@@ -4,13 +4,26 @@ import { fileURLToPath } from 'url';
 import type { ExtensionAPI, ToolDefinition } from '@earendil-works/pi-coding-agent';
 import { createJiti } from 'jiti/static';
 import {
+  appendAgentRunEvent,
   completeAgentRun,
   failAgentRun,
   listAgentRuns,
   startAgentRun,
   updateAgentRun,
 } from './run-ledger';
+import { runWithAgentRunContext } from './agent-run-context';
+import {
+  abortErrorFromSignal,
+  isAbortLikeError,
+  linkAbortSignalToAgentRun,
+  registerAgentRunCancelHandler,
+} from './run-cancellation';
 import { createMindosAgentPermissionPolicyFromContext } from './permission-policy';
+import {
+  executeSubagentOrchestrationPlan,
+  type SubagentOrchestrationPlan,
+  type SubagentSubtaskPlan,
+} from './subagent-orchestrator';
 
 type ToolWithRuntimeContext = ToolDefinition & {
   execute: (
@@ -83,6 +96,49 @@ function hasAsyncStartDetails(result: unknown): boolean {
 
 function resultIsError(result: unknown): boolean {
   return Boolean(result && typeof result === 'object' && (result as { isError?: unknown }).isError);
+}
+
+function appendSubagentProgressEvent(runId: string, update: unknown): void {
+  const summary = outputSummary(update).trim();
+  const error = resultIsError(update);
+  if (!summary && !error) return;
+
+  try {
+    appendAgentRunEvent(runId, error ? {
+      type: 'error',
+      category: 'error',
+      title: 'Subagent error',
+      message: summary || 'Subagent progress update reported an error.',
+      data: {
+        kind: 'error',
+        message: summary || 'Subagent progress update reported an error.',
+      },
+      metadata: resultMetadata(update),
+    } : {
+      type: 'text',
+      category: 'text',
+      title: 'Subagent update',
+      message: summary,
+      data: {
+        kind: 'text',
+        text: summary,
+        channel: 'assistant',
+      },
+      metadata: resultMetadata(update),
+    });
+  } catch {
+    // Timeline forwarding is best-effort and must not affect upstream subagent execution.
+  }
+}
+
+function onUpdateWithLedger(runId: string, onUpdate: unknown): ((update: unknown) => unknown) {
+  return (update: unknown) => {
+    appendSubagentProgressEvent(runId, update);
+    if (typeof onUpdate === 'function') {
+      return (onUpdate as (value: unknown) => unknown)(update);
+    }
+    return undefined;
+  };
 }
 
 function resultMetadata(result: unknown): Record<string, unknown> {
@@ -194,10 +250,161 @@ function subagentPermissionMode(ctx?: Record<string, any>) {
   return createMindosAgentPermissionPolicyFromContext(ctx, 'agent').permissionMode;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+
+function positiveNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.floor(value) : undefined;
+}
+
+function stringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0);
+}
+
+function subtaskFromInput(item: unknown, index: number, fallbackCwd?: string): SubagentSubtaskPlan | null {
+  if (!isRecord(item)) return null;
+  const agent = typeof item.agent === 'string' ? item.agent.trim() : '';
+  const task = typeof item.task === 'string' ? item.task.trim() : '';
+  if (!agent || !task) return null;
+  const id = typeof item.id === 'string' && item.id.trim() ? item.id.trim() : `task-${index + 1}`;
+  const dependencies = [
+    ...stringArray(item.dependencies),
+    ...stringArray(item.dependsOn),
+  ];
+  const timeoutMs = positiveNumber(item.timeoutMs ?? item.maxRuntimeMs);
+  const contextBudget = positiveNumber(item.contextBudget);
+  return {
+    id,
+    agent,
+    task,
+    ...(dependencies.length > 0 ? { dependencies } : {}),
+    ...(typeof item.cwd === 'string' && item.cwd.trim() ? { cwd: item.cwd } : fallbackCwd ? { cwd: fallbackCwd } : {}),
+    ...(timeoutMs ? { timeoutMs } : {}),
+    ...(contextBudget ? { contextBudget } : {}),
+    metadata: {
+      ...(typeof item.label === 'string' ? { label: item.label } : {}),
+      ...(typeof item.phase === 'string' ? { phase: item.phase } : {}),
+    },
+  };
+}
+
+function chainSubtasksFromInput(items: unknown[], fallbackCwd?: string): SubagentSubtaskPlan[] | null {
+  const subtasks: SubagentSubtaskPlan[] = [];
+  for (let index = 0; index < items.length; index += 1) {
+    const subtask = subtaskFromInput(items[index], index, fallbackCwd);
+    if (!subtask) return null;
+    subtasks.push({
+      ...subtask,
+      ...(index > 0 ? { dependencies: [subtasks[index - 1]!.id] } : {}),
+    });
+  }
+  return subtasks;
+}
+
+function hasExplicitDependencies(items: unknown[]): boolean {
+  return items.some((item) => isRecord(item) && (
+    stringArray(item.dependencies).length > 0 || stringArray(item.dependsOn).length > 0
+  ));
+}
+
+function mindosOrchestrationPlanFromParams(params: unknown, ctx?: Record<string, any>): SubagentOrchestrationPlan | null {
+  if (!isRecord(params)) return null;
+  const fallbackCwd = subagentCwd(params, ctx);
+  const rawTasks = Array.isArray(params.subtasks)
+    ? params.subtasks
+    : Array.isArray(params.tasks)
+      ? params.tasks
+      : undefined;
+  const rawChain = Array.isArray(params.chain) ? params.chain : undefined;
+  const explicitMindosOrchestration = params.mindosOrchestration === true || params.orchestrator === 'mindos';
+
+  if (!explicitMindosOrchestration && (!rawTasks || !hasExplicitDependencies(rawTasks))) {
+    return null;
+  }
+
+  const tasks = rawTasks
+    ? rawTasks.map((item, index) => subtaskFromInput(item, index, fallbackCwd))
+    : rawChain
+      ? chainSubtasksFromInput(rawChain, fallbackCwd)
+      : null;
+  if (!tasks || tasks.some((task) => !task)) return null;
+
+  return {
+    displayName: `Subagent orchestration (${tasks.length})`,
+    cwd: fallbackCwd,
+    permissionMode: subagentPermissionMode(ctx),
+    timeoutMs: positiveNumber(params.timeoutMs ?? params.maxRuntimeMs),
+    contextBudget: positiveNumber(params.contextBudget),
+    tasks: tasks as SubagentSubtaskPlan[],
+  };
+}
+
+function subagentToolResultFromOrchestration(result: Awaited<ReturnType<typeof executeSubagentOrchestrationPlan>>) {
+  return {
+    content: [{ type: 'text', text: result.summary }],
+    isError: result.status !== 'completed',
+    details: {
+      mode: 'mindos-orchestration',
+      runId: result.parentRun.id,
+      status: result.status,
+      results: result.tasks.map((task) => ({
+        id: task.taskId,
+        agent: task.agent,
+        status: task.status,
+        output: task.outputSummary,
+        error: task.error,
+        runId: task.run.id,
+      })),
+    },
+  };
+}
+
 export function wrapSubagentToolForLedger(tool: ToolWithRuntimeContext): ToolWithRuntimeContext {
   return {
     ...tool,
     async execute(toolCallId, params, signal, onUpdate, ctx) {
+      const orchestrationPlan = mindosOrchestrationPlanFromParams(params, ctx);
+      if (orchestrationPlan) {
+        const orchestrationResult = await executeSubagentOrchestrationPlan(orchestrationPlan, async (task, context) => {
+          const childParams = {
+            ...(isRecord(params) ? params : {}),
+            agent: task.agent,
+            task: task.task,
+            cwd: task.cwd,
+            async: false,
+            tasks: undefined,
+            subtasks: undefined,
+            chain: undefined,
+            mindosOrchestration: undefined,
+            orchestrator: undefined,
+            ...(task.timeoutMs ? { timeoutMs: task.timeoutMs } : {}),
+          };
+          const childResult = await tool.execute(
+            `${toolCallId}:${task.id}`,
+            childParams,
+            context.signal,
+            onUpdateWithLedger(context.run.id, onUpdate),
+            ctx,
+          );
+          const summary = outputSummary(childResult);
+          if (resultIsError(childResult)) {
+            return {
+              status: 'failed',
+              outputSummary: summary,
+              error: summary || 'Subagent task failed.',
+              metadata: resultMetadata(childResult),
+            };
+          }
+          return {
+            outputSummary: summary,
+            metadata: resultMetadata(childResult),
+          };
+        }, { signal });
+        return subagentToolResultFromOrchestration(orchestrationResult);
+      }
+
       const run = startAgentRun({
         agentKind: 'pi-subagent',
         runtimeId: subagentRuntimeId(params),
@@ -211,17 +418,28 @@ export function wrapSubagentToolForLedger(tool: ToolWithRuntimeContext): ToolWit
         },
       });
 
-      const handleAbort = () => {
-        failAgentRun(run.id, {
-          status: 'canceled',
-          error: 'Subagent run was canceled.',
-          metadata: { aborted: true },
-        });
+      const upstreamAbort = new AbortController();
+      const abortUpstream = (reason?: unknown) => {
+        if (!upstreamAbort.signal.aborted) upstreamAbort.abort(reason);
       };
-      signal?.addEventListener('abort', handleAbort, { once: true });
+      const handleParentAbort = () => abortUpstream(abortErrorFromSignal(signal, 'Subagent run was canceled.'));
+      if (signal?.aborted) handleParentAbort();
+      signal?.addEventListener('abort', handleParentAbort, { once: true });
+
+      const unregisterCancelHandler = registerAgentRunCancelHandler(run.id, ({ reason }) => {
+        abortUpstream(reason ?? new Error('Subagent run was canceled.'));
+      });
+      const unlinkAbortLedger = linkAbortSignalToAgentRun(run.id, upstreamAbort.signal, {
+        reason: 'Subagent run was canceled.',
+        metadata: { aborted: true },
+      });
 
       try {
-        const result = await tool.execute(toolCallId, params, signal, onUpdate, ctx);
+        const result = await runWithAgentRunContext({
+          ...(run.chatSessionId ? { chatSessionId: run.chatSessionId } : {}),
+          rootRunId: run.rootRunId ?? run.id,
+          parentRunId: run.id,
+        }, () => tool.execute(toolCallId, params, upstreamAbort.signal, onUpdateWithLedger(run.id, onUpdate), ctx));
         if (hasAsyncStartDetails(result) && !resultIsError(result)) {
           updateAgentRun(run.id, {
             status: 'streaming',
@@ -246,10 +464,16 @@ export function wrapSubagentToolForLedger(tool: ToolWithRuntimeContext): ToolWit
         });
         return result;
       } catch (error) {
-        failAgentRun(run.id, { error });
+        failAgentRun(run.id, {
+          status: isAbortLikeError(error) || upstreamAbort.signal.aborted ? 'canceled' : 'failed',
+          error: isAbortLikeError(error) ? 'Subagent run was canceled.' : error,
+          metadata: upstreamAbort.signal.aborted ? { aborted: true } : undefined,
+        });
         throw error;
       } finally {
-        signal?.removeEventListener('abort', handleAbort);
+        signal?.removeEventListener('abort', handleParentAbort);
+        unlinkAbortLedger();
+        unregisterCancelHandler();
       }
     },
   };

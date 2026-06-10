@@ -31,11 +31,31 @@ export function createClaudePermissionPromptConfig(input: {
 }
 
 export function resolveRuntimePermissionBaseUrl(req: Request): string {
+  if (process.env.MINDOS_INTERNAL_URL) return process.env.MINDOS_INTERNAL_URL;
   if (process.env.MINDOS_URL) return process.env.MINDOS_URL;
   const url = new URL(req.url);
-  const port = process.env.MINDOS_WEB_PORT || url.port;
-  if (port) return `${url.protocol}//127.0.0.1:${port}`;
+  if (process.env.MINDOS_WEB_PORT) return `http://127.0.0.1:${process.env.MINDOS_WEB_PORT}`;
+  if (url.port) return `http://127.0.0.1:${url.port}`;
+  if (!isTrustedRuntimePermissionOrigin(url)) {
+    throw new Error('Claude Code permission callbacks require MINDOS_INTERNAL_URL, MINDOS_URL, MINDOS_WEB_PORT, or a loopback/private request origin.');
+  }
   return url.origin;
+}
+
+function isTrustedRuntimePermissionOrigin(url: URL): boolean {
+  const host = url.hostname.toLowerCase().replace(/^\[/, '').replace(/\]$/, '');
+  if (host === 'localhost' || host === '::1') return true;
+  if (host.startsWith('127.')) return true;
+  if (host.startsWith('10.')) return true;
+  if (host.startsWith('192.168.')) return true;
+  const ipv4 = host.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
+  if (ipv4) {
+    const first = Number(ipv4[1]);
+    const second = Number(ipv4[2]);
+    if (first === 172 && second >= 16 && second <= 31) return true;
+    if (first === 169 && second === 254) return true;
+  }
+  return host.startsWith('fc') || host.startsWith('fd') || host.startsWith('fe80:');
 }
 
 const CLAUDE_PERMISSION_PROMPT_MCP_SOURCE = String.raw`

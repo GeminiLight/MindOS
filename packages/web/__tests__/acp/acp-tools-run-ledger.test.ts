@@ -9,6 +9,7 @@ const mockGetAcpAgents = vi.fn();
 const mockCreateSessionFromEntry = vi.fn();
 const mockPrompt = vi.fn();
 const mockCloseSession = vi.fn();
+const mockCancelPrompt = vi.fn();
 
 vi.mock('@/lib/acp/registry', () => ({
   findAcpAgent: mockFindAcpAgent,
@@ -19,6 +20,7 @@ vi.mock('@/lib/acp/session', () => ({
   createSessionFromEntry: mockCreateSessionFromEntry,
   prompt: mockPrompt,
   closeSession: mockCloseSession,
+  cancelPrompt: mockCancelPrompt,
 }));
 
 function getCallAcpAgentTool() {
@@ -37,6 +39,7 @@ describe('call_acp_agent run ledger integration', () => {
     mockCreateSessionFromEntry.mockReset();
     mockPrompt.mockReset();
     mockCloseSession.mockReset();
+    mockCancelPrompt.mockReset();
   });
 
   it('records a completed ACP delegation while preserving the tool result', async () => {
@@ -79,14 +82,14 @@ describe('call_acp_agent run ledger integration', () => {
     ]);
   });
 
-  it('uses readonly ACP sessions when tool context carries readonly or organize policy', async () => {
+  it.each(['chat', 'organize'] as const)('uses readonly ACP sessions when tool context carries %s policy', async (askMode) => {
     mockFindAcpAgent.mockResolvedValue({
       id: 'gemini',
       name: 'Gemini CLI',
       description: 'Gemini local agent',
       transport: 'stdio',
     });
-    mockCreateSessionFromEntry.mockResolvedValue({ id: 'session-readonly' });
+    mockCreateSessionFromEntry.mockResolvedValue({ id: `session-${askMode}` });
     mockPrompt.mockResolvedValue({ text: 'Read-only answer.' });
     mockCloseSession.mockResolvedValue(undefined);
 
@@ -99,7 +102,7 @@ describe('call_acp_agent run ledger integration', () => {
       },
       undefined,
       undefined,
-      { askMode: 'organize' },
+      { askMode },
     );
 
     expect(result.content[0]?.text).toContain('**Gemini CLI** responded');
@@ -169,6 +172,51 @@ describe('call_acp_agent run ledger integration', () => {
         status: 'failed',
         error: 'agent crashed',
         metadata: expect.objectContaining({ sessionId: 'session-fail' }),
+      }),
+    ]);
+  });
+
+  it('cancels an active ACP prompt when the tool signal aborts', async () => {
+    const controller = new AbortController();
+    mockFindAcpAgent.mockResolvedValue({
+      id: 'gemini',
+      name: 'Gemini CLI',
+      description: 'Gemini local agent',
+      transport: 'stdio',
+    });
+    mockCreateSessionFromEntry.mockResolvedValue({ id: 'session-cancel' });
+    mockPrompt.mockImplementation((_sessionId: string) => new Promise((_resolve, reject) => {
+      controller.signal.addEventListener('abort', () => reject(controller.signal.reason), { once: true });
+    }));
+    mockCancelPrompt.mockResolvedValue(undefined);
+    mockCloseSession.mockResolvedValue(undefined);
+
+    const tool = await getCallAcpAgentTool();
+    const pending = tool.execute('tool-cancel', {
+      agent_id: 'gemini',
+      message: 'Stop this.',
+    }, controller.signal);
+
+    await vi.waitFor(() => {
+      expect(mockPrompt).toHaveBeenCalledWith('session-cancel', 'Stop this.');
+    });
+    controller.abort(new DOMException('User stopped the run.', 'AbortError'));
+
+    const result = await pending;
+
+    expect(result.content[0]?.text).toBe('ACP call canceled.');
+    expect(mockCancelPrompt).toHaveBeenCalledWith('session-cancel');
+    expect(mockCloseSession).toHaveBeenCalledWith('session-cancel');
+    expect(listAgentRuns({ kind: 'acp' })).toEqual([
+      expect.objectContaining({
+        agentKind: 'acp',
+        runtimeId: 'gemini',
+        status: 'canceled',
+        error: 'ACP run was canceled.',
+        metadata: expect.objectContaining({
+          sessionId: 'session-cancel',
+          aborted: true,
+        }),
       }),
     ]);
   });

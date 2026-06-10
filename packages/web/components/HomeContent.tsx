@@ -134,10 +134,11 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
                         role="tab"
                         aria-selected={isActive}
                         onClick={() => setActiveTab(i)}
-                        className={`flex items-center gap-1.5 px-4 py-2 text-xs font-medium rounded-full transition-all duration-150 ${
+                        data-hit-active={isActive ? 'true' : undefined}
+                        className={`hit-target-box flex items-center gap-1.5 px-4 py-2 text-xs font-medium transition-all duration-150 [--hit-target-radius:9999px] [--hit-target-active-bg:color-mix(in_srgb,var(--amber)_12%,transparent)] [--hit-target-hover-bg:color-mix(in_srgb,var(--muted)_40%,transparent)] ${
                           isActive
-                            ? 'bg-[var(--amber)]/12 text-[var(--amber)]'
-                            : 'text-muted-foreground/50 hover:text-muted-foreground hover:bg-muted/40'
+                            ? 'text-[var(--amber)]'
+                            : 'text-muted-foreground/50 hover:text-muted-foreground'
                         }`}
                       >
                         <Icon size={13} />
@@ -154,7 +155,7 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
                       key={`${activeTab}-${i}`}
                       type="button"
                       onClick={() => injectAskInput(item.prompt)}
-                      className="group relative text-left px-4 py-3.5 rounded-xl border border-border/30 hover:border-border/60 transition-all duration-150 hover:shadow-sm"
+                      className="hit-target-box group relative text-left px-4 py-3.5 border border-transparent transition-all duration-150 [--hit-target-border-width:1px] [--hit-target-border:color-mix(in_srgb,var(--border)_30%,transparent)] [--hit-target-hover-border:color-mix(in_srgb,var(--border)_60%,transparent)] [--hit-target-radius:var(--radius-xl)] [--hit-target-hover-shadow:0_1px_2px_0_color-mix(in_srgb,var(--foreground)_8%,transparent)]"
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">

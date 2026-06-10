@@ -122,6 +122,7 @@ describe('MessageList runtime status rendering', () => {
               },
               {
                 id: 'run-2',
+                parentRunId: 'run-1',
                 chatSessionId: 'chat-1',
                 agentKind: 'acp',
                 runtimeId: 'gemini',
@@ -155,6 +156,7 @@ describe('MessageList runtime status rendering', () => {
     expect(html).toContain('Agent activity');
     expect(html).toContain('Reviewer');
     expect(html).toContain('Running');
+    expect(html).toContain('1 child run');
     expect(html).toContain('Gemini ACP');
     expect(html).toContain('Failed');
     expect(html).toContain('agent crashed');

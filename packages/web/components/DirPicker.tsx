@@ -136,7 +136,7 @@ export default function DirPicker({ dirPaths, value, onChange, rootLabel = 'Root
         <button
           type="button"
           onClick={() => navigateTo(-1)}
-          className={`shrink-0 px-1.5 py-0.5 rounded transition-colors ${
+          className={`hit-target-box shrink-0 px-1.5 py-0.5 transition-colors [--hit-target-hover-bg:transparent] [--hit-target-radius:var(--radius-sm)] ${
             browsing === '' ? 'text-[var(--amber)] font-medium' : 'text-muted-foreground hover:text-foreground'
           }`}
         >
@@ -148,7 +148,7 @@ export default function DirPicker({ dirPaths, value, onChange, rootLabel = 'Root
             <button
               type="button"
               onClick={() => navigateTo(i)}
-              className={`px-1.5 py-0.5 rounded transition-colors truncate max-w-[100px] ${
+              className={`hit-target-box px-1.5 py-0.5 transition-colors truncate max-w-[100px] [--hit-target-hover-bg:transparent] [--hit-target-radius:var(--radius-sm)] ${
                 i === segments.length - 1 ? 'text-[var(--amber)] font-medium' : 'text-muted-foreground hover:text-foreground'
               }`}
             >
@@ -168,7 +168,7 @@ export default function DirPicker({ dirPaths, value, onChange, rootLabel = 'Root
                 key={childPath}
                 type="button"
                 onClick={() => drillInto(childPath)}
-                className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-foreground hover:bg-muted/60 transition-colors"
+                className="hit-target-box w-full flex items-center gap-2 px-3 py-1.5 text-xs text-foreground transition-colors [--hit-target-hover-bg:color-mix(in_srgb,var(--muted)_60%,transparent)] [--hit-target-radius:0px]"
               >
                 <Folder size={12} className="shrink-0 text-[var(--amber)]" />
                 <span className="flex-1 text-left truncate">{childName}</span>
@@ -184,7 +184,7 @@ export default function DirPicker({ dirPaths, value, onChange, rootLabel = 'Root
       <button
         type="button"
         onClick={collapse}
-        className="w-full py-1.5 flex items-center justify-center gap-1 text-xs font-medium text-[var(--amber)] border-t border-border hover:bg-muted/30 transition-colors shrink-0"
+        className="hit-target-box w-full py-1.5 flex items-center justify-center gap-1 text-xs font-medium text-[var(--amber)] border-t border-border transition-colors shrink-0 [--hit-target-hover-bg:color-mix(in_srgb,var(--muted)_30%,transparent)] [--hit-target-radius:0px]"
       >
         <Check size={12} />
       </button>
@@ -200,8 +200,11 @@ export default function DirPicker({ dirPaths, value, onChange, rootLabel = 'Root
         onClick={() => setExpanded(v => !v)}
         aria-haspopup="true"
         aria-expanded={expanded}
-        className={`w-full flex items-center gap-2 px-3 py-2 text-sm rounded-lg border bg-background text-foreground transition-colors text-left focus-visible:ring-1 focus-visible:ring-ring outline-none ${
-          expanded ? 'border-[var(--amber)]' : 'border-border hover:border-[var(--amber)]/40'
+        data-hit-active={expanded ? 'true' : undefined}
+        className={`hit-target-box w-full flex items-center gap-2 px-3 py-2 text-sm border border-transparent text-foreground transition-colors text-left focus-visible:ring-1 focus-visible:ring-ring outline-none [--hit-target-bg:var(--background)] [--hit-target-border-width:1px] [--hit-target-radius:var(--radius-lg)] ${
+          expanded
+            ? '[--hit-target-active-border:var(--amber)]'
+            : '[--hit-target-border:var(--border)] [--hit-target-hover-border:color-mix(in_srgb,var(--amber)_40%,transparent)]'
         }`}
       >
         <Folder size={14} className="shrink-0 text-[var(--amber)]" />

@@ -222,7 +222,7 @@ export function InboxSection({ isOrganizing: externalOrganizing = false }: Inbox
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground rounded-md px-2 py-1 transition-all duration-150 ease-out hover:text-foreground hover:bg-muted/40 cursor-pointer focus-visible:ring-2 focus-visible:ring-ring"
+              className="hit-target-box flex items-center gap-1.5 text-xs font-medium text-muted-foreground px-2 py-1 transition-all duration-150 ease-out hover:text-foreground cursor-pointer focus-visible:ring-2 focus-visible:ring-ring [--hit-target-hover-bg:color-mix(in_srgb,var(--muted)_40%,transparent)] [--hit-target-radius:var(--radius-md)]"
               title={t.inbox.uploadButton}
             >
               <Upload size={12} />
@@ -231,7 +231,7 @@ export function InboxSection({ isOrganizing: externalOrganizing = false }: Inbox
             <button
               onClick={handleOrganize}
               disabled={isOrganizing}
-              className="flex items-center gap-1.5 text-xs font-medium text-[var(--amber)] bg-[var(--amber)]/[0.08] rounded-md px-2.5 py-1 transition-all duration-150 ease-out hover:bg-[var(--amber)]/[0.15] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-ring"
+              className="hit-target-box flex items-center gap-1.5 text-xs font-medium text-[var(--amber)] px-2.5 py-1 transition-all duration-150 ease-out cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-ring [--hit-target-bg:color-mix(in_srgb,var(--amber)_8%,transparent)] [--hit-target-hover-bg:color-mix(in_srgb,var(--amber)_15%,transparent)] [--hit-target-radius:var(--radius-md)]"
               title={isOrganizing ? t.inbox.organizing : undefined}
             >
               {isOrganizing ? (
@@ -268,7 +268,7 @@ export function InboxSection({ isOrganizing: externalOrganizing = false }: Inbox
               setLoading(true);
               void fetchInbox();
             }}
-            className="shrink-0 rounded-md px-2 py-1 font-medium hover:bg-error/10 focus-visible:ring-2 focus-visible:ring-ring"
+            className="hit-target-box shrink-0 px-2 py-1 font-medium focus-visible:ring-2 focus-visible:ring-ring [--hit-target-hover-bg:color-mix(in_srgb,var(--error)_10%,transparent)] [--hit-target-radius:var(--radius-md)]"
           >
             {t.inbox.retry}
           </button>
@@ -372,7 +372,7 @@ export function InboxSection({ isOrganizing: externalOrganizing = false }: Inbox
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}
-                className="mt-1 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-all duration-150 ease-out bg-muted/60 text-muted-foreground hover:text-foreground hover:bg-muted/80 focus-visible:ring-2 focus-visible:ring-ring"
+                className="hit-target-box mt-1 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-all duration-150 ease-out text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring [--hit-target-bg:color-mix(in_srgb,var(--muted)_60%,transparent)] [--hit-target-hover-bg:color-mix(in_srgb,var(--muted)_80%,transparent)] [--hit-target-radius:var(--radius-lg)]"
               >
                 <Upload size={12} />
                 {t.inbox.uploadButton}
@@ -431,7 +431,7 @@ export function InboxSection({ isOrganizing: externalOrganizing = false }: Inbox
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); handleClipUrl(clipUrl); }}
-              className="shrink-0 flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-lg bg-[var(--amber)]/10 text-[var(--amber)] hover:bg-[var(--amber)]/20 transition-all duration-150 ease-out cursor-pointer focus-visible:ring-2 focus-visible:ring-ring"
+              className="hit-target-box shrink-0 flex items-center gap-1.5 px-3 py-1 text-xs font-medium text-[var(--amber)] transition-all duration-150 ease-out cursor-pointer focus-visible:ring-2 focus-visible:ring-ring [--hit-target-bg:color-mix(in_srgb,var(--amber)_10%,transparent)] [--hit-target-hover-bg:color-mix(in_srgb,var(--amber)_20%,transparent)] [--hit-target-radius:var(--radius-lg)]"
             >
               <Globe size={11} />
               {t.inbox.clipButton}
@@ -507,7 +507,7 @@ function InboxFileRow({ file, onDelete }: { file: InboxFile; onDelete: (name: st
           }
         }}
         onContextMenu={handleContextMenu}
-        className="group flex items-center gap-3 px-3.5 py-2.5 rounded-lg transition-all duration-150 ease-out hover:translate-x-0.5 hover:bg-muted/50 hover:shadow-sm hover:shadow-black/[0.03] cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="hit-target-box group flex items-center gap-3 px-3.5 py-2.5 transition-all duration-150 ease-out hover:translate-x-0.5 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [--hit-target-hover-bg:color-mix(in_srgb,var(--muted)_50%,transparent)] [--hit-target-hover-shadow:0_1px_2px_0_color-mix(in_srgb,var(--foreground)_3%,transparent)] [--hit-target-radius:var(--radius-lg)]"
       >
         <span
           className={`w-[5px] h-[5px] rounded-full shrink-0 ring-2 ring-background ${
@@ -551,7 +551,7 @@ function InboxFileRow({ file, onDelete }: { file: InboxFile; onDelete: (name: st
           type="button"
           onClick={handleDelete}
           aria-label={t.inbox.removeFile}
-          className="hidden group-hover:flex group-focus-within:flex max-sm:flex items-center justify-center w-5 h-5 rounded shrink-0 text-muted-foreground/50 hover:text-destructive hover:bg-destructive/10 transition-all duration-150 ease-out focus-visible:ring-2 focus-visible:ring-ring"
+          className="hit-target-box hidden group-hover:flex group-focus-within:flex max-sm:flex items-center justify-center w-5 h-5 shrink-0 text-muted-foreground/50 hover:text-destructive transition-all duration-150 ease-out focus-visible:ring-2 focus-visible:ring-ring [--hit-target-hover-bg:color-mix(in_srgb,var(--destructive)_10%,transparent)] [--hit-target-radius:var(--radius-sm)]"
           title={t.inbox.removeFile}
         >
           <X size={12} />

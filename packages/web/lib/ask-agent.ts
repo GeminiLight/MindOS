@@ -68,10 +68,32 @@ export function toAgentRuntime(agent: AgentIdentity | null | undefined): AgentRu
   return agent ? { ...agent, kind: 'acp' } : null;
 }
 
-export function getSessionAgentRuntime(
-  session: Pick<ChatSession, 'defaultAgentRuntime' | 'defaultAcpAgent'> | null | undefined,
+export function compactAgentRuntimeIdentity(
+  runtime: AgentRuntimeIdentity | null | undefined,
 ): AgentRuntimeIdentity | null {
-  return session?.defaultAgentRuntime ?? toAgentRuntime(session?.defaultAcpAgent);
+  if (!runtime) return null;
+  return {
+    id: runtime.id,
+    name: runtime.name,
+    kind: runtime.kind,
+    ...(runtime.binaryPath ? { binaryPath: runtime.binaryPath } : {}),
+  };
+}
+
+export function getSessionAgentRuntime(
+  session: Pick<ChatSession, 'defaultAgentRuntime' | 'defaultAcpAgent' | 'runtimeSessionBinding' | 'externalAgentBinding'> | null | undefined,
+): AgentRuntimeIdentity | null {
+  const explicit = session?.defaultAgentRuntime ?? toAgentRuntime(session?.defaultAcpAgent);
+  if (explicit) return explicit;
+
+  const binding = getDisplayRuntimeSessionBinding(session);
+  if (binding?.runtime === 'codex') {
+    return { id: binding.runtimeId, name: 'Codex', kind: 'codex' };
+  }
+  if (binding?.runtime === 'claude') {
+    return { id: binding.runtimeId, name: 'Claude Code', kind: 'claude' };
+  }
+  return null;
 }
 
 function isNativeRuntimeKind(kind: string | null | undefined): kind is 'codex' | 'claude' {

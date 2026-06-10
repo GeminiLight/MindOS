@@ -102,7 +102,7 @@ MindOS 是你思考的地方，也是 AI Agent 行动的起点——一个你和
 | 2026-04 | **产品主包落地** — MindOS 采用 OpenCode 式核心包：`packages/mindos`（`@geminilight/mindos`）承载产品 runtime facade 与 CLI kernel 边界；Web/CLI 围绕它做适配。 |
 | 2026-04 | **OpenCode 式 workspace 扁平化** — 所有源码 workspace 已统一到 `packages/`：`packages/web`、`packages/desktop`、`packages/mobile`、`packages/mindos`，以及可选 `packages/retrieval/*` adapters。npm tarball / CLI / MCP / Web standalone / Desktop / Mobile 均已验证。 |
 | 2026-04 | **发布包清理** — 旧顶层 `app/`、`mcp/`、`desktop/`、`mobile/` 源码根已移除，发布清单精确排除测试、缓存与 nested `node_modules`。 |
-| 2026-04 | **网页剪藏插件** — 浏览器扩展，一键剪藏任意网页到 MindOS 暂存台。[安装 →](packages/browser-extension/) |
+| 2026-04 | **网页剪藏插件** — 浏览器扩展，一键剪藏任意网页到 MindOS 收集箱。[安装 →](packages/browser-extension/) |
 | 2026-04 | **PDF & 图片导入** — 拖拽 PDF 和图片到 MindOS，自动转换为可搜索的 Markdown。 |
 
 ## 🧠 人机共享心智
@@ -205,7 +205,7 @@ npx skills add https://github.com/GeminiLight/MindOS --skill mindos-zh -g -y   #
 MindOS 的知识不必从零开始——把你已有的信息导入进来：
 
 - **拖拽导入**：将文件（PDF、图片、Markdown、CSV）直接拖入 MindOS GUI，AI 自动分析并归档到对应文件夹。
-- **网页剪藏**：安装[浏览器插件](packages/browser-extension/)，一键保存任意网页到暂存台。快捷键 Ctrl+Shift+M 或右键菜单 →「Save to MindOS」。
+- **网页剪藏**：安装[浏览器插件](packages/browser-extension/)，一键保存任意网页到收集箱。快捷键 Ctrl+Shift+M 或右键菜单 →「Save to MindOS」。
 - **Agent 导入**：让任意已连接的 Agent 阅读文档并同步到你的知识库。
 
 ## ✨ 功能特性
@@ -217,7 +217,7 @@ MindOS 的知识不必从零开始——把你已有的信息导入进来：
 - **一键导入**：拖拽文件即可导入，Inline AI Organize 自动分析、分类、写入知识库，支持进度追踪和撤销。
 - **新手引导**：首次使用的分步引导体验，帮助新用户快速搭建知识库并连接第一个 Agent。
 - **插件扩展**：多种内置渲染器插件——TODO Board、CSV Views、Wiki Graph、Timeline、Workflow Editor、Agent Inspector 等。
-- **网页剪藏**：浏览器扩展，一键将任意网页保存为干净的 Markdown——存入暂存台，稍后 AI 自动整理归档。[安装 →](packages/browser-extension/)
+- **网页剪藏**：浏览器扩展，一键将任意网页保存为干净的 Markdown——存入收集箱，稍后 AI 自动整理归档。[安装 →](packages/browser-extension/)
 
 **Agent 侧**
 

@@ -1,3 +1,7 @@
+import { redactSensitiveObject, redactSensitiveText } from './redaction.js';
+
+export { redactSensitiveObject, redactSensitiveText } from './redaction.js';
+
 export type MindosSessionEventType =
   | 'session.started'
   | 'message.delta'
@@ -273,7 +277,7 @@ export function createMindosAgentEventReducer(options: MindosAgentEventReducerOp
       if (isToolExecutionEndEvent(event)) {
         const { toolCallId, output, isError } = getToolExecutionEnd(event);
         return {
-          events: [{ type: 'tool_end', toolCallId, output, isError }],
+          events: [{ type: 'tool_end', toolCallId, output: sanitizeToolOutput(output), isError }],
           hasVisibleContent: false,
           toolExecutions: 1,
         };
@@ -336,10 +340,10 @@ export function createMindosAgentEventReducer(options: MindosAgentEventReducerOp
 }
 
 export function sanitizeToolArgs(toolName: string, args: unknown): unknown {
-  if (!isRecord(args)) return args;
+  if (!isRecord(args)) return typeof args === 'string' ? redactSensitiveText(args) : redactSensitiveObject(args);
 
   if (toolName === 'batch_create_files' && Array.isArray(args.files)) {
-    return {
+    return redactSensitiveObject({
       ...args,
       files: args.files
         .filter(isRecord)
@@ -347,16 +351,20 @@ export function sanitizeToolArgs(toolName: string, args: unknown): unknown {
           path: file.path,
           ...(file.description ? { description: file.description } : {}),
         })),
-    };
+    });
   }
 
   if (typeof args.content === 'string' && args.content.length > 200) {
-    return { ...args, content: `[${args.content.length} chars]` };
+    return redactSensitiveObject({ ...args, content: `[${args.content.length} chars]` });
   }
   if (typeof args.text === 'string' && args.text.length > 200) {
-    return { ...args, text: `[${args.text.length} chars]` };
+    return redactSensitiveObject({ ...args, text: `[${args.text.length} chars]` });
   }
-  return args;
+  return redactSensitiveObject(args);
+}
+
+export function sanitizeToolOutput(output: string): string {
+  return redactSensitiveText(output);
 }
 
 export function encodeMindosSseEvent(event: MindOSSSEvent): string {
@@ -746,7 +754,10 @@ export function mapMindosAcpUpdateToSseEvents(
           type: 'tool_start',
           toolCallId: update.toolCall.toolCallId,
           toolName: update.toolCall.title ?? update.toolCall.kind ?? 'tool',
-          args: safeParseMindosJsonObject(update.toolCall.rawInput),
+          args: sanitizeToolArgs(
+            update.toolCall.title ?? update.toolCall.kind ?? 'tool',
+            safeParseMindosJsonObject(update.toolCall.rawInput),
+          ),
         }],
         hasVisibleContent: true,
       };
@@ -759,7 +770,7 @@ export function mapMindosAcpUpdateToSseEvents(
         events: [{
           type: 'tool_end',
           toolCallId: update.toolCall.toolCallId,
-          output: update.toolCall.rawOutput ?? '',
+          output: sanitizeToolOutput(update.toolCall.rawOutput ?? ''),
           isError: update.toolCall.status === 'failed',
         }],
         hasVisibleContent: false,
@@ -941,6 +952,43 @@ export type MindosPiAgentAskSessionResult = {
   lastModelError: string;
 };
 
+async function runMindosAbortable<T>(
+  promise: Promise<T>,
+  signal: AbortSignal | undefined,
+  onAbort: () => Promise<void> | void,
+  message: string,
+): Promise<T> {
+  if (!signal) return promise;
+
+  const abortReason = () => {
+    const reason = signal.reason;
+    if (reason instanceof Error) return reason;
+    const error = new Error(typeof reason === 'string' && reason ? reason : message);
+    error.name = 'AbortError';
+    return error;
+  };
+
+  if (signal.aborted) {
+    await onAbort();
+    throw abortReason();
+  }
+
+  let removeAbortListener: (() => void) | undefined;
+  const abortPromise = new Promise<never>((_resolve, reject) => {
+    const abort = () => {
+      void Promise.resolve(onAbort()).finally(() => reject(abortReason()));
+    };
+    signal.addEventListener('abort', abort, { once: true });
+    removeAbortListener = () => signal.removeEventListener('abort', abort);
+  });
+
+  try {
+    return await Promise.race([promise, abortPromise]);
+  } finally {
+    removeAbortListener?.();
+  }
+}
+
 export async function runMindosPiAgentAskSession(options: MindosPiAgentAskSessionOptions): Promise<MindosPiAgentAskSessionResult> {
   let hasContent = false;
   let lastModelError = '';
@@ -979,7 +1027,12 @@ export async function runMindosPiAgentAskSession(options: MindosPiAgentAskSessio
     retryDelay: options.retryDelay,
     execute: async () => {
       await runMindosWithTimeout(
-        options.session.prompt(options.prompt, options.promptOptions),
+        runMindosAbortable(
+          options.session.prompt(options.prompt, options.promptOptions),
+          options.signal,
+          () => options.session.abort(),
+          'Agent run was canceled.',
+        ),
         timeoutMs,
         options.timeoutMessage?.(timeoutMs) ?? `Agent execution timeout after ${timeoutMs / 1000} seconds`,
       );
@@ -1641,7 +1694,7 @@ export async function runMindosNonStreamingFallback(options: MindosNonStreamingF
       );
 
       const tool = toolMap.get(toolName);
-      send({ type: 'tool_start', toolCallId, toolName, args: parsedArgs });
+      send({ type: 'tool_start', toolCallId, toolName, args: sanitizeToolArgs(toolName, parsedArgs) });
 
       let resultText = '';
       let isError = false;
@@ -1661,7 +1714,7 @@ export async function runMindosNonStreamingFallback(options: MindosNonStreamingF
         isError = true;
       }
 
-      send({ type: 'tool_end', toolCallId, output: resultText, isError });
+      send({ type: 'tool_end', toolCallId, output: sanitizeToolOutput(resultText), isError });
       toolResultMessages.push({ role: 'tool', tool_call_id: toolCallId, content: resultText });
     }
 

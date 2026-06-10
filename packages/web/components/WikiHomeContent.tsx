@@ -105,7 +105,7 @@ export default function WikiHomeContent({ spaces, recent, mindSystemSpaces }: Wi
           <button
             onClick={triggerAsk}
             title="⌘/"
-            className="flex-1 flex items-center gap-3 px-4 py-3.5 rounded-xl border border-border/50 shadow-sm bg-card/80 backdrop-blur-sm transition-all duration-200 hover:border-[var(--amber)]/40 hover:shadow-md hover:-translate-y-0.5 group"
+            className="hit-target-box flex-1 flex items-center gap-3 px-4 py-3.5 border border-transparent transition-all duration-200 hover:-translate-y-0.5 group [--hit-target-bg:color-mix(in_srgb,var(--card)_80%,transparent)] [--hit-target-hover-bg:color-mix(in_srgb,var(--card)_90%,transparent)] [--hit-target-border-width:1px] [--hit-target-border:color-mix(in_srgb,var(--border)_50%,transparent)] [--hit-target-hover-border:color-mix(in_srgb,var(--amber)_40%,transparent)] [--hit-target-radius:var(--radius-xl)] [--hit-target-shadow:0_1px_2px_0_color-mix(in_srgb,var(--foreground)_8%,transparent)] [--hit-target-hover-shadow:0_4px_6px_-1px_color-mix(in_srgb,var(--foreground)_10%,transparent)]"
           >
             <Sparkles size={16} className="shrink-0 text-[var(--amber)] group-hover:scale-110 transition-transform duration-150" />
             <div className="flex-1 min-h-[1.5rem] flex items-center">
@@ -123,7 +123,7 @@ export default function WikiHomeContent({ spaces, recent, mindSystemSpaces }: Wi
           <button
             onClick={triggerSearch}
             title="⌘K"
-            className="flex items-center gap-2 px-3.5 py-3 rounded-xl border border-border/50 text-sm text-muted-foreground transition-all duration-200 shrink-0 hover:bg-muted/60 hover:shadow-sm hover:-translate-y-0.5"
+            className="hit-target-box flex items-center gap-2 px-3.5 py-3 border border-transparent text-sm text-muted-foreground transition-all duration-200 shrink-0 hover:-translate-y-0.5 [--hit-target-hover-bg:color-mix(in_srgb,var(--muted)_60%,transparent)] [--hit-target-border-width:1px] [--hit-target-border:color-mix(in_srgb,var(--border)_50%,transparent)] [--hit-target-hover-border:color-mix(in_srgb,var(--border)_65%,transparent)] [--hit-target-radius:var(--radius-xl)] [--hit-target-hover-shadow:0_1px_2px_0_color-mix(in_srgb,var(--foreground)_8%,transparent)]"
           >
             <Search size={14} />
             <kbd className="hidden sm:inline-flex items-center px-1.5 py-0.5 rounded text-xs font-mono bg-muted">
@@ -136,7 +136,7 @@ export default function WikiHomeContent({ spaces, recent, mindSystemSpaces }: Wi
         <div className="flex items-center gap-3 mt-4 pl-4">
           <Link
             href="/view/Untitled.md"
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 bg-[var(--amber)] text-[var(--amber-foreground)]"
+            className="hit-target-box inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-all duration-200 hover:-translate-y-0.5 text-[var(--amber-foreground)] [--hit-target-bg:var(--amber)] [--hit-target-hover-bg:var(--amber)] [--hit-target-radius:var(--radius-lg)] [--hit-target-hover-shadow:0_4px_6px_-1px_color-mix(in_srgb,var(--foreground)_10%,transparent)]"
           >
             <FilePlus size={14} />
             <span>{t.home.newNote}</span>
@@ -144,7 +144,7 @@ export default function WikiHomeContent({ spaces, recent, mindSystemSpaces }: Wi
           {lastFile && (
             <Link
               href={`/view/${encodePath(lastFile.path)}`}
-              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-colors text-muted-foreground hover:text-foreground hover:bg-muted"
+              className="hit-target-box inline-flex items-center gap-2 px-3.5 py-2 text-sm font-medium transition-colors text-muted-foreground hover:text-foreground [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-lg)]"
             >
               <ArrowRight size={14} className="text-[var(--amber)]/60" />
               <span>{t.home.continueEditing}</span>
@@ -227,10 +227,10 @@ export default function WikiHomeContent({ spaces, recent, mindSystemSpaces }: Wi
                   <Link
                     key={space.name}
                     href={`/view/${encodePath(space.path)}`}
-                    className={`flex items-start gap-3 px-4 py-3.5 rounded-xl border transition-all duration-200 ${
+                    className={`flex items-start gap-3 px-4 py-3.5 border transition-all duration-200 ${
                       isEmpty
-                        ? 'border-dashed border-border/50 opacity-50 hover:opacity-70'
-                        : 'border-border/60 hover:border-[var(--amber)]/30 hover:shadow-md hover:-translate-y-0.5 bg-card/40'
+                        ? 'rounded-xl border-dashed border-border/50 opacity-50 hover:opacity-70'
+                        : 'hit-target-box border-transparent hover:-translate-y-0.5 [--hit-target-bg:color-mix(in_srgb,var(--card)_40%,transparent)] [--hit-target-hover-bg:color-mix(in_srgb,var(--card)_58%,transparent)] [--hit-target-border-width:1px] [--hit-target-border:color-mix(in_srgb,var(--border)_60%,transparent)] [--hit-target-hover-border:color-mix(in_srgb,var(--amber)_30%,transparent)] [--hit-target-radius:var(--radius-xl)] [--hit-target-hover-shadow:0_4px_6px_-1px_color-mix(in_srgb,var(--foreground)_10%,transparent)]'
                     }`}
                   >
                     {emoji ? (

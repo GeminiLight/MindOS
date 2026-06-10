@@ -3,7 +3,12 @@ import { NextRequest } from 'next/server';
 import { seedFile } from '../setup';
 import { invalidateCache } from '../../lib/fs';
 import type { MindosAgentRuntimeAskOptions } from '@geminilight/mindos/agent-runtime';
+import type { AgentRuntimeDescriptor } from '@geminilight/mindos/server';
 import { listAgentRuns, resetAgentRunsForTest } from '@/lib/agent/run-ledger';
+import {
+  rememberAvailableNativeRuntimeDescriptor,
+  resetNativeRuntimeDescriptorCacheForTest,
+} from '@/lib/agent/native-runtime-descriptor-cache';
 
 let capturedNativeOptions: MindosAgentRuntimeAskOptions | null = null;
 let capturedAcpOptions: Record<string, any> | null = null;
@@ -13,6 +18,47 @@ const mockCheckNativeRuntimeHealth = vi.fn();
 const mockRunMindosAgentRuntimeAskSession = vi.fn();
 const mockRunMindosAcpAskSession = vi.fn();
 const mockCreateAcpSession = vi.fn();
+const originalAgentTimeoutMs = process.env.MINDOS_AGENT_TIMEOUT_MS;
+
+function availableNativeDescriptor(
+  input: Pick<AgentRuntimeDescriptor, 'id' | 'name' | 'kind' | 'adapter'> & { binaryPath: string },
+): AgentRuntimeDescriptor {
+  return {
+    id: input.id,
+    name: input.name,
+    kind: input.kind,
+    adapter: input.adapter,
+    modelOwner: 'external',
+    authOwner: 'external',
+    permissionOwner: 'external',
+    sessionOwner: 'external',
+    status: 'available',
+    binaryPath: input.binaryPath,
+    capabilities: {
+      ownsModelSelection: true,
+      supportsResume: true,
+      supportsFreshSession: true,
+      supportsListSessions: input.kind === 'codex',
+      supportsAttachExisting: input.kind === 'codex',
+      supportsFork: input.kind === 'codex',
+      supportsArchive: input.kind === 'codex',
+      supportsInterrupt: true,
+      supportsModelList: false,
+      supportsApprovals: true,
+      supportsUserInput: true,
+      supportsToolEvents: true,
+      supportsRuntimeStatus: true,
+      supportsDiffs: false,
+      supportsCheckpoints: false,
+      supportsBackgroundRuns: false,
+      supportsMcpConfig: input.kind === 'claude',
+    },
+    availability: {
+      checkedAt: '2026-06-10T00:00:00.000Z',
+      sources: ['native-health'],
+    },
+  };
+}
 
 vi.mock('@/lib/acp/detect-local', () => ({
   detectLocalAcpAgents: mockDetectLocalAcpAgents,
@@ -21,6 +67,28 @@ vi.mock('@/lib/acp/detect-local', () => ({
 }));
 
 vi.mock('@geminilight/mindos/agent-runtime', () => ({
+  buildAgentRuntimeEnv: vi.fn((input?: { settings?: { keys?: string[] } }) => ({
+    env: {
+      PATH: '/usr/bin',
+      ...(input?.settings?.keys?.includes('CLAUDE_CODE_OAUTH_TOKEN')
+        ? { CLAUDE_CODE_OAUTH_TOKEN: 'runtime-token' }
+        : {}),
+    },
+    overlay: input?.settings?.keys?.includes('CLAUDE_CODE_OAUTH_TOKEN')
+      ? { CLAUDE_CODE_OAUTH_TOKEN: 'runtime-token' }
+      : {},
+    keys: input?.settings?.keys ?? [],
+    injectedKeys: input?.settings?.keys ?? [],
+    missingKeys: [],
+  })),
+  resolveAgentRuntimeEnvOverlay: vi.fn((input?: { settings?: { keys?: string[] } }) => ({
+    overlay: input?.settings?.keys?.includes('GEMINI_API_KEY')
+      ? { GEMINI_API_KEY: 'runtime-gemini' }
+      : {},
+    keys: input?.settings?.keys ?? [],
+    injectedKeys: input?.settings?.keys ?? [],
+    missingKeys: [],
+  })),
   runMindosAgentRuntimeAskSession: mockRunMindosAgentRuntimeAskSession,
 }));
 
@@ -64,6 +132,7 @@ describe('/api/ask native runtime routing', () => {
     mockRunMindosAcpAskSession.mockReset();
     mockCreateAcpSession.mockReset();
     mockCreateAcpSession.mockResolvedValue({ id: 'acp-session-1' });
+    resetNativeRuntimeDescriptorCacheForTest();
     mockRunMindosAgentRuntimeAskSession.mockImplementation(async (options: MindosAgentRuntimeAskOptions) => {
       capturedNativeOptions = options;
       options.send({ type: 'text_delta', delta: 'native ok' });
@@ -84,6 +153,11 @@ describe('/api/ask native runtime routing', () => {
 
   afterEach(() => {
     vi.useRealTimers();
+    if (originalAgentTimeoutMs === undefined) {
+      delete process.env.MINDOS_AGENT_TIMEOUT_MS;
+    } else {
+      process.env.MINDOS_AGENT_TIMEOUT_MS = originalAgentTimeoutMs;
+    }
   });
 
   it('routes Codex before MindOS pi runtime initialization and bridges MindOS context', async () => {
@@ -104,7 +178,7 @@ describe('/api/ask native runtime routing', () => {
       messages: [{ role: 'user', content: 'Use the attached context' }],
       currentFile: 'current.md',
       attachedFiles: ['attached.md'],
-      selectedRuntime: { id: 'codex', name: 'Codex', kind: 'codex' },
+      selectedRuntime: { id: 'codex', name: 'Codex', kind: 'codex', binaryPath: '/usr/local/bin/codex' },
       runtimeBinding: {
         kind: 'codex-thread',
         runtime: 'codex',
@@ -126,6 +200,7 @@ describe('/api/ask native runtime routing', () => {
       id: 'codex',
       name: 'Codex',
       kind: 'codex',
+      binaryPath: '/usr/local/bin/codex',
       externalSessionId: 'thr_existing',
     });
     expect(capturedNativeOptions?.permissionMode).toBe('agent');
@@ -158,7 +233,7 @@ describe('/api/ask native runtime routing', () => {
     expect(nativeRuns[0]?.rootRunId).toBe(nativeRuns[0]?.id);
     expect(text).toContain('"type":"agent_run_context"');
     expect(text).toContain(`"rootRunId":"${nativeRuns[0]?.id}"`);
-  });
+  }, 15_000);
 
   it('maps Chat mode native runtime requests to readonly permission mode', async () => {
     mockResolveCommandPath.mockImplementation(async (command: string) => command === 'claude' ? '/usr/local/bin/claude' : null);
@@ -177,6 +252,29 @@ describe('/api/ask native runtime routing', () => {
 
     expect(capturedNativeOptions?.runtime.kind).toBe('claude');
     expect(capturedNativeOptions?.permissionMode).toBe('readonly');
+  });
+
+  it('uses the server-detected native runtime path instead of trusting the request body', async () => {
+    mockResolveCommandPath.mockImplementation(async (command: string) => command === 'codex' ? '/usr/local/bin/codex' : null);
+    mockCheckNativeRuntimeHealth.mockResolvedValue({ status: 'available' });
+    mockDetectLocalAcpAgents.mockResolvedValue({ installed: [], notInstalled: [] });
+
+    const { POST } = await import('../../app/api/ask/route');
+    const res = await POST(askRequest({
+      messages: [{ role: 'user', content: 'Use Codex' }],
+      selectedRuntime: { id: 'codex', name: 'Codex', kind: 'codex', binaryPath: '/tmp/fake-codex' },
+      mode: 'agent',
+    }));
+
+    expect(res.status).toBe(200);
+    await res.text();
+
+    expect(capturedNativeOptions?.runtime).toEqual({
+      id: 'codex',
+      name: 'Codex',
+      kind: 'codex',
+      binaryPath: '/usr/local/bin/codex',
+    });
   });
 
   it('maps organize mode native runtime requests to readonly permission mode', async () => {
@@ -230,6 +328,7 @@ describe('/api/ask native runtime routing', () => {
       id: 'codex',
       name: 'Codex',
       kind: 'codex',
+      binaryPath: '/usr/local/bin/codex',
     });
   });
 
@@ -265,6 +364,7 @@ describe('/api/ask native runtime routing', () => {
       id: 'codex',
       name: 'Codex',
       kind: 'codex',
+      binaryPath: '/usr/local/bin/codex',
     });
   });
 
@@ -304,7 +404,66 @@ describe('/api/ask native runtime routing', () => {
     expect(capturedNativeOptions).toBeNull();
   });
 
-  it('does not block native runtime send when the forced availability recheck hangs', async () => {
+  it('uses the last server-verified native runtime path when the forced availability recheck hangs', async () => {
+    vi.useFakeTimers();
+    rememberAvailableNativeRuntimeDescriptor(availableNativeDescriptor({
+      id: 'codex',
+      name: 'Codex',
+      kind: 'codex',
+      adapter: 'codex-app-server',
+      binaryPath: '/opt/homebrew/bin/codex',
+    }));
+    mockResolveCommandPath.mockImplementation(async () => new Promise(() => {}));
+    mockDetectLocalAcpAgents.mockResolvedValue({ installed: [], notInstalled: [] });
+
+    const { POST } = await import('../../app/api/ask/route');
+    const responsePromise = POST(askRequest({
+      messages: [{ role: 'user', content: 'Use Codex even if detection is slow' }],
+      selectedRuntime: { id: 'codex', name: 'Codex', kind: 'codex', binaryPath: '/tmp/fake-codex' },
+      mode: 'agent',
+    }));
+
+    await vi.advanceTimersByTimeAsync(3000);
+    await vi.advanceTimersByTimeAsync(1500);
+    const res = await responsePromise;
+    const text = await res.text();
+
+    expect(res.status).toBe(200);
+    expect(text).toContain('native ok');
+    expect(capturedNativeOptions?.runtime).toEqual({
+      id: 'codex',
+      name: 'Codex',
+      kind: 'codex',
+      binaryPath: '/opt/homebrew/bin/codex',
+    });
+  });
+
+  it('rejects Codex instead of launching without a server-verified path when recheck hangs', async () => {
+    vi.useFakeTimers();
+    mockResolveCommandPath.mockImplementation(async () => new Promise(() => {}));
+    mockDetectLocalAcpAgents.mockResolvedValue({ installed: [], notInstalled: [] });
+
+    const { POST } = await import('../../app/api/ask/route');
+    const responsePromise = POST(askRequest({
+      messages: [{ role: 'user', content: 'Use Codex while detection is slow' }],
+      selectedRuntime: { id: 'codex', name: 'Codex', kind: 'codex', binaryPath: '/tmp/fake-codex' },
+      mode: 'agent',
+    }));
+
+    await vi.advanceTimersByTimeAsync(3000);
+    const res = await responsePromise;
+    const body = await res.json();
+
+    expect(res.status).toBe(409);
+    expect(body).toMatchObject({
+      ok: false,
+      error: { message: 'Codex is still being verified. Please retry in a moment.' },
+    });
+    expect(capturedNativeOptions).toBeNull();
+    expect(mockRunMindosAgentRuntimeAskSession).not.toHaveBeenCalled();
+  });
+
+  it('uses the bundled Claude SDK path when Claude verification hangs without a cached CLI path', async () => {
     vi.useFakeTimers();
     mockResolveCommandPath.mockImplementation(async () => new Promise(() => {}));
     mockDetectLocalAcpAgents.mockResolvedValue({ installed: [], notInstalled: [] });
@@ -312,17 +471,72 @@ describe('/api/ask native runtime routing', () => {
     const { POST } = await import('../../app/api/ask/route');
     const responsePromise = POST(askRequest({
       messages: [{ role: 'user', content: 'Use Claude Code even if detection is slow' }],
-      selectedRuntime: { id: 'claude', name: 'Claude Code', kind: 'claude' },
+      selectedRuntime: { id: 'claude', name: 'Claude Code', kind: 'claude', binaryPath: '/tmp/fake-claude' },
       mode: 'agent',
     }));
 
     await vi.advanceTimersByTimeAsync(3000);
+    await vi.advanceTimersByTimeAsync(1500);
     const res = await responsePromise;
     const text = await res.text();
 
     expect(res.status).toBe(200);
     expect(text).toContain('native ok');
-    expect(capturedNativeOptions?.runtime.kind).toBe('claude');
+    expect(capturedNativeOptions?.runtime).toEqual({
+      id: 'claude',
+      name: 'Claude Code',
+      kind: 'claude',
+      binaryPath: 'sdk:@anthropic-ai/claude-agent-sdk',
+    });
+  });
+
+  it('resolves a real Claude CLI path before launching when runtime health returned the SDK sentinel', async () => {
+    let resolveCalls = 0;
+    mockResolveCommandPath.mockImplementation(async (command: string) => {
+      if (command !== 'claude') return null;
+      resolveCalls += 1;
+      if (resolveCalls === 1) {
+        return await new Promise<string>((resolve) => setTimeout(() => resolve('/usr/local/bin/claude'), 50));
+      }
+      return '/usr/local/bin/claude';
+    });
+    mockCheckNativeRuntimeHealth.mockResolvedValue({ status: 'available' });
+    mockDetectLocalAcpAgents.mockResolvedValue({ installed: [], notInstalled: [] });
+
+    const { POST } = await import('../../app/api/ask/route');
+    const res = await POST(askRequest({
+      messages: [{ role: 'user', content: 'Use Claude Code' }],
+      selectedRuntime: { id: 'claude', name: 'Claude Code', kind: 'claude', binaryPath: '/tmp/fake-claude' },
+      mode: 'agent',
+    }));
+
+    expect(res.status).toBe(200);
+    await res.text();
+
+    expect(capturedNativeOptions?.runtime).toEqual({
+      id: 'claude',
+      name: 'Claude Code',
+      kind: 'claude',
+      binaryPath: '/usr/local/bin/claude',
+    });
+  });
+
+  it('passes the configured agent timeout to native runtimes', async () => {
+    process.env.MINDOS_AGENT_TIMEOUT_MS = '1234';
+    mockResolveCommandPath.mockImplementation(async (command: string) => command === 'codex' ? '/usr/local/bin/codex' : null);
+    mockCheckNativeRuntimeHealth.mockResolvedValue({ status: 'available' });
+    mockDetectLocalAcpAgents.mockResolvedValue({ installed: [], notInstalled: [] });
+
+    const { POST } = await import('../../app/api/ask/route');
+    const res = await POST(askRequest({
+      messages: [{ role: 'user', content: 'Use Codex with timeout' }],
+      selectedRuntime: { id: 'codex', name: 'Codex', kind: 'codex' },
+      mode: 'agent',
+    }));
+    await res.text();
+
+    expect(res.status).toBe(200);
+    expect(capturedNativeOptions?.timeoutMs).toBe(1234);
   });
 
   it('returns a structured SSE error if the native runtime runner throws', async () => {
@@ -395,6 +609,44 @@ describe('/api/ask native runtime routing', () => {
         metadata: expect.objectContaining({
           runtimeKind: 'codex',
           externalSessionId: 'thr_failed',
+        }),
+      }),
+    ]);
+  });
+
+  it('records native runtime timeout results as timed out ledger runs', async () => {
+    mockResolveCommandPath.mockImplementation(async (command: string) => command === 'claude' ? '/usr/local/bin/claude' : null);
+    mockCheckNativeRuntimeHealth.mockResolvedValue({ status: 'available' });
+    mockDetectLocalAcpAgents.mockResolvedValue({ installed: [], notInstalled: [] });
+    const timeoutError = Object.assign(new Error('Native runtime timed out after 1s.'), { code: 'TIMEOUT' });
+    mockRunMindosAgentRuntimeAskSession.mockImplementationOnce(async (options: MindosAgentRuntimeAskOptions) => {
+      capturedNativeOptions = options;
+      options.send({ type: 'text_delta', delta: 'partial native output' });
+      return { error: timeoutError, externalSessionId: 'claude-timeout' };
+    });
+
+    const { POST } = await import('../../app/api/ask/route');
+    const res = await POST(askRequest({
+      messages: [{ role: 'user', content: 'Use Claude Code' }],
+      selectedRuntime: { id: 'claude', name: 'Claude Code', kind: 'claude' },
+      mode: 'agent',
+      chatSessionId: 'chat-native-timeout',
+    }));
+    const text = await res.text();
+
+    expect(res.status).toBe(200);
+    expect(text).toContain('partial native output');
+    expect(listAgentRuns({ kind: 'native-runtime' })).toEqual([
+      expect.objectContaining({
+        agentKind: 'native-runtime',
+        runtimeId: 'claude',
+        displayName: 'Claude Code',
+        status: 'timed_out',
+        chatSessionId: 'chat-native-timeout',
+        error: 'Native runtime timed out after 1s.',
+        metadata: expect.objectContaining({
+          runtimeKind: 'claude',
+          externalSessionId: 'claude-timeout',
         }),
       }),
     ]);

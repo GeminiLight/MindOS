@@ -16,6 +16,7 @@
  */
 import type { Message, MessagePart, ToolCallPart, TextPart, ReasoningPart, RuntimeStatusPart, AskUserQuestion, AskUserQuestionAnswer } from '@/lib/types';
 import { parseMindosSseLine } from '@geminilight/mindos/session';
+import { redactSensitiveObject, redactSensitiveText } from './redaction';
 
 /** Tools that modify files — trigger files-changed notification on completion */
 const FILE_MUTATING_TOOLS = new Set([
@@ -83,12 +84,12 @@ function normalizeUserQuestionAnswers(value: unknown): AskUserQuestionAnswer[] {
   if (!Array.isArray(value)) return [];
   return value.filter(isRecord).map((answer) => ({
     questionIndex: typeof answer.questionIndex === 'number' ? answer.questionIndex : -1,
-    question: typeof answer.question === 'string' ? answer.question : '',
+    question: typeof answer.question === 'string' ? redactSensitiveText(answer.question) : '',
     kind: answer.kind === 'custom' || answer.kind === 'chat' || answer.kind === 'multi' ? answer.kind : 'option',
-    answer: typeof answer.answer === 'string' ? answer.answer : null,
-    ...(Array.isArray(answer.selected) ? { selected: answer.selected.filter((item): item is string => typeof item === 'string') } : {}),
-    ...(typeof answer.notes === 'string' ? { notes: answer.notes } : {}),
-    ...(typeof answer.preview === 'string' ? { preview: answer.preview } : {}),
+    answer: typeof answer.answer === 'string' ? redactSensitiveText(answer.answer) : null,
+    ...(Array.isArray(answer.selected) ? { selected: answer.selected.filter((item): item is string => typeof item === 'string').map(redactSensitiveText) } : {}),
+    ...(typeof answer.notes === 'string' ? { notes: redactSensitiveText(answer.notes) } : {}),
+    ...(typeof answer.preview === 'string' ? { preview: redactSensitiveText(answer.preview) } : {}),
   }));
 }
 
@@ -224,14 +225,15 @@ export async function consumeUIMessageStream(
   }
 
   function upsertRuntimeStatus(message: string, runtime?: RuntimeStatusPart['runtime']): void {
+    const safeMessage = redactSensitiveText(message);
     const last = parts[parts.length - 1];
     if (last?.type === 'runtime-status' && last.runtime === runtime) {
-      last.message = message;
+      last.message = safeMessage;
       return;
     }
     parts.push({
       type: 'runtime-status',
-      message,
+      message: safeMessage,
       ...(runtime ? { runtime } : {}),
     });
     currentTextId = null;
@@ -242,16 +244,16 @@ export async function consumeUIMessageStream(
     return value
       .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item))
       .map((question) => ({
-        question: typeof question.question === 'string' ? question.question : '',
-        header: typeof question.header === 'string' ? question.header : '',
+        question: typeof question.question === 'string' ? redactSensitiveText(question.question) : '',
+        header: typeof question.header === 'string' ? redactSensitiveText(question.header) : '',
         multiSelect: question.multiSelect === true,
         options: Array.isArray(question.options)
           ? question.options
               .filter((option): option is Record<string, unknown> => Boolean(option) && typeof option === 'object' && !Array.isArray(option))
               .map(option => ({
-                label: typeof option.label === 'string' ? option.label : '',
-                description: typeof option.description === 'string' ? option.description : '',
-                ...(typeof option.preview === 'string' ? { preview: option.preview } : {}),
+                label: typeof option.label === 'string' ? redactSensitiveText(option.label) : '',
+                description: typeof option.description === 'string' ? redactSensitiveText(option.description) : '',
+                ...(typeof option.preview === 'string' ? { preview: redactSensitiveText(option.preview) } : {}),
               }))
           : [],
       }));
@@ -317,10 +319,11 @@ export async function consumeUIMessageStream(
             if (!toolCallId) break;
             const toolName = eventRecord.toolName as string;
             const tc = findOrCreateToolCall(toolCallId, toolName);
-            tc.input = eventRecord.args;
+            const safeArgs = redactSensitiveObject(eventRecord.args);
+            tc.input = safeArgs;
             tc.runtime = normalizeRuntime(eventRecord.runtime);
             if (isAskUserQuestionToolName(toolName)) {
-              const questions = normalizeUserQuestions(extractQuestionPayload(eventRecord.args));
+              const questions = normalizeUserQuestions(extractQuestionPayload(safeArgs));
               if (questions.length > 0) {
                 const runId = typeof eventRecord.runId === 'string' ? eventRecord.runId : '';
                 tc.userQuestion = {
@@ -344,7 +347,7 @@ export async function consumeUIMessageStream(
             const tc = findOrCreateToolCall(toolCallId, toolName);
             if (toolName && tc.toolName === 'unknown') tc.toolName = toolName;
             tc.runtime = normalizeRuntime(eventRecord.runtime) ?? tc.runtime;
-            tc.output = `${tc.output ?? ''}${typeof eventRecord.delta === 'string' ? eventRecord.delta : ''}`;
+            tc.output = `${tc.output ?? ''}${typeof eventRecord.delta === 'string' ? redactSensitiveText(eventRecord.delta) : ''}`;
             if (tc.state === 'pending') tc.state = 'running';
             changed = true;
             break;
@@ -360,7 +363,7 @@ export async function consumeUIMessageStream(
               tc.toolName = eventRecord.toolName;
             }
             tc.runtime = normalizeRuntime(eventRecord.runtime) ?? tc.runtime;
-            const output = typeof eventRecord.output === 'string' ? eventRecord.output : '';
+            const output = typeof eventRecord.output === 'string' ? redactSensitiveText(eventRecord.output) : '';
             const shouldPreserveExistingOutput = Boolean(
               tc.output &&
               !eventRecord.isError &&
@@ -391,7 +394,7 @@ export async function consumeUIMessageStream(
             const toolName = typeof eventRecord.toolName === 'string' && eventRecord.toolName ? eventRecord.toolName : 'approval_request';
             const tc = findOrCreateToolCall(toolCallId, toolName);
             tc.toolName = toolName;
-            tc.input = eventRecord.input;
+            tc.input = redactSensitiveObject(eventRecord.input);
             tc.runtime = runtime;
             tc.runtimePermission = {
               runId,
@@ -403,13 +406,13 @@ export async function consumeUIMessageStream(
                     .filter(isRecord)
                     .map(option => ({
                       id: typeof option.id === 'string' ? option.id : '',
-                      label: typeof option.label === 'string' ? option.label : '',
-                      ...(typeof option.description === 'string' ? { description: option.description } : {}),
+                      label: typeof option.label === 'string' ? redactSensitiveText(option.label) : '',
+                      ...(typeof option.description === 'string' ? { description: redactSensitiveText(option.description) } : {}),
                       ...(normalizeRuntimePermissionIntent(option.intent) ? { intent: normalizeRuntimePermissionIntent(option.intent) } : {}),
                     }))
                     .filter(option => option.id && option.label)
                 : [],
-              ...(typeof eventRecord.reason === 'string' ? { reason: eventRecord.reason } : {}),
+              ...(typeof eventRecord.reason === 'string' ? { reason: redactSensitiveText(eventRecord.reason) } : {}),
             };
             tc.state = 'running';
             changed = true;
@@ -476,11 +479,11 @@ export async function consumeUIMessageStream(
             const tc = findOrCreateToolCall(toolCallId, 'ask_user_question');
             if (tc.userQuestion) {
               tc.userQuestion.status = 'cancelled';
-              tc.userQuestion.reason = typeof eventRecord.reason === 'string' ? eventRecord.reason : undefined;
+              tc.userQuestion.reason = typeof eventRecord.reason === 'string' ? redactSensitiveText(eventRecord.reason) : undefined;
             }
             tc.state = 'error';
             tc.output = typeof eventRecord.reason === 'string' && eventRecord.reason
-              ? eventRecord.reason
+              ? redactSensitiveText(eventRecord.reason)
               : 'Question cancelled.';
             changed = true;
             break;
@@ -499,7 +502,7 @@ export async function consumeUIMessageStream(
                 externalSessionId,
                 ...(typeof eventRecord.cwd === 'string' ? { cwd: eventRecord.cwd } : {}),
                 ...(isRuntimeBindingStatus(eventRecord.status) ? { status: eventRecord.status } : {}),
-                ...(typeof eventRecord.reason === 'string' ? { reason: eventRecord.reason } : {}),
+                ...(typeof eventRecord.reason === 'string' ? { reason: redactSensitiveText(eventRecord.reason) } : {}),
               });
             }
             break;
@@ -519,7 +522,7 @@ export async function consumeUIMessageStream(
             const message = eventRecord.message as string;
             parts.push({
               type: 'text',
-              text: `\n\n**Stream Error:** ${message}`,
+              text: `\n\n**Stream Error:** ${redactSensitiveText(message)}`,
             });
             currentTextId = null;
             changed = true;

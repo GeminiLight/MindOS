@@ -55,6 +55,52 @@ describe('MindOS copy alignment', () => {
     expect(Object.keys(knowledgeZh.home.mindPillars)).toEqual(['dao', 'fa', 'shu', 'qi']);
   });
 
+  it('localizes Inbox as 收集箱 in Chinese UI while keeping English and path names stable', () => {
+    expect(navigationEn.sidebar.capture).toBe('Inbox');
+    expect(knowledgeEn.inbox.title).toBe('Inbox');
+    expect(knowledgeEn.inbox.composerTitle).toBe('Add to Inbox');
+    expect(knowledgeEn.inbox.viewQueue).toBe('Pending');
+    expect(knowledgeEn.inbox.viewShelved).toBe('Shelved');
+    expect(knowledgeEn.inbox.viewHistory).toBe('Done');
+
+    expect(navigationZh.sidebar.capture).toBe('收集箱');
+    expect(knowledgeZh.inbox.title).toBe('收集箱');
+    expect(knowledgeZh.inbox.capturePageTitle).toBe('新增收集');
+    expect(knowledgeZh.inbox.composerTitle).toBe('加入收集箱');
+    expect(knowledgeZh.inbox.captureButton).toBe('保存到收集箱');
+    expect(knowledgeZh.inbox.organizeToMindAction).toBe('整理到 Mind');
+    expect(knowledgeZh.inbox.organizationAgentTitle).toBe('收集箱整理助手');
+    expect(knowledgeZh.inbox.viewQueue).toBe('待处理');
+    expect(knowledgeZh.inbox.viewShelved).toBe('已搁置');
+    expect(knowledgeZh.inbox.viewHistory).toBe('已完成');
+    expect(knowledgeZh.importHistory.processedArchive).toContain('Inbox/.processed/');
+
+    const visibleZhCopy = [
+      navigationZh.sidebar.capture,
+      knowledgeZh.inbox.title,
+      knowledgeZh.inbox.capturePageTitle,
+      knowledgeZh.inbox.reviewPageSubtitle,
+      knowledgeZh.inbox.composerTitle,
+      knowledgeZh.inbox.captureButton,
+      knowledgeZh.inbox.organizeToMindAction,
+      knowledgeZh.inbox.organizationAgentTitle,
+      knowledgeZh.inbox.queuePreviewDesc,
+      knowledgeZh.inbox.contentPreviewFailed,
+      knowledgeZh.inbox.sourcePreviewIdleDesc,
+      knowledgeZh.inbox.sourcePreviewTextCapture,
+      knowledgeZh.inbox.emptyTitle,
+      aiChatZh.ask.suggestions[0]?.label,
+      aiChatZh.ask.suggestions[0]?.prompt,
+    ].join('\n');
+
+    expect(visibleZhCopy).toContain('收集箱');
+    expect(visibleZhCopy).not.toContain('Inbox Agent');
+    expect(visibleZhCopy).not.toContain('收集箱整理 Agent');
+    expect(visibleZhCopy).not.toContain('收件箱');
+    expect(visibleZhCopy).not.toContain('暂存台');
+    expect(visibleZhCopy).not.toContain('捕获');
+  });
+
   it('packages every built-in MindOS skill reference used by SKILL.md', () => {
     for (const skillName of ['mindos', 'mindos-zh']) {
       const sourceSkillPath = path.join(repoRoot, 'skills', skillName, 'SKILL.md');
@@ -64,6 +110,7 @@ describe('MindOS copy alignment', () => {
       const refs = Array.from(sourceSkill.matchAll(/references\/[\w.-]+\.md/g), match => match[0]);
 
       expect(packagedSkill).toBe(sourceSkill);
+      expect(sourceSkill).not.toContain('暂存台');
       expect(refs.length).toBeGreaterThan(0);
       for (const ref of new Set(refs)) {
         const sourceRef = path.join(repoRoot, 'skills', skillName, ref);

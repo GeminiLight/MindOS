@@ -117,7 +117,7 @@ export default function ExportModal({ open, onClose, filePath, isDirectory, file
               {isDirectory ? (t.export?.exportSpace ?? 'Export Space') : (t.export?.exportFile ?? 'Export File')}
             </h3>
           </div>
-          <button onClick={handleClose} className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" aria-label={t.export?.cancel ?? 'Close'}>
+          <button onClick={handleClose} className="hit-target-box p-1 text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-md)]" aria-label={t.export?.cancel ?? 'Close'}>
             <X size={14} />
           </button>
         </div>
@@ -145,10 +145,10 @@ export default function ExportModal({ open, onClose, filePath, isDirectory, file
                 {formats.map(f => (
                   <label
                     key={f.value}
-                    className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
+                    className={`hit-target-box flex items-start gap-3 p-3 border border-transparent cursor-pointer transition-all [--hit-target-border-width:1px] [--hit-target-radius:var(--radius-lg)] ${
                       format === f.value
-                        ? 'border-[var(--amber)]/40 bg-[var(--amber-dim)]'
-                        : 'border-border hover:border-border/80 hover:bg-muted/30'
+                        ? '[--hit-target-border:color-mix(in_srgb,var(--amber)_40%,transparent)] [--hit-target-bg:var(--amber-dim)]'
+                        : '[--hit-target-border:var(--border)] [--hit-target-hover-border:color-mix(in_srgb,var(--border)_80%,transparent)] [--hit-target-hover-bg:color-mix(in_srgb,var(--muted)_30%,transparent)]'
                     } ${f.disabled ? 'opacity-40 cursor-not-allowed' : ''}`}
                   >
                     <input
@@ -178,25 +178,25 @@ export default function ExportModal({ open, onClose, filePath, isDirectory, file
         <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-border">
           {state === 'done' ? (
             <>
-              <button onClick={handleRetry} className="px-3 py-1.5 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
+              <button onClick={handleRetry} className="hit-target-box px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-md)]">
                 {t.export?.downloadAgain ?? 'Download Again'}
               </button>
-              <button onClick={handleClose} className="px-3 py-1.5 rounded-md text-xs font-medium bg-[var(--amber-dim)] text-[var(--amber-text)] hover:opacity-80 transition-colors">
+              <button onClick={handleClose} className="hit-target-box px-3 py-1.5 text-xs font-medium text-[var(--amber-text)] hover:opacity-80 transition-colors [--hit-target-bg:var(--amber-dim)] [--hit-target-hover-bg:var(--amber-dim)] [--hit-target-radius:var(--radius-md)]">
                 {t.export?.close ?? 'Done'}
               </button>
             </>
           ) : state === 'error' ? (
             <>
-              <button onClick={handleClose} className="px-3 py-1.5 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
+              <button onClick={handleClose} className="hit-target-box px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-md)]">
                 {t.export?.cancel ?? 'Cancel'}
               </button>
-              <button onClick={handleRetry} className="px-3 py-1.5 rounded-md text-xs font-medium bg-[var(--amber-dim)] text-[var(--amber-text)] hover:opacity-80 transition-colors">
+              <button onClick={handleRetry} className="hit-target-box px-3 py-1.5 text-xs font-medium text-[var(--amber-text)] hover:opacity-80 transition-colors [--hit-target-bg:var(--amber-dim)] [--hit-target-hover-bg:var(--amber-dim)] [--hit-target-radius:var(--radius-md)]">
                 {t.export?.retry ?? 'Retry'}
               </button>
             </>
           ) : state === 'exporting' ? (
             <>
-              <button onClick={handleCancel} className="px-3 py-1.5 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
+              <button onClick={handleCancel} className="hit-target-box px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-md)]">
                 {t.export?.cancel ?? 'Cancel'}
               </button>
               <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium text-[var(--amber-text)] opacity-70">
@@ -205,12 +205,12 @@ export default function ExportModal({ open, onClose, filePath, isDirectory, file
             </>
           ) : (
             <>
-              <button onClick={handleClose} className="px-3 py-1.5 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
+              <button onClick={handleClose} className="hit-target-box px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-md)]">
                 {t.export?.cancel ?? 'Cancel'}
               </button>
               <button
                 onClick={handleExport}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-[var(--amber-dim)] text-[var(--amber-text)] hover:opacity-80 transition-colors"
+                className="hit-target-box inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[var(--amber-text)] hover:opacity-80 transition-colors [--hit-target-bg:var(--amber-dim)] [--hit-target-hover-bg:var(--amber-dim)] [--hit-target-radius:var(--radius-md)]"
               >
                 <Download size={12} /> {t.export?.exportButton ?? 'Export'}
               </button>

@@ -234,7 +234,7 @@ export default function ImportModal({ open, onClose, defaultSpace, initialFiles,
             </div>
             <button
               onClick={handleClose}
-              className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              className="hit-target-box p-1 text-muted-foreground hover:text-foreground transition-colors [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-md)]"
               aria-label="Close"
             >
               <X size={16} />
@@ -245,10 +245,10 @@ export default function ImportModal({ open, onClose, defaultSpace, initialFiles,
             {/* DropZone */}
             {isSelectStep && (
               <div
-                className={`rounded-lg transition-all duration-200 cursor-pointer ${
+                className={`hit-target-box transition-all duration-200 cursor-pointer [--hit-target-radius:var(--radius-lg)] ${
                   hasFiles
-                    ? 'border border-border/50 bg-muted/25 py-3 px-4'
-                    : 'border-2 border-dashed border-[var(--amber)]/25 hover:border-[var(--amber)]/40 bg-[var(--amber)]/2 hover:bg-[var(--amber)]/4 py-8 px-4 shadow-[inset_0_1px_2px_rgba(200,135,58,0.08)]'
+                    ? 'py-3 px-4 [--hit-target-bg:color-mix(in_srgb,var(--muted)_25%,transparent)] [--hit-target-outline-width:1px] [--hit-target-outline:color-mix(in_srgb,var(--border)_50%,transparent)]'
+                    : 'py-8 px-4 [--hit-target-bg:color-mix(in_srgb,var(--amber)_2%,transparent)] [--hit-target-hover-bg:color-mix(in_srgb,var(--amber)_4%,transparent)] [--hit-target-outline-width:2px] [--hit-target-outline-style:dashed] [--hit-target-outline:color-mix(in_srgb,var(--amber)_25%,transparent)] [--hit-target-hover-outline:color-mix(in_srgb,var(--amber)_40%,transparent)] [--hit-target-shadow:inset_0_1px_2px_color-mix(in_srgb,var(--amber)_8%,transparent)]'
                 }`}
                 role="button"
                 tabIndex={0}
@@ -337,7 +337,7 @@ export default function ImportModal({ open, onClose, defaultSpace, initialFiles,
                       {isSelectStep && !isArchiveConfig && (
                         <button
                           onClick={(e) => { e.stopPropagation(); im.removeFile(idx); }}
-                          className="p-0.5 text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                          className="hit-target-box p-0.5 text-muted-foreground hover:text-foreground transition-colors shrink-0 [--hit-target-hover-bg:transparent] [--hit-target-radius:var(--radius-sm)]"
                           aria-label={`${t.fileImport.remove} ${f.name}`}
                         >
                           <X size={14} />
@@ -384,7 +384,7 @@ export default function ImportModal({ open, onClose, defaultSpace, initialFiles,
               <div className="grid grid-cols-2 gap-3 mt-4">
                 <button
                   onClick={() => handleIntentSelect('archive')}
-                  className="flex flex-col items-center gap-2 p-4 border rounded-lg cursor-pointer transition-all duration-150 border-[var(--amber)]/30 bg-card hover:border-[var(--amber)]/60 hover:shadow-sm active:scale-[0.98] text-left"
+                  className="hit-target-box flex flex-col items-center gap-2 p-4 border border-transparent cursor-pointer transition-all duration-150 active:scale-[0.98] text-left [--hit-target-bg:var(--card)] [--hit-target-hover-bg:var(--card)] [--hit-target-border-width:1px] [--hit-target-border:color-mix(in_srgb,var(--amber)_30%,transparent)] [--hit-target-hover-border:color-mix(in_srgb,var(--amber)_60%,transparent)] [--hit-target-radius:var(--radius-lg)] [--hit-target-hover-shadow:0_1px_2px_0_color-mix(in_srgb,var(--foreground)_8%,transparent)]"
                   disabled={im.validFiles.length === 0}
                   title={im.validFiles.length === 0 ? t.hints.noValidFiles : undefined}
                 >
@@ -394,7 +394,7 @@ export default function ImportModal({ open, onClose, defaultSpace, initialFiles,
                 </button>
                 <button
                   onClick={() => handleIntentSelect('digest')}
-                  className="flex flex-col items-center gap-2 p-4 border border-border rounded-lg cursor-pointer transition-all duration-150 bg-card hover:border-[var(--amber)]/50 hover:shadow-sm active:scale-[0.98] text-left"
+                  className="hit-target-box flex flex-col items-center gap-2 p-4 border border-transparent cursor-pointer transition-all duration-150 active:scale-[0.98] text-left [--hit-target-bg:var(--card)] [--hit-target-hover-bg:var(--card)] [--hit-target-border-width:1px] [--hit-target-border:var(--border)] [--hit-target-hover-border:color-mix(in_srgb,var(--amber)_50%,transparent)] [--hit-target-radius:var(--radius-lg)] [--hit-target-hover-shadow:0_1px_2px_0_color-mix(in_srgb,var(--foreground)_8%,transparent)]"
                   disabled={im.validFiles.length === 0 || aiOrganize.phase === 'organizing'}
                   title={im.validFiles.length === 0 ? t.hints.noValidFiles : aiOrganize.phase === 'organizing' ? t.hints.aiOrganizing : undefined}
                 >
@@ -476,7 +476,7 @@ export default function ImportModal({ open, onClose, defaultSpace, initialFiles,
                 <div className="flex items-center justify-end gap-3 pt-2">
                   <button
                     onClick={handleClose}
-                    className="text-xs text-muted-foreground/70 hover:text-muted-foreground transition-colors px-2 py-1.5"
+                    className="hit-target-box text-xs text-muted-foreground/70 hover:text-muted-foreground transition-colors px-2 py-1.5 [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-md)]"
                   >
                     {t.fileImport.cancel}
                   </button>
@@ -484,10 +484,10 @@ export default function ImportModal({ open, onClose, defaultSpace, initialFiles,
                     onClick={handleArchiveSubmit}
                     disabled={isImporting || im.validFiles.length === 0}
                     title={isImporting ? t.hints.importInProgress : im.validFiles.length === 0 ? t.hints.noValidFiles : undefined}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                    className={`hit-target-box flex items-center gap-2 px-4 py-2 text-sm font-medium transition-all duration-200 [--hit-target-radius:var(--radius-lg)] ${
                       showSuccess
-                        ? 'bg-success text-success-foreground'
-                        : 'bg-[var(--amber)] text-[var(--amber-foreground)] hover:opacity-90'
+                        ? 'text-success-foreground [--hit-target-bg:var(--success)] [--hit-target-hover-bg:var(--success)]'
+                        : 'text-[var(--amber-foreground)] hover:opacity-90 [--hit-target-bg:var(--amber)] [--hit-target-hover-bg:var(--amber)]'
                     } disabled:opacity-50`}
                   >
                     {showSuccess ? (

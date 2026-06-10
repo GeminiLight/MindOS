@@ -2,11 +2,18 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronRight, FileText, History, Inbox, ListChecks, Plus } from 'lucide-react';
+import { Archive, ChevronRight, FileText, History, Inbox, ListChecks, Plus } from 'lucide-react';
 import PanelHeader from './PanelHeader';
 import { useLocale } from '@/lib/stores/locale-store';
 import { loadHistory, type OrganizeHistoryEntry } from '@/lib/organize-history';
 import { fetchInboxFiles } from '@/lib/inbox-client';
+import {
+  INBOX_SHELVED_STORAGE_KEY,
+  INBOX_SHELVED_UPDATED_EVENT,
+  normalizeShelvedInboxPaths,
+  readShelvedInboxPaths,
+  writeShelvedInboxPaths,
+} from '@/lib/inbox-shelved';
 
 type InboxFile = {
   name: string;
@@ -16,13 +23,13 @@ type InboxFile = {
   isAging?: boolean;
 };
 
-type CapturePanelView = 'capture' | 'queue' | 'history';
+type CapturePanelView = 'capture' | 'queue' | 'shelved' | 'history';
 
 function getCurrentPanelView(): CapturePanelView {
   if (typeof window === 'undefined') return 'capture';
   if (window.location.pathname === '/capture/history') return 'history';
   const hash = window.location.hash.replace('#', '');
-  return hash === 'queue' || hash === 'history' ? hash : 'capture';
+  return hash === 'queue' || hash === 'shelved' || hash === 'history' ? hash : 'capture';
 }
 
 export default function CapturePanel() {
@@ -32,6 +39,7 @@ export default function CapturePanel() {
   const [loading, setLoading] = useState(true);
   const [inboxError, setInboxError] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<CapturePanelView>(() => getCurrentPanelView());
+  const [shelvedPaths, setShelvedPaths] = useState<string[]>(() => readShelvedInboxPaths());
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const fetchSeqRef = useRef(0);
   const inboxFilesEventSeqRef = useRef(0);
@@ -79,6 +87,10 @@ export default function CapturePanel() {
     });
 
     const syncView = () => setActiveView(getCurrentPanelView());
+    const syncShelvedPaths = () => setShelvedPaths(readShelvedInboxPaths());
+    const syncStorage = (event: StorageEvent) => {
+      if (event.key === INBOX_SHELVED_STORAGE_KEY) syncShelvedPaths();
+    };
     const syncInboxFiles = (event: Event) => {
       const nextFiles = (event as CustomEvent<InboxFile[]>).detail;
       if (!Array.isArray(nextFiles)) return;
@@ -91,6 +103,8 @@ export default function CapturePanel() {
     window.addEventListener('mindos:organize-done', refresh);
     window.addEventListener('mindos:organize-history-update', refreshHistory);
     window.addEventListener('mindos:inbox-files', syncInboxFiles);
+    window.addEventListener(INBOX_SHELVED_UPDATED_EVENT, syncShelvedPaths);
+    window.addEventListener('storage', syncStorage);
     window.addEventListener('hashchange', syncView);
     window.addEventListener('popstate', syncView);
     return () => {
@@ -100,14 +114,28 @@ export default function CapturePanel() {
       window.removeEventListener('mindos:organize-done', refresh);
       window.removeEventListener('mindos:organize-history-update', refreshHistory);
       window.removeEventListener('mindos:inbox-files', syncInboxFiles);
+      window.removeEventListener(INBOX_SHELVED_UPDATED_EVENT, syncShelvedPaths);
+      window.removeEventListener('storage', syncStorage);
       window.removeEventListener('hashchange', syncView);
       window.removeEventListener('popstate', syncView);
     };
   }, [fetchInbox, refresh, refreshHistory]);
 
-  const agingCount = useMemo(() => files.filter(file => file.isAging).length, [files]);
-  const previewFiles = useMemo(() => files.slice(0, 3), [files]);
-  const reviewDesc = inboxError ? t.inbox.loadFailed : loading ? t.inbox.sidebarLoadingDesc : t.inbox.sidebarQueueDesc(files.length);
+  useEffect(() => {
+    if (loading || inboxError) return;
+    const validPaths = new Set(files.map(file => file.path));
+    const normalized = normalizeShelvedInboxPaths(shelvedPaths, validPaths);
+    if (normalized.length !== shelvedPaths.length || normalized.some((path, index) => path !== shelvedPaths[index])) {
+      setShelvedPaths(writeShelvedInboxPaths(normalized));
+    }
+  }, [files, inboxError, loading, shelvedPaths]);
+
+  const shelvedPathSet = useMemo(() => new Set(shelvedPaths), [shelvedPaths]);
+  const pendingFiles = useMemo(() => files.filter(file => !shelvedPathSet.has(file.path)), [files, shelvedPathSet]);
+  const shelvedFiles = useMemo(() => files.filter(file => shelvedPathSet.has(file.path)), [files, shelvedPathSet]);
+  const agingCount = useMemo(() => pendingFiles.filter(file => file.isAging).length, [pendingFiles]);
+  const previewFiles = useMemo(() => pendingFiles.slice(0, 5), [pendingFiles]);
+  const reviewDesc = inboxError ? t.inbox.loadFailed : loading ? t.inbox.sidebarLoadingDesc : t.inbox.sidebarQueueDesc(pendingFiles.length);
 
   return (
     <div className="flex h-full flex-col">
@@ -115,47 +143,63 @@ export default function CapturePanel() {
 
       <div className="flex-1 overflow-y-auto px-3 py-3">
         <section className="rounded-xl border border-border/55 bg-card/45 p-3 shadow-sm">
-          <div className="flex items-start gap-2.5">
-            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[var(--amber-subtle)] text-[var(--amber)]">
-              <Inbox size={14} />
-            </span>
-            <div className="min-w-0 pt-0.5">
-              <div className="flex items-center gap-2">
-                <h3 className="truncate text-xs font-semibold text-foreground">{t.inbox.sidebarPanelDesc}</h3>
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex min-w-0 items-start gap-2.5">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[var(--amber-subtle)] text-[var(--amber)]">
+                <Inbox size={14} />
+              </span>
+              <div className="min-w-0 pt-0.5">
+                <h3 className="truncate text-sm font-semibold text-foreground">{t.inbox.title}</h3>
+                <p className="mt-0.5 text-2xs leading-relaxed text-muted-foreground/60">{t.inbox.sidebarPanelDesc}</p>
               </div>
             </div>
+            {pendingFiles.length > 0 && (
+              <span className="rounded-full bg-[var(--amber)]/10 px-2 py-0.5 text-2xs font-semibold tabular-nums text-[var(--amber)]">
+                {pendingFiles.length}
+              </span>
+            )}
           </div>
-          <div className="mt-3 grid grid-cols-2 gap-2">
-            <CaptureMetric active={files.length > 0} label={t.inbox.pendingSequenceTitle} value={String(files.length)} />
-            <CaptureMetric label={t.inbox.recentProcessedTitle} value={String(history.length)} />
-          </div>
+          <Link
+            href="/capture"
+            className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg bg-[var(--amber)] px-3 py-2 text-xs font-semibold text-[var(--amber-foreground)] transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring"
+            aria-current={activeView === 'capture' ? 'page' : undefined}
+          >
+            <Plus size={13} />
+            {t.inbox.viewCapture}
+          </Link>
         </section>
 
-        <nav className="mt-3 space-y-1.5" aria-label={t.inbox.title}>
-          <CapturePanelLink
-            href="/capture"
-            icon={Plus}
-            title={t.inbox.viewCapture}
-            desc={t.inbox.sidebarCaptureDesc}
-            active={activeView === 'capture'}
-          />
-          <CapturePanelLink
-            href="/capture#queue"
-            icon={ListChecks}
-            title={t.inbox.viewQueue}
-            desc={reviewDesc}
-            active={activeView === 'queue'}
-            count={files.length}
-            emphasized={files.length > 0}
-          />
-          <CapturePanelLink
-            href="/capture#history"
-            icon={History}
-            title={t.inbox.viewHistory}
-            desc={t.inbox.sidebarHistoryDesc(history.length)}
-            active={activeView === 'history'}
-            count={history.length}
-          />
+        <nav className="mt-4" aria-label={t.inbox.title}>
+          <p className="mb-1.5 px-1 text-2xs font-medium uppercase tracking-wider text-muted-foreground/50">
+            {t.inbox.sidebarProcessTitle}
+          </p>
+          <div className="space-y-1">
+            <CapturePanelLink
+              href="/capture#queue"
+              icon={ListChecks}
+              title={t.inbox.viewQueue}
+              desc={reviewDesc}
+              active={activeView === 'queue'}
+              count={pendingFiles.length}
+              emphasized={pendingFiles.length > 0}
+            />
+            <CapturePanelLink
+              href="/capture#shelved"
+              icon={Archive}
+              title={t.inbox.viewShelved}
+              desc={t.inbox.sidebarShelvedDesc(shelvedFiles.length)}
+              active={activeView === 'shelved'}
+              count={shelvedFiles.length}
+            />
+            <CapturePanelLink
+              href="/capture#history"
+              icon={History}
+              title={t.inbox.viewHistory}
+              desc={t.inbox.sidebarHistoryDesc(history.length)}
+              active={activeView === 'history'}
+              count={history.length}
+            />
+          </div>
         </nav>
 
         {inboxError && (
@@ -185,9 +229,9 @@ export default function CapturePanel() {
                   <CapturePreviewFile key={file.path} file={file} agingLabel={t.inbox.agingHint} />
                 ))}
               </div>
-              {files.length > previewFiles.length && (
+              {pendingFiles.length > previewFiles.length && (
                 <div className="flex items-center justify-between px-3 py-2 text-2xs font-medium text-muted-foreground/60">
-                  <span>{t.inbox.more(files.length - previewFiles.length)}</span>
+                  <span>{t.inbox.more(pendingFiles.length - previewFiles.length)}</span>
                   <ChevronRight size={12} />
                 </div>
               )}
@@ -239,15 +283,6 @@ function CapturePanelLink({
         </span>
       )}
     </Link>
-  );
-}
-
-function CaptureMetric({ label, value, active }: { label: string; value: string; active?: boolean }) {
-  return (
-    <div className={`rounded-lg border px-3 py-2 ${active ? 'border-[var(--amber)]/25 bg-[var(--amber-subtle)]/45' : 'border-border/35 bg-muted/25'}`}>
-      <p className="text-lg font-semibold tabular-nums text-foreground">{value}</p>
-      <p className="mt-0.5 truncate text-2xs text-muted-foreground/60">{label}</p>
-    </div>
   );
 }
 

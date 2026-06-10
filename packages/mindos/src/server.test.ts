@@ -24,8 +24,10 @@ import {
   handleAcpSessionGet,
   handleAcpSessionPost,
   checkCodexProviderEnvironment,
+  checkClaudeRuntimeHealth,
   mergeCodexProviderAndLoginHealth,
   resolveNpmInvocation,
+  handleAgentCapabilitiesGet,
   handleAskSessionsDelete,
   handleAskSessionsGet,
   handleAskSessionsPost,
@@ -36,6 +38,7 @@ import {
   handleBootstrapGet,
   handleChannelsVerifyPost,
   handleConnectGet,
+  handleCodexThreadsGet,
   handleGit,
   handleGraph,
   handleAskStream,
@@ -68,6 +71,7 @@ import {
   handleChangesPost,
   handleStaticArtifact,
   handleMcpStatus,
+  handleMcpTokenReveal,
   handleMcpAgentsGet,
   handleMcpInstallPost,
   handleMcpInstallSkillPost,
@@ -123,6 +127,18 @@ import {
   type MindosMcpAgentDef,
   type MindosMcpAgentRegistryDef,
 } from './server.js';
+
+function throwingAsyncIterable<T>(error: Error): AsyncIterable<T> {
+  return {
+    [Symbol.asyncIterator](): AsyncIterator<T> {
+      return {
+        async next(): Promise<IteratorResult<T>> {
+          throw error;
+        },
+      };
+    },
+  };
+}
 
 describe('MindOS product server contract', () => {
   it('exposes stable route metadata owned by the product runtime', () => {
@@ -1343,6 +1359,23 @@ describe('MindOS product server contract', () => {
     } finally {
       await new Promise<void>((resolve, reject) => app.server.close((error) => error ? reject(error) : resolve()));
     }
+  });
+
+  it('returns structured Codex thread diagnostics when the local runtime is unavailable', async () => {
+    const res = await handleCodexThreadsGet(new URLSearchParams('limit=10'), {
+      resolveRuntimeCommand: async () => '/usr/local/bin/codex',
+      checkCodexRuntimeHealth: async () => ({
+        status: 'signed-out',
+        reason: 'Codex model provider "custom" requires STAFF_KEY.',
+      }),
+    });
+
+    expect(res).toEqual({
+      status: 409,
+      body: {
+        error: 'Codex is signed out. Codex model provider "custom" requires STAFF_KEY.',
+      },
+    });
   });
 
   it('serves every Product Server route declared in the runtime contract', async () => {
@@ -2987,9 +3020,101 @@ describe('MindOS product server contract', () => {
     expect(response.status).toBe(200);
     expect(response.body).toEqual({
       events: [
-        { id: '1', ts: '2026-01-01T00:00:00.000Z', tool: 'write_file', params: {}, result: 'ok' },
+        expect.objectContaining({ id: '1', ts: '2026-01-01T00:00:00.000Z', tool: 'write_file', params: {}, result: 'ok' }),
       ],
     });
+  });
+
+  it('aggregates agent capabilities with mode filtering, source isolation, and safe metadata', async () => {
+    const chat = await handleAgentCapabilitiesGet(new URLSearchParams('mode=chat'), {
+      kb: () => [
+        {
+          id: 'kb:read',
+          kind: 'kb-tool',
+          name: 'Read File',
+          description: 'Read notes',
+          source: 'mindos',
+          status: 'available',
+          permissionRequired: 'readonly',
+          availableInModes: ['chat', 'organize', 'agent'],
+          metadata: {
+            toolName: 'read_file',
+            execute: () => 'must not leak',
+            apiKey: 'sk-capability-secret-abcdefghijkl',
+          },
+        },
+        {
+          id: 'kb:delete',
+          kind: 'kb-tool',
+          name: 'Delete File',
+          description: 'Delete notes',
+          source: 'mindos',
+          status: 'available',
+          permissionRequired: 'agent',
+          availableInModes: ['agent'],
+        },
+      ],
+      subagents: () => {
+        throw new Error('Authorization: Bearer sk-capability-secret-1234567890');
+      },
+    });
+
+    expect(chat.status).toBe(200);
+    expect(chat.body.capabilities).toHaveLength(1);
+    expect(chat.body.capabilities[0]).toMatchObject({
+      id: 'kb:read',
+      kind: 'kb-tool',
+      source: 'mindos',
+      permissionRequired: 'readonly',
+      availableInModes: ['chat', 'organize', 'agent'],
+      metadata: {
+        toolName: 'read_file',
+        apiKey: '[redacted]',
+      },
+    });
+    expect(JSON.stringify(chat.body)).not.toContain('must not leak');
+    expect(JSON.stringify(chat.body)).not.toContain('sk-capability-secret');
+    expect(chat.body.sources).toContainEqual({
+      id: 'subagents',
+      status: 'error',
+      count: 0,
+      error: 'Authorization: Bearer [redacted]',
+    });
+
+    const agent = await handleAgentCapabilitiesGet(new URLSearchParams('mode=agent&include=kb,mcp,a2a'), {
+      kb: () => [{
+        kind: 'kb-tool',
+        name: 'Delete File',
+        description: 'Delete notes',
+        source: 'mindos',
+        permissionRequired: 'agent',
+      }],
+      mcp: () => [{
+        kind: 'mcp-tool',
+        name: 'search_code',
+        description: 'Search code',
+        source: 'mcp',
+        status: 'cached',
+        permissionRequired: 'agent',
+        metadata: { serverName: 'github', authToken: 'token-secret' },
+      }],
+      a2a: () => [{
+        kind: 'a2a-agent',
+        name: 'Remote Reviewer',
+        description: 'Remote agent',
+        source: 'a2a',
+        permissionRequired: 'agent',
+      }],
+    });
+
+    expect(agent.status).toBe(200);
+    expect(agent.body.include).toEqual(['kb', 'mcp', 'a2a']);
+    expect(agent.body.capabilities.map((capability) => capability.kind)).toEqual([
+      'kb-tool',
+      'mcp-tool',
+      'a2a-agent',
+    ]);
+    expect(JSON.stringify(agent.body)).not.toContain('token-secret');
   });
 
   it('persists ask sessions in the product runtime store', () => {
@@ -4216,10 +4341,26 @@ describe('MindOS product server contract', () => {
     });
 
     expect(handleImActivityGet(new URLSearchParams('platform=feishu&limit=500'), {
-      getActivities: (platform, limit) => [{ id: '1', platform, limit }],
+      getActivities: (platform, limit) => [{
+        id: '1',
+        platform,
+        limit,
+        recipient: 'ou_1234567890',
+        messageSummary: 'token=abc123secret',
+        error: 'Authorization: Bearer sk-im-handler-secret-1234567890',
+      }],
     })).toMatchObject({
       status: 200,
-      body: { activities: [{ id: '1', platform: 'feishu', limit: 100 }] },
+      body: {
+        activities: [{
+          id: '1',
+          platform: 'feishu',
+          limit: 100,
+          recipient: 'ou_***890',
+          messageSummary: 'token=[redacted]',
+          error: 'Authorization: Bearer [redacted]',
+        }],
+      },
     });
   });
 
@@ -5007,11 +5148,34 @@ describe('MindOS product server contract', () => {
         'env_key = "STAFF_KEY"',
         'wire_api = "responses"',
       ].join('\n'),
+      readShellEnvValue: () => undefined,
     });
 
     expect(result).toEqual({
       status: 'signed-out',
-      reason: 'Codex model provider "subhub-prod-responses" requires STAFF_KEY, but MindOS cannot see that environment variable. Export STAFF_KEY before starting MindOS, or switch Codex to a provider that does not require it.',
+      reason: 'Codex model provider "subhub-prod-responses" requires STAFF_KEY, but MindOS cannot see that environment variable in the app process, OS user environment, or login shell. Export STAFF_KEY in your shell profile or OS user environment before starting MindOS, or switch Codex to a provider that does not require it.',
+    });
+  });
+
+  it('keeps Codex available when the configured provider key is resolved from the runtime environment fallback', () => {
+    const readShellEnvValue = vi.fn((key: string) => key === 'STAFF_KEY' ? 'shell-secret' : undefined);
+    const result = checkCodexProviderEnvironment({
+      env: {},
+      configText: [
+        'model_provider = "subhub-prod-responses"',
+        '',
+        '[model_providers.subhub-prod-responses]',
+        'env_key = "STAFF_KEY"',
+      ].join('\n'),
+      readShellEnvValue,
+    });
+
+    expect(readShellEnvValue).toHaveBeenCalledWith('STAFF_KEY', {});
+    expect(result).toEqual({
+      status: 'available',
+      diagnosticHints: [
+        'Codex provider environment key STAFF_KEY was found through MindOS runtime environment fallback and will be injected only into Codex app-server.',
+      ],
     });
   });
 
@@ -5044,6 +5208,49 @@ describe('MindOS product server contract', () => {
     });
   });
 
+  it('marks Claude unavailable when SDK import succeeds but no SDK native binary or CLI is available', async () => {
+    const result = await checkClaudeRuntimeHealth({
+      binaryPath: 'sdk:@anthropic-ai/claude-agent-sdk',
+      importSdk: async () => ({ query: () => ({}) }),
+      resolveSdkNativeBinary: () => ({
+        platformKey: 'darwin-arm64',
+        candidates: ['@anthropic-ai/claude-agent-sdk-darwin-arm64/claude'],
+        reason: 'Claude Agent SDK native CLI binary for darwin-arm64 was not found.',
+      }),
+      checkCliVersion: async () => {
+        throw new Error('should not check cli without a cli path');
+      },
+    });
+
+    expect(result).toMatchObject({
+      status: 'error',
+      reason: expect.stringContaining('darwin-arm64'),
+      diagnosticHints: [
+        'Install Claude Code globally or reinstall @anthropic-ai/claude-agent-sdk with optional dependencies enabled.',
+      ],
+    });
+  });
+
+  it('keeps Claude available through a real CLI path when the SDK native binary is missing', async () => {
+    const result = await checkClaudeRuntimeHealth({
+      binaryPath: '/Users/tester/.local/bin/claude',
+      importSdk: async () => ({ query: () => ({}) }),
+      resolveSdkNativeBinary: () => ({
+        platformKey: 'darwin-arm64',
+        candidates: ['@anthropic-ai/claude-agent-sdk-darwin-arm64/claude'],
+        reason: 'Claude Agent SDK native CLI binary for darwin-arm64 was not found.',
+      }),
+      checkCliVersion: async () => ({ status: 'available' }),
+    });
+
+    expect(result).toMatchObject({
+      status: 'available',
+      diagnosticHints: [
+        expect.stringContaining('native binary is unavailable'),
+      ],
+    });
+  });
+
   it('keeps local native runtime detection independent when ACP detection times out', async () => {
     vi.useFakeTimers();
     const pendingDetection = new Promise<{ installed: unknown[]; notInstalled: unknown[] }>(() => {});
@@ -5052,6 +5259,11 @@ describe('MindOS product server contract', () => {
       readSettings: () => ({ acpAgents: {} }),
       detectLocalAcpAgents: async () => pendingDetection,
       resolveRuntimeCommand: async () => null,
+      checkNativeRuntimeHealth: async ({ runtime }) => (
+        runtime === 'claude'
+          ? { status: 'available' }
+          : { status: 'error', reason: 'not checked' }
+      ),
     });
 
     await vi.advanceTimersByTimeAsync(5000);
@@ -5156,6 +5368,93 @@ describe('MindOS product server contract', () => {
     });
   });
 
+  it('detects Claude through the bundled SDK without waiting for a slow CLI path lookup', async () => {
+    const detectLocalAcpAgents = vi.fn(async () => ({
+      installed: [{ id: 'gemini', name: 'Gemini CLI', binaryPath: '/usr/local/bin/gemini' }],
+      notInstalled: [],
+    }));
+    const resolveRuntimeCommand = vi.fn(async () => new Promise<string | null>(() => {}));
+    const checkNativeRuntimeHealth = vi.fn(async () => ({ status: 'available' as const }));
+
+    const res = await handleAgentRuntimesGet(new URLSearchParams('runtime=claude'), {
+      now: () => Date.parse('2026-06-09T00:00:00.000Z'),
+      readSettings: () => ({ acpAgents: {} }),
+      detectLocalAcpAgents,
+      resolveRuntimeCommand,
+      checkNativeRuntimeHealth,
+    });
+
+    expect(detectLocalAcpAgents).not.toHaveBeenCalled();
+    expect(resolveRuntimeCommand).toHaveBeenCalledWith('claude');
+    expect(checkNativeRuntimeHealth).toHaveBeenCalledTimes(1);
+    expect(checkNativeRuntimeHealth).toHaveBeenCalledWith({
+      runtime: 'claude',
+      agent: expect.objectContaining({
+        id: 'claude',
+        binaryPath: 'sdk:@anthropic-ai/claude-agent-sdk',
+      }),
+      timeoutMs: 20000,
+    });
+    expect(res).toMatchObject({
+      status: 200,
+      body: {
+        runtime: expect.objectContaining({
+          id: 'claude',
+          kind: 'claude',
+          status: 'available',
+          binaryPath: 'sdk:@anthropic-ai/claude-agent-sdk',
+          availability: expect.objectContaining({
+            sources: ['native-health'],
+          }),
+        }),
+      },
+    });
+  });
+
+  it('falls back to a detected Claude CLI path when SDK-only health is unavailable', async () => {
+    const checkNativeRuntimeHealth = vi.fn(async ({ agent }) => (
+      agent.binaryPath.startsWith('sdk:')
+        ? { status: 'error' as const, reason: 'SDK native binary missing.' }
+        : { status: 'available' as const }
+    ));
+
+    const res = await handleAgentRuntimesGet(new URLSearchParams('runtime=claude'), {
+      now: () => Date.parse('2026-06-09T00:00:00.000Z'),
+      readSettings: () => ({ acpAgents: {} }),
+      detectLocalAcpAgents: async () => ({ installed: [], notInstalled: [] }),
+      resolveRuntimeCommand: async (command) => (
+        command === 'claude'
+          ? await new Promise<string>((resolve) => setTimeout(() => resolve('/Users/tester/.local/bin/claude'), 50))
+          : null
+      ),
+      checkNativeRuntimeHealth,
+    });
+
+    expect(checkNativeRuntimeHealth).toHaveBeenCalledWith(expect.objectContaining({
+      runtime: 'claude',
+      agent: expect.objectContaining({ binaryPath: 'sdk:@anthropic-ai/claude-agent-sdk' }),
+    }));
+    expect(checkNativeRuntimeHealth).toHaveBeenCalledWith(expect.objectContaining({
+      runtime: 'claude',
+      agent: expect.objectContaining({ binaryPath: '/Users/tester/.local/bin/claude' }),
+    }));
+    expect(res).toMatchObject({
+      status: 200,
+      body: {
+        runtime: expect.objectContaining({
+          id: 'claude',
+          status: 'available',
+          binaryPath: '/Users/tester/.local/bin/claude',
+          availability: expect.objectContaining({
+            diagnosticHints: [
+              expect.stringContaining('SDK native binary is unavailable'),
+            ],
+          }),
+        }),
+      },
+    });
+  });
+
   it('preserves unavailable runtime status and reason from runtime detection', async () => {
     const res = await handleAgentRuntimesGet(new URLSearchParams(), {
       now: () => Date.parse('2026-06-09T00:00:00.000Z'),
@@ -5206,9 +5505,7 @@ describe('MindOS product server contract', () => {
 
   it('validates ask stream requests and returns a product-owned SSE stream', async () => {
     const invalid = handleAskStream({}, {
-      askStream: async function* () {
-        throw new Error('should not stream invalid ask requests');
-      },
+      askStream: () => throwingAsyncIterable(new Error('should not stream invalid ask requests')),
     });
     expect(invalid).toMatchObject({
       ok: false,
@@ -5451,6 +5748,7 @@ describe('MindOS product server contract', () => {
         authToken: 'mindos-secret-token',
         webPassword: 'web-secret',
         mcpPort: 8567,
+        agentRuntimeEnv: { keys: ['CLAUDE_CODE_OAUTH_TOKEN'] },
       }),
       writeSettings: () => undefined,
       readWebSearchConfig: () => ({ provider: 'exa', exaApiKey: 'exa-key' }),
@@ -5473,6 +5771,7 @@ describe('MindOS product server contract', () => {
       port: 4567,
       mcpPort: 8567,
       webSearch: { provider: 'exa', exaApiKey: '••••••' },
+      agentRuntimeEnv: { keys: ['CLAUDE_CODE_OAUTH_TOKEN'] },
       envOverrides: { AI_PROVIDER: true, MIND_ROOT: true, OPENAI_API_KEY: true },
       envValues: { AI_PROVIDER: 'openai', MIND_ROOT: '/mind', OPENAI_API_KEY: '***set***' },
     });
@@ -5542,6 +5841,7 @@ describe('MindOS product server contract', () => {
       allowNetworkAccess: false,
       mindRoot: '/old',
       skillPaths: { enableAgentsDir: true, custom: ['/old-skills'] },
+      agentRuntimeEnv: { keys: ['OLD_RUNTIME_KEY'] },
       baseUrlCompat: { openai: { streaming: false } },
     };
     let webSearch = { provider: 'exa', exaApiKey: 'old-key' };
@@ -5556,6 +5856,7 @@ describe('MindOS product server contract', () => {
       webSearch: { provider: 'perplexity', exaApiKey: '••••••' },
       connectionMode: { cli: false, mcp: true },
       skillPaths: { enableAgentsDir: false, custom: ['/custom-skills', 42, '  '] } as never,
+      agentRuntimeEnv: { keys: ['CLAUDE_CODE_OAUTH_TOKEN', 'bad key', '__proto__', 'CLAUDE_CODE_OAUTH_TOKEN'] },
     }, {
       readSettings: () => settings,
       writeSettings: (next) => {
@@ -5584,6 +5885,7 @@ describe('MindOS product server contract', () => {
     expect(settings.mindRoot).toBe('/new');
     expect(settings.connectionMode).toEqual({ cli: false, mcp: true });
     expect(settings.skillPaths).toEqual({ enableAgentsDir: false, custom: ['/custom-skills'] });
+    expect(settings.agentRuntimeEnv).toEqual({ keys: ['CLAUDE_CODE_OAUTH_TOKEN'] });
     expect(settings.baseUrlCompat).toEqual({});
     expect(webSearch).toEqual({ provider: 'perplexity', exaApiKey: 'old-key' });
     expect(invalidated).toBe(true);
@@ -5935,6 +6237,13 @@ describe('MindOS product server contract', () => {
       status: 400,
       body: { error: 'Invalid URL', agent: null },
     });
+    await expect(handleA2aDiscoverPost({ url: 'http://127.0.0.1:3456' }, {
+      ...services,
+      validateDiscoveryUrl: () => ({ ok: false as const, message: 'Private-network A2A discovery is not allowed' }),
+    })).resolves.toMatchObject({
+      status: 400,
+      body: { error: 'Private-network A2A discovery is not allowed', agent: null },
+    });
     await expect(handleA2aDiscoverPost({ url: 'http://agent' }, services)).resolves.toMatchObject({
       status: 200,
       body: { agent: { id: 'agent-1' } },
@@ -6126,9 +6435,21 @@ describe('MindOS product server contract', () => {
       toolCount: 24,
       authConfigured: true,
       maskedToken: 'masked:token-secret',
-      authToken: 'token-secret',
       localIP: '192.168.1.2',
       connectionMode: { cli: false, mcp: true },
+    });
+  });
+
+  it('reveals MCP auth token only through the explicit token endpoint', async () => {
+    const res = await handleMcpTokenReveal({
+      readSettings: () => ({ authToken: 'token-secret' }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.headers).toMatchObject({ 'Cache-Control': 'no-store' });
+    expect(res.body).toEqual({
+      authConfigured: true,
+      authToken: 'token-secret',
     });
   });
 

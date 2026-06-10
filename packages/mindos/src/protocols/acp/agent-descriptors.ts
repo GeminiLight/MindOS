@@ -304,7 +304,7 @@ export function parseAcpAgentOverrides(raw: unknown): Record<string, AcpAgentOve
     if (entry.env && typeof entry.env === 'object' && !Array.isArray(entry.env)) {
       const env: Record<string, string> = {};
       for (const [ek, ev] of Object.entries(entry.env as Record<string, unknown>)) {
-        if (typeof ev === 'string') env[ek] = ev;
+        if (isSafeEnvKey(ek) && typeof ev === 'string') env[ek] = ev;
       }
       if (Object.keys(env).length > 0) override.env = env;
     }
@@ -319,4 +319,11 @@ export function parseAcpAgentOverrides(raw: unknown): Record<string, AcpAgentOve
   }
 
   return hasEntries ? result : undefined;
+}
+
+function isSafeEnvKey(key: string): boolean {
+  return /^[A-Za-z_][A-Za-z0-9_]*$/.test(key)
+    && key !== '__proto__'
+    && key !== 'constructor'
+    && key !== 'prototype';
 }

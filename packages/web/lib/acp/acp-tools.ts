@@ -5,7 +5,7 @@
 
 import { Type, type Static } from '@sinclair/typebox';
 import { getAcpAgents, findAcpAgent } from './registry';
-import { createSessionFromEntry, prompt, closeSession } from './session';
+import { createSessionFromEntry, prompt, closeSession, cancelPrompt } from './session';
 import { getMindRoot } from '../fs';
 import {
   completeAgentRun,
@@ -15,6 +15,12 @@ import {
   type AgentRunPermissionMode,
 } from '@/lib/agent/run-ledger';
 import { createMindosAgentPermissionPolicyFromContext } from '@/lib/agent/permission-policy';
+import {
+  abortErrorFromSignal,
+  isAbortLikeError,
+  linkAbortSignalToAgentRun,
+  registerAgentRunCancelHandler,
+} from '@/lib/agent/run-cancellation';
 
 function textResult(text: string) {
   return { content: [{ type: 'text' as const, text }], details: {} };
@@ -34,6 +40,24 @@ function errorMessage(error: unknown): string {
 
 function permissionModeFromContext(ctx: unknown): AgentRunPermissionMode {
   return createMindosAgentPermissionPolicyFromContext(ctx, 'agent').acpPermissionMode;
+}
+
+async function raceWithAbort<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return promise;
+  if (signal.aborted) throw abortErrorFromSignal(signal, 'ACP run was canceled.');
+
+  let removeAbortListener: (() => void) | undefined;
+  const abortPromise = new Promise<never>((_resolve, reject) => {
+    const onAbort = () => reject(abortErrorFromSignal(signal, 'ACP run was canceled.'));
+    signal.addEventListener('abort', onAbort, { once: true });
+    removeAbortListener = () => signal.removeEventListener('abort', onAbort);
+  });
+
+  try {
+    return await Promise.race([promise, abortPromise]);
+  } finally {
+    removeAbortListener?.();
+  }
 }
 
 /* ── Parameter Schemas ─────────────────────────────────────────────────── */
@@ -108,6 +132,13 @@ export const acpTools: MindosAgentTool[] = [
         },
       });
       let session: { id: string } | undefined;
+      const unlinkAbortLedger = linkAbortSignalToAgentRun(run.id, _signal, {
+        reason: 'ACP run was canceled.',
+        metadata: { aborted: true },
+      });
+      const unregisterCancelHandler = registerAgentRunCancelHandler(run.id, async () => {
+        if (session?.id) await cancelPrompt(session.id).catch(() => {});
+      });
       try {
         const entry = await findAcpAgent(params.agent_id);
         if (!entry) {
@@ -132,7 +163,7 @@ export const acpTools: MindosAgentTool[] = [
         });
 
         try {
-          const response = await prompt(session.id, params.message);
+          const response = await raceWithAbort(prompt(session.id, params.message), _signal);
           completeAgentRun(run.id, {
             outputSummary: response.text || '(empty response)',
             metadata: {
@@ -147,6 +178,17 @@ export const acpTools: MindosAgentTool[] = [
           await closeSession(session.id).catch(() => {});
         }
       } catch (err) {
+        if (isAbortLikeError(err) || _signal?.aborted) {
+          failAgentRun(run.id, {
+            status: 'canceled',
+            error: 'ACP run was canceled.',
+            metadata: {
+              ...(session?.id ? { sessionId: session.id } : {}),
+              aborted: true,
+            },
+          });
+          return textResult('ACP call canceled.');
+        }
         failAgentRun(run.id, {
           error: err,
           metadata: {
@@ -154,6 +196,9 @@ export const acpTools: MindosAgentTool[] = [
           },
         });
         return textResult(`ACP call failed: ${errorMessage(err)}`);
+      } finally {
+        unlinkAbortLedger();
+        unregisterCancelHandler();
       }
     },
   },

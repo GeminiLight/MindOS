@@ -121,7 +121,7 @@ export default function CreateSpaceModal({ t, dirPaths }: { t: ReturnType<typeof
         {/* Header */}
         <div className="flex items-center justify-between px-5 pt-5 pb-3">
           <h3 className="text-base font-semibold text-foreground">{h.newSpace}</h3>
-          <button onClick={close} className="p-1 rounded-md text-muted-foreground hover:bg-muted transition-colors">
+          <button onClick={close} className="hit-target-box p-1 text-muted-foreground transition-colors [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-md)]">
             <X size={14} />
           </button>
         </div>
@@ -214,14 +214,14 @@ export default function CreateSpaceModal({ t, dirPaths }: { t: ReturnType<typeof
           <div className="flex items-center justify-end gap-2 pt-1">
             <button
               onClick={close}
-              className="px-4 py-2 rounded-lg text-sm font-medium text-muted-foreground transition-colors hover:bg-muted"
+              className="hit-target-box px-4 py-2 text-sm font-medium text-muted-foreground transition-colors [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-lg)]"
             >
               {h.cancelCreate}
             </button>
             <button
               onClick={handleCreate}
               disabled={!name.trim() || loading || !!nameHint}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-[var(--amber)] text-[var(--amber-foreground)] transition-colors hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="hit-target-box flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-[var(--amber-foreground)] transition-colors hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed [--hit-target-bg:var(--amber)] [--hit-target-hover-bg:var(--amber)] [--hit-target-radius:var(--radius-lg)]"
             >
               {loading && <Loader2 size={14} className="animate-spin" />}
               {h.createSpace}

@@ -4,6 +4,10 @@ import React, { act, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 import { useInboxOrganizeController } from '@/hooks/useInboxOrganizeController';
 import type { InboxOrganizeFile, InboxOrganizeOptions } from '@/hooks/useInboxOrganizeController';
+import {
+  INBOX_ORGANIZER_ASSISTANT_PROMPT_PATH,
+  INBOX_ORGANIZER_DEFAULT_PROMPT,
+} from '@/lib/inbox-assistant';
 
 const toastError = vi.hoisted(() => vi.fn());
 
@@ -23,9 +27,11 @@ const aiOrganize = {
 };
 
 const labels = {
-  organizeNoAi: 'Configure an AI API key before running the Inbox Agent. Capture still works without AI.',
-  organizeFailed: 'Inbox Agent failed.',
+  organizeNoAi: 'Configure an AI API key before running the Inbox Organizer. Capture still works without AI.',
+  organizeFailed: 'Inbox Organizer failed.',
 };
+
+const inboxOrganizerPromptUrl = `/api/file?path=${encodeURIComponent(INBOX_ORGANIZER_ASSISTANT_PROMPT_PATH)}&op=read_file`;
 
 function InboxOrganizeHarness({
   files,
@@ -56,7 +62,7 @@ describe('useInboxOrganizeController', () => {
     (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   });
 
-  it('starts Inbox Agent with the active provider from Settings instead of showing the missing-key toast', async () => {
+  it('starts Inbox Organizer with the active provider from Settings instead of showing the missing-key toast', async () => {
     const files = [{ name: 'capture.md', path: 'Inbox/capture.md' }];
     vi.stubGlobal('fetch', vi.fn(async (url: string) => {
       if (url === '/api/settings') {
@@ -71,6 +77,12 @@ describe('useInboxOrganizeController', () => {
             },
             envOverrides: {},
           }),
+        };
+      }
+      if (url === inboxOrganizerPromptUrl) {
+        return {
+          ok: true,
+          json: async () => ({ content: `${INBOX_ORGANIZER_DEFAULT_PROMPT}\n\nUse the user's inbox taxonomy.` }),
         };
       }
       if (url.startsWith('/api/file?')) {
@@ -95,10 +107,11 @@ describe('useInboxOrganizeController', () => {
     expect(startMock).toHaveBeenCalledTimes(1);
     expect(startMock).toHaveBeenCalledWith(
       [{ name: 'capture.md', content: 'Inbox capture content' }],
-      expect.stringContaining('capture.md'),
+      expect.stringContaining('Use the user\'s inbox taxonomy.'),
       'inbox-organize',
       {},
     );
+    expect(startMock.mock.calls[0]?.[1]).toContain('Inbox/capture.md');
     expect(resultMock).toHaveBeenCalledWith({ started: true });
 
     await act(async () => {
@@ -124,6 +137,9 @@ describe('useInboxOrganizeController', () => {
           }),
         };
       }
+      if (url === inboxOrganizerPromptUrl) {
+        return { ok: false, status: 404, json: async () => ({ error: 'missing' }) };
+      }
       if (url.startsWith('/api/file?')) {
         return {
           ok: true,
@@ -146,10 +162,11 @@ describe('useInboxOrganizeController', () => {
     expect(toastError).not.toHaveBeenCalledWith(labels.organizeNoAi, expect.anything());
     expect(startMock).toHaveBeenCalledWith(
       [{ name: 'capture.md', content: 'Inbox capture content' }],
-      expect.stringContaining('capture.md'),
+      expect.stringContaining('assistantId: inbox-organizer'),
       'inbox-organize',
       options,
     );
+    expect(startMock.mock.calls[0]?.[1]).toContain('Inbox/capture.md');
     expect(resultMock).toHaveBeenCalledWith({ started: true });
 
     await act(async () => {
@@ -178,6 +195,9 @@ describe('useInboxOrganizeController', () => {
             envOverrides: {},
           }),
         };
+      }
+      if (url === inboxOrganizerPromptUrl) {
+        return { ok: true, json: async () => ({ content: INBOX_ORGANIZER_DEFAULT_PROMPT }) };
       }
       if (url.startsWith('/api/file?path=Inbox%2Fnotes.md')) {
         return { ok: true, json: async () => ({ content: 'Readable notes' }) };
@@ -245,6 +265,9 @@ describe('useInboxOrganizeController', () => {
             envOverrides: {},
           }),
         };
+      }
+      if (url === inboxOrganizerPromptUrl) {
+        return { ok: true, json: async () => ({ content: INBOX_ORGANIZER_DEFAULT_PROMPT }) };
       }
       if (url.startsWith('/api/file?')) {
         return { ok: true, json: async () => ({ content: 'Readable notes' }) };

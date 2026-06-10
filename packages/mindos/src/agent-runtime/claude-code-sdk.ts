@@ -1,4 +1,11 @@
-import type { MindOSSSEvent } from '../session/index.js';
+import {
+  redactSensitiveText,
+  sanitizeToolArgs,
+  sanitizeToolOutput,
+  type MindOSSSEvent,
+} from '../session/index.js';
+import { existsSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import type {
   MindosRuntimePermissionRequest,
   MindosRuntimePermissionResult,
@@ -7,7 +14,7 @@ import type {
   MindosRuntimeUserQuestionRequest,
   MindosRuntimeUserQuestionResult,
 } from './run.js';
-import type { ClaudeCodeCliClient, ClaudeCodeCliPermissionMode } from './claude-code-cli.js';
+import type { ClaudeCodeCliClient } from './claude-code-cli.js';
 
 export type ClaudeCodeSdkQuery = AsyncIterable<Record<string, unknown>> & {
   interrupt?(): Promise<void>;
@@ -21,8 +28,19 @@ export type ClaudeCodeSdkModule = {
   }): ClaudeCodeSdkQuery;
 };
 
+export const CLAUDE_CODE_SDK_BINARY_SENTINEL = 'sdk:@anthropic-ai/claude-agent-sdk';
+
+export type ClaudeCodeSdkNativeBinaryResolution = {
+  platformKey: string;
+  candidates: string[];
+  path?: string;
+  reason?: string;
+};
+
 export type ClaudeCodeSdkClientServices = {
   sdk: ClaudeCodeSdkModule;
+  pathToClaudeCodeExecutable?: string;
+  env?: NodeJS.ProcessEnv;
   requestRuntimePermission?(
     request: MindosRuntimePermissionRequest,
     options?: { signal?: AbortSignal },
@@ -38,8 +56,100 @@ type ClaudeCodeSdkState = {
   emittedDone: boolean;
 };
 
+const requireFromHere = createRequire(import.meta.url);
+
 export async function loadClaudeCodeSdkModule(): Promise<ClaudeCodeSdkModule> {
   return import('@anthropic-ai/claude-agent-sdk') as Promise<ClaudeCodeSdkModule>;
+}
+
+export function resolveClaudeCodeSdkNativeBinaryPath(input: {
+  platform?: NodeJS.Platform;
+  arch?: NodeJS.Architecture;
+  isMusl?: boolean;
+  requireResolve?: (id: string) => string;
+  exists?: (path: string) => boolean;
+} = {}): ClaudeCodeSdkNativeBinaryResolution {
+  const platform = input.platform ?? process.platform;
+  const arch = input.arch ?? process.arch;
+  const isMusl = input.isMusl ?? isMuslRuntime(platform);
+  const candidates = claudeCodeSdkNativeBinaryCandidates(platform, arch, isMusl);
+  const requireResolve = input.requireResolve ?? createClaudeCodeSdkPackageRequireResolve();
+  const exists = input.exists ?? existsSync;
+  const platformKey = platform === 'linux' && isMusl ? `${platform}-${arch}-musl` : `${platform}-${arch}`;
+
+  if (candidates.length === 0) {
+    return {
+      platformKey,
+      candidates,
+      reason: `Claude Agent SDK does not publish a native CLI binary for ${platformKey}.`,
+    };
+  }
+
+  for (const candidate of candidates) {
+    try {
+      const resolved = requireResolve(candidate);
+      if (exists(resolved)) {
+        return { platformKey, candidates, path: resolved };
+      }
+    } catch {
+      // Try the next platform package candidate.
+    }
+  }
+
+  return {
+    platformKey,
+    candidates,
+    reason: `Claude Agent SDK native CLI binary for ${platformKey} was not found. Reinstall @anthropic-ai/claude-agent-sdk without --omit=optional, or install the global claude command.`,
+  };
+}
+
+function createClaudeCodeSdkPackageRequireResolve(): (id: string) => string {
+  try {
+    const sdkUrl = import.meta.resolve('@anthropic-ai/claude-agent-sdk');
+    const requireFromSdk = createRequire(sdkUrl);
+    return requireFromSdk.resolve.bind(requireFromSdk);
+  } catch {
+    return requireFromHere.resolve.bind(requireFromHere);
+  }
+}
+
+export function isClaudeCodeSdkNativeBinaryError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? '');
+  return /Native CLI binary for .+ not found/i.test(message)
+    || /Claude Code native binary .*not found/i.test(message)
+    || /pathToClaudeCodeExecutable/i.test(message);
+}
+
+function claudeCodeSdkNativeBinaryCandidates(
+  platform: NodeJS.Platform,
+  arch: NodeJS.Architecture,
+  isMusl: boolean,
+): string[] {
+  if (arch !== 'x64' && arch !== 'arm64') return [];
+  const suffix = platform === 'win32' ? '/claude.exe' : '/claude';
+  if (platform === 'darwin') return [`@anthropic-ai/claude-agent-sdk-darwin-${arch}${suffix}`];
+  if (platform === 'win32') return [`@anthropic-ai/claude-agent-sdk-win32-${arch}${suffix}`];
+  if (platform === 'linux') {
+    const glibc = `@anthropic-ai/claude-agent-sdk-linux-${arch}${suffix}`;
+    const musl = `@anthropic-ai/claude-agent-sdk-linux-${arch}-musl${suffix}`;
+    return isMusl ? [musl, glibc] : [glibc, musl];
+  }
+  return [];
+}
+
+function isMuslRuntime(platform: NodeJS.Platform): boolean {
+  if (platform !== 'linux') return false;
+  try {
+    const report = typeof process.report?.getReport === 'function'
+      ? process.report.getReport()
+      : null;
+    const header = report && typeof report === 'object' && 'header' in report && report.header && typeof report.header === 'object'
+      ? report.header as { glibcVersionRuntime?: unknown }
+      : undefined;
+    return header?.glibcVersionRuntime === undefined;
+  } catch {
+    return false;
+  }
 }
 
 export function createClaudeCodeSdkClient(services: ClaudeCodeSdkClientServices): ClaudeCodeCliClient {
@@ -55,6 +165,8 @@ export function createClaudeCodeSdkClient(services: ClaudeCodeSdkClientServices)
           cwd: input.cwd,
           outputFormat: 'stream-json',
           permissionMode: input.permissionMode ?? 'default',
+          ...(services.pathToClaudeCodeExecutable ? { pathToClaudeCodeExecutable: services.pathToClaudeCodeExecutable } : {}),
+          ...(services.env ? { env: services.env } : {}),
           ...(input.sessionId ? { resume: input.sessionId } : {}),
           canUseTool: createClaudeCodeSdkPermissionHandler(services),
         },
@@ -66,8 +178,17 @@ export function createClaudeCodeSdkClient(services: ClaudeCodeSdkClientServices)
       };
       input.signal?.addEventListener('abort', abort, { once: true });
 
+      const queryIterator = queryHandle[Symbol.asyncIterator]();
+      let completed = false;
+
       try {
-        for await (const message of queryHandle) {
+        while (true) {
+          const next = await nextClaudeSdkQueryMessage(queryIterator, input.signal);
+          if (next.done) {
+            completed = true;
+            break;
+          }
+          const message = next.value;
           const sessionId = getStringField(message, 'session_id');
           if (sessionId && sessionId !== lastSessionId) {
             lastSessionId = sessionId;
@@ -84,12 +205,61 @@ export function createClaudeCodeSdkClient(services: ClaudeCodeSdkClientServices)
         }
       } finally {
         input.signal?.removeEventListener('abort', abort);
+        if (!completed) {
+          settleClaudeSdkIteratorReturn(queryIterator);
+        }
       }
     },
     close() {
       queryHandle?.close?.();
     },
   };
+}
+
+function claudeSdkAbortError(signal: AbortSignal): Error {
+  const reason = signal.reason;
+  if (reason instanceof Error) return reason;
+  return new Error(reason ? String(reason) : 'Claude Agent SDK query aborted.');
+}
+
+function throwIfClaudeSdkAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) {
+    throw claudeSdkAbortError(signal);
+  }
+}
+
+function settleClaudeSdkIteratorReturn(iterator: AsyncIterator<Record<string, unknown>>): void {
+  const result = iterator.return?.();
+  if (result && typeof (result as PromiseLike<IteratorResult<Record<string, unknown>>>).then === 'function') {
+    void Promise.resolve(result).catch(() => {});
+  }
+}
+
+async function nextClaudeSdkQueryMessage(
+  iterator: AsyncIterator<Record<string, unknown>>,
+  signal?: AbortSignal,
+): Promise<IteratorResult<Record<string, unknown>>> {
+  throwIfClaudeSdkAborted(signal);
+
+  const nextPromise = Promise.resolve(iterator.next());
+  nextPromise.catch(() => {});
+  if (!signal) return nextPromise;
+
+  let removeAbortListener = () => {};
+  const abortPromise = new Promise<never>((_resolve, reject) => {
+    const abort = () => reject(claudeSdkAbortError(signal));
+    removeAbortListener = () => signal.removeEventListener('abort', abort);
+    signal.addEventListener('abort', abort, { once: true });
+  });
+
+  try {
+    return await Promise.race([nextPromise, abortPromise]);
+  } catch (error) {
+    if (signal.aborted) throw claudeSdkAbortError(signal);
+    throw error;
+  } finally {
+    removeAbortListener();
+  }
 }
 
 function createClaudeCodeSdkPermissionHandler(services: ClaudeCodeSdkClientServices) {
@@ -354,7 +524,7 @@ function mapClaudeCodeSdkMessageToSseEvents(
   if (message.type === 'result') {
     state.emittedDone = true;
     if (message.is_error === true || message.subtype !== 'success') {
-      return [{ type: 'error', message: getResultErrorText(message) || 'Claude Code turn failed' }];
+      return [{ type: 'error', message: redactSensitiveText(getResultErrorText(message) || 'Claude Code turn failed') }];
     }
     const resultText = getStringField(message, 'result');
     return [
@@ -431,15 +601,15 @@ function mapClaudePermissionDeniedRecord(record: Record<string, unknown>): MindO
       type: 'tool_start',
       toolCallId,
       toolName,
-      args: {
+      args: sanitizeToolArgs(toolName, {
         ...(getStringField(record, 'decision_reason') ? { reason: getStringField(record, 'decision_reason') } : {}),
-      },
+      }),
       runtime: 'claude',
     },
     {
       type: 'tool_end',
       toolCallId,
-      output: message,
+      output: sanitizeToolOutput(message),
       isError: true,
       runtime: 'claude',
     },
@@ -470,7 +640,7 @@ function mapClaudeContentBlock(
       type: 'tool_start',
       toolCallId,
       toolName,
-      args: block.input,
+      args: sanitizeToolArgs(toolName, block.input),
       runtime: 'claude',
     }];
   }
@@ -481,7 +651,7 @@ function mapClaudeContentBlock(
     return [{
       type: 'tool_end',
       toolCallId,
-      output: stringifyClaudeToolResult(block.content),
+      output: sanitizeToolOutput(stringifyClaudeToolResult(block.content)),
       isError: block.is_error === true,
       runtime: 'claude',
     }];

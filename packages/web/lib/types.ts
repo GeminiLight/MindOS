@@ -173,12 +173,88 @@ export interface AgentRunTimelineRecord {
   metadata?: Record<string, unknown>;
 }
 
+export type AgentRunTimelineEventCategory =
+  | 'status'
+  | 'text'
+  | 'tool'
+  | 'file'
+  | 'permission'
+  | 'question'
+  | 'error';
+
+export type AgentRunTimelineEventData =
+  | {
+      kind: 'status';
+      previousStatus?: AgentRunStatus;
+      nextStatus: AgentRunStatus;
+      summary?: string;
+    }
+  | {
+      kind: 'text';
+      text: string;
+      channel?: 'assistant' | 'reasoning' | 'stdout' | 'stderr' | 'system';
+    }
+  | {
+      kind: 'tool';
+      name: string;
+      status?: 'started' | 'running' | 'completed' | 'failed' | 'canceled';
+      inputSummary?: string;
+      outputSummary?: string;
+      error?: string;
+    }
+  | {
+      kind: 'file';
+      path: string;
+      action: 'read' | 'created' | 'updated' | 'deleted' | 'renamed' | 'diff' | 'unknown';
+      status?: 'started' | 'completed' | 'failed';
+      summary?: string;
+    }
+  | {
+      kind: 'permission';
+      action: string;
+      status: 'requested' | 'approved' | 'denied' | 'expired' | 'skipped';
+      resource?: string;
+      prompt?: string;
+    }
+  | {
+      kind: 'question';
+      status: 'requested' | 'answered' | 'cancelled';
+      prompt?: string;
+      summary?: string;
+    }
+  | {
+      kind: 'error';
+      message: string;
+      code?: string;
+      recoverable?: boolean;
+    };
+
+export interface AgentRunTimelineEvent {
+  id: string;
+  runId: string;
+  type: string;
+  category: AgentRunTimelineEventCategory;
+  ts: number;
+  status: AgentRunStatus;
+  record: AgentRunTimelineRecord;
+  title?: string;
+  message?: string;
+  data?: AgentRunTimelineEventData;
+  visibility?: 'timeline' | 'debug';
+  toolName?: string;
+  toolCallId?: string;
+  filePath?: string;
+  runtime?: string;
+  metadata?: Record<string, unknown>;
+}
+
 export interface AgentRunTimelinePart {
   type: 'agent-run-timeline';
   chatSessionId: string;
   rootRunId?: string;
   startedAfter?: number;
   runs: AgentRunTimelineRecord[];
+  events?: AgentRunTimelineEvent[];
   updatedAt: number;
 }
 
@@ -193,6 +269,7 @@ export type AgentRuntimeKind = 'mindos' | 'acp' | 'codex' | 'claude';
 
 export interface AgentRuntimeIdentity extends AgentIdentity {
   kind: AgentRuntimeKind;
+  binaryPath?: string;
 }
 
 export type AgentRuntimeStatus = 'available' | 'missing' | 'signed-out' | 'error';

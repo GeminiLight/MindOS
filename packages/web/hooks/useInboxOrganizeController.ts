@@ -5,7 +5,7 @@ import type { LocalAttachment } from '@/lib/types';
 import type { useAiOrganize } from '@/hooks/useAiOrganize';
 import { checkAiAvailable } from '@/lib/space-ai-init';
 import { isAiReadableCaptureName } from '@/lib/capture-formats';
-import { buildInboxAgentPrompt } from '@/lib/inbox-agent-preset';
+import { buildInboxOrganizerRunPrompt, loadInboxOrganizerPrompt } from '@/lib/inbox-assistant';
 import { toast } from '@/lib/toast';
 import { archiveInboxFiles } from '@/lib/inbox-client';
 
@@ -73,7 +73,6 @@ export function useInboxOrganizeController({
       return { started: false, reason: 'busy' };
     }
 
-    const prompt = buildInboxAgentPrompt(files.map(f => f.name));
     organizedReadableFileNamesRef.current = [];
 
     const aiReady = await checkAiAvailable(options.providerOverride);
@@ -84,6 +83,8 @@ export function useInboxOrganizeController({
       return { started: false, reason: 'ai-unavailable' };
     }
 
+    const assistantPrompt = await loadInboxOrganizerPrompt();
+    const prompt = buildInboxOrganizerRunPrompt(files.map(f => f.path || f.name), assistantPrompt);
     const attachments: LocalAttachment[] = [];
     let failed = 0;
     let skipped = 0;

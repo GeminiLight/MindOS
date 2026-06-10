@@ -185,7 +185,7 @@ export default function FindInPage({ containerRef, onClose }: FindInPageProps) {
           <button
             onClick={goPrev}
             disabled={totalMarks === 0}
-            className="p-1 rounded text-muted-foreground hover:text-foreground disabled:opacity-30 transition-colors"
+            className="hit-target-box p-1 text-muted-foreground hover:text-foreground disabled:opacity-30 transition-colors [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-sm)]"
             aria-label="Previous match"
           >
             <ChevronUp size={14} />
@@ -193,14 +193,14 @@ export default function FindInPage({ containerRef, onClose }: FindInPageProps) {
           <button
             onClick={goNext}
             disabled={totalMarks === 0}
-            className="p-1 rounded text-muted-foreground hover:text-foreground disabled:opacity-30 transition-colors"
+            className="hit-target-box p-1 text-muted-foreground hover:text-foreground disabled:opacity-30 transition-colors [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-sm)]"
             aria-label="Next match"
           >
             <ChevronDown size={14} />
           </button>
           <button
             onClick={onClose}
-            className="p-1 rounded text-muted-foreground hover:text-foreground transition-colors"
+            className="hit-target-box p-1 text-muted-foreground hover:text-foreground transition-colors [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-sm)]"
             aria-label="Close find"
           >
             <X size={14} />

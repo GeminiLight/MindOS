@@ -3,6 +3,7 @@ import path from 'path';
 import { resolveExistingSafe } from '@/lib/core/security';
 import type { MindSystemSlot, MindSystemSlotKey } from './mind-system';
 import { getAssistantProfilePath, getAssistantPromptPath } from './mind-system-assistant-paths';
+import { INBOX_ORGANIZER_ASSISTANT_ID, INBOX_ORGANIZER_DEFAULT_PROMPT } from './inbox-assistant';
 
 export {
   getAssistantProfilePath,
@@ -96,6 +97,7 @@ export const MIND_SYSTEM_ASSISTANT_CONFIGS: Record<MindSystemSlotKey, MindSystem
 };
 
 const DEFAULT_ASSISTANT_PROMPTS: Record<string, string> = {
+  [INBOX_ORGANIZER_ASSISTANT_ID]: INBOX_ORGANIZER_DEFAULT_PROMPT,
   'daily-signal': `---
 assistantId: daily-signal
 version: 1

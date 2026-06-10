@@ -10,12 +10,12 @@ import { truncate } from '@/lib/agent/tools';
 import type { AgentRuntimeIdentity, AskModeApi, RuntimeSessionBinding } from '@/lib/types';
 import { readSettings, readBaseUrlCompat, writeBaseUrlCompat } from '@/lib/settings';
 import { checkNativeRuntimeHealth, detectLocalAcpAgents, resolveCommandPath } from '@/lib/acp/detect-local';
+import { findUserOverride } from '@/lib/acp/agent-descriptors';
 import { en as i18nEn, zh as i18nZh } from '@/lib/i18n';
 import { MindOSError, apiError, ErrorCodes } from '@/lib/errors';
 import { performActiveRecall } from '@/lib/agent/active-recall';
 import { metrics } from '@/lib/metrics';
 import { resolveAskCompatMode } from '@/lib/agent/ask-compat';
-import '@/lib/pi-integration/mcp-config'; // Injects --mcp-config argv before extension load
 import { createSession, promptStream, cancelPrompt, closeSession } from '@/lib/acp/session';
 import { getProjectRoot } from '@/lib/project-root';
 import type { Message as FrontendMessage } from '@/lib/types';
@@ -36,11 +36,14 @@ import {
   runMindosPiAgentAskSession,
 } from '@geminilight/mindos/session';
 import {
+  buildAgentRuntimeEnv,
+  resolveAgentRuntimeEnvOverlay,
   runMindosAgentRuntimeAskSession,
   type MindosAgentRuntimeSelection,
 } from '@geminilight/mindos/agent-runtime';
 import {
   handleAgentRuntimesGet,
+  type AgentRuntimeDescriptor,
   type AgentRuntimesServices,
 } from '@geminilight/mindos/server';
 import {
@@ -62,16 +65,29 @@ import {
 } from '@/lib/agent/claude-permission-prompt';
 import {
   completeAgentRun,
+  appendAgentRunEvent,
   failAgentRun,
   startAgentRun,
   updateAgentRun,
   type AgentRunRecord,
 } from '@/lib/agent/run-ledger';
+import {
+  getCachedAvailableNativeRuntimeDescriptor,
+  rememberAvailableNativeRuntimeDescriptor,
+} from '@/lib/agent/native-runtime-descriptor-cache';
 import { createMindosAgentPermissionPolicy } from '@/lib/agent/permission-policy';
 import { runWithAgentRunContext } from '@/lib/agent/agent-run-context';
 import { toMindosUiAskMessages } from '@/lib/agent/to-agent-messages';
+import { isAbortLikeError } from '@/lib/agent/run-cancellation';
 
 const NATIVE_ASK_HEALTH_GATE_TIMEOUT_MS = 3000;
+const CLAUDE_SDK_BINARY_PATH = 'sdk:@anthropic-ai/claude-agent-sdk';
+const CLAUDE_ASK_CLI_PATH_TIMEOUT_MS = 1500;
+
+function agentRunErrorStatus(error: unknown, signal?: AbortSignal): 'failed' | 'canceled' | 'timed_out' {
+  if (signal?.aborted || isAbortLikeError(error)) return 'canceled';
+  return (error as any)?.code === 'TIMEOUT' ? 'timed_out' : 'failed';
+}
 
 function sendAgentRunContext(
   send: (event: MindOSSSEvent) => void,
@@ -83,6 +99,197 @@ function sendAgentRunContext(
     ...(run.chatSessionId ? { chatSessionId: run.chatSessionId } : {}),
     startedAt: run.startedAt,
   } as unknown as MindOSSSEvent);
+}
+
+function safeAuditString(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (value == null) return '';
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+function compactStringEnv(env: Record<string, string | undefined> | undefined): Record<string, string> | undefined {
+  if (!env) return undefined;
+  const compact: Record<string, string> = {};
+  for (const [key, value] of Object.entries(env)) {
+    if (typeof value === 'string') compact[key] = value;
+  }
+  return Object.keys(compact).length > 0 ? compact : undefined;
+}
+
+function omitEnvKeys(
+  env: Record<string, string>,
+  reserved: Record<string, string>,
+): Record<string, string> {
+  const next: Record<string, string> = {};
+  for (const [key, value] of Object.entries(env)) {
+    if (!(key in reserved)) next[key] = value;
+  }
+  return next;
+}
+
+function appendSseEventToAgentRun(runId: string, event: MindOSSSEvent): void {
+  if (event.type === 'text_delta') {
+    if (!event.delta.trim()) return;
+    appendAgentRunEvent(runId, {
+      type: 'text',
+      category: 'text',
+      message: event.delta,
+      data: { kind: 'text', text: event.delta, channel: 'assistant' },
+    });
+    return;
+  }
+  if (event.type === 'thinking_delta') {
+    if (!event.delta.trim()) return;
+    appendAgentRunEvent(runId, {
+      type: 'text',
+      category: 'text',
+      message: event.delta,
+      data: { kind: 'text', text: event.delta, channel: 'reasoning' },
+      visibility: 'debug',
+    });
+    return;
+  }
+  if (event.type === 'tool_start') {
+    appendAgentRunEvent(runId, {
+      type: 'tool_started',
+      category: 'tool',
+      message: event.toolName,
+      toolCallId: event.toolCallId,
+      toolName: event.toolName,
+      ...(event.runtime ? { runtime: event.runtime } : {}),
+      data: {
+        kind: 'tool',
+        name: event.toolName,
+        status: 'started',
+        inputSummary: safeAuditString(event.args),
+      },
+    });
+    return;
+  }
+  if (event.type === 'tool_delta') {
+    appendAgentRunEvent(runId, {
+      type: 'tool_updated',
+      category: 'tool',
+      message: event.delta,
+      toolCallId: event.toolCallId,
+      ...(event.toolName ? { toolName: event.toolName } : {}),
+      ...(event.runtime ? { runtime: event.runtime } : {}),
+      data: {
+        kind: 'tool',
+        name: event.toolName ?? 'tool',
+        status: 'running',
+        outputSummary: event.delta,
+      },
+      visibility: 'debug',
+    });
+    return;
+  }
+  if (event.type === 'tool_end') {
+    appendAgentRunEvent(runId, {
+      type: 'tool_completed',
+      category: 'tool',
+      message: event.output,
+      toolCallId: event.toolCallId,
+      ...(event.toolName ? { toolName: event.toolName } : {}),
+      ...(event.runtime ? { runtime: event.runtime } : {}),
+      data: {
+        kind: 'tool',
+        name: event.toolName ?? 'tool',
+        status: event.isError ? 'failed' : 'completed',
+        ...(event.isError ? { error: event.output } : { outputSummary: event.output }),
+      },
+    });
+    return;
+  }
+  if (event.type === 'runtime_permission_request') {
+    appendAgentRunEvent(runId, {
+      type: 'permission_requested',
+      category: 'permission',
+      message: event.reason ?? event.toolName,
+      toolCallId: event.toolCallId,
+      toolName: event.toolName,
+      runtime: event.runtime,
+      data: {
+        kind: 'permission',
+        action: event.toolName,
+        status: 'requested',
+        ...(event.reason ? { prompt: event.reason } : {}),
+      },
+    });
+    return;
+  }
+  if (event.type === 'runtime_permission_resolved') {
+    appendAgentRunEvent(runId, {
+      type: 'permission_resolved',
+      category: 'permission',
+      message: event.decision,
+      toolCallId: event.toolCallId,
+      runtime: event.runtime,
+      data: {
+        kind: 'permission',
+        action: event.toolCallId,
+        status: event.cancelled ? 'denied' : event.decision === 'deny' ? 'denied' : 'approved',
+      },
+    });
+    return;
+  }
+  if (event.type === 'user_question_start') {
+    appendAgentRunEvent(runId, {
+      type: 'user_question_started',
+      category: 'question',
+      message: 'User question requested',
+      toolCallId: event.toolCallId,
+      data: {
+        kind: 'question',
+        status: 'requested',
+        prompt: safeAuditString(event.questions),
+      },
+    });
+    return;
+  }
+  if (event.type === 'user_question_answered' || event.type === 'user_question_cancelled') {
+    appendAgentRunEvent(runId, {
+      type: 'user_question_resolved',
+      category: 'question',
+      message: event.type === 'user_question_cancelled' ? event.reason : 'User answered',
+      toolCallId: event.toolCallId,
+      data: {
+        kind: 'question',
+        status: event.type === 'user_question_cancelled' ? 'cancelled' : 'answered',
+        summary: event.type === 'user_question_cancelled' ? event.reason : safeAuditString(event.answers ?? []),
+      },
+    });
+    return;
+  }
+  if (event.type === 'status') {
+    appendAgentRunEvent(runId, {
+      type: 'runtime_status',
+      category: 'status',
+      message: event.message,
+      ...(event.runtime ? { runtime: event.runtime } : {}),
+      data: {
+        kind: 'status',
+        nextStatus: 'running',
+        summary: event.message,
+      },
+    });
+    return;
+  }
+  if (event.type === 'error') {
+    appendAgentRunEvent(runId, {
+      type: 'error',
+      category: 'error',
+      message: event.message,
+      data: {
+        kind: 'error',
+        message: event.message,
+      },
+    });
+  }
 }
 
 // generateSkillsXml is in lib/agent/skills-xml.ts (not inline: Next.js route export constraints)
@@ -211,7 +418,40 @@ function createAskSseResponse(
   });
 }
 
-async function assertNativeRuntimeAvailable(runtime: MindosAgentRuntimeSelection): Promise<string | null> {
+function runtimeSelectionWithBinaryPath(
+  runtime: MindosAgentRuntimeSelection,
+  binaryPath?: string,
+): MindosAgentRuntimeSelection {
+  return {
+    id: runtime.id,
+    name: runtime.name,
+    kind: runtime.kind,
+    ...(binaryPath ? { binaryPath } : {}),
+    ...(runtime.externalSessionId ? { externalSessionId: runtime.externalSessionId } : {}),
+  };
+}
+
+async function resolveClaudeCliPathForAsk(): Promise<string | null> {
+  return await Promise.race([
+    resolveCommandPath('claude').catch(() => null),
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), CLAUDE_ASK_CLI_PATH_TIMEOUT_MS)),
+  ]);
+}
+
+async function runtimeSelectionWithDetectedBinaryPath(
+  runtime: MindosAgentRuntimeSelection,
+  descriptor?: AgentRuntimeDescriptor,
+): Promise<MindosAgentRuntimeSelection> {
+  if (runtime.kind === 'claude' && (!descriptor?.binaryPath || descriptor.binaryPath.startsWith('sdk:'))) {
+    const cliPath = await resolveClaudeCliPathForAsk();
+    return runtimeSelectionWithBinaryPath(runtime, cliPath ?? descriptor?.binaryPath ?? CLAUDE_SDK_BINARY_PATH);
+  }
+  return runtimeSelectionWithBinaryPath(runtime, descriptor?.binaryPath);
+}
+
+async function resolveAvailableNativeRuntime(
+  runtime: MindosAgentRuntimeSelection,
+): Promise<{ runtime: MindosAgentRuntimeSelection; unavailableReason: null } | { runtime: null; unavailableReason: string }> {
   const services: AgentRuntimesServices = {
     readSettings: readSettings as AgentRuntimesServices['readSettings'],
     detectLocalAcpAgents: detectLocalAcpAgents as AgentRuntimesServices['detectLocalAcpAgents'],
@@ -222,22 +462,55 @@ async function assertNativeRuntimeAvailable(runtime: MindosAgentRuntimeSelection
     handleAgentRuntimesGet(new URLSearchParams(`runtime=${runtime.kind}&force=1`), services),
     new Promise<null>((resolve) => setTimeout(() => resolve(null), NATIVE_ASK_HEALTH_GATE_TIMEOUT_MS)),
   ]);
-  if (!res) return null;
+  if (!res) {
+    const cachedDescriptor = getCachedAvailableNativeRuntimeDescriptor(runtime.kind, runtime.id);
+    if (cachedDescriptor) {
+      return {
+        runtime: await runtimeSelectionWithDetectedBinaryPath(runtime, cachedDescriptor),
+        unavailableReason: null,
+      };
+    }
+    if (runtime.kind === 'claude') {
+      return {
+        runtime: await runtimeSelectionWithDetectedBinaryPath(runtime),
+        unavailableReason: null,
+      };
+    }
+    return {
+      runtime: null,
+      unavailableReason: `${runtime.name} is still being verified. Please retry in a moment.`,
+    };
+  }
   const body = res.body;
   if (res.status !== 200 || !body || !('runtime' in body)) {
-    return `Unable to verify ${runtime.name} before starting the turn.`;
+    return {
+      runtime: null,
+      unavailableReason: `Unable to verify ${runtime.name} before starting the turn.`,
+    };
   }
   const descriptor = body.runtime;
   if (descriptor.kind !== runtime.kind || descriptor.id !== runtime.id) {
-    return `${runtime.name} is not available.`;
+    return {
+      runtime: null,
+      unavailableReason: `${runtime.name} is not available.`,
+    };
   }
-  if (descriptor.status === 'available') return null;
+  if (descriptor.status === 'available') {
+    rememberAvailableNativeRuntimeDescriptor(descriptor);
+    return {
+      runtime: await runtimeSelectionWithDetectedBinaryPath(runtime, descriptor),
+      unavailableReason: null,
+    };
+  }
   const statusText = descriptor.status === 'signed-out'
     ? 'signed out'
     : descriptor.status === 'missing'
       ? 'not installed'
       : 'unavailable';
-  return `${descriptor.name} is ${statusText}.${descriptor.availability?.reason ? ` ${descriptor.availability.reason}` : ''}`;
+  return {
+    runtime: null,
+    unavailableReason: `${descriptor.name} is ${statusText}.${descriptor.availability?.reason ? ` ${descriptor.availability.reason}` : ''}`,
+  };
 }
 
 // SSE event contract and pi-agent event guards → @geminilight/mindos/session
@@ -330,11 +603,22 @@ export async function POST(req: NextRequest) {
   // Read agent config from settings
   const serverSettings = readSettings();
   const agentConfig = serverSettings.agent ?? {};
+  const nativeRuntimeEnv = selectedNativeRuntime
+    ? buildAgentRuntimeEnv({ settings: serverSettings.agentRuntimeEnv }).env
+    : undefined;
+  const acpOverrideEnv = selectedAcpAgent
+    ? findUserOverride(selectedAcpAgent.id, serverSettings.acpAgents)?.env ?? {}
+    : {};
+  const acpRuntimeEnvOverlay = selectedAcpAgent
+    ? omitEnvKeys(resolveAgentRuntimeEnvOverlay({ settings: serverSettings.agentRuntimeEnv }).overlay, acpOverrideEnv)
+    : undefined;
+  let verifiedNativeRuntime = selectedNativeRuntime;
   if (selectedNativeRuntime) {
-    const unavailableReason = await assertNativeRuntimeAvailable(selectedNativeRuntime);
+    const { runtime, unavailableReason } = await resolveAvailableNativeRuntime(selectedNativeRuntime);
     if (unavailableReason) {
       return apiError(ErrorCodes.INVALID_REQUEST, unavailableReason, 409);
     }
+    verifiedNativeRuntime = runtime;
   }
 
   // Detect locale from Accept-Language header for i18n status messages
@@ -354,7 +638,7 @@ export async function POST(req: NextRequest) {
   // server-side cap to guard against malformed requests.
   const uploadedParts = createMindosUploadedFileParts(uploadedFiles);
 
-  if (selectedNativeRuntime || selectedAcpAgent) {
+  if (verifiedNativeRuntime || selectedAcpAgent) {
     const mindRoot = getMindRoot();
     const lastUserContent = getLastUserContent(messages);
     const fileContext = loadAttachedFileContext(attachedFiles, currentFile, 'external');
@@ -381,23 +665,25 @@ export async function POST(req: NextRequest) {
     });
 
     return createAskSseResponse((send) => runWithAgentRunContext({ chatSessionId }, async () => {
-      if (selectedNativeRuntime) {
+      const nativeRuntime = verifiedNativeRuntime;
+      if (nativeRuntime) {
         const runtimeRunId = randomUUID();
         let outputSummary = '';
         const nativeRun = startAgentRun({
           agentKind: 'native-runtime',
-          runtimeId: selectedNativeRuntime.id,
-          displayName: selectedNativeRuntime.name,
+          runtimeId: nativeRuntime.id,
+          displayName: nativeRuntime.name,
           cwd: mindRoot,
           permissionMode: permissionPolicy.runtimePermissionMode,
           inputSummary: externalPrompt,
           metadata: {
-            runtimeKind: selectedNativeRuntime.kind,
+            runtimeKind: nativeRuntime.kind,
             source: 'selected-native-runtime',
           },
         });
         const sendWithLedger = (event: MindOSSSEvent) => {
           if (event.type === 'text_delta') outputSummary += event.delta;
+          appendSseEventToAgentRun(nativeRun.id, event);
           send(event);
         };
         sendAgentRunContext(send, nativeRun);
@@ -414,14 +700,16 @@ export async function POST(req: NextRequest) {
               runId: runtimeRunId,
               send: (event) => sendWithLedger(event as unknown as MindOSSSEvent),
             }, () => runMindosAgentRuntimeAskSession({
-              runtime: selectedNativeRuntime,
+              runtime: nativeRuntime,
               cwd: mindRoot,
               prompt: externalPrompt,
               permissionMode: permissionPolicy.runtimePermissionMode,
+              timeoutMs: resolveMindosAgentTimeoutMs(process.env.MINDOS_AGENT_TIMEOUT_MS),
+              ...(nativeRuntimeEnv ? { runtimeEnv: nativeRuntimeEnv } : {}),
               signal: req.signal,
               send: sendWithLedger,
               services: {
-                ...(selectedNativeRuntime.kind === 'claude' ? {
+                ...(nativeRuntime.kind === 'claude' ? {
                   createClaudePermissionPrompt: () => createClaudePermissionPromptConfig({
                     runId: runtimeRunId,
                     baseUrl: resolveRuntimePermissionBaseUrl(req),
@@ -438,10 +726,11 @@ export async function POST(req: NextRequest) {
           )));
           if (result.error) {
             failAgentRun(nativeRun.id, {
+              status: agentRunErrorStatus(result.error, req.signal),
               error: result.error,
               outputSummary,
               metadata: {
-                runtimeKind: selectedNativeRuntime.kind,
+                runtimeKind: nativeRuntime.kind,
                 ...(result.externalSessionId ? { externalSessionId: result.externalSessionId } : {}),
               },
             });
@@ -450,12 +739,16 @@ export async function POST(req: NextRequest) {
           completeAgentRun(nativeRun.id, {
             outputSummary,
             metadata: {
-              runtimeKind: selectedNativeRuntime.kind,
+              runtimeKind: nativeRuntime.kind,
               ...(result.externalSessionId ? { externalSessionId: result.externalSessionId } : {}),
             },
           });
         } catch (error) {
-          failAgentRun(nativeRun.id, { error, outputSummary });
+          failAgentRun(nativeRun.id, {
+            status: agentRunErrorStatus(error, req.signal),
+            error,
+            outputSummary,
+          });
           throw error;
         }
         return;
@@ -488,8 +781,11 @@ export async function POST(req: NextRequest) {
             prompt: externalPrompt,
             signal: req.signal,
             createSession: async (agentId, options) => {
+              const optionEnv = compactStringEnv((options as { env?: Record<string, string | undefined> } | undefined)?.env);
+              const mergedEnv = compactStringEnv({ ...(acpRuntimeEnvOverlay ?? {}), ...(optionEnv ?? {}) });
               const session = await createSession(agentId, {
                 ...options,
+                ...(mergedEnv ? { env: mergedEnv } : {}),
                 permissionMode: permissionPolicy.acpPermissionMode,
               });
               updateAgentRun(acpRun.id, {
@@ -505,6 +801,7 @@ export async function POST(req: NextRequest) {
             onVisibleContent: () => { hasContent = true; },
             send: (event) => {
               if (event.type === 'text_delta') outputSummary += event.delta;
+              appendSseEventToAgentRun(acpRun.id, event);
               send(event);
             },
             promptStream: async (sessionId, prompt, onUpdate) => {
@@ -519,7 +816,7 @@ export async function POST(req: NextRequest) {
         ))
           .catch((error) => {
             failAgentRun(acpRun.id, {
-              status: (error as any)?.code === 'TIMEOUT' ? 'timed_out' : 'failed',
+              status: agentRunErrorStatus(error, req.signal),
               error,
               outputSummary,
             });
@@ -527,7 +824,7 @@ export async function POST(req: NextRequest) {
           });
         if (acpResult.error) {
           failAgentRun(acpRun.id, {
-            status: (acpResult.error as any).code === 'TIMEOUT' ? 'timed_out' : 'failed',
+            status: agentRunErrorStatus(acpResult.error, req.signal),
             error: acpResult.error,
             outputSummary,
           });
@@ -724,6 +1021,7 @@ export async function POST(req: NextRequest) {
       sendAgentRunContext(send, mainRun);
       const sendWithLedger = (event: MindOSSSEvent) => {
         if (event.type === 'text_delta') outputSummary += event.delta;
+        appendSseEventToAgentRun(mainRun.id, event);
         send(event);
       };
       try {
@@ -799,7 +1097,7 @@ export async function POST(req: NextRequest) {
         completeAgentRun(mainRun.id, { outputSummary });
       } catch (error) {
         failAgentRun(mainRun.id, {
-          status: (error as any)?.code === 'TIMEOUT' ? 'timed_out' : 'failed',
+          status: agentRunErrorStatus(error, req.signal),
           error,
           outputSummary,
         });

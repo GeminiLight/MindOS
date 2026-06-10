@@ -25,6 +25,9 @@ import {
   MINDOS_WRITE_TOOL_NAMES,
   type MindosAgentPermissionPolicy,
 } from './permission-policy';
+import { withAgentFileWriteLock, withAgentFileWriteLocks } from './file-write-lock';
+import { getCurrentAgentRunContext } from './agent-run-context';
+import { appendAgentRunEvent } from './run-ledger';
 
 // Max chars per file to avoid token overflow (~100k chars ≈ ~25k tokens)
 const MAX_FILE_CHARS = 20_000;
@@ -108,6 +111,40 @@ function formatDiff(raw: import('@/components/changes/line-diff').DiffLine[]): s
 /** Safe read — returns empty string if file doesn't exist */
 function safeReadContent(filePath: string): string {
   try { return getFileContent(filePath); } catch { return ''; }
+}
+
+function writeLock<T>(operation: string, filePath: string, fn: () => Promise<T> | T): Promise<T> {
+  return withAgentFileWriteLock({ operation, filePath }, fn);
+}
+
+type FileChangedAction = 'created' | 'updated' | 'deleted' | 'renamed' | 'unknown';
+
+function currentRunIdForToolEvent(): string | undefined {
+  const context = getCurrentAgentRunContext();
+  return context?.parentRunId ?? context?.rootRunId;
+}
+
+function appendFileChangedEvent(input: {
+  path: string;
+  action: FileChangedAction;
+  summary: string;
+  status?: 'completed' | 'failed';
+}): void {
+  const runId = currentRunIdForToolEvent();
+  if (!runId) return;
+  appendAgentRunEvent(runId, {
+    type: 'file_changed',
+    category: 'file',
+    filePath: input.path,
+    message: input.summary,
+    data: {
+      kind: 'file',
+      path: input.path,
+      action: input.action,
+      status: input.status ?? 'completed',
+      summary: input.summary,
+    },
+  });
 }
 
 /** Safe execute wrapper — catches all errors, returns error text (never throws) */
@@ -401,10 +438,17 @@ export const knowledgeBaseTools: MindosAgentTool[] = [
     description: 'Overwrite the entire content of an existing file. Use read_file first to see current content. Prefer update_section or insert_after_heading for partial edits.',
     parameters: WriteFileParams,
     execute: safeExecute(async (_id, params: Static<typeof WriteFileParams>) => {
-      const before = safeReadContent(params.path);
-      saveFileContent(params.path, params.content);
-      const diff = await buildDiffSummaryAsync(before, params.content);
-      return textResult(`File written: ${params.path}${diff ? ' ' + diff : ''}`);
+      return writeLock('write_file', params.path, async () => {
+        const before = safeReadContent(params.path);
+        saveFileContent(params.path, params.content);
+        const diff = await buildDiffSummaryAsync(before, params.content);
+        appendFileChangedEvent({
+          path: params.path,
+          action: 'updated',
+          summary: `Updated ${params.path}`,
+        });
+        return textResult(`File written: ${params.path}${diff ? ' ' + diff : ''}`);
+      });
     }),
   },
 
@@ -414,10 +458,17 @@ export const knowledgeBaseTools: MindosAgentTool[] = [
     description: 'Create a new file. Only .md and .csv files are allowed. Parent directories are created automatically. Does NOT create Space scaffolding (INSTRUCTION.md/README.md). Use create_space to create a Space.',
     parameters: CreateFileParams,
     execute: safeExecute(async (_id, params: Static<typeof CreateFileParams>) => {
-      const content = params.content ?? '';
-      createFile(params.path, content);
-      const lineCount = content.split('\n').length;
-      return textResult(`File created: ${params.path} (+${lineCount})\n\n--- changes ---\n${content.split('\n').slice(0, 30).map(l => '+ ' + l).join('\n')}${lineCount > 30 ? '\n... (truncated)' : ''}`);
+      return writeLock('create_file', params.path, () => {
+        const content = params.content ?? '';
+        createFile(params.path, content);
+        appendFileChangedEvent({
+          path: params.path,
+          action: 'created',
+          summary: `Created ${params.path}`,
+        });
+        const lineCount = content.split('\n').length;
+        return textResult(`File created: ${params.path} (+${lineCount})\n\n--- changes ---\n${content.split('\n').slice(0, 30).map(l => '+ ' + l).join('\n')}${lineCount > 30 ? '\n... (truncated)' : ''}`);
+      });
     }),
   },
 
@@ -427,19 +478,29 @@ export const knowledgeBaseTools: MindosAgentTool[] = [
     description: 'Create multiple new files in a single operation. Highly recommended when scaffolding new features or projects.',
     parameters: BatchCreateFileParams,
     execute: safeExecute(async (_id, params: Static<typeof BatchCreateFileParams>) => {
-      const created: string[] = [];
-      const errors: string[] = [];
-      for (const file of params.files) {
-        try {
-          createFile(file.path, file.content);
-          created.push(file.path);
-        } catch (e) {
-          errors.push(`${file.path}: ${formatToolError(e)}`);
-        }
-      }
-      let msg = `Batch creation complete.\nCreated ${created.length} files: ${created.join(', ')}`;
-      if (errors.length > 0) msg += `\n\nFailed to create ${errors.length} files:\n${errors.join('\n')}`;
-      return textResult(msg);
+      return withAgentFileWriteLocks(
+        params.files.map((file) => ({ operation: 'batch_create_files', filePath: file.path })),
+        () => {
+          const created: string[] = [];
+          const errors: string[] = [];
+          for (const file of params.files) {
+            try {
+              createFile(file.path, file.content);
+              created.push(file.path);
+              appendFileChangedEvent({
+                path: file.path,
+                action: 'created',
+                summary: `Created ${file.path}`,
+              });
+            } catch (e) {
+              errors.push(`${file.path}: ${formatToolError(e)}`);
+            }
+          }
+          let msg = `Batch creation complete.\nCreated ${created.length} files: ${created.join(', ')}`;
+          if (errors.length > 0) msg += `\n\nFailed to create ${errors.length} files:\n${errors.join('\n')}`;
+          return textResult(msg);
+        },
+      );
     }),
   },
 
@@ -449,11 +510,18 @@ export const knowledgeBaseTools: MindosAgentTool[] = [
     description: 'Append text to the end of an existing file. A blank line separator is added automatically.',
     parameters: AppendParams,
     execute: safeExecute(async (_id, params: Static<typeof AppendParams>) => {
-      const before = safeReadContent(params.path);
-      appendToFile(params.path, params.content);
-      const after = safeReadContent(params.path);
-      const diff = await buildDiffSummaryAsync(before, after);
-      return textResult(`Content appended to: ${params.path}${diff ? ' ' + diff : ''}`);
+      return writeLock('append_to_file', params.path, async () => {
+        const before = safeReadContent(params.path);
+        appendToFile(params.path, params.content);
+        const after = safeReadContent(params.path);
+        const diff = await buildDiffSummaryAsync(before, after);
+        appendFileChangedEvent({
+          path: params.path,
+          action: 'updated',
+          summary: `Appended to ${params.path}`,
+        });
+        return textResult(`Content appended to: ${params.path}${diff ? ' ' + diff : ''}`);
+      });
     }),
   },
 
@@ -463,11 +531,18 @@ export const knowledgeBaseTools: MindosAgentTool[] = [
     description: 'Insert content right after a Markdown heading. Useful for adding items under a specific section. If heading matches fail, use edit_lines instead.',
     parameters: InsertHeadingParams,
     execute: safeExecute(async (_id, params: Static<typeof InsertHeadingParams>) => {
-      const before = safeReadContent(params.path);
-      insertAfterHeading(params.path, params.heading, params.content);
-      const after = safeReadContent(params.path);
-      const diff = await buildDiffSummaryAsync(before, after);
-      return textResult(`Content inserted after heading "${params.heading}" in ${params.path}${diff ? ' ' + diff : ''}`);
+      return writeLock('insert_after_heading', params.path, async () => {
+        const before = safeReadContent(params.path);
+        insertAfterHeading(params.path, params.heading, params.content);
+        const after = safeReadContent(params.path);
+        const diff = await buildDiffSummaryAsync(before, after);
+        appendFileChangedEvent({
+          path: params.path,
+          action: 'updated',
+          summary: `Inserted content in ${params.path}`,
+        });
+        return textResult(`Content inserted after heading "${params.heading}" in ${params.path}${diff ? ' ' + diff : ''}`);
+      });
     }),
   },
 
@@ -477,11 +552,18 @@ export const knowledgeBaseTools: MindosAgentTool[] = [
     description: 'Replace the content of a Markdown section identified by its heading. The section spans from the heading to the next heading of equal or higher level. If heading matches fail, use edit_lines instead.',
     parameters: UpdateSectionParams,
     execute: safeExecute(async (_id, params: Static<typeof UpdateSectionParams>) => {
-      const before = safeReadContent(params.path);
-      updateSection(params.path, params.heading, params.content);
-      const after = safeReadContent(params.path);
-      const diff = await buildDiffSummaryAsync(before, after);
-      return textResult(`Section "${params.heading}" updated in ${params.path}${diff ? ' ' + diff : ''}`);
+      return writeLock('update_section', params.path, async () => {
+        const before = safeReadContent(params.path);
+        updateSection(params.path, params.heading, params.content);
+        const after = safeReadContent(params.path);
+        const diff = await buildDiffSummaryAsync(before, after);
+        appendFileChangedEvent({
+          path: params.path,
+          action: 'updated',
+          summary: `Updated section in ${params.path}`,
+        });
+        return textResult(`Section "${params.heading}" updated in ${params.path}${diff ? ' ' + diff : ''}`);
+      });
     }),
   },
 
@@ -494,13 +576,20 @@ export const knowledgeBaseTools: MindosAgentTool[] = [
       const { path: fp, start_line, end_line, content } = params;
       const start = Math.max(0, start_line - 1);
       const end = Math.max(0, end_line - 1);
-      const before = safeReadContent(fp);
-      const mindRoot = getMindRoot();
-      const { updateLines } = await import('@/lib/core');
-      updateLines(mindRoot, fp, start, end, content.split('\n'));
-      const after = safeReadContent(fp);
-      const diff = await buildDiffSummaryAsync(before, after);
-      return textResult(`Lines ${start_line}-${end_line} replaced in ${fp}${diff ? ' ' + diff : ''}`);
+      return writeLock('edit_lines', fp, async () => {
+        const before = safeReadContent(fp);
+        const mindRoot = getMindRoot();
+        const { updateLines } = await import('@/lib/core');
+        updateLines(mindRoot, fp, start, end, content.split('\n'));
+        const after = safeReadContent(fp);
+        const diff = await buildDiffSummaryAsync(before, after);
+        appendFileChangedEvent({
+          path: fp,
+          action: 'updated',
+          summary: `Edited lines ${start_line}-${end_line} in ${fp}`,
+        });
+        return textResult(`Lines ${start_line}-${end_line} replaced in ${fp}${diff ? ' ' + diff : ''}`);
+      });
     }),
   },
 
@@ -510,8 +599,15 @@ export const knowledgeBaseTools: MindosAgentTool[] = [
     description: 'Delete a file from the knowledge base. The file is moved to trash and can be recovered within 30 days.',
     parameters: PathParam,
     execute: safeExecute(async (_id, params: Static<typeof PathParam>) => {
-      const meta = moveToTrashFile(params.path);
-      return textResult(`Moved to trash: ${params.path} (recoverable for 30 days, trashId: ${meta.id})`);
+      return writeLock('delete_file', params.path, () => {
+        const meta = moveToTrashFile(params.path);
+        appendFileChangedEvent({
+          path: params.path,
+          action: 'deleted',
+          summary: `Moved ${params.path} to trash`,
+        });
+        return textResult(`Moved to trash: ${params.path} (recoverable for 30 days, trashId: ${meta.id})`);
+      });
     }),
   },
 
@@ -521,8 +617,15 @@ export const knowledgeBaseTools: MindosAgentTool[] = [
     description: 'Rename a file within its current directory. Only the filename changes, not the directory.',
     parameters: RenameParams,
     execute: safeExecute(async (_id, params: Static<typeof RenameParams>) => {
-      const newPath = renameFile(params.path, params.new_name);
-      return textResult(`File renamed: ${params.path} → ${newPath}`);
+      return writeLock('rename_file', params.path, () => {
+        const newPath = renameFile(params.path, params.new_name);
+        appendFileChangedEvent({
+          path: newPath,
+          action: 'renamed',
+          summary: `Renamed ${params.path} to ${newPath}`,
+        });
+        return textResult(`File renamed: ${params.path} → ${newPath}`);
+      });
     }),
   },
 
@@ -532,11 +635,21 @@ export const knowledgeBaseTools: MindosAgentTool[] = [
     description: 'Move a file to a new location. Also returns any files that had backlinks affected by the move.',
     parameters: MoveParams,
     execute: safeExecute(async (_id, params: Static<typeof MoveParams>) => {
-      const result = moveFile(params.from_path, params.to_path);
-      const affected = result.affectedFiles.length > 0
-        ? `\nAffected backlinks in: ${result.affectedFiles.join(', ')}`
-        : '';
-      return textResult(`File moved: ${params.from_path} → ${result.newPath}${affected}`);
+      return withAgentFileWriteLocks([
+        { operation: 'move_file', filePath: params.from_path },
+        { operation: 'move_file', filePath: params.to_path },
+      ], () => {
+        const result = moveFile(params.from_path, params.to_path);
+        const affected = result.affectedFiles.length > 0
+          ? `\nAffected backlinks in: ${result.affectedFiles.join(', ')}`
+          : '';
+        appendFileChangedEvent({
+          path: result.newPath,
+          action: 'renamed',
+          summary: `Moved ${params.from_path} to ${result.newPath}`,
+        });
+        return textResult(`File moved: ${params.from_path} → ${result.newPath}${affected}`);
+      });
     }),
   },
 
@@ -580,8 +693,15 @@ export const knowledgeBaseTools: MindosAgentTool[] = [
     description: 'Append a row to a CSV file. Values are automatically escaped per RFC 4180.',
     parameters: CsvAppendParams,
     execute: safeExecute(async (_id, params: Static<typeof CsvAppendParams>) => {
-      const result = appendCsvRow(params.path, params.row);
-      return textResult(`Row appended to ${params.path} (now ${result.newRowCount} rows)`);
+      return writeLock('append_csv', params.path, () => {
+        const result = appendCsvRow(params.path, params.row);
+        appendFileChangedEvent({
+          path: params.path,
+          action: 'updated',
+          summary: `Appended CSV row to ${params.path}`,
+        });
+        return textResult(`Row appended to ${params.path} (now ${result.newRowCount} rows)`);
+      });
     }),
   },
 
@@ -637,14 +757,22 @@ export const knowledgeBaseTools: MindosAgentTool[] = [
       space: Type.String({ description: 'Space path to compile (e.g. "Research", "Projects/ML")' }),
     }),
     execute: safeExecute(async (_id, params: { space: string }) => {
-      const { compileSpaceOverview, isCompileError } = await import('@/lib/compile');
-      const result = await compileSpaceOverview(params.space);
-      if (isCompileError(result)) {
-        return textResult(`Error: ${result.message}`);
-      }
-      return textResult(
-        `Overview generated for "${result.stats.spaceName}" (${result.stats.fileCount} files analyzed).\n\nSaved to ${params.space}/README.md`
-      );
+      return writeLock('compile', path.posix.join(params.space, 'README.md'), async () => {
+        const { compileSpaceOverview, isCompileError } = await import('@/lib/compile');
+        const result = await compileSpaceOverview(params.space);
+        if (isCompileError(result)) {
+          return textResult(`Error: ${result.message}`);
+        }
+        const readmePath = path.posix.join(params.space, 'README.md');
+        appendFileChangedEvent({
+          path: readmePath,
+          action: 'updated',
+          summary: `Generated overview ${readmePath}`,
+        });
+        return textResult(
+          `Overview generated for "${result.stats.spaceName}" (${result.stats.fileCount} files analyzed).\n\nSaved to ${params.space}/README.md`
+        );
+      });
     }),
   },
 ];

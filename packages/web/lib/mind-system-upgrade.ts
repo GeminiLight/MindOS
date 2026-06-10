@@ -7,6 +7,10 @@ import {
   getMindSystemAssistants,
 } from './mind-system-assistants';
 import {
+  INBOX_ORGANIZER_ASSISTANT_ID,
+  INBOX_ORGANIZER_ASSISTANT_PROMPT_PATH,
+} from './inbox-assistant';
+import {
   INSTRUCTION_BY_MIND_SYSTEM_SLOT,
   README_BY_MIND_SYSTEM_SLOT,
 } from './mind-system-scaffold';
@@ -23,20 +27,37 @@ export interface MindSystemUpgradeResult {
   skippedPaths: MindSystemUpgradeSkippedPath[];
 }
 
+const CORE_BUILTIN_ASSISTANT_PROMPTS = [
+  {
+    assistantId: INBOX_ORGANIZER_ASSISTANT_ID,
+    promptPath: INBOX_ORGANIZER_ASSISTANT_PROMPT_PATH,
+  },
+] as const;
+
 export function ensureDefaultMindSystemUpgrade(mindRoot: string): MindSystemUpgradeResult {
   const config = ensureMindSystemConfig(mindRoot);
-  if (!config.enabled) {
-    return {
-      state: 'hidden',
-      createdPaths: [],
-      existingPaths: [],
-      skippedPaths: [],
-    };
-  }
-
   const createdPaths: string[] = [];
   const existingPaths: string[] = [];
   const skippedPaths: MindSystemUpgradeSkippedPath[] = [];
+
+  for (const assistant of CORE_BUILTIN_ASSISTANT_PROMPTS) {
+    const promptResult = ensureAssistantPromptFile(mindRoot, assistant.assistantId, assistant.promptPath);
+    if (promptResult !== 'ready') {
+      skippedPaths.push({
+        path: assistant.promptPath,
+        reason: promptResult,
+      });
+    }
+  }
+
+  if (!config.enabled) {
+    return {
+      state: skippedPaths.length > 0 ? 'partial' : 'hidden',
+      createdPaths,
+      existingPaths,
+      skippedPaths,
+    };
+  }
 
   for (const slot of Object.values(config.slots).sort((a, b) => a.order - b.order)) {
     if (!slot.enabled) continue;

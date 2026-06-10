@@ -32,7 +32,7 @@ type RuntimeOption = {
 };
 
 type RuntimeSelectable = AgentRuntimeIdentity & { status?: AgentRuntimeStatus };
-type NativeRuntimeOption = AgentRuntimeIdentity & Partial<Pick<AgentRuntimeDescriptor, 'status' | 'availability' | 'installCmd' | 'packageName'>>;
+type NativeRuntimeOption = AgentRuntimeIdentity & Partial<Pick<AgentRuntimeDescriptor, 'status' | 'availability' | 'installCmd' | 'packageName' | 'binaryPath'>>;
 
 function isCodexAgent(agent: Pick<AgentRuntimeIdentity | NotInstalledAgent, 'id' | 'name'>): boolean {
   const name = agent.name.toLowerCase();
@@ -303,7 +303,7 @@ export default function RuntimeIconSwitcher({
               event.stopPropagation();
               onRefreshNativeRuntimes();
             }}
-            className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors duration-75 hover:bg-muted/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="hit-target-box inline-flex h-6 w-6 items-center justify-center text-muted-foreground transition-colors duration-75 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [--hit-target-hover-bg:color-mix(in_srgb,var(--muted)_70%,transparent)] [--hit-target-radius:var(--radius-md)]"
           >
             <RefreshCw size={12} />
           </button>
@@ -393,7 +393,8 @@ export default function RuntimeIconSwitcher({
         aria-haspopup="listbox"
         aria-expanded={open}
         title={selectedRuntimeLoading ? 'Checking selected local agent' : selectedOption.label}
-        className="group/runtime relative z-10 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border/40 bg-background text-foreground shadow-sm transition-colors duration-75 hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+        data-hit-active={open ? 'true' : undefined}
+        className="hit-target-box group/runtime relative z-10 inline-flex h-8 w-8 shrink-0 items-center justify-center border border-transparent text-foreground transition-colors duration-75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60 [--hit-target-bg:var(--background)] [--hit-target-hover-bg:color-mix(in_srgb,var(--muted)_60%,transparent)] [--hit-target-active-bg:color-mix(in_srgb,var(--muted)_60%,transparent)] [--hit-target-border-width:1px] [--hit-target-border:color-mix(in_srgb,var(--border)_40%,transparent)] [--hit-target-hover-border:color-mix(in_srgb,var(--border)_60%,transparent)] [--hit-target-radius:var(--radius-lg)] [--hit-target-shadow:0_1px_2px_0_color-mix(in_srgb,var(--foreground)_8%,transparent)]"
       >
         <RuntimeMark option={selectedOption} />
         <span className="absolute -bottom-0.5 -right-0.5 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full border border-background bg-muted text-muted-foreground shadow-sm">

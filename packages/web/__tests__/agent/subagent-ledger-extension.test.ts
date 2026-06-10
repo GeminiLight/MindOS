@@ -1,9 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { finalizeSubagentAsyncRunFromEvent, wrapSubagentToolForLedger } from '@/lib/agent/subagent-ledger-extension';
+import { getCurrentAgentRunContext } from '@/lib/agent/agent-run-context';
 import {
+  listAgentEvents,
   listAgentRuns,
   resetAgentRunsForTest,
 } from '@/lib/agent/run-ledger';
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((res) => {
+    resolve = res;
+  });
+  return { promise, resolve };
+}
 
 describe('MindOS subagent ledger extension', () => {
   beforeEach(() => {
@@ -11,13 +21,17 @@ describe('MindOS subagent ledger extension', () => {
   });
 
   it('records successful subagent tool calls without modifying upstream behavior', async () => {
+    let capturedParentRunId: string | undefined;
     const upstream = {
       name: 'subagent',
       parameters: {} as any,
-      execute: vi.fn(async () => ({
-        content: [{ type: 'text', text: 'Review completed.' }],
-        details: {},
-      })),
+      execute: vi.fn(async () => {
+        capturedParentRunId = getCurrentAgentRunContext()?.parentRunId;
+        return {
+          content: [{ type: 'text', text: 'Review completed.' }],
+          details: {},
+        };
+      }),
     };
     const wrapped = wrapSubagentToolForLedger(upstream as any);
 
@@ -34,7 +48,9 @@ describe('MindOS subagent ledger extension', () => {
       details: {},
     });
     expect(upstream.execute).toHaveBeenCalledTimes(1);
-    expect(listAgentRuns()).toEqual([
+    const runs = listAgentRuns();
+    expect(capturedParentRunId).toBe(runs[0]?.id);
+    expect(runs).toEqual([
       expect.objectContaining({
         agentKind: 'pi-subagent',
         runtimeId: 'reviewer',
@@ -45,6 +61,44 @@ describe('MindOS subagent ledger extension', () => {
         inputSummary: expect.stringContaining('Review the patch.'),
         outputSummary: 'Review completed.',
         metadata: expect.objectContaining({ toolCallId: 'tool-call-1', source: 'pi-subagents' }),
+      }),
+    ]);
+  });
+
+  it('forwards single subagent progress updates into the run timeline without swallowing upstream onUpdate', async () => {
+    const forwardedUpdates: unknown[] = [];
+    const progressUpdate = {
+      content: [{ type: 'text', text: 'Step 1: scanning files.' }],
+      details: { runId: 'upstream-progress-1' },
+    };
+    const upstream = {
+      name: 'subagent',
+      parameters: {} as any,
+      execute: vi.fn(async (_toolCallId: string, _params: unknown, _signal?: AbortSignal, onUpdate?: unknown) => {
+        if (typeof onUpdate === 'function') onUpdate(progressUpdate);
+        return {
+          content: [{ type: 'text', text: 'Review completed.' }],
+          details: {},
+        };
+      }),
+    };
+    const wrapped = wrapSubagentToolForLedger(upstream as any);
+
+    await wrapped.execute(
+      'tool-call-progress',
+      { agent: 'reviewer', task: 'Review the patch.' },
+      undefined,
+      (update: unknown) => forwardedUpdates.push(update),
+    );
+
+    const [run] = listAgentRuns();
+    expect(forwardedUpdates).toEqual([progressUpdate]);
+    expect(listAgentEvents({ runId: run!.id, category: 'text' })).toEqual([
+      expect.objectContaining({
+        type: 'text',
+        title: 'Subagent update',
+        message: 'Step 1: scanning files.',
+        metadata: expect.objectContaining({ upstreamRunId: 'upstream-progress-1' }),
       }),
     ]);
   });
@@ -70,6 +124,113 @@ describe('MindOS subagent ledger extension', () => {
         displayName: 'Parallel subagents (1)',
         status: 'failed',
         error: 'child failed',
+      }),
+    ]);
+  });
+
+  it('routes explicit MindOS orchestration through child ledger runs', async () => {
+    const scout = deferred<any>();
+    const reviewer = deferred<any>();
+    const startedAgents: string[] = [];
+    const upstream = {
+      name: 'subagent',
+      parameters: {} as any,
+      execute: vi.fn(async (_toolCallId: string, params: unknown) => {
+        const agent = (params as { agent?: string }).agent;
+        startedAgents.push(agent ?? '');
+        return agent === 'scout' ? scout.promise : reviewer.promise;
+      }),
+    };
+    const wrapped = wrapSubagentToolForLedger(upstream as any);
+
+    const resultPromise = wrapped.execute('tool-call-orchestrated', {
+      mindosOrchestration: true,
+      tasks: [
+        { id: 'scan', agent: 'scout', task: 'Scan files.' },
+        { id: 'review', agent: 'reviewer', task: 'Review findings.' },
+      ],
+    });
+
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(startedAgents).toEqual(['scout', 'reviewer']);
+
+    scout.resolve({ content: [{ type: 'text', text: 'Scan done.' }], details: {} });
+    reviewer.resolve({ content: [{ type: 'text', text: 'Review done.' }], details: {} });
+    const result = await resultPromise;
+
+    expect(result).toEqual(expect.objectContaining({
+      isError: false,
+      details: expect.objectContaining({
+        mode: 'mindos-orchestration',
+        status: 'completed',
+      }),
+    }));
+    expect(upstream.execute).toHaveBeenCalledTimes(2);
+
+    const runs = listAgentRuns({ kind: 'pi-subagent', limit: 10 });
+    const parent = runs.find((run) => run.runtimeId === 'subagent:orchestration');
+    expect(parent).toEqual(expect.objectContaining({
+      status: 'completed',
+      outputSummary: expect.stringContaining('2 completed'),
+    }));
+    expect(listAgentRuns({ parentRunId: parent!.id }).map((run) => `${run.runtimeId}:${run.status}`).sort()).toEqual([
+      'reviewer:completed',
+      'scout:completed',
+    ]);
+  });
+
+  it('records orchestration child progress on the matching child run', async () => {
+    const forwardedUpdates: unknown[] = [];
+    const upstream = {
+      name: 'subagent',
+      parameters: {} as any,
+      execute: vi.fn(async (_toolCallId: string, params: unknown, _signal?: AbortSignal, onUpdate?: unknown) => {
+        const agent = (params as { agent?: string }).agent ?? 'unknown';
+        const update = {
+          content: [{ type: 'text', text: `${agent} progress` }],
+          details: { runId: `upstream-${agent}` },
+        };
+        if (typeof onUpdate === 'function') onUpdate(update);
+        return {
+          content: [{ type: 'text', text: `${agent} done` }],
+          details: {},
+        };
+      }),
+    };
+    const wrapped = wrapSubagentToolForLedger(upstream as any);
+
+    await wrapped.execute(
+      'tool-call-orchestrated-progress',
+      {
+        mindosOrchestration: true,
+        tasks: [
+          { id: 'scan', agent: 'scout', task: 'Scan files.' },
+          { id: 'review', agent: 'reviewer', task: 'Review findings.' },
+        ],
+      },
+      undefined,
+      (update: unknown) => forwardedUpdates.push(update),
+    );
+
+    const parent = listAgentRuns({ kind: 'pi-subagent', limit: 10 })
+      .find((run) => run.runtimeId === 'subagent:orchestration');
+    const children = listAgentRuns({ parentRunId: parent!.id, limit: 10 });
+    const scout = children.find((run) => run.runtimeId === 'scout');
+    const reviewer = children.find((run) => run.runtimeId === 'reviewer');
+
+    expect(forwardedUpdates).toHaveLength(2);
+    expect(listAgentEvents({ runId: parent!.id, category: 'text' })).toEqual([]);
+    expect(listAgentEvents({ runId: scout!.id, category: 'text' })).toEqual([
+      expect.objectContaining({
+        message: 'scout progress',
+        metadata: expect.objectContaining({ upstreamRunId: 'upstream-scout' }),
+      }),
+    ]);
+    expect(listAgentEvents({ runId: reviewer!.id, category: 'text' })).toEqual([
+      expect.objectContaining({
+        message: 'reviewer progress',
+        metadata: expect.objectContaining({ upstreamRunId: 'upstream-reviewer' }),
       }),
     ]);
   });
@@ -203,5 +364,6 @@ describe('MindOS subagent ledger extension', () => {
         error: 'Subagent run was canceled.',
       }),
     ]);
+    expect(listAgentEvents({ type: 'run_canceled' })).toHaveLength(1);
   });
 });

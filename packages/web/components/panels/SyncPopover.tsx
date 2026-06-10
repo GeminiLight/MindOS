@@ -83,7 +83,7 @@ export default function SyncPopover({ id, open, onClose, anchorRect, railWidth, 
         <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{t.sidebar?.syncLabel ?? 'Sync'}</span>
         <button
           onClick={onClose}
-          className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="hit-target-box inline-flex h-8 w-8 items-center justify-center text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-md)]"
           aria-label={t.search?.close ?? 'Close'}
         >
           <X size={14} />
@@ -132,7 +132,7 @@ export default function SyncPopover({ id, open, onClose, anchorRect, railWidth, 
           )}
           <button
             onClick={() => { onOpenSyncSettings(); onClose(); }}
-            className="inline-flex min-h-9 items-center rounded-md px-2 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="hit-target-box inline-flex min-h-9 items-center px-2 text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-md)]"
           >
             {level === 'conflicts'
               ? ((syncT?.resolveConflicts as string)?.replace('{n}', String(syncStatus?.conflicts?.length ?? 0)) ?? 'Resolve conflicts')

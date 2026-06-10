@@ -8,6 +8,7 @@ import { toast } from '@/lib/toast';
 import { useMcpData } from '@/lib/stores/mcp-store';
 import { generateSnippet } from '@/lib/mcp-snippets';
 import { copyToClipboard } from '@/lib/clipboard';
+import { revealMcpAuthToken } from '@/lib/mcp-token';
 import CustomSelect from '@/components/CustomSelect';
 import type { SelectItem } from '@/components/CustomSelect';
 import AgentInstall from './McpAgentInstall';
@@ -128,11 +129,24 @@ function CliGuide({ status, activeSkillName, agents, connectedAgents, detectedAg
 }) {
   const { copiedField, handleCopy } = useCopyField();
 
-  const hasToken = status.authConfigured && !!status.authToken;
+  const hasToken = status.authConfigured;
   const remoteHost = status.localIP || 'localhost';
   const webPort = typeof window !== 'undefined' ? window.location.port || '3456' : '3456';
   const remoteUrl = `http://${remoteHost}:${webPort}`;
   const maskedAuthToken = status.maskedToken ?? '';
+
+  const handleCopyTokenCommand = useCallback(async (_text: string, field: string) => {
+    if (!hasToken) {
+      handleCopy('mindos config set authToken <token>', field);
+      return;
+    }
+    try {
+      const token = await revealMcpAuthToken();
+      handleCopy(`mindos config set authToken ${token || '<token>'}`, field);
+    } catch {
+      toast.error(m?.tokenRevealFailed ?? 'Failed to reveal token');
+    }
+  }, [handleCopy, hasToken, m?.tokenRevealFailed]);
 
   return (
     <>
@@ -180,9 +194,7 @@ function CliGuide({ status, activeSkillName, agents, connectedAgents, detectedAg
             <CodeBlock code={`mindos config set url ${remoteUrl}`} onCopy={handleCopy} copiedField={copiedField} fieldId="cli-url" compact />
             <CodeBlock
               code={`mindos config set authToken ${hasToken ? maskedAuthToken : '<token>'}`}
-              onCopy={(_, field) => {
-                handleCopy(`mindos config set authToken ${status.authToken ?? '<token>'}`, field);
-              }}
+              onCopy={handleCopyTokenCommand}
               copiedField={copiedField} fieldId="cli-token" compact
               hint={hasToken ? (m?.tokenCopyFullHint ?? 'Copies full token') : undefined}
             />
@@ -219,7 +231,7 @@ function McpGuide({ status, agents, activeSkillName, connectedAgents, detectedAg
 }) {
   const { copiedField, handleCopy } = useCopyField();
 
-  const hasToken = status.authConfigured && !!status.authToken;
+  const hasToken = status.authConfigured;
   const remoteHost = status.localIP || 'localhost';
   const mcpUrl = `http://${remoteHost}:${status.port}/mcp`;
 
@@ -231,6 +243,17 @@ function McpGuide({ status, agents, activeSkillName, connectedAgents, detectedAg
     () => currentAgent ? generateSnippet(currentAgent, status, 'http') : null,
     [currentAgent, status]
   );
+  const handleCopyRemoteSnippet = useCallback(async () => {
+    if (!currentAgent || !remoteSnippet) return;
+    try {
+      const token = hasToken ? await revealMcpAuthToken() : undefined;
+      const snippet = generateSnippet(currentAgent, status, 'http', token || undefined).snippet;
+      const ok = await copyToClipboard(snippet);
+      if (ok) toast.copy();
+    } catch {
+      toast.error(m?.tokenRevealFailed ?? 'Failed to reveal token');
+    }
+  }, [currentAgent, hasToken, m?.tokenRevealFailed, remoteSnippet, status]);
 
   return (
     <>
@@ -319,7 +342,7 @@ function McpGuide({ status, agents, activeSkillName, connectedAgents, detectedAg
               {remoteSnippet.displaySnippet}
             </pre>
             <div className="flex items-center gap-3 text-sm">
-              <button onClick={async () => { const ok = await copyToClipboard(remoteSnippet.snippet); if (ok) toast.copy(); }}
+              <button onClick={handleCopyRemoteSnippet}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0">
                 <Copy size={14} /> {m?.copyConfig ?? 'Copy'}
               </button>

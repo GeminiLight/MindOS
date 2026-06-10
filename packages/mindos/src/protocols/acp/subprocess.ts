@@ -95,7 +95,7 @@ export function spawnAndConnect(
   const cwd = options?.cwd ?? process.cwd();
   const callbacks: AcpClientCallbacks = {};
 
-  const client = createMindosClient(proc, cwd, callbacks, options?.permissionMode ?? 'agent');
+  const client = createMindosClient(proc, cwd, callbacks, options?.permissionMode ?? 'agent', options?.env);
 
   const output = Writable.toWeb(proc.proc.stdin!) as WritableStream<Uint8Array>;
   const input = Readable.toWeb(proc.proc.stdout!) as ReadableStream<Uint8Array>;
@@ -285,6 +285,7 @@ export function createMindosClient(
   cwd: string,
   callbacks: AcpClientCallbacks,
   permissionMode: AcpPermissionMode = 'agent',
+  runtimeEnv: Record<string, string> = {},
 ): Client {
   return {
     async requestPermission(params: RequestPermissionRequest): Promise<RequestPermissionResponse> {
@@ -399,7 +400,7 @@ export function createMindosClient(
         const terminalSpawn = resolveTerminalSpawn(params.command);
         const child = spawn(terminalSpawn.command, params.args ?? [], {
           cwd: terminalCwd,
-          env: { ...process.env, ...envObj },
+          env: { ...process.env, ...runtimeEnv, ...envObj },
           shell: terminalSpawn.shell,
           stdio: ['pipe', 'pipe', 'pipe'],
         });

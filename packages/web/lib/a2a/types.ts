@@ -181,7 +181,7 @@ export interface SubTask {
   description: string;
   assignedAgentId: string | null;
   matchedSkillId: string | null;
-  status: 'pending' | 'running' | 'completed' | 'failed';
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'canceled';
   result: string | null;
   error: string | null;
   dependsOn: string[];
@@ -198,7 +198,7 @@ export interface OrchestrationPlan {
   subtasks: SubTask[];
   createdAt: string;
   completedAt: string | null;
-  status: 'planning' | 'executing' | 'completed' | 'failed';
+  status: 'planning' | 'executing' | 'completed' | 'failed' | 'canceled';
   aggregatedResult: string | null;
 }
 
@@ -219,7 +219,7 @@ export interface DelegationRecord {
   agentId: string;
   agentName: string;
   message: string;
-  status: 'pending' | 'completed' | 'failed';
+  status: 'pending' | 'completed' | 'failed' | 'canceled';
   startedAt: string;
   completedAt: string | null;
   result: string | null;

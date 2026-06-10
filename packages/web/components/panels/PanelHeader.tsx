@@ -24,7 +24,7 @@ export default function PanelHeader({
           <button
             type="button"
             onClick={onMaximize}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors duration-75 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation"
+            className="hit-target-box inline-flex h-8 w-8 items-center justify-center text-muted-foreground transition-colors duration-75 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-md)]"
             aria-label={maximized ? 'Restore panel' : 'Maximize panel'}
           >
             {maximized ? <Minimize2 size={13} /> : <Maximize2 size={13} />}

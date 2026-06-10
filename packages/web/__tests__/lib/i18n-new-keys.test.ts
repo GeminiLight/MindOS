@@ -84,6 +84,11 @@ describe('i18n onboarding keys', () => {
 describe('i18n agents panel hub', () => {
   const hubKeys = [
     'navOverview',
+    'navAssistant',
+    'navAgent',
+    'navCapabilities',
+    'navChannels',
+    'navRuns',
     'navMcp',
     'navSkills',
     'rosterLabel',
@@ -108,6 +113,66 @@ describe('i18n agents panel hub', () => {
     for (const k of hubKeys) {
       expect((a as Record<string, unknown>)[k], k).toBeTruthy();
     }
+  });
+});
+
+describe('i18n agents content IA', () => {
+  const contentKeys = [
+    'navOverview',
+    'navAssistant',
+    'navAgent',
+    'navCapabilities',
+    'navChannels',
+    'navRuns',
+    'agentSubtitle',
+    'capabilitiesSubtitle',
+    'runsSubtitle',
+  ] as const;
+
+  const overviewKeys = [
+    'systemModelTitle',
+    'systemFlowTitle',
+    'systemReadinessTitle',
+    'systemReadinessMeta',
+    'systemSignalsTitle',
+    'profilesUnit',
+    'runtimeEndpointsUnit',
+    'entryPointsUnit',
+    'assistantLabel',
+    'agentLabel',
+    'capabilitiesLabel',
+    'channelsLabel',
+    'runsLabel',
+    'nextActionsTitle',
+    'actionOpen',
+    'viewAllSignals',
+  ] as const;
+
+  it('en has canonical IA keys', () => {
+    const a = en.agentsContent;
+    for (const k of contentKeys) {
+      expect((a as Record<string, unknown>)[k], k).toBeTruthy();
+    }
+    for (const k of overviewKeys) {
+      expect((a.overview as Record<string, unknown>)[k], k).toBeTruthy();
+    }
+    expect(a.navPresets).toBe('Assistant');
+    expect(a.presets.title).toBe('Assistant');
+  });
+
+  it('zh mirrors canonical IA keys without the old Assistant label', () => {
+    const a = zh.agentsContent;
+    for (const k of contentKeys) {
+      expect((a as Record<string, unknown>)[k], k).toBeTruthy();
+    }
+    for (const k of overviewKeys) {
+      expect((a.overview as Record<string, unknown>)[k], k).toBeTruthy();
+    }
+    expect(a.navAssistant).toBe('Assistant');
+    expect(a.navPresets).toBe('Assistant');
+    expect(a.navCapabilities).toBe('Skills & MCP');
+    expect(a.presets.title).toBe('Assistant');
+    expect(a.navHints.presets).not.toBe('内置能力');
   });
 });
 

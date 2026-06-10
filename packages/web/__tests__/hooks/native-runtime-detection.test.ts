@@ -156,7 +156,7 @@ describe('useNativeRuntimeDetection', () => {
     });
   });
 
-  it('removes stale cached available runtime state when background detection fails', async () => {
+  it('marks stale cached available runtime state as unavailable when background detection fails', async () => {
     sessionStorage.setItem('mindos:native-runtime-detection:v1:claude', JSON.stringify({
       ts: Date.now(),
       runtime: {
@@ -199,6 +199,16 @@ describe('useNativeRuntimeDetection', () => {
 
     expect(states[0]?.loadingByKind.claude).toBe(true);
     expect(states.at(-1)?.errorByKind.claude).toBe('Detection failed');
+    expect(states.at(-1)?.runtimes).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: 'claude',
+        status: 'error',
+        availability: expect.objectContaining({
+          reason: 'Detection failed',
+          sources: ['native-health'],
+        }),
+      }),
+    ]));
     expect(sessionStorage.getItem('mindos:native-runtime-detection:v1:claude')).toBeNull();
 
     await act(async () => {

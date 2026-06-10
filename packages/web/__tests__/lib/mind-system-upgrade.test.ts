@@ -8,6 +8,7 @@ import { ensureDefaultMindSystemUpgrade } from '@/lib/mind-system-upgrade';
 
 const DEFAULT_DIRS = ['MIND_DAO', 'MIND_FA', 'MIND_SHU', 'MIND_QI'] as const;
 const DEFAULT_ASSISTANT_PROMPTS = [
+  '.mindos/assistants/inbox-organizer/prompt.md',
   '.mindos/assistants/daily-signal/prompt.md',
   '.mindos/assistants/decision-synthesizer/prompt.md',
   '.mindos/assistants/rule-keeper/prompt.md',
@@ -63,6 +64,12 @@ describe('default mind-system upgrade', () => {
         '# Custom Daily Signal Prompt\n',
         'utf-8',
       );
+      fs.mkdirSync(path.join(mindRoot, '.mindos', 'assistants', 'inbox-organizer'), { recursive: true });
+      fs.writeFileSync(
+        path.join(mindRoot, '.mindos', 'assistants', 'inbox-organizer', 'prompt.md'),
+        '# Custom Inbox Organizer Prompt\n',
+        'utf-8',
+      );
 
       ensureDefaultMindSystemUpgrade(mindRoot);
       const result = ensureDefaultMindSystemUpgrade(mindRoot);
@@ -75,6 +82,8 @@ describe('default mind-system upgrade', () => {
       expect(fs.readFileSync(path.join(mindRoot, 'MIND_DAO', 'Drafts', 'custom.md'), 'utf-8')).toBe('# Existing Draft\n');
       expect(fs.readFileSync(path.join(mindRoot, '.mindos/assistants/daily-signal/prompt.md'), 'utf-8'))
         .toBe('# Custom Daily Signal Prompt\n');
+      expect(fs.readFileSync(path.join(mindRoot, '.mindos/assistants/inbox-organizer/prompt.md'), 'utf-8'))
+        .toBe('# Custom Inbox Organizer Prompt\n');
       expect(fs.readFileSync(path.join(mindRoot, '.mindos/assistants/decision-synthesizer/prompt.md'), 'utf-8'))
         .toContain('assistantId: decision-synthesizer');
     } finally {
@@ -94,6 +103,7 @@ describe('default mind-system upgrade', () => {
       expect(result.createdPaths).toEqual(['MIND_FA', 'MIND_SHU', 'MIND_QI']);
       expect(listMindSystemSlots(mindRoot).map(slot => slot.key)).toEqual(['fa', 'shu', 'qi']);
       expect(fs.readFileSync(path.join(mindRoot, 'MIND_DAO'), 'utf-8')).toBe('not a directory');
+      expect(fs.existsSync(path.join(mindRoot, '.mindos/assistants/inbox-organizer/prompt.md'))).toBe(true);
       expect(fs.existsSync(path.join(mindRoot, '.mindos/assistants/daily-signal/prompt.md'))).toBe(false);
       expect(fs.existsSync(path.join(mindRoot, '.mindos/assistants/decision-synthesizer/prompt.md'))).toBe(false);
       expect(fs.existsSync(path.join(mindRoot, '.mindos/assistants/rule-keeper/prompt.md'))).toBe(true);
@@ -115,6 +125,7 @@ describe('default mind-system upgrade', () => {
       expect(result.createdPaths).toEqual([...DEFAULT_DIRS]);
       expect(result.skippedPaths.map(item => item.path).sort()).toEqual([...DEFAULT_ASSISTANT_PROMPTS].sort());
       expect(result.skippedPaths.every(item => item.reason === 'unsafe_path')).toBe(true);
+      expect(fs.existsSync(path.join(outside, 'inbox-organizer', 'prompt.md'))).toBe(false);
       expect(fs.existsSync(path.join(outside, 'daily-signal', 'prompt.md'))).toBe(false);
       expect(fs.existsSync(path.join(outside, 'resource-auditor', 'prompt.md'))).toBe(false);
     } finally {
@@ -137,6 +148,7 @@ describe('default mind-system upgrade', () => {
       expect(fs.existsSync(path.join(outside, 'README.md'))).toBe(false);
       expect(fs.existsSync(path.join(outside, 'INSTRUCTION.md'))).toBe(false);
       expect(fs.existsSync(path.join(outside, 'Drafts'))).toBe(false);
+      expect(fs.existsSync(path.join(mindRoot, '.mindos/assistants/inbox-organizer/prompt.md'))).toBe(true);
       expect(fs.existsSync(path.join(mindRoot, '.mindos/assistants/daily-signal/prompt.md'))).toBe(false);
       expect(fs.existsSync(path.join(mindRoot, '.mindos/assistants/decision-synthesizer/prompt.md'))).toBe(false);
     } finally {
@@ -167,7 +179,9 @@ describe('default mind-system upgrade', () => {
       for (const dir of DEFAULT_DIRS) {
         expect(fs.existsSync(path.join(mindRoot, dir))).toBe(false);
       }
-      expect(fs.existsSync(path.join(mindRoot, '.mindos', 'assistants'))).toBe(false);
+      const inboxPrompt = path.join(mindRoot, '.mindos', 'assistants', 'inbox-organizer', 'prompt.md');
+      expect(fs.existsSync(inboxPrompt)).toBe(true);
+      expect(fs.readFileSync(inboxPrompt, 'utf-8')).toContain('assistantId: inbox-organizer');
       expect(listMindSystemSlots(mindRoot)).toEqual([]);
     } finally {
       cleanupMindRoot(mindRoot);

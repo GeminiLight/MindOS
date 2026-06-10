@@ -17,6 +17,19 @@ import { getDiscoveredAgents, delegateTask } from './client';
 
 const MAX_SUBTASKS = 10;
 
+export interface ExecutePlanOptions {
+  signal?: AbortSignal;
+}
+
+function isAbortLikeError(error: unknown): boolean {
+  return error instanceof Error && (
+    error.name === 'AbortError'
+    || error.message.toLowerCase().includes('aborted')
+    || error.message.toLowerCase().includes('canceled')
+    || error.message.toLowerCase().includes('cancelled')
+  );
+}
+
 /* ── Skill Matcher ─────────────────────────────────────────────────────── */
 
 /** Score how well a skill matches a task description (keyword overlap, deduplicated) */
@@ -147,7 +160,7 @@ export function createPlan(
 /**
  * Execute a single sub-task by delegating to its assigned agent.
  */
-async function executeSubtask(subtask: SubTask, token?: string): Promise<void> {
+async function executeSubtask(subtask: SubTask, token?: string, options: ExecutePlanOptions = {}): Promise<void> {
   if (!subtask.assignedAgentId) {
     subtask.status = 'failed';
     subtask.error = 'No agent assigned to this subtask';
@@ -158,7 +171,7 @@ async function executeSubtask(subtask: SubTask, token?: string): Promise<void> {
 
   try {
     // delegateTask has its own 30s RPC timeout via fetchWithTimeout in client.ts
-    const task = await delegateTask(subtask.assignedAgentId, subtask.description, token);
+    const task = await delegateTask(subtask.assignedAgentId, subtask.description, token, { signal: options.signal });
 
     if (task.status.state === 'TASK_STATE_COMPLETED') {
       subtask.status = 'completed';
@@ -168,20 +181,23 @@ async function executeSubtask(subtask: SubTask, token?: string): Promise<void> {
     } else if (task.status.state === 'TASK_STATE_FAILED') {
       subtask.status = 'failed';
       subtask.error = task.status.message?.parts?.[0]?.text ?? 'Agent reported failure';
+    } else if (task.status.state === 'TASK_STATE_CANCELED') {
+      subtask.status = 'canceled';
+      subtask.error = 'Agent task canceled';
     } else {
       subtask.status = 'completed';
       subtask.result = `Task in progress (state: ${task.status.state})`;
     }
   } catch (err) {
-    subtask.status = 'failed';
-    subtask.error = (err as Error).message;
+    subtask.status = isAbortLikeError(err) || options.signal?.aborted ? 'canceled' : 'failed';
+    subtask.error = subtask.status === 'canceled' ? 'Subtask canceled' : (err as Error).message;
   }
 }
 
 /**
  * Execute all sub-tasks in an orchestration plan.
  */
-export async function executePlan(plan: OrchestrationPlan, token?: string): Promise<OrchestrationPlan> {
+export async function executePlan(plan: OrchestrationPlan, token?: string, options: ExecutePlanOptions = {}): Promise<OrchestrationPlan> {
   plan.status = 'executing';
 
   if (plan.subtasks.length === 0) {
@@ -211,7 +227,7 @@ export async function executePlan(plan: OrchestrationPlan, token?: string): Prom
 
   if (plan.strategy === 'parallel') {
     await Promise.allSettled(
-      assignedTasks.map(st => executeSubtask(st, token))
+      assignedTasks.map(st => executeSubtask(st, token, options))
     );
   } else {
     // Sequential or dependency-based
@@ -233,7 +249,7 @@ export async function executePlan(plan: OrchestrationPlan, token?: string): Prom
         }
       }
 
-      await executeSubtask(st, token);
+      await executeSubtask(st, token, options);
 
       // Stop on failure in sequential mode
       if (plan.strategy === 'sequential' && st.status === 'failed') break;
@@ -243,8 +259,13 @@ export async function executePlan(plan: OrchestrationPlan, token?: string): Prom
   // Aggregate results
   const completed = plan.subtasks.filter(st => st.status === 'completed');
   const failed = plan.subtasks.filter(st => st.status === 'failed');
+  const canceled = plan.subtasks.filter(st => st.status === 'canceled');
 
-  if (failed.length === plan.subtasks.length) {
+  if (canceled.length > 0 && failed.length + canceled.length === plan.subtasks.length) {
+    plan.status = 'canceled';
+    plan.aggregatedResult = `All ${canceled.length + failed.length} subtasks were canceled or failed:\n` +
+      [...canceled, ...failed].map(st => `- ${st.description}: ${st.error}`).join('\n');
+  } else if (failed.length === plan.subtasks.length) {
     plan.status = 'failed';
     plan.aggregatedResult = `All ${failed.length} subtasks failed:\n` +
       failed.map(st => `- ${st.description}: ${st.error}`).join('\n');
@@ -256,6 +277,8 @@ export async function executePlan(plan: OrchestrationPlan, token?: string): Prom
         parts.push(`## ${st.description}\n\n${st.result}`);
       } else if (st.status === 'failed') {
         parts.push(`## ${st.description}\n\n[Failed: ${st.error}]`);
+      } else if (st.status === 'canceled') {
+        parts.push(`## ${st.description}\n\n[Canceled: ${st.error}]`);
       }
     }
     plan.aggregatedResult = parts.join('\n\n---\n\n');

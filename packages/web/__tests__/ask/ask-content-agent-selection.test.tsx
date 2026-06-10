@@ -23,6 +23,7 @@ let mockRuntimeDescriptors: unknown[] = [];
 let mockDetectionLoading = false;
 let mockNativeRuntimeDescriptors: unknown[] = [];
 let mockNativeLoadingByKind: Partial<Record<'codex' | 'claude', boolean>> = {};
+let mockNativeErrorByKind: Partial<Record<'codex' | 'claude', string | null>> = {};
 
 const sessionWithClaude: ChatSession = {
   id: 's1',
@@ -174,7 +175,7 @@ vi.mock('@/hooks/useNativeRuntimeDetection', () => ({
   useNativeRuntimeDetection: () => ({
     runtimes: mockNativeRuntimeDescriptors,
     loadingByKind: mockNativeLoadingByKind,
-    errorByKind: {},
+    errorByKind: mockNativeErrorByKind,
     refresh: vi.fn(),
   }),
 }));
@@ -255,13 +256,20 @@ vi.mock('@/components/ask/AskHeader', () => ({
     onToggleHistory?: () => void;
     onReset?: () => void;
     onDeleteSession?: (id: string) => void;
-    selectedAgentRuntime: { id: string; name: string; kind: 'acp' | 'codex' | 'claude' } | null;
-    onSelectAgentRuntime: (agent: { id: string; name: string; kind: 'acp' | 'codex' | 'claude' } | null) => void;
+    selectedAgentRuntime: { id: string; name: string; kind: 'acp' | 'codex' | 'claude'; binaryPath?: string } | null;
+    onSelectAgentRuntime: (agent: { id: string; name: string; kind: 'acp' | 'codex' | 'claude'; binaryPath?: string } | null) => void;
     nativeRuntimes?: unknown[];
     agentLoading?: boolean;
     agentLoadingByKind?: Partial<Record<'codex' | 'claude', boolean>>;
   }) => (
     (() => {
+      const codexRuntime = nativeRuntimes?.find((runtime): runtime is { id: string; name: string; kind: 'codex'; binaryPath?: string } => (
+        !!runtime
+        && typeof runtime === 'object'
+        && (runtime as { kind?: unknown }).kind === 'codex'
+        && typeof (runtime as { id?: unknown }).id === 'string'
+        && typeof (runtime as { name?: unknown }).name === 'string'
+      ));
       mockAskHeaderProps({ sessions, activeSessionId, selectedAgentRuntime, nativeRuntimes, agentLoading, agentLoadingByKind });
       return (
         <div>
@@ -276,7 +284,7 @@ vi.mock('@/components/ask/AskHeader', () => ({
           <button type="button" onClick={() => onSelectAgentRuntime(null)}>Select MindOS</button>
           <button type="button" onClick={() => onSelectAgentRuntime({ id: 'claude-code', name: 'Claude Code', kind: 'acp' })}>Select Claude</button>
           <button type="button" onClick={() => onSelectAgentRuntime({ id: 'claude', name: 'Claude Code', kind: 'claude' })}>Select Claude Native</button>
-          <button type="button" onClick={() => onSelectAgentRuntime({ id: 'codex', name: 'Codex', kind: 'codex' })}>Select Codex</button>
+          <button type="button" onClick={() => onSelectAgentRuntime(codexRuntime ?? { id: 'codex', name: 'Codex', kind: 'codex' })}>Select Codex</button>
         </div>
       );
     })()
@@ -322,6 +330,7 @@ describe('AskContent ACP session binding', () => {
     mockDetectionLoading = false;
     mockNativeRuntimeDescriptors = [];
     mockNativeLoadingByKind = {};
+    mockNativeErrorByKind = {};
     mockSessions = [sessionWithClaude];
     mockActiveSession = sessionWithClaude;
     mockActiveSessionId = 's1';
@@ -691,6 +700,7 @@ describe('AskContent ACP session binding', () => {
       id: 'codex',
       name: 'Codex',
       kind: 'codex',
+      binaryPath: '/usr/local/bin/codex',
       status: 'available',
       capabilities: {},
     }];
@@ -725,10 +735,10 @@ describe('AskContent ACP session binding', () => {
     expect(askCall).toBeTruthy();
     const requestBody = JSON.parse(String((askCall?.[1] as RequestInit | undefined)?.body));
     expect(requestBody.selectedAcpAgent).toBeNull();
-    expect(requestBody.selectedRuntime).toEqual({ id: 'codex', name: 'Codex', kind: 'codex' });
+    expect(requestBody.selectedRuntime).toEqual({ id: 'codex', name: 'Codex', kind: 'codex', binaryPath: '/usr/local/bin/codex' });
     expect(requestBody).not.toHaveProperty('providerOverride');
     expect(requestBody).not.toHaveProperty('modelOverride');
-    expect(mockSetSessionAgentRuntimeBinding).toHaveBeenCalledWith({ id: 'codex', name: 'Codex', kind: 'codex' });
+    expect(mockSetSessionAgentRuntimeBinding).toHaveBeenCalledWith({ id: 'codex', name: 'Codex', kind: 'codex', binaryPath: '/usr/local/bin/codex' });
 
     await act(async () => {
       root.unmount();
@@ -741,6 +751,7 @@ describe('AskContent ACP session binding', () => {
       id: 'codex',
       name: 'Codex',
       kind: 'codex',
+      binaryPath: '/usr/local/bin/codex',
       status: 'available',
       capabilities: {},
     }];
@@ -764,7 +775,7 @@ describe('AskContent ACP session binding', () => {
     });
 
     expect(host.querySelector('[data-testid="runtime-switcher"]')?.textContent).toBe('Codex');
-    expect(mockSetSessionAgentRuntimeBinding).toHaveBeenCalledWith({ id: 'codex', name: 'Codex', kind: 'codex' });
+    expect(mockSetSessionAgentRuntimeBinding).toHaveBeenCalledWith({ id: 'codex', name: 'Codex', kind: 'codex', binaryPath: '/usr/local/bin/codex' });
 
     const form = host.querySelector('form') as HTMLFormElement;
     await act(async () => {
@@ -780,7 +791,7 @@ describe('AskContent ACP session binding', () => {
     expect(askCall).toBeTruthy();
     const requestBody = JSON.parse(String((askCall?.[1] as RequestInit | undefined)?.body));
     expect(requestBody.selectedAcpAgent).toBeNull();
-    expect(requestBody.selectedRuntime).toEqual({ id: 'codex', name: 'Codex', kind: 'codex' });
+    expect(requestBody.selectedRuntime).toEqual({ id: 'codex', name: 'Codex', kind: 'codex', binaryPath: '/usr/local/bin/codex' });
 
     await act(async () => {
       root.unmount();
@@ -842,6 +853,7 @@ describe('AskContent ACP session binding', () => {
       id: 'codex',
       name: 'Codex',
       kind: 'codex',
+      binaryPath: '/usr/local/bin/codex',
       status: 'available',
       capabilities: {},
     }];
@@ -899,7 +911,7 @@ describe('AskContent ACP session binding', () => {
       externalSessionId: 'thread_failed',
       status: 'failed',
     });
-    expect(requestBody.selectedRuntime).toEqual({ id: 'codex', name: 'Codex', kind: 'codex' });
+    expect(requestBody.selectedRuntime).toEqual({ id: 'codex', name: 'Codex', kind: 'codex', binaryPath: '/usr/local/bin/codex' });
 
     await act(async () => {
       root.unmount();
@@ -1230,6 +1242,48 @@ describe('AskContent ACP session binding', () => {
     });
 
     expect(host.textContent).toContain('Codex is signed out. Run codex login first.');
+
+    const form = host.querySelector('form') as HTMLFormElement;
+    await act(async () => {
+      if (typeof form.requestSubmit === 'function') {
+        form.requestSubmit();
+      } else {
+        form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      }
+    });
+
+    expect(globalThis.fetch).not.toHaveBeenCalledWith('/api/ask', expect.anything());
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('blocks sending when native runtime cache was available but background revalidation failed', async () => {
+    mockNativeRuntimeDescriptors = [{
+      id: 'claude',
+      name: 'Claude Code',
+      kind: 'claude',
+      status: 'available',
+      capabilities: {},
+    }];
+    mockNativeLoadingByKind = { claude: false };
+    mockNativeErrorByKind = { claude: 'Detection failed' };
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<AskContent visible variant="panel" initialMessage="summarize this repo" />);
+    });
+
+    const selectButton = Array.from(host.querySelectorAll('button')).find((button) => button.textContent === 'Select Claude Native') as HTMLButtonElement;
+    await act(async () => {
+      selectButton.click();
+    });
+
+    expect(host.textContent).toContain('Claude Code is unavailable. Detection failed');
 
     const form = host.querySelector('form') as HTMLFormElement;
     await act(async () => {

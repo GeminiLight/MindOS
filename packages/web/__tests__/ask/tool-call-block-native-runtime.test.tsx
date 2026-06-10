@@ -178,6 +178,28 @@ describe('ToolCallBlock native runtime rendering', () => {
     view.cleanup();
   });
 
+  it('redacts secrets from native runtime command and output rendering', () => {
+    const view = renderToolCall({
+      type: 'tool-call',
+      toolCallId: 'tool-codex-secret',
+      toolName: 'Bash',
+      runtime: 'codex',
+      state: 'done',
+      input: {
+        command: 'curl -H "Authorization: Bearer sk-ui-secret-1234567890" https://example.test?token=abc123secret',
+        env: { API_KEY: 'sk-ui-secret-abcdefghijkl' },
+      },
+      output: 'Authorization: Bearer ghp_abcdefghijklmnopqrstuvwxyz123456',
+    });
+
+    expect(view.host.textContent).toContain('[redacted]');
+    expect(view.host.textContent).not.toContain('sk-ui-secret');
+    expect(view.host.textContent).not.toContain('abc123secret');
+    expect(view.host.textContent).not.toContain('ghp_abcdefghijklmnopqrstuvwxyz123456');
+
+    view.cleanup();
+  });
+
   it('renders native Claude AskUserQuestion input as a structured question card', () => {
     const view = renderToolCall({
       type: 'tool-call',

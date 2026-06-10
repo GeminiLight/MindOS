@@ -72,7 +72,7 @@ export function SaveInsightTrigger({ text }: { text: string }) {
       <button
         type="button"
         disabled
-        className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-card border border-success/40 shadow-sm text-success transition-all duration-75"
+        className="hit-target-box inline-flex h-7 w-7 items-center justify-center border border-transparent text-success transition-all duration-75 [--hit-target-bg:var(--card)] [--hit-target-border-width:1px] [--hit-target-border:color-mix(in_srgb,var(--success)_40%,transparent)] [--hit-target-radius:var(--radius-md)] [--hit-target-shadow:0_1px_2px_0_color-mix(in_srgb,var(--foreground)_8%,transparent)]"
         title="Saved"
       >
         <Check size={11} />
@@ -84,7 +84,7 @@ export function SaveInsightTrigger({ text }: { text: string }) {
     <button
       type="button"
       onClick={ctx.open}
-      className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-card border border-border/60 shadow-sm text-muted-foreground transition-all duration-75 hover:bg-[var(--amber)]/10 hover:text-[var(--amber)] hover:border-[var(--amber)]/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation"
+      className="hit-target-box inline-flex h-7 w-7 items-center justify-center border border-transparent text-muted-foreground transition-all duration-75 hover:text-[var(--amber)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation [--hit-target-bg:var(--card)] [--hit-target-hover-bg:color-mix(in_srgb,var(--amber)_10%,transparent)] [--hit-target-border-width:1px] [--hit-target-border:color-mix(in_srgb,var(--border)_60%,transparent)] [--hit-target-hover-border:color-mix(in_srgb,var(--amber)_30%,transparent)] [--hit-target-radius:var(--radius-md)] [--hit-target-shadow:0_1px_2px_0_color-mix(in_srgb,var(--foreground)_8%,transparent)]"
       title={(labels as Record<string, unknown>).saveToKB as string ?? 'Save to knowledge base'}
     >
       <FolderInput size={11} />
@@ -258,7 +258,7 @@ function SaveInsightForm({
           type="button"
           onClick={handleCancel}
           disabled={saving}
-          className="px-2.5 py-1 text-[11px] rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors disabled:opacity-50"
+          className="hit-target-box px-2.5 py-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50 [--hit-target-hover-bg:color-mix(in_srgb,var(--muted)_60%,transparent)] [--hit-target-radius:var(--radius-md)]"
         >
           {(labels as Record<string, unknown>).cancelSave as string ?? 'Cancel'}
         </button>
@@ -266,7 +266,7 @@ function SaveInsightForm({
           type="button"
           onClick={handleSave}
           disabled={saving || !path.trim()}
-          className="flex items-center gap-1.5 px-3 py-1 text-[11px] font-medium rounded-md bg-[var(--amber)] text-[var(--amber-foreground)] hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+          className="hit-target-box flex items-center gap-1.5 px-3 py-1 text-[11px] font-medium text-[var(--amber-foreground)] hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed [--hit-target-bg:var(--amber)] [--hit-target-hover-bg:var(--amber)] [--hit-target-radius:var(--radius-md)]"
         >
           {saving ? (
             <>

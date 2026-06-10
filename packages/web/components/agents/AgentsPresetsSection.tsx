@@ -17,7 +17,13 @@ import {
   Wrench,
 } from 'lucide-react';
 import { toast } from '@/lib/toast';
-import { BUILTIN_AGENT_PRESETS, getPresetStorageKey, type BuiltinAgentPreset } from './builtin-agent-presets';
+import { AgentSectionHeading } from './AgentsPrimitives';
+import {
+  BUILTIN_AGENT_PRESETS,
+  getPresetLegacyStorageKeys,
+  getPresetStorageKey,
+  type BuiltinAgentPreset,
+} from './builtin-agent-presets';
 
 type PresetsCopy = {
   title: string;
@@ -52,10 +58,26 @@ type PresetsCopy = {
   customDraft: string;
   unsavedDraft: string;
   saved: string;
+  saveFailed: string;
   reset: string;
 };
 
 type PresetSection = 'overview' | 'prompt' | 'resources';
+
+function readStoredPromptDraft(preset: BuiltinAgentPreset): string | null {
+  return window.localStorage.getItem(getPresetStorageKey(preset.id))
+    ?? getPresetLegacyStorageKeys(preset)
+      .map(key => window.localStorage.getItem(key))
+      .find((value): value is string => typeof value === 'string')
+    ?? null;
+}
+
+function clearStoredPromptDraft(preset: BuiltinAgentPreset): void {
+  window.localStorage.removeItem(getPresetStorageKey(preset.id));
+  for (const legacyKey of getPresetLegacyStorageKeys(preset)) {
+    window.localStorage.removeItem(legacyKey);
+  }
+}
 
 export default function AgentsPresetsSection({ copy }: { copy: PresetsCopy }) {
   const [selectedId, setSelectedId] = useState(BUILTIN_AGENT_PRESETS[0]?.id ?? '');
@@ -66,61 +88,153 @@ export default function AgentsPresetsSection({ copy }: { copy: PresetsCopy }) {
   );
   const [savedPromptDrafts, setSavedPromptDrafts] = useState<Record<string, string>>({});
   const [promptEdits, setPromptEdits] = useState<Record<string, string>>({});
+  const [promptDraftMigrations, setPromptDraftMigrations] = useState<Record<string, boolean>>({});
+  const [promptFileLoading, setPromptFileLoading] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     const drafts: Record<string, string> = {};
     for (const preset of BUILTIN_AGENT_PRESETS) {
-      const saved = window.localStorage.getItem(getPresetStorageKey(preset.id));
+      if (preset.promptPath) continue;
+      const saved = readStoredPromptDraft(preset);
       if (saved) drafts[preset.id] = saved;
     }
     setSavedPromptDrafts(drafts);
   }, []);
 
+  useEffect(() => {
+    if (!selected.promptPath) return;
+    const storedDraft = readStoredPromptDraft(selected);
+    if (storedDraft !== null) {
+      setPromptEdits(prev => ({ ...prev, [selected.id]: storedDraft }));
+      setPromptDraftMigrations(prev => ({ ...prev, [selected.id]: true }));
+    }
+
+    let cancelled = false;
+    setPromptFileLoading(prev => ({ ...prev, [selected.id]: true }));
+
+    fetch(`/api/file?path=${encodeURIComponent(selected.promptPath)}&op=read_file`)
+      .then(async (res) => {
+        if (!res.ok) return selected.prompt;
+        const body = await res.json() as { content?: unknown };
+        return typeof body.content === 'string' && body.content.trim() ? body.content : selected.prompt;
+      })
+      .catch(() => selected.prompt)
+      .then((content) => {
+        if (cancelled) return;
+        setSavedPromptDrafts(prev => ({ ...prev, [selected.id]: content }));
+        if (storedDraft !== null && storedDraft === content) {
+          clearStoredPromptDraft(selected);
+          setPromptDraftMigrations(prev => {
+            const next = { ...prev };
+            delete next[selected.id];
+            return next;
+          });
+          setPromptEdits(prev => {
+            if (prev[selected.id] !== storedDraft) return prev;
+            const next = { ...prev };
+            delete next[selected.id];
+            return next;
+          });
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setPromptFileLoading(prev => ({ ...prev, [selected.id]: false }));
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selected]);
+
   const savedPrompt = savedPromptDrafts[selected.id];
   const promptValue = promptEdits[selected.id] ?? savedPrompt ?? selected.prompt;
   const baselinePrompt = savedPrompt ?? selected.prompt;
+  const isPromptLoading = Boolean(selected.promptPath && promptFileLoading[selected.id]);
   const hasCustomDraft = typeof savedPrompt === 'string' && savedPrompt !== selected.prompt;
-  const hasUnsavedChanges = promptValue !== baselinePrompt;
-  const canResetPrompt = promptValue !== selected.prompt || hasCustomDraft;
+  const hasUnsavedChanges = promptValue !== baselinePrompt || Boolean(promptDraftMigrations[selected.id]);
+  const canResetPrompt = !isPromptLoading && (promptValue !== selected.prompt || hasCustomDraft);
 
   const updatePrompt = useCallback((value: string) => {
     setPromptEdits(prev => ({ ...prev, [selected.id]: value }));
   }, [selected.id]);
 
-  const saveDraft = useCallback(() => {
-    if (promptValue === selected.prompt) {
-      window.localStorage.removeItem(getPresetStorageKey(selected.id));
-      setSavedPromptDrafts(prev => {
+  const savePromptFile = useCallback(async (content: string) => {
+    if (!selected.promptPath) return;
+    const res = await fetch('/api/file', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        op: 'save_file',
+        path: selected.promptPath,
+        content,
+        source: 'user',
+      }),
+    });
+    if (!res.ok) throw new Error(`Prompt save failed (${res.status})`);
+  }, [selected.promptPath]);
+
+  const saveDraft = useCallback(async () => {
+    try {
+      if (selected.promptPath) {
+        await savePromptFile(promptValue);
+        clearStoredPromptDraft(selected);
+        setSavedPromptDrafts(prev => ({ ...prev, [selected.id]: promptValue }));
+      } else if (promptValue === selected.prompt) {
+        clearStoredPromptDraft(selected);
+        setSavedPromptDrafts(prev => {
+          const next = { ...prev };
+          delete next[selected.id];
+          return next;
+        });
+      } else {
+        window.localStorage.setItem(getPresetStorageKey(selected.id), promptValue);
+        setSavedPromptDrafts(prev => ({ ...prev, [selected.id]: promptValue }));
+      }
+      setPromptEdits(prev => {
         const next = { ...prev };
         delete next[selected.id];
         return next;
       });
-    } else {
-      window.localStorage.setItem(getPresetStorageKey(selected.id), promptValue);
-      setSavedPromptDrafts(prev => ({ ...prev, [selected.id]: promptValue }));
+      setPromptDraftMigrations(prev => {
+        const next = { ...prev };
+        delete next[selected.id];
+        return next;
+      });
+      toast.success(copy.saved);
+    } catch {
+      toast.error(copy.saveFailed);
     }
-    setPromptEdits(prev => {
-      const next = { ...prev };
-      delete next[selected.id];
-      return next;
-    });
-    toast.success(copy.saved);
-  }, [copy.saved, promptValue, selected.id, selected.prompt]);
+  }, [copy.saveFailed, copy.saved, promptValue, savePromptFile, selected]);
 
-  const resetDraft = useCallback(() => {
-    window.localStorage.removeItem(getPresetStorageKey(selected.id));
-    setSavedPromptDrafts(prev => {
-      const next = { ...prev };
-      delete next[selected.id];
-      return next;
-    });
-    setPromptEdits(prev => {
-      const next = { ...prev };
-      delete next[selected.id];
-      return next;
-    });
-    toast.success(copy.reset);
-  }, [copy.reset, selected.id]);
+  const resetDraft = useCallback(async () => {
+    try {
+      if (selected.promptPath) {
+        await savePromptFile(selected.prompt);
+        clearStoredPromptDraft(selected);
+        setSavedPromptDrafts(prev => ({ ...prev, [selected.id]: selected.prompt }));
+      } else {
+        clearStoredPromptDraft(selected);
+        setSavedPromptDrafts(prev => {
+          const next = { ...prev };
+          delete next[selected.id];
+          return next;
+        });
+      }
+      setPromptEdits(prev => {
+        const next = { ...prev };
+        delete next[selected.id];
+        return next;
+      });
+      setPromptDraftMigrations(prev => {
+        const next = { ...prev };
+        delete next[selected.id];
+        return next;
+      });
+      toast.success(copy.reset);
+    } catch {
+      toast.error(copy.saveFailed);
+    }
+  }, [copy.reset, copy.saveFailed, savePromptFile, selected]);
 
   const counts = useMemo(() => ({
     active: BUILTIN_AGENT_PRESETS.filter(preset => preset.status === 'active').length,
@@ -219,7 +333,7 @@ export default function AgentsPresetsSection({ copy }: { copy: PresetsCopy }) {
                 <button
                   type="button"
                   onClick={saveDraft}
-                  disabled={!hasUnsavedChanges}
+                  disabled={!hasUnsavedChanges || isPromptLoading}
                   className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-[var(--amber)] px-2.5 text-xs font-medium text-[var(--amber-foreground)] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-45 focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <Save size={12} />
@@ -230,6 +344,7 @@ export default function AgentsPresetsSection({ copy }: { copy: PresetsCopy }) {
             <textarea
               value={promptValue}
               onChange={(event) => updatePrompt(event.target.value)}
+              disabled={isPromptLoading}
               className="min-h-[360px] w-full resize-y bg-transparent px-4 py-3 text-sm leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/40 focus-visible:ring-0"
               spellCheck={false}
             />
@@ -410,10 +525,13 @@ function StatusPill({ preset, copy, compact = false }: { preset: BuiltinAgentPre
 
 function PanelLabel({ icon, label }: { icon: React.ReactNode; label: string }) {
   return (
-    <div className="flex items-center gap-1.5 text-2xs font-medium uppercase tracking-wider text-muted-foreground/55">
-      <span className="text-[var(--amber)]">{icon}</span>
-      {label}
-    </div>
+    <AgentSectionHeading
+      as="p"
+      size="sm"
+      icon={icon}
+      title={label}
+      titleClassName="text-2xs uppercase tracking-wider text-muted-foreground/65"
+    />
   );
 }
 

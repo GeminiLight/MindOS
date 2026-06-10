@@ -30,6 +30,7 @@ export type MindosRuntimeFileNode = {
 export type MindosRuntimeSettings = {
   mindRoot?: string;
   acpAgents?: Record<string, import('../protocols/acp/index.js').AcpAgentOverride>;
+  agentRuntimeEnv?: import('../agent-runtime/runtime-env.js').AgentRuntimeEnvironmentSettings;
   disabledSkills?: string[];
   skillPaths?: {
     enableAgentsDir?: boolean;

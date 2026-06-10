@@ -9,6 +9,7 @@ import type { AgentBuckets, AgentStatusFilter, AgentTransportFilter } from './ag
 import {
   ActionButton,
   AddAvatarButton,
+  AgentSectionHeading,
   AgentAvatar,
   AgentPickerPopover,
   BulkMessage,
@@ -147,12 +148,11 @@ export default function AgentsMcpSection({
       {/* Header */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2.5">
-          <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
-            <div className="w-6 h-6 rounded-md bg-[var(--amber-subtle)] flex items-center justify-center">
-              <Server size={13} className="text-[var(--amber)]" aria-hidden="true" />
-            </div>
-            {copy.title}
-          </h2>
+          <AgentSectionHeading
+            icon={<Server size={13} aria-hidden="true" />}
+            title={copy.title}
+            titleClassName="text-sm"
+          />
           <button
             type="button"
             onClick={() => { setBusyAction('refresh'); void mcp.refresh({ force: true }).finally(() => setBusyAction(null)); }}

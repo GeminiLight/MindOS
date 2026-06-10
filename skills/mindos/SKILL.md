@@ -210,7 +210,7 @@ When creating/rewriting an SOP → read [references/sop-template.md](./reference
 The `Inbox/` directory is the KB's quick-capture zone. It has its own `INSTRUCTION.md` that governs behavior.
 
 **When to use Inbox:**
-- User says "just save it" / "先放着" / "放到暂存台" without specifying a location
+- User says "just save it" / "先放着" / "放到收集箱" without specifying a location
 - Content doesn't clearly fit any existing Space or directory
 - Batch import of multiple files that need individual classification
 

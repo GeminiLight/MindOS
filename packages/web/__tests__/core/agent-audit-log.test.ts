@@ -29,6 +29,59 @@ describe('core/agent-audit-log', () => {
     expect(json.events.length).toBe(1);
   });
 
+  it('stores action summaries by default and keeps raw debug capture redacted when explicitly requested', () => {
+    appendAgentAuditEvent(testMindRoot, {
+      ts: '2026-03-25T00:00:00.000Z',
+      tool: 'schedule_user_extension',
+      params: {
+        path: 'Daily.md',
+        content: 'Authorization: Bearer sk-audit-secret-1234567890',
+        nested: { apiKey: 'sk-audit-secret-abcdefghijkl' },
+      },
+      result: 'ok',
+      message: 'token=abc123secret',
+      debugCapture: 'redacted_raw',
+    });
+
+    const events = listAgentAuditEvents(testMindRoot, 10);
+    expect(events).toHaveLength(1);
+    expect(events[0].actionSummary).toContain('schedule_user_extension ok target=Daily.md');
+    expect(events[0].params).toMatchObject({
+      path: 'Daily.md',
+      content: expect.stringMatching(/^\[\d+ chars\]$/),
+      nested: { apiKey: '[redacted]' },
+    });
+    expect(events[0].message).toBe('token=[redacted]');
+    expect(JSON.stringify(events[0].rawDebug)).toContain('[redacted]');
+    expect(JSON.stringify(events[0])).not.toContain('sk-audit-secret');
+    expect(JSON.stringify(events[0])).not.toContain('abc123secret');
+  });
+
+  it('redacts secrets from existing persisted audit logs before returning them', () => {
+    fs.mkdirSync(path.join(testMindRoot, '.mindos'), { recursive: true });
+    fs.writeFileSync(auditLogPath(testMindRoot), JSON.stringify({
+      version: 1,
+      events: [{
+        id: 'old-1',
+        ts: '2026-03-25T00:00:00.000Z',
+        tool: 'old_tool',
+        params: { Authorization: 'Bearer sk-old-secret-1234567890', content: 'raw text' },
+        result: 'ok',
+        message: 'apiKey=sk-old-secret-abcdefghijkl',
+      }],
+    }), 'utf-8');
+
+    const events = listAgentAuditEvents(testMindRoot, 10);
+
+    expect(JSON.stringify(events)).not.toContain('sk-old-secret');
+    expect(events[0].params).toMatchObject({
+      Authorization: '[redacted]',
+      content: '[8 chars]',
+    });
+    expect(events[0].message).toBe('apiKey=[redacted]');
+    expect(events[0].actionSummary).toContain('old_tool ok');
+  });
+
   it('imports legacy Agent-Audit.md blocks into JSON log and removes legacy file', () => {
     const legacyPath = path.join(testMindRoot, 'Agent-Audit.md');
     fs.writeFileSync(legacyPath, [

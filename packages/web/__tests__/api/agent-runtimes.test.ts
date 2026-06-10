@@ -97,9 +97,7 @@ describe('/api/agent-runtimes', () => {
         status: 'available',
         binaryPath: 'sdk:@anthropic-ai/claude-agent-sdk',
         availability: expect.objectContaining({
-          diagnosticHints: expect.arrayContaining([
-            'Global claude command was not detected; CLI fallback will be unavailable until it is installed or on MindOS server PATH.',
-          ]),
+          sources: ['native-health'],
         }),
       }),
       expect.objectContaining({
@@ -118,6 +116,10 @@ describe('/api/agent-runtimes', () => {
         }),
       }),
     ]));
+    const claudeRuntime = body.runtimes.find((runtime: any) => runtime.id === 'claude');
+    expect(claudeRuntime?.availability?.diagnosticHints ?? []).not.toContain(
+      'Global claude command was not detected; CLI fallback will be unavailable until it is installed or on MindOS server PATH.',
+    );
     expect(body.installed).toHaveLength(2);
     expect(body.notInstalled).toHaveLength(1);
   });

@@ -37,6 +37,7 @@ import {
   runMindosAskWithRetry,
   safeParseMindosJsonObject,
   sanitizeToolArgs,
+  sanitizeToolOutput,
   sleepMindos,
   toMindosAgentMessages,
 } from './session/index.js';
@@ -275,6 +276,25 @@ describe('MindOS session event contract', () => {
     });
   });
 
+  it('redacts secrets from tool args and outputs before streaming to clients', () => {
+    expect(sanitizeToolArgs('call_api', {
+      headers: { Authorization: 'Bearer sk-test-secret-1234567890' },
+      apiKey: 'sk-test-secret-abcdefghijkl',
+      url: 'https://example.test/hook?access_token=abc123secret',
+      nested: [{ token: 'plain-token-secret' }],
+    })).toEqual({
+      headers: { Authorization: '[redacted]' },
+      apiKey: '[redacted]',
+      url: 'https://example.test/hook?access_token=[redacted]',
+      nested: [{ token: '[redacted]' }],
+    });
+
+    expect(sanitizeToolArgs('bash', 'curl -H "Authorization: Bearer sk-live-secret-1234567890" https://example.test'))
+      .toBe('curl -H "Authorization: Bearer [redacted]" https://example.test');
+    expect(sanitizeToolOutput('token=abc123secret\nsk-live-secret-1234567890'))
+      .toBe('token=[redacted]\n[redacted]');
+  });
+
   it('normalizes ask mode and step limits without Web dependencies', () => {
     expect(normalizeMindosAskMode('organize')).toBe('organize');
     expect(normalizeMindosAskMode('chat')).toBe('chat');
@@ -462,6 +482,36 @@ describe('MindOS session event contract', () => {
       },
     })).toEqual({
       events: [{ type: 'tool_end', toolCallId: 'call-1', output: 'boom', isError: true }],
+      hasVisibleContent: false,
+    });
+    expect(mapMindosAcpUpdateToSseEvents({
+      type: 'tool_call',
+      toolCall: {
+        toolCallId: 'call-secret',
+        title: 'HTTP',
+        rawInput: '{"headers":{"Authorization":"Bearer sk-secret-1234567890"},"url":"https://x.test/?token=abc123"}',
+      },
+    })).toEqual({
+      events: [{
+        type: 'tool_start',
+        toolCallId: 'call-secret',
+        toolName: 'HTTP',
+        args: {
+          headers: { Authorization: '[redacted]' },
+          url: 'https://x.test/?token=[redacted]',
+        },
+      }],
+      hasVisibleContent: true,
+    });
+    expect(mapMindosAcpUpdateToSseEvents({
+      type: 'tool_call_update',
+      toolCall: {
+        toolCallId: 'call-secret',
+        status: 'completed',
+        rawOutput: 'Authorization: Bearer ghp_abcdefghijklmnopqrstuvwxyz123456',
+      },
+    })).toEqual({
+      events: [{ type: 'tool_end', toolCallId: 'call-secret', output: 'Authorization: Bearer [redacted]', isError: false }],
       hasVisibleContent: false,
     });
     expect(mapMindosAcpUpdateToSseEvents({ type: 'error', error: 'bad' }, { suppressErrors: true })).toEqual({
@@ -820,6 +870,44 @@ describe('MindOS session event contract', () => {
       { type: 'text_delta', delta: 'hi' },
       { type: 'done' },
     ]);
+  });
+
+  it('aborts the active pi-agent session when the request signal aborts', async () => {
+    const controller = new AbortController();
+    let resolvePromptStarted!: () => void;
+    const promptStarted = new Promise<void>((resolve) => { resolvePromptStarted = resolve; });
+    const aborts: string[] = [];
+
+    const pending = runMindosPiAgentAskSession({
+      session: {
+        subscribe: () => {},
+        prompt: async () => {
+          resolvePromptStarted();
+          await new Promise(() => {});
+        },
+        steer: async () => {},
+        abort: async () => { aborts.push('abort'); },
+      },
+      prompt: 'hello',
+      stepLimit: 5,
+      send: () => {},
+      signal: controller.signal,
+      provider: 'anthropic',
+      runFallback: async () => {},
+      proxyMessages: {
+        proxyCompatMode: 'proxy mode',
+        proxyCompatDetecting: 'detecting',
+        proxyCompatFailed: (message) => `failed: ${message}`,
+        proxyCompatAlsoFailed: (message) => `also failed: ${message}`,
+      },
+      sleep: async () => {},
+    });
+
+    await promptStarted;
+    controller.abort(new DOMException('The operation was aborted.', 'AbortError'));
+
+    await expect(pending).rejects.toThrow('The operation was aborted.');
+    expect(aborts).toEqual(['abort']);
   });
 
   it('uses cached proxy fallback before running pi-agent prompt', async () => {

@@ -165,6 +165,7 @@ body {
 :root { --content-width: 80%; --toc-width: 0px; }
 .content-width { max-width: var(--content-width-override, var(--content-width)); margin-left: auto; margin-right: auto; padding-left: 0.75rem; padding-right: 0.75rem; }
 @media (max-width: 639px) {
+  .content-width.agents-content-page { max-width: 100%; }
   .content-width.channel-detail-content { max-width: 100%; }
 }
 
@@ -526,6 +527,45 @@ body {
 @layer utilities {
   .text-2xs { font-size: 10px; line-height: 1.4; }
   .animate-spin-slow { animation: spin 3s linear infinite; }
+  .hit-target-box {
+    isolation: isolate;
+    border-radius: 0 !important;
+    background: transparent !important;
+  }
+  .hit-target-box:not(.absolute):not(.fixed):not(.sticky) {
+    position: relative;
+  }
+  .hit-target-box::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    box-sizing: border-box;
+    border-radius: var(--hit-target-radius, var(--radius-md));
+    border-width: var(--hit-target-outline-width, 0px);
+    border-style: var(--hit-target-outline-style, solid);
+    border-color: var(--hit-target-outline, transparent);
+    background: var(--hit-target-bg, transparent);
+    box-shadow:
+      var(--hit-target-shadow, 0 0 transparent),
+      inset 0 0 0 var(--hit-target-border-width, 0px) var(--hit-target-border, transparent);
+    transition: background-color 75ms ease, box-shadow 75ms ease, border-color 75ms ease;
+  }
+  .hit-target-box:hover::before {
+    border-color: var(--hit-target-hover-outline, var(--hit-target-outline, transparent));
+    background: var(--hit-target-hover-bg, var(--muted));
+    box-shadow:
+      var(--hit-target-hover-shadow, var(--hit-target-shadow, 0 0 transparent)),
+      inset 0 0 0 var(--hit-target-border-width, 0px) var(--hit-target-hover-border, var(--hit-target-border, transparent));
+  }
+  .hit-target-box[data-hit-active="true"]::before {
+    border-color: var(--hit-target-active-outline, var(--hit-target-hover-outline, var(--hit-target-outline, transparent)));
+    background: var(--hit-target-active-bg, var(--hit-target-hover-bg, var(--muted)));
+    box-shadow:
+      var(--hit-target-active-shadow, var(--hit-target-hover-shadow, var(--hit-target-shadow, 0 0 transparent))),
+      inset 0 0 0 var(--hit-target-border-width, 0px) var(--hit-target-active-border, var(--hit-target-hover-border, var(--hit-target-border, transparent)));
+  }
   /* Checkerboard background for transparent image preview */
   .bg-checkerboard {
     background-color: #f0f0f0;

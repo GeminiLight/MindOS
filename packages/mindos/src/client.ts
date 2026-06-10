@@ -79,7 +79,6 @@ export type MindosMcpStatus = {
   toolCount: number;
   authConfigured: boolean;
   maskedToken?: string;
-  authToken?: string;
   localIP: string | null;
   connectionMode: {
     cli: boolean;

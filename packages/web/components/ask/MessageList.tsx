@@ -563,7 +563,7 @@ export default memo(function MessageList({
                   key={i}
                   type="button"
                   onClick={() => onSuggestionClick(s.prompt)}
-                  className="group/sug flex items-center gap-3 text-left text-[13px] px-3.5 py-3 rounded-xl border border-border/40 bg-transparent text-muted-foreground hover:text-foreground hover:border-[var(--amber)]/30 hover:bg-[var(--amber)]/5 transition-all leading-snug"
+                  className="hit-target-box group/sug flex items-center gap-3 text-left text-[13px] px-3.5 py-3 border border-transparent text-muted-foreground hover:text-foreground transition-all leading-snug [--hit-target-bg:transparent] [--hit-target-hover-bg:color-mix(in_srgb,var(--amber)_5%,transparent)] [--hit-target-border-width:1px] [--hit-target-border:color-mix(in_srgb,var(--border)_40%,transparent)] [--hit-target-hover-border:color-mix(in_srgb,var(--amber)_30%,transparent)] [--hit-target-radius:var(--radius-xl)]"
                   aria-label={s.prompt}
                 >
                   <span className="shrink-0 w-8 h-8 rounded-lg bg-muted/60 flex items-center justify-center group-hover/sug:bg-[var(--amber)]/10 transition-colors">

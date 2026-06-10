@@ -34,6 +34,7 @@ function buildSettingsSaveBody(d: SettingsData) {
     authToken: d.authToken,
     allowNetworkAccess: d.allowNetworkAccess === true,
     skillPaths: d.skillPaths,
+    agentRuntimeEnv: d.agentRuntimeEnv,
     connectionMode: d.connectionMode,
   };
 }

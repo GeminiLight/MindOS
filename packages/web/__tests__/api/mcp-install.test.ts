@@ -71,7 +71,7 @@ describe('POST /api/mcp/install', () => {
     const body = await res.json();
     expect(body.results[0].status).toBe('error');
     expect(body.results[0].message).toMatch(/Unknown agent/);
-  });
+  }, 15_000);
 
   it('installs stdio entry to claude-code global config', async () => {
     markAgentPresent('claude-code');

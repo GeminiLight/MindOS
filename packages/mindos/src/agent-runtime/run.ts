@@ -8,6 +8,7 @@ import {
 } from './claude-code-cli.js';
 import {
   createClaudeCodeSdkClient,
+  isClaudeCodeSdkNativeBinaryError,
   loadClaudeCodeSdkModule,
   type ClaudeCodeSdkModule,
 } from './claude-code-sdk.js';
@@ -26,6 +27,7 @@ export type MindosAgentRuntimeSelection = {
   name: string;
   kind: MindosNativeAgentRuntimeKind;
   externalSessionId?: string;
+  binaryPath?: string;
 };
 
 export type MindosAgentRuntimeAskServices = {
@@ -35,8 +37,8 @@ export type MindosAgentRuntimeAskServices = {
     handleServerRequest?: (request: CodexAppServerServerRequest) => Promise<unknown> | unknown;
   }): CodexAppServerClient | Promise<CodexAppServerClient>;
   createClaudeClient?(options: { cwd: string; signal?: AbortSignal }): ClaudeCodeCliClient | Promise<ClaudeCodeCliClient>;
-  createClaudeCliClient?(options: { cwd: string; signal?: AbortSignal }): ClaudeCodeCliClient | Promise<ClaudeCodeCliClient>;
-  createClaudeSdkClient?(options: { cwd: string; signal?: AbortSignal }): ClaudeCodeCliClient | Promise<ClaudeCodeCliClient>;
+  createClaudeCliClient?(options: { cwd: string; signal?: AbortSignal; command?: string; env?: NodeJS.ProcessEnv }): ClaudeCodeCliClient | Promise<ClaudeCodeCliClient>;
+  createClaudeSdkClient?(options: { cwd: string; signal?: AbortSignal; env?: NodeJS.ProcessEnv }): ClaudeCodeCliClient | Promise<ClaudeCodeCliClient>;
   loadClaudeSdk?(): ClaudeCodeSdkModule | Promise<ClaudeCodeSdkModule>;
   createClaudePermissionPrompt?(options: {
     cwd: string;
@@ -113,6 +115,8 @@ export type MindosAgentRuntimeAskOptions = {
   cwd: string;
   prompt: string;
   permissionMode?: 'readonly' | 'agent';
+  timeoutMs?: number;
+  runtimeEnv?: NodeJS.ProcessEnv;
   signal?: AbortSignal;
   send(event: MindOSSSEvent): void;
   services?: MindosAgentRuntimeAskServices;
@@ -138,6 +142,7 @@ type CodexPendingServerRequests = Map<string, CodexPendingServerRequest>;
 type ResolvedClaudeClient = {
   client: ClaudeCodeCliClient;
   usesCliPermissionPrompt: boolean;
+  source: 'sdk' | 'cli' | 'override';
 };
 
 function sendNativeRuntimeStatus(
@@ -151,16 +156,154 @@ function sendNativeRuntimeStatus(
 export async function runMindosAgentRuntimeAskSession(
   options: MindosAgentRuntimeAskOptions,
 ): Promise<MindosAgentRuntimeAskResult> {
-  if (options.runtime.kind === 'claude') {
-    return runClaudeAskSession(options);
+  const scoped = withNativeRuntimeTimeout(options);
+  try {
+    if (scoped.options.runtime.kind === 'claude') {
+      return await runClaudeAskSession(scoped.options);
+    }
+
+    return await runCodexAskSession(scoped.options);
+  } finally {
+    scoped.cleanup();
+  }
+}
+
+function createNativeRuntimeTimeoutError(timeoutMs: number): Error & { code: 'TIMEOUT' } {
+  const seconds = Math.max(1, Math.round(timeoutMs / 1000));
+  const error = new Error(`Native runtime timed out after ${seconds}s.`) as Error & { code: 'TIMEOUT' };
+  error.code = 'TIMEOUT';
+  return error;
+}
+
+function isTimeoutError(value: unknown): value is Error & { code: 'TIMEOUT' } {
+  return value instanceof Error && (value as { code?: unknown }).code === 'TIMEOUT';
+}
+
+function errorFromRuntimeFailure(error: unknown, signal?: AbortSignal): Error {
+  const reason = signal?.reason;
+  if (signal?.aborted && isTimeoutError(reason)) return reason;
+  return error instanceof Error ? error : new Error(String(error));
+}
+
+function throwIfNativeRuntimeTimedOut(signal?: AbortSignal): void {
+  if (signal?.aborted && isTimeoutError(signal.reason)) {
+    throw signal.reason;
+  }
+}
+
+function abortErrorFromSignal(signal: AbortSignal): Error {
+  const reason = signal.reason;
+  if (reason instanceof Error) return reason;
+  return new Error(reason ? String(reason) : 'Native runtime aborted.');
+}
+
+function throwIfNativeRuntimeAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) {
+    throw abortErrorFromSignal(signal);
+  }
+}
+
+function settleIteratorReturn<T>(iterator: AsyncIterator<T>): void {
+  const result = iterator.return?.();
+  if (result && typeof (result as PromiseLike<IteratorResult<T>>).then === 'function') {
+    void Promise.resolve(result).catch(() => {});
+  }
+}
+
+async function nextWithNativeRuntimeAbort<T>(
+  iterator: AsyncIterator<T>,
+  signal?: AbortSignal,
+): Promise<IteratorResult<T>> {
+  throwIfNativeRuntimeAborted(signal);
+
+  const nextPromise = Promise.resolve(iterator.next());
+  nextPromise.catch(() => {});
+  if (!signal) return nextPromise;
+
+  let removeAbortListener = () => {};
+  const abortPromise = new Promise<never>((_resolve, reject) => {
+    const abort = () => reject(abortErrorFromSignal(signal));
+    removeAbortListener = () => signal.removeEventListener('abort', abort);
+    signal.addEventListener('abort', abort, { once: true });
+  });
+
+  try {
+    return await Promise.race([nextPromise, abortPromise]);
+  } catch (error) {
+    if (signal.aborted) {
+      throw abortErrorFromSignal(signal);
+    }
+    throw error;
+  } finally {
+    removeAbortListener();
+  }
+}
+
+async function* iterateWithNativeRuntimeAbort<T>(
+  iterable: AsyncIterable<T>,
+  signal?: AbortSignal,
+): AsyncIterable<T> {
+  const iterator = iterable[Symbol.asyncIterator]();
+  let completed = false;
+  try {
+    while (true) {
+      const next = await nextWithNativeRuntimeAbort(iterator, signal);
+      if (next.done) {
+        completed = true;
+        return;
+      }
+      yield next.value;
+    }
+  } finally {
+    if (!completed) {
+      settleIteratorReturn(iterator);
+    }
+  }
+}
+
+function withNativeRuntimeTimeout(options: MindosAgentRuntimeAskOptions): {
+  options: MindosAgentRuntimeAskOptions;
+  cleanup(): void;
+} {
+  const timeoutMs = options.timeoutMs;
+  if (!timeoutMs || !Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+    return { options, cleanup: () => {} };
   }
 
-  return runCodexAskSession(options);
+  const controller = new AbortController();
+  const abortFromParent = () => {
+    if (!controller.signal.aborted) {
+      controller.abort(options.signal?.reason ?? new Error('Native runtime aborted.'));
+    }
+  };
+  if (options.signal?.aborted) {
+    abortFromParent();
+  } else {
+    options.signal?.addEventListener('abort', abortFromParent, { once: true });
+  }
+
+  const timer = setTimeout(() => {
+    if (!controller.signal.aborted) {
+      controller.abort(createNativeRuntimeTimeoutError(timeoutMs));
+    }
+  }, timeoutMs);
+
+  return {
+    options: {
+      ...options,
+      signal: controller.signal,
+    },
+    cleanup: () => {
+      clearTimeout(timer);
+      options.signal?.removeEventListener('abort', abortFromParent);
+    },
+  };
 }
 
 async function runClaudeAskSession(options: MindosAgentRuntimeAskOptions): Promise<MindosAgentRuntimeAskResult> {
   let client: ClaudeCodeCliClient | undefined;
   let sessionId = options.runtime.externalSessionId;
+  const turnState = { sessionId };
 
   try {
     sendNativeRuntimeStatus(options, 'claude', sessionId
@@ -168,37 +311,31 @@ async function runClaudeAskSession(options: MindosAgentRuntimeAskOptions): Promi
       : 'Starting Claude Code locally.');
     const resolvedClient = await resolveClaudeClient(options);
     client = resolvedClient.client;
-    const permissionPrompt = resolvedClient.usesCliPermissionPrompt
-      ? await options.services?.createClaudePermissionPrompt?.({
-        cwd: options.cwd,
-        signal: options.signal,
-      })
-      : undefined;
-    for await (const event of client.startTurn({
-      prompt: options.prompt,
-      cwd: options.cwd,
-      ...(sessionId ? { sessionId } : {}),
-      permissionMode: claudeCliPermissionModeForMindosMode(options.permissionMode),
-      ...(permissionPrompt ? { permissionPrompt } : {}),
-      signal: options.signal,
-    })) {
-      if (event.type === 'session_id') {
-        sessionId = event.sessionId;
-        options.send({
-          type: 'runtime_binding',
-          runtime: 'claude',
-          externalSessionId: event.sessionId,
-          cwd: options.cwd,
-        });
-        sendNativeRuntimeStatus(options, 'claude', 'Claude Code is connected and working in this chat.');
-        continue;
+    try {
+      sessionId = await runClaudeTurnWithClient(options, resolvedClient, turnState);
+    } catch (error) {
+      sessionId = turnState.sessionId;
+      const err = errorFromRuntimeFailure(error, options.signal);
+      if (resolvedClient.source !== 'sdk' || !shouldFallbackFromClaudeSdkTurnError(err, options.signal)) {
+        throw error;
       }
-      options.send(event);
+
+      await client.close?.();
+      sendNativeRuntimeStatus(options, 'claude', `Claude Agent SDK could not start its native runtime; using Claude Code CLI fallback. ${err.message}`);
+      const cliClient = await resolveClaudeCliClient(options);
+      client = cliClient;
+      turnState.sessionId = sessionId;
+      sessionId = await runClaudeTurnWithClient(options, {
+        client: cliClient,
+        usesCliPermissionPrompt: true,
+        source: 'cli',
+      }, turnState);
     }
+    throwIfNativeRuntimeTimedOut(options.signal);
 
     return sessionId ? { externalSessionId: sessionId } : {};
   } catch (error) {
-    const err = error instanceof Error ? error : new Error(String(error));
+    const err = errorFromRuntimeFailure(error, options.signal);
     if (sessionId) {
       options.send({
         type: 'runtime_binding',
@@ -214,6 +351,49 @@ async function runClaudeAskSession(options: MindosAgentRuntimeAskOptions): Promi
   } finally {
     await client?.close?.();
   }
+}
+
+async function runClaudeTurnWithClient(
+  options: MindosAgentRuntimeAskOptions,
+  resolvedClient: ResolvedClaudeClient,
+  state: { sessionId?: string },
+): Promise<string | undefined> {
+  let sessionId = state.sessionId;
+  const permissionPrompt = resolvedClient.usesCliPermissionPrompt
+    ? await options.services?.createClaudePermissionPrompt?.({
+      cwd: options.cwd,
+      signal: options.signal,
+    })
+    : undefined;
+  const turnEvents = resolvedClient.client.startTurn({
+    prompt: options.prompt,
+    cwd: options.cwd,
+    ...(sessionId ? { sessionId } : {}),
+    permissionMode: claudeCliPermissionModeForMindosMode(options.permissionMode),
+    ...(permissionPrompt ? { permissionPrompt } : {}),
+    signal: options.signal,
+  });
+  for await (const event of iterateWithNativeRuntimeAbort(turnEvents, options.signal)) {
+    if (event.type === 'session_id') {
+      sessionId = event.sessionId;
+      state.sessionId = event.sessionId;
+      options.send({
+        type: 'runtime_binding',
+        runtime: 'claude',
+        externalSessionId: event.sessionId,
+        cwd: options.cwd,
+      });
+      sendNativeRuntimeStatus(options, 'claude', 'Claude Code is connected and working in this chat.');
+      continue;
+    }
+    options.send(event);
+  }
+  return sessionId;
+}
+
+function shouldFallbackFromClaudeSdkTurnError(error: Error, signal?: AbortSignal): boolean {
+  if (signal?.aborted) return false;
+  return isClaudeCodeSdkNativeBinaryError(error);
 }
 
 function claudeCliPermissionModeForMindosMode(
@@ -234,10 +414,10 @@ async function runCodexAskSession(options: MindosAgentRuntimeAskOptions): Promis
     client = await resolveCodexClient(options, async (request) => {
       return handleCodexServerRequest(request, options, pendingServerRequests);
     });
-    await client.initialize();
+    await client.initialize({ signal: options.signal });
     const thread = threadId
-      ? await client.resumeThread({ threadId })
-      : await client.startThread({ cwd: options.cwd });
+      ? await client.resumeThread({ threadId }, { signal: options.signal })
+      : await client.startThread({ cwd: options.cwd }, { signal: options.signal });
     threadId = thread.threadId;
     options.send({
       type: 'runtime_binding',
@@ -252,12 +432,13 @@ async function runCodexAskSession(options: MindosAgentRuntimeAskOptions): Promis
     };
     options.signal?.addEventListener('abort', abortListener, { once: true });
     try {
-      for await (const notification of client.startTurn({
+      const turnNotifications = client.startTurn({
         threadId,
         cwd: options.cwd,
         input: [{ type: 'text', text: options.prompt }],
         signal: options.signal,
-      })) {
+      });
+      for await (const notification of iterateWithNativeRuntimeAbort(turnNotifications, options.signal)) {
         if (notification.method === 'serverRequest/resolved') {
           abortCodexPendingServerRequest(notification.params, pendingServerRequests);
         }
@@ -268,10 +449,11 @@ async function runCodexAskSession(options: MindosAgentRuntimeAskOptions): Promis
     } finally {
       options.signal?.removeEventListener('abort', abortListener);
     }
+    throwIfNativeRuntimeTimedOut(options.signal);
 
     return { externalSessionId: threadId };
   } catch (error) {
-    const err = error instanceof Error ? error : new Error(String(error));
+    const err = errorFromRuntimeFailure(error, options.signal);
     if (threadId) {
       options.send({
         type: 'runtime_binding',
@@ -299,7 +481,11 @@ async function resolveCodexClient(
   }
 
   return createCodexAppServerClient(
-    createCodexAppServerStdioTransport({ cwd: options.cwd }),
+    createCodexAppServerStdioTransport({
+      cwd: options.cwd,
+      ...(options.runtime.binaryPath ? { command: options.runtime.binaryPath } : {}),
+      ...(options.runtimeEnv ? { env: options.runtimeEnv } : {}),
+    }),
     { handleServerRequest },
   );
 }
@@ -309,6 +495,7 @@ async function resolveClaudeClient(options: MindosAgentRuntimeAskOptions): Promi
     return {
       client: await options.services.createClaudeClient({ cwd: options.cwd, signal: options.signal }),
       usesCliPermissionPrompt: true,
+      source: 'override',
     };
   }
 
@@ -316,6 +503,7 @@ async function resolveClaudeClient(options: MindosAgentRuntimeAskOptions): Promi
     return {
       client: await resolveClaudeSdkClient(options),
       usesCliPermissionPrompt: false,
+      source: 'sdk',
     };
   } catch (error) {
     const err = error instanceof Error ? error : new Error(String(error));
@@ -325,12 +513,17 @@ async function resolveClaudeClient(options: MindosAgentRuntimeAskOptions): Promi
   return {
     client: await resolveClaudeCliClient(options),
     usesCliPermissionPrompt: true,
+    source: 'cli',
   };
 }
 
 async function resolveClaudeSdkClient(options: MindosAgentRuntimeAskOptions): Promise<ClaudeCodeCliClient> {
   if (options.services?.createClaudeSdkClient) {
-    return options.services.createClaudeSdkClient({ cwd: options.cwd, signal: options.signal });
+    return options.services.createClaudeSdkClient({
+      cwd: options.cwd,
+      signal: options.signal,
+      ...(options.runtimeEnv ? { env: options.runtimeEnv } : {}),
+    });
   }
 
   const sdk = options.services?.loadClaudeSdk
@@ -338,17 +531,34 @@ async function resolveClaudeSdkClient(options: MindosAgentRuntimeAskOptions): Pr
     : await loadClaudeCodeSdkModule();
   return createClaudeCodeSdkClient({
     sdk,
+    ...(isNativeCliBinaryPath(options.runtime.binaryPath) ? { pathToClaudeCodeExecutable: options.runtime.binaryPath } : {}),
+    ...(options.runtimeEnv ? { env: options.runtimeEnv } : {}),
     requestRuntimePermission: options.services?.requestRuntimePermission,
     requestUserQuestion: options.services?.requestUserQuestion,
   });
 }
 
 async function resolveClaudeCliClient(options: MindosAgentRuntimeAskOptions): Promise<ClaudeCodeCliClient> {
+  const command = isNativeCliBinaryPath(options.runtime.binaryPath)
+    ? options.runtime.binaryPath
+    : undefined;
   if (options.services?.createClaudeCliClient) {
-    return options.services.createClaudeCliClient({ cwd: options.cwd, signal: options.signal });
+    return options.services.createClaudeCliClient({
+      cwd: options.cwd,
+      signal: options.signal,
+      ...(command ? { command } : {}),
+      ...(options.runtimeEnv ? { env: options.runtimeEnv } : {}),
+    });
   }
 
-  return createClaudeCodeCliClient(createClaudeCodeCliStdioTransport());
+  return createClaudeCodeCliClient(createClaudeCodeCliStdioTransport({
+    ...(command ? { command } : {}),
+    ...(options.runtimeEnv ? { env: options.runtimeEnv } : {}),
+  }));
+}
+
+function isNativeCliBinaryPath(value: string | undefined): value is string {
+  return typeof value === 'string' && value.trim().length > 0 && !value.startsWith('sdk:');
 }
 
 async function handleCodexServerRequest(

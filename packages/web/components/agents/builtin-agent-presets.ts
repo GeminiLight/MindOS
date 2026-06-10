@@ -1,7 +1,15 @@
+import {
+  INBOX_ORGANIZER_ASSISTANT_ID,
+  INBOX_ORGANIZER_ASSISTANT_NAME,
+  INBOX_ORGANIZER_ASSISTANT_PROMPT_PATH,
+  INBOX_ORGANIZER_DEFAULT_PROMPT,
+} from '@/lib/inbox-assistant';
+
 export type BuiltinAgentPresetStatus = 'active' | 'draft' | 'planned';
 
 export interface BuiltinAgentPreset {
   id: string;
+  legacyIds?: string[];
   name: string;
   shortName: string;
   status: BuiltinAgentPresetStatus;
@@ -14,6 +22,7 @@ export interface BuiltinAgentPreset {
   modelPolicy: string;
   description: string;
   prompt: string;
+  promptPath?: string;
   tools: string[];
   skills: string[];
   context: string[];
@@ -23,8 +32,9 @@ export interface BuiltinAgentPreset {
 
 export const BUILTIN_AGENT_PRESETS: BuiltinAgentPreset[] = [
   {
-    id: 'inbox-agent',
-    name: 'Inbox Agent',
+    id: INBOX_ORGANIZER_ASSISTANT_ID,
+    legacyIds: ['inbox-agent'],
+    name: INBOX_ORGANIZER_ASSISTANT_NAME,
     shortName: 'Inbox',
     status: 'active',
     surface: 'Inbox / Review',
@@ -32,11 +42,11 @@ export const BUILTIN_AGENT_PRESETS: BuiltinAgentPreset[] = [
     primaryAction: 'Open Inbox review',
     owner: 'MindOS Core',
     runMode: 'Manual review now, scheduled later',
-    persistence: 'Draft prompt stored locally',
+    persistence: `Prompt stored at ${INBOX_ORGANIZER_ASSISTANT_PROMPT_PATH}`,
     modelPolicy: 'Follows system model, override per run',
     description: 'Reviews pending captures and proposes safe knowledge-base writes.',
-    prompt:
-      'Review the staged Inbox materials. Propose titles, tags, destination files, and write actions. Preserve sources and language. Do not delete or overwrite Inbox material until the user confirms the run.',
+    prompt: INBOX_ORGANIZER_DEFAULT_PROMPT,
+    promptPath: INBOX_ORGANIZER_ASSISTANT_PROMPT_PATH,
     tools: ['read_inbox', 'read_file', 'write_note', 'search_knowledge', 'organize_history'],
     skills: ['mindos', 'curate-creator-archive', 'workflow-to-skill'],
     context: ['Inbox files', 'Knowledge tree', 'Recent organize history', 'User language preference'],
@@ -107,4 +117,8 @@ export const BUILTIN_AGENT_PRESETS: BuiltinAgentPreset[] = [
 
 export function getPresetStorageKey(id: string): string {
   return `mindos:agent-preset:${id}:prompt`;
+}
+
+export function getPresetLegacyStorageKeys(preset: BuiltinAgentPreset): string[] {
+  return (preset.legacyIds ?? []).map(getPresetStorageKey);
 }

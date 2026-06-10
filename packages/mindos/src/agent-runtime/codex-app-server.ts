@@ -1,6 +1,12 @@
 import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
-import type { MindOSSSEvent } from '../session/index.js';
+import {
+  redactSensitiveText,
+  sanitizeToolArgs,
+  sanitizeToolOutput,
+  type MindOSSSEvent,
+} from '../session/index.js';
+import { buildCodexAppServerEnv } from './codex-env.js';
 
 export type CodexAppServerClientInfo = {
   name: string;
@@ -115,10 +121,14 @@ export type CodexThreadForkResult = Record<string, unknown> & {
   thread: CodexThread;
 };
 
+export type CodexAppServerRequestOptions = {
+  signal?: AbortSignal;
+};
+
 export type CodexAppServerClient = {
-  initialize(): Promise<void>;
-  startThread(input?: { model?: string; cwd?: string }): Promise<{ threadId: string }>;
-  resumeThread(input: { threadId: string }): Promise<{ threadId: string }>;
+  initialize(options?: CodexAppServerRequestOptions): Promise<void>;
+  startThread(input?: { model?: string; cwd?: string }, options?: CodexAppServerRequestOptions): Promise<{ threadId: string }>;
+  resumeThread(input: { threadId: string }, options?: CodexAppServerRequestOptions): Promise<{ threadId: string }>;
   listThreads(input?: CodexThreadListInput): Promise<CodexThreadListResult>;
   readThread(input: { threadId: string; includeTurns?: boolean }): Promise<CodexThreadReadResult>;
   forkThread(input: CodexThreadForkInput): Promise<CodexThreadForkResult>;
@@ -299,20 +309,20 @@ export function createCodexAppServerClient(
   };
 
   return {
-    async initialize() {
-      await request('initialize', { clientInfo, capabilities });
+    async initialize(options = {}) {
+      await request('initialize', { clientInfo, capabilities }, options.signal);
       await notify('initialized');
     },
-    async startThread(input = {}) {
+    async startThread(input = {}, options = {}) {
       const params = pruneUndefined({
         model: input.model,
         cwd: input.cwd,
       });
-      const result = await request('thread/start', params);
+      const result = await request('thread/start', params, options.signal);
       return { threadId: getThreadId(result, 'thread/start') };
     },
-    async resumeThread(input) {
-      const result = await request('thread/resume', { threadId: input.threadId });
+    async resumeThread(input, options = {}) {
+      const result = await request('thread/resume', { threadId: input.threadId }, options.signal);
       return { threadId: getThreadId(result, 'thread/resume') ?? input.threadId };
     },
     async listThreads(input = {}) {
@@ -374,7 +384,7 @@ export function createCodexAppServerStdioTransport(options: {
   const child = spawn(command, args, {
     stdio: ['pipe', 'pipe', 'pipe'],
     ...(options.cwd ? { cwd: options.cwd } : {}),
-    env: { ...process.env, ...(options.env ?? {}) },
+    env: buildCodexAppServerEnv({ overrideEnv: options.env }),
   });
   const lines = createInterface({ input: child.stdout });
   let stderr = '';
@@ -422,7 +432,7 @@ export function mapCodexAppServerNotificationToSseEvents(notification: CodexAppS
   if (toolEvents.length > 0) return toolEvents;
 
   if (notification.method === 'error') {
-    return [{ type: 'error', message: getCodexErrorMessage(notification.params, 'Codex app-server error') }];
+    return [{ type: 'error', message: redactSensitiveText(getCodexErrorMessage(notification.params, 'Codex app-server error')) }];
   }
 
   if (notification.method === 'item/agentMessage/delta') {
@@ -449,13 +459,13 @@ export function mapCodexAppServerNotificationToSseEvents(notification: CodexAppS
   if (notification.method === 'turn/completed') {
     const status = getCodexTurnStatus(notification.params);
     if (status && status !== 'completed' && status !== 'success') {
-      return [{ type: 'error', message: getCodexErrorMessage(notification.params, `Codex turn ${status}`) }];
+      return [{ type: 'error', message: redactSensitiveText(getCodexErrorMessage(notification.params, `Codex turn ${status}`)) }];
     }
     return [{ type: 'done' }];
   }
 
   if (notification.method === 'turn/failed') {
-    return [{ type: 'error', message: getCodexErrorMessage(notification.params, 'Codex turn failed') }];
+    return [{ type: 'error', message: redactSensitiveText(getCodexErrorMessage(notification.params, 'Codex turn failed')) }];
   }
 
   return [];
@@ -483,7 +493,7 @@ function mapCodexRuntimeToolNotification(notification: CodexAppServerNotificatio
       type: 'tool_delta',
       toolCallId,
       toolName,
-      delta,
+      delta: redactSensitiveText(delta),
       runtime: 'codex',
     }] : [];
   }
@@ -493,7 +503,7 @@ function mapCodexRuntimeToolNotification(notification: CodexAppServerNotificatio
       type: 'tool_end',
       toolCallId,
       toolName,
-      output: getCodexToolOutput(params),
+      output: sanitizeToolOutput(getCodexToolOutput(params)),
       isError: /(failed|error|rejected|denied)/.test(lower) || params.isError === true || params.error !== undefined,
       runtime: 'codex',
     }];
@@ -504,7 +514,7 @@ function mapCodexRuntimeToolNotification(notification: CodexAppServerNotificatio
       type: 'tool_start',
       toolCallId,
       toolName,
-      args: getCodexToolInput(params),
+      args: sanitizeToolArgs(toolName, getCodexToolInput(params)),
       runtime: 'codex',
     }];
   }
@@ -526,7 +536,7 @@ function mapCodexOfficialItemNotification(
       type: 'tool_delta',
       toolCallId,
       toolName: getCodexToolName(method, params),
-      delta,
+      delta: redactSensitiveText(delta),
       runtime: 'codex',
     }];
   }
@@ -544,7 +554,7 @@ function mapCodexOfficialItemNotification(
       type: 'tool_start',
       toolCallId,
       toolName,
-      args: getCodexToolInput(params),
+      args: sanitizeToolArgs(toolName, getCodexToolInput(params)),
       runtime: 'codex',
     }];
   }
@@ -554,7 +564,7 @@ function mapCodexOfficialItemNotification(
     type: 'tool_end',
     toolCallId,
     toolName,
-    output: getCodexToolOutput(params),
+    output: sanitizeToolOutput(getCodexToolOutput(params)),
     isError: status === 'failed'
       || status === 'error'
       || status === 'declined'

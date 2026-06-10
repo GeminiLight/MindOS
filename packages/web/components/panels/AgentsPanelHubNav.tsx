@@ -1,11 +1,14 @@
 'use client';
 
 import { usePathname, useSearchParams } from 'next/navigation';
-import { Bot, Globe, LayoutDashboard, MessageSquare, Server, Zap } from 'lucide-react';
+import { Bot, LayoutDashboard, MessageSquare, Server, Sparkles } from 'lucide-react';
 import { PanelNavRow } from './PanelNavRow';
 
 type HubCopy = {
   navOverview: string;
+  navAssistant: string;
+  navAgent: string;
+  navCapabilities: string;
   navPresets: string;
   navMcp: string;
   navSkills: string;
@@ -18,15 +21,11 @@ type HubCopy = {
 export function AgentsPanelHubNav({
   copy,
   connectedCount,
-  mcpEnabled = true,
   channelsActive = false,
-  onChannelsClick,
 }: {
   copy: HubCopy;
   connectedCount: number;
-  mcpEnabled?: boolean;
   channelsActive?: boolean;
-  onChannelsClick?: () => void;
 }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -35,49 +34,45 @@ export function AgentsPanelHubNav({
 
   // When channels view is active, suppress route-based active states
   const routeActive = !channelsActive;
+  const overviewActive = routeActive && inAgentsRoute && (tab === null || tab === 'overview');
+  const assistantActive = routeActive && inAgentsRoute && (tab === 'assistant' || tab === 'presets');
+  const agentActive = routeActive && inAgentsRoute && (tab === 'agent' || tab === 'a2a');
+  const capabilitiesActive = routeActive && inAgentsRoute && (tab === 'capabilities' || tab === 'skills' || tab === 'mcp');
+  const channelsHubActive = (routeActive && inAgentsRoute && tab === 'channels') || channelsActive;
 
   return (
     <div className="py-2">
       <PanelNavRow
-        icon={<LayoutDashboard size={14} className={routeActive && inAgentsRoute && (tab === null || tab === 'overview') ? 'text-[var(--amber)]' : 'text-muted-foreground'} />}
+        icon={<LayoutDashboard size={14} className={overviewActive ? 'text-[var(--amber)]' : 'text-muted-foreground'} />}
         title={copy.navOverview}
         badge={<span className="text-2xs tabular-nums text-muted-foreground/60 px-1.5 py-0.5 rounded bg-muted/40 font-medium">{connectedCount}</span>}
         href="/agents"
-        active={routeActive && inAgentsRoute && (tab === null || tab === 'overview')}
+        active={overviewActive}
       />
       <PanelNavRow
-        icon={<Bot size={14} className={routeActive && inAgentsRoute && tab === 'presets' ? 'text-[var(--amber)]' : 'text-muted-foreground'} />}
-        title={copy.navPresets}
-        href="/agents?tab=presets"
-        active={routeActive && inAgentsRoute && tab === 'presets'}
-      />
-      {mcpEnabled && (
-        <PanelNavRow
-          icon={<Server size={14} className={routeActive && inAgentsRoute && tab === 'mcp' ? 'text-[var(--amber)]' : 'text-muted-foreground'} />}
-          title={copy.navMcp}
-          href="/agents?tab=mcp"
-          active={routeActive && inAgentsRoute && tab === 'mcp'}
-        />
-      )}
-      <PanelNavRow
-        icon={<Zap size={14} className={routeActive && inAgentsRoute && tab === 'skills' ? 'text-[var(--amber)]' : 'text-muted-foreground'} />}
-        title={copy.navSkills}
-        href="/agents?tab=skills"
-        active={routeActive && inAgentsRoute && tab === 'skills'}
+        icon={<Sparkles size={14} className={assistantActive ? 'text-[var(--amber)]' : 'text-muted-foreground'} />}
+        title={copy.navAssistant ?? copy.navPresets}
+        href="/agents?tab=assistant"
+        active={assistantActive}
       />
       <PanelNavRow
-        icon={<MessageSquare size={14} className={channelsActive ? 'text-[var(--amber)]' : 'text-muted-foreground'} />}
+        icon={<Bot size={14} className={agentActive ? 'text-[var(--amber)]' : 'text-muted-foreground'} />}
+        title={copy.navAgent ?? copy.navMcp}
+        href="/agents?tab=agent"
+        active={agentActive}
+      />
+      <PanelNavRow
+        icon={<Server size={14} className={capabilitiesActive ? 'text-[var(--amber)]' : 'text-muted-foreground'} />}
+        title={copy.navCapabilities ?? copy.navSkills}
+        href="/agents?tab=capabilities"
+        active={capabilitiesActive}
+      />
+      <PanelNavRow
+        icon={<MessageSquare size={14} className={channelsHubActive ? 'text-[var(--amber)]' : 'text-muted-foreground'} />}
         title={copy.navChannels}
-        onClick={onChannelsClick}
-        active={channelsActive}
+        href="/agents?tab=channels"
+        active={channelsHubActive}
       />
-      <PanelNavRow
-        icon={<Globe size={14} className={routeActive && inAgentsRoute && tab === 'a2a' ? 'text-[var(--amber)]' : 'text-muted-foreground'} />}
-        title={copy.navNetwork}
-        href="/agents?tab=a2a"
-        active={routeActive && inAgentsRoute && tab === 'a2a'}
-      />
-      {/* Sessions tab hidden */}
     </div>
   );
 }

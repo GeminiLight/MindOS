@@ -124,4 +124,34 @@ describe('ToolCallBlock subagent rendering', () => {
 
     view.cleanup();
   });
+
+  it('redacts secrets from subagent summaries, details, raw input, and output', () => {
+    const view = renderToolCall({
+      type: 'tool-call',
+      toolCallId: 'tool-secret',
+      toolName: 'subagent',
+      state: 'done',
+      input: {
+        agent: 'reviewer',
+        task: 'Review Authorization: Bearer sk-subagent-secret-1234567890',
+        cwd: '/tmp/mindos',
+        context: 'token=abc123secret',
+        headers: { Authorization: 'Bearer ghp_abcdefghijklmnopqrstuvwxyz123456' },
+      },
+      output: 'token=abc123secret',
+    });
+
+    expect(view.host.textContent).toContain('[redacted]');
+    expect(view.host.textContent).not.toContain('sk-subagent-secret');
+
+    view.expand();
+
+    expect(view.host.textContent).toContain('Raw input');
+    expect(view.host.textContent).toContain('[redacted]');
+    expect(view.host.textContent).not.toContain('sk-subagent-secret');
+    expect(view.host.textContent).not.toContain('abc123secret');
+    expect(view.host.textContent).not.toContain('ghp_abcdefghijklmnopqrstuvwxyz123456');
+
+    view.cleanup();
+  });
 });

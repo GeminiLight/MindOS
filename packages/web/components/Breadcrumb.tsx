@@ -24,7 +24,7 @@ export default function Breadcrumb({ filePath }: { filePath: string }) {
       <nav className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground flex-nowrap overflow-hidden">
         <Link
           href="/"
-          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors duration-75 hover:bg-muted/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation"
+          className="hit-target-box inline-flex h-8 w-8 shrink-0 items-center justify-center text-muted-foreground transition-colors duration-75 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation [--hit-target-hover-bg:color-mix(in_srgb,var(--muted)_50%,transparent)] [--hit-target-radius:var(--radius-md)]"
           title="Home"
         >
           <Home size={14} />
@@ -43,7 +43,7 @@ export default function Breadcrumb({ filePath }: { filePath: string }) {
     <nav className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground flex-nowrap overflow-hidden">
       <Link
         href="/"
-        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors duration-75 hover:bg-muted/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation"
+        className="hit-target-box inline-flex h-8 w-8 shrink-0 items-center justify-center text-muted-foreground transition-colors duration-75 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation [--hit-target-hover-bg:color-mix(in_srgb,var(--muted)_50%,transparent)] [--hit-target-radius:var(--radius-md)]"
         title="Home"
       >
         <Home size={14} />
@@ -60,7 +60,7 @@ export default function Breadcrumb({ filePath }: { filePath: string }) {
                 <span className="block truncate max-w-[180px] sm:max-w-[260px] md:max-w-[360px]" suppressHydrationWarning>{part}</span>
               </span>
             ) : (
-              <Link href={href} className="inline-flex min-h-8 max-w-[120px] items-center rounded-md px-2 transition-colors duration-75 hover:bg-muted/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation sm:max-w-[160px] md:max-w-[200px]" title={part}>
+              <Link href={href} className="hit-target-box inline-flex min-h-8 max-w-[120px] items-center px-2 transition-colors duration-75 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation sm:max-w-[160px] md:max-w-[200px] [--hit-target-hover-bg:color-mix(in_srgb,var(--muted)_50%,transparent)] [--hit-target-radius:var(--radius-md)]" title={part}>
                 <span className="truncate" suppressHydrationWarning>{part}</span>
               </Link>
             )}

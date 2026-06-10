@@ -96,7 +96,7 @@ import {
   type MindosMcpInstallSkillRequest,
 } from './handlers/mcp-install-skill.js';
 import { handleMcpRestartPost } from './handlers/mcp-restart.js';
-import { handleMcpStatus, type MindosMcpStatusServices, type MindosMcpStatusSettings } from './handlers/mcp-status.js';
+import { handleMcpStatus, handleMcpTokenReveal, type MindosMcpStatusServices, type MindosMcpStatusSettings } from './handlers/mcp-status.js';
 import { handleRawFile } from './handlers/file-raw.js';
 import { handleAskStream } from './handlers/ask.js';
 import { handleRecentFiles } from './handlers/recent-files.js';
@@ -618,6 +618,10 @@ async function handleRequest(
       writeResponse(res, await handleMcpStatus(createHttpMcpStatusServices(services), {
         host: typeof req.headers.host === 'string' ? req.headers.host : undefined,
       }));
+      return;
+    }
+    if (route === 'POST /api/mcp/token/reveal') {
+      writeResponse(res, await handleMcpTokenReveal(createHttpMcpStatusServices(services)));
       return;
     }
     if (route === 'POST /api/mcp/direct-tools') {

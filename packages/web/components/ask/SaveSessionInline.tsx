@@ -141,10 +141,11 @@ export function SaveSessionButton({ messages, disabled }: {
         type="button"
         onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
         disabled={disabled}
-        className={`relative z-10 h-9 w-9 inline-flex items-center justify-center rounded-lg transition-colors pointer-events-auto touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+        data-hit-active={open ? 'true' : undefined}
+        className={`hit-target-box relative z-10 h-9 w-9 inline-flex items-center justify-center transition-colors pointer-events-auto touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [--hit-target-radius:var(--radius-lg)] [--hit-target-hover-bg:var(--muted)] [--hit-target-active-bg:color-mix(in_srgb,var(--amber)_10%,transparent)] ${
           open
-            ? 'bg-[var(--amber)]/10 text-[var(--amber)]'
-            : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+            ? 'text-[var(--amber)]'
+            : 'text-muted-foreground hover:text-foreground'
         } disabled:pointer-events-none disabled:opacity-40`}
         title={t.ask?.saveSession ?? 'Save session'}
       >

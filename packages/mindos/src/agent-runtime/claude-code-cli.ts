@@ -1,7 +1,12 @@
 import { spawn, type ChildProcessByStdio } from 'node:child_process';
 import type { Readable } from 'node:stream';
 import { createInterface } from 'node:readline';
-import type { MindOSSSEvent } from '../session/index.js';
+import {
+  redactSensitiveText,
+  sanitizeToolArgs,
+  sanitizeToolOutput,
+  type MindOSSSEvent,
+} from '../session/index.js';
 
 export type ClaudeCodeCliTransport = {
   run(args: string[], options: { cwd: string; signal?: AbortSignal }): AsyncIterable<string>;
@@ -170,7 +175,7 @@ function mapClaudeCodeCliRecordToSseEvents(
   if (record.type === 'result') {
     state.emittedDone = true;
     if (record.is_error === true || record.subtype === 'error') {
-      return [{ type: 'error', message: getResultText(record) || 'Claude Code turn failed' }];
+      return [{ type: 'error', message: redactSensitiveText(getResultText(record) || 'Claude Code turn failed') }];
     }
     const resultText = getStringField(record, 'result');
     return [
@@ -229,16 +234,16 @@ function mapClaudePermissionDeniedRecord(record: Record<string, unknown>): MindO
       type: 'tool_start',
       toolCallId,
       toolName,
-      args: {
+      args: sanitizeToolArgs(toolName, {
         ...(getStringField(record, 'reason') ? { reason: getStringField(record, 'reason') } : {}),
         ...(getStringField(record, 'blockedPath') ? { blockedPath: getStringField(record, 'blockedPath') } : {}),
-      },
+      }),
       runtime: 'claude',
     },
     {
       type: 'tool_end',
       toolCallId,
-      output: message,
+      output: sanitizeToolOutput(message),
       isError: true,
       runtime: 'claude',
     },
@@ -269,7 +274,7 @@ function mapClaudeContentBlock(
       type: 'tool_start',
       toolCallId,
       toolName,
-      args: block.input,
+      args: sanitizeToolArgs(toolName, block.input),
       runtime: 'claude',
     }];
   }
@@ -280,7 +285,7 @@ function mapClaudeContentBlock(
     return [{
       type: 'tool_end',
       toolCallId,
-      output: stringifyClaudeToolResult(block.content),
+      output: sanitizeToolOutput(stringifyClaudeToolResult(block.content)),
       isError: block.is_error === true,
       runtime: 'claude',
     }];

@@ -12,13 +12,17 @@ import type {
   SendMessageParams,
   DelegationRecord,
 } from './types';
+import {
+  validateA2aDiscoveryUrl,
+  validateA2aEndpointUrl,
+  type A2aDiscoveryPolicyOptions,
+} from './discovery-policy';
 
 /* ── Constants ─────────────────────────────────────────────────────────── */
 
 const DISCOVERY_TIMEOUT_MS = 5_000;
 const RPC_TIMEOUT_MS = 30_000;
 const CARD_CACHE_TTL_MS = 5 * 60 * 1000; // 5 min
-const MAX_A2A_URL_LENGTH = 2048;
 const A2A_TASK_STATES = new Set([
   'TASK_STATE_SUBMITTED',
   'TASK_STATE_WORKING',
@@ -28,6 +32,10 @@ const A2A_TASK_STATES = new Set([
   'TASK_STATE_CANCELED',
   'TASK_STATE_REJECTED',
 ]);
+
+export interface DelegateTaskOptions {
+  signal?: AbortSignal;
+}
 
 /* ── Agent Registry (in-memory cache) ──────────────────────────────────── */
 
@@ -59,40 +67,13 @@ function urlToId(url: string): string {
   }
 }
 
-function normalizeHttpUrl(input: unknown): string | null {
-  if (typeof input !== 'string') return null;
-
-  const value = input.trim();
-  if (!value || value.length > MAX_A2A_URL_LENGTH) return null;
-
-  try {
-    const url = new URL(value);
-    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
-    if (!url.hostname) return null;
-    if (url.username || url.password) return null;
-    return value;
-  } catch {
-    return null;
-  }
-}
-
-function normalizeDiscoveryBaseUrl(input: unknown): string | null {
-  const url = normalizeHttpUrl(input);
-  if (!url) return null;
-
-  const parsed = new URL(url);
-  if (parsed.search || parsed.hash) return null;
-
-  return url.replace(/\/+$/, '');
-}
-
-function findJsonRpcEndpoint(card: AgentCard): string | null {
+function findJsonRpcEndpoint(card: AgentCard, policyOptions?: A2aDiscoveryPolicyOptions): string | null {
   for (const agentInterface of card.supportedInterfaces) {
     if (!agentInterface || typeof agentInterface !== 'object') continue;
     if (agentInterface.protocolBinding !== 'JSONRPC') continue;
 
-    const endpoint = normalizeHttpUrl(agentInterface.url);
-    if (endpoint) return endpoint;
+    const endpoint = validateA2aEndpointUrl(agentInterface.url, policyOptions);
+    if (endpoint.ok) return endpoint.url;
   }
 
   return null;
@@ -117,18 +98,35 @@ function assertA2ATask(value: unknown): A2ATask {
 
 /* ── HTTP helpers ──────────────────────────────────────────────────────── */
 
+function abortErrorFromSignal(signal?: AbortSignal, fallback = 'A2A delegation canceled.'): Error {
+  const reason = signal?.reason;
+  if (reason instanceof Error) return reason;
+  if (typeof DOMException !== 'undefined' && reason instanceof DOMException) return new Error(reason.message);
+  const error = new Error(typeof reason === 'string' && reason ? reason : fallback);
+  error.name = 'AbortError';
+  return error;
+}
+
 async function fetchWithTimeout(url: string, opts: RequestInit & { timeoutMs?: number } = {}): Promise<Response> {
-  const { timeoutMs = DISCOVERY_TIMEOUT_MS, ...fetchOpts } = opts;
+  const { timeoutMs = DISCOVERY_TIMEOUT_MS, signal, ...fetchOpts } = opts;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+  let removeAbortListener: (() => void) | undefined;
   try {
+    if (signal?.aborted) throw abortErrorFromSignal(signal);
+    if (signal) {
+      const onAbort = () => controller.abort(signal.reason);
+      signal.addEventListener('abort', onAbort, { once: true });
+      removeAbortListener = () => signal.removeEventListener('abort', onAbort);
+    }
     return await fetch(url, { ...fetchOpts, signal: controller.signal });
   } finally {
     clearTimeout(timer);
+    removeAbortListener?.();
   }
 }
 
-async function jsonRpcCall(endpoint: string, method: string, params: unknown, token?: string): Promise<JsonRpcResponse> {
+async function jsonRpcCall(endpoint: string, method: string, params: unknown, token?: string, options: { signal?: AbortSignal } = {}): Promise<JsonRpcResponse> {
   const body: JsonRpcRequest = {
     jsonrpc: '2.0',
     id: `mindos-${Date.now()}`,
@@ -146,6 +144,7 @@ async function jsonRpcCall(endpoint: string, method: string, params: unknown, to
     headers,
     body: JSON.stringify(body),
     timeoutMs: RPC_TIMEOUT_MS,
+    signal: options.signal,
   });
 
   if (!res.ok) {
@@ -161,9 +160,13 @@ async function jsonRpcCall(endpoint: string, method: string, params: unknown, to
  * Discover an A2A agent at the given base URL.
  * Fetches /.well-known/agent-card.json and caches the result.
  */
-export async function discoverAgent(baseUrl: string): Promise<RemoteAgent | null> {
-  const cleanUrl = normalizeDiscoveryBaseUrl(baseUrl);
-  if (!cleanUrl) return null;
+export async function discoverAgent(
+  baseUrl: string,
+  policyOptions?: A2aDiscoveryPolicyOptions,
+): Promise<RemoteAgent | null> {
+  const policy = validateA2aDiscoveryUrl(baseUrl, policyOptions);
+  if (!policy.ok) return null;
+  const cleanUrl = policy.url;
 
   const cardUrl = `${cleanUrl}/.well-known/agent-card.json`;
   const id = urlToId(cleanUrl);
@@ -187,7 +190,7 @@ export async function discoverAgent(baseUrl: string): Promise<RemoteAgent | null
 
     // Find a usable JSON-RPC endpoint. Agent cards are remote input, so the
     // endpoint URL needs the same trust-boundary checks as the discovery URL.
-    const jsonRpcEndpoint = findJsonRpcEndpoint(card);
+    const jsonRpcEndpoint = findJsonRpcEndpoint(card, policyOptions);
     if (!jsonRpcEndpoint) return null;
 
     const agent: RemoteAgent = {
@@ -213,8 +216,8 @@ export async function discoverAgent(baseUrl: string): Promise<RemoteAgent | null
 /**
  * Discover agents from a list of URLs (concurrent, best-effort).
  */
-export async function discoverAgents(urls: string[]): Promise<RemoteAgent[]> {
-  const results = await Promise.allSettled(urls.map(discoverAgent));
+export async function discoverAgents(urls: string[], policyOptions?: A2aDiscoveryPolicyOptions): Promise<RemoteAgent[]> {
+  const results = await Promise.allSettled(urls.map((url) => discoverAgent(url, policyOptions)));
   return results
     .filter((r): r is PromiseFulfilledResult<RemoteAgent | null> => r.status === 'fulfilled')
     .map(r => r.value)
@@ -231,6 +234,7 @@ export async function delegateTask(
   agentId: string,
   message: string,
   token?: string,
+  options: DelegateTaskOptions = {},
 ): Promise<A2ATask> {
   const agent = registry.get(agentId);
   if (!agent) throw new Error(`Agent not found: ${agentId}`);
@@ -258,7 +262,7 @@ export async function delegateTask(
   };
 
   try {
-    const response = await jsonRpcCall(agent.endpoint, 'SendMessage', params, token);
+    const response = await jsonRpcCall(agent.endpoint, 'SendMessage', params, token, { signal: options.signal });
 
     if (response.error) {
       record.status = 'failed';
@@ -273,6 +277,12 @@ export async function delegateTask(
     record.result = task.artifacts?.[0]?.parts?.[0]?.text ?? null;
     return task;
   } catch (err) {
+    if (options.signal?.aborted) {
+      record.status = 'canceled';
+      record.completedAt = new Date().toISOString();
+      record.error = 'A2A delegation canceled.';
+      throw abortErrorFromSignal(options.signal);
+    }
     if (record.status === 'pending') {
       record.status = 'failed';
       record.completedAt = new Date().toISOString();

@@ -80,6 +80,25 @@ function upsertRuntime(runtimes: AgentRuntimeDescriptor[], runtime: AgentRuntime
   return next.sort((a, b) => RUNTIME_KINDS.indexOf(a.kind as NativeRuntimeKind) - RUNTIME_KINDS.indexOf(b.kind as NativeRuntimeKind));
 }
 
+function markRuntimeDetectionError(
+  runtimes: AgentRuntimeDescriptor[],
+  kind: NativeRuntimeKind,
+  message: string,
+): AgentRuntimeDescriptor[] {
+  const existing = runtimes.find((runtime) => runtime.kind === kind && runtime.id === kind);
+  if (!existing) return runtimes;
+  return upsertRuntime(runtimes, {
+    ...existing,
+    status: 'error',
+    availability: {
+      checkedAt: new Date().toISOString(),
+      sources: ['native-health'],
+      ...(message ? { reason: message } : {}),
+      stale: false,
+    },
+  });
+}
+
 export function useNativeRuntimeDetection(): NativeRuntimeDetectionState {
   const [initialCaches] = useState(() => new Map(RUNTIME_KINDS.map((kind) => [kind, readRuntimeCache(kind)] as const)));
   const [runtimes, setRuntimes] = useState<AgentRuntimeDescriptor[]>(() => (
@@ -98,6 +117,7 @@ export function useNativeRuntimeDetection(): NativeRuntimeDetectionState {
     for (const kind of RUNTIME_KINDS) removeRuntimeCache(kind);
     forceRef.current = true;
     setLoadingByKind({ codex: true, claude: true });
+    setErrorByKind({ codex: null, claude: null });
     setTrigger((value) => value + 1);
   }, []);
 
@@ -139,6 +159,7 @@ export function useNativeRuntimeDetection(): NativeRuntimeDetectionState {
             ? `${label} did not respond within ${seconds}s. Check that ${label} is installed and available to the MindOS server process.`
             : (err as Error).message;
           removeRuntimeCache(kind);
+          setRuntimes((current) => markRuntimeDetectionError(current, kind, message));
           setErrorByKind((current) => ({ ...current, [kind]: message }));
         })
         .finally(() => {

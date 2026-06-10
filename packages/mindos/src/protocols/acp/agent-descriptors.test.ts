@@ -130,6 +130,22 @@ describe('parseAcpAgentOverrides', () => {
     expect(result).toEqual({ 'gemini': { env: { API_KEY: 'abc' } } });
   });
 
+  it('filters unsafe env var names from parsed overrides', () => {
+    const result = parseAcpAgentOverrides({
+      'gemini': {
+        env: {
+          API_KEY: 'abc',
+          'bad key': 'bad',
+          ['__proto__']: 'pollute',
+          constructor: 'ctor',
+          NUMBER_VALUE: 123,
+        },
+      },
+    });
+    expect(result).toEqual({ 'gemini': { env: { API_KEY: 'abc' } } });
+    expect(({} as Record<string, unknown>).pollute).toBeUndefined();
+  });
+
   it('skips invalid entries', () => {
     const result = parseAcpAgentOverrides({ 'good': { command: 'x' }, 'bad': 'not-an-object' });
     expect(result).toEqual({ 'good': { command: 'x' } });

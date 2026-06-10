@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { json, type MindosServerResponse } from '../response.js';
+import { redactSensitiveObject, redactSensitiveText } from '../../session/redaction.js';
 
 export type ImPlatform =
   | 'telegram'
@@ -47,7 +48,7 @@ export function handleImActivityGet(
     ? services.getActivities(platform, limit)
     : readActivities(platform, limit, services.activityPath ?? DEFAULT_ACTIVITY_PATH);
 
-  return json({ activities });
+  return json({ activities: sanitizeActivities(activities) });
 }
 
 function isImPlatform(value: string): value is ImPlatform {
@@ -64,4 +65,29 @@ function readActivities(platform: ImPlatform, limit: number, activityPath: strin
   } catch {
     return [];
   }
+}
+
+function sanitizeActivities(activities: unknown[]): unknown[] {
+  return activities.map((activity) => {
+    if (!activity || typeof activity !== 'object' || Array.isArray(activity)) {
+      return redactSensitiveObject(activity);
+    }
+    const redacted = redactSensitiveObject(activity) as Record<string, unknown>;
+    if (typeof redacted.recipient === 'string') {
+      redacted.recipient = maskForActivity(redacted.recipient);
+    }
+    if (typeof redacted.messageSummary === 'string') {
+      redacted.messageSummary = redactSensitiveText(redacted.messageSummary);
+    }
+    if (typeof redacted.error === 'string') {
+      redacted.error = redactSensitiveText(redacted.error);
+    }
+    return redacted;
+  });
+}
+
+function maskForActivity(value: string): string {
+  const safeValue = redactSensitiveText(value);
+  if (safeValue.length <= 8) return '***';
+  return `${safeValue.slice(0, 3)}***${safeValue.slice(-3)}`;
 }

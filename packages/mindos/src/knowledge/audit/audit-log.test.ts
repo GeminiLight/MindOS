@@ -161,6 +161,38 @@ describe('Agent Audit Log', () => {
     }
   });
 
+  it('redacts audit params and stores raw debug only as redacted opt-in data', async () => {
+    const result = await appendAgentAuditEvent(fs, mindRoot, {
+      ts: '2026-03-25T00:00:00.000Z',
+      tool: 'user_extension_run',
+      params: {
+        path: 'Daily.md',
+        content: 'Authorization: Bearer sk-product-audit-secret-1234567890',
+        nested: { apiKey: 'sk-product-audit-secret-abcdefghijkl' },
+      },
+      result: 'ok',
+      message: 'token=abc123secret',
+      debugCapture: 'redacted_raw',
+      agentName: 'schedule-agent',
+    });
+
+    expect(result.ok).toBe(true);
+    const queryResult = await listAgentAuditEvents(fs, mindRoot);
+    expect(queryResult.ok).toBe(true);
+    if (!queryResult.ok) return;
+    const event = queryResult.value[0];
+    expect(event.actionSummary).toContain('user_extension_run ok target=Daily.md');
+    expect(event.params).toMatchObject({
+      path: 'Daily.md',
+      content: expect.stringMatching(/^\[\d+ chars\]$/),
+      nested: { apiKey: '[redacted]' },
+    });
+    expect(event.message).toBe('token=[redacted]');
+    expect(JSON.stringify(event.rawDebug)).toContain('[redacted]');
+    expect(JSON.stringify(event)).not.toContain('sk-product-audit-secret');
+    expect(JSON.stringify(event)).not.toContain('abc123secret');
+  });
+
   it('should list all audit events', async () => {
     await appendAgentAuditEvent(fs, mindRoot, {
       ts: new Date().toISOString(),
@@ -184,6 +216,34 @@ describe('Agent Audit Log', () => {
       const agent1Events = result.value.filter(e => e.agentName === 'agent1');
       expect(agent1Events.length).toBe(1);
     }
+  });
+
+  it('redacts secrets from existing persisted audit logs before listing', async () => {
+    await fs.writeFile(join(mindRoot, '.mindos', 'agent-audit-log.json'), JSON.stringify({
+      version: 1,
+      events: [{
+        id: 'persisted-1',
+        ts: '2026-03-25T00:00:00.000Z',
+        tool: 'persisted_tool',
+        params: {
+          Authorization: 'Bearer sk-persisted-secret-1234567890',
+          content: 'raw text',
+        },
+        result: 'ok',
+        message: 'apiKey=sk-persisted-secret-abcdefghijkl',
+      }],
+    }));
+
+    const result = await listAgentAuditEvents(fs, mindRoot);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(JSON.stringify(result.value)).not.toContain('sk-persisted-secret');
+    expect(result.value[0].params).toMatchObject({
+      Authorization: '[redacted]',
+      content: '[8 chars]',
+    });
+    expect(result.value[0].message).toBe('apiKey=[redacted]');
+    expect(result.value[0].actionSummary).toContain('persisted_tool ok');
   });
 
   it('should reject audit log writes through symlinked .mindos directories outside the root', async () => {

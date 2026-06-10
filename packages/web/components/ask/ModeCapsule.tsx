@@ -156,15 +156,17 @@ export default function ModeCapsule({ mode, onChange, disabled }: ModeCapsulePro
         type="button"
         onClick={() => { if (!disabled) setOpen(v => !v); }}
         disabled={disabled}
+        data-hit-active={!isChat || open ? 'true' : undefined}
         className={`
-          relative z-10 inline-flex min-h-6 items-center gap-1 rounded-full px-2.5 py-0.5
+          hit-target-box relative z-10 inline-flex min-h-6 items-center gap-1 px-2.5 py-0.5
           text-2xs font-medium transition-colors select-none
           pointer-events-auto touch-manipulation
-          border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
+          border border-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
           disabled:pointer-events-none disabled:opacity-40 disabled:cursor-not-allowed
+          [--hit-target-border-width:1px] [--hit-target-radius:9999px]
           ${isChat
-            ? 'bg-muted/50 border-border/50 text-muted-foreground hover:bg-muted hover:text-foreground'
-            : 'bg-[var(--amber)]/10 border-[var(--amber)]/25 text-foreground hover:bg-[var(--amber)]/15'
+            ? 'text-muted-foreground hover:text-foreground [--hit-target-bg:color-mix(in_srgb,var(--muted)_50%,transparent)] [--hit-target-border:color-mix(in_srgb,var(--border)_50%,transparent)] [--hit-target-hover-bg:var(--muted)] [--hit-target-hover-border:color-mix(in_srgb,var(--border)_65%,transparent)]'
+            : 'text-foreground [--hit-target-active-bg:color-mix(in_srgb,var(--amber)_10%,transparent)] [--hit-target-active-border:color-mix(in_srgb,var(--amber)_25%,transparent)] [--hit-target-hover-bg:color-mix(in_srgb,var(--amber)_15%,transparent)] [--hit-target-hover-border:color-mix(in_srgb,var(--amber)_35%,transparent)]'
           }
         `}
         title={modeHint(mode)}

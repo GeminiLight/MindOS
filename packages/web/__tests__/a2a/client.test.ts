@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { discoverAgent, discoverAgents, getDiscoveredAgents, clearRegistry, delegateTask, checkRemoteTaskStatus } from '../../lib/a2a/client';
+import { discoverAgent, discoverAgents, getDiscoveredAgents, clearRegistry, delegateTask, checkRemoteTaskStatus, getDelegationHistory, clearDelegationHistory } from '../../lib/a2a/client';
 
 const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
@@ -27,6 +27,7 @@ function mockRpcError(code: number, message: string) {
 describe('A2A Client', () => {
   beforeEach(() => {
     clearRegistry();
+    clearDelegationHistory();
     mockFetch.mockReset();
   });
 
@@ -56,10 +57,66 @@ describe('A2A Client', () => {
       expect(mockFetch).not.toHaveBeenCalled();
     });
 
+    it('returns null for malformed discovery URL without fetching', async () => {
+      const agent = await discoverAgent('not a url');
+      expect(agent).toBeNull();
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('returns null for discovery URL with query or hash without fetching', async () => {
+      const agent = await discoverAgent('https://agent.example/path?token=secret#card');
+      expect(agent).toBeNull();
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
     it('returns null for discovery URL with embedded credentials', async () => {
       const agent = await discoverAgent('https://user:pass@test:3000');
       expect(agent).toBeNull();
       expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('blocks localhost and private-network discovery URLs by default', async () => {
+      await expect(discoverAgent('http://127.0.0.1:3456')).resolves.toBeNull();
+      await expect(discoverAgent('http://localhost:3456')).resolves.toBeNull();
+      await expect(discoverAgent('http://192.168.1.10:3456')).resolves.toBeNull();
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('allows private-network discovery only when explicitly enabled', async () => {
+      const localCard = {
+        ...MOCK_CARD,
+        supportedInterfaces: [{ url: 'http://127.0.0.1:3456/api/a2a', protocolBinding: 'JSONRPC', protocolVersion: '1.0' }],
+      };
+      mockFetch.mockResolvedValueOnce({ ok: true, json: async () => localCard });
+
+      const agent = await discoverAgent('http://127.0.0.1:3456', { allowPrivateNetwork: true });
+
+      expect(agent).not.toBeNull();
+      expect(agent!.endpoint).toBe('http://127.0.0.1:3456/api/a2a');
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://127.0.0.1:3456/.well-known/agent-card.json',
+        expect.any(Object),
+      );
+    });
+
+    it('enforces an explicit discovery allowlist when configured', async () => {
+      await expect(discoverAgent('https://evil.example', {
+        allowedOrigins: ['https://allowed.example'],
+      })).resolves.toBeNull();
+      expect(mockFetch).not.toHaveBeenCalled();
+
+      const allowedCard = {
+        ...MOCK_CARD,
+        supportedInterfaces: [{ url: 'https://allowed.example/api/a2a', protocolBinding: 'JSONRPC', protocolVersion: '1.0' }],
+      };
+      mockFetch.mockResolvedValueOnce({ ok: true, json: async () => allowedCard });
+
+      const agent = await discoverAgent('https://allowed.example', {
+        allowedOrigins: ['https://allowed.example'],
+      });
+
+      expect(agent).not.toBeNull();
+      expect(agent!.endpoint).toBe('https://allowed.example/api/a2a');
     });
 
     it('returns null for unreachable URL', async () => {
@@ -102,6 +159,19 @@ describe('A2A Client', () => {
       };
       mockFetch.mockResolvedValueOnce({ ok: true, json: async () => cardCredentialedRpc });
       const agent = await discoverAgent('http://credentialed-endpoint:3000');
+      expect(agent).toBeNull();
+      expect(getDiscoveredAgents()).toHaveLength(0);
+    });
+
+    it('returns null when a public card points its JSONRPC endpoint at a private network URL', async () => {
+      const cardPrivateRpc = {
+        ...MOCK_CARD,
+        supportedInterfaces: [{ url: 'http://127.0.0.1:9999/api/a2a', protocolBinding: 'JSONRPC', protocolVersion: '1.0' }],
+      };
+      mockFetch.mockResolvedValueOnce({ ok: true, json: async () => cardPrivateRpc });
+
+      const agent = await discoverAgent('https://public-agent.example');
+
       expect(agent).toBeNull();
       expect(getDiscoveredAgents()).toHaveLength(0);
     });
@@ -274,6 +344,28 @@ describe('A2A Client', () => {
       expect(body.method).toBe('SendMessage');
       expect(body.params.message.role).toBe('ROLE_USER');
       expect(body.params.message.parts[0].text).toBe('test message');
+    });
+
+    it('cancels the RPC and records canceled history when the caller signal aborts', async () => {
+      mockFetch.mockResolvedValueOnce({ ok: true, json: async () => MOCK_CARD });
+      const agent = await discoverAgent('http://test:3000');
+      const controller = new AbortController();
+      mockFetch.mockImplementationOnce((_input: RequestInfo | URL, init?: RequestInit) => new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => reject(controller.signal.reason), { once: true });
+      }));
+
+      const pending = delegateTask(agent!.id, 'cancel this', undefined, { signal: controller.signal });
+      controller.abort(new DOMException('User stopped the run.', 'AbortError'));
+
+      await expect(pending).rejects.toThrow('User stopped the run.');
+      expect(getDelegationHistory()).toEqual([
+        expect.objectContaining({
+          agentId: agent!.id,
+          message: 'cancel this',
+          status: 'canceled',
+          error: 'A2A delegation canceled.',
+        }),
+      ]);
     });
   });
 

@@ -117,14 +117,14 @@ export default function ChangesBanner() {
             <div className="mt-1 flex items-center gap-1.5">
               <Link
                 href="/changelog"
-                className="inline-flex items-center rounded-md px-2.5 py-1 text-xs font-medium bg-[var(--amber)] text-[var(--amber-foreground)] focus-visible:ring-2 focus-visible:ring-ring hover:opacity-90"
+                className="hit-target-box inline-flex items-center px-2.5 py-1 text-xs font-medium text-[var(--amber-foreground)] focus-visible:ring-2 focus-visible:ring-ring hover:opacity-90 [--hit-target-bg:var(--amber)] [--hit-target-hover-bg:var(--amber)] [--hit-target-radius:var(--radius-md)]"
               >
                 {t.changes.reviewNow}
               </Link>
               <button
                 type="button"
                 onClick={() => void handleMarkAllRead()}
-                className="inline-flex items-center rounded-md px-2 py-1 text-xs font-medium bg-muted text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                className="hit-target-box inline-flex items-center px-2 py-1 text-xs font-medium text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring [--hit-target-bg:var(--muted)] [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-md)]"
               >
                 {t.changes.markAllRead}
               </button>
@@ -134,7 +134,7 @@ export default function ChangesBanner() {
             type="button"
             onClick={() => setDismissedAtCount(unreadCount)}
             aria-label={t.changes.dismiss}
-            className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring"
+            className="hit-target-box inline-flex h-6 w-6 items-center justify-center text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring [--hit-target-hover-bg:color-mix(in_srgb,var(--muted)_60%,transparent)] [--hit-target-radius:var(--radius-md)]"
           >
             <X size={14} />
           </button>

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { CheckCircle2, AlertCircle, ChevronDown, Activity, ArrowRight } from 'lucide-react';
 import { encodePath } from '@/lib/utils';
 import { useLocale } from '@/lib/stores/locale-store';
+import { AgentSectionHeading } from './AgentsPrimitives';
 import {
   type AgentOp,
   opKind, KindBadge, relativeTs, getFilePath,
@@ -48,14 +49,11 @@ export default function RecentActivityFeed() {
 
   if (loading) return (
     <section aria-label="Recent Activity" aria-busy="true">
-      <div className="mb-3 flex items-center gap-2.5">
-        <div className="flex h-6 w-6 items-center justify-center rounded-md bg-[var(--amber-subtle)] text-[var(--amber)]">
-          <Activity size={13} />
-        </div>
-        <h2 className="text-[13px] font-semibold tracking-wide text-foreground">
-          {copy?.recentActivity ?? 'Recent Activity'}
-        </h2>
-      </div>
+      <AgentSectionHeading
+        icon={<Activity size={13} />}
+        title={copy?.recentActivity ?? 'Recent Activity'}
+        className="mb-3"
+      />
       <div className="rounded-xl border border-border bg-card p-3">
         <div className="space-y-2 animate-pulse">
           <div className="h-8 rounded-lg bg-muted/45" />
@@ -69,14 +67,14 @@ export default function RecentActivityFeed() {
 
   return (
     <section aria-label="Recent Activity">
-      <div className="flex items-center gap-2.5 mb-5">
-        <div className="flex items-center justify-center w-6 h-6 rounded-md bg-[var(--amber-subtle)] text-[var(--amber)]"><Activity size={13} /></div>
-        <h2 className="text-[13px] font-semibold text-foreground tracking-wide">
-          {copy?.recentActivity ?? 'Recent Activity'}
-        </h2>
+      <div className="mb-5 flex items-start gap-3">
+        <AgentSectionHeading
+          icon={<Activity size={13} />}
+          title={copy?.recentActivity ?? 'Recent Activity'}
+        />
         <div className="ml-auto">
           <Link
-            href="/agents?tab=activity"
+            href="/agents?tab=runs"
             className="flex items-center gap-1.5 text-xs font-medium text-[var(--amber)] hover:opacity-80 transition-colors"
           >
             <ArrowRight size={12} />

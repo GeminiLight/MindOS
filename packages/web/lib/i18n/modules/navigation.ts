@@ -147,7 +147,7 @@ export const navigationZh = {
     newFile: '新建文件',
     newSpace: '新建空间',
     more: '更多',
-    capture: 'Inbox',
+    capture: '收集箱',
     showHiddenFiles: '显示隐藏文件',
     builtInSpacesTitle: 'Mind 系统',
     builtInSpacesDesc: '内置模块映射到本地目录。',

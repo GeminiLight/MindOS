@@ -91,7 +91,7 @@ export default function SyncStatusBar({ collapsed, onOpenSyncSettings }: SyncSta
       <div className="hidden md:flex items-center justify-between gap-2 px-4 py-1.5 border-t border-border text-xs text-destructive shrink-0 animate-in fade-in duration-300">
         <button
           onClick={() => void fetchStatus()}
-          className="flex min-h-7 min-w-0 items-center gap-2 rounded-md transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="hit-target-box flex min-h-7 min-w-0 items-center gap-2 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-md)]"
           title={loadError}
         >
           <XCircle size={12} className="shrink-0" />
@@ -107,7 +107,7 @@ export default function SyncStatusBar({ collapsed, onOpenSyncSettings }: SyncSta
       <div className="hidden md:flex items-center justify-between px-4 py-1.5 border-t border-border text-xs text-muted-foreground shrink-0 animate-in fade-in duration-300">
         <button
           onClick={onOpenSyncSettings}
-          className="flex min-h-7 min-w-0 items-center gap-2 rounded-md hover:text-foreground transition-colors truncate focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="hit-target-box flex min-h-7 min-w-0 items-center gap-2 hover:text-foreground transition-colors truncate focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-md)]"
           title={(syncT?.enableHint as string) ?? 'Set up cross-device sync'}
         >
           <span className="w-2 h-2 rounded-full shrink-0 bg-muted-foreground/40" />
@@ -119,7 +119,7 @@ export default function SyncStatusBar({ collapsed, onOpenSyncSettings }: SyncSta
             try { localStorage.setItem('sync-hint-dismissed', '1'); } catch (err) { console.warn("[SyncStatusBar] localStorage write dismissed:", err); }
             setHintDismissed(true);
           }}
-          className="ml-2 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground/50 transition-colors hover:bg-muted hover:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="hit-target-box ml-2 inline-flex h-7 w-7 shrink-0 items-center justify-center text-muted-foreground/50 transition-colors hover:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-md)]"
           title={(syncT?.dismiss as string) ?? 'Dismiss'}
         >
           <span className="text-2xs">✕</span>
@@ -140,7 +140,7 @@ export default function SyncStatusBar({ collapsed, onOpenSyncSettings }: SyncSta
     <div className="hidden md:flex items-center justify-between px-4 py-1.5 border-t border-border text-xs text-muted-foreground shrink-0 animate-in fade-in duration-300">
       <button
         onClick={onOpenSyncSettings}
-        className="flex min-h-7 min-w-0 items-center gap-2 rounded-md hover:text-foreground transition-colors truncate focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="hit-target-box flex min-h-7 min-w-0 items-center gap-2 hover:text-foreground transition-colors truncate focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-md)]"
         title={buttonTitle}
       >
         <span
@@ -157,7 +157,7 @@ export default function SyncStatusBar({ collapsed, onOpenSyncSettings }: SyncSta
         {level === 'conflicts' ? (
           <button
             onClick={onOpenSyncSettings}
-            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-error transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="hit-target-box inline-flex h-7 w-7 items-center justify-center text-error transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-md)]"
             title={(syncT?.resolveConflictsHint as string) ?? 'Open Settings > Sync to resolve conflicts'}
           >
             <XCircle size={12} />
@@ -166,7 +166,7 @@ export default function SyncStatusBar({ collapsed, onOpenSyncSettings }: SyncSta
           <button
             onClick={stale ? handleRetryStatus : handleSyncNow}
             disabled={!stale && syncing}
-            className="inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-muted hover:text-foreground disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="hit-target-box inline-flex h-7 w-7 items-center justify-center transition-colors hover:text-foreground disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-md)]"
             title={stale ? ((syncT?.retry as string) ?? 'Retry') : ((syncT?.syncNow as string) ?? 'Sync now')}
           >
             <RefreshCw size={12} className={!stale && syncing ? 'animate-spin' : ''} />

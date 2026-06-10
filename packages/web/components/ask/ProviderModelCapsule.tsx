@@ -605,15 +605,17 @@ export default function ProviderModelCapsule({
           if (open) { setHoveredProvider(null); setModelSearch(''); }
         }}
         disabled={disabled}
+        data-hit-active={providerValue || hasModelOverride || open ? 'true' : undefined}
         className={`
-          relative z-10 inline-flex min-h-6 items-center gap-1 rounded-full px-2.5 py-0.5
+          hit-target-box relative z-10 inline-flex min-h-6 items-center gap-1 px-2.5 py-0.5
           text-2xs font-medium transition-colors select-none max-w-[260px]
           pointer-events-auto touch-manipulation
-          border focus:outline-none focus-visible:ring-2 focus-visible:ring-ring
+          border border-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
           disabled:pointer-events-none disabled:opacity-40 disabled:cursor-not-allowed
+          [--hit-target-border-width:1px] [--hit-target-radius:9999px]
           ${providerValue || hasModelOverride
-            ? 'bg-[var(--amber)]/10 border-[var(--amber)]/25 text-foreground hover:bg-[var(--amber)]/15'
-            : 'bg-muted/50 border-border/50 text-muted-foreground hover:bg-muted hover:text-foreground'
+            ? 'text-foreground [--hit-target-active-bg:color-mix(in_srgb,var(--amber)_10%,transparent)] [--hit-target-active-border:color-mix(in_srgb,var(--amber)_25%,transparent)] [--hit-target-hover-bg:color-mix(in_srgb,var(--amber)_15%,transparent)] [--hit-target-hover-border:color-mix(in_srgb,var(--amber)_35%,transparent)]'
+            : 'text-muted-foreground hover:text-foreground [--hit-target-bg:color-mix(in_srgb,var(--muted)_50%,transparent)] [--hit-target-border:color-mix(in_srgb,var(--border)_50%,transparent)] [--hit-target-hover-bg:var(--muted)] [--hit-target-hover-border:color-mix(in_srgb,var(--border)_65%,transparent)]'
           }
         `}
         title={capsuleTooltip}

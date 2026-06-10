@@ -35,6 +35,53 @@ export function StatusDot({ tone, label, count }: { tone: 'ok' | 'warn' | 'neutr
   );
 }
 
+export function AgentSectionHeading({
+  id,
+  icon,
+  title,
+  description,
+  as: HeadingTag = 'h2',
+  size = 'md',
+  className,
+  titleClassName,
+}: {
+  id?: string;
+  icon: React.ReactNode;
+  title: React.ReactNode;
+  description?: React.ReactNode;
+  as?: 'h2' | 'h3' | 'p' | 'div';
+  size?: 'sm' | 'md';
+  className?: string;
+  titleClassName?: string;
+}) {
+  const iconBoxClass = size === 'sm' ? 'h-5 w-5' : 'h-6 w-6';
+  const titleSizeClass = size === 'sm' ? 'text-xs' : 'text-[13px]';
+
+  return (
+    <div className={`flex min-w-0 items-start gap-2.5 ${className ?? ''}`}>
+      <span
+        className={`flex ${iconBoxClass} shrink-0 items-center justify-center rounded-md bg-[var(--amber-subtle)] text-[var(--amber)]`}
+        aria-hidden="true"
+      >
+        {icon}
+      </span>
+      <span className="min-w-0">
+        <HeadingTag
+          id={id}
+          className={`${titleSizeClass} font-semibold tracking-wide text-foreground ${titleClassName ?? ''}`}
+        >
+          {title}
+        </HeadingTag>
+        {description ? (
+          <p className="mt-1 max-w-2xl text-xs leading-relaxed text-muted-foreground">
+            {description}
+          </p>
+        ) : null}
+      </span>
+    </div>
+  );
+}
+
 export function SearchInput({
   value,
   onChange,

@@ -14,9 +14,9 @@ import {
   isThinkingDeltaEvent,
   isToolExecutionEndEvent,
   isToolExecutionStartEvent,
-  normalizeMindosAskMode,
 } from '@geminilight/mindos/session';
 import { buildMindosAskSystemPrompt } from '@geminilight/mindos/agent';
+import { resolveHeadlessAgentMode, type HeadlessAgentEntryPoint } from './headless-mode-guard';
 
 export interface HeadlessAgentRunOptions {
   userMessage: string;
@@ -25,6 +25,8 @@ export interface HeadlessAgentRunOptions {
   maxSteps?: number;
   providerOverride?: string;
   modelOverride?: string;
+  entrypoint?: HeadlessAgentEntryPoint;
+  allowAgentMode?: boolean;
 }
 
 export interface HeadlessAgentRunResult {
@@ -55,7 +57,12 @@ function readKnowledgeFile(filePath: string): { ok: boolean; content: string; tr
 }
 
 export async function runHeadlessAgent(options: HeadlessAgentRunOptions): Promise<HeadlessAgentRunResult> {
-  const askMode = normalizeMindosAskMode(options.mode);
+  const modeDecision = resolveHeadlessAgentMode({
+    requestedMode: options.mode,
+    entrypoint: options.entrypoint,
+    allowAgentMode: options.allowAgentMode,
+  });
+  const askMode = modeDecision.effectiveMode;
   const historyMessages = Array.isArray(options.historyMessages) ? options.historyMessages : [];
   const currentMessage: FrontendMessage = { role: 'user', content: options.userMessage, timestamp: Date.now() };
   const allMessages = [...historyMessages, currentMessage];

@@ -66,10 +66,56 @@ describe('CapturePanel inbox sync', () => {
     });
 
     expect(host.textContent).toContain('2 items waiting.');
-    expect(host.textContent).toContain('Next up');
+    expect(host.textContent).toContain('Pending');
     expect(host.textContent).toContain('first.md');
     expect(host.textContent).toContain('second.md');
     expect(host.textContent).not.toContain('Loading queue...');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('keeps locally shelved captures out of the pending preview', async () => {
+    localStorage.setItem('mindos-inbox-shelved-paths', JSON.stringify(['Inbox/first.md']));
+    vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(() => {})));
+    const CapturePanel = (await import('@/components/panels/CapturePanel')).default;
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<CapturePanel />);
+      await new Promise(r => setTimeout(r, 0));
+    });
+
+    await act(async () => {
+      window.dispatchEvent(new CustomEvent('mindos:inbox-files', {
+        detail: [
+          {
+            name: 'first.md',
+            path: 'Inbox/first.md',
+            size: 10,
+            modifiedAt: new Date().toISOString(),
+            isAging: false,
+          },
+          {
+            name: 'second.md',
+            path: 'Inbox/second.md',
+            size: 20,
+            modifiedAt: new Date().toISOString(),
+            isAging: false,
+          },
+        ],
+      }));
+      await new Promise(r => setTimeout(r, 0));
+    });
+
+    expect(host.textContent).toContain('1 item waiting.');
+    expect(host.textContent).toContain('1 item shelved.');
+    expect(host.textContent).toContain('second.md');
+    expect(host.textContent).not.toContain('first.md');
 
     await act(async () => {
       root.unmount();

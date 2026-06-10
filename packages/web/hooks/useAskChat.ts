@@ -4,10 +4,26 @@ import { useRef, useState, useCallback, useLayoutEffect } from 'react';
 import type { AgentIdentity, AgentRuntimeIdentity, Message, ImagePart, AskMode, LocalAttachment, RuntimeSessionBinding } from '@/lib/types';
 import type { ProviderId } from '@/lib/agent/providers';
 import { consumeUIMessageStream, type AgentRunContextMetadata } from '@/lib/agent/stream-consumer';
-import { annotateMessageWithAgentRuntime, getMatchingRuntimeSessionBinding, isRuntimeSessionBindingResumable } from '@/lib/ask-agent';
+import { annotateMessageWithAgentRuntime, compactAgentRuntimeIdentity, getMatchingRuntimeSessionBinding, isRuntimeSessionBindingResumable } from '@/lib/ask-agent';
 import { isRetryableError, retryDelay, sleep } from '@/lib/agent/reconnect';
 
 export type LoadingPhase = 'connecting' | 'thinking' | 'streaming' | 'reconnecting';
+
+type AskRequestRuntime = AgentRuntimeIdentity & {
+  binaryPath?: string;
+  externalSessionId?: string;
+};
+
+function runtimeForAskRequest(runtime: AskRequestRuntime | null | undefined): AskRequestRuntime | null {
+  if (!runtime) return null;
+  return {
+    id: runtime.id,
+    name: runtime.name,
+    kind: runtime.kind,
+    ...(runtime.binaryPath ? { binaryPath: runtime.binaryPath } : {}),
+    ...(runtime.externalSessionId ? { externalSessionId: runtime.externalSessionId } : {}),
+  };
+}
 
 export interface AskChatRefs {
   inputValueRef: React.RefObject<string>;
@@ -37,7 +53,7 @@ export interface AskChatRefs {
     localAttachments: LocalAttachment[];
   }>;
   selectedSkillRef: React.RefObject<{ name: string } | null>;
-  selectedAgentRuntimeRef: React.RefObject<AgentRuntimeIdentity | null>;
+  selectedAgentRuntimeRef: React.RefObject<(AgentRuntimeIdentity & { binaryPath?: string }) | null>;
   attachedFilesRef: React.RefObject<string[]>;
 }
 
@@ -155,17 +171,18 @@ export function useAskChat({
     if (hasLoadingUploads || ((!text && img.images.length === 0) || isLoadingRef.current)) return;
 
     const skill = refs.selectedSkillRef.current;
-    const selectedRuntimeBase = refs.selectedAgentRuntimeRef.current;
+    const selectedRuntimeBase = compactAgentRuntimeIdentity(refs.selectedAgentRuntimeRef.current);
     const acpAgent: AgentIdentity | null = selectedRuntimeBase?.kind === 'acp'
       ? { id: selectedRuntimeBase.id, name: selectedRuntimeBase.name }
       : null;
     const matchingRuntimeBinding = getMatchingRuntimeSessionBinding(sess.activeSession, selectedRuntimeBase);
-    const selectedRuntime = selectedRuntimeBase && isRuntimeSessionBindingResumable(matchingRuntimeBinding)
+    const selectedRuntimeWithBinding = selectedRuntimeBase && isRuntimeSessionBindingResumable(matchingRuntimeBinding)
       ? {
           ...selectedRuntimeBase,
           externalSessionId: matchingRuntimeBinding.externalSessionId,
         }
       : selectedRuntimeBase;
+    const selectedRuntime = runtimeForAskRequest(selectedRuntimeWithBinding);
     const runtimeForMessage = selectedRuntimeBase ?? null;
     const pendingImages = img.images.length > 0 ? [...img.images] : undefined;
     // Only store explicitly user-chosen files (filter out auto-included currentFile)
@@ -282,7 +299,7 @@ export function useAskChat({
         controller.signal,
         {
           onRuntimeBinding: (binding) => {
-            const currentRuntime = refs.selectedAgentRuntimeRef.current;
+            const currentRuntime = compactAgentRuntimeIdentity(refs.selectedAgentRuntimeRef.current);
             if (!currentRuntime || currentRuntime.kind !== binding.runtime) return;
             refs.sessionRef.current?.setSessionAgentRuntimeBinding?.(currentRuntime, {
               externalSessionId: binding.externalSessionId,

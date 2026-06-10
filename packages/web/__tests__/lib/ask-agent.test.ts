@@ -377,6 +377,46 @@ describe('ask agent helpers', () => {
     });
   });
 
+  it('restores native runtime identity from legacy native session metadata', () => {
+    const codexSession: ChatSession = {
+      id: 'legacy-codex',
+      createdAt: 1,
+      updatedAt: 1,
+      messages: [],
+      externalAgentBinding: {
+        runtime: 'codex',
+        externalSessionId: 'thread_legacy',
+        cwd: '/tmp/mind',
+        status: 'active',
+        updatedAt: 456,
+      },
+    };
+    const claudeSession: ChatSession = {
+      id: 'legacy-claude',
+      createdAt: 1,
+      updatedAt: 1,
+      messages: [],
+      externalAgentBinding: {
+        runtime: 'claude',
+        externalSessionId: 'session_legacy',
+        cwd: '/tmp/mind',
+        status: 'active',
+        updatedAt: 789,
+      },
+    };
+
+    expect(getSessionAgentRuntime(codexSession)).toEqual({
+      id: 'codex',
+      name: 'Codex',
+      kind: 'codex',
+    });
+    expect(getSessionAgentRuntime(claudeSession)).toEqual({
+      id: 'claude',
+      name: 'Claude Code',
+      kind: 'claude',
+    });
+  });
+
   it('summarizes typed and legacy runtime session metadata for history UI', () => {
     const typed: ChatSession = {
       id: 'codex',

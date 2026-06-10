@@ -6,7 +6,7 @@ import { messages } from '@/lib/i18n';
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: () => {} }),
   usePathname: () => '/agents',
-  useSearchParams: () => new URLSearchParams('tab=mcp'),
+  useSearchParams: () => new URLSearchParams('tab=agent'),
 }));
 
 vi.mock('@/lib/stores/mcp-store', () => ({
@@ -48,17 +48,24 @@ vi.mock('@/lib/stores/locale-store', () => ({
 }));
 
 describe('AgentsPanel hub layout', () => {
-  it('renders four hub nav rows (Overview, MCP, Skills, Network) and agent name', () => {
+  it('renders five hub nav rows for the Agents IA and agent name', () => {
     const html = renderToStaticMarkup(<AgentsPanel active maximized={false} />);
     const a = messages.en.panels.agents;
+    const capabilitiesLabel = a.navCapabilities.replace('&', '&amp;');
     expect(html).toContain(a.navOverview);
-    expect(html).toContain(a.navMcp);
-    expect(html).toContain(a.navSkills);
-    expect(html).toContain(a.navNetwork);
+    expect(html).toContain(a.navAssistant);
+    expect(html).toContain(a.navAgent);
+    expect(html).toContain(capabilitiesLabel);
+    expect(html).toContain(a.navChannels);
     expect(html).toContain('href="/agents"');
-    expect(html).toContain('href="/agents?tab=mcp"');
-    expect(html).toContain('href="/agents?tab=skills"');
-    expect(html).toContain('href="/agents?tab=a2a"');
+    expect(html).toContain('href="/agents?tab=assistant"');
+    expect(html).toContain('href="/agents?tab=agent"');
+    expect(html).toContain('href="/agents?tab=capabilities"');
+    expect(html).toContain('href="/agents?tab=channels"');
+    expect(html).toContain('href="/agents?tab=runs"');
+    expect(html).not.toContain('href="/agents?tab=mcp"');
+    expect(html).not.toContain('href="/agents?tab=skills"');
+    expect(html).not.toContain('href="/agents?tab=a2a"');
     expect(html).toContain('href="/agents/test-agent"');
     expect(html).toContain('Test Agent');
     expect(html).not.toContain('/help');

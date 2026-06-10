@@ -292,7 +292,7 @@ export const aiChatZh = {
     proxyCompatAlsoFailed: (err: string) => `兼容模式也失败了：${err}。请检查 Base URL、API Key 和模型名称。`,
     retry: '重试',
     suggestions: [
-      { label: '整理收件箱', prompt: '把收件箱的文件整理到对应空间' },
+      { label: '整理收集箱', prompt: '把收集箱里的文件整理到对应空间' },
       { label: '调研一个话题', prompt: '调研一下 AI Agent 的最新趋势' },
       { label: '起草周报', prompt: '根据最近的笔记起草一份周报' },
       { label: '想新 idea', prompt: '为我的下一个项目想 3 个新 idea' },

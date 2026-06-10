@@ -245,6 +245,51 @@ describe('consumeUIMessageStream — status event handling', () => {
     });
   });
 
+  it('redacts secrets from raw tool SSE payloads before storing message parts', async () => {
+    const stream = makeStream(
+      {
+        type: 'tool_start',
+        toolCallId: 'cmd-secret',
+        toolName: 'Bash',
+        runtime: 'claude',
+        args: {
+          command: 'curl -H "Authorization: Bearer sk-stream-secret-1234567890" https://example.test?token=abc123secret',
+          env: { API_KEY: 'sk-stream-secret-abcdefghijkl' },
+        },
+      },
+      {
+        type: 'tool_delta',
+        toolCallId: 'cmd-secret',
+        toolName: 'Bash',
+        runtime: 'claude',
+        delta: 'token=abc123secret\n',
+      },
+      {
+        type: 'tool_end',
+        toolCallId: 'cmd-secret',
+        toolName: 'Bash',
+        runtime: 'claude',
+        output: 'Authorization: Bearer ghp_abcdefghijklmnopqrstuvwxyz123456',
+        isError: false,
+      },
+      { type: 'done' },
+    );
+
+    const result = await consumeUIMessageStream(stream, vi.fn());
+    const toolPart = result.parts.find((p): p is ToolCallPart => p.type === 'tool-call');
+    const serialized = JSON.stringify(toolPart);
+
+    expect(serialized).toContain('[redacted]');
+    expect(serialized).not.toContain('sk-stream-secret');
+    expect(serialized).not.toContain('abc123secret');
+    expect(serialized).not.toContain('ghp_abcdefghijklmnopqrstuvwxyz123456');
+    expect(toolPart).toMatchObject({
+      runtime: 'claude',
+      state: 'done',
+      output: 'Authorization: Bearer [redacted]',
+    });
+  });
+
   it('surfaces runtime binding metadata without adding message content', async () => {
     const onRuntimeBinding = vi.fn();
     const stream = makeStream(

@@ -5,12 +5,21 @@
  * extension, providing the subagent control tool to the Agent.
  */
 
-import { describe, expect, it, beforeAll } from 'vitest';
+import { describe, expect, it, beforeAll, afterEach, vi } from 'vitest';
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 import { DefaultResourceLoader, SettingsManager } from '@earendil-works/pi-coding-agent';
 
 const PROJECT_ROOT = path.resolve(__dirname, '..', '..');
+let tempHomeToClean: string | null = null;
+
+afterEach(() => {
+  if (tempHomeToClean) {
+    fs.rmSync(tempHomeToClean, { recursive: true, force: true });
+    tempHomeToClean = null;
+  }
+});
 
 describe('pi-subagents built-in extension', () => {
   describe('dependency installation', () => {
@@ -61,6 +70,11 @@ describe('pi-subagents built-in extension', () => {
       expect(runtimeAdapterContent).toContain("path.join(webAppDir, 'lib', 'schedule-prompt', 'index.ts')");
     });
 
+    it('runtime adapter loads the MindOS MCP wrapper instead of upstream pi-mcp-adapter directly', () => {
+      expect(runtimeAdapterContent).toContain('mindos-mcp-adapter-extension.ts');
+      expect(runtimeAdapterContent).not.toContain("path.join(webAppDir, 'node_modules', 'pi-mcp-adapter', 'index.ts')");
+    });
+
     it('pi-subagents path is after user extensions (scanExtensionPaths)', () => {
       // User extensions should have priority, so scanExtensionPaths() comes first
       const scanIndex = runtimeAdapterContent.indexOf('scanExtensionPaths()');
@@ -70,42 +84,71 @@ describe('pi-subagents built-in extension', () => {
       expect(subagentsIndex).toBeGreaterThan(scanIndex);
     });
 
-    it('derives extension exposure from PermissionPolicy tool scope for every ask mode', async () => {
-      const { getMindosWebPiRuntimePaths } = await import('@/lib/agent/mindos-pi-runtime-host');
-      const base = {
-        projectRoot: path.resolve(PROJECT_ROOT, '..', '..'),
-        mindRoot: PROJECT_ROOT,
-        serverSettings: {},
-      };
+    it('derives extension exposure from PermissionPolicy tool scope and bounded MCP allowlist for every ask mode', async () => {
+      const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'mindos-pi-subagents-home-'));
+      tempHomeToClean = tempHome;
+      const previousHome = process.env.HOME;
+      process.env.HOME = tempHome;
+      vi.resetModules();
+      try {
+        const { getMindosWebPiRuntimePaths } = await import('@/lib/agent/mindos-pi-runtime-host');
+        const base = {
+          projectRoot: path.resolve(PROJECT_ROOT, '..', '..'),
+          mindRoot: PROJECT_ROOT,
+          serverSettings: {},
+        };
 
-      const chatPaths = getMindosWebPiRuntimePaths({ ...base, mode: 'chat' });
-      const chatExtensionList = chatPaths.additionalExtensionPaths.join('\n');
-      expect(chatExtensionList).toContain('kb-extension');
-      expect(chatExtensionList).toContain('ask-user-question-bridge-extension');
-      expect(chatExtensionList).toContain('web-search-extension');
-      expect(chatExtensionList).toContain('pi-web-access');
-      expect(chatExtensionList).not.toContain('pi-mcp-adapter');
-      expect(chatExtensionList).not.toContain('subagent-ledger-extension');
-      expect(chatExtensionList).not.toContain(path.join('lib', 'im', 'index.ts'));
-      expect(chatExtensionList).not.toContain('schedule-prompt');
+        const chatPaths = getMindosWebPiRuntimePaths({ ...base, mode: 'chat' });
+        const chatExtensionList = chatPaths.additionalExtensionPaths.join('\n');
+        expect(chatExtensionList).toContain('kb-extension');
+        expect(chatExtensionList).toContain('ask-user-question-bridge-extension');
+        expect(chatExtensionList).toContain('web-search-extension');
+        expect(chatExtensionList).toContain('pi-web-access');
+        expect(chatExtensionList).not.toContain('pi-mcp-adapter');
+        expect(chatExtensionList).not.toContain('subagent-ledger-extension');
+        expect(chatExtensionList).not.toContain(path.join('lib', 'im', 'index.ts'));
+        expect(chatExtensionList).not.toContain('schedule-prompt');
 
-      const organizePaths = getMindosWebPiRuntimePaths({ ...base, mode: 'organize' });
-      const organizeExtensionList = organizePaths.additionalExtensionPaths.join('\n');
-      expect(organizeExtensionList).toContain('kb-extension');
-      expect(organizeExtensionList).toContain('web-search-extension');
-      expect(organizeExtensionList).not.toContain('pi-mcp-adapter');
-      expect(organizeExtensionList).not.toContain('subagent-ledger-extension');
-      expect(organizeExtensionList).not.toContain(path.join('lib', 'im', 'index.ts'));
-      expect(organizeExtensionList).not.toContain('schedule-prompt');
+        const organizePaths = getMindosWebPiRuntimePaths({ ...base, mode: 'organize' });
+        const organizeExtensionList = organizePaths.additionalExtensionPaths.join('\n');
+        expect(organizeExtensionList).toContain('kb-extension');
+        expect(organizeExtensionList).toContain('web-search-extension');
+        expect(organizeExtensionList).not.toContain('pi-mcp-adapter');
+        expect(organizeExtensionList).not.toContain('subagent-ledger-extension');
+        expect(organizeExtensionList).not.toContain(path.join('lib', 'im', 'index.ts'));
+        expect(organizeExtensionList).not.toContain('schedule-prompt');
 
-      const agentPaths = getMindosWebPiRuntimePaths({ ...base, mode: 'agent' });
-      const agentExtensionList = agentPaths.additionalExtensionPaths.join('\n');
-      expect(agentExtensionList).toContain('kb-extension');
-      expect(agentExtensionList).toContain('web-search-extension');
-      expect(agentExtensionList).toContain('pi-mcp-adapter');
-      expect(agentExtensionList).toContain('subagent-ledger-extension');
-      expect(agentExtensionList).toContain(path.join('lib', 'im', 'index.ts'));
-      expect(agentExtensionList).toContain('schedule-prompt');
+        const agentPaths = getMindosWebPiRuntimePaths({ ...base, mode: 'agent' });
+        const agentExtensionList = agentPaths.additionalExtensionPaths.join('\n');
+        expect(agentExtensionList).toContain('kb-extension');
+        expect(agentExtensionList).toContain('web-search-extension');
+        expect(agentExtensionList).not.toContain('pi-mcp-adapter');
+        expect(agentExtensionList).not.toContain('mindos-mcp-adapter-extension');
+        expect(agentExtensionList).toContain('subagent-ledger-extension');
+        expect(agentExtensionList).toContain(path.join('lib', 'im', 'index.ts'));
+        expect(agentExtensionList).toContain('schedule-prompt');
+
+        fs.mkdirSync(path.join(tempHome, '.mindos'), { recursive: true });
+        fs.writeFileSync(path.join(tempHome, '.mindos', 'mcp.json'), JSON.stringify({
+          mcpServers: {
+            github: {
+              command: 'github-mcp',
+              mindosAgent: ['search_code'],
+            },
+          },
+        }), 'utf-8');
+        const agentWithMcpPaths = getMindosWebPiRuntimePaths({ ...base, mode: 'agent' });
+        const agentWithMcpExtensionList = agentWithMcpPaths.additionalExtensionPaths.join('\n');
+        expect(agentWithMcpExtensionList).toContain('mindos-mcp-adapter-extension');
+        expect(agentWithMcpExtensionList).not.toContain(path.join('node_modules', 'pi-mcp-adapter', 'index.ts'));
+      } finally {
+        if (previousHome === undefined) {
+          delete process.env.HOME;
+        } else {
+          process.env.HOME = previousHome;
+        }
+        vi.resetModules();
+      }
     });
   });
 

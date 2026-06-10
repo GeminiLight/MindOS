@@ -27,6 +27,7 @@ export type A2aServices = {
   getDiscoveredAgents?(): unknown[];
   getDelegationHistory?(): unknown[];
   discoverAgent?(url: string): Promise<unknown | null>;
+  validateDiscoveryUrl?(url: string): { ok: true; url?: string } | { ok: false; message: string };
 };
 
 const MAX_REQUEST_BYTES = 100_000;
@@ -136,9 +137,13 @@ export async function handleA2aDiscoverPost(
   if (!isValidDiscoveryUrl(url)) {
     return json({ error: 'Invalid URL', agent: null }, { status: 400 });
   }
+  const policy = services.validateDiscoveryUrl?.(url);
+  if (policy && !policy.ok) {
+    return json({ error: policy.message, agent: null }, { status: 400 });
+  }
 
   const discoverAgent = services.discoverAgent ?? defaultDiscoverAgent;
-  const agent = await discoverAgent(url);
+  const agent = await discoverAgent(policy?.ok && policy.url ? policy.url : url);
   if (!agent) {
     return json({ error: 'No A2A agent found', agent: null });
   }

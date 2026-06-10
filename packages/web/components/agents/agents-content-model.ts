@@ -1,6 +1,19 @@
 import type { AgentInfo, SkillInfo } from '@/components/settings/types';
 
-export type AgentsDashboardTab = 'overview' | 'presets' | 'mcp' | 'skills' | 'a2a' | 'sessions' | 'activity' | 'channels';
+export type AgentsDashboardTab =
+  | 'overview'
+  | 'assistant'
+  | 'agent'
+  | 'capabilities'
+  | 'runs'
+  | 'presets'
+  | 'mcp'
+  | 'skills'
+  | 'a2a'
+  | 'sessions'
+  | 'activity'
+  | 'channels';
+export type AgentsNavGroup = 'overview' | 'assistant' | 'agent' | 'capabilities' | 'channels';
 export type AgentResolvedStatus = 'connected' | 'detected' | 'notFound';
 export type SkillCapability = 'research' | 'coding' | 'docs' | 'ops' | 'memory';
 export type SkillSourceFilter = 'all' | 'builtin' | 'user';
@@ -24,7 +37,27 @@ export interface AgentBuckets {
 }
 
 export function parseAgentsTab(tab: string | undefined): AgentsDashboardTab {
-  if (tab === 'presets' || tab === 'mcp' || tab === 'skills' || tab === 'a2a' || tab === 'sessions' || tab === 'activity' || tab === 'channels') return tab;
+  if (
+    tab === 'assistant' ||
+    tab === 'agent' ||
+    tab === 'capabilities' ||
+    tab === 'runs' ||
+    tab === 'presets' ||
+    tab === 'mcp' ||
+    tab === 'skills' ||
+    tab === 'a2a' ||
+    tab === 'sessions' ||
+    tab === 'activity' ||
+    tab === 'channels'
+  ) return tab;
+  return 'overview';
+}
+
+export function getAgentsNavGroup(tab: AgentsDashboardTab): AgentsNavGroup {
+  if (tab === 'assistant' || tab === 'presets') return 'assistant';
+  if (tab === 'agent' || tab === 'a2a') return 'agent';
+  if (tab === 'capabilities' || tab === 'skills' || tab === 'mcp') return 'capabilities';
+  if (tab === 'channels') return 'channels';
   return 'overview';
 }
 

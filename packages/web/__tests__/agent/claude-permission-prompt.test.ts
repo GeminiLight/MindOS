@@ -19,6 +19,36 @@ afterEach(() => {
   child = null;
 });
 
+function withRuntimeBaseUrlEnv<T>(
+  env: Partial<Record<'MINDOS_INTERNAL_URL' | 'MINDOS_URL' | 'MINDOS_WEB_PORT', string>>,
+  run: () => T,
+): T {
+  const previous = {
+    MINDOS_INTERNAL_URL: process.env.MINDOS_INTERNAL_URL,
+    MINDOS_URL: process.env.MINDOS_URL,
+    MINDOS_WEB_PORT: process.env.MINDOS_WEB_PORT,
+  };
+  try {
+    for (const key of Object.keys(previous) as Array<keyof typeof previous>) {
+      const next = env[key];
+      if (next === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = next;
+      }
+    }
+    return run();
+  } finally {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) {
+        delete process.env[key as keyof typeof previous];
+      } else {
+        process.env[key as keyof typeof previous] = value;
+      }
+    }
+  }
+}
+
 async function readBody(req: IncomingMessage): Promise<unknown> {
   const chunks: Buffer[] = [];
   for await (const chunk of req) {
@@ -120,8 +150,44 @@ describe('Claude Code permission prompt MCP config', () => {
     });
   });
 
-  it('prefers a local loopback URL when the request has a port', () => {
-    expect(resolveRuntimePermissionBaseUrl(new Request('http://21.6.243.108:4567/api/ask'))).toBe('http://127.0.0.1:4567');
+  it('prefers MINDOS_INTERNAL_URL for server-to-self callbacks', () => {
+    withRuntimeBaseUrlEnv({
+      MINDOS_INTERNAL_URL: 'http://127.0.0.1:9999',
+      MINDOS_URL: 'https://mindos.example.com',
+      MINDOS_WEB_PORT: '4567',
+    }, () => {
+      expect(resolveRuntimePermissionBaseUrl(new Request('https://21.6.243.108/api/ask'))).toBe('http://127.0.0.1:9999');
+    });
+  });
+
+  it('keeps MINDOS_URL as the explicit fallback override', () => {
+    withRuntimeBaseUrlEnv({
+      MINDOS_URL: 'https://mindos.example.com',
+    }, () => {
+      expect(resolveRuntimePermissionBaseUrl(new Request('https://21.6.243.108:4567/api/ask'))).toBe('https://mindos.example.com');
+    });
+  });
+
+  it('uses an http loopback URL from MINDOS_WEB_PORT before the external request port', () => {
+    withRuntimeBaseUrlEnv({
+      MINDOS_WEB_PORT: '4567',
+    }, () => {
+      expect(resolveRuntimePermissionBaseUrl(new Request('https://21.6.243.108:443/api/ask'))).toBe('http://127.0.0.1:4567');
+    });
+  });
+
+  it('uses an http loopback URL when the request has a port', () => {
+    withRuntimeBaseUrlEnv({}, () => {
+      expect(resolveRuntimePermissionBaseUrl(new Request('https://21.6.243.108:4567/api/ask'))).toBe('http://127.0.0.1:4567');
+    });
+  });
+
+  it('does not use an arbitrary external request origin for runtime callbacks', () => {
+    withRuntimeBaseUrlEnv({}, () => {
+      expect(() => resolveRuntimePermissionBaseUrl(new Request('https://mindos.example.com/api/ask'))).toThrow(
+        'Claude Code permission callbacks require MINDOS_INTERNAL_URL',
+      );
+    });
   });
 
   it('returns a JSON-RPC error response when the permission bridge request fails', async () => {

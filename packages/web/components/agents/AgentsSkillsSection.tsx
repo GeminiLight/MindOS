@@ -15,6 +15,7 @@ import type {
 import {
   ActionButton,
   AddAvatarButton,
+  AgentSectionHeading,
   AgentAvatar,
   AgentPickerPopover,
   BulkMessage,
@@ -216,12 +217,11 @@ export default function AgentsSkillsSection({
     <section className="space-y-4 overflow-hidden" aria-label={copy.title}>
       {/* Header */}
       <div className="flex items-center justify-between gap-3">
-        <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
-          <div className="w-6 h-6 rounded-md bg-[var(--amber-subtle)] flex items-center justify-center">
-            <Zap size={13} className="text-[var(--amber)]" aria-hidden="true" />
-          </div>
-          {copy.title}
-        </h2>
+        <AgentSectionHeading
+          icon={<Zap size={13} aria-hidden="true" />}
+          title={copy.title}
+          titleClassName="text-sm"
+        />
         <div className="flex items-center gap-1 rounded-md border border-border p-0.5 bg-background" role="tablist" aria-label={copy.title}>
           <PillButton active={view === 'bySkill'} label={copy.tabs.bySkill} onClick={() => setView('bySkill')} />
           <PillButton active={view === 'byAgent'} label={copy.tabs.byAgent} onClick={() => setView('byAgent')} />

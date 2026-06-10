@@ -85,8 +85,18 @@ describe('MCP settings interactions', () => {
     host.remove();
   });
 
-  it('prefills MCP agent HTTP install settings from the current status endpoint', async () => {
+  it('reveals the saved MCP token only when installing HTTP agent config', async () => {
     const { default: AgentInstall } = await import('@/components/settings/McpAgentInstall');
+    mockApiFetch.mockImplementation(async (url: string, opts?: RequestInit) => {
+      if (url === '/api/mcp/token/reveal') {
+        expect(opts?.method).toBe('POST');
+        return { authConfigured: true, authToken: 'full-token' };
+      }
+      if (url === '/api/mcp/install') {
+        return { results: [{ agent: 'cursor', status: 'ok' }] };
+      }
+      throw new Error(`Unexpected apiFetch call: ${url}`);
+    });
     const agents: AgentInfo[] = [{
       key: 'cursor',
       name: 'Cursor',
@@ -118,7 +128,6 @@ describe('MCP settings interactions', () => {
             port: 8567,
             toolCount: 1,
             authConfigured: true,
-            authToken: 'full-token',
             maskedToken: 'full-••••',
             localIP: null,
             connectionMode: { cli: true, mcp: true },
@@ -139,7 +148,27 @@ describe('MCP settings interactions', () => {
     expect(urlInput?.value).toBe('http://localhost:8567/mcp');
 
     const passwordInput = host.querySelector('input[type="password"]') as HTMLInputElement | null;
-    expect(passwordInput?.value).toBe('full-token');
+    expect(passwordInput?.value).toBe('');
+    expect(passwordInput?.placeholder).toBe('full-••••');
+
+    const installButton = Array.from(host.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('Install Selected')) as HTMLButtonElement | undefined;
+    expect(installButton?.disabled).toBe(false);
+
+    await act(async () => {
+      installButton?.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mockApiFetch).toHaveBeenCalledWith('/api/mcp/token/reveal', { method: 'POST' });
+    const installCall = mockApiFetch.mock.calls.find(([url]) => url === '/api/mcp/install');
+    expect(JSON.parse((installCall?.[1] as RequestInit).body as string)).toMatchObject({
+      agents: [{ key: 'cursor', scope: 'global', transport: 'http' }],
+      transport: 'auto',
+      url: 'http://localhost:8567/mcp',
+      token: 'full-token',
+    });
 
     await act(async () => {
       root.unmount();

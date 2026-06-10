@@ -3,6 +3,10 @@ import path from 'path';
 import os from 'os';
 import { randomBytes } from 'crypto';
 import { parseAcpAgentOverrides } from './acp/agent-descriptors';
+import {
+  parseAgentRuntimeEnvironmentSettings,
+  type AgentRuntimeEnvironmentSettings,
+} from '@geminilight/mindos/agent-runtime';
 import { type ProviderId, PROVIDER_PRESETS, isProviderId, getApiKeyFromEnv } from './agent/providers';
 import { type Provider, parseProviders, findProvider, migrateProviders, isProviderEntryId } from './custom-endpoints';
 import { effectiveMindRoot } from './mind-root';
@@ -97,6 +101,8 @@ export interface ServerSettings {
   guideState?: GuideState;
   /** Per-agent ACP overrides (command, args, env, enabled). Keyed by agent ID. */
   acpAgents?: Record<string, import('./acp/agent-descriptors').AcpAgentOverride>;
+  /** Explicit environment variables that local runtimes may import from the user's login shell. */
+  agentRuntimeEnv?: AgentRuntimeEnvironmentSettings;
   /** Proxy compatibility cache: keyed by baseUrl, value is detected mode. */
   baseUrlCompat?: Record<string, 'streaming' | 'non-streaming'>;
   /** User's connection mode preference: CLI always on, MCP is optional */
@@ -275,6 +281,7 @@ export function readSettings(): ServerSettings {
       embedding: parseEmbedding(parsed.embedding),
       webSearch: parseWebSearch(parsed.webSearch),
       acpAgents: parseAcpAgentsField(parsed.acpAgents),
+      agentRuntimeEnv: parseAgentRuntimeEnvironmentSettings(parsed.agentRuntimeEnv),
       mindRoot: (parsed.mindRoot ?? DEFAULTS.mindRoot) as string,
       webPassword: typeof parsed.webPassword === 'string' ? parsed.webPassword : undefined,
       authToken:   typeof parsed.authToken   === 'string' ? parsed.authToken   : undefined,
@@ -336,6 +343,7 @@ export function writeSettings(settings: ServerSettings): void {
   if (settings.disabledSkills !== undefined) merged.disabledSkills = settings.disabledSkills;
   if (settings.guideState !== undefined) merged.guideState = settings.guideState;
   if (settings.acpAgents !== undefined) merged.acpAgents = settings.acpAgents;
+  if (settings.agentRuntimeEnv !== undefined) merged.agentRuntimeEnv = settings.agentRuntimeEnv;
   if (settings.baseUrlCompat !== undefined) merged.baseUrlCompat = settings.baseUrlCompat;
   if (settings.connectionMode !== undefined) merged.connectionMode = settings.connectionMode;
   if (settings.customAgents !== undefined) merged.customAgents = settings.customAgents;

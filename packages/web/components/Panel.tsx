@@ -258,7 +258,7 @@ export default function Panel({
                     setNewPopover(v => !v);
                   });
                 }}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors duration-75 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation"
+                className="hit-target-box inline-flex h-8 w-8 items-center justify-center text-muted-foreground transition-colors duration-75 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-md)]"
                 aria-label={t.sidebar.new}
                 title={t.sidebar.new}
               >
@@ -270,7 +270,7 @@ export default function Panel({
                   className="absolute top-full right-0 mt-1 min-w-[152px] bg-card border border-border rounded-lg shadow-lg py-1 z-50"
                 >
                   <button
-                    className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-foreground hover:bg-muted transition-colors text-left"
+                    className="hit-target-box w-full flex items-center gap-2 px-3 py-1.5 text-sm text-foreground transition-colors text-left [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:0px]"
                     onClick={() => {
                       startTransition(() => {
                         setNewPopover(false);
@@ -282,7 +282,7 @@ export default function Panel({
                     {t.sidebar.newFile}
                   </button>
                   <button
-                    className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-foreground hover:bg-muted transition-colors text-left"
+                    className="hit-target-box w-full flex items-center gap-2 px-3 py-1.5 text-sm text-foreground transition-colors text-left [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:0px]"
                     onClick={() => { setNewPopover(false); window.dispatchEvent(new Event('mindos:create-space')); }}
                   >
                     <Layers size={14} className="shrink-0 text-[var(--amber)]" />
@@ -295,7 +295,7 @@ export default function Panel({
             <button
               type="button"
               onClick={() => onImport?.()}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors duration-75 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation"
+              className="hit-target-box inline-flex h-8 w-8 items-center justify-center text-muted-foreground transition-colors duration-75 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-md)]"
               aria-label={t.sidebar.importFile}
               title={t.sidebar.importFile}
             >
@@ -305,7 +305,7 @@ export default function Panel({
             <button
               type="button"
               onClick={handleRefreshFiles}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors duration-75 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation"
+              className="hit-target-box inline-flex h-8 w-8 items-center justify-center text-muted-foreground transition-colors duration-75 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-md)]"
               aria-label={t.sidebar.refreshFiles}
               aria-busy={refreshingTree}
               title={t.sidebar.refreshFiles}
@@ -321,7 +321,7 @@ export default function Panel({
                 return Math.max(-1, current - 1);
               })}
               onDoubleClick={() => { setMaxOpenDepth(-1); markDblHintSeen(); }}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors duration-75 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation"
+              className="hit-target-box inline-flex h-8 w-8 items-center justify-center text-muted-foreground transition-colors duration-75 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-md)]"
               aria-label={t.sidebar.collapseLevel}
               title={dblHintSeen ? t.sidebar.collapseLevel : (t.sidebar.collapseLevelHint ?? t.sidebar.collapseLevel)}
             >
@@ -336,7 +336,7 @@ export default function Panel({
                 return next;
               })}
               onDoubleClick={() => { setMaxOpenDepth(null); markDblHintSeen(); }}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors duration-75 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation"
+              className="hit-target-box inline-flex h-8 w-8 items-center justify-center text-muted-foreground transition-colors duration-75 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-md)]"
               aria-label={t.sidebar.expandLevel}
               title={dblHintSeen ? t.sidebar.expandLevel : (t.sidebar.expandLevelHint ?? t.sidebar.expandLevel)}
             >
@@ -355,7 +355,7 @@ export default function Panel({
                     setMorePopover(v => !v);
                   });
                 }}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors duration-75 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation"
+                className="hit-target-box inline-flex h-8 w-8 items-center justify-center text-muted-foreground transition-colors duration-75 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-md)]"
                 aria-label={t.sidebar.more}
                 title={t.sidebar.more}
               >
@@ -367,7 +367,7 @@ export default function Panel({
                   className="absolute top-full right-0 mt-1 min-w-[172px] bg-card border border-border rounded-lg shadow-lg py-1 z-50"
                 >
                   <button
-                    className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-foreground hover:bg-muted transition-colors text-left"
+                    className="hit-target-box w-full flex items-center gap-2 px-3 py-1.5 text-sm text-foreground transition-colors text-left [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:0px]"
                     onClick={() => {
                       startTransition(() => {
                         setMorePopover(false);
@@ -382,7 +382,7 @@ export default function Panel({
                     )}
                   </button>
                   <button
-                    className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-foreground hover:bg-muted transition-colors text-left"
+                    className="hit-target-box w-full flex items-center gap-2 px-3 py-1.5 text-sm text-foreground transition-colors text-left [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:0px]"
                     onClick={() => {
                       startTransition(() => {
                         setMorePopover(false);
@@ -394,7 +394,7 @@ export default function Panel({
                     <span className="flex-1">{t.changes.title}</span>
                   </button>
                   <button
-                    className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-foreground hover:bg-muted transition-colors text-left"
+                    className="hit-target-box w-full flex items-center gap-2 px-3 py-1.5 text-sm text-foreground transition-colors text-left [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:0px]"
                     onClick={() => {
                       startTransition(() => {
                         setMorePopover(false);
@@ -410,7 +410,7 @@ export default function Panel({
                   </button>
                   <div className="my-1 border-t border-border/50" />
                   <button
-                    className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-foreground hover:bg-muted transition-colors text-left"
+                    className="hit-target-box w-full flex items-center gap-2 px-3 py-1.5 text-sm text-foreground transition-colors text-left [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:0px]"
                     onClick={() => { setShowHiddenFiles(!showHidden); }}
                   >
                     {showHidden ? <EyeOff size={14} className="shrink-0" /> : <Eye size={14} className="shrink-0" />}
@@ -441,10 +441,11 @@ export default function Panel({
         <button
           type="button"
           onClick={() => router.push('/capture')}
-          className={`flex items-center gap-2 mx-2 px-2 py-1.5 text-sm rounded-lg transition-all duration-150 group shrink-0 ${
+          data-hit-active={isInboxActive ? 'true' : undefined}
+          className={`hit-target-box flex items-center gap-2 mx-2 px-2 py-1.5 text-sm transition-all duration-150 group shrink-0 [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-lg)] [--hit-target-active-bg:var(--amber-dim)] ${
             isInboxActive
-              ? 'bg-[var(--amber-dim)] text-[var(--amber)]'
-              : 'hover:bg-muted text-muted-foreground hover:text-foreground'
+              ? 'text-[var(--amber)]'
+              : 'text-muted-foreground hover:text-foreground'
           }`}
         >
           <div className={`flex items-center justify-center w-5 h-5 rounded-md shrink-0 transition-colors ${
@@ -530,12 +531,13 @@ function BuiltInMindSpaces({
         type="button"
         onClick={toggleCollapsed}
         data-state={collapsed ? 'collapsed' : 'expanded'}
+        data-hit-active={collapsed ? undefined : 'true'}
         aria-expanded={!collapsed}
         aria-controls={MIND_SYSTEM_SLOT_LIST_ID}
-        className={`mb-1 flex w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+        className={`hit-target-box mb-1 flex w-full items-center gap-2 border border-transparent px-2.5 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [--hit-target-border-width:1px] [--hit-target-radius:var(--radius-lg)] ${
           collapsed
-            ? 'border-border/70 bg-card hover:border-border hover:bg-muted'
-            : 'border-[var(--amber)]/20 bg-[var(--amber-subtle)] hover:border-[var(--amber)]/35 hover:bg-[var(--amber-dim)]'
+            ? '[--hit-target-border:color-mix(in_srgb,var(--border)_70%,transparent)] [--hit-target-hover-border:var(--border)] [--hit-target-bg:var(--card)] [--hit-target-hover-bg:var(--muted)]'
+            : '[--hit-target-active-border:color-mix(in_srgb,var(--amber)_20%,transparent)] [--hit-target-hover-border:color-mix(in_srgb,var(--amber)_35%,transparent)] [--hit-target-active-bg:var(--amber-subtle)] [--hit-target-hover-bg:var(--amber-dim)]'
         }`}
       >
         <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-xs font-semibold transition-colors ${
@@ -565,7 +567,7 @@ function BuiltInMindSpaces({
                 type="button"
                 onClick={() => onOpen(item.path)}
                 data-mind-system-sidebar-open={item.key}
-                className="flex w-full min-w-0 items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="hit-target-box flex w-full min-w-0 items-center gap-2 px-2.5 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-md)]"
               >
                 <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded border border-border bg-background/40 text-[11px] font-semibold text-[var(--amber)]">
                   {item.label}

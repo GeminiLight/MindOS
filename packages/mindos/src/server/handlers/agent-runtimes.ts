@@ -3,10 +3,18 @@ import {
   resolveCommandPath,
   type AcpAgentOverride,
 } from '../../protocols/acp/index.js';
+import {
+  readCodexConfigText,
+  resolveCodexProviderEnvironment,
+  type CodexShellEnvValueReader,
+} from '../../agent-runtime/codex-env.js';
+import {
+  CLAUDE_CODE_SDK_BINARY_SENTINEL,
+  resolveClaudeCodeSdkNativeBinaryPath,
+  type ClaudeCodeSdkNativeBinaryResolution,
+} from '../../agent-runtime/claude-code-sdk.js';
+import type { AgentRuntimeEnvironmentSettings } from '../../agent-runtime/runtime-env.js';
 import { spawn } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
-import { homedir } from 'node:os';
-import { join } from 'node:path';
 import { errorResponse, json, privateCacheHeaders, type MindosServerResponse } from '../response.js';
 
 export type AgentRuntimeKind = 'mindos' | 'acp' | 'codex' | 'claude';
@@ -106,6 +114,7 @@ export type AgentRuntimePayload = {
 
 export type AgentRuntimesSettings = {
   acpAgents?: Record<string, AcpAgentOverride>;
+  agentRuntimeEnv?: AgentRuntimeEnvironmentSettings;
 };
 
 export type NativeRuntimeHealthResult = {
@@ -208,6 +217,8 @@ const acpCapabilities: AgentRuntimeCapabilities = {
 
 const RUNTIME_DETECTION_TIMEOUT_MS = 5000;
 const NATIVE_HEALTH_TIMEOUT_MS = 20000;
+const CLAUDE_SDK_BINARY_PATH = CLAUDE_CODE_SDK_BINARY_SENTINEL;
+const CLAUDE_CLI_PATH_GRACE_MS = 0;
 const nativeRuntimeDefinitions: Array<{
   id: 'codex-acp' | 'claude';
   name: string;
@@ -581,55 +592,40 @@ export function checkCodexProviderEnvironment(input: {
   env?: NodeJS.ProcessEnv;
   configText?: string;
   configPath?: string;
+  readShellEnvValue?: CodexShellEnvValueReader;
 } = {}): NativeRuntimeHealthResult {
   const env = input.env ?? process.env;
+  const resolution = resolveCodexProviderEnvironment({
+    env,
+    configText: input.configText,
+    configPath: input.configPath,
+    readShellEnvValue: input.readShellEnvValue,
+  });
+  if (!resolution.envKey) return { status: 'available' };
+
+  if (resolution.value) {
+    return {
+      status: 'available',
+      ...(resolution.source === 'login-shell'
+        ? { diagnosticHints: [`Codex provider environment key ${resolution.envKey} was found through MindOS runtime environment fallback and will be injected only into Codex app-server.`] }
+        : {}),
+    };
+  }
   const configText = input.configText ?? readCodexConfigText(input.configPath, env);
-  if (!configText) return { status: 'available' };
-
-  const provider = extractTomlStringValue(configText, 'model_provider');
-  if (!provider) return { status: 'available' };
-
-  const providerSection = extractTomlSection(configText, `model_providers.${provider}`);
-  const envKey = providerSection ? extractTomlStringValue(providerSection, 'env_key') : undefined;
-  if (!envKey || env[envKey]) return { status: 'available' };
+  const provider = configText ? extractTomlStringValue(configText, 'model_provider') : undefined;
 
   return {
     status: 'signed-out',
-    reason: `Codex model provider "${provider}" requires ${envKey}, but MindOS cannot see that environment variable. Export ${envKey} before starting MindOS, or switch Codex to a provider that does not require it.`,
+    reason: provider
+      ? `Codex model provider "${provider}" requires ${resolution.envKey}, but MindOS cannot see that environment variable in the app process, OS user environment, or login shell. Export ${resolution.envKey} in your shell profile or OS user environment before starting MindOS, or switch Codex to a provider that does not require it.`
+      : `Codex requires ${resolution.envKey}, but MindOS cannot see that environment variable in the app process, OS user environment, or login shell.`,
   };
-}
-
-function readCodexConfigText(configPath: string | undefined, env: NodeJS.ProcessEnv): string | undefined {
-  const resolvedPath = configPath ?? join(env.CODEX_HOME || join(homedir(), '.codex'), 'config.toml');
-  try {
-    if (!existsSync(resolvedPath)) return undefined;
-    return readFileSync(resolvedPath, 'utf8');
-  } catch {
-    return undefined;
-  }
 }
 
 function extractTomlStringValue(text: string, key: string): string | undefined {
   const escapedKey = escapeRegExp(key);
   const match = text.match(new RegExp(`^\\s*${escapedKey}\\s*=\\s*"([^"]*)"\\s*$`, 'm'));
   return match?.[1]?.trim() || undefined;
-}
-
-function extractTomlSection(text: string, sectionName: string): string | undefined {
-  const lines = text.split(/\r?\n/);
-  const targetHeader = `[${sectionName}]`;
-  const sectionLines: string[] = [];
-  let inSection = false;
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
-      if (inSection) break;
-      inSection = trimmed === targetHeader;
-      continue;
-    }
-    if (inSection) sectionLines.push(line);
-  }
-  return inSection ? sectionLines.join('\n') : undefined;
 }
 
 function escapeRegExp(value: string): string {
@@ -641,27 +637,32 @@ export async function defaultCheckNativeRuntimeHealth(input: NativeRuntimeHealth
   if (input.runtime === 'codex') {
     return checkCodexCliRuntime(input.agent.binaryPath, timeoutMs);
   }
-  return checkClaudeSdkRuntime(input.agent.binaryPath, timeoutMs);
+  return checkClaudeRuntimeHealth({ binaryPath: input.agent.binaryPath, timeoutMs });
 }
 
-async function checkClaudeSdkRuntime(binaryPath: string, timeoutMs: number): Promise<NativeRuntimeHealthResult> {
+export async function checkClaudeRuntimeHealth(input: {
+  binaryPath: string;
+  timeoutMs?: number;
+  importSdk?: () => Promise<unknown>;
+  resolveSdkNativeBinary?: () => ClaudeCodeSdkNativeBinaryResolution;
+  checkCliVersion?: (binaryPath: string, timeoutMs: number) => Promise<NativeRuntimeHealthResult>;
+}): Promise<NativeRuntimeHealthResult> {
+  const timeoutMs = input.timeoutMs ?? NATIVE_HEALTH_TIMEOUT_MS;
+  const binaryPath = input.binaryPath;
+  const importSdk = input.importSdk ?? (() => import('@anthropic-ai/claude-agent-sdk'));
+  const resolveSdkNativeBinary = input.resolveSdkNativeBinary ?? resolveClaudeCodeSdkNativeBinaryPath;
+  const checkCliVersion = input.checkCliVersion ?? ((path, ms) => checkProcessVersion(path, ['--version'], ms));
+  const hasNativeCliPath = !binaryPath.startsWith('sdk:');
+
   try {
     await withTimeout(
-      import('@anthropic-ai/claude-agent-sdk'),
+      importSdk(),
       timeoutMs,
       `Claude Agent SDK health check timed out after ${timeoutMs}ms.`,
     );
-    return {
-      status: 'available',
-      diagnosticHints: [
-        binaryPath.startsWith('sdk:')
-          ? 'Claude Agent SDK is bundled with MindOS; a global claude command is optional.'
-          : `Claude CLI was also detected at ${binaryPath}; MindOS uses Claude Agent SDK first and falls back to CLI if needed.`,
-      ],
-    };
   } catch (error) {
-    if (!binaryPath.startsWith('sdk:')) {
-      const fallback = await checkProcessVersion(binaryPath, ['--version'], timeoutMs);
+    if (hasNativeCliPath) {
+      const fallback = await checkCliVersion(binaryPath, timeoutMs);
       return {
         ...fallback,
         diagnosticHints: [
@@ -672,6 +673,38 @@ async function checkClaudeSdkRuntime(binaryPath: string, timeoutMs: number): Pro
     }
     throw error;
   }
+
+  const sdkBinary = resolveSdkNativeBinary();
+  if (sdkBinary.path) {
+    return {
+      status: 'available',
+      diagnosticHints: [
+        hasNativeCliPath
+          ? `Claude Agent SDK native binary is available. Claude CLI was also detected at ${binaryPath}; MindOS can pass it to the SDK if needed.`
+          : 'Claude Agent SDK native binary is available; a global claude command is optional.',
+      ],
+    };
+  }
+
+  if (hasNativeCliPath) {
+    const fallback = await checkCliVersion(binaryPath, timeoutMs);
+    return {
+      ...fallback,
+      diagnosticHints: [
+        ...(fallback.diagnosticHints ?? []),
+        `Claude Agent SDK is installed but its native binary is unavailable; MindOS will pass the detected Claude CLI path to the SDK and can fall back to CLI mode. ${sdkBinary.reason ?? ''}`.trim(),
+      ],
+    };
+  }
+
+  return {
+    status: 'error',
+    reason: sdkBinary.reason
+      ?? `Claude Agent SDK native binary for ${sdkBinary.platformKey} was not found, and the global claude command was not detected.`,
+    diagnosticHints: [
+      'Install Claude Code globally or reinstall @anthropic-ai/claude-agent-sdk with optional dependencies enabled.',
+    ],
+  };
 }
 
 async function applyNativeRuntimeHealth(
@@ -715,39 +748,11 @@ async function detectNativeRuntimeDefinition(
 ): Promise<DetectedRuntimeAgent | MissingRuntimeAgent> {
   const checkNativeRuntimeHealth = services.checkNativeRuntimeHealth ?? defaultCheckNativeRuntimeHealth;
   const resolveRuntimeCommand = services.resolveRuntimeCommand ?? resolveCommandPath;
+  if (candidate.runtime === 'claude') {
+    return detectClaudeNativeRuntimeDefinition(candidate, services);
+  }
   const binaryPath = await resolveRuntimeCommand(candidate.command);
   if (!binaryPath) {
-    if (candidate.runtime === 'claude') {
-      const sdkBinaryPath = 'sdk:@anthropic-ai/claude-agent-sdk';
-      try {
-        const health = await checkNativeRuntimeHealth({
-          runtime: candidate.runtime,
-          agent: { id: candidate.id, name: candidate.name, binaryPath: sdkBinaryPath },
-          timeoutMs: NATIVE_HEALTH_TIMEOUT_MS,
-        });
-        return {
-          id: candidate.id,
-          name: candidate.name,
-          binaryPath: sdkBinaryPath,
-          status: health.status,
-          reason: health.reason,
-          diagnosticHints: [
-            ...(health.diagnosticHints ?? []),
-            'Global claude command was not detected; CLI fallback will be unavailable until it is installed or on MindOS server PATH.',
-          ],
-        };
-      } catch (error) {
-        const result = classifyRuntimeFailure(error instanceof Error ? error.message : String(error));
-        return {
-          id: candidate.id,
-          name: candidate.name,
-          installCmd: candidate.installCmd,
-          packageName: candidate.installCmd.match(/npm install -g (.+)/)?.[1],
-          status: 'error',
-          reason: `Claude Agent SDK is unavailable and the global claude command was not detected. ${result.reason ?? ''}`.trim(),
-        };
-      }
-    }
     return {
       id: candidate.id,
       name: candidate.name,
@@ -782,6 +787,108 @@ async function detectNativeRuntimeDefinition(
       status: result.status,
       ...(result.reason ? { reason: result.reason } : {}),
     };
+  }
+}
+
+async function detectClaudeNativeRuntimeDefinition(
+  candidate: typeof nativeRuntimeDefinitions[number],
+  services: AgentRuntimesServices,
+): Promise<DetectedRuntimeAgent | MissingRuntimeAgent> {
+  const checkNativeRuntimeHealth = services.checkNativeRuntimeHealth ?? defaultCheckNativeRuntimeHealth;
+  const resolveRuntimeCommand = services.resolveRuntimeCommand ?? resolveCommandPath;
+  const cliPathPromise = resolveRuntimeCommand(candidate.command).catch(() => null);
+  const quickCliPath = await Promise.race([
+    cliPathPromise,
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), CLAUDE_CLI_PATH_GRACE_MS)),
+  ]);
+  const sdkHealthBinaryPath = quickCliPath ?? CLAUDE_SDK_BINARY_PATH;
+
+  try {
+    const health = await checkNativeRuntimeHealth({
+      runtime: candidate.runtime,
+      agent: { id: candidate.id, name: candidate.name, binaryPath: sdkHealthBinaryPath },
+      timeoutMs: NATIVE_HEALTH_TIMEOUT_MS,
+    });
+    if (health.status !== 'available' && !quickCliPath) {
+      const cliPath = await cliPathPromise;
+      if (cliPath) {
+        const fallbackHealth = await checkNativeRuntimeHealth({
+          runtime: candidate.runtime,
+          agent: { id: candidate.id, name: candidate.name, binaryPath: cliPath },
+          timeoutMs: NATIVE_HEALTH_TIMEOUT_MS,
+        });
+        return {
+          id: candidate.id,
+          name: candidate.name,
+          binaryPath: cliPath,
+          resolvedCommand: { cmd: candidate.command, args: [], source: 'descriptor' },
+          status: fallbackHealth.status,
+          ...(fallbackHealth.reason ? { reason: fallbackHealth.reason } : {}),
+          diagnosticHints: fallbackHealth.diagnosticHints?.length
+            ? fallbackHealth.diagnosticHints
+            : [`Claude Agent SDK native binary is unavailable; MindOS will use the detected Claude CLI at ${cliPath}. ${health.reason ?? ''}`.trim()],
+        };
+      }
+    }
+    return {
+      id: candidate.id,
+      name: candidate.name,
+      binaryPath: sdkHealthBinaryPath,
+      ...(quickCliPath ? { resolvedCommand: { cmd: candidate.command, args: [], source: 'descriptor' as const } } : {}),
+      status: health.status,
+      ...(health.reason ? { reason: health.reason } : {}),
+      diagnosticHints: [
+        ...(health.diagnosticHints ?? []),
+        ...(quickCliPath
+          ? [`Claude CLI was also detected at ${quickCliPath}; MindOS uses Claude Agent SDK first and falls back to CLI if needed.`]
+          : []),
+      ],
+    };
+  } catch (error) {
+    const sdkFailure = classifyRuntimeFailure(error instanceof Error ? error.message : String(error));
+    const cliPath = await cliPathPromise;
+    if (!cliPath) {
+      return {
+        id: candidate.id,
+        name: candidate.name,
+        installCmd: candidate.installCmd,
+        packageName: candidate.installCmd.match(/npm install -g (.+)/)?.[1],
+        status: 'error',
+        reason: `Claude Agent SDK is unavailable and the global claude command was not detected. ${sdkFailure.reason ?? ''}`.trim(),
+      };
+    }
+    try {
+      const health = await checkNativeRuntimeHealth({
+        runtime: candidate.runtime,
+        agent: { id: candidate.id, name: candidate.name, binaryPath: cliPath },
+        timeoutMs: NATIVE_HEALTH_TIMEOUT_MS,
+      });
+      return {
+        id: candidate.id,
+        name: candidate.name,
+        binaryPath: cliPath,
+        resolvedCommand: { cmd: candidate.command, args: [], source: 'descriptor' },
+        status: health.status,
+        ...(health.reason ? { reason: health.reason } : {}),
+        diagnosticHints: [
+          ...(health.diagnosticHints ?? []),
+          `Claude Agent SDK is unavailable; MindOS will use CLI fallback. ${sdkFailure.reason ?? ''}`.trim(),
+        ],
+      };
+    } catch (cliError) {
+      const cliFailure = classifyRuntimeFailure(cliError instanceof Error ? cliError.message : String(cliError));
+      return {
+        id: candidate.id,
+        name: candidate.name,
+        binaryPath: cliPath,
+        resolvedCommand: { cmd: candidate.command, args: [], source: 'descriptor' },
+        status: cliFailure.status,
+        ...(cliFailure.reason ? { reason: cliFailure.reason } : {}),
+        diagnosticHints: [
+          `Claude Agent SDK is unavailable. ${sdkFailure.reason ?? ''}`.trim(),
+        ],
+      };
+    }
   }
 }
 

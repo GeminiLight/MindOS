@@ -1,6 +1,7 @@
 import type { Locale, Messages } from '@/lib/i18n';
 import type React from 'react';
 import type { Provider } from '@/lib/custom-endpoints';
+import type { AgentRuntimeEnvironmentSettings } from '@geminilight/mindos/agent-runtime';
 
 export interface AiSettings {
   activeProvider: string;
@@ -47,6 +48,7 @@ export interface SettingsData {
     enableAgentsDir?: boolean;
     custom?: string[];
   };
+  agentRuntimeEnv?: AgentRuntimeEnvironmentSettings;
   connectionMode?: {
     cli: boolean;
     mcp: boolean;
@@ -91,7 +93,6 @@ export interface McpStatus {
   toolCount: number;
   authConfigured: boolean;
   maskedToken?: string;
-  authToken?: string;
   localIP?: string | null;
   connectionMode?: ConnectionMode;
 }

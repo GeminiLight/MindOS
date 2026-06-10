@@ -5,6 +5,7 @@ import { handleAgentRuntimesGet, type AgentRuntimesServices } from '@geminilight
 import { checkNativeRuntimeHealth, detectLocalAcpAgents, resolveCommandPath } from '@/lib/acp/detect-local';
 import { readSettings } from '@/lib/settings';
 import { toNextResponse } from '../_mindos-adapter';
+import { rememberAvailableNativeRuntimeDescriptorsFromPayload } from '@/lib/agent/native-runtime-descriptor-cache';
 
 const services: AgentRuntimesServices = {
   readSettings: readSettings as AgentRuntimesServices['readSettings'],
@@ -14,5 +15,9 @@ const services: AgentRuntimesServices = {
 };
 
 export async function GET(req: Request) {
-  return toNextResponse(await handleAgentRuntimesGet(new URL(req.url).searchParams, services));
+  const response = await handleAgentRuntimesGet(new URL(req.url).searchParams, services);
+  if (response.status === 200) {
+    rememberAvailableNativeRuntimeDescriptorsFromPayload(response.body);
+  }
+  return toNextResponse(response);
 }

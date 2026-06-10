@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 import {
   listAgentEvents,
   listAgentRuns,
+  type AgentEventCategory,
   type AgentEventType,
   type AgentNodeKind,
   type AgentRunStatus,
@@ -19,7 +20,25 @@ const RUN_STATUSES = new Set<AgentRunStatus>([
   'canceled',
   'timed_out',
 ]);
-const EVENT_TYPES = new Set<AgentEventType>(['run_started', 'run_updated', 'run_completed', 'run_failed']);
+const EVENT_TYPES = new Set<AgentEventType>([
+  'run_started',
+  'run_updated',
+  'run_completed',
+  'run_canceled',
+  'run_failed',
+  'text',
+  'tool_started',
+  'tool_updated',
+  'tool_completed',
+  'file_changed',
+  'permission_requested',
+  'permission_resolved',
+  'user_question_started',
+  'user_question_resolved',
+  'runtime_status',
+  'error',
+]);
+const EVENT_CATEGORIES = new Set<AgentEventCategory>(['status', 'text', 'tool', 'file', 'permission', 'question', 'error']);
 
 function optionalEnum<T extends string>(value: string | null, allowed: Set<T>): T | undefined {
   return value && allowed.has(value as T) ? value as T : undefined;
@@ -36,6 +55,7 @@ export async function GET(req: Request) {
   const limit = Number.parseInt(url.searchParams.get('limit') ?? '100', 10);
   const runId = url.searchParams.get('runId') ?? undefined;
   const rootRunId = url.searchParams.get('rootRunId') ?? undefined;
+  const startedAfter = optionalNumber(url.searchParams.get('startedAfter'));
   const runs = listAgentRuns({
     runId,
     rootRunId,
@@ -43,7 +63,7 @@ export async function GET(req: Request) {
     status: optionalEnum(url.searchParams.get('status'), RUN_STATUSES),
     parentRunId: url.searchParams.get('parentRunId') ?? undefined,
     chatSessionId: url.searchParams.get('chatSessionId') ?? undefined,
-    startedAfter: optionalNumber(url.searchParams.get('startedAfter')),
+    ...(rootRunId ? {} : { startedAfter }),
     limit: Number.isFinite(limit) ? limit : 100,
   });
   const includeEvents = url.searchParams.get('includeEvents') === '1' || url.searchParams.get('includeEvents') === 'true';
@@ -54,6 +74,8 @@ export async function GET(req: Request) {
     rootRunId,
     chatSessionId: url.searchParams.get('chatSessionId') ?? undefined,
     type: optionalEnum(url.searchParams.get('eventType'), EVENT_TYPES),
+    category: optionalEnum(url.searchParams.get('eventCategory'), EVENT_CATEGORIES),
+    ...(rootRunId ? {} : { startedAfter }),
     limit: Number.isFinite(limit) ? limit : 100,
   });
   return NextResponse.json({ runs, events });

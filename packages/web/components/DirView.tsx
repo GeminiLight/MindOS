@@ -1144,7 +1144,7 @@ export default function DirView({ dirPath, entries, spacePreview, mindSystemSpac
           <div className="flex items-center gap-2 shrink-0">
             <Link
               href={`/view/${encodePath(dirPath ? `${dirPath}/Untitled.md` : 'Untitled.md')}`}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-lg transition-colors text-muted-foreground hover:text-foreground hover:bg-muted"
+              className="hit-target-box flex items-center gap-1.5 px-2.5 py-1.5 text-xs transition-colors text-muted-foreground hover:text-foreground [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-lg)]"
             >
               <FilePlus size={13} />
               <span className="hidden sm:inline">{t.dirView.newFile}</span>
@@ -1152,14 +1152,16 @@ export default function DirView({ dirPath, entries, spacePreview, mindSystemSpac
             <div className="flex items-center gap-1 p-1 bg-muted rounded-lg">
               <button
                 onClick={() => setView('grid')}
-                className={`inline-flex h-8 w-8 items-center justify-center rounded transition-colors duration-75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation ${view === 'grid' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                data-hit-active={view === 'grid' ? 'true' : undefined}
+                className={`hit-target-box inline-flex h-8 w-8 items-center justify-center transition-colors duration-75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation [--hit-target-active-bg:var(--card)] [--hit-target-hover-bg:var(--card)] [--hit-target-radius:var(--radius-sm)] [--hit-target-active-shadow:0_1px_2px_0_color-mix(in_srgb,var(--foreground)_8%,transparent)] ${view === 'grid' ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
                 title={t.dirView.gridView}
               >
                 <LayoutGrid size={14} />
               </button>
               <button
                 onClick={() => setView('list')}
-                className={`inline-flex h-8 w-8 items-center justify-center rounded transition-colors duration-75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation ${view === 'list' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                data-hit-active={view === 'list' ? 'true' : undefined}
+                className={`hit-target-box inline-flex h-8 w-8 items-center justify-center transition-colors duration-75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation [--hit-target-active-bg:var(--card)] [--hit-target-hover-bg:var(--card)] [--hit-target-radius:var(--radius-sm)] [--hit-target-active-shadow:0_1px_2px_0_color-mix(in_srgb,var(--foreground)_8%,transparent)] ${view === 'list' ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
                 title={t.dirView.listView}
               >
                 <List size={14} />

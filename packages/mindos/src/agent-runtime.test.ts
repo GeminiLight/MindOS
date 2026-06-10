@@ -1,8 +1,15 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   createClaudeCodeCliClient,
   createClaudeCodeCliStdioTransport,
+  buildCodexAppServerEnv,
   createCodexAppServerClient,
+  extractLoginShellEnvValue,
+  extractWindowsRegistryEnvValue,
+  buildAgentRuntimeEnv,
+  readPlatformEnvironmentValue,
+  resolveAgentRuntimeEnvOverlay,
+  resolveClaudeCodeSdkNativeBinaryPath,
   mapCodexAppServerNotificationToSseEvents,
   runMindosAgentRuntimeAskSession,
   type CodexAppServerMessage,
@@ -46,6 +53,57 @@ class AsyncQueue<T> implements AsyncIterable<T> {
     };
   }
 }
+
+function pendingUntilAbort<T>(signal?: AbortSignal): AsyncIterable<T> {
+  return {
+    [Symbol.asyncIterator](): AsyncIterator<T> {
+      return {
+        async next(): Promise<IteratorResult<T>> {
+          await new Promise<never>((_resolve, reject) => {
+            if (signal?.aborted) {
+              reject(signal.reason);
+              return;
+            }
+            signal?.addEventListener('abort', () => reject(signal.reason), { once: true });
+          });
+          return { value: undefined as T, done: true };
+        },
+      };
+    },
+  };
+}
+
+function pendingForever<T>(options: { onReturn?: () => void } = {}): AsyncIterable<T> {
+  return {
+    [Symbol.asyncIterator](): AsyncIterator<T> {
+      return {
+        next(): Promise<IteratorResult<T>> {
+          return new Promise<IteratorResult<T>>(() => {});
+        },
+        return(): Promise<IteratorResult<T>> {
+          options.onReturn?.();
+          return Promise.resolve({ value: undefined as T, done: true });
+        },
+      };
+    },
+  };
+}
+
+function throwingAsyncIterable<T>(error: Error): AsyncIterable<T> {
+  return {
+    [Symbol.asyncIterator](): AsyncIterator<T> {
+      return {
+        async next(): Promise<IteratorResult<T>> {
+          throw error;
+        },
+      };
+    },
+  };
+}
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 function createFakeCodexTransport(): CodexAppServerTransport & { sent: unknown[] } {
   const queue = new AsyncQueue<CodexAppServerMessage>();
@@ -203,6 +261,197 @@ function createFakeClaudeSdk(
 }
 
 describe('agent runtime adapters', () => {
+  it('injects only the configured Codex provider key from the runtime environment fallback', () => {
+    const readShellEnvValue = vi.fn((key: string) => key === 'STAFF_KEY' ? 'shell-secret' : undefined);
+    const env = buildCodexAppServerEnv({
+      baseEnv: {
+        PATH: '/usr/bin',
+        HOME: '/Users/tester',
+        OTHER_SECRET: 'do-not-copy-from-shell',
+      },
+      configText: [
+        'model_provider = "subhub-prod-responses"',
+        '',
+        '[model_providers.subhub-prod-responses]',
+        'env_key = "STAFF_KEY"',
+      ].join('\n'),
+      readShellEnvValue,
+    });
+
+    expect(readShellEnvValue).toHaveBeenCalledWith('STAFF_KEY', expect.objectContaining({
+      PATH: '/usr/bin',
+      HOME: '/Users/tester',
+    }));
+    expect(env.STAFF_KEY).toBe('shell-secret');
+    expect(env.PATH).toBe('/usr/bin');
+    expect(env.OTHER_SECRET).toBe('do-not-copy-from-shell');
+    expect(env.ANTHROPIC_API_KEY).toBeUndefined();
+  });
+
+  it('does not override an explicit Codex provider key already visible to MindOS', () => {
+    const readShellEnvValue = vi.fn(() => 'shell-secret');
+    const env = buildCodexAppServerEnv({
+      baseEnv: { STAFF_KEY: 'process-secret' },
+      configText: [
+        'model_provider = "subhub-prod-responses"',
+        '',
+        '[model_providers.subhub-prod-responses]',
+        'env_key = "STAFF_KEY"',
+      ].join('\n'),
+      readShellEnvValue,
+    });
+
+    expect(readShellEnvValue).not.toHaveBeenCalled();
+    expect(env.STAFF_KEY).toBe('process-secret');
+  });
+
+  it('extracts Codex provider keys from login shell output without banner pollution', () => {
+    expect(extractLoginShellEnvValue([
+      'debug banner from shell profile',
+      '__MINDOS_CODEX_ENV_VALUE_START__shell-secret__MINDOS_CODEX_ENV_VALUE_END__',
+      'goodbye banner',
+    ].join('\n'))).toBe('shell-secret');
+    expect(extractLoginShellEnvValue('debug banner without sentinels')).toBeUndefined();
+  });
+
+  it('reads macOS launchd environment before falling back to a login shell', () => {
+    const calls: Array<{ command: string; args: string[] }> = [];
+    const value = readPlatformEnvironmentValue({
+      key: 'STAFF_KEY',
+      platform: 'darwin',
+      env: { SHELL: '/bin/zsh' },
+      execFile: (command, args) => {
+        calls.push({ command, args });
+        if (command === 'launchctl') return 'launch-secret\n';
+        throw new Error(`unexpected command: ${command}`);
+      },
+    });
+
+    expect(value).toBe('launch-secret');
+    expect(calls).toEqual([{ command: 'launchctl', args: ['getenv', 'STAFF_KEY'] }]);
+  });
+
+  it('reads Windows user or machine environment without using a POSIX login shell', () => {
+    const calls: Array<{ command: string; args: string[] }> = [];
+    const value = readPlatformEnvironmentValue({
+      key: 'STAFF_KEY',
+      platform: 'win32',
+      env: { SystemRoot: 'C:\\Windows' },
+      execFile: (command, args) => {
+        calls.push({ command, args });
+        if (command.endsWith('powershell.exe')) {
+          return '__MINDOS_CODEX_ENV_VALUE_START__windows-secret__MINDOS_CODEX_ENV_VALUE_END__';
+        }
+        throw new Error(`unexpected command: ${command}`);
+      },
+    });
+
+    expect(value).toBe('windows-secret');
+    expect(calls[0]?.command).toBe('C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe');
+    expect(calls[0]?.args).toEqual(expect.arrayContaining(['-NoProfile', '-NonInteractive', '-Command']));
+  });
+
+  it('falls back to Windows registry environment values when PowerShell is unavailable', () => {
+    const calls: Array<{ command: string; args: string[] }> = [];
+    const value = readPlatformEnvironmentValue({
+      key: 'STAFF_KEY',
+      platform: 'win32',
+      env: {},
+      execFile: (command, args) => {
+        calls.push({ command, args });
+        if (command !== 'reg.exe') throw new Error('PowerShell unavailable');
+        return [
+          '',
+          'HKEY_CURRENT_USER\\Environment',
+          '    STAFF_KEY    REG_EXPAND_SZ    registry-secret',
+          '',
+        ].join('\r\n');
+      },
+    });
+
+    expect(value).toBe('registry-secret');
+    expect(extractWindowsRegistryEnvValue('    STAFF_KEY    REG_SZ    direct-secret', 'STAFF_KEY')).toBe('direct-secret');
+    expect(calls.some((call) => call.command === 'reg.exe')).toBe(true);
+  });
+
+  it('injects only allowlisted local runtime env keys from the runtime environment fallback', () => {
+    const readShellEnvValue = vi.fn((key: string) => ({
+      CLAUDE_CODE_OAUTH_TOKEN: 'shell-token',
+      EXTRA_SECRET: 'extra-secret',
+    }[key]));
+
+    const result = buildAgentRuntimeEnv({
+      baseEnv: {
+        PATH: '/usr/bin',
+        HOME: '/Users/tester',
+        EXTRA_SECRET: 'process-extra',
+      },
+      settings: {
+        keys: [
+          'CLAUDE_CODE_OAUTH_TOKEN',
+          'EXTRA_SECRET',
+          'invalid key',
+          '__proto__',
+          'MISSING_KEY',
+          'CLAUDE_CODE_OAUTH_TOKEN',
+        ],
+      },
+      readShellEnvValue,
+    });
+
+    expect(result.keys).toEqual(['CLAUDE_CODE_OAUTH_TOKEN', 'EXTRA_SECRET', 'MISSING_KEY']);
+    expect(readShellEnvValue).toHaveBeenCalledWith('CLAUDE_CODE_OAUTH_TOKEN', expect.objectContaining({
+      PATH: '/usr/bin',
+      HOME: '/Users/tester',
+    }));
+    expect(readShellEnvValue).not.toHaveBeenCalledWith('EXTRA_SECRET', expect.anything());
+    expect(result.injectedKeys).toEqual(['CLAUDE_CODE_OAUTH_TOKEN']);
+    expect(result.missingKeys).toEqual(['MISSING_KEY']);
+    expect(result.overlay).toEqual({ CLAUDE_CODE_OAUTH_TOKEN: 'shell-token' });
+    expect(result.env.CLAUDE_CODE_OAUTH_TOKEN).toBe('shell-token');
+    expect(result.env.EXTRA_SECRET).toBe('process-extra');
+    expect(Object.prototype.hasOwnProperty.call(result.env, '__proto__')).toBe(false);
+  });
+
+  it('returns only the allowlist overlay when resolving local runtime env for ACP launch options', () => {
+    const result = resolveAgentRuntimeEnvOverlay({
+      baseEnv: { PATH: '/usr/bin' },
+      settings: { keys: ['GEMINI_API_KEY'] },
+      readShellEnvValue: (key) => key === 'GEMINI_API_KEY' ? 'shell-gemini' : undefined,
+    });
+
+    expect(result.overlay).toEqual({ GEMINI_API_KEY: 'shell-gemini' });
+    expect(result.injectedKeys).toEqual(['GEMINI_API_KEY']);
+  });
+
+  it('detects whether the Claude Agent SDK platform native binary is installed', () => {
+    const result = resolveClaudeCodeSdkNativeBinaryPath({
+      platform: 'darwin',
+      arch: 'arm64',
+      requireResolve: (id) => {
+        if (id === '@anthropic-ai/claude-agent-sdk-darwin-arm64/claude') return '/sdk/claude';
+        throw new Error('not found');
+      },
+      exists: (filePath) => filePath === '/sdk/claude',
+    });
+
+    expect(result).toMatchObject({
+      platformKey: 'darwin-arm64',
+      path: '/sdk/claude',
+    });
+
+    const missing = resolveClaudeCodeSdkNativeBinaryPath({
+      platform: 'darwin',
+      arch: 'arm64',
+      requireResolve: () => {
+        throw new Error('not found');
+      },
+      exists: () => false,
+    });
+    expect(missing.path).toBeUndefined();
+    expect(missing.reason).toContain('darwin-arm64');
+  });
+
   it('drives Codex app-server over JSON-RPC and streams turn notifications', async () => {
     const transport = createFakeCodexTransport();
     const client = createCodexAppServerClient(transport, {
@@ -440,6 +689,34 @@ describe('agent runtime adapters', () => {
       toolCallId: 'perm-1',
       toolName: 'Bash',
       args: 'mindos file delete "Profile.md"',
+      runtime: 'codex',
+    }]);
+
+    expect(mapCodexAppServerNotificationToSseEvents({
+      method: 'item/command/started',
+      params: {
+        id: 'cmd-secret',
+        command: 'curl -H "Authorization: Bearer sk-secret-1234567890" https://example.test?token=abc123',
+      },
+    })).toEqual([{
+      type: 'tool_start',
+      toolCallId: 'cmd-secret',
+      toolName: 'Bash',
+      args: 'curl -H "Authorization: Bearer [redacted]" https://example.test?token=[redacted]',
+      runtime: 'codex',
+    }]);
+
+    expect(mapCodexAppServerNotificationToSseEvents({
+      method: 'item/commandExecution/outputDelta',
+      params: {
+        itemId: 'cmd-secret',
+        delta: 'token=abc123\n',
+      },
+    })).toEqual([{
+      type: 'tool_delta',
+      toolCallId: 'cmd-secret',
+      toolName: 'Bash',
+      delta: 'token=[redacted]\n',
       runtime: 'codex',
     }]);
 
@@ -792,6 +1069,105 @@ describe('agent runtime adapters', () => {
     });
   });
 
+  it('times out a stuck Codex native turn and interrupts the active thread', async () => {
+    vi.useFakeTimers();
+    const interruptTurn = vi.fn(async () => {});
+    const client: CodexAppServerClient = {
+      initialize: async () => {},
+      startThread: async () => ({ threadId: 'thr-timeout' }),
+      resumeThread: async () => ({ threadId: 'thr-timeout' }),
+      listThreads: async () => ({ data: [], nextCursor: null, backwardsCursor: null }),
+      readThread: async () => { throw new Error('unused'); },
+      forkThread: async () => { throw new Error('unused'); },
+      archiveThread: async () => {},
+      unarchiveThread: async () => { throw new Error('unused'); },
+      interruptTurn,
+      startTurn: ({ signal }: { signal?: AbortSignal }) => pendingUntilAbort(signal),
+    };
+    const events: MindOSSSEvent[] = [];
+
+    const resultPromise = runMindosAgentRuntimeAskSession({
+      runtime: { kind: 'codex', id: 'codex', name: 'Codex' },
+      cwd: '/tmp/mind',
+      prompt: 'Hang.',
+      timeoutMs: 100,
+      send: (event) => events.push(event),
+      services: {
+        createCodexClient: () => client,
+      },
+    });
+
+    await vi.advanceTimersByTimeAsync(100);
+    const result = await resultPromise;
+
+    expect(result.error).toMatchObject({
+      message: 'Native runtime timed out after 1s.',
+      code: 'TIMEOUT',
+    });
+    expect(interruptTurn).toHaveBeenCalledWith({ threadId: 'thr-timeout' });
+    expect(events).toContainEqual({
+      type: 'runtime_binding',
+      runtime: 'codex',
+      externalSessionId: 'thr-timeout',
+      cwd: '/tmp/mind',
+      status: 'failed',
+      reason: 'Native runtime timed out after 1s.',
+    });
+  });
+
+  it('times out a stuck Codex app-server initialization before a thread exists', async () => {
+    vi.useFakeTimers();
+    const close = vi.fn(async () => {});
+    const client: CodexAppServerClient = {
+      initialize: async ({ signal }: { signal?: AbortSignal } = {}) => {
+        await new Promise((_resolve, reject) => {
+          signal?.addEventListener('abort', () => reject(signal.reason), { once: true });
+        });
+      },
+      startThread: async () => { throw new Error('unused'); },
+      resumeThread: async () => { throw new Error('unused'); },
+      listThreads: async () => ({ data: [], nextCursor: null, backwardsCursor: null }),
+      readThread: async () => { throw new Error('unused'); },
+      forkThread: async () => { throw new Error('unused'); },
+      archiveThread: async () => {},
+      unarchiveThread: async () => { throw new Error('unused'); },
+      startTurn: () => throwingAsyncIterable(new Error('unused')),
+      close,
+    };
+    const events: MindOSSSEvent[] = [];
+
+    const resultPromise = runMindosAgentRuntimeAskSession({
+      runtime: { kind: 'codex', id: 'codex', name: 'Codex' },
+      cwd: '/tmp/mind',
+      prompt: 'Hang during initialize.',
+      timeoutMs: 100,
+      send: (event) => events.push(event),
+      services: {
+        createCodexClient: () => client,
+      },
+    });
+
+    await vi.advanceTimersByTimeAsync(100);
+    const result = await resultPromise;
+
+    expect(result.error).toMatchObject({
+      message: 'Native runtime timed out after 1s.',
+      code: 'TIMEOUT',
+    });
+    expect(close).toHaveBeenCalled();
+    expect(events).toContainEqual({
+      type: 'status',
+      runtime: 'codex',
+      message: 'Starting Codex locally.',
+      visible: true,
+    });
+    expect(events).toContainEqual({
+      type: 'error',
+      message: 'Codex native runtime error: Native runtime timed out after 1s.',
+    });
+    expect(events.some((event) => event.type === 'runtime_binding')).toBe(false);
+  });
+
   it('marks an existing Codex thread binding failed when resume errors', async () => {
     const events: MindOSSSEvent[] = [];
     const client: CodexAppServerClient = {
@@ -1063,6 +1439,7 @@ describe('agent runtime adapters', () => {
       runtime: { kind: 'claude', id: 'claude', name: 'Claude Code' },
       cwd: '/tmp/mind',
       prompt: 'Review this.',
+      runtimeEnv: { PATH: '/usr/bin', CLAUDE_CODE_OAUTH_TOKEN: 'runtime-token' } as NodeJS.ProcessEnv,
       send: (event) => events.push(event),
       services: {
         loadClaudeSdk: () => sdk,
@@ -1075,6 +1452,10 @@ describe('agent runtime adapters', () => {
         cwd: '/tmp/mind',
         outputFormat: 'stream-json',
         permissionMode: 'default',
+        env: {
+          PATH: '/usr/bin',
+          CLAUDE_CODE_OAUTH_TOKEN: 'runtime-token',
+        },
       },
     });
     expect(typeof sdk.params?.options?.canUseTool).toBe('function');
@@ -1084,6 +1465,93 @@ describe('agent runtime adapters', () => {
       { type: 'runtime_binding', runtime: 'claude', externalSessionId: 'claude-sdk-session', cwd: '/tmp/mind' },
       { type: 'status', visible: true, runtime: 'claude', message: 'Claude Code is connected and working in this chat.' },
       { type: 'text_delta', delta: 'Hello from SDK' },
+      { type: 'done' },
+    ]);
+  });
+
+  it('passes a detected Claude Code CLI path to the Claude Agent SDK', async () => {
+    const sdk = createFakeClaudeSdk([
+      { type: 'result', subtype: 'success', session_id: 'claude-sdk-cli-path', is_error: false },
+    ]);
+
+    await runMindosAgentRuntimeAskSession({
+      runtime: { kind: 'claude', id: 'claude', name: 'Claude Code', binaryPath: '/Users/tester/.local/bin/claude' },
+      cwd: '/tmp/mind',
+      prompt: 'Use SDK with explicit CLI path.',
+      send: () => {},
+      services: {
+        loadClaudeSdk: () => sdk,
+      },
+    });
+
+    expect(sdk.params?.options).toMatchObject({
+      pathToClaudeCodeExecutable: '/Users/tester/.local/bin/claude',
+    });
+  });
+
+  it('redacts secrets from Claude Agent SDK tool events', async () => {
+    const events: MindOSSSEvent[] = [];
+    const sdk = createFakeClaudeSdk([
+      {
+        type: 'assistant',
+        message: {
+          content: [{
+            type: 'tool_use',
+            id: 'toolu-sdk-secret',
+            name: 'Bash',
+            input: {
+              command: 'curl -H "Authorization: Bearer sk-sdk-secret-1234567890" https://example.test?token=abc123',
+              env: { API_KEY: 'sk-sdk-secret-abcdefghijkl' },
+            },
+          }],
+        },
+        session_id: 'claude-sdk-secret',
+      },
+      {
+        type: 'user',
+        message: {
+          content: [{
+            type: 'tool_result',
+            tool_use_id: 'toolu-sdk-secret',
+            content: 'token=abc123secret',
+          }],
+        },
+        session_id: 'claude-sdk-secret',
+      },
+      { type: 'result', subtype: 'success', session_id: 'claude-sdk-secret', is_error: false },
+    ]);
+
+    await runMindosAgentRuntimeAskSession({
+      runtime: { kind: 'claude', id: 'claude', name: 'Claude Code' },
+      cwd: '/tmp/mind',
+      prompt: 'Run secret command.',
+      send: (event) => events.push(event),
+      services: {
+        loadClaudeSdk: () => sdk,
+      },
+    });
+
+    expect(events).toEqual([
+      { type: 'status', visible: true, runtime: 'claude', message: 'Starting Claude Code locally.' },
+      { type: 'runtime_binding', runtime: 'claude', externalSessionId: 'claude-sdk-secret', cwd: '/tmp/mind' },
+      { type: 'status', visible: true, runtime: 'claude', message: 'Claude Code is connected and working in this chat.' },
+      {
+        type: 'tool_start',
+        toolCallId: 'toolu-sdk-secret',
+        toolName: 'Bash',
+        args: {
+          command: 'curl -H "Authorization: Bearer [redacted]" https://example.test?token=[redacted]',
+          env: { API_KEY: '[redacted]' },
+        },
+        runtime: 'claude',
+      },
+      {
+        type: 'tool_end',
+        toolCallId: 'toolu-sdk-secret',
+        output: 'token=[redacted]',
+        isError: false,
+        runtime: 'claude',
+      },
       { type: 'done' },
     ]);
   });
@@ -1261,9 +1729,10 @@ describe('agent runtime adapters', () => {
     const transport = createFakeClaudeTransport([
       JSON.stringify({ type: 'result', subtype: 'success', session_id: 'claude-cli-fallback' }),
     ]);
+    let capturedCliOptions: { cwd: string; signal?: AbortSignal; command?: string } | null = null;
 
     const result = await runMindosAgentRuntimeAskSession({
-      runtime: { kind: 'claude', id: 'claude', name: 'Claude Code' },
+      runtime: { kind: 'claude', id: 'claude', name: 'Claude Code', binaryPath: '/opt/homebrew/bin/claude' },
       cwd: '/tmp/mind',
       prompt: 'Fallback.',
       send: (event) => events.push(event),
@@ -1271,10 +1740,17 @@ describe('agent runtime adapters', () => {
         loadClaudeSdk: async () => {
           throw new Error('SDK missing');
         },
-        createClaudeCliClient: () => createClaudeCodeCliClient(transport),
+        createClaudeCliClient: (options) => {
+          capturedCliOptions = options;
+          return createClaudeCodeCliClient(transport);
+        },
       },
     });
 
+    expect(capturedCliOptions).toMatchObject({
+      cwd: '/tmp/mind',
+      command: '/opt/homebrew/bin/claude',
+    });
     expect(transport.argv).toEqual([
       '--print',
       '--output-format',
@@ -1290,6 +1766,51 @@ describe('agent runtime adapters', () => {
       visible: true,
       runtime: 'claude',
       message: 'Claude Agent SDK is unavailable; using Claude Code CLI fallback. SDK missing',
+    });
+  });
+
+  it('falls back to the Claude Code CLI when the Claude Agent SDK native binary fails during turn start', async () => {
+    const events: MindOSSSEvent[] = [];
+    const sdk = createFakeClaudeSdk(() => throwingAsyncIterable(
+      new Error('Native CLI binary for darwin-arm64 not found. Reinstall @anthropic-ai/claude-agent-sdk without --omit=optional, or set options.pathToClaudeCodeExecutable.'),
+    ));
+    const transport = createFakeClaudeTransport([
+      JSON.stringify({ type: 'system', subtype: 'init', session_id: 'claude-cli-after-sdk-failure' }),
+      JSON.stringify({ type: 'assistant', message: { content: [{ type: 'text', text: 'CLI fallback ok' }] } }),
+      JSON.stringify({ type: 'result', subtype: 'success', session_id: 'claude-cli-after-sdk-failure' }),
+    ]);
+    let capturedCliOptions: { cwd: string; signal?: AbortSignal; command?: string; env?: NodeJS.ProcessEnv } | null = null;
+
+    const result = await runMindosAgentRuntimeAskSession({
+      runtime: { kind: 'claude', id: 'claude', name: 'Claude Code', binaryPath: '/Users/tester/.local/bin/claude' },
+      cwd: '/tmp/mind',
+      prompt: 'Fallback after SDK start.',
+      runtimeEnv: { PATH: '/usr/bin', CLAUDE_CODE_OAUTH_TOKEN: 'runtime-token' } as NodeJS.ProcessEnv,
+      send: (event) => events.push(event),
+      services: {
+        loadClaudeSdk: async () => sdk,
+        createClaudeCliClient: (options) => {
+          capturedCliOptions = options;
+          return createClaudeCodeCliClient(transport);
+        },
+      },
+    });
+
+    expect(capturedCliOptions).toMatchObject({
+      cwd: '/tmp/mind',
+      command: '/Users/tester/.local/bin/claude',
+      env: expect.objectContaining({ CLAUDE_CODE_OAUTH_TOKEN: 'runtime-token' }),
+    });
+    expect(result).toEqual({ externalSessionId: 'claude-cli-after-sdk-failure' });
+    expect(events).toContainEqual({
+      type: 'status',
+      visible: true,
+      runtime: 'claude',
+      message: expect.stringContaining('using Claude Code CLI fallback'),
+    });
+    expect(events).toContainEqual({
+      type: 'text_delta',
+      delta: 'CLI fallback ok',
     });
   });
 
@@ -1496,6 +2017,67 @@ describe('agent runtime adapters', () => {
     ]);
   });
 
+  it('redacts secrets from Claude Code CLI tool events', async () => {
+    const transport = createFakeClaudeTransport([
+      JSON.stringify({
+        type: 'assistant',
+        message: {
+          content: [
+            {
+              type: 'tool_use',
+              id: 'toolu-secret',
+              name: 'Bash',
+              input: {
+                command: 'curl -H "Authorization: Bearer sk-secret-1234567890" https://example.test?token=abc123',
+                env: { API_KEY: 'sk-secret-abcdefghijkl' },
+              },
+            },
+          ],
+        },
+      }),
+      JSON.stringify({
+        type: 'user',
+        message: {
+          content: [
+            {
+              type: 'tool_result',
+              tool_use_id: 'toolu-secret',
+              content: 'Authorization: Bearer ghp_abcdefghijklmnopqrstuvwxyz123456',
+            },
+          ],
+        },
+      }),
+      JSON.stringify({ type: 'result', subtype: 'success' }),
+    ]);
+
+    const client = createClaudeCodeCliClient(transport);
+    const events = [];
+    for await (const event of client.startTurn({ prompt: 'Run secret command.', cwd: '/tmp/mind' })) {
+      events.push(event);
+    }
+
+    expect(events).toEqual([
+      {
+        type: 'tool_start',
+        toolCallId: 'toolu-secret',
+        toolName: 'Bash',
+        args: {
+          command: 'curl -H "Authorization: Bearer [redacted]" https://example.test?token=[redacted]',
+          env: { API_KEY: '[redacted]' },
+        },
+        runtime: 'claude',
+      },
+      {
+        type: 'tool_end',
+        toolCallId: 'toolu-secret',
+        output: 'Authorization: Bearer [redacted]',
+        isError: false,
+        runtime: 'claude',
+      },
+      { type: 'done' },
+    ]);
+  });
+
   it('maps Claude Code permission denied system events into visible native runtime tool errors', async () => {
     const transport = createFakeClaudeTransport([
       JSON.stringify({
@@ -1592,9 +2174,7 @@ describe('agent runtime adapters', () => {
   it('marks an existing Claude Code session binding failed when resume errors', async () => {
     const events: MindOSSSEvent[] = [];
     const client: ClaudeCodeCliClient = {
-      async *startTurn() {
-        throw new Error('Claude resume failed');
-      },
+      startTurn: () => throwingAsyncIterable(new Error('Claude resume failed')),
     };
 
     const result = await runMindosAgentRuntimeAskSession({
@@ -1616,5 +2196,150 @@ describe('agent runtime adapters', () => {
       status: 'failed',
       reason: 'Claude resume failed',
     });
+  });
+
+  it('times out a stuck Claude Code native turn', async () => {
+    vi.useFakeTimers();
+    const close = vi.fn(async () => {});
+    const client: ClaudeCodeCliClient = {
+      close,
+      startTurn: ({ signal }: { signal?: AbortSignal }) => pendingUntilAbort(signal),
+    };
+    const events: MindOSSSEvent[] = [];
+
+    const resultPromise = runMindosAgentRuntimeAskSession({
+      runtime: { kind: 'claude', id: 'claude', name: 'Claude Code', externalSessionId: 'claude-existing' },
+      cwd: '/tmp/mind',
+      prompt: 'Hang.',
+      timeoutMs: 100,
+      send: (event) => events.push(event),
+      services: {
+        createClaudeClient: () => client,
+      },
+    });
+
+    await vi.advanceTimersByTimeAsync(100);
+    const result = await resultPromise;
+
+    expect(result.error).toMatchObject({
+      message: 'Native runtime timed out after 1s.',
+      code: 'TIMEOUT',
+    });
+    expect(close).toHaveBeenCalled();
+    expect(events).toContainEqual({
+      type: 'runtime_binding',
+      runtime: 'claude',
+      externalSessionId: 'claude-existing',
+      cwd: '/tmp/mind',
+      status: 'failed',
+      reason: 'Native runtime timed out after 1s.',
+    });
+  });
+
+  it('hard-times out a Claude Code native turn even when the stream ignores abort', async () => {
+    vi.useFakeTimers();
+    const close = vi.fn(async () => {});
+    const iteratorReturn = vi.fn();
+    const client: ClaudeCodeCliClient = {
+      close,
+      startTurn: () => pendingForever({ onReturn: iteratorReturn }),
+    };
+    const events: MindOSSSEvent[] = [];
+
+    const resultPromise = runMindosAgentRuntimeAskSession({
+      runtime: { kind: 'claude', id: 'claude', name: 'Claude Code', externalSessionId: 'claude-existing' },
+      cwd: '/tmp/mind',
+      prompt: 'Hang without observing the signal.',
+      timeoutMs: 100,
+      send: (event) => events.push(event),
+      services: {
+        createClaudeClient: () => client,
+      },
+    });
+
+    await vi.advanceTimersByTimeAsync(100);
+    const result = await resultPromise;
+
+    expect(result.error).toMatchObject({
+      message: 'Native runtime timed out after 1s.',
+      code: 'TIMEOUT',
+    });
+    expect(iteratorReturn).toHaveBeenCalled();
+    expect(close).toHaveBeenCalled();
+    expect(events).toContainEqual({
+      type: 'runtime_binding',
+      runtime: 'claude',
+      externalSessionId: 'claude-existing',
+      cwd: '/tmp/mind',
+      status: 'failed',
+      reason: 'Native runtime timed out after 1s.',
+    });
+  });
+
+  it('hard-times out a Claude Agent SDK query when the SDK iterator ignores abort and close', async () => {
+    vi.useFakeTimers();
+    const interrupt = vi.fn(async () => {});
+    const close = vi.fn();
+    const iteratorReturn = vi.fn(() => new Promise<IteratorResult<Record<string, unknown>>>(() => {}));
+    const sdk = createFakeClaudeSdk(() => {
+      let nextCount = 0;
+      const iterator: AsyncIterator<Record<string, unknown>> = {
+        next() {
+          nextCount += 1;
+          if (nextCount === 1) {
+            return Promise.resolve({
+              value: { type: 'system', subtype: 'init', session_id: 'claude-sdk-timeout' },
+              done: false,
+            });
+          }
+          return new Promise<IteratorResult<Record<string, unknown>>>(() => {});
+        },
+        return: iteratorReturn,
+      };
+      return {
+        interrupt,
+        close,
+        [Symbol.asyncIterator]() {
+          return iterator;
+        },
+      };
+    });
+    const events: MindOSSSEvent[] = [];
+
+    const resultPromise = runMindosAgentRuntimeAskSession({
+      runtime: { kind: 'claude', id: 'claude', name: 'Claude Code' },
+      cwd: '/tmp/mind',
+      prompt: 'Hang in SDK.',
+      timeoutMs: 100,
+      send: (event) => events.push(event),
+      services: {
+        loadClaudeSdk: () => sdk,
+      },
+    });
+
+    await vi.advanceTimersByTimeAsync(100);
+    const result = await resultPromise;
+
+    expect(result.error).toMatchObject({
+      message: 'Native runtime timed out after 1s.',
+      code: 'TIMEOUT',
+    });
+    expect(result.externalSessionId).toBe('claude-sdk-timeout');
+    expect(interrupt).toHaveBeenCalled();
+    expect(close).toHaveBeenCalled();
+    expect(iteratorReturn).toHaveBeenCalled();
+    expect(events).toContainEqual({
+      type: 'runtime_binding',
+      runtime: 'claude',
+      externalSessionId: 'claude-sdk-timeout',
+      cwd: '/tmp/mind',
+      status: 'failed',
+      reason: 'Native runtime timed out after 1s.',
+    });
+    expect(events).toContainEqual({
+      type: 'error',
+      message: 'Claude Code native runtime error: Native runtime timed out after 1s.',
+    });
+    expect(events).not.toContainEqual({ type: 'done' });
   });
 });

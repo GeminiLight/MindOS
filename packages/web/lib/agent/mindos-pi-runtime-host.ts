@@ -14,6 +14,7 @@ import { setKbPermissionPolicy } from '@/lib/agent/kb-extension';
 import { scanExtensionPaths } from '@/lib/pi-integration/extensions';
 import { generateSkillsXml } from '@/lib/agent/skills-xml';
 import { getSkillSearchPaths } from '@/lib/agent/skill-paths';
+import { ensureMindosAgentMcpRuntimeConfig } from '@/lib/pi-integration/mcp-config';
 import {
   createMindosAgentPermissionPolicy,
   hasMindosExtensionScope,
@@ -61,7 +62,10 @@ export function getMindosWebPiRuntimePaths(input: {
     additionalExtensionPaths.push(...scanExtensionPaths());
   }
   if (hasMindosExtensionScope(policy, 'pi-mcp-adapter')) {
-    additionalExtensionPaths.push(path.join(webAppDir, 'node_modules', 'pi-mcp-adapter', 'index.ts'));
+    const mcpRuntimeConfig = ensureMindosAgentMcpRuntimeConfig();
+    if (mcpRuntimeConfig.serverCount > 0) {
+      additionalExtensionPaths.push(path.join(webAppDir, 'lib', 'agent', 'mindos-mcp-adapter-extension.ts'));
+    }
   }
   if (hasMindosExtensionScope(policy, 'im')) {
     additionalExtensionPaths.push(path.join(webAppDir, 'lib', 'im', 'index.ts'));

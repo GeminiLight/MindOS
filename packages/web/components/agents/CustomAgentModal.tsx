@@ -172,7 +172,7 @@ export default function CustomAgentModal({
     if (existingKeys.has(key)) {
       const conflict = existingAgents.find(a => a.key === key);
       if (conflict?.isCustom) return p.customAgentKeyConflict?.(key) ?? `An agent with key "${key}" already exists`;
-      return p.customAgentBuiltinConflict?.(conflict?.name || key) ?? `Conflicts with built-in agent "${conflict?.name || key}"`;
+      return p.customAgentBuiltinConflict?.(conflict?.name || key) ?? `Conflicts with reserved Agent "${conflict?.name || key}"`;
     }
     return null;
   }, [isEdit, slug, existingKeys, existingAgents, form.name, p]);

@@ -3,7 +3,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Activity, Bot, Cable, MessageSquare, Network, Sparkles, TerminalSquare, Wrench } from 'lucide-react';
+import { Bot, Cable, MessageSquare, Server, Sparkles } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import { useLocale } from '@/lib/stores/locale-store';
 import { useMcpData } from '@/lib/stores/mcp-store';
@@ -13,6 +13,8 @@ import { generateSnippet } from '@/lib/mcp-snippets';
 import {
   bucketAgents,
   buildRiskQueue,
+  getAgentsNavGroup,
+  type AgentsNavGroup,
   type AgentsDashboardTab,
 } from './agents-content-model';
 import AgentsOverviewSection from './AgentsOverviewSection';
@@ -29,14 +31,11 @@ import { BUILTIN_AGENT_PRESETS } from './builtin-agent-presets';
 import type { AgentInfo } from '@/components/settings/types';
 
 const DEFAULT_AGENT_NAV_HINTS = {
-  overview: 'Health',
-  presets: 'Built-ins',
-  mcp: 'Protocol',
-  skills: 'Capabilities',
+  overview: 'Map',
+  assistant: 'Profiles',
+  agent: 'Runtime endpoints',
+  capabilities: 'Skills & MCP',
   channels: 'Messaging',
-  network: 'Remote',
-  sessions: 'Runs',
-  activity: 'Audit',
 } as const;
 
 export default function AgentsContentPage({ tab }: { tab: AgentsDashboardTab }) {
@@ -53,40 +52,40 @@ export default function AgentsContentPage({ tab }: { tab: AgentsDashboardTab }) 
         subtitle: a.channelsSubtitle ?? 'Connect messaging platforms to let MindOS send messages on your behalf.',
       };
     }
-    if (tab === 'activity') {
+    if (tab === 'activity' || tab === 'runs') {
       return {
-        title: a.navActivity ?? 'Activity',
-        subtitle: a.activitySubtitle ?? 'Agent operations audit log.',
+        title: a.navRuns ?? a.navActivity ?? 'Runs',
+        subtitle: a.runsSubtitle ?? a.activitySubtitle ?? 'Sessions and agent operations audit log.',
       };
     }
     if (tab === 'sessions') {
       return {
-        title: 'Sessions',
-        subtitle: 'Active ACP agent sessions.',
+        title: a.navRuns ?? 'Runs',
+        subtitle: a.sessionsSubtitle ?? 'Active ACP agent sessions.',
       };
     }
     if (tab === 'a2a') {
       return {
-        title: a.navNetwork,
+        title: a.a2aTabTitle ?? a.navNetwork,
         subtitle: a.a2aTabEmptyHint,
       };
     }
-    if (tab === 'skills') {
+    if (tab === 'skills' || tab === 'mcp' || tab === 'capabilities') {
       return {
-        title: a.navSkills,
-        subtitle: a.skills.capabilityGroups,
+        title: a.navCapabilities ?? a.navSkills,
+        subtitle: a.capabilitiesSubtitle ?? a.skills.capabilityGroups,
       };
     }
-    if (tab === 'presets') {
+    if (tab === 'presets' || tab === 'assistant') {
       return {
         title: a.presets.title,
         subtitle: a.presets.subtitle,
       };
     }
-    if (tab === 'mcp') {
+    if (tab === 'agent') {
       return {
-        title: a.navMcp,
-        subtitle: a.mcp.connectionGraph,
+        title: a.navAgent ?? a.navMcp,
+        subtitle: a.agentSubtitle ?? a.mcp.connectionGraph,
       };
     }
     return {
@@ -171,7 +170,7 @@ export default function AgentsContentPage({ tab }: { tab: AgentsDashboardTab }) 
   };
 
   return (
-    <div className={`content-width px-4 md:px-6 py-8 md:py-10 ${isChannelDetail ? 'channel-detail-content' : ''}`}>
+    <div className={`content-width agents-content-page px-4 md:px-6 py-8 md:py-10 ${isChannelDetail ? 'channel-detail-content' : ''}`}>
       {!isChannelDetail && (
         <header className="mb-6">
           <h1 className="text-2xl font-semibold tracking-tight text-foreground">{pageHeader.title}</h1>
@@ -183,9 +182,9 @@ export default function AgentsContentPage({ tab }: { tab: AgentsDashboardTab }) 
             detectedCount={buckets.detected.length}
             enabledSkillCount={enabledSkillCount}
             mcpRunning={!!mcp.status?.running}
+            mcpEnabled={mcpEnabled}
             mcpPort={mcp.status?.port ?? null}
             presetCount={BUILTIN_AGENT_PRESETS.length}
-            a2aCount={a2a.agents.length}
           />
         </header>
       )}
@@ -203,32 +202,34 @@ export default function AgentsContentPage({ tab }: { tab: AgentsDashboardTab }) 
           mcpToolCount={mcp.status?.toolCount ?? 0}
           mcpEnabled={mcpEnabled}
           enabledSkillCount={enabledSkillCount}
+          assistantCount={BUILTIN_AGENT_PRESETS.length}
           allAgents={mcp.agents}
           pulseCopy={a.workspacePulse}
-          a2aCount={a2a.agents.length}
           onAddCustomAgent={handleAddCustomAgent}
           onEditCustomAgent={handleEditCustomAgent}
           onRemoveCustomAgent={handleRemoveCustomAgent}
         />
       )}
 
-      {tab === 'mcp' && mcpEnabled && (
+      {(tab === 'mcp' || tab === 'agent' || tab === 'capabilities') && mcpEnabled && (
         <AgentsMcpSection copy={{ ...a.mcp, status: a.status }} mcp={mcp} buckets={buckets} copyState={null} onCopySnippet={copySnippet} />
       )}
 
       {/* MCP tab accessed but mode disabled — show hint */}
-      {tab === 'mcp' && !mcpEnabled && !mcp.loading && (
+      {(tab === 'mcp' || tab === 'agent' || tab === 'capabilities') && !mcpEnabled && !mcp.loading && (
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <p className="text-sm text-muted-foreground">{a.mcp?.mcpDisabledMessage ?? 'MCP mode is not enabled.'}</p>
           <p className="text-xs text-muted-foreground/60 mt-1">{a.mcp?.mcpDisabledHint ?? 'Enable it in Settings → Connections to use MCP agents.'}</p>
         </div>
       )}
 
-      {tab === 'skills' && (
-        <AgentsSkillsSection copy={a.skills} mcp={mcp} buckets={buckets} />
+      {(tab === 'skills' || tab === 'capabilities') && (
+        <div className={tab === 'capabilities' ? 'mt-6' : undefined}>
+          <AgentsSkillsSection copy={a.skills} mcp={mcp} buckets={buckets} />
+        </div>
       )}
 
-      {tab === 'presets' && (
+      {(tab === 'presets' || tab === 'assistant') && (
         <AgentsPresetsSection copy={a.presets} />
       )}
 
@@ -246,7 +247,7 @@ export default function AgentsContentPage({ tab }: { tab: AgentsDashboardTab }) 
         <AgentsPanelSessionsTab />
       )}
 
-      {tab === 'activity' && (
+      {(tab === 'activity' || tab === 'runs') && (
         <AgentActivitySection />
       )}
 
@@ -285,9 +286,9 @@ function AgentsPageNav({
   detectedCount,
   enabledSkillCount,
   mcpRunning,
+  mcpEnabled,
   mcpPort,
   presetCount,
-  a2aCount,
 }: {
   tab: AgentsDashboardTab;
   copy: ReturnType<typeof useLocale>['t']['agentsContent'];
@@ -295,13 +296,14 @@ function AgentsPageNav({
   detectedCount: number;
   enabledSkillCount: number;
   mcpRunning: boolean;
+  mcpEnabled: boolean;
   mcpPort: number | null;
   presetCount: number;
-  a2aCount: number;
 }) {
   const navHints = copy.navHints ?? DEFAULT_AGENT_NAV_HINTS;
+  const activeGroup = getAgentsNavGroup(tab);
   const navItems: Array<{
-    id: AgentsDashboardTab;
+    id: AgentsNavGroup;
     href: string;
     label: string;
     hint: string;
@@ -315,88 +317,62 @@ function AgentsPageNav({
       label: copy.navOverview,
       hint: navHints.overview,
       icon: <Bot size={14} />,
-      badge: connectedCount > 0 ? `${connectedCount}` : undefined,
       tone: detectedCount > 0 ? 'warn' : 'ok',
     },
     {
-      id: 'presets',
-      href: '/agents?tab=presets',
-      label: copy.navPresets,
-      hint: navHints.presets,
+      id: 'assistant',
+      href: '/agents?tab=assistant',
+      label: copy.navAssistant ?? copy.navPresets,
+      hint: navHints.assistant ?? navHints.presets,
       icon: <Sparkles size={14} />,
       badge: `${presetCount}`,
       tone: 'neutral',
     },
     {
-      id: 'mcp',
-      href: '/agents?tab=mcp',
-      label: copy.navMcp,
-      hint: navHints.mcp,
+      id: 'agent',
+      href: '/agents?tab=agent',
+      label: copy.navAgent ?? copy.navMcp,
+      hint: navHints.agent ?? navHints.mcp,
       icon: <Cable size={14} />,
-      badge: mcpRunning && mcpPort ? `:${mcpPort}` : copy.navBadgeOff,
-      tone: mcpRunning ? 'ok' : 'warn',
+      badge: detectedCount > 0 ? copy.navBadgeAttention?.(detectedCount) ?? `${detectedCount}` : connectedCount > 0 ? `${connectedCount}` : undefined,
+      tone: detectedCount > 0 ? 'warn' : 'ok',
     },
     {
-      id: 'skills',
-      href: '/agents?tab=skills',
-      label: copy.navSkills,
-      hint: navHints.skills,
-      icon: <Wrench size={14} />,
-      badge: `${enabledSkillCount}`,
-      tone: 'ok',
+      id: 'capabilities',
+      href: '/agents?tab=capabilities',
+      label: copy.navCapabilities ?? copy.navSkills,
+      hint: navHints.capabilities ?? navHints.skills,
+      icon: <Server size={14} />,
+      badge: mcpRunning && mcpPort ? `MCP :${mcpPort}` : `${enabledSkillCount}`,
+      tone: mcpEnabled && !mcpRunning ? 'warn' : mcpRunning || enabledSkillCount > 0 ? 'ok' : 'neutral',
     },
     {
       id: 'channels',
       href: '/agents?tab=channels',
       label: copy.navChannels,
-      hint: navHints.channels,
+      hint: navHints.channels ?? 'Messaging',
       icon: <MessageSquare size={14} />,
-      tone: 'neutral',
-    },
-    {
-      id: 'a2a',
-      href: '/agents?tab=a2a',
-      label: copy.navNetwork,
-      hint: navHints.network,
-      icon: <Network size={14} />,
-      badge: a2aCount > 0 ? `${a2aCount}` : undefined,
-      tone: 'neutral',
-    },
-    {
-      id: 'sessions',
-      href: '/agents?tab=sessions',
-      label: copy.navSessions,
-      hint: navHints.sessions,
-      icon: <TerminalSquare size={14} />,
-      tone: 'neutral',
-    },
-    {
-      id: 'activity',
-      href: '/agents?tab=activity',
-      label: copy.navActivity,
-      hint: navHints.activity,
-      icon: <Activity size={14} />,
       tone: 'neutral',
     },
   ];
 
   return (
     <nav aria-label={copy.navAriaLabel} className="mt-5 overflow-x-auto pb-1">
-      <div className="flex w-max min-w-full overflow-hidden rounded-xl border border-border/60 bg-card/35 shadow-sm lg:grid lg:w-auto lg:grid-cols-8">
+      <div className="flex w-max min-w-full overflow-hidden rounded-xl border border-border/60 bg-card/35 shadow-sm lg:grid lg:w-auto lg:grid-cols-5">
         {navItems.map(item => (
           <Link
             key={item.id}
             href={item.href}
-            aria-current={tab === item.id ? 'page' : undefined}
-            className={`group min-h-[68px] w-[104px] shrink-0 border-r border-border/45 px-2.5 py-2.5 transition-colors last:border-r-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:w-[112px] lg:w-auto lg:px-3 lg:py-3 ${
-              tab === item.id
+            aria-current={activeGroup === item.id ? 'page' : undefined}
+            className={`group min-h-[70px] w-[156px] shrink-0 border-r border-border/45 px-3 py-2.5 transition-colors last:border-r-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:w-auto lg:px-4 lg:py-3 ${
+              activeGroup === item.id
                 ? 'bg-[var(--amber)]/[0.08] text-foreground'
                 : 'text-muted-foreground hover:bg-muted/45 hover:text-foreground'
             }`}
           >
             <span className="flex items-center justify-between gap-2">
               <span className={`inline-flex h-7 w-7 items-center justify-center rounded-lg ${
-                tab === item.id ? 'bg-[var(--amber)] text-[var(--amber-foreground)]' : 'bg-background text-muted-foreground group-hover:text-foreground'
+                activeGroup === item.id ? 'bg-[var(--amber)] text-[var(--amber-foreground)]' : 'bg-background text-muted-foreground group-hover:text-foreground'
               }`}>
                 {item.icon}
               </span>

@@ -3,10 +3,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Loader2, CheckCircle2, Circle, RefreshCw, AlertCircle } from 'lucide-react';
+import { Loader2, CheckCircle2, Circle, RefreshCw, AlertCircle, MessageSquare } from 'lucide-react';
 import { useLocale } from '@/lib/stores/locale-store';
 import { PLATFORMS, type PlatformStatus } from '@/lib/im/platforms';
 import AgentsContentChannelDetail from './AgentsContentChannelDetail';
+import { AgentSectionHeading } from './AgentsPrimitives';
 import { ChannelIcon } from './ChannelIcon';
 import { getCachedStatuses, setCachedStatuses } from './channel-detail/cache';
 
@@ -114,7 +115,11 @@ function ChannelsOverview() {
       </div>
 
       {/* Platform grid — clickable */}
-      <h2 className="text-sm font-medium text-foreground mb-4">{im.platformsTitle}</h2>
+      <AgentSectionHeading
+        icon={<MessageSquare size={13} aria-hidden="true" />}
+        title={im.platformsTitle}
+        className="mb-4"
+      />
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {PLATFORMS.map((platform) => {
           const { id, name } = platform;

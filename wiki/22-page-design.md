@@ -99,7 +99,7 @@ Drawer (triggered by ☰):
 | `/help` | 帮助 | `app/help/page.tsx` | Activity Bar 底部 `?` 入口 |
 | `/echo` | 回响入口 | `app/echo/page.tsx` | Echo 主页，导航到各 segment |
 | `/echo/[segment]` | 回响内容页 | `app/echo/[segment]/page.tsx` | 与你有关 / 未完待续 / 每日回响 / 历史的你 / 心向生长；见 `spec-echo-content-pages.md` |
-| `/agents` | 智能体总览 | `app/agents/page.tsx` | Overview / MCP / Skills / Network 四 Tab |
+| `/agents` | 智能体总览 | `app/agents/page.tsx` | 总览 / Assistant / Agent / Skills & MCP / 频道五组 IA；旧 MCP / Skills / Network / Sessions / Activity query 仍作为兼容入口 |
 | `/agents/[agentKey]` | 智能体详情 | `app/agents/[agentKey]/page.tsx` | Skill 管理 + MCP 状态 + Runtime 诊断 |
 | `/trash` | 回收站 | `app/trash/page.tsx` | 已删除文件恢复/永久删除 |
 | `/wiki` | Wiki 入口 | `app/wiki/page.tsx` | 项目 Wiki 浏览 |
@@ -107,6 +107,20 @@ Drawer (triggered by ☰):
 | `/capture/history` / `/inbox/history` | Inbox 历史 | `app/capture/history/page.tsx` / `app/inbox/history/page.tsx` | 已处理记录与撤销记录 |
 | `/changelog` | 更新日志 | `app/changelog/page.tsx` | 版本变更日志浏览 + 搜索 |
 | `/changes` | 变更记录 (重定向) | `app/changes/page.tsx` | → 重定向到 `/changelog` |
+
+---
+
+### Agents 页面 IA
+
+`/agents` 的顶部导航与 Agents Panel Hub 统一为五组：`总览`、`Assistant`、`Agent`、`Skills & MCP`、`频道`。
+
+- `Assistant` 表示 MindOS 内部的角色档案、默认 Prompt、产品入口与任务路由策略。
+- `Agent` 表示实际执行端点，例如 MindOS Agent、Codex、Claude Code、Remote Agent。
+- `Skills & MCP` 聚合 MindOS Skills、MCP 连接状态与 MCP 暴露工具；旧的 `tab=mcp`、`tab=skills` 继续解析为兼容入口。
+- `频道` 表示 Telegram、Slack、飞书、Discord 等消息入口；旧的 `tab=channels` 保留。
+- `tab=a2a` 归入 `Agent` 的远程执行端语义；`tab=sessions`、`tab=activity`、`tab=runs` 保留为运行日志辅助入口，但不占顶层主导航。
+
+总览页首屏的「系统模型」只保留一句模型说明和健康状态，不再重复放流程卡。下方保留 Assistant、Agent、Skills & MCP、频道四张状态卡；再往下左侧展示最近运行，右侧展示下一步。运行日志从顶层导航降级为总览内模块与侧栏底部辅助入口。
 
 ---
 

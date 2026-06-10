@@ -64,6 +64,38 @@ describe('IM activity store', () => {
     expect(activities[0].status).toBe('failed');
   });
 
+  it('redacts secrets and masks recipients before persisting activity', async () => {
+    let fileContent = '';
+    mockFs.existsSync.mockImplementation(() => Boolean(fileContent));
+    mockFs.readFileSync.mockImplementation(() => fileContent as never);
+    mockFs.writeFileSync.mockImplementation((_, content) => {
+      fileContent = String(content).trim();
+      return undefined;
+    });
+    mockFs.renameSync.mockImplementation(() => undefined);
+
+    const { recordActivity, getActivities } = await import('@/lib/im/activity');
+
+    recordActivity({
+      platform: 'slack',
+      type: 'agent',
+      status: 'failed',
+      recipient: 'C1234567890',
+      message: 'Send token=abc123secret and Authorization: Bearer sk-im-secret-1234567890',
+      error: 'apiKey=sk-im-secret-abcdefghijkl',
+    });
+
+    const activities = getActivities('slack');
+    const rawStore = fileContent;
+
+    expect(activities[0].recipient).toBe('C12***890');
+    expect(activities[0].messageSummary).toContain('[redacted]');
+    expect(activities[0].error).toContain('[redacted]');
+    expect(rawStore).not.toContain('abc123secret');
+    expect(rawStore).not.toContain('sk-im-secret');
+    expect(rawStore).not.toContain('C1234567890');
+  });
+
   it('resets corrupt store data to empty', async () => {
     mockFs.existsSync.mockReturnValue(true);
     mockFs.readFileSync.mockReturnValue('{bad json}' as never);

@@ -40,13 +40,15 @@ function CopyButton({ code }: { code: string }) {
       onClick={handleCopy}
       className="
         absolute top-2.5 right-2.5
-        inline-flex h-8 w-8 items-center justify-center rounded-md
-        bg-muted hover:bg-accent
+        hit-target-box inline-flex h-8 w-8 items-center justify-center
         text-muted-foreground hover:text-foreground
         transition-colors duration-75
         opacity-60 group-hover:opacity-100
         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
         touch-manipulation
+        [--hit-target-bg:var(--muted)]
+        [--hit-target-hover-bg:var(--accent)]
+        [--hit-target-radius:var(--radius-md)]
       "
       title="Copy code"
     >
@@ -253,7 +255,7 @@ export default function MarkdownView({ content, highlightLines, onDismissHighlig
             <button
               type="button"
               onClick={onDismissHighlight}
-              className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded transition-colors duration-75 hover:bg-[var(--amber)]/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation"
+              className="hit-target-box inline-flex h-7 w-7 shrink-0 items-center justify-center transition-colors duration-75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation [--hit-target-hover-bg:color-mix(in_srgb,var(--amber)_15%,transparent)] [--hit-target-radius:var(--radius-sm)]"
               aria-label="Dismiss"
             >
               <X size={12} />

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { GET } from '@/app/api/agent-runs/route';
 import {
+  appendAgentRunEvent,
   completeAgentRun,
   resetAgentRunsForTest,
   startAgentRun,
@@ -121,6 +122,54 @@ describe('/api/agent-runs', () => {
       child.id,
       child.id,
       root.id,
+    ]);
+  });
+
+  it('returns scoped fine-grained events and filters by event category', async () => {
+    const oldRun = startAgentRun({
+      agentKind: 'native-runtime',
+      runtimeId: 'codex',
+      displayName: 'Codex',
+      chatSessionId: 'chat-events',
+      permissionMode: 'agent',
+      inputSummary: 'Old turn',
+    });
+    appendAgentRunEvent(oldRun.id, {
+      type: 'text',
+      category: 'text',
+      data: { kind: 'text', text: 'old event' },
+    });
+
+    const target = startAgentRun({
+      agentKind: 'native-runtime',
+      runtimeId: 'claude',
+      displayName: 'Claude Code',
+      chatSessionId: 'chat-events',
+      permissionMode: 'agent',
+      inputSummary: 'Current turn',
+    });
+    appendAgentRunEvent(target.id, {
+      type: 'tool_completed',
+      category: 'tool',
+      data: { kind: 'tool', name: 'Bash', status: 'completed', outputSummary: 'done' },
+    });
+    appendAgentRunEvent(target.id, {
+      type: 'file_changed',
+      category: 'file',
+      data: { kind: 'file', action: 'updated', path: 'notes/demo.md' },
+    });
+
+    const response = await GET(new Request(`http://localhost/api/agent-runs?chatSessionId=chat-events&startedAfter=${target.startedAt}&includeEvents=1&eventCategory=tool`));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.runs.map((run: { id: string }) => run.id)).toEqual([target.id]);
+    expect(body.events).toEqual([
+      expect.objectContaining({
+        runId: target.id,
+        category: 'tool',
+        data: expect.objectContaining({ kind: 'tool', name: 'Bash', status: 'completed' }),
+      }),
     ]);
   });
 });

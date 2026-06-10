@@ -59,7 +59,6 @@ const mcpStatus: McpStatus = {
   port: 8781,
   toolCount: 20,
   authConfigured: true,
-  authToken: 'token_abc123',
   maskedToken: 'token_a••••3',
 };
 
@@ -185,14 +184,24 @@ describe('mcp-snippets', () => {
       expect(parsed.mcpServers.mindos.url).toBe('http://127.0.0.1:8781/mcp');
     });
 
-    it('passes authToken from status to http snippet', () => {
+    it('uses only masked token from status when no token was explicitly revealed', () => {
       const result = generateSnippet(jsonAgent, mcpStatus, 'http');
       const parsed = JSON.parse(result.snippet);
-      expect(parsed.mcpServers.mindos.headers.Authorization).toBe('Bearer token_abc123');
+      expect(parsed.mcpServers.mindos.headers).toBeUndefined();
+      const display = JSON.parse(result.displaySnippet);
+      expect(display.mcpServers.mindos.headers.Authorization).toBe('Bearer token_a••••3');
     });
 
-    it('omits auth header when status has no authToken', () => {
-      const noAuthStatus: McpStatus = { ...mcpStatus, authToken: undefined, maskedToken: undefined };
+    it('uses an explicitly revealed token for the copy snippet', () => {
+      const result = generateSnippet(jsonAgent, mcpStatus, 'http', 'token_abc123');
+      const parsed = JSON.parse(result.snippet);
+      expect(parsed.mcpServers.mindos.headers.Authorization).toBe('Bearer token_abc123');
+      const display = JSON.parse(result.displaySnippet);
+      expect(display.mcpServers.mindos.headers.Authorization).toBe('Bearer token_a••••3');
+    });
+
+    it('omits auth header when status has no masked token', () => {
+      const noAuthStatus: McpStatus = { ...mcpStatus, maskedToken: undefined, authConfigured: false };
       const result = generateSnippet(jsonAgent, noAuthStatus, 'http');
       const parsed = JSON.parse(result.snippet);
       expect(parsed.mcpServers.mindos.headers).toBeUndefined();

@@ -5,6 +5,7 @@ import { useMcpDataOptional } from '@/lib/stores/mcp-store';
 import { generateSnippet } from '@/lib/mcp-snippets';
 import { copyToClipboard } from '@/lib/clipboard';
 import { apiFetch } from '@/lib/api';
+import { revealMcpAuthToken } from '@/lib/mcp-token';
 import CustomSelect from '@/components/CustomSelect';
 import type { SelectItem } from '@/components/CustomSelect';
 import type { McpTabProps, McpStatus, AgentInfo, ConnectionMode } from './types';
@@ -251,24 +252,62 @@ function AuthTokenCard({ status, m }: {
 }) {
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [revealed, setRevealed] = useState(false);
+  const [revealedToken, setRevealedToken] = useState<string | null>(null);
+  const [revealing, setRevealing] = useState(false);
 
   useEffect(() => () => setRevealed(false), []);
+  useEffect(() => {
+    setRevealed(false);
+    setRevealedToken(null);
+  }, [status?.authConfigured, status?.maskedToken]);
   useEffect(() => {
     if (!copiedField) return;
     const t = setTimeout(() => setCopiedField(null), 2000);
     return () => clearTimeout(t);
   }, [copiedField]);
 
-  const handleCopy = useCallback(async (text: string, field: string) => {
+  const getFullToken = useCallback(async () => {
+    if (revealedToken) return revealedToken;
+    setRevealing(true);
+    try {
+      const token = await revealMcpAuthToken();
+      setRevealedToken(token || null);
+      return token;
+    } finally {
+      setRevealing(false);
+    }
+  }, [revealedToken]);
+
+  const handleReveal = useCallback(async () => {
+    if (revealed) {
+      setRevealed(false);
+      return;
+    }
+    try {
+      const token = await getFullToken();
+      if (token) setRevealed(true);
+    } catch {
+      toast.error(m?.tokenRevealFailed ?? 'Failed to reveal token');
+    }
+  }, [getFullToken, m?.tokenRevealFailed, revealed]);
+
+  const handleCopy = useCallback(async (field: string) => {
+    let text = '';
+    try {
+      text = await getFullToken();
+    } catch {
+      toast.error(m?.tokenRevealFailed ?? 'Failed to reveal token');
+      return;
+    }
     if (!text) return;
     const ok = await copyToClipboard(text);
     if (ok) { setCopiedField(field); toast.copy(); }
-  }, []);
+  }, [getFullToken, m?.tokenRevealFailed]);
 
   if (!status) return null;
 
-  const hasToken = status.authConfigured && !!status.authToken;
-  const displayToken = revealed ? (status.authToken ?? '') : (status.maskedToken ?? '');
+  const hasToken = status.authConfigured;
+  const displayToken = revealed ? (revealedToken ?? '') : (status.maskedToken ?? '');
 
   return (
     <div className="rounded-xl border border-border bg-card overflow-hidden">
@@ -287,12 +326,12 @@ function AuthTokenCard({ status, m }: {
             <div className="flex-1 flex items-center gap-2 px-2.5 py-1.5 bg-muted/50 border border-border rounded-lg min-h-[34px]">
               <code className="flex-1 text-xs font-mono text-foreground break-all select-all leading-relaxed">{displayToken}</code>
             </div>
-            <button type="button" onClick={() => setRevealed(v => !v)}
+            <button type="button" onClick={handleReveal} disabled={revealing}
               className="shrink-0 p-1.5 rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors focus-visible:ring-2 focus-visible:ring-ring"
               title={revealed ? (m?.tokenHide ?? 'Hide') : (m?.tokenShow ?? 'Show')}>
-              {revealed ? <EyeOff size={13} /> : <Eye size={13} />}
+              {revealing ? <Loader2 size={13} className="animate-spin" /> : revealed ? <EyeOff size={13} /> : <Eye size={13} />}
             </button>
-            <CopyButton onCopy={() => handleCopy(status.authToken ?? '', 'token-card')} copied={copiedField === 'token-card'} title={m?.tokenCopy ?? 'Copy'} size="sm" />
+            <CopyButton onCopy={() => handleCopy('token-card')} copied={copiedField === 'token-card'} title={m?.tokenCopy ?? 'Copy'} size="sm" />
           </div>
         ) : (
           <div className="px-2.5 py-2 bg-[var(--amber-subtle)] border border-[var(--amber)]/20 rounded-lg">

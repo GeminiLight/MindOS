@@ -149,7 +149,7 @@ export function generateHttpSnippet(
 
   return {
     snippet: buildSnippet(httpEntry),
-    displaySnippet: buildSnippet(token ? displayEntry : httpEntry),
+    displaySnippet: buildSnippet(maskedToken ? displayEntry : httpEntry),
     path: agent.format === 'toml'
       ? agent.globalPath
       : agent.globalPath,
@@ -161,6 +161,7 @@ export function generateSnippet(
   agent: AgentInfo,
   status: McpStatus | null,
   transport: 'stdio' | 'http',
+  revealedToken?: string,
 ): ConfigSnippet {
   if (transport === 'stdio') {
     return generateStdioSnippet(agent);
@@ -172,7 +173,7 @@ export function generateSnippet(
   return generateHttpSnippet(
     agent,
     endpoint,
-    status?.authToken,
+    revealedToken,
     status?.maskedToken,
   );
 }

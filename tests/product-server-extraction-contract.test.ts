@@ -242,6 +242,7 @@ describe('Product server extraction contract', () => {
       'packages/web/app/api/backlinks/route.ts',
       'packages/web/app/api/graph/route.ts',
       'packages/web/app/api/agent-activity/route.ts',
+      'packages/web/app/api/agent-capabilities/route.ts',
       'packages/web/app/api/agent-runtimes/route.ts',
       'packages/web/app/api/agent-runtimes/codex/threads/route.ts',
       'packages/web/app/api/agent-runtimes/codex/threads/[threadId]/route.ts',
@@ -294,6 +295,7 @@ describe('Product server extraction contract', () => {
       'packages/web/app/api/mcp/install/route.ts',
       'packages/web/app/api/mcp/install-skill/route.ts',
       'packages/web/app/api/mcp/restart/route.ts',
+      'packages/web/app/api/mcp/token/reveal/route.ts',
       'packages/web/app/api/mcp/uninstall/route.ts',
       'packages/web/app/api/tree-version/route.ts',
     ];

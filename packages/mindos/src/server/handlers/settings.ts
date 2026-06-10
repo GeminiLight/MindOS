@@ -1,4 +1,8 @@
 import { randomBytes } from 'node:crypto';
+import {
+  parseAgentRuntimeEnvironmentSettings,
+  type AgentRuntimeEnvironmentSettings,
+} from '../../agent-runtime/runtime-env.js';
 import { errorResponse, json, type MindosServerResponse } from '../response.js';
 
 export type MindosSettingsAi = {
@@ -31,6 +35,7 @@ export type MindosServerSettings = {
   mcpPort?: number;
   agent?: unknown;
   skillPaths?: Record<string, unknown>;
+  agentRuntimeEnv?: AgentRuntimeEnvironmentSettings;
   startMode?: string;
   connectionMode?: MindosConnectionMode;
   baseUrlCompat?: Record<string, unknown>;
@@ -89,6 +94,7 @@ export type MindosSettingsPayload = {
   mcpPort: number;
   agent: unknown;
   skillPaths: Record<string, unknown>;
+  agentRuntimeEnv: AgentRuntimeEnvironmentSettings;
   envOverrides: Record<string, boolean>;
   envValues: Record<string, string>;
 };
@@ -247,6 +253,7 @@ export function handleSettingsGet(services: MindosSettingsServices): MindosServe
       mcpPort: settings.mcpPort ?? 8781,
       agent: settings.agent ?? {},
       skillPaths: settings.skillPaths ?? {},
+      agentRuntimeEnv: settings.agentRuntimeEnv ?? {},
       envOverrides,
       envValues,
     });
@@ -283,6 +290,9 @@ export function handleSettingsPost(
       mindRoot: body.mindRoot ?? current.mindRoot,
       agent: body.agent ?? current.agent,
       skillPaths: resolveSkillPathsPatch(current.skillPaths, body.skillPaths),
+      agentRuntimeEnv: Object.prototype.hasOwnProperty.call(body, 'agentRuntimeEnv')
+        ? (parseAgentRuntimeEnvironmentSettings(body.agentRuntimeEnv) ?? {})
+        : current.agentRuntimeEnv,
       webPassword: resolvedWebPassword,
       authToken: resolvedAuthToken,
       allowNetworkAccess: typeof body.allowNetworkAccess === 'boolean'

@@ -21,12 +21,13 @@ import {
   Trash2,
   ArrowLeft,
   History,
-  BookOpen,
   ListChecks,
   Archive,
   ArrowRight,
   Paperclip,
   Eye,
+  Plus,
+  RotateCcw,
 } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import { useLocale } from '@/lib/stores/locale-store';
@@ -34,11 +35,19 @@ import { encodePath } from '@/lib/utils';
 import { quickDropToInbox, clipUrlToInbox, looksLikeUrl, extractUrlFromDrop, dragContainsUrl } from '@/lib/inbox-upload';
 import { loadHistory, type OrganizeHistoryEntry, type OrganizeSource } from '@/lib/organize-history';
 import { CAPTURE_ACCEPT } from '@/lib/capture-formats';
-import CustomSelect from '@/components/CustomSelect';
 import ProviderModelCapsule, { getPersistedProviderModel, type ProviderSelection } from '@/components/ask/ProviderModelCapsule';
 import { useInboxOrganize } from '@/components/inbox/InboxOrganizeContext';
 import { SourceIcon, getInboxSourceLabel } from '@/components/inbox/SourceIcon';
 import { archiveInboxFiles, fetchInboxFiles, saveInboxFiles, type InboxFileSourceInfo } from '@/lib/inbox-client';
+import {
+  INBOX_SHELVED_STORAGE_KEY,
+  INBOX_SHELVED_UPDATED_EVENT,
+  addShelvedInboxPaths,
+  normalizeShelvedInboxPaths,
+  readShelvedInboxPaths,
+  removeShelvedInboxPaths,
+  writeShelvedInboxPaths,
+} from '@/lib/inbox-shelved';
 
 interface InboxFile {
   name: string;
@@ -54,8 +63,15 @@ const REVIEW_PREVIEW_VISIBLE = 5;
 const INBOX_PROVIDER_MODEL_STORAGE_KEY = 'mindos-inbox-provider-model';
 
 type CaptureIntent = 'source' | 'note' | 'judgment' | 'reflect';
-type InboxViewMode = 'capture' | 'queue' | 'history';
+type InboxViewMode = 'capture' | 'queue' | 'shelved' | 'history';
 type LastSavedSummary = { saved: number; failed: number };
+type CaptureSaveOutcome = {
+  savedAny: boolean;
+  savedCount: number;
+  failedCount: number;
+  textSaveFailed: boolean;
+  latestFiles: InboxFile[] | null;
+};
 
 const EXT_STYLES: Record<string, { bg: string; text: string }> = {
   md:   { bg: 'bg-blue-500/10',    text: 'text-blue-500/70' },
@@ -78,7 +94,7 @@ function getFileBaseName(name: string): string {
 function getInitialInboxViewMode(): InboxViewMode {
   if (typeof window === 'undefined') return 'capture';
   const hash = window.location.hash.replace('#', '');
-  return hash === 'queue' || hash === 'history' ? hash : 'capture';
+  return hash === 'queue' || hash === 'shelved' || hash === 'history' ? hash : 'capture';
 }
 
 export default function InboxView() {
@@ -89,15 +105,16 @@ export default function InboxView() {
   const [dragOver, setDragOver] = useState(false);
   const [history, setHistory] = useState<OrganizeHistoryEntry[]>([]);
   const [draftText, setDraftText] = useState('');
-  const [selectedIntent, setSelectedIntent] = useState<CaptureIntent>('source');
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [pendingUrls, setPendingUrls] = useState<string[]>([]);
   const [savingText, setSavingText] = useState(false);
+  const [savingToMind, setSavingToMind] = useState(false);
   const [inboxError, setInboxError] = useState<string | null>(null);
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [selectedQueuePaths, setSelectedQueuePaths] = useState<string[]>([]);
   const [activeView, setActiveView] = useState<InboxViewMode>(() => getInitialInboxViewMode());
   const [lastSavedSummary, setLastSavedSummary] = useState<LastSavedSummary | null>(null);
+  const [shelvedPaths, setShelvedPaths] = useState<string[]>(() => readShelvedInboxPaths());
   const [providerOverride, setProviderOverride] = useState<ProviderSelection>(
     () => getPersistedProviderModel(INBOX_PROVIDER_MODEL_STORAGE_KEY).provider,
   );
@@ -122,9 +139,11 @@ export default function InboxView() {
       });
       setInboxError(null);
       window.dispatchEvent(new CustomEvent('mindos:inbox-files', { detail: nextFiles }));
+      return nextFiles;
     } catch (err) {
       console.warn('[InboxView] fetch failed:', err);
       setInboxError(err instanceof Error ? err.message : t.inbox.loadFailed);
+      return null;
     } finally {
       setLoading(false);
     }
@@ -171,6 +190,19 @@ export default function InboxView() {
       window.removeEventListener('dragend', resetDrag, true);
     };
   }, [fetchInbox, debouncedRefresh, refreshHistory]);
+
+  useEffect(() => {
+    const syncShelvedPaths = () => setShelvedPaths(readShelvedInboxPaths());
+    const syncStorage = (event: StorageEvent) => {
+      if (event.key === INBOX_SHELVED_STORAGE_KEY) syncShelvedPaths();
+    };
+    window.addEventListener(INBOX_SHELVED_UPDATED_EVENT, syncShelvedPaths);
+    window.addEventListener('storage', syncStorage);
+    return () => {
+      window.removeEventListener(INBOX_SHELVED_UPDATED_EVENT, syncShelvedPaths);
+      window.removeEventListener('storage', syncStorage);
+    };
+  }, []);
 
   const handleOrganizeSelected = useCallback(() => {
     const selectedPathSet = new Set(selectedQueuePaths);
@@ -220,69 +252,82 @@ export default function InboxView() {
     return true;
   }, []);
 
-  const handleCapture = useCallback(async () => {
+  const savePendingCaptures = useCallback(async (captureIntent: CaptureIntent): Promise<CaptureSaveOutcome> => {
     const content = draftText.trim();
-    if ((!content && pendingFiles.length === 0 && pendingUrls.length === 0) || savingText) return;
-    setSavingText(true);
     let savedAny = false;
     let savedCount = 0;
     let failedCount = 0;
     let textSaveFailed = false;
+    let latestFiles: InboxFile[] | null = null;
+
+    if (content) {
+      const name = buildCaptureFileName(content, captureIntent);
+      const result = await saveInboxFiles(
+        [{ name, content, encoding: 'text' }],
+        t.inbox.saveFailed,
+        { source: 'text', captureIntent },
+      );
+      if (result.saved.length > 0 && result.skipped.length === 0) {
+        savedAny = true;
+        savedCount += result.saved.length;
+        setDraftText('');
+      } else {
+        failedCount += Math.max(1, result.skipped.length);
+        textSaveFailed = true;
+      }
+    }
+
+    const failedUrls: string[] = [];
+    for (const url of pendingUrls) {
+      const result = await clipUrlToInbox(url, t);
+      if (result.ok) {
+        savedAny = true;
+        savedCount += 1;
+      } else {
+        failedCount += 1;
+        failedUrls.push(url);
+      }
+    }
+    setPendingUrls(failedUrls);
+
+    if (pendingFiles.length > 0) {
+      const result = await quickDropToInbox(pendingFiles, t);
+      if (result.saved.length > 0) {
+        savedAny = true;
+        savedCount += result.saved.length;
+        setPendingFiles(prev => removeSavedPendingFiles(prev, result.saved.map(item => item.original)));
+      }
+      failedCount += result.skipped.length + result.oversized.length + result.unreadable.length;
+    }
+
+    if (savedAny) {
+      setLastSavedSummary({ saved: savedCount, failed: failedCount });
+      latestFiles = await fetchInbox();
+      window.dispatchEvent(new Event('mindos:inbox-updated'));
+    }
+
+    return { savedAny, savedCount, failedCount, textSaveFailed, latestFiles };
+  }, [draftText, fetchInbox, pendingFiles, pendingUrls, t]);
+
+  const handleCapture = useCallback(async () => {
+    const content = draftText.trim();
+    if ((!content && pendingFiles.length === 0 && pendingUrls.length === 0) || savingText || savingToMind) return;
+    setSavingText(true);
     try {
-      if (content) {
-        const name = buildCaptureFileName(content, selectedIntent);
-        const result = await saveInboxFiles(
-          [{ name, content, encoding: 'text' }],
-          t.inbox.saveFailed,
-          { source: 'text', captureIntent: selectedIntent },
-        );
-        if (result.saved.length > 0 && result.skipped.length === 0) {
-          savedAny = true;
-          savedCount += result.saved.length;
-          setDraftText('');
-        } else {
-          failedCount += Math.max(1, result.skipped.length);
-          textSaveFailed = true;
-        }
-      }
-      const failedUrls: string[] = [];
-      for (const url of pendingUrls) {
-        const result = await clipUrlToInbox(url, t);
-        if (result.ok) {
-          savedAny = true;
-          savedCount += 1;
-        } else {
-          failedCount += 1;
-          failedUrls.push(url);
-        }
-      }
-      setPendingUrls(failedUrls);
-      if (pendingFiles.length > 0) {
-        const result = await quickDropToInbox(pendingFiles, t);
-        if (result.saved.length > 0) {
-          savedAny = true;
-          savedCount += result.saved.length;
-          setPendingFiles(prev => removeSavedPendingFiles(prev, result.saved.map(item => item.original)));
-        }
-        failedCount += result.skipped.length + result.oversized.length + result.unreadable.length;
-      }
-      if (savedAny) {
-        setLastSavedSummary({ saved: savedCount, failed: failedCount });
-        await fetchInbox();
-        window.dispatchEvent(new Event('mindos:inbox-updated'));
-      }
-      if (content && !textSaveFailed && pendingUrls.length === 0 && pendingFiles.length === 0) {
+      const captureIntent = inferSuggestedIntent(draftText, pendingUrls, pendingFiles);
+      const outcome = await savePendingCaptures(captureIntent);
+      if (content && !outcome.textSaveFailed && pendingUrls.length === 0 && pendingFiles.length === 0) {
         toast.success(t.inbox.textSaved, 3000);
       }
-      if (textSaveFailed) {
-        toast.error(savedAny ? t.inbox.capturePartialFailed : t.inbox.saveFailed, 4000);
+      if (outcome.textSaveFailed) {
+        toast.error(outcome.savedAny ? t.inbox.capturePartialFailed : t.inbox.saveFailed, 4000);
       }
     } catch {
       toast.error(t.inbox.saveFailed, 4000);
     } finally {
       setSavingText(false);
     }
-  }, [draftText, pendingFiles, pendingUrls, selectedIntent, savingText, fetchInbox, t]);
+  }, [draftText, pendingFiles, pendingUrls, savePendingCaptures, savingText, savingToMind, t]);
 
   const handleComposerPaste = useCallback((e: React.ClipboardEvent<HTMLTextAreaElement>) => {
     const files = e.clipboardData.files;
@@ -315,43 +360,57 @@ export default function InboxView() {
     }
   }, [addPendingFiles, addPendingUrl]);
 
-  const agingCount = useMemo(() => files.filter(f => f.isAging).length, [files]);
-  const hasFiles = files.length > 0;
+  useEffect(() => {
+    if (loading || inboxError) return;
+    const validPaths = new Set(files.map(file => file.path));
+    const normalized = normalizeShelvedInboxPaths(shelvedPaths, validPaths);
+    if (normalized.length !== shelvedPaths.length || normalized.some((path, index) => path !== shelvedPaths[index])) {
+      setShelvedPaths(writeShelvedInboxPaths(normalized));
+    }
+  }, [files, inboxError, loading, shelvedPaths]);
+
+  const shelvedPathSet = useMemo(() => new Set(shelvedPaths), [shelvedPaths]);
+  const queueFiles = useMemo(() => files.filter(file => !shelvedPathSet.has(file.path)), [files, shelvedPathSet]);
+  const shelvedFiles = useMemo(() => files.filter(file => shelvedPathSet.has(file.path)), [files, shelvedPathSet]);
+  const agingCount = useMemo(() => queueFiles.filter(f => f.isAging).length, [queueFiles]);
+  const hasFiles = queueFiles.length > 0;
   const selectedQueuePathSet = useMemo(() => new Set(selectedQueuePaths), [selectedQueuePaths]);
   const selectedQueueFiles = useMemo(
-    () => files.filter(file => selectedQueuePathSet.has(file.path)),
-    [files, selectedQueuePathSet],
+    () => queueFiles.filter(file => selectedQueuePathSet.has(file.path)),
+    [queueFiles, selectedQueuePathSet],
   );
   const selectedFile = useMemo(
-    () => files.find(f => f.path === selectedPath) ?? null,
-    [files, selectedPath],
+    () => {
+      const visibleFiles = activeView === 'shelved'
+        ? shelvedFiles
+        : activeView === 'queue'
+          ? queueFiles
+          : files;
+      return visibleFiles.find(f => f.path === selectedPath) ?? null;
+    },
+    [activeView, files, queueFiles, selectedPath, shelvedFiles],
   );
   const selectedUnderstanding = useMemo(
     () => selectedFile ? buildUnderstanding(selectedFile, t.inbox, inferInboxFileIntent(selectedFile)) : null,
     [selectedFile, t],
   );
   const intentOptions = useMemo(() => getIntentOptions(t.inbox), [t]);
-  const intentSelectOptions = useMemo(() => intentOptions.map(intent => ({
-    value: intent.id,
-    label: intent.title,
-  })), [intentOptions]);
-  const selectedIntentOption = intentOptions.find(intent => intent.id === selectedIntent) ?? intentOptions[0];
   const suggestedIntent = useMemo(
     () => inferSuggestedIntent(draftText, pendingUrls, pendingFiles),
     [draftText, pendingUrls, pendingFiles],
   );
   const suggestedIntentOption = intentOptions.find(intent => intent.id === suggestedIntent) ?? intentOptions[0];
-  const showSuggestedIntent = suggestedIntent !== selectedIntent;
   const hasPendingCapture = draftText.trim().length > 0 || pendingFiles.length > 0 || pendingUrls.length > 0;
+  const canOrganizeToMind = hasPendingCapture || queueFiles.length > 0;
   const textWordCount = countWords(draftText);
   const stagedCaptureCount = (draftText.trim() ? 1 : 0) + pendingUrls.length + pendingFiles.length;
   const visibleHistory = useMemo(() => history.slice(0, HISTORY_VISIBLE), [history]);
   const [animateList, setAnimateList] = useState(true);
   const prevFileCountRef = useRef(0);
   useEffect(() => {
-    if (prevFileCountRef.current > 0 && files.length > 0) setAnimateList(false);
-    prevFileCountRef.current = files.length;
-  }, [files.length]);
+    if (prevFileCountRef.current > 0 && queueFiles.length > 0) setAnimateList(false);
+    prevFileCountRef.current = queueFiles.length;
+  }, [queueFiles.length]);
 
   useEffect(() => {
     const syncHash = () => setActiveView(getInitialInboxViewMode());
@@ -383,11 +442,15 @@ export default function InboxView() {
     ? t.inbox.capturePageTitle
     : activeView === 'queue'
       ? t.inbox.reviewPageTitle
+      : activeView === 'shelved'
+        ? t.inbox.shelvedPageTitle
       : t.inbox.donePageTitle;
   const pageSubtitle = activeView === 'capture'
     ? t.inbox.capturePageSubtitle
     : activeView === 'queue'
       ? t.inbox.reviewPageSubtitle
+      : activeView === 'shelved'
+        ? t.inbox.shelvedPageSubtitle
       : t.inbox.donePageSubtitle;
   const toggleQueueSelection = useCallback((file: InboxFile) => {
     setSelectedQueuePaths(prev => (
@@ -398,16 +461,91 @@ export default function InboxView() {
   }, []);
 
   const selectAllQueueFiles = useCallback(() => {
-    setSelectedQueuePaths(files.map(file => file.path));
-  }, [files]);
+    setSelectedQueuePaths(queueFiles.map(file => file.path));
+  }, [queueFiles]);
 
   const selectAgingQueueFiles = useCallback(() => {
-    setSelectedQueuePaths(files.filter(file => file.isAging).map(file => file.path));
-  }, [files]);
+    setSelectedQueuePaths(queueFiles.filter(file => file.isAging).map(file => file.path));
+  }, [queueFiles]);
 
   const clearQueueSelection = useCallback(() => {
     setSelectedQueuePaths([]);
   }, []);
+
+  const shelveFiles = useCallback((paths: string[]) => {
+    if (paths.length === 0) return;
+    const next = addShelvedInboxPaths(shelvedPaths, paths);
+    setShelvedPaths(next);
+    setSelectedQueuePaths(prev => prev.filter(path => !paths.includes(path)));
+    setSelectedPath(prev => (prev && paths.includes(prev) ? null : prev));
+    toast.success(t.inbox.fileShelved);
+  }, [shelvedPaths, t.inbox.fileShelved]);
+
+  const restoreFiles = useCallback((paths: string[]) => {
+    if (paths.length === 0) return;
+    const next = removeShelvedInboxPaths(shelvedPaths, paths);
+    setShelvedPaths(next);
+    setSelectedPath(prev => (prev && paths.includes(prev) ? null : prev));
+    toast.success(t.inbox.fileRestored);
+  }, [shelvedPaths, t.inbox.fileRestored]);
+
+  const shelveSelectedQueueFiles = useCallback(() => {
+    shelveFiles(selectedQueueFiles.map(file => file.path));
+  }, [selectedQueueFiles, shelveFiles]);
+
+  const handleOrganizeToMind = useCallback(async () => {
+    const hasStagedInput = draftText.trim().length > 0 || pendingFiles.length > 0 || pendingUrls.length > 0;
+    if ((!hasStagedInput && queueFiles.length === 0) || savingText || savingToMind || organizing) return;
+
+    setSavingToMind(true);
+    try {
+      let filesForRun = queueFiles;
+      let outcome: CaptureSaveOutcome | null = null;
+
+      if (hasStagedInput) {
+        const captureIntent = inferSuggestedIntent(draftText, pendingUrls, pendingFiles);
+        outcome = await savePendingCaptures(captureIntent);
+        const latestFiles = outcome.latestFiles ?? files;
+        filesForRun = latestFiles.filter(file => !shelvedPathSet.has(file.path));
+      }
+
+      if (outcome?.textSaveFailed) {
+        toast.error(outcome.savedAny ? t.inbox.capturePartialFailed : t.inbox.saveFailed, 4000);
+      }
+
+      if (filesForRun.length === 0) {
+        toast.error(t.inbox.organizeToMindEmpty, 3000);
+        return;
+      }
+
+      setSelectedQueuePaths(filesForRun.map(file => file.path));
+      switchView('queue');
+      await inboxOrganize.requestInboxOrganize(filesForRun, {
+        providerOverride,
+        modelOverride,
+      });
+    } catch {
+      toast.error(t.inbox.saveFailed, 4000);
+    } finally {
+      setSavingToMind(false);
+    }
+  }, [
+    draftText,
+    files,
+    inboxOrganize,
+    modelOverride,
+    organizing,
+    pendingFiles,
+    pendingUrls,
+    providerOverride,
+    queueFiles,
+    savePendingCaptures,
+    savingText,
+    savingToMind,
+    shelvedPathSet,
+    switchView,
+    t,
+  ]);
 
   if (loading) {
     return (
@@ -468,7 +606,7 @@ export default function InboxView() {
               </h1>
               {hasFiles && (
                 <span className="hidden sm:inline text-2xs text-muted-foreground/60 leading-tight shrink-0">
-                  {t.inbox.fileCount(files.length)}
+                  {t.inbox.fileCount(queueFiles.length)}
                   {agingCount > 0 && (
                     <span className="text-[var(--amber)]/70"> · {agingCount} {t.inbox.agingCountLabel}</span>
                   )}
@@ -511,28 +649,13 @@ export default function InboxView() {
             </div>
           </div>
 
-          <div className="flex flex-wrap gap-2">
-            <InboxViewTab
-              active={activeView === 'capture'}
-              icon={BookOpen}
-              label={t.inbox.viewCapture}
-              onClick={() => switchView('capture')}
-            />
-            <InboxViewTab
-              active={activeView === 'queue'}
-              icon={ListChecks}
-              label={t.inbox.viewQueue}
-              count={files.length}
-              onClick={() => switchView('queue')}
-            />
-            <InboxViewTab
-              active={activeView === 'history'}
-              icon={History}
-              label={t.inbox.viewHistory}
-              count={history.length}
-              onClick={() => switchView('history')}
-            />
-          </div>
+          <InboxProcessNav
+            activeView={activeView}
+            pendingCount={queueFiles.length}
+            shelvedCount={shelvedFiles.length}
+            doneCount={history.length}
+            onSwitch={switchView}
+          />
 
           {inboxError && (
             <InboxErrorBanner
@@ -548,6 +671,8 @@ export default function InboxView() {
           <div className={
             activeView === 'queue'
               ? 'grid gap-5 lg:grid-cols-[minmax(0,1.08fr)_350px] 2xl:grid-cols-[minmax(0,1.08fr)_380px]'
+              : activeView === 'shelved'
+                ? 'grid gap-5 lg:grid-cols-[minmax(0,1.08fr)_350px] 2xl:grid-cols-[minmax(0,1.08fr)_380px]'
               : activeView === 'capture'
                 ? 'grid max-w-[1120px] gap-5 xl:grid-cols-[minmax(0,1fr)_340px] xl:items-start'
                 : 'max-w-[760px]'
@@ -596,34 +721,15 @@ export default function InboxView() {
                       }`}
                     >
                       <div className="border-b border-border/50 px-3 py-3">
-                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                          <div className="flex min-w-0 items-start gap-2.5">
-                            <span className="mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[var(--amber-subtle)] text-[var(--amber)]">
-                              <FolderInput size={14} />
-                            </span>
-                            <div className="min-w-0">
-                              <span className="text-sm font-semibold text-foreground">{t.inbox.composerTitle}</span>
-                              <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground/58">
-                                {t.inbox.captureTrustLine}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="flex shrink-0 flex-wrap items-center gap-2">
-                            <label
-                              htmlFor="capture-next-action"
-                              className="text-2xs font-medium uppercase tracking-wider text-muted-foreground/55"
-                            >
-                              {t.inbox.nextActionTitle}
-                            </label>
-                            <div className="min-w-[156px]">
-                              <CustomSelect
-                                id="capture-next-action"
-                                value={selectedIntent}
-                                onChange={(value) => setSelectedIntent(value as CaptureIntent)}
-                                options={intentSelectOptions}
-                                size="sm"
-                              />
-                            </div>
+                        <div className="flex min-w-0 items-start gap-2.5">
+                          <span className="mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[var(--amber-subtle)] text-[var(--amber)]">
+                            <FolderInput size={14} />
+                          </span>
+                          <div className="min-w-0">
+                            <span className="text-sm font-semibold text-foreground">{t.inbox.composerTitle}</span>
+                            <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground/58">
+                              {t.inbox.captureTrustLine}
+                            </p>
                           </div>
                         </div>
 
@@ -634,14 +740,14 @@ export default function InboxView() {
                             description={t.inbox.captureAffordanceLinkDesc}
                           />
                           <CaptureAffordance
-                            icon={<FileText size={12} />}
-                            label={t.inbox.captureAffordanceNote}
-                            description={t.inbox.captureAffordanceNoteDesc}
-                          />
-                          <CaptureAffordance
                             icon={<Paperclip size={12} />}
                             label={t.inbox.captureAffordanceFile}
                             description={t.inbox.captureAffordanceFileDesc}
+                          />
+                          <CaptureAffordance
+                            icon={<FileText size={12} />}
+                            label={t.inbox.captureAffordanceNote}
+                            description={t.inbox.captureAffordanceNoteDesc}
                           />
                           <CaptureAffordance
                             icon={<Upload size={12} />}
@@ -709,12 +815,6 @@ export default function InboxView() {
                           <span>{t.inbox.captureInputKinds}</span>
                           <span className="text-muted-foreground/25">·</span>
                           <span>{t.inbox.captureNoAiHint}</span>
-                          {showSuggestedIntent && (
-                            <>
-                              <span className="text-muted-foreground/25">·</span>
-                              <span>{t.inbox.suggestedAction(suggestedIntentOption.title)}</span>
-                            </>
-                          )}
                         </div>
                         <div className="flex shrink-0 items-center gap-2">
                           {hasPendingCapture && (
@@ -741,13 +841,22 @@ export default function InboxView() {
                           <button
                             type="button"
                             onClick={handleCapture}
-                            disabled={!hasPendingCapture || savingText}
+                            disabled={!hasPendingCapture || savingText || savingToMind}
                             className="flex items-center gap-1.5 rounded-lg bg-[var(--amber)] px-3 py-2 text-xs font-medium text-[var(--amber-foreground)] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-45 focus-visible:ring-2 focus-visible:ring-ring"
                           >
                             {savingText ? <Loader2 size={13} className="animate-spin" /> : <Archive size={13} />}
                             {savingText
                               ? (stagedCaptureCount > 1 ? t.inbox.savingItems(stagedCaptureCount) : t.inbox.savingText)
                               : (stagedCaptureCount > 1 ? t.inbox.captureButtonCount(stagedCaptureCount) : t.inbox.captureButton)}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleOrganizeToMind}
+                            disabled={!canOrganizeToMind || savingText || savingToMind || organizing}
+                            className="flex items-center gap-1.5 rounded-lg border border-[var(--amber)]/35 bg-background px-3 py-2 text-xs font-medium text-foreground transition-colors hover:bg-[var(--amber-subtle)] disabled:cursor-not-allowed disabled:opacity-45 focus-visible:ring-2 focus-visible:ring-ring"
+                          >
+                            {savingToMind || organizing ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} className="text-[var(--amber)]" />}
+                            {savingToMind || organizing ? t.inbox.organizeToMindRunning : t.inbox.organizeToMindAction}
                           </button>
                         </div>
                       </div>
@@ -756,7 +865,7 @@ export default function InboxView() {
                   {lastSavedSummary && (
                     <InboxLastSavedStrip
                       summary={lastSavedSummary}
-                      pendingCount={files.length}
+                      pendingCount={queueFiles.length}
                       onReview={scrollToReviewPreview}
                       onDismiss={() => setLastSavedSummary(null)}
                     />
@@ -767,7 +876,7 @@ export default function InboxView() {
               {activeView === 'queue' && (
                 <InboxQueueSection
                   variant="workbench"
-                  files={files}
+                  files={queueFiles}
                   inboxError={inboxError}
                   animateList={animateList}
                   selectedPath={selectedPath}
@@ -779,6 +888,7 @@ export default function InboxView() {
                   onSelectAging={selectAgingQueueFiles}
                   onClearSelection={clearQueueSelection}
                   onOrganizeSelected={handleOrganizeSelected}
+                  onShelveSelected={shelveSelectedQueueFiles}
                   onDelete={handleDeleteFile}
                   onRetry={() => {
                     setLoading(true);
@@ -790,6 +900,22 @@ export default function InboxView() {
                   onProviderChange={setProviderOverride}
                   modelOverride={modelOverride}
                   onModelChange={setModelOverride}
+                />
+              )}
+
+              {activeView === 'shelved' && (
+                <InboxShelvedSection
+                  files={shelvedFiles}
+                  inboxError={inboxError}
+                  animateList={animateList}
+                  selectedPath={selectedPath}
+                  onSelectFile={(file) => setSelectedPath(file.path)}
+                  onRestore={(file) => restoreFiles([file.path])}
+                  onDelete={handleDeleteFile}
+                  onRetry={() => {
+                    setLoading(true);
+                    void fetchInbox();
+                  }}
                 />
               )}
 
@@ -831,7 +957,7 @@ export default function InboxView() {
                   draftText={draftText}
                   pendingUrls={pendingUrls}
                   pendingFiles={pendingFiles}
-                  selectedIntentTitle={selectedIntentOption.title}
+                  selectedIntentTitle={suggestedIntentOption.title}
                   textWordCount={textWordCount}
                   stagedCaptureCount={stagedCaptureCount}
                 />
@@ -843,7 +969,7 @@ export default function InboxView() {
                 <InboxQueueSection
                   sectionRef={reviewSectionRef}
                   variant="preview"
-                  files={files}
+                  files={queueFiles}
                   inboxError={inboxError}
                   animateList={animateList}
                   selectedPath={selectedPath}
@@ -864,6 +990,20 @@ export default function InboxView() {
                   file={selectedFile}
                   understanding={selectedUnderstanding}
                   onOpen={(file) => router.push(`/view/${encodePath(file.path)}`)}
+                  onShelve={(file) => shelveFiles([file.path])}
+                  onDelete={(file) => handleDeleteFile(file.name)}
+                />
+              </aside>
+            )}
+
+            {activeView === 'shelved' && (
+              <aside className="lg:sticky lg:top-[70px] lg:self-start">
+                <InboxItemDetailsPanel
+                  file={selectedFile}
+                  understanding={selectedUnderstanding}
+                  mode="shelved"
+                  onOpen={(file) => router.push(`/view/${encodePath(file.path)}`)}
+                  onRestore={(file) => restoreFiles([file.path])}
                   onDelete={(file) => handleDeleteFile(file.name)}
                 />
               </aside>
@@ -887,7 +1027,10 @@ function CaptureAffordance({
   description: string;
 }) {
   return (
-    <div className="min-w-0 rounded-lg border border-border/45 bg-background/45 px-2.5 py-2">
+    <div
+      data-capture-affordance={label}
+      className="min-w-0 rounded-lg border border-border/45 bg-background/45 px-2.5 py-2"
+    >
       <div className="flex items-center gap-1.5">
         <span className="shrink-0 text-[var(--amber)]">{icon}</span>
         <span className="truncate text-xs font-medium text-foreground/80">{label}</span>
@@ -1049,6 +1192,36 @@ function InboxCapturePreviewPanel({
   );
 }
 
+function InboxOrganizerAvatar({ className = 'h-8 w-8 text-xs' }: { className?: string }) {
+  const { t } = useLocale();
+
+  return (
+    <span className={`inline-flex shrink-0 items-center justify-center rounded-lg border border-[var(--amber)]/25 bg-[var(--amber-subtle)] font-mono font-semibold text-[var(--amber)] ${className}`}>
+      {t.inbox.organizationAssistantInitial}
+    </span>
+  );
+}
+
+function InboxAssistantFact({
+  icon,
+  label,
+  value,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="flex min-w-0 items-start gap-2 rounded-lg border border-border/45 bg-background/45 px-2.5 py-2">
+      <span className="mt-0.5 shrink-0 text-[var(--amber)]">{icon}</span>
+      <div className="min-w-0">
+        <p className="text-2xs font-medium uppercase tracking-wider text-muted-foreground/48">{label}</p>
+        <p className="mt-0.5 truncate text-xs font-medium text-foreground/78">{value}</p>
+      </div>
+    </div>
+  );
+}
+
 function CapturePreviewIdentity({
   icon,
   title,
@@ -1154,6 +1327,7 @@ function InboxQueueSection({
   onSelectAging,
   onClearSelection,
   onOrganizeSelected,
+  onShelveSelected,
   onDelete,
   onRetry,
   onOpenWorkbench,
@@ -1177,6 +1351,7 @@ function InboxQueueSection({
   onSelectAging?: () => void;
   onClearSelection?: () => void;
   onOrganizeSelected?: () => void;
+  onShelveSelected?: () => void;
   onDelete: (name: string) => void;
   onRetry: () => void;
   onOpenWorkbench: () => void;
@@ -1251,6 +1426,7 @@ function InboxQueueSection({
               onSelectAging={onSelectAging}
               onClearSelection={onClearSelection}
               onOrganize={onOrganizeSelected}
+              onShelveSelected={onShelveSelected}
             />
           )}
           <div className="divide-y divide-border/50">
@@ -1290,6 +1466,93 @@ function InboxQueueSection({
   );
 }
 
+function InboxShelvedSection({
+  files,
+  inboxError,
+  animateList,
+  selectedPath,
+  onSelectFile,
+  onRestore,
+  onDelete,
+  onRetry,
+}: {
+  files: InboxFile[];
+  inboxError: string | null;
+  animateList: boolean;
+  selectedPath: string | null;
+  onSelectFile: (file: InboxFile) => void;
+  onRestore: (file: InboxFile) => void;
+  onDelete: (name: string) => void;
+  onRetry: () => void;
+}) {
+  const { t } = useLocale();
+  const hasFiles = files.length > 0;
+
+  return (
+    <section className="overflow-hidden rounded-xl border border-border/60 bg-card/40 shadow-sm">
+      <div className="flex flex-col gap-3 border-b border-border/50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <Archive size={15} className="text-[var(--amber)]" />
+            <h3 className="text-sm font-semibold text-foreground">{t.inbox.shelvedTitle}</h3>
+            {hasFiles && (
+              <span className="rounded-full bg-muted px-2 py-0.5 text-2xs font-medium text-muted-foreground">
+                {t.inbox.fileCount(files.length)}
+              </span>
+            )}
+          </div>
+          <p className="mt-1 text-xs leading-relaxed text-muted-foreground/60">
+            {t.inbox.shelvedDesc}
+          </p>
+        </div>
+      </div>
+
+      {inboxError ? (
+        <div className="px-4 py-10 text-center">
+          <p className="text-sm font-medium text-foreground/70">{t.inbox.loadFailed}</p>
+          <p className="mt-1 text-xs text-muted-foreground/55">{inboxError}</p>
+          <button
+            type="button"
+            onClick={onRetry}
+            className="mt-4 rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {t.inbox.retry}
+          </button>
+        </div>
+      ) : hasFiles ? (
+        <div className="divide-y divide-border/50">
+          {files.map((file, idx) => (
+            <InboxFileRow
+              key={file.path}
+              file={file}
+              index={idx}
+              animate={animateList}
+              selected={selectedPath === file.path}
+              onSelect={() => onSelectFile(file)}
+              onDelete={onDelete}
+              secondaryAction={{
+                label: t.inbox.actionRestore,
+                icon: RotateCcw,
+                onClick: () => onRestore(file),
+              }}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="px-4 py-12 text-center">
+          <span className="mx-auto flex h-9 w-9 items-center justify-center rounded-lg bg-muted/45 text-muted-foreground/50">
+            <Archive size={16} />
+          </span>
+          <p className="mt-3 text-sm font-medium text-foreground/70">{t.inbox.shelvedEmptyTitle}</p>
+          <p className="mx-auto mt-1 max-w-[320px] text-xs leading-relaxed text-muted-foreground/55">
+            {t.inbox.shelvedEmptyDesc}
+          </p>
+        </div>
+      )}
+    </section>
+  );
+}
+
 function InboxOrganizationAgentBar({
   files,
   selectedFiles,
@@ -1303,6 +1566,7 @@ function InboxOrganizationAgentBar({
   onSelectAging,
   onClearSelection,
   onOrganize,
+  onShelveSelected,
 }: {
   files: InboxFile[];
   selectedFiles: InboxFile[];
@@ -1316,34 +1580,69 @@ function InboxOrganizationAgentBar({
   onSelectAging: () => void;
   onClearSelection: () => void;
   onOrganize: () => void;
+  onShelveSelected?: () => void;
 }) {
   const { t } = useLocale();
   const selectedCount = selectedFiles.length;
   const disabled = selectedCount === 0 || organizing;
 
   return (
-    <div className="border-b border-border/50 bg-background/55 px-3 py-2.5">
-      <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex min-w-0 items-start gap-2.5">
-          <span className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--amber-subtle)] text-[var(--amber)]">
-            <Sparkles size={15} />
-          </span>
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <h4 className="text-sm font-semibold text-foreground">{t.inbox.organizationAgentTitle}</h4>
-              <span className="rounded-full bg-muted px-2 py-0.5 text-2xs font-medium text-muted-foreground">
-                {t.inbox.selectedCount(selectedCount)}
-              </span>
+    <div className="border-b border-border/50 bg-background/55 px-3 py-3">
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div className="flex min-w-0 items-start gap-2.5">
+            <InboxOrganizerAvatar />
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h4 className="text-sm font-semibold text-foreground">{t.inbox.organizationAgentTitle}</h4>
+                <span className="rounded-full bg-muted px-2 py-0.5 text-2xs font-medium text-muted-foreground">
+                  {t.inbox.organizationAssistantBadge}
+                </span>
+                <span className="rounded-full bg-muted px-2 py-0.5 text-2xs font-medium text-muted-foreground">
+                  {t.inbox.selectedCount(selectedCount)}
+                </span>
+              </div>
+              <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground/62">
+                {selectedCount > 0
+                  ? t.inbox.organizationAgentReady(selectedCount)
+                  : t.inbox.organizationAssistantWorkbenchDesc}
+              </p>
             </div>
-            <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground/62">
-              {selectedCount > 0
-                ? t.inbox.organizationAgentReady(selectedCount)
-                : t.inbox.organizationAgentDesc}
-            </p>
+          </div>
+
+          <div className="flex shrink-0 items-center gap-2 lg:justify-end">
+            <Link
+              href="/agents?tab=presets"
+              className="inline-flex items-center justify-center rounded-lg border border-border/70 bg-background px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              {t.inbox.organizationAssistantEdit}
+            </Link>
+            <button
+              type="button"
+              onClick={onOrganize}
+              disabled={disabled}
+              className="inline-flex min-w-[154px] items-center justify-center gap-1.5 rounded-lg bg-[var(--amber)] px-3 py-2 text-xs font-medium text-[var(--amber-foreground)] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-45 focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              {organizing ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
+              {organizing ? t.inbox.organizing : t.inbox.organizeSelectedAction(selectedCount)}
+            </button>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+        <div className="grid gap-2 sm:grid-cols-2">
+          <InboxAssistantFact
+            icon={<ListChecks size={12} />}
+            label={t.inbox.organizationAssistantReadsLabel}
+            value={t.inbox.organizationAssistantReadsSelected}
+          />
+          <InboxAssistantFact
+            icon={<Check size={12} />}
+            label={t.inbox.organizationAssistantWritesLabel}
+            value={t.inbox.organizationAssistantWritesMind}
+          />
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={onSelectAll}
@@ -1379,15 +1678,17 @@ function InboxOrganizationAgentBar({
             systemLabel={t.inbox.modelFollowSystem}
             emptyLabel={t.inbox.modelNoProvider}
           />
-          <button
-            type="button"
-            onClick={onOrganize}
-            disabled={disabled}
-            className="inline-flex min-w-[154px] items-center justify-center gap-1.5 rounded-lg bg-[var(--amber)] px-3 py-1.5 text-xs font-medium text-[var(--amber-foreground)] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-45 focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            {organizing ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
-            {organizing ? t.inbox.organizing : t.inbox.organizeSelectedAction(selectedCount)}
-          </button>
+          {onShelveSelected && (
+            <button
+              type="button"
+              onClick={onShelveSelected}
+              disabled={disabled}
+              className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-border/70 bg-background px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-45 focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <Archive size={13} />
+              {t.inbox.shelveSelectedAction(selectedCount)}
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -1406,15 +1707,16 @@ function InboxOrganizationPreviewBar({
   const { t } = useLocale();
 
   return (
-    <div className="border-b border-border/50 bg-background/45 px-3 py-2.5">
+    <div className="border-b border-border/50 bg-background/45 px-3 py-3">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 items-start gap-2.5">
-          <span className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--amber-subtle)] text-[var(--amber)]">
-            <Sparkles size={15} />
-          </span>
+          <InboxOrganizerAvatar />
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <h4 className="text-sm font-semibold text-foreground">{t.inbox.organizationAgentTitle}</h4>
+              <span className="rounded-full bg-muted px-2 py-0.5 text-2xs font-medium text-muted-foreground">
+                {t.inbox.organizationAssistantBadge}
+              </span>
               <span className="rounded-full bg-muted px-2 py-0.5 text-2xs font-medium text-muted-foreground">
                 {t.inbox.fileCount(files.length)}
               </span>
@@ -1425,7 +1727,7 @@ function InboxOrganizationPreviewBar({
               )}
             </div>
             <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground/62">
-              {t.inbox.organizationAgentPreviewDesc}
+              {t.inbox.organizationAssistantPreviewDesc}
             </p>
           </div>
         </div>
@@ -1454,6 +1756,7 @@ function InboxFileRow({
   checked = false,
   onSelect,
   onToggleChecked,
+  secondaryAction,
 }: {
   file: InboxFile;
   onDelete: (name: string) => void;
@@ -1464,6 +1767,11 @@ function InboxFileRow({
   checked?: boolean;
   onSelect: () => void;
   onToggleChecked?: () => void;
+  secondaryAction?: {
+    label: string;
+    icon: React.ComponentType<{ size?: number; className?: string }>;
+    onClick: () => void;
+  };
 }) {
   const { t } = useLocale();
   const router = useRouter();
@@ -1477,6 +1785,7 @@ function InboxFileRow({
   const FileIcon = ext === 'csv' ? Table
     : ext === 'json' ? FileCode
     : FileText;
+  const SecondaryIcon = secondaryAction?.icon;
   const iconColor = ext === 'csv' ? 'text-emerald-500/70'
     : ext === 'json' ? 'text-violet-500/70'
     : ext === 'pdf' ? 'text-error/60'
@@ -1554,6 +1863,22 @@ function InboxFileRow({
             <span className="text-2xs text-muted-foreground/40 tabular-nums">{age}</span>
           </div>
         </div>
+
+        {secondaryAction && SecondaryIcon && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              secondaryAction.onClick();
+            }}
+            className={`${selected ? 'hidden md:flex' : 'hidden md:group-hover:flex md:group-focus:flex'} items-center justify-center gap-1 rounded-md px-2 py-1 text-2xs font-medium text-muted-foreground/55 transition-colors hover:bg-background hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring`}
+            title={secondaryAction.label}
+          >
+            <SecondaryIcon size={12} />
+            {secondaryAction.label}
+          </button>
+        )}
 
         <button
           type="button"
@@ -1634,12 +1959,18 @@ function FileContextMenu({ x, y, file, onDelete, onClose }: {
 function InboxItemDetailsPanel({
   file,
   understanding,
+  mode = 'pending',
   onOpen,
+  onShelve,
+  onRestore,
   onDelete,
 }: {
   file: InboxFile | null;
   understanding: ReturnType<typeof buildUnderstanding> | null;
+  mode?: 'pending' | 'shelved';
   onOpen: (file: InboxFile) => void;
+  onShelve?: (file: InboxFile) => void;
+  onRestore?: (file: InboxFile) => void;
   onDelete: (file: InboxFile) => void;
 }) {
   const { t } = useLocale();
@@ -1720,7 +2051,7 @@ function InboxItemDetailsPanel({
 
       <InboxContentPreview key={file.path} file={file} />
 
-      <div className="grid grid-cols-2 gap-2 border-t border-border/45 px-4 py-4">
+      <div className="grid grid-cols-1 gap-2 border-t border-border/45 px-4 py-4 sm:grid-cols-3">
         <button
           type="button"
           onClick={() => onOpen(file)}
@@ -1728,6 +2059,25 @@ function InboxItemDetailsPanel({
         >
           {t.inbox.actionOpen}
         </button>
+        {mode === 'shelved' ? (
+          <button
+            type="button"
+            onClick={() => onRestore?.(file)}
+            className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-[var(--amber)]/35 bg-[var(--amber-subtle)] px-3 py-2 text-xs font-medium text-foreground transition-colors hover:bg-[var(--amber-subtle)]/80 focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <RotateCcw size={13} className="text-[var(--amber)]" />
+            {t.inbox.actionRestore}
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => onShelve?.(file)}
+            className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <Archive size={13} />
+            {t.inbox.actionShelve}
+          </button>
+        )}
         <button
           type="button"
           onClick={() => onDelete(file)}
@@ -1897,38 +2247,106 @@ function HistoryRow({ entry }: { entry: OrganizeHistoryEntry }) {
 
 /* ─── Helpers ─── */
 
-function InboxViewTab({
-  active,
-  icon: Icon,
-  label,
-  count,
-  onClick,
+function InboxProcessNav({
+  activeView,
+  pendingCount,
+  shelvedCount,
+  doneCount,
+  onSwitch,
 }: {
-  active: boolean;
-  icon: React.ComponentType<{ size?: number; className?: string }>;
-  label: string;
-  count?: number;
-  onClick: () => void;
+  activeView: InboxViewMode;
+  pendingCount: number;
+  shelvedCount: number;
+  doneCount: number;
+  onSwitch: (view: InboxViewMode) => void;
 }) {
+  const { t } = useLocale();
+  const entries: Array<{
+    view: Exclude<InboxViewMode, 'capture'>;
+    icon: React.ComponentType<{ size?: number; className?: string }>;
+    label: string;
+    count: number;
+    desc: string;
+  }> = [
+    {
+      view: 'queue',
+      icon: ListChecks,
+      label: t.inbox.viewQueue,
+      count: pendingCount,
+      desc: t.inbox.sidebarQueueDesc(pendingCount),
+    },
+    {
+      view: 'shelved',
+      icon: Archive,
+      label: t.inbox.viewShelved,
+      count: shelvedCount,
+      desc: t.inbox.sidebarShelvedDesc(shelvedCount),
+    },
+    {
+      view: 'history',
+      icon: History,
+      label: t.inbox.viewHistory,
+      count: doneCount,
+      desc: t.inbox.sidebarHistoryDesc(doneCount),
+    },
+  ];
+
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className={`inline-flex h-9 items-center gap-2 rounded-lg border px-3 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:ring-ring ${
-        active
-          ? 'border-[var(--amber)]/45 bg-[var(--amber-subtle)] text-foreground'
-          : 'border-border/60 bg-card/50 text-muted-foreground hover:bg-muted hover:text-foreground'
-      }`}
-    >
-      <Icon size={13} className={active ? 'text-[var(--amber)]' : 'text-muted-foreground/55'} />
-      <span>{label}</span>
-      {typeof count === 'number' && count > 0 && (
-        <span className="rounded-full bg-background px-1.5 py-px text-2xs text-muted-foreground">
-          {count}
-        </span>
-      )}
-    </button>
+    <nav className="md:hidden rounded-xl border border-border/60 bg-card/45 p-3 shadow-sm" aria-label={t.inbox.title}>
+      <button
+        type="button"
+        onClick={() => onSwitch('capture')}
+        aria-current={activeView === 'capture' ? 'page' : undefined}
+        className={`flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition-opacity focus-visible:ring-2 focus-visible:ring-ring ${
+          activeView === 'capture'
+            ? 'bg-[var(--amber)] text-[var(--amber-foreground)] hover:opacity-90'
+            : 'bg-[var(--amber)] text-[var(--amber-foreground)] hover:opacity-90'
+        }`}
+      >
+        <Plus size={13} />
+        {t.inbox.viewCapture}
+      </button>
+
+      <div className="mt-3">
+        <p className="mb-1.5 px-1 text-2xs font-medium uppercase tracking-wider text-muted-foreground/50">
+          {t.inbox.sidebarProcessTitle}
+        </p>
+        <div className="space-y-1">
+          {entries.map(entry => {
+            const active = activeView === entry.view;
+            const Icon = entry.icon;
+            return (
+              <button
+                key={entry.view}
+                type="button"
+                onClick={() => onSwitch(entry.view)}
+                aria-current={active ? 'page' : undefined}
+                className={`flex w-full items-start gap-2 rounded-lg border px-3 py-2.5 text-left transition-colors focus-visible:ring-2 focus-visible:ring-ring ${
+                  active
+                    ? 'border-[var(--amber)]/45 bg-[var(--amber-subtle)] text-foreground'
+                    : 'border-transparent text-muted-foreground hover:bg-muted/45'
+                }`}
+              >
+                <Icon size={13} className={`mt-0.5 shrink-0 ${active ? 'text-[var(--amber)]' : 'text-muted-foreground/60'}`} />
+                <span className="min-w-0 flex-1">
+                  <span className={`block text-xs font-medium ${active ? 'text-foreground' : 'text-foreground/85'}`}>
+                    {entry.label}
+                  </span>
+                  <span className="mt-0.5 block text-2xs leading-relaxed text-muted-foreground/60">
+                    {entry.desc}
+                  </span>
+                </span>
+                {entry.count > 0 && (
+                  <span className="mt-0.5 rounded-full bg-background px-1.5 py-px text-2xs font-medium text-muted-foreground">
+                    {entry.count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </nav>
   );
 }
 
@@ -2045,8 +2463,6 @@ function inferInboxFileIntent(file: InboxFile): CaptureIntent {
 }
 
 type InboxUnderstandingLabels = {
-  nextActionTitle: string;
-  suggestedAction: (action: string) => string;
   intentSourceTitle: string;
   intentSourceDesc: string;
   intentSourceAction: string;

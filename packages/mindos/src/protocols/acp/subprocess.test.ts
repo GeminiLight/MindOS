@@ -228,6 +228,49 @@ describe('createMindosClient permission policy', () => {
     expect(mockSpawn).not.toHaveBeenCalled();
   });
 
+  it('passes runtime env to ACP terminal subprocesses without overriding request env', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'mindos-acp-terminal-env-'));
+    mockExecFileSync.mockImplementation((command, args) => {
+      if (command === 'which' && Array.isArray(args) && args[0] === 'node') {
+        return '/usr/bin/node\n' as any;
+      }
+      throw new Error(`unexpected command: ${String(command)}`);
+    });
+    mockSpawn.mockReturnValue({
+      ...makeChildProcess(),
+      stdout: { on: vi.fn() },
+      stderr: { on: vi.fn() },
+      exitCode: null,
+      signalCode: null,
+      kill: vi.fn(),
+    } as any);
+    const client = createMindosClient(
+      makeAcpProcess(),
+      root,
+      {},
+      'agent',
+      { GEMINI_API_KEY: 'runtime-key', SHARED_KEY: 'runtime-shared' },
+    );
+
+    await expect(client.createTerminal({
+      command: 'node',
+      args: ['-v'],
+      env: [{ name: 'SHARED_KEY', value: 'request-shared' }],
+    })).resolves.toEqual({ terminalId: expect.stringMatching(/^term-/) });
+
+    expect(mockSpawn).toHaveBeenCalledWith(
+      '/usr/bin/node',
+      ['-v'],
+      expect.objectContaining({
+        env: expect.objectContaining({
+          GEMINI_API_KEY: 'runtime-key',
+          SHARED_KEY: 'request-shared',
+        }),
+        shell: false,
+      }),
+    );
+  });
+
   it('resolves relative file paths against the ACP working directory', async () => {
     const root = mkdtempSync(join(tmpdir(), 'mindos-acp-paths-'));
     writeFileSync(join(root, 'note.md'), 'hello', 'utf-8');

@@ -8,10 +8,17 @@ import {
   type CodexThreadReadResult,
   type CodexThreadForkResult,
 } from '../../agent-runtime/codex-app-server.js';
+import { resolveCommandPath } from '../../protocols/acp/index.js';
 import { errorResponse, json, type MindosServerResponse } from '../response.js';
+import {
+  defaultCheckNativeRuntimeHealth,
+  type NativeRuntimeHealthResult,
+} from './agent-runtimes.js';
 
 export type CodexThreadManagerServices = {
   createCodexClient?(): CodexAppServerClient | Promise<CodexAppServerClient>;
+  resolveRuntimeCommand?(command: string): Promise<string | null>;
+  checkCodexRuntimeHealth?(binaryPath: string): Promise<NativeRuntimeHealthResult>;
 };
 
 export type CodexThreadListPayload = CodexThreadListResult;
@@ -32,7 +39,7 @@ export async function handleCodexThreadsGet(
       headers: NO_STORE_HEADERS,
     });
   } catch (error) {
-    return errorResponse(error);
+    return codexThreadErrorResponse(error);
   }
 }
 
@@ -51,7 +58,7 @@ export async function handleCodexThreadGet(
       headers: NO_STORE_HEADERS,
     });
   } catch (error) {
-    return errorResponse(error);
+    return codexThreadErrorResponse(error);
   }
 }
 
@@ -68,7 +75,7 @@ export async function handleCodexThreadForkPost(
       headers: NO_STORE_HEADERS,
     });
   } catch (error) {
-    return errorResponse(error);
+    return codexThreadErrorResponse(error);
   }
 }
 
@@ -82,7 +89,7 @@ export async function handleCodexThreadArchivePost(
     await withCodexClient(services, (client) => client.archiveThread({ threadId: normalizedThreadId }));
     return json({ ok: true }, { headers: NO_STORE_HEADERS });
   } catch (error) {
-    return errorResponse(error);
+    return codexThreadErrorResponse(error);
   }
 }
 
@@ -97,20 +104,48 @@ export async function handleCodexThreadUnarchivePost(
       headers: NO_STORE_HEADERS,
     });
   } catch (error) {
-    return errorResponse(error);
+    return codexThreadErrorResponse(error);
   }
+}
+
+class CodexThreadRuntimeUnavailableError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'CodexThreadRuntimeUnavailableError';
+  }
+}
+
+function codexThreadErrorResponse(error: unknown): MindosServerResponse<{ error: string }> {
+  return errorResponse(error, error instanceof CodexThreadRuntimeUnavailableError ? 409 : 500);
 }
 
 async function withCodexClient<T>(
   services: CodexThreadManagerServices,
   run: (client: CodexAppServerClient) => Promise<T>,
 ): Promise<T> {
+  await ensureCodexThreadRuntimeAvailable(services);
   const client = await (services.createCodexClient?.() ?? createCodexAppServerClient(createCodexAppServerStdioTransport()));
   try {
     await client.initialize();
     return await run(client);
   } finally {
     await client.close?.();
+  }
+}
+
+async function ensureCodexThreadRuntimeAvailable(services: CodexThreadManagerServices): Promise<void> {
+  if (services.createCodexClient) return;
+  const resolveRuntimeCommand = services.resolveRuntimeCommand ?? resolveCommandPath;
+  const binaryPath = await resolveRuntimeCommand('codex');
+  if (!binaryPath) {
+    throw new CodexThreadRuntimeUnavailableError('Codex executable was not detected. Install Codex or start MindOS from an environment where the codex command is available.');
+  }
+  const health = await (services.checkCodexRuntimeHealth?.(binaryPath) ?? defaultCheckNativeRuntimeHealth({
+    runtime: 'codex',
+    agent: { id: 'codex-acp', name: 'Codex', binaryPath },
+  }));
+  if (health.status !== 'available') {
+    throw new CodexThreadRuntimeUnavailableError(`Codex is ${health.status === 'signed-out' ? 'signed out' : 'unavailable'}.${health.reason ? ` ${health.reason}` : ''}`);
   }
 }
 

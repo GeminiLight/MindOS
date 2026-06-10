@@ -103,32 +103,42 @@ vi.mock('@/lib/stores/locale-store', () => ({
 }));
 
 describe('Agents content dashboard', () => {
-  it('renders overview with pulse stats, agent cards, and quick nav', () => {
+  it('renders overview with five IA groups and clickable system model', () => {
     const html = renderToStaticMarkup(<AgentsContentPage tab="overview" />);
     const a = messages.en.agentsContent;
+    const capabilitiesHint = a.navHints.capabilities.replace('&', '&amp;');
+    const capabilitiesLabel = a.overview.capabilitiesLabel.replace('&', '&amp;');
+    const channelsHint = a.navHints.channels.replace('&', '&amp;');
 
     expect(html).toContain(a.title);
     expect(html).toContain(a.navAriaLabel);
     expect(html).toContain(a.navHints.overview);
-    expect(html).toContain(a.navHints.presets);
-    expect(html).toContain(a.navHints.mcp);
-    expect(html).toContain(a.navHints.skills);
-    expect(html).toContain('/agents?tab=presets');
-    expect(html).toContain('/agents?tab=channels');
-    expect(html).toContain(a.workspacePulse.connected);
-    expect(html).toContain(a.workspacePulse.enabledSkills);
-    expect(html).toContain(a.overview.usagePulse);
-    expect(html).toContain(a.overview.pulseMcp);
-    expect(html).toContain('Cursor');
-    expect(html).toContain('Codex');
-    // Ghost Agent (present: false) is hidden from overview — only present agents shown
+    expect(html).toContain(a.navHints.assistant);
+    expect(html).toContain(a.navHints.agent);
+    expect(html).toContain(capabilitiesHint);
+    expect(html).toContain(channelsHint);
+    expect(html).toContain('href="/agents?tab=assistant"');
+    expect(html).toContain('href="/agents?tab=agent"');
+    expect(html).toContain('href="/agents?tab=capabilities"');
+    expect(html).toContain('href="/agents?tab=channels"');
+    expect(html).toContain(a.overview.systemModelTitle);
+    expect(html).toContain(a.overview.assistantLabel);
+    expect(html).toContain(a.overview.agentLabel);
+    expect(html).toContain(capabilitiesLabel);
+    expect(html).toContain(a.overview.channelsLabel);
+    expect(html).toContain(a.overview.recentActivity);
+    expect(html).toContain(a.overview.nextActionsTitle);
+    expect(html).not.toContain('/agents?tab=presets');
+    expect(html).not.toContain('/agents?tab=mcp');
+    expect(html).not.toContain('/agents?tab=skills');
+    expect(html).not.toContain('/agents?tab=a2a');
+    expect(html).not.toContain('/agents?tab=activity');
+    // Hidden/legacy agent card wall is not part of the overview anymore.
     expect(html).not.toContain('Ghost Agent');
-    expect(html).toContain('MCP');
-    expect(html).toContain('Skills');
   });
 
-  it('renders mcp section with By Server (default) / By Agent views and management', () => {
-    const html = renderToStaticMarkup(<AgentsContentPage tab="mcp" />);
+  it('renders Agent section with By Server (default) / By Agent views and management', () => {
+    const html = renderToStaticMarkup(<AgentsContentPage tab="agent" />);
     const a = messages.en.agentsContent;
 
     expect(html).toContain(a.mcp.tabs.byAgent);
@@ -143,10 +153,13 @@ describe('Agents content dashboard', () => {
     expect(html).toContain('/agent-icons/openai.svg');
   });
 
-  it('renders skills section with By Skill / By Agent views and management', () => {
-    const html = renderToStaticMarkup(<AgentsContentPage tab="skills" />);
+  it('renders Skills & MCP section with MCP and skill management', () => {
+    const html = renderToStaticMarkup(<AgentsContentPage tab="capabilities" />);
     const a = messages.en.agentsContent;
 
+    expect(html).toContain(a.mcp.tabs.byAgent);
+    expect(html).toContain(a.mcp.tabs.byServer);
+    expect(html).toContain(a.mcp.connectionGraph);
     expect(html).toContain(a.skills.title);
     expect(html).toContain(a.skills.tabs.bySkill);
     expect(html).toContain(a.skills.tabs.byAgent);
@@ -161,14 +174,14 @@ describe('Agents content dashboard', () => {
     // Skill rendering is validated via Virtuoso's data prop, not DOM assertion.
   });
 
-  it('renders built-in agent presets with scalable sections and run panel', () => {
-    const html = renderToStaticMarkup(<AgentsContentPage tab="presets" />);
+  it('renders Assistant profiles with scalable sections and run panel', () => {
+    const html = renderToStaticMarkup(<AgentsContentPage tab="assistant" />);
     const a = messages.en.agentsContent;
 
     expect(html).toContain(a.presets.title);
     expect(html).toContain(a.presets.presetRail);
     expect(html).toContain(a.presets.libraryHint);
-    expect(html).toContain('Inbox Agent');
+    expect(html).toContain('Inbox Organizer');
     expect(html).toContain('Open Inbox review');
     expect(html).toContain('/capture#queue');
     expect(html).toContain(a.presets.overviewSection);

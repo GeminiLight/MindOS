@@ -29,12 +29,16 @@ export type MindosMcpStatusPayload = {
   toolCount: number;
   authConfigured: boolean;
   maskedToken?: string;
-  authToken?: string;
   localIP: string | null;
   connectionMode: {
     cli: boolean;
     mcp: boolean;
   };
+};
+
+export type MindosMcpTokenRevealPayload = {
+  authConfigured: boolean;
+  authToken?: string;
 };
 
 function parseHostname(host: string): string {
@@ -73,9 +77,24 @@ export async function handleMcpStatus(
       toolCount: running ? 24 : 0,
       authConfigured,
       maskedToken: authConfigured ? services.maskToken(token) : undefined,
-      authToken: authConfigured ? token : undefined,
       localIP: services.getLocalIP(),
       connectionMode: settings.connectionMode ?? { cli: true, mcp: false },
+    });
+  } catch (error) {
+    return errorResponse(error);
+  }
+}
+
+export async function handleMcpTokenReveal(
+  services: Pick<MindosMcpStatusServices, 'readSettings'>,
+): Promise<MindosServerResponse<MindosMcpTokenRevealPayload | { error: string }>> {
+  try {
+    const token = services.readSettings().authToken ?? '';
+    return json({
+      authConfigured: !!token,
+      ...(token ? { authToken: token } : {}),
+    }, {
+      headers: { 'Cache-Control': 'no-store' },
     });
   } catch (error) {
     return errorResponse(error);

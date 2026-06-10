@@ -80,10 +80,10 @@ function RailButton({
 }: RailButtonProps) {
   const tooltipText = shortcut ? `${label} (${shortcut})` : label;
   const buttonClassName = `
-    relative flex items-center ${expanded ? 'justify-start px-3 w-full' : 'justify-center w-10'} h-10 rounded-md transition-colors
+    hit-target-box relative flex items-center ${expanded ? 'justify-start px-3 w-full' : 'justify-center w-10'} h-10 transition-colors [--hit-target-hover-bg:var(--muted)] [--hit-target-active-bg:var(--amber-dim)] [--hit-target-radius:var(--radius-md)]
     ${active
-      ? 'text-[var(--amber)] bg-[var(--amber-dim)]'
-      : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+      ? 'text-[var(--amber)]'
+      : 'text-muted-foreground hover:text-foreground'
     }
     focus-visible:ring-2 focus-visible:ring-ring
   `;
@@ -113,6 +113,7 @@ function RailButton({
     'aria-label': label,
     title: expanded ? undefined : tooltipText,
     'data-walkthrough': walkthroughId,
+    'data-hit-active': active ? 'true' : undefined,
     className: buttonClassName,
   };
 
@@ -446,14 +447,18 @@ export default function ActivityBar({
       <button
         onClick={() => onExpandedChange(!expanded)}
         className="
+          hit-target-box
           absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 z-[32]
-          w-5 h-5 rounded-full
-          bg-card border border-border shadow-sm
+          w-5 h-5
+          border border-transparent
           flex items-center justify-center
           opacity-0 group-hover:opacity-100 hover:!opacity-100
           transition-opacity duration-200
-          text-muted-foreground hover:text-foreground hover:bg-muted
-          focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring
+          text-muted-foreground hover:text-foreground
+          focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
+          [--hit-target-bg:var(--card)] [--hit-target-hover-bg:var(--muted)]
+          [--hit-target-border-width:1px] [--hit-target-border:var(--border)] [--hit-target-hover-border:var(--border)]
+          [--hit-target-radius:9999px] [--hit-target-shadow:0_1px_2px_0_color-mix(in_srgb,var(--foreground)_8%,transparent)]
         "
         aria-label={expanded ? 'Collapse sidebar' : 'Expand sidebar'}
         title={expanded ? 'Collapse' : 'Expand'}

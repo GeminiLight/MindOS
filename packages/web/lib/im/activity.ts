@@ -6,6 +6,8 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import type { IMPlatform, IMActivity, IMActivityStore, IMActivityType, IMActivityStatus } from './types';
+import { maskForLog } from './format';
+import { redactSensitiveText } from '../agent/redaction';
 
 const ACTIVITY_DIR = path.join(os.homedir(), '.mindos');
 const ACTIVITY_PATH = path.join(ACTIVITY_DIR, 'im-activity.json');
@@ -19,8 +21,9 @@ function generateId(): string {
 }
 
 function truncateMessage(message: string): string {
-  if (message.length <= MAX_MESSAGE_SUMMARY_LENGTH) return message;
-  return message.slice(0, MAX_MESSAGE_SUMMARY_LENGTH - 1) + '…';
+  const redacted = redactSensitiveText(message);
+  if (redacted.length <= MAX_MESSAGE_SUMMARY_LENGTH) return redacted;
+  return redacted.slice(0, MAX_MESSAGE_SUMMARY_LENGTH - 1) + '…';
 }
 
 function readStore(): IMActivityStore {
@@ -66,9 +69,9 @@ export function recordActivity(params: {
     platform: params.platform,
     type: params.type,
     status: params.status,
-    recipient: params.recipient,
+    recipient: maskForLog(redactSensitiveText(params.recipient)),
     messageSummary: truncateMessage(params.message),
-    error: params.error,
+    error: params.error ? truncateMessage(params.error) : undefined,
     timestamp: new Date().toISOString(),
   };
 

@@ -10,6 +10,7 @@ import {
 import type { ToolCallPart } from '@/lib/types';
 import type { LucideIcon } from 'lucide-react';
 import AskUserQuestionBlock from './AskUserQuestionBlock';
+import { redactSensitiveObject, redactSensitiveText } from '@/lib/agent/redaction';
 
 const DESTRUCTIVE_TOOLS = new Set(['delete_file', 'move_file', 'rename_file', 'write_file']);
 
@@ -50,20 +51,21 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function getString(value: unknown): string | undefined {
-  return typeof value === 'string' && value.trim() ? value : undefined;
+  return typeof value === 'string' && value.trim() ? redactSensitiveText(value) : undefined;
 }
 
 function truncate(value: string, max = 96): string {
-  const normalized = value.replace(/\s+/g, ' ').trim();
+  const normalized = redactSensitiveText(value).replace(/\s+/g, ' ').trim();
   return normalized.length > max ? `${normalized.slice(0, max)}…` : normalized;
 }
 
 function formatInput(input: unknown): string {
-  if (!isRecord(input)) return String(input ?? '');
+  if (!isRecord(input)) return redactSensitiveText(String(input ?? ''));
   const parts: string[] = [];
   for (const val of Object.values(input)) {
     if (typeof val === 'string') {
-      parts.push(val.length > 60 ? `${val.slice(0, 60)}…` : val);
+      const safeValue = redactSensitiveText(val);
+      parts.push(safeValue.length > 60 ? `${safeValue.slice(0, 60)}…` : safeValue);
     } else if (Array.isArray(val)) {
       parts.push(`[${val.length} items]`);
     } else if (val !== undefined && val !== null) {
@@ -163,14 +165,14 @@ function buildReadOnlyUserQuestion(part: ToolCallPart): ToolCallPart['userQuesti
   const questions = payload
     .filter(isRecord)
     .map((question) => ({
-      question: typeof question.question === 'string' ? question.question : '',
-      header: typeof question.header === 'string' ? question.header : '',
+      question: typeof question.question === 'string' ? redactSensitiveText(question.question) : '',
+      header: typeof question.header === 'string' ? redactSensitiveText(question.header) : '',
       multiSelect: question.multiSelect === true,
       options: Array.isArray(question.options)
         ? question.options.filter(isRecord).map((option) => ({
-          label: typeof option.label === 'string' ? option.label : '',
-          description: typeof option.description === 'string' ? option.description : '',
-          ...(typeof option.preview === 'string' ? { preview: option.preview } : {}),
+          label: typeof option.label === 'string' ? redactSensitiveText(option.label) : '',
+          description: typeof option.description === 'string' ? redactSensitiveText(option.description) : '',
+          ...(typeof option.preview === 'string' ? { preview: redactSensitiveText(option.preview) } : {}),
         }))
         : [],
     }));
@@ -234,8 +236,9 @@ function formatSubagentMode(input: Record<string, unknown>): string {
 
 function formatSubagentOutput(output: string | undefined): string {
   if (!output) return '';
+  const safeOutput = redactSensitiveText(output);
   try {
-    const parsed = JSON.parse(output) as unknown;
+    const parsed = JSON.parse(safeOutput) as unknown;
     if (isRecord(parsed)) {
       const summary = getString(parsed.summary) ?? getString(parsed.message) ?? getString(parsed.result) ?? getString(parsed.output);
       if (summary) return truncate(summary, 500);
@@ -246,7 +249,11 @@ function formatSubagentOutput(output: string | undefined): string {
   } catch {
     // Tool output is usually plain text; JSON parsing is only a best-effort preview.
   }
-  return output.length > 500 ? `${output.slice(0, 500)}…` : output;
+  return safeOutput.length > 500 ? `${safeOutput.slice(0, 500)}…` : safeOutput;
+}
+
+function stringifyRedacted(value: unknown): string {
+  return JSON.stringify(redactSensitiveObject(value), null, 2);
 }
 
 function SubagentDetailRow({ label, value }: { label: string; value: unknown }) {
@@ -277,7 +284,7 @@ function SubagentToolDetails({ input, output, running }: { input: unknown; outpu
         )}
         <div className="text-muted-foreground leading-relaxed">
           <span className="font-semibold text-foreground/70">Input: </span>
-          <span className="break-all whitespace-pre-wrap">{JSON.stringify(input, null, 2)}</span>
+          <span className="break-all whitespace-pre-wrap">{stringifyRedacted(input)}</span>
         </div>
       </div>
     );
@@ -355,7 +362,7 @@ function SubagentToolDetails({ input, output, running }: { input: unknown; outpu
       <details className="text-muted-foreground">
         <summary className="cursor-pointer select-none text-muted-foreground/70">Raw input</summary>
         <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-all rounded-md bg-muted/15 px-2 py-1.5">
-          {JSON.stringify(input, null, 2)}
+          {stringifyRedacted(input)}
         </pre>
       </details>
     </div>
@@ -369,7 +376,8 @@ function NativeRuntimeToolDetails({ part, running }: { part: ToolCallPart; runni
   const runtimePermission = part.runtimePermission;
   const approvalSensitive = Boolean(runtimePermission) || isDestructiveToolCall(part) || part.toolName === 'approval_request';
   const label = runtimeLabel(part.runtime);
-  const outputPreview = part.output && part.output.length > 1000 ? `${part.output.slice(0, 1000)}…` : part.output;
+  const safeOutput = part.output ? redactSensitiveText(part.output) : part.output;
+  const outputPreview = safeOutput && safeOutput.length > 1000 ? `${safeOutput.slice(0, 1000)}…` : safeOutput;
 
   return (
     <div className="space-y-2 px-2.5 pb-2.5 pt-2 font-sans">
@@ -401,7 +409,7 @@ function NativeRuntimeToolDetails({ part, running }: { part: ToolCallPart; runni
           </pre>
         ) : (
           <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-all rounded-md border border-border/30 bg-background/75 p-2 font-mono text-2xs leading-5 text-foreground">
-            {JSON.stringify(part.input, null, 2)}
+            {stringifyRedacted(part.input)}
           </pre>
         )}
 
@@ -460,7 +468,7 @@ function RuntimePermissionControls({ part }: { part: ToolCallPart }) {
         throw new Error(typeof body?.error === 'string' ? body.error : 'Could not send permission decision.');
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(redactSensitiveText(err instanceof Error ? err.message : String(err)));
       setSubmitting(null);
     }
   }
@@ -481,11 +489,13 @@ function RuntimePermissionControls({ part }: { part: ToolCallPart }) {
       </div>
       {permissionState.reason && (
         <div className="mb-2 text-2xs leading-5 text-muted-foreground [overflow-wrap:anywhere]">
-          {permissionState.reason}
+          {redactSensitiveText(permissionState.reason)}
         </div>
       )}
       <div className="flex flex-wrap gap-1.5">
         {options.map((option) => {
+          const optionLabel = redactSensitiveText(option.label);
+          const optionDescription = option.description ? redactSensitiveText(option.description) : undefined;
           const isAllow = option.intent === 'allow' || option.id === 'accept' || option.id === 'acceptForSession';
           const isDeny = option.intent === 'deny' || option.id === 'decline' || option.id === 'deny';
           const active = submitting === option.id;
@@ -495,7 +505,7 @@ function RuntimePermissionControls({ part }: { part: ToolCallPart }) {
               type="button"
               disabled={!waiting || Boolean(submitting)}
               onClick={() => void submitDecision(option.id)}
-              title={option.description}
+              title={optionDescription}
               className={`inline-flex h-7 items-center gap-1 rounded-md border px-2 text-2xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
                 isAllow
                   ? 'border-[var(--amber)] bg-[var(--amber)] text-[var(--amber-foreground)] hover:opacity-90'
@@ -505,7 +515,7 @@ function RuntimePermissionControls({ part }: { part: ToolCallPart }) {
               }`}
             >
               {active && <Loader2 size={11} className="animate-spin" />}
-              {option.label}
+              {optionLabel}
             </button>
           );
         })}
@@ -529,11 +539,12 @@ const CHANGES_SEPARATOR = '--- changes ---';
 /** Parse tool output: extract header line (before separator) and diff lines (after separator) */
 function parseToolOutput(output: string | undefined): { header: string; stats: string; diffLines: { prefix: string; text: string }[] } {
   if (!output) return { header: '', stats: '', diffLines: [] };
-  const sepIdx = output.indexOf(CHANGES_SEPARATOR);
-  if (sepIdx === -1) return { header: output, stats: '', diffLines: [] };
+  const safeOutput = redactSensitiveText(output);
+  const sepIdx = safeOutput.indexOf(CHANGES_SEPARATOR);
+  if (sepIdx === -1) return { header: safeOutput, stats: '', diffLines: [] };
 
-  const header = output.slice(0, sepIdx).trim();
-  const diffText = output.slice(sepIdx + CHANGES_SEPARATOR.length).trim();
+  const header = safeOutput.slice(0, sepIdx).trim();
+  const diffText = safeOutput.slice(sepIdx + CHANGES_SEPARATOR.length).trim();
 
   // Extract stats from header, e.g. "File written: foo.md (+3 −1)"
   const statsMatch = header.match(/\((\+\d+\s*−\d+)\)/);
@@ -575,7 +586,7 @@ export default function ToolCallBlock({ part }: { part: ToolCallPart }) {
   const filePath = useMemo(() => {
     if (!displayPart.input || typeof displayPart.input !== 'object') return '';
     const obj = displayPart.input as Record<string, unknown>;
-    return (obj.path as string) ?? '';
+    return getString(obj.path) ?? '';
   }, [displayPart.input]);
 
   const headerLabel = hasUserQuestion
@@ -674,12 +685,12 @@ export default function ToolCallBlock({ part }: { part: ToolCallPart }) {
               )}
               <div className="text-muted-foreground leading-relaxed">
                 <span className="font-semibold text-foreground/70">Input: </span>
-                <span className="break-all whitespace-pre-wrap">{JSON.stringify(displayPart.input, null, 2)}</span>
+                <span className="break-all whitespace-pre-wrap">{stringifyRedacted(displayPart.input)}</span>
               </div>
               {displayPart.output !== undefined && displayPart.output !== '' && (
                 <div className="text-muted-foreground leading-relaxed">
                   <span className="font-semibold text-foreground/70">Output: </span>
-                  <span className="break-all whitespace-pre-wrap">{displayPart.output.length > 500 ? displayPart.output.slice(0, 500) + '…' : displayPart.output}</span>
+                  <span className="break-all whitespace-pre-wrap">{redactSensitiveText(displayPart.output).length > 500 ? redactSensitiveText(displayPart.output).slice(0, 500) + '…' : redactSensitiveText(displayPart.output)}</span>
                 </div>
               )}
             </div>

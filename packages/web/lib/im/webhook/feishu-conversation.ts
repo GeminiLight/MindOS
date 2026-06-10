@@ -25,7 +25,8 @@ export async function processFeishuIncomingMessage(incoming: IncomingIMMessage):
     const result = await runHeadlessAgent({
       userMessage: incoming.text,
       historyMessages,
-      mode: 'agent',
+      mode: 'chat',
+      entrypoint: 'im',
       maxSteps: 8,
     });
     replyText = result.text.trim() || buildFallbackReply();

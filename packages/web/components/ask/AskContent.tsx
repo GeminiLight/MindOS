@@ -24,6 +24,7 @@ import { useAskChat } from '@/hooks/useAskChat';
 import { useAgentRunTimeline } from '@/hooks/useAgentRunTimeline';
 import {
   filterSessionsByRuntimeLane,
+  compactAgentRuntimeIdentity,
   getMatchingRuntimeSessionBinding,
   getMessageAgentRuntime,
   getSessionAgentRuntime,
@@ -46,6 +47,19 @@ function runtimeStatusLabel(status: AgentRuntimeDescriptor['status']): string {
   if (status === 'error') return 'unavailable';
   if (status === 'missing') return 'not installed';
   return 'available';
+}
+
+type SelectedAgentRuntime = AgentRuntimeIdentity & { binaryPath?: string };
+
+function normalizeSelectedAgentRuntime(runtime: AgentRuntimeIdentity | null | undefined): SelectedAgentRuntime | null {
+  if (!runtime) return null;
+  const record = runtime as AgentRuntimeIdentity & { binaryPath?: unknown };
+  return {
+    id: runtime.id,
+    name: runtime.name,
+    kind: runtime.kind,
+    ...(typeof record.binaryPath === 'string' && record.binaryPath.trim() ? { binaryPath: record.binaryPath } : {}),
+  };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -159,16 +173,17 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
 
   const [selectedSkill, setSelectedSkill] = useState<SlashItem | null>(null);
   const selectedSkillRef = useRef(selectedSkill);
-  const [selectedAgentRuntime, setSelectedAgentRuntime] = useState<AgentRuntimeIdentity | null>(null);
+  const [selectedAgentRuntime, setSelectedAgentRuntime] = useState<SelectedAgentRuntime | null>(null);
   const selectedAgentRuntimeRef = useRef(selectedAgentRuntime);
-  const pendingOpenAgentRef = useRef<AgentRuntimeIdentity | null>(null);
+  const pendingOpenAgentRef = useRef<SelectedAgentRuntime | null>(null);
   const [chatMode, setChatMode] = useState<AskMode>('agent');
   const [providerOverride, setProviderOverride] = useState<ProviderId | `p_${string}` | null>(null);
   const [modelOverride, setModelOverride] = useState<string | null>(null);
 
   const updateSelectedAgentRuntime = useCallback((runtime: AgentRuntimeIdentity | null) => {
-    selectedAgentRuntimeRef.current = runtime;
-    setSelectedAgentRuntime(runtime);
+    const normalized = normalizeSelectedAgentRuntime(runtime);
+    selectedAgentRuntimeRef.current = normalized;
+    setSelectedAgentRuntime(normalized);
   }, []);
 
   useEffect(() => {
@@ -215,7 +230,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
   const mention = useMention();
   const slash = useSlashCommand();
   const nativeDetection = useNativeRuntimeDetection();
-  const nativeRuntimes = useMemo<Array<AgentRuntimeIdentity & Partial<Pick<AgentRuntimeDescriptor, 'status' | 'availability' | 'installCmd' | 'packageName'>>>>(() => {
+  const nativeRuntimes = useMemo<Array<AgentRuntimeIdentity & Partial<Pick<AgentRuntimeDescriptor, 'status' | 'availability' | 'installCmd' | 'packageName' | 'binaryPath'>>>>(() => {
     return nativeDetection.runtimes
       .filter((runtime) => runtime.kind === 'codex' || runtime.kind === 'claude')
       .map((runtime) => ({
@@ -224,6 +239,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
         kind: runtime.kind,
         status: runtime.status,
         availability: runtime.availability,
+        ...(runtime.binaryPath ? { binaryPath: runtime.binaryPath } : {}),
         ...(runtime.installCmd ? { installCmd: runtime.installCmd } : {}),
         ...(runtime.packageName ? { packageName: runtime.packageName } : {}),
       }));
@@ -239,6 +255,13 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
     if (!selectedAgentRuntime || selectedAgentRuntime.kind === 'mindos') return null;
     const nativeKind = selectedAgentRuntime.kind;
     if (nativeKind !== 'codex' && nativeKind !== 'claude') return null;
+    const detectionError = nativeDetection.errorByKind[nativeKind];
+    if (detectionError && !nativeDetection.loadingByKind[nativeKind]) {
+      return {
+        status: 'error' as const,
+        reason: detectionError,
+      };
+    }
     const descriptor = nativeDetection.runtimes.find((runtime) => (
       runtime.kind === nativeKind && runtime.id === selectedAgentRuntime.id
     ));
@@ -254,7 +277,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
       status: descriptor.status,
       reason: descriptor.availability?.reason,
     };
-  }, [nativeDetection.loadingByKind, nativeDetection.runtimes, selectedAgentRuntime]);
+  }, [nativeDetection.errorByKind, nativeDetection.loadingByKind, nativeDetection.runtimes, selectedAgentRuntime]);
   const activeRuntimeSessionBinding = useMemo(
     () => getMatchingRuntimeSessionBinding(session.activeSession, selectedAgentRuntime),
     [
@@ -421,7 +444,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
       sessionRef.current.setSessionDefaultAcpAgent({ id: agent.id, name: agent.name });
       return;
     }
-    sessionRef.current.setSessionAgentRuntimeBinding(agent);
+    sessionRef.current.setSessionAgentRuntimeBinding(compactAgentRuntimeIdentity(agent) ?? agent);
   }, []);
 
   const handleSelectAgentRuntime = useCallback((agent: AgentRuntimeIdentity | null) => {
@@ -575,11 +598,17 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
         ? currentRuntime
         : null;
     const restoredRuntime = sessionRuntime ?? openerRuntime ?? keepNativeRuntime;
+    const detectedRuntime = restoredRuntime?.kind === 'codex' || restoredRuntime?.kind === 'claude'
+      ? nativeRuntimes.find((runtime) => runtime.kind === restoredRuntime.kind && runtime.id === restoredRuntime.id)
+      : undefined;
+    const hydratedRuntime = restoredRuntime && detectedRuntime?.binaryPath && !(restoredRuntime as AgentRuntimeIdentity & { binaryPath?: string }).binaryPath
+      ? { ...restoredRuntime, binaryPath: detectedRuntime.binaryPath }
+      : restoredRuntime;
 
-    updateSelectedAgentRuntime(restoredRuntime);
+    updateSelectedAgentRuntime(hydratedRuntime);
 
     if (openerRuntime && !getSessionAgentRuntime(session.activeSession) && session.activeSession?.messages.length === 0) {
-      bindActiveSessionToRuntime(openerRuntime);
+      bindActiveSessionToRuntime(hydratedRuntime);
     }
 
     pendingOpenAgentRef.current = null;
@@ -590,6 +619,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
     session.activeSession?.defaultAgentRuntime,
     session.activeSession?.messages.length,
     bindActiveSessionToRuntime,
+    nativeRuntimes,
     updateSelectedAgentRuntime,
   ]);
 
@@ -885,7 +915,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
     if (chat.isLoadingRef.current) return;
     const runtime = selectedAgentRuntimeRef.current;
     if (!runtime || runtime.kind !== 'codex') return;
-    sessionRef.current.attachRuntimeSession(runtime, {
+    sessionRef.current.attachRuntimeSession(compactAgentRuntimeIdentity(runtime) ?? runtime, {
       externalSessionId: thread.id,
       cwd: thread.cwd,
       status: codexThreadBindingStatus(thread),
@@ -923,7 +953,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
       const forked = normalizeCodexThread(body.thread);
       if (forked) {
         setCodexThreads((prev) => [forked, ...prev.filter((item) => item.id !== forked.id)]);
-        sessionRef.current.attachRuntimeSession(runtime, {
+        sessionRef.current.attachRuntimeSession(compactAgentRuntimeIdentity(runtime) ?? runtime, {
           externalSessionId: forked.id,
           cwd: forked.cwd,
           status: codexThreadBindingStatus(forked),
@@ -970,7 +1000,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
       setCodexThreads((prev) => prev.filter((item) => item.id !== thread.id));
       const activeBinding = getMatchingRuntimeSessionBinding(sessionRef.current.activeSession, runtime);
       if (activeBinding?.externalSessionId === thread.id) {
-        sessionRef.current.setSessionAgentRuntimeBinding(runtime, {
+        sessionRef.current.setSessionAgentRuntimeBinding(compactAgentRuntimeIdentity(runtime) ?? runtime, {
           externalSessionId: thread.id,
           cwd: thread.cwd,
           status: 'archived',
@@ -1198,7 +1228,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
                 ref={attachButtonRef}
                 type="button"
                 onClick={() => setShowAttachMenu(v => !v)}
-                className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
+                className="hit-target-box p-2 text-muted-foreground hover:text-foreground transition-colors [--hit-target-hover-bg:color-mix(in_srgb,var(--muted)_60%,transparent)] [--hit-target-radius:var(--radius-lg)]"
                 title={t.hints.attachFile}
               >
                 <Plus size={inputIconSize} />
@@ -1219,7 +1249,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
               >
                 <button
                   type="button"
-                  className="flex w-full items-center gap-2.5 px-3 py-2 text-xs hover:bg-muted transition-colors text-left rounded-lg"
+                  className="hit-target-box flex w-full items-center gap-2.5 px-3 py-2 text-xs transition-colors text-left [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-lg)]"
                   onClick={() => { uploadInputRef.current?.click(); setShowAttachMenu(false); }}
                 >
                   <FileText size={12} className="shrink-0 text-muted-foreground" />
@@ -1227,7 +1257,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
                 </button>
                 <button
                   type="button"
-                  className="flex w-full items-center gap-2.5 px-3 py-2 text-xs hover:bg-muted transition-colors text-left rounded-lg"
+                  className="hit-target-box flex w-full items-center gap-2.5 px-3 py-2 text-xs transition-colors text-left [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-lg)]"
                   onClick={() => { imageInputRef.current?.click(); setShowAttachMenu(false); }}
                 >
                   <ImageIcon size={12} className="shrink-0 text-muted-foreground" />
@@ -1277,11 +1307,11 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
             />
 
             {isLoading ? (
-              <button type="button" onClick={handleStop} className="p-2 rounded-xl transition-colors shrink-0 text-foreground bg-muted hover:bg-muted/80" title={loadingPhase === 'reconnecting' ? t.ask.cancelReconnect : t.ask.stopTitle}>
+              <button type="button" onClick={handleStop} className="hit-target-box p-2 transition-colors shrink-0 text-foreground [--hit-target-bg:var(--muted)] [--hit-target-hover-bg:color-mix(in_srgb,var(--muted)_80%,transparent)] [--hit-target-radius:var(--radius-xl)]" title={loadingPhase === 'reconnecting' ? t.ask.cancelReconnect : t.ask.stopTitle}>
                 {loadingPhase === 'reconnecting' ? <X size={inputIconSize} /> : <StopCircle size={inputIconSize} />}
               </button>
             ) : (
-              <button type="submit" title={hasLoadingAttachments ? (t.ask.uploadsProcessing ?? 'Wait for uploaded files to finish processing before sending.') : runtimeCheckingMessage || runtimeUnavailableMessage || t.ask.send} disabled={hasLoadingAttachments || selectedRuntimeChecking || !!selectedRuntimeUnavailable || (!input.trim() && images.length === 0)} className="p-2 rounded-xl disabled:opacity-20 disabled:scale-95 disabled:cursor-not-allowed transition-all duration-150 shrink-0 bg-[var(--amber)] text-[var(--amber-foreground)] shadow-sm shadow-[var(--amber)]/15 hover:shadow-md hover:shadow-[var(--amber)]/20 active:scale-95">
+              <button type="submit" title={hasLoadingAttachments ? (t.ask.uploadsProcessing ?? 'Wait for uploaded files to finish processing before sending.') : runtimeCheckingMessage || runtimeUnavailableMessage || t.ask.send} disabled={hasLoadingAttachments || selectedRuntimeChecking || !!selectedRuntimeUnavailable || (!input.trim() && images.length === 0)} className="hit-target-box p-2 disabled:opacity-20 disabled:scale-95 disabled:cursor-not-allowed transition-all duration-150 shrink-0 text-[var(--amber-foreground)] active:scale-95 [--hit-target-bg:var(--amber)] [--hit-target-hover-bg:var(--amber)] [--hit-target-radius:var(--radius-xl)] [--hit-target-shadow:0_1px_2px_0_color-mix(in_srgb,var(--amber)_15%,transparent)] [--hit-target-hover-shadow:0_4px_6px_-1px_color-mix(in_srgb,var(--amber)_20%,transparent)]">
                 <Send size={14} />
               </button>
             )}

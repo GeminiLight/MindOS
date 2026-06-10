@@ -31,6 +31,21 @@ export {
 } from './context.js';
 
 export {
+  handleAgentCapabilitiesGet,
+  type AgentCapabilitiesPayload,
+  type AgentCapabilitiesServices,
+  type AgentCapability,
+  type AgentCapabilityInput,
+  type AgentCapabilityKind,
+  type AgentCapabilityMode,
+  type AgentCapabilityPermissionRequired,
+  type AgentCapabilitySource,
+  type AgentCapabilitySourceKey,
+  type AgentCapabilitySourceStatus,
+  type AgentCapabilityStatus,
+} from './handlers/agent-capabilities.js';
+
+export {
   handleAgentActivity,
   type AgentActivityHandlerServices,
   type AgentActivityPayload,
@@ -39,6 +54,7 @@ export {
 export {
   buildAgentRuntimesPayload,
   checkCodexProviderEnvironment,
+  checkClaudeRuntimeHealth,
   defaultCheckNativeRuntimeHealth,
   handleAgentRuntimesGet,
   mergeCodexProviderAndLoginHealth,
@@ -511,10 +527,12 @@ export {
 
 export {
   handleMcpStatus,
+  handleMcpTokenReveal,
   type MindosMcpStatusOptions,
   type MindosMcpStatusPayload,
   type MindosMcpStatusServices,
   type MindosMcpStatusSettings,
+  type MindosMcpTokenRevealPayload,
 } from './handlers/mcp-status.js';
 
 export {

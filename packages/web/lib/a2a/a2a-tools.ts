@@ -12,6 +12,16 @@ import {
   getDiscoveredAgents,
 } from './client';
 import { createPlan, executePlan } from './orchestrator';
+import {
+  completeAgentRun,
+  failAgentRun,
+  startAgentRun,
+  type AgentRunPermissionMode,
+} from '@/lib/agent/run-ledger';
+import {
+  linkAbortSignalToAgentRun,
+} from '@/lib/agent/run-cancellation';
+import { createMindosAgentPermissionPolicyFromContext } from '@/lib/agent/permission-policy';
 
 function textResult(text: string) {
   return { content: [{ type: 'text' as const, text }], details: {} };
@@ -24,6 +34,16 @@ type MindosAgentTool = {
   parameters: unknown;
   execute: (...args: any[]) => Promise<ReturnType<typeof textResult>>;
 };
+
+function permissionModeFromContext(ctx: unknown): AgentRunPermissionMode {
+  return createMindosAgentPermissionPolicyFromContext(ctx, 'agent').permissionMode;
+}
+
+function textFromTask(task: Awaited<ReturnType<typeof delegateTask>>): string {
+  return task.artifacts?.[0]?.parts?.[0]?.text
+    ?? task.history?.find(m => m.role === 'ROLE_AGENT')?.parts?.[0]?.text
+    ?? '';
+}
 
 /* ── Parameter Schemas ─────────────────────────────────────────────────── */
 
@@ -128,29 +148,71 @@ export const a2aTools: MindosAgentTool[] = [
     label: 'Delegate Task to Agent',
     description: 'Send a task to a remote A2A agent. The agent will process the message and return a result. Use list_remote_agents to see available agents and their skills first.',
     parameters: DelegateParams,
-    execute: async (_id: string, params: Static<typeof DelegateParams>) => {
+    execute: async (_id: string, params: Static<typeof DelegateParams>, signal?: AbortSignal, _onUpdate?: unknown, ctx?: unknown) => {
+      const run = startAgentRun({
+        agentKind: 'a2a',
+        runtimeId: params.agent_id,
+        displayName: params.agent_id,
+        permissionMode: permissionModeFromContext(ctx),
+        inputSummary: params.message,
+        metadata: {
+          toolCallId: _id,
+          source: 'a2a',
+        },
+      });
+      const unlinkAbortLedger = linkAbortSignalToAgentRun(run.id, signal, {
+        reason: 'A2A delegation canceled.',
+        metadata: { aborted: true },
+      });
       try {
-        const task = await delegateTask(params.agent_id, params.message);
+        const task = await delegateTask(params.agent_id, params.message, undefined, { signal });
+        const taskText = textFromTask(task);
 
         if (task.status.state === 'TASK_STATE_COMPLETED') {
-          const result = task.artifacts?.[0]?.parts?.[0]?.text
-            ?? task.history?.find(m => m.role === 'ROLE_AGENT')?.parts?.[0]?.text
-            ?? 'Task completed (no text result)';
+          const result = taskText || 'Task completed (no text result)';
+          completeAgentRun(run.id, {
+            outputSummary: result,
+            metadata: { taskId: task.id, taskState: task.status.state },
+          });
           return textResult(`Agent completed task (id: ${task.id}):\n\n${result}`);
         }
 
         if (task.status.state === 'TASK_STATE_FAILED') {
           const errMsg = task.status.message?.parts?.[0]?.text ?? 'Unknown error';
+          failAgentRun(run.id, {
+            error: errMsg,
+            metadata: { taskId: task.id, taskState: task.status.state },
+          });
           return textResult(`Agent failed task (id: ${task.id}): ${errMsg}`);
         }
 
+        if (task.status.state === 'TASK_STATE_CANCELED') {
+          failAgentRun(run.id, {
+            status: 'canceled',
+            error: 'A2A task was canceled.',
+            metadata: { taskId: task.id, taskState: task.status.state },
+          });
+          return textResult(`Agent canceled task (id: ${task.id}).`);
+        }
+
         // Task is still in progress (non-blocking)
+        completeAgentRun(run.id, {
+          outputSummary: `Task in progress (state: ${task.status.state}).`,
+          metadata: { taskId: task.id, taskState: task.status.state },
+        });
         return textResult(
           `Task submitted (id: ${task.id}, state: ${task.status.state}).\n` +
           `Use check_task_status to poll for completion.`
         );
       } catch (err) {
+        failAgentRun(run.id, {
+          status: signal?.aborted ? 'canceled' : 'failed',
+          error: signal?.aborted ? 'A2A delegation canceled.' : err,
+          metadata: signal?.aborted ? { aborted: true } : undefined,
+        });
         return textResult(`Delegation failed: ${(err as Error).message}`);
+      } finally {
+        unlinkAbortLedger();
       }
     },
   },
@@ -186,7 +248,7 @@ export const a2aTools: MindosAgentTool[] = [
     label: 'Orchestrate Multi-Agent Task',
     description: 'Decompose a complex request into subtasks and execute them across multiple remote agents. Auto-matches subtasks to the best available agent based on skills. Use discover_agent first to register agents.',
     parameters: OrchestrateParams,
-    execute: async (_id: string, params: Static<typeof OrchestrateParams>) => {
+    execute: async (_id: string, params: Static<typeof OrchestrateParams>, signal?: AbortSignal) => {
       try {
         const strategy = params.strategy ?? 'parallel';
         const plan = createPlan(params.request, strategy, params.subtasks);
@@ -200,10 +262,16 @@ export const a2aTools: MindosAgentTool[] = [
           );
         }
 
-        const result = await executePlan(plan);
+        const result = await executePlan(plan, undefined, { signal });
 
         const summary = plan.subtasks.map(st => {
-          const icon = st.status === 'completed' ? '[OK]' : st.status === 'failed' ? '[FAIL]' : '[?]';
+          const icon = st.status === 'completed'
+            ? '[OK]'
+            : st.status === 'failed'
+              ? '[FAIL]'
+              : st.status === 'canceled'
+                ? '[CANCEL]'
+                : '[?]';
           return `${icon} ${st.description}`;
         }).join('\n');
 

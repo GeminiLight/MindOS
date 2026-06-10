@@ -100,7 +100,7 @@ export default function WorkflowsPanel({ active, maximized, onMaximize }: Workfl
       <PanelHeader title={wt.title} maximized={maximized} onMaximize={onMaximize}>
         <button
           onClick={() => setShowCreate(v => !v)}
-          className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors focus-visible:ring-1 focus-visible:ring-ring"
+          className="hit-target-box p-1 text-muted-foreground hover:text-foreground transition-colors focus-visible:ring-1 focus-visible:ring-ring [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-sm)]"
           aria-label={wt.newWorkflow}
           title={wt.newWorkflow}
         >
@@ -128,14 +128,14 @@ export default function WorkflowsPanel({ active, maximized, onMaximize }: Workfl
             <div className="flex gap-2 mt-2.5">
               <button
                 onClick={() => { setShowCreate(false); setNewName(''); setCreateError(''); }}
-                className="flex-1 px-3 py-1.5 text-xs rounded-md border border-border text-muted-foreground hover:bg-muted transition-colors"
+                className="hit-target-box flex-1 px-3 py-1.5 text-xs border border-transparent text-muted-foreground transition-colors [--hit-target-hover-bg:var(--muted)] [--hit-target-border-width:1px] [--hit-target-border:var(--border)] [--hit-target-hover-border:var(--border)] [--hit-target-radius:var(--radius-md)]"
               >
                 {wt.cancel}
               </button>
               <button
                 onClick={handleCreate}
                 disabled={!newName.trim() || creating}
-                className="flex-1 px-3 py-1.5 text-xs rounded-md font-medium transition-colors disabled:opacity-50 bg-[var(--amber)] text-[var(--amber-foreground)]"
+                className="hit-target-box flex-1 px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-50 text-[var(--amber-foreground)] [--hit-target-bg:var(--amber)] [--hit-target-hover-bg:var(--amber)] [--hit-target-radius:var(--radius-md)]"
               >
                 {creating ? wt.creating : wt.create}
               </button>
@@ -158,7 +158,7 @@ export default function WorkflowsPanel({ active, maximized, onMaximize }: Workfl
             <p className="text-xs text-muted-foreground/70 mb-4 max-w-[200px]">{wt.emptyDesc}</p>
             <button
               onClick={() => setShowCreate(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md font-medium bg-[var(--amber)] text-[var(--amber-foreground)] transition-colors"
+              className="hit-target-box inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[var(--amber-foreground)] transition-colors [--hit-target-bg:var(--amber)] [--hit-target-hover-bg:var(--amber)] [--hit-target-radius:var(--radius-md)]"
             >
               <Plus size={12} />
               {wt.newWorkflow}
@@ -173,7 +173,7 @@ export default function WorkflowsPanel({ active, maximized, onMaximize }: Workfl
               <Link
                 key={w.path}
                 href={`/view/${encodePath(w.path)}`}
-                className={`flex items-start gap-2.5 px-3 py-2 mx-1 rounded-lg transition-colors hover:bg-muted ${
+                className={`hit-target-box flex items-start gap-2.5 px-3 py-2 mx-1 transition-colors [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-lg)] ${
                   w.error ? 'opacity-70' : ''
                 }`}
               >

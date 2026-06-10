@@ -186,6 +186,7 @@ const STATUS_STYLES: Record<DelegationRecord['status'], string> = {
   pending: 'bg-muted text-muted-foreground',
   completed: 'bg-[var(--success)]/15 text-[var(--success)]',
   failed: 'bg-[var(--error)]/15 text-[var(--error)]',
+  canceled: 'bg-muted text-muted-foreground',
 };
 
 function DelegationRow({ record }: { record: DelegationRecord }) {
@@ -195,6 +196,7 @@ function DelegationRow({ record }: { record: DelegationRecord }) {
     pending: p.a2aDelegationPending,
     completed: p.a2aDelegationCompleted,
     failed: p.a2aDelegationFailed,
+    canceled: p.a2aDelegationCanceled,
   };
 
   const duration = record.completedAt

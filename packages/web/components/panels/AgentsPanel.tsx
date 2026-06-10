@@ -1,8 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter, usePathname, useSearchParams } from 'next/navigation';
-import { Globe, Loader2, RefreshCw, Settings } from 'lucide-react';
+import Link from 'next/link';
+import { usePathname, useSearchParams } from 'next/navigation';
+import { Clock, Globe, Loader2, RefreshCw, Settings } from 'lucide-react';
 import { useMcpData } from '@/lib/stores/mcp-store';
 import { useA2aRegistry } from '@/hooks/useA2aRegistry';
 import { useLocale } from '@/lib/stores/locale-store';
@@ -27,7 +28,6 @@ export default function AgentsPanel({
 }: AgentsPanelProps) {
   const { t } = useLocale();
   const p = t.panels.agents;
-  const router = useRouter();
   const mcp = useMcpData();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -41,10 +41,6 @@ export default function AgentsPanel({
     setRefreshing(true);
     await mcp.refresh({ force: true });
     setRefreshing(false);
-  };
-
-  const handleChannelsClick = () => {
-    router.push('/agents?tab=channels');
   };
 
   const openAdvancedConfig = () => {
@@ -76,6 +72,9 @@ export default function AgentsPanel({
 
   const hubCopy = {
     navOverview: p.navOverview,
+    navAssistant: p.navAssistant,
+    navAgent: p.navAgent,
+    navCapabilities: p.navCapabilities,
     navPresets: p.navPresets,
     navMcp: p.navMcp,
     navSkills: p.navSkills,
@@ -89,9 +88,7 @@ export default function AgentsPanel({
     <AgentsPanelHubNav
       copy={hubCopy}
       connectedCount={connected.length}
-      mcpEnabled={mcp.status?.connectionMode?.mcp ?? false}
       channelsActive={isChannelsTab}
-      onChannelsClick={handleChannelsClick}
     />
   );
 
@@ -110,7 +107,7 @@ export default function AgentsPanel({
           <button
             onClick={handleRefresh}
             disabled={refreshing}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors duration-75 hover:bg-muted hover:text-foreground disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation"
+            className="hit-target-box inline-flex h-8 w-8 items-center justify-center text-muted-foreground transition-colors duration-75 hover:text-foreground disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-md)]"
             aria-label={p.refresh}
             title={p.refresh}
             type="button"
@@ -174,6 +171,13 @@ export default function AgentsPanel({
       </div>
 
       <div className="px-3 py-2 border-t border-border shrink-0 space-y-1">
+        <Link
+          href="/agents?tab=runs"
+          className="flex items-center gap-1.5 text-2xs text-muted-foreground hover:text-foreground transition-colors w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
+        >
+          <Clock size={11} />
+          {p.navActivity ?? p.navRuns}
+        </Link>
         <button
           type="button"
           onClick={() => setShowDiscoverModal(true)}

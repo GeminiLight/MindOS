@@ -5,6 +5,7 @@ import { CheckCircle2, AlertCircle, Loader2, Copy } from 'lucide-react';
 import CustomSelect from '@/components/CustomSelect';
 import { apiFetch } from '@/lib/api';
 import { copyToClipboard } from '@/lib/clipboard';
+import { revealMcpAuthToken } from '@/lib/mcp-token';
 import { SKILL_AGENT_REGISTRY } from '@/lib/mcp-agent-registry';
 import { toast } from '@/lib/toast';
 import { PasswordInput } from './Primitives';
@@ -18,7 +19,7 @@ export default function AgentInstall({ agents, t, onRefresh, mode = 'mcp', activ
   const [transport, setTransport] = useState<'auto' | 'stdio' | 'http'>('auto');
   const defaultHttpUrl = useMemo(() => status?.endpoint || `http://localhost:${status?.port ?? 8781}/mcp`, [status?.endpoint, status?.port]);
   const [httpUrl, setHttpUrl] = useState(defaultHttpUrl);
-  const [httpToken, setHttpToken] = useState(status?.authToken ?? '');
+  const [httpToken, setHttpToken] = useState('');
   const [httpUrlTouched, setHttpUrlTouched] = useState(false);
   const [httpTokenTouched, setHttpTokenTouched] = useState(false);
   const [scopes, setScopes] = useState<Record<string, 'project' | 'global'>>({});
@@ -28,10 +29,6 @@ export default function AgentInstall({ agents, t, onRefresh, mode = 'mcp', activ
   useEffect(() => {
     if (!httpUrlTouched) setHttpUrl(defaultHttpUrl);
   }, [defaultHttpUrl, httpUrlTouched]);
-
-  useEffect(() => {
-    if (!httpTokenTouched) setHttpToken(status?.authToken ?? '');
-  }, [status?.authToken, httpTokenTouched]);
 
   const getEffectiveTransport = (agent: AgentInfo) => {
     if (transport === 'auto') return agent.preferredTransport;
@@ -59,6 +56,17 @@ export default function AgentInstall({ agents, t, onRefresh, mode = 'mcp', activ
     setInstalling(true);
     setMessage(null);
     try {
+      const includeHttpSettings = transport === 'http' || selectedInstallableKeys.some(key => {
+        const agent = agents.find(a => a.key === key);
+        return transport === 'auto' && agent?.preferredTransport === 'http';
+      });
+      const resolvedHttpToken = includeHttpSettings
+        ? httpTokenTouched
+          ? httpToken
+          : status?.authConfigured
+            ? await revealMcpAuthToken()
+            : ''
+        : '';
       const payload = {
         agents: selectedInstallableKeys.map(key => {
           const agent = agents.find(a => a.key === key);
@@ -72,8 +80,7 @@ export default function AgentInstall({ agents, t, onRefresh, mode = 'mcp', activ
           };
         }),
         transport,
-        ...(transport === 'http' ? { url: httpUrl, token: httpToken } : {}),
-        ...(transport === 'auto' ? { url: httpUrl, token: httpToken } : {}),
+        ...(includeHttpSettings ? { url: httpUrl, token: resolvedHttpToken } : {}),
       };
       const res = await apiFetch<{ results: Array<{ agent: string; status: string; message?: string }> }>('/api/mcp/install', {
         method: 'POST',
@@ -203,7 +210,7 @@ export default function AgentInstall({ agents, t, onRefresh, mode = 'mcp', activ
             <PasswordInput
               value={httpToken}
               onChange={(value) => { setHttpTokenTouched(true); setHttpToken(value); }}
-              placeholder="Bearer token"
+              placeholder={status?.authConfigured ? (status.maskedToken ?? 'Saved token') : 'Bearer token'}
               size="sm"
             />
           </div>
