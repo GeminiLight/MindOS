@@ -5,14 +5,24 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { FileText, Table, Folder, FolderOpen, LayoutGrid, List, FilePlus, ScrollText, BookOpen, Copy, AlertTriangle, Sparkles, Loader2, Check, Bot, Play, CheckCircle2, Pencil } from 'lucide-react';
 import Breadcrumb from '@/components/Breadcrumb';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { encodePath, relativeTime } from '@/lib/utils';
 import { FileNode, SYSTEM_FILES } from '@/lib/types';
 import type { SpacePreview } from '@/lib/core/types';
 import { useLocale } from '@/lib/stores/locale-store';
 import { openMindSystemAssistantRun } from '@/lib/mind-system-assistant-actions';
 import type { BuiltInMindSystemSpaceRecord } from '@/lib/space-records';
-import { getMindSystemAssistantAvatar, resolveMindSystemAssistantCopies } from '@/lib/mind-system-assistant-copy';
+import { getMindSystemAssistantAvatar, resolveMindSystemAssistantCopies, type MindSystemAssistantAvatar, type MindSystemAssistantCopy } from '@/lib/mind-system-assistant-copy';
 import { getAssistantPromptPath } from '@/lib/mind-system-assistant-paths';
+import type { MindSystemSpaceAssistant } from '@/lib/mind-system-assistants';
+import { apiFetch } from '@/lib/api';
 
 async function copyPathToClipboard(path: string) {
   try { await navigator.clipboard.writeText(path); } catch { /* noop */ }
@@ -424,19 +434,35 @@ function SpacePreviewSection({ preview, dirPath }: {
 
 const ASSISTANT_PREVIEW_LIMIT = 3;
 
+type MindSystemAssistantViewModel = MindSystemSpaceAssistant & MindSystemAssistantCopy & {
+  promptPath: string;
+  promptReady: boolean;
+  avatar: MindSystemAssistantAvatar;
+};
+
 function MindSystemAssistantStrip({ space }: { space: BuiltInMindSystemSpaceRecord }) {
   const { t } = useLocale();
   const [showAllAssistants, setShowAllAssistants] = useState(false);
   const [expandedAssistantId, setExpandedAssistantId] = useState<string | null>(null);
+  const [editingAssistant, setEditingAssistant] = useState<MindSystemAssistantViewModel | null>(null);
   const pillar = t.home.mindPillars[space.slot.key];
   const assistantCopies = resolveMindSystemAssistantCopies(
     space.assistantSummary.assistants,
     t.home.mindAssistants[space.slot.key],
   );
-  const assistants = space.assistantSummary.assistants.map((assistant, index) => ({
-    ...assistant,
-    ...assistantCopies[index],
-  }));
+  const assistants: MindSystemAssistantViewModel[] = space.assistantSummary.assistants.map((assistant, index) => {
+    const copy = assistantCopies[index] ?? { id: assistant.id, name: assistant.id, desc: assistant.id };
+    const promptPath = assistant.promptPath ?? getAssistantPromptPath(assistant.id);
+    const promptReady = assistant.promptReady !== false;
+    const avatar = getMindSystemAssistantAvatar(copy.name, assistant.id);
+    return {
+      ...assistant,
+      ...copy,
+      promptPath,
+      promptReady,
+      avatar,
+    };
+  });
   const visibleAssistants = showAllAssistants ? assistants : assistants.slice(0, ASSISTANT_PREVIEW_LIMIT);
   const hiddenAssistantCount = Math.max(0, assistants.length - ASSISTANT_PREVIEW_LIMIT);
   const instructionReady = space.assistantSummary.instructionReady;
@@ -497,9 +523,6 @@ function MindSystemAssistantStrip({ space }: { space: BuiltInMindSystemSpaceReco
       <div className="mt-4 grid grid-cols-1 gap-2 lg:grid-cols-3">
         {visibleAssistants.map((assistant) => {
           const expanded = expandedAssistantId === assistant.id;
-          const promptPath = assistant.promptPath ?? getAssistantPromptPath(assistant.id);
-          const promptReady = assistant.promptReady !== false;
-          const avatar = getMindSystemAssistantAvatar(assistant.name, assistant.id);
           return (
             <article
               key={assistant.id}
@@ -510,10 +533,10 @@ function MindSystemAssistantStrip({ space }: { space: BuiltInMindSystemSpaceReco
                 <div className="flex min-w-0 items-start gap-2">
                   <span
                     data-mind-system-dir-assistant-icon={assistant.id}
-                    className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md border text-[11px] font-semibold ${avatar.className}`}
+                    className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md border text-[11px] font-semibold ${assistant.avatar.className}`}
                     aria-hidden="true"
                   >
-                    {avatar.text}
+                    {assistant.avatar.text}
                   </span>
                   <div className="min-w-0">
                     <div className="truncate text-xs font-semibold text-foreground">{assistant.name}</div>
@@ -521,8 +544,8 @@ function MindSystemAssistantStrip({ space }: { space: BuiltInMindSystemSpaceReco
                       <span className="inline-flex rounded bg-muted px-1.5 py-px text-[10px] font-medium text-muted-foreground">
                         {t.home.mindAssistant.scheduleMode[assistant.schedule.mode]}
                       </span>
-                      <span className={`inline-flex rounded px-1.5 py-px text-[10px] font-medium ${promptReady ? 'bg-[var(--success)]/10 text-[var(--success)]' : 'bg-muted text-muted-foreground'}`}>
-                        {promptReady ? t.home.mindAssistant.promptReady : t.home.mindAssistant.promptMissing}
+                      <span className={`inline-flex rounded px-1.5 py-px text-[10px] font-medium ${assistant.promptReady ? 'bg-[var(--success)]/10 text-[var(--success)]' : 'bg-muted text-muted-foreground'}`}>
+                        {assistant.promptReady ? t.home.mindAssistant.promptReady : t.home.mindAssistant.promptMissing}
                       </span>
                     </div>
                   </div>
@@ -535,7 +558,7 @@ function MindSystemAssistantStrip({ space }: { space: BuiltInMindSystemSpaceReco
                     assistantName: assistant.name,
                     assistantDesc: assistant.desc,
                     spacePath: space.slot.path,
-                    promptPath,
+                    promptPath: assistant.promptPath,
                     runPrompt: t.home.mindAssistant.runPrompt,
                   })}
                   className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md px-2 text-[10px] font-medium text-[var(--amber)] transition-colors hover:bg-[var(--amber)]/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation"
@@ -551,7 +574,7 @@ function MindSystemAssistantStrip({ space }: { space: BuiltInMindSystemSpaceReco
               {expanded && (
                 <div className="mt-2 rounded-md bg-muted/45 px-2 py-1.5 text-[10px] leading-4 text-muted-foreground">
                   <div className="truncate font-mono">{assistant.id}</div>
-                  <div className="truncate">{t.home.mindAssistant.promptFile}: {promptPath}</div>
+                  <div className="truncate">{t.home.mindAssistant.promptFile}: {assistant.promptPath}</div>
                   <div>{t.home.mindAssistant.openDrafts}: {space.slot.path}/Drafts/</div>
                 </div>
               )}
@@ -565,14 +588,15 @@ function MindSystemAssistantStrip({ space }: { space: BuiltInMindSystemSpaceReco
                 >
                   {expanded ? t.home.mindAssistant.hide : t.home.mindAssistant.view}
                 </button>
-                <Link
-                  href={`/view/${encodePath(promptPath)}`}
+                <button
+                  type="button"
+                  onClick={() => setEditingAssistant(assistant)}
                   data-mind-system-dir-edit-assistant={assistant.id}
                   className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-[10px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <Pencil size={10} aria-hidden="true" />
                   {t.home.mindAssistant.editPrompt}
-                </Link>
+                </button>
               </div>
             </article>
           );
@@ -591,8 +615,236 @@ function MindSystemAssistantStrip({ space }: { space: BuiltInMindSystemSpaceReco
             : t.home.mindAssistant.viewAllAssistants(assistants.length)}
         </button>
       )}
+      <MindSystemAssistantPromptDialog
+        assistant={editingAssistant}
+        spaceTitle={spaceTitle}
+        spacePath={space.slot.path}
+        onClose={() => setEditingAssistant(null)}
+      />
     </section>
   );
+}
+
+function MindSystemAssistantPromptDialog({
+  assistant,
+  spaceTitle,
+  spacePath,
+  onClose,
+}: {
+  assistant: MindSystemAssistantViewModel | null;
+  spaceTitle: string;
+  spacePath: string;
+  onClose: () => void;
+}) {
+  const { t } = useLocale();
+  const router = useRouter();
+  const [promptContent, setPromptContent] = useState('');
+  const [originalContent, setOriginalContent] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [status, setStatus] = useState<'idle' | 'missing' | 'saved' | 'error'>('idle');
+  const [message, setMessage] = useState('');
+
+  useEffect(() => {
+    if (!assistant) return;
+    let canceled = false;
+
+    setPromptContent('');
+    setOriginalContent('');
+    setLoading(true);
+    setSaving(false);
+    setStatus('idle');
+    setMessage('');
+
+    async function loadPrompt() {
+      if (!assistant) return;
+      try {
+        const res = await fetch(`/api/file?path=${encodeURIComponent(assistant.promptPath)}&op=read_file`);
+        if (!res.ok) {
+          if (res.status === 404) {
+            const fallback = buildDefaultPromptDraft(assistant, spaceTitle, spacePath);
+            if (canceled) return;
+            setPromptContent(fallback);
+            setOriginalContent('');
+            setStatus('missing');
+            setMessage(t.home.mindAssistant.promptMissingHint);
+            return;
+          }
+          let errorMessage = t.home.mindAssistant.loadPromptFailed;
+          try {
+            const body = await res.json();
+            if (body?.error) errorMessage = typeof body.error === 'string' ? body.error : body.error.message ?? errorMessage;
+          } catch { /* ignore non-JSON error */ }
+          throw new Error(errorMessage);
+        }
+        const body = await res.json() as { content?: unknown };
+        const content = typeof body.content === 'string' ? body.content : '';
+        if (canceled) return;
+        setPromptContent(content);
+        setOriginalContent(content);
+        setStatus('idle');
+      } catch (error) {
+        if (canceled) return;
+        setStatus('error');
+        setMessage(error instanceof Error ? error.message : t.home.mindAssistant.loadPromptFailed);
+      } finally {
+        if (!canceled) setLoading(false);
+      }
+    }
+
+    void loadPrompt();
+    return () => { canceled = true; };
+  }, [assistant, spacePath, spaceTitle, t.home.mindAssistant.loadPromptFailed, t.home.mindAssistant.promptMissingHint]);
+
+  const hasChanges = promptContent !== originalContent;
+  const canSave = Boolean(assistant) && !loading && !saving && promptContent.trim().length > 0 && hasChanges;
+
+  const savePrompt = async () => {
+    if (!assistant || !canSave) return;
+    setSaving(true);
+    setStatus('idle');
+    setMessage('');
+    try {
+      const result = await apiFetch<{ ok?: boolean; path?: string; mtime?: number }>('/api/file', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          op: 'save_file',
+          path: assistant.promptPath,
+          content: promptContent,
+          source: 'user',
+        }),
+      });
+      setOriginalContent(promptContent);
+      setStatus('saved');
+      setMessage(t.home.mindAssistant.savedPrompt);
+      if (result?.path) router.refresh();
+    } catch (error) {
+      setStatus('error');
+      setMessage(error instanceof Error ? error.message : t.home.mindAssistant.savePromptFailed);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={Boolean(assistant)} onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto sm:max-w-[760px]">
+        {assistant && (
+          <div data-mind-system-assistant-dialog={assistant.id} className="flex min-h-0 flex-col gap-4">
+            <DialogHeader>
+              <div className="flex min-w-0 items-start gap-3 pr-8">
+                <span
+                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-md border text-sm font-semibold ${assistant.avatar.className}`}
+                  aria-hidden="true"
+                >
+                  {assistant.avatar.text}
+                </span>
+                <div className="min-w-0">
+                  <DialogTitle className="truncate">{assistant.name}</DialogTitle>
+                  <DialogDescription className="mt-1 line-clamp-2">{assistant.desc}</DialogDescription>
+                </div>
+              </div>
+            </DialogHeader>
+
+            <div className="grid gap-2 rounded-md border border-border/70 bg-muted/25 p-3 text-[11px] text-muted-foreground sm:grid-cols-2">
+              <DetailRow label={t.home.mindAssistant.assistantId} value={assistant.id} mono />
+              <DetailRow label={t.home.mindAssistant.assistantSpace} value={`${spaceTitle} · ${spacePath}`} />
+              <DetailRow label={t.home.mindAssistant.schedule} value={t.home.mindAssistant.scheduleMode[assistant.schedule.mode]} />
+              <DetailRow label={t.home.mindAssistant.writesTo} value={`${spacePath}/Drafts/`} mono />
+              <div className="min-w-0 sm:col-span-2">
+                <div className="text-muted-foreground/70">{t.home.mindAssistant.promptFile}</div>
+                <div className="mt-0.5 truncate font-mono text-foreground/80">{assistant.promptPath}</div>
+              </div>
+            </div>
+
+            <label className="grid min-h-0 gap-2">
+              <span className="text-xs font-medium text-foreground">{t.home.mindAssistant.promptEditor}</span>
+              <textarea
+                data-mind-system-assistant-prompt-editor={assistant.id}
+                value={promptContent}
+                onChange={(event) => {
+                  setPromptContent(event.target.value);
+                  if (status === 'saved' || status === 'error') {
+                    setStatus('idle');
+                    setMessage('');
+                  }
+                }}
+                disabled={loading || saving}
+                className="min-h-[320px] w-full resize-y rounded-md border border-border bg-background px-3 py-2 font-mono text-xs leading-5 text-foreground shadow-inner outline-none transition-colors placeholder:text-muted-foreground/60 focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+                placeholder={loading ? t.home.mindAssistant.loadingPrompt : t.home.mindAssistant.promptEditor}
+              />
+            </label>
+
+            {(message || (!loading && promptContent.trim().length === 0)) && (
+              <div
+                data-mind-system-assistant-prompt-status={status}
+                className={`rounded-md px-3 py-2 text-[11px] leading-4 ${status === 'error' || (!loading && promptContent.trim().length === 0)
+                  ? 'bg-[var(--error)]/10 text-[var(--error)]'
+                  : status === 'saved'
+                    ? 'bg-[var(--success)]/10 text-[var(--success)]'
+                    : 'bg-muted text-muted-foreground'}`}
+              >
+                {!loading && promptContent.trim().length === 0 ? t.home.mindAssistant.promptEmpty : message}
+              </div>
+            )}
+
+            <DialogFooter>
+              <button
+                type="button"
+                onClick={onClose}
+                className="inline-flex h-8 items-center justify-center rounded-md px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                {t.home.mindAssistant.close}
+              </button>
+              <button
+                type="button"
+                data-mind-system-assistant-save-prompt={assistant.id}
+                onClick={savePrompt}
+                disabled={!canSave}
+                className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md bg-[var(--amber)] px-3 text-xs font-medium text-[var(--amber-foreground)] transition-colors hover:bg-[var(--amber)]/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:bg-muted disabled:text-muted-foreground"
+              >
+                {saving && <Loader2 size={12} className="animate-spin" aria-hidden="true" />}
+                {saving ? t.home.mindAssistant.savingPrompt : t.home.mindAssistant.savePrompt}
+              </button>
+            </DialogFooter>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function DetailRow({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <div className="min-w-0">
+      <div className="text-muted-foreground/70">{label}</div>
+      <div className={`mt-0.5 truncate text-foreground/80 ${mono ? 'font-mono' : ''}`}>{value}</div>
+    </div>
+  );
+}
+
+function buildDefaultPromptDraft(assistant: Pick<MindSystemAssistantViewModel, 'name' | 'desc'>, spaceTitle: string, spacePath: string): string {
+  return `# ${assistant.name}
+
+## Role
+
+${assistant.desc}
+
+## Inputs
+
+- Notes and context from ${spacePath}
+- The space instruction for ${spaceTitle}
+
+## Output
+
+Write one focused Markdown draft for user review.
+
+## Boundaries
+
+- Do not overwrite canonical notes unless explicitly asked.
+- Keep uncertainty and source assumptions visible.
+`;
 }
 
 // ─── Context Menu for DirView entries ─────────────────────────────────────────
