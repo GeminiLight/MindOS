@@ -51,6 +51,7 @@ export function materializeStandaloneAssets(appDir, options = {}) {
   materializeNextServerLib(appDir, standaloneDir);
   materializeRuntimeDependencySeeds(appDir, standaloneDir, options.runtimeDependencySeeds ?? []);
   materializeStandalonePackageDependencies(appDir, standaloneDir);
+  prunePnpmVirtualStores(standaloneDir);
   pruneNextProductionServerPayload(standaloneDir);
   pruneRedundantNestedPackages(standaloneDir);
   pruneTargetNativeBinaries(standaloneDir, {
@@ -198,6 +199,7 @@ function listPackageNames(nodeModulesDir) {
   if (!existsSync(nodeModulesDir)) return packageNames;
   for (const entry of readdirSync(nodeModulesDir, { withFileTypes: true })) {
     if (!entry.isDirectory() || entry.name === '.bin') continue;
+    if (entry.name === '.pnpm') continue;
     if (entry.name.startsWith('@')) {
       const scopeDir = path.join(nodeModulesDir, entry.name);
       for (const scopedEntry of readdirSync(scopeDir, { withFileTypes: true })) {
@@ -222,6 +224,8 @@ function collectPackageEntries(nodeModulesDir, out = []) {
 
 function replaceSymlinksWithCopies(dir, nodeModulesRoot = dir, fallbackNodeModulesDir = null) {
   for (const name of readdirSync(dir)) {
+    if (name === '.pnpm') continue;
+
     const child = path.join(dir, name);
     const stat = lstatSync(child);
 
@@ -245,6 +249,14 @@ function replaceSymlinksWithCopies(dir, nodeModulesRoot = dir, fallbackNodeModul
     if (stat.isDirectory()) {
       replaceSymlinksWithCopies(child, nodeModulesRoot, fallbackNodeModulesDir);
     }
+  }
+}
+
+function prunePnpmVirtualStores(standaloneDir) {
+  const nodeModulesDir = path.join(standaloneDir, 'node_modules');
+  if (!existsSync(nodeModulesDir)) return;
+  for (const pnpmDir of findDirsNamed(nodeModulesDir, '.pnpm')) {
+    rmSync(pnpmDir, { recursive: true, force: true });
   }
 }
 
@@ -728,6 +740,8 @@ function copyDereferenced(fromAbs, toAbs) {
     mkdirSync(path.dirname(toAbs), { recursive: true });
     mkdirSync(toAbs, { recursive: true });
     for (const name of readdirSync(fromAbs)) {
+      if (name === '.pnpm') continue;
+      if (name === '.next') continue;
       copyDereferenced(path.join(fromAbs, name), path.join(toAbs, name));
     }
     return;

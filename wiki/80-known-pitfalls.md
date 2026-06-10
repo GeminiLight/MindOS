@@ -145,6 +145,16 @@
 
 **验证**：发布前用全新 `/tmp` 安装 tarball，真实运行 `mindos start`，确认首页 `/` 返回 200；再用真实浏览器/Playwright 打开首页，要求无 4xx/5xx responses、无 console error，并用 token 调 `/api/files` / `/api/file` / `/api/search`。
 
+### Standalone 打包不能 dereference pnpm virtual store 自引用（2026-06-11）
+
+**症状**：`Publish to npm` / `Publish Runtime` 在 GitHub Actions 里构建完 Next standalone 后，`prepare-standalone` 或 `verify-standalone` 复制依赖时卡很久，最后报 `ENOSPC: no space left on device`。失败路径里会反复出现 `.next/standalone/node_modules/.../.pnpm/node_modules/@mindos/web/.next/standalone/...`。
+
+**根因**：pnpm virtual store 可能在 package 的 nested `node_modules/.pnpm/node_modules/` 下放 workspace package symlink。打包脚本如果无脑 dereference `.pnpm`，会把 `@mindos/web` 指回 appDir，再复制 appDir 里的 `.next/standalone`，形成嵌套 standalone 递归并撑爆 CI runner 磁盘。
+
+**修复**：`packages/desktop/scripts/prepare-mindos-bundle.mjs` 的 standalone materialize 流程跳过并清理 `.pnpm` virtual store，dereference package 时也跳过 `.next` build payload。真实 runtime dependency 由显式 package symlink materialization 和 dependency closure 补齐，不依赖复制 pnpm virtual store。
+
+**防回归**：`packages/desktop/src/prepare-mindos-bundle.test.ts` 覆盖 pnpm virtual store 中 `@mindos/web -> appDir` 自引用时，不会复制出嵌套 `.next/standalone`，并清理 standalone `node_modules/.pnpm`。
+
 ### Capture AI organize 不能只测 SSE，要验证工具真实落盘（2026-05-16）
 
 **症状**：暂存台 AI 整理的 `/api/ask mode=organize` 返回 200，SSE 里也有 `tool_start`，但知识库没有新增/更新文件；进一步看 stream 才发现 `list_files` / `create_file` 返回 `Tool ... not found`。

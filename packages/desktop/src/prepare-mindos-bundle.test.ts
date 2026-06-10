@@ -102,6 +102,37 @@ describe('materializeStandaloneAssets', () => {
     expect(readFileSync(path.join(standalonePackage, 'dist', 'index.js'), 'utf-8')).toBe('ok');
   });
 
+  it('does not dereference pnpm virtual-store self links into nested standalone builds', () => {
+    const appDir = makeTemp('mindos-app-pnpm-self-link-');
+    writeStandaloneApp(appDir);
+
+    const packageStore = path.join(makeTemp('mindos-pnpm-store-'), 'runtime-package');
+    mkdirSync(path.join(packageStore, 'node_modules', '.pnpm', 'node_modules', '@mindos'), { recursive: true });
+    writeFileSync(path.join(packageStore, 'package.json'), JSON.stringify({
+      name: 'runtime-package',
+      version: '1.0.0',
+    }));
+    writeFileSync(path.join(packageStore, 'index.js'), 'module.exports = {};');
+    symlinkSync(appDir, path.join(packageStore, 'node_modules', '.pnpm', 'node_modules', '@mindos', 'web'));
+
+    const standaloneNodeModules = path.join(appDir, '.next', 'standalone', 'node_modules');
+    const standalonePackage = path.join(standaloneNodeModules, 'runtime-package');
+    mkdirSync(path.dirname(standalonePackage), { recursive: true });
+    symlinkSync(packageStore, standalonePackage);
+
+    const rootVirtualStoreSelfLink = path.join(standaloneNodeModules, '.pnpm', 'node_modules', '@mindos', 'web');
+    mkdirSync(path.dirname(rootVirtualStoreSelfLink), { recursive: true });
+    symlinkSync(appDir, rootVirtualStoreSelfLink);
+
+    materializeStandaloneAssets(appDir);
+
+    expect(lstatSync(standalonePackage).isSymbolicLink()).toBe(false);
+    expect(readFileSync(path.join(standalonePackage, 'index.js'), 'utf-8')).toBe('module.exports = {};');
+    expect(existsSync(path.join(standalonePackage, 'node_modules', '.pnpm'))).toBe(false);
+    expect(existsSync(path.join(standaloneNodeModules, '.pnpm'))).toBe(false);
+    expect(existsSync(path.join(standalonePackage, '.next', 'standalone', 'server.js'))).toBe(false);
+  });
+
   it('materializes dependencies of external standalone packages', () => {
     const appDir = makeTemp('mindos-app-standalone-deps-');
     writeStandaloneApp(appDir);
