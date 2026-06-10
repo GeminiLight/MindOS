@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { Eye, EyeOff, ExternalLink, Loader2 } from 'lucide-react';
 import type { PlatformDef } from '@/lib/im/platforms';
 import { ActionResult } from './shared';
+import { ChannelSetupMethods } from './ChannelSetupMethods';
 
 export function ChannelSetupFlow({ platform, im, locale, onSaved }: {
   platform: PlatformDef;
@@ -15,7 +16,7 @@ export function ChannelSetupFlow({ platform, im, locale, onSaved }: {
   const [saving, setSaving] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; msg: string } | null>(null);
 
-  const isComplete = platform.fields.every(f => formValues[f.key]?.trim());
+  const isComplete = platform.fields.filter(f => !f.optional).every(f => formValues[f.key]?.trim());
   const purpose = locale === 'zh' ? (platform.purposeZh ?? platform.purpose ?? '') : (platform.purpose ?? '');
   const useCases = locale === 'zh' ? (platform.useCasesZh ?? platform.useCases ?? []) : (platform.useCases ?? []);
 
@@ -59,9 +60,11 @@ export function ChannelSetupFlow({ platform, im, locale, onSaved }: {
         )}
       </section>
 
+      <ChannelSetupMethods platform={platform} im={im} locale={locale} />
+
       {/* Setup steps + form */}
       <section className="rounded-lg border border-border bg-card p-5 shadow-sm">
-        <h3 className="text-sm font-semibold text-foreground tracking-tight mb-4">{im.setupGuide}</h3>
+        <h3 className="text-sm font-semibold text-foreground tracking-tight mb-4">{im.manualSetupTitle}</h3>
 
         {platform.guide && (
           <div className="rounded-md bg-muted/30 border border-border/50 px-4 py-3 mb-5">
@@ -98,12 +101,12 @@ export function ChannelSetupFlow({ platform, im, locale, onSaved }: {
                   onChange={e => setFormValues(prev => ({ ...prev, [field.key]: e.target.value }))}
                   className="h-10 w-full px-3 pr-10 text-sm font-mono bg-background border border-border rounded-md focus:outline-none focus-visible:ring-1 focus-visible:ring-ring transition-colors"
                   autoComplete="off"
-                  aria-required="true"
+                  aria-required={!field.optional}
                 />
                 <button
                   type="button"
                   onClick={() => setShowSecrets(prev => !prev)}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-muted-foreground hover:text-foreground rounded transition-colors"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                   aria-label={showSecrets ? im.hideSecret : im.showSecret}
                 >
                   {showSecrets ? <EyeOff size={15} /> : <Eye size={15} />}
@@ -118,7 +121,7 @@ export function ChannelSetupFlow({ platform, im, locale, onSaved }: {
               type="button"
               onClick={handleSave}
               disabled={saving || !isComplete}
-              className="h-10 px-5 text-sm font-medium rounded-md inline-flex items-center gap-2 bg-[var(--amber)] text-[var(--amber-foreground)] shadow-sm hover:opacity-90 hover:shadow disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+              className="inline-flex h-10 items-center gap-2 rounded-md bg-[var(--amber)] px-5 text-sm font-medium text-[var(--amber-foreground)] shadow-sm transition-all hover:opacity-90 hover:shadow focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40"
             >
               {saving && <Loader2 size={14} className="animate-spin" />}
               {saving ? im.saving : im.saveConfig}

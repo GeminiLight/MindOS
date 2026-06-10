@@ -32,6 +32,14 @@ import {
   handleAcpSessionPost,
 } from './handlers/acp.js';
 import { handleAgentActivity } from './handlers/agent-activity.js';
+import {
+  handleCodexThreadArchivePost,
+  handleCodexThreadForkPost,
+  handleCodexThreadGet,
+  handleCodexThreadUnarchivePost,
+  handleCodexThreadsGet,
+  type CodexThreadManagerServices,
+} from './handlers/agent-runtime-codex.js';
 import { handleAgentRuntimesGet } from './handlers/agent-runtimes.js';
 import {
   handleAgentCopySkillPost,
@@ -160,6 +168,7 @@ export type MindosHttpServices = {
   };
   listSkills(): { disabledSkills?: string[]; skillRoots: MindosSkillRoot[] };
   askStream(input: unknown): AsyncIterable<MindOSSSEvent>;
+  createCodexClient?: CodexThreadManagerServices['createCodexClient'];
   documentExtraction?: ExtractPdfServices & ExtractDocxServices;
   channels?: MindosChannelServices;
   syncDaemon?: {
@@ -293,8 +302,9 @@ async function handleRequest(
       return;
     }
 
-    const route = `${req.method ?? 'GET'} ${url.pathname}`;
-    if (!isAuthorizedRequest(route, req, services)) {
+    const method = req.method ?? 'GET';
+    const route = `${method} ${url.pathname}`;
+    if (!isAuthorizedRequest(resolveAuthRoute(method, url.pathname), req, services)) {
       writeResponse(res, json({ error: 'Unauthorized' }, { status: 401 }));
       return;
     }
@@ -338,6 +348,29 @@ async function handleRequest(
     if (route === 'GET /api/agent-runtimes') {
       writeResponse(res, await handleAgentRuntimesGet(url.searchParams, services));
       return;
+    }
+    if (route === 'GET /api/agent-runtimes/codex/threads') {
+      writeResponse(res, await handleCodexThreadsGet(url.searchParams, services));
+      return;
+    }
+    const codexThreadRoute = parseCodexThreadRoute(method, url.pathname);
+    if (codexThreadRoute) {
+      if (codexThreadRoute.action === null && method === 'GET') {
+        writeResponse(res, await handleCodexThreadGet(codexThreadRoute.threadId, url.searchParams, services));
+        return;
+      }
+      if (codexThreadRoute.action === 'fork' && method === 'POST') {
+        writeResponse(res, await handleCodexThreadForkPost(codexThreadRoute.threadId, await readJsonBody(req), services));
+        return;
+      }
+      if (codexThreadRoute.action === 'archive' && method === 'POST') {
+        writeResponse(res, await handleCodexThreadArchivePost(codexThreadRoute.threadId, services));
+        return;
+      }
+      if (codexThreadRoute.action === 'unarchive' && method === 'POST') {
+        writeResponse(res, await handleCodexThreadUnarchivePost(codexThreadRoute.threadId, services));
+        return;
+      }
     }
     if (route === 'OPTIONS /api/a2a') {
       writeResponse(res, handleA2aOptions());
@@ -787,6 +820,38 @@ function isAuthorizedRequest(route: string, req: IncomingMessage, services: Mind
   const match = /^Bearer\s+(.+)$/i.exec(authorization);
   const candidate = match?.[1];
   return typeof candidate === 'string' && safeTokenEquals(candidate, token);
+}
+
+function resolveAuthRoute(method: string, pathname: string): string {
+  const codexThreadRoute = parseCodexThreadRoute(method, pathname);
+  if (!codexThreadRoute) {
+    if (
+      (method === 'GET' || method === 'POST')
+      && pathname.startsWith('/api/agent-runtimes/codex/threads/')
+    ) {
+      return 'GET /api/agent-runtimes/codex/threads';
+    }
+    return `${method} ${pathname}`;
+  }
+  const suffix = codexThreadRoute.action ? `/${codexThreadRoute.action}` : '';
+  return `${method} /api/agent-runtimes/codex/threads/[threadId]${suffix}`;
+}
+
+function parseCodexThreadRoute(
+  method: string,
+  pathname: string,
+): { threadId: string; action: null | 'fork' | 'archive' | 'unarchive' } | null {
+  if (method !== 'GET' && method !== 'POST') return null;
+  const match = /^\/api\/agent-runtimes\/codex\/threads\/([^/]+)(?:\/([^/]+))?$/.exec(pathname);
+  if (!match) return null;
+  const threadId = match[1];
+  if (!threadId) return null;
+  const action = match[2] ?? null;
+  if (action !== null && action !== 'fork' && action !== 'archive' && action !== 'unarchive') return null;
+  return {
+    threadId: decodeURIComponent(threadId),
+    action,
+  };
 }
 
 function readAuthToken(services: MindosHttpServices): string {

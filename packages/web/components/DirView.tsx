@@ -3,7 +3,7 @@
 import { useSyncExternalStore, useMemo, useState, useCallback, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { FileText, Table, Folder, FolderOpen, LayoutGrid, List, FilePlus, ScrollText, BookOpen, Copy, AlertTriangle, Sparkles, Loader2, Check, Bot, Play, CheckCircle2, Pencil } from 'lucide-react';
+import { FileText, Table, Folder, FolderOpen, LayoutGrid, List, FilePlus, ScrollText, BookOpen, Copy, AlertTriangle, Sparkles, Loader2, Check, Play, Pencil } from 'lucide-react';
 import Breadcrumb from '@/components/Breadcrumb';
 import {
   Dialog,
@@ -20,8 +20,8 @@ import { useLocale } from '@/lib/stores/locale-store';
 import { openMindSystemAssistantRun } from '@/lib/mind-system-assistant-actions';
 import type { BuiltInMindSystemSpaceRecord } from '@/lib/space-records';
 import { getMindSystemAssistantAvatar, resolveMindSystemAssistantCopies, type MindSystemAssistantAvatar, type MindSystemAssistantCopy } from '@/lib/mind-system-assistant-copy';
-import { getAssistantPromptPath } from '@/lib/mind-system-assistant-paths';
-import type { MindSystemSpaceAssistant } from '@/lib/mind-system-assistants';
+import { getAssistantProfilePath, getAssistantPromptPath } from '@/lib/mind-system-assistant-paths';
+import type { AssistantScheduleMode, MindSystemSpaceAssistant } from '@/lib/mind-system-assistants';
 import { apiFetch } from '@/lib/api';
 
 async function copyPathToClipboard(path: string) {
@@ -433,18 +433,27 @@ function SpacePreviewSection({ preview, dirPath }: {
 }
 
 const ASSISTANT_PREVIEW_LIMIT = 3;
+type SpaceDocumentKind = 'rules' | 'about';
 
 type MindSystemAssistantViewModel = MindSystemSpaceAssistant & MindSystemAssistantCopy & {
   promptPath: string;
-  promptReady: boolean;
+  profilePath: string;
   avatar: MindSystemAssistantAvatar;
 };
 
-function MindSystemAssistantStrip({ space }: { space: BuiltInMindSystemSpaceRecord }) {
+type EditableAssistantProfile = {
+  name: string;
+  desc: string;
+  scheduleMode: AssistantScheduleMode;
+};
+
+const ASSISTANT_SCHEDULE_MODE_OPTIONS: AssistantScheduleMode[] = ['manual', 'daily', 'weekly'];
+
+function MindSystemSpacePanel({ space, spacePreview }: { space: BuiltInMindSystemSpaceRecord; spacePreview?: SpacePreview | null }) {
   const { t } = useLocale();
   const [showAllAssistants, setShowAllAssistants] = useState(false);
-  const [expandedAssistantId, setExpandedAssistantId] = useState<string | null>(null);
   const [editingAssistant, setEditingAssistant] = useState<MindSystemAssistantViewModel | null>(null);
+  const [spaceDocument, setSpaceDocument] = useState<SpaceDocumentKind | null>(null);
   const pillar = t.home.mindPillars[space.slot.key];
   const assistantCopies = resolveMindSystemAssistantCopies(
     space.assistantSummary.assistants,
@@ -453,29 +462,29 @@ function MindSystemAssistantStrip({ space }: { space: BuiltInMindSystemSpaceReco
   const assistants: MindSystemAssistantViewModel[] = space.assistantSummary.assistants.map((assistant, index) => {
     const copy = assistantCopies[index] ?? { id: assistant.id, name: assistant.id, desc: assistant.id };
     const promptPath = assistant.promptPath ?? getAssistantPromptPath(assistant.id);
-    const promptReady = assistant.promptReady !== false;
+    const profilePath = assistant.profilePath ?? getAssistantProfilePath(assistant.id);
     const avatar = getMindSystemAssistantAvatar(copy.name, assistant.id);
     return {
       ...assistant,
       ...copy,
       promptPath,
-      promptReady,
+      profilePath,
       avatar,
     };
   });
   const visibleAssistants = showAllAssistants ? assistants : assistants.slice(0, ASSISTANT_PREVIEW_LIMIT);
   const hiddenAssistantCount = Math.max(0, assistants.length - ASSISTANT_PREVIEW_LIMIT);
-  const instructionReady = space.assistantSummary.instructionReady;
-  const draftCount = space.assistantSummary.draftCount;
   const spaceTitle = pillar?.title ?? space.slot.label;
+  const spaceDescription = pillar?.desc ?? space.description ?? space.slot.role;
 
   return (
     <section
+      data-mind-system-space-panel={space.slot.key}
       data-mind-system-dir-assistant={space.slot.key}
-      className="mb-5 rounded-lg border border-border/70 bg-card/55 px-4 py-4"
-      aria-label={`${t.home.mindAssistant.spaceTitle}: ${t.home.mindAssistant.assistantCount(assistants.length)}`}
+      className="mb-5 overflow-hidden rounded-lg border border-border/70 bg-card/55"
+      aria-label={spaceTitle}
     >
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+      <div className="flex flex-col gap-3 border-b border-border/60 px-4 py-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="flex min-w-0 items-start gap-3">
           <span
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-[var(--amber)]/35 bg-[var(--amber-subtle)] text-base font-semibold text-[var(--amber)]"
@@ -484,132 +493,90 @@ function MindSystemAssistantStrip({ space }: { space: BuiltInMindSystemSpaceReco
             {space.slot.label}
           </span>
           <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-              <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-foreground">
-                <Bot size={13} className="text-[var(--amber)]/75" aria-hidden="true" />
-                {t.home.mindAssistant.spaceTitle}
-              </span>
-              <span className="rounded bg-muted px-1.5 py-px text-[10px] font-medium text-muted-foreground">
-                {t.home.mindAssistant.assistantCount(assistants.length)}
-              </span>
-            </div>
-            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground/70">
-              <span className={`inline-flex items-center gap-1 ${instructionReady ? 'text-[var(--success)]' : 'text-muted-foreground/60'}`}>
-                <CheckCircle2 size={11} aria-hidden="true" />
-                {instructionReady ? t.home.mindAssistant.instructionReady : t.home.mindAssistant.instructionMissing}
-              </span>
-              <span className="inline-flex items-center gap-1">
-                <FileText size={11} aria-hidden="true" />
-                {t.home.mindAssistant.customDrafts(draftCount)}
-              </span>
-            </div>
+            <div className="text-sm font-semibold leading-5 text-foreground">{spaceTitle}</div>
+            <p className="mt-1 max-w-xl text-xs leading-relaxed text-muted-foreground">{spaceDescription}</p>
           </div>
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-2 lg:justify-end">
-          <Link
-            href={`/view/${encodePath(`${space.slot.path}/INSTRUCTION.md`)}`}
+          <button
+            type="button"
+            data-mind-system-space-doc-button="rules"
+            onClick={() => setSpaceDocument('rules')}
             className="inline-flex h-8 items-center rounded-md px-2.5 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            {t.home.mindAssistant.openInstruction}
-          </Link>
-          <Link
-            href={`/view/${encodePath(`${space.slot.path}/Drafts`)}`}
+            <ScrollText size={12} className="mr-1.5" aria-hidden="true" />
+            {t.fileTree.rules}
+          </button>
+          <button
+            type="button"
+            data-mind-system-space-doc-button="about"
+            onClick={() => setSpaceDocument('about')}
             className="inline-flex h-8 items-center rounded-md px-2.5 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            {t.home.mindAssistant.openDrafts}
-          </Link>
+            <BookOpen size={12} className="mr-1.5" aria-hidden="true" />
+            {t.fileTree.about}
+          </button>
         </div>
       </div>
-      <div className="mt-4 grid grid-cols-1 gap-2.5 lg:grid-cols-3">
-        {visibleAssistants.map((assistant) => {
-          const expanded = expandedAssistantId === assistant.id;
-          return (
-            <article
-              key={assistant.id}
-              data-mind-system-dir-assistant-item={assistant.id}
-              className="group min-w-0 rounded-lg border border-border/60 bg-background/40 p-3.5 transition-colors hover:border-[var(--amber)]/30 hover:bg-background/65"
-            >
-              <div className="flex min-w-0 items-start justify-between gap-2">
-                <div className="flex min-w-0 items-start gap-2">
-                  <span
-                    data-mind-system-dir-assistant-icon={assistant.id}
-                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md border text-xs font-semibold ${assistant.avatar.className}`}
-                    aria-hidden="true"
-                  >
-                    {assistant.avatar.text}
+      <div className="grid grid-cols-1 gap-2.5 p-3 lg:grid-cols-3">
+        {visibleAssistants.map((assistant) => (
+          <article
+            key={assistant.id}
+            data-mind-system-dir-assistant-item={assistant.id}
+            className="group min-w-0 rounded-lg border border-border/65 bg-background/55 p-3.5 transition-colors hover:border-[var(--amber)]/35 hover:bg-background/75"
+          >
+            <div className="flex min-w-0 items-start gap-2.5">
+              <span
+                data-mind-system-dir-assistant-icon={assistant.id}
+                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-md border text-xs font-semibold ${assistant.avatar.className}`}
+                aria-hidden="true"
+              >
+                {assistant.avatar.text}
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm font-semibold leading-5 text-foreground">{assistant.name}</div>
+                <p className="mt-1 line-clamp-2 min-h-8 text-[11px] leading-4 text-muted-foreground">
+                  {assistant.desc}
+                </p>
+                <div className="mt-2 flex flex-wrap items-center gap-1">
+                  <span className="inline-flex rounded-md bg-muted px-1.5 py-px text-[10px] font-medium text-muted-foreground">
+                    {t.home.mindAssistant.scheduleMode[assistant.schedule.mode]}
                   </span>
-                  <div className="min-w-0">
-                    <div className="truncate text-[13px] font-semibold leading-4 text-foreground">{assistant.name}</div>
-                    <div className="mt-1.5 flex flex-wrap items-center gap-1">
-                      <span className="inline-flex rounded-md bg-muted px-1.5 py-px text-[10px] font-medium text-muted-foreground">
-                        {t.home.mindAssistant.scheduleMode[assistant.schedule.mode]}
-                      </span>
-                      <span className={`inline-flex rounded-md px-1.5 py-px text-[10px] font-medium ${assistant.promptReady ? 'bg-[var(--success)]/10 text-[var(--success)]' : 'bg-muted text-muted-foreground'}`}>
-                        {assistant.promptReady ? t.home.mindAssistant.promptReady : t.home.mindAssistant.promptMissing}
-                      </span>
-                    </div>
-                  </div>
                 </div>
-                <button
-                  type="button"
-                  data-mind-system-dir-run-once={assistant.id}
-                  onClick={() => openMindSystemAssistantRun({
-                    spaceTitle,
-                    assistantName: assistant.name,
-                    assistantDesc: assistant.desc,
-                    spacePath: space.slot.path,
-                    promptPath: assistant.promptPath,
-                    runPrompt: t.home.mindAssistant.runPrompt,
-                  })}
-                  className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md bg-[var(--amber)]/10 px-2 text-[10px] font-medium text-[var(--amber)] transition-colors hover:bg-[var(--amber)]/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation"
-                  aria-label={`${t.home.mindAssistant.runOnce}: ${assistant.name}`}
-                >
-                  <Play size={11} aria-hidden="true" />
-                  {t.home.mindAssistant.runOnce}
-                </button>
               </div>
-              <p className="mt-3 line-clamp-2 min-h-8 text-[11px] leading-4 text-muted-foreground">
-                {assistant.desc}
-              </p>
-              {expanded && (
-                <div className="mt-3 grid gap-1.5 rounded-md border border-border/50 bg-muted/35 px-2.5 py-2 text-[10px] leading-4 text-muted-foreground">
-                  <div className="flex min-w-0 items-center justify-between gap-2">
-                    <span className="text-muted-foreground/70">{t.home.mindAssistant.assistantId}</span>
-                    <span className="truncate font-mono text-foreground/75">{assistant.id}</span>
-                  </div>
-                  <div className="flex min-w-0 items-center justify-between gap-2">
-                    <span className="text-muted-foreground/70">{t.home.mindAssistant.promptFile}</span>
-                    <span className="truncate font-mono text-foreground/75">{assistant.promptPath}</span>
-                  </div>
-                  <div className="flex min-w-0 items-center justify-between gap-2">
-                    <span className="text-muted-foreground/70">{t.home.mindAssistant.openDrafts}</span>
-                    <span className="truncate font-mono text-foreground/75">{space.slot.path}/Drafts/</span>
-                  </div>
-                </div>
-              )}
-              <div className="mt-3 flex items-center justify-between gap-1.5 border-t border-border/40 pt-2">
-                <button
-                  type="button"
-                  data-mind-system-dir-view-assistant={assistant.id}
-                  onClick={() => setExpandedAssistantId(expanded ? null : assistant.id)}
-                  className="inline-flex h-7 items-center rounded-md px-2 text-[10px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  aria-expanded={expanded}
-                >
-                  {expanded ? t.home.mindAssistant.hide : t.home.mindAssistant.view}
-                </button>
+            </div>
+            <div className="mt-3 flex items-center justify-between gap-2 border-t border-border/45 pt-2.5">
+              <div className="flex min-w-0 items-center gap-1">
                 <button
                   type="button"
                   onClick={() => setEditingAssistant(assistant)}
                   data-mind-system-dir-edit-assistant={assistant.id}
-                  className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-[10px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="inline-flex h-8 items-center gap-1 rounded-md px-2 text-[10px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <Pencil size={10} aria-hidden="true" />
-                  {t.home.mindAssistant.editPrompt}
+                  {t.home.mindAssistant.editAssistant}
                 </button>
               </div>
-            </article>
-          );
-        })}
+              <button
+                type="button"
+                data-mind-system-dir-run-once={assistant.id}
+                onClick={() => openMindSystemAssistantRun({
+                  spaceTitle,
+                  assistantName: assistant.name,
+                  assistantDesc: assistant.desc,
+                  spacePath: space.slot.path,
+                  promptPath: assistant.promptPath,
+                  runPrompt: t.home.mindAssistant.runPrompt,
+                })}
+                className="inline-flex h-8 shrink-0 items-center gap-1 rounded-md bg-[var(--amber)]/10 px-2.5 text-[10px] font-medium text-[var(--amber)] transition-colors hover:bg-[var(--amber)]/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation"
+                aria-label={`${t.home.mindAssistant.runOnce}: ${assistant.name}`}
+              >
+                <Play size={11} aria-hidden="true" />
+                {t.home.mindAssistant.runOnce}
+              </button>
+            </div>
+          </article>
+        ))}
       </div>
       {hiddenAssistantCount > 0 && (
         <button
@@ -624,17 +591,94 @@ function MindSystemAssistantStrip({ space }: { space: BuiltInMindSystemSpaceReco
             : t.home.mindAssistant.viewAllAssistants(assistants.length)}
         </button>
       )}
-      <MindSystemAssistantPromptDialog
+      <MindSystemAssistantEditDialog
         assistant={editingAssistant}
         spaceTitle={spaceTitle}
         spacePath={space.slot.path}
         onClose={() => setEditingAssistant(null)}
       />
+      <SpaceDocumentDialog
+        kind={spaceDocument}
+        dirPath={space.slot.path}
+        preview={spacePreview}
+        onClose={() => setSpaceDocument(null)}
+      />
     </section>
   );
 }
 
-function MindSystemAssistantPromptDialog({
+function SpaceDocumentDialog({
+  kind,
+  dirPath,
+  preview,
+  onClose,
+}: {
+  kind: SpaceDocumentKind | null;
+  dirPath: string;
+  preview?: SpacePreview | null;
+  onClose: () => void;
+}) {
+  const { t } = useLocale();
+  const open = Boolean(kind);
+  const isRules = kind === 'rules';
+  const title = isRules ? t.fileTree.rules : t.fileTree.about;
+  const Icon = isRules ? ScrollText : BookOpen;
+  const lines = isRules ? (preview?.instructionLines ?? []) : (preview?.readmeLines ?? []);
+  const targetPath = `${dirPath}/${isRules ? 'INSTRUCTION.md' : 'README.md'}`;
+
+  return (
+    <Dialog open={open} onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}>
+      <DialogContent className="sm:max-w-xl">
+        {kind && (
+          <div data-mind-system-space-doc-dialog={kind}>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-base">
+                <Icon size={15} className="text-[var(--amber)]/80" aria-hidden="true" />
+                {title}
+              </DialogTitle>
+              <DialogDescription className="sr-only">{title}</DialogDescription>
+            </DialogHeader>
+            <div className="mt-4 max-h-[52vh] overflow-y-auto rounded-lg border border-border/65 bg-muted/20 p-3">
+              {lines.length > 0 ? (
+                <div className="space-y-2">
+                  {lines.map((line, index) => (
+                    <p key={`${kind}-${index}`} className="text-sm leading-relaxed text-muted-foreground" suppressHydrationWarning>
+                      {line}
+                    </p>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm leading-relaxed text-muted-foreground">
+                  {isRules ? t.home.mindAssistant.instructionMissing : t.dirView.overviewNoFiles}
+                </p>
+              )}
+            </div>
+            <DialogFooter className="mt-4">
+              <button
+                type="button"
+                data-mind-system-space-doc-close={kind}
+                onClick={onClose}
+                className="inline-flex h-9 items-center justify-center rounded-md px-3 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                {t.home.mindAssistant.close}
+              </button>
+              <Link
+                href={`/view/${encodePath(targetPath)}`}
+                data-mind-system-space-doc-open={kind}
+                onClick={onClose}
+                className="inline-flex h-9 items-center justify-center rounded-md bg-[var(--amber)] px-3 text-sm font-medium text-[var(--amber-foreground)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                {t.fileTree.viewAll}
+              </Link>
+            </DialogFooter>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function MindSystemAssistantEditDialog({
   assistant,
   spaceTitle,
   spacePath,
@@ -649,6 +693,8 @@ function MindSystemAssistantPromptDialog({
   const router = useRouter();
   const [promptContent, setPromptContent] = useState('');
   const [originalContent, setOriginalContent] = useState('');
+  const [profile, setProfile] = useState<EditableAssistantProfile>({ name: '', desc: '', scheduleMode: 'manual' });
+  const [originalProfile, setOriginalProfile] = useState<EditableAssistantProfile>({ name: '', desc: '', scheduleMode: 'manual' });
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState<'idle' | 'missing' | 'saved' | 'error'>('idle');
@@ -664,6 +710,13 @@ function MindSystemAssistantPromptDialog({
     setSaving(false);
     setStatus('idle');
     setMessage('');
+    const nextProfile = {
+      name: assistant.name,
+      desc: assistant.desc,
+      scheduleMode: assistant.schedule.mode,
+    };
+    setProfile(nextProfile);
+    setOriginalProfile(nextProfile);
 
     async function loadPrompt() {
       if (!assistant) return;
@@ -705,18 +758,27 @@ function MindSystemAssistantPromptDialog({
     return () => { canceled = true; };
   }, [assistant, spacePath, spaceTitle, t.home.mindAssistant.loadPromptFailed, t.home.mindAssistant.promptMissingHint]);
 
-  const hasChanges = promptContent !== originalContent;
-  const canSave = Boolean(assistant) && !loading && !saving && promptContent.trim().length > 0 && hasChanges;
+  const promptHasChanges = promptContent !== originalContent;
+  const profileHasChanges = profile.name !== originalProfile.name
+    || profile.desc !== originalProfile.desc
+    || profile.scheduleMode !== originalProfile.scheduleMode;
+  const hasChanges = promptHasChanges || profileHasChanges;
+  const canSave = Boolean(assistant)
+    && !loading
+    && !saving
+    && profile.name.trim().length > 0
+    && promptContent.trim().length > 0
+    && hasChanges;
   const statusLabel = loading
     ? t.home.mindAssistant.loadingPrompt
     : saving
-      ? t.home.mindAssistant.savingPrompt
+      ? t.home.mindAssistant.savingChanges
       : status === 'saved'
-        ? t.home.mindAssistant.savedPrompt
+        ? t.home.mindAssistant.savedChanges
         : status === 'missing'
           ? t.home.mindAssistant.promptMissing
           : hasChanges
-            ? t.home.mindAssistant.unsavedPrompt
+            ? t.home.mindAssistant.unsavedChanges
             : t.home.mindAssistant.promptReady;
   const statusClassName = status === 'error' || (!loading && promptContent.trim().length === 0)
     ? 'bg-[var(--error)]/10 text-[var(--error)]'
@@ -726,86 +788,179 @@ function MindSystemAssistantPromptDialog({
         ? 'bg-[var(--amber)]/10 text-[var(--amber)]'
         : 'bg-muted text-muted-foreground';
   const promptCharacterCount = t.home.mindAssistant.promptCharacters(promptContent.length);
+  const displayName = profile.name.trim() || assistant?.name || '';
+  const displayDesc = profile.desc.trim();
+  const displayAvatar = assistant ? getMindSystemAssistantAvatar(displayName, assistant.id) : null;
 
-  const savePrompt = async () => {
+  const saveAssistant = async () => {
     if (!assistant || !canSave) return;
     setSaving(true);
     setStatus('idle');
     setMessage('');
     try {
-      const result = await apiFetch<{ ok?: boolean; path?: string; mtime?: number }>('/api/file', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          op: 'save_file',
-          path: assistant.promptPath,
-          content: promptContent,
-          source: 'user',
-        }),
-      });
+      let savedPath: string | undefined;
+      if (profileHasChanges) {
+        const result = await apiFetch<{ ok?: boolean; path?: string; mtime?: number }>('/api/file', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            op: 'save_file',
+            path: assistant.profilePath,
+            content: JSON.stringify({
+              name: profile.name.trim(),
+              desc: profile.desc.trim(),
+              schedule: { mode: profile.scheduleMode },
+            }, null, 2) + '\n',
+            source: 'user',
+          }),
+        });
+        savedPath = result?.path;
+      }
+      if (promptHasChanges) {
+        const result = await apiFetch<{ ok?: boolean; path?: string; mtime?: number }>('/api/file', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            op: 'save_file',
+            path: assistant.promptPath,
+            content: promptContent,
+            source: 'user',
+          }),
+        });
+        savedPath = result?.path ?? savedPath;
+      }
       setOriginalContent(promptContent);
+      setOriginalProfile({
+        name: profile.name.trim(),
+        desc: profile.desc.trim(),
+        scheduleMode: profile.scheduleMode,
+      });
+      setProfile(value => ({
+        ...value,
+        name: value.name.trim(),
+        desc: value.desc.trim(),
+      }));
       setStatus('saved');
-      setMessage(t.home.mindAssistant.savedPrompt);
-      if (result?.path) router.refresh();
+      setMessage(t.home.mindAssistant.savedChanges);
+      if (savedPath) router.refresh();
     } catch (error) {
       setStatus('error');
-      setMessage(error instanceof Error ? error.message : t.home.mindAssistant.savePromptFailed);
+      setMessage(error instanceof Error ? error.message : t.home.mindAssistant.saveChangesFailed);
     } finally {
       setSaving(false);
     }
   };
 
-  const resetPrompt = () => {
+  const resetAssistantEdits = () => {
     setPromptContent(originalContent);
+    setProfile(originalProfile);
     setStatus('idle');
     setMessage('');
   };
 
   return (
     <Dialog open={Boolean(assistant)} onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto p-0 sm:max-w-[940px]">
+      <DialogContent className="max-h-[calc(100vh-2rem)] overflow-hidden p-0 sm:max-w-[980px]">
         {assistant && (
-          <div data-mind-system-assistant-dialog={assistant.id} className="flex min-h-0 flex-col">
-            <DialogHeader className="border-b border-border/70 bg-muted/20 px-5 py-4">
-              <div className="flex min-w-0 items-start gap-3 pr-10">
+          <div data-mind-system-assistant-dialog={assistant.id} className="flex max-h-[calc(100vh-2rem)] min-h-0 flex-col">
+            <DialogHeader className="shrink-0 border-b border-border/70 bg-card/75 px-5 py-4">
+              <div className="flex min-w-0 items-start gap-3 pr-10 sm:items-center">
                 <span
-                  className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border text-sm font-semibold ${assistant.avatar.className}`}
+                  className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border text-base font-semibold ${displayAvatar?.className ?? assistant.avatar.className}`}
                   aria-hidden="true"
                 >
-                  {assistant.avatar.text}
+                  {displayAvatar?.text ?? assistant.avatar.text}
                 </span>
                 <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <DialogTitle className="truncate text-base">{assistant.name}</DialogTitle>
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <DialogTitle className="truncate text-lg leading-6">{displayName}</DialogTitle>
                     <span className={`inline-flex rounded-md px-1.5 py-px text-[10px] font-medium ${statusClassName}`}>
                       {statusLabel}
                     </span>
                   </div>
-                  <DialogDescription className="mt-1 line-clamp-2 max-w-[68ch]">{assistant.desc}</DialogDescription>
+                  <DialogDescription className="mt-1 line-clamp-2 max-w-[68ch]">{displayDesc}</DialogDescription>
                 </div>
               </div>
             </DialogHeader>
 
-            <div className="grid md:min-h-0 md:flex-1 md:grid-cols-[300px_minmax(0,1fr)]">
-              <aside className="border-b border-border/70 bg-muted/15 p-4 md:border-b-0 md:border-r">
-                <div className="grid gap-3 text-[11px] text-muted-foreground">
-                  <DetailRow label={t.home.mindAssistant.assistantId} value={assistant.id} mono />
-                  <DetailRow label={t.home.mindAssistant.assistantSpace} value={`${spaceTitle} · ${spacePath}`} />
-                  <DetailRow label={t.home.mindAssistant.schedule} value={t.home.mindAssistant.scheduleMode[assistant.schedule.mode]} />
-                  <DetailRow label={t.home.mindAssistant.writesTo} value={`${spacePath}/Drafts/`} mono />
-                  <DetailRow label={t.home.mindAssistant.promptFile} value={assistant.promptPath} mono wrap />
+            <div className="grid min-h-0 flex-1 overflow-y-auto md:grid-cols-[320px_minmax(0,1fr)] md:overflow-hidden">
+              <aside className="border-b border-border/70 bg-muted/10 p-4 md:border-b-0 md:border-r md:overflow-y-auto">
+                <div className="rounded-lg border border-border/65 bg-background/55 p-3">
+                  <div className="mb-3 flex items-center justify-between gap-2">
+                    <div className="text-xs font-semibold text-foreground">{t.home.mindAssistant.profileFile}</div>
+                    <span className={`inline-flex rounded-md px-1.5 py-px text-[10px] font-medium ${profileHasChanges ? 'bg-[var(--amber)]/10 text-[var(--amber)]' : 'bg-muted text-muted-foreground'}`}>
+                      {profileHasChanges ? t.home.mindAssistant.unsavedChanges : t.home.mindAssistant.savedState}
+                    </span>
+                  </div>
+
+                  <label className="grid gap-1.5">
+                    <span className="text-[11px] font-medium text-muted-foreground">{t.home.mindAssistant.assistantName}</span>
+                    <input
+                      data-mind-system-assistant-name-editor={assistant.id}
+                      value={profile.name}
+                      onChange={(event) => {
+                        setProfile(value => ({ ...value, name: event.target.value }));
+                        if (status === 'saved' || status === 'error') {
+                          setStatus('idle');
+                          setMessage('');
+                        }
+                      }}
+                      disabled={loading || saving}
+                      className="h-9 rounded-md border border-border bg-background px-2.5 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground/60 focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+                    />
+                  </label>
+                  <div className="mt-3 grid gap-1.5">
+                    <span className="text-[11px] font-medium text-muted-foreground">{t.home.mindAssistant.schedule}</span>
+                    <div
+                      data-mind-system-assistant-schedule-editor={assistant.id}
+                      className="grid grid-cols-3 gap-1 rounded-md border border-border bg-background p-1"
+                    >
+                      {ASSISTANT_SCHEDULE_MODE_OPTIONS.map(mode => (
+                        <button
+                          key={mode}
+                          type="button"
+                          data-mind-system-assistant-schedule-option={`${assistant.id}-${mode}`}
+                          aria-pressed={profile.scheduleMode === mode}
+                          disabled={loading || saving}
+                          onClick={() => {
+                            setProfile(value => ({ ...value, scheduleMode: mode }));
+                            if (status === 'saved' || status === 'error') {
+                              setStatus('idle');
+                              setMessage('');
+                            }
+                          }}
+                          className={`h-8 rounded text-[11px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60 ${profile.scheduleMode === mode ? 'bg-[var(--amber)] text-[var(--amber-foreground)]' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}
+                        >
+                          {t.home.mindAssistant.scheduleMode[mode]}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <label className="mt-3 grid gap-1.5">
+                    <span className="text-[11px] font-medium text-muted-foreground">{t.home.mindAssistant.assistantDescription}</span>
+                    <textarea
+                      data-mind-system-assistant-desc-editor={assistant.id}
+                      value={profile.desc}
+                      onChange={(event) => {
+                        setProfile(value => ({ ...value, desc: event.target.value }));
+                        if (status === 'saved' || status === 'error') {
+                          setStatus('idle');
+                          setMessage('');
+                        }
+                      }}
+                      disabled={loading || saving}
+                      className="min-h-24 resize-y rounded-md border border-border bg-background px-2.5 py-2 text-sm leading-5 text-foreground outline-none transition-colors placeholder:text-muted-foreground/60 focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+                    />
+                  </label>
                 </div>
               </aside>
 
-              <div className="flex min-h-0 flex-col">
-                <div className="flex flex-col gap-2 border-b border-border/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex min-h-0 flex-col bg-background/35">
+                <div className="flex flex-col gap-2 border-b border-border/70 bg-background/45 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 text-xs font-medium text-foreground">
                       <ScrollText size={13} className="text-[var(--amber)]/75" aria-hidden="true" />
                       {t.home.mindAssistant.promptEditor}
-                    </div>
-                    <div className="mt-1 truncate font-mono text-[10px] text-muted-foreground/75">
-                      {assistant.promptPath}
                     </div>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
@@ -818,7 +973,7 @@ function MindSystemAssistantPromptDialog({
                   </div>
                 </div>
 
-                <div className="flex min-h-0 flex-1 flex-col gap-3 p-4">
+                <div className="flex min-h-0 flex-1 flex-col gap-3 p-4 md:overflow-y-auto">
                   <label className="grid min-h-0 flex-1 gap-2">
                     <span className="sr-only">{t.home.mindAssistant.promptEditor}</span>
                     <textarea
@@ -834,11 +989,11 @@ function MindSystemAssistantPromptDialog({
                       onKeyDown={(event) => {
                         if ((event.metaKey || event.ctrlKey) && event.key === 'Enter' && canSave) {
                           event.preventDefault();
-                          void savePrompt();
+                          void saveAssistant();
                         }
                       }}
                       disabled={loading || saving}
-                      className="h-[260px] w-full resize-y rounded-lg border border-border bg-background px-3.5 py-3 font-mono text-xs leading-5 text-foreground shadow-inner outline-none transition-colors placeholder:text-muted-foreground/60 focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60 md:h-[min(42vh,520px)] md:min-h-[320px]"
+                      className="h-[320px] w-full resize-y rounded-lg border border-border bg-background/90 px-3.5 py-3 font-mono text-xs leading-5 text-foreground shadow-inner outline-none transition-colors placeholder:text-muted-foreground/60 focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60 md:h-[min(48vh,560px)] md:min-h-[380px]"
                       placeholder={loading ? t.home.mindAssistant.loadingPrompt : t.home.mindAssistant.promptEditor}
                     />
                   </label>
@@ -855,47 +1010,40 @@ function MindSystemAssistantPromptDialog({
               </div>
             </div>
 
-            <DialogFooter className="sticky bottom-0 z-10 mx-0 mb-0 flex-row justify-end rounded-none border-t border-border/70">
+            <DialogFooter className="z-10 mx-0 mb-0 shrink-0 flex-row justify-end rounded-none border-t border-border/70 bg-card/95 px-5 py-3">
               <button
                 type="button"
                 onClick={onClose}
-                className="inline-flex h-8 items-center justify-center rounded-md px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="inline-flex h-9 items-center justify-center rounded-md px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 {t.home.mindAssistant.close}
               </button>
               <button
                 type="button"
+                data-mind-system-assistant-reset={assistant.id}
                 data-mind-system-assistant-reset-prompt={assistant.id}
-                onClick={resetPrompt}
+                onClick={resetAssistantEdits}
                 disabled={!hasChanges || loading || saving}
-                className="inline-flex h-8 items-center justify-center rounded-md px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-45"
+                className="inline-flex h-9 items-center justify-center rounded-md px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-45"
               >
-                {t.home.mindAssistant.resetPrompt}
+                {t.home.mindAssistant.resetChanges}
               </button>
               <button
                 type="button"
+                data-mind-system-assistant-save={assistant.id}
                 data-mind-system-assistant-save-prompt={assistant.id}
-                onClick={savePrompt}
+                onClick={saveAssistant}
                 disabled={!canSave}
-                className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md bg-[var(--amber)] px-3 text-xs font-medium text-[var(--amber-foreground)] transition-colors hover:bg-[var(--amber)]/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:bg-muted disabled:text-muted-foreground"
+                className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md bg-[var(--amber)] px-4 text-xs font-medium text-[var(--amber-foreground)] transition-colors hover:bg-[var(--amber)]/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:bg-muted disabled:text-muted-foreground"
               >
                 {saving && <Loader2 size={12} className="animate-spin" aria-hidden="true" />}
-                {saving ? t.home.mindAssistant.savingPrompt : t.home.mindAssistant.savePrompt}
+                {saving ? t.home.mindAssistant.savingChanges : t.home.mindAssistant.saveChanges}
               </button>
             </DialogFooter>
           </div>
         )}
       </DialogContent>
     </Dialog>
-  );
-}
-
-function DetailRow({ label, value, mono = false, wrap = false }: { label: string; value: string; mono?: boolean; wrap?: boolean }) {
-  return (
-    <div className="min-w-0">
-      <div className="text-muted-foreground/70">{label}</div>
-      <div className={`mt-0.5 text-foreground/80 ${mono ? 'font-mono' : ''} ${wrap ? 'break-all' : 'truncate'}`}>{value}</div>
-    </div>
   );
 }
 
@@ -1025,11 +1173,11 @@ export default function DirView({ dirPath, entries, spacePreview, mindSystemSpac
       <div className="flex-1 px-4 md:px-6 py-6">
         <div className="max-w-[860px] mx-auto">
           {mindSystemSpace && (
-            <MindSystemAssistantStrip space={mindSystemSpace} />
+            <MindSystemSpacePanel space={mindSystemSpace} spacePreview={spacePreview} />
           )}
 
-          {/* Space preview cards (always shown when there's a spacePreview) */}
-          {spacePreview && (
+          {/* Space preview cards for ordinary spaces. Built-in Mind System spaces expose these from the header. */}
+          {spacePreview && !mindSystemSpace && (
             <SpacePreviewSection preview={spacePreview} dirPath={dirPath} />
           )}
 

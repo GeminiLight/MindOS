@@ -49,6 +49,7 @@ describe('Product server extraction contract', () => {
     expect(http).toContain('/api/graph');
     expect(http).toContain('/api/agent-activity');
     expect(http).toContain('/api/agent-runtimes');
+    expect(http).toContain('/api/agent-runtimes/codex/threads');
     expect(http).toContain('/api/ask-sessions');
     expect(http).toContain('/api/space-overview');
     expect(http).toContain('/api/git');
@@ -123,6 +124,13 @@ describe('Product server extraction contract', () => {
     expect(contract).toContain("path: '/api/agent-activity'");
     expect(contract).toContain("id: 'agent-runtimes'");
     expect(contract).toContain("path: '/api/agent-runtimes'");
+    expect(contract).toContain("id: 'agent-runtimes.codex.threads'");
+    expect(contract).toContain("path: '/api/agent-runtimes/codex/threads'");
+    expect(contract).toContain("id: 'agent-runtimes.codex.thread'");
+    expect(contract).toContain("path: '/api/agent-runtimes/codex/threads/[threadId]'");
+    expect(contract).toContain("id: 'agent-runtimes.codex.thread.fork'");
+    expect(contract).toContain("id: 'agent-runtimes.codex.thread.archive'");
+    expect(contract).toContain("id: 'agent-runtimes.codex.thread.unarchive'");
     expect(contract).toContain("id: 'ask-sessions'");
     expect(contract).toContain("path: '/api/ask-sessions'");
     expect(contract).toContain("id: 'space-overview'");
@@ -235,6 +243,11 @@ describe('Product server extraction contract', () => {
       'packages/web/app/api/graph/route.ts',
       'packages/web/app/api/agent-activity/route.ts',
       'packages/web/app/api/agent-runtimes/route.ts',
+      'packages/web/app/api/agent-runtimes/codex/threads/route.ts',
+      'packages/web/app/api/agent-runtimes/codex/threads/[threadId]/route.ts',
+      'packages/web/app/api/agent-runtimes/codex/threads/[threadId]/archive/route.ts',
+      'packages/web/app/api/agent-runtimes/codex/threads/[threadId]/fork/route.ts',
+      'packages/web/app/api/agent-runtimes/codex/threads/[threadId]/unarchive/route.ts',
       'packages/web/app/api/ask-sessions/route.ts',
       'packages/web/app/api/space-overview/route.ts',
       'packages/web/app/api/git/route.ts',

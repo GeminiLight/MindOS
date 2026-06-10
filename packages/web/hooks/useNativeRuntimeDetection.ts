@@ -70,8 +70,8 @@ function removeRuntimeCache(kind: NativeRuntimeKind): void {
   try { sessionStorage.removeItem(cacheKey(kind)); } catch { /* ignore */ }
 }
 
-function shouldRevalidate(cache: NativeRuntimeCache | null): boolean {
-  return !cache || cache.runtime.status !== 'available';
+function shouldRevalidate(): boolean {
+  return true;
 }
 
 function upsertRuntime(runtimes: AgentRuntimeDescriptor[], runtime: AgentRuntimeDescriptor): AgentRuntimeDescriptor[] {
@@ -88,7 +88,7 @@ export function useNativeRuntimeDetection(): NativeRuntimeDetectionState {
       .filter((runtime): runtime is AgentRuntimeDescriptor => !!runtime)
   ));
   const [loadingByKind, setLoadingByKind] = useState<RuntimeLoadingMap>(() => Object.fromEntries(
-    RUNTIME_KINDS.map((kind) => [kind, shouldRevalidate(initialCaches.get(kind) ?? null)]),
+    RUNTIME_KINDS.map((kind) => [kind, shouldRevalidate()]),
   ) as RuntimeLoadingMap);
   const [errorByKind, setErrorByKind] = useState<RuntimeErrorMap>({});
   const [trigger, setTrigger] = useState(0);
@@ -114,9 +114,6 @@ export function useNativeRuntimeDetection(): NativeRuntimeDetectionState {
     forceRef.current = false;
 
     for (const kind of RUNTIME_KINDS) {
-      const cached = initialCaches.get(kind) ?? null;
-      if (!isForce && trigger === 0 && cached && !shouldRevalidate(cached)) continue;
-
       const controller = new AbortController();
       controllers.push(controller);
       const timeout = setTimeout(() => controller.abort(), DETECTION_TIMEOUT_MS);
@@ -136,9 +133,12 @@ export function useNativeRuntimeDetection(): NativeRuntimeDetectionState {
         })
         .catch((err) => {
           if (cancelled) return;
+          const label = kind === 'claude' ? 'Claude Code' : 'Codex';
+          const seconds = Math.round(DETECTION_TIMEOUT_MS / 1000);
           const message = err instanceof DOMException && err.name === 'AbortError'
-            ? `${kind} runtime detection timed out after ${DETECTION_TIMEOUT_MS}ms.`
+            ? `${label} did not respond within ${seconds}s. Check that ${label} is installed and available to the MindOS server process.`
             : (err as Error).message;
+          removeRuntimeCache(kind);
           setErrorByKind((current) => ({ ...current, [kind]: message }));
         })
         .finally(() => {

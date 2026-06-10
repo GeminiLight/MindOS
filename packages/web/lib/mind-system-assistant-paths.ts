@@ -12,3 +12,10 @@ export function getAssistantPromptPath(assistantId: string): string {
   }
   return `${MINDOS_ASSISTANT_PROMPT_ROOT}/${assistantId}/prompt.md`;
 }
+
+export function getAssistantProfilePath(assistantId: string): string {
+  if (!isSafeAssistantId(assistantId)) {
+    throw new Error(`Unsafe assistant id: ${assistantId}`);
+  }
+  return `${MINDOS_ASSISTANT_PROMPT_ROOT}/${assistantId}/assistant.json`;
+}

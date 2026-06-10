@@ -13,11 +13,14 @@ export type ClaudeCodeCliPermissionPrompt = {
   mcpConfig: string | Record<string, unknown>;
 };
 
+export type ClaudeCodeCliPermissionMode = 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan' | 'dontAsk' | 'auto';
+
 export type ClaudeCodeCliClient = {
   startTurn(input: {
     prompt: string;
     cwd: string;
     sessionId?: string;
+    permissionMode?: ClaudeCodeCliPermissionMode;
     permissionPrompt?: ClaudeCodeCliPermissionPrompt;
     signal?: AbortSignal;
   }): AsyncIterable<ClaudeCodeCliEvent>;
@@ -82,15 +85,19 @@ export function createClaudeCodeCliStdioTransport(options: {
 
       const lines = createInterface({ input: proc.stdout });
       let stderr = '';
+      let spawnErrorMessage = '';
       proc.stderr.on('data', (chunk) => {
         stderr += String(chunk);
+      });
+      proc.once('error', (error) => {
+        spawnErrorMessage = error instanceof Error ? error.message : String(error);
       });
 
       const abort = () => proc.kill();
       runOptions.signal?.addEventListener('abort', abort, { once: true });
 
-      const exit = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((resolve) => {
-        proc.once('exit', (code, signal) => resolve({ code, signal }));
+      const close = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((resolve) => {
+        proc.once('close', (code, signal) => resolve({ code, signal }));
       });
 
       return (async function* () {
@@ -98,7 +105,10 @@ export function createClaudeCodeCliStdioTransport(options: {
           for await (const line of lines) {
             if (typeof line === 'string') yield line;
           }
-          const result = await exit;
+          const result = await close;
+          if (spawnErrorMessage) {
+            throw new Error(stderr.trim() || spawnErrorMessage);
+          }
           if (result.code && result.code !== 0) {
             const message = stderr.trim() || `Claude Code exited with code ${result.code}`;
             throw new Error(message);
@@ -118,6 +128,7 @@ export function createClaudeCodeCliStdioTransport(options: {
 function buildClaudeCodeCliArgs(input: {
   prompt: string;
   sessionId?: string;
+  permissionMode?: ClaudeCodeCliPermissionMode;
   permissionPrompt?: ClaudeCodeCliPermissionPrompt;
 }): string[] {
   return [
@@ -126,7 +137,7 @@ function buildClaudeCodeCliArgs(input: {
     'stream-json',
     '--verbose',
     '--permission-mode',
-    'default',
+    input.permissionMode ?? 'default',
     ...(input.sessionId ? ['--resume', input.sessionId] : []),
     ...(input.permissionPrompt ? [
       '--mcp-config',
@@ -186,6 +197,7 @@ function mapClaudeApiRetryRecord(record: Record<string, unknown>): MindOSSSEvent
   return [{
     type: 'status',
     visible: true,
+    runtime: 'claude',
     message: `Claude Code ${statusText}; retrying${attemptText}.${delayText}`,
   }];
 }
@@ -228,6 +240,7 @@ function mapClaudePermissionDeniedRecord(record: Record<string, unknown>): MindO
       toolCallId,
       output: message,
       isError: true,
+      runtime: 'claude',
     },
   ];
 }
@@ -269,6 +282,7 @@ function mapClaudeContentBlock(
       toolCallId,
       output: stringifyClaudeToolResult(block.content),
       isError: block.is_error === true,
+      runtime: 'claude',
     }];
   }
 

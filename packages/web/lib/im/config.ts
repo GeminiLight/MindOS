@@ -109,7 +109,44 @@ export function validatePlatformConfig(
   platform: IMPlatform,
   config: unknown,
 ): { valid: boolean; missing?: string[] } {
-  return validateChannelCredentials(platform, config);
+  return validateChannelCredentials(platform, normalizePlatformConfig(platform, config));
+}
+
+export function normalizePlatformConfig(
+  platform: IMPlatform,
+  config: unknown,
+): Record<string, string> {
+  if (!config || typeof config !== 'object') return {};
+  const normalized: Record<string, string> = {};
+  for (const [key, value] of Object.entries(config)) {
+    if (typeof value !== 'string') continue;
+    const trimmed = value.trim();
+    if (!trimmed) continue;
+    normalized[key] = normalizePlatformField(platform, key, trimmed);
+  }
+  return normalized;
+}
+
+function normalizePlatformField(platform: IMPlatform, key: string, value: string): string {
+  if (platform === 'wecom' && key === 'webhook_key') {
+    return extractQueryParam(value, 'key') || value;
+  }
+  return value;
+}
+
+function extractQueryParam(value: string, key: string): string | undefined {
+  try {
+    const parsed = new URL(value);
+    const found = parsed.searchParams.get(key)?.trim();
+    if (found) return found;
+  } catch {
+    // Not a URL. Fall through to regex extraction for pasted webhook snippets.
+  }
+
+  const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = value.match(new RegExp(`[?&]${escaped}=([^&#\\s]+)`));
+  const captured = match?.[1];
+  return captured ? decodeURIComponent(captured).trim() : undefined;
 }
 
 /** For testing: reset the internal cache. */

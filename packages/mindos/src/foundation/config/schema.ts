@@ -68,12 +68,26 @@ export const appConfigSchema = z.object({
   name: z.string().default('MindOS'),
   version: z.string().default('1.0.0'),
   env: z.enum(['development', 'production', 'test']).default('development'),
-  server: serverConfigSchema.default({}),
+  server: serverConfigSchema.default({
+    port: 3456,
+    host: 'localhost',
+    cors: true,
+    timeout: 30000,
+  }),
   workspace: workspaceConfigSchema,
-  search: searchConfigSchema.default({}),
+  search: searchConfigSchema.default({
+    engine: 'meilisearch',
+    indexName: 'documents',
+  }),
   vector: vectorConfigSchema,
-  mcp: mcpConfigSchema.default({}),
-  logging: loggingConfigSchema.default({}),
+  mcp: mcpConfigSchema.default({
+    port: 8781,
+    enabled: true,
+  }),
+  logging: loggingConfigSchema.default({
+    level: 'info',
+    pretty: false,
+  }),
 })
 
 /**

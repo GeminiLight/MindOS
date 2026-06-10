@@ -19,18 +19,23 @@ const ASSISTANT_AVATAR_TONES = [
 ] as const;
 
 export function resolveMindSystemAssistantCopy(
-  assistant: Pick<MindSystemSpaceAssistant, 'id'>,
+  assistant: Pick<MindSystemSpaceAssistant, 'id' | 'name' | 'desc'>,
   copies: readonly MindSystemAssistantCopy[],
 ): MindSystemAssistantCopy {
-  return copies.find(copy => copy.id === assistant.id) ?? {
+  const fallback = copies.find(copy => copy.id === assistant.id) ?? {
     id: assistant.id,
     name: assistant.id,
     desc: '',
   };
+  return {
+    id: assistant.id,
+    name: typeof assistant.name === 'string' && assistant.name.trim() ? assistant.name.trim() : fallback.name,
+    desc: typeof assistant.desc === 'string' ? assistant.desc : fallback.desc,
+  };
 }
 
 export function resolveMindSystemAssistantCopies(
-  assistants: Array<Pick<MindSystemSpaceAssistant, 'id'>>,
+  assistants: Array<Pick<MindSystemSpaceAssistant, 'id' | 'name' | 'desc'>>,
   copies: readonly MindSystemAssistantCopy[],
 ): MindSystemAssistantCopy[] {
   return assistants.map(assistant => resolveMindSystemAssistantCopy(assistant, copies));

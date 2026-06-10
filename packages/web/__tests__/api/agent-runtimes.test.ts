@@ -76,7 +76,10 @@ describe('/api/agent-runtimes', () => {
         capabilities: expect.objectContaining({
           supportsResume: true,
           supportsFreshSession: true,
-          supportsListSessions: false,
+          supportsListSessions: true,
+          supportsAttachExisting: true,
+          supportsFork: true,
+          supportsArchive: true,
           supportsApprovals: true,
           supportsUserInput: true,
           supportsToolEvents: true,
@@ -86,13 +89,18 @@ describe('/api/agent-runtimes', () => {
       expect.objectContaining({
         id: 'claude',
         kind: 'claude',
-        adapter: 'claude-cli',
+        adapter: 'claude-sdk',
         modelOwner: 'external',
         authOwner: 'external',
         permissionOwner: 'external',
         sessionOwner: 'external',
-        status: 'missing',
-        installCmd: 'npm install -g @anthropic-ai/claude-code',
+        status: 'available',
+        binaryPath: 'sdk:@anthropic-ai/claude-agent-sdk',
+        availability: expect.objectContaining({
+          diagnosticHints: expect.arrayContaining([
+            'Global claude command was not detected; CLI fallback will be unavailable until it is installed or on MindOS server PATH.',
+          ]),
+        }),
       }),
       expect.objectContaining({
         id: 'gemini',
@@ -146,7 +154,14 @@ describe('/api/agent-runtimes', () => {
         kind: 'codex',
         adapter: 'codex-app-server',
         status: 'signed-out',
-        availability: expect.objectContaining({ reason: 'Run codex login first.', sources: ['native-health'] }),
+        availability: expect.objectContaining({
+          reason: 'Run codex login first.',
+          sources: ['native-health'],
+          diagnosticHints: expect.arrayContaining([
+            'MindOS detected Codex at /usr/local/bin/codex.',
+            'Run "codex login status" from the same environment that starts MindOS.',
+          ]),
+        }),
       }),
       expect.objectContaining({
         id: 'opencode',
@@ -216,7 +231,7 @@ describe('/api/agent-runtimes', () => {
       runtime: expect.objectContaining({
         id: 'claude',
         kind: 'claude',
-        adapter: 'claude-cli',
+        adapter: 'claude-sdk',
         modelOwner: 'external',
         permissionOwner: 'external',
         status: 'available',

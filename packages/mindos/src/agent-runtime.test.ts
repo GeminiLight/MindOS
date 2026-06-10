@@ -1,12 +1,16 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   createClaudeCodeCliClient,
+  createClaudeCodeCliStdioTransport,
   createCodexAppServerClient,
   mapCodexAppServerNotificationToSseEvents,
   runMindosAgentRuntimeAskSession,
   type CodexAppServerMessage,
+  type CodexAppServerClient,
   type CodexAppServerTransport,
+  type ClaudeCodeCliClient,
   type ClaudeCodeCliTransport,
+  type ClaudeCodeSdkModule,
   type MindOSSSEvent,
 } from './agent-runtime.js';
 
@@ -60,6 +64,98 @@ function createFakeCodexTransport(): CodexAppServerTransport & { sent: unknown[]
       if (record.method === 'thread/resume') {
         queue.push({ id: record.id!, result: { thread: { id: record.params?.threadId } } });
       }
+      if (record.method === 'thread/list') {
+        queue.push({
+          id: record.id!,
+          result: {
+            data: [
+              {
+                id: 'thr-existing',
+                sessionId: 'sess-existing',
+                preview: 'Existing Codex thread',
+                ephemeral: false,
+                modelProvider: 'openai',
+                createdAt: 1,
+                updatedAt: 2,
+                cwd: '/tmp/mind',
+                status: { type: 'idle' },
+                cliVersion: '0.138.0',
+                source: 'appServer',
+                turns: [],
+              },
+            ],
+            nextCursor: 'cursor-next',
+            backwardsCursor: null,
+          },
+        });
+      }
+      if (record.method === 'thread/read') {
+        queue.push({
+          id: record.id!,
+          result: {
+            thread: {
+              id: record.params?.threadId,
+              sessionId: 'sess-existing',
+              preview: 'Existing Codex thread',
+              ephemeral: false,
+              modelProvider: 'openai',
+              createdAt: 1,
+              updatedAt: 2,
+              cwd: '/tmp/mind',
+              status: { type: 'idle' },
+              cliVersion: '0.138.0',
+              source: 'appServer',
+              turns: record.params?.includeTurns ? [{ id: 'turn-existing' }] : [],
+            },
+          },
+        });
+      }
+      if (record.method === 'thread/fork') {
+        queue.push({
+          id: record.id!,
+          result: {
+            thread: {
+              id: 'thr-forked',
+              forkedFromId: record.params?.threadId,
+              sessionId: 'sess-forked',
+              preview: 'Forked Codex thread',
+              ephemeral: Boolean(record.params?.ephemeral),
+              modelProvider: 'openai',
+              createdAt: 3,
+              updatedAt: 4,
+              cwd: record.params?.cwd ?? '/tmp/mind',
+              status: { type: 'idle' },
+              cliVersion: '0.138.0',
+              source: 'appServer',
+              turns: [],
+            },
+          },
+        });
+      }
+      if (record.method === 'thread/archive') {
+        queue.push({ id: record.id!, result: {} });
+      }
+      if (record.method === 'thread/unarchive') {
+        queue.push({
+          id: record.id!,
+          result: {
+            thread: {
+              id: record.params?.threadId,
+              sessionId: 'sess-existing',
+              preview: 'Existing Codex thread',
+              ephemeral: false,
+              modelProvider: 'openai',
+              createdAt: 1,
+              updatedAt: 2,
+              cwd: '/tmp/mind',
+              status: { type: 'idle' },
+              cliVersion: '0.138.0',
+              source: 'appServer',
+              turns: [],
+            },
+          },
+        });
+      }
       if (record.method === 'turn/start') {
         queue.push({ id: record.id!, result: { turn: { id: 'turn-1' } } });
         queue.push({ method: 'item/agentMessage/delta', params: { delta: 'Hello' } });
@@ -83,6 +179,23 @@ function createFakeClaudeTransport(lines: string[]): ClaudeCodeCliTransport & { 
       return {
         async *[Symbol.asyncIterator]() {
           for (const line of lines) yield line;
+        },
+      };
+    },
+  };
+}
+
+function createFakeClaudeSdk(
+  messages: Record<string, unknown>[] | ((params: Parameters<ClaudeCodeSdkModule['query']>[0]) => AsyncIterable<Record<string, unknown>>),
+): ClaudeCodeSdkModule & { params: Parameters<ClaudeCodeSdkModule['query']>[0] | null } {
+  return {
+    params: null,
+    query(params) {
+      this.params = params;
+      if (typeof messages === 'function') return messages(params);
+      return {
+        async *[Symbol.asyncIterator]() {
+          for (const message of messages) yield message;
         },
       };
     },
@@ -117,7 +230,7 @@ describe('agent runtime adapters', () => {
         },
       },
       { method: 'initialized', params: {} },
-      { method: 'thread/start', id: 2, params: {} },
+      { method: 'thread/start', id: 2, params: { cwd: '/tmp/mind' } },
       {
         method: 'turn/start',
         id: 3,
@@ -148,6 +261,105 @@ describe('agent runtime adapters', () => {
         capabilities: { experimentalApi: true },
       },
     });
+  });
+
+  it('lists and reads Codex threads without starting a turn', async () => {
+    const transport = createFakeCodexTransport();
+    const client = createCodexAppServerClient(transport);
+
+    await client.initialize();
+    const list = await client.listThreads({
+      limit: 20,
+      archived: false,
+      cwd: '/tmp/mind',
+      searchTerm: 'Existing',
+      useStateDbOnly: true,
+    });
+    const read = await client.readThread({ threadId: 'thr-existing', includeTurns: true });
+
+    expect(list).toEqual({
+      data: [expect.objectContaining({
+        id: 'thr-existing',
+        sessionId: 'sess-existing',
+        preview: 'Existing Codex thread',
+      })],
+      nextCursor: 'cursor-next',
+      backwardsCursor: null,
+    });
+    expect(read.thread).toMatchObject({
+      id: 'thr-existing',
+      sessionId: 'sess-existing',
+      turns: [{ id: 'turn-existing' }],
+    });
+    expect(transport.sent).toEqual([
+      expect.objectContaining({ method: 'initialize' }),
+      { method: 'initialized', params: {} },
+      {
+        method: 'thread/list',
+        id: 2,
+        params: {
+          limit: 20,
+          archived: false,
+          cwd: '/tmp/mind',
+          searchTerm: 'Existing',
+          useStateDbOnly: true,
+        },
+      },
+      {
+        method: 'thread/read',
+        id: 3,
+        params: {
+          threadId: 'thr-existing',
+          includeTurns: true,
+        },
+      },
+    ]);
+    expect(transport.sent).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ method: 'turn/start' }),
+    ]));
+  });
+
+  it('forks, archives, and unarchives Codex threads through app-server thread methods', async () => {
+    const transport = createFakeCodexTransport();
+    const client = createCodexAppServerClient(transport);
+
+    await client.initialize();
+    const fork = await client.forkThread({ threadId: 'thr-existing', cwd: '/tmp/forked', ephemeral: true });
+    await client.archiveThread({ threadId: 'thr-existing' });
+    const unarchive = await client.unarchiveThread({ threadId: 'thr-existing' });
+
+    expect(fork.thread).toMatchObject({
+      id: 'thr-forked',
+      forkedFromId: 'thr-existing',
+      cwd: '/tmp/forked',
+    });
+    expect(unarchive.thread).toMatchObject({ id: 'thr-existing' });
+    expect(transport.sent).toEqual([
+      expect.objectContaining({ method: 'initialize' }),
+      { method: 'initialized', params: {} },
+      {
+        method: 'thread/fork',
+        id: 2,
+        params: {
+          threadId: 'thr-existing',
+          cwd: '/tmp/forked',
+          ephemeral: true,
+        },
+      },
+      {
+        method: 'thread/archive',
+        id: 3,
+        params: { threadId: 'thr-existing' },
+      },
+      {
+        method: 'thread/unarchive',
+        id: 4,
+        params: { threadId: 'thr-existing' },
+      },
+    ]);
+    expect(transport.sent).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ method: 'turn/start' }),
+    ]));
   });
 
   it('maps Codex notifications into MindOS SSE events', () => {
@@ -279,6 +491,7 @@ describe('agent runtime adapters', () => {
       toolName: 'Bash',
       output: 'Command failed',
       isError: true,
+      runtime: 'codex',
     }]);
 
     expect(mapCodexAppServerNotificationToSseEvents({
@@ -298,6 +511,7 @@ describe('agent runtime adapters', () => {
       toolName: 'mindos.search',
       output: 'Found 3 notes.',
       isError: false,
+      runtime: 'codex',
     }]);
   });
 
@@ -540,8 +754,15 @@ describe('agent runtime adapters', () => {
     });
 
     expect(result).toEqual({ externalSessionId: 'thr-new' });
+    expect(transport.sent).toContainEqual({
+      method: 'thread/start',
+      id: 2,
+      params: { cwd: '/tmp/mind' },
+    });
     expect(events).toEqual([
+      { type: 'status', visible: true, runtime: 'codex', message: 'Starting Codex locally.' },
       { type: 'runtime_binding', runtime: 'codex', externalSessionId: 'thr-new', cwd: '/tmp/mind' },
+      { type: 'status', visible: true, runtime: 'codex', message: 'Codex is connected and working in this chat.' },
       { type: 'text_delta', delta: 'Hello' },
       { type: 'done' },
     ]);
@@ -568,6 +789,43 @@ describe('agent runtime adapters', () => {
       method: 'thread/start',
       id: 2,
       params: {},
+    });
+  });
+
+  it('marks an existing Codex thread binding failed when resume errors', async () => {
+    const events: MindOSSSEvent[] = [];
+    const client: CodexAppServerClient = {
+      initialize: async () => {},
+      startThread: async () => ({ threadId: 'unused' }),
+      resumeThread: async () => {
+        throw new Error('Codex thread missing');
+      },
+      listThreads: async () => ({ data: [], nextCursor: null, backwardsCursor: null }),
+      readThread: async () => { throw new Error('unused'); },
+      forkThread: async () => { throw new Error('unused'); },
+      archiveThread: async () => {},
+      unarchiveThread: async () => { throw new Error('unused'); },
+      startTurn: async function* () {},
+    };
+
+    const result = await runMindosAgentRuntimeAskSession({
+      runtime: { kind: 'codex', id: 'codex', name: 'Codex', externalSessionId: 'thr-missing' },
+      cwd: '/tmp/mind',
+      prompt: 'Continue.',
+      send: (event) => events.push(event),
+      services: {
+        createCodexClient: () => client,
+      },
+    });
+
+    expect(result.error?.message).toBe('Codex thread missing');
+    expect(events).toContainEqual({
+      type: 'runtime_binding',
+      runtime: 'codex',
+      externalSessionId: 'thr-missing',
+      cwd: '/tmp/mind',
+      status: 'failed',
+      reason: 'Codex thread missing',
     });
   });
 
@@ -793,7 +1051,249 @@ describe('agent runtime adapters', () => {
     });
   });
 
-  it('streams Claude Code CLI output and returns the session binding', async () => {
+  it('uses Claude Agent SDK by default and returns the session binding', async () => {
+    const events: MindOSSSEvent[] = [];
+    const sdk = createFakeClaudeSdk([
+      { type: 'system', subtype: 'init', session_id: 'claude-sdk-session', cwd: '/tmp/mind' },
+      { type: 'assistant', message: { content: [{ type: 'text', text: 'Hello from SDK' }] }, session_id: 'claude-sdk-session' },
+      { type: 'result', subtype: 'success', session_id: 'claude-sdk-session', is_error: false, result: '' },
+    ]);
+
+    const result = await runMindosAgentRuntimeAskSession({
+      runtime: { kind: 'claude', id: 'claude', name: 'Claude Code' },
+      cwd: '/tmp/mind',
+      prompt: 'Review this.',
+      send: (event) => events.push(event),
+      services: {
+        loadClaudeSdk: () => sdk,
+      },
+    });
+
+    expect(sdk.params).toMatchObject({
+      prompt: 'Review this.',
+      options: {
+        cwd: '/tmp/mind',
+        outputFormat: 'stream-json',
+        permissionMode: 'default',
+      },
+    });
+    expect(typeof sdk.params?.options?.canUseTool).toBe('function');
+    expect(result).toEqual({ externalSessionId: 'claude-sdk-session' });
+    expect(events).toEqual([
+      { type: 'status', visible: true, runtime: 'claude', message: 'Starting Claude Code locally.' },
+      { type: 'runtime_binding', runtime: 'claude', externalSessionId: 'claude-sdk-session', cwd: '/tmp/mind' },
+      { type: 'status', visible: true, runtime: 'claude', message: 'Claude Code is connected and working in this chat.' },
+      { type: 'text_delta', delta: 'Hello from SDK' },
+      { type: 'done' },
+    ]);
+  });
+
+  it('does not create the CLI permission prompt when Claude Agent SDK is available', async () => {
+    const sdk = createFakeClaudeSdk([
+      { type: 'result', subtype: 'success', session_id: 'claude-sdk-no-cli-prompt', is_error: false },
+    ]);
+    let promptCreated = false;
+
+    await runMindosAgentRuntimeAskSession({
+      runtime: { kind: 'claude', id: 'claude', name: 'Claude Code' },
+      cwd: '/tmp/mind',
+      prompt: 'Use SDK only.',
+      send: () => {},
+      services: {
+        loadClaudeSdk: () => sdk,
+        createClaudePermissionPrompt: () => {
+          promptCreated = true;
+          return {
+            toolName: 'mcp__mindos_runtime_permission__mindos_runtime_permission',
+            mcpConfig: '{"mcpServers":{}}',
+          };
+        },
+      },
+    });
+
+    expect(promptCreated).toBe(false);
+  });
+
+  it('passes Claude Agent SDK permission prompts through the MindOS runtime permission bridge', async () => {
+    let permissionResult: unknown;
+    let capturedRequest: unknown;
+    const sdk = createFakeClaudeSdk((params) => ({
+      async *[Symbol.asyncIterator]() {
+        const canUseTool = params.options?.canUseTool as (
+          toolName: string,
+          input: Record<string, unknown>,
+          options: Record<string, unknown>,
+        ) => Promise<unknown>;
+        permissionResult = await canUseTool('Bash', {
+          command: 'rm Profile.md',
+          description: 'Delete a note',
+        }, {
+          signal: new AbortController().signal,
+          toolUseID: 'toolu-sdk-permission',
+          title: 'Claude Code wants to run rm Profile.md',
+          displayName: 'Run shell command',
+          description: 'Claude Code will run a shell command.',
+          suggestions: [{
+            rules: [{ toolName: 'Bash', ruleContent: 'rm Profile.md' }],
+            behavior: 'allow',
+            destination: 'session',
+          }],
+        });
+        yield { type: 'result', subtype: 'success', session_id: 'claude-sdk-permission', is_error: false };
+      },
+    }));
+
+    await runMindosAgentRuntimeAskSession({
+      runtime: { kind: 'claude', id: 'claude', name: 'Claude Code' },
+      cwd: '/tmp/mind',
+      prompt: 'Delete it.',
+      send: () => {},
+      services: {
+        loadClaudeSdk: () => sdk,
+        requestRuntimePermission: async (request) => {
+          capturedRequest = request;
+          return { decision: 'acceptForSession' };
+        },
+      },
+    });
+
+    expect(capturedRequest).toMatchObject({
+      runtime: 'claude',
+      toolCallId: 'toolu-sdk-permission',
+      toolName: 'Bash',
+      reason: 'Claude Code wants to run rm Profile.md',
+      options: [
+        { id: 'accept', label: 'Allow once' },
+        { id: 'acceptForSession', label: 'Allow for session' },
+        { id: 'decline', label: 'Deny' },
+      ],
+    });
+    expect(permissionResult).toMatchObject({
+      behavior: 'allow',
+      updatedInput: {
+        command: 'rm Profile.md',
+        description: 'Delete a note',
+      },
+      updatedPermissions: [{
+        rules: [{ toolName: 'Bash', ruleContent: 'rm Profile.md' }],
+        behavior: 'allow',
+        destination: 'session',
+      }],
+      decisionClassification: 'user_permanent',
+    });
+  });
+
+  it('passes Claude Agent SDK AskUserQuestion prompts through the MindOS question bridge', async () => {
+    let questionResult: unknown;
+    let capturedRequest: unknown;
+    const sdk = createFakeClaudeSdk((params) => ({
+      async *[Symbol.asyncIterator]() {
+        const canUseTool = params.options?.canUseTool as (
+          toolName: string,
+          input: Record<string, unknown>,
+          options: Record<string, unknown>,
+        ) => Promise<unknown>;
+        questionResult = await canUseTool('AskUserQuestion', {
+          questions: [{
+            header: 'Delete note?',
+            question: 'Should Claude Code delete Profile.md?',
+            options: [
+              { label: 'Delete', description: 'Delete the note.' },
+              { label: 'Keep', description: 'Keep the note.' },
+            ],
+          }],
+        }, {
+          signal: new AbortController().signal,
+          toolUseID: 'toolu-sdk-question',
+          title: 'Claude Code needs a choice',
+        });
+        yield { type: 'result', subtype: 'success', session_id: 'claude-sdk-question', is_error: false };
+      },
+    }));
+
+    await runMindosAgentRuntimeAskSession({
+      runtime: { kind: 'claude', id: 'claude', name: 'Claude Code' },
+      cwd: '/tmp/mind',
+      prompt: 'Ask first.',
+      send: () => {},
+      services: {
+        loadClaudeSdk: () => sdk,
+        requestUserQuestion: async (request) => {
+          capturedRequest = request;
+          return {
+            answers: [{
+              questionIndex: 0,
+              question: 'Should Claude Code delete Profile.md?',
+              kind: 'option',
+              answer: 'Delete',
+            }],
+          };
+        },
+      },
+    });
+
+    expect(capturedRequest).toMatchObject({
+      runtime: 'claude',
+      toolCallId: 'toolu-sdk-question',
+      questions: [{
+        header: 'Delete note?',
+        question: 'Should Claude Code delete Profile.md?',
+      }],
+    });
+    expect(questionResult).toMatchObject({
+      behavior: 'allow',
+      updatedInput: {
+        questions: [{
+          header: 'Delete note?',
+          question: 'Should Claude Code delete Profile.md?',
+          multiSelect: false,
+        }],
+        answers: {
+          'Should Claude Code delete Profile.md?': 'Delete',
+        },
+      },
+      decisionClassification: 'user_temporary',
+    });
+  });
+
+  it('falls back to the Claude Code CLI when the Claude Agent SDK is unavailable before the turn starts', async () => {
+    const events: MindOSSSEvent[] = [];
+    const transport = createFakeClaudeTransport([
+      JSON.stringify({ type: 'result', subtype: 'success', session_id: 'claude-cli-fallback' }),
+    ]);
+
+    const result = await runMindosAgentRuntimeAskSession({
+      runtime: { kind: 'claude', id: 'claude', name: 'Claude Code' },
+      cwd: '/tmp/mind',
+      prompt: 'Fallback.',
+      send: (event) => events.push(event),
+      services: {
+        loadClaudeSdk: async () => {
+          throw new Error('SDK missing');
+        },
+        createClaudeCliClient: () => createClaudeCodeCliClient(transport),
+      },
+    });
+
+    expect(transport.argv).toEqual([
+      '--print',
+      '--output-format',
+      'stream-json',
+      '--verbose',
+      '--permission-mode',
+      'default',
+      'Fallback.',
+    ]);
+    expect(result).toEqual({ externalSessionId: 'claude-cli-fallback' });
+    expect(events).toContainEqual({
+      type: 'status',
+      visible: true,
+      runtime: 'claude',
+      message: 'Claude Agent SDK is unavailable; using Claude Code CLI fallback. SDK missing',
+    });
+  });
+
+  it('streams Claude Code CLI output and returns the session binding when the legacy client override is used', async () => {
     const events: MindOSSSEvent[] = [];
     const transport = createFakeClaudeTransport([
       JSON.stringify({ type: 'system', subtype: 'init', session_id: 'claude-session-1' }),
@@ -822,9 +1322,38 @@ describe('agent runtime adapters', () => {
     ]);
     expect(result).toEqual({ externalSessionId: 'claude-session-1' });
     expect(events).toEqual([
+      { type: 'status', visible: true, runtime: 'claude', message: 'Starting Claude Code locally.' },
       { type: 'runtime_binding', runtime: 'claude', externalSessionId: 'claude-session-1', cwd: '/tmp/mind' },
+      { type: 'status', visible: true, runtime: 'claude', message: 'Claude Code is connected and working in this chat.' },
       { type: 'text_delta', delta: 'Hello' },
       { type: 'done' },
+    ]);
+  });
+
+  it('maps readonly MindOS native mode to Claude Code dontAsk permission mode', async () => {
+    const transport = createFakeClaudeTransport([
+      JSON.stringify({ type: 'result', subtype: 'success', session_id: 'claude-session-readonly' }),
+    ]);
+
+    await runMindosAgentRuntimeAskSession({
+      runtime: { kind: 'claude', id: 'claude', name: 'Claude Code' },
+      cwd: '/tmp/mind',
+      prompt: 'Read only.',
+      permissionMode: 'readonly',
+      send: () => {},
+      services: {
+        createClaudeClient: () => createClaudeCodeCliClient(transport),
+      },
+    });
+
+    expect(transport.argv).toEqual([
+      '--print',
+      '--output-format',
+      'stream-json',
+      '--verbose',
+      '--permission-mode',
+      'dontAsk',
+      'Read only.',
     ]);
   });
 
@@ -868,6 +1397,23 @@ describe('agent runtime adapters', () => {
       },
     });
     expect(events).toContainEqual({ type: 'done' });
+  });
+
+  it('fails fast when the Claude Code executable cannot be spawned', async () => {
+    const client = createClaudeCodeCliClient(createClaudeCodeCliStdioTransport({
+      command: '/tmp/mindos-missing-claude-code-binary',
+    }));
+    const iterator = client.startTurn({ prompt: 'Hello', cwd: '/tmp' });
+    const result = (async () => {
+      for await (const _event of iterator) {
+        // drain
+      }
+    })();
+
+    await expect(Promise.race([
+      result,
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Claude spawn hung.')), 1000)),
+    ])).rejects.toThrow(/ENOENT|no such file|spawn/i);
   });
 
   it('passes the per-run Claude permission prompt service into the CLI adapter', async () => {
@@ -944,6 +1490,7 @@ describe('agent runtime adapters', () => {
         toolCallId: 'toolu-1',
         output: 'Deleted Profile.md',
         isError: false,
+        runtime: 'claude',
       },
       { type: 'done' },
     ]);
@@ -984,6 +1531,7 @@ describe('agent runtime adapters', () => {
         toolCallId: 'toolu-denied',
         output: 'User denied this command.',
         isError: true,
+        runtime: 'claude',
       },
       { type: 'done' },
     ]);
@@ -1015,6 +1563,7 @@ describe('agent runtime adapters', () => {
       {
         type: 'status',
         visible: true,
+        runtime: 'claude',
         message: 'Claude Code HTTP 429; retrying (1/10). Retrying in 1s.',
       },
       { type: 'done' },
@@ -1038,5 +1587,34 @@ describe('agent runtime adapters', () => {
 
     expect(transport.argv).toContain('--resume');
     expect(transport.argv).toContain('claude-existing');
+  });
+
+  it('marks an existing Claude Code session binding failed when resume errors', async () => {
+    const events: MindOSSSEvent[] = [];
+    const client: ClaudeCodeCliClient = {
+      async *startTurn() {
+        throw new Error('Claude resume failed');
+      },
+    };
+
+    const result = await runMindosAgentRuntimeAskSession({
+      runtime: { kind: 'claude', id: 'claude', name: 'Claude Code', externalSessionId: 'claude-existing' },
+      cwd: '/tmp/mind',
+      prompt: 'Continue.',
+      send: (event) => events.push(event),
+      services: {
+        createClaudeClient: () => client,
+      },
+    });
+
+    expect(result.error?.message).toBe('Claude resume failed');
+    expect(events).toContainEqual({
+      type: 'runtime_binding',
+      runtime: 'claude',
+      externalSessionId: 'claude-existing',
+      cwd: '/tmp/mind',
+      status: 'failed',
+      reason: 'Claude resume failed',
+    });
   });
 });

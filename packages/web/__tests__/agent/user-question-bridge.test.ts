@@ -125,6 +125,87 @@ describe('ask user question bridge', () => {
     });
   });
 
+  it('rejects answers that do not match the pending question contract without resolving it', async () => {
+    const send = vi.fn();
+    const promise = runWithAskUserQuestionBridge(
+      { runId: 'run-invalid', send },
+      () => askUserQuestionViaBridge({ toolCallId: 'tool-invalid', params }),
+    );
+
+    expect(answerAskUserQuestion({
+      runId: 'run-invalid',
+      toolCallId: 'tool-invalid',
+      answers: [{ questionIndex: 1, question: params.questions[0].question, kind: 'option', answer: 'Bridge' }],
+    })).toEqual({
+      ok: false,
+      status: 400,
+      error: 'Answer questionIndex does not match a pending question.',
+    });
+    expect(answerAskUserQuestion({
+      runId: 'run-invalid',
+      toolCallId: 'tool-invalid',
+      answers: [{ questionIndex: 0, question: 'Different question', kind: 'option', answer: 'Bridge' }],
+    })).toEqual({
+      ok: false,
+      status: 400,
+      error: 'Answer question text does not match the pending question.',
+    });
+    expect(answerAskUserQuestion({
+      runId: 'run-invalid',
+      toolCallId: 'tool-invalid',
+      answers: [{ questionIndex: 0, question: params.questions[0].question, kind: 'option', answer: 'Unknown' }],
+    })).toEqual({
+      ok: false,
+      status: 400,
+      error: 'Selected option is not valid for this question.',
+    });
+    expect(getPendingAskUserQuestionCount()).toBe(1);
+
+    const validAnswer = { questionIndex: 0, question: params.questions[0].question, kind: 'option' as const, answer: 'Bridge' };
+    expect(answerAskUserQuestion({ runId: 'run-invalid', toolCallId: 'tool-invalid', answers: [validAnswer] })).toEqual({ ok: true });
+    await expect(promise).resolves.toEqual({ answers: [validAnswer], cancelled: false });
+    expect(getPendingAskUserQuestionCount()).toBe(0);
+  });
+
+  it('validates multi-select answers against the pending options', async () => {
+    const send = vi.fn();
+    const multiParams = {
+      questions: [{
+        question: 'Which files should Claude Code update?',
+        header: 'Files',
+        multiSelect: true,
+        options: [
+          { label: 'README.md', description: 'Docs' },
+          { label: 'SPEC.md', description: 'Spec' },
+        ],
+      }],
+    };
+    const promise = runWithAskUserQuestionBridge(
+      { runId: 'run-multi', send },
+      () => askUserQuestionViaBridge({ toolCallId: 'tool-multi', params: multiParams }),
+    );
+
+    expect(answerAskUserQuestion({
+      runId: 'run-multi',
+      toolCallId: 'tool-multi',
+      answers: [{ questionIndex: 0, question: multiParams.questions[0].question, kind: 'multi', answer: null, selected: ['README.md', 'NOPE.md'] }],
+    })).toEqual({
+      ok: false,
+      status: 400,
+      error: 'Selected option is not valid for this question.',
+    });
+
+    const validAnswer = {
+      questionIndex: 0,
+      question: multiParams.questions[0].question,
+      kind: 'multi' as const,
+      answer: null,
+      selected: ['README.md', 'SPEC.md'],
+    };
+    expect(answerAskUserQuestion({ runId: 'run-multi', toolCallId: 'tool-multi', answers: [validAnswer] })).toEqual({ ok: true });
+    await expect(promise).resolves.toEqual({ answers: [validAnswer], cancelled: false });
+  });
+
   it('rejects empty question requests without creating a pending UI card', async () => {
     const send = vi.fn();
     const result = await runWithAskUserQuestionBridge(

@@ -57,8 +57,8 @@ export function ChannelSettings({ platform, im, onSaved, onDisconnected }: {
   };
 
   return (
-    <details className="rounded-lg border border-border bg-card shadow-sm overflow-hidden group">
-      <summary className="flex items-center gap-2.5 px-5 py-3.5 cursor-pointer select-none text-sm font-medium text-muted-foreground hover:text-foreground transition-colors list-none [&::-webkit-details-marker]:hidden">
+    <details className="overflow-hidden rounded-lg border border-border bg-card shadow-sm group">
+      <summary className="flex cursor-pointer select-none items-center gap-2.5 px-5 py-3.5 text-sm font-medium text-muted-foreground transition-colors list-none hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
         <ChevronDown size={14} className="transition-transform group-open:rotate-180" />
         <span>{im.settingsTitle}</span>
         <span className="ml-auto text-xs text-muted-foreground/60 group-open:hidden">{im.settingsHint}</span>
@@ -88,7 +88,7 @@ export function ChannelSettings({ platform, im, onSaved, onDisconnected }: {
                   <button
                     type="button"
                     onClick={() => setShowSecrets(prev => !prev)}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-muted-foreground hover:text-foreground rounded transition-colors"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                     aria-label={showSecrets ? im.hideSecret : im.showSecret}
                   >
                     {showSecrets ? <EyeOff size={15} /> : <Eye size={15} />}
@@ -101,7 +101,7 @@ export function ChannelSettings({ platform, im, onSaved, onDisconnected }: {
                 type="button"
                 onClick={handleSave}
                 disabled={saving || !hasCredentialChanges}
-                className="h-10 px-5 text-sm font-medium rounded-md inline-flex items-center gap-2 bg-[var(--amber)] text-[var(--amber-foreground)] shadow-sm hover:opacity-90 hover:shadow disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                className="inline-flex h-10 items-center gap-2 rounded-md bg-[var(--amber)] px-5 text-sm font-medium text-[var(--amber-foreground)] shadow-sm transition-all hover:opacity-90 hover:shadow focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {saving && <Loader2 size={14} className="animate-spin" />}
                 {saving ? im.saving : im.saveConfig}
@@ -123,7 +123,7 @@ export function ChannelSettings({ platform, im, onSaved, onDisconnected }: {
               confirmDelete
                 ? 'text-error border-error/40 bg-error/5 hover:bg-error/10'
                 : 'text-muted-foreground border-border hover:text-error hover:border-error/30'
-            }`}
+            } focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40`}
           >
             {deleting ? <Loader2 size={14} className="animate-spin" /> : confirmDelete ? <><AlertTriangle size={14} /> {im.confirmDisconnect}</> : <Trash2 size={14} />}
             {!confirmDelete && !deleting && <span>{im.disconnect}</span>}

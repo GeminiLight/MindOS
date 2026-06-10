@@ -68,25 +68,44 @@ describe('InboxView product shape', () => {
     });
 
     expect(host.textContent).toContain('New capture');
-    expect(host.textContent).toContain('Paste, drop, or attach. Review later.');
+    expect(host.textContent).toContain('Paste anything. Keep the source. Review later.');
     expect(host.textContent).not.toContain('CaptureSave only');
     expect(host.textContent).not.toContain('Capture anythingCapture anything');
-    expect(host.querySelector('textarea')?.getAttribute('placeholder')).toContain('Paste a note, link');
+    expect(host.querySelector('textarea')?.getAttribute('placeholder')).toContain('Paste a link, write a note');
+    expect(host.querySelector('textarea')?.getAttribute('aria-label')).toContain('Add a link, note, file');
     expect(host.textContent).toContain('Attach');
     expect(host.textContent).toContain('Save to Inbox');
     expect(host.textContent).toContain('Next action');
     expect(host.textContent).toContain('Save only');
     expect(host.textContent).not.toContain('Suggested: Save only');
     expect(host.textContent).not.toContain('Choose intent');
-    expect(host.textContent).toContain('Text, links, files');
+    expect(host.textContent).toContain('Local first · Source preserved · Review later');
+    expect(host.textContent).toContain('Links, notes, files, drops');
+    expect(host.textContent).toContain('Link');
+    expect(host.textContent).toContain('YouTube, Bilibili, XHS');
+    expect(host.textContent).toContain('Note');
+    expect(host.textContent).toContain('File');
+    expect(host.textContent).toContain('Drop');
     expect(host.textContent).toContain('AI waits for Review');
+    expect(host.textContent).toContain('Live source preview');
+    expect(host.textContent).toContain('Paste any source');
+    expect(host.textContent).toContain('Links, notes, files, and dropped sources are staged here before they enter the Review queue.');
+    const livePreview = host.querySelector('section[aria-label="Live source preview"]');
+    const livePreviewAside = livePreview?.closest('aside');
+    expect(livePreviewAside?.className).not.toContain('sticky');
+    expect(livePreviewAside?.className).not.toContain('top-');
     expect(host.textContent).not.toContain('Detected');
     expect(host.textContent).not.toContain('Documents');
     expect(host.textContent).not.toContain('Tables');
     expect(host.textContent).not.toContain('Screenshots');
     expect(host.textContent).toContain('Review queue');
     expect(host.textContent).toContain('Scroll here when you are ready to clear what you captured.');
+    expect(host.textContent).toContain('Inbox Organization Agent');
+    expect(host.textContent).toContain('Open Review to select captures. The Agent proposes changes before writing to your Mind.');
     expect(host.textContent).toContain('Review 2 pending');
+    expect(host.textContent).not.toContain('0 selected');
+    expect(host.textContent).not.toContain('Select all');
+    expect(host.textContent).not.toContain('Organize selected');
     expect(host.textContent).not.toContain('Routing hints');
     expect(host.textContent).not.toContain('Review with Agent');
     expect(Array.from(host.querySelectorAll('button'))
@@ -104,12 +123,17 @@ describe('InboxView product shape', () => {
     });
   });
 
-  it('moves review, selected item hints, and the Inbox Agent behind the Review tab', async () => {
+  it('puts the Inbox Organization Agent above a multi-select queue and keeps details item-only', async () => {
     const InboxView = (await import('@/components/InboxView')).default;
 
     const host = document.createElement('div');
     document.body.appendChild(host);
     const root = createRoot(host);
+    let organizeDetail: unknown = null;
+    const onOrganize = (event: Event) => {
+      organizeDetail = (event as CustomEvent).detail;
+    };
+    window.addEventListener('mindos:inbox-organize', onOrganize);
 
     await act(async () => {
       root.render(<InboxView />);
@@ -126,21 +150,64 @@ describe('InboxView product shape', () => {
     });
 
     expect(host.textContent).toContain('Review queue');
-    expect(host.textContent).toContain('Review pending captures with the Inbox Agent.');
-    expect(host.textContent).toContain('Scope');
-    expect(host.textContent).toContain('2 pending items');
-    expect(host.textContent).toContain('Item preview');
-    expect(host.textContent).toContain('Review 2 with Agent');
+    expect(host.textContent).toContain('Select captures for the Inbox Organization Agent.');
+    expect(host.textContent).toContain('Inbox Organization Agent');
+    expect(host.textContent).toContain('0 selected');
+    expect(host.textContent).toContain('Select all');
+    expect(host.textContent).toContain('Select aging');
+    expect(host.textContent).toContain('Organize selected');
     expect(Array.from(host.querySelectorAll('button'))
-      .some(button => button.textContent?.trim().includes('Review 2 with Agent'))).toBe(true);
+      .some(button => button.textContent?.trim().includes('Organize selected'))).toBe(true);
     expect(host.textContent).toContain('agent-memory-notes');
-    expect(host.textContent).not.toContain('Current item');
-    expect(host.textContent).toContain('Review before write');
-    expect(host.textContent).toContain('Undo history');
+    expect(host.textContent).toContain('Select an item');
+    expect(host.textContent).not.toContain('Scope');
+    expect(host.textContent).not.toContain('Review before write');
+    expect(host.textContent).not.toContain('Undo history');
+    expect(host.textContent).not.toContain('Item details');
+
+    const checkbox = host.querySelector('input[aria-label="Select wechat-capture.txt"]') as HTMLInputElement | null;
+    expect(checkbox).not.toBeNull();
+
+    await act(async () => {
+      checkbox!.click();
+      await new Promise(r => setTimeout(r, 0));
+    });
+
+    expect(checkbox!.checked).toBe(true);
+    expect(host.textContent).toContain('1 selected');
+    expect(host.textContent).toContain('Organize 1 selected');
+
+    const organizeButton = Array.from(host.querySelectorAll('button'))
+      .find(button => button.textContent?.includes('Organize 1 selected'));
+    expect(organizeButton).not.toBeNull();
+
+    await act(async () => {
+      organizeButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await new Promise(r => setTimeout(r, 0));
+    });
+
+    expect(organizeDetail).toEqual(expect.objectContaining({
+      files: [expect.objectContaining({ name: 'wechat-capture.txt', path: 'Inbox/wechat-capture.txt' })],
+    }));
+
+    const row = Array.from(host.querySelectorAll('[role="button"]'))
+      .find(button => button.textContent?.includes('agent-memory-notes'));
+    expect(row).not.toBeUndefined();
+
+    await act(async () => {
+      row!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await new Promise(r => setTimeout(r, 0));
+    });
+
+    expect(host.textContent).toContain('Item details');
+    expect(host.textContent).toContain('Item preview');
+    expect(host.textContent).toContain('Content preview');
+    expect(host.textContent).toContain('No previewable text in this capture.');
 
     await act(async () => {
       root.unmount();
     });
+    window.removeEventListener('mindos:inbox-organize', onOrganize);
   });
 
   it('shows source-aware rows for captured social links in Review', async () => {
@@ -182,7 +249,175 @@ describe('InboxView product shape', () => {
 
     expect(host.textContent).toContain('YouTube');
     expect(host.querySelector('img[src="/source-icons/youtube.ico"]')).not.toBeNull();
+
+    const row = Array.from(host.querySelectorAll('[role="button"]'))
+      .find(button => button.textContent?.includes('Video Notes'));
+    expect(row).not.toBeUndefined();
+
+    await act(async () => {
+      row!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await new Promise(r => setTimeout(r, 0));
+    });
+
     expect(host.textContent).toContain('youtube.com');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('loads a selected markdown capture into the item content preview', async () => {
+    window.history.replaceState(null, '', '/capture#queue');
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.startsWith('/api/file?path=Inbox%2Fclip.md')) {
+        return {
+          ok: true,
+          json: async () => ({
+            content: [
+              '---',
+              'title: Clip',
+              'source: "https://github.com/GeminiLight/MindOS"',
+              '---',
+              '',
+              '***',
+              'title: Clip',
+              'source: "https://github.com/GeminiLight/MindOS"',
+              'author: GeminiLight',
+              'site: github.com',
+              'clipped: "2026-06-10T10:00:00.000Z"',
+              '----------------------------------------',
+              '',
+              '# Clip',
+              '',
+              'Preview body line from the saved capture.',
+            ].join('\n'),
+          }),
+        };
+      }
+      return {
+        ok: true,
+        json: async () => ({
+          files: [{
+            name: 'clip.md',
+            path: 'Inbox/clip.md',
+            size: 512,
+            modifiedAt: new Date().toISOString(),
+            isAging: false,
+          }],
+        }),
+      };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const InboxView = (await import('@/components/InboxView')).default;
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<InboxView />);
+      await new Promise(r => setTimeout(r, 0));
+    });
+
+    const row = Array.from(host.querySelectorAll('[role="button"]'))
+      .find(button => button.textContent?.includes('clip'));
+    expect(row).not.toBeUndefined();
+
+    await act(async () => {
+      row!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await new Promise(r => setTimeout(r, 0));
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/file?path=Inbox%2Fclip.md&op=read_file');
+    expect(host.textContent).toContain('Content preview');
+    expect(host.textContent).toContain('Preview body line from the saved capture.');
+    expect(host.textContent).not.toContain('source:');
+    expect(host.textContent).not.toContain('clipped:');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('clears item details and queue selection after removing the selected capture', async () => {
+    window.history.replaceState(null, '', '/capture#queue');
+    let deleted = false;
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url === '/api/inbox' && init?.method === 'DELETE') {
+        deleted = true;
+        return {
+          ok: true,
+          json: async () => ({ archived: [{ original: 'keep-me.md', archivedPath: '.trash/keep-me.md' }], notFound: [] }),
+        };
+      }
+      if (url.startsWith('/api/file?path=Inbox%2Fkeep-me.md')) {
+        return {
+          ok: true,
+          json: async () => ({ content: '# Keep me\n\nSelected item body.' }),
+        };
+      }
+      return {
+        ok: true,
+        json: async () => ({
+          files: deleted ? [] : [{
+            name: 'keep-me.md',
+            path: 'Inbox/keep-me.md',
+            size: 512,
+            modifiedAt: new Date().toISOString(),
+            isAging: false,
+          }],
+        }),
+      };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const InboxView = (await import('@/components/InboxView')).default;
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<InboxView />);
+      await new Promise(r => setTimeout(r, 0));
+    });
+
+    const checkbox = host.querySelector('input[aria-label="Select keep-me.md"]') as HTMLInputElement | null;
+    expect(checkbox).not.toBeNull();
+    await act(async () => {
+      checkbox!.click();
+      await new Promise(r => setTimeout(r, 0));
+    });
+
+    const row = Array.from(host.querySelectorAll('[role="button"]'))
+      .find(button => button.textContent?.includes('keep-me'));
+    expect(row).not.toBeUndefined();
+    await act(async () => {
+      row!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await new Promise(r => setTimeout(r, 0));
+    });
+
+    expect(host.textContent).toContain('1 selected');
+    expect(host.textContent).toContain('Item details');
+    expect(host.textContent).toContain('Selected item body.');
+
+    const removeButton = Array.from(host.querySelectorAll('button'))
+      .find(button => button.textContent?.trim() === 'Remove');
+    expect(removeButton).not.toBeNull();
+    await act(async () => {
+      removeButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await new Promise(r => setTimeout(r, 120));
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/inbox', expect.objectContaining({
+      method: 'DELETE',
+      body: JSON.stringify({ names: ['keep-me.md'] }),
+    }));
+    expect(host.textContent).toContain('Nothing waiting');
+    expect(host.textContent).toContain('Select an item');
+    expect(host.textContent).not.toContain('Item details');
+    expect(host.textContent).not.toContain('1 selected');
 
     await act(async () => {
       root.unmount();
@@ -256,6 +491,12 @@ describe('InboxView product shape', () => {
       textarea!.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText' }));
       await new Promise(r => setTimeout(r, 0));
     });
+
+    expect(host.textContent).toContain('Staged captures');
+    expect(host.textContent).toContain('1 staged');
+    expect(host.textContent).toContain('Text capture');
+    expect(host.textContent).toContain('Text note');
+    expect(host.textContent).toContain('Review pending');
 
     const intentButton = Array.from(host.querySelectorAll('button'))
       .find(button => button.textContent?.includes('Save only'));
@@ -373,6 +614,12 @@ describe('InboxView product shape', () => {
 
     expect(host.textContent).toContain('URL');
     expect(host.textContent).toContain('example.com/article');
+    expect(textarea!.value).toBe('');
+    expect(host.textContent).toContain('Live source preview');
+    expect(host.textContent).toContain('Web link');
+    expect(host.textContent).toContain('Source preserved');
+    expect(host.textContent).toContain('Review pending');
+    expect(host.textContent).not.toContain('Inbox Organization Agent');
 
     const captureButton = Array.from(host.querySelectorAll('button'))
       .find(button => button.textContent?.includes('Save to Inbox'));
@@ -429,6 +676,8 @@ describe('InboxView product shape', () => {
     });
 
     expect(host.textContent).toContain('example.com/fail');
+    expect(host.textContent).toContain('Source preserved');
+    expect(host.textContent).toContain('Review pending');
 
     const captureButton = Array.from(host.querySelectorAll('button'))
       .find(button => button.textContent?.includes('Save to Inbox'));
@@ -444,6 +693,7 @@ describe('InboxView product shape', () => {
       body: expect.stringContaining('https://example.com/fail'),
     }));
     expect(host.textContent).toContain('example.com/fail');
+    expect(host.textContent).toContain('Live source preview');
 
     await act(async () => {
       root.unmount();
@@ -495,7 +745,7 @@ describe('InboxView product shape', () => {
     });
 
     const captureButton = Array.from(host.querySelectorAll('button'))
-      .find(button => button.textContent?.includes('Save to Inbox'));
+      .find(button => button.textContent?.includes('Save 2 to Inbox'));
     expect(captureButton).not.toBeNull();
 
     await act(async () => {
@@ -558,6 +808,9 @@ describe('InboxView product shape', () => {
     });
 
     expect(host.textContent).toContain('notes.md');
+    expect(host.textContent).toContain('Original file');
+    expect(host.textContent).toContain('Review pending');
+    expect(host.textContent).toContain('Staged captures');
 
     const captureButton = Array.from(host.querySelectorAll('button'))
       .find(button => button.textContent?.includes('Save to Inbox'));
@@ -568,6 +821,74 @@ describe('InboxView product shape', () => {
       await new Promise(r => setTimeout(r, 0));
     });
 
+    expect(host.textContent).toContain('notes.md');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('removes only the saved same-name file when a partial upload leaves another pending', async () => {
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url === '/api/inbox' && init?.method === 'POST') {
+        return {
+          ok: true,
+          json: async () => ({
+            saved: [{ original: 'notes.md', path: 'Inbox/notes.md' }],
+            skipped: [{ name: 'notes.md', reason: 'Disk write failed' }],
+          }),
+        };
+      }
+      return { ok: true, json: async () => ({ files: [] }) };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const InboxView = (await import('@/components/InboxView')).default;
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<InboxView />);
+      await new Promise(r => setTimeout(r, 0));
+    });
+
+    const textarea = host.querySelector('textarea');
+    expect(textarea).not.toBeNull();
+    const savedFile = new File(['saved'], 'notes.md', { type: 'text/markdown', lastModified: 1 });
+    const failedFile = new File(['still here'], 'notes.md', { type: 'text/markdown', lastModified: 2 });
+
+    await act(async () => {
+      const pasteEvent = new Event('paste', { bubbles: true });
+      Object.defineProperty(pasteEvent, 'clipboardData', {
+        value: {
+          getData: () => '',
+          files: [savedFile, failedFile],
+        },
+      });
+      textarea!.dispatchEvent(pasteEvent);
+      await new Promise(r => setTimeout(r, 0));
+    });
+
+    expect(host.textContent).toContain('2 staged');
+    expect(host.querySelectorAll('[aria-label="Remove File"]')).toHaveLength(2);
+
+    const captureButton = Array.from(host.querySelectorAll('button'))
+      .find(button => button.textContent?.includes('Save 2 to Inbox'));
+    expect(captureButton).not.toBeNull();
+
+    await act(async () => {
+      captureButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await new Promise(r => setTimeout(r, 0));
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/inbox', expect.objectContaining({
+      method: 'POST',
+      body: expect.stringContaining('still here'),
+    }));
+    expect(host.textContent).toContain('1 saved, 1 need retry');
+    expect(host.querySelectorAll('[aria-label="Remove File"]')).toHaveLength(1);
     expect(host.textContent).toContain('notes.md');
 
     await act(async () => {

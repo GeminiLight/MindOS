@@ -41,6 +41,7 @@ export {
   checkCodexProviderEnvironment,
   defaultCheckNativeRuntimeHealth,
   handleAgentRuntimesGet,
+  mergeCodexProviderAndLoginHealth,
   type AgentRuntimeCapabilities,
   type AgentRuntimeDescriptor,
   type AgentRuntimeKind,
@@ -53,6 +54,18 @@ export {
   type NativeRuntimeHealthInput,
   type NativeRuntimeHealthResult,
 } from './handlers/agent-runtimes.js';
+
+export {
+  handleCodexThreadArchivePost,
+  handleCodexThreadForkPost,
+  handleCodexThreadGet,
+  handleCodexThreadUnarchivePost,
+  handleCodexThreadsGet,
+  type CodexThreadForkPayload,
+  type CodexThreadListPayload,
+  type CodexThreadManagerServices,
+  type CodexThreadReadPayload,
+} from './handlers/agent-runtime-codex.js';
 
 export {
   handleAskSessionsDelete,
@@ -221,6 +234,7 @@ export {
   CHANNEL_FIELD_PATTERNS,
   CHANNEL_PLATFORMS,
   isChannelPlatform,
+  normalizeChannelCredentials,
   validateChannelCredentials,
   type ChannelPlatform,
   type ChannelValidationResult,

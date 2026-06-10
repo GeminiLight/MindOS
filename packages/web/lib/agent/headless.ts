@@ -4,6 +4,7 @@ import { readSettings } from '@/lib/settings';
 import { getProjectRoot } from '@/lib/project-root';
 import type { AskModeApi, Message as FrontendMessage } from '@/lib/types';
 import { performActiveRecall } from '@/lib/agent/active-recall';
+import { toMindosUiAskMessages } from '@/lib/agent/to-agent-messages';
 import {
   getTextDelta,
   getThinkingDelta,
@@ -58,6 +59,7 @@ export async function runHeadlessAgent(options: HeadlessAgentRunOptions): Promis
   const historyMessages = Array.isArray(options.historyMessages) ? options.historyMessages : [];
   const currentMessage: FrontendMessage = { role: 'user', content: options.userMessage, timestamp: Date.now() };
   const allMessages = [...historyMessages, currentMessage];
+  const mindosUiMessages = toMindosUiAskMessages(allMessages);
   const serverSettings = readSettings();
   const agentConfig = serverSettings.agent ?? {};
   const projectRoot = getProjectRoot();
@@ -67,7 +69,7 @@ export async function runHeadlessAgent(options: HeadlessAgentRunOptions): Promis
     mode: askMode,
     mindRoot,
     uploadedParts: [],
-    messages: allMessages,
+    messages: mindosUiMessages,
     activeRecall: agentConfig.activeRecall,
   }, {
     readKnowledgeFile,
@@ -81,11 +83,11 @@ export async function runHeadlessAgent(options: HeadlessAgentRunOptions): Promis
     getMindosWebPiRuntimePaths,
     getMindosWebRequestTools,
   } = await import('@/lib/agent/mindos-pi-runtime-host');
-  const runtimePaths = getMindosWebPiRuntimePaths({ projectRoot, mindRoot, serverSettings });
+  const runtimePaths = getMindosWebPiRuntimePaths({ projectRoot, mindRoot, serverSettings, mode: askMode });
   const { createMindosPiCodingAgentRuntime } = await import('@geminilight/mindos/session/pi-coding-agent');
   const runtime = await createMindosPiCodingAgentRuntime({
     mode: askMode,
-    messages: allMessages,
+    messages: mindosUiMessages,
     systemPrompt,
     providerOverride: options.providerOverride,
     modelOverride: typeof options.modelOverride === 'string' ? options.modelOverride : undefined,

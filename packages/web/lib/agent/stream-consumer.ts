@@ -12,9 +12,9 @@
  * Frontend Message structure:
  * - role: 'assistant'
  * - content: concatenated text deltas (for display)
- * - parts: structured [TextPart | ReasoningPart | ToolCallPart] (for detailed view)
+ * - parts: structured [TextPart | ReasoningPart | ToolCallPart | RuntimeStatusPart] (for detailed view)
  */
-import type { Message, MessagePart, ToolCallPart, TextPart, ReasoningPart, AskUserQuestion, AskUserQuestionAnswer } from '@/lib/types';
+import type { Message, MessagePart, ToolCallPart, TextPart, ReasoningPart, RuntimeStatusPart, AskUserQuestion, AskUserQuestionAnswer } from '@/lib/types';
 import { parseMindosSseLine } from '@geminilight/mindos/session';
 
 /** Tools that modify files — trigger files-changed notification on completion */
@@ -29,10 +29,19 @@ export interface RuntimeBindingMetadata {
   runtime: 'acp' | 'codex' | 'claude';
   externalSessionId: string;
   cwd?: string;
+  status?: 'active' | 'missing' | 'signed-out' | 'archived' | 'failed';
+  reason?: string;
+}
+
+export interface AgentRunContextMetadata {
+  rootRunId: string;
+  chatSessionId?: string;
+  startedAt: number;
 }
 
 export interface ConsumeUIMessageStreamOptions {
   onRuntimeBinding?: (binding: RuntimeBindingMetadata) => void;
+  onAgentRunContext?: (context: AgentRunContextMetadata) => void;
 }
 
 /** Notify the app that files were changed by the AI agent */
@@ -56,6 +65,14 @@ function parseSseLineAsRecord(line: string): Record<string, unknown> | null {
   } catch {
     return null;
   }
+}
+
+function isRuntimeBindingStatus(value: unknown): value is NonNullable<RuntimeBindingMetadata['status']> {
+  return value === 'active'
+    || value === 'missing'
+    || value === 'signed-out'
+    || value === 'archived'
+    || value === 'failed';
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -133,6 +150,16 @@ export async function consumeUIMessageStream(
       if (p.type === 'text') return { type: 'text' as const, text: p.text };
       if (p.type === 'reasoning') return { type: 'reasoning' as const, text: p.text };
       if (p.type === 'image') return { ...p };
+      if (p.type === 'runtime-status') return { ...p };
+      if (p.type === 'agent-run-timeline') {
+        return {
+          ...p,
+          runs: p.runs.map(run => ({
+            ...run,
+            ...(run.metadata ? { metadata: { ...run.metadata } } : {}),
+          })),
+        };
+      }
       // ToolCallPart — shallow copy safe (primitive fields, input is replaced not mutated)
       return {
         ...p,
@@ -196,6 +223,20 @@ export async function consumeUIMessageStream(
     return tc;
   }
 
+  function upsertRuntimeStatus(message: string, runtime?: RuntimeStatusPart['runtime']): void {
+    const last = parts[parts.length - 1];
+    if (last?.type === 'runtime-status' && last.runtime === runtime) {
+      last.message = message;
+      return;
+    }
+    parts.push({
+      type: 'runtime-status',
+      message,
+      ...(runtime ? { runtime } : {}),
+    });
+    currentTextId = null;
+  }
+
   function normalizeUserQuestions(value: unknown): AskUserQuestion[] {
     if (!Array.isArray(value)) return [];
     return value
@@ -238,6 +279,18 @@ export async function consumeUIMessageStream(
         const type = typeof eventRecord.type === 'string' ? eventRecord.type : '';
 
         switch (type) {
+          case 'agent_run_context': {
+            if (typeof eventRecord.rootRunId !== 'string' || !eventRecord.rootRunId) break;
+            options.onAgentRunContext?.({
+              rootRunId: eventRecord.rootRunId,
+              ...(typeof eventRecord.chatSessionId === 'string' ? { chatSessionId: eventRecord.chatSessionId } : {}),
+              startedAt: typeof eventRecord.startedAt === 'number' && Number.isFinite(eventRecord.startedAt)
+                ? eventRecord.startedAt
+                : Date.now(),
+            });
+            break;
+          }
+
           case 'text_delta': {
             // Regular text from assistant
             const part = findOrCreateTextPart('text');
@@ -306,6 +359,7 @@ export async function consumeUIMessageStream(
             if (typeof eventRecord.toolName === 'string' && eventRecord.toolName && tc.toolName === 'unknown') {
               tc.toolName = eventRecord.toolName;
             }
+            tc.runtime = normalizeRuntime(eventRecord.runtime) ?? tc.runtime;
             const output = typeof eventRecord.output === 'string' ? eventRecord.output : '';
             const shouldPreserveExistingOutput = Boolean(
               tc.output &&
@@ -366,19 +420,21 @@ export async function consumeUIMessageStream(
             const toolCallId = eventRecord.toolCallId as string;
             if (!toolCallId) break;
             const tc = findOrCreateToolCall(toolCallId, 'approval_request');
+            tc.runtime = normalizeRuntime(eventRecord.runtime) ?? tc.runtime;
+            const decision = typeof eventRecord.decision === 'string' ? eventRecord.decision : '';
+            const denied = decision === 'decline' || decision === 'deny' || decision === 'denied';
             if (tc.runtimePermission) {
-              const decision = typeof eventRecord.decision === 'string' ? eventRecord.decision : '';
               tc.runtimePermission.decision = decision;
               tc.runtimePermission.status = eventRecord.cancelled === true
                 ? 'cancelled'
-                : decision === 'decline' || decision === 'deny' || decision === 'denied'
+                : denied
                   ? 'denied'
                   : 'approved';
             }
-            if (eventRecord.cancelled === true) {
+            if (eventRecord.cancelled === true || denied) {
               tc.state = 'error';
-              tc.output = typeof eventRecord.decision === 'string'
-                ? `Permission decision forwarded: ${eventRecord.decision}`
+              tc.output = decision
+                ? `Permission decision forwarded: ${decision}`
                 : 'Permission decision forwarded.';
             }
             changed = true;
@@ -442,6 +498,8 @@ export async function consumeUIMessageStream(
                 runtime,
                 externalSessionId,
                 ...(typeof eventRecord.cwd === 'string' ? { cwd: eventRecord.cwd } : {}),
+                ...(isRuntimeBindingStatus(eventRecord.status) ? { status: eventRecord.status } : {}),
+                ...(typeof eventRecord.reason === 'string' ? { reason: eventRecord.reason } : {}),
               });
             }
             break;
@@ -451,9 +509,7 @@ export async function consumeUIMessageStream(
             if (eventRecord.visible !== true || typeof eventRecord.message !== 'string' || !eventRecord.message.trim()) {
               break;
             }
-            const part = findOrCreateTextPart('text');
-            const prefix = part.text && !part.text.endsWith('\n') ? '\n\n' : '';
-            part.text += `${prefix}_${eventRecord.message.trim()}_\n`;
+            upsertRuntimeStatus(eventRecord.message.trim(), normalizeRuntime(eventRecord.runtime));
             changed = true;
             break;
           }

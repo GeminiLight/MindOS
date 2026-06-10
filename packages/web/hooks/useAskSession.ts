@@ -1,8 +1,13 @@
 'use client';
 
 import { useState, useCallback, useMemo, useRef } from 'react';
-import type { AgentIdentity, AgentRuntimeIdentity, Message, ChatSession } from '@/lib/types';
-import { bindSessionAgent, bindSessionAgentRuntime, isSessionInRuntimeLane } from '@/lib/ask-agent';
+import type { AgentIdentity, AgentRuntimeIdentity, Message, ChatSession, RuntimeSessionBinding } from '@/lib/types';
+import {
+  bindSessionAgent,
+  bindSessionAgentRuntime,
+  getMatchingRuntimeSessionBinding,
+  isSessionInRuntimeLane,
+} from '@/lib/ask-agent';
 
 const MAX_SESSIONS = 30;
 
@@ -19,6 +24,26 @@ function createSession(currentFile?: string, runtime?: AgentRuntimeIdentity | nu
   if (!runtime || runtime.kind === 'mindos') return session;
   if (runtime.kind === 'acp') return bindSessionAgent(session, { id: runtime.id, name: runtime.name });
   return bindSessionAgentRuntime(session, runtime, { updatedAt: ts });
+}
+
+function hasDurableRuntimeBinding(session: Pick<ChatSession, 'runtimeSessionBinding' | 'externalAgentBinding'>): boolean {
+  return Boolean(
+    session.runtimeSessionBinding?.externalSessionId?.trim()
+    || session.externalAgentBinding?.externalSessionId?.trim(),
+  );
+}
+
+function shouldPersistSession(session: Pick<ChatSession, 'messages' | 'runtimeSessionBinding' | 'externalAgentBinding'>): boolean {
+  return session.messages.length > 0 || hasDurableRuntimeBinding(session);
+}
+
+function runtimeBindingUpdatedAt(value?: number | string): number {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string') {
+    const parsed = Date.parse(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return Date.now();
 }
 
 export function sessionTitle(s: ChatSession): string {
@@ -101,21 +126,27 @@ export function useAskSession(currentFile?: string) {
   const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   /** Load sessions from server, pick the matching one or create fresh. Prunes stale empty sessions. */
-  const initSessions = useCallback(async () => {
+  const initSessions = useCallback(async (runtime?: AgentRuntimeIdentity | null) => {
     const all = (await fetchSessions())
       .sort((a, b) => b.updatedAt - a.updatedAt)
       .slice(0, MAX_SESSIONS);
 
-    // Prune any empty sessions that leaked to server (from older versions)
-    const emptyIds = all.filter((s) => s.messages.length === 0).map((s) => s.id);
+    // Prune abandoned empty sessions from older versions, but keep metadata-only
+    // sessions that intentionally bind MindOS to a native runtime session.
+    const emptyIds = all
+      .filter((s) => s.messages.length === 0 && !hasDurableRuntimeBinding(s))
+      .map((s) => s.id);
     const sorted = emptyIds.length > 0 ? all.filter((s) => !emptyIds.includes(s.id)) : all;
     if (emptyIds.length > 0) void removeSessions(emptyIds);
 
     // Always prepend a fresh empty session in memory (never persisted until first message)
-    const fresh = createSession(currentFile);
+    const fresh = createSession(currentFile, runtime);
+    const candidates = runtime === undefined
+      ? sorted
+      : sorted.filter((sess) => isSessionInRuntimeLane(sess, runtime));
     const matched = currentFile
-      ? sorted.find((sess) => sess.currentFile === currentFile)
-      : sorted[0];
+      ? candidates.find((sess) => sess.currentFile === currentFile) ?? candidates[0]
+      : candidates[0];
 
     if (matched) {
       setActiveSessionId(matched.id);
@@ -166,8 +197,15 @@ export function useAskSession(currentFile?: string) {
   const resetSession = useCallback((runtime?: AgentRuntimeIdentity | null) => {
     setSessions((prev) => {
       const active = prev.find((s) => s.id === activeSessionId);
-      // Already on an empty session in this runtime lane — just clear input.
-      if (active && active.messages.length === 0 && isSessionInRuntimeLane(active, runtime)) return prev;
+      // Already on an empty session in this runtime lane — just clear input,
+      // unless it is bound to an external session and New Chat should create a
+      // fresh unlinked runtime session.
+      if (
+        active
+        && active.messages.length === 0
+        && isSessionInRuntimeLane(active, runtime)
+        && !hasDurableRuntimeBinding(active)
+      ) return prev;
 
       const fresh = createSession(currentFile, runtime);
       setActiveSessionId(fresh.id);
@@ -187,7 +225,7 @@ export function useAskSession(currentFile?: string) {
 
       // Drop the session we're leaving if it's empty (it was never persisted, just remove from memory)
       const leaving = activeSessionId ? sessions.find((s) => s.id === activeSessionId) : null;
-      if (leaving && leaving.messages.length === 0 && leaving.id !== id) {
+      if (leaving && leaving.messages.length === 0 && !hasDurableRuntimeBinding(leaving) && leaving.id !== id) {
         setSessions((prev) => prev.filter((s) => s.id !== leaving.id));
       }
 
@@ -201,8 +239,9 @@ export function useAskSession(currentFile?: string) {
   const deleteSession = useCallback(
     (id: string, runtime?: AgentRuntimeIdentity | null) => {
       const target = sessions.find((s) => s.id === id);
-      // Only call removeSession if the session has messages (i.e. was persisted)
-      if (target && target.messages.length > 0) void removeSession(id);
+      // Only remove the local MindOS record. This never deletes the external
+      // Codex/Claude session referenced by runtimeSessionBinding.
+      if (target && shouldPersistSession(target)) void removeSession(id);
 
       const remaining = sessions.filter((s) => s.id !== id);
       setSessions(remaining);
@@ -239,8 +278,7 @@ export function useAskSession(currentFile?: string) {
       const updated = { ...prev[idx], pinned: !prev[idx].pinned };
       const next = [...prev];
       next[idx] = updated;
-      // Only persist if session has messages
-      if (updated.messages.length > 0) void upsertSession(updated);
+      if (shouldPersistSession(updated)) void upsertSession(updated);
       return next;
     });
   }, []);
@@ -276,7 +314,7 @@ export function useAskSession(currentFile?: string) {
   /** Update the session-level runtime binding for native agent sessions. */
   const setSessionAgentRuntimeBinding = useCallback((
     runtime: AgentRuntimeIdentity,
-    binding?: { externalSessionId?: string; cwd?: string; updatedAt?: number },
+    binding?: { externalSessionId?: string; cwd?: string; status?: RuntimeSessionBinding['status']; updatedAt?: number },
   ) => {
     if (!activeSessionId) return;
 
@@ -297,19 +335,70 @@ export function useAskSession(currentFile?: string) {
     });
 
     if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
-    if (updatedSession.messages.length > 0) {
+    if (shouldPersistSession(updatedSession)) {
       persistTimerRef.current = setTimeout(() => {
         void upsertSession(updatedSession);
       }, 600);
     }
   }, [activeSessionId, currentFile, sessions]);
 
+  const attachRuntimeSession = useCallback((
+    runtime: AgentRuntimeIdentity,
+    binding: {
+      externalSessionId: string;
+      cwd?: string;
+      status?: RuntimeSessionBinding['status'];
+      updatedAt?: number | string;
+    },
+    metadata?: { title?: string },
+  ) => {
+    if (runtime.kind !== 'codex' && runtime.kind !== 'claude') return;
+    const externalSessionId = binding.externalSessionId.trim();
+    if (!externalSessionId) return;
+
+    const now = Date.now();
+    const bindingUpdatedAt = runtimeBindingUpdatedAt(binding.updatedAt);
+    let sessionToPersist: ChatSession | null = null;
+
+    setSessions((prev) => {
+      const existing = prev.find((item) => (
+        getMatchingRuntimeSessionBinding(item, runtime)?.externalSessionId === externalSessionId
+      ));
+      const base = existing ?? createSession(currentFile, runtime);
+      const updated = bindSessionAgentRuntime({
+        ...base,
+        currentFile: base.currentFile ?? currentFile,
+        title: metadata?.title?.trim() || base.title,
+        updatedAt: now,
+      }, runtime, {
+        externalSessionId,
+        cwd: binding.cwd,
+        status: binding.status ?? 'active',
+        updatedAt: bindingUpdatedAt,
+      });
+
+      sessionToPersist = updated;
+      setActiveSessionId(updated.id);
+      setMessages(updated.messages);
+
+      const rest = prev.filter((item) => item.id !== updated.id);
+      return [updated, ...rest]
+        .sort((a, b) => b.updatedAt - a.updatedAt)
+        .slice(0, MAX_SESSIONS);
+    });
+
+    if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
+    persistTimerRef.current = setTimeout(() => {
+      if (sessionToPersist) void upsertSession(sessionToPersist);
+    }, 0);
+  }, [currentFile]);
+
   const clearSessions = useCallback((ids?: string[], runtime?: AgentRuntimeIdentity | null) => {
     const targetIds = ids
       ? new Set(ids)
       : new Set(sessions.map((s) => s.id));
     const persistedIds = sessions
-      .filter((s) => targetIds.has(s.id) && s.messages.length > 0)
+      .filter((s) => targetIds.has(s.id) && shouldPersistSession(s))
       .map((s) => s.id);
     if (persistedIds.length > 0) void removeSessions(persistedIds);
 
@@ -352,6 +441,7 @@ export function useAskSession(currentFile?: string) {
     togglePinSession,
     setSessionDefaultAcpAgent,
     setSessionAgentRuntimeBinding,
+    attachRuntimeSession,
     clearSessions,
     clearAllSessions,
   };

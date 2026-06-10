@@ -24,6 +24,7 @@ import {
   handleAcpSessionGet,
   handleAcpSessionPost,
   checkCodexProviderEnvironment,
+  mergeCodexProviderAndLoginHealth,
   resolveNpmInvocation,
   handleAskSessionsDelete,
   handleAskSessionsGet,
@@ -342,6 +343,42 @@ describe('MindOS product server contract', () => {
       id: 'agent-activity',
       method: 'GET',
       path: '/api/agent-activity',
+      auth: 'required',
+    });
+    expect(contract.routes).toContainEqual({
+      id: 'agent-runtimes',
+      method: 'GET',
+      path: '/api/agent-runtimes',
+      auth: 'required',
+    });
+    expect(contract.routes).toContainEqual({
+      id: 'agent-runtimes.codex.threads',
+      method: 'GET',
+      path: '/api/agent-runtimes/codex/threads',
+      auth: 'required',
+    });
+    expect(contract.routes).toContainEqual({
+      id: 'agent-runtimes.codex.thread',
+      method: 'GET',
+      path: '/api/agent-runtimes/codex/threads/[threadId]',
+      auth: 'required',
+    });
+    expect(contract.routes).toContainEqual({
+      id: 'agent-runtimes.codex.thread.fork',
+      method: 'POST',
+      path: '/api/agent-runtimes/codex/threads/[threadId]/fork',
+      auth: 'required',
+    });
+    expect(contract.routes).toContainEqual({
+      id: 'agent-runtimes.codex.thread.archive',
+      method: 'POST',
+      path: '/api/agent-runtimes/codex/threads/[threadId]/archive',
+      auth: 'required',
+    });
+    expect(contract.routes).toContainEqual({
+      id: 'agent-runtimes.codex.thread.unarchive',
+      method: 'POST',
+      path: '/api/agent-runtimes/codex/threads/[threadId]/unarchive',
       auth: 'required',
     });
     expect(contract.routes).toContainEqual({
@@ -1169,6 +1206,140 @@ describe('MindOS product server contract', () => {
       expect((await fetch(`${base}/api/files`, {
         headers: { 'sec-fetch-site': 'same-origin' },
       })).status).toBe(200);
+      const protectedCodexRoutes: Array<{ path: string; init?: RequestInit }> = [
+        { path: '/api/agent-runtimes/codex/threads' },
+        { path: '/api/agent-runtimes/codex/threads/thr-existing' },
+        { path: '/api/agent-runtimes/codex/threads/thr-existing/fork', init: { method: 'POST', body: '{}' } },
+        { path: '/api/agent-runtimes/codex/threads/thr-existing/archive', init: { method: 'POST' } },
+        { path: '/api/agent-runtimes/codex/threads/thr-existing/unarchive', init: { method: 'POST' } },
+        { path: '/api/agent-runtimes/codex/threads/thr-existing/delete', init: { method: 'POST' } },
+      ];
+      for (const route of protectedCodexRoutes) {
+        expect((await fetch(`${base}${route.path}`, route.init)).status, route.path).toBe(401);
+      }
+      expect((await fetch(`${base}/api/agent-runtimes/codex/threads/thr-existing/delete`, {
+        method: 'POST',
+        headers: { authorization: 'Bearer secret-token' },
+      })).status).toBe(404);
+    } finally {
+      await new Promise<void>((resolve, reject) => app.server.close((error) => error ? reject(error) : resolve()));
+    }
+  });
+
+  it('dispatches Codex thread manager routes through the Product HTTP server without starting turns', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'mindos-http-codex-threads-'));
+    const calls: string[] = [];
+    const app = createMindosHttpServer({
+      hostname: '127.0.0.1',
+      port: 0,
+      services: {
+        ...createDefaultMindosHttpServices({
+          readSettings: () => ({ mindRoot: root, authToken: 'secret-token' }),
+        }),
+        createCodexClient: async () => ({
+          initialize: async () => {
+            calls.push('initialize');
+          },
+          listThreads: async () => {
+            calls.push('thread/list');
+            return {
+              data: [{
+                id: 'thr-existing',
+                sessionId: 'sess-existing',
+                preview: 'Existing Codex thread',
+                turns: [],
+              }],
+              nextCursor: null,
+              backwardsCursor: null,
+            };
+          },
+          readThread: async (input) => {
+            calls.push(`thread/read:${input.threadId}:${input.includeTurns ? 'turns' : 'summary'}`);
+            return {
+              thread: {
+                id: input.threadId,
+                preview: 'Existing Codex thread',
+                turns: input.includeTurns ? [{ id: 'turn-existing' }] : [],
+              },
+            };
+          },
+          forkThread: async (input) => {
+            calls.push(`thread/fork:${input.threadId}`);
+            return { thread: { id: 'thr-forked', forkedFromId: input.threadId, turns: [] } };
+          },
+          archiveThread: async (input) => {
+            calls.push(`thread/archive:${input.threadId}`);
+          },
+          unarchiveThread: async (input) => {
+            calls.push(`thread/unarchive:${input.threadId}`);
+            return { thread: { id: input.threadId, turns: [] } };
+          },
+          startThread: vi.fn(),
+          resumeThread: vi.fn(),
+          startTurn: vi.fn(),
+          close: async () => {
+            calls.push('close');
+          },
+        }),
+      },
+    });
+    await new Promise<void>((resolve) => app.server.listen(0, '127.0.0.1', resolve));
+    const address = app.server.address();
+    if (!address || typeof address === 'string') throw new Error('expected TCP server address');
+    const base = `http://127.0.0.1:${address.port}`;
+    const auth = { authorization: 'Bearer secret-token' };
+
+    try {
+      const list = await fetch(`${base}/api/agent-runtimes/codex/threads?limit=10`, { headers: auth });
+      const read = await fetch(`${base}/api/agent-runtimes/codex/threads/thr-existing?includeTurns=1`, { headers: auth });
+      const fork = await fetch(`${base}/api/agent-runtimes/codex/threads/thr-existing/fork`, {
+        method: 'POST',
+        headers: { ...auth, 'content-type': 'application/json' },
+        body: JSON.stringify({ cwd: '/tmp/forked' }),
+      });
+      const archive = await fetch(`${base}/api/agent-runtimes/codex/threads/thr-existing/archive`, {
+        method: 'POST',
+        headers: auth,
+      });
+      const unarchive = await fetch(`${base}/api/agent-runtimes/codex/threads/thr-existing/unarchive`, {
+        method: 'POST',
+        headers: auth,
+      });
+
+      expect(list.status).toBe(200);
+      expect(await list.json()).toEqual({
+        data: [expect.objectContaining({ id: 'thr-existing' })],
+        nextCursor: null,
+        backwardsCursor: null,
+      });
+      expect(read.status).toBe(200);
+      expect(await read.json()).toEqual({
+        thread: expect.objectContaining({
+          id: 'thr-existing',
+          turns: [{ id: 'turn-existing' }],
+        }),
+      });
+      expect(fork.status).toBe(200);
+      expect(archive.status).toBe(200);
+      expect(unarchive.status).toBe(200);
+      expect(calls).toEqual([
+        'initialize',
+        'thread/list',
+        'close',
+        'initialize',
+        'thread/read:thr-existing:turns',
+        'close',
+        'initialize',
+        'thread/fork:thr-existing',
+        'close',
+        'initialize',
+        'thread/archive:thr-existing',
+        'close',
+        'initialize',
+        'thread/unarchive:thr-existing',
+        'close',
+      ]);
+      expect(calls).not.toContain('turn/start');
     } finally {
       await new Promise<void>((resolve, reject) => app.server.close((error) => error ? reject(error) : resolve()));
     }
@@ -4102,6 +4273,15 @@ describe('MindOS product server contract', () => {
     });
 
     expect(handleImConfigPut({
+      platform: 'wecom',
+      credentials: { webhook_key: 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=robot-key-123' },
+    }, services)).toMatchObject({
+      status: 200,
+      body: { ok: true, platform: 'wecom' },
+    });
+    expect(config.providers.wecom).toMatchObject({ webhook_key: 'robot-key-123' });
+
+    expect(handleImConfigPut({
       platform: 'feishu',
       conversation: { enabled: true, transport: 'long_connection', allow_group_mentions: false },
     }, services)).toMatchObject({
@@ -4849,6 +5029,21 @@ describe('MindOS product server contract', () => {
     expect(result).toEqual({ status: 'available' });
   });
 
+  it('keeps Codex available when app-server works but account login status fails', () => {
+    const result = mergeCodexProviderAndLoginHealth(
+      { status: 'available' },
+      { status: 'signed-out', reason: 'Run codex login first.' },
+    );
+
+    expect(result).toEqual({
+      status: 'available',
+      diagnosticHints: [
+        'Codex app-server is available. If this Codex profile uses account login, run "codex login status" from the same environment that starts MindOS.',
+        'codex login status returned: Run codex login first.',
+      ],
+    });
+  });
+
   it('keeps local native runtime detection independent when ACP detection times out', async () => {
     vi.useFakeTimers();
     const pendingDetection = new Promise<{ installed: unknown[]; notInstalled: unknown[] }>(() => {});
@@ -4880,9 +5075,10 @@ describe('MindOS product server contract', () => {
           expect.objectContaining({
             id: 'claude',
             kind: 'claude',
-            status: 'missing',
+            adapter: 'claude-sdk',
+            status: 'available',
+            binaryPath: 'sdk:@anthropic-ai/claude-agent-sdk',
             availability: expect.objectContaining({
-              reason: 'Claude Code executable was not detected.',
               sources: ['native-health'],
             }),
           }),

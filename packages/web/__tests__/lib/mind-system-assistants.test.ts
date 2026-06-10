@@ -3,6 +3,7 @@ import path from 'path';
 import { describe, expect, it, vi } from 'vitest';
 import { cleanupMindRoot, mkTempMindRoot, seedFile } from '../core/helpers';
 import {
+  getAssistantProfilePath,
   getAssistantPromptPath,
   getMindSystemAssistants,
   getMindSystemAssistantSummary,
@@ -39,13 +40,71 @@ describe('mind-system assistants', () => {
     expect(assistants[1]).toMatchObject({ schedule: { mode: 'manual' } });
     expect(assistants[0]?.promptPath).toBe('.mindos/assistants/daily-signal/prompt.md');
     expect(assistants[1]?.promptPath).toBe('.mindos/assistants/decision-synthesizer/prompt.md');
+    expect(assistants[0]?.profilePath).toBe('.mindos/assistants/daily-signal/assistant.json');
     expect(assistants).not.toContainEqual(expect.objectContaining({ primary: expect.anything() }));
   });
 
   it('uses a flat hidden assistant prompt registry and rejects unsafe assistant ids', () => {
     expect(getAssistantPromptPath('daily-signal')).toBe('.mindos/assistants/daily-signal/prompt.md');
+    expect(getAssistantProfilePath('daily-signal')).toBe('.mindos/assistants/daily-signal/assistant.json');
     expect(() => getAssistantPromptPath('../daily-signal')).toThrow(/Unsafe assistant id/);
+    expect(() => getAssistantProfilePath('../daily-signal')).toThrow(/Unsafe assistant id/);
     expect(() => getAssistantPromptPath('Daily Signal')).toThrow(/Unsafe assistant id/);
+  });
+
+  it('applies local assistant profile overrides without changing the assistant id', () => {
+    const mindRoot = mkTempMindRoot();
+    try {
+      seedFile(mindRoot, '.mindos/assistants/daily-signal/assistant.json', JSON.stringify({
+        name: 'Morning signal editor',
+        desc: 'Prepare a shorter morning brief.',
+        schedule: { mode: 'weekly' },
+      }));
+
+      const summary = getMindSystemAssistantSummary(mindRoot, daoSlot);
+
+      expect(summary.assistants[0]).toMatchObject({
+        id: 'daily-signal',
+        name: 'Morning signal editor',
+        desc: 'Prepare a shorter morning brief.',
+        schedule: { mode: 'weekly' },
+        profilePath: '.mindos/assistants/daily-signal/assistant.json',
+      });
+      expect(summary.assistants[1]).toMatchObject({
+        id: 'decision-synthesizer',
+        schedule: { mode: 'manual' },
+      });
+    } finally {
+      cleanupMindRoot(mindRoot);
+    }
+  });
+
+  it('ignores malformed or invalid assistant profile fields', () => {
+    const mindRoot = mkTempMindRoot();
+    try {
+      seedFile(mindRoot, '.mindos/assistants/daily-signal/assistant.json', JSON.stringify({
+        name: '   ',
+        desc: 42,
+        schedule: { mode: 'hourly' },
+      }));
+      seedFile(mindRoot, '.mindos/assistants/decision-synthesizer/assistant.json', '{broken json');
+
+      const summary = getMindSystemAssistantSummary(mindRoot, daoSlot);
+
+      expect(summary.assistants[0]).toMatchObject({
+        id: 'daily-signal',
+        schedule: { mode: 'daily' },
+        profilePath: '.mindos/assistants/daily-signal/assistant.json',
+      });
+      expect(summary.assistants[0]?.name).toBeUndefined();
+      expect(summary.assistants[0]?.desc).toBeUndefined();
+      expect(summary.assistants[1]).toMatchObject({
+        id: 'decision-synthesizer',
+        schedule: { mode: 'manual' },
+      });
+    } finally {
+      cleanupMindRoot(mindRoot);
+    }
   });
 
   it('counts visible markdown drafts and reports instruction readiness', () => {

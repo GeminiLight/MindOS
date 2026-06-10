@@ -104,4 +104,105 @@ describe('useNativeRuntimeDetection', () => {
       root.unmount();
     });
   });
+
+  it('revalidates cached available native runtimes in the background', async () => {
+    sessionStorage.setItem('mindos:native-runtime-detection:v1:codex', JSON.stringify({
+      ts: Date.now(),
+      runtime: {
+        id: 'codex',
+        name: 'Codex',
+        kind: 'codex',
+        status: 'available',
+        capabilities: {},
+      },
+    }));
+    const fetchMock = vi.fn((url: string) => {
+      const kind = url.includes('runtime=codex') ? 'codex' : 'claude';
+      return Promise.resolve(new Response(JSON.stringify({
+        runtime: {
+          id: kind,
+          name: kind === 'codex' ? 'Codex' : 'Claude Code',
+          kind,
+          status: 'available',
+          capabilities: {},
+        },
+      }), { status: 200 }));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const states: Array<ReturnType<typeof useNativeRuntimeDetection>> = [];
+    function Probe() {
+      states.push(useNativeRuntimeDetection());
+      return null;
+    }
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(React.createElement(Probe));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/agent-runtimes?runtime=codex', expect.objectContaining({
+      signal: expect.any(AbortSignal),
+    }));
+    expect(states[0]?.loadingByKind.codex).toBe(true);
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('removes stale cached available runtime state when background detection fails', async () => {
+    sessionStorage.setItem('mindos:native-runtime-detection:v1:claude', JSON.stringify({
+      ts: Date.now(),
+      runtime: {
+        id: 'claude',
+        name: 'Claude Code',
+        kind: 'claude',
+        status: 'available',
+        capabilities: {},
+      },
+    }));
+    const fetchMock = vi.fn((url: string) => {
+      if (url.includes('runtime=claude')) return Promise.reject(new Error('Detection failed'));
+      return Promise.resolve(new Response(JSON.stringify({
+        runtime: {
+          id: 'codex',
+          name: 'Codex',
+          kind: 'codex',
+          status: 'missing',
+          capabilities: {},
+        },
+      }), { status: 200 }));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const states: Array<ReturnType<typeof useNativeRuntimeDetection>> = [];
+
+    function Probe() {
+      states.push(useNativeRuntimeDetection());
+      return null;
+    }
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(React.createElement(Probe));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(states[0]?.loadingByKind.claude).toBe(true);
+    expect(states.at(-1)?.errorByKind.claude).toBe('Detection failed');
+    expect(sessionStorage.getItem('mindos:native-runtime-detection:v1:claude')).toBeNull();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
 });

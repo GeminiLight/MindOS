@@ -3,6 +3,7 @@ import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import {
   isChannelPlatform,
+  normalizeChannelCredentials,
   validateChannelCredentials,
 } from '../channel-contract.js';
 import { json, type MindosServerResponse } from '../response.js';
@@ -72,7 +73,7 @@ export function handleImConfigPut(
     const existing = config.providers[platform] ?? {};
 
     if (credentials && typeof credentials === 'object') {
-      const cleanCredentials = compactCredentials(credentials);
+      const cleanCredentials = normalizeChannelCredentials(platform, credentials);
       if (Object.keys(cleanCredentials).length === 0) {
         return json({ error: 'No credential values provided' }, { status: 400 });
       }
@@ -167,16 +168,6 @@ function writeConfig(config: ImConfig, services: ImConfigServices): void {
   if (process.platform !== 'win32') {
     try { chmodSync(configPath, 0o600); } catch { /* best effort */ }
   }
-}
-
-function compactCredentials(credentials: Record<string, unknown>): Record<string, string> {
-  const clean: Record<string, string> = {};
-  for (const [key, value] of Object.entries(credentials)) {
-    if (typeof value !== 'string') continue;
-    const trimmed = value.trim();
-    if (trimmed) clean[key] = trimmed;
-  }
-  return clean;
 }
 
 function isFeishuConversationTransport(value: unknown): value is NonNullable<ImConfigConversation['transport']> {

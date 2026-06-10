@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, ChevronDown, Loader2 } from 'lucide-react';
+import { Check, ChevronDown, Loader2, RefreshCw } from 'lucide-react';
 import type { AgentRuntimeDescriptor, AgentRuntimeIdentity, AgentRuntimeStatus, RuntimeSessionBinding } from '@/lib/types';
 import type { NotInstalledAgent } from '@/hooks/useAcpDetection';
 import { useLocale } from '@/lib/stores/locale-store';
@@ -15,6 +15,8 @@ interface RuntimeIconSwitcherProps {
   notInstalledAgents?: NotInstalledAgent[];
   loading?: boolean;
   loadingByKind?: Partial<Record<'codex' | 'claude', boolean>>;
+  errorByKind?: Partial<Record<'codex' | 'claude', string | null>>;
+  onRefreshNativeRuntimes?: () => void;
   disabled?: boolean;
 }
 
@@ -22,6 +24,7 @@ type RuntimeOption = {
   key: string;
   label: string;
   description: string;
+  diagnosticHints?: string[];
   runtime: RuntimeSelectable | null;
   icon: 'mindos' | 'codex' | 'claude' | 'agent';
   disabled?: boolean;
@@ -82,7 +85,7 @@ function resolveNativeOptionStatus(
 
 function RuntimeMark({ option, small = false }: { option: Pick<RuntimeOption, 'icon' | 'label'>; small?: boolean }) {
   const size = small ? 'h-5 w-5' : 'h-6 w-6';
-  const iconSize = small ? 'h-3.5 w-3.5' : 'h-4 w-4';
+  const iconSize = 'h-4 w-4';
 
   if (option.icon === 'mindos') {
     return (
@@ -123,6 +126,8 @@ export default function RuntimeIconSwitcher({
   notInstalledAgents = [],
   loading = false,
   loadingByKind = {},
+  errorByKind = {},
+  onRefreshNativeRuntimes,
   disabled = false,
 }: RuntimeIconSwitcherProps) {
   const { t } = useLocale();
@@ -149,20 +154,27 @@ export default function RuntimeIconSwitcher({
       missingAgent: NotInstalledAgent | undefined,
     ): RuntimeOption => {
       const optionLoading = loadingByKind[kind] ?? loading;
-      const description = runtime?.availability?.reason
+      const detectionError = errorByKind[kind];
+      const description = detectionError
+        ? `Detection failed. ${detectionError}`
+        : runtime?.availability?.reason
         ?? (missingAgent
           ? `Not detected. ${missingAgent.installCmd ? `Install: ${missingAgent.installCmd}` : 'Configure it in Agents settings.'}`
           : kind === 'codex'
             ? 'Use local Codex.'
             : 'Use local Claude Code.');
-      const status = resolveNativeOptionStatus(runtime, optionLoading);
+      const status = detectionError ? 'error' : resolveNativeOptionStatus(runtime, optionLoading);
+      const diagnosticHints = status === 'available'
+        ? undefined
+        : runtime?.availability?.diagnosticHints?.filter((hint) => hint.trim().length > 0).slice(0, 2);
 
       return {
         key: `${kind}:${runtime?.id ?? kind}`,
         label: runtime?.name ?? label,
         description,
+        ...(diagnosticHints && diagnosticHints.length > 0 ? { diagnosticHints } : {}),
         runtime: runtime ?? { id: kind, name: label, kind },
-        icon: 'codex',
+        icon: kind,
         disabled: status !== 'available',
         status,
       };
@@ -186,7 +198,7 @@ export default function RuntimeIconSwitcher({
       codexOption,
       claudeOption,
     ];
-  }, [loading, loadingByKind, nativeRuntimes, notInstalledAgents, p.acpDefaultAgent]);
+  }, [errorByKind, loading, loadingByKind, nativeRuntimes, notInstalledAgents, p.acpDefaultAgent]);
 
   const selectedOption = useMemo<RuntimeOption>(() => {
     if (!selectedRuntime) return options[0];
@@ -278,8 +290,24 @@ export default function RuntimeIconSwitcher({
       className="fixed z-50 isolate pointer-events-auto w-[min(340px,calc(100vw-24px))] rounded-xl border border-border bg-background py-1.5 shadow-xl shadow-foreground/10"
       style={dropdownStyle}
     >
-      <div className="px-3 pb-1.5 pt-1 text-2xs font-medium uppercase tracking-wide text-muted-foreground/70">
-        Runtime
+      <div className="flex items-center justify-between gap-2 px-3 pb-1.5 pt-1">
+        <span className="text-2xs font-medium uppercase tracking-wide text-muted-foreground/70">
+          Runtime
+        </span>
+        {onRefreshNativeRuntimes && (
+          <button
+            type="button"
+            aria-label="Refresh local runtime status"
+            title="Refresh local runtime status"
+            onClick={(event) => {
+              event.stopPropagation();
+              onRefreshNativeRuntimes();
+            }}
+            className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors duration-75 hover:bg-muted/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <RefreshCw size={12} />
+          </button>
+        )}
       </div>
       {canShowSessionBinding && selectedRuntime && (
         <div className="mx-2 mb-1 rounded-lg border border-border/60 bg-muted/25 px-2.5 py-2">
@@ -321,7 +349,7 @@ export default function RuntimeIconSwitcher({
             aria-selected={isSelected}
             disabled={option.disabled || disabled}
             onClick={() => handleSelect(option)}
-            className="flex w-full items-center gap-2.5 px-3 py-2 text-left transition-colors duration-75 hover:bg-muted/60 disabled:cursor-not-allowed disabled:opacity-55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="flex w-full items-center gap-2.5 px-3 py-2 text-left opacity-100 transition-colors duration-75 hover:bg-muted/60 disabled:cursor-not-allowed disabled:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <RuntimeMark option={option} small />
             <span className="min-w-0 flex-1">
@@ -333,7 +361,16 @@ export default function RuntimeIconSwitcher({
                   </span>
                 )}
               </span>
-              <span className="block truncate text-2xs text-muted-foreground">{option.description}</span>
+              <span className="block text-2xs leading-snug text-muted-foreground [overflow-wrap:anywhere]">{option.description}</span>
+              {option.diagnosticHints && option.diagnosticHints.length > 0 && (
+                <span className="mt-1 block space-y-0.5 text-[10px] leading-snug text-muted-foreground/70">
+                  {option.diagnosticHints.map((hint) => (
+                    <span key={hint} className="block [overflow-wrap:anywhere]">
+                      - {hint}
+                    </span>
+                  ))}
+                </span>
+              )}
             </span>
             {isSelected && <Check size={12} className="shrink-0 text-[var(--amber)]" />}
           </button>

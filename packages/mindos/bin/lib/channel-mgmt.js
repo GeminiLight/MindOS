@@ -7,6 +7,7 @@ import {
   readChannelConfig,
   writeChannelConfig,
   validateChannelConfig,
+  normalizeChannelConfig,
   getChannelConfigMtime,
 } from './channel-config.js';
 import { CHANNEL_PLATFORMS, CHANNEL_PLATFORM_EMOJIS } from './channel-constants.js';
@@ -49,7 +50,8 @@ export async function channelAdd(platform, credentials, options = {}) {
     return unsupportedPlatform(platform);
   }
 
-  const validation = validateChannelConfig(platform, credentials);
+  const normalizedCredentials = normalizeChannelConfig(platform, credentials);
+  const validation = validateChannelConfig(platform, normalizedCredentials);
   if (!validation.valid) {
     return {
       ok: false,
@@ -60,7 +62,7 @@ export async function channelAdd(platform, credentials, options = {}) {
 
   let verifyResult = { ok: true, botName: undefined, botId: undefined };
   if (!options.skipVerify) {
-    verifyResult = await verifyCredentialsRemotely(platform, credentials);
+    verifyResult = await verifyCredentialsRemotely(platform, normalizedCredentials);
     if (!verifyResult.ok) {
       return {
         ok: false,
@@ -74,7 +76,7 @@ export async function channelAdd(platform, credentials, options = {}) {
     const config = readChannelConfig();
     const expectedMtime = getChannelConfigMtime();
     config.providers ??= {};
-    config.providers[platform] = buildSavedProviderConfig(credentials, verifyResult, options);
+    config.providers[platform] = buildSavedProviderConfig(normalizedCredentials, verifyResult, options);
     writeChannelConfig(config, { expectedMtime });
 
     return {

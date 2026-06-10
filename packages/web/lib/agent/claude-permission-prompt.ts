@@ -22,6 +22,7 @@ export function createClaudePermissionPromptConfig(input: {
             MINDOS_RUNTIME_PERMISSION_RUN_ID: input.runId,
             MINDOS_RUNTIME_PERMISSION_TOOL: CLAUDE_PERMISSION_PROMPT_TOOL,
             MINDOS_ASK_USER_QUESTION_TOOL: CLAUDE_ASK_USER_QUESTION_TOOL,
+            ...(process.env.AUTH_TOKEN ? { MINDOS_RUNTIME_PERMISSION_AUTH_TOKEN: process.env.AUTH_TOKEN } : {}),
           },
         },
       },
@@ -40,6 +41,7 @@ export function resolveRuntimePermissionBaseUrl(req: Request): string {
 const CLAUDE_PERMISSION_PROMPT_MCP_SOURCE = String.raw`
 const baseUrl = process.env.MINDOS_RUNTIME_PERMISSION_BASE_URL;
 const runId = process.env.MINDOS_RUNTIME_PERMISSION_RUN_ID;
+const authToken = process.env.MINDOS_RUNTIME_PERMISSION_AUTH_TOKEN;
 const permissionToolName = process.env.MINDOS_RUNTIME_PERMISSION_TOOL || 'mindos_runtime_permission';
 const askUserQuestionToolName = process.env.MINDOS_ASK_USER_QUESTION_TOOL || 'AskUserQuestion';
 let buffer = '';
@@ -64,7 +66,6 @@ function sendError(id, error) {
 function textResult(value) {
   return {
     content: [{ type: 'text', text: JSON.stringify(value) }],
-    structuredContent: value,
   };
 }
 
@@ -145,7 +146,10 @@ async function requestDecision(args) {
   const input = extractToolInput(args);
   const response = await fetch(new URL('/api/ask/runtime-permission/request', baseUrl), {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(authToken ? { Authorization: 'Bearer ' + authToken } : {}),
+    },
     body: JSON.stringify({
       runId,
       runtime: 'claude',
@@ -167,7 +171,10 @@ async function requestUserQuestion(args, requestId) {
   if (!baseUrl || !runId) return { answers: [], cancelled: true, error: 'no_bridge' };
   const response = await fetch(new URL('/api/ask/user-question/request', baseUrl), {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(authToken ? { Authorization: 'Bearer ' + authToken } : {}),
+    },
     body: JSON.stringify({
       runId,
       toolCallId: extractToolCallId(args, 'claude-question-' + String(requestId ?? Date.now())),
@@ -176,6 +183,51 @@ async function requestUserQuestion(args, requestId) {
   });
   if (!response.ok) return { answers: [], cancelled: true, error: 'request_failed' };
   return await response.json();
+}
+
+function answerValue(answer) {
+  if (!isRecord(answer)) return undefined;
+  if (Array.isArray(answer.selected) && answer.selected.length > 0) {
+    const selected = answer.selected.filter((item) => typeof item === 'string' && item.trim());
+    if (selected.length > 0) return selected;
+  }
+  if (typeof answer.answer === 'string' && answer.answer.trim()) return answer.answer;
+  if (typeof answer.notes === 'string' && answer.notes.trim()) return answer.notes;
+  return undefined;
+}
+
+function askUserQuestionPermissionResult(args, result) {
+  const params = extractQuestionsInput(args);
+  const questions = Array.isArray(params.questions) ? params.questions : [];
+  const answers = {};
+
+  if (isRecord(result) && Array.isArray(result.answers)) {
+    for (const answer of result.answers) {
+      if (!isRecord(answer)) continue;
+      const index = typeof answer.questionIndex === 'number' ? answer.questionIndex : -1;
+      const question = firstString(
+        answer.question,
+        isRecord(questions[index]) ? questions[index].question : undefined,
+      );
+      const value = answerValue(answer);
+      if (question && value !== undefined) answers[question] = value;
+    }
+  }
+
+  if (isRecord(result) && result.cancelled === true) {
+    return { behavior: 'deny', message: 'The user did not answer the questions.' };
+  }
+  if (Object.keys(answers).length === 0) {
+    return { behavior: 'deny', message: 'The user did not answer the questions.' };
+  }
+
+  return {
+    behavior: 'allow',
+    updatedInput: {
+      questions,
+      answers,
+    },
+  };
 }
 
 async function handleRequest(message) {
@@ -250,6 +302,13 @@ async function handleRequest(message) {
     if (shortToolName(name) === askUserQuestionToolName) {
       const value = await requestUserQuestion(args, id);
       send({ jsonrpc: '2.0', id, result: textResult(value) });
+      return;
+    }
+
+    const toolName = extractToolName(args);
+    if (shortToolName(toolName) === askUserQuestionToolName) {
+      const questionResult = await requestUserQuestion(args, id);
+      send({ jsonrpc: '2.0', id, result: textResult(askUserQuestionPermissionResult(args, questionResult)) });
       return;
     }
 

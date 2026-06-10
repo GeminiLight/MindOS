@@ -7,7 +7,7 @@ import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { useAskSession } from '@/hooks/useAskSession';
 import { getSessionAgentRuntime, isSessionInRuntimeLane } from '@/lib/ask-agent';
-import type { AgentRuntimeIdentity } from '@/lib/types';
+import type { AgentRuntimeIdentity, ChatSession } from '@/lib/types';
 
 const codexRuntime: AgentRuntimeIdentity = { id: 'codex', name: 'Codex', kind: 'codex' };
 const claudeRuntime: AgentRuntimeIdentity = { id: 'claude', name: 'Claude Code', kind: 'claude' };
@@ -90,6 +90,165 @@ describe('useAskSession native runtime lane', () => {
     expect(getSessionAgentRuntime(replacement)).toEqual(claudeRuntime);
     expect(isSessionInRuntimeLane(replacement!, claudeRuntime)).toBe(true);
     expect(isSessionInRuntimeLane(replacement!, null)).toBe(false);
+
+    act(() => {
+      root.unmount();
+    });
+  });
+
+  it('keeps metadata-only native runtime sessions when pruning leaked empty sessions', async () => {
+    const linkedCodexSession: ChatSession = {
+      id: 'linked-codex',
+      title: 'Existing Codex thread',
+      createdAt: 10,
+      updatedAt: 10,
+      messages: [],
+      defaultAgentRuntime: codexRuntime,
+      runtimeSessionBinding: {
+        kind: 'codex-thread',
+        runtime: 'codex',
+        runtimeId: 'codex',
+        externalSessionId: 'thread_existing',
+        cwd: '/tmp/mindos',
+        status: 'active',
+        updatedAt: 10,
+      },
+    };
+    const leakedEmptySession: ChatSession = {
+      id: 'leaked-empty',
+      createdAt: 9,
+      updatedAt: 9,
+      messages: [],
+    };
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      if (!init?.method || init.method === 'GET') {
+        return { ok: true, json: async () => [linkedCodexSession, leakedEmptySession] };
+      }
+      return { ok: true, json: async () => ({ ok: true }) };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const { getLatest, root } = renderUseAskSession();
+
+    await act(async () => {
+      await getLatest().initSessions();
+    });
+
+    expect(getLatest().sessions.map((session) => session.id)).toContain('linked-codex');
+    expect(getLatest().sessions.map((session) => session.id)).not.toContain('leaked-empty');
+    expect(getLatest().activeSessionId).toBe('linked-codex');
+    const deleteCall = fetchMock.mock.calls.find(([, init]) => init?.method === 'DELETE');
+    expect(deleteCall).toBeTruthy();
+    expect(JSON.parse(String(deleteCall?.[1]?.body))).toEqual({ ids: ['leaked-empty'] });
+
+    act(() => {
+      root.unmount();
+    });
+  });
+
+  it('initializes into the requested native runtime lane instead of loading a newer MindOS chat', async () => {
+    const mindosSession: ChatSession = {
+      id: 'newer-mindos',
+      createdAt: 20,
+      updatedAt: 20,
+      messages: [{ role: 'user', content: 'mindos chat' }],
+    };
+    const codexSession: ChatSession = {
+      id: 'older-codex',
+      createdAt: 10,
+      updatedAt: 10,
+      messages: [{ role: 'user', content: 'codex chat' }],
+      defaultAgentRuntime: codexRuntime,
+    };
+    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => [mindosSession, codexSession] }));
+    vi.stubGlobal('fetch', fetchMock);
+    const { getLatest, root } = renderUseAskSession();
+
+    await act(async () => {
+      await getLatest().initSessions(codexRuntime);
+    });
+
+    expect(getLatest().activeSessionId).toBe('older-codex');
+    expect(getLatest().messages).toEqual(codexSession.messages);
+    expect(getSessionAgentRuntime(getLatest().activeSession)).toEqual(codexRuntime);
+
+    act(() => {
+      root.unmount();
+    });
+  });
+
+  it('creates a fresh requested native runtime session when no saved chat is in that lane', async () => {
+    const mindosSession: ChatSession = {
+      id: 'newer-mindos',
+      createdAt: 20,
+      updatedAt: 20,
+      messages: [{ role: 'user', content: 'mindos chat' }],
+    };
+    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => [mindosSession] }));
+    vi.stubGlobal('fetch', fetchMock);
+    const { getLatest, root } = renderUseAskSession();
+
+    await act(async () => {
+      await getLatest().initSessions(codexRuntime);
+    });
+
+    const active = getLatest().activeSession;
+    expect(active?.id).not.toBe('newer-mindos');
+    expect(active?.messages).toEqual([]);
+    expect(getSessionAgentRuntime(active)).toEqual(codexRuntime);
+    expect(isSessionInRuntimeLane(active!, codexRuntime)).toBe(true);
+    expect(isSessionInRuntimeLane(active!, null)).toBe(false);
+
+    act(() => {
+      root.unmount();
+    });
+  });
+
+  it('attaches an existing Codex thread as a persisted metadata-only session', async () => {
+    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => [] }));
+    vi.stubGlobal('fetch', fetchMock);
+    const { getLatest, root } = renderUseAskSession();
+
+    act(() => {
+      getLatest().attachRuntimeSession(codexRuntime, {
+        externalSessionId: 'thread_attached',
+        cwd: '/tmp/repo',
+        status: 'active',
+        updatedAt: 123,
+      }, {
+        title: 'Attached repo thread',
+      });
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    });
+
+    const active = getLatest().activeSession;
+    expect(active).not.toBeNull();
+    expect(active?.messages).toEqual([]);
+    expect(active?.title).toBe('Attached repo thread');
+    expect(active?.runtimeSessionBinding).toMatchObject({
+      kind: 'codex-thread',
+      runtime: 'codex',
+      runtimeId: 'codex',
+      externalSessionId: 'thread_attached',
+      cwd: '/tmp/repo',
+      status: 'active',
+      updatedAt: 123,
+    });
+
+    const postCall = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST');
+    expect(postCall).toBeTruthy();
+    const body = JSON.parse(String(postCall?.[1]?.body));
+    expect(body.session).toMatchObject({
+      title: 'Attached repo thread',
+      messages: [],
+      runtimeSessionBinding: {
+        kind: 'codex-thread',
+        runtime: 'codex',
+        runtimeId: 'codex',
+        externalSessionId: 'thread_attached',
+      },
+    });
 
     act(() => {
       root.unmount();

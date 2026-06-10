@@ -261,7 +261,7 @@ export default function AskUserQuestionBlock({ part }: { part: ToolCallPart }) {
               </div>
               <div className="truncate text-2xs text-muted-foreground">
                 {readOnly
-                  ? 'Rendered from a native runtime tool call'
+                  ? `${runtimeLabel(questionState.runtime)} is no longer waiting for an answer`
                   : statusText(questionState.status, answeredCount, questions.length, questionState.reason)}
               </div>
             </div>
@@ -425,7 +425,7 @@ export default function AskUserQuestionBlock({ part }: { part: ToolCallPart }) {
 
       {questionState.status === 'waiting' && readOnly && (
         <div className="rounded-md border border-border/35 bg-muted/10 px-2.5 py-2 text-2xs leading-5 text-muted-foreground [overflow-wrap:anywhere]">
-          MindOS could not attach this {runtimeLabel(questionState.runtime)} question to an active answer bridge, so this card is read-only context for the current run.
+          This question came from {runtimeLabel(questionState.runtime)}, but this run is no longer waiting for an answer.
         </div>
       )}
 

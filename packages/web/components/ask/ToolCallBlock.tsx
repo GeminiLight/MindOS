@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import {
   ChevronRight, ChevronDown, Loader2, CheckCircle2, XCircle, AlertTriangle,
   Search, FolderOpen, BookOpen, Pencil, FilePlus, FileText, Pin, Trash2,
@@ -366,8 +366,8 @@ function NativeRuntimeToolDetails({ part, running }: { part: ToolCallPart; runni
   const input = isRecord(part.input) ? part.input : {};
   const command = getCommand(part.input);
   const description = getString(input.description) ?? getString(input.summary);
-  const approvalSensitive = isDestructiveToolCall(part) || part.toolName === 'approval_request' || (running && part.toolName === 'Bash');
   const runtimePermission = part.runtimePermission;
+  const approvalSensitive = Boolean(runtimePermission) || isDestructiveToolCall(part) || part.toolName === 'approval_request';
   const label = runtimeLabel(part.runtime);
   const outputPreview = part.output && part.output.length > 1000 ? `${part.output.slice(0, 1000)}…` : part.output;
 
@@ -375,10 +375,10 @@ function NativeRuntimeToolDetails({ part, running }: { part: ToolCallPart; runni
     <div className="space-y-2 px-2.5 pb-2.5 pt-2 font-sans">
       {running && (
         <div className={`flex items-center gap-1.5 text-2xs ${
-          approvalSensitive ? 'text-[var(--amber)]' : 'text-muted-foreground'
+          runtimePermission ? 'text-[var(--amber)]' : 'text-muted-foreground'
         }`}>
-          {approvalSensitive ? <ShieldAlert size={12} /> : <Loader2 size={12} className="animate-spin" />}
-          {approvalSensitive ? 'Local approval may be required' : `Running in ${label}`}
+          {runtimePermission ? <ShieldAlert size={12} /> : <Loader2 size={12} className="animate-spin" />}
+          {runtimePermission ? `${label} is asking for approval` : `Running in ${label}`}
         </div>
       )}
 
@@ -407,11 +407,7 @@ function NativeRuntimeToolDetails({ part, running }: { part: ToolCallPart; runni
 
         {runtimePermission ? (
           <RuntimePermissionControls part={part} />
-        ) : approvalSensitive && (
-          <div className="mt-2 break-words rounded-md border border-[var(--amber)]/25 bg-background/65 px-2 py-1.5 text-2xs leading-5 text-muted-foreground [overflow-wrap:anywhere]">
-            This action is controlled by the local {label} permission pipeline. When {label} exposes a permission bridge request, MindOS can approve or deny it here.
-          </div>
-        )}
+        ) : null}
 
         {outputPreview && (
           <div className="mt-2 rounded-md border border-border/30 bg-muted/10 px-2 py-1.5">
@@ -434,6 +430,9 @@ function RuntimePermissionControls({ part }: { part: ToolCallPart }) {
   const permissionState = permission;
 
   const waiting = permissionState.status === 'waiting';
+  useEffect(() => {
+    if (!waiting) setSubmitting(null);
+  }, [waiting]);
   const statusText = permissionState.status === 'approved'
     ? 'Approved'
     : permissionState.status === 'denied'
@@ -475,10 +474,10 @@ function RuntimePermissionControls({ part }: { part: ToolCallPart }) {
 
   return (
     <div className="mt-2 rounded-md border border-[var(--amber)]/30 bg-background/70 px-2 py-2">
-      <div className="mb-1.5 flex items-center gap-1.5 text-2xs font-medium text-foreground">
+      <div className="mb-1.5 flex flex-wrap items-center gap-1.5 text-2xs font-medium text-foreground">
         <ShieldAlert size={12} className="text-[var(--amber)]" />
         <span>{runtimeLabel(permissionState.runtime)} permission request</span>
-        <span className="ml-auto text-muted-foreground">{statusText}</span>
+        <span className="basis-full text-muted-foreground min-[520px]:ml-auto min-[520px]:basis-auto">{statusText}</span>
       </div>
       {permissionState.reason && (
         <div className="mb-2 text-2xs leading-5 text-muted-foreground [overflow-wrap:anywhere]">
@@ -588,9 +587,12 @@ export default function ToolCallBlock({ part }: { part: ToolCallPart }) {
     : filePath
       ? `${filePath.split('/').pop() ?? filePath}${parsed.stats ? ` (${parsed.stats})` : ''}`
       : formatInput(displayPart.input);
+  const headerSummaryClass = hasNativeRuntimeTool || hasUserQuestion
+    ? 'min-w-0 flex-1 basis-full whitespace-normal break-words text-muted-foreground [overflow-wrap:anywhere] min-[520px]:basis-32'
+    : 'min-w-0 flex-1 truncate text-muted-foreground';
 
   return (
-    <div className={`my-1.5 box-border min-w-0 max-w-full overflow-hidden rounded-lg border text-xs font-mono ${
+    <div className={`my-1.5 box-border w-full min-w-0 max-w-full overflow-hidden rounded-lg border text-xs font-mono ${
       isDestructive
         ? 'border-[var(--amber)]/30 bg-background/60'
         : 'border-border/40 bg-background/50'
@@ -599,14 +601,14 @@ export default function ToolCallBlock({ part }: { part: ToolCallPart }) {
         type="button"
         onClick={() => setManualToggle(v => v === null ? !expanded : !v)}
         aria-expanded={expanded}
-        className="w-full flex items-center gap-1.5 px-2.5 py-2 text-left hover:bg-muted/30 transition-colors rounded-lg"
+        className="flex w-full min-w-0 flex-wrap items-start gap-1.5 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-muted/30"
       >
         {expanded ? <ChevronDown size={12} className="shrink-0 text-muted-foreground" /> : <ChevronRight size={12} className="shrink-0 text-muted-foreground" />}
         {isDestructive && <AlertTriangle size={11} className="shrink-0 text-[var(--amber)]" />}
         <IconComponent size={12} className={`shrink-0 ${isDestructive ? 'text-[var(--amber)]' : 'text-muted-foreground'}`} />
         <span className={`font-medium ${isDestructive ? 'text-[var(--amber)]' : 'text-foreground'}`}>{displayPart.toolName}</span>
-        <span className="text-muted-foreground truncate flex-1">{headerLabel}</span>
-        <span className="shrink-0 ml-auto">
+        <span className={headerSummaryClass}>{headerLabel}</span>
+        <span className="ml-auto shrink-0 pt-0.5">
           {displayPart.state === 'pending' || displayPart.state === 'running' ? (
             <Loader2 size={12} className="animate-spin text-[var(--amber)]" />
           ) : displayPart.state === 'done' ? (

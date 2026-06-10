@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import AgentsContentChannelDetail from '@/components/agents/AgentsContentChannelDetail';
+import { ChannelSetupFlow } from '@/components/agents/channel-detail/ChannelSetupFlow';
 import { ChannelSettings } from '@/components/agents/channel-detail/ChannelSettings';
 import { ChannelTestSend } from '@/components/agents/channel-detail/ChannelTestSend';
 import type { PlatformDef } from '@/lib/im/platforms';
@@ -93,6 +94,19 @@ vi.mock('@/lib/stores/locale-store', () => ({
           saved: 'Saved',
           saveConfig: 'Save',
           setupGuide: 'Setup Guide',
+          setupMethodsTitle: 'Connection options',
+          manualSetupTitle: 'Manual setup',
+          openSetupLink: 'Open',
+          copySetupLink: 'Copy setup link',
+          copyLink: 'Copy link',
+          copied: 'Copied',
+          recommended: 'Recommended',
+          setupAvailable: 'Available',
+          setupAfterCredentials: 'After credentials',
+          setupPlanned: 'Planned',
+          setupManualOnly: 'Manual',
+          scanQrHint: 'Scan this locally generated QR code to continue on your phone. No credentials are embedded.',
+          setupQrAlt: (name: string) => `${name} QR code`,
           tabConfigure: 'Configure',
           hideSecret: 'Hide',
           showSecret: 'Show',
@@ -130,6 +144,19 @@ const im = {
   sentOk: 'Sent',
   sentWithId: (id: string) => `Sent ${id}`,
   failed: 'Failed',
+  setupMethodsTitle: 'Connection options',
+  manualSetupTitle: 'Manual setup',
+  openSetupLink: 'Open',
+  copySetupLink: 'Copy setup link',
+  copyLink: 'Copy link',
+  copied: 'Copied',
+  recommended: 'Recommended',
+  setupAvailable: 'Available',
+  setupAfterCredentials: 'After credentials',
+  setupPlanned: 'Planned',
+  setupManualOnly: 'Manual',
+  scanQrHint: 'Scan this locally generated QR code to continue on your phone. No credentials are embedded.',
+  setupQrAlt: (name: string) => `${name} QR code`,
 };
 
 function setInputValue(input: HTMLInputElement, value: string) {
@@ -272,7 +299,7 @@ describe('AgentsContentChannelDetail redesign', () => {
     await act(async () => { root.render(<AgentsContentChannelDetail platformId="feishu" />); });
     await act(async () => { await Promise.resolve(); });
 
-    expect(host.textContent).toContain('Setup Guide');
+    expect(host.textContent).toContain('Manual setup');
     expect(host.textContent).toContain('Feishu authorization');
     expect(host.textContent).toContain('Authorize with Feishu');
 
@@ -330,8 +357,10 @@ describe('AgentsContentChannelDetail redesign', () => {
     await act(async () => { root.render(<AgentsContentChannelDetail platformId="telegram" />); });
     await act(async () => { await Promise.resolve(); });
 
-    // Setup flow: has guide, has form, no activity/settings
-    expect(host.textContent).toContain('Setup Guide');
+    // Setup flow: has connection options, manual form, no activity/settings
+    expect(host.textContent).toContain('Connection options');
+    expect(host.textContent).toContain('Create bot with BotFather');
+    expect(host.textContent).toContain('Manual setup');
     expect(host.textContent).toContain('Bot Token');
     expect(host.textContent).toContain('Save');
     expect(host.textContent).not.toContain('Recent activity');
@@ -423,6 +452,46 @@ describe('AgentsContentChannelDetail redesign', () => {
       body: JSON.stringify({ platform: 'feishu', credentials: { app_secret: 'new-secret' } }),
     }));
     expect(onSaved).toHaveBeenCalled();
+
+    await act(async () => { root.unmount(); });
+  });
+
+  it('does not require optional channel fields before saving setup credentials', async () => {
+    const platform: PlatformDef = {
+      id: 'dingtalk',
+      name: 'DingTalk',
+      icon: '🔔',
+      purpose: 'Push MindOS notifications into DingTalk groups.',
+      fields: [
+        { key: 'webhook_url', label: 'Webhook URL', placeholder: 'https://oapi.dingtalk.com/robot/send?access_token=...' },
+        { key: 'webhook_secret', label: 'Signing Secret (optional)', placeholder: 'SECxxx', optional: true },
+      ],
+    };
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(
+        <ChannelSetupFlow
+          platform={platform}
+          im={im}
+          locale="en"
+          onSaved={vi.fn()}
+        />,
+      );
+    });
+
+    const saveButton = Array.from(host.querySelectorAll('button')).find((button) => button.textContent?.includes('Save')) as HTMLButtonElement;
+    expect(saveButton.disabled).toBe(true);
+
+    const inputs = host.querySelectorAll('input');
+    await act(async () => {
+      setInputValue(inputs[0] as HTMLInputElement, 'https://oapi.dingtalk.com/robot/send?access_token=abc');
+    });
+
+    expect(saveButton.disabled).toBe(false);
 
     await act(async () => { root.unmount(); });
   });

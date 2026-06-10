@@ -43,6 +43,7 @@ export function createMindosSessionEvent<TData>(
 }
 
 export type MindOSSSEvent =
+  | { type: 'agent_run_context'; rootRunId: string; chatSessionId?: string; startedAt: number }
   | { type: 'text_delta'; delta: string }
   | { type: 'thinking_delta'; delta: string }
   | { type: 'tool_start'; toolCallId: string; toolName: string; args: unknown; runtime?: 'mindos' | 'acp' | 'codex' | 'claude' }
@@ -71,14 +72,22 @@ export type MindOSSSEvent =
   | { type: 'user_question_start'; runId: string; toolCallId: string; questions: unknown }
   | { type: 'user_question_answered'; runId: string; toolCallId: string; answers?: unknown }
   | { type: 'user_question_cancelled'; runId: string; toolCallId: string; reason: string }
-  | { type: 'runtime_binding'; runtime: 'acp' | 'codex' | 'claude'; externalSessionId: string; cwd?: string }
+  | {
+      type: 'runtime_binding';
+      runtime: 'acp' | 'codex' | 'claude';
+      externalSessionId: string;
+      cwd?: string;
+      status?: 'active' | 'missing' | 'signed-out' | 'archived' | 'failed';
+      reason?: string;
+    }
   | { type: 'done'; usage?: { input: number; output: number } }
   | { type: 'error'; message: string }
-  | { type: 'status'; message: string; visible?: boolean };
+  | { type: 'status'; message: string; visible?: boolean; runtime?: 'mindos' | 'acp' | 'codex' | 'claude' };
 
 export const MINDOS_ASK_STREAM_EVENT_TYPES = [
   'text_delta',
   'thinking_delta',
+  'agent_run_context',
   'tool_start',
   'tool_delta',
   'tool_end',
@@ -1728,11 +1737,18 @@ export type MindosUiToolCallPart = {
   state?: 'pending' | 'running' | 'done' | 'error';
 };
 
+export type MindosUiRuntimeStatusPart = {
+  type: 'runtime-status';
+  message: string;
+  runtime?: 'mindos' | 'acp' | 'codex' | 'claude';
+};
+
 export type MindosUiMessagePart =
   | MindosUiImagePart
   | MindosUiTextPart
   | MindosUiReasoningPart
-  | MindosUiToolCallPart;
+  | MindosUiToolCallPart
+  | MindosUiRuntimeStatusPart;
 
 export type MindosUiAskMessage = {
   role: 'user' | 'assistant';
@@ -1787,6 +1803,8 @@ export function toMindosAgentMessages(messages: MindosUiAskMessage[]): MindosAge
           arguments: part.input ?? {},
         });
         toolCalls.push(part);
+      } else if (part.type === 'runtime-status') {
+        // UI-only runtime diagnostics should not become model conversation history.
       }
     }
 

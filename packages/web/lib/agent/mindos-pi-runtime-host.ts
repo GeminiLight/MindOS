@@ -6,14 +6,18 @@ import type {
 } from '@geminilight/mindos/session';
 import type { MindosPiCodingAgentRuntimeHostServices } from '@geminilight/mindos/session/pi-coding-agent';
 import { getModelConfig, hasImages } from '@/lib/agent/model';
-import { getChatTools, getOrganizeTools, getRequestScopedTools } from '@/lib/agent/tools';
+import { getToolsForMindosAgentPolicy } from '@/lib/agent/tools';
 import { estimateStringTokens, getOllamaContextWindow } from '@/lib/agent/context';
 import { isProviderId, toPiProvider, type ProviderId } from '@/lib/agent/providers';
 import { findProvider, isProviderEntryId } from '@/lib/custom-endpoints';
-import { setKbMode } from '@/lib/agent/kb-extension';
+import { setKbPermissionPolicy } from '@/lib/agent/kb-extension';
 import { scanExtensionPaths } from '@/lib/pi-integration/extensions';
 import { generateSkillsXml } from '@/lib/agent/skills-xml';
 import { getSkillSearchPaths } from '@/lib/agent/skill-paths';
+import {
+  createMindosAgentPermissionPolicy,
+  hasMindosExtensionScope,
+} from '@/lib/agent/permission-policy';
 
 type WebServerSettings = {
   disabledSkills?: string[];
@@ -27,11 +31,7 @@ type WebServerSettings = {
 };
 
 export function getMindosWebRequestTools(mode: MindosAskMode): MindosExecutableTool[] {
-  const tools = mode === 'organize'
-    ? getOrganizeTools()
-    : mode === 'chat'
-      ? getChatTools()
-      : getRequestScopedTools();
+  const tools = getToolsForMindosAgentPolicy(createMindosAgentPermissionPolicy(mode));
   return tools as unknown as MindosExecutableTool[];
 }
 
@@ -39,22 +39,44 @@ export function getMindosWebPiRuntimePaths(input: {
   projectRoot: string;
   mindRoot: string;
   serverSettings: WebServerSettings;
+  mode: MindosAskMode;
 }): { agentDir: string; additionalSkillPaths: string[]; additionalExtensionPaths: string[] } {
+  const policy = createMindosAgentPermissionPolicy(input.mode);
   const webAppDir = path.join(input.projectRoot, 'packages', 'web');
+  const additionalExtensionPaths: string[] = [];
+
+  if (hasMindosExtensionScope(policy, 'kb')) {
+    additionalExtensionPaths.push(path.join(webAppDir, 'lib', 'agent', 'kb-extension.ts'));
+  }
+  if (hasMindosExtensionScope(policy, 'ask-user-question')) {
+    additionalExtensionPaths.push(path.join(webAppDir, 'lib', 'agent', 'ask-user-question-bridge-extension.ts'));
+  }
+  if (hasMindosExtensionScope(policy, 'web-search')) {
+    additionalExtensionPaths.push(path.join(webAppDir, 'lib', 'agent', 'web-search-extension.ts'));
+  }
+  if (hasMindosExtensionScope(policy, 'pi-web-access')) {
+    additionalExtensionPaths.push(path.join(webAppDir, 'node_modules', 'pi-web-access', 'index.ts'));
+  }
+  if (hasMindosExtensionScope(policy, 'user-extensions')) {
+    additionalExtensionPaths.push(...scanExtensionPaths());
+  }
+  if (hasMindosExtensionScope(policy, 'pi-mcp-adapter')) {
+    additionalExtensionPaths.push(path.join(webAppDir, 'node_modules', 'pi-mcp-adapter', 'index.ts'));
+  }
+  if (hasMindosExtensionScope(policy, 'im')) {
+    additionalExtensionPaths.push(path.join(webAppDir, 'lib', 'im', 'index.ts'));
+  }
+  if (hasMindosExtensionScope(policy, 'subagents')) {
+    additionalExtensionPaths.push(path.join(webAppDir, 'lib', 'agent', 'subagent-ledger-extension.ts'));
+  }
+  if (hasMindosExtensionScope(policy, 'schedule-prompt')) {
+    additionalExtensionPaths.push(path.join(webAppDir, 'lib', 'schedule-prompt', 'index.ts'));
+  }
+
   return {
     agentDir: path.join(os.homedir(), '.pi'),
     additionalSkillPaths: getSkillSearchPaths(input.projectRoot, input.mindRoot, input.serverSettings as any),
-    additionalExtensionPaths: [
-      ...scanExtensionPaths(),
-      path.join(webAppDir, 'lib', 'agent', 'kb-extension.ts'),
-      path.join(webAppDir, 'node_modules', 'pi-mcp-adapter', 'index.ts'),
-      path.join(webAppDir, 'lib', 'agent', 'ask-user-question-bridge-extension.ts'),
-      path.join(webAppDir, 'lib', 'im', 'index.ts'),
-      path.join(webAppDir, 'node_modules', 'pi-subagents', 'src', 'extension', 'index.ts'),
-      path.join(webAppDir, 'lib', 'agent', 'web-search-extension.ts'),
-      path.join(webAppDir, 'node_modules', 'pi-web-access', 'index.ts'),
-      path.join(webAppDir, 'lib', 'schedule-prompt', 'index.ts'),
-    ],
+    additionalExtensionPaths,
   };
 }
 
@@ -96,7 +118,7 @@ export function createWebMindosPiRuntimeHostServices(
       });
     },
     toRuntimeProvider: (provider) => toPiProvider(provider as ProviderId),
-    setKbMode: (mode) => setKbMode(mode === 'organize' ? 'organize' : mode === 'chat' ? 'chat' : 'agent'),
+    setKbMode: (mode) => setKbPermissionPolicy(createMindosAgentPermissionPolicy(mode)),
     generateSkillsXml: (skills) => generateSkillsXml(skills as any),
     getOllamaContextWindow,
     estimateTokens: estimateStringTokens,

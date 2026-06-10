@@ -11,32 +11,27 @@
 import type { ExtensionAPI, ToolDefinition } from '@earendil-works/pi-coding-agent';
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 import type { TSchema } from '@sinclair/typebox';
-import { knowledgeBaseTools, WRITE_TOOLS, CHAT_TOOL_NAMES, ORGANIZE_TOOL_NAMES } from './tools';
-import { a2aTools } from '@/lib/a2a/a2a-tools';
-import { acpTools } from '@/lib/acp/acp-tools';
+import { getToolsForMindosAgentPolicy, WRITE_TOOLS } from './tools';
 import { assertNotProtected } from '@/lib/core';
 import { logAgentOp } from './log';
+import {
+  createMindosAgentPermissionPolicy,
+  type MindosAgentPermissionPolicy,
+} from './permission-policy';
 
 // ─── Mode-based tool filtering ───────────────────────────────────────────────
 
 export type KbMode = 'agent' | 'chat' | 'organize';
 
-let currentMode: KbMode = 'agent';
+let currentPolicy: MindosAgentPermissionPolicy = createMindosAgentPermissionPolicy('agent');
 
 /** Set the mode before resourceLoader.reload(). Determines which tools get registered. */
 export function setKbMode(mode: KbMode): void {
-  currentMode = mode;
+  currentPolicy = createMindosAgentPermissionPolicy(mode);
 }
 
-function getToolsForMode(mode: KbMode): AgentTool<any>[] {
-  switch (mode) {
-    case 'chat':
-      return knowledgeBaseTools.filter(t => CHAT_TOOL_NAMES.has(t.name));
-    case 'organize':
-      return knowledgeBaseTools.filter(t => ORGANIZE_TOOL_NAMES.has(t.name));
-    case 'agent':
-      return [...knowledgeBaseTools, ...a2aTools, ...acpTools];
-  }
+export function setKbPermissionPolicy(policy: MindosAgentPermissionPolicy): void {
+  currentPolicy = policy;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -59,7 +54,7 @@ function getProtectedPaths(toolName: string, args: Record<string, unknown>): str
 // ─── Extension Factory ────────────────────────────────────────────────────────
 
 export default function kbExtension(pi: ExtensionAPI) {
-  const tools = getToolsForMode(currentMode);
+  const tools = getToolsForMindosAgentPolicy(currentPolicy) as AgentTool<any>[];
 
   for (const tool of tools) {
     pi.registerTool({

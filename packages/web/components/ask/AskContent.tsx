@@ -21,6 +21,7 @@ import FileChip from '@/components/ask/FileChip';
 import ProviderModelCapsule, { getPersistedProviderModel } from '@/components/ask/ProviderModelCapsule';
 import type { ProviderId } from '@/lib/agent/providers';
 import { useAskChat } from '@/hooks/useAskChat';
+import { useAgentRunTimeline } from '@/hooks/useAgentRunTimeline';
 import {
   filterSessionsByRuntimeLane,
   getMatchingRuntimeSessionBinding,
@@ -30,9 +31,9 @@ import {
   toAgentRuntime,
 } from '@/lib/ask-agent';
 import { cn } from '@/lib/utils';
-import { useAcpDetection } from '@/hooks/useAcpDetection';
 import { useNativeRuntimeDetection } from '@/hooks/useNativeRuntimeDetection';
 import type { AcpAgentSelection } from '@/hooks/useAskModal';
+import type { CodexThreadListResponse, CodexThreadSummary, RuntimeSessionBinding } from '@/lib/types';
 
 /** Textarea auto-grows with content up to this many visible lines, then scrolls */
 const TEXTAREA_MAX_VISIBLE_LINES = 8;
@@ -45,6 +46,39 @@ function runtimeStatusLabel(status: AgentRuntimeDescriptor['status']): string {
   if (status === 'error') return 'unavailable';
   if (status === 'missing') return 'not installed';
   return 'available';
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function normalizeCodexThread(value: unknown): CodexThreadSummary | null {
+  if (!isRecord(value) || typeof value.id !== 'string' || !value.id.trim()) return null;
+  return {
+    id: value.id,
+    ...(typeof value.name === 'string' || value.name === null ? { name: value.name } : {}),
+    ...(typeof value.preview === 'string' ? { preview: value.preview } : {}),
+    ...(typeof value.cwd === 'string' ? { cwd: value.cwd } : {}),
+    ...(typeof value.createdAt === 'number' || typeof value.createdAt === 'string' ? { createdAt: value.createdAt } : {}),
+    ...(typeof value.updatedAt === 'number' || typeof value.updatedAt === 'string' ? { updatedAt: value.updatedAt } : {}),
+    ...('status' in value ? { status: value.status } : {}),
+    ...(typeof value.archived === 'boolean' ? { archived: value.archived } : {}),
+  };
+}
+
+function codexThreadTitle(thread: CodexThreadSummary): string {
+  const title = thread.name?.trim() || thread.preview?.trim();
+  if (title) return title.length > 42 ? `${title.slice(0, 42)}...` : title;
+  return `Codex thread ${thread.id.slice(0, 8)}`;
+}
+
+function codexThreadBindingStatus(thread: CodexThreadSummary): RuntimeSessionBinding['status'] {
+  if (thread.archived) return 'archived';
+  return typeof thread.status === 'string' && thread.status === 'archived' ? 'archived' : 'active';
+}
+
+function codexThreadUpdatedAt(thread: CodexThreadSummary): number | string | undefined {
+  return thread.updatedAt ?? thread.createdAt;
 }
 
 /** Auto-size textarea height to fit content, capped at maxVisibleLines */
@@ -113,10 +147,15 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
   const [showHistory, setShowHistory] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const [showAttachMenu, setShowAttachMenu] = useState(false);
+  const [codexThreads, setCodexThreads] = useState<CodexThreadSummary[]>([]);
+  const [codexThreadsLoading, setCodexThreadsLoading] = useState(false);
+  const [codexThreadsError, setCodexThreadsError] = useState<string | null>(null);
+  const [codexThreadActionId, setCodexThreadActionId] = useState<string | null>(null);
   const attachButtonRef = useRef<HTMLButtonElement>(null);
   const attachMenuRef = useRef<HTMLDivElement>(null);
   const [attachMenuPos, setAttachMenuPos] = useState<{ top: number; left: number } | null>(null);
   const [dropError, setDropError] = useState('');
+  const codexThreadsRequestSeqRef = useRef(0);
 
   const [selectedSkill, setSelectedSkill] = useState<SlashItem | null>(null);
   const selectedSkillRef = useRef(selectedSkill);
@@ -175,7 +214,6 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
   }), [clearImages, handleImageDrop, handleImagePaste, images]);
   const mention = useMention();
   const slash = useSlashCommand();
-  const acpDetection = useAcpDetection();
   const nativeDetection = useNativeRuntimeDetection();
   const nativeRuntimes = useMemo<Array<AgentRuntimeIdentity & Partial<Pick<AgentRuntimeDescriptor, 'status' | 'availability' | 'installCmd' | 'packageName'>>>>(() => {
     return nativeDetection.runtimes
@@ -191,6 +229,12 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
       }));
   }, [nativeDetection.runtimes]);
   const isMindosRuntime = !selectedAgentRuntime || selectedAgentRuntime.kind === 'mindos';
+  const selectedRuntimeChecking = useMemo(() => {
+    if (!selectedAgentRuntime || selectedAgentRuntime.kind === 'mindos') return false;
+    const nativeKind = selectedAgentRuntime.kind;
+    if (nativeKind !== 'codex' && nativeKind !== 'claude') return false;
+    return nativeDetection.loadingByKind[nativeKind] === true;
+  }, [nativeDetection.loadingByKind, selectedAgentRuntime]);
   const selectedRuntimeUnavailable = useMemo(() => {
     if (!selectedAgentRuntime || selectedAgentRuntime.kind === 'mindos') return null;
     const nativeKind = selectedAgentRuntime.kind;
@@ -228,6 +272,47 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
       : null,
     [runtimeScopedSessions, session.activeSessionId],
   );
+  const loadCodexThreads = useCallback(async () => {
+    if (selectedAgentRuntimeRef.current?.kind !== 'codex') return;
+    const seq = codexThreadsRequestSeqRef.current + 1;
+    codexThreadsRequestSeqRef.current = seq;
+    setCodexThreadsLoading(true);
+    setCodexThreadsError(null);
+
+    try {
+      const res = await fetch('/api/agent-runtimes/codex/threads?limit=30&useStateDbOnly=1', {
+        cache: 'no-store',
+      });
+      if (!res.ok) {
+        let message = `Failed to load Codex threads (${res.status}).`;
+        try {
+          const body = await res.json() as { error?: string; message?: string };
+          message = body.error || body.message || message;
+        } catch {
+          // keep status-derived message
+        }
+        throw new Error(message);
+      }
+      const body = await res.json() as Partial<CodexThreadListResponse>;
+      const threads = Array.isArray(body.data)
+        ? body.data.map(normalizeCodexThread).filter((thread): thread is CodexThreadSummary => Boolean(thread))
+        : [];
+      if (codexThreadsRequestSeqRef.current === seq) {
+        setCodexThreads(threads);
+      }
+    } catch (error) {
+      if (codexThreadsRequestSeqRef.current === seq) {
+        const message = error instanceof Error && error.message
+          ? error.message
+          : 'Failed to load Codex threads.';
+        setCodexThreadsError(message);
+      }
+    } finally {
+      if (codexThreadsRequestSeqRef.current === seq) {
+        setCodexThreadsLoading(false);
+      }
+    }
+  }, []);
 
   const imageUploadRef = useRef(imageUploadRuntime);
   const mentionRef = useRef(mention);
@@ -243,6 +328,18 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
     mentionRef.current = mention;
     slashRef.current = slash;
   }, [attachedFiles, imageUploadRuntime, input, mention, selectedAgentRuntime, selectedSkill, session, slash, uploadRuntime]);
+
+  useEffect(() => {
+    if (!visible || !showHistory) return;
+    if (selectedAgentRuntime?.kind === 'codex') {
+      void loadCodexThreads();
+      return;
+    }
+    setCodexThreads([]);
+    setCodexThreadsError(null);
+    setCodexThreadsLoading(false);
+    setCodexThreadActionId(null);
+  }, [loadCodexThreads, selectedAgentRuntime?.kind, showHistory, visible]);
 
   const resetInputState = useCallback(() => {
     setInput('');
@@ -288,6 +385,16 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
     onRestoreInput: handleRestoreInput,
   });
   const { isLoading, loadingPhase, reconnectAttempt, reconnectMax } = chat;
+  useAgentRunTimeline({
+    chatSessionId: session.activeSessionId,
+    rootRunId: chat.agentRunContext?.chatSessionId && chat.agentRunContext.chatSessionId !== session.activeSessionId
+      ? undefined
+      : chat.agentRunContext?.rootRunId,
+    visible: visible && !showHistory,
+    isLoading,
+    messages: session.messages,
+    setMessages: session.setMessages,
+  });
   const handleSubmit = chat.submit;
   const handleStop = chat.stop;
 
@@ -347,18 +454,21 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
   }, [bindActiveSessionToRuntime, chat.isLoadingRef, clearTransientComposerState, updateSelectedAgentRuntime]);
 
   const hasLoadingAttachments = localAttachments.some((f) => f.status === 'loading');
+  const runtimeCheckingMessage = selectedAgentRuntime && selectedRuntimeChecking
+    ? `Checking ${selectedAgentRuntime.name} status...`
+    : '';
   const runtimeUnavailableMessage = selectedAgentRuntime && selectedRuntimeUnavailable
     ? `${selectedAgentRuntime.name} is ${runtimeStatusLabel(selectedRuntimeUnavailable.status)}.${selectedRuntimeUnavailable.reason ? ` ${selectedRuntimeUnavailable.reason}` : ''}`
     : '';
-  const composerStatusMessage = uploadError || imageError || dropError || runtimeUnavailableMessage;
+  const composerStatusMessage = uploadError || imageError || dropError || runtimeCheckingMessage || runtimeUnavailableMessage;
 
   const handleSubmitWithRuntimeGuard = useCallback((event: React.FormEvent) => {
-    if (selectedRuntimeUnavailable) {
+    if (selectedRuntimeChecking || selectedRuntimeUnavailable) {
       event.preventDefault();
       return;
     }
     void handleSubmit(event);
-  }, [handleSubmit, selectedRuntimeUnavailable]);
+  }, [handleSubmit, selectedRuntimeChecking, selectedRuntimeUnavailable]);
 
   useEffect(() => {
     const handler = (e: Event) => {
@@ -427,7 +537,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
       const openerRuntime = initialAgentRuntime ?? toAgentRuntime(initialAcpAgent);
       pendingOpenAgentRef.current = openerRuntime;
       setTimeout(() => inputRef.current?.focus(), 50);
-      void session.initSessions();
+      void session.initSessions(openerRuntime ?? undefined);
       setInput(initialMessage || '');
       chat.firstMessageFired.current = false;
       setAttachedFiles(currentFile ? [currentFile] : []);
@@ -771,6 +881,112 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
     clearTransientComposerState();
   }, [chat.isLoadingRef, clearTransientComposerState, updateSelectedAgentRuntime]);
 
+  const handleAttachCodexThread = useCallback((thread: CodexThreadSummary) => {
+    if (chat.isLoadingRef.current) return;
+    const runtime = selectedAgentRuntimeRef.current;
+    if (!runtime || runtime.kind !== 'codex') return;
+    sessionRef.current.attachRuntimeSession(runtime, {
+      externalSessionId: thread.id,
+      cwd: thread.cwd,
+      status: codexThreadBindingStatus(thread),
+      updatedAt: codexThreadUpdatedAt(thread),
+    }, {
+      title: codexThreadTitle(thread),
+    });
+    updateSelectedAgentRuntime(runtime);
+    clearTransientComposerState();
+  }, [chat.isLoadingRef, clearTransientComposerState, updateSelectedAgentRuntime]);
+
+  const handleForkCodexThread = useCallback(async (thread: CodexThreadSummary) => {
+    if (chat.isLoadingRef.current || codexThreadActionId) return;
+    const runtime = selectedAgentRuntimeRef.current;
+    if (!runtime || runtime.kind !== 'codex') return;
+    setCodexThreadActionId(thread.id);
+    setCodexThreadsError(null);
+    try {
+      const res = await fetch(`/api/agent-runtimes/codex/threads/${encodeURIComponent(thread.id)}/fork`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(thread.cwd ? { cwd: thread.cwd } : {}),
+      });
+      if (!res.ok) {
+        let message = `Failed to fork Codex thread (${res.status}).`;
+        try {
+          const body = await res.json() as { error?: string; message?: string };
+          message = body.error || body.message || message;
+        } catch {
+          // keep status-derived message
+        }
+        throw new Error(message);
+      }
+      const body = await res.json() as { thread?: unknown };
+      const forked = normalizeCodexThread(body.thread);
+      if (forked) {
+        setCodexThreads((prev) => [forked, ...prev.filter((item) => item.id !== forked.id)]);
+        sessionRef.current.attachRuntimeSession(runtime, {
+          externalSessionId: forked.id,
+          cwd: forked.cwd,
+          status: codexThreadBindingStatus(forked),
+          updatedAt: codexThreadUpdatedAt(forked),
+        }, {
+          title: codexThreadTitle(forked),
+        });
+        updateSelectedAgentRuntime(runtime);
+        clearTransientComposerState();
+      } else {
+        await loadCodexThreads();
+      }
+    } catch (error) {
+      const message = error instanceof Error && error.message
+        ? error.message
+        : 'Failed to fork Codex thread.';
+      setCodexThreadsError(message);
+    } finally {
+      setCodexThreadActionId(null);
+    }
+  }, [chat.isLoadingRef, clearTransientComposerState, codexThreadActionId, loadCodexThreads, updateSelectedAgentRuntime]);
+
+  const handleArchiveCodexThread = useCallback(async (thread: CodexThreadSummary) => {
+    if (chat.isLoadingRef.current || codexThreadActionId) return;
+    const runtime = selectedAgentRuntimeRef.current;
+    if (!runtime || runtime.kind !== 'codex') return;
+    setCodexThreadActionId(thread.id);
+    setCodexThreadsError(null);
+    try {
+      const res = await fetch(`/api/agent-runtimes/codex/threads/${encodeURIComponent(thread.id)}/archive`, {
+        method: 'POST',
+      });
+      if (!res.ok) {
+        let message = `Failed to archive Codex thread (${res.status}).`;
+        try {
+          const body = await res.json() as { error?: string; message?: string };
+          message = body.error || body.message || message;
+        } catch {
+          // keep status-derived message
+        }
+        throw new Error(message);
+      }
+
+      setCodexThreads((prev) => prev.filter((item) => item.id !== thread.id));
+      const activeBinding = getMatchingRuntimeSessionBinding(sessionRef.current.activeSession, runtime);
+      if (activeBinding?.externalSessionId === thread.id) {
+        sessionRef.current.setSessionAgentRuntimeBinding(runtime, {
+          externalSessionId: thread.id,
+          cwd: thread.cwd,
+          status: 'archived',
+          updatedAt: Date.now(),
+        });
+      }
+    } catch (error) {
+      const message = error instanceof Error && error.message
+        ? error.message
+        : 'Failed to archive Codex thread.';
+      setCodexThreadsError(message);
+    } finally {
+      setCodexThreadActionId(null);
+    }
+  }, [chat.isLoadingRef, codexThreadActionId]);
+
   const toggleHistory = useCallback(() => setShowHistory(v => !v), []);
   const inputIconSize = 15;
   const messageLabels = useMemo(() => ({
@@ -839,12 +1055,19 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
         notInstalledAgents={[]}
         agentLoading={false}
         agentLoadingByKind={nativeDetection.loadingByKind}
+        agentErrorByKind={nativeDetection.errorByKind}
+        onRefreshNativeRuntimes={nativeDetection.refresh}
       />
 
       {showHistory && (
         <SessionHistoryPanel
           sessions={runtimeScopedSessions}
           activeSessionId={runtimeScopedActiveSessionId}
+          selectedAgentRuntime={selectedAgentRuntime}
+          codexThreads={codexThreads}
+          codexThreadsLoading={codexThreadsLoading}
+          codexThreadsError={codexThreadsError}
+          codexThreadActionId={codexThreadActionId}
           onLoad={handleLoadSession}
           onDelete={handleDeleteSession}
           onRename={session.renameSession}
@@ -852,6 +1075,10 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
           onClearAll={handleClearRuntimeHistory}
           onClose={() => setShowHistory(false)}
           onNewChat={handleResetSession}
+          onRefreshCodexThreads={loadCodexThreads}
+          onAttachCodexThread={handleAttachCodexThread}
+          onForkCodexThread={handleForkCodexThread}
+          onArchiveCodexThread={handleArchiveCodexThread}
         />
       )}
 
@@ -1054,7 +1281,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
                 {loadingPhase === 'reconnecting' ? <X size={inputIconSize} /> : <StopCircle size={inputIconSize} />}
               </button>
             ) : (
-              <button type="submit" title={hasLoadingAttachments ? (t.ask.uploadsProcessing ?? 'Wait for uploaded files to finish processing before sending.') : runtimeUnavailableMessage || t.ask.send} disabled={hasLoadingAttachments || !!selectedRuntimeUnavailable || (!input.trim() && images.length === 0)} className="p-2 rounded-xl disabled:opacity-20 disabled:scale-95 disabled:cursor-not-allowed transition-all duration-150 shrink-0 bg-[var(--amber)] text-[var(--amber-foreground)] shadow-sm shadow-[var(--amber)]/15 hover:shadow-md hover:shadow-[var(--amber)]/20 active:scale-95">
+              <button type="submit" title={hasLoadingAttachments ? (t.ask.uploadsProcessing ?? 'Wait for uploaded files to finish processing before sending.') : runtimeCheckingMessage || runtimeUnavailableMessage || t.ask.send} disabled={hasLoadingAttachments || selectedRuntimeChecking || !!selectedRuntimeUnavailable || (!input.trim() && images.length === 0)} className="p-2 rounded-xl disabled:opacity-20 disabled:scale-95 disabled:cursor-not-allowed transition-all duration-150 shrink-0 bg-[var(--amber)] text-[var(--amber-foreground)] shadow-sm shadow-[var(--amber)]/15 hover:shadow-md hover:shadow-[var(--amber)]/20 active:scale-95">
                 <Send size={14} />
               </button>
             )}

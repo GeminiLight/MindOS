@@ -164,6 +164,9 @@ body {
 /* Content width — controlled by Settings > Appearance */
 :root { --content-width: 80%; --toc-width: 0px; }
 .content-width { max-width: var(--content-width-override, var(--content-width)); margin-left: auto; margin-right: auto; padding-left: 0.75rem; padding-right: 0.75rem; }
+@media (max-width: 639px) {
+  .content-width.channel-detail-content { max-width: 100%; }
+}
 
 /* TOC offset — only on xl screens where TOC is visible.
    --toc-width is set by TableOfContents.tsx (212px when expanded, 0px when collapsed).

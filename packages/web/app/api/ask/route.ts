@@ -60,6 +60,30 @@ import {
   createClaudePermissionPromptConfig,
   resolveRuntimePermissionBaseUrl,
 } from '@/lib/agent/claude-permission-prompt';
+import {
+  completeAgentRun,
+  failAgentRun,
+  startAgentRun,
+  updateAgentRun,
+  type AgentRunRecord,
+} from '@/lib/agent/run-ledger';
+import { createMindosAgentPermissionPolicy } from '@/lib/agent/permission-policy';
+import { runWithAgentRunContext } from '@/lib/agent/agent-run-context';
+import { toMindosUiAskMessages } from '@/lib/agent/to-agent-messages';
+
+const NATIVE_ASK_HEALTH_GATE_TIMEOUT_MS = 3000;
+
+function sendAgentRunContext(
+  send: (event: MindOSSSEvent) => void,
+  run: AgentRunRecord,
+): void {
+  send({
+    type: 'agent_run_context',
+    rootRunId: run.rootRunId ?? run.id,
+    ...(run.chatSessionId ? { chatSessionId: run.chatSessionId } : {}),
+    startedAt: run.startedAt,
+  } as unknown as MindOSSSEvent);
+}
 
 // generateSkillsXml is in lib/agent/skills-xml.ts (not inline: Next.js route export constraints)
 
@@ -88,18 +112,26 @@ function acpAgentFromRuntime(runtime: unknown): { id: string; name: string } | n
   return { id: record.id, name: record.name };
 }
 
+function acpAgentFromLegacySelection(agent: unknown): { id: string; name: string } | null {
+  if (!agent || typeof agent !== 'object') return null;
+  const record = agent as { id?: unknown; name?: unknown };
+  if (typeof record.id !== 'string' || typeof record.name !== 'string') return null;
+  return { id: record.id, name: record.name };
+}
+
 function nativeAgentRuntimeFromSelection(runtime: unknown, binding?: unknown): MindosAgentRuntimeSelection | null {
   if (!runtime || typeof runtime !== 'object') return null;
   const record = runtime as Partial<AgentRuntimeIdentity> & { externalSessionId?: unknown };
   if (record.kind !== 'codex' && record.kind !== 'claude') return null;
   if (typeof record.id !== 'string' || typeof record.name !== 'string') return null;
-  const bindingExternalSessionId = externalSessionIdFromRuntimeBinding(record, binding);
+  const bindingResume = runtimeBindingResumeState(record, binding);
+  const hasTypedBinding = !!binding && typeof binding === 'object';
   return {
     id: record.id,
     name: record.name,
     kind: record.kind,
-    ...(bindingExternalSessionId ? { externalSessionId: bindingExternalSessionId } : {}),
-    ...(!bindingExternalSessionId && typeof record.externalSessionId === 'string' ? { externalSessionId: record.externalSessionId } : {}),
+    ...(bindingResume.externalSessionId ? { externalSessionId: bindingResume.externalSessionId } : {}),
+    ...(!hasTypedBinding && !bindingResume.matched && typeof record.externalSessionId === 'string' ? { externalSessionId: record.externalSessionId } : {}),
   };
 }
 
@@ -117,19 +149,22 @@ function getLastUserContent(messages: FrontendMessage[]): string {
   return '';
 }
 
-function externalSessionIdFromRuntimeBinding(
+function runtimeBindingResumeState(
   runtime: Partial<AgentRuntimeIdentity>,
   binding: unknown,
-): string | null {
-  if (!binding || typeof binding !== 'object') return null;
+): { matched: boolean; externalSessionId: string | null } {
+  if (!binding || typeof binding !== 'object') return { matched: false, externalSessionId: null };
   const record = binding as Partial<RuntimeSessionBinding>;
-  if (record.runtime !== runtime.kind || record.runtimeId !== runtime.id) return null;
-  if (runtime.kind === 'codex' && record.kind !== 'codex-thread') return null;
-  if (runtime.kind === 'claude' && record.kind !== 'claude-session') return null;
-  if (record.status && record.status !== 'active') return null;
-  return typeof record.externalSessionId === 'string' && record.externalSessionId.trim()
-    ? record.externalSessionId
-    : null;
+  if (record.runtime !== runtime.kind || record.runtimeId !== runtime.id) return { matched: false, externalSessionId: null };
+  if (runtime.kind === 'codex' && record.kind !== 'codex-thread') return { matched: false, externalSessionId: null };
+  if (runtime.kind === 'claude' && record.kind !== 'claude-session') return { matched: false, externalSessionId: null };
+  if (record.status && record.status !== 'active') return { matched: true, externalSessionId: null };
+  return {
+    matched: true,
+    externalSessionId: typeof record.externalSessionId === 'string' && record.externalSessionId.trim()
+      ? record.externalSessionId
+      : null,
+  };
 }
 
 function createAskSseResponse(
@@ -183,7 +218,11 @@ async function assertNativeRuntimeAvailable(runtime: MindosAgentRuntimeSelection
     resolveRuntimeCommand: resolveCommandPath as AgentRuntimesServices['resolveRuntimeCommand'],
     checkNativeRuntimeHealth: checkNativeRuntimeHealth as AgentRuntimesServices['checkNativeRuntimeHealth'],
   };
-  const res = await handleAgentRuntimesGet(new URLSearchParams(`runtime=${runtime.kind}&force=1`), services);
+  const res = await Promise.race([
+    handleAgentRuntimesGet(new URLSearchParams(`runtime=${runtime.kind}&force=1`), services),
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), NATIVE_ASK_HEALTH_GATE_TIMEOUT_MS)),
+  ]);
+  if (!res) return null;
   const body = res.body;
   if (res.status !== 200 || !body || !('runtime' in body)) {
     return `Unable to verify ${runtime.name} before starting the turn.`;
@@ -260,6 +299,8 @@ export async function POST(req: NextRequest) {
     providerOverride?: string;
     /** Per-request model override from the inline model picker */
     modelOverride?: string;
+    /** MindOS Chat Panel session id for run ledger correlation. */
+    chatSessionId?: string;
   };
   try {
     body = await req.json();
@@ -268,14 +309,18 @@ export async function POST(req: NextRequest) {
   }
 
   const { messages, currentFile, attachedFiles: rawAttached, uploadedFiles } = body;
+  const mindosUiMessages = toMindosUiAskMessages(messages);
   const selectedNativeRuntime = nativeAgentRuntimeFromSelection(body.selectedRuntime, body.runtimeBinding);
+  const legacySelectedAcpAgent = acpAgentFromLegacySelection(body.selectedAcpAgent);
   const selectedAcpAgent = selectedNativeRuntime || body.selectedRuntime === null || isMindosRuntimeSelection(body.selectedRuntime)
     ? null
-    : (body.selectedRuntime === undefined
-      ? body.selectedAcpAgent ?? null
-      : acpAgentFromRuntime(body.selectedRuntime));
+    : (acpAgentFromRuntime(body.selectedRuntime) ?? legacySelectedAcpAgent);
   const attachedFiles = Array.isArray(rawAttached) ? expandAttachedFiles(rawAttached) : rawAttached;
   const askMode: AskModeApi = normalizeMindosAskMode(body.mode);
+  const permissionPolicy = createMindosAgentPermissionPolicy(askMode);
+  const chatSessionId = typeof body.chatSessionId === 'string' && body.chatSessionId.trim()
+    ? body.chatSessionId.trim()
+    : undefined;
 
   // Diagnostic: log attached files so silent failures are visible
   if (Array.isArray(attachedFiles) && attachedFiles.length > 0) {
@@ -335,65 +380,162 @@ export async function POST(req: NextRequest) {
       recalledKnowledge,
     });
 
-    return createAskSseResponse(async (send) => {
+    return createAskSseResponse((send) => runWithAgentRunContext({ chatSessionId }, async () => {
       if (selectedNativeRuntime) {
         const runtimeRunId = randomUUID();
-        await runWithRuntimePermissionBridge({
-          runId: runtimeRunId,
-          send,
-        }, () => runWithAskUserQuestionBridge({
-          runId: runtimeRunId,
-          send: (event) => send(event as unknown as MindOSSSEvent),
-        }, () => runMindosAgentRuntimeAskSession({
-            runtime: selectedNativeRuntime,
-            cwd: mindRoot,
-            prompt: externalPrompt,
-            signal: req.signal,
-            send,
-            services: {
-              ...(selectedNativeRuntime.kind === 'claude' ? {
-                createClaudePermissionPrompt: () => createClaudePermissionPromptConfig({
-                  runId: runtimeRunId,
-                  baseUrl: resolveRuntimePermissionBaseUrl(req),
+        let outputSummary = '';
+        const nativeRun = startAgentRun({
+          agentKind: 'native-runtime',
+          runtimeId: selectedNativeRuntime.id,
+          displayName: selectedNativeRuntime.name,
+          cwd: mindRoot,
+          permissionMode: permissionPolicy.runtimePermissionMode,
+          inputSummary: externalPrompt,
+          metadata: {
+            runtimeKind: selectedNativeRuntime.kind,
+            source: 'selected-native-runtime',
+          },
+        });
+        const sendWithLedger = (event: MindOSSSEvent) => {
+          if (event.type === 'text_delta') outputSummary += event.delta;
+          send(event);
+        };
+        sendAgentRunContext(send, nativeRun);
+        try {
+          const result = await runWithAgentRunContext({
+            chatSessionId,
+            rootRunId: nativeRun.rootRunId ?? nativeRun.id,
+            parentRunId: nativeRun.id,
+          }, () => (
+            runWithRuntimePermissionBridge({
+              runId: runtimeRunId,
+              send: sendWithLedger,
+            }, () => runWithAskUserQuestionBridge({
+              runId: runtimeRunId,
+              send: (event) => sendWithLedger(event as unknown as MindOSSSEvent),
+            }, () => runMindosAgentRuntimeAskSession({
+              runtime: selectedNativeRuntime,
+              cwd: mindRoot,
+              prompt: externalPrompt,
+              permissionMode: permissionPolicy.runtimePermissionMode,
+              signal: req.signal,
+              send: sendWithLedger,
+              services: {
+                ...(selectedNativeRuntime.kind === 'claude' ? {
+                  createClaudePermissionPrompt: () => createClaudePermissionPromptConfig({
+                    runId: runtimeRunId,
+                    baseUrl: resolveRuntimePermissionBaseUrl(req),
+                  }),
+                } : {}),
+                requestRuntimePermission: requestRuntimePermissionViaBridge,
+                requestUserQuestion: (request, callOptions) => askUserQuestionViaBridge({
+                  toolCallId: request.toolCallId,
+                  params: { questions: request.questions },
+                  signal: callOptions?.signal,
                 }),
-              } : {}),
-              requestRuntimePermission: requestRuntimePermissionViaBridge,
-              requestUserQuestion: (request, callOptions) => askUserQuestionViaBridge({
-                toolCallId: request.toolCallId,
-                params: { questions: request.questions },
-                signal: callOptions?.signal,
-              }),
+              },
+            }))
+          )));
+          if (result.error) {
+            failAgentRun(nativeRun.id, {
+              error: result.error,
+              outputSummary,
+              metadata: {
+                runtimeKind: selectedNativeRuntime.kind,
+                ...(result.externalSessionId ? { externalSessionId: result.externalSessionId } : {}),
+              },
+            });
+            return;
+          }
+          completeAgentRun(nativeRun.id, {
+            outputSummary,
+            metadata: {
+              runtimeKind: selectedNativeRuntime.kind,
+              ...(result.externalSessionId ? { externalSessionId: result.externalSessionId } : {}),
             },
-          })));
+          });
+        } catch (error) {
+          failAgentRun(nativeRun.id, { error, outputSummary });
+          throw error;
+        }
         return;
       }
 
       if (selectedAcpAgent) {
         let hasContent = false;
-        await runMindosAcpAskSession({
-          agentId: selectedAcpAgent.id,
+        let outputSummary = '';
+        const acpRun = startAgentRun({
+          agentKind: 'acp',
+          runtimeId: selectedAcpAgent.id,
+          displayName: selectedAcpAgent.name,
           cwd: mindRoot,
-          prompt: externalPrompt,
-          signal: req.signal,
-          createSession: (agentId, options) => createSession(agentId, {
-            ...options,
-            permissionMode: askMode === 'chat' ? 'readonly' : 'agent',
-          }),
-          timeoutMs: resolveMindosAgentTimeoutMs(process.env.MINDOS_AGENT_TIMEOUT_MS),
-          hasContent: () => hasContent,
-          onVisibleContent: () => { hasContent = true; },
-          send,
-          promptStream: async (sessionId, prompt, onUpdate) => {
-            await promptStream(sessionId, prompt, onUpdate);
+          permissionMode: permissionPolicy.acpPermissionMode,
+          inputSummary: externalPrompt,
+          metadata: {
+            source: 'selected-acp-runtime',
+            phase: 'create_session',
           },
-          cancelPrompt,
-          closeSession,
-          errorMessage: (error) => ((error as any).code === 'TIMEOUT'
-            ? t.agentTimeout
-            : `ACP Agent Error: ${error.message}`),
         });
+        sendAgentRunContext(send, acpRun);
+        const acpResult = await runWithAgentRunContext({
+          chatSessionId,
+          rootRunId: acpRun.rootRunId ?? acpRun.id,
+          parentRunId: acpRun.id,
+        }, () => (
+          runMindosAcpAskSession({
+            agentId: selectedAcpAgent.id,
+            cwd: mindRoot,
+            prompt: externalPrompt,
+            signal: req.signal,
+            createSession: async (agentId, options) => {
+              const session = await createSession(agentId, {
+                ...options,
+                permissionMode: permissionPolicy.acpPermissionMode,
+              });
+              updateAgentRun(acpRun.id, {
+                metadata: {
+                  phase: 'prompt',
+                  sessionId: session.id,
+                },
+              });
+              return session;
+            },
+            timeoutMs: resolveMindosAgentTimeoutMs(process.env.MINDOS_AGENT_TIMEOUT_MS),
+            hasContent: () => hasContent,
+            onVisibleContent: () => { hasContent = true; },
+            send: (event) => {
+              if (event.type === 'text_delta') outputSummary += event.delta;
+              send(event);
+            },
+            promptStream: async (sessionId, prompt, onUpdate) => {
+              await promptStream(sessionId, prompt, onUpdate);
+            },
+            cancelPrompt,
+            closeSession,
+            errorMessage: (error) => ((error as any).code === 'TIMEOUT'
+              ? t.agentTimeout
+              : `ACP Agent Error: ${error.message}`),
+          })
+        ))
+          .catch((error) => {
+            failAgentRun(acpRun.id, {
+              status: (error as any)?.code === 'TIMEOUT' ? 'timed_out' : 'failed',
+              error,
+              outputSummary,
+            });
+            throw error;
+          });
+        if (acpResult.error) {
+          failAgentRun(acpRun.id, {
+            status: (acpResult.error as any).code === 'TIMEOUT' ? 'timed_out' : 'failed',
+            error: acpResult.error,
+            outputSummary,
+          });
+        } else {
+          completeAgentRun(acpRun.id, { outputSummary });
+        }
       }
-    }, (err) => {
+    }), (err) => {
       if (err instanceof Error && (err as any).code === 'TIMEOUT') return t.agentTimeout;
       return err instanceof Error ? err.message : String(err);
     });
@@ -510,7 +652,7 @@ export async function POST(req: NextRequest) {
     currentFile,
     attachedFiles,
     uploadedParts,
-    messages,
+    messages: mindosUiMessages,
     agentInitialization,
     activeRecall: agentConfig.activeRecall,
   }, {
@@ -532,11 +674,11 @@ export async function POST(req: NextRequest) {
       getMindosWebPiRuntimePaths,
       getMindosWebRequestTools,
     } = await import('@/lib/agent/mindos-pi-runtime-host');
-    const runtimePaths = getMindosWebPiRuntimePaths({ projectRoot, mindRoot, serverSettings });
+    const runtimePaths = getMindosWebPiRuntimePaths({ projectRoot, mindRoot, serverSettings, mode: askMode });
     const { createMindosPiCodingAgentRuntime } = await import('@geminilight/mindos/session/pi-coding-agent');
     const runtime = await createMindosPiCodingAgentRuntime({
       mode: askMode,
-      messages,
+      messages: mindosUiMessages,
       systemPrompt,
       providerOverride: body.providerOverride,
       modelOverride: typeof body.modelOverride === 'string' ? body.modelOverride : undefined,
@@ -569,69 +711,100 @@ export async function POST(req: NextRequest) {
 
     // ── SSE Stream ──
     return createAskSseResponse(async (send) => {
-      // ── Proxy compatibility check ──
-      // If this baseUrl is known to reject stream+tools, skip session.prompt() entirely
-      // and go straight to the non-streaming fallback path.
-      const compatCache = readBaseUrlCompat();
-      const effectiveBaseUrlKey = baseUrl || 'default';
-      const compatMode = resolveAskCompatMode({
-        askMode,
-        provider,
-        baseUrl,
-        cachedMode: compatCache[effectiveBaseUrlKey],
+      let outputSummary = '';
+      const mainRun = startAgentRun({
+        agentKind: 'mindos-main',
+        runtimeId: 'mindos',
+        displayName: 'MindOS Agent',
+        chatSessionId,
+        cwd: mindRoot,
+        permissionMode: permissionPolicy.permissionMode,
+        inputSummary: typeof lastUserContent === 'string' ? lastUserContent : JSON.stringify(lastUserContent),
       });
-      const proxyFallbackMessages = {
-        proxyCompatMode: t.proxyCompatMode,
-        proxyCompatDetecting: t.proxyCompatDetecting,
-        proxyCompatFailed: t.proxyCompatFailed,
-        proxyCompatAlsoFailed: t.proxyCompatAlsoFailed,
+      sendAgentRunContext(send, mainRun);
+      const sendWithLedger = (event: MindOSSSEvent) => {
+        if (event.type === 'text_delta') outputSummary += event.delta;
+        send(event);
       };
-      const runProxyFallback = () => runMindosNonStreamingFallback({
-        baseUrl: baseUrl ?? '',
-        apiKey,
-        model: modelName,
-        systemPrompt,
-        historyMessages: llmHistoryMessages,
-        userContent: typeof lastUserContent === 'string' ? lastUserContent : JSON.stringify(lastUserContent),
-        tools: requestTools,
-        send,
-        signal: req.signal,
-        maxSteps: stepLimit,
-      });
+      try {
+        await runWithAgentRunContext({
+          chatSessionId,
+          rootRunId: mainRun.rootRunId ?? mainRun.id,
+          parentRunId: mainRun.id,
+        }, async () => {
+          // ── Proxy compatibility check ──
+          // If this baseUrl is known to reject stream+tools, skip session.prompt() entirely
+          // and go straight to the non-streaming fallback path.
+          const compatCache = readBaseUrlCompat();
+          const effectiveBaseUrlKey = baseUrl || 'default';
+          const compatMode = resolveAskCompatMode({
+            askMode,
+            provider,
+            baseUrl,
+            cachedMode: compatCache[effectiveBaseUrlKey],
+          });
+          const proxyFallbackMessages = {
+            proxyCompatMode: t.proxyCompatMode,
+            proxyCompatDetecting: t.proxyCompatDetecting,
+            proxyCompatFailed: t.proxyCompatFailed,
+            proxyCompatAlsoFailed: t.proxyCompatAlsoFailed,
+          };
+          const runProxyFallback = () => runMindosNonStreamingFallback({
+            baseUrl: baseUrl ?? '',
+            apiKey,
+            model: modelName,
+            systemPrompt,
+            historyMessages: llmHistoryMessages,
+            userContent: typeof lastUserContent === 'string' ? lastUserContent : JSON.stringify(lastUserContent),
+            tools: requestTools,
+            send: sendWithLedger,
+            signal: req.signal,
+            maxSteps: stepLimit,
+          });
 
-      const askRunId = randomUUID();
-      await runWithAskUserQuestionBridge({
-        runId: askRunId,
-        send: (event) => send(event as unknown as MindOSSSEvent),
-      }, () => runMindosPiAgentAskSession({
-        session: {
-          subscribe: (callback) => { session.subscribe(callback); },
-          prompt: async (prompt, options) => { await session.prompt(prompt, options as any); },
-          steer: (message) => session.steer(message),
-          abort: () => session.abort(),
-        },
-        prompt: lastUserContent,
-        promptOptions: lastUserImages ? { images: lastUserImages } : undefined,
-        stepLimit,
-        timeoutMs: resolveMindosAgentTimeoutMs(process.env.MINDOS_AGENT_TIMEOUT_MS),
-        signal: req.signal,
-        provider,
-        baseUrl,
-        effectiveBaseUrlKey,
-        compatMode,
-        send,
-        runFallback: runProxyFallback,
-        proxyMessages: proxyFallbackMessages,
-        onToolExecution: () => metrics.recordToolExecution(),
-        onTokens: (input, output) => metrics.recordTokens(input, output),
-        onStep: (step, maxSteps) => {
-          if (process.env.NODE_ENV === 'development') console.log(`[ask] Step ${step}/${maxSteps}`);
-        },
-        writeCompat: (key, mode) => {
-          writeBaseUrlCompat(key, mode);
-          console.log(`[ask] Proxy compat detected: ${key} → ${mode} (cached)`);
-        },
-      }));
+          const askRunId = randomUUID();
+          await runWithAskUserQuestionBridge({
+            runId: askRunId,
+            send: (event) => sendWithLedger(event as unknown as MindOSSSEvent),
+          }, () => runMindosPiAgentAskSession({
+            session: {
+              subscribe: (callback) => { session.subscribe(callback); },
+              prompt: async (prompt, options) => { await session.prompt(prompt, options as any); },
+              steer: (message) => session.steer(message),
+              abort: () => session.abort(),
+            },
+            prompt: lastUserContent,
+            promptOptions: lastUserImages ? { images: lastUserImages } : undefined,
+            stepLimit,
+            timeoutMs: resolveMindosAgentTimeoutMs(process.env.MINDOS_AGENT_TIMEOUT_MS),
+            signal: req.signal,
+            provider,
+            baseUrl,
+            effectiveBaseUrlKey,
+            compatMode,
+            send: sendWithLedger,
+            runFallback: runProxyFallback,
+            proxyMessages: proxyFallbackMessages,
+            onToolExecution: () => metrics.recordToolExecution(),
+            onTokens: (input, output) => metrics.recordTokens(input, output),
+            onStep: (step, maxSteps) => {
+              if (process.env.NODE_ENV === 'development') console.log(`[ask] Step ${step}/${maxSteps}`);
+            },
+            writeCompat: (key, mode) => {
+              writeBaseUrlCompat(key, mode);
+              console.log(`[ask] Proxy compat detected: ${key} → ${mode} (cached)`);
+            },
+          }));
+        });
+        completeAgentRun(mainRun.id, { outputSummary });
+      } catch (error) {
+        failAgentRun(mainRun.id, {
+          status: (error as any)?.code === 'TIMEOUT' ? 'timed_out' : 'failed',
+          error,
+          outputSummary,
+        });
+        throw error;
+      }
     }, (err) => {
       if (err instanceof Error && (err as any).code === 'TIMEOUT') return t.agentTimeout;
       return err instanceof Error ? err.message : String(err);

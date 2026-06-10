@@ -125,7 +125,15 @@ describe('RuntimeIconSwitcher', () => {
               name: 'Codex',
               kind: 'codex',
               status: 'signed-out',
-              availability: { checkedAt: '2026-06-09T00:00:00.000Z', sources: ['native-health'], reason: 'Run codex login first.' },
+              availability: {
+                checkedAt: '2026-06-09T00:00:00.000Z',
+                sources: ['native-health'],
+                reason: 'Run codex login first.',
+                diagnosticHints: [
+                  'MindOS detected Codex at /usr/local/bin/codex.',
+                  'Run "codex login status" from the same environment that starts MindOS.',
+                ],
+              },
             },
           ]}
           loading={false}
@@ -140,6 +148,8 @@ describe('RuntimeIconSwitcher', () => {
 
     expect(document.body.textContent).toContain('Signed out');
     expect(document.body.textContent).toContain('Run codex login first.');
+    expect(document.body.textContent).toContain('MindOS detected Codex at /usr/local/bin/codex.');
+    expect(document.body.textContent).toContain('Run "codex login status" from the same environment that starts MindOS.');
     expect(document.body.textContent).not.toContain('OpenCode');
     expect(document.body.textContent).not.toContain('Config file is invalid.');
 
@@ -150,6 +160,114 @@ describe('RuntimeIconSwitcher', () => {
       codexButton.click();
     });
     expect(onSelect).not.toHaveBeenCalled();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('surfaces runtime detection errors as the disabled option reason', async () => {
+    const onSelect = vi.fn();
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(
+        <RuntimeIconSwitcher
+          selectedRuntime={null}
+          onSelect={onSelect}
+          nativeRuntimes={[]}
+          errorByKind={{ claude: 'claude runtime detection timed out after 30000ms.' }}
+          loading={false}
+        />,
+      );
+    });
+
+    const trigger = host.querySelector('button[aria-haspopup="listbox"]') as HTMLButtonElement;
+    await act(async () => {
+      trigger.click();
+    });
+
+    expect(document.body.textContent).toContain('Detection failed. claude runtime detection timed out after 30000ms.');
+    const claudeButton = Array.from(document.body.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('Detection failed. claude runtime detection timed out')) as HTMLButtonElement;
+    expect(claudeButton.disabled).toBe(true);
+    await act(async () => {
+      claudeButton.click();
+    });
+    expect(onSelect).not.toHaveBeenCalled();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('disables cached available native runtimes when revalidation reports an error', async () => {
+    const onSelect = vi.fn();
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(
+        <RuntimeIconSwitcher
+          selectedRuntime={null}
+          onSelect={onSelect}
+          nativeRuntimes={[{ id: 'claude', name: 'Claude Code', kind: 'claude', status: 'available' }]}
+          errorByKind={{ claude: 'Detection failed' }}
+          loadingByKind={{ claude: false }}
+        />,
+      );
+    });
+
+    const trigger = host.querySelector('button[aria-haspopup="listbox"]') as HTMLButtonElement;
+    await act(async () => {
+      trigger.click();
+    });
+
+    const claudeButton = Array.from(document.body.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('Detection failed')) as HTMLButtonElement;
+    expect(claudeButton.disabled).toBe(true);
+    await act(async () => {
+      claudeButton.click();
+    });
+    expect(onSelect).not.toHaveBeenCalled();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('lets the user retry local runtime detection from the runtime menu', async () => {
+    const onRefreshNativeRuntimes = vi.fn();
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(
+        <RuntimeIconSwitcher
+          selectedRuntime={null}
+          onSelect={vi.fn()}
+          nativeRuntimes={[]}
+          errorByKind={{ codex: 'Detection failed' }}
+          onRefreshNativeRuntimes={onRefreshNativeRuntimes}
+        />,
+      );
+    });
+
+    const trigger = host.querySelector('button[aria-haspopup="listbox"]') as HTMLButtonElement;
+    await act(async () => {
+      trigger.click();
+    });
+
+    const refreshButton = document.body.querySelector('button[aria-label="Refresh local runtime status"]') as HTMLButtonElement;
+    expect(refreshButton).toBeTruthy();
+    await act(async () => {
+      refreshButton.click();
+    });
+    expect(onRefreshNativeRuntimes).toHaveBeenCalledTimes(1);
 
     await act(async () => {
       root.unmount();

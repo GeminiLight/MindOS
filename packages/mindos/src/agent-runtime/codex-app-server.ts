@@ -60,10 +60,70 @@ export type CodexAppServerClientOptions = {
 
 export type CodexTurnInput = Array<{ type: 'text'; text: string }>;
 
+export type CodexThread = Record<string, unknown> & {
+  id: string;
+  sessionId?: string;
+  preview?: string;
+  name?: string | null;
+  cwd?: string;
+  createdAt?: number;
+  updatedAt?: number;
+  status?: unknown;
+  turns?: unknown[];
+};
+
+export type CodexThreadListInput = {
+  cursor?: string | null;
+  limit?: number | null;
+  sortKey?: string | null;
+  sortDirection?: string | null;
+  modelProviders?: string[] | null;
+  sourceKinds?: string[] | null;
+  archived?: boolean | null;
+  cwd?: string | string[] | null;
+  useStateDbOnly?: boolean;
+  searchTerm?: string | null;
+};
+
+export type CodexThreadListResult = {
+  data: CodexThread[];
+  nextCursor: string | null;
+  backwardsCursor: string | null;
+};
+
+export type CodexThreadReadResult = {
+  thread: CodexThread;
+};
+
+export type CodexThreadForkInput = {
+  threadId: string;
+  model?: string | null;
+  modelProvider?: string | null;
+  serviceTier?: string | null;
+  cwd?: string | null;
+  approvalPolicy?: string | null;
+  approvalsReviewer?: unknown;
+  sandbox?: unknown;
+  config?: Record<string, unknown> | null;
+  baseInstructions?: string | null;
+  developerInstructions?: string | null;
+  ephemeral?: boolean;
+  threadSource?: unknown;
+};
+
+export type CodexThreadForkResult = Record<string, unknown> & {
+  thread: CodexThread;
+};
+
 export type CodexAppServerClient = {
   initialize(): Promise<void>;
-  startThread(input?: { model?: string }): Promise<{ threadId: string }>;
+  startThread(input?: { model?: string; cwd?: string }): Promise<{ threadId: string }>;
   resumeThread(input: { threadId: string }): Promise<{ threadId: string }>;
+  listThreads(input?: CodexThreadListInput): Promise<CodexThreadListResult>;
+  readThread(input: { threadId: string; includeTurns?: boolean }): Promise<CodexThreadReadResult>;
+  forkThread(input: CodexThreadForkInput): Promise<CodexThreadForkResult>;
+  archiveThread(input: { threadId: string }): Promise<void>;
+  unarchiveThread(input: { threadId: string }): Promise<CodexThreadReadResult>;
   startTurn(input: {
     threadId: string;
     input: CodexTurnInput;
@@ -244,13 +304,42 @@ export function createCodexAppServerClient(
       await notify('initialized');
     },
     async startThread(input = {}) {
-      const params = input.model ? { model: input.model } : {};
+      const params = pruneUndefined({
+        model: input.model,
+        cwd: input.cwd,
+      });
       const result = await request('thread/start', params);
       return { threadId: getThreadId(result, 'thread/start') };
     },
     async resumeThread(input) {
       const result = await request('thread/resume', { threadId: input.threadId });
       return { threadId: getThreadId(result, 'thread/resume') ?? input.threadId };
+    },
+    async listThreads(input = {}) {
+      const result = await request('thread/list', pruneUndefined(input as Record<string, unknown>));
+      return getThreadListResult(result, 'thread/list');
+    },
+    async readThread(input) {
+      const result = await request('thread/read', {
+        threadId: input.threadId,
+        ...(typeof input.includeTurns === 'boolean' ? { includeTurns: input.includeTurns } : {}),
+      });
+      return { thread: getThread(result, 'thread/read') };
+    },
+    async forkThread(input) {
+      const result = await request('thread/fork', pruneUndefined(input as Record<string, unknown>));
+      const record = asRecord(result);
+      return {
+        ...(record ?? {}),
+        thread: getThread(result, 'thread/fork'),
+      };
+    },
+    async archiveThread(input) {
+      await request('thread/archive', { threadId: input.threadId });
+    },
+    async unarchiveThread(input) {
+      const result = await request('thread/unarchive', { threadId: input.threadId });
+      return { thread: getThread(result, 'thread/unarchive') };
     },
     async *startTurn(input) {
       const params: Record<string, unknown> = {
@@ -406,6 +495,7 @@ function mapCodexRuntimeToolNotification(notification: CodexAppServerNotificatio
       toolName,
       output: getCodexToolOutput(params),
       isError: /(failed|error|rejected|denied)/.test(lower) || params.isError === true || params.error !== undefined,
+      runtime: 'codex',
     }];
   }
 
@@ -471,6 +561,7 @@ function mapCodexOfficialItemNotification(
       || params.isError === true
       || params.error !== undefined
       || item.error !== undefined,
+    runtime: 'codex',
   }];
 }
 
@@ -519,13 +610,40 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 }
 
 function getThreadId(result: unknown, method: string): string {
+  return getThread(result, method).id;
+}
+
+function getThread(result: unknown, method: string): CodexThread {
   const record = asRecord(result);
   const thread = asRecord(record?.thread);
   const id = thread?.id;
   if (typeof id !== 'string' || !id) {
     throw new Error(`Codex app-server ${method} did not return a thread id`);
   }
-  return id;
+  return { ...thread, id } as CodexThread;
+}
+
+function getThreadListResult(result: unknown, method: string): CodexThreadListResult {
+  const record = asRecord(result);
+  if (!record || !Array.isArray(record.data)) {
+    throw new Error(`Codex app-server ${method} did not return a thread list`);
+  }
+  return {
+    data: record.data.map((item) => {
+      const thread = asRecord(item);
+      const id = thread?.id;
+      if (typeof id !== 'string' || !id) {
+        throw new Error(`Codex app-server ${method} returned a thread without an id`);
+      }
+      return { ...thread, id } as CodexThread;
+    }),
+    nextCursor: typeof record.nextCursor === 'string' ? record.nextCursor : null,
+    backwardsCursor: typeof record.backwardsCursor === 'string' ? record.backwardsCursor : null,
+  };
+}
+
+function pruneUndefined(value: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== undefined));
 }
 
 function getStringParam(params: Record<string, unknown> | undefined, key: string): string | undefined {

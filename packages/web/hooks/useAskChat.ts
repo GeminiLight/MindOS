@@ -3,8 +3,8 @@
 import { useRef, useState, useCallback, useLayoutEffect } from 'react';
 import type { AgentIdentity, AgentRuntimeIdentity, Message, ImagePart, AskMode, LocalAttachment, RuntimeSessionBinding } from '@/lib/types';
 import type { ProviderId } from '@/lib/agent/providers';
-import { consumeUIMessageStream } from '@/lib/agent/stream-consumer';
-import { annotateMessageWithAgentRuntime, getMatchingRuntimeSessionBinding } from '@/lib/ask-agent';
+import { consumeUIMessageStream, type AgentRunContextMetadata } from '@/lib/agent/stream-consumer';
+import { annotateMessageWithAgentRuntime, getMatchingRuntimeSessionBinding, isRuntimeSessionBindingResumable } from '@/lib/ask-agent';
 import { isRetryableError, retryDelay, sleep } from '@/lib/agent/reconnect';
 
 export type LoadingPhase = 'connecting' | 'thinking' | 'streaming' | 'reconnecting';
@@ -25,11 +25,12 @@ export interface AskChatRefs {
         updatedAt: number;
       } | null;
     } | null;
+    activeSessionId?: string | null;
     messages: Message[];
     setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
     setSessionAgentRuntimeBinding?: (
       runtime: AgentRuntimeIdentity,
-      binding?: { externalSessionId?: string; cwd?: string; updatedAt?: number },
+      binding?: { externalSessionId?: string; cwd?: string; status?: RuntimeSessionBinding['status']; updatedAt?: number },
     ) => void;
   }>;
   uploadRef: React.RefObject<{
@@ -67,6 +68,7 @@ export function useAskChat({
   const [loadingPhase, setLoadingPhase] = useState<LoadingPhase>('connecting');
   const [reconnectAttempt, setReconnectAttempt] = useState(0);
   const [reconnectMax, setReconnectMax] = useState(3);
+  const [agentRunContext, setAgentRunContext] = useState<AgentRunContextMetadata | null>(null);
   const reconnectMaxRef = useRef(3);
   const abortRef = useRef<AbortController | null>(null);
   const firstMessageFired = useRef(false);
@@ -158,7 +160,7 @@ export function useAskChat({
       ? { id: selectedRuntimeBase.id, name: selectedRuntimeBase.name }
       : null;
     const matchingRuntimeBinding = getMatchingRuntimeSessionBinding(sess.activeSession, selectedRuntimeBase);
-    const selectedRuntime = selectedRuntimeBase && matchingRuntimeBinding?.externalSessionId
+    const selectedRuntime = selectedRuntimeBase && isRuntimeSessionBindingResumable(matchingRuntimeBinding)
       ? {
           ...selectedRuntimeBase,
           externalSessionId: matchingRuntimeBinding.externalSessionId,
@@ -202,6 +204,7 @@ export function useAskChat({
       onFirstMessage();
     }
     setIsLoading(true);
+    setAgentRunContext(null);
     setLoadingPhase('connecting');
     setReconnectAttempt(0);
 
@@ -232,6 +235,7 @@ export function useAskChat({
       selectedRuntime,
       runtimeBinding: matchingRuntimeBinding ?? null,
       mode: chatMode,
+      chatSessionId: sess.activeSessionId ?? undefined,
       providerOverride: selectedRuntimeBase && selectedRuntimeBase.kind !== 'mindos' ? undefined : providerOverride ?? undefined,
       modelOverride: selectedRuntimeBase && selectedRuntimeBase.kind !== 'mindos' ? undefined : modelOverride ?? undefined,
     });
@@ -283,8 +287,12 @@ export function useAskChat({
             refs.sessionRef.current?.setSessionAgentRuntimeBinding?.(currentRuntime, {
               externalSessionId: binding.externalSessionId,
               cwd: binding.cwd,
+              status: binding.status,
               updatedAt: Date.now(),
             });
+          },
+          onAgentRunContext: (context) => {
+            setAgentRunContext(context);
           },
         },
       );
@@ -376,6 +384,7 @@ export function useAskChat({
     loadingPhase,
     reconnectAttempt,
     reconnectMax,
+    agentRunContext,
     reconnectMaxRef,
     abortRef,
     firstMessageFired,

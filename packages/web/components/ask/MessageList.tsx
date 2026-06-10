@@ -1,16 +1,17 @@
 'use client';
 
 import { useRef, useEffect, memo, useState, useCallback, useMemo, type CSSProperties } from 'react';
-import { Sparkles, Loader2, AlertCircle, Wrench, WifiOff, Zap, Copy, Check, ArrowDown, FolderInput, Search, PenLine, Lightbulb, FileText, Paperclip, Bot } from 'lucide-react';
+import { Loader2, AlertCircle, Wrench, WifiOff, Zap, Copy, Check, ArrowDown, FolderInput, Search, PenLine, Lightbulb, FileText, Paperclip, Bot, Sparkles } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import type { Message, ImagePart } from '@/lib/types';
+import type { Message, ImagePart, RuntimeStatusPart } from '@/lib/types';
 import { stripThinkingTags } from '@/hooks/useAiOrganize';
 import { copyToClipboard } from '@/lib/clipboard';
 import ToolCallBlock from './ToolCallBlock';
 import ThinkingBlock from './ThinkingBlock';
 import { SaveMessageButton } from './SaveSessionInline';
 import UserMessageActions from './UserMessageActions';
+import AgentRunTimeline from './AgentRunTimeline';
 
 const SKILL_PREFIX_RE = /^Use the skill ([^:]+):\s*/;
 const MARKDOWN_REMARK_PLUGINS = [remarkGfm];
@@ -157,6 +158,73 @@ const AssistantMessage = memo(function AssistantMessage({ content, isStreaming }
   );
 });
 
+function runtimeLabel(runtime: RuntimeStatusPart['runtime']): string {
+  if (runtime === 'codex') return 'Codex';
+  if (runtime === 'claude') return 'Claude Code';
+  if (runtime === 'acp') return 'ACP';
+  if (runtime === 'mindos') return 'MindOS';
+  return 'Runtime';
+}
+
+function RuntimeMark({
+  runtime,
+  label,
+  active = false,
+  small = false,
+}: {
+  runtime?: Message['agentKind'] | RuntimeStatusPart['runtime'];
+  label?: string;
+  active?: boolean;
+  small?: boolean;
+}) {
+  const size = small ? 'h-5 w-5' : 'h-7 w-7';
+  const iconSize = small ? 'h-3.5 w-3.5' : 'h-4 w-4';
+  const title = label ?? (runtime ? runtimeLabel(runtime as RuntimeStatusPart['runtime']) : 'MindOS');
+  const imageSrc = runtime === 'codex'
+    ? '/agent-icons/openai.svg'
+    : runtime === 'claude'
+      ? '/agent-icons/claude.svg'
+      : runtime === 'mindos' || !runtime
+        ? '/logo-square.svg'
+        : null;
+
+  return (
+    <span
+      title={title}
+      aria-label={title}
+      className={`${size} relative inline-flex shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border/40 bg-background shadow-sm`}
+    >
+      {imageSrc ? (
+        <img src={imageSrc} alt="" aria-hidden="true" className={`${iconSize} object-contain`} />
+      ) : (
+        <Bot size={small ? 12 : 14} className="text-muted-foreground" />
+      )}
+      {active && (
+        <span className="absolute -bottom-0.5 -right-0.5 inline-flex h-3 w-3 items-center justify-center rounded-full border border-background bg-muted">
+          <Loader2 size={7} className="animate-spin text-[var(--amber)]" />
+        </span>
+      )}
+    </span>
+  );
+}
+
+const RuntimeStatusBlock = memo(function RuntimeStatusBlock({ part, active }: { part: RuntimeStatusPart; active: boolean }) {
+  return (
+    <div
+      role="status"
+      className="my-1.5 flex max-w-full items-start gap-2 rounded-md border border-border/40 bg-muted/30 px-2.5 py-2 text-xs text-muted-foreground"
+    >
+      <RuntimeMark runtime={part.runtime} active={active} small />
+      <div className="min-w-0 leading-relaxed">
+        <div className="text-2xs font-medium uppercase tracking-wide text-muted-foreground/60">
+          {runtimeLabel(part.runtime)}
+        </div>
+        <div className="[overflow-wrap:anywhere]">{part.message}</div>
+      </div>
+    </div>
+  );
+});
+
 const AssistantMessageWithParts = memo(function AssistantMessageWithParts({ message, isStreaming }: { message: Message; isStreaming: boolean }) {
   const parts = message.parts;
   if (!parts || parts.length === 0) {
@@ -185,6 +253,18 @@ const AssistantMessageWithParts = memo(function AssistantMessageWithParts({ mess
         }
         if (part.type === 'tool-call') {
           return <ToolCallBlock key={part.toolCallId} part={part} />;
+        }
+        if (part.type === 'runtime-status') {
+          return (
+            <RuntimeStatusBlock
+              key={`runtime-status-${idx}`}
+              part={part}
+              active={isStreaming && idx === parts.length - 1}
+            />
+          );
+        }
+        if (part.type === 'agent-run-timeline') {
+          return <AgentRunTimeline key={`agent-run-timeline-${part.chatSessionId}-${part.startedAfter ?? 'all'}`} part={part} />;
         }
         return null;
       })}
@@ -264,10 +344,8 @@ const MessageRow = memo(function MessageRow({
   return (
     <div style={MESSAGE_ROW_STYLE} className={`flex gap-3 animate-[fadeSlideUp_0.22s_ease_both] ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
       {message.role === 'assistant' && (
-        <div
-          className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5 bg-[var(--amber)]/8"
-        >
-          <Sparkles size={13} className="text-[var(--amber)]" />
+        <div className="mt-0.5 shrink-0">
+          <RuntimeMark runtime={message.agentKind ?? 'mindos'} label={message.agentName} />
         </div>
       )}
       {message.role === 'user' ? (

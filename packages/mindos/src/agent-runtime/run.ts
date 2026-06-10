@@ -3,8 +3,14 @@ import {
   createClaudeCodeCliClient,
   createClaudeCodeCliStdioTransport,
   type ClaudeCodeCliClient,
+  type ClaudeCodeCliPermissionMode,
   type ClaudeCodeCliPermissionPrompt,
 } from './claude-code-cli.js';
+import {
+  createClaudeCodeSdkClient,
+  loadClaudeCodeSdkModule,
+  type ClaudeCodeSdkModule,
+} from './claude-code-sdk.js';
 import {
   createCodexAppServerClient,
   createCodexAppServerStdioTransport,
@@ -29,6 +35,9 @@ export type MindosAgentRuntimeAskServices = {
     handleServerRequest?: (request: CodexAppServerServerRequest) => Promise<unknown> | unknown;
   }): CodexAppServerClient | Promise<CodexAppServerClient>;
   createClaudeClient?(options: { cwd: string; signal?: AbortSignal }): ClaudeCodeCliClient | Promise<ClaudeCodeCliClient>;
+  createClaudeCliClient?(options: { cwd: string; signal?: AbortSignal }): ClaudeCodeCliClient | Promise<ClaudeCodeCliClient>;
+  createClaudeSdkClient?(options: { cwd: string; signal?: AbortSignal }): ClaudeCodeCliClient | Promise<ClaudeCodeCliClient>;
+  loadClaudeSdk?(): ClaudeCodeSdkModule | Promise<ClaudeCodeSdkModule>;
   createClaudePermissionPrompt?(options: {
     cwd: string;
     signal?: AbortSignal;
@@ -103,6 +112,7 @@ export type MindosAgentRuntimeAskOptions = {
   runtime: MindosAgentRuntimeSelection;
   cwd: string;
   prompt: string;
+  permissionMode?: 'readonly' | 'agent';
   signal?: AbortSignal;
   send(event: MindOSSSEvent): void;
   services?: MindosAgentRuntimeAskServices;
@@ -125,6 +135,19 @@ type CodexPendingServerRequest = {
 
 type CodexPendingServerRequests = Map<string, CodexPendingServerRequest>;
 
+type ResolvedClaudeClient = {
+  client: ClaudeCodeCliClient;
+  usesCliPermissionPrompt: boolean;
+};
+
+function sendNativeRuntimeStatus(
+  options: MindosAgentRuntimeAskOptions,
+  runtime: MindosNativeAgentRuntimeKind,
+  message: string,
+): void {
+  options.send({ type: 'status', visible: true, runtime, message });
+}
+
 export async function runMindosAgentRuntimeAskSession(
   options: MindosAgentRuntimeAskOptions,
 ): Promise<MindosAgentRuntimeAskResult> {
@@ -140,15 +163,22 @@ async function runClaudeAskSession(options: MindosAgentRuntimeAskOptions): Promi
   let sessionId = options.runtime.externalSessionId;
 
   try {
-    client = await resolveClaudeClient(options);
-    const permissionPrompt = await options.services?.createClaudePermissionPrompt?.({
-      cwd: options.cwd,
-      signal: options.signal,
-    });
+    sendNativeRuntimeStatus(options, 'claude', sessionId
+      ? 'Resuming Claude Code locally.'
+      : 'Starting Claude Code locally.');
+    const resolvedClient = await resolveClaudeClient(options);
+    client = resolvedClient.client;
+    const permissionPrompt = resolvedClient.usesCliPermissionPrompt
+      ? await options.services?.createClaudePermissionPrompt?.({
+        cwd: options.cwd,
+        signal: options.signal,
+      })
+      : undefined;
     for await (const event of client.startTurn({
       prompt: options.prompt,
       cwd: options.cwd,
       ...(sessionId ? { sessionId } : {}),
+      permissionMode: claudeCliPermissionModeForMindosMode(options.permissionMode),
       ...(permissionPrompt ? { permissionPrompt } : {}),
       signal: options.signal,
     })) {
@@ -160,6 +190,7 @@ async function runClaudeAskSession(options: MindosAgentRuntimeAskOptions): Promi
           externalSessionId: event.sessionId,
           cwd: options.cwd,
         });
+        sendNativeRuntimeStatus(options, 'claude', 'Claude Code is connected and working in this chat.');
         continue;
       }
       options.send(event);
@@ -168,11 +199,27 @@ async function runClaudeAskSession(options: MindosAgentRuntimeAskOptions): Promi
     return sessionId ? { externalSessionId: sessionId } : {};
   } catch (error) {
     const err = error instanceof Error ? error : new Error(String(error));
+    if (sessionId) {
+      options.send({
+        type: 'runtime_binding',
+        runtime: 'claude',
+        externalSessionId: sessionId,
+        cwd: options.cwd,
+        status: 'failed',
+        reason: err.message,
+      });
+    }
     options.send({ type: 'error', message: `Claude Code native runtime error: ${err.message}` });
     return { error: err, ...(sessionId ? { externalSessionId: sessionId } : {}) };
   } finally {
     await client?.close?.();
   }
+}
+
+function claudeCliPermissionModeForMindosMode(
+  mode: MindosAgentRuntimeAskOptions['permissionMode'],
+): ClaudeCodeCliPermissionMode {
+  return mode === 'readonly' ? 'dontAsk' : 'default';
 }
 
 async function runCodexAskSession(options: MindosAgentRuntimeAskOptions): Promise<MindosAgentRuntimeAskResult> {
@@ -181,13 +228,16 @@ async function runCodexAskSession(options: MindosAgentRuntimeAskOptions): Promis
   const pendingServerRequests: CodexPendingServerRequests = new Map();
 
   try {
+    sendNativeRuntimeStatus(options, 'codex', threadId
+      ? 'Resuming Codex locally.'
+      : 'Starting Codex locally.');
     client = await resolveCodexClient(options, async (request) => {
       return handleCodexServerRequest(request, options, pendingServerRequests);
     });
     await client.initialize();
     const thread = threadId
       ? await client.resumeThread({ threadId })
-      : await client.startThread();
+      : await client.startThread({ cwd: options.cwd });
     threadId = thread.threadId;
     options.send({
       type: 'runtime_binding',
@@ -195,6 +245,7 @@ async function runCodexAskSession(options: MindosAgentRuntimeAskOptions): Promis
       externalSessionId: threadId,
       cwd: options.cwd,
     });
+    sendNativeRuntimeStatus(options, 'codex', 'Codex is connected and working in this chat.');
 
     const abortListener = () => {
       if (threadId) void client?.interruptTurn?.({ threadId }).catch(() => {});
@@ -221,6 +272,16 @@ async function runCodexAskSession(options: MindosAgentRuntimeAskOptions): Promis
     return { externalSessionId: threadId };
   } catch (error) {
     const err = error instanceof Error ? error : new Error(String(error));
+    if (threadId) {
+      options.send({
+        type: 'runtime_binding',
+        runtime: 'codex',
+        externalSessionId: threadId,
+        cwd: options.cwd,
+        status: 'failed',
+        reason: err.message,
+      });
+    }
     options.send({ type: 'error', message: `Codex native runtime error: ${err.message}` });
     return { error: err, ...(threadId ? { externalSessionId: threadId } : {}) };
   } finally {
@@ -243,9 +304,48 @@ async function resolveCodexClient(
   );
 }
 
-async function resolveClaudeClient(options: MindosAgentRuntimeAskOptions): Promise<ClaudeCodeCliClient> {
+async function resolveClaudeClient(options: MindosAgentRuntimeAskOptions): Promise<ResolvedClaudeClient> {
   if (options.services?.createClaudeClient) {
-    return options.services.createClaudeClient({ cwd: options.cwd, signal: options.signal });
+    return {
+      client: await options.services.createClaudeClient({ cwd: options.cwd, signal: options.signal }),
+      usesCliPermissionPrompt: true,
+    };
+  }
+
+  try {
+    return {
+      client: await resolveClaudeSdkClient(options),
+      usesCliPermissionPrompt: false,
+    };
+  } catch (error) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    sendNativeRuntimeStatus(options, 'claude', `Claude Agent SDK is unavailable; using Claude Code CLI fallback. ${err.message}`);
+  }
+
+  return {
+    client: await resolveClaudeCliClient(options),
+    usesCliPermissionPrompt: true,
+  };
+}
+
+async function resolveClaudeSdkClient(options: MindosAgentRuntimeAskOptions): Promise<ClaudeCodeCliClient> {
+  if (options.services?.createClaudeSdkClient) {
+    return options.services.createClaudeSdkClient({ cwd: options.cwd, signal: options.signal });
+  }
+
+  const sdk = options.services?.loadClaudeSdk
+    ? await options.services.loadClaudeSdk()
+    : await loadClaudeCodeSdkModule();
+  return createClaudeCodeSdkClient({
+    sdk,
+    requestRuntimePermission: options.services?.requestRuntimePermission,
+    requestUserQuestion: options.services?.requestUserQuestion,
+  });
+}
+
+async function resolveClaudeCliClient(options: MindosAgentRuntimeAskOptions): Promise<ClaudeCodeCliClient> {
+  if (options.services?.createClaudeCliClient) {
+    return options.services.createClaudeCliClient({ cwd: options.cwd, signal: options.signal });
   }
 
   return createClaudeCodeCliClient(createClaudeCodeCliStdioTransport());

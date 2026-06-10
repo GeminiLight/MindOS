@@ -79,7 +79,7 @@ export function validateChannelConfig(platform, config) {
     return { valid: false, missing: ['(unknown platform)'] };
   }
 
-  const c = config;
+  const c = normalizeChannelConfig(platform, config);
   const platformPatterns = CHANNEL_FIELD_PATTERNS[platform] || {};
   let bestMissing = credentialSets[0];
 
@@ -102,6 +102,39 @@ export function validateChannelConfig(platform, config) {
   }
 
   return { valid: false, missing: bestMissing };
+}
+
+export function normalizeChannelConfig(platform, config) {
+  if (!config || typeof config !== 'object') return {};
+  const normalized = {};
+  for (const [key, value] of Object.entries(config)) {
+    if (typeof value !== 'string') continue;
+    const trimmed = value.trim();
+    if (!trimmed) continue;
+    normalized[key] = normalizeChannelField(platform, key, trimmed);
+  }
+  return normalized;
+}
+
+function normalizeChannelField(platform, key, value) {
+  if (platform === 'wecom' && key === 'webhook_key') {
+    return extractQueryParam(value, 'key') || value;
+  }
+  return value;
+}
+
+function extractQueryParam(value, key) {
+  try {
+    const parsed = new URL(value);
+    const found = parsed.searchParams.get(key)?.trim();
+    if (found) return found;
+  } catch {
+    // Not a URL. Fall through to regex extraction.
+  }
+
+  const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = value.match(new RegExp(`[?&]${escaped}=([^&#\\s]+)`));
+  return match ? decodeURIComponent(match[1]).trim() : undefined;
 }
 
 export function getConfiguredPlatforms() {

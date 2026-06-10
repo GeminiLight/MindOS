@@ -36,6 +36,16 @@ describe('getChatTools', () => {
     }
   });
 
+  it('excludes delegation and destructive file tools', () => {
+    expect(chatToolNames).not.toContain('list_acp_agents');
+    expect(chatToolNames).not.toContain('call_acp_agent');
+    expect(chatToolNames).not.toContain('delegate_to_agent');
+    expect(chatToolNames).not.toContain('orchestrate');
+    expect(chatToolNames).not.toContain('delete_file');
+    expect(chatToolNames).not.toContain('rename_file');
+    expect(chatToolNames).not.toContain('move_file');
+  });
+
   it('is significantly smaller than full tool set', () => {
     expect(chatTools.length).toBeLessThan(knowledgeBaseTools.length);
   });
@@ -50,6 +60,31 @@ describe('getChatTools', () => {
 describe('getOrganizeTools', () => {
   it('keeps skill loading available for selected skill workflows', () => {
     expect(getOrganizeTools().map(t => t.name)).toContain('load_skill');
+  });
+
+  it('allows only bounded KB organization writes', () => {
+    const organizeToolNames = getOrganizeTools().map(t => t.name);
+
+    expect(organizeToolNames).toEqual(expect.arrayContaining([
+      'list_files',
+      'read_file',
+      'search',
+      'load_skill',
+      'create_file',
+      'batch_create_files',
+      'write_file',
+      'append_to_file',
+      'insert_after_heading',
+      'update_section',
+    ]));
+    expect(organizeToolNames).not.toContain('delete_file');
+    expect(organizeToolNames).not.toContain('rename_file');
+    expect(organizeToolNames).not.toContain('move_file');
+    expect(organizeToolNames).not.toContain('edit_lines');
+    expect(organizeToolNames).not.toContain('list_acp_agents');
+    expect(organizeToolNames).not.toContain('call_acp_agent');
+    expect(organizeToolNames).not.toContain('delegate_to_agent');
+    expect(organizeToolNames).not.toContain('orchestrate');
   });
 });
 

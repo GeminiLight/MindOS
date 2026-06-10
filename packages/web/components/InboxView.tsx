@@ -26,6 +26,7 @@ import {
   Archive,
   ArrowRight,
   Paperclip,
+  Eye,
 } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import { useLocale } from '@/lib/stores/locale-store';
@@ -94,6 +95,7 @@ export default function InboxView() {
   const [savingText, setSavingText] = useState(false);
   const [inboxError, setInboxError] = useState<string | null>(null);
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
+  const [selectedQueuePaths, setSelectedQueuePaths] = useState<string[]>([]);
   const [activeView, setActiveView] = useState<InboxViewMode>(() => getInitialInboxViewMode());
   const [lastSavedSummary, setLastSavedSummary] = useState<LastSavedSummary | null>(null);
   const [providerOverride, setProviderOverride] = useState<ProviderSelection>(
@@ -107,12 +109,17 @@ export default function InboxView() {
   const dragCounterRef = useRef(0);
   const inboxOrganize = useInboxOrganize();
   const organizing = inboxOrganize.isOrganizing;
-  const queueViewActive = activeView === 'queue';
 
   const fetchInbox = useCallback(async () => {
     try {
       const nextFiles = await fetchInboxFiles(t.inbox.loadFailed);
+      const nextPathSet = new Set(nextFiles.map(file => file.path));
       setFiles(nextFiles);
+      setSelectedPath(prev => (prev && nextPathSet.has(prev) ? prev : null));
+      setSelectedQueuePaths(prev => {
+        const retained = prev.filter(path => nextPathSet.has(path));
+        return retained.length === prev.length ? prev : retained;
+      });
       setInboxError(null);
       window.dispatchEvent(new CustomEvent('mindos:inbox-files', { detail: nextFiles }));
     } catch (err) {
@@ -165,27 +172,32 @@ export default function InboxView() {
     };
   }, [fetchInbox, debouncedRefresh, refreshHistory]);
 
-  const handleOrganize = useCallback(() => {
-    if (files.length === 0 || organizing) return;
-    void inboxOrganize.requestInboxOrganize(files, {
+  const handleOrganizeSelected = useCallback(() => {
+    const selectedPathSet = new Set(selectedQueuePaths);
+    const selectedFiles = files.filter(file => selectedPathSet.has(file.path));
+    if (selectedFiles.length === 0 || organizing) return;
+    void inboxOrganize.requestInboxOrganize(selectedFiles, {
       providerOverride,
       modelOverride,
     });
-  }, [files, inboxOrganize, modelOverride, organizing, providerOverride]);
+  }, [files, inboxOrganize, modelOverride, organizing, providerOverride, selectedQueuePaths]);
 
   const handleDeleteFile = useCallback(async (name: string) => {
+    const removedPathSet = new Set(files.filter(file => file.name === name).map(file => file.path));
     try {
       const result = await archiveInboxFiles([name], t.inbox.fileRemoveFailed);
       if (!result.archived.some(item => item.original === name)) {
         throw new Error(t.inbox.fileRemoveFailed);
       }
       setFiles(prev => prev.filter(f => f.name !== name));
+      setSelectedPath(prev => (prev && removedPathSet.has(prev) ? null : prev));
+      setSelectedQueuePaths(prev => prev.filter(path => !removedPathSet.has(path)));
       window.dispatchEvent(new Event('mindos:inbox-updated'));
       toast.success(t.inbox.fileRemoved);
     } catch {
       toast.error(t.inbox.fileRemoveFailed);
     }
-  }, [t]);
+  }, [files, t]);
 
   const addPendingFiles = useCallback((selected: FileList | File[] | null) => {
     if (!selected || selected.length === 0) return;
@@ -250,8 +262,7 @@ export default function InboxView() {
         if (result.saved.length > 0) {
           savedAny = true;
           savedCount += result.saved.length;
-          const savedNames = new Set(result.saved.map(item => item.original));
-          setPendingFiles(prev => prev.filter(file => !savedNames.has(file.name)));
+          setPendingFiles(prev => removeSavedPendingFiles(prev, result.saved.map(item => item.original)));
         }
         failedCount += result.skipped.length + result.oversized.length + result.unreadable.length;
       }
@@ -306,8 +317,13 @@ export default function InboxView() {
 
   const agingCount = useMemo(() => files.filter(f => f.isAging).length, [files]);
   const hasFiles = files.length > 0;
+  const selectedQueuePathSet = useMemo(() => new Set(selectedQueuePaths), [selectedQueuePaths]);
+  const selectedQueueFiles = useMemo(
+    () => files.filter(file => selectedQueuePathSet.has(file.path)),
+    [files, selectedQueuePathSet],
+  );
   const selectedFile = useMemo(
-    () => files.find(f => f.path === selectedPath) ?? files[0] ?? null,
+    () => files.find(f => f.path === selectedPath) ?? null,
     [files, selectedPath],
   );
   const selectedUnderstanding = useMemo(
@@ -319,6 +335,7 @@ export default function InboxView() {
     value: intent.id,
     label: intent.title,
   })), [intentOptions]);
+  const selectedIntentOption = intentOptions.find(intent => intent.id === selectedIntent) ?? intentOptions[0];
   const suggestedIntent = useMemo(
     () => inferSuggestedIntent(draftText, pendingUrls, pendingFiles),
     [draftText, pendingUrls, pendingFiles],
@@ -327,6 +344,7 @@ export default function InboxView() {
   const showSuggestedIntent = suggestedIntent !== selectedIntent;
   const hasPendingCapture = draftText.trim().length > 0 || pendingFiles.length > 0 || pendingUrls.length > 0;
   const textWordCount = countWords(draftText);
+  const stagedCaptureCount = (draftText.trim() ? 1 : 0) + pendingUrls.length + pendingFiles.length;
   const visibleHistory = useMemo(() => history.slice(0, HISTORY_VISIBLE), [history]);
   const [animateList, setAnimateList] = useState(true);
   const prevFileCountRef = useRef(0);
@@ -371,7 +389,25 @@ export default function InboxView() {
     : activeView === 'queue'
       ? t.inbox.reviewPageSubtitle
       : t.inbox.donePageSubtitle;
-  const reviewAllLabel = t.inbox.reviewAllWithAgent(files.length);
+  const toggleQueueSelection = useCallback((file: InboxFile) => {
+    setSelectedQueuePaths(prev => (
+      prev.includes(file.path)
+        ? prev.filter(path => path !== file.path)
+        : [...prev, file.path]
+    ));
+  }, []);
+
+  const selectAllQueueFiles = useCallback(() => {
+    setSelectedQueuePaths(files.map(file => file.path));
+  }, [files]);
+
+  const selectAgingQueueFiles = useCallback(() => {
+    setSelectedQueuePaths(files.filter(file => file.isAging).map(file => file.path));
+  }, [files]);
+
+  const clearQueueSelection = useCallback(() => {
+    setSelectedQueuePaths([]);
+  }, []);
 
   if (loading) {
     return (
@@ -454,22 +490,6 @@ export default function InboxView() {
                 <span className="hidden sm:inline">{t.inbox.uploadButton}</span>
               </button>
             )}
-            {queueViewActive && hasFiles && (
-              <button
-                onClick={handleOrganize}
-                disabled={organizing}
-                aria-label={organizing ? t.inbox.organizing : reviewAllLabel}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-all bg-[var(--amber)] text-[var(--amber-foreground)] hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed lg:hidden"
-                title={organizing ? t.inbox.organizing : reviewAllLabel}
-              >
-                {organizing ? (
-                  <Loader2 size={13} className="animate-spin" />
-                ) : (
-                  <Sparkles size={13} />
-                )}
-                <span className="hidden min-[380px]:inline">{organizing ? t.inbox.organizing : reviewAllLabel}</span>
-              </button>
-            )}
           </div>
         </div>
       </div>
@@ -529,10 +549,10 @@ export default function InboxView() {
             activeView === 'queue'
               ? 'grid gap-5 lg:grid-cols-[minmax(0,1.08fr)_350px] 2xl:grid-cols-[minmax(0,1.08fr)_380px]'
               : activeView === 'capture'
-                ? 'max-w-[880px]'
+                ? 'grid max-w-[1120px] gap-5 xl:grid-cols-[minmax(0,1fr)_340px] xl:items-start'
                 : 'max-w-[760px]'
           }>
-            <div className="space-y-5">
+            <div className="min-w-0 space-y-5">
               {activeView === 'capture' && (
                 <>
                   <div
@@ -575,27 +595,59 @@ export default function InboxView() {
                           : 'border-border/60 bg-card/70'
                       }`}
                     >
-                      <div className="flex flex-col gap-2 border-b border-border/50 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
-                        <div className="flex items-center gap-2">
-                          <FolderInput size={14} className="text-[var(--amber)]" />
-                          <span className="text-xs font-semibold text-foreground">{t.inbox.composerTitle}</span>
-                        </div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <label
-                            htmlFor="capture-next-action"
-                            className="text-2xs font-medium uppercase tracking-wider text-muted-foreground/55"
-                          >
-                            {t.inbox.nextActionTitle}
-                          </label>
-                          <div className="min-w-[156px]">
-                            <CustomSelect
-                              id="capture-next-action"
-                              value={selectedIntent}
-                              onChange={(value) => setSelectedIntent(value as CaptureIntent)}
-                              options={intentSelectOptions}
-                              size="sm"
-                            />
+                      <div className="border-b border-border/50 px-3 py-3">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                          <div className="flex min-w-0 items-start gap-2.5">
+                            <span className="mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[var(--amber-subtle)] text-[var(--amber)]">
+                              <FolderInput size={14} />
+                            </span>
+                            <div className="min-w-0">
+                              <span className="text-sm font-semibold text-foreground">{t.inbox.composerTitle}</span>
+                              <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground/58">
+                                {t.inbox.captureTrustLine}
+                              </p>
+                            </div>
                           </div>
+                          <div className="flex shrink-0 flex-wrap items-center gap-2">
+                            <label
+                              htmlFor="capture-next-action"
+                              className="text-2xs font-medium uppercase tracking-wider text-muted-foreground/55"
+                            >
+                              {t.inbox.nextActionTitle}
+                            </label>
+                            <div className="min-w-[156px]">
+                              <CustomSelect
+                                id="capture-next-action"
+                                value={selectedIntent}
+                                onChange={(value) => setSelectedIntent(value as CaptureIntent)}
+                                options={intentSelectOptions}
+                                size="sm"
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="mt-3 grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+                          <CaptureAffordance
+                            icon={<ExternalLink size={12} />}
+                            label={t.inbox.captureAffordanceLink}
+                            description={t.inbox.captureAffordanceLinkDesc}
+                          />
+                          <CaptureAffordance
+                            icon={<FileText size={12} />}
+                            label={t.inbox.captureAffordanceNote}
+                            description={t.inbox.captureAffordanceNoteDesc}
+                          />
+                          <CaptureAffordance
+                            icon={<Paperclip size={12} />}
+                            label={t.inbox.captureAffordanceFile}
+                            description={t.inbox.captureAffordanceFileDesc}
+                          />
+                          <CaptureAffordance
+                            icon={<Upload size={12} />}
+                            label={t.inbox.captureAffordanceDrop}
+                            description={t.inbox.captureAffordanceDropDesc}
+                          />
                         </div>
                       </div>
 
@@ -603,38 +655,52 @@ export default function InboxView() {
                         value={draftText}
                         onChange={(e) => setDraftText(e.target.value)}
                         onPaste={handleComposerPaste}
+                        aria-label={t.inbox.composerInputLabel}
                         placeholder={t.inbox.composerPlaceholder}
-                        className="min-h-[220px] w-full resize-y bg-transparent px-3 py-3 text-sm leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/35 focus-visible:ring-0 max-sm:min-h-[180px]"
+                        className="min-h-[84px] w-full resize-y bg-transparent px-3 py-3 text-sm leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/38 focus-visible:ring-0"
                       />
 
                       {(draftText.trim() || pendingUrls.length > 0 || pendingFiles.length > 0) && (
-                        <div className="flex flex-wrap gap-1.5 border-t border-border/40 px-3 py-2">
-                          {draftText.trim() && (
-                            <CaptureChip
-                              icon={<FileText size={12} />}
-                              label={t.inbox.signalText}
-                              detail={t.inbox.pendingText(textWordCount)}
-                              onRemove={() => setDraftText('')}
-                            />
-                          )}
-                          {pendingUrls.map(url => (
-                            <CaptureChip
-                              key={url}
-                              icon={<SourceIcon url={url} size="xs" className="border-0 shadow-none" />}
-                              label={t.inbox.pendingUrl}
-                              detail={shortenUrl(url)}
-                              onRemove={() => setPendingUrls(prev => prev.filter(item => item !== url))}
-                            />
-                          ))}
-                          {pendingFiles.map(file => (
-                            <CaptureChip
-                              key={`${file.name}:${file.size}:${file.lastModified}`}
-                              icon={<Paperclip size={12} />}
-                              label={t.inbox.pendingFile}
-                              detail={`${file.name} · ${formatSize(file.size)}`}
-                              onRemove={() => setPendingFiles(prev => prev.filter(item => item !== file))}
-                            />
-                          ))}
+                        <div className="border-t border-border/40 px-3 py-2.5">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="text-2xs font-medium uppercase tracking-wider text-muted-foreground/55">
+                              {t.inbox.stagedCapturesTitle}
+                            </p>
+                            <span className="rounded-md bg-muted/45 px-1.5 py-0.5 text-2xs text-muted-foreground">
+                              {t.inbox.stagedCaptureCount(stagedCaptureCount)}
+                            </span>
+                          </div>
+                          <div className="mt-2 space-y-1.5">
+                            {draftText.trim() && (
+                              <PendingCaptureRow
+                                icon={<FileText size={12} />}
+                                label={t.inbox.signalText}
+                                detail={t.inbox.pendingText(textWordCount)}
+                                status={t.inbox.stagedCaptureStatus}
+                                onRemove={() => setDraftText('')}
+                              />
+                            )}
+                            {pendingUrls.map(url => (
+                              <PendingCaptureRow
+                                key={url}
+                                icon={<SourceIcon url={url} size="xs" className="border-0 shadow-none" />}
+                                label={t.inbox.pendingUrl}
+                                detail={shortenUrl(url)}
+                                status={t.inbox.stagedCaptureStatus}
+                                onRemove={() => setPendingUrls(prev => prev.filter(item => item !== url))}
+                              />
+                            ))}
+                            {pendingFiles.map(file => (
+                              <PendingCaptureRow
+                                key={`${file.name}:${file.size}:${file.lastModified}`}
+                                icon={<Paperclip size={12} />}
+                                label={t.inbox.pendingFile}
+                                detail={`${file.name} · ${formatSize(file.size)}`}
+                                status={t.inbox.stagedCaptureStatus}
+                                onRemove={() => setPendingFiles(prev => prev.filter(item => item !== file))}
+                              />
+                            ))}
+                          </div>
                         </div>
                       )}
 
@@ -679,7 +745,9 @@ export default function InboxView() {
                             className="flex items-center gap-1.5 rounded-lg bg-[var(--amber)] px-3 py-2 text-xs font-medium text-[var(--amber-foreground)] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-45 focus-visible:ring-2 focus-visible:ring-ring"
                           >
                             {savingText ? <Loader2 size={13} className="animate-spin" /> : <Archive size={13} />}
-                            {savingText ? t.inbox.savingText : t.inbox.captureButton}
+                            {savingText
+                              ? (stagedCaptureCount > 1 ? t.inbox.savingItems(stagedCaptureCount) : t.inbox.savingText)
+                              : (stagedCaptureCount > 1 ? t.inbox.captureButtonCount(stagedCaptureCount) : t.inbox.captureButton)}
                           </button>
                         </div>
                       </div>
@@ -693,21 +761,6 @@ export default function InboxView() {
                       onDismiss={() => setLastSavedSummary(null)}
                     />
                   )}
-                  <InboxQueueSection
-                    sectionRef={reviewSectionRef}
-                    variant="preview"
-                    files={files}
-                    inboxError={inboxError}
-                    animateList={animateList}
-                    selectedPath={selectedPath}
-                    onSelectFile={(file) => openQueueWorkbench(file.path)}
-                    onDelete={handleDeleteFile}
-                    onRetry={() => {
-                      setLoading(true);
-                      void fetchInbox();
-                    }}
-                    onOpenWorkbench={() => openQueueWorkbench()}
-                  />
                 </>
               )}
 
@@ -717,14 +770,26 @@ export default function InboxView() {
                   files={files}
                   inboxError={inboxError}
                   animateList={animateList}
-                  selectedPath={selectedFile?.path ?? selectedPath}
+                  selectedPath={selectedPath}
+                  selectedQueuePaths={selectedQueuePathSet}
+                  selectedQueueFiles={selectedQueueFiles}
                   onSelectFile={(file) => setSelectedPath(file.path)}
+                  onToggleQueueSelection={toggleQueueSelection}
+                  onSelectAll={selectAllQueueFiles}
+                  onSelectAging={selectAgingQueueFiles}
+                  onClearSelection={clearQueueSelection}
+                  onOrganizeSelected={handleOrganizeSelected}
                   onDelete={handleDeleteFile}
                   onRetry={() => {
                     setLoading(true);
                     void fetchInbox();
                   }}
                   onOpenWorkbench={() => openQueueWorkbench()}
+                  organizing={organizing}
+                  providerOverride={providerOverride}
+                  onProviderChange={setProviderOverride}
+                  modelOverride={modelOverride}
+                  onModelChange={setModelOverride}
                 />
               )}
 
@@ -760,146 +825,47 @@ export default function InboxView() {
               )}
             </div>
 
+            {activeView === 'capture' && (
+              <aside className="min-w-0 xl:self-start">
+                <InboxCapturePreviewPanel
+                  draftText={draftText}
+                  pendingUrls={pendingUrls}
+                  pendingFiles={pendingFiles}
+                  selectedIntentTitle={selectedIntentOption.title}
+                  textWordCount={textWordCount}
+                  stagedCaptureCount={stagedCaptureCount}
+                />
+              </aside>
+            )}
+
+            {activeView === 'capture' && (
+              <div className="min-w-0 xl:col-span-2">
+                <InboxQueueSection
+                  sectionRef={reviewSectionRef}
+                  variant="preview"
+                  files={files}
+                  inboxError={inboxError}
+                  animateList={animateList}
+                  selectedPath={selectedPath}
+                  onSelectFile={(file) => openQueueWorkbench(file.path)}
+                  onDelete={handleDeleteFile}
+                  onRetry={() => {
+                    setLoading(true);
+                    void fetchInbox();
+                  }}
+                  onOpenWorkbench={() => openQueueWorkbench()}
+                />
+              </div>
+            )}
+
             {activeView === 'queue' && (
               <aside className="lg:sticky lg:top-[70px] lg:self-start">
-                <section className="overflow-hidden rounded-xl border border-border/60 bg-card/70 shadow-sm">
-                  <div className="border-b border-border/50 px-4 py-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-2">
-                        <Sparkles size={15} className="text-[var(--amber)]" />
-                        <h3 className="text-sm font-semibold text-foreground">{t.inbox.aiRouteTitle}</h3>
-                      </div>
-                      <span className="rounded-full bg-[var(--amber-subtle)] px-2 py-0.5 text-2xs font-medium uppercase tracking-wider text-[var(--amber)]">
-                        {t.inbox.agentPresetLabel}
-                      </span>
-                    </div>
-                    <p className="mt-1 text-xs leading-relaxed text-muted-foreground/60">
-                      {t.inbox.modelHint}
-                    </p>
-                  </div>
-
-                  {selectedFile && selectedUnderstanding ? (
-                    <div className="space-y-0">
-                      <div className="border-b border-border/45 px-4 py-3">
-                        <div>
-                          <p className="text-2xs font-medium uppercase tracking-wider text-muted-foreground/55">
-                            {t.inbox.agentScopeTitle}
-                          </p>
-                          <p className="mt-1 text-sm font-medium text-foreground">
-                            {t.inbox.agentScopeAllPending(files.length)}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="px-4 py-4">
-                        <p className="text-2xs font-medium uppercase tracking-wider text-muted-foreground/55">
-                          {t.inbox.understandingTitle}
-                        </p>
-                        <div className="mt-1 flex min-w-0 items-center gap-2">
-                          {selectedFile.source && <SourceIcon source={selectedFile.source} size="sm" />}
-                          <p className="truncate text-sm font-medium text-foreground" title={selectedFile.name}>
-                            {selectedFile.name}
-                          </p>
-                        </div>
-                        {selectedFile.source && (
-                          <p className="mt-1 truncate text-2xs text-muted-foreground/60" title={selectedFile.source.url}>
-                            {getInboxSourceLabel(selectedFile.source)} · {selectedFile.source.domain ?? selectedFile.source.url}
-                          </p>
-                        )}
-                        <p className="mt-1 text-2xs text-muted-foreground/60">
-                          {formatSize(selectedFile.size)} · {formatRelativeTime(selectedFile.modifiedAt, t.home.relativeTime)}
-                        </p>
-                      </div>
-
-                      <div className="border-y border-border/45">
-                        <ReviewFactRow label={t.inbox.suggestedType} value={selectedUnderstanding.type} />
-                        <ReviewFactRow label={t.inbox.suggestedTarget} value={selectedUnderstanding.target} />
-                        <ReviewFactRow label={t.inbox.densityTitle} value={selectedUnderstanding.density} />
-                      </div>
-
-                      <div className="px-4 py-4">
-                        <div className="rounded-lg bg-muted/30 px-3 py-2.5">
-                          <p className="text-2xs font-medium uppercase tracking-wider text-muted-foreground/55">
-                            {t.inbox.suggestedReason}
-                          </p>
-                          <p className="mt-1 text-xs leading-relaxed text-foreground/75">
-                            {selectedUnderstanding.reason}
-                          </p>
-                        </div>
-
-                        <p className="mb-2 mt-4 text-2xs font-medium uppercase tracking-wider text-muted-foreground/55">
-                          {t.inbox.relatedSignals}
-                        </p>
-                        <div className="flex flex-wrap gap-1.5">
-                          {selectedUnderstanding.signals.map(signal => (
-                            <span key={signal} className="rounded-md bg-muted/45 px-2 py-1 text-2xs text-muted-foreground">
-                              {signal}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="space-y-3 border-t border-border/45 px-4 py-4">
-                        <div className="flex items-center justify-between gap-3">
-                          <span className="text-2xs font-medium uppercase tracking-wider text-muted-foreground/55">
-                            {t.inbox.modelTitle}
-                          </span>
-                          <ProviderModelCapsule
-                            providerValue={providerOverride}
-                            onProviderChange={setProviderOverride}
-                            modelValue={modelOverride}
-                            onModelChange={setModelOverride}
-                            disabled={organizing}
-                            storageKey={INBOX_PROVIDER_MODEL_STORAGE_KEY}
-                            systemLabel={t.inbox.modelFollowSystem}
-                            emptyLabel={t.inbox.modelNoProvider}
-                          />
-                        </div>
-                        <div className="flex flex-wrap gap-1.5">
-                          {[t.inbox.reviewBeforeWrite, t.inbox.keepRawSource, t.inbox.undoRecord].map(item => (
-                            <span key={item} className="inline-flex items-center gap-1.5 rounded-md bg-background px-2 py-1 text-2xs text-muted-foreground">
-                              <Check size={10} className="text-success/70" />
-                              {item}
-                            </span>
-                          ))}
-                        </div>
-                        <button
-                          type="button"
-                          onClick={handleOrganize}
-                          disabled={organizing}
-                          className="flex w-full items-center justify-between rounded-lg bg-[var(--amber)] px-3 py-2 text-sm font-medium text-[var(--amber-foreground)] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          <span className="flex items-center gap-2">
-                            {organizing ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-                            {organizing ? t.inbox.organizing : reviewAllLabel}
-                          </span>
-                          <ArrowRight size={14} />
-                        </button>
-                        <div className="grid grid-cols-2 gap-2 pt-1">
-                          <button
-                            type="button"
-                            onClick={() => router.push(`/view/${encodePath(selectedFile.path)}`)}
-                            className="rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
-                          >
-                            {t.inbox.actionOpen}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteFile(selectedFile.name)}
-                            className="rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:ring-2 focus-visible:ring-ring"
-                          >
-                            {t.inbox.actionRemove}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="p-8 text-center">
-                      <p className="text-sm font-medium text-foreground/70">{t.inbox.understandingEmptyTitle}</p>
-                      <p className="mt-1 text-xs leading-relaxed text-muted-foreground/55">{t.inbox.understandingEmptyDesc}</p>
-                    </div>
-                  )}
-                </section>
+                <InboxItemDetailsPanel
+                  file={selectedFile}
+                  understanding={selectedUnderstanding}
+                  onOpen={(file) => router.push(`/view/${encodePath(file.path)}`)}
+                  onDelete={(file) => handleDeleteFile(file.name)}
+                />
               </aside>
             )}
           </div>
@@ -910,6 +876,209 @@ export default function InboxView() {
 }
 
 /* ─── Capture Confirmation + Queue ─── */
+
+function CaptureAffordance({
+  icon,
+  label,
+  description,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  description: string;
+}) {
+  return (
+    <div className="min-w-0 rounded-lg border border-border/45 bg-background/45 px-2.5 py-2">
+      <div className="flex items-center gap-1.5">
+        <span className="shrink-0 text-[var(--amber)]">{icon}</span>
+        <span className="truncate text-xs font-medium text-foreground/80">{label}</span>
+      </div>
+      <p className="mt-0.5 truncate text-2xs text-muted-foreground/55">{description}</p>
+    </div>
+  );
+}
+
+function PendingCaptureRow({
+  icon,
+  label,
+  detail,
+  status,
+  onRemove,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  detail: string;
+  status: string;
+  onRemove: () => void;
+}) {
+  const { t } = useLocale();
+
+  return (
+    <div className="flex min-w-0 items-center gap-2 rounded-lg border border-border/45 bg-background/50 px-2.5 py-2">
+      <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-muted/50 text-[var(--amber)]">
+        {icon}
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="flex min-w-0 items-center gap-1.5">
+          <span className="shrink-0 text-xs font-medium text-foreground/80">{label}</span>
+          <span className="min-w-0 truncate text-2xs text-muted-foreground/58">{detail}</span>
+        </div>
+      </div>
+      <span className="hidden shrink-0 rounded-md bg-muted/45 px-1.5 py-0.5 text-2xs text-muted-foreground/55 sm:inline">
+        {status}
+      </span>
+      <button
+        type="button"
+        onClick={onRemove}
+        className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground/50 transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+        aria-label={t.inbox.removeCaptureItem(label)}
+      >
+        <X size={12} />
+      </button>
+    </div>
+  );
+}
+
+function InboxCapturePreviewPanel({
+  draftText,
+  pendingUrls,
+  pendingFiles,
+  selectedIntentTitle,
+  textWordCount,
+  stagedCaptureCount,
+}: {
+  draftText: string;
+  pendingUrls: string[];
+  pendingFiles: File[];
+  selectedIntentTitle: string;
+  textWordCount: number;
+  stagedCaptureCount: number;
+}) {
+  const { t } = useLocale();
+  const trimmedText = draftText.trim();
+  const primaryUrl = pendingUrls[0];
+  const primaryFile = pendingFiles[0];
+  const hasText = trimmedText.length > 0;
+  const additionalCount = Math.max(0, stagedCaptureCount - 1);
+
+  let body: React.ReactNode;
+  if (primaryUrl) {
+    const host = getUrlHost(primaryUrl);
+    body = (
+      <>
+        <CapturePreviewIdentity
+          icon={<SourceIcon url={primaryUrl} size="md" />}
+          title={getInboxSourceLabel(null, primaryUrl) ?? host}
+          description={shortenUrl(primaryUrl)}
+        />
+        <div className="mt-4 divide-y divide-border/35 border-y border-border/35">
+          <CapturePreviewFactRow label={t.inbox.sourcePreviewType} value={t.inbox.sourcePreviewWebLink} />
+          <CapturePreviewFactRow label={t.inbox.sourcePreviewSaveAs} value={t.inbox.sourcePreviewSourcePreserved} />
+          <CapturePreviewFactRow label={t.inbox.sourcePreviewStatus} value={t.inbox.sourcePreviewReviewPending} />
+        </div>
+      </>
+    );
+  } else if (primaryFile) {
+    const ext = getFileExt(primaryFile.name);
+    body = (
+      <>
+        <CapturePreviewIdentity
+          icon={<Paperclip size={15} />}
+          title={primaryFile.name}
+          description={`${formatSize(primaryFile.size)} · ${ext ? `.${ext}` : t.inbox.sourcePreviewFileType}`}
+        />
+        <div className="mt-4 divide-y divide-border/35 border-y border-border/35">
+          <CapturePreviewFactRow label={t.inbox.sourcePreviewType} value={ext ? `.${ext}` : t.inbox.sourcePreviewFileType} />
+          <CapturePreviewFactRow label={t.inbox.sourcePreviewSaveAs} value={t.inbox.sourcePreviewOriginalFile} />
+          <CapturePreviewFactRow label={t.inbox.sourcePreviewStatus} value={t.inbox.sourcePreviewReviewPending} />
+        </div>
+      </>
+    );
+  } else if (hasText) {
+    body = (
+      <>
+        <CapturePreviewIdentity
+          icon={<FileText size={15} />}
+          title={t.inbox.sourcePreviewTextCapture}
+          description={t.inbox.pendingText(textWordCount)}
+        />
+        <div className="mt-4 divide-y divide-border/35 border-y border-border/35">
+          <CapturePreviewFactRow label={t.inbox.sourcePreviewType} value={t.inbox.sourcePreviewTextType} />
+          <CapturePreviewFactRow label={t.inbox.sourcePreviewIntent} value={selectedIntentTitle} />
+          <CapturePreviewFactRow label={t.inbox.sourcePreviewStatus} value={t.inbox.sourcePreviewReviewPending} />
+        </div>
+      </>
+    );
+  } else {
+    body = (
+      <div className="py-5 text-center">
+        <span className="mx-auto inline-flex h-10 w-10 items-center justify-center rounded-lg bg-muted/45 text-muted-foreground/55">
+          <Inbox size={17} />
+        </span>
+        <p className="mt-3 text-sm font-medium text-foreground/78">{t.inbox.sourcePreviewEmptyTitle}</p>
+        <p className="mx-auto mt-1 max-w-[260px] text-xs leading-relaxed text-muted-foreground/58">
+          {t.inbox.sourcePreviewEmptyDesc}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <section
+      className="rounded-xl border border-border/60 bg-card/65 shadow-sm"
+      aria-live="polite"
+      aria-label={t.inbox.sourcePreviewTitle}
+    >
+      <div className="border-b border-border/50 px-4 py-3">
+        <div className="flex items-center gap-2">
+          <Eye size={15} className="text-[var(--amber)]" />
+          <h3 className="text-sm font-semibold text-foreground">{t.inbox.sourcePreviewTitle}</h3>
+        </div>
+        <p className="mt-1 text-xs leading-relaxed text-muted-foreground/60">
+          {stagedCaptureCount > 0 ? t.inbox.sourcePreviewActiveDesc : t.inbox.sourcePreviewIdleDesc}
+        </p>
+      </div>
+      <div className="px-4 py-4">
+        {body}
+        {additionalCount > 0 && (
+          <div className="mt-3 rounded-lg border border-border/45 bg-background/50 px-3 py-2 text-xs text-muted-foreground/65">
+            {t.inbox.sourcePreviewAlsoStaged(additionalCount)}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function CapturePreviewIdentity({
+  icon,
+  title,
+  description,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="flex min-w-0 items-start gap-3">
+      <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--amber-subtle)] text-[var(--amber)]">
+        {icon}
+      </span>
+      <div className="min-w-0">
+        <p className="truncate text-sm font-semibold text-foreground" title={title}>{title}</p>
+        <p className="mt-0.5 truncate text-xs text-muted-foreground/62" title={description}>{description}</p>
+      </div>
+    </div>
+  );
+}
+
+function CapturePreviewFactRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="grid grid-cols-[78px_minmax(0,1fr)] items-start gap-3 py-2.5">
+      <p className="text-2xs font-medium uppercase tracking-wider text-muted-foreground/50">{label}</p>
+      <p className="min-w-0 text-xs font-medium leading-snug text-foreground/78">{value}</p>
+    </div>
+  );
+}
 
 function InboxLastSavedStrip({
   summary,
@@ -977,10 +1146,22 @@ function InboxQueueSection({
   inboxError,
   animateList,
   selectedPath,
+  selectedQueuePaths = new Set<string>(),
+  selectedQueueFiles = [],
   onSelectFile,
+  onToggleQueueSelection,
+  onSelectAll,
+  onSelectAging,
+  onClearSelection,
+  onOrganizeSelected,
   onDelete,
   onRetry,
   onOpenWorkbench,
+  organizing = false,
+  providerOverride = null,
+  onProviderChange,
+  modelOverride = null,
+  onModelChange,
 }: {
   sectionRef?: RefObject<HTMLElement | null>;
   variant: 'preview' | 'workbench';
@@ -988,16 +1169,29 @@ function InboxQueueSection({
   inboxError: string | null;
   animateList: boolean;
   selectedPath: string | null;
+  selectedQueuePaths?: Set<string>;
+  selectedQueueFiles?: InboxFile[];
   onSelectFile: (file: InboxFile) => void;
+  onToggleQueueSelection?: (file: InboxFile) => void;
+  onSelectAll?: () => void;
+  onSelectAging?: () => void;
+  onClearSelection?: () => void;
+  onOrganizeSelected?: () => void;
   onDelete: (name: string) => void;
   onRetry: () => void;
   onOpenWorkbench: () => void;
+  organizing?: boolean;
+  providerOverride?: ProviderSelection;
+  onProviderChange?: (provider: ProviderSelection) => void;
+  modelOverride?: string | null;
+  onModelChange?: (model: string | null) => void;
 }) {
   const { t } = useLocale();
   const hasFiles = files.length > 0;
   const isPreview = variant === 'preview';
   const visibleFiles = isPreview ? files.slice(0, REVIEW_PREVIEW_VISIBLE) : files;
   const remainingCount = Math.max(0, files.length - visibleFiles.length);
+  const agingCount = files.filter(file => file.isAging).length;
 
   return (
     <section
@@ -1021,16 +1215,6 @@ function InboxQueueSection({
             {isPreview ? t.inbox.queuePreviewDesc : t.inbox.reviewPageSubtitle}
           </p>
         </div>
-        {isPreview && hasFiles && (
-          <button
-            type="button"
-            onClick={onOpenWorkbench}
-            className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            {t.inbox.reviewPendingAction(files.length)}
-            <ArrowRight size={12} />
-          </button>
-        )}
       </div>
       {inboxError ? (
         <div className="px-4 py-10 text-center">
@@ -1046,6 +1230,29 @@ function InboxQueueSection({
         </div>
       ) : hasFiles ? (
         <>
+          {isPreview && (
+            <InboxOrganizationPreviewBar
+              files={files}
+              agingCount={agingCount}
+              onOpenWorkbench={onOpenWorkbench}
+            />
+          )}
+          {!isPreview && onOrganizeSelected && onSelectAll && onSelectAging && onClearSelection && onProviderChange && onModelChange && (
+            <InboxOrganizationAgentBar
+              files={files}
+              selectedFiles={selectedQueueFiles}
+              agingCount={agingCount}
+              organizing={organizing}
+              providerOverride={providerOverride}
+              onProviderChange={onProviderChange}
+              modelOverride={modelOverride}
+              onModelChange={onModelChange}
+              onSelectAll={onSelectAll}
+              onSelectAging={onSelectAging}
+              onClearSelection={onClearSelection}
+              onOrganize={onOrganizeSelected}
+            />
+          )}
           <div className="divide-y divide-border/50">
             {visibleFiles.map((file, idx) => (
               <InboxFileRow
@@ -1054,7 +1261,10 @@ function InboxQueueSection({
                 index={idx}
                 animate={animateList}
                 selected={!isPreview && selectedPath === file.path}
+                multiSelect={!isPreview}
+                checked={selectedQueuePaths.has(file.path)}
                 onSelect={() => onSelectFile(file)}
+                onToggleChecked={onToggleQueueSelection ? () => onToggleQueueSelection(file) : undefined}
                 onDelete={onDelete}
               />
             ))}
@@ -1080,6 +1290,158 @@ function InboxQueueSection({
   );
 }
 
+function InboxOrganizationAgentBar({
+  files,
+  selectedFiles,
+  agingCount,
+  organizing,
+  providerOverride,
+  onProviderChange,
+  modelOverride,
+  onModelChange,
+  onSelectAll,
+  onSelectAging,
+  onClearSelection,
+  onOrganize,
+}: {
+  files: InboxFile[];
+  selectedFiles: InboxFile[];
+  agingCount: number;
+  organizing: boolean;
+  providerOverride: ProviderSelection;
+  onProviderChange: (provider: ProviderSelection) => void;
+  modelOverride: string | null;
+  onModelChange: (model: string | null) => void;
+  onSelectAll: () => void;
+  onSelectAging: () => void;
+  onClearSelection: () => void;
+  onOrganize: () => void;
+}) {
+  const { t } = useLocale();
+  const selectedCount = selectedFiles.length;
+  const disabled = selectedCount === 0 || organizing;
+
+  return (
+    <div className="border-b border-border/50 bg-background/55 px-3 py-2.5">
+      <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex min-w-0 items-start gap-2.5">
+          <span className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--amber-subtle)] text-[var(--amber)]">
+            <Sparkles size={15} />
+          </span>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h4 className="text-sm font-semibold text-foreground">{t.inbox.organizationAgentTitle}</h4>
+              <span className="rounded-full bg-muted px-2 py-0.5 text-2xs font-medium text-muted-foreground">
+                {t.inbox.selectedCount(selectedCount)}
+              </span>
+            </div>
+            <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground/62">
+              {selectedCount > 0
+                ? t.inbox.organizationAgentReady(selectedCount)
+                : t.inbox.organizationAgentDesc}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+          <button
+            type="button"
+            onClick={onSelectAll}
+            disabled={files.length === 0}
+            className="rounded-lg border border-border/70 bg-background px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-45 focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {t.inbox.selectAll}
+          </button>
+          <button
+            type="button"
+            onClick={onSelectAging}
+            disabled={agingCount === 0}
+            className="rounded-lg border border-border/70 bg-background px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-45 focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {t.inbox.selectAging}
+          </button>
+          {selectedCount > 0 && (
+            <button
+              type="button"
+              onClick={onClearSelection}
+              className="rounded-lg px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              {t.inbox.clearSelection}
+            </button>
+          )}
+          <ProviderModelCapsule
+            providerValue={providerOverride}
+            onProviderChange={onProviderChange}
+            modelValue={modelOverride}
+            onModelChange={onModelChange}
+            disabled={organizing}
+            storageKey={INBOX_PROVIDER_MODEL_STORAGE_KEY}
+            systemLabel={t.inbox.modelFollowSystem}
+            emptyLabel={t.inbox.modelNoProvider}
+          />
+          <button
+            type="button"
+            onClick={onOrganize}
+            disabled={disabled}
+            className="inline-flex min-w-[154px] items-center justify-center gap-1.5 rounded-lg bg-[var(--amber)] px-3 py-1.5 text-xs font-medium text-[var(--amber-foreground)] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-45 focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {organizing ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
+            {organizing ? t.inbox.organizing : t.inbox.organizeSelectedAction(selectedCount)}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function InboxOrganizationPreviewBar({
+  files,
+  agingCount,
+  onOpenWorkbench,
+}: {
+  files: InboxFile[];
+  agingCount: number;
+  onOpenWorkbench: () => void;
+}) {
+  const { t } = useLocale();
+
+  return (
+    <div className="border-b border-border/50 bg-background/45 px-3 py-2.5">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 items-start gap-2.5">
+          <span className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--amber-subtle)] text-[var(--amber)]">
+            <Sparkles size={15} />
+          </span>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h4 className="text-sm font-semibold text-foreground">{t.inbox.organizationAgentTitle}</h4>
+              <span className="rounded-full bg-muted px-2 py-0.5 text-2xs font-medium text-muted-foreground">
+                {t.inbox.fileCount(files.length)}
+              </span>
+              {agingCount > 0 && (
+                <span className="rounded-full bg-[var(--amber)]/10 px-2 py-0.5 text-2xs font-medium text-[var(--amber)]/75">
+                  {agingCount} {t.inbox.agingCountLabel}
+                </span>
+              )}
+            </div>
+            <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground/62">
+              {t.inbox.organizationAgentPreviewDesc}
+            </p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={onOpenWorkbench}
+          className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          {t.inbox.reviewPendingAction(files.length)}
+          <ArrowRight size={12} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /* ─── File Row ─── */
 
 function InboxFileRow({
@@ -1088,14 +1450,20 @@ function InboxFileRow({
   index,
   animate,
   selected,
+  multiSelect = false,
+  checked = false,
   onSelect,
+  onToggleChecked,
 }: {
   file: InboxFile;
   onDelete: (name: string) => void;
   index: number;
   animate: boolean;
   selected: boolean;
+  multiSelect?: boolean;
+  checked?: boolean;
   onSelect: () => void;
+  onToggleChecked?: () => void;
 }) {
   const { t } = useLocale();
   const router = useRouter();
@@ -1135,6 +1503,19 @@ function InboxFileRow({
         style={animate ? { animationDelay: `${index * 30}ms` } : undefined}
       >
         <span className={`h-8 w-[2px] rounded-full ${selected ? 'bg-[var(--amber)]' : 'bg-transparent'}`} />
+        {multiSelect && (
+          <input
+            type="checkbox"
+            checked={checked}
+            onChange={(e) => {
+              e.stopPropagation();
+              onToggleChecked?.();
+            }}
+            onClick={(e) => e.stopPropagation()}
+            className="h-4 w-4 shrink-0 rounded border-border accent-[var(--amber)] focus-visible:ring-2 focus-visible:ring-ring"
+            aria-label={t.inbox.selectItem(file.name)}
+          />
+        )}
         {/* File icon */}
         {file.source ? (
           <SourceIcon source={file.source} size="md" />
@@ -1246,6 +1627,184 @@ function FileContextMenu({ x, y, file, onDelete, onClose }: {
       <button className={`${itemCls} text-destructive hover:text-destructive`} onClick={onDelete}>
         <Trash2 size={14} className="shrink-0" /> {t.inbox.removeFile}
       </button>
+    </div>
+  );
+}
+
+function InboxItemDetailsPanel({
+  file,
+  understanding,
+  onOpen,
+  onDelete,
+}: {
+  file: InboxFile | null;
+  understanding: ReturnType<typeof buildUnderstanding> | null;
+  onOpen: (file: InboxFile) => void;
+  onDelete: (file: InboxFile) => void;
+}) {
+  const { t } = useLocale();
+
+  if (!file || !understanding) {
+    return (
+      <section className="overflow-hidden rounded-xl border border-border/60 bg-card/70 shadow-sm">
+        <div className="p-8 text-center">
+          <span className="mx-auto flex h-9 w-9 items-center justify-center rounded-lg bg-muted/45 text-muted-foreground/50">
+            <Eye size={16} />
+          </span>
+          <p className="mt-3 text-sm font-medium text-foreground/70">{t.inbox.understandingEmptyTitle}</p>
+          <p className="mt-1 text-xs leading-relaxed text-muted-foreground/55">{t.inbox.understandingEmptyDesc}</p>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section className="overflow-hidden rounded-xl border border-border/60 bg-card/70 shadow-sm">
+      <div className="border-b border-border/50 px-4 py-3">
+        <div className="flex items-center gap-2">
+          <Eye size={15} className="text-[var(--amber)]" />
+          <h3 className="text-sm font-semibold text-foreground">{t.inbox.itemDetailsTitle}</h3>
+        </div>
+        <p className="mt-1 text-xs leading-relaxed text-muted-foreground/60">
+          {t.inbox.itemDetailsDesc}
+        </p>
+      </div>
+
+      <div className="px-4 py-4">
+        <p className="text-2xs font-medium uppercase tracking-wider text-muted-foreground/55">
+          {t.inbox.understandingTitle}
+        </p>
+        <div className="mt-1 flex min-w-0 items-center gap-2">
+          {file.source && <SourceIcon source={file.source} size="sm" />}
+          <p className="truncate text-sm font-medium text-foreground" title={file.name}>
+            {file.name}
+          </p>
+        </div>
+        {file.source && (
+          <p className="mt-1 truncate text-2xs text-muted-foreground/60" title={file.source.url}>
+            {getInboxSourceLabel(file.source)} · {file.source.domain ?? file.source.url}
+          </p>
+        )}
+        <p className="mt-1 text-2xs text-muted-foreground/60">
+          {formatSize(file.size)} · {formatRelativeTime(file.modifiedAt, t.home.relativeTime)}
+        </p>
+      </div>
+
+      <div className="border-y border-border/45">
+        <ReviewFactRow label={t.inbox.suggestedType} value={understanding.type} />
+        <ReviewFactRow label={t.inbox.suggestedTarget} value={understanding.target} />
+        <ReviewFactRow label={t.inbox.densityTitle} value={understanding.density} />
+      </div>
+
+      <div className="px-4 py-4">
+        <div className="rounded-lg bg-muted/30 px-3 py-2.5">
+          <p className="text-2xs font-medium uppercase tracking-wider text-muted-foreground/55">
+            {t.inbox.suggestedReason}
+          </p>
+          <p className="mt-1 text-xs leading-relaxed text-foreground/75">
+            {understanding.reason}
+          </p>
+        </div>
+
+        <p className="mb-2 mt-4 text-2xs font-medium uppercase tracking-wider text-muted-foreground/55">
+          {t.inbox.relatedSignals}
+        </p>
+        <div className="flex flex-wrap gap-1.5">
+          {understanding.signals.map(signal => (
+            <span key={signal} className="rounded-md bg-muted/45 px-2 py-1 text-2xs text-muted-foreground">
+              {signal}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      <InboxContentPreview key={file.path} file={file} />
+
+      <div className="grid grid-cols-2 gap-2 border-t border-border/45 px-4 py-4">
+        <button
+          type="button"
+          onClick={() => onOpen(file)}
+          className="rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          {t.inbox.actionOpen}
+        </button>
+        <button
+          type="button"
+          onClick={() => onDelete(file)}
+          className="rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          {t.inbox.actionRemove}
+        </button>
+      </div>
+    </section>
+  );
+}
+
+type PreviewState =
+  | { status: 'unsupported' }
+  | { status: 'loading' }
+  | { status: 'ready'; content: string }
+  | { status: 'error' };
+
+function InboxContentPreview({ file }: { file: InboxFile }) {
+  const { t } = useLocale();
+  const [preview, setPreview] = useState<PreviewState>(() => (
+    isContentPreviewable(file.name) ? { status: 'loading' } : { status: 'unsupported' }
+  ));
+
+  useEffect(() => {
+    if (!isContentPreviewable(file.name)) {
+      return;
+    }
+
+    let cancelled = false;
+    fetch(`/api/file?path=${encodeURIComponent(file.path)}&op=read_file`)
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`read failed ${res.status}`);
+        const body = await res.json() as { content?: string };
+        if (!cancelled) {
+          setPreview({ status: 'ready', content: formatContentPreview(body.content ?? '') });
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setPreview({ status: 'error' });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [file.name, file.path]);
+
+  return (
+    <div className="border-t border-border/45 px-4 py-4">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <p className="text-2xs font-medium uppercase tracking-wider text-muted-foreground/55">
+          {t.inbox.contentPreviewTitle}
+        </p>
+        {isContentPreviewable(file.name) && (
+          <span className="text-2xs text-muted-foreground/45">{getFileExt(file.name) || 'text'}</span>
+        )}
+      </div>
+      {preview.status === 'loading' ? (
+        <div className="space-y-2 rounded-lg border border-border/45 bg-background/60 p-3">
+          <div className="h-3 w-4/5 animate-pulse rounded bg-muted" />
+          <div className="h-3 w-3/5 animate-pulse rounded bg-muted" />
+          <div className="h-3 w-2/3 animate-pulse rounded bg-muted" />
+        </div>
+      ) : preview.status === 'ready' ? (
+        preview.content ? (
+          <pre className="max-h-[260px] overflow-auto whitespace-pre-wrap rounded-lg border border-border/45 bg-background/65 p-3 font-mono text-[11px] leading-relaxed text-foreground/78">
+            {preview.content}
+          </pre>
+        ) : (
+          <div className="rounded-lg border border-border/45 bg-background/60 px-3 py-4 text-center text-xs text-muted-foreground/55">
+            {t.inbox.contentPreviewEmpty}
+          </div>
+        )
+      ) : (
+        <div className="rounded-lg border border-border/45 bg-background/60 px-3 py-4 text-center text-xs leading-relaxed text-muted-foreground/55">
+          {preview.status === 'unsupported' ? t.inbox.contentPreviewUnavailable : t.inbox.contentPreviewFailed}
+        </div>
+      )}
     </div>
   );
 }
@@ -1405,36 +1964,6 @@ function ReviewFactRow({ label, value }: { label: string; value: string }) {
       <p className="text-2xs font-medium uppercase tracking-wider text-muted-foreground/50">{label}</p>
       <p className="min-w-0 text-sm font-medium leading-snug text-foreground">{value}</p>
     </div>
-  );
-}
-
-function CaptureChip({
-  icon,
-  label,
-  detail,
-  onRemove,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  detail: string;
-  onRemove: () => void;
-}) {
-  const { t } = useLocale();
-
-  return (
-    <span className="inline-flex max-w-full items-center gap-1.5 rounded-lg border border-border/60 bg-card px-2 py-1 text-2xs text-muted-foreground">
-      <span className="shrink-0 text-[var(--amber)]">{icon}</span>
-      <span className="shrink-0 font-medium text-foreground/75">{label}</span>
-      <span className="min-w-0 truncate">{detail}</span>
-      <button
-        type="button"
-        onClick={onRemove}
-        className="-mr-0.5 ml-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded text-muted-foreground/50 transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
-        aria-label={t.inbox.removeCaptureItem(label)}
-      >
-        <X size={10} />
-      </button>
-    </span>
   );
 }
 
@@ -1624,6 +2153,32 @@ function looksLikeCapturedArticle(lowerName: string): boolean {
   return /article|url|web|clip|wechat|公众号|mp.weixin|小红书|link|reference|ref/.test(lowerName);
 }
 
+function isContentPreviewable(name: string): boolean {
+  const ext = getFileExt(name);
+  return ['', 'md', 'markdown', 'txt', 'csv', 'tsv', 'json', 'yaml', 'yml', 'xml', 'html', 'htm'].includes(ext);
+}
+
+function formatContentPreview(content: string): string {
+  const withoutYamlFrontmatter = content.replace(/^\uFEFF?---[ \t]*(?:\r?\n)[\s\S]*?(?:^|\r?\n)---[ \t]*(?:\r?\n|$)/, '');
+  const withoutCaptureHeader = stripGeneratedCaptureHeader(withoutYamlFrontmatter);
+  const compact = withoutCaptureHeader.trim();
+  const limit = 3200;
+  return compact.length > limit ? `${compact.slice(0, limit).trimEnd()}\n...` : compact;
+}
+
+function stripGeneratedCaptureHeader(content: string): string {
+  const lines = content.split(/\r?\n/);
+  const headerStart = lines.findIndex(line => line.trim().length > 0);
+  if (headerStart < 0 || lines[headerStart]?.trim() !== '***') return content;
+
+  const separatorIndex = lines.findIndex((line, index) => index > headerStart && /^[-*_]{6,}$/.test(line.trim()));
+  if (separatorIndex < headerStart + 2 || separatorIndex - headerStart > 24) return content;
+
+  const headerLines = lines.slice(headerStart + 1, separatorIndex);
+  const hasCaptureMetadata = headerLines.some(line => /^(title|source|url|author|site|platform|clipped):/i.test(line.trim()));
+  return hasCaptureMetadata ? lines.slice(separatorIndex + 1).join('\n') : content;
+}
+
 function countWords(text: string): number {
   const trimmed = text.trim();
   if (!trimmed) return 0;
@@ -1635,6 +2190,14 @@ function countWords(text: string): number {
   return cjk + words;
 }
 
+function getUrlHost(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return url;
+  }
+}
+
 function shortenUrl(url: string): string {
   try {
     const parsed = new URL(url);
@@ -1644,6 +2207,19 @@ function shortenUrl(url: string): string {
   } catch {
     return url.length > 42 ? `${url.slice(0, 39)}...` : url;
   }
+}
+
+function removeSavedPendingFiles(files: File[], savedOriginalNames: string[]): File[] {
+  const remainingSavedByName = new Map<string, number>();
+  for (const name of savedOriginalNames) {
+    remainingSavedByName.set(name, (remainingSavedByName.get(name) ?? 0) + 1);
+  }
+  return files.filter(file => {
+    const remaining = remainingSavedByName.get(file.name) ?? 0;
+    if (remaining <= 0) return true;
+    remainingSavedByName.set(file.name, remaining - 1);
+    return false;
+  });
 }
 
 function buildCaptureFileName(content: string, intent: CaptureIntent): string {

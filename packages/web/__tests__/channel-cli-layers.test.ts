@@ -69,6 +69,16 @@ describe('channel config layer', () => {
     expect(validatePlatformConfig('dingtalk', { webhook_url: 'http://example.com/hook' }).valid).toBe(false);
   });
 
+  it('accepts full WeCom webhook URLs consistently and saves only the extracted key', async () => {
+    const { validateChannelConfig, normalizeChannelConfig } = await import('../../../packages/mindos/bin/lib/channel-config.js');
+    const { validatePlatformConfig } = await import('@/lib/im/config');
+    const fullWebhook = 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=robot-key-123';
+
+    expect(validateChannelConfig('wecom', { webhook_key: fullWebhook })).toEqual({ valid: true });
+    expect(validatePlatformConfig('wecom', { webhook_key: fullWebhook })).toEqual({ valid: true });
+    expect(normalizeChannelConfig('wecom', { webhook_key: fullWebhook })).toEqual({ webhook_key: 'robot-key-123' });
+  });
+
   it('writes config with optimistic mtime protection', async () => {
     const { writeChannelConfig, readChannelConfig, getChannelConfigMtime } = await import('../../../packages/mindos/bin/lib/channel-config.js');
     writeChannelConfig({ providers: { telegram: { bot_token: '123456789:ABCdefGHIjklMNOpqrSTUvwxYZ' } } });
@@ -103,6 +113,18 @@ describe('channel management layer', () => {
     const verify = await channelVerify('telegram', { skipVerify: true });
     expect(verify.valid).toBe(true);
     expect(verify.details?.status).toBe('Format valid only');
+  });
+
+  it('normalizes full WeCom webhook URL before saving from CLI', async () => {
+    const { channelAdd } = await import('../../../packages/mindos/bin/lib/channel-mgmt.js');
+    const add = await channelAdd('wecom', {
+      webhook_key: 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=robot-key-123',
+    }, { skipVerify: true });
+    expect(add.ok).toBe(true);
+
+    const configPath = path.join(fakeHome, '.mindos', 'im.json');
+    const onDisk = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+    expect(onDisk.providers.wecom.webhook_key).toBe('robot-key-123');
   });
 
   it('loads web URL and auth token from config when remotely verifying credentials', async () => {

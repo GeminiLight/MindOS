@@ -17,6 +17,14 @@ import { buildLineDiff, collapseDiffContext } from '@/components/changes/line-di
 import { extractRelevantContent } from '@/lib/agent/paragraph-extract';
 import { computeDiffAsync } from '@/lib/agent/diff-async';
 import { getProjectRoot } from '@/lib/project-root';
+import {
+  createMindosAgentPermissionPolicy,
+  getMindosKbToolNameSet,
+  MINDOS_CHAT_KB_TOOL_NAMES,
+  MINDOS_ORGANIZE_KB_TOOL_NAMES,
+  MINDOS_WRITE_TOOL_NAMES,
+  type MindosAgentPermissionPolicy,
+} from './permission-policy';
 
 // Max chars per file to avoid token overflow (~100k chars ≈ ~25k tokens)
 const MAX_FILE_CHARS = 20_000;
@@ -214,22 +222,14 @@ const LoadSkillParams = Type.Object({
 // ─── Tool Definitions (AgentTool interface) ─────────────────────────────────
 
 // Write-operation tool names — used by beforeToolCall for write-protection
-export const WRITE_TOOLS = new Set([
-  'write_file', 'create_file', 'batch_create_files', 'append_to_file', 'insert_after_heading',
-  'update_section', 'edit_lines', 'delete_file', 'rename_file', 'move_file', 'append_csv',
-]);
+export const WRITE_TOOLS = new Set<string>(MINDOS_WRITE_TOOL_NAMES);
 
 /** Tool names sufficient for the "organize uploaded files" task. */
-export const ORGANIZE_TOOL_NAMES = new Set([
-  'list_files', 'read_file', 'search',
-  'load_skill',
-  'create_file', 'batch_create_files', 'write_file',
-  'append_to_file', 'insert_after_heading', 'update_section',
-]);
+export const ORGANIZE_TOOL_NAMES = new Set<string>(MINDOS_ORGANIZE_KB_TOOL_NAMES);
 
 /** Lean tool set for organize mode — skips MCP discovery, history, backlinks, etc. */
 export function getOrganizeTools(): MindosAgentTool[] {
-  return knowledgeBaseTools.filter(t => ORGANIZE_TOOL_NAMES.has(t.name));
+  return getToolsForMindosAgentPolicy(createMindosAgentPermissionPolicy('organize'));
 }
 
 /**
@@ -239,22 +239,28 @@ export function getOrganizeTools(): MindosAgentTool[] {
  * but blocks all write operations. Extensible: add tool names here
  * to grant more read-only capabilities to Chat mode.
  */
-export const CHAT_TOOL_NAMES = new Set([
-  'list_files',
-  'read_file',
-  'read_file_chunk',
-  'search',
-  'load_skill',
-  'get_recent',
-  'get_backlinks',
-]);
+export const CHAT_TOOL_NAMES = new Set<string>(MINDOS_CHAT_KB_TOOL_NAMES);
 
 export function getChatTools(): MindosAgentTool[] {
-  return knowledgeBaseTools.filter(t => CHAT_TOOL_NAMES.has(t.name));
+  return getToolsForMindosAgentPolicy(createMindosAgentPermissionPolicy('chat'));
 }
 
 export function getRequestScopedTools(): MindosAgentTool[] {
-  const baseTools = [...knowledgeBaseTools, ...a2aTools, ...acpTools];
+  return getToolsForMindosAgentPolicy(createMindosAgentPermissionPolicy('agent'));
+}
+
+export function getToolsForMindosAgentPolicy(policy: MindosAgentPermissionPolicy): MindosAgentTool[] {
+  const kbToolNameSet = getMindosKbToolNameSet(policy);
+  const baseTools = kbToolNameSet
+    ? knowledgeBaseTools.filter(t => kbToolNameSet.has(t.name))
+    : [...knowledgeBaseTools];
+
+  if (policy.toolScope.a2aDelegation) {
+    baseTools.push(...a2aTools);
+  }
+  if (policy.toolScope.acpDelegation) {
+    baseTools.push(...acpTools);
+  }
 
   // IM tools are now provided by the im extension (packages/web/lib/im/index.ts)
   // registered via pi.registerTool() and loaded by DefaultResourceLoader.

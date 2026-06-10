@@ -11,6 +11,7 @@ const mockClearPersistTimer = vi.fn();
 const mockInitSessions = vi.fn();
 const mockSetSessionDefaultAcpAgent = vi.fn();
 const mockSetSessionAgentRuntimeBinding = vi.fn();
+const mockAttachRuntimeSession = vi.fn();
 const mockResetSession = vi.fn();
 const mockLoadSession = vi.fn();
 const mockDeleteSession = vi.fn();
@@ -97,6 +98,7 @@ vi.mock('@/hooks/useAskSession', () => ({
     setMessages: mockSetMessages,
     setSessionDefaultAcpAgent: mockSetSessionDefaultAcpAgent,
     setSessionAgentRuntimeBinding: mockSetSessionAgentRuntimeBinding,
+    attachRuntimeSession: mockAttachRuntimeSession,
     resetSession: mockResetSession,
     loadSession: mockLoadSession,
     deleteSession: mockDeleteSession,
@@ -191,14 +193,38 @@ vi.mock('@/components/ask/SessionHistoryPanel', () => ({
     onClose?: () => void;
     onNewChat?: () => void;
     onDelete?: (id: string) => void;
+    codexThreads?: Array<{ id: string; name?: string; preview?: string; cwd?: string; updatedAt?: number }>;
+    codexThreadsLoading?: boolean;
+    codexThreadsError?: string | null;
+    onAttachCodexThread?: (thread: { id: string; name?: string; preview?: string; cwd?: string; updatedAt?: number }) => void;
+    onForkCodexThread?: (thread: { id: string; name?: string; preview?: string; cwd?: string; updatedAt?: number }) => void;
+    onArchiveCodexThread?: (thread: { id: string; name?: string; preview?: string; cwd?: string; updatedAt?: number }) => void;
   }) => {
     mockSessionHistoryPanelProps(props);
     return (
       <div data-testid="history-session-list">
         {props.sessions?.map((session) => <span key={session.id}>{session.title ?? session.id}</span>)}
+        {props.codexThreadsLoading && <span>Loading Codex threads...</span>}
+        {props.codexThreadsError && <span>{props.codexThreadsError}</span>}
+        {props.codexThreads?.map((thread) => <span key={thread.id}>{thread.name ?? thread.id}</span>)}
         {props.sessions?.map((session) => (
           <button key={`load-${session.id}`} type="button" onClick={() => props.onLoad?.(session.id)}>
             Load {session.title ?? session.id}
+          </button>
+        ))}
+        {props.codexThreads?.map((thread) => (
+          <button key={`attach-${thread.id}`} type="button" onClick={() => props.onAttachCodexThread?.(thread)}>
+            Attach {thread.name ?? thread.id}
+          </button>
+        ))}
+        {props.codexThreads?.map((thread) => (
+          <button key={`fork-${thread.id}`} type="button" onClick={() => props.onForkCodexThread?.(thread)}>
+            Fork {thread.name ?? thread.id}
+          </button>
+        ))}
+        {props.codexThreads?.map((thread) => (
+          <button key={`archive-${thread.id}`} type="button" onClick={() => props.onArchiveCodexThread?.(thread)}>
+            Archive {thread.name ?? thread.id}
           </button>
         ))}
         <button type="button" onClick={() => props.onNewChat?.()}>History New Chat</button>
@@ -247,6 +273,7 @@ vi.mock('@/components/ask/AskHeader', () => ({
           <button type="button" onClick={() => onToggleHistory?.()}>Toggle History</button>
           <button type="button" onClick={() => onReset?.()}>Header New Chat</button>
           <button type="button" onClick={() => onDeleteSession?.(activeSessionId ?? 'missing')}>Header Delete Active</button>
+          <button type="button" onClick={() => onSelectAgentRuntime(null)}>Select MindOS</button>
           <button type="button" onClick={() => onSelectAgentRuntime({ id: 'claude-code', name: 'Claude Code', kind: 'acp' })}>Select Claude</button>
           <button type="button" onClick={() => onSelectAgentRuntime({ id: 'claude', name: 'Claude Code', kind: 'claude' })}>Select Claude Native</button>
           <button type="button" onClick={() => onSelectAgentRuntime({ id: 'codex', name: 'Codex', kind: 'codex' })}>Select Codex</button>
@@ -593,6 +620,71 @@ describe('AskContent ACP session binding', () => {
     });
   });
 
+  it('can switch an opener-selected ACP runtime back to MindOS before submit', async () => {
+    mockPersistedProviderModel = { provider: 'openai', model: 'gpt-test' };
+    mockActiveSession = {
+      id: 's-acp-empty',
+      title: 'ACP opener',
+      createdAt: 1,
+      updatedAt: 1,
+      messages: [],
+      defaultAcpAgent: { id: 'claude-code', name: 'Claude Code' },
+    };
+    mockSessions = [mockActiveSession];
+    mockActiveSessionId = mockActiveSession.id;
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(
+        <AskContent
+          visible
+          variant="panel"
+          initialMessage="answer with mindos"
+          initialAcpAgent={{ id: 'claude-code', name: 'Claude Code' }}
+        />,
+      );
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(host.querySelector('[data-testid="runtime-switcher"]')?.textContent).toBe('Claude Code');
+
+    const selectMindos = Array.from(host.querySelectorAll('button')).find((button) => button.textContent === 'Select MindOS') as HTMLButtonElement;
+    await act(async () => {
+      selectMindos.click();
+    });
+
+    expect(host.querySelector('[data-testid="runtime-switcher"]')?.textContent).toBe('MindOS');
+
+    const form = host.querySelector('form') as HTMLFormElement;
+    await act(async () => {
+      if (typeof form.requestSubmit === 'function') {
+        form.requestSubmit();
+      } else {
+        form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      }
+    });
+
+    const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
+    const askCall = fetchMock.mock.calls.find(([url]) => url === '/api/ask');
+    expect(askCall).toBeTruthy();
+    const requestBody = JSON.parse(String((askCall?.[1] as RequestInit | undefined)?.body));
+    expect(requestBody.selectedAcpAgent).toBeNull();
+    expect(requestBody.selectedRuntime).toBeNull();
+    expect(requestBody.providerOverride).toBe('openai');
+    expect(requestBody.modelOverride).toBe('gpt-test');
+    expect(mockSetSessionDefaultAcpAgent).toHaveBeenLastCalledWith(null);
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it('sends a native Codex runtime selection without legacy ACP routing', async () => {
     mockPersistedProviderModel = { provider: 'openai', model: 'gpt-test' };
     mockNativeRuntimeDescriptors = [{
@@ -745,6 +837,75 @@ describe('AskContent ACP session binding', () => {
     });
   });
 
+  it('keeps failed native runtime bindings visible but does not submit them as resumable runtime ids', async () => {
+    mockNativeRuntimeDescriptors = [{
+      id: 'codex',
+      name: 'Codex',
+      kind: 'codex',
+      status: 'available',
+      capabilities: {},
+    }];
+    mockActiveSession = {
+      id: 's-codex-failed',
+      title: 'Codex failed thread',
+      createdAt: 1,
+      updatedAt: 1,
+      messages: [],
+      defaultAgentRuntime: { id: 'codex', name: 'Codex', kind: 'codex' },
+      runtimeSessionBinding: {
+        kind: 'codex-thread',
+        runtime: 'codex',
+        runtimeId: 'codex',
+        externalSessionId: 'thread_failed',
+        cwd: '/tmp/mind',
+        status: 'failed',
+        updatedAt: 2,
+      },
+    };
+    mockSessions = [mockActiveSession];
+    mockActiveSessionId = mockActiveSession.id;
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<AskContent visible variant="panel" initialMessage="continue safely" />);
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(host.querySelector('[data-testid="runtime-switcher"]')?.textContent).toBe('Codex');
+
+    const form = host.querySelector('form') as HTMLFormElement;
+    await act(async () => {
+      if (typeof form.requestSubmit === 'function') {
+        form.requestSubmit();
+      } else {
+        form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      }
+    });
+
+    const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
+    const askCall = fetchMock.mock.calls.find(([url]) => url === '/api/ask');
+    expect(askCall).toBeTruthy();
+    const requestBody = JSON.parse(String((askCall?.[1] as RequestInit | undefined)?.body));
+    expect(requestBody.runtimeBinding).toMatchObject({
+      kind: 'codex-thread',
+      runtime: 'codex',
+      runtimeId: 'codex',
+      externalSessionId: 'thread_failed',
+      status: 'failed',
+    });
+    expect(requestBody.selectedRuntime).toEqual({ id: 'codex', name: 'Codex', kind: 'codex' });
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it('shows only Claude Code sessions in the runtime history', async () => {
     const mindosSession: ChatSession = {
       id: 's-mindos',
@@ -804,7 +965,191 @@ describe('AskContent ACP session binding', () => {
     });
   });
 
-  it('does not show a composer reminder while the selected native runtime is still being checked', async () => {
+  it('loads Codex local threads in runtime history and attaches without starting a turn', async () => {
+    mockNativeRuntimeDescriptors = [{
+      id: 'codex',
+      name: 'Codex',
+      kind: 'codex',
+      status: 'available',
+      capabilities: {},
+    }];
+    mockSessions = [{
+      id: 's-mindos',
+      title: 'MindOS planning',
+      createdAt: 1,
+      updatedAt: 1,
+      messages: [{ role: 'user', content: 'plan' }],
+    }];
+    mockActiveSession = mockSessions[0];
+    mockActiveSessionId = 's-mindos';
+    const codexThread = {
+      id: 'thread_existing',
+      name: 'Runtime fix thread',
+      preview: 'Continue native runtime work',
+      cwd: '/tmp/repo',
+      updatedAt: 123,
+    };
+    const fetchMock = vi.fn(async (url: RequestInfo | URL) => {
+      if (String(url).startsWith('/api/agent-runtimes/codex/threads?')) {
+        return {
+          ok: true,
+          json: async () => ({ data: [codexThread], nextCursor: null, backwardsCursor: null }),
+        };
+      }
+      return {
+        ok: true,
+        body: new ReadableStream(),
+        json: async () => ({}),
+      };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<AskContent visible variant="panel" />);
+    });
+
+    const selectCodex = Array.from(host.querySelectorAll('button')).find((button) => button.textContent === 'Select Codex') as HTMLButtonElement;
+    await act(async () => {
+      selectCodex.click();
+    });
+
+    const toggleHistoryButton = Array.from(host.querySelectorAll('button')).find((button) => button.textContent === 'Toggle History') as HTMLButtonElement;
+    await act(async () => {
+      toggleHistoryButton.click();
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(fetchMock.mock.calls.some(([url]) => String(url).startsWith('/api/agent-runtimes/codex/threads?'))).toBe(true);
+    expect(host.querySelector('[data-testid="history-session-list"]')?.textContent).toContain('Runtime fix thread');
+
+    const attach = Array.from(host.querySelectorAll('button')).find((button) => button.textContent === 'Attach Runtime fix thread') as HTMLButtonElement;
+    await act(async () => {
+      attach.click();
+    });
+
+    expect(mockAttachRuntimeSession).toHaveBeenCalledWith(
+      { id: 'codex', name: 'Codex', kind: 'codex' },
+      {
+        externalSessionId: 'thread_existing',
+        cwd: '/tmp/repo',
+        status: 'active',
+        updatedAt: 123,
+      },
+      { title: 'Runtime fix thread' },
+    );
+    expect(fetchMock.mock.calls.some(([url]) => url === '/api/ask')).toBe(false);
+    expect(host.querySelector('[data-testid="history-session-list"]')).toBeNull();
+    expect(host.querySelector('[data-testid="runtime-switcher"]')?.textContent).toBe('Codex');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('forks a Codex local thread and attaches the returned thread without starting a turn', async () => {
+    mockNativeRuntimeDescriptors = [{
+      id: 'codex',
+      name: 'Codex',
+      kind: 'codex',
+      status: 'available',
+      capabilities: {},
+    }];
+    mockSessions = [{
+      id: 's-mindos',
+      title: 'MindOS planning',
+      createdAt: 1,
+      updatedAt: 1,
+      messages: [{ role: 'user', content: 'plan' }],
+    }];
+    mockActiveSession = mockSessions[0];
+    mockActiveSessionId = 's-mindos';
+    const codexThread = {
+      id: 'thread_existing',
+      name: 'Runtime fix thread',
+      cwd: '/tmp/repo',
+      updatedAt: 123,
+    };
+    const forkedThread = {
+      id: 'thread_forked',
+      name: 'Forked runtime fix',
+      cwd: '/tmp/repo',
+      updatedAt: 456,
+    };
+    const fetchMock = vi.fn(async (url: RequestInfo | URL) => {
+      if (String(url).startsWith('/api/agent-runtimes/codex/threads?')) {
+        return {
+          ok: true,
+          json: async () => ({ data: [codexThread], nextCursor: null, backwardsCursor: null }),
+        };
+      }
+      if (String(url) === '/api/agent-runtimes/codex/threads/thread_existing/fork') {
+        return {
+          ok: true,
+          json: async () => ({ thread: forkedThread }),
+        };
+      }
+      return {
+        ok: true,
+        body: new ReadableStream(),
+        json: async () => ({}),
+      };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<AskContent visible variant="panel" />);
+    });
+    const selectCodex = Array.from(host.querySelectorAll('button')).find((button) => button.textContent === 'Select Codex') as HTMLButtonElement;
+    await act(async () => {
+      selectCodex.click();
+    });
+    const toggleHistoryButton = Array.from(host.querySelectorAll('button')).find((button) => button.textContent === 'Toggle History') as HTMLButtonElement;
+    await act(async () => {
+      toggleHistoryButton.click();
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const fork = Array.from(host.querySelectorAll('button')).find((button) => button.textContent === 'Fork Runtime fix thread') as HTMLButtonElement;
+    await act(async () => {
+      fork.click();
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(fetchMock.mock.calls.some(([url]) => url === '/api/agent-runtimes/codex/threads/thread_existing/fork')).toBe(true);
+    expect(mockAttachRuntimeSession).toHaveBeenCalledWith(
+      { id: 'codex', name: 'Codex', kind: 'codex' },
+      {
+        externalSessionId: 'thread_forked',
+        cwd: '/tmp/repo',
+        status: 'active',
+        updatedAt: 456,
+      },
+      { title: 'Forked runtime fix' },
+    );
+    expect(fetchMock.mock.calls.some(([url]) => url === '/api/ask')).toBe(false);
+    expect(host.querySelector('[data-testid="history-session-list"]')).toBeNull();
+    expect(host.querySelector('[data-testid="runtime-switcher"]')?.textContent).toBe('Codex');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('shows a concise composer status and blocks sending while the selected native runtime is still being checked', async () => {
     mockDetectionLoading = true;
     mockNativeLoadingByKind = { codex: true, claude: false };
     mockSessions = [{
@@ -835,8 +1180,19 @@ describe('AskContent ACP session binding', () => {
       agentLoading: false,
       agentLoadingByKind: { codex: true, claude: false },
     }));
-    expect(host.textContent).not.toContain('Checking Codex status.');
+    expect(host.textContent).toContain('Checking Codex status...');
     expect(host.textContent).not.toContain('Local runtime cold starts can take up to 20 seconds.');
+
+    const form = host.querySelector('form') as HTMLFormElement;
+    await act(async () => {
+      if (typeof form.requestSubmit === 'function') {
+        form.requestSubmit();
+      } else {
+        form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      }
+    });
+
+    expect(globalThis.fetch).not.toHaveBeenCalledWith('/api/ask', expect.anything());
 
     await act(async () => {
       root.unmount();

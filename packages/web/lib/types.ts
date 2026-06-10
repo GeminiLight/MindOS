@@ -130,7 +130,59 @@ export interface ImagePart {
   fileName?: string;
 }
 
-export type MessagePart = TextPart | ToolCallPart | ReasoningPart | ImagePart;
+export interface RuntimeStatusPart {
+  type: 'runtime-status';
+  message: string;
+  runtime?: AgentRuntimeKind;
+}
+
+export type AgentRunNodeKind =
+  | 'mindos-main'
+  | 'mindos-headless'
+  | 'native-runtime'
+  | 'pi-subagent'
+  | 'acp'
+  | 'a2a';
+
+export type AgentRunStatus =
+  | 'queued'
+  | 'running'
+  | 'streaming'
+  | 'completed'
+  | 'failed'
+  | 'canceled'
+  | 'timed_out';
+
+export interface AgentRunTimelineRecord {
+  id: string;
+  rootRunId?: string;
+  parentRunId?: string;
+  chatSessionId?: string;
+  agentKind: AgentRunNodeKind;
+  runtimeId: string;
+  displayName: string;
+  status: AgentRunStatus;
+  cwd?: string;
+  permissionMode: 'readonly' | 'organize' | 'agent';
+  inputSummary: string;
+  outputSummary?: string;
+  error?: string;
+  startedAt: number;
+  completedAt?: number;
+  durationMs?: number;
+  metadata?: Record<string, unknown>;
+}
+
+export interface AgentRunTimelinePart {
+  type: 'agent-run-timeline';
+  chatSessionId: string;
+  rootRunId?: string;
+  startedAfter?: number;
+  runs: AgentRunTimelineRecord[];
+  updatedAt: number;
+}
+
+export type MessagePart = TextPart | ToolCallPart | ReasoningPart | ImagePart | RuntimeStatusPart | AgentRunTimelinePart;
 
 export interface AgentIdentity {
   id: string;
@@ -199,6 +251,7 @@ export interface AgentRuntimeDescriptor extends AgentRuntimeIdentity {
     checkedAt: string;
     sources: Array<'acp-detect' | 'acp-registry' | 'mcp-agents' | 'native-health' | 'settings'>;
     reason?: string;
+    diagnosticHints?: string[];
     stale?: boolean;
   };
 }
@@ -221,6 +274,23 @@ export interface RuntimeSessionBinding {
   cwd?: string;
   status?: 'active' | 'missing' | 'signed-out' | 'archived' | 'failed';
   updatedAt: number;
+}
+
+export interface CodexThreadSummary {
+  id: string;
+  name?: string | null;
+  preview?: string;
+  cwd?: string;
+  createdAt?: number | string;
+  updatedAt?: number | string;
+  status?: unknown;
+  archived?: boolean;
+}
+
+export interface CodexThreadListResponse {
+  data: CodexThreadSummary[];
+  nextCursor: string | null;
+  backwardsCursor: string | null;
 }
 
 export interface Message {

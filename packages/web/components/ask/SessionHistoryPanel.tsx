@@ -1,14 +1,20 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback, useMemo, useTransition } from 'react';
-import { Search, Trash2, Pencil, Pin, PinOff, FolderInput, MessageSquare, SquarePen, X } from 'lucide-react';
-import type { ChatSession } from '@/lib/types';
+import { AlertCircle, Archive, GitFork, Loader2, RefreshCw, Search, Trash2, Pencil, Pin, PinOff, Link2, MessageSquare, SquarePen, X } from 'lucide-react';
+import type { AgentRuntimeIdentity, ChatSession, CodexThreadSummary } from '@/lib/types';
 import { sessionTitle } from '@/hooks/useAskSession';
+import { getRuntimeSessionSummary, shortRuntimeSessionId } from '@/lib/ask-agent';
 import { useLocale } from '@/lib/stores/locale-store';
 
 interface SessionHistoryPanelProps {
   sessions: ChatSession[];
   activeSessionId: string | null;
+  selectedAgentRuntime?: AgentRuntimeIdentity | null;
+  codexThreads?: CodexThreadSummary[];
+  codexThreadsLoading?: boolean;
+  codexThreadsError?: string | null;
+  codexThreadActionId?: string | null;
   onLoad: (id: string) => void;
   onDelete: (id: string) => void;
   onRename: (id: string, title: string) => void;
@@ -16,6 +22,10 @@ interface SessionHistoryPanelProps {
   onClearAll: () => void;
   onClose: () => void;
   onNewChat: () => void;
+  onRefreshCodexThreads?: () => void;
+  onAttachCodexThread?: (thread: CodexThreadSummary) => void;
+  onForkCodexThread?: (thread: CodexThreadSummary) => void;
+  onArchiveCodexThread?: (thread: CodexThreadSummary) => void;
 }
 
 // ── Helpers ──
@@ -52,12 +62,50 @@ function sessionPreview(s: ChatSession): string {
   return text.length > 60 ? `${text.slice(0, 60)}...` : text;
 }
 
+function timestampMs(value: CodexThreadSummary['updatedAt'] | CodexThreadSummary['createdAt']): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value < 10_000_000_000 ? value * 1000 : value;
+  }
+  if (typeof value === 'string') {
+    const parsed = Date.parse(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return null;
+}
+
+function codexThreadTitle(thread: CodexThreadSummary): string {
+  const title = thread.name?.trim() || thread.preview?.trim();
+  if (title) return title.length > 56 ? `${title.slice(0, 56)}...` : title;
+  return `Thread ${shortRuntimeSessionId(thread.id)}`;
+}
+
+function codexThreadPreview(thread: CodexThreadSummary): string {
+  const preview = thread.preview?.trim();
+  if (!preview || preview === thread.name?.trim()) return '';
+  return preview.length > 72 ? `${preview.slice(0, 72)}...` : preview;
+}
+
+function codexThreadStatus(thread: CodexThreadSummary): string | null {
+  if (thread.archived) return 'archived';
+  return typeof thread.status === 'string' && thread.status.trim() ? thread.status : null;
+}
+
+function pluralize(count: number, singular: string, plural: string): string {
+  return `${count} ${count === 1 ? singular : plural}`;
+}
+
 // ── Main Component ──
 
 export default function SessionHistoryPanel({
   sessions, activeSessionId,
+  selectedAgentRuntime,
+  codexThreads = [],
+  codexThreadsLoading = false,
+  codexThreadsError = null,
+  codexThreadActionId = null,
   onLoad, onDelete, onRename, onTogglePin, onClearAll,
   onClose, onNewChat,
+  onRefreshCodexThreads, onAttachCodexThread, onForkCodexThread, onArchiveCodexThread,
 }: SessionHistoryPanelProps) {
   const { t } = useLocale();
   const [isPending, startTransition] = useTransition();
@@ -86,9 +134,32 @@ export default function SessionHistoryPanel({
     return sessions.filter(s => {
       const title = sessionTitle(s).toLowerCase();
       if (title.includes(q)) return true;
+      const runtimeSummary = getRuntimeSessionSummary(s);
+      if (
+        runtimeSummary &&
+        [
+          runtimeSummary.idLabel,
+          runtimeSummary.cwd,
+          runtimeSummary.status,
+          runtimeSummary.binding.externalSessionId,
+        ].filter(Boolean).some(value => String(value).toLowerCase().includes(q))
+      ) return true;
       return s.messages.some(m => m.content.toLowerCase().includes(q));
     });
   }, [sessions, query]);
+
+  const filteredCodexThreads = useMemo(() => {
+    if (selectedAgentRuntime?.kind !== 'codex') return [];
+    if (!query.trim()) return codexThreads;
+    const q = query.toLowerCase();
+    return codexThreads.filter((thread) => [
+      thread.id,
+      thread.name,
+      thread.preview,
+      thread.cwd,
+      codexThreadStatus(thread),
+    ].filter(Boolean).some((value) => String(value).toLowerCase().includes(q)));
+  }, [codexThreads, query, selectedAgentRuntime?.kind]);
 
   // Group sessions by time
   const groups = useMemo(() => {
@@ -110,8 +181,7 @@ export default function SessionHistoryPanel({
   }, [filtered]);
 
   const pinnedCount = sessions.filter(s => s.pinned).length;
-  // Only count sessions with messages (non-empty)
-  const totalCount = sessions.filter(s => s.messages.length > 0).length;
+  const totalCount = sessions.filter(s => s.messages.length > 0 || getRuntimeSessionSummary(s)).length;
 
   const handleLoad = useCallback((id: string) => {
     startTransition(() => {
@@ -196,6 +266,14 @@ export default function SessionHistoryPanel({
   };
 
   const hasResults = filtered.length > 0;
+  const showCodexThreads = selectedAgentRuntime?.kind === 'codex';
+  const isNativeRuntimeHistory = selectedAgentRuntime?.kind === 'codex' || selectedAgentRuntime?.kind === 'claude';
+  const hasAnyResults = hasResults || filteredCodexThreads.length > 0 || (showCodexThreads && codexThreadsLoading);
+  const statsLabel = showCodexThreads
+    ? `${pluralize(totalCount, 'saved chat', 'saved chats')} · ${pluralize(codexThreads.length, 'Codex thread', 'Codex threads')}`
+    : (ask?.historyStats?.(totalCount) ?? `${totalCount} conversations`);
+  const clearLabel = isNativeRuntimeHistory ? 'Clear saved chats' : (ask?.clearAll ?? 'Clear all');
+  const confirmClearLabel = isNativeRuntimeHistory ? 'Confirm clear saved chats?' : (ask?.confirmClear ?? 'Confirm clear?');
 
   return (
     <div className="flex flex-col flex-1 min-h-0 animate-in fade-in-0 duration-150">
@@ -226,7 +304,7 @@ export default function SessionHistoryPanel({
       {/* Stats bar */}
       <div className="flex items-center justify-between px-4 pb-2 shrink-0">
         <span className="text-2xs text-muted-foreground/60">
-          {ask?.historyStats?.(totalCount) ?? `${totalCount} conversations`}
+          {statsLabel}
           {pinnedCount > 0 && <> &middot; {pinnedCount} {ask?.historyPinned ?? 'pinned'}</>}
         </span>
         <button
@@ -241,8 +319,20 @@ export default function SessionHistoryPanel({
 
       {/* Scrollable list */}
       <div className="flex-1 overflow-y-auto min-h-0 px-3 pb-3">
-        {hasResults ? (
+        {hasAnyResults ? (
           <div className="flex flex-col gap-1">
+            {showCodexThreads && (
+              <CodexThreadSection
+                threads={filteredCodexThreads}
+                loading={codexThreadsLoading}
+                error={codexThreadsError}
+                actionId={codexThreadActionId}
+                onRefresh={onRefreshCodexThreads}
+                onAttach={onAttachCodexThread}
+                onFork={onForkCodexThread}
+                onArchive={onArchiveCodexThread}
+              />
+            )}
             {renderGroup(ask?.historyPinned ?? 'Pinned', groups.pinned)}
             {renderGroup(ask?.historyToday ?? 'Today', groups.today)}
             {renderGroup(ask?.historyYesterday ?? 'Yesterday', groups.yesterday)}
@@ -278,14 +368,174 @@ export default function SessionHistoryPanel({
           >
             <span className="flex items-center gap-1">
               <Trash2 size={10} />
-              {confirmClearAll ? (ask?.confirmClear ?? 'Confirm clear?') : (ask?.clearAll ?? 'Clear all')}
+              {confirmClearAll ? confirmClearLabel : clearLabel}
             </span>
           </button>
           <span className="text-2xs text-muted-foreground/40 tabular-nums">
-            {ask?.historyCapacity?.(totalCount) ?? `${totalCount} of 30`}
+            {showCodexThreads
+              ? pluralize(totalCount, 'saved', 'saved')
+              : (ask?.historyCapacity?.(totalCount) ?? `${totalCount} of 30`)}
           </span>
         </div>
       )}
+    </div>
+  );
+}
+
+function CodexThreadSection({
+  threads,
+  loading,
+  error,
+  actionId,
+  onRefresh,
+  onAttach,
+  onFork,
+  onArchive,
+}: {
+  threads: CodexThreadSummary[];
+  loading: boolean;
+  error: string | null;
+  actionId: string | null;
+  onRefresh?: () => void;
+  onAttach?: (thread: CodexThreadSummary) => void;
+  onFork?: (thread: CodexThreadSummary) => void;
+  onArchive?: (thread: CodexThreadSummary) => void;
+}) {
+  return (
+    <div>
+      <div className="flex items-center justify-between px-1 py-2">
+        <div className="text-2xs font-medium text-muted-foreground/50 uppercase tracking-wider">
+          Codex local threads
+        </div>
+        {onRefresh && (
+          <button
+            type="button"
+            onClick={onRefresh}
+            disabled={loading}
+            className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground/45 transition-colors hover:bg-muted/60 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            title="Refresh Codex threads"
+          >
+            {loading ? <Loader2 size={11} className="animate-spin" /> : <RefreshCw size={11} />}
+          </button>
+        )}
+      </div>
+
+      {error && (
+        <div className="mb-1 flex items-start gap-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-2xs text-muted-foreground">
+          <AlertCircle size={12} className="mt-0.5 shrink-0 text-error" />
+          <span className="min-w-0">{error}</span>
+        </div>
+      )}
+
+      {loading && threads.length === 0 && (
+        <div className="flex items-center gap-2 rounded-lg border border-border/50 px-3 py-2 text-2xs text-muted-foreground/60">
+          <Loader2 size={12} className="animate-spin" />
+          <span>Loading Codex threads...</span>
+        </div>
+      )}
+
+      {!loading && !error && threads.length === 0 && (
+        <div className="rounded-lg border border-border/50 px-3 py-2 text-2xs text-muted-foreground/50">
+          No Codex threads found.
+        </div>
+      )}
+
+      {threads.length > 0 && (
+        <div className="flex flex-col gap-1">
+          {threads.map((thread) => (
+            <CodexThreadRow
+              key={thread.id}
+              thread={thread}
+              busy={actionId === thread.id}
+              onAttach={onAttach}
+              onFork={onFork}
+              onArchive={onArchive}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CodexThreadRow({
+  thread,
+  busy,
+  onAttach,
+  onFork,
+  onArchive,
+}: {
+  thread: CodexThreadSummary;
+  busy: boolean;
+  onAttach?: (thread: CodexThreadSummary) => void;
+  onFork?: (thread: CodexThreadSummary) => void;
+  onArchive?: (thread: CodexThreadSummary) => void;
+}) {
+  const title = codexThreadTitle(thread);
+  const preview = codexThreadPreview(thread);
+  const status = codexThreadStatus(thread);
+  const updatedAt = timestampMs(thread.updatedAt ?? thread.createdAt);
+
+  return (
+    <div className="group rounded-lg border border-transparent px-3 py-2.5 transition-colors hover:bg-muted/60">
+      <div className="flex items-start gap-2">
+        <button
+          type="button"
+          onClick={() => onAttach?.(thread)}
+          disabled={busy || !onAttach}
+          className="mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[var(--amber)] transition-colors hover:bg-[var(--amber)]/10 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          title="Open this Codex thread"
+        >
+          {busy ? <Loader2 size={12} className="animate-spin" /> : <Link2 size={12} />}
+        </button>
+        <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 items-center gap-1.5">
+            <span className="truncate text-xs font-medium text-foreground">{title}</span>
+            {status && (
+              <span className="shrink-0 rounded-full border border-border/50 px-1 py-0 text-[9px] text-muted-foreground/60">
+                {status}
+              </span>
+            )}
+            {updatedAt && (
+              <span className="shrink-0 text-2xs tabular-nums text-muted-foreground/40">
+                {formatRelativeTime(new Date(updatedAt))}
+              </span>
+            )}
+          </div>
+          {preview && (
+            <div className="mt-0.5 truncate text-2xs text-muted-foreground/50">{preview}</div>
+          )}
+          <div className="mt-1 flex min-w-0 items-center gap-1 text-[10px] text-muted-foreground/40">
+            <span className="shrink-0 font-mono">{shortRuntimeSessionId(thread.id)}</span>
+            {thread.cwd && (
+              <>
+                <span className="shrink-0">·</span>
+                <span className="truncate font-mono">{thread.cwd}</span>
+              </>
+            )}
+          </div>
+        </div>
+        <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity duration-75 group-hover:opacity-100 focus-within:opacity-100">
+          <button
+            type="button"
+            onClick={() => onFork?.(thread)}
+            disabled={busy || !onFork}
+            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground/40 transition-colors hover:bg-muted/60 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            title="Fork Codex thread"
+          >
+            <GitFork size={11} />
+          </button>
+          <button
+            type="button"
+            onClick={() => onArchive?.(thread)}
+            disabled={busy || !onArchive}
+            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground/40 transition-colors hover:bg-muted/60 hover:text-error disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            title="Archive Codex thread"
+          >
+            <Archive size={11} />
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -314,6 +564,7 @@ function SessionCard({
   const title = sessionTitle(s);
   const preview = sessionPreview(s);
   const msgCount = s.messages.length;
+  const runtimeSummary = getRuntimeSessionSummary(s);
 
   return (
     <div
@@ -362,6 +613,25 @@ function SessionCard({
           <p className="text-2xs text-muted-foreground/50 truncate mt-0.5 pl-0.5">
             {preview}
           </p>
+        )}
+
+        {!editing && runtimeSummary && (
+          <div className="mt-1.5 space-y-0.5 pl-0.5">
+            <div className="flex min-w-0 items-center gap-1 text-2xs text-muted-foreground/50">
+              <Link2 size={9} className="shrink-0 text-[var(--amber)]/70" />
+              <span className="truncate">{runtimeSummary.idLabel}</span>
+              {runtimeSummary.status && (
+                <span className="shrink-0 rounded-full border border-border/50 px-1 py-0 text-[9px] text-muted-foreground/60">
+                  {runtimeSummary.status}
+                </span>
+              )}
+            </div>
+            {runtimeSummary.cwd && (
+              <div className="truncate font-mono text-[10px] text-muted-foreground/40">
+                {runtimeSummary.cwd}
+              </div>
+            )}
+          </div>
         )}
 
         {/* Meta row */}

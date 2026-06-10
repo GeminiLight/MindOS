@@ -5,6 +5,7 @@ import { SaveSessionButton } from './SaveSessionInline';
 import RuntimeIconSwitcher from './RuntimeIconSwitcher';
 import { useLocale } from '@/lib/stores/locale-store';
 import type { AgentRuntimeDescriptor, AgentRuntimeIdentity, ChatSession, RuntimeSessionBinding } from '@/lib/types';
+import { getRuntimeSessionSummary } from '@/lib/ask-agent';
 import { sessionTitle } from '@/hooks/useAskSession';
 import type { NotInstalledAgent } from '@/hooks/useAcpDetection';
 
@@ -39,6 +40,15 @@ interface AskHeaderProps {
   notInstalledAgents?: NotInstalledAgent[];
   agentLoading?: boolean;
   agentLoadingByKind?: Partial<Record<'codex' | 'claude', boolean>>;
+  agentErrorByKind?: Partial<Record<'codex' | 'claude', string | null>>;
+  onRefreshNativeRuntimes?: () => void;
+}
+
+function nativeSavedSessionLabel(runtime: AgentRuntimeIdentity | null | undefined): string {
+  if (runtime?.kind === 'codex') return 'MindOS-linked Codex chats';
+  if (runtime?.kind === 'claude') return 'MindOS-linked Claude Code chats';
+  if (runtime?.kind === 'acp') return `Saved ${runtime.name} chats`;
+  return 'Saved chats';
 }
 
 export default memo(function AskHeader({
@@ -46,7 +56,7 @@ export default memo(function AskHeader({
   maximized, onMaximize, askMode, onModeSwitch, onClose, onDockToPanel, hideTitle,
   sessions, activeSessionId, onLoadSession, onDeleteSession, onRenameSession, onTogglePinSession,
   messages, selectedAgentRuntime, onSelectAgentRuntime, runtimeSessionBinding,
-  nativeRuntimes = [], notInstalledAgents = [], agentLoading, agentLoadingByKind,
+  nativeRuntimes = [], notInstalledAgents = [], agentLoading, agentLoadingByKind, agentErrorByKind, onRefreshNativeRuntimes,
 }: AskHeaderProps) {
   const { t } = useLocale();
   const [isPending, startTransition] = useTransition();
@@ -140,11 +150,7 @@ export default memo(function AskHeader({
       {isNativeRuntime && (
         <div className="flex items-center justify-between gap-2 border-b border-border/40 px-3 py-2">
           <span className="truncate text-2xs font-medium uppercase tracking-wide text-muted-foreground/70">
-            {selectedAgentRuntime?.kind === 'codex'
-              ? 'Codex threads'
-              : selectedAgentRuntime?.kind === 'claude'
-                ? 'Claude Code sessions'
-                : `${selectedAgentRuntime?.name ?? 'Runtime'} sessions`}
+            {nativeSavedSessionLabel(selectedAgentRuntime)}
           </span>
           <button
             type="button"
@@ -164,13 +170,16 @@ export default memo(function AskHeader({
       )}
       {sessions.length === 0 && (
         <div className="px-3 py-3 text-xs text-muted-foreground/60">
-          {t.ask?.noSessions ?? 'No saved sessions.'}
+          {isNativeRuntime
+            ? `No ${nativeSavedSessionLabel(selectedAgentRuntime).toLowerCase()}.`
+            : (t.ask?.noSessions ?? 'No saved sessions.')}
         </div>
       )}
       {sessions.map((s) => {
         const isActive = s.id === activeSessionId;
         const title = sessionTitle(s);
         const displayTitle = title === '(empty session)' ? (t.hints?.newChat ?? 'New chat') : title;
+        const runtimeSummary = getRuntimeSessionSummary(s);
 
         if (renamingId === s.id) {
           return (
@@ -205,7 +214,20 @@ export default memo(function AskHeader({
             >
               {s.pinned && <Pin size={10} className="shrink-0 text-[var(--amber)]/60 -rotate-45" />}
               {isActive && !s.pinned && <Check size={11} className="shrink-0 text-[var(--amber)]" />}
-              <span className="truncate">{displayTitle}</span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate">{displayTitle}</span>
+                {runtimeSummary && (
+                  <span className="mt-0.5 block truncate text-2xs font-normal text-muted-foreground/60">
+                    {runtimeSummary.idLabel}
+                    {runtimeSummary.status ? ` · ${runtimeSummary.status}` : ''}
+                  </span>
+                )}
+                {runtimeSummary?.cwd && (
+                  <span className="mt-0.5 block truncate font-mono text-[10px] font-normal text-muted-foreground/50">
+                    {runtimeSummary.cwd}
+                  </span>
+                )}
+              </span>
             </button>
             <div className="shrink-0 flex items-center gap-0.5 mr-1 opacity-0 group-hover/item:opacity-100 transition-opacity">
               {onTogglePinSession && (
@@ -262,6 +284,8 @@ export default memo(function AskHeader({
               notInstalledAgents={notInstalledAgents}
               loading={agentLoading}
               loadingByKind={agentLoadingByKind}
+              errorByKind={agentErrorByKind}
+              onRefreshNativeRuntimes={onRefreshNativeRuntimes}
               disabled={isLoading}
             />
           ) : (
@@ -289,7 +313,7 @@ export default memo(function AskHeader({
               <span className="truncate max-w-[180px]">
                 {activeTitle
                   ? activeTitle === '(empty session)' ? (t.hints?.newChat ?? 'New chat') : activeTitle
-                  : isNativeRuntime ? `${selectedAgentRuntime?.name ?? 'Runtime'} sessions` : (t.hints?.newChat ?? 'New chat')}
+                  : isNativeRuntime ? nativeSavedSessionLabel(selectedAgentRuntime) : (t.hints?.newChat ?? 'New chat')}
               </span>
               <ChevronDown size={12} className={`shrink-0 text-muted-foreground transition-transform duration-150 ${switcherOpen ? 'rotate-180' : ''}`} />
             </button>

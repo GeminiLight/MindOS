@@ -115,10 +115,13 @@
     "build:platform-packages": "node ../../scripts/build-platform-packages.mjs"
   },
   "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "0.3.170",
+    "@anthropic-ai/sdk": "^0.93.0",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "chokidar": "^4.0.3",
     "pino": "^8.17.0",
     "pino-pretty": "^10.3.0",
-    "zod": "^3.22.4"
+    "zod": "^4.3.6"
   },
   "optionalDependencies": {
     "@geminilight/mindos-darwin-arm64": "1.0.28",
@@ -133,7 +136,6 @@
   "devDependencies": {
     "@agentclientprotocol/sdk": "^0.18.2",
     "@earendil-works/pi-coding-agent": "0.78.1",
-    "@modelcontextprotocol/sdk": "^1.25.0",
     "@types/node": "^22.10.5",
     "esbuild": "^0.25.0",
     "typescript": "^5.7.3",

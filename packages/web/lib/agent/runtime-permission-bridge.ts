@@ -13,6 +13,7 @@ type PendingRuntimePermission = {
   requestId: string;
   runtime: 'codex' | 'claude';
   toolCallId: string;
+  optionIds: Set<string>;
   send: (event: MindOSSSEvent) => void;
   resolve: (result: MindosRuntimePermissionResult) => void;
   timeout: ReturnType<typeof setTimeout>;
@@ -116,6 +117,7 @@ function enqueueRuntimePermission(
       requestId,
       runtime: request.runtime,
       toolCallId: request.toolCallId,
+      optionIds: new Set(request.options.map((option) => option.id)),
       send: context.send,
       resolve: finish,
       timeout,
@@ -179,6 +181,9 @@ export function resolveRuntimePermission(input: {
   const pending = state.pending.get(key);
   if (!pending) return { ok: false, status: 404, error: 'Permission request is no longer pending.' };
   const decision = input.decision || 'cancel';
+  if (decision !== 'cancel' && !pending.optionIds.has(decision)) {
+    return { ok: false, status: 400, error: 'Permission decision is not valid for this request.' };
+  }
   const cancelled = decision === 'cancel';
   pending.send({
     type: 'runtime_permission_resolved',

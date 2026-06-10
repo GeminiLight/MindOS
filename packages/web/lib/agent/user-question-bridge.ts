@@ -265,9 +265,13 @@ export function answerAskUserQuestion(input: {
   const key = pendingKey(input.runId, input.toolCallId);
   const pending = pendingQuestions.get(key);
   if (!pending) return { ok: false, status: 404, error: 'Question is no longer pending.' };
+  const validation = input.cancelled === true
+    ? { ok: true as const, answers: [] }
+    : validateAnswers(pending.params.questions, input.answers);
+  if (!validation.ok) return { ok: false, status: 400, error: validation.error };
 
   const result: AskUserQuestionResult = {
-    answers: Array.isArray(input.answers) ? input.answers : [],
+    answers: validation.answers,
     cancelled: input.cancelled === true,
   };
 
@@ -286,6 +290,73 @@ export function answerAskUserQuestion(input: {
       });
   pending.resolve(result);
   return { ok: true };
+}
+
+function validateAnswers(
+  questions: AskUserQuestionQuestion[],
+  answers: AskUserQuestionAnswer[],
+): { ok: true; answers: AskUserQuestionAnswer[] } | { ok: false; error: string } {
+  if (!Array.isArray(answers) || answers.length === 0) {
+    return { ok: false, error: 'At least one answer is required.' };
+  }
+
+  const seen = new Set<number>();
+  for (const answer of answers) {
+    if (!Number.isInteger(answer.questionIndex)) {
+      return { ok: false, error: 'Answer questionIndex must be an integer.' };
+    }
+    if (seen.has(answer.questionIndex)) {
+      return { ok: false, error: 'Each question can only be answered once.' };
+    }
+    seen.add(answer.questionIndex);
+
+    const question = questions[answer.questionIndex];
+    if (!question) {
+      return { ok: false, error: 'Answer questionIndex does not match a pending question.' };
+    }
+    if (answer.question !== question.question) {
+      return { ok: false, error: 'Answer question text does not match the pending question.' };
+    }
+
+    const optionLabels = new Set(question.options.map((option) => option.label));
+    if (answer.kind === 'option') {
+      if (question.multiSelect) {
+        return { ok: false, error: 'Use a multi answer for multi-select questions.' };
+      }
+      if (typeof answer.answer !== 'string' || !answer.answer.trim()) {
+        return { ok: false, error: 'Option answers must include a selected option.' };
+      }
+      if (optionLabels.size > 0 && !optionLabels.has(answer.answer)) {
+        return { ok: false, error: 'Selected option is not valid for this question.' };
+      }
+      continue;
+    }
+
+    if (answer.kind === 'multi') {
+      if (!question.multiSelect) {
+        return { ok: false, error: 'Use a single answer for single-select questions.' };
+      }
+      const selected = Array.isArray(answer.selected) ? answer.selected : [];
+      if (selected.length === 0) {
+        return { ok: false, error: 'Multi-select answers must include at least one option.' };
+      }
+      if (optionLabels.size > 0 && selected.some((value) => !optionLabels.has(value))) {
+        return { ok: false, error: 'Selected option is not valid for this question.' };
+      }
+      continue;
+    }
+
+    if (answer.kind === 'custom' || answer.kind === 'chat') {
+      if (typeof answer.answer !== 'string' || !answer.answer.trim()) {
+        return { ok: false, error: 'Custom answers must include text.' };
+      }
+      continue;
+    }
+
+    return { ok: false, error: 'Answer kind is not valid.' };
+  }
+
+  return { ok: true, answers };
 }
 
 export function cancelAskUserQuestion(input: {

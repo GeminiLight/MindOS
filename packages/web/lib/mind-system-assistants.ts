@@ -2,15 +2,17 @@ import fs from 'fs';
 import path from 'path';
 import { resolveExistingSafe } from '@/lib/core/security';
 import type { MindSystemSlot, MindSystemSlotKey } from './mind-system';
-import { getAssistantPromptPath } from './mind-system-assistant-paths';
+import { getAssistantProfilePath, getAssistantPromptPath } from './mind-system-assistant-paths';
 
 export {
+  getAssistantProfilePath,
   getAssistantPromptPath,
   isSafeAssistantId,
   MINDOS_ASSISTANT_PROMPT_ROOT,
 } from './mind-system-assistant-paths';
 
 export type AssistantScheduleMode = 'manual' | 'daily' | 'weekly';
+const ASSISTANT_SCHEDULE_MODES: AssistantScheduleMode[] = ['manual', 'daily', 'weekly'];
 
 export interface AssistantSchedule {
   mode: AssistantScheduleMode;
@@ -19,7 +21,10 @@ export interface AssistantSchedule {
 export interface MindSystemSpaceAssistant {
   id: string;
   schedule: AssistantSchedule;
+  name?: string;
+  desc?: string;
   promptPath?: string;
+  profilePath?: string;
   promptReady?: boolean;
 }
 
@@ -31,6 +36,12 @@ export interface MindSystemAssistantSummary {
   assistants: MindSystemSpaceAssistant[];
   draftCount: number;
   instructionReady: boolean;
+}
+
+export interface MindSystemAssistantProfile {
+  name?: string;
+  desc?: string;
+  schedule?: AssistantSchedule;
 }
 
 export const MIND_SYSTEM_ASSISTANT_CONFIGS: Record<MindSystemSlotKey, MindSystemSpaceAssistantConfig> = {
@@ -304,11 +315,17 @@ Write an audit draft listing healthy resources, stale resources, duplicates, and
 `,
 };
 
-export function getMindSystemAssistants(slot: Pick<MindSystemSlot, 'key'>): MindSystemSpaceAssistant[] {
-  return MIND_SYSTEM_ASSISTANT_CONFIGS[slot.key].assistants.map(assistant => ({
-    ...assistant,
-    promptPath: getAssistantPromptPath(assistant.id),
-  }));
+export function getMindSystemAssistants(slot: Pick<MindSystemSlot, 'key'>, mindRoot?: string): MindSystemSpaceAssistant[] {
+  return MIND_SYSTEM_ASSISTANT_CONFIGS[slot.key].assistants.map(assistant => {
+    const profile = mindRoot ? readAssistantProfile(mindRoot, assistant.id) : null;
+    return {
+      ...assistant,
+      ...profile,
+      schedule: profile?.schedule ?? assistant.schedule,
+      promptPath: getAssistantPromptPath(assistant.id),
+      profilePath: getAssistantProfilePath(assistant.id),
+    };
+  });
 }
 
 export function getDefaultAssistantPrompt(assistantId: string): string {
@@ -341,7 +358,7 @@ export function getMindSystemAssistantSummary(
   mindRoot: string,
   slot: Pick<MindSystemSlot, 'key' | 'path'>,
 ): MindSystemAssistantSummary {
-  const assistants = getMindSystemAssistants(slot).map(assistant => ({
+  const assistants = getMindSystemAssistants(slot, mindRoot).map(assistant => ({
     ...assistant,
     promptReady: assistantPromptFileExists(mindRoot, assistant.promptPath ?? getAssistantPromptPath(assistant.id)),
   }));
@@ -377,6 +394,45 @@ function assistantPromptFileExists(mindRoot: string, promptPath: string): boolea
   } catch {
     return false;
   }
+}
+
+function readAssistantProfile(mindRoot: string, assistantId: string): MindSystemAssistantProfile | null {
+  let profilePath: string;
+  try {
+    profilePath = resolveExistingSafe(mindRoot, getAssistantProfilePath(assistantId));
+  } catch {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(fs.readFileSync(profilePath, 'utf-8')) as unknown;
+    return sanitizeAssistantProfile(parsed);
+  } catch {
+    return null;
+  }
+}
+
+function sanitizeAssistantProfile(value: unknown): MindSystemAssistantProfile | null {
+  if (!value || typeof value !== 'object') return null;
+  const record = value as {
+    name?: unknown;
+    desc?: unknown;
+    schedule?: unknown;
+  };
+  const profile: MindSystemAssistantProfile = {};
+  if (typeof record.name === 'string' && record.name.trim()) {
+    profile.name = record.name.trim().slice(0, 80);
+  }
+  if (typeof record.desc === 'string') {
+    profile.desc = record.desc.trim().slice(0, 240);
+  }
+  if (record.schedule && typeof record.schedule === 'object') {
+    const scheduleRecord = record.schedule as { mode?: unknown };
+    if (typeof scheduleRecord.mode === 'string' && ASSISTANT_SCHEDULE_MODES.includes(scheduleRecord.mode as AssistantScheduleMode)) {
+      profile.schedule = { mode: scheduleRecord.mode as AssistantScheduleMode };
+    }
+  }
+  return Object.keys(profile).length > 0 ? profile : null;
 }
 
 function countDraftFiles(mindRoot: string, spacePath: string): number {

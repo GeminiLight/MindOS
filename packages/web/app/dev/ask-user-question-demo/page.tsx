@@ -140,8 +140,8 @@ const cancelledQuestion: ToolCallPart = {
 
 export default function AskUserQuestionDemoPage() {
   return (
-    <main className="box-border min-h-screen w-full max-w-full overflow-x-hidden bg-background text-foreground">
-      <div className="mx-auto box-border flex w-full min-w-0 max-w-full flex-col gap-6 px-6 py-8 lg:max-w-6xl">
+    <main className="box-border min-h-screen max-w-[100vw] overflow-x-hidden bg-background py-8 text-foreground">
+      <div className="mx-6 box-border flex w-[calc(100vw_-_48px)] min-w-0 max-w-[calc(100vw_-_48px)] flex-col gap-6 sm:mx-auto sm:w-full lg:max-w-6xl">
         <header className="space-y-2">
           <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
             MindOS Agent Demo

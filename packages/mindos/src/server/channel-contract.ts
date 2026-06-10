@@ -74,7 +74,7 @@ export function validateChannelCredentials(
     return { valid: false, missing: ['(no config)'] };
   }
 
-  const source = credentials as Record<string, unknown>;
+  const source = normalizeChannelCredentials(platform, credentials);
   const credentialSets = CHANNEL_CREDENTIAL_SETS[platform];
   const patterns = CHANNEL_FIELD_PATTERNS[platform] ?? {};
   let bestMissing = [...(credentialSets[0] ?? ['(unknown platform)'])];
@@ -92,4 +92,45 @@ export function validateChannelCredentials(
   }
 
   return { valid: false, missing: bestMissing };
+}
+
+export function normalizeChannelCredentials(
+  platform: string,
+  credentials: unknown,
+): Record<string, string> {
+  if (!credentials || typeof credentials !== 'object') return {};
+  const source = credentials as Record<string, unknown>;
+  const normalized: Record<string, string> = {};
+
+  for (const [key, value] of Object.entries(source)) {
+    if (typeof value !== 'string') continue;
+    const trimmed = value.trim();
+    if (!trimmed) continue;
+    normalized[key] = normalizeChannelCredentialField(platform, key, trimmed);
+  }
+
+  return normalized;
+}
+
+function normalizeChannelCredentialField(platform: string, key: string, value: string): string {
+  if (platform === 'wecom' && key === 'webhook_key') {
+    const extracted = extractQueryParam(value, 'key');
+    return extracted || value;
+  }
+  return value;
+}
+
+function extractQueryParam(value: string, key: string): string | undefined {
+  try {
+    const parsed = new URL(value);
+    const found = parsed.searchParams.get(key)?.trim();
+    if (found) return found;
+  } catch {
+    // Not a URL. Fall through to regex extraction for pasted snippets.
+  }
+
+  const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = value.match(new RegExp(`[?&]${escaped}=([^&#\\s]+)`));
+  const captured = match?.[1];
+  return captured ? decodeURIComponent(captured).trim() : undefined;
 }

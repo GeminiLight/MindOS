@@ -51,9 +51,9 @@ describe('pi-subagents built-in extension', () => {
       runtimeAdapterContent = fs.readFileSync(adapterPath, 'utf-8');
     });
 
-    it('runtime adapter includes pi-subagents in additionalExtensionPaths', () => {
-      expect(runtimeAdapterContent).toContain('pi-subagents');
-      expect(runtimeAdapterContent).toContain("path.join(webAppDir, 'node_modules', 'pi-subagents', 'src', 'extension', 'index.ts')");
+    it('runtime adapter loads the MindOS subagent ledger wrapper instead of upstream directly', () => {
+      expect(runtimeAdapterContent).toContain("path.join(webAppDir, 'lib', 'agent', 'subagent-ledger-extension.ts')");
+      expect(runtimeAdapterContent).not.toContain("path.join(webAppDir, 'node_modules', 'pi-subagents', 'src', 'extension', 'index.ts')");
     });
 
     it('runtime adapter preserves the built-in schedule-prompt extension from the legacy app', () => {
@@ -64,10 +64,48 @@ describe('pi-subagents built-in extension', () => {
     it('pi-subagents path is after user extensions (scanExtensionPaths)', () => {
       // User extensions should have priority, so scanExtensionPaths() comes first
       const scanIndex = runtimeAdapterContent.indexOf('scanExtensionPaths()');
-      const subagentsIndex = runtimeAdapterContent.indexOf('pi-subagents');
+      const subagentsIndex = runtimeAdapterContent.indexOf('subagent-ledger-extension');
 
       expect(scanIndex).toBeGreaterThan(-1);
       expect(subagentsIndex).toBeGreaterThan(scanIndex);
+    });
+
+    it('derives extension exposure from PermissionPolicy tool scope for every ask mode', async () => {
+      const { getMindosWebPiRuntimePaths } = await import('@/lib/agent/mindos-pi-runtime-host');
+      const base = {
+        projectRoot: path.resolve(PROJECT_ROOT, '..', '..'),
+        mindRoot: PROJECT_ROOT,
+        serverSettings: {},
+      };
+
+      const chatPaths = getMindosWebPiRuntimePaths({ ...base, mode: 'chat' });
+      const chatExtensionList = chatPaths.additionalExtensionPaths.join('\n');
+      expect(chatExtensionList).toContain('kb-extension');
+      expect(chatExtensionList).toContain('ask-user-question-bridge-extension');
+      expect(chatExtensionList).toContain('web-search-extension');
+      expect(chatExtensionList).toContain('pi-web-access');
+      expect(chatExtensionList).not.toContain('pi-mcp-adapter');
+      expect(chatExtensionList).not.toContain('subagent-ledger-extension');
+      expect(chatExtensionList).not.toContain(path.join('lib', 'im', 'index.ts'));
+      expect(chatExtensionList).not.toContain('schedule-prompt');
+
+      const organizePaths = getMindosWebPiRuntimePaths({ ...base, mode: 'organize' });
+      const organizeExtensionList = organizePaths.additionalExtensionPaths.join('\n');
+      expect(organizeExtensionList).toContain('kb-extension');
+      expect(organizeExtensionList).toContain('web-search-extension');
+      expect(organizeExtensionList).not.toContain('pi-mcp-adapter');
+      expect(organizeExtensionList).not.toContain('subagent-ledger-extension');
+      expect(organizeExtensionList).not.toContain(path.join('lib', 'im', 'index.ts'));
+      expect(organizeExtensionList).not.toContain('schedule-prompt');
+
+      const agentPaths = getMindosWebPiRuntimePaths({ ...base, mode: 'agent' });
+      const agentExtensionList = agentPaths.additionalExtensionPaths.join('\n');
+      expect(agentExtensionList).toContain('kb-extension');
+      expect(agentExtensionList).toContain('web-search-extension');
+      expect(agentExtensionList).toContain('pi-mcp-adapter');
+      expect(agentExtensionList).toContain('subagent-ledger-extension');
+      expect(agentExtensionList).toContain(path.join('lib', 'im', 'index.ts'));
+      expect(agentExtensionList).toContain('schedule-prompt');
     });
   });
 
@@ -95,7 +133,7 @@ describe('pi-subagents built-in extension', () => {
     it('DefaultResourceLoader loads pi-subagents and exposes subagent tools', async () => {
       // This test mirrors the actual loading path used by /api/ask
       const settingsManager = SettingsManager.inMemory();
-      const piSubagentsPath = path.join(PROJECT_ROOT, 'node_modules', 'pi-subagents', 'src', 'extension', 'index.ts');
+      const piSubagentsPath = path.join(PROJECT_ROOT, 'lib', 'agent', 'subagent-ledger-extension.ts');
 
       const loader = new DefaultResourceLoader({
         cwd: PROJECT_ROOT,
@@ -108,12 +146,13 @@ describe('pi-subagents built-in extension', () => {
       });
 
       await loader.reload();
-      const { extensions } = loader.getExtensions();
+      const { extensions, errors } = loader.getExtensions();
 
-      // Find the pi-subagents extension
-      const subagentsExt = extensions.find((ext) =>
-        ext.path.includes('pi-subagents') || ext.resolvedPath?.includes('pi-subagents')
-      );
+      expect(errors).toEqual([]);
+
+      // The loader may attribute tools to the wrapped upstream extension; the
+      // product contract is that loading the MindOS wrapper exposes subagent.
+      const subagentsExt = extensions.find((ext) => ext.tools.has('subagent'));
 
       expect(subagentsExt).toBeDefined();
 
@@ -124,7 +163,7 @@ describe('pi-subagents built-in extension', () => {
 
     it('subagent tool is registered and available', async () => {
       const settingsManager = SettingsManager.inMemory();
-      const piSubagentsPath = path.join(PROJECT_ROOT, 'node_modules', 'pi-subagents', 'src', 'extension', 'index.ts');
+      const piSubagentsPath = path.join(PROJECT_ROOT, 'lib', 'agent', 'subagent-ledger-extension.ts');
 
       const loader = new DefaultResourceLoader({
         cwd: PROJECT_ROOT,
@@ -137,10 +176,10 @@ describe('pi-subagents built-in extension', () => {
       });
 
       await loader.reload();
-      const { extensions } = loader.getExtensions();
-      const subagentsExt = extensions.find((ext) =>
-        ext.path.includes('pi-subagents') || ext.resolvedPath?.includes('pi-subagents')
-      );
+      const { extensions, errors } = loader.getExtensions();
+
+      expect(errors).toEqual([]);
+      const subagentsExt = extensions.find((ext) => ext.tools.has('subagent'));
 
       expect(subagentsExt).toBeDefined();
 

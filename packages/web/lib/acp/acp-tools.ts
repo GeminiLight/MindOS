@@ -7,6 +7,14 @@ import { Type, type Static } from '@sinclair/typebox';
 import { getAcpAgents, findAcpAgent } from './registry';
 import { createSessionFromEntry, prompt, closeSession } from './session';
 import { getMindRoot } from '../fs';
+import {
+  completeAgentRun,
+  failAgentRun,
+  startAgentRun,
+  updateAgentRun,
+  type AgentRunPermissionMode,
+} from '@/lib/agent/run-ledger';
+import { createMindosAgentPermissionPolicyFromContext } from '@/lib/agent/permission-policy';
 
 function textResult(text: string) {
   return { content: [{ type: 'text' as const, text }], details: {} };
@@ -19,6 +27,14 @@ type MindosAgentTool = {
   parameters: unknown;
   execute: (...args: any[]) => Promise<ReturnType<typeof textResult>>;
 };
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function permissionModeFromContext(ctx: unknown): AgentRunPermissionMode {
+  return createMindosAgentPermissionPolicyFromContext(ctx, 'agent').acpPermissionMode;
+}
 
 /* ── Parameter Schemas ─────────────────────────────────────────────────── */
 
@@ -76,18 +92,54 @@ export const acpTools: MindosAgentTool[] = [
     label: 'Call ACP Agent',
     description: 'Spawn an ACP agent, send it a message, and return the result. The agent runs as a local subprocess. Use list_acp_agents first to see available agents.',
     parameters: CallAcpAgentParams,
-    execute: async (_id: string, params: Static<typeof CallAcpAgentParams>) => {
+    execute: async (_id: string, params: Static<typeof CallAcpAgentParams>, _signal?: AbortSignal, _onUpdate?: unknown, ctx?: unknown) => {
+      const cwd = getMindRoot();
+      const permissionMode = permissionModeFromContext(ctx);
+      const run = startAgentRun({
+        agentKind: 'acp',
+        runtimeId: params.agent_id,
+        displayName: params.agent_id,
+        cwd,
+        permissionMode,
+        inputSummary: params.message,
+        metadata: {
+          toolCallId: _id,
+          phase: 'resolve_agent',
+        },
+      });
+      let session: { id: string } | undefined;
       try {
         const entry = await findAcpAgent(params.agent_id);
         if (!entry) {
+          failAgentRun(run.id, {
+            error: `ACP agent not found: ${params.agent_id}.`,
+            metadata: { phase: 'resolve_agent' },
+          });
           return textResult(`ACP agent not found: ${params.agent_id}. Use list_acp_agents to see available agents.`);
         }
 
-        const cwd = getMindRoot();
-        const session = await createSessionFromEntry(entry, { cwd });
+        updateAgentRun(run.id, {
+          runtimeId: entry.id,
+          displayName: entry.name,
+          metadata: { phase: 'create_session' },
+        });
+        session = await createSessionFromEntry(entry, { cwd, permissionMode: permissionMode === 'readonly' ? 'readonly' : 'agent' });
+        updateAgentRun(run.id, {
+          metadata: {
+            phase: 'prompt',
+            sessionId: session.id,
+          },
+        });
 
         try {
           const response = await prompt(session.id, params.message);
+          completeAgentRun(run.id, {
+            outputSummary: response.text || '(empty response)',
+            metadata: {
+              sessionId: session.id,
+              outputChars: response.text?.length ?? 0,
+            },
+          });
           return textResult(
             `**${entry.name}** responded:\n\n${response.text || '(empty response)'}`
           );
@@ -95,7 +147,13 @@ export const acpTools: MindosAgentTool[] = [
           await closeSession(session.id).catch(() => {});
         }
       } catch (err) {
-        return textResult(`ACP call failed: ${(err as Error).message}`);
+        failAgentRun(run.id, {
+          error: err,
+          metadata: {
+            ...(session?.id ? { sessionId: session.id } : {}),
+          },
+        });
+        return textResult(`ACP call failed: ${errorMessage(err)}`);
       }
     },
   },

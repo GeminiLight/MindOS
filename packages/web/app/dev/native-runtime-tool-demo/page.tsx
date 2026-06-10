@@ -72,8 +72,8 @@ const parts: ToolCallPart[] = [
 
 export default function NativeRuntimeToolDemoPage() {
   return (
-    <main className="box-border min-h-screen w-screen max-w-[100vw] overflow-x-hidden bg-background text-foreground">
-      <div className="mx-auto box-border flex w-full min-w-0 max-w-[100vw] flex-col gap-6 px-6 py-8 lg:max-w-4xl">
+    <main className="box-border min-h-screen max-w-[100vw] overflow-x-hidden bg-background py-8 text-foreground">
+      <div className="mx-6 box-border flex w-[calc(100vw_-_48px)] min-w-0 max-w-[calc(100vw_-_48px)] flex-col gap-6 sm:mx-auto sm:w-full sm:max-w-4xl">
         <header className="space-y-2">
           <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
             MindOS Agent Demo
@@ -82,7 +82,7 @@ export default function NativeRuntimeToolDemoPage() {
             Native Runtime Tool Preview
           </h1>
           <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
-            Claude Code and Codex tool calls are rendered as local runtime operations. Permission requests from Codex app-server and Claude Code permission prompt tools can be approved or denied inline through the MindOS runtime bridge.
+            Approvals render inline in the Chat Panel.
           </p>
         </header>
 

@@ -1,4 +1,4 @@
-import { test, expect, Page } from 'playwright/test';
+import { test, expect, Page } from '@playwright/test';
 
 test.describe('Navigation', () => {
   test('homepage loads and shows sidebar', async ({ page }: { page: Page }) => {

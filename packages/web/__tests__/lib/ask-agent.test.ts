@@ -7,10 +7,12 @@ import {
   bindSessionAgent,
   bindSessionAgentRuntime,
   filterSessionsByRuntimeLane,
+  getRuntimeSessionSummary,
   getMatchingRuntimeSessionBinding,
   getMessageAgentRuntime,
   getSelectedAcpAgentFromMessage,
   getSessionAgentRuntime,
+  isRuntimeSessionBindingResumable,
   resolveComposerAgent,
   resolveMessageAgent,
 } from '@/lib/ask-agent';
@@ -252,7 +254,11 @@ describe('ask agent helpers', () => {
 
     expect(filterSessionsByRuntimeLane(sessions, null).map((session) => session.id)).toEqual([
       'mindos-session',
+    ]);
+    expect(filterSessionsByRuntimeLane(sessions, { id: 'local-agent', name: 'Local ACP Agent', kind: 'acp' }).map((session) => session.id)).toEqual([
       'acp-session',
+    ]);
+    expect(filterSessionsByRuntimeLane(sessions, { id: 'other-acp', name: 'Other ACP Agent', kind: 'acp' }).map((session) => session.id)).toEqual([
     ]);
     expect(filterSessionsByRuntimeLane(sessions, { id: 'codex', name: 'Codex', kind: 'codex' }).map((session) => session.id)).toEqual([
       'codex-session',
@@ -369,5 +375,86 @@ describe('ask agent helpers', () => {
       status: 'active',
       updatedAt: 456,
     });
+  });
+
+  it('summarizes typed and legacy runtime session metadata for history UI', () => {
+    const typed: ChatSession = {
+      id: 'codex',
+      createdAt: 1,
+      updatedAt: 1,
+      messages: [],
+      runtimeSessionBinding: {
+        kind: 'codex-thread',
+        runtime: 'codex',
+        runtimeId: 'codex',
+        externalSessionId: 'thread_1234567890abcdef',
+        cwd: '/tmp/mind',
+        status: 'failed',
+        updatedAt: 1,
+      },
+    };
+    const legacy: ChatSession = {
+      id: 'claude',
+      createdAt: 1,
+      updatedAt: 1,
+      messages: [],
+      externalAgentBinding: {
+        runtime: 'claude',
+        externalSessionId: 'session_1234567890abcdef',
+        cwd: '/tmp/mind',
+        status: 'active',
+        updatedAt: 2,
+      },
+    };
+
+    expect(getRuntimeSessionSummary(typed)).toMatchObject({
+      label: 'Codex thread',
+      idLabel: 'Codex thread thread_1...abcdef',
+      cwd: '/tmp/mind',
+      status: 'failed',
+    });
+    expect(getRuntimeSessionSummary(legacy)).toMatchObject({
+      label: 'Claude Code session',
+      idLabel: 'Claude Code session session_...abcdef',
+      cwd: '/tmp/mind',
+    });
+    expect(getRuntimeSessionSummary({ id: 'mindos', createdAt: 1, updatedAt: 1, messages: [] })).toBeNull();
+  });
+
+  it('only treats active runtime session bindings with external ids as resumable', () => {
+    expect(isRuntimeSessionBindingResumable({
+      kind: 'codex-thread',
+      runtime: 'codex',
+      runtimeId: 'codex',
+      externalSessionId: 'thread_123',
+      status: 'active',
+      updatedAt: 1,
+    })).toBe(true);
+
+    expect(isRuntimeSessionBindingResumable({
+      kind: 'claude-session',
+      runtime: 'claude',
+      runtimeId: 'claude',
+      externalSessionId: 'session_failed',
+      status: 'failed',
+      updatedAt: 2,
+    })).toBe(false);
+
+    expect(isRuntimeSessionBindingResumable({
+      kind: 'codex-thread',
+      runtime: 'codex',
+      runtimeId: 'codex',
+      externalSessionId: 'thread_archived',
+      status: 'archived',
+      updatedAt: 3,
+    })).toBe(false);
+
+    expect(isRuntimeSessionBindingResumable({
+      kind: 'claude-session',
+      runtime: 'claude',
+      runtimeId: 'claude',
+      status: 'active',
+      updatedAt: 4,
+    })).toBe(false);
   });
 });

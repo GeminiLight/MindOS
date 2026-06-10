@@ -2,12 +2,12 @@
  * Tests for consumeUIMessageStream handling of 'status' SSE events.
  *
  * Status events are sent by the backend during retry attempts to inform
- * the frontend about the retry state. Previously, these were silently
- * ignored. After the fix, they should surface as text in the message.
+ * the frontend about the retry state. Visible native runtime status should
+ * render as a structured message part, not assistant conversation text.
  */
 import { afterEach, describe, it, expect, vi } from 'vitest';
 import { consumeUIMessageStream } from '@/lib/agent/stream-consumer';
-import type { ToolCallPart } from '@/lib/types';
+import type { RuntimeStatusPart, ToolCallPart } from '@/lib/types';
 
 /** Helper: encode SSE events into a ReadableStream */
 function makeStream(...events: object[]): ReadableStream<Uint8Array> {
@@ -33,6 +33,27 @@ function stubWindowEventTarget(): EventTarget & Pick<Window, 'addEventListener' 
 }
 
 describe('consumeUIMessageStream — status event handling', () => {
+  it('emits agent run context metadata without adding visible message parts', async () => {
+    const onAgentRunContext = vi.fn();
+    const result = await consumeUIMessageStream(
+      makeStream(
+        { type: 'agent_run_context', rootRunId: 'root-1', chatSessionId: 'chat-1', startedAt: 123 },
+        { type: 'done' },
+      ),
+      vi.fn(),
+      undefined,
+      { onAgentRunContext },
+    );
+
+    expect(onAgentRunContext).toHaveBeenCalledWith({
+      rootRunId: 'root-1',
+      chatSessionId: 'chat-1',
+      startedAt: 123,
+    });
+    expect(result.content).toBe('');
+    expect(result.parts).toEqual([]);
+  });
+
   it('ignores status events when no text has been emitted yet (silent reconnect)', async () => {
     // Status-only stream (no text_delta, no done) — after the fix,
     // status events should NOT appear as visible text in the message
@@ -85,13 +106,143 @@ describe('consumeUIMessageStream — status event handling', () => {
     expect(result.content).toBe('Response after retry');
   });
 
-  it('shows visible native runtime status events as transient assistant text', async () => {
+  it('shows visible native runtime status events as structured runtime status parts', async () => {
     const stream = makeStream(
-      { type: 'status', visible: true, message: 'Claude Code HTTP 429; retrying (1/10). Retrying in 1s.' },
+      {
+        type: 'status',
+        visible: true,
+        runtime: 'claude',
+        message: 'Claude Code HTTP 429; retrying (1/10). Retrying in 1s.',
+      },
       { type: 'done' },
     );
     const result = await consumeUIMessageStream(stream, vi.fn());
-    expect(result.content).toContain('Claude Code HTTP 429; retrying (1/10). Retrying in 1s.');
+    expect(result.content).toBe('');
+    expect(result.parts).toEqual([
+      {
+        type: 'runtime-status',
+        runtime: 'claude',
+        message: 'Claude Code HTTP 429; retrying (1/10). Retrying in 1s.',
+      },
+    ]);
+  });
+
+  it('coalesces adjacent visible runtime status updates for the same runtime', async () => {
+    const stream = makeStream(
+      {
+        type: 'status',
+        visible: true,
+        runtime: 'claude',
+        message: 'Claude Code HTTP 429; retrying (1/10). Retrying in 1s.',
+      },
+      {
+        type: 'status',
+        visible: true,
+        runtime: 'claude',
+        message: 'Claude Code HTTP 429; retrying (2/10). Retrying in 1s.',
+      },
+      { type: 'done' },
+    );
+    const result = await consumeUIMessageStream(stream, vi.fn());
+    const statusParts = result.parts.filter((p): p is RuntimeStatusPart => p.type === 'runtime-status');
+    expect(result.content).toBe('');
+    expect(statusParts).toEqual([
+      {
+        type: 'runtime-status',
+        runtime: 'claude',
+        message: 'Claude Code HTTP 429; retrying (2/10). Retrying in 1s.',
+      },
+    ]);
+  });
+
+  it('keeps visible runtime status out of assistant content when text arrives later', async () => {
+    const stream = makeStream(
+      {
+        type: 'status',
+        visible: true,
+        runtime: 'codex',
+        message: 'Codex is preparing the local runtime.',
+      },
+      { type: 'text_delta', delta: 'Ready.' },
+      { type: 'done' },
+    );
+
+    const result = await consumeUIMessageStream(stream, vi.fn());
+
+    expect(result.content).toBe('Ready.');
+    expect(result.parts).toEqual([
+      {
+        type: 'runtime-status',
+        runtime: 'codex',
+        message: 'Codex is preparing the local runtime.',
+      },
+      {
+        type: 'text',
+        text: 'Ready.',
+      },
+    ]);
+  });
+
+  it('does not interrupt native runtime tool state when status arrives during a tool call', async () => {
+    const stream = makeStream(
+      {
+        type: 'tool_start',
+        toolCallId: 'cmd-1',
+        toolName: 'Bash',
+        runtime: 'claude',
+        args: { command: 'mindos search runtime' },
+      },
+      {
+        type: 'status',
+        visible: true,
+        runtime: 'claude',
+        message: 'Claude Code is waiting for the local runtime.',
+      },
+      { type: 'tool_end', toolCallId: 'cmd-1', output: 'done', isError: false },
+      { type: 'done' },
+    );
+
+    const result = await consumeUIMessageStream(stream, vi.fn());
+    const toolPart = result.parts.find((p): p is ToolCallPart => p.type === 'tool-call');
+    const statusPart = result.parts.find((p): p is RuntimeStatusPart => p.type === 'runtime-status');
+
+    expect(result.content).toBe('');
+    expect(toolPart).toMatchObject({
+      toolCallId: 'cmd-1',
+      toolName: 'Bash',
+      runtime: 'claude',
+      state: 'done',
+      output: 'done',
+    });
+    expect(statusPart).toMatchObject({
+      runtime: 'claude',
+      message: 'Claude Code is waiting for the local runtime.',
+    });
+  });
+
+  it('preserves native runtime identity when a tool_end event arrives without tool_start', async () => {
+    const stream = makeStream(
+      {
+        type: 'tool_end',
+        toolCallId: 'codex-tool-1',
+        toolName: 'Bash',
+        runtime: 'codex',
+        output: 'done',
+        isError: false,
+      },
+      { type: 'done' },
+    );
+
+    const result = await consumeUIMessageStream(stream, vi.fn());
+    const toolPart = result.parts.find((p): p is ToolCallPart => p.type === 'tool-call');
+
+    expect(toolPart).toMatchObject({
+      toolCallId: 'codex-tool-1',
+      toolName: 'Bash',
+      runtime: 'codex',
+      state: 'done',
+      output: 'done',
+    });
   });
 
   it('surfaces runtime binding metadata without adding message content', async () => {
@@ -110,6 +261,31 @@ describe('consumeUIMessageStream — status event handling', () => {
       cwd: '/tmp/mind',
     });
     expect(result.content).toBe('Bound session.');
+  });
+
+  it('surfaces failed runtime binding metadata for stale native sessions', async () => {
+    const onRuntimeBinding = vi.fn();
+    const stream = makeStream(
+      {
+        type: 'runtime_binding',
+        runtime: 'claude',
+        externalSessionId: 'claude_old',
+        cwd: '/tmp/mind',
+        status: 'failed',
+        reason: 'Claude resume failed',
+      },
+      { type: 'error', message: 'Claude Code native runtime error: Claude resume failed' },
+    );
+
+    await consumeUIMessageStream(stream, vi.fn(), undefined, { onRuntimeBinding });
+
+    expect(onRuntimeBinding).toHaveBeenCalledWith({
+      runtime: 'claude',
+      externalSessionId: 'claude_old',
+      cwd: '/tmp/mind',
+      status: 'failed',
+      reason: 'Claude resume failed',
+    });
   });
 
   it('handles error event by adding error text to message', async () => {
@@ -290,6 +466,73 @@ describe('consumeUIMessageStream — status event handling', () => {
         status: 'approved',
         decision: 'accept',
       },
+    });
+  });
+
+  it('marks denied runtime permission requests as closed without waiting for tool_end', async () => {
+    const stream = makeStream(
+      {
+        type: 'runtime_permission_request',
+        runId: 'run-1',
+        requestId: 'perm-1',
+        runtime: 'claude',
+        toolCallId: 'cmd-1',
+        toolName: 'Bash',
+        input: { command: 'mindos file delete "Profile.md"' },
+        options: [
+          { id: 'accept', label: 'Allow once', intent: 'allow' },
+          { id: 'decline', label: 'Deny', intent: 'deny' },
+        ],
+      },
+      {
+        type: 'runtime_permission_resolved',
+        runId: 'run-1',
+        requestId: 'perm-1',
+        runtime: 'claude',
+        toolCallId: 'cmd-1',
+        decision: 'decline',
+      },
+      { type: 'done' },
+    );
+
+    const result = await consumeUIMessageStream(stream, vi.fn());
+    const toolPart = result.parts.find((p): p is ToolCallPart => (p as ToolCallPart).type === 'tool-call');
+
+    expect(toolPart).toMatchObject({
+      toolCallId: 'cmd-1',
+      toolName: 'Bash',
+      runtime: 'claude',
+      state: 'error',
+      output: 'Permission decision forwarded: decline',
+      runtimePermission: {
+        status: 'denied',
+        decision: 'decline',
+      },
+    });
+  });
+
+  it('preserves native runtime identity when a permission resolution arrives without the request event', async () => {
+    const stream = makeStream(
+      {
+        type: 'runtime_permission_resolved',
+        runId: 'run-1',
+        requestId: 'perm-1',
+        runtime: 'claude',
+        toolCallId: 'cmd-1',
+        decision: 'denied',
+      },
+      { type: 'done' },
+    );
+
+    const result = await consumeUIMessageStream(stream, vi.fn());
+    const toolPart = result.parts.find((p): p is ToolCallPart => p.type === 'tool-call');
+
+    expect(toolPart).toMatchObject({
+      toolCallId: 'cmd-1',
+      toolName: 'approval_request',
+      runtime: 'claude',
+      state: 'error',
+      output: 'Permission decision forwarded: denied',
     });
   });
 

@@ -96,6 +96,15 @@ describe('AskHeader panel hit area', () => {
               title: 'Claude review',
               messages: [{ role: 'user', content: 'review' }],
               defaultAgentRuntime: { id: 'claude', name: 'Claude Code', kind: 'claude' },
+              runtimeSessionBinding: {
+                kind: 'claude-session',
+                runtime: 'claude',
+                runtimeId: 'claude',
+                externalSessionId: 'session_1234567890abcdef',
+                cwd: '/tmp/mind',
+                status: 'active',
+                updatedAt: 1,
+              },
             } as any,
           ]}
           activeSessionId="claude-session"
@@ -119,9 +128,55 @@ describe('AskHeader panel hit area', () => {
       titleButton.click();
     });
 
-    expect(document.body.textContent).toContain('Claude Code sessions');
+    expect(document.body.textContent).toContain('MindOS-linked Claude Code chats');
     expect(document.body.textContent).toContain('Claude review');
+    expect(document.body.textContent).toContain('Claude Code session session_...abcdef');
+    expect(document.body.textContent).toContain('/tmp/mind');
     expect(document.body.textContent).toContain('New chat');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('labels the native Codex header dropdown as MindOS-linked chats, not full Codex threads', async () => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(
+        <AskHeader
+          isPanel
+          showHistory={false}
+          onToggleHistory={vi.fn()}
+          onReset={vi.fn()}
+          isLoading={false}
+          sessions={[]}
+          activeSessionId={null}
+          onLoadSession={vi.fn()}
+          onDeleteSession={vi.fn()}
+          onRenameSession={vi.fn()}
+          onTogglePinSession={vi.fn()}
+          selectedAgentRuntime={{ id: 'codex', name: 'Codex', kind: 'codex' }}
+          onSelectAgentRuntime={vi.fn()}
+          nativeRuntimes={[{ id: 'codex', name: 'Codex', kind: 'codex' }]}
+          messages={[]}
+        />,
+      );
+    });
+
+    const titleButton = Array.from(host.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('MindOS-linked Codex chats')) as HTMLButtonElement;
+    expect(titleButton).toBeTruthy();
+
+    await act(async () => {
+      titleButton.click();
+    });
+
+    expect(document.body.textContent).toContain('MindOS-linked Codex chats');
+    expect(document.body.textContent).toContain('No mindos-linked codex chats.');
+    expect(document.body.textContent).not.toContain('Codex threads');
 
     await act(async () => {
       root.unmount();

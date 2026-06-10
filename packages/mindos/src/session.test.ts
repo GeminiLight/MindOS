@@ -71,6 +71,7 @@ describe('MindOS session event contract', () => {
     expect(MINDOS_ASK_STREAM_EVENT_TYPES).toEqual([
       'text_delta',
       'thinking_delta',
+      'agent_run_context',
       'tool_start',
       'tool_delta',
       'tool_end',
@@ -92,6 +93,17 @@ describe('MindOS session event contract', () => {
     const encoded = encodeMindosSseEvent({ type: 'text_delta', delta: 'hello' });
     expect(encoded).toBe('data:{"type":"text_delta","delta":"hello"}\n\n');
     expect(parseMindosSseLine(encoded.trim())).toEqual({ type: 'text_delta', delta: 'hello' });
+    expect(parseMindosSseLine(encodeMindosSseEvent({
+      type: 'agent_run_context',
+      rootRunId: 'root-1',
+      chatSessionId: 'chat-1',
+      startedAt: 123,
+    }).trim())).toEqual({
+      type: 'agent_run_context',
+      rootRunId: 'root-1',
+      chatSessionId: 'chat-1',
+      startedAt: 123,
+    });
     expect(parseMindosSseLine(encodeMindosSseEvent({
       type: 'runtime_binding',
       runtime: 'codex',
@@ -981,6 +993,7 @@ describe('MindOS session event contract', () => {
         parts: [
           { type: 'text', text: 'Reading' },
           { type: 'reasoning', text: 'internal' },
+          { type: 'runtime-status', runtime: 'claude', message: 'Claude Code HTTP 429; retrying (1/10).' },
           {
             type: 'tool-call',
             toolCallId: 'call-1',

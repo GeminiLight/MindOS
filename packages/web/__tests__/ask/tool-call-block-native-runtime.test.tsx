@@ -16,6 +16,11 @@ function renderToolCall(part: ToolCallPart) {
 
   return {
     host,
+    rerender: (nextPart: ToolCallPart) => {
+      act(() => {
+        root.render(<ToolCallBlock part={nextPart} />);
+      });
+    },
     cleanup: () => {
       act(() => {
         root.unmount();
@@ -32,7 +37,7 @@ describe('ToolCallBlock native runtime rendering', () => {
     (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
   });
 
-  it('renders Claude Code Bash calls with local approval guidance', () => {
+  it('renders Claude Code Bash calls as native runtime execution until an approval request arrives', () => {
     const view = renderToolCall({
       type: 'tool-call',
       toolCallId: 'tool-claude-bash',
@@ -48,8 +53,9 @@ describe('ToolCallBlock native runtime rendering', () => {
     expect(view.host.textContent).toContain('Claude Code');
     expect(view.host.textContent).toContain('Bash');
     expect(view.host.textContent).toContain('mindos file delete "Profile.md"');
-    expect(view.host.textContent).toContain('Local approval may be required');
-    expect(view.host.textContent).toContain('MindOS can approve or deny it here');
+    expect(view.host.textContent).toContain('Running in Claude Code');
+    expect(view.host.textContent).not.toContain('Local approval may be required');
+    expect(view.host.textContent).not.toContain('permission pipeline');
 
     view.cleanup();
   });
@@ -104,6 +110,55 @@ describe('ToolCallBlock native runtime rendering', () => {
     vi.unstubAllGlobals();
   });
 
+  it('clears local permission button loading state once the runtime resolves the request', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const waitingPart: ToolCallPart = {
+      type: 'tool-call',
+      toolCallId: 'cmd-spinner',
+      toolName: 'Bash',
+      runtime: 'claude',
+      state: 'running',
+      input: { command: 'touch /tmp/example' },
+      runtimePermission: {
+        runId: 'run-spinner',
+        requestId: 'perm-spinner',
+        runtime: 'claude',
+        status: 'waiting',
+        options: [
+          { id: 'accept', label: 'Allow once', intent: 'allow' },
+          { id: 'decline', label: 'Deny', intent: 'deny' },
+        ],
+      },
+    };
+    const view = renderToolCall(waitingPart);
+    const allowButton = Array.from(view.host.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('Allow once'));
+
+    await act(async () => {
+      allowButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(allowButton?.querySelector('.animate-spin')).toBeTruthy();
+
+    view.rerender({
+      ...waitingPart,
+      runtimePermission: {
+        ...waitingPart.runtimePermission!,
+        status: 'approved',
+        decision: 'accept',
+      },
+    });
+
+    expect(view.host.textContent).toContain('Approved');
+    const resolvedAllowButton = Array.from(view.host.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('Allow once'));
+    expect(resolvedAllowButton?.querySelector('.animate-spin')).toBeNull();
+
+    view.cleanup();
+    vi.unstubAllGlobals();
+  });
+
   it('renders Codex command output in a native runtime card', () => {
     const view = renderToolCall({
       type: 'tool-call',
@@ -147,7 +202,7 @@ describe('ToolCallBlock native runtime rendering', () => {
     expect(view.host.textContent).toContain('Delete confirmation');
     expect(view.host.textContent).toContain('Delete');
     expect(view.host.textContent).toContain('Keep');
-    expect(view.host.textContent).toContain('read-only context');
+    expect(view.host.textContent).toContain('no longer waiting for an answer');
     expect(view.host.textContent).not.toContain('opens its own prompt');
     expect(view.host.textContent).not.toContain('"questions"');
 

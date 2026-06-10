@@ -92,17 +92,19 @@ export function isSessionInRuntimeLane(
   runtime: AgentRuntimeIdentity | null | undefined,
 ): boolean {
   const nativeKind = getSessionNativeRuntimeKind(session);
+  const selected = getSessionAgentRuntime(session);
 
-  // The MindOS lane owns MindOS sessions plus ACP-routed sessions. Native runtime
-  // sessions get their own lanes because Codex/Claude own model and resume state.
-  if (!runtime || runtime.kind === 'mindos' || runtime.kind === 'acp') {
-    return nativeKind === null;
+  if (!runtime || runtime.kind === 'mindos') {
+    return nativeKind === null && selected?.kind !== 'acp';
+  }
+
+  if (runtime.kind === 'acp') {
+    return nativeKind === null && selected?.kind === 'acp' && selected.id === runtime.id;
   }
 
   if (!isNativeRuntimeKind(runtime.kind)) return nativeKind === null;
   if (nativeKind !== runtime.kind) return false;
 
-  const selected = getSessionAgentRuntime(session);
   if (selected?.kind === runtime.kind) return selected.id === runtime.id;
 
   const bindingRuntimeId = session.runtimeSessionBinding?.runtimeId;
@@ -114,6 +116,69 @@ export function filterSessionsByRuntimeLane(
   runtime: AgentRuntimeIdentity | null | undefined,
 ): ChatSession[] {
   return sessions.filter((session) => isSessionInRuntimeLane(session, runtime));
+}
+
+export function shortRuntimeSessionId(id: string): string {
+  if (id.length <= 18) return id;
+  return `${id.slice(0, 8)}...${id.slice(-6)}`;
+}
+
+export function runtimeSessionKindLabel(kind: RuntimeSessionKind): string {
+  if (kind === 'codex-thread') return 'Codex thread';
+  if (kind === 'claude-session') return 'Claude Code session';
+  return 'ACP session';
+}
+
+function legacyRuntimeSessionKind(runtime: ExternalAgentBinding['runtime']): RuntimeSessionKind | null {
+  if (runtime === 'codex') return 'codex-thread';
+  if (runtime === 'claude') return 'claude-session';
+  if (runtime === 'acp') return 'acp-session';
+  return null;
+}
+
+export function getDisplayRuntimeSessionBinding(
+  session: Pick<ChatSession, 'runtimeSessionBinding' | 'externalAgentBinding'> | null | undefined,
+): RuntimeSessionBinding | null {
+  if (!session) return null;
+  if (session.runtimeSessionBinding) return session.runtimeSessionBinding;
+
+  const legacy = session.externalAgentBinding;
+  const kind = legacy ? legacyRuntimeSessionKind(legacy.runtime) : null;
+  if (!legacy || !kind) return null;
+
+  return {
+    kind,
+    runtime: legacy.runtime,
+    runtimeId: legacy.runtime,
+    ...(legacy.externalSessionId ? { externalSessionId: legacy.externalSessionId } : {}),
+    ...(legacy.cwd ? { cwd: legacy.cwd } : {}),
+    status: legacy.status ?? 'active',
+    updatedAt: legacy.updatedAt,
+  };
+}
+
+export function getRuntimeSessionSummary(
+  session: Pick<ChatSession, 'runtimeSessionBinding' | 'externalAgentBinding'> | null | undefined,
+): {
+  binding: RuntimeSessionBinding;
+  label: string;
+  idLabel: string;
+  cwd?: string;
+  status?: NonNullable<RuntimeSessionBinding['status']>;
+} | null {
+  const binding = getDisplayRuntimeSessionBinding(session);
+  if (!binding) return null;
+
+  const label = runtimeSessionKindLabel(binding.kind);
+  return {
+    binding,
+    label,
+    idLabel: binding.externalSessionId
+      ? `${label} ${shortRuntimeSessionId(binding.externalSessionId)}`
+      : `Unlinked ${label}`,
+    ...(binding.cwd ? { cwd: binding.cwd } : {}),
+    ...(binding.status && binding.status !== 'active' ? { status: binding.status } : {}),
+  };
 }
 
 export function bindSessionAgent(session: ChatSession, agent: AgentIdentity | null): ChatSession {
@@ -158,22 +223,35 @@ export function getMatchingRuntimeSessionBinding(
   };
 }
 
+export function isRuntimeSessionBindingResumable(
+  binding: RuntimeSessionBinding | null | undefined,
+): binding is RuntimeSessionBinding & { externalSessionId: string } {
+  return Boolean(
+    binding?.externalSessionId?.trim()
+    && (!binding.status || binding.status === 'active'),
+  );
+}
+
 export function bindSessionAgentRuntime(
   session: ChatSession,
   runtime: AgentRuntimeIdentity | null,
   binding?: {
     externalSessionId?: string;
     cwd?: string;
-    status?: ExternalAgentBinding['status'];
+    status?: RuntimeSessionBinding['status'];
     updatedAt?: number;
   },
 ): ChatSession {
+  const legacyStatus =
+    binding?.status === 'active' || binding?.status === 'missing' || binding?.status === 'signed-out'
+      ? binding.status
+      : 'active';
   const externalAgentBinding = runtime && runtime.kind !== 'mindos'
     ? {
         runtime: runtime.kind,
         ...(binding?.externalSessionId ? { externalSessionId: binding.externalSessionId } : {}),
         ...(binding?.cwd ? { cwd: binding.cwd } : {}),
-        status: binding?.status ?? 'active',
+        status: legacyStatus,
         updatedAt: binding?.updatedAt ?? Date.now(),
       } satisfies ExternalAgentBinding
     : null;
