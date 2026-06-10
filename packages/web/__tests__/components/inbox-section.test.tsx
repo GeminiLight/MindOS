@@ -160,4 +160,46 @@ describe('InboxSection', () => {
       root.unmount();
     });
   });
+
+  it('renders source icons for social web clips in the home Inbox list', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        files: [
+          {
+            name: 'Video Notes.md',
+            path: 'Inbox/Video Notes.md',
+            size: 120,
+            modifiedAt: new Date().toISOString(),
+            isAging: false,
+            source: {
+              kind: 'web',
+              url: 'https://www.youtube.com/watch?v=abc',
+              domain: 'youtube.com',
+              siteName: 'YouTube',
+              platform: 'youtube',
+              platformLabel: 'YouTube',
+            },
+          },
+        ],
+      }),
+    }));
+
+    const { InboxSection } = await import('@/components/home/InboxSection');
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<InboxSection />);
+      await new Promise(r => setTimeout(r, 0));
+    });
+
+    expect(host.textContent).toContain('YouTube');
+    expect(host.querySelector('img[src="/source-icons/youtube.ico"]')).not.toBeNull();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
 });

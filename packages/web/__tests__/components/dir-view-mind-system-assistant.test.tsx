@@ -160,6 +160,7 @@ describe('DirView Mind System assistant strip', () => {
     expect(dialog?.textContent).toContain('MIND_DAO/Drafts/');
     expect(textarea?.value).toBe('# Daily prompt\n\nKeep it focused.\n');
     expect(fetchMock).toHaveBeenCalledWith('/api/file?path=.mindos%2Fassistants%2Fdaily-signal%2Fprompt.md&op=read_file');
+    expect(document.body.textContent).toContain('Prompt ready');
 
     const valueSetter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
     await act(async () => {
@@ -168,7 +169,10 @@ describe('DirView Mind System assistant strip', () => {
     });
 
     const saveButton = document.body.querySelector<HTMLButtonElement>('[data-mind-system-assistant-save-prompt="daily-signal"]');
+    const resetButton = document.body.querySelector<HTMLButtonElement>('[data-mind-system-assistant-reset-prompt="daily-signal"]');
     expect(saveButton?.disabled).toBe(false);
+    expect(resetButton?.disabled).toBe(false);
+    expect(document.body.textContent).toContain('Unsaved changes');
 
     await act(async () => {
       saveButton?.click();
@@ -191,6 +195,7 @@ describe('DirView Mind System assistant strip', () => {
     });
     expect(document.body.textContent).toContain('Prompt saved');
     expect(navigationMocks.refresh).toHaveBeenCalled();
+    expect(document.body.querySelector<HTMLButtonElement>('[data-mind-system-assistant-save-prompt="daily-signal"]')?.disabled).toBe(true);
   });
 
   it('creates the assistant prompt from the editor when the prompt file is missing', async () => {

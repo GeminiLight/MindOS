@@ -33,21 +33,32 @@ export default function CapturePanel() {
   const [inboxError, setInboxError] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<CapturePanelView>(() => getCurrentPanelView());
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const fetchSeqRef = useRef(0);
+  const inboxFilesEventSeqRef = useRef(0);
 
   const refreshHistory = useCallback(() => {
     setHistory(loadHistory());
   }, []);
 
   const fetchInbox = useCallback(async () => {
+    const fetchSeq = ++fetchSeqRef.current;
+    const eventSeqAtStart = inboxFilesEventSeqRef.current;
+    const shouldApplyFetch = () => (
+      fetchSeq === fetchSeqRef.current &&
+      inboxFilesEventSeqRef.current === eventSeqAtStart
+    );
+
     try {
       const nextFiles = await fetchInboxFiles(t.inbox.loadFailed);
+      if (!shouldApplyFetch()) return;
       setFiles(nextFiles);
       setInboxError(null);
     } catch (error) {
+      if (!shouldApplyFetch()) return;
       console.warn('[CapturePanel] fetch failed:', error);
       setInboxError(error instanceof Error ? error.message : t.inbox.loadFailed);
     } finally {
-      setLoading(false);
+      if (shouldApplyFetch()) setLoading(false);
     }
   }, [t]);
 
@@ -60,13 +71,20 @@ export default function CapturePanel() {
   }, [fetchInbox, refreshHistory]);
 
   useEffect(() => {
-    void fetchInbox();
-    refreshHistory();
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      void fetchInbox();
+      refreshHistory();
+    });
+
     const syncView = () => setActiveView(getCurrentPanelView());
     const syncInboxFiles = (event: Event) => {
       const nextFiles = (event as CustomEvent<InboxFile[]>).detail;
       if (!Array.isArray(nextFiles)) return;
+      inboxFilesEventSeqRef.current += 1;
       setFiles(nextFiles);
+      setInboxError(null);
       setLoading(false);
     };
     window.addEventListener('mindos:inbox-updated', refresh);
@@ -76,6 +94,7 @@ export default function CapturePanel() {
     window.addEventListener('hashchange', syncView);
     window.addEventListener('popstate', syncView);
     return () => {
+      cancelled = true;
       clearTimeout(refreshTimerRef.current);
       window.removeEventListener('mindos:inbox-updated', refresh);
       window.removeEventListener('mindos:organize-done', refresh);

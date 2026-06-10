@@ -520,31 +520,31 @@ function MindSystemAssistantStrip({ space }: { space: BuiltInMindSystemSpaceReco
           </Link>
         </div>
       </div>
-      <div className="mt-4 grid grid-cols-1 gap-2 lg:grid-cols-3">
+      <div className="mt-4 grid grid-cols-1 gap-2.5 lg:grid-cols-3">
         {visibleAssistants.map((assistant) => {
           const expanded = expandedAssistantId === assistant.id;
           return (
             <article
               key={assistant.id}
               data-mind-system-dir-assistant-item={assistant.id}
-              className="min-w-0 rounded-md border border-border/60 bg-background/35 p-3 transition-colors hover:border-[var(--amber)]/25 hover:bg-background/55"
+              className="group min-w-0 rounded-lg border border-border/60 bg-background/40 p-3.5 transition-colors hover:border-[var(--amber)]/30 hover:bg-background/65"
             >
               <div className="flex min-w-0 items-start justify-between gap-2">
                 <div className="flex min-w-0 items-start gap-2">
                   <span
                     data-mind-system-dir-assistant-icon={assistant.id}
-                    className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md border text-[11px] font-semibold ${assistant.avatar.className}`}
+                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md border text-xs font-semibold ${assistant.avatar.className}`}
                     aria-hidden="true"
                   >
                     {assistant.avatar.text}
                   </span>
                   <div className="min-w-0">
-                    <div className="truncate text-xs font-semibold text-foreground">{assistant.name}</div>
-                    <div className="mt-1 flex flex-wrap items-center gap-1">
-                      <span className="inline-flex rounded bg-muted px-1.5 py-px text-[10px] font-medium text-muted-foreground">
+                    <div className="truncate text-[13px] font-semibold leading-4 text-foreground">{assistant.name}</div>
+                    <div className="mt-1.5 flex flex-wrap items-center gap-1">
+                      <span className="inline-flex rounded-md bg-muted px-1.5 py-px text-[10px] font-medium text-muted-foreground">
                         {t.home.mindAssistant.scheduleMode[assistant.schedule.mode]}
                       </span>
-                      <span className={`inline-flex rounded px-1.5 py-px text-[10px] font-medium ${assistant.promptReady ? 'bg-[var(--success)]/10 text-[var(--success)]' : 'bg-muted text-muted-foreground'}`}>
+                      <span className={`inline-flex rounded-md px-1.5 py-px text-[10px] font-medium ${assistant.promptReady ? 'bg-[var(--success)]/10 text-[var(--success)]' : 'bg-muted text-muted-foreground'}`}>
                         {assistant.promptReady ? t.home.mindAssistant.promptReady : t.home.mindAssistant.promptMissing}
                       </span>
                     </div>
@@ -561,24 +561,33 @@ function MindSystemAssistantStrip({ space }: { space: BuiltInMindSystemSpaceReco
                     promptPath: assistant.promptPath,
                     runPrompt: t.home.mindAssistant.runPrompt,
                   })}
-                  className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md px-2 text-[10px] font-medium text-[var(--amber)] transition-colors hover:bg-[var(--amber)]/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation"
+                  className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md bg-[var(--amber)]/10 px-2 text-[10px] font-medium text-[var(--amber)] transition-colors hover:bg-[var(--amber)]/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation"
                   aria-label={`${t.home.mindAssistant.runOnce}: ${assistant.name}`}
                 >
                   <Play size={11} aria-hidden="true" />
                   {t.home.mindAssistant.runOnce}
                 </button>
               </div>
-              <p className="mt-2 line-clamp-2 min-h-8 text-[11px] leading-4 text-muted-foreground">
+              <p className="mt-3 line-clamp-2 min-h-8 text-[11px] leading-4 text-muted-foreground">
                 {assistant.desc}
               </p>
               {expanded && (
-                <div className="mt-2 rounded-md bg-muted/45 px-2 py-1.5 text-[10px] leading-4 text-muted-foreground">
-                  <div className="truncate font-mono">{assistant.id}</div>
-                  <div className="truncate">{t.home.mindAssistant.promptFile}: {assistant.promptPath}</div>
-                  <div>{t.home.mindAssistant.openDrafts}: {space.slot.path}/Drafts/</div>
+                <div className="mt-3 grid gap-1.5 rounded-md border border-border/50 bg-muted/35 px-2.5 py-2 text-[10px] leading-4 text-muted-foreground">
+                  <div className="flex min-w-0 items-center justify-between gap-2">
+                    <span className="text-muted-foreground/70">{t.home.mindAssistant.assistantId}</span>
+                    <span className="truncate font-mono text-foreground/75">{assistant.id}</span>
+                  </div>
+                  <div className="flex min-w-0 items-center justify-between gap-2">
+                    <span className="text-muted-foreground/70">{t.home.mindAssistant.promptFile}</span>
+                    <span className="truncate font-mono text-foreground/75">{assistant.promptPath}</span>
+                  </div>
+                  <div className="flex min-w-0 items-center justify-between gap-2">
+                    <span className="text-muted-foreground/70">{t.home.mindAssistant.openDrafts}</span>
+                    <span className="truncate font-mono text-foreground/75">{space.slot.path}/Drafts/</span>
+                  </div>
                 </div>
               )}
-              <div className="mt-2 flex items-center gap-1.5">
+              <div className="mt-3 flex items-center justify-between gap-1.5 border-t border-border/40 pt-2">
                 <button
                   type="button"
                   data-mind-system-dir-view-assistant={assistant.id}
@@ -698,6 +707,25 @@ function MindSystemAssistantPromptDialog({
 
   const hasChanges = promptContent !== originalContent;
   const canSave = Boolean(assistant) && !loading && !saving && promptContent.trim().length > 0 && hasChanges;
+  const statusLabel = loading
+    ? t.home.mindAssistant.loadingPrompt
+    : saving
+      ? t.home.mindAssistant.savingPrompt
+      : status === 'saved'
+        ? t.home.mindAssistant.savedPrompt
+        : status === 'missing'
+          ? t.home.mindAssistant.promptMissing
+          : hasChanges
+            ? t.home.mindAssistant.unsavedPrompt
+            : t.home.mindAssistant.promptReady;
+  const statusClassName = status === 'error' || (!loading && promptContent.trim().length === 0)
+    ? 'bg-[var(--error)]/10 text-[var(--error)]'
+    : status === 'saved'
+      ? 'bg-[var(--success)]/10 text-[var(--success)]'
+      : hasChanges
+        ? 'bg-[var(--amber)]/10 text-[var(--amber)]'
+        : 'bg-muted text-muted-foreground';
+  const promptCharacterCount = t.home.mindAssistant.promptCharacters(promptContent.length);
 
   const savePrompt = async () => {
     if (!assistant || !canSave) return;
@@ -727,75 +755,122 @@ function MindSystemAssistantPromptDialog({
     }
   };
 
+  const resetPrompt = () => {
+    setPromptContent(originalContent);
+    setStatus('idle');
+    setMessage('');
+  };
+
   return (
     <Dialog open={Boolean(assistant)} onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto sm:max-w-[760px]">
+      <DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto p-0 sm:max-w-[940px]">
         {assistant && (
-          <div data-mind-system-assistant-dialog={assistant.id} className="flex min-h-0 flex-col gap-4">
-            <DialogHeader>
-              <div className="flex min-w-0 items-start gap-3 pr-8">
+          <div data-mind-system-assistant-dialog={assistant.id} className="flex min-h-0 flex-col">
+            <DialogHeader className="border-b border-border/70 bg-muted/20 px-5 py-4">
+              <div className="flex min-w-0 items-start gap-3 pr-10">
                 <span
-                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-md border text-sm font-semibold ${assistant.avatar.className}`}
+                  className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border text-sm font-semibold ${assistant.avatar.className}`}
                   aria-hidden="true"
                 >
                   {assistant.avatar.text}
                 </span>
-                <div className="min-w-0">
-                  <DialogTitle className="truncate">{assistant.name}</DialogTitle>
-                  <DialogDescription className="mt-1 line-clamp-2">{assistant.desc}</DialogDescription>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <DialogTitle className="truncate text-base">{assistant.name}</DialogTitle>
+                    <span className={`inline-flex rounded-md px-1.5 py-px text-[10px] font-medium ${statusClassName}`}>
+                      {statusLabel}
+                    </span>
+                  </div>
+                  <DialogDescription className="mt-1 line-clamp-2 max-w-[68ch]">{assistant.desc}</DialogDescription>
                 </div>
               </div>
             </DialogHeader>
 
-            <div className="grid gap-2 rounded-md border border-border/70 bg-muted/25 p-3 text-[11px] text-muted-foreground sm:grid-cols-2">
-              <DetailRow label={t.home.mindAssistant.assistantId} value={assistant.id} mono />
-              <DetailRow label={t.home.mindAssistant.assistantSpace} value={`${spaceTitle} · ${spacePath}`} />
-              <DetailRow label={t.home.mindAssistant.schedule} value={t.home.mindAssistant.scheduleMode[assistant.schedule.mode]} />
-              <DetailRow label={t.home.mindAssistant.writesTo} value={`${spacePath}/Drafts/`} mono />
-              <div className="min-w-0 sm:col-span-2">
-                <div className="text-muted-foreground/70">{t.home.mindAssistant.promptFile}</div>
-                <div className="mt-0.5 truncate font-mono text-foreground/80">{assistant.promptPath}</div>
+            <div className="grid md:min-h-0 md:flex-1 md:grid-cols-[300px_minmax(0,1fr)]">
+              <aside className="border-b border-border/70 bg-muted/15 p-4 md:border-b-0 md:border-r">
+                <div className="grid gap-3 text-[11px] text-muted-foreground">
+                  <DetailRow label={t.home.mindAssistant.assistantId} value={assistant.id} mono />
+                  <DetailRow label={t.home.mindAssistant.assistantSpace} value={`${spaceTitle} · ${spacePath}`} />
+                  <DetailRow label={t.home.mindAssistant.schedule} value={t.home.mindAssistant.scheduleMode[assistant.schedule.mode]} />
+                  <DetailRow label={t.home.mindAssistant.writesTo} value={`${spacePath}/Drafts/`} mono />
+                  <DetailRow label={t.home.mindAssistant.promptFile} value={assistant.promptPath} mono wrap />
+                </div>
+              </aside>
+
+              <div className="flex min-h-0 flex-col">
+                <div className="flex flex-col gap-2 border-b border-border/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 text-xs font-medium text-foreground">
+                      <ScrollText size={13} className="text-[var(--amber)]/75" aria-hidden="true" />
+                      {t.home.mindAssistant.promptEditor}
+                    </div>
+                    <div className="mt-1 truncate font-mono text-[10px] text-muted-foreground/75">
+                      {assistant.promptPath}
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <span className="rounded-md bg-muted px-1.5 py-px text-[10px] font-medium text-muted-foreground">
+                      {promptCharacterCount}
+                    </span>
+                    <span className={`rounded-md px-1.5 py-px text-[10px] font-medium ${statusClassName}`}>
+                      {statusLabel}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex min-h-0 flex-1 flex-col gap-3 p-4">
+                  <label className="grid min-h-0 flex-1 gap-2">
+                    <span className="sr-only">{t.home.mindAssistant.promptEditor}</span>
+                    <textarea
+                      data-mind-system-assistant-prompt-editor={assistant.id}
+                      value={promptContent}
+                      onChange={(event) => {
+                        setPromptContent(event.target.value);
+                        if (status === 'saved' || status === 'error') {
+                          setStatus('idle');
+                          setMessage('');
+                        }
+                      }}
+                      onKeyDown={(event) => {
+                        if ((event.metaKey || event.ctrlKey) && event.key === 'Enter' && canSave) {
+                          event.preventDefault();
+                          void savePrompt();
+                        }
+                      }}
+                      disabled={loading || saving}
+                      className="h-[260px] w-full resize-y rounded-lg border border-border bg-background px-3.5 py-3 font-mono text-xs leading-5 text-foreground shadow-inner outline-none transition-colors placeholder:text-muted-foreground/60 focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60 md:h-[min(42vh,520px)] md:min-h-[320px]"
+                      placeholder={loading ? t.home.mindAssistant.loadingPrompt : t.home.mindAssistant.promptEditor}
+                    />
+                  </label>
+
+                  {(message || (!loading && promptContent.trim().length === 0)) && (
+                    <div
+                      data-mind-system-assistant-prompt-status={status}
+                      className={`rounded-md px-3 py-2 text-[11px] leading-4 ${statusClassName}`}
+                    >
+                      {!loading && promptContent.trim().length === 0 ? t.home.mindAssistant.promptEmpty : message}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
-            <label className="grid min-h-0 gap-2">
-              <span className="text-xs font-medium text-foreground">{t.home.mindAssistant.promptEditor}</span>
-              <textarea
-                data-mind-system-assistant-prompt-editor={assistant.id}
-                value={promptContent}
-                onChange={(event) => {
-                  setPromptContent(event.target.value);
-                  if (status === 'saved' || status === 'error') {
-                    setStatus('idle');
-                    setMessage('');
-                  }
-                }}
-                disabled={loading || saving}
-                className="min-h-[320px] w-full resize-y rounded-md border border-border bg-background px-3 py-2 font-mono text-xs leading-5 text-foreground shadow-inner outline-none transition-colors placeholder:text-muted-foreground/60 focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
-                placeholder={loading ? t.home.mindAssistant.loadingPrompt : t.home.mindAssistant.promptEditor}
-              />
-            </label>
-
-            {(message || (!loading && promptContent.trim().length === 0)) && (
-              <div
-                data-mind-system-assistant-prompt-status={status}
-                className={`rounded-md px-3 py-2 text-[11px] leading-4 ${status === 'error' || (!loading && promptContent.trim().length === 0)
-                  ? 'bg-[var(--error)]/10 text-[var(--error)]'
-                  : status === 'saved'
-                    ? 'bg-[var(--success)]/10 text-[var(--success)]'
-                    : 'bg-muted text-muted-foreground'}`}
-              >
-                {!loading && promptContent.trim().length === 0 ? t.home.mindAssistant.promptEmpty : message}
-              </div>
-            )}
-
-            <DialogFooter>
+            <DialogFooter className="sticky bottom-0 z-10 mx-0 mb-0 flex-row justify-end rounded-none border-t border-border/70">
               <button
                 type="button"
                 onClick={onClose}
                 className="inline-flex h-8 items-center justify-center rounded-md px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 {t.home.mindAssistant.close}
+              </button>
+              <button
+                type="button"
+                data-mind-system-assistant-reset-prompt={assistant.id}
+                onClick={resetPrompt}
+                disabled={!hasChanges || loading || saving}
+                className="inline-flex h-8 items-center justify-center rounded-md px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-45"
+              >
+                {t.home.mindAssistant.resetPrompt}
               </button>
               <button
                 type="button"
@@ -815,11 +890,11 @@ function MindSystemAssistantPromptDialog({
   );
 }
 
-function DetailRow({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
+function DetailRow({ label, value, mono = false, wrap = false }: { label: string; value: string; mono?: boolean; wrap?: boolean }) {
   return (
     <div className="min-w-0">
       <div className="text-muted-foreground/70">{label}</div>
-      <div className={`mt-0.5 truncate text-foreground/80 ${mono ? 'font-mono' : ''}`}>{value}</div>
+      <div className={`mt-0.5 text-foreground/80 ${mono ? 'font-mono' : ''} ${wrap ? 'break-all' : 'truncate'}`}>{value}</div>
     </div>
   );
 }

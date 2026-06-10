@@ -1,6 +1,9 @@
 import {
   existsSync,
+  closeSync,
   mkdirSync,
+  openSync,
+  readSync,
   readdirSync,
   renameSync,
   statSync,
@@ -9,10 +12,13 @@ import {
 import { extname, basename, join } from 'node:path';
 import { resolveExistingSafe, resolveSafe } from '../../foundation/security/index.js';
 import { json, type MindosServerResponse } from '../response.js';
+import { extractInboxSourceMetadata, type InboxSourceMetadata } from './inbox-source.js';
 
 export const INBOX_DIR = 'Inbox';
 const PROCESSED_DIR = '.processed';
 const AGING_THRESHOLD_MS = 7 * 24 * 60 * 60 * 1000;
+const SOURCE_METADATA_READ_LIMIT = 64 * 1024;
+const SOURCE_METADATA_EXTENSIONS = new Set(['.md', '.markdown']);
 
 const ALLOWED_IMPORT_EXTENSIONS = new Set([
   '.txt', '.md', '.markdown', '.csv', '.tsv', '.json', '.yaml', '.yml', '.xml', '.html', '.htm', '.pdf',
@@ -65,6 +71,7 @@ export interface InboxFileInfo {
   size: number;
   modifiedAt: string;
   isAging: boolean;
+  source?: InboxSourceMetadata;
 }
 
 export interface InboxSaveInput {
@@ -169,12 +176,14 @@ export function listInboxFiles(mindRoot: string): InboxFileInfo[] {
     const filePath = join(inboxDir, entry.name);
     try {
       const stat = statSync(filePath);
+      const source = readInboxSourceMetadata(filePath, entry.name, stat.size);
       files.push({
         name: entry.name,
         path: `${INBOX_DIR}/${entry.name}`,
         size: stat.size,
         modifiedAt: stat.mtime.toISOString(),
         isAging: now - stat.mtime.getTime() > AGING_THRESHOLD_MS,
+        ...(source ? { source } : {}),
       });
     } catch {
       // The file may have been deleted between readdir and stat.
@@ -182,6 +191,25 @@ export function listInboxFiles(mindRoot: string): InboxFileInfo[] {
   }
 
   return files.sort((a, b) => new Date(b.modifiedAt).getTime() - new Date(a.modifiedAt).getTime());
+}
+
+function readInboxSourceMetadata(filePath: string, fileName: string, size: number): InboxSourceMetadata | undefined {
+  if (!SOURCE_METADATA_EXTENSIONS.has(extname(fileName).toLowerCase())) return undefined;
+
+  let fd: number | undefined;
+  try {
+    fd = openSync(filePath, 'r');
+    const buffer = Buffer.allocUnsafe(Math.min(size, SOURCE_METADATA_READ_LIMIT));
+    const bytesRead = readSync(fd, buffer, 0, buffer.length, 0);
+    if (bytesRead === 0) return undefined;
+    return extractInboxSourceMetadata(buffer.subarray(0, bytesRead).toString('utf-8'));
+  } catch {
+    return undefined;
+  } finally {
+    if (typeof fd === 'number') {
+      try { closeSync(fd); } catch { /* ignore close errors while listing Inbox */ }
+    }
+  }
 }
 
 export function saveToInbox(mindRoot: string, files: InboxSaveInput[], source?: string): InboxSaveResult {
@@ -316,7 +344,10 @@ function resolveUniqueName(inboxDir: string, targetName: string): string {
 function sanitizeFileName(name: string): string {
   let base = name.replace(/\\/g, '/').split('/').pop() ?? '';
   base = base.replace(/\.\./g, '').replace(/^\/+/, '');
-  base = base.replace(/[\\/:*?"<>|\x00-\x1f]/g, '-');
+  base = [...base].map((char) => {
+    const code = char.charCodeAt(0);
+    return code <= 31 || /[\\/:*?"<>|]/.test(char) ? '-' : char;
+  }).join('');
   base = base.replace(/-{2,}/g, '-');
   base = base.replace(/^[-\s]+|[-\s]+$/g, '');
   base = base.replace(/[. ]+$/g, '');

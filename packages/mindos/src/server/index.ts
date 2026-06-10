@@ -143,6 +143,14 @@ export {
 } from './handlers/inbox.js';
 
 export {
+  detectInboxSourcePlatform,
+  extractInboxSourceMetadata,
+  type InboxSourceMetadata,
+  type InboxSourcePlatform,
+  type InboxSourcePlatformId,
+} from './handlers/inbox-source.js';
+
+export {
   handleInitPost,
   type InitHandlerServices,
   type InitPostPayload,

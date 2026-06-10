@@ -30,7 +30,8 @@ import { quickDropToInbox, clipUrlToInbox, looksLikeUrl, extractUrlFromDrop, dra
 import { loadHistory, type OrganizeHistoryEntry, type OrganizeSource } from '@/lib/organize-history';
 import { useInboxOrganize } from '@/components/inbox/InboxOrganizeContext';
 import { CAPTURE_ACCEPT } from '@/lib/capture-formats';
-import { archiveInboxFiles, fetchInboxFiles } from '@/lib/inbox-client';
+import { SourceIcon, getInboxSourceLabel } from '@/components/inbox/SourceIcon';
+import { archiveInboxFiles, fetchInboxFiles, type InboxFileSourceInfo } from '@/lib/inbox-client';
 
 interface InboxFile {
   name: string;
@@ -38,6 +39,7 @@ interface InboxFile {
   size: number;
   modifiedAt: string;
   isAging: boolean;
+  source?: InboxFileSourceInfo;
 }
 
 interface InboxSectionProps {
@@ -163,6 +165,7 @@ export function InboxSection({ isOrganizing: externalOrganizing = false }: Inbox
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchInbox();
     refreshHistory();
 
@@ -187,11 +190,7 @@ export function InboxSection({ isOrganizing: externalOrganizing = false }: Inbox
   );
   const overflowCount = Math.max(0, files.length - VISIBLE_LIMIT);
   const hasFiles = files.length > 0;
-  const [totalHistory, setTotalHistory] = useState(0);
-
-  useEffect(() => {
-    setTotalHistory(loadHistory().length);
-  }, [history]);
+  const totalHistory = loadHistory().length;
 
   if (loading) return (
     <section className="mb-8 animate-pulse">
@@ -399,6 +398,8 @@ export function InboxSection({ isOrganizing: externalOrganizing = false }: Inbox
           }`}>
             {clipping ? (
               <Loader2 size={12} className="text-[var(--amber)] animate-spin" />
+            ) : looksLikeUrl(clipUrl) ? (
+              <SourceIcon url={clipUrl} size="sm" className="border-0 bg-transparent shadow-none" />
             ) : (
               <Link2 size={12} className={`transition-colors duration-150 ${clipUrl ? 'text-[var(--amber)]' : 'text-muted-foreground/40'}`} />
             )}
@@ -513,17 +514,26 @@ function InboxFileRow({ file, onDelete }: { file: InboxFile; onDelete: (name: st
             file.isAging ? 'bg-[var(--amber)]/60' : 'bg-[var(--amber)]'
           }`}
         />
-        {isCSV ? (
+        {file.source ? (
+          <SourceIcon source={file.source} size="sm" />
+        ) : isCSV ? (
           <Table size={12} className="shrink-0 text-success" />
         ) : (
           <FileText size={12} className="shrink-0 text-muted-foreground" />
         )}
-        <span
-          className="text-sm truncate flex-1 text-foreground"
-          title={file.name}
-          suppressHydrationWarning
-        >
-          {file.name}
+        <span className="flex min-w-0 flex-1 items-center gap-1.5">
+          <span
+            className="truncate text-sm text-foreground"
+            title={file.name}
+            suppressHydrationWarning
+          >
+            {file.name}
+          </span>
+          {file.source && (
+            <span className="hidden max-w-[96px] shrink-0 truncate rounded-md bg-muted/45 px-1.5 py-px text-2xs text-muted-foreground sm:inline" title={getInboxSourceLabel(file.source) ?? undefined}>
+              {getInboxSourceLabel(file.source)}
+            </span>
+          )}
         </span>
         <span className="text-2xs text-muted-foreground/40 tabular-nums shrink-0 group-hover:hidden">
           {age}

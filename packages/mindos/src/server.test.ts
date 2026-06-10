@@ -2945,10 +2945,39 @@ describe('MindOS product server contract', () => {
     });
     expect(readFileSync(join(root, 'Inbox', 'source.pdf'))).toEqual(pdfBytes);
 
+    const savedWebClip = handleInboxPost({
+      files: [{
+        name: 'video.md',
+        content: [
+          '---',
+          'title: Video Notes',
+          'source: "https://www.youtube.com/watch?v=abc"',
+          'source_platform: youtube',
+          'source_domain: youtube.com',
+          'site: YouTube',
+          '---',
+          '',
+          '# Video Notes',
+        ].join('\n'),
+      }],
+    }, { mindRoot: root });
+    expect(savedWebClip.status).toBe(200);
+
     const listed = handleInboxGet({ mindRoot: root });
     expect(listed.body.files).toEqual(expect.arrayContaining([
       expect.objectContaining({ name: 'todo.md', path: 'Inbox/todo.md' }),
       expect.objectContaining({ name: 'source.pdf', path: 'Inbox/source.pdf' }),
+      expect.objectContaining({
+        name: 'video.md',
+        source: expect.objectContaining({
+          kind: 'web',
+          url: 'https://www.youtube.com/watch?v=abc',
+          domain: 'youtube.com',
+          platform: 'youtube',
+          platformLabel: 'YouTube',
+          title: 'Video Notes',
+        }),
+      }),
     ]));
 
     const archived = handleInboxDelete({ names: ['todo.md'] }, { mindRoot: root });

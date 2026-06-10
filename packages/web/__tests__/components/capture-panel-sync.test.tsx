@@ -14,7 +14,9 @@ vi.mock('@/lib/stores/locale-store', () => ({
 }));
 
 vi.mock('next/link', () => ({
-  default: ({ children, ...props }: any) => <a {...props}>{children}</a>,
+  default: ({ children, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement> & { children?: React.ReactNode }) => (
+    <a {...props}>{children}</a>
+  ),
 }));
 
 describe('CapturePanel inbox sync', () => {
@@ -67,6 +69,68 @@ describe('CapturePanel inbox sync', () => {
     expect(host.textContent).toContain('Next up');
     expect(host.textContent).toContain('first.md');
     expect(host.textContent).toContain('second.md');
+    expect(host.textContent).not.toContain('Loading queue...');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('does not let an older panel fetch overwrite a newer shared Inbox files event', async () => {
+    let resolveFetch: (value: Response) => void = () => {};
+    const fetchPromise = new Promise<Response>(resolve => {
+      resolveFetch = resolve;
+    });
+    vi.stubGlobal('fetch', vi.fn(() => fetchPromise));
+
+    const CapturePanel = (await import('@/components/panels/CapturePanel')).default;
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<CapturePanel />);
+      await new Promise(r => setTimeout(r, 0));
+    });
+
+    await act(async () => {
+      window.dispatchEvent(new CustomEvent('mindos:inbox-files', {
+        detail: [
+          {
+            name: 'fresh.md',
+            path: 'Inbox/fresh.md',
+            size: 12,
+            modifiedAt: new Date().toISOString(),
+            isAging: false,
+          },
+          {
+            name: 'newer.md',
+            path: 'Inbox/newer.md',
+            size: 24,
+            modifiedAt: new Date().toISOString(),
+            isAging: true,
+          },
+        ],
+      }));
+      await new Promise(r => setTimeout(r, 0));
+    });
+
+    expect(host.textContent).toContain('2 items waiting.');
+    expect(host.textContent).toContain('fresh.md');
+    expect(host.textContent).toContain('newer.md');
+
+    await act(async () => {
+      resolveFetch({
+        ok: true,
+        json: async () => ({ files: [] }),
+      } as Response);
+      await new Promise(r => setTimeout(r, 0));
+    });
+
+    expect(host.textContent).toContain('2 items waiting.');
+    expect(host.textContent).toContain('fresh.md');
+    expect(host.textContent).toContain('newer.md');
     expect(host.textContent).not.toContain('Loading queue...');
 
     await act(async () => {

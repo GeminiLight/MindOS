@@ -5,7 +5,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
 import { effectiveSopRoot } from '@/lib/settings';
 import { saveToInbox } from '@/lib/core/inbox';
-import { clipUrl, isValidUrl } from '@/lib/core/web-clip';
+import { clipUrl, createFallbackWebClip, isSafeHttpUrlForFetch, isValidUrl } from '@/lib/core/web-clip';
 import { invalidateCache } from '@/lib/fs';
 import { handleRouteErrorSimple } from '@/lib/errors';
 
@@ -30,9 +30,20 @@ export async function POST(req: NextRequest) {
   if (!isValidUrl(url)) {
     return NextResponse.json({ error: 'Invalid URL — only http:// and https:// are supported' }, { status: 400 });
   }
+  if (!isSafeHttpUrlForFetch(url)) {
+    return NextResponse.json({ error: 'Unsafe URL — local and private network addresses are not supported' }, { status: 400 });
+  }
 
   try {
-    const clip = await clipUrl(url);
+    let clip;
+    try {
+      clip = await clipUrl(url);
+    } catch (clipError) {
+      if (clipError instanceof Error && /unsafe/i.test(clipError.message)) {
+        throw clipError;
+      }
+      clip = createFallbackWebClip(url);
+    }
 
     const result = saveToInbox(
       mindRoot,
@@ -57,6 +68,7 @@ export async function POST(req: NextRequest) {
       wordCount: clip.wordCount,
       siteName: clip.siteName,
       url: clip.url,
+      mode: clip.mode,
     });
   } catch (err) {
     if (err instanceof Error) {

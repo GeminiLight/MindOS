@@ -55,7 +55,7 @@ describe('InboxView product shape', () => {
     }));
   });
 
-  it('opens as a focused capture page instead of a crowded queue dashboard', async () => {
+  it('opens as a quiet add surface with a scrollable Review queue preview', async () => {
     const InboxView = (await import('@/components/InboxView')).default;
 
     const host = document.createElement('div');
@@ -84,16 +84,20 @@ describe('InboxView product shape', () => {
     expect(host.textContent).not.toContain('Documents');
     expect(host.textContent).not.toContain('Tables');
     expect(host.textContent).not.toContain('Screenshots');
-    expect(host.textContent).not.toContain('Review queue');
+    expect(host.textContent).toContain('Review queue');
+    expect(host.textContent).toContain('Scroll here when you are ready to clear what you captured.');
+    expect(host.textContent).toContain('Review 2 pending');
     expect(host.textContent).not.toContain('Routing hints');
     expect(host.textContent).not.toContain('Review with Agent');
     expect(Array.from(host.querySelectorAll('button'))
       .some(button => button.textContent?.trim() === 'Review with Agent')).toBe(false);
-    expect(host.textContent).not.toContain('agent-memory-notes');
+    expect(host.textContent).toContain('agent-memory-notes');
     expect(host.textContent).not.toContain('Capture sources');
     expect(host.textContent).not.toContain('WeChat');
     expect(host.textContent).not.toContain('Web clipper');
     expect(host.textContent).not.toContain('Current item');
+    expect(host.textContent).not.toContain('Item preview');
+    expect(host.textContent).not.toContain('Inbox Agent');
 
     await act(async () => {
       root.unmount();
@@ -133,6 +137,52 @@ describe('InboxView product shape', () => {
     expect(host.textContent).not.toContain('Current item');
     expect(host.textContent).toContain('Review before write');
     expect(host.textContent).toContain('Undo history');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('shows source-aware rows for captured social links in Review', async () => {
+    window.history.replaceState(null, '', '/capture#queue');
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        files: [
+          {
+            name: 'Video Notes.md',
+            path: 'Inbox/Video Notes.md',
+            size: 2048,
+            modifiedAt: new Date().toISOString(),
+            isAging: false,
+            source: {
+              kind: 'web',
+              url: 'https://www.youtube.com/watch?v=abc',
+              domain: 'youtube.com',
+              siteName: 'YouTube',
+              platform: 'youtube',
+              platformLabel: 'YouTube',
+              title: 'Video Notes',
+            },
+          },
+        ],
+      }),
+    }));
+
+    const InboxView = (await import('@/components/InboxView')).default;
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<InboxView />);
+      await new Promise(r => setTimeout(r, 0));
+    });
+
+    expect(host.textContent).toContain('YouTube');
+    expect(host.querySelector('img[src="/source-icons/youtube.ico"]')).not.toBeNull();
+    expect(host.textContent).toContain('youtube.com');
 
     await act(async () => {
       root.unmount();
@@ -241,6 +291,8 @@ describe('InboxView product shape', () => {
     expect(fetchMock).toHaveBeenCalledWith('/api/inbox', expect.objectContaining({
       body: expect.stringContaining('"captureIntent":"judgment"'),
     }));
+    expect(host.textContent).toContain('Saved 1 capture to Inbox');
+    expect(host.textContent).toContain('Staged locally. Review when you are ready.');
 
     await act(async () => {
       root.unmount();
@@ -392,6 +444,77 @@ describe('InboxView product shape', () => {
       body: expect.stringContaining('https://example.com/fail'),
     }));
     expect(host.textContent).toContain('example.com/fail');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('shows an in-page partial saved state when one capture item fails', async () => {
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url === '/api/inbox' && init?.method === 'POST') {
+        return { ok: true, json: async () => ({ saved: [{ original: 'capture.md', path: 'Inbox/capture.md' }], skipped: [] }) };
+      }
+      if (url === '/api/inbox/clip') {
+        return { ok: false, status: 422, json: async () => ({ error: 'Clip failed' }) };
+      }
+      return { ok: true, json: async () => ({ files: [] }) };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const InboxView = (await import('@/components/InboxView')).default;
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<InboxView />);
+      await new Promise(r => setTimeout(r, 0));
+    });
+
+    const textarea = host.querySelector('textarea');
+    expect(textarea).not.toBeNull();
+
+    await act(async () => {
+      const valueSetter = Object.getOwnPropertyDescriptor(
+        HTMLTextAreaElement.prototype,
+        'value',
+      )?.set;
+      valueSetter?.call(textarea, 'Decision note to keep');
+      textarea!.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText' }));
+      const pasteEvent = new Event('paste', { bubbles: true });
+      Object.defineProperty(pasteEvent, 'clipboardData', {
+        value: {
+          getData: (type: string) => type === 'text/plain' ? 'https://example.com/fail' : '',
+          files: [],
+        },
+      });
+      textarea!.dispatchEvent(pasteEvent);
+      await new Promise(r => setTimeout(r, 0));
+    });
+
+    const captureButton = Array.from(host.querySelectorAll('button'))
+      .find(button => button.textContent?.includes('Save to Inbox'));
+    expect(captureButton).not.toBeNull();
+
+    await act(async () => {
+      captureButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await new Promise(r => setTimeout(r, 0));
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/inbox', expect.objectContaining({
+      method: 'POST',
+      body: expect.stringContaining('Decision note to keep'),
+    }));
+    expect(fetchMock).toHaveBeenCalledWith('/api/inbox/clip', expect.objectContaining({
+      method: 'POST',
+      body: expect.stringContaining('https://example.com/fail'),
+    }));
+    expect(host.textContent).toContain('1 saved, 1 need retry');
+    expect(host.textContent).toContain('Unfinished items stayed in the composer so you can retry or remove them.');
+    expect(host.textContent).toContain('example.com/fail');
+    expect(host.textContent).not.toContain('Saved 1 capture to Inbox');
 
     await act(async () => {
       root.unmount();

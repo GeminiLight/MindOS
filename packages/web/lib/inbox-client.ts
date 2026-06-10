@@ -6,6 +6,17 @@ export interface InboxFileInfo {
   size: number;
   modifiedAt: string;
   isAging: boolean;
+  source?: InboxFileSourceInfo;
+}
+
+export interface InboxFileSourceInfo {
+  kind?: string;
+  url?: string;
+  domain?: string;
+  siteName?: string;
+  platform?: string;
+  platformLabel?: string;
+  title?: string;
 }
 
 export interface InboxSaveInput {
@@ -95,6 +106,17 @@ function normalizeArchiveResult(body: Record<string, unknown>): InboxArchiveResu
   return { archived, notFound };
 }
 
+function normalizeInboxSourceInfo(value: unknown): InboxFileSourceInfo | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const source = value as Record<string, unknown>;
+  const result: InboxFileSourceInfo = {};
+  for (const key of ['kind', 'url', 'domain', 'siteName', 'platform', 'platformLabel', 'title'] as const) {
+    const next = source[key];
+    if (typeof next === 'string' && next.trim()) result[key] = next;
+  }
+  return Object.keys(result).length > 0 ? result : undefined;
+}
+
 export async function fetchInboxFiles(fallbackError: string): Promise<InboxFileInfo[]> {
   const res = await fetch('/api/inbox');
   const body = await readJsonBody(res);
@@ -102,15 +124,28 @@ export async function fetchInboxFiles(fallbackError: string): Promise<InboxFileI
     throw new InboxClientError(errorMessageFromBody(body, fallbackError), res.status);
   }
   const files = Array.isArray(body.files) ? body.files : [];
-  return files.filter((item): item is InboxFileInfo => (
-    item !== null &&
-    typeof item === 'object' &&
-    typeof (item as { name?: unknown }).name === 'string' &&
-    typeof (item as { path?: unknown }).path === 'string' &&
-    typeof (item as { size?: unknown }).size === 'number' &&
-    typeof (item as { modifiedAt?: unknown }).modifiedAt === 'string' &&
-    typeof (item as { isAging?: unknown }).isAging === 'boolean'
-  ));
+  return files.flatMap((item): InboxFileInfo[] => {
+    if (
+      item === null ||
+      typeof item !== 'object' ||
+      typeof (item as { name?: unknown }).name !== 'string' ||
+      typeof (item as { path?: unknown }).path !== 'string' ||
+      typeof (item as { size?: unknown }).size !== 'number' ||
+      typeof (item as { modifiedAt?: unknown }).modifiedAt !== 'string' ||
+      typeof (item as { isAging?: unknown }).isAging !== 'boolean'
+    ) {
+      return [];
+    }
+    const source = normalizeInboxSourceInfo((item as { source?: unknown }).source);
+    return [{
+      name: (item as { name: string }).name,
+      path: (item as { path: string }).path,
+      size: (item as { size: number }).size,
+      modifiedAt: (item as { modifiedAt: string }).modifiedAt,
+      isAging: (item as { isAging: boolean }).isAging,
+      ...(source ? { source } : {}),
+    }];
+  });
 }
 
 export async function saveInboxFiles(

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { clipUrl, isValidUrl } from '@/lib/core/web-clip';
+import { clipUrl, createFallbackWebClip, isSafeHttpUrlForFetch, isValidUrl } from '@/lib/core/web-clip';
 
 describe('isValidUrl', () => {
   it('accepts http URLs', () => {
@@ -32,6 +32,19 @@ describe('isValidUrl', () => {
   });
 });
 
+describe('isSafeHttpUrlForFetch', () => {
+  it('blocks local and private network URLs before server-side fetch', () => {
+    expect(isSafeHttpUrlForFetch('https://example.com')).toBe(true);
+    expect(isSafeHttpUrlForFetch('http://localhost:3000')).toBe(false);
+    expect(isSafeHttpUrlForFetch('http://127.0.0.1:3000')).toBe(false);
+    expect(isSafeHttpUrlForFetch('http://10.0.0.2/page')).toBe(false);
+    expect(isSafeHttpUrlForFetch('http://192.168.1.5/page')).toBe(false);
+    expect(isSafeHttpUrlForFetch('http://[::1]/page')).toBe(false);
+    expect(isSafeHttpUrlForFetch('http://2130706433/page')).toBe(false);
+    expect(isSafeHttpUrlForFetch('http://0x7f000001/page')).toBe(false);
+  });
+});
+
 describe('clipUrl', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -44,6 +57,30 @@ describe('clipUrl', () => {
   it('rejects invalid URLs', async () => {
     await expect(clipUrl('not-a-url')).rejects.toThrow('Invalid URL');
     await expect(clipUrl('ftp://evil.com')).rejects.toThrow('Invalid URL');
+  });
+
+  it('rejects local URLs before fetch', async () => {
+    const mockFetch = vi.fn();
+    vi.stubGlobal('fetch', mockFetch);
+
+    await expect(clipUrl('http://127.0.0.1:4567/private')).rejects.toThrow('Unsafe URL');
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it('rejects unsafe redirects before following them', async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 302,
+      statusText: 'Found',
+      url: 'https://example.com/redirect',
+      headers: new Headers({
+        location: 'http://127.0.0.1:4567/private',
+      }),
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    await expect(clipUrl('https://example.com/redirect')).rejects.toThrow('Unsafe redirect URL');
+    expect(mockFetch).toHaveBeenCalledTimes(1);
   });
 
   it('clips a simple HTML page', async () => {
@@ -81,6 +118,8 @@ describe('clipUrl', () => {
     expect(result.markdown).toContain('# Test Article');
     expect(result.markdown).toContain('---');
     expect(result.markdown).toMatch(/source:.*example\.com\/article/);
+    expect(result.markdown).toContain('source_domain: example.com');
+    expect(result.mode).toBe('article');
     expect(result.wordCount).toBeGreaterThan(0);
   });
 
@@ -198,8 +237,39 @@ describe('clipUrl', () => {
     expect(result.markdown).toMatch(/^---\n/);
     expect(result.markdown).toContain('title: Frontmatter Test');
     expect(result.markdown).toMatch(/source:.*blog\.example\.com\/post\/123/);
+    expect(result.markdown).toContain('source_domain: blog.example.com');
     expect(result.markdown).toContain('clipped:');
     expect(result.siteName).toBe('blog.example.com');
+  });
+
+  it('adds platform frontmatter for known social sources', async () => {
+    const html = `<!DOCTYPE html>
+<html><head><title>Video Notes</title></head>
+<body><article><h1>Video Notes</h1><p>Enough content for extraction from a YouTube page. This paragraph has enough words for the readability fallback in tests and keeps the behavior deterministic.</p></article></body></html>`;
+
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      url: 'https://www.youtube.com/watch?v=abc',
+      headers: new Headers({ 'content-type': 'text/html; charset=utf-8' }),
+      text: () => Promise.resolve(html),
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    const result = await clipUrl('https://www.youtube.com/watch?v=abc');
+
+    expect(result.markdown).toContain('source_platform: youtube');
+    expect(result.markdown).toContain('source_domain: youtube.com');
+    expect(result.siteName).toBe('YouTube');
+  });
+
+  it('creates link-only fallback markdown with source metadata', () => {
+    const result = createFallbackWebClip('https://www.bilibili.com/video/BV123');
+
+    expect(result.mode).toBe('link');
+    expect(result.fileName).toBe('Bilibili link.md');
+    expect(result.markdown).toContain('source_platform: bilibili');
+    expect(result.markdown).toContain('clip_status: link-only');
   });
 
   it('handles CJK content word count', async () => {
