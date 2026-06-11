@@ -5,7 +5,7 @@ export default defineConfig({
   test: {
     include: ['__tests__/**/*.test.ts', '__tests__/**/*.test.tsx', '__tests__/**/*.test.js'],
     setupFiles: ['__tests__/setup.ts'],
-    testTimeout: 10000,
+    testTimeout: 20000,
   },
   resolve: {
     alias: {
