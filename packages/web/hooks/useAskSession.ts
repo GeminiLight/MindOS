@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useMemo, useRef } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import type { AgentIdentity, AgentRuntimeIdentity, Message, ChatSession, RuntimeSessionBinding } from '@/lib/types';
 import {
   bindSessionAgent,
@@ -8,6 +8,21 @@ import {
   getMatchingRuntimeSessionBinding,
   isSessionInRuntimeLane,
 } from '@/lib/ask-agent';
+import {
+  clearUnread,
+  getMessageWriteAt,
+  getMessages as storeGetMessages,
+  getRun,
+  hasMessages as storeHasMessages,
+  registerMetaResolver,
+  registerRuntimeBindingWriter,
+  registerSessionsUpdater,
+  removeSession as storeRemoveSession,
+  schedulePersist,
+  setActiveSession as storeSetActiveSession,
+  setMessages as storeSetMessages,
+  useSessionMessages,
+} from '@/lib/ask-run-store';
 
 const MAX_SESSIONS = 30;
 
@@ -44,6 +59,13 @@ function runtimeBindingUpdatedAt(value?: number | string): number {
     if (Number.isFinite(parsed)) return parsed;
   }
   return Date.now();
+}
+
+/** Messages now live in ask-run-store; metadata entries may carry a stale snapshot. */
+function withStoreMessages(session: ChatSession): ChatSession {
+  return storeHasMessages(session.id)
+    ? { ...session, messages: storeGetMessages(session.id) }
+    : session;
 }
 
 export function sessionTitle(s: ChatSession): string {
@@ -120,13 +142,90 @@ async function removeSessions(ids: string[]): Promise<void> {
 }
 
 export function useAskSession(currentFile?: string) {
-  const [messages, setMessages] = useState<Message[]>([]);
+  // `sessions` is metadata only (id/title/pinned/bindings/updatedAt). Message
+  // contents live in ask-run-store; the `messages` field on entries is a
+  // snapshot refreshed at each persistence flush, kept for type compat.
   const [sessions, setSessions] = useState<ChatSession[]>([]);
-  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
-  const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [activeSessionId, setActiveSessionIdState] = useState<string | null>(null);
+
+  const messages = useSessionMessages(activeSessionId);
+
+  const sessionsRef = useRef<ChatSession[]>([]);
+  sessionsRef.current = sessions;
+  const currentFileRef = useRef(currentFile);
+  currentFileRef.current = currentFile;
+  const activeIdRef = useRef(activeSessionId);
+  activeIdRef.current = activeSessionId;
+
+  const setActiveSessionId = useCallback((id: string | null) => {
+    setActiveSessionIdState(id);
+    storeSetActiveSession(id);
+  }, []);
+
+  const setMessages = useCallback((next: React.SetStateAction<Message[]>) => {
+    const id = activeIdRef.current;
+    if (id) storeSetMessages(id, next as Message[] | ((prev: Message[]) => Message[]));
+  }, []);
+
+  // --- store bridges (single-slot registrations; the most recently
+  // initialized AskContent instance wins — known PR1 compromise, see spec) ---
+
+  const resolveMeta = useCallback((id: string): ChatSession | null => {
+    const found = sessionsRef.current.find((s) => s.id === id);
+    if (!found) return null;
+    if (id === activeIdRef.current) {
+      return { ...found, currentFile: currentFileRef.current ?? found.currentFile };
+    }
+    return found;
+  }, []);
+
+  /** Persistence flush feeds the payload back so metadata (ordering, message snapshot) stays fresh. */
+  const applyPersistedSession = useCallback((session: ChatSession) => {
+    setSessions((prev) => {
+      const rest = prev.filter((s) => s.id !== session.id);
+      return [session, ...rest]
+        .sort((a, b) => b.updatedAt - a.updatedAt)
+        .slice(0, MAX_SESSIONS);
+    });
+  }, []);
+
+  /** Component-independent binding write path for run closures (explicit session id). */
+  const writeBindingForSession = useCallback((
+    sessionId: string,
+    runtime: AgentRuntimeIdentity,
+    binding?: { externalSessionId?: string; cwd?: string; status?: RuntimeSessionBinding['status']; updatedAt?: number },
+  ) => {
+    setSessions((prev) => {
+      const current = prev.find((s) => s.id === sessionId);
+      if (!current) return prev;
+      const updatedSession = bindSessionAgentRuntime({
+        ...current,
+        currentFile: current.currentFile ?? currentFileRef.current,
+        updatedAt: Date.now(),
+      }, runtime, binding);
+      const rest = prev.filter((s) => s.id !== sessionId);
+      return [updatedSession, ...rest]
+        .sort((a, b) => b.updatedAt - a.updatedAt)
+        .slice(0, MAX_SESSIONS);
+    });
+    schedulePersist(sessionId);
+  }, []);
+
+  const registerStoreBridges = useCallback(() => {
+    registerMetaResolver(resolveMeta);
+    registerSessionsUpdater(applyPersistedSession);
+    registerRuntimeBindingWriter(writeBindingForSession);
+  }, [resolveMeta, applyPersistedSession, writeBindingForSession]);
+
+  useEffect(() => {
+    registerStoreBridges();
+  }, [registerStoreBridges]);
 
   /** Load sessions from server, pick the matching one or create fresh. Prunes stale empty sessions. */
   const initSessions = useCallback(async (runtime?: AgentRuntimeIdentity | null) => {
+    // The visible instance re-claims the single-slot bridges on init.
+    registerStoreBridges();
+
     const all = (await fetchSessions())
       .sort((a, b) => b.updatedAt - a.updatedAt)
       .slice(0, MAX_SESSIONS);
@@ -134,10 +233,18 @@ export function useAskSession(currentFile?: string) {
     // Prune abandoned empty sessions from older versions, but keep metadata-only
     // sessions that intentionally bind MindOS to a native runtime session.
     const emptyIds = all
-      .filter((s) => s.messages.length === 0 && !hasDurableRuntimeBinding(s))
+      .filter((s) => s.messages.length === 0 && !hasDurableRuntimeBinding(s) && !getRun(s.id))
       .map((s) => s.id);
     const sorted = emptyIds.length > 0 ? all.filter((s) => !emptyIds.includes(s.id)) : all;
     if (emptyIds.length > 0) void removeSessions(emptyIds);
+
+    // Idempotent backfill: the store is the in-memory source of truth, the
+    // server snapshot must never clobber newer local state.
+    for (const s of sorted) {
+      if (getRun(s.id)) continue; // running: in-memory messages are always newer
+      if (storeHasMessages(s.id) && getMessageWriteAt(s.id) >= s.updatedAt) continue; // local copy newer
+      storeSetMessages(s.id, s.messages, { skipPersist: true });
+    }
 
     // Always prepend a fresh empty session in memory (never persisted until first message)
     const fresh = createSession(currentFile, runtime);
@@ -148,113 +255,93 @@ export function useAskSession(currentFile?: string) {
       ? candidates.find((sess) => sess.currentFile === currentFile) ?? candidates[0]
       : candidates[0];
 
+    // Keep local sessions with live runs that the server doesn't know yet
+    // (brand-new sessions are only persisted after their first flush).
+    const localRunning = sessionsRef.current.filter(
+      (p) => getRun(p.id) && !sorted.some((s) => s.id === p.id),
+    );
+
     if (matched) {
       setActiveSessionId(matched.id);
-      setMessages(matched.messages);
-      setSessions([...sorted]);
+      setSessions([...localRunning, ...sorted].slice(0, MAX_SESSIONS));
     } else {
       setActiveSessionId(fresh.id);
-      setMessages([]);
       // Empty session lives only in memory — no upsertSession call
-      setSessions([fresh, ...sorted].slice(0, MAX_SESSIONS));
+      setSessions([fresh, ...localRunning, ...sorted].slice(0, MAX_SESSIONS));
     }
-  }, [currentFile]);
-
-  /** Persist current session (debounced). Only persists if session has messages. */
-  const persistSession = useCallback(
-    (msgs: Message[], sessionId: string | null) => {
-      if (!sessionId || msgs.length === 0) return;
-      let sessionToPersist: ChatSession | null = null;
-      setSessions((prev) => {
-        const now = Date.now();
-        const existing = prev.find((s) => s.id === sessionId);
-        sessionToPersist = existing
-          ? { ...existing, currentFile, updatedAt: now, messages: msgs }
-          : { id: sessionId, currentFile, createdAt: now, updatedAt: now, messages: msgs };
-
-        const rest = prev.filter((s) => s.id !== sessionId);
-        return [sessionToPersist!, ...rest]
-          .sort((a, b) => b.updatedAt - a.updatedAt)
-          .slice(0, MAX_SESSIONS);
-      });
-
-      if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
-      persistTimerRef.current = setTimeout(() => {
-        if (sessionToPersist) void upsertSession(sessionToPersist);
-      }, 600);
-    },
-    [currentFile],
-  );
-
-  const clearPersistTimer = useCallback(() => {
-    if (persistTimerRef.current) {
-      clearTimeout(persistTimerRef.current);
-      persistTimerRef.current = null;
-    }
-  }, []);
+  }, [currentFile, registerStoreBridges, setActiveSessionId]);
 
   /** Create a brand-new session (memory only). If current session is already empty, reuse it. */
   const resetSession = useCallback((runtime?: AgentRuntimeIdentity | null) => {
-    setSessions((prev) => {
-      const active = prev.find((s) => s.id === activeSessionId);
-      // Already on an empty session in this runtime lane — just clear input,
-      // unless it is bound to an external session and New Chat should create a
-      // fresh unlinked runtime session.
-      if (
-        active
-        && active.messages.length === 0
-        && isSessionInRuntimeLane(active, runtime)
-        && !hasDurableRuntimeBinding(active)
-      ) return prev;
+    const active = sessionsRef.current.find((s) => s.id === activeIdRef.current);
+    const activeMessages = active ? withStoreMessages(active).messages : [];
+    // Already on an empty session in this runtime lane — just clear input,
+    // unless it is bound to an external session and New Chat should create a
+    // fresh unlinked runtime session.
+    if (
+      active
+      && activeMessages.length === 0
+      && isSessionInRuntimeLane(active, runtime)
+      && !hasDurableRuntimeBinding(active)
+    ) return;
 
-      const fresh = createSession(currentFile, runtime);
-      setActiveSessionId(fresh.id);
-      setMessages([]);
-      // Memory only — no upsertSession call. Will be persisted on first message.
-      return [fresh, ...prev]
-        .sort((a, b) => b.updatedAt - a.updatedAt)
-        .slice(0, MAX_SESSIONS);
-    });
-  }, [currentFile, activeSessionId]);
+    const fresh = createSession(currentFile, runtime);
+    setActiveSessionId(fresh.id);
+    // Memory only — no upsertSession call. Will be persisted on first message.
+    setSessions((prev) => [fresh, ...prev]
+      .sort((a, b) => b.updatedAt - a.updatedAt)
+      .slice(0, MAX_SESSIONS));
+  }, [currentFile, setActiveSessionId]);
 
   /** Switch to an existing session. Auto-drops abandoned empty sessions from memory. */
   const loadSession = useCallback(
     (id: string) => {
-      const target = sessions.find((s) => s.id === id);
+      const target = sessionsRef.current.find((s) => s.id === id);
       if (!target) return;
 
       // Drop the session we're leaving if it's empty (it was never persisted, just remove from memory)
-      const leaving = activeSessionId ? sessions.find((s) => s.id === activeSessionId) : null;
-      if (leaving && leaving.messages.length === 0 && !hasDurableRuntimeBinding(leaving) && leaving.id !== id) {
+      const leaving = activeIdRef.current ? sessionsRef.current.find((s) => s.id === activeIdRef.current) : null;
+      if (
+        leaving
+        && leaving.id !== id
+        && !getRun(leaving.id)
+        && withStoreMessages(leaving).messages.length === 0
+        && !hasDurableRuntimeBinding(leaving)
+      ) {
         setSessions((prev) => prev.filter((s) => s.id !== leaving.id));
       }
 
       setActiveSessionId(target.id);
-      setMessages(target.messages);
+      clearUnread(target.id);
     },
-    [sessions, activeSessionId],
+    [setActiveSessionId],
   );
 
   /** Delete a session. If it's the active one, create fresh (memory only). */
   const deleteSession = useCallback(
     (id: string, runtime?: AgentRuntimeIdentity | null) => {
-      const target = sessions.find((s) => s.id === id);
+      const target = sessionsRef.current.find((s) => s.id === id);
+      const persisted = target ? shouldPersistSession(withStoreMessages(target)) : false;
+
+      // Abort any live run and clear store entries (messages, timers, unread)
+      // before touching metadata, so late chunks and zombie persists are impossible.
+      storeRemoveSession(id);
+
       // Only remove the local MindOS record. This never deletes the external
       // Codex/Claude session referenced by runtimeSessionBinding.
-      if (target && shouldPersistSession(target)) void removeSession(id);
+      if (persisted) void removeSession(id);
 
-      const remaining = sessions.filter((s) => s.id !== id);
-      setSessions(remaining);
-
-      if (activeSessionId === id) {
+      const remaining = sessionsRef.current.filter((s) => s.id !== id);
+      if (activeIdRef.current === id) {
         const fresh = createSession(currentFile, runtime);
         setActiveSessionId(fresh.id);
-        setMessages([]);
         setSessions([fresh, ...remaining].slice(0, MAX_SESSIONS));
         // No upsertSession — memory only
+      } else {
+        setSessions(remaining);
       }
     },
-    [activeSessionId, currentFile, sessions],
+    [currentFile, setActiveSessionId],
   );
 
   const renameSession = useCallback((id: string, newTitle: string) => {
@@ -265,7 +352,7 @@ export function useAskSession(currentFile?: string) {
       const updated = { ...prev[idx], title: trimmed || undefined };
       const next = [...prev];
       next[idx] = updated;
-      void upsertSession(updated);
+      void upsertSession(withStoreMessages(updated));
       return next;
     });
   }, []);
@@ -278,16 +365,18 @@ export function useAskSession(currentFile?: string) {
       const updated = { ...prev[idx], pinned: !prev[idx].pinned };
       const next = [...prev];
       next[idx] = updated;
-      if (shouldPersistSession(updated)) void upsertSession(updated);
+      const full = withStoreMessages(updated);
+      if (shouldPersistSession(full)) void upsertSession(full);
       return next;
     });
   }, []);
 
   /** Update the session-level ACP agent binding for the currently active session. */
   const setSessionDefaultAcpAgent = useCallback((agent: AgentIdentity | null) => {
-    if (!activeSessionId) return;
+    const sessionId = activeIdRef.current;
+    if (!sessionId) return;
 
-    const currentSession = sessions.find((session) => session.id === activeSessionId);
+    const currentSession = sessionsRef.current.find((session) => session.id === sessionId);
     if (!currentSession) return;
 
     const updatedSession = bindSessionAgent({
@@ -297,51 +386,32 @@ export function useAskSession(currentFile?: string) {
     }, agent);
 
     setSessions((prev) => {
-      const rest = prev.filter((session) => session.id !== activeSessionId);
+      const rest = prev.filter((session) => session.id !== sessionId);
       return [updatedSession, ...rest]
         .sort((a, b) => b.updatedAt - a.updatedAt)
         .slice(0, MAX_SESSIONS);
     });
 
-    if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
-    if (updatedSession.messages.length > 0) {
-      persistTimerRef.current = setTimeout(() => {
-        void upsertSession(updatedSession);
-      }, 600);
-    }
-  }, [activeSessionId, currentFile, sessions]);
+    // Debounced via the store's per-session channel; flush itself decides
+    // whether the session is persistable (has messages or durable binding).
+    schedulePersist(sessionId);
+  }, [currentFile]);
 
   /** Update the session-level runtime binding for native agent sessions. */
   const setSessionAgentRuntimeBinding = useCallback((
     runtime: AgentRuntimeIdentity,
     binding?: { externalSessionId?: string; cwd?: string; status?: RuntimeSessionBinding['status']; updatedAt?: number },
   ) => {
-    if (!activeSessionId) return;
+    const sessionId = activeIdRef.current;
+    if (!sessionId) return;
+    if (!sessionsRef.current.some((session) => session.id === sessionId)) return;
+    writeBindingForSession(sessionId, runtime, binding);
+  }, [writeBindingForSession]);
 
-    const currentSession = sessions.find((session) => session.id === activeSessionId);
-    if (!currentSession) return;
-
-    const updatedSession = bindSessionAgentRuntime({
-      ...currentSession,
-      currentFile: currentSession.currentFile ?? currentFile,
-      updatedAt: Date.now(),
-    }, runtime, binding);
-
-    setSessions((prev) => {
-      const rest = prev.filter((session) => session.id !== activeSessionId);
-      return [updatedSession, ...rest]
-        .sort((a, b) => b.updatedAt - a.updatedAt)
-        .slice(0, MAX_SESSIONS);
-    });
-
-    if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
-    if (shouldPersistSession(updatedSession)) {
-      persistTimerRef.current = setTimeout(() => {
-        void upsertSession(updatedSession);
-      }, 600);
-    }
-  }, [activeSessionId, currentFile, sessions]);
-
+  /**
+   * Attach an external runtime session (Codex thread / Claude session).
+   * Returns false when refused — e.g. the matched local session is running.
+   */
   const attachRuntimeSession = useCallback((
     runtime: AgentRuntimeIdentity,
     binding: {
@@ -351,64 +421,69 @@ export function useAskSession(currentFile?: string) {
       updatedAt?: number | string;
     },
     metadata?: { title?: string },
-  ) => {
-    if (runtime.kind !== 'codex' && runtime.kind !== 'claude') return;
+  ): boolean => {
+    if (runtime.kind !== 'codex' && runtime.kind !== 'claude') return false;
     const externalSessionId = binding.externalSessionId.trim();
-    if (!externalSessionId) return;
+    if (!externalSessionId) return false;
 
     const now = Date.now();
     const bindingUpdatedAt = runtimeBindingUpdatedAt(binding.updatedAt);
-    let sessionToPersist: ChatSession | null = null;
+
+    const existing = sessionsRef.current.find((item) => (
+      getMatchingRuntimeSessionBinding(item, runtime)?.externalSessionId === externalSessionId
+    ));
+    // A running session keeps its binding — rebinding mid-run would desync
+    // the UI from the run's submit-time snapshot. Browsing it is still fine.
+    if (existing && getRun(existing.id)) return false;
+
+    const base = existing ?? createSession(currentFile, runtime);
+    const updated = bindSessionAgentRuntime({
+      ...base,
+      currentFile: base.currentFile ?? currentFile,
+      title: metadata?.title?.trim() || base.title,
+      updatedAt: now,
+    }, runtime, {
+      externalSessionId,
+      cwd: binding.cwd,
+      status: binding.status ?? 'active',
+      updatedAt: bindingUpdatedAt,
+    });
+
+    if (!storeHasMessages(updated.id)) {
+      storeSetMessages(updated.id, updated.messages, { skipPersist: true });
+    }
+    setActiveSessionId(updated.id);
+    clearUnread(updated.id);
 
     setSessions((prev) => {
-      const existing = prev.find((item) => (
-        getMatchingRuntimeSessionBinding(item, runtime)?.externalSessionId === externalSessionId
-      ));
-      const base = existing ?? createSession(currentFile, runtime);
-      const updated = bindSessionAgentRuntime({
-        ...base,
-        currentFile: base.currentFile ?? currentFile,
-        title: metadata?.title?.trim() || base.title,
-        updatedAt: now,
-      }, runtime, {
-        externalSessionId,
-        cwd: binding.cwd,
-        status: binding.status ?? 'active',
-        updatedAt: bindingUpdatedAt,
-      });
-
-      sessionToPersist = updated;
-      setActiveSessionId(updated.id);
-      setMessages(updated.messages);
-
       const rest = prev.filter((item) => item.id !== updated.id);
       return [updated, ...rest]
         .sort((a, b) => b.updatedAt - a.updatedAt)
         .slice(0, MAX_SESSIONS);
     });
 
-    if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
-    persistTimerRef.current = setTimeout(() => {
-      if (sessionToPersist) void upsertSession(sessionToPersist);
-    }, 0);
-  }, [currentFile]);
+    void upsertSession(withStoreMessages(updated));
+    return true;
+  }, [currentFile, setActiveSessionId]);
 
   const clearSessions = useCallback((ids?: string[], runtime?: AgentRuntimeIdentity | null) => {
     const targetIds = ids
       ? new Set(ids)
-      : new Set(sessions.map((s) => s.id));
-    const persistedIds = sessions
-      .filter((s) => targetIds.has(s.id) && shouldPersistSession(s))
+      : new Set(sessionsRef.current.map((s) => s.id));
+    const persistedIds = sessionsRef.current
+      .filter((s) => targetIds.has(s.id) && shouldPersistSession(withStoreMessages(s)))
       .map((s) => s.id);
     if (persistedIds.length > 0) void removeSessions(persistedIds);
 
-    const remaining = sessions.filter((s) => !targetIds.has(s.id));
+    // Abort runs and clear store entries for everything we drop.
+    targetIds.forEach((id) => storeRemoveSession(id));
+
+    const remaining = sessionsRef.current.filter((s) => !targetIds.has(s.id));
     const fresh = createSession(currentFile, runtime);
     setActiveSessionId(fresh.id);
-    setMessages([]);
     setSessions([fresh, ...remaining].slice(0, MAX_SESSIONS));
     // No upsertSession — memory only
-  }, [currentFile, sessions]);
+  }, [currentFile, setActiveSessionId]);
 
   const clearAllSessions = useCallback(() => {
     clearSessions(undefined, null);
@@ -420,10 +495,13 @@ export function useAskSession(currentFile?: string) {
     if (!a.pinned && b.pinned) return 1;
     return b.updatedAt - a.updatedAt;
   }), [sessions]);
-  const activeSession = useMemo(
-    () => sessions.find((session) => session.id === activeSessionId) ?? null,
-    [activeSessionId, sessions],
-  );
+
+  /** Active session metadata with live messages from the store overlaid. */
+  const activeSession = useMemo(() => {
+    const meta = sessions.find((session) => session.id === activeSessionId) ?? null;
+    if (!meta) return null;
+    return meta.messages === messages ? meta : { ...meta, messages };
+  }, [activeSessionId, sessions, messages]);
 
   return {
     messages,
@@ -432,8 +510,6 @@ export function useAskSession(currentFile?: string) {
     activeSession,
     activeSessionId,
     initSessions,
-    persistSession,
-    clearPersistTimer,
     resetSession,
     loadSession,
     deleteSession,

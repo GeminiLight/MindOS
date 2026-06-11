@@ -407,9 +407,10 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
     chatMode,
     providerOverride,
     modelOverride,
+    activeSessionId: session.activeSessionId,
     onFirstMessage,
     refs: chatRefs,
-    errorLabels: { noResponse: t.ask.errorNoResponse, stopped: t.ask.stopped },
+    errorLabels: { noResponse: t.ask.errorNoResponse, stopped: t.ask.stopped, concurrentLimit: t.ask.concurrentLimit },
     resetInputState,
     onRestoreInput: handleRestoreInput,
   });
@@ -632,22 +633,8 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
     updateSelectedAgentRuntime,
   ]);
 
-  // Persist session on message changes (skip if last msg is empty assistant placeholder during loading)
-  const clearPersistTimerRef = useRef(session.clearPersistTimer);
-  useLayoutEffect(() => {
-    clearPersistTimerRef.current = session.clearPersistTimer;
-  }, [session.clearPersistTimer]);
-  useEffect(() => {
-    if (!visible || !session.activeSessionId) return;
-    const msgs = session.messages;
-    if (chat.isLoading && msgs.length > 0) {
-      const last = msgs[msgs.length - 1];
-      if (last.role === 'assistant' && !last.content.trim() && (!last.parts || last.parts.length === 0)) return;
-    }
-    session.persistSession(msgs, session.activeSessionId);
-    return () => clearPersistTimerRef.current();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible, session.messages, session.activeSessionId, chat.isLoading]);
+  // Persistence is handled by ask-run-store (every message write schedules a
+  // debounced flush; the placeholder-skip rule lives in flushPersist).
 
   // Esc to close modal or exit focus mode (skip for home variant)
   useEffect(() => {
@@ -815,7 +802,8 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
   );
 
   const handleResetSession = useCallback(() => {
-    if (chat.isLoadingRef.current) return;
+    // Concurrency: a running active session keeps streaming in the background;
+    // New Chat just switches to a fresh session.
     const runtime = selectedAgentRuntimeRef.current;
     sessionRef.current.resetSession(runtime);
     updateSelectedAgentRuntime(runtime);
@@ -884,7 +872,8 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
   }, []);
 
   const handleLoadSession = useCallback((id: string) => {
-    if (chat.isLoadingRef.current) return; // Don't switch sessions during streaming
+    // Concurrency: switching away from a streaming session is allowed — its
+    // run keeps writing to the store and the list shows a running indicator.
     const targetSession = session.sessions.find((item) => item.id === id) ?? null;
     sessionRef.current.loadSession(id);
     setShowHistory(false);
@@ -902,14 +891,15 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
   }, [chat.isLoadingRef, currentFile, session.sessions, updateSelectedAgentRuntime]);
 
   const handleDeleteSession = useCallback((id: string) => {
-    if (chat.isLoadingRef.current) return;
+    // Deleting a running session is allowed: the store aborts its run and
+    // clears timers/messages before the metadata goes (no zombie writes).
     const runtime = selectedAgentRuntimeRef.current;
     sessionRef.current.deleteSession(id, runtime);
     if (sessionRef.current.activeSessionId === id) {
       updateSelectedAgentRuntime(runtime);
       clearTransientComposerState();
     }
-  }, [chat.isLoadingRef, clearTransientComposerState, updateSelectedAgentRuntime]);
+  }, [clearTransientComposerState, updateSelectedAgentRuntime]);
 
   const handleClearRuntimeHistory = useCallback(() => {
     if (chat.isLoadingRef.current) return;
@@ -926,7 +916,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
     if (chat.isLoadingRef.current) return;
     const runtime = selectedAgentRuntimeRef.current;
     if (!runtime || runtime.kind !== 'codex') return;
-    sessionRef.current.attachRuntimeSession(compactAgentRuntimeIdentity(runtime) ?? runtime, {
+    const attached = sessionRef.current.attachRuntimeSession(compactAgentRuntimeIdentity(runtime) ?? runtime, {
       externalSessionId: thread.id,
       cwd: thread.cwd,
       status: codexThreadBindingStatus(thread),
@@ -934,9 +924,14 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
     }, {
       title: codexThreadTitle(thread),
     });
+    if (!attached) {
+      // The matched local session has a live run — rebinding mid-run is refused.
+      setCodexThreadsError(t.ask.sessionRunningRetry);
+      return;
+    }
     updateSelectedAgentRuntime(runtime);
     clearTransientComposerState();
-  }, [chat.isLoadingRef, clearTransientComposerState, updateSelectedAgentRuntime]);
+  }, [chat.isLoadingRef, clearTransientComposerState, t.ask.sessionRunningRetry, updateSelectedAgentRuntime]);
 
   const handleForkCodexThread = useCallback(async (thread: CodexThreadSummary) => {
     if (chat.isLoadingRef.current || codexThreadActionId) return;
@@ -1029,6 +1024,8 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
   }, [chat.isLoadingRef, codexThreadActionId]);
 
   const toggleHistory = useCallback(() => setShowHistory(v => !v), []);
+  // Stable identity so the memoized SessionHistoryPanel skips chunk-driven re-renders.
+  const closeHistory = useCallback(() => setShowHistory(false), []);
   const inputIconSize = 15;
   const messageLabels = useMemo(() => ({
     connecting: t.ask.connecting,
@@ -1114,7 +1111,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
           onRename={session.renameSession}
           onTogglePin={session.togglePinSession}
           onClearAll={handleClearRuntimeHistory}
-          onClose={() => setShowHistory(false)}
+          onClose={closeHistory}
           onNewChat={handleResetSession}
           onRefreshCodexThreads={loadCodexThreads}
           onAttachCodexThread={handleAttachCodexThread}

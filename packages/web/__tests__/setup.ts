@@ -152,6 +152,11 @@ beforeEach(() => {
   sessionStorage.clear();
 });
 
-afterEach(() => {
+afterEach(async () => {
   fs.rmSync(state.root, { recursive: true, force: true });
+  // ask-run-store keeps runs/messages at module level so background chat runs
+  // survive unmounts — in tests that means state leaks across cases unless
+  // reset here. Dynamic import keeps non-web suites from paying the cost.
+  const { resetAskRunStoreForTests } = await import('@/lib/ask-run-store');
+  resetAskRunStoreForTests();
 });

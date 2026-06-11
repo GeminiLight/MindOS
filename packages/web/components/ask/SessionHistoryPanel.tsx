@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback, useMemo, useTransition } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo, useTransition, memo } from 'react';
 import { AlertCircle, Archive, GitFork, Loader2, RefreshCw, Search, Trash2, Pencil, Pin, PinOff, Link2, MessageSquare, SquarePen, X } from 'lucide-react';
 import type { AgentRuntimeIdentity, ChatSession, CodexThreadSummary } from '@/lib/types';
 import { sessionTitle } from '@/hooks/useAskSession';
+import { useRunSummary } from '@/lib/ask-run-store';
 import { getRuntimeSessionSummary, shortRuntimeSessionId } from '@/lib/ask-agent';
 import { useLocale } from '@/lib/stores/locale-store';
 
@@ -96,7 +97,7 @@ function pluralize(count: number, singular: string, plural: string): string {
 
 // ── Main Component ──
 
-export default function SessionHistoryPanel({
+function SessionHistoryPanel({
   sessions, activeSessionId,
   selectedAgentRuntime,
   codexThreads = [],
@@ -110,6 +111,10 @@ export default function SessionHistoryPanel({
   const { t } = useLocale();
   const [isPending, startTransition] = useTransition();
   const ask = t.ask;
+  // Run/unread state comes from ask-run-store's summary snapshot, which only
+  // changes on run start/end or unread membership — streaming chunks never
+  // re-render the list (spec-chat-session-concurrency.md performance bar).
+  const runSummary = useRunSummary();
   const [query, setQuery] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
@@ -247,6 +252,8 @@ export default function SessionHistoryPanel({
               key={s.id}
               session={s}
               isActive={s.id === activeSessionId}
+              isRunning={runSummary.running.has(s.id)}
+              isUnread={!runSummary.running.has(s.id) && runSummary.unread.has(s.id)}
               editing={editingId === s.id}
               editValue={editValue}
               onEditValueChange={setEditValue}
@@ -381,6 +388,11 @@ export default function SessionHistoryPanel({
     </div>
   );
 }
+
+// Memoized: AskContent re-renders on every streamed chunk (it subscribes to the
+// active session's messages), but every prop here is referentially stable during
+// a stream, so memo keeps the open history panel from reconciling per chunk.
+export default memo(SessionHistoryPanel);
 
 function CodexThreadSection({
   threads,
@@ -543,12 +555,14 @@ function CodexThreadRow({
 // ── Session Card ──
 
 function SessionCard({
-  session: s, isActive, editing, editValue, onEditValueChange, inputRef,
+  session: s, isActive, isRunning, isUnread, editing, editValue, onEditValueChange, inputRef,
   onLoad, onStartRename, onCommitRename, onCancelRename, onDelete, onTogglePin,
   ask,
 }: {
   session: ChatSession;
   isActive: boolean;
+  isRunning: boolean;
+  isUnread: boolean;
   editing: boolean;
   editValue: string;
   onEditValueChange: (v: string) => void;
@@ -602,6 +616,24 @@ function SessionCard({
             <span className="flex-1 min-w-0 text-xs font-medium text-foreground truncate">
               {title}
             </span>
+          )}
+          {!editing && isRunning && (
+            <span
+              data-testid="session-running-indicator"
+              title={ask?.sessionRunningIndicator}
+              aria-label={ask?.sessionRunningIndicator}
+              className="inline-flex shrink-0 text-[var(--amber)]"
+            >
+              <Loader2 size={11} className="animate-spin" />
+            </span>
+          )}
+          {!editing && isUnread && (
+            <span
+              data-testid="session-unread-indicator"
+              title={ask?.sessionUnreadIndicator}
+              aria-label={ask?.sessionUnreadIndicator}
+              className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--amber)]"
+            />
           )}
           <span className="text-2xs text-muted-foreground/40 shrink-0 tabular-nums">
             {formatRelativeTime(new Date(s.updatedAt))}

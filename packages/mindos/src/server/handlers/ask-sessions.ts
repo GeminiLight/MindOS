@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { json, type MindosServerResponse } from '../response.js';
@@ -93,9 +93,17 @@ function readSessions(storePath: string): MindosChatSession[] {
   }
 }
 
+// CONSTRAINT: read-modify-write here is only safe because every handler in this
+// file is synchronous (single JS turn = no interleaving). If any of this moves
+// to async fs APIs, a write queue must be added or concurrent upserts will
+// clobber each other. Cross-process locking (web + mcp servers sharing the
+// store) is intentionally out of scope — see spec-chat-session-concurrency.md.
 function writeSessions(storePath: string, sessions: MindosChatSession[]) {
   mkdirSync(dirname(storePath), { recursive: true });
-  writeFileSync(storePath, JSON.stringify(sessions.slice(0, MAX_SESSIONS), null, 2), 'utf-8');
+  // Atomic replace: a crash mid-write must never leave a truncated sessions.json.
+  const tmpPath = `${storePath}.${process.pid}.tmp`;
+  writeFileSync(tmpPath, JSON.stringify(sessions.slice(0, MAX_SESSIONS), null, 2), 'utf-8');
+  renameSync(tmpPath, storePath);
 }
 
 function isValidSession(value: unknown): value is MindosChatSession {

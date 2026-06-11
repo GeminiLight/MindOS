@@ -7,6 +7,12 @@ import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { useAskSession } from '@/hooks/useAskSession';
 import { getSessionAgentRuntime, isSessionInRuntimeLane } from '@/lib/ask-agent';
+import {
+  getMessages,
+  setMessages as storeSetMessages,
+  startRun,
+  endRun,
+} from '@/lib/ask-run-store';
 import type { AgentRuntimeIdentity, ChatSession } from '@/lib/types';
 
 const codexRuntime: AgentRuntimeIdentity = { id: 'codex', name: 'Codex', kind: 'codex' };
@@ -139,6 +145,57 @@ describe('useAskSession native runtime lane', () => {
     const deleteCall = fetchMock.mock.calls.find(([, init]) => init?.method === 'DELETE');
     expect(deleteCall).toBeTruthy();
     expect(JSON.parse(String(deleteCall?.[1]?.body))).toEqual({ ids: ['leaked-empty'] });
+
+    act(() => {
+      root.unmount();
+    });
+  });
+
+  it('initSessions backfills missing messages but never clobbers newer local or running state', async () => {
+    const serverSession: ChatSession = {
+      id: 'persisted',
+      title: 'Persisted chat',
+      createdAt: 10,
+      updatedAt: 10,
+      messages: [
+        { role: 'user', content: 'old question', timestamp: 10 },
+        { role: 'assistant', content: 'old stale answer', timestamp: 10 },
+      ],
+    };
+    vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      if (!init?.method || init.method === 'GET') {
+        return { ok: true, json: async () => [serverSession] };
+      }
+      return { ok: true, json: async () => ({ ok: true }) };
+    }));
+
+    // Branch 1 (missing): no local copy → server messages backfill the store.
+    const { getLatest, root } = renderUseAskSession();
+    await act(async () => {
+      await getLatest().initSessions();
+    });
+    expect(getMessages('persisted')[1].content).toBe('old stale answer');
+
+    // Branch 2 (newer local): a fresher local write survives a remount-style re-init.
+    const newer = [
+      { role: 'user' as const, content: 'old question', timestamp: 10 },
+      { role: 'assistant' as const, content: 'streamed final answer', timestamp: Date.now() },
+    ];
+    storeSetMessages('persisted', newer, { skipPersist: true });
+    await act(async () => {
+      await getLatest().initSessions();
+    });
+    expect(getMessages('persisted')[1].content).toBe('streamed final answer');
+
+    // Branch 3 (running): a live run's messages are untouchable even if the
+    // server snapshot claims a future updatedAt.
+    startRun('persisted', { controller: new AbortController(), runtimeSnapshot: null, reconnectMax: 3 });
+    serverSession.updatedAt = Date.now() + 60_000;
+    await act(async () => {
+      await getLatest().initSessions();
+    });
+    expect(getMessages('persisted')[1].content).toBe('streamed final answer');
+    endRun('persisted');
 
     act(() => {
       root.unmount();

@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Trash2, Pencil, Pin, PinOff } from 'lucide-react';
+import { Trash2, Pencil, Pin, PinOff, Loader2 } from 'lucide-react';
 import type { ChatSession } from '@/lib/types';
 import { sessionTitle } from '@/hooks/useAskSession';
+import { useRunSummary } from '@/lib/ask-run-store';
 
 interface SessionHistoryProps {
   sessions: ChatSession[];
@@ -13,7 +14,15 @@ interface SessionHistoryProps {
   onRename: (id: string, title: string) => void;
   onTogglePin: (id: string) => void;
   onClearAll: () => void;
-  labels: { title: string; clearAll: string; confirmClear: string; noSessions: string; rename: string };
+  labels: {
+    title: string;
+    clearAll: string;
+    confirmClear: string;
+    noSessions: string;
+    rename: string;
+    running?: string;
+    unread?: string;
+  };
 }
 
 function formatRelativeTime(date: Date): string {
@@ -30,6 +39,10 @@ function formatRelativeTime(date: Date): string {
 }
 
 export default function SessionHistory({ sessions, activeSessionId, onLoad, onDelete, onRename, onTogglePin, onClearAll, labels }: SessionHistoryProps) {
+  // Run/unread state lives in ask-run-store; the summary snapshot only changes
+  // on run start/end or unread membership, so streaming chunks never re-render
+  // this list (spec-chat-session-concurrency.md performance acceptance).
+  const runSummary = useRunSummary();
   const [confirmClearAll, setConfirmClearAll] = useState(false);
   const clearTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -97,6 +110,8 @@ export default function SessionHistory({ sessions, activeSessionId, onLoad, onDe
         )}
         {sessions.map((s) => {
           const isActive = activeSessionId === s.id;
+          const isRunning = runSummary.running.has(s.id);
+          const isUnread = !isRunning && runSummary.unread.has(s.id);
           return (
             <div key={s.id} className="group flex items-center gap-0.5">
               {s.pinned && <Pin size={10} className="shrink-0 text-[var(--amber)]/50 -rotate-45 ml-1" />}
@@ -125,7 +140,27 @@ export default function SessionHistory({ sessions, activeSessionId, onLoad, onDe
                     className="w-full bg-transparent border-b border-[var(--amber)] outline-none text-xs text-foreground"
                   />
                 ) : (
-                  <div className="truncate font-medium">{sessionTitle(s)}</div>
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <div className="truncate font-medium">{sessionTitle(s)}</div>
+                    {isRunning && (
+                      <span
+                        data-testid="session-running-indicator"
+                        title={labels.running}
+                        aria-label={labels.running}
+                        className="inline-flex shrink-0 text-[var(--amber)]"
+                      >
+                        <Loader2 size={11} className="animate-spin" />
+                      </span>
+                    )}
+                    {isUnread && (
+                      <span
+                        data-testid="session-unread-indicator"
+                        title={labels.unread}
+                        aria-label={labels.unread}
+                        className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--amber)]"
+                      />
+                    )}
+                  </div>
                 )}
                 {editingId !== s.id && (
                   <div className="text-2xs text-muted-foreground/50 mt-0.5">{formatRelativeTime(new Date(s.updatedAt))}</div>

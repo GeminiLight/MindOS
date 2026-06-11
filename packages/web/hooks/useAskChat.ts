@@ -1,11 +1,27 @@
 'use client';
 
-import { useRef, useState, useCallback, useLayoutEffect } from 'react';
+import { useRef, useCallback, useLayoutEffect } from 'react';
 import type { AgentIdentity, AgentRuntimeIdentity, Message, ImagePart, AskMode, LocalAttachment, RuntimeSessionBinding } from '@/lib/types';
 import type { ProviderId } from '@/lib/agent/providers';
-import { consumeUIMessageStream, type AgentRunContextMetadata } from '@/lib/agent/stream-consumer';
+import { consumeUIMessageStream } from '@/lib/agent/stream-consumer';
 import { annotateMessageWithAgentRuntime, compactAgentRuntimeIdentity, getMatchingRuntimeSessionBinding, isRuntimeSessionBindingResumable } from '@/lib/ask-agent';
 import { isRetryableError, retryDelay, sleep } from '@/lib/agent/reconnect';
+import {
+  MAX_CONCURRENT_RUNS,
+  appendMessages as storeAppendMessages,
+  endRun,
+  getMessages as storeGetMessages,
+  getRun,
+  getRunCount,
+  isInSubmitCooldown,
+  replaceLastMessage,
+  setMessages as storeSetMessages,
+  startRun,
+  startSubmitCooldown,
+  updateRun,
+  useSessionRun,
+  writeRuntimeBinding,
+} from '@/lib/ask-run-store';
 
 export type LoadingPhase = 'connecting' | 'thinking' | 'streaming' | 'reconnecting';
 
@@ -62,9 +78,10 @@ interface UseAskChatOpts {
   chatMode: AskMode;
   providerOverride: ProviderId | `p_${string}` | null;
   modelOverride: string | null;
+  activeSessionId: string | null;
   onFirstMessage?: () => void;
   refs: AskChatRefs;
-  errorLabels: { noResponse: string; stopped: string };
+  errorLabels: { noResponse: string; stopped: string; concurrentLimit: string };
   resetInputState: () => void;
   onRestoreInput?: (userMessage: Message) => void;
 }
@@ -74,37 +91,26 @@ export function useAskChat({
   chatMode,
   providerOverride,
   modelOverride,
+  activeSessionId,
   onFirstMessage,
   refs,
   errorLabels,
   resetInputState,
   onRestoreInput,
 }: UseAskChatOpts) {
-  const [isLoading, setIsLoading] = useState(false);
-  const [loadingPhase, setLoadingPhase] = useState<LoadingPhase>('connecting');
-  const [reconnectAttempt, setReconnectAttempt] = useState(0);
-  const [reconnectMax, setReconnectMax] = useState(3);
-  const [agentRunContext, setAgentRunContext] = useState<AgentRunContextMetadata | null>(null);
+  // All run state lives in ask-run-store, keyed by session. The hook derives
+  // UI state for the *active* session — background runs keep going on their
+  // own and never touch these values.
+  const activeRun = useSessionRun(activeSessionId);
+  const isLoading = activeRun !== null;
+  const loadingPhase: LoadingPhase = activeRun?.phase ?? 'connecting';
+  const reconnectAttempt = activeRun?.reconnectAttempt ?? 0;
+  const reconnectMax = activeRun?.reconnectMax ?? 3;
+  const agentRunContext = activeRun?.agentRunContext ?? null;
+
   const reconnectMaxRef = useRef(3);
   const abortRef = useRef<AbortController | null>(null);
   const firstMessageFired = useRef(false);
-
-  // Cooldown guard: after stop+retract, briefly block re-submission so that
-  // the mouseup on the stop-button position doesn't accidentally trigger the
-  // send button that React swaps in at the same DOM position.
-  const submitCooldownRef = useRef(false);
-
-  // Track the pending user message so we can retract it on stop.
-  // `userMessageIndex` is the index of the *user* message inside the messages
-  // array (the assistant placeholder sits at userMessageIndex + 1).
-  const pendingMessageRef = useRef<{
-    userMessageIndex: number;
-    userMessage: Message;
-  } | null>(null);
-
-  // When true the AbortError handler in submit() skips its own setMessages
-  // because stop() already cleaned up the messages array.
-  const retractedRef = useRef(false);
 
   const isLoadingRef = useRef(false);
   useLayoutEffect(() => {
@@ -112,53 +118,45 @@ export function useAskChat({
   }, [isLoading]);
 
   const stop = useCallback(() => {
-    const pending = pendingMessageRef.current;
+    const sessionId = refs.sessionRef.current?.activeSessionId ?? null;
+    if (!sessionId) return;
+    const run = getRun(sessionId);
+    if (!run) return;
 
-    // Abort the fetch first.
-    abortRef.current?.abort();
+    const pending = run.pendingUserMessage;
+    // Mark retracted before aborting so the AbortError handler in the run
+    // closure (which fires on a later microtask) skips its own cleanup.
+    if (pending) updateRun(sessionId, { retracted: true, pendingUserMessage: null });
+    run.controller.abort();
 
     if (pending) {
-      retractedRef.current = true;
-
-      // Always remove the user message + assistant response (empty or partial)
-      // from the messages array. The user clicked stop — they don't want this
-      // exchange in the history at all.
-      refs.sessionRef.current?.setMessages(prev => {
-        // Use timestamp to locate messages instead of index to avoid race conditions.
-        // If the messages array is modified between submit() and stop(), index-based
-        // deletion could remove the wrong messages.
-        const userTimestamp = pending.userMessage.timestamp;
-
-        return prev.filter((msg, idx) => {
-          // Remove the user message with matching timestamp
-          if (msg.role === 'user' && msg.timestamp === userTimestamp) {
-            return false;
-          }
-          // Remove the assistant message that immediately follows the user message
-          if (idx > 0 && prev[idx - 1].role === 'user' &&
-              prev[idx - 1].timestamp === userTimestamp &&
-              msg.role === 'assistant') {
-            return false;
-          }
-          return true;
-        });
-      });
+      // Always remove the user message + assistant response (empty or partial).
+      // The user clicked stop — they don't want this exchange in the history.
+      // Timestamp-based lookup avoids index races if the array changed between
+      // submit() and stop().
+      const userTimestamp = pending.timestamp;
+      storeSetMessages(sessionId, (prev) => prev.filter((msg, idx) => {
+        if (msg.role === 'user' && msg.timestamp === userTimestamp) return false;
+        if (idx > 0 && prev[idx - 1].role === 'user'
+            && prev[idx - 1].timestamp === userTimestamp
+            && msg.role === 'assistant') return false;
+        return true;
+      }));
 
       // Restore text (+ attachments) back into the input box.
-      onRestoreInput?.(pending.userMessage);
-
-      pendingMessageRef.current = null;
+      onRestoreInput?.(pending);
 
       // Block re-submission for a short window so the browser's mouseup
       // doesn't hit the send button that replaces the stop button.
-      submitCooldownRef.current = true;
-      setTimeout(() => { submitCooldownRef.current = false; }, 300);
+      startSubmitCooldown(sessionId);
     }
   }, [refs, onRestoreInput]);
 
   const submit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
-    if (submitCooldownRef.current) return; // ignore accidental re-submit after stop
+    // ---- Sync phase: the component is mounted, refs are valid. Everything
+    // the run needs is snapshotted into plain values here; the async phase
+    // below must never read a ref again.
     const m = refs.mentionRef.current;
     const s = refs.slashRef.current;
     const img = refs.imageUploadRef.current;
@@ -166,9 +164,15 @@ export function useAskChat({
     const upl = refs.uploadRef.current;
     if (!m || !s || !img || !sess || !upl) return;
     if (m.mentionQuery !== null || s.slashQuery !== null) return;
+
+    const sessionId = sess.activeSessionId ?? null;
+    if (!sessionId) return;
+    if (isInSubmitCooldown(sessionId)) return; // ignore accidental re-submit after stop
+    if (getRun(sessionId)) return; // per-session mutex: this session is already running
+
     const text = refs.inputValueRef.current?.trim() ?? '';
     const hasLoadingUploads = upl.localAttachments.some(f => f.status === 'loading');
-    if (hasLoadingUploads || ((!text && img.images.length === 0) || isLoadingRef.current)) return;
+    if (hasLoadingUploads || (!text && img.images.length === 0)) return;
 
     const skill = refs.selectedSkillRef.current;
     const selectedRuntimeBase = compactAgentRuntimeIdentity(refs.selectedAgentRuntimeRef.current);
@@ -200,19 +204,30 @@ export function useAskChat({
       ...(pendingAttachedFiles && { attachedFiles: pendingAttachedFiles }),
       ...(pendingUploadedNames.length > 0 && { uploadedFileNames: pendingUploadedNames }),
     }, runtimeForMessage);
+
+    // Concurrency cap: reject loudly (a silent drop here would feel like a
+    // dead send button). The backend has its own per-agent/global caps whose
+    // errors stream through as readable text.
+    if (getRunCount() >= MAX_CONCURRENT_RUNS) {
+      storeAppendMessages(sessionId, [
+        userMsg,
+        annotateMessageWithAgentRuntime(
+          { role: 'assistant', content: `__error__${errorLabels.concurrentLimit}`, timestamp: Date.now() },
+          runtimeForMessage,
+        ),
+      ]);
+      resetInputState();
+      img.clearImages();
+      return;
+    }
+
     img.clearImages();
-    const requestMessages = [...sess.messages, userMsg];
+    const requestMessages = [...storeGetMessages(sessionId), userMsg];
 
-    // Track the user message index for potential retraction on stop.
-    // The user message is at requestMessages.length - 1; the assistant
-    // placeholder we're about to insert will be at requestMessages.length.
-    pendingMessageRef.current = {
-      userMessageIndex: requestMessages.length - 1,
-      userMessage: userMsg,
-    };
-    retractedRef.current = false;
-
-    sess.setMessages([...requestMessages, annotateMessageWithAgentRuntime({ role: 'assistant', content: '', timestamp: Date.now() }, runtimeForMessage)]);
+    storeAppendMessages(sessionId, [
+      userMsg,
+      annotateMessageWithAgentRuntime({ role: 'assistant', content: '', timestamp: Date.now() }, runtimeForMessage),
+    ]);
 
     resetInputState();
 
@@ -220,10 +235,6 @@ export function useAskChat({
       firstMessageFired.current = true;
       onFirstMessage();
     }
-    setIsLoading(true);
-    setAgentRunContext(null);
-    setLoadingPhase('connecting');
-    setReconnectAttempt(0);
 
     const controller = new AbortController();
     abortRef.current = controller;
@@ -234,7 +245,13 @@ export function useAskChat({
       if (stored !== null) { const n = parseInt(stored, 10); if (Number.isFinite(n)) maxRetries = Math.max(0, Math.min(10, n)); }
     } catch { /* localStorage unavailable */ }
     reconnectMaxRef.current = maxRetries;
-    setReconnectMax(maxRetries);
+
+    startRun(sessionId, {
+      controller,
+      runtimeSnapshot: runtimeForMessage,
+      reconnectMax: maxRetries,
+      pendingUserMessage: userMsg,
+    });
 
     const requestBody = JSON.stringify({
       messages: requestMessages,
@@ -252,10 +269,18 @@ export function useAskChat({
       selectedRuntime,
       runtimeBinding: matchingRuntimeBinding ?? null,
       mode: chatMode,
-      chatSessionId: sess.activeSessionId ?? undefined,
+      chatSessionId: sessionId,
       providerOverride: selectedRuntimeBase && selectedRuntimeBase.kind !== 'mindos' ? undefined : providerOverride ?? undefined,
       modelOverride: selectedRuntimeBase && selectedRuntimeBase.kind !== 'mindos' ? undefined : modelOverride ?? undefined,
     });
+
+    // ---- Async phase (run closure): only snapshots + store APIs from here.
+    // No `refs.*.current` — the component may unmount mid-stream and the run
+    // must keep writing to its own session.
+    const setPhase = (phase: LoadingPhase) => {
+      const run = getRun(sessionId);
+      if (run && run.phase !== phase) updateRun(sessionId, { phase });
+    };
 
     const doFetch = async (): Promise<{ finalMessage: Message }> => {
       const res = await fetch('/api/ask', {
@@ -284,24 +309,25 @@ export function useAskChat({
 
       if (!res.body) throw new Error('No response body');
 
-      setLoadingPhase('thinking');
+      setPhase('thinking');
 
       const finalMessage = await consumeUIMessageStream(
         res.body,
         (msg) => {
-          setLoadingPhase('streaming');
-          refs.sessionRef.current?.setMessages(prev => {
-            const updated = [...prev];
-            updated[updated.length - 1] = annotateMessageWithAgentRuntime(msg, runtimeForMessage);
-            return updated;
-          });
+          setPhase('streaming');
+          replaceLastMessage(sessionId, annotateMessageWithAgentRuntime(msg, runtimeForMessage), { requireRun: true });
         },
         controller.signal,
         {
           onRuntimeBinding: (binding) => {
-            const currentRuntime = compactAgentRuntimeIdentity(refs.selectedAgentRuntimeRef.current);
-            if (!currentRuntime || currentRuntime.kind !== binding.runtime) return;
-            refs.sessionRef.current?.setSessionAgentRuntimeBinding?.(currentRuntime, {
+            // Late events after the run ended are dropped; the lane is judged
+            // from the submit-time snapshot, NOT the currently selected
+            // runtime — the user may have switched runtimes mid-stream.
+            const run = getRun(sessionId);
+            if (!run) return;
+            const runtime = run.runtimeSnapshot;
+            if (!runtime || runtime.kind !== binding.runtime) return;
+            writeRuntimeBinding(sessionId, runtime, {
               externalSessionId: binding.externalSessionId,
               cwd: binding.cwd,
               status: binding.status,
@@ -309,7 +335,7 @@ export function useAskChat({
             });
           },
           onAgentRunContext: (context) => {
-            setAgentRunContext(context);
+            updateRun(sessionId, { agentRunContext: context });
           },
         },
       );
@@ -323,28 +349,27 @@ export function useAskChat({
         if (controller.signal.aborted) break;
 
         if (attempt > 0) {
-          setReconnectAttempt(attempt);
-          setLoadingPhase('reconnecting');
-          refs.sessionRef.current?.setMessages(prev => {
-            const updated = [...prev];
-            updated[updated.length - 1] = annotateMessageWithAgentRuntime({ role: 'assistant', content: '', timestamp: Date.now() }, runtimeForMessage);
-            return updated;
-          });
+          updateRun(sessionId, { reconnectAttempt: attempt, phase: 'reconnecting' });
+          replaceLastMessage(
+            sessionId,
+            annotateMessageWithAgentRuntime({ role: 'assistant', content: '', timestamp: Date.now() }, runtimeForMessage),
+            { requireRun: true },
+          );
           await sleep(retryDelay(attempt - 1), controller.signal);
-          setLoadingPhase('connecting');
+          setPhase('connecting');
         }
 
         try {
           const { finalMessage } = await doFetch();
           if (!finalMessage.content.trim() && (!finalMessage.parts || finalMessage.parts.length === 0)) {
-            refs.sessionRef.current?.setMessages(prev => {
-              const updated = [...prev];
-              updated[updated.length - 1] = annotateMessageWithAgentRuntime({ role: 'assistant', content: `__error__${errorLabels.noResponse}` }, runtimeForMessage);
-              return updated;
-            });
+            replaceLastMessage(
+              sessionId,
+              annotateMessageWithAgentRuntime({ role: 'assistant', content: `__error__${errorLabels.noResponse}` }, runtimeForMessage),
+              { requireRun: true },
+            );
           }
           // Successfully received response — no longer retractable.
-          pendingMessageRef.current = null;
+          updateRun(sessionId, { pendingUserMessage: null });
           return;
         } catch (err) {
           lastError = err instanceof Error ? err : new Error(String(err));
@@ -357,8 +382,8 @@ export function useAskChat({
     } catch (err) {
       if ((err as Error).name === 'AbortError') {
         // If stop() already retracted the messages, skip writing __error__stopped.
-        if (!retractedRef.current) {
-          refs.sessionRef.current?.setMessages(prev => {
+        if (!getRun(sessionId)?.retracted) {
+          storeSetMessages(sessionId, (prev) => {
             const updated = [...prev];
             const lastIdx = updated.length - 1;
             if (lastIdx >= 0 && updated[lastIdx].role === 'assistant') {
@@ -369,11 +394,11 @@ export function useAskChat({
               }
             }
             return updated;
-          });
+          }, { requireRun: true });
         }
       } else {
         const errMsg = err instanceof Error ? err.message : 'Something went wrong';
-        refs.sessionRef.current?.setMessages(prev => {
+        storeSetMessages(sessionId, (prev) => {
           const updated = [...prev];
           const lastIdx = updated.length - 1;
           if (lastIdx >= 0 && updated[lastIdx].role === 'assistant') {
@@ -385,15 +410,13 @@ export function useAskChat({
             }
           }
           return [...updated, annotateMessageWithAgentRuntime({ role: 'assistant', content: `__error__${errMsg}` }, runtimeForMessage)];
-        });
+        }, { requireRun: true });
       }
     } finally {
-      setIsLoading(false);
-      setReconnectAttempt(0);
-      abortRef.current = null;
-      pendingMessageRef.current = null;
+      endRun(sessionId);
+      if (abortRef.current === controller) abortRef.current = null;
     }
-  }, [currentFile, chatMode, providerOverride, modelOverride, errorLabels.noResponse, errorLabels.stopped, onFirstMessage, refs, resetInputState]);
+  }, [currentFile, chatMode, providerOverride, modelOverride, errorLabels.noResponse, errorLabels.stopped, errorLabels.concurrentLimit, onFirstMessage, refs, resetInputState]);
 
   return {
     isLoading,

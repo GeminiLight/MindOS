@@ -12,7 +12,7 @@ const mockClearPersistTimer = vi.fn();
 const mockInitSessions = vi.fn();
 const mockSetSessionDefaultAcpAgent = vi.fn();
 const mockSetSessionAgentRuntimeBinding = vi.fn();
-const mockAttachRuntimeSession = vi.fn();
+const mockAttachRuntimeSession = vi.fn(() => true);
 const mockResetSession = vi.fn();
 const mockLoadSession = vi.fn();
 const mockDeleteSession = vi.fn();
@@ -68,6 +68,7 @@ vi.mock('@/lib/stores/locale-store', () => ({
         emptyPrompt: 'empty',
         suggestions: [],
         copyMessage: 'Copy',
+        sessionRunningRetry: 'That session is still running. Try again after it finishes.',
       },
       search: { close: 'close' },
       hints: {
@@ -1340,6 +1341,110 @@ describe('AskContent ACP session binding', () => {
     });
 
     expect(globalThis.fetch).not.toHaveBeenCalledWith('/api/ask', expect.anything());
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('refuses a runtime switch while the active session is running, then allows it on a run-less session', async () => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    // Submit in s1 — the mocked stream never resolves, so s1 keeps a live run.
+    await act(async () => {
+      root.render(<AskContent visible variant="panel" initialMessage="long running task" />);
+    });
+    const form = host.querySelector('form') as HTMLFormElement;
+    await act(async () => {
+      if (typeof form.requestSubmit === 'function') {
+        form.requestSubmit();
+      } else {
+        form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      }
+    });
+    const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
+    expect(fetchMock.mock.calls.some(([url]) => url === '/api/ask')).toBe(true);
+
+    // Switching runtime while the *active* session runs is refused.
+    const selectCodex = Array.from(host.querySelectorAll('button')).find((button) => button.textContent === 'Select Codex') as HTMLButtonElement;
+    await act(async () => {
+      selectCodex.click();
+    });
+    expect(host.querySelector('[data-testid="runtime-switcher"]')?.textContent).toBe('Claude Code');
+
+    // Activate a session without a run — the same switch now goes through.
+    mockSessions = [sessionWithClaude, emptySession];
+    mockActiveSession = emptySession;
+    mockActiveSessionId = emptySession.id;
+    await act(async () => {
+      root.render(<AskContent visible variant="panel" />);
+    });
+    const selectCodexAgain = Array.from(host.querySelectorAll('button')).find((button) => button.textContent === 'Select Codex') as HTMLButtonElement;
+    await act(async () => {
+      selectCodexAgain.click();
+    });
+    expect(host.querySelector('[data-testid="runtime-switcher"]')?.textContent).toBe('Codex');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('surfaces the running-session message when attaching a Codex thread is refused', async () => {
+    mockAttachRuntimeSession.mockReturnValueOnce(false);
+    mockNativeRuntimeDescriptors = [{
+      id: 'codex',
+      name: 'Codex',
+      kind: 'codex',
+      status: 'available',
+      capabilities: {},
+    }];
+    mockSessions = [{
+      id: 's-mindos',
+      title: 'MindOS planning',
+      createdAt: 1,
+      updatedAt: 1,
+      messages: [{ role: 'user', content: 'plan' }],
+    }];
+    mockActiveSession = mockSessions[0];
+    mockActiveSessionId = 's-mindos';
+    const codexThread = { id: 'thread_busy', name: 'Busy thread', cwd: '/tmp/repo', updatedAt: 123 };
+    vi.stubGlobal('fetch', vi.fn(async (url: RequestInfo | URL) => {
+      if (String(url).startsWith('/api/agent-runtimes/codex/threads?')) {
+        return { ok: true, json: async () => ({ data: [codexThread], nextCursor: null, backwardsCursor: null }) };
+      }
+      return { ok: true, body: new ReadableStream(), json: async () => ({}) };
+    }));
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<AskContent visible variant="panel" />);
+    });
+    const selectCodex = Array.from(host.querySelectorAll('button')).find((button) => button.textContent === 'Select Codex') as HTMLButtonElement;
+    await act(async () => {
+      selectCodex.click();
+    });
+    const toggleHistoryButton = Array.from(host.querySelectorAll('button')).find((button) => button.textContent === 'Toggle History') as HTMLButtonElement;
+    await act(async () => {
+      toggleHistoryButton.click();
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const attach = Array.from(host.querySelectorAll('button')).find((button) => button.textContent === 'Attach Busy thread') as HTMLButtonElement;
+    await act(async () => {
+      attach.click();
+    });
+
+    // Refusal keeps the panel open and shows the retry hint instead of switching.
+    expect(host.querySelector('[data-testid="history-session-list"]')?.textContent)
+      .toContain('That session is still running. Try again after it finishes.');
 
     await act(async () => {
       root.unmount();
