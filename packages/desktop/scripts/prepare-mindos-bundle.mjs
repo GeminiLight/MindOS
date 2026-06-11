@@ -356,6 +356,8 @@ function pruneDirectDevelopmentPackages(standaloneDir) {
   const nodeModulesDir = path.join(standaloneDir, 'node_modules');
   if (!existsSync(nodeModulesDir)) return;
 
+  const nodeModulesDirs = [nodeModulesDir];
+  collectNestedNodeModulesDirs(nodeModulesDir, nodeModulesDir, nodeModulesDirs);
   for (const packageName of [
     '@eslint',
     '@vitest',
@@ -367,9 +369,11 @@ function pruneDirectDevelopmentPackages(standaloneDir) {
     'typescript-eslint',
     'vitest',
   ]) {
-    const packageDir = path.join(nodeModulesDir, packageName);
-    rmSync(packageDir, { recursive: true, force: true });
-    pruneEmptyParents(packageDir, nodeModulesDir);
+    for (const currentNodeModulesDir of nodeModulesDirs) {
+      const packageDir = path.join(currentNodeModulesDir, packageName);
+      rmSync(packageDir, { recursive: true, force: true });
+      pruneEmptyParents(packageDir, currentNodeModulesDir);
+    }
   }
 }
 

@@ -209,6 +209,13 @@ describe('materializeStandaloneAssets', () => {
       name: '@eslint/config-array',
       version: '1.0.0',
     }));
+    const nestedVitest = path.join(standaloneNodeModules, 'runtime-package', 'node_modules', 'vitest');
+    mkdirSync(nestedVitest, { recursive: true });
+    writeFileSync(path.join(nestedVitest, 'package.json'), JSON.stringify({
+      name: 'vitest',
+      version: '2.1.9',
+      dependencies: { vite: '^5.0.0' },
+    }));
 
     materializeStandaloneAssets(appDir);
 
@@ -216,6 +223,7 @@ describe('materializeStandaloneAssets', () => {
       expect(existsSync(path.join(standaloneNodeModules, packageName))).toBe(false);
     }
     expect(existsSync(eslintScope)).toBe(false);
+    expect(existsSync(nestedVitest)).toBe(false);
   });
 
   it('keeps runtime @types packages when production packages declare them as dependencies', () => {
