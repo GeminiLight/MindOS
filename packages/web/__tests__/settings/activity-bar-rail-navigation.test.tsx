@@ -95,6 +95,37 @@ describe('ActivityBar rail navigation', () => {
     }));
   });
 
+  it('does not show a keyboard shortcut chip on the expanded Search rail item', async () => {
+    const ActivityBar = (await import('@/components/ActivityBar')).default;
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(
+        <ActivityBar
+          activePanel={null}
+          onPanelChange={vi.fn()}
+          syncStatus={null}
+          expanded
+          onExpandedChange={vi.fn()}
+          onSettingsClick={vi.fn()}
+          onSyncClick={vi.fn()}
+        />,
+      );
+    });
+
+    const searchButton = host.querySelector('button[aria-label="Search"]');
+    expect(searchButton?.textContent).toContain('Search');
+    expect(searchButton?.textContent).not.toContain('⌘K');
+
+    await act(async () => {
+      root.unmount();
+    });
+    host.remove();
+  });
+
   it('clicking Files on homepage navigates to /wiki instead of toggling sidebar', async () => {
     mockPathname = '/';
     const mockPanelChange = vi.fn();

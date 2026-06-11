@@ -1,14 +1,14 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { Check, ChevronDown, ChevronUp, Clock, Code2, Globe, Loader2, MessageSquare, Network, RefreshCw, RotateCcw, Save, Settings2, Trash2, Wifi, WifiOff, Wrench, Zap } from 'lucide-react';
+import { Check, ChevronDown, ChevronUp, Code2, MessageSquare, Network, RefreshCw, RotateCcw, Save, Settings2, Wrench, Zap } from 'lucide-react';
 import { useLocale } from '@/lib/stores/locale-store';
 import { useAcpConfig } from '@/hooks/useAcpConfig';
 import type { AcpRegistryEntry } from '@/lib/acp/types';
 import { useAcpRegistry } from '@/hooks/useAcpRegistry';
 import { useAcpDetection } from '@/hooks/useAcpDetection';
 import { openAskModal } from '@/hooks/useAskModal';
-import DiscoverAgentModal from './DiscoverAgentModal';
+import { AgentAvatar, AgentHeadingHelp } from './AgentsPrimitives';
 
 interface QuickAction {
   labelKey: 'acpQuickReview' | 'acpQuickFix' | 'acpQuickExplain';
@@ -31,15 +31,39 @@ function SkeletonCard() {
           <div className="h-3.5 bg-muted/60 rounded w-28" />
           <div className="h-2.5 bg-muted/40 rounded w-48" />
         </div>
-        <div className="h-5 bg-muted/40 rounded w-10" />
+        <div className="h-5 w-5 shrink-0 rounded-full bg-muted/40" />
       </div>
     </div>
   );
 }
 
-export default function AcpRegistrySection() {
+function AcpReadyMark({ label, className = '' }: { label: string; className?: string }) {
+  return (
+    <span
+      role="img"
+      aria-label={label}
+      title={label}
+      className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-success/20 bg-success/10 text-success ${className}`}
+    >
+      <Check size={12} aria-hidden="true" />
+    </span>
+  );
+}
+
+export default function AcpRegistrySection({
+  title,
+  description,
+  variant = 'full',
+  maxInstalled = 4,
+}: {
+  title?: string;
+  description?: string;
+  variant?: 'full' | 'compact';
+  maxInstalled?: number;
+} = {}) {
   const { t } = useLocale();
   const p = t.panels.agents;
+  const sectionTitle = title ?? p.acpSectionTitle;
   const acp = useAcpRegistry();
   const detection = useAcpDetection();
   const acpConfig = useAcpConfig();
@@ -48,10 +72,11 @@ export default function AcpRegistrySection() {
   /* [U-1][R-4] Skeleton loading state */
   if (acp.loading) {
     return (
-      <div className="space-y-2" role="status" aria-label={p.acpLoading}>
-        <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+      <div className={variant === 'compact' ? 'space-y-2 rounded-xl border border-border/60 bg-card/35 p-4' : 'space-y-2'} role="status" aria-label={p.acpLoading}>
+        <h3 className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
           <div className="flex items-center justify-center w-6 h-6 rounded-md bg-[var(--amber-subtle)] text-[var(--amber)]"><Network size={13} /></div>
-          {p.acpSectionTitle}
+          {sectionTitle}
+          {description ? <AgentHeadingHelp label={description} size="sm" /> : null}
         </h3>
         <div className="space-y-2">
           <SkeletonCard />
@@ -66,10 +91,11 @@ export default function AcpRegistrySection() {
   /* [U-3] Improved error state with context */
   if (acp.error) {
     return (
-      <div className="space-y-2">
-        <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+      <div className={variant === 'compact' ? 'space-y-2 rounded-xl border border-border/60 bg-card/35 p-4' : 'space-y-2'}>
+        <h3 className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
           <div className="flex items-center justify-center w-6 h-6 rounded-md bg-[var(--amber-subtle)] text-[var(--amber)]"><Network size={13} /></div>
-          {p.acpSectionTitle}
+          {sectionTitle}
+          {description ? <AgentHeadingHelp label={description} size="sm" /> : null}
         </h3>
         <div className="rounded-lg border border-border/60 bg-card/80 p-4 text-center" role="alert">
           <p className="text-xs text-muted-foreground mb-2">{p.acpLoadFailed}</p>
@@ -104,13 +130,97 @@ export default function AcpRegistrySection() {
     }
   }
 
+  if (variant === 'compact') {
+    const compactInstalledAgents = installedAgents.slice(0, maxInstalled);
+
+    return (
+      <section className="min-w-0 space-y-3" aria-labelledby="acp-section-title">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h3 id="acp-section-title" className="flex items-center gap-2 text-xs font-semibold text-foreground">
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-[var(--amber-subtle)] text-[var(--amber)]">
+                <Network size={12} aria-hidden="true" />
+              </span>
+              {sectionTitle}
+              {description ? <AgentHeadingHelp label={description} size="sm" /> : null}
+            </h3>
+          </div>
+          <button
+            type="button"
+            onClick={() => detection.refresh()}
+            disabled={detection.loading}
+            aria-label={p.acpScan}
+            className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+          >
+            <RefreshCw size={12} className={detection.loading ? 'motion-safe:animate-spin' : ''} aria-hidden="true" />
+          </button>
+        </div>
+
+        {detection.loading ? (
+          <div className="grid min-w-0 gap-2 md:grid-cols-2 xl:grid-cols-4">
+            <SkeletonCard />
+            <SkeletonCard />
+          </div>
+        ) : installedAgents.length > 0 ? (
+          <div className="grid min-w-0 gap-2 md:grid-cols-2 xl:grid-cols-4">
+            {compactInstalledAgents.map(({ agent, info }) => (
+              <AcpInstalledCompactCard
+                key={agent.id}
+                agent={agent}
+                installed={info}
+                detectionDone={!detection.loading}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-lg border border-border/40 bg-card/35 p-3 text-center">
+            <p className="text-2xs leading-relaxed text-muted-foreground">{p.acpNoInstalled}</p>
+          </div>
+        )}
+
+        {!detection.loading && notInstalledAgents.length > 0 && (
+          <div className="rounded-lg border border-border/45 bg-card/25 p-3">
+            <button
+              type="button"
+              onClick={() => setShowAvailable(v => !v)}
+              aria-expanded={showAvailable}
+              className="flex w-full items-center justify-between gap-2 rounded-sm text-2xs font-medium text-muted-foreground transition-colors duration-150 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <span className="inline-flex items-center gap-1.5">
+                {showAvailable ? <ChevronUp size={12} aria-hidden="true" /> : <ChevronDown size={12} aria-hidden="true" />}
+                <span>{p.acpAvailableTitle}</span>
+              </span>
+              <span className="text-muted-foreground/60">({notInstalledAgents.length})</span>
+            </button>
+            {showAvailable && (
+              <ul role="list" className="mt-2 grid min-w-0 gap-1.5 md:grid-cols-2 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-top-1 duration-150">
+                {notInstalledAgents.map(({ agent, installCmd, packageName }) => (
+                  <li key={agent.id}>
+                    <AcpAgentCompactRow
+                      agent={agent}
+                      installCmd={installCmd}
+                      packageName={packageName}
+                      detectionDone={!detection.loading}
+                      onInstalled={detection.refresh}
+                    />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+      </section>
+    );
+  }
+
   return (
     <section className="space-y-3" aria-labelledby="acp-section-title">
       {/* ── Section header ── [V-1] clear hierarchy */}
       <div className="flex items-center justify-between">
         <h3 id="acp-section-title" className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-2">
           <div className="flex items-center justify-center w-6 h-6 rounded-md bg-[var(--amber-subtle)] text-[var(--amber)]"><Network size={13} /></div>
-          {p.acpSectionTitle}
+          {sectionTitle}
+          {description ? <AgentHeadingHelp label={description} size="sm" /> : null}
         </h3>
         <div className="flex items-center gap-2">
           <button
@@ -130,7 +240,6 @@ export default function AcpRegistrySection() {
           )}
         </div>
       </div>
-
       {/* ── Installed agents — [A-3] semantic list, [C-2] shadow for depth ── */}
       {detection.loading ? (
         <div className="space-y-2">
@@ -203,6 +312,48 @@ const TRANSPORT_STYLES: Record<string, string> = {
   stdio: 'bg-muted text-muted-foreground',
 };
 
+function AcpInstalledCompactCard({
+  agent,
+  installed,
+  detectionDone,
+}: {
+  agent: AcpRegistryEntry;
+  installed: { id: string; name: string; binaryPath: string; resolvedCommand?: { cmd: string; args: string[]; source: string } };
+  detectionDone: boolean;
+}) {
+  const { t } = useLocale();
+  const p = t.panels.agents;
+  const handleUse = () => {
+    openAskModal('', 'user', { id: agent.id, name: agent.name });
+  };
+
+  return (
+    <article className="relative flex min-h-[112px] w-full max-w-full min-w-0 flex-col rounded-lg border border-border/50 bg-background/60 py-3 pl-3 pr-10 transition-colors hover:border-border hover:bg-background">
+      {detectionDone ? (
+        <AcpReadyMark label={p.acpReady} className="absolute right-3 top-3" />
+      ) : null}
+      <div className="flex min-w-0 items-start gap-2.5">
+        <AgentAvatar name={agent.name} size="sm" />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-semibold text-foreground">{agent.name}</span>
+          <span className="mt-1 block truncate text-2xs text-muted-foreground">{installed.binaryPath}</span>
+        </span>
+      </div>
+
+      <div className="mt-auto flex min-w-0 justify-end pt-3">
+        <button
+          type="button"
+          onClick={handleUse}
+          className="inline-flex items-center gap-1 rounded-md bg-[var(--amber)] px-2 py-0.5 text-2xs font-medium text-[var(--amber-foreground)] transition-colors duration-150 hover:bg-[var(--amber)]/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <Zap size={10} aria-hidden="true" />
+          {p.acpUseAgent}
+        </button>
+      </div>
+    </article>
+  );
+}
+
 export function AcpAgentCard({ agent, installed, detectionDone, acpConfig }: {
   agent: AcpRegistryEntry;
   installed: { id: string; name: string; binaryPath: string; resolvedCommand?: { cmd: string; args: string[]; source: string } } | null;
@@ -265,12 +416,13 @@ export function AcpAgentCard({ agent, installed, detectionDone, acpConfig }: {
 
   return (
     /* [C-2] shadow-sm for installed cards; [S-1] p-4 (16px) */
-    <div className="rounded-lg border border-[var(--amber)]/20 bg-card shadow-sm hover:border-[var(--amber)]/40 transition-colors duration-150 p-4">
+    <div className="relative rounded-lg border border-[var(--amber)]/20 bg-card py-4 pl-4 pr-10 shadow-sm transition-colors duration-150 hover:border-[var(--amber)]/40">
+      {detectionDone && (
+        <AcpReadyMark label={p.acpReady} className="absolute right-4 top-4" />
+      )}
       {/* Header row — [V-1] stronger agent name, [V-2] weaker metadata */}
       <div className="flex items-center gap-2">
-        <div className="w-8 h-8 rounded-lg bg-[var(--amber)]/10 flex items-center justify-center shrink-0">
-          <Network size={14} className="text-[var(--amber)]" />
-        </div>
+        <AgentAvatar name={agent.name} size="sm" />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5">
             {/* [V-1] agent name is 16px semibold — most prominent element */}
@@ -288,12 +440,6 @@ export function AcpAgentCard({ agent, installed, detectionDone, acpConfig }: {
         <span className={`text-2xs px-1.5 py-0.5 rounded shrink-0 ${TRANSPORT_STYLES[agent.transport] ?? TRANSPORT_STYLES.stdio}`}>
           {transportLabels[agent.transport] ?? agent.transport}
         </span>
-        {/* [V-2] "Ready" badge — only high-saturation badge */}
-        {detectionDone && (
-          <span className="text-2xs px-1.5 py-0.5 rounded font-medium shrink-0 bg-[var(--success)]/15 text-[var(--success)]">
-            {p.acpReady}
-          </span>
-        )}
         {/* [A-1] aria-label for icon-only button; [P-2] aria-expanded */}
         <button
           type="button"
@@ -424,9 +570,7 @@ export function AcpAgentCompactRow({ agent, installCmd }: {
     /* [P-3] list-row style for not-installed — clearly different from installed cards */
     <div className="group rounded-md border border-border/40 bg-card/40 px-3 py-2 hover:border-border/60 transition-colors duration-150">
       <div className="flex items-center gap-2">
-        <div className="w-6 h-6 rounded-md bg-muted/30 flex items-center justify-center shrink-0">
-          <Network size={11} className="text-muted-foreground/40" />
-        </div>
+        <AgentAvatar name={agent.name} size="sm" />
         <div className="flex-1 min-w-0">
           <p className="text-xs text-muted-foreground truncate">{agent.name}</p>
           {agent.description && (
@@ -454,4 +598,3 @@ export function AcpAgentCompactRow({ agent, installCmd }: {
 }
 
 /* ────────── Delegation History Section ────────── */
-

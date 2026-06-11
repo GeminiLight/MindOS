@@ -122,13 +122,10 @@ export default function WikiHomeContent({ spaces, recent, mindSystemSpaces }: Wi
           </button>
           <button
             onClick={triggerSearch}
-            title="⌘K"
+            aria-label={t.sidebar.searchTitle}
             className="hit-target-box flex items-center gap-2 px-3.5 py-3 border border-transparent text-sm text-muted-foreground transition-all duration-200 shrink-0 hover:-translate-y-0.5 [--hit-target-hover-bg:color-mix(in_srgb,var(--muted)_60%,transparent)] [--hit-target-border-width:1px] [--hit-target-border:color-mix(in_srgb,var(--border)_50%,transparent)] [--hit-target-hover-border:color-mix(in_srgb,var(--border)_65%,transparent)] [--hit-target-radius:var(--radius-xl)] [--hit-target-hover-shadow:0_1px_2px_0_color-mix(in_srgb,var(--foreground)_8%,transparent)]"
           >
             <Search size={14} />
-            <kbd className="hidden sm:inline-flex items-center px-1.5 py-0.5 rounded text-xs font-mono bg-muted">
-              ⌘K
-            </kbd>
           </button>
         </div>
 

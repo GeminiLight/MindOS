@@ -31,6 +31,10 @@ import {
   isSessionInRuntimeLane,
   toAgentRuntime,
 } from '@/lib/ask-agent';
+import {
+  loadLastSelectedAgentRuntime,
+  persistLastSelectedAgentRuntime,
+} from '@/lib/ask-runtime-preference';
 import { cn } from '@/lib/utils';
 import { useNativeRuntimeDetection } from '@/hooks/useNativeRuntimeDetection';
 import type { AcpAgentSelection } from '@/hooks/useAskModal';
@@ -452,6 +456,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
   const handleSelectAgentRuntime = useCallback((agent: AgentRuntimeIdentity | null) => {
     if (chat.isLoadingRef.current) return;
     updateSelectedAgentRuntime(agent);
+    persistLastSelectedAgentRuntime(agent);
 
     const currentSession = sessionRef.current.activeSession;
     const currentIsEmpty = !currentSession || currentSession.messages.length === 0;
@@ -560,9 +565,11 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
 
     if (justOpened) {
       const openerRuntime = initialAgentRuntime ?? toAgentRuntime(initialAcpAgent);
-      pendingOpenAgentRef.current = openerRuntime;
+      const preferredRuntime = openerRuntime ?? loadLastSelectedAgentRuntime();
+      pendingOpenAgentRef.current = preferredRuntime;
+      if (openerRuntime) persistLastSelectedAgentRuntime(openerRuntime);
       setTimeout(() => inputRef.current?.focus(), 50);
-      void session.initSessions(openerRuntime ?? undefined);
+      void session.initSessions(preferredRuntime ?? undefined);
       setInput(initialMessage || '');
       chat.firstMessageFired.current = false;
       setAttachedFiles(currentFile ? [currentFile] : []);
@@ -571,7 +578,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
       mention.resetMention();
       slash.resetSlash();
       setSelectedSkill(null);
-      updateSelectedAgentRuntime(openerRuntime);
+      updateSelectedAgentRuntime(preferredRuntime);
       setShowHistory(false);
     } else if (fileChanged) {
       // Update attached file context to match new file (don't reset session/messages)
@@ -888,7 +895,9 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
     mentionRef.current.resetMention();
     slashRef.current.resetSlash();
     setSelectedSkill(null);
-    updateSelectedAgentRuntime(getSessionAgentRuntime(targetSession));
+    const targetRuntime = getSessionAgentRuntime(targetSession);
+    updateSelectedAgentRuntime(targetRuntime);
+    persistLastSelectedAgentRuntime(targetRuntime);
     setTimeout(() => inputRef.current?.focus(), 0);
   }, [chat.isLoadingRef, currentFile, session.sessions, updateSelectedAgentRuntime]);
 

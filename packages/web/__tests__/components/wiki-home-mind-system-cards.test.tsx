@@ -110,6 +110,17 @@ describe('WikiHomeContent Mind System cards', () => {
     }
   });
 
+  it('keeps the homepage Search button free of visible shortcut hints', async () => {
+    await act(async () => {
+      root = createRoot(host);
+      root.render(<WikiHomeContent spaces={[]} recent={[]} mindSystemSpaces={mindSystemRecords()} />);
+    });
+
+    const searchButton = host.querySelector('button[aria-label="Search"]');
+    expect(searchButton).not.toBeNull();
+    expect(searchButton?.textContent).not.toContain('⌘K');
+  });
+
   it('uses Chinese framed theme-color icons for the four Mind System cards', async () => {
     await act(async () => {
       root = createRoot(host);

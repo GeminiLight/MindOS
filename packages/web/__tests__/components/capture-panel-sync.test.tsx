@@ -76,6 +76,7 @@ describe('CapturePanel inbox sync', () => {
     expect(host.textContent).toContain('second.md');
     expect(host.textContent).not.toContain('2 items waiting.');
     expect(host.textContent).not.toContain('Loading queue...');
+    expect(host.querySelector('[data-inbox-sidebar-new-capture]')?.textContent?.trim()).toBe(messages.en.inbox.viewCapture);
 
     await act(async () => {
       root.unmount();
@@ -334,6 +335,60 @@ describe('CapturePanel inbox sync', () => {
     });
 
     expect(window.location.hash).toBe('#queue');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('opens a sidebar pending file directly into Review item details', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        files: [
+          {
+            name: 'first.md',
+            path: 'Inbox/first.md',
+            size: 1024,
+            modifiedAt: new Date().toISOString(),
+            isAging: false,
+          },
+          {
+            name: 'second.md',
+            path: 'Inbox/second.md',
+            size: 2048,
+            modifiedAt: new Date().toISOString(),
+            isAging: false,
+          },
+        ],
+      }),
+    }));
+
+    const CapturePanel = (await import('@/components/panels/CapturePanel')).default;
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<CapturePanel />);
+      await new Promise(r => setTimeout(r, 0));
+    });
+
+    const firstFileButton = Array.from(host.querySelectorAll('button'))
+      .find(button => button.textContent?.includes('first.md'));
+    expect(firstFileButton).not.toBeUndefined();
+
+    await act(async () => {
+      firstFileButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await new Promise(r => setTimeout(r, 0));
+    });
+
+    expect(window.location.hash).toBe('#queue?path=Inbox%2Ffirst.md');
+
+    const pendingButton = Array.from(host.querySelectorAll('button'))
+      .find(button => button.textContent?.includes('Pending'));
+    expect(pendingButton?.getAttribute('aria-current')).toBe('page');
 
     await act(async () => {
       root.unmount();

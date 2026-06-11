@@ -1,13 +1,24 @@
 import fs from 'fs';
 import path from 'path';
 import { NextRequest } from 'next/server';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestMindRoot } from '../setup';
+import type { UrlCaptureResult } from '@/lib/core/web-clip';
+
+const captureUrlMock = vi.hoisted(() => vi.fn<() => Promise<UrlCaptureResult>>());
 
 vi.mock('next/cache', () => ({
   revalidatePath: vi.fn(),
 }));
+
+vi.mock('@/lib/core/web-clip', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/core/web-clip')>('@/lib/core/web-clip');
+  return {
+    ...actual,
+    captureUrl: captureUrlMock,
+  };
+});
 
 function clipRequest(body: Record<string, unknown>): NextRequest {
   return new NextRequest('http://localhost/api/inbox/clip', {
@@ -18,23 +29,24 @@ function clipRequest(body: Record<string, unknown>): NextRequest {
 }
 
 describe('/api/inbox/clip', () => {
-  afterEach(() => {
-    vi.unstubAllGlobals();
+  beforeEach(() => {
+    captureUrlMock.mockReset();
   });
 
   it('stores an HTTP PDF URL as a PDF file in Inbox', async () => {
     const pdfBytes = Buffer.from('%PDF-1.7\nremote paper');
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
+    captureUrlMock.mockResolvedValue({
+      title: 'Remote Paper.pdf',
+      fileName: 'Remote Paper.pdf',
+      contentBase64: pdfBytes.toString('base64'),
+      contentType: 'application/pdf; charset=binary',
+      byteLength: pdfBytes.length,
+      wordCount: 0,
       url: 'https://papers.example.com/paper?id=42',
-      headers: new Headers({
-        'content-type': 'application/pdf; charset=binary',
-        'content-length': String(pdfBytes.length),
-        'content-disposition': 'attachment; filename="Remote Paper.pdf"',
-      }),
-      arrayBuffer: () => Promise.resolve(pdfBytes.buffer.slice(pdfBytes.byteOffset, pdfBytes.byteOffset + pdfBytes.byteLength)),
-    }));
+      siteName: 'papers.example.com',
+      byline: null,
+      mode: 'file',
+    });
 
     const { POST } = await import('@/app/api/inbox/clip/route');
     const res = await POST(clipRequest({ url: 'https://papers.example.com/paper?id=42' }));
@@ -50,21 +62,24 @@ describe('/api/inbox/clip', () => {
       contentType: 'application/pdf; charset=binary',
       byteLength: pdfBytes.length,
     });
+    expect(captureUrlMock).toHaveBeenCalledWith('https://papers.example.com/paper?id=42');
     expect(fs.readFileSync(path.join(getTestMindRoot(), 'Inbox', 'Remote Paper.pdf'))).toEqual(pdfBytes);
   });
 
   it('stores an HTTP image URL as an image file in Inbox', async () => {
     const imageBytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a]);
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
+    captureUrlMock.mockResolvedValue({
+      title: 'diagram.png',
+      fileName: 'diagram.png',
+      contentBase64: imageBytes.toString('base64'),
+      contentType: 'image/png',
+      byteLength: imageBytes.length,
+      wordCount: 0,
       url: 'https://assets.example.com/diagram.png',
-      headers: new Headers({
-        'content-type': 'image/png',
-        'content-length': String(imageBytes.length),
-      }),
-      arrayBuffer: () => Promise.resolve(imageBytes.buffer.slice(imageBytes.byteOffset, imageBytes.byteOffset + imageBytes.byteLength)),
-    }));
+      siteName: 'assets.example.com',
+      byline: null,
+      mode: 'file',
+    });
 
     const { POST } = await import('@/app/api/inbox/clip/route');
     const res = await POST(clipRequest({ url: 'https://assets.example.com/diagram.png' }));
@@ -80,6 +95,7 @@ describe('/api/inbox/clip', () => {
       contentType: 'image/png',
       byteLength: imageBytes.length,
     });
+    expect(captureUrlMock).toHaveBeenCalledWith('https://assets.example.com/diagram.png');
     expect(fs.readFileSync(path.join(getTestMindRoot(), 'Inbox', 'diagram.png'))).toEqual(imageBytes);
   });
 });

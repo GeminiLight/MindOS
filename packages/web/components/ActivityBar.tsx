@@ -363,7 +363,6 @@ export default function ActivityBar({
           <RailButton
             icon={<Search size={18} />}
             label={t.sidebar.searchTitle}
-            shortcut="⌘K"
             active={activePanel === 'search'}
             pressed={activePanel === 'search'}
             expanded={expanded}

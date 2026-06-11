@@ -50,11 +50,6 @@ export default function AgentsPanelAgentListRow({
       >
         <AgentAvatar name={agent.name} status={agentStatus} size="sm" />
         <span className="text-sm font-medium text-foreground truncate leading-tight">{agent.name}</span>
-        {agentStatus === 'connected' && agent.transport && (
-          <span className="text-2xs font-mono tabular-nums px-1.5 py-0.5 rounded-md bg-muted/90 text-muted-foreground shrink-0 border border-border/50">
-            {agent.transport}
-          </span>
-        )}
         {isA2aReady && (
           <span title={a2aTooltip} className="shrink-0 text-muted-foreground/70">
             <Globe size={12} />

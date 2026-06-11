@@ -3,7 +3,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Bot, Cable, MessageSquare, Server, Sparkles } from 'lucide-react';
+import { Bot, Cable, Globe, MessageSquare, Server, Sparkles } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import { useLocale } from '@/lib/stores/locale-store';
 import { useMcpData } from '@/lib/stores/mcp-store';
@@ -19,12 +19,16 @@ import {
 } from './agents-content-model';
 import AgentsOverviewSection from './AgentsOverviewSection';
 import AgentsMcpSection from './AgentsMcpSection';
+import AgentsRuntimeSection from './AgentsRuntimeSection';
+import AgentsLocalClientsSection from './AgentsLocalClientsSection';
+import AgentsA2aSection from './AgentsA2aSection';
 import AgentsSkillsSection from './AgentsSkillsSection';
 import AgentsPresetsSection from './AgentsPresetsSection';
 import AgentsPanelA2aTab from './AgentsPanelA2aTab';
 import AgentsPanelSessionsTab from './AgentsPanelSessionsTab';
 import AgentActivitySection from './AgentActivitySection';
 import AgentsContentChannels from './AgentsContentChannels';
+import AcpRegistrySection from './AcpRegistrySection';
 import CustomAgentModal from './CustomAgentModal';
 import { ConfirmDialog } from './AgentsPrimitives';
 import { BUILTIN_AGENT_PRESETS } from './builtin-agent-presets';
@@ -112,6 +116,10 @@ export default function AgentsContentPage({ tab }: { tab: AgentsDashboardTab }) 
     () => mcp.skills.filter((skill) => skill.enabled).length,
     [mcp.skills],
   );
+  const activeLocalClientCount = useMemo(
+    () => mcp.agents.filter((agent) => agent.present || agent.isCustom).length,
+    [mcp.agents],
+  );
 
   /* ─── Custom Agent Modal State ─── */
   const [customModalOpen, setCustomModalOpen] = useState(false);
@@ -178,7 +186,6 @@ export default function AgentsContentPage({ tab }: { tab: AgentsDashboardTab }) 
           <AgentsPageNav
             tab={tab}
             copy={a}
-            connectedCount={buckets.connected.length}
             detectedCount={buckets.detected.length}
             enabledSkillCount={enabledSkillCount}
             mcpRunning={!!mcp.status?.running}
@@ -211,12 +218,51 @@ export default function AgentsContentPage({ tab }: { tab: AgentsDashboardTab }) 
         />
       )}
 
-      {(tab === 'mcp' || tab === 'agent' || tab === 'capabilities') && mcpEnabled && (
+      {tab === 'agent' && (
+        <div className="space-y-7">
+          <AgentModeOverview
+            copy={a}
+            localClientCount={activeLocalClientCount}
+            remoteA2aCount={a2a.agents.length}
+          />
+          <div id="agent-local-runtime" className="scroll-mt-24">
+            <AgentsRuntimeSection
+              showContracts={false}
+            />
+          </div>
+          <div id="agent-local-clients" className="scroll-mt-24">
+            <AgentsLocalClientsSection
+              buckets={buckets}
+              onAddCustomAgent={handleAddCustomAgent}
+              onEditCustomAgent={handleEditCustomAgent}
+              onRemoveCustomAgent={handleRemoveCustomAgent}
+            />
+          </div>
+          <div id="agent-remote-acp" className="scroll-mt-24">
+            <AcpRegistrySection
+              title={a.acpAgents.title}
+              description={a.acpAgents.description}
+              variant="compact"
+            />
+          </div>
+          <div id="agent-remote-a2a" className="scroll-mt-24">
+            <AgentsA2aSection
+              agents={a2a.agents}
+              discovering={a2a.discovering}
+              error={a2a.error}
+              onDiscover={a2a.discover}
+              onRemove={a2a.remove}
+            />
+          </div>
+        </div>
+      )}
+
+      {(tab === 'mcp' || tab === 'capabilities') && mcpEnabled && (
         <AgentsMcpSection copy={{ ...a.mcp, status: a.status }} mcp={mcp} buckets={buckets} copyState={null} onCopySnippet={copySnippet} />
       )}
 
       {/* MCP tab accessed but mode disabled — show hint */}
-      {(tab === 'mcp' || tab === 'agent' || tab === 'capabilities') && !mcpEnabled && !mcp.loading && (
+      {(tab === 'mcp' || tab === 'capabilities') && !mcpEnabled && !mcp.loading && (
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <p className="text-sm text-muted-foreground">{a.mcp?.mcpDisabledMessage ?? 'MCP mode is not enabled.'}</p>
           <p className="text-xs text-muted-foreground/60 mt-1">{a.mcp?.mcpDisabledHint ?? 'Enable it in Settings → Connections to use MCP agents.'}</p>
@@ -279,10 +325,85 @@ export default function AgentsContentPage({ tab }: { tab: AgentsDashboardTab }) 
   );
 }
 
+function AgentModeOverview({
+  copy,
+  localClientCount,
+  remoteA2aCount,
+}: {
+  copy: ReturnType<typeof useLocale>['t']['agentsContent'];
+  localClientCount: number;
+  remoteA2aCount: number;
+}) {
+  const overview = copy.agentOverview;
+  const items = [
+    {
+      href: '#agent-local-runtime',
+      title: copy.runtime.title,
+      metric: overview.localRuntimeMetric,
+      icon: <Bot size={14} aria-hidden="true" />,
+      tone: 'runtime',
+    },
+    {
+      href: '#agent-local-clients',
+      title: copy.localClients.title,
+      metric: overview.localClientsMetric(localClientCount),
+      icon: <Server size={14} aria-hidden="true" />,
+      tone: 'client',
+    },
+    {
+      href: '#agent-remote-acp',
+      title: copy.acpAgents.title,
+      metric: overview.remoteAcpMetric,
+      icon: <Cable size={14} aria-hidden="true" />,
+      tone: 'acp',
+    },
+    {
+      href: '#agent-remote-a2a',
+      title: copy.a2aAgents.title,
+      metric: overview.remoteA2aMetric(remoteA2aCount),
+      icon: <Globe size={14} aria-hidden="true" />,
+      tone: 'a2a',
+    },
+  ] as const;
+
+  return (
+    <section
+      className="overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm"
+      aria-label={overview.title}
+    >
+      <div className="min-w-0 p-3.5">
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          {items.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className="group grid min-h-[72px] min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-3 rounded-lg px-2.5 py-2 transition-colors duration-150 hover:bg-muted/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border transition-colors duration-150 ${agentOverviewToneClass(item.tone)}`}>
+                {item.icon}
+              </span>
+              <span className="min-w-0">
+                <span className="block truncate text-sm font-semibold text-foreground">{item.title}</span>
+                <span className="mt-1 block truncate text-2xs text-muted-foreground">{item.metric}</span>
+              </span>
+            </Link>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function agentOverviewToneClass(tone: 'runtime' | 'client' | 'acp' | 'a2a'): string {
+  if (tone === 'runtime') return 'border-[var(--amber)]/25 bg-[var(--amber-subtle)] text-[var(--amber)]';
+  if (tone === 'client') return 'border-success/20 bg-success/10 text-success';
+  if (tone === 'acp') return 'border-[var(--tool-search)]/20 bg-[var(--tool-search)]/10 text-[var(--tool-search)]';
+  return 'border-[var(--tool-read)]/20 bg-[var(--tool-read)]/10 text-[var(--tool-read)]';
+}
+
 function AgentsPageNav({
   tab,
   copy,
-  connectedCount,
   detectedCount,
   enabledSkillCount,
   mcpRunning,
@@ -292,7 +413,6 @@ function AgentsPageNav({
 }: {
   tab: AgentsDashboardTab;
   copy: ReturnType<typeof useLocale>['t']['agentsContent'];
-  connectedCount: number;
   detectedCount: number;
   enabledSkillCount: number;
   mcpRunning: boolean;
@@ -334,8 +454,7 @@ function AgentsPageNav({
       label: copy.navAgent ?? copy.navMcp,
       hint: navHints.agent ?? navHints.mcp,
       icon: <Cable size={14} />,
-      badge: detectedCount > 0 ? copy.navBadgeAttention?.(detectedCount) ?? `${detectedCount}` : connectedCount > 0 ? `${connectedCount}` : undefined,
-      tone: detectedCount > 0 ? 'warn' : 'ok',
+      tone: 'neutral',
     },
     {
       id: 'capabilities',

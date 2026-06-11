@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import AskContent from '@/components/ask/AskContent';
+import { LAST_AGENT_RUNTIME_STORAGE_KEY } from '@/lib/ask-runtime-preference';
 import type { ChatSession } from '@/lib/types';
 
 const mockSetMessages = vi.fn();
@@ -325,6 +326,7 @@ vi.mock('@/lib/agent/stream-consumer', () => ({
 describe('AskContent ACP session binding', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear();
     mockPersistedProviderModel = { provider: null, model: null };
     mockRuntimeDescriptors = [];
     mockDetectionLoading = false;
@@ -792,6 +794,49 @@ describe('AskContent ACP session binding', () => {
     const requestBody = JSON.parse(String((askCall?.[1] as RequestInit | undefined)?.body));
     expect(requestBody.selectedAcpAgent).toBeNull();
     expect(requestBody.selectedRuntime).toEqual({ id: 'codex', name: 'Codex', kind: 'codex', binaryPath: '/usr/local/bin/codex' });
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('uses the last selected runtime when opened without an explicit runtime', async () => {
+    mockSessions = [];
+    mockActiveSession = null;
+    mockActiveSessionId = null;
+    localStorage.setItem(LAST_AGENT_RUNTIME_STORAGE_KEY, JSON.stringify({
+      id: 'codex',
+      name: 'Codex',
+      kind: 'codex',
+      binaryPath: '/usr/local/bin/codex',
+    }));
+    mockNativeRuntimeDescriptors = [{
+      id: 'codex',
+      name: 'Codex',
+      kind: 'codex',
+      binaryPath: '/usr/local/bin/codex',
+      status: 'available',
+      capabilities: {},
+    }];
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<AskContent visible variant="panel" />);
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(mockInitSessions).toHaveBeenCalledWith({
+      id: 'codex',
+      name: 'Codex',
+      kind: 'codex',
+      binaryPath: '/usr/local/bin/codex',
+    });
+    expect(host.querySelector('[data-testid="runtime-switcher"]')?.textContent).toBe('Codex');
 
     await act(async () => {
       root.unmount();

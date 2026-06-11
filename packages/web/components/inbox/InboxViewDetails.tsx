@@ -32,9 +32,9 @@ export function InboxItemDetailsPanel({
 
   if (!file || !understanding) {
     return (
-      <section className="overflow-hidden rounded-xl border border-border/60 bg-card/70 shadow-sm">
-        <div className="p-8 text-center">
-          <span className="mx-auto flex h-9 w-9 items-center justify-center rounded-lg bg-muted/45 text-muted-foreground/50">
+      <section className="overflow-hidden rounded-xl border border-dashed border-border/60 bg-card/35 shadow-none">
+        <div className="p-7 text-center">
+          <span className="mx-auto flex h-8 w-8 items-center justify-center rounded-lg bg-muted/35 text-muted-foreground/45">
             <Eye size={16} />
           </span>
           <p className="mt-3 text-sm font-medium text-foreground/70">{t.inbox.understandingEmptyTitle}</p>

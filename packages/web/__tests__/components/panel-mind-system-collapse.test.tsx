@@ -217,6 +217,28 @@ describe('Panel Mind System collapse', () => {
     expect(mockPush).toHaveBeenCalledWith('/view/MIND_DAO');
   });
 
+  it('opens the top New menu toward the panel content instead of under the rail', async () => {
+    await act(async () => {
+      root = renderPanel(host);
+    });
+
+    const newButton = Array.from(host.querySelectorAll<HTMLButtonElement>('button'))
+      .find(button => button.getAttribute('aria-label') === 'New' || button.getAttribute('aria-label') === '新建');
+    expect(newButton).not.toBeNull();
+
+    await act(async () => {
+      newButton?.click();
+      await Promise.resolve();
+    });
+
+    const menu = host.querySelector<HTMLElement>('[data-panel-new-menu]');
+    expect(menu).not.toBeNull();
+    expect(menu?.className).toContain('left-0');
+    expect(menu?.className).not.toContain('right-0');
+    expect(menu?.textContent).toContain('New file');
+    expect(menu?.textContent).toContain('New Space');
+  });
+
   it('loads the Inbox badge count through the normalized Inbox client contract', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => ({
       ok: true,

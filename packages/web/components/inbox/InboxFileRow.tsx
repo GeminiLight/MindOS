@@ -94,7 +94,7 @@ export function InboxFileRow({
         aria-pressed={selected}
         aria-label={file.name}
         className={`group flex items-center gap-3 px-4 py-3 transition-colors duration-100 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${
-          selected ? 'bg-[var(--amber-subtle)]/70' : 'bg-card hover:bg-accent'
+          selected ? 'bg-[var(--amber-subtle)]/45' : 'bg-card hover:bg-accent'
         }${animate ? ' animate-[fadeSlideUp_0.22s_ease_both]' : ''}`}
         style={animate ? { animationDelay: `${index * 30}ms` } : undefined}
       >
@@ -104,18 +104,19 @@ export function InboxFileRow({
             type="button"
             aria-pressed={checked}
             aria-label={t.inbox.selectItem(file.name)}
+            data-inbox-row-select-control
             onClick={(e) => {
               e.stopPropagation();
               e.preventDefault();
               onToggleChecked?.();
             }}
-            className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md border transition-colors focus-visible:ring-2 focus-visible:ring-ring ${
+            className={`inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border transition-all duration-150 focus-visible:ring-2 focus-visible:ring-ring ${
               checked
-                ? 'border-[var(--amber)] bg-[var(--amber)] text-[var(--amber-foreground)]'
-                : 'border-border/80 bg-background text-transparent hover:border-[var(--amber)]/55 hover:bg-[var(--amber-subtle)]'
+                ? 'border-[var(--amber)] bg-[var(--amber)] text-[var(--amber-foreground)] shadow-[0_0_0_3px_var(--amber-subtle)]'
+                : 'border-muted-foreground/25 bg-transparent text-transparent opacity-70 hover:border-[var(--amber)]/55 hover:bg-[var(--amber-subtle)]/55 hover:opacity-100'
             }`}
           >
-            <Check size={13} />
+            <Check size={11} strokeWidth={2.5} />
           </button>
         )}
 

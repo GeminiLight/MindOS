@@ -5,6 +5,26 @@ import AgentsContentPage from '@/components/agents/AgentsContentPage';
 import AgentDetailContent from '@/components/agents/AgentDetailContent';
 import { messages } from '@/lib/i18n';
 
+const runtimeCapabilities = vi.hoisted(() => ({
+  ownsModelSelection: false,
+  supportsResume: true,
+  supportsFreshSession: true,
+  supportsListSessions: true,
+  supportsAttachExisting: true,
+  supportsFork: true,
+  supportsArchive: true,
+  supportsInterrupt: true,
+  supportsModelList: false,
+  supportsApprovals: true,
+  supportsUserInput: true,
+  supportsToolEvents: true,
+  supportsRuntimeStatus: true,
+  supportsDiffs: true,
+  supportsCheckpoints: false,
+  supportsBackgroundRuns: false,
+  supportsMcpConfig: false,
+}));
+
 const baseMcpState = {
   status: {
     running: true,
@@ -83,6 +103,29 @@ const baseMcpState = {
       installedSkillNames: [],
       installedSkillCount: 0,
     },
+    {
+      key: 'workbuddy',
+      name: 'WorkBuddy',
+      present: false,
+      installed: false,
+      isCustom: true,
+      hasProjectScope: false,
+      hasGlobalScope: true,
+      preferredTransport: 'stdio' as const,
+      format: 'json' as const,
+      configKey: 'mcpServers',
+      globalPath: '/tmp/workbuddy/mcp.json',
+      customBaseDir: '~/.workbuddy/',
+      skillMode: 'additional' as const,
+      hiddenRootPath: '/home/test/.workbuddy',
+      hiddenRootPresent: false,
+      runtimeConversationSignal: false,
+      runtimeUsageSignal: false,
+      configuredMcpServers: [],
+      configuredMcpServerCount: 0,
+      installedSkillNames: [],
+      installedSkillCount: 0,
+    },
   ],
   skills: [
     { name: 'mindos', description: 'kb ops', path: '/skills/mindos', source: 'builtin' as const, enabled: true, editable: false },
@@ -100,6 +143,43 @@ vi.mock('@/lib/stores/mcp-store', () => ({
 
 vi.mock('@/lib/stores/locale-store', () => ({
   useLocale: () => ({ locale: 'en' as const, setLocale: () => {}, t: messages.en }),
+}));
+
+vi.mock('@/hooks/useNativeRuntimeDetection', () => ({
+  useNativeRuntimeDetection: () => ({
+    runtimes: [
+      {
+        id: 'codex',
+        name: 'Codex',
+        kind: 'codex',
+        adapter: 'codex-app-server',
+        modelOwner: 'external',
+        authOwner: 'external',
+        permissionOwner: 'external',
+        sessionOwner: 'external',
+        status: 'available',
+        capabilities: runtimeCapabilities,
+        runtimeBridge: { kind: 'codex-app-server', label: 'Codex app-server' },
+        binaryPath: '/usr/local/bin/codex',
+      },
+      {
+        id: 'claude',
+        name: 'Claude Code',
+        kind: 'claude',
+        adapter: 'claude-sdk',
+        modelOwner: 'external',
+        authOwner: 'external',
+        permissionOwner: 'external',
+        sessionOwner: 'external',
+        status: 'available',
+        capabilities: runtimeCapabilities,
+        runtimeBridge: { kind: 'claude-sdk', label: 'Claude Code SDK' },
+      },
+    ],
+    loadingByKind: { codex: false, claude: false },
+    errorByKind: { codex: null, claude: null },
+    refresh: vi.fn(),
+  }),
 }));
 
 describe('Agents content dashboard', () => {
@@ -137,20 +217,48 @@ describe('Agents content dashboard', () => {
     expect(html).not.toContain('Ghost Agent');
   });
 
-  it('renders Agent section with By Server (default) / By Agent views and management', () => {
+  it('renders Agent section as runtime endpoints instead of MCP management', () => {
     const html = renderToStaticMarkup(<AgentsContentPage tab="agent" />);
     const a = messages.en.agentsContent;
 
-    expect(html).toContain(a.mcp.tabs.byAgent);
-    expect(html).toContain(a.mcp.tabs.byServer);
-    expect(html).toContain(a.mcp.connectionGraph);
-    expect(html).toContain(a.mcp.searchServersPlaceholder);
-    expect(html).toContain('mindos');
-    expect(html).toContain('github');
-    expect(html).toContain('Cursor');
+    expect(html).toContain(a.runtime.title);
+    expect(html).toContain(a.runtime.mindosName);
     expect(html).toContain('Codex');
-    expect(html).toContain('/agent-icons/cursor.svg');
+    expect(html).toContain('Claude Code');
+    expect(html).toContain(a.runtime.openChatWith('Codex'));
+    expect(html).toContain(a.agentOverview.title);
+    expect(html).toContain('href="#agent-local-runtime"');
+    expect(html).toContain('href="#agent-local-clients"');
+    expect(html).toContain('href="#agent-remote-acp"');
+    expect(html).toContain('href="#agent-remote-a2a"');
+    expect(html).toContain(a.localClients.title);
+    expect(html).toContain(a.localClients.statusConnected);
+    expect(html).toContain(a.localClients.statusDetected);
+    expect(html).toContain(a.localClients.groupNotFound);
+    expect(html).toContain(a.localClients.addCustomClient);
+    expect(html).toContain(a.localClients.groupCustom);
+    expect(html).toContain('WorkBuddy');
+    expect(html).toContain(a.localClients.editCustomClient);
+    expect(html).toContain(a.localClients.removeCustomClient);
+    expect(html).toContain(a.acpAgents.title);
+    expect(html).toContain(a.acpAgents.description);
+    expect(html).toContain(a.a2aAgents.title);
+    expect(html).toContain(a.a2aAgents.description);
+    expect(html).toContain('Cursor');
     expect(html).toContain('/agent-icons/openai.svg');
+    expect(html).toContain('/agent-icons/claude.svg');
+    expect(html).not.toContain(a.localClients.skillCount(3));
+    expect(html).not.toContain(a.localClients.projectScope);
+    expect(html).not.toContain(a.localClients.globalScope);
+    expect(html).not.toContain(a.runtime.remoteEmpty);
+    expect(html).not.toContain(a.runtime.contractModelTitle);
+    expect(html).not.toContain(a.runtime.contractPermissionTitle);
+    expect(html).not.toContain(a.runtime.contractSessionTitle);
+    expect(html).not.toContain(a.mcp.tabs.byAgent);
+    expect(html).not.toContain(a.mcp.tabs.byServer);
+    expect(html).not.toContain(a.mcp.connectionGraph);
+    expect(html).not.toContain(a.mcp.searchServersPlaceholder);
+    expect(html).not.toContain('github');
   });
 
   it('renders Skills & MCP section with MCP and skill management', () => {

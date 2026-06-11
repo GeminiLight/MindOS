@@ -12,6 +12,7 @@ import { AgentsPanelHubNav } from './AgentsPanelHubNav';
 import { AgentsPanelAgentGroups } from './AgentsPanelAgentGroups';
 import DiscoverAgentModal from '../agents/DiscoverAgentModal';
 import IMChannelsView from './IMChannelsView';
+import AgentsRuntimeSection from '../agents/AgentsRuntimeSection';
 
 interface AgentsPanelProps {
   active: boolean;
@@ -28,10 +29,13 @@ export default function AgentsPanel({
 }: AgentsPanelProps) {
   const { t } = useLocale();
   const p = t.panels.agents;
+  const runtimeCopy = t.agentsContent.runtime;
+  const localClientsCopy = t.agentsContent.localClients;
   const mcp = useMcpData();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const isChannelsTab = pathname === '/agents' && searchParams.get('tab') === 'channels';
+  const isAgentTab = pathname === '/agents' && searchParams.get('tab') === 'agent';
   const [refreshing, setRefreshing] = useState(false);
   const [showNotDetected, setShowNotDetected] = useState(false);
   const [showDiscoverModal, setShowDiscoverModal] = useState(false);
@@ -96,7 +100,11 @@ export default function AgentsPanel({
     <div className={`flex flex-col h-full ${active ? '' : 'hidden'}`}>
       <PanelHeader title={p.title} maximized={maximized} onMaximize={onMaximize}>
         <div className="flex items-center gap-1.5">
-          {!mcp.loading && (
+          {isAgentTab ? (
+            <span className="text-2xs text-muted-foreground">
+              {runtimeCopy.panelTitle}
+            </span>
+          ) : !mcp.loading && (
             <span className="text-2xs text-muted-foreground">
               {connected.length} {p.connected}
               {a2a.agents.length > 0 && (
@@ -118,7 +126,44 @@ export default function AgentsPanel({
       </PanelHeader>
 
       <div className="flex-1 overflow-y-auto min-h-0">
-        {mcp.loading ? (
+        {isAgentTab ? (
+          <div className="pb-3">
+            {hub}
+            <div className="mx-4 border-t border-border" />
+            <AgentsRuntimeSection
+              variant="panel"
+            />
+            {mcp.loading ? (
+              <div className="flex justify-center py-5">
+                <Loader2 size={16} className="animate-spin text-muted-foreground" />
+              </div>
+            ) : mcp.agents.length > 0 ? (
+              <div className="border-t border-border/60 px-3 py-3">
+                <AgentsPanelAgentGroups
+                  connected={connected}
+                  detected={detected}
+                  notFound={notFound}
+                  selectedAgentKey={effectiveSelectedAgentKey}
+                  listCopy={listCopy}
+                  onInstallAgent={installAgentWithRefresh}
+                  showNotDetected={showNotDetected}
+                  setShowNotDetected={setShowNotDetected}
+                  p={{
+                    rosterLabel: localClientsCopy.panelTitle,
+                    sectionConnected: localClientsCopy.statusConnected,
+                    sectionDetected: localClientsCopy.statusDetected,
+                    sectionNotDetected: localClientsCopy.statusNotFound,
+                    showMore: localClientsCopy.showMore,
+                  }}
+                />
+              </div>
+            ) : (
+              <div className="border-t border-border/60 px-3 py-4">
+                <p className="text-xs text-muted-foreground">{localClientsCopy.emptyTitle}</p>
+              </div>
+            )}
+          </div>
+        ) : mcp.loading ? (
           <div className="flex justify-center py-8">
             <Loader2 size={16} className="animate-spin text-muted-foreground" />
           </div>
@@ -162,6 +207,7 @@ export default function AgentsPanel({
                   sectionConnected: p.sectionConnected,
                   sectionDetected: p.sectionDetected,
                   sectionNotDetected: p.sectionNotDetected,
+                  showMore: localClientsCopy.showMore,
                 }}
               />
             </div>

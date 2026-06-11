@@ -267,7 +267,8 @@ export default function Panel({
               {newPopover && (
                 <div
                   ref={newPopoverRef}
-                  className="absolute top-full right-0 mt-1 min-w-[152px] bg-card border border-border rounded-lg shadow-lg py-1 z-50"
+                  className="absolute top-full left-0 mt-1 min-w-[152px] bg-card border border-border rounded-lg shadow-lg py-1 z-50"
+                  data-panel-new-menu
                 >
                   <button
                     className="hit-target-box w-full flex items-center gap-2 px-3 py-1.5 text-sm text-foreground transition-colors text-left [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:0px]"

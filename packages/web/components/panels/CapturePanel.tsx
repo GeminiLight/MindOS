@@ -29,11 +29,14 @@ function getCurrentPanelView(): CapturePanelView {
   if (typeof window === 'undefined') return 'capture';
   if (window.location.pathname === '/capture/history') return 'history';
   const hash = window.location.hash.replace('#', '');
-  return hash === 'queue' || hash === 'shelved' || hash === 'history' ? hash : 'capture';
+  const view = hash.split('?', 1)[0];
+  return view === 'queue' || view === 'shelved' || view === 'history' ? view : 'capture';
 }
 
-function getCapturePanelHref(view: CapturePanelView): string {
-  return view === 'capture' ? '/capture' : `/capture#${view}`;
+function getCapturePanelHref(view: CapturePanelView, selectedPath?: string): string {
+  if (view === 'capture') return '/capture';
+  const params = selectedPath ? `?path=${encodeURIComponent(selectedPath)}` : '';
+  return `/capture#${view}${params}`;
 }
 
 function dispatchSyntheticHashChange(oldUrl: string, newUrl: string) {
@@ -148,8 +151,8 @@ export default function CapturePanel() {
   const shelvedFiles = useMemo(() => files.filter(file => shelvedPathSet.has(file.path)), [files, shelvedPathSet]);
   const agingCount = useMemo(() => pendingFiles.filter(file => file.isAging).length, [pendingFiles]);
   const previewFiles = useMemo(() => pendingFiles.slice(0, 5), [pendingFiles]);
-  const navigateToView = useCallback((view: CapturePanelView) => {
-    const href = getCapturePanelHref(view);
+  const navigateToView = useCallback((view: CapturePanelView, selectedPath?: string) => {
+    const href = getCapturePanelHref(view, selectedPath);
     setActiveView(view);
 
     if (typeof window !== 'undefined' && window.location.pathname === '/capture') {
@@ -177,11 +180,6 @@ export default function CapturePanel() {
           >
             <Plus size={13} />
             {t.inbox.viewCapture}
-            {pendingFiles.length > 0 && (
-              <span className="ml-0.5 rounded-full bg-background/20 px-1.5 py-px text-2xs font-semibold tabular-nums text-[var(--amber-foreground)]">
-                {pendingFiles.length}
-              </span>
-            )}
           </button>
         </div>
 
@@ -234,17 +232,17 @@ export default function CapturePanel() {
               )}
             </div>
             <div className="overflow-hidden rounded-xl border border-border/50 bg-card/35">
-              <button
-                type="button"
-                onClick={() => navigateToView('queue')}
-                className="block w-full touch-manipulation text-left transition-colors hover:bg-muted/30 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-              >
-                <div className="divide-y divide-border/45">
-                  {previewFiles.map(file => (
-                    <CapturePreviewFile key={file.path} file={file} agingLabel={t.inbox.agingHint} />
-                  ))}
-                </div>
-              </button>
+              <div className="divide-y divide-border/45">
+                {previewFiles.map(file => (
+                  <CapturePreviewFile
+                    key={file.path}
+                    file={file}
+                    agingLabel={t.inbox.agingHint}
+                    reviewLabel={t.inbox.viewQueue}
+                    onSelect={() => navigateToView('queue', file.path)}
+                  />
+                ))}
+              </div>
               {pendingFiles.length > previewFiles.length && (
                 <button
                   type="button"
@@ -306,11 +304,26 @@ function CapturePanelLink({
   );
 }
 
-function CapturePreviewFile({ file, agingLabel }: { file: InboxFile; agingLabel: string }) {
+function CapturePreviewFile({
+  file,
+  agingLabel,
+  reviewLabel,
+  onSelect,
+}: {
+  file: InboxFile;
+  agingLabel: string;
+  reviewLabel: string;
+  onSelect: () => void;
+}) {
   const sizeLabel = formatCompactSize(file.size);
 
   return (
-    <div className="flex items-center gap-2 px-3 py-2">
+    <button
+      type="button"
+      onClick={onSelect}
+      aria-label={`${reviewLabel}: ${file.name}`}
+      className="flex min-h-11 w-full touch-manipulation items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-muted/30 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+    >
       <FileText size={12} className="shrink-0 text-muted-foreground/45" />
       <div className="min-w-0 flex-1">
         <p className="truncate text-xs font-medium text-foreground/85" title={file.name}>
@@ -328,7 +341,7 @@ function CapturePreviewFile({ file, agingLabel }: { file: InboxFile; agingLabel:
           7+
         </span>
       )}
-    </div>
+    </button>
   );
 }
 

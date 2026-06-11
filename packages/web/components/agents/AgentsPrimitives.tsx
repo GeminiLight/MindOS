@@ -1,7 +1,7 @@
 'use client';
 
-import { Loader2, Plus, X } from 'lucide-react';
-import { useEffect, useRef } from 'react';
+import { HelpCircle, Loader2, Plus, X } from 'lucide-react';
+import { useEffect, useId, useRef } from 'react';
 import { useFocusTrap } from '@/lib/hooks/useFocusTrap';
 
 /* ────────── Pill / Status / Search ────────── */
@@ -40,6 +40,7 @@ export function AgentSectionHeading({
   icon,
   title,
   description,
+  descriptionTooltip,
   as: HeadingTag = 'h2',
   size = 'md',
   className,
@@ -49,6 +50,7 @@ export function AgentSectionHeading({
   icon: React.ReactNode;
   title: React.ReactNode;
   description?: React.ReactNode;
+  descriptionTooltip?: string;
   as?: 'h2' | 'h3' | 'p' | 'div';
   size?: 'sm' | 'md';
   className?: string;
@@ -68,9 +70,10 @@ export function AgentSectionHeading({
       <span className="min-w-0">
         <HeadingTag
           id={id}
-          className={`${titleSizeClass} font-semibold tracking-wide text-foreground ${titleClassName ?? ''}`}
+          className={`flex min-w-0 items-center gap-1.5 ${titleSizeClass} font-semibold tracking-wide text-foreground ${titleClassName ?? ''}`}
         >
-          {title}
+          <span className="min-w-0">{title}</span>
+          {descriptionTooltip ? <AgentHeadingHelp label={descriptionTooltip} size={size} /> : null}
         </HeadingTag>
         {description ? (
           <p className="mt-1 max-w-2xl text-xs leading-relaxed text-muted-foreground">
@@ -79,6 +82,37 @@ export function AgentSectionHeading({
         ) : null}
       </span>
     </div>
+  );
+}
+
+export function AgentHeadingHelp({
+  label,
+  size = 'md',
+}: {
+  label: string;
+  size?: 'sm' | 'md';
+}) {
+  const tooltipId = useId();
+  const iconSize = size === 'sm' ? 11 : 12;
+
+  return (
+    <span className="group/hint relative inline-flex shrink-0">
+      <button
+        type="button"
+        aria-label={label}
+        aria-describedby={tooltipId}
+        className="inline-flex h-5 w-5 items-center justify-center rounded-md text-muted-foreground/55 transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <HelpCircle size={iconSize} aria-hidden="true" />
+      </button>
+      <span
+        id={tooltipId}
+        role="tooltip"
+        className="invisible pointer-events-none absolute left-1/2 top-full z-20 mt-1.5 w-max max-w-[260px] -translate-x-1/2 rounded-md bg-foreground px-2.5 py-1.5 text-left text-2xs font-normal leading-relaxed tracking-normal text-background opacity-0 shadow-sm transition-opacity duration-150 normal-case group-hover/hint:visible group-hover/hint:opacity-100 group-focus-within/hint:visible group-focus-within/hint:opacity-100"
+      >
+        {label}
+      </span>
+    </span>
   );
 }
 
@@ -236,6 +270,7 @@ const AGENT_ICON_FILE_BY_KEY: Record<string, string> = {
   kilo: 'kilo-code.svg',
   warp: 'warp.svg',
   pi: 'pi.svg',
+  'pi-agent': 'pi.svg',
   augment: 'augment.svg',
   auggie: 'augment.svg',
   'qwen-code': 'qwen-code.svg',

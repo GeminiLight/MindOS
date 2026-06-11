@@ -10,7 +10,10 @@ type AgentsCopy = {
   sectionConnected: string;
   sectionDetected: string;
   sectionNotDetected: string;
+  showMore?: (n: number) => string;
 };
+
+const MAX_PANEL_DETECTED_AGENTS = 3;
 
 export function AgentsPanelAgentGroups({
   connected,
@@ -33,6 +36,10 @@ export function AgentsPanelAgentGroups({
   setShowNotDetected: (v: boolean | ((prev: boolean) => boolean)) => void;
   p: AgentsCopy;
 }) {
+  const visibleDetected = detected.slice(0, MAX_PANEL_DETECTED_AGENTS);
+  const hiddenDetected = detected.slice(MAX_PANEL_DETECTED_AGENTS);
+  const showMoreDetected = p.showMore ?? ((n: number) => `${n} more`);
+
   return (
     <div>
       <div className="mb-3 px-0 py-1">
@@ -67,7 +74,7 @@ export function AgentsPanelAgentGroups({
         <section className="mb-3">
           <PanelGroupHeading icon={<Search size={12} aria-hidden="true" />} title={p.sectionDetected} count={detected.length} />
           <div className="space-y-1.5">
-            {detected.map(agent => (
+            {visibleDetected.map(agent => (
               <AgentsPanelAgentListRow
                 key={agent.key}
                 agent={agent}
@@ -78,6 +85,27 @@ export function AgentsPanelAgentGroups({
                 copy={listCopy}
               />
             ))}
+            {hiddenDetected.length > 0 && (
+              <details>
+                <summary className="flex cursor-pointer list-none items-center justify-between rounded-md px-2 py-1 text-2xs font-medium text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                  <span>{showMoreDetected(hiddenDetected.length)}</span>
+                  <ChevronDown size={12} aria-hidden="true" />
+                </summary>
+                <div className="mt-1.5 space-y-1.5">
+                  {hiddenDetected.map(agent => (
+                    <AgentsPanelAgentListRow
+                      key={agent.key}
+                      agent={agent}
+                      agentStatus="detected"
+                      selected={selectedAgentKey === agent.key}
+                      detailHref={`/agents/${encodeURIComponent(agent.key)}`}
+                      onInstallAgent={onInstallAgent}
+                      copy={listCopy}
+                    />
+                  ))}
+                </div>
+              </details>
+            )}
           </div>
         </section>
       )}
