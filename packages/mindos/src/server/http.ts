@@ -52,6 +52,7 @@ import {
   type CustomAgentDetectPayload,
 } from './handlers/agents.js';
 import { handleAskSessionsDelete, handleAskSessionsGet, handleAskSessionsPost } from './handlers/ask-sessions.js';
+import { handleAssistantsDelete, handleAssistantsGet, handleAssistantsPost } from './handlers/assistants.js';
 import { handleBootstrapGet } from './handlers/bootstrap.js';
 import { handleChannelsVerifyPost, type ChannelsVerifyServices } from './handlers/channels-verify.js';
 import { handleFileGet, handleFilePost } from './handlers/file.js';
@@ -343,6 +344,18 @@ async function handleRequest(
     }
     if (route === 'GET /api/agent-activity') {
       writeResponse(res, await handleAgentActivity(url.searchParams, services));
+      return;
+    }
+    if (route === 'GET /api/assistants') {
+      writeResponse(res, handleAssistantsGet(services));
+      return;
+    }
+    if (route === 'POST /api/assistants') {
+      writeResponse(res, handleAssistantsPost(await readJsonBody(req), services));
+      return;
+    }
+    if (route === 'DELETE /api/assistants') {
+      writeResponse(res, handleAssistantsDelete(await readJsonBody(req), services));
       return;
     }
     if (route === 'GET /api/agent-runtimes') {

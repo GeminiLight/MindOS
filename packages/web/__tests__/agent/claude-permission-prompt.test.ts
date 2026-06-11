@@ -82,7 +82,7 @@ async function startBridgeServer(handler: (req: IncomingMessage, res: ServerResp
 
 async function readJsonLine(lines: ReturnType<typeof createInterface>): Promise<Record<string, unknown>> {
   const timeout = new Promise<never>((_, reject) => {
-    setTimeout(() => reject(new Error('Timed out waiting for MCP response.')), 1000);
+    setTimeout(() => reject(new Error('Timed out waiting for MCP response.')), 5000);
   });
   return await Promise.race([
     (async () => {

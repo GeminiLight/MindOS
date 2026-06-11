@@ -6,6 +6,7 @@ set -euo pipefail
 # ─────────────────────────────────────────────────────────────────────────
 
 BUMP="${1:-patch}"
+REPO_ROOT="$(pwd -P)"
 
 # 1. Ensure clean working tree
 if ! git diff --quiet || ! git diff --cached --quiet; then
@@ -119,9 +120,10 @@ if [ -d "$SMOKE_DIR/node_modules/@geminilight/mindos-$PLATFORM_KEY/_standalone" 
 fi
 echo "   ✅ Main + platform key files present"
 
-# Cleanup
+# Cleanup. Leave the temp install directory before deleting it so subsequent
+# git operations never run from a removed working directory.
+cd "$REPO_ROOT"
 rm -rf "$SMOKE_DIR"
-cd - >/dev/null
 echo "   🟢 Smoke test passed"
 echo ""
 

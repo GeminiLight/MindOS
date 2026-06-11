@@ -21,7 +21,7 @@ import { openMindSystemAssistantRun } from '@/lib/mind-system-assistant-actions'
 import type { BuiltInMindSystemSpaceRecord } from '@/lib/space-records';
 import { getMindSystemAssistantAvatar, resolveMindSystemAssistantCopies, type MindSystemAssistantAvatar, type MindSystemAssistantCopy } from '@/lib/mind-system-assistant-copy';
 import { getAssistantProfilePath, getAssistantPromptPath } from '@/lib/mind-system-assistant-paths';
-import type { AssistantScheduleMode, MindSystemSpaceAssistant } from '@/lib/mind-system-assistants';
+import type { MindSystemSpaceAssistant } from '@/lib/mind-system-assistants';
 import { apiFetch } from '@/lib/api';
 
 async function copyPathToClipboard(path: string) {
@@ -444,10 +444,7 @@ type MindSystemAssistantViewModel = MindSystemSpaceAssistant & MindSystemAssista
 type EditableAssistantProfile = {
   name: string;
   desc: string;
-  scheduleMode: AssistantScheduleMode;
 };
-
-const ASSISTANT_SCHEDULE_MODE_OPTIONS: AssistantScheduleMode[] = ['manual', 'daily', 'weekly'];
 
 function MindSystemSpacePanel({ space, spacePreview }: { space: BuiltInMindSystemSpaceRecord; spacePreview?: SpacePreview | null }) {
   const { t } = useLocale();
@@ -693,8 +690,8 @@ function MindSystemAssistantEditDialog({
   const router = useRouter();
   const [promptContent, setPromptContent] = useState('');
   const [originalContent, setOriginalContent] = useState('');
-  const [profile, setProfile] = useState<EditableAssistantProfile>({ name: '', desc: '', scheduleMode: 'manual' });
-  const [originalProfile, setOriginalProfile] = useState<EditableAssistantProfile>({ name: '', desc: '', scheduleMode: 'manual' });
+  const [profile, setProfile] = useState<EditableAssistantProfile>({ name: '', desc: '' });
+  const [originalProfile, setOriginalProfile] = useState<EditableAssistantProfile>({ name: '', desc: '' });
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState<'idle' | 'missing' | 'saved' | 'error'>('idle');
@@ -713,7 +710,6 @@ function MindSystemAssistantEditDialog({
     const nextProfile = {
       name: assistant.name,
       desc: assistant.desc,
-      scheduleMode: assistant.schedule.mode,
     };
     setProfile(nextProfile);
     setOriginalProfile(nextProfile);
@@ -760,8 +756,7 @@ function MindSystemAssistantEditDialog({
 
   const promptHasChanges = promptContent !== originalContent;
   const profileHasChanges = profile.name !== originalProfile.name
-    || profile.desc !== originalProfile.desc
-    || profile.scheduleMode !== originalProfile.scheduleMode;
+    || profile.desc !== originalProfile.desc;
   const hasChanges = promptHasChanges || profileHasChanges;
   const canSave = Boolean(assistant)
     && !loading
@@ -808,8 +803,8 @@ function MindSystemAssistantEditDialog({
             path: assistant.profilePath,
             content: JSON.stringify({
               name: profile.name.trim(),
-              desc: profile.desc.trim(),
-              schedule: { mode: profile.scheduleMode },
+              description: profile.desc.trim(),
+              schemaVersion: 1,
             }, null, 2) + '\n',
             source: 'user',
           }),
@@ -833,7 +828,6 @@ function MindSystemAssistantEditDialog({
       setOriginalProfile({
         name: profile.name.trim(),
         desc: profile.desc.trim(),
-        scheduleMode: profile.scheduleMode,
       });
       setProfile(value => ({
         ...value,
@@ -913,27 +907,9 @@ function MindSystemAssistantEditDialog({
                     <span className="text-[11px] font-medium text-muted-foreground">{t.home.mindAssistant.schedule}</span>
                     <div
                       data-mind-system-assistant-schedule-editor={assistant.id}
-                      className="grid grid-cols-3 gap-1 rounded-md border border-border bg-background p-1"
+                      className="rounded-md border border-border bg-muted/20 px-2.5 py-2 text-xs text-muted-foreground"
                     >
-                      {ASSISTANT_SCHEDULE_MODE_OPTIONS.map(mode => (
-                        <button
-                          key={mode}
-                          type="button"
-                          data-mind-system-assistant-schedule-option={`${assistant.id}-${mode}`}
-                          aria-pressed={profile.scheduleMode === mode}
-                          disabled={loading || saving}
-                          onClick={() => {
-                            setProfile(value => ({ ...value, scheduleMode: mode }));
-                            if (status === 'saved' || status === 'error') {
-                              setStatus('idle');
-                              setMessage('');
-                            }
-                          }}
-                          className={`h-8 rounded text-[11px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60 ${profile.scheduleMode === mode ? 'bg-[var(--amber)] text-[var(--amber-foreground)]' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}
-                        >
-                          {t.home.mindAssistant.scheduleMode[mode]}
-                        </button>
-                      ))}
+                      {t.home.mindAssistant.scheduleMode[assistant.schedule.mode]}
                     </div>
                   </div>
                   <label className="mt-3 grid gap-1.5">

@@ -40,13 +40,13 @@ describe('mind-system assistants', () => {
     expect(assistants[1]).toMatchObject({ schedule: { mode: 'manual' } });
     expect(assistants[0]?.promptPath).toBe('.mindos/assistants/daily-signal/prompt.md');
     expect(assistants[1]?.promptPath).toBe('.mindos/assistants/decision-synthesizer/prompt.md');
-    expect(assistants[0]?.profilePath).toBe('.mindos/assistants/daily-signal/assistant.json');
+    expect(assistants[0]?.profilePath).toBe('.mindos/assistants/daily-signal/profile.json');
     expect(assistants).not.toContainEqual(expect.objectContaining({ primary: expect.anything() }));
   });
 
   it('uses a flat hidden assistant prompt registry and rejects unsafe assistant ids', () => {
     expect(getAssistantPromptPath('daily-signal')).toBe('.mindos/assistants/daily-signal/prompt.md');
-    expect(getAssistantProfilePath('daily-signal')).toBe('.mindos/assistants/daily-signal/assistant.json');
+    expect(getAssistantProfilePath('daily-signal')).toBe('.mindos/assistants/daily-signal/profile.json');
     expect(() => getAssistantPromptPath('../daily-signal')).toThrow(/Unsafe assistant id/);
     expect(() => getAssistantProfilePath('../daily-signal')).toThrow(/Unsafe assistant id/);
     expect(() => getAssistantPromptPath('Daily Signal')).toThrow(/Unsafe assistant id/);
@@ -55,9 +55,9 @@ describe('mind-system assistants', () => {
   it('applies local assistant profile overrides without changing the assistant id', () => {
     const mindRoot = mkTempMindRoot();
     try {
-      seedFile(mindRoot, '.mindos/assistants/daily-signal/assistant.json', JSON.stringify({
+      seedFile(mindRoot, '.mindos/assistants/daily-signal/profile.json', JSON.stringify({
         name: 'Morning signal editor',
-        desc: 'Prepare a shorter morning brief.',
+        description: 'Prepare a shorter morning brief.',
         schedule: { mode: 'weekly' },
       }));
 
@@ -67,8 +67,8 @@ describe('mind-system assistants', () => {
         id: 'daily-signal',
         name: 'Morning signal editor',
         desc: 'Prepare a shorter morning brief.',
-        schedule: { mode: 'weekly' },
-        profilePath: '.mindos/assistants/daily-signal/assistant.json',
+        schedule: { mode: 'daily' },
+        profilePath: '.mindos/assistants/daily-signal/profile.json',
       });
       expect(summary.assistants[1]).toMatchObject({
         id: 'decision-synthesizer',
@@ -82,19 +82,19 @@ describe('mind-system assistants', () => {
   it('ignores malformed or invalid assistant profile fields', () => {
     const mindRoot = mkTempMindRoot();
     try {
-      seedFile(mindRoot, '.mindos/assistants/daily-signal/assistant.json', JSON.stringify({
+      seedFile(mindRoot, '.mindos/assistants/daily-signal/profile.json', JSON.stringify({
         name: '   ',
         desc: 42,
-        schedule: { mode: 'hourly' },
+        schedule: { mode: 'weekly' },
       }));
-      seedFile(mindRoot, '.mindos/assistants/decision-synthesizer/assistant.json', '{broken json');
+      seedFile(mindRoot, '.mindos/assistants/decision-synthesizer/profile.json', '{broken json');
 
       const summary = getMindSystemAssistantSummary(mindRoot, daoSlot);
 
       expect(summary.assistants[0]).toMatchObject({
         id: 'daily-signal',
         schedule: { mode: 'daily' },
-        profilePath: '.mindos/assistants/daily-signal/assistant.json',
+        profilePath: '.mindos/assistants/daily-signal/profile.json',
       });
       expect(summary.assistants[0]?.name).toBeUndefined();
       expect(summary.assistants[0]?.desc).toBeUndefined();

@@ -13,7 +13,6 @@ export {
 } from './mind-system-assistant-paths';
 
 export type AssistantScheduleMode = 'manual' | 'daily' | 'weekly';
-const ASSISTANT_SCHEDULE_MODES: AssistantScheduleMode[] = ['manual', 'daily', 'weekly'];
 
 export interface AssistantSchedule {
   mode: AssistantScheduleMode;
@@ -42,7 +41,6 @@ export interface MindSystemAssistantSummary {
 export interface MindSystemAssistantProfile {
   name?: string;
   desc?: string;
-  schedule?: AssistantSchedule;
 }
 
 export const MIND_SYSTEM_ASSISTANT_CONFIGS: Record<MindSystemSlotKey, MindSystemSpaceAssistantConfig> = {
@@ -323,7 +321,7 @@ export function getMindSystemAssistants(slot: Pick<MindSystemSlot, 'key'>, mindR
     return {
       ...assistant,
       ...profile,
-      schedule: profile?.schedule ?? assistant.schedule,
+      schedule: assistant.schedule,
       promptPath: getAssistantPromptPath(assistant.id),
       profilePath: getAssistantProfilePath(assistant.id),
     };
@@ -419,20 +417,15 @@ function sanitizeAssistantProfile(value: unknown): MindSystemAssistantProfile | 
   const record = value as {
     name?: unknown;
     desc?: unknown;
-    schedule?: unknown;
+    description?: unknown;
   };
   const profile: MindSystemAssistantProfile = {};
   if (typeof record.name === 'string' && record.name.trim()) {
     profile.name = record.name.trim().slice(0, 80);
   }
-  if (typeof record.desc === 'string') {
-    profile.desc = record.desc.trim().slice(0, 240);
-  }
-  if (record.schedule && typeof record.schedule === 'object') {
-    const scheduleRecord = record.schedule as { mode?: unknown };
-    if (typeof scheduleRecord.mode === 'string' && ASSISTANT_SCHEDULE_MODES.includes(scheduleRecord.mode as AssistantScheduleMode)) {
-      profile.schedule = { mode: scheduleRecord.mode as AssistantScheduleMode };
-    }
+  const rawDescription = typeof record.description === 'string' ? record.description : record.desc;
+  if (typeof rawDescription === 'string') {
+    profile.desc = rawDescription.trim().slice(0, 240);
   }
   return Object.keys(profile).length > 0 ? profile : null;
 }

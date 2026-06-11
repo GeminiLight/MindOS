@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Bot, Cable, Globe, MessageSquare, Server, Sparkles } from 'lucide-react';
@@ -31,7 +31,6 @@ import AgentsContentChannels from './AgentsContentChannels';
 import AcpRegistrySection from './AcpRegistrySection';
 import CustomAgentModal from './CustomAgentModal';
 import { ConfirmDialog } from './AgentsPrimitives';
-import { BUILTIN_AGENT_PRESETS } from './builtin-agent-presets';
 import type { AgentInfo } from '@/components/settings/types';
 
 const DEFAULT_AGENT_NAV_HINTS = {
@@ -116,6 +115,29 @@ export default function AgentsContentPage({ tab }: { tab: AgentsDashboardTab }) 
     () => mcp.skills.filter((skill) => skill.enabled).length,
     [mcp.skills],
   );
+  const [assistantCount, setAssistantCount] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadAssistantCount() {
+      try {
+        const res = await fetch('/api/assistants', { cache: 'no-store' });
+        if (!res.ok) throw new Error(`Assistant count load failed (${res.status})`);
+        const payload = await res.json() as { assistants?: unknown[] };
+        if (!cancelled) setAssistantCount(Array.isArray(payload.assistants) ? payload.assistants.length : 0);
+      } catch {
+        if (!cancelled) setAssistantCount(0);
+      }
+    }
+    void loadAssistantCount();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleAssistantCountChange = useCallback((count: number) => {
+    setAssistantCount(count);
+  }, []);
   const activeLocalClientCount = useMemo(
     () => mcp.agents.filter((agent) => agent.present || agent.isCustom).length,
     [mcp.agents],
@@ -191,7 +213,7 @@ export default function AgentsContentPage({ tab }: { tab: AgentsDashboardTab }) 
             mcpRunning={!!mcp.status?.running}
             mcpEnabled={mcpEnabled}
             mcpPort={mcp.status?.port ?? null}
-            presetCount={BUILTIN_AGENT_PRESETS.length}
+            presetCount={assistantCount}
           />
         </header>
       )}
@@ -209,7 +231,7 @@ export default function AgentsContentPage({ tab }: { tab: AgentsDashboardTab }) 
           mcpToolCount={mcp.status?.toolCount ?? 0}
           mcpEnabled={mcpEnabled}
           enabledSkillCount={enabledSkillCount}
-          assistantCount={BUILTIN_AGENT_PRESETS.length}
+          assistantCount={assistantCount}
           allAgents={mcp.agents}
           pulseCopy={a.workspacePulse}
           onAddCustomAgent={handleAddCustomAgent}
@@ -276,7 +298,7 @@ export default function AgentsContentPage({ tab }: { tab: AgentsDashboardTab }) 
       )}
 
       {(tab === 'presets' || tab === 'assistant') && (
-        <AgentsPresetsSection copy={a.presets} />
+        <AgentsPresetsSection copy={a.presets} onLibraryCountChange={handleAssistantCountChange} />
       )}
 
       {tab === 'a2a' && (

@@ -214,7 +214,7 @@ describe('DirView Mind System space panel', () => {
     expect(dialog).not.toBeNull();
     expect(dialog?.textContent).toContain('Daily signal curator');
     expect(dialog?.textContent).not.toContain('.mindos/assistants/daily-signal/prompt.md');
-    expect(dialog?.textContent).not.toContain('.mindos/assistants/daily-signal/assistant.json');
+    expect(dialog?.textContent).not.toContain('.mindos/assistants/daily-signal/profile.json');
     expect(dialog?.textContent).not.toContain('Dao · MIND_DAO');
     expect(dialog?.textContent).not.toContain('MIND_DAO/Drafts/');
     expect(textarea?.value).toBe('# Daily prompt\n\nKeep it focused.\n');
@@ -263,7 +263,7 @@ describe('DirView Mind System space panel', () => {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true, path: '.mindos/assistants/daily-signal/assistant.json' }), {
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true, path: '.mindos/assistants/daily-signal/profile.json' }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       }));
@@ -291,7 +291,6 @@ describe('DirView Mind System space panel', () => {
 
     const nameInput = document.body.querySelector<HTMLInputElement>('[data-mind-system-assistant-name-editor="daily-signal"]');
     const descInput = document.body.querySelector<HTMLTextAreaElement>('[data-mind-system-assistant-desc-editor="daily-signal"]');
-    const weeklyScheduleButton = document.body.querySelector<HTMLButtonElement>('[data-mind-system-assistant-schedule-option="daily-signal-weekly"]');
     const inputValueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
     const textareaValueSetter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
 
@@ -300,7 +299,6 @@ describe('DirView Mind System space panel', () => {
       nameInput?.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText' }));
       textareaValueSetter?.call(descInput, 'Prepare a shorter morning brief.');
       descInput?.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText' }));
-      weeklyScheduleButton?.click();
     });
 
     const saveButton = document.body.querySelector<HTMLButtonElement>('[data-mind-system-assistant-save="daily-signal"]');
@@ -319,11 +317,11 @@ describe('DirView Mind System space panel', () => {
     const [, saveOptions] = fetchMock.mock.calls[1] ?? [];
     expect(JSON.parse(String(saveOptions.body))).toEqual({
       op: 'save_file',
-      path: '.mindos/assistants/daily-signal/assistant.json',
+      path: '.mindos/assistants/daily-signal/profile.json',
       content: JSON.stringify({
         name: 'Morning signal editor',
-        desc: 'Prepare a shorter morning brief.',
-        schedule: { mode: 'weekly' },
+        description: 'Prepare a shorter morning brief.',
+        schemaVersion: 1,
       }, null, 2) + '\n',
       source: 'user',
     });
@@ -360,8 +358,7 @@ describe('DirView Mind System space panel', () => {
     });
 
     const nameInput = document.body.querySelector<HTMLInputElement>('[data-mind-system-assistant-name-editor="daily-signal"]');
-    const dailyScheduleButton = document.body.querySelector<HTMLButtonElement>('[data-mind-system-assistant-schedule-option="daily-signal-daily"]');
-    const weeklyScheduleButton = document.body.querySelector<HTMLButtonElement>('[data-mind-system-assistant-schedule-option="daily-signal-weekly"]');
+    const scheduleEditor = document.body.querySelector<HTMLElement>('[data-mind-system-assistant-schedule-editor="daily-signal"]');
     const saveButton = document.body.querySelector<HTMLButtonElement>('[data-mind-system-assistant-save="daily-signal"]');
     const resetButton = document.body.querySelector<HTMLButtonElement>('[data-mind-system-assistant-reset="daily-signal"]');
     const inputValueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
@@ -369,7 +366,6 @@ describe('DirView Mind System space panel', () => {
     await act(async () => {
       inputValueSetter?.call(nameInput, 'Morning signal editor');
       nameInput?.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText' }));
-      weeklyScheduleButton?.click();
     });
 
     expect(saveButton?.disabled).toBe(false);
@@ -380,8 +376,7 @@ describe('DirView Mind System space panel', () => {
     });
 
     expect(nameInput?.value).toBe('Daily signal curator');
-    expect(dailyScheduleButton?.getAttribute('aria-pressed')).toBe('true');
-    expect(weeklyScheduleButton?.getAttribute('aria-pressed')).toBe('false');
+    expect(scheduleEditor?.textContent).toContain('Daily');
     expect(saveButton?.disabled).toBe(true);
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });

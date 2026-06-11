@@ -282,25 +282,19 @@ describe('Agents content dashboard', () => {
     // Skill rendering is validated via Virtuoso's data prop, not DOM assertion.
   });
 
-  it('renders Assistant profiles with scalable sections and run panel', () => {
+  it('renders the Assistant local-library shell before dynamic profiles load', () => {
     const html = renderToStaticMarkup(<AgentsContentPage tab="assistant" />);
     const a = messages.en.agentsContent;
 
     expect(html).toContain(a.presets.title);
     expect(html).toContain(a.presets.presetRail);
     expect(html).toContain(a.presets.libraryHint);
-    expect(html).toContain('Inbox Organizer');
-    expect(html).toContain('Open Inbox review');
-    expect(html).toContain('/capture#queue');
-    expect(html).toContain(a.presets.overviewSection);
-    expect(html).toContain(a.presets.promptSection);
-    expect(html).toContain(a.presets.resourcesSection);
-    expect(html).toContain(a.presets.launchTitle);
-    expect(html).toContain(a.presets.contractTitle);
-    expect(html).toContain(a.presets.runMode);
-    expect(html).toContain(a.presets.triggersTitle);
-    expect(html).toContain(a.presets.guardrailsTitle);
-    expect(html).not.toContain(a.presets.promptTitle);
+    expect(html).toContain(a.presets.localRoot);
+    expect(html).toContain(a.presets.localRootHint);
+    expect(html).toContain(a.presets.loading);
+    expect(html).not.toContain('Inbox Organizer');
+    expect(html).not.toContain('Open Inbox review');
+    expect(html).not.toContain('/capture#queue');
     expect(html).not.toContain('read_inbox');
   });
 });

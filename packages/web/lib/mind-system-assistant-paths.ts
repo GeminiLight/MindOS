@@ -17,5 +17,5 @@ export function getAssistantProfilePath(assistantId: string): string {
   if (!isSafeAssistantId(assistantId)) {
     throw new Error(`Unsafe assistant id: ${assistantId}`);
   }
-  return `${MINDOS_ASSISTANT_PROMPT_ROOT}/${assistantId}/assistant.json`;
+  return `${MINDOS_ASSISTANT_PROMPT_ROOT}/${assistantId}/profile.json`;
 }

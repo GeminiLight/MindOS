@@ -148,6 +148,45 @@ describe('i18n agents content IA', () => {
     'viewAllSignals',
   ] as const;
 
+  const presetKeys = [
+    'profileSection',
+    'localRoot',
+    'localRootHint',
+    'loading',
+    'loadFailed',
+    'retry',
+    'emptyTitle',
+    'emptyHint',
+    'readyLabel',
+    'needsPromptLabel',
+    'promptReadyLabel',
+    'localFileLabel',
+    'localOwnerLabel',
+    'promptMissingHint',
+    'saveProfile',
+    'profileSaved',
+    'nameLabel',
+    'descLabel',
+    'scheduleLabel',
+    'scheduleManual',
+    'scheduleDaily',
+    'scheduleWeekly',
+    'roleTitle',
+    'inputTitle',
+    'outputTitle',
+    'boundaryTitle',
+    'noResources',
+    'notDefinedYet',
+    'fileReadyLabel',
+    'fileMissingLabel',
+    'totalLabel',
+    'scheduledLabel',
+    'systemModelDefault',
+    'profileInvalidJson',
+    'profileUnreadable',
+    'promptPlaceholder',
+  ] as const;
+
   it('en has canonical IA keys', () => {
     const a = en.agentsContent;
     for (const k of contentKeys) {
@@ -155,6 +194,9 @@ describe('i18n agents content IA', () => {
     }
     for (const k of overviewKeys) {
       expect((a.overview as Record<string, unknown>)[k], k).toBeTruthy();
+    }
+    for (const k of presetKeys) {
+      expect((a.presets as Record<string, unknown>)[k], k).toBeTruthy();
     }
     expect(a.navPresets).toBe('Assistant');
     expect(a.presets.title).toBe('Assistant');
@@ -167,6 +209,9 @@ describe('i18n agents content IA', () => {
     }
     for (const k of overviewKeys) {
       expect((a.overview as Record<string, unknown>)[k], k).toBeTruthy();
+    }
+    for (const k of presetKeys) {
+      expect((a.presets as Record<string, unknown>)[k], k).toBeTruthy();
     }
     expect(a.navAssistant).toBe('Assistant');
     expect(a.navPresets).toBe('Assistant');

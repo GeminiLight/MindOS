@@ -27,6 +27,7 @@ import {
 } from '../../knowledge/knowledge-ops/index.js';
 import { queryValue, type MindosRequestQuery } from '../context.js';
 import { json, type MindosServerResponse } from '../response.js';
+import { isMindosBuiltinAssistantId } from './assistants.js';
 
 export type FileGetHandlerServices = {
   mindRoot?: string;
@@ -257,6 +258,20 @@ function existingKnowledgePath(mindRoot: string, filePath: string): string {
   return relativeKnowledgePath(mindRoot, resolveExistingSafe(mindRoot, filePath));
 }
 
+function isBuiltinAssistantPath(filePath: string): boolean {
+  const normalized = filePath.split('\\').join('/').replace(/^\/+/, '').replace(/\/+$/, '');
+  const parts = normalized.split('/');
+  return parts[0] === '.mindos'
+    && parts[1] === 'assistants'
+    && typeof parts[2] === 'string'
+    && isMindosBuiltinAssistantId(parts[2]);
+}
+
+function assertNotBuiltinAssistantDestructivePath(filePath: string, operation: string): void {
+  if (!isBuiltinAssistantPath(filePath)) return;
+  throw new Error(`Access denied: built-in Assistant "${filePath}" cannot be ${operation}`);
+}
+
 function saveFile(mindRoot: string, filePath: string, params: Record<string, unknown>) {
   const content = requireString(params.content, 'content');
   const abs = resolveExistingSafe(mindRoot, filePath);
@@ -390,6 +405,7 @@ function deleteFile(mindRoot: string, filePath: string) {
   }
   const abs = resolveExistingSafe(mindRoot, filePath);
   const normalizedPath = relativeKnowledgePath(mindRoot, abs);
+  assertNotBuiltinAssistantDestructivePath(normalizedPath, 'deleted');
   const before = safeRead(mindRoot, filePath);
   const trash = moveToTrash(mindRoot, normalizedPath);
   return {
@@ -403,8 +419,10 @@ function renameFile(mindRoot: string, filePath: string, params: Record<string, u
   validateLeafName(newName, 'filename');
   const oldAbs = resolveExistingSafe(mindRoot, filePath);
   const oldPath = relativeKnowledgePath(mindRoot, oldAbs);
+  assertNotBuiltinAssistantDestructivePath(oldPath, 'renamed');
   const newRelPath = posix.join(posix.dirname(oldPath), newName);
   const newAbs = resolveSafe(mindRoot, newRelPath);
+  assertNotBuiltinAssistantDestructivePath(newRelPath, 'renamed into');
   if (dirname(newAbs) !== dirname(oldAbs)) throw new Error('Invalid filename: must stay in the same directory');
   if (existsSync(newAbs)) throw new Error('A file with that name already exists');
   const before = safeRead(mindRoot, filePath);
@@ -423,6 +441,8 @@ function moveFile(mindRoot: string, filePath: string, params: Record<string, unk
   const toAbs = resolveExistingSafe(mindRoot, toPath);
   const fromPath = relativeKnowledgePath(mindRoot, fromAbs);
   const normalizedToPath = relativeKnowledgePath(mindRoot, toAbs);
+  assertNotBuiltinAssistantDestructivePath(fromPath, 'moved');
+  assertNotBuiltinAssistantDestructivePath(normalizedToPath, 'moved into');
   if (existsSync(toAbs)) throw new Error(`Destination already exists: ${toPath}`);
   mkdirSync(dirname(toAbs), { recursive: true });
   renameSync(fromAbs, toAbs);
@@ -456,8 +476,10 @@ function renameSpace(mindRoot: string, filePath: string, params: Record<string, 
   const oldAbs = resolveExistingSafe(mindRoot, filePath);
   if (!statSync(oldAbs).isDirectory()) throw new Error(`Not a directory: ${filePath}`);
   const oldPath = relativeKnowledgePath(mindRoot, oldAbs);
+  assertNotBuiltinAssistantDestructivePath(oldPath, 'renamed');
   const newRelPath = posix.join(posix.dirname(oldPath), newName);
   const newAbs = resolveSafe(mindRoot, newRelPath);
+  assertNotBuiltinAssistantDestructivePath(newRelPath, 'renamed into');
   if (dirname(newAbs) !== dirname(oldAbs)) throw new Error('Invalid space name: must stay in the same directory');
   if (existsSync(newAbs)) throw new Error('A space with that name already exists');
   renameSync(oldAbs, newAbs);

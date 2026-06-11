@@ -95,6 +95,26 @@ export {
 } from './handlers/ask-sessions.js';
 
 export {
+  MINDOS_ASSISTANTS_ROOT,
+  handleAssistantsDelete,
+  handleAssistantsGet,
+  handleAssistantsPost,
+  isMindosBuiltinAssistantId,
+  listLocalAssistants,
+  type MindosAssistantDeletePayload,
+  type MindosAssistantHealth,
+  type MindosAssistantHealthIssue,
+  type MindosAssistantLibraryItem,
+  type MindosAssistantOrigin,
+  type MindosAssistantPaths,
+  type MindosAssistantProfileMetadata,
+  type MindosAssistantPromptPayload,
+  type MindosAssistantWritePayload,
+  type MindosAssistantsPayload,
+  type MindosAssistantsServices,
+} from './handlers/assistants.js';
+
+export {
   createDefaultMindosHttpServices,
   createMindosHttpServer,
   type MindosHttpServer,

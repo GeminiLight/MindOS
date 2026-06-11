@@ -1,26 +1,9 @@
-import {
-  existsSync,
-  mkdtempSync,
-  mkdirSync,
-  readFileSync,
-  symlinkSync,
-  writeFileSync
-} from 'node:fs';
-import {
-  createServer as createNodeServer
-} from 'node:http';
-import {
-  tmpdir
-} from 'node:os';
-import {
-  join
-} from 'node:path';
-import {
-  describe,
-  expect,
-  it,
-  vi
-} from 'vitest';
+import { execFileSync } from 'node:child_process';
+import { existsSync, lstatSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { createServer as createNodeServer } from 'node:http';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { describe, expect, it, vi } from 'vitest';
 import {
   CORS_HEADERS,
   createDefaultSkillAgentRegistry,
@@ -30,6 +13,42 @@ import {
   handleFileGet,
   handleFilePost,
   handleCodexThreadsGet,
+  handleGit,
+  handleGraph,
+  handleAskStream,
+  handleAgentActivity,
+  handleAssistantsDelete,
+  handleAssistantsGet,
+  handleAssistantsPost,
+  handleAgentRuntimesGet,
+  handleAgentCopySkillPost,
+  handleCustomAgentDetectPost,
+  handleCustomAgentsDelete,
+  handleCustomAgentsPost,
+  handleCustomAgentsPut,
+  handleEmbeddingGet,
+  handleEmbeddingPost,
+  handleInboxDelete,
+  handleImActivityGet,
+  handleImConfigDelete,
+  handleImConfigGet,
+  handleImConfigPut,
+  handleImFeishuOAuthCallbackGet,
+  handleImFeishuOAuthGet,
+  handleImFeishuLongConnectionDelete,
+  handleImFeishuLongConnectionGet,
+  handleImFeishuLongConnectionPost,
+  handleImStatusGet,
+  handleImTestPost,
+  handleImWebhookStatusGet,
+  handleInboxGet,
+  handleInboxPost,
+  handleInitPost,
+  handleChangesGet,
+  handleChangesPost,
+  handleStaticArtifact,
+  handleMcpStatus,
+  handleMcpTokenReveal,
   handleMcpAgentsGet,
   handleRawFile,
   handleRecentFiles,
@@ -268,6 +287,24 @@ describe('MindOS server contract: core, files, HTTP', () => {
       auth: 'required',
     });
     expect(contract.routes).toContainEqual({
+      id: 'assistants.create',
+      method: 'POST',
+      path: '/api/assistants',
+      auth: 'required',
+    });
+    expect(contract.routes).toContainEqual({
+      id: 'assistants.delete',
+      method: 'DELETE',
+      path: '/api/assistants',
+      auth: 'required',
+    });
+    expect(contract.routes).toContainEqual({
+      id: 'assistants',
+      method: 'GET',
+      path: '/api/assistants',
+      auth: 'required',
+    });
+    expect(contract.routes).toContainEqual({
       id: 'agent-runtimes',
       method: 'GET',
       path: '/api/agent-runtimes',
@@ -381,6 +418,196 @@ describe('MindOS server contract: core, files, HTTP', () => {
       path: '/api/mcp/agents',
       auth: 'required',
     });
+  });
+
+  it('loads local assistants from the hidden assistant registry', () => {
+    const root = mkdtempSync(join(tmpdir(), 'mindos-assistants-'));
+    try {
+      mkdirSync(join(root, '.mindos', 'assistants', 'daily-signal'), { recursive: true });
+      mkdirSync(join(root, '.mindos', 'assistants', 'Bad Name'), { recursive: true });
+      writeFileSync(join(root, '.mindos', 'assistants', 'daily-signal', 'prompt.md'), `---
+owner: Research
+tools: read_notes, web-search
+skills: signal-curation
+context: MIND_DAO
+triggers: Daily review
+guardrails: Cite sources
+---
+
+# Daily Signal
+
+## Role
+
+Collect weak signals and summarize them.
+
+## Inputs
+
+- Recent notes
+- Decision logs
+
+## Output
+
+Write a concise signal brief.
+
+## Boundaries
+
+- Do not overwrite source notes.
+`, 'utf-8');
+      writeFileSync(join(root, '.mindos', 'assistants', 'daily-signal', 'profile.json'), JSON.stringify({
+        name: 'Morning signal editor',
+        description: 'Prepare a shorter morning brief.',
+        schemaVersion: 1,
+        preferredAgent: 'mindos-agent',
+        skills: ['signal-curation'],
+        mcp: ['arxiv'],
+        schedule: { mode: 'daily' },
+        surface: 'Overview',
+        owner: 'Local Research',
+        tools: ['read_notes'],
+        context: ['MIND_DAO'],
+        triggers: ['Daily review'],
+        guardrails: ['Cite sources'],
+      }), 'utf-8');
+      writeFileSync(join(root, '.mindos', 'assistants', 'Bad Name', 'prompt.md'), '# Unsafe name\n', 'utf-8');
+
+      const response = handleAssistantsGet({ mindRoot: root });
+      const body = response.body as {
+        root: string;
+        assistants: Array<{
+          id: string;
+          name: string;
+          description: string;
+          source: 'builtin' | 'custom';
+          deletable: boolean;
+          preferredAgent?: string;
+          skills: string[];
+          mcp: string[];
+          paths: { root: string; profile: string; prompt: string };
+          prompt: { exists: boolean; content?: string };
+          health: { state: string; issues: Array<{ code: string }> };
+          promptReady: boolean;
+          profileReady: boolean;
+        }>;
+      };
+
+      expect(response.status).toBe(200);
+      expect(body.root).toBe('.mindos/assistants');
+      expect(body.assistants).toHaveLength(1);
+      expect(body.assistants[0]).toMatchObject({
+        id: 'daily-signal',
+        name: 'Morning signal editor',
+        description: 'Prepare a shorter morning brief.',
+        source: 'builtin',
+        deletable: false,
+        preferredAgent: 'mindos-agent',
+        skills: ['signal-curation'],
+        mcp: ['arxiv'],
+        paths: {
+          root: '.mindos/assistants/daily-signal',
+          profile: '.mindos/assistants/daily-signal/profile.json',
+          prompt: '.mindos/assistants/daily-signal/prompt.md',
+        },
+        prompt: {
+          exists: true,
+        },
+        health: {
+          state: 'ready',
+          issues: [],
+        },
+        promptReady: true,
+        profileReady: true,
+      });
+      expect(body.assistants[0]?.prompt.content).toContain('# Daily Signal');
+      expect(body.assistants[0]).not.toHaveProperty('sections');
+      expect(body.assistants[0]).not.toHaveProperty('metadata');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('creates custom assistants with minimal profile and prompt files', () => {
+    const root = mkdtempSync(join(tmpdir(), 'mindos-assistant-create-'));
+    try {
+      const response = handleAssistantsPost({
+        id: 'research-scout',
+        name: 'Research Scout',
+        description: 'Finds useful local research follow-ups.',
+        preferredAgent: 'mindos-agent',
+        skills: ['mindos', 'mindos'],
+        mcp: ['arxiv'],
+        permissionMode: 'readonly',
+        schedule: { mode: 'daily' },
+        surface: ['agents'],
+        outputPolicy: { mode: 'draft' },
+        tools: ['write_file'],
+      }, { mindRoot: root });
+      const body = response.body as {
+        ok: true;
+        id: string;
+        paths: { root: string; profile: string; prompt: string };
+      };
+
+      expect(response.status).toBe(201);
+      expect(body).toMatchObject({
+        ok: true,
+        id: 'research-scout',
+        paths: {
+          root: '.mindos/assistants/research-scout',
+          profile: '.mindos/assistants/research-scout/profile.json',
+          prompt: '.mindos/assistants/research-scout/prompt.md',
+        },
+      });
+
+      const savedProfile = JSON.parse(readFileSync(join(root, body.paths.profile), 'utf-8')) as Record<string, unknown>;
+      expect(savedProfile).toMatchObject({
+        name: 'Research Scout',
+        description: 'Finds useful local research follow-ups.',
+        schemaVersion: 1,
+        preferredAgent: 'mindos-agent',
+        skills: ['mindos'],
+        mcp: ['arxiv'],
+      });
+      expect(savedProfile).not.toHaveProperty('permissionMode');
+      expect(savedProfile).not.toHaveProperty('schedule');
+      expect(savedProfile).not.toHaveProperty('surface');
+      expect(savedProfile).not.toHaveProperty('outputPolicy');
+      expect(savedProfile).not.toHaveProperty('tools');
+      expect(readFileSync(join(root, body.paths.prompt), 'utf-8')).toContain('# Research Scout');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('protects built-in assistants and deletes custom assistant directories', () => {
+    const root = mkdtempSync(join(tmpdir(), 'mindos-assistant-delete-'));
+    try {
+      mkdirSync(join(root, '.mindos', 'assistants', 'daily-signal'), { recursive: true });
+      writeFileSync(join(root, '.mindos', 'assistants', 'daily-signal', 'profile.json'), JSON.stringify({
+        name: 'Daily Signal',
+        schemaVersion: 1,
+        preferredAgent: 'mindos-agent',
+        skills: [],
+        mcp: [],
+      }), 'utf-8');
+      writeFileSync(join(root, '.mindos', 'assistants', 'daily-signal', 'prompt.md'), '# Daily Signal\n', 'utf-8');
+      const custom = handleAssistantsPost({ id: 'custom-research', name: 'Custom Research' }, { mindRoot: root });
+
+      const createBuiltin = handleAssistantsPost({ id: 'daily-signal', name: 'Override' }, { mindRoot: root });
+      const deleteBuiltin = handleAssistantsDelete({ id: 'daily-signal' }, { mindRoot: root });
+      const deleteCustom = handleAssistantsDelete({ id: 'custom-research' }, { mindRoot: root });
+      const listed = handleAssistantsGet({ mindRoot: root }).body as {
+        assistants: Array<{ id: string }>;
+      };
+
+      expect(custom.status).toBe(201);
+      expect(createBuiltin.status).toBe(409);
+      expect(deleteBuiltin.status).toBe(403);
+      expect(deleteCustom.status).toBe(200);
+      expect(listed.assistants.some((item) => item.id === 'daily-signal')).toBe(true);
+      expect(listed.assistants.some((item) => item.id === 'custom-research')).toBe(false);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   it('creates a health payload with runtime metadata', () => {
@@ -697,6 +924,39 @@ describe('MindOS server contract: core, files, HTTP', () => {
     expect(deleted.body).toMatchObject({ ok: true, trashId: expect.any(String) });
     expect(existsSync(join(root, 'note.md'))).toBe(false);
     expect(existsSync(join(root, '..', '.trash', (deleted.body as { trashId: string }).trashId))).toBe(true);
+  });
+
+  it('rejects destructive file operations against built-in Assistant directories', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'mindos-builtin-assistant-protect-'));
+    mkdirSync(join(root, '.mindos', 'assistants', 'daily-signal'), { recursive: true });
+    mkdirSync(join(root, 'Archive'), { recursive: true });
+    writeFileSync(join(root, '.mindos', 'assistants', 'daily-signal', 'prompt.md'), '# Daily Signal\n', 'utf-8');
+    writeFileSync(join(root, '.mindos', 'assistants', 'daily-signal', 'profile.json'), '{"name":"Daily Signal"}\n', 'utf-8');
+
+    const deleteDirectory = await handleFilePost(
+      { op: 'delete_file', path: '.mindos/assistants/daily-signal' },
+      { mindRoot: root },
+    );
+    const deletePrompt = await handleFilePost(
+      { op: 'delete_file', path: '.mindos/assistants/daily-signal/prompt.md' },
+      { mindRoot: root },
+    );
+    const renameDirectory = await handleFilePost(
+      { op: 'rename_space', path: '.mindos/assistants/daily-signal', new_name: 'daily-signal-old' },
+      { mindRoot: root },
+    );
+    const movePrompt = await handleFilePost(
+      { op: 'move_file', path: '.mindos/assistants/daily-signal/prompt.md', to_path: 'Archive/daily-signal.md' },
+      { mindRoot: root },
+    );
+
+    expect(deleteDirectory.status).toBe(403);
+    expect(deletePrompt.status).toBe(403);
+    expect(renameDirectory.status).toBe(403);
+    expect(movePrompt.status).toBe(403);
+    expect(existsSync(join(root, '.mindos', 'assistants', 'daily-signal'))).toBe(true);
+    expect(readFileSync(join(root, '.mindos', 'assistants', 'daily-signal', 'prompt.md'), 'utf-8')).toBe('# Daily Signal\n');
+    expect(existsSync(join(root, 'Archive', 'daily-signal.md'))).toBe(false);
   });
 
   it('returns POSIX knowledge paths after Product Server file moves', async () => {
