@@ -181,28 +181,28 @@ importers:
         version: 2.1.9(@types/node@22.19.17)(jsdom@29.0.2(@noble/hashes@1.8.0))(lightningcss@1.32.0)(terser@5.46.1)
     optionalDependencies:
       '@geminilight/mindos-darwin-arm64':
-        specifier: 1.1.7
+        specifier: 1.1.8
         version: link:../mindos-platforms/darwin-arm64
       '@geminilight/mindos-darwin-x64':
-        specifier: 1.1.7
+        specifier: 1.1.8
         version: link:../mindos-platforms/darwin-x64
       '@geminilight/mindos-linux-arm64':
-        specifier: 1.1.7
+        specifier: 1.1.8
         version: link:../mindos-platforms/linux-arm64
       '@geminilight/mindos-linux-arm64-musl':
-        specifier: 1.1.7
+        specifier: 1.1.8
         version: link:../mindos-platforms/linux-arm64-musl
       '@geminilight/mindos-linux-x64':
-        specifier: 1.1.7
+        specifier: 1.1.8
         version: link:../mindos-platforms/linux-x64
       '@geminilight/mindos-linux-x64-musl':
-        specifier: 1.1.7
+        specifier: 1.1.8
         version: link:../mindos-platforms/linux-x64-musl
       '@geminilight/mindos-windows-arm64':
-        specifier: 1.1.7
+        specifier: 1.1.8
         version: link:../mindos-platforms/windows-arm64
       '@geminilight/mindos-windows-x64':
-        specifier: 1.1.7
+        specifier: 1.1.8
         version: link:../mindos-platforms/windows-x64
 
   packages/mindos-platforms/darwin-arm64: {}
