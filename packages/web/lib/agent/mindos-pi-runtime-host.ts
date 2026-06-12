@@ -78,7 +78,10 @@ export function getMindosWebPiRuntimePaths(input: {
   }
 
   return {
-    agentDir: path.join(os.homedir(), '.pi'),
+    // MindOS's own system dir — never ~/.pi, which belongs to a user's
+    // independently installed pi CLI (its skills/extensions/settings must not
+    // leak into the embedded runtime, nor ours into it).
+    agentDir: path.join(os.homedir(), '.mindos', 'pi'),
     additionalSkillPaths: getSkillSearchPaths(input.projectRoot, input.mindRoot, input.serverSettings as any),
     additionalExtensionPaths,
   };
