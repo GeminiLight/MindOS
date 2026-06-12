@@ -420,6 +420,54 @@ describe('TitlebarTabStrip (spec-titlebar-row Phase 2)', () => {
     expect(h.push).not.toHaveBeenCalled();
   });
 
+  it('aligns the new-chat and overflow buttons on the tab baseline instead of floating mid-row', async () => {
+    vi.stubGlobal('ResizeObserver', ResizeObserverStub);
+    await navigateTo('/view/d1.md');
+    await navigateTo('/view/d2.md');
+    await navigateTo('/view/d3.md');
+    await act(async () => {
+      ResizeObserverStub.instances.forEach((ro) => ro.trigger(240)); // forces the ⌄N trigger to render
+    });
+
+    // The row is taller than the 34px tabs (tabs sit on its bottom edge), so a
+    // self-center button floats visibly above the tab centerline. Both buttons
+    // must anchor to the bottom edge and offset up to the tab's own center.
+    for (const selector of ['button[aria-label="New chat"]', '[data-overflow-trigger]']) {
+      const button = document.querySelector<HTMLButtonElement>(selector)!;
+      expect(button, selector).not.toBeNull();
+      expect(button.className, selector).toContain('self-end');
+      expect(button.className, selector).not.toContain('self-center');
+    }
+  });
+
+  it('renders a separator between adjacent tabs but none before the first tab', async () => {
+    await navigateTo('/view/d1.md');
+    expect(document.querySelectorAll('[data-tab-separator]')).toHaveLength(0);
+
+    await navigateTo('/view/d2.md');
+    await navigateTo('/view/d3.md');
+    const separators = document.querySelectorAll<HTMLElement>('[data-tab-separator]');
+    expect(separators).toHaveLength(2);
+    for (const sep of separators) expect(sep.getAttribute('aria-hidden')).toBe('true');
+  });
+
+  it('hides the separators adjacent to the active tab (its own border marks the boundary)', async () => {
+    await navigateTo('/view/d1.md');
+    await navigateTo('/view/d2.md');
+    await navigateTo('/view/d3.md');
+    await navigateTo('/view/d2.md'); // active = middle tab
+
+    const separators = Array.from(document.querySelectorAll<HTMLElement>('[data-tab-separator]'));
+    expect(separators).toHaveLength(2);
+    // both separators touch the active tab → transparent (layout stays stable)
+    for (const sep of separators) expect(sep.className).toContain('bg-transparent');
+
+    await navigateTo('/view/d1.md'); // active = first tab
+    const after = Array.from(document.querySelectorAll<HTMLElement>('[data-tab-separator]'));
+    expect(after[0].className).toContain('bg-transparent'); // touches active d1
+    expect(after[1].className).toContain('bg-border'); // between two inactive tabs
+  });
+
   it('tabHref round-trips with parseActiveTab', () => {
     const docKey = '笔记/日记😀.md';
     expect(parseActiveTab(tabHref({ kind: 'doc', key: docKey }))).toEqual({ kind: 'doc', key: docKey });

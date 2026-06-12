@@ -208,7 +208,24 @@ export default function TitlebarTabStrip() {
   return (
     <div ref={containerRef} className="flex min-w-0 flex-1 items-end overflow-hidden">
       <div role="tablist" className="flex min-w-0 items-end gap-1">
-        {visibleTabs.map(renderTab)}
+        {visibleTabs.map((tab, index) => {
+          // The active tab draws its own side borders, so a separator touching
+          // it would double the boundary line — keep it transparent (not
+          // removed) so tab widths don't shift when the active tab changes.
+          const touchesActive = tab.id === activeTabId || visibleTabs[index - 1]?.id === activeTabId;
+          return (
+            <React.Fragment key={tab.id}>
+              {index > 0 && (
+                <span
+                  aria-hidden="true"
+                  data-tab-separator
+                  className={`h-3.5 w-px shrink-0 self-end mb-[10px] ${touchesActive ? 'bg-transparent' : 'bg-border'}`}
+                />
+              )}
+              {renderTab(tab)}
+            </React.Fragment>
+          );
+        })}
       </div>
 
       {hiddenTabs.length > 0 && (
@@ -223,7 +240,7 @@ export default function TitlebarTabStrip() {
             setMenuAnchor(e.currentTarget.getBoundingClientRect());
             setMenuOpen((open) => !open);
           }}
-          className="ml-1 flex h-7 shrink-0 items-center gap-0.5 self-center rounded-md px-1.5 text-xs text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="ml-1 mb-[3px] flex h-7 shrink-0 items-center gap-0.5 self-end rounded-md px-1.5 text-xs text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <ChevronDown size={13} aria-hidden="true" />
           {hiddenTabs.length}
@@ -236,7 +253,7 @@ export default function TitlebarTabStrip() {
         title={t.workspaceTabs.newChat}
         aria-label={t.workspaceTabs.newChat}
         onClick={() => router.push('/chat/new')}
-        className="ml-1 flex h-7 w-7 shrink-0 items-center justify-center self-center rounded-md text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="ml-1 mb-[3px] flex h-7 w-7 shrink-0 items-center justify-center self-end rounded-md text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <Plus size={15} aria-hidden="true" />
       </button>
