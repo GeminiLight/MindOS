@@ -416,9 +416,11 @@ describe('consumeUIMessageStream — status event handling', () => {
     );
 
     const updates: Array<{ parts: unknown[] }> = [];
+    // emitCoalesceMs: 0 — this test asserts an intermediate emission
+    // (delta applied, tool still running) that coalescing would skip.
     const result = await consumeUIMessageStream(stream, (message) => {
       updates.push({ parts: message.parts });
-    });
+    }, undefined, { emitCoalesceMs: 0 });
     const afterDelta = updates.find((message) => {
       const part = message.parts.find((p): p is ToolCallPart => (p as ToolCallPart).type === 'tool-call');
       return part?.output === 'hello\n';
@@ -485,9 +487,11 @@ describe('consumeUIMessageStream — status event handling', () => {
     );
 
     const updates: Array<{ parts: unknown[] }> = [];
+    // emitCoalesceMs: 0 — this test asserts an intermediate emission
+    // (permission approved, tool still running) that coalescing would skip.
     const result = await consumeUIMessageStream(stream, (message) => {
       updates.push({ parts: message.parts });
-    });
+    }, undefined, { emitCoalesceMs: 0 });
     const afterResolved = updates.find((message) => {
       const part = message.parts.find((p): p is ToolCallPart => (p as ToolCallPart).type === 'tool-call');
       return part?.runtimePermission?.status === 'approved';

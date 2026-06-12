@@ -22,3 +22,8 @@ export function isEchoSegment(value: string): value is EchoSegment {
 export function defaultEchoSegment(): EchoSegment {
   return 'imprint';
 }
+
+/** Default landing route — `/` and `/echo` server-redirect here. */
+export function defaultEchoPath(): string {
+  return `/echo/${defaultEchoSegment()}`;
+}

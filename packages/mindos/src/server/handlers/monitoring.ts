@@ -1,5 +1,5 @@
 import { existsSync, readdirSync, statSync, type Dirent } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { json, type MindosServerResponse } from '../response.js';
 import { MINDOS_IGNORED_DIRS } from '../runtime.js';
 
@@ -18,6 +18,13 @@ export type MonitoringHandlerServices = {
   memoryUsage?: () => { heapUsed: number; heapTotal: number; rss: number };
   nodeVersion?: string;
   mcpPort?: number;
+  /**
+   * Monotonic tree version (e.g. the standalone server's tree cache or the
+   * web app's peekTreeVersion). When provided, the knowledge-base walk is
+   * cached until the version changes; otherwise a short TTL bounds the walk
+   * frequency.
+   */
+  getTreeVersion?: () => number;
 };
 
 export type MonitoringPayload = {
@@ -43,7 +50,7 @@ export function handleMonitoringGet(
 ): MindosServerResponse<MonitoringPayload> {
   const snapshot = (services.metricsSnapshot ?? defaultMetricsSnapshot)();
   const memory = (services.memoryUsage ?? process.memoryUsage)();
-  const kbStats = walkStats(services.mindRoot);
+  const kbStats = getCachedStats(services.mindRoot, services.getTreeVersion);
   const mcpPort = services.mcpPort ?? (Number(process.env.MINDOS_MCP_PORT) || Number(process.env.MCP_PORT) || 8781);
 
   return json({
@@ -84,6 +91,39 @@ function defaultMetricsSnapshot(): MonitoringMetricsSnapshot {
     avgResponseTimeMs: 0,
     errors: 0,
   };
+}
+
+type KbStats = { fileCount: number; totalSizeBytes: number };
+
+type KbStatsCacheEntry = {
+  value: KbStats;
+  version: number | null;
+  builtAt: number;
+};
+
+// Bounds the full-library walk: monitoring is polled, but the stats only
+// change when the tree does (version key) or, lacking a version source, at
+// most once per TTL window.
+const KB_STATS_TTL_MS = 30_000;
+const kbStatsCache = new Map<string, KbStatsCacheEntry>();
+
+export function resetMonitoringStatsCacheForTests(): void {
+  kbStatsCache.clear();
+}
+
+function getCachedStats(root: string, getTreeVersion?: () => number): KbStats {
+  const key = resolve(root);
+  const version = getTreeVersion ? getTreeVersion() : null;
+  const cached = kbStatsCache.get(key);
+  if (cached) {
+    const fresh = version !== null
+      ? cached.version === version
+      : Date.now() - cached.builtAt < KB_STATS_TTL_MS;
+    if (fresh) return cached.value;
+  }
+  const value = walkStats(root);
+  kbStatsCache.set(key, { value, version, builtAt: Date.now() });
+  return value;
 }
 
 function walkStats(root: string): { fileCount: number; totalSizeBytes: number } {

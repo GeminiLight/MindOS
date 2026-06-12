@@ -2,19 +2,16 @@
 
 import { useRef, useEffect, memo, useState, useCallback, useMemo, type CSSProperties } from 'react';
 import { Loader2, AlertCircle, Wrench, WifiOff, Zap, Copy, Check, ArrowDown, FolderInput, Search, PenLine, Lightbulb, FileText, Paperclip, Bot, Sparkles } from 'lucide-react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import type { Message, ImagePart, RuntimeStatusPart } from '@/lib/types';
-import { stripThinkingTags } from '@/hooks/useAiOrganize';
+import type { Message, ImagePart, RuntimeStatusPart } from '@/lib/types';import { stripThinkingTags } from '@/hooks/useAiOrganize';
 import { copyToClipboard } from '@/lib/clipboard';
 import ToolCallBlock from './ToolCallBlock';
 import ThinkingBlock from './ThinkingBlock';
+import MarkdownMessage from './MarkdownMessage';
 import { SaveMessageButton } from './SaveSessionInline';
 import UserMessageActions from './UserMessageActions';
 import AgentRunTimeline from './AgentRunTimeline';
 
 const SKILL_PREFIX_RE = /^Use the skill ([^:]+):\s*/;
-const MARKDOWN_REMARK_PLUGINS = [remarkGfm];
 const MESSAGE_ROW_STYLE: CSSProperties = {
   contentVisibility: 'auto',
   containIntrinsicSize: '0 96px',
@@ -150,7 +147,7 @@ const AssistantMessage = memo(function AssistantMessage({ content, isStreaming }
       prose-strong:text-foreground prose-strong:font-semibold
       prose-table:text-xs prose-th:py-1.5 prose-td:py-1
     ">
-      <ReactMarkdown remarkPlugins={MARKDOWN_REMARK_PLUGINS}>{cleaned}</ReactMarkdown>
+      <MarkdownMessage content={cleaned} />
       {isStreaming && (
         <span className="inline-block w-1.5 h-3.5 bg-[var(--amber)] ml-0.5 align-middle animate-pulse rounded-full" />
       )}

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { getPluginRenderers, isRendererEnabled, setRendererEnabled, loadDisabledState } from '@/lib/renderers/registry';
+import { fetchAllFilePaths } from '@/lib/client-cache';
 import { Toggle } from '../settings/Primitives';
 import PanelHeader from './PanelHeader';
 import { useLocale } from '@/lib/stores/locale-store';
@@ -38,8 +39,8 @@ export default function PluginsPanel({ active, maximized, onMaximize }: PluginsP
     if (entryPaths.length === 0) return;
 
     // Single request: fetch all file paths and check which entry paths exist
-    fetch('/api/files')
-      .then(r => r.ok ? r.json() : [])
+    // (shared client cache — deduped with other /api/files consumers)
+    fetchAllFilePaths()
       .then((allPaths: string[]) => {
         const pathSet = new Set(allPaths);
         setExistingFiles(new Set(entryPaths.filter(p => pathSet.has(p))));

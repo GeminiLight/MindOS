@@ -116,7 +116,6 @@ describe('TitlebarRow (spec-titlebar-row Phase 1 + 2)', () => {
     // swallows its clicks (user-reported: focus-mode chat header buttons only
     // clickable along their bottom edge).
     const fullHeightPages = [
-      path.join(webRoot, 'components', 'HomeContent.tsx'),
       path.join(webRoot, 'app', 'chat', '[sessionId]', 'ChatPageClient.tsx'),
     ];
     for (const file of fullHeightPages) {

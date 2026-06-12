@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { MIN_PANEL_WIDTH, MAX_PANEL_WIDTH_ABS } from '@/components/Panel';
 import type { PanelId } from '@/lib/navigation-panel';
 import { RAIL_WIDTH_COLLAPSED, RAIL_WIDTH_EXPANDED } from '@/components/ActivityBar';
@@ -51,8 +51,39 @@ export function useLeftPanel(): LeftPanelState {
   // Exit maximize when switching panels
   useEffect(() => { setPanelMaximized(false); }, [activePanel]);
 
-  const handlePanelWidthChange = useCallback((w: number) => setPanelWidth(w), []);
+  // Drag resize fires one onResize per mousemove (often >60/s on high-rate
+  // mice), and SidebarLayout derives the content padding from `panelWidth`, so
+  // the live value must stay in React state — we can't bypass it with direct
+  // style mutation. Instead, coalesce updates to one setState per animation
+  // frame and commit the final value synchronously on drag end.
+  const widthRafRef = useRef<number | null>(null);
+  const pendingWidthRef = useRef<number | null>(null);
+
+  useEffect(() => () => {
+    if (widthRafRef.current !== null) cancelAnimationFrame(widthRafRef.current);
+  }, []);
+
+  const handlePanelWidthChange = useCallback((w: number) => {
+    if (typeof requestAnimationFrame !== 'function') { setPanelWidth(w); return; }
+    pendingWidthRef.current = w;
+    if (widthRafRef.current !== null) return; // frame already scheduled
+    widthRafRef.current = requestAnimationFrame(() => {
+      widthRafRef.current = null;
+      if (pendingWidthRef.current !== null) {
+        setPanelWidth(pendingWidthRef.current);
+        pendingWidthRef.current = null;
+      }
+    });
+  }, []);
+
   const handlePanelWidthCommit = useCallback((w: number) => {
+    // Drop any pending frame so a stale drag value can't overwrite the commit.
+    if (widthRafRef.current !== null) {
+      cancelAnimationFrame(widthRafRef.current);
+      widthRafRef.current = null;
+    }
+    pendingWidthRef.current = null;
+    setPanelWidth(w);
     try { localStorage.setItem('left-panel-width', String(w)); } catch {}
   }, []);
   const handlePanelMaximize = useCallback(() => setPanelMaximized(v => !v), []);

@@ -1,44 +1,18 @@
-import fs from 'fs';
+import { redirect } from 'next/navigation';
 import { readSetupPending } from '@/lib/setup-state';
-import { getRecentlyModified, getMindRoot } from '@/lib/fs';
-import { resolveExistingSafe } from '@/lib/core/security';
-import { getAllRenderers } from '@/lib/renderers/registry';
-import { listWorkspaceSpaces } from '@/lib/space-records';
-import HomeContent from '@/components/HomeContent';
-import ClientRedirect from '@/components/ClientRedirect';
+import { defaultEchoPath } from '@/lib/echo-segments';
 
+// The setup gate reads ~/.mindos/config.json — evaluate it per request, never
+// at build time, so finishing setup takes effect on the next visit.
 export const dynamic = 'force-dynamic';
 
-function getExistingFiles(paths: string[]): string[] {
-  try {
-    const root = getMindRoot();
-    return paths.filter(p => {
-      try {
-        return fs.existsSync(resolveExistingSafe(root, p));
-      } catch { return false; }
-    });
-  } catch {
-    return [];
-  }
-}
-
+/**
+ * `/` is a pure entry point: server-redirect to setup (when pending) or to the
+ * default Echo page. Server redirects replace the old client-side
+ * window.location.replace pattern, which shipped + hydrated a throwaway page
+ * and then hard-reloaded, roughly doubling startup TTI.
+ */
 export default function HomePage() {
-  if (readSetupPending()) return <ClientRedirect href="/setup" label="Opening setup..." />;
-
-  let recent: { path: string; mtime: number }[] = [];
-  try {
-    recent = getRecentlyModified(15);
-  } catch (err) {
-    console.error('[HomePage] Failed to load recent files:', err);
-  }
-
-  // Derive renderer entry paths from registry — used by plugin and app-builtin sections on home.
-  const entryPaths = getAllRenderers()
-    .map(r => r.entryPath)
-    .filter((p): p is string => !!p);
-  const existingFiles = getExistingFiles(entryPaths);
-
-  const spaces = listWorkspaceSpaces();
-
-  return <HomeContent recent={recent} existingFiles={existingFiles} spaces={spaces} />;
+  if (readSetupPending()) redirect('/setup');
+  redirect(defaultEchoPath());
 }

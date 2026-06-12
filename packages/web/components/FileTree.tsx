@@ -6,7 +6,7 @@ import { FileNode, SYSTEM_FILES, UNDELETABLE_FILES } from '@/lib/types';
 import { encodePath } from '@/lib/utils';
 import { ICON_SIZES } from '@/lib/config/icon-scale';
 import {
-  ChevronDown, FileText, Table, Folder, FolderOpen, Plus, Loader2,
+  ChevronDown, FileText, Table, Folder, FolderOpen, Loader2,
   Trash2, Pencil, Layers, Copy, MoreHorizontal, Star, Inbox,
 } from 'lucide-react';
 import { createFileAction, deleteFileAction, renameFileAction, renameSpaceAction, deleteSpaceAction, deleteFolderAction, undoDeleteAction } from '@/lib/actions';
@@ -20,6 +20,7 @@ import { useShowHiddenFiles, setShowHiddenFiles, filterHiddenNodes } from '@/lib
 export { setShowHiddenFiles, useShowHiddenFiles };
 import { ContextMenuShell, SpaceContextMenu, FolderContextMenu, MENU_ITEM, MENU_DANGER, MENU_DIVIDER } from '@/components/file-tree/FileTreeContextMenus';
 import { useDirectoryDragDrop } from '@/lib/hooks/useDirectoryDragDrop';
+import { ActivePathContext, createActivePathStore, useIsActiveFile, useIsOnActivePath, type ActivePathStore } from '@/components/file-tree/active-path';
 
 function notifyFilesChanged() {
   window.dispatchEvent(new Event('mindos:files-changed'));
@@ -51,10 +52,36 @@ function getCurrentFilePath(pathname: string): string {
   return encoded.split('/').map(decodeURIComponent).join('/');
 }
 
-function countContentFiles(node: FileNode): number {
-  if (node.type === 'file') return SYSTEM_FILES.has(node.name) ? 0 : 1;
-  return (node.children ?? []).reduce((sum, c) => sum + countContentFiles(c), 0);
+// Counts are cached per node identity: the server sends a fresh tree object on
+// every refresh, so a WeakMap keyed on the node is invalidated exactly when the
+// data actually changes, and collapsed-space badges stop re-walking the whole
+// subtree on every render.
+const contentFileCounts = new WeakMap<FileNode, number>();
+
+export function countContentFiles(node: FileNode): number {
+  const cached = contentFileCounts.get(node);
+  if (cached !== undefined) return cached;
+  const count = node.type === 'file'
+    ? (SYSTEM_FILES.has(node.name) ? 0 : 1)
+    : (node.children ?? []).reduce((sum, c) => sum + countContentFiles(c), 0);
+  contentFileCounts.set(node, count);
+  return count;
 }
+
+/**
+ * Returns a stable function identity that always calls the latest `fn`.
+ * Row components are memoized; threading possibly-inline parent callbacks
+ * through this keeps their props referentially stable across re-renders.
+ */
+function useStableHandler<Args extends unknown[]>(fn: ((...args: Args) => void) | undefined): (...args: Args) => void {
+  const ref = useRef(fn);
+  useEffect(() => { ref.current = fn; });
+  return useCallback((...args: Args) => { ref.current?.(...args); }, []);
+}
+
+// Offscreen rows skip layout/paint entirely; 28px matches the row min-height
+// (min-h-7) so the scrollbar stays accurate before rows are first rendered.
+const ROW_CONTENT_VISIBILITY = '[content-visibility:auto] [contain-intrinsic-block-size:auto_28px]';
 
 // ─── NewFileInline ────────────────────────────────────────────────────────────
 
@@ -130,12 +157,14 @@ function NewFileInline({ dirPath, depth, onDone }: { dirPath: string; depth: num
 
 // ─── DirectoryNode ────────────────────────────────────────────────────────────
 
-const DirectoryNode = memo(function DirectoryNode({ node, depth, currentPath, onNavigate, maxOpenDepth, onImport }: {
-  node: FileNode; depth: number; currentPath: string; onNavigate?: () => void;
+const DirectoryNode = memo(function DirectoryNode({ node, depth, onNavigate, maxOpenDepth, onImport }: {
+  node: FileNode; depth: number; onNavigate?: () => void;
   maxOpenDepth?: number | null; onImport?: (space: string) => void;
 }) {
   const router = useRouter();
-  const isActive = currentPath.startsWith(node.path + '/') || currentPath === node.path;
+  // Subscribed boolean: this row only re-renders when its containment of the
+  // active path flips, not on every navigation (see active-path.ts).
+  const isActive = useIsOnActivePath(node.path);
   const isSpace = !!node.isSpace;
   const [open, setOpen] = useState(depth === 0 ? true : isActive);
   // Track whether this directory has ever been opened — only render children after first open.
@@ -150,7 +179,7 @@ const DirectoryNode = memo(function DirectoryNode({ node, depth, currentPath, on
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const { t } = useLocale();
   const [deleteConfirm, setDeleteConfirm] = useState<null | 'space' | 'folder'>(null);
-  const [isPendingDelete, startDeleteTransition] = useTransition();
+  const [, startDeleteTransition] = useTransition();
 
   // ── External file drop target (from hook) ──
   // Wrap setOpen so drag-expand also marks the directory as opened for lazy rendering
@@ -232,19 +261,14 @@ const DirectoryNode = memo(function DirectoryNode({ node, depth, currentPath, on
     }, 180);
   }, [renaming, router, node.path, onNavigate]);
 
-  const handleDoubleClick = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
-    // Double-click to toggle expand/collapse
-    toggle();
-  }, [toggle]);
-
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setContextMenu({ x: e.clientX, y: e.clientY });
   }, []);
 
-  const contentCount = isSpace ? countContentFiles(node) : 0;
+  // Cached per node identity (WeakMap) and only needed while collapsed.
+  const contentCount = isSpace && !open ? countContentFiles(node) : 0;
 
   if (renaming) {
     return (
@@ -271,7 +295,7 @@ const DirectoryNode = memo(function DirectoryNode({ node, depth, currentPath, on
   return (
     <div>
       <div
-        className={`relative group/dir flex items-center transition-colors duration-100 ${
+        className={`relative group/dir flex items-center transition-colors duration-100 ${ROW_CONTENT_VISIBILITY} ${
           isDragTarget ? 'bg-[var(--amber)]/10 rounded-md' : ''
         }`}
         onContextMenu={handleContextMenu}
@@ -425,11 +449,12 @@ const DirectoryNode = memo(function DirectoryNode({ node, depth, currentPath, on
 
 // ─── FileNodeItem ─────────────────────────────────────────────────────────────
 
-const FileNodeItem = memo(function FileNodeItem({ node, depth, currentPath, onNavigate }: {
-  node: FileNode; depth: number; currentPath: string; onNavigate?: () => void;
+const FileNodeItem = memo(function FileNodeItem({ node, depth, onNavigate }: {
+  node: FileNode; depth: number; onNavigate?: () => void;
 }) {
   const router = useRouter();
-  const isActive = currentPath === node.path;
+  // Subscribed boolean: this row only re-renders when it becomes (in)active.
+  const isActive = useIsActiveFile(node.path);
   const [renaming, setRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState(node.name);
   const [isPending, startTransition] = useTransition();
@@ -519,6 +544,7 @@ const FileNodeItem = memo(function FileNodeItem({ node, depth, currentPath, onNa
         className={`
           hit-target-box w-full flex min-h-7 items-center gap-1.5 px-2 text-left
           text-sm transition-colors duration-100 cursor-default pr-16
+          ${ROW_CONTENT_VISIBILITY}
           [--hit-target-hover-bg:var(--muted)] [--hit-target-active-bg:var(--accent)] [--hit-target-radius:var(--radius-sm)]
           ${isActive
             ? 'text-foreground'
@@ -603,13 +629,50 @@ const FileNodeItem = memo(function FileNodeItem({ node, depth, currentPath, onNa
   );
 });
 
-// ─── FileTree (root) ──────────────────────────────────────────────────────────
+// ─── FileTree ─────────────────────────────────────────────────────────────────
+//
+// Split into three layers so navigation stays O(changed rows):
+//   FileTree (dispatcher) → FileTreeRoot (depth 0: pathname subscription,
+//   active-path store, scroll-into-view) → FileTreeList (pure row mapping,
+//   also used directly for nested levels so they never subscribe to pathname).
 
-export default function FileTree({ nodes, depth = 0, onNavigate, maxOpenDepth, parentIsSpace, onImport }: FileTreeProps) {
+export default function FileTree(props: FileTreeProps) {
+  if ((props.depth ?? 0) > 0) return <FileTreeList {...props} />;
+  return <FileTreeRoot {...props} />;
+}
+
+function FileTreeRoot(props: FileTreeProps) {
   const pathname = usePathname();
   const currentPath = getCurrentFilePath(pathname);
-  const showHidden = useShowHiddenFiles();
 
+  // The store lives for the lifetime of the tree; rows subscribe to derived
+  // booleans so only the rows affected by a navigation re-render.
+  const [store] = useState<ActivePathStore>(() => createActivePathStore(currentPath));
+  useEffect(() => { store.set(currentPath); }, [store, currentPath]);
+
+  // Parent callbacks may be inline; stabilize them once at the root so the
+  // memoized rows below never see a changed function identity.
+  const onNavigate = useStableHandler(props.onNavigate);
+  const onImport = useStableHandler(props.onImport);
+
+  useEffect(() => {
+    if (!currentPath) return;
+    const timer = setTimeout(() => {
+      const el = document.querySelector(`[data-filepath="${CSS.escape(currentPath)}"]`) as HTMLElement | null;
+      el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }, 120);
+    return () => clearTimeout(timer);
+  }, [currentPath]);
+
+  return (
+    <ActivePathContext.Provider value={store}>
+      <FileTreeList {...props} onNavigate={onNavigate} onImport={onImport} />
+    </ActivePathContext.Provider>
+  );
+}
+
+const FileTreeList = memo(function FileTreeList({ nodes, depth = 0, onNavigate, maxOpenDepth, onImport }: FileTreeProps) {
+  const showHidden = useShowHiddenFiles();
   const isRoot = depth === 0;
 
   // Memoize filtering to avoid re-computing on every render
@@ -620,24 +683,15 @@ export default function FileTree({ nodes, depth = 0, onNavigate, maxOpenDepth, p
       : filtered;
   }, [nodes, showHidden, isRoot]);
 
-  useEffect(() => {
-    if (!currentPath || depth !== 0) return;
-    const timer = setTimeout(() => {
-      const el = document.querySelector(`[data-filepath="${CSS.escape(currentPath)}"]`) as HTMLElement | null;
-      el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-    }, 120);
-    return () => clearTimeout(timer);
-  }, [currentPath, depth]);
-
   return (
     <div className="flex flex-col gap-0.5">
       {visibleNodes.map((node) =>
         node.type === 'directory' ? (
-          <DirectoryNode key={node.path} node={node} depth={depth} currentPath={currentPath} onNavigate={onNavigate} maxOpenDepth={maxOpenDepth} onImport={onImport} />
+          <DirectoryNode key={node.path} node={node} depth={depth} onNavigate={onNavigate} maxOpenDepth={maxOpenDepth} onImport={onImport} />
         ) : (
-          <FileNodeItem key={node.path} node={node} depth={depth} currentPath={currentPath} onNavigate={onNavigate} />
+          <FileNodeItem key={node.path} node={node} depth={depth} onNavigate={onNavigate} />
         )
       )}
     </div>
   );
-}
+});

@@ -135,6 +135,12 @@ describe('SearchModal prewarm', () => {
       window.dispatchEvent(new Event('mindos:files-changed'));
     });
 
+    // The files-changed listener coalesces bursts (~300ms) before resetting
+    // the warm state — wait out the window before reopening.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 350));
+    });
+
     await act(async () => {
       root.render(<SearchModal open={false} onClose={() => {}} />);
     });

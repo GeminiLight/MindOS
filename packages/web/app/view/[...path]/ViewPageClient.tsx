@@ -27,6 +27,7 @@ import ExportModal from '@/components/ExportModal';
 import { useEditorTheme } from '@/lib/stores/editor-theme-store';
 import { twemojiToNative } from '@/lib/twemoji';
 import { splitMarkdownFrontmatter } from '@/lib/parsing/frontmatter';
+import { isPathAffected, subscribeFilesChanged } from '@/lib/files-changed';
 
 interface ViewPageClientProps {
   filePath: string;
@@ -412,25 +413,18 @@ export default function ViewPageClient({
   }, [content, editing]);
 
   useEffect(() => {
-    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
-    const handler = () => {
+    // Coalesced (300ms) files-changed subscription: AI may write multiple
+    // files in sequence. Skips the router.refresh() entirely when the event
+    // declares paths and none of them are the file being viewed.
+    return subscribeFilesChanged(() => {
       if (editing) return;
-      // Debounce rapid file changes (AI may write multiple files in sequence)
-      if (debounceTimer) clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(() => {
-        aiTriggeredRef.current = true;
-        router.refresh();
-        setFileUpdated(true);
-        if (updatedTimerRef.current) clearTimeout(updatedTimerRef.current);
-        updatedTimerRef.current = setTimeout(() => setFileUpdated(false), 3000);
-      }, 300);
-    };
-    window.addEventListener('mindos:files-changed', handler);
-    return () => {
-      window.removeEventListener('mindos:files-changed', handler);
-      if (debounceTimer) clearTimeout(debounceTimer);
-    };
-  }, [editing, router]);
+      aiTriggeredRef.current = true;
+      router.refresh();
+      setFileUpdated(true);
+      if (updatedTimerRef.current) clearTimeout(updatedTimerRef.current);
+      updatedTimerRef.current = setTimeout(() => setFileUpdated(false), 3000);
+    }, { isRelevant: (paths) => isPathAffected(paths, filePath) });
+  }, [editing, router, filePath]);
 
   return (
     <div className="flex flex-col min-h-[calc(100vh-var(--app-titlebar-h))]">

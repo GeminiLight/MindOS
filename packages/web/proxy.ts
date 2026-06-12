@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyJwt } from '@/lib/jwt';
 import { buildLoginRedirectTarget, resolveWebSessionSecret, WEB_SESSION_COOKIE_NAME } from '@/lib/auth-session';
+import { readSetupPending } from '@/lib/setup-state';
+import { defaultEchoPath } from '@/lib/echo-segments';
 
 /** CORS headers for /api/* routes (React Native mobile app + cross-origin agents). */
 function corsHeaders(): Record<string, string> {
@@ -64,6 +66,17 @@ export async function proxy(req: NextRequest) {
       return withCors(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }));
     }
     return withCors(NextResponse.next());
+  }
+
+  // --- Entry redirects (/ and /echo) ---
+  // Redirecting here yields a true 307: the page-level redirect() fallback in
+  // app/page.tsx still works, but the root loading.tsx Suspense boundary turns
+  // it into a streamed 200 + meta-refresh shell (~480KB of throwaway HTML).
+  // The proxy runs on the Node.js runtime in Next 16, so the fs read inside
+  // readSetupPending() is allowed.
+  if (pathname === '/' || pathname === '/echo') {
+    const target = readSetupPending() ? '/setup' : defaultEchoPath();
+    return NextResponse.redirect(new URL(target, req.url), 307);
   }
 
   // --- Web UI protection (WEB_PASSWORD) ---

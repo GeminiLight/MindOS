@@ -51,12 +51,19 @@ async function importSync() {
 }
 
 function runGit(args: string[], cwd: string): string {
+  // Never inherit GIT_DIR / GIT_WORK_TREE etc.: when this suite runs from a
+  // git hook (pre-push), those vars point at the real repository and every
+  // add/commit below would silently land there instead of the temp repo
+  // (real incident: "seed remote" commits destroyed the development worktree).
+  const env = Object.fromEntries(
+    Object.entries(process.env).filter(([key]) => !key.startsWith('GIT_')),
+  ) as NodeJS.ProcessEnv;
   return execFileSync('git', args, {
     cwd,
     encoding: 'utf-8',
     stdio: 'pipe',
     env: {
-      ...process.env,
+      ...env,
       GIT_AUTHOR_NAME: 'MindOS Test',
       GIT_AUTHOR_EMAIL: 'mindos-test@example.com',
       GIT_COMMITTER_NAME: 'MindOS Test',

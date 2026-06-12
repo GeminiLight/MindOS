@@ -20,6 +20,7 @@ import { FileNode } from '@/lib/types';
 import type { MindSystemSlot } from '@/lib/mind-system';
 import { useLocale } from '@/lib/stores/locale-store';
 import { telemetry } from '@/lib/telemetry';
+import { createTrailingCoalescer } from '@/lib/files-changed';
 import dynamic from 'next/dynamic';
 
 const SearchModal = dynamic(() => import('./SearchModal'), { ssr: false });
@@ -394,27 +395,35 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
   const closeAgentDetailPanel = useCallback(() => setAgentDetailKey(null), []);
 
   // Refresh file tree when server-side tree version changes.
-  // Polls a lightweight version counter every 5s — only calls router.refresh()
-  // (which rebuilds the full tree) when the version actually changes.
-  // A 2-second cooldown prevents rapid-fire refreshes during bulk file operations.
+  // Polls a lightweight version counter every 5s — only triggers a refresh
+  // when the version actually changes. The actual router.refresh() (which
+  // re-serializes the full file tree into the RSC payload) is trailing-edge
+  // coalesced: bursts of version changes (bulk file ops, visibility-triggered
+  // checks) collapse into a single refresh, with ≥2s between refreshes.
   useEffect(() => {
     let lastVersion = -1;
     let stopped = false;
-    let lastRefreshTime = 0;
-    let pendingRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+    let pendingRange: { previousVersion: number; version: number } | null = null;
 
-    const doRefresh = (version: number, previousVersion: number) => {
-      lastRefreshTime = Date.now();
+    const REFRESH_COALESCE_MS = 1000;
+    const REFRESH_MIN_SPACING_MS = 2000;
+    // Own writes surface immediately via mindos:files-changed events; this
+    // poll only backstops external edits, so it can run slowly.
+    const POLL_INTERVAL_MS = 15000;
+
+    const refreshCoalescer = createTrailingCoalescer(() => {
+      if (stopped || !pendingRange) return;
+      const { previousVersion, version } = pendingRange;
+      pendingRange = null;
       const stopRefresh = telemetry.startTimer('tree.refresh.trigger');
       startTransition(() => {
         router.refresh();
       });
       stopRefresh({ previousVersion, version, reason: 'tree_version_changed' });
+      // Tree-version polling cannot know which paths changed, so the event
+      // carries no detail — listeners treat it as "anything changed".
       window.dispatchEvent(new Event('mindos:files-changed'));
-    };
-
-    const REFRESH_COOLDOWN_MS = 2000;
-    const POLL_INTERVAL_MS = 5000;
+    }, { delayMs: REFRESH_COALESCE_MS, minSpacingMs: REFRESH_MIN_SPACING_MS });
 
     const checkVersion = async () => {
       if (stopped || document.visibilityState === 'hidden') return;
@@ -434,20 +443,11 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
         if (v !== lastVersion) {
           const previousVersion = lastVersion;
           lastVersion = v;
-
-          // Cooldown: if we refreshed recently, delay this one
-          const elapsed = Date.now() - lastRefreshTime;
-          if (elapsed < REFRESH_COOLDOWN_MS) {
-            if (pendingRefreshTimer) clearTimeout(pendingRefreshTimer);
-            pendingRefreshTimer = setTimeout(() => {
-              pendingRefreshTimer = null;
-              if (!stopped) doRefresh(v, previousVersion);
-            }, REFRESH_COOLDOWN_MS - elapsed);
-            stop({ ok: true, changed: true, previousVersion, version: v, deferred: true });
-          } else {
-            doRefresh(v, previousVersion);
-            stop({ ok: true, changed: true, previousVersion, version: v });
-          }
+          pendingRange = pendingRange
+            ? { previousVersion: pendingRange.previousVersion, version: v }
+            : { previousVersion, version: v };
+          refreshCoalescer.schedule();
+          stop({ ok: true, changed: true, previousVersion, version: v });
           return;
         }
         stop({ ok: true, changed: false, version: v });
@@ -468,7 +468,7 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
     return () => {
       stopped = true;
       clearInterval(interval);
-      if (pendingRefreshTimer) clearTimeout(pendingRefreshTimer);
+      refreshCoalescer.cancel();
       document.removeEventListener('visibilitychange', onVisible);
     };
   }, [router]);

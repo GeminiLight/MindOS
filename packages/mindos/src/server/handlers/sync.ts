@@ -6,6 +6,33 @@ import { dirname, join, resolve } from 'node:path';
 import { resolveExistingSafe } from '../../foundation/security/index.js';
 import { json, type MindosServerResponse } from '../response.js';
 
+// Git hooks (pre-push etc.) export GIT_DIR — and may export GIT_WORK_TREE,
+// GIT_INDEX_FILE, GIT_OBJECT_DIRECTORY, GIT_PREFIX, GIT_QUARANTINE_PATH —
+// pointing at the hook's own repository. Any git we spawn with that env and a
+// different cwd silently operates on the hook's repo instead of mindRoot
+// (real incident: a test run under pre-push committed onto the development
+// worktree and deleted the tree). These vars are never legitimate input to
+// MindOS sync; strip them from every spawned git's env. User-level git env
+// (GIT_SSH_COMMAND, GIT_TERMINAL_PROMPT, GIT_AUTHOR_*) stays. Keep the list
+// in sync with bin/lib/sync.js.
+const GIT_REPO_TARGETING_VARS = new Set([
+  'GIT_DIR',
+  'GIT_WORK_TREE',
+  'GIT_INDEX_FILE',
+  'GIT_OBJECT_DIRECTORY',
+  'GIT_ALTERNATE_OBJECT_DIRECTORIES',
+  'GIT_COMMON_DIR',
+  'GIT_NAMESPACE',
+  'GIT_PREFIX',
+  'GIT_QUARANTINE_PATH',
+]);
+
+export function sanitizeGitEnv(base: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  return Object.fromEntries(
+    Object.entries(base).filter(([key]) => !GIT_REPO_TARGETING_VARS.has(key)),
+  ) as NodeJS.ProcessEnv;
+}
+
 export type MindosSyncConfig = Record<string, any> & {
   mindRoot?: string;
   sync?: {
@@ -571,6 +598,7 @@ function stopTrackingIgnoredFiles(mindRoot: string): StopTrackingIgnoredResult {
       execFileSync('git', ['rm', '--cached', '--ignore-unmatch', '--', ...chunk], {
         cwd: mindRoot,
         stdio: 'pipe',
+        env: sanitizeGitEnv(),
         timeout: 60_000,
       });
       stoppedTracking.push(...chunk);
@@ -599,6 +627,7 @@ function commitAndPushResolvedSync(mindRoot: string, file: string): ResolvedSync
       execFileSync('git', ['commit', '--only', '-m', 'auto-sync: resolved sync conflict', '--', ...pathspecs], {
         cwd: mindRoot,
         stdio: 'pipe',
+        env: sanitizeGitEnv(),
         timeout: 60_000,
       });
     }
@@ -617,7 +646,7 @@ function commitAndPushResolvedSync(mindRoot: string, file: string): ResolvedSync
     execFileSync('git', ['push', '-u', 'origin', 'HEAD'], {
       cwd: mindRoot,
       stdio: 'pipe',
-      env: { ...process.env, GIT_TERMINAL_PROMPT: '0', ...getGitSshEnvIfNeeded(remote) },
+      env: { ...sanitizeGitEnv(), GIT_TERMINAL_PROMPT: '0', ...getGitSshEnvIfNeeded(remote) },
       timeout: 60_000,
     });
     return { uploaded: true };
@@ -669,6 +698,7 @@ function isGitPathTracked(mindRoot: string, pathspec: string): boolean {
     execFileSync('git', ['ls-files', '--error-unmatch', '--', pathspec], {
       cwd: mindRoot,
       stdio: ['ignore', 'ignore', 'ignore'],
+      env: sanitizeGitEnv(),
       timeout: 5000,
     });
     return true;
@@ -683,6 +713,7 @@ function listTrackedGitFiles(mindRoot: string): string[] {
       cwd: mindRoot,
       encoding: 'utf-8',
       stdio: ['ignore', 'pipe', 'pipe'],
+      env: sanitizeGitEnv(),
       timeout: 30_000,
     }));
   } catch {
@@ -699,6 +730,7 @@ function listIgnoredFilesFromTrackedSet(mindRoot: string, trackedFiles: string[]
       input,
       encoding: 'utf-8',
       stdio: ['pipe', 'pipe', 'pipe'],
+      env: sanitizeGitEnv(),
       timeout: 30_000,
     }));
   } catch (error) {
@@ -723,10 +755,10 @@ function chunkArray<T>(items: T[], chunkSize: number): T[][] {
 
 function ensureServerGitIdentity(mindRoot: string): void {
   if (!readServerGitConfig(mindRoot, 'user.email')) {
-    execFileSync('git', ['config', 'user.email', 'mindos@local'], { cwd: mindRoot, stdio: 'pipe', timeout: 5000 });
+    execFileSync('git', ['config', 'user.email', 'mindos@local'], { cwd: mindRoot, stdio: 'pipe', env: sanitizeGitEnv(), timeout: 5000 });
   }
   if (!readServerGitConfig(mindRoot, 'user.name')) {
-    execFileSync('git', ['config', 'user.name', 'MindOS'], { cwd: mindRoot, stdio: 'pipe', timeout: 5000 });
+    execFileSync('git', ['config', 'user.name', 'MindOS'], { cwd: mindRoot, stdio: 'pipe', env: sanitizeGitEnv(), timeout: 5000 });
   }
 }
 
@@ -1102,6 +1134,7 @@ function runGit(cwd: string, args: string[]): string {
     cwd,
     encoding: 'utf-8',
     stdio: ['ignore', 'pipe', 'ignore'],
+    env: sanitizeGitEnv(),
   }).trim();
 }
 
@@ -1164,7 +1197,9 @@ async function runCli(
     return;
   }
 
-  const env = { ...(services.env ?? process.env), ...(envOverrides ?? {}) };
+  // The child CLI spawns its own git against mindRoot — repo-targeting vars
+  // inherited from a git hook must not reach it either.
+  const env = { ...sanitizeGitEnv(services.env ?? process.env), ...(envOverrides ?? {}) };
   const nodeBin = services.nodeBin ?? env.MINDOS_NODE_BIN ?? process.execPath;
   const cliPath = services.cliPath ?? resolveMindosCliPath({
     env,

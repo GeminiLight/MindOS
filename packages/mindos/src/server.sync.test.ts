@@ -26,8 +26,24 @@ import {
 import {
   getServerSyncLockPath,
   handleSyncGet,
-  handleSyncPost
+  handleSyncPost,
+  sanitizeGitEnv
 } from './server.js';
+
+// Never inherit GIT_DIR / GIT_WORK_TREE etc.: when this suite runs from a git
+// hook (pre-push), those vars point at the real repository and every add/commit
+// below would silently land there instead of the temp repo (real incident:
+// "seed remote" commits destroyed the development worktree).
+function testGitEnv(): NodeJS.ProcessEnv {
+  const env = Object.fromEntries(
+    Object.entries(process.env).filter(([key]) => !key.startsWith('GIT_')),
+  ) as NodeJS.ProcessEnv;
+  env.GIT_AUTHOR_NAME = 'MindOS Test';
+  env.GIT_AUTHOR_EMAIL = 'mindos-test@example.com';
+  env.GIT_COMMITTER_NAME = 'MindOS Test';
+  env.GIT_COMMITTER_EMAIL = 'mindos-test@example.com';
+  return env;
+}
 
 function runTestGit(cwd: string, args: string[], input?: string): string {
   return execFileSync('git', args, {
@@ -35,13 +51,7 @@ function runTestGit(cwd: string, args: string[], input?: string): string {
     input,
     encoding: 'utf-8',
     stdio: input === undefined ? ['ignore', 'pipe', 'pipe'] : ['pipe', 'pipe', 'pipe'],
-    env: {
-      ...process.env,
-      GIT_AUTHOR_NAME: 'MindOS Test',
-      GIT_AUTHOR_EMAIL: 'mindos-test@example.com',
-      GIT_COMMITTER_NAME: 'MindOS Test',
-      GIT_COMMITTER_EMAIL: 'mindos-test@example.com',
-    },
+    env: testGitEnv(),
   }).trim();
 }
 
@@ -959,5 +969,59 @@ describe('MindOS server contract: sync', () => {
     expect(source).toContain("execFileSync('git', args");
     expect(source).toContain("runGit(cwd, ['remote', 'get-url', 'origin'])");
     expect(source).toContain("runGit(cwd, ['rev-list', '--count', '@{u}..HEAD'])");
+  });
+
+  it('sanitizeGitEnv drops hook-exported repo-targeting vars but keeps user git config', () => {
+    const sanitized = sanitizeGitEnv({
+      PATH: '/usr/bin',
+      HOME: '/home/u',
+      GIT_DIR: '/real/repo/.git',
+      GIT_WORK_TREE: '/real/repo',
+      GIT_INDEX_FILE: '/real/repo/.git/index',
+      GIT_OBJECT_DIRECTORY: '/real/repo/.git/objects',
+      GIT_ALTERNATE_OBJECT_DIRECTORIES: '/alt',
+      GIT_COMMON_DIR: '/real/repo/.git',
+      GIT_NAMESPACE: 'ns',
+      GIT_PREFIX: 'sub/',
+      GIT_QUARANTINE_PATH: '/q',
+      GIT_SSH_COMMAND: 'ssh -i key',
+      GIT_TERMINAL_PROMPT: '0',
+      GIT_AUTHOR_NAME: 'User',
+    });
+
+    // Repo-location vars (exported by git hooks) would redirect every spawned
+    // git away from mindRoot — they must never survive.
+    for (const key of [
+      'GIT_DIR',
+      'GIT_WORK_TREE',
+      'GIT_INDEX_FILE',
+      'GIT_OBJECT_DIRECTORY',
+      'GIT_ALTERNATE_OBJECT_DIRECTORIES',
+      'GIT_COMMON_DIR',
+      'GIT_NAMESPACE',
+      'GIT_PREFIX',
+      'GIT_QUARANTINE_PATH',
+    ]) {
+      expect(sanitized, `${key} must be removed`).not.toHaveProperty(key);
+    }
+
+    // Legitimate user-level git env stays.
+    expect(sanitized.PATH).toBe('/usr/bin');
+    expect(sanitized.HOME).toBe('/home/u');
+    expect(sanitized.GIT_SSH_COMMAND).toBe('ssh -i key');
+    expect(sanitized.GIT_TERMINAL_PROMPT).toBe('0');
+    expect(sanitized.GIT_AUTHOR_NAME).toBe('User');
+  });
+
+  it('every git spawn in the sync handler uses a sanitized env', () => {
+    const source = readFileSync(join(__dirname, 'server', 'handlers', 'sync.ts'), 'utf-8');
+    // Count execFileSync('git', ...) option objects without an env key by
+    // checking each call site mentions sanitizeGitEnv in its options.
+    const calls = source.split(/execFileSync\('git',/).slice(1);
+    expect(calls.length).toBeGreaterThan(0);
+    for (const [index, call] of calls.entries()) {
+      const options = call.slice(0, call.indexOf('})'));
+      expect(options, `git spawn #${index + 1} must pass a sanitized env`).toContain('sanitizeGitEnv');
+    }
   });
 });

@@ -207,7 +207,8 @@ describe('MindOS server contract: product operations', () => {
       status: 200,
       body: { ok: true },
     });
-    expect(JSON.parse(readFileSync(storePath, 'utf-8'))).toEqual([session]);
+    // Per-session storage: each session lives in its own file under sessions/.
+    expect(JSON.parse(readFileSync(join(root, 'sessions', `${Buffer.from('s1').toString('base64url')}.json`), 'utf-8'))).toEqual(session);
     expect(handleAskSessionsGet({ storePath }).body).toEqual([session]);
     expect(handleAskSessionsDelete({ id: 's1' }, { storePath })).toMatchObject({
       status: 200,

@@ -23,10 +23,11 @@ describe('core/agent-audit-log', () => {
     });
 
     expect(fs.existsSync(auditLogPath(testMindRoot))).toBe(true);
-    const raw = fs.readFileSync(auditLogPath(testMindRoot), 'utf-8');
-    const json = JSON.parse(raw) as { events: unknown[] };
-    expect(Array.isArray(json.events)).toBe(true);
-    expect(json.events.length).toBe(1);
+    // JSONL format: one event per line, plus a meta sidecar marking the format.
+    const lines = fs.readFileSync(auditLogPath(testMindRoot), 'utf-8').trim().split('\n');
+    expect(lines.length).toBe(1);
+    expect((JSON.parse(lines[0]) as { tool: string }).tool).toBe('mindos_read_file');
+    expect(fs.existsSync(path.join(testMindRoot, '.mindos', 'agent-audit-log.meta.json'))).toBe(true);
   });
 
   it('stores action summaries by default and keeps raw debug capture redacted when explicitly requested', () => {
@@ -120,6 +121,22 @@ describe('core/agent-audit-log', () => {
     expect(events[0].op).toBe('legacy_agent_log_jsonl_import');
     expect(events[0].tool).toBe('mindos_update_lines');
     expect(fs.existsSync(legacyPath)).toBe(false);
+  });
+
+  it('appends without rewriting earlier lines and skips corrupted lines on read', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mindos-audit-log-append-'));
+    try {
+      appendAgentAuditEvent(root, { ts: '2026-03-25T00:00:00.000Z', tool: 'first_tool', params: {}, result: 'ok' });
+      const firstLine = fs.readFileSync(auditLogPath(root), 'utf-8');
+      fs.appendFileSync(auditLogPath(root), '{broken json\n', 'utf-8');
+      appendAgentAuditEvent(root, { ts: '2026-03-25T00:01:00.000Z', tool: 'second_tool', params: {}, result: 'ok' });
+
+      expect(fs.readFileSync(auditLogPath(root), 'utf-8').startsWith(firstLine)).toBe(true);
+      const events = listAgentAuditEvents(root, 10);
+      expect(events.map((event) => event.tool)).toEqual(['second_tool', 'first_tool']);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
   });
 
   it('does not write audit logs through a symlinked .mindos directory outside mindRoot', () => {

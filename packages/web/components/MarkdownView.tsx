@@ -2,7 +2,6 @@
 
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import rehypeHighlight from 'rehype-highlight';
 import rehypeRaw from 'rehype-raw';
 import rehypeSlug from 'rehype-slug';
 import { useState, useCallback, useEffect, useId } from 'react';
@@ -11,7 +10,9 @@ import { copyToClipboard } from '@/lib/clipboard';
 import { toast } from '@/lib/toast';
 import { resolveImagePath } from '@/lib/image';
 import { splitMarkdownFrontmatter, type FrontmatterValue } from '@/lib/parsing/frontmatter';
-import type { Components } from 'react-markdown';
+import type { Components, Options as ReactMarkdownOptions } from 'react-markdown';
+
+type RehypePlugin = NonNullable<ReactMarkdownOptions['rehypePlugins']>[number];
 
 interface MarkdownViewProps {
   content: string;
@@ -226,6 +227,23 @@ export default function MarkdownView({ content, highlightLines, onDismissHighlig
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
 
+  // rehype-highlight pulls in highlight.js (~100KB gz) — load it lazily so it
+  // stays out of the /view route's first-load chunk. Code renders
+  // un-highlighted for a frame and re-renders once the plugin arrives.
+  const [highlightPlugin, setHighlightPlugin] = useState<RehypePlugin | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    import('rehype-highlight')
+      .then((mod) => {
+        if (!cancelled) setHighlightPlugin(() => mod.default as RehypePlugin);
+      })
+      .catch((err) => {
+        // Graceful degradation: code stays readable without highlighting.
+        console.error('[MarkdownView] Failed to load syntax highlighter:', err);
+      });
+    return () => { cancelled = true; };
+  }, []);
+
   if (!content.trim() && emptyPlaceholder) {
     return (
       <div className="py-16 text-center text-sm text-muted-foreground/60">
@@ -270,7 +288,7 @@ export default function MarkdownView({ content, highlightLines, onDismissHighlig
         {mounted ? (
           <ReactMarkdown
             remarkPlugins={[remarkGfm]}
-            rehypePlugins={[rehypeSlug, rehypeHighlight, rehypeRaw]}
+            rehypePlugins={highlightPlugin ? [rehypeSlug, highlightPlugin, rehypeRaw] : [rehypeSlug, rehypeRaw]}
             components={components}
           >
             {parsedMarkdown.body}

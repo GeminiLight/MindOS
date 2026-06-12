@@ -1,13 +1,11 @@
-import { LocalFileSystem } from '../../knowledge/storage/local.js';
-import {
-  getContentChangeSummary,
-  listContentChanges,
-  markContentChangesSeen,
-  type ContentChangeEvent,
-  type ContentChangeSummary,
-} from '../../knowledge/audit/index.js';
+import type { ContentChangeEvent, ContentChangeSummary } from '../../knowledge/audit/index.js';
 import { queryValue, type MindosRequestQuery } from '../context.js';
 import { json, type MindosServerResponse } from '../response.js';
+import {
+  getContentChangeSummaryFromLog,
+  listContentChangesFromLog,
+  markContentChangesSeenInLog,
+} from './change-log-store.js';
 
 export type ChangesHandlerServices = {
   mindRoot: string;
@@ -26,11 +24,13 @@ export async function handleChangesGet(
   services: ChangesHandlerServices,
 ): Promise<MindosServerResponse<ContentChangeSummary | ChangesListPayload | { error: string }>> {
   const op = queryValue(query, 'op') ?? 'summary';
-  const fs = new LocalFileSystem();
 
   if (op === 'summary') {
-    const result = await getContentChangeSummary(fs, services.mindRoot);
-    return result.ok ? json(result.value) : json({ error: result.error.message }, { status: 500 });
+    try {
+      return json(getContentChangeSummaryFromLog(services.mindRoot));
+    } catch (error) {
+      return json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 });
+    }
   }
 
   if (op === 'list') {
@@ -41,14 +41,18 @@ export async function handleChangesGet(
     const source = sourceParam === 'user' || sourceParam === 'agent' || sourceParam === 'system'
       ? sourceParam
       : undefined;
-    const result = await listContentChanges(fs, services.mindRoot, {
-      path: queryValue(query, 'path'),
-      source,
-      op: queryValue(query, 'event_op'),
-      q: queryValue(query, 'q'),
-      limit,
-    });
-    return result.ok ? json({ events: result.value }) : json({ error: result.error.message }, { status: 500 });
+    try {
+      const events = listContentChangesFromLog(services.mindRoot, {
+        path: queryValue(query, 'path'),
+        source,
+        op: queryValue(query, 'event_op'),
+        q: queryValue(query, 'q'),
+        limit,
+      });
+      return json({ events });
+    } catch (error) {
+      return json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 });
+    }
   }
 
   return json({ error: `unknown op: ${op}` }, { status: 400 });
@@ -63,8 +67,12 @@ export async function handleChangesPost(
   if (typeof op !== 'string') return json({ error: 'missing op' }, { status: 400 });
 
   if (op === 'mark_seen') {
-    const result = await markContentChangesSeen(new LocalFileSystem(), services.mindRoot);
-    return result.ok ? json({ ok: true }) : json({ error: result.error.message }, { status: 500 });
+    try {
+      markContentChangesSeenInLog(services.mindRoot);
+      return json({ ok: true });
+    } catch (error) {
+      return json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 });
+    }
   }
 
   return json({ error: `unknown op: ${op}` }, { status: 400 });

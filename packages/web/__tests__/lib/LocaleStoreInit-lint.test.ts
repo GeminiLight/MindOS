@@ -8,7 +8,17 @@ describe('LocaleStoreInit lint contract', () => {
   it('does not read refs during render', () => {
     const result = spawnSync(
       'pnpm',
-      ['--filter', '@mindos/web', 'exec', 'eslint', '-f', 'json', 'lib/stores/LocaleStoreInit.tsx'],
+      [
+        '--filter',
+        '@mindos/web',
+        'exec',
+        'eslint',
+        '-f',
+        'json',
+        'lib/stores/LocaleStoreInit.tsx',
+        'lib/stores/LocaleStoreInitClient.tsx',
+        'lib/stores/LocaleStoreInitZh.tsx',
+      ],
       {
         cwd: repoRoot,
         encoding: 'utf-8',

@@ -1,13 +1,13 @@
 'use client';
 
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { type ComponentType, useCallback, useEffect, useId, useRef, useState } from 'react';
 import { ChevronDown, Loader2, Sparkles } from 'lucide-react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import { cn } from '@/lib/utils';
 import { consumeUIMessageStream } from '@/lib/agent/stream-consumer';
 import { useSettingsAiAvailable } from '@/hooks/useSettingsAiAvailable';
 import { useLocale } from '@/lib/stores/locale-store';
+
+type InsightMarkdownComponent = ComponentType<{ markdown: string }>;
 
 const proseInsight =
   'prose prose-sm prose-panel dark:prose-invert max-w-none text-foreground ' +
@@ -52,6 +52,24 @@ export function EchoInsightCollapsible({
   const abortRef = useRef<AbortController | null>(null);
   const { ready: aiReady, loading: aiLoading } = useSettingsAiAvailable();
   const { t } = useLocale();
+
+  // react-markdown (~46KB gz) stays out of the Echo first-screen chunk: the
+  // renderer is dynamic-imported once the panel opens. Until it arrives, the
+  // raw insight text renders as a lightweight pre-wrapped fallback.
+  const [InsightMarkdown, setInsightMarkdown] = useState<InsightMarkdownComponent | null>(null);
+  useEffect(() => {
+    if (!open || InsightMarkdown) return;
+    let cancelled = false;
+    import('./EchoInsightMarkdown')
+      .then((mod) => {
+        if (!cancelled) setInsightMarkdown(() => mod.default);
+      })
+      .catch((err) => {
+        // Graceful degradation: the raw-text fallback keeps content readable.
+        console.error('[EchoInsightCollapsible] Failed to load markdown renderer:', err);
+      });
+    return () => { cancelled = true; };
+  }, [open, InsightMarkdown]);
 
   useEffect(() => () => abortRef.current?.abort(), []);
 
@@ -180,7 +198,11 @@ export function EchoInsightCollapsible({
             ) : null}
             {insightMd ? (
               <div className={cn(proseInsight, 'mt-4 border-t border-border/50 pt-4')}>
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>{insightMd}</ReactMarkdown>
+                {InsightMarkdown ? (
+                  <InsightMarkdown markdown={insightMd} />
+                ) : (
+                  <p className="whitespace-pre-wrap">{insightMd}</p>
+                )}
                 {streaming ? (
                   <span
                     className="ml-0.5 inline-block h-3.5 w-1 animate-pulse rounded-sm bg-[var(--amber)] align-middle"

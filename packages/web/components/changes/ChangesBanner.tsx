@@ -1,10 +1,12 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { History, X } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
+import { useVisiblePolling } from '@/lib/use-visible-polling';
+import { useFilesChanged } from '@/hooks/useFilesChanged';
 import { useLocale } from '@/lib/stores/locale-store';
 
 interface ChangeSummaryPayload {
@@ -21,23 +23,25 @@ export default function ChangesBanner() {
   const pathname = usePathname();
   const { t } = useLocale();
 
+  const mountedRef = useRef(true);
   useEffect(() => {
-    let active = true;
-    const fetchSummary = async () => {
-      try {
-        const summary = await apiFetch<ChangeSummaryPayload>('/api/changes?op=summary');
-        if (active) setUnreadCount(summary.unreadCount);
-      } catch {
-        if (active) setUnreadCount(0);
-      }
-    };
-    void fetchSummary();
-    const timer = setInterval(() => void fetchSummary(), 15_000);
-    return () => {
-      active = false;
-      clearInterval(timer);
-    };
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
   }, []);
+
+  const fetchSummary = useCallback(async () => {
+    try {
+      const summary = await apiFetch<ChangeSummaryPayload>('/api/changes?op=summary');
+      if (mountedRef.current) setUnreadCount(summary.unreadCount);
+    } catch {
+      if (mountedRef.current) setUnreadCount(0);
+    }
+  }, []);
+
+  // Content writes arrive via files-changed events; the slow poll only
+  // backstops changes the event contract cannot see (e.g. other tabs).
+  useVisiblePolling(() => void fetchSummary(), 60_000);
+  useFilesChanged(() => void fetchSummary());
 
   // Re-show banner when new changes arrive after auto-dismiss
   useEffect(() => {

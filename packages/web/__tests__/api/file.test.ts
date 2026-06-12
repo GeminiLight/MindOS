@@ -203,14 +203,13 @@ describe('POST /api/file', () => {
     const logPath = path.join(root(), '.mindos', 'change-log.json');
     expect(fs.existsSync(logPath)).toBe(true);
 
-    const log = JSON.parse(fs.readFileSync(logPath, 'utf-8')) as {
-      events: Array<{ op: string; path: string; after?: string }>;
-    };
-    expect(Array.isArray(log.events)).toBe(true);
-    expect(log.events.length).toBeGreaterThan(0);
-    expect(log.events[0].op).toBe('save_file');
-    expect(log.events[0].path).toBe('logged.md');
-    expect(log.events[0].after).toContain('v1');
+    // JSONL format: newest event is the last line.
+    const lines = fs.readFileSync(logPath, 'utf-8').trim().split('\n');
+    expect(lines.length).toBeGreaterThan(0);
+    const latest = JSON.parse(lines[lines.length - 1]) as { op: string; path: string; after?: string };
+    expect(latest.op).toBe('save_file');
+    expect(latest.path).toBe('logged.md');
+    expect(latest.after).toContain('v1');
   });
 
   it('save_file returns error if content missing', async () => {
@@ -387,12 +386,12 @@ describe('POST /api/file', () => {
 
     const newLogPath = path.join(root(), '.mindos', 'agent-audit-log.json');
     expect(fs.existsSync(newLogPath)).toBe(true);
-    const json = JSON.parse(fs.readFileSync(newLogPath, 'utf-8')) as {
-      events: Array<{ tool: string; op: string }>;
-    };
-    expect(json.events.length).toBeGreaterThan(0);
-    expect(json.events[0].tool).toBe('mindos_search_notes');
-    expect(json.events[0].op).toBe('append');
+    // JSONL format: newest event is the last line.
+    const lines = fs.readFileSync(newLogPath, 'utf-8').trim().split('\n');
+    expect(lines.length).toBeGreaterThan(0);
+    const latest = JSON.parse(lines[lines.length - 1]) as { tool: string; op: string };
+    expect(latest.tool).toBe('mindos_search_notes');
+    expect(latest.op).toBe('append');
     expect(fs.existsSync(path.join(root(), '.agent-log.json'))).toBe(false);
   });
 

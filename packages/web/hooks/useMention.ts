@@ -1,12 +1,13 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
+import { fetchAllFilePaths } from '@/lib/client-cache';
+import { subscribeFilesChanged } from '@/lib/files-changed';
 
 function safeFetchFiles(): Promise<string[]> {
-  return fetch('/api/files')
-    .then((r) => (r.ok ? r.json() : []))
-    .then((data) => (Array.isArray(data) ? data : []))
-    .catch(() => [] as string[]);
+  // Shared cache + single-flight: simultaneous consumers of /api/files
+  // (mention picker, plugin panels, ...) issue one request.
+  return fetchAllFilePaths().catch(() => [] as string[]);
 }
 
 export function useMention() {
@@ -21,9 +22,8 @@ export function useMention() {
 
   useEffect(() => {
     loadFiles();
-    const handler = () => loadFiles();
-    window.addEventListener('mindos:files-changed', handler);
-    return () => window.removeEventListener('mindos:files-changed', handler);
+    // Any path change can affect mention candidates; coalesce bursts only.
+    return subscribeFilesChanged(() => loadFiles());
   }, [loadFiles]);
 
   const updateMentionFromInput = useCallback(

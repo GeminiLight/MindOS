@@ -27,6 +27,7 @@ import {
 } from '../../knowledge/knowledge-ops/index.js';
 import { queryValue, type MindosRequestQuery } from '../context.js';
 import { json, type MindosServerResponse } from '../response.js';
+import { appendAgentAuditEvents, parseAgentAuditJsonLines } from './audit-log.js';
 import { isMindosBuiltinAssistantId } from './assistants.js';
 
 export type FileGetHandlerServices = {
@@ -305,8 +306,8 @@ function createFile(mindRoot: string, filePath: string, params: Record<string, u
 function appendToFile(mindRoot: string, filePath: string, params: Record<string, unknown>) {
   const content = requireString(params.content, 'content');
   if (filePath === '.agent-log.json') {
-    const entries = parseAgentAuditJsonLines(content);
-    for (const entry of entries) appendAgentAuditEvent(mindRoot, entry);
+    // Batch append: one JSONL write for all entries (was O(N^2) rewrite-per-entry).
+    appendAgentAuditEvents(mindRoot, parseAgentAuditJsonLines(content));
     return { response: json({ ok: true, path: filePath }), changeEvent: null };
   }
   const before = safeRead(mindRoot, filePath);
@@ -618,59 +619,6 @@ function resolveSafeSiblingDir(mindRoot: string, name: string): string {
   }
 
   return target;
-}
-
-type AgentAuditInput = {
-  ts: string;
-  tool: string;
-  params: Record<string, unknown>;
-  result: 'ok' | 'error';
-  message?: string;
-  durationMs?: number;
-  agentName?: string;
-};
-
-function parseAgentAuditJsonLines(raw: string): AgentAuditInput[] {
-  const entries: AgentAuditInput[] = [];
-  for (const line of raw.split('\n')) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#') || trimmed.startsWith('//')) continue;
-    try {
-      const parsed = JSON.parse(trimmed) as Record<string, unknown>;
-      entries.push({
-        ts: typeof parsed.ts === 'string' ? parsed.ts : new Date().toISOString(),
-        tool: typeof parsed.tool === 'string' && parsed.tool.trim() ? parsed.tool : 'unknown-tool',
-        params: parsed.params && typeof parsed.params === 'object' ? parsed.params as Record<string, unknown> : {},
-        result: parsed.result === 'error' ? 'error' : 'ok',
-        message: typeof parsed.message === 'string' ? parsed.message : undefined,
-        durationMs: typeof parsed.durationMs === 'number' ? parsed.durationMs : undefined,
-        agentName: typeof parsed.agentName === 'string' ? parsed.agentName : undefined,
-      });
-    } catch {
-      // Ignore malformed legacy lines.
-    }
-  }
-  return entries;
-}
-
-function appendAgentAuditEvent(mindRoot: string, input: AgentAuditInput): void {
-  const file = resolveExistingSafe(mindRoot, '.mindos/agent-audit-log.json');
-  let state: { version: 1; events: Array<Record<string, unknown>> } = { version: 1, events: [] };
-  try {
-    if (existsSync(file)) {
-      const parsed = JSON.parse(readFileSync(file, 'utf-8')) as typeof state;
-      if (Array.isArray(parsed.events)) state = { version: 1, events: parsed.events };
-    }
-  } catch {
-    state = { version: 1, events: [] };
-  }
-  state.events.unshift({
-    id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
-    ...input,
-    op: 'append',
-  });
-  mkdirSync(dirname(file), { recursive: true });
-  writeFileSync(file, JSON.stringify(state, null, 2), 'utf-8');
 }
 
 function requireString(value: unknown, field: string): string {

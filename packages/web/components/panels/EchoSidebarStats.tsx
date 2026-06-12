@@ -1,9 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { TrendingUp, MessageSquare, AlertCircle } from 'lucide-react';
 import type { ContentChangeEvent } from '@/lib/fs';
 import { apiFetch } from '@/lib/api';
+import { useVisiblePolling } from '@/lib/use-visible-polling';
+import { useFilesChanged } from '@/hooks/useFilesChanged';
 import { useLocale } from '@/lib/stores/locale-store';
 
 interface EchoStats {
@@ -18,36 +20,35 @@ export default function EchoSidebarStats() {
   const [loading, setLoading] = useState(true);
   const { t } = useLocale();
 
-  useEffect(() => {
-    const loadStats = async () => {
-      try {
-        setLoading(true);
-        const [monitoring, changes, sessions] = await Promise.all([
-          apiFetch<any>('/api/monitoring'),
-          apiFetch<any>('/api/changes?op=list&limit=3'),
-          apiFetch<any>('/api/ask-sessions'),
-        ]);
+  const loadStats = async () => {
+    try {
+      const [monitoring, changes, sessions] = await Promise.all([
+        apiFetch<any>('/api/monitoring'),
+        apiFetch<any>('/api/changes?op=list&limit=3'),
+        apiFetch<any>('/api/ask-sessions'),
+      ]);
 
-        setStats({
-          fileCount: monitoring?.knowledgeBase?.fileCount ?? 0,
-          unreadChanges: changes?.events?.length ?? 0,
-          sessionCount: Array.isArray(sessions) ? sessions.length : 0,
-        });
+      setStats({
+        fileCount: monitoring?.knowledgeBase?.fileCount ?? 0,
+        unreadChanges: changes?.events?.length ?? 0,
+        sessionCount: Array.isArray(sessions) ? sessions.length : 0,
+      });
 
-        setRecentEvents((changes?.events ?? []).slice(0, 3));
-      } catch (err) {
-        console.warn('[EchoSidebarStats] Failed to load stats:', err);
-        setStats({ fileCount: 0, unreadChanges: 0, sessionCount: 0 });
-        setRecentEvents([]);
-      } finally {
-        setLoading(false);
-      }
-    };
+      setRecentEvents((changes?.events ?? []).slice(0, 3));
+    } catch (err) {
+      console.warn('[EchoSidebarStats] Failed to load stats:', err);
+      setStats({ fileCount: 0, unreadChanges: 0, sessionCount: 0 });
+      setRecentEvents([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    loadStats();
-    const interval = setInterval(loadStats, 10000); // Refresh every 10s
-    return () => clearInterval(interval);
-  }, []);
+  // Content writes arrive via files-changed events; the slow poll only
+  // backstops what the event contract cannot see (sessions from other tabs,
+  // external edits between tree-version polls).
+  useVisiblePolling(() => void loadStats(), 60_000);
+  useFilesChanged(() => void loadStats());
 
   if (loading || !stats) {
     return (

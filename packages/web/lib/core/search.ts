@@ -1,10 +1,9 @@
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { collectAllFiles } from './tree';
-import { readFile } from './fs-ops';
 import { resolveExistingSafe } from './security';
 import { SearchIndex } from './search-index';
+import { registerSearchIndexHooks } from './search-index-bridge';
 import type { SearchResult, SearchOptions } from './types';
 import { telemetry } from '../telemetry';
 /**
@@ -60,12 +59,65 @@ export function addSearchIndexFile(mindRoot: string, filePath: string): void {
   updateEmbeddingFileLazy(mindRoot, filePath);
 }
 
+/** Incrementally remove a file — or a directory subtree — from the search index. */
+export function removeSearchIndexPath(relPath: string): void {
+  if (!searchIndex.isBuilt()) return;
+  const removed = searchIndex.removePath(relPath);
+  if (removed.length === 0) return;
+  schedulePersist();
+  for (const filePath of removed) removeEmbeddingFileLazy(filePath);
+}
+
 /** Incrementally remove a file from the search index (after delete). */
 export function removeSearchIndexFile(filePath: string): void {
   if (!searchIndex.isBuilt()) return;
   searchIndex.removeFile(filePath);
   schedulePersist();
   removeEmbeddingFileLazy(filePath);
+}
+
+// Register invalidation hooks on the fs↔search bridge so writes flowing
+// through `lib/fs.ts` (which must not import this module directly) reach
+// the index. Registration happens once at module load.
+registerSearchIndexHooks({
+  invalidateAll: () => invalidateSearchIndex(),
+  updateFile: (mindRoot, filePath) => updateSearchIndexFile(mindRoot, filePath),
+  removePath: (relPath) => removeSearchIndexPath(relPath),
+});
+
+// ── Cold-build PDF budget ────────────────────────────────────────────────
+// A cold in-request rebuild reads text files inline (fast) but defers PDF
+// extraction beyond this time budget to a background task, so the first
+// search after a restart is not blocked by minutes of PDF parsing.
+const DEFAULT_COLD_PDF_BUDGET_MS = 3_000;
+let _coldPdfBudgetMs = DEFAULT_COLD_PDF_BUDGET_MS;
+let _deferredPdfTask: Promise<void> = Promise.resolve();
+
+/** Test hook: override the inline-PDF time budget (null restores the default). */
+export function __setColdBuildPdfBudgetForTests(budgetMs: number | null): void {
+  _coldPdfBudgetMs = budgetMs ?? DEFAULT_COLD_PDF_BUDGET_MS;
+}
+
+/** Test hook: resolves once all currently scheduled deferred PDFs are indexed. */
+export function __waitForDeferredPdfIndexingForTests(): Promise<void> {
+  return _deferredPdfTask;
+}
+
+function scheduleDeferredPdfIndexing(mindRoot: string, deferredPdfs: string[]): void {
+  if (deferredPdfs.length === 0) return;
+  _deferredPdfTask = _deferredPdfTask.then(async () => {
+    for (const pdfPath of deferredPdfs) {
+      // Index may have been invalidated/rebuilt for another root meanwhile.
+      if (!searchIndex.isBuiltFor(mindRoot)) return;
+      try {
+        // updateFile re-extracts the PDF and replaces the placeholder entry.
+        // Extraction failures are swallowed inside addFile (entry is dropped).
+        searchIndex.updateFile(mindRoot, pdfPath);
+      } catch { /* skip corrupt pdf, keep the rest */ }
+      await Promise.resolve(); // yield between files
+    }
+    schedulePersist();
+  });
 }
 
 /** Debounced persist — writes index to disk 5s after last write operation. */
@@ -228,7 +280,11 @@ export function searchFiles(mindRoot: string, query: string, opts: SearchOptions
     const loaded = searchIndex.load(getMindosDir(), mindRoot);
     stopIndexLoad({ loaded, fileCount: loaded ? searchIndex.getFileCount() : 0 });
     if (!loaded) {
-      searchIndex.rebuild(mindRoot);
+      // Cold in-request build: text files inline, PDFs beyond the time
+      // budget are deferred to a background task (path tokens are indexed
+      // immediately, full text becomes searchable once extraction finishes).
+      const { deferredPdfs } = searchIndex.rebuild(mindRoot, { pdfTimeBudgetMs: _coldPdfBudgetMs });
+      scheduleDeferredPdfIndexing(mindRoot, deferredPdfs);
       // Persist for next cold start (fire-and-forget)
       try { searchIndex.persist(getMindosDir()); } catch { /* non-critical */ }
     }
@@ -248,7 +304,9 @@ export function searchFiles(mindRoot: string, query: string, opts: SearchOptions
   const candidates = searchIndex.getCandidatesUnion(query);
   const candidateSet = candidates ? new Set(candidates) : null;
 
-  let allFiles = collectAllFiles(mindRoot);
+  // Warm queries are served entirely from the in-memory index — no
+  // directory re-scan (collectAllFiles) and no per-file disk reads.
+  let allFiles = searchIndex.getAllFiles();
 
   // Filter by scope (directory prefix)
   if (scope) {
@@ -278,9 +336,9 @@ export function searchFiles(mindRoot: string, query: string, opts: SearchOptions
   const lowerQuery = query.toLowerCase();
 
   // ── Pre-scan: compute document frequency for each query term ──
-  // FIXED: Now uses consistent term counting (word boundaries for Latin, substring for CJK)
+  // Contents come from the index's in-memory cache (no disk IO).
   const termDf = new Map<string, number>();
-  const fileContents = new Map<string, string>();
+  const matchedFiles: string[] = [];
 
   for (const filePath of allFiles) {
     if (mtimeThreshold > 0) {
@@ -291,11 +349,9 @@ export function searchFiles(mindRoot: string, query: string, opts: SearchOptions
       } catch { continue; }
     }
 
-    let content: string;
-    try { content = readFile(mindRoot, filePath); } catch { continue; }
-
-    const lower = content.toLowerCase();
-    fileContents.set(filePath, content);
+    const lower = searchIndex.getLowerContent(mindRoot, filePath);
+    if (lower === null) continue;
+    matchedFiles.push(filePath);
 
     for (const term of queryTerms) {
       // Use consistent term counting with word boundaries for Latin terms
@@ -306,8 +362,10 @@ export function searchFiles(mindRoot: string, query: string, opts: SearchOptions
   }
 
   // ── Score each document with BM25 ──
-  for (const [filePath, content] of fileContents) {
-    const lowerContent = content.toLowerCase();
+  for (const filePath of matchedFiles) {
+    const content = searchIndex.getContent(mindRoot, filePath);
+    const lowerContent = searchIndex.getLowerContent(mindRoot, filePath);
+    if (content === null || lowerContent === null) continue;
 
     // Check if document matches any term (full-text verification after index narrowing)
     let matchedAnyTerm = false;
@@ -316,7 +374,8 @@ export function searchFiles(mindRoot: string, query: string, opts: SearchOptions
     // Compute BM25 score: sum of per-term scores
     let totalScore = 0;
     let totalOccurrences = 0;
-    const docLength = content.length;
+    // Full (pre-truncation) length for BM25 length normalization.
+    const docLength = searchIndex.getDocLength(filePath) || content.length;
 
     for (const term of queryTerms) {
       const tf = countTermOccurrences(term, lowerContent);

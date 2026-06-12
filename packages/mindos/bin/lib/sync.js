@@ -8,6 +8,30 @@ import { bold, dim, cyan, green, red, yellow } from './colors.js';
 import { stripBom } from './jsonc.js';
 import { resolveInsideRoot } from './safe-path.js';
 
+// ── Git env isolation ────────────────────────────────────────────────────────
+// Git hooks (pre-push etc.) export GIT_DIR — and may export GIT_WORK_TREE,
+// GIT_INDEX_FILE, GIT_OBJECT_DIRECTORY, GIT_PREFIX, GIT_QUARANTINE_PATH —
+// pointing at the hook's own repository. Every git this module spawns must
+// operate on the explicit `cwd` repo (mindRoot / temp dirs); an inherited
+// GIT_DIR silently redirects add/commit/push there instead (real incident:
+// a test run under pre-push committed onto the development worktree and
+// deleted the tree). These vars are never legitimate input to MindOS sync,
+// so drop them from this process outright — that covers every spawn site,
+// including child CLI processes. Keep the list in sync with sanitizeGitEnv
+// in src/server/handlers/sync.ts.
+const GIT_REPO_TARGETING_VARS = [
+  'GIT_DIR',
+  'GIT_WORK_TREE',
+  'GIT_INDEX_FILE',
+  'GIT_OBJECT_DIRECTORY',
+  'GIT_ALTERNATE_OBJECT_DIRECTORIES',
+  'GIT_COMMON_DIR',
+  'GIT_NAMESPACE',
+  'GIT_PREFIX',
+  'GIT_QUARANTINE_PATH',
+];
+for (const key of GIT_REPO_TARGETING_VARS) delete process.env[key];
+
 // ── Atomic write helper ────────────────────────────────────────────────────
 
 function atomicWriteJSON(filePath, data) {
