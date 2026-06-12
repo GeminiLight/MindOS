@@ -828,3 +828,14 @@ html[data-mac-titlebar-row] .titlebar-row { display: flex; }
 @media (min-width: 768px) {
   .titlebar-row { display: flex; }
 }
+/* Old mac shells (desktop <= v0.3.24) insertCSS() their own 28px drag band
+   (body::before, z-index 9999) and force the rail + aside[role=region] to
+   top: 28px !important. Layered over our 46px row, that band swallows the
+   tab strip's clicks and the forced panel top paints the panel header across
+   the tabs. Those shells set data-electron-mac (UA sniff) but never expose
+   mindosShell.macTitlebarRow — suppress the row and zero the height so the
+   injected CSS owns the geometry exactly like before spec-titlebar-row. */
+html[data-electron-mac]:not([data-mac-titlebar-row]) {
+  --app-titlebar-h: 0px;
+}
+html[data-electron-mac]:not([data-mac-titlebar-row]) .titlebar-row { display: none; }

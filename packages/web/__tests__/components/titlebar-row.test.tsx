@@ -109,6 +109,30 @@ describe('TitlebarRow (spec-titlebar-row Phase 1 + 2)', () => {
     expect(css).not.toContain('.electron-mac-titlebar-pad');
   });
 
+  it('suppresses the row inside old mac shells that still inject their own drag band', () => {
+    // Desktop shells <= v0.3.24 insertCSS() a 28px body::before drag band
+    // (z-index 9999) and force aside[role=region]/the rail to top: 28px
+    // !important. Layered over the new 46px web row that band swallows the
+    // tab strip's clicks (the ＋ button dies) and the forced 28px panel top
+    // paints the panel header across the tabs (user-reported 2026-06-12).
+    // Those shells are detected by UA (data-electron-mac) but never expose
+    // mindosShell.macTitlebarRow, so until the shell is updated the web must
+    // fall back to the pre-row layout: no row, zero titlebar height, and let
+    // the injected CSS own the geometry like it did before spec-titlebar-row.
+    const css = readFileSync(path.join(webRoot, 'app', 'globals.css'), 'utf-8');
+    expect(css).toMatch(
+      /html\[data-electron-mac\]:not\(\[data-mac-titlebar-row\]\)\s*\{[^}]*--app-titlebar-h:\s*0px/
+    );
+    expect(css).toMatch(
+      /html\[data-electron-mac\]:not\(\[data-mac-titlebar-row\]\)\s+\.titlebar-row\s*\{\s*display:\s*none;?\s*\}/
+    );
+    // The guard must come after the >=768px media rule in source order — it
+    // wins on specificity alone, but keeping it last documents the override.
+    const guardIdx = css.indexOf('html[data-electron-mac]:not([data-mac-titlebar-row])');
+    const mediaIdx = css.indexOf('--app-titlebar-h: 46px');
+    expect(guardIdx).toBeGreaterThan(mediaIdx);
+  });
+
   it('full-viewport pages subtract the titlebar height instead of using bare 100dvh', () => {
     // #main-content gets padding-top: var(--app-titlebar-h). A child sized
     // h-[100dvh] overflows the document by that padding, so the page can
