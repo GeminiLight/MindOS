@@ -15,6 +15,7 @@ import { listTrashAction } from '@/lib/actions';
 import { DEFAULT_LEFT_PANEL_WIDTH, LEFT_PANEL } from '@/lib/config/panel-sizes';
 import { encodePath } from '@/lib/utils';
 import { fetchInboxFiles } from '@/lib/inbox-client';
+import { openTab } from '@/lib/workspace-tabs';
 
 const noop = () => {};
 
@@ -275,6 +276,7 @@ export default function Panel({
                     onClick={() => {
                       startTransition(() => {
                         setNewPopover(false);
+                        openTab('doc', 'Untitled.md', 'Untitled.md');
                         router.push('/view/Untitled.md');
                       });
                     }}

@@ -54,32 +54,55 @@ async function allocateFreePort() {
 
 const port = await allocateFreePort();
 const nodeBin = process.execPath;
+const localOrigin = `http://127.0.0.1:${port}`;
+const redirectStatusCodes = new Set([301, 302, 303, 307, 308]);
 
-function waitHttpOk(pathname, timeoutMs, validate = () => true) {
+function resolveLocalRedirect(currentUrl, location) {
+  if (!location) return null;
+  const redirectUrl = new URL(location, currentUrl);
+  if (redirectUrl.origin !== localOrigin) {
+    throw new Error(`Refusing external redirect from ${currentUrl.href} to ${redirectUrl.href}`);
+  }
+  return redirectUrl;
+}
+
+function waitHttpOk(pathname, timeoutMs, validate = () => true, options = {}) {
+  const maxRedirects = options.maxRedirects ?? 0;
   const deadline = Date.now() + timeoutMs;
   return new Promise((resolve, reject) => {
-    const tick = () => {
-      if (Date.now() > deadline) {
-        reject(new Error(`Timeout waiting for http://127.0.0.1:${port}${pathname}`));
-        return;
-      }
-      const req = http.get(
-        `http://127.0.0.1:${port}${pathname}`,
-        { timeout: 2000 },
-        (res) => {
-          let body = '';
-          res.on('data', (c) => {
-            body += c;
-          });
-          res.on('end', () => {
-            if (res.statusCode === 200 && validate(body)) {
-              resolve();
+    const requestUrl = (url, redirectsRemaining) => {
+      const req = http.get(url, { timeout: 2000 }, (res) => {
+        let body = '';
+        res.on('data', (c) => {
+          body += c;
+        });
+        res.on('end', () => {
+          if (res.statusCode === 200 && validate(body)) {
+            resolve();
+            return;
+          }
+
+          if (redirectStatusCodes.has(res.statusCode ?? 0)) {
+            if (redirectsRemaining <= 0) {
+              reject(new Error(`Too many redirects while waiting for ${localOrigin}${pathname}`));
               return;
             }
-            setTimeout(tick, 300);
-          });
-        }
-      );
+
+            try {
+              const redirectUrl = resolveLocalRedirect(url, res.headers.location);
+              if (redirectUrl) {
+                requestUrl(redirectUrl, redirectsRemaining - 1);
+                return;
+              }
+            } catch (error) {
+              reject(error);
+              return;
+            }
+          }
+
+          setTimeout(tick, 300);
+        });
+      });
       req.on('error', () => {
         setTimeout(tick, 300);
       });
@@ -87,6 +110,14 @@ function waitHttpOk(pathname, timeoutMs, validate = () => true) {
         req.destroy();
         setTimeout(tick, 300);
       });
+    };
+
+    const tick = () => {
+      if (Date.now() > deadline) {
+        reject(new Error(`Timeout waiting for ${localOrigin}${pathname}`));
+        return;
+      }
+      requestUrl(new URL(pathname, localOrigin), maxRedirects);
     };
     tick();
   });
@@ -119,10 +150,13 @@ const child = spawn(nodeBin, [serverJs], {
   cwd: appDir,
   env: {
     ...process.env,
+    AUTH_TOKEN: '',
     NODE_ENV: 'production',
     PORT: String(port),
     /** Next binds to machine hostname by default; Desktop health checks use 127.0.0.1 */
     HOSTNAME: '127.0.0.1',
+    WEB_PASSWORD: '',
+    WEB_SESSION_SECRET: '',
   },
   stdio: ['ignore', 'pipe', 'pipe'],
 });
@@ -143,7 +177,12 @@ async function main() {
   try {
     await waitHealth(90_000);
     await waitMcpAgents(30_000);
-    await waitHttpOk('/', 30_000, (body) => body.includes('MindOS') || body.includes('__next'));
+    await waitHttpOk(
+      '/',
+      30_000,
+      (body) => body.includes('MindOS') || body.includes('__next'),
+      { maxRedirects: 5 }
+    );
     console.log(`[verify-standalone] OK (port ${port})`);
     return 0;
   } catch (e) {

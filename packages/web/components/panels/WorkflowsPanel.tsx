@@ -2,10 +2,12 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Plus, Zap, AlertTriangle, Loader2 } from 'lucide-react';
 import PanelHeader from './PanelHeader';
 import { useLocale } from '@/lib/stores/locale-store';
 import { encodePath, relativeTime } from '@/lib/utils';
+import { openTab } from '@/lib/workspace-tabs';
 
 interface WorkflowItem {
   path: string;
@@ -24,6 +26,7 @@ interface WorkflowsPanelProps {
 }
 
 export default function WorkflowsPanel({ active, maximized, onMaximize }: WorkflowsPanelProps) {
+  const router = useRouter();
   const { t } = useLocale();
   const wt = t.panels.workflows as {
     title: string;
@@ -87,7 +90,10 @@ export default function WorkflowsPanel({ active, maximized, onMaximize }: Workfl
       setShowCreate(false);
       setNewName('');
       await fetchWorkflows();
-      window.location.href = `/view/${encodePath(data.path)}`;
+      if (typeof data.path === 'string' && data.path.length > 0) {
+        openTab('doc', data.path, data.path.split('/').pop() || data.path);
+        router.push(`/view/${encodePath(data.path)}`);
+      }
     } catch {
       setCreateError('Network error');
     } finally {

@@ -196,7 +196,14 @@ describe('product npm publish contract', () => {
     expect(verifyStandalone).toContain('createTcpServer');
     expect(verifyStandalone).toContain("server.listen(0, '127.0.0.1'");
     expect(verifyStandalone).not.toContain('31000 + Math.floor(Math.random() * 5000)');
-    expect(verifyStandalone).toContain("waitHttpOk('/', 30_000");
+    expect(verifyStandalone).toMatch(/waitHttpOk\(\s*'\/',\s*30_000/);
+    expect(verifyStandalone).toContain('options.maxRedirects ?? 0');
+    expect(verifyStandalone).toContain('redirectStatusCodes');
+    expect(verifyStandalone).toContain('resolveLocalRedirect');
+    expect(verifyStandalone).toContain('redirectUrl.origin !== localOrigin');
+    expect(verifyStandalone).toContain('AUTH_TOKEN:');
+    expect(verifyStandalone).toContain('WEB_PASSWORD:');
+    expect(verifyStandalone).toContain('{ maxRedirects: 5 }');
     expect(verifyStandalone).toContain('/api/health');
   });
 

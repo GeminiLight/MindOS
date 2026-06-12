@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useLocale } from '@/lib/stores/locale-store';
 import { encodePath } from '@/lib/utils';
 import { revertSpaceInitAction } from '@/lib/actions';
+import { openTab } from '@/lib/workspace-tabs';
 
 type InitState = 'working' | 'done' | 'reverted' | 'error';
 
@@ -59,7 +60,9 @@ export default function SpaceInitToast() {
   const handleReview = useCallback(() => {
     if (!info) return;
     dismiss();
-    router.push(`/view/${encodePath(info.spacePath + '/')}`);
+    const viewPath = info.spacePath.endsWith('/') ? info.spacePath : `${info.spacePath}/`;
+    openTab('doc', viewPath, info.spaceName || info.spacePath);
+    router.push(`/view/${encodePath(viewPath)}`);
   }, [info, dismiss, router]);
 
   const handleDiscard = useCallback(() => {

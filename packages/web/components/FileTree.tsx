@@ -15,6 +15,7 @@ import { useLocale } from '@/lib/stores/locale-store';
 import { ConfirmDialog } from '@/components/agents/AgentsPrimitives';
 import { usePinnedFiles } from '@/lib/hooks/usePinnedFiles';
 import { useShowHiddenFiles, setShowHiddenFiles, filterHiddenNodes } from '@/lib/stores/hidden-files';
+import { closeByKey, openTab } from '@/lib/workspace-tabs';
 
 // Re-export for backward compatibility (Panel.tsx, KnowledgeTab.tsx import from FileTree)
 export { setShowHiddenFiles, useShowHiddenFiles };
@@ -27,6 +28,19 @@ function notifyFilesChanged() {
 
 async function copyPathToClipboard(path: string) {
   try { await navigator.clipboard.writeText(path); } catch { /* noop */ }
+}
+
+function docTabTitle(path: string): string {
+  return path.split('/').pop() || path;
+}
+
+function keepDocTab(path: string) {
+  openTab('doc', path, docTabTitle(path));
+}
+
+function retargetKeptDocTab(oldPath: string, newPath: string) {
+  closeByKey('doc', oldPath);
+  keepDocTab(newPath);
 }
 
 interface FileTreeProps {
@@ -73,6 +87,7 @@ function NewFileInline({ dirPath, depth, onDone }: { dirPath: string; depth: num
       const result = await createFileAction(dirPath, name);
       if (result.success && result.filePath) {
         onDone();
+        keepDocTab(result.filePath);
         router.push(`/view/${encodePath(result.filePath)}`);
         router.refresh();
         notifyFilesChanged();
@@ -213,6 +228,7 @@ const DirectoryNode = memo(function DirectoryNode({ node, depth, currentPath, on
       const result = await action(node.path, newName);
       if (result.success && result.newPath) {
         setRenaming(false);
+        retargetKeptDocTab(node.path, result.newPath);
         router.push(`/view/${encodePath(result.newPath)}`);
         router.refresh();
         notifyFilesChanged();
@@ -448,6 +464,15 @@ const FileNodeItem = memo(function FileNodeItem({ node, depth, currentPath, onNa
     onNavigate?.();
   }, [router, node.path, onNavigate, renaming]);
 
+  const handleDoubleClick = useCallback((e: React.MouseEvent) => {
+    if (renaming) return;
+    e.preventDefault();
+    e.stopPropagation();
+    keepDocTab(node.path);
+    router.push(`/view/${encodePath(node.path)}`);
+    onNavigate?.();
+  }, [router, node.path, onNavigate, renaming]);
+
   const startRename = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
     setRenameValue(node.name);
@@ -462,6 +487,7 @@ const FileNodeItem = memo(function FileNodeItem({ node, depth, currentPath, onNa
       const result = await renameFileAction(node.path, newName);
       if (result.success && result.newPath) {
         setRenaming(false);
+        retargetKeptDocTab(node.path, result.newPath);
         router.push(`/view/${encodePath(result.newPath)}`);
         router.refresh();
         notifyFilesChanged();
@@ -511,6 +537,7 @@ const FileNodeItem = memo(function FileNodeItem({ node, depth, currentPath, onNa
     <div className="relative group/file">
       <button
         onClick={handleClick}
+        onDoubleClick={handleDoubleClick}
         onContextMenu={handleContextMenu}
         draggable
         onDragStart={handleDragStart}

@@ -23,6 +23,7 @@ import { getMindSystemAssistantAvatar, resolveMindSystemAssistantCopies, type Mi
 import { getAssistantProfilePath, getAssistantPromptPath } from '@/lib/mind-system-assistant-paths';
 import type { MindSystemSpaceAssistant } from '@/lib/mind-system-assistants';
 import { apiFetch } from '@/lib/api';
+import { openTab } from '@/lib/workspace-tabs';
 
 async function copyPathToClipboard(path: string) {
   try { await navigator.clipboard.writeText(path); } catch { /* noop */ }
@@ -1119,7 +1120,10 @@ export default function DirView({ dirPath, entries, spacePreview, mindSystemSpac
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <Link
-              href={`/view/${encodePath(dirPath ? `${dirPath}/Untitled.md` : 'Untitled.md')}`}
+              href={dirPath ? `/view/Untitled.md?dir=${encodeURIComponent(dirPath)}` : '/view/Untitled.md'}
+              onClick={() => {
+                openTab('doc', 'Untitled.md', 'Untitled.md');
+              }}
               className="hit-target-box flex items-center gap-1.5 px-2.5 py-1.5 text-xs transition-colors text-muted-foreground hover:text-foreground [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-lg)]"
             >
               <FilePlus size={13} />

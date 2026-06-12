@@ -10,6 +10,7 @@ import { InboxSection } from '@/components/home/InboxSection';
 import type { BuiltInMindSystemSpaceRecord, SpaceInfo } from '@/lib/space-records';
 import { Select } from '@/components/settings/Primitives';
 import { ReadingPageShell } from '@/components/shared/ContentPageShell';
+import { openTab } from '@/lib/workspace-tabs';
 
 interface RecentFile {
   path: string;
@@ -133,6 +134,7 @@ export default function WikiHomeContent({ spaces, recent, mindSystemSpaces }: Wi
         <div className="flex items-center gap-3 mt-4 pl-4">
           <Link
             href="/view/Untitled.md"
+            onClick={() => openTab('doc', 'Untitled.md', 'Untitled.md')}
             className="hit-target-box inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-all duration-200 hover:-translate-y-0.5 text-[var(--amber-foreground)] [--hit-target-bg:var(--amber)] [--hit-target-hover-bg:var(--amber)] [--hit-target-radius:var(--radius-lg)] [--hit-target-hover-shadow:0_4px_6px_-1px_color-mix(in_srgb,var(--foreground)_10%,transparent)]"
           >
             <FilePlus size={14} />
@@ -141,6 +143,7 @@ export default function WikiHomeContent({ spaces, recent, mindSystemSpaces }: Wi
           {lastFile && (
             <Link
               href={`/view/${encodePath(lastFile.path)}`}
+              onClick={() => openTab('doc', lastFile.path, lastFile.path.split('/').pop() || lastFile.path)}
               className="hit-target-box inline-flex items-center gap-2 px-3.5 py-2 text-sm font-medium transition-colors text-muted-foreground hover:text-foreground [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-lg)]"
             >
               <ArrowRight size={14} className="text-[var(--amber)]/60" />

@@ -7,6 +7,7 @@ import { serializeWorkflowYaml, generateStepId } from './serializer';
 import type { WorkflowYaml, WorkflowStep } from './types';
 import { DirPicker } from './selectors';
 import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { openTab } from '@/lib/workspace-tabs';
 
 interface WorkflowEditorProps {
   workflow: WorkflowYaml;
@@ -70,6 +71,7 @@ export default function WorkflowEditor({ workflow, filePath, onChange, onSaved }
     setSaveError('');
     setSaveSuccess(false);
     try {
+      openTab('doc', filePath, filePath.split('/').pop() || filePath);
       const yaml = serializeWorkflowYaml(workflow);
       const res = await fetch('/api/file', {
         method: 'POST',

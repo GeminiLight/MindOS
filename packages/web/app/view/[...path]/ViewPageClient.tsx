@@ -27,7 +27,7 @@ import ExportModal from '@/components/ExportModal';
 import { useEditorTheme } from '@/lib/stores/editor-theme-store';
 import { twemojiToNative } from '@/lib/twemoji';
 import { splitMarkdownFrontmatter } from '@/lib/parsing/frontmatter';
-import { keepTab, openTab } from '@/lib/workspace-tabs';
+import { closeByKey, keepTab, openTab } from '@/lib/workspace-tabs';
 
 interface ViewPageClientProps {
   filePath: string;
@@ -38,6 +38,7 @@ interface ViewPageClientProps {
   initialEditing?: boolean;
   isDraft?: boolean;
   draftDirectories?: string[];
+  defaultDraftDir?: string;
   createDraftAction?: (targetPath: string, content: string) => Promise<void>;
 }
 
@@ -50,6 +51,7 @@ export default function ViewPageClient({
   initialEditing = false,
   isDraft = false,
   draftDirectories = [],
+  defaultDraftDir = '',
   createDraftAction,
 }: ViewPageClientProps) {
   const { t } = useLocale();
@@ -90,6 +92,10 @@ export default function ViewPageClient({
   const keepDocTab = useCallback((targetPath: string) => {
     openTab('doc', targetPath, targetPath.split('/').pop() || targetPath);
   }, []);
+  const retargetKeptDocTab = useCallback((oldPath: string, newPath: string) => {
+    closeByKey('doc', oldPath);
+    keepDocTab(newPath);
+  }, [keepDocTab]);
 
   // Sync savedContent when server re-renders with new content (e.g. after router.refresh)
   const serverContentRef = useRef(content);
@@ -169,7 +175,7 @@ export default function ViewPageClient({
 
   const inferredName = filePath.split('/').pop() || 'Untitled.md';
   const [showSaveAs, setShowSaveAs] = useState(isDraft);
-  const [saveDir, setSaveDir] = useState('');
+  const [saveDir, setSaveDir] = useState(defaultDraftDir);
   const [saveName, setSaveName] = useState(inferredName);
 
   // Close more menu on outside click
@@ -206,12 +212,13 @@ export default function ViewPageClient({
       const result = await renameFileAction(filePath, newName);
       setRenaming(false);
       if (result.success && result.newPath) {
+        retargetKeptDocTab(filePath, result.newPath);
         router.push(`/view/${encodePath(result.newPath)}`);
         router.refresh();
         window.dispatchEvent(new Event('mindos:files-changed'));
       }
     });
-  }, [renameValue, filePath, router]);
+  }, [renameValue, filePath, router, retargetKeptDocTab]);
 
   const handleConfirmDelete = useCallback(() => {
     setShowDeleteConfirm(false);
@@ -282,12 +289,13 @@ export default function ViewPageClient({
 
   const handleCancel = useCallback(() => {
     if (isDraft) {
+      closeByKey('doc', filePath);
       router.push('/');
       return;
     }
     setEditing(false);
     setSaveError(null);
-  }, [isDraft, router]);
+  }, [isDraft, filePath, router]);
 
   const handleConfirmDraftSave = useCallback(() => {
     const trimmed = saveName.trim();
@@ -312,7 +320,7 @@ export default function ViewPageClient({
     startTransition(async () => {
       try {
         await createDraftAction(targetPath, editContent);
-        keepDocTab(targetPath);
+        retargetKeptDocTab(filePath, targetPath);
         setSavedContent(editContent);
         setEditing(false);
         setShowSaveAs(false);
@@ -324,7 +332,7 @@ export default function ViewPageClient({
         setSaveError(err instanceof Error ? err.message : 'Failed to save');
       }
     });
-  }, [saveName, createDraftAction, saveDir, editContent, router, keepDocTab]);
+  }, [saveName, createDraftAction, saveDir, editContent, router, filePath, retargetKeptDocTab]);
 
   const handleSave = useCallback(() => {
     if (isCsv) {
@@ -528,10 +536,12 @@ export default function ViewPageClient({
                           const clean = twemojiToNative(editContent);
                           setSavedContent(clean);
                           if (clean !== savedContent) {
+                            keepCurrentTab();
                             saveAction(clean).catch(() => {});
                           }
                           setEditing(false);
                         } else if (!editing) {
+                          keepCurrentTab();
                           setEditContent(savedContent);
                           setEditing(true);
                         }
@@ -736,6 +746,7 @@ export default function ViewPageClient({
                 filePath={filePath}
                 appendAction={appendRowAction}
                 saveAction={async (c) => {
+                  keepCurrentTab();
                   await saveAction(c);
                   setEditContent(c);
                   setSavedContent(c);

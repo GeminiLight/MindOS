@@ -10,6 +10,7 @@ import { createSpaceAction } from '@/lib/actions';
 import { checkAiAvailable, triggerSpaceAiInit } from '@/lib/space-ai-init';
 import DirPicker from './DirPicker';
 import { ModalHeader, ModalShell } from '@/components/shared/ModalShell';
+import { openTab } from '@/lib/workspace-tabs';
 
 /* ── Create Space Modal ── */
 
@@ -87,7 +88,9 @@ export default function CreateSpaceModal({ t, dirPaths }: { t: ReturnType<typeof
       close();
       router.refresh();
       window.dispatchEvent(new Event('mindos:files-changed'));
-      router.push(`/view/${encodePath(createdPath + '/')}`);
+      const viewPath = createdPath.endsWith('/') ? createdPath : `${createdPath}/`;
+      openTab('doc', viewPath, createdPath.split('/').filter(Boolean).pop() || createdPath);
+      router.push(`/view/${encodePath(viewPath)}`);
     } else {
       const msg = result.error ?? '';
       if (msg.includes('already exists')) {
