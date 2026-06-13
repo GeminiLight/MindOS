@@ -20,6 +20,7 @@ import { FileNode } from '@/lib/types';
 import type { MindSystemSlot } from '@/lib/mind-system';
 import { useLocale } from '@/lib/stores/locale-store';
 import { telemetry } from '@/lib/telemetry';
+import { notifyFilesChanged } from '@/lib/files-changed';
 import dynamic from 'next/dynamic';
 
 const SearchModal = dynamic(() => import('./SearchModal'), { ssr: false });
@@ -447,7 +448,7 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
   const closeAgentDetailPanel = useCallback(() => setAgentDetailKey(null), []);
 
   // Refresh file tree when server-side tree version changes.
-  // Polls a lightweight version counter every 5s — only calls router.refresh()
+  // Polls a lightweight version counter every 15s — only calls router.refresh()
   // (which rebuilds the full tree) when the version actually changes.
   // A 2-second cooldown prevents rapid-fire refreshes during bulk file operations.
   useEffect(() => {
@@ -463,7 +464,7 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
         router.refresh();
       });
       stopRefresh({ previousVersion, version, reason: 'tree_version_changed' });
-      window.dispatchEvent(new Event('mindos:files-changed'));
+      notifyFilesChanged();
     };
 
     const REFRESH_COOLDOWN_MS = 2000;
@@ -629,6 +630,8 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
       <TitlebarRow
         searchActive={activeLeftPanel === 'search'}
         onSearchOpenOrFocus={openOrFocusSearchPanel}
+        sidebarExpanded={lp.railExpanded}
+        onSidebarExpandedChange={handleExpandedChange}
       />
       <ActivityBar
         activePanel={railActivePanel}
@@ -664,7 +667,7 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
       >
         {isPanelMounted('echo') && (
           <div className={`flex flex-col h-full ${activeLeftPanel === 'echo' ? '' : 'hidden'}`}>
-            <EchoPanel active={activeLeftPanel === 'echo'} maximized={effectivePanelMaximized} onMaximize={lp.handlePanelMaximize} />
+            <EchoPanel active={activeLeftPanel === 'echo'} />
           </div>
         )}
         {isPanelMounted('capture') && (
@@ -687,8 +690,6 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
           <div className={`flex flex-col h-full ${activeLeftPanel === 'agents' ? '' : 'hidden'}`}>
             <AgentsPanel
               active={activeLeftPanel === 'agents'}
-              maximized={effectivePanelMaximized}
-              onMaximize={lp.handlePanelMaximize}
               selectedAgentKey={agentDockOpen ? agentDetailKey : null}
             />
           </div>

@@ -58,6 +58,25 @@ export type MindosSelectedRuntime = {
   externalSessionId?: string;
 };
 
+export type MindosRuntimeSessionBinding = {
+  kind: 'codex-thread' | 'claude-session' | 'acp-session';
+  runtime: Exclude<MindosAgentRuntimeKind, 'mindos'>;
+  runtimeId: string;
+  externalSessionId?: string;
+  cwd?: string;
+  status?: 'active' | 'missing' | 'signed-out' | 'archived' | 'failed';
+  updatedAt: number;
+};
+
+export type MindosRuntimePermissionMode = 'readonly' | 'agent' | 'workspace-write' | 'danger-full-access';
+export type MindosRuntimeReasoningEffort = 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max' | string;
+
+export type MindosRuntimeOptions = {
+  permissionMode?: MindosRuntimePermissionMode;
+  modelOverride?: string;
+  reasoningEffort?: MindosRuntimeReasoningEffort;
+};
+
 export type MindosAskStreamRequest = {
   messages: Array<Record<string, unknown>>;
   currentFile?: string;
@@ -66,6 +85,8 @@ export type MindosAskStreamRequest = {
   maxSteps?: number;
   mode?: 'chat' | 'agent' | 'organize';
   selectedRuntime?: MindosSelectedRuntime | null;
+  runtimeBinding?: MindosRuntimeSessionBinding | null;
+  runtimeOptions?: MindosRuntimeOptions;
   selectedAcpAgent?: { id: string; name: string } | null;
   providerOverride?: string;
   modelOverride?: string;

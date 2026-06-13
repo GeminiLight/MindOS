@@ -13,6 +13,32 @@ export interface FilesChangedDetail {
   paths?: string[];
 }
 
+function normalizeChangedPaths(paths: readonly string[] | undefined): string[] | undefined {
+  if (!paths || paths.length === 0) return undefined;
+  const normalized = paths
+    .filter((p): p is string => typeof p === 'string')
+    .map(p => p.trim())
+    .filter(Boolean);
+  return normalized.length > 0 ? Array.from(new Set(normalized)) : undefined;
+}
+
+/**
+ * Emit the shared `mindos:files-changed` event.
+ *
+ * Pass affected vault-relative paths when known so listeners can skip
+ * unrelated refreshes. Omit paths to preserve the legacy "anything changed"
+ * behavior.
+ */
+export function notifyFilesChanged(paths?: readonly string[]): void {
+  if (typeof window === 'undefined') return;
+  const normalized = normalizeChangedPaths(paths);
+  window.dispatchEvent(
+    normalized
+      ? new CustomEvent<FilesChangedDetail>(FILES_CHANGED_EVENT, { detail: { paths: normalized } })
+      : new Event(FILES_CHANGED_EVENT),
+  );
+}
+
 /**
  * Extract changed paths from a files-changed event.
  * Returns undefined when the event carries no usable path information,

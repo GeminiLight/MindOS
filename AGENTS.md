@@ -211,8 +211,18 @@ npm test                          # 手动跑测试，不杀 dev server
 
 | 角色 | 路径 / 分支 | 职责 |
 |------|-------------|------|
-| 主 worktree | 当前 repo 根目录 / `main` | 承接当前主线、热修、release、最终集成 |
+| Git admin / bare repo | `/Users/moonshot/projects/product/mindos-dev` | 只存 Git 对象、refs、worktree 元数据；不是源码工作区 |
+| 主 worktree | 当前实际 `main` worktree（本机通常为 `/Users/moonshot/projects/product/mindos-dev/.claude/worktrees/perf-hardening`）/ `main` | 承接当前主线、热修、release、最终集成 |
 | 任务 worktree | 相邻目录或临时 worktree / 唯一任务分支 | 承接较大功能、跨模块 hardening、需要较长验证的任务 |
+
+本仓库当前采用 **bare repo + 多 worktree** 布局：`/Users/moonshot/projects/product/mindos-dev` 是 Git 管理目录，不包含完整源码工作区；实际可编辑、可测试、可 merge 的源码目录通过 `git worktree list` 确认。看到 `(bare)` 的目录不要当作项目根来开发。
+
+**Bare / worktree 操作边界**
+- `bare` 目录只负责保存 Git 数据库和 worktree 元信息；不要在其中执行普通开发、测试、merge、rebase、冲突解决或 release。
+- `git status`、代码编辑、测试、build、merge、rebase、版本 bump、发版前检查都必须在具体 worktree 内执行；主线操作用实际 `main` worktree。
+- 不确定当前目录时先执行 `git worktree list` 和 `git rev-parse --show-toplevel`；如果当前路径显示为 `(bare)` 或 `git status` 提示必须在 work tree 里运行，立即切到实际 worktree。
+- 同步 `main` 时，先在主 worktree 跑 `git status --short --branch`。如果有本地改动，不能直接 `reset` 或强行 pull；先明确这些改动归属，必要时用临时 branch / commit / stash 保护后再快进或 merge。
+- merge 的结果（commit objects / refs）会写回 bare repo，但 merge 行为本身必须在 worktree 中完成。
 
 任务分支不要写死成一个共享分支。按任务创建唯一分支，例如 `<agent>/<task-slug>`、`async/<task-slug>`、`fix/<task-slug>`；worktree 目录也用同一个 task slug 命名，便于清理和追踪。
 

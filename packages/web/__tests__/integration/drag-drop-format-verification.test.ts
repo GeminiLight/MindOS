@@ -107,6 +107,7 @@ describe('SearchPanel Drag Implementation', () => {
       e.dataTransfer.effectAllowed = 'copy';
       e.dataTransfer.setData('text/mindos-path', result.path);
       e.dataTransfer.setData('text/mindos-type', 'file');
+      e.dataTransfer.setData('text/plain', result.path);
     };
 
     const mockEvent = {
@@ -127,6 +128,10 @@ describe('SearchPanel Drag Implementation', () => {
       'text/mindos-type',
       'file'
     );
+    expect(mockEvent.dataTransfer.setData).toHaveBeenCalledWith(
+      'text/plain',
+      'test.md'
+    );
   });
 
   it('should implement onDragEnd handler to clear state', () => {
@@ -144,15 +149,15 @@ describe('SearchPanel Drag Implementation', () => {
     expect(draggedIndex).toBe(null);
   });
 
-  it('should show drag hint on selected items', () => {
-    // When an item is selected and not dragging, show hint text
-    // React expression: {isSelected && !isDragging && <div>⬆ Drag</div>}
+  it('should show a compact drag affordance on selected items', () => {
+    // When an item is selected and not dragging, show an icon affordance with
+    // an accessible label instead of visible legacy drag copy.
     
     const isSelected = true;
     const isDragging = false;
-    const showHint = isSelected && !isDragging;
+    const showAffordance = isSelected && !isDragging;
     
-    expect(showHint).toBe(true);
+    expect(showAffordance).toBe(true);
   });
 
   it('should highlight item during drag', () => {
@@ -281,9 +286,9 @@ describe('Visual Feedback', () => {
     expect(onDragging).toMatch(/muted/);
   });
 
-  it('should show drag hint text', () => {
-    // When selected and not dragging: show "⬆ Drag" text
-    const dragHintText = '⬆ Drag';
-    expect(dragHintText).toBeTruthy();
+  it('should use an icon drag affordance instead of visible drag hint text', () => {
+    const affordanceLabel = 'to chat';
+    expect(affordanceLabel).toBeTruthy();
+    expect(affordanceLabel).not.toMatch(/drag/i);
   });
 });

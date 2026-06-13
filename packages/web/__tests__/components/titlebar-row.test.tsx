@@ -90,8 +90,15 @@ describe('TitlebarRow (spec-titlebar-row Phase 1 + 2)', () => {
 
   it('renders the leading Search trigger before the tablist without joining the tab model', () => {
     const onSearchOpenOrFocus = vi.fn();
-    const el = render({ searchActive: true, onSearchOpenOrFocus });
+    const onSidebarExpandedChange = vi.fn();
+    const el = render({
+      searchActive: true,
+      onSearchOpenOrFocus,
+      sidebarExpanded: true,
+      onSidebarExpandedChange,
+    });
     const searchButton = el.querySelector<HTMLButtonElement>('[data-titlebar-search-trigger]');
+    const sidebarToggle = el.querySelector<HTMLButtonElement>('[data-titlebar-sidebar-toggle]');
     const tablist = el.querySelector<HTMLElement>('[role="tablist"]');
 
     expect(searchButton).not.toBeNull();
@@ -108,13 +115,24 @@ describe('TitlebarRow (spec-titlebar-row Phase 1 + 2)', () => {
     expect(searchButton!.className).not.toContain('self-center');
     expect(searchButton!.className).not.toMatch(/(^|\s)border(?:-|\s|$)/);
     expect(searchButton!.className).not.toContain('border-r');
+    expect(sidebarToggle).not.toBeNull();
+    expect(sidebarToggle!.getAttribute('aria-label')).toBe('Collapse sidebar');
+    expect(sidebarToggle!.getAttribute('aria-pressed')).toBe('true');
+    expect((sidebarToggle!.style as unknown as Record<string, string>).WebkitAppRegion).toBe('no-drag');
     expect(tablist).not.toBeNull();
+    expect(searchButton!.compareDocumentPosition(sidebarToggle!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(sidebarToggle!.compareDocumentPosition(tablist!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(searchButton!.compareDocumentPosition(tablist!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
     act(() => {
       searchButton!.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
     });
     expect(onSearchOpenOrFocus).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      sidebarToggle!.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    });
+    expect(onSidebarExpandedChange).toHaveBeenCalledWith(false);
   });
 
   it('globals.css gates display and defines the shell variables', () => {

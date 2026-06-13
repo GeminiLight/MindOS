@@ -187,6 +187,7 @@ describe('Agents content dashboard', () => {
     const html = renderToStaticMarkup(<AgentsContentPage tab="overview" />);
     const a = messages.en.agentsContent;
     const capabilitiesLabel = a.overview.capabilitiesLabel.replace('&', '&amp;');
+    const navCapabilities = a.navCapabilities.replace('&', '&amp;');
     const channelsHint = a.navHints.channels.replace('&', '&amp;');
 
     expect(html).toContain('data-content-page-shell="agents"');
@@ -198,17 +199,14 @@ describe('Agents content dashboard', () => {
     expect(html).toContain(a.navHints.overview);
     expect(html).toContain(a.navHints.assistant);
     expect(html).toContain(a.navHints.agent);
-    expect(html).toContain(a.navHints.plugins);
-    expect(html).toContain(a.navHints.skills);
-    expect(html).toContain(a.navHints.mcp);
+    expect(html).toContain(a.navHints.capabilities.replace('&', '&amp;'));
     expect(html).toContain(channelsHint);
     expect(html).not.toContain('MCP :8781');
     expect(html).toContain('href="/agents?tab=assistant"');
     expect(html).toContain('href="/agents?tab=agent"');
-    expect(html).toContain('href="/agents?tab=plugins"');
     expect(html).toContain('href="/agents?tab=skills"');
-    expect(html).toContain('href="/agents?tab=mcp"');
     expect(html).toContain('href="/agents?tab=channels"');
+    expect(html).toContain(navCapabilities);
     expect(html).toContain(a.overview.systemModelTitle);
     expect(html).toContain(a.overview.assistantLabel);
     expect(html).toContain(a.overview.agentLabel);
@@ -317,14 +315,16 @@ describe('Agents content dashboard', () => {
     expect(html).not.toContain(a.presets.filterAll);
   });
 
-  it('renders Plugins as a dedicated Agent tab', () => {
+  it('maps legacy Plugins tab links into the combined capabilities page', () => {
     const html = renderToStaticMarkup(<AgentsContentPage tab="plugins" />);
     const a = messages.en.agentsContent;
+    const navCapabilities = a.navCapabilities.replace('&', '&amp;');
 
-    expect(html).toContain(a.navPlugins);
+    expect(html).toContain(navCapabilities);
+    expect(html).toContain(a.skills.title);
     expect(html).toContain(a.plugins.title);
     expect(html).toContain(a.plugins.empty);
-    expect(html).not.toContain(a.mcp.connectionGraph);
+    expect(html).toContain(a.mcp.title);
   });
 });
 

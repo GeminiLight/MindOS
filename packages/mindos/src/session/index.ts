@@ -1217,6 +1217,49 @@ export type MindosPiAgentRuntime = {
   lastUserSkillName?: string;
 };
 
+function basenameFromPath(filePath: string): string {
+  return filePath.split(/[\\/]/).filter(Boolean).pop() ?? filePath;
+}
+
+function formatMindosToolNames(tools: MindosExecutableTool[]): string {
+  const names = tools
+    .map((tool) => typeof tool.name === 'string' ? tool.name.trim() : '')
+    .filter(Boolean);
+  const uniqueNames = Array.from(new Set(names));
+  if (uniqueNames.length === 0) return '(none in proxy fallback)';
+  const visible = uniqueNames.slice(0, 32).join(', ');
+  return uniqueNames.length > 32 ? `${visible}, ... (+${uniqueNames.length - 32} more)` : visible;
+}
+
+function buildMindosAgentToolSurfacesPrompt(options: {
+  requestTools: MindosExecutableTool[];
+  additionalExtensionPaths?: string[];
+}): string {
+  const extensionEntries = (options.additionalExtensionPaths ?? [])
+    .map(basenameFromPath)
+    .filter(Boolean);
+  const extensionList = extensionEntries.length > 0
+    ? extensionEntries.join(', ')
+    : '(no optional extension entries registered for this run)';
+
+  return [
+    '## MindOS Agent Tool Surfaces',
+    '',
+    'MindOS Agent has multiple capability surfaces. Do not answer capability questions by only listing SDK customTools.',
+    '',
+    '- Direct runtime tools: use the tools visible in the current tool palette. SDK customTools may only show the project-root bash helper, but they are not the full MindOS capability set.',
+    '- MindOS extension tools: knowledge-base tools such as list_files, read_file, search, load_skill, write_file, create_file, update_section, edit_lines, rename_file, move_file, delete_file, lint_knowledge_base, compile_space_overview, and delegation tools are registered through pi extensions when allowed by the current mode.',
+    '- Skills: skills are not shell commands; use load_skill("<name>") when a listed skill is requested or its description matches the task.',
+    '- MCP / IM / subagent / scheduled-prompt capabilities: these are extension-backed surfaces and may appear as direct tools when configured and allowlisted for this run. Use the available direct tool when present; fall back to CLI or bash only when no direct tool exists.',
+    '- MindOS CLI via bash: bash can call local commands such as the mindos CLI, but prefer first-class MindOS tools for knowledge-base reads/writes because they enforce permission policy, write locks, and audit events.',
+    '',
+    `Proxy fallback tool names for this run: ${formatMindosToolNames(options.requestTools)}.`,
+    `Extension entries requested for this run: ${extensionList}.`,
+    '',
+    'If the user asks what you can do, describe these surfaces separately: direct tools currently visible, MindOS extension tools, skills, MindOS CLI via bash, and external/ACP/MCP agents when configured. Do not claim "only bash" unless the current tool palette and extension diagnostics both prove every extension-backed surface is unavailable.',
+  ].join('\n');
+}
+
 export async function createMindosPiAgentRuntime(options: MindosPiAgentRuntimeOptions): Promise<MindosPiAgentRuntime> {
   const lastMessage = options.messages.length > 0 ? options.messages[options.messages.length - 1] : undefined;
   const lastUserContent = lastMessage?.role === 'user' ? lastMessage.content : '';
@@ -1289,6 +1332,11 @@ export async function createMindosPiAgentRuntime(options: MindosPiAgentRuntimeOp
   reportMindosExtensionLoadErrors(resourceLoader, options.services.onExtensionLoadErrors);
 
   if (options.mode === 'agent') {
+    agentPromptSuffix += `\n\n---\n\n${buildMindosAgentToolSurfacesPrompt({
+      requestTools: options.requestTools,
+      additionalExtensionPaths: options.additionalExtensionPaths,
+    })}`;
+
     const disabledSkillNames = new Set(options.serverSettings?.disabledSkills ?? []);
     const discoveredSkills = resourceLoader.getSkills?.().skills ?? [];
     const thirdPartySkills = discoveredSkills.filter(

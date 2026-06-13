@@ -174,7 +174,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
   const [chatMode, setChatMode] = useState<AskMode>('agent');
   const [providerOverride, setProviderOverride] = useState<ProviderId | `p_${string}` | null>(null);
   const [modelOverride, setModelOverride] = useState<string | null>(null);
-  const [runtimeOptions, setRuntimeOptions] = useState<RuntimeOptionsState>(() => getPersistedRuntimeOptions());
+  const [runtimeOptions, setRuntimeOptions] = useState<RuntimeOptionsState>(() => getPersistedRuntimeOptions('codex'));
 
   const updateSelectedAgentRuntime = useCallback((runtime: AgentRuntimeIdentity | null) => {
     const normalized = normalizeSelectedAgentRuntime(runtime);
@@ -187,7 +187,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
     const persisted = getPersistedProviderModel();
     setProviderOverride(persisted.provider);
     setModelOverride(persisted.model);
-    setRuntimeOptions(getPersistedRuntimeOptions());
+    setRuntimeOptions(getPersistedRuntimeOptions('codex'));
   }, []);
 
   const session = useAskSession(currentFile);
@@ -246,6 +246,11 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
   const selectedNativeRuntimeKind = selectedAgentRuntime?.kind === 'codex' || selectedAgentRuntime?.kind === 'claude'
     ? selectedAgentRuntime.kind
     : null;
+
+  useEffect(() => {
+    if (!selectedNativeRuntimeKind) return;
+    setRuntimeOptions(getPersistedRuntimeOptions(selectedNativeRuntimeKind));
+  }, [selectedNativeRuntimeKind]);
   const selectedRuntimeChecking = useMemo(() => {
     if (!selectedAgentRuntime || selectedAgentRuntime.kind === 'mindos') return false;
     const nativeKind = selectedAgentRuntime.kind;
@@ -1048,8 +1053,8 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
 
   const handleRuntimeOptionsChange = useCallback((next: RuntimeOptionsState) => {
     setRuntimeOptions(next);
-    persistRuntimeOptions(next);
-  }, []);
+    persistRuntimeOptions(selectedNativeRuntimeKind ?? 'codex', next);
+  }, [selectedNativeRuntimeKind]);
 
   return (
     <div className="flex min-h-0 w-full flex-col h-full">

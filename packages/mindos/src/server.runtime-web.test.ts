@@ -32,7 +32,8 @@ import {
   handleMonitoringGet,
   handleWorkflowsGet,
   handleWorkflowsPost,
-  handleTreeVersion
+  handleTreeVersion,
+  handleTreeVersionRefresh
 } from './server.js';
 
 function throwingAsyncIterable<T>(error: Error): AsyncIterable<T> {
@@ -198,6 +199,19 @@ describe('MindOS server contract: runtime, ask stream, static web', () => {
     expect(res.headers?.['Cache-Control']).toBe('private, max-age=0');
   });
 
+  it('handles forced tree-version refresh through an injectable product service', () => {
+    let version = 123;
+    const invalidateTreeCache = vi.fn(() => {
+      version = 124;
+    });
+    const res = handleTreeVersionRefresh({
+      getTreeVersion: () => version,
+      invalidateTreeCache,
+    });
+    expect(res).toMatchObject({ status: 200, body: { v: 124 } });
+    expect(invalidateTreeCache).toHaveBeenCalledTimes(1);
+  });
+
   it('aggregates Chat Panel runtime availability through a product handler', async () => {
     const res = await handleAgentRuntimesGet(new URLSearchParams(), {
       now: () => Date.parse('2026-06-09T00:00:00.000Z'),
@@ -306,6 +320,12 @@ describe('MindOS server contract: runtime, ask stream, static web', () => {
           permissions: 'runtime-bridged',
           eventStream: expect.arrayContaining(['thread-turn-item', 'permissions']),
         }),
+        runtimeOptions: expect.objectContaining({
+          permissionModes: ['readonly', 'workspace-write', 'danger-full-access'],
+          effortModes: ['low', 'medium', 'high', 'xhigh'],
+          defaultPermissionMode: 'workspace-write',
+          defaultEffortMode: 'auto',
+        }),
       }),
       expect.objectContaining({
         id: 'claude',
@@ -317,6 +337,12 @@ describe('MindOS server contract: runtime, ask stream, static web', () => {
         harnessCapabilities: expect.objectContaining({
           session: 'local-id',
           permissions: 'runtime-bridged',
+        }),
+        runtimeOptions: expect.objectContaining({
+          permissionModes: ['readonly', 'agent', 'workspace-write', 'danger-full-access'],
+          effortModes: ['low', 'medium', 'high', 'xhigh', 'max'],
+          defaultPermissionMode: 'agent',
+          defaultEffortMode: 'auto',
         }),
       }),
       expect.objectContaining({
@@ -837,6 +863,11 @@ describe('MindOS server contract: runtime, ask stream, static web', () => {
       mode: 'chat',
       attachedFiles: ['note.md', 123],
       selectedRuntime: { id: 'codex', name: 'Codex', kind: 'codex' },
+      runtimeOptions: {
+        permissionMode: 'workspace-write',
+        modelOverride: ' gpt-5.1-codex ',
+        reasoningEffort: 'xhigh',
+      },
       runtimeBinding: {
         kind: 'codex-thread',
         runtime: 'codex',
@@ -850,6 +881,7 @@ describe('MindOS server contract: runtime, ask stream, static web', () => {
       askStream: async function* (input) {
         yield { type: 'status', message: `mode=${input.mode};runtime=${input.selectedRuntime?.kind}:${input.selectedRuntime?.id}` };
         yield { type: 'status', message: `binding=${input.runtimeBinding?.kind}:${input.runtimeBinding?.externalSessionId}` };
+        yield { type: 'status', message: `options=${input.runtimeOptions?.permissionMode}:${input.runtimeOptions?.modelOverride}:${input.runtimeOptions?.reasoningEffort}` };
         yield { type: 'text_delta', delta: String(input.messages[0]?.content ?? '') };
         yield { type: 'done' };
       },
@@ -862,6 +894,7 @@ describe('MindOS server contract: runtime, ask stream, static web', () => {
     expect(events).toEqual([
       { type: 'status', message: 'mode=chat;runtime=codex:codex' },
       { type: 'status', message: 'binding=codex-thread:thr_123' },
+      { type: 'status', message: 'options=workspace-write:gpt-5.1-codex:xhigh' },
       { type: 'text_delta', delta: 'hello' },
       { type: 'done' },
     ]);

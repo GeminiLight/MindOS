@@ -7,10 +7,11 @@ import type { MindSystemSlot } from '@/lib/mind-system';
 import type { FileNode } from '@/lib/types';
 
 const mockPush = vi.fn();
+const mockRefresh = vi.fn();
 
 vi.mock('next/navigation', () => ({
   usePathname: () => '/wiki',
-  useRouter: () => ({ push: mockPush }),
+  useRouter: () => ({ push: mockPush, refresh: mockRefresh }),
 }));
 
 vi.mock('@/lib/actions', () => ({
@@ -275,6 +276,7 @@ describe('Panel Mind System collapse', () => {
     const newButton = Array.from(host.querySelectorAll<HTMLButtonElement>('button'))
       .find(button => button.getAttribute('aria-label') === 'New' || button.getAttribute('aria-label') === '新建');
     expect(newButton).not.toBeNull();
+    expect(host.querySelector('button[aria-label="Import file"]')).toBeNull();
 
     await act(async () => {
       newButton?.click();
@@ -287,6 +289,39 @@ describe('Panel Mind System collapse', () => {
     expect(menu?.className).not.toContain('right-0');
     expect(menu?.textContent).toContain('New file');
     expect(menu?.textContent).toContain('New Space');
+    expect(menu?.textContent).toContain('Import file');
+  });
+
+  it('forces a tree-version refresh before refreshing the file tree UI', async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ files: [] }),
+    }));
+    const filesChanged = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    window.addEventListener('mindos:files-changed', filesChanged);
+
+    try {
+      await act(async () => {
+        root = renderPanel(host);
+        await new Promise(r => setTimeout(r, 0));
+      });
+
+      const refreshButton = host.querySelector<HTMLButtonElement>('button[aria-label="Refresh knowledge base"]');
+      expect(refreshButton).not.toBeNull();
+
+      await act(async () => {
+        refreshButton?.click();
+        await new Promise(r => setTimeout(r, 0));
+      });
+
+      expect(fetchMock).toHaveBeenCalledWith('/api/tree-version', { method: 'POST', cache: 'no-store' });
+      expect(mockRefresh).toHaveBeenCalledTimes(1);
+      expect(filesChanged).toHaveBeenCalledTimes(1);
+      expect(refreshButton?.disabled).toBe(true);
+    } finally {
+      window.removeEventListener('mindos:files-changed', filesChanged);
+    }
   });
 
   it('loads the Inbox badge count through the normalized Inbox client contract', async () => {

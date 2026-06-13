@@ -2,13 +2,14 @@
 
 import { useState, useEffect, useCallback, useRef, useLayoutEffect, useMemo, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, X, FileText, Table, Settings, RotateCcw, Moon, Sun, Bot, Compass, HelpCircle, ChevronRight } from 'lucide-react';
+import { Search, X, FileText, Table, Settings, RotateCcw, Moon, Sun, Bot, Compass, HelpCircle, ChevronRight, GripVertical } from 'lucide-react';
 import { SearchResult } from '@/lib/types';
 import { encodePath } from '@/lib/utils';
 import { apiFetch } from '@/lib/api';
 import { useLocale } from '@/lib/stores/locale-store';
 import { toast } from '@/lib/toast';
 import { getSearchWarmHint, useSearchPrewarm } from '@/hooks/useSearchPrewarm';
+import { createSearchResultDragPreview, scheduleSearchResultDragPreviewCleanup } from '@/lib/search-drag-preview';
 
 interface SearchModalProps {
   open: boolean;
@@ -65,13 +66,18 @@ export default function SearchModal({ open, onClose }: SearchModalProps) {
   const isDark = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
 
   // Drag and drop handlers
-  const handleDragStart = useCallback((e: React.DragEvent<HTMLButtonElement>, result: SearchResult) => {
+  const handleDragStart = useCallback((e: React.DragEvent<HTMLButtonElement>, result: SearchResult, index: number) => {
     e.dataTransfer.effectAllowed = 'copy';
     // Use the same data format as MindOS knowledge base drag-drop
     e.dataTransfer.setData('text/mindos-path', result.path);
     e.dataTransfer.setData('text/mindos-type', 'file');
-    const dragImg = new Image();
-    e.dataTransfer.setDragImage(dragImg, 0, 0);
+    e.dataTransfer.setData('text/plain', result.path);
+    const preview = createSearchResultDragPreview(result.path);
+    if (preview && typeof e.dataTransfer.setDragImage === 'function') {
+      e.dataTransfer.setDragImage(preview, 12, 12);
+    }
+    scheduleSearchResultDragPreviewCleanup(preview);
+    setDraggedIndex(index);
   }, []);
 
   const handleDragEnd = useCallback(() => {
@@ -294,16 +300,16 @@ export default function SearchModal({ open, onClose }: SearchModalProps) {
         {tab === 'search' && (
           <>
             {/* Search input - IMPROVED */}
-            <div className="px-4 py-3 border-b border-border">
+            <div className="px-4 py-2.5 border-b border-border">
               <div className="flex items-center gap-3">
-                <Search size={16} className="text-muted-foreground shrink-0 flex-none" />
+                <Search size={15} className="text-muted-foreground shrink-0 flex-none" />
                 <input
                   ref={inputRef}
                   type="text"
                   value={query}
                   onChange={handleChange}
                   placeholder={t.search.placeholder}
-                  className="flex-1 bg-transparent text-foreground text-base font-medium placeholder:text-muted-foreground/60 outline-none"
+                  className="flex-1 bg-transparent text-foreground text-sm font-medium placeholder:text-muted-foreground/55 outline-none"
                 />
                 {loading && (
                   <div className="w-4 h-4 border-2 border-muted-foreground/30 border-t-foreground rounded-full animate-spin shrink-0 flex-none" />
@@ -378,14 +384,14 @@ export default function SearchModal({ open, onClose }: SearchModalProps) {
                   <button
                     key={result.path}
                     draggable
-                    onDragStart={(e) => handleDragStart(e, result)}
+                    onDragStart={(e) => handleDragStart(e, result, i)}
                     onDragEnd={handleDragEnd}
                     onDragEnter={() => setDraggedIndex(i)}
                     onDragLeave={() => setDraggedIndex(null)}
                     onClick={() => navigate(result)}
                     onMouseEnter={() => setSelectedIndex(i)}
                     className={`
-                      w-full px-3 py-2.5 flex items-start gap-3 text-left transition-colors duration-100
+                      group w-full px-3 py-2.5 flex items-start gap-3 text-left transition-colors duration-100
                       ${isSelected ? 'bg-[var(--amber-dim)] border-l-2 border-[var(--amber)]' : 'border-l-2 border-transparent'}
                       ${isDragging ? 'bg-muted/70' : isSelected ? '' : 'hover:bg-muted/60'}
                       ${i < results.length - 1 ? 'border-b border-border/50' : ''}
@@ -426,11 +432,15 @@ export default function SearchModal({ open, onClose }: SearchModalProps) {
                       )}
                     </div>
 
-                    {/* Drag hint for mobile/desktop */}
+                    {/* Drag affordance */}
                     {isSelected && !isDragging && (
-                      <div className="hidden md:flex shrink-0 flex-none text-[10px] text-muted-foreground/50 font-mono pt-0.5">
-                        ⬆ Drag
-                      </div>
+                      <span
+                        className="hidden md:inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground/45 transition-colors group-hover:text-muted-foreground"
+                        title={t.search.dragToChat}
+                        aria-label={t.search.dragToChat}
+                      >
+                        <GripVertical size={13} aria-hidden="true" />
+                      </span>
                     )}
                   </button>
                 );
@@ -443,7 +453,7 @@ export default function SearchModal({ open, onClose }: SearchModalProps) {
                 <span><kbd className="font-mono text-[10px] px-1 py-0.5 bg-muted/40 rounded">↑↓</kbd> {t.search.navigate}</span>
                 <span><kbd className="font-mono text-[10px] px-1 py-0.5 bg-muted/40 rounded">↵</kbd> {t.search.open}</span>
                 <span className="text-muted-foreground/40 mx-0.5">•</span>
-                <span><kbd className="font-mono text-[10px] px-1 py-0.5 bg-muted/40 rounded">Drag</kbd> to chat</span>
+                <span><kbd className="font-mono text-[10px] px-1 py-0.5 bg-muted/40 rounded">Drag</kbd> {t.search.dragToChat}</span>
                 <span className="text-muted-foreground/40 mx-0.5">•</span>
                 <span><kbd className="font-mono text-[10px] px-1 py-0.5 bg-muted/40 rounded">ESC</kbd> {t.search.close}</span>
               </div>

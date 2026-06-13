@@ -9,7 +9,9 @@
  * changed" (backward compatible with the legacy plain Event emitters).
  */
 
-export const FILES_CHANGED_EVENT = 'mindos:files-changed';
+import { FILES_CHANGED_EVENT, notifyFilesChanged } from '@/lib/files-changed';
+
+export { FILES_CHANGED_EVENT };
 
 const FLUSH_DELAY_MS = 300;
 
@@ -57,9 +59,7 @@ export function flushFilesChanged(): void {
   hasPending = false;
   pendingUnknown = false;
   pendingPaths = new Set();
-  window.dispatchEvent(
-    detail ? new CustomEvent(FILES_CHANGED_EVENT, { detail }) : new CustomEvent(FILES_CHANGED_EVENT),
-  );
+  notifyFilesChanged(detail?.paths);
 }
 
 export function resetFilesChangedEmitterForTests(): void {

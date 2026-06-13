@@ -1,4 +1,5 @@
 import { apiFetch } from '@/lib/api';
+import { notifyFilesChanged } from '@/lib/files-changed';
 import { isAiConfiguredForAsk, type SettingsJsonForAi } from '@/lib/settings-ai-client';
 
 /**
@@ -84,7 +85,10 @@ export function triggerSpaceAiInit(
     window.dispatchEvent(new CustomEvent('mindos:ai-init', {
       detail: { spacePath, state: 'done' },
     }));
-    window.dispatchEvent(new Event('mindos:files-changed'));
+    notifyFilesChanged([
+      `${spacePath}/README.md`,
+      `${spacePath}/INSTRUCTION.md`,
+    ]);
   }).catch(() => {
     window.dispatchEvent(new CustomEvent('mindos:ai-init', {
       detail: { spacePath, state: 'error' },

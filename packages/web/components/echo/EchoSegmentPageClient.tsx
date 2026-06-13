@@ -15,6 +15,7 @@ import { EchoInsightCollapsible } from './EchoInsightCollapsible';
 import { EchoFactSnapshot } from './EchoPageSections';
 import DailyEchoReportButton from './DailyEcho/DailyEchoReportButton';
 import DailyEchoReportDrawer from './DailyEcho/DailyEchoReportDrawer';
+import { ContentPageShell } from '@/components/shared/ContentPageShell';
 import type { DailyEchoReport } from '@/lib/daily-echo/types';
 import { generateDailyEchoReport } from '@/lib/daily-echo/generator';
 import { loadDailyEchoConfig } from '@/lib/daily-echo/config';
@@ -205,8 +206,9 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
     : p.selfChatLabel;
 
   return (
-    <article
-      className="mx-auto max-w-3xl px-4 py-6 sm:px-6 md:py-11"
+    <ContentPageShell
+      as="article"
+      className="echo-content-page"
       aria-labelledby={pageTitleId}
     >
       <EchoHero
@@ -333,6 +335,6 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
           userPrompt={insightUserPrompt}
         />
       )}
-    </article>
+    </ContentPageShell>
   );
 }

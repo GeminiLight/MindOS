@@ -132,7 +132,7 @@ import { handleSkillMatrixGet, handleSkillsGet, handleSkillsPost, type MindosSki
 import { handleSpaceOverviewGet } from './handlers/space-overview.js';
 import { handleStaticArtifact } from './handlers/static.js';
 import { handleSyncGet, handleSyncPost } from './handlers/sync.js';
-import { handleTreeVersion } from './handlers/tree-version.js';
+import { handleTreeVersion, handleTreeVersionRefresh } from './handlers/tree-version.js';
 import { handleRestartPost, handleUpdateCheckGet, handleUpdatePost, handleUpdateStatusGet } from './handlers/update.js';
 import { handleWorkflowsGet, handleWorkflowsPost } from './handlers/workflows.js';
 import { CORS_HEADERS, json, type MindosServerResponse } from './response.js';
@@ -212,7 +212,7 @@ export type MindosHttpServer = {
 export function createDefaultMindosHttpServices(options: DefaultMindosHttpServicesOptions = {}): MindosHttpServices {
   const mindRoot = getDefaultMindRoot(options);
   // Watcher-driven cache: avoids walking the whole library on every poll of
-  // /api/tree-version (~5s) and on every /api/files request.
+  // /api/tree-version and on every /api/files request.
   const treeCache = createMindRootTreeCache(mindRoot);
   const channels: MindosChannelServices = {};
   if (options.homeDir) {
@@ -275,11 +275,22 @@ export function createMindosHttpServer(options: MindosHttpServerOptions = {}): M
   });
   const server = createServer((req, res) => {
     const method = (req.method ?? 'GET').toUpperCase();
+    let requestPath = '';
+    try {
+      requestPath = new URL(req.url ?? '/', `http://${hostname}`).pathname;
+    } catch {
+      requestPath = '';
+    }
     void handleRequest(req, res, services, options.runtimeRoot).finally(() => {
       // Any non-read API call may have written into the mind root (file ops,
       // inbox, init, skills, ...). Invalidation is a cheap dirty flag; the
       // watcher covers external writes, this covers internal ones immediately.
-      if (method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS') {
+      if (
+        method !== 'GET' &&
+        method !== 'HEAD' &&
+        method !== 'OPTIONS' &&
+        !(method === 'POST' && requestPath === '/api/tree-version')
+      ) {
         services.invalidateTreeCache?.();
       }
     });
@@ -343,6 +354,10 @@ async function handleRequest(
     }
     if (route === 'GET /api/tree-version') {
       writeResponse(res, handleTreeVersion(services));
+      return;
+    }
+    if (route === 'POST /api/tree-version') {
+      writeResponse(res, handleTreeVersionRefresh(services));
       return;
     }
     if (route === 'GET /api/search') {

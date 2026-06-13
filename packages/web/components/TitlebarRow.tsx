@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Search } from 'lucide-react';
+import { PanelLeftClose, PanelLeftOpen, Search } from 'lucide-react';
 import TitlebarTabStrip from './TitlebarTabStrip';
 import { useLocale } from '@/lib/stores/locale-store';
 
@@ -36,6 +36,8 @@ const NO_DRAG_STYLE = { WebkitAppRegion: 'no-drag' } as React.CSSProperties;
 interface TitlebarRowProps {
   searchActive?: boolean;
   onSearchOpenOrFocus?: () => void;
+  sidebarExpanded?: boolean;
+  onSidebarExpandedChange?: (expanded: boolean) => void;
 }
 
 function TitlebarSearchTrigger({
@@ -68,9 +70,39 @@ function TitlebarSearchTrigger({
   );
 }
 
+function TitlebarSidebarToggle({
+  expanded,
+  onExpandedChange,
+  collapseLabel,
+  expandLabel,
+}: {
+  expanded: boolean;
+  onExpandedChange?: (expanded: boolean) => void;
+  collapseLabel: string;
+  expandLabel: string;
+}) {
+  const label = expanded ? collapseLabel : expandLabel;
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      aria-pressed={expanded}
+      title={label}
+      data-titlebar-sidebar-toggle
+      style={NO_DRAG_STYLE}
+      onClick={() => onExpandedChange?.(!expanded)}
+      className="mb-1 mr-1 hidden h-7 w-7 shrink-0 items-center justify-center self-end rounded-md text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:inline-flex"
+    >
+      {expanded ? <PanelLeftClose size={15} aria-hidden="true" /> : <PanelLeftOpen size={15} aria-hidden="true" />}
+    </button>
+  );
+}
+
 export default function TitlebarRow({
   searchActive = false,
   onSearchOpenOrFocus,
+  sidebarExpanded = false,
+  onSidebarExpandedChange,
 }: TitlebarRowProps) {
   const { t } = useLocale();
 
@@ -83,6 +115,12 @@ export default function TitlebarRow({
         active={searchActive}
         onOpenOrFocus={onSearchOpenOrFocus}
         label={t.sidebar.searchTitle}
+      />
+      <TitlebarSidebarToggle
+        expanded={sidebarExpanded}
+        onExpandedChange={onSidebarExpandedChange}
+        collapseLabel={t.sidebar.collapseTitle}
+        expandLabel={t.sidebar.expandTitle}
       />
       <TitlebarTabStrip />
       <div aria-hidden="true" data-drag-spacer className="h-full shrink-0" style={DRAG_SPACER_STYLE} />

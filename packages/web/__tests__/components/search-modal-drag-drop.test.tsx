@@ -37,6 +37,7 @@ vi.mock('@/lib/stores/locale-store', () => ({
         goToDiscover: 'Discover',
         goToHelp: 'Help',
         walkthroughRestarted: 'Walkthrough restarted',
+        dragToChat: 'to chat',
       },
     },
   }),
@@ -164,11 +165,14 @@ describe('SearchModal Drag-Drop Integration', () => {
       // Verify correct data format for AskContent integration
       expect(setDataSpy).toHaveBeenCalledWith('text/mindos-path', expect.any(String));
       expect(setDataSpy).toHaveBeenCalledWith('text/mindos-type', 'file');
+      expect(setDataSpy).toHaveBeenCalledWith('text/plain', expect.any(String));
 
       // Verify data is file path format
       const callArgs = setDataSpy.mock.calls;
       const pathCall = callArgs.find(call => call[0] === 'text/mindos-path');
+      const plainCall = callArgs.find(call => call[0] === 'text/plain');
       expect(pathCall?.[1]).toMatch(/\.(md|csv)$/);
+      expect(plainCall?.[1]).toBe(pathCall?.[1]);
     });
   });
 
@@ -208,9 +212,9 @@ describe('SearchModal Drag-Drop Integration', () => {
         resultButton.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
       });
 
-      // On desktop (md+), drag hint should be visible
-      // The component renders: "⬆ Drag" for selected items on md+
       expect(resultButton).toBeTruthy();
+      expect(resultButton.textContent).not.toContain(['⬆', 'Drag'].join(' '));
+      expect(resultButton.querySelector('[aria-label="to chat"]')).toBeTruthy();
     });
 
     it('should support keyboard navigation and drag', async () => {
@@ -262,6 +266,7 @@ describe('SearchModal Drag-Drop Integration', () => {
         'text/mindos-path',
         'knowledge/search-test.md'
       );
+      expect(setDataSpy).toHaveBeenCalledWith('text/plain', 'knowledge/search-test.md');
     });
   });
 
@@ -299,11 +304,13 @@ describe('SearchModal Drag-Drop Integration', () => {
 
         let pathData = '';
         let typeData = '';
+        let plainData = '';
 
         // Mock getData and setData to capture values
         dragEvent.dataTransfer!.setData = ((type: string, value: string) => {
           if (type === 'text/mindos-path') pathData = value;
           if (type === 'text/mindos-type') typeData = value;
+          if (type === 'text/plain') plainData = value;
         }) as any;
 
         await act(async () => {
@@ -313,6 +320,7 @@ describe('SearchModal Drag-Drop Integration', () => {
         // Verify data format matches AskContent expectations
         expect(pathData).toMatch(/\.(md|csv)$/);
         expect(typeData).toBe('file');
+        expect(plainData).toBe(pathData);
       }
     });
   });

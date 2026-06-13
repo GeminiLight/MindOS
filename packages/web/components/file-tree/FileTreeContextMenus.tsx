@@ -12,10 +12,7 @@ import { useLocale } from '@/lib/stores/locale-store';
 import { usePinnedFiles } from '@/lib/hooks/usePinnedFiles';
 import { checkAiAvailable, triggerSpaceAiInit } from '@/lib/space-ai-init';
 import { toast } from '@/lib/toast';
-
-function notifyFilesChanged() {
-  window.dispatchEvent(new Event('mindos:files-changed'));
-}
+import { notifyFilesChanged } from '@/lib/files-changed';
 
 async function copyPathToClipboard(path: string) {
   try { await navigator.clipboard.writeText(path); } catch { /* noop */ }
@@ -141,7 +138,7 @@ export function FolderContextMenu({ x, y, node, onClose, onRename, onNewFile, on
           const result = await convertToSpaceAction(node.path);
           if (result.success) {
             router.refresh();
-            notifyFilesChanged();
+            notifyFilesChanged([node.path]);
             const spaceName = node.name.replace(/^[\p{Emoji_Presentation}\p{Extended_Pictographic}\s]+/u, '') || node.name;
             triggerSpaceAiInit(spaceName, node.path);
           } else {

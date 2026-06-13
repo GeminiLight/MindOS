@@ -27,7 +27,7 @@ import ExportModal from '@/components/ExportModal';
 import { useEditorTheme } from '@/lib/stores/editor-theme-store';
 import { twemojiToNative } from '@/lib/twemoji';
 import { splitMarkdownFrontmatter } from '@/lib/parsing/frontmatter';
-import { isPathAffected, subscribeFilesChanged } from '@/lib/files-changed';
+import { isPathAffected, notifyFilesChanged, subscribeFilesChanged } from '@/lib/files-changed';
 import { closeByKey, keepTab, openTab } from '@/lib/workspace-tabs';
 
 interface ViewPageClientProps {
@@ -214,7 +214,7 @@ export default function ViewPageClient({
         retargetKeptDocTab(filePath, result.newPath);
         router.push(`/view/${encodePath(result.newPath)}`);
         router.refresh();
-        window.dispatchEvent(new Event('mindos:files-changed'));
+        notifyFilesChanged([filePath, result.newPath]);
       }
     });
   }, [renameValue, filePath, router, retargetKeptDocTab]);
@@ -231,7 +231,7 @@ export default function ViewPageClient({
             const undo = await undoDeleteAction(trashId);
             if (undo.success) {
               router.refresh();
-              window.dispatchEvent(new Event('mindos:files-changed'));
+              notifyFilesChanged([filePath]);
             } else {
               toast.error(undo.error ?? 'Undo failed');
             }
@@ -239,7 +239,7 @@ export default function ViewPageClient({
         }
         router.push('/');
         router.refresh();
-        window.dispatchEvent(new Event('mindos:files-changed'));
+        notifyFilesChanged([filePath]);
       }
     });
   }, [filePath, router, t]);
@@ -327,6 +327,7 @@ export default function ViewPageClient({
         setTimeout(() => setSaveSuccess(false), 2500);
         router.push(`/view/${encodePath(targetPath)}`);
         router.refresh();
+        notifyFilesChanged([targetPath]);
       } catch (err) {
         setSaveError(err instanceof Error ? err.message : 'Failed to save');
       }
@@ -353,6 +354,7 @@ export default function ViewPageClient({
         keepCurrentTab();
         await saveAction(cleanContent);
         setSavedContent(cleanContent);
+        notifyFilesChanged([filePath]);
         // Markdown auto-save: Ctrl+S saves but stays in edit mode
         if (!isMarkdown) {
           setEditing(false);
@@ -363,14 +365,15 @@ export default function ViewPageClient({
         setSaveError(err instanceof Error ? err.message : 'Failed to save');
       }
     });
-  }, [isCsv, isDraft, isMarkdown, saveAction, editContent, keepCurrentTab]);
+  }, [isCsv, isDraft, isMarkdown, saveAction, editContent, keepCurrentTab, filePath]);
 
   // Renderer's inline save — updates local savedContent without entering edit mode
   const handleRendererSave = useCallback(async (newContent: string) => {
     keepCurrentTab();
     await saveAction(newContent);
     setSavedContent(newContent);
-  }, [saveAction, keepCurrentTab]);
+    notifyFilesChanged([filePath]);
+  }, [saveAction, keepCurrentTab, filePath]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -532,7 +535,7 @@ export default function ViewPageClient({
                             setSavedContent(clean);
                             if (clean !== savedContent) {
                               keepCurrentTab();
-                              saveAction(clean).catch(() => {});
+                              saveAction(clean).then(() => notifyFilesChanged([filePath])).catch(() => {});
                             }
                             setEditing(false);
                           } else if (!editing) {
@@ -746,6 +749,7 @@ export default function ViewPageClient({
                   await saveAction(c);
                   setEditContent(c);
                   setSavedContent(c);
+                  notifyFilesChanged([filePath]);
                 }}
               />
             ) : (

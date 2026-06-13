@@ -25,7 +25,7 @@ export default function McpPortSection({ m }: { m: SettingsMcpMessages }) {
     portUnavailable,
     handlePortInputChange,
     handlePortInputBlur,
-    useSuggestedPort,
+    applySuggestedPort,
   } = useSettingsPort();
 
   useEffect(() => {
@@ -131,7 +131,7 @@ export default function McpPortSection({ m }: { m: SettingsMcpMessages }) {
             </p>
             {status.suggestion !== null && (
               <button type="button"
-                onClick={() => useSuggestedPort(status.suggestion!)}
+                onClick={() => applySuggestedPort(status.suggestion!)}
                 className="text-2xs px-1.5 py-0.5 rounded border border-[var(--amber)] text-[var(--amber)] transition-colors hover:bg-[var(--amber-subtle)]"
               >
                 {m.portSuggest(status.suggestion)}

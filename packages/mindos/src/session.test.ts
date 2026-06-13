@@ -1049,6 +1049,10 @@ describe('MindOS session event contract', () => {
     expect(runtime.modelName).toBe('gpt-test');
     expect(runtime.provider).toBe('anthropic');
     expect(runtime.requestTools).toEqual([{ name: 'read_file', execute: expect.any(Function) }]);
+    expect(runtime.systemPrompt).toContain('## MindOS Agent Tool Surfaces');
+    expect(runtime.systemPrompt).toContain('Do not answer capability questions by only listing SDK customTools.');
+    expect(runtime.systemPrompt).toContain('Proxy fallback tool names for this run: read_file.');
+    expect(runtime.systemPrompt).toContain('Extension entries requested for this run: ext.');
     expect(runtime.systemPrompt).toContain('<skills>third-party</skills>');
     expect(runtime.systemPrompt).toContain('load_skill("third-party")');
     expect(capturedSystemPrompt).toBe('base prompt');
@@ -1059,6 +1063,7 @@ describe('MindOS session event contract', () => {
     expect(capturedSystemPromptOverride).not.toBeNull();
     const effectiveSessionPrompt = capturedSystemPromptOverride!('base prompt');
     expect(effectiveSessionPrompt).toContain('base prompt');
+    expect(effectiveSessionPrompt).toContain('## MindOS Agent Tool Surfaces');
     expect(effectiveSessionPrompt).toContain('<skills>third-party</skills>');
     expect(effectiveSessionPrompt).toContain('load_skill("third-party")');
     expect(effectiveSessionPrompt).toBe(runtime.systemPrompt);

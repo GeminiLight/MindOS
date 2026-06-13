@@ -166,7 +166,7 @@ function buildNextActions({
       id: 'mcp-stopped',
       title: copy.actionMcpStoppedTitle,
       hint: copy.actionMcpStoppedHint,
-      href: '/agents?tab=mcp',
+      href: '/agents?tab=skills',
       tone: 'warn',
       label: copy.actionOpen,
     });

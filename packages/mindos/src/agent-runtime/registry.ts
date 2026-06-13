@@ -64,6 +64,14 @@ export type AgentRuntimeBridge = {
   reason?: string;
 };
 
+export type AgentRuntimeOptionsDescriptor = {
+  permissionModes: Array<'readonly' | 'agent' | 'workspace-write' | 'danger-full-access'>;
+  effortModes: Array<'low' | 'medium' | 'high' | 'xhigh' | 'max'>;
+  modelInput: 'freeform' | 'external';
+  defaultPermissionMode: 'readonly' | 'agent' | 'workspace-write' | 'danger-full-access';
+  defaultEffortMode: 'auto';
+};
+
 export type AgentRuntimeDescriptor = {
   id: string;
   name: string;
@@ -78,6 +86,7 @@ export type AgentRuntimeDescriptor = {
   status: AgentRuntimeStatus;
   capabilities: AgentRuntimeCapabilities;
   harnessCapabilities?: AgentRuntimeHarnessCapabilities;
+  runtimeOptions?: AgentRuntimeOptionsDescriptor;
   runtimeBridge?: AgentRuntimeBridge;
   description?: string;
   sourceAgentId?: string;

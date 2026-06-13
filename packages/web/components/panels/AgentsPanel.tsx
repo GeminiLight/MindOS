@@ -17,15 +17,11 @@ import AgentsRuntimeSection from '../agents/AgentsRuntimeSection';
 
 interface AgentsPanelProps {
   active: boolean;
-  maximized?: boolean;
-  onMaximize?: () => void;
   selectedAgentKey?: string | null;
 }
 
 export default function AgentsPanel({
   active,
-  maximized,
-  onMaximize,
   selectedAgentKey = null,
 }: AgentsPanelProps) {
   const { t } = useLocale();
@@ -121,7 +117,7 @@ export default function AgentsPanel({
 
   return (
     <div className={`flex flex-col h-full ${active ? '' : 'hidden'}`}>
-      <PanelHeader title={p.title} maximized={maximized} onMaximize={onMaximize}>
+      <PanelHeader title={p.title}>
         <div className="flex items-center gap-1.5">
           {isAgentTab ? (
             <span className="text-2xs text-muted-foreground">

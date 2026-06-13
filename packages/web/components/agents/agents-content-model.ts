@@ -41,26 +41,22 @@ export function parseAgentsTab(tab: string | undefined): AgentsDashboardTab {
   if (
     tab === 'assistant' ||
     tab === 'agent' ||
-    tab === 'plugins' ||
     tab === 'runs' ||
     tab === 'presets' ||
-    tab === 'mcp' ||
     tab === 'skills' ||
     tab === 'a2a' ||
     tab === 'sessions' ||
     tab === 'activity' ||
     tab === 'channels'
   ) return tab;
-  if (tab === 'capabilities') return 'skills';
+  if (tab === 'capabilities' || tab === 'plugins' || tab === 'mcp') return 'skills';
   return 'overview';
 }
 
 export function getAgentsNavGroup(tab: AgentsDashboardTab): AgentsNavGroup {
   if (tab === 'assistant' || tab === 'presets') return 'assistant';
   if (tab === 'agent' || tab === 'a2a') return 'agent';
-  if (tab === 'plugins') return 'plugins';
-  if (tab === 'capabilities' || tab === 'skills') return 'skills';
-  if (tab === 'mcp') return 'mcp';
+  if (tab === 'capabilities' || tab === 'plugins' || tab === 'skills' || tab === 'mcp') return 'skills';
   if (tab === 'channels') return 'channels';
   return 'overview';
 }

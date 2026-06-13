@@ -176,6 +176,9 @@ export function getTreeVersion(): number {
     // Cache expired by TTL — rebuild and check if files actually changed.
     refreshExpiredCache();
   }
+  // The tree-version endpoint can be the first cache touch in lightweight
+  // clients. Keep watcher startup semantics aligned with getFileTree().
+  if (!_watcher) startFileWatcher();
   return _treeVersion;
 }
 

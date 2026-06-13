@@ -2,6 +2,7 @@ import { toast } from '@/lib/toast';
 import type { useLocale } from '@/lib/stores/locale-store';
 import { isBinaryCaptureName } from '@/lib/capture-formats';
 import { saveInboxFiles, type InboxSaveInput, type InboxSaveResult } from '@/lib/inbox-client';
+import { notifyFilesChanged } from '@/lib/files-changed';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB per file
 
@@ -147,7 +148,7 @@ export async function quickDropToInbox(
 
     showQuickDropToast(saved, formatSkipped, oversized.length, t);
     if (saved > 0) {
-      window.dispatchEvent(new Event('mindos:files-changed'));
+      notifyFilesChanged(result.saved.map(item => item.path));
       window.dispatchEvent(new Event('mindos:inbox-updated'));
     }
     return {
@@ -188,7 +189,7 @@ export async function clipUrlToInbox(
     }
 
     toast.success(t.inbox.clipSuccess(data.title || url), 3000);
-    window.dispatchEvent(new Event('mindos:files-changed'));
+    notifyFilesChanged(typeof data.fileName === 'string' ? [data.fileName] : undefined);
     window.dispatchEvent(new Event('mindos:inbox-updated'));
     return { ok: true, title: data.title };
   } catch (err) {
@@ -324,7 +325,12 @@ export async function quickDropToDirectory(
       if (skipped > 0) toast.error(t.inbox.savedWithSkipped(0, skipped), 4000);
     }
 
-    window.dispatchEvent(new Event('mindos:files-changed'));
+    const createdPaths = Array.isArray(result.created)
+      ? result.created
+        .map((item: { path?: unknown }) => item.path)
+        .filter((path: unknown): path is string => typeof path === 'string')
+      : undefined;
+    notifyFilesChanged(createdPaths);
   } catch (err) {
     console.error('[TreeDrop] Network error:', err);
     toast.error(t.inbox.saveFailed, 4000);

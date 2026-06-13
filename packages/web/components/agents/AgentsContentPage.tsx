@@ -57,7 +57,7 @@ export default function AgentsContentPage({ tab }: { tab: AgentsDashboardTab }) 
   const mcp = useMcpData();
   const a2a = useA2aRegistry();
   const searchParams = useSearchParams();
-  const resolvedTab: AgentsDashboardTab = tab === 'capabilities' ? 'skills' : tab;
+  const resolvedTab: AgentsDashboardTab = tab === 'capabilities' || tab === 'plugins' || tab === 'mcp' ? 'skills' : tab;
   const isChannelDetail = resolvedTab === 'channels' && !!searchParams.get('platform');
   const pageHeader = useMemo(() => {
     if (resolvedTab === 'channels') {
@@ -84,22 +84,10 @@ export default function AgentsContentPage({ tab }: { tab: AgentsDashboardTab }) 
         subtitle: a.a2aTabEmptyHint,
       };
     }
-    if (resolvedTab === 'plugins') {
-      return {
-        title: a.navPlugins ?? 'Plugins',
-        subtitle: a.pluginsSubtitle ?? 'Manage agent-facing extensions.',
-      };
-    }
     if (resolvedTab === 'skills') {
       return {
-        title: a.navSkills,
-        subtitle: a.skillsSubtitle ?? a.skills.capabilityGroups,
-      };
-    }
-    if (resolvedTab === 'mcp') {
-      return {
-        title: a.navMcp,
-        subtitle: a.mcpSubtitle ?? a.capabilitiesSubtitle ?? a.mcp.title,
+        title: a.navCapabilities ?? a.navSkills,
+        subtitle: a.capabilitiesSubtitle ?? a.skillsSubtitle ?? a.skills.capabilityGroups,
       };
     }
     if (resolvedTab === 'presets' || resolvedTab === 'assistant') {
@@ -305,24 +293,14 @@ export default function AgentsContentPage({ tab }: { tab: AgentsDashboardTab }) 
         </div>
       )}
 
-      {resolvedTab === 'plugins' && (
-        <AgentsPluginsSection copy={a} />
-      )}
-
-      {resolvedTab === 'mcp' && mcpEnabled && (
-        <AgentsMcpSection copy={{ ...a.mcp, status: a.status }} mcp={mcp} buckets={buckets} copyState={null} onCopySnippet={copySnippet} />
-      )}
-
-      {/* MCP tab accessed but mode disabled — show hint */}
-      {resolvedTab === 'mcp' && !mcpEnabled && !mcp.loading && (
-        <div className="flex flex-col items-center justify-center py-16 text-center">
-          <p className="text-sm text-muted-foreground">{a.mcp?.mcpDisabledMessage ?? 'MCP mode is not enabled.'}</p>
-          <p className="text-xs text-muted-foreground/60 mt-1">{a.mcp?.mcpDisabledHint ?? 'Enable it in Settings → Connections to use MCP agents.'}</p>
-        </div>
-      )}
-
       {resolvedTab === 'skills' && (
-        <AgentsSkillsSection copy={a.skills} mcp={mcp} buckets={buckets} />
+        <AgentsCapabilitiesSection
+          copy={a}
+          mcp={mcp}
+          buckets={buckets}
+          mcpEnabled={mcpEnabled}
+          onCopySnippet={copySnippet}
+        />
       )}
 
       {(resolvedTab === 'presets' || resolvedTab === 'assistant') && (
@@ -372,6 +350,39 @@ export default function AgentsContentPage({ tab }: { tab: AgentsDashboardTab }) 
         variant="destructive"
       />
     </ContentPageShell>
+  );
+}
+
+function AgentsCapabilitiesSection({
+  copy,
+  mcp,
+  buckets,
+  mcpEnabled,
+  onCopySnippet,
+}: {
+  copy: ReturnType<typeof useLocale>['t']['agentsContent'];
+  mcp: ReturnType<typeof useMcpData>;
+  buckets: ReturnType<typeof bucketAgents>;
+  mcpEnabled: boolean;
+  onCopySnippet: (agentKey: string) => Promise<void>;
+}) {
+  return (
+    <div className="space-y-8">
+      <AgentsSkillsSection copy={copy.skills} mcp={mcp} buckets={buckets} />
+      <div className="border-t border-border/60 pt-7">
+        {mcpEnabled ? (
+          <AgentsMcpSection copy={{ ...copy.mcp, status: copy.status }} mcp={mcp} buckets={buckets} copyState={null} onCopySnippet={onCopySnippet} />
+        ) : (
+          <div className="rounded-xl border border-border/60 bg-card/45 px-4 py-5 text-center">
+            <p className="text-sm font-medium text-foreground">{copy.mcp?.mcpDisabledMessage ?? 'MCP mode is not enabled.'}</p>
+            <p className="mt-1 text-xs text-muted-foreground">{copy.mcp?.mcpDisabledHint ?? 'Enable it in Settings > Connections to use MCP agents.'}</p>
+          </div>
+        )}
+      </div>
+      <div className="border-t border-border/60 pt-7">
+        <AgentsPluginsSection copy={copy} />
+      </div>
+    </div>
   );
 }
 
@@ -527,29 +538,13 @@ function AgentsPageNav({
       tone: 'neutral',
     },
     {
-      id: 'plugins',
-      href: '/agents?tab=plugins',
-      label: copy.navPlugins ?? 'Plugins',
-      hint: navHints.plugins ?? 'Extensions',
-      icon: <Puzzle size={14} />,
-      tone: 'neutral',
-    },
-    {
       id: 'skills',
       href: '/agents?tab=skills',
-      label: copy.navSkills,
-      hint: navHints.skills ?? 'Capabilities',
+      label: copy.navCapabilities ?? copy.navSkills,
+      hint: navHints.capabilities ?? navHints.skills ?? 'Capabilities',
       icon: <Sparkles size={14} />,
       badge: `${enabledSkillCount}`,
-      tone: enabledSkillCount > 0 ? 'ok' : 'neutral',
-    },
-    {
-      id: 'mcp',
-      href: '/agents?tab=mcp',
-      label: copy.navMcp,
-      hint: navHints.mcp ?? 'Protocol',
-      icon: <Server size={14} />,
-      tone: mcpEnabled && !mcpRunning ? 'warn' : mcpRunning ? 'ok' : 'neutral',
+      tone: mcpEnabled && !mcpRunning ? 'warn' : enabledSkillCount > 0 ? 'ok' : 'neutral',
     },
     {
       id: 'channels',
@@ -564,7 +559,7 @@ function AgentsPageNav({
 
   return (
     <nav aria-label={copy.navAriaLabel} className="mt-5 overflow-x-auto pb-1">
-      <div className="flex w-max min-w-full overflow-hidden rounded-xl border border-border/60 bg-card/35 shadow-sm lg:grid lg:w-auto lg:grid-cols-7">
+      <div className="flex w-max min-w-full overflow-hidden rounded-xl border border-border/60 bg-card/35 shadow-sm lg:grid lg:w-auto lg:grid-cols-5">
         {navItems.map(item => (
           <Link
             key={item.id}

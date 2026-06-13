@@ -16,6 +16,7 @@ export const MINDOS_SERVER_ROUTES: MindosServerRouteContract[] = [
   { id: 'files', method: 'GET', path: '/api/files', auth: 'required' },
   { id: 'recent-files', method: 'GET', path: '/api/recent-files', auth: 'required' },
   { id: 'tree-version', method: 'GET', path: '/api/tree-version', auth: 'required' },
+  { id: 'tree-version.refresh', method: 'POST', path: '/api/tree-version', auth: 'required' },
   { id: 'file.read', method: 'GET', path: '/api/file', auth: 'required' },
   { id: 'file.write', method: 'POST', path: '/api/file', auth: 'required' },
   { id: 'extract-pdf', method: 'POST', path: '/api/extract-pdf', auth: 'required' },

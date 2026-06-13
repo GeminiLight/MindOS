@@ -156,6 +156,48 @@ describe('MindOS Agent bounded MCP runtime config', () => {
     expect(sandboxCache.servers.linear.tools).toEqual([{ name: 'danger', description: 'Danger' }]);
   });
 
+  it('syncs Settings direct tool choices into the MindOS Agent allowlist', async () => {
+    const sourceConfigPath = path.join(tempHome, '.mindos', 'mcp.json');
+    writeJson(sourceConfigPath, {
+      mcpServers: {
+        github: {
+          command: 'github-mcp',
+        },
+        docs: {
+          command: 'docs-mcp',
+        },
+      },
+    });
+
+    const {
+      createBoundedMindosAgentMcpConfig,
+      readMcpConfig,
+      updateServerDirectTools,
+    } = await import('@/lib/pi-integration/mcp-config');
+
+    updateServerDirectTools('github', [' search_code ', 'get_issue', 'search_code']);
+    updateServerDirectTools('docs', true);
+
+    const config = readMcpConfig();
+    expect(config.mcpServers.github.directTools).toEqual(['search_code', 'get_issue']);
+    expect(config.mcpServers.docs.directTools).toBe(true);
+    expect(config.settings?.mindosAgent?.mcpServers).toEqual({
+      github: ['search_code', 'get_issue'],
+      docs: true,
+    });
+
+    const bounded = createBoundedMindosAgentMcpConfig(config);
+    expect(Object.keys(bounded.config.mcpServers)).toEqual(['github', 'docs']);
+    expect(bounded.config.mcpServers.github.directTools).toEqual(['search_code', 'get_issue']);
+    expect(bounded.config.mcpServers.docs.directTools).toBe(true);
+
+    updateServerDirectTools('github', false);
+    const afterDisable = readMcpConfig();
+    expect(afterDisable.mcpServers.github.directTools).toBeUndefined();
+    expect(afterDisable.settings?.mindosAgent?.mcpServers?.github).toBeUndefined();
+    expect(afterDisable.settings?.mindosAgent?.mcpServers?.docs).toBe(true);
+  });
+
   it('only loads the MindOS MCP wrapper in agent mode when at least one server is explicitly allowlisted', async () => {
     const { getMindosWebPiRuntimePaths } = await import('@/lib/agent/mindos-pi-runtime-host');
     const base = {

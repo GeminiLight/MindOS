@@ -18,11 +18,17 @@ export type {
 } from '@/lib/types';
 
 const STORAGE_KEY = 'mindos-native-runtime-options';
+type NativeRuntimeKind = 'codex' | 'claude';
 
 const DEFAULT_RUNTIME_OPTIONS: RuntimeOptionsState = {
   permissionMode: 'agent',
   modelOverride: null,
   reasoningEffort: null,
+};
+
+const DEFAULT_OPTIONS_BY_KIND: Record<NativeRuntimeKind, RuntimeOptionsState> = {
+  codex: DEFAULT_RUNTIME_OPTIONS,
+  claude: DEFAULT_RUNTIME_OPTIONS,
 };
 
 type PermissionOption = {
@@ -86,29 +92,55 @@ function normalizeRuntimeOptions(value: unknown): RuntimeOptionsState {
   return { permissionMode, modelOverride: model, reasoningEffort };
 }
 
-export function getPersistedRuntimeOptions(): RuntimeOptionsState {
+function normalizeRuntimeOptionsStore(value: unknown): Record<NativeRuntimeKind, RuntimeOptionsState> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return DEFAULT_OPTIONS_BY_KIND;
+  const record = value as Record<string, unknown>;
+  const hasKindBuckets = 'codex' in record || 'claude' in record;
+  if (!hasKindBuckets) {
+    // Legacy single-bucket storage from v1.1.13 and earlier. Treat it as a
+    // Codex default because Codex was the first native runtime capsule.
+    return {
+      codex: normalizeRuntimeOptions(record),
+      claude: DEFAULT_RUNTIME_OPTIONS,
+    };
+  }
+  return {
+    codex: normalizeRuntimeOptions(record.codex),
+    claude: normalizeRuntimeOptions(record.claude),
+  };
+}
+
+function runtimeOptionsAreDefault(value: RuntimeOptionsState): boolean {
+  return value.permissionMode === DEFAULT_RUNTIME_OPTIONS.permissionMode
+    && !value.modelOverride
+    && !value.reasoningEffort;
+}
+
+export function getPersistedRuntimeOptions(kind: NativeRuntimeKind = 'codex'): RuntimeOptionsState {
   if (typeof window === 'undefined') return DEFAULT_RUNTIME_OPTIONS;
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? normalizeRuntimeOptions(JSON.parse(raw)) : DEFAULT_RUNTIME_OPTIONS;
+    const store = raw ? normalizeRuntimeOptionsStore(JSON.parse(raw)) : DEFAULT_OPTIONS_BY_KIND;
+    return store[kind] ?? DEFAULT_RUNTIME_OPTIONS;
   } catch {
     return DEFAULT_RUNTIME_OPTIONS;
   }
 }
 
-export function persistRuntimeOptions(value: RuntimeOptionsState): void {
+export function persistRuntimeOptions(kind: NativeRuntimeKind, value: RuntimeOptionsState): void {
   if (typeof window === 'undefined') return;
   try {
-    const normalized = normalizeRuntimeOptions(value);
-    if (
-      normalized.permissionMode === DEFAULT_RUNTIME_OPTIONS.permissionMode
-      && !normalized.modelOverride
-      && !normalized.reasoningEffort
-    ) {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    const store = raw ? normalizeRuntimeOptionsStore(JSON.parse(raw)) : DEFAULT_OPTIONS_BY_KIND;
+    const next = {
+      ...store,
+      [kind]: normalizeRuntimeOptions(value),
+    };
+    if (runtimeOptionsAreDefault(next.codex) && runtimeOptionsAreDefault(next.claude)) {
       localStorage.removeItem(STORAGE_KEY);
       return;
     }
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
   } catch {
     // localStorage may be unavailable in hardened browser contexts.
   }

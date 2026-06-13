@@ -16,11 +16,28 @@ import {
 } from './runtime-errors.js';
 import type {
   AgentRuntimeDescriptor,
+  AgentRuntimeOptionsDescriptor,
   AgentRuntimeStatus,
   DetectedRuntimeAgent,
   MissingRuntimeAgent,
   NativeRuntimeId,
 } from './registry.js';
+
+const codexRuntimeOptions: AgentRuntimeOptionsDescriptor = {
+  permissionModes: ['readonly', 'workspace-write', 'danger-full-access'],
+  effortModes: ['low', 'medium', 'high', 'xhigh'],
+  modelInput: 'external',
+  defaultPermissionMode: 'workspace-write',
+  defaultEffortMode: 'auto',
+};
+
+const claudeRuntimeOptions: AgentRuntimeOptionsDescriptor = {
+  permissionModes: ['readonly', 'agent', 'workspace-write', 'danger-full-access'],
+  effortModes: ['low', 'medium', 'high', 'xhigh', 'max'],
+  modelInput: 'external',
+  defaultPermissionMode: 'agent',
+  defaultEffortMode: 'auto',
+};
 
 export function nativeRuntimeDiagnosticHints(input: {
   id: NativeRuntimeId;
@@ -107,6 +124,7 @@ export function nativeDescriptor(input: {
     status,
     capabilities: input.id === 'codex' ? codexCapabilities : claudeCapabilities,
     harnessCapabilities: input.id === 'codex' ? codexHarnessCapabilities : claudeHarnessCapabilities,
+    runtimeOptions: input.id === 'codex' ? codexRuntimeOptions : claudeRuntimeOptions,
     ...(runtimeBridge ? { runtimeBridge } : {}),
     description: input.id === 'codex'
       ? 'Local Codex app-server runtime. Model, approval, and thread behavior are owned by Codex.'

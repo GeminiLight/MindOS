@@ -15,6 +15,7 @@ import {
   appendEntry, updateEntry, generateEntryId,
   type OrganizeHistoryEntry,
 } from '@/lib/organize-history';
+import { notifyFilesChanged } from '@/lib/files-changed';
 
 const AUTO_DISMISS_MS = 3 * 60 * 1000; // 3 minutes
 const THINKING_TIMEOUT_MS = 5000;
@@ -154,7 +155,7 @@ export default function OrganizeToast({
     const ok = await aiOrganize.undoOne(path);
     setUndoing(false);
     if (ok) {
-      window.dispatchEvent(new Event('mindos:files-changed'));
+      notifyFilesChanged([path]);
       // History sync deferred to next render when aiOrganize.changes is updated
       setTimeout(() => {
         if (historyIdRef.current) {
@@ -179,7 +180,7 @@ export default function OrganizeToast({
     const reverted = await aiOrganize.undoAll();
     setUndoing(false);
     if (reverted > 0) {
-      window.dispatchEvent(new Event('mindos:files-changed'));
+      notifyFilesChanged(aiOrganize.changes.map(c => c.path));
       if (historyIdRef.current) {
         updateEntry(historyIdRef.current, {
           files: aiOrganize.changes.map(c => ({

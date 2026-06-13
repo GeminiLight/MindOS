@@ -1,5 +1,5 @@
 import { handleTreeVersion } from '@geminilight/mindos/server';
-import { peekTreeVersion } from '@/lib/fs';
+import { getTreeVersion, invalidateCache } from '@/lib/fs';
 import { telemetry } from '@/lib/telemetry';
 import { toNextResponse } from '../_mindos-adapter';
 
@@ -7,8 +7,15 @@ export const dynamic = 'force-dynamic';
 
 export function GET() {
   const stop = telemetry.startTimer('tree.version.route');
-  const v = peekTreeVersion();
-  const response = handleTreeVersion({ getTreeVersion: () => v });
-  stop({ version: v });
+  const response = handleTreeVersion({ getTreeVersion });
+  stop({ version: response.body?.v ?? -1 });
+  return toNextResponse(response);
+}
+
+export function POST() {
+  const stop = telemetry.startTimer('tree.version.refresh');
+  invalidateCache();
+  const response = handleTreeVersion({ getTreeVersion });
+  stop({ version: response.body?.v ?? -1 });
   return toNextResponse(response);
 }

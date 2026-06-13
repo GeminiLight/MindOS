@@ -199,6 +199,14 @@ describe('icon button hit areas', () => {
     expect(saveSource).toContain('hover:bg-[var(--amber)]/10 hover:text-[var(--amber)]');
   });
 
+  it('keeps shared dialog controls above dialog content layers', () => {
+    const dialogSource = readSource('components/ui/dialog.tsx');
+
+    expect(dialogSource).toContain('z-app-modal overlay-backdrop');
+    expect(dialogSource).toContain('z-app-modal grid');
+    expect(dialogSource).toContain('className="absolute top-2 right-2 z-10"');
+  });
+
   it('keeps floating utilities and modal buttons on rectangular hit targets', () => {
     const markdownSource = readSource('components/MarkdownView.tsx');
     const findSource = readSource('components/FindInPage.tsx');

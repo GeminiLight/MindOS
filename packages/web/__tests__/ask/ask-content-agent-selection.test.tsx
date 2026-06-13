@@ -967,9 +967,16 @@ describe('AskContent ACP session binding', () => {
   it('sends a native Claude Code runtime selection without legacy ACP routing', async () => {
     mockPersistedProviderModel = { provider: 'anthropic', model: 'claude-test' };
     localStorage.setItem('mindos-native-runtime-options', JSON.stringify({
-      permissionMode: 'danger-full-access',
-      modelOverride: 'opus',
-      reasoningEffort: 'max',
+      codex: {
+        permissionMode: 'workspace-write',
+        modelOverride: 'gpt-5.1-codex',
+        reasoningEffort: 'xhigh',
+      },
+      claude: {
+        permissionMode: 'danger-full-access',
+        modelOverride: 'opus',
+        reasoningEffort: 'max',
+      },
     }));
     mockNativeRuntimeDescriptors = [{
       id: 'claude',

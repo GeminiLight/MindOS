@@ -95,6 +95,12 @@ describe('MindOS server contract: core, files, HTTP', () => {
       auth: 'required',
     });
     expect(contract.routes).toContainEqual({
+      id: 'tree-version.refresh',
+      method: 'POST',
+      path: '/api/tree-version',
+      auth: 'required',
+    });
+    expect(contract.routes).toContainEqual({
       id: 'file.read',
       method: 'GET',
       path: '/api/file',
@@ -1147,6 +1153,7 @@ Write a concise signal brief.
       });
       expect(await (await fetch(`${base}/api/recent-files?limit=1`)).json()).toHaveLength(1);
       expect(await (await fetch(`${base}/api/tree-version`)).json()).toMatchObject({ v: expect.any(Number) });
+      expect(await (await fetch(`${base}/api/tree-version`, { method: 'POST' })).json()).toMatchObject({ v: expect.any(Number) });
       expect(await (await fetch(`${base}/api/skills`)).json()).toMatchObject({ skills: expect.any(Array) });
       expect(await (await fetch(`${base}/api/mcp/tools`)).json()).toEqual({ servers: [] });
       expect(await (await fetch(`${base}/api/changes?op=summary`)).json()).toMatchObject({ unreadCount: 0 });

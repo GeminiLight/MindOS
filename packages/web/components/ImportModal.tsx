@@ -11,6 +11,7 @@ import type { useAiOrganize } from '@/hooks/useAiOrganize';
 import { ALLOWED_IMPORT_EXTENSIONS } from '@/lib/core/file-convert';
 import type { LocalAttachment } from '@/lib/types';
 import { ConfirmDialog } from '@/components/agents/AgentsPrimitives';
+import { notifyFilesChanged } from '@/lib/files-changed';
 import DirPicker from './DirPicker';
 
 interface ImportModalProps {
@@ -22,6 +23,10 @@ interface ImportModalProps {
   aiOrganize: ReturnType<typeof useAiOrganize>;
   /** Flat list of directory paths for the DirPicker */
   dirPaths: string[];
+}
+
+function notifyImportResult(paths: Array<{ path: string }> | undefined): void {
+  notifyFilesChanged(paths?.map(item => item.path));
 }
 
 const ACCEPT = Array.from(ALLOWED_IMPORT_EXTENSIONS).join(',');
@@ -123,6 +128,7 @@ export default function ImportModal({ open, onClose, defaultSpace, initialFiles,
   const handleArchiveSubmit = useCallback(async () => {
     await im.doArchive();
     if (im.result && im.result.created.length > 0) {
+      const created = im.result.created;
       setShowSuccess(true);
       setTimeout(() => {
         setClosing(true);
@@ -131,7 +137,7 @@ export default function ImportModal({ open, onClose, defaultSpace, initialFiles,
           onClose();
           im.reset();
           setShowSuccess(false);
-          window.dispatchEvent(new Event('mindos:files-changed'));
+          notifyImportResult(created);
         }, 150);
       }, 600);
     }
@@ -178,6 +184,7 @@ export default function ImportModal({ open, onClose, defaultSpace, initialFiles,
   useEffect(() => {
     if (im.step === 'done' && im.result) {
       if (im.result.created.length > 0) {
+        const created = im.result.created;
         setShowSuccess(true);
         const timer = setTimeout(() => {
           setClosing(true);
@@ -186,7 +193,7 @@ export default function ImportModal({ open, onClose, defaultSpace, initialFiles,
             onClose();
             im.reset();
             setShowSuccess(false);
-            window.dispatchEvent(new Event('mindos:files-changed'));
+            notifyImportResult(created);
           }, 150);
         }, 800);
         return () => clearTimeout(timer);

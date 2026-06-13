@@ -6,6 +6,7 @@ import {
   getFilesChangedPaths,
   isAnyPathUnder,
   isPathAffected,
+  notifyFilesChanged,
   subscribeFilesChanged,
 } from '@/lib/files-changed';
 
@@ -35,6 +36,34 @@ describe('getFilesChangedPaths', () => {
   it('returns undefined when detail is malformed', () => {
     const event = new CustomEvent(FILES_CHANGED_EVENT, { detail: { paths: 'not-an-array' } });
     expect(getFilesChangedPaths(event)).toBeUndefined();
+  });
+});
+
+describe('notifyFilesChanged', () => {
+  it('emits affected paths when paths are known', () => {
+    const seen: Array<string[] | undefined> = [];
+    const handler = (event: Event) => seen.push(getFilesChangedPaths(event));
+    window.addEventListener(FILES_CHANGED_EVENT, handler);
+    try {
+      notifyFilesChanged([' a.md ', 'b.md', 'a.md']);
+      expect(seen).toEqual([['a.md', 'b.md']]);
+    } finally {
+      window.removeEventListener(FILES_CHANGED_EVENT, handler);
+    }
+  });
+
+  it('emits the legacy unknown-change event for blank or missing paths', () => {
+    const seen: Array<string[] | undefined> = [];
+    const handler = (event: Event) => seen.push(getFilesChangedPaths(event));
+    window.addEventListener(FILES_CHANGED_EVENT, handler);
+    try {
+      notifyFilesChanged([]);
+      notifyFilesChanged(['', '   ']);
+      notifyFilesChanged();
+      expect(seen).toEqual([undefined, undefined, undefined]);
+    } finally {
+      window.removeEventListener(FILES_CHANGED_EVENT, handler);
+    }
   });
 });
 

@@ -48,7 +48,7 @@ function CopyMessageButton({ text, label, variant = 'default' }: { text: string;
 
 function MessageActionDock({ children }: { children: ReactNode }) {
   return (
-    <div className="absolute right-3 top-full z-10 -mt-2 flex items-center gap-0.5 rounded-lg border border-border/50 bg-background/95 p-0.5 shadow-sm backdrop-blur-sm opacity-100 transition-[opacity,transform] duration-100 pointer-events-auto md:pointer-events-none md:opacity-0 md:translate-y-0.5 md:group-hover/message:pointer-events-auto md:group-hover/message:opacity-100 md:group-hover/message:translate-y-0 md:focus-within:pointer-events-auto md:focus-within:opacity-100 md:focus-within:translate-y-0">
+    <div className="absolute right-3 top-full z-40 -mt-2 flex items-center gap-0.5 rounded-lg border border-border/50 bg-background/95 p-0.5 shadow-sm backdrop-blur-sm opacity-100 transition-[opacity,transform] duration-100 pointer-events-auto md:pointer-events-none md:opacity-0 md:translate-y-0.5 md:group-hover/message:pointer-events-auto md:group-hover/message:opacity-100 md:group-hover/message:translate-y-0 md:focus-within:pointer-events-auto md:focus-within:opacity-100 md:focus-within:translate-y-0">
       {children}
     </div>
   );

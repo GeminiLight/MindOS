@@ -24,6 +24,15 @@ export type MindosRuntimeSessionBinding = {
   updatedAt: number;
 };
 
+export type MindosRuntimePermissionMode = 'readonly' | 'agent' | 'workspace-write' | 'danger-full-access';
+export type MindosRuntimeReasoningEffort = 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max' | string;
+
+export type MindosRuntimeOptions = {
+  permissionMode?: MindosRuntimePermissionMode;
+  modelOverride?: string;
+  reasoningEffort?: MindosRuntimeReasoningEffort;
+};
+
 export type MindosAskStreamRequest = {
   messages: MindosAskMessage[];
   currentFile?: string;
@@ -33,6 +42,7 @@ export type MindosAskStreamRequest = {
   mode?: 'chat' | 'agent' | 'organize';
   selectedRuntime?: MindosSelectedRuntime | null;
   runtimeBinding?: MindosRuntimeSessionBinding | null;
+  runtimeOptions?: MindosRuntimeOptions;
   selectedAcpAgent?: { id: string; name: string } | null;
   providerOverride?: string;
   modelOverride?: string;
@@ -80,6 +90,7 @@ function parseAskStreamRequest(body: unknown):
 
   const selectedRuntime = normalizeSelectedRuntime(record);
   const runtimeBinding = normalizeRuntimeSessionBinding(record.runtimeBinding);
+  const runtimeOptions = normalizeRuntimeOptions(record.runtimeOptions);
 
   return {
     ok: true,
@@ -92,6 +103,7 @@ function parseAskStreamRequest(body: unknown):
       ...(mode ? { mode } : {}),
       ...(selectedRuntime !== undefined ? { selectedRuntime } : {}),
       ...(runtimeBinding !== undefined ? { runtimeBinding } : {}),
+      ...(runtimeOptions !== undefined ? { runtimeOptions } : {}),
       ...(isSelectedAcpAgent(record.selectedAcpAgent) ? { selectedAcpAgent: record.selectedAcpAgent } : {}),
       ...(typeof record.providerOverride === 'string' ? { providerOverride: record.providerOverride } : {}),
       ...(typeof record.modelOverride === 'string' ? { modelOverride: record.modelOverride } : {}),
@@ -141,6 +153,26 @@ function isExternalRuntimeKind(value: unknown): value is MindosRuntimeSessionBin
 
 function isRuntimeSessionStatus(value: unknown): value is NonNullable<MindosRuntimeSessionBinding['status']> {
   return value === 'active' || value === 'missing' || value === 'signed-out' || value === 'archived' || value === 'failed';
+}
+
+function normalizeRuntimeOptions(value: unknown): MindosRuntimeOptions | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const record = value as Record<string, unknown>;
+  const options: MindosRuntimeOptions = {};
+  if (isRuntimePermissionMode(record.permissionMode)) {
+    options.permissionMode = record.permissionMode;
+  }
+  if (typeof record.modelOverride === 'string' && record.modelOverride.trim()) {
+    options.modelOverride = record.modelOverride.trim().slice(0, 160);
+  }
+  if (typeof record.reasoningEffort === 'string' && record.reasoningEffort.trim()) {
+    options.reasoningEffort = record.reasoningEffort.trim().slice(0, 64);
+  }
+  return Object.keys(options).length > 0 ? options : undefined;
+}
+
+function isRuntimePermissionMode(value: unknown): value is MindosRuntimePermissionMode {
+  return value === 'readonly' || value === 'agent' || value === 'workspace-write' || value === 'danger-full-access';
 }
 
 function normalizeSelectedRuntime(record: Record<string, unknown>): MindosSelectedRuntime | null | undefined {

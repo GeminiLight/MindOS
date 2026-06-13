@@ -69,6 +69,22 @@ describe('standalone server tree cache wiring', () => {
     expect((await (await fetch(`${base}/api/files?limit=10`)).json())).toMatchObject({ files: ['a.md', 'b.md'] });
   });
 
+  it('POST /api/tree-version forces a cache refresh for external writes', async () => {
+    const root = makeRoot();
+    writeFileSync(join(root, 'a.md'), 'a');
+    const { base } = await startServer(root);
+
+    expect((await (await fetch(`${base}/api/files?limit=10`)).json())).toMatchObject({ files: ['a.md'] });
+    writeFileSync(join(root, 'external.md'), 'external');
+
+    const refresh = await fetch(`${base}/api/tree-version`, { method: 'POST' });
+    expect(refresh.status).toBe(200);
+    expect(await refresh.json()).toMatchObject({ v: expect.any(Number) });
+    expect((await (await fetch(`${base}/api/files?limit=10`)).json())).toMatchObject({
+      files: ['a.md', 'external.md'],
+    });
+  });
+
   it('serves fresh backlinks after a write bumps the tree version', async () => {
     const root = makeRoot();
     writeFileSync(join(root, 'target.md'), '# Target');

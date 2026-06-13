@@ -53,10 +53,10 @@ describe('parseAgentsTab', () => {
   it('accepts canonical IA tabs and falls back for unknown tabs', () => {
     expect(parseAgentsTab('assistant')).toBe('assistant');
     expect(parseAgentsTab('agent')).toBe('agent');
-    expect(parseAgentsTab('plugins')).toBe('plugins');
+    expect(parseAgentsTab('plugins')).toBe('skills');
     expect(parseAgentsTab('capabilities')).toBe('skills');
     expect(parseAgentsTab('skills')).toBe('skills');
-    expect(parseAgentsTab('mcp')).toBe('mcp');
+    expect(parseAgentsTab('mcp')).toBe('skills');
     expect(parseAgentsTab('runs')).toBe('runs');
     expect(parseAgentsTab('unknown')).toBe('overview');
     expect(parseAgentsTab(undefined)).toBe('overview');
@@ -76,10 +76,10 @@ describe('parseAgentsTab', () => {
     expect(getAgentsNavGroup('presets')).toBe('assistant');
     expect(getAgentsNavGroup('agent')).toBe('agent');
     expect(getAgentsNavGroup('a2a')).toBe('agent');
-    expect(getAgentsNavGroup('plugins')).toBe('plugins');
+    expect(getAgentsNavGroup('plugins')).toBe('skills');
     expect(getAgentsNavGroup('capabilities')).toBe('skills');
     expect(getAgentsNavGroup('skills')).toBe('skills');
-    expect(getAgentsNavGroup('mcp')).toBe('mcp');
+    expect(getAgentsNavGroup('mcp')).toBe('skills');
     expect(getAgentsNavGroup('channels')).toBe('channels');
     expect(getAgentsNavGroup('runs')).toBe('overview');
     expect(getAgentsNavGroup('sessions')).toBe('overview');

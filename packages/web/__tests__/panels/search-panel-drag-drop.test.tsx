@@ -7,12 +7,16 @@ import { createRoot } from 'react-dom/client';
 vi.mock('@/lib/stores/locale-store', () => ({
   useLocale: () => ({
     t: {
+      sidebar: {
+        searchTitle: 'Search',
+      },
       search: {
         placeholder: 'Search files...',
         noResults: 'No results found',
         prompt: 'Type to search',
         navigate: 'navigate',
         open: 'open',
+        dragToChat: 'to chat',
       },
     },
   }),
@@ -149,11 +153,13 @@ describe('SearchPanel Drag-Drop Tests', () => {
 
     let capturedPath = '';
     let capturedType = '';
+    let capturedPlain = '';
 
     // Mock setData to capture calls
     dt.setData = (type: string, value: string) => {
       if (type === 'text/mindos-path') capturedPath = value;
       if (type === 'text/mindos-type') capturedType = value;
+      if (type === 'text/plain') capturedPlain = value;
     };
 
     await act(async () => {
@@ -162,6 +168,7 @@ describe('SearchPanel Drag-Drop Tests', () => {
 
     expect(capturedPath).toBeTruthy();
     expect(capturedType).toBe('file');
+    expect(capturedPlain).toBe(capturedPath);
     expect(capturedPath).toMatch(/\.(md|csv)$/);
   });
 

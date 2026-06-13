@@ -43,7 +43,7 @@ export default function WebPortSection({ m }: { m: SettingsMcpMessages }) {
     portUnavailable,
     handlePortInputChange,
     handlePortInputBlur,
-    useSuggestedPort,
+    applySuggestedPort,
   } = useSettingsPort();
 
   useEffect(() => {
@@ -161,7 +161,7 @@ export default function WebPortSection({ m }: { m: SettingsMcpMessages }) {
               </p>
               {status.suggestion !== null && (
                 <button type="button"
-                  onClick={() => useSuggestedPort(status.suggestion!)}
+                  onClick={() => applySuggestedPort(status.suggestion!)}
                   className="text-xs px-2 py-0.5 rounded border border-[var(--amber)] text-[var(--amber)] transition-colors hover:bg-[var(--amber-subtle)]"
                 >
                   {m.portSuggest(status.suggestion)}
