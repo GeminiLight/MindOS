@@ -8,7 +8,8 @@
  *   1. Bind the tab store to the current mind root and trigger the initial
  *      session list fetch (refreshSessions has no selection side-effects).
  *   2. Watch the pathname: /view/<path> opens a doc tab, /chat/<id> opens a
- *      chat tab (dedup lives in the store). A null return from openTab means
+ *      chat tab. Documents opened from ordinary routes are preview tabs by
+ *      default; chat sessions are kept tabs. A null return from openTab means
  *      the 50-tab cap was hit → limit toast, once per attempted key.
  *   3. Mirror session titles into chat tabs (renameByKey no-ops on same title).
  *   4. Reconcile chat tabs against the server session list — but only after
@@ -126,7 +127,7 @@ export function useWorkspaceTabSync(): WorkspaceTabSyncState {
         const session = sessionsRef.current.find((s) => s.id === active.key);
         return session ? chatTabTitle(session, tRef.current.workspaceTabs) : tRef.current.workspaceTabs.chatTab;
       })();
-    const opened = openTab(active.kind, active.key, title);
+    const opened = openTab(active.kind, active.key, title, { pinned: active.kind === 'chat' });
     if (opened) {
       limitToastKeyRef.current = null;
       return;

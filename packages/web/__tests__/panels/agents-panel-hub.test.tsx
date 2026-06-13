@@ -133,25 +133,27 @@ describe('AgentsPanel hub layout', () => {
     mcpState.skills = [];
   });
 
-  it('renders five hub nav rows and runtime endpoints in the Agent tab', () => {
+  it('renders split hub nav rows and runtime endpoints in the Agent tab', () => {
     const html = renderToStaticMarkup(<AgentsPanel active maximized={false} />);
     const a = messages.en.panels.agents;
     const runtime = messages.en.agentsContent.runtime;
     const localClients = messages.en.agentsContent.localClients;
-    const capabilitiesLabel = a.navCapabilities.replace('&', '&amp;');
     expect(html).toContain(a.navOverview);
     expect(html).toContain(a.navAssistant);
     expect(html).toContain(a.navAgent);
-    expect(html).toContain(capabilitiesLabel);
+    expect(html).toContain(a.navPlugins);
+    expect(html).toContain(a.navSkills);
+    expect(html).toContain(a.navMcp);
     expect(html).toContain(a.navChannels);
     expect(html).toContain('href="/agents"');
     expect(html).toContain('href="/agents?tab=assistant"');
     expect(html).toContain('href="/agents?tab=agent"');
-    expect(html).toContain('href="/agents?tab=capabilities"');
+    expect(html).toContain('href="/agents?tab=plugins"');
+    expect(html).toContain('href="/agents?tab=skills"');
+    expect(html).toContain('href="/agents?tab=mcp"');
     expect(html).toContain('href="/agents?tab=channels"');
     expect(html).toContain('href="/agents?tab=runs"');
-    expect(html).not.toContain('href="/agents?tab=mcp"');
-    expect(html).not.toContain('href="/agents?tab=skills"');
+    expect(html).not.toContain('href="/agents?tab=capabilities"');
     expect(html).toContain(runtime.panelTitle);
     expect(html).toContain(runtime.mindosName);
     expect(html).toContain('Codex');
@@ -160,7 +162,7 @@ describe('AgentsPanel hub layout', () => {
     expect(html).toContain(localClients.panelTitle);
     expect(html).toContain('href="/agents/test-agent"');
     expect(html).toContain('Test Agent');
-    expect(html).not.toContain(a.rosterLabel);
+    expect(html).not.toContain('Your setup');
     expect(html).not.toContain('/help');
   });
 

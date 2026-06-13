@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { Check, ChevronDown, ChevronUp, Code2, MessageSquare, Network, RefreshCw, RotateCcw, Save, Settings2, Wrench, Zap } from 'lucide-react';
+import { Check, ChevronDown, ChevronUp, Code2, MessageSquare, Network, RefreshCw, RotateCcw, Save, Settings2, Wrench } from 'lucide-react';
 import { useLocale } from '@/lib/stores/locale-store';
 import { useAcpConfig } from '@/hooks/useAcpConfig';
 import type { AcpRegistryEntry } from '@/lib/acp/types';
@@ -323,32 +323,18 @@ function AcpInstalledCompactCard({
 }) {
   const { t } = useLocale();
   const p = t.panels.agents;
-  const handleUse = () => {
-    openAskModal('', 'user', { id: agent.id, name: agent.name });
-  };
 
   return (
-    <article className="relative flex min-h-[112px] w-full max-w-full min-w-0 flex-col rounded-lg border border-border/50 bg-background/60 py-3 pl-3 pr-10 transition-colors hover:border-border hover:bg-background">
+    <article className="relative flex min-h-[88px] w-full max-w-full min-w-0 flex-col rounded-lg border border-border/50 bg-background/60 py-3 pl-3 pr-10 transition-colors hover:border-border hover:bg-background">
       {detectionDone ? (
         <AcpReadyMark label={p.acpReady} className="absolute right-3 top-3" />
       ) : null}
       <div className="flex min-w-0 items-start gap-2.5">
         <AgentAvatar name={agent.name} size="sm" />
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-semibold text-foreground">{agent.name}</span>
-          <span className="mt-1 block truncate text-2xs text-muted-foreground">{installed.binaryPath}</span>
+          <span className="block truncate text-sm font-semibold text-foreground" title={agent.name}>{agent.name}</span>
+          <span className="mt-1 block truncate text-2xs text-muted-foreground" title={installed.binaryPath}>{installed.binaryPath}</span>
         </span>
-      </div>
-
-      <div className="mt-auto flex min-w-0 justify-end pt-3">
-        <button
-          type="button"
-          onClick={handleUse}
-          className="inline-flex items-center gap-1 rounded-md bg-[var(--amber)] px-2 py-0.5 text-2xs font-medium text-[var(--amber-foreground)] transition-colors duration-150 hover:bg-[var(--amber)]/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <Zap size={10} aria-hidden="true" />
-          {p.acpUseAgent}
-        </button>
       </div>
     </article>
   );
@@ -406,10 +392,6 @@ export function AcpAgentCard({ agent, installed, detectionDone, acpConfig }: {
     setConfigOpen(false);
   }, [acpConfig, agent.id]);
 
-  const handleUse = () => {
-    openAskModal('', 'user', { id: agent.id, name: agent.name });
-  };
-
   const handleQuickAction = (action: QuickAction) => {
     openAskModal(action.promptSuffix, 'user', { id: agent.id, name: agent.name });
   };
@@ -426,14 +408,14 @@ export function AcpAgentCard({ agent, installed, detectionDone, acpConfig }: {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5">
             {/* [V-1] agent name is 16px semibold — most prominent element */}
-            <p className="text-base font-semibold text-foreground truncate leading-tight">{agent.name}</p>
+            <p className="text-base font-semibold text-foreground truncate leading-tight" title={agent.name}>{agent.name}</p>
             {agent.version && (
               <span className="text-2xs text-muted-foreground/40 shrink-0">v{agent.version}</span>
             )}
           </div>
           {/* [V-2] description is muted and smaller — weaker than name */}
           {agent.description && (
-            <p className="text-2xs text-muted-foreground/50 truncate mt-0.5">{agent.description}</p>
+            <p className="text-2xs text-muted-foreground/50 truncate mt-0.5" title={agent.description}>{agent.description}</p>
           )}
         </div>
         {/* [V-2][C-3] transport badge — low saturation, metadata-level */}
@@ -449,14 +431,6 @@ export function AcpAgentCard({ agent, installed, detectionDone, acpConfig }: {
           className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <Settings2 size={14} />
-        </button>
-        <button
-          type="button"
-          onClick={handleUse}
-          className="inline-flex items-center gap-1 px-2.5 py-1 text-2xs font-medium rounded-md border border-[var(--amber)] text-[var(--amber)] hover:bg-[var(--amber)]/10 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer"
-        >
-          <Zap size={10} />
-          {p.acpUseAgent}
         </button>
       </div>
 
@@ -493,7 +467,7 @@ export function AcpAgentCard({ agent, installed, detectionDone, acpConfig }: {
               : 'bg-muted text-muted-foreground'
             }`}>{sourceLabel}</span>
             <span className="text-muted-foreground/30">|</span>
-            <span>{p.acpConfigPath}: <span className="font-mono">{installed?.binaryPath}</span></span>
+            <span className="min-w-0 truncate" title={installed?.binaryPath}>{p.acpConfigPath}: <span className="font-mono">{installed?.binaryPath}</span></span>
           </div>
           {/* Action buttons — [S-1] pt-2 for separation */}
           <div className="flex items-center justify-end gap-2 pt-1">
@@ -572,9 +546,9 @@ export function AcpAgentCompactRow({ agent, installCmd }: {
       <div className="flex items-center gap-2">
         <AgentAvatar name={agent.name} size="sm" />
         <div className="flex-1 min-w-0">
-          <p className="text-xs text-muted-foreground truncate">{agent.name}</p>
+          <p className="text-xs text-muted-foreground truncate" title={agent.name}>{agent.name}</p>
           {agent.description && (
-            <p className="text-2xs text-muted-foreground/40 truncate">{agent.description}</p>
+            <p className="text-2xs text-muted-foreground/40 truncate" title={agent.description}>{agent.description}</p>
           )}
         </div>
         {effectiveCmd && (

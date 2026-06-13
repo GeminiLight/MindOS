@@ -4,6 +4,8 @@ export const workspaceTabsEn = {
   workspaceTabs: {
     newChat: 'New chat',
     closeTab: 'Close tab',
+    keepTab: 'Keep tab',
+    previewTab: 'Preview tab',
     moreTabs: (n: number) => `${n} more tab${n !== 1 ? 's' : ''}`,
     overflowMenuTitle: 'Hidden tabs',
     tabLimitReached: 'Tab limit reached (50). Close a tab to open another.',

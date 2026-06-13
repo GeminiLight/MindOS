@@ -3,13 +3,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Bot, Cable, Globe, MessageSquare, Server, Sparkles } from 'lucide-react';
+import { Bot, Cable, Globe, MessageSquare, Puzzle, Server, Sparkles } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import { useLocale } from '@/lib/stores/locale-store';
 import { useMcpData } from '@/lib/stores/mcp-store';
 import { useA2aRegistry } from '@/hooks/useA2aRegistry';
 import { copyToClipboard } from '@/lib/clipboard';
 import { generateSnippet } from '@/lib/mcp-snippets';
+import { PLATFORMS } from '@/lib/im/platforms';
 import {
   bucketAgents,
   buildRiskQueue,
@@ -30,7 +31,7 @@ import AgentActivitySection from './AgentActivitySection';
 import AgentsContentChannels from './AgentsContentChannels';
 import AcpRegistrySection from './AcpRegistrySection';
 import CustomAgentModal from './CustomAgentModal';
-import { ConfirmDialog } from './AgentsPrimitives';
+import { AgentSectionHeading, ConfirmDialog, EmptyState } from './AgentsPrimitives';
 import type { AgentInfo } from '@/components/settings/types';
 import { ContentPageShell } from '@/components/shared/ContentPageShell';
 
@@ -38,8 +39,16 @@ const DEFAULT_AGENT_NAV_HINTS = {
   overview: 'Map',
   assistant: 'Profiles',
   agent: 'Runtime endpoints',
-  capabilities: 'Skills & MCP',
+  capabilities: 'Skills',
+  plugins: 'Extensions',
+  skills: 'Capabilities',
+  mcp: 'Protocol',
+  runs: 'Activity log',
+  presets: 'Profiles',
   channels: 'Messaging',
+  network: 'Remote',
+  sessions: 'Runs',
+  activity: 'Audit',
 } as const;
 
 export default function AgentsContentPage({ tab }: { tab: AgentsDashboardTab }) {
@@ -48,45 +57,58 @@ export default function AgentsContentPage({ tab }: { tab: AgentsDashboardTab }) 
   const mcp = useMcpData();
   const a2a = useA2aRegistry();
   const searchParams = useSearchParams();
-  const isChannelDetail = tab === 'channels' && !!searchParams.get('platform');
+  const resolvedTab: AgentsDashboardTab = tab === 'capabilities' ? 'skills' : tab;
+  const isChannelDetail = resolvedTab === 'channels' && !!searchParams.get('platform');
   const pageHeader = useMemo(() => {
-    if (tab === 'channels') {
+    if (resolvedTab === 'channels') {
       return {
         title: a.navChannels ?? 'Channels',
         subtitle: a.channelsSubtitle ?? 'Connect messaging platforms to let MindOS send messages on your behalf.',
       };
     }
-    if (tab === 'activity' || tab === 'runs') {
+    if (resolvedTab === 'activity' || resolvedTab === 'runs') {
       return {
         title: a.navRuns ?? a.navActivity ?? 'Runs',
         subtitle: a.runsSubtitle ?? a.activitySubtitle ?? 'Sessions and agent operations audit log.',
       };
     }
-    if (tab === 'sessions') {
+    if (resolvedTab === 'sessions') {
       return {
         title: a.navRuns ?? 'Runs',
         subtitle: a.sessionsSubtitle ?? 'Active ACP agent sessions.',
       };
     }
-    if (tab === 'a2a') {
+    if (resolvedTab === 'a2a') {
       return {
         title: a.a2aTabTitle ?? a.navNetwork,
         subtitle: a.a2aTabEmptyHint,
       };
     }
-    if (tab === 'skills' || tab === 'mcp' || tab === 'capabilities') {
+    if (resolvedTab === 'plugins') {
       return {
-        title: a.navCapabilities ?? a.navSkills,
-        subtitle: a.capabilitiesSubtitle ?? a.skills.capabilityGroups,
+        title: a.navPlugins ?? 'Plugins',
+        subtitle: a.pluginsSubtitle ?? 'Manage agent-facing extensions.',
       };
     }
-    if (tab === 'presets' || tab === 'assistant') {
+    if (resolvedTab === 'skills') {
+      return {
+        title: a.navSkills,
+        subtitle: a.skillsSubtitle ?? a.skills.capabilityGroups,
+      };
+    }
+    if (resolvedTab === 'mcp') {
+      return {
+        title: a.navMcp,
+        subtitle: a.mcpSubtitle ?? a.capabilitiesSubtitle ?? a.mcp.title,
+      };
+    }
+    if (resolvedTab === 'presets' || resolvedTab === 'assistant') {
       return {
         title: a.presets.title,
         subtitle: a.presets.subtitle,
       };
     }
-    if (tab === 'agent') {
+    if (resolvedTab === 'agent') {
       return {
         title: a.navAgent ?? a.navMcp,
         subtitle: a.agentSubtitle ?? a.mcp.connectionGraph,
@@ -96,7 +118,7 @@ export default function AgentsContentPage({ tab }: { tab: AgentsDashboardTab }) 
       title: a.title,
       subtitle: a.subtitle,
     };
-  }, [a, tab]);
+  }, [a, resolvedTab]);
 
   const buckets = useMemo(() => bucketAgents(mcp.agents), [mcp.agents]);
   const mcpEnabled = mcp.status?.connectionMode?.mcp ?? false;
@@ -217,14 +239,15 @@ export default function AgentsContentPage({ tab }: { tab: AgentsDashboardTab }) 
             mcpRunning={!!mcp.status?.running}
             mcpEnabled={mcpEnabled}
             presetCount={assistantCount}
+            channelCount={PLATFORMS.length}
           />
         </header>
       )}
 
       {/* Loading skeleton — shown while initial data loads */}
-      {mcp.loading && tab === 'overview' && <OverviewSkeleton />}
+      {mcp.loading && resolvedTab === 'overview' && <OverviewSkeleton />}
 
-      {!mcp.loading && tab === 'overview' && (
+      {!mcp.loading && resolvedTab === 'overview' && (
         <AgentsOverviewSection
           copy={a.overview}
           buckets={buckets}
@@ -243,7 +266,7 @@ export default function AgentsContentPage({ tab }: { tab: AgentsDashboardTab }) 
         />
       )}
 
-      {tab === 'agent' && (
+      {resolvedTab === 'agent' && (
         <div className="space-y-7">
           <AgentModeOverview
             copy={a}
@@ -282,29 +305,31 @@ export default function AgentsContentPage({ tab }: { tab: AgentsDashboardTab }) 
         </div>
       )}
 
-      {(tab === 'mcp' || tab === 'capabilities') && mcpEnabled && (
+      {resolvedTab === 'plugins' && (
+        <AgentsPluginsSection copy={a} />
+      )}
+
+      {resolvedTab === 'mcp' && mcpEnabled && (
         <AgentsMcpSection copy={{ ...a.mcp, status: a.status }} mcp={mcp} buckets={buckets} copyState={null} onCopySnippet={copySnippet} />
       )}
 
       {/* MCP tab accessed but mode disabled — show hint */}
-      {(tab === 'mcp' || tab === 'capabilities') && !mcpEnabled && !mcp.loading && (
+      {resolvedTab === 'mcp' && !mcpEnabled && !mcp.loading && (
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <p className="text-sm text-muted-foreground">{a.mcp?.mcpDisabledMessage ?? 'MCP mode is not enabled.'}</p>
           <p className="text-xs text-muted-foreground/60 mt-1">{a.mcp?.mcpDisabledHint ?? 'Enable it in Settings → Connections to use MCP agents.'}</p>
         </div>
       )}
 
-      {(tab === 'skills' || tab === 'capabilities') && (
-        <div className={tab === 'capabilities' ? 'mt-6' : undefined}>
-          <AgentsSkillsSection copy={a.skills} mcp={mcp} buckets={buckets} />
-        </div>
+      {resolvedTab === 'skills' && (
+        <AgentsSkillsSection copy={a.skills} mcp={mcp} buckets={buckets} />
       )}
 
-      {(tab === 'presets' || tab === 'assistant') && (
+      {(resolvedTab === 'presets' || resolvedTab === 'assistant') && (
         <AgentsPresetsSection copy={a.presets} onLibraryCountChange={handleAssistantCountChange} />
       )}
 
-      {tab === 'a2a' && (
+      {resolvedTab === 'a2a' && (
         <AgentsPanelA2aTab
           agents={a2a.agents}
           discovering={a2a.discovering}
@@ -314,15 +339,15 @@ export default function AgentsContentPage({ tab }: { tab: AgentsDashboardTab }) 
         />
       )}
 
-      {tab === 'sessions' && (
+      {resolvedTab === 'sessions' && (
         <AgentsPanelSessionsTab />
       )}
 
-      {(tab === 'activity' || tab === 'runs') && (
+      {(resolvedTab === 'activity' || resolvedTab === 'runs') && (
         <AgentActivitySection />
       )}
 
-      {tab === 'channels' && (
+      {resolvedTab === 'channels' && (
         <AgentsContentChannels />
       )}
 
@@ -419,6 +444,26 @@ function AgentModeOverview({
   );
 }
 
+function AgentsPluginsSection({
+  copy,
+}: {
+  copy: ReturnType<typeof useLocale>['t']['agentsContent'];
+}) {
+  return (
+    <section className="space-y-4" aria-label={copy.navPlugins ?? 'Plugins'}>
+      <AgentSectionHeading
+        icon={<Puzzle size={14} aria-hidden="true" />}
+        title={copy.plugins?.title ?? copy.navPlugins ?? 'Plugins'}
+        descriptionTooltip={copy.plugins?.description}
+      />
+      <EmptyState
+        message={copy.plugins?.empty ?? 'No agent plugins are available yet.'}
+        className="py-12"
+      />
+    </section>
+  );
+}
+
 function agentOverviewToneClass(tone: 'runtime' | 'client' | 'acp' | 'a2a'): string {
   if (tone === 'runtime') return 'border-[var(--amber)]/25 bg-[var(--amber-subtle)] text-[var(--amber)]';
   if (tone === 'client') return 'border-success/20 bg-success/10 text-success';
@@ -434,6 +479,7 @@ function AgentsPageNav({
   mcpRunning,
   mcpEnabled,
   presetCount,
+  channelCount,
 }: {
   tab: AgentsDashboardTab;
   copy: ReturnType<typeof useLocale>['t']['agentsContent'];
@@ -442,6 +488,7 @@ function AgentsPageNav({
   mcpRunning: boolean;
   mcpEnabled: boolean;
   presetCount: number;
+  channelCount: number;
 }) {
   const navHints = copy.navHints ?? DEFAULT_AGENT_NAV_HINTS;
   const activeGroup = getAgentsNavGroup(tab);
@@ -480,13 +527,29 @@ function AgentsPageNav({
       tone: 'neutral',
     },
     {
-      id: 'capabilities',
-      href: '/agents?tab=capabilities',
-      label: copy.navCapabilities ?? copy.navSkills,
-      hint: navHints.capabilities ?? navHints.skills,
-      icon: <Server size={14} />,
+      id: 'plugins',
+      href: '/agents?tab=plugins',
+      label: copy.navPlugins ?? 'Plugins',
+      hint: navHints.plugins ?? 'Extensions',
+      icon: <Puzzle size={14} />,
+      tone: 'neutral',
+    },
+    {
+      id: 'skills',
+      href: '/agents?tab=skills',
+      label: copy.navSkills,
+      hint: navHints.skills ?? 'Capabilities',
+      icon: <Sparkles size={14} />,
       badge: `${enabledSkillCount}`,
-      tone: mcpEnabled && !mcpRunning ? 'warn' : mcpRunning || enabledSkillCount > 0 ? 'ok' : 'neutral',
+      tone: enabledSkillCount > 0 ? 'ok' : 'neutral',
+    },
+    {
+      id: 'mcp',
+      href: '/agents?tab=mcp',
+      label: copy.navMcp,
+      hint: navHints.mcp ?? 'Protocol',
+      icon: <Server size={14} />,
+      tone: mcpEnabled && !mcpRunning ? 'warn' : mcpRunning ? 'ok' : 'neutral',
     },
     {
       id: 'channels',
@@ -494,13 +557,14 @@ function AgentsPageNav({
       label: copy.navChannels,
       hint: navHints.channels ?? 'Messaging',
       icon: <MessageSquare size={14} />,
+      badge: `${channelCount}`,
       tone: 'neutral',
     },
   ];
 
   return (
     <nav aria-label={copy.navAriaLabel} className="mt-5 overflow-x-auto pb-1">
-      <div className="flex w-max min-w-full overflow-hidden rounded-xl border border-border/60 bg-card/35 shadow-sm lg:grid lg:w-auto lg:grid-cols-5">
+      <div className="flex w-max min-w-full overflow-hidden rounded-xl border border-border/60 bg-card/35 shadow-sm lg:grid lg:w-auto lg:grid-cols-7">
         {navItems.map(item => (
           <Link
             key={item.id}

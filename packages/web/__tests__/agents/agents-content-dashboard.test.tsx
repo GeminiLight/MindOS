@@ -183,10 +183,9 @@ vi.mock('@/hooks/useNativeRuntimeDetection', () => ({
 }));
 
 describe('Agents content dashboard', () => {
-  it('renders overview with five IA groups and clickable system model', () => {
+  it('renders overview with split IA groups and clickable system model', () => {
     const html = renderToStaticMarkup(<AgentsContentPage tab="overview" />);
     const a = messages.en.agentsContent;
-    const capabilitiesHint = a.navHints.capabilities.replace('&', '&amp;');
     const capabilitiesLabel = a.overview.capabilitiesLabel.replace('&', '&amp;');
     const channelsHint = a.navHints.channels.replace('&', '&amp;');
 
@@ -199,12 +198,16 @@ describe('Agents content dashboard', () => {
     expect(html).toContain(a.navHints.overview);
     expect(html).toContain(a.navHints.assistant);
     expect(html).toContain(a.navHints.agent);
-    expect(html).toContain(capabilitiesHint);
+    expect(html).toContain(a.navHints.plugins);
+    expect(html).toContain(a.navHints.skills);
+    expect(html).toContain(a.navHints.mcp);
     expect(html).toContain(channelsHint);
     expect(html).not.toContain('MCP :8781');
     expect(html).toContain('href="/agents?tab=assistant"');
     expect(html).toContain('href="/agents?tab=agent"');
-    expect(html).toContain('href="/agents?tab=capabilities"');
+    expect(html).toContain('href="/agents?tab=plugins"');
+    expect(html).toContain('href="/agents?tab=skills"');
+    expect(html).toContain('href="/agents?tab=mcp"');
     expect(html).toContain('href="/agents?tab=channels"');
     expect(html).toContain(a.overview.systemModelTitle);
     expect(html).toContain(a.overview.assistantLabel);
@@ -214,8 +217,7 @@ describe('Agents content dashboard', () => {
     expect(html).toContain(a.overview.recentActivity);
     expect(html).toContain(a.overview.nextActionsTitle);
     expect(html).not.toContain('/agents?tab=presets');
-    expect(html).not.toContain('/agents?tab=mcp');
-    expect(html).not.toContain('/agents?tab=skills');
+    expect(html).not.toContain('/agents?tab=capabilities');
     expect(html).not.toContain('/agents?tab=a2a');
     expect(html).not.toContain('/agents?tab=activity');
     // Hidden/legacy agent card wall is not part of the overview anymore.
@@ -266,13 +268,10 @@ describe('Agents content dashboard', () => {
     expect(html).not.toContain('github');
   });
 
-  it('renders Skills & MCP section with MCP and skill management', () => {
-    const html = renderToStaticMarkup(<AgentsContentPage tab="capabilities" />);
+  it('renders Skills as a dedicated section', () => {
+    const html = renderToStaticMarkup(<AgentsContentPage tab="skills" />);
     const a = messages.en.agentsContent;
 
-    expect(html).toContain(a.mcp.tabs.byAgent);
-    expect(html).toContain(a.mcp.tabs.byServer);
-    expect(html).toContain(a.mcp.connectionGraph);
     expect(html).toContain(a.skills.title);
     expect(html).toContain(a.skills.tabs.bySkill);
     expect(html).toContain(a.skills.tabs.byAgent);
@@ -285,6 +284,18 @@ describe('Agents content dashboard', () => {
     // Skill names (e.g. 'custom-routing', 'mindos') are inside Virtuoso which
     // doesn't inflate items in renderToStaticMarkup (no viewport/scroll height).
     // Skill rendering is validated via Virtuoso's data prop, not DOM assertion.
+  });
+
+  it('renders MCP as a dedicated section without the old connection wrapper copy', () => {
+    const html = renderToStaticMarkup(<AgentsContentPage tab="mcp" />);
+    const a = messages.en.agentsContent;
+
+    expect(html).toContain(a.mcp.title);
+    expect(html).toContain(a.mcp.tabs.byAgent);
+    expect(html).toContain(a.mcp.tabs.byServer);
+    expect(html).toContain(a.mcp.searchServersPlaceholder);
+    expect(html).toContain('mindos');
+    expect(html).not.toContain(a.mcp.connectionGraph);
   });
 
   it('renders the Assistant local-library shell before dynamic profiles load', () => {
@@ -302,6 +313,18 @@ describe('Agents content dashboard', () => {
     expect(html).not.toContain('Open Inbox review');
     expect(html).not.toContain('/capture#queue');
     expect(html).not.toContain('read_inbox');
+    expect(html).not.toContain('data-assistant-run');
+    expect(html).not.toContain(a.presets.filterAll);
+  });
+
+  it('renders Plugins as a dedicated Agent tab', () => {
+    const html = renderToStaticMarkup(<AgentsContentPage tab="plugins" />);
+    const a = messages.en.agentsContent;
+
+    expect(html).toContain(a.navPlugins);
+    expect(html).toContain(a.plugins.title);
+    expect(html).toContain(a.plugins.empty);
+    expect(html).not.toContain(a.mcp.connectionGraph);
   });
 });
 

@@ -1,4 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
+import { resetRuntimeAuthConfigCacheForTests } from '@/lib/runtime-auth-config';
 
 vi.mock('@/lib/setup-state', () => ({
   readSetupPending: vi.fn(() => false),
@@ -16,12 +20,17 @@ function makeRequest(path: string) {
 describe('proxy entry redirects (/ and /echo)', () => {
   const originalPassword = process.env.WEB_PASSWORD;
   const originalToken = process.env.AUTH_TOKEN;
+  const originalHome = process.env.HOME;
+  let tempHome = '';
 
   beforeEach(() => {
+    tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'mindos-proxy-entry-'));
+    process.env.HOME = tempHome;
     vi.mocked(readSetupPending).mockClear();
     vi.mocked(readSetupPending).mockReturnValue(false);
     delete process.env.WEB_PASSWORD;
     delete process.env.AUTH_TOKEN;
+    resetRuntimeAuthConfigCacheForTests();
   });
 
   afterEach(() => {
@@ -29,6 +38,10 @@ describe('proxy entry redirects (/ and /echo)', () => {
     else process.env.WEB_PASSWORD = originalPassword;
     if (originalToken === undefined) delete process.env.AUTH_TOKEN;
     else process.env.AUTH_TOKEN = originalToken;
+    if (originalHome === undefined) delete process.env.HOME;
+    else process.env.HOME = originalHome;
+    if (tempHome) fs.rmSync(tempHome, { recursive: true, force: true });
+    resetRuntimeAuthConfigCacheForTests();
   });
 
   it('serves / as the home page (no redirect) when setup is complete', async () => {

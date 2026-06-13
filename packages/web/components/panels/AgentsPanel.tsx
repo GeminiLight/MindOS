@@ -1,12 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { Clock, Globe, Loader2, RefreshCw, Settings } from 'lucide-react';
 import { useMcpData } from '@/lib/stores/mcp-store';
 import { useA2aRegistry } from '@/hooks/useA2aRegistry';
 import { useLocale } from '@/lib/stores/locale-store';
+import { PLATFORMS } from '@/lib/im/platforms';
 import PanelHeader from './PanelHeader';
 import { AgentsPanelHubNav } from './AgentsPanelHubNav';
 import { AgentsPanelAgentGroups } from './AgentsPanelAgentGroups';
@@ -39,7 +40,26 @@ export default function AgentsPanel({
   const [refreshing, setRefreshing] = useState(false);
   const [showNotDetected, setShowNotDetected] = useState(false);
   const [showDiscoverModal, setShowDiscoverModal] = useState(false);
+  const [assistantCount, setAssistantCount] = useState(0);
   const a2a = useA2aRegistry();
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadAssistantCount() {
+      try {
+        const res = await fetch('/api/assistants', { cache: 'no-store' });
+        if (!res.ok) throw new Error(`Assistant count load failed (${res.status})`);
+        const payload = await res.json() as { assistants?: unknown[] };
+        if (!cancelled) setAssistantCount(Array.isArray(payload.assistants) ? payload.assistants.length : 0);
+      } catch {
+        if (!cancelled) setAssistantCount(0);
+      }
+    }
+    void loadAssistantCount();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -79,6 +99,7 @@ export default function AgentsPanel({
     navAssistant: p.navAssistant,
     navAgent: p.navAgent,
     navCapabilities: p.navCapabilities,
+    navPlugins: p.navPlugins,
     navPresets: p.navPresets,
     navMcp: p.navMcp,
     navSkills: p.navSkills,
@@ -92,6 +113,8 @@ export default function AgentsPanel({
     <AgentsPanelHubNav
       copy={hubCopy}
       connectedCount={connected.length}
+      assistantCount={assistantCount}
+      channelCount={PLATFORMS.length}
       channelsActive={isChannelsTab}
     />
   );

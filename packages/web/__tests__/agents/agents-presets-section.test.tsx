@@ -405,7 +405,7 @@ Write an updated morning brief.
     });
   });
 
-  it('runs and deletes custom Assistants', async () => {
+  it('deletes custom Assistants without exposing manual run buttons', async () => {
     const fetchMock = mockAssistantsFetch();
     const { host, root } = await renderSection();
 
@@ -418,20 +418,8 @@ Write an updated morning brief.
     expect(host.textContent).toContain('Custom');
     const deleteButton = host.querySelector('button[data-assistant-delete="research-scout"]') as HTMLButtonElement;
     expect(deleteButton.disabled).toBe(false);
-
-    await act(async () => {
-      host.querySelector('button[data-assistant-run="research-scout"]')!
-        .dispatchEvent(new MouseEvent('click', { bubbles: true }));
-      await flushEffects();
-    });
-
-    const askCall = fetchMock.mock.calls.find(([url, init]) => url === '/api/ask' && init?.method === 'POST');
-    expect(askCall).toBeTruthy();
-    const askBody = JSON.parse(askCall![1]!.body as string);
-    expect(askBody.mode).toBe('chat');
-    expect(askBody.messages[0].content).toContain('Research Scout');
-    expect(askBody.messages[0].content).toContain('readonly mode');
-    expect(host.textContent).toContain('Run summary');
+    expect(host.querySelector('button[data-assistant-run="research-scout"]')).toBeNull();
+    expect(host.textContent).not.toContain('All assistants');
 
     await act(async () => {
       deleteButton.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -449,8 +437,8 @@ Write an updated morning brief.
     });
   });
 
-  it('runs Dreaming through the dedicated AssistantRun endpoint', async () => {
-    const fetchMock = mockAssistantsFetch({
+  it('keeps Dreaming visible without a manual run button', async () => {
+    mockAssistantsFetch({
       ...localAssistantsPayload,
       assistants: [
         {
@@ -499,22 +487,8 @@ Review the local knowledge base for maintenance signals.
       await flushEffects();
     });
 
-    await act(async () => {
-      host.querySelector('button[data-assistant-run="dreaming"]')!
-        .dispatchEvent(new MouseEvent('click', { bubbles: true }));
-      await flushEffects();
-    });
-
-    const assistantRunCall = fetchMock.mock.calls.find(([url, init]) => url === '/api/assistant-runs' && init?.method === 'POST');
-    expect(assistantRunCall).toBeTruthy();
-    expect(JSON.parse(assistantRunCall![1]!.body as string)).toEqual({
-      assistantId: 'dreaming',
-      trigger: 'manual',
-    });
-    expect(fetchMock.mock.calls.some(([url, init]) => url === '/api/ask' && init?.method === 'POST')).toBe(false);
-    expect(host.textContent).toContain('Dreaming completed for all.');
-    expect(host.textContent).toContain('1 review proposal(s) generated, health 91/100.');
-    expect(host.textContent).toContain('.mindos/dreaming/dreaming-report.md');
+    expect(host.textContent).toContain('Dreaming');
+    expect(host.querySelector('button[data-assistant-run="dreaming"]')).toBeNull();
 
     await act(async () => {
       root.unmount();

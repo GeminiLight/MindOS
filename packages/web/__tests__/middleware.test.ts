@@ -2,6 +2,10 @@ import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import { proxy as middleware } from '@/proxy';
 import { NextRequest } from 'next/server';
 import { signJwt } from '@/lib/jwt';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
+import { resetRuntimeAuthConfigCacheForTests } from '@/lib/runtime-auth-config';
 
 const mockReadSetupPending = vi.hoisted(() => vi.fn(() => false));
 
@@ -16,6 +20,29 @@ function makeApiRequest(headers: Record<string, string> = {}) {
 function makePageRequest(path = '/some-page', headers: Record<string, string> = {}) {
   return new NextRequest(`http://localhost${path}`, { headers });
 }
+
+const originalHome = process.env.HOME;
+let tempHome = '';
+
+function writeConfig(config: Record<string, unknown>) {
+  const dir = path.join(tempHome, '.mindos');
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify(config), 'utf-8');
+  resetRuntimeAuthConfigCacheForTests();
+}
+
+beforeEach(() => {
+  tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'mindos-proxy-auth-'));
+  process.env.HOME = tempHome;
+  resetRuntimeAuthConfigCacheForTests();
+});
+
+afterEach(() => {
+  if (originalHome === undefined) delete process.env.HOME;
+  else process.env.HOME = originalHome;
+  if (tempHome) fs.rmSync(tempHome, { recursive: true, force: true });
+  resetRuntimeAuthConfigCacheForTests();
+});
 
 describe('middleware — API protection (AUTH_TOKEN)', () => {
   const original = process.env.AUTH_TOKEN;
@@ -47,6 +74,17 @@ describe('middleware — API protection (AUTH_TOKEN)', () => {
     process.env.AUTH_TOKEN = 'secret123';
     const res = await middleware(makeApiRequest({ authorization: 'Bearer secret123' }));
     expect(res.status).toBe(200);
+  });
+
+  it('uses the persisted auth token when AUTH_TOKEN is not set', async () => {
+    delete process.env.AUTH_TOKEN;
+    writeConfig({ authToken: 'persisted-token' });
+
+    const missing = await middleware(makeApiRequest());
+    const valid = await middleware(makeApiRequest({ authorization: 'Bearer persisted-token' }));
+
+    expect(missing.status).toBe(401);
+    expect(valid.status).toBe(200);
   });
 
   it('allows /api/health without auth (for check-port self-detection)', async () => {
@@ -147,6 +185,18 @@ describe('middleware — Web UI protection (WEB_PASSWORD)', () => {
     expect(res.headers.get('location')).toContain('/login');
   });
 
+  it('redirects unauthenticated page requests when only the persisted Web password exists', async () => {
+    delete process.env.WEB_PASSWORD;
+    writeConfig({ webPassword: 'persisted-secret', webSessionSecret: 'persisted-session-secret' });
+
+    const res = await middleware(makePageRequest('/some-page'));
+    const location = new URL(res.headers.get('location') ?? '');
+
+    expect(res.status).toBe(307);
+    expect(location.pathname).toBe('/login');
+    expect(location.searchParams.get('redirect')).toBe('/some-page');
+  });
+
   it('preserves the query string in login redirects', async () => {
     process.env.WEB_PASSWORD = 'secret123';
     const res = await middleware(makePageRequest('/agents?tab=mcp'));
@@ -191,6 +241,22 @@ describe('middleware — Web UI protection (WEB_PASSWORD)', () => {
       sub: 'user',
       exp: Math.floor(Date.now() / 1000) + 60,
     }, 'stable-session-secret');
+
+    const res = await middleware(makePageRequest('/wiki', {
+      cookie: `mindos-session=${token}`,
+    }));
+
+    expect(res.status).toBe(200);
+  });
+
+  it('accepts sessions signed with the persisted Web session secret', async () => {
+    delete process.env.WEB_PASSWORD;
+    delete process.env.WEB_SESSION_SECRET;
+    writeConfig({ webPassword: 'persisted-secret', webSessionSecret: 'persisted-session-secret' });
+    const token = await signJwt({
+      sub: 'user',
+      exp: Math.floor(Date.now() / 1000) + 60,
+    }, 'persisted-session-secret');
 
     const res = await middleware(makePageRequest('/wiki', {
       cookie: `mindos-session=${token}`,

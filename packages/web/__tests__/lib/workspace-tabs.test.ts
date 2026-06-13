@@ -8,6 +8,7 @@ import {
   closeTab,
   getTabs,
   initWorkspaceTabs,
+  keepTab,
   moveTab,
   openTab,
   readDomRootId,
@@ -80,6 +81,50 @@ describe('openTab', () => {
     expect(doc!.id).toBe('doc:shared-key');
     expect(chat!.id).toBe('chat:shared-key');
     expect(getTabs()).toHaveLength(2);
+  });
+
+  it('opens casual doc routes as one replaceable preview tab when requested', () => {
+    const first = openTab('doc', 'notes/a.md', 'A', { pinned: false });
+    const second = openTab('doc', 'notes/b.md', 'B', { pinned: false });
+
+    expect(first).toMatchObject({ id: 'doc:notes/a.md', pinned: false });
+    expect(second).toMatchObject({ id: 'doc:notes/b.md', pinned: false });
+    expect(getTabs()).toEqual([
+      { id: 'doc:notes/b.md', kind: 'doc', key: 'notes/b.md', title: 'B', pinned: false },
+    ]);
+  });
+
+  it('upgrades an existing preview when the same doc is opened as kept', () => {
+    openTab('doc', 'notes/a.md', 'A', { pinned: false });
+
+    const kept = openTab('doc', 'notes/a.md', 'A');
+
+    expect(kept).toEqual({ id: 'doc:notes/a.md', kind: 'doc', key: 'notes/a.md', title: 'A' });
+    expect(getTabs()).toEqual([{ id: 'doc:notes/a.md', kind: 'doc', key: 'notes/a.md', title: 'A' }]);
+  });
+});
+
+describe('keepTab', () => {
+  it('turns a preview tab into a kept tab without reordering it', () => {
+    openTab('doc', 'kept.md', 'Kept');
+    openTab('doc', 'preview.md', 'Preview', { pinned: false });
+
+    const kept = keepTab('doc:preview.md');
+
+    expect(kept).toEqual({ id: 'doc:preview.md', kind: 'doc', key: 'preview.md', title: 'Preview' });
+    expect(getTabs()).toEqual([
+      { id: 'doc:kept.md', kind: 'doc', key: 'kept.md', title: 'Kept' },
+      { id: 'doc:preview.md', kind: 'doc', key: 'preview.md', title: 'Preview' },
+    ]);
+  });
+
+  it('is a no-op for already kept or missing tabs', () => {
+    const original = openTab('doc', 'kept.md', 'Kept');
+    const before = getTabs();
+
+    expect(keepTab('doc:kept.md')).toBe(original);
+    expect(keepTab('doc:missing.md')).toBeNull();
+    expect(getTabs()).toBe(before);
   });
 });
 
@@ -299,6 +344,21 @@ describe('persistence', () => {
     ]);
   });
 
+  it('does not persist preview tabs until they are kept', () => {
+    vi.useFakeTimers();
+    initWorkspaceTabs('root-a');
+    openTab('doc', 'preview.md', 'Preview', { pinned: false });
+
+    vi.advanceTimersByTime(DEBOUNCE_MS);
+    expect(readStored('root-a')).toEqual([]);
+
+    keepTab('doc:preview.md');
+    vi.advanceTimersByTime(DEBOUNCE_MS);
+    expect(readStored('root-a')).toEqual([
+      { id: 'doc:preview.md', kind: 'doc', key: 'preview.md', title: 'Preview' },
+    ]);
+  });
+
   it('coalesces rapid successive mutations into a single write of the final state', () => {
     vi.useFakeTimers();
     initWorkspaceTabs('root-a');
@@ -389,6 +449,7 @@ describe('corrupt storage recovery', () => {
       null,
       'string item',
       { kind: 'chat', key: 's-ok', title: '' }, // empty title is a valid string
+      { kind: 'doc', key: 'preview.md', title: 'Preview', pinned: false },
     ]));
 
     initWorkspaceTabs('root-a');

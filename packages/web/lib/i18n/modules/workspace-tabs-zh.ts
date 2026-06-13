@@ -4,6 +4,8 @@ export const workspaceTabsZh = {
   workspaceTabs: {
     newChat: '新会话',
     closeTab: '关闭标签',
+    keepTab: '保留标签',
+    previewTab: '预览标签',
     moreTabs: (n: number) => `还有 ${n} 个标签`,
     overflowMenuTitle: '收起的标签',
     tabLimitReached: '标签数已达上限（50），请先关闭一些标签。',

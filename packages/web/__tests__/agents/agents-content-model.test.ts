@@ -53,7 +53,10 @@ describe('parseAgentsTab', () => {
   it('accepts canonical IA tabs and falls back for unknown tabs', () => {
     expect(parseAgentsTab('assistant')).toBe('assistant');
     expect(parseAgentsTab('agent')).toBe('agent');
-    expect(parseAgentsTab('capabilities')).toBe('capabilities');
+    expect(parseAgentsTab('plugins')).toBe('plugins');
+    expect(parseAgentsTab('capabilities')).toBe('skills');
+    expect(parseAgentsTab('skills')).toBe('skills');
+    expect(parseAgentsTab('mcp')).toBe('mcp');
     expect(parseAgentsTab('runs')).toBe('runs');
     expect(parseAgentsTab('unknown')).toBe('overview');
     expect(parseAgentsTab(undefined)).toBe('overview');
@@ -61,23 +64,22 @@ describe('parseAgentsTab', () => {
 
   it('keeps legacy deep tabs parseable for existing links', () => {
     expect(parseAgentsTab('presets')).toBe('presets');
-    expect(parseAgentsTab('mcp')).toBe('mcp');
-    expect(parseAgentsTab('skills')).toBe('skills');
     expect(parseAgentsTab('channels')).toBe('channels');
     expect(parseAgentsTab('a2a')).toBe('a2a');
     expect(parseAgentsTab('sessions')).toBe('sessions');
     expect(parseAgentsTab('activity')).toBe('activity');
   });
 
-  it('groups legacy tabs under the five visible IA entries and keeps logs auxiliary', () => {
+  it('groups visible IA tabs independently and keeps logs auxiliary', () => {
     expect(getAgentsNavGroup('overview')).toBe('overview');
     expect(getAgentsNavGroup('assistant')).toBe('assistant');
     expect(getAgentsNavGroup('presets')).toBe('assistant');
     expect(getAgentsNavGroup('agent')).toBe('agent');
     expect(getAgentsNavGroup('a2a')).toBe('agent');
-    expect(getAgentsNavGroup('capabilities')).toBe('capabilities');
-    expect(getAgentsNavGroup('skills')).toBe('capabilities');
-    expect(getAgentsNavGroup('mcp')).toBe('capabilities');
+    expect(getAgentsNavGroup('plugins')).toBe('plugins');
+    expect(getAgentsNavGroup('capabilities')).toBe('skills');
+    expect(getAgentsNavGroup('skills')).toBe('skills');
+    expect(getAgentsNavGroup('mcp')).toBe('mcp');
     expect(getAgentsNavGroup('channels')).toBe('channels');
     expect(getAgentsNavGroup('runs')).toBe('overview');
     expect(getAgentsNavGroup('sessions')).toBe('overview');

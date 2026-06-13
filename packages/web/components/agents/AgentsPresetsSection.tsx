@@ -3,12 +3,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertCircle,
-  Clock3,
   Database,
   FileText,
   FolderLock,
   Loader2,
-  Play,
   Plus,
   RefreshCw,
   Route,
@@ -224,8 +222,6 @@ export default function AgentsPresetsSection({
   const [savingPrompt, setSavingPrompt] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
   const [deletingAssistantId, setDeletingAssistantId] = useState<string | null>(null);
-  const [runningAssistantId, setRunningAssistantId] = useState<string | null>(null);
-  const [runResult, setRunResult] = useState<{ assistantId: string; output?: string; error?: string } | null>(null);
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<AssistantFilter>('all');
   const [creating, setCreating] = useState(false);
@@ -448,25 +444,6 @@ export default function AgentsPresetsSection({
     }
   }, [assistants.length, copy.deleteFailed, copy.deleted, copy.saveFailed, deletingAssistantId, onLibraryCountChange]);
 
-  const runAssistant = useCallback(async (assistant: AssistantView) => {
-    if (!assistant.promptReady || runningAssistantId) return;
-    setRunningAssistantId(assistant.id);
-    setRunResult(null);
-    try {
-      const output = assistant.id === 'dreaming'
-        ? await runDedicatedAssistant(assistant)
-        : await runPromptAssistant(assistant);
-      setRunResult({ assistantId: assistant.id, output });
-      toast.success(copy.runCompleted ?? 'Assistant run completed');
-    } catch (runError) {
-      const message = runError instanceof Error ? runError.message : String(runError);
-      setRunResult({ assistantId: assistant.id, error: message });
-      toast.error(copy.runFailed ?? copy.saveFailed);
-    } finally {
-      setRunningAssistantId(null);
-    }
-  }, [copy.runCompleted, copy.runFailed, copy.saveFailed, runningAssistantId]);
-
   const createAssistant = useCallback(async () => {
     const assistantId = slugifyAssistantId(createDraft.id || createDraft.name);
     if (!assistantId || creatingAssistant) return;
@@ -506,12 +483,9 @@ export default function AgentsPresetsSection({
         query={query}
         filter={filter}
         creating={creating}
-        selected={selected}
-        running={Boolean(selected && runningAssistantId === selected.id)}
         onQueryChange={setQuery}
         onFilterChange={setFilter}
         onToggleCreate={() => setCreating(current => !current)}
-        onRunSelected={() => selected ? void runAssistant(selected) : undefined}
       />
 
       {creating ? (
@@ -543,9 +517,7 @@ export default function AgentsPresetsSection({
             setSelectedId(assistantId);
             setSection('overview');
           }}
-          onRun={(assistant) => void runAssistant(assistant)}
           onDelete={(assistant) => void deleteAssistant(assistant)}
-          runningAssistantId={runningAssistantId}
           deletingAssistantId={deletingAssistantId}
         />
 
@@ -581,8 +553,6 @@ export default function AgentsPresetsSection({
               savingPrompt={savingPrompt}
               savingProfile={savingProfile}
               deleting={deletingAssistantId === selected.id}
-              running={runningAssistantId === selected.id}
-              runResult={runResult?.assistantId === selected.id ? runResult : null}
               copy={copy}
               onSectionChange={setSection}
               onPromptChange={(value) => setPromptEdits(prev => ({ ...prev, [selected.id]: value }))}
@@ -595,7 +565,6 @@ export default function AgentsPresetsSection({
                 delete next[selected.id];
                 return next;
               })}
-              onRun={() => void runAssistant(selected)}
               onDelete={() => void deleteAssistant(selected)}
             />
           )}
@@ -611,27 +580,20 @@ function AssistantCommandBar({
   query,
   filter,
   creating,
-  selected,
-  running,
   onQueryChange,
   onFilterChange,
   onToggleCreate,
-  onRunSelected,
 }: {
   copy: PresetsCopy;
   counts: AssistantCounts;
   query: string;
   filter: AssistantFilter;
   creating: boolean;
-  selected?: AssistantView;
-  running: boolean;
   onQueryChange: (value: string) => void;
   onFilterChange: (value: AssistantFilter) => void;
   onToggleCreate: () => void;
-  onRunSelected: () => void;
 }) {
   const filterOptions: Array<{ value: AssistantFilter; label: string; count: number }> = [
-    { value: 'all', label: copy.filterAll ?? 'All assistants', count: counts.total },
     { value: 'builtin', label: copy.filterBuiltin ?? copy.builtinLabel ?? 'Built-in', count: counts.builtin },
     { value: 'custom', label: copy.filterCustom ?? copy.customLabel ?? 'Custom', count: counts.custom },
   ];
@@ -676,7 +638,7 @@ function AssistantCommandBar({
             active={filter === option.value}
             label={option.label}
             count={option.count}
-            onClick={() => onFilterChange(option.value)}
+            onClick={() => onFilterChange(filter === option.value ? 'all' : option.value)}
           />
         ))}
       </div>
@@ -690,15 +652,6 @@ function AssistantCommandBar({
         >
           {creating ? <X size={14} /> : <Plus size={14} />}
           {copy.newAssistant ?? 'New Assistant'}
-        </button>
-        <button
-          type="button"
-          onClick={onRunSelected}
-          disabled={!selected?.promptReady || running}
-          className="inline-flex h-10 items-center gap-2 rounded-lg bg-[var(--amber)] px-3 text-xs font-medium text-[var(--amber-foreground)] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          {running ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
-          {running ? copy.runningLabel ?? 'Running' : copy.launchTitle}
         </button>
       </div>
     </div>
@@ -826,9 +779,7 @@ function AssistantDirectory({
   query,
   onRetry,
   onSelect,
-  onRun,
   onDelete,
-  runningAssistantId,
   deletingAssistantId,
 }: {
   copy: PresetsCopy;
@@ -841,9 +792,7 @@ function AssistantDirectory({
   query: string;
   onRetry: () => void;
   onSelect: (assistantId: string) => void;
-  onRun: (assistant: AssistantView) => void;
   onDelete: (assistant: AssistantView) => void;
-  runningAssistantId: string | null;
   deletingAssistantId: string | null;
 }) {
   return (
@@ -896,9 +845,7 @@ function AssistantDirectory({
               copy={copy}
               selectedId={selectedId}
               onSelect={onSelect}
-              onRun={onRun}
               onDelete={onDelete}
-              runningAssistantId={runningAssistantId}
               deletingAssistantId={deletingAssistantId}
             />
             <AssistantDirectoryGroup
@@ -908,9 +855,7 @@ function AssistantDirectory({
               copy={copy}
               selectedId={selectedId}
               onSelect={onSelect}
-              onRun={onRun}
               onDelete={onDelete}
-              runningAssistantId={runningAssistantId}
               deletingAssistantId={deletingAssistantId}
             />
           </div>
@@ -927,9 +872,7 @@ function AssistantDirectoryGroup({
   copy,
   selectedId,
   onSelect,
-  onRun,
   onDelete,
-  runningAssistantId,
   deletingAssistantId,
 }: {
   title: string;
@@ -938,9 +881,7 @@ function AssistantDirectoryGroup({
   copy: PresetsCopy;
   selectedId?: string;
   onSelect: (assistantId: string) => void;
-  onRun: (assistant: AssistantView) => void;
   onDelete: (assistant: AssistantView) => void;
-  runningAssistantId: string | null;
   deletingAssistantId: string | null;
 }) {
   if (assistants.length === 0) return null;
@@ -961,11 +902,8 @@ function AssistantDirectoryGroup({
             sourceLabel={assistant.source === 'builtin' ? copy.protectedLabel ?? 'Protected' : copy.customLabel ?? 'Custom'}
             deleteAssistantLabel={copy.deleteAssistant ?? 'Delete'}
             protectedLabel={copy.protectedLabel ?? 'Protected'}
-            runLabel={copy.launchTitle}
             deleting={deletingAssistantId === assistant.id}
-            running={runningAssistantId === assistant.id}
             onClick={() => onSelect(assistant.id)}
-            onRun={() => onRun(assistant)}
             onDelete={() => onDelete(assistant)}
           />
         ))}
@@ -984,8 +922,6 @@ function AssistantUnifiedDetail({
   savingPrompt,
   savingProfile,
   deleting,
-  running,
-  runResult,
   copy,
   onSectionChange,
   onPromptChange,
@@ -994,7 +930,6 @@ function AssistantUnifiedDetail({
   onProfileChange,
   onSaveProfile,
   onDiscardProfile,
-  onRun,
   onDelete,
 }: {
   assistant: AssistantView;
@@ -1006,8 +941,6 @@ function AssistantUnifiedDetail({
   savingPrompt: boolean;
   savingProfile: boolean;
   deleting: boolean;
-  running: boolean;
-  runResult: { output?: string; error?: string } | null;
   copy: PresetsCopy;
   onSectionChange: (section: PresetSection) => void;
   onPromptChange: (value: string) => void;
@@ -1016,7 +949,6 @@ function AssistantUnifiedDetail({
   onProfileChange: (next: ProfileEdit) => void;
   onSaveProfile: () => void;
   onDiscardProfile: () => void;
-  onRun: () => void;
   onDelete: () => void;
 }) {
   const tabs: Array<{ id: PresetSection; label: string; icon: React.ReactNode }> = [
@@ -1068,17 +1000,7 @@ function AssistantUnifiedDetail({
             </div>
           </div>
 
-          <div className="grid gap-2 sm:grid-cols-2 xl:min-w-[280px] xl:grid-cols-1">
-            <button
-              type="button"
-              onClick={onRun}
-              disabled={!assistant.promptReady || running}
-              data-assistant-run={assistant.id}
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[var(--amber)] px-3 text-sm font-medium text-[var(--amber-foreground)] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              {running ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
-              {running ? copy.runningLabel ?? 'Running' : copy.launchTitle}
-            </button>
+          <div className="grid gap-2 xl:min-w-[160px]">
             <button
               type="button"
               onClick={onDelete}
@@ -1130,7 +1052,7 @@ function AssistantUnifiedDetail({
 
       <div className="min-h-[500px] p-5">
         {section === 'overview' ? (
-          <UnifiedOverviewPane assistant={assistant} runResult={runResult} copy={copy} />
+          <UnifiedOverviewPane assistant={assistant} copy={copy} />
         ) : null}
         {section === 'prompt' ? (
           <PromptInspectorPanel
@@ -1193,11 +1115,9 @@ function DetailMetaItem({
 
 function UnifiedOverviewPane({
   assistant,
-  runResult,
   copy,
 }: {
   assistant: AssistantView;
-  runResult: { output?: string; error?: string } | null;
   copy: PresetsCopy;
 }) {
   const role = assistant.sections.role || assistant.promptPreview || (assistant.promptReady ? '' : copy.promptMissingHint ?? 'Create a prompt to describe how this assistant should work.');
@@ -1236,21 +1156,6 @@ function UnifiedOverviewPane({
           <InspectorFact label="ID" value={assistant.id} mono />
           <InspectorFact label={copy.preferredAgentLabel ?? 'Preferred agent'} value={assistant.preferredAgent ?? copy.systemModelDefault ?? 'mindos-agent'} />
         </dl>
-      </section>
-
-      <section className="border-t border-border/45 pt-5">
-        <PanelLabel icon={<Clock3 size={13} />} label={copy.recentRunLabel ?? 'Recent run'} />
-        {runResult ? (
-          <p className={`mt-3 whitespace-pre-wrap text-xs leading-relaxed ${
-            runResult.error ? 'text-destructive' : 'text-foreground/80'
-          }`}>
-            {runResult.error || runResult.output || (copy.runCompleted ?? 'Assistant run completed')}
-          </p>
-        ) : (
-          <p className="mt-3 rounded-lg bg-muted/25 px-3 py-2 text-xs leading-relaxed text-muted-foreground/65">
-            {emptyText}
-          </p>
-        )}
       </section>
     </div>
   );
@@ -1312,11 +1217,8 @@ function AssistantRow({
   sourceLabel,
   deleteAssistantLabel,
   protectedLabel,
-  runLabel,
   deleting,
-  running,
   onClick,
-  onRun,
   onDelete,
 }: {
   assistant: AssistantView;
@@ -1326,11 +1228,8 @@ function AssistantRow({
   sourceLabel: string;
   deleteAssistantLabel: string;
   protectedLabel: string;
-  runLabel: string;
   deleting: boolean;
-  running: boolean;
   onClick: () => void;
-  onRun: () => void;
   onDelete: () => void;
 }) {
   const summary = assistant.sections.role || assistant.description || assistant.promptPreview;
@@ -1364,17 +1263,6 @@ function AssistantRow({
       </button>
 
       <div className="flex shrink-0 items-start gap-1">
-        <button
-          type="button"
-          onClick={onRun}
-          disabled={!assistant.promptReady || running}
-          data-assistant-run={assistant.id}
-          className="inline-flex h-7 w-8 items-center justify-center rounded-md border border-border bg-background text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          title={runLabel}
-        >
-          {running ? <Loader2 size={11} className="animate-spin" /> : <Play size={11} />}
-          <span className="sr-only">{running ? 'Running' : runLabel}</span>
-        </button>
         <button
           type="button"
           onClick={onDelete}
@@ -1745,31 +1633,6 @@ function AssistantStateCard({
   );
 }
 
-function RunResultCard({
-  result,
-  copy,
-}: {
-  result: { output?: string; error?: string };
-  copy: PresetsCopy;
-}) {
-  const failed = Boolean(result.error);
-  return (
-    <section className={`rounded-xl border p-4 shadow-sm ${
-      failed ? 'border-destructive/25 bg-destructive/[0.04]' : 'border-success/25 bg-success/[0.04]'
-    }`}>
-      <PanelLabel
-        icon={failed ? <AlertCircle size={13} /> : <Play size={13} />}
-        label={failed ? copy.runFailed ?? 'Run failed' : copy.runCompleted ?? 'Run completed'}
-      />
-      <p className={`mt-3 whitespace-pre-wrap text-sm leading-relaxed ${
-        failed ? 'text-destructive' : 'text-foreground/80'
-      }`}>
-        {result.error || result.output || (copy.runCompleted ?? 'Assistant run completed')}
-      </p>
-    </section>
-  );
-}
-
 function AssistantDetailSkeleton() {
   return (
     <div className="space-y-4 animate-pulse" aria-busy="true">
@@ -1964,117 +1827,4 @@ function titleizeAssistantId(value: string): string {
     .filter(Boolean)
     .map(part => `${part.slice(0, 1).toLocaleUpperCase()}${part.slice(1)}`)
     .join(' ') || 'Assistant';
-}
-
-async function runPromptAssistant(assistant: AssistantView): Promise<string> {
-  const res = await fetch('/api/ask', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      mode: 'chat',
-      messages: [{
-        role: 'user',
-        content: buildAssistantRunPrompt(assistant),
-      }],
-    }),
-  });
-  if (!res.ok) throw new Error(`Assistant run failed (${res.status})`);
-  return readAskTextResponse(res);
-}
-
-async function runDedicatedAssistant(assistant: AssistantView): Promise<string> {
-  const res = await fetch('/api/assistant-runs', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      assistantId: assistant.id,
-      trigger: 'manual',
-    }),
-  });
-  const payload = await res.json().catch(() => null) as {
-    ok?: boolean;
-    error?: { message?: unknown };
-    run?: {
-      scope?: unknown;
-      proposals?: unknown[];
-      lint?: { healthScore?: unknown };
-    };
-    artifacts?: {
-      reportMarkdown?: unknown;
-      pendingJson?: unknown;
-    };
-  } | null;
-  if (!res.ok || payload?.ok !== true) {
-    const message = typeof payload?.error?.message === 'string'
-      ? payload.error.message
-      : `Assistant run failed (${res.status})`;
-    throw new Error(message);
-  }
-
-  const proposalCount = Array.isArray(payload.run?.proposals) ? payload.run.proposals.length : 0;
-  const healthScore = typeof payload.run?.lint?.healthScore === 'number'
-    ? payload.run.lint.healthScore
-    : null;
-  const scope = typeof payload.run?.scope === 'string' ? payload.run.scope : 'all';
-  const reportPath = typeof payload.artifacts?.reportMarkdown === 'string'
-    ? payload.artifacts.reportMarkdown
-    : '.mindos/dreaming/dreaming-report.md';
-  const pendingPath = typeof payload.artifacts?.pendingJson === 'string'
-    ? payload.artifacts.pendingJson
-    : '.mindos/dreaming/pending.json';
-  return [
-    `Dreaming completed for ${scope}.`,
-    `${proposalCount} review proposal(s) generated${healthScore === null ? '' : `, health ${healthScore}/100`}.`,
-    `Report: ${reportPath}`,
-    `Pending review: ${pendingPath}`,
-  ].join('\n');
-}
-
-function buildAssistantRunPrompt(assistant: AssistantView): string {
-  return `Run the local MindOS Assistant "${assistant.name}" (${assistant.id}) in readonly mode.
-
-Use this assistant profile:
-- preferredAgent: ${assistant.preferredAgent ?? 'mindos-agent'}
-- skills: ${assistant.skills.length > 0 ? assistant.skills.join(', ') : 'none'}
-- mcp: ${assistant.mcp.length > 0 ? assistant.mcp.join(', ') : 'none'}
-
-Assistant prompt:
-
-${assistant.promptContent || assistant.promptPreview}
-
-Return a concise result for the user. Do not write files or make external changes unless a later run explicitly grants a stronger permission mode.`;
-}
-
-async function readAskTextResponse(res: Response): Promise<string> {
-  if (!res.body) {
-    return typeof res.text === 'function' ? res.text() : '';
-  }
-
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
-  let output = '';
-
-  while (true) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split('\n');
-    buffer = lines.pop() ?? '';
-    for (const line of lines) {
-      if (!line.startsWith('data:')) continue;
-      const raw = line.slice(5).trim();
-      if (!raw || raw === '[DONE]') continue;
-      try {
-        const event = JSON.parse(raw) as { type?: string; delta?: string; error?: string };
-        if (event.type === 'text_delta' && typeof event.delta === 'string') output += event.delta;
-        if (event.type === 'error' && event.error) throw new Error(event.error);
-      } catch (error) {
-        if (error instanceof SyntaxError) continue;
-        throw error;
-      }
-    }
-  }
-
-  return output.trim();
 }

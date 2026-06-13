@@ -5,12 +5,13 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { AlertCircle, Loader2, RefreshCw } from 'lucide-react';
 import { useLocale } from '@/lib/stores/locale-store';
-import { getPlatformDisplaySubtitle } from '@/lib/im/display';
+import { resolveChannelListStatus } from '@/lib/im/display';
 import { PLATFORMS, type PlatformStatus } from '@/lib/im/platforms';
 import { ChannelIcon } from '@/components/agents/ChannelIcon';
+import { ChannelStatusIndicator } from '@/components/agents/ChannelStatusIndicator';
 
 export default function IMChannelsView() {
-  const { locale, t } = useLocale();
+  const { t } = useLocale();
   const im = t.panels.im;
   const searchParams = useSearchParams();
   const activePlatform = searchParams.get('platform');
@@ -68,30 +69,34 @@ export default function IMChannelsView() {
     );
   }
 
-  const configuredCount = statuses.filter(s => s.connected).length;
+  const configuredCount = statuses.filter(s => resolveChannelListStatus(s) !== 'unconfigured').length;
+  const total = PLATFORMS.length;
   const getStatus = (id: string) => statuses.find(s => s.platform === id);
+  const statusLabels = {
+    unconfigured: im.statusUnconfigured,
+    configured: im.statusConfigured,
+    running: im.statusRunning,
+    issue: im.statusIssue,
+  };
 
   return (
     <div className="flex flex-col gap-2 px-2 py-2">
       <div className="flex items-center justify-between gap-2 px-1.5">
         <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{im.title}</span>
-        <span className="rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[11px] leading-4 text-muted-foreground">
-          {configuredCount} {im.connected}
+        <span
+          className="rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[11px] leading-4 text-muted-foreground"
+          aria-label={`${configuredCount} / ${total}`}
+          title={`${configuredCount} / ${total}`}
+        >
+          {configuredCount}/{total}
         </span>
       </div>
 
       <div className="flex flex-col gap-1">
         {PLATFORMS.map((platform) => {
           const status = getStatus(platform.id);
-          const isConnected = status?.connected ?? false;
           const isActive = activePlatform === platform.id;
-          const subtitle = getPlatformDisplaySubtitle({
-            platform,
-            status,
-            locale,
-            connectedFallback: im.statusConnected,
-            disconnectedFallback: im.notConfigured,
-          });
+          const channelStatus = resolveChannelListStatus(status);
 
           return (
             <Link
@@ -118,26 +123,9 @@ export default function IMChannelsView() {
                 className={isActive ? 'border-[var(--amber)]/35 bg-background' : 'bg-background/80'}
               />
               <span className="min-w-0">
-                <span className="block truncate text-sm font-medium leading-5 text-foreground">{platform.name}</span>
-                <span className={`block truncate text-[11px] leading-4 ${isConnected ? 'text-success' : 'text-muted-foreground'}`}>
-                  {subtitle}
-                </span>
+                <span className="block truncate text-sm font-medium leading-5 text-foreground" title={platform.name}>{platform.name}</span>
               </span>
-              <span
-                className={`
-                  inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-medium leading-4
-                  ${isConnected
-                    ? 'border-[var(--success)]/25 bg-[var(--success)]/10 text-success'
-                    : 'border-border bg-background text-muted-foreground'
-                  }
-                `}
-              >
-                <span
-                  className={`h-1.5 w-1.5 rounded-full ${isConnected ? 'bg-success' : 'bg-muted-foreground/35'}`}
-                  aria-hidden
-                />
-                {isConnected ? im.statusConnected : im.notConfigured}
-              </span>
+              <ChannelStatusIndicator status={channelStatus} labels={statusLabels} className="h-6 w-6" />
             </Link>
           );
         })}

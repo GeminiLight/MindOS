@@ -125,10 +125,11 @@ export default function AgentsLocalClientsSection({
           <button
             type="button"
             onClick={onAddCustomAgent}
-            className="inline-flex min-h-8 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-border px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            aria-label={copy.addCustomClient}
+            title={copy.addCustomClient}
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <Plus size={13} aria-hidden="true" />
-            {copy.addCustomClient}
           </button>
         ) : null}
       </div>
@@ -141,10 +142,11 @@ export default function AgentsLocalClientsSection({
             <button
               type="button"
               onClick={onAddCustomAgent}
-              className="mt-4 inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-border px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              aria-label={copy.addCustomClient}
+              title={copy.addCustomClient}
+              className="mt-4 inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <Plus size={13} aria-hidden="true" />
-              {copy.addCustomClient}
             </button>
           ) : null}
         </div>
@@ -271,9 +273,9 @@ function LocalClientTile({
         <AgentAvatar name={agent.name} />
         <span className="min-w-0">
           <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-            <span className="truncate text-sm font-medium text-foreground">{agent.name}</span>
+            <span className="truncate text-sm font-medium text-foreground" title={agent.name}>{agent.name}</span>
           </span>
-          <span className="mt-1 block truncate text-2xs text-muted-foreground">
+          <span className="mt-1 block truncate text-2xs text-muted-foreground" title={path ?? copy.noMetadata}>
             {path ?? copy.noMetadata}
           </span>
         </span>

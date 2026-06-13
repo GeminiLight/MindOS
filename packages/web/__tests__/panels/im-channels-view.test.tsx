@@ -41,9 +41,10 @@ describe('IMChannelsView', () => {
             connected: true,
             botName: 'MindOS Feishu Bot',
             capabilities: ['text'],
+            webhook: { state: 'ready', transport: 'long_connection' },
           },
           {
-            platform: 'telegram',
+            platform: 'discord',
             connected: false,
             capabilities: [],
           },
@@ -66,22 +67,29 @@ describe('IMChannelsView', () => {
 
     expect(globalThis.fetch).toHaveBeenCalledWith('/api/im/status');
     expect(host.textContent).toContain('CHANNELS');
-    expect(host.textContent).toContain('1 connected');
+    expect(host.textContent).toContain('2/8');
+    expect(host.textContent).not.toContain('2 connected');
     expect(host.textContent).toContain('Feishu');
-    expect(host.textContent).toContain('MindOS Feishu Bot');
-    expect(host.textContent).toContain('Set up');
+    expect(host.textContent).not.toContain('MindOS Feishu Bot');
+    expect(host.textContent).not.toContain('Set up');
+    expect(host.textContent).not.toContain('Receive MindOS notifications');
 
     const links = Array.from(host.querySelectorAll<HTMLAnchorElement>('a'));
     const feishuLink = links.find(link => link.getAttribute('href')?.includes('platform=feishu'));
     expect(feishuLink).not.toBeNull();
     expect(feishuLink?.getAttribute('aria-current')).toBe('page');
     expect(feishuLink?.className).toContain('grid-cols-[auto_minmax(0,1fr)_auto]');
-    expect(feishuLink?.textContent).toContain('Connected');
+    expect(feishuLink?.textContent).not.toContain('Connected');
+    expect(feishuLink?.querySelector('[aria-label="Running"]')).toBeTruthy();
 
     const telegramLink = links.find(link => link.getAttribute('href')?.includes('platform=telegram'));
     expect(telegramLink).not.toBeNull();
     expect(telegramLink?.getAttribute('aria-current')).toBeNull();
-    expect(telegramLink?.textContent).toContain('Set up');
-    expect(telegramLink?.textContent).toContain('Receive MindOS notifications');
+    expect(telegramLink?.textContent).not.toContain('Set up');
+    expect(telegramLink?.textContent).not.toContain('Receive MindOS notifications');
+    expect(telegramLink?.querySelector('[aria-label="Not configured"]')).toBeTruthy();
+
+    const discordLink = links.find(link => link.getAttribute('href')?.includes('platform=discord'));
+    expect(discordLink?.querySelector('[aria-label="Needs attention"]')).toBeTruthy();
   });
 });

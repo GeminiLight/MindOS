@@ -109,7 +109,7 @@ export default function AgentsOverviewSection({
     },
     {
       index: '03',
-      href: '/agents?tab=capabilities',
+      href: '/agents?tab=skills',
       icon: <Server size={15} />,
       hue: 'capability',
       label: copy.capabilitiesLabel,
@@ -166,7 +166,7 @@ function buildNextActions({
       id: 'mcp-stopped',
       title: copy.actionMcpStoppedTitle,
       hint: copy.actionMcpStoppedHint,
-      href: '/agents?tab=capabilities',
+      href: '/agents?tab=mcp',
       tone: 'warn',
       label: copy.actionOpen,
     });
@@ -188,7 +188,7 @@ function buildNextActions({
       id: 'skills-disabled',
       title: copy.actionSkillsDisabledTitle,
       hint: copy.actionSkillsDisabledHint,
-      href: '/agents?tab=capabilities',
+      href: '/agents?tab=skills',
       tone: 'neutral',
       label: copy.actionOpen,
     });

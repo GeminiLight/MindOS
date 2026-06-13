@@ -49,7 +49,7 @@ export default function AgentsPanelAgentListRow({
         className="flex flex-1 min-w-0 items-center gap-2.5 text-left rounded-xl pl-2.5 pr-2 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <AgentAvatar name={agent.name} status={agentStatus} size="sm" />
-        <span className="text-sm font-medium text-foreground truncate leading-tight">{agent.name}</span>
+        <span className="text-sm font-medium text-foreground truncate leading-tight" title={agent.name}>{agent.name}</span>
         {isA2aReady && (
           <span title={a2aTooltip} className="shrink-0 text-muted-foreground/70">
             <Globe size={12} />

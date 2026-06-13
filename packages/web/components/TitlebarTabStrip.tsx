@@ -21,8 +21,8 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronDown, FileText, Loader2, MessageSquare, Plus, X } from 'lucide-react';
-import { closeTab, type WorkspaceTab } from '@/lib/workspace-tabs';
+import { ChevronDown, FileText, Loader2, MessageSquare, Pin, Plus, X } from 'lucide-react';
+import { closeTab, keepTab, type WorkspaceTab } from '@/lib/workspace-tabs';
 import { tabHref, useWorkspaceTabSync } from '@/hooks/useWorkspaceTabSync';
 import { useLocale } from '@/lib/stores/locale-store';
 
@@ -147,8 +147,13 @@ export default function TitlebarTabStrip() {
   // (indicators keep full opacity — a background run must stay noticeable).
   const dimmed = activeTabId === null;
 
-  const renderTab = (tab: WorkspaceTab) => {
+  const renderTab = (tab: WorkspaceTab, index: number) => {
     const isActive = tab.id === activeTabId;
+    const isPreview = tab.kind === 'doc' && tab.pinned === false;
+    const previousTab = index > 0 ? visibleTabs[index - 1] : null;
+    const showLeadingSeparator = Boolean(
+      previousTab && previousTab.id !== activeTabId && tab.id !== activeTabId,
+    );
     return (
       <div
         key={tab.id}
@@ -156,8 +161,13 @@ export default function TitlebarTabStrip() {
         aria-selected={isActive}
         tabIndex={0}
         title={tab.title}
+        data-titlebar-tab-preview={isPreview ? 'true' : undefined}
+        data-titlebar-tab-separator={showLeadingSeparator ? 'true' : undefined}
         style={NO_DRAG}
         onClick={() => navigate(tab)}
+        onDoubleClick={() => {
+          if (isPreview) keepTab(tab.id);
+        }}
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault();
@@ -174,7 +184,11 @@ export default function TitlebarTabStrip() {
             handleClose(tab);
           }
         }}
-        className={`group flex h-[34px] min-w-[96px] max-w-[180px] shrink cursor-pointer select-none items-center gap-1.5 self-end rounded-t-lg border-x border-t px-2.5 text-xs transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${
+        className={`group relative flex h-[34px] min-w-[96px] max-w-[180px] shrink cursor-pointer select-none items-center gap-1.5 self-end rounded-t-lg border-x border-t px-2.5 text-xs transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${
+          showLeadingSeparator
+            ? "before:pointer-events-none before:absolute before:-left-0.5 before:top-1/2 before:h-4 before:w-px before:-translate-y-1/2 before:rounded-full before:bg-border/60 before:content-['']"
+            : ''
+        } ${
           isActive
             ? 'border-border bg-card text-foreground'
             : 'border-transparent text-muted-foreground hover:bg-muted/50 hover:text-foreground'
@@ -184,9 +198,24 @@ export default function TitlebarTabStrip() {
           {tab.kind === 'doc'
             ? <FileText size={13} aria-hidden="true" className="shrink-0" />
             : <MessageSquare size={13} aria-hidden="true" className="shrink-0" />}
-          <span className="truncate">{tab.title}</span>
+          <span className={`truncate ${isPreview ? 'italic' : ''}`}>{tab.title}</span>
         </span>
         <TabIndicator tab={tab} running={running} unread={unread} />
+        {isPreview && (
+          <button
+            type="button"
+            aria-label={t.workspaceTabs.keepTab}
+            title={t.workspaceTabs.keepTab}
+            style={NO_DRAG}
+            onClick={(e) => {
+              e.stopPropagation();
+              keepTab(tab.id);
+            }}
+            className="shrink-0 rounded p-0.5 text-muted-foreground/70 transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <Pin size={12} aria-hidden="true" />
+          </button>
+        )}
         <button
           type="button"
           aria-label={t.workspaceTabs.closeTab}
@@ -261,6 +290,7 @@ export default function TitlebarTabStrip() {
               <button
                 type="button"
                 title={tab.title}
+                data-titlebar-tab-preview={tab.pinned === false ? 'true' : undefined}
                 onClick={() => {
                   setMenuOpen(false);
                   navigate(tab);
@@ -270,9 +300,20 @@ export default function TitlebarTabStrip() {
                 {tab.kind === 'doc'
                   ? <FileText size={13} aria-hidden="true" className="shrink-0 text-muted-foreground" />
                   : <MessageSquare size={13} aria-hidden="true" className="shrink-0 text-muted-foreground" />}
-                <span className="truncate">{tab.title}</span>
+                <span className={`truncate ${tab.pinned === false ? 'italic' : ''}`}>{tab.title}</span>
                 <TabIndicator tab={tab} running={running} unread={unread} />
               </button>
+              {tab.kind === 'doc' && tab.pinned === false && (
+                <button
+                  type="button"
+                  aria-label={t.workspaceTabs.keepTab}
+                  title={t.workspaceTabs.keepTab}
+                  onClick={() => keepTab(tab.id)}
+                  className="shrink-0 rounded p-1 text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <Pin size={12} aria-hidden="true" />
+                </button>
+              )}
               <button
                 type="button"
                 aria-label={t.workspaceTabs.closeTab}
