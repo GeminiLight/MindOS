@@ -8,6 +8,15 @@
 
 - **标签栏微调**：相邻标签之间加入细分隔线（贴近激活标签一侧自动隐藏，由其自身边框分界）；新建（＋）与溢出（⌄N）按钮从整行垂直居中改为对齐标签中线，不再悬浮在标签上方。
 
+### Skill 管理
+
+- **GUI skill 操作真实传导到下游 Agent**：Settings 与 Agents 页的 per-agent 开关现在通过统一矩阵读写真实 skill 链接，支持 link / unlink / disable-native / enable-native，不再只更新 UI 状态或旧记账字段。
+- **统一 skill × agent 事实源**：新增 `GET /api/skills/matrix`，以各 agent skill 目录中的链接/本体/停放状态作为唯一事实源；Settings、Agents by-skill、Agents by-agent 与 Agent 详情页消费同一数据模型。
+- **跨平台链接与安全卸载**：创建链接时按 symlink → Windows junction → 标记副本 fallback；卸载只删除托管链接或 `.mindos-managed` 副本，拒删用户手放的真实目录。
+- **Agent 自有技能可停用且可恢复**：agent 自有 skill 支持移入 `.mindos-disabled` 暂存并从矩阵恢复，避免“停用即消失”或误删 agent 原生文件。
+- **MCP 安装去副作用**：`/api/mcp/install` 不再隐式拷贝 skill 或写入旧 `installedSkillAgents` 记账，安装成功后的 skill 绑定统一走矩阵接口。
+- **stdio MCP packaged runtime 修复**：打包运行时缺少协议构建脚本时不再强制 rebuild；构建提示改走 stderr，避免污染 JSON-RPC stdout。
+
 ## v1.1.8 (2026-06-12)
 
 ### 修复

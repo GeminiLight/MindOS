@@ -15,7 +15,7 @@ import { readSettings, writeSettings } from '@/lib/settings';
 import { handleRouteErrorSimple } from '@/lib/errors';
 import { getProjectRoot } from '@/lib/project-root';
 import { toNextResponse } from '../_mindos-adapter';
-import { expandHome, MCP_AGENTS, resolveSkillWorkspaceProfile } from '@/lib/mcp-agents';
+import { expandHome, listSkillLinkAgents, MCP_AGENTS, resolveSkillWorkspaceProfile } from '@/lib/mcp-agents';
 import { loadCustomAgents } from '@/lib/custom-agents';
 
 const PROJECT_ROOT = getProjectRoot();
@@ -60,6 +60,7 @@ export async function POST(req: NextRequest) {
       trustedNativeSkillRoots: getTrustedNativeSkillRoots(),
       readSettings: () => readSettings() as unknown as MindosSkillsSettings,
       writeSettings: (nextSettings) => writeSettings(nextSettings as unknown as ReturnType<typeof readSettings>),
+      listLinkAgents: listSkillLinkAgents,
     }));
   } catch (err) {
     return handleRouteErrorSimple(err);

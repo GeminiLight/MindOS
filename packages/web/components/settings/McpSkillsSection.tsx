@@ -10,7 +10,7 @@ import { apiFetch } from '@/lib/api';
 import { useMcpDataOptional } from '@/lib/stores/mcp-store';
 import { ConfirmDialog } from '@/components/agents/AgentsPrimitives';
 import { copyToClipboard } from '@/lib/clipboard';
-import type { SkillInfo, McpSkillsSectionProps, SettingsMcpMessages } from './types';
+import type { SkillInfo, SkillMatrix, McpSkillsSectionProps, SettingsMcpMessages } from './types';
 import SkillRow from './McpSkillRow';
 import SkillCreateForm from './McpSkillCreateForm';
 import CustomSelect from '@/components/CustomSelect';
@@ -39,6 +39,8 @@ export default function SkillsSection({ t }: McpSkillsSectionProps) {
   const [loadErrors, setLoadErrors] = useState<Record<string, string>>({});
   const [switchingLang, setSwitchingLang] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [matrix, setMatrix] = useState<SkillMatrix | null>(null);
+  const [linkingCell, setLinkingCell] = useState<string | null>(null);
 
   const fetchSkills = useCallback(async () => {
     try {
@@ -53,7 +55,18 @@ export default function SkillsSection({ t }: McpSkillsSectionProps) {
     setLoading(false);
   }, []);
 
+  const refreshMatrix = useCallback(async () => {
+    try {
+      const data = await apiFetch<SkillMatrix>('/api/skills/matrix', { cache: 'no-store' });
+      setMatrix(data);
+    } catch (err) {
+      console.error('refreshMatrix error:', err instanceof Error ? err.message : err);
+    }
+  }, []);
+
+  // Skills list and skill×agent matrix load in parallel (independent fetches).
   useEffect(() => { fetchSkills(); }, [fetchSkills]);
+  useEffect(() => { refreshMatrix(); }, [refreshMatrix]);
 
   // Filtered + grouped
   const filtered = useMemo(() => {
@@ -90,6 +103,32 @@ export default function SkillsSection({ t }: McpSkillsSectionProps) {
       const msg = err instanceof Error ? err.message : 'Failed to toggle skill';
       console.error('handleToggle error:', msg);
       setLoadErrors(prev => ({ ...prev, [name]: msg }));
+    }
+  };
+
+  /** Apply a per-agent cell action (link/unlink/disable/enable) — the matrix is the single source of truth. */
+  const handleAgentLink = async (name: string, agentKey: string, action: 'link' | 'unlink' | 'disable-native' | 'enable-native') => {
+    setLinkingCell(`${name}:${agentKey}`);
+    try {
+      await apiFetch('/api/skills', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, name, agentKey }),
+      });
+      setLoadErrors(prev => { const next = { ...prev }; delete next[name]; return next; });
+      await refreshMatrix();
+      const agent = matrix?.agents.find(a => a.key === agentKey);
+      if (agent?.mode === 'additional') {
+        toast.success(m?.skillLinkRestartHint
+          ? m.skillLinkRestartHint(agent.name)
+          : `Takes effect the next time ${agent.name} starts`);
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : (m?.skillLinkFailed ?? 'Failed to update skill link');
+      console.error('handleAgentLink error:', msg);
+      setLoadErrors(prev => ({ ...prev, [name]: msg }));
+    } finally {
+      setLinkingCell(null);
     }
   };
 
@@ -304,6 +343,9 @@ export default function SkillsSection({ t }: McpSkillsSectionProps) {
                 fullContent={fullContent}
                 loadingContent={loadingContent}
                 loadErrors={loadErrors}
+                matrix={matrix}
+                linkingCell={linkingCell}
+                onAgentLink={handleAgentLink}
                 m={m}
               />
             ))}
@@ -342,6 +384,9 @@ export default function SkillsSection({ t }: McpSkillsSectionProps) {
                   fullContent={fullContent}
                   loadingContent={loadingContent}
                   loadErrors={loadErrors}
+                  matrix={matrix}
+                  linkingCell={linkingCell}
+                  onAgentLink={handleAgentLink}
                   m={m}
                 />
               ))}

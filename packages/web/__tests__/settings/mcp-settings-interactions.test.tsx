@@ -95,6 +95,9 @@ describe('MCP settings interactions', () => {
       if (url === '/api/mcp/install') {
         return { results: [{ agent: 'cursor', status: 'ok' }] };
       }
+      if (url === '/api/skills') {
+        return { ok: true, result: 'linked' };
+      }
       throw new Error(`Unexpected apiFetch call: ${url}`);
     });
     const agents: AgentInfo[] = [{
@@ -159,6 +162,7 @@ describe('MCP settings interactions', () => {
       installButton?.click();
       await Promise.resolve();
       await Promise.resolve();
+      await Promise.resolve();
     });
 
     expect(mockApiFetch).toHaveBeenCalledWith('/api/mcp/token/reveal', { method: 'POST' });
@@ -169,6 +173,141 @@ describe('MCP settings interactions', () => {
       url: 'http://localhost:8567/mcp',
       token: 'full-token',
     });
+
+    // After a successful MCP install the active skill is linked to the agent.
+    const linkCall = mockApiFetch.mock.calls.find(([url]) => url === '/api/skills');
+    expect(JSON.parse((linkCall?.[1] as RequestInit).body as string)).toEqual({
+      action: 'link',
+      name: 'mindos',
+      agentKey: 'cursor',
+    });
+    expect(host.textContent).toContain('Skill linked');
+
+    await act(async () => {
+      root.unmount();
+    });
+    host.remove();
+  });
+
+  it('links the active skill to every ok agent after install, skipping unsupported-mode agents', async () => {
+    const { default: AgentInstall } = await import('@/components/settings/McpAgentInstall');
+    mockApiFetch.mockImplementation(async (url: string) => {
+      if (url === '/api/mcp/install') {
+        return {
+          results: [
+            { agent: 'claude-code', status: 'ok' },
+            { agent: 'qclaw', status: 'ok' },
+          ],
+        };
+      }
+      if (url === '/api/skills') return { ok: true, result: 'linked' };
+      throw new Error(`Unexpected apiFetch call: ${url}`);
+    });
+    const base = {
+      present: true,
+      installed: false,
+      hasProjectScope: false,
+      hasGlobalScope: true,
+      preferredTransport: 'stdio' as const,
+      format: 'json' as const,
+      configKey: 'mcpServers',
+    };
+    const agents: AgentInfo[] = [
+      { ...base, key: 'claude-code', name: 'Claude Code', globalPath: '/tmp/claude.json' },
+      { ...base, key: 'qclaw', name: 'QClaw', globalPath: '/tmp/qclaw.json' },
+    ];
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(
+        <AgentInstall agents={agents} t={messages.en} onRefresh={() => undefined} mode="mcp" activeSkillName="mindos" />,
+      );
+    });
+
+    for (const checkbox of Array.from(host.querySelectorAll('input[type="checkbox"]'))) {
+      await act(async () => {
+        (checkbox as HTMLInputElement).click();
+      });
+    }
+
+    const installButton = Array.from(host.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('Install Selected')) as HTMLButtonElement | undefined;
+    await act(async () => {
+      installButton?.click();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const linkBodies = mockApiFetch.mock.calls
+      .filter(([url]) => url === '/api/skills')
+      .map(([, opts]) => JSON.parse((opts as RequestInit).body as string));
+    // claude-code (additional) gets linked; qclaw (unsupported) is skipped.
+    expect(linkBodies).toEqual([{ action: 'link', name: 'mindos', agentKey: 'claude-code' }]);
+    expect(host.textContent).toContain('Skill linked');
+    expect(host.textContent).toContain('Takes effect the next time Claude Code starts');
+
+    await act(async () => {
+      root.unmount();
+    });
+    host.remove();
+  });
+
+  it('reports a skill link failure per agent without rolling back the MCP install', async () => {
+    const { default: AgentInstall } = await import('@/components/settings/McpAgentInstall');
+    mockApiFetch.mockImplementation(async (url: string) => {
+      if (url === '/api/mcp/install') {
+        return { results: [{ agent: 'cursor', status: 'ok' }] };
+      }
+      if (url === '/api/skills') {
+        throw new Error('skill directory occupied');
+      }
+      throw new Error(`Unexpected apiFetch call: ${url}`);
+    });
+    const agents: AgentInfo[] = [{
+      key: 'cursor',
+      name: 'Cursor',
+      present: true,
+      installed: false,
+      hasProjectScope: false,
+      hasGlobalScope: true,
+      preferredTransport: 'stdio',
+      format: 'json',
+      configKey: 'mcpServers',
+      globalPath: '/tmp/cursor.json',
+    }];
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(
+        <AgentInstall agents={agents} t={messages.en} onRefresh={() => undefined} mode="mcp" activeSkillName="mindos" />,
+      );
+    });
+
+    const checkbox = host.querySelector('input[type="checkbox"]') as HTMLInputElement | null;
+    await act(async () => {
+      checkbox?.click();
+    });
+
+    const installButton = Array.from(host.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('Install Selected')) as HTMLButtonElement | undefined;
+    await act(async () => {
+      installButton?.click();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    // The MCP install itself happened and is not retried/rolled back…
+    expect(mockApiFetch.mock.calls.filter(([url]) => url === '/api/mcp/install').length).toBe(1);
+    // …while the link failure is surfaced per agent.
+    expect(host.textContent).toContain('cursor: skill directory occupied');
 
     await act(async () => {
       root.unmount();

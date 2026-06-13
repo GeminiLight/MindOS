@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import { errorResponse, json, type MindosServerResponse } from '../response.js';
 
 export type MindosMcpAgentDef = {
@@ -64,12 +64,6 @@ export type MindosMcpInstallServices = {
   requireAgentPresence?: boolean;
   detectAgentPresence?: (agent: string) => boolean;
   readSettings?: () => { mcpPort?: number; disabledSkills?: string[] };
-  recordSkillInstall?: (agent: string, skill: string, path: string) => void;
-  resolveSkillWorkspaceProfile?: (agent: string) => MindosSkillWorkspaceProfile;
-  skillAgentRegistry?: Record<string, MindosSkillAgentRegistration>;
-  copyDirectory?: (sourcePath: string, targetPath: string) => Promise<void>;
-  directoryExists?: (path: string) => boolean;
-  projectRoot?: string;
   fetcher?: typeof fetch;
 };
 
@@ -447,7 +441,6 @@ export async function handleMcpInstallPost(
         }
 
         const result: MindosMcpInstallResult = { agent: key, status: 'ok', path: configPath, transport: effectiveTransport };
-        await recordInstallSideEffects(key, services);
 
         if (effectiveTransport === 'http') {
           const verification = await verifyHttpConnection(String(entry.url), body.token, services.fetcher);
@@ -464,34 +457,6 @@ export async function handleMcpInstallPost(
     return json({ results });
   } catch (error) {
     return errorResponse(error);
-  }
-}
-
-async function recordInstallSideEffects(agentKey: string, services: MindosMcpInstallServices): Promise<void> {
-  if (!services.resolveSkillWorkspaceProfile) return;
-  try {
-    const skillProfile = services.resolveSkillWorkspaceProfile(agentKey);
-    const settings = services.readSettings?.() ?? {};
-    const activeSkill = settings.disabledSkills?.includes('mindos') ? 'mindos-zh' : 'mindos';
-    const skillPath = join(skillProfile.workspacePath, activeSkill, 'SKILL.md');
-    services.recordSkillInstall?.(agentKey, activeSkill, skillPath);
-
-    const registration = services.skillAgentRegistry?.[agentKey];
-    if (registration && (registration.mode === 'additional' || registration.mode === 'unsupported')) {
-      mkdirSync(skillProfile.workspacePath, { recursive: true });
-    }
-
-    if (registration?.mode !== 'unsupported' || !services.projectRoot || !services.copyDirectory) return;
-    const candidates = [
-      join(services.projectRoot, 'skills', activeSkill),
-      join(services.projectRoot, 'packages', 'web', 'data', 'skills', activeSkill),
-    ];
-    const directoryExists = services.directoryExists ?? existsSync;
-    const skillSource = candidates.find((candidate) => directoryExists(candidate));
-    const targetDir = join(skillProfile.workspacePath, activeSkill);
-    if (skillSource && !directoryExists(targetDir)) await services.copyDirectory(skillSource, targetDir);
-  } catch {
-    // Best effort side-effect; MCP install itself must not fail because skill tracking failed.
   }
 }
 

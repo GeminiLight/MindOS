@@ -251,6 +251,12 @@ describe('MindOS server contract: core, files, HTTP', () => {
       auth: 'required',
     });
     expect(contract.routes).toContainEqual({
+      id: 'skills.matrix',
+      method: 'GET',
+      path: '/api/skills/matrix',
+      auth: 'required',
+    });
+    expect(contract.routes).toContainEqual({
       id: 'skills.action',
       method: 'POST',
       path: '/api/skills',
@@ -1195,6 +1201,68 @@ Write a concise signal brief.
         }),
       })).json()).toMatchObject({ name: 'brief.docx', extracted: true, text: 'Word text' });
       expect((await fetch(`${base}/missing`)).status).toBe(404);
+    } finally {
+      await new Promise<void>((resolve, reject) => app.server.close((error) => error ? reject(error) : resolve()));
+    }
+  });
+
+  it('serves the unified skill matrix with MindOS as the self column over HTTP', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'mindos-http-skill-matrix-'));
+    const app = createMindosHttpServer({
+      hostname: '127.0.0.1',
+      port: 0,
+      services: createDefaultMindosHttpServices({
+        homeDir: root,
+        readSettings: () => ({ mindRoot: root }),
+      }),
+    });
+    await new Promise<void>((resolve) => app.server.listen(0, '127.0.0.1', resolve));
+    const address = app.server.address();
+    if (!address || typeof address === 'string') throw new Error('expected TCP server address');
+    const base = `http://127.0.0.1:${address.port}`;
+    try {
+      const response = await fetch(`${base}/api/skills/matrix`);
+      expect(response.status).toBe(200);
+      const matrix = await response.json() as {
+        skills: unknown[];
+        agents: Array<{ key: string; name: string; mode: string }>;
+        state: Record<string, Record<string, boolean>>;
+        cells: Record<string, Record<string, { enabled: boolean; status: string }>>;
+      };
+      expect(Array.isArray(matrix.skills)).toBe(true);
+      expect(matrix.agents[0]).toMatchObject({ key: 'mindos', mode: 'self' });
+      expect(matrix.state).toEqual(expect.any(Object));
+      expect(matrix.cells).toEqual(expect.any(Object));
+    } finally {
+      await new Promise<void>((resolve, reject) => app.server.close((error) => error ? reject(error) : resolve()));
+    }
+  });
+
+  it('migrates legacy copy-install records and clears the ledger on first skill matrix read', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'mindos-http-matrix-migrate-home-'));
+    const root = mkdtempSync(join(tmpdir(), 'mindos-http-matrix-migrate-root-'));
+    const configDir = join(home, '.mindos');
+    mkdirSync(configDir, { recursive: true });
+    writeFileSync(join(configDir, 'config.json'), JSON.stringify({
+      mindRoot: root,
+      installedSkillAgents: [{ agent: 'ghost-agent', skill: 'ghost-skill', path: join(home, 'ghost') }],
+    }), 'utf-8');
+
+    const app = createMindosHttpServer({
+      hostname: '127.0.0.1',
+      port: 0,
+      runtime: { homeDir: home },
+    });
+    await new Promise<void>((resolve) => app.server.listen(0, '127.0.0.1', resolve));
+    const address = app.server.address();
+    if (!address || typeof address === 'string') throw new Error('expected TCP server address');
+    const base = `http://127.0.0.1:${address.port}`;
+    try {
+      const response = await fetch(`${base}/api/skills/matrix`);
+      expect(response.status).toBe(200);
+      const saved = JSON.parse(readFileSync(join(configDir, 'config.json'), 'utf-8'));
+      expect(saved.installedSkillAgents).toEqual([]);
+      expect(saved.mindRoot).toBe(root);
     } finally {
       await new Promise<void>((resolve, reject) => app.server.close((error) => error ? reject(error) : resolve()));
     }

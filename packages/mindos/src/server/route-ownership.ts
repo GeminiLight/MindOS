@@ -149,6 +149,7 @@ export const MINDOS_WEB_API_ROUTE_OWNERSHIP: MindosWebApiRouteOwnership[] = [
   migrated('/api/setup/ls', 'medium'),
   migrated('/api/setup', 'high'),
   migrated('/api/skills', 'high'),
+  migrated('/api/skills/matrix', 'high'),
   migrated('/api/space-overview'),
   migrated('/api/sync', 'high'),
   migrated('/api/tree-version'),

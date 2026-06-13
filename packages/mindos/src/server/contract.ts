@@ -109,6 +109,7 @@ export const MINDOS_SERVER_ROUTES: MindosServerRouteContract[] = [
   { id: 'mcp.restart', method: 'POST', path: '/api/mcp/restart', auth: 'required' },
   { id: 'mcp.uninstall', method: 'POST', path: '/api/mcp/uninstall', auth: 'required' },
   { id: 'skills', method: 'GET', path: '/api/skills', auth: 'required' },
+  { id: 'skills.matrix', method: 'GET', path: '/api/skills/matrix', auth: 'required' },
   { id: 'skills.action', method: 'POST', path: '/api/skills', auth: 'required' },
   { id: 'changes', method: 'GET', path: '/api/changes', auth: 'required' },
   { id: 'changes.mark-seen', method: 'POST', path: '/api/changes', auth: 'required' },

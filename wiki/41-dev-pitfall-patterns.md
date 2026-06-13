@@ -204,5 +204,58 @@ done
 | `cp` 和 `cp -P` 行为不同 | 同步 workflow 里 symlink 必须用 `cp -P` |
 | 文件名是约定不是标准 | AGENTS.md 是通用名，各 Agent 通过各自的 symlink/config 指向它 |
 
+## dev server 运行期间不要重建 workspace 包的 dist
+
+### 问题
+
+`packages/web` 通过 exports map 消费 `@geminilight/mindos` 的 `dist/`。在 `next dev`（webpack watch）运行期间执行 `pnpm --filter @geminilight/mindos build` 重建 dist，webpack 会在「目录被清空/半写入」的瞬间解析模块，把 `Attempted import error: 'X' is not exported from ...` 烙进编译缓存——此后即使 dist 已完整，页面渲染依旧崩（layout 链上 import 为 undefined）、客户端导航全部 `Failed to fetch`、且反复全量重编译导致整站卡顿。事后用 `node -e "import('@geminilight/mindos/foundation')"` 验证 dist 明明是好的，极具迷惑性。
+
+### 规则 10：重建被 dev server 消费的包之前，先停 dev server
+
+```bash
+# ✅ 正确顺序
+tmux send-keys -t <dev-session> C-c
+pnpm --filter @geminilight/mindos build
+rm -rf packages/web/.next        # 若 dev server 曾撞上半成品 dist，必须清缓存
+<重新启动 dev server>
+```
+
+### 教训
+
+| 教训 | 行动 |
+|------|------|
+| webpack 缓存会保留「半成品 dist」时刻的解析结果 | 撞上后仅重启不够，要 `rm -rf .next` |
+| 报错指向 re-export 文件（如 `lib/core/security.ts`）而非真凶 | 看到 `is not exported from` 先查上游包 dist 的构建时间线 |
+| fresh worktree 没有 dist | 起 dev 前先 `pnpm --filter @geminilight/mindos build` |
+
+## tmux kill-session 不保证进程死透：重启后必须核对进程启动时间
+
+### 问题
+
+`tmux kill-session` 杀掉的是 tmux 会话，不保证会话里 spawn 的整棵进程树都退出——脱离了会话的子进程（如 MCP server）会残留并继续占着端口。随后「重启」起的新进程绑定端口时 `EADDRINUSE`，但若启动脚本不把这个错误抛到显眼处，新进程就**暗死**（或只有部分服务起来），旧进程顶着旧代码继续服务。表象是「明明重启了但改动不生效」，极易误判为代码或缓存问题。本次真实发生：17:00 启动的旧 MCP 进程一直占着 8577 端口，直到 18:03 才被发现——期间所有 MCP 请求都打在旧代码上。
+
+### 规则 11：重启服务后，核对每个进程的启动时间晚于构建时间
+
+```bash
+# 1. 找出所有相关端口的监听进程（一个都不能漏）
+lsof -nP -iTCP:3456 -iTCP:8577 -sTCP:LISTEN
+
+# 2. 查每个 pid 的启动时间
+ps -o pid,lstart,command -p <pid>
+
+# 3. 与构建产物的修改时间比对（macOS 用 stat -f；Linux 用 stat -c %y）
+stat -f %Sm packages/mindos/dist/index.js
+
+# 任何一个进程的 lstart 早于构建时间 = 旧进程，kill 掉再重启
+```
+
+### 教训
+
+| 教训 | 行动 |
+|------|------|
+| `tmux kill-session` ≠ 进程树死透 | 杀完会话后用 `lsof` 确认端口无残留监听 |
+| `EADDRINUSE` 可能暗死不报错 | 重启后必须验证新进程真的在监听，而不是只看启动日志滚过 |
+| 旧进程可以顶着旧代码服务一小时不被发现（17:00 的 MCP 进程占 8577 到 18:03） | 把「`ps -o lstart` 晚于 `stat -f %Sm`」纳入重启后的固定检查 |
+| 只查主进程不够，旁挂服务（MCP 等）各有自己的进程 | **每个**监听进程逐一核对启动时间，别抽查 |
 
 避免硬编码

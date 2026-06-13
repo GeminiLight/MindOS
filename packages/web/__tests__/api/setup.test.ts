@@ -27,7 +27,6 @@ let tempDir: string;
 vi.mock('@/lib/settings', () => ({
   readSettings: () => ({ ...mockSettings }),
   writeSettings: vi.fn((cfg: Record<string, unknown>) => { writtenConfig = cfg; }),
-  recordSkillInstall: vi.fn(),
   effectiveSopRoot: () => tempDir,
 }));
 

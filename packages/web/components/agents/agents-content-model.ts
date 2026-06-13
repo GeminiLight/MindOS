@@ -75,7 +75,7 @@ export function resolveAgentStatus(agent: AgentInfo): AgentResolvedStatus {
   return 'notFound';
 }
 
-export function capabilityForSkill(skill: SkillInfo): SkillCapability {
+export function capabilityForSkill(skill: Pick<SkillInfo, 'name' | 'description'>): SkillCapability {
   return capabilityFromText(`${skill.name} ${skill.description}`);
 }
 
@@ -324,7 +324,7 @@ export function filterSkillsForAgentDetail(
 
 /* ────────── Unified Skill List (MindOS + Native) ────────── */
 
-export type SkillAvailability = 'global' | 'linked' | 'native-private';
+export type SkillAvailability = 'global' | 'linked' | 'unlinked' | 'native-private';
 
 export interface UnifiedSkillItem {
   name: string;
@@ -366,7 +366,7 @@ export function buildUnifiedSkillList(
       kind: 'mindos',
       mindosSkill: skill,
       agents,
-      availability: resolveMindosSkillAvailability(agents),
+      availability: resolveMindosSkillAvailability(skill, agents),
       sourcePath: skill.path,
       capability: capabilityForSkill(skill),
       enabled: skill.enabled,
@@ -393,10 +393,14 @@ export function buildUnifiedSkillList(
   return result;
 }
 
-function resolveMindosSkillAvailability(agentNames: string[]): SkillAvailability {
-  if (agentNames.length === 0) return 'global';
-  if (agentNames.includes('MindOS') || agentNames.length > 1) return 'global';
-  return 'linked';
+function resolveMindosSkillAvailability(skill: SkillInfo, agentNames: string[]): SkillAvailability {
+  // Where the body lives decides the baseline:
+  //   ~/.agents/skills → the universal shared pool, visible to every universal agent
+  //   custom paths (an agent's own dir, e.g. ~/.codex/skills) → that agent's private skill
+  if (skill.origin === 'agents-global') return 'global';
+  if (skill.origin === 'custom') return 'native-private';
+  // MindOS-managed bodies: linked when at least one downstream agent has it.
+  return agentNames.length > 0 ? 'linked' : 'unlinked';
 }
 
 export function groupUnifiedSkills(skills: UnifiedSkillItem[]): Record<SkillCapability, UnifiedSkillItem[]> {

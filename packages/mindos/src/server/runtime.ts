@@ -164,12 +164,16 @@ export function getSkillRootsFromRuntime(options: {
     },
   ];
 
+  // ~/.agents/skills and custom paths point at directories owned by external
+  // agents (or the npx skills ecosystem). MindOS lists them read-only — they are
+  // managed by their own agent, like builtins (edit/delete only works for the
+  // MindOS-managed roots above anyway).
   if (settings.skillPaths?.enableAgentsDir !== false) {
     roots.push({
       path: join(home, '.agents', 'skills'),
-      source: 'user',
+      source: 'builtin',
       origin: 'agents-global',
-      editable: true,
+      editable: false,
     });
   }
 
@@ -180,9 +184,9 @@ export function getSkillRootsFromRuntime(options: {
     if (!trimmed) continue;
     roots.push({
       path: trimmed,
-      source: 'user',
+      source: 'builtin',
       origin: 'custom',
-      editable: true,
+      editable: false,
     });
   }
 

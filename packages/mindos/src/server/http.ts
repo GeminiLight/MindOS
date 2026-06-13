@@ -81,8 +81,10 @@ import {
 } from './handlers/mcp-install.js';
 import {
   handleMcpAgentsGet,
+  resolveSkillLinkAgents,
   type MindosMcpAgentRegistryDef,
 } from './handlers/mcp-agents.js';
+import { migrateInstalledSkillAgents, type MindosSkillLinkAgent } from './handlers/skill-links.js';
 import {
   handleMcpDirectToolsPost,
   handleMcpToolsGet,
@@ -126,7 +128,7 @@ import { handleSetupCheckPort } from './handlers/setup-port.js';
 import { handleSetupGenerateToken } from './handlers/setup-token.js';
 import { handleSetupCheckPath, handleSetupListDirectories } from './handlers/setup-path.js';
 import { handleSetupGet, handleSetupPatch, handleSetupPost } from './handlers/setup.js';
-import { handleSkillsGet, handleSkillsPost, type MindosSkillRoot } from './handlers/skills.js';
+import { handleSkillMatrixGet, handleSkillsGet, handleSkillsPost, type MindosSkillRoot } from './handlers/skills.js';
 import { handleSpaceOverviewGet } from './handlers/space-overview.js';
 import { handleStaticArtifact } from './handlers/static.js';
 import { handleSyncGet, handleSyncPost } from './handlers/sync.js';
@@ -626,6 +628,13 @@ async function handleRequest(
       writeResponse(res, handleSkillsGet(services.listSkills()));
       return;
     }
+    if (route === 'GET /api/skills/matrix') {
+      const listLinkAgents = createHttpSkillLinkAgents(services);
+      migrateLegacySkillInstallRecords(services, listLinkAgents);
+      const { disabledSkills, skillRoots } = services.listSkills();
+      writeResponse(res, handleSkillMatrixGet({ disabledSkills, skillRoots, listLinkAgents }));
+      return;
+    }
     if (route === 'GET /api/mcp/tools') {
       writeResponse(res, handleMcpToolsGet(services.mcpTools ?? {
         readMcpConfig: () => ({ mcpServers: {} }),
@@ -665,7 +674,6 @@ async function handleRequest(
         agents: services.mcpAgents ?? {},
         readSettings: services.readSettings,
         env: process.env,
-        skillAgentRegistry: createDefaultSkillAgentRegistry(),
       }));
       return;
     }
@@ -695,6 +703,7 @@ async function handleRequest(
         skillRoots: services.listSkills().skillRoots,
         readSettings: services.readSettings,
         writeSettings: services.writeSettings,
+        listLinkAgents: createHttpSkillLinkAgents(services),
       }));
       return;
     }
@@ -1120,6 +1129,39 @@ function maskToken(token: string): string {
   if (!token) return '';
   if (token.length <= 8) return '***set***';
   return `${token.slice(0, 4)}••••••••${token.slice(-4)}`;
+}
+
+/** Downstream agents eligible for skill linking, sourced like GET /api/mcp/agents. */
+function createHttpSkillLinkAgents(services: MindosHttpServices): () => MindosSkillLinkAgent[] {
+  return () => resolveSkillLinkAgents({
+    agents: (services.mcpAgents ?? {}) as Record<string, MindosMcpAgentRegistryDef>,
+    skillAgentRegistry: createDefaultSkillAgentRegistry(),
+  });
+}
+
+/**
+ * One-time migration of legacy `installedSkillAgents` copy installs into
+ * symlinks (spec 4.6). Clears the legacy ledger on success; failures only
+ * warn and never fail the matrix request.
+ */
+function migrateLegacySkillInstallRecords(
+  services: MindosHttpServices,
+  listLinkAgents: () => MindosSkillLinkAgent[],
+): void {
+  try {
+    const settings = services.readSettings();
+    const records = Array.isArray(settings.installedSkillAgents) ? settings.installedSkillAgents : [];
+    if (records.length === 0) return;
+    migrateInstalledSkillAgents({
+      records,
+      skillRoots: services.listSkills().skillRoots,
+      agents: listLinkAgents(),
+      warn: (message) => console.warn(`[mindos] ${message}`),
+    });
+    services.writeSettings({ ...settings, installedSkillAgents: [] });
+  } catch (error) {
+    console.warn(`[mindos] legacy skill install migration failed: ${error instanceof Error ? error.message : String(error)}`);
+  }
 }
 
 function optionsStaticRoot(services: MindosHttpServices, runtimeRoot?: string): string | undefined {

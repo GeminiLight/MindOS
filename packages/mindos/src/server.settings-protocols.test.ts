@@ -292,6 +292,34 @@ describe('MindOS server contract: settings, embedding, protocols', () => {
     expect(roots.filter((root) => root.origin === 'custom').map((root) => root.path)).toEqual(['/home/ada/direct-skill']);
   });
 
+  it('lists agent-owned skill roots (agents-global and custom paths) as read-only builtins managed by their own agent', () => {
+    const roots = getSkillRootsFromRuntime({
+      mindRoot: '/mind',
+      runtimeRoot: '/runtime',
+      homeDir: '/home/ada',
+      settings: {
+        skillPaths: {
+          custom: ['~/.codex/skills'],
+        },
+      },
+    });
+
+    const agentOwned = roots.filter((root) => root.origin === 'agents-global' || root.origin === 'custom');
+    expect(agentOwned.length).toBe(2);
+    for (const root of agentOwned) {
+      expect(root.source).toBe('builtin');
+      expect(root.editable).toBe(false);
+    }
+
+    // MindOS-managed roots stay editable — new skills are created and edited there.
+    const managed = roots.filter((root) => root.origin === 'mindos-user' || root.origin === 'mindos-global');
+    expect(managed.length).toBe(2);
+    for (const root of managed) {
+      expect(root.source).toBe('user');
+      expect(root.editable).toBe(true);
+    }
+  });
+
   it('tests AI provider keys with product-owned validation and error classification', async () => {
     const services = {
       isProviderId: (value: string) => ['anthropic', 'openai', 'google'].includes(value),

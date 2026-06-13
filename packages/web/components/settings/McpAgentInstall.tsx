@@ -87,12 +87,47 @@ export default function AgentInstall({ agents, t, onRefresh, mode = 'mcp', activ
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-      const ok = res.results.filter(r => r.status === 'ok').length;
+      const okResults = res.results.filter(r => r.status === 'ok');
+      const ok = okResults.length;
       const fail = res.results.filter(r => r.status === 'error');
-      if (fail.length > 0) {
-        setMessage({ type: 'error', text: fail.map(f => `${f.agent}: ${f.message}`).join('; ') });
+
+      // Link the active skill to each successfully configured, skill-capable agent.
+      // MCP config install and skill linking are independent steps: a link failure
+      // never rolls back the MCP install.
+      const linkErrors: string[] = [];
+      const restartAgents: string[] = [];
+      let linkedCount = 0;
+      for (const result of okResults) {
+        const registration = SKILL_AGENT_REGISTRY[result.agent];
+        if (registration?.mode === 'unsupported') continue;
+        try {
+          await apiFetch('/api/skills', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'link', name: activeSkillName, agentKey: result.agent }),
+          });
+          linkedCount += 1;
+          if (registration?.mode === 'additional') {
+            restartAgents.push(agents.find(a => a.key === result.agent)?.name ?? result.agent);
+          }
+        } catch (err) {
+          linkErrors.push(`${result.agent}: ${err instanceof Error ? err.message : (m?.skillLinkFailed ?? 'Failed to update skill link')}`);
+        }
+      }
+
+      if (fail.length > 0 || linkErrors.length > 0) {
+        const parts = [...fail.map(f => `${f.agent}: ${f.message}`), ...linkErrors];
+        setMessage({ type: 'error', text: parts.join('; ') });
       } else {
-        setMessage({ type: 'success', text: m?.installSuccess ? m.installSuccess(ok) : `${ok} agent(s) configured` });
+        let text = m?.installSuccess ? m.installSuccess(ok) : `${ok} agent(s) configured`;
+        if (linkedCount > 0) {
+          text += ` · ${m?.skillLinked ?? 'Skill linked'}`;
+          if (restartAgents.length > 0) {
+            const names = restartAgents.join(', ');
+            text += ` · ${m?.skillLinkRestartHint ? m.skillLinkRestartHint(names) : `Takes effect the next time ${names} starts`}`;
+          }
+        }
+        setMessage({ type: 'success', text });
       }
       setSelected(new Set());
       onRefresh();

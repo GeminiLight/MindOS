@@ -34,7 +34,8 @@
 | `/api/ask` | POST | AI 对话（SSE 流式）。Body：`{ messages, sessionId, currentFile, attachedFiles, mode }` |
 | `/api/ask-sessions` | GET/DELETE | 会话历史管理 |
 | `/api/bootstrap` | GET | Agent 上下文引导加载（INSTRUCTION + CONFIG + README） |
-| `/api/skills` | GET/POST | Skills 列表与 CRUD |
+| `/api/skills` | GET/POST | Skills 列表与 CRUD。POST action 全集：`create`/`update`/`delete`/`toggle`/`read`/`read-native`/`record-install`/`link`/`unlink`/`disable-native`/`enable-native`。`link`/`unlink` 把 skill 链接到/移出下游 agent 的 skill 目录（symlink → Windows junction → copy fallback，副本带 `.mindos-managed` 标记）；`disable-native`/`enable-native` 停用/恢复 agent 自有技能——停用不删除，把技能目录整体移入 `{skillDir}/.mindos-disabled/` 暂存，恢复即原样移回 |
+| `/api/skills/matrix` | GET | 统一 (skill × agent) 启用矩阵：`{ skills, agents, state, cells }`，首列恒为 MindOS 自身（`disabledSkills`），外部 agent 列以链接是否存在为唯一事实源，单元格状态含 `linked`/`copied`/`broken`/`conflict`/`native-disabled`（已停放）/`none`；矩阵会并入仅存在于各 agent `.mindos-disabled` 停放区的技能（保证停放后仍可恢复）；universal agent 具备私房目录感知（如 Codex 的 `~/.codex/skills`），本体在私房目录的技能判定为已启用、对其 link 不会向共享池写入链接；首次访问会把遗留 `installedSkillAgents[]` copy 安装迁移为 symlink |
 | `/api/agent-activity` | POST | Agent 活动日志记录 |
 
 ## A2A Protocol (Agent-to-Agent 通信)

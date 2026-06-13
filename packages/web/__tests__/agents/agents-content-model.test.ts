@@ -249,26 +249,26 @@ describe('aggregateCrossAgentSkills', () => {
 });
 
 describe('buildUnifiedSkillList', () => {
-  it('marks MindOS skills as global or linked and native-only skills as private', () => {
+  it('derives availability from where the body lives: shared pool → global, custom path → private, managed → linked/unlinked', () => {
     const result = buildUnifiedSkillList([
-      { name: 'mindos', description: 'MindOS context', path: '/skills/mindos/SKILL.md', source: 'builtin', enabled: true, editable: false },
-      { name: 'taste-skill', description: 'Design taste', path: '/mind/.skills/taste-skill/SKILL.md', source: 'user', enabled: true, editable: true },
+      // Body in the universal shared pool — every universal agent sees it.
+      { name: 'pool-skill', description: 'Shared', path: '/Users/test/.agents/skills/pool-skill/SKILL.md', source: 'builtin', origin: 'agents-global', enabled: true, editable: false },
+      // Body in an agent's own dir registered via a custom path — that agent's private skill.
+      { name: 'codex-own', description: 'Codex private', path: '/Users/test/.codex/skills/codex-own/SKILL.md', source: 'builtin', origin: 'custom', enabled: true, editable: false },
+      // MindOS-managed bodies: linked when at least one downstream agent has it, otherwise MindOS-only.
+      { name: 'taste-skill', description: 'Design taste', path: '/mind/.skills/taste-skill/SKILL.md', source: 'user', origin: 'mindos-user', enabled: true, editable: true },
+      { name: 'drafts-only', description: 'Not linked anywhere', path: '/mind/.skills/drafts-only/SKILL.md', source: 'user', origin: 'mindos-user', enabled: true, editable: true },
     ], [
-      { skillName: 'mindos', agents: ['MindOS', 'Claude Code', 'Codex'], sourcePaths: ['/Users/test/.agents/skills'] },
+      { skillName: 'pool-skill', agents: ['Cursor', 'Codex'], sourcePaths: ['/Users/test/.agents/skills'] },
+      { skillName: 'codex-own', agents: ['Codex'], sourcePaths: ['/Users/test/.codex/skills'] },
       { skillName: 'taste-skill', agents: ['Codex'], sourcePaths: ['/Users/test/.codex/skills'] },
       { skillName: 'native-only', agents: ['Claude Code'], sourcePaths: ['/Users/test/.claude/skills'] },
     ]);
 
-    expect(result.find((skill) => skill.name === 'mindos')).toMatchObject({
-      kind: 'mindos',
-      availability: 'global',
-      agents: ['MindOS', 'Claude Code', 'Codex'],
-    });
-    expect(result.find((skill) => skill.name === 'taste-skill')).toMatchObject({
-      kind: 'mindos',
-      availability: 'linked',
-      agents: ['Codex'],
-    });
+    expect(result.find((skill) => skill.name === 'pool-skill')).toMatchObject({ kind: 'mindos', availability: 'global' });
+    expect(result.find((skill) => skill.name === 'codex-own')).toMatchObject({ kind: 'mindos', availability: 'native-private' });
+    expect(result.find((skill) => skill.name === 'taste-skill')).toMatchObject({ kind: 'mindos', availability: 'linked', agents: ['Codex'] });
+    expect(result.find((skill) => skill.name === 'drafts-only')).toMatchObject({ kind: 'mindos', availability: 'unlinked', agents: [] });
     expect(result.find((skill) => skill.name === 'native-only')).toMatchObject({
       kind: 'native',
       availability: 'native-private',

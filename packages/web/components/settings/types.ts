@@ -150,8 +150,56 @@ export interface SkillInfo {
   description: string;
   path: string;
   source: 'builtin' | 'user';
+  /** Which skill root the body lives in (e.g. 'app-builtin', 'agents-global', 'custom'). */
+  origin?: string;
   enabled: boolean;
   editable: boolean;
+}
+
+/** Roots owned by an external agent (or the npx skills ecosystem) — read-only in MindOS. */
+export function isAgentOwnedSkillOrigin(origin: string | undefined): boolean {
+  return origin === 'agents-global' || origin === 'custom';
+}
+
+/* ── Skill × Agent matrix (mirrors GET /api/skills/matrix) ────── */
+
+/** External agent cells use linked/copied/broken/conflict/native-disabled/none; the MindOS self column uses enabled/disabled. */
+export type SkillMatrixCellStatus =
+  | 'native-disabled'
+  | 'linked'
+  | 'copied'
+  | 'broken'
+  | 'conflict'
+  | 'none'
+  | 'enabled'
+  | 'disabled';
+
+export interface SkillMatrixAgent {
+  key: string;
+  name: string;
+  /** First entry is always { key: 'mindos', mode: 'self' }; the rest are detected skill-capable agents. */
+  mode: 'self' | 'universal' | 'additional';
+  skillDir?: string;
+}
+
+export interface SkillMatrixCell {
+  enabled: boolean;
+  status: SkillMatrixCellStatus;
+}
+
+export interface SkillMatrixSkill {
+  name: string;
+  description: string;
+  source: 'builtin' | 'user';
+  origin: string;
+  path: string;
+}
+
+export interface SkillMatrix {
+  skills: SkillMatrixSkill[];
+  agents: SkillMatrixAgent[];
+  state: Record<string, Record<string, boolean>>;
+  cells: Record<string, Record<string, SkillMatrixCell>>;
 }
 
 export interface SyncStatus {

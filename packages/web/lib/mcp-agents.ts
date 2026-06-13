@@ -2,8 +2,15 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { execFileSync } from 'child_process';
+import {
+  resolveSkillLinkAgents,
+  type MindosMcpAgentRegistryDef,
+  type MindosSkillAgentRegistration,
+  type MindosSkillLinkAgent,
+} from '@geminilight/mindos/server';
 import { SKILL_AGENT_REGISTRY } from './mcp-agent-registry';
 import type { SkillInstallMode as SkillInstallModeType } from './mcp-agent-registry';
+import { loadCustomAgents } from './custom-agents';
 export {
   SKILL_AGENT_REGISTRY,
   type SkillAgentRegistration,
@@ -949,4 +956,41 @@ export function detectAgentPresence(agentKey: string): boolean {
   // 2. Dir check
   if (agent.presenceDirs?.some(d => presencePathHasAgentSignal(expandHome(d), agent))) return true;
   return false;
+}
+
+/* ── Skill Link Agents (skill × agent matrix) ──────────────────────────── */
+
+/**
+ * Downstream agents eligible for skill linking: present on this machine and
+ * skill-capable (universal/additional). Unsupported-mode agents, agents not
+ * detected on this machine, and MindOS itself are excluded. Custom agents are
+ * appended with their configured skill directory (additional mode).
+ */
+export function listSkillLinkAgents(): MindosSkillLinkAgent[] {
+  const linkAgents = resolveSkillLinkAgents({
+    agents: MCP_AGENTS as unknown as Record<string, MindosMcpAgentRegistryDef>,
+    skillAgentRegistry: SKILL_AGENT_REGISTRY as unknown as Record<string, MindosSkillAgentRegistration>,
+    detectAgentPresence,
+    resolveSkillWorkspaceProfile,
+    // Route fs probing through THIS module's fs so behavior is injectable in
+    // tests (the package's own fs import is not affected by web-side spies).
+    pathExists: (p: string) => fs.existsSync(p),
+  });
+
+  const seenKeys = new Set(linkAgents.map((agent) => agent.key));
+  for (const custom of loadCustomAgents()) {
+    if (custom.key === 'mindos' || custom.key in MCP_AGENTS || seenKeys.has(custom.key)) continue;
+    const presenceCandidates = [...(custom.presenceDirs ?? []), custom.baseDir].filter(Boolean);
+    if (!presenceCandidates.some((dir) => fs.existsSync(expandHome(dir)))) continue;
+    seenKeys.add(custom.key);
+    linkAgents.push({
+      key: custom.key,
+      name: custom.name,
+      mode: 'additional',
+      // Same skill-dir resolution as getTrustedNativeSkillRoots in app/api/skills/route.ts.
+      skillDir: expandHome(custom.skillDir || path.join(custom.baseDir, 'skills')),
+    });
+  }
+
+  return linkAgents;
 }

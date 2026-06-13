@@ -5,6 +5,7 @@ import { homedir } from 'os';
 import { dirname, isAbsolute, join, normalize, resolve } from 'path';
 import { errorResponse, json, type MindosServerResponse } from '../response.js';
 import type { MindosMcpAgentDef, MindosSkillAgentRegistration } from './mcp-install.js';
+import type { MindosSkillLinkAgent } from './skill-links.js';
 
 export type MindosMcpAgentRegistryDef = MindosMcpAgentDef & {
   presenceCli?: string;
@@ -224,6 +225,46 @@ export async function handleMcpAgentsGet(
   } catch (error) {
     return errorResponse(error);
   }
+}
+
+/**
+ * Resolve the downstream agents eligible for the skill matrix: present on
+ * this machine, skill-capable (universal/additional — unsupported agents are
+ * excluded), with their absolute skill directory. MindOS itself is excluded;
+ * the matrix prepends it as the self column.
+ */
+export function resolveSkillLinkAgents(
+  services: Pick<
+    MindosMcpAgentsServices,
+    'agents' | 'skillAgentRegistry' | 'homeDir' | 'pathExists' | 'readTextFile' | 'commandExists' | 'detectAgentPresence' | 'resolveSkillWorkspaceProfile'
+  >,
+): MindosSkillLinkAgent[] {
+  const linkAgents: MindosSkillLinkAgent[] = [];
+  for (const [key, agent] of Object.entries(services.agents)) {
+    if (key === 'mindos') continue;
+    const registration = services.skillAgentRegistry?.[key];
+    const mode = registration?.mode ?? 'unsupported';
+    if (mode === 'unsupported') continue;
+    const present = services.detectAgentPresence?.(key)
+      ?? defaultDetectAgentPresence(agent, services as MindosMcpAgentsServices);
+    if (!present) continue;
+    const profile = services.resolveSkillWorkspaceProfile?.(key)
+      ?? defaultSkillWorkspaceProfile(key, agent, services as MindosMcpAgentsServices);
+    if (!profile.workspacePath.trim()) continue;
+    // Universal agents share the pool as workspace, but may also ship skills
+    // in their own home (e.g. Codex's ~/.codex/skills) — track that dir so the
+    // matrix sees natively-owned skills and never shadows them with pool links.
+    let nativeSkillDir: string | undefined;
+    if (mode === 'universal') {
+      const ownDir = join(resolveHiddenRootPath(agent, services as MindosMcpAgentsServices), 'skills');
+      const pathExists = services.pathExists ?? existsSync;
+      // Only meaningful when the directory actually exists — a phantom path
+      // would just add noise to every cell computation.
+      if (resolve(ownDir) !== resolve(profile.workspacePath) && pathExists(ownDir)) nativeSkillDir = ownDir;
+    }
+    linkAgents.push({ key, name: agent.name, mode, skillDir: profile.workspacePath, nativeSkillDir });
+  }
+  return linkAgents;
 }
 
 export function detectCustomAgentConfiguredMcp(

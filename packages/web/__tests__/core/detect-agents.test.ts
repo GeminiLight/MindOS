@@ -3,7 +3,10 @@ import fs from 'fs';
 import { execFileSync, execSync } from 'child_process';
 import { detectAgentPresence, MCP_AGENTS } from '@/lib/mcp-agents';
 
-vi.mock('child_process', () => ({
+// Partial mock: lib/mcp-agents now imports @geminilight/mindos/server, whose
+// module graph needs the real execFile — only the lookup helpers are stubbed.
+vi.mock('child_process', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('child_process')>()),
   execFileSync: vi.fn(),
   execSync: vi.fn(() => { throw new Error('shell command lookup should not be used'); }),
 }));

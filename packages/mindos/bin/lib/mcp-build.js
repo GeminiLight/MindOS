@@ -9,6 +9,9 @@ export const MCP_SRC_DIR = resolve(PACKAGE_ROOT, 'src', 'protocols', 'mcp-server
 export const MCP_BUNDLE = resolve(PACKAGE_ROOT, 'dist', 'protocols', 'mcp-server', 'index.cjs');
 
 const MCP_PACKAGE_JSON = resolve(PACKAGE_ROOT, 'package.json');
+// `npm run build:protocols` executes `node ../../scripts/build-product-protocols.mjs`
+// relative to MCP_DIR — it only exists in a monorepo checkout.
+const MONOREPO_PROTOCOLS_BUILDER = resolve(PACKAGE_ROOT, '..', '..', 'scripts', 'build-product-protocols.mjs');
 
 function safeMtime(filePath) {
   try {
@@ -64,7 +67,20 @@ export function ensureMcpBundle() {
     throw new Error(`MCP bundle not found and source directory missing: ${MCP_SRC_DIR}`);
   }
 
-  console.log(yellow(hadBundle
+  // Packaged runtimes (e.g. the Desktop copy under ~/.mindos/runtime) ship src/
+  // but not the monorepo build script. Rebuilding there is impossible — and a
+  // package.json copied a few ms after the bundle would otherwise trigger a
+  // doomed rebuild on every startup. Trust the shipped bundle instead.
+  if (!existsSync(MONOREPO_PROTOCOLS_BUILDER)) {
+    if (hadBundle) {
+      return;
+    }
+    throw new Error(`MCP bundle not found and protocols builder missing: ${MONOREPO_PROTOCOLS_BUILDER}`);
+  }
+
+  // stderr, never stdout: with MCP_TRANSPORT=stdio any stray stdout line
+  // corrupts the JSON-RPC stream ("invalid character 'R' ..." on the client).
+  console.error(yellow(hadBundle
     ? 'Rebuilding MCP bundle (source changed)...\n'
     : 'Building MCP bundle (first run)...\n'));
   execNpmInherited(['run', 'build:protocols'], MCP_DIR);

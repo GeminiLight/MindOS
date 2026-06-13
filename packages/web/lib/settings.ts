@@ -364,7 +364,7 @@ export function writeSettings(settings: ServerSettings): void {
   fs.writeFileSync(SETTINGS_PATH, JSON.stringify(merged, null, 2) + '\n', 'utf-8');
 }
 
-/* ── Skill install tracking ────────────────────────────────────── */
+/* ── Legacy skill install records (migration only) ─────────────── */
 
 export interface SkillInstallRecord {
   agent: string;
@@ -373,27 +373,33 @@ export interface SkillInstallRecord {
 }
 
 /**
- * Record that a skill was installed to a specific agent path.
- * Stored in config.json → installedSkillAgents[].
- * Idempotent — updates existing entry if agent+skill match.
+ * Read legacy config.json → installedSkillAgents[] copy-install records.
+ * Link existence on disk is the single source of truth for the (skill × agent)
+ * matrix now; these records only feed the one-time symlink migration. Never throws.
  */
-export function recordSkillInstall(agentKey: string, skillName: string, installPath: string): void {
-  let config: Record<string, unknown> = {};
-  try { config = JSON.parse(fs.readFileSync(SETTINGS_PATH, 'utf-8')); } catch { /* fresh */ }
+export function readInstalledSkillAgents(): SkillInstallRecord[] {
+  try {
+    const config = JSON.parse(fs.readFileSync(SETTINGS_PATH, 'utf-8')) as Record<string, unknown>;
+    if (!Array.isArray(config.installedSkillAgents)) return [];
+    return config.installedSkillAgents.filter((item): item is SkillInstallRecord => {
+      if (!item || typeof item !== 'object') return false;
+      const record = item as Record<string, unknown>;
+      return typeof record.agent === 'string' && typeof record.skill === 'string' && typeof record.path === 'string';
+    });
+  } catch {
+    return [];
+  }
+}
 
-  const list: SkillInstallRecord[] = Array.isArray(config.installedSkillAgents)
-    ? (config.installedSkillAgents as SkillInstallRecord[])
-    : [];
-
-  const entry: SkillInstallRecord = { agent: agentKey, skill: skillName, path: installPath };
-  const idx = list.findIndex(e => e.agent === agentKey && e.skill === skillName);
-  if (idx >= 0) list[idx] = entry;
-  else list.push(entry);
-
-  config.installedSkillAgents = list;
-  const dir = path.dirname(SETTINGS_PATH);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(SETTINGS_PATH, JSON.stringify(config, null, 2) + '\n', 'utf-8');
+/** Drop the legacy installedSkillAgents field after migration. Merge-write; never throws. */
+export function clearInstalledSkillAgents(): void {
+  let config: Record<string, unknown>;
+  try { config = JSON.parse(fs.readFileSync(SETTINGS_PATH, 'utf-8')) as Record<string, unknown>; } catch { return; }
+  if (!('installedSkillAgents' in config)) return;
+  delete config.installedSkillAgents;
+  try {
+    fs.writeFileSync(SETTINGS_PATH, JSON.stringify(config, null, 2) + '\n', 'utf-8');
+  } catch { /* best-effort cleanup */ }
 }
 
 /** Effective AI config — unified interface for all providers.

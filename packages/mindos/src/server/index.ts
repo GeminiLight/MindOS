@@ -486,6 +486,8 @@ export {
 } from './handlers/graph.js';
 
 export {
+  collectSkillInfos,
+  handleSkillMatrixGet,
   handleSkillsGet,
   handleSkillsPost,
   type MindosSkillInfo,
@@ -493,12 +495,38 @@ export {
   type MindosSkillRoot,
   type MindosSkillSource,
   type MindosSkillsSettings,
+  type SkillMatrixHandlerServices,
   type SkillsHandlerServices,
   type SkillsPayload,
   type SkillsPostAction,
   type SkillsPostHandlerServices,
   type SkillsPostPayload,
 } from './handlers/skills.js';
+
+export {
+  buildSkillMatrix,
+  disableNativeSkill,
+  enableNativeSkill,
+  getSkillCellStatus,
+  isSkillCellEnabled,
+  linkSkillToAgent,
+  migrateInstalledSkillAgents,
+  MINDOS_DISABLED_DIR,
+  MINDOS_MANAGED_MARKER,
+  MINDOS_SELF_AGENT_KEY,
+  resolveSkillSourceDir,
+  unlinkSkillFromAgent,
+  type MindosSkillCellStatus,
+  type MindosSkillInstallRecord,
+  type MindosSkillLinkAgent,
+  type MindosSkillLinkAgentMode,
+  type MindosSkillLinkDeps,
+  type MindosSkillLinkOutcome,
+  type MindosSkillMatrix,
+  type MindosSkillMatrixAgent,
+  type MindosSkillMatrixCell,
+  type MindosSkillMigrationResult,
+} from './handlers/skill-links.js';
 
 export {
   STATIC_MIME_TYPES,
@@ -599,6 +627,7 @@ export {
   handleMcpAgentsGet,
   parseJsonForServers,
   parseTomlForServers,
+  resolveSkillLinkAgents,
   type MindosCustomMcpAgentDef,
   type MindosMcpAgentConfiguredServers,
   type MindosMcpAgentInstallStatus,
