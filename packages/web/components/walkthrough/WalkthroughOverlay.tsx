@@ -108,7 +108,7 @@ export default function WalkthroughOverlay() {
     <>
       {/* SVG overlay with spotlight hole */}
       <svg
-        className="fixed inset-0 z-app-walkthrough-backdrop pointer-events-auto"
+        className="fixed inset-0 z-[100] pointer-events-auto"
         width="100%"
         height="100%"
         onClick={(e) => {
@@ -165,7 +165,7 @@ export default function WalkthroughOverlay() {
       {/* Fallback dismiss button — shown when target element NOT found.
           Without this, user sees dark overlay but no visible UI to dismiss it. */}
       {!targetRect && (
-        <div className="fixed inset-0 z-app-walkthrough-surface flex items-center justify-center pointer-events-none">
+        <div className="fixed inset-0 z-[101] flex items-center justify-center pointer-events-none">
           <button
             onClick={wt.skip}
             className="pointer-events-auto px-4 py-2 text-sm rounded-lg font-medium transition-all hover:opacity-90"
@@ -193,12 +193,12 @@ function MobileWalkthroughSheet() {
     <>
       {/* Backdrop */}
       <div
-        className="fixed inset-0 z-app-walkthrough-backdrop bg-black/40 backdrop-blur-sm"
+        className="fixed inset-0 z-[100] bg-black/40 backdrop-blur-sm"
         onClick={wt.skip}
       />
       {/* Bottom sheet */}
       <div
-        className="fixed bottom-0 left-0 right-0 z-app-walkthrough-surface rounded-t-2xl border-t shadow-lg p-5 pb-8 animate-in slide-in-from-bottom duration-300"
+        className="fixed bottom-0 left-0 right-0 z-[101] rounded-t-2xl border-t shadow-lg p-5 pb-8 animate-in slide-in-from-bottom duration-300"
         style={{ background: 'var(--card)', borderColor: 'var(--border)' }}
       >
         {/* Step counter */}

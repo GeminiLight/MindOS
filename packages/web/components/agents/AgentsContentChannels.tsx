@@ -140,6 +140,13 @@ function ChannelsOverview() {
                 ) : (
                   <div className="text-xs text-muted-foreground">{isConnected ? im.statusConnected : im.notConfigured}</div>
                 )}
+                {isConnected && status?.capabilities && status.capabilities.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-1.5">
+                    {status.capabilities.slice(0, 3).map(cap => (
+                      <span key={cap} className="text-xs px-2 py-0.5 rounded-md bg-muted text-muted-foreground">{cap}</span>
+                    ))}
+                  </div>
+                )}
               </div>
               {isConnected ? (
                 <CheckCircle2 size={18} className="text-success shrink-0" />

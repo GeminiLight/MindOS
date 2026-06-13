@@ -1,7 +1,6 @@
 'use client';
 
 import { ChangeLogRenderer } from '@/components/renderers/change-log/ChangeLogRenderer';
-import { NarrowPageShell } from '@/components/shared/ContentPageShell';
 import type { RendererContext } from '@/lib/renderers/registry';
 
 const noop = async () => {};
@@ -9,8 +8,8 @@ const ctx: RendererContext = { filePath: '.mindos/change-log.json', content: '',
 
 export default function ChangelogClient() {
   return (
-    <NarrowPageShell>
+    <div className="max-w-4xl mx-auto px-4 md:px-6">
       <ChangeLogRenderer {...ctx} />
-    </NarrowPageShell>
+    </div>
   );
 }

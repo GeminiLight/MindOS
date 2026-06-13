@@ -227,6 +227,66 @@ describe('Claude Code permission prompt MCP config', () => {
     expect((response.error as { message?: string }).message).toMatch(/fetch|connect|ECONNREFUSED|failed/i);
   });
 
+  it('times out a hung permission bridge request instead of hanging forever', async () => {
+    // A bridge that accepts the request but never responds — a wedged web
+    // process must not leave the runtime blocked on the permission prompt.
+    let hungResponse: ServerResponse | null = null;
+    const bridge = await startBridgeServer((_req, res) => {
+      hungResponse = res;
+    });
+
+    const previousTimeout = process.env.MINDOS_RUNTIME_PERMISSION_FETCH_TIMEOUT_MS;
+    process.env.MINDOS_RUNTIME_PERMISSION_FETCH_TIMEOUT_MS = '500';
+    let server: { command: string; args: string[]; env: Record<string, string> };
+    try {
+      const prompt = createClaudePermissionPromptConfig({
+        runId: 'run-timeout',
+        baseUrl: bridge.baseUrl,
+      });
+      const mcpConfig = prompt.mcpConfig as {
+        mcpServers: Record<string, { command: string; args: string[]; env: Record<string, string> }>;
+      };
+      server = mcpConfig.mcpServers[CLAUDE_PERMISSION_PROMPT_SERVER];
+      expect(server.env.MINDOS_RUNTIME_PERMISSION_FETCH_TIMEOUT_MS).toBe('500');
+    } finally {
+      if (previousTimeout === undefined) {
+        delete process.env.MINDOS_RUNTIME_PERMISSION_FETCH_TIMEOUT_MS;
+      } else {
+        process.env.MINDOS_RUNTIME_PERMISSION_FETCH_TIMEOUT_MS = previousTimeout;
+      }
+    }
+
+    try {
+      child = spawn(server.command, server.args, {
+        stdio: ['pipe', 'pipe', 'pipe'],
+        env: { ...process.env, ...server.env },
+      });
+      const lines = createInterface({ input: child.stdout! });
+
+      child.stdin!.write(`${JSON.stringify({
+        jsonrpc: '2.0',
+        id: 4,
+        method: 'tools/call',
+        params: {
+          name: CLAUDE_PERMISSION_PROMPT_TOOL,
+          arguments: { toolName: 'Bash', input: { command: 'rm note.md' } },
+        },
+      })}\n`);
+
+      // Must surface a JSON-RPC error well before the harness 5s deadline.
+      const response = await readJsonLine(lines);
+      expect(response).toMatchObject({
+        jsonrpc: '2.0',
+        id: 4,
+        error: { code: -32000 },
+      });
+      expect((response.error as { message?: string }).message).toMatch(/timeout|timed out|abort/i);
+    } finally {
+      (hungResponse as ServerResponse | null)?.destroy();
+      await bridge.close();
+    }
+  });
+
   it('bridges permission tool calls from stdio MCP to the MindOS runtime permission API', async () => {
     let capturedBody: unknown;
     const bridge = await startBridgeServer(async (req, res) => {

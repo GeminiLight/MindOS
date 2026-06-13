@@ -1,0 +1,50 @@
+// common + app + login + notFound + updateBanner
+
+export const commonEn = {
+  common: {
+    relatedFiles: 'Related Files',
+  },
+  app: {
+    tagline: 'You think here, Agents act there',
+    footer: 'MindOS · human-agent collaborative mind system',
+  },
+  login: {
+    tagline: 'You think here, Agents act there',
+    title: 'Enter your Web password',
+    loginBadge: 'Private workspace',
+    reauthBadge: 'Session locked',
+    reauthTitle: 'Re-enter your password',
+    reauthSubtitle: 'Your browser session expired. Unlock MindOS to continue where you left off.',
+    subtitle: 'Enter your password to continue',
+    returningTo: (path: string) => `Returning to ${path}`,
+    passwordLabel: 'Password',
+    passwordPlaceholder: 'Enter password',
+    showPassword: 'Show password',
+    hidePassword: 'Hide password',
+    signIn: 'Sign in',
+    continueButton: 'Continue',
+    signingIn: 'Signing in…',
+    incorrectPassword: 'Incorrect password. Please try again.',
+    connectionError: 'Connection error. Please try again.',
+    forgotPassword: 'Forgot password?',
+    forgotIntro: 'MindOS cannot recover this local Web password remotely.',
+    forgotReset: 'On the machine running MindOS, reset it with:',
+    forgotDisable: 'To temporarily remove the login gate, use:',
+    forgotRestart: 'Existing signed-in browser sessions are kept. If this is not your machine, ask the owner to reset it.',
+  },
+  notFound: {
+    title: 'File not found',
+    description: 'This file does not exist in your knowledge base.',
+    createButton: 'Create this file',
+    creating: 'Creating...',
+    goToParent: 'Go to parent folder',
+    goHome: 'Home',
+  },
+  updateBanner: {
+    newVersion: (latest: string, current: string) => `MindOS v${latest} available (current: v${current})`,
+    updateNow: 'Update',
+    runUpdate: 'Run',
+    orSee: 'or',
+    releaseNotes: 'release notes',
+  },
+} as const;

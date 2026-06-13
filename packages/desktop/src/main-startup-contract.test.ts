@@ -45,4 +45,25 @@ describe('desktop main startup contract', () => {
     expect(source).toContain("import { planUninstall } from './uninstall-plan';");
     expect(source).toContain('planUninstall({');
   });
+
+  it('defers CLI shim install until after the splash window is created (never blocks first paint)', () => {
+    const whenReady = source.indexOf('app.whenReady()');
+    expect(whenReady).toBeGreaterThan(-1);
+    const startupSlice = source.slice(whenReady);
+
+    // The shim install (PowerShell PATH step on Windows) is scheduled via the
+    // deferral helper, after splash creation — not invoked inline before it.
+    const ensureIdx = startupSlice.indexOf(
+      "ensureMindosCliShim({ appendPath: process.env.MINDOS_DISABLE_CLI_SHIM_PATH_APPEND !== '1' })",
+    );
+    expect(ensureIdx).toBeGreaterThan(-1);
+    expect(startupSlice).toContain('scheduleCliShimInstall(splashWindow');
+
+    let splashIdx = startupSlice.indexOf('splashWindow = createSplash()');
+    expect(splashIdx).toBeGreaterThan(-1);
+    while (splashIdx !== -1) {
+      expect(ensureIdx).toBeGreaterThan(splashIdx);
+      splashIdx = startupSlice.indexOf('splashWindow = createSplash()', splashIdx + 1);
+    }
+  });
 });

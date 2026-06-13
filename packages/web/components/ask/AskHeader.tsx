@@ -143,7 +143,7 @@ export default memo(function AskHeader({
   const switcherDropdown = switcherOpen && dropPos && sessions ? createPortal(
     <div
       ref={dropdownRef}
-      className="fixed z-app-popover pointer-events-auto rounded-xl border border-border/50 bg-card shadow-lg py-1 animate-in fade-in-0 slide-in-from-top-1 duration-100 max-h-[60vh] overflow-y-auto"
+      className="fixed z-[60] pointer-events-auto rounded-xl border border-border/50 bg-card shadow-lg py-1 animate-in fade-in-0 slide-in-from-top-1 duration-100 max-h-[60vh] overflow-y-auto"
       style={{ top: dropPos.top, left: dropPos.left, minWidth: Math.max(dropPos.width, 280), maxWidth: 340 }}
       role="listbox"
     >

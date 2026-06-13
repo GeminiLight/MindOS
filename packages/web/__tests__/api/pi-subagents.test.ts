@@ -109,6 +109,15 @@ describe('pi-subagents built-in extension', () => {
         expect(chatExtensionList).not.toContain(path.join('lib', 'im', 'index.ts'));
         expect(chatExtensionList).not.toContain('schedule-prompt');
 
+        const organizePaths = getMindosWebPiRuntimePaths({ ...base, mode: 'organize' });
+        const organizeExtensionList = organizePaths.additionalExtensionPaths.join('\n');
+        expect(organizeExtensionList).toContain('kb-extension');
+        expect(organizeExtensionList).toContain('web-search-extension');
+        expect(organizeExtensionList).not.toContain('pi-mcp-adapter');
+        expect(organizeExtensionList).not.toContain('subagent-ledger-extension');
+        expect(organizeExtensionList).not.toContain(path.join('lib', 'im', 'index.ts'));
+        expect(organizeExtensionList).not.toContain('schedule-prompt');
+
         const agentPaths = getMindosWebPiRuntimePaths({ ...base, mode: 'agent' });
         const agentExtensionList = agentPaths.additionalExtensionPaths.join('\n');
         expect(agentExtensionList).toContain('kb-extension');

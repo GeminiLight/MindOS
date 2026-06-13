@@ -1,10 +1,9 @@
 'use client';
 
 import { useState, useCallback, useRef } from 'react';
-import { Download, FileText, Globe, Archive, Check, Loader2 } from 'lucide-react';
+import { X, Download, FileText, Globe, Archive, Check, Loader2 } from 'lucide-react';
 import { useLocale } from '@/lib/stores/locale-store';
 import { toast } from '@/lib/toast';
-import { ModalFooter, ModalHeader, ModalShell } from '@/components/shared/ModalShell';
 
 type ExportFormat = 'md' | 'html' | 'zip' | 'zip-html';
 
@@ -102,18 +101,26 @@ export default function ExportModal({ open, onClose, filePath, isDirectory, file
       ];
 
   return (
-    <ModalShell
-      ariaLabelledBy="export-modal-title"
-      closeDisabled={state === 'exporting'}
-      onClose={handleClose}
-    >
-        <ModalHeader
-          titleId="export-modal-title"
-          title={isDirectory ? (t.export?.exportSpace ?? 'Export Space') : (t.export?.exportFile ?? 'Export File')}
-          icon={<Download size={15} className="text-[var(--amber)]" />}
-          closeLabel={t.export?.cancel ?? 'Close'}
-          onClose={handleClose}
-        />
+    <div className="fixed inset-0 z-50 flex items-center justify-center modal-backdrop" onClick={state === 'exporting' ? undefined : handleClose}>
+      <div
+        className="bg-card border border-border rounded-xl shadow-xl max-w-md w-full mx-4 animate-in fade-in-0 zoom-in-95 duration-200"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="export-modal-title"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+          <div className="flex items-center gap-2">
+            <Download size={15} className="text-[var(--amber)]" />
+            <h3 id="export-modal-title" className="text-sm font-semibold">
+              {isDirectory ? (t.export?.exportSpace ?? 'Export Space') : (t.export?.exportFile ?? 'Export File')}
+            </h3>
+          </div>
+          <button onClick={handleClose} className="hit-target-box p-1 text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-md)]" aria-label={t.export?.cancel ?? 'Close'}>
+            <X size={14} />
+          </button>
+        </div>
 
         {/* Body */}
         <div className="px-5 py-4">
@@ -168,7 +175,7 @@ export default function ExportModal({ open, onClose, filePath, isDirectory, file
         </div>
 
         {/* Footer */}
-        <ModalFooter>
+        <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-border">
           {state === 'done' ? (
             <>
               <button onClick={handleRetry} className="hit-target-box px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-md)]">
@@ -209,7 +216,8 @@ export default function ExportModal({ open, onClose, filePath, isDirectory, file
               </button>
             </>
           )}
-        </ModalFooter>
-    </ModalShell>
+        </div>
+      </div>
+    </div>
   );
 }

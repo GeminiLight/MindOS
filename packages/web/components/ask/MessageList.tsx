@@ -123,8 +123,12 @@ const UserMessageContent = memo(function UserMessageContent({ content, skillName
   );
 });
 
+// Native runtimes (codex / claude) speak as the assistant itself — repeating
+// their identity per message reads as noise, so badge and side mark are both
+// suppressed for them. Every other attributed agent (acp / a2a / subagents /
+// kind-less attributions) keeps the badge.
 function shouldShowAssistantAgentBadge(agentKind?: Message['agentKind'] | string): boolean {
-  return agentKind === 'acp' || agentKind === 'a2a';
+  return shouldShowAssistantSideMark(agentKind);
 }
 
 function shouldShowAssistantSideMark(agentKind?: Message['agentKind'] | string): boolean {

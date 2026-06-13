@@ -87,4 +87,30 @@ describe('Bun single-binary runtime contract', () => {
     expect(mcpSpawn).toContain('MINDOS_BINARY_EXECUTOR');
     expect(mcpSpawn).toContain('runtimeJsExecutor');
   });
+
+  it('embeds the document extraction runtime instead of excluding _standalone (v1.1.7 regression)', () => {
+    // v1.1.7 tar-excluded ./_standalone from the embedded runtime archive, so
+    // hasDocumentExtractionRuntime() was false in every fresh install and
+    // `mindos start` crashed in the source-build path (gen-renderer-index.js
+    // ENOENT). The archive must ship a pruned _standalone instead.
+    const bunScript = read('scripts/build-bun-binary.mjs');
+    expect(bunScript).not.toContain('excludeStandalone');
+    expect(bunScript).not.toContain("'--exclude', './_standalone'");
+
+    const platformScript = read('scripts/build-platform-packages.mjs');
+    expect(platformScript).toContain('pruneStandaloneToExtractionRuntime');
+    expect(platformScript).toContain('assertExtractionRuntime');
+    // Bun compiled binaries cannot resolve package.json-main requires from
+    // external node_modules — the docx extractor must ship self-contained.
+    expect(platformScript).toContain('bundleDocxExtractor');
+  });
+
+  it('never routes a packaged runtime into the source-build path', () => {
+    // Packaged runtimes ship no packages/web sources, so the source-build
+    // branch can only crash there. If the extraction runtime is missing, start
+    // must degrade (product server without PDF/DOCX import), not build.
+    const start = read('packages/mindos/bin/commands/start.js');
+    expect(start).toContain('hasWebSources');
+    expect(start).toContain('degraded');
+  });
 });

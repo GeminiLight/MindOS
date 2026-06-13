@@ -196,7 +196,7 @@ function PopoverShell({ anchorRef, onClose, children }: {
   if (!pos || typeof document === 'undefined') return null;
 
   return createPortal(
-    <div ref={panelRef} className="fixed z-app-popover pointer-events-auto rounded-xl border border-border bg-card shadow-lg animate-in fade-in-0 slide-in-from-top-1 duration-100"
+    <div ref={panelRef} className="fixed z-[60] pointer-events-auto rounded-xl border border-border bg-card shadow-lg animate-in fade-in-0 slide-in-from-top-1 duration-100"
       style={{ top: pos.top, right: pos.right, width: PANEL_WIDTH }}>
       {children}
     </div>,

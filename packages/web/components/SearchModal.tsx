@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, useLayoutEffect, useMemo, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, X, FileText, Table, Settings, RotateCcw, Moon, Sun, Bot, Compass, HelpCircle, ChevronRight, GripVertical } from 'lucide-react';
+import { Search, X, FileText, Table, Settings, RotateCcw, Moon, Sun, Bot, Compass, HelpCircle, ChevronRight } from 'lucide-react';
 import { SearchResult } from '@/lib/types';
 import { encodePath } from '@/lib/utils';
 import { apiFetch } from '@/lib/api';
@@ -244,9 +244,6 @@ export default function SearchModal({ open, onClose }: SearchModalProps) {
     preparing: t.search.preparing,
     fallbackWarmHint: t.search.fallbackWarmHint,
   });
-  const dragToChatLabel = !t.search.dragToChat || t.search.dragToChat === 'to chat'
-    ? 'Drag to chat'
-    : t.search.dragToChat;
 
   return (
     <div
@@ -296,24 +293,23 @@ export default function SearchModal({ open, onClose }: SearchModalProps) {
         {/* Search tab */}
         {tab === 'search' && (
           <>
-            {/* Search input */}
-            <div className="border-b border-border px-3 py-2.5">
-              <div className="flex h-9 items-center gap-2 rounded-md border border-border/70 bg-muted/25 px-2.5 transition-colors focus-within:border-ring focus-within:bg-background">
-                <Search size={15} className="text-muted-foreground/80 shrink-0 flex-none" />
+            {/* Search input - IMPROVED */}
+            <div className="px-4 py-3 border-b border-border">
+              <div className="flex items-center gap-3">
+                <Search size={16} className="text-muted-foreground shrink-0 flex-none" />
                 <input
                   ref={inputRef}
                   type="text"
                   value={query}
                   onChange={handleChange}
                   placeholder={t.search.placeholder}
-                  className="min-w-0 flex-1 bg-transparent text-sm font-normal text-foreground placeholder:text-muted-foreground/55 outline-none"
+                  className="flex-1 bg-transparent text-foreground text-base font-medium placeholder:text-muted-foreground/60 outline-none"
                 />
                 {loading && (
-                  <div className="h-3.5 w-3.5 rounded-full border-2 border-muted-foreground/25 border-t-foreground animate-spin shrink-0 flex-none" />
+                  <div className="w-4 h-4 border-2 border-muted-foreground/30 border-t-foreground rounded-full animate-spin shrink-0 flex-none" />
                 )}
                 {!loading && query && (
                   <button
-                    type="button"
                     onClick={() => {
                       startTransition(() => {
                         setQuery('');
@@ -321,16 +317,16 @@ export default function SearchModal({ open, onClose }: SearchModalProps) {
                         inputRef.current?.focus();
                       });
                     }}
-                    className="inline-flex h-6 w-6 shrink-0 flex-none items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="shrink-0 flex-none p-1 text-muted-foreground hover:text-foreground transition-colors"
                     aria-label={t.search.clear}
                   >
-                    <X size={13} />
+                    <X size={16} />
                   </button>
                 )}
                 <kbd className="hidden md:inline text-xs text-muted-foreground border border-border rounded px-1.5 py-0.5 font-mono">ESC</kbd>
               </div>
               {warmHint && (
-                <p className="mt-1.5 px-1 text-[11px] leading-4 text-muted-foreground/65">{warmHint}</p>
+                <p className="mt-2 text-xs text-muted-foreground/70">{warmHint}</p>
               )}
             </div>
 
@@ -389,7 +385,7 @@ export default function SearchModal({ open, onClose }: SearchModalProps) {
                     onClick={() => navigate(result)}
                     onMouseEnter={() => setSelectedIndex(i)}
                     className={`
-                      group w-full px-3 py-2.5 flex items-start gap-3 text-left transition-colors duration-100
+                      w-full px-3 py-2.5 flex items-start gap-3 text-left transition-colors duration-100
                       ${isSelected ? 'bg-[var(--amber-dim)] border-l-2 border-[var(--amber)]' : 'border-l-2 border-transparent'}
                       ${isDragging ? 'bg-muted/70' : isSelected ? '' : 'hover:bg-muted/60'}
                       ${i < results.length - 1 ? 'border-b border-border/50' : ''}
@@ -430,15 +426,11 @@ export default function SearchModal({ open, onClose }: SearchModalProps) {
                       )}
                     </div>
 
-                    {/* Drag affordance for desktop */}
+                    {/* Drag hint for mobile/desktop */}
                     {isSelected && !isDragging && (
-                      <span
-                        className="ml-1 hidden h-6 w-6 shrink-0 flex-none items-center justify-center rounded text-muted-foreground/65 opacity-70 transition-[background-color,opacity] group-hover:bg-background/55 group-hover:opacity-100 group-focus-visible:opacity-100 md:inline-flex"
-                        title={dragToChatLabel}
-                      >
-                        <GripVertical size={14} aria-hidden="true" />
-                        <span className="sr-only">{dragToChatLabel}</span>
-                      </span>
+                      <div className="hidden md:flex shrink-0 flex-none text-[10px] text-muted-foreground/50 font-mono pt-0.5">
+                        ⬆ Drag
+                      </div>
                     )}
                   </button>
                 );
@@ -451,10 +443,7 @@ export default function SearchModal({ open, onClose }: SearchModalProps) {
                 <span><kbd className="font-mono text-[10px] px-1 py-0.5 bg-muted/40 rounded">↑↓</kbd> {t.search.navigate}</span>
                 <span><kbd className="font-mono text-[10px] px-1 py-0.5 bg-muted/40 rounded">↵</kbd> {t.search.open}</span>
                 <span className="text-muted-foreground/40 mx-0.5">•</span>
-                <span className="inline-flex items-center gap-1.5">
-                  <GripVertical size={12} aria-hidden="true" />
-                  {dragToChatLabel}
-                </span>
+                <span><kbd className="font-mono text-[10px] px-1 py-0.5 bg-muted/40 rounded">Drag</kbd> to chat</span>
                 <span className="text-muted-foreground/40 mx-0.5">•</span>
                 <span><kbd className="font-mono text-[10px] px-1 py-0.5 bg-muted/40 rounded">ESC</kbd> {t.search.close}</span>
               </div>

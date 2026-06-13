@@ -12,14 +12,15 @@ import {
   failAgentRun,
   startAgentRun,
   updateAgentRun,
-} from '@/lib/agent/run-ledger';
-import { createMindosAgentPermissionPolicyFromContext } from '@/lib/agent/permission-policy';
+  type AgentRunPermissionMode,
+} from '@geminilight/mindos/agent/run-ledger';
+import { createMindosAgentPermissionPolicyFromContext } from '@geminilight/mindos/agent/permission-policy';
 import {
   abortErrorFromSignal,
   isAbortLikeError,
   linkAbortSignalToAgentRun,
   registerAgentRunCancelHandler,
-} from '@/lib/agent/run-cancellation';
+} from '@geminilight/mindos/agent/run-cancellation';
 
 function textResult(text: string) {
   return { content: [{ type: 'text' as const, text }], details: {} };
@@ -35,6 +36,10 @@ type MindosAgentTool = {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function permissionModeFromContext(ctx: unknown): AgentRunPermissionMode {
+  return createMindosAgentPermissionPolicyFromContext(ctx, 'agent').acpPermissionMode;
 }
 
 async function raceWithAbort<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
@@ -113,13 +118,13 @@ export const acpTools: MindosAgentTool[] = [
     parameters: CallAcpAgentParams,
     execute: async (_id: string, params: Static<typeof CallAcpAgentParams>, _signal?: AbortSignal, _onUpdate?: unknown, ctx?: unknown) => {
       const cwd = getMindRoot();
-      const permissionPolicy = createMindosAgentPermissionPolicyFromContext(ctx, 'agent');
+      const permissionMode = permissionModeFromContext(ctx);
       const run = startAgentRun({
         agentKind: 'acp',
         runtimeId: params.agent_id,
         displayName: params.agent_id,
         cwd,
-        permissionMode: permissionPolicy.permissionMode,
+        permissionMode,
         inputSummary: params.message,
         metadata: {
           toolCallId: _id,
@@ -149,8 +154,9 @@ export const acpTools: MindosAgentTool[] = [
           displayName: entry.name,
           metadata: { phase: 'create_session' },
         });
-        session = await createSessionFromEntry(entry, { cwd, permissionMode: permissionPolicy.acpPermissionMode });
+        session = await createSessionFromEntry(entry, { cwd, permissionMode: permissionMode === 'readonly' ? 'readonly' : 'agent' });
         updateAgentRun(run.id, {
+          archive: { sessionId: session.id },
           metadata: {
             phase: 'prompt',
             sessionId: session.id,

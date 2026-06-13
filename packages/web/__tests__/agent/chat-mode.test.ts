@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getChatTools, getRequestScopedTools, knowledgeBaseTools, WRITE_TOOLS } from '@/lib/agent/tools';
-import { getMindosWebRequestTools } from '@/lib/agent/mindos-pi-runtime-host';
+import { getChatTools, getOrganizeTools, knowledgeBaseTools, WRITE_TOOLS } from '@/lib/agent/tools';
 import { CHAT_SYSTEM_PROMPT, AGENT_SYSTEM_PROMPT } from '@/lib/agent/prompt';
 
 // ---------------------------------------------------------------------------
@@ -58,36 +57,15 @@ describe('getChatTools', () => {
   });
 });
 
-describe('getMindosWebRequestTools', () => {
-  it('returns visible MindOS tools for the Chat Panel chat mode', () => {
-    const toolNames = getMindosWebRequestTools('chat').map((tool) => tool.name);
-
-    expect(toolNames).toEqual(expect.arrayContaining([
-      'list_files',
-      'read_file',
-      'search',
-      'load_skill',
-    ]));
-    expect(toolNames.length).toBeGreaterThan(0);
-    expect(toolNames).not.toContain('delete_file');
-    expect(toolNames).not.toContain('delegate_to_agent');
-  });
-
-  it('returns mode-specific tools instead of an empty set', () => {
-    expect(getMindosWebRequestTools('chat').length).toBeGreaterThan(0);
-    expect(getMindosWebRequestTools('agent').length).toBeGreaterThan(getMindosWebRequestTools('chat').length);
-  });
-});
-
-describe('getRequestScopedTools', () => {
+describe('getOrganizeTools', () => {
   it('keeps skill loading available for selected skill workflows', () => {
-    expect(getRequestScopedTools().map(t => t.name)).toContain('load_skill');
+    expect(getOrganizeTools().map(t => t.name)).toContain('load_skill');
   });
 
-  it('exposes full agent tools for organizer assistants through agent mode', () => {
-    const agentToolNames = getRequestScopedTools().map(t => t.name);
+  it('allows only bounded KB organization writes', () => {
+    const organizeToolNames = getOrganizeTools().map(t => t.name);
 
-    expect(agentToolNames).toEqual(expect.arrayContaining([
+    expect(organizeToolNames).toEqual(expect.arrayContaining([
       'list_files',
       'read_file',
       'search',
@@ -98,13 +76,15 @@ describe('getRequestScopedTools', () => {
       'append_to_file',
       'insert_after_heading',
       'update_section',
-      'edit_lines',
-      'delete_file',
-      'rename_file',
-      'move_file',
-      'delegate_to_agent',
-      'orchestrate',
     ]));
+    expect(organizeToolNames).not.toContain('delete_file');
+    expect(organizeToolNames).not.toContain('rename_file');
+    expect(organizeToolNames).not.toContain('move_file');
+    expect(organizeToolNames).not.toContain('edit_lines');
+    expect(organizeToolNames).not.toContain('list_acp_agents');
+    expect(organizeToolNames).not.toContain('call_acp_agent');
+    expect(organizeToolNames).not.toContain('delegate_to_agent');
+    expect(organizeToolNames).not.toContain('orchestrate');
   });
 });
 
@@ -157,8 +137,8 @@ describe('AskMode type', () => {
     expect(validModes).toHaveLength(2);
   });
 
-  it('keeps AskModeApi aligned with user-facing modes', async () => {
-    const validModes: Array<import('@/lib/types').AskModeApi> = ['chat', 'agent'];
-    expect(validModes).toHaveLength(2);
+  it('AskModeApi includes organize', async () => {
+    const validModes: Array<import('@/lib/types').AskModeApi> = ['chat', 'agent', 'organize'];
+    expect(validModes).toHaveLength(3);
   });
 });

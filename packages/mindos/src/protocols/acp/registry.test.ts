@@ -34,12 +34,6 @@ const MOCK_REGISTRY = {
   ],
 };
 
-async function flushPromises(times = 5) {
-  for (let i = 0; i < times; i += 1) {
-    await Promise.resolve();
-  }
-}
-
 describe('ACP Registry', () => {
   beforeEach(() => {
     clearRegistryCache();
@@ -47,23 +41,19 @@ describe('ACP Registry', () => {
   });
 
   describe('fetchAcpRegistry', () => {
-    it('returns built-in registry immediately and refreshes CDN data in the background', async () => {
+    it('fetches and merges with built-in registry', async () => {
       mockFetch.mockResolvedValueOnce({ ok: true, json: async () => MOCK_REGISTRY });
 
       const registry = await fetchAcpRegistry();
       expect(registry).not.toBeNull();
-      expect(registry.version).toBe('builtin');
       // Built-in agents are present with canonical IDs
       const gemini = registry.agents.find(a => a.id === 'gemini');
       expect(gemini).toBeDefined();
       expect(gemini!.name).toBe('Gemini CLI');
       // CDN alias entries (gemini-cli) are deduplicated — built-in 'gemini' covers them
       expect(registry.agents.find(a => a.id === 'gemini-cli')).toBeUndefined();
-
-      await flushPromises();
-      const refreshed = await fetchAcpRegistry();
       // CDN-only entries are added
-      const cdnOnly = refreshed.agents.find(a => a.id === 'new-cdn-only');
+      const cdnOnly = registry.agents.find(a => a.id === 'new-cdn-only');
       expect(cdnOnly).toBeDefined();
       expect(cdnOnly!.name).toBe('CDN Only Agent');
     });
@@ -72,50 +62,10 @@ describe('ACP Registry', () => {
       mockFetch.mockResolvedValueOnce({ ok: true, json: async () => MOCK_REGISTRY });
 
       await fetchAcpRegistry();
-      await flushPromises();
       const cached = await fetchAcpRegistry();
 
       expect(cached).not.toBeNull();
       expect(mockFetch).toHaveBeenCalledTimes(1);
-    });
-
-    it('does not wait for a hanging CDN request before returning built-in agents', async () => {
-      let resolveFetch!: (value: { ok: boolean; json: () => Promise<typeof MOCK_REGISTRY> }) => void;
-      mockFetch.mockReturnValueOnce(new Promise((resolve) => {
-        resolveFetch = resolve;
-      }));
-
-      const registry = await fetchAcpRegistry();
-
-      expect(registry.version).toBe('builtin');
-      expect(registry.agents.length).toBeGreaterThan(0);
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-
-      resolveFetch({ ok: true, json: async () => MOCK_REGISTRY });
-      await flushPromises();
-      const refreshed = await fetchAcpRegistry();
-      expect(refreshed.agents.find(a => a.id === 'new-cdn-only')).toBeDefined();
-    });
-
-    it('deduplicates concurrent cold refreshes', async () => {
-      let resolveFetch!: (value: { ok: boolean; json: () => Promise<typeof MOCK_REGISTRY> }) => void;
-      mockFetch.mockReturnValueOnce(new Promise((resolve) => {
-        resolveFetch = resolve;
-      }));
-
-      const registries = await Promise.all([
-        fetchAcpRegistry(),
-        fetchAcpRegistry(),
-        fetchAcpRegistry(),
-      ]);
-
-      expect(registries.every((registry) => registry.version === 'builtin')).toBe(true);
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-
-      resolveFetch({ ok: true, json: async () => MOCK_REGISTRY });
-      await flushPromises();
-      const refreshed = await fetchAcpRegistry();
-      expect(refreshed.agents.find(a => a.id === 'new-cdn-only')).toBeDefined();
     });
 
     it('returns built-in registry on fetch failure with no cache', async () => {
@@ -131,7 +81,6 @@ describe('ACP Registry', () => {
     it('returns stale cache on fetch failure', async () => {
       mockFetch.mockResolvedValueOnce({ ok: true, json: async () => MOCK_REGISTRY });
       await fetchAcpRegistry();
-      await flushPromises();
 
       // Force cache expiry by clearing and re-caching with old date
       // (we can't easily expire cache in test, so just test that cache works)
@@ -166,8 +115,6 @@ describe('ACP Registry', () => {
       };
       mockFetch.mockResolvedValueOnce({ ok: true, json: async () => objectFormat });
 
-      await fetchAcpRegistry();
-      await flushPromises();
       const registry = await fetchAcpRegistry();
       expect(registry).not.toBeNull();
       expect(registry.agents.length).toBeGreaterThanOrEqual(1);
@@ -186,8 +133,6 @@ describe('ACP Registry', () => {
       };
       mockFetch.mockResolvedValueOnce({ ok: true, json: async () => withBad });
 
-      await fetchAcpRegistry();
-      await flushPromises();
       const registry = await fetchAcpRegistry();
       expect(registry).not.toBeNull();
       // Valid CDN entry should be present (merged with built-in)

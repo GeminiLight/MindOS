@@ -3,7 +3,6 @@ import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import ViewPageClient from '@/app/view/[...path]/ViewPageClient';
-import { getTabs, initWorkspaceTabs, openTab, resetWorkspaceTabsForTests } from '@/lib/workspace-tabs';
 
 const routerPush = vi.fn();
 const routerRefresh = vi.fn();
@@ -87,8 +86,6 @@ describe('ViewPageClient draft file names', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
-    resetWorkspaceTabsForTests();
-    initWorkspaceTabs('default');
     (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     host = document.createElement('div');
     document.body.appendChild(host);
@@ -98,7 +95,6 @@ describe('ViewPageClient draft file names', () => {
   afterEach(() => {
     act(() => root.unmount());
     document.body.removeChild(host);
-    resetWorkspaceTabsForTests();
   });
 
   it('allows consecutive dots inside a draft file name', async () => {
@@ -138,41 +134,5 @@ describe('ViewPageClient draft file names', () => {
     });
 
     expect(createDraftAction).toHaveBeenCalledWith('meeting..notes.md', '');
-  });
-
-  it('uses the default draft directory and retargets the draft tab after save', async () => {
-    const createDraftAction = vi.fn().mockResolvedValue(undefined);
-    openTab('doc', 'Untitled.md', 'Untitled.md');
-
-    await act(async () => {
-      root.render(
-        <ViewPageClient
-          filePath="Untitled.md"
-          content=""
-          extension="md"
-          saveAction={vi.fn()}
-          initialEditing
-          isDraft
-          draftDirectories={['Notes']}
-          defaultDraftDir="Notes"
-          createDraftAction={createDraftAction}
-        />,
-      );
-    });
-
-    const saveButton = [...host.querySelectorAll('button')]
-      .find(button => button.textContent?.includes('Save'));
-    expect(saveButton).toBeTruthy();
-
-    await act(async () => {
-      saveButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-      await Promise.resolve();
-    });
-
-    expect(createDraftAction).toHaveBeenCalledWith('Notes/Untitled.md', '');
-    expect(getTabs()).toEqual([
-      { id: 'doc:Notes/Untitled.md', kind: 'doc', key: 'Notes/Untitled.md', title: 'Untitled.md' },
-    ]);
-    expect(routerPush).toHaveBeenCalledWith('/view/Notes/Untitled.md');
   });
 });

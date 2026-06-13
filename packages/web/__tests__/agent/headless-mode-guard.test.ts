@@ -19,15 +19,14 @@ describe('headless agent mode guard', () => {
     });
   });
 
-  it('preserves chat mode and defaults unknown requests to guarded agent mode', () => {
+  it('preserves bounded non-agent modes', () => {
     expect(resolveHeadlessAgentMode({ requestedMode: 'chat', entrypoint: 'im' })).toMatchObject({
       effectiveMode: 'chat',
       downgraded: false,
     });
-    expect(resolveHeadlessAgentMode({ requestedMode: 'unexpected', entrypoint: 'schedule' })).toMatchObject({
-      requestedMode: 'agent',
-      effectiveMode: 'chat',
-      downgraded: true,
+    expect(resolveHeadlessAgentMode({ requestedMode: 'organize', entrypoint: 'schedule' })).toMatchObject({
+      effectiveMode: 'organize',
+      downgraded: false,
     });
   });
 

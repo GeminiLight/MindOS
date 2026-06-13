@@ -23,6 +23,7 @@ export function defaultEchoSegment(): EchoSegment {
   return 'imprint';
 }
 
+/** Default landing route — `/` and `/echo` server-redirect here. */
 export function defaultEchoPath(): string {
-  return ECHO_SEGMENT_HREF[defaultEchoSegment()];
+  return `/echo/${defaultEchoSegment()}`;
 }

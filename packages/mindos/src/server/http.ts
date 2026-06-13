@@ -2,10 +2,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { URL } from 'node:url';
 import { timingSafeEqual } from 'node:crypto';
 import {
-  collectAllFilesFromMindRoot,
   getDefaultMindRoot,
-  getRecentlyModifiedFromMindRoot,
-  getTreeVersionFromMindRoot,
   listDirectoriesFromMindRoot,
   listMindSpacesFromMindRoot,
   readLinesFromMindRoot,
@@ -17,6 +14,7 @@ import {
   type MindosRuntimeOptions,
   type MindosRuntimeSettings,
 } from './runtime.js';
+import { createMindRootTreeCache } from './tree-cache.js';
 import { MINDOS_SERVER_ROUTES } from './contract.js';
 import { createDefaultMcpAgents, createDefaultSkillAgentRegistry } from './mcp-agent-registry.js';
 import { handleA2aAgentsGet, handleA2aDelegationsGet, handleA2aDiscoverPost, handleA2aOptions, handleA2aPost } from './handlers/a2a.js';
@@ -161,6 +159,10 @@ export type MindosHttpServices = {
   search(query: string, options: { limit: number }): Promise<unknown[]>;
   readSettings(): MindosRuntimeSettings;
   writeSettings(settings: MindosRuntimeSettings): void;
+  /** Marks any tree/link caches dirty after internal writes. Optional for custom services. */
+  invalidateTreeCache?(): void;
+  /** Releases watchers/timers owned by the services (called on server close for default services). */
+  dispose?(): void;
   mcpAgents?: Record<string, MindosMcpAgentDef>;
   mcpTools?: {
     readMcpConfig(): MindosMcpConfigFile;
@@ -207,6 +209,9 @@ export type MindosHttpServer = {
 
 export function createDefaultMindosHttpServices(options: DefaultMindosHttpServicesOptions = {}): MindosHttpServices {
   const mindRoot = getDefaultMindRoot(options);
+  // Watcher-driven cache: avoids walking the whole library on every poll of
+  // /api/tree-version (~5s) and on every /api/files request.
+  const treeCache = createMindRootTreeCache(mindRoot);
   const channels: MindosChannelServices = {};
   if (options.homeDir) {
     channels.configPath = `${options.homeDir}/.mindos/im.json`;
@@ -217,9 +222,11 @@ export function createDefaultMindosHttpServices(options: DefaultMindosHttpServic
     staticRoot: options.staticRoot,
     askSessionsStorePath: options.homeDir ? `${options.homeDir}/.mindos/sessions.json` : undefined,
     updateStatusPath: options.homeDir ? `${options.homeDir}/.mindos/update-status.json` : undefined,
-    collectAllFiles: () => collectAllFilesFromMindRoot(mindRoot),
-    getRecentlyModified: (limit) => getRecentlyModifiedFromMindRoot(mindRoot, limit),
-    getTreeVersion: () => getTreeVersionFromMindRoot(mindRoot),
+    collectAllFiles: () => treeCache.collectAllFiles(),
+    getRecentlyModified: (limit) => treeCache.getRecentlyModified(limit),
+    getTreeVersion: () => treeCache.getTreeVersion(),
+    invalidateTreeCache: () => treeCache.invalidate(),
+    dispose: () => treeCache.dispose(),
     readTextFile: (filePath) => readTextFileFromMindRoot(mindRoot, filePath),
     readLines: (filePath) => readLinesFromMindRoot(mindRoot, filePath),
     listSpaces: () => listMindSpacesFromMindRoot(mindRoot),
@@ -257,6 +264,7 @@ export function createDefaultMindosHttpServices(options: DefaultMindosHttpServic
 export function createMindosHttpServer(options: MindosHttpServerOptions = {}): MindosHttpServer {
   const hostname = options.hostname ?? process.env.MINDOS_WEB_HOST ?? '127.0.0.1';
   const port = options.port ?? Number(process.env.MINDOS_WEB_PORT || 3456);
+  const ownsServices = !options.services;
   const services = options.services ?? createDefaultMindosHttpServices({
     ...options.runtime,
     runtimeRoot: options.runtimeRoot,
@@ -264,7 +272,15 @@ export function createMindosHttpServer(options: MindosHttpServerOptions = {}): M
     syncDaemon: options.syncDaemon,
   });
   const server = createServer((req, res) => {
-    void handleRequest(req, res, services, options.runtimeRoot);
+    const method = (req.method ?? 'GET').toUpperCase();
+    void handleRequest(req, res, services, options.runtimeRoot).finally(() => {
+      // Any non-read API call may have written into the mind root (file ops,
+      // inbox, init, skills, ...). Invalidation is a cheap dirty flag; the
+      // watcher covers external writes, this covers internal ones immediately.
+      if (method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS') {
+        services.invalidateTreeCache?.();
+      }
+    });
   });
 
   return {
@@ -282,6 +298,7 @@ export function createMindosHttpServer(options: MindosHttpServerOptions = {}): M
     close() {
       return new Promise((resolve, reject) => {
         server.close((error) => {
+          if (ownsServices) services.dispose?.();
           if (error) reject(error);
           else resolve();
         });

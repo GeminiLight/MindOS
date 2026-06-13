@@ -6,29 +6,50 @@ import { Worker } from 'worker_threads';
 import path from 'path';
 import type { DiffLine } from '@/components/changes/line-diff';
 
-let _worker: Worker | null = null;
+/** Minimal worker surface — lets tests substitute a fake worker. */
+export interface DiffWorkerLike {
+  postMessage(value: unknown): void;
+  terminate(): Promise<number> | void;
+  on(event: string, handler: (...args: never[]) => void): unknown;
+}
+
+let _worker: DiffWorkerLike | null = null;
 let _nextId = 0;
 const _pending = new Map<number, { resolve: (result: DiffLine[]) => void; reject: (err: Error) => void; timer: ReturnType<typeof setTimeout> }>();
 
 const DIFF_TIMEOUT_MS = 5_000; // 5 second timeout for worker computation
 
-function getWorker(): Worker | null {
+let _workerFactory: (() => DiffWorkerLike) | null = null;
+
+/** Test hook: substitute the worker construction. Pass null to restore. */
+export function __setDiffWorkerFactoryForTest(factory: (() => DiffWorkerLike) | null): void {
+  _workerFactory = factory;
+  _worker = null;
+}
+
+function createWorker(): DiffWorkerLike {
+  if (_workerFactory) return _workerFactory();
+  // Use import.meta-style URL resolution for Next.js/TypeScript compatibility.
+  // Falls back to __dirname for Node.js CJS environments.
+  const workerPath = path.resolve(__dirname, 'diff-worker.js');
+  return new Worker(workerPath);
+}
+
+function getWorker(): DiffWorkerLike | null {
   if (_worker) return _worker;
   try {
-    // Use import.meta-style URL resolution for Next.js/TypeScript compatibility.
-    // Falls back to __dirname for Node.js CJS environments.
-    const workerPath = path.resolve(__dirname, 'diff-worker.js');
-    _worker = new Worker(workerPath);
-    _worker.on('message', ({ id, result, error }: { id: number; result: DiffLine[] | null; error: string | null }) => {
+    const worker = createWorker();
+    worker.on('message', (({ id, result, error }: { id: number; result: DiffLine[] | null; error: string | null }) => {
       const pending = _pending.get(id);
       if (!pending) return;
       _pending.delete(id);
       clearTimeout(pending.timer);
       if (error) pending.reject(new Error(error));
       else pending.resolve(result!);
-    });
-    _worker.on('error', () => { _worker = null; drainPending(); });
-    _worker.on('exit', () => { _worker = null; drainPending(); });
+    }) as never);
+    worker.on('error', () => { if (_worker === worker) _worker = null; drainPending(); });
+    worker.on('exit', () => { if (_worker === worker) _worker = null; drainPending(); });
+    _worker = worker;
     return _worker;
   } catch {
     return null;
@@ -47,6 +68,11 @@ export function computeDiffAsync(before: string, after: string): Promise<DiffLin
   return new Promise<DiffLine[] | null>((resolve) => {
     const timer = setTimeout(() => {
       _pending.delete(id);
+      // A timed-out worker is almost certainly wedged on pathological input;
+      // recycle it so later diffs get a fresh worker instead of queueing
+      // behind the stuck computation.
+      if (_worker === worker) _worker = null;
+      void worker.terminate();
       resolve(null); // Timeout — caller will use fallback
     }, DIFF_TIMEOUT_MS);
 
@@ -72,7 +98,7 @@ function drainPending(): void {
 /** Terminate the worker (for cleanup/tests). */
 export function terminateDiffWorker(): void {
   if (_worker) {
-    _worker.terminate();
+    void _worker.terminate();
     _worker = null;
   }
   drainPending();

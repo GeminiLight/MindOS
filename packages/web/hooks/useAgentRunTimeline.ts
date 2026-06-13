@@ -6,6 +6,12 @@ import type { AgentRunTimelineEvent, AgentRunTimelinePart, AgentRunTimelineRecor
 const TIMELINE_POLL_MS = 900;
 const TURN_SINCE_PADDING_MS = 1000;
 
+/**
+ * Backoff schedule for SSE reconnect attempts. After these are exhausted the
+ * hook downgrades permanently (for the current turn) to visible-only polling.
+ */
+export const AGENT_RUN_STREAM_RECONNECT_DELAYS_MS = [1_000, 5_000, 15_000] as const;
+
 interface AgentRunsResponse {
   runs?: AgentRunTimelineRecord[];
   events?: AgentRunTimelineEvent[];
@@ -314,13 +320,22 @@ export function useAgentRunTimeline(input: {
     const chatSessionId = input.chatSessionId;
     const rootRunId = input.rootRunId;
     const controller = new AbortController();
-    void refreshOnce(chatSessionId, rootRunId, controller.signal);
-    const interval = setInterval(() => {
+    const tick = () => {
+      // Background tabs skip the network call entirely; the visibilitychange
+      // handler issues a catch-up refresh when the tab returns.
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
       void refreshOnce(chatSessionId, rootRunId, controller.signal);
-    }, pollMs);
+    };
+    tick();
+    const interval = setInterval(tick, pollMs);
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') tick();
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
 
     return () => {
       clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
       controller.abort();
     };
   }, [input.chatSessionId, input.isLoading, input.rootRunId, input.visible, pollMs, refreshOnce, streamUnavailable]);
@@ -342,29 +357,49 @@ export function useAgentRunTimeline(input: {
       ...(rootRunId ? { rootRunId } : { startedAfter }),
     });
     let closed = false;
+    let attempts = 0;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let source: EventSource | null = null;
     setStreamUnavailable(false);
 
-    const source = new EventSourceConstructor(streamUrl);
-    source.onmessage = (event) => {
-      if (closed) return;
-      try {
-        const payload = JSON.parse(event.data) as AgentRunsStreamPayload;
-        if (!Array.isArray(payload.runs) && !Array.isArray(payload.events)) return;
-        applyTimeline(payload, chatSessionId, startedAfter, rootRunId ?? undefined);
-      } catch {
-        // Ignore malformed stream frames; the polling fallback handles recovery if the stream fails.
-      }
+    const connect = () => {
+      source = new EventSourceConstructor(streamUrl);
+      source.onmessage = (event) => {
+        if (closed) return;
+        // A delivered frame proves the stream works — reset the backoff budget.
+        attempts = 0;
+        try {
+          const payload = JSON.parse(event.data) as AgentRunsStreamPayload;
+          if (!Array.isArray(payload.runs) && !Array.isArray(payload.events)) return;
+          applyTimeline(payload, chatSessionId, startedAfter, rootRunId ?? undefined);
+        } catch {
+          // Ignore malformed stream frames; the polling fallback handles recovery if the stream fails.
+        }
+      };
+      source.onerror = () => {
+        if (closed) return;
+        source?.close();
+        source = null;
+        if (attempts >= AGENT_RUN_STREAM_RECONNECT_DELAYS_MS.length) {
+          // Backoff budget exhausted — downgrade to visible-only polling.
+          closed = true;
+          setStreamUnavailable(true);
+          return;
+        }
+        const delay = AGENT_RUN_STREAM_RECONNECT_DELAYS_MS[attempts];
+        attempts += 1;
+        reconnectTimer = setTimeout(() => {
+          reconnectTimer = null;
+          if (!closed) connect();
+        }, delay);
+      };
     };
-    source.onerror = () => {
-      if (closed) return;
-      closed = true;
-      source.close();
-      setStreamUnavailable(true);
-    };
+    connect();
 
     return () => {
       closed = true;
-      source.close();
+      if (reconnectTimer !== null) clearTimeout(reconnectTimer);
+      source?.close();
     };
   }, [applyTimeline, ensureTurnStartedAfter, input.chatSessionId, input.isLoading, input.rootRunId, input.visible]);
 

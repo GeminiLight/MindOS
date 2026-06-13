@@ -20,7 +20,6 @@ const BINARY_EXTENSIONS = new Set([
 
 interface PageProps {
   params: Promise<{ path: string[] }>;
-  searchParams?: Promise<{ dir?: string }>;
 }
 
 function collectDirectories(nodes: FileNode[]): string[] {
@@ -34,9 +33,8 @@ function collectDirectories(nodes: FileNode[]): string[] {
   return dirs;
 }
 
-export default async function ViewPage({ params, searchParams }: PageProps) {
+export default async function ViewPage({ params }: PageProps) {
   const { path: segments } = await params;
-  const query = searchParams ? await searchParams : {};
   const filePath = segments.map(decodeURIComponent).join('/');
 
   if (isDirectory(filePath)) {
@@ -105,8 +103,6 @@ export default async function ViewPage({ params, searchParams }: PageProps) {
     // Special draft entry used by homepage "New Notes"
     if (filePath === 'Untitled.md') {
       const draftDirectories = collectDirectories(getFileTree());
-      const requestedDir = typeof query.dir === 'string' ? query.dir : '';
-      const defaultDraftDir = draftDirectories.includes(requestedDir) ? requestedDir : '';
       return (
         <ViewPageClient
           filePath={filePath}
@@ -116,7 +112,6 @@ export default async function ViewPage({ params, searchParams }: PageProps) {
           initialEditing
           isDraft
           draftDirectories={draftDirectories}
-          defaultDraftDir={defaultDraftDir}
           createDraftAction={createDraftAction}
         />
       );

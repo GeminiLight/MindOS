@@ -23,6 +23,9 @@ export function createClaudePermissionPromptConfig(input: {
             MINDOS_RUNTIME_PERMISSION_TOOL: CLAUDE_PERMISSION_PROMPT_TOOL,
             MINDOS_ASK_USER_QUESTION_TOOL: CLAUDE_ASK_USER_QUESTION_TOOL,
             ...(process.env.AUTH_TOKEN ? { MINDOS_RUNTIME_PERMISSION_AUTH_TOKEN: process.env.AUTH_TOKEN } : {}),
+            ...(process.env.MINDOS_RUNTIME_PERMISSION_FETCH_TIMEOUT_MS
+              ? { MINDOS_RUNTIME_PERMISSION_FETCH_TIMEOUT_MS: process.env.MINDOS_RUNTIME_PERMISSION_FETCH_TIMEOUT_MS }
+              : {}),
           },
         },
       },
@@ -64,6 +67,12 @@ const runId = process.env.MINDOS_RUNTIME_PERMISSION_RUN_ID;
 const authToken = process.env.MINDOS_RUNTIME_PERMISSION_AUTH_TOKEN;
 const permissionToolName = process.env.MINDOS_RUNTIME_PERMISSION_TOOL || 'mindos_runtime_permission';
 const askUserQuestionToolName = process.env.MINDOS_ASK_USER_QUESTION_TOOL || 'AskUserQuestion';
+// Permission prompts wait for a human, so the ceiling is generous (15 min by
+// default) — but it must exist, or a wedged web process blocks the runtime
+// forever on a fetch that will never settle.
+const fetchTimeoutMs = Number(process.env.MINDOS_RUNTIME_PERMISSION_FETCH_TIMEOUT_MS) > 0
+  ? Number(process.env.MINDOS_RUNTIME_PERMISSION_FETCH_TIMEOUT_MS)
+  : 900000;
 let buffer = '';
 
 function send(message) {
@@ -166,6 +175,7 @@ async function requestDecision(args) {
   const input = extractToolInput(args);
   const response = await fetch(new URL('/api/ask/runtime-permission/request', baseUrl), {
     method: 'POST',
+    signal: AbortSignal.timeout(fetchTimeoutMs),
     headers: {
       'Content-Type': 'application/json',
       ...(authToken ? { Authorization: 'Bearer ' + authToken } : {}),
@@ -191,6 +201,7 @@ async function requestUserQuestion(args, requestId) {
   if (!baseUrl || !runId) return { answers: [], cancelled: true, error: 'no_bridge' };
   const response = await fetch(new URL('/api/ask/user-question/request', baseUrl), {
     method: 'POST',
+    signal: AbortSignal.timeout(fetchTimeoutMs),
     headers: {
       'Content-Type': 'application/json',
       ...(authToken ? { Authorization: 'Bearer ' + authToken } : {}),

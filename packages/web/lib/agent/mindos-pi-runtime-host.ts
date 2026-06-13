@@ -11,6 +11,7 @@ import { estimateStringTokens, getOllamaContextWindow } from '@/lib/agent/contex
 import { isProviderId, toPiProvider, type ProviderId } from '@/lib/agent/providers';
 import { findProvider, isProviderEntryId } from '@/lib/custom-endpoints';
 import { setKbPermissionPolicy } from '@/lib/agent/kb-extension';
+import { registerWebKbExtensionHost } from '@/lib/agent/kb-extension-host';
 import { scanExtensionPaths } from '@/lib/pi-integration/extensions';
 import { generateSkillsXml } from '@/lib/agent/skills-xml';
 import { getSkillSearchPaths } from '@/lib/agent/skill-paths';
@@ -18,7 +19,7 @@ import { ensureMindosAgentMcpRuntimeConfig } from '@/lib/pi-integration/mcp-conf
 import {
   createMindosAgentPermissionPolicy,
   hasMindosExtensionScope,
-} from '@/lib/agent/permission-policy';
+} from '@geminilight/mindos/agent/permission-policy';
 
 type WebServerSettings = {
   disabledSkills?: string[];
@@ -45,6 +46,10 @@ export function getMindosWebPiRuntimePaths(input: {
   const policy = createMindosAgentPermissionPolicy(input.mode);
   const webAppDir = path.join(input.projectRoot, 'packages', 'web');
   const additionalExtensionPaths: string[] = [];
+
+  // The kb-extension entry reads the web toolkit back from a process-global
+  // slot at reload() time — register it before the loader can run.
+  registerWebKbExtensionHost();
 
   if (hasMindosExtensionScope(policy, 'kb')) {
     additionalExtensionPaths.push(path.join(webAppDir, 'lib', 'agent', 'kb-extension.ts'));
@@ -142,6 +147,15 @@ export function createWebMindosPiRuntimeHostServices(
     },
     onOllamaCompacted: ({ beforeTokens, afterTokens }) => {
       console.log(`[ask] Ollama compacted: ${beforeTokens} -> ${afterTokens} tokens`);
+    },
+    onExtensionLoadErrors: (errors) => {
+      for (const entry of errors) {
+        // Known benign overlap: pi-web-access also ships a web_search tool;
+        // our dedicated web-search-extension registers first and wins (it is
+        // settings/provider aware). Everything else is a real load failure.
+        if (entry.error.includes('Tool "web_search" conflicts with')) continue;
+        console.error(`[ask] extension failed to load: ${entry.path}: ${entry.error}`);
+      }
     },
   };
 }

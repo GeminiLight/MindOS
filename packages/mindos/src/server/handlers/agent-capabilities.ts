@@ -1,7 +1,7 @@
 import { json, type MindosServerResponse } from '../response.js';
 import { redactSensitiveObject, redactSensitiveText } from '../../session/redaction.js';
 
-export type AgentCapabilityMode = 'chat' | 'agent';
+export type AgentCapabilityMode = 'chat' | 'organize' | 'agent';
 
 export type AgentCapabilityKind =
   | 'kb-tool'
@@ -21,7 +21,7 @@ export type AgentCapabilitySource =
   | 'a2a';
 
 export type AgentCapabilityStatus = 'available' | 'missing' | 'disabled' | 'cached' | 'error';
-export type AgentCapabilityPermissionRequired = 'chat' | 'agent';
+export type AgentCapabilityPermissionRequired = 'readonly' | 'organize' | 'agent';
 
 export type AgentCapabilityInput = {
   id?: unknown;
@@ -85,7 +85,7 @@ export type AgentCapabilitiesServices = Partial<Record<
 >>;
 
 const SOURCE_ORDER = ['kb', 'subagents', 'acp', 'native', 'mcp', 'a2a'] as const satisfies readonly AgentCapabilitySourceKey[];
-const MODE_ORDER = ['chat', 'agent'] as const satisfies readonly AgentCapabilityMode[];
+const MODE_ORDER = ['chat', 'organize', 'agent'] as const satisfies readonly AgentCapabilityMode[];
 const KIND_SET = new Set<AgentCapabilityKind>([
   'kb-tool',
   'pi-subagent',
@@ -97,7 +97,7 @@ const KIND_SET = new Set<AgentCapabilityKind>([
 ]);
 const SOURCE_SET = new Set<AgentCapabilitySource>(['mindos', 'pi-subagents', 'acp', 'native', 'mcp', 'a2a']);
 const STATUS_SET = new Set<AgentCapabilityStatus>(['available', 'missing', 'disabled', 'cached', 'error']);
-const PERMISSION_SET = new Set<AgentCapabilityPermissionRequired>(['chat', 'agent']);
+const PERMISSION_SET = new Set<AgentCapabilityPermissionRequired>(['readonly', 'organize', 'agent']);
 
 export async function handleAgentCapabilitiesGet(
   searchParams: URLSearchParams,
@@ -143,7 +143,7 @@ export async function handleAgentCapabilitiesGet(
 }
 
 function normalizeMode(value: string | null): AgentCapabilityMode {
-  return value === 'chat' || value === 'agent' ? value : 'agent';
+  return value === 'chat' || value === 'organize' || value === 'agent' ? value : 'agent';
 }
 
 function normalizeInclude(value: string | null): AgentCapabilitySourceKey[] {
@@ -169,10 +169,8 @@ function normalizeCapability(input: AgentCapabilityInput): AgentCapability | nul
     : null;
   if (!kind || !source || !name) return null;
 
-  const permissionRequired = input.permissionRequired === 'readonly'
-    ? 'chat'
-    : typeof input.permissionRequired === 'string' && PERMISSION_SET.has(input.permissionRequired as AgentCapabilityPermissionRequired)
-      ? input.permissionRequired as AgentCapabilityPermissionRequired
+  const permissionRequired = typeof input.permissionRequired === 'string' && PERMISSION_SET.has(input.permissionRequired as AgentCapabilityPermissionRequired)
+    ? input.permissionRequired as AgentCapabilityPermissionRequired
     : 'agent';
   const availableInModes = normalizeModes(input.availableInModes, permissionRequired);
   if (availableInModes.length === 0) return null;
@@ -214,9 +212,11 @@ function normalizeModes(
   value: unknown,
   permissionRequired: AgentCapabilityPermissionRequired,
 ): AgentCapabilityMode[] {
-  const fallback: AgentCapabilityMode[] = permissionRequired === 'chat'
-    ? ['chat', 'agent']
-    : ['agent'];
+  const fallback: AgentCapabilityMode[] = permissionRequired === 'readonly'
+    ? ['chat', 'organize', 'agent']
+    : permissionRequired === 'organize'
+      ? ['organize', 'agent']
+      : ['agent'];
   if (!Array.isArray(value)) return fallback;
   const requested = new Set(value.filter((item): item is AgentCapabilityMode => MODE_ORDER.includes(item as AgentCapabilityMode)));
   return MODE_ORDER.filter((mode) => requested.has(mode));

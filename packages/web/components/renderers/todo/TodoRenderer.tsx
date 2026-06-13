@@ -72,7 +72,7 @@ export function TodoRenderer({ content, saveAction }: RendererContext) {
   const pct = totalItems ? Math.round((totalDone / totalItems) * 100) : 0;
 
   return (
-    <div className="toc-reserved-content mx-auto max-w-[900px] px-0 py-2">
+    <div className="max-w-[900px] mx-auto xl:mr-[220px] px-0 py-2">
       {/* Summary header */}
       <div className="mb-5 flex items-center gap-4">
         <div className="flex-1">

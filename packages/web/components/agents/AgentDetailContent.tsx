@@ -30,7 +30,6 @@ import RuntimeDiagSection from './RuntimeDiagSection';
 import EnvPermSection from './EnvPermSection';
 import KnowledgeInteractionSection from './KnowledgeInteractionSection';
 import ActivitySection from './ActivitySection';
-import { WorkbenchPageShell } from '@/components/shared/ContentPageShell';
 
 export default function AgentDetailContent({ agentKey }: { agentKey: string }) {
   const { t } = useLocale();
@@ -308,7 +307,7 @@ export default function AgentDetailContent({ agentKey }: { agentKey: string }) {
       .slice(0, 3);
 
     return (
-      <WorkbenchPageShell>
+      <div className="content-width px-4 md:px-6 py-8 md:py-10">
         <Link href="/agents" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-4">
           <ArrowLeft size={14} />
           {a.backToOverview}
@@ -333,13 +332,13 @@ export default function AgentDetailContent({ agentKey }: { agentKey: string }) {
             </div>
           )}
         </div>
-      </WorkbenchPageShell>
+      </div>
     );
   }
 
 
   return (
-    <WorkbenchPageShell className="space-y-4">
+    <div className="content-width px-4 md:px-6 py-8 md:py-10 space-y-4">
       {/* Back link */}
       <Link href="/agents" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
         <ArrowLeft size={14} />
@@ -790,7 +789,7 @@ export default function AgentDetailContent({ agentKey }: { agentKey: string }) {
         onCancel={() => setConfirmCustomRemove(false)}
         variant="destructive"
       />
-    </WorkbenchPageShell>
+    </div>
   );
 }
 

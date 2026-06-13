@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
+import { useVisiblePolling } from '@/lib/use-visible-polling';
 import type { DelegationRecord } from '@/lib/a2a/types';
 
 interface DelegationHistory {
@@ -37,13 +38,8 @@ export function useDelegationHistory(active: boolean): DelegationHistory {
     return () => { mountedRef.current = false; };
   }, []);
 
-  // Fetch on mount and poll while active
-  useEffect(() => {
-    if (!active) return;
-    fetchHistory();
-    const id = setInterval(fetchHistory, POLL_INTERVAL_MS);
-    return () => clearInterval(id);
-  }, [active, fetchHistory]);
+  // Fetch on activation and poll while active — paused when the tab is hidden
+  useVisiblePolling(() => void fetchHistory(), POLL_INTERVAL_MS, { enabled: active });
 
   return { delegations, loading, refresh: fetchHistory };
 }

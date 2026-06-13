@@ -4,7 +4,6 @@ import { useState } from 'react';
 import { useLocale } from '@/lib/stores/locale-store';
 import { useCases, categories, scenarios, type UseCaseCategory, type UseCaseScenario } from './use-cases.generated';
 import UseCaseCard from './UseCaseCard';
-import { WorkbenchPageShell } from '@/components/shared/ContentPageShell';
 
 export default function ExploreContent() {
   const { t } = useLocale();
@@ -24,7 +23,7 @@ export default function ExploreContent() {
   };
 
   return (
-    <WorkbenchPageShell className="md:py-12">
+    <div className="content-width px-4 md:px-6 py-8 md:py-12">
       {/* Header */}
       <div className="mb-8">
         <div className="flex items-center gap-2 mb-3">
@@ -103,7 +102,7 @@ export default function ExploreContent() {
           No use cases match the current filters.
         </p>
       )}
-    </WorkbenchPageShell>
+    </div>
   );
 }
 

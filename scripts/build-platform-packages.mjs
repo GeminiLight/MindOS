@@ -9,6 +9,7 @@ import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, write
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { binaryName, buildBunBinary } from './build-bun-binary.mjs';
+import { assertExtractionRuntime, bundleDocxExtractor, pruneStandaloneToExtractionRuntime } from './prune-standalone-extraction.mjs';
 import { writeRuntimeManifest as writeSharedRuntimeManifest } from './runtime-manifest.mjs';
 import { pruneClaudeAgentSdkNativePackages } from '../packages/desktop/scripts/prepare-mindos-bundle.mjs';
 
@@ -53,6 +54,19 @@ for (const target of selected) {
     console.log(`[build-platform-packages] Removed ${removedClaudeNativePackages} Claude Agent SDK native package(s) from ${target.key}`);
   }
   if (targetBuildBinary) {
+    // Binary targets serve static-web; the standalone Next server is dead
+    // weight in the embedded archive, but the document extraction runtime
+    // under _standalone must survive — excluding it wholesale shipped a
+    // runtime whose start gate fell into the source-build crash path (1.1.7).
+    // Fallback-runtime packages expose _standalone on disk, so keep it whole.
+    if (!fallbackRuntime && existsSync(resolve(packageDir, 'static-web', 'index.html'))) {
+      const standaloneDir = resolve(packageDir, '_standalone');
+      // Bundle first: it resolves against the complete staged tree, which the
+      // pruned closure does not fully preserve (nested node_modules).
+      bundleDocxExtractor(standaloneDir);
+      pruneStandaloneToExtractionRuntime(standaloneDir);
+      assertExtractionRuntime(standaloneDir);
+    }
     buildBunBinary({
       runtimeRoot: packageDir,
       outFile: resolve(packageDir, 'bin', binaryName(target)),

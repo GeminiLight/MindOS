@@ -118,7 +118,7 @@ export default function ModeCapsule({ mode, onChange, disabled }: ModeCapsulePro
       ref={dropdownRef}
       role="listbox"
       aria-label="Select mode"
-      className="fixed z-app-popover pointer-events-auto min-w-[200px] max-w-[260px] rounded-lg border border-border bg-card shadow-lg py-1 animate-in fade-in-0 zoom-in-95 duration-100"
+      className="fixed z-[60] pointer-events-auto min-w-[200px] max-w-[260px] rounded-lg border border-border bg-card shadow-lg py-1 animate-in fade-in-0 zoom-in-95 duration-100"
       style={{
         left: pos.left,
         ...(pos.direction === 'up'

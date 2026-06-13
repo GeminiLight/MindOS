@@ -318,9 +318,9 @@ function EndpointCard({
       )}
     >
       <RuntimeStatusMark status={endpoint.status} label={statusLabel} className="absolute right-3 top-3" />
-      <span className="flex min-w-0 items-start gap-3">
+      <span className="flex items-start gap-3">
         {runtimeIcon(endpoint.icon, 'h-10 w-10')}
-        <span className="min-w-0 flex-1">
+        <span className="min-w-0">
           <span className="flex min-w-0 flex-wrap items-center gap-1.5">
             <span className="truncate text-sm font-semibold text-foreground">{endpoint.name}</span>
             {isPrimary ? (
@@ -333,11 +333,9 @@ function EndpointCard({
         </span>
       </span>
       {showDetail ? (
-        <RuntimeDetailLine
-          status={endpoint.status}
-          statusLabel={statusLabel}
-          detail={endpoint.detail}
-        />
+        <span className="mt-3 block truncate rounded-md border border-border/40 bg-background/45 px-2.5 py-1.5 text-2xs text-muted-foreground">
+          {endpoint.detail}
+        </span>
       ) : null}
       <span className="mt-auto flex w-full items-center justify-end pt-3">
         <span className="ml-auto inline-flex items-center gap-1 text-2xs font-medium text-muted-foreground transition-colors group-hover:text-foreground">
@@ -346,36 +344,6 @@ function EndpointCard({
         </span>
       </span>
     </button>
-  );
-}
-
-function RuntimeDetailLine({
-  status,
-  statusLabel,
-  detail,
-}: {
-  status: EndpointStatus;
-  statusLabel: string;
-  detail: string;
-}) {
-  const labelClass = status === 'error'
-    ? 'border-error/20 bg-error/10 text-error'
-    : status === 'checking'
-      ? 'border-border bg-muted text-muted-foreground'
-      : 'border-[var(--amber)]/20 bg-[var(--amber)]/10 text-[var(--amber-text)]';
-
-  return (
-    <span
-      className="mt-3 flex w-full max-w-full min-w-0 items-center gap-2 overflow-hidden rounded-md border border-border/40 bg-background/45 px-2.5 py-1.5 text-2xs text-muted-foreground"
-      title={detail}
-    >
-      <span className={cn('shrink-0 rounded-full border px-1.5 py-0.5 text-[10px] font-medium leading-4', labelClass)}>
-        {statusLabel}
-      </span>
-      <span className="min-w-0 flex-1 truncate">
-        {detail}
-      </span>
-    </span>
   );
 }
 

@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { seedFile } from '../setup';
-import { runWithAgentRunContext } from '@/lib/agent/agent-run-context';
+import { runWithAgentRunContext } from '@geminilight/mindos/agent/agent-run-context';
 import {
   listAgentEvents,
   resetAgentRunsForTest,
   startAgentRun,
   type AgentEvent,
-} from '@/lib/agent/run-ledger';
+} from '@geminilight/mindos/agent/run-ledger';
 import { knowledgeBaseTools } from '@/lib/agent/tools';
 
 function getTool(name: string) {

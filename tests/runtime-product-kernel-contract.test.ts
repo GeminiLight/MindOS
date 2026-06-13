@@ -58,6 +58,8 @@ describe('MindOS runtime product kernel contract', () => {
     expect(Object.keys(manifest.dependencies ?? {}).sort()).toEqual([
       '@anthropic-ai/sdk',
       '@modelcontextprotocol/sdk',
+      // kb-tools value-imports TypeBox at runtime (Wave 3, agent-core consolidation)
+      '@sinclair/typebox',
       'chokidar',
       'pino',
       'pino-pretty',
@@ -69,6 +71,7 @@ describe('MindOS runtime product kernel contract', () => {
       './agent',
       './agent-runtime',
       './agent-runtime/runtime-env',
+      './agent/*',
       './capabilities',
       './cli',
       './client',

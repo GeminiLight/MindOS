@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import { X } from 'lucide-react';
 import { useLocale } from '@/lib/stores/locale-store';
-import { ModalFooter, ModalHeader, ModalShell } from '@/components/shared/ModalShell';
 
 export default function KeyboardShortcuts() {
   const [open, setOpen] = useState(false);
@@ -42,18 +42,26 @@ export default function KeyboardShortcuts() {
   const sections = [...new Set(shortcuts.map(s => s.section))];
 
   return (
-    <ModalShell
-      ariaLabel={s.title}
-      frameClassName="overflow-hidden shadow-2xl"
-      onClose={() => setOpen(false)}
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center modal-backdrop"
+      onClick={e => e.target === e.currentTarget && setOpen(false)}
     >
-        <ModalHeader
-          title={s.title}
-          titleClassName="font-medium"
-          closeLabel={s.closePanel}
-          onClose={() => setOpen(false)}
-          className="py-3.5"
-        />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={s.title}
+        className="w-full max-w-md mx-4 bg-card border border-border rounded-xl shadow-2xl overflow-hidden"
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-border">
+          <span className="text-sm font-medium text-foreground">{s.title}</span>
+          <button
+            onClick={() => setOpen(false)}
+            className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <X size={15} />
+          </button>
+        </div>
 
         {/* Content */}
         <div className="px-5 py-4 space-y-4 max-h-[60vh] overflow-y-auto">
@@ -82,12 +90,13 @@ export default function KeyboardShortcuts() {
         </div>
 
         {/* Footer */}
-        <ModalFooter className="justify-start py-2.5">
+        <div className="px-5 py-2.5 border-t border-border">
           <p className="text-2xs text-muted-foreground/60">
             Press <kbd className="px-1 py-0.5 text-2xs rounded border border-border bg-muted font-mono">{mod}</kbd>
             <kbd className="px-1 py-0.5 text-2xs rounded border border-border bg-muted font-mono ml-0.5">?</kbd> {s.toggleHint}
           </p>
-        </ModalFooter>
-    </ModalShell>
+        </div>
+      </div>
+    </div>
   );
 }

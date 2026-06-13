@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  defaultEchoPath,
   defaultEchoSegment,
   ECHO_SEGMENT_HREF,
   ECHO_SEGMENT_IDS,
@@ -38,7 +37,7 @@ describe('echo-segments', () => {
   });
 
   it('index redirect path is /echo/imprint', () => {
-    expect(defaultEchoPath()).toBe('/echo/imprint');
+    expect(`/echo/${defaultEchoSegment()}`).toBe('/echo/imprint');
   });
 
   it('ECHO_SEGMENT_HREF covers every segment with /echo/ prefix', () => {

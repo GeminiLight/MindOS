@@ -6,6 +6,7 @@ import {
 } from '../session/index.js';
 import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import { nativeImport } from '../foundation/native-import.js';
 import type {
   MindosRuntimePermissionRequest,
   MindosRuntimePermissionResult,
@@ -56,10 +57,23 @@ type ClaudeCodeSdkState = {
   emittedDone: boolean;
 };
 
-const requireFromHere = createRequire(import.meta.url);
+// Lazy: a module-scope `createRequire(import.meta.url)` would crash the whole
+// agent-runtime import graph if a bundler ships this file with a broken
+// import.meta — keep the failure scoped to binary resolution (which already
+// degrades gracefully to the CLI fallback).
+let lazyRequireFromHere: NodeRequire | undefined;
+function requireFromHere(): NodeRequire {
+  lazyRequireFromHere ??= createRequire(import.meta.url);
+  return lazyRequireFromHere;
+}
+
+let sdkModulePromise: Promise<ClaudeCodeSdkModule> | undefined;
 
 export async function loadClaudeCodeSdkModule(): Promise<ClaudeCodeSdkModule> {
-  return import('@anthropic-ai/claude-agent-sdk') as Promise<ClaudeCodeSdkModule>;
+  // Bundler-proof: the SDK spawns its CLI via paths derived from import.meta;
+  // a webpack-inlined copy breaks that (see foundation/native-import.ts).
+  sdkModulePromise ??= nativeImport<ClaudeCodeSdkModule>('@anthropic-ai/claude-agent-sdk');
+  return sdkModulePromise;
 }
 
 export function resolveClaudeCodeSdkNativeBinaryPath(input: {
@@ -105,11 +119,15 @@ export function resolveClaudeCodeSdkNativeBinaryPath(input: {
 
 function createClaudeCodeSdkPackageRequireResolve(): (id: string) => string {
   try {
-    const sdkUrl = import.meta.resolve('@anthropic-ai/claude-agent-sdk');
-    const requireFromSdk = createRequire(sdkUrl);
+    // Resolve platform binary packages relative to the SDK itself (they are
+    // the SDK's optional deps, not necessarily visible from here). Avoids
+    // `import.meta.resolve`, which webpack neither supports nor tolerates.
+    const sdkPackageJson = requireFromHere().resolve('@anthropic-ai/claude-agent-sdk/package.json');
+    const requireFromSdk = createRequire(sdkPackageJson);
     return requireFromSdk.resolve.bind(requireFromSdk);
   } catch {
-    return requireFromHere.resolve.bind(requireFromHere);
+    const fallback = requireFromHere();
+    return fallback.resolve.bind(fallback);
   }
 }
 

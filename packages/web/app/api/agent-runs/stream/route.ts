@@ -6,7 +6,7 @@ import {
   listAgentRuns,
   subscribeAgentRunEvents,
   type AgentEvent,
-} from '@/lib/agent/run-ledger';
+} from '@geminilight/mindos/agent/run-ledger';
 
 const encoder = new TextEncoder();
 const DEFAULT_LIMIT = 50;

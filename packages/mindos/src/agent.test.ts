@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   AGENT_SYSTEM_PROMPT,
   CHAT_SYSTEM_PROMPT,
+  ORGANIZE_SYSTEM_PROMPT,
   buildMindosAskSystemPrompt,
   compactMindosPromptForTokenBudget,
   defineMindosAgent,
@@ -32,9 +33,10 @@ describe('MindOS agent product contract', () => {
     expect(CHAT_SYSTEM_PROMPT).not.toContain('Delegation / Subagents');
     expect(CHAT_SYSTEM_PROMPT).not.toContain('ask_user_question');
     expect(CHAT_SYSTEM_PROMPT.length).toBeLessThan(AGENT_SYSTEM_PROMPT.length);
+    expect(ORGANIZE_SYSTEM_PROMPT).toContain('organizing information');
   });
 
-  it('builds chat ask prompts without Web modules', async () => {
+  it('builds chat and organize ask prompts without Web modules', async () => {
     const prompt = await buildMindosAskSystemPrompt({
       mode: 'chat',
       mindRoot: '/tmp/mind',

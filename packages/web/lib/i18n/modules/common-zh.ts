@@ -1,0 +1,50 @@
+// common + app + login + notFound + updateBanner
+
+export const commonZh = {
+  common: {
+    relatedFiles: '关联视图',
+  },
+  app: {
+    tagline: '你在此思考，Agent 依此行动',
+    footer: 'MindOS · 人机共生知识系统',
+  },
+  login: {
+    tagline: '人类在此思考，Agent 依此行动',
+    title: '输入网页访问密码',
+    loginBadge: '私有工作区',
+    reauthBadge: '会话已锁定',
+    reauthTitle: '重新输入密码',
+    reauthSubtitle: '浏览器会话已过期。解锁 MindOS 后会回到刚才的位置。',
+    subtitle: '请输入密码以继续',
+    returningTo: (path: string) => `返回 ${path}`,
+    passwordLabel: '密码',
+    passwordPlaceholder: '输入密码',
+    showPassword: '显示密码',
+    hidePassword: '隐藏密码',
+    signIn: '登录',
+    continueButton: '继续',
+    signingIn: '登录中…',
+    incorrectPassword: '密码错误，请重试。',
+    connectionError: '连接错误，请重试。',
+    forgotPassword: '忘记密码？',
+    forgotIntro: 'MindOS 不会远程找回这个本地网页访问密码。',
+    forgotReset: '在运行 MindOS 的那台机器上执行：',
+    forgotDisable: '如果需要临时关闭登录保护，执行：',
+    forgotRestart: '已登录的浏览器会话会保留。若这不是你的机器，请联系配置这台 MindOS 的人重置。',
+  },
+  notFound: {
+    title: '文件未找到',
+    description: '该文件不存在于你的知识库中。',
+    createButton: '创建此文件',
+    creating: '创建中...',
+    goToParent: '返回上级目录',
+    goHome: '首页',
+  },
+  updateBanner: {
+    newVersion: (latest: string, current: string) => `MindOS v${latest} 可用（当前 v${current}）`,
+    updateNow: '更新',
+    runUpdate: '终端运行',
+    orSee: '或',
+    releaseNotes: '查看更新说明',
+  },
+};

@@ -210,6 +210,7 @@ export {
   getServerSyncLockPath,
   handleSyncGet,
   handleSyncPost,
+  sanitizeGitEnv,
   type MindosSyncConfig,
   type MindosSyncPostPayload,
   type MindosSyncServices,

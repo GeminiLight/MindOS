@@ -67,7 +67,7 @@ function AgentsPanelLoading() {
         <span className="text-sm font-medium text-foreground">{p.title}</span>
       </div>
       <div className="flex flex-1 items-center justify-center text-xs text-muted-foreground">
-        {p.loading}
+        {p.acpLoading}
       </div>
     </div>
   );
@@ -456,7 +456,9 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
     };
 
     const REFRESH_COOLDOWN_MS = 2000;
-    const POLL_INTERVAL_MS = 5000;
+    // Idle-polling budget contract (idle-polling-budget.test): own writes
+    // arrive via mindos:files-changed events, so the fallback poll can be slow.
+    const POLL_INTERVAL_MS = 15000;
 
     const checkVersion = async () => {
       if (stopped || document.visibilityState === 'hidden') return;

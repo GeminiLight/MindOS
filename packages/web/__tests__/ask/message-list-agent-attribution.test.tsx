@@ -46,7 +46,7 @@ describe('MessageList agent attribution', () => {
 
     expect(html).toContain('Claude Code');
     expect(html).toContain('Hello from Claude.');
-    expect(html).toContain('logo-square.svg');
+    expect(html).toContain('lucide-bot');
   });
 
   it('keeps the agent badge visible on assistant error bubbles', () => {
@@ -68,6 +68,6 @@ describe('MessageList agent attribution', () => {
 
     expect(html).toContain('Claude Code');
     expect(html).toContain('ACP Agent Error: timeout');
-    expect(html).toContain('logo-square.svg');
+    expect(html).toContain('lucide-bot');
   });
 });

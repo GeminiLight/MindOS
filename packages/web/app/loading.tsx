@@ -1,12 +1,10 @@
-import { LoadingPageShell } from '@/components/shared/ContentPageShell';
-
 /**
  * Home page skeleton — shown while server components load.
  * Matches the HomeContent layout: hero → spaces grid → recent files.
  */
 export default function Loading() {
   return (
-    <LoadingPageShell aria-busy="true" aria-label="Loading">
+    <div className="content-width px-4 md:px-6 py-10 md:py-14 animate-pulse" aria-busy="true" aria-label="Loading">
       {/* Hero skeleton */}
       <div className="mb-10">
         <div className="flex items-center gap-3 mb-2">
@@ -77,6 +75,6 @@ export default function Loading() {
           ))}
         </div>
       </div>
-    </LoadingPageShell>
+    </div>
   );
 }

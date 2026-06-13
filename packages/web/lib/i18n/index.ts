@@ -1,40 +1,15 @@
-import type { Widen } from './_core';
-import { commonEn, commonZh } from './modules/common';
-import { navigationEn, navigationZh } from './modules/navigation';
-import { aiChatEn, aiChatZh } from './modules/ai-chat';
-import { knowledgeEn, knowledgeZh } from './modules/knowledge';
-import { panelsEn, panelsZh } from './modules/panels';
-import { settingsEn, settingsZh } from './modules/settings';
-import { onboardingEn, onboardingZh } from './modules/onboarding';
-import { featuresEn, featuresZh } from './modules/features';
-import { workspaceTabsEn, workspaceTabsZh } from './modules/workspace-tabs';
-import { exploreEn, exploreZh } from './generated/explore-i18n.generated';
+/**
+ * i18n entry point — composes BOTH locales, so it is safe for server code and
+ * tests only. First-load client code must import lib/i18n/messages-en directly
+ * (and load zh lazily) to keep the inactive locale out of the startup bundle;
+ * type-only imports from here are fine anywhere (they compile away).
+ * Guarded by __tests__/lib/first-load-bundle-split.test.ts.
+ */
+import { en } from './messages-en';
+import { zh } from './messages-zh';
 
-export const en = {
-  ...commonEn,
-  ...navigationEn,
-  ...aiChatEn,
-  ...knowledgeEn,
-  ...panelsEn,
-  ...settingsEn,
-  ...onboardingEn,
-  ...featuresEn,
-  ...workspaceTabsEn,
-  explore: exploreEn,
-} as const;
-
-export const zh: Widen<typeof en> = {
-  ...commonZh,
-  ...navigationZh,
-  ...aiChatZh,
-  ...knowledgeZh,
-  ...panelsZh,
-  ...settingsZh,
-  ...onboardingZh,
-  ...featuresZh,
-  ...workspaceTabsZh,
-  explore: exploreZh,
-};
+export { en } from './messages-en';
+export { zh } from './messages-zh';
 
 export type Locale = 'en' | 'zh';
 export const messages = { en, zh } as const;

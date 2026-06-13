@@ -2,6 +2,18 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { vi, beforeEach, afterEach } from 'vitest';
+import { setMindRootResolverForTests } from '@geminilight/mindos/foundation';
+
+// --- Git env isolation ---
+// Git hooks (pre-push etc.) export GIT_DIR / GIT_WORK_TREE / GIT_INDEX_FILE…
+// pointing at the real repository. Tests in this suite (and the product code
+// they invoke) spawn `git init/add/commit` in temp dirs with inherited env —
+// under a hook those commands would silently operate on the real repo (real
+// incident: sync-test commits destroyed the development worktree). Scrub the
+// repo-targeting vars for the whole test process.
+for (const key of Object.keys(process.env)) {
+  if (key.startsWith('GIT_')) delete process.env[key];
+}
 
 type TestGlobal = typeof globalThis & {
   DataTransfer: typeof DataTransfer;
@@ -141,9 +153,10 @@ vi.mock('@/lib/settings', () => ({
   }),
 }));
 
-vi.mock('@/lib/mind-root', () => ({
-  effectiveMindRoot: () => state.root,
-}));
+// The mind-root resolver now lives in the core package (lib/mind-root is a
+// shim), so a vi.mock of the web module path would not reach core-internal
+// callers like the agent run ledger. The core test seam covers every caller.
+setMindRootResolverForTests(() => state.root);
 
 beforeEach(() => {
   state.root = fs.mkdtempSync(path.join(os.tmpdir(), 'mindos-app-test-'));

@@ -1,6 +1,5 @@
 import fs from 'fs';
 import path from 'path';
-import Fuse, { FuseResultMatch } from 'fuse.js';
 import { MindOSError, ErrorCodes } from '@/lib/errors';
 import {
   resolveExistingSafe,
@@ -51,9 +50,13 @@ import {
 import type { MindSpaceSummary } from './core/list-spaces';
 import type { ContentChangeEvent, ContentChangeInput, ContentChangeSummary } from './core/content-changes';
 import { FileNode, SpacePreview } from './core/types';
-import { SearchMatch } from './types';
 import type { SearchPrewarmResponse } from './types';
 import { effectiveMindRoot } from './mind-root';
+import {
+  notifySearchIndexInvalidated,
+  notifySearchIndexFileChanged,
+  notifySearchIndexPathRemoved,
+} from './core/search-index-bridge';
 import { extractPdfText } from './core/pdf-text';
 import { telemetry } from './telemetry';
 import { ensureDefaultMindSystemUpgrade } from './mind-system-upgrade';
@@ -89,25 +92,27 @@ const CACHE_TTL_MS = 30_000; // 30 seconds (file watcher still invalidates immed
 
 let _treeVersion = 0;
 
+// Core-search invalidation goes through `core/search-index-bridge` — a
+// dependency-free module — so this file (imported by app/layout for the
+// file tree) never pulls the core search/embedding stack into ordinary
+// page renders. If `core/search` was never loaded, the hooks are absent
+// and the notifications are dropped (the lazy build reads fresh state).
+
 function invalidateSearchIndexLazy(): void {
-  // Intentionally no-op here. `fs.ts` is imported by app/layout for the file
-  // tree; pulling core/search from this boundary also pulls embedding/provider
-  // code into ordinary page renders. The app-level Fuse index is invalidated
-  // via `_searchIndex = null`; core search rebuilds from source when used.
+  notifySearchIndexInvalidated();
 }
 
 function updateSearchIndexFileLazy(mindRoot: string, filePath: string): void {
-  void mindRoot;
-  void filePath;
+  notifySearchIndexFileChanged(mindRoot, filePath);
 }
 
 function addSearchIndexFileLazy(mindRoot: string, filePath: string): void {
-  void mindRoot;
-  void filePath;
+  // The index's updateFile handles both add and modify.
+  notifySearchIndexFileChanged(mindRoot, filePath);
 }
 
 function removeSearchIndexFileLazy(filePath: string): void {
-  void filePath;
+  notifySearchIndexPathRemoved(filePath);
 }
 
 function buildCache(root: string): FileTreeCache {
@@ -250,10 +255,108 @@ function ensureCache(): FileTreeCache {
 
 // ─── File System Watcher ──────────────────────────────────────────────────────
 // Watches mindRoot for external changes (VSCode, Finder, git pull) and
-// invalidates cache immediately instead of waiting for the 5s TTL.
+// invalidates cache immediately instead of waiting for the TTL. Events are
+// batched (500ms debounce) and applied incrementally to the search index;
+// unknown paths or oversized batches fall back to full invalidation.
 
 let _watcher: fs.FSWatcher | null = null;
 let _watchDebounce: ReturnType<typeof setTimeout> | null = null;
+
+/** Above this many distinct paths per batch, a full invalidation is cheaper. */
+const WATCH_BATCH_LIMIT = 50;
+
+let _watchPending: Set<string> | null = null;
+let _watchPendingRoot: string | null = null;
+let _watchOverflow = false;
+
+function isIgnoredWatcherPath(relPath: string): boolean {
+  for (const segment of relPath.split('/')) {
+    if (IGNORED_DIRS.has(segment)) return true;
+  }
+  return false;
+}
+
+/**
+ * Record a single watcher event (relative path inside mindRoot).
+ * Pass `null`/`undefined` when the platform did not report a filename —
+ * this forces a full invalidation on the next flush (never silently drop).
+ * Exported for tests and for alternative watch backends.
+ */
+export function handleWatcherEvent(filename: string | Buffer | null | undefined): void {
+  if (filename == null) {
+    _watchOverflow = true;
+    scheduleWatcherFlush();
+    return;
+  }
+  const rel = String(filename).split(path.sep).join('/');
+  if (isIgnoredWatcherPath(rel)) return;
+
+  let root: string;
+  try { root = getMindRoot(); } catch { _watchOverflow = true; scheduleWatcherFlush(); return; }
+  // Root changed mid-batch (e.g. settings switch) → stale rel paths.
+  if (_watchPendingRoot !== null && _watchPendingRoot !== root) _watchOverflow = true;
+  _watchPendingRoot = root;
+
+  if (!_watchPending) _watchPending = new Set();
+  _watchPending.add(rel);
+  if (_watchPending.size > WATCH_BATCH_LIMIT) _watchOverflow = true;
+  scheduleWatcherFlush();
+}
+
+function scheduleWatcherFlush(): void {
+  if (_watchDebounce) clearTimeout(_watchDebounce);
+  _watchDebounce = setTimeout(flushWatcherChanges, 500);
+}
+
+/**
+ * Apply the batched watcher events: invalidate the tree cache and update
+ * the search/link indexes incrementally per path. Exported for tests;
+ * called automatically 500ms after the last event.
+ */
+export function flushWatcherChanges(): void {
+  if (_watchDebounce) { clearTimeout(_watchDebounce); _watchDebounce = null; }
+  const pending = _watchPending;
+  const pendingRoot = _watchPendingRoot;
+  const overflow = _watchOverflow;
+  _watchPending = null;
+  _watchPendingRoot = null;
+  _watchOverflow = false;
+
+  if (!pending && !overflow) return; // nothing relevant happened
+
+  let root: string;
+  try { root = getMindRoot(); } catch { return; }
+
+  if (overflow || !pending || pendingRoot !== root) {
+    invalidateCache();
+    return;
+  }
+
+  // Tree cache is always stale after any event; search/link indexes are
+  // updated per file below.
+  _cache = null;
+  _searchIndex = null;
+  _treeVersion++;
+
+  for (const rel of pending) {
+    let stat: fs.Stats | null = null;
+    try { stat = fs.statSync(path.join(root, rel)); } catch { stat = null; }
+
+    if (stat?.isDirectory()) {
+      // Directory event: contents unknown (rename/move of a subtree) —
+      // a full invalidation is the only safe answer.
+      invalidateCache();
+      return;
+    }
+    if (stat) {
+      updateSearchIndexFileLazy(root, rel);
+      if (_linkIndex.isBuilt()) _linkIndex.updateFile(root, rel);
+    } else {
+      removeSearchIndexFileLazy(rel);
+      if (_linkIndex.isBuilt()) _linkIndex.removeFile(rel);
+    }
+  }
+}
 
 /**
  * Start watching mindRoot for file changes. Idempotent — safe to call multiple times.
@@ -268,19 +371,7 @@ export function startFileWatcher(): void {
 
   try {
     _watcher = fs.watch(root, { recursive: true }, (_event, filename) => {
-      if (!filename) return;
-      // Ignore .git internals, node_modules, .next
-      if (filename.startsWith('.git') || filename.includes('node_modules') || filename.includes('.next')) return;
-      // Debounce: batch rapid file changes into one cache invalidation
-      if (_watchDebounce) clearTimeout(_watchDebounce);
-      _watchDebounce = setTimeout(() => {
-        _cache = null; // Invalidate tree cache — next read will rebuild
-        _searchIndex = null;
-        _treeVersion++; // Bump version so polling clients detect the change
-        invalidateSearchIndexLazy();
-        _linkIndex.invalidate();
-        _watchDebounce = null;
-      }, 500);
+      handleWatcherEvent(filename ?? null);
     });
     _watcher.on('error', () => {
       // Watcher failed (e.g. too many open files) — degrade gracefully to TTL cache
@@ -295,6 +386,9 @@ export function startFileWatcher(): void {
 /** Stop the file watcher. Safe to call even if not watching. */
 export function stopFileWatcher(): void {
   if (_watchDebounce) { clearTimeout(_watchDebounce); _watchDebounce = null; }
+  _watchPending = null;
+  _watchPendingRoot = null;
+  _watchOverflow = false;
   if (_watcher) { _watcher.close(); _watcher = null; }
 }
 
@@ -713,189 +807,43 @@ export function updateSection(filePath: string, heading: string, newContent: str
   invalidateCacheForFile(filePath);
 }
 
-/** App-level search result (extends core SearchResult with Fuse.js match details) */
-export interface AppSearchResult {
-  path: string;
-  snippet: string;
-  score: number;
-  matches?: SearchMatch[];
-}
-
-// ─── Search (app-specific: Fuse.js fuzzy search with CJK support) ────────────
+// ─── Search prewarm (app-level) ───────────────────────────────────────────────
 //
-// This is the frontend search used by the ⌘K overlay in the browser.
-// It uses Fuse.js for fuzzy matching with CJK language support.
-//
-// NOTE: A separate literal search exists in `lib/core/search.ts`, used by
-// the MCP server via the REST API. The two coexist intentionally:
-// - App search (here): Fuse.js fuzzy match, best for interactive UI search
-// - Core search (lib/core/search.ts): exact literal match with filters, best for MCP tools
+// The browser ⌘K overlay queries `/api/search`, which uses the core BM25 /
+// hybrid search in `lib/core/`. The old in-process Fuse.js index here had no
+// query callers anymore (dead code) and was removed; what remains is the
+// prewarm bookkeeping used by `/api/search/prewarm` to keep the tree cache
+// warm and report a document count.
 
-const MAX_CONTENT_LENGTH = 10_000;
-
-/** Maximum content length for large knowledge bases (300+ files) to keep Fuse queries fast. */
-const MAX_CONTENT_LENGTH_LARGE_KB = 5_000;
-const LARGE_KB_THRESHOLD = 300;
-
-interface SearchIndex {
-  fuse: InstanceType<typeof Fuse<SearchDocument>>;
-  documents: SearchDocument[];
+interface UiSearchPrewarmState {
+  documentCount: number;
   timestamp: number;
   treeVersion: number;
 }
 
-interface SearchDocument {
-  path: string;
-  fileName: string;
-  content: string;
-}
+let _searchIndex: UiSearchPrewarmState | null = null;
 
-let _searchIndex: SearchIndex | null = null;
-
-function getValidSearchIndex(): SearchIndex | null {
+function getValidSearchIndex(): UiSearchPrewarmState | null {
   ensureCache();
   return _searchIndex !== null && _searchIndex.treeVersion === _treeVersion
     ? _searchIndex
     : null;
 }
 
-function getSearchIndex(): SearchIndex {
-  const cached = getValidSearchIndex();
-  if (cached) {
-    telemetry.track('search.ui.index.cache_hit', { documentCount: cached.documents.length });
-    return cached;
-  }
-
-  const stop = telemetry.startTimer('search.ui.index.build');
-  const allFiles = collectAllFiles();
-  const documents: SearchDocument[] = [];
-
-  const contentLimit = allFiles.length >= LARGE_KB_THRESHOLD
-    ? MAX_CONTENT_LENGTH_LARGE_KB
-    : MAX_CONTENT_LENGTH;
-
-  for (const filePath of allFiles) {
-    let content: string;
-    try {
-      content = getFileContent(filePath);
-    } catch {
-      continue;
-    }
-    if (content.length > contentLimit) {
-      content = content.slice(0, contentLimit);
-    }
-    documents.push({
-      path: filePath,
-      fileName: path.basename(filePath),
-      content,
-    });
-  }
-
-  const fuse = new Fuse(documents, {
-    keys: [
-      { name: 'fileName', weight: 0.3 },
-      { name: 'path', weight: 0.2 },
-      { name: 'content', weight: 0.5 },
-    ],
-    includeScore: true,
-    includeMatches: true,
-    threshold: 0.4,
-    ignoreLocation: true,
-    minMatchCharLength: 2,
-    useExtendedSearch: true,
-  });
-
-  _searchIndex = { fuse, documents, timestamp: Date.now(), treeVersion: _treeVersion };
-  stop({ fileCount: allFiles.length, documentCount: documents.length });
-  return _searchIndex;
-}
-
-/** Full-text search across all files using Fuse.js fuzzy matching. */
+/** Warm the file-tree cache and report the searchable document count. */
 export function prewarmSearchIndex(): SearchPrewarmResponse {
   const cached = getValidSearchIndex();
   if (cached) {
-    telemetry.track('search.ui.prewarm', { cacheState: 'hit', documentCount: cached.documents.length });
-    return { warmed: true, cacheState: 'hit', documentCount: cached.documents.length };
+    telemetry.track('search.ui.prewarm', { cacheState: 'hit', documentCount: cached.documentCount });
+    return { warmed: true, cacheState: 'hit', documentCount: cached.documentCount };
   }
 
-  const index = getSearchIndex();
-  telemetry.track('search.ui.prewarm', { cacheState: 'built', documentCount: index.documents.length });
-  return { warmed: true, cacheState: 'built', documentCount: index.documents.length };
-}
-
-export function searchFiles(query: string): AppSearchResult[] {
-  if (!query.trim()) return [];
-
-  const stop = telemetry.startTimer('search.ui.query', { queryLen: query.length });
-  const { fuse, documents } = getSearchIndex();
-
-  // FIXED: Removed CJK-specific exact-match forcing.
-  // Now all queries use the same Fuse.js fuzzy matching for consistent UX.
-  const searchQuery = query;
-
-  const fuseResults = fuse.search(searchQuery, { limit: 20 });
-
-  const results = fuseResults.map((r) => {
-    const filePath = r.item.path;
-    const content = r.item.content;
-    const score = 1 - (r.score ?? 1);
-
-    const snippet = generateSnippet(content, r.matches);
-
-    const matches = r.matches?.map((m) => ({
-      indices: m.indices as [number, number][],
-      value: m.value ?? '',
-      key: m.key ?? '',
-    }));
-
-    return { path: filePath, snippet, score, matches };
-  });
-
-  stop({ resultCount: results.length, documentCount: documents.length });
-  return results;
-}
-
-/** Pick the best (longest) content match and build a context snippet around it. */
-function generateSnippet(
-  content: string,
-  matches?: readonly FuseResultMatch[],
-): string {
-  const contentMatch = matches?.find((m) => m.key === 'content');
-  if (!contentMatch || contentMatch.indices.length === 0) {
-    const s = content.slice(0, 120).replace(/\n/g, ' ').trim();
-    return content.length > 120 ? s + '...' : s;
-  }
-
-  let bestStart = 0, bestEnd = 0, bestLen = 0;
-  for (const [ms, me] of contentMatch.indices) {
-    const len = me - ms;
-    if (len > bestLen) {
-      bestStart = ms;
-      bestEnd = me;
-      bestLen = len;
-    }
-  }
-
-  const snippetStart = Math.max(0, bestStart - 120);
-  const snippetEnd = Math.min(content.length, bestEnd + 120);
-
-  let start = snippetStart;
-  if (start > 0) {
-    const spaceIdx = content.indexOf(' ', start);
-    if (spaceIdx !== -1 && spaceIdx < bestStart) start = spaceIdx + 1;
-  }
-  let end = snippetEnd;
-  if (end < content.length) {
-    const spaceIdx = content.lastIndexOf(' ', end);
-    if (spaceIdx > bestEnd) end = spaceIdx;
-  }
-
-  let snippet = content.slice(start, end).trim();
-  // Collapse multiple newlines into spaces but keep single newlines
-  snippet = snippet.replace(/\n{2,}/g, ' ↵ ');
-  if (start > 0) snippet = '...' + snippet;
-  if (end < content.length) snippet = snippet + '...';
-  return snippet;
+  const stop = telemetry.startTimer('search.ui.index.build');
+  const documentCount = collectAllFiles().length;
+  _searchIndex = { documentCount, timestamp: Date.now(), treeVersion: _treeVersion };
+  stop({ fileCount: documentCount, documentCount });
+  telemetry.track('search.ui.prewarm', { cacheState: 'built', documentCount });
+  return { warmed: true, cacheState: 'built', documentCount };
 }
 
 // ─── Public API: CSV (delegated to @mindos/core) ────────────────────────────

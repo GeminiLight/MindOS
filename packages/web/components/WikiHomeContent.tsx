@@ -2,15 +2,14 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
-import { Bot, Brain, ChevronDown, FolderOpen, Plus, Sparkles, Search, FilePlus, ArrowRight, Clock, FileText, Table, Star, X, History } from 'lucide-react';
+import { Bot, Brain, CheckCircle2, ChevronDown, FolderOpen, Plus, Sparkles, Search, FilePlus, ArrowRight, Clock, FileText, Table, Star, X, History } from 'lucide-react';
 import { usePinnedFiles } from '@/lib/hooks/usePinnedFiles';
 import { useLocale } from '@/lib/stores/locale-store';
 import { encodePath, relativeTime, extractEmoji, stripEmoji } from '@/lib/utils';
 import { InboxSection } from '@/components/home/InboxSection';
 import type { BuiltInMindSystemSpaceRecord, SpaceInfo } from '@/lib/space-records';
 import { Select } from '@/components/settings/Primitives';
-import { ReadingPageShell } from '@/components/shared/ContentPageShell';
-import { openTab } from '@/lib/workspace-tabs';
+import { getMindSystemAssistantAvatar, resolveMindSystemAssistantCopies } from '@/lib/mind-system-assistant-copy';
 
 interface RecentFile {
   path: string;
@@ -87,7 +86,7 @@ export default function WikiHomeContent({ spaces, recent, mindSystemSpaces }: Wi
   const lastFile = recent[0];
 
   return (
-    <ReadingPageShell>
+    <div className="content-width px-4 md:px-6 py-10 md:py-14">
 
       {/* ══════════ Hero ══════════ */}
       <div className="mb-10">
@@ -134,7 +133,6 @@ export default function WikiHomeContent({ spaces, recent, mindSystemSpaces }: Wi
         <div className="flex items-center gap-3 mt-4 pl-4">
           <Link
             href="/view/Untitled.md"
-            onClick={() => openTab('doc', 'Untitled.md', 'Untitled.md')}
             className="hit-target-box inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-all duration-200 hover:-translate-y-0.5 text-[var(--amber-foreground)] [--hit-target-bg:var(--amber)] [--hit-target-hover-bg:var(--amber)] [--hit-target-radius:var(--radius-lg)] [--hit-target-hover-shadow:0_4px_6px_-1px_color-mix(in_srgb,var(--foreground)_10%,transparent)]"
           >
             <FilePlus size={14} />
@@ -143,7 +141,6 @@ export default function WikiHomeContent({ spaces, recent, mindSystemSpaces }: Wi
           {lastFile && (
             <Link
               href={`/view/${encodePath(lastFile.path)}`}
-              onClick={() => openTab('doc', lastFile.path, lastFile.path.split('/').pop() || lastFile.path)}
               className="hit-target-box inline-flex items-center gap-2 px-3.5 py-2 text-sm font-medium transition-colors text-muted-foreground hover:text-foreground [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-lg)]"
             >
               <ArrowRight size={14} className="text-[var(--amber)]/60" />
@@ -241,11 +238,7 @@ export default function WikiHomeContent({ spaces, recent, mindSystemSpaces }: Wi
                     <div className="min-w-0 flex-1">
                       <span className="text-sm font-medium truncate block text-foreground">{label}</span>
                       {space.description && (
-                        <span
-                          className="mt-0.5 block truncate text-xs text-muted-foreground"
-                          title={space.description}
-                          suppressHydrationWarning
-                        >
+                        <span className="text-xs text-muted-foreground line-clamp-1 mt-0.5" suppressHydrationWarning>
                           {space.description}
                         </span>
                       )}
@@ -277,7 +270,7 @@ export default function WikiHomeContent({ spaces, recent, mindSystemSpaces }: Wi
       <InboxSection />
 
       {/* ══════════ Pinned Files ══════════ */}
-      <PinnedFilesSection />
+      <PinnedFilesSection formatTime={formatTime} />
 
       {/* ── Visual divider ── */}
       <div className="border-t border-border/30 mb-8" />
@@ -292,7 +285,7 @@ export default function WikiHomeContent({ spaces, recent, mindSystemSpaces }: Wi
         <Sparkles size={10} className="text-[var(--amber)]/40" />
         <span>{t.app.footer}</span>
       </div>
-    </ReadingPageShell>
+    </div>
   );
 }
 
@@ -305,6 +298,7 @@ function BuiltInMindSpacesSection({
   const pillars = spaces.map(space => ({
     ...space,
     data: t.home.mindPillars[space.slot.key],
+    assistantCopies: resolveMindSystemAssistantCopies(space.assistantSummary.assistants, t.home.mindAssistants[space.slot.key]),
   }));
 
   if (pillars.length === 0) return null;
@@ -317,13 +311,15 @@ function BuiltInMindSpacesSection({
       >
         {t.home.builtInSpacesTitle}
       </SectionTitle>
-      <div className="mb-3 max-w-2xl text-sm leading-normal text-muted-foreground" data-mind-system-home-desc>
+      <div className="mb-3 max-w-2xl text-sm leading-relaxed text-muted-foreground">
         {t.home.builtInSpacesDesc}
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
         {pillars.map((pillar) => {
           const desc = pillar.data?.desc ?? pillar.slot.role;
-          const assistantCount = pillar.assistantSummary?.assistants.length ?? 0;
+          const draftCount = pillar.assistantSummary?.draftCount ?? 0;
+          const instructionReady = pillar.assistantSummary?.instructionReady ?? false;
+          const assistantCount = pillar.assistantCopies.length;
           return (
             <article
               key={pillar.slot.key}
@@ -348,21 +344,48 @@ function BuiltInMindSpacesSection({
                     <span className="mt-0.5 block truncate font-mono text-[10px] text-muted-foreground/45">{pillar.slot.systemId}</span>
                   </span>
                 </span>
-                <span
-                  className="block truncate text-xs leading-5 text-muted-foreground"
-                  title={desc}
-                  data-mind-system-card-desc={pillar.slot.key}
-                >
-                  {desc}
-                </span>
+                <span className="block min-h-9 text-xs leading-relaxed text-muted-foreground">{desc}</span>
               </Link>
-              <span className="mt-3 flex items-center gap-2 border-t border-border/40 pt-2.5" data-mind-system-card-assistant-summary={pillar.slot.key}>
-                <span className="inline-flex min-w-0 items-center gap-1.5 rounded-md bg-[var(--amber)]/10 px-2 py-1 text-[10px] font-medium text-[var(--amber)]/80">
-                  <Bot size={11} className="shrink-0" aria-hidden="true" />
-                  <span className="truncate">{t.home.mindAssistant.spaceTitle}</span>
+              <span className="mt-3 block border-t border-border/40 pt-2.5">
+                <span className="flex items-start gap-2">
+                  <Bot size={13} className="mt-0.5 shrink-0 text-[var(--amber)]/70" aria-hidden="true" />
+                  <span className="min-w-0 flex-1">
+                    <span className="mt-1 flex flex-wrap items-center gap-1.5">
+                      <span className="rounded bg-[var(--amber)]/10 px-1.5 py-px text-[10px] font-medium text-[var(--amber)]/80">
+                        {t.home.mindAssistant.label}
+                      </span>
+                      <span className="rounded bg-muted px-1.5 py-px text-[10px] font-medium text-muted-foreground">
+                        {t.home.mindAssistant.assistantCount(assistantCount)}
+                      </span>
+                    </span>
+                    <span className="mt-1 flex min-w-0 items-center gap-1.5 overflow-hidden">
+                      {pillar.assistantCopies.slice(0, 3).map((assistant) => {
+                        const avatar = getMindSystemAssistantAvatar(assistant.name, assistant.id);
+                        return (
+                          <span key={assistant.id} className="inline-flex min-w-0 items-center gap-1">
+                            <span
+                              data-mind-system-home-assistant-icon={assistant.id}
+                              className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[8px] font-semibold ${avatar.className}`}
+                              aria-hidden="true"
+                            >
+                              {avatar.text}
+                            </span>
+                            <span className="truncate text-[10px] text-muted-foreground/60">{assistant.name}</span>
+                          </span>
+                        );
+                      })}
+                    </span>
+                  </span>
                 </span>
-                <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-md bg-muted px-1.5 font-mono text-[10px] font-semibold tabular-nums text-muted-foreground">
-                  {assistantCount}
+                <span className="mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[10px] text-muted-foreground/65">
+                  <span className={`inline-flex items-center gap-1 ${instructionReady ? 'text-[var(--success)]' : 'text-muted-foreground/60'}`}>
+                    <CheckCircle2 size={11} aria-hidden="true" />
+                    {instructionReady ? t.home.mindAssistant.instructionReady : t.home.mindAssistant.instructionMissing}
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <FileText size={11} aria-hidden="true" />
+                    {t.home.mindAssistant.customDrafts(draftCount)}
+                  </span>
                 </span>
               </span>
               <span className="mt-3 flex items-center justify-between border-t border-border/40 pt-2">
@@ -407,7 +430,7 @@ function SectionTitle({ icon, children, count, action }: {
 }
 
 /* ── Pinned Files Section ── */
-function PinnedFilesSection() {
+function PinnedFilesSection({ formatTime }: { formatTime: (t: number) => string }) {
   const { t } = useLocale();
   const { pinnedFiles, removePin } = usePinnedFiles();
 

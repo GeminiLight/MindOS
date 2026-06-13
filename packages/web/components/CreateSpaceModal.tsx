@@ -2,15 +2,13 @@
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Folder, Loader2, Sparkles, AlertTriangle } from 'lucide-react';
+import { Folder, Loader2, X, Sparkles, AlertTriangle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useLocale } from '@/lib/stores/locale-store';
 import { encodePath } from '@/lib/utils';
 import { createSpaceAction } from '@/lib/actions';
 import { checkAiAvailable, triggerSpaceAiInit } from '@/lib/space-ai-init';
 import DirPicker from './DirPicker';
-import { ModalHeader, ModalShell } from '@/components/shared/ModalShell';
-import { openTab } from '@/lib/workspace-tabs';
 
 /* ── Create Space Modal ── */
 
@@ -88,9 +86,7 @@ export default function CreateSpaceModal({ t, dirPaths }: { t: ReturnType<typeof
       close();
       router.refresh();
       window.dispatchEvent(new Event('mindos:files-changed'));
-      const viewPath = createdPath.endsWith('/') ? createdPath : `${createdPath}/`;
-      openTab('doc', viewPath, createdPath.split('/').filter(Boolean).pop() || createdPath);
-      router.push(`/view/${encodePath(viewPath)}`);
+      router.push(`/view/${encodePath(createdPath + '/')}`);
     } else {
       const msg = result.error ?? '';
       if (msg.includes('already exists')) {
@@ -112,19 +108,23 @@ export default function CreateSpaceModal({ t, dirPaths }: { t: ReturnType<typeof
   const h = t.home;
 
   return createPortal(
-    <ModalShell
-      ariaLabel={h.newSpace}
-      frameClassName="rounded-2xl"
-      onClose={close}
-      onKeyDown={handleKeyDown}
-    >
-        <ModalHeader
-          title={h.newSpace}
-          titleClassName="text-base"
-          closeLabel={h.cancelCreate}
-          onClose={close}
-          className="border-b-0 px-5 pb-3 pt-5"
-        />
+    <div className="fixed inset-0 z-50 flex items-center justify-center" onKeyDown={handleKeyDown}>
+      {/* Backdrop */}
+      <div className="absolute inset-0 overlay-backdrop" onClick={close} />
+      {/* Dialog */}
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={h.newSpace}
+        className="relative w-full max-w-md mx-4 rounded-2xl border border-border bg-card shadow-xl"
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 pt-5 pb-3">
+          <h3 className="text-base font-semibold text-foreground">{h.newSpace}</h3>
+          <button onClick={close} className="hit-target-box p-1 text-muted-foreground transition-colors [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-md)]">
+            <X size={14} />
+          </button>
+        </div>
         {/* Body */}
         <div className="px-5 pb-5 flex flex-col gap-3">
           {/* Location */}
@@ -228,7 +228,8 @@ export default function CreateSpaceModal({ t, dirPaths }: { t: ReturnType<typeof
             </button>
           </div>
         </div>
-    </ModalShell>,
+      </div>
+    </div>,
     document.body,
   );
 }

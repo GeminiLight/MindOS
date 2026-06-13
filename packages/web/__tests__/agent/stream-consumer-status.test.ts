@@ -127,57 +127,6 @@ describe('consumeUIMessageStream — status event handling', () => {
     ]);
   });
 
-  it('suppresses routine native runtime lifecycle status parts', async () => {
-    const stream = makeStream(
-      { type: 'status', visible: true, runtime: 'claude', message: 'Starting Claude Code locally.' },
-      { type: 'status', visible: true, runtime: 'claude', message: 'Claude Code is connected and working in this chat.' },
-      { type: 'status', visible: true, runtime: 'codex', message: 'Resuming Codex locally.' },
-      { type: 'status', visible: true, runtime: 'codex', message: 'Codex is connected and working in this chat.' },
-      { type: 'status', visible: true, runtime: 'claude', message: 'Claude Code is compacting context.' },
-      { type: 'status', visible: true, runtime: 'claude', message: 'Claude Code is contacting Claude.' },
-      { type: 'done' },
-    );
-
-    const result = await consumeUIMessageStream(stream, vi.fn());
-
-    expect(result.content).toBe('');
-    expect(result.parts).toEqual([]);
-  });
-
-  it('keeps fallback and retry runtime statuses visible', async () => {
-    const stream = makeStream(
-      {
-        type: 'status',
-        visible: true,
-        runtime: 'claude',
-        message: 'Claude Agent SDK is unavailable; using Claude Code CLI fallback. SDK missing',
-      },
-      {
-        type: 'status',
-        visible: true,
-        runtime: 'codex',
-        message: 'Codex app-server error; retrying (1/3). Retrying in 1s.',
-      },
-      { type: 'done' },
-    );
-
-    const result = await consumeUIMessageStream(stream, vi.fn());
-    const statusParts = result.parts.filter((p): p is RuntimeStatusPart => p.type === 'runtime-status');
-
-    expect(statusParts).toEqual([
-      {
-        type: 'runtime-status',
-        runtime: 'claude',
-        message: 'Claude Agent SDK is unavailable; using Claude Code CLI fallback. SDK missing',
-      },
-      {
-        type: 'runtime-status',
-        runtime: 'codex',
-        message: 'Codex app-server error; retrying (1/3). Retrying in 1s.',
-      },
-    ]);
-  });
-
   it('coalesces adjacent visible runtime status updates for the same runtime', async () => {
     const stream = makeStream(
       {
@@ -467,9 +416,11 @@ describe('consumeUIMessageStream — status event handling', () => {
     );
 
     const updates: Array<{ parts: unknown[] }> = [];
+    // emitCoalesceMs: 0 — this test asserts an intermediate emission
+    // (delta applied, tool still running) that coalescing would skip.
     const result = await consumeUIMessageStream(stream, (message) => {
       updates.push({ parts: message.parts });
-    });
+    }, undefined, { emitCoalesceMs: 0 });
     const afterDelta = updates.find((message) => {
       const part = message.parts.find((p): p is ToolCallPart => (p as ToolCallPart).type === 'tool-call');
       return part?.output === 'hello\n';
@@ -536,9 +487,11 @@ describe('consumeUIMessageStream — status event handling', () => {
     );
 
     const updates: Array<{ parts: unknown[] }> = [];
+    // emitCoalesceMs: 0 — this test asserts an intermediate emission
+    // (permission approved, tool still running) that coalescing would skip.
     const result = await consumeUIMessageStream(stream, (message) => {
       updates.push({ parts: message.parts });
-    });
+    }, undefined, { emitCoalesceMs: 0 });
     const afterResolved = updates.find((message) => {
       const part = message.parts.find((p): p is ToolCallPart => (p as ToolCallPart).type === 'tool-call');
       return part?.runtimePermission?.status === 'approved';

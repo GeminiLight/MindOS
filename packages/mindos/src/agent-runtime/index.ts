@@ -1,3 +1,4 @@
+export * from './child-process.js';
 export * from './claude-code-cli.js';
 export * from './claude-code-sdk.js';
 export * from './codex-env.js';

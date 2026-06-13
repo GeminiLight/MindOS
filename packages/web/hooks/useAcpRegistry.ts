@@ -13,13 +13,10 @@ interface AcpRegistryState {
 const STORAGE_KEY = 'mindos:acp-registry';
 const STALE_TTL_MS = 30 * 60 * 1000; // 30 min — show stale data instantly
 const REVALIDATE_TTL_MS = 10 * 60 * 1000; // 10 min — background refresh interval
-const BUILTIN_REFRESH_RETRY_MS = 1200;
-const BUILTIN_REFRESH_MAX_RETRIES = 3;
 
 export interface RegistryCache {
   agents: AcpRegistryEntry[];
   ts: number;
-  version?: string;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -32,22 +29,16 @@ export function readAcpRegistryCacheFromStorage(): RegistryCache | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     if (!isRecord(parsed) || !Array.isArray(parsed.agents) || typeof parsed.ts !== 'number') return null;
-    if (parsed.version !== undefined && typeof parsed.version !== 'string') return null;
     if (Date.now() - parsed.ts > STALE_TTL_MS) return null;
-    return {
-      agents: parsed.agents as AcpRegistryEntry[],
-      ts: parsed.ts,
-      version: typeof parsed.version === 'string' ? parsed.version : undefined,
-    };
+    return { agents: parsed.agents as AcpRegistryEntry[], ts: parsed.ts };
   } catch {
     return null;
   }
 }
 
-function writeStorage(agents: AcpRegistryEntry[], version?: string) {
-  if (version === 'builtin') return;
+function writeStorage(agents: AcpRegistryEntry[]) {
   try {
-    sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ agents, ts: Date.now(), version }));
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ agents, ts: Date.now() }));
   } catch { /* quota exceeded — ignore */ }
 }
 
@@ -59,17 +50,13 @@ export function useAcpRegistry(): AcpRegistryState {
   const [error, setError] = useState<string | null>(null);
   const [trigger, setTrigger] = useState(0);
   const inflight = useRef(false);
-  const builtinRefreshRetries = useRef(0);
 
   const retry = useCallback(() => {
-    builtinRefreshRetries.current = 0;
     setTrigger((n) => n + 1);
   }, []);
 
   useEffect(() => {
-    const fresh = cached.current
-      && cached.current.version !== 'builtin'
-      && Date.now() - cached.current.ts < REVALIDATE_TTL_MS;
+    const fresh = cached.current && Date.now() - cached.current.ts < REVALIDATE_TTL_MS;
     if (fresh && trigger === 0) return;
 
     if (inflight.current) return;
@@ -80,7 +67,6 @@ export function useAcpRegistry(): AcpRegistryState {
     setError(null);
 
     let cancelled = false;
-    let builtinRetryTimer: number | null = null;
 
     fetch('/api/acp/registry')
       .then((res) => {
@@ -89,20 +75,10 @@ export function useAcpRegistry(): AcpRegistryState {
       })
       .then((data) => {
         if (cancelled) return;
-        const registry = isRecord(data.registry) ? data.registry : null;
-        const version = typeof registry?.version === 'string' ? registry.version : undefined;
-        const list: AcpRegistryEntry[] = Array.isArray(registry?.agents) ? registry.agents as AcpRegistryEntry[] : [];
-        writeStorage(list, version);
-        cached.current = { agents: list, ts: Date.now(), version };
+        const list: AcpRegistryEntry[] = data.registry?.agents ?? [];
+        writeStorage(list);
+        cached.current = { agents: list, ts: Date.now() };
         setAgents(list);
-        if (version !== 'builtin') {
-          builtinRefreshRetries.current = 0;
-        } else if (builtinRefreshRetries.current < BUILTIN_REFRESH_MAX_RETRIES) {
-          builtinRefreshRetries.current += 1;
-          builtinRetryTimer = window.setTimeout(() => {
-            if (!cancelled) setTrigger((n) => n + 1);
-          }, BUILTIN_REFRESH_RETRY_MS);
-        }
       })
       .catch((err) => {
         if (cancelled) return;
@@ -113,11 +89,7 @@ export function useAcpRegistry(): AcpRegistryState {
         if (!cancelled) setLoading(false);
       });
 
-    return () => {
-      cancelled = true;
-      inflight.current = false;
-      if (builtinRetryTimer) window.clearTimeout(builtinRetryTimer);
-    };
+    return () => { cancelled = true; inflight.current = false; };
   }, [trigger]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return { agents, loading, error, retry };

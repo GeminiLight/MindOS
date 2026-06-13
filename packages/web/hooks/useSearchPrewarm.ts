@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { apiFetch } from '@/lib/api';
+import { subscribeFilesChanged } from '@/lib/files-changed';
 import type {
   SearchPrewarmEligibility,
   SearchPrewarmResponse,
@@ -68,12 +69,12 @@ export function useSearchPrewarm(active: boolean): SearchWarmState {
   }, []);
 
   useEffect(() => {
-    const handleFilesChanged = () => {
+    // Any file change invalidates the warm search index; coalesce bursts so a
+    // bulk file operation only resets (and re-triggers prewarm) once.
+    return subscribeFilesChanged(() => {
       hasAttemptedPrewarm.current = false;
       setWarmState('idle');
-    };
-    window.addEventListener('mindos:files-changed', handleFilesChanged);
-    return () => window.removeEventListener('mindos:files-changed', handleFilesChanged);
+    });
   }, []);
 
   useEffect(() => {

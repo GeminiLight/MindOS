@@ -37,7 +37,7 @@ describe('useAiOrganize start request', () => {
     }));
   });
 
-  it('passes Capture-specific provider and model overrides in agent mode', async () => {
+  it('passes Capture-specific provider and model overrides to /api/ask organize mode', async () => {
     const host = document.createElement('div');
     document.body.appendChild(host);
     const root = createRoot(host);
@@ -53,11 +53,10 @@ describe('useAiOrganize start request', () => {
     }));
     const request = JSON.parse(fetchMock.mock.calls[0][1].body as string);
     expect(request).toMatchObject({
-      mode: 'agent',
+      mode: 'organize',
       providerOverride: 'p_capture',
       modelOverride: 'capture-model',
     });
-    expect(request).not.toHaveProperty('toolProfile');
 
     await act(async () => {
       root.unmount();

@@ -38,7 +38,7 @@ import { isNextBuildCurrent, BUILD_VERSION_FILE, analyzeMindOsLayout, resolveWeb
 import { hasRequiredStandaloneAppFiles } from './runtime-health-contract';
 import { getDefaultBundledMindOsDirectory } from './mindos-runtime-path';
 import { getEffectiveMindRootFromConfig } from './mindos-desktop-config';
-import { ensureMindosCliShim, refreshMindosCliAndNotify } from './install-cli-shim';
+import { ensureMindosCliShim, refreshMindosCliAndNotify, scheduleCliShimInstall } from './install-cli-shim';
 import { verifyMindOsWebHealth, verifyMindOsWebListening } from './mindos-web-health';
 import { resolvePreferUnpacked } from './resolve-packaged-asset';
 import { registerMindosConnectSchemePrivileged, registerMindosConnectProtocol } from './mindos-connect-protocol';
@@ -233,7 +233,7 @@ function createMainWindow(): BrowserWindow {
     minWidth: 800, minHeight: 600,
     title: 'MindOS',
     titleBarStyle: process.platform === 'darwin' ? 'hidden' : 'default',
-    trafficLightPosition: process.platform === 'darwin' ? { x: 12, y: 15 } : undefined,
+    trafficLightPosition: process.platform === 'darwin' ? { x: 12, y: 17 } : undefined,
     /** Match app light `globals.css` --background (#f8f6f1); reduces white flash before first paint. */
     backgroundColor: '#f8f6f1',
     webPreferences: {
@@ -1354,7 +1354,7 @@ const trayCallbacks: TrayCallbacks = {
       refreshTray('error');
     }
   },
-  onRefreshCliShim: () => { refreshMindosCliAndNotify(mainWindow); },
+  onRefreshCliShim: () => { void refreshMindosCliAndNotify(mainWindow); },
 };
 
 // ── IPC Handlers ──
@@ -1577,8 +1577,9 @@ function setupIPC(): void {
       const verifiedVersion = coreUpdater.getCachedVersion();
       console.info(`[CoreUpdater] Files replaced: ${newRuntimeDir}, verified version: ${verifiedVersion}`);
 
-      // 2b. Refresh CLI shim so `mindos -v` reflects the new version
-      try { ensureMindosCliShim({ appendPath: false }); } catch (e) {
+      // 2b. Refresh CLI shim so `mindos -v` reflects the new version (forced — the
+      // runtime content changed even when the resolved cli.js path is identical)
+      try { await ensureMindosCliShim({ appendPath: false, force: true }); } catch (e) {
         console.warn('[CoreUpdater] CLI shim refresh failed:', e);
       }
 
@@ -1929,7 +1930,6 @@ app.whenReady().then(async () => {
 
   const stopBoot = desktopTelemetry.startTimer('desktop.boot.total');
   try {
-    ensureMindosCliShim({ appendPath: process.env.MINDOS_DISABLE_CLI_SHIM_PATH_APPEND !== '1' });
     cleanupOrphanedSshTunnel();
 
     // Show splash BEFORE healing so users see immediate visual feedback
@@ -1949,6 +1949,15 @@ app.whenReady().then(async () => {
       currentMode = disk.desktopMode === 'remote' ? 'remote' : 'local';
       splashWindow = createSplash();
     }
+
+    // CLI shim install is deferred until the splash has painted: on Windows the
+    // PATH registry step shells out to PowerShell and used to white-screen every
+    // launch. Steady-state launches skip it entirely via the install stamp.
+    scheduleCliShimInstall(splashWindow, () => {
+      ensureMindosCliShim({ appendPath: process.env.MINDOS_DISABLE_CLI_SHIM_PATH_APPEND !== '1' }).catch((e) => {
+        console.warn('[MindOS] Deferred CLI shim install failed:', e);
+      });
+    });
 
     await healPreviousInstallation();
     await bootApp();

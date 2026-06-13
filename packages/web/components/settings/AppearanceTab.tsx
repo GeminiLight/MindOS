@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { ChevronDown, ChevronRight, Sun, Moon, Monitor, Type, ALargeSmall, Columns3, Globe, BookOpen, Palette } from 'lucide-react';
-import { Locale } from '@/lib/i18n';
+import type { Locale } from '@/lib/i18n';
 import { FONTS, FONT_SIZES, AppearanceTabProps } from './types';
 import { SettingCard } from './Primitives';
 

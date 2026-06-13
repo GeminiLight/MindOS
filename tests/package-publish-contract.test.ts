@@ -103,6 +103,58 @@ describe('product npm publish contract', () => {
     expect(pkg.devDependencies).toHaveProperty('@anthropic-ai/claude-agent-sdk');
   });
 
+  it('ships the sunk agent core modules inside the publish closure', () => {
+    const pkg = readJson<{
+      files?: string[];
+      dependencies?: Record<string, string>;
+      exports?: Record<string, { types?: string; import?: string }>;
+    }>('packages/mindos/package.json');
+
+    // dist/ is whitelisted wholesale, so the compiled agent modules ship as
+    // long as the exports map routes the subpaths into dist.
+    expect(pkg.files).toContain('dist/');
+    expect(pkg.exports?.['./agent']).toEqual({
+      types: './dist/agent.d.ts',
+      import: './dist/agent.js',
+    });
+    expect(pkg.exports?.['./agent/*']).toEqual({
+      types: './dist/agent/*.d.ts',
+      import: './dist/agent/*.js',
+    });
+
+    // Modules sunk from packages/web/lib/agent (spec-agent-core-consolidation).
+    // A missing source file here means the web shim re-exports a dangling
+    // subpath and npx runs die with MODULE_NOT_FOUND.
+    for (const module of [
+      'run-ledger-types',
+      'agent-run-context',
+      'file-write-lock',
+      'result-reducer',
+      'permission-policy',
+      'global-state',
+      'redaction',
+      'run-ledger',
+      'run-cancellation',
+      'runtime-permission-bridge',
+      'user-question-bridge',
+      'line-diff',
+      'paragraph-extract',
+      'kb-tools',
+      'kb-extension',
+      'capability-registry',
+      'subagent-orchestrator',
+      'subagent-ledger-extension',
+      'stream-consumer',
+      'stream-message-types',
+    ]) {
+      expect(existsSync(resolve(root, `packages/mindos/src/agent/${module}.ts`))).toBe(true);
+    }
+
+    // kb-tools value-imports TypeBox schemas at runtime — it must be a real
+    // dependency, not a devDependency, or npx installs crash on import.
+    expect(pkg.dependencies).toHaveProperty('@sinclair/typebox');
+  });
+
   it('keeps product staging cleanup explicit and source-safe', () => {
     const rootPkg = readJson<{ scripts?: Record<string, string> }>('package.json');
     const cleanup = readText('scripts/clean-product-stage.mjs');

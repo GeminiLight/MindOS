@@ -2,6 +2,7 @@ import type { MindosAskFileContext, MindosAskMode } from '../session/index.js';
 import {
   AGENT_SYSTEM_PROMPT,
   CHAT_SYSTEM_PROMPT,
+  ORGANIZE_SYSTEM_PROMPT,
 } from './prompts.js';
 
 export type MindosKnowledgeFile = {
@@ -67,28 +68,32 @@ export async function buildMindosAskSystemPrompt(
   input: BuildMindosAskSystemPromptInput,
   services: BuildMindosAskSystemPromptServices,
 ): Promise<string> {
-  if (input.mode === 'chat') return buildLeanPrompt(input, services);
+  if (input.mode === 'organize') return buildLeanPrompt(input, services, 'organize');
+  if (input.mode === 'chat') return buildLeanPrompt(input, services, 'chat');
   return buildAgentPrompt(input, services);
 }
 
 function buildLeanPrompt(
   input: BuildMindosAskSystemPromptInput,
   services: BuildMindosAskSystemPromptServices,
+  mode: 'chat' | 'organize',
 ): string {
   const promptParts: string[] = [
-    CHAT_SYSTEM_PROMPT,
+    mode === 'chat' ? CHAT_SYSTEM_PROMPT : ORGANIZE_SYSTEM_PROMPT,
     `---\n\nmind_root=${input.mindRoot}`,
   ];
 
   const bootstrapIndex = services.readKnowledgeFile('README.md');
-  if (bootstrapIndex.ok && bootstrapIndex.content.trim().length > MIN_USEFUL_CONTENT_LENGTH) {
+  if (bootstrapIndex.ok && (mode === 'organize' || bootstrapIndex.content.trim().length > MIN_USEFUL_CONTENT_LENGTH)) {
     promptParts.push(`---\n\n## Knowledge Base Structure\n\n${bootstrapIndex.content}`);
   }
 
-  promptParts.push(`---\n\n${formatMindosAskTimeContext(services, { includeUnix: false })}`);
+  if (mode === 'chat') {
+    promptParts.push(`---\n\n${formatMindosAskTimeContext(services, { includeUnix: false })}`);
+  }
 
-  appendFileContext(promptParts, services.loadFileContext(input.attachedFiles, input.currentFile, 'chat'));
-  appendUploadedParts(promptParts, input.uploadedParts, 'chat');
+  appendFileContext(promptParts, services.loadFileContext(input.attachedFiles, input.currentFile, mode));
+  appendUploadedParts(promptParts, input.uploadedParts, mode);
 
   return promptParts.join('\n\n');
 }

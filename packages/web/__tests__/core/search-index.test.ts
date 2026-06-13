@@ -257,5 +257,96 @@ describe('SearchIndex', () => {
       expect(index.getDocLength('Profile/Identity.md')).toBe(5);
       expect(index.getDocLength('Profile/Identity.md')).not.toBe(oldLen);
     });
+
+    it('removeFile of an unknown path does not corrupt fileCount', () => {
+      index.rebuild(mindRoot);
+      index.removeFile('never/indexed.md');
+      expect(index.getFileCount()).toBe(4);
+    });
+
+    it('updateFile on a not-yet-indexed file adds it with correct fileCount', () => {
+      index.rebuild(mindRoot);
+      seedFile(mindRoot, 'Notes/brand-new.md', 'velociraptor facts');
+      index.updateFile(mindRoot, 'Notes/brand-new.md');
+      expect(index.getFileCount()).toBe(5);
+      expect(index.getCandidates('velociraptor')).toContain('Notes/brand-new.md');
+    });
+
+    it('removePath removes a single file', () => {
+      index.rebuild(mindRoot);
+      const removed = index.removePath('Archive/old.md');
+      expect(removed).toEqual(['Archive/old.md']);
+      expect(index.getCandidates('archived')).toHaveLength(0);
+    });
+
+    it('removePath removes every file under a directory prefix', () => {
+      seedFile(mindRoot, 'Projects/Sub/inner.md', 'nested submarine content');
+      index.rebuild(mindRoot);
+      const removed = index.removePath('Projects');
+      expect(removed.sort()).toEqual(['Projects/Sub/inner.md', 'Projects/TODO.md']);
+      expect(index.getCandidates('submarine')).toHaveLength(0);
+      expect(index.getFileCount()).toBe(3);
+      // Sibling files survive.
+      expect(index.getCandidates('archived')).toContain('Archive/old.md');
+    });
+
+    it('removePath does not remove files sharing only a name prefix', () => {
+      seedFile(mindRoot, 'Projects-extra/other.md', 'prefix collision content');
+      index.rebuild(mindRoot);
+      index.removePath('Projects');
+      expect(index.getCandidates('collision')).toContain('Projects-extra/other.md');
+    });
+  });
+
+  describe('content cache', () => {
+    it('serves content from memory after rebuild (no disk read)', () => {
+      index.rebuild(mindRoot);
+      const readSpy = vi.spyOn(fs, 'readFileSync');
+      const content = index.getContent(mindRoot, 'Archive/old.md');
+      expect(content).toContain('archived content');
+      const libraryReads = readSpy.mock.calls.filter((c) => String(c[0]).startsWith(mindRoot));
+      expect(libraryReads).toHaveLength(0);
+      readSpy.mockRestore();
+    });
+
+    it('returns pre-lowercased content', () => {
+      index.rebuild(mindRoot);
+      const lower = index.getLowerContent(mindRoot, 'Profile/Identity.md');
+      expect(lower).toContain('# my identity');
+    });
+
+    it('returns null for files not in the index', () => {
+      index.rebuild(mindRoot);
+      expect(index.getContent(mindRoot, 'nope/missing.md')).toBeNull();
+      expect(index.getLowerContent(mindRoot, 'nope/missing.md')).toBeNull();
+    });
+
+    it('lazily re-reads content after a persisted index is loaded (contents are not persisted)', () => {
+      index.rebuild(mindRoot);
+      const dir = fs.mkdtempSync(path.join(mindRoot, 'persist-'));
+      index.persist(dir);
+      const restored = new SearchIndex();
+      expect(restored.load(dir, mindRoot)).toBe(true);
+      expect(restored.getContent(mindRoot, 'Archive/old.md')).toContain('archived content');
+    });
+
+    it('refreshes cached content on updateFile', () => {
+      index.rebuild(mindRoot);
+      expect(index.getContent(mindRoot, 'Archive/old.md')).toContain('archived');
+      seedFile(mindRoot, 'Archive/old.md', 'replaced with fresh text');
+      index.updateFile(mindRoot, 'Archive/old.md');
+      expect(index.getContent(mindRoot, 'Archive/old.md')).toBe('replaced with fresh text');
+      expect(index.getLowerContent(mindRoot, 'Archive/old.md')).toBe('replaced with fresh text');
+    });
+
+    it('getAllFiles lists indexed files', () => {
+      index.rebuild(mindRoot);
+      expect(index.getAllFiles().sort()).toEqual([
+        'Archive/old.md',
+        'Profile/Identity.md',
+        'Projects/TODO.md',
+        'Resources/data.csv',
+      ]);
+    });
   });
 });

@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { readAcpDetectionCacheFromStorage, useAcpDetection } from '@/hooks/useAcpDetection';
-import { readAcpRegistryCacheFromStorage, useAcpRegistry } from '@/hooks/useAcpRegistry';
+import { readAcpRegistryCacheFromStorage } from '@/hooks/useAcpRegistry';
 
 const DETECTION_STORAGE_KEY = 'mindos:acp-detection:v3';
 const LEGACY_DETECTION_STORAGE_KEY_V2 = 'mindos:acp-detection:v2';
@@ -85,69 +85,6 @@ describe('ACP hook storage caches', () => {
 
     expect(readAcpDetectionCacheFromStorage()).toBeNull();
     expect(readAcpRegistryCacheFromStorage()).toBeNull();
-  });
-
-  it('does not persist built-in ACP registry fallback before refresh data arrives', async () => {
-    vi.useFakeTimers();
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          registry: {
-            version: 'builtin',
-            agents: [{ id: 'gemini', name: 'Gemini CLI' }],
-          },
-        }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          registry: {
-            version: '1',
-            agents: [
-              { id: 'gemini', name: 'Gemini CLI' },
-              { id: 'new-cdn-only', name: 'CDN Only Agent' },
-            ],
-          },
-        }),
-      });
-    vi.stubGlobal('fetch', fetchMock);
-
-    const states: Array<ReturnType<typeof useAcpRegistry>> = [];
-    function Probe() {
-      states.push(useAcpRegistry());
-      return null;
-    }
-
-    const host = document.createElement('div');
-    document.body.appendChild(host);
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(React.createElement(Probe));
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-
-    expect(states.at(-1)?.loading).toBe(false);
-    expect(states.at(-1)?.agents).toHaveLength(1);
-    expect(sessionStorage.getItem('mindos:acp-registry')).toBeNull();
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(1200);
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(states.at(-1)?.agents).toHaveLength(2);
-    expect(JSON.parse(sessionStorage.getItem('mindos:acp-registry') ?? '{}')).toMatchObject({
-      version: '1',
-    });
-
-    await act(async () => {
-      root.unmount();
-    });
   });
 
   it('stops loading when ACP/runtime detection request times out', async () => {

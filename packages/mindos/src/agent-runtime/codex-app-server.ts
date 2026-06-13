@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
+import { appendBoundedLog, killChildWithEscalation } from './child-process.js';
 import {
   redactSensitiveText,
   sanitizeToolArgs,
@@ -390,8 +391,12 @@ export function createCodexAppServerStdioTransport(options: {
   const lines = createInterface({ input: child.stdout });
   let stderr = '';
   let spawnError: Error | null = null;
+  let closedByUs = false;
+  // Without an error listener, a write racing the child's exit raises an
+  // unhandled 'error' event (EPIPE) and crashes the whole process.
+  child.stdin.on('error', () => {});
   child.stderr.on('data', (chunk) => {
-    stderr += String(chunk);
+    stderr = appendBoundedLog(stderr, chunk);
   });
   child.once('error', (error) => {
     spawnError = error;
@@ -402,18 +407,34 @@ export function createCodexAppServerStdioTransport(options: {
 
   return {
     send(message) {
+      if (closedByUs || child.exitCode !== null || child.signalCode !== null || !child.stdin.writable) {
+        throw new Error(stderr.trim() || 'Codex app-server is not running (stdin is closed).');
+      }
       child.stdin.write(`${JSON.stringify(message)}\n`);
     },
     async *read() {
       try {
         for await (const line of lines) {
           if (typeof line !== 'string' || !line.trim()) continue;
-          yield JSON.parse(line) as CodexAppServerMessage;
+          // Startup noise or partial writes on stdout must not kill the session.
+          let message: CodexAppServerMessage | null = null;
+          try {
+            const parsed = JSON.parse(line) as unknown;
+            if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+              message = parsed as CodexAppServerMessage;
+            }
+          } catch {
+            continue;
+          }
+          if (message) yield message;
         }
         const result = await childClose;
         if (spawnError) throw spawnError;
         if (result.code && result.code !== 0) {
           throw new Error(stderr.trim() || `Codex app-server exited with code ${result.code}`);
+        }
+        if (result.signal && !closedByUs) {
+          throw new Error(stderr.trim() || `Codex app-server was killed by signal ${result.signal}`);
         }
       } catch (error) {
         const err = error instanceof Error ? error : new Error(String(error));
@@ -422,8 +443,9 @@ export function createCodexAppServerStdioTransport(options: {
       }
     },
     close() {
+      closedByUs = true;
       lines.close();
-      child.kill();
+      killChildWithEscalation(child);
     },
   };
 }

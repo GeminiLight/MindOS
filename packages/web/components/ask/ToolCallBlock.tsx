@@ -10,10 +10,9 @@ import {
 import type { ToolCallPart } from '@/lib/types';
 import type { LucideIcon } from 'lucide-react';
 import AskUserQuestionBlock from './AskUserQuestionBlock';
-import { redactSensitiveObject, redactSensitiveText } from '@/lib/agent/redaction';
+import { redactSensitiveObject, redactSensitiveText } from '@geminilight/mindos/agent/redaction';
 
 const DESTRUCTIVE_TOOLS = new Set(['delete_file', 'move_file', 'rename_file', 'write_file']);
-const NATIVE_MUTATING_TOOLS = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit']);
 
 const DIFF_TOOLS = new Set([
   'write_file', 'create_file', 'update_section',
@@ -213,15 +212,6 @@ function formatNativeRuntimeSummary(part: ToolCallPart): string {
 
 function isNativeRuntimeTool(part: ToolCallPart): boolean {
   return part.runtime === 'claude' || part.runtime === 'codex';
-}
-
-function shouldAutoExpandNativeRuntimeTool(part: ToolCallPart): boolean {
-  if (!isNativeRuntimeTool(part)) return false;
-  return Boolean(part.runtimePermission)
-    || part.state === 'error'
-    || part.toolName === 'approval_request'
-    || NATIVE_MUTATING_TOOLS.has(part.toolName)
-    || isPotentiallyDestructiveCommand(getCommand(part.input));
 }
 
 function isPotentiallyDestructiveCommand(command: string | undefined): boolean {
@@ -579,11 +569,10 @@ export default function ToolCallBlock({ part }: { part: ToolCallPart }) {
   const hasDiff = DIFF_TOOLS.has(displayPart.toolName);
   const hasUserQuestion = isAskUserQuestionToolName(displayPart.toolName) || Boolean(displayPart.userQuestion);
   const hasNativeRuntimeTool = isNativeRuntimeTool(displayPart);
-  const shouldAutoExpandNativeRuntime = shouldAutoExpandNativeRuntimeTool(displayPart);
   const isDone = displayPart.state === 'done';
   // Auto-expand diff tools when completed
   const [manualToggle, setManualToggle] = useState<boolean | null>(null);
-  const expanded = manualToggle ?? (hasUserQuestion || shouldAutoExpandNativeRuntime || (hasDiff && isDone));
+  const expanded = manualToggle ?? (hasUserQuestion || hasNativeRuntimeTool || (hasDiff && isDone));
 
   const IconComponent = isAskUserQuestionToolName(displayPart.toolName)
     ? MessageSquareMore

@@ -230,9 +230,9 @@ border-radius: 4px;
 | 20 | `z-20` | 页面内 sticky（top bar） |
 | 30 | `z-30` | 全局导航（sidebar、header） |
 | 40 | `z-40` | 遮罩层（mobile overlay） |
-| 50 | `z-50` | 标准最高层（modal、dialog） |
+| 50 | `z-50` | 最高层（modal、dialog） |
 
-**规则：** 普通组件选择最接近的 10/20/30/40/50 语义层级。App shell 级例外（Rail 需压过 Panel、Ask portal popover 需压过 modal、walkthrough 需覆盖全应用、update blocker 需阻断所有交互）必须通过 `packages/web/lib/config/layout-layers.ts` 与 `z-app-*` utility 命名使用，不能在组件里裸写 `z-[60]`、`z-[100]`、`zIndex: 99999` 等表外值。
+**规则：** 新组件选择最接近的语义层级，不要使用表外的 z-index 值。
 
 ## 动效规范
 
@@ -280,7 +280,7 @@ border-radius: 4px;
 | < 640px (mobile) | 默认 | prose 字号 0.95rem，代码块 0.82em，表格 `display: block` 横滚 |
 | ≥ 640px (sm) | `sm:` | prose 字号 1rem，代码块 0.855em，表格 `display: table` |
 | ≥ 768px (md) | `md:` | 模态框居中（移动端为底部 sheet） |
-| ≥ 1280px (xl) | `xl:` | TOC 侧栏显示（`hidden xl:block`）；主避让走 `--toc-extra-right`，少数非 TOC 页面用 `.toc-reserved-content` opt-in |
+| ≥ 1280px (xl) | `xl:` | TOC 侧栏显示（`hidden xl:block`），内容区右偏移（`xl:mr-[220px]`） |
 
 ### 移动端专项
 

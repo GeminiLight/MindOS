@@ -379,7 +379,7 @@ Write an updated morning brief.
     const askBody = JSON.parse(askCall![1]!.body as string);
     expect(askBody.mode).toBe('chat');
     expect(askBody.messages[0].content).toContain('Research Scout');
-    expect(askBody.messages[0].content).toContain('chat mode');
+    expect(askBody.messages[0].content).toContain('readonly mode');
     expect(host.textContent).toContain('Run summary');
 
     await act(async () => {

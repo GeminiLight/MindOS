@@ -45,6 +45,6 @@ export function resolveHeadlessAgentMode(input: HeadlessAgentModeGuardInput = {}
 }
 
 function normalizeHeadlessAskMode(mode: unknown): MindosAskMode {
-  if (mode === 'chat' || mode === 'agent') return mode;
+  if (mode === 'chat' || mode === 'organize' || mode === 'agent') return mode;
   return 'agent';
 }

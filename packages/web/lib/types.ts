@@ -1,6 +1,37 @@
 // Re-export core types as single source of truth
 export type { FileNode, SearchResult, BacklinkEntry } from './core/types';
 
+// Chat message model — sunk into the core package (Wave 4,
+// spec-agent-core-consolidation). Edit
+// packages/mindos/src/agent/stream-message-types.ts instead of redefining
+// these here.
+import type { AgentRuntimeKind, Message } from '@geminilight/mindos/agent/stream-message-types';
+
+export type {
+  AgentRuntimeKind,
+  AgentRunNodeKind,
+  AgentRunStatus,
+  AgentRunTimelineEvent,
+  AgentRunTimelineEventCategory,
+  AgentRunTimelineEventData,
+  AgentRunTimelinePart,
+  AgentRunTimelineRecord,
+  AskUserQuestion,
+  AskUserQuestionAnswer,
+  AskUserQuestionOption,
+  AskUserQuestionState,
+  ImageMimeType,
+  ImagePart,
+  Message,
+  MessagePart,
+  ReasoningPart,
+  RuntimePermissionOption,
+  RuntimePermissionState,
+  RuntimeStatusPart,
+  TextPart,
+  ToolCallPart,
+} from '@geminilight/mindos/agent/stream-message-types';
+
 /** System configuration files that should be hidden from file tree by default */
 export const SYSTEM_FILES = new Set([
   'INSTRUCTION.md',
@@ -47,225 +78,10 @@ export interface BacklinkItem {
   snippets: string[];
 }
 
-export interface ToolCallPart {
-  type: 'tool-call';
-  toolCallId: string;
-  toolName: string;
-  input: unknown;
-  output?: string;
-  state: 'pending' | 'running' | 'done' | 'error';
-  runtime?: AgentRuntimeKind;
-  userQuestion?: AskUserQuestionState;
-  runtimePermission?: RuntimePermissionState;
-}
-
-export interface RuntimePermissionOption {
-  id: string;
-  label: string;
-  description?: string;
-  intent?: 'allow' | 'deny' | 'cancel';
-}
-
-export interface RuntimePermissionState {
-  runId: string;
-  requestId: string;
-  runtime: Extract<AgentRuntimeKind, 'codex' | 'claude'>;
-  status: 'waiting' | 'approved' | 'denied' | 'cancelled';
-  options: RuntimePermissionOption[];
-  decision?: string;
-  reason?: string;
-}
-
-export interface AskUserQuestionOption {
-  label: string;
-  description: string;
-  preview?: string;
-}
-
-export interface AskUserQuestion {
-  question: string;
-  header: string;
-  options: AskUserQuestionOption[];
-  multiSelect?: boolean;
-}
-
-export interface AskUserQuestionAnswer {
-  questionIndex: number;
-  question: string;
-  kind: 'option' | 'custom' | 'chat' | 'multi';
-  answer: string | null;
-  selected?: string[];
-  notes?: string;
-  preview?: string;
-}
-
-export interface AskUserQuestionState {
-  runId: string;
-  questions: AskUserQuestion[];
-  status: 'waiting' | 'submitted' | 'cancelled';
-  readOnly?: boolean;
-  runtime?: AgentRuntimeKind;
-  reason?: string;
-  answers?: AskUserQuestionAnswer[];
-}
-
-export interface TextPart {
-  type: 'text';
-  text: string;
-}
-
-export interface ReasoningPart {
-  type: 'reasoning';
-  text: string;
-}
-
-export type ImageMimeType = 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp';
-
-export interface ImagePart {
-  type: 'image';
-  /** Base64-encoded image data (no data: prefix) */
-  data: string;
-  mimeType: ImageMimeType;
-  /** Original file name, if available */
-  fileName?: string;
-}
-
-export interface RuntimeStatusPart {
-  type: 'runtime-status';
-  message: string;
-  runtime?: AgentRuntimeKind;
-}
-
-export type AgentRunNodeKind =
-  | 'mindos-main'
-  | 'mindos-headless'
-  | 'native-runtime'
-  | 'pi-subagent'
-  | 'acp'
-  | 'a2a';
-
-export type AgentRunStatus =
-  | 'queued'
-  | 'running'
-  | 'streaming'
-  | 'completed'
-  | 'failed'
-  | 'canceled'
-  | 'timed_out';
-
-export interface AgentRunTimelineRecord {
-  id: string;
-  rootRunId?: string;
-  parentRunId?: string;
-  chatSessionId?: string;
-  agentKind: AgentRunNodeKind;
-  runtimeId: string;
-  displayName: string;
-  status: AgentRunStatus;
-  cwd?: string;
-  permissionMode: 'chat' | 'agent';
-  inputSummary: string;
-  outputSummary?: string;
-  error?: string;
-  startedAt: number;
-  completedAt?: number;
-  durationMs?: number;
-  metadata?: Record<string, unknown>;
-}
-
-export type AgentRunTimelineEventCategory =
-  | 'status'
-  | 'text'
-  | 'tool'
-  | 'file'
-  | 'permission'
-  | 'question'
-  | 'error';
-
-export type AgentRunTimelineEventData =
-  | {
-      kind: 'status';
-      previousStatus?: AgentRunStatus;
-      nextStatus: AgentRunStatus;
-      summary?: string;
-    }
-  | {
-      kind: 'text';
-      text: string;
-      channel?: 'assistant' | 'reasoning' | 'stdout' | 'stderr' | 'system';
-    }
-  | {
-      kind: 'tool';
-      name: string;
-      status?: 'started' | 'running' | 'completed' | 'failed' | 'canceled';
-      inputSummary?: string;
-      outputSummary?: string;
-      error?: string;
-    }
-  | {
-      kind: 'file';
-      path: string;
-      action: 'read' | 'created' | 'updated' | 'deleted' | 'renamed' | 'diff' | 'unknown';
-      status?: 'started' | 'completed' | 'failed';
-      summary?: string;
-    }
-  | {
-      kind: 'permission';
-      action: string;
-      status: 'requested' | 'approved' | 'denied' | 'expired' | 'skipped';
-      resource?: string;
-      prompt?: string;
-    }
-  | {
-      kind: 'question';
-      status: 'requested' | 'answered' | 'cancelled';
-      prompt?: string;
-      summary?: string;
-    }
-  | {
-      kind: 'error';
-      message: string;
-      code?: string;
-      recoverable?: boolean;
-    };
-
-export interface AgentRunTimelineEvent {
-  id: string;
-  runId: string;
-  type: string;
-  category: AgentRunTimelineEventCategory;
-  ts: number;
-  status: AgentRunStatus;
-  record: AgentRunTimelineRecord;
-  title?: string;
-  message?: string;
-  data?: AgentRunTimelineEventData;
-  visibility?: 'timeline' | 'debug';
-  toolName?: string;
-  toolCallId?: string;
-  filePath?: string;
-  runtime?: string;
-  metadata?: Record<string, unknown>;
-}
-
-export interface AgentRunTimelinePart {
-  type: 'agent-run-timeline';
-  chatSessionId: string;
-  rootRunId?: string;
-  startedAfter?: number;
-  runs: AgentRunTimelineRecord[];
-  events?: AgentRunTimelineEvent[];
-  updatedAt: number;
-}
-
-export type MessagePart = TextPart | ToolCallPart | ReasoningPart | ImagePart | RuntimeStatusPart | AgentRunTimelinePart;
-
 export interface AgentIdentity {
   id: string;
   name: string;
 }
-
-export type AgentRuntimeKind = 'mindos' | 'acp' | 'codex' | 'claude';
 
 export interface AgentRuntimeIdentity extends AgentIdentity {
   kind: AgentRuntimeKind;
@@ -378,27 +194,6 @@ export interface CodexThreadListResponse {
   backwardsCursor: string | null;
 }
 
-export interface Message {
-  role: 'user' | 'assistant';
-  content: string;
-  /** Unix timestamp in milliseconds when this message was created */
-  timestamp?: number;
-  /** Structured parts for assistant messages (tool calls + text segments) */
-  parts?: MessagePart[];
-  /** Images attached to this message (user messages only) */
-  images?: ImagePart[];
-  /** Skill name used for this user message (rendered as a capsule in the UI) */
-  skillName?: string;
-  /** KB file paths (@mentions) sent with this message */
-  attachedFiles?: string[];
-  /** Names of uploaded files (PDFs etc.) sent with this message */
-  uploadedFileNames?: string[];
-  /** Agent attribution for this message when routed via ACP or rendered by MindOS */
-  agentId?: string;
-  agentName?: string;
-  agentKind?: AgentRuntimeKind;
-}
-
 export interface LocalAttachment {
   name: string;
   content: string;
@@ -415,11 +210,11 @@ export interface LocalAttachment {
   };
 }
 
-/** User-facing Ask modes. */
+/** User-facing Ask modes. 'organize' is internal-only (not selectable by users). */
 export type AskMode = 'chat' | 'agent';
 
-/** API Ask mode intentionally mirrors the user-facing modes. */
-export type AskModeApi = AskMode;
+/** All Ask modes including internal ones sent to the API */
+export type AskModeApi = AskMode | 'organize';
 
 export interface ChatSession {
   id: string;

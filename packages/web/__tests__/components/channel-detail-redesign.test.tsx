@@ -29,13 +29,11 @@ vi.mock('@/lib/stores/locale-store', () => ({
           currentMode: 'Current mode',
           notificationsOnly: 'Notifications only',
           twoWayConversation: 'Two-way conversation',
-          conversationTitle: 'Talk with MindOS in Feishu',
+          conversationTitle: 'Conversation',
           conversationEnable: 'Allow messages from Feishu',
-          conversationWaiting: 'Waiting for setup',
+          conversationWaiting: 'Waiting for verification',
           conversationReady: 'Ready for replies',
           conversationDisabled: 'Disabled',
-          conversationError: 'Needs attention',
-          conversationNotStarted: 'Not started',
           conversationNeedsPublicUrl: 'Public URL required',
           conversationNeedsEncryptKey: 'Encrypt Key required',
           conversationHint: 'Users can DM the bot, and group messages only trigger when the bot is mentioned.',
@@ -54,42 +52,14 @@ vi.mock('@/lib/stores/locale-store', () => ({
           conversationGroupMentions: 'Only reply when mentioned in groups',
           conversationSaved: 'Conversation settings saved',
           conversationSave: 'Save conversation settings',
-          conversationPrimaryTitle: 'Start Feishu chat',
-          conversationPrimaryHint: '',
-          conversationStart: 'Start Feishu chat',
-          conversationStarted: 'Feishu chat started.',
-          conversationStepApp: 'App connected',
-          conversationStepStart: 'Start chat',
-          conversationStepTest: 'DM / @ bot in Feishu',
-          conversationFeishuChecklist: 'Feishu console: Bot · im.message.receive_v1 · Installed',
-          conversationAdvancedToggle: 'Advanced deployment: public Webhook',
-          conversationAdvancedHint: 'Only for public deployments.',
-          conversationWebhookReady: 'Public Webhook is ready',
-          conversationSaveWebhook: 'Save Webhook settings',
-          conversationSetupTitle: 'Setup flow',
-          conversationLongStep1: 'Choose local long connection and save settings.',
-          conversationLongStep2: 'Start the local connection and keep MindOS running.',
-          conversationLongStep3: 'Enable the im.message.receive_v1 event in Feishu console.',
-          conversationWebhookStep1: 'Fill public Base URL and Encrypt Key.',
-          conversationWebhookStep2: 'Save, then copy the Webhook URL into Feishu event subscriptions.',
-          conversationWebhookStep3: 'Enable the im.message.receive_v1 event in Feishu console.',
-          conversationLongControlTitle: 'Local long connection',
-          conversationLongControlHint: 'Best for local development and desktop use. Feishu events arrive through WebSocket after it starts.',
-          conversationLongStart: 'Start local connection',
-          conversationLongStop: 'Stop Feishu chat',
-          conversationLongStarted: 'Local long connection started.',
-          conversationLongStopped: 'Local long connection stopped.',
-          conversationLongRunning: 'Local connection is running.',
-          conversationLongIdle: 'Local connection is not running.',
-          feishuOAuthTitle: 'Optional user binding',
-          feishuOAuthHint: '',
-          feishuOAuthConnected: 'Bound as',
-          feishuOAuthPending: 'Pending',
-          feishuOAuthDisconnected: 'Optional',
-          feishuOAuthAuthorize: 'Bind Feishu user',
+          feishuOAuthTitle: 'Feishu authorization',
+          feishuOAuthHint: 'Let a user authorize Feishu from MindOS instead of copying IDs by hand.',
+          feishuOAuthConnected: 'Authorized as',
+          feishuOAuthDisconnected: 'Not authorized yet',
+          feishuOAuthAuthorize: 'Authorize with Feishu',
           feishuOAuthOpening: 'Opening...',
           feishuOAuthSetupRequired: 'Save App ID and App Secret first.',
-          feishuOAuthOpened: 'Feishu user binding opened.',
+          feishuOAuthOpened: 'Feishu authorization opened.',
           workInMindosHint: 'Use Ask in MindOS to work with the agent.',
           useCasesTitle: 'What you can receive',
           statusSummaryTitle: 'Status summary',
@@ -137,10 +107,6 @@ vi.mock('@/lib/stores/locale-store', () => ({
           setupManualOnly: 'Manual',
           scanQrHint: 'Scan this locally generated QR code to continue on your phone. No credentials are embedded.',
           setupQrAlt: (name: string) => `${name} QR code`,
-          transportLongTitle: 'Local long connection',
-          transportWebhookTitle: 'Public Webhook',
-          transportLongHint: 'Recommended for local development. No public URL needed; events arrive over WebSocket.',
-          transportWebhookHint: 'Use this for deployed servers with a Base URL reachable by Feishu.',
           tabConfigure: 'Configure',
           hideSecret: 'Hide',
           showSecret: 'Show',
@@ -191,56 +157,6 @@ const im = {
   setupManualOnly: 'Manual',
   scanQrHint: 'Scan this locally generated QR code to continue on your phone. No credentials are embedded.',
   setupQrAlt: (name: string) => `${name} QR code`,
-  conversationTitle: 'Talk with MindOS in Feishu',
-  conversationEnable: 'Allow messages from Feishu',
-  conversationHint: 'Users can DM the bot, and group messages only trigger when the bot is mentioned.',
-  conversationStatus: 'Webhook status',
-  conversationWaiting: 'Waiting for setup',
-  conversationReady: 'Ready for replies',
-  conversationDisabled: 'Disabled',
-  conversationError: 'Needs attention',
-  conversationNotStarted: 'Not started',
-  conversationPublicBaseUrl: 'Public base URL',
-  conversationEncryptKey: 'Encrypt Key',
-  conversationVerificationToken: 'Verification Token',
-  conversationSecretPlaceholder: 'Leave blank to keep saved value',
-  conversationWebhookUrl: 'Webhook URL',
-  conversationCopyUrl: 'Copy URL',
-  conversationGroupMentions: 'Only reply when mentioned in groups',
-  conversationSaved: 'Conversation settings saved',
-  conversationSave: 'Save conversation settings',
-  conversationOpenPlatform: 'Open Feishu console',
-  conversationPrimaryTitle: 'Start Feishu chat',
-  conversationPrimaryHint: '',
-  conversationStart: 'Start Feishu chat',
-  conversationStarted: 'Feishu chat started.',
-  conversationStepApp: 'App connected',
-  conversationStepStart: 'Start chat',
-  conversationStepTest: 'DM / @ bot in Feishu',
-  conversationFeishuChecklist: 'Feishu console: Bot · im.message.receive_v1 · Installed',
-  conversationAdvancedToggle: 'Advanced deployment: public Webhook',
-  conversationAdvancedHint: 'Only for public deployments.',
-  conversationWebhookReady: 'Public Webhook is ready',
-  conversationSaveWebhook: 'Save Webhook settings',
-  conversationSetupTitle: 'Setup flow',
-  conversationLongStep1: 'Choose local long connection and save settings.',
-  conversationLongStep2: 'Start the local connection and keep MindOS running.',
-  conversationLongStep3: 'Enable the im.message.receive_v1 event in Feishu console.',
-  conversationWebhookStep1: 'Fill public Base URL and Encrypt Key.',
-  conversationWebhookStep2: 'Save, then copy the Webhook URL into Feishu event subscriptions.',
-  conversationWebhookStep3: 'Enable the im.message.receive_v1 event in Feishu console.',
-  conversationLongControlTitle: 'Local long connection',
-  conversationLongControlHint: 'Best for local development and desktop use. Feishu events arrive through WebSocket after it starts.',
-  conversationLongStart: 'Start local connection',
-  conversationLongStop: 'Stop Feishu chat',
-  conversationLongStarted: 'Local long connection started.',
-  conversationLongStopped: 'Local long connection stopped.',
-  conversationLongRunning: 'Local connection is running.',
-  conversationLongIdle: 'Local connection is not running.',
-  transportLongTitle: 'Local long connection',
-  transportWebhookTitle: 'Public Webhook',
-  transportLongHint: 'Recommended for local development. No public URL needed; events arrive over WebSocket.',
-  transportWebhookHint: 'Use this for deployed servers with a Base URL reachable by Feishu.',
 };
 
 function setInputValue(input: HTMLInputElement, value: string) {
@@ -302,15 +218,9 @@ describe('AgentsContentChannelDetail redesign', () => {
     // Status bar
     expect(host.textContent).toContain('Two-way conversation');
 
-    // Feishu chat is the primary path. Webhook details stay under advanced deployment.
-    expect(host.textContent).toContain('Talk with MindOS in Feishu');
-    expect(host.textContent).toContain('Start Feishu chat');
-    expect(host.textContent).toContain('App connected');
-    expect(host.textContent).toContain('DM / @ bot in Feishu');
-    expect(host.textContent).toContain('Feishu console: Bot · im.message.receive_v1 · Installed');
-    expect(host.textContent).toContain('Advanced deployment: public Webhook');
-    expect(host.textContent).not.toContain('Public base URL');
-    expect(host.textContent).not.toContain('The Feishu app is connected. Next');
+    // Conversation section
+    expect(host.textContent).toContain('Conversation');
+    expect(host.textContent).toContain('Allow messages from Feishu');
 
     // Activity
     expect(host.textContent).toContain('Recent activity');
@@ -323,7 +233,7 @@ describe('AgentsContentChannelDetail redesign', () => {
     await act(async () => { root.unmount(); });
   });
 
-  it('renders Feishu user binding as optional after app credentials are connected', async () => {
+  it('renders a friendly Feishu authorization action for connected credentials', async () => {
     vi.stubGlobal('fetch', vi.fn((url: string) => {
       if (url.includes('/api/im/status')) {
         return Promise.resolve({
@@ -353,16 +263,14 @@ describe('AgentsContentChannelDetail redesign', () => {
     await act(async () => { root.render(<AgentsContentChannelDetail platformId="feishu" />); });
     await act(async () => { await Promise.resolve(); });
 
-    expect(host.textContent).toContain('Optional user binding');
-    expect(host.textContent).toContain('Optional');
-    expect(host.textContent).toContain('Bind Feishu user');
-    expect(host.textContent).not.toContain('App ID and App Secret already connect the Feishu bot.');
-    expect(host.textContent).not.toContain('Not authorized yet');
+    expect(host.textContent).toContain('Feishu authorization');
+    expect(host.textContent).toContain('Not authorized yet');
+    expect(host.textContent).toContain('Authorize with Feishu');
 
     await act(async () => { root.unmount(); });
   });
 
-  it('shows optional Feishu user binding when credentials exist but verification is disconnected', async () => {
+  it('shows Feishu authorization when credentials exist but verification is disconnected', async () => {
     vi.stubGlobal('fetch', vi.fn((url: string) => {
       if (url.includes('/api/im/status')) {
         return Promise.resolve({
@@ -392,46 +300,8 @@ describe('AgentsContentChannelDetail redesign', () => {
     await act(async () => { await Promise.resolve(); });
 
     expect(host.textContent).toContain('Manual setup');
-    expect(host.textContent).toContain('Optional user binding');
-    expect(host.textContent).toContain('Bind Feishu user');
-
-    await act(async () => { root.unmount(); });
-  });
-
-  it('shows Feishu user binding pending without implying app verification failed', async () => {
-    vi.stubGlobal('fetch', vi.fn((url: string) => {
-      if (url.includes('/api/im/status')) {
-        return Promise.resolve({
-          ok: true,
-          json: async () => ({
-            platforms: [{
-              platform: 'feishu',
-              connected: true,
-              botName: 'MindOS Bot',
-              capabilities: ['text', 'markdown'],
-              oauth: { state: 'pending', expiresAt: '2026-04-10T10:10:00.000Z' },
-              webhook: { state: 'disabled', transport: 'webhook' },
-            }],
-          }),
-        });
-      }
-      if (url.includes('/api/im/activity')) {
-        return Promise.resolve({ ok: true, json: async () => ({ activities: [] }) });
-      }
-      return Promise.resolve({ ok: true, json: async () => ({}) });
-    }));
-
-    const host = document.createElement('div');
-    document.body.appendChild(host);
-    const root = createRoot(host);
-
-    await act(async () => { root.render(<AgentsContentChannelDetail platformId="feishu" />); });
-    await act(async () => { await Promise.resolve(); });
-
-    expect(host.textContent).toContain('Connected');
-    expect(host.textContent).toContain('Optional user binding');
-    expect(host.textContent).toContain('Pending');
-    expect(host.textContent).not.toContain('Not authorized yet');
+    expect(host.textContent).toContain('Feishu authorization');
+    expect(host.textContent).toContain('Authorize with Feishu');
 
     await act(async () => { root.unmount(); });
   });
@@ -463,73 +333,8 @@ describe('AgentsContentChannelDetail redesign', () => {
     await act(async () => { root.render(<AgentsContentChannelDetail platformId="feishu" />); });
     await act(async () => { await Promise.resolve(); });
 
-    expect(host.textContent).toContain('Talk with MindOS in Feishu');
-    expect(host.textContent).toContain('Not started');
-    expect(host.textContent).toContain('Start Feishu chat');
-    expect(host.textContent).toContain('im.message.receive_v1');
-    expect(host.textContent).not.toContain('Start the Feishu long connection client.');
-
-    await act(async () => { root.unmount(); });
-  });
-
-  it('starts Feishu long connection from the conversation setup panel', async () => {
-    const fetchMock = vi.fn((url: string, init?: RequestInit) => {
-      if (url.includes('/api/im/status')) {
-        return Promise.resolve({
-          ok: true,
-          json: async () => ({
-            platforms: [{
-              platform: 'feishu', connected: true, botName: 'MindOS Bot',
-              capabilities: ['text', 'markdown'],
-              webhook: { state: 'pending', lastError: 'Start the Feishu long connection client.', transport: 'long_connection' },
-            }],
-          }),
-        });
-      }
-      if (url.includes('/api/im/activity')) {
-        return Promise.resolve({ ok: true, json: async () => ({ activities: [] }) });
-      }
-      if (url.includes('/api/im/config')) {
-        return Promise.resolve({ ok: true, json: async () => ({ ok: true }) });
-      }
-      if (url.includes('/api/im/feishu/long-connection')) {
-        return Promise.resolve({
-          ok: true,
-          json: async () => ({ ok: true, running: true, startedAt: '2026-04-10T10:00:00.000Z' }),
-        });
-      }
-      return Promise.resolve({ ok: true, json: async () => ({}) });
-    });
-    vi.stubGlobal('fetch', fetchMock);
-
-    const host = document.createElement('div');
-    document.body.appendChild(host);
-    const root = createRoot(host);
-
-    await act(async () => { root.render(<AgentsContentChannelDetail platformId="feishu" />); });
-    await act(async () => { await Promise.resolve(); });
-
-    const startButton = Array.from(host.querySelectorAll('button')).find((button) => button.textContent?.includes('Start Feishu chat')) as HTMLButtonElement;
-    expect(startButton).toBeTruthy();
-
-    await act(async () => {
-      startButton.click();
-      await Promise.resolve();
-    });
-
-    expect(fetchMock).toHaveBeenCalledWith('/api/im/config', expect.objectContaining({
-      method: 'PUT',
-      body: JSON.stringify({
-        platform: 'feishu',
-        conversation: {
-          enabled: true,
-          transport: 'long_connection',
-          allow_group_mentions: true,
-        },
-      }),
-    }));
-    expect(fetchMock).toHaveBeenCalledWith('/api/im/feishu/long-connection', { method: 'POST' });
-    expect(host.textContent).toContain('Feishu chat started.');
+    expect(host.textContent).toContain('Waiting for verification');
+    expect(host.textContent).toContain('Start the Feishu long connection client.');
 
     await act(async () => { root.unmount(); });
   });

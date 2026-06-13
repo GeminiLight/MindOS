@@ -5,7 +5,7 @@ import {
   completeAgentRun,
   resetAgentRunsForTest,
   startAgentRun,
-} from '@/lib/agent/run-ledger';
+} from '@geminilight/mindos/agent/run-ledger';
 
 interface StreamPayload {
   runs?: Array<{ id: string; chatSessionId?: string; rootRunId?: string; status?: string }>;
@@ -100,7 +100,7 @@ describe('/api/agent-runs/stream', () => {
       rootRunId: root.id,
       parentRunId: root.id,
       chatSessionId: 'chat-stream',
-      permissionMode: 'chat',
+      permissionMode: 'readonly',
       inputSummary: 'Review',
     });
     startAgentRun({

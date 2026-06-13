@@ -47,8 +47,10 @@ export function ChannelTestSend({ platformId, im, recipientExample, onSent }: {
       <summary className="flex cursor-pointer select-none items-center gap-2.5 px-5 py-3.5 text-sm font-medium text-muted-foreground transition-colors list-none hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
         <Send size={14} className="text-[var(--amber)]" />
         <span>{im.sendSample}</span>
+        <span className="ml-auto text-xs text-muted-foreground/60 group-open:hidden">{im.expandToSee ?? 'Click to expand'}</span>
       </summary>
       <div className="border-t border-border px-5 py-4 space-y-3">
+        <p className="text-xs text-muted-foreground leading-relaxed">{im.sampleHint}</p>
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
             <label className="text-xs font-medium text-muted-foreground block mb-1.5">{im.recipientPlaceholder}</label>

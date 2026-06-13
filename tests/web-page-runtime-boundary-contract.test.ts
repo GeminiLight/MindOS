@@ -17,13 +17,22 @@ function listFiles(dir: string, predicate: (file: string) => boolean): string[] 
 }
 
 describe('Web page runtime boundaries', () => {
-  it('avoids server redirect in App pages because it regresses App Router hook order', () => {
+  it('allows server redirect only in pure-redirect App pages (mixed pages regress hook order)', () => {
     const pageFiles = listFiles(webAppRoot, file => file.endsWith(`${path.sep}page.tsx`));
 
     for (const file of pageFiles) {
       const source = fs.readFileSync(file, 'utf8');
-      expect(source, path.relative(repoRoot, file)).not.toMatch(/from ['"]next\/navigation['"];?\s*[\s\S]*\bredirect\(/);
-      expect(source, path.relative(repoRoot, file)).not.toMatch(/\bredirect\(/);
+      if (!/\bredirect\(/.test(source)) continue;
+
+      // 2026-05 incident: a page that conditionally called redirect() and
+      // otherwise rendered a client component tree broke App Router hook
+      // order when the condition flipped between navigations. A page that
+      // ONLY redirects (no client directive, no JSX) has no hooks and no
+      // rendered tree, so the failure mode cannot occur — and it is the
+      // cheapest possible entry point (no throwaway hydrate + hard reload).
+      const rel = path.relative(repoRoot, file);
+      expect(source, `${rel} mixes redirect() with a client directive`).not.toMatch(/['"]use client['"]/);
+      expect(source, `${rel} mixes redirect() with rendered JSX`).not.toMatch(/<[A-Za-z]/);
     }
   });
 

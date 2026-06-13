@@ -79,10 +79,28 @@ function runtimeJsExecutor() {
   return process.env.MINDOS_BINARY_EXECUTOR || process.execPath;
 }
 
+function hasWebSources() {
+  return existsSync(resolve(WEB_APP_DIR, 'package.json'));
+}
+
+let warnedDegradedExtraction = false;
+
 function useProductServer() {
   if (process.env.MINDOS_NEXT_STANDALONE === '1' && hasPrebuiltStandalone()) return false;
   if (process.env.MINDOS_PRODUCT_SERVER === '1') return true;
-  return hasPrebuiltStaticWeb() && hasDocumentExtractionRuntime();
+  if (!hasPrebuiltStaticWeb()) return false;
+  if (hasDocumentExtractionRuntime()) return true;
+  // A packaged runtime ships no packages/web sources, so the source-build
+  // path can only crash (gen-renderer-index.js ENOENT, shipped in 1.1.7).
+  // Serve the product server with degraded PDF/DOCX extraction instead.
+  if (!hasWebSources()) {
+    if (!warnedDegradedExtraction) {
+      warnedDegradedExtraction = true;
+      console.warn(yellow('Document extraction runtime missing from this package; PDF/DOCX import is degraded.'));
+    }
+    return true;
+  }
+  return false;
 }
 
 export function resolveWebHost(config = {}, env = process.env) {

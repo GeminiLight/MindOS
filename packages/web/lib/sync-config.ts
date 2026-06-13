@@ -9,6 +9,7 @@ import { existsSync, readFileSync, writeFileSync, renameSync } from 'fs';
 import { isAbsolute, join, relative, resolve, sep, win32 } from 'path';
 import { homedir } from 'os';
 import { resolveMindosCliPath } from './project-root';
+import { sanitizedGitEnv } from './git-env';
 
 // ---------------------------------------------------------------------------
 // Paths
@@ -51,15 +52,15 @@ export function isGitRepo(dir: string): boolean {
 }
 
 export function getRemoteUrl(cwd: string): string | null {
-  try { return execFileSync('git', ['remote', 'get-url', 'origin'], { cwd, encoding: 'utf-8', stdio: 'pipe' }).trim(); } catch { return null; }
+  try { return execFileSync('git', ['remote', 'get-url', 'origin'], { cwd, encoding: 'utf-8', stdio: 'pipe', env: sanitizedGitEnv() }).trim(); } catch { return null; }
 }
 
 export function getBranch(cwd: string): string {
-  try { return execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd, encoding: 'utf-8', stdio: 'pipe' }).trim(); } catch { return 'main'; }
+  try { return execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd, encoding: 'utf-8', stdio: 'pipe', env: sanitizedGitEnv() }).trim(); } catch { return 'main'; }
 }
 
 export function getUnpushedCount(cwd: string): string {
-  try { return execFileSync('git', ['rev-list', '--count', '@{u}..HEAD'], { cwd, encoding: 'utf-8', stdio: 'pipe' }).trim(); } catch { return '?'; }
+  try { return execFileSync('git', ['rev-list', '--count', '@{u}..HEAD'], { cwd, encoding: 'utf-8', stdio: 'pipe', env: sanitizedGitEnv() }).trim(); } catch { return '?'; }
 }
 
 // ---------------------------------------------------------------------------

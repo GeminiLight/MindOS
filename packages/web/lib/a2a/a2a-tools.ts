@@ -17,11 +17,11 @@ import {
   failAgentRun,
   startAgentRun,
   type AgentRunPermissionMode,
-} from '@/lib/agent/run-ledger';
+} from '@geminilight/mindos/agent/run-ledger';
 import {
   linkAbortSignalToAgentRun,
-} from '@/lib/agent/run-cancellation';
-import { createMindosAgentPermissionPolicyFromContext } from '@/lib/agent/permission-policy';
+} from '@geminilight/mindos/agent/run-cancellation';
+import { createMindosAgentPermissionPolicyFromContext } from '@geminilight/mindos/agent/permission-policy';
 
 function textResult(text: string) {
   return { content: [{ type: 'text' as const, text }], details: {} };

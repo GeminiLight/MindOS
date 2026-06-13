@@ -93,8 +93,25 @@ export function extractCodexProviderEnvKey(configText: string): string | undefin
   return extractTomlStringValue(providerSection, 'env_key');
 }
 
-export function readLoginShellEnvValue(key: string, env: CodexEnvMap = process.env): string | undefined {
-  return readPlatformEnvironmentValue({ key, env });
+// Login-shell probes are synchronous and can stack up to several seconds per
+// shell candidate, blocking the event loop on every runtime spawn. Persistent
+// shell environments do not change within a process lifetime, so both hits
+// and misses are cached.
+const loginShellEnvValueCache = new Map<string, string | undefined>();
+
+export function clearLoginShellEnvValueCache(): void {
+  loginShellEnvValueCache.clear();
+}
+
+export function readLoginShellEnvValue(
+  key: string,
+  env: CodexEnvMap = process.env,
+  read: (key: string, env: CodexEnvMap) => string | undefined = (k, e) => readPlatformEnvironmentValue({ key: k, env: e }),
+): string | undefined {
+  if (loginShellEnvValueCache.has(key)) return loginShellEnvValueCache.get(key);
+  const value = read(key, env);
+  loginShellEnvValueCache.set(key, value);
+  return value;
 }
 
 export function readPlatformEnvironmentValue(input: {

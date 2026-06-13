@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useEffect, useCallback, useSyncExternalStore, useRef } from 'react';
+import { useState, useEffect, useCallback, useSyncExternalStore } from 'react';
 import { Copy, Check, RefreshCw, Trash2, Sparkles, ChevronDown, ChevronRight, Loader2, Cpu, Database as DatabaseIcon, HardDrive, RotateCcw, FlaskConical } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import type { KnowledgeTabProps } from './types';
 import { Field, Input, EnvBadge, Toggle, SettingCard, SettingRow, PasswordInput } from './Primitives';
 import { ConfirmDialog } from '@/components/agents/AgentsPrimitives';
 import { apiFetch } from '@/lib/api';
+import { useVisiblePolling } from '@/lib/use-visible-polling';
 import { copyToClipboard } from '@/lib/clipboard';
 import { formatBytes, formatUptime } from '@/lib/format';
 import { setShowHiddenFiles } from '@/components/FileTree';
@@ -427,14 +428,8 @@ function MonitoringSection({ k }: { k: Record<string, unknown> }) {
     setLoading(false);
   }, []);
 
-  // Fetch on first expand, then refresh every 10s while expanded
-  const hasFetched = useRef(false);
-  useEffect(() => {
-    if (!expanded) { hasFetched.current = false; return; }
-    if (!hasFetched.current) { fetchData(); hasFetched.current = true; }
-    const id = setInterval(fetchData, 10_000);
-    return () => clearInterval(id);
-  }, [expanded, fetchData]);
+  // Fetch on expand, then refresh every 10s while expanded and the tab is visible
+  useVisiblePolling(() => void fetchData(), 10_000, { enabled: expanded });
 
   return (
     <div className="border-t border-border pt-5">

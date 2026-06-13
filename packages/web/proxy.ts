@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyJwt } from '@/lib/jwt';
 import { buildLoginRedirectTarget, resolveWebSessionSecret, WEB_SESSION_COOKIE_NAME } from '@/lib/auth-session';
-import { defaultEchoPath } from '@/lib/echo-segments';
 import { readSetupPending } from '@/lib/setup-state';
+import { defaultEchoPath } from '@/lib/echo-segments';
 
 /** CORS headers for /api/* routes (React Native mobile app + cross-origin agents). */
 function corsHeaders(): Record<string, string> {
@@ -34,12 +34,6 @@ export async function proxy(req: NextRequest) {
     const newHeaders = new Headers(req.headers);
     newHeaders.set('x-pathname', pathname);
     return NextResponse.next({ request: { headers: newHeaders } });
-  }
-
-  function rootRedirect(): NextResponse | null {
-    if (pathname !== '/') return null;
-    const href = readSetupPending() ? '/setup' : defaultEchoPath();
-    return NextResponse.redirect(new URL(href, req.url));
   }
 
   // --- API protection (AUTH_TOKEN) + CORS ---
@@ -74,8 +68,25 @@ export async function proxy(req: NextRequest) {
     return withCors(NextResponse.next());
   }
 
+  // --- Entry redirects (/ and /echo) ---
+  // Redirecting here yields a true 307 before rendering starts: a page-level
+  // redirect() under the root loading.tsx Suspense boundary would stream a
+  // 200 + meta-refresh shell (~480KB of throwaway HTML) instead. `/` renders
+  // the home page itself and only redirects while setup is pending; `/echo`
+  // always forwards to the default segment. The proxy runs on the Node.js
+  // runtime in Next 16, so the fs read inside readSetupPending() is allowed.
+  if (pathname === '/' || pathname === '/echo') {
+    if (readSetupPending()) {
+      return NextResponse.redirect(new URL('/setup', req.url), 307);
+    }
+    if (pathname === '/echo') {
+      return NextResponse.redirect(new URL(defaultEchoPath(), req.url), 307);
+    }
+    // `/` falls through to render the home page (behind the login wall below).
+  }
+
   // --- Web UI protection (WEB_PASSWORD) ---
-  if (!webPassword) return rootRedirect() ?? next();
+  if (!webPassword) return next();
 
   // Login page itself always passes through
   if (pathname === '/login') return next();
@@ -83,7 +94,7 @@ export async function proxy(req: NextRequest) {
   // Verify JWT session cookie
   const token = req.cookies.get(WEB_SESSION_COOKIE_NAME)?.value ?? '';
   const session = token ? await verifyJwt(token, webSessionSecret) : null;
-  if (session) return rootRedirect() ?? next();
+  if (session) return next();
 
   // Not authenticated: redirect to /login
   const loginUrl = new URL('/login', req.url);

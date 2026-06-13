@@ -197,8 +197,20 @@ describe('OpenCode architecture alignment', () => {
     expect(askRoute.indexOf('if (selectedNativeRuntime || selectedAcpAgent)')).toBeLessThan(
       askRoute.indexOf("await import('@geminilight/mindos/session/pi-coding-agent')"),
     );
-    expect(piRuntimeAdapter).toContain("from '@earendil-works/pi-coding-agent'");
+    // Native-only SDKs must load through the bundler-proof native import: a
+    // static `import ... from` (or even a plain dynamic import) lets Next.js
+    // inline a webpack copy of the SDK whose broken `import.meta` kills jiti
+    // extension loading (no KB tools) and Claude SDK CLI resolution.
+    const nativeImportHelper = readText('packages/mindos/src/foundation/native-import.ts');
+    const claudeSdkAdapter = readText('packages/mindos/src/agent-runtime/claude-code-sdk.ts');
+    expect(nativeImportHelper).toContain("new Function('specifier', 'return import(specifier)')");
+    expect(piRuntimeAdapter).toContain('@earendil-works/pi-coding-agent');
+    expect(piRuntimeAdapter).toContain("import { nativeImport } from '../foundation/native-import.js'");
+    expect(piRuntimeAdapter).not.toMatch(/^import\s*\{[^}]*\}\s*from '@earendil-works\/pi-coding-agent';/m);
     expect(piRuntimeAdapter).not.toContain("from '@mariozechner/pi-coding-agent'");
+    expect(claudeSdkAdapter).toContain("import { nativeImport } from '../foundation/native-import.js'");
+    expect(claudeSdkAdapter).not.toContain("import('@anthropic-ai/claude-agent-sdk')");
+    expect(claudeSdkAdapter).not.toMatch(/^const requireFromHere = createRequire/m);
     expect(piRuntimeAdapter).toContain('createMindosPiAgentRuntime');
     expect(piRuntimeAdapter).toContain('compactMindosPromptForTokenBudget');
     expect(existsSync(resolve(root, 'packages/web/lib/agent/mindos-pi-runtime-adapter.ts'))).toBe(false);
@@ -207,7 +219,10 @@ describe('OpenCode architecture alignment', () => {
     expect(headlessAgent).not.toContain('DefaultResourceLoader');
     expect(headlessAgent).toContain('createMindosPiCodingAgentRuntime');
     expect(askRoute).not.toContain("from '@/lib/agent/prompt'");
-    expect(streamConsumer).toContain("from '@geminilight/mindos/session'");
+    // Wave 4 (spec-agent-core-consolidation): the SSE parsing engine sank
+    // into the core stream consumer; the web file is a thin adapter that
+    // injects the browser files-changed emitter.
+    expect(streamConsumer).toContain("from '@geminilight/mindos/agent/stream-consumer'");
 
     expect(readText('packages/web/lib/agent/prompt.ts')).toContain("from '@geminilight/mindos/agent'");
     expect(readText('packages/web/lib/agent/retry.ts')).toContain("from '@geminilight/mindos/session'");

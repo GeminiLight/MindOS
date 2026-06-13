@@ -144,8 +144,9 @@ describe('SearchPanel Drag Implementation', () => {
     expect(draggedIndex).toBe(null);
   });
 
-  it('should show drag affordance on selected items', () => {
-    // When an item is selected and not dragging, show the icon-only drag affordance.
+  it('should show drag hint on selected items', () => {
+    // When an item is selected and not dragging, show hint text
+    // React expression: {isSelected && !isDragging && <div>⬆ Drag</div>}
     
     const isSelected = true;
     const isDragging = false;
@@ -280,9 +281,9 @@ describe('Visual Feedback', () => {
     expect(onDragging).toMatch(/muted/);
   });
 
-  it('should show drag affordance icon', () => {
-    // When selected and not dragging: show a compact icon affordance.
-    const dragHintIcon = 'GripVertical';
-    expect(dragHintIcon).toBeTruthy();
+  it('should show drag hint text', () => {
+    // When selected and not dragging: show "⬆ Drag" text
+    const dragHintText = '⬆ Drag';
+    expect(dragHintText).toBeTruthy();
   });
 });

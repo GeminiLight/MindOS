@@ -22,7 +22,7 @@ describe('GET /api/agent-capabilities', () => {
         source: 'mindos',
         status: 'available',
         permissionRequired: 'readonly',
-        availableInModes: ['chat', 'agent'],
+        availableInModes: ['chat', 'organize', 'agent'],
       }],
       mcp: () => [{
         id: 'mcp:github:search_code',
@@ -50,8 +50,6 @@ describe('GET /api/agent-capabilities', () => {
         id: 'kb:read',
         kind: 'kb-tool',
         source: 'mindos',
-        permissionRequired: 'chat',
-        availableInModes: ['chat', 'agent'],
       }],
       sources: [
         { id: 'kb', status: 'ok', count: 1 },

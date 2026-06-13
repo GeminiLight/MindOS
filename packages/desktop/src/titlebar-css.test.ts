@@ -16,8 +16,8 @@ describe('desktop macOS titlebar shell contract', () => {
     expect(mainSource).not.toContain('insertCSS');
   });
 
-  it('centers traffic lights in the 42px titlebar row', () => {
-    expect(mainSource).toMatch(/trafficLightPosition[\s\S]{0,80}\{\s*x:\s*12,\s*y:\s*15\s*\}/);
+  it('centers traffic lights in the 46px titlebar row', () => {
+    expect(mainSource).toMatch(/trafficLightPosition[\s\S]{0,80}\{\s*x:\s*12,\s*y:\s*17\s*\}/);
   });
 
   it('forwards fullscreen state and resends it on every load', () => {

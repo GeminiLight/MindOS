@@ -1,6 +1,6 @@
 import type { ExtensionAPI, ToolDefinition } from '@earendil-works/pi-coding-agent';
 import { createJiti } from 'jiti/static';
-import { askUserQuestionViaBridge, hasAskUserQuestionBridge } from './user-question-bridge';
+import { askUserQuestionViaBridge, hasAskUserQuestionBridge } from '@geminilight/mindos/agent/user-question-bridge';
 
 type ToolWithRuntimeContext = ToolDefinition & {
   execute: (

@@ -98,6 +98,9 @@ describe('icon button hit areas', () => {
     const runtimeSource = readSource('components/ask/RuntimeIconSwitcher.tsx');
     const saveSource = readSource('components/ask/SaveSessionInline.tsx');
     const contentSource = readSource('components/ask/AskContent.tsx');
+    // Composer textarea + send/stop buttons were extracted into their own
+    // component (streaming-render perf: keystrokes no longer re-render AskContent).
+    const composerSource = readSource('components/ask/AskComposerInput.tsx');
     const modeSource = readSource('components/ask/ModeCapsule.tsx');
     const providerSource = readSource('components/ask/ProviderModelCapsule.tsx');
 
@@ -110,7 +113,7 @@ describe('icon button hit areas', () => {
     expect(runtimeSource).toContain('data-hit-active={open ? \'true\' : undefined}');
     expect(saveSource).toContain('hit-target-box relative z-10 h-9 w-9');
     expect(contentSource).toContain('hit-target-box p-2 text-muted-foreground');
-    expect(contentSource).toContain('hit-target-box p-2 disabled:opacity-20');
+    expect(composerSource).toContain('hit-target-box p-2 disabled:opacity-20');
     expect(contentSource).toContain('hit-target-box flex w-full items-center gap-2.5 px-3 py-2');
     expect(modeSource).toContain('hit-target-box relative z-10 inline-flex min-h-6');
     expect(providerSource).toContain('hit-target-box relative z-10 inline-flex min-h-6');
@@ -118,7 +121,6 @@ describe('icon button hit areas', () => {
 
   it('keeps wiki home quick links and space cards on rectangular hit targets', () => {
     const source = readSource('components/WikiHomeContent.tsx');
-    const homeSource = readSource('components/HomeContent.tsx');
     const inboxSource = readSource('components/home/InboxSection.tsx');
     const changesSource = readSource('components/changes/ChangesBanner.tsx');
     const fabSource = readSource('components/AskFab.tsx');
@@ -128,7 +130,6 @@ describe('icon button hit areas', () => {
     expect(source).toContain('hit-target-box inline-flex items-center gap-2 px-4 py-2.5');
     expect(source).toContain('hit-target-box inline-flex items-center gap-2 px-3.5 py-2');
     expect(source).toContain('hit-target-box border-transparent hover:-translate-y-0.5');
-    expect(homeSource).toContain('hit-target-box flex items-center gap-1.5 px-4 py-2');
     expect(inboxSource).toContain('hit-target-box flex items-center gap-1.5 text-xs font-medium text-muted-foreground px-2 py-1');
     expect(inboxSource).toContain('hit-target-box flex items-center gap-1.5 text-xs font-medium text-[var(--amber)] px-2.5 py-1');
     expect(inboxSource).toContain('hit-target-box group flex items-center gap-3');

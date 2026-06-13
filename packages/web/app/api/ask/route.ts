@@ -54,11 +54,11 @@ import {
   resolveSkillFile,
   resolveSkillReference,
 } from '@/lib/agent/skill-resolver';
-import { askUserQuestionViaBridge, runWithAskUserQuestionBridge } from '@/lib/agent/user-question-bridge';
+import { askUserQuestionViaBridge, runWithAskUserQuestionBridge } from '@geminilight/mindos/agent/user-question-bridge';
 import {
   requestRuntimePermissionViaBridge,
   runWithRuntimePermissionBridge,
-} from '@/lib/agent/runtime-permission-bridge';
+} from '@geminilight/mindos/agent/runtime-permission-bridge';
 import { compactRuntimeDisplayReason } from '@/lib/agent/runtime-error-display';
 import {
   createClaudePermissionPromptConfig,
@@ -72,15 +72,15 @@ import {
   startAgentRun,
   updateAgentRun,
   type AgentRunRecord,
-} from '@/lib/agent/run-ledger';
+} from '@geminilight/mindos/agent/run-ledger';
 import {
   getCachedAvailableNativeRuntimeDescriptor,
   rememberAvailableNativeRuntimeDescriptor,
 } from '@/lib/agent/native-runtime-descriptor-cache';
-import { createMindosAgentPermissionPolicy } from '@/lib/agent/permission-policy';
-import { runWithAgentRunContext } from '@/lib/agent/agent-run-context';
+import { createMindosAgentPermissionPolicy } from '@geminilight/mindos/agent/permission-policy';
+import { runWithAgentRunContext } from '@geminilight/mindos/agent/agent-run-context';
 import { toMindosUiAskMessages } from '@/lib/agent/to-agent-messages';
-import { isAbortLikeError } from '@/lib/agent/run-cancellation';
+import { isAbortLikeError } from '@geminilight/mindos/agent/run-cancellation';
 
 const NATIVE_ASK_HEALTH_GATE_TIMEOUT_MS = 3000;
 
@@ -572,7 +572,7 @@ export async function POST(req: NextRequest) {
     attachedFiles?: string[];
     uploadedFiles?: Array<{ name: string; content: string }>;
     maxSteps?: number;
-    /** Ask mode: 'chat' = conversational/read-focused; 'agent' = task execution */
+    /** Ask mode: 'chat' = read-only tools; 'agent' = full tools; 'organize' = lean import mode */
     mode?: AskModeApi;
     /** ACP agent selection: if present, route to ACP instead of MindOS */
     selectedAcpAgent?: { id: string; name: string } | null;
@@ -591,9 +591,6 @@ export async function POST(req: NextRequest) {
     body = await req.json();
   } catch {
     return apiError(ErrorCodes.INVALID_REQUEST, 'Invalid JSON body', 400);
-  }
-  if (body.mode !== undefined && body.mode !== 'chat' && body.mode !== 'agent') {
-    return apiError(ErrorCodes.INVALID_REQUEST, 'mode must be chat or agent', 400);
   }
 
   const { messages, currentFile, attachedFiles: rawAttached, uploadedFiles } = body;
@@ -689,12 +686,11 @@ export async function POST(req: NextRequest) {
           runtimeId: nativeRuntime.id,
           displayName: nativeRuntime.name,
           cwd: mindRoot,
-          permissionMode: permissionPolicy.permissionMode,
+          permissionMode: permissionPolicy.runtimePermissionMode,
           inputSummary: externalPrompt,
           metadata: {
             runtimeKind: nativeRuntime.kind,
             source: 'selected-native-runtime',
-            harnessPermissionMode: permissionPolicy.runtimePermissionMode,
           },
         });
         const sendWithLedger = (event: MindOSSSEvent) => {
@@ -745,6 +741,7 @@ export async function POST(req: NextRequest) {
               status: agentRunErrorStatus(result.error, req.signal),
               error: result.error,
               outputSummary,
+              ...(result.externalSessionId ? { archive: { sessionId: result.externalSessionId } } : {}),
               metadata: {
                 runtimeKind: nativeRuntime.kind,
                 ...(result.externalSessionId ? { externalSessionId: result.externalSessionId } : {}),
@@ -754,6 +751,7 @@ export async function POST(req: NextRequest) {
           }
           completeAgentRun(nativeRun.id, {
             outputSummary,
+            ...(result.externalSessionId ? { archive: { sessionId: result.externalSessionId } } : {}),
             metadata: {
               runtimeKind: nativeRuntime.kind,
               ...(result.externalSessionId ? { externalSessionId: result.externalSessionId } : {}),
@@ -778,12 +776,11 @@ export async function POST(req: NextRequest) {
           runtimeId: selectedAcpAgent.id,
           displayName: selectedAcpAgent.name,
           cwd: mindRoot,
-          permissionMode: permissionPolicy.permissionMode,
+          permissionMode: permissionPolicy.acpPermissionMode,
           inputSummary: externalPrompt,
           metadata: {
             source: 'selected-acp-runtime',
             phase: 'create_session',
-            harnessPermissionMode: permissionPolicy.acpPermissionMode,
           },
         });
         sendAgentRunContext(send, acpRun);
@@ -806,6 +803,7 @@ export async function POST(req: NextRequest) {
                 permissionMode: permissionPolicy.acpPermissionMode,
               });
               updateAgentRun(acpRun.id, {
+                archive: { sessionId: session.id },
                 metadata: {
                   phase: 'prompt',
                   sessionId: session.id,
@@ -990,7 +988,11 @@ export async function POST(req: NextRequest) {
     } = await import('@/lib/agent/mindos-pi-runtime-host');
     const runtimePaths = getMindosWebPiRuntimePaths({ projectRoot, mindRoot, serverSettings, mode: askMode });
     const { createMindosPiCodingAgentRuntime } = await import('@geminilight/mindos/session/pi-coding-agent');
-    const runtime = await createMindosPiCodingAgentRuntime({
+    const { runWithKbPermissionPolicy } = await import('@/lib/agent/kb-extension');
+    // Scope the kb tool policy to this request: runtime creation reloads the
+    // kb extension, and concurrent requests with different modes must not
+    // race on the module-level policy.
+    const runtime = await runWithKbPermissionPolicy(permissionPolicy, () => createMindosPiCodingAgentRuntime({
       mode: askMode,
       messages: mindosUiMessages,
       systemPrompt,
@@ -1009,7 +1011,7 @@ export async function POST(req: NextRequest) {
       additionalSkillPaths: runtimePaths.additionalSkillPaths,
       additionalExtensionPaths: runtimePaths.additionalExtensionPaths,
       hostServices: createWebMindosPiRuntimeHostServices(serverSettings),
-    });
+    }));
     systemPrompt = runtime.systemPrompt;
     const {
       session,

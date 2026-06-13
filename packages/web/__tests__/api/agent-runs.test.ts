@@ -5,7 +5,7 @@ import {
   completeAgentRun,
   resetAgentRunsForTest,
   startAgentRun,
-} from '@/lib/agent/run-ledger';
+} from '@geminilight/mindos/agent/run-ledger';
 
 describe('/api/agent-runs', () => {
   beforeEach(() => {
@@ -24,7 +24,7 @@ describe('/api/agent-runs', () => {
       agentKind: 'pi-subagent',
       runtimeId: 'reviewer',
       displayName: 'Reviewer',
-      permissionMode: 'chat',
+      permissionMode: 'readonly',
       inputSummary: 'Review this',
     });
     completeAgentRun(subagentRun.id, { outputSummary: 'Looks good.' });
@@ -62,7 +62,7 @@ describe('/api/agent-runs', () => {
       runtimeId: 'claude',
       displayName: 'Claude Code',
       chatSessionId: 'chat-b',
-      permissionMode: 'chat',
+      permissionMode: 'readonly',
       inputSummary: 'Use Claude',
     });
 
@@ -97,7 +97,7 @@ describe('/api/agent-runs', () => {
       rootRunId: root.id,
       parentRunId: root.id,
       chatSessionId: 'chat-root',
-      permissionMode: 'chat',
+      permissionMode: 'readonly',
       inputSummary: 'Review',
     });
     startAgentRun({

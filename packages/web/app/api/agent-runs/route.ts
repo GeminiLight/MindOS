@@ -8,7 +8,7 @@ import {
   type AgentEventType,
   type AgentNodeKind,
   type AgentRunStatus,
-} from '@/lib/agent/run-ledger';
+} from '@geminilight/mindos/agent/run-ledger';
 
 const AGENT_KINDS = new Set<AgentNodeKind>(['mindos-main', 'mindos-headless', 'native-runtime', 'pi-subagent', 'acp', 'a2a']);
 const RUN_STATUSES = new Set<AgentRunStatus>([

@@ -112,7 +112,6 @@ export default function AgentsContentChannelDetail({ platformId }: { platformId:
   const isFeishu = platformId === 'feishu';
   const webhookState = status?.webhook?.state ?? 'disabled';
   const purpose = locale === 'zh' ? (platform.purposeZh ?? platform.purpose ?? im.emptyDesc) : (platform.purpose ?? im.emptyDesc);
-  const headerPurpose = isFeishu && isConnected ? '' : purpose;
   const recipientExample = locale === 'zh' ? (platform.recipientExampleZh ?? platform.recipientExample) : platform.recipientExample;
 
   return (
@@ -155,7 +154,7 @@ export default function AgentsContentChannelDetail({ platformId }: { platformId:
             platform={platform}
             status={status}
             im={im}
-            purpose={headerPurpose}
+            purpose={purpose}
             isConnected={isConnected}
           />
 
@@ -171,12 +170,20 @@ export default function AgentsContentChannelDetail({ platformId }: { platformId:
               />
 
               {isFeishu && (
-                <ChannelConversation
-                  status={status?.webhook}
-                  im={im}
-                  platform={platform}
-                  onSaved={() => fetchDetail(true)}
-                />
+                <>
+                  <ChannelFeishuOAuth
+                    status={status?.oauth}
+                    im={im}
+                    onSaved={() => fetchDetail(true)}
+                  />
+
+                  <ChannelConversation
+                    status={status?.webhook}
+                    im={im}
+                    platform={platform}
+                    onSaved={() => fetchDetail(true)}
+                  />
+                </>
               )}
 
               <ChannelActivityFeed
@@ -191,14 +198,6 @@ export default function AgentsContentChannelDetail({ platformId }: { platformId:
                 recipientExample={recipientExample}
                 onSent={() => fetchDetail(true)}
               />
-
-              {isFeishu && (
-                <ChannelFeishuOAuth
-                  status={status?.oauth}
-                  im={im}
-                  onSaved={() => fetchDetail(true)}
-                />
-              )}
 
               <ChannelSettings
                 platform={platform}

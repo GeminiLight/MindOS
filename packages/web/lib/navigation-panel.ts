@@ -1,5 +1,3 @@
-import { defaultEchoPath } from '@/lib/echo-segments';
-
 export type PanelId = 'files' | 'capture' | 'search' | 'echo' | 'agents' | 'discover' | 'workflows';
 
 export type RoutePanelId = Extract<PanelId, 'files' | 'capture' | 'echo' | 'agents' | 'discover'>;
@@ -40,7 +38,9 @@ export function getPendingRoutePanel(
 export const ROUTE_PANEL_HREF: Record<RoutePanelId, string> = {
   files: '/wiki',
   capture: '/capture',
-  echo: defaultEchoPath(),
+  // Must be a valid echo segment (see ECHO_SEGMENT_IDS) — 'about-you' is not
+  // one, so '/echo/about-you' 404s via app/echo/[segment] notFound().
+  echo: '/echo/imprint',
   agents: '/agents',
   discover: '/explore',
 };

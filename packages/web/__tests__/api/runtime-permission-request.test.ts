@@ -4,7 +4,7 @@ import { POST } from '@/app/api/ask/runtime-permission/request/route';
 import {
   resolveRuntimePermission,
   runWithRuntimePermissionBridge,
-} from '@/lib/agent/runtime-permission-bridge';
+} from '@geminilight/mindos/agent/runtime-permission-bridge';
 
 function postJson(body: Record<string, unknown>): NextRequest {
   return new NextRequest('http://localhost/api/ask/runtime-permission/request', {

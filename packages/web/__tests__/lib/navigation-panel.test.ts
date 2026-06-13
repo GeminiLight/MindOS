@@ -10,7 +10,6 @@ import {
   isNeutralContentRoute,
   recoverStaleCapturePanel,
   recoverStaleRoutePanel,
-  ROUTE_PANEL_HREF,
 } from '@/lib/navigation-panel';
 
 describe('navigation panel route recovery', () => {
@@ -23,7 +22,7 @@ describe('navigation panel route recovery', () => {
     expect(getContentRoutePanel('/agents')).toBe('agents');
     expect(getContentRoutePanel('/agents/codex')).toBe('agents');
     expect(getContentRoutePanel('/explore')).toBe('discover');
-    expect(getContentRoutePanel('/echo/imprint')).toBe('echo');
+    expect(getContentRoutePanel('/echo/about-you')).toBe('echo');
   });
 
   it('does not treat route name prefixes as panel routes', () => {
@@ -54,11 +53,7 @@ describe('navigation panel route recovery', () => {
     expect(getRouteControlledPanel('/capture')).toBe('capture');
     expect(getRouteControlledPanel('/agents')).toBe('agents');
     expect(getRouteControlledPanel('/explore')).toBe('discover');
-    expect(getRouteControlledPanel('/echo/imprint')).toBe('echo');
-  });
-
-  it('routes Echo rail clicks to the current default Echo segment', () => {
-    expect(ROUTE_PANEL_HREF.echo).toBe('/echo/imprint');
+    expect(getRouteControlledPanel('/echo/about-you')).toBe('echo');
   });
 
   it('uses route panels as defaults while allowing utility panels to temporarily override them', () => {
@@ -87,7 +82,7 @@ describe('navigation panel route recovery', () => {
   it('recovers sibling destination panels when leaving Inbox', () => {
     expect(recoverStaleCapturePanel('/agents', 'capture')).toBe('agents');
     expect(recoverStaleCapturePanel('/explore', 'capture')).toBe('discover');
-    expect(recoverStaleCapturePanel('/echo/imprint', 'capture')).toBe('echo');
+    expect(recoverStaleCapturePanel('/echo/about-you', 'capture')).toBe('echo');
   });
 
   it('recovers any stale route-owned panel when the destination route commits', () => {

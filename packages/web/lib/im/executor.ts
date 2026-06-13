@@ -5,7 +5,7 @@ import type { IMAdapter, IMMessage, IMPlatform, IMSendResult, IMActivityType } f
 import { isValidRecipientId, PLATFORM_LIMITS } from './types';
 import { getPlatformConfig, getIMConfigMtime, getConfiguredPlatforms } from './config';
 import { preprocessMessage } from './format';
-import { retryDelay, sleep } from '@/lib/agent/reconnect';
+import { retryDelay, sleep } from '../agent/reconnect';
 import { recordActivity } from './activity';
 
 const MAX_RETRIES = 3;

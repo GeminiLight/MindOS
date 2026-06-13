@@ -23,5 +23,6 @@ export { DIContainer, TOKENS, createContainer, createToken } from './foundation/
 export type { Container, ServiceFactory, ServiceIdentifier, ServiceLifecycle, ServiceRegistration } from './foundation/core/index.js';
 export * from './foundation/config/index.js';
 export * from './foundation/logger/index.js';
+export * from './foundation/mind-root/index.js';
 export * from './foundation/permissions/index.js';
 export * from './foundation/security/index.js';

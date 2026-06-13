@@ -2,12 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { resolveAskCompatMode } from '@/lib/agent/ask-compat';
 
 describe('resolveAskCompatMode', () => {
-  it('tries streaming first for agent runs against OpenAI-compatible custom base URLs', () => {
+  it('uses non-streaming tools for organize runs against OpenAI-compatible custom base URLs', () => {
     expect(resolveAskCompatMode({
-      askMode: 'agent',
+      askMode: 'organize',
       provider: 'openai',
       baseUrl: 'https://lumina.tripo3d.com/v1',
-    })).toBeUndefined();
+    })).toBe('non-streaming');
   });
 
   it('does not force non-streaming for normal chat on the same base URL', () => {

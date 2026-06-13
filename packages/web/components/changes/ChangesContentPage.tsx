@@ -248,7 +248,7 @@ export default function ChangesContentPage({ initialPath = '' }: { initialPath?:
     <div className="min-h-[calc(100vh-var(--app-titlebar-h))] bg-background">
       {/* Header with icon in box */}
       <div className="px-4 md:px-6 pt-6 md:pt-8">
-        <div className="content-width toc-reserved-content rounded-xl border border-border/60 bg-card p-6 md:p-8 shadow-sm">
+        <div className="content-width xl:mr-[220px] rounded-xl border border-border/60 bg-card p-6 md:p-8 shadow-sm">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="min-w-0 flex-1">
               {/* Title with icon in box (Settings pattern) */}
@@ -302,7 +302,7 @@ export default function ChangesContentPage({ initialPath = '' }: { initialPath?:
 
       {/* Filters Section (SettingCard pattern) */}
       <div className="px-4 md:px-6 py-4 md:py-6">
-        <div className="content-width toc-reserved-content space-y-4">
+        <div className="content-width xl:mr-[220px] space-y-4">
           <div className="rounded-xl border border-border/60 bg-card/60 p-5 md:p-6 shadow-sm hover:border-border hover:shadow transition-all duration-150">
             <div className="space-y-4">
               {/* Row 1: File path + Source */}

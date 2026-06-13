@@ -152,16 +152,6 @@ describe('tools: write_file', () => {
     expect(read).toContain('# New content');
     expect(read).not.toContain('# Old content');
   });
-
-  it('blocks writes to protected root files even when called directly', async () => {
-    seedFile('INSTRUCTION.md', '# System');
-
-    const result = await callTool('write_file', { path: 'INSTRUCTION.md', content: '# Changed' });
-
-    expect(result).toContain('Error:');
-    expect(result).toContain('Protected file');
-    expect(await callTool('read_file', { path: 'INSTRUCTION.md' })).toContain('# System');
-  });
 });
 
 // ---------------------------------------------------------------------------

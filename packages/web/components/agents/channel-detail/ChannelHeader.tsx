@@ -31,7 +31,7 @@ export function ChannelHeader({ platform, status, im, purpose, isConnected }: {
             </span>
           )}
         </div>
-        {purpose && <p className="text-sm text-muted-foreground leading-relaxed max-w-prose">{purpose}</p>}
+        <p className="text-sm text-muted-foreground leading-relaxed max-w-prose">{purpose}</p>
         {isConnected && status?.botName && (
           <p className="text-xs text-muted-foreground mt-1 font-mono">{status.botName}</p>
         )}

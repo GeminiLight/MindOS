@@ -18,8 +18,7 @@ export default function AskFab({ onToggle, askPanelOpen }: AskFabProps) {
 
   // Hide on home page — it already has an inline chatbot
   const isHome = pathname === '/' || pathname === '';
-  const isChatRoute = pathname === '/chat' || pathname?.startsWith('/chat/');
-  const hidden = askPanelOpen || isHome || isChatRoute;
+  const hidden = askPanelOpen || isHome;
 
   return (
     <button

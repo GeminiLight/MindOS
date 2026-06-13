@@ -5,7 +5,12 @@
  * Reads: components/explore/use-cases.yaml (single source of truth)
  * Generates:
  *   1. components/explore/use-cases.generated.ts  (UseCase[] array + types)
- *   2. lib/i18n/generated/explore-i18n.generated.ts  (zh + en translation objects)
+ *   2. lib/i18n/generated/explore-i18n-en.generated.ts  (exploreEn only)
+ *   3. lib/i18n/generated/explore-i18n-zh.generated.ts  (exploreZh only)
+ *   4. lib/i18n/generated/explore-i18n.generated.ts  (re-export shim)
+ *
+ * The per-locale split keeps zh translation strings out of the en first-load
+ * chunk (webpack tree-shakes per-module, not per-export).
  *
  * Run: pnpm --filter @mindos/web run generate
  */
@@ -129,16 +134,31 @@ function buildI18n(lang: 'en' | 'zh') {
   return { ...ui, categories, scenarios, ...cases };
 }
 
-const i18nTs = `${BANNER}
-export const exploreEn = ${JSON.stringify(buildI18n('en'), null, 2)} as const;
-
-export const exploreZh = ${JSON.stringify(buildI18n('zh'), null, 2)} as const;
-`;
-
 const i18nDir = resolve(appDir, 'lib/i18n/generated');
 mkdirSync(i18nDir, { recursive: true });
-const i18nPath = resolve(i18nDir, 'explore-i18n.generated.ts');
-writeFileSync(i18nPath, i18nTs, 'utf-8');
-console.log(`[generate-explore] ✓ ${i18nPath}`);
+
+// Per-locale files keep each locale's strings in its own module so the en
+// first-load chunk never statically pulls in zh translations.
+const enTs = `${BANNER}
+export const exploreEn = ${JSON.stringify(buildI18n('en'), null, 2)} as const;
+`;
+const zhTs = `${BANNER}
+export const exploreZh = ${JSON.stringify(buildI18n('zh'), null, 2)} as const;
+`;
+// Shim preserves the combined import surface for any aggregate importer.
+const shimTs = `${BANNER}
+export { exploreEn } from './explore-i18n-en.generated';
+export { exploreZh } from './explore-i18n-zh.generated';
+`;
+
+const enPath = resolve(i18nDir, 'explore-i18n-en.generated.ts');
+const zhPath = resolve(i18nDir, 'explore-i18n-zh.generated.ts');
+const shimPath = resolve(i18nDir, 'explore-i18n.generated.ts');
+writeFileSync(enPath, enTs, 'utf-8');
+writeFileSync(zhPath, zhTs, 'utf-8');
+writeFileSync(shimPath, shimTs, 'utf-8');
+console.log(`[generate-explore] ✓ ${enPath}`);
+console.log(`[generate-explore] ✓ ${zhPath}`);
+console.log(`[generate-explore] ✓ ${shimPath}`);
 
 console.log(`[generate-explore] Done — ${data.cases.length} use cases generated.`);

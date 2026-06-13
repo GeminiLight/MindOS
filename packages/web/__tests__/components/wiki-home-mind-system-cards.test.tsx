@@ -140,23 +140,7 @@ describe('WikiHomeContent Mind System cards', () => {
     }
   });
 
-  it('keeps Mind System homepage copy concise and card descriptions to one visual line', async () => {
-    await act(async () => {
-      root = createRoot(host);
-      root.render(<WikiHomeContent spaces={[]} recent={[]} mindSystemSpaces={mindSystemRecords()} />);
-    });
-
-    const sectionDesc = host.querySelector<HTMLElement>('[data-mind-system-home-desc]');
-    const daoDesc = host.querySelector<HTMLElement>('[data-mind-system-card-desc="dao"]');
-
-    expect(sectionDesc?.textContent).toBe('Organize your knowledge with four built-in spaces.');
-    expect(sectionDesc?.textContent).not.toContain('.mindos');
-    expect(sectionDesc?.textContent).not.toContain('module registry');
-    expect(daoDesc?.className).toContain('truncate');
-    expect(daoDesc?.textContent).toBe('Values, direction, long-term judgment');
-  });
-
-  it('shows compact assistant counts without assistant internals or file status', async () => {
+  it('shows assistant summaries without a hidden primary run action', async () => {
     await act(async () => {
       root = createRoot(host);
       root.render(
@@ -180,22 +164,17 @@ describe('WikiHomeContent Mind System cards', () => {
     });
 
     const daoCard = host.querySelector<HTMLElement>('[data-mind-system-card="dao"]');
-    const summary = host.querySelector<HTMLElement>('[data-mind-system-card-assistant-summary="dao"]');
 
-    expect(summary?.textContent).toContain('Assistants');
-    expect(summary?.textContent).toContain('2');
-    expect(daoCard?.textContent).not.toContain('Daily signal curator');
-    expect(daoCard?.textContent).not.toContain('Decision synthesizer');
-    expect(daoCard?.textContent).not.toContain('2 assistants');
-    expect(daoCard?.textContent).not.toContain('2 drafts');
-    expect(daoCard?.textContent).not.toContain('Instruction ready');
-    expect(daoCard?.textContent).not.toContain('Instruction missing');
-    expect(host.querySelector('[data-mind-system-home-assistant-icon="daily-signal"]')).toBeNull();
-    expect(host.querySelector('[data-mind-system-home-assistant-icon="decision-synthesizer"]')).toBeNull();
+    expect(daoCard?.textContent).toContain('Daily signal curator');
+    expect(daoCard?.textContent).toContain('2 assistants');
+    expect(daoCard?.textContent).toContain('Decision synthesizer');
+    expect(daoCard?.textContent).toContain('2 drafts');
+    expect(host.querySelector('[data-mind-system-home-assistant-icon="daily-signal"]')?.textContent).toBe('D');
+    expect(host.querySelector('[data-mind-system-home-assistant-icon="decision-synthesizer"]')?.textContent).toBe('D');
     expect(host.querySelector('[data-mind-system-run-once="dao"]')).toBeNull();
   });
 
-  it('hides missing instruction state on homepage cards', async () => {
+  it('shows missing instruction state when a space has no INSTRUCTION.md', async () => {
     await act(async () => {
       root = createRoot(host);
       root.render(
@@ -220,7 +199,7 @@ describe('WikiHomeContent Mind System cards', () => {
 
     const daoCard = host.querySelector<HTMLElement>('[data-mind-system-card="dao"]');
 
-    expect(daoCard?.textContent).not.toContain('Instruction missing');
+    expect(daoCard?.textContent).toContain('Instruction missing');
     expect(daoCard?.textContent).not.toContain('Instruction ready');
   });
 });

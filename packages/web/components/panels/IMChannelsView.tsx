@@ -3,12 +3,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { CheckCircle2, AlertCircle, RefreshCw } from 'lucide-react';
+import { CheckCircle2, Circle, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
 import { useLocale } from '@/lib/stores/locale-store';
 import { PLATFORMS, type PlatformStatus } from '@/lib/im/platforms';
 import { ChannelIcon } from '@/components/agents/ChannelIcon';
 
-/** Compact sidebar cards for IM channels — icon + name + status mark. */
+/** Simple sidebar nav list for IM channels — icon + name + status dot. */
 export default function IMChannelsView() {
   const { t } = useLocale();
   const im = t.panels.im;
@@ -39,35 +39,24 @@ export default function IMChannelsView() {
 
   if (loading) {
     return (
-      <div className="space-y-2 px-3 py-3" aria-label={im.title}>
-        {[0, 1, 2, 3].map((item) => (
-          <div
-            key={item}
-            className="flex min-h-14 items-center gap-3 rounded-xl border border-border/50 bg-background/45 px-3 py-2.5"
-          >
-            <span className="h-9 w-9 shrink-0 animate-pulse rounded-md bg-muted/60" />
-            <span className="h-4 w-24 animate-pulse rounded bg-muted/60" />
-            <span className="ml-auto h-7 w-7 shrink-0 animate-pulse rounded-full bg-muted/40" />
-          </div>
-        ))}
+      <div className="flex justify-center py-8">
+        <Loader2 size={16} className="animate-spin text-muted-foreground" />
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="px-3 py-3">
-        <div className="flex flex-col items-center gap-2 rounded-xl border border-border/60 bg-background/50 px-4 py-5 text-center">
-          <AlertCircle size={16} className="text-muted-foreground" />
-          <p className="text-2xs text-muted-foreground">{im.fetchError}</p>
-          <button
-            type="button"
-            onClick={() => { setLoading(true); fetchStatuses(); }}
-            className="inline-flex items-center gap-1 text-2xs text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <RefreshCw size={11} /> {im.retry}
-          </button>
-        </div>
+      <div className="flex flex-col items-center gap-2 py-8 px-3">
+        <AlertCircle size={16} className="text-muted-foreground" />
+        <p className="text-2xs text-muted-foreground">{im.fetchError}</p>
+        <button
+          type="button"
+          onClick={() => { setLoading(true); fetchStatuses(); }}
+          className="inline-flex items-center gap-1 text-2xs text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <RefreshCw size={11} /> {im.retry}
+        </button>
       </div>
     );
   }
@@ -76,17 +65,17 @@ export default function IMChannelsView() {
   const getStatus = (id: string) => statuses.find(s => s.platform === id);
 
   return (
-    <div className="flex flex-col px-3 py-3">
+    <div className="flex flex-col py-1">
       {/* Section header */}
-      <div className="mb-2 flex items-center gap-2 px-0.5">
-        <span className="text-2xs font-semibold text-muted-foreground">{im.title}</span>
+      <div className="flex items-center gap-2 px-3 py-1.5 mb-0.5">
+        <span className="text-2xs font-medium text-muted-foreground uppercase tracking-wider">{im.title}</span>
         {configuredCount > 0 && (
           <span className="text-2xs text-muted-foreground/60">{configuredCount} {im.connected}</span>
         )}
       </div>
 
       {/* Platform list */}
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col">
         {PLATFORMS.map((platform) => {
           const { id, name } = platform;
           const status = getStatus(id);
@@ -97,35 +86,26 @@ export default function IMChannelsView() {
             <Link
               key={id}
               href={`/agents?tab=channels&platform=${id}`}
-              aria-current={isActive ? 'page' : undefined}
               className={`
-                group relative flex min-h-14 items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-all duration-150
+                relative flex items-center gap-2.5 px-3 py-2 text-left rounded-sm transition-colors
                 ${isActive
-                  ? 'border-[var(--amber)]/30 bg-[var(--amber)]/8 shadow-sm shadow-[var(--amber)]/5'
-                  : 'border-border/55 bg-background/45 hover:border-border hover:bg-muted/35'
+                  ? 'bg-[var(--amber-dim)]/40 pl-3.5'
+                  : 'hover:bg-muted/50'
                 }
               `}
             >
-              <ChannelIcon
-                platform={platform}
-                size="md"
-                className={isActive ? 'border-[var(--amber)]/20 bg-[var(--amber)]/8' : 'transition-colors group-hover:bg-background'}
-              />
-              <span className="min-w-0 flex-1 truncate text-[15px] font-semibold text-foreground">{name}</span>
+              {isActive && (
+                <span
+                  className="pointer-events-none absolute bottom-[22%] left-0 top-[22%] w-0.5 rounded-r-full bg-[var(--amber)]"
+                  aria-hidden
+                />
+              )}
+              <ChannelIcon platform={platform} size="sm" />
+              <span className="text-sm flex-1 truncate text-foreground">{name}</span>
               {isConnected ? (
-                <span
-                  className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-success/25 bg-success/10 text-success"
-                  aria-label={im.connected}
-                >
-                  <CheckCircle2 size={15} />
-                </span>
+                <CheckCircle2 size={14} className="text-success shrink-0" />
               ) : (
-                <span
-                  className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full"
-                  aria-label={im.statsNotConfigured}
-                >
-                  <span className="h-3 w-3 rounded-full border border-border bg-background" />
-                </span>
+                <Circle size={14} className="text-border shrink-0" />
               )}
             </Link>
           );

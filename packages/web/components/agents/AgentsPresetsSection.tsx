@@ -2044,7 +2044,7 @@ function titleizeAssistantId(value: string): string {
 }
 
 function buildAssistantRunPrompt(assistant: AssistantView): string {
-  return `Run the local MindOS Assistant "${assistant.name}" (${assistant.id}) in chat mode.
+  return `Run the local MindOS Assistant "${assistant.name}" (${assistant.id}) in readonly mode.
 
 Use this assistant profile:
 - preferredAgent: ${assistant.preferredAgent ?? 'mindos-agent'}
@@ -2055,7 +2055,7 @@ Assistant prompt:
 
 ${assistant.promptContent || assistant.promptPreview}
 
-Return a concise result for the user. Do not write files or make external changes unless a later agent run explicitly grants stronger execution permissions.`;
+Return a concise result for the user. Do not write files or make external changes unless a later run explicitly grants a stronger permission mode.`;
 }
 
 async function readAskTextResponse(res: Response): Promise<string> {

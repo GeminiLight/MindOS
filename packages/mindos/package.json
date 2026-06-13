@@ -69,6 +69,10 @@
       "types": "./dist/agent.d.ts",
       "import": "./dist/agent.js"
     },
+    "./agent/*": {
+      "types": "./dist/agent/*.d.ts",
+      "import": "./dist/agent/*.js"
+    },
     "./agent-runtime": {
       "types": "./dist/agent-runtime.d.ts",
       "import": "./dist/agent-runtime.js"
@@ -121,6 +125,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.93.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
+    "@sinclair/typebox": "^0.34.33",
     "chokidar": "^4.0.3",
     "pino": "^8.17.0",
     "pino-pretty": "^10.3.0",
@@ -139,6 +144,7 @@
   "devDependencies": {
     "@agentclientprotocol/sdk": "^0.18.2",
     "@anthropic-ai/claude-agent-sdk": "0.3.170",
+    "@earendil-works/pi-agent-core": "0.78.1",
     "@earendil-works/pi-coding-agent": "0.78.1",
     "@types/node": "^22.10.5",
     "esbuild": "^0.25.0",

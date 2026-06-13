@@ -1,112 +1,32 @@
 import { useState } from 'react';
 import Link from 'next/link';
-import { Check, Copy, ExternalLink, Loader2, MessageCircle, Play, Settings2, Square } from 'lucide-react';
+import { Loader2, ExternalLink } from 'lucide-react';
 import { SectionCard, StatusDot, ActionResult } from './shared';
-
-type FeishuLongConnectionStatus = {
-  running: boolean;
-  startedAt?: string;
-  lastError?: string;
-};
-
-type FeishuConversationStatus = {
-  state: string;
-  transport?: string;
-  webhookUrl?: string;
-  publicBaseUrl?: string;
-  lastError?: string;
-};
+import { Select } from '@/components/settings/Primitives';
 
 export function ChannelConversation({ status, im, platform, onSaved }: {
-  status: FeishuConversationStatus | undefined;
+  status: { state: string; transport?: string; webhookUrl?: string; publicBaseUrl?: string; lastError?: string } | undefined;
   im: Record<string, any>;
   platform: { guideUrl?: string };
   onSaved: () => void;
 }) {
-  const [allowMentions, setAllowMentions] = useState(true);
-  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const currentTransport = status?.transport ?? 'webhook';
+  const isLongConnection = currentTransport === 'long_connection';
+
+  const [enabled, setEnabled] = useState(status?.state !== 'disabled');
+  const [transport, setTransport] = useState<'webhook' | 'long_connection'>(currentTransport as any);
   const [encryptKey, setEncryptKey] = useState('');
   const [verificationToken, setVerificationToken] = useState('');
   const [publicBaseUrl, setPublicBaseUrl] = useState(status?.publicBaseUrl ?? '');
-  const [savingWebhook, setSavingWebhook] = useState(false);
-  const [longAction, setLongAction] = useState<'start' | 'stop' | null>(null);
-  const [longStatus, setLongStatus] = useState<FeishuLongConnectionStatus | null>(null);
-  const [copiedWebhook, setCopiedWebhook] = useState(false);
+  const [allowMentions, setAllowMentions] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; msg: string } | null>(null);
 
-  const longConnectionRunning = longStatus?.running ?? (status?.transport === 'long_connection' && status?.state === 'ready');
-  const webhookReady = status?.transport === 'webhook' && status?.state === 'ready';
-  const conversationReady = longConnectionRunning || webhookReady;
-  const statusLabel = conversationReady
-    ? im.conversationReady
-    : status?.state === 'error'
-      ? im.conversationError
-      : im.conversationNotStarted;
-  const primaryButtonLabel = longConnectionRunning ? im.conversationLongStop : im.conversationStart;
-  const primaryBusy = longAction !== null;
-  const statusLastError = status?.lastError ?? '';
-  const statusErrorIsStartHint = statusLastError.includes('Start the Feishu long connection client');
-  const statusError = longStatus?.lastError ?? (statusErrorIsStartHint ? undefined : status?.lastError);
+  const isLC = transport === 'long_connection';
+  const stateReady = status?.state === 'ready';
 
-  const saveLongConnectionConfig = async () => {
-    const res = await fetch('/api/im/config', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        platform: 'feishu',
-        conversation: {
-          enabled: true,
-          transport: 'long_connection',
-          allow_group_mentions: allowMentions,
-        },
-      }),
-    });
-    const data = await res.json();
-    if (!res.ok || !data.ok) {
-      throw new Error(data.error || im.failed || 'Failed');
-    }
-  };
-
-  const handlePrimaryConversationAction = async () => {
-    const action = longConnectionRunning ? 'stop' : 'start';
-    setLongAction(action);
-    setResult(null);
-    try {
-      if (action === 'start') {
-        await saveLongConnectionConfig();
-      }
-      const res = await fetch('/api/im/feishu/long-connection', {
-        method: action === 'start' ? 'POST' : 'DELETE',
-      });
-      const data = await res.json();
-      if (!res.ok || !data.ok) {
-        setLongStatus({
-          running: Boolean(data.running),
-          startedAt: data.startedAt,
-          lastError: data.error ?? data.lastError,
-        });
-        setResult({ ok: false, msg: data.error || im.failed || 'Failed' });
-        return;
-      }
-      setLongStatus({
-        running: Boolean(data.running),
-        startedAt: data.startedAt,
-        lastError: data.lastError,
-      });
-      setResult({
-        ok: true,
-        msg: data.running ? im.conversationStarted : im.conversationLongStopped,
-      });
-      onSaved();
-    } catch (err) {
-      setResult({ ok: false, msg: err instanceof Error ? err.message : (im.networkError ?? 'Network error') });
-    } finally {
-      setLongAction(null);
-    }
-  };
-
-  const handleSaveWebhook = async () => {
-    setSavingWebhook(true);
+  const handleSave = async () => {
+    setSaving(true);
     setResult(null);
     try {
       const res = await fetch('/api/im/config', {
@@ -115,11 +35,11 @@ export function ChannelConversation({ status, im, platform, onSaved }: {
         body: JSON.stringify({
           platform: 'feishu',
           conversation: {
-            enabled: true,
-            transport: 'webhook',
+            enabled,
+            transport,
             encrypt_key: encryptKey.trim() || undefined,
             verification_token: verificationToken.trim() || undefined,
-            public_base_url: publicBaseUrl.trim() || undefined,
+            public_base_url: isLC ? undefined : (publicBaseUrl || undefined),
             allow_group_mentions: allowMentions,
           },
         }),
@@ -131,166 +51,142 @@ export function ChannelConversation({ status, im, platform, onSaved }: {
         setVerificationToken('');
         onSaved();
       } else {
-        setResult({ ok: false, msg: data.error || im.failed || 'Failed' });
+        setResult({ ok: false, msg: data.error || 'Failed' });
       }
     } catch (err) {
       setResult({ ok: false, msg: err instanceof Error ? err.message : (im.networkError ?? 'Network error') });
-    } finally {
-      setSavingWebhook(false);
     }
-  };
-
-  const handleCopyWebhookUrl = async () => {
-    if (!status?.webhookUrl || typeof navigator === 'undefined' || !navigator.clipboard) return;
-    await navigator.clipboard.writeText(status.webhookUrl);
-    setCopiedWebhook(true);
-    window.setTimeout(() => setCopiedWebhook(false), 1200);
+    setSaving(false);
   };
 
   return (
-    <SectionCard title={im.conversationTitle} icon={<StatusDot ok={conversationReady} />}>
-      <div className="space-y-5">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <SectionCard title={im.conversationTitle} icon={<StatusDot ok={stateReady} />}>
+      <div className="space-y-4">
+        {/* Enable toggle */}
+        <div className="flex items-center justify-between gap-4">
           <div>
-            <div className="inline-flex items-center gap-2 rounded-md bg-[var(--amber)]/10 px-2.5 py-1 text-xs font-medium text-[var(--amber)]">
-              <MessageCircle size={13} aria-hidden="true" />
-              {statusLabel}
-            </div>
+            <p className="text-sm font-medium text-foreground">{im.conversationEnable}</p>
+            <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{im.conversationHint}</p>
           </div>
-          <button
-            type="button"
-            onClick={handlePrimaryConversationAction}
-            disabled={primaryBusy}
-            className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-md bg-[var(--amber)] px-5 text-sm font-medium text-[var(--amber-foreground)] shadow-sm transition-all hover:opacity-90 hover:shadow focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {primaryBusy ? (
-              <Loader2 size={15} className="animate-spin" aria-hidden="true" />
-            ) : longConnectionRunning ? (
-              <Square size={15} aria-hidden="true" />
-            ) : (
-              <Play size={15} aria-hidden="true" />
-            )}
-            {primaryButtonLabel}
-          </button>
+          <label className="inline-flex items-center cursor-pointer shrink-0">
+            <input
+              type="checkbox"
+              className="sr-only"
+              checked={enabled}
+              onChange={e => setEnabled(e.target.checked)}
+              aria-label={im.conversationEnable}
+            />
+            <span className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${enabled ? 'bg-[var(--amber)]' : 'bg-muted'}`}>
+              <span className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${enabled ? 'translate-x-5' : 'translate-x-1'}`} />
+            </span>
+          </label>
         </div>
 
-        <div className="grid gap-2 sm:grid-cols-3">
-          {[im.conversationStepApp, im.conversationStepStart, im.conversationStepTest].map((label: string, index: number) => (
-            <div key={label} className="flex items-start gap-2 rounded-md bg-muted/30 px-3 py-2.5">
-              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--amber)]/15 text-[11px] font-semibold text-[var(--amber)]">
-                {index + 1}
-              </span>
-              <span className="text-xs leading-relaxed text-foreground">{label}</span>
+        {enabled && (
+          <>
+            {/* Transport selector */}
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label className="text-xs font-medium text-muted-foreground block mb-1.5">Transport</label>
+                <Select
+                  value={transport}
+                  onChange={e => setTransport(e.target.value as 'webhook' | 'long_connection')}
+                >
+                  <option value="long_connection">Long Connection (recommended)</option>
+                  <option value="webhook">Webhook</option>
+                </Select>
+                <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                  {isLC
+                    ? im.transportLongHint
+                    : im.transportWebhookHint}
+                </p>
+              </div>
+
+              {/* Status */}
+              <div className="flex items-end">
+                <div className="rounded-md bg-muted/40 px-4 py-3 w-full">
+                  <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-1">{im.conversationStatus}</p>
+                  <div className="flex items-center gap-2">
+                    <StatusDot ok={stateReady} />
+                    <span className="text-sm text-foreground">
+                      {stateReady ? im.conversationReady : status?.state === 'pending' ? im.conversationWaiting : im.conversationDisabled}
+                    </span>
+                  </div>
+                  {status?.lastError && <p className="text-xs text-error mt-1">{status.lastError}</p>}
+                </div>
+              </div>
             </div>
-          ))}
-        </div>
 
-        <div className="flex flex-col gap-3 rounded-md bg-muted/20 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
-          <div className="text-xs text-muted-foreground">
-            {im.conversationFeishuChecklist}
-          </div>
-          {platform.guideUrl && (
-            <Link
-              href={platform.guideUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex h-9 shrink-0 items-center justify-center gap-1 rounded-md border border-border bg-background px-3 text-xs font-medium text-foreground transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-            >
-              {im.conversationOpenPlatform}
-              <ExternalLink size={12} aria-hidden="true" />
-            </Link>
-          )}
-        </div>
-
-        <label className="flex cursor-pointer items-center gap-3">
-          <input
-            type="checkbox"
-            checked={allowMentions}
-            onChange={e => setAllowMentions(e.target.checked)}
-            className="h-4 w-4 rounded border-border text-[var(--amber)] focus-visible:ring-1 focus-visible:ring-ring"
-          />
-          <span className="text-sm text-foreground">{im.conversationGroupMentions}</span>
-        </label>
-
-        {statusError && <p className="text-xs leading-relaxed text-error">{statusError}</p>}
-        <ActionResult result={result} />
-
-        <div className="border-t border-border pt-4">
-          <button
-            type="button"
-            onClick={() => setAdvancedOpen(open => !open)}
-            aria-expanded={advancedOpen}
-            className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-          >
-            <Settings2 size={14} aria-hidden="true" />
-            {im.conversationAdvancedToggle}
-          </button>
-
-          {advancedOpen && (
-            <div className="mt-4 space-y-3">
-              <p className="text-xs leading-relaxed text-muted-foreground">{im.conversationAdvancedHint}</p>
-              <div className="grid gap-3 lg:grid-cols-3">
+            {/* Webhook-only fields */}
+            {!isLC && (
+              <div className="grid gap-3 sm:grid-cols-2">
                 <div>
-                  <label className="mb-1.5 block text-xs font-medium text-muted-foreground">{im.conversationPublicBaseUrl}</label>
+                  <label className="text-xs font-medium text-muted-foreground block mb-1.5">{im.conversationPublicBaseUrl}</label>
                   <input
                     type="url"
                     placeholder="https://mindos.example.com"
                     value={publicBaseUrl}
                     onChange={e => setPublicBaseUrl(e.target.value)}
-                    className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm focus:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    className="h-10 w-full px-3 text-sm bg-background border border-border rounded-md focus:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                   />
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-xs font-medium text-muted-foreground">{im.conversationEncryptKey}</label>
-                  <input
-                    type="password"
-                    placeholder={im.conversationSecretPlaceholder}
-                    value={encryptKey}
-                    onChange={e => setEncryptKey(e.target.value)}
-                    className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm font-mono focus:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1.5 block text-xs font-medium text-muted-foreground">{im.conversationVerificationToken}</label>
+                  <label className="text-xs font-medium text-muted-foreground block mb-1.5">{im.conversationVerificationToken}</label>
                   <input
                     type="password"
                     placeholder={im.conversationSecretPlaceholder}
                     value={verificationToken}
                     onChange={e => setVerificationToken(e.target.value)}
-                    className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm font-mono focus:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    className="h-10 w-full px-3 text-sm font-mono bg-background border border-border rounded-md focus:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                   />
                 </div>
-              </div>
-
-              {status?.webhookUrl && (
-                <div className="rounded-md bg-muted/30 p-3">
-                  <div className="mb-2 flex items-center justify-between gap-3">
-                    <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">{im.conversationWebhookUrl}</p>
-                    <button
-                      type="button"
-                      onClick={handleCopyWebhookUrl}
-                      className="inline-flex h-8 items-center gap-1 rounded-md border border-border bg-background px-2.5 text-xs font-medium text-foreground transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                    >
-                      {copiedWebhook ? <Check size={13} aria-hidden="true" /> : <Copy size={13} aria-hidden="true" />}
-                      {copiedWebhook ? im.copied : im.conversationCopyUrl}
-                    </button>
+                {status?.webhookUrl && (
+                  <div className="sm:col-span-2 rounded-md bg-muted/30 px-3 py-2">
+                    <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-0.5">Webhook URL</p>
+                    <p className="text-xs font-mono text-foreground break-all">{status.webhookUrl}</p>
                   </div>
-                  <p className="break-all font-mono text-xs text-foreground">{status.webhookUrl}</p>
-                </div>
-              )}
+                )}
+              </div>
+            )}
 
+            {/* Group mention toggle */}
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={allowMentions}
+                onChange={e => setAllowMentions(e.target.checked)}
+                className="h-4 w-4 rounded border-border text-[var(--amber)] focus-visible:ring-1 focus-visible:ring-ring"
+              />
+              <span className="text-sm text-foreground">{im.conversationGroupMentions}</span>
+            </label>
+
+            {/* Actions */}
+            <div className="flex flex-wrap items-center gap-3 pt-1">
               <button
                 type="button"
-                onClick={handleSaveWebhook}
-                disabled={savingWebhook}
-                className="inline-flex h-10 items-center gap-2 rounded-md border border-border bg-background px-4 text-sm font-medium text-foreground transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={handleSave}
+                disabled={saving}
+                className="h-10 px-5 text-sm font-medium rounded-md inline-flex items-center gap-2 bg-[var(--amber)] text-[var(--amber-foreground)] shadow-sm hover:opacity-90 hover:shadow disabled:opacity-40 disabled:cursor-not-allowed transition-all"
               >
-                {savingWebhook && <Loader2 size={14} className="animate-spin" aria-hidden="true" />}
-                {im.conversationSaveWebhook}
+                {saving && <Loader2 size={14} className="animate-spin" />}
+                {im.conversationSave}
               </button>
+              {platform.guideUrl && (
+                <Link
+                  href={platform.guideUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  {im.conversationOpenPlatform}
+                  <ExternalLink size={12} />
+                </Link>
+              )}
             </div>
-          )}
-        </div>
+
+            <ActionResult result={result} />
+          </>
+        )}
       </div>
     </SectionCard>
   );

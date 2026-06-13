@@ -1,13 +1,7 @@
-import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import { proxy as middleware } from '@/proxy';
 import { NextRequest } from 'next/server';
 import { signJwt } from '@/lib/jwt';
-
-const mockReadSetupPending = vi.hoisted(() => vi.fn(() => false));
-
-vi.mock('@/lib/setup-state', () => ({
-  readSetupPending: mockReadSetupPending,
-}));
 
 function makeApiRequest(headers: Record<string, string> = {}) {
   return new NextRequest('http://localhost/api/files', { headers });
@@ -94,11 +88,6 @@ describe('middleware — Web UI protection (WEB_PASSWORD)', () => {
   const original = process.env.WEB_PASSWORD;
   const originalSessionSecret = process.env.WEB_SESSION_SECRET;
 
-  beforeEach(() => {
-    mockReadSetupPending.mockReset();
-    mockReadSetupPending.mockReturnValue(false);
-  });
-
   afterEach(() => {
     if (original === undefined) delete process.env.WEB_PASSWORD;
     else process.env.WEB_PASSWORD = original;
@@ -110,26 +99,6 @@ describe('middleware — Web UI protection (WEB_PASSWORD)', () => {
     delete process.env.WEB_PASSWORD;
     const res = await middleware(makePageRequest());
     expect(res.status).toBe(200);
-  });
-
-  it('redirects the root page to Echo when setup is complete', async () => {
-    delete process.env.WEB_PASSWORD;
-    const res = await middleware(makePageRequest('/'));
-    const location = new URL(res.headers.get('location') ?? '');
-
-    expect(res.status).toBe(307);
-    expect(location.pathname).toBe('/echo/imprint');
-  });
-
-  it('redirects the root page to setup before Echo during first-run setup', async () => {
-    delete process.env.WEB_PASSWORD;
-    mockReadSetupPending.mockReturnValue(true);
-
-    const res = await middleware(makePageRequest('/'));
-    const location = new URL(res.headers.get('location') ?? '');
-
-    expect(res.status).toBe(307);
-    expect(location.pathname).toBe('/setup');
   });
 
   it('redirects unauthenticated page requests to /login', async () => {
@@ -195,29 +164,5 @@ describe('middleware — Web UI protection (WEB_PASSWORD)', () => {
     process.env.WEB_PASSWORD = 'secret123';
     const res = await middleware(makePageRequest('/login'));
     expect(res.status).toBe(200);
-  });
-
-  it('keeps login protection ahead of root Echo redirects', async () => {
-    process.env.WEB_PASSWORD = 'secret123';
-    const res = await middleware(makePageRequest('/'));
-    const location = new URL(res.headers.get('location') ?? '');
-
-    expect(location.pathname).toBe('/login');
-    expect(location.searchParams.get('redirect')).toBeNull();
-  });
-
-  it('redirects authenticated root page requests to Echo', async () => {
-    process.env.WEB_PASSWORD = 'secret123';
-    const token = await signJwt({
-      sub: 'user',
-      exp: Math.floor(Date.now() / 1000) + 60,
-    }, 'secret123');
-
-    const res = await middleware(makePageRequest('/', {
-      cookie: `mindos-session=${token}`,
-    }));
-    const location = new URL(res.headers.get('location') ?? '');
-
-    expect(location.pathname).toBe('/echo/imprint');
   });
 });

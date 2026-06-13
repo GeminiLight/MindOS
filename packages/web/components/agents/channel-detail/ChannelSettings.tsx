@@ -61,6 +61,7 @@ export function ChannelSettings({ platform, im, onSaved, onDisconnected }: {
       <summary className="flex cursor-pointer select-none items-center gap-2.5 px-5 py-3.5 text-sm font-medium text-muted-foreground transition-colors list-none hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
         <ChevronDown size={14} className="transition-transform group-open:rotate-180" />
         <span>{im.settingsTitle}</span>
+        <span className="ml-auto text-xs text-muted-foreground/60 group-open:hidden">{im.settingsHint}</span>
       </summary>
 
       <div className="border-t border-border px-5 py-4 space-y-5">

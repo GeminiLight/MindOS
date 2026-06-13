@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ExternalLink, Loader2 } from 'lucide-react';
+import { ExternalLink, Loader2, ScanLine } from 'lucide-react';
 import { SectionCard, StatusDot, ActionResult } from './shared';
 
 type FeishuOAuthStatus = {
@@ -30,11 +30,6 @@ export function ChannelFeishuOAuth({ status, im, onSaved }: {
     ?? status?.user?.open_id
     ?? status?.user?.union_id
     ?? status?.user?.user_id;
-  const statusText = connected && displayUser
-    ? `${im.feishuOAuthConnected} ${displayUser}`
-    : pending
-      ? im.feishuOAuthPending
-      : im.feishuOAuthDisconnected;
 
   const handleAuthorize = async () => {
     setOpening(true);
@@ -58,9 +53,18 @@ export function ChannelFeishuOAuth({ status, im, onSaved }: {
 
   return (
     <SectionCard title={im.feishuOAuthTitle} icon={<StatusDot ok={connected} />}>
-      <div className="space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-sm text-muted-foreground">{statusText}</p>
+      <div className="space-y-4">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-sm text-muted-foreground leading-relaxed">{im.feishuOAuthHint}</p>
+            <p className="mt-2 text-sm text-foreground">
+              {connected && displayUser ? `${im.feishuOAuthConnected} ${displayUser}` : pending ? im.conversationWaiting : im.feishuOAuthDisconnected}
+            </p>
+          </div>
+          <ScanLine size={18} className="mt-1 shrink-0 text-muted-foreground" aria-hidden="true" />
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3">
           <button
             type="button"
             onClick={handleAuthorize}

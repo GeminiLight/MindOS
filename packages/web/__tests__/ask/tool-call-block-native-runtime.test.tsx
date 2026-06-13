@@ -159,7 +159,7 @@ describe('ToolCallBlock native runtime rendering', () => {
     vi.unstubAllGlobals();
   });
 
-  it('keeps routine Codex command output collapsed until the user opens it', () => {
+  it('renders Codex command output in a native runtime card', () => {
     const view = renderToolCall({
       type: 'tool-call',
       toolCallId: 'tool-codex-bash',
@@ -172,22 +172,13 @@ describe('ToolCallBlock native runtime rendering', () => {
 
     expect(view.host.textContent).toContain('Codex');
     expect(view.host.textContent).toContain('mindos search "permission"');
-    expect(view.host.textContent).not.toContain('Found 3 notes.');
-    expect(view.host.textContent).not.toContain('only mirrors');
-    const toggle = view.host.querySelector('button[aria-expanded]');
-    expect(toggle?.getAttribute('aria-expanded')).toBe('false');
-
-    act(() => {
-      toggle?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
-
-    expect(toggle?.getAttribute('aria-expanded')).toBe('true');
     expect(view.host.textContent).toContain('Found 3 notes.');
+    expect(view.host.textContent).not.toContain('only mirrors');
 
     view.cleanup();
   });
 
-  it('redacts secrets from collapsed and expanded native runtime rendering', () => {
+  it('redacts secrets from native runtime command and output rendering', () => {
     const view = renderToolCall({
       type: 'tool-call',
       toolCallId: 'tool-codex-secret',
@@ -199,17 +190,6 @@ describe('ToolCallBlock native runtime rendering', () => {
         env: { API_KEY: 'sk-ui-secret-abcdefghijkl' },
       },
       output: 'Authorization: Bearer ghp_abcdefghijklmnopqrstuvwxyz123456',
-    });
-
-    expect(view.host.textContent).toContain('[redacted]');
-    expect(view.host.textContent).not.toContain('sk-ui-secret');
-    expect(view.host.textContent).not.toContain('abc123secret');
-    expect(view.host.textContent).not.toContain('ghp_abcdefghijklmnopqrstuvwxyz123456');
-    const toggle = view.host.querySelector('button[aria-expanded]');
-    expect(toggle?.getAttribute('aria-expanded')).toBe('false');
-
-    act(() => {
-      toggle?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
     expect(view.host.textContent).toContain('[redacted]');
