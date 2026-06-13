@@ -26,11 +26,6 @@ function getPreviousSessionServerSnapshot(): boolean {
   return false;
 }
 
-function truncateRedirect(path: string): string {
-  if (path.length <= 48) return path;
-  return `${path.slice(0, 22)}...${path.slice(-22)}`;
-}
-
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -49,10 +44,26 @@ function LoginForm() {
   const safeRedirect = sanitizeLoginRedirect(searchParams.get('redirect'));
   const mode = resolveLoginMode(searchParams.get('reason'), hadPreviousBrowserSession);
   const isReauth = mode === 'reauth';
-  const returnLabel = safeRedirect !== '/' ? truncateRedirect(safeRedirect) : '';
+  const canSubmit = password.length > 0 && !loading;
+  const submitButtonTone = canSubmit
+    ? 'shadow-sm shadow-[var(--amber)]/20 hover:opacity-90'
+    : 'cursor-not-allowed shadow-none';
+  const submitButtonStyle = canSubmit
+    ? {
+        backgroundColor: 'var(--amber)',
+        borderColor: 'var(--amber)',
+        color: 'var(--amber-foreground)',
+      }
+    : {
+        backgroundColor: 'var(--muted)',
+        borderColor: 'var(--border)',
+        color: 'var(--muted-foreground)',
+      };
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!canSubmit) return;
+
     setLoading(true);
     setError('');
     try {
@@ -95,28 +106,13 @@ function LoginForm() {
         </div>
 
         <div className="w-full rounded-xl border border-border bg-card p-6 shadow-2xl shadow-black/10 sm:p-7">
-          <div className="mb-6 space-y-2">
+          <div className="mb-5">
             <div className="inline-flex items-center gap-1.5 rounded-md bg-[var(--amber-subtle)] px-2 py-1 text-xs font-medium text-[var(--amber-text)]">
               <Lock size={12} aria-hidden />
               {isReauth
                 ? (loginT?.reauthBadge ?? 'Session locked')
                 : (loginT?.loginBadge ?? 'Private workspace')}
             </div>
-            <h2 className="text-lg font-semibold leading-snug text-foreground">
-              {isReauth
-                ? (loginT?.reauthTitle ?? 'Re-enter your password')
-                : (loginT?.title ?? 'Enter your Web password')}
-            </h2>
-            <p className="text-sm leading-6 text-muted-foreground">
-              {isReauth
-                ? (loginT?.reauthSubtitle ?? 'Your browser session expired. Unlock MindOS to continue where you left off.')
-                : (loginT?.subtitle ?? 'Enter your password to continue')}
-            </p>
-            {returnLabel && (
-              <p className="rounded-md border border-border bg-muted/35 px-3 py-2 text-xs text-muted-foreground" title={safeRedirect}>
-                {(loginT?.returningTo ?? ((path: string) => `Returning to ${path}`))(returnLabel)}
-              </p>
-            )}
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -157,8 +153,9 @@ function LoginForm() {
 
           <button
             type="submit"
-            disabled={loading || !password}
-            className="mt-2 flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-[var(--amber)] px-4 text-sm font-medium text-[var(--amber-foreground)] transition-all hover:opacity-90 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={!canSubmit}
+            className={`mt-2 flex h-11 w-full items-center justify-center gap-2 rounded-lg border px-4 text-sm font-medium transition-all active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${submitButtonTone}`}
+            style={submitButtonStyle}
           >
             {loading ? (
               <Loader2 size={15} className="animate-spin" aria-hidden />
