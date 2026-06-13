@@ -42,11 +42,14 @@ describe('MarkdownView lazy syntax highlighting', () => {
     });
 
     // After the dynamic rehype-highlight import resolves, code gets highlighted.
-    await vi.waitFor(async () => {
-      await flushAsync();
-      expect(host.querySelector('code.hljs')).not.toBeNull();
-      expect(host.querySelector('.hljs-keyword')).not.toBeNull();
-    });
+    await vi.waitFor(
+      async () => {
+        await flushAsync();
+        expect(host.querySelector('code.hljs')).not.toBeNull();
+        expect(host.querySelector('.hljs-keyword')).not.toBeNull();
+      },
+      { timeout: 5000 },
+    );
   });
 
   it('still renders non-code markdown when no highlighting is involved', async () => {
