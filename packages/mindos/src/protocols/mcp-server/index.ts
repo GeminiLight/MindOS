@@ -53,9 +53,18 @@ function formatMcpListenError(error: NodeListenError): string {
 function headers(agentName?: string): Record<string, string> {
   const h: Record<string, string> = { "Content-Type": "application/json" };
   if (AUTH_TOKEN) h["Authorization"] = `Bearer ${AUTH_TOKEN}`;
-  // Sanitize: strip control chars, limit to 100 chars
-  if (agentName) h["x-mindos-agent"] = agentName.replace(/[\x00-\x1f]/g, '').slice(0, 100);
+  if (agentName) h["x-mindos-agent"] = sanitizeHeaderValue(agentName, 100);
   return h;
+}
+
+function sanitizeHeaderValue(value: string, maxLength: number): string {
+  let sanitized = "";
+  for (const char of value) {
+    const code = char.charCodeAt(0);
+    if (code >= 0x20) sanitized += char;
+    if (sanitized.length >= maxLength) return sanitized.slice(0, maxLength);
+  }
+  return sanitized;
 }
 
 // ─── HTTP helpers ────────────────────────────────────────────────────────────

@@ -13,7 +13,6 @@ import {
   failAgentRun,
   type AgentRunPermissionMode,
   type AgentRunRecord,
-  type AgentRunStatus,
   startAgentRun,
 } from './run-ledger.js';
 import {
@@ -184,10 +183,6 @@ function errorMessage(error: unknown): string {
   } catch {
     return String(error);
   }
-}
-
-function isTerminalStatus(status: AgentRunStatus): status is ReducibleAgentRunStatus {
-  return status === 'completed' || status === 'failed' || status === 'canceled' || status === 'timed_out';
 }
 
 async function runWithTimeout(
