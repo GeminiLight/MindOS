@@ -253,8 +253,12 @@ describe('product npm publish contract', () => {
     expect(verifyStandalone).toContain('redirectStatusCodes');
     expect(verifyStandalone).toContain('resolveLocalRedirect');
     expect(verifyStandalone).toContain('redirectUrl.origin !== localOrigin');
+    expect(verifyStandalone).toContain('mkdtempSync');
     expect(verifyStandalone).toContain('AUTH_TOKEN:');
+    expect(verifyStandalone).toContain('HOME: isolatedHome');
+    expect(verifyStandalone).toContain('MIND_ROOT: isolatedMindRoot');
     expect(verifyStandalone).toContain('WEB_PASSWORD:');
+    expect(verifyStandalone).toContain('rmSync(isolatedRoot');
     expect(verifyStandalone).toContain('{ maxRedirects: 5 }');
     expect(verifyStandalone).toContain('/api/health');
   });

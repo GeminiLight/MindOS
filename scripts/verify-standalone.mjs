@@ -11,7 +11,8 @@
 import { spawn } from 'child_process';
 import http from 'http';
 import { createServer as createTcpServer } from 'net';
-import { existsSync } from 'fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'fs';
+import { tmpdir } from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { materializeStandaloneAssets } from '../packages/desktop/scripts/prepare-mindos-bundle.mjs';
@@ -56,6 +57,11 @@ const port = await allocateFreePort();
 const nodeBin = process.execPath;
 const localOrigin = `http://127.0.0.1:${port}`;
 const redirectStatusCodes = new Set([301, 302, 303, 307, 308]);
+const isolatedRoot = mkdtempSync(path.join(tmpdir(), 'mindos-standalone-verify-'));
+const isolatedHome = path.join(isolatedRoot, 'home');
+const isolatedMindRoot = path.join(isolatedRoot, 'mind');
+mkdirSync(isolatedHome, { recursive: true });
+mkdirSync(isolatedMindRoot, { recursive: true });
 
 function resolveLocalRedirect(currentUrl, location) {
   if (!location) return null;
@@ -151,6 +157,14 @@ const child = spawn(nodeBin, [serverJs], {
   env: {
     ...process.env,
     AUTH_TOKEN: '',
+    HOME: isolatedHome,
+    USERPROFILE: isolatedHome,
+    APPDATA: path.join(isolatedHome, 'AppData', 'Roaming'),
+    LOCALAPPDATA: path.join(isolatedHome, 'AppData', 'Local'),
+    XDG_CONFIG_HOME: path.join(isolatedHome, '.config'),
+    XDG_DATA_HOME: path.join(isolatedHome, '.local', 'share'),
+    XDG_STATE_HOME: path.join(isolatedHome, '.local', 'state'),
+    MIND_ROOT: isolatedMindRoot,
     NODE_ENV: 'production',
     PORT: String(port),
     /** Next binds to machine hostname by default; Desktop health checks use 127.0.0.1 */
@@ -192,6 +206,7 @@ async function main() {
   } finally {
     killChild();
     await new Promise((r) => setTimeout(r, 500));
+    rmSync(isolatedRoot, { recursive: true, force: true });
   }
 }
 
