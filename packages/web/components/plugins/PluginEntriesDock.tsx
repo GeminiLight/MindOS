@@ -41,6 +41,7 @@ import type { PluginSurface } from '@/lib/plugins/surfaces';
 import { notifyPluginEntriesState, PLUGIN_ENTRIES_OPEN_EVENT } from '@/lib/plugins/ui-events';
 import { encodePath } from '@/lib/utils';
 import { openTab } from '@/lib/workspace-tabs';
+import { notifyFilesChanged } from '@/lib/files-changed';
 import PluginActionModalDialog from './PluginActionModalDialog';
 import PluginActionMenuDialog from './PluginActionMenuDialog';
 
@@ -654,7 +655,9 @@ export default function PluginEntriesDock({ onOpenPluginsSettings, onOpenCommand
       return;
     }
     if (result.editorUpdates?.some((update) => update.changed)) {
-      window.dispatchEvent(new Event('mindos:files-changed'));
+      notifyFilesChanged(
+        result.editorUpdates.flatMap((update) => update.changed && update.sourcePath ? [update.sourcePath] : []),
+      );
       router.refresh();
       setPluginModal(null);
       setPluginMenu(null);

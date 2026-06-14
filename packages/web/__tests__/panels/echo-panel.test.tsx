@@ -26,11 +26,12 @@ describe('EchoPanel sidebar navigation', () => {
     const html = renderToStaticMarkup(<EchoPanel active maximized={false} />);
 
     expect(html).toMatch(/<a[^>]*aria-current="page"[^>]*href="\/echo\/imprint"/);
-    expect(html).toContain('rounded-none');
-    expect(html).toContain('bg-[var(--amber-subtle)]');
-    expect(html).toContain('w-[3px] rounded-r-full bg-[var(--amber)]');
+    expect(html).toContain('rounded-md');
+    expect(html).toContain('border-[var(--amber)]/35');
+    expect(html).toContain('bg-[var(--amber-dim)]/45');
+    expect(html).toContain('bg-[var(--amber)]/10');
+    expect(html).not.toContain('rounded-r-full');
     expect(html).not.toContain('ring-2 ring-ring/50');
-    expect(html).not.toContain('bg-[var(--amber-dim)]');
   });
 
   it('keeps inactive Echo segments out of the active/current state', () => {

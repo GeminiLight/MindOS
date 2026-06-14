@@ -135,7 +135,7 @@ describe('AgentsPanel hub layout', () => {
   });
 
   it('renders five hub nav rows and runtime endpoints in the Agent tab', () => {
-    const html = renderToStaticMarkup(<AgentsPanel active maximized={false} />);
+    const html = renderToStaticMarkup(<AgentsPanel active />);
     const a = messages.en.panels.agents;
     const runtime = messages.en.agentsContent.runtime;
     const localClients = messages.en.agentsContent.localClients;
@@ -163,6 +163,13 @@ describe('AgentsPanel hub layout', () => {
     expect(html).toContain('Test Agent');
     expect(html).not.toContain(a.rosterLabel);
     expect(html).not.toContain('/help');
+
+    const headerStart = html.indexOf('panel-header');
+    const headerEnd = html.indexOf('<div class="flex-1 overflow-y-auto', headerStart);
+    const headerHtml = html.slice(headerStart, headerEnd);
+    expect(headerHtml).not.toContain(runtime.panelTitle);
+    expect(headerHtml).not.toContain(a.connected);
+    expect(headerHtml).not.toContain(`aria-label="${a.refresh}"`);
   });
 
   it('keeps the hub nav visible while MCP data is loading', () => {
@@ -171,7 +178,7 @@ describe('AgentsPanel hub layout', () => {
     mcpState.agents = [];
     mcpState.skills = [];
 
-    const html = renderToStaticMarkup(<AgentsPanel active maximized={false} />);
+    const html = renderToStaticMarkup(<AgentsPanel active />);
     const a = messages.en.panels.agents;
 
     expect(html).toContain(a.navOverview);
@@ -185,7 +192,7 @@ describe('AgentsPanel hub layout', () => {
     routeState.pathname = '/agents/test-agent';
     routeState.search = '';
 
-    const html = renderToStaticMarkup(<AgentsPanel active maximized={false} />);
+    const html = renderToStaticMarkup(<AgentsPanel active />);
 
     expect(html).toContain('href="/agents?tab=agent"');
     expect(html).toMatch(/<a[^>]*aria-current="page"[^>]*href="\/agents\?tab=agent"/);
@@ -194,7 +201,6 @@ describe('AgentsPanel hub layout', () => {
     expect(html).toContain('bg-[var(--amber-subtle)]');
     expect(html).toContain('w-[3px] rounded-r-full bg-[var(--amber)]');
     expect(html).not.toContain('ring-2 ring-ring/50');
-    expect(html).not.toContain('bg-[var(--amber-dim)]/45');
   });
 
   it('renders selected agent rows as flat rail rows without a bordered card shell', () => {

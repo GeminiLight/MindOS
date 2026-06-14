@@ -9,6 +9,7 @@ import { encodePath } from '@/lib/utils';
 import { createSpaceAction } from '@/lib/actions';
 import { checkAiAvailable, triggerSpaceAiInit } from '@/lib/space-ai-init';
 import DirPicker from './DirPicker';
+import { notifyFilesChanged } from '@/lib/files-changed';
 
 /* ── Create Space Modal ── */
 
@@ -85,7 +86,7 @@ export default function CreateSpaceModal({ t, dirPaths }: { t: ReturnType<typeof
 
       close();
       router.refresh();
-      window.dispatchEvent(new Event('mindos:files-changed'));
+      notifyFilesChanged([createdPath]);
       router.push(`/view/${encodePath(createdPath + '/')}`);
     } else {
       const msg = result.error ?? '';

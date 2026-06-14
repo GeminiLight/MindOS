@@ -34,7 +34,7 @@ import { openTab } from '@/lib/workspace-tabs';
 import PluginActionModalDialog from '@/components/plugins/PluginActionModalDialog';
 import PluginActionMenuDialog from '@/components/plugins/PluginActionMenuDialog';
 import { createSearchResultDragPreview, scheduleSearchResultDragPreviewCleanup } from '@/lib/search-drag-preview';
-import { isPathAffected, subscribeFilesChanged } from '@/lib/files-changed';
+import { isPathAffected, notifyFilesChanged, subscribeFilesChanged } from '@/lib/files-changed';
 
 /** Highlight matched text fragments in a snippet based on the query */
 function highlightSnippet(snippet: string, query: string): React.ReactNode {
@@ -293,8 +293,10 @@ export default function SearchPanel({ active, focusRequest = 0, onNavigate, onCl
       setPluginMenu(null);
       return;
     }
+    const changedPaths = result.editorUpdates
+      ?.flatMap((update) => update.changed && update.sourcePath ? [update.sourcePath] : []);
     if (result.editorUpdates?.some((update) => update.changed)) {
-      window.dispatchEvent(new Event('mindos:files-changed'));
+      notifyFilesChanged(changedPaths);
       router.refresh();
       toast.success(`Updated ${result.editorUpdates[0]?.sourcePath ?? 'current note'}`);
       setPluginModal(null);
@@ -365,7 +367,9 @@ export default function SearchPanel({ active, focusRequest = 0, onNavigate, onCl
         onNavigate?.();
         toast.success(`Opened ${targetPath}`);
       } else if (result.editorUpdates?.some((update) => update.changed)) {
-        window.dispatchEvent(new Event('mindos:files-changed'));
+        notifyFilesChanged(
+          result.editorUpdates.flatMap((update) => update.changed && update.sourcePath ? [update.sourcePath] : []),
+        );
         router.refresh();
         toast.success(`Updated ${result.editorUpdates[0]?.sourcePath ?? 'current note'}`);
       } else {

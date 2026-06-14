@@ -38,6 +38,7 @@ import {
   OBSIDIAN_PLUGIN_PACKAGES_CHANGED_EVENT,
 } from '@/lib/plugins/events';
 import { openTab } from '@/lib/workspace-tabs';
+import { notifyFilesChanged } from '@/lib/files-changed';
 import { Input, Select, Toggle } from './Primitives';
 import { ConfirmDialog } from '@/components/agents/AgentsPrimitives';
 import PluginActionMenuDialog from '@/components/plugins/PluginActionMenuDialog';
@@ -341,7 +342,9 @@ export function ObsidianPluginHostSection({
       return;
     }
     if (result.editorUpdates?.some((update) => update.changed)) {
-      window.dispatchEvent(new Event('mindos:files-changed'));
+      notifyFilesChanged(
+        result.editorUpdates.flatMap((update) => update.changed && update.sourcePath ? [update.sourcePath] : []),
+      );
       router.refresh();
       setPluginModal(null);
       setPluginMenu(null);

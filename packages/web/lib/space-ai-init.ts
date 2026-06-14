@@ -1,5 +1,6 @@
 import { apiFetch } from '@/lib/api';
 import { isAiConfiguredForAsk, type SettingsJsonForAi } from '@/lib/settings-ai-client';
+import { notifyFilesChanged } from '@/lib/files-changed';
 
 /**
  * Check if AI is available by inspecting the active or explicitly selected provider.
@@ -84,7 +85,7 @@ export function triggerSpaceAiInit(
     window.dispatchEvent(new CustomEvent('mindos:ai-init', {
       detail: { spacePath, state: 'done' },
     }));
-    window.dispatchEvent(new Event('mindos:files-changed'));
+    notifyFilesChanged([`${spacePath}/INSTRUCTION.md`]);
   }).catch(() => {
     window.dispatchEvent(new CustomEvent('mindos:ai-init', {
       detail: { spacePath, state: 'error' },

@@ -56,7 +56,8 @@ describe('icon button hit areas', () => {
     expect(filesPanelSource).not.toContain('className="p-1 rounded hover:bg-muted');
     expect(filesPanelSource).not.toContain('hover:bg-muted transition-colors text-left');
 
-    expect(agentsPanelSource).toContain('hit-target-box inline-flex h-8 w-8');
+    expect(agentsPanelSource).toContain('<PanelHeader title={p.title} />');
+    expect(agentsPanelSource).not.toContain('onMaximize={onMaximize}');
     expect(agentsPanelSource).not.toContain('className="p-1 rounded hover:bg-muted');
   });
 
@@ -105,7 +106,7 @@ describe('icon button hit areas', () => {
 
     expect(source).toContain('hit-target-box relative flex items-center');
     expect(source).toContain('hit-target-box');
-    expect(source).toContain('[--hit-target-radius:0px]');
+    expect(source).toContain('[--hit-target-radius:var(--radius-md)]');
     expect(source).toContain("'data-hit-active': active ? 'true' : undefined");
     expect(source).not.toContain("hover:bg-muted'");
     expect(source).not.toContain("bg-[var(--amber-dim)]'");

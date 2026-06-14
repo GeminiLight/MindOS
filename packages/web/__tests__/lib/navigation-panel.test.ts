@@ -3,6 +3,8 @@ import {
   getActiveLeftPanel,
   getContentRoutePanel,
   getEffectivePanelMaximized,
+  getHomeClickPanel,
+  getPendingHomePanel,
   getPendingRoutePanel,
   getRailActivePanel,
   getRailPanelClickDecision,
@@ -146,6 +148,28 @@ describe('navigation panel route recovery', () => {
     expect(getPendingRoutePanel('/capture', null)).toBeNull();
     // Defensive: a pending entry recorded ON its own target route is a no-op
     expect(getPendingRoutePanel('/agents', { target: 'agents', fromPathname: '/agents' })).toBeNull();
+  });
+
+  it('keeps a home navigation intent active until the home route commits', () => {
+    const pending = { panel: 'files' as const, fromPathname: '/view/Notes/example.md' };
+
+    expect(getPendingHomePanel('/view/Notes/example.md', pending)).toBe('files');
+    expect(getPendingHomePanel('/', pending)).toBeNull();
+    expect(getPendingHomePanel('/wiki', pending)).toBeNull();
+  });
+
+  it('supports a pending home navigation that intentionally closes the sidebar', () => {
+    const pending = { panel: null, fromPathname: '/wiki' };
+
+    expect(getPendingHomePanel('/wiki', pending)).toBeNull();
+    expect(getHomeClickPanel(null)).toBeNull();
+  });
+
+  it('restores the files panel when home is clicked from an open sidebar state', () => {
+    const panels = ['files', 'capture', 'search', 'echo', 'agents', 'discover', 'workflows'] as const;
+    for (const panel of panels) {
+      expect(getHomeClickPanel(panel)).toBe('files');
+    }
   });
 
   it('computes route-backed rail click behavior from one contract', () => {

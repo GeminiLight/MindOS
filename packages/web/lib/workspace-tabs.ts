@@ -4,11 +4,12 @@
  * workspace-tabs — module-level store for the titlebar workspace tab strip
  * (wiki/specs/spec-titlebar-row.md, Phase 2).
  *
- * Tabs are the durable working set: documents (kind 'doc', key = mind-root
- * relative path) and chat sessions (kind 'chat', key = session id). The store
- * is the single in-memory source of truth; localStorage is a per-root mirror
- * (`mindos.workspaceTabs.v1:<rootId>`) read once at init and written behind a
- * debounce — same single-reader strategy as useLeftPanel, no cross-tab sync.
+ * Tabs are the durable working set: the product Home (kind 'home'), documents
+ * (kind 'doc', key = mind-root relative path), and chat sessions (kind 'chat',
+ * key = session id). The store is the single in-memory source of truth;
+ * localStorage is a per-root mirror (`mindos.workspaceTabs.v1:<rootId>`) read
+ * once at init and written behind a debounce — same single-reader strategy as
+ * useLeftPanel, no cross-tab sync.
  *
  * Activation is NOT stored here: the route is already the source of truth for
  * "where the user is", so the strip derives the active tab from usePathname.
@@ -16,7 +17,9 @@
 
 import { useSyncExternalStore } from 'react';
 
-export type WorkspaceTabKind = 'doc' | 'chat';
+export type WorkspaceTabKind = 'home' | 'doc' | 'chat';
+
+export const HOME_TAB_KEY = 'root';
 
 export interface WorkspaceTab {
   /** Stable identity: `${kind}:${key}` — (kind, key) is unique by construction. */
@@ -25,6 +28,8 @@ export interface WorkspaceTab {
   /** doc → mind-root relative path (decoded); chat → session id. */
   key: string;
   title: string;
+  /** false means the doc is a replaceable preview tab; missing/true means kept. */
+  pinned?: boolean;
 }
 
 export const MAX_TABS = 50;
@@ -51,6 +56,14 @@ function storageKey(): string | null {
   return rootId ? `${STORAGE_PREFIX}:${rootId}` : null;
 }
 
+function isKept(tab: WorkspaceTab): boolean {
+  return tab.pinned !== false;
+}
+
+function userTabCount(tabList: WorkspaceTab[]): number {
+  return tabList.filter((tab) => tab.kind !== 'home').length;
+}
+
 function schedulePersist() {
   const key = storageKey();
   if (!key || typeof window === 'undefined') return;
@@ -58,7 +71,7 @@ function schedulePersist() {
   persistTimer = setTimeout(() => {
     persistTimer = null;
     try {
-      localStorage.setItem(key, JSON.stringify(tabs));
+      localStorage.setItem(key, JSON.stringify(tabs.filter(isKept)));
     } catch {
       // quota / private mode — tabs simply don't survive reload
     }
@@ -75,15 +88,17 @@ function parseStoredTabs(raw: string | null): WorkspaceTab[] {
     const valid: WorkspaceTab[] = [];
     for (const item of data) {
       if (typeof item !== 'object' || item === null) continue;
-      const { kind, key, title } = item as Record<string, unknown>;
-      if (kind !== 'doc' && kind !== 'chat') continue;
+      const { kind, key, title, pinned } = item as Record<string, unknown>;
+      if (kind !== 'home' && kind !== 'doc' && kind !== 'chat') continue;
       if (typeof key !== 'string' || key.length === 0) continue;
+      if (kind === 'home' && key !== HOME_TAB_KEY) continue;
       if (typeof title !== 'string') continue;
+      if (pinned === false) continue;
+      if (kind !== 'home' && userTabCount(valid) >= MAX_TABS) continue;
       const id = tabId(kind, key);
       if (seen.has(id)) continue;
       seen.add(id);
       valid.push({ id, kind, key, title });
-      if (valid.length >= MAX_TABS) break;
     }
     return valid;
   } catch {
@@ -124,26 +139,60 @@ export function getTabs(): WorkspaceTab[] {
 }
 
 /**
- * Open (or focus) a tab. Dedup by (kind, key): an existing tab is returned
- * as-is — navigation, not mutation, expresses "focus". Returns null when the
- * working set is full (caller surfaces the limit toast).
+ * Open (or focus) a tab. Dedup by (kind, key): an existing kept tab is
+ * returned as-is, while opening an existing preview as kept upgrades it.
+ * Doc previews are replaceable: opening a new preview reuses the existing
+ * preview slot instead of polluting the working set. Returns null when the
+ * 50-tab cap is hit and no preview slot can be reused.
  */
-export function openTab(kind: WorkspaceTabKind, key: string, title: string): WorkspaceTab | null {
+export function openTab(
+  kind: WorkspaceTabKind,
+  key: string,
+  title: string,
+  options: { pinned?: boolean } = {},
+): WorkspaceTab | null {
+  if (kind === 'home' && key !== HOME_TAB_KEY) return null;
   const id = tabId(kind, key);
   const existing = tabs.find((t) => t.id === id);
-  if (existing) return existing;
-  if (tabs.length >= MAX_TABS) return null;
-  const tab: WorkspaceTab = { id, kind, key, title };
-  emit([...tabs, tab]);
+  const pinned = kind === 'home' || kind === 'chat' || options.pinned !== false;
+  if (existing) {
+    if (pinned && existing.pinned === false) {
+      const next = tabs.map((tab) => (tab.id === id ? { id, kind, key, title } : tab));
+      emit(next);
+      return next.find((tab) => tab.id === id) ?? null;
+    }
+    return existing;
+  }
+  if (!pinned && kind === 'doc') {
+    const previewIndex = tabs.findIndex((tab) => tab.kind === 'doc' && tab.pinned === false);
+    const previewTab: WorkspaceTab = { id, kind, key, title, pinned: false };
+    if (previewIndex >= 0) {
+      const next = [...tabs];
+      next[previewIndex] = previewTab;
+      emit(next);
+      return previewTab;
+    }
+  }
+  if (kind !== 'home' && userTabCount(tabs) >= MAX_TABS) return null;
+  const tab: WorkspaceTab = pinned ? { id, kind, key, title } : { id, kind, key, title, pinned: false };
+  emit(kind === 'home' ? [tab, ...tabs] : [...tabs, tab]);
   return tab;
 }
 
 export function keepTab(id: string): WorkspaceTab | null {
-  return tabs.find((t) => t.id === id) ?? null;
+  const idx = tabs.findIndex((t) => t.id === id);
+  if (idx < 0) return null;
+  const tab = tabs[idx];
+  if (tab.pinned !== false) return tab;
+  const next = [...tabs];
+  next[idx] = { id: tab.id, kind: tab.kind, key: tab.key, title: tab.title };
+  emit(next);
+  return next[idx];
 }
 
 export function closeTab(id: string) {
   if (!tabs.some((t) => t.id === id)) return;
+  if (id === tabId('home', HOME_TAB_KEY)) return;
   emit(tabs.filter((t) => t.id !== id));
 }
 

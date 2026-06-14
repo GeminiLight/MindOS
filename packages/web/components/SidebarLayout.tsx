@@ -23,6 +23,7 @@ import { FileNode } from '@/lib/types';
 import type { MindSystemSlot } from '@/lib/mind-system';
 import { useLocale } from '@/lib/stores/locale-store';
 import { telemetry } from '@/lib/telemetry';
+import { notifyFilesChanged } from '@/lib/files-changed';
 import dynamic from 'next/dynamic';
 
 const SearchModal = dynamic(() => import('./SearchModal'), { ssr: false });
@@ -49,6 +50,8 @@ import {
   getActiveLeftPanel,
   getContentRoutePanel,
   getEffectivePanelMaximized,
+  getHomeClickPanel,
+  getPendingHomePanel,
   getPendingRoutePanel,
   getRailActivePanel,
   getRailPanelClickDecision,
@@ -56,6 +59,7 @@ import {
   isNeutralContentRoute,
   recoverStaleRoutePanel,
   type PanelId,
+  type PendingHomeNav,
   type PendingRouteNav,
   type RoutePanelId,
 } from '@/lib/navigation-panel';
@@ -238,11 +242,20 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
   // mismatch can't flip any derived state back and forth (the rail-click
   // flicker). Any pathname change invalidates the pending entry in-render.
   const [pendingNav, setPendingNav] = useState<PendingRouteNav | null>(null);
-  const [pendingHomePathname, setPendingHomePathname] = useState<string | null>(null);
+  const [pendingHomeNav, setPendingHomeNav] = useState<PendingHomeNav | null>(null);
   const pendingRoutePanel = getPendingRoutePanel(pathname, pendingNav);
-  const homeNavPending = pendingHomePathname === pathname;
-  const activeLeftPanel = homeNavPending || isFullPageChatRoute ? null : pendingRoutePanel ?? getActiveLeftPanel(pathname, lp.activePanel);
-  const railActivePanel = homeNavPending || isFullPageChatRoute ? null : pendingRoutePanel ?? getRailActivePanel(pathname, lp.activePanel);
+  const pendingHomePanel = getPendingHomePanel(pathname, pendingHomeNav);
+  const homeNavPending = pendingHomeNav?.fromPathname === pathname;
+  const activeLeftPanel = isFullPageChatRoute
+    ? null
+    : homeNavPending
+      ? pendingHomePanel
+      : pendingRoutePanel ?? getActiveLeftPanel(pathname, lp.activePanel);
+  const railActivePanel = isFullPageChatRoute
+    ? null
+    : homeNavPending
+      ? pendingHomePanel
+      : pendingRoutePanel ?? getRailActivePanel(pathname, lp.activePanel);
   const agentDockOpen = agentDetailKey !== null && activeLeftPanel === 'agents';
   const panelOpen = activeLeftPanel !== null;
   const effectivePanelMaximized = getEffectivePanelMaximized(activeLeftPanel, lp.activePanel, lp.panelMaximized);
@@ -293,9 +306,14 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
   useEffect(() => {
     setPendingNav((prev) => (prev && prev.fromPathname !== pathname ? null : prev));
   }, [pathname]);
+
   useEffect(() => {
-    setPendingHomePathname((prev) => (prev && prev !== pathname ? null : prev));
-  }, [pathname]);
+    if (!pendingHomeNav || pendingHomeNav.fromPathname === pathname) return;
+    setPendingHomeNav(null);
+    if (pathname === '/' && pendingHomeNav.panel) {
+      lp.setActivePanel(pendingHomeNav.panel);
+    }
+  }, [pathname, pendingHomeNav, lp.setActivePanel]);
 
   useEffect(() => {
     if (!isFullPageChatRoute) return;
@@ -508,7 +526,7 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
         router.refresh();
       });
       stopRefresh({ previousVersion, version, reason: 'tree_version_changed' });
-      window.dispatchEvent(new Event('mindos:files-changed'));
+      notifyFilesChanged();
     };
 
     const REFRESH_COOLDOWN_MS = 2000;
@@ -667,22 +685,37 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
     setSyncPopoverOpen(false);
   }, [lp]);
 
+  const handleSidebarPanelExpandedChange = useCallback((expanded: boolean) => {
+    previousSearchPanelRef.current = null;
+    if (expanded) {
+      lp.setActivePanel('files');
+    } else {
+      lp.setActivePanel(null);
+    }
+  }, [lp.setActivePanel]);
+
   const handleMobileNavigate = useCallback(() => setMobileOpen(false), []);
 
   const handleHomeClick = useCallback(() => {
+    const nextPanel = getHomeClickPanel(activeLeftPanel);
     flushSync(() => {
       exitAskMaximized();
       previousSearchPanelRef.current = null;
       setAgentDetailKey(null);
-      lp.setActivePanel(null);
-      setPendingHomePathname(pathname !== '/' ? pathname : null);
+      setPendingNav(null);
+      setPendingHomeNav(pathname !== '/' ? { fromPathname: pathname, panel: nextPanel } : null);
+      if (nextPanel) {
+        lp.setActivePanel(nextPanel);
+      } else {
+        lp.setActivePanel(null);
+      }
     });
     if (pathname !== '/') {
       startTransition(() => {
         router.push('/');
       });
     }
-  }, [exitAskMaximized, lp.setActivePanel, pathname, router]);
+  }, [activeLeftPanel, exitAskMaximized, lp.setActivePanel, pathname, router]);
 
   const handleRoutePanelClick = useCallback((
     event: React.MouseEvent<HTMLAnchorElement | HTMLButtonElement>,
@@ -717,8 +750,8 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
       <TitlebarRow
         searchActive={activeLeftPanel === 'search'}
         onSearchOpenOrFocus={openOrFocusSearchPanel}
-        sidebarExpanded={lp.railExpanded}
-        onSidebarExpandedChange={handleExpandedChange}
+        sidebarExpanded={panelOpen}
+        onSidebarExpandedChange={handleSidebarPanelExpandedChange}
       />
       <ActivityBar
         activePanel={railActivePanel}
@@ -781,8 +814,6 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
           <div className={`flex flex-col h-full ${activeLeftPanel === 'agents' ? '' : 'hidden'}`}>
             <AgentsPanel
               active={activeLeftPanel === 'agents'}
-              maximized={effectivePanelMaximized}
-              onMaximize={lp.handlePanelMaximize}
               selectedAgentKey={agentDockOpen ? agentDetailKey : null}
             />
           </div>

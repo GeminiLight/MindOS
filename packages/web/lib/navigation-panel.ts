@@ -20,6 +20,11 @@ export interface PendingRouteNav {
   fromPathname: string;
 }
 
+export interface PendingHomeNav {
+  panel: PanelId | null;
+  fromPathname: string;
+}
+
 /**
  * The pending target while its navigation is still in flight, else null.
  * Any pathname change — destination commit, file-tree click, back button —
@@ -33,6 +38,15 @@ export function getPendingRoutePanel(
   if (pathname !== pending.fromPathname) return null;
   if (isContentRouteForPanel(pathname, pending.target)) return null;
   return pending.target;
+}
+
+export function getPendingHomePanel(
+  pathname: string | null | undefined,
+  pending: PendingHomeNav | null,
+): PanelId | null {
+  if (!pending) return null;
+  if (pathname !== pending.fromPathname) return null;
+  return pending.panel;
 }
 
 export const ROUTE_PANEL_HREF: Record<RoutePanelId, string> = {
@@ -105,6 +119,10 @@ export function getEffectivePanelMaximized(
   localPanelMaximized: boolean,
 ): boolean {
   return activeLeftPanel === localActivePanel && localPanelMaximized;
+}
+
+export function getHomeClickPanel(activeLeftPanel: PanelId | null): PanelId | null {
+  return activeLeftPanel ? 'files' : null;
 }
 
 export function recoverStaleCapturePanel(

@@ -11,6 +11,7 @@ import SyncStatusBar from './SyncStatusBar';
 import PanelHeader from './panels/PanelHeader';
 import { useResizeDrag } from '@/hooks/useResizeDrag';
 import { useFilesChanged } from '@/hooks/useFilesChanged';
+import { notifyFilesChanged } from '@/lib/files-changed';
 import { useLocale } from '@/lib/stores/locale-store';
 import { listTrashAction } from '@/lib/actions';
 import { DEFAULT_LEFT_PANEL_WIDTH, LEFT_PANEL } from '@/lib/config/panel-sizes';
@@ -228,17 +229,28 @@ export default function Panel({
   }, []);
 
   const handleRefreshFiles = useCallback(() => {
+    if (refreshingTree) return;
     if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
     setRefreshingTree(true);
-    startTransition(() => {
-      router.refresh();
-      window.dispatchEvent(new Event('mindos:files-changed'));
-    });
-    refreshTimerRef.current = setTimeout(() => {
-      refreshTimerRef.current = null;
-      setRefreshingTree(false);
-    }, 450);
-  }, [router]);
+    void (async () => {
+      try {
+        if (typeof fetch === 'function') {
+          await fetch('/api/tree-version', { method: 'POST', cache: 'no-store' });
+        }
+      } catch {
+        // Manual refresh remains best-effort even if the force-refresh endpoint is unavailable.
+      } finally {
+        startTransition(() => {
+          router.refresh();
+          notifyFilesChanged();
+        });
+        refreshTimerRef.current = setTimeout(() => {
+          refreshTimerRef.current = null;
+          setRefreshingTree(false);
+        }, 450);
+      }
+    })();
+  }, [refreshingTree, router]);
 
   // Disable the width transition while dragging (same pattern as
   // RightAskPanel): otherwise every mousemove animates 200ms behind the cursor.
@@ -341,9 +353,10 @@ export default function Panel({
             <button
               type="button"
               onClick={handleRefreshFiles}
-              className="hit-target-box inline-flex h-8 w-8 items-center justify-center text-muted-foreground transition-colors duration-75 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-md)]"
+              className="hit-target-box inline-flex h-8 w-8 items-center justify-center text-muted-foreground transition-colors duration-75 hover:text-foreground disabled:cursor-wait disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-md)]"
               aria-label={t.sidebar.refreshFiles}
               aria-busy={refreshingTree}
+              disabled={refreshingTree}
               title={t.sidebar.refreshFiles}
             >
               <RefreshCw size={13} className={refreshingTree ? 'motion-safe:animate-spin' : undefined} />

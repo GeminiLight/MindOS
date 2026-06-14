@@ -16,20 +16,15 @@ import AgentsRuntimeSection from '../agents/AgentsRuntimeSection';
 
 interface AgentsPanelProps {
   active: boolean;
-  maximized?: boolean;
-  onMaximize?: () => void;
   selectedAgentKey?: string | null;
 }
 
 export default function AgentsPanel({
   active,
-  maximized,
-  onMaximize,
   selectedAgentKey = null,
 }: AgentsPanelProps) {
   const { t } = useLocale();
   const p = t.panels.agents;
-  const runtimeCopy = t.agentsContent.runtime;
   const localClientsCopy = t.agentsContent.localClients;
   const mcp = useMcpData();
   const pathname = usePathname();
@@ -98,32 +93,7 @@ export default function AgentsPanel({
 
   return (
     <div className={`flex flex-col h-full ${active ? '' : 'hidden'}`}>
-      <PanelHeader title={p.title} maximized={maximized} onMaximize={onMaximize}>
-        <div className="flex items-center gap-1.5">
-          {isAgentTab ? (
-            <span className="text-2xs text-muted-foreground">
-              {runtimeCopy.panelTitle}
-            </span>
-          ) : !mcp.loading && (
-            <span className="text-2xs text-muted-foreground">
-              {connected.length} {p.connected}
-              {a2a.agents.length > 0 && (
-                <> &middot; {p.a2aLabel} {a2a.agents.length}</>
-              )}
-            </span>
-          )}
-          <button
-            onClick={handleRefresh}
-            disabled={refreshing}
-            className="hit-target-box inline-flex h-8 w-8 items-center justify-center text-muted-foreground transition-colors duration-75 hover:text-foreground disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-md)]"
-            aria-label={p.refresh}
-            title={p.refresh}
-            type="button"
-          >
-            <RefreshCw size={12} className={refreshing ? 'animate-spin' : ''} />
-          </button>
-        </div>
-      </PanelHeader>
+      <PanelHeader title={p.title} />
 
       <div className="flex-1 overflow-y-auto min-h-0">
         {isAgentTab ? (

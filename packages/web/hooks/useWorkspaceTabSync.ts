@@ -7,20 +7,23 @@
  * Mounted exactly once inside TitlebarTabStrip. Responsibilities:
  *   1. Bind the tab store to the current mind root and trigger the initial
  *      session list fetch (refreshSessions has no selection side-effects).
- *   2. Watch the pathname: /view/<path> opens a doc tab, /chat/<id> opens a
- *      chat tab (dedup lives in the store). A null return from openTab means
- *      the 50-tab cap was hit → limit toast, once per attempted key.
+ *   2. Watch the pathname: / opens/focuses the singleton Home tab,
+ *      /view/<path> opens a doc tab, /chat/<id> opens a chat tab. Documents
+ *      opened from ordinary routes are preview tabs by default; Home and chat
+ *      sessions are kept tabs. A null return from openTab means the 50-tab cap
+ *      was hit → limit toast, once per attempted key.
  *   3. Mirror session titles into chat tabs (renameByKey no-ops on same title).
  *   4. Reconcile chat tabs against the server session list — but only after
  *      getSessionsLoaded(), so the pre-fetch empty list never mass-closes tabs.
  *
  * Activation is derived from the route (the route is the source of truth);
- * place routes (/, /capture, /echo, ...) yield no active tab.
+ * non-home place routes (/capture, /echo, ...) yield no active tab.
  */
 
 import { useEffect, useMemo, useRef } from 'react';
 import { usePathname } from 'next/navigation';
 import {
+  HOME_TAB_KEY,
   initWorkspaceTabs,
   openTab,
   readDomRootId,
@@ -49,12 +52,13 @@ function safeDecode(segment: string): string {
 
 /**
  * Derive the would-be active tab from a pathname.
- * `/view/<segments>` → doc (key = decoded path), `/chat/<id>` (id !== 'new')
- * → chat. Everything else (place routes) → null: tabs render dimmed, none
- * selected.
+ * `/` → home, `/view/<segments>` → doc (key = decoded path), `/chat/<id>`
+ * (id !== 'new') → chat. Everything else (place routes) → null: tabs render
+ * dimmed, none selected.
  */
 export function parseActiveTab(pathname: string | null | undefined): { kind: WorkspaceTabKind; key: string } | null {
   if (!pathname) return null;
+  if (pathname === '/') return { kind: 'home', key: HOME_TAB_KEY };
   if (pathname.startsWith('/view/')) {
     const rest = pathname.slice('/view/'.length);
     if (!rest) return null;
@@ -72,6 +76,7 @@ export function parseActiveTab(pathname: string | null | undefined): { kind: Wor
 
 /** Route href for a tab — encoding mirrors parseActiveTab's decoding. */
 export function tabHref(tab: Pick<WorkspaceTab, 'kind' | 'key'>): string {
+  if (tab.kind === 'home') return '/';
   if (tab.kind === 'doc') {
     return `/view/${tab.key.split('/').map(encodeURIComponent).join('/')}`;
   }
@@ -120,15 +125,16 @@ export function useWorkspaceTabSync(): WorkspaceTabSyncState {
   useEffect(() => {
     const active = parseActiveTab(pathname);
     if (!active) return;
-    const title = active.kind === 'doc'
-      ? (active.key.split('/').pop() || active.key)
-      : (() => {
-        const session = sessionsRef.current.find((s) => s.id === active.key);
-        return session ? chatTabTitle(session, tRef.current.workspaceTabs) : tRef.current.workspaceTabs.chatTab;
-      })();
-    const opened = openTab(active.kind, active.key, title);
+    const title = (() => {
+      if (active.kind === 'home') return tRef.current.workspaceTabs.homeTab;
+      if (active.kind === 'doc') return active.key.split('/').pop() || active.key;
+
+      const session = sessionsRef.current.find((s) => s.id === active.key);
+      return session ? chatTabTitle(session, tRef.current.workspaceTabs) : tRef.current.workspaceTabs.chatTab;
+    })();
+    const opened = openTab(active.kind, active.key, title, { pinned: active.kind !== 'doc' });
     if (opened) {
-      limitToastKeyRef.current = null;
+      if (active.kind !== 'home') limitToastKeyRef.current = null;
       return;
     }
     // 50-tab cap: toast once per attempted key, not on every re-render.

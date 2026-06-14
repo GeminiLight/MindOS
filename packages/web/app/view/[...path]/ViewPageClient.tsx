@@ -146,6 +146,7 @@ export default function ViewPageClient({
         await saveAction(cleanContent);
         if (!mountedRef.current) return;
         setSavedContent(cleanContent);
+        notifyFilesChanged([filePath]);
         setAutoSaveStatus('saved');
         setTimeout(() => {
           if (mountedRef.current) setAutoSaveStatus('idle');
@@ -159,7 +160,7 @@ export default function ViewPageClient({
     return () => {
       if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
     };
-  }, [editContent, savedContent, editing, isMarkdown, isDraft, saveAction, keepCurrentTab]);
+  }, [editContent, savedContent, editing, isMarkdown, isDraft, saveAction, keepCurrentTab, filePath]);
   const [mdViewMode, setMdViewModeState] = useState<MdViewMode>(() => {
     if (typeof window === 'undefined') return 'wysiwyg';
     if (initialContentHasFrontmatter) return 'preview';
@@ -361,6 +362,7 @@ export default function ViewPageClient({
         setTimeout(() => setSaveSuccess(false), 2500);
         router.push(`/view/${encodePath(targetPath)}`);
         router.refresh();
+        notifyFilesChanged([targetPath]);
       } catch (err) {
         setSaveError(err instanceof Error ? err.message : 'Failed to save');
       }
@@ -387,6 +389,7 @@ export default function ViewPageClient({
         keepCurrentTab();
         await saveAction(cleanContent);
         setSavedContent(cleanContent);
+        notifyFilesChanged([filePath]);
         // Markdown auto-save: Ctrl+S saves but stays in edit mode
         if (!isMarkdown) {
           setEditing(false);
@@ -397,13 +400,15 @@ export default function ViewPageClient({
         setSaveError(err instanceof Error ? err.message : 'Failed to save');
       }
     });
-  }, [isCsv, isDraft, isMarkdown, saveAction, editContent, keepCurrentTab]);
+  }, [isCsv, isDraft, isMarkdown, saveAction, editContent, keepCurrentTab, filePath]);
 
   // Renderer's inline save — updates local savedContent without entering edit mode
   const handleRendererSave = useCallback(async (newContent: string) => {
+    keepCurrentTab();
     await saveAction(newContent);
     setSavedContent(newContent);
-  }, [saveAction]);
+    notifyFilesChanged([filePath]);
+  }, [saveAction, keepCurrentTab, filePath]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -564,10 +569,14 @@ export default function ViewPageClient({
                             const clean = twemojiToNative(editContent);
                             setSavedContent(clean);
                             if (clean !== savedContent) {
-                              saveAction(clean).catch(() => {});
+                              keepCurrentTab();
+                              saveAction(clean)
+                                .then(() => notifyFilesChanged([filePath]))
+                                .catch(() => {});
                             }
                             setEditing(false);
                           } else if (!editing) {
+                            keepCurrentTab();
                             setEditContent(savedContent);
                             setEditing(true);
                           }
@@ -819,9 +828,11 @@ export default function ViewPageClient({
                 filePath={filePath}
                 appendAction={appendRowAction}
                 saveAction={async (c) => {
+                  keepCurrentTab();
                   await saveAction(c);
                   setEditContent(c);
                   setSavedContent(c);
+                  notifyFilesChanged([filePath]);
                 }}
               />
             ) : (

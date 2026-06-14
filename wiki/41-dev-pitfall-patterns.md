@@ -258,4 +258,53 @@ stat -f %Sm packages/mindos/dist/index.js
 | 旧进程可以顶着旧代码服务一小时不被发现（17:00 的 MCP 进程占 8577 到 18:03） | 把「`ps -o lstart` 晚于 `stat -f %Sm`」纳入重启后的固定检查 |
 | 只查主进程不够，旁挂服务（MCP 等）各有自己的进程 | **每个**监听进程逐一核对启动时间，别抽查 |
 
+## 宽范围分支合并不能覆盖既有 UI 契约
+
+> 复盘 2026-06-14 v1.1.16 → v1.1.17 集成回退：一个 runtime / shell navigation 分支同时覆盖了 Titlebar tab、Echo 页面、Channel sidebar、View 保存事件等 UI 文件，导致 Home 入口、Echo 统一页面壳和多处既有 polish 被回退。
+
+### 问题根因
+
+宽分支的 commit message 往往只描述主目标（如 runtime / plugin / shell），但实际 diff 可能包含大量相邻 UI 文件。合并时如果只看冲突是否解决、测试是否绿，容易把旧实现当作“合理新实现”接受，尤其是以下几类细节：
+
+1. **页面壳 / 宽度契约** — `ContentPageShell` 被手写 `article` 宽度替代，视觉仍能显示，但与全局 workbench 宽度不一致。
+2. **入口按钮 / tab 模型契约** — Home 入口只在某些路由打开过 tab 后出现，刷新到 place route 时入口消失。
+3. **轻量 UI polish** — Channel sidebar、Echo hero、tab separator、preview tab 等不一定有业务断言，容易被大 diff 静默覆盖。
+4. **事件契约** — 保存文件后只发裸事件，不带路径信息，导致 sidebar / tab 状态不能精准刷新。
+
+### 规则 12：合并宽分支前先列高风险 UI 文件，再对照 good tag
+
+```bash
+git diff --name-status <good-tag>..HEAD -- packages/web/components packages/web/app packages/web/hooks packages/web/lib packages/web/__tests__
+```
+
+如果 diff 里出现 shell、sidebar、titlebar、page shell、route sync、保存事件、auth、channel 等共享文件，不能只看最终页面能不能打开。必须抽样对照上一个确认正常的 tag / commit，确认这些契约没有被旧实现覆盖。
+
+### 规则 13：对“看起来只是样式”的契约写 source contract 测试
+
+交互测试不一定能发现页面壳、header 形态、Home launcher 这种视觉契约。对容易被覆盖的结构用小型 source contract 测试锁住，例如：
+
+- `EchoSegmentPageClient` 必须使用 `ContentPageShell as="article"`，不能回退成手写 `mx-auto max-w-3xl`。
+- `EchoHero` 必须是 plain workbench header，不能回退成嵌套卡片 hero。
+- `TitlebarTabStrip` 必须在 place route 也显示 Home launcher，且 launcher 不参与 tab model。
+- `files-changed` 事件必须通过 `notifyFilesChanged(paths)` 发射，不能回到裸 `new Event('mindos:files-changed')`。
+
+### 规则 14：修覆盖回退时保留新功能，但恢复旧契约
+
+不要把宽分支整段 revert。正确做法是把 diff 拆成三类：
+
+| 类型 | 处理方式 |
+|------|----------|
+| 新功能本身 | 保留，例如插件、runtime、Obsidan 兼容新增能力 |
+| 被覆盖的旧契约 | 精准恢复，例如 Home tab、Echo page shell、Channel compact sidebar |
+| 互相矛盾的测试 | 以当前产品目标为准修测试，不用旧断言掩盖真实目标，也不要为了过测试删功能 |
+
+### 教训
+
+| 教训 | 行动 |
+|------|------|
+| commit message 的范围可能小于实际 diff | merge 前必须看 `--name-status`，尤其是共享 UI 文件 |
+| UI 回退常常“能显示但不一致” | 用 source contract 锁页面壳、入口按钮、事件 helper |
+| 宽分支不能靠大 revert 修 | 分离新功能、旧契约、冲突测试，做选择性恢复 |
+| 截图能抓视觉，但抓不到所有契约 | 截图 + DOM 断言 + source contract 三者配合 |
+
 避免硬编码

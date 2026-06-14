@@ -4,10 +4,12 @@ import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import {
   MAX_TABS,
+  HOME_TAB_KEY,
   closeByKey,
   closeTab,
   getTabs,
   initWorkspaceTabs,
+  keepTab,
   moveTab,
   openTab,
   readDomRootId,
@@ -43,12 +45,29 @@ afterEach(() => {
 
 describe('tabId', () => {
   it('formats identity as `${kind}:${key}`', () => {
+    expect(tabId('home', HOME_TAB_KEY)).toBe('home:root');
     expect(tabId('doc', 'notes/a.md')).toBe('doc:notes/a.md');
     expect(tabId('chat', 's-123')).toBe('chat:s-123');
   });
 });
 
 describe('openTab', () => {
+  it('opens the singleton Home tab at the start of the working set', () => {
+    openTab('doc', 'notes/a.md', 'A');
+
+    const home = openTab('home', HOME_TAB_KEY, 'Home');
+    const again = openTab('home', HOME_TAB_KEY, 'Home');
+
+    expect(home).toEqual({ id: 'home:root', kind: 'home', key: HOME_TAB_KEY, title: 'Home' });
+    expect(again).toBe(home);
+    expect(getTabs().map((t) => t.id)).toEqual(['home:root', 'doc:notes/a.md']);
+  });
+
+  it('rejects non-singleton Home keys', () => {
+    expect(openTab('home', 'other', 'Home')).toBeNull();
+    expect(getTabs()).toEqual([]);
+  });
+
   it('opens a tab with id `${kind}:${key}` and appends in order', () => {
     const a = openTab('doc', 'notes/a.md', 'A');
     const b = openTab('chat', 's-1', 'Chat 1');
@@ -80,6 +99,50 @@ describe('openTab', () => {
     expect(doc!.id).toBe('doc:shared-key');
     expect(chat!.id).toBe('chat:shared-key');
     expect(getTabs()).toHaveLength(2);
+  });
+
+  it('opens casual doc routes as one replaceable preview tab when requested', () => {
+    const first = openTab('doc', 'notes/a.md', 'A', { pinned: false });
+    const second = openTab('doc', 'notes/b.md', 'B', { pinned: false });
+
+    expect(first).toMatchObject({ id: 'doc:notes/a.md', pinned: false });
+    expect(second).toMatchObject({ id: 'doc:notes/b.md', pinned: false });
+    expect(getTabs()).toEqual([
+      { id: 'doc:notes/b.md', kind: 'doc', key: 'notes/b.md', title: 'B', pinned: false },
+    ]);
+  });
+
+  it('upgrades an existing preview when the same doc is opened as kept', () => {
+    openTab('doc', 'notes/a.md', 'A', { pinned: false });
+
+    const kept = openTab('doc', 'notes/a.md', 'A');
+
+    expect(kept).toEqual({ id: 'doc:notes/a.md', kind: 'doc', key: 'notes/a.md', title: 'A' });
+    expect(getTabs()).toEqual([{ id: 'doc:notes/a.md', kind: 'doc', key: 'notes/a.md', title: 'A' }]);
+  });
+});
+
+describe('keepTab', () => {
+  it('turns a preview tab into a kept tab without reordering it', () => {
+    openTab('doc', 'kept.md', 'Kept');
+    openTab('doc', 'preview.md', 'Preview', { pinned: false });
+
+    const kept = keepTab('doc:preview.md');
+
+    expect(kept).toEqual({ id: 'doc:preview.md', kind: 'doc', key: 'preview.md', title: 'Preview' });
+    expect(getTabs()).toEqual([
+      { id: 'doc:kept.md', kind: 'doc', key: 'kept.md', title: 'Kept' },
+      { id: 'doc:preview.md', kind: 'doc', key: 'preview.md', title: 'Preview' },
+    ]);
+  });
+
+  it('is a no-op for already kept or missing tabs', () => {
+    const original = openTab('doc', 'kept.md', 'Kept');
+    const before = getTabs();
+
+    expect(keepTab('doc:kept.md')).toBe(original);
+    expect(keepTab('doc:missing.md')).toBeNull();
+    expect(getTabs()).toBe(before);
   });
 });
 
@@ -119,6 +182,17 @@ describe('MAX_TABS limit', () => {
     expect(getTabs()).toHaveLength(MAX_TABS);
     expect(getTabs().at(-1)!.id).toBe('doc:notes/overflow.md');
   });
+
+  it('does not count the system Home tab against the user tab cap', () => {
+    fillToMax();
+
+    const home = openTab('home', HOME_TAB_KEY, 'Home');
+
+    expect(home).not.toBeNull();
+    expect(getTabs()).toHaveLength(MAX_TABS + 1);
+    expect(getTabs()[0]).toMatchObject({ kind: 'home', key: HOME_TAB_KEY });
+    expect(openTab('doc', 'notes/overflow.md', 'Overflow')).toBeNull();
+  });
 });
 
 describe('closeTab / closeByKey', () => {
@@ -130,6 +204,17 @@ describe('closeTab / closeByKey', () => {
     closeTab('chat:s-1');
 
     expect(getTabs().map((t) => t.id)).toEqual(['doc:a.md', 'doc:b.md']);
+  });
+
+  it('keeps the system Home tab when close is requested', () => {
+    openTab('home', HOME_TAB_KEY, 'Home');
+    const before = getTabs();
+
+    closeTab('home:root');
+    closeByKey('home', HOME_TAB_KEY);
+
+    expect(getTabs()).toBe(before);
+    expect(getTabs()).toEqual([{ id: 'home:root', kind: 'home', key: HOME_TAB_KEY, title: 'Home' }]);
   });
 
   it('closeByKey removes the tab addressed by (kind, key)', () => {
@@ -299,6 +384,21 @@ describe('persistence', () => {
     ]);
   });
 
+  it('does not persist preview tabs until they are kept', () => {
+    vi.useFakeTimers();
+    initWorkspaceTabs('root-a');
+    openTab('doc', 'preview.md', 'Preview', { pinned: false });
+
+    vi.advanceTimersByTime(DEBOUNCE_MS);
+    expect(readStored('root-a')).toEqual([]);
+
+    keepTab('doc:preview.md');
+    vi.advanceTimersByTime(DEBOUNCE_MS);
+    expect(readStored('root-a')).toEqual([
+      { id: 'doc:preview.md', kind: 'doc', key: 'preview.md', title: 'Preview' },
+    ]);
+  });
+
   it('coalesces rapid successive mutations into a single write of the final state', () => {
     vi.useFakeTimers();
     initWorkspaceTabs('root-a');
@@ -389,6 +489,7 @@ describe('corrupt storage recovery', () => {
       null,
       'string item',
       { kind: 'chat', key: 's-ok', title: '' }, // empty title is a valid string
+      { kind: 'doc', key: 'preview.md', title: 'Preview', pinned: false },
     ]));
 
     initWorkspaceTabs('root-a');

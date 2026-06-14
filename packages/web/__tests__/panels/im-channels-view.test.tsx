@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import IMChannelsView from '@/components/panels/IMChannelsView';
+import { clearChannelCache } from '@/components/agents/channel-detail/cache';
 import { messages } from '@/lib/i18n';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -29,6 +30,7 @@ describe('IMChannelsView', () => {
   const originalFetch = globalThis.fetch;
 
   beforeEach(() => {
+    clearChannelCache();
     host = document.createElement('div');
     document.body.appendChild(host);
     root = createRoot(host);
@@ -41,6 +43,7 @@ describe('IMChannelsView', () => {
             connected: true,
             botName: 'MindOS Feishu Bot',
             capabilities: ['text'],
+            webhook: { state: 'ready', transport: 'long_connection' },
           },
           {
             platform: 'telegram',
@@ -56,6 +59,7 @@ describe('IMChannelsView', () => {
     act(() => root.unmount());
     host.remove();
     globalThis.fetch = originalFetch;
+    clearChannelCache();
     vi.clearAllMocks();
   });
 
@@ -66,27 +70,25 @@ describe('IMChannelsView', () => {
 
     expect(globalThis.fetch).toHaveBeenCalledWith('/api/im/status');
     expect(host.textContent).toContain('CHANNELS');
-    expect(host.textContent).toContain('1 connected');
+    expect(host.textContent).toContain('1/8');
     expect(host.textContent).toContain('Feishu');
-    expect(host.textContent).toContain('MindOS Feishu Bot');
-    expect(host.textContent).toContain('Set up');
+    expect(host.textContent).not.toContain('MindOS Feishu Bot');
+    expect(host.textContent).not.toContain('Set up');
 
     const links = Array.from(host.querySelectorAll<HTMLAnchorElement>('a'));
     const feishuLink = links.find(link => link.getAttribute('href')?.includes('platform=feishu'));
     expect(feishuLink).not.toBeNull();
     expect(feishuLink?.getAttribute('aria-current')).toBe('page');
     expect(feishuLink?.className).toContain('grid-cols-[auto_minmax(0,1fr)_auto]');
-    expect(feishuLink?.className).toContain('rounded-none');
-    expect(feishuLink?.className).toContain('bg-[var(--amber-subtle)]');
-    expect(feishuLink?.className).not.toContain('border-[var(--amber)]');
-    expect(feishuLink?.className).not.toContain('shadow-sm');
-    expect(feishuLink?.innerHTML).toContain('w-0.5 rounded-r-full bg-[var(--amber)]');
-    expect(feishuLink?.textContent).toContain('Connected');
+    expect(feishuLink?.className).toContain('rounded-md');
+    expect(feishuLink?.className).toContain('bg-[var(--amber-dim)]/45');
+    expect(feishuLink?.querySelector('[aria-label="Running"]')).toBeTruthy();
 
     const telegramLink = links.find(link => link.getAttribute('href')?.includes('platform=telegram'));
     expect(telegramLink).not.toBeNull();
     expect(telegramLink?.getAttribute('aria-current')).toBeNull();
-    expect(telegramLink?.textContent).toContain('Set up');
-    expect(telegramLink?.textContent).toContain('Receive MindOS notifications');
+    expect(telegramLink?.textContent).not.toContain('Set up');
+    expect(telegramLink?.textContent).not.toContain('Receive MindOS notifications');
+    expect(telegramLink?.querySelector('[aria-label="Needs attention"]')).toBeTruthy();
   });
 });

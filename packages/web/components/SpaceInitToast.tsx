@@ -7,6 +7,7 @@ import { useLocale } from '@/lib/stores/locale-store';
 import { encodePath } from '@/lib/utils';
 import { revertSpaceInitAction } from '@/lib/actions';
 import { openTab } from '@/lib/workspace-tabs';
+import { notifyFilesChanged } from '@/lib/files-changed';
 
 type InitState = 'working' | 'done' | 'reverted' | 'error';
 
@@ -71,7 +72,7 @@ export default function SpaceInitToast() {
       await revertSpaceInitAction(info.spacePath, info.spaceName, info.description);
       setInfo((prev) => prev ? { ...prev, state: 'reverted' } : null);
       router.refresh();
-      window.dispatchEvent(new Event('mindos:files-changed'));
+      notifyFilesChanged([info.spacePath]);
       setTimeout(dismiss, 2000);
     });
   }, [info, router, dismiss]);

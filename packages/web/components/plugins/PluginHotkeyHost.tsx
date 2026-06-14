@@ -25,6 +25,7 @@ import type { PluginSurface } from '@/lib/plugins/surfaces';
 import { encodePath } from '@/lib/utils';
 import { openTab } from '@/lib/workspace-tabs';
 import { toast } from '@/lib/toast';
+import { notifyFilesChanged } from '@/lib/files-changed';
 import PluginActionModalDialog from './PluginActionModalDialog';
 import PluginActionMenuDialog from './PluginActionMenuDialog';
 
@@ -86,7 +87,9 @@ export default function PluginHotkeyHost() {
     }
 
     if (result.editorUpdates?.some((update) => update.changed)) {
-      window.dispatchEvent(new Event('mindos:files-changed'));
+      notifyFilesChanged(
+        result.editorUpdates.flatMap((update) => update.changed && update.sourcePath ? [update.sourcePath] : []),
+      );
       router.refresh();
       toast.success(`Updated ${result.editorUpdates[0]?.sourcePath ?? 'current note'}`);
       setPluginModal(null);

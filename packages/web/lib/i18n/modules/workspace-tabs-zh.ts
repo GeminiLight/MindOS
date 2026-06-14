@@ -2,7 +2,9 @@
 
 export const workspaceTabsZh = {
   workspaceTabs: {
+    homeTab: '首页',
     newChat: '新会话',
+    keepTab: '固定标签',
     closeTab: '关闭标签',
     moreTabs: (n: number) => `还有 ${n} 个标签`,
     overflowMenuTitle: '收起的标签',

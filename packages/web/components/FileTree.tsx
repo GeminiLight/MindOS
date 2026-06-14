@@ -15,16 +15,13 @@ import { useLocale } from '@/lib/stores/locale-store';
 import { ConfirmDialog } from '@/components/agents/AgentsPrimitives';
 import { usePinnedFiles } from '@/lib/hooks/usePinnedFiles';
 import { useShowHiddenFiles, setShowHiddenFiles, filterHiddenNodes } from '@/lib/stores/hidden-files';
+import { notifyFilesChanged } from '@/lib/files-changed';
 
 // Re-export for backward compatibility (Panel.tsx, KnowledgeTab.tsx import from FileTree)
 export { setShowHiddenFiles, useShowHiddenFiles };
 import { ContextMenuShell, SpaceContextMenu, FolderContextMenu, MENU_ITEM, MENU_DANGER, MENU_DIVIDER } from '@/components/file-tree/FileTreeContextMenus';
 import { useDirectoryDragDrop } from '@/lib/hooks/useDirectoryDragDrop';
 import { ActivePathContext, createActivePathStore, useIsActiveFile, useIsOnActivePath, type ActivePathStore } from '@/components/file-tree/active-path';
-
-function notifyFilesChanged() {
-  window.dispatchEvent(new Event('mindos:files-changed'));
-}
 
 async function copyPathToClipboard(path: string) {
   try { await navigator.clipboard.writeText(path); } catch { /* noop */ }
@@ -102,7 +99,7 @@ function NewFileInline({ dirPath, depth, onDone }: { dirPath: string; depth: num
         onDone();
         router.push(`/view/${encodePath(result.filePath)}`);
         router.refresh();
-        notifyFilesChanged();
+        notifyFilesChanged([result.filePath]);
       } else {
         setError(result.error || t.fileTree.failed);
       }
@@ -244,7 +241,7 @@ const DirectoryNode = memo(function DirectoryNode({ node, depth, onNavigate, max
         setRenaming(false);
         router.push(`/view/${encodePath(result.newPath)}`);
         router.refresh();
-        notifyFilesChanged();
+        notifyFilesChanged([node.path, result.newPath]);
       } else {
         setRenaming(false);
       }
@@ -434,10 +431,10 @@ const DirectoryNode = memo(function DirectoryNode({ node, depth, onNavigate, max
               const name = node.path.split('/').pop() ?? node.path;
               toast.undo(`${t.trash?.movedToTrash ?? 'Deleted'} ${name}`, async () => {
                 const undo = await undoDeleteAction(trashId);
-                if (undo.success) { router.refresh(); notifyFilesChanged(); }
+                if (undo.success) { router.refresh(); notifyFilesChanged([node.path]); }
                 else toast.error(undo.error ?? 'Undo failed');
               }, { label: t.trash?.undo ?? 'Undo' });
-              router.push('/'); router.refresh(); notifyFilesChanged();
+              router.push('/'); router.refresh(); notifyFilesChanged([node.path]);
             }
           });
         }}
@@ -489,7 +486,7 @@ const FileNodeItem = memo(function FileNodeItem({ node, depth, onNavigate }: {
         setRenaming(false);
         router.push(`/view/${encodePath(result.newPath)}`);
         router.refresh();
-        notifyFilesChanged();
+        notifyFilesChanged([node.path, result.newPath]);
       } else {
         setRenaming(false);
       }
@@ -616,11 +613,11 @@ const FileNodeItem = memo(function FileNodeItem({ node, depth, onNavigate }: {
                 const name = node.path.split('/').pop() ?? node.path;
                 toast.undo(`${t.trash?.movedToTrash ?? 'Deleted'} ${name}`, async () => {
                   const undo = await undoDeleteAction(trashId);
-                  if (undo.success) { router.refresh(); notifyFilesChanged(); }
+                  if (undo.success) { router.refresh(); notifyFilesChanged([node.path]); }
                   else toast.error(undo.error ?? 'Undo failed');
                 }, { label: t.trash?.undo ?? 'Undo' });
               }
-              router.refresh(); notifyFilesChanged();
+              router.refresh(); notifyFilesChanged([node.path]);
             }
           });
         }}

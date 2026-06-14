@@ -130,7 +130,7 @@ describe('TitlebarRow (spec-titlebar-row Phase 1 + 2)', () => {
     expect(onSearchOpenOrFocus).toHaveBeenCalledTimes(1);
   });
 
-  it('renders the rail expand/collapse control before the tablist and toggles the rail state', () => {
+  it('renders the sidebar panel expand/collapse control before the tablist', () => {
     const onSidebarExpandedChange = vi.fn();
     const el = render({ sidebarExpanded: true, onSidebarExpandedChange });
     const sidebarToggle = el.querySelector<HTMLButtonElement>('[data-titlebar-sidebar-toggle]');
@@ -153,7 +153,7 @@ describe('TitlebarRow (spec-titlebar-row Phase 1 + 2)', () => {
     expect(onSidebarExpandedChange).toHaveBeenCalledWith(false);
   });
 
-  it('labels the titlebar rail control as expand when the rail is collapsed', () => {
+  it('labels the titlebar sidebar control as expand when the panel is collapsed', () => {
     const onSidebarExpandedChange = vi.fn();
     const el = render({ sidebarExpanded: false, onSidebarExpandedChange });
     const sidebarToggle = el.querySelector<HTMLButtonElement>('[data-titlebar-sidebar-toggle]');

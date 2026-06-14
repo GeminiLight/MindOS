@@ -9,6 +9,7 @@ import type { Locale, Messages } from '@/lib/i18n';
 import { useLocale } from '@/lib/stores/locale-store';
 import { cn } from '@/lib/utils';
 import { openAskModal } from '@/hooks/useAskModal';
+import { ContentPageShell } from '@/components/shared/ContentPageShell';
 import { EchoHero } from './EchoHero';
 import EchoSegmentNav from './EchoSegmentNav';
 import { EchoInsightCollapsible } from './EchoInsightCollapsible';
@@ -205,8 +206,9 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
     : p.selfChatLabel;
 
   return (
-    <article
-      className="mx-auto max-w-3xl px-4 py-6 sm:px-6 md:py-11"
+    <ContentPageShell
+      as="article"
+      className="echo-content-page"
       aria-labelledby={pageTitleId}
     >
       <EchoHero
@@ -333,6 +335,6 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
           userPrompt={insightUserPrompt}
         />
       )}
-    </article>
+    </ContentPageShell>
   );
 }

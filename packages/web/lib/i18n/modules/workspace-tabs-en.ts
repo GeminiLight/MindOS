@@ -2,7 +2,9 @@
 
 export const workspaceTabsEn = {
   workspaceTabs: {
+    homeTab: 'Home',
     newChat: 'New chat',
+    keepTab: 'Keep tab',
     closeTab: 'Close tab',
     moreTabs: (n: number) => `${n} more tab${n !== 1 ? 's' : ''}`,
     overflowMenuTitle: 'Hidden tabs',

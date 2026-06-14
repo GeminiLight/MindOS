@@ -43,6 +43,7 @@ describe('AgentsContentChannels', () => {
             connected: true,
             botName: 'MindOS Feishu Bot',
             capabilities: ['text', 'markdown', 'threads'],
+            webhook: { state: 'ready', transport: 'long_connection' },
           },
           {
             platform: 'telegram',
@@ -62,7 +63,7 @@ describe('AgentsContentChannels', () => {
     vi.clearAllMocks();
   });
 
-  it('uses compact status pills and localized purpose copy in the platform overview', async () => {
+  it('uses compact status icons in the platform overview', async () => {
     await act(async () => {
       root.render(<AgentsContentChannels />);
     });
@@ -75,13 +76,15 @@ describe('AgentsContentChannels', () => {
     const feishuLink = links.find(link => link.getAttribute('href')?.includes('platform=feishu'));
     expect(feishuLink).not.toBeNull();
     expect(feishuLink?.className).toContain('grid-cols-[auto_minmax(0,1fr)_auto]');
-    expect(feishuLink?.textContent).toContain('MindOS Feishu Bot');
-    expect(feishuLink?.textContent).toContain('Connected');
-    expect(feishuLink?.textContent).toContain('markdown');
+    expect(feishuLink?.textContent).not.toContain('MindOS Feishu Bot');
+    expect(feishuLink?.textContent).not.toContain('Connected');
+    expect(feishuLink?.textContent).not.toContain('markdown');
+    expect(feishuLink?.querySelector('[aria-label="Running"]')).toBeTruthy();
 
     const telegramLink = links.find(link => link.getAttribute('href')?.includes('platform=telegram'));
     expect(telegramLink).not.toBeNull();
-    expect(telegramLink?.textContent).toContain('Receive MindOS notifications');
-    expect(telegramLink?.textContent).toContain('Set up');
+    expect(telegramLink?.textContent).not.toContain('Receive MindOS notifications');
+    expect(telegramLink?.textContent).not.toContain('Set up');
+    expect(telegramLink?.querySelector('[aria-label="Needs attention"]')).toBeTruthy();
   });
 });

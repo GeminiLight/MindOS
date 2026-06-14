@@ -14,7 +14,7 @@ import { createRoot, type Root } from 'react-dom/client';
 
 import TitlebarTabStrip, { computeVisibleCount, TAB_MIN_W } from '@/components/TitlebarTabStrip';
 import { parseActiveTab, tabHref } from '@/hooks/useWorkspaceTabSync';
-import { getTabs, initWorkspaceTabs, openTab, MAX_TABS } from '@/lib/workspace-tabs';
+import { getTabs, HOME_TAB_KEY, initWorkspaceTabs, openTab, MAX_TABS } from '@/lib/workspace-tabs';
 import { getSessionsLoaded, renameSession } from '@/lib/ask-session-store';
 import { endRun, startRun } from '@/lib/ask-run-store';
 import type { ChatSession } from '@/lib/types';
@@ -107,6 +107,10 @@ const closeButtonOf = (tabEl: HTMLElement) => tabEl.querySelector<HTMLButtonElem
 const click = (el: Element) => act(() => {
   el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
 });
+function seedKeptDocTabs(keys: string[]) {
+  initWorkspaceTabs('default');
+  for (const key of keys) openTab('doc', key, key.split('/').pop() || key);
+}
 
 beforeEach(() => {
   h.pathname.current = '/';
@@ -129,6 +133,10 @@ afterEach(() => {
 // =============================================================================
 
 describe('parseActiveTab', () => {
+  it('maps / to the singleton Home tab', () => {
+    expect(parseActiveTab('/')).toEqual({ kind: 'home', key: HOME_TAB_KEY });
+  });
+
   it('maps /view/<segments> to a decoded doc key', () => {
     expect(parseActiveTab('/view/a/b.md')).toEqual({ kind: 'doc', key: 'a/b.md' });
     expect(parseActiveTab(`/view/${encodeURIComponent('笔记')}/${encodeURIComponent('日记😀.md')}`))
@@ -141,7 +149,7 @@ describe('parseActiveTab', () => {
   });
 
   it('returns null for place routes and degenerate paths', () => {
-    for (const p of ['/', '/capture', '/echo', '/echo/foo', '/agents', '/discover', '/inbox', '/view/', '/chat/a/b', null, undefined]) {
+    for (const p of ['/capture', '/echo', '/echo/foo', '/agents', '/discover', '/inbox', '/view/', '/chat/a/b', null, undefined]) {
       expect(parseActiveTab(p)).toBeNull();
     }
   });
@@ -157,12 +165,12 @@ describe('computeVisibleCount', () => {
   });
 
   it('shows all tabs when they fit without the overflow trigger', () => {
-    expect(computeVisibleCount(3 * TAB_MIN_W + 32, 3)).toBe(3);
+    expect(computeVisibleCount(3 * TAB_MIN_W + 64, 3)).toBe(3);
   });
 
   it('reserves room for the overflow trigger when tabs do not fit', () => {
-    // 300px: 300-32 = 268 < 5*96 → (268-48)/96 → 2 visible
-    expect(computeVisibleCount(300, 5)).toBe(2);
+    // 300px: 300-64 = 236 < 5*96 → (236-48)/96 → 1 visible
+    expect(computeVisibleCount(300, 5)).toBe(1);
   });
 
   it('never goes negative on tiny widths', () => {
@@ -174,11 +182,22 @@ describe('computeVisibleCount', () => {
 // =============================================================================
 
 describe('TitlebarTabStrip (spec-titlebar-row Phase 2)', () => {
-  it('opens a doc tab titled with the basename when visiting /view/a/b.md', async () => {
+  it('opens the singleton Home tab on the product root route', async () => {
+    await navigateTo('/');
+    expect(tabTitles()).toEqual(['Home']);
+    expect(getTabs()).toEqual([{ id: 'home:root', kind: 'home', key: HOME_TAB_KEY, title: 'Home' }]);
+    const tab = findTab('Home')!;
+    expect(tab.getAttribute('aria-selected')).toBe('true');
+    expect(closeButtonOf(tab)).toBeNull();
+  });
+
+  it('opens a doc route as a replaceable preview tab', async () => {
     await navigateTo('/view/a/b.md');
     expect(tabTitles()).toEqual(['b.md']);
     const tab = findTab('b.md')!;
     expect(tab.getAttribute('aria-selected')).toBe('true');
+    expect(tab.getAttribute('data-titlebar-tab-preview')).toBe('true');
+    expect(getTabs()[0]).toMatchObject({ kind: 'doc', key: 'a/b.md', pinned: false });
     // interactive elements opt out of the window drag region
     expect((tab.style as unknown as Record<string, string>).WebkitAppRegion).toBe('no-drag');
   });
@@ -191,14 +210,28 @@ describe('TitlebarTabStrip (spec-titlebar-row Phase 2)', () => {
 
     await navigateTo('/');
     await navigateTo('/chat/abc');
-    expect(getTabs()).toHaveLength(1);
+    expect(getTabs().filter((tab) => tab.kind === 'chat' && tab.key === 'abc')).toHaveLength(1);
   });
 
-  it('does not duplicate a doc tab on repeated visits', async () => {
+  it('reuses a single doc preview across casual file browsing', async () => {
     await navigateTo('/view/a/b.md');
-    await navigateTo('/');
+    await navigateTo('/capture');
+    await navigateTo('/view/a/c.md');
+    expect(tabTitles()).toEqual(['c.md']);
+    expect(getTabs()).toHaveLength(1);
+    expect(getTabs()[0]).toMatchObject({ kind: 'doc', key: 'a/c.md', pinned: false });
+  });
+
+  it('keeps a preview tab when the user pins it', async () => {
     await navigateTo('/view/a/b.md');
-    expect(tabTitles()).toEqual(['b.md']);
+    const tab = findTab('b.md')!;
+    const keepButton = tab.querySelector<HTMLButtonElement>('button[aria-label="Keep tab"]')!;
+
+    await click(keepButton);
+
+    expect(getTabs()[0]).toMatchObject({ kind: 'doc', key: 'a/b.md' });
+    expect(getTabs()[0].pinned).toBeUndefined();
+    expect(tabEls()[0].getAttribute('data-titlebar-tab-preview')).toBeNull();
   });
 
   it('clicking a tab navigates to its route (Chinese/emoji keys round-trip)', async () => {
@@ -212,17 +245,26 @@ describe('TitlebarTabStrip (spec-titlebar-row Phase 2)', () => {
     expect(h.push).toHaveBeenCalledWith(encoded);
   });
 
-  it('marks no tab selected on place routes but keeps them open (dim state)', async () => {
+  it('marks no tab selected on non-home place routes but keeps them open (dim state)', async () => {
     await navigateTo('/view/a.md');
-    await navigateTo('/');
+    await navigateTo('/capture');
     expect(tabTitles()).toEqual(['a.md']);
     expect(document.querySelector('[aria-selected="true"]')).toBeNull();
   });
 
+  it('draws a subtle separator only between flat inactive tabs', async () => {
+    seedKeptDocTabs(['a.md', 'b.md']);
+    await navigateTo('/view/c.md'); // active preview = c
+
+    const tabs = tabEls();
+    expect(tabTitles()).toEqual(['a.md', 'b.md', 'c.md']);
+    expect(tabs[1].getAttribute('data-titlebar-tab-separator')).toBe('true');
+    expect(tabs[1].className).toContain('before:bg-border/60');
+    expect(tabs[2].getAttribute('data-titlebar-tab-separator')).toBeNull();
+  });
+
   it('closing the active tab navigates to the right neighbor', async () => {
-    await navigateTo('/view/a.md');
-    await navigateTo('/view/b.md');
-    await navigateTo('/view/c.md');
+    seedKeptDocTabs(['a.md', 'b.md', 'c.md']);
     await navigateTo('/view/b.md'); // active = b
     h.push.mockClear();
 
@@ -232,7 +274,7 @@ describe('TitlebarTabStrip (spec-titlebar-row Phase 2)', () => {
   });
 
   it('closing the active tab falls back to the left neighbor, then home', async () => {
-    await navigateTo('/view/a.md');
+    seedKeptDocTabs(['a.md', 'c.md']);
     await navigateTo('/view/c.md'); // active = c (rightmost)
     h.push.mockClear();
     await click(closeButtonOf(findTab('c.md')!));
@@ -248,7 +290,7 @@ describe('TitlebarTabStrip (spec-titlebar-row Phase 2)', () => {
   });
 
   it('closing an inactive tab does not navigate', async () => {
-    await navigateTo('/view/a.md');
+    seedKeptDocTabs(['a.md']);
     await navigateTo('/view/b.md'); // active = b
     h.push.mockClear();
 
@@ -258,7 +300,7 @@ describe('TitlebarTabStrip (spec-titlebar-row Phase 2)', () => {
   });
 
   it('middle-click closes a tab', async () => {
-    await navigateTo('/view/a.md');
+    seedKeptDocTabs(['a.md', 'b.md']);
     await navigateTo('/view/b.md');
     await act(async () => {
       findTab('a.md')!.dispatchEvent(new MouseEvent('auxclick', { bubbles: true, cancelable: true, button: 1 }));
@@ -271,6 +313,20 @@ describe('TitlebarTabStrip (spec-titlebar-row Phase 2)', () => {
     h.push.mockClear();
     await click(document.querySelector('button[aria-label="New chat"]')!);
     expect(h.push).toHaveBeenCalledWith('/chat/new');
+  });
+
+  it('keeps a Home launcher visible on place routes without creating a tab', async () => {
+    initWorkspaceTabs('default');
+    await navigateTo('/capture');
+    const homeButton = document.querySelector<HTMLButtonElement>('[data-titlebar-home-button]');
+
+    expect(homeButton).not.toBeNull();
+    expect(homeButton!.getAttribute('aria-label')).toBe('Home');
+    expect(tabEls()).toHaveLength(0);
+
+    await click(homeButton!);
+    expect(h.push).toHaveBeenCalledWith('/');
+    expect(tabEls()).toHaveLength(0);
   });
 
   it('syncs chat tab titles from the session list (renameByKey path)', async () => {
@@ -364,18 +420,16 @@ describe('TitlebarTabStrip (spec-titlebar-row Phase 2)', () => {
   it('collapses overflowing tabs into a ⌄N menu with running/unread first', async () => {
     vi.stubGlobal('ResizeObserver', ResizeObserverStub);
     deferServerSessions();
+    seedKeptDocTabs(['d1.md', 'd2.md', 'd3.md', 'd4.md']);
     await navigateTo('/view/d1.md');
-    await navigateTo('/view/d2.md');
-    await navigateTo('/view/d3.md');
-    await navigateTo('/view/d4.md');
     await navigateTo('/chat/c1');
     await act(async () => {
       startRun('c1', { controller: new AbortController(), runtimeSnapshot: null, reconnectMax: 0 });
     });
 
-    // 300px: 2 tabs fit, 3 go to the overflow menu
+    // 332px: fixed Home/New Chat actions leave room for 2 tabs and an overflow menu.
     await act(async () => {
-      ResizeObserverStub.instances.forEach((ro) => ro.trigger(300));
+      ResizeObserverStub.instances.forEach((ro) => ro.trigger(332));
     });
     expect(tabTitles()).toEqual(['d1.md', 'd2.md']);
 
@@ -401,9 +455,7 @@ describe('TitlebarTabStrip (spec-titlebar-row Phase 2)', () => {
 
   it('closing a hidden tab from the overflow menu works without navigating', async () => {
     vi.stubGlobal('ResizeObserver', ResizeObserverStub);
-    await navigateTo('/view/d1.md');
-    await navigateTo('/view/d2.md');
-    await navigateTo('/view/d3.md');
+    seedKeptDocTabs(['d1.md', 'd2.md', 'd3.md']);
     await navigateTo('/view/d1.md'); // active = d1 (visible)
     await act(async () => {
       ResizeObserverStub.instances.forEach((ro) => ro.trigger(240)); // 1 visible, 2 hidden
@@ -422,28 +474,30 @@ describe('TitlebarTabStrip (spec-titlebar-row Phase 2)', () => {
 
   it('aligns utility actions to the tab baseline with compact rounded controls', async () => {
     vi.stubGlobal('ResizeObserver', ResizeObserverStub);
+    seedKeptDocTabs(['d1.md', 'd2.md', 'd3.md']);
     await navigateTo('/view/d1.md');
-    await navigateTo('/view/d2.md');
-    await navigateTo('/view/d3.md');
     await act(async () => {
       ResizeObserverStub.instances.forEach((ro) => ro.trigger(240));
     });
 
     const newChatButton = document.querySelector<HTMLButtonElement>('button[aria-label="New chat"]');
+    const homeButton = document.querySelector<HTMLButtonElement>('[data-titlebar-home-button]');
     const overflowButton = document.querySelector<HTMLButtonElement>('[data-overflow-trigger]');
 
-    for (const button of [newChatButton, overflowButton]) {
+    for (const button of [homeButton, newChatButton, overflowButton]) {
       expect(button).not.toBeNull();
       expect(button!.className).toContain('self-end');
       expect(button!.className).toContain('mb-1');
       expect(button!.className).toContain('rounded-full');
       expect(button!.className).not.toContain('self-center');
     }
+    expect(homeButton!.className).toContain('h-7 w-7');
     expect(newChatButton!.className).toContain('h-7 w-7');
   });
 
   it('tabHref round-trips with parseActiveTab', () => {
     const docKey = '笔记/日记😀.md';
+    expect(parseActiveTab(tabHref({ kind: 'home', key: HOME_TAB_KEY }))).toEqual({ kind: 'home', key: HOME_TAB_KEY });
     expect(parseActiveTab(tabHref({ kind: 'doc', key: docKey }))).toEqual({ kind: 'doc', key: docKey });
     expect(parseActiveTab(tabHref({ kind: 'chat', key: 'abc-123' }))).toEqual({ kind: 'chat', key: 'abc-123' });
   });

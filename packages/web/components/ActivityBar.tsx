@@ -85,7 +85,7 @@ function RailButton({
 }: RailButtonProps) {
   const tooltipText = shortcut ? `${label} (${shortcut})` : label;
   const buttonClassName = `
-    hit-target-box relative flex items-center ${expanded ? 'justify-start px-3 w-full' : 'justify-center w-10'} h-10 transition-colors [--hit-target-hover-bg:var(--muted)] [--hit-target-active-bg:var(--amber-subtle)] [--hit-target-radius:0px]
+    hit-target-box relative flex items-center ${expanded ? 'justify-start px-3 w-full' : 'justify-center w-10'} h-10 transition-colors [--hit-target-hover-bg:var(--muted)] [--hit-target-active-bg:var(--amber-dim)] [--hit-target-radius:var(--radius-md)]
     ${active
       ? 'text-[var(--amber)]'
       : 'text-muted-foreground hover:text-foreground'

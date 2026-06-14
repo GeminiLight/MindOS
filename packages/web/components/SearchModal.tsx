@@ -32,6 +32,7 @@ import { openTab } from '@/lib/workspace-tabs';
 import PluginActionModalDialog from '@/components/plugins/PluginActionModalDialog';
 import PluginActionMenuDialog from '@/components/plugins/PluginActionMenuDialog';
 import { createSearchResultDragPreview, scheduleSearchResultDragPreviewCleanup } from '@/lib/search-drag-preview';
+import { notifyFilesChanged } from '@/lib/files-changed';
 
 interface SearchModalProps {
   open: boolean;
@@ -111,8 +112,10 @@ export default function SearchModal({ open, onClose }: SearchModalProps) {
       setPluginMenu(null);
       return;
     }
+    const changedPaths = result.editorUpdates
+      ?.flatMap((update) => update.changed && update.sourcePath ? [update.sourcePath] : []);
     if (result.editorUpdates?.some((update) => update.changed)) {
-      window.dispatchEvent(new Event('mindos:files-changed'));
+      notifyFilesChanged(changedPaths);
       router.refresh();
       toast.success(`Updated ${result.editorUpdates[0]?.sourcePath ?? 'current note'}`);
       setPluginModal(null);
@@ -267,7 +270,10 @@ export default function SearchModal({ open, onClose }: SearchModalProps) {
             toast.success(`Opened ${targetPath}`);
             onClose();
           } else if (result.editorUpdates?.some((update) => update.changed)) {
-            window.dispatchEvent(new Event('mindos:files-changed'));
+            notifyFilesChanged(
+              result.editorUpdates
+                .flatMap((update) => update.changed && update.sourcePath ? [update.sourcePath] : []),
+            );
             router.refresh();
             toast.success(`Updated ${result.editorUpdates[0]?.sourcePath ?? 'current note'}`);
             onClose();

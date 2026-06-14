@@ -34,17 +34,17 @@ describe('PanelNavRow layout stability', () => {
     expect(activeClassName).not.toContain('pr-4');
   });
 
-  it('uses the lightweight rectangular active state with a left amber rail', () => {
+  it('uses a stable active background and icon tile instead of a left rail', () => {
     const activeHtml = htmlFor(true);
+    const inactiveHtml = htmlFor(false);
     const activeClassName = classNameFor(true);
 
-    expect(activeClassName).toContain('rounded-none');
-    expect(activeClassName).toContain('bg-[var(--amber-subtle)]');
-    expect(activeClassName).not.toContain('ring-2 ring-ring/50');
-    expect(activeClassName).not.toContain('border-border');
-    expect(activeClassName).not.toContain('shadow');
-    expect(activeClassName).not.toContain('bg-[var(--amber-dim)]');
-    expect(activeHtml).toContain('w-[3px] rounded-r-full bg-[var(--amber)]');
+    expect(activeClassName).toContain('rounded-md');
+    expect(activeHtml).toContain('border-[var(--amber)]/35');
+    expect(activeHtml).toContain('bg-[var(--amber-dim)]/45');
+    expect(activeHtml).toContain('bg-[var(--amber)]/10');
+    expect(activeHtml).not.toContain('rounded-r-full');
+    expect(inactiveHtml).toContain('border-transparent');
     expect(activeHtml).toContain('aria-current="page"');
   });
 });
