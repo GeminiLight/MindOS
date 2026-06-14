@@ -3,11 +3,16 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { Component } from '@/lib/obsidian-compat/component';
+import { Events } from '@/lib/obsidian-compat/events';
 import { Plugin } from '@/lib/obsidian-compat/shims/plugin';
 import type { App, Command, PluginManifest } from '@/lib/obsidian-compat/types';
 
 class ChildComponent extends Component {
+  loaded = false;
   unloaded = false;
+  override onload(): void {
+    this.loaded = true;
+  }
   override onunload(): void {
     this.unloaded = true;
   }
@@ -44,6 +49,44 @@ const manifest: PluginManifest = {
   version: '1.0.0',
 };
 
+describe('Events', () => {
+  it('binds callback context and supports offref cleanup', () => {
+    const events = new Events();
+    const ctx = { prefix: 'ctx:' };
+    const callback = vi.fn(function (this: typeof ctx, value: string) {
+      return `${this.prefix}${value}`;
+    });
+
+    expect(events.trigger('ready', 'skip')).toEqual([]);
+    const ref = events.on('ready', callback, ctx);
+
+    expect(events.trigger('ready', 'value')).toEqual(['ctx:value']);
+    events.offref(ref);
+    expect(events.tryTrigger('ready', ['again'])).toEqual([]);
+    expect(callback).toHaveBeenCalledTimes(1);
+  });
+
+  it('isolates throwing event callbacks and continues triggering listeners', () => {
+    const events = new Events();
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const good = vi.fn(() => 'ok');
+
+    events.on('changed', () => {
+      throw new Error('boom');
+    });
+    events.on('changed', good);
+
+    expect(events.trigger('changed')).toEqual([undefined, 'ok']);
+    expect(good).toHaveBeenCalledTimes(1);
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining("Event 'changed' callback error"),
+      expect.any(Error),
+    );
+
+    errorSpy.mockRestore();
+  });
+});
+
 describe('Component', () => {
   it('unloads child components and registered callbacks', async () => {
     const parent = new ParentComponent();
@@ -67,6 +110,60 @@ describe('Component', () => {
     await component.unload();
 
     expect(off).toHaveBeenCalledTimes(1);
+  });
+
+  it('loads existing and newly added children when parent is already loaded', async () => {
+    const parent = new ParentComponent();
+    const beforeLoad = new ChildComponent();
+    const afterLoad = new ChildComponent();
+
+    expect(parent.addChild(beforeLoad)).toBe(beforeLoad);
+    await parent.load();
+    expect(beforeLoad.loaded).toBe(true);
+
+    expect(parent.addChild(afterLoad)).toBe(afterLoad);
+    await Promise.resolve();
+    expect(afterLoad.loaded).toBe(true);
+  });
+
+  it('unloads removed child components immediately', async () => {
+    const parent = new ParentComponent();
+    const child = new ChildComponent();
+
+    parent.addChild(child);
+    await parent.load();
+    expect(parent.removeChild(child)).toBe(child);
+    await Promise.resolve();
+
+    expect(child.unloaded).toBe(true);
+  });
+
+  it('removes DOM listeners with the same options on unload', async () => {
+    const component = new ParentComponent();
+    const target = new EventTarget();
+    const callback = vi.fn();
+    const options = { capture: true };
+
+    component.registerDomEvent(target, 'click', callback, options);
+    target.dispatchEvent(new Event('click'));
+    await component.unload();
+    target.dispatchEvent(new Event('click'));
+
+    expect(callback).toHaveBeenCalledTimes(1);
+  });
+
+  it('clears registered intervals on unload', async () => {
+    vi.useFakeTimers();
+    const component = new ParentComponent();
+    const tick = vi.fn();
+    const id = setInterval(tick, 1000) as unknown as number;
+
+    expect(component.registerInterval(id)).toBe(id);
+    await component.unload();
+    vi.advanceTimersByTime(3000);
+
+    expect(tick).not.toHaveBeenCalled();
+    vi.useRealTimers();
   });
 });
 

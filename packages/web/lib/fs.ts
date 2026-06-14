@@ -69,7 +69,18 @@ export function getMindRoot(): string {
   return effectiveMindRoot();
 }
 
-const IGNORED_DIRS = new Set(['.git', 'node_modules', 'app', '.next', '.DS_Store', '.media', 'mcp', '.mindos']);
+const IGNORED_DIRS = new Set([
+  '.git',
+  'node_modules',
+  'app',
+  '.next',
+  '.DS_Store',
+  '.media',
+  'mcp',
+  '.mindos',
+  '.obsidian',
+  '.plugins',
+]);
 const ALLOWED_EXTENSIONS = new Set([
   '.md', '.csv', '.json', '.pdf',
   '.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.bmp', '.ico',

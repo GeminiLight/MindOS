@@ -62,7 +62,17 @@ describe('obsidian compat integration', () => {
               hasModal: typeof obsidian.Modal === 'function',
               hasPluginSettingTab: typeof obsidian.PluginSettingTab === 'function',
               hasSetting: typeof obsidian.Setting === 'function',
-              hasTFile: typeof obsidian.TFile === 'function'
+              hasTFile: typeof obsidian.TFile === 'function',
+              hasNormalizePath: typeof obsidian.normalizePath === 'function',
+              hasRequestUrl: typeof obsidian.requestUrl === 'function',
+              hasPlatform: typeof obsidian.Platform === 'object',
+              hasItemView: typeof obsidian.ItemView === 'function',
+              hasMarkdownRenderChild: typeof obsidian.MarkdownRenderChild === 'function',
+              hasMarkdownRenderer: typeof obsidian.MarkdownRenderer?.renderMarkdown === 'function',
+              hasFuzzySuggestModal: typeof obsidian.FuzzySuggestModal === 'function',
+              hasVaultAdapter: typeof this.app.vault.adapter?.read === 'function',
+              hasFileManager: typeof this.app.fileManager?.processFrontMatter === 'function',
+              hasWorkspaceActiveView: typeof this.app.workspace.getActiveViewOfType === 'function'
             };
           }
         };
@@ -81,6 +91,16 @@ describe('obsidian compat integration', () => {
       hasPluginSettingTab: true,
       hasSetting: true,
       hasTFile: true,
+      hasNormalizePath: true,
+      hasRequestUrl: true,
+      hasPlatform: true,
+      hasItemView: true,
+      hasMarkdownRenderChild: true,
+      hasMarkdownRenderer: true,
+      hasFuzzySuggestModal: true,
+      hasVaultAdapter: true,
+      hasFileManager: true,
+      hasWorkspaceActiveView: true,
     });
   });
 
@@ -116,6 +136,16 @@ describe('obsidian compat integration', () => {
 
     expect(resolved?.path).toBe('notes/Target Note.md');
     expect(app.metadataCache.fileToLinktext(file!, 'notes/source.md', true)).toBe('notes/Target Note');
+  });
+
+  it('persists app local storage under the plugin private directory', () => {
+    const loader = new PluginLoader(mindRoot);
+    const app = loader.getApp();
+
+    app.saveLocalStorage('tasks-view-state', { filter: 'today' });
+
+    const secondLoader = new PluginLoader(mindRoot);
+    expect(secondLoader.getApp().loadLocalStorage('tasks-view-state')).toEqual({ filter: 'today' });
   });
 
   it('lets plugins register setting tabs with collected setting items', async () => {
@@ -156,5 +186,54 @@ describe('obsidian compat integration', () => {
       kind: 'text',
       value: 'token',
     });
+  });
+
+  it('collects settings from Obsidian-style new Setting(containerEl) and avoids duplicate display items', async () => {
+    writePlugin(
+      'container-settings-plugin',
+      `
+        const { Plugin, PluginSettingTab, Setting } = require('obsidian');
+        class ExampleTab extends PluginSettingTab {
+          constructor(app, plugin) {
+            super(app, plugin);
+            this.plugin = plugin;
+          }
+          display() {
+            const { containerEl } = this;
+            containerEl.empty();
+            containerEl.createEl('h2', { text: 'Example' });
+            new Setting(containerEl)
+              .setName('Homepage path')
+              .setDesc('Path to your homepage note')
+              .addText((text) => text.setPlaceholder('Home.md').setValue('Home.md').onChange(() => {}));
+            new Setting(containerEl)
+              .setName('Run')
+              .addButton((button) => button.setButtonText('Run now').setCta());
+          }
+        }
+        module.exports = class ContainerSettingsPlugin extends Plugin {
+          onload() {
+            const tab = new ExampleTab(this.app, this);
+            tab.display();
+            tab.display();
+            this.addSettingTab(tab);
+          }
+        };
+      `,
+    );
+
+    const loader = new PluginLoader(mindRoot);
+    const loaded = await loader.loadPlugin('container-settings-plugin');
+    const tabs = (loaded.instance as any).settingTabs;
+
+    expect(tabs).toHaveLength(1);
+    expect(tabs[0].items).toHaveLength(2);
+    expect(tabs[0].items[0]).toMatchObject({
+      name: 'Homepage path',
+      kind: 'text',
+      value: 'Home.md',
+      placeholder: 'Home.md',
+    });
+    expect(tabs[0].items[1]).toMatchObject({ name: 'Run', kind: 'button', cta: true });
   });
 });

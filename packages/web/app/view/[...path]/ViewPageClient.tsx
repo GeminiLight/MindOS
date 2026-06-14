@@ -2,7 +2,7 @@
 
 import { useState, useTransition, useCallback, useEffect, useRef, useSyncExternalStore, useMemo, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
-import { Edit3, Save, X, Loader2, LayoutTemplate, ArrowLeft, Share2, FileText, Code, MoreHorizontal, Copy, Pencil, Trash2, Star, Download, Eye, PanelLeft } from 'lucide-react';
+import { Edit3, Save, X, Loader2, LayoutTemplate, ArrowLeft, Share2, FileText, Code, MoreHorizontal, Copy, Pencil, Trash2, Star, Download, Eye, PanelLeft, PanelRightOpen, Puzzle } from 'lucide-react';
 import { lazy } from 'react';
 import MarkdownView from '@/components/MarkdownView';
 import JsonView from '@/components/JsonView';
@@ -29,6 +29,8 @@ import { twemojiToNative } from '@/lib/twemoji';
 import { splitMarkdownFrontmatter } from '@/lib/parsing/frontmatter';
 import { isPathAffected, notifyFilesChanged, subscribeFilesChanged } from '@/lib/files-changed';
 import { closeByKey, keepTab, openTab } from '@/lib/workspace-tabs';
+import { fetchPluginViewSurfacesForExtension, pluginViewSurfaceHref } from '@/lib/plugins/client';
+import type { PluginSurface } from '@/lib/plugins/surfaces';
 
 interface ViewPageClientProps {
   filePath: string;
@@ -266,6 +268,31 @@ export default function ViewPageClient({
   const isCsv = extension === 'csv';
   // Graph mode overrides Raw — when graph is active, always show the renderer
   const showRenderer = !editing && !!renderer && (!effectiveUseRaw || !!graphRenderer);
+  const [pluginViewSurfaces, setPluginViewSurfaces] = useState<PluginSurface[]>([]);
+  const shouldShowPluginViewEntry = !editing && !isDraft && pluginViewSurfaces.length > 0;
+  const fileExtensionLabel = extension ? `.${extension.trim().replace(/^\.+/, '').toLowerCase()}` : 'this file';
+  const visiblePluginViewSurfaces = pluginViewSurfaces.slice(0, 2);
+  const pluginViewOverflowCount = Math.max(0, pluginViewSurfaces.length - visiblePluginViewSurfaces.length);
+
+  useEffect(() => {
+    if (!extension || isBinaryFile || isDraft) {
+      setPluginViewSurfaces([]);
+      return;
+    }
+
+    let cancelled = false;
+    fetchPluginViewSurfacesForExtension(extension)
+      .then((surfaces) => {
+        if (!cancelled) setPluginViewSurfaces(surfaces);
+      })
+      .catch(() => {
+        if (!cancelled) setPluginViewSurfaces([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [extension, isBinaryFile, isDraft]);
 
   // Lazily resolve the renderer component for code-splitting
   const LazyComponent = useMemo(() => {
@@ -678,6 +705,50 @@ export default function ViewPageClient({
         </div>
       </div>
 
+      {shouldShowPluginViewEntry && (
+        <div className="border-b border-border/70 bg-muted/20 px-4 py-2 md:px-6">
+          <div
+            className="content-width flex min-h-11 flex-wrap items-center justify-between gap-2 rounded-lg border border-border/70 bg-card/80 px-3 py-2 shadow-sm"
+            data-testid="plugin-view-extension-entry"
+          >
+            <div className="flex min-w-0 items-center gap-2.5">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[var(--amber-subtle)] text-[var(--amber)]">
+                <Puzzle size={14} />
+              </span>
+              <div className="min-w-0">
+                <div className="truncate text-xs font-semibold text-foreground">Plugin view available</div>
+                <div className="truncate text-2xs text-muted-foreground">
+                  {fileExtensionLabel} can open through an Obsidian-compatible view.
+                </div>
+              </div>
+            </div>
+            <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+              {visiblePluginViewSurfaces.map((surface) => {
+                const href = pluginViewSurfaceHref(surface, filePath);
+                if (!href) return null;
+                return (
+                  <a
+                    key={surface.id}
+                    href={href}
+                    className="inline-flex h-8 max-w-[220px] items-center gap-1.5 rounded-md border border-border bg-background px-2.5 text-xs font-medium text-foreground transition-colors duration-75 hover:bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    data-testid="plugin-view-extension-link"
+                    title={`Open ${surface.pluginName}: ${surface.title}`}
+                  >
+                    <PanelRightOpen size={13} className="shrink-0 text-[var(--amber)]" />
+                    <span className="truncate">{surface.pluginName}</span>
+                  </a>
+                );
+              })}
+              {pluginViewOverflowCount > 0 && (
+                <span className="inline-flex h-8 items-center rounded-md border border-border/70 px-2 text-2xs font-medium text-muted-foreground">
+                  +{pluginViewOverflowCount}
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Content */}
       <div className="flex-1 py-6 md:py-8">
         {isMarkdown && !showRenderer ? (
@@ -719,7 +790,7 @@ export default function ViewPageClient({
             {/* Markdown View — always mounted, hidden when in Edit mode */}
             <div ref={contentRef} className="content-width" style={{ display: editing ? 'none' : undefined }}>
               {findOpen && <FindInPage containerRef={contentRef} onClose={() => setFindOpen(false)} />}
-              <MarkdownView content={twemojiToNative(savedContent)} highlightLines={changedLines} onDismissHighlight={() => setChangedLines([])} emptyPlaceholder={t.view?.emptyNote} />
+              <MarkdownView content={twemojiToNative(savedContent)} sourcePath={filePath} highlightLines={changedLines} onDismissHighlight={() => setChangedLines([])} emptyPlaceholder={t.view?.emptyNote} />
               <TableOfContents content={twemojiToNative(savedContent)} />
               <Backlinks filePath={filePath} />
             </div>
@@ -767,7 +838,7 @@ export default function ViewPageClient({
             ) : extension === 'json' ? (
               <JsonView content={savedContent} />
             ) : (
-              <MarkdownView content={savedContent} highlightLines={changedLines} onDismissHighlight={() => setChangedLines([])} emptyPlaceholder={t.view?.emptyNote} />
+              <MarkdownView content={savedContent} sourcePath={filePath} highlightLines={changedLines} onDismissHighlight={() => setChangedLines([])} emptyPlaceholder={t.view?.emptyNote} />
             )}
             <Backlinks filePath={filePath} />
           </div>

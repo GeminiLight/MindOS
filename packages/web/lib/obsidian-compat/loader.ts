@@ -77,6 +77,10 @@ export class PluginLoader {
           const manifestRaw = fs.readFileSync(manifestPath, 'utf-8');
           const manifestObj = JSON.parse(manifestRaw);
           const manifest = validateManifest(manifestObj);
+          if (manifest.id !== entry) {
+            console.warn(`[obsidian-compat] Plugin directory "${entry}" does not match manifest id "${manifest.id}", skipping`);
+            continue;
+          }
           discovered.push(manifest);
         } catch (err) {
           if (err instanceof ManifestError) {
@@ -98,7 +102,7 @@ export class PluginLoader {
    */
   async loadPlugin(pluginId: string): Promise<LoadedPlugin> {
     if (this.plugins.has(pluginId)) {
-      throw new CompatError(`Plugin already loaded: ${pluginId}`, CompatErrorCodes.PLUGIN_ALREADY_LOADED);
+      return this.plugins.get(pluginId)!;
     }
 
     const pluginDir = this.resolvePluginDir(pluginId);
@@ -147,7 +151,7 @@ export class PluginLoader {
     try {
       await instance.load();
     } catch (err) {
-      this.plugins.delete(pluginId);
+      await this.cleanupPlugin(pluginId, instance);
       throw new CompatError(
         `Plugin onload failed: ${err instanceof Error ? err.message : String(err)}`,
         CompatErrorCodes.PLUGIN_RUNTIME_ERROR,
@@ -173,12 +177,14 @@ export class PluginLoader {
       console.error(`[obsidian-compat] Error during plugin unload: ${err instanceof Error ? err.message : String(err)}`);
     }
 
-    this.app.unregisterAllCommands(pluginId);
-    this.plugins.delete(pluginId);
+    this.clearPluginRegistrations(pluginId);
   }
 
   /**
-   * Execute plugin code in a sandbox with obsidian shim.
+   * Execute plugin code in a restricted CommonJS wrapper with the Obsidian shim.
+   *
+   * This is compatibility isolation for unsupported imports, not a security
+   * sandbox for arbitrary untrusted plugin code.
    */
   private executePluginModule(code: string, manifest: PluginManifest, pluginDir: string): Plugin {
     const module = { exports: {} as any };
@@ -227,5 +233,22 @@ export class PluginLoader {
    */
   getApp(): AppShim {
     return this.app;
+  }
+
+  private async cleanupPlugin(pluginId: string, instance: Plugin): Promise<void> {
+    try {
+      await instance.unload();
+    } catch (err) {
+      console.error(`[obsidian-compat] Error during failed plugin cleanup: ${err instanceof Error ? err.message : String(err)}`);
+    }
+    this.clearPluginRegistrations(pluginId);
+  }
+
+  private clearPluginRegistrations(pluginId: string): void {
+    this.app.unregisterAllCommands(pluginId);
+    this.app.getRuntimeHost().unregisterPlugin(pluginId);
+    delete this.app.plugins.plugins[pluginId];
+    this.app.plugins.enabledPlugins.delete(pluginId);
+    this.plugins.delete(pluginId);
   }
 }

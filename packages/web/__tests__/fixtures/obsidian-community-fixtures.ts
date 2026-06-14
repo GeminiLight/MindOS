@@ -334,4 +334,73 @@ export const OBSIDIAN_COMMUNITY_FIXTURES: ObsidianCommunityFixture[] = [
       };
     `,
   },
+  {
+    pluginId: 'dataview-tasks-like',
+    displayName: 'Dataview/Tasks-like',
+    source: 'https://github.com/blacksmithgu/obsidian-dataview + https://github.com/obsidian-tasks-group/obsidian-tasks',
+    expectedCompatibilityLevel: 'compatible',
+    code: `
+      const { Plugin, Notice } = require('obsidian');
+
+      module.exports = class DataviewTasksLike extends Plugin {
+        onload() {
+          this.addCommand({
+            id: 'build-metadata-report',
+            name: 'Build Metadata Report',
+            callback: async () => {
+              const rows = [];
+              for (const file of this.app.vault.getMarkdownFiles()) {
+                const cache = this.app.metadataCache.getFileCache(file);
+                rows.push({
+                  path: file.path,
+                  tags: (cache?.tags || []).map((tag) => tag.tag),
+                  taskCount: (cache?.listItems || []).filter((item) => item.task !== undefined).length,
+                  blockIds: Object.keys(cache?.blocks || {}),
+                  embedCount: (cache?.embeds || []).length,
+                  firstHeadingLine: cache?.headings?.[0]?.position?.start?.line ?? null,
+                  frontmatterLinks: (cache?.frontmatterLinks || []).map((link) => link.link),
+                });
+              }
+              await this.app.vault.adapter.write('reports/metadata.json', JSON.stringify(rows, null, 2));
+              new Notice('Metadata report built: ' + rows.length);
+            },
+          });
+        }
+      };
+    `,
+  },
+  {
+    pluginId: 'attachment-lifecycle-like',
+    displayName: 'Attachment lifecycle-like',
+    source: 'https://docs.obsidian.md/Plugins/Vault',
+    expectedCompatibilityLevel: 'compatible',
+    code: `
+      const { Plugin, Notice } = require('obsidian');
+
+      module.exports = class AttachmentLifecycleLike extends Plugin {
+        onload() {
+          this.addCommand({
+            id: 'capture-attachment',
+            name: 'Capture Attachment',
+            callback: async () => {
+              const sourcePath = 'notes/source.md';
+              let sourceFile = this.app.vault.getFileByPath(sourcePath);
+              if (!sourceFile) {
+                sourceFile = await this.app.vault.create(sourcePath, '# Source\\n');
+              }
+
+              const attachmentPath = await this.app.fileManager.getAvailablePathForAttachment('image.png', sourcePath);
+              await this.app.vault.createBinary(attachmentPath, new TextEncoder().encode('png').buffer);
+              await this.app.vault.adapter.appendBinary(attachmentPath, new TextEncoder().encode('-tail').buffer);
+              await this.app.vault.process(sourceFile, (data) => data + '\\n![](' + attachmentPath + ')');
+
+              const resourcePath = this.app.vault.getResourcePath(this.app.vault.getFileByPath(attachmentPath));
+              await this.app.vault.adapter.write('reports/attachment.json', JSON.stringify({ attachmentPath, resourcePath }, null, 2));
+              new Notice('Attachment captured');
+            },
+          });
+        }
+      };
+    `,
+  },
 ];

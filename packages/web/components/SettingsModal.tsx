@@ -7,9 +7,17 @@ interface SettingsModalProps {
   open: boolean;
   onClose: () => void;
   initialTab?: Tab;
+  onOpenPluginEntries?: () => void;
+  onOpenCommandCenter?: () => void;
 }
 
-export default function SettingsModal({ open, onClose, initialTab }: SettingsModalProps) {
+export default function SettingsModal({
+  open,
+  onClose,
+  initialTab,
+  onOpenPluginEntries,
+  onOpenCommandCenter,
+}: SettingsModalProps) {
   return (
     <div style={{ display: open ? undefined : 'none' }}>
       <div
@@ -22,6 +30,8 @@ export default function SettingsModal({ open, onClose, initialTab }: SettingsMod
             variant="modal"
             onClose={onClose}
             initialTab={initialTab}
+            onOpenPluginEntries={onOpenPluginEntries}
+            onOpenCommandCenter={onOpenCommandCenter}
           />
         </div>
       </div>

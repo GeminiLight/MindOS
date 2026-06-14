@@ -1,15 +1,38 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
-import { Search, X, FileText, Table, ChevronRight, Eye, GripVertical } from 'lucide-react';
+import { usePathname, useRouter } from 'next/navigation';
+import { Search, X, FileText, Table, ChevronRight, Eye, GripVertical, Terminal } from 'lucide-react';
 import { SearchResult } from '@/lib/types';
 import { encodePath } from '@/lib/utils';
 import { apiFetch } from '@/lib/api';
 import { useLocale } from '@/lib/stores/locale-store';
+import { toast } from '@/lib/toast';
 import PanelHeader from './PanelHeader';
 import { Virtuoso } from 'react-virtuoso';
 import { getSearchWarmHint, shouldStartSearchPrewarm, useSearchPrewarm } from '@/hooks/useSearchPrewarm';
+import {
+  choosePluginMenuItem,
+  choosePluginModalSuggestion,
+  executePluginCommandSurface,
+  fetchPluginCommandSurfaces,
+  firstPluginActionMenuSnapshot,
+  firstPluginActionModalSnapshot,
+  firstPluginActionTargetPath,
+  matchesPluginCommandQuery,
+  pluginCommandHotkeyLabel,
+  pluginCommandHotkeyConflictSummary,
+  pluginEditorCommandContextForPathname,
+  pluginCommandHotkeyPolicyLabel,
+  toastPluginActionNotices,
+  type PluginMenuSnapshot,
+  type PluginModalSnapshot,
+  type PluginModalSuggestionChoice,
+} from '@/lib/plugins/client';
+import type { PluginSurface } from '@/lib/plugins/surfaces';
+import { openTab } from '@/lib/workspace-tabs';
+import PluginActionModalDialog from '@/components/plugins/PluginActionModalDialog';
+import PluginActionMenuDialog from '@/components/plugins/PluginActionMenuDialog';
 import { createSearchResultDragPreview, scheduleSearchResultDragPreviewCleanup } from '@/lib/search-drag-preview';
 
 /** Highlight matched text fragments in a snippet based on the query */
@@ -52,10 +75,20 @@ export default function SearchPanel({ active, focusRequest = 0, onNavigate, onCl
   const [loading, setLoading] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [pluginCommands, setPluginCommands] = useState<PluginSurface[]>([]);
+  const [pluginModal, setPluginModal] = useState<PluginModalSnapshot | null>(null);
+  const [pluginMenu, setPluginMenu] = useState<PluginMenuSnapshot | null>(null);
+  const [choosingSuggestionIndex, setChoosingSuggestionIndex] = useState<number | null>(null);
+  const [modalChoiceError, setModalChoiceError] = useState<string | null>(null);
+  const [choosingMenuItemIndex, setChoosingMenuItemIndex] = useState<number | null>(null);
+  const [menuChoiceError, setMenuChoiceError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
+  const pathname = usePathname();
+  const pluginEditorContext = useMemo(() => pluginEditorCommandContextForPathname(pathname), [pathname]);
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { t } = useLocale();
+  const searchTitle = t.sidebar?.searchTitle ?? t.search.tabSearch ?? 'Search';
 
   // Focus input when panel becomes active
   useEffect(() => {
@@ -65,6 +98,12 @@ export default function SearchPanel({ active, focusRequest = 0, onNavigate, onCl
   }, [active, focusRequest]);
 
   const warmState = useSearchPrewarm(active);
+  const visiblePluginCommands = useMemo(
+    () => pluginCommands.filter((surface) => matchesPluginCommandQuery(surface, query)),
+    [pluginCommands, query],
+  );
+  const selectedFileIndex = selectedIndex - visiblePluginCommands.length;
+  const selectableCount = visiblePluginCommands.length + results.length;
 
   // ── Preview state ──
   const [previewContent, setPreviewContent] = useState<string | null>(null);
@@ -76,13 +115,13 @@ export default function SearchPanel({ active, focusRequest = 0, onNavigate, onCl
   useEffect(() => {
     if (previewTimer.current) clearTimeout(previewTimer.current);
 
-    if (results.length === 0 || selectedIndex < 0 || selectedIndex >= results.length) {
+    if (results.length === 0 || selectedFileIndex < 0 || selectedFileIndex >= results.length) {
       setPreviewContent(null);
       setPreviewPath(null);
       return;
     }
 
-    const result = results[selectedIndex];
+    const result = results[selectedFileIndex];
     if (result.path === previewPath && previewContent !== null) return;
 
     previewTimer.current = setTimeout(async () => {
@@ -103,7 +142,7 @@ export default function SearchPanel({ active, focusRequest = 0, onNavigate, onCl
       if (previewTimer.current) clearTimeout(previewTimer.current);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [results, selectedIndex]);
+  }, [results, selectedFileIndex]);
 
   // Clear preview when query changes
   useEffect(() => {
@@ -144,18 +183,151 @@ export default function SearchPanel({ active, focusRequest = 0, onNavigate, onCl
     onNavigate?.();
   }, [router, onNavigate]);
 
+  const applyPluginActionResult = useCallback((result: Awaited<ReturnType<typeof choosePluginModalSuggestion>>) => {
+    const showedNotice = toastPluginActionNotices(result);
+    const targetPath = firstPluginActionTargetPath(result);
+    if (targetPath) {
+      openTab('doc', targetPath, targetPath.split('/').pop() || targetPath);
+      router.push(`/view/${encodePath(targetPath)}`);
+      onNavigate?.();
+      toast.success(`Opened ${targetPath}`);
+      setPluginModal(null);
+      setPluginMenu(null);
+      return;
+    }
+    if (result.editorUpdates?.some((update) => update.changed)) {
+      window.dispatchEvent(new Event('mindos:files-changed'));
+      router.refresh();
+      toast.success(`Updated ${result.editorUpdates[0]?.sourcePath ?? 'current note'}`);
+      setPluginModal(null);
+      setPluginMenu(null);
+      return;
+    }
+
+    const modal = firstPluginActionModalSnapshot(result);
+    if (modal) {
+      setPluginModal(modal);
+      setPluginMenu(null);
+      return;
+    }
+
+    const menu = firstPluginActionMenuSnapshot(result);
+    if (menu) {
+      setPluginMenu(menu);
+      setPluginModal(null);
+      return;
+    }
+
+    setPluginModal(null);
+    if (!showedNotice) {
+      toast.success('Plugin suggestion applied');
+    }
+  }, [router, onNavigate]);
+
+  const chooseModalSuggestion = useCallback(async (modal: PluginModalSnapshot, suggestion: PluginModalSuggestionChoice) => {
+    setChoosingSuggestionIndex(suggestion.index);
+    setModalChoiceError(null);
+    try {
+      if (!modal.interactionId) {
+        throw new Error('Plugin modal interaction expired. Run the command again.');
+      }
+      const result = await choosePluginModalSuggestion(modal.id, suggestion.index, modal.interactionId);
+      applyPluginActionResult(result);
+    } catch (error) {
+      setModalChoiceError(error instanceof Error ? error.message : 'Failed to choose plugin suggestion');
+    } finally {
+      setChoosingSuggestionIndex(null);
+    }
+  }, [applyPluginActionResult]);
+
+  const chooseMenuItem = useCallback(async (menu: PluginMenuSnapshot, item: PluginMenuSnapshot['items'][number]) => {
+    setChoosingMenuItemIndex(item.index);
+    setMenuChoiceError(null);
+    try {
+      if (!menu.interactionId) {
+        throw new Error('Plugin menu interaction expired. Run the command again.');
+      }
+      const result = await choosePluginMenuItem(menu.id, item.index, menu.interactionId);
+      applyPluginActionResult(result);
+    } catch (error) {
+      setMenuChoiceError(error instanceof Error ? error.message : 'Failed to choose plugin menu item');
+    } finally {
+      setChoosingMenuItemIndex(null);
+    }
+  }, [applyPluginActionResult]);
+
+  const runPluginCommand = useCallback(async (surface: PluginSurface) => {
+    try {
+      const result = await executePluginCommandSurface(surface, pluginEditorContext);
+      const showedNotice = toastPluginActionNotices(result);
+      const targetPath = firstPluginActionTargetPath(result);
+      if (targetPath) {
+        openTab('doc', targetPath, targetPath.split('/').pop() || targetPath);
+        router.push(`/view/${encodePath(targetPath)}`);
+        onNavigate?.();
+        toast.success(`Opened ${targetPath}`);
+      } else if (result.editorUpdates?.some((update) => update.changed)) {
+        window.dispatchEvent(new Event('mindos:files-changed'));
+        router.refresh();
+        toast.success(`Updated ${result.editorUpdates[0]?.sourcePath ?? 'current note'}`);
+      } else {
+        const modal = firstPluginActionModalSnapshot(result);
+        if (modal) {
+          setPluginModal(modal);
+        } else {
+          const menu = firstPluginActionMenuSnapshot(result);
+          if (menu) {
+            setPluginMenu(menu);
+          } else if (!showedNotice) {
+            toast.success(`Ran ${surface.title}`);
+          }
+        }
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to run plugin command');
+    }
+  }, [pluginEditorContext, router, onNavigate]);
+
+  useEffect(() => {
+    if (!active) return;
+    let cancelled = false;
+    void fetchPluginCommandSurfaces(pluginEditorContext)
+      .then((surfaces) => {
+        if (!cancelled) setPluginCommands(surfaces);
+      })
+      .catch(() => {
+        if (!cancelled) setPluginCommands([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [active, pluginEditorContext]);
+
+  useEffect(() => {
+    if (selectableCount === 0) {
+      setSelectedIndex(0);
+      return;
+    }
+    setSelectedIndex((current) => Math.min(current, selectableCount - 1));
+  }, [selectableCount]);
+
   // Keyboard navigation within the panel
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'ArrowDown') {
       e.preventDefault();
-      setSelectedIndex(i => Math.min(i + 1, results.length - 1));
+      setSelectedIndex(i => Math.min(i + 1, Math.max(selectableCount - 1, 0)));
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
       setSelectedIndex(i => Math.max(i - 1, 0));
     } else if (e.key === 'Enter') {
-      if (results[selectedIndex]) navigate(results[selectedIndex]);
+      if (selectedIndex < visiblePluginCommands.length) {
+        const command = visiblePluginCommands[selectedIndex];
+        if (command) void runPluginCommand(command);
+        return;
+      }
+      if (results[selectedFileIndex]) navigate(results[selectedFileIndex]);
     }
-  }, [results, selectedIndex, navigate]);
+  }, [results, selectedIndex, selectedFileIndex, selectableCount, navigate, visiblePluginCommands, runPluginCommand]);
 
   // Drag and drop handlers
   const handleDragStart = useCallback((e: React.DragEvent<HTMLButtonElement>, result: SearchResult, index: number) => {
@@ -184,7 +356,7 @@ export default function SearchPanel({ active, focusRequest = 0, onNavigate, onCl
   return (
     <>
       {/* Header */}
-      <PanelHeader title={t.sidebar.searchTitle} maximized={maximized} onMaximize={onMaximize}>
+      <PanelHeader title={searchTitle} maximized={maximized} onMaximize={onMaximize}>
         {onClose && (
           <button
             type="button"
@@ -233,7 +405,7 @@ export default function SearchPanel({ active, focusRequest = 0, onNavigate, onCl
       {/* Results */}
       <div className="flex-1 overflow-y-auto min-h-0" role="listbox" aria-label="Search results">
         {/* Empty state with prompt */}
-        {results.length === 0 && !query && !loading && (
+        {results.length === 0 && visiblePluginCommands.length === 0 && !query && !loading && (
           <div className="flex flex-col items-center justify-center px-4 py-12 text-center">
             <div className="flex items-center justify-center w-12 h-12 rounded-lg bg-muted mb-4">
               <Search size={20} className="text-muted-foreground/60" />
@@ -246,7 +418,7 @@ export default function SearchPanel({ active, focusRequest = 0, onNavigate, onCl
         )}
 
         {/* No results state */}
-        {results.length === 0 && query && !loading && (
+        {results.length === 0 && visiblePluginCommands.length === 0 && query && !loading && (
           <div className="flex flex-col items-center justify-center px-4 py-12 text-center">
             <div className="flex items-center justify-center w-12 h-12 rounded-lg bg-muted mb-4">
               <Search size={20} className="text-muted-foreground/60" />
@@ -271,6 +443,54 @@ export default function SearchPanel({ active, focusRequest = 0, onNavigate, onCl
           </div>
         )}
 
+        {visiblePluginCommands.length > 0 && (
+          <div className="border-b border-border/50 py-1">
+            <div className="px-3 py-1.5 text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Plugin commands
+            </div>
+            {visiblePluginCommands.map((surface, i) => {
+              const isSelected = i === selectedIndex;
+              const shortcut = pluginCommandHotkeyLabel(surface);
+              const shortcutPolicy = pluginCommandHotkeyPolicyLabel(surface);
+              const shortcutTitle = pluginCommandHotkeyConflictSummary(surface) ?? undefined;
+              return (
+                <button
+                  key={surface.id}
+                  type="button"
+                  role="option"
+                  aria-selected={isSelected}
+                  onClick={() => void runPluginCommand(surface)}
+                  onMouseEnter={() => setSelectedIndex(i)}
+                  className={`
+                    group flex w-full items-center gap-3 border-l-2 px-3 py-2.5 text-left transition-colors duration-100
+                    ${isSelected ? 'border-[var(--amber)] bg-[var(--amber-dim)]' : 'border-transparent hover:bg-muted/60'}
+                  `}
+                >
+                  <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-[var(--amber-subtle)] text-[var(--amber)]">
+                    <Terminal size={13} />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold text-foreground">{surface.title}</span>
+                    <span className="block truncate text-xs text-muted-foreground">{surface.pluginName}</span>
+                  </span>
+                  {shortcut && (
+                    <span className="ml-auto flex shrink-0 items-center gap-1.5" title={shortcutTitle}>
+                      <kbd className="rounded border border-border bg-background/70 px-1.5 py-0.5 font-mono text-2xs text-muted-foreground">
+                        {shortcut}
+                      </kbd>
+                      {shortcutPolicy === 'Conflict' && (
+                        <span className="rounded border border-[var(--amber)]/25 bg-[var(--amber-subtle)] px-1.5 py-0.5 text-2xs font-medium text-[var(--amber-text)]">
+                          Conflict
+                        </span>
+                      )}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         {/* Results list */}
         {results.length > 0 && (
           <Virtuoso
@@ -280,7 +500,7 @@ export default function SearchPanel({ active, focusRequest = 0, onNavigate, onCl
               const result = results[i];
               const ext = result.path.endsWith('.csv') ? '.csv' : '.md';
               const { name, breadcrumb } = formatPath(result.path);
-              const isSelected = i === selectedIndex;
+              const isSelected = visiblePluginCommands.length + i === selectedIndex;
               const isDragging = i === draggedIndex;
 
               return (
@@ -293,7 +513,7 @@ export default function SearchPanel({ active, focusRequest = 0, onNavigate, onCl
                   onDragEnter={() => setDraggedIndex(i)}
                   onDragLeave={() => setDraggedIndex(null)}
                   onClick={() => navigate(result)}
-                  onMouseEnter={() => setSelectedIndex(i)}
+                  onMouseEnter={() => setSelectedIndex(visiblePluginCommands.length + i)}
                   className={`
                     group w-full px-3 py-2.5 flex items-start gap-3 text-left transition-colors duration-100
                     border-b border-border/50
@@ -355,7 +575,7 @@ export default function SearchPanel({ active, focusRequest = 0, onNavigate, onCl
       </div>
 
       {/* Preview pane — shows content of selected result */}
-      {results.length > 0 && (previewContent || previewLoading) && (
+      {selectedFileIndex >= 0 && results.length > 0 && (previewContent || previewLoading) && (
         <div className="border-t border-border shrink-0 max-h-[30%] overflow-y-auto">
           <div className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-muted-foreground border-b border-border/50 sticky top-0 bg-card z-10">
             <Eye size={12} className="shrink-0" />
@@ -379,7 +599,7 @@ export default function SearchPanel({ active, focusRequest = 0, onNavigate, onCl
       )}
 
       {/* Footer hints */}
-      {results.length > 0 && (
+      {selectableCount > 0 && (
         <div className="px-3 py-2 border-t border-border/50 flex items-center gap-2 text-xs text-muted-foreground/60 shrink-0">
           <span><kbd className="font-mono text-[10px] px-1 py-0.5 bg-muted/40 rounded">↑↓</kbd> {t.search.navigate}</span>
           <span><kbd className="font-mono text-[10px] px-1 py-0.5 bg-muted/40 rounded">↵</kbd> {t.search.open}</span>
@@ -395,6 +615,27 @@ export default function SearchPanel({ active, focusRequest = 0, onNavigate, onCl
           </span>
         </div>
       )}
+
+      <PluginActionModalDialog
+        modal={pluginModal}
+        onChooseSuggestion={(modal, suggestion) => void chooseModalSuggestion(modal, suggestion)}
+        choosingSuggestionIndex={choosingSuggestionIndex}
+        choiceError={modalChoiceError}
+        onClose={() => {
+          setPluginModal(null);
+          setModalChoiceError(null);
+        }}
+      />
+      <PluginActionMenuDialog
+        menu={pluginMenu}
+        onChooseItem={(menu, item) => void chooseMenuItem(menu, item)}
+        choosingItemIndex={choosingMenuItemIndex}
+        choiceError={menuChoiceError}
+        onClose={() => {
+          setPluginMenu(null);
+          setMenuChoiceError(null);
+        }}
+      />
     </>
   );
 }

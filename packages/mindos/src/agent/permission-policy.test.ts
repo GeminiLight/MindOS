@@ -126,4 +126,3 @@ describe('MindOS agent permission policy', () => {
     expect(createMindosAgentPermissionPolicyFromContext(undefined).mode).toBe('agent');
   });
 });
-

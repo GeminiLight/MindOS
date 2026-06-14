@@ -1,0 +1,8 @@
+{
+  "id": "community-canary",
+  "name": "Community Canary",
+  "version": "1.0.0",
+  "minAppVersion": "1.5.0",
+  "description": "Deterministic packaged Obsidian plugin fixture for MindOS compatibility smoke.",
+  "author": "MindOS Test Fixture"
+}

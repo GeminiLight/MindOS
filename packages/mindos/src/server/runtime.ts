@@ -18,6 +18,9 @@ export const MINDOS_IGNORED_DIRS = new Set([
   '.DS_Store',
   '.media',
   'mcp',
+  '.mindos',
+  '.obsidian',
+  '.plugins',
 ]);
 
 export type MindosRuntimeFileNode = {

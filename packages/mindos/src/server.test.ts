@@ -689,9 +689,15 @@ Write a concise signal brief.
     const root = mkdtempSync(join(tmpdir(), 'mindos-runtime-files-'));
     mkdirSync(join(root, 'Space'), { recursive: true });
     mkdirSync(join(root, '.git'), { recursive: true });
+    mkdirSync(join(root, '.obsidian'), { recursive: true });
+    mkdirSync(join(root, '.plugins', 'sample'), { recursive: true });
+    mkdirSync(join(root, '.mindos', 'assistant-runs'), { recursive: true });
     writeFileSync(join(root, 'a.md'), 'a');
     writeFileSync(join(root, 'Space', 'b.csv'), 'b');
     writeFileSync(join(root, '.git', 'ignored.md'), 'ignored');
+    writeFileSync(join(root, '.obsidian', 'workspace.json'), '{"private":true}');
+    writeFileSync(join(root, '.plugins', 'sample', 'data.json'), '{"private":true}');
+    writeFileSync(join(root, '.mindos', 'assistant-runs', 'run.md'), 'private');
     writeFileSync(join(root, 'ignored.txt'), 'ignored');
 
     expect(collectAllFilesFromMindRoot(root)).toEqual(['a.md', 'Space/b.csv']);
@@ -715,8 +721,12 @@ Write a concise signal brief.
   it('searches text files from a mind root without Web dependencies', async () => {
     const root = mkdtempSync(join(tmpdir(), 'mindos-runtime-search-'));
     mkdirSync(join(root, 'Space'), { recursive: true });
+    mkdirSync(join(root, '.obsidian'), { recursive: true });
+    mkdirSync(join(root, '.plugins', 'sample'), { recursive: true });
     writeFileSync(join(root, 'Space', 'note.md'), 'Alpha project\nBeta detail');
     writeFileSync(join(root, 'data.csv'), 'name,value\nalpha,1');
+    writeFileSync(join(root, '.obsidian', 'app.json'), '{"query":"alpha private"}');
+    writeFileSync(join(root, '.plugins', 'sample', 'data.json'), '{"query":"alpha private"}');
     writeFileSync(join(root, 'image.png'), Buffer.from('alpha'));
 
     const results = await searchMindRoot(root, 'alpha', { limit: 10 });

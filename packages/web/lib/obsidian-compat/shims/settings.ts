@@ -4,7 +4,8 @@
  */
 
 import { Component } from '../component';
-import type { App, PluginSettingTab as IPluginSettingTab, PluginSettingItem, SettingKind } from '../types';
+import type { App, PluginSettingTab as IPluginSettingTab, PluginSettingItem } from '../types';
+import { createObsidianElement, ensureObsidianElement, type ObsidianElement } from './dom';
 
 class TextComponent {
   private item: PluginSettingItem;
@@ -21,6 +22,16 @@ class TextComponent {
 
   onChange(callback: (value: string) => void): this {
     this.item.onChange = callback as (value: unknown) => void;
+    return this;
+  }
+
+  setPlaceholder(value: string): this {
+    this.item.placeholder = value;
+    return this;
+  }
+
+  setDisabled(value: boolean): this {
+    this.item.disabled = value;
     return this;
   }
 }
@@ -42,6 +53,11 @@ class ToggleComponent {
     this.item.onChange = callback as (value: unknown) => void;
     return this;
   }
+
+  setDisabled(value: boolean): this {
+    this.item.disabled = value;
+    return this;
+  }
 }
 
 class DropdownComponent {
@@ -58,6 +74,13 @@ class DropdownComponent {
     return this;
   }
 
+  addOptions(options: Record<string, string>): this {
+    for (const [value, label] of Object.entries(options)) {
+      this.addOption(value, label);
+    }
+    return this;
+  }
+
   setValue(value: string): this {
     this.item.value = value;
     return this;
@@ -65,6 +88,11 @@ class DropdownComponent {
 
   onChange(callback: (value: string) => void): this {
     this.item.onChange = callback as (value: unknown) => void;
+    return this;
+  }
+
+  setDisabled(value: boolean): this {
+    this.item.disabled = value;
     return this;
   }
 }
@@ -86,29 +114,47 @@ class ButtonComponent {
     this.item.onClick = callback;
     return this;
   }
-}
 
-function createContainer(): HTMLElement {
-  if (typeof document !== 'undefined') {
-    return document.createElement('div');
+  setCta(): this {
+    this.item.cta = true;
+    return this;
   }
 
-  return {
-    appendChild: () => null,
-    textContent: '',
-    innerHTML: '',
-  } as unknown as HTMLElement;
+  setDisabled(value: boolean): this {
+    this.item.disabled = value;
+    return this;
+  }
+}
+
+function textFromDesc(desc: unknown): string {
+  if (typeof desc === 'string') return desc;
+  if (desc && typeof desc === 'object' && 'textContent' in desc) {
+    return String((desc as { textContent?: unknown }).textContent ?? '');
+  }
+  return desc == null ? '' : String(desc);
+}
+
+function settingItemsForTarget(target: PluginSettingTab | HTMLElement): PluginSettingItem[] {
+  if (target instanceof PluginSettingTab) {
+    return target.items;
+  }
+  const container = ensureObsidianElement(target);
+  container.__obsidianSettingItems ??= [];
+  return container.__obsidianSettingItems;
 }
 
 export class PluginSettingTab extends Component implements IPluginSettingTab {
   app: App;
-  containerEl: HTMLElement;
+  containerEl: ObsidianElement;
   items: PluginSettingItem[] = [];
+  plugin?: unknown;
 
-  constructor(app: App) {
+  constructor(app: App, plugin?: unknown) {
     super();
     this.app = app;
-    this.containerEl = createContainer();
+    this.plugin = plugin;
+    this.containerEl = createObsidianElement('div');
+    this.containerEl.__obsidianSettingItems = this.items;
   }
 
   display(): void {}
@@ -120,12 +166,12 @@ export class PluginSettingTab extends Component implements IPluginSettingTab {
 
 export class Setting {
   private item: PluginSettingItem;
-  private tab: PluginSettingTab;
+  private items: PluginSettingItem[];
 
-  constructor(tab: PluginSettingTab) {
-    this.tab = tab;
+  constructor(target: PluginSettingTab | HTMLElement) {
+    this.items = settingItemsForTarget(target);
     this.item = {};
-    this.tab.addItem(this.item);
+    this.items.push(this.item);
   }
 
   setName(name: string): this {
@@ -133,12 +179,36 @@ export class Setting {
     return this;
   }
 
-  setDesc(desc: string): this {
-    this.item.desc = desc;
+  setDesc(desc: unknown): this {
+    this.item.desc = textFromDesc(desc);
+    return this;
+  }
+
+  setClass(cls: string): this {
+    void cls;
+    return this;
+  }
+
+  setHeading(): this {
+    return this;
+  }
+
+  setDisabled(disabled: boolean): this {
+    this.item.disabled = disabled;
     return this;
   }
 
   addText(configure: (component: TextComponent) => void): this {
+    configure(new TextComponent(this.item));
+    return this;
+  }
+
+  addTextArea(configure: (component: TextComponent) => void): this {
+    configure(new TextComponent(this.item));
+    return this;
+  }
+
+  addSearch(configure: (component: TextComponent) => void): this {
     configure(new TextComponent(this.item));
     return this;
   }
@@ -154,6 +224,11 @@ export class Setting {
   }
 
   addButton(configure: (component: ButtonComponent) => void): this {
+    configure(new ButtonComponent(this.item));
+    return this;
+  }
+
+  addExtraButton(configure: (component: ButtonComponent) => void): this {
     configure(new ButtonComponent(this.item));
     return this;
   }

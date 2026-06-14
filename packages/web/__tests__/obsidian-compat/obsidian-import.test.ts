@@ -31,6 +31,16 @@ const writeVaultPlugin = (
   }
 };
 
+const writeObsidianConfig = (fileName: string, value: unknown) => {
+  const obsidianDir = path.join(vaultRoot, '.obsidian');
+  fs.mkdirSync(obsidianDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(obsidianDir, fileName),
+    typeof value === 'string' ? value : JSON.stringify(value, null, 2),
+    'utf-8',
+  );
+};
+
 describe('obsidian import scanner', () => {
   beforeEach(() => {
     vaultRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'mindos-obsidian-vault-source-'));
@@ -43,6 +53,12 @@ describe('obsidian import scanner', () => {
   });
 
   it('scans .obsidian/plugins and returns compatibility summaries', async () => {
+    writeObsidianConfig('community-plugins.json', ['quickadd-like']);
+    writeObsidianConfig('hotkeys.json', {
+      'quickadd-like:capture': [{ modifiers: ['Mod', 'Shift'], key: 'Q' }],
+      'app:open-vault': [{ modifiers: ['Mod'], key: 'O' }],
+    });
+
     writeVaultPlugin(
       'quickadd-like',
       `
@@ -74,14 +90,24 @@ describe('obsidian import scanner', () => {
       compatibilityLevel: 'compatible',
       hasStyles: true,
       hasData: true,
+      obsidianConfig: {
+        enabledInObsidian: true,
+        hotkeyCount: 1,
+        hotkeys: [{
+          commandId: 'quickadd-like:capture',
+          hotkeys: [{ modifiers: ['Mod', 'Shift'], key: 'Q' }],
+        }],
+      },
     });
 
     const desktopOnly = result.plugins.find((item) => item.id === 'desktop-only-like');
     expect(desktopOnly).toMatchObject({ compatibilityLevel: 'blocked' });
+    expect(desktopOnly?.obsidianConfig).toMatchObject({ enabledInObsidian: false, hotkeyCount: 0 });
     expect(desktopOnly?.compatibility.nodeModules).toContain('electron');
   });
 
   it('skips invalid manifests and reports the reason', async () => {
+    writeObsidianConfig('community-plugins.json', '{invalid-json');
     writeVaultPlugin('good-plugin', `const { Plugin } = require('obsidian'); module.exports = class Good extends Plugin {};`);
     writeVaultPlugin(
       'bad-plugin',
@@ -103,6 +129,8 @@ describe('obsidian import scanner', () => {
   });
 
   it('imports an Obsidian plugin into MindOS .plugins and preserves data and styles', async () => {
+    writeObsidianConfig('community-plugins.json', ['import-me']);
+    writeObsidianConfig('hotkeys.json', { 'import-me:open': [{ modifiers: ['Mod'], key: 'I' }] });
     writeVaultPlugin(
       'import-me',
       `const { Plugin } = require('obsidian'); module.exports = class ImportMe extends Plugin {};`,
@@ -120,6 +148,18 @@ describe('obsidian import scanner', () => {
     expect(fs.existsSync(path.join(imported.targetDir, 'main.js'))).toBe(true);
     expect(fs.existsSync(path.join(imported.targetDir, 'styles.css'))).toBe(true);
     expect(JSON.parse(fs.readFileSync(path.join(imported.targetDir, 'data.json'), 'utf-8'))).toEqual({ count: 2 });
+    expect(JSON.parse(fs.readFileSync(path.join(imported.targetDir, 'obsidian-import.json'), 'utf-8'))).toEqual({
+      schemaVersion: 1,
+      source: 'obsidian',
+      pluginId: 'import-me',
+      enabledInObsidian: true,
+      hotkeyCount: 1,
+      hotkeys: [{
+        commandId: 'import-me:open',
+        hotkeys: [{ modifiers: ['Mod'], key: 'I' }],
+      }],
+    });
+    expect(imported.obsidianConfig.enabledInObsidian).toBe(true);
   });
 
   it('rejects importing into a symlinked MindOS .plugins directory outside mindRoot', async () => {

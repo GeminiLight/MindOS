@@ -45,14 +45,19 @@ describe('space-aware file tree', () => {
       expect(sub!.isSpace).toBe(true);
     });
 
-    it('ignores directories in IGNORED_DIRS (.git, node_modules, etc.)', async () => {
+    it('ignores directories in IGNORED_DIRS (.git, node_modules, .obsidian, .plugins, etc.)', async () => {
       seedFile(mindRoot, '.git/INSTRUCTION.md', '# Git');
       seedFile(mindRoot, '.git/file.md', 'content');
+      seedFile(mindRoot, '.obsidian/workspace.json', '{"active":"private"}');
+      seedFile(mindRoot, '.plugins/example/data.json', '{"private":true}');
+      seedFile(mindRoot, 'Visible/file.md', 'content');
 
       const { buildFileTreeForTest } = await import('@/lib/fs');
       const tree = buildFileTreeForTest(mindRoot);
-      const git = tree.find(n => n.name === '.git');
-      expect(git).toBeUndefined();
+      expect(tree.find(n => n.name === '.git')).toBeUndefined();
+      expect(tree.find(n => n.name === '.obsidian')).toBeUndefined();
+      expect(tree.find(n => n.name === '.plugins')).toBeUndefined();
+      expect(tree.find(n => n.name === 'Visible')).toBeDefined();
     });
   });
 

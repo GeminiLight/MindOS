@@ -3,6 +3,8 @@
 import { useState, useCallback } from 'react';
 import { Download, Search, CheckCircle2, AlertTriangle, XCircle, Loader2, FolderOpen, ChevronDown, ChevronUp } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
+import { getObsidianImportSupport, isObsidianPluginImportable } from '@/lib/obsidian-compat/import-policy';
+import { notifyObsidianPluginPackagesChanged } from '@/lib/plugins/events';
 
 interface ScannedPlugin {
   id: string;
@@ -13,10 +15,17 @@ interface ScannedPlugin {
     nodeModules: string[];
     supportedApis: string[];
     partialApis: string[];
+    unsupportedApis?: string[];
     blockers: string[];
   };
   hasStyles: boolean;
   hasData: boolean;
+  importable?: boolean;
+  obsidianConfig?: {
+    enabledInObsidian: boolean;
+    hotkeyCount: number;
+    hotkeys: Array<{ commandId: string; hotkeys: Array<{ modifiers: string[]; key: string }> }>;
+  };
 }
 
 interface SkippedPlugin {
@@ -27,7 +36,7 @@ interface SkippedPlugin {
 interface CompatReport {
   ok: boolean;
   vaultRoot: string;
-  summary: { total: number; compatible: number; partial: number; blocked: number };
+  summary: { total: number; compatible: number; partial: number; blocked: number; importable?: number };
   plugins: ScannedPlugin[];
   skipped: SkippedPlugin[];
 }
@@ -36,13 +45,18 @@ type ScanState = 'idle' | 'scanning' | 'done' | 'error';
 type ImportState = 'idle' | 'importing' | 'done';
 
 const LEVEL_CONFIG = {
-  compatible: { icon: CheckCircle2, color: 'var(--success)', label: 'Compatible', bg: 'rgba(90,141,96,0.1)' },
-  partial: { icon: AlertTriangle, color: 'var(--amber)', label: 'Partial', bg: 'var(--amber-subtle)' },
+  ready: { icon: CheckCircle2, color: 'var(--success)', bg: 'rgba(90,141,96,0.1)' },
+  limited: { icon: AlertTriangle, color: 'var(--amber)', bg: 'var(--amber-subtle)' },
+  review: { icon: AlertTriangle, color: 'var(--amber)', bg: 'var(--amber-subtle)' },
   blocked: { icon: XCircle, color: 'var(--error)', label: 'Blocked', bg: 'rgba(200,80,80,0.08)' },
 } as const;
 
-export function ObsidianImportSection({ mindRoot }: { mindRoot?: string }) {
-  const [expanded, setExpanded] = useState(false);
+export function ObsidianImportSection({
+  initialExpanded = false,
+}: {
+  initialExpanded?: boolean;
+}) {
+  const [expanded, setExpanded] = useState(initialExpanded);
   const [vaultPath, setVaultPath] = useState('');
   const [scanState, setScanState] = useState<ScanState>('idle');
   const [scanError, setScanError] = useState('');
@@ -63,9 +77,12 @@ export function ObsidianImportSection({ mindRoot }: { mindRoot?: string }) {
     try {
       const data = await apiFetch<CompatReport>(`/api/obsidian/compat-report?vaultRoot=${encodeURIComponent(trimmed)}`);
       setReport(data);
-      // Auto-select all compatible plugins
-      const compatibleIds = new Set(data.plugins.filter(p => p.compatibilityLevel === 'compatible').map(p => p.id));
-      setSelected(compatibleIds);
+      // Prefer the source vault's enabled list when available; otherwise choose plugins that can run through known MindOS hosts.
+      const hasEnabledList = data.plugins.some(p => p.obsidianConfig?.enabledInObsidian);
+      const defaultSelectedIds = new Set(data.plugins
+        .filter(p => getObsidianImportSupport(p, { hasEnabledList }).defaultSelected)
+        .map(p => p.id));
+      setSelected(defaultSelectedIds);
       setScanState('done');
     } catch (err) {
       setScanError(err instanceof Error ? err.message : 'Scan failed');
@@ -74,7 +91,7 @@ export function ObsidianImportSection({ mindRoot }: { mindRoot?: string }) {
   }, [vaultPath]);
 
   const handleImport = useCallback(async () => {
-    if (!report || selected.size === 0 || !mindRoot) return;
+    if (!report || selected.size === 0) return;
     setImportState('importing');
     const results: { id: string; ok: boolean; error?: string }[] = [];
     for (const pluginId of selected) {
@@ -82,7 +99,7 @@ export function ObsidianImportSection({ mindRoot }: { mindRoot?: string }) {
         await apiFetch('/api/obsidian/import', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ vaultRoot: report.vaultRoot, pluginId, targetMindRoot: mindRoot }),
+          body: JSON.stringify({ vaultRoot: report.vaultRoot, pluginId }),
         });
         results.push({ id: pluginId, ok: true });
       } catch (err) {
@@ -91,7 +108,10 @@ export function ObsidianImportSection({ mindRoot }: { mindRoot?: string }) {
     }
     setImportResults(results);
     setImportState('done');
-  }, [report, selected, mindRoot]);
+    if (results.some((result) => result.ok)) {
+      notifyObsidianPluginPackagesChanged();
+    }
+  }, [report, selected]);
 
   const togglePlugin = (id: string) => {
     setSelected(prev => {
@@ -112,7 +132,7 @@ export function ObsidianImportSection({ mindRoot }: { mindRoot?: string }) {
         <FolderOpen size={16} className="text-muted-foreground shrink-0" />
         <div className="flex-1 min-w-0">
           <span className="text-sm font-medium text-foreground">Import from Obsidian</span>
-          <p className="text-xs text-muted-foreground mt-0.5">Scan an Obsidian vault and import compatible plugins</p>
+          <p className="text-xs text-muted-foreground mt-0.5">Scan an Obsidian vault and import ready or limited plugins</p>
         </div>
         {expanded ? <ChevronUp size={14} className="text-muted-foreground" /> : <ChevronDown size={14} className="text-muted-foreground" />}
       </button>
@@ -163,9 +183,18 @@ export function ObsidianImportSection({ mindRoot }: { mindRoot?: string }) {
               {/* Summary bar */}
               <div className="flex items-center gap-3 text-xs text-muted-foreground">
                 <span>{report.summary.total} plugins found</span>
-                <span className="text-[var(--success)]">{report.summary.compatible} compatible</span>
-                {report.summary.partial > 0 && <span className="text-[var(--amber)]">{report.summary.partial} partial</span>}
+                <span className="text-[var(--success)]">{report.summary.compatible} ready</span>
+                {report.summary.partial > 0 && <span className="text-[var(--amber)]">{report.summary.partial} limited/review</span>}
                 {report.summary.blocked > 0 && <span className="text-[var(--error)]">{report.summary.blocked} blocked</span>}
+                {(report.summary.importable ?? report.plugins.filter(isObsidianPluginImportable).length) > 0 && (
+                  <span>{report.summary.importable ?? report.plugins.filter(isObsidianPluginImportable).length} importable</span>
+                )}
+                {report.plugins.some(plugin => plugin.obsidianConfig?.enabledInObsidian) && (
+                  <span>{report.plugins.filter(plugin => plugin.obsidianConfig?.enabledInObsidian).length} enabled in Obsidian</span>
+                )}
+                {report.plugins.some(plugin => (plugin.obsidianConfig?.hotkeyCount ?? 0) > 0) && (
+                  <span>{report.plugins.reduce((sum, plugin) => sum + (plugin.obsidianConfig?.hotkeyCount ?? 0), 0)} hotkeys</span>
+                )}
                 {report.skipped.length > 0 && <span>{report.skipped.length} skipped</span>}
               </div>
 
@@ -175,9 +204,10 @@ export function ObsidianImportSection({ mindRoot }: { mindRoot?: string }) {
               ) : (
                 <div className="flex flex-col gap-1.5 max-h-[400px] overflow-y-auto">
                   {report.plugins.map(plugin => {
-                    const level = LEVEL_CONFIG[plugin.compatibilityLevel];
+                    const support = getObsidianImportSupport(plugin);
+                    const level = LEVEL_CONFIG[support.kind];
                     const Icon = level.icon;
-                    const canSelect = plugin.compatibilityLevel === 'compatible';
+                    const canSelect = plugin.importable ?? support.importable;
                     const isSelected = selected.has(plugin.id);
                     return (
                       <label
@@ -198,8 +228,18 @@ export function ObsidianImportSection({ mindRoot }: { mindRoot?: string }) {
                           <div className="flex items-center gap-2">
                             <span className="text-sm font-medium text-foreground truncate">{plugin.manifest.name}</span>
                             <span className="text-2xs px-1.5 py-0.5 rounded font-mono shrink-0" style={{ background: level.bg, color: level.color }}>
-                              {level.label}
+                              {support.label}
                             </span>
+                            {plugin.obsidianConfig?.enabledInObsidian && (
+                              <span className="text-2xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground shrink-0">
+                                Enabled
+                              </span>
+                            )}
+                            {(plugin.obsidianConfig?.hotkeyCount ?? 0) > 0 && (
+                              <span className="text-2xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground shrink-0">
+                                {plugin.obsidianConfig?.hotkeyCount} hotkey{plugin.obsidianConfig?.hotkeyCount === 1 ? '' : 's'}
+                              </span>
+                            )}
                             <span className="text-2xs text-muted-foreground/50 font-mono">{plugin.manifest.version}</span>
                           </div>
                           {plugin.manifest.description && (
@@ -207,7 +247,12 @@ export function ObsidianImportSection({ mindRoot }: { mindRoot?: string }) {
                           )}
                           {plugin.compatibilityLevel === 'partial' && plugin.compatibility.partialApis.length > 0 && (
                             <p className="text-2xs text-[var(--amber)] mt-1">
-                              Partial APIs: {plugin.compatibility.partialApis.join(', ')}
+                              {support.reason}
+                            </p>
+                          )}
+                          {plugin.compatibilityLevel === 'partial' && plugin.compatibility.partialApis.length === 0 && (plugin.compatibility.unsupportedApis?.length ?? 0) > 0 && (
+                            <p className="text-2xs text-[var(--amber)] mt-1">
+                              {support.reason}
                             </p>
                           )}
                           {plugin.compatibilityLevel === 'blocked' && plugin.compatibility.blockers.length > 0 && (
@@ -223,7 +268,7 @@ export function ObsidianImportSection({ mindRoot }: { mindRoot?: string }) {
               )}
 
               {/* Import button */}
-              {report.summary.compatible > 0 && importState !== 'done' && (
+              {(report.summary.importable ?? report.plugins.filter(isObsidianPluginImportable).length) > 0 && importState !== 'done' && (
                 <button
                   onClick={handleImport}
                   disabled={selected.size === 0 || importState === 'importing'}

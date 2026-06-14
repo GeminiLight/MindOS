@@ -1,14 +1,36 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef, useLayoutEffect, useMemo, useTransition } from 'react';
-import { useRouter } from 'next/navigation';
-import { Search, X, FileText, Table, Settings, RotateCcw, Moon, Sun, Bot, Compass, HelpCircle, ChevronRight, GripVertical } from 'lucide-react';
+import { usePathname, useRouter } from 'next/navigation';
+import { Search, X, FileText, Table, Settings, RotateCcw, Moon, Sun, Bot, Compass, HelpCircle, ChevronRight, GripVertical, Terminal } from 'lucide-react';
 import { SearchResult } from '@/lib/types';
 import { encodePath } from '@/lib/utils';
 import { apiFetch } from '@/lib/api';
 import { useLocale } from '@/lib/stores/locale-store';
 import { toast } from '@/lib/toast';
 import { getSearchWarmHint, useSearchPrewarm } from '@/hooks/useSearchPrewarm';
+import {
+  choosePluginMenuItem,
+  choosePluginModalSuggestion,
+  executePluginCommandSurface,
+  fetchPluginCommandSurfaces,
+  firstPluginActionMenuSnapshot,
+  firstPluginActionModalSnapshot,
+  firstPluginActionTargetPath,
+  pluginCommandLabel,
+  pluginCommandHotkeyLabel,
+  pluginCommandHotkeyConflictSummary,
+  pluginEditorCommandContextForPathname,
+  pluginCommandHotkeyPolicyLabel,
+  toastPluginActionNotices,
+  type PluginMenuSnapshot,
+  type PluginModalSnapshot,
+  type PluginModalSuggestionChoice,
+} from '@/lib/plugins/client';
+import type { PluginSurface } from '@/lib/plugins/surfaces';
+import { openTab } from '@/lib/workspace-tabs';
+import PluginActionModalDialog from '@/components/plugins/PluginActionModalDialog';
+import PluginActionMenuDialog from '@/components/plugins/PluginActionMenuDialog';
 import { createSearchResultDragPreview, scheduleSearchResultDragPreviewCleanup } from '@/lib/search-drag-preview';
 
 interface SearchModalProps {
@@ -23,6 +45,8 @@ interface CommandAction {
   label: string;
   icon: React.ReactNode;
   shortcut?: string;
+  shortcutPolicy?: string;
+  shortcutTitle?: string;
   execute: () => void;
 }
 
@@ -54,16 +78,97 @@ export default function SearchModal({ open, onClose }: SearchModalProps) {
   const [tab, setTab] = useState<PaletteTab>('search');
   const [actionIndex, setActionIndex] = useState(0);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [pluginCommands, setPluginCommands] = useState<PluginSurface[]>([]);
+  const [pluginModal, setPluginModal] = useState<PluginModalSnapshot | null>(null);
+  const [pluginMenu, setPluginMenu] = useState<PluginMenuSnapshot | null>(null);
+  const [choosingSuggestionIndex, setChoosingSuggestionIndex] = useState<number | null>(null);
+  const [modalChoiceError, setModalChoiceError] = useState<string | null>(null);
+  const [choosingMenuItemIndex, setChoosingMenuItemIndex] = useState<number | null>(null);
+  const [menuChoiceError, setMenuChoiceError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const resultsRef = useRef<HTMLDivElement>(null);
   const actionsRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
+  const pathname = usePathname();
   const [isPending, startTransition] = useTransition();
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { t } = useLocale();
   const warmState = useSearchPrewarm(open && tab === 'search');
 
   const isDark = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
+  const pluginEditorContext = useMemo(() => pluginEditorCommandContextForPathname(pathname), [pathname]);
+
+  const applyPluginActionResult = useCallback((result: Awaited<ReturnType<typeof choosePluginModalSuggestion>>) => {
+    const showedNotice = toastPluginActionNotices(result);
+    const targetPath = firstPluginActionTargetPath(result);
+    if (targetPath) {
+      openTab('doc', targetPath, targetPath.split('/').pop() || targetPath);
+      router.push(`/view/${encodePath(targetPath)}`);
+      toast.success(`Opened ${targetPath}`);
+      setPluginModal(null);
+      setPluginMenu(null);
+      return;
+    }
+    if (result.editorUpdates?.some((update) => update.changed)) {
+      window.dispatchEvent(new Event('mindos:files-changed'));
+      router.refresh();
+      toast.success(`Updated ${result.editorUpdates[0]?.sourcePath ?? 'current note'}`);
+      setPluginModal(null);
+      setPluginMenu(null);
+      return;
+    }
+
+    const modal = firstPluginActionModalSnapshot(result);
+    if (modal) {
+      setPluginModal(modal);
+      setPluginMenu(null);
+      return;
+    }
+
+    const menu = firstPluginActionMenuSnapshot(result);
+    if (menu) {
+      setPluginMenu(menu);
+      setPluginModal(null);
+      return;
+    }
+
+    setPluginModal(null);
+    if (!showedNotice) {
+      toast.success('Plugin suggestion applied');
+    }
+  }, [router]);
+
+  const chooseModalSuggestion = useCallback(async (modal: PluginModalSnapshot, suggestion: PluginModalSuggestionChoice) => {
+    setChoosingSuggestionIndex(suggestion.index);
+    setModalChoiceError(null);
+    try {
+      if (!modal.interactionId) {
+        throw new Error('Plugin modal interaction expired. Run the command again.');
+      }
+      const result = await choosePluginModalSuggestion(modal.id, suggestion.index, modal.interactionId);
+      applyPluginActionResult(result);
+    } catch (error) {
+      setModalChoiceError(error instanceof Error ? error.message : 'Failed to choose plugin suggestion');
+    } finally {
+      setChoosingSuggestionIndex(null);
+    }
+  }, [applyPluginActionResult]);
+
+  const chooseMenuItem = useCallback(async (menu: PluginMenuSnapshot, item: PluginMenuSnapshot['items'][number]) => {
+    setChoosingMenuItemIndex(item.index);
+    setMenuChoiceError(null);
+    try {
+      if (!menu.interactionId) {
+        throw new Error('Plugin menu interaction expired. Run the command again.');
+      }
+      const result = await choosePluginMenuItem(menu.id, item.index, menu.interactionId);
+      applyPluginActionResult(result);
+    } catch (error) {
+      setMenuChoiceError(error instanceof Error ? error.message : 'Failed to choose plugin menu item');
+    } finally {
+      setChoosingMenuItemIndex(null);
+    }
+  }, [applyPluginActionResult]);
 
   // Drag and drop handlers
   const handleDragStart = useCallback((e: React.DragEvent<HTMLButtonElement>, result: SearchResult, index: number) => {
@@ -84,62 +189,127 @@ export default function SearchModal({ open, onClose }: SearchModalProps) {
     setDraggedIndex(null);
   }, []);
 
-  const actions: CommandAction[] = useMemo(() => [
-    {
-      id: 'settings',
-      label: t.search.openSettings,
-      icon: <Settings size={15} />,
-      shortcut: '⌘,',
-      execute: () => { router.push('/settings'); onClose(); },
-    },
-    {
-      id: 'restart-walkthrough',
-      label: t.search.restartWalkthrough,
-      icon: <RotateCcw size={15} />,
-      execute: () => {
-        fetch('/api/setup', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ walkthroughStep: 0, walkthroughDismissed: false }),
-        }).then(() => {
-          toast.success(t.search.walkthroughRestarted);
-        }).catch(() => {
-          toast.error('Failed to restart walkthrough');
-        });
-        onClose();
+  const actions: CommandAction[] = useMemo(() => {
+    const builtInActions: CommandAction[] = [
+      {
+        id: 'settings',
+        label: t.search.openSettings,
+        icon: <Settings size={15} />,
+        shortcut: '⌘,',
+        execute: () => { router.push('/settings'); onClose(); },
       },
-    },
-    {
-      id: 'toggle-dark-mode',
-      label: t.search.toggleDarkMode,
-      icon: isDark ? <Sun size={15} /> : <Moon size={15} />,
-      execute: () => {
-        const html = document.documentElement;
-        const nowDark = html.classList.contains('dark');
-        html.classList.toggle('dark', !nowDark);
-        try { localStorage.setItem('theme', nowDark ? 'light' : 'dark'); } catch { /* noop */ }
-        onClose();
+      {
+        id: 'restart-walkthrough',
+        label: t.search.restartWalkthrough,
+        icon: <RotateCcw size={15} />,
+        execute: () => {
+          fetch('/api/setup', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ walkthroughStep: 0, walkthroughDismissed: false }),
+          }).then(() => {
+            toast.success(t.search.walkthroughRestarted);
+          }).catch(() => {
+            toast.error('Failed to restart walkthrough');
+          });
+          onClose();
+        },
       },
-    },
-    {
-      id: 'go-agents',
-      label: t.search.goToAgents,
-      icon: <Bot size={15} />,
-      execute: () => { router.push('/agents'); onClose(); },
-    },
-    {
-      id: 'go-discover',
-      label: t.search.goToDiscover,
-      icon: <Compass size={15} />,
-      execute: () => { router.push('/explore'); onClose(); },
-    },
-    {
-      id: 'go-help',
-      label: t.search.goToHelp,
-      icon: <HelpCircle size={15} />,
-      execute: () => { router.push('/help'); onClose(); },
-    },
-  ], [t, router, onClose, isDark]);
+      {
+        id: 'toggle-dark-mode',
+        label: t.search.toggleDarkMode,
+        icon: isDark ? <Sun size={15} /> : <Moon size={15} />,
+        execute: () => {
+          const html = document.documentElement;
+          const nowDark = html.classList.contains('dark');
+          html.classList.toggle('dark', !nowDark);
+          try { localStorage.setItem('theme', nowDark ? 'light' : 'dark'); } catch { /* noop */ }
+          onClose();
+        },
+      },
+      {
+        id: 'go-agents',
+        label: t.search.goToAgents,
+        icon: <Bot size={15} />,
+        execute: () => { router.push('/agents'); onClose(); },
+      },
+      {
+        id: 'go-discover',
+        label: t.search.goToDiscover,
+        icon: <Compass size={15} />,
+        execute: () => { router.push('/explore'); onClose(); },
+      },
+      {
+        id: 'go-help',
+        label: t.search.goToHelp,
+        icon: <HelpCircle size={15} />,
+        execute: () => { router.push('/help'); onClose(); },
+      },
+    ];
+
+    const pluginActions: CommandAction[] = pluginCommands.map((surface) => ({
+      id: surface.id,
+      label: pluginCommandLabel(surface),
+      icon: <Terminal size={15} />,
+      shortcut: pluginCommandHotkeyLabel(surface) ?? undefined,
+      shortcutPolicy: pluginCommandHotkeyPolicyLabel(surface) ?? undefined,
+      shortcutTitle: pluginCommandHotkeyConflictSummary(surface) ?? undefined,
+      execute: async () => {
+        try {
+          const result = await executePluginCommandSurface(surface, pluginEditorContext);
+          const showedNotice = toastPluginActionNotices(result);
+          const targetPath = firstPluginActionTargetPath(result);
+          if (targetPath) {
+            openTab('doc', targetPath, targetPath.split('/').pop() || targetPath);
+            router.push(`/view/${encodePath(targetPath)}`);
+            toast.success(`Opened ${targetPath}`);
+            onClose();
+          } else if (result.editorUpdates?.some((update) => update.changed)) {
+            window.dispatchEvent(new Event('mindos:files-changed'));
+            router.refresh();
+            toast.success(`Updated ${result.editorUpdates[0]?.sourcePath ?? 'current note'}`);
+            onClose();
+          } else {
+            const modal = firstPluginActionModalSnapshot(result);
+            if (modal) {
+              setPluginModal(modal);
+              onClose();
+            } else {
+              const menu = firstPluginActionMenuSnapshot(result);
+              if (menu) {
+                setPluginMenu(menu);
+                onClose();
+              } else if (!showedNotice) {
+                toast.success(`Ran ${surface.title}`);
+                onClose();
+              } else {
+                onClose();
+              }
+            }
+          }
+        } catch (err) {
+          toast.error(err instanceof Error ? err.message : 'Failed to run plugin command');
+        }
+      },
+    }));
+
+    return [...builtInActions, ...pluginActions];
+  }, [t, router, onClose, isDark, pluginCommands, pluginEditorContext]);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    void fetchPluginCommandSurfaces(pluginEditorContext)
+      .then((surfaces) => {
+        if (!cancelled) setPluginCommands(surfaces);
+      })
+      .catch(() => {
+        if (!cancelled) setPluginCommands([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, pluginEditorContext]);
 
   // Focus input when modal opens; clean up debounce timer on close/unmount
   useEffect(() => {
@@ -244,7 +414,7 @@ export default function SearchModal({ open, onClose }: SearchModalProps) {
     }
   }, [selectedIndex, actionIndex, tab]);
 
-  if (!open) return null;
+  if (!open && !pluginModal && !pluginMenu) return null;
 
   const warmHint = getSearchWarmHint(warmState, query, {
     preparing: t.search.preparing,
@@ -252,11 +422,13 @@ export default function SearchModal({ open, onClose }: SearchModalProps) {
   });
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-end md:items-start justify-center md:pt-[15vh] modal-backdrop"
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <div role="dialog" aria-modal="true" aria-label="Command palette" className="w-full md:max-w-xl md:mx-4 bg-card border-t md:border border-border rounded-t-2xl md:rounded-xl shadow-2xl overflow-hidden max-h-[85vh] md:max-h-none flex flex-col">
+    <>
+      {open && (
+        <div
+          className="fixed inset-0 z-50 flex items-end md:items-start justify-center md:pt-[15vh] modal-backdrop"
+          onClick={(e) => e.target === e.currentTarget && onClose()}
+        >
+          <div role="dialog" aria-modal="true" aria-label="Command palette" className="w-full md:max-w-xl md:mx-4 bg-card border-t md:border border-border rounded-t-2xl md:rounded-xl shadow-2xl overflow-hidden max-h-[85vh] md:max-h-none flex flex-col">
         {/* Mobile drag indicator */}
         <div className="flex justify-center pt-2 pb-0 md:hidden">
           <div className="w-8 h-1 rounded-full bg-muted-foreground/20" />
@@ -485,15 +657,45 @@ export default function SearchModal({ open, onClose }: SearchModalProps) {
                 <span className="text-muted-foreground shrink-0">{action.icon}</span>
                 <span className="text-sm text-foreground flex-1">{action.label}</span>
                 {action.shortcut && (
-                  <kbd className="text-xs text-muted-foreground/60 font-mono border border-border rounded px-1.5 py-0.5">
-                    {action.shortcut}
-                  </kbd>
+                  <span className="flex shrink-0 items-center gap-1.5" title={action.shortcutTitle}>
+                    <kbd className="rounded border border-border px-1.5 py-0.5 font-mono text-xs text-muted-foreground/60">
+                      {action.shortcut}
+                    </kbd>
+                    {action.shortcutPolicy === 'Conflict' && (
+                      <span className="rounded border border-[var(--amber)]/25 bg-[var(--amber-subtle)] px-1.5 py-0.5 text-2xs font-medium text-[var(--amber-text)]">
+                        Conflict
+                      </span>
+                    )}
+                  </span>
                 )}
               </button>
             ))}
           </div>
         )}
-      </div>
-    </div>
+          </div>
+        </div>
+      )}
+
+      <PluginActionModalDialog
+        modal={pluginModal}
+        onChooseSuggestion={(modal, suggestion) => void chooseModalSuggestion(modal, suggestion)}
+        choosingSuggestionIndex={choosingSuggestionIndex}
+        choiceError={modalChoiceError}
+        onClose={() => {
+          setPluginModal(null);
+          setModalChoiceError(null);
+        }}
+      />
+      <PluginActionMenuDialog
+        menu={pluginMenu}
+        onChooseItem={(menu, item) => void chooseMenuItem(menu, item)}
+        choosingItemIndex={choosingMenuItemIndex}
+        choiceError={menuChoiceError}
+        onClose={() => {
+          setPluginMenu(null);
+          setMenuChoiceError(null);
+        }}
+      />
+    </>
   );
 }

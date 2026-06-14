@@ -6,14 +6,50 @@
 import fs from 'fs';
 import yaml from 'js-yaml';
 import { Events } from '../events';
-import type { CachedMetadata, IMetadataCache, TFile, IVault } from '../types';
+import type {
+  BlockCache,
+  CachedMetadata,
+  EmbedCache,
+  FrontmatterLinkCache,
+  HeadingCache,
+  IMetadataCache,
+  LinkCache,
+  ListItemCache,
+  Pos,
+  SectionCache,
+  TagCache,
+  TAbstractFile,
+  TFile,
+  IVault,
+} from '../types';
 import { resolveExistingSafe } from '@/lib/core/security';
 
-const FRONTMATTER_RE = /^---\n([\s\S]*?)\n---\n?/;
+const FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n)?/;
 const TAG_RE = /(^|\s)(#([\p{L}\p{N}_/-]+))/gu;
 const HEADING_RE = /^(#{1,6})\s+(.+)$/gm;
-const WIKILINK_RE = /\[\[([^\]|#]+)(?:#[^\]|]+)?(?:\|[^\]]+)?\]\]/g;
-const MARKDOWN_LINK_RE = /\[[^\]]+\]\((?!https?:\/\/)([^)#]+)(?:#[^)]+)?\)/g;
+const WIKI_REFERENCE_RE = /(!)?\[\[([^\]]+)\]\]/g;
+const MARKDOWN_REFERENCE_RE = /(!)?\[([^\]]*)\]\((?!https?:\/\/|mailto:|obsidian:)([^)\s]+)(?:\s+["'][^)]*["'])?\)/g;
+const BLOCK_ID_RE = /\s\^([A-Za-z0-9_-]+)\s*$/;
+const LIST_ITEM_RE = /^(\s*)([-*+]|\d+[.)])\s+(?:\[([^\]])\]\s+)?(.+)$/;
+
+type Positioner = (startOffset: number, endOffset: number) => Pos;
+
+interface LineInfo {
+  line: number;
+  text: string;
+  start: number;
+  end: number;
+}
+
+interface ParsedReferences {
+  links: LinkCache[];
+  embeds: EmbedCache[];
+}
+
+interface IgnoredRange {
+  start: number;
+  end: number;
+}
 
 function readMarkdownFile(mindRoot: string, file: TFile): string | null {
   try {
@@ -37,56 +73,354 @@ function parseFrontmatter(content: string): Record<string, unknown> | undefined 
   }
 }
 
-function parseTags(content: string): Array<{ tag: string }> {
-  const tags = new Set<string>();
-  for (const match of content.matchAll(TAG_RE)) {
-    if (match[2]) {
-      tags.add(match[2]);
+function createPositioner(content: string): Positioner {
+  const lineStarts = [0];
+  for (let index = 0; index < content.length; index += 1) {
+    if (content[index] === '\n') {
+      lineStarts.push(index + 1);
     }
   }
-  return Array.from(tags).map((tag) => ({ tag }));
+
+  const toLoc = (offset: number) => {
+    const boundedOffset = Math.max(0, Math.min(offset, content.length));
+    let low = 0;
+    let high = lineStarts.length - 1;
+    while (low <= high) {
+      const middle = Math.floor((low + high) / 2);
+      const start = lineStarts[middle] ?? 0;
+      const nextStart = lineStarts[middle + 1] ?? Number.POSITIVE_INFINITY;
+      if (boundedOffset < start) {
+        high = middle - 1;
+      } else if (boundedOffset >= nextStart) {
+        low = middle + 1;
+      } else {
+        return {
+          line: middle,
+          col: boundedOffset - start,
+          offset: boundedOffset,
+        };
+      }
+    }
+    const fallbackLine = Math.max(0, lineStarts.length - 1);
+    return {
+      line: fallbackLine,
+      col: boundedOffset - (lineStarts[fallbackLine] ?? 0),
+      offset: boundedOffset,
+    };
+  };
+
+  return (startOffset, endOffset) => ({
+    start: toLoc(startOffset),
+    end: toLoc(endOffset),
+  });
 }
 
-function parseHeadings(content: string): Array<{ heading: string; level: number }> {
+function splitLines(content: string): LineInfo[] {
+  const rawLines = content.split('\n');
+  const lines: LineInfo[] = [];
+  let offset = 0;
+  for (let line = 0; line < rawLines.length; line += 1) {
+    const raw = rawLines[line] ?? '';
+    const text = raw.replace(/\r$/, '');
+    lines.push({
+      line,
+      text,
+      start: offset,
+      end: offset + text.length,
+    });
+    offset += raw.length + (line < rawLines.length - 1 ? 1 : 0);
+  }
+  return lines;
+}
+
+function collectIgnoredMarkdownRanges(content: string): IgnoredRange[] {
+  const ranges: IgnoredRange[] = [];
+  const frontmatter = content.match(FRONTMATTER_RE);
+  if (frontmatter) {
+    ranges.push({ start: 0, end: frontmatter[0].length });
+  }
+
+  let inFence = false;
+  let fenceStart = 0;
+  for (const line of splitLines(content)) {
+    if (frontmatter && line.start < frontmatter[0].length) {
+      continue;
+    }
+    if (!line.text.trim().match(/^(```|~~~)/)) {
+      continue;
+    }
+    if (inFence) {
+      ranges.push({ start: fenceStart, end: line.end });
+      inFence = false;
+    } else {
+      inFence = true;
+      fenceStart = line.start;
+    }
+  }
+  if (inFence) {
+    ranges.push({ start: fenceStart, end: content.length });
+  }
+
+  const inlineCodeRe = /`[^`\n]+`/g;
+  for (const match of content.matchAll(inlineCodeRe)) {
+    ranges.push({
+      start: match.index ?? 0,
+      end: (match.index ?? 0) + (match[0]?.length ?? 0),
+    });
+  }
+  return ranges.sort((a, b) => a.start - b.start);
+}
+
+function maskRanges(content: string, ranges: IgnoredRange[]): string {
+  if (!ranges.length) return content;
+  const chars = content.split('');
+  for (const range of ranges) {
+    for (let index = range.start; index < range.end && index < chars.length; index += 1) {
+      if (chars[index] !== '\n' && chars[index] !== '\r') {
+        chars[index] = ' ';
+      }
+    }
+  }
+  return chars.join('');
+}
+
+function parseTags(content: string, position: Positioner): TagCache[] {
+  const tags = new Map<string, TagCache>();
+  for (const match of content.matchAll(TAG_RE)) {
+    const index = match.index ?? 0;
+    const tagOffset = index + (match[1]?.length ?? 0);
+    if (match[2]) {
+      tags.set(match[2], {
+        tag: match[2],
+        position: position(tagOffset, tagOffset + match[2].length),
+      });
+    }
+  }
+  return Array.from(tags.values());
+}
+
+function parseHeadings(content: string, position: Positioner): HeadingCache[] {
   return Array.from(content.matchAll(HEADING_RE)).map((match) => ({
     heading: match[2]?.trim() ?? '',
     level: match[1]?.length ?? 1,
+    position: position(match.index ?? 0, (match.index ?? 0) + (match[0]?.length ?? 0)),
   }));
 }
 
-function parseLinks(content: string): Array<{ link: string; original: string }> {
-  const links = new Map<string, { link: string; original: string }>();
+function normalizeReferenceLink(link: string): string {
+  return link.trim().replace(/\.md(?=$|#)/i, '');
+}
 
-  for (const match of content.matchAll(WIKILINK_RE)) {
-    const link = match[1]?.trim();
+function stripSubpath(link: string): string {
+  return link.split('#')[0]?.trim() ?? link.trim();
+}
+
+function parseWikiReferenceBody(body: string): { link: string; displayText?: string } | null {
+  const [rawLink = '', rawDisplayText] = body.split('|');
+  const link = normalizeReferenceLink(rawLink);
+  if (!link) return null;
+  const displayText = rawDisplayText?.trim();
+  return displayText ? { link, displayText } : { link };
+}
+
+function parseReferences(content: string, position: Positioner): ParsedReferences {
+  const links: LinkCache[] = [];
+  const embeds: EmbedCache[] = [];
+
+  for (const match of content.matchAll(WIKI_REFERENCE_RE)) {
     const original = match[0];
-    if (link && original) {
-      links.set(`${original}:${link}`, { link, original });
+    const parsed = parseWikiReferenceBody(match[2] ?? '');
+    if (parsed && original) {
+      const reference = {
+        ...parsed,
+        original,
+        position: position(match.index ?? 0, (match.index ?? 0) + original.length),
+      };
+      if (match[1]) {
+        embeds.push(reference);
+      } else {
+        links.push(reference);
+      }
     }
   }
 
-  for (const match of content.matchAll(MARKDOWN_LINK_RE)) {
-    const link = match[1]?.trim();
+  for (const match of content.matchAll(MARKDOWN_REFERENCE_RE)) {
     const original = match[0];
+    const link = normalizeReferenceLink(match[3] ?? '');
     if (link && original) {
-      const normalized = link.replace(/\.md$/, '');
-      links.set(`${original}:${normalized}`, { link: normalized, original });
+      const displayText = match[2]?.trim() || undefined;
+      const reference = {
+        link,
+        original,
+        ...(displayText ? { displayText } : {}),
+        position: position(match.index ?? 0, (match.index ?? 0) + original.length),
+      };
+      if (match[1]) {
+        embeds.push(reference);
+      } else {
+        links.push(reference);
+      }
     }
   }
 
-  return Array.from(links.values());
+  return { links, embeds };
+}
+
+function parseMarkdownBody(content: string, position: Positioner): ParsedReferences & {
+  tags: TagCache[];
+  headings: HeadingCache[];
+  listItems: ListItemCache[];
+  blocks: Record<string, BlockCache> | undefined;
+} {
+  const masked = maskRanges(content, collectIgnoredMarkdownRanges(content));
+  const references = parseReferences(masked, position);
+  return {
+    ...references,
+    tags: parseTags(masked, position),
+    headings: parseHeadings(masked, position),
+    listItems: parseListItems(masked, position),
+    blocks: parseBlocks(masked, position),
+  };
+}
+
+function parseFrontmatterPosition(content: string, position: Positioner): Pos | undefined {
+  const match = content.match(FRONTMATTER_RE);
+  return match ? position(0, match[0].length) : undefined;
+}
+
+function parseFrontmatterLinks(content: string): FrontmatterLinkCache[] | undefined {
+  const match = content.match(FRONTMATTER_RE);
+  if (!match?.[1]) return undefined;
+  const links: FrontmatterLinkCache[] = [];
+  let currentKey = '';
+  const rawFrontmatter = match[1];
+  for (const line of rawFrontmatter.split(/\r?\n/)) {
+    const keyMatch = line.match(/^\s*([A-Za-z0-9_.-]+):/);
+    if (keyMatch?.[1]) {
+      currentKey = keyMatch[1];
+    }
+    if (!currentKey) continue;
+    const references = parseReferences(line, createPositioner(line));
+    for (const reference of [...references.links, ...references.embeds]) {
+      links.push({
+        key: currentKey,
+        link: reference.link,
+        original: reference.original,
+        ...(reference.displayText ? { displayText: reference.displayText } : {}),
+      });
+    }
+  }
+  return links.length ? links : undefined;
+}
+
+function lineSectionType(line: string, inFence: boolean): string | null {
+  const trimmed = line.trim();
+  if (!trimmed) return null;
+  if (inFence) return 'code';
+  if (/^#{1,6}\s+/.test(trimmed)) return 'heading';
+  if (/^>\s*\[![^\]]+\]/.test(trimmed)) return 'callout';
+  if (/^>/.test(trimmed)) return 'blockquote';
+  if (/^(\s*)([-*+]|\d+[.)])\s+/.test(line)) return 'list';
+  if (/^(\|.+\|)$/.test(trimmed)) return 'table';
+  if (/^(-{3,}|\*{3,}|_{3,})$/.test(trimmed)) return 'thematicBreak';
+  if (/^<[^>]+>/.test(trimmed)) return 'html';
+  return 'paragraph';
+}
+
+function parseSections(content: string, position: Positioner): SectionCache[] {
+  const sections: SectionCache[] = [];
+  const frontmatter = content.match(FRONTMATTER_RE);
+  if (frontmatter) {
+    sections.push({
+      type: 'yaml',
+      position: position(0, frontmatter[0].length),
+    });
+  }
+
+  let inFence = false;
+  for (const line of splitLines(content)) {
+    if (frontmatter && line.start < frontmatter[0].length) {
+      continue;
+    }
+    const trimmed = line.text.trim();
+    const fenceMatch = trimmed.match(/^(```|~~~)/);
+    const type = lineSectionType(line.text, inFence);
+    if (type) {
+      const blockId = line.text.match(BLOCK_ID_RE)?.[1];
+      sections.push({
+        type,
+        ...(blockId ? { id: blockId } : {}),
+        position: position(line.start, line.end),
+      });
+    }
+    if (fenceMatch) {
+      inFence = !inFence;
+    }
+  }
+  return sections;
+}
+
+function parseListItems(content: string, position: Positioner): ListItemCache[] {
+  const items: ListItemCache[] = [];
+  const stack: Array<{ indent: number; line: number }> = [];
+  for (const line of splitLines(content)) {
+    const match = line.text.match(LIST_ITEM_RE);
+    if (!match) continue;
+    const indent = match[1]?.length ?? 0;
+    while (stack.length && stack[stack.length - 1]!.indent >= indent) {
+      stack.pop();
+    }
+    const parent = stack.length ? stack[stack.length - 1]!.line : -line.line;
+    const blockId = line.text.match(BLOCK_ID_RE)?.[1];
+    const task = match[3];
+    items.push({
+      parent,
+      ...(blockId ? { id: blockId } : {}),
+      ...(task !== undefined ? { task } : {}),
+      position: position(line.start, line.end),
+    });
+    stack.push({ indent, line: line.line });
+  }
+  return items;
+}
+
+function parseBlocks(content: string, position: Positioner): Record<string, BlockCache> | undefined {
+  const blocks: Record<string, BlockCache> = {};
+  for (const line of splitLines(content)) {
+    const blockId = line.text.match(BLOCK_ID_RE)?.[1];
+    if (blockId) {
+      blocks[blockId] = {
+        id: blockId,
+        position: position(line.start, line.end),
+      };
+    }
+  }
+  return Object.keys(blocks).length ? blocks : undefined;
 }
 
 export class MetadataCacheShim extends Events implements IMetadataCache {
-  resolvedLinks: Record<string, Record<string, number>> = {};
-  unresolvedLinks: Record<string, Record<string, number>> = {};
+  private resolvedLinksCache: Record<string, Record<string, number>> = {};
+  private unresolvedLinksCache: Record<string, Record<string, number>> = {};
+  private fileMetadataCache = new Map<string, CachedMetadata | null>();
+  private globalIndexBuilt = false;
+  private markdownFileSnapshot: TFile[] | null = null;
 
   constructor(
     private mindRoot: string,
     private vault: IVault,
   ) {
     super();
-    this.buildGlobalIndex();
+    this.bindVaultEvents();
+  }
+
+  get resolvedLinks(): Record<string, Record<string, number>> {
+    this.ensureGlobalIndex();
+    return this.resolvedLinksCache;
+  }
+
+  get unresolvedLinks(): Record<string, Record<string, number>> {
+    this.ensureGlobalIndex();
+    return this.unresolvedLinksCache;
   }
 
   /**
@@ -94,13 +428,23 @@ export class MetadataCacheShim extends Events implements IMetadataCache {
    * This populates resolvedLinks and unresolvedLinks properties.
    */
   buildGlobalIndex(): void {
-    this.resolvedLinks = {};
-    this.unresolvedLinks = {};
+    this.resolvedLinksCache = {};
+    this.unresolvedLinksCache = {};
 
-    const markdownFiles = this.vault.getMarkdownFiles();
+    this.markdownFileSnapshot = this.vault.getMarkdownFiles();
+    try {
+      for (const file of this.markdownFileSnapshot) {
+        this.indexFileLinks(file);
+      }
+      this.globalIndexBuilt = true;
+    } finally {
+      this.markdownFileSnapshot = null;
+    }
+  }
 
-    for (const file of markdownFiles) {
-      this.indexFileLinks(file);
+  private ensureGlobalIndex(): void {
+    if (!this.globalIndexBuilt) {
+      this.buildGlobalIndex();
     }
   }
 
@@ -118,11 +462,10 @@ export class MetadataCacheShim extends Events implements IMetadataCache {
     const resolvedMap: Record<string, number> = {};
     const unresolvedMap: Record<string, number> = {};
 
-    // Parse wikilinks - count all occurrences
-    for (const match of content.matchAll(WIKILINK_RE)) {
-      const linkText = match[1]?.trim();
+    const body = parseMarkdownBody(content, createPositioner(content));
+    for (const reference of [...body.links, ...body.embeds]) {
+      const linkText = stripSubpath(reference.link);
       if (!linkText) continue;
-
       const destFile = this.getFirstLinkpathDest(linkText, sourcePath);
       if (destFile) {
         const destPath = destFile.path;
@@ -132,27 +475,12 @@ export class MetadataCacheShim extends Events implements IMetadataCache {
       }
     }
 
-    // Parse markdown links - count all occurrences
-    for (const match of content.matchAll(MARKDOWN_LINK_RE)) {
-      const linkText = match[1]?.trim();
-      if (!linkText) continue;
-
-      const normalized = linkText.replace(/\.md$/, '');
-      const destFile = this.getFirstLinkpathDest(normalized, sourcePath);
-      if (destFile) {
-        const destPath = destFile.path;
-        resolvedMap[destPath] = (resolvedMap[destPath] ?? 0) + 1;
-      } else {
-        unresolvedMap[normalized] = (unresolvedMap[normalized] ?? 0) + 1;
-      }
-    }
-
     // Store results if non-empty
     if (Object.keys(resolvedMap).length > 0) {
-      this.resolvedLinks[sourcePath] = resolvedMap;
+      this.resolvedLinksCache[sourcePath] = resolvedMap;
     }
     if (Object.keys(unresolvedMap).length > 0) {
-      this.unresolvedLinks[sourcePath] = unresolvedMap;
+      this.unresolvedLinksCache[sourcePath] = unresolvedMap;
     }
   }
 
@@ -161,14 +489,23 @@ export class MetadataCacheShim extends Events implements IMetadataCache {
    * Call this when a file is created, modified, or deleted.
    */
   updateFileIndex(file: TFile): void {
+    if (!this.globalIndexBuilt) {
+      return;
+    }
+
     const sourcePath = file.path;
 
     // Remove old entries for this file
-    delete this.resolvedLinks[sourcePath];
-    delete this.unresolvedLinks[sourcePath];
+    delete this.resolvedLinksCache[sourcePath];
+    delete this.unresolvedLinksCache[sourcePath];
 
     // Rebuild entries for this file
-    this.indexFileLinks(file);
+    this.markdownFileSnapshot = this.vault.getMarkdownFiles();
+    try {
+      this.indexFileLinks(file);
+    } finally {
+      this.markdownFileSnapshot = null;
+    }
   }
 
   /**
@@ -179,18 +516,78 @@ export class MetadataCacheShim extends Events implements IMetadataCache {
     this.buildGlobalIndex();
   }
 
+  private bindVaultEvents(): void {
+    this.vault.on('create', (file: TAbstractFile) => {
+      if (!isMarkdownFile(file)) return;
+      this.invalidateIfBuilt();
+      this.triggerChanged(file);
+      this.triggerResolvedFile(file);
+    });
+    this.vault.on('modify', (file: TAbstractFile) => {
+      if (!isMarkdownFile(file)) return;
+      this.updateFileIndex(file);
+      this.triggerChanged(file);
+      this.triggerResolvedFile(file);
+    });
+    this.vault.on('delete', (file: TAbstractFile) => {
+      if (!isMarkdownLikePath(file.path)) return;
+      const prevCache = this.fileMetadataCache.get(file.path) ?? null;
+      this.fileMetadataCache.delete(file.path);
+      this.invalidateIfBuilt();
+      this.trigger('deleted', file, prevCache);
+      this.trigger('resolved');
+    });
+    this.vault.on('rename', (file: TAbstractFile, oldPath: string) => {
+      if (!isMarkdownLikePath(file.path) && !isMarkdownLikePath(oldPath)) return;
+      this.fileMetadataCache.delete(oldPath);
+      this.invalidateIfBuilt();
+      if (isMarkdownFile(file)) {
+        this.triggerChanged(file);
+        this.triggerResolvedFile(file);
+      } else {
+        this.trigger('resolved');
+      }
+    });
+  }
+
+  private invalidateIfBuilt(): void {
+    if (this.globalIndexBuilt) {
+      this.invalidateGlobalIndex();
+    }
+  }
+
+  private triggerChanged(file: TFile): void {
+    const content = readMarkdownFile(this.mindRoot, file) ?? '';
+    this.trigger('changed', file, content, this.getFileCache(file));
+  }
+
+  private triggerResolvedFile(file: TFile): void {
+    this.trigger('resolve', file);
+    this.trigger('resolved');
+  }
+
   getFileCache(file: TFile): CachedMetadata | null {
     const content = readMarkdownFile(this.mindRoot, file);
     if (content === null) {
       return null;
     }
 
-    return {
+    const position = createPositioner(content);
+    const body = parseMarkdownBody(content, position);
+    const cache = {
       frontmatter: parseFrontmatter(content),
-      tags: parseTags(content),
-      headings: parseHeadings(content),
-      links: parseLinks(content),
+      frontmatterPosition: parseFrontmatterPosition(content, position),
+      frontmatterLinks: parseFrontmatterLinks(content),
+      tags: body.tags,
+      headings: body.headings,
+      links: body.links,
+      embeds: body.embeds,
+      sections: parseSections(content, position),
+      listItems: body.listItems,
+      blocks: body.blocks,
     };
+    this.fileMetadataCache.set(file.path, cache);
+    return cache;
   }
 
   getCache(filePath: string): CachedMetadata | null {
@@ -201,7 +598,7 @@ export class MetadataCacheShim extends Events implements IMetadataCache {
   getFirstLinkpathDest(linkpath: string, sourcePath: string): TFile | null {
     void sourcePath;
     const normalized = linkpath.replace(/\.md$/, '');
-    const markdownFiles = this.vault.getMarkdownFiles();
+    const markdownFiles = this.markdownFileSnapshot ?? this.vault.getMarkdownFiles();
 
     return (
       markdownFiles.find((file) => file.path.replace(/\.md$/, '') === normalized) ??
@@ -217,4 +614,13 @@ export class MetadataCacheShim extends Events implements IMetadataCache {
     }
     return file.path;
   }
+}
+
+function isMarkdownLikePath(filePath: string): boolean {
+  return filePath.toLowerCase().endsWith('.md');
+}
+
+function isMarkdownFile(file: TAbstractFile): file is TFile {
+  const extension = (file as Partial<TFile>).extension;
+  return typeof extension === 'string' && extension.toLowerCase() === 'md';
 }

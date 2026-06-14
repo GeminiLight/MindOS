@@ -264,8 +264,8 @@ const baseTools = [
 
 **Line 452**:
 ```typescript
-const requestTools = isOrganizeMode 
-  ? getOrganizeTools() 
+const requestTools = isOrganizeMode
+  ? getOrganizeTools()
   : await getRequestScopedTools();
 ```
 
@@ -282,7 +282,6 @@ await createAgentSession({
   customTools,               // ← MindOS custom tools (20 KB + MCP + A2A)
 });
 ```
-
 **Result**: All tools (KB + MCP + A2A + ACP) are available to the LLM in `/api/ask`.
 
 #### 3.4 MCP Server Configuration
@@ -606,4 +605,3 @@ const res = await fetch('/api/ask', {
   }),
 });
 ```
-

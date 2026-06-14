@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { handleRouteErrorSimple } from '@/lib/errors';
 import { scanObsidianVaultPlugins } from '@/lib/obsidian-compat/obsidian-import';
+import { isObsidianPluginImportable } from '@/lib/obsidian-compat/import-policy';
 import { expandSetupPathHome } from '@/app/api/setup/path-utils';
 
 export async function GET(req: NextRequest) {
@@ -19,13 +20,17 @@ export async function GET(req: NextRequest) {
       compatible: result.plugins.filter((plugin) => plugin.compatibilityLevel === 'compatible').length,
       partial: result.plugins.filter((plugin) => plugin.compatibilityLevel === 'partial').length,
       blocked: result.plugins.filter((plugin) => plugin.compatibilityLevel === 'blocked').length,
+      importable: result.plugins.filter(isObsidianPluginImportable).length,
     };
 
     return NextResponse.json({
       ok: true,
       vaultRoot,
       summary,
-      plugins: result.plugins.map(({ sourceDir: _sourceDir, ...rest }) => rest),
+      plugins: result.plugins.map(({ sourceDir: _sourceDir, ...rest }) => ({
+        ...rest,
+        importable: isObsidianPluginImportable(rest),
+      })),
       skipped: result.skipped,
     });
   } catch (err) {

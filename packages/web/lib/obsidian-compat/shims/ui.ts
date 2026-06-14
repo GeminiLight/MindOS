@@ -5,7 +5,36 @@
 
 import { Component } from '../component';
 import type { App } from '../types';
+import type { ObsidianRuntimeHost } from '../runtime';
+import { getActiveObsidianRuntimeHost, inferPluginNoticeLevel } from '../runtime';
 import { toast } from '@/lib/toast';
+import { createObsidianElement, ensureObsidianElement, type ObsidianElement } from './dom';
+
+type RuntimeApp = App & { getRuntimeHost?: () => ObsidianRuntimeHost };
+
+type SuggestModalLike = Modal & {
+  inputEl?: HTMLElement;
+  getSuggestions?: (query: string) => unknown[] | Promise<unknown[]>;
+  renderSuggestion?: (value: unknown, el: HTMLElement) => void;
+  onChooseSuggestion?: (value: unknown) => unknown;
+};
+
+function getRuntimeHost(app: App): ObsidianRuntimeHost | null {
+  return (app as RuntimeApp).getRuntimeHost?.() ?? null;
+}
+
+function hasPluginMethodOverride(instance: object, methodName: string): boolean {
+  if (Object.prototype.hasOwnProperty.call(instance, methodName)) return true;
+  let prototype = Object.getPrototypeOf(instance);
+  while (prototype && prototype !== Modal.prototype) {
+    if (Object.prototype.hasOwnProperty.call(prototype, methodName)) {
+      const constructorName = typeof prototype.constructor?.name === 'string' ? prototype.constructor.name : '';
+      return constructorName !== 'SuggestModal' && constructorName !== 'FuzzySuggestModal';
+    }
+    prototype = Object.getPrototypeOf(prototype);
+  }
+  return false;
+}
 
 /**
  * Notice - Displays toast notifications using MindOS's toast system.
@@ -15,35 +44,28 @@ export class Notice {
   timeout?: number;
 
   constructor(message: string, timeout?: number) {
-    this.message = message;
+    const normalizedMessage = String(message);
+    this.message = normalizedMessage;
     this.timeout = timeout;
+    const level = inferPluginNoticeLevel(normalizedMessage);
+
+    getActiveObsidianRuntimeHost()?.recordNotice({
+      message: normalizedMessage,
+      timeout,
+      level,
+    });
 
     // Integrate with MindOS toast system
     if (typeof window !== 'undefined') {
-      // Determine toast type based on message content
-      const lowerMessage = message.toLowerCase();
-      if (lowerMessage.includes('error') || lowerMessage.includes('failed') || lowerMessage.includes('fail')) {
-        toast.error(message, timeout);
-      } else if (lowerMessage.includes('success') || lowerMessage.includes('saved') || lowerMessage.includes('complete')) {
-        toast.success(message, timeout);
+      if (level === 'error') {
+        toast.error(normalizedMessage, timeout);
+      } else if (level === 'success') {
+        toast.success(normalizedMessage, timeout);
       } else {
-        toast(message, timeout !== undefined ? { duration: timeout } : undefined);
+        toast(normalizedMessage, timeout !== undefined ? { duration: timeout } : undefined);
       }
     }
   }
-}
-
-function createElement(tagName: string): HTMLElement {
-  if (typeof document !== 'undefined') {
-    return document.createElement(tagName);
-  }
-
-  return {
-    innerHTML: '',
-    textContent: '',
-    appendChild: () => null,
-    remove: () => {},
-  } as unknown as HTMLElement;
 }
 
 /**
@@ -59,9 +81,9 @@ function createElement(tagName: string): HTMLElement {
  */
 export class Modal extends Component {
   app: App;
-  containerEl: HTMLElement;
-  contentEl: HTMLElement;
-  titleEl: HTMLElement;
+  containerEl: ObsidianElement;
+  contentEl: ObsidianElement;
+  titleEl: ObsidianElement;
   isOpen = false;
   private modalRoot: HTMLElement | null = null;
   private backdrop: HTMLElement | null = null;
@@ -69,20 +91,31 @@ export class Modal extends Component {
   constructor(app: App) {
     super();
     this.app = app;
-    this.containerEl = createElement('div');
-    this.contentEl = createElement('div');
-    this.titleEl = createElement('div');
+    this.containerEl = createObsidianElement('div');
+    this.contentEl = createObsidianElement('div');
+    this.titleEl = createObsidianElement('div');
   }
 
   open(): void {
     this.isOpen = true;
+    this.onOpen();
 
     // Create modal in DOM if in browser environment
     if (typeof document !== 'undefined') {
       this.renderModal();
     }
 
-    this.onOpen();
+    const suggest = this as SuggestModalLike;
+    getRuntimeHost(this.app)?.recordModalOpen({
+      kind: typeof suggest.getSuggestions === 'function' ? 'suggest' : 'modal',
+      titleEl: this.titleEl,
+      contentEl: this.contentEl,
+      placeholder: suggest.inputEl?.getAttribute('placeholder') ?? undefined,
+      getSuggestions: suggest.getSuggestions?.bind(this),
+      renderSuggestion: suggest.renderSuggestion?.bind(this),
+      chooseSuggestion: hasPluginMethodOverride(this, 'onChooseSuggestion') ? suggest.onChooseSuggestion?.bind(this) : undefined,
+      close: this.close.bind(this),
+    });
   }
 
   close(): void {
@@ -119,7 +152,7 @@ export class Modal extends Component {
     if (typeof content === 'string') {
       this.contentEl.textContent = content;
     } else {
-      this.contentEl.innerHTML = '';
+      this.contentEl.empty();
       this.contentEl.appendChild(content);
     }
 
@@ -138,7 +171,7 @@ export class Modal extends Component {
 
   private renderModal(): void {
     // Create backdrop
-    this.backdrop = document.createElement('div');
+    this.backdrop = ensureObsidianElement(document.createElement('div'));
     this.backdrop.style.cssText = `
       position: fixed;
       inset: 0;
@@ -149,7 +182,7 @@ export class Modal extends Component {
     this.backdrop.addEventListener('click', () => this.close());
 
     // Create modal container
-    this.modalRoot = document.createElement('div');
+    this.modalRoot = ensureObsidianElement(document.createElement('div'));
     this.modalRoot.style.cssText = `
       position: fixed;
       top: 50%;

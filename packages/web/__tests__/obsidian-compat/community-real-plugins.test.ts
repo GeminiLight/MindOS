@@ -112,8 +112,9 @@ describe.skipIf(!ENABLED)('real community plugin smoke suite', () => {
 
         console.log(`${fixture.name} compatibility: ${level}`);
         console.log(`  Supported APIs: ${report.supportedApis.length}`);
+        console.log(`  Partial APIs: ${report.partialApis.length}`);
         console.log(`  Unsupported APIs: ${report.unsupportedApis.length}`);
-        console.log(`  Blocked APIs: ${report.blockedApis.length}`);
+        console.log(`  Blockers: ${report.blockers.length}`);
 
         // We don't enforce exact match because real plugins may evolve
         // Just ensure we can analyze them without crashing

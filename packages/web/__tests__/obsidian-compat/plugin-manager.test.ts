@@ -1,8 +1,9 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { PluginManager } from '@/lib/obsidian-compat/plugin-manager';
+import { MetadataCacheShim } from '@/lib/obsidian-compat/shims/metadata-cache';
 
 let mindRoot: string;
 
@@ -39,6 +40,55 @@ describe('PluginManager', () => {
       loaded: false,
       compatibilityLevel: 'compatible',
     });
+  });
+
+  it('surfaces Obsidian Community origin metadata for installed packages', async () => {
+    writePlugin('quickadd', `const { Plugin } = require('obsidian'); module.exports = class QuickAddPlugin extends Plugin {};`);
+    fs.writeFileSync(
+      path.join(mindRoot, '.plugins', 'quickadd', 'obsidian-community.json'),
+      JSON.stringify({
+        source: 'obsidian-community',
+        pluginId: 'quickadd',
+        repo: 'chhoumann/quickadd',
+        githubUrl: 'https://github.com/chhoumann/quickadd',
+        installedAt: '2026-06-14T00:00:00.000Z',
+        updatedAt: '2026-06-15T00:00:00.000Z',
+        previousVersion: '1.0.0',
+        compatibilityLevel: 'compatible',
+      }, null, 2),
+      'utf-8',
+    );
+
+    const manager = new PluginManager(mindRoot);
+    const plugins = await manager.discover();
+
+    expect(plugins[0].runtime.communityOrigin).toMatchObject({
+      source: 'obsidian-community',
+      repo: 'chhoumann/quickadd',
+      githubUrl: 'https://github.com/chhoumann/quickadd',
+      installedAt: '2026-06-14T00:00:00.000Z',
+      updatedAt: '2026-06-15T00:00:00.000Z',
+      previousVersion: '1.0.0',
+      compatibilityLevel: 'compatible',
+      validJson: true,
+    });
+  });
+
+  it('does not build the global metadata index while discovering plugin lifecycle state', async () => {
+    fs.writeFileSync(path.join(mindRoot, 'note-a.md'), '[[note-b]]'.repeat(100), 'utf-8');
+    fs.writeFileSync(path.join(mindRoot, 'note-b.md'), '# Note B', 'utf-8');
+    writePlugin('alpha-plugin', `const { Plugin } = require('obsidian'); module.exports = class AlphaPlugin extends Plugin {};`);
+    const buildGlobalIndex = vi.spyOn(MetadataCacheShim.prototype, 'buildGlobalIndex');
+
+    try {
+      const manager = new PluginManager(mindRoot);
+      const plugins = await manager.discover();
+
+      expect(plugins).toHaveLength(1);
+      expect(buildGlobalIndex).not.toHaveBeenCalled();
+    } finally {
+      buildGlobalIndex.mockRestore();
+    }
   });
 
   it('persists enabled state across manager instances', async () => {
@@ -104,7 +154,7 @@ describe('PluginManager', () => {
     expect(plugins.find((item) => item.id === 'disabled-plugin')).toMatchObject({ enabled: false, loaded: false });
   });
 
-  it('captures plugin load errors without aborting the whole load pass', async () => {
+  it('captures plugin load errors or skips blocked plugins without aborting the whole load pass', async () => {
     writePlugin('good-plugin', `const { Plugin } = require('obsidian'); module.exports = class GoodPlugin extends Plugin {};`);
     writePlugin('bad-plugin', `
       const { Plugin } = require('obsidian');
@@ -123,12 +173,12 @@ describe('PluginManager', () => {
     const result = await manager.loadEnabledPlugins();
 
     expect(result.loaded).toContain('good-plugin');
-    expect(result.failed).toContain('bad-plugin');
+    expect(result.skipped).toContain('bad-plugin');
 
     const bad = manager.list().find((item) => item.id === 'bad-plugin');
     expect(bad?.compatibilityLevel).toBe('blocked');
     expect(bad?.compatibility?.nodeModules).toContain('electron');
-    expect(bad?.lastError).toMatch(/Unsupported module: electron|boom/);
+    expect(bad?.lastError).toMatch(/unsupported runtime module: electron/i);
   });
 
   it('disables and unloads a loaded plugin', async () => {
@@ -142,6 +192,67 @@ describe('PluginManager', () => {
 
     const plugin = manager.list().find((item) => item.id === 'toggle-plugin');
     expect(plugin).toMatchObject({ enabled: false, loaded: false });
+  });
+
+  it('uninstalls the MindOS plugin copy and clears enabled runtime state', async () => {
+    writePlugin(
+      'remove-plugin',
+      `
+        const { Plugin } = require('obsidian');
+        module.exports = class RemovePlugin extends Plugin {
+          onload() {
+            this.addCommand({ id: 'run', name: 'Run', callback: () => {} });
+          }
+        };
+      `,
+    );
+
+    const manager = new PluginManager(mindRoot);
+    await manager.discover();
+    await manager.enable('remove-plugin');
+    await manager.loadEnabledPlugins();
+    expect(manager.getLoader().getLoadedPlugins().map((loaded) => loaded.manifest.id)).toEqual(['remove-plugin']);
+
+    await manager.uninstall('remove-plugin');
+
+    expect(fs.existsSync(path.join(mindRoot, '.plugins', 'remove-plugin'))).toBe(false);
+    expect(manager.list().find((item) => item.id === 'remove-plugin')).toBeUndefined();
+    expect(manager.getLoader().getLoadedPlugins()).toEqual([]);
+    const state = JSON.parse(fs.readFileSync(path.join(mindRoot, '.plugins', '.plugin-manager.json'), 'utf-8'));
+    expect(state.enabled).toEqual({});
+
+    const fresh = new PluginManager(mindRoot);
+    await expect(fresh.discover()).resolves.toEqual([]);
+  });
+
+  it('does not uninstall through a symlinked plugin directory outside mindRoot', async () => {
+    const outsideRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'mindos-obsidian-uninstall-outside-'));
+    try {
+      const pluginsDir = path.join(mindRoot, '.plugins');
+      const outsidePluginDir = path.join(outsideRoot, 'linked-plugin');
+      fs.mkdirSync(pluginsDir, { recursive: true });
+      fs.mkdirSync(outsidePluginDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(outsidePluginDir, 'manifest.json'),
+        JSON.stringify({ id: 'linked-plugin', name: 'linked-plugin', version: '1.0.0' }, null, 2),
+        'utf-8',
+      );
+      fs.writeFileSync(
+        path.join(outsidePluginDir, 'main.js'),
+        `const { Plugin } = require('obsidian'); module.exports = class LinkedPlugin extends Plugin {};`,
+        'utf-8',
+      );
+      fs.symlinkSync(outsidePluginDir, path.join(pluginsDir, 'linked-plugin'), 'dir');
+
+      const manager = new PluginManager(mindRoot);
+      const discovered = await manager.discover();
+      expect(discovered.map((plugin) => plugin.id)).toEqual(['linked-plugin']);
+
+      await expect(manager.uninstall('linked-plugin')).rejects.toThrow(/access denied|symlink|validate real path/i);
+      expect(fs.existsSync(path.join(outsidePluginDir, 'manifest.json'))).toBe(true);
+    } finally {
+      fs.rmSync(outsideRoot, { recursive: true, force: true });
+    }
   });
 
   it('scans an external Obsidian vault and imports a selected plugin into the manager root', async () => {

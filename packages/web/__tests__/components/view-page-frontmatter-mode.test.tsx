@@ -74,6 +74,10 @@ vi.mock('@/lib/stores/editor-theme-store', () => ({
 vi.mock('@/lib/twemoji', () => ({
   twemojiToNative: (value: string) => value,
 }));
+vi.mock('@/lib/plugins/client', () => ({
+  fetchPluginViewSurfacesForExtension: vi.fn().mockResolvedValue([]),
+  pluginViewSurfaceHref: vi.fn(() => null),
+}));
 
 describe('ViewPageClient frontmatter markdown mode', () => {
   let host: HTMLDivElement;

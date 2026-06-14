@@ -47,10 +47,12 @@ describe('validateManifest', () => {
       id: 'test-plugin',
       name: 'Test Plugin',
       version: '1.0.0',
+      minAppVersion: '1.7.2',
       description: 'A test plugin',
       author: 'Test Author',
       isDesktopOnly: true,
     });
+    expect(manifest.minAppVersion).toBe('1.7.2');
     expect(manifest.description).toBe('A test plugin');
     expect(manifest.author).toBe('Test Author');
     expect(manifest.isDesktopOnly).toBe(true);

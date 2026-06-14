@@ -64,8 +64,10 @@ vi.mock('@/lib/api', () => ({
 }));
 
 vi.mock('next/navigation', () => ({
+  usePathname: () => '/wiki',
   useRouter: () => ({
     push: vi.fn(),
+    refresh: vi.fn(),
   }),
 }));
 

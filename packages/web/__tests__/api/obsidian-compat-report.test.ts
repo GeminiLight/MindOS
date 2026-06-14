@@ -46,6 +46,15 @@ describe('GET /api/obsidian/compat-report', () => {
           hasStyles: false,
           hasData: false,
         },
+        {
+          id: 'kanban-like',
+          manifest: { id: 'kanban-like', name: 'Kanban', version: '1.0.0' },
+          sourceDir: '/tmp/vault/.obsidian/plugins/kanban-like',
+          compatibilityLevel: 'partial',
+          compatibility: { obsidianApis: ['Plugin', 'registerMarkdownCodeBlockProcessor'], nodeModules: [], supportedApis: ['Plugin'], partialApis: ['registerMarkdownCodeBlockProcessor'], unsupportedApis: [], blockers: [] },
+          hasStyles: true,
+          hasData: false,
+        },
       ],
       skipped: [],
     });
@@ -57,8 +66,11 @@ describe('GET /api/obsidian/compat-report', () => {
 
     expect(res.status).toBe(200);
     expect(json.ok).toBe(true);
-    expect(json.summary).toEqual({ total: 2, compatible: 1, partial: 0, blocked: 1 });
-    expect(json.plugins).toHaveLength(2);
+    expect(json.summary).toEqual({ total: 3, compatible: 1, partial: 1, blocked: 1, importable: 2 });
+    expect(json.plugins).toHaveLength(3);
+    expect(json.plugins.find((plugin: { id: string }) => plugin.id === 'style-settings-like')?.importable).toBe(true);
+    expect(json.plugins.find((plugin: { id: string }) => plugin.id === 'kanban-like')?.importable).toBe(true);
+    expect(json.plugins.find((plugin: { id: string }) => plugin.id === 'desktop-only-like')?.importable).toBe(false);
     expect(scanObsidianVaultPlugins).toHaveBeenCalledTimes(1);
     expect(scanObsidianVaultPlugins.mock.calls[0][0]).not.toContain('~/');
   });

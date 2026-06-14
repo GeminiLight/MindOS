@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Notice, Modal } from '@/lib/obsidian-compat/shims/ui';
+import { ObsidianRuntimeHost } from '@/lib/obsidian-compat/runtime';
 import { PluginSettingTab, Setting } from '@/lib/obsidian-compat/shims/settings';
 import type { App } from '@/lib/obsidian-compat/types';
 
@@ -19,6 +20,40 @@ describe('UI shims', () => {
     const notice = new Notice('Saved', 1500);
     expect(notice.message).toBe('Saved');
     expect(notice.timeout).toBe(1500);
+  });
+
+  it('records notice snapshots when a plugin runtime context is active', async () => {
+    const host = new ObsidianRuntimeHost();
+
+    await host.runWithPluginContext('notice-plugin', () => {
+      new Notice('Saved draft', 1500);
+      new Notice('Failed to publish');
+      new Notice('Working...');
+    });
+
+    expect(host.renderNoticeSnapshotsSince(0)).toEqual([
+      {
+        id: 'notice-plugin:notice:1',
+        pluginId: 'notice-plugin',
+        message: 'Saved draft',
+        timeout: 1500,
+        level: 'success',
+      },
+      {
+        id: 'notice-plugin:notice:2',
+        pluginId: 'notice-plugin',
+        message: 'Failed to publish',
+        timeout: undefined,
+        level: 'error',
+      },
+      {
+        id: 'notice-plugin:notice:3',
+        pluginId: 'notice-plugin',
+        message: 'Working...',
+        timeout: undefined,
+        level: 'info',
+      },
+    ]);
   });
 
   it('opens and closes modal while preserving title and content in non-browser environments', () => {
@@ -49,6 +84,33 @@ describe('UI shims', () => {
     });
   });
 
+  it('supports Obsidian-style DOM helpers and new Setting(containerEl)', () => {
+    const tab = new PluginSettingTab(appStub);
+    const heading = tab.containerEl.createEl('h2', { text: 'Plugin Settings' });
+
+    new Setting(tab.containerEl)
+      .setName('Path')
+      .setDesc('Target note')
+      .addText((text) => text
+        .setPlaceholder('Home.md')
+        .setValue('Home.md')
+        .setDisabled(false));
+
+    expect(heading.textContent).toBe('Plugin Settings');
+    expect(tab.items).toHaveLength(1);
+    expect(tab.items[0]).toMatchObject({
+      name: 'Path',
+      desc: 'Target note',
+      kind: 'text',
+      value: 'Home.md',
+      placeholder: 'Home.md',
+      disabled: false,
+    });
+
+    tab.containerEl.empty();
+    expect(tab.items).toHaveLength(0);
+  });
+
   it('supports toggle dropdown and button settings', () => {
     const tab = new PluginSettingTab(appStub);
 
@@ -62,10 +124,10 @@ describe('UI shims', () => {
 
     new Setting(tab)
       .setName('Run')
-      .addButton((button) => button.setButtonText('Run now').onClick(() => {}));
+      .addButton((button) => button.setButtonText('Run now').setCta().onClick(() => {}));
 
     expect(tab.items.map((item) => item.kind)).toEqual(['toggle', 'dropdown', 'button']);
     expect(tab.items[1]).toMatchObject({ kind: 'dropdown', value: 'fast' });
-    expect(tab.items[2]).toMatchObject({ kind: 'button', buttonText: 'Run now' });
+    expect(tab.items[2]).toMatchObject({ kind: 'button', buttonText: 'Run now', cta: true });
   });
 });

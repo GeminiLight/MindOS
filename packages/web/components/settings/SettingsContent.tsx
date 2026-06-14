@@ -16,12 +16,15 @@ import { UpdateTab } from './UpdateTab';
 import { UninstallTab } from './UninstallTab';
 import { restoreAiSettingsFromEnvironment } from './ai-env-restore';
 import { saveSettingsDocument } from './settings-save';
+import { requestCommandCenterOpen, requestPluginEntriesOpen } from '@/lib/plugins/ui-events';
 
 interface SettingsContentProps {
   visible: boolean;
   initialTab?: Tab;
   variant: 'modal' | 'panel';
   onClose?: () => void;
+  onOpenPluginEntries?: () => void;
+  onOpenCommandCenter?: () => void;
 }
 
 function readStoredProseFont(storage: Storage): string {
@@ -37,7 +40,14 @@ function migrateStoredContentWidth(raw: string): string {
   return '65%';
 }
 
-export default function SettingsContent({ visible, initialTab, variant, onClose }: SettingsContentProps) {
+export default function SettingsContent({
+  visible,
+  initialTab,
+  variant,
+  onClose,
+  onOpenPluginEntries,
+  onOpenCommandCenter,
+}: SettingsContentProps) {
   const [tab, setTab] = useState<Tab>('ai');
   const [data, setData] = useState<SettingsData | null>(null);
   const [saving, setSaving] = useState(false);
@@ -272,6 +282,29 @@ export default function SettingsContent({ visible, initialTab, variant, onClose 
     setData(d => d ? { ...d, agent: { ...(d.agent ?? {}), ...patch } } : d);
   }, []);
 
+  const openPluginEntries = useCallback(() => {
+    if (onOpenPluginEntries) {
+      onOpenPluginEntries();
+      return;
+    }
+    onClose?.();
+    window.requestAnimationFrame(requestPluginEntriesOpen);
+  }, [onClose, onOpenPluginEntries]);
+
+  const openCommandCenter = useCallback(() => {
+    if (onOpenCommandCenter) {
+      onOpenCommandCenter();
+      return;
+    }
+    onClose?.();
+    window.requestAnimationFrame(requestCommandCenterOpen);
+  }, [onClose, onOpenCommandCenter]);
+
+  const openPluginViews = useCallback(() => {
+    onClose?.();
+    router.push('/plugins/views');
+  }, [onClose, router]);
+
   const restoreFromEnv = useCallback(async () => {
     if (!data) return;
     const next = { ...data, ai: restoreAiSettingsFromEnvironment(data) };
@@ -348,7 +381,17 @@ export default function SettingsContent({ visible, initialTab, variant, onClose 
           {tab === 'knowledge' && data && <KnowledgeTab data={data} setData={setData} t={t} />}
           {tab === 'sync' && <SyncTab t={t} visible={visible} />}
           {tab === 'mcp' && <McpTab t={t} />}
-          {tab === 'plugins' && <PluginsTab pluginStates={pluginStates} setPluginStates={setPluginStates} t={t} mindRoot={data?.mindRoot} />}
+          {tab === 'plugins' && (
+            <PluginsTab
+              pluginStates={pluginStates}
+              setPluginStates={setPluginStates}
+              t={t}
+              mindRoot={data?.mindRoot}
+              onOpenPluginEntries={openPluginEntries}
+              onOpenCommandCenter={openCommandCenter}
+              onOpenPluginViews={openPluginViews}
+            />
+          )}
           {tab === 'update' && <UpdateTab />}
           {tab === 'uninstall' && <UninstallTab />}
         </>

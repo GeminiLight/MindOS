@@ -44,6 +44,19 @@ describe('PluginLoader', () => {
     expect(plugins[0]?.id).toBe('valid-plugin');
   });
 
+  it('skips plugins whose directory name does not match manifest id', () => {
+    writePlugin(
+      'renamed-plugin-dir',
+      { id: 'manifest-plugin-id', name: 'Renamed Plugin', version: '1.0.0' },
+      "module.exports = class {}",
+    );
+
+    const loader = new PluginLoader(mindRoot);
+    const plugins = loader.discoverPlugins();
+
+    expect(plugins).toEqual([]);
+  });
+
   it('loads a valid plugin and registers its command during onload', async () => {
     writePlugin(
       'hello-plugin',
@@ -90,6 +103,53 @@ describe('PluginLoader', () => {
 
     expect(loader.getApp().getCommands()).toHaveLength(0);
     expect(loader.getLoadedPlugins()).toHaveLength(0);
+  });
+
+  it('cleans partial registrations when onload fails after registering surfaces', async () => {
+    writePlugin(
+      'partial-plugin',
+      { id: 'partial-plugin', name: 'Partial Plugin', version: '1.0.0' },
+      `
+        const { Plugin } = require('obsidian');
+        module.exports = class PartialPlugin extends Plugin {
+          onload() {
+            globalThis.__mindosPartialPluginCleanupCount = 0;
+            this.register(() => {
+              globalThis.__mindosPartialPluginCleanupCount += 1;
+            });
+            this.addCommand({ id: 'partial', name: 'Partial', callback: () => {} });
+            this.addRibbonIcon('sparkles', 'Partial ribbon', () => {});
+            this.addStatusBarItem().setText('Partial status');
+            this.registerView('partial-view', () => ({}));
+            this.registerExtensions(['partial'], 'partial-view');
+            this.registerMarkdownCodeBlockProcessor('partial', () => {});
+            this.registerMarkdownPostProcessor(() => {});
+            this.registerEditorExtension({ name: 'partial-extension' });
+            throw new Error('boom after registration');
+          }
+        };
+      `,
+    );
+
+    const loader = new PluginLoader(mindRoot);
+
+    await expect(loader.loadPlugin('partial-plugin')).rejects.toThrow(/boom after registration/);
+
+    const app = loader.getApp();
+    const host = app.getRuntimeHost();
+    expect((globalThis as { __mindosPartialPluginCleanupCount?: number }).__mindosPartialPluginCleanupCount).toBe(1);
+    expect(loader.getLoadedPlugins()).toHaveLength(0);
+    expect(app.getCommands()).toHaveLength(0);
+    expect(app.plugins.plugins['partial-plugin']).toBeUndefined();
+    expect(app.plugins.enabledPlugins.has('partial-plugin')).toBe(false);
+    expect(host.getRibbonIcons()).toHaveLength(0);
+    expect(host.getStatusBarItems()).toHaveLength(0);
+    expect(host.getViews()).toHaveLength(0);
+    expect(host.getViewExtensions()).toHaveLength(0);
+    expect(host.getMarkdownCodeBlockProcessors()).toHaveLength(0);
+    expect(host.getMarkdownPostProcessors()).toHaveLength(0);
+    expect(host.getEditorExtensions()).toHaveLength(0);
+    expect(host.getWarnings().filter((warning) => warning.pluginId === 'partial-plugin')).toHaveLength(0);
   });
 
   it('rejects plugins that require unsupported modules', async () => {

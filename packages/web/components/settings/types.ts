@@ -263,6 +263,9 @@ export interface PluginsTabProps {
   setPluginStates: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
   t: Messages;
   mindRoot?: string;
+  onOpenPluginEntries?: () => void;
+  onOpenCommandCenter?: () => void;
+  onOpenPluginViews?: () => void;
 }
 
 export interface SyncTabProps {

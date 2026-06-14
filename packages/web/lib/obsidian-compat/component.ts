@@ -5,16 +5,32 @@
 
 import { Events, EventRef } from './events';
 
+type LifecycleChild = {
+  load(): Promise<void>;
+  unload(): Promise<void>;
+};
+
 /**
  * Base component class for plugin lifecycle and event/timer cleanup.
  * Plugins extend this; ensures unload() properly cleans up child resources.
  */
 export class Component extends Events {
-  private children: Set<Component> = new Set();
+  private children: Set<LifecycleChild> = new Set();
   private unloadCallbacks: Set<() => void> = new Set();
+  private loaded = false;
 
   async load(): Promise<void> {
-    await this.onload();
+    if (this.loaded) return;
+    this.loaded = true;
+    try {
+      await this.onload();
+      for (const child of Array.from(this.children)) {
+        await child.load();
+      }
+    } catch (err) {
+      this.loaded = false;
+      throw err;
+    }
   }
 
   async unload(): Promise<void> {
@@ -35,7 +51,11 @@ export class Component extends Events {
     this.unloadCallbacks.clear();
 
     // Call user-defined onunload
-    await this.onunload();
+    try {
+      await this.onunload();
+    } finally {
+      this.loaded = false;
+    }
   }
 
   /** Override in subclass */
@@ -44,12 +64,19 @@ export class Component extends Events {
   /** Override in subclass */
   onunload(): Promise<void> | void {}
 
-  addChild(child: Component): void {
+  addChild<T extends LifecycleChild>(child: T): T {
     this.children.add(child);
+    if (this.loaded) {
+      void child.load();
+    }
+    return child;
   }
 
-  removeChild(child: Component): void {
-    this.children.delete(child);
+  removeChild<T extends LifecycleChild>(child: T): T {
+    if (this.children.delete(child)) {
+      void child.unload();
+    }
+    return child;
   }
 
   /**
@@ -69,9 +96,9 @@ export class Component extends Events {
   /**
    * Register a DOM event listener. Automatically removes on unload.
    */
-  registerDomEvent(el: EventTarget, type: string, callback: EventListener): void {
-    el.addEventListener(type, callback);
-    this.register(() => el.removeEventListener(type, callback));
+  registerDomEvent(el: EventTarget, type: string, callback: EventListener, options?: boolean | AddEventListenerOptions): void {
+    el.addEventListener(type, callback, options);
+    this.register(() => el.removeEventListener(type, callback, options));
   }
 
   /**

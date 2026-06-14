@@ -211,4 +211,3 @@ export function hasMindosExtensionScope(
 ): boolean {
   return policy.extensionScopes.includes(scope);
 }
-

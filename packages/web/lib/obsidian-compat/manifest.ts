@@ -48,6 +48,10 @@ export function validateManifest(manifest: unknown): PluginManifest {
     version: m.version,
   };
 
+  if (m.minAppVersion && typeof m.minAppVersion === 'string') {
+    result.minAppVersion = m.minAppVersion;
+  }
+
   if (m.minMindOsVersion && typeof m.minMindOsVersion === 'string') {
     result.minMindOsVersion = m.minMindOsVersion;
   }

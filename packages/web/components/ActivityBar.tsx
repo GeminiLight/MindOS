@@ -3,7 +3,7 @@
 import { useRef, useCallback, useState, useEffect, useTransition, type CSSProperties } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Brain, Settings, RefreshCw, Bot, Compass, ChevronLeft, ChevronRight, Radio, Zap, Inbox } from 'lucide-react';
+import { Brain, Settings, RefreshCw, Bot, Compass, ChevronLeft, ChevronRight, Radio, Zap, Inbox, Puzzle } from 'lucide-react';
 import { useLocale } from '@/lib/stores/locale-store';
 import { DOT_COLORS, getStatusLevel } from './SyncStatusBar';
 import type { SyncStatus } from './settings/types';
@@ -36,6 +36,8 @@ interface ActivityBarProps {
   expanded: boolean;
   onExpandedChange: (expanded: boolean) => void;
   onSettingsClick: () => void;
+  onPluginEntriesClick?: () => void;
+  pluginEntriesAvailable?: boolean;
   onSyncClick: (rect: DOMRect) => void;
   syncPopoverOpen?: boolean;
   syncPopoverId?: string;
@@ -164,6 +166,8 @@ export default function ActivityBar({
   expanded,
   onExpandedChange,
   onSettingsClick,
+  onPluginEntriesClick,
+  pluginEntriesAvailable = false,
   onSyncClick,
   syncPopoverOpen = false,
   syncPopoverId = 'sync-popover',
@@ -411,6 +415,17 @@ export default function ActivityBar({
         {/* ── Bottom: Action buttons (not panel toggles) ── */}
         <div className={`${expanded ? 'mx-3' : 'mx-2'} border-t border-border`} />
         <div className={`flex flex-col ${expanded ? 'px-1.5' : 'items-center'} gap-1 py-2`}>
+          {pluginEntriesAvailable && onPluginEntriesClick && (
+            <RailButton
+              icon={<Puzzle size={18} />}
+              label="Plugin Entries"
+              expanded={expanded}
+              onClick={() => debounced('action:plugin-entries', onPluginEntriesClick)}
+              badge={(
+                <span className={`absolute ${expanded ? 'left-[26px] top-1.5' : 'top-1.5 right-1.5'} h-1.5 w-1.5 rounded-full bg-success`} />
+              )}
+            />
+          )}
           <RailButton
             icon={<Settings size={18} />}
             label={t.sidebar.settingsTitle}

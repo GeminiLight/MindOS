@@ -32,6 +32,7 @@ export const ErrorCodes = {
   INVALID_FILE_TYPE: 'INVALID_FILE_TYPE',
   // API
   INVALID_REQUEST: 'INVALID_REQUEST',
+  CONFLICT: 'CONFLICT',
   MODEL_INIT_FAILED: 'MODEL_INIT_FAILED',
   // Generic
   INTERNAL_ERROR: 'INTERNAL_ERROR',
@@ -63,6 +64,7 @@ function mapCodeToStatus(code: ErrorCode): number {
     case ErrorCodes.HEADING_NOT_FOUND:
       return 404;
     case ErrorCodes.FILE_ALREADY_EXISTS:
+    case ErrorCodes.CONFLICT:
       return 409;
     case ErrorCodes.PATH_OUTSIDE_ROOT:
     case ErrorCodes.PROTECTED_FILE:

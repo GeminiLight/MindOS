@@ -15,6 +15,50 @@ export { analyzePluginCompatibility, getCompatibilityLevel } from './compatibili
 export { CommandRegistry } from './command-registry';
 export { Component } from './component';
 export { Events } from './events';
+export { ObsidianRuntimeHost } from './runtime';
 export { validateManifest, ManifestError } from './manifest';
+export {
+  OBSIDIAN_COMMUNITY_PLUGINS_URL,
+  buildObsidianCommunityPluginReleaseUrls,
+  buildObsidianCommunityCatalog,
+  fetchObsidianCommunityPluginPackage,
+  githubUrlForRepo,
+  parseObsidianCommunityCatalog,
+  preflightObsidianCommunityPluginPackage,
+} from './community-catalog';
+export {
+  installObsidianCommunityPlugin,
+  planObsidianCommunityPluginUpdate,
+  updateObsidianCommunityPlugin,
+} from './community-install';
+export { compareCommunityVersions } from './community-version';
 export { CompatError, CompatErrorCodes } from './errors';
-export type { PluginManifest, TFile, TFolder, TAbstractFile, Command } from './types';
+export type { DataAdapter, IFileManager, ListedFiles, PluginManifest, Stat, TFile, TFolder, TAbstractFile, Command } from './types';
+export type {
+  BuildObsidianCommunityCatalogOptions,
+  FetchedObsidianCommunityPluginPackage,
+  FetchObsidianCommunityPluginPackageOptions,
+  InstalledObsidianPluginState,
+  ObsidianCommunityCatalog,
+  ObsidianCommunityCatalogEntry,
+  ObsidianCommunityCatalogItem,
+  ObsidianCommunityPluginPackageDigest,
+  ObsidianCommunityPluginPreflight,
+  ObsidianCommunityPluginReleaseUrls,
+  ParseObsidianCommunityCatalogResult,
+  PreflightObsidianCommunityPluginPackageOptions,
+} from './community-catalog';
+export type {
+  InstalledObsidianCommunityPlugin,
+  InstallObsidianCommunityPluginOptions,
+  InstallObsidianCommunityPluginResult,
+  ObsidianCommunityInstallMetadata,
+  ObsidianCommunityUpdateFileAction,
+  ObsidianCommunityUpdatePlan,
+  ObsidianCommunityUpdatePlanFile,
+  PlanObsidianCommunityPluginUpdateOptions,
+  UpdateObsidianCommunityPluginOptions,
+  UpdateObsidianCommunityPluginResult,
+  UpdatedObsidianCommunityPlugin,
+} from './community-install';
+export type { CommunityVersionState } from './community-version';

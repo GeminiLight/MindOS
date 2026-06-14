@@ -10,6 +10,8 @@ import Panel from './Panel';
 import FileTree from './FileTree';
 import Logo from './Logo';
 import AskFab from './AskFab';
+import PluginEntriesDock from './plugins/PluginEntriesDock';
+import PluginHotkeyHost from './plugins/PluginHotkeyHost';
 import SyncPopover from './panels/SyncPopover';
 import KeyboardShortcuts from './KeyboardShortcuts';
 import ChangesBanner from './changes/ChangesBanner';
@@ -37,6 +39,12 @@ import { useAiOrganize } from '@/hooks/useAiOrganize';
 import { useInboxOrganizeController } from '@/hooks/useInboxOrganizeController';
 import { InboxOrganizeProvider } from '@/components/inbox/InboxOrganizeContext';
 import { quickDropToInbox } from '@/lib/inbox-upload';
+import {
+  COMMAND_CENTER_OPEN_EVENT,
+  PLUGIN_ENTRIES_STATE_EVENT,
+  requestPluginEntriesOpen,
+  type PluginEntriesStateDetail,
+} from '@/lib/plugins/ui-events';
 import {
   getActiveLeftPanel,
   getContentRoutePanel,
@@ -134,6 +142,7 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
   // ── Sync popover ──
   const [syncPopoverOpen, setSyncPopoverOpen] = useState(false);
   const [syncAnchorRect, setSyncAnchorRect] = useState<DOMRect | null>(null);
+  const [pluginEntriesAvailable, setPluginEntriesAvailable] = useState(false);
 
   // ── Agent MCP detail (right dock, does not replace left Agents list) ──
   const [agentDetailKey, setAgentDetailKey] = useState<string | null>(null);
@@ -406,6 +415,27 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
     return () => window.removeEventListener('mindos:open-panel', handler);
   }, [lp.setActivePanel, openOrFocusSearchPanel]);
 
+  useEffect(() => {
+    const handler = () => {
+      if (window.innerWidth >= 768) {
+        openOrFocusSearchPanel();
+      } else {
+        setMobileSearchOpen(true);
+      }
+    };
+    window.addEventListener(COMMAND_CENTER_OPEN_EVENT, handler);
+    return () => window.removeEventListener(COMMAND_CENTER_OPEN_EVENT, handler);
+  }, [openOrFocusSearchPanel]);
+
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<PluginEntriesStateDetail>).detail;
+      setPluginEntriesAvailable((detail?.count ?? 0) > 0);
+    };
+    window.addEventListener(PLUGIN_ENTRIES_STATE_EVENT, handler);
+    return () => window.removeEventListener(PLUGIN_ENTRIES_STATE_EVENT, handler);
+  }, []);
+
   // GuideCard first message handler
   const handleFirstMessage = useCallback(() => {
     const notifyGuide = () => window.dispatchEvent(new Event('guide-state-updated'));
@@ -588,6 +618,12 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
     setSettingsOpen(true);
   }, []);
 
+  const openPluginsSettings = useCallback(() => {
+    setSettingsTab('plugins');
+    setSyncPopoverOpen(false);
+    setSettingsOpen(true);
+  }, []);
+
   const handleSettingsClick = useCallback(() => {
     setSettingsOpen(true);
     setSettingsTab(undefined);
@@ -597,6 +633,27 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
     setSettingsOpen(false);
     setSettingsTab(undefined);
   }, []);
+
+  const openPluginEntriesFromSettings = useCallback(() => {
+    closeSettings();
+    window.requestAnimationFrame(requestPluginEntriesOpen);
+  }, [closeSettings]);
+
+  const openPluginEntriesFromRail = useCallback(() => {
+    setSyncPopoverOpen(false);
+    requestPluginEntriesOpen();
+  }, []);
+
+  const openCommandCenterFromSettings = useCallback(() => {
+    closeSettings();
+    window.requestAnimationFrame(() => {
+      if (window.innerWidth >= 768) {
+        openOrFocusSearchPanel();
+      } else {
+        setMobileSearchOpen(true);
+      }
+    });
+  }, [closeSettings, openOrFocusSearchPanel]);
 
   const handleSyncClick = useCallback((rect: DOMRect) => {
     setSyncAnchorRect(rect);
@@ -684,6 +741,8 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
         expanded={lp.railExpanded}
         onExpandedChange={handleExpandedChange}
         onSettingsClick={handleSettingsClick}
+        pluginEntriesAvailable={pluginEntriesAvailable}
+        onPluginEntriesClick={openPluginEntriesFromRail}
         onSyncClick={handleSyncClick}
         syncPopoverOpen={syncPopoverOpen}
         syncPopoverId={SYNC_POPOVER_ID}
@@ -791,10 +850,20 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
         />
       )}
 
+      <PluginEntriesDock onOpenPluginsSettings={openPluginsSettings} onOpenCommandCenter={openOrFocusSearchPanel} />
+      <PluginHotkeyHost />
       <AskFab onToggle={ap.toggleAskPanel} askPanelOpen={ap.askPanelOpen || ap.desktopAskPopupOpen} />
       <KeyboardShortcuts />
 
-      {settingsMounted && <SettingsModal open={settingsOpen} onClose={closeSettings} initialTab={settingsTab} />}
+      {settingsMounted && (
+        <SettingsModal
+          open={settingsOpen}
+          onClose={closeSettings}
+          initialTab={settingsTab}
+          onOpenPluginEntries={openPluginEntriesFromSettings}
+          onOpenCommandCenter={openCommandCenterFromSettings}
+        />
+      )}
 
       <SyncPopover
         id={SYNC_POPOVER_ID}
@@ -931,6 +1000,7 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
         @media (min-width: 768px) {
           :root {
             --rail-width: ${lp.railWidth}px;
+            --content-left-offset: ${panelOpen && effectivePanelMaximized ? '100vw' : `${panelOpen ? lp.railWidth + effectivePanelWidth : lp.railWidth}px`};
             --right-panel-width: ${ap.askMaximized ? `calc(100vw - ${panelOpen ? lp.railWidth + effectivePanelWidth : lp.railWidth}px)` : `${ap.askPanelOpen ? ap.askPanelWidth : 0}px`};
             --right-agent-detail-width: ${agentDockOpen ? agentDetailWidth : 0}px;
           }

@@ -6,6 +6,10 @@ import SearchModal from '@/components/SearchModal';
 
 const apiFetchMock = vi.fn();
 
+function prewarmCallCount(): number {
+  return apiFetchMock.mock.calls.filter((call) => call[0] === '/api/search/prewarm').length;
+}
+
 vi.mock('@/lib/stores/locale-store', () => ({
   useLocale: () => ({
     t: {
@@ -39,8 +43,10 @@ vi.mock('@/lib/api', () => ({
 }));
 
 vi.mock('next/navigation', () => ({
+  usePathname: () => '/wiki',
   useRouter: () => ({
     push: vi.fn(),
+    refresh: vi.fn(),
   }),
 }));
 
@@ -129,7 +135,7 @@ describe('SearchModal prewarm', () => {
     await act(async () => {
       root.render(<SearchModal open={true} onClose={() => {}} />);
     });
-    expect(apiFetchMock).toHaveBeenCalledTimes(1);
+    expect(prewarmCallCount()).toBe(1);
 
     await act(async () => {
       window.dispatchEvent(new Event('mindos:files-changed'));
@@ -149,6 +155,6 @@ describe('SearchModal prewarm', () => {
       root.render(<SearchModal open={true} onClose={() => {}} />);
     });
 
-    expect(apiFetchMock).toHaveBeenCalledTimes(2);
+    expect(prewarmCallCount()).toBe(2);
   });
 });

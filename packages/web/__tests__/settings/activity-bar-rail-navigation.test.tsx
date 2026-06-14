@@ -354,6 +354,65 @@ describe('ActivityBar rail navigation', () => {
     host.remove();
   });
 
+  it('shows Plugin Entries as an action only when plugin entries are available', async () => {
+    const mockPluginEntriesClick = vi.fn();
+    const mockPanelChange = vi.fn();
+    const ActivityBar = (await import('@/components/ActivityBar')).default;
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(
+        <ActivityBar
+          activePanel="files"
+          onPanelChange={mockPanelChange}
+          syncStatus={null}
+          expanded
+          onExpandedChange={vi.fn()}
+          onSettingsClick={vi.fn()}
+          onPluginEntriesClick={mockPluginEntriesClick}
+          pluginEntriesAvailable={false}
+          onSyncClick={vi.fn()}
+        />,
+      );
+    });
+
+    expect(host.querySelector('button[aria-label="Plugin Entries"]')).toBeNull();
+
+    await act(async () => {
+      root.render(
+        <ActivityBar
+          activePanel="files"
+          onPanelChange={mockPanelChange}
+          syncStatus={null}
+          expanded
+          onExpandedChange={vi.fn()}
+          onSettingsClick={vi.fn()}
+          onPluginEntriesClick={mockPluginEntriesClick}
+          pluginEntriesAvailable
+          onSyncClick={vi.fn()}
+        />,
+      );
+    });
+
+    const pluginEntriesButton = host.querySelector('button[aria-label="Plugin Entries"]');
+    expect(pluginEntriesButton).not.toBeNull();
+
+    await act(async () => {
+      pluginEntriesButton?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    });
+
+    expect(mockPluginEntriesClick).toHaveBeenCalledTimes(1);
+    expect(mockPanelChange).not.toHaveBeenCalled();
+
+    await act(async () => {
+      root.unmount();
+    });
+    host.remove();
+  });
+
   it('clicking Files on /wiki page toggles sidebar off', async () => {
     mockPathname = '/wiki';
     const mockPanelChange = vi.fn();
