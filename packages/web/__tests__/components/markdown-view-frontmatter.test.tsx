@@ -44,6 +44,11 @@ describe('MarkdownView frontmatter rendering', () => {
     });
   }
 
+  async function flushIdleWork() {
+    await new Promise(resolve => setTimeout(resolve, 0));
+    await Promise.resolve();
+  }
+
   it('renders leading frontmatter as a collapsed properties panel and strips it from prose', async () => {
     await render(`---
 title: Frontmatter Test
@@ -146,6 +151,7 @@ title: [broken
       await Promise.resolve();
       await Promise.resolve();
       await Promise.resolve();
+      await flushIdleWork();
     });
 
     expect(pluginMocks.fetchPluginMarkdownPostProcessorSnapshots).toHaveBeenCalledWith('# Plain note\n\nNo code here.', '');

@@ -34,6 +34,7 @@ import { openTab } from '@/lib/workspace-tabs';
 import PluginActionModalDialog from '@/components/plugins/PluginActionModalDialog';
 import PluginActionMenuDialog from '@/components/plugins/PluginActionMenuDialog';
 import { createSearchResultDragPreview, scheduleSearchResultDragPreviewCleanup } from '@/lib/search-drag-preview';
+import { isPathAffected, subscribeFilesChanged } from '@/lib/files-changed';
 
 /** Highlight matched text fragments in a snippet based on the query */
 function highlightSnippet(snippet: string, query: string): React.ReactNode {
@@ -53,6 +54,16 @@ function formatPath(fullPath: string): { name: string; breadcrumb: string[] } {
   const name = parts[parts.length - 1];
   const breadcrumb = parts.slice(0, -1);
   return { name, breadcrumb };
+}
+
+const SEARCH_PREVIEW_CACHE_LIMIT = 25;
+
+function rememberPreview(cache: Map<string, string | null>, path: string, content: string | null): void {
+  if (cache.has(path)) cache.delete(path);
+  cache.set(path, content);
+  if (cache.size <= SEARCH_PREVIEW_CACHE_LIMIT) return;
+  const oldest = cache.keys().next().value;
+  if (oldest !== undefined) cache.delete(oldest);
 }
 
 interface SearchPanelProps {
@@ -109,45 +120,102 @@ export default function SearchPanel({ active, focusRequest = 0, onNavigate, onCl
   const [previewContent, setPreviewContent] = useState<string | null>(null);
   const [previewPath, setPreviewPath] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewGeneration, setPreviewGeneration] = useState(0);
   const previewTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const previewCache = useRef(new Map<string, string | null>());
+  const previewAbort = useRef<AbortController | null>(null);
+  const previewRequestId = useRef(0);
+  const selectedPreviewPath = selectedFileIndex >= 0 && selectedFileIndex < results.length
+    ? results[selectedFileIndex]?.path ?? null
+    : null;
+
+  useEffect(() => {
+    return subscribeFilesChanged((paths) => {
+      const cachedPaths = Array.from(previewCache.current.keys());
+      const changedCurrent = selectedPreviewPath
+        ? !paths || isPathAffected(paths, selectedPreviewPath)
+        : false;
+
+      if (!paths) {
+        previewCache.current.clear();
+      } else {
+        for (const cachedPath of cachedPaths) {
+          if (isPathAffected(paths, cachedPath)) {
+            previewCache.current.delete(cachedPath);
+          }
+        }
+      }
+
+      if (!changedCurrent) return;
+      previewRequestId.current += 1;
+      previewAbort.current?.abort();
+      setPreviewContent(null);
+      setPreviewPath(null);
+      setPreviewLoading(false);
+      setPreviewGeneration((generation) => generation + 1);
+    });
+  }, [selectedPreviewPath]);
 
   // Fetch preview content when selected result changes (debounced 150ms)
   useEffect(() => {
     if (previewTimer.current) clearTimeout(previewTimer.current);
+    previewAbort.current?.abort();
 
     if (results.length === 0 || selectedFileIndex < 0 || selectedFileIndex >= results.length) {
       setPreviewContent(null);
       setPreviewPath(null);
+      setPreviewLoading(false);
       return;
     }
 
     const result = results[selectedFileIndex];
-    if (result.path === previewPath && previewContent !== null) return;
+    if (previewCache.current.has(result.path)) {
+      setPreviewContent(previewCache.current.get(result.path) ?? null);
+      setPreviewPath(result.path);
+      setPreviewLoading(false);
+      return;
+    }
 
     previewTimer.current = setTimeout(async () => {
+      const requestId = previewRequestId.current + 1;
+      previewRequestId.current = requestId;
+      const controller = new AbortController();
+      previewAbort.current = controller;
       setPreviewLoading(true);
       try {
-        const data = await apiFetch<{ content: string }>(`/api/file?path=${encodeURIComponent(result.path)}`);
-        setPreviewContent(typeof data.content === 'string' ? data.content.slice(0, 2000) : null);
+        const data = await apiFetch<{ content: string }>(
+          `/api/file?path=${encodeURIComponent(result.path)}`,
+          { signal: controller.signal },
+        );
+        if (controller.signal.aborted || previewRequestId.current !== requestId) return;
+        const nextContent = typeof data.content === 'string' ? data.content.slice(0, 2000) : null;
+        rememberPreview(previewCache.current, result.path, nextContent);
+        setPreviewContent(nextContent);
         setPreviewPath(result.path);
       } catch {
+        if (controller.signal.aborted || previewRequestId.current !== requestId) return;
         setPreviewContent(null);
         setPreviewPath(null);
       } finally {
-        setPreviewLoading(false);
+        if (!controller.signal.aborted && previewRequestId.current === requestId) {
+          setPreviewLoading(false);
+        }
       }
     }, 150);
 
     return () => {
       if (previewTimer.current) clearTimeout(previewTimer.current);
+      previewAbort.current?.abort();
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [results, selectedFileIndex]);
+  }, [results, selectedFileIndex, previewGeneration]);
 
   // Clear preview when query changes
   useEffect(() => {
+    previewRequestId.current += 1;
+    previewAbort.current?.abort();
     setPreviewContent(null);
     setPreviewPath(null);
+    setPreviewLoading(false);
   }, [query]);
 
   // Debounced search

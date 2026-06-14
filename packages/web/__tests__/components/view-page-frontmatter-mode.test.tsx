@@ -98,7 +98,7 @@ describe('ViewPageClient frontmatter markdown mode', () => {
     document.body.removeChild(host);
   });
 
-  it('opens markdown with frontmatter in view mode instead of WYSIWYG edit mode', async () => {
+  it('opens markdown with frontmatter in view mode without mounting the editor pane', async () => {
     await act(async () => {
       root.render(
         <ViewPageClient
@@ -114,8 +114,25 @@ describe('ViewPageClient frontmatter markdown mode', () => {
     const view = host.querySelector('[data-testid="markdown-view"]');
 
     expect(view).not.toBeNull();
-    expect((view?.closest('.content-width') as HTMLElement | null)?.style.display).not.toBe('none');
+    expect(editor).toBeNull();
+  });
+
+  it('opens normal markdown in edit mode without mounting the preview pane', async () => {
+    await act(async () => {
+      root.render(
+        <ViewPageClient
+          filePath="note.md"
+          content={'# Body'}
+          extension="md"
+          saveAction={vi.fn()}
+        />,
+      );
+    });
+
+    const editor = host.querySelector('[data-testid="markdown-editor"]');
+    const view = host.querySelector('[data-testid="markdown-view"]');
+
     expect(editor).not.toBeNull();
-    expect((editor?.closest('.content-width') as HTMLElement | null)?.style.display).toBe('none');
+    expect(view).toBeNull();
   });
 });

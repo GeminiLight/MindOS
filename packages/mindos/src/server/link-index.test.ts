@@ -153,6 +153,7 @@ describe('server link index cache', () => {
     expect(snapshot.hits).toEqual([
       { source: 'source.md', target: 'target.md', snippet: 'See [[target]].' },
     ]);
+    expect(snapshot.backlinksByTarget.get('target.md')?.get('source.md')).toEqual(new Set(['See [[target]].']));
     // Same version → identical snapshot instance (no re-scan).
     expect(getLinkSnapshot(services)).toBe(snapshot);
   });

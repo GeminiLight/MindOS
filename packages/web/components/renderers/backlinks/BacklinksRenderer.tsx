@@ -5,12 +5,8 @@ import { useRouter } from 'next/navigation';
 import { FileText, ExternalLink } from 'lucide-react';
 import { encodePath } from '@/lib/utils';
 import type { RendererContext } from '@/lib/renderers/registry';
-import { apiFetch } from '@/lib/api';
-
-interface BacklinkItem {
-  filePath: string;
-  snippets: string[];
-}
+import { fetchBacklinks } from '@/lib/backlinks-client';
+import type { BacklinkItem } from '@/lib/types';
 
 function basename(p: string) {
   return p.split('/').pop()?.replace(/\.md$/, '') ?? p;
@@ -44,7 +40,7 @@ export function BacklinksRenderer({ filePath }: RendererContext) {
 
   useEffect(() => {
     setLoading(true);
-    apiFetch<BacklinkItem[]>(`/api/backlinks?path=${encodeURIComponent(filePath)}`)
+    fetchBacklinks(filePath)
       .then((data) => { setBacklinks(data); setLoading(false); })
       .catch(() => setLoading(false));
   }, [filePath]);

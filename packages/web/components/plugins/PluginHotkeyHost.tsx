@@ -52,20 +52,26 @@ export default function PluginHotkeyHost() {
   const pathname = usePathname();
   const pluginEditorContext = useMemo(() => pluginEditorCommandContextForPathname(pathname), [pathname]);
 
-  const refreshEnabled = useCallback(() => {
-    setEnabled(readObsidianPluginHotkeysEnabled());
-  }, []);
-
-  const refreshSurfaces = useCallback(() => {
+  const refreshSurfaces = useCallback((options: { bypassCache?: boolean } = {}) => {
     if (!readObsidianPluginHotkeysEnabled()) {
       setSurfaces([]);
       return;
     }
 
-    void fetchPluginCommandSurfaces(pluginEditorContext)
+    void fetchPluginCommandSurfaces(pluginEditorContext, { bypassCache: options.bypassCache })
       .then(setSurfaces)
       .catch(() => setSurfaces([]));
   }, [pluginEditorContext]);
+
+  const refreshEnabled = useCallback(() => {
+    const nextEnabled = readObsidianPluginHotkeysEnabled();
+    setEnabled(nextEnabled);
+    if (nextEnabled) {
+      refreshSurfaces({ bypassCache: true });
+    } else {
+      setSurfaces([]);
+    }
+  }, [refreshSurfaces]);
 
   const applyPluginActionResult = useCallback((result: PluginActionResult, fallbackTitle = 'plugin command') => {
     const showedNotice = toastPluginActionNotices(result);
@@ -122,8 +128,9 @@ export default function PluginHotkeyHost() {
   useEffect(() => {
     refreshSurfaces();
     if (!enabled) return;
-    window.addEventListener(PLUGINS_CHANGED_EVENT, refreshSurfaces);
-    return () => window.removeEventListener(PLUGINS_CHANGED_EVENT, refreshSurfaces);
+    const onPluginChange = () => refreshSurfaces({ bypassCache: true });
+    window.addEventListener(PLUGINS_CHANGED_EVENT, onPluginChange);
+    return () => window.removeEventListener(PLUGINS_CHANGED_EVENT, onPluginChange);
   }, [enabled, refreshSurfaces]);
 
   useEffect(() => {

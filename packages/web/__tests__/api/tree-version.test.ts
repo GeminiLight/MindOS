@@ -19,15 +19,14 @@ describe('GET /api/tree-version', () => {
     vi.clearAllMocks();
   });
 
-  it('returns the TTL-aware tree version so watcher misses recover on the next poll', async () => {
-    fsMocks.getTreeVersion.mockReturnValue(42);
-    fsMocks.peekTreeVersion.mockReturnValue(7);
+  it('returns the TTL-aware tree version so watcher misses recover on polling', async () => {
+    fsMocks.getTreeVersion.mockReturnValue(7);
 
     const { GET } = await import('../../app/api/tree-version/route');
     const res = GET();
 
     expect(res.status).toBe(200);
-    await expect(res.json()).resolves.toEqual({ v: 42 });
+    await expect(res.json()).resolves.toEqual({ v: 7 });
     expect(fsMocks.getTreeVersion).toHaveBeenCalledTimes(1);
     expect(fsMocks.peekTreeVersion).not.toHaveBeenCalled();
   });

@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useSyncExternalStore } from 'react';
+import { createContext, useCallback, useContext, useSyncExternalStore } from 'react';
 
 /**
  * Tiny external store for the currently active file path.
@@ -15,23 +15,84 @@ import { createContext, useContext, useSyncExternalStore } from 'react';
  */
 export interface ActivePathStore {
   subscribe: (listener: () => void) => () => void;
+  subscribeFile: (path: string, listener: () => void) => () => void;
+  subscribeActivePath: (path: string, listener: () => void) => () => void;
   get: () => string;
   set: (path: string) => void;
+}
+
+function subscribeKeyed(
+  listenersByPath: Map<string, Set<() => void>>,
+  path: string,
+  listener: () => void,
+): () => void {
+  let listeners = listenersByPath.get(path);
+  if (!listeners) {
+    listeners = new Set();
+    listenersByPath.set(path, listeners);
+  }
+  listeners.add(listener);
+  return () => {
+    listeners?.delete(listener);
+    if (listeners?.size === 0) listenersByPath.delete(path);
+  };
+}
+
+function notifyKeyed(listenersByPath: Map<string, Set<() => void>>, path: string): void {
+  const listeners = listenersByPath.get(path);
+  if (!listeners) return;
+  for (const listener of [...listeners]) listener();
+}
+
+function activePathKeys(path: string): Set<string> {
+  const keys = new Set<string>();
+  const segments = path.split('/').filter(Boolean);
+  for (let index = 0; index < segments.length; index += 1) {
+    keys.add(segments.slice(0, index + 1).join('/'));
+  }
+  return keys;
+}
+
+function changedActivePathKeys(previous: string, next: string): Set<string> {
+  const previousKeys = activePathKeys(previous);
+  const nextKeys = activePathKeys(next);
+  const changed = new Set<string>();
+  for (const key of previousKeys) {
+    if (!nextKeys.has(key)) changed.add(key);
+  }
+  for (const key of nextKeys) {
+    if (!previousKeys.has(key)) changed.add(key);
+  }
+  return changed;
 }
 
 export function createActivePathStore(initial = ''): ActivePathStore {
   let current = initial;
   const listeners = new Set<() => void>();
+  const fileListeners = new Map<string, Set<() => void>>();
+  const activePathListeners = new Map<string, Set<() => void>>();
   return {
     subscribe(listener) {
       listeners.add(listener);
       return () => { listeners.delete(listener); };
     },
+    subscribeFile(path, listener) {
+      return subscribeKeyed(fileListeners, path, listener);
+    },
+    subscribeActivePath(path, listener) {
+      return subscribeKeyed(activePathListeners, path, listener);
+    },
     get: () => current,
     set(path) {
       if (path === current) return;
+      const previous = current;
       current = path;
-      // Copy before iterating: a listener may unsubscribe (row unmount) mid-notify.
+      notifyKeyed(fileListeners, previous);
+      notifyKeyed(fileListeners, path);
+      for (const key of changedActivePathKeys(previous, path)) {
+        notifyKeyed(activePathListeners, key);
+      }
+      // Copy before iterating: a listener may unsubscribe mid-notify.
       for (const listener of [...listeners]) listener();
     },
   };
@@ -46,8 +107,12 @@ export const ActivePathContext = createContext<ActivePathStore>(fallbackStore);
 /** True when `path` is exactly the active file. Re-renders only when this flips. */
 export function useIsActiveFile(path: string): boolean {
   const store = useContext(ActivePathContext);
+  const subscribe = useCallback(
+    (listener: () => void) => store.subscribeFile(path, listener),
+    [path, store],
+  );
   return useSyncExternalStore(
-    store.subscribe,
+    subscribe,
     () => store.get() === path,
     () => store.get() === path,
   );
@@ -63,5 +128,9 @@ export function useIsOnActivePath(path: string): boolean {
     const current = store.get();
     return current === path || current.startsWith(path + '/');
   };
-  return useSyncExternalStore(store.subscribe, matches, matches);
+  const subscribe = useCallback(
+    (listener: () => void) => store.subscribeActivePath(path, listener),
+    [path, store],
+  );
+  return useSyncExternalStore(subscribe, matches, matches);
 }

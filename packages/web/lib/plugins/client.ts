@@ -407,11 +407,58 @@ export function pluginEditorCommandContextForPathname(pathname: string | null | 
 
 interface FetchPluginSurfacesOptions {
   loadEnabled?: boolean;
+  bypassCache?: boolean;
 }
 
-export async function fetchPluginCommandSurfaces(context?: PluginEditorCommandContext): Promise<PluginSurface[]> {
+const PLUGIN_SURFACES_CACHE_TTL_MS = 5_000;
+const MARKDOWN_POST_PROCESSOR_CACHE_TTL_MS = 30_000;
+
+interface PluginSurfacesCacheEntry {
+  expiresAt: number;
+  surfaces?: PluginSurface[];
+  promise?: Promise<PluginSurface[]>;
+}
+
+const pluginSurfacesCache = new Map<string, PluginSurfacesCacheEntry>();
+
+export function clearPluginSurfacesCacheForTests(): void {
+  pluginSurfacesCache.clear();
+  clearPluginMarkdownPostProcessorCacheForTests();
+}
+
+interface MarkdownPostProcessorCacheEntry {
+  expiresAt: number;
+  renders?: PluginMarkdownPostProcessorRender[];
+  promise?: Promise<PluginMarkdownPostProcessorRender[]>;
+}
+
+const pluginMarkdownPostProcessorCache = new Map<string, MarkdownPostProcessorCacheEntry>();
+
+function hashMarkdownInput(markdown: string): string {
+  let hash = 5381;
+  for (let index = 0; index < markdown.length; index += 1) {
+    hash = Math.imul(hash, 33) ^ markdown.charCodeAt(index);
+  }
+  return `${markdown.length}:${(hash >>> 0).toString(36)}`;
+}
+
+function markdownPostProcessorCacheKey(markdown: string, sourcePath: string): string {
+  return `${sourcePath}\0${hashMarkdownInput(markdown)}`;
+}
+
+export function clearPluginMarkdownPostProcessorCacheForTests(): void {
+  pluginMarkdownPostProcessorCache.clear();
+}
+
+export async function fetchPluginCommandSurfaces(
+  context?: PluginEditorCommandContext,
+  options: Pick<FetchPluginSurfacesOptions, 'bypassCache'> = {},
+): Promise<PluginSurface[]> {
   const sourcePathQuery = context?.sourcePath ? `&sourcePath=${encodeURIComponent(context.sourcePath)}` : '';
-  const data = await fetchPluginSurfaces(`kind=command${sourcePathQuery}`, { loadEnabled: true });
+  const data = await fetchPluginSurfaces(`kind=command${sourcePathQuery}`, {
+    loadEnabled: true,
+    bypassCache: options.bypassCache,
+  });
   return (data ?? []).filter((surface) => (
     surface.kind === 'command'
     && surface.availability === 'available'
@@ -424,10 +471,37 @@ export async function fetchPluginSurfaces(query?: string, options: FetchPluginSu
     options.loadEnabled ? 'loadEnabled=1' : '',
     query ?? '',
   ].filter(Boolean).join('&');
-  const data = await apiFetch<PluginSurfacesResponse>(`/api/plugins/surfaces${queryString ? `?${queryString}` : ''}`, {
+  const cacheKey = queryString;
+  const now = Date.now();
+  if (!options.bypassCache) {
+    const cached = pluginSurfacesCache.get(cacheKey);
+    if (cached && cached.expiresAt > now) {
+      if (cached.surfaces) return cached.surfaces;
+      if (cached.promise) return cached.promise;
+    }
+  }
+
+  const promise = apiFetch<PluginSurfacesResponse>(`/api/plugins/surfaces${queryString ? `?${queryString}` : ''}`, {
     cache: 'no-store',
+  }).then((data) => {
+    const surfaces = data.surfaces ?? [];
+    pluginSurfacesCache.set(cacheKey, {
+      expiresAt: Date.now() + PLUGIN_SURFACES_CACHE_TTL_MS,
+      surfaces,
+    });
+    return surfaces;
+  }).catch((error) => {
+    if (pluginSurfacesCache.get(cacheKey)?.promise === promise) {
+      pluginSurfacesCache.delete(cacheKey);
+    }
+    throw error;
   });
-  return data.surfaces ?? [];
+
+  pluginSurfacesCache.set(cacheKey, {
+    expiresAt: now + PLUGIN_SURFACES_CACHE_TTL_MS,
+    promise,
+  });
+  return promise;
 }
 
 export async function fetchPluginHostSurfaces(options: FetchPluginSurfacesOptions = {}): Promise<PluginSurface[]> {
@@ -634,11 +708,36 @@ export async function fetchPluginMarkdownPostProcessorSnapshots(
   markdown: string,
   sourcePath = '',
 ): Promise<PluginMarkdownPostProcessorRender[]> {
-  const data = await apiFetch<PluginMarkdownPostProcessorsResponse>('/api/obsidian-plugins/markdown-post-processors', {
+  const cacheKey = markdownPostProcessorCacheKey(markdown, sourcePath);
+  const now = Date.now();
+  const cached = pluginMarkdownPostProcessorCache.get(cacheKey);
+  if (cached && cached.expiresAt > now) {
+    if (cached.renders) return cached.renders;
+    if (cached.promise) return cached.promise;
+  }
+
+  const promise = apiFetch<PluginMarkdownPostProcessorsResponse>('/api/obsidian-plugins/markdown-post-processors', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     cache: 'no-store',
     body: JSON.stringify({ markdown, sourcePath }),
+  }).then((data) => {
+    const renders = data.renders ?? [];
+    pluginMarkdownPostProcessorCache.set(cacheKey, {
+      expiresAt: Date.now() + MARKDOWN_POST_PROCESSOR_CACHE_TTL_MS,
+      renders,
+    });
+    return renders;
+  }).catch((error) => {
+    if (pluginMarkdownPostProcessorCache.get(cacheKey)?.promise === promise) {
+      pluginMarkdownPostProcessorCache.delete(cacheKey);
+    }
+    throw error;
   });
-  return data.renders ?? [];
+
+  pluginMarkdownPostProcessorCache.set(cacheKey, {
+    expiresAt: now + MARKDOWN_POST_PROCESSOR_CACHE_TTL_MS,
+    promise,
+  });
+  return promise;
 }

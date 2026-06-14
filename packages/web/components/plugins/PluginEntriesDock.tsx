@@ -566,9 +566,9 @@ export default function PluginEntriesDock({ onOpenPluginsSettings, onOpenCommand
   const pathname = usePathname();
   const sourcePath = useMemo(() => sourcePathFromViewPathname(pathname), [pathname]);
 
-  const refresh = useCallback(async (loadEnabled = false) => {
+  const refresh = useCallback(async (loadEnabled = false, options: { bypassCache?: boolean } = {}) => {
     try {
-      const next = await fetchPluginHostSurfaces({ loadEnabled });
+      const next = await fetchPluginHostSurfaces({ loadEnabled, bypassCache: options.bypassCache });
       setSurfaces(next);
     } catch {
       setSurfaces([]);
@@ -578,11 +578,11 @@ export default function PluginEntriesDock({ onOpenPluginsSettings, onOpenCommand
   }, []);
 
   useEffect(() => {
-    void refresh();
-    const onPluginChange = () => void refresh();
+    void refresh(false, { bypassCache: true });
+    const onPluginChange = () => void refresh(false, { bypassCache: true });
     const onPluginEntriesOpen = () => {
       setOpen(true);
-      void refresh(true);
+      void refresh(true, { bypassCache: true });
     };
     const onWindowFocus = () => void refresh();
     window.addEventListener(PLUGINS_CHANGED_EVENT, onPluginChange);
@@ -702,7 +702,7 @@ export default function PluginEntriesDock({ onOpenPluginsSettings, onOpenCommand
           }
         }
       }
-      await refresh(true);
+      await refresh(true, { bypassCache: true });
     } catch (error) {
       setActionError(error instanceof Error ? error.message : 'Failed to run plugin action');
     } finally {
@@ -718,7 +718,7 @@ export default function PluginEntriesDock({ onOpenPluginsSettings, onOpenCommand
       }
       const result = await choosePluginModalSuggestion(modal.id, suggestion.index, modal.interactionId);
       applyPluginActionResult(result);
-      await refresh(true);
+      await refresh(true, { bypassCache: true });
     } catch (error) {
       setModalChoiceError(error instanceof Error ? error.message : 'Failed to choose plugin suggestion');
     } finally {
@@ -734,7 +734,7 @@ export default function PluginEntriesDock({ onOpenPluginsSettings, onOpenCommand
       }
       const result = await choosePluginMenuItem(menu.id, item.index, menu.interactionId);
       applyPluginActionResult(result);
-      await refresh(true);
+      await refresh(true, { bypassCache: true });
     } catch (error) {
       setMenuChoiceError(error instanceof Error ? error.message : 'Failed to choose plugin menu item');
     } finally {

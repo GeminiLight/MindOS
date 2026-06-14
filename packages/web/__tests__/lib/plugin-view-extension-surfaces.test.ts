@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  clearPluginSurfacesCacheForTests,
   fetchPluginViewSurfacesForExtension,
   normalizePluginViewExtension,
   pluginViewSurfaceMatchesExtension,
@@ -45,6 +46,7 @@ function viewSurface(overrides: Partial<PluginSurface> = {}): PluginSurface {
 describe('plugin view extension surfaces', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    clearPluginSurfacesCacheForTests();
   });
 
   it('normalizes file extensions to Obsidian-compatible keys', () => {
@@ -77,6 +79,19 @@ describe('plugin view extension surfaces', () => {
     expect(mocks.apiFetch).toHaveBeenCalledWith('/api/plugins/surfaces?kind=view&source=obsidian', {
       cache: 'no-store',
     });
+  });
+
+  it('reuses a recent surfaces response for repeated extension lookups', async () => {
+    const matchingSurface = viewSurface();
+    mocks.apiFetch.mockResolvedValueOnce({
+      ok: true,
+      surfaces: [matchingSurface],
+    });
+
+    await expect(fetchPluginViewSurfacesForExtension('kanban')).resolves.toEqual([matchingSurface]);
+    await expect(fetchPluginViewSurfacesForExtension('kanban')).resolves.toEqual([matchingSurface]);
+
+    expect(mocks.apiFetch).toHaveBeenCalledTimes(1);
   });
 
   it('does not call the surfaces API for an empty extension', async () => {

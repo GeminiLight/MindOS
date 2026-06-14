@@ -83,6 +83,7 @@ export default async function ViewPage({ params }: PageProps) {
 
     return (
       <ViewPageClient
+        key={filePath}
         filePath={filePath}
         content=""
         extension={extension}
@@ -105,6 +106,7 @@ export default async function ViewPage({ params }: PageProps) {
       const draftDirectories = collectDirectories(getFileTree());
       return (
         <ViewPageClient
+          key={filePath}
           filePath={filePath}
           content=""
           extension="md"
@@ -121,6 +123,7 @@ export default async function ViewPage({ params }: PageProps) {
 
   return (
     <ViewPageClient
+      key={filePath}
       filePath={filePath}
       content={content}
       extension={extension}

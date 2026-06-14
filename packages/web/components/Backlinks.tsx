@@ -1,34 +1,71 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Link as LinkIcon, FileText } from 'lucide-react';
 import { useLocale } from '@/lib/stores/locale-store';
-import { apiFetch } from '@/lib/api';
+import { fetchBacklinks } from '@/lib/backlinks-client';
 import type { BacklinkItem } from '@/lib/types';
 
 export default function Backlinks({ filePath }: { filePath: string }) {
   const [backlinks, setBacklinks] = useState<BacklinkItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [loadPath, setLoadPath] = useState<string | null>(null);
+  const sentinelRef = useRef<HTMLDivElement>(null);
   const { t } = useLocale();
+  const shouldLoad = loadPath === filePath;
 
   useEffect(() => {
+    setBacklinks([]);
+    setLoading(false);
+  }, [filePath]);
+
+  useEffect(() => {
+    if (shouldLoad) return;
+    const element = sentinelRef.current;
+    if (!element || typeof IntersectionObserver === 'undefined') {
+      setLoadPath(filePath);
+      return;
+    }
+
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) {
+        setLoadPath(filePath);
+        observer.disconnect();
+      }
+    }, { rootMargin: '600px 0px' });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [filePath, shouldLoad]);
+
+  useEffect(() => {
+    if (!shouldLoad) return;
+    let cancelled = false;
     setLoading(true);
-    apiFetch<BacklinkItem[]>(`/api/backlinks?path=${encodeURIComponent(filePath)}`)
+    fetchBacklinks(filePath)
       .then(data => {
+        if (cancelled) return;
         setBacklinks(Array.isArray(data) ? data : []);
         setLoading(false);
       })
       .catch(() => {
+        if (cancelled) return;
         setBacklinks([]);
         setLoading(false);
       });
-  }, [filePath]);
+    return () => {
+      cancelled = true;
+    };
+  }, [filePath, shouldLoad]);
+
+  if (!shouldLoad) {
+    return <div ref={sentinelRef} aria-hidden="true" data-backlinks-deferred className="h-px" />;
+  }
 
   if (!loading && backlinks.length === 0) return null;
 
   return (
-    <div className="mt-12 pt-8 border-t border-border">
+    <div ref={sentinelRef} className="mt-12 pt-8 border-t border-border">
       <div className="flex items-center gap-2 mb-6 text-muted-foreground">
         <LinkIcon size={16} className="text-[var(--amber)]/70" />
         <h3 className="text-sm font-semibold tracking-wider uppercase">

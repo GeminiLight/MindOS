@@ -12,4 +12,14 @@ describe('TableOfContents header layout', () => {
     expect(source).toContain('className="flex flex-col gap-0.5 overflow-y-auto min-h-0 flex-1 pt-3 pb-5 pl-2 pr-3 border-l border-border"');
     expect(source).not.toContain('py-5 pl-2 pr-3 border-l border-border');
   });
+
+  it('parses headings from deferred content so editor input stays responsive', () => {
+    const filePath = path.resolve(process.cwd(), 'components/TableOfContents.tsx');
+    const source = fs.readFileSync(filePath, 'utf8');
+
+    expect(source).toContain('useDeferredValue');
+    expect(source).toContain('const deferredContent = useDeferredValue(content);');
+    expect(source).toContain('parseHeadings(deferredContent)');
+    expect(source).not.toContain('parseHeadings(content)');
+  });
 });

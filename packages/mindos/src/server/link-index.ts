@@ -28,6 +28,8 @@ export type LinkSnapshot = {
   files: string[];
   /** Every resolved link occurrence with its source line snippet. */
   hits: LinkHit[];
+  /** Backlink lookup table: target -> source -> unique snippets. */
+  backlinksByTarget: Map<string, Map<string, Set<string>>>;
 };
 
 type CachedSnapshot = LinkSnapshot & { version: number };
@@ -62,6 +64,7 @@ export function buildLinkSnapshot(services: LinkScanServices): LinkSnapshot {
   const fileSet = new Set(files);
   const basenameMap = buildBasenameMap(files);
   const hits: LinkHit[] = [];
+  const backlinksByTarget = new Map<string, Map<string, Set<string>>>();
 
   for (const source of files) {
     let content = '';
@@ -71,10 +74,23 @@ export function buildLinkSnapshot(services: LinkScanServices): LinkSnapshot {
       // File deleted (or unreadable) between listing and reading — skip it.
       continue;
     }
-    hits.push(...extractLinkHits(content, source, fileSet, basenameMap));
+    for (const hit of extractLinkHits(content, source, fileSet, basenameMap)) {
+      hits.push(hit);
+      let sources = backlinksByTarget.get(hit.target);
+      if (!sources) {
+        sources = new Map();
+        backlinksByTarget.set(hit.target, sources);
+      }
+      let snippets = sources.get(hit.source);
+      if (!snippets) {
+        snippets = new Set();
+        sources.set(hit.source, snippets);
+      }
+      snippets.add(hit.snippet);
+    }
   }
 
-  return { files, hits };
+  return { files, hits, backlinksByTarget };
 }
 
 export function normalizeTargetPath(value: string | undefined): string | undefined {

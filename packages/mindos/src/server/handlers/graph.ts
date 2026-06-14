@@ -41,18 +41,12 @@ export function handleBacklinks(
     return json({ error: 'path required' }, { status: 400 });
   }
 
-  const snippets = new Map<string, string[]>();
-  for (const hit of getLinkSnapshot(services).hits) {
-    if (hit.target !== target) continue;
-    const list = snippets.get(hit.source) ?? [];
-    list.push(hit.snippet);
-    snippets.set(hit.source, list);
-  }
+  const snippets = getLinkSnapshot(services).backlinksByTarget.get(target) ?? new Map<string, Set<string>>();
 
   const backlinks = [...snippets.entries()]
     .map(([filePath, lines]) => ({
       filePath,
-      snippets: [...new Set(lines)],
+      snippets: [...lines],
     }))
     .sort((a, b) => a.filePath.localeCompare(b.filePath));
 

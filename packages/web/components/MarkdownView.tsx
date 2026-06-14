@@ -155,6 +155,23 @@ function isMarkdownPostProcessorSurface(surface: PluginSurface): boolean {
     && surface.metadata.processorType === 'post';
 }
 
+function scheduleMarkdownIdleWork(callback: () => void): () => void {
+  const idleWindow = typeof window !== 'undefined'
+    ? window as Window & typeof globalThis & {
+      requestIdleCallback?: (cb: IdleRequestCallback, options?: IdleRequestOptions) => number;
+      cancelIdleCallback?: (handle: number) => void;
+    }
+    : null;
+
+  if (idleWindow?.requestIdleCallback) {
+    const handle = idleWindow.requestIdleCallback(() => callback(), { timeout: 1_000 });
+    return () => idleWindow.cancelIdleCallback?.(handle);
+  }
+
+  const handle = setTimeout(callback, 0);
+  return () => clearTimeout(handle);
+}
+
 function MarkdownPostProcessorSnapshots({ renders }: { renders: PluginMarkdownPostProcessorRender[] }) {
   const visibleRenders = renders.filter((render) => render.text || render.error);
   if (visibleRenders.length === 0) return null;
@@ -444,8 +461,10 @@ export default function MarkdownView({ content, highlightLines, onDismissHighlig
       return;
     }
     let cancelled = false;
+    let cancelDeferredPostProcessors: (() => void) | null = null;
     fetchPluginSurfaces('kind=markdown&source=obsidian')
       .then(async (surfaces) => {
+        if (cancelled) return;
         const hookSurfaces = surfaces.filter(isMarkdownCodeBlockSurface);
         const postProcessorSurfaces = surfaces.filter(isMarkdownPostProcessorSurface);
         if (!cancelled) {
@@ -479,12 +498,17 @@ export default function MarkdownView({ content, highlightLines, onDismissHighlig
         if (postProcessorSurfaces.length === 0) {
           if (!cancelled) setMarkdownPostProcessorRenders([]);
         } else {
-          try {
-            const renders = await fetchPluginMarkdownPostProcessorSnapshots(parsedMarkdown.body, sourcePath);
-            if (!cancelled) setMarkdownPostProcessorRenders(renders);
-          } catch {
-            if (!cancelled) setMarkdownPostProcessorRenders([]);
-          }
+          if (!cancelled) setMarkdownPostProcessorRenders([]);
+          cancelDeferredPostProcessors = scheduleMarkdownIdleWork(() => {
+            if (cancelled) return;
+            fetchPluginMarkdownPostProcessorSnapshots(parsedMarkdown.body, sourcePath)
+              .then((renders) => {
+                if (!cancelled) setMarkdownPostProcessorRenders(renders);
+              })
+              .catch(() => {
+                if (!cancelled) setMarkdownPostProcessorRenders([]);
+              });
+          });
         }
       })
       .catch(() => {
@@ -496,6 +520,7 @@ export default function MarkdownView({ content, highlightLines, onDismissHighlig
       });
     return () => {
       cancelled = true;
+      cancelDeferredPostProcessors?.();
     };
   }, [fencedCodeBlocks, mounted, parsedMarkdown.body, sourcePath]);
 

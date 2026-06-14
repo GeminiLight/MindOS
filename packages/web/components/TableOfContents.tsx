@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
+import { useEffect, useState, useRef, useCallback, useDeferredValue, useMemo } from 'react';
 import { ChevronRight } from 'lucide-react';
 import GithubSlugger from 'github-slugger';
 import { useLocale } from '@/lib/stores/locale-store';
@@ -100,10 +100,11 @@ interface TableOfContentsProps {
 
 export default function TableOfContents({ content }: TableOfContentsProps) {
   const { t } = useLocale();
+  const deferredContent = useDeferredValue(content);
   const { headings, minLevel } = useMemo(() => {
-    const h = parseHeadings(content);
+    const h = parseHeadings(deferredContent);
     return { headings: h, minLevel: h.length > 0 ? Math.min(...h.map(x => x.level)) : 1 };
-  }, [content]);
+  }, [deferredContent]);
   const [activeIdx, setActiveIdx] = useState(-1);
   const [collapsed, setCollapsed] = useState(false);
 
