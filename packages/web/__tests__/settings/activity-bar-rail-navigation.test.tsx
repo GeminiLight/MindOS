@@ -253,7 +253,7 @@ describe('ActivityBar rail navigation', () => {
       home?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
     });
 
-    expect(mockPanelChange).toHaveBeenCalledWith(null);
+    expect(mockPanelChange).toHaveBeenCalledWith('files');
     expect(mockRouterPush).toHaveBeenCalledWith('/');
     expect(mockRouterPush).not.toHaveBeenCalledWith('/wiki');
     expect(mockRouterPush).not.toHaveBeenCalledWith('/echo/imprint');

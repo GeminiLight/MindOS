@@ -12,6 +12,7 @@ import ThinkingBlock from './ThinkingBlock';
 import { SaveMessageButton } from './SaveSessionInline';
 import UserMessageActions from './UserMessageActions';
 import AgentRunTimeline from './AgentRunTimeline';
+import { agentIconFile } from '@/lib/agent-icons';
 
 const SKILL_PREFIX_RE = /^Use the skill ([^:]+):\s*/;
 const MARKDOWN_REMARK_PLUGINS = [remarkGfm];
@@ -133,16 +134,12 @@ const UserMessageContent = memo(function UserMessageContent({ content, skillName
   );
 });
 
-// Native runtimes (codex / claude) speak as the assistant itself — repeating
-// their identity per message reads as noise, so badge and side mark are both
-// suppressed for them. Every other attributed agent (acp / a2a / subagents /
-// kind-less attributions) keeps the badge.
 function shouldShowAssistantAgentBadge(agentKind?: Message['agentKind'] | string): boolean {
-  return shouldShowAssistantSideMark(agentKind);
+  return agentKind !== 'codex' && agentKind !== 'claude';
 }
 
 function shouldShowAssistantSideMark(agentKind?: Message['agentKind'] | string): boolean {
-  return agentKind !== 'codex' && agentKind !== 'claude';
+  return true;
 }
 
 const AssistantAgentBadge = memo(function AssistantAgentBadge({ agentName, agentKind }: { agentName?: string; agentKind?: Message['agentKind'] | string }) {
@@ -212,13 +209,12 @@ function RuntimeMark({
   const size = small ? 'h-5 w-5' : 'h-7 w-7';
   const iconSize = small ? 'h-3.5 w-3.5' : 'h-4 w-4';
   const title = label ?? (runtime ? runtimeLabel(runtime as RuntimeStatusPart['runtime']) : 'MindOS');
-  const imageSrc = runtime === 'codex'
-    ? '/agent-icons/openai.svg'
-    : runtime === 'claude'
-      ? '/agent-icons/claude.svg'
-      : runtime === 'mindos' || !runtime
-        ? '/logo-square.svg'
-        : null;
+  const iconFile = agentIconFile(label) ?? agentIconFile(runtime);
+  const imageSrc = iconFile
+    ? `/agent-icons/${iconFile}`
+    : runtime === 'mindos' || !runtime
+      ? '/logo-square.svg'
+      : null;
 
   return (
     <span

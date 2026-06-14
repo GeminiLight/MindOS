@@ -329,7 +329,7 @@ export default function ActivityBar({
               return;
             }
             startTransition(() => {
-              onPanelChange(null);
+              onPanelChange('files');
               if (!isHome) {
                 router.push('/');
               }

@@ -129,7 +129,7 @@ describe('MessageList runtime status rendering', () => {
     expect(html).not.toContain('role="status"');
   });
 
-  it('does not repeat native runtime identity inside assistant messages', () => {
+  it('keeps native runtime logos without repeating identity badges inside assistant messages', () => {
     const messages: Message[] = [
       {
         role: 'assistant',
@@ -161,10 +161,10 @@ describe('MessageList runtime status rendering', () => {
 
     expect(html).toContain('Native runtime result one');
     expect(html).toContain('Native runtime result two');
-    expect(html).not.toContain('/agent-icons/openai.svg');
-    expect(html).not.toContain('/agent-icons/claude.svg');
-    expect(html).not.toContain('Codex');
-    expect(html).not.toContain('Claude Code');
+    expect(html).toContain('/agent-icons/openai.svg');
+    expect(html).toContain('/agent-icons/claude.svg');
+    expect(html).not.toContain('<span>Codex</span>');
+    expect(html).not.toContain('<span>Claude Code</span>');
   });
 
   it('keeps an agent capsule for ACP assistant messages', () => {
@@ -192,6 +192,7 @@ describe('MessageList runtime status rendering', () => {
 
     expect(html).toContain('Gemini ACP');
     expect(html).toContain('Delegated answer');
+    expect(html).toContain('/agent-icons/gemini.svg');
     expect(html).toContain('rounded-full');
   });
 

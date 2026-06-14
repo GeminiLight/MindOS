@@ -3,45 +3,17 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { X } from 'lucide-react';
 import { useLocale } from '@/lib/stores/locale-store';
+import { getDesktopBridge } from '@/lib/desktop-bridge';
+import { useCoreUpdateStore } from '@/lib/stores/core-update-store';
 
-/* ── Bridge interface ──────────────────────────────────────────────── */
-
-interface MindosDesktopBridge {
-  checkUpdate?: () => Promise<{ available: boolean; version?: string }>;
-  onUpdateAvailable?: (cb: (info: { version?: string }) => void) => () => void;
-  checkCoreUpdate?: () => Promise<{
-    available: boolean;
-    currentVersion: string;
-    latestVersion: string;
-  }>;
-  onCoreUpdateAvailable?: (
-    cb: (info: { current: string; latest: string; ready?: boolean }) => void,
-  ) => () => void;
-}
-
-function getDesktopBridge(): MindosDesktopBridge | null {
-  if (typeof window === 'undefined') return null;
-  const w = window as unknown as { mindos?: MindosDesktopBridge };
-  return w.mindos?.checkUpdate ? (w.mindos as MindosDesktopBridge) : null;
-}
-
-/* ── Types ─────────────────────────────────────────────────────────── */
-
-interface PendingUpdate {
-  type: 'desktop' | 'core';
-  version: string;
-}
-
-type ToastVisibility = 'hidden' | 'visible' | 'dismissing';
-
-/* ── Constants ─────────────────────────────────────────────────────── */
+// Constants
 
 const SKIP_DESKTOP_KEY = 'mindos_update_skip_desktop';
-const SKIP_CORE_KEY = 'mindos_update_skip_core';
-const SHOW_DELAY_MS = 10_000; // Wait 10 s after startup before showing
+const SHOW_DELAY_MS = 10_000;  // Wait 10 s after startup before showing the shell toast
+const CORE_AUTODISMISS_MS = 6_000; // Core "ready" nudge is transient
 const DISMISS_MS = 200; // Match the CSS transition duration
 
-/* ── Helpers ───────────────────────────────────────────────────────── */
+// Helpers
 
 /** Proper semantic-version comparison: returns true when `a` is strictly newer than `b`. */
 function isNewer(a: string, b: string): boolean {
@@ -56,52 +28,49 @@ function isNewer(a: string, b: string): boolean {
   return false;
 }
 
-/* ── Component ─────────────────────────────────────────────────────── */
+type Visibility = 'hidden' | 'visible' | 'dismissing';
+
+// Component
 
 /**
- * Desktop-only update notification toast.
+ * Desktop-only update notifications (bottom-left).
  *
- * Appears in the bottom-left corner when the Electron bridge reports a new
- * Desktop shell or MindOS Core update.  Persists until the user clicks
- * "View Details" (→ Settings > Update tab) or "Skip Version" (→ stored in
- * localStorage so it won't re-appear for that version).
+ * Two deliberately different policies (the redesign's direction 1):
+ *  - Shell update (rare, needs an app restart): a PERSISTENT toast worth
+ *    interrupting for: "View details / Skip version".
+ *  - Core update (cheap, service-only): downloads silently via the core store;
+ *    we only nudge once it is READY, as a quiet auto-dismissing toast offering
+ *    "Apply now". We never toast a Core update that is merely available.
  *
  * Renders `null` in browser/CLI mode (no bridge).
  */
 export default function UpdateToast() {
   const { t } = useLocale();
   const ut = t.settings.update.updateToast;
+  const u = t.settings.update;
 
-  const [visibility, setVisibility] = useState<ToastVisibility>('hidden');
-  const [updates, setUpdates] = useState<{
-    desktop?: PendingUpdate;
-    core?: PendingUpdate;
-  }>({});
-
-  // Stable ref for the bridge — avoids re-running the effect every render.
-  const bridgeRef = useRef<MindosDesktopBridge | null>(null);
   const [isDesktop, setIsDesktop] = useState(false);
+  const bridgeRef = useRef(getDesktopBridge());
 
-  // Timeout bookkeeping — prevents stale setState after dismiss / unmount.
+  // Core store: drive silent check/download app-wide.
+  const corePhase = useCoreUpdateStore((s) => s.phase);
+  const coreLatest = useCoreUpdateStore((s) => s.latest);
+  const coreInit = useCoreUpdateStore((s) => s.init);
+  const applyNow = useCoreUpdateStore((s) => s.applyNow);
+
+  // Shell (electron-updater) toast: persistent.
+  const [shell, setShell] = useState<{ version: string } | null>(null);
+  const [shellVis, setShellVis] = useState<Visibility>('hidden');
+
+  // Core "ready" toast: transient.
+  const [coreVis, setCoreVis] = useState<Visibility>('hidden');
+  const [coreDismissed, setCoreDismissed] = useState<string>('');
+
   const timers = useRef(new Set<ReturnType<typeof setTimeout>>());
-  const queued = useRef<{ desktop?: string; core?: string }>({});
-
-  // ── Timeout helpers ─────────────────────────────────────────────────
-
-  const clearTimers = useCallback(() => {
-    timers.current.forEach(clearTimeout);
-    timers.current.clear();
-  }, []);
-
-  const schedule = useCallback((state: ToastVisibility, ms: number) => {
-    const id = setTimeout(() => {
-      timers.current.delete(id);
-      setVisibility(state);
-    }, ms);
+  const after = useCallback((ms: number, fn: () => void) => {
+    const id = setTimeout(() => { timers.current.delete(id); fn(); }, ms);
     timers.current.add(id);
   }, []);
-
-  // ── Detect Desktop bridge once on mount ─────────────────────────────
 
   useEffect(() => {
     const b = getDesktopBridge();
@@ -109,144 +78,135 @@ export default function UpdateToast() {
     setIsDesktop(!!b);
   }, []);
 
-  // ── Subscribe to IPC update events ──────────────────────────────────
+  useEffect(() => { coreInit(); }, [coreInit]);
 
+  // Subscribe to shell availability.
   useEffect(() => {
     const bridge = bridgeRef.current;
-    if (!bridge) return;
-
-    clearTimers();
-    const teardowns: Array<() => void> = [];
-
-    // Helper: queue an update unless already queued for this version.
-    const enqueue = (
-      key: 'desktop' | 'core',
-      version: string,
-      skipKey: string,
-    ) => {
-      const skipped = localStorage.getItem(skipKey);
+    if (!bridge?.onUpdateAvailable) return;
+    const teardown = bridge.onUpdateAvailable((info) => {
+      const version = info?.version;
+      if (!version) return;
+      const skipped = localStorage.getItem(SKIP_DESKTOP_KEY);
       if (skipped && !isNewer(version, skipped)) return;
-      if (queued.current[key] === version) return; // de-dup
+      setShell({ version });
+      after(SHOW_DELAY_MS, () => setShellVis('visible'));
+    });
+    return () => { teardown?.(); };
+  }, [isDesktop, after]);
 
-      queued.current[key] = version;
-      setUpdates(prev => ({ ...prev, [key]: { type: key, version } }));
-      schedule('visible', SHOW_DELAY_MS);
-    };
+  // Surface the Core "ready" nudge (transient, auto-dismiss).
+  useEffect(() => {
+    if (corePhase !== 'ready' || !coreLatest || coreLatest === coreDismissed) return;
+    setCoreVis('visible');
+    after(CORE_AUTODISMISS_MS, () => setCoreVis('dismissing'));
+    after(CORE_AUTODISMISS_MS + DISMISS_MS, () => setCoreVis('hidden'));
+  }, [corePhase, coreLatest, coreDismissed, after]);
 
-    if (bridge.onUpdateAvailable) {
-      teardowns.push(
-        bridge.onUpdateAvailable(info => {
-          if (info?.version) enqueue('desktop', info.version, SKIP_DESKTOP_KEY);
-        }),
-      );
-    }
+  useEffect(() => () => { timers.current.forEach(clearTimeout); timers.current.clear(); }, []);
 
-    if (bridge.onCoreUpdateAvailable) {
-      teardowns.push(
-        bridge.onCoreUpdateAvailable(info => {
-          if (info?.latest && !info.ready) {
-            enqueue('core', info.latest, SKIP_CORE_KEY);
-          }
-        }),
-      );
-    }
+  const openSettings = useCallback(() => {
+    window.dispatchEvent(new CustomEvent('mindos:open-settings', { detail: { tab: 'update' } }));
+  }, []);
 
-    return () => {
-      teardowns.forEach(fn => fn());
-      clearTimers();
-    };
-  }, [isDesktop, clearTimers, schedule]); // eslint-disable-line react-hooks/exhaustive-deps
+  const dismissShell = useCallback((skip: boolean) => {
+    if (skip && shell) localStorage.setItem(SKIP_DESKTOP_KEY, shell.version);
+    setShellVis('dismissing');
+    after(DISMISS_MS, () => setShellVis('hidden'));
+  }, [shell, after]);
 
-  // Clean up on unmount
-  useEffect(() => () => clearTimers(), [clearTimers]);
+  const dismissCore = useCallback(() => {
+    if (coreLatest) setCoreDismissed(coreLatest);
+    setCoreVis('dismissing');
+    after(DISMISS_MS, () => setCoreVis('hidden'));
+  }, [coreLatest, after]);
 
-  // ── Actions ─────────────────────────────────────────────────────────
+  if (!isDesktop) return null;
 
-  const handleViewDetails = useCallback(() => {
-    clearTimers();
-    window.dispatchEvent(
-      new CustomEvent('mindos:open-settings', { detail: { tab: 'update' } }),
+  // Shell (persistent) takes priority over the transient Core nudge.
+  if (shellVis !== 'hidden' && shell) {
+    return (
+      <ToastShell
+        show={shellVis === 'visible'}
+        title={u?.shellBannerTitle ? u.shellBannerTitle(shell.version) : `App v${shell.version} available`}
+        subtitle={u?.shellBannerDesc ?? 'Requires downloading and restarting the app.'}
+        onClose={() => dismissShell(true)}
+        primaryLabel={ut.viewDetails}
+        onPrimary={() => { openSettings(); dismissShell(false); }}
+        secondaryLabel={ut.skipVersion}
+        onSecondary={() => dismissShell(true)}
+      />
     );
-    setVisibility('dismissing');
-    schedule('hidden', DISMISS_MS);
-  }, [clearTimers, schedule]);
+  }
 
-  const handleSkip = useCallback(() => {
-    clearTimers();
-    if (updates.desktop) localStorage.setItem(SKIP_DESKTOP_KEY, updates.desktop.version);
-    if (updates.core) localStorage.setItem(SKIP_CORE_KEY, updates.core.version);
-    setVisibility('dismissing');
-    schedule('hidden', DISMISS_MS);
-  }, [updates, clearTimers, schedule]);
+  if (coreVis !== 'hidden' && coreLatest) {
+    return (
+      <ToastShell
+        show={coreVis === 'visible'}
+        title={u?.coreReadyToastTitle ? u.coreReadyToastTitle(coreLatest) : `MindOS v${coreLatest} ready`}
+        subtitle={u?.coreReadyToastSub ?? 'Applies on next restart'}
+        onClose={dismissCore}
+        primaryLabel={u?.coreApplyNow ?? 'Apply now'}
+        onPrimary={() => { void applyNow(); dismissCore(); }}
+        secondaryLabel={u?.later ?? 'Later'}
+        onSecondary={dismissCore}
+      />
+    );
+  }
 
-  // ── Render ──────────────────────────────────────────────────────────
+  return null;
+}
 
-  if (!isDesktop || visibility === 'hidden') return null;
+// Presentational toast box.
 
-  const hasBoth = !!(updates.desktop && updates.core);
-  const title = hasBoth
-    ? ut.titleMultiple
-    : updates.desktop
-      ? ut.titleSingle(ut.desktopLabel, updates.desktop.version)
-      : updates.core
-        ? ut.titleSingle(ut.coreLabel, updates.core.version)
-        : '';
-
-  const subtitle = hasBoth
-    ? `${ut.desktopLabel} v${updates.desktop!.version} \u00B7 ${ut.coreLabel} v${updates.core!.version}`
-    : '';
-
-  const show = visibility === 'visible';
-
+function ToastShell(props: {
+  show: boolean;
+  title: string;
+  subtitle: string;
+  onClose: () => void;
+  primaryLabel: string;
+  onPrimary: () => void;
+  secondaryLabel: string;
+  onSecondary: () => void;
+}) {
   return (
     <div
       role="status"
       aria-live="polite"
-      className={`
-        fixed bottom-14 left-14 z-40 pointer-events-none
-        transition-all duration-200
-        ${show ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'}
-      `}
+      className={`fixed bottom-14 left-14 z-40 pointer-events-none transition-all duration-200 ${
+        props.show ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'
+      }`}
     >
       <div className="pointer-events-auto flex flex-col gap-2.5 bg-card border border-border rounded-xl shadow-lg px-4 py-3 w-[290px]">
-        {/* ── Title row ── */}
         <div className="flex items-start gap-2">
-          {/* Amber indicator dot */}
           <span className="mt-[5px] w-2 h-2 rounded-full bg-[var(--amber)] shrink-0" />
-
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-foreground leading-snug">{title}</p>
-            {subtitle && (
-              <p className="text-xs text-muted-foreground mt-0.5 truncate">{subtitle}</p>
-            )}
+            <p className="text-sm font-medium text-foreground leading-snug">{props.title}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">{props.subtitle}</p>
           </div>
-
-          {/* Close = same as skip */}
           <button
             type="button"
-            onClick={handleSkip}
+            onClick={props.onClose}
             className="shrink-0 p-0.5 rounded text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             aria-label="Dismiss"
           >
             <X size={13} />
           </button>
         </div>
-
-        {/* ── Actions ── */}
         <div className="flex gap-2">
           <button
             type="button"
-            onClick={handleViewDetails}
+            onClick={props.onPrimary}
             className="flex-1 px-3 py-1.5 text-xs font-medium rounded-lg text-[var(--amber-foreground)] bg-[var(--amber)] hover:opacity-90 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           >
-            {ut.viewDetails}
+            {props.primaryLabel}
           </button>
           <button
             type="button"
-            onClick={handleSkip}
+            onClick={props.onSecondary}
             className="flex-1 px-3 py-1.5 text-xs rounded-lg text-muted-foreground border border-border hover:text-foreground hover:bg-muted transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           >
-            {hasBoth ? ut.skipAll : ut.skipVersion}
+            {props.secondaryLabel}
           </button>
         </div>
       </div>

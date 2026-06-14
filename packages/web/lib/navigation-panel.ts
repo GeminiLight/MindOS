@@ -121,8 +121,8 @@ export function getEffectivePanelMaximized(
   return activeLeftPanel === localActivePanel && localPanelMaximized;
 }
 
-export function getHomeClickPanel(activeLeftPanel: PanelId | null): PanelId | null {
-  return activeLeftPanel ? 'files' : null;
+export function getHomeClickPanel(_activeLeftPanel: PanelId | null): PanelId | null {
+  return 'files';
 }
 
 export function recoverStaleCapturePanel(

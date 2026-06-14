@@ -21,15 +21,25 @@ import {
   deleteDirectory,
   moveToTrashFile,
   invalidateCache,
-  getMindRoot,
   getFileTree,
   handleWatcherEvent,
   flushWatcherChanges,
+  stopFileWatcher,
 } from '@/lib/fs';
 import { searchFiles } from '@/lib/core/search';
+import type { FileNode } from '@/lib/types';
 
 function resultPaths(root: string, query: string): string[] {
   return searchFiles(root, query).map((r) => r.path);
+}
+
+function treePaths(nodes: FileNode[]): string[] {
+  const paths: string[] = [];
+  for (const node of nodes) {
+    paths.push(node.path);
+    if (node.children) paths.push(...treePaths(node.children));
+  }
+  return paths;
 }
 
 describe('search index invalidation through the fs layer', () => {
@@ -44,6 +54,7 @@ describe('search index invalidation through the fs layer', () => {
   });
 
   afterEach(() => {
+    stopFileWatcher();
     vi.useRealTimers();
   });
 
@@ -123,6 +134,7 @@ describe('search index invalidation for external changes', () => {
   });
 
   afterEach(() => {
+    stopFileWatcher();
     vi.useRealTimers();
   });
 
@@ -162,19 +174,38 @@ describe('search index invalidation for external changes', () => {
     expect(resultPaths(root, 'capybaraherd')).toContain('bulk.md');
   });
 
-  it('picks up external changes via the tree-cache TTL refresh path', () => {
+  it('picks up external changes via the tree-cache TTL refresh path when the watcher is unavailable', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));
     invalidateCache();
     getFileTree(); // build tree cache at t0
+    stopFileWatcher(); // simulate platforms/environments where recursive watching is unavailable
     expect(resultPaths(root, 'alphabison')).toContain('notes/alpha.md');
 
     const abs = path.join(root, 'ttl-pickup.md');
-    fs.writeFileSync(abs, 'ferretburrow appeared externally', 'utf-8');
+    fs.writeFileSync(abs, 'ttl unique token appeared externally', 'utf-8');
     fs.utimesSync(abs, new Date('2026-01-01T00:00:40.000Z'), new Date('2026-01-01T00:00:40.000Z'));
 
     vi.setSystemTime(new Date('2026-01-01T00:00:31.000Z'));
     getFileTree(); // TTL expired → refresh detects signature change → invalidates
-    expect(resultPaths(root, 'ferretburrow')).toContain('ttl-pickup.md');
+    expect(resultPaths(root, 'ttl unique token')).toContain('ttl-pickup.md');
+  });
+
+  it('keeps ordinary tree reads off the full refresh path while the watcher is active', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));
+    invalidateCache();
+    expect(treePaths(getFileTree())).toContain('notes/alpha.md');
+
+    const abs = path.join(root, 'watcher-backed-cache.md');
+    fs.writeFileSync(abs, 'watcher backed cache token', 'utf-8');
+    fs.utimesSync(abs, new Date('2026-01-01T00:00:40.000Z'), new Date('2026-01-01T00:00:40.000Z'));
+
+    vi.setSystemTime(new Date('2026-01-01T00:00:31.000Z'));
+    expect(treePaths(getFileTree())).not.toContain('watcher-backed-cache.md');
+
+    handleWatcherEvent('watcher-backed-cache.md');
+    flushWatcherChanges();
+    expect(treePaths(getFileTree())).toContain('watcher-backed-cache.md');
   });
 });

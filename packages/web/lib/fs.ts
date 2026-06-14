@@ -94,12 +94,15 @@ const SYSTEM_FILES = new Set(['INSTRUCTION.md', 'README.md', 'CONFIG.json', 'CHA
 interface FileTreeCache {
   tree: FileNode[];
   allFiles: string[];
+  recentFiles: Array<{ path: string; mtime: number }>;
   fileSignature: string;
   timestamp: number;
 }
 
 let _cache: FileTreeCache | null = null;
 const CACHE_TTL_MS = 30_000; // 30 seconds (file watcher still invalidates immediately on changes)
+const WATCHER_BACKED_CACHE_TTL_MS = 5 * 60_000;
+const WATCHER_MISS_SWEEP_MS = 60_000;
 
 let _treeVersion = 0;
 
@@ -144,20 +147,27 @@ function buildCache(root: string): FileTreeCache {
     }
   }
   collect(tree);
-  const fileSignature = buildFileSignature(root, allFiles);
+  const { fileSignature, recentFiles } = buildFileStats(root, allFiles);
   stop({ fileCount: allFiles.length, directoryCount });
-  return { tree, allFiles, fileSignature, timestamp: Date.now() };
+  return { tree, allFiles, recentFiles, fileSignature, timestamp: Date.now() };
 }
 
-function buildFileSignature(root: string, allFiles: string[]): string {
-  return allFiles.map((filePath) => {
+function buildFileStats(root: string, allFiles: string[]): {
+  fileSignature: string;
+  recentFiles: Array<{ path: string; mtime: number }>;
+} {
+  const recentFiles: Array<{ path: string; mtime: number }> = [];
+  const fileSignature = allFiles.map((filePath) => {
     try {
       const stat = fs.statSync(path.join(root, filePath));
+      recentFiles.push({ path: filePath, mtime: stat.mtimeMs });
       return JSON.stringify([filePath, stat.size, stat.mtimeMs]);
     } catch {
       return JSON.stringify([filePath, 'missing']);
     }
   }).join('\n');
+  recentFiles.sort((a, b) => b.mtime - a.mtime);
+  return { fileSignature, recentFiles };
 }
 
 function refreshExpiredCache(): FileTreeCache {
@@ -183,15 +193,27 @@ export function getTreeVersion(): number {
     // Cache was invalidated (by watcher or explicit invalidateCache) — rebuild.
     // _treeVersion was already bumped by the invalidator, no need to bump again.
     _cache = buildCache(getMindRoot());
-  } else if (!isCacheValid()) {
-    // Cache expired by TTL — rebuild and check if files actually changed.
+  } else if (shouldRefreshCacheForVersionCheck()) {
+    // Periodic watcher-miss recovery: keep this on the lightweight version
+    // endpoint, not on every page render that merely needs the current tree.
     refreshExpiredCache();
   }
   return _treeVersion;
 }
 
-function isCacheValid(): boolean {
-  return _cache !== null && (Date.now() - _cache.timestamp) < CACHE_TTL_MS;
+function isCacheValid(ttlMs = CACHE_TTL_MS): boolean {
+  return _cache !== null && (Date.now() - _cache.timestamp) < ttlMs;
+}
+
+function isCacheValidForRead(): boolean {
+  const ttlMs = _watcher ? WATCHER_BACKED_CACHE_TTL_MS : CACHE_TTL_MS;
+  return isCacheValid(ttlMs);
+}
+
+function shouldRefreshCacheForVersionCheck(): boolean {
+  if (!_cache) return true;
+  const ttlMs = _watcher ? WATCHER_MISS_SWEEP_MS : CACHE_TTL_MS;
+  return !isCacheValid(ttlMs);
 }
 
 /** Module-level link index singleton. Lazily built on first graph/backlink access. */
@@ -253,7 +275,7 @@ function invalidateCacheForDeletedFile(filePath: string): void {
 }
 
 function ensureCache(): FileTreeCache {
-  if (isCacheValid()) return _cache!;
+  if (isCacheValidForRead()) return _cache!;
   if (_cache) {
     refreshExpiredCache();
   } else {
@@ -661,20 +683,7 @@ export function getDirEntries(dirPath: string): FileNode[] {
  * @param limit Max files to return (default: 10)
  */
 export function getRecentlyModified(limit = 10): Array<{ path: string; mtime: number }> {
-  const root = getMindRoot();
-  const allFiles = collectAllFiles();
-  const withMtime = allFiles.map((filePath) => {
-    try {
-      const abs = resolveExistingSafe(root, filePath);
-      const stat = fs.statSync(abs);
-      return { path: filePath, mtime: stat.mtimeMs };
-    } catch {
-      return null;
-    }
-  }).filter(Boolean) as Array<{ path: string; mtime: number }>;
-
-  withMtime.sort((a, b) => b.mtime - a.mtime);
-  return withMtime.slice(0, limit);
+  return ensureCache().recentFiles.slice(0, limit);
 }
 
 // ─── Public API: File operations (delegated to @mindos/core) ─────────────────

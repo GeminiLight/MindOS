@@ -801,6 +801,21 @@ export const settingsZh = {
       coreDesktopTooOldHint: '请先更新 MindOS Desktop。',
       coreHint: '核心更新只需重启服务，无需重启应用。',
       shellTitle: 'MindOS Desktop',
+      // 更新重构 —— Core 静默自动更新 + 单一产品版本号
+      coreFetching: (version: string) => `正在后台获取 v${version}`,
+      coreReadyAuto: (version: string) => `v${version} 已就绪 · 下次重启自动生效`,
+      coreApplyNow: '立即应用',
+      coreApplyHint: '重启服务约需数秒',
+      coreAutoHint: '核心更新在后台自动完成，无需重启应用。',
+      coreReadyToastTitle: (version: string) => `MindOS v${version} 已就绪`,
+      coreReadyToastSub: '下次重启自动生效',
+      later: '稍后',
+      shellRowLabel: '应用外壳',
+      shellLatest: '最新',
+      shellCheck: '检查',
+      shellBannerTitle: (version: string) => `应用新版本 v${version} 可用`,
+      shellBannerDesc: '需下载安装包并重启应用',
+      shellBannerAction: '下载并重启',
       // Update Toast Notification
       updateToast: {
         titleSingle: (type: string, version: string) => `${type} v${version} 可用`,

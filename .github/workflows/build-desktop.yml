@@ -252,11 +252,10 @@ jobs:
       - name: Smoke packaged app
         # mac x64 runs under Rosetta on the arm64 runner (smoke-desktop-app.mjs
         # detects the mismatch and prepends `arch -x86_64` instead of skipping).
-        # Windows CI runners are not a reliable interactive desktop surface for
-        # unsigned packaged Electron apps, so validate the bundled runtime from
-        # the packaged resources for both Windows architectures.
+        # Windows x64 must smoke the real packaged Electron app before release.
+        # Windows ARM64 still uses runtime-only smoke on the x64 runner.
         run: |
-          if [ "${{ matrix.platform }}" = "win" ]; then
+          if [ "${{ matrix.platform }}" = "win" ] && [ "${{ matrix.arch }}" = "arm64" ]; then
             node scripts/smoke-desktop-app.mjs --skip-if-arch-mismatch --timeout 90000 --windows-runtime-only
           elif [ "${{ matrix.platform }}" = "linux" ]; then
             xvfb-run -a node scripts/smoke-desktop-app.mjs --skip-if-arch-mismatch --timeout 90000

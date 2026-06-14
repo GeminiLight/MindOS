@@ -330,6 +330,20 @@ async function startLocalMode(): Promise<string | null> {
     coreUpdater.cleanupOnBoot(bundledVer);
   } catch (e) { console.warn('[MindOS] cleanupOnBoot failed:', e); }
 
+  // Promote a pending Core download at boot; services are not running yet, so
+  // apply() is just an atomic directory swap (no overlay, no restart). This is
+  // what makes a silently-downloaded Core update apply on the next launch.
+  // A merely-downloaded update still surfaces "Apply now" mid-session; this
+  // consumes it cleanly on relaunch.
+  try {
+    if (coreUpdater.getPendingVersion()) {
+      const applied = coreUpdater.apply();
+      console.info(`[MindOS] Auto-applied pending Core update v${applied} at boot`);
+    }
+  } catch (e) {
+    console.warn('[MindOS] Boot auto-apply of pending Core update skipped:', e);
+  }
+
   const runtimeRes = await resolveLocalMindOsProjectRoot(loadConfig(), nodePath);
   if (!runtimeRes.ok) {
     splashStatus({

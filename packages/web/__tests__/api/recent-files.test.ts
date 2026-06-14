@@ -1,4 +1,5 @@
-import { describe, it, expect } from 'vitest';
+import fs from 'fs';
+import { describe, it, expect, vi } from 'vitest';
 import { seedFile } from '../setup';
 import { GET } from '@/app/api/recent-files/route';
 import { invalidateCache } from '@/lib/fs';
@@ -39,5 +40,24 @@ describe('GET /api/recent-files', () => {
     const res = await GET(makeRequest('2'));
     const json = await res.json();
     expect(json.length).toBe(2);
+  });
+
+  it('serves repeated recent-file reads from the tree cache without re-statting every file', async () => {
+    seedFile('a.md', 'a');
+    seedFile('b.md', 'b');
+    invalidateCache();
+
+    await GET(makeRequest('1'));
+
+    const statSpy = vi.spyOn(fs, 'statSync');
+    try {
+      const res = await GET(makeRequest('1'));
+      const json: Array<{ path: string }> = await res.json();
+
+      expect(json.length).toBe(1);
+      expect(statSpy).not.toHaveBeenCalled();
+    } finally {
+      statSpy.mockRestore();
+    }
   });
 });

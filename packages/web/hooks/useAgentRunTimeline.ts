@@ -221,8 +221,13 @@ function isTimelineRunVisible(run: AgentRunTimelineRecord, events: AgentRunTimel
   if (run.status === 'failed' || run.status === 'timed_out' || run.status === 'canceled' || Boolean(run.error)) {
     return true;
   }
+  if (events.some(isActionableTimelineEvent)) return true;
+  if (run.agentKind === 'pi-subagent' || run.agentKind === 'a2a' || run.agentKind === 'mindos-headless') return true;
+  if (run.agentKind === 'acp') {
+    return Boolean(run.parentRunId && run.parentRunId !== run.id);
+  }
   if (run.agentKind !== 'native-runtime') return true;
-  return events.some(isActionableTimelineEvent);
+  return false;
 }
 
 export function selectVisibleAgentRunTimeline(input: {

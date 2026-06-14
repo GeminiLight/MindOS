@@ -801,6 +801,21 @@ export const settingsEn = {
       coreDesktopTooOldHint: 'Please update MindOS Desktop first.',
       coreHint: 'Core updates only restart services — no app restart needed.',
       shellTitle: 'MindOS Desktop',
+      // Update redesign: silent Core auto-update + single product version
+      coreFetching: (version: string) => `Fetching v${version} in the background`,
+      coreReadyAuto: (version: string) => `v${version} ready - applies on next restart`,
+      coreApplyNow: 'Apply now',
+      coreApplyHint: 'Restarts services in a few seconds',
+      coreAutoHint: 'Core updates complete in the background - no app restart needed.',
+      coreReadyToastTitle: (version: string) => `MindOS v${version} ready`,
+      coreReadyToastSub: 'Applies on next restart',
+      later: 'Later',
+      shellRowLabel: 'Desktop shell',
+      shellLatest: 'Latest',
+      shellCheck: 'Check',
+      shellBannerTitle: (version: string) => `New app version v${version} available`,
+      shellBannerDesc: 'Requires downloading and restarting the app.',
+      shellBannerAction: 'Download & Restart',
       // Update Toast Notification
       updateToast: {
         titleSingle: (type: string, version: string) => `${type} v${version} available`,

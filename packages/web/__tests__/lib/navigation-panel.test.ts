@@ -158,15 +158,8 @@ describe('navigation panel route recovery', () => {
     expect(getPendingHomePanel('/wiki', pending)).toBeNull();
   });
 
-  it('supports a pending home navigation that intentionally closes the sidebar', () => {
-    const pending = { panel: null, fromPathname: '/wiki' };
-
-    expect(getPendingHomePanel('/wiki', pending)).toBeNull();
-    expect(getHomeClickPanel(null)).toBeNull();
-  });
-
-  it('restores the files panel when home is clicked from an open sidebar state', () => {
-    const panels = ['files', 'capture', 'search', 'echo', 'agents', 'discover', 'workflows'] as const;
+  it('restores the files panel whenever home is clicked', () => {
+    const panels = [null, 'files', 'capture', 'search', 'echo', 'agents', 'discover', 'workflows'] as const;
     for (const panel of panels) {
       expect(getHomeClickPanel(panel)).toBe('files');
     }

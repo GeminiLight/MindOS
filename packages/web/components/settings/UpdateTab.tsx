@@ -6,7 +6,7 @@ import { apiFetch, ApiError } from '@/lib/api';
 import { useLocale } from '@/lib/stores/locale-store';
 
 import {
-  getDesktopBridge, DesktopCoreCard, DesktopShellCard,
+  getDesktopBridge, ProductVersionCard, ShellUpdateBanner, ShellVersionRow, useShellUpdate,
   StageIcon, formatSize,
   type UpdateInfo, type UpdateState, type StageInfo, type UpdateStatus,
   CHANGELOG_URL, POLL_INTERVAL, POLL_TIMEOUT, UPDATE_STATE_KEY, STAGE_LABELS,
@@ -26,14 +26,34 @@ export function UpdateTab() {
     }
   }, []);
   if (isDesktop) {
-    return (
-      <div className="space-y-6">
-        {isLocal && <DesktopCoreCard />}
-        <DesktopShellCard />
-      </div>
-    );
+    return <DesktopUpdatePanel isLocal={isLocal} />;
   }
   return <BrowserUpdateTab />;
+}
+
+/**
+ * One unified surface: the MindOS (Core) product version is the headline, the
+ * shell is demoted to a secondary row, and the only "loud" element is the
+ * banner that appears when the shell, the rare app-restart update, has one.
+ */
+function DesktopUpdatePanel({ isLocal }: { isLocal: boolean }) {
+  const { t } = useLocale();
+  const u = t.settings.update;
+  const shell = useShellUpdate();
+  const shellHasUpdate = shell.available || shell.phase === 'ready';
+
+  return (
+    <div className="space-y-4">
+      {shellHasUpdate && <ShellUpdateBanner shell={shell} />}
+      {isLocal && <ProductVersionCard />}
+      <ShellVersionRow shell={shell} />
+      {isLocal && (
+        <p className="text-[11px] text-muted-foreground/60">
+          {u?.coreAutoHint ?? 'Core updates complete in the background - no app restart needed.'}
+        </p>
+      )}
+    </div>
+  );
 }
 
 /** Browser / CLI update: uses npm registry check + POST /api/update */

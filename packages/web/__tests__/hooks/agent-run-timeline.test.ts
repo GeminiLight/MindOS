@@ -474,9 +474,60 @@ describe('selectVisibleAgentRunTimeline', () => {
     expect(timeline?.events).toBeUndefined();
   });
 
-  it('keeps non-native agent runs visible without requiring actionable events', () => {
+  it('suppresses root ACP runtime chat turns without actionable events', () => {
     const run: AgentRunTimelineRecord = {
       id: 'acp-run-1',
+      chatSessionId: 'chat-1',
+      agentKind: 'acp',
+      runtimeId: 'gemini',
+      displayName: 'Gemini ACP',
+      status: 'completed',
+      permissionMode: 'agent',
+      inputSummary: 'Ask external agent',
+      outputSummary: 'Done',
+      startedAt: 1000,
+      completedAt: 1200,
+      durationMs: 200,
+    };
+    const timeline = selectVisibleAgentRunTimeline({
+      payload: { runs: [run], events: [] },
+      chatSessionId: 'chat-1',
+      startedAfter: 900,
+      now: 1300,
+    });
+
+    expect(timeline).toBeNull();
+  });
+
+  it('keeps pi-subagent runs visible without requiring actionable events', () => {
+    const run: AgentRunTimelineRecord = {
+      id: 'subagent-run-1',
+      chatSessionId: 'chat-1',
+      agentKind: 'pi-subagent',
+      runtimeId: 'reviewer',
+      displayName: 'Reviewer',
+      status: 'completed',
+      permissionMode: 'agent',
+      inputSummary: 'Review the patch',
+      outputSummary: 'Done',
+      startedAt: 1000,
+      completedAt: 1200,
+      durationMs: 200,
+    };
+    const timeline = selectVisibleAgentRunTimeline({
+      payload: { runs: [run], events: [] },
+      chatSessionId: 'chat-1',
+      startedAfter: 900,
+      now: 1300,
+    });
+
+    expect(timeline?.runs).toEqual([run]);
+  });
+
+  it('keeps delegated ACP child runs visible without requiring actionable events', () => {
+    const run: AgentRunTimelineRecord = {
+      id: 'acp-child-run-1',
+      parentRunId: 'subagent-run-1',
       chatSessionId: 'chat-1',
       agentKind: 'acp',
       runtimeId: 'gemini',
