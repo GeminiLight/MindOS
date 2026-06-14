@@ -23,9 +23,9 @@ export default function Breadcrumb({ filePath }: { filePath: string }) {
     return (
       <nav className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground flex-nowrap overflow-hidden">
         <Link
-          href="/"
+          href="/wiki"
           className="hit-target-box inline-flex h-8 w-8 shrink-0 items-center justify-center text-muted-foreground transition-colors duration-75 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation [--hit-target-hover-bg:color-mix(in_srgb,var(--muted)_50%,transparent)] [--hit-target-radius:var(--radius-md)]"
-          title="Home"
+          title="Mind"
         >
           <Home size={14} />
         </Link>
@@ -42,9 +42,9 @@ export default function Breadcrumb({ filePath }: { filePath: string }) {
   return (
     <nav className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground flex-nowrap overflow-hidden">
       <Link
-        href="/"
+        href="/wiki"
         className="hit-target-box inline-flex h-8 w-8 shrink-0 items-center justify-center text-muted-foreground transition-colors duration-75 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation [--hit-target-hover-bg:color-mix(in_srgb,var(--muted)_50%,transparent)] [--hit-target-radius:var(--radius-md)]"
-        title="Home"
+        title="Mind"
       >
         <Home size={14} />
       </Link>

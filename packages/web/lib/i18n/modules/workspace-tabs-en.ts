@@ -2,6 +2,7 @@
 
 export const workspaceTabsEn = {
   workspaceTabs: {
+    homeTab: 'Home',
     newChat: 'New chat',
     closeTab: 'Close tab',
     keepTab: 'Keep tab',

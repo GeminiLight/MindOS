@@ -188,7 +188,7 @@ describe('ActivityBar rail navigation', () => {
     host.remove();
   });
 
-  it('clicking the rail logo from Echo opens Home instead of Echo or Wiki', async () => {
+  it('clicking the rail logo from Echo opens Home without closing the active panel', async () => {
     mockPathname = '/echo/imprint';
     const mockPanelChange = vi.fn();
     const ActivityBar = (await import('@/components/ActivityBar')).default;
@@ -218,10 +218,52 @@ describe('ActivityBar rail navigation', () => {
       home?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
     });
 
-    expect(mockPanelChange).toHaveBeenCalledWith(null);
+    expect(mockPanelChange).not.toHaveBeenCalled();
     expect(mockRouterPush).toHaveBeenCalledWith('/');
     expect(mockRouterPush).not.toHaveBeenCalledWith('/wiki');
     expect(mockRouterPush).not.toHaveBeenCalledWith('/echo/imprint');
+
+    await act(async () => {
+      root.unmount();
+    });
+    host.remove();
+  });
+
+  it('delegates the rail logo click to the shell when a Home handler is provided', async () => {
+    mockPathname = '/echo/imprint';
+    const mockPanelChange = vi.fn();
+    const mockHomeClick = vi.fn();
+    const ActivityBar = (await import('@/components/ActivityBar')).default;
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(
+        <ActivityBar
+          activePanel="echo"
+          onPanelChange={mockPanelChange}
+          onHomeClick={mockHomeClick}
+          syncStatus={null}
+          expanded={false}
+          onExpandedChange={vi.fn()}
+          onSettingsClick={vi.fn()}
+          onSyncClick={vi.fn()}
+        />,
+      );
+    });
+
+    const home = host.querySelector<HTMLButtonElement>('button[aria-label="MindOS Home"]');
+    expect(home).not.toBeNull();
+
+    await act(async () => {
+      home?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    });
+
+    expect(mockHomeClick).toHaveBeenCalledTimes(1);
+    expect(mockPanelChange).not.toHaveBeenCalled();
+    expect(mockRouterPush).not.toHaveBeenCalled();
 
     await act(async () => {
       root.unmount();

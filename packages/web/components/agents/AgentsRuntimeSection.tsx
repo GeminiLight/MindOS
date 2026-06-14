@@ -184,6 +184,7 @@ export default function AgentsRuntimeSection({
     errorByKind: native.errorByKind,
     copy,
   });
+  const nativeRefreshing = Object.values(native.loadingByKind).some(Boolean);
 
   const openRuntime = (endpoint: RuntimeEndpoint) => {
     if (endpoint.disabled) return;
@@ -193,15 +194,25 @@ export default function AgentsRuntimeSection({
   if (variant === 'panel') {
     return (
       <div className="px-3 py-3">
-        <AgentSectionHeading
-          as="h3"
-          size="sm"
-          icon={<Bot size={12} aria-hidden="true" />}
-          title={copy.panelTitle}
-          descriptionTooltip={copy.panelDescription}
-          titleClassName="text-[11px] uppercase tracking-wider text-muted-foreground/80"
-          className="mb-3"
-        />
+        <div className="mb-3 flex items-start justify-between gap-2">
+          <AgentSectionHeading
+            as="h3"
+            size="sm"
+            icon={<Bot size={12} aria-hidden="true" />}
+            title={copy.panelTitle}
+            descriptionTooltip={copy.panelDescription}
+            titleClassName="text-[11px] uppercase tracking-wider text-muted-foreground/80"
+          />
+          <button
+            type="button"
+            onClick={native.refresh}
+            aria-label={copy.refresh}
+            title={copy.refresh}
+            className="hit-target-box inline-flex h-7 w-7 shrink-0 items-center justify-center text-muted-foreground transition-colors duration-75 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-md)]"
+          >
+            <RefreshCw size={12} className={nativeRefreshing ? 'animate-spin' : ''} aria-hidden="true" />
+          </button>
+        </div>
         <div className="space-y-1.5">
           {endpoints.map((endpoint) => (
             endpoint.href ? (
@@ -227,15 +238,6 @@ export default function AgentsRuntimeSection({
             )
           ))}
         </div>
-        <button
-          type="button"
-          onClick={native.refresh}
-          aria-label={copy.refresh}
-          title={copy.refresh}
-          className="mt-3 inline-flex h-8 w-8 items-center justify-center rounded-md border border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <RefreshCw size={12} aria-hidden="true" />
-        </button>
       </div>
     );
   }

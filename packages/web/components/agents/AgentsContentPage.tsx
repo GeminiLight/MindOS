@@ -10,7 +10,7 @@ import { useMcpData } from '@/lib/stores/mcp-store';
 import { useA2aRegistry } from '@/hooks/useA2aRegistry';
 import { copyToClipboard } from '@/lib/clipboard';
 import { generateSnippet } from '@/lib/mcp-snippets';
-import { PLATFORMS } from '@/lib/im/platforms';
+import { countConnectedChannels } from '@/lib/im/display';
 import {
   bucketAgents,
   buildRiskQueue,
@@ -32,6 +32,7 @@ import AgentsContentChannels from './AgentsContentChannels';
 import AcpRegistrySection from './AcpRegistrySection';
 import CustomAgentModal from './CustomAgentModal';
 import { AgentSectionHeading, ConfirmDialog, EmptyState } from './AgentsPrimitives';
+import { useChannelStatuses } from './channel-detail/useChannelStatuses';
 import type { AgentInfo } from '@/components/settings/types';
 import { ContentPageShell } from '@/components/shared/ContentPageShell';
 
@@ -125,6 +126,11 @@ export default function AgentsContentPage({ tab }: { tab: AgentsDashboardTab }) 
   const enabledSkillCount = useMemo(
     () => mcp.skills.filter((skill) => skill.enabled).length,
     [mcp.skills],
+  );
+  const { statuses: channelStatuses } = useChannelStatuses({ enabled: !isChannelDetail });
+  const connectedChannelCount = useMemo(
+    () => countConnectedChannels(channelStatuses),
+    [channelStatuses],
   );
   const [assistantCount, setAssistantCount] = useState(0);
 
@@ -227,7 +233,7 @@ export default function AgentsContentPage({ tab }: { tab: AgentsDashboardTab }) 
             mcpRunning={!!mcp.status?.running}
             mcpEnabled={mcpEnabled}
             presetCount={assistantCount}
-            channelCount={PLATFORMS.length}
+            channelCount={connectedChannelCount}
           />
         </header>
       )}

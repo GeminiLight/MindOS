@@ -3,6 +3,8 @@ import {
   getActiveLeftPanel,
   getContentRoutePanel,
   getEffectivePanelMaximized,
+  getHomeClickPanel,
+  getPendingHomePanel,
   getPendingRoutePanel,
   getRailActivePanel,
   getRailPanelClickDecision,
@@ -123,6 +125,21 @@ describe('navigation panel route recovery', () => {
     expect(getEffectivePanelMaximized(null, 'files', true)).toBe(false);
     expect(getEffectivePanelMaximized('search', 'search', true)).toBe(true);
     expect(getEffectivePanelMaximized('agents', 'agents', false)).toBe(false);
+  });
+
+  it('routes Home clicks to Mind only when the left sidebar is already open', () => {
+    expect(getHomeClickPanel(null)).toBeNull();
+    for (const panel of ['files', 'capture', 'search', 'echo', 'agents', 'discover', 'workflows'] as const) {
+      expect(getHomeClickPanel(panel)).toBe('files');
+    }
+  });
+
+  it('keeps the pending Home sidebar target only until the route changes', () => {
+    const pending = { fromPathname: '/echo/imprint', panel: 'files' as const };
+    expect(getPendingHomePanel('/echo/imprint', pending)).toBe('files');
+    expect(getPendingHomePanel('/', pending)).toBeNull();
+    expect(getPendingHomePanel('/agents', pending)).toBeNull();
+    expect(getPendingHomePanel('/echo/imprint', null)).toBeNull();
   });
 
   it('keeps the clicked panel active while its rail navigation is in flight', () => {

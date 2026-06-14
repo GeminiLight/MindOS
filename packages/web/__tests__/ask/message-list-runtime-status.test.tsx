@@ -54,6 +54,9 @@ describe('MessageList runtime status rendering', () => {
     expect(html).toContain('group/message');
     expect(html).toContain('absolute right-3 top-full');
     expect(html).toContain('md:group-hover/message:opacity-100');
+    expect(html).toContain('pt-5 pb-10 space-y-6');
+    expect(html).not.toContain('content-visibility');
+    expect(html).not.toContain('contain-intrinsic-size');
     expect(html).not.toContain('mt-2 flex justify-start');
     expect(html).not.toContain('mt-2 flex justify-end');
   });

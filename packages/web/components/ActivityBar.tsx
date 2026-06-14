@@ -30,6 +30,7 @@ interface ActivityBarProps {
   onDiscoverClick?: React.MouseEventHandler<HTMLAnchorElement | HTMLButtonElement>;
   onWorkflowsClick?: React.MouseEventHandler<HTMLAnchorElement | HTMLButtonElement>;
   onSpacesClick?: React.MouseEventHandler<HTMLAnchorElement | HTMLButtonElement>;
+  onHomeClick?: React.MouseEventHandler<HTMLButtonElement>;
   syncStatus: SyncStatus | null;
   syncStale?: boolean;
   expanded: boolean;
@@ -157,6 +158,7 @@ export default function ActivityBar({
   onDiscoverClick,
   onWorkflowsClick,
   onSpacesClick,
+  onHomeClick,
   syncStatus,
   syncStale,
   expanded,
@@ -311,9 +313,12 @@ export default function ActivityBar({
         {/* ── Top: Logo — mirrors the titlebar height so rail and panel start on the same line. ── */}
         <button
           type="button"
-          onClick={() => {
+          onClick={(event) => {
+            if (onHomeClick) {
+              onHomeClick(event);
+              return;
+            }
             startTransition(() => {
-              onPanelChange(null);
               if (!isHome) {
                 router.push('/');
               }

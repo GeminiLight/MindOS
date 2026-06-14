@@ -57,19 +57,19 @@ describe('TitlebarRow (spec-titlebar-row Phase 1 + 2)', () => {
   it('binds geometry to the shell CSS variables', () => {
     const el = render();
     const style = el.getAttribute('style') ?? '';
-    expect(style).toContain('left: var(--rail-width)');
+    expect(style).toContain('left: var(--titlebar-row-left)');
     expect(style).toContain('height: var(--app-titlebar-h)');
-    expect(style).toContain('max(0px, calc(var(--window-controls-left) - var(--rail-width)))');
+    expect(style).toContain('max(0px, calc(var(--window-controls-left) - var(--titlebar-row-left)))');
   });
 
-  it('is draggable and animates in sync with the rail (200ms ease-out)', () => {
+  it('is draggable without tracking expanded rail width', () => {
     const el = render();
     // jsdom does not serialize -webkit-app-region into the style attribute;
     // React assigns it as a camelCase expando on the style object
     expect((el.style as unknown as Record<string, string>).WebkitAppRegion).toBe('drag');
     const style = el.getAttribute('style') ?? '';
-    expect(style).toMatch(/transition:[^;]*left 200ms ease-out/);
-    expect(style).toMatch(/transition:[^;]*padding-left 200ms ease-out/);
+    expect(style).not.toContain('transition:');
+    expect(style).not.toContain('var(--rail-width)');
   });
 
   it('hosts the tab strip and reserves >=110px of pure drag space at the right end', () => {
@@ -143,6 +143,8 @@ describe('TitlebarRow (spec-titlebar-row Phase 1 + 2)', () => {
     // Variables default to 0 (browser/win/linux/old shell = zero diff)
     expect(css).toContain('--app-titlebar-h: 0px');
     expect(css).toContain('--window-controls-left: 0px');
+    expect(css).toContain('--titlebar-row-left: 0px');
+    expect(css).toMatch(/@media \(min-width:\s*768px\)\s*\{[^}]*--titlebar-row-left:\s*48px/);
     // Rail offset exists only for the mac traffic lights: 0 by default so the
     // rail logo sits in the first row on browser/win/linux desktops
     expect(css).toMatch(/:root\s*\{[^}]*--rail-titlebar-offset:\s*0px/);

@@ -14,7 +14,7 @@ import { createRoot, type Root } from 'react-dom/client';
 
 import TitlebarTabStrip, { computeVisibleCount, TAB_MIN_W } from '@/components/TitlebarTabStrip';
 import { parseActiveTab, tabHref } from '@/hooks/useWorkspaceTabSync';
-import { getTabs, initWorkspaceTabs, openTab, MAX_TABS } from '@/lib/workspace-tabs';
+import { getTabs, HOME_TAB_KEY, initWorkspaceTabs, openTab, MAX_TABS } from '@/lib/workspace-tabs';
 import { getSessionsLoaded, renameSession } from '@/lib/ask-session-store';
 import { endRun, startRun } from '@/lib/ask-run-store';
 import type { ChatSession } from '@/lib/types';
@@ -133,6 +133,10 @@ afterEach(() => {
 // =============================================================================
 
 describe('parseActiveTab', () => {
+  it('maps / to the singleton Home tab', () => {
+    expect(parseActiveTab('/')).toEqual({ kind: 'home', key: HOME_TAB_KEY });
+  });
+
   it('maps /view/<segments> to a decoded doc key', () => {
     expect(parseActiveTab('/view/a/b.md')).toEqual({ kind: 'doc', key: 'a/b.md' });
     expect(parseActiveTab(`/view/${encodeURIComponent('笔记')}/${encodeURIComponent('日记😀.md')}`))
@@ -145,7 +149,7 @@ describe('parseActiveTab', () => {
   });
 
   it('returns null for place routes and degenerate paths', () => {
-    for (const p of ['/', '/capture', '/echo', '/echo/foo', '/agents', '/discover', '/inbox', '/view/', '/chat/a/b', null, undefined]) {
+    for (const p of ['/capture', '/echo', '/echo/foo', '/agents', '/discover', '/inbox', '/view/', '/chat/a/b', null, undefined]) {
       expect(parseActiveTab(p)).toBeNull();
     }
   });
@@ -178,6 +182,15 @@ describe('computeVisibleCount', () => {
 // =============================================================================
 
 describe('TitlebarTabStrip (spec-titlebar-row Phase 2)', () => {
+  it('opens the singleton Home tab on the product root route', async () => {
+    await navigateTo('/');
+    expect(tabTitles()).toEqual(['Home']);
+    expect(getTabs()).toEqual([{ id: 'home:root', kind: 'home', key: HOME_TAB_KEY, title: 'Home' }]);
+    const tab = findTab('Home')!;
+    expect(tab.getAttribute('aria-selected')).toBe('true');
+    expect(closeButtonOf(tab)).toBeNull();
+  });
+
   it('opens a doc route as a replaceable preview tab', async () => {
     await navigateTo('/view/a/b.md');
     expect(tabTitles()).toEqual(['b.md']);
@@ -197,12 +210,12 @@ describe('TitlebarTabStrip (spec-titlebar-row Phase 2)', () => {
 
     await navigateTo('/');
     await navigateTo('/chat/abc');
-    expect(getTabs()).toHaveLength(1);
+    expect(getTabs().filter((tab) => tab.kind === 'chat' && tab.key === 'abc')).toHaveLength(1);
   });
 
   it('reuses a single doc preview across casual file browsing', async () => {
     await navigateTo('/view/a/b.md');
-    await navigateTo('/');
+    await navigateTo('/capture');
     await navigateTo('/view/a/c.md');
     expect(tabTitles()).toEqual(['c.md']);
     expect(getTabs()).toHaveLength(1);
@@ -232,9 +245,9 @@ describe('TitlebarTabStrip (spec-titlebar-row Phase 2)', () => {
     expect(h.push).toHaveBeenCalledWith(encoded);
   });
 
-  it('marks no tab selected on place routes but keeps them open (dim state)', async () => {
+  it('marks no tab selected on non-home place routes but keeps them open (dim state)', async () => {
     await navigateTo('/view/a.md');
-    await navigateTo('/');
+    await navigateTo('/capture');
     expect(tabTitles()).toEqual(['a.md']);
     expect(document.querySelector('[aria-selected="true"]')).toBeNull();
   });
@@ -468,6 +481,7 @@ describe('TitlebarTabStrip (spec-titlebar-row Phase 2)', () => {
 
   it('tabHref round-trips with parseActiveTab', () => {
     const docKey = '笔记/日记😀.md';
+    expect(parseActiveTab(tabHref({ kind: 'home', key: HOME_TAB_KEY }))).toEqual({ kind: 'home', key: HOME_TAB_KEY });
     expect(parseActiveTab(tabHref({ kind: 'doc', key: docKey }))).toEqual({ kind: 'doc', key: docKey });
     expect(parseActiveTab(tabHref({ kind: 'chat', key: 'abc-123' }))).toEqual({ kind: 'chat', key: 'abc-123' });
   });

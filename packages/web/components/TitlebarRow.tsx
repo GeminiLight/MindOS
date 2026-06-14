@@ -15,12 +15,10 @@ import { useLocale } from '@/lib/stores/locale-store';
 // individually, and the trailing spacer guarantees >=110px of pure drag space
 // at the row's right end no matter how many tabs are open.
 const ROW_STYLE = {
-  left: 'var(--rail-width)',
+  left: 'var(--titlebar-row-left)',
   height: 'var(--app-titlebar-h)',
   // Clear the traffic lights only when the rail does not already cover them
-  paddingLeft: 'max(0px, calc(var(--window-controls-left) - var(--rail-width)))',
-  // Same duration/easing as the rail width transition so expand/collapse stays in sync
-  transition: 'left 200ms ease-out, padding-left 200ms ease-out',
+  paddingLeft: 'max(0px, calc(var(--window-controls-left) - var(--titlebar-row-left)))',
   WebkitAppRegion: 'drag',
 } as React.CSSProperties;
 

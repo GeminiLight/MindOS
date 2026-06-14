@@ -4,6 +4,7 @@ import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import {
   MAX_TABS,
+  HOME_TAB_KEY,
   closeByKey,
   closeTab,
   getTabs,
@@ -44,12 +45,29 @@ afterEach(() => {
 
 describe('tabId', () => {
   it('formats identity as `${kind}:${key}`', () => {
+    expect(tabId('home', HOME_TAB_KEY)).toBe('home:root');
     expect(tabId('doc', 'notes/a.md')).toBe('doc:notes/a.md');
     expect(tabId('chat', 's-123')).toBe('chat:s-123');
   });
 });
 
 describe('openTab', () => {
+  it('opens the singleton Home tab at the start of the working set', () => {
+    openTab('doc', 'notes/a.md', 'A');
+
+    const home = openTab('home', HOME_TAB_KEY, 'Home');
+    const again = openTab('home', HOME_TAB_KEY, 'Home');
+
+    expect(home).toEqual({ id: 'home:root', kind: 'home', key: HOME_TAB_KEY, title: 'Home' });
+    expect(again).toBe(home);
+    expect(getTabs().map((t) => t.id)).toEqual(['home:root', 'doc:notes/a.md']);
+  });
+
+  it('rejects non-singleton Home keys', () => {
+    expect(openTab('home', 'other', 'Home')).toBeNull();
+    expect(getTabs()).toEqual([]);
+  });
+
   it('opens a tab with id `${kind}:${key}` and appends in order', () => {
     const a = openTab('doc', 'notes/a.md', 'A');
     const b = openTab('chat', 's-1', 'Chat 1');
@@ -164,6 +182,17 @@ describe('MAX_TABS limit', () => {
     expect(getTabs()).toHaveLength(MAX_TABS);
     expect(getTabs().at(-1)!.id).toBe('doc:notes/overflow.md');
   });
+
+  it('does not count the system Home tab against the user tab cap', () => {
+    fillToMax();
+
+    const home = openTab('home', HOME_TAB_KEY, 'Home');
+
+    expect(home).not.toBeNull();
+    expect(getTabs()).toHaveLength(MAX_TABS + 1);
+    expect(getTabs()[0]).toMatchObject({ kind: 'home', key: HOME_TAB_KEY });
+    expect(openTab('doc', 'notes/overflow.md', 'Overflow')).toBeNull();
+  });
 });
 
 describe('closeTab / closeByKey', () => {
@@ -175,6 +204,17 @@ describe('closeTab / closeByKey', () => {
     closeTab('chat:s-1');
 
     expect(getTabs().map((t) => t.id)).toEqual(['doc:a.md', 'doc:b.md']);
+  });
+
+  it('keeps the system Home tab when close is requested', () => {
+    openTab('home', HOME_TAB_KEY, 'Home');
+    const before = getTabs();
+
+    closeTab('home:root');
+    closeByKey('home', HOME_TAB_KEY);
+
+    expect(getTabs()).toBe(before);
+    expect(getTabs()).toEqual([{ id: 'home:root', kind: 'home', key: HOME_TAB_KEY, title: 'Home' }]);
   });
 
   it('closeByKey removes the tab addressed by (kind, key)', () => {

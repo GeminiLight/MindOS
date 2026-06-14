@@ -38,15 +38,15 @@ export default function AgentsPanelAgentListRow({
   return (
     <div
       className={`
-        group flex items-center gap-0 rounded-xl border transition-all duration-150
+        group flex items-center gap-0 rounded-lg border transition-[background-color,border-color,box-shadow] duration-150
         ${selected
-          ? 'border-border ring-2 ring-ring/50 bg-[var(--amber-dim)]/45'
+          ? 'border-[var(--amber)]/35 bg-[var(--amber-dim)]/45 shadow-sm'
           : 'border-border/70 bg-card/50 hover:border-border hover:bg-muted/25'}
       `}
     >
       <Link
         href={detailHref}
-        className="flex flex-1 min-w-0 items-center gap-2.5 text-left rounded-xl pl-2.5 pr-2 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="flex flex-1 min-w-0 items-center gap-2.5 text-left rounded-lg pl-2.5 pr-2 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <AgentAvatar name={agent.name} status={agentStatus} size="sm" />
         <span className="text-sm font-medium text-foreground truncate leading-tight" title={agent.name}>{agent.name}</span>

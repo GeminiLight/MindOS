@@ -70,7 +70,7 @@ describe('AgentsContentChannels', () => {
 
     expect(globalThis.fetch).toHaveBeenCalledWith('/api/im/status');
     expect(host.textContent).toContain('Platforms');
-    expect(host.textContent).toContain('2/ 8');
+    expect(host.textContent).toContain('1/ 8');
 
     const links = Array.from(host.querySelectorAll<HTMLAnchorElement>('a'));
     const feishuLink = links.find(link => link.getAttribute('href')?.includes('platform=feishu'));

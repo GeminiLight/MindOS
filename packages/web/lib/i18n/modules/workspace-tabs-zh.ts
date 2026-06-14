@@ -2,6 +2,7 @@
 
 export const workspaceTabsZh = {
   workspaceTabs: {
+    homeTab: 'Home',
     newChat: '新会话',
     closeTab: '关闭标签',
     keepTab: '保留标签',

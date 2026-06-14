@@ -113,6 +113,7 @@ describe('i18n agents panel hub', () => {
     for (const k of hubKeys) {
       expect((a as Record<string, unknown>)[k], k).toBeTruthy();
     }
+    expect(a.navAgent).toBe('智能体');
   });
 });
 
@@ -210,6 +211,7 @@ describe('i18n agents content IA', () => {
       expect((a.presets as Record<string, unknown>)[k], k).toBeTruthy();
     }
     expect(a.navAssistant).toBe('Assistant');
+    expect(a.navAgent).toBe('智能体');
     expect(a.navPresets).toBe('Assistant');
     expect(a.navCapabilities).toBe('Skills & MCP');
     expect(a.presets.title).toBe('Assistant');

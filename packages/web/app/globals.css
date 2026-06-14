@@ -161,15 +161,9 @@ body {
   letter-spacing: 0.03em;
 }
 
-/* Side panel headers own their responsive action priority.
-   The files panel keeps More visible and drops depth controls first when narrow. */
+/* Side panel headers own their responsive action priority. */
 .panel-header {
   container-type: inline-size;
-}
-@container (max-width: 272px) {
-  .files-panel-header-depth-actions {
-    display: none;
-  }
 }
 
 /* Content width — controlled by Settings > Appearance */
@@ -857,10 +851,12 @@ input[type="radio"].form-radio:focus-visible {
      win / linux desktops keep 0 so the logo sits in the first row. */
   --rail-titlebar-offset: 0px;
   --rail-width: 0px;
+  --titlebar-row-left: 0px;
 }
 @media (min-width: 768px) {
   :root {
     --app-titlebar-h: 42px;
+    --titlebar-row-left: 48px;
   }
 }
 html[data-mac-titlebar-row] {

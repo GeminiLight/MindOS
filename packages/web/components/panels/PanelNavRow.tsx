@@ -26,7 +26,16 @@ export function PanelNavRow({
 }) {
   const content = (
     <>
-      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">{icon}</span>
+      <span
+        className={cn(
+          'flex h-7 w-7 shrink-0 items-center justify-center rounded-md border transition-[background-color,border-color,color] duration-150',
+          active
+            ? 'border-[var(--amber)]/35 bg-[var(--amber)]/10 text-[var(--amber)]'
+            : 'border-transparent bg-muted/70 text-muted-foreground group-hover:bg-muted group-hover:text-foreground',
+        )}
+      >
+        {icon}
+      </span>
       <span className="flex-1 min-w-0">
         <span className="block text-left text-sm font-medium text-foreground truncate" title={title}>{title}</span>
         {subtitle ? (
@@ -38,33 +47,22 @@ export function PanelNavRow({
     </>
   );
 
-  const showRail = Boolean(active);
-
   const className = cn(
-    'relative flex items-center gap-3 px-4 py-2.5 transition-[background-color,color] duration-150 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-    showRail ? 'bg-[var(--amber-dim)]/40 text-foreground' : 'text-muted-foreground',
-    !showRail && 'cursor-pointer hover:bg-muted/50',
-    showRail && 'cursor-default',
+    'group relative flex items-center gap-3 rounded-md border px-4 py-2.5 transition-[background-color,border-color,color,box-shadow] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+    active
+      ? 'cursor-default border-[var(--amber)]/35 bg-[var(--amber-dim)]/45 text-foreground shadow-sm'
+      : 'cursor-pointer border-transparent text-muted-foreground hover:border-border/60 hover:bg-muted/45 hover:text-foreground',
   );
-
-  const rail = showRail ? (
-    <span
-      className="pointer-events-none absolute bottom-[22%] left-0 top-[22%] w-0.5 rounded-r-full bg-[var(--amber)]"
-      aria-hidden
-    />
-  ) : null;
 
   if (href) {
     return (
       <Link href={href} className={className} aria-current={active ? 'page' : undefined}>
-        {rail}
         {content}
       </Link>
     );
   }
   return (
     <button type="button" onClick={onClick} className={cn(className, 'w-full')}>
-      {rail}
       {content}
     </button>
   );

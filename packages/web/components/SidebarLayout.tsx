@@ -41,6 +41,8 @@ import {
   getActiveLeftPanel,
   getContentRoutePanel,
   getEffectivePanelMaximized,
+  getHomeClickPanel,
+  getPendingHomePanel,
   getPendingRoutePanel,
   getRailActivePanel,
   getRailPanelClickDecision,
@@ -48,6 +50,7 @@ import {
   isNeutralContentRoute,
   recoverStaleRoutePanel,
   type PanelId,
+  type PendingHomeNav,
   type PendingRouteNav,
   type RoutePanelId,
 } from '@/lib/navigation-panel';
@@ -225,9 +228,11 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
   // mismatch can't flip any derived state back and forth (the rail-click
   // flicker). Any pathname change invalidates the pending entry in-render.
   const [pendingNav, setPendingNav] = useState<PendingRouteNav | null>(null);
+  const [pendingHomeNav, setPendingHomeNav] = useState<PendingHomeNav | null>(null);
   const pendingRoutePanel = getPendingRoutePanel(pathname, pendingNav);
-  const activeLeftPanel = pendingRoutePanel ?? getActiveLeftPanel(pathname, lp.activePanel);
-  const railActivePanel = pendingRoutePanel ?? getRailActivePanel(pathname, lp.activePanel);
+  const pendingHomePanel = getPendingHomePanel(pathname, pendingHomeNav);
+  const activeLeftPanel = pendingHomePanel ?? pendingRoutePanel ?? getActiveLeftPanel(pathname, lp.activePanel);
+  const railActivePanel = pendingHomePanel ?? pendingRoutePanel ?? getRailActivePanel(pathname, lp.activePanel);
   const agentDockOpen = agentDetailKey !== null && activeLeftPanel === 'agents';
   const panelOpen = activeLeftPanel !== null;
   const effectivePanelMaximized = getEffectivePanelMaximized(activeLeftPanel, lp.activePanel, lp.panelMaximized);
@@ -278,6 +283,14 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
   useEffect(() => {
     setPendingNav((prev) => (prev && prev.fromPathname !== pathname ? null : prev));
   }, [pathname]);
+
+  useEffect(() => {
+    if (!pendingHomeNav || pendingHomeNav.fromPathname === pathname) return;
+    setPendingHomeNav(null);
+    if (pathname === '/' && pendingHomeNav.panel) {
+      lp.setActivePanel(pendingHomeNav.panel);
+    }
+  }, [pathname, pendingHomeNav, lp.setActivePanel]);
 
   // Auto-exit Ask panel maximize when navigating to a different page
   // or when left panel opens (content needs to be visible).
@@ -595,6 +608,15 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
     setSyncPopoverOpen(false);
   }, [lp]);
 
+  const handleSidebarPanelExpandedChange = useCallback((expanded: boolean) => {
+    previousSearchPanelRef.current = null;
+    if (expanded) {
+      lp.setActivePanel('files');
+    } else {
+      lp.setActivePanel(null);
+    }
+  }, [lp.setActivePanel]);
+
   const handleMobileNavigate = useCallback(() => setMobileOpen(false), []);
 
   const handleRoutePanelClick = useCallback((
@@ -614,6 +636,21 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
     if (targetPanel === 'agents') setAgentDetailKey(null);
   }, [activeLeftPanel, exitAskMaximized, lp, pathname]);
 
+  const handleHomeClick = useCallback(() => {
+    previousSearchPanelRef.current = null;
+    const nextPanel = getHomeClickPanel(activeLeftPanel);
+    setPendingNav(null);
+    setPendingHomeNav(pathname !== '/' ? { fromPathname: pathname, panel: nextPanel } : null);
+    if (nextPanel) {
+      lp.setActivePanel(nextPanel);
+    }
+    if (pathname !== '/') {
+      startTransition(() => {
+        router.push('/');
+      });
+    }
+  }, [activeLeftPanel, lp, pathname, router]);
+
   return (
     <InboxOrganizeProvider value={inboxOrganize}>
       <McpStoreInit />
@@ -630,8 +667,8 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
       <TitlebarRow
         searchActive={activeLeftPanel === 'search'}
         onSearchOpenOrFocus={openOrFocusSearchPanel}
-        sidebarExpanded={lp.railExpanded}
-        onSidebarExpandedChange={handleExpandedChange}
+        sidebarExpanded={panelOpen}
+        onSidebarExpandedChange={handleSidebarPanelExpandedChange}
       />
       <ActivityBar
         activePanel={railActivePanel}
@@ -641,6 +678,7 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
         onAgentsClick={(event) => handleRoutePanelClick(event, 'agents')}
         onDiscoverClick={(event) => handleRoutePanelClick(event, 'discover')}
         onSpacesClick={(event) => handleRoutePanelClick(event, 'files')}
+        onHomeClick={handleHomeClick}
         syncStatus={syncStatus}
         syncStale={syncStatusStale}
         expanded={lp.railExpanded}

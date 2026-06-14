@@ -5,9 +5,10 @@
  * (wiki/specs/spec-titlebar-row.md, Phase 2).
  *
  * Visuals: 34px tabs sitting on the row's bottom edge, rounded-t-lg, active
- * tab bg-card with top/side borders; FileText for docs, MessageSquare for
- * chat sessions (same icon the session history panel uses). Chat indicators
- * come from useRunSummary: spinner while running, amber dot when unread.
+ * tab bg-card with top/side borders; Home for the product start page, FileText
+ * for docs, MessageSquare for chat sessions (same icon the session history
+ * panel uses). Chat indicators come from useRunSummary: spinner while running,
+ * amber dot when unread.
  *
  * Overflow: a ResizeObserver measures the strip container; visible count =
  * how many min-width (96px) tabs fit next to the ＋ button (plus the ⌄N
@@ -21,7 +22,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronDown, FileText, Loader2, MessageSquare, Pin, Plus, X } from 'lucide-react';
+import { ChevronDown, FileText, Home as HomeIcon, Loader2, MessageSquare, Pin, Plus, X } from 'lucide-react';
 import { closeTab, keepTab, type WorkspaceTab } from '@/lib/workspace-tabs';
 import { tabHref, useWorkspaceTabSync } from '@/hooks/useWorkspaceTabSync';
 import { useLocale } from '@/lib/stores/locale-store';
@@ -61,6 +62,12 @@ function TabIndicator({ tab, running, unread }: IndicatorProps) {
     return <span aria-hidden="true" data-indicator="unread" className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--amber)]" />;
   }
   return null;
+}
+
+function TabKindIcon({ kind, className = 'shrink-0' }: { kind: WorkspaceTab['kind']; className?: string }) {
+  if (kind === 'home') return <HomeIcon size={13} aria-hidden="true" className={className} />;
+  if (kind === 'doc') return <FileText size={13} aria-hidden="true" className={className} />;
+  return <MessageSquare size={13} aria-hidden="true" className={className} />;
 }
 
 export default function TitlebarTabStrip() {
@@ -135,6 +142,7 @@ export default function TitlebarTabStrip() {
 
   /** Close a tab; closing the ACTIVE one moves to the right neighbor, then left, then home. */
   const handleClose = useCallback((tab: WorkspaceTab) => {
+    if (tab.kind === 'home') return;
     const index = tabs.findIndex((item) => item.id === tab.id);
     const wasActive = tab.id === activeTabId;
     closeTab(tab.id);
@@ -150,6 +158,7 @@ export default function TitlebarTabStrip() {
   const renderTab = (tab: WorkspaceTab, index: number) => {
     const isActive = tab.id === activeTabId;
     const isPreview = tab.kind === 'doc' && tab.pinned === false;
+    const canClose = tab.kind !== 'home';
     const previousTab = index > 0 ? visibleTabs[index - 1] : null;
     const showLeadingSeparator = Boolean(
       previousTab && previousTab.id !== activeTabId && tab.id !== activeTabId,
@@ -195,9 +204,7 @@ export default function TitlebarTabStrip() {
         }`}
       >
         <span className={`flex min-w-0 flex-1 items-center gap-1.5 ${dimmed ? 'opacity-60' : ''}`}>
-          {tab.kind === 'doc'
-            ? <FileText size={13} aria-hidden="true" className="shrink-0" />
-            : <MessageSquare size={13} aria-hidden="true" className="shrink-0" />}
+          <TabKindIcon kind={tab.kind} />
           <span className={`truncate ${isPreview ? 'italic' : ''}`}>{tab.title}</span>
         </span>
         <TabIndicator tab={tab} running={running} unread={unread} />
@@ -216,20 +223,22 @@ export default function TitlebarTabStrip() {
             <Pin size={12} aria-hidden="true" />
           </button>
         )}
-        <button
-          type="button"
-          aria-label={t.workspaceTabs.closeTab}
-          style={NO_DRAG}
-          onClick={(e) => {
-            e.stopPropagation();
-            handleClose(tab);
-          }}
-          className={`shrink-0 rounded p-0.5 transition-opacity duration-150 hover:bg-muted hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-            isActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'
-          }`}
-        >
-          <X size={12} aria-hidden="true" />
-        </button>
+        {canClose && (
+          <button
+            type="button"
+            aria-label={t.workspaceTabs.closeTab}
+            style={NO_DRAG}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleClose(tab);
+            }}
+            className={`shrink-0 rounded p-0.5 transition-opacity duration-150 hover:bg-muted hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+              isActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'
+            }`}
+          >
+            <X size={12} aria-hidden="true" />
+          </button>
+        )}
       </div>
     );
   };
@@ -297,9 +306,7 @@ export default function TitlebarTabStrip() {
                 }}
                 className="flex min-w-0 flex-1 items-center gap-1.5 rounded-md px-1.5 py-1.5 text-left text-xs text-foreground transition-colors duration-150 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                {tab.kind === 'doc'
-                  ? <FileText size={13} aria-hidden="true" className="shrink-0 text-muted-foreground" />
-                  : <MessageSquare size={13} aria-hidden="true" className="shrink-0 text-muted-foreground" />}
+                <TabKindIcon kind={tab.kind} className="shrink-0 text-muted-foreground" />
                 <span className={`truncate ${tab.pinned === false ? 'italic' : ''}`}>{tab.title}</span>
                 <TabIndicator tab={tab} running={running} unread={unread} />
               </button>
@@ -314,14 +321,16 @@ export default function TitlebarTabStrip() {
                   <Pin size={12} aria-hidden="true" />
                 </button>
               )}
-              <button
-                type="button"
-                aria-label={t.workspaceTabs.closeTab}
-                onClick={() => handleClose(tab)}
-                className="shrink-0 rounded p-1 text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <X size={12} aria-hidden="true" />
-              </button>
+              {tab.kind !== 'home' && (
+                <button
+                  type="button"
+                  aria-label={t.workspaceTabs.closeTab}
+                  onClick={() => handleClose(tab)}
+                  className="shrink-0 rounded p-1 text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <X size={12} aria-hidden="true" />
+                </button>
+              )}
             </div>
           ))}
         </div>

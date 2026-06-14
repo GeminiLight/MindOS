@@ -56,11 +56,11 @@ describe('icon button hit areas', () => {
     expect(filesPanelSource).not.toContain('className="p-1 rounded hover:bg-muted');
     expect(filesPanelSource).not.toContain('hover:bg-muted transition-colors text-left');
 
-    expect(agentsPanelSource).toContain('hit-target-box inline-flex h-8 w-8');
+    expect(agentsPanelSource).toContain('<PanelHeader title={p.title} />');
     expect(agentsPanelSource).not.toContain('className="p-1 rounded hover:bg-muted');
   });
 
-  it('keeps the files panel more button visible before depth controls on narrow headers', () => {
+  it('keeps the files panel depth controls visible on narrow headers', () => {
     const source = readSource('components/Panel.tsx');
     const headerSource = readSource('components/panels/PanelHeader.tsx');
     const css = readSource('app/globals.css');
@@ -71,9 +71,7 @@ describe('icon button hit areas', () => {
     expect(source).toContain('files-panel-header-actions');
     expect(source).toContain('files-panel-header-depth-actions');
     expect(source).toContain('files-panel-header-more-action');
-    expect(css).toContain('@container (max-width: 272px)');
-    expect(css).toContain('.files-panel-header-depth-actions');
-    expect(css).toContain('display: none;');
+    expect(css).not.toContain('.files-panel-header-depth-actions');
   });
 
   it('keeps built-in Mind System sidebar controls on rectangular hit targets', () => {
@@ -190,6 +188,10 @@ describe('icon button hit areas', () => {
     expect(messageListSource).toContain('absolute right-3 top-full');
     expect(messageListSource).toContain('md:group-hover/message:opacity-100');
     expect(messageListSource).toContain('md:focus-within:opacity-100');
+    expect(messageListSource).not.toContain('contentVisibility');
+    expect(messageListSource).not.toContain('containIntrinsicSize');
+    expect(messageListSource).not.toContain('style={MESSAGE_ROW_STYLE}');
+    expect(messageListSource).toContain('pt-5 pb-10 space-y-6');
     expect(messageListSource).not.toContain('mt-2 flex justify-start');
     expect(messageListSource).not.toContain('mt-2 flex justify-end');
     expect(messageListSource).toContain('hit-target-box group/sug');

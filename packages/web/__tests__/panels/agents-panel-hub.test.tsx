@@ -161,6 +161,15 @@ describe('AgentsPanel hub layout', () => {
     expect(html).toContain('Test Agent');
     expect(html).not.toContain('Your setup');
     expect(html).not.toContain('/help');
+
+    const headerStart = html.indexOf('panel-header');
+    const headerEnd = html.indexOf('<div class="flex-1 overflow-y-auto', headerStart);
+    const headerHtml = html.slice(headerStart, headerEnd);
+    expect(headerHtml).not.toContain(runtime.panelTitle);
+    expect(headerHtml).not.toContain(a.connected);
+    expect(headerHtml).not.toContain(`aria-label="${a.refresh}"`);
+    expect((html.match(new RegExp(`aria-label="${runtime.refresh}"`, 'g')) ?? [])).toHaveLength(1);
+    expect(html).toContain('hit-target-box inline-flex h-7 w-7');
   });
 
   it('keeps the hub nav visible while MCP data is loading', () => {

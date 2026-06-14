@@ -51,33 +51,33 @@ export function AgentsPanelHubNav({
   return (
     <div className="py-2">
       <PanelNavRow
-        icon={<LayoutDashboard size={14} className={overviewActive ? 'text-[var(--amber)]' : 'text-muted-foreground'} />}
+        icon={<LayoutDashboard size={14} />}
         title={copy.navOverview}
         badge={badge(connectedCount)}
         href="/agents"
         active={overviewActive}
       />
       <PanelNavRow
-        icon={<Sparkles size={14} className={assistantActive ? 'text-[var(--amber)]' : 'text-muted-foreground'} />}
+        icon={<Sparkles size={14} />}
         title={copy.navAssistant ?? copy.navPresets}
         badge={badge(assistantCount)}
         href="/agents?tab=assistant"
         active={assistantActive}
       />
       <PanelNavRow
-        icon={<Bot size={14} className={agentActive ? 'text-[var(--amber)]' : 'text-muted-foreground'} />}
+        icon={<Bot size={14} />}
         title={copy.navAgent ?? copy.navMcp}
         href="/agents?tab=agent"
         active={agentActive}
       />
       <PanelNavRow
-        icon={<Sparkles size={14} className={capabilitiesActive ? 'text-[var(--amber)]' : 'text-muted-foreground'} />}
+        icon={<Sparkles size={14} />}
         title={copy.navCapabilities ?? copy.navSkills}
         href="/agents?tab=skills"
         active={capabilitiesActive}
       />
       <PanelNavRow
-        icon={<MessageSquare size={14} className={channelsHubActive ? 'text-[var(--amber)]' : 'text-muted-foreground'} />}
+        icon={<MessageSquare size={14} />}
         title={copy.navChannels}
         badge={badge(channelCount)}
         href="/agents?tab=channels"

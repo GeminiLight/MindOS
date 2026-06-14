@@ -34,3 +34,7 @@ export function resolveChannelListStatus(status: PlatformStatus | undefined): Ch
   if (status.connected) return 'configured';
   return 'issue';
 }
+
+export function countConnectedChannels(statuses: PlatformStatus[]): number {
+  return statuses.filter((status) => status.connected === true).length;
+}

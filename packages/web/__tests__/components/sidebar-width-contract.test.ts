@@ -32,4 +32,12 @@ describe('Sidebar width contract', () => {
     expect(sidebarLayout).toContain('<Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">');
     expect(sidebarLayout).not.toContain('href={ROUTE_PANEL_HREF.files}');
   });
+
+  it('keeps Mind file-tree depth controls visible in narrow sidebars', () => {
+    const panel = readSource('components/Panel.tsx');
+    const globals = readSource('app/globals.css');
+
+    expect(panel).toContain('files-panel-header-depth-actions');
+    expect(globals).not.toContain('.files-panel-header-depth-actions');
+  });
 });
