@@ -452,14 +452,10 @@ function ByServerView({
 
   return (
     <>
-      <div className="relative overflow-hidden rounded-xl border border-border/70 bg-muted/20 p-3 pl-8">
-        <div className="pointer-events-none absolute left-5 top-8 bottom-8 w-px bg-border" aria-hidden="true" />
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <p className="text-2xs font-medium uppercase tracking-wider text-muted-foreground">
-            {copy.connectionGraph}
-          </p>
-          <p className="text-2xs text-muted-foreground tabular-nums">{copy.resultCount(servers.length)}</p>
-        </div>
+      <p className="text-2xs font-medium uppercase tracking-wider text-muted-foreground">
+        {copy.connectionGraph}
+      </p>
+      <div className="max-h-[min(540px,calc(100vh-260px))] space-y-3 overflow-y-auto pr-1">
         {hintMessage && (
           <div role="status" aria-live="polite" className="mb-3 rounded-md border border-border bg-background/80 px-3 py-2 text-xs text-muted-foreground animate-in fade-in duration-200">
             {hintMessage}
@@ -478,8 +474,7 @@ function ByServerView({
           const notFoundCount = agentDetails.length - connectedCount - detectedCount + orphanNames.length;
 
           return (
-            <div key={srv.serverName} className="relative mb-3 last:mb-0 rounded-lg border border-border/70 bg-card/90 p-4 shadow-sm transition-all duration-200 hover:border-[var(--amber)]/35 hover:bg-card hover:shadow-md">
-              <span className="absolute -left-[1.08rem] top-5 h-3 w-3 rounded-full border-2 border-background bg-[var(--amber)] shadow-[0_0_0_3px_var(--background)]" aria-hidden="true" />
+            <div key={srv.serverName} className="rounded-lg border border-border/70 bg-card/90 p-4 shadow-sm transition-all duration-200 hover:border-[var(--amber)]/35 hover:bg-card hover:shadow-md">
               {/* Server header */}
               <div className="flex items-start justify-between gap-3 mb-4">
                 <div className="flex items-center gap-2.5 min-w-0">
@@ -488,7 +483,6 @@ function ByServerView({
                   </div>
                   <div className="min-w-0">
                     <span className="block text-sm font-semibold text-foreground truncate">{srv.serverName}</span>
-                    <span className="mt-0.5 block text-2xs text-muted-foreground tabular-nums">{copy.serverAgentCount(srv.agents.length)}</span>
                   </div>
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">

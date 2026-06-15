@@ -80,7 +80,7 @@ interface SearchPanelProps {
 
 export { getSearchWarmHint, shouldStartSearchPrewarm } from '@/hooks/useSearchPrewarm';
 
-export default function SearchPanel({ active, focusRequest = 0, onNavigate, onClose, maximized, onMaximize }: SearchPanelProps) {
+export default function SearchPanel({ active, focusRequest = 0, onNavigate, onClose }: SearchPanelProps) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
@@ -458,7 +458,7 @@ export default function SearchPanel({ active, focusRequest = 0, onNavigate, onCl
   return (
     <>
       {/* Header */}
-      <PanelHeader title={searchTitle} maximized={maximized} onMaximize={onMaximize}>
+      <PanelHeader title={searchTitle}>
         {onClose && (
           <button
             type="button"
@@ -474,7 +474,7 @@ export default function SearchPanel({ active, focusRequest = 0, onNavigate, onCl
 
       {/* Search input */}
       <div className="shrink-0 overflow-hidden border-b border-border/70 px-3 py-3">
-        <div className="group/search flex min-h-11 items-center gap-2.5 overflow-hidden rounded-lg border border-border/65 bg-background/45 px-3 shadow-[inset_0_1px_0_color-mix(in_srgb,var(--foreground)_4%,transparent)] transition-[background-color,border-color,box-shadow] duration-150 focus-within:border-[var(--amber)]/45 focus-within:bg-background/70 focus-within:shadow-[inset_3px_0_0_var(--amber)]">
+        <div className="group/search flex min-h-11 items-center gap-2.5 overflow-hidden rounded-lg border border-border/65 bg-background/45 px-3 shadow-[inset_0_1px_0_color-mix(in_srgb,var(--foreground)_4%,transparent)] transition-[background-color,border-color,box-shadow] duration-150 focus-within:border-[var(--amber)]/45 focus-within:bg-background/70">
           <Search size={16} className="shrink-0 flex-none text-muted-foreground transition-colors duration-150 group-focus-within/search:text-[var(--amber)]" />
           <input
             ref={inputRef}

@@ -573,8 +573,8 @@ function BuiltInMindSpaces({
         aria-controls={MIND_SYSTEM_SLOT_LIST_ID}
         className={`hit-target-box relative mb-1 flex w-full items-center gap-2 px-2.5 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [--hit-target-radius:var(--radius-md)] ${
           collapsed
-            ? 'rounded-md border border-transparent [--hit-target-hover-bg:var(--muted)]'
-            : 'rounded-md border border-[var(--amber)]/25 bg-[var(--amber-subtle)] [--hit-target-active-bg:var(--amber-subtle)] [--hit-target-hover-bg:var(--amber-dim)]'
+            ? 'rounded-md border border-transparent [--hit-target-border-width:1px] [--hit-target-border:transparent] [--hit-target-hover-bg:var(--muted)]'
+            : 'rounded-md border border-transparent [--hit-target-border-width:1px] [--hit-target-border:color-mix(in_srgb,var(--amber)_25%,transparent)] [--hit-target-active-bg:var(--amber-subtle)] [--hit-target-active-border:color-mix(in_srgb,var(--amber)_25%,transparent)] [--hit-target-hover-bg:var(--amber-dim)] [--hit-target-hover-border:color-mix(in_srgb,var(--amber)_30%,transparent)]'
         }`}
       >
         <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md transition-colors ${

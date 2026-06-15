@@ -70,6 +70,8 @@ describe('AskHeader panel hit area', () => {
     expect(html).toContain('title="Session history"');
     expect(html).toContain('title="New session"');
     expect(html).toContain('title="Focus mode"');
+    expect(html).not.toContain('title="Open as popup"');
+    expect(html).not.toContain('title="Dock to side panel"');
     expect(html).toContain('h-9 w-9');
     expect(html).toContain('min-h-9');
     expect(html).toContain('relative z-20 isolate');

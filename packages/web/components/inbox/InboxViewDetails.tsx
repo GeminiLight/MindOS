@@ -370,7 +370,11 @@ export function InboxProcessNav({
                   {entry.label}
                 </span>
                 {entry.count > 0 && (
-                  <span className="rounded-full bg-background px-1.5 py-px text-2xs font-medium text-muted-foreground">
+                  <span className={`rounded-full px-1.5 py-px text-2xs font-medium tabular-nums ${
+                    active
+                      ? 'bg-background/75 text-[var(--amber-text)]'
+                      : 'bg-muted/55 text-muted-foreground/75'
+                  }`}>
                     {entry.count}
                   </span>
                 )}

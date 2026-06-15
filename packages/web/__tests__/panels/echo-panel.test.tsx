@@ -15,10 +15,6 @@ vi.mock('@/lib/stores/locale-store', () => ({
   useLocale: () => ({ locale: 'en' as const, setLocale: () => {}, t: messages.en }),
 }));
 
-vi.mock('@/components/panels/EchoSidebarStats', () => ({
-  default: () => <div data-testid="echo-sidebar-stats" />,
-}));
-
 describe('EchoPanel sidebar navigation', () => {
   it('marks the active Echo segment with the primary sidebar rail style', () => {
     routeState.pathname = '/echo/imprint';
@@ -49,5 +45,16 @@ describe('EchoPanel sidebar navigation', () => {
 
     expect(html).not.toContain('Maximize panel');
     expect(html).not.toContain('Restore panel');
+  });
+
+  it('does not render the legacy Recent stats section', () => {
+    routeState.pathname = '/echo/imprint';
+
+    const html = renderToStaticMarkup(<EchoPanel active maximized={false} />);
+
+    expect(html).not.toContain('data-testid="echo-sidebar-stats"');
+    expect(html).not.toContain('Files');
+    expect(html).not.toContain('Changes');
+    expect(html).not.toContain('Chats');
   });
 });

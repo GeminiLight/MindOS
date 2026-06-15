@@ -211,6 +211,24 @@ describe('AgentsPresetsSection', () => {
     expect(host.textContent).toContain('Recent notes');
     expect(host.textContent).toContain('Decision logs');
     expect(host.textContent).not.toContain('Skill Librarian');
+    expect(host.textContent).not.toContain('All assistants');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('places assistant search between filters and New Assistant', async () => {
+    mockAssistantsFetch();
+    const { host, root } = await renderSection();
+
+    const commandCenter = host.querySelector('[data-assistant-command-center]');
+    expect(commandCenter).not.toBeNull();
+    const labels = Array.from(commandCenter!.children).map((child) => child.textContent ?? '');
+    expect(labels[0]).toContain('Custom');
+    expect(labels[1]).not.toContain('Custom');
+    expect((commandCenter!.children[1] as HTMLElement).querySelector('input')).not.toBeNull();
+    expect(labels[2]).toContain('New Assistant');
 
     await act(async () => {
       root.unmount();

@@ -326,7 +326,7 @@ describe('Panel Mind System collapse', () => {
 
     const toggle = getMindSystemToggle(host);
     expect(toggle.className).toContain('rounded-md');
-    expect(toggle.className).toContain('border-[var(--amber)]/25');
+    expect(toggle.className).toContain('[--hit-target-active-border:color-mix(in_srgb,var(--amber)_25%,transparent)]');
     expect(toggle.querySelector('[class*="rounded-r-full"]')).toBeNull();
 
     const openButton = host.querySelector<HTMLButtonElement>('[data-mind-system-sidebar-open="dao"]');

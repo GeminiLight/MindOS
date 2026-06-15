@@ -82,7 +82,8 @@ describe('icon button hit areas', () => {
 
     expect(source).toContain('data-hit-active={expanded ? \'true\' : undefined}');
     expect(source).toContain('hit-target-box relative mb-1 flex w-full items-center gap-2');
-    expect(source).toContain('rounded-md border border-[var(--amber)]/25 bg-[var(--amber-subtle)]');
+    expect(source).toContain('[--hit-target-active-bg:var(--amber-subtle)]');
+    expect(source).toContain('[--hit-target-active-border:color-mix(in_srgb,var(--amber)_25%,transparent)]');
     expect(source).not.toContain('w-[3px] rounded-r-full bg-[var(--amber)]');
     expect(source).toContain('data-mind-system-sidebar-open={item.key}');
     expect(source).toContain('hit-target-box relative flex w-full min-w-0 items-center gap-2');

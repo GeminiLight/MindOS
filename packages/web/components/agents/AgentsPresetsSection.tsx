@@ -631,7 +631,6 @@ function AssistantCommandBar({
   onRunSelected: () => void;
 }) {
   const filterOptions: Array<{ value: AssistantFilter; label: string; count: number }> = [
-    { value: 'all', label: copy.filterAll ?? 'All assistants', count: counts.total },
     { value: 'builtin', label: copy.filterBuiltin ?? copy.builtinLabel ?? 'Built-in', count: counts.builtin },
     { value: 'custom', label: copy.filterCustom ?? copy.customLabel ?? 'Custom', count: counts.custom },
   ];
@@ -639,8 +638,27 @@ function AssistantCommandBar({
   return (
     <div
       data-assistant-command-center
-      className="grid gap-3 rounded-xl border border-border/60 bg-card/35 p-3 shadow-sm xl:grid-cols-[minmax(240px,1fr)_auto_auto]"
+      className="grid gap-3 rounded-xl border border-border/60 bg-card/35 p-3 shadow-sm xl:grid-cols-[auto_minmax(260px,1fr)_auto]"
     >
+      <div
+        role="group"
+        aria-label="Filter assistants"
+        className="flex min-h-10 min-w-0 items-center gap-1 overflow-x-auto rounded-lg border border-border/60 bg-background/70 p-1"
+      >
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground/60" aria-hidden="true">
+          <SlidersHorizontal size={13} />
+        </span>
+        {filterOptions.map(option => (
+          <AssistantFilterPill
+            key={option.value}
+            active={filter === option.value}
+            label={option.label}
+            count={option.count}
+            onClick={() => onFilterChange(option.value)}
+          />
+        ))}
+      </div>
+
       <label className="relative min-w-0">
         <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/55" />
         <input
@@ -661,25 +679,6 @@ function AssistantCommandBar({
           </button>
         ) : null}
       </label>
-
-      <div
-        role="group"
-        aria-label="Filter assistants"
-        className="flex min-h-10 min-w-0 items-center gap-1 overflow-x-auto rounded-lg border border-border/60 bg-background/70 p-1"
-      >
-        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground/60" aria-hidden="true">
-          <SlidersHorizontal size={13} />
-        </span>
-        {filterOptions.map(option => (
-          <AssistantFilterPill
-            key={option.value}
-            active={filter === option.value}
-            label={option.label}
-            count={option.count}
-            onClick={() => onFilterChange(option.value)}
-          />
-        ))}
-      </div>
 
       <div className="flex flex-wrap items-center justify-start gap-2 xl:justify-end">
         <button

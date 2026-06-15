@@ -168,11 +168,14 @@ export default function ProviderModelCapsule({
 
   const reposition = useCallback(() => {
     if (!triggerRef.current) return;
+    const dropdownWidth = 276;
+    const viewportPadding = 8;
     const rect = triggerRef.current.getBoundingClientRect();
     const goUp = rect.top > window.innerHeight - rect.bottom && rect.top > 280;
     setDropdownStyle({
       position: 'fixed',
-      left: Math.min(rect.left, window.innerWidth - 270),
+      left: Math.max(viewportPadding, Math.min(rect.left, window.innerWidth - dropdownWidth - viewportPadding)),
+      width: dropdownWidth,
       ...(goUp ? { bottom: window.innerHeight - rect.top + 6 } : { top: rect.bottom + 6 }),
       zIndex: 60,
     });
@@ -513,7 +516,7 @@ export default function ProviderModelCapsule({
         ref={providerPanelRef}
         role="listbox"
         aria-label="Model"
-        className="w-[260px] rounded-lg border border-border bg-card shadow-lg py-1 animate-in fade-in-0 zoom-in-95 duration-100"
+        className="w-full rounded-lg border border-border bg-card shadow-lg py-1 animate-in fade-in-0 zoom-in-95 duration-100"
         style={{ maxHeight: '70vh', overflowY: 'auto' }}
       >
         <div className="border-b border-border/40 px-3 py-2">
@@ -610,8 +613,8 @@ export default function ProviderModelCapsule({
         disabled={disabled}
         data-hit-active={providerValue || hasModelOverride || open ? 'true' : undefined}
         className={`
-          hit-target-box relative z-10 inline-flex min-h-6 items-center gap-1 px-2.5 py-0.5
-          text-2xs font-medium transition-colors select-none max-w-[260px]
+          hit-target-box relative z-10 inline-flex min-h-6 w-[148px] items-center gap-1 px-2.5 py-0.5
+          text-2xs font-medium transition-colors select-none sm:w-[164px]
           pointer-events-auto touch-manipulation
           border border-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
           disabled:pointer-events-none disabled:opacity-40 disabled:cursor-not-allowed

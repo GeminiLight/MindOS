@@ -1,6 +1,6 @@
 import { memo, useState, useRef, useEffect, useCallback, useTransition } from 'react';
 import { createPortal } from 'react-dom';
-import { SquarePen, History, X, Maximize2, Minimize2, PanelRight, AppWindow, ChevronDown, Check, Trash2, Pencil, Pin, PinOff } from 'lucide-react';
+import { SquarePen, History, X, Maximize2, Minimize2, PanelRight, ChevronDown, Check, Trash2, Pencil, Pin, PinOff } from 'lucide-react';
 import { SaveSessionButton } from './SaveSessionInline';
 import RuntimeIconSwitcher from './RuntimeIconSwitcher';
 import { useLocale } from '@/lib/stores/locale-store';
@@ -53,7 +53,7 @@ function nativeSavedSessionLabel(runtime: AgentRuntimeIdentity | null | undefine
 
 export default memo(function AskHeader({
   isPanel, showHistory, onToggleHistory, onReset, isLoading,
-  maximized, onMaximize, askMode, onModeSwitch, onClose, onDockToPanel, hideTitle,
+  maximized, onMaximize, onClose, onDockToPanel, hideTitle,
   sessions, activeSessionId, onLoadSession, onDeleteSession, onRenameSession, onTogglePinSession,
   messages, selectedAgentRuntime, onSelectAgentRuntime, runtimeSessionBinding,
   nativeRuntimes = [], notInstalledAgents = [], agentLoading, agentLoadingByKind, agentErrorByKind, onRefreshNativeRuntimes,
@@ -349,11 +349,6 @@ export default memo(function AskHeader({
         {onDockToPanel && (
           <button type="button" onClick={(e) => { e.stopPropagation(); startTransition(() => onDockToPanel()); }} className={`${headerButtonClass} text-muted-foreground hover:text-foreground`} title={t.hints.dockToSide ?? 'Dock to side panel'}>
             <PanelRight size={iconSize} />
-          </button>
-        )}
-        {onModeSwitch && (
-          <button type="button" onClick={(e) => { e.stopPropagation(); startTransition(() => onModeSwitch()); }} className={`${headerButtonClass} text-muted-foreground hover:text-foreground`} title={askMode === 'popup' ? t.hints.dockToSide : t.hints.openAsPopup}>
-            {askMode === 'popup' ? <PanelRight size={iconSize} /> : <AppWindow size={iconSize} />}
           </button>
         )}
         {onClose && (

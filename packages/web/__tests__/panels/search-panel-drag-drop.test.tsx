@@ -140,7 +140,8 @@ describe('SearchPanel Drag-Drop Tests', () => {
     const input = host.querySelector('input[type="text"]') as HTMLInputElement;
     const inputShell = input.parentElement as HTMLElement;
 
-    expect(inputShell.className).toContain('focus-within:shadow-[inset_3px_0_0_var(--amber)]');
+    expect(inputShell.className).not.toContain('focus-within:shadow-[inset_3px_0_0_var(--amber)]');
+    expect(inputShell.className).toContain('focus-within:border-[var(--amber)]/45');
     expect(inputShell.className).toContain('rounded-lg');
     expect(host.textContent).toContain('Search your knowledge base');
     expect(host.textContent).toContain('Find notes, tables, and commands.');

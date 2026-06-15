@@ -5,7 +5,6 @@ import { usePathname } from 'next/navigation';
 import { Footprints, Brain, Eye } from 'lucide-react';
 import PanelHeader from './PanelHeader';
 import { PanelNavRow } from './PanelNavRow';
-import EchoSidebarStats from './EchoSidebarStats';
 import { useLocale } from '@/lib/stores/locale-store';
 import { ECHO_SEGMENT_HREF, ECHO_SEGMENT_ORDER, type EchoSegment } from '@/lib/echo-segments';
 
@@ -39,9 +38,6 @@ export default function EchoPanel({ active }: EchoPanelProps) {
               <PanelNavRow key={segment} href={href} icon={row.icon} title={row.title} active={isActive} activeVariant="rail" />
             );
           })}
-        </div>
-        <div className="mt-auto">
-          <EchoSidebarStats />
         </div>
       </div>
     </div>

@@ -290,12 +290,12 @@ function CapturePanelLink({
       <Icon size={13} className={`shrink-0 ${active ? 'text-[var(--amber)]' : 'text-muted-foreground/60 group-hover:text-foreground/70'}`} />
       <span className={`min-w-0 flex-1 truncate text-xs font-medium ${active ? 'text-foreground' : 'text-foreground/85'}`}>{title}</span>
       {typeof count === 'number' && count > 0 && (
-        <span className={`rounded-full px-1.5 py-px text-2xs font-medium ${
+        <span className={`rounded-full px-1.5 py-px text-2xs font-medium tabular-nums ${
           active
-            ? 'bg-background text-muted-foreground'
+            ? 'bg-background/75 text-[var(--amber-text)]'
             : emphasized
               ? 'bg-[var(--amber)]/10 text-[var(--amber)]/75'
-              : 'bg-background text-muted-foreground'
+              : 'bg-muted/55 text-muted-foreground/75'
         }`}>
           {count}
         </span>
