@@ -13,6 +13,7 @@ import { usePinnedFiles } from '@/lib/hooks/usePinnedFiles';
 import { checkAiAvailable, triggerSpaceAiInit } from '@/lib/space-ai-init';
 import { toast } from '@/lib/toast';
 import { notifyFilesChanged } from '@/lib/files-changed';
+import { useSmoothRouterPush } from '@/hooks/useSmoothRouterPush';
 
 async function copyPathToClipboard(path: string) {
   try { await navigator.clipboard.writeText(path); } catch { /* noop */ }
@@ -67,7 +68,7 @@ export function ContextMenuShell({ x, y, onClose, menuHeight, children }: {
 export function SpaceContextMenu({ x, y, node, onClose, onRename, onNewFile, onImport, onDelete }: {
   x: number; y: number; node: FileNode; onClose: () => void; onRename: () => void; onNewFile: () => void; onImport?: (space: string) => void; onDelete: () => void;
 }) {
-  const router = useRouter();
+  const smoothPush = useSmoothRouterPush();
   const { t } = useLocale();
   const { isPinned, togglePin } = usePinnedFiles();
   const pinned = isPinned(node.path);
@@ -77,7 +78,7 @@ export function SpaceContextMenu({ x, y, node, onClose, onRename, onNewFile, onI
       <button className={MENU_ITEM} onClick={() => { onNewFile(); onClose(); }}>
         <Plus size={14} className="shrink-0" /> {t.fileTree.newFile}
       </button>
-      <button className={MENU_ITEM} onClick={() => { router.push(`/view/${encodePath(`${node.path}/INSTRUCTION.md`)}`); onClose(); }}>
+      <button className={MENU_ITEM} onClick={() => { onClose(); smoothPush(`/view/${encodePath(`${node.path}/INSTRUCTION.md`)}`); }}>
         <ScrollText size={14} className="shrink-0" /> {t.fileTree.viewRules}
       </button>
       {onImport && (

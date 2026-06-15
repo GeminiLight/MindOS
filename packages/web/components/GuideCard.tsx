@@ -5,12 +5,12 @@ import { X, Sparkles, Upload, MessageCircle, ExternalLink, Check, Copy, ChevronD
 import { copyToClipboard } from '@/lib/clipboard';
 import { toast } from '@/lib/toast';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { useLocale } from '@/lib/stores/locale-store';
 import { openAskModal } from '@/hooks/useAskModal';
 import { walkthroughSteps } from './walkthrough/steps';
 import { subscribeFilesChanged } from '@/lib/files-changed';
 import type { GuideState } from '@/lib/settings';
+import { useSmoothRouterPush } from '@/hooks/useSmoothRouterPush';
 
 interface GuideCardProps {
   hasExistingFiles?: boolean;
@@ -30,7 +30,7 @@ function isAiConfigured(data: SetupGuideResponse): boolean {
 
 export default function GuideCard({ hasExistingFiles = false }: GuideCardProps) {
   const { t } = useLocale();
-  const router = useRouter();
+  const smoothPush = useSmoothRouterPush();
   const g = t.guide;
 
   const [guideState, setGuideState] = useState<GuideState | null>(null);
@@ -107,14 +107,14 @@ export default function GuideCard({ hasExistingFiles = false }: GuideCardProps) 
   // ── Step 2: AI verify ──
   const handleStartAI = useCallback(() => {
     if (!aiConfigured) {
-      router.push('/settings?tab=ai');
+      smoothPush('/settings?tab=ai');
       return;
     }
     const gs = guideState;
     const isEmpty = gs?.template === 'empty';
     const prompt = isEmpty ? g.ai.promptEmpty : g.ai.prompt;
     openAskModal(prompt, 'guide');
-  }, [aiConfigured, guideState, g, router]);
+  }, [aiConfigured, guideState, g, smoothPush]);
 
   // ── Step 3: Cross-agent copy ──
   const handleCopyPrompt = useCallback(async () => {

@@ -1,12 +1,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import { FileText, ExternalLink } from 'lucide-react';
 import { encodePath } from '@/lib/utils';
 import type { RendererContext } from '@/lib/renderers/registry';
 import { fetchBacklinks } from '@/lib/backlinks-client';
 import type { BacklinkItem } from '@/lib/types';
+import { useSmoothRouterPush } from '@/hooks/useSmoothRouterPush';
 
 function basename(p: string) {
   return p.split('/').pop()?.replace(/\.md$/, '') ?? p;
@@ -34,7 +34,7 @@ function SnippetLine({ text }: { text: string }) {
 }
 
 export function BacklinksRenderer({ filePath }: RendererContext) {
-  const router = useRouter();
+  const smoothPush = useSmoothRouterPush();
   const [backlinks, setBacklinks] = useState<BacklinkItem[] | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -94,7 +94,7 @@ export function BacklinksRenderer({ filePath }: RendererContext) {
                   cursor: 'pointer',
                   transition: 'border-color .15s',
                 }}
-                onClick={() => router.push('/view/' + encodePath(src))}
+                onClick={() => smoothPush('/view/' + encodePath(src))}
                 onMouseEnter={e => (e.currentTarget.style.borderColor = 'rgba(200,135,58,0.4)')}
                 onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border)')}
               >

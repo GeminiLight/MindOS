@@ -6,6 +6,7 @@ import { Footprints, Brain, Eye } from 'lucide-react';
 import { useLocale } from '@/lib/stores/locale-store';
 import { cn } from '@/lib/utils';
 import { ECHO_SEGMENT_HREF, ECHO_SEGMENT_ORDER, type EchoSegment } from '@/lib/echo-segments';
+import { shouldHandleSmoothNavigation, useSmoothRouterPush } from '@/hooks/useSmoothRouterPush';
 
 function segmentMeta(
   segment: EchoSegment,
@@ -23,6 +24,7 @@ function segmentMeta(
 
 export default function EchoSegmentNav({ activeSegment }: { activeSegment: EchoSegment }) {
   const { t } = useLocale();
+  const smoothPush = useSmoothRouterPush();
   const echo = t.panels.echo;
   const aria = t.echoPages.segmentNavAria;
 
@@ -38,6 +40,11 @@ export default function EchoSegmentNav({ activeSegment }: { activeSegment: EchoS
               <Link
                 href={href}
                 aria-current={isActive ? 'page' : undefined}
+                onClick={(event) => {
+                  if (!shouldHandleSmoothNavigation(event)) return;
+                  event.preventDefault();
+                  if (!isActive) smoothPush(href);
+                }}
                 className={cn(
                   'inline-flex min-h-9 max-w-44 items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm transition-[background-color,border-color] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
                   isActive

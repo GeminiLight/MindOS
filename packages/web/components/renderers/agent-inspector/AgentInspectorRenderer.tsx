@@ -1,9 +1,9 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { Terminal, FileEdit, FilePlus, Trash2, Search, Clock, ChevronDown, AlertCircle, CheckCircle2 } from 'lucide-react';
 import type { RendererContext } from '@/lib/renderers/registry';
+import { useSmoothRouterPush } from '@/hooks/useSmoothRouterPush';
 
 // ─── Log entry format ─────────────────────────────────────────────────────────
 // Primary format:
@@ -129,7 +129,7 @@ function truncateContent(v: unknown, max = 120): string {
 // ─── Single op card ───────────────────────────────────────────────────────────
 
 function OpCard({ op }: { op: AgentOp }) {
-  const router = useRouter();
+  const smoothPush = useSmoothRouterPush();
   const [expanded, setExpanded] = useState(false);
   const kind = opKind(op.tool);
   const style = KIND_STYLE[kind];
@@ -171,7 +171,7 @@ function OpCard({ op }: { op: AgentOp }) {
         {filePath && (
           <span
             style={{ fontSize: '0.72rem', color: 'var(--amber)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'pointer' }}
-            onClick={e => { e.stopPropagation(); router.push('/view/' + filePath.split('/').map(encodeURIComponent).join('/')); }}
+            onClick={e => { e.stopPropagation(); smoothPush('/view/' + filePath.split('/').map(encodeURIComponent).join('/')); }}
             title={filePath}
             className="font-display"
           >

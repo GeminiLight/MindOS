@@ -38,6 +38,7 @@ import { useLeftPanel } from '@/hooks/useLeftPanel';
 import { useAskPanel } from '@/hooks/useAskPanel';
 import { useAiOrganize } from '@/hooks/useAiOrganize';
 import { useInboxOrganizeController } from '@/hooks/useInboxOrganizeController';
+import { shouldHandleSmoothNavigation, useSmoothRouterPush } from '@/hooks/useSmoothRouterPush';
 import { InboxOrganizeProvider } from '@/components/inbox/InboxOrganizeContext';
 import { quickDropToInbox } from '@/lib/inbox-upload';
 import {
@@ -47,6 +48,7 @@ import {
   type PluginEntriesStateDetail,
 } from '@/lib/plugins/ui-events';
 import {
+  ROUTE_PANEL_HREF,
   getActiveLeftPanel,
   getContentRoutePanel,
   getEffectivePanelMaximized,
@@ -211,6 +213,7 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
   const { t } = useLocale();
   const inboxOrganize = useInboxOrganizeController({ aiOrganize, labels: t.inbox });
   const router = useRouter();
+  const smoothPush = useSmoothRouterPush();
   const pathname = usePathname();
   const isFullPageChatRoute = pathname === '/chat' || pathname.startsWith('/chat/');
   const effectiveAskPanelOpen = !isFullPageChatRoute && ap.askPanelOpen;
@@ -711,28 +714,27 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
       }
     });
     if (pathname !== '/') {
-      startTransition(() => {
-        router.push('/');
-      });
+      smoothPush('/');
     }
-  }, [activeLeftPanel, exitAskMaximized, lp.setActivePanel, pathname, router]);
+  }, [activeLeftPanel, exitAskMaximized, lp.setActivePanel, pathname, smoothPush]);
 
   const handleRoutePanelClick = useCallback((
     event: React.MouseEvent<HTMLAnchorElement | HTMLButtonElement>,
     targetPanel: RoutePanelId,
   ) => {
+    if (!shouldHandleSmoothNavigation(event)) return;
     exitAskMaximized();
     const decision = getRailPanelClickDecision(pathname, activeLeftPanel, targetPanel);
-    if (decision.preventDefault) {
-      event.preventDefault();
-    } else {
+    event.preventDefault();
+    if (!decision.preventDefault) {
       // Real navigation starts — keep the clicked target active until it commits
       setPendingNav({ target: targetPanel, fromPathname: pathname });
+      smoothPush(ROUTE_PANEL_HREF[targetPanel]);
     }
     previousSearchPanelRef.current = null;
     lp.setActivePanel(decision.nextPanel);
     if (targetPanel === 'agents') setAgentDetailKey(null);
-  }, [activeLeftPanel, exitAskMaximized, lp, pathname]);
+  }, [activeLeftPanel, exitAskMaximized, lp, pathname, smoothPush]);
 
   return (
     <InboxOrganizeProvider value={inboxOrganize}>
@@ -950,7 +952,7 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
 
       <main
         id="main-content"
-        className={`min-h-screen transition-all duration-200 pt-[52px] md:pt-0`}
+        className="min-h-screen transition-[padding-left,padding-right] duration-200 pt-[52px] md:pt-0"
         onDragEnter={(e) => {
           if (!e.dataTransfer.types.includes('Files')) return;
           e.preventDefault();

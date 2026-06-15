@@ -11,6 +11,7 @@ import SyncStatusBar from './SyncStatusBar';
 import PanelHeader from './panels/PanelHeader';
 import { useResizeDrag } from '@/hooks/useResizeDrag';
 import { useFilesChanged } from '@/hooks/useFilesChanged';
+import { useSmoothRouterPush } from '@/hooks/useSmoothRouterPush';
 import { notifyFilesChanged } from '@/lib/files-changed';
 import { useLocale } from '@/lib/stores/locale-store';
 import { listTrashAction } from '@/lib/actions';
@@ -115,6 +116,7 @@ export default function Panel({
   const { t } = useLocale();
   const [, startTransition] = useTransition();
   const router = useRouter();
+  const smoothPush = useSmoothRouterPush();
   const pathname = usePathname();
   const isInboxActive = pathname === '/capture' || pathname === '/capture/';
   const [refreshingTree, setRefreshingTree] = useState(false);
@@ -300,10 +302,8 @@ export default function Panel({
                 ref={newBtnRef}
                 type="button"
                 onClick={() => {
-                  startTransition(() => {
-                    setMorePopover(false);
-                    setNewPopover(v => !v);
-                  });
+                  setMorePopover(false);
+                  setNewPopover(v => !v);
                 }}
                 className="hit-target-box inline-flex h-8 w-8 items-center justify-center text-muted-foreground transition-colors duration-75 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-md)]"
                 aria-label={t.sidebar.new}
@@ -320,10 +320,8 @@ export default function Panel({
                   <button
                     className="hit-target-box w-full flex items-center gap-2 px-3 py-1.5 text-sm text-foreground transition-colors text-left [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:0px]"
                     onClick={() => {
-                      startTransition(() => {
-                        setNewPopover(false);
-                        onImport?.();
-                      });
+                      setNewPopover(false);
+                      onImport?.();
                     }}
                   >
                     <Import size={14} className="shrink-0 text-[var(--amber)]" />
@@ -332,10 +330,8 @@ export default function Panel({
                   <button
                     className="hit-target-box w-full flex items-center gap-2 px-3 py-1.5 text-sm text-foreground transition-colors text-left [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:0px]"
                     onClick={() => {
-                      startTransition(() => {
-                        setNewPopover(false);
-                        router.push('/view/Untitled.md');
-                      });
+                      setNewPopover(false);
+                      smoothPush('/view/Untitled.md');
                     }}
                   >
                     <FileText size={14} className="shrink-0" />
@@ -403,10 +399,8 @@ export default function Panel({
                 ref={moreBtnRef}
                 type="button"
                 onClick={() => {
-                  startTransition(() => {
-                    setNewPopover(false);
-                    setMorePopover(v => !v);
-                  });
+                  setNewPopover(false);
+                  setMorePopover(v => !v);
                 }}
                 className="hit-target-box inline-flex h-8 w-8 items-center justify-center text-muted-foreground transition-colors duration-75 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-md)]"
                 aria-label={t.sidebar.more}
@@ -422,10 +416,8 @@ export default function Panel({
                   <button
                     className="hit-target-box w-full flex items-center gap-2 px-3 py-1.5 text-sm text-foreground transition-colors text-left [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:0px]"
                     onClick={() => {
-                      startTransition(() => {
-                        setMorePopover(false);
-                        router.push('/view/.mindos/change-log.json');
-                      });
+                      setMorePopover(false);
+                      smoothPush('/view/.mindos/change-log.json');
                     }}
                   >
                     <History size={14} className="shrink-0 text-[var(--amber)]" />
@@ -434,10 +426,8 @@ export default function Panel({
                   <button
                     className="hit-target-box w-full flex items-center gap-2 px-3 py-1.5 text-sm text-foreground transition-colors text-left [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:0px]"
                     onClick={() => {
-                      startTransition(() => {
-                        setMorePopover(false);
-                        router.push('/trash');
-                      });
+                      setMorePopover(false);
+                      smoothPush('/trash');
                     }}
                   >
                     <Trash2 size={14} className="shrink-0" />
@@ -470,14 +460,14 @@ export default function Panel({
             title={t.sidebar.builtInSpacesTitle}
             slots={mindSystemSlots}
             activePathname={pathname}
-            onOpen={(path) => router.push(`/view/${encodePath(path)}`)}
+            onOpen={(path) => smoothPush(`/view/${encodePath(path)}`)}
           />
           <FileTree nodes={ordinaryFileTree} onNavigate={onNavigate} maxOpenDepth={maxOpenDepth} onImport={onImport} />
         </div>
         {/* Inbox quick entry — always visible above sync bar */}
         <button
           type="button"
-          onClick={() => router.push('/capture')}
+          onClick={() => smoothPush('/capture')}
           data-hit-active={isInboxActive ? 'true' : undefined}
           className={`hit-target-box flex items-center gap-2 mx-2 px-2 py-1.5 text-sm transition-all duration-150 group shrink-0 [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-lg)] [--hit-target-active-bg:var(--amber-dim)] ${
             isInboxActive

@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useMemo, memo, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
 import {
   ReactFlow,
   Background,
@@ -16,6 +15,7 @@ import '@xyflow/react/dist/style.css';
 import type { RendererContext } from '@/lib/renderers/registry';
 import type { GraphData, GraphNode, GraphEdge } from '@/app/api/graph/route';
 import { apiFetch } from '@/lib/api';
+import { useSmoothRouterPush } from '@/hooks/useSmoothRouterPush';
 
 // ─── Force Layout ──────────────────────────────────────────────────────────────
 
@@ -122,13 +122,13 @@ interface WikiNodeData {
 }
 
 const WikiNode = memo(function WikiNode({ data }: NodeProps) {
-  const router = useRouter();
+  const smoothPush = useSmoothRouterPush();
   const { label, id, isCurrent, isOrphan, size = 1 } = data as WikiNodeData & { size?: number };
 
   const handleClick = useCallback(() => {
     const encoded = (id as string).split('/').map(encodeURIComponent).join('/');
-    router.push('/view/' + encoded);
-  }, [id, router]);
+    smoothPush('/view/' + encoded);
+  }, [id, smoothPush]);
 
   const scale = 0.8 + Math.min(size * 0.1, 1.2);
 

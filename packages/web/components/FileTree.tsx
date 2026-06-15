@@ -16,6 +16,7 @@ import { ConfirmDialog } from '@/components/agents/AgentsPrimitives';
 import { usePinnedFiles } from '@/lib/hooks/usePinnedFiles';
 import { useShowHiddenFiles, setShowHiddenFiles, filterHiddenNodes } from '@/lib/stores/hidden-files';
 import { notifyFilesChanged } from '@/lib/files-changed';
+import { useSmoothRouterPush } from '@/hooks/useSmoothRouterPush';
 
 // Re-export for backward compatibility (Panel.tsx, KnowledgeTab.tsx import from FileTree)
 export { setShowHiddenFiles, useShowHiddenFiles };
@@ -87,6 +88,7 @@ function NewFileInline({ dirPath, depth, onDone }: { dirPath: string; depth: num
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState('');
   const router = useRouter();
+  const smoothPush = useSmoothRouterPush();
   const { t } = useLocale();
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -97,14 +99,14 @@ function NewFileInline({ dirPath, depth, onDone }: { dirPath: string; depth: num
       const result = await createFileAction(dirPath, name);
       if (result.success && result.filePath) {
         onDone();
-        router.push(`/view/${encodePath(result.filePath)}`);
+        smoothPush(`/view/${encodePath(result.filePath)}`);
         router.refresh();
         notifyFilesChanged([result.filePath]);
       } else {
         setError(result.error || t.fileTree.failed);
       }
     });
-  }, [value, dirPath, onDone, router, t]);
+  }, [value, dirPath, onDone, router, smoothPush, t]);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -159,6 +161,7 @@ const DirectoryNode = memo(function DirectoryNode({ node, depth, onNavigate, max
   maxOpenDepth?: number | null; onImport?: (space: string) => void;
 }) {
   const router = useRouter();
+  const smoothPush = useSmoothRouterPush();
   // Subscribed boolean: this row only re-renders when its containment of the
   // active path flips, not on every navigation (see active-path.ts).
   const isActive = useIsOnActivePath(node.path);
@@ -239,24 +242,24 @@ const DirectoryNode = memo(function DirectoryNode({ node, depth, onNavigate, max
       const result = await action(node.path, newName);
       if (result.success && result.newPath) {
         setRenaming(false);
-        router.push(`/view/${encodePath(result.newPath)}`);
+        smoothPush(`/view/${encodePath(result.newPath)}`);
         router.refresh();
         notifyFilesChanged([node.path, result.newPath]);
       } else {
         setRenaming(false);
       }
     });
-  }, [renameValue, node.name, node.path, router, isSpace]);
+  }, [renameValue, node.name, node.path, router, smoothPush, isSpace]);
 
   const handleSingleClick = useCallback(() => {
     if (renaming) return;
     if (clickTimerRef.current) clearTimeout(clickTimerRef.current);
     clickTimerRef.current = setTimeout(() => {
-      router.push(`/view/${encodePath(node.path)}`);
+      smoothPush(`/view/${encodePath(node.path)}`);
       onNavigate?.();
       clickTimerRef.current = null;
     }, 180);
-  }, [renaming, router, node.path, onNavigate]);
+  }, [renaming, smoothPush, node.path, onNavigate]);
 
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -434,7 +437,7 @@ const DirectoryNode = memo(function DirectoryNode({ node, depth, onNavigate, max
                 if (undo.success) { router.refresh(); notifyFilesChanged([node.path]); }
                 else toast.error(undo.error ?? 'Undo failed');
               }, { label: t.trash?.undo ?? 'Undo' });
-              router.push('/'); router.refresh(); notifyFilesChanged([node.path]);
+              smoothPush('/'); router.refresh(); notifyFilesChanged([node.path]);
             }
           });
         }}
@@ -450,6 +453,7 @@ const FileNodeItem = memo(function FileNodeItem({ node, depth, onNavigate }: {
   node: FileNode; depth: number; onNavigate?: () => void;
 }) {
   const router = useRouter();
+  const smoothPush = useSmoothRouterPush();
   // Subscribed boolean: this row only re-renders when it becomes (in)active.
   const isActive = useIsActiveFile(node.path);
   const [renaming, setRenaming] = useState(false);
@@ -466,9 +470,9 @@ const FileNodeItem = memo(function FileNodeItem({ node, depth, onNavigate }: {
 
   const handleClick = useCallback(() => {
     if (renaming) return;
-    router.push(`/view/${encodePath(node.path)}`);
+    smoothPush(`/view/${encodePath(node.path)}`);
     onNavigate?.();
-  }, [router, node.path, onNavigate, renaming]);
+  }, [smoothPush, node.path, onNavigate, renaming]);
 
   const startRename = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -484,14 +488,14 @@ const FileNodeItem = memo(function FileNodeItem({ node, depth, onNavigate }: {
       const result = await renameFileAction(node.path, newName);
       if (result.success && result.newPath) {
         setRenaming(false);
-        router.push(`/view/${encodePath(result.newPath)}`);
+        smoothPush(`/view/${encodePath(result.newPath)}`);
         router.refresh();
         notifyFilesChanged([node.path, result.newPath]);
       } else {
         setRenaming(false);
       }
     });
-  }, [renameValue, node.name, node.path, router]);
+  }, [renameValue, node.name, node.path, router, smoothPush]);
 
   const handleDelete = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();

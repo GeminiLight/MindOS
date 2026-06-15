@@ -1,12 +1,12 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { Archive, ChevronRight, FileText, History, ListChecks, Plus } from 'lucide-react';
 import PanelHeader from './PanelHeader';
 import { useLocale } from '@/lib/stores/locale-store';
 import { loadHistory, type OrganizeHistoryEntry } from '@/lib/organize-history';
 import { fetchInboxFiles } from '@/lib/inbox-client';
+import { useSmoothRouterPush } from '@/hooks/useSmoothRouterPush';
 import {
   INBOX_SHELVED_STORAGE_KEY,
   INBOX_SHELVED_UPDATED_EVENT,
@@ -49,7 +49,7 @@ function dispatchSyntheticHashChange(oldUrl: string, newUrl: string) {
 
 export default function CapturePanel() {
   const { t } = useLocale();
-  const router = useRouter();
+  const smoothPush = useSmoothRouterPush();
   const [files, setFiles] = useState<InboxFile[]>([]);
   const [history, setHistory] = useState<OrganizeHistoryEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -162,8 +162,8 @@ export default function CapturePanel() {
       return;
     }
 
-    router.push(href);
-  }, [router]);
+    smoothPush(href);
+  }, [smoothPush]);
 
   return (
     <div className="flex h-full flex-col">

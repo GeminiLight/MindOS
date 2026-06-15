@@ -268,6 +268,11 @@ describe('Panel Mind System collapse', () => {
       openButton?.click();
     });
 
+    expect(mockPush).not.toHaveBeenCalled();
+    await act(async () => {
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    });
+
     expect(mockPush).toHaveBeenCalledWith('/view/MIND_DAO');
   });
 

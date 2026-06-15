@@ -6,13 +6,13 @@
  */
 
 import { useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { Terminal, ChevronDown, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { useLocale } from '@/lib/stores/locale-store';
 import {
   type AgentOp, type OpKind,
   opKind, KIND_STYLE, KIND_LABEL, OpIcon, KindBadge, formatTs, relativeTs, getFilePath,
 } from './agent-activity-shared';
+import { useSmoothRouterPush } from '@/hooks/useSmoothRouterPush';
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -24,7 +24,7 @@ function truncateContent(v: unknown, max = 120): string {
 // ─── Op Card ───────────────────────────────────────────────────────────────────
 
 function OpCard({ op, copy }: { op: AgentOp; copy?: Record<string, string> }) {
-  const router = useRouter();
+  const smoothPush = useSmoothRouterPush();
   const { locale } = useLocale();
   const [expanded, setExpanded] = useState(false);
   const kind = opKind(op.tool);
@@ -51,7 +51,7 @@ function OpCard({ op, copy }: { op: AgentOp; copy?: Record<string, string> }) {
         {filePath && (
           <span
             style={{ fontSize: '0.72rem', color: 'var(--amber)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'pointer' }}
-            onClick={e => { e.stopPropagation(); router.push('/view/' + filePath.split('/').map(encodeURIComponent).join('/')); }}
+            onClick={e => { e.stopPropagation(); smoothPush('/view/' + filePath.split('/').map(encodeURIComponent).join('/')); }}
             title={filePath}
             className="font-display"
           >

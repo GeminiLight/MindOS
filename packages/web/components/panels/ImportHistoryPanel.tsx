@@ -1,13 +1,13 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
 import {
   ChevronDown, FilePlus, FileEdit, ExternalLink, Trash2, FileInput,
 } from 'lucide-react';
 import { useLocale } from '@/lib/stores/locale-store';
 import { encodePath } from '@/lib/utils';
 import PanelHeader from './PanelHeader';
+import { useSmoothRouterPush } from '@/hooks/useSmoothRouterPush';
 import {
   loadHistory, clearHistory,
   type OrganizeHistoryEntry,
@@ -49,7 +49,7 @@ function groupByDate(entries: OrganizeHistoryEntry[]): Map<string, OrganizeHisto
 
 export default function ImportHistoryPanel({ active, maximized, onMaximize, refreshToken }: ImportHistoryPanelProps) {
   const { t } = useLocale();
-  const router = useRouter();
+  const smoothPush = useSmoothRouterPush();
   const [entries, setEntries] = useState<OrganizeHistoryEntry[]>([]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const hi = (t as unknown as Record<string, Record<string, unknown>>).importHistory ?? {};
@@ -74,8 +74,8 @@ export default function ImportHistoryPanel({ active, maximized, onMaximize, refr
   }, []);
 
   const handleViewFile = useCallback((path: string) => {
-    router.push(`/view/${encodePath(path)}`);
-  }, [router]);
+    smoothPush(`/view/${encodePath(path)}`);
+  }, [smoothPush]);
 
   const groups = groupByDate(entries);
 

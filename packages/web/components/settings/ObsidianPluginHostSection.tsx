@@ -39,6 +39,7 @@ import {
 } from '@/lib/plugins/events';
 import { openTab } from '@/lib/workspace-tabs';
 import { notifyFilesChanged } from '@/lib/files-changed';
+import { useSmoothRouterPush } from '@/hooks/useSmoothRouterPush';
 import { Input, Select, Toggle } from './Primitives';
 import { ConfirmDialog } from '@/components/agents/AgentsPrimitives';
 import PluginActionMenuDialog from '@/components/plugins/PluginActionMenuDialog';
@@ -270,6 +271,7 @@ export function ObsidianPluginHostSection({
   const [highlightedPluginId, setHighlightedPluginId] = useState<string | null>(null);
   const pluginRowsRef = useRef<Record<string, HTMLDivElement | null>>({});
   const router = useRouter();
+  const smoothPush = useSmoothRouterPush();
 
   const counts = useMemo(() => ({
     total: plugins.length,
@@ -336,7 +338,7 @@ export function ObsidianPluginHostSection({
     const targetPath = firstPluginActionTargetPath(result);
     if (targetPath) {
       openTab('doc', targetPath, targetPath.split('/').pop() || targetPath);
-      router.push(`/view/${encodePath(targetPath)}`);
+      smoothPush(`/view/${encodePath(targetPath)}`);
       setPluginModal(null);
       setPluginMenu(null);
       return;
@@ -363,7 +365,7 @@ export function ObsidianPluginHostSection({
       setPluginMenu(menu);
       setPluginModal(null);
     }
-  }, [router]);
+  }, [router, smoothPush]);
 
   const chooseModalSuggestion = useCallback(async (modal: PluginModalSnapshot, suggestion: PluginModalSuggestionChoice) => {
     setChoosingSuggestionIndex(suggestion.index);

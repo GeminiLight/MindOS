@@ -107,6 +107,12 @@ function portalRoot() {
   return document.body;
 }
 
+const flushSmoothNavigation = () => act(async () => {
+  await new Promise<void>((resolve) => {
+    window.requestAnimationFrame(() => resolve());
+  });
+});
+
 function setupApiFetch() {
   mocks.apiFetch.mockImplementation(async (url: string, init?: RequestInit) => {
     if (url === '/api/plugins/surfaces?loadEnabled=1&kind=command') {
@@ -271,6 +277,7 @@ describe('plugin command surfaces', () => {
       await Promise.resolve();
     });
 
+    await flushSmoothNavigation();
     expect(mocks.push).toHaveBeenCalledWith('/view/notes/from-suggestion.md');
   });
 
@@ -510,6 +517,7 @@ describe('plugin command surfaces', () => {
       await Promise.resolve();
     });
 
+    await flushSmoothNavigation();
     expect(mocks.push).toHaveBeenCalledWith('/view/notes/opened-from-command.md');
     expect(mocks.toastSuccess).toHaveBeenCalledWith('Opened notes/opened-from-command.md');
   });

@@ -26,6 +26,12 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: mockRouterPush, replace: vi.fn(), prefetch: vi.fn(), back: vi.fn() }),
 }));
 
+const flushSmoothNavigation = () => act(async () => {
+  await new Promise<void>((resolve) => {
+    window.requestAnimationFrame(() => resolve());
+  });
+});
+
 describe('InboxSection', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -148,6 +154,7 @@ describe('InboxSection', () => {
     });
 
     expect(spaceEvent.defaultPrevented).toBe(true);
+    await flushSmoothNavigation();
     expect(mockRouterPush).toHaveBeenCalledWith('/view/Inbox/capture.md');
 
     const removeButton = host.querySelector('button[aria-label="Remove from Inbox"]') as HTMLButtonElement | null;

@@ -72,6 +72,12 @@ vi.mock('@/components/SyncStatusBar', () => ({
   },
 }));
 
+const flushSmoothNavigation = () => act(async () => {
+  await new Promise<void>((resolve) => {
+    window.requestAnimationFrame(() => resolve());
+  });
+});
+
 function applyRailDecision(
   event: React.MouseEvent<HTMLAnchorElement | HTMLButtonElement>,
   activePanel: PanelId | null,
@@ -254,6 +260,7 @@ describe('ActivityBar rail navigation', () => {
     });
 
     expect(mockPanelChange).toHaveBeenCalledWith(null);
+    await flushSmoothNavigation();
     expect(mockRouterPush).toHaveBeenCalledWith('/');
     expect(mockRouterPush).not.toHaveBeenCalledWith('/wiki');
     expect(mockRouterPush).not.toHaveBeenCalledWith('/echo/imprint');

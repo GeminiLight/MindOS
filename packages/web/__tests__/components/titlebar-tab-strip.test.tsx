@@ -107,6 +107,11 @@ const closeButtonOf = (tabEl: HTMLElement) => tabEl.querySelector<HTMLButtonElem
 const click = (el: Element) => act(() => {
   el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
 });
+const flushSmoothNavigation = () => act(async () => {
+  await new Promise<void>((resolve) => {
+    window.requestAnimationFrame(() => resolve());
+  });
+});
 function seedKeptDocTabs(keys: string[]) {
   initWorkspaceTabs('default');
   for (const key of keys) openTab('doc', key, key.split('/').pop() || key);
@@ -242,6 +247,7 @@ describe('TitlebarTabStrip (spec-titlebar-row Phase 2)', () => {
     await navigateTo('/');
     h.push.mockClear();
     await click(findTab('日记😀.md')!);
+    await flushSmoothNavigation();
     expect(h.push).toHaveBeenCalledWith(encoded);
   });
 
@@ -270,6 +276,7 @@ describe('TitlebarTabStrip (spec-titlebar-row Phase 2)', () => {
 
     await click(closeButtonOf(findTab('b.md')!));
     expect(tabTitles()).toEqual(['a.md', 'c.md']);
+    await flushSmoothNavigation();
     expect(h.push).toHaveBeenCalledWith('/view/c.md');
   });
 
@@ -278,6 +285,7 @@ describe('TitlebarTabStrip (spec-titlebar-row Phase 2)', () => {
     await navigateTo('/view/c.md'); // active = c (rightmost)
     h.push.mockClear();
     await click(closeButtonOf(findTab('c.md')!));
+    await flushSmoothNavigation();
     expect(h.push).toHaveBeenCalledWith('/view/a.md');
 
     // pathname is still /view/c.md (router mock), so a.md is inactive: closing
@@ -286,6 +294,7 @@ describe('TitlebarTabStrip (spec-titlebar-row Phase 2)', () => {
     h.push.mockClear();
     await click(closeButtonOf(findTab('a.md')!));
     expect(tabTitles()).toEqual([]);
+    await flushSmoothNavigation();
     expect(h.push).toHaveBeenCalledWith('/');
   });
 
@@ -312,6 +321,7 @@ describe('TitlebarTabStrip (spec-titlebar-row Phase 2)', () => {
     await navigateTo('/');
     h.push.mockClear();
     await click(document.querySelector('button[aria-label="New chat"]')!);
+    await flushSmoothNavigation();
     expect(h.push).toHaveBeenCalledWith('/chat/new');
   });
 
@@ -325,6 +335,7 @@ describe('TitlebarTabStrip (spec-titlebar-row Phase 2)', () => {
     expect(tabEls()).toHaveLength(0);
 
     await click(homeButton!);
+    await flushSmoothNavigation();
     expect(h.push).toHaveBeenCalledWith('/');
     expect(tabEls()).toHaveLength(0);
   });
@@ -446,10 +457,11 @@ describe('TitlebarTabStrip (spec-titlebar-row Phase 2)', () => {
     expect(rows.map((r) => r.getAttribute('title'))).toEqual(['Chat session', 'd3.md', 'd4.md']);
     expect(menu.querySelector('[data-indicator="running"]')).not.toBeNull();
 
-    // clicking a hidden tab navigates and closes the menu
+    // clicking a non-current hidden tab navigates and closes the menu
     h.push.mockClear();
-    await click(rows[0]);
-    expect(h.push).toHaveBeenCalledWith('/chat/c1');
+    await click(rows[1]);
+    await flushSmoothNavigation();
+    expect(h.push).toHaveBeenCalledWith('/view/d3.md');
     expect(document.querySelector('[role="menu"]')).toBeNull();
   });
 

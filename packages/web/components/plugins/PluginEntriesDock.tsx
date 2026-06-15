@@ -42,6 +42,7 @@ import { notifyPluginEntriesState, PLUGIN_ENTRIES_OPEN_EVENT } from '@/lib/plugi
 import { encodePath } from '@/lib/utils';
 import { openTab } from '@/lib/workspace-tabs';
 import { notifyFilesChanged } from '@/lib/files-changed';
+import { useSmoothRouterPush } from '@/hooks/useSmoothRouterPush';
 import PluginActionModalDialog from './PluginActionModalDialog';
 import PluginActionMenuDialog from './PluginActionMenuDialog';
 
@@ -564,6 +565,7 @@ export default function PluginEntriesDock({ onOpenPluginsSettings, onOpenCommand
   const [choosingMenuItemIndex, setChoosingMenuItemIndex] = useState<number | null>(null);
   const [menuChoiceError, setMenuChoiceError] = useState<string | null>(null);
   const router = useRouter();
+  const smoothPush = useSmoothRouterPush();
   const pathname = usePathname();
   const sourcePath = useMemo(() => sourcePathFromViewPathname(pathname), [pathname]);
 
@@ -648,7 +650,7 @@ export default function PluginEntriesDock({ onOpenPluginsSettings, onOpenCommand
     const targetPath = firstPluginActionTargetPath(result);
     if (targetPath) {
       openTab('doc', targetPath, targetPath.split('/').pop() || targetPath);
-      router.push(`/view/${encodePath(targetPath)}`);
+      smoothPush(`/view/${encodePath(targetPath)}`);
       setPluginModal(null);
       setPluginMenu(null);
       setOpen(false);
@@ -690,7 +692,7 @@ export default function PluginEntriesDock({ onOpenPluginsSettings, onOpenCommand
       const targetPath = firstPluginActionTargetPath(result);
       if (targetPath) {
         openTab('doc', targetPath, targetPath.split('/').pop() || targetPath);
-        router.push(`/view/${encodePath(targetPath)}`);
+        smoothPush(`/view/${encodePath(targetPath)}`);
         setOpen(false);
       } else {
         const modal = firstPluginActionModalSnapshot(result);

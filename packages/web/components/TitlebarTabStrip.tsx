@@ -21,11 +21,12 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { ChevronDown, FileText, Home as HomeIcon, Loader2, MessageSquare, Pin, Plus, X } from 'lucide-react';
 import { closeTab, keepTab, type WorkspaceTab } from '@/lib/workspace-tabs';
 import { tabHref, useWorkspaceTabSync } from '@/hooks/useWorkspaceTabSync';
 import { useLocale } from '@/lib/stores/locale-store';
+import { useSmoothRouterPush } from '@/hooks/useSmoothRouterPush';
 
 const NO_DRAG = { WebkitAppRegion: 'no-drag' } as React.CSSProperties;
 
@@ -73,8 +74,8 @@ function TabKindIcon({ kind, className = 'shrink-0' }: { kind: WorkspaceTab['kin
 
 export default function TitlebarTabStrip() {
   const { tabs, activeTabId, running, unread } = useWorkspaceTabSync();
-  const router = useRouter();
   const pathname = usePathname();
+  const smoothPush = useSmoothRouterPush();
   const { t } = useLocale();
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -82,6 +83,7 @@ export default function TitlebarTabStrip() {
   const [containerWidth, setContainerWidth] = useState<number | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuAnchor, setMenuAnchor] = useState<DOMRect | null>(null);
+  const [pendingRoute, setPendingRoute] = useState<{ href: string; tabId: string | null; fromPathname: string } | null>(null);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -138,14 +140,27 @@ export default function TitlebarTabStrip() {
     };
   }, [menuOpen]);
 
+  useEffect(() => {
+    setPendingRoute((pending) => (pending && pending.fromPathname !== pathname ? null : pending));
+  }, [pathname]);
+
+  const scheduleNavigation = useCallback((href: string, tabId: string | null) => {
+    setMenuOpen(false);
+    if (href === pathname) {
+      setPendingRoute(null);
+      return;
+    }
+    setPendingRoute({ href, tabId, fromPathname: pathname });
+    smoothPush(href);
+  }, [pathname, smoothPush]);
+
   const navigate = useCallback((tab: WorkspaceTab) => {
-    router.push(tabHref(tab));
-  }, [router]);
+    scheduleNavigation(tabHref(tab), tab.id);
+  }, [scheduleNavigation]);
 
   const navigateHome = useCallback(() => {
-    setMenuOpen(false);
-    router.push('/');
-  }, [router]);
+    scheduleNavigation('/', null);
+  }, [scheduleNavigation]);
 
   /** Close a tab; closing the ACTIVE one moves to the right neighbor, then left, then home. */
   const handleClose = useCallback((tab: WorkspaceTab) => {
@@ -155,16 +170,17 @@ export default function TitlebarTabStrip() {
     closeTab(tab.id);
     if (!wasActive) return;
     const neighbor = (index >= 0 && tabs[index + 1]) || (index > 0 && tabs[index - 1]) || null;
-    router.push(neighbor ? tabHref(neighbor) : '/');
-  }, [tabs, activeTabId, router]);
+    scheduleNavigation(neighbor ? tabHref(neighbor) : '/', neighbor?.id ?? null);
+  }, [tabs, activeTabId, scheduleNavigation]);
 
   // Place routes: no active tab → the working set renders dimmed but intact
   // (indicators keep full opacity — a background run must stay noticeable).
-  const dimmed = activeTabId === null;
-  const homeLauncherActive = pathname === '/';
+  const optimisticTabId = pendingRoute?.fromPathname === pathname ? pendingRoute.tabId : activeTabId;
+  const dimmed = optimisticTabId === null;
+  const homeLauncherActive = pathname === '/' || (pendingRoute?.fromPathname === pathname && pendingRoute.href === '/');
 
   const renderTab = (tab: WorkspaceTab, index: number) => {
-    const isActive = tab.id === activeTabId;
+    const isActive = tab.id === optimisticTabId;
     const isPreview = tab.kind === 'doc' && tab.pinned === false;
     const canClose = tab.kind !== 'home';
     const previousTab = index > 0 ? visibleTabs[index - 1] : null;
@@ -297,7 +313,7 @@ export default function TitlebarTabStrip() {
         style={NO_DRAG}
         title={t.workspaceTabs.newChat}
         aria-label={t.workspaceTabs.newChat}
-        onClick={() => router.push('/chat/new')}
+        onClick={() => scheduleNavigation('/chat/new', null)}
         className="mb-1 ml-1 flex h-7 w-7 shrink-0 items-center justify-center self-end rounded-full text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <Plus size={15} aria-hidden="true" />

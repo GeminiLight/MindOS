@@ -34,6 +34,7 @@ import PluginActionMenuDialog from '@/components/plugins/PluginActionMenuDialog'
 import { createSearchResultDragPreview, scheduleSearchResultDragPreviewCleanup } from '@/lib/search-drag-preview';
 import { notifyFilesChanged } from '@/lib/files-changed';
 import { restartWalkthrough } from '@/lib/stores/walkthrough-store';
+import { useSmoothRouterPush } from '@/hooks/useSmoothRouterPush';
 
 interface SearchModalProps {
   open: boolean;
@@ -91,6 +92,7 @@ export default function SearchModal({ open, onClose }: SearchModalProps) {
   const resultsRef = useRef<HTMLDivElement>(null);
   const actionsRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
+  const smoothPush = useSmoothRouterPush();
   const pathname = usePathname();
   const [isPending, startTransition] = useTransition();
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -107,7 +109,7 @@ export default function SearchModal({ open, onClose }: SearchModalProps) {
     const targetPath = firstPluginActionTargetPath(result);
     if (targetPath) {
       openTab('doc', targetPath, targetPath.split('/').pop() || targetPath);
-      router.push(`/view/${encodePath(targetPath)}`);
+      smoothPush(`/view/${encodePath(targetPath)}`);
       toast.success(`Opened ${targetPath}`);
       setPluginModal(null);
       setPluginMenu(null);
@@ -142,7 +144,7 @@ export default function SearchModal({ open, onClose }: SearchModalProps) {
     if (!showedNotice) {
       toast.success('Plugin suggestion applied');
     }
-  }, [router]);
+  }, [router, smoothPush]);
 
   const chooseModalSuggestion = useCallback(async (modal: PluginModalSnapshot, suggestion: PluginModalSuggestionChoice) => {
     setChoosingSuggestionIndex(suggestion.index);
@@ -202,7 +204,7 @@ export default function SearchModal({ open, onClose }: SearchModalProps) {
         label: t.search.openSettings,
         icon: <Settings size={15} />,
         shortcut: '⌘,',
-        execute: () => { router.push('/settings'); onClose(); },
+        execute: () => { onClose(); smoothPush('/settings'); },
       },
       {
         id: 'restart-walkthrough',
@@ -233,19 +235,19 @@ export default function SearchModal({ open, onClose }: SearchModalProps) {
         id: 'go-agents',
         label: t.search.goToAgents,
         icon: <Bot size={15} />,
-        execute: () => { router.push('/agents'); onClose(); },
+        execute: () => { onClose(); smoothPush('/agents'); },
       },
       {
         id: 'go-discover',
         label: t.search.goToDiscover,
         icon: <Compass size={15} />,
-        execute: () => { router.push('/explore'); onClose(); },
+        execute: () => { onClose(); smoothPush('/explore'); },
       },
       {
         id: 'go-help',
         label: t.search.goToHelp,
         icon: <HelpCircle size={15} />,
-        execute: () => { router.push('/help'); onClose(); },
+        execute: () => { onClose(); smoothPush('/help'); },
       },
     ];
 
@@ -263,9 +265,9 @@ export default function SearchModal({ open, onClose }: SearchModalProps) {
           const targetPath = firstPluginActionTargetPath(result);
           if (targetPath) {
             openTab('doc', targetPath, targetPath.split('/').pop() || targetPath);
-            router.push(`/view/${encodePath(targetPath)}`);
-            toast.success(`Opened ${targetPath}`);
             onClose();
+            smoothPush(`/view/${encodePath(targetPath)}`);
+            toast.success(`Opened ${targetPath}`);
           } else if (result.editorUpdates?.some((update) => update.changed)) {
             notifyFilesChanged(
               result.editorUpdates
@@ -299,7 +301,7 @@ export default function SearchModal({ open, onClose }: SearchModalProps) {
     }));
 
     return [...builtInActions, ...pluginActions];
-  }, [t, router, onClose, isDark, pluginCommands, pluginEditorContext]);
+  }, [t, router, smoothPush, onClose, isDark, pluginCommands, pluginEditorContext]);
 
   useEffect(() => {
     if (!open) return;
@@ -378,9 +380,9 @@ export default function SearchModal({ open, onClose }: SearchModalProps) {
   }, [doSearch]);
 
   const navigate = useCallback((result: SearchResult) => {
-    router.push(`/view/${encodePath(result.path)}`);
     onClose();
-  }, [router, onClose]);
+    smoothPush(`/view/${encodePath(result.path)}`);
+  }, [smoothPush, onClose]);
 
   // Keyboard navigation
   useEffect(() => {

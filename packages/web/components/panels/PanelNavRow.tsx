@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { shouldHandleSmoothNavigation, useSmoothRouterPush } from '@/hooks/useSmoothRouterPush';
 
 /** Row matching Discover panel nav: icon tile, title, optional subtitle, optional badge, chevron. */
 export function PanelNavRow({
@@ -27,6 +28,7 @@ export function PanelNavRow({
   /** `rail` is for primary sidebar sections that use a left activity marker. */
   activeVariant?: 'box' | 'rail';
 }) {
+  const smoothPush = useSmoothRouterPush();
   const railVariant = activeVariant === 'rail';
   const content = (
     <>
@@ -81,7 +83,16 @@ export function PanelNavRow({
 
   if (href) {
     return (
-      <Link href={href} className={className} aria-current={active ? 'page' : undefined}>
+      <Link
+        href={href}
+        className={className}
+        aria-current={active ? 'page' : undefined}
+        onClick={(event) => {
+          if (!shouldHandleSmoothNavigation(event)) return;
+          event.preventDefault();
+          if (!active) smoothPush(href);
+        }}
+      >
         {content}
       </Link>
     );

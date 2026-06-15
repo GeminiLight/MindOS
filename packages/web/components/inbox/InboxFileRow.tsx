@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useRef, useState, type ComponentType } from 'react';
-import { useRouter } from 'next/navigation';
 import {
   Check,
   Copy,
@@ -24,6 +23,7 @@ import {
   getFileBaseName,
   getFileExt,
 } from '@/components/inbox/InboxViewFormat';
+import { useSmoothRouterPush } from '@/hooks/useSmoothRouterPush';
 
 export function InboxFileRow({
   file,
@@ -53,7 +53,7 @@ export function InboxFileRow({
   };
 }) {
   const { t } = useLocale();
-  const router = useRouter();
+  const smoothPush = useSmoothRouterPush();
   const ext = getFileExt(file.name);
   const baseName = getFileBaseName(file.name);
   const extStyle = EXT_STYLES[ext];
@@ -182,7 +182,7 @@ export function InboxFileRow({
             onClick={(e) => {
               e.stopPropagation();
               e.preventDefault();
-              router.push(`/view/${encodePath(file.path)}`);
+              smoothPush(`/view/${encodePath(file.path)}`);
             }}
             className="inline-flex items-center justify-center rounded-md px-2 py-1 text-2xs font-medium text-muted-foreground/55 transition-colors hover:bg-background hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
             title={t.inbox.openFile}
@@ -235,7 +235,7 @@ function FileContextMenu({
   onClose: () => void;
 }) {
   const menuRef = useRef<HTMLDivElement>(null);
-  const router = useRouter();
+  const smoothPush = useSmoothRouterPush();
   const { t } = useLocale();
 
   useEffect(() => {
@@ -263,7 +263,7 @@ function FileContextMenu({
       className="fixed z-50 min-w-[160px] bg-card border border-border rounded-lg shadow-lg py-1"
       style={{ top: adjY, left: adjX }}
     >
-      <button type="button" className={itemCls} onClick={() => { router.push(`/view/${encodePath(file.path)}`); onClose(); }}>
+      <button type="button" className={itemCls} onClick={() => { onClose(); smoothPush(`/view/${encodePath(file.path)}`); }}>
         <ExternalLink size={14} className="shrink-0" /> {t.inbox.openFile}
       </button>
       <button type="button" className={itemCls} onClick={() => { navigator.clipboard.writeText(file.name); toast.copy(); onClose(); }}>

@@ -36,6 +36,12 @@ function portalRoot() {
   return document.body;
 }
 
+const flushSmoothNavigation = () => act(async () => {
+  await new Promise<void>((resolve) => {
+    window.requestAnimationFrame(() => resolve());
+  });
+});
+
 const ribbonSurface = {
   id: 'obsidian:ribbon:daily:0:capture',
   source: 'obsidian',
@@ -653,6 +659,7 @@ describe('PluginEntriesDock', () => {
       await Promise.resolve();
     });
 
+    await flushSmoothNavigation();
     expect(mocks.push).toHaveBeenCalledWith('/view/notes/from-ribbon.md');
   });
 

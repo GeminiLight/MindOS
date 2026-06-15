@@ -2,12 +2,12 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { Plus, Zap, AlertTriangle, Loader2 } from 'lucide-react';
 import PanelHeader from './PanelHeader';
 import { useLocale } from '@/lib/stores/locale-store';
 import { encodePath, relativeTime } from '@/lib/utils';
 import { openTab } from '@/lib/workspace-tabs';
+import { shouldHandleSmoothNavigation, useSmoothRouterPush } from '@/hooks/useSmoothRouterPush';
 
 interface WorkflowItem {
   path: string;
@@ -26,7 +26,7 @@ interface WorkflowsPanelProps {
 }
 
 export default function WorkflowsPanel({ active, maximized, onMaximize }: WorkflowsPanelProps) {
-  const router = useRouter();
+  const smoothPush = useSmoothRouterPush();
   const { t } = useLocale();
   const wt = t.panels.workflows as {
     title: string;
@@ -92,7 +92,7 @@ export default function WorkflowsPanel({ active, maximized, onMaximize }: Workfl
       await fetchWorkflows();
       if (typeof data.path === 'string' && data.path.length > 0) {
         openTab('doc', data.path, data.path.split('/').pop() || data.path);
-        router.push(`/view/${encodePath(data.path)}`);
+        smoothPush(`/view/${encodePath(data.path)}`);
       }
     } catch {
       setCreateError('Network error');
@@ -179,6 +179,11 @@ export default function WorkflowsPanel({ active, maximized, onMaximize }: Workfl
               <Link
                 key={w.path}
                 href={`/view/${encodePath(w.path)}`}
+                onClick={(event) => {
+                  if (!shouldHandleSmoothNavigation(event)) return;
+                  event.preventDefault();
+                  smoothPush(`/view/${encodePath(w.path)}`);
+                }}
                 className={`hit-target-box flex items-start gap-2.5 px-3 py-2 mx-1 transition-colors [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-lg)] ${
                   w.error ? 'opacity-70' : ''
                 }`}

@@ -8,6 +8,7 @@ import { encodePath } from '@/lib/utils';
 import { revertSpaceInitAction } from '@/lib/actions';
 import { openTab } from '@/lib/workspace-tabs';
 import { notifyFilesChanged } from '@/lib/files-changed';
+import { useSmoothRouterPush } from '@/hooks/useSmoothRouterPush';
 
 type InitState = 'working' | 'done' | 'reverted' | 'error';
 
@@ -33,6 +34,7 @@ export default function SpaceInitToast() {
   const [visible, setVisible] = useState(false);
   const [reverting, startRevert] = useTransition();
   const router = useRouter();
+  const smoothPush = useSmoothRouterPush();
   const { t } = useLocale();
 
   const dismiss = useCallback(() => {
@@ -63,8 +65,8 @@ export default function SpaceInitToast() {
     dismiss();
     const viewPath = info.spacePath.endsWith('/') ? info.spacePath : `${info.spacePath}/`;
     openTab('doc', viewPath, info.spaceName || info.spacePath);
-    router.push(`/view/${encodePath(viewPath)}`);
-  }, [info, dismiss, router]);
+    smoothPush(`/view/${encodePath(viewPath)}`);
+  }, [info, dismiss, smoothPush]);
 
   const handleDiscard = useCallback(() => {
     if (!info) return;

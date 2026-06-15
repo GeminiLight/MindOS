@@ -22,7 +22,6 @@ import {
   Link2,
   Globe,
 } from 'lucide-react';
-import { useRouter } from 'next/navigation';
 import { toast } from '@/lib/toast';
 import { useLocale } from '@/lib/stores/locale-store';
 import { encodePath } from '@/lib/utils';
@@ -33,6 +32,7 @@ import { CAPTURE_ACCEPT } from '@/lib/capture-formats';
 import { SourceIcon, getInboxSourceLabel } from '@/components/inbox/SourceIcon';
 import { archiveInboxFiles, fetchInboxFiles, type InboxFileSourceInfo } from '@/lib/inbox-client';
 import { isAnyPathUnder, subscribeFilesChanged } from '@/lib/files-changed';
+import { useSmoothRouterPush } from '@/hooks/useSmoothRouterPush';
 
 interface InboxFile {
   name: string;
@@ -479,13 +479,13 @@ export function InboxSection({ isOrganizing: externalOrganizing = false }: Inbox
 
 function InboxFileRow({ file, onDelete }: { file: InboxFile; onDelete: (name: string) => void }) {
   const { t } = useLocale();
-  const router = useRouter();
+  const smoothPush = useSmoothRouterPush();
   const isCSV = file.name.endsWith('.csv');
   const age = formatRelativeTime(file.modifiedAt, t.home.relativeTime);
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
 
   const handleNavigate = () => {
-    router.push(`/view/${encodePath(file.path)}`);
+    smoothPush(`/view/${encodePath(file.path)}`);
   };
 
   const handleDelete = (e: React.MouseEvent) => {
@@ -581,7 +581,7 @@ function InboxFileContextMenu({ x, y, file, onDelete, onClose }: {
   x: number; y: number; file: InboxFile; onDelete: () => void; onClose: () => void;
 }) {
   const menuRef = useRef<HTMLDivElement>(null);
-  const router = useRouter();
+  const smoothPush = useSmoothRouterPush();
   const { t } = useLocale();
 
   useEffect(() => {
@@ -607,7 +607,7 @@ function InboxFileContextMenu({ x, y, file, onDelete, onClose }: {
     >
       <button
         className={menuItemClass}
-        onClick={() => { router.push(`/view/${encodePath(file.path)}`); onClose(); }}
+        onClick={() => { onClose(); smoothPush(`/view/${encodePath(file.path)}`); }}
       >
         <ExternalLink size={14} className="shrink-0" /> {t.inbox.openFile}
       </button>

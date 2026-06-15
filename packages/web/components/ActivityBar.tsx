@@ -17,6 +17,7 @@ import {
   type RoutePanelId,
 } from '@/lib/navigation-panel';
 import { ACTIVITY_BAR } from '@/lib/config/panel-sizes';
+import { useSmoothRouterPush } from '@/hooks/useSmoothRouterPush';
 
 export const RAIL_WIDTH_COLLAPSED = ACTIVITY_BAR.WIDTH_COLLAPSED;
 export const RAIL_WIDTH_EXPANDED = ACTIVITY_BAR.WIDTH_EXPANDED;
@@ -180,6 +181,7 @@ export default function ActivityBar({
   const pathname = usePathname();
   const [, startTransition] = useTransition();
   const router = useRouter();
+  const smoothPush = useSmoothRouterPush();
   const isHome = pathname === '/';
   const activeDestination = suppressRouteActive ? activePanel : getRailActivePanel(pathname, activePanel);
   const isCurrentRouteForPanel = useCallback((panel: RoutePanelId) => (
@@ -330,10 +332,8 @@ export default function ActivityBar({
             }
             startTransition(() => {
               onPanelChange(null);
-              if (!isHome) {
-                router.push('/');
-              }
             });
+            if (!isHome) smoothPush('/');
           }}
           className={`flex items-center ${expanded ? 'px-3 gap-2' : 'justify-center'} w-full h-[var(--app-titlebar-h)] shrink-0 transition-opacity cursor-pointer ${isHome ? 'opacity-100' : 'opacity-50 hover:opacity-80'}`}
           aria-label="MindOS Home"

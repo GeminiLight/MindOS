@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useRouter } from 'next/navigation';
 import { Lightbulb, Blocks, Zap, LayoutTemplate, User, Download, RefreshCw, Repeat, Rocket, Search, Handshake, ShieldCheck, ChevronDown } from 'lucide-react';
 import PanelHeader from './PanelHeader';
 import { PanelNavRow, ComingSoonBadge } from './PanelNavRow';
@@ -11,6 +10,7 @@ import { openAskModal } from '@/hooks/useAskModal';
 import { getPluginRenderers, isRendererEnabled, setRendererEnabled, loadDisabledState } from '@/lib/renderers/registry';
 import { fetchAllFilePaths } from '@/lib/client-cache';
 import { Toggle } from '../settings/Primitives';
+import { useSmoothRouterPush } from '@/hooks/useSmoothRouterPush';
 
 interface DiscoverPanelProps {
   active: boolean;
@@ -62,7 +62,7 @@ export default function DiscoverPanel({ active, maximized, onMaximize }: Discove
   const d = t.panels.discover;
   const e = t.explore;
   const p = t.panels.plugins;
-  const router = useRouter();
+  const smoothPush = useSmoothRouterPush();
 
   const [pluginsMounted, setPluginsMounted] = useState(false);
   const [showPlugins, setShowPlugins] = useState(false);
@@ -96,8 +96,8 @@ export default function DiscoverPanel({ active, maximized, onMaximize }: Discove
   }, []);
 
   const handleOpenPlugin = useCallback((entryPath: string) => {
-    router.push(`/view/${entryPath.split('/').map(encodeURIComponent).join('/')}`);
-  }, [router]);
+    smoothPush(`/view/${entryPath.split('/').map(encodeURIComponent).join('/')}`);
+  }, [smoothPush]);
 
   const getUseCaseText = (id: string): { title: string; prompt: string } | undefined => {
     const map: Record<string, { title: string; desc: string; prompt: string }> = {

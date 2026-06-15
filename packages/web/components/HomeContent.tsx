@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
 import { useLocale } from '@/lib/stores/locale-store';
 import { FolderSync, PenLine, BarChart3, Sparkles, ArrowUpRight } from 'lucide-react';
 import OnboardingView from './OnboardingView';
@@ -9,6 +8,7 @@ import Logo from './Logo';
 import GuideCard from './GuideCard';
 import AskContent from '@/components/ask/AskContent';
 import type { SpaceInfo } from '@/lib/space-records';
+import { useSmoothRouterPush } from '@/hooks/useSmoothRouterPush';
 
 interface RecentFile {
   path: string;
@@ -23,7 +23,7 @@ const TAB_ICONS = [FolderSync, PenLine, BarChart3, Sparkles];
 
 export default function HomeContent({ recent, existingFiles, spaces }: { recent: RecentFile[]; existingFiles?: string[]; spaces?: SpaceInfo[] }) {
   const { t } = useLocale();
-  const router = useRouter();
+  const smoothPush = useSmoothRouterPush();
   const [activeTab, setActiveTab] = useState(0);
   const [maximized, setMaximized] = useState(false);
 
@@ -39,8 +39,8 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
     const target = recent.length > 0 ? `/view/${recent[0].path}` : '/';
     // Signal the already-mounted SidebarLayout to open the Ask panel
     window.dispatchEvent(new CustomEvent('mindos:open-ask-panel'));
-    router.push(target);
-  }, [recent, router]);
+    smoothPush(target);
+  }, [recent, smoothPush]);
 
   if (recent.length === 0) {
     return <OnboardingView />;

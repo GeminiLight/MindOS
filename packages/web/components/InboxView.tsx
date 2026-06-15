@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef, type RefObject } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import {
   Inbox,
   Sparkles,
@@ -42,6 +41,7 @@ import {
   removeShelvedInboxPaths,
   writeShelvedInboxPaths,
 } from '@/lib/inbox-shelved';
+import { useSmoothRouterPush } from '@/hooks/useSmoothRouterPush';
 import type {
   CaptureIntent,
   CaptureSaveOutcome,
@@ -126,7 +126,7 @@ function takeCount(map: Map<string, number>, key: string): boolean {
 
 export default function InboxView() {
   const { t } = useLocale();
-  const router = useRouter();
+  const smoothPush = useSmoothRouterPush();
   const [files, setFiles] = useState<InboxFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [dragOver, setDragOver] = useState(false);
@@ -1077,7 +1077,7 @@ export default function InboxView() {
                 <InboxItemDetailsPanel
                   file={selectedFile}
                   understanding={selectedUnderstanding}
-                  onOpen={(file) => router.push(`/view/${encodePath(file.path)}`)}
+                  onOpen={(file) => smoothPush(`/view/${encodePath(file.path)}`)}
                   onShelve={(file) => shelveFiles([file.path])}
                   onDelete={(file) => handleDeleteFile(file.name)}
                 />
@@ -1090,7 +1090,7 @@ export default function InboxView() {
                   file={selectedFile}
                   understanding={selectedUnderstanding}
                   mode="shelved"
-                  onOpen={(file) => router.push(`/view/${encodePath(file.path)}`)}
+                  onOpen={(file) => smoothPush(`/view/${encodePath(file.path)}`)}
                   onRestore={(file) => restoreFiles([file.path])}
                   onDelete={(file) => handleDeleteFile(file.name)}
                 />

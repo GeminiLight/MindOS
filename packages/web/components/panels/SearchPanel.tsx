@@ -35,6 +35,7 @@ import PluginActionModalDialog from '@/components/plugins/PluginActionModalDialo
 import PluginActionMenuDialog from '@/components/plugins/PluginActionMenuDialog';
 import { createSearchResultDragPreview, scheduleSearchResultDragPreviewCleanup } from '@/lib/search-drag-preview';
 import { isPathAffected, notifyFilesChanged, subscribeFilesChanged } from '@/lib/files-changed';
+import { useSmoothRouterPush } from '@/hooks/useSmoothRouterPush';
 
 /** Highlight matched text fragments in a snippet based on the query */
 function highlightSnippet(snippet: string, query: string): React.ReactNode {
@@ -93,6 +94,7 @@ export default function SearchPanel({ active, focusRequest = 0, onNavigate, onCl
   const [menuChoiceError, setMenuChoiceError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
+  const smoothPush = useSmoothRouterPush();
   const pathname = usePathname();
   const pluginEditorContext = useMemo(() => pluginEditorCommandContextForPathname(pathname), [pathname]);
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -275,16 +277,16 @@ export default function SearchPanel({ active, focusRequest = 0, onNavigate, onCl
   }, [doSearch]);
 
   const navigate = useCallback((result: SearchResult) => {
-    router.push(`/view/${encodePath(result.path)}`);
+    smoothPush(`/view/${encodePath(result.path)}`);
     onNavigate?.();
-  }, [router, onNavigate]);
+  }, [smoothPush, onNavigate]);
 
   const applyPluginActionResult = useCallback((result: Awaited<ReturnType<typeof choosePluginModalSuggestion>>) => {
     const showedNotice = toastPluginActionNotices(result);
     const targetPath = firstPluginActionTargetPath(result);
     if (targetPath) {
       openTab('doc', targetPath, targetPath.split('/').pop() || targetPath);
-      router.push(`/view/${encodePath(targetPath)}`);
+      smoothPush(`/view/${encodePath(targetPath)}`);
       onNavigate?.();
       toast.success(`Opened ${targetPath}`);
       setPluginModal(null);
@@ -320,7 +322,7 @@ export default function SearchPanel({ active, focusRequest = 0, onNavigate, onCl
     if (!showedNotice) {
       toast.success('Plugin suggestion applied');
     }
-  }, [router, onNavigate]);
+  }, [router, smoothPush, onNavigate]);
 
   const chooseModalSuggestion = useCallback(async (modal: PluginModalSnapshot, suggestion: PluginModalSuggestionChoice) => {
     setChoosingSuggestionIndex(suggestion.index);
@@ -361,7 +363,7 @@ export default function SearchPanel({ active, focusRequest = 0, onNavigate, onCl
       const targetPath = firstPluginActionTargetPath(result);
       if (targetPath) {
         openTab('doc', targetPath, targetPath.split('/').pop() || targetPath);
-        router.push(`/view/${encodePath(targetPath)}`);
+        smoothPush(`/view/${encodePath(targetPath)}`);
         onNavigate?.();
         toast.success(`Opened ${targetPath}`);
       } else if (result.editorUpdates?.some((update) => update.changed)) {
@@ -386,7 +388,7 @@ export default function SearchPanel({ active, focusRequest = 0, onNavigate, onCl
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to run plugin command');
     }
-  }, [pluginEditorContext, router, onNavigate]);
+  }, [pluginEditorContext, router, smoothPush, onNavigate]);
 
   useEffect(() => {
     if (!active) return;

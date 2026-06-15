@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { Settings, Loader2, AlertCircle, CheckCircle2, RotateCcw, Sparkles, Palette, RefreshCw, Plug, Download, X, Trash2, HelpCircle, Puzzle } from 'lucide-react';
-import { useRouter } from 'next/navigation';
 import { useLocale } from '@/lib/stores/locale-store';
 import { apiFetch } from '@/lib/api';
 import type { AiSettings, AgentSettings, PluginPanel, SettingsData, Tab } from './types';
@@ -17,6 +16,7 @@ import { UninstallTab } from './UninstallTab';
 import { restoreAiSettingsFromEnvironment } from './ai-env-restore';
 import { saveSettingsDocument } from './settings-save';
 import { requestCommandCenterOpen, requestPluginEntriesOpen } from '@/lib/plugins/ui-events';
+import { useSmoothRouterPush } from '@/hooks/useSmoothRouterPush';
 
 interface SettingsContentProps {
   visible: boolean;
@@ -55,7 +55,7 @@ export default function SettingsContent({
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState<'idle' | 'saved' | 'error' | 'load-error'>('idle');
   const { t, locale, setLocale } = useLocale();
-  const router = useRouter();
+  const smoothPush = useSmoothRouterPush();
   const saveTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const statusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dataLoaded = useRef(false);
@@ -304,8 +304,8 @@ export default function SettingsContent({
 
   const openPluginViews = useCallback(() => {
     onClose?.();
-    router.push('/plugins/views');
-  }, [onClose, router]);
+    smoothPush('/plugins/views');
+  }, [onClose, smoothPush]);
 
   const restoreFromEnv = useCallback(async () => {
     if (!data) return;
@@ -459,7 +459,7 @@ export default function SettingsContent({
         ))}
         {isMobileTabs && (
           <button
-            onClick={() => { onClose?.(); router.push('/help'); }}
+            onClick={() => { onClose?.(); smoothPush('/help'); }}
             className={`${buttonClassName} border-transparent text-muted-foreground hover:text-foreground`}
           >
             <HelpCircle size={iconSize} />
@@ -566,7 +566,7 @@ export default function SettingsContent({
         </nav>
         <div className="shrink-0 border-t border-border/60 p-3">
           <button
-            onClick={() => { onClose?.(); router.push('/help'); }}
+            onClick={() => { onClose?.(); smoothPush('/help'); }}
             className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/45 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <HelpCircle size={13} />

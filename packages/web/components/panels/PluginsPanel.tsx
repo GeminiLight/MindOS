@@ -1,12 +1,12 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useRouter } from 'next/navigation';
 import { getPluginRenderers, isRendererEnabled, setRendererEnabled, loadDisabledState } from '@/lib/renderers/registry';
 import { fetchAllFilePaths } from '@/lib/client-cache';
 import { Toggle } from '../settings/Primitives';
 import PanelHeader from './PanelHeader';
 import { useLocale } from '@/lib/stores/locale-store';
+import { useSmoothRouterPush } from '@/hooks/useSmoothRouterPush';
 
 interface PluginsPanelProps {
   active: boolean;
@@ -18,7 +18,7 @@ export default function PluginsPanel({ active, maximized, onMaximize }: PluginsP
   const [mounted, setMounted] = useState(false);
   const [, forceUpdate] = useState(0);
   const [existingFiles, setExistingFiles] = useState<Set<string>>(new Set());
-  const router = useRouter();
+  const smoothPush = useSmoothRouterPush();
   const { t } = useLocale();
   const p = t.panels.plugins;
 
@@ -58,8 +58,8 @@ export default function PluginsPanel({ active, maximized, onMaximize }: PluginsP
   }, []);
 
   const handleOpen = useCallback((entryPath: string) => {
-    router.push(`/view/${entryPath.split('/').map(encodeURIComponent).join('/')}`);
-  }, [router]);
+    smoothPush(`/view/${entryPath.split('/').map(encodeURIComponent).join('/')}`);
+  }, [smoothPush]);
 
   return (
     <div className={`flex flex-col h-full ${active ? '' : 'hidden'}`}>

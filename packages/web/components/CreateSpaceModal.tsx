@@ -10,11 +10,13 @@ import { createSpaceAction } from '@/lib/actions';
 import { checkAiAvailable, triggerSpaceAiInit } from '@/lib/space-ai-init';
 import DirPicker from './DirPicker';
 import { notifyFilesChanged } from '@/lib/files-changed';
+import { useSmoothRouterPush } from '@/hooks/useSmoothRouterPush';
 
 /* ── Create Space Modal ── */
 
 export default function CreateSpaceModal({ t, dirPaths }: { t: ReturnType<typeof useLocale>['t']; dirPaths: string[] }) {
   const router = useRouter();
+  const smoothPush = useSmoothRouterPush();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -87,7 +89,7 @@ export default function CreateSpaceModal({ t, dirPaths }: { t: ReturnType<typeof
       close();
       router.refresh();
       notifyFilesChanged([createdPath]);
-      router.push(`/view/${encodePath(createdPath + '/')}`);
+      smoothPush(`/view/${encodePath(createdPath + '/')}`);
     } else {
       const msg = result.error ?? '';
       if (msg.includes('already exists')) {
@@ -97,7 +99,7 @@ export default function CreateSpaceModal({ t, dirPaths }: { t: ReturnType<typeof
       }
     }
     setLoading(false);
-  }, [name, description, parent, loading, close, router, t, validateName, useAi, aiAvailable]);
+  }, [name, description, parent, loading, close, router, smoothPush, t, validateName, useAi, aiAvailable]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Escape') close();

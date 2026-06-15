@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useRouter } from 'next/navigation';
 import {
   Check, X, Loader2, Sparkles, AlertCircle, Undo2,
   ChevronDown, FilePlus, FileEdit, ExternalLink,
@@ -16,6 +15,7 @@ import {
   type OrganizeHistoryEntry,
 } from '@/lib/organize-history';
 import { notifyFilesChanged } from '@/lib/files-changed';
+import { useSmoothRouterPush } from '@/hooks/useSmoothRouterPush';
 
 const AUTO_DISMISS_MS = 3 * 60 * 1000; // 3 minutes
 const THINKING_TIMEOUT_MS = 5000;
@@ -79,7 +79,7 @@ export default function OrganizeToast({
   aiOrganize, onDismiss, onCancel, onHistoryUpdate,
 }: OrganizeToastProps) {
   const { t } = useLocale();
-  const router = useRouter();
+  const smoothPush = useSmoothRouterPush();
   const fi = t.fileImport as Record<string, unknown>;
 
   const isOrganizing = aiOrganize.phase === 'organizing';
@@ -196,8 +196,8 @@ export default function OrganizeToast({
 
   const handleViewFile = useCallback((path: string) => {
     handleUserAction();
-    router.push(`/view/${encodePath(path)}`);
-  }, [router, handleUserAction]);
+    smoothPush(`/view/${encodePath(path)}`);
+  }, [smoothPush, handleUserAction]);
 
   const handleDismiss = useCallback(() => {
     onDismiss();

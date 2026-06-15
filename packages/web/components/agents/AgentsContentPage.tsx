@@ -33,6 +33,7 @@ import CustomAgentModal from './CustomAgentModal';
 import { ConfirmDialog } from './AgentsPrimitives';
 import type { AgentInfo } from '@/components/settings/types';
 import { ContentPageShell } from '@/components/shared/ContentPageShell';
+import { shouldHandleSmoothNavigation, useSmoothRouterPush } from '@/hooks/useSmoothRouterPush';
 
 const DEFAULT_AGENT_NAV_HINTS = {
   overview: 'Map',
@@ -443,6 +444,7 @@ function AgentsPageNav({
   mcpEnabled: boolean;
   presetCount: number;
 }) {
+  const smoothPush = useSmoothRouterPush();
   const navHints = copy.navHints ?? DEFAULT_AGENT_NAV_HINTS;
   const activeGroup = getAgentsNavGroup(tab);
   const navItems: Array<{
@@ -506,6 +508,11 @@ function AgentsPageNav({
             key={item.id}
             href={item.href}
             aria-current={activeGroup === item.id ? 'page' : undefined}
+            onClick={(event) => {
+              if (!shouldHandleSmoothNavigation(event)) return;
+              event.preventDefault();
+              if (activeGroup !== item.id) smoothPush(item.href);
+            }}
             className={`group min-h-[70px] w-[156px] shrink-0 border-r border-border/45 px-3 py-2.5 transition-colors last:border-r-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:w-auto lg:px-4 lg:py-3 ${
               activeGroup === item.id
                 ? 'bg-[var(--amber)]/[0.08] text-foreground'

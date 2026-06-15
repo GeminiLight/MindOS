@@ -28,6 +28,7 @@ import { toast } from '@/lib/toast';
 import { notifyFilesChanged } from '@/lib/files-changed';
 import PluginActionModalDialog from './PluginActionModalDialog';
 import PluginActionMenuDialog from './PluginActionMenuDialog';
+import { useSmoothRouterPush } from '@/hooks/useSmoothRouterPush';
 
 function isEditableTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
@@ -50,6 +51,7 @@ export default function PluginHotkeyHost() {
   const [choosingMenuItemIndex, setChoosingMenuItemIndex] = useState<number | null>(null);
   const [menuChoiceError, setMenuChoiceError] = useState<string | null>(null);
   const router = useRouter();
+  const smoothPush = useSmoothRouterPush();
   const pathname = usePathname();
   const pluginEditorContext = useMemo(() => pluginEditorCommandContextForPathname(pathname), [pathname]);
 
@@ -79,7 +81,7 @@ export default function PluginHotkeyHost() {
     const targetPath = firstPluginActionTargetPath(result);
     if (targetPath) {
       openTab('doc', targetPath, targetPath.split('/').pop() || targetPath);
-      router.push(`/view/${encodePath(targetPath)}`);
+      smoothPush(`/view/${encodePath(targetPath)}`);
       toast.success(`Opened ${targetPath}`);
       setPluginModal(null);
       setPluginMenu(null);
@@ -116,7 +118,7 @@ export default function PluginHotkeyHost() {
     if (!showedNotice) {
       toast.success(`Ran ${fallbackTitle}`);
     }
-  }, [router]);
+  }, [router, smoothPush]);
 
   useEffect(() => {
     refreshEnabled();
