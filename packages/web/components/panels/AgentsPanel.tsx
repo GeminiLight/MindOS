@@ -167,10 +167,10 @@ export default function AgentsPanel({
                   showNotDetected={showNotDetected}
                   setShowNotDetected={setShowNotDetected}
                   p={{
-                    rosterLabel: p.rosterLabel,
-                    sectionConnected: p.sectionConnected,
-                    sectionDetected: p.sectionDetected,
-                    sectionNotDetected: p.sectionNotDetected,
+                    rosterLabel: localClientsCopy.panelTitle,
+                    sectionConnected: localClientsCopy.statusConnected,
+                    sectionDetected: localClientsCopy.statusDetected,
+                    sectionNotDetected: localClientsCopy.statusNotFound,
                     showMore: localClientsCopy.showMore,
                   }}
                 />

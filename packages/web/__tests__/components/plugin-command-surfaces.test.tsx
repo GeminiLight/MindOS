@@ -42,6 +42,7 @@ vi.mock('@/lib/stores/locale-store', () => ({
         fallbackWarmHint: 'Search will prepare on first query.',
         navigate: 'navigate',
         open: 'open',
+        dragToChat: 'drag to chat',
         tabSearch: 'Search',
         tabActions: 'Actions',
         close: 'close',

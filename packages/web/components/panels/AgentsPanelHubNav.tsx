@@ -51,30 +51,35 @@ export function AgentsPanelHubNav({
         badge={<span className="text-2xs tabular-nums text-muted-foreground/60 px-1.5 py-0.5 rounded bg-muted/40 font-medium">{connectedCount}</span>}
         href="/agents"
         active={overviewActive}
+        activeVariant="rail"
       />
       <PanelNavRow
         icon={<Sparkles size={14} className={assistantActive ? 'text-[var(--amber)]' : 'text-muted-foreground'} />}
         title={copy.navAssistant ?? copy.navPresets}
         href="/agents?tab=assistant"
         active={assistantActive}
+        activeVariant="rail"
       />
       <PanelNavRow
         icon={<Bot size={14} className={agentActive ? 'text-[var(--amber)]' : 'text-muted-foreground'} />}
         title={copy.navAgent ?? copy.navMcp}
         href="/agents?tab=agent"
         active={agentActive}
+        activeVariant="rail"
       />
       <PanelNavRow
         icon={<Server size={14} className={capabilitiesActive ? 'text-[var(--amber)]' : 'text-muted-foreground'} />}
         title={copy.navCapabilities ?? copy.navSkills}
         href="/agents?tab=capabilities"
         active={capabilitiesActive}
+        activeVariant="rail"
       />
       <PanelNavRow
         icon={<MessageSquare size={14} className={channelsHubActive ? 'text-[var(--amber)]' : 'text-muted-foreground'} />}
         title={copy.navChannels}
         href="/agents?tab=channels"
         active={channelsHubActive}
+        activeVariant="rail"
       />
     </div>
   );

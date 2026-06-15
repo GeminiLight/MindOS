@@ -20,17 +20,15 @@ vi.mock('@/components/panels/EchoSidebarStats', () => ({
 }));
 
 describe('EchoPanel sidebar navigation', () => {
-  it('marks the active Echo segment with the lightweight rectangular row style', () => {
+  it('marks the active Echo segment with the primary sidebar rail style', () => {
     routeState.pathname = '/echo/imprint';
 
     const html = renderToStaticMarkup(<EchoPanel active maximized={false} />);
 
     expect(html).toMatch(/<a[^>]*aria-current="page"[^>]*href="\/echo\/imprint"/);
-    expect(html).toContain('rounded-md');
-    expect(html).toContain('border-[var(--amber)]/35');
-    expect(html).toContain('bg-[var(--amber-dim)]/45');
-    expect(html).toContain('bg-[var(--amber)]/10');
-    expect(html).not.toContain('rounded-r-full');
+    expect(html).toContain('w-[3px] rounded-r-full bg-[var(--amber)]');
+    expect(html).toContain('bg-[var(--amber-subtle)]');
+    expect(html).not.toContain('border-[var(--amber)]/35 bg-[var(--amber-dim)]/45');
     expect(html).not.toContain('ring-2 ring-ring/50');
   });
 

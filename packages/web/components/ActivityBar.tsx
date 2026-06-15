@@ -464,18 +464,14 @@ export default function ActivityBar({
       <button
         onClick={() => onExpandedChange(!expanded)}
         className="
-          hit-target-box
           absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 z-app-rail-affordance
-          w-5 h-5
-          border border-transparent
-          flex items-center justify-center
+          flex h-6 w-6 items-center justify-center rounded-full
+          border border-border bg-card shadow-sm
           opacity-0 group-hover:opacity-100 hover:!opacity-100
-          transition-opacity duration-200
+          transition-[opacity,background-color,border-color,color,box-shadow] duration-200
           text-muted-foreground hover:text-foreground
+          hover:bg-muted hover:shadow-md
           focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
-          [--hit-target-bg:var(--card)] [--hit-target-hover-bg:var(--muted)]
-          [--hit-target-border-width:1px] [--hit-target-border:var(--border)] [--hit-target-hover-border:var(--border)]
-          [--hit-target-radius:9999px] [--hit-target-shadow:0_1px_2px_0_color-mix(in_srgb,var(--foreground)_8%,transparent)]
         "
         aria-label={expanded ? 'Collapse sidebar' : 'Expand sidebar'}
         title={expanded ? 'Collapse' : 'Expand'}

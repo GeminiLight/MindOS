@@ -61,7 +61,7 @@ export const panelsEn = {
       a2aTabEmpty: 'No remote agents',
       a2aTabEmptyHint: 'Discover agents to enable cross-agent delegation.',
       a2aRemoveAgent: 'Remove',
-      rosterLabel: 'Your setup',
+      rosterLabel: 'Local Clients',
       notFoundDetail: 'This agent app was not detected on this machine. Install it, then refresh the list.',
       skillsEmptyHint: 'Enable and edit skills in Skills & MCP settings.',
       backToList: 'Back',

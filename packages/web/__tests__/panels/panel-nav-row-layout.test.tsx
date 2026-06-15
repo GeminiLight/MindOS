@@ -15,6 +15,18 @@ function htmlFor(active: boolean): string {
   return html;
 }
 
+function railHtmlFor(active: boolean): string {
+  return renderToStaticMarkup(
+    <PanelNavRow
+      icon={<Bot size={14} />}
+      title={active ? 'Active' : 'Inactive'}
+      href="/agents?tab=agent"
+      active={active}
+      activeVariant="rail"
+    />,
+  );
+}
+
 function classNameFor(active: boolean): string {
   const html = htmlFor(active);
   const match = html.match(/class="([^"]+)"/);
@@ -34,7 +46,7 @@ describe('PanelNavRow layout stability', () => {
     expect(activeClassName).not.toContain('pr-4');
   });
 
-  it('uses a stable active background and icon tile instead of a left rail', () => {
+  it('keeps the default active background and icon tile for non-primary nav rows', () => {
     const activeHtml = htmlFor(true);
     const inactiveHtml = htmlFor(false);
     const activeClassName = classNameFor(true);
@@ -46,5 +58,17 @@ describe('PanelNavRow layout stability', () => {
     expect(activeHtml).not.toContain('rounded-r-full');
     expect(inactiveHtml).toContain('border-transparent');
     expect(activeHtml).toContain('aria-current="page"');
+  });
+
+  it('supports primary sidebar rows with a left rail active state', () => {
+    const activeHtml = railHtmlFor(true);
+    const inactiveHtml = railHtmlFor(false);
+    const activeClassName = activeHtml.match(/class="([^"]+)"/)?.[1] ?? '';
+
+    expect(activeHtml).toContain('w-[3px] rounded-r-full bg-[var(--amber)]');
+    expect(activeClassName).toContain('bg-[var(--amber-subtle)]');
+    expect(activeClassName).not.toContain('rounded-md');
+    expect(activeHtml).not.toContain('border-[var(--amber)]/35 bg-[var(--amber-dim)]/45');
+    expect(inactiveHtml).not.toContain('w-[3px] rounded-r-full bg-[var(--amber)]');
   });
 });

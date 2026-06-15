@@ -269,10 +269,10 @@ describe('Visual Feedback', () => {
   });
 
   it('should show visual feedback when item is selected', () => {
-    // Selected state: className includes 'bg-amber-dim border-l-2 border-amber'
-    const onSelected = 'bg-[var(--amber-dim)] border-l-2 border-[var(--amber)]';
-    expect(onSelected).toContain('amber-dim');
-    expect(onSelected).toContain('border');
+    // Selected state: subtle background plus an inset amber activity line.
+    const onSelected = 'bg-[var(--amber-subtle)] shadow-[inset_3px_0_0_var(--amber)]';
+    expect(onSelected).toContain('amber-subtle');
+    expect(onSelected).toContain('inset_3px');
   });
 
   it('should show visual feedback during drag', () => {
@@ -282,8 +282,8 @@ describe('Visual Feedback', () => {
   });
 
   it('should show drag hint text', () => {
-    // When selected and not dragging: show "⬆ Drag" text
-    const dragHintText = '⬆ Drag';
+    // When selected and not dragging: show a compact Drag affordance.
+    const dragHintText = 'Drag';
     expect(dragHintText).toBeTruthy();
   });
 });

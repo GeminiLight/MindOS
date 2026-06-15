@@ -11,8 +11,14 @@ describe('Sidebar width contract', () => {
     const activityBar = readSource('components/ActivityBar.tsx');
     const leftPanel = readSource('hooks/useLeftPanel.ts');
     const sidebarLayout = readSource('components/SidebarLayout.tsx');
+    const panelSizes = readSource('lib/config/panel-sizes.ts');
 
     expect(activityBar).toContain("from '@/lib/config/panel-sizes'");
+    expect(panelSizes).toContain('STANDARD_LEFT_PANEL_WIDTH');
+    expect(panelSizes).toContain('files: STANDARD_LEFT_PANEL_WIDTH');
+    expect(panelSizes).toContain('search: STANDARD_LEFT_PANEL_WIDTH');
+    expect(panelSizes).toContain('echo: STANDARD_LEFT_PANEL_WIDTH');
+    expect(panelSizes).toContain('agents: STANDARD_LEFT_PANEL_WIDTH');
     expect(leftPanel).toContain("import { MIN_PANEL_WIDTH, MAX_PANEL_WIDTH_ABS } from '@/components/Panel'");
     expect(leftPanel).toContain("import { RAIL_WIDTH_COLLAPSED, RAIL_WIDTH_EXPANDED } from '@/components/ActivityBar'");
     expect(leftPanel).not.toContain('280');
@@ -59,6 +65,15 @@ describe('Sidebar width contract', () => {
     expect(sidebarLayout).toContain('suppressRouteActive={homeNavPending}');
     expect(sidebarLayout).toContain('setPendingHomeNav(pathname !== \'/\' ? { fromPathname: pathname, panel: nextPanel } : null)');
     expect(activityBar).toContain('onPanelChange(null)');
+  });
+
+  it('renders the rail expand affordance as a real circle instead of a clipped pseudo target', () => {
+    const activityBar = readSource('components/ActivityBar.tsx');
+
+    expect(activityBar).toContain('z-app-rail-affordance');
+    expect(activityBar).toContain('flex h-6 w-6 items-center justify-center rounded-full');
+    expect(activityBar).toContain('border border-border bg-card shadow-sm');
+    expect(activityBar).not.toContain('[--hit-target-radius:9999px]');
   });
 
   it('wires the titlebar sidebar button to the left panel, not the rail width', () => {

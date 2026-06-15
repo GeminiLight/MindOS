@@ -14,6 +14,7 @@ export function PanelNavRow({
   href,
   onClick,
   active,
+  activeVariant = 'box',
 }: {
   icon: ReactNode;
   title: string;
@@ -23,15 +24,29 @@ export function PanelNavRow({
   onClick?: () => void;
   /** When true, row shows selected state (e.g. current Echo segment). */
   active?: boolean;
+  /** `rail` is for primary sidebar sections that use a left activity marker. */
+  activeVariant?: 'box' | 'rail';
 }) {
+  const railVariant = activeVariant === 'rail';
   const content = (
     <>
+      {railVariant && active ? (
+        <span className="pointer-events-none absolute bottom-2 left-0 top-2 w-[3px] rounded-r-full bg-[var(--amber)]" aria-hidden="true" />
+      ) : null}
       <span
         className={cn(
-          'flex h-7 w-7 shrink-0 items-center justify-center rounded-md border transition-[background-color,border-color,color] duration-150',
-          active
-            ? 'border-[var(--amber)]/35 bg-[var(--amber)]/10 text-[var(--amber)]'
-            : 'border-transparent bg-muted/70 text-muted-foreground group-hover:bg-muted group-hover:text-foreground',
+          'flex h-7 w-7 shrink-0 items-center justify-center transition-[background-color,border-color,color] duration-150',
+          railVariant
+            ? cn(
+              'rounded-md border border-transparent bg-transparent',
+              active ? 'text-[var(--amber)]' : 'text-muted-foreground group-hover:text-foreground',
+            )
+            : cn(
+              'rounded-md border',
+              active
+                ? 'border-[var(--amber)]/35 bg-[var(--amber)]/10 text-[var(--amber)]'
+                : 'border-transparent bg-muted/70 text-muted-foreground group-hover:bg-muted group-hover:text-foreground',
+            ),
         )}
       >
         {icon}
@@ -48,10 +63,20 @@ export function PanelNavRow({
   );
 
   const className = cn(
-    'group relative flex items-center gap-3 rounded-md border px-4 py-2.5 transition-[background-color,border-color,color,box-shadow] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-    active
-      ? 'cursor-default border-[var(--amber)]/35 bg-[var(--amber-dim)]/45 text-foreground shadow-sm'
-      : 'cursor-pointer border-transparent text-muted-foreground hover:border-border/60 hover:bg-muted/45 hover:text-foreground',
+    'group relative flex items-center gap-3 px-4 py-2.5 transition-[background-color,border-color,color,box-shadow] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+    railVariant
+      ? cn(
+        'border border-transparent',
+        active
+          ? 'cursor-default bg-[var(--amber-subtle)] text-foreground'
+          : 'cursor-pointer text-muted-foreground hover:bg-muted/35 hover:text-foreground',
+      )
+      : cn(
+        'rounded-md border',
+        active
+          ? 'cursor-default border-[var(--amber)]/35 bg-[var(--amber-dim)]/45 text-foreground shadow-sm'
+          : 'cursor-pointer border-transparent text-muted-foreground hover:border-border/60 hover:bg-muted/45 hover:text-foreground',
+      ),
   );
 
   if (href) {

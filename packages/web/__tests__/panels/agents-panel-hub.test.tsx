@@ -161,8 +161,14 @@ describe('AgentsPanel hub layout', () => {
     expect(html).toContain(localClients.panelTitle);
     expect(html).toContain('href="/agents/test-agent"');
     expect(html).toContain('Test Agent');
-    expect(html).not.toContain(a.rosterLabel);
+    expect(html).not.toContain('Your setup');
     expect(html).not.toContain('/help');
+    expect(html).toContain('w-[3px] rounded-r-full bg-[var(--amber)]');
+
+    const statusIndex = html.indexOf(localClients.statusConnected);
+    const statusLead = html.slice(Math.max(0, statusIndex - 180), statusIndex);
+    expect(statusIndex).toBeGreaterThan(-1);
+    expect(statusLead).not.toContain('<svg');
 
     const headerStart = html.indexOf('panel-header');
     const headerEnd = html.indexOf('<div class="flex-1 overflow-y-auto', headerStart);

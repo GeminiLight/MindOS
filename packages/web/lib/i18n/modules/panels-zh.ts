@@ -61,7 +61,7 @@ export const panelsZh = {
       a2aTabEmpty: '无远程 Agent',
       a2aTabEmptyHint: '发现远程 Agent 以启用跨 Agent 委派。',
       a2aRemoveAgent: '移除',
-      rosterLabel: '当前环境',
+      rosterLabel: '本机客户端',
       notFoundDetail: '本机未检测到该智能体客户端。请安装后刷新列表。',
       skillsEmptyHint: '请在「Skills & MCP」中启用或编辑技能。',
       backToList: '返回',

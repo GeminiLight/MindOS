@@ -7,18 +7,20 @@ import type { PanelId } from '@/lib/navigation-panel';
 
 // ── Left Panel (Files/Search/Agents/Echo/Discover) ──
 
+export const STANDARD_LEFT_PANEL_WIDTH = 300;
+
 export const DEFAULT_LEFT_PANEL_WIDTH: Record<PanelId, number> = {
-  files: 280,
-  capture: 300,
-  search: 320,
-  echo: 340,
-  agents: 300,
-  discover: 300,
-  workflows: 320,
+  files: STANDARD_LEFT_PANEL_WIDTH,
+  capture: STANDARD_LEFT_PANEL_WIDTH,
+  search: STANDARD_LEFT_PANEL_WIDTH,
+  echo: STANDARD_LEFT_PANEL_WIDTH,
+  agents: STANDARD_LEFT_PANEL_WIDTH,
+  discover: STANDARD_LEFT_PANEL_WIDTH,
+  workflows: STANDARD_LEFT_PANEL_WIDTH,
 };
 
 export const LEFT_PANEL: { DEFAULT: number; MIN: number; MAX_RATIO: number; MAX_ABS: number } = {
-  DEFAULT: 280,
+  DEFAULT: STANDARD_LEFT_PANEL_WIDTH,
   MIN: 240,
   MAX_RATIO: 0.45, // 45% of screen width
   MAX_ABS: 600, // Absolute pixel max

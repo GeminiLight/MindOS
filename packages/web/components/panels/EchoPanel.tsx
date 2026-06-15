@@ -36,7 +36,7 @@ export default function EchoPanel({ active }: EchoPanelProps) {
             const href = ECHO_SEGMENT_HREF[segment];
             const isActive = pathname === href || pathname.startsWith(`${href}/`);
             return (
-              <PanelNavRow key={segment} href={href} icon={row.icon} title={row.title} active={isActive} />
+              <PanelNavRow key={segment} href={href} icon={row.icon} title={row.title} active={isActive} activeVariant="rail" />
             );
           })}
         </div>

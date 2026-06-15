@@ -28,6 +28,12 @@ vi.mock('@/lib/stores/locale-store', () => ({
       search: {
         placeholder: 'Search files...',
         tabSearch: 'Search',
+        clear: 'Clear',
+        close: 'Close',
+        emptyTitle: 'Search your knowledge base',
+        emptyHint: 'Find notes, tables, and commands.',
+        noResults: 'No results found',
+        noResultsHint: 'Try another query.',
         navigate: 'navigate',
         open: 'open',
         dragToChat: 'to chat',
