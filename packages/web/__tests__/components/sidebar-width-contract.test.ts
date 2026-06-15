@@ -33,7 +33,7 @@ describe('Sidebar width contract', () => {
     const activityBar = readSource('components/ActivityBar.tsx');
     const sidebarLayout = readSource('components/SidebarLayout.tsx');
 
-    expect(activityBar).toContain("router.push('/')");
+    expect(activityBar).toContain("smoothPush('/')");
     expect(activityBar).not.toContain('router.push(ROUTE_PANEL_HREF.files)');
     expect(sidebarLayout).toContain('<Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">');
     expect(sidebarLayout).not.toContain('href={ROUTE_PANEL_HREF.files}');

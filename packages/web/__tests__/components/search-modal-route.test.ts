@@ -9,6 +9,6 @@ describe('SearchModal routes', () => {
     const source = fs.readFileSync(path.join(ROOT, 'components', 'SearchModal.tsx'), 'utf-8');
 
     expect(source).not.toContain("router.push('/discover')");
-    expect(source).toContain("router.push('/explore')");
+    expect(source).toContain("smoothPush('/explore')");
   });
 });
