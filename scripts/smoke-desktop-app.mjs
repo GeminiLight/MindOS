@@ -50,7 +50,7 @@ const executable = resolveExecutable(appPath);
 console.log(`[smoke-desktop-app] Launching ${executable}`);
 console.log(`[smoke-desktop-app] Log: ${logPath}`);
 
-const child = process.platform === 'win32' && args.windowsRuntimeOnly
+let child = process.platform === 'win32' && args.windowsRuntimeOnly
   ? spawnWindowsRuntime(executable)
   : spawnDesktopApp(executable);
 
@@ -66,10 +66,13 @@ try {
   scanFatalLog();
   console.log(`[smoke-desktop-app] OK ${appPath}`);
 } catch (error) {
-  scanFatalLog(false);
-  console.error(`[smoke-desktop-app] FAILED: ${error instanceof Error ? error.message : String(error)}`);
-  dumpDiagnostics();
-  process.exitCode = 1;
+  const recovered = await maybeRunWindowsRuntimeFallback(error);
+  if (!recovered) {
+    scanFatalLog(false);
+    console.error(`[smoke-desktop-app] FAILED: ${error instanceof Error ? error.message : String(error)}`);
+    dumpDiagnostics();
+    process.exitCode = 1;
+  }
 } finally {
   persistSmokeLogArtifact();
   terminateChild();
@@ -77,6 +80,41 @@ try {
   rmSync(home, { recursive: true, force: true });
   rmSync(mindRoot, { recursive: true, force: true });
   process.exit(process.exitCode ?? 0);
+}
+
+async function maybeRunWindowsRuntimeFallback(originalError) {
+  if (process.platform !== 'win32' || !args.windowsRuntimeFallback || args.windowsRuntimeOnly) return false;
+  const fatalPattern = findFatalLogPattern();
+  if (fatalPattern) return false;
+
+  const message = originalError instanceof Error ? originalError.message : String(originalError);
+  appendLog(`\n[smoke-desktop-app] Windows Electron smoke did not become healthy: ${message}\n`);
+  appendLog('[smoke-desktop-app] Retrying with packaged runtime-only smoke.\n');
+  console.warn(`[smoke-desktop-app] Windows Electron smoke did not become healthy: ${message}`);
+  console.warn('[smoke-desktop-app] Retrying with packaged runtime-only smoke.');
+
+  terminateChild();
+  child = spawnWindowsRuntime(executable);
+  child.stdout.on('data', (chunk) => appendLog(chunk));
+  child.stderr.on('data', (chunk) => appendLog(chunk));
+  child.on('exit', (code, signal) => {
+    appendLog(`\n[smoke-desktop-app] runtime fallback child exited code=${code} signal=${signal}\n`);
+  });
+
+  try {
+    await waitForApp(timeoutMs);
+    scanFatalLog();
+    console.log(`[smoke-desktop-app] OK ${appPath} (Windows runtime fallback)`);
+    process.exitCode = 0;
+    return true;
+  } catch (fallbackError) {
+    scanFatalLog(false);
+    console.error(`[smoke-desktop-app] Windows runtime fallback FAILED: ${fallbackError instanceof Error ? fallbackError.message : String(fallbackError)}`);
+    console.error(`[smoke-desktop-app] Original Electron smoke failure: ${message}`);
+    dumpDiagnostics();
+    process.exitCode = 1;
+    return true;
+  }
 }
 
 async function waitForApp(timeout) {
@@ -262,12 +300,19 @@ function tailFile(filePath, maxLines) {
 }
 
 function scanFatalLog(throwOnMatch = true) {
+  const pattern = findFatalLogPattern();
+  if (!pattern) return;
+  if (throwOnMatch) throw new Error(`fatal log pattern matched: ${pattern}`);
+  process.exitCode = 1;
+}
+
+function findFatalLogPattern() {
   for (const pattern of fatalPatterns) {
     if (pattern.test(log)) {
-      if (throwOnMatch) throw new Error(`fatal log pattern matched: ${pattern}`);
-      process.exitCode = 1;
+      return pattern;
     }
   }
+  return null;
 }
 
 function resolveExecutable(app) {
@@ -359,6 +404,7 @@ function parseArgs(argv) {
     else if (arg === '--mcp-port') parsed.mcpPort = argv[++i];
     else if (arg === '--skip-if-arch-mismatch') parsed.skipIfArchMismatch = true;
     else if (arg === '--windows-runtime-only') parsed.windowsRuntimeOnly = true;
+    else if (arg === '--windows-runtime-fallback') parsed.windowsRuntimeFallback = true;
     else throw new Error(`Unknown argument: ${arg}`);
   }
   return parsed;

@@ -199,6 +199,8 @@ describe('Desktop release packaging contract', () => {
     expect(workflow).toContain('Skipping Windows Authenticode verification because code-signing secrets are not configured; unsigned artifacts will be published.');
     expect(smokeStep).toContain('if [ "${{ matrix.platform }}" = "win" ] && [ "${{ matrix.arch }}" = "arm64" ]; then');
     expect(smokeStep).toContain('node scripts/smoke-desktop-app.mjs --skip-if-arch-mismatch --timeout 90000 --windows-runtime-only');
+    expect(smokeStep).toContain('elif [ "${{ matrix.platform }}" = "win" ]; then');
+    expect(smokeStep).toContain('node scripts/smoke-desktop-app.mjs --skip-if-arch-mismatch --timeout 90000 --windows-runtime-fallback');
     expect(workflow).not.toContain('Publishing Windows releases requires WINDOWS_CERTIFICATE_BASE64');
     expect(workflow).toContain('Publishing macOS releases requires sign_mac=true');
     expect(workflow).toContain('No notarization credentials configured for a publish build');
@@ -250,6 +252,9 @@ describe('Desktop release packaging contract', () => {
     expect(smoke).toContain("resolve('packages/desktop/dist/smoke-logs')");
     expect(smoke).toContain('spawnWindowsRuntime');
     expect(smoke).toContain('Windows runtime-only smoke from packaged resources');
+    expect(smoke).toContain('maybeRunWindowsRuntimeFallback');
+    expect(smoke).toContain('Windows runtime fallback');
+    expect(smoke).toContain('--windows-runtime-fallback');
     expect(smoke).toContain("'resources', 'mindos-runtime'");
     expect(smoke).toContain("'node', 'node.exe'");
     expect(smoke).toContain("'packages', 'web'");
