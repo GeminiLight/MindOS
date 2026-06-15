@@ -42,7 +42,7 @@ function createServices(overrides: Partial<MindosAgentCapabilityRegistryServices
 }
 
 describe('kb-tool capabilities', () => {
-  it('maps permission tiers and approval support from the tool name sets', () => {
+  it('maps permission tiers without promising interactive approvals for KB writes', () => {
     const services = createServices({
       knowledgeBaseTools: [
         makeKbTool('read_file', 'Read file'),
@@ -67,14 +67,14 @@ describe('kb-tool capabilities', () => {
     expect(writeFile).toMatchObject({
       permissionRequired: 'organize',
       availableInModes: ['organize', 'agent'],
-      supportsApprovals: true,
+      supportsApprovals: false,
     });
 
     const deleteFile = byId.get('kb-tool:delete_file');
     expect(deleteFile).toMatchObject({
       permissionRequired: 'agent',
       availableInModes: ['agent'],
-      supportsApprovals: true,
+      supportsApprovals: false,
     });
 
     expect(readFile?.metadata).toMatchObject({ toolName: 'read_file' });
@@ -163,27 +163,68 @@ describe('pi-subagent capabilities', () => {
 });
 
 describe('mcp-tool capabilities', () => {
-  it('maps cached MCP tools per configured server', () => {
+  it('maps only cached MCP tools explicitly allowlisted for MindOS Agent', () => {
     const listers = createAgentCapabilitiesServices(createServices({
       readMcpConfig: () => ({
+        settings: {
+          mindosAgent: {
+            mcpServers: {
+              github: ['search_code'],
+            },
+          },
+        },
         mcpServers: {
-          notes: { directTools: true, lifecycle: 'eager' },
+          notes: { directTools: true, lifecycle: 'eager', mindosAgent: ['find_note'] },
+          github: { directTools: true },
+          crm: { directTools: true, mindos: { agent: { tools: ['lookup_contact'] } } },
+          broad: { directTools: true, mindosAgent: true },
           uncached: {},
         },
       }),
       readMcpToolCache: () => ({
-        notes: { tools: [{ name: 'find_note', description: 'Find a note' }] },
+        notes: {
+          tools: [
+            { name: 'find_note', description: 'Find a note' },
+            { name: 'delete_note', description: 'Delete a note' },
+          ],
+        },
+        github: {
+          tools: [
+            { name: 'search_code', description: 'Search code' },
+            { name: 'delete_repo', description: 'Delete repository' },
+          ],
+        },
+        crm: {
+          tools: [
+            { name: 'lookup_contact', description: 'Lookup contact' },
+            { name: 'export_all', description: 'Export everything' },
+          ],
+        },
+        broad: {
+          tools: [{ name: 'safe_tool', description: 'Safe tool' }],
+        },
+        uncached: {
+          tools: [{ name: 'hidden_tool', description: 'Should not be listed' }],
+        },
       }),
     }));
 
     const caps = listers.mcp() as AgentCapabilityInput[];
-    expect(caps).toHaveLength(1);
+    expect(caps.map((cap) => cap.id)).toEqual([
+      'mcp-tool:notes:find_note',
+      'mcp-tool:github:search_code',
+      'mcp-tool:crm:lookup_contact',
+      'mcp-tool:broad:safe_tool',
+    ]);
     expect(caps[0]).toMatchObject({
-      id: 'mcp-tool:notes:find_note',
       kind: 'mcp-tool',
       status: 'cached',
-      metadata: { serverName: 'notes', directTools: true, lifecycle: 'eager', cached: true },
+      metadata: { serverName: 'notes', directTools: ['find_note'], lifecycle: 'eager', cached: true },
     });
+    expect(caps.map((cap) => cap.id)).not.toContain('mcp-tool:notes:delete_note');
+    expect(caps.map((cap) => cap.id)).not.toContain('mcp-tool:github:delete_repo');
+    expect(caps.map((cap) => cap.id)).not.toContain('mcp-tool:crm:export_all');
+    expect(caps.map((cap) => cap.id)).not.toContain('mcp-tool:uncached:hidden_tool');
   });
 });
 

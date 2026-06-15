@@ -24,6 +24,12 @@ describe('MindOS agent product contract', () => {
   it('owns system prompts inside the product runtime', () => {
     expect(AGENT_SYSTEM_PROMPT).toContain('You are MindOS');
     expect(AGENT_SYSTEM_PROMPT).toContain('Read Before Write');
+    expect(AGENT_SYSTEM_PROMPT).toContain('Tool Strategy');
+    expect(AGENT_SYSTEM_PROMPT).toContain('Use tools as the default path for local files');
+    expect(AGENT_SYSTEM_PROMPT).toContain('Do not answer from memory when a tool can verify the current state');
+    expect(AGENT_SYSTEM_PROMPT).toContain('mcp');
+    expect(AGENT_SYSTEM_PROMPT).toContain('configured and allowlisted for MindOS Agent');
+    expect(AGENT_SYSTEM_PROMPT).toContain('the main MindOS Agent owns the final answer');
     expect(AGENT_SYSTEM_PROMPT).toContain('Delegation / Subagents');
     expect(AGENT_SYSTEM_PROMPT).toContain('action: "list"');
     expect(AGENT_SYSTEM_PROMPT).toContain('pass only `name` as the `agent` value');

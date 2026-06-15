@@ -21,7 +21,6 @@ import type {
 import {
   MINDOS_CHAT_KB_TOOL_NAMES,
   MINDOS_ORGANIZE_KB_TOOL_NAMES,
-  MINDOS_WRITE_TOOL_NAMES,
 } from './permission-policy.js';
 import type { MindosAgentTool } from './kb-tools.js';
 
@@ -43,8 +42,30 @@ type PiSubagentModule = {
 /** Structural shape of the host's MCP server config. */
 export type MindosMcpConfigLike = {
   // directTools is boolean or an allowlist of tool names in the web config.
-  mcpServers?: Record<string, { directTools?: boolean | string[]; lifecycle?: string }>;
+  mcpServers?: Record<string, {
+    directTools?: boolean | string[];
+    lifecycle?: string;
+    mindosAgent?: MindosMcpServerAccess;
+    mindos?: {
+      agent?: MindosMcpServerAccess;
+      [key: string]: unknown;
+    };
+  }>;
+  settings?: {
+    mindosAgent?: {
+      mcpServers?: Record<string, MindosMcpServerAccess>;
+    };
+  };
 };
+
+export type MindosMcpServerAccess =
+  | boolean
+  | string[]
+  | {
+    enabled?: boolean;
+    tools?: true | string[];
+    directTools?: true | string[];
+  };
 
 /** Structural shape of the host's cached MCP tool listings. */
 export type MindosMcpToolCacheLike =
@@ -90,7 +111,6 @@ export interface MindosAgentCapabilityRegistryServices {
 
 const CHAT_KB_TOOL_NAMES = new Set<string>(MINDOS_CHAT_KB_TOOL_NAMES);
 const ORGANIZE_KB_TOOL_NAMES = new Set<string>(MINDOS_ORGANIZE_KB_TOOL_NAMES);
-const WRITE_KB_TOOL_NAMES = new Set<string>(MINDOS_WRITE_TOOL_NAMES);
 
 export function createAgentCapabilitiesServices(
   services: MindosAgentCapabilityRegistryServices,
@@ -122,7 +142,9 @@ function listKnowledgeToolCapabilities(services: MindosAgentCapabilityRegistrySe
       supportsStreaming: false,
       supportsCancel: false,
       supportsBackgroundRuns: false,
-      supportsApprovals: WRITE_KB_TOOL_NAMES.has(tool.name),
+      // KB writes are bounded by mode policy, protected-path guards, and the
+      // audit log. They do not currently trigger an interactive approval card.
+      supportsApprovals: false,
       supportsUserInput: false,
       defaultTimeoutMs: 30_000,
       metadata: {
@@ -185,9 +207,12 @@ async function listAcpRuntimeCapabilities(services: MindosAgentCapabilityRegistr
 function listMcpToolCapabilities(services: MindosAgentCapabilityRegistryServices): AgentCapabilityInput[] {
   const config = services.readMcpConfig();
   const cache = services.readMcpToolCache();
+  const globalAllowlist = config.settings?.mindosAgent?.mcpServers ?? {};
   return Object.entries(config.mcpServers ?? {}).flatMap(([serverName, entry]) => {
+    const access = resolveMindosAgentMcpAccess(serverName, entry, globalAllowlist);
+    if (!access) return [];
     const serverCache = cache?.[serverName];
-    const tools = serverCache?.tools ?? [];
+    const tools = filterMcpToolsForMindosAgent(serverCache?.tools ?? [], access);
     return tools.map((tool) => ({
       id: `mcp-tool:${serverName}:${tool.name}`,
       kind: 'mcp-tool',
@@ -208,12 +233,50 @@ function listMcpToolCapabilities(services: MindosAgentCapabilityRegistryServices
       metadata: {
         serverName,
         toolName: tool.name,
-        directTools: entry.directTools ?? false,
+        directTools: access,
         lifecycle: entry.lifecycle ?? 'lazy',
         cached: Boolean(serverCache),
       },
     }));
   });
+}
+
+function resolveMindosAgentMcpAccess(
+  serverName: string,
+  entry: NonNullable<MindosMcpConfigLike['mcpServers']>[string],
+  globalAllowlist: Record<string, MindosMcpServerAccess>,
+): true | string[] | null {
+  return normalizeMindosMcpAccess(globalAllowlist[serverName])
+    ?? normalizeMindosMcpAccess(entry.mindosAgent)
+    ?? normalizeMindosMcpAccess(entry.mindos?.agent)
+    ?? null;
+}
+
+function normalizeMindosMcpAccess(access: MindosMcpServerAccess | undefined): true | string[] | null {
+  if (access === true) return true;
+  if (access === false || access === undefined) return null;
+  if (Array.isArray(access)) return normalizeToolNames(access);
+  if (!access || typeof access !== 'object') return null;
+  if (access.enabled === false) return null;
+  if (access.tools === true || access.directTools === true) return true;
+  if (Array.isArray(access.tools)) return normalizeToolNames(access.tools);
+  if (Array.isArray(access.directTools)) return normalizeToolNames(access.directTools);
+  if (access.enabled === true) return true;
+  return null;
+}
+
+function normalizeToolNames(tools: string[]): string[] | null {
+  const normalized = Array.from(new Set(tools.map((tool) => tool.trim()).filter(Boolean)));
+  return normalized.length > 0 ? normalized : null;
+}
+
+function filterMcpToolsForMindosAgent(
+  tools: Array<{ name: string; description?: string }>,
+  access: true | string[],
+): Array<{ name: string; description?: string }> {
+  if (access === true) return tools;
+  const allowed = new Set(access);
+  return tools.filter((tool) => allowed.has(tool.name));
 }
 
 function listA2aAgentCapabilities(services: MindosAgentCapabilityRegistryServices): AgentCapabilityInput[] {
