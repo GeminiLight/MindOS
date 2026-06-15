@@ -10,12 +10,15 @@
 import { useCallback, useRef, useState, useEffect } from 'react';
 import { useConnectionStore } from '@/lib/connection-store';
 import { streamChat, MessageBuilder } from '@/lib/sse-client';
-import type { Message, AskMode } from '@/lib/types';
+import { mindosClient } from '@/lib/api-client';
+import type { Message, AskMode, AgentRuntimeIdentity } from '@/lib/types';
 
 export interface UseChatWithSessionOptions {
   sessionId: string;
   initialMessages: Message[];
+  initialMessagesLoaded?: boolean;
   mode?: AskMode;
+  selectedRuntime?: AgentRuntimeIdentity | null;
   onMessagesChange: (messages: Message[]) => void;
 }
 
@@ -24,7 +27,9 @@ const generateMessageId = (): string => `msg-${Date.now()}-${Math.random().toStr
 export function useChatWithSession({
   sessionId,
   initialMessages,
+  initialMessagesLoaded = true,
   mode = 'chat',
+  selectedRuntime = null,
   onMessagesChange,
 }: UseChatWithSessionOptions) {
   const baseUrl = useConnectionStore((s) => s.serverUrl);
@@ -37,41 +42,64 @@ export function useChatWithSession({
 
   const cancelRef = useRef<(() => void) | null>(null);
   const builderRef = useRef<MessageBuilder | null>(null);
+  const streamEndedRef = useRef(true);
   const messagesRef = useRef<Message[]>([]);
   messagesRef.current = messages;
 
-  // Reset when session changes (ignore initialMessages reference to avoid re-render loop)
+  const finishCurrentStream = useCallback(() => {
+    if (streamEndedRef.current) return;
+    streamEndedRef.current = true;
+    if (builderRef.current) {
+      const final = builderRef.current.finalize();
+      setMessages((prev) => {
+        const updated = [...prev];
+        updated[updated.length - 1] = final;
+        return updated;
+      });
+    }
+    cancelRef.current = null;
+    setIsStreaming(false);
+  }, []);
+
+  // Reset when session changes or async-loaded messages arrive.
   useEffect(() => {
     cancelRef.current?.();
     cancelRef.current = null;
+    builderRef.current = null;
+    streamEndedRef.current = true;
     setIsStreaming(false);
-    setMessages(initialMessages);
     setError('');
     setLastFailedMessage('');
     setLastFailedAttachments([]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId]);
+    if (!initialMessagesLoaded) {
+      setMessages([]);
+      return;
+    }
+    setMessages(initialMessages);
+  }, [initialMessages, initialMessagesLoaded, sessionId]);
 
   // Notify parent of message changes (debounced)
   const notifyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
+    if (!sessionId || !initialMessagesLoaded) return;
     if (isStreaming) return;
     if (notifyTimerRef.current) clearTimeout(notifyTimerRef.current);
     notifyTimerRef.current = setTimeout(() => {
       onMessagesChange(messages);
     }, 500);
     return () => { if (notifyTimerRef.current) clearTimeout(notifyTimerRef.current); };
-  }, [messages, isStreaming, onMessagesChange]);
+  }, [initialMessagesLoaded, messages, isStreaming, onMessagesChange, sessionId]);
 
   // --- Send message ---
   const send = useCallback(
     (userMessage: string, attachedFilePaths?: string[]) => {
-      if (!baseUrl || !sessionId) return false;
+      if (!baseUrl || !sessionId || !initialMessagesLoaded) return false;
 
       setError('');
       setLastFailedMessage('');
       setLastFailedAttachments([]);
       setIsStreaming(true);
+      streamEndedRef.current = false;
 
       const userMsg: Message = {
         id: generateMessageId(),
@@ -99,7 +127,9 @@ export function useChatWithSession({
           messages: nextHistory,
           mode,
           sessionId,
+          chatSessionId: sessionId,
           attachedFiles: attachedFilePaths,
+          ...(selectedRuntime ? { selectedRuntime } : {}),
         },
         {
           onEvent: (event) => {
@@ -116,6 +146,9 @@ export function useChatWithSession({
               case 'tool_start':
                 builder.addToolStart(event.toolCallId || '', event.toolName || '', event.args);
                 break;
+              case 'tool_delta':
+                builder.addToolDelta(event.toolCallId || '', event.delta || '');
+                break;
               case 'tool_end':
                 builder.addToolEnd(event.toolCallId || '', event.output || '', event.isError || false);
                 break;
@@ -123,8 +156,12 @@ export function useChatWithSession({
                 setError(event.message || 'Unknown error');
                 setLastFailedMessage(userMessage);
                 setLastFailedAttachments(attachedFilePaths || []);
-                break;
+                finishCurrentStream();
+                return;
               case 'done':
+                finishCurrentStream();
+                return;
+              case 'status':
                 break;
             }
 
@@ -136,35 +173,20 @@ export function useChatWithSession({
             });
           },
           onError: (err) => {
-            if (builderRef.current) {
-              const final = builderRef.current.finalize();
-              setMessages((prev) => {
-                const updated = [...prev];
-                updated[updated.length - 1] = final;
-                return updated;
-              });
-            }
             setError(err.message);
             setLastFailedMessage(userMessage);
             setLastFailedAttachments(attachedFilePaths || []);
-            setIsStreaming(false);
+            finishCurrentStream();
           },
           onComplete: () => {
-            if (builderRef.current) {
-              const final = builderRef.current.finalize();
-              setMessages((prev) => {
-                const updated = [...prev];
-                updated[updated.length - 1] = final;
-                return updated;
-              });
-            }
-            setIsStreaming(false);
+            finishCurrentStream();
           },
         },
+        { authToken: mindosClient.authToken },
       );
       return true;
     },
-    [baseUrl, mode, sessionId],
+    [baseUrl, finishCurrentStream, initialMessagesLoaded, mode, selectedRuntime, sessionId],
   );
 
   // --- Retry last failed message ---
@@ -178,17 +200,8 @@ export function useChatWithSession({
   // --- Cancel streaming ---
   const cancel = useCallback(() => {
     cancelRef.current?.();
-    cancelRef.current = null;
-    if (builderRef.current) {
-      const final = builderRef.current.finalize();
-      setMessages((prev) => {
-        const updated = [...prev];
-        updated[updated.length - 1] = final;
-        return updated;
-      });
-    }
-    setIsStreaming(false);
-  }, []);
+    finishCurrentStream();
+  }, [finishCurrentStream]);
 
   // --- Clear messages (for new chat within same session) ---
   const clearMessages = useCallback(() => {
@@ -205,6 +218,7 @@ export function useChatWithSession({
     error,
     lastFailedMessage,
     lastFailedAttachments,
+    ready: initialMessagesLoaded,
     send,
     retry,
     cancel,

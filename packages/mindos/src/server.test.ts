@@ -356,7 +356,7 @@ describe('MindOS server contract: core, files, HTTP', () => {
       id: 'connect',
       method: 'GET',
       path: '/api/connect',
-      auth: 'required',
+      auth: 'public',
     });
     expect(contract.routes).toContainEqual({
       id: 'monitoring',
@@ -842,7 +842,10 @@ Write a concise signal brief.
     expect(handleFileGet(new URLSearchParams('op=list_spaces'), services).body).toEqual({
       spaces: [expect.objectContaining({ name: 'Space', path: 'Space', fileCount: 1 })],
     });
-    expect(handleFileGet(new URLSearchParams('op=read_file&path=Space/note.md'), services).body).toEqual({ content: 'one\ntwo' });
+    expect(handleFileGet(new URLSearchParams('op=read_file&path=Space/note.md'), services).body).toMatchObject({
+      content: 'one\ntwo',
+      mtime: expect.any(Number),
+    });
     expect(handleFileGet(new URLSearchParams('op=read_lines&path=Space/note.md'), services).body).toEqual({ lines: ['one', 'two'] });
     expect(handleFileGet(new URLSearchParams('op=read_file&path=../secret.md'), services)).toMatchObject({
       status: 403,
@@ -1211,7 +1214,10 @@ Write a concise signal brief.
         method: 'POST',
         body: JSON.stringify({ path: root }),
       })).json()).toMatchObject({ dirs: ['Inbox', 'Space'] });
-      expect(await (await fetch(`${base}/api/file?path=Space/note.md`)).json()).toEqual({ content: 'hello' });
+      expect(await (await fetch(`${base}/api/file?path=Space/note.md`)).json()).toMatchObject({
+        content: 'hello',
+        mtime: expect.any(Number),
+      });
       expect(await (await fetch(`${base}/api/file/raw?path=image.png`)).arrayBuffer()).toHaveProperty('byteLength', 3);
       expect(await (await fetch(`${base}/api/extract-pdf`, {
         method: 'POST',

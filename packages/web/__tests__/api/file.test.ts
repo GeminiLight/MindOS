@@ -45,6 +45,7 @@ describe('GET /api/file', () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.content).toBe('# Hello World');
+    expect(body.mtime).toEqual(expect.any(Number));
   });
 
   it('reads file lines (op=read_lines)', async () => {

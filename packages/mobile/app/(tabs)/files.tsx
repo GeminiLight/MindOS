@@ -22,7 +22,13 @@ import { mindosClient } from '@/lib/api-client';
 import TextInputModal from '@/components/TextInputModal';
 import FilesErrorBanner from '@/components/files/FilesErrorBanner';
 import Breadcrumb from '@/components/Breadcrumb';
-import { getFilesErrorMessage, getFilesTabViewState, getRenameInputDefaultValue } from '@/lib/files-tab-state';
+import {
+  getFilesErrorMessage,
+  getFilesTabViewState,
+  getRenameInputDefaultValue,
+  normalizeNewMarkdownFileName,
+  normalizeRenameTarget,
+} from '@/lib/files-tab-state';
 import { getChildrenAtPath, getParentPath, sortFileNodes } from '@/lib/file-tree';
 import type { FileNode } from '@/lib/types';
 
@@ -43,9 +49,9 @@ export default function FilesScreen() {
 
   const load = useCallback(async () => {
     try {
-      const files = await mindosClient.getFileTree();
-      setTree(files);
-      setError('');
+      const result = await mindosClient.getFileTreeWithStatus();
+      setTree(result.tree);
+      setError(result.stale ? (result.error ?? 'Showing cached files. Pull to retry.') : '');
     } catch (e) {
       setError(getFilesErrorMessage(e));
     } finally {
@@ -82,10 +88,13 @@ export default function FilesScreen() {
   const viewState = getFilesTabViewState(currentChildren, error);
 
   const handleCreateFile = useCallback(async () => {
-    const name = newFileName.trim();
-    if (!name) return;
+    const normalized = normalizeNewMarkdownFileName(newFileName);
+    if (!normalized.ok) {
+      Alert.alert('Invalid File Name', normalized.message);
+      return;
+    }
 
-    const baseName = name.endsWith('.md') ? name : `${name}.md`;
+    const baseName = normalized.fileName;
     const filePath = currentPath ? `${currentPath}/${baseName}` : baseName;
     setCreating(true);
     try {
@@ -108,7 +117,25 @@ export default function FilesScreen() {
         );
         return;
       }
-      await mindosClient.saveFile(filePath, `# ${name.replace(/\.md$/, '')}\n\n`);
+      const created = await mindosClient.createFile(filePath, `# ${normalized.title}\n\n`);
+      if (!created.ok && created.error === 'exists') {
+        Alert.alert(
+          'File Exists',
+          `"${baseName}" was created by another session. Open it instead?`,
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Open',
+              onPress: () => {
+                setShowNewFile(false);
+                setNewFileName('');
+                router.push(`/view/${filePath}` as any);
+              },
+            },
+          ],
+        );
+        return;
+      }
       setShowNewFile(false);
       setNewFileName('');
       await load();
@@ -152,9 +179,13 @@ export default function FilesScreen() {
                 {
                   text: 'Rename',
                   onPress: async (newName?: string) => {
-                    if (!newName?.trim()) return;
+                    const normalized = normalizeRenameTarget(item.name, newName ?? '');
+                    if (!normalized.ok) {
+                      Alert.alert('Invalid File Name', normalized.message);
+                      return;
+                    }
                     try {
-                      await mindosClient.renameFile(item.path, newName.trim());
+                      await mindosClient.renameFile(item.path, normalized.fileName);
                       await load();
                     } catch (e) {
                       Alert.alert('Error', (e as Error).message);
@@ -222,9 +253,14 @@ export default function FilesScreen() {
   const handleRenameSubmit = async (newName: string) => {
     if (!renameTarget) return;
     const target = renameTarget;
+    const normalized = normalizeRenameTarget(target.name, newName);
+    if (!normalized.ok) {
+      Alert.alert('Invalid File Name', normalized.message);
+      return;
+    }
     setRenameModalVisible(false);
     try {
-      await mindosClient.renameFile(target.path, newName);
+      await mindosClient.renameFile(target.path, normalized.fileName);
       await load();
       setRenameTarget(null);
     } catch (e) {

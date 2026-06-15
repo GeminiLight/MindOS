@@ -11,15 +11,17 @@ import {
   Alert,
   Share,
   ActivityIndicator,
+  BackHandler,
   StyleSheet,
 } from 'react-native';
-import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
+import { useLocalSearchParams, useRouter, Stack, useNavigation } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Markdown from 'react-native-markdown-display';
 import { mindosClient } from '@/lib/api-client';
 import { findNode, sortFileNodes } from '@/lib/file-tree';
 import { getMarkdownStyles } from '@/lib/markdown-styles';
-import MarkdownEditor from '@/components/editor/MarkdownEditor';
+import { resolveReaderErrorMessage } from '@/lib/view-target-state';
+import MarkdownEditor, { clearMarkdownDraft } from '@/components/editor/MarkdownEditor';
 import CSVTable from '@/components/CSVTable';
 import type { FileNode } from '@/lib/types';
 
@@ -29,6 +31,7 @@ export default function ViewScreen() {
   const fileName = filePath.split('/').pop() || filePath;
   const isMarkdown = fileName.endsWith('.md');
   const router = useRouter();
+  const navigation = useNavigation();
 
   const [content, setContent] = useState('');
   const [mtime, setMtime] = useState<number | undefined>();
@@ -37,7 +40,20 @@ export default function ViewScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [editing, setEditing] = useState(false);
+  const [dirty, setDirty] = useState(false);
   const dirtyRef = useRef(false);
+
+  const setEditorDirty = useCallback((nextDirty: boolean) => {
+    dirtyRef.current = nextDirty;
+    setDirty(nextDirty);
+  }, []);
+
+  const discardEditorChanges = useCallback(async () => {
+    dirtyRef.current = false;
+    setDirty(false);
+    await clearMarkdownDraft(filePath).catch(() => {});
+    setEditing(false);
+  }, [filePath]);
 
   const handleExitEditor = useCallback(() => {
     if (dirtyRef.current) {
@@ -46,17 +62,72 @@ export default function ViewScreen() {
         'You have unsaved changes. Discard them?',
         [
           { text: 'Keep Editing', style: 'cancel' },
-          { text: 'Discard', style: 'destructive', onPress: () => { dirtyRef.current = false; setEditing(false); } },
+          { text: 'Discard', style: 'destructive', onPress: () => { void discardEditorChanges(); } },
         ],
       );
     } else {
       setEditing(false);
     }
-  }, []);
+  }, [discardEditorChanges]);
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('beforeRemove', (event) => {
+      if (!editing || !dirtyRef.current) return;
+      event.preventDefault();
+      Alert.alert(
+        'Unsaved Changes',
+        'Discard your local edits and leave this file?',
+        [
+          { text: 'Keep Editing', style: 'cancel' },
+          {
+            text: 'Discard',
+            style: 'destructive',
+            onPress: () => {
+              void clearMarkdownDraft(filePath).finally(() => {
+                dirtyRef.current = false;
+                setDirty(false);
+                setEditing(false);
+                navigation.dispatch(event.data.action);
+              });
+            },
+          },
+        ],
+      );
+    });
+    return unsubscribe;
+  }, [editing, filePath, navigation]);
+
+  useEffect(() => {
+    if (!editing) return undefined;
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (!dirtyRef.current) return false;
+      Alert.alert(
+        'Unsaved Changes',
+        'Discard your local edits and leave this file?',
+        [
+          { text: 'Keep Editing', style: 'cancel' },
+          {
+            text: 'Discard',
+            style: 'destructive',
+            onPress: () => {
+              void clearMarkdownDraft(filePath).finally(() => {
+                dirtyRef.current = false;
+                setDirty(false);
+                setEditing(false);
+                router.back();
+              });
+            },
+          },
+        ],
+      );
+      return true;
+    });
+    return () => subscription.remove();
+  }, [editing, filePath, router]);
 
   const requestIdRef = useRef(0);
 
-  const loadContent = () => {
+  const loadContent = useCallback(() => {
     const currentId = ++requestIdRef.current;
     const controller = new AbortController();
 
@@ -69,7 +140,7 @@ export default function ViewScreen() {
         setContent(data.content);
         setMtime(data.mtime);
         setIsDir(false);
-      } catch {
+      } catch (readError) {
         if (currentId !== requestIdRef.current) return;
         try {
           const tree = await mindosClient.getFileTree();
@@ -80,11 +151,11 @@ export default function ViewScreen() {
             setChildren(sortFileNodes(node.children));
             setIsDir(true);
           } else {
-            setError('File not found');
+            setError(resolveReaderErrorMessage(readError));
           }
-        } catch (e) {
+        } catch {
           if (currentId !== requestIdRef.current) return;
-          setError((e as Error).message);
+          setError(resolveReaderErrorMessage(readError));
         }
       } finally {
         if (currentId === requestIdRef.current) setLoading(false);
@@ -92,13 +163,12 @@ export default function ViewScreen() {
     })();
 
     return () => controller.abort();
-  };
+  }, [filePath]);
 
   useEffect(() => {
     const cleanup = loadContent();
     return cleanup;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filePath]);
+  }, [loadContent]);
 
   // --- Loading ---
   if (loading) {
@@ -118,9 +188,14 @@ export default function ViewScreen() {
         <View style={styles.errorCenter}>
           <Ionicons name="alert-circle-outline" size={48} color="#78716c" />
           <Text style={styles.errorText}>{error}</Text>
-          <Pressable style={styles.retryBtn} onPress={() => router.back()}>
-            <Text style={styles.retryText}>Go Back</Text>
-          </Pressable>
+          <View style={styles.errorActions}>
+            <Pressable style={[styles.retryBtn, styles.retryBtnPrimary]} onPress={loadContent}>
+              <Text style={styles.retryTextPrimary}>Retry</Text>
+            </Pressable>
+            <Pressable style={styles.retryBtn} onPress={() => router.back()}>
+              <Text style={styles.retryText}>Go Back</Text>
+            </Pressable>
+          </View>
         </View>
       </View>
     );
@@ -163,7 +238,7 @@ export default function ViewScreen() {
       <View style={styles.container}>
         <Stack.Screen
           options={{
-            title: fileName,
+            title: dirty ? `${fileName} *` : fileName,
             headerLeft: () => (
               <Pressable onPress={handleExitEditor} style={styles.headerBtn}>
                 <Ionicons name="close" size={22} color="#fafaf9" />
@@ -175,9 +250,9 @@ export default function ViewScreen() {
           filePath={filePath}
           initialContent={content}
           initialMtime={mtime}
-          onDirtyChange={(d) => { dirtyRef.current = d; }}
+          onDirtyChange={setEditorDirty}
           onSaved={() => {
-            dirtyRef.current = false;
+            setEditorDirty(false);
             setEditing(false);
             loadContent();
           }}
@@ -239,16 +314,24 @@ const styles = StyleSheet.create({
     padding: 32,
   },
   errorText: { fontSize: 15, color: '#a8a29e', textAlign: 'center' },
+  errorActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 4,
+  },
   retryBtn: {
     backgroundColor: '#292524',
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 8,
   },
+  retryBtnPrimary: {
+    backgroundColor: '#c8873a',
+  },
   retryText: { color: '#fafaf9', fontWeight: '500' },
+  retryTextPrimary: { color: '#fff', fontWeight: '600' },
   headerBtn: {
     paddingHorizontal: 8,
     paddingVertical: 4,
   },
 });
-

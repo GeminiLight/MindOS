@@ -51,7 +51,7 @@ export const MINDOS_SERVER_ROUTES: MindosServerRouteContract[] = [
   { id: 'agent-runtimes.codex.thread.archive', method: 'POST', path: '/api/agent-runtimes/codex/threads/[threadId]/archive', auth: 'required' },
   { id: 'agent-runtimes.codex.thread.unarchive', method: 'POST', path: '/api/agent-runtimes/codex/threads/[threadId]/unarchive', auth: 'required' },
   { id: 'bootstrap', method: 'GET', path: '/api/bootstrap', auth: 'required' },
-  { id: 'connect', method: 'GET', path: '/api/connect', auth: 'required' },
+  { id: 'connect', method: 'GET', path: '/api/connect', auth: 'public' },
   { id: 'embedding', method: 'GET', path: '/api/embedding', auth: 'required' },
   { id: 'embedding.action', method: 'POST', path: '/api/embedding', auth: 'required' },
   { id: 'channels.verify', method: 'POST', path: '/api/channels/verify', auth: 'required' },

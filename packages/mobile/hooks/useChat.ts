@@ -12,16 +12,18 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useConnectionStore } from '@/lib/connection-store';
 import { streamChat, MessageBuilder } from '@/lib/sse-client';
-import type { Message, AskMode } from '@/lib/types';
+import { mindosClient } from '@/lib/api-client';
+import type { Message, AskMode, AgentRuntimeIdentity } from '@/lib/types';
 
 const CHAT_STORAGE_KEY = 'mindos_chat_messages';
 const SESSION_STORAGE_KEY = 'mindos_chat_session';
 
 export interface UseChatOptions {
   mode?: AskMode;
+  selectedRuntime?: AgentRuntimeIdentity | null;
 }
 
-export function useChat({ mode = 'chat' }: UseChatOptions = {}) {
+export function useChat({ mode = 'chat', selectedRuntime = null }: UseChatOptions = {}) {
   const baseUrl = useConnectionStore((s) => s.serverUrl);
 
   const [sessionId, setSessionId] = useState('');
@@ -34,8 +36,24 @@ export function useChat({ mode = 'chat' }: UseChatOptions = {}) {
 
   const cancelRef = useRef<(() => void) | null>(null);
   const builderRef = useRef<MessageBuilder | null>(null);
+  const streamEndedRef = useRef(true);
   const messagesRef = useRef<Message[]>([]);
   messagesRef.current = messages;
+
+  const finishCurrentStream = useCallback(() => {
+    if (streamEndedRef.current) return;
+    streamEndedRef.current = true;
+    if (builderRef.current) {
+      const final = builderRef.current.finalize();
+      setMessages((prev) => {
+        const updated = [...prev];
+        updated[updated.length - 1] = final;
+        return updated;
+      });
+    }
+    cancelRef.current = null;
+    setIsStreaming(false);
+  }, []);
 
   // --- Load session + messages from storage ---
   useEffect(() => {
@@ -85,6 +103,7 @@ export function useChat({ mode = 'chat' }: UseChatOptions = {}) {
       setLastFailedMessage('');
       setLastFailedAttachments([]);
       setIsStreaming(true);
+      streamEndedRef.current = false;
 
       const userMsg: Message = {
         role: 'user',
@@ -110,7 +129,9 @@ export function useChat({ mode = 'chat' }: UseChatOptions = {}) {
           messages: nextHistory,
           mode,
           sessionId,
+          chatSessionId: sessionId,
           attachedFiles: attachedFilePaths,
+          ...(selectedRuntime ? { selectedRuntime } : {}),
         },
         {
           onEvent: (event) => {
@@ -127,6 +148,9 @@ export function useChat({ mode = 'chat' }: UseChatOptions = {}) {
               case 'tool_start':
                 builder.addToolStart(event.toolCallId || '', event.toolName || '', event.args);
                 break;
+              case 'tool_delta':
+                builder.addToolDelta(event.toolCallId || '', event.delta || '');
+                break;
               case 'tool_end':
                 builder.addToolEnd(event.toolCallId || '', event.output || '', event.isError || false);
                 break;
@@ -134,8 +158,12 @@ export function useChat({ mode = 'chat' }: UseChatOptions = {}) {
                 setError(event.message || 'Unknown error');
                 setLastFailedMessage(userMessage);
                 setLastFailedAttachments(attachedFilePaths || []);
-                break;
+                finishCurrentStream();
+                return;
               case 'done':
+                finishCurrentStream();
+                return;
+              case 'status':
                 break;
             }
 
@@ -147,35 +175,20 @@ export function useChat({ mode = 'chat' }: UseChatOptions = {}) {
             });
           },
           onError: (err) => {
-            if (builderRef.current) {
-              const final = builderRef.current.finalize();
-              setMessages((prev) => {
-                const updated = [...prev];
-                updated[updated.length - 1] = final;
-                return updated;
-              });
-            }
             setError(err.message);
             setLastFailedMessage(userMessage);
             setLastFailedAttachments(attachedFilePaths || []);
-            setIsStreaming(false);
+            finishCurrentStream();
           },
           onComplete: () => {
-            if (builderRef.current) {
-              const final = builderRef.current.finalize();
-              setMessages((prev) => {
-                const updated = [...prev];
-                updated[updated.length - 1] = final;
-                return updated;
-              });
-            }
-            setIsStreaming(false);
+            finishCurrentStream();
           },
         },
+        { authToken: mindosClient.authToken },
       );
       return true;
     },
-    [baseUrl, mode, sessionId],
+    [baseUrl, finishCurrentStream, mode, selectedRuntime, sessionId],
   );
 
   // --- Retry last failed message ---
@@ -190,17 +203,8 @@ export function useChat({ mode = 'chat' }: UseChatOptions = {}) {
   // --- Cancel streaming ---
   const cancel = useCallback(() => {
     cancelRef.current?.();
-    cancelRef.current = null;
-    if (builderRef.current) {
-      const final = builderRef.current.finalize();
-      setMessages((prev) => {
-        const updated = [...prev];
-        updated[updated.length - 1] = final;
-        return updated;
-      });
-    }
-    setIsStreaming(false);
-  }, []);
+    finishCurrentStream();
+  }, [finishCurrentStream]);
 
   // --- New chat (with session reset) ---
   const newChat = useCallback(async () => {

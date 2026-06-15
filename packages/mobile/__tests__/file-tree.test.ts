@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { findNode, flattenFiles, formatRelativeTime, sortFileNodes, getChildrenAtPath, getParentPath } from '@/lib/file-tree';
+import {
+  buildFileTreeFromPaths,
+  findNode,
+  flattenFiles,
+  formatRelativeTime,
+  getChildrenAtPath,
+  getParentPath,
+  normalizeFilesResponseToTree,
+  sortFileNodes,
+} from '@/lib/file-tree';
 import type { FileNode } from '@/lib/types';
 
 const tree: FileNode[] = [
@@ -101,6 +110,64 @@ describe('file-tree', () => {
 
     it('returns empty string for empty path', () => {
       expect(getParentPath('')).toBe('');
+    });
+  });
+
+  describe('API response normalization', () => {
+    it('builds a FileNode tree from the server string path list contract', () => {
+      const result = buildFileTreeFromPaths([
+        'Space/note.md',
+        'Space/nested/todo.md',
+        'root.csv',
+      ]);
+
+      expect(result).toEqual([
+        {
+          type: 'directory',
+          name: 'Space',
+          path: 'Space',
+          children: [
+            {
+              type: 'directory',
+              name: 'nested',
+              path: 'Space/nested',
+              children: [
+                { type: 'file', name: 'todo.md', path: 'Space/nested/todo.md', extension: '.md' },
+              ],
+            },
+            { type: 'file', name: 'note.md', path: 'Space/note.md', extension: '.md' },
+          ],
+        },
+        { type: 'file', name: 'root.csv', path: 'root.csv', extension: '.csv' },
+      ]);
+    });
+
+    it('normalizes paginated /api/files responses with a files field', () => {
+      const result = normalizeFilesResponseToTree({
+        files: ['inbox/2026-04-11.md'],
+        total: 1,
+        offset: 0,
+        limit: 10,
+      } as unknown as { files: string[] });
+
+      expect(result).toEqual([
+        {
+          type: 'directory',
+          name: 'inbox',
+          path: 'inbox',
+          children: [
+            { type: 'file', name: '2026-04-11.md', path: 'inbox/2026-04-11.md', extension: '.md' },
+          ],
+        },
+      ]);
+    });
+
+    it('preserves legacy tree responses', () => {
+      expect(normalizeFilesResponseToTree({ tree })).toEqual(sortFileNodes(tree));
+    });
+
+    it('throws for invalid file responses', () => {
+      expect(() => normalizeFilesResponseToTree({ files: [42] } as unknown as { files: string[] })).toThrow('Invalid response format');
     });
   });
 });

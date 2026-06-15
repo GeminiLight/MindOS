@@ -23,6 +23,7 @@ interface ChatInputProps {
   canSend?: boolean;
   mode?: AskMode;
   onModeChange?: (mode: AskMode) => void;
+  agentModeEnabled?: boolean;
   attachedPaths?: string[];
   onOpenAttachmentPicker?: () => void;
   onRemoveAttachment?: (path: string) => void;
@@ -37,6 +38,7 @@ export default function ChatInput({
   canSend = true,
   mode = 'chat',
   onModeChange,
+  agentModeEnabled = false,
   attachedPaths = [],
   onOpenAttachmentPicker,
   onRemoveAttachment,
@@ -56,26 +58,27 @@ export default function ChatInput({
 
   return (
     <View>
-      {/* Mode selector */}
-      <View style={styles.modeRow}>
-        {(['chat', 'agent'] as const).map((m) => (
-          <Pressable
-            key={m}
-            style={[styles.modeButton, mode === m && styles.modeButtonActive]}
-            onPress={() => onModeChange?.(m)}
-            disabled={isLoading}
-          >
-            <Ionicons
-              name={m === 'chat' ? 'chatbubble-outline' : 'flash-outline'}
-              size={14}
-              color={mode === m ? '#c8873a' : '#78716c'}
-            />
-            <Text style={[styles.modeText, mode === m && styles.modeTextActive]}>
-              {m === 'chat' ? 'Chat' : 'Agent'}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
+      {agentModeEnabled ? (
+        <View style={styles.modeRow}>
+          {(['chat', 'agent'] as const).map((m) => (
+            <Pressable
+              key={m}
+              style={[styles.modeButton, mode === m && styles.modeButtonActive]}
+              onPress={() => onModeChange?.(m)}
+              disabled={isLoading}
+            >
+              <Ionicons
+                name={m === 'chat' ? 'chatbubble-outline' : 'flash-outline'}
+                size={14}
+                color={mode === m ? '#c8873a' : '#78716c'}
+              />
+              <Text style={[styles.modeText, mode === m && styles.modeTextActive]}>
+                {m === 'chat' ? 'Chat' : 'Agent'}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
 
       {/* Attachment chips */}
       {attachedPaths.length > 0 && (

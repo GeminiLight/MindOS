@@ -5,12 +5,14 @@ import { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable, Alert, Dimensions } from 'react-native';
 import { CameraView, useCameraPermissions, BarcodeScanningResult } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
+import { parseMobilePairingPayload, type MobilePairingPayload } from '@/lib/pairing-payload';
+import { colors, radius, spacing, typography } from '@/lib/theme';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const SCAN_AREA_SIZE = SCREEN_WIDTH * 0.7;
 
 interface QRScannerProps {
-  onScan: (url: string) => void;
+  onScan: (payload: MobilePairingPayload) => void;
   onClose: () => void;
 }
 
@@ -28,14 +30,13 @@ export default function QRScanner({ onScan, onClose }: QRScannerProps) {
     if (scanned) return;
     setScanned(true);
 
-    const data = result.data;
-    // Validate URL format
-    if (data.startsWith('http://') || data.startsWith('https://')) {
-      onScan(data);
+    const parsed = parseMobilePairingPayload(result.data);
+    if (parsed.ok) {
+      onScan(parsed.payload);
     } else {
       Alert.alert(
-        'Invalid QR Code',
-        'This QR code does not contain a valid MindOS server URL.',
+        'Invalid connection code',
+        parsed.message,
         [{ text: 'Try Again', onPress: () => setScanned(false) }],
       );
     }
@@ -52,7 +53,7 @@ export default function QRScanner({ onScan, onClose }: QRScannerProps) {
   if (!permission.granted) {
     return (
       <View style={styles.container}>
-        <Ionicons name="camera-outline" size={48} color="#78716c" />
+        <Ionicons name="camera-outline" size={48} color={colors.textSubtle} />
         <Text style={styles.message}>Camera access is required to scan QR codes</Text>
         <Text style={styles.hint}>
           Please allow camera access in your device settings
@@ -95,14 +96,14 @@ export default function QRScanner({ onScan, onClose }: QRScannerProps) {
         </View>
         <View style={styles.overlayBottom}>
           <Text style={styles.instruction}>
-            Point your camera at the QR code{'\n'}shown in MindOS Desktop Settings
+            Point your camera at a MindOS connection code
           </Text>
         </View>
       </View>
 
       {/* Close button */}
       <Pressable style={styles.closeButton} onPress={onClose} hitSlop={16}>
-        <Ionicons name="close" size={28} color="#fff" />
+        <Ionicons name="close" size={28} color={colors.white} />
       </Pressable>
     </View>
   );
@@ -111,42 +112,42 @@ export default function QRScanner({ onScan, onClose }: QRScannerProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1a1917',
+    backgroundColor: colors.background,
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 16,
+    gap: spacing.lg,
   },
   message: {
-    fontSize: 16,
-    color: '#d6d3d1',
+    fontSize: typography.title,
+    color: colors.text,
     textAlign: 'center',
-    paddingHorizontal: 32,
-    marginTop: 16,
+    paddingHorizontal: spacing.xxl,
+    marginTop: spacing.lg,
   },
   hint: {
-    fontSize: 14,
-    color: '#78716c',
+    fontSize: typography.body,
+    color: colors.textSubtle,
     textAlign: 'center',
-    paddingHorizontal: 32,
+    paddingHorizontal: spacing.xxl,
   },
   button: {
-    backgroundColor: '#c8873a',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
-    marginTop: 8,
+    backgroundColor: colors.amber,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.md,
+    borderRadius: radius.md,
+    marginTop: spacing.sm,
   },
   buttonText: {
-    color: '#fff',
+    color: colors.white,
     fontWeight: '600',
-    fontSize: 15,
+    fontSize: typography.bodyLarge,
   },
   cancelButton: {
-    paddingVertical: 12,
+    paddingVertical: spacing.md,
   },
   cancelText: {
-    color: '#78716c',
-    fontSize: 14,
+    color: colors.textSubtle,
+    fontSize: typography.body,
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,
@@ -156,7 +157,7 @@ const styles = StyleSheet.create({
   overlayTop: {
     flex: 1,
     width: '100%',
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    backgroundColor: colors.scrim,
   },
   overlayMiddle: {
     flexDirection: 'row',
@@ -164,7 +165,7 @@ const styles = StyleSheet.create({
   },
   overlaySide: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    backgroundColor: colors.scrim,
   },
   scanArea: {
     width: SCAN_AREA_SIZE,
@@ -174,14 +175,14 @@ const styles = StyleSheet.create({
   overlayBottom: {
     flex: 1,
     width: '100%',
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    backgroundColor: colors.scrim,
     justifyContent: 'flex-start',
     alignItems: 'center',
-    paddingTop: 24,
+    paddingTop: spacing.xl,
   },
   instruction: {
-    fontSize: 14,
-    color: '#d6d3d1',
+    fontSize: typography.body,
+    color: colors.text,
     textAlign: 'center',
     lineHeight: 20,
   },
@@ -189,7 +190,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     width: 24,
     height: 24,
-    borderColor: '#c8873a',
+    borderColor: colors.amber,
   },
   cornerTopLeft: {
     top: 0,
@@ -222,7 +223,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: colors.scrim,
     justifyContent: 'center',
     alignItems: 'center',
   },

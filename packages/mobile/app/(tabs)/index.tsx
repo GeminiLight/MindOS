@@ -17,11 +17,13 @@ import { mindosClient } from '@/lib/api-client';
 import { useConnectionStore } from '@/lib/connection-store';
 import QuickCaptureCard from '@/components/QuickCaptureCard';
 import { flattenFiles, formatRelativeTime } from '@/lib/file-tree';
+import { getHomeEmptyState } from '@/lib/home-state';
 import type { FileNode } from '@/lib/types';
+import { colors } from '@/lib/theme';
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { serverVersion, hostname } = useConnectionStore();
+  const { serverVersion, hostname, status } = useConnectionStore();
   const [tree, setTree] = useState<FileNode[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
@@ -29,8 +31,9 @@ export default function HomeScreen() {
   const loadData = useCallback(async () => {
     try {
       setError('');
-      const files = await mindosClient.getFileTree();
-      setTree(files);
+      const result = await mindosClient.getFileTreeWithStatus();
+      setTree(result.tree);
+      setError(result.stale ? (result.error ?? 'Showing cached Home data. Pull to retry.') : '');
     } catch (e) {
       setError((e as Error).message);
     }
@@ -47,9 +50,17 @@ export default function HomeScreen() {
   }, [loadData]);
 
   const spaces = tree.filter((n) => n.type === 'directory' && n.isSpace);
-  const recentFiles = flattenFiles(tree)
+  const allFiles = flattenFiles(tree);
+  const recentFiles = allFiles
+    .filter((file) => typeof file.mtime === 'number' && file.mtime > 0)
     .sort((a, b) => (b.mtime ?? 0) - (a.mtime ?? 0))
     .slice(0, 10);
+  const emptyState = getHomeEmptyState({
+    fileCount: allFiles.length,
+    spaceCount: spaces.length,
+    recentCount: recentFiles.length,
+    hasError: Boolean(error),
+  });
 
   return (
     <SafeAreaView style={styles.container} edges={['left', 'right']}>
@@ -60,13 +71,20 @@ export default function HomeScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor="#c8873a"
+            tintColor={colors.amber}
           />
         }
         ListHeaderComponent={
           <View>
             <View style={styles.statusRow}>
-              <View style={styles.statusDot} />
+              <View style={[
+                styles.statusDot,
+                status === 'connected'
+                  ? styles.statusDotConnected
+                  : status === 'connecting'
+                    ? styles.statusDotChecking
+                    : styles.statusDotError,
+              ]} />
               <Text style={styles.statusText}>
                 {hostname || 'MindOS'} · v{serverVersion}
               </Text>
@@ -136,19 +154,19 @@ export default function HomeScreen() {
         )}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Ionicons name="archive-outline" size={48} color="#44403c" />
-            <Text style={styles.emptyTitle}>Your mind is empty</Text>
-            <Text style={styles.emptyText}>
-              {error
-                ? 'Quick Capture is still available above. Retry Home data, or open Files directly.'
-                : 'Start with Quick Capture above, or create a full note in Files.'}
-            </Text>
+            <Ionicons
+              name={(emptyState?.icon ?? 'archive-outline') as any}
+              size={48}
+              color={error ? colors.errorText : '#44403c'}
+            />
+            <Text style={styles.emptyTitle}>{emptyState?.title ?? 'No recent activity yet'}</Text>
+            <Text style={styles.emptyText}>{emptyState?.message ?? 'Open Files to browse your notes.'}</Text>
             <Pressable
               style={styles.createBtn}
               onPress={() => router.push('/(tabs)/files' as any)}
             >
               <Ionicons name="add-circle-outline" size={18} color="#fff" />
-              <Text style={styles.createBtnText}>Open Files</Text>
+              <Text style={styles.createBtnText}>{emptyState?.actionLabel ?? 'Open Files'}</Text>
             </Pressable>
           </View>
         }
@@ -158,7 +176,7 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#1a1917' },
+  container: { flex: 1, backgroundColor: colors.background },
   statusRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -170,9 +188,11 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#22c55e',
   },
-  statusText: { fontSize: 13, color: '#a8a29e' },
+  statusDotConnected: { backgroundColor: colors.success },
+  statusDotChecking: { backgroundColor: colors.warning },
+  statusDotError: { backgroundColor: colors.error },
+  statusText: { fontSize: 13, color: colors.textMuted },
   section: { paddingHorizontal: 16, paddingTop: 20, paddingBottom: 8 },
   sectionTitle: { fontSize: 18, fontWeight: '700', color: '#fafaf9' },
   spacesGrid: {

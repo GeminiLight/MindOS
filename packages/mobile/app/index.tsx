@@ -4,6 +4,7 @@
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { Redirect } from 'expo-router';
 import { useConnectionStore } from '@/lib/connection-store';
+import { colors } from '@/lib/theme';
 
 export default function Index() {
   const status = useConnectionStore((s) => s.status);
@@ -16,7 +17,7 @@ export default function Index() {
   if (status === 'connecting') {
     return (
       <View style={styles.center}>
-        <ActivityIndicator color="#c8873a" size="large" />
+        <ActivityIndicator color={colors.amber} size="large" />
       </View>
     );
   }
@@ -29,6 +30,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#1a1917',
+    backgroundColor: colors.background,
   },
 });

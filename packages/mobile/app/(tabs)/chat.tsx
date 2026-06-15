@@ -40,6 +40,7 @@ export default function ChatScreen() {
   const [showSessionList, setShowSessionList] = useState(false);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
   const [currentMessages, setCurrentMessages] = useState<Message[]>([]);
+  const [currentMessagesLoaded, setCurrentMessagesLoaded] = useState(false);
   const listRef = useRef<FlatList>(null);
   const contentHeightRef = useRef(0);
   const scrollOffsetRef = useRef(0);
@@ -59,18 +60,37 @@ export default function ChatScreen() {
   } = sessionsState;
 
   useEffect(() => {
-    if (!sessionsLoaded || !activeSessionId) return;
-    getSessionMessages(activeSessionId).then(setCurrentMessages);
+    let cancelled = false;
+    if (!sessionsLoaded || !activeSessionId) {
+      setCurrentMessages([]);
+      setCurrentMessagesLoaded(false);
+      return () => { cancelled = true; };
+    }
+
+    setCurrentMessagesLoaded(false);
+    getSessionMessages(activeSessionId)
+      .then((loadedMessages) => {
+        if (cancelled) return;
+        setCurrentMessages(loadedMessages);
+        setCurrentMessagesLoaded(true);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setCurrentMessages([]);
+        setCurrentMessagesLoaded(true);
+      });
+    return () => { cancelled = true; };
   }, [activeSessionId, getSessionMessages, sessionsLoaded]);
 
   const handleMessagesChange = useCallback((messages: Message[]) => {
-    if (!activeSessionId) return;
+    if (!activeSessionId || !currentMessagesLoaded) return;
     void saveSessionMessages(activeSessionId, messages);
-  }, [activeSessionId, saveSessionMessages]);
+  }, [activeSessionId, currentMessagesLoaded, saveSessionMessages]);
 
   const chatState = useChatWithSession({
     sessionId: activeSessionId ?? '',
     initialMessages: currentMessages,
+    initialMessagesLoaded: currentMessagesLoaded,
     mode,
     onMessagesChange: handleMessagesChange,
   });
@@ -83,6 +103,7 @@ export default function ChatScreen() {
 
   const handleNewChat = useCallback(async () => {
     const createFreshChat = async () => {
+      setCurrentMessagesLoaded(false);
       await createSession();
       setCurrentMessages([]);
       resetComposer();
@@ -127,7 +148,7 @@ export default function ChatScreen() {
   const isEmptyState = !messages.length && !isStreaming && !error;
   const hasAssistantContent = Boolean(messages[messages.length - 1]?.content);
 
-  if (!sessionsLoaded) {
+  if (!sessionsLoaded || !currentMessagesLoaded) {
     return (
       <SafeAreaView style={styles.container} edges={['left', 'right']}>
         <ActivityIndicator color="#c8873a" style={styles.loader} />

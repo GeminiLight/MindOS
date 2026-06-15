@@ -18,6 +18,7 @@ export type SSEEventType =
   | 'text_delta'
   | 'thinking_delta'
   | 'tool_start'
+  | 'tool_delta'
   | 'tool_end'
   | 'done'
   | 'error'
@@ -51,8 +52,10 @@ export function streamChat(
   baseUrl: string,
   body: Record<string, unknown>,
   callbacks: StreamConsumerCallbacks,
+  options: { authToken?: string } = {},
 ): () => void {
   let isClosed = false;
+  let completed = false;
   let processedLength = 0;
   let buffer = '';
 
@@ -60,6 +63,56 @@ export function streamChat(
   xhr.open('POST', `${baseUrl}/api/ask`);
   xhr.setRequestHeader('Content-Type', 'application/json');
   xhr.setRequestHeader('Accept', 'text/event-stream');
+  if (options.authToken) {
+    xhr.setRequestHeader('Authorization', `Bearer ${options.authToken}`);
+  }
+
+  const completeOnce = () => {
+    if (completed) return;
+    completed = true;
+    callbacks.onComplete();
+  };
+
+  const processEvent = (event: SSEEvent) => {
+    callbacks.onEvent(event);
+    if (event.type === 'done' || event.type === 'error') {
+      isClosed = true;
+      completeOnce();
+      return true;
+    }
+    return false;
+  };
+
+  const processBuffer = (text: string) => {
+    for (const line of text.split('\n')) {
+      if (!line.startsWith('data:')) continue;
+
+      const dataStr = line.slice(5).trim();
+      if (!dataStr) continue;
+
+      try {
+        const event = JSON.parse(dataStr) as SSEEvent;
+        if (processEvent(event)) return true;
+      } catch {
+        // Skip unparseable lines (e.g. partial JSON)
+      }
+    }
+    return false;
+  };
+
+  const responseErrorMessage = () => {
+    const status = xhr.status || 0;
+    const fallback = status ? `MindOS request failed with HTTP ${status}` : 'MindOS request failed';
+    if (!xhr.responseText) return fallback;
+    try {
+      const data = JSON.parse(xhr.responseText) as { error?: unknown; message?: unknown };
+      if (typeof data.message === 'string' && data.message) return data.message;
+      if (typeof data.error === 'string' && data.error) return data.error;
+    } catch {
+      // Non-JSON response body; use HTTP status fallback.
+    }
+    return fallback;
+  };
 
   xhr.onprogress = () => {
     if (isClosed) return;
@@ -76,42 +129,20 @@ export function streamChat(
 
     for (const chunk of chunks) {
       if (!chunk.trim()) continue;
-
-      for (const line of chunk.split('\n')) {
-        if (!line.startsWith('data:')) continue;
-
-        const dataStr = line.slice(5).trim();
-        if (!dataStr) continue;
-
-        try {
-          const event = JSON.parse(dataStr) as SSEEvent;
-          if (!isClosed) callbacks.onEvent(event);
-
-          if (event.type === 'done' || event.type === 'error') {
-            isClosed = true;
-          }
-        } catch {
-          // Skip unparseable lines (e.g. partial JSON)
-        }
-      }
+      if (processBuffer(chunk)) return;
     }
   };
 
   xhr.onload = () => {
-    if (!isClosed) {
-      // Process any remaining buffer
-      if (buffer.trim()) {
-        for (const line of buffer.split('\n')) {
-          if (!line.startsWith('data:')) continue;
-          const dataStr = line.slice(5).trim();
-          if (!dataStr) continue;
-          try {
-            const event = JSON.parse(dataStr) as SSEEvent;
-            callbacks.onEvent(event);
-          } catch { /* skip */ }
-        }
-      }
-      callbacks.onComplete();
+    if (!completed && xhr.status !== 0 && (xhr.status < 200 || xhr.status >= 300)) {
+      isClosed = true;
+      callbacks.onError(new Error(responseErrorMessage()));
+      return;
+    }
+
+    if (!completed) {
+      if (!isClosed && buffer.trim()) processBuffer(buffer);
+      completeOnce();
     }
     isClosed = true;
   };
@@ -190,6 +221,13 @@ export class MessageBuilder {
     if (tc) {
       tc.output = output;
       tc.state = isError ? 'error' : 'done';
+    }
+  }
+
+  addToolDelta(toolCallId: string, delta: string): void {
+    const tc = this.toolCalls.get(toolCallId);
+    if (tc) {
+      tc.output = `${tc.output ?? ''}${delta}`;
     }
   }
 

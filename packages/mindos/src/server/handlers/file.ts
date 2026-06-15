@@ -73,7 +73,11 @@ export function handleFileGet(
       return json({ lines: services.readLines(filePath) });
     }
     if (op === 'read_file') {
-      return json({ content: services.readTextFile(filePath) });
+      const content = services.readTextFile(filePath);
+      const mtime = services.mindRoot
+        ? statSync(resolveExistingSafe(services.mindRoot, filePath)).mtimeMs
+        : undefined;
+      return json(mtime === undefined ? { content } : { content, mtime });
     }
     return json({ error: `Unknown op: ${op}` }, { status: 400 });
   } catch (error) {

@@ -9,8 +9,9 @@
  * - Large file warning (>20KB on Android)
  */
 
-import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  AppState,
   View,
   TextInput,
   ScrollView,
@@ -27,12 +28,17 @@ import Markdown from 'react-native-markdown-display';
 import MarkdownToolbar from './MarkdownToolbar';
 import { TOOLBAR_ACTIONS } from './markdown-actions';
 import type { ToolbarAction, Selection } from './markdown-actions';
+import { buildConflictCopyPath } from './markdown-editor-state';
 import { mindosClient } from '@/lib/api-client';
 import { getMarkdownStyles } from '@/lib/markdown-styles';
 
 const DRAFT_PREFIX = 'mindos_draft_';
 const DRAFT_DEBOUNCE_MS = 3000;
 const MAX_EDITABLE_BYTES = Platform.OS === 'android' ? 20 * 1024 : 100 * 1024;
+
+export function clearMarkdownDraft(filePath: string): Promise<void> {
+  return AsyncStorage.removeItem(DRAFT_PREFIX + filePath);
+}
 
 interface MarkdownEditorProps {
   filePath: string;
@@ -64,6 +70,16 @@ export default function MarkdownEditor({
   const selectionRef = useRef<Selection>({ start: 0, end: 0 });
   const inputRef = useRef<TextInput>(null);
   const draftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const contentRef = useRef(content);
+  const dirtyRef = useRef(dirty);
+
+  useEffect(() => {
+    contentRef.current = content;
+  }, [content]);
+
+  useEffect(() => {
+    dirtyRef.current = dirty;
+  }, [dirty]);
 
   // Hermes has no TextEncoder; use string.length as rough byte estimate
   const isLargeFile = content.length > MAX_EDITABLE_BYTES;
@@ -76,12 +92,27 @@ export default function MarkdownEditor({
     } catch { /* best-effort */ }
   }, [filePath]);
 
+  const flushDraftNow = useCallback(() => {
+    if (!dirtyRef.current) return;
+    void saveDraft(contentRef.current);
+  }, [saveDraft]);
+
   useEffect(() => {
     if (!dirty) return;
     if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
     draftTimerRef.current = setTimeout(() => saveDraft(content), DRAFT_DEBOUNCE_MS);
     return () => { if (draftTimerRef.current) clearTimeout(draftTimerRef.current); };
   }, [content, dirty, saveDraft]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state !== 'active') flushDraftNow();
+    });
+    return () => {
+      subscription.remove();
+      flushDraftNow();
+    };
+  }, [flushDraftNow]);
 
   // Load draft on mount
   useEffect(() => {
@@ -92,7 +123,7 @@ export default function MarkdownEditor({
           'Unsaved Draft',
           'A local draft was found. Do you want to restore it?',
           [
-            { text: 'Discard', style: 'destructive', onPress: () => AsyncStorage.removeItem(DRAFT_PREFIX + filePath) },
+            { text: 'Discard', style: 'destructive', onPress: () => { void clearMarkdownDraft(filePath); } },
             { text: 'Restore', onPress: () => { setContent(draft); setDirty(true); } },
           ],
         );
@@ -110,9 +141,35 @@ export default function MarkdownEditor({
     // Update selection via controlled prop (setNativeProps doesn't work on Fabric)
     setSelection(result.selection);
     selectionRef.current = result.selection;
-  }, [content]);
+  }, [content, setDirty]);
 
   // --- Save to server ---
+
+  const completeSuccessfulSave = useCallback(async (nextMtime?: number) => {
+    setLastMtime(nextMtime);
+    setDirty(false);
+    await clearMarkdownDraft(filePath);
+    onSaved?.();
+  }, [filePath, onSaved, setDirty]);
+
+  const runConflictSaveAction = useCallback(async (
+    action: () => Promise<{ ok: boolean; mtime?: number; error?: string }>,
+  ) => {
+    setSaving(true);
+    setSaveError('');
+    try {
+      const result = await action();
+      if (result.ok) {
+        await completeSuccessfulSave(result.mtime);
+        return;
+      }
+      setSaveError(result.error || 'Save failed');
+    } catch (e) {
+      setSaveError((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }, [completeSuccessfulSave]);
 
   const handleSave = useCallback(async () => {
     setSaving(true);
@@ -129,23 +186,21 @@ export default function MarkdownEditor({
             {
               text: 'Overwrite',
               style: 'destructive',
-              onPress: async () => {
-                // Force save without mtime check
-                const forced = await mindosClient.saveFile(filePath, content);
-                if (forced.ok) {
-                  setLastMtime(forced.mtime);
-                  setDirty(false);
-                  await AsyncStorage.removeItem(DRAFT_PREFIX + filePath);
-                  onSaved?.();
-                }
+              onPress: () => {
+                void runConflictSaveAction(() => mindosClient.saveFile(filePath, content));
               },
             },
             {
               text: 'Keep Both',
-              onPress: async () => {
-                const copyPath = filePath.replace(/\.md$/, `-${Date.now()}.md`);
-                await mindosClient.saveFile(copyPath, content);
-                Alert.alert('Saved', `Your version saved as ${copyPath}`);
+              onPress: () => {
+                const copyPath = buildConflictCopyPath(filePath);
+                void runConflictSaveAction(async () => {
+                  const saved = await mindosClient.saveFile(copyPath, content);
+                  if (saved.ok) {
+                    Alert.alert('Saved', `Your version saved as ${copyPath}`);
+                  }
+                  return saved;
+                });
               },
             },
             { text: 'Cancel', style: 'cancel' },
@@ -155,17 +210,14 @@ export default function MarkdownEditor({
       }
 
       if (result.ok) {
-        setLastMtime(result.mtime);
-        setDirty(false);
-        await AsyncStorage.removeItem(DRAFT_PREFIX + filePath);
-        onSaved?.();
+        await completeSuccessfulSave(result.mtime);
       }
     } catch (e) {
       setSaveError((e as Error).message);
     } finally {
       setSaving(false);
     }
-  }, [content, filePath, lastMtime, onSaved]);
+  }, [completeSuccessfulSave, content, filePath, lastMtime, runConflictSaveAction]);
 
   // --- Render ---
 
@@ -344,4 +396,3 @@ const styles = StyleSheet.create({
   preview: { flex: 1 },
   previewInner: { padding: 16, paddingBottom: 40 },
 });
-
