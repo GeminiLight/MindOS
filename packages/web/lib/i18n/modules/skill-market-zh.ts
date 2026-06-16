@@ -1,12 +1,12 @@
 export const skillMarketZh = {
   skillMarket: {
     title: '技能市场',
-    subtitle: '从公开技能索引中发现 Agent 技能，先检查来源，再通过 skills CLI 安装到本地 Agent 技能目录。',
+    subtitle: '发现公开 Agent 技能，安装前先检查来源。',
     backToExplore: '返回探索',
     sourceBadge: 'skills.sh 索引',
     reviewBadge: '安装前检查',
     cliBadge: 'CLI 安装',
-    manageAction: '管理已安装技能',
+    manageAction: '管理已安装',
     searchPlaceholder: '搜索技能、仓库或工作流...',
     searchAction: '搜索',
     refreshAction: '刷新',
@@ -19,7 +19,6 @@ export const skillMarketZh = {
     resultNote: '当前页面只做发现。MindOS 会叠加本地已安装状态，但第三方安装仍通过明确的 CLI 命令执行。',
     defaultQueryLabel: '默认: agent',
     queryLabel: (query: string) => `搜索: ${query}`,
-    defaultedQueryNotice: '搜索至少需要 2 个字符；当前展示默认技能查询。',
     cacheState: (state: 'fresh' | 'refreshed' | 'stale') => (
       state === 'fresh' ? '缓存' : state === 'stale' ? '陈旧缓存' : '已刷新'
     ),

@@ -1,12 +1,12 @@
 export const skillMarketEn = {
   skillMarket: {
     title: 'Skill Market',
-    subtitle: 'Find agent skills from public skill indexes, review the source, then install them through the skills CLI into your local agent skill paths.',
+    subtitle: 'Find public agent skills and review the source before installing.',
     backToExplore: 'Back to Explore',
     sourceBadge: 'skills.sh index',
     reviewBadge: 'review before install',
     cliBadge: 'CLI install',
-    manageAction: 'Manage installed skills',
+    manageAction: 'Manage Installed',
     searchPlaceholder: 'Search skills, repositories, or workflows...',
     searchAction: 'Search',
     refreshAction: 'Refresh',
@@ -19,7 +19,6 @@ export const skillMarketEn = {
     resultNote: 'This page is discovery only for now. MindOS overlays local installed state, but third-party installs stay explicit through the CLI command.',
     defaultQueryLabel: 'Default: agent',
     queryLabel: (query: string) => `Search: ${query}`,
-    defaultedQueryNotice: 'Enter at least 2 characters to search; showing the default skill query.',
     cacheState: (state: 'fresh' | 'refreshed' | 'stale') => (
       state === 'fresh' ? 'cached' : state === 'stale' ? 'stale cache' : 'refreshed'
     ),

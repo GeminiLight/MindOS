@@ -200,6 +200,7 @@ describe('PluginMarketContent', () => {
       root.unmount();
     });
     host.remove();
+    window.history.replaceState(null, '', '/');
   });
 
   it('renders a Discover-family market without the Settings manager shell', async () => {
@@ -228,8 +229,23 @@ describe('PluginMarketContent', () => {
 
     const links = Array.from(host.querySelectorAll('a')).map((link) => link.getAttribute('href'));
     expect(links).toContain('/explore');
-    expect(links).toContain('/settings?tab=plugins');
+    expect(links).toContain('/explore/plugins?filter=installed');
+    expect(links).not.toContain('/settings?tab=plugins');
     expect(links).toContain('/settings?tab=plugins&panel=import');
+  });
+
+  it('opens the installed filter from the market manage route', async () => {
+    window.history.replaceState(null, '', '/explore/plugins?filter=installed');
+
+    await act(async () => {
+      root.render(<PluginMarketContent />);
+      await flushPluginMarketPromises();
+    });
+
+    const installedFilter = host.querySelector('[data-plugin-market-filter="installed"]') as HTMLButtonElement;
+    expect(installedFilter.getAttribute('aria-pressed')).toBe('true');
+    expect(host.textContent).toContain('Dataview');
+    expect(host.textContent).not.toContain('QuickAdd');
   });
 
   it('searches, preflights, and installs without bypassing confirmation', async () => {

@@ -11,7 +11,6 @@ import {
   PackageCheck,
   RefreshCw,
   Search,
-  Settings,
   ShieldCheck,
   Terminal,
   X,
@@ -240,10 +239,10 @@ export default function SkillMarketContent() {
           </div>
           <div className="flex flex-wrap items-center gap-2 md:pt-11">
             <Link
-              href="/settings?tab=mcp"
+              href="/agents?tab=skills"
               className="inline-flex h-8 items-center gap-1.5 rounded-md border border-[var(--amber)] bg-[var(--amber)] px-2.5 text-xs font-medium text-[var(--amber-foreground)] transition-colors hover:bg-[var(--amber)]/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              <Settings size={13} />
+              <PackageCheck size={13} />
               {copy.manageAction}
             </Link>
           </div>
@@ -310,10 +309,6 @@ export default function SkillMarketContent() {
               </button>
             </div>
           </form>
-
-          {skillInput.trim().length > 0 && skillInput.trim().length < 2 && (
-            <p className="mt-2 text-2xs text-muted-foreground">{copy.defaultedQueryNotice}</p>
-          )}
 
           <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border/60 pt-3">
             <span className="text-2xs font-medium uppercase text-muted-foreground">{copy.filterTitle}</span>
@@ -508,7 +503,7 @@ const MarketSkillRow = memo(function MarketSkillRow({
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="flex min-w-0 items-start gap-3">
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border bg-background font-mono text-xs font-semibold text-[var(--amber-text)]">
-            Sk
+            <Zap size={15} aria-hidden="true" />
           </span>
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
@@ -552,11 +547,11 @@ const MarketSkillRow = memo(function MarketSkillRow({
         <div className="grid w-full shrink-0 grid-cols-1 gap-2 sm:w-auto sm:grid-cols-none sm:flex sm:flex-wrap sm:items-center sm:justify-end">
           {skill.installed ? (
             <Link
-              href="/settings?tab=mcp"
+              href="/agents?tab=skills"
               data-skill-market-manage={skill.id}
               className="inline-flex h-8 w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-border bg-background px-2.5 text-2xs font-medium text-foreground transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:w-auto"
             >
-              <Settings size={11} />
+              <PackageCheck size={11} />
               {copy.manageInstalled}
             </Link>
           ) : skill.installCommand ? (

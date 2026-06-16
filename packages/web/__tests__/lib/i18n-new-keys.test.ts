@@ -83,6 +83,9 @@ describe('i18n skill market keys', () => {
     expect(en.panels.discover.skillMarketDesc).toContain('AI agents');
     expect(zh.panels.discover.skillMarket).toBe('技能市场');
     expect(zh.panels.discover.skillMarketDesc).toContain('AI 智能体');
+    expect(en.skillMarket.subtitle).toBe('Find public agent skills and review the source before installing.');
+    expect(en.skillMarket.manageAction).toBe('Manage Installed');
+    expect(zh.skillMarket.manageAction).toBe('管理已安装');
 
     for (const messages of [en, zh]) {
       const s = messages.skillMarket;

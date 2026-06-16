@@ -12,7 +12,6 @@ import {
   Puzzle,
   RefreshCw,
   Search,
-  Settings,
   ShieldCheck,
   Sparkles,
   X,
@@ -52,9 +51,33 @@ type MarketFilter = 'all' | 'available' | 'installed' | 'issues';
 const COMMUNITY_CATALOG_LIMIT = 80;
 const MARKET_INITIAL_VISIBLE_COUNT = 24;
 const MARKET_VISIBLE_INCREMENT = 24;
+const PLUGIN_MARKET_PATH = '/explore/plugins';
 
 function isAbortError(err: unknown): boolean {
   return err instanceof Error && err.name === 'AbortError';
+}
+
+function parseMarketFilter(value: string | null): MarketFilter {
+  if (value === 'available' || value === 'installed' || value === 'issues') return value;
+  return 'all';
+}
+
+function readInitialMarketFilter(): MarketFilter {
+  if (typeof window === 'undefined') return 'all';
+  if (window.location.pathname !== PLUGIN_MARKET_PATH) return 'all';
+  return parseMarketFilter(new URLSearchParams(window.location.search).get('filter'));
+}
+
+function writeMarketFilterToUrl(filter: MarketFilter): void {
+  if (typeof window === 'undefined') return;
+  const url = new URL(window.location.href);
+  if (url.pathname !== PLUGIN_MARKET_PATH) return;
+  if (filter === 'all') {
+    url.searchParams.delete('filter');
+  } else {
+    url.searchParams.set('filter', filter);
+  }
+  window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}`);
 }
 
 function marketFilterMatches(filter: MarketFilter, plugin: ObsidianCommunityCatalogItem): boolean {
@@ -147,6 +170,13 @@ export default function PluginMarketContent() {
   useEffect(() => {
     void loadCommunityCatalog('');
   }, [loadCommunityCatalog]);
+
+  useEffect(() => {
+    const syncMarketFilter = () => setMarketFilter(readInitialMarketFilter());
+    syncMarketFilter();
+    window.addEventListener('popstate', syncMarketFilter);
+    return () => window.removeEventListener('popstate', syncMarketFilter);
+  }, []);
 
   useEffect(() => {
     communityPreflightsRef.current = communityPreflights;
@@ -345,10 +375,10 @@ export default function PluginMarketContent() {
               {copy.marketImportAction}
             </Link>
             <Link
-              href="/settings?tab=plugins"
+              href="/explore/plugins?filter=installed"
               className="inline-flex h-8 items-center gap-1.5 rounded-md border border-[var(--amber)] bg-[var(--amber)] px-2.5 text-xs font-medium text-[var(--amber-foreground)] transition-colors hover:bg-[var(--amber)]/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              <Settings size={13} />
+              <PackageCheck size={13} />
               {copy.marketManageAction}
             </Link>
           </div>
@@ -426,7 +456,10 @@ export default function PluginMarketContent() {
                   type="button"
                   data-plugin-market-filter={filter.id}
                   aria-pressed={active}
-                  onClick={() => setMarketFilter(filter.id)}
+                  onClick={() => {
+                    setMarketFilter(filter.id);
+                    writeMarketFilterToUrl(filter.id);
+                  }}
                   className={`inline-flex h-8 items-center gap-2 rounded-md border px-2.5 text-2xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                     active
                       ? 'border-[var(--amber)]/35 bg-[var(--amber-subtle)] text-[var(--amber-text)]'
@@ -675,11 +708,11 @@ const MarketPluginRow = memo(function MarketPluginRow({
           </button>
           {plugin.installed ? (
             <Link
-              href="/settings?tab=plugins"
+              href="/explore/plugins?filter=installed"
               data-plugin-market-manage={plugin.id}
               className="inline-flex h-8 w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-border bg-background px-2.5 text-2xs font-medium text-foreground transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:w-auto"
             >
-              <Settings size={11} />
+              <PackageCheck size={11} />
               {copy.communityManageAction}
             </Link>
           ) : canInstall ? (

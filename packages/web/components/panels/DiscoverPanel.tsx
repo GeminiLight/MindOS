@@ -1,5 +1,6 @@
 'use client';
 
+import { usePathname } from 'next/navigation';
 import { Lightbulb, Blocks, Zap, LayoutTemplate, User, Download, RefreshCw, Repeat, Rocket, Search, Handshake, ShieldCheck } from 'lucide-react';
 import PanelHeader from './PanelHeader';
 import { PanelNavRow, ComingSoonBadge } from './PanelNavRow';
@@ -52,10 +53,14 @@ const useCaseIcons: Record<string, React.ReactNode> = {
   c9: <ShieldCheck size={12} />,   // Audit & Correct
 };
 
-export default function DiscoverPanel({ active, maximized, onMaximize }: DiscoverPanelProps) {
+export default function DiscoverPanel({ active }: DiscoverPanelProps) {
   const { t } = useLocale();
   const d = t.panels.discover;
   const e = t.explore;
+  const pathname = usePathname() ?? '';
+  const pluginMarketActive = pathname === '/explore/plugins';
+  const skillMarketActive = pathname === '/explore/skills';
+  const useCasesActive = pathname === '/explore';
 
   const getUseCaseText = (id: string): { title: string; prompt: string } | undefined => {
     const map: Record<string, { title: string; desc: string; prompt: string }> = {
@@ -67,32 +72,37 @@ export default function DiscoverPanel({ active, maximized, onMaximize }: Discove
 
   return (
     <div className={`flex flex-col h-full ${active ? '' : 'hidden'}`}>
-      <PanelHeader title={d.title} maximized={maximized} onMaximize={onMaximize} />
+      <PanelHeader title={d.title} />
       <div className="flex-1 overflow-y-auto min-h-0">
         {/* Navigation entries */}
-        <div className="py-2">
+        <div className="flex flex-col gap-0.5 py-1.5">
           <PanelNavRow
-            icon={<Lightbulb size={14} className="text-[var(--amber)]" />}
-            title={d.useCases}
-            badge={<span className="text-2xs tabular-nums text-muted-foreground">{useCases.length}</span>}
-            href="/explore"
-          />
-          <PanelNavRow
-            icon={<Blocks size={14} className="text-[var(--amber)]" />}
+            icon={<Blocks size={14} className={pluginMarketActive ? 'text-[var(--amber)]' : 'text-muted-foreground'} />}
             title={d.pluginMarket}
-            subtitle={d.pluginMarketDesc}
             href="/explore/plugins"
+            active={pluginMarketActive}
+            activeVariant="rail"
           />
           <PanelNavRow
-            icon={<Zap size={14} className="text-[var(--amber)]" />}
+            icon={<Zap size={14} className={skillMarketActive ? 'text-[var(--amber)]' : 'text-muted-foreground'} />}
             title={d.skillMarket}
-            subtitle={d.skillMarketDesc}
             href="/explore/skills"
+            active={skillMarketActive}
+            activeVariant="rail"
           />
           <PanelNavRow
             icon={<LayoutTemplate size={14} className="text-muted-foreground" />}
             title={d.spaceTemplates}
             badge={<ComingSoonBadge label={d.comingSoon} />}
+            activeVariant="rail"
+          />
+          <PanelNavRow
+            icon={<Lightbulb size={14} className={useCasesActive ? 'text-[var(--amber)]' : 'text-muted-foreground'} />}
+            title={d.useCases}
+            badge={<span className="text-2xs tabular-nums text-muted-foreground">{useCases.length}</span>}
+            href="/explore"
+            active={useCasesActive}
+            activeVariant="rail"
           />
         </div>
 

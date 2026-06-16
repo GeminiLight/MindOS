@@ -17,4 +17,24 @@ describe('DiscoverPanel plugin market boundary', () => {
     expect(source).not.toContain('getPluginRenderers');
     expect(source).not.toContain('isRendererEnabled');
   });
+
+  it('uses panel navigation without subtitles or fullscreen controls', () => {
+    expect(source).toContain("import { usePathname } from 'next/navigation'");
+    expect(source).toContain('<PanelHeader title={d.title} />');
+    expect(source).not.toContain('maximized={maximized}');
+    expect(source).not.toContain('onMaximize={onMaximize}');
+    expect(source).not.toContain('subtitle={d.pluginMarketDesc}');
+    expect(source).not.toContain('subtitle={d.skillMarketDesc}');
+    expect(source).toContain('activeVariant="rail"');
+  });
+
+  it('puts use cases after market entries in the primary navigation', () => {
+    const pluginIndex = source.indexOf('title={d.pluginMarket}');
+    const skillIndex = source.indexOf('title={d.skillMarket}');
+    const useCasesIndex = source.indexOf('title={d.useCases}');
+
+    expect(pluginIndex).toBeGreaterThan(-1);
+    expect(skillIndex).toBeGreaterThan(pluginIndex);
+    expect(useCasesIndex).toBeGreaterThan(skillIndex);
+  });
 });

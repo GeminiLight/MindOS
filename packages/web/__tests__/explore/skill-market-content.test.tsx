@@ -185,7 +185,8 @@ describe('SkillMarketContent', () => {
 
     const links = Array.from(host.querySelectorAll('a')).map((link) => link.getAttribute('href'));
     expect(links).toContain('/explore');
-    expect(links).toContain('/settings?tab=mcp');
+    expect(links).toContain('/agents?tab=skills');
+    expect(links).not.toContain('/settings?tab=mcp');
     expect(links).toContain('https://github.com/vercel-labs/agent-browser');
   });
 
