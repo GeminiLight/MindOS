@@ -165,7 +165,7 @@ describe('OpenCode architecture alignment', () => {
     expect(readText('packages/mindos/src/session/index.ts')).toContain('buildMindosCompatEndpointCandidates');
     expect(readText('packages/mindos/src/session/index.ts')).toContain('createMindosPiAgentRuntime');
     expect(readText('packages/mindos/src/agent/index.ts')).toContain('defineMindosAgent');
-    expect(readText('packages/mindos/src/agent/index.ts')).toContain('AGENT_SYSTEM_PROMPT');
+    expect(readText('packages/mindos/src/agent/index.ts')).toContain('MINDOS_SYSTEM_PROMPT');
     expect(readText('packages/mindos/src/agent/index.ts')).toContain('buildMindosAskSystemPrompt');
     expect(readText('packages/mindos/src/agent/index.ts')).toContain('compactMindosPromptForTokenBudget');
     expect(askRoute).toContain("from '@geminilight/mindos/session'");

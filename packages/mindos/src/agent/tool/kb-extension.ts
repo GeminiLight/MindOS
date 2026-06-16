@@ -18,7 +18,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import type { ExtensionAPI, ToolDefinition } from '@earendil-works/pi-coding-agent';
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 import type { TSchema } from '@sinclair/typebox';
-import { assertNotProtected } from '../foundation/security/index.js';
+import { assertNotProtected } from '../../foundation/security/index.js';
 import {
   createMindosAgentPermissionPolicy,
   type MindosAgentPermissionPolicy,
@@ -28,7 +28,7 @@ import {
   KB_EXTENSION_HOST_KEY,
   KB_PERMISSION_POLICY_FALLBACK_KEY,
   KB_PERMISSION_POLICY_STORAGE_KEY,
-} from './global-state.js';
+} from '../global-state.js';
 import { WRITE_TOOLS, type MindosAgentTool } from './kb-tools.js';
 
 // ─── Mode-based tool filtering ───────────────────────────────────────────────

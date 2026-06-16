@@ -13,11 +13,11 @@ import {
   type AgentRuntimeDescriptor,
   type AgentRuntimesPayload,
   type AgentRuntimesServices,
-} from '../server/handlers/agent-runtimes.js';
+} from '../../server/handlers/agent-runtimes.js';
 import type {
   AgentCapabilitiesServices,
   AgentCapabilityInput,
-} from '../server/handlers/agent-capabilities.js';
+} from '../../server/handlers/agent-capabilities.js';
 import {
   MINDOS_CHAT_KB_TOOL_NAMES,
   MINDOS_ORGANIZE_KB_TOOL_NAMES,

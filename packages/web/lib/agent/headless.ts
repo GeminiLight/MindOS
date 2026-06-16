@@ -93,7 +93,7 @@ export async function runHeadlessAgent(options: HeadlessAgentRunOptions): Promis
   const runtimePaths = getMindosWebPiRuntimePaths({ projectRoot, mindRoot, serverSettings, mode: askMode });
   const { createMindosPiCodingAgentRuntime } = await import('@geminilight/mindos/session/pi-coding-agent');
   const { runWithKbPermissionPolicy } = await import('@/lib/agent/kb-extension');
-  const { createMindosAgentPermissionPolicy } = await import('@geminilight/mindos/agent/permission-policy');
+  const { createMindosAgentPermissionPolicy } = await import('@geminilight/mindos/agent/tool/permission-policy');
   // Scope the kb tool policy to this request — see route.ts for the rationale.
   const runtime = await runWithKbPermissionPolicy(createMindosAgentPermissionPolicy(askMode), () => createMindosPiCodingAgentRuntime({
     mode: askMode,

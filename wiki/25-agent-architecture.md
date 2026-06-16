@@ -167,7 +167,7 @@ MindOS 支持两种对话模式，用户可在 Ask 面板顶部切换：
 
 | 段落 | 内容 | 来源 |
 |---|---|---|
-| AGENT_SYSTEM_PROMPT | 身份、7 条 Core Directives、Context Mechanics、Output 格式 | `packages/web/lib/agent/prompt.ts` |
+| MINDOS_SYSTEM_PROMPT | 身份、grounding、request context、tool use、skills、delegation、web/external info、output 规则 | `packages/mindos/src/agent/prompt/agent-prompt.txt` |
 | Time Context | 当前 UTC / 本地时间 / Unix 时间戳 | 运行时生成 |
 | Init Status | bootstrap 加载结果 | 运行时检测 |
 | Init Context | SKILL.md + 用户规则 + INSTRUCTION.md + 首页 + config | 知识库文件 |

@@ -69,6 +69,22 @@
       "types": "./dist/agent.d.ts",
       "import": "./dist/agent.js"
     },
+    "./agent/prompt": {
+      "types": "./dist/agent/prompt/index.d.ts",
+      "import": "./dist/agent/prompt/index.js"
+    },
+    "./agent/prompt/*": {
+      "types": "./dist/agent/prompt/*.d.ts",
+      "import": "./dist/agent/prompt/*.js"
+    },
+    "./agent/tool": {
+      "types": "./dist/agent/tool/index.d.ts",
+      "import": "./dist/agent/tool/index.js"
+    },
+    "./agent/tool/*": {
+      "types": "./dist/agent/tool/*.d.ts",
+      "import": "./dist/agent/tool/*.js"
+    },
     "./agent/*": {
       "types": "./dist/agent/*.d.ts",
       "import": "./dist/agent/*.js"
@@ -118,7 +134,7 @@
     "type-check": "tsc --noEmit",
     "test": "vitest run --dir src",
     "test:watch": "vitest",
-    "build": "tsc && pnpm run build:protocols",
+    "build": "tsc && node ../../scripts/copy-mindos-agent-assets.mjs && pnpm run build:protocols",
     "build:protocols": "node ../../scripts/build-product-protocols.mjs",
     "build:platform-packages": "node ../../scripts/build-platform-packages.mjs"
   },

@@ -36,7 +36,7 @@ import {
   linkAbortSignalToAgentRun,
   registerAgentRunCancelHandler,
 } from './run-cancellation.js';
-import { createMindosAgentPermissionPolicyFromContext } from './permission-policy.js';
+import { createMindosAgentPermissionPolicyFromContext } from './tool/permission-policy.js';
 import {
   executeSubagentOrchestrationPlan,
   type SubagentOrchestrationPlan,

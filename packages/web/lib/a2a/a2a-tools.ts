@@ -21,7 +21,7 @@ import {
 import {
   linkAbortSignalToAgentRun,
 } from '@geminilight/mindos/agent/run-cancellation';
-import { createMindosAgentPermissionPolicyFromContext } from '@geminilight/mindos/agent/permission-policy';
+import { createMindosAgentPermissionPolicyFromContext } from '@geminilight/mindos/agent/tool/permission-policy';
 
 function textResult(text: string) {
   return { content: [{ type: 'text' as const, text }], details: {} };

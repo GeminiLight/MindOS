@@ -1,6 +1,6 @@
 // Sunk into the core package (Wave 3, spec-agent-core-consolidation).
 // Mapping rules and pi-subagent discovery live in
-// packages/mindos/src/agent/capability-registry.ts; this adapter injects the
+// packages/mindos/src/agent/tool/capability-registry.ts; this adapter injects the
 // web app's services (settings, ACP detection, MCP cache, A2A registry) and
 // resolves the bundled pi-subagents dir relative to this install layout.
 
@@ -8,7 +8,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import type { AgentCapabilitiesServices, AgentRuntimesServices } from '@geminilight/mindos/server';
-import { createAgentCapabilitiesServices as createCoreServices } from '@geminilight/mindos/agent/capability-registry';
+import { createAgentCapabilitiesServices as createCoreServices } from '@geminilight/mindos/agent/tool/capability-registry';
 import { knowledgeBaseTools } from './tools';
 import { checkNativeRuntimeHealth, detectLocalAcpAgents, resolveCommandPath } from '@/lib/acp/detect-local';
 import { readSettings } from '@/lib/settings';

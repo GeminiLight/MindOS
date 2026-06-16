@@ -19,7 +19,7 @@ import { ensureMindosAgentMcpRuntimeConfig } from '@/lib/pi-integration/mcp-conf
 import {
   createMindosAgentPermissionPolicy,
   hasMindosExtensionScope,
-} from '@geminilight/mindos/agent/permission-policy';
+} from '@geminilight/mindos/agent/tool/permission-policy';
 
 type WebServerSettings = {
   disabledSkills?: string[];

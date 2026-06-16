@@ -1,6 +1,6 @@
 export { getModelConfig } from './model';
 export { getRequestScopedTools, knowledgeBaseTools, WRITE_TOOLS, truncate } from './tools';
-export { AGENT_SYSTEM_PROMPT, CHAT_SYSTEM_PROMPT, MINDOS_SYSTEM_PROMPT } from './prompt';
+export { MINDOS_SYSTEM_PROMPT } from './prompt';
 export {
   estimateTokens, estimateStringTokens, getContextLimit, needsCompact,
   truncateToolOutputs, compactMessages, hardPrune, createTransformContext,

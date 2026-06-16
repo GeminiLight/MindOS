@@ -1,5 +1,5 @@
 // Sunk into the core package (Wave 3, spec-agent-core-consolidation).
-// Tool logic lives in packages/mindos/src/agent/kb-tools.ts; this adapter
+// Tool logic lives in packages/mindos/src/agent/tool/kb-tools.ts; this adapter
 // wires the web app's fs/search/skills/lint/compile services into the
 // host-injected toolkit and re-exports the historical API surface.
 
@@ -21,15 +21,15 @@ import {
   type MindosAgentTool,
   type MindosKbFileTreeNode,
   type MindosKbToolsHost,
-} from '@geminilight/mindos/agent/kb-tools';
-import type { MindosAgentPermissionPolicy } from '@geminilight/mindos/agent/permission-policy';
+} from '@geminilight/mindos/agent/tool/kb-tools';
+import type { MindosAgentPermissionPolicy } from '@geminilight/mindos/agent/tool/permission-policy';
 
 export {
   CHAT_TOOL_NAMES,
   ORGANIZE_TOOL_NAMES,
   WRITE_TOOLS,
   truncate,
-} from '@geminilight/mindos/agent/kb-tools';
+} from '@geminilight/mindos/agent/tool/kb-tools';
 
 const host: MindosKbToolsHost = {
   files: {

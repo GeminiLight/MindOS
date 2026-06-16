@@ -14,7 +14,7 @@ import {
   updateAgentRun,
   type AgentRunPermissionMode,
 } from '@geminilight/mindos/agent/run-ledger';
-import { createMindosAgentPermissionPolicyFromContext } from '@geminilight/mindos/agent/permission-policy';
+import { createMindosAgentPermissionPolicyFromContext } from '@geminilight/mindos/agent/tool/permission-policy';
 import {
   abortErrorFromSignal,
   isAbortLikeError,

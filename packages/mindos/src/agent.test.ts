@@ -1,12 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
-  AGENT_SYSTEM_PROMPT,
-  CHAT_SYSTEM_PROMPT,
   MINDOS_SYSTEM_PROMPT,
   ORGANIZE_SYSTEM_PROMPT,
   buildMindosAskSystemPrompt,
   compactMindosPromptForTokenBudget,
   defineMindosAgent,
+  loadMindosAgentPrompt,
 } from './agent/index.js';
 
 describe('MindOS agent product contract', () => {
@@ -24,8 +23,7 @@ describe('MindOS agent product contract', () => {
 
   it('owns system prompts inside the product runtime', () => {
     expect(MINDOS_SYSTEM_PROMPT).toContain('You are MindOS');
-    expect(AGENT_SYSTEM_PROMPT).toBe(MINDOS_SYSTEM_PROMPT);
-    expect(CHAT_SYSTEM_PROMPT).toBe(MINDOS_SYSTEM_PROMPT);
+    expect(loadMindosAgentPrompt()).toBe(MINDOS_SYSTEM_PROMPT);
     expect(MINDOS_SYSTEM_PROMPT).toContain('Before modifying an existing file, read it first');
     expect(MINDOS_SYSTEM_PROMPT).toContain('Use tools as the default path');
     expect(MINDOS_SYSTEM_PROMPT).toContain('Attached files from the MindOS knowledge base');
@@ -65,7 +63,7 @@ describe('MindOS agent product contract', () => {
       }),
     });
 
-    expect(prompt).toContain(CHAT_SYSTEM_PROMPT);
+    expect(prompt).toContain(MINDOS_SYSTEM_PROMPT);
     expect(prompt).toContain('mind_root=/tmp/mind');
     expect(prompt).toContain('## Knowledge Base Structure');
     expect(prompt).toContain('Current UTC Time: 2026-01-02T03:04:05.000Z');
@@ -109,7 +107,7 @@ describe('MindOS agent product contract', () => {
       recallKnowledge: async () => [{ path: 'Recall.md', content: 'recalled content' }],
     });
 
-    expect(prompt).toContain(AGENT_SYSTEM_PROMPT);
+    expect(prompt).toContain(MINDOS_SYSTEM_PROMPT);
     expect(prompt).toContain('Initialization issues:');
     expect(prompt).toContain('bootstrap.config_json: failed');
     expect(prompt).toContain('## bootstrap_instruction');

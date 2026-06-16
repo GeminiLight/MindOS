@@ -1,5 +1,5 @@
-import type { MindosAskMode } from '../session/index.js';
-import type { AgentRunPermissionMode } from './run-ledger-types.js';
+import type { MindosAskMode } from '../../session/index.js';
+import type { AgentRunPermissionMode } from '../run-ledger-types.js';
 
 export type MindosHarnessPermissionMode = 'readonly' | 'agent';
 export type MindosKbWriteScope = 'none' | 'organize' | 'all';

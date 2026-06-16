@@ -1,9 +1,8 @@
-import type { MindosAskFileContext, MindosAskMode } from '../session/index.js';
+import type { MindosAskFileContext, MindosAskMode } from '../../session/index.js';
 import {
-  AGENT_SYSTEM_PROMPT,
-  CHAT_SYSTEM_PROMPT,
+  MINDOS_SYSTEM_PROMPT,
   ORGANIZE_SYSTEM_PROMPT,
-} from './prompts.js';
+} from './base-prompt.js';
 
 export type MindosKnowledgeFile = {
   ok: boolean;
@@ -79,7 +78,7 @@ function buildLeanPrompt(
   mode: 'chat' | 'organize',
 ): string {
   const promptParts: string[] = [
-    mode === 'chat' ? CHAT_SYSTEM_PROMPT : ORGANIZE_SYSTEM_PROMPT,
+    mode === 'chat' ? MINDOS_SYSTEM_PROMPT : ORGANIZE_SYSTEM_PROMPT,
     `---\n\nmind_root=${input.mindRoot}`,
   ];
 
@@ -108,7 +107,7 @@ async function buildAgentPrompt(
   const initContextBlocks = initialization.initContextBlocks ?? [];
   const targetDir = initialization.targetDir ?? null;
   const promptParts: string[] = [
-    AGENT_SYSTEM_PROMPT,
+    MINDOS_SYSTEM_PROMPT,
     `---\n\n${formatMindosAskTimeContext(services, { includeUnix: true })}`,
   ];
 

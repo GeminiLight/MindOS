@@ -13,7 +13,7 @@ import kbExtension, {
   setKbPermissionPolicy,
 } from '@/lib/agent/kb-extension';
 import { registerWebKbExtensionHost } from '@/lib/agent/kb-extension-host';
-import { createMindosAgentPermissionPolicy } from '@geminilight/mindos/agent/permission-policy';
+import { createMindosAgentPermissionPolicy } from '@geminilight/mindos/agent/tool/permission-policy';
 import { getToolsForMindosAgentPolicy } from '@/lib/agent/tools';
 
 function registeredToolNames(run: (register: (def: { name: string }) => void) => void): string[] {

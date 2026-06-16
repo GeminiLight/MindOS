@@ -16,8 +16,8 @@ import {
   type MindosAgentPermissionPolicy,
 } from './permission-policy.js';
 import { withAgentFileWriteLock, withAgentFileWriteLocks } from './file-write-lock.js';
-import { getCurrentAgentRunContext } from './agent-run-context.js';
-import { appendAgentRunEvent } from './run-ledger.js';
+import { getCurrentAgentRunContext } from '../agent-run-context.js';
+import { appendAgentRunEvent } from '../run-ledger.js';
 import { buildLineDiff, collapseDiffContext, type DiffLine } from './line-diff.js';
 import { extractRelevantContent } from './paragraph-extract.js';
 

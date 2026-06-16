@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { getChatTools, getOrganizeTools, knowledgeBaseTools, WRITE_TOOLS } from '@/lib/agent/tools';
-import { CHAT_SYSTEM_PROMPT, AGENT_SYSTEM_PROMPT } from '@/lib/agent/prompt';
+import { MINDOS_SYSTEM_PROMPT } from '@/lib/agent/prompt';
 
 // ---------------------------------------------------------------------------
 // getChatTools — tool set correctness
@@ -89,36 +89,32 @@ describe('getOrganizeTools', () => {
 });
 
 // ---------------------------------------------------------------------------
-// CHAT_SYSTEM_PROMPT — content correctness
+// MINDOS_SYSTEM_PROMPT — content correctness
 // ---------------------------------------------------------------------------
 
-describe('CHAT_SYSTEM_PROMPT', () => {
+describe('MINDOS_SYSTEM_PROMPT', () => {
   it('exists and is a non-empty string', () => {
-    expect(typeof CHAT_SYSTEM_PROMPT).toBe('string');
-    expect(CHAT_SYSTEM_PROMPT.length).toBeGreaterThan(100);
-  });
-
-  it('shares the unified MindOS prompt with agent surfaces', () => {
-    expect(CHAT_SYSTEM_PROMPT).toBe(AGENT_SYSTEM_PROMPT);
+    expect(typeof MINDOS_SYSTEM_PROMPT).toBe('string');
+    expect(MINDOS_SYSTEM_PROMPT.length).toBeGreaterThan(100);
   });
 
   it('contains grounding rules without exposing internal mode labels', () => {
-    expect(CHAT_SYSTEM_PROMPT).toContain('Grounding Rules');
-    expect(CHAT_SYSTEM_PROMPT).not.toContain('Mode: Chat');
-    expect(CHAT_SYSTEM_PROMPT).not.toContain('Agent mode');
-    expect(CHAT_SYSTEM_PROMPT).not.toContain('Working Context');
+    expect(MINDOS_SYSTEM_PROMPT).toContain('Grounding Rules');
+    expect(MINDOS_SYSTEM_PROMPT).not.toContain('Mode: Chat');
+    expect(MINDOS_SYSTEM_PROMPT).not.toContain('Agent mode');
+    expect(MINDOS_SYSTEM_PROMPT).not.toContain('Working Context');
   });
 
   it('distinguishes MindOS attachments from user uploads', () => {
-    expect(CHAT_SYSTEM_PROMPT).toContain('Attached files from the MindOS knowledge base');
-    expect(CHAT_SYSTEM_PROMPT).toContain('Files uploaded by the user for this request');
-    expect(CHAT_SYSTEM_PROMPT).toContain('Use uploaded content directly');
+    expect(MINDOS_SYSTEM_PROMPT).toContain('Attached files from the MindOS knowledge base');
+    expect(MINDOS_SYSTEM_PROMPT).toContain('Files uploaded by the user for this request');
+    expect(MINDOS_SYSTEM_PROMPT).toContain('Use uploaded content directly');
   });
 
   it('keeps write behavior conditional on available tools and permissions', () => {
-    expect(CHAT_SYSTEM_PROMPT).toContain('when the available tools and permissions allow it');
-    expect(CHAT_SYSTEM_PROMPT).toContain('Before modifying an existing file, read it first');
-    expect(CHAT_SYSTEM_PROMPT).toContain('Use only tools that are actually available');
+    expect(MINDOS_SYSTEM_PROMPT).toContain('when the available tools and permissions allow it');
+    expect(MINDOS_SYSTEM_PROMPT).toContain('Before modifying an existing file, read it first');
+    expect(MINDOS_SYSTEM_PROMPT).toContain('Use only tools that are actually available');
   });
 });
 

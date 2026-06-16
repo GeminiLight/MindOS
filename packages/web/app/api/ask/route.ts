@@ -76,7 +76,7 @@ import {
   getCachedAvailableNativeRuntimeDescriptor,
   rememberAvailableNativeRuntimeDescriptor,
 } from '@/lib/agent/native-runtime-descriptor-cache';
-import { createMindosAgentPermissionPolicy } from '@geminilight/mindos/agent/permission-policy';
+import { createMindosAgentPermissionPolicy } from '@geminilight/mindos/agent/tool/permission-policy';
 import {
   runWithAgentRunContext,
   setAgentRunContextForResource,

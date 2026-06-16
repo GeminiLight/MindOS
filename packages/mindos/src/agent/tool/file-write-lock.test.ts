@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { runWithAgentRunContext } from './agent-run-context.js';
+import { runWithAgentRunContext } from '../agent-run-context.js';
 import {
   AgentFileWriteConflictError,
   resetAgentFileWriteLocksForTest,

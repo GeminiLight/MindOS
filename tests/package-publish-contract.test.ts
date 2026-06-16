@@ -96,7 +96,7 @@ describe('product npm publish contract', () => {
     expect(pkg.scripts?.prepack).not.toContain('packages/mindos/node_modules');
     expect(pkg.scripts?.prepack).not.toContain('packages/protocols/mcp-server/node_modules');
     expect(pkg.scripts?.prepack).not.toContain('packages/web/node_modules');
-    expect(pkg.scripts?.build).toBe('tsc && pnpm run build:protocols');
+    expect(pkg.scripts?.build).toBe('tsc && node ../../scripts/copy-mindos-agent-assets.mjs && pnpm run build:protocols');
     expect(pkg.scripts?.['build:protocols']).toBe('node ../../scripts/build-product-protocols.mjs');
     expect(pkg.scripts?.['type-check']).toBe('tsc --noEmit');
     expect(pkg.dependencies).not.toHaveProperty('@anthropic-ai/claude-agent-sdk');
@@ -121,6 +121,22 @@ describe('product npm publish contract', () => {
       types: './dist/agent/*.d.ts',
       import: './dist/agent/*.js',
     });
+    expect(pkg.exports?.['./agent/prompt']).toEqual({
+      types: './dist/agent/prompt/index.d.ts',
+      import: './dist/agent/prompt/index.js',
+    });
+    expect(pkg.exports?.['./agent/prompt/*']).toEqual({
+      types: './dist/agent/prompt/*.d.ts',
+      import: './dist/agent/prompt/*.js',
+    });
+    expect(pkg.exports?.['./agent/tool']).toEqual({
+      types: './dist/agent/tool/index.d.ts',
+      import: './dist/agent/tool/index.js',
+    });
+    expect(pkg.exports?.['./agent/tool/*']).toEqual({
+      types: './dist/agent/tool/*.d.ts',
+      import: './dist/agent/tool/*.js',
+    });
 
     // Modules sunk from packages/web/lib/agent (spec-agent-core-consolidation).
     // A missing source file here means the web shim re-exports a dangling
@@ -128,26 +144,40 @@ describe('product npm publish contract', () => {
     for (const module of [
       'run-ledger-types',
       'agent-run-context',
-      'file-write-lock',
       'result-reducer',
-      'permission-policy',
       'global-state',
       'redaction',
       'run-ledger',
+      'run-timeline-events',
       'run-cancellation',
       'runtime-permission-bridge',
       'user-question-bridge',
-      'line-diff',
-      'paragraph-extract',
-      'kb-tools',
-      'kb-extension',
-      'capability-registry',
       'subagent-orchestrator',
       'subagent-ledger-extension',
       'stream-consumer',
       'stream-message-types',
     ]) {
       expect(existsSync(resolve(root, `packages/mindos/src/agent/${module}.ts`))).toBe(true);
+    }
+    for (const module of [
+      'base-prompt',
+      'index',
+      'system-prompt',
+    ]) {
+      expect(existsSync(resolve(root, `packages/mindos/src/agent/prompt/${module}.ts`))).toBe(true);
+    }
+    expect(existsSync(resolve(root, 'packages/mindos/src/agent/prompt/agent-prompt.txt'))).toBe(true);
+    for (const module of [
+      'capability-registry',
+      'file-write-lock',
+      'index',
+      'kb-extension',
+      'kb-tools',
+      'line-diff',
+      'paragraph-extract',
+      'permission-policy',
+    ]) {
+      expect(existsSync(resolve(root, `packages/mindos/src/agent/tool/${module}.ts`))).toBe(true);
     }
 
     // kb-tools value-imports TypeBox schemas at runtime — it must be a real

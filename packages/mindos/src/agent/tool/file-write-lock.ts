@@ -1,6 +1,6 @@
 import path from 'node:path';
-import { getCurrentAgentRunContext } from './agent-run-context.js';
-import { AGENT_FILE_WRITE_LOCKS_KEY, getProcessGlobal } from './global-state.js';
+import { getCurrentAgentRunContext } from '../agent-run-context.js';
+import { AGENT_FILE_WRITE_LOCKS_KEY, getProcessGlobal } from '../global-state.js';
 
 export class AgentFileWriteConflictError extends Error {
   readonly code = 'AGENT_FILE_WRITE_CONFLICT';

@@ -21,7 +21,7 @@ import {
   setKbPermissionPolicy,
   type MindosKbAuditEntry,
 } from './kb-extension.js';
-import { deleteProcessGlobal, KB_EXTENSION_HOST_KEY } from './global-state.js';
+import { deleteProcessGlobal, KB_EXTENSION_HOST_KEY } from '../global-state.js';
 import type { MindosAgentTool } from './kb-tools.js';
 
 type RegisteredTool = {

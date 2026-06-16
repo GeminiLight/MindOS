@@ -8,10 +8,10 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { setMindRootResolverForTests } from '../foundation/mind-root/index.js';
-import { runWithAgentRunContext } from './agent-run-context.js';
+import { setMindRootResolverForTests } from '../../foundation/mind-root/index.js';
+import { runWithAgentRunContext } from '../agent-run-context.js';
 import { createMindosAgentPermissionPolicy } from './permission-policy.js';
-import { listAgentEvents, resetAgentRunsForTest, startAgentRun } from './run-ledger.js';
+import { listAgentEvents, resetAgentRunsForTest, startAgentRun } from '../run-ledger.js';
 import {
   CHAT_TOOL_NAMES,
   createMindosKbToolkit,
