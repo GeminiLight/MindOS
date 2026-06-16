@@ -1048,18 +1048,22 @@ describe('MindOS session event contract', () => {
     expect(runtime.modelName).toBe('gpt-test');
     expect(runtime.provider).toBe('anthropic');
     expect(runtime.requestTools).toEqual([{ name: 'read_file', execute: expect.any(Function) }]);
+    expect(runtime.lastUserSkillName).toBe('third-party');
     expect(runtime.systemPrompt).toContain('<skills>third-party</skills>');
-    expect(runtime.systemPrompt).toContain('load_skill("third-party")');
+    expect(runtime.systemPrompt).not.toContain('load_skill("third-party")');
+    expect(runtime.systemPrompt).not.toContain('## Active Skill Request');
     expect(capturedSystemPrompt).toBe('base prompt');
     // The streaming session reads its system prompt through the resource
-    // loader's override on reload — the agent-mode suffix (skills XML + active
-    // skill directive) must arrive there, not just in runtime.systemPrompt
-    // (which only the non-streaming fallback uses).
+    // loader's override on reload — the agent-mode skill index must arrive
+    // there, not just in runtime.systemPrompt (which only the non-streaming
+    // fallback uses). The active skill request is turn-local context and stays
+    // out of the system prompt.
     expect(capturedSystemPromptOverride).not.toBeNull();
     const effectiveSessionPrompt = capturedSystemPromptOverride!('base prompt');
     expect(effectiveSessionPrompt).toContain('base prompt');
     expect(effectiveSessionPrompt).toContain('<skills>third-party</skills>');
-    expect(effectiveSessionPrompt).toContain('load_skill("third-party")');
+    expect(effectiveSessionPrompt).not.toContain('load_skill("third-party")');
+    expect(effectiveSessionPrompt).not.toContain('## Active Skill Request');
     expect(effectiveSessionPrompt).toBe(runtime.systemPrompt);
     expect(appendedMessages).toEqual([
       { index: 0, message: expect.objectContaining({ role: 'user' }) },

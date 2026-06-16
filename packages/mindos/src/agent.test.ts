@@ -87,6 +87,7 @@ describe('MindOS agent product contract', () => {
         truncationWarnings: ['skill.mindos was truncated'],
         initContextBlocks: ['## bootstrap_instruction\n\nAlways cite files.'],
       },
+      selectedSkillName: 'third-party',
       activeRecall: {
         enabled: true,
         maxTokens: 1000,
@@ -108,6 +109,9 @@ describe('MindOS agent product contract', () => {
     expect(prompt).toContain('Current UTC Time: 2026-01-02T03:04:05.000Z');
     expect(prompt).toContain('Unix Timestamp: 1767323045');
     expect(prompt).toContain('## MindOS Chat Panel Bridge');
+    expect(prompt).toContain('## Active Skill Request');
+    expect(prompt).toContain('The user selected the skill "third-party" for this turn.');
+    expect(prompt).toContain('load_skill("third-party")');
     expect(prompt).toContain('Initialization issues:');
     expect(prompt).toContain('bootstrap.config_json: failed');
     expect(prompt).toContain('## bootstrap_instruction');
@@ -119,6 +123,19 @@ describe('MindOS agent product contract', () => {
     expect(prompt).toContain('### Recall.md');
     expect(prompt).toContain('These attached files could not be loaded: missing.md');
     expect(prompt).not.toContain(MINDOS_SYSTEM_PROMPT);
+  });
+
+  it('escapes selected skill names in active skill requests', async () => {
+    const prompt = await buildMindosContextPrompt({
+      prompt: 'use it',
+      selectedSkillName: 'skill "quoted"',
+    }, {
+      now: () => new Date('2026-01-02T03:04:05.000Z'),
+      formatLocalTime: () => 'Friday, January 2, 2026 at 11:04:05 AM GMT+8',
+    });
+
+    expect(prompt).toContain('## Active Skill Request');
+    expect(prompt).toContain('load_skill("skill \\"quoted\\"")');
   });
 
   it('compacts oversized prompts while preserving core and explicit attachments', () => {

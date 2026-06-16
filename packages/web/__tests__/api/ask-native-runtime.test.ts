@@ -183,7 +183,7 @@ describe('/api/ask native runtime routing', () => {
 
     const { POST } = await import('../../app/api/ask/route');
     const res = await POST(askRequest({
-      messages: [{ role: 'user', content: 'Use the attached context' }],
+      messages: [{ role: 'user', content: 'Use the attached context', skillName: 'third-party' }],
       currentFile: 'current.md',
       attachedFiles: ['attached.md'],
       selectedRuntime: { id: 'codex', name: 'Codex', kind: 'codex', binaryPath: '/usr/local/bin/codex' },
@@ -221,6 +221,8 @@ describe('/api/ask native runtime routing', () => {
     expect(capturedNativeOptions?.reasoningEffort).toBe('high');
     expect(capturedNativeOptions?.prompt).toContain('MindOS Turn Context');
     expect(capturedNativeOptions?.prompt).toContain('Use the attached context');
+    expect(capturedNativeOptions?.prompt).toContain('## Active Skill Request');
+    expect(capturedNativeOptions?.prompt).toContain('load_skill("third-party")');
     expect(capturedNativeOptions?.prompt).toContain('current.md');
     expect(capturedNativeOptions?.prompt).toContain('Current file body');
     expect(capturedNativeOptions?.prompt).toContain('attached.md');

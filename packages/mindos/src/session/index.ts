@@ -1259,10 +1259,11 @@ export async function createMindosPiAgentRuntime(options: MindosPiAgentRuntimeOp
   const modelRegistry = options.services.createModelRegistry(authStorage);
   const settingsManager = options.services.createSettingsManager(createMindosPiSettingsConfig(options.agentConfig, modelConfig.provider));
   const coreSkillNames = new Set(['mindos', 'mindos-zh', 'mindos-max', 'mindos-max-zh']);
-  // Agent-mode prompt additions (skills XML, active-skill directive) are
-  // discovered only after the first reload(), but the loader captured
-  // `systemPrompt` at construction. The override below re-applies the suffix
-  // on every reload, so the streaming session sees the full prompt.
+  // Agent-mode skill-index additions are discovered only after the first
+  // reload(), but the loader captured `systemPrompt` at construction. The
+  // override below re-applies the suffix on every reload, so the streaming
+  // session sees the available-skill index. Turn-local active skill requests
+  // belong in the latest user/context prompt, not in system identity.
   let agentPromptSuffix = '';
   const resourceLoader = options.services.createResourceLoader({
     cwd: options.projectRoot,
@@ -1291,14 +1292,6 @@ export async function createMindosPiAgentRuntime(options: MindosPiAgentRuntimeOp
     );
     if (thirdPartySkills.length > 0 && options.services.generateSkillsXml) {
       agentPromptSuffix += `\n\n---\n\n${options.services.generateSkillsXml(thirdPartySkills)}`;
-    }
-
-    if (lastUserSkillName) {
-      agentPromptSuffix += '\n\n---\n\n## Active Skill Request\n\n'
-        + `The user has selected the "${lastUserSkillName}" skill via slash command. You MUST:\n`
-        + `1. Immediately call \`load_skill("${lastUserSkillName}")\` to load the skill's full content\n`
-        + "2. Follow the skill's instructions to handle the user's request\n"
-        + '3. Do NOT ask the user which skill they mean — they have already selected it';
     }
 
     if (agentPromptSuffix) {

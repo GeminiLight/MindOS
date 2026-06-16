@@ -170,6 +170,11 @@ describe('OpenCode architecture alignment', () => {
     expect(readText('packages/mindos/src/agent/index.ts')).toContain('buildMindosSystemPrompt');
     expect(readText('packages/mindos/src/agent/index.ts')).toContain('buildMindosContextPrompt');
     expect(readText('packages/mindos/src/agent/index.ts')).toContain('compactMindosPromptForTokenBudget');
+    expect(existsSync(resolve(root, 'packages/mindos/src/agent/prompt/context-prompt.ts'))).toBe(true);
+    expect(readText('packages/mindos/src/agent/prompt/system-prompt.ts')).toContain('buildMindosSystemPrompt');
+    expect(readText('packages/mindos/src/agent/prompt/system-prompt.ts')).not.toContain('buildMindosContextPrompt');
+    expect(readText('packages/mindos/src/agent/prompt/context-prompt.ts')).toContain('buildMindosContextPrompt');
+    expect(readText('packages/mindos/src/agent/prompt/context-prompt.ts')).toContain('compactMindosPromptForTokenBudget');
     expect(askRoute).toContain("from '@geminilight/mindos/session'");
     expect(askRoute).toContain('runMindosAcpAskSession');
     expect(askRoute).toContain('runMindosPiAgentAskSession');

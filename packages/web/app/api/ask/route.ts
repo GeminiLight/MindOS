@@ -230,6 +230,17 @@ function getLastUserContent(messages: FrontendMessage[]): string {
   return '';
 }
 
+function getLastUserSkillName(messages: FrontendMessage[]): string | undefined {
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    const message = messages[i] as FrontendMessage & { skillName?: unknown } | undefined;
+    if (message?.role !== 'user') continue;
+    return typeof message.skillName === 'string' && message.skillName.trim()
+      ? message.skillName.trim()
+      : undefined;
+  }
+  return undefined;
+}
+
 function runtimeBindingResumeState(
   runtime: Partial<AgentRuntimeIdentity>,
   binding: unknown,
@@ -524,6 +535,7 @@ export async function POST(req: NextRequest) {
   // These are already truncated client-side (80K limit), so only apply a generous
   // server-side cap to guard against malformed requests.
   const uploadedParts = createMindosUploadedFileParts(uploadedFiles);
+  const selectedSkillName = getLastUserSkillName(messages);
 
   if (verifiedNativeRuntime || selectedAcpAgent) {
     const mindRoot = getMindRoot();
@@ -550,6 +562,7 @@ export async function POST(req: NextRequest) {
       fileContext,
       uploadedParts,
       recalledKnowledge,
+      selectedSkillName,
     });
 
     return createAskSseResponse((send) => runWithAgentRunContext({ chatSessionId }, async () => {
@@ -858,6 +871,7 @@ export async function POST(req: NextRequest) {
     messages: mindosUiMessages,
     agentInitialization,
     activeRecall: agentConfig.activeRecall,
+    selectedSkillName,
   }, {
     loadFileContext: loadAttachedFileContext,
     recallKnowledge: (query, options) => performActiveRecall(mindRoot, query, options),

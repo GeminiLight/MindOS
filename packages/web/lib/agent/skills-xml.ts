@@ -22,7 +22,7 @@ export function generateSkillsXml(skills: Array<{ name: string; description: str
     '',
     'Invocation patterns:',
     '- User says "read/use/load <skill-name>" → call load_skill("<skill-name>")',
-    '- User selects a skill via slash command → see "Active Skill Request" section above',
+    '- User selects a skill via slash command → follow the current turn\'s "Active Skill Request" section',
     '- Task naturally matches a skill description → proactively call load_skill',
     '',
     '<available_skills>',

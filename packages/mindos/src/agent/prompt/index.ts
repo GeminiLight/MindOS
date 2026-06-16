@@ -9,18 +9,21 @@ export {
 
 export {
   MINDOS_AGENT_MANIFEST,
-  buildMindosContextPrompt,
   buildMindosSystemPrompt,
+  type BuildMindosSystemPromptInput,
+  type MindosAgentManifest,
+  type MindosPromptSection,
+  type MindosSystemPromptEnvironment,
+} from './system-prompt.js';
+
+export {
+  buildMindosContextPrompt,
   compactMindosPromptForTokenBudget,
   formatMindosAskTimeContext,
   type BuildMindosContextPromptInput,
   type BuildMindosContextPromptServices,
-  type BuildMindosSystemPromptInput,
   type CompactMindosPromptOptions,
-  type MindosAgentManifest,
   type MindosAskActiveRecallConfig,
   type MindosAskInitializationContext,
   type MindosAskPromptMessage,
-  type MindosPromptSection,
-  type MindosSystemPromptEnvironment,
-} from './system-prompt.js';
+} from './context-prompt.js';
