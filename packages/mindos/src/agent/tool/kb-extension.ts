@@ -5,7 +5,7 @@
 // Hosts keep a real extension entry file (the pi DefaultResourceLoader loads
 // it by file path) that wires their toolkit into createMindosKbExtension().
 //
-// Mode-based filtering (chat/organize/agent) is controlled by
+// Permission-based filtering (readonly/organize/agent) is controlled by
 // runWithKbPermissionPolicy() (request-scoped) or setKbMode()/
 // setKbPermissionPolicy() (process fallback), evaluated at reload() time.
 //
@@ -21,6 +21,7 @@ import type { TSchema } from '@sinclair/typebox';
 import { assertNotProtected } from '../../foundation/security/index.js';
 import {
   createMindosAgentPermissionPolicy,
+  type MindosAgentPermissionPolicyMode,
   type MindosAgentPermissionPolicy,
 } from './permission-policy.js';
 import {
@@ -31,9 +32,9 @@ import {
 } from '../global-state.js';
 import { WRITE_TOOLS, type MindosAgentTool } from './kb-tools.js';
 
-// ─── Mode-based tool filtering ───────────────────────────────────────────────
+// ─── Permission-based tool filtering ─────────────────────────────────────────
 
-export type KbMode = 'agent' | 'chat' | 'organize';
+export type KbMode = MindosAgentPermissionPolicyMode;
 
 function getPolicyStorage(): AsyncLocalStorage<MindosAgentPermissionPolicy> {
   return getProcessGlobal(

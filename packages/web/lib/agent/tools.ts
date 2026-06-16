@@ -25,8 +25,8 @@ import {
 import type { MindosAgentPermissionPolicy } from '@geminilight/mindos/agent/tool/permission-policy';
 
 export {
-  CHAT_TOOL_NAMES,
   ORGANIZE_TOOL_NAMES,
+  READONLY_TOOL_NAMES,
   WRITE_TOOLS,
   truncate,
 } from '@geminilight/mindos/agent/tool/kb-tools';
@@ -104,9 +104,9 @@ export function getOrganizeTools(): MindosAgentTool[] {
   return toolkit.getOrganizeTools();
 }
 
-/** Read-only tool set for Chat mode. */
-export function getChatTools(): MindosAgentTool[] {
-  return toolkit.getChatTools();
+/** Read-only knowledge-base tool set. */
+export function getReadonlyTools(): MindosAgentTool[] {
+  return toolkit.getReadonlyTools();
 }
 
 export function getRequestScopedTools(): MindosAgentTool[] {

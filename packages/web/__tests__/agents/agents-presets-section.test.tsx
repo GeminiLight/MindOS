@@ -446,7 +446,8 @@ Write an updated morning brief.
     const askCall = fetchMock.mock.calls.find(([url, init]) => url === '/api/ask' && init?.method === 'POST');
     expect(askCall).toBeTruthy();
     const askBody = JSON.parse(askCall![1]!.body as string);
-    expect(askBody.mode).toBe('chat');
+    expect(askBody.mode).toBe('agent');
+    expect(askBody.runtimeOptions).toEqual({ permissionMode: 'readonly' });
     expect(askBody.messages[0].content).toContain('Research Scout');
     expect(askBody.messages[0].content).toContain('readonly mode');
     expect(host.textContent).toContain('Run summary');

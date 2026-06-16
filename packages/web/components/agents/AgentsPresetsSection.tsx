@@ -1970,7 +1970,8 @@ async function runPromptAssistant(assistant: AssistantView): Promise<string> {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      mode: 'chat',
+      mode: 'agent',
+      runtimeOptions: { permissionMode: 'readonly' },
       messages: [{
         role: 'user',
         content: buildAssistantRunPrompt(assistant),

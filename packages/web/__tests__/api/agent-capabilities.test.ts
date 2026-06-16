@@ -22,7 +22,7 @@ describe('GET /api/agent-capabilities', () => {
         source: 'mindos',
         status: 'available',
         permissionRequired: 'readonly',
-        availableInModes: ['chat', 'organize', 'agent'],
+        availableInModes: ['organize', 'agent'],
       }],
       mcp: () => [{
         id: 'mcp:github:search_code',
@@ -39,12 +39,12 @@ describe('GET /api/agent-capabilities', () => {
 
   it('returns mode-filtered capabilities from the product handler', async () => {
     const { GET } = await importRoute();
-    const res = await GET(new Request('http://localhost/api/agent-capabilities?mode=chat&include=kb,mcp'));
+    const res = await GET(new Request('http://localhost/api/agent-capabilities?mode=organize&include=kb,mcp'));
 
     expect(res.status).toBe(200);
     expect(createAgentCapabilitiesServices).toHaveBeenCalledTimes(1);
     await expect(res.json()).resolves.toMatchObject({
-      mode: 'chat',
+      mode: 'organize',
       include: ['kb', 'mcp'],
       capabilities: [{
         id: 'kb:read',

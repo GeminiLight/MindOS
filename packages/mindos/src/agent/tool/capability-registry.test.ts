@@ -59,7 +59,7 @@ describe('kb-tool capabilities', () => {
       kind: 'kb-tool',
       name: 'Read file',
       permissionRequired: 'readonly',
-      availableInModes: ['chat', 'organize', 'agent'],
+      availableInModes: ['organize', 'agent'],
       supportsApprovals: false,
     });
 

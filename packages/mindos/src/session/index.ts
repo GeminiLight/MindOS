@@ -392,7 +392,7 @@ export function parseMindosSseLine(line: string): MindOSSSEvent | null {
   }
 }
 
-export type MindosAskMode = 'chat' | 'agent' | 'organize';
+export type MindosAskMode = 'agent' | 'organize';
 
 export type MindosAskFileValidationResult = {
   valid: boolean;
@@ -414,7 +414,6 @@ export type MindosAskFileContext = {
 
 export function normalizeMindosAskMode(mode: unknown): MindosAskMode {
   if (mode === 'organize') return 'organize';
-  if (mode === 'chat') return 'chat';
   return 'agent';
 }
 
@@ -423,7 +422,7 @@ export function normalizeMindosAskStepLimit(options: {
   requestedMaxSteps?: unknown;
   agentMaxSteps?: number;
 }): number {
-  const defaultMaxSteps = options.mode === 'chat' ? 8 : (options.agentMaxSteps ?? 20);
+  const defaultMaxSteps = options.agentMaxSteps ?? 20;
   const raw = typeof options.requestedMaxSteps === 'number' && Number.isFinite(options.requestedMaxSteps)
     ? options.requestedMaxSteps
     : defaultMaxSteps;
@@ -522,7 +521,7 @@ export function createMindosUploadedFileParts(
 
 export type MindosExternalRuntimePromptInput = {
   prompt: string;
-  mode?: 'chat' | 'agent' | 'organize';
+  mode?: MindosAskMode;
   fileContext?: MindosAskFileContext;
   uploadedParts?: string[];
   recalledKnowledge?: Array<{ path: string; content: string }>;
@@ -1192,6 +1191,7 @@ export type MindosPiAgentRuntimeOptions = {
   additionalSkillPaths?: string[];
   additionalExtensionPaths?: string[];
   requestTools: MindosExecutableTool[];
+  allowProjectBash?: boolean;
   bashTool: unknown;
   services: MindosPiAgentRuntimeServices;
 };
@@ -1326,13 +1326,14 @@ export async function createMindosPiAgentRuntime(options: MindosPiAgentRuntimeOp
     settingsManager,
     // Builtin read/edit/write/bash stay off: KB file access must flow through
     // the extension-registered KB tools (write-protection + audit log). The
-    // project-root bash tool is the only SDK customTool, and only in agent
-    // mode. options.requestTools is intentionally NOT passed here — SDK
+    // project-root bash tool is the only SDK customTool, and only when the
+    // request permission policy allows terminal access. options.requestTools is
+    // intentionally NOT passed here — SDK
     // customTools override extension-registered tools by name, which would
     // strip the kb-extension wrappers; requestTools is still used by the
     // non-streaming proxy fallback and exposed on the returned runtime.
     noTools: 'builtin',
-    customTools: options.mode === 'agent' ? [options.bashTool] : [],
+    customTools: options.mode === 'agent' && options.allowProjectBash !== false ? [options.bashTool] : [],
   });
 
   return {

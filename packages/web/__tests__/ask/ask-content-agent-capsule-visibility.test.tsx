@@ -156,7 +156,7 @@ vi.mock('@/components/ask/FileChip', () => ({ default: () => null }));
 vi.mock('@/components/ask/ModeCapsule', () => ({
   default: () => <div data-testid="permission-capsule">permission</div>,
   getPersistedPermissionLevel: () => 'ask',
-  permissionLevelToAskMode: (level: string) => level === 'read' ? 'chat' : 'agent',
+  permissionLevelToAskMode: () => 'agent',
   permissionLevelToNativeRuntimePermission: (level: string) => level === 'read' ? 'readonly' : 'agent',
 }));
 vi.mock('@/components/ask/ProviderModelCapsule', () => ({

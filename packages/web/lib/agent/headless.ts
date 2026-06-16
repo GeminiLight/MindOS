@@ -1,5 +1,4 @@
-import { getFileContent, getMindRoot } from '@/lib/fs';
-import { truncate } from '@/lib/agent/tools';
+import { getMindRoot } from '@/lib/fs';
 import { readSettings } from '@/lib/settings';
 import { getProjectRoot } from '@/lib/project-root';
 import type { AskModeApi, Message as FrontendMessage } from '@/lib/types';
@@ -15,7 +14,7 @@ import {
   isToolExecutionEndEvent,
   isToolExecutionStartEvent,
 } from '@geminilight/mindos/session';
-import { buildMindosAskSystemPrompt } from '@geminilight/mindos/agent';
+import { buildMindosContextPrompt, buildMindosSystemPrompt } from '@geminilight/mindos/agent';
 import { resolveHeadlessAgentMode, type HeadlessAgentEntryPoint } from './headless-mode-guard';
 
 export interface HeadlessAgentRunOptions {
@@ -35,27 +34,6 @@ export interface HeadlessAgentRunResult {
   toolCalls: Array<{ toolCallId: string; toolName: string; output: string; isError: boolean }>;
 }
 
-function readKnowledgeFile(filePath: string): { ok: boolean; content: string; truncated: boolean; error?: string } {
-  try {
-    const raw = getFileContent(filePath);
-    if (raw.length > 20_000) {
-      return {
-        ok: true,
-        content: truncate(raw),
-        truncated: true,
-      };
-    }
-    return { ok: true, content: raw, truncated: false };
-  } catch (err) {
-    return {
-      ok: false,
-      content: '',
-      truncated: false,
-      error: err instanceof Error ? err.message : String(err),
-    };
-  }
-}
-
 export async function runHeadlessAgent(options: HeadlessAgentRunOptions): Promise<HeadlessAgentRunResult> {
   const modeDecision = resolveHeadlessAgentMode({
     requestedMode: options.mode,
@@ -72,14 +50,20 @@ export async function runHeadlessAgent(options: HeadlessAgentRunOptions): Promis
   const projectRoot = getProjectRoot();
   const mindRoot = getMindRoot();
 
-  const systemPrompt = await buildMindosAskSystemPrompt({
+  const systemPrompt = buildMindosSystemPrompt({
+    mindRoot,
+    environment: {
+      projectRoot,
+      cwd: mindRoot,
+    },
+  });
+  const turnPrompt = await buildMindosContextPrompt({
+    prompt: options.userMessage,
     mode: askMode,
     mindRoot,
-    uploadedParts: [],
     messages: mindosUiMessages,
     activeRecall: agentConfig.activeRecall,
   }, {
-    readKnowledgeFile,
     loadFileContext: () => ({ contextParts: [], failedFiles: [] }),
     recallKnowledge: (query, recallOptions) => performActiveRecall(mindRoot, query, recallOptions),
     warn: (message, error) => console.warn(message, error),
@@ -88,14 +72,15 @@ export async function runHeadlessAgent(options: HeadlessAgentRunOptions): Promis
   const {
     createWebMindosPiRuntimeHostServices,
     getMindosWebPiRuntimePaths,
-    getMindosWebRequestTools,
+    getMindosWebRequestToolsForPolicy,
   } = await import('@/lib/agent/mindos-pi-runtime-host');
-  const runtimePaths = getMindosWebPiRuntimePaths({ projectRoot, mindRoot, serverSettings, mode: askMode });
   const { createMindosPiCodingAgentRuntime } = await import('@geminilight/mindos/session/pi-coding-agent');
   const { runWithKbPermissionPolicy } = await import('@/lib/agent/kb-extension');
   const { createMindosAgentPermissionPolicy } = await import('@geminilight/mindos/agent/tool/permission-policy');
+  const permissionPolicy = createMindosAgentPermissionPolicy(modeDecision.permissionPolicyMode);
+  const runtimePaths = getMindosWebPiRuntimePaths({ projectRoot, mindRoot, serverSettings, mode: askMode, permissionPolicy });
   // Scope the kb tool policy to this request — see route.ts for the rationale.
-  const runtime = await runWithKbPermissionPolicy(createMindosAgentPermissionPolicy(askMode), () => createMindosPiCodingAgentRuntime({
+  const runtime = await runWithKbPermissionPolicy(permissionPolicy, () => createMindosPiCodingAgentRuntime({
     mode: askMode,
     messages: mindosUiMessages,
     systemPrompt,
@@ -106,9 +91,10 @@ export async function runHeadlessAgent(options: HeadlessAgentRunOptions): Promis
     mindRoot,
     agentConfig,
     serverSettings,
-    requestTools: getMindosWebRequestTools(askMode),
+    requestTools: getMindosWebRequestToolsForPolicy(permissionPolicy),
     additionalSkillPaths: runtimePaths.additionalSkillPaths,
     additionalExtensionPaths: runtimePaths.additionalExtensionPaths,
+    allowProjectBash: permissionPolicy.toolScope.terminal,
     hostServices: createWebMindosPiRuntimeHostServices(serverSettings),
   }));
 
@@ -136,7 +122,7 @@ export async function runHeadlessAgent(options: HeadlessAgentRunOptions): Promis
   });
 
   await runtime.session.prompt(
-    runtime.lastUserContent,
+    turnPrompt,
     runtime.lastUserImages ? { images: runtime.lastUserImages } : undefined,
   );
 

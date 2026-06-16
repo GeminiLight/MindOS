@@ -98,22 +98,27 @@ describe('pi-subagents built-in extension', () => {
       vi.resetModules();
       try {
         const { getMindosWebPiRuntimePaths } = await import('@/lib/agent/mindos-pi-runtime-host');
+        const { createMindosAgentPermissionPolicy } = await import('@geminilight/mindos/agent/tool/permission-policy');
         const base = {
           projectRoot: path.resolve(PROJECT_ROOT, '..', '..'),
           mindRoot: PROJECT_ROOT,
           serverSettings: {},
         };
 
-        const chatPaths = getMindosWebPiRuntimePaths({ ...base, mode: 'chat' });
-        const chatExtensionList = chatPaths.additionalExtensionPaths.join('\n');
-        expect(chatExtensionList).toContain('kb-extension');
-        expect(chatExtensionList).toContain('ask-user-question-bridge-extension');
-        expect(chatExtensionList).toContain('web-search-extension');
-        expect(chatExtensionList).toContain('pi-web-access');
-        expect(chatExtensionList).not.toContain('pi-mcp-adapter');
-        expect(chatExtensionList).not.toContain('subagent-ledger-extension');
-        expect(chatExtensionList).not.toContain(path.join('lib', 'im', 'index.ts'));
-        expect(chatExtensionList).not.toContain('schedule-prompt');
+        const readonlyPaths = getMindosWebPiRuntimePaths({
+          ...base,
+          mode: 'agent',
+          permissionPolicy: createMindosAgentPermissionPolicy('readonly'),
+        });
+        const readonlyExtensionList = readonlyPaths.additionalExtensionPaths.join('\n');
+        expect(readonlyExtensionList).toContain('kb-extension');
+        expect(readonlyExtensionList).toContain('ask-user-question-bridge-extension');
+        expect(readonlyExtensionList).toContain('web-search-extension');
+        expect(readonlyExtensionList).toContain('pi-web-access');
+        expect(readonlyExtensionList).not.toContain('pi-mcp-adapter');
+        expect(readonlyExtensionList).not.toContain('subagent-ledger-extension');
+        expect(readonlyExtensionList).not.toContain(path.join('lib', 'im', 'index.ts'));
+        expect(readonlyExtensionList).not.toContain('schedule-prompt');
 
         const organizePaths = getMindosWebPiRuntimePaths({ ...base, mode: 'organize' });
         const organizeExtensionList = organizePaths.additionalExtensionPaths.join('\n');

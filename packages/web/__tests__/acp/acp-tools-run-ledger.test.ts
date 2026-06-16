@@ -82,7 +82,7 @@ describe('call_acp_agent run ledger integration', () => {
     ]);
   });
 
-  it.each(['chat', 'organize'] as const)('uses readonly ACP sessions when tool context carries %s policy', async (askMode) => {
+  it.each(['readonly', 'organize'] as const)('uses readonly ACP sessions when tool context carries %s policy', async (askMode) => {
     mockFindAcpAgent.mockResolvedValue({
       id: 'gemini',
       name: 'Gemini CLI',

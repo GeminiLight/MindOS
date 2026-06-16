@@ -32,15 +32,16 @@ describe('Permission capsule persistence', () => {
     store[STORAGE_KEY] = 'read';
     const { getPersistedPermissionLevel, getPersistedMode } = await import('@/components/ask/ModeCapsule');
     expect(getPersistedPermissionLevel()).toBe('read');
-    expect(getPersistedMode()).toBe('chat');
+    expect(getPersistedMode()).toBe('agent');
   });
 
   it('migrates legacy chat mode to read permission', async () => {
     store[LEGACY_STORAGE_KEY] = 'chat';
     const { getPersistedPermissionLevel, getPersistedMode } = await import('@/components/ask/ModeCapsule');
     expect(getPersistedPermissionLevel()).toBe('read');
-    expect(getPersistedMode()).toBe('chat');
+    expect(getPersistedMode()).toBe('agent');
     expect(store[STORAGE_KEY]).toBe('read');
+    expect(store[LEGACY_STORAGE_KEY]).toBeUndefined();
   });
 
   it('migrates legacy agent mode to ask permission', async () => {
@@ -57,26 +58,26 @@ describe('Permission capsule persistence', () => {
     expect(getPersistedPermissionLevel()).toBe('ask');
   });
 
-  it('persists permission level and legacy ask mode compatibility value', async () => {
+  it('persists permission level without writing legacy ask mode values', async () => {
     const { persistPermissionLevel, persistMode } = await import('@/components/ask/ModeCapsule');
     persistPermissionLevel('read');
     expect(store[STORAGE_KEY]).toBe('read');
-    expect(store[LEGACY_STORAGE_KEY]).toBe('chat');
+    expect(store[LEGACY_STORAGE_KEY]).toBeUndefined();
 
     persistPermissionLevel('full');
     expect(store[STORAGE_KEY]).toBe('full');
-    expect(store[LEGACY_STORAGE_KEY]).toBe('agent');
+    expect(store[LEGACY_STORAGE_KEY]).toBeUndefined();
 
     persistMode('chat');
     expect(store[STORAGE_KEY]).toBe('read');
-    expect(store[LEGACY_STORAGE_KEY]).toBe('chat');
+    expect(store[LEGACY_STORAGE_KEY]).toBeUndefined();
   });
 });
 
 describe('Permission level mapping', () => {
-  it('maps read permission to chat/readonly runtime behavior', async () => {
+  it('maps read permission to agent prompt mode plus readonly runtime behavior', async () => {
     const { permissionLevelToAskMode, permissionLevelToNativeRuntimePermission } = await import('@/components/ask/ModeCapsule');
-    expect(permissionLevelToAskMode('read')).toBe('chat');
+    expect(permissionLevelToAskMode('read')).toBe('agent');
     expect(permissionLevelToNativeRuntimePermission('read')).toBe('readonly');
   });
 

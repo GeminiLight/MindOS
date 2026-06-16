@@ -56,13 +56,13 @@ afterEach(() => {
 
 describe('KB permission policy resolution', () => {
   it('prefers the request-scoped policy over the process fallback', () => {
-    setKbMode('chat');
+    setKbMode('readonly');
     const agentPolicy = createMindosAgentPermissionPolicy('agent');
 
     const observed = runWithKbPermissionPolicy(agentPolicy, () => getEffectiveKbPermissionPolicy());
 
     expect(observed).toBe(agentPolicy);
-    expect(getEffectiveKbPermissionPolicy().mode).toBe('chat');
+    expect(getEffectiveKbPermissionPolicy().mode).toBe('readonly');
   });
 
   it('returns sync and async results from runWithKbPermissionPolicy', async () => {
@@ -88,11 +88,11 @@ describe('createMindosKbExtension', () => {
       },
     });
     const { pi, registered } = createFakePi();
-    const chatPolicy = createMindosAgentPermissionPolicy('chat');
+    const readonlyPolicy = createMindosAgentPermissionPolicy('readonly');
 
-    runWithKbPermissionPolicy(chatPolicy, () => extension(pi));
+    runWithKbPermissionPolicy(readonlyPolicy, () => extension(pi));
 
-    expect(seenPolicies).toEqual([chatPolicy]);
+    expect(seenPolicies).toEqual([readonlyPolicy]);
     expect(registered.map((tool) => tool.name)).toEqual(['read_file', 'search']);
   });
 

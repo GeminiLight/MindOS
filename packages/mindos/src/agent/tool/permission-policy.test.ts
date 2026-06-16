@@ -6,11 +6,11 @@ import {
 } from './permission-policy.js';
 
 describe('MindOS agent permission policy', () => {
-  it('maps chat mode to readonly tool scope', () => {
-    const policy = createMindosAgentPermissionPolicy('chat');
+  it('maps readonly permission policy to a read-only tool scope', () => {
+    const policy = createMindosAgentPermissionPolicy('readonly');
 
     expect(policy).toMatchObject({
-      mode: 'chat',
+      mode: 'readonly',
       permissionMode: 'readonly',
       runtimePermissionMode: 'readonly',
       acpPermissionMode: 'readonly',
@@ -109,18 +109,18 @@ describe('MindOS agent permission policy', () => {
     expect(hasMindosExtensionScope(policy, 'schedule-prompt')).toBe(true);
   });
 
-  it('derives external harness permission from policy instead of non-chat branches', () => {
-    expect(createMindosAgentPermissionPolicy('chat').runtimePermissionMode).toBe('readonly');
+  it('derives external harness permission from the explicit permission policy', () => {
+    expect(createMindosAgentPermissionPolicy('readonly').runtimePermissionMode).toBe('readonly');
     expect(createMindosAgentPermissionPolicy('organize').runtimePermissionMode).toBe('readonly');
     expect(createMindosAgentPermissionPolicy('agent').runtimePermissionMode).toBe('agent');
 
-    expect(createMindosAgentPermissionPolicy('chat').acpPermissionMode).toBe('readonly');
+    expect(createMindosAgentPermissionPolicy('readonly').acpPermissionMode).toBe('readonly');
     expect(createMindosAgentPermissionPolicy('organize').acpPermissionMode).toBe('readonly');
     expect(createMindosAgentPermissionPolicy('agent').acpPermissionMode).toBe('agent');
   });
 
   it('maps runtime contexts into the same policy contract', () => {
-    expect(createMindosAgentPermissionPolicyFromContext({ permissionMode: 'readonly' }).mode).toBe('chat');
+    expect(createMindosAgentPermissionPolicyFromContext({ permissionMode: 'readonly' }).mode).toBe('readonly');
     expect(createMindosAgentPermissionPolicyFromContext({ askMode: 'organize' }).acpPermissionMode).toBe('readonly');
     expect(createMindosAgentPermissionPolicyFromContext({ mode: 'agent' }).toolScope.subagents).toBe(true);
     expect(createMindosAgentPermissionPolicyFromContext(undefined).mode).toBe('agent');

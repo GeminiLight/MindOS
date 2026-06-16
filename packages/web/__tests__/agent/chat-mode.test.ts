@@ -1,17 +1,17 @@
 import { describe, it, expect } from 'vitest';
-import { getChatTools, getOrganizeTools, knowledgeBaseTools, WRITE_TOOLS } from '@/lib/agent/tools';
+import { getReadonlyTools, getOrganizeTools, knowledgeBaseTools, WRITE_TOOLS } from '@/lib/agent/tools';
 import { MINDOS_SYSTEM_PROMPT } from '@/lib/agent/prompt';
 
 // ---------------------------------------------------------------------------
-// getChatTools — tool set correctness
+// getReadonlyTools — tool set correctness
 // ---------------------------------------------------------------------------
 
-describe('getChatTools', () => {
-  const chatTools = getChatTools();
-  const chatToolNames = chatTools.map(t => t.name);
+describe('getReadonlyTools', () => {
+  const readonlyTools = getReadonlyTools();
+  const readonlyToolNames = readonlyTools.map(t => t.name);
 
   it('returns a non-empty array of tools', () => {
-    expect(chatTools.length).toBeGreaterThan(0);
+    expect(readonlyTools.length).toBeGreaterThan(0);
   });
 
   it('returns the approved read-only tools including skill loading', () => {
@@ -20,38 +20,38 @@ describe('getChatTools', () => {
       'list_files', 'read_file', 'read_file_chunk',
       'search', 'load_skill', 'get_recent', 'get_backlinks',
     ];
-    expect(new Set(chatToolNames)).toEqual(new Set(expected));
+    expect(new Set(readonlyToolNames)).toEqual(new Set(expected));
   });
 
   it('is a strict subset of knowledgeBaseTools', () => {
     const allNames = new Set(knowledgeBaseTools.map(t => t.name));
-    for (const name of chatToolNames) {
+    for (const name of readonlyToolNames) {
       expect(allNames.has(name)).toBe(true);
     }
   });
 
   it('contains zero write tools', () => {
-    for (const name of chatToolNames) {
+    for (const name of readonlyToolNames) {
       expect(WRITE_TOOLS.has(name)).toBe(false);
     }
   });
 
   it('excludes delegation and destructive file tools', () => {
-    expect(chatToolNames).not.toContain('list_acp_agents');
-    expect(chatToolNames).not.toContain('call_acp_agent');
-    expect(chatToolNames).not.toContain('delegate_to_agent');
-    expect(chatToolNames).not.toContain('orchestrate');
-    expect(chatToolNames).not.toContain('delete_file');
-    expect(chatToolNames).not.toContain('rename_file');
-    expect(chatToolNames).not.toContain('move_file');
+    expect(readonlyToolNames).not.toContain('list_acp_agents');
+    expect(readonlyToolNames).not.toContain('call_acp_agent');
+    expect(readonlyToolNames).not.toContain('delegate_to_agent');
+    expect(readonlyToolNames).not.toContain('orchestrate');
+    expect(readonlyToolNames).not.toContain('delete_file');
+    expect(readonlyToolNames).not.toContain('rename_file');
+    expect(readonlyToolNames).not.toContain('move_file');
   });
 
   it('is significantly smaller than full tool set', () => {
-    expect(chatTools.length).toBeLessThan(knowledgeBaseTools.length);
+    expect(readonlyTools.length).toBeLessThan(knowledgeBaseTools.length);
   });
 
   it('each tool has a valid execute function', () => {
-    for (const tool of chatTools) {
+    for (const tool of readonlyTools) {
       expect(typeof tool.execute).toBe('function');
     }
   });
@@ -125,12 +125,12 @@ describe('MINDOS_SYSTEM_PROMPT', () => {
 describe('AskMode type', () => {
   it('accepts valid mode values', async () => {
     const { AskMode } = await import('@/lib/types') as any;
-    const validModes: Array<import('@/lib/types').AskMode> = ['chat', 'agent'];
-    expect(validModes).toHaveLength(2);
+    const validModes: Array<import('@/lib/types').AskMode> = ['agent'];
+    expect(validModes).toHaveLength(1);
   });
 
   it('AskModeApi includes organize', async () => {
-    const validModes: Array<import('@/lib/types').AskModeApi> = ['chat', 'agent', 'organize'];
-    expect(validModes).toHaveLength(3);
+    const validModes: Array<import('@/lib/types').AskModeApi> = ['agent', 'organize'];
+    expect(validModes).toHaveLength(2);
   });
 });

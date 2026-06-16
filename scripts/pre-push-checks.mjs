@@ -28,6 +28,19 @@ function read(command, args) {
   return result.stdout.trim();
 }
 
+function gitLocalEnvVarNames() {
+  const output = read('git', ['rev-parse', '--local-env-vars']);
+  return output ? output.split('\n').filter(Boolean) : [];
+}
+
+function envWithoutGitHookVars(extra = {}) {
+  const env = { ...process.env, ...extra };
+  for (const key of gitLocalEnvVarNames()) {
+    delete env[key];
+  }
+  return env;
+}
+
 function parseUpdates(stdin) {
   return stdin
     .trim()
@@ -115,11 +128,10 @@ if (commands.length === 0) {
 
 for (const { command, args } of commands) {
   run(command, args, {
-    env: {
-      ...process.env,
+    env: envWithoutGitHookVars({
       MINDOS_WEB_PORT: process.env.MINDOS_WEB_PORT || '19456',
       MINDOS_MCP_PORT: process.env.MINDOS_MCP_PORT || '19781',
-    },
+    }),
   });
 }
 

@@ -834,7 +834,7 @@ describe('MindOS server contract: runtime, ask stream, static web', () => {
 
     const valid = handleAskStream({
       messages: [{ role: 'user', content: 'hello' }],
-      mode: 'chat',
+      mode: 'agent',
       attachedFiles: ['note.md', 123],
       selectedRuntime: { id: 'codex', name: 'Codex', kind: 'codex' },
       runtimeBinding: {
@@ -860,7 +860,7 @@ describe('MindOS server contract: runtime, ask stream, static web', () => {
     const events = [];
     for await (const event of valid.body) events.push(event);
     expect(events).toEqual([
-      { type: 'status', message: 'mode=chat;runtime=codex:codex' },
+      { type: 'status', message: 'mode=agent;runtime=codex:codex' },
       { type: 'status', message: 'binding=codex-thread:thr_123' },
       { type: 'text_delta', delta: 'hello' },
       { type: 'done' },

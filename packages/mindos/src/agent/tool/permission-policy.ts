@@ -1,6 +1,7 @@
 import type { MindosAskMode } from '../../session/index.js';
 import type { AgentRunPermissionMode } from '../run-ledger-types.js';
 
+export type MindosAgentPermissionPolicyMode = MindosAskMode | 'readonly';
 export type MindosHarnessPermissionMode = 'readonly' | 'agent';
 export type MindosKbWriteScope = 'none' | 'organize' | 'all';
 
@@ -31,7 +32,7 @@ export interface MindosAgentToolScope {
 }
 
 export interface MindosAgentPermissionPolicy {
-  mode: MindosAskMode;
+  mode: MindosAgentPermissionPolicyMode;
   permissionMode: AgentRunPermissionMode;
   runtimePermissionMode: MindosHarnessPermissionMode;
   acpPermissionMode: MindosHarnessPermissionMode;
@@ -56,7 +57,7 @@ export const MINDOS_WRITE_TOOL_NAMES = [
   'dreaming',
 ] as const;
 
-export const MINDOS_CHAT_KB_TOOL_NAMES = [
+export const MINDOS_READONLY_KB_TOOL_NAMES = [
   'list_files',
   'read_file',
   'read_file_chunk',
@@ -95,9 +96,9 @@ const AGENT_EXTENSION_SCOPES = [
   'schedule-prompt',
 ] as const satisfies readonly MindosExtensionScope[];
 
-function normalizePolicyMode(mode: unknown): MindosAskMode {
-  if (mode === 'readonly') return 'chat';
-  if (mode === 'chat' || mode === 'organize' || mode === 'agent') return mode;
+function normalizePolicyMode(mode: unknown): MindosAgentPermissionPolicyMode {
+  if (mode === 'readonly') return 'readonly';
+  if (mode === 'organize' || mode === 'agent') return mode;
   return 'agent';
 }
 
@@ -121,9 +122,9 @@ function fullToolScope(): MindosAgentToolScope {
 export function createMindosAgentPermissionPolicy(mode: unknown): MindosAgentPermissionPolicy {
   const normalized = normalizePolicyMode(mode);
 
-  if (normalized === 'chat') {
+  if (normalized === 'readonly') {
     return {
-      mode: 'chat',
+      mode: 'readonly',
       permissionMode: 'readonly',
       runtimePermissionMode: 'readonly',
       acpPermissionMode: 'readonly',
@@ -141,7 +142,7 @@ export function createMindosAgentPermissionPolicy(mode: unknown): MindosAgentPer
         schedule: false,
         userExtensions: false,
       },
-      kbToolNames: [...MINDOS_CHAT_KB_TOOL_NAMES],
+      kbToolNames: [...MINDOS_READONLY_KB_TOOL_NAMES],
       writeToolNames: [...MINDOS_WRITE_TOOL_NAMES],
       extensionScopes: [...SAFE_EXTENSION_SCOPES],
     };
@@ -189,7 +190,7 @@ export function createMindosAgentPermissionPolicy(mode: unknown): MindosAgentPer
 
 export function createMindosAgentPermissionPolicyFromContext(
   context: unknown,
-  fallbackMode: MindosAskMode = 'agent',
+  fallbackMode: MindosAgentPermissionPolicyMode = 'agent',
 ): MindosAgentPermissionPolicy {
   if (!context || typeof context !== 'object') {
     return createMindosAgentPermissionPolicy(fallbackMode);

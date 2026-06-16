@@ -304,7 +304,7 @@ describe('/api/ask native runtime routing', () => {
     expect(toolEvent).not.toHaveProperty('visibility');
   });
 
-  it('maps Chat mode native runtime requests to readonly permission mode', async () => {
+  it('maps readonly permission requests to readonly native runtime mode', async () => {
     mockResolveCommandPath.mockImplementation(async (command: string) => command === 'claude' ? '/usr/local/bin/claude' : null);
     mockCheckNativeRuntimeHealth.mockResolvedValue({ status: 'available' });
     mockDetectLocalAcpAgents.mockResolvedValue({ installed: [], notInstalled: [] });
@@ -313,7 +313,8 @@ describe('/api/ask native runtime routing', () => {
     const res = await POST(askRequest({
       messages: [{ role: 'user', content: 'Read the workspace only' }],
       selectedRuntime: { id: 'claude', name: 'Claude Code', kind: 'claude' },
-      mode: 'chat',
+      mode: 'agent',
+      runtimeOptions: { permissionMode: 'readonly' },
     }));
 
     expect(res.status).toBe(200);
@@ -879,7 +880,8 @@ describe('/api/ask native runtime routing', () => {
     const res = await POST(askRequest({
       messages: [{ role: 'user', content: 'Use the selected ACP agent' }],
       selectedRuntime: { id: 'gemini', name: 'Gemini ACP', kind: 'acp' },
-      mode: 'chat',
+      mode: 'agent',
+      runtimeOptions: { permissionMode: 'readonly' },
     }));
     const text = await res.text();
 

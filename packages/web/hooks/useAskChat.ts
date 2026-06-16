@@ -75,7 +75,7 @@ export interface AskChatRefs {
 
 interface UseAskChatOpts {
   currentFile?: string;
-  chatMode: AskMode;
+  askMode: AskMode;
   providerOverride: ProviderId | `p_${string}` | null;
   modelOverride: string | null;
   nativeRuntimeOptions?: NativeRuntimeOptions;
@@ -89,7 +89,7 @@ interface UseAskChatOpts {
 
 export function useAskChat({
   currentFile,
-  chatMode,
+  askMode,
   providerOverride,
   modelOverride,
   nativeRuntimeOptions = {},
@@ -256,7 +256,7 @@ export function useAskChat({
     });
 
     const selectedRuntimeIsNative = selectedRuntimeBase?.kind === 'codex' || selectedRuntimeBase?.kind === 'claude';
-    const compactNativeRuntimeOptions: NativeRuntimeOptions = {
+    const compactRuntimeOptions: NativeRuntimeOptions = {
       ...(nativeRuntimeOptions.permissionMode ? { permissionMode: nativeRuntimeOptions.permissionMode } : {}),
       ...(nativeRuntimeOptions.modelOverride?.trim() ? { modelOverride: nativeRuntimeOptions.modelOverride.trim() } : {}),
       ...(selectedRuntimeIsNative && nativeRuntimeOptions.reasoningEffort
@@ -278,12 +278,12 @@ export function useAskChat({
       selectedAcpAgent: acpAgent,
       selectedRuntime,
       runtimeBinding: matchingRuntimeBinding ?? null,
-      mode: chatMode,
+      mode: askMode,
       chatSessionId: sessionId,
       providerOverride: selectedRuntimeBase && selectedRuntimeBase.kind !== 'mindos' ? undefined : providerOverride ?? undefined,
       modelOverride: selectedRuntimeBase && selectedRuntimeBase.kind !== 'mindos' ? undefined : modelOverride ?? undefined,
-      runtimeOptions: selectedRuntimeIsNative && Object.keys(compactNativeRuntimeOptions).length > 0
-        ? compactNativeRuntimeOptions
+      runtimeOptions: Object.keys(compactRuntimeOptions).length > 0
+        ? compactRuntimeOptions
         : undefined,
     });
 
@@ -429,7 +429,7 @@ export function useAskChat({
       endRun(sessionId);
       if (abortRef.current === controller) abortRef.current = null;
     }
-  }, [currentFile, chatMode, providerOverride, modelOverride, nativeRuntimeOptions, errorLabels.noResponse, errorLabels.stopped, errorLabels.concurrentLimit, onFirstMessage, refs, resetInputState]);
+  }, [currentFile, askMode, providerOverride, modelOverride, nativeRuntimeOptions, errorLabels.noResponse, errorLabels.stopped, errorLabels.concurrentLimit, onFirstMessage, refs, resetInputState]);
 
   return {
     isLoading,

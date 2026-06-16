@@ -171,7 +171,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
   const [providerOverride, setProviderOverride] = useState<ProviderId | `p_${string}` | null>(null);
   const [modelOverride, setModelOverride] = useState<string | null>(null);
   const [nativeRuntimeOptions, setNativeRuntimeOptions] = useState<NativeRuntimeOptions>({});
-  const chatMode = useMemo(() => permissionLevelToAskMode(permissionLevel), [permissionLevel]);
+  const askMode = useMemo(() => permissionLevelToAskMode(permissionLevel), [permissionLevel]);
   const effectiveNativeRuntimeOptions = useMemo<NativeRuntimeOptions>(() => ({
     ...nativeRuntimeOptions,
     permissionMode: permissionLevelToNativeRuntimePermission(permissionLevel),
@@ -404,7 +404,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
   }), []);
   const chat = useAskChat({
     currentFile,
-    chatMode,
+    askMode,
     providerOverride,
     modelOverride,
     nativeRuntimeOptions: effectiveNativeRuntimeOptions,

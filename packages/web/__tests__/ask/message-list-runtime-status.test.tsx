@@ -287,7 +287,7 @@ describe('MessageList runtime status rendering', () => {
                 runtimeId: 'reviewer',
                 displayName: 'Reviewer',
                 status: 'running',
-                permissionMode: 'chat',
+                permissionMode: 'readonly',
                 inputSummary: 'Review the patch.',
                 startedAt: 1100,
               },
@@ -331,7 +331,7 @@ describe('MessageList runtime status rendering', () => {
     expect(html).toContain('Gemini ACP');
     expect(html).toContain('Failed');
     expect(html).toContain('agent crashed');
-    expect(html).toContain('chat');
+    expect(html).toContain('readonly');
     expect(html).toContain('agent');
     expect(html).toContain('Main answer');
   });

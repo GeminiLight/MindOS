@@ -23,12 +23,10 @@ import {
   MINDOS_SSE_HEADERS,
   encodeMindosSseEvent,
   type MindOSSSEvent,
-  buildMindosExternalRuntimePrompt,
   createMindosUploadedFileParts,
   dirnameOfMindosPath,
   expandMindosAskAttachedFiles,
   loadMindosAskFileContext,
-  normalizeMindosAskMode,
   normalizeMindosAskStepLimit,
   resolveMindosAgentTimeoutMs,
   runMindosAcpAskSession,
@@ -48,7 +46,8 @@ import {
 } from '@geminilight/mindos/server';
 import {
   appendSseEventToAgentRun,
-  buildMindosAskSystemPrompt,
+  buildMindosContextPrompt,
+  buildMindosSystemPrompt,
   type MindosAskInitializationContext,
 } from '@geminilight/mindos/agent';
 import {
@@ -208,6 +207,19 @@ function effectiveNativePermissionMode(
 ): NativeRuntimePermissionMode {
   if (askMode === 'organize') return 'readonly';
   return runtimeOptions.permissionMode ?? fallback;
+}
+
+function normalizeAskModeApiInput(value: unknown): AskModeApi | null {
+  if (value === undefined || value === null) return 'agent';
+  return value === 'agent' || value === 'organize' ? value : null;
+}
+
+function permissionPolicyModeForRequest(
+  askMode: AskModeApi,
+  runtimeOptions: NativeRuntimeOptions,
+): 'readonly' | 'organize' | 'agent' {
+  if (askMode === 'organize') return 'organize';
+  return runtimeOptions.permissionMode === 'readonly' ? 'readonly' : 'agent';
 }
 
 function getLastUserContent(messages: FrontendMessage[]): string {
@@ -422,7 +434,7 @@ export async function POST(req: NextRequest) {
     attachedFiles?: string[];
     uploadedFiles?: Array<{ name: string; content: string }>;
     maxSteps?: number;
-    /** Ask mode: 'chat' = read-only tools; 'agent' = full tools; 'organize' = lean import mode */
+    /** Ask prompt mode. Tool permissions are controlled by runtimeOptions.permissionMode. */
     mode?: AskModeApi;
     /** ACP agent selection: if present, route to ACP instead of MindOS */
     selectedAcpAgent?: { id: string; name: string } | null;
@@ -453,9 +465,14 @@ export async function POST(req: NextRequest) {
     ? null
     : (acpAgentFromRuntime(body.selectedRuntime) ?? legacySelectedAcpAgent);
   const attachedFiles = Array.isArray(rawAttached) ? expandAttachedFiles(rawAttached) : rawAttached;
-  const askMode: AskModeApi = normalizeMindosAskMode(body.mode);
-  const permissionPolicy = createMindosAgentPermissionPolicy(askMode);
+  const askMode = normalizeAskModeApiInput(body.mode);
+  if (!askMode) {
+    return apiError(ErrorCodes.INVALID_REQUEST, 'mode must be agent or organize', 400);
+  }
   const nativeRuntimeOptions = normalizeNativeRuntimeOptions(body.runtimeOptions);
+  const permissionPolicy = createMindosAgentPermissionPolicy(
+    permissionPolicyModeForRequest(askMode, nativeRuntimeOptions),
+  );
   const nativePermissionMode = effectiveNativePermissionMode(
     askMode,
     permissionPolicy.runtimePermissionMode,
@@ -467,7 +484,7 @@ export async function POST(req: NextRequest) {
 
   // Diagnostic: log attached files so silent failures are visible
   if (Array.isArray(attachedFiles) && attachedFiles.length > 0) {
-    console.log(`[ask] mode=${askMode} attachedFiles=${JSON.stringify(attachedFiles)} currentFile=${currentFile ?? 'none'}`);
+    console.log(`[ask] mode=${askMode} permission=${permissionPolicy.mode} attachedFiles=${JSON.stringify(attachedFiles)} currentFile=${currentFile ?? 'none'}`);
   }
 
   // Read agent config from settings
@@ -526,9 +543,10 @@ export async function POST(req: NextRequest) {
         excludePaths,
       });
     }
-    const externalPrompt = buildMindosExternalRuntimePrompt({
+    const externalPrompt = await buildMindosContextPrompt({
       prompt: lastUserContent,
       mode: askMode,
+      mindRoot,
       fileContext,
       uploadedParts,
       recalledKnowledge,
@@ -820,9 +838,20 @@ export async function POST(req: NextRequest) {
     };
   }
 
-  const systemPromptBase = await buildMindosAskSystemPrompt({
+  const mindRoot = getMindRoot();
+  const projectRoot = getProjectRoot();
+  const lastUserContent = getLastUserContent(messages);
+  const systemPromptBase = buildMindosSystemPrompt({
+    mindRoot,
+    environment: {
+      projectRoot,
+      cwd: mindRoot,
+    },
+  });
+  const turnPrompt = await buildMindosContextPrompt({
+    prompt: lastUserContent,
     mode: askMode,
-    mindRoot: getMindRoot(),
+    mindRoot,
     currentFile,
     attachedFiles,
     uploadedParts,
@@ -830,9 +859,8 @@ export async function POST(req: NextRequest) {
     agentInitialization,
     activeRecall: agentConfig.activeRecall,
   }, {
-    readKnowledgeFile,
     loadFileContext: loadAttachedFileContext,
-    recallKnowledge: (query, options) => performActiveRecall(getMindRoot(), query, options),
+    recallKnowledge: (query, options) => performActiveRecall(mindRoot, query, options),
     warn: (message, error) => console.warn(message, error),
   });
   let systemPrompt = systemPromptBase;
@@ -841,14 +869,12 @@ export async function POST(req: NextRequest) {
   console.log(`[ask] mode=${askMode} systemPrompt=${systemPrompt.length} chars (~${Math.ceil(systemPrompt.length / 4)} tokens)`);
 
   try {
-    const projectRoot = getProjectRoot();
-    const mindRoot = getMindRoot();
     const {
       createWebMindosPiRuntimeHostServices,
       getMindosWebPiRuntimePaths,
-      getMindosWebRequestTools,
+      getMindosWebRequestToolsForPolicy,
     } = await import('@/lib/agent/mindos-pi-runtime-host');
-    const runtimePaths = getMindosWebPiRuntimePaths({ projectRoot, mindRoot, serverSettings, mode: askMode });
+    const runtimePaths = getMindosWebPiRuntimePaths({ projectRoot, mindRoot, serverSettings, mode: askMode, permissionPolicy });
     const { createMindosPiCodingAgentRuntime } = await import('@geminilight/mindos/session/pi-coding-agent');
     const { runWithKbPermissionPolicy } = await import('@/lib/agent/kb-extension');
     // Scope the kb tool policy to this request: runtime creation reloads the
@@ -869,9 +895,10 @@ export async function POST(req: NextRequest) {
         contextStrategy,
       },
       serverSettings,
-      requestTools: getMindosWebRequestTools(askMode),
+      requestTools: getMindosWebRequestToolsForPolicy(permissionPolicy),
       additionalSkillPaths: runtimePaths.additionalSkillPaths,
       additionalExtensionPaths: runtimePaths.additionalExtensionPaths,
+      allowProjectBash: permissionPolicy.toolScope.terminal,
       hostServices: createWebMindosPiRuntimeHostServices(serverSettings),
     }));
     systemPrompt = runtime.systemPrompt;
@@ -938,7 +965,7 @@ export async function POST(req: NextRequest) {
               model: modelName,
               systemPrompt,
               historyMessages: llmHistoryMessages,
-              userContent: typeof lastUserContent === 'string' ? lastUserContent : JSON.stringify(lastUserContent),
+              userContent: turnPrompt,
               tools: requestTools,
               send: sendWithLedger,
               signal: req.signal,
@@ -956,7 +983,7 @@ export async function POST(req: NextRequest) {
                 steer: (message) => session.steer(message),
                 abort: () => session.abort(),
               },
-              prompt: lastUserContent,
+              prompt: turnPrompt,
               promptOptions: lastUserImages ? { images: lastUserImages } : undefined,
               stepLimit,
               timeoutMs: resolveMindosAgentTimeoutMs(process.env.MINDOS_AGENT_TIMEOUT_MS),

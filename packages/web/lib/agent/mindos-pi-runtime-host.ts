@@ -19,6 +19,7 @@ import { ensureMindosAgentMcpRuntimeConfig } from '@/lib/pi-integration/mcp-conf
 import {
   createMindosAgentPermissionPolicy,
   hasMindosExtensionScope,
+  type MindosAgentPermissionPolicy,
 } from '@geminilight/mindos/agent/tool/permission-policy';
 
 type WebServerSettings = {
@@ -33,7 +34,11 @@ type WebServerSettings = {
 };
 
 export function getMindosWebRequestTools(mode: MindosAskMode): MindosExecutableTool[] {
-  const tools = getToolsForMindosAgentPolicy(createMindosAgentPermissionPolicy(mode));
+  return getMindosWebRequestToolsForPolicy(createMindosAgentPermissionPolicy(mode));
+}
+
+export function getMindosWebRequestToolsForPolicy(policy: MindosAgentPermissionPolicy): MindosExecutableTool[] {
+  const tools = getToolsForMindosAgentPolicy(policy);
   return tools as unknown as MindosExecutableTool[];
 }
 
@@ -42,8 +47,9 @@ export function getMindosWebPiRuntimePaths(input: {
   mindRoot: string;
   serverSettings: WebServerSettings;
   mode: MindosAskMode;
+  permissionPolicy?: MindosAgentPermissionPolicy;
 }): { agentDir: string; additionalSkillPaths: string[]; additionalExtensionPaths: string[] } {
-  const policy = createMindosAgentPermissionPolicy(input.mode);
+  const policy = input.permissionPolicy ?? createMindosAgentPermissionPolicy(input.mode);
   const webAppDir = path.join(input.projectRoot, 'packages', 'web');
   const additionalExtensionPaths: string[] = [];
 

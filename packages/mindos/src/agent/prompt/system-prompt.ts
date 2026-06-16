@@ -1,15 +1,7 @@
 import type { MindosAskFileContext, MindosAskMode } from '../../session/index.js';
 import {
   MINDOS_SYSTEM_PROMPT,
-  ORGANIZE_SYSTEM_PROMPT,
 } from './base-prompt.js';
-
-export type MindosKnowledgeFile = {
-  ok: boolean;
-  content: string;
-  truncated: boolean;
-  error?: string;
-};
 
 export type MindosAskPromptMessage = {
   role?: unknown;
@@ -30,20 +22,54 @@ export type MindosAskInitializationContext = {
   initContextBlocks?: string[];
 };
 
-export type BuildMindosAskSystemPromptInput = {
-  mode: MindosAskMode;
+export type MindosAgentManifest = {
+  id: 'mindos';
+  name: string;
+  description: string;
+};
+
+export type MindosSystemPromptEnvironment = {
   mindRoot: string;
+  projectRoot?: string;
+  cwd?: string;
+  platform?: string;
+  isGitRepo?: boolean;
+  model?: {
+    provider?: string;
+    id?: string;
+  };
+};
+
+export type MindosPromptSection = {
+  title: string;
+  content: string | string[];
+};
+
+export type BuildMindosSystemPromptInput = {
+  mindRoot: string;
+  agent?: Partial<MindosAgentManifest>;
+  environment?: Partial<MindosSystemPromptEnvironment>;
+  skillsPrompt?: string;
+  extraSections?: MindosPromptSection[];
+};
+
+export type BuildMindosContextPromptInput = {
+  prompt: string;
+  mode?: MindosAskMode;
+  mindRoot?: string;
   currentFile?: string;
   attachedFiles?: string[];
+  fileContext?: MindosAskFileContext;
   uploadedParts?: string[];
+  recalledKnowledge?: Array<{ path: string; content: string }>;
   messages?: MindosAskPromptMessage[];
   agentInitialization?: MindosAskInitializationContext;
   activeRecall?: MindosAskActiveRecallConfig;
+  includeChatPanelBridge?: boolean;
 };
 
-export type BuildMindosAskSystemPromptServices = {
-  readKnowledgeFile(filePath: string): MindosKnowledgeFile;
-  loadFileContext(attachedFiles: string[] | undefined, currentFile: string | undefined, mode: MindosAskMode): MindosAskFileContext;
+export type BuildMindosContextPromptServices = {
+  loadFileContext?(attachedFiles: string[] | undefined, currentFile: string | undefined, mode: MindosAskMode): MindosAskFileContext;
   recallKnowledge?(query: string, options: {
     maxTokens?: number;
     maxFiles?: number;
@@ -61,78 +87,97 @@ export type CompactMindosPromptOptions = {
   onStrip?: (section: string, tokens: number) => void;
 };
 
-const MIN_USEFUL_CONTENT_LENGTH = 10;
+export const MINDOS_AGENT_MANIFEST: MindosAgentManifest = {
+  id: 'mindos',
+  name: 'MindOS',
+  description: 'Local knowledge-base assistant and agent runtime for searching, reading, organizing, and updating the user\'s MindOS knowledge.',
+};
 
-export async function buildMindosAskSystemPrompt(
-  input: BuildMindosAskSystemPromptInput,
-  services: BuildMindosAskSystemPromptServices,
-): Promise<string> {
-  if (input.mode === 'organize') return buildLeanPrompt(input, services, 'organize');
-  if (input.mode === 'chat') return buildLeanPrompt(input, services, 'chat');
-  return buildAgentPrompt(input, services);
-}
+export function buildMindosSystemPrompt(input: BuildMindosSystemPromptInput): string {
+  const manifest: MindosAgentManifest = {
+    ...MINDOS_AGENT_MANIFEST,
+    ...input.agent,
+    id: 'mindos',
+  };
+  const environment: MindosSystemPromptEnvironment = {
+    platform: process.platform,
+    ...input.environment,
+    mindRoot: input.environment?.mindRoot ?? input.mindRoot,
+  };
 
-function buildLeanPrompt(
-  input: BuildMindosAskSystemPromptInput,
-  services: BuildMindosAskSystemPromptServices,
-  mode: 'chat' | 'organize',
-): string {
-  const promptParts: string[] = [
-    mode === 'chat' ? MINDOS_SYSTEM_PROMPT : ORGANIZE_SYSTEM_PROMPT,
-    `---\n\nmind_root=${input.mindRoot}`,
+  const sections: MindosPromptSection[] = [
+    {
+      title: 'Agent Manifest',
+      content: renderAgentManifest(manifest),
+    },
+    {
+      title: 'Environment',
+      content: renderSystemEnvironment(environment),
+    },
   ];
 
-  const bootstrapIndex = services.readKnowledgeFile('README.md');
-  if (bootstrapIndex.ok && (mode === 'organize' || bootstrapIndex.content.trim().length > MIN_USEFUL_CONTENT_LENGTH)) {
-    promptParts.push(`---\n\n## Knowledge Base Structure\n\n${bootstrapIndex.content}`);
+  const skillsPrompt = input.skillsPrompt?.trim();
+  if (skillsPrompt) {
+    sections.push({
+      title: 'Available Skills',
+      content: [
+        'Skills are optional specialized workflows. Use the skill-loading tool only when the current task matches a listed skill or the user explicitly selected one.',
+        skillsPrompt,
+      ],
+    });
   }
 
-  if (mode === 'chat') {
-    promptParts.push(`---\n\n${formatMindosAskTimeContext(services, { includeUnix: false })}`);
-  }
+  if (input.extraSections?.length) sections.push(...input.extraSections);
 
-  appendFileContext(promptParts, services.loadFileContext(input.attachedFiles, input.currentFile, mode));
-  appendUploadedParts(promptParts, input.uploadedParts, mode);
-
-  return promptParts.join('\n\n');
+  return renderPromptWithSections(MINDOS_SYSTEM_PROMPT, sections);
 }
 
-async function buildAgentPrompt(
-  input: BuildMindosAskSystemPromptInput,
-  services: BuildMindosAskSystemPromptServices,
+export async function buildMindosContextPrompt(
+  input: BuildMindosContextPromptInput,
+  services: BuildMindosContextPromptServices = {},
 ): Promise<string> {
-  const initialization = input.agentInitialization ?? {};
-  const initFailures = initialization.initFailures ?? [];
-  const truncationWarnings = initialization.truncationWarnings ?? [];
-  const initContextBlocks = initialization.initContextBlocks ?? [];
-  const targetDir = initialization.targetDir ?? null;
-  const promptParts: string[] = [
-    MINDOS_SYSTEM_PROMPT,
-    `---\n\n${formatMindosAskTimeContext(services, { includeUnix: true })}`,
-  ];
+  const prompt = input.prompt.trim();
+  const mode = input.mode ?? 'agent';
+  const fileContext = input.fileContext ?? services.loadFileContext?.(input.attachedFiles, input.currentFile, mode);
+  const recalledKnowledge = input.recalledKnowledge ?? await recallMindosKnowledge(input, services);
+  const contextSections: MindosPromptSection[] = [];
+  const modeGuidance = getMindosContextModeGuidance(mode);
 
-  if (initFailures.length > 0 || truncationWarnings.length > 0) {
-    promptParts.push(`---\n\nInitialization status (auto-loaded at request start):\n\n${formatInitializationStatus({
-      mindRoot: input.mindRoot,
-      targetDir,
-      initFailures,
-      truncationWarnings,
-    })}`);
+  if (modeGuidance) {
+    contextSections.push({
+      title: 'MindOS Request Guidance',
+      content: modeGuidance,
+    });
   }
 
-  if (initContextBlocks.length > 0) {
-    promptParts.push(`---\n\nInitialization context:\n\n${initContextBlocks.join('\n\n---\n\n')}`);
+  contextSections.push({
+    title: 'Current Time Context',
+    content: formatMindosAskTimeContext(services, { includeUnix: true }).replace(/^## Current Time Context\n\n?/, ''),
+  });
+
+  if (input.includeChatPanelBridge !== false) {
+    contextSections.push({
+      title: 'MindOS Chat Panel Bridge',
+      content: 'If the available tools include `AskUserQuestion`, use it for user confirmations or structured choices that affect the next action. Keep questions concise and include concrete options.',
+    });
   }
 
-  appendFileContext(promptParts, services.loadFileContext(input.attachedFiles, input.currentFile, 'agent'));
-  appendUploadedParts(promptParts, input.uploadedParts, 'agent');
-  await appendActiveRecall(promptParts, input, services);
+  appendInitializationContext(contextSections, input);
+  appendFileContextSections(contextSections, fileContext);
+  appendUploadedContextSections(contextSections, input.uploadedParts);
+  appendRecalledKnowledgeSections(contextSections, recalledKnowledge);
 
-  return promptParts.join('\n\n');
+  if (contextSections.length === 0) return prompt;
+  return [
+    prompt,
+    '---',
+    '## MindOS Turn Context',
+    ...contextSections.map(renderSection),
+  ].filter(Boolean).join('\n\n');
 }
 
 export function formatMindosAskTimeContext(
-  services: Pick<BuildMindosAskSystemPromptServices, 'now' | 'formatLocalTime'>,
+  services: Pick<BuildMindosContextPromptServices, 'now' | 'formatLocalTime'>,
   options: { includeUnix: boolean },
 ): string {
   const now = services.now?.() ?? new Date();
@@ -191,59 +236,23 @@ function formatInitializationStatus(input: {
 }): string {
   const location = `mind_root=${input.mindRoot}${input.targetDir ? `, target_dir=${input.targetDir}` : ''}`;
   if (input.initFailures.length === 0) {
-    return `All initialization contexts loaded successfully. ${location}${input.truncationWarnings.length > 0 ? ` ⚠️ ${input.truncationWarnings.length} files truncated` : ''}`;
+    return `All initialization contexts loaded successfully. ${location}${input.truncationWarnings.length > 0 ? ` ${input.truncationWarnings.length} files truncated` : ''}`;
   }
 
-  return `Initialization issues:\n${input.initFailures.join('\n')}\n${location}${input.truncationWarnings.length > 0 ? `\n⚠️ Warnings:\n${input.truncationWarnings.join('\n')}` : ''}`;
+  return `Initialization issues:\n${input.initFailures.join('\n')}\n${location}${input.truncationWarnings.length > 0 ? `\nWarnings:\n${input.truncationWarnings.join('\n')}` : ''}`;
 }
 
-function appendFileContext(promptParts: string[], context: MindosAskFileContext) {
-  if (context.contextParts.length > 0) {
-    promptParts.push(
-      `---\n\n## Request Context\n\n`
-      + `### Attached files from the MindOS knowledge base\n\n`
-      + `These files already exist in the user's MindOS knowledge base or local workspace. `
-      + `They have stable paths. Cite their paths when using them, and use file tools to re-read or search them only when needed.\n\n`
-      + context.contextParts.join('\n\n---\n\n'),
-    );
-  }
-  if (context.failedFiles.length > 0) {
-    promptParts.push(`---\n\n## Unavailable attached files from the MindOS knowledge base\n\nThe following attached files could not be read: ${context.failedFiles.join(', ')}. Inform the user that these files were not loaded.`);
-  }
-}
-
-function appendUploadedParts(promptParts: string[], uploadedParts: string[] | undefined, mode: MindosAskMode) {
-  if (!uploadedParts || uploadedParts.length === 0) return;
-  if (mode === 'agent') {
-    promptParts.push(
-      `---\n\n## Files uploaded by the user for this request\n\n`
-      + `The user uploaded the following file(s) in this conversation. `
-      + `Their full content is provided below. Use this content directly when the user refers to these files. `
-      + `Do not use read_file or search tools to find uploaded files unless you first save them into the MindOS knowledge base.\n\n`
-      + uploadedParts.join('\n\n---\n\n'),
-    );
-    return;
-  }
-
-  promptParts.push(
-    `---\n\n## Files uploaded by the user for this request\n\n`
-    + `Their full content is below. Use this directly. Do not call read tools on uploaded files unless you first save them into the MindOS knowledge base.\n\n`
-    + uploadedParts.join('\n\n---\n\n'),
-  );
-}
-
-async function appendActiveRecall(
-  promptParts: string[],
-  input: BuildMindosAskSystemPromptInput,
-  services: BuildMindosAskSystemPromptServices,
-) {
-  if (!services.recallKnowledge) return;
+async function recallMindosKnowledge(
+  input: BuildMindosContextPromptInput,
+  services: BuildMindosContextPromptServices,
+): Promise<Array<{ path: string; content: string }>> {
+  if (!services.recallKnowledge) return [];
   const arConfig = input.activeRecall ?? {};
-  if (arConfig.enabled === false) return;
+  if (arConfig.enabled === false) return [];
 
   const lastUserMsg = (input.messages ?? []).filter((message) => message.role === 'user').pop();
-  const userQuery = typeof lastUserMsg?.content === 'string' ? lastUserMsg.content : '';
-  if (userQuery.trim().length <= 1) return;
+  const userQuery = typeof lastUserMsg?.content === 'string' ? lastUserMsg.content : input.prompt;
+  if (userQuery.trim().length <= 1) return [];
 
   const excludePaths = [
     ...(input.currentFile ? [input.currentFile] : []),
@@ -257,16 +266,147 @@ async function appendActiveRecall(
       minScore: arConfig.minScore,
       excludePaths,
     });
-    if (recalled.length === 0) return;
-    const block = recalled.map((item) => `### ${item.path}\n\n${item.content}`).join('\n\n---\n\n');
-    promptParts.push(
-      `---\n\n## KNOWLEDGE CONTEXT (auto-recalled)\n\n`
-      + `The following notes were automatically found in the knowledge base based on the user's question. `
-      + `Reference this content to provide accurate, grounded answers. `
-      + `Cite the file path when using information from a specific note.\n\n`
-      + block,
-    );
+    return recalled;
   } catch (error) {
     services.warn?.('[ask] Active recall failed, continuing without:', error);
+    return [];
   }
+}
+
+function renderPromptWithSections(basePrompt: string, sections: MindosPromptSection[]): string {
+  return [
+    basePrompt.trim(),
+    ...sections.map(renderSection),
+  ].filter(Boolean).join('\n\n---\n\n');
+}
+
+function renderSection(section: MindosPromptSection): string {
+  const content = Array.isArray(section.content) ? section.content.filter(Boolean).join('\n\n') : section.content;
+  return `## ${section.title}\n\n${content.trim()}`;
+}
+
+function renderAgentManifest(manifest: MindosAgentManifest): string {
+  return [
+    '<agent>',
+    `  <id>${escapeXml(manifest.id)}</id>`,
+    `  <name>${escapeXml(manifest.name)}</name>`,
+    `  <description>${escapeXml(manifest.description)}</description>`,
+    '</agent>',
+  ].join('\n');
+}
+
+function renderSystemEnvironment(environment: MindosSystemPromptEnvironment): string {
+  const lines = [
+    '<env>',
+    `  <mind_root>${escapeXml(environment.mindRoot)}</mind_root>`,
+  ];
+  if (environment.projectRoot) lines.push(`  <project_root>${escapeXml(environment.projectRoot)}</project_root>`);
+  if (environment.cwd) lines.push(`  <working_directory>${escapeXml(environment.cwd)}</working_directory>`);
+  if (environment.platform) lines.push(`  <platform>${escapeXml(environment.platform)}</platform>`);
+  if (typeof environment.isGitRepo === 'boolean') lines.push(`  <is_git_repo>${environment.isGitRepo ? 'yes' : 'no'}</is_git_repo>`);
+  if (environment.model?.provider || environment.model?.id) {
+    lines.push('  <model>');
+    if (environment.model.provider) lines.push(`    <provider>${escapeXml(environment.model.provider)}</provider>`);
+    if (environment.model.id) lines.push(`    <id>${escapeXml(environment.model.id)}</id>`);
+    lines.push('  </model>');
+  }
+  lines.push('</env>');
+  return lines.join('\n');
+}
+
+function getMindosContextModeGuidance(mode: MindosAskMode): string | null {
+  if (mode === 'organize') {
+    return 'Prioritize classification, cleanup, and knowledge organization. Use uploaded or selected materials as source material for well-structured MindOS notes when tools and permissions allow it.';
+  }
+  return null;
+}
+
+function appendInitializationContext(
+  sections: MindosPromptSection[],
+  input: BuildMindosContextPromptInput,
+): void {
+  const initialization = input.agentInitialization ?? {};
+  const initFailures = initialization.initFailures ?? [];
+  const truncationWarnings = initialization.truncationWarnings ?? [];
+  const initContextBlocks = initialization.initContextBlocks ?? [];
+  const targetDir = initialization.targetDir ?? null;
+
+  if (initFailures.length > 0 || truncationWarnings.length > 0) {
+    sections.push({
+      title: 'Initialization Status',
+      content: formatInitializationStatus({
+        mindRoot: input.mindRoot ?? '',
+        targetDir,
+        initFailures,
+        truncationWarnings,
+      }),
+    });
+  }
+
+  if (initContextBlocks.length > 0) {
+    sections.push({
+      title: 'Initialization Context',
+      content: initContextBlocks.join('\n\n---\n\n'),
+    });
+  }
+}
+
+function appendFileContextSections(
+  sections: MindosPromptSection[],
+  context: MindosAskFileContext | undefined,
+): void {
+  if (!context) return;
+  if (context.contextParts.length > 0) {
+    sections.push({
+      title: 'Attached files from the MindOS knowledge base',
+      content: [
+        'These files already exist in the user\'s MindOS knowledge base or local workspace. They have stable paths. Cite their paths when using them, and use file tools to re-read or search them only when needed.',
+        context.contextParts.join('\n\n---\n\n'),
+      ],
+    });
+  }
+  if (context.failedFiles.length > 0) {
+    sections.push({
+      title: 'Unavailable MindOS Context',
+      content: `These attached files could not be loaded: ${context.failedFiles.join(', ')}. Inform the user that these files were not loaded.`,
+    });
+  }
+}
+
+function appendUploadedContextSections(
+  sections: MindosPromptSection[],
+  uploadedParts: string[] | undefined,
+): void {
+  if (!uploadedParts?.length) return;
+  sections.push({
+    title: 'Files uploaded by the user for this request',
+    content: [
+      'The user uploaded the following file content for this turn. It may not exist in the MindOS knowledge base yet; use it directly unless it is saved first.',
+      uploadedParts.join('\n\n---\n\n'),
+    ],
+  });
+}
+
+function appendRecalledKnowledgeSections(
+  sections: MindosPromptSection[],
+  recalledKnowledge: Array<{ path: string; content: string }> | undefined,
+): void {
+  if (!recalledKnowledge?.length) return;
+  const block = recalledKnowledge
+    .map((item) => `### ${item.path}\n\n${item.content}`)
+    .join('\n\n---\n\n');
+  sections.push({
+    title: 'Auto-Recalled MindOS Knowledge',
+    content: [
+      'MindOS found these related notes for the user request. Cite file paths when relying on them.',
+      block,
+    ],
+  });
+}
+
+function escapeXml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
 }

@@ -101,7 +101,7 @@ describe('MindOS server contract: product operations', () => {
   });
 
   it('aggregates agent capabilities with mode filtering, source isolation, and safe metadata', async () => {
-    const chat = await handleAgentCapabilitiesGet(new URLSearchParams('mode=chat'), {
+    const readonly = await handleAgentCapabilitiesGet(new URLSearchParams('mode=organize'), {
       kb: () => [
         {
           id: 'kb:read',
@@ -111,7 +111,7 @@ describe('MindOS server contract: product operations', () => {
           source: 'mindos',
           status: 'available',
           permissionRequired: 'readonly',
-          availableInModes: ['chat', 'organize', 'agent'],
+          availableInModes: ['organize', 'agent'],
           metadata: {
             toolName: 'read_file',
             execute: () => 'must not leak',
@@ -134,22 +134,22 @@ describe('MindOS server contract: product operations', () => {
       },
     });
 
-    expect(chat.status).toBe(200);
-    expect(chat.body.capabilities).toHaveLength(1);
-    expect(chat.body.capabilities[0]).toMatchObject({
+    expect(readonly.status).toBe(200);
+    expect(readonly.body.capabilities).toHaveLength(1);
+    expect(readonly.body.capabilities[0]).toMatchObject({
       id: 'kb:read',
       kind: 'kb-tool',
       source: 'mindos',
       permissionRequired: 'readonly',
-      availableInModes: ['chat', 'organize', 'agent'],
+      availableInModes: ['organize', 'agent'],
       metadata: {
         toolName: 'read_file',
         apiKey: '[redacted]',
       },
     });
-    expect(JSON.stringify(chat.body)).not.toContain('must not leak');
-    expect(JSON.stringify(chat.body)).not.toContain('sk-capability-secret');
-    expect(chat.body.sources).toContainEqual({
+    expect(JSON.stringify(readonly.body)).not.toContain('must not leak');
+    expect(JSON.stringify(readonly.body)).not.toContain('sk-capability-secret');
+    expect(readonly.body.sources).toContainEqual({
       id: 'subagents',
       status: 'error',
       count: 0,

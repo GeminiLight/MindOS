@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  MINDOS_AGENT_MANIFEST,
   MINDOS_SYSTEM_PROMPT,
   ORGANIZE_SYSTEM_PROMPT,
-  buildMindosAskSystemPrompt,
+  buildMindosContextPrompt,
+  buildMindosSystemPrompt,
   compactMindosPromptForTokenBudget,
   defineMindosAgent,
   loadMindosAgentPrompt,
@@ -22,6 +24,7 @@ describe('MindOS agent product contract', () => {
   });
 
   it('owns system prompts inside the product runtime', () => {
+    expect(MINDOS_AGENT_MANIFEST).toMatchObject({ id: 'mindos', name: 'MindOS' });
     expect(MINDOS_SYSTEM_PROMPT).toContain('You are MindOS');
     expect(loadMindosAgentPrompt()).toBe(MINDOS_SYSTEM_PROMPT);
     expect(MINDOS_SYSTEM_PROMPT).toContain('Before modifying an existing file, read it first');
@@ -38,49 +41,41 @@ describe('MindOS agent product contract', () => {
     expect(ORGANIZE_SYSTEM_PROMPT).toContain('organizing information');
   });
 
-  it('builds chat and organize ask prompts without Web modules', async () => {
-    const prompt = await buildMindosAskSystemPrompt({
-      mode: 'chat',
+  it('builds stable system prompts without turn-local context', () => {
+    const prompt = buildMindosSystemPrompt({
       mindRoot: '/tmp/mind',
-      currentFile: 'Space/current.md',
-      attachedFiles: ['Space/a.md'],
-      uploadedParts: ['### upload.txt\n\nuploaded content'],
-    }, {
-      now: () => new Date('2026-01-02T03:04:05.000Z'),
-      formatLocalTime: () => 'Friday, January 2, 2026 at 11:04:05 AM GMT+8',
-      readKnowledgeFile: (filePath) => ({
-        ok: filePath === 'README.md',
-        content: filePath === 'README.md' ? '# Index\n\nUseful knowledge base structure.' : '',
-        truncated: false,
-        error: filePath === 'README.md' ? undefined : 'missing',
-      }),
-      loadFileContext: () => ({
-        contextParts: [
-          '### Attached file from the MindOS knowledge base: Space/a.md\n\nAlpha',
-          '### Current file from the MindOS knowledge base: Space/current.md\n\nCurrent',
-        ],
-        failedFiles: ['missing.md'],
-      }),
+      environment: {
+        projectRoot: '/tmp/project',
+        cwd: '/tmp/mind',
+        platform: 'test-platform',
+        isGitRepo: true,
+        model: { provider: 'openai', id: 'gpt-test' },
+      },
     });
 
     expect(prompt).toContain(MINDOS_SYSTEM_PROMPT);
-    expect(prompt).toContain('mind_root=/tmp/mind');
-    expect(prompt).toContain('## Knowledge Base Structure');
-    expect(prompt).toContain('Current UTC Time: 2026-01-02T03:04:05.000Z');
-    expect(prompt).toContain('## Request Context');
-    expect(prompt).toContain('### Attached files from the MindOS knowledge base');
-    expect(prompt).toContain('### Attached file from the MindOS knowledge base: Space/a.md');
-    expect(prompt).toContain('missing.md');
-    expect(prompt).toContain('Files uploaded by the user for this request');
+    expect(prompt).toContain('## Agent Manifest');
+    expect(prompt).toContain('<id>mindos</id>');
+    expect(prompt).toContain('## Environment');
+    expect(prompt).toContain('<mind_root>/tmp/mind</mind_root>');
+    expect(prompt).toContain('<project_root>/tmp/project</project_root>');
+    expect(prompt).toContain('<is_git_repo>yes</is_git_repo>');
+    expect(prompt).toContain('<provider>openai</provider>');
+    expect(prompt).not.toContain('## MindOS Turn Context');
+    expect(prompt).not.toContain('Current UTC Time: 2026-01-02T03:04:05.000Z');
+    expect(prompt).not.toContain('### Attached file from the MindOS knowledge base: Space/a.md');
+    expect(prompt).not.toContain('### upload.txt');
+    expect(prompt).not.toContain('### Recall.md');
   });
 
-  it('builds agent prompts with product-owned initialization and recall policy', async () => {
-    const prompt = await buildMindosAskSystemPrompt({
+  it('builds turn context prompts with initialization, files, uploads, and recall', async () => {
+    const prompt = await buildMindosContextPrompt({
+      prompt: 'find project alpha',
       mode: 'agent',
       mindRoot: '/tmp/mind',
       currentFile: 'Space/current.md',
       attachedFiles: ['Space/a.md'],
-      uploadedParts: [],
+      uploadedParts: ['### upload.txt\n\nuploaded content'],
       messages: [
         { role: 'user', content: 'find project alpha' },
       ],
@@ -99,20 +94,29 @@ describe('MindOS agent product contract', () => {
     }, {
       now: () => new Date('2026-01-02T03:04:05.000Z'),
       formatLocalTime: () => 'Friday, January 2, 2026 at 11:04:05 AM GMT+8',
-      readKnowledgeFile: () => ({ ok: false, content: '', truncated: false, error: 'unused' }),
       loadFileContext: () => ({
         contextParts: ['### Attached file from the MindOS knowledge base: Space/a.md\n\nAlpha'],
-        failedFiles: [],
+        failedFiles: ['missing.md'],
       }),
       recallKnowledge: async () => [{ path: 'Recall.md', content: 'recalled content' }],
     });
 
-    expect(prompt).toContain(MINDOS_SYSTEM_PROMPT);
+    expect(prompt).toContain('find project alpha');
+    expect(prompt).toContain('## MindOS Turn Context');
+    expect(prompt).toContain('Current UTC Time: 2026-01-02T03:04:05.000Z');
+    expect(prompt).toContain('Unix Timestamp: 1767323045');
+    expect(prompt).toContain('## MindOS Chat Panel Bridge');
     expect(prompt).toContain('Initialization issues:');
     expect(prompt).toContain('bootstrap.config_json: failed');
     expect(prompt).toContain('## bootstrap_instruction');
-    expect(prompt).toContain('## KNOWLEDGE CONTEXT (auto-recalled)');
+    expect(prompt).toContain('## Attached files from the MindOS knowledge base');
+    expect(prompt).toContain('### Attached file from the MindOS knowledge base: Space/a.md');
+    expect(prompt).toContain('## Files uploaded by the user for this request');
+    expect(prompt).toContain('### upload.txt');
+    expect(prompt).toContain('## Auto-Recalled MindOS Knowledge');
     expect(prompt).toContain('### Recall.md');
+    expect(prompt).toContain('These attached files could not be loaded: missing.md');
+    expect(prompt).not.toContain(MINDOS_SYSTEM_PROMPT);
   });
 
   it('compacts oversized prompts while preserving core and explicit attachments', () => {

@@ -62,7 +62,7 @@ describe('MindOS subagent ledger extension', () => {
       { agent: 'reviewer', task: 'Review the patch.', cwd: '/tmp/mindos' },
       undefined,
       undefined,
-      { cwd: '/tmp/fallback', mode: 'chat' },
+      { cwd: '/tmp/fallback', permissionMode: 'readonly' },
     );
 
     expect(result).toEqual({

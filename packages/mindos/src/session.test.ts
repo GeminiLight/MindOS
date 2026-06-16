@@ -297,10 +297,9 @@ describe('MindOS session event contract', () => {
 
   it('normalizes ask mode and step limits without Web dependencies', () => {
     expect(normalizeMindosAskMode('organize')).toBe('organize');
-    expect(normalizeMindosAskMode('chat')).toBe('chat');
     expect(normalizeMindosAskMode('invalid')).toBe('agent');
 
-    expect(normalizeMindosAskStepLimit({ mode: 'chat' })).toBe(8);
+    expect(normalizeMindosAskStepLimit({ mode: 'agent' })).toBe(20);
     expect(normalizeMindosAskStepLimit({ mode: 'agent', agentMaxSteps: 50 })).toBe(50);
     expect(normalizeMindosAskStepLimit({ mode: 'agent', requestedMaxSteps: -1 })).toBe(1);
     expect(normalizeMindosAskStepLimit({ mode: 'agent', requestedMaxSteps: 5000 })).toBe(999);
@@ -358,7 +357,7 @@ describe('MindOS session event contract', () => {
   it('builds external runtime prompts with explicit MindOS turn context', () => {
     const prompt = buildMindosExternalRuntimePrompt({
       prompt: 'Summarize the attached plan.',
-      mode: 'chat',
+      mode: 'agent',
       fileContext: {
         contextParts: ['### Attached file from the MindOS knowledge base: Plan.md\n\nAlpha plan'],
         failedFiles: ['Missing.md'],
@@ -1081,7 +1080,7 @@ describe('MindOS session event contract', () => {
     ]);
   });
 
-  it('keeps builtins off and registers no SDK custom tools in chat mode (kb extension owns KB tools)', async () => {
+  it('keeps builtins off and registers no SDK custom tools in organize mode (kb extension owns KB tools)', async () => {
     let captured: Record<string, unknown> | null = null;
     const session = {
       subscribe: () => {},
@@ -1091,7 +1090,7 @@ describe('MindOS session event contract', () => {
     };
 
     await createMindosPiAgentRuntime({
-      mode: 'chat',
+      mode: 'organize',
       messages: [{ role: 'user', content: 'hi', timestamp: 1 }],
       systemPrompt: 'prompt',
       projectRoot: '/repo',
@@ -1133,6 +1132,58 @@ describe('MindOS session event contract', () => {
     expect(config.noTools).toBe('builtin');
     // request tools must NOT be re-registered as SDK customTools: by-name they
     // override the kb-extension wrappers and lose write-protection + audit log.
+    expect(config.customTools).toEqual([]);
+  });
+
+  it('does not register project bash when agent prompt runs under a non-terminal permission policy', async () => {
+    let captured: Record<string, unknown> | null = null;
+    const session = {
+      subscribe: () => {},
+      prompt: async () => {},
+      steer: async () => {},
+      abort: async () => {},
+    };
+
+    await createMindosPiAgentRuntime({
+      mode: 'agent',
+      allowProjectBash: false,
+      messages: [{ role: 'user', content: 'hi', timestamp: 1 }],
+      systemPrompt: 'prompt',
+      projectRoot: '/repo',
+      agentDir: '/home/test/.pi',
+      mindRoot: '/mind',
+      agentConfig: {},
+      serverSettings: {},
+      requestTools: [{ name: 'read_file', execute: async () => ({ content: [] }) }],
+      bashTool: { name: 'bash' },
+      services: {
+        resolveModelConfig: () => ({
+          model: { id: 'model-object' },
+          modelName: 'gpt-test',
+          apiKey: 'key',
+          provider: 'openai',
+        }),
+        toRuntimeProvider: (provider) => provider,
+        createAuthStorage: () => ({ setRuntimeApiKey: () => {} }),
+        createModelRegistry: () => ({}),
+        createSettingsManager: (settings) => ({ settings }),
+        createSessionManager: () => ({ appendMessage: () => {} }),
+        createResourceLoader: () => ({
+          reload: async () => {},
+          getSkills: () => ({ skills: [] }),
+        }),
+        convertToLlm: (messages) => [...messages],
+        createAgentSession: async (config) => {
+          captured = config as unknown as Record<string, unknown>;
+          return { session };
+        },
+        setKbMode: () => {},
+      },
+    });
+
+    expect(captured).not.toBeNull();
+    const config = captured! as Record<string, unknown>;
+    expect(config.noTools).toBe('builtin');
     expect(config.customTools).toEqual([]);
   });
 

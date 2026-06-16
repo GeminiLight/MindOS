@@ -2,9 +2,9 @@
  * kbExtension — the registered tool set must come from the request's own
  * permission policy, not from module-level shared state.
  *
- * Two concurrent /api/ask requests with different modes (chat vs agent) used
+ * Two concurrent /api/ask requests with different permission policies used
  * to race on setKbMode(): whichever request set the module-level policy last
- * decided the tools for BOTH reloads — a chat request could get agent write
+ * decided the tools for BOTH reloads — a readonly request could get agent write
  * tools (privilege escalation) or an agent request could lose its tools.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
@@ -22,7 +22,7 @@ function registeredToolNames(run: (register: (def: { name: string }) => void) =>
   return names.sort();
 }
 
-function expectedToolNames(mode: 'chat' | 'agent' | 'organize'): string[] {
+function expectedToolNames(mode: 'readonly' | 'agent' | 'organize'): string[] {
   return getToolsForMindosAgentPolicy(createMindosAgentPermissionPolicy(mode))
     .map((tool) => tool.name)
     .sort();
@@ -37,13 +37,13 @@ describe('kbExtension permission policy scoping', () => {
   });
 
   it('registers the policy-scoped tool set even when another request flips the global policy', () => {
-    const chatPolicy = createMindosAgentPermissionPolicy('chat');
+    const readonlyPolicy = createMindosAgentPermissionPolicy('readonly');
     const agentPolicy = createMindosAgentPermissionPolicy('agent');
     // The two modes must actually differ for this test to mean anything.
-    expect(expectedToolNames('chat')).not.toEqual(expectedToolNames('agent'));
+    expect(expectedToolNames('readonly')).not.toEqual(expectedToolNames('agent'));
 
     const names = registeredToolNames((register) => {
-      runWithKbPermissionPolicy(chatPolicy, () => {
+      runWithKbPermissionPolicy(readonlyPolicy, () => {
         // A concurrent agent-mode request mutates the module-level policy
         // between this request's setKbMode() and its reload().
         setKbPermissionPolicy(agentPolicy);
@@ -51,7 +51,7 @@ describe('kbExtension permission policy scoping', () => {
       });
     });
 
-    expect(names).toEqual(expectedToolNames('chat'));
+    expect(names).toEqual(expectedToolNames('readonly'));
   });
 
   it('returns the callback result and supports async callbacks', async () => {

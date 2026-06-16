@@ -10,9 +10,9 @@ describe('resolveAskCompatMode', () => {
     })).toBe('non-streaming');
   });
 
-  it('does not force non-streaming for normal chat on the same base URL', () => {
+  it('does not force non-streaming for normal agent runs on the same base URL', () => {
     expect(resolveAskCompatMode({
-      askMode: 'chat',
+      askMode: 'agent',
       provider: 'openai',
       baseUrl: 'https://lumina.tripo3d.com/v1',
     })).toBeUndefined();

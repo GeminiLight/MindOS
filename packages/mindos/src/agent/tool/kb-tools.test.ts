@@ -13,8 +13,8 @@ import { runWithAgentRunContext } from '../agent-run-context.js';
 import { createMindosAgentPermissionPolicy } from './permission-policy.js';
 import { listAgentEvents, resetAgentRunsForTest, startAgentRun } from '../run-ledger.js';
 import {
-  CHAT_TOOL_NAMES,
   createMindosKbToolkit,
+  READONLY_TOOL_NAMES,
   truncate,
   WRITE_TOOLS,
   type MindosAgentTool,
@@ -144,10 +144,10 @@ describe('createMindosKbToolkit', () => {
     const { host } = createFakeHost({ delegationTools: { a2a: [a2aTool], acp: [acpTool] } });
     const toolkit = createMindosKbToolkit(host);
 
-    const chatNames = new Set(toolkit.getChatTools().map((tool) => tool.name));
-    expect([...chatNames].every((name) => CHAT_TOOL_NAMES.has(name))).toBe(true);
-    expect([...chatNames].some((name) => WRITE_TOOLS.has(name))).toBe(false);
-    expect(chatNames.has('call_a2a_agent')).toBe(false);
+    const readonlyNames = new Set(toolkit.getReadonlyTools().map((tool) => tool.name));
+    expect([...readonlyNames].every((name) => READONLY_TOOL_NAMES.has(name))).toBe(true);
+    expect([...readonlyNames].some((name) => WRITE_TOOLS.has(name))).toBe(false);
+    expect(readonlyNames.has('call_a2a_agent')).toBe(false);
 
     const agentNames = new Set(
       toolkit.getToolsForPolicy(createMindosAgentPermissionPolicy('agent')).map((tool) => tool.name),

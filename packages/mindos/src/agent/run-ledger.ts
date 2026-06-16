@@ -637,7 +637,7 @@ function redactMetadata(metadata: Record<string, unknown>): Record<string, unkno
 }
 
 function normalizePermissionMode(mode: unknown): AgentRunPermissionMode {
-  if (mode === 'readonly' || mode === 'chat') return 'readonly';
+  if (mode === 'readonly') return 'readonly';
   if (mode === 'organize') return 'organize';
   return 'agent';
 }

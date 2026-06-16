@@ -19,7 +19,7 @@ import type {
   AgentCapabilityInput,
 } from '../../server/handlers/agent-capabilities.js';
 import {
-  MINDOS_CHAT_KB_TOOL_NAMES,
+  MINDOS_READONLY_KB_TOOL_NAMES,
   MINDOS_ORGANIZE_KB_TOOL_NAMES,
 } from './permission-policy.js';
 import type { MindosAgentTool } from './kb-tools.js';
@@ -109,7 +109,7 @@ export interface MindosAgentCapabilityRegistryServices {
   resolveBuiltinSubagentsDir?(): string | null;
 }
 
-const CHAT_KB_TOOL_NAMES = new Set<string>(MINDOS_CHAT_KB_TOOL_NAMES);
+const READONLY_KB_TOOL_NAMES = new Set<string>(MINDOS_READONLY_KB_TOOL_NAMES);
 const ORGANIZE_KB_TOOL_NAMES = new Set<string>(MINDOS_ORGANIZE_KB_TOOL_NAMES);
 
 export function createAgentCapabilitiesServices(
@@ -341,7 +341,7 @@ function runtimeToCapability(runtime: AgentRuntimeDescriptor): AgentCapabilityIn
         ? 'missing'
         : 'error',
     permissionRequired: runtime.kind === 'mindos' ? 'readonly' : 'agent',
-    availableInModes: runtime.kind === 'mindos' ? ['chat', 'organize', 'agent'] : ['agent'],
+    availableInModes: runtime.kind === 'mindos' ? modesForPermission('readonly') : ['agent'],
     inputKinds: ['text', 'files', 'context'],
     outputKinds: ['text', 'tool-events'],
     supportsStreaming: true,
@@ -368,13 +368,13 @@ function runtimeToCapability(runtime: AgentRuntimeDescriptor): AgentCapabilityIn
 }
 
 function permissionForKbTool(toolName: string): 'readonly' | 'organize' | 'agent' {
-  if (CHAT_KB_TOOL_NAMES.has(toolName)) return 'readonly';
+  if (READONLY_KB_TOOL_NAMES.has(toolName)) return 'readonly';
   if (ORGANIZE_KB_TOOL_NAMES.has(toolName)) return 'organize';
   return 'agent';
 }
 
-function modesForPermission(permission: 'readonly' | 'organize' | 'agent'): Array<'chat' | 'organize' | 'agent'> {
-  if (permission === 'readonly') return ['chat', 'organize', 'agent'];
+function modesForPermission(permission: 'readonly' | 'organize' | 'agent'): Array<'organize' | 'agent'> {
+  if (permission === 'readonly') return ['organize', 'agent'];
   if (permission === 'organize') return ['organize', 'agent'];
   return ['agent'];
 }

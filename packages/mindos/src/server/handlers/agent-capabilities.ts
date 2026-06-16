@@ -1,7 +1,7 @@
 import { json, type MindosServerResponse } from '../response.js';
 import { redactSensitiveObject, redactSensitiveText } from '../../session/redaction.js';
 
-export type AgentCapabilityMode = 'chat' | 'organize' | 'agent';
+export type AgentCapabilityMode = 'organize' | 'agent';
 
 export type AgentCapabilityKind =
   | 'kb-tool'
@@ -85,7 +85,7 @@ export type AgentCapabilitiesServices = Partial<Record<
 >>;
 
 const SOURCE_ORDER = ['kb', 'subagents', 'acp', 'native', 'mcp', 'a2a'] as const satisfies readonly AgentCapabilitySourceKey[];
-const MODE_ORDER = ['chat', 'organize', 'agent'] as const satisfies readonly AgentCapabilityMode[];
+const MODE_ORDER = ['organize', 'agent'] as const satisfies readonly AgentCapabilityMode[];
 const KIND_SET = new Set<AgentCapabilityKind>([
   'kb-tool',
   'pi-subagent',
@@ -143,7 +143,7 @@ export async function handleAgentCapabilitiesGet(
 }
 
 function normalizeMode(value: string | null): AgentCapabilityMode {
-  return value === 'chat' || value === 'organize' || value === 'agent' ? value : 'agent';
+  return value === 'organize' || value === 'agent' ? value : 'agent';
 }
 
 function normalizeInclude(value: string | null): AgentCapabilitySourceKey[] {
@@ -213,7 +213,7 @@ function normalizeModes(
   permissionRequired: AgentCapabilityPermissionRequired,
 ): AgentCapabilityMode[] {
   const fallback: AgentCapabilityMode[] = permissionRequired === 'readonly'
-    ? ['chat', 'organize', 'agent']
+    ? ['organize', 'agent']
     : permissionRequired === 'organize'
       ? ['organize', 'agent']
       : ['agent'];

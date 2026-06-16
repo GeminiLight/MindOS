@@ -18,12 +18,14 @@ function isPermissionLevel(value: unknown): value is AskPermissionLevel {
   return value === 'read' || value === 'ask' || value === 'auto' || value === 'full';
 }
 
-function legacyModeToPermissionLevel(mode: AskMode): AskPermissionLevel {
-  return mode === 'chat' ? 'read' : 'ask';
+function legacyModeToPermissionLevel(mode: unknown): AskPermissionLevel | null {
+  if (mode === 'chat') return 'read';
+  if (mode === 'agent') return 'ask';
+  return null;
 }
 
 export function permissionLevelToAskMode(level: AskPermissionLevel): AskMode {
-  return level === 'read' ? 'chat' : 'agent';
+  return 'agent';
 }
 
 export function permissionLevelToNativeRuntimePermission(level: AskPermissionLevel): NativeRuntimePermissionMode {
@@ -37,9 +39,10 @@ export function getPersistedPermissionLevel(): AskPermissionLevel {
     if (isPermissionLevel(stored)) return stored;
 
     const legacy = localStorage.getItem(LEGACY_MODE_STORAGE_KEY);
-    if (legacy === 'chat' || legacy === 'agent') {
-      const migrated = legacyModeToPermissionLevel(legacy);
+    const migrated = legacyModeToPermissionLevel(legacy);
+    if (migrated) {
       localStorage.setItem(STORAGE_KEY, migrated);
+      localStorage.removeItem(LEGACY_MODE_STORAGE_KEY);
       return migrated;
     }
   } catch {
@@ -51,7 +54,6 @@ export function getPersistedPermissionLevel(): AskPermissionLevel {
 export function persistPermissionLevel(mode: AskPermissionLevel): void {
   try {
     localStorage.setItem(STORAGE_KEY, mode);
-    localStorage.setItem(LEGACY_MODE_STORAGE_KEY, permissionLevelToAskMode(mode));
   } catch {
     // localStorage unavailable; the current render still uses the selected value.
   }
@@ -61,8 +63,8 @@ export function getPersistedMode(): AskMode {
   return permissionLevelToAskMode(getPersistedPermissionLevel());
 }
 
-export function persistMode(mode: AskMode): void {
-  persistPermissionLevel(legacyModeToPermissionLevel(mode));
+export function persistMode(mode: AskMode | 'chat'): void {
+  persistPermissionLevel(legacyModeToPermissionLevel(mode) ?? 'ask');
 }
 
 function permissionIcon(mode: AskPermissionLevel, size = 11) {

@@ -10,7 +10,7 @@ import type { AgentToolResult } from '@earendil-works/pi-agent-core';
 import {
   createMindosAgentPermissionPolicy,
   getMindosKbToolNameSet,
-  MINDOS_CHAT_KB_TOOL_NAMES,
+  MINDOS_READONLY_KB_TOOL_NAMES,
   MINDOS_ORGANIZE_KB_TOOL_NAMES,
   MINDOS_WRITE_TOOL_NAMES,
   type MindosAgentPermissionPolicy,
@@ -305,14 +305,8 @@ export const WRITE_TOOLS = new Set<string>(MINDOS_WRITE_TOOL_NAMES);
 /** Tool names sufficient for the "organize uploaded files" task. */
 export const ORGANIZE_TOOL_NAMES = new Set<string>(MINDOS_ORGANIZE_KB_TOOL_NAMES);
 
-/**
- * Read-only tool set for Chat mode.
- *
- * Allows searching and reading the knowledge base + web access,
- * but blocks all write operations. Extensible: add tool names here
- * to grant more read-only capabilities to Chat mode.
- */
-export const CHAT_TOOL_NAMES = new Set<string>(MINDOS_CHAT_KB_TOOL_NAMES);
+/** Knowledge-base tool names allowed by the read-only permission policy. */
+export const READONLY_TOOL_NAMES = new Set<string>(MINDOS_READONLY_KB_TOOL_NAMES);
 
 // ─── Toolkit factory ─────────────────────────────────────────────────────────
 
@@ -322,7 +316,7 @@ export interface MindosKbToolkit {
   getToolsForPolicy(policy: MindosAgentPermissionPolicy): MindosAgentTool[];
   /** Lean tool set for organize mode — skips MCP discovery, history, backlinks, etc. */
   getOrganizeTools(): MindosAgentTool[];
-  getChatTools(): MindosAgentTool[];
+  getReadonlyTools(): MindosAgentTool[];
   getRequestScopedTools(): MindosAgentTool[];
 }
 
@@ -352,7 +346,7 @@ export function createMindosKbToolkit(host: MindosKbToolsHost): MindosKbToolkit 
     knowledgeBaseTools,
     getToolsForPolicy,
     getOrganizeTools: () => getToolsForPolicy(createMindosAgentPermissionPolicy('organize')),
-    getChatTools: () => getToolsForPolicy(createMindosAgentPermissionPolicy('chat')),
+    getReadonlyTools: () => getToolsForPolicy(createMindosAgentPermissionPolicy('readonly')),
     getRequestScopedTools: () => getToolsForPolicy(createMindosAgentPermissionPolicy('agent')),
   };
 }

@@ -158,6 +158,7 @@ describe('MindOS Agent bounded MCP runtime config', () => {
 
   it('only loads the MindOS MCP wrapper in agent mode when at least one server is explicitly allowlisted', async () => {
     const { getMindosWebPiRuntimePaths } = await import('@/lib/agent/mindos-pi-runtime-host');
+    const { createMindosAgentPermissionPolicy } = await import('@geminilight/mindos/agent/tool/permission-policy');
     const base = {
       projectRoot: REPO_ROOT,
       mindRoot: PROJECT_ROOT,
@@ -182,9 +183,13 @@ describe('MindOS Agent bounded MCP runtime config', () => {
     expect(extensionList).toContain('mindos-mcp-adapter-extension');
     expect(extensionList).not.toContain(path.join('node_modules', 'pi-mcp-adapter', 'index.ts'));
 
-    const chatPaths = getMindosWebPiRuntimePaths({ ...base, mode: 'chat' });
+    const readonlyPaths = getMindosWebPiRuntimePaths({
+      ...base,
+      mode: 'agent',
+      permissionPolicy: createMindosAgentPermissionPolicy('readonly'),
+    });
     const organizePaths = getMindosWebPiRuntimePaths({ ...base, mode: 'organize' });
-    expect(chatPaths.additionalExtensionPaths.join('\n')).not.toContain('mindos-mcp-adapter-extension');
+    expect(readonlyPaths.additionalExtensionPaths.join('\n')).not.toContain('mindos-mcp-adapter-extension');
     expect(organizePaths.additionalExtensionPaths.join('\n')).not.toContain('mindos-mcp-adapter-extension');
   });
 

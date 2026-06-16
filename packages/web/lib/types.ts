@@ -229,8 +229,8 @@ export interface LocalAttachment {
   };
 }
 
-/** User-facing Ask modes. 'organize' is internal-only (not selectable by users). */
-export type AskMode = 'chat' | 'agent';
+/** User-facing Ask mode. Tool permissions are controlled separately. */
+export type AskMode = 'agent';
 
 /** All Ask modes including internal ones sent to the API */
 export type AskModeApi = AskMode | 'organize';

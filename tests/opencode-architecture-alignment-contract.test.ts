@@ -166,7 +166,9 @@ describe('OpenCode architecture alignment', () => {
     expect(readText('packages/mindos/src/session/index.ts')).toContain('createMindosPiAgentRuntime');
     expect(readText('packages/mindos/src/agent/index.ts')).toContain('defineMindosAgent');
     expect(readText('packages/mindos/src/agent/index.ts')).toContain('MINDOS_SYSTEM_PROMPT');
-    expect(readText('packages/mindos/src/agent/index.ts')).toContain('buildMindosAskSystemPrompt');
+    expect(readText('packages/mindos/src/agent/index.ts')).toContain('MINDOS_AGENT_MANIFEST');
+    expect(readText('packages/mindos/src/agent/index.ts')).toContain('buildMindosSystemPrompt');
+    expect(readText('packages/mindos/src/agent/index.ts')).toContain('buildMindosContextPrompt');
     expect(readText('packages/mindos/src/agent/index.ts')).toContain('compactMindosPromptForTokenBudget');
     expect(askRoute).toContain("from '@geminilight/mindos/session'");
     expect(askRoute).toContain('runMindosAcpAskSession');
@@ -189,11 +191,15 @@ describe('OpenCode architecture alignment', () => {
     expect(askRoute).not.toContain('setKbMode');
     expect(askRoute).not.toContain('getRequestScopedTools');
     expect(askRoute).toContain("from '@geminilight/mindos/agent'");
-    expect(askRoute).toContain('buildMindosAskSystemPrompt');
+    expect(askRoute).toContain('buildMindosSystemPrompt');
+    expect(askRoute).toContain('buildMindosContextPrompt');
     expect(askRoute).not.toContain("from '@geminilight/mindos/session/pi-coding-agent'");
     expect(askRoute).toContain("await import('@geminilight/mindos/session/pi-coding-agent')");
     expect(askRoute).toContain('createMindosPiCodingAgentRuntime');
-    expect(askRoute).toContain('buildMindosExternalRuntimePrompt');
+    expect(askRoute).toContain('const externalPrompt = await buildMindosContextPrompt');
+    expect(askRoute).toContain('const turnPrompt = await buildMindosContextPrompt');
+    expect(askRoute).toContain('prompt: externalPrompt');
+    expect(askRoute).toContain('prompt: turnPrompt');
     expect(askRoute.indexOf('if (selectedNativeRuntime || selectedAcpAgent)')).toBeLessThan(
       askRoute.indexOf("await import('@geminilight/mindos/session/pi-coding-agent')"),
     );
