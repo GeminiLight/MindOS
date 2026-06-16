@@ -57,9 +57,9 @@ describe('TitlebarRow (spec-titlebar-row Phase 1 + 2)', () => {
   it('binds geometry to the shell CSS variables', () => {
     const el = render();
     const style = el.getAttribute('style') ?? '';
-    expect(style).toContain('left: var(--titlebar-row-left, 48px)');
+    expect(style).toContain('left: var(--rail-width, var(--titlebar-row-left, 48px))');
     expect(style).toContain('height: var(--app-titlebar-h)');
-    expect(style).toContain('max(0px, calc(var(--window-controls-left, 0px) - var(--titlebar-row-left, 48px)))');
+    expect(style).toContain('max(0px, calc(var(--window-controls-left, 0px) - var(--rail-width, var(--titlebar-row-left, 48px))))');
   });
 
   it('paints above the expanding rail so leading titlebar buttons stay clickable', () => {
@@ -71,12 +71,13 @@ describe('TitlebarRow (spec-titlebar-row Phase 1 + 2)', () => {
     expect(titlebarSource).not.toContain('className="titlebar-row fixed top-0 right-0 z-30');
   });
 
-  it('is draggable without tying the leading controls to rail expansion animation', () => {
+  it('starts after the live rail width so expanded rail controls stay clickable', () => {
     const el = render();
     // jsdom does not serialize -webkit-app-region into the style attribute;
     // React assigns it as a camelCase expando on the style object
     expect((el.style as unknown as Record<string, string>).WebkitAppRegion).toBe('drag');
     const style = el.getAttribute('style') ?? '';
+    expect(style).toContain('left: var(--rail-width');
     expect(style).not.toMatch(/transition:[^;]*left 200ms ease-out/);
     expect(style).not.toMatch(/transition:[^;]*padding-left 200ms ease-out/);
   });

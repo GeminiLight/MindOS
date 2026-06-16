@@ -183,8 +183,9 @@ describe('ActivityBar rail navigation', () => {
       );
     });
 
-    const home = host.querySelector<HTMLButtonElement>('button[aria-label="MindOS Home"]');
+    const home = host.querySelector<HTMLAnchorElement>('a[aria-label="MindOS Home"]');
     expect(home).not.toBeNull();
+    expect(home!.getAttribute('href')).toBe('/');
     expect(home!.className).toContain('h-[var(--app-titlebar-h)]');
     expect(home!.className).not.toContain('h-[46px]');
     expect((home!.style as unknown as Record<string, string>).WebkitAppRegion).toBe('no-drag');
@@ -252,7 +253,7 @@ describe('ActivityBar rail navigation', () => {
       );
     });
 
-    const home = host.querySelector<HTMLButtonElement>('button[aria-label="MindOS Home"]');
+    const home = host.querySelector<HTMLAnchorElement>('a[aria-label="MindOS Home"]');
     expect(home).not.toBeNull();
 
     await act(async () => {

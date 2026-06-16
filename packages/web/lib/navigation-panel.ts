@@ -1,4 +1,4 @@
-export type PanelId = 'files' | 'capture' | 'search' | 'echo' | 'agents' | 'discover' | 'workflows';
+export type PanelId = 'home' | 'files' | 'capture' | 'search' | 'echo' | 'agents' | 'discover' | 'workflows';
 
 export type RoutePanelId = Extract<PanelId, 'files' | 'capture' | 'echo' | 'agents' | 'discover'>;
 
@@ -97,6 +97,11 @@ export function getActiveLeftPanel(
   pathname: string | null | undefined,
   localActivePanel: PanelId | null,
 ): PanelId | null {
+  if (pathname === '/') {
+    if (localActivePanel === null) return null;
+    if (localActivePanel === 'search' || localActivePanel === 'workflows') return localActivePanel;
+    return 'home';
+  }
   if (isNeutralContentRoute(pathname)) {
     return localActivePanel === 'search' || localActivePanel === 'workflows' ? localActivePanel : null;
   }
@@ -121,8 +126,8 @@ export function getEffectivePanelMaximized(
   return activeLeftPanel === localActivePanel && localPanelMaximized;
 }
 
-export function getHomeClickPanel(_activeLeftPanel: PanelId | null): PanelId | null {
-  return null;
+export function getHomeClickPanel(_activeLeftPanel: PanelId | null): PanelId {
+  return 'home';
 }
 
 export function recoverStaleCapturePanel(

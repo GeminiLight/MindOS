@@ -23,8 +23,8 @@ export interface LeftPanelState {
  * Manages left panel state: active panel, width, maximize, rail expansion.
  * Extracted from SidebarLayout to reduce its state complexity.
  */
-export function useLeftPanel(): LeftPanelState {
-  const [activePanel, setActivePanel] = useState<PanelId | null>('files');
+export function useLeftPanel(initialActivePanel: PanelId | null = 'files'): LeftPanelState {
+  const [activePanel, setActivePanel] = useState<PanelId | null>(initialActivePanel);
   const [panelWidth, setPanelWidth] = useState<number | null>(null);
   const [panelMaximized, setPanelMaximized] = useState(false);
   const [railExpanded, setRailExpanded] = useState(false);

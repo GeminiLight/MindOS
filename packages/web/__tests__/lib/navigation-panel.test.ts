@@ -68,6 +68,11 @@ describe('navigation panel route recovery', () => {
   });
 
   it('uses route panels as defaults while allowing utility panels to temporarily override them', () => {
+    expect(getActiveLeftPanel('/', null)).toBeNull();
+    expect(getActiveLeftPanel('/', 'files')).toBe('home');
+    expect(getActiveLeftPanel('/', 'capture')).toBe('home');
+    expect(getActiveLeftPanel('/', 'home')).toBe('home');
+    expect(getActiveLeftPanel('/', 'search')).toBe('search');
     expect(getActiveLeftPanel('/agents', null)).toBe('agents');
     expect(getActiveLeftPanel('/agents', 'files')).toBe('agents');
     expect(getActiveLeftPanel('/agents', 'search')).toBe('search');
@@ -151,17 +156,17 @@ describe('navigation panel route recovery', () => {
   });
 
   it('keeps a home navigation intent active until the home route commits', () => {
-    const pending = { panel: 'files' as const, fromPathname: '/view/Notes/example.md' };
+    const pending = { panel: 'home' as const, fromPathname: '/view/Notes/example.md' };
 
-    expect(getPendingHomePanel('/view/Notes/example.md', pending)).toBe('files');
+    expect(getPendingHomePanel('/view/Notes/example.md', pending)).toBe('home');
     expect(getPendingHomePanel('/', pending)).toBeNull();
     expect(getPendingHomePanel('/wiki', pending)).toBeNull();
   });
 
   it('keeps rail sections inactive whenever home is clicked', () => {
-    const panels = [null, 'files', 'capture', 'search', 'echo', 'agents', 'discover', 'workflows'] as const;
+    const panels = [null, 'home', 'files', 'capture', 'search', 'echo', 'agents', 'discover', 'workflows'] as const;
     for (const panel of panels) {
-      expect(getHomeClickPanel(panel)).toBeNull();
+      expect(getHomeClickPanel(panel)).toBe('home');
     }
   });
 

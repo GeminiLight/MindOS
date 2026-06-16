@@ -199,6 +199,30 @@ describe('FileTree navigation re-render scope', () => {
     expect(mockPrefetch).toHaveBeenCalledWith('/view/S/f1.md');
   });
 
+  it('scrolls the active file without requiring CSS.escape', async () => {
+    vi.useFakeTimers();
+    const originalCSS = globalThis.CSS;
+    const originalScrollIntoView = HTMLElement.prototype.scrollIntoView;
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(globalThis, 'CSS', { value: undefined, configurable: true });
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', { value: scrollIntoView, configurable: true });
+
+    try {
+      const { default: FileTree } = await import('@/components/FileTree');
+      await render(<FileTree nodes={buildSpaceTree()} />);
+
+      await act(async () => {
+        vi.advanceTimersByTime(130);
+      });
+
+      expect(scrollIntoView).toHaveBeenCalledWith({ block: 'nearest', behavior: 'smooth' });
+    } finally {
+      Object.defineProperty(globalThis, 'CSS', { value: originalCSS, configurable: true });
+      Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', { value: originalScrollIntoView, configurable: true });
+      vi.useRealTimers();
+    }
+  });
+
   it('does not re-render directory rows when navigating between files inside them', async () => {
     const { default: FileTree } = await import('@/components/FileTree');
     const tree = buildSpaceTree();

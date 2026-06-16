@@ -132,8 +132,12 @@ interface SidebarLayoutProps {
 }
 
 export default function SidebarLayout({ fileTree, mindSystemSlots, children }: SidebarLayoutProps) {
+  const router = useRouter();
+  const smoothPush = useSmoothRouterPush();
+  const pathname = usePathname();
+
   // ── Left panel state (extracted hook) ──
-  const lp = useLeftPanel();
+  const lp = useLeftPanel(pathname === '/' ? 'home' : 'files');
 
   // ── Right Ask AI panel state (extracted hook) ──
   const ap = useAskPanel();
@@ -212,9 +216,6 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
 
   const { t } = useLocale();
   const inboxOrganize = useInboxOrganizeController({ aiOrganize, labels: t.inbox });
-  const router = useRouter();
-  const smoothPush = useSmoothRouterPush();
-  const pathname = usePathname();
   const isFullPageChatRoute = pathname === '/chat' || pathname.startsWith('/chat/');
   const effectiveAskPanelOpen = !isFullPageChatRoute && ap.askPanelOpen;
   const effectiveDesktopAskPopupOpen = !isFullPageChatRoute && ap.desktopAskPopupOpen;
@@ -272,6 +273,7 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
   const resolveSearchClosePanel = useCallback((): PanelId | null => {
     const previous = previousSearchPanelRef.current;
     if (!previous) return null;
+    if (previous === 'home') return pathname === '/' ? 'home' : null;
     if (previous === 'workflows') return 'workflows';
     const routePanel = getContentRoutePanel(pathname);
     if (previous === 'files') return routePanel === 'files' ? 'files' : null;
@@ -358,7 +360,7 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
 
   useEffect(() => {
     const active = activeLeftPanel;
-    if (!active || active === 'files') return;
+    if (!active || active === 'files' || active === 'home') return;
     setMountedPanels((prev) => {
       if (prev.has(active)) return prev;
       const next = new Set(prev);
@@ -691,11 +693,11 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
   const handleSidebarPanelExpandedChange = useCallback((expanded: boolean) => {
     previousSearchPanelRef.current = null;
     if (expanded) {
-      lp.setActivePanel('files');
+      lp.setActivePanel(pathname === '/' ? 'home' : 'files');
     } else {
       lp.setActivePanel(null);
     }
-  }, [lp.setActivePanel]);
+  }, [lp.setActivePanel, pathname]);
 
   const handleMobileNavigate = useCallback(() => setMobileOpen(false), []);
 
@@ -707,11 +709,7 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
       setAgentDetailKey(null);
       setPendingNav(null);
       setPendingHomeNav(pathname !== '/' ? { fromPathname: pathname, panel: nextPanel } : null);
-      if (nextPanel) {
-        lp.setActivePanel(nextPanel);
-      } else {
-        lp.setActivePanel(null);
-      }
+      lp.setActivePanel(nextPanel);
     });
     if (pathname !== '/') {
       smoothPush('/');

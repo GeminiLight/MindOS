@@ -3,6 +3,16 @@
 export const navigationEn = {
   sidebar: {
     files: 'Mind',
+    home: 'Home',
+    homeAgentSessions: 'Agent Sessions',
+    homeMindFiles: 'Mind Files',
+    homeEmptySessions: 'No sessions yet',
+    homeEmptySessionsHint: 'Start a conversation from the Home page.',
+    homeRuntimeMindOS: 'MindOS',
+    homeRuntimeIdle: 'Idle',
+    homeRuntimeActive: 'Active',
+    homeRuntimeRunning: 'Running',
+    homeRuntimeUnread: 'Done',
     search: 'Search',
     searchTitle: 'Search',
     askTitle: 'MindOS',

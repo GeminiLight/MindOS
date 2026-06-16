@@ -3,6 +3,16 @@
 export const navigationZh = {
   sidebar: {
     files: 'Mind',
+    home: '首页',
+    homeAgentSessions: 'Agent Sessions',
+    homeMindFiles: 'Mind Files',
+    homeEmptySessions: '暂无会话',
+    homeEmptySessionsHint: '可以从首页开始一段对话。',
+    homeRuntimeMindOS: 'MindOS',
+    homeRuntimeIdle: '空闲',
+    homeRuntimeActive: '当前',
+    homeRuntimeRunning: '运行中',
+    homeRuntimeUnread: '已完成',
     search: '搜索',
     searchTitle: '搜索',
     askTitle: 'MindOS',

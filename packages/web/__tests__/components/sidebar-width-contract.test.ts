@@ -15,6 +15,7 @@ describe('Sidebar width contract', () => {
 
     expect(activityBar).toContain("from '@/lib/config/panel-sizes'");
     expect(panelSizes).toContain('STANDARD_LEFT_PANEL_WIDTH');
+    expect(panelSizes).toContain('home: STANDARD_LEFT_PANEL_WIDTH');
     expect(panelSizes).toContain('files: STANDARD_LEFT_PANEL_WIDTH');
     expect(panelSizes).toContain('search: STANDARD_LEFT_PANEL_WIDTH');
     expect(panelSizes).toContain('echo: STANDARD_LEFT_PANEL_WIDTH');
@@ -39,19 +40,18 @@ describe('Sidebar width contract', () => {
     expect(sidebarLayout).not.toContain('href={ROUTE_PANEL_HREF.files}');
   });
 
-  it('keeps titlebar actions pinned to the collapsed rail edge while content follows live rail width', () => {
+  it('keeps titlebar actions outside the live rail width so expanded rail controls remain clickable', () => {
     const titlebarRow = readSource('components/TitlebarRow.tsx');
     const sidebarLayout = readSource('components/SidebarLayout.tsx');
     const globals = readSource('app/globals.css');
 
-    expect(titlebarRow).toContain("left: 'var(--titlebar-row-left, 48px)'");
-    expect(titlebarRow).toContain("paddingLeft: 'max(0px, calc(var(--window-controls-left, 0px) - var(--titlebar-row-left, 48px)))'");
+    expect(titlebarRow).toContain("left: 'var(--rail-width, var(--titlebar-row-left, 48px))'");
+    expect(titlebarRow).toContain("paddingLeft: 'max(0px, calc(var(--window-controls-left, 0px) - var(--rail-width, var(--titlebar-row-left, 48px))))'");
     expect(titlebarRow).toContain('z-app-rail-affordance');
     expect(sidebarLayout).toContain('--rail-width: ${lp.railWidth}px;');
     expect(sidebarLayout).toContain('--titlebar-row-left: ${RAIL_WIDTH_COLLAPSED}px;');
     expect(globals).toContain('--titlebar-row-left: 48px;');
-    expect(titlebarRow).not.toContain("left: 'var(--rail-width");
-    expect(titlebarRow).not.toContain('var(--window-controls-left, 0px) - var(--rail-width');
+    expect(titlebarRow).not.toContain("left: 'var(--titlebar-row-left, 48px)'");
   });
 
   it('keeps Home navigation pending state from re-highlighting route sections', () => {
@@ -64,7 +64,8 @@ describe('Sidebar width contract', () => {
     expect(sidebarLayout).toContain('const homeNavPending = pendingHomeNav?.fromPathname === pathname');
     expect(sidebarLayout).toContain('suppressRouteActive={homeNavPending}');
     expect(sidebarLayout).toContain('setPendingHomeNav(pathname !== \'/\' ? { fromPathname: pathname, panel: nextPanel } : null)');
-    expect(activityBar).toContain('onPanelChange(null)');
+    expect(sidebarLayout).toContain("lp.setActivePanel(nextPanel)");
+    expect(activityBar).toContain("smoothPush('/')");
   });
 
   it('renders the rail expand affordance as a real circle instead of a clipped pseudo target', () => {
@@ -80,7 +81,7 @@ describe('Sidebar width contract', () => {
     const sidebarLayout = readSource('components/SidebarLayout.tsx');
 
     expect(sidebarLayout).toContain('const handleSidebarPanelExpandedChange = useCallback((expanded: boolean) => {');
-    expect(sidebarLayout).toContain("lp.setActivePanel('files')");
+    expect(sidebarLayout).toContain("lp.setActivePanel(pathname === '/' ? 'home' : 'files')");
     expect(sidebarLayout).toContain('lp.setActivePanel(null)');
     expect(sidebarLayout).toContain('sidebarExpanded={panelOpen}');
     expect(sidebarLayout).toContain('onSidebarExpandedChange={handleSidebarPanelExpandedChange}');

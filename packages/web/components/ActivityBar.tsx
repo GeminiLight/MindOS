@@ -17,7 +17,7 @@ import {
   type RoutePanelId,
 } from '@/lib/navigation-panel';
 import { ACTIVITY_BAR } from '@/lib/config/panel-sizes';
-import { useSmoothRouterPush } from '@/hooks/useSmoothRouterPush';
+import { shouldHandleSmoothNavigation, useSmoothRouterPush } from '@/hooks/useSmoothRouterPush';
 
 export const RAIL_WIDTH_COLLAPSED = ACTIVITY_BAR.WIDTH_COLLAPSED;
 export const RAIL_WIDTH_EXPANDED = ACTIVITY_BAR.WIDTH_EXPANDED;
@@ -32,7 +32,7 @@ interface ActivityBarProps {
   onDiscoverClick?: React.MouseEventHandler<HTMLAnchorElement | HTMLButtonElement>;
   onWorkflowsClick?: React.MouseEventHandler<HTMLAnchorElement | HTMLButtonElement>;
   onSpacesClick?: React.MouseEventHandler<HTMLAnchorElement | HTMLButtonElement>;
-  onHomeClick?: React.MouseEventHandler<HTMLButtonElement>;
+  onHomeClick?: React.MouseEventHandler<HTMLAnchorElement>;
   syncStatus: SyncStatus | null;
   syncStale?: boolean;
   expanded: boolean;
@@ -315,32 +315,35 @@ export default function ActivityBar({
       aria-label="Navigation"
     >
       {/* Content wrapper — overflow-hidden prevents text flash during width transitions */}
-      <div className="flex flex-col h-full w-full overflow-hidden">
+      <div className="relative z-10 flex flex-col h-full w-full overflow-hidden">
         {/* macOS titlebar row: draggable spacer pushes the logo below the traffic-light row (0px elsewhere) */}
         <div
           className="w-full shrink-0 h-[var(--rail-titlebar-offset)]"
           style={{ WebkitAppRegion: 'drag' } as CSSProperties}
         />
         {/* ── Top: Logo — mirrors the titlebar height so rail and panel start on the same line. ── */}
-        <button
-          type="button"
+        <Link
+          href="/"
           style={{ WebkitAppRegion: 'no-drag' } as CSSProperties}
           onClick={(event) => {
+            if (!shouldHandleSmoothNavigation(event)) return;
             if (onHomeClick) {
+              event.preventDefault();
               onHomeClick(event);
               return;
             }
+            event.preventDefault();
             startTransition(() => {
               onPanelChange(null);
             });
             if (!isHome) smoothPush('/');
           }}
-          className={`flex items-center ${expanded ? 'px-3 gap-2' : 'justify-center'} w-full h-[var(--app-titlebar-h)] shrink-0 transition-opacity cursor-pointer ${isHome ? 'opacity-100' : 'opacity-50 hover:opacity-80'}`}
+          className={`relative z-10 flex items-center ${expanded ? 'px-3 gap-2' : 'justify-center'} w-full h-[var(--app-titlebar-h)] shrink-0 transition-opacity cursor-pointer ${isHome ? 'opacity-100' : 'opacity-50 hover:opacity-80'}`}
           aria-label="MindOS Home"
         >
           <Logo id="rail" className="w-7 h-3.5 shrink-0" />
           {expanded && <span className="text-sm text-foreground font-brand whitespace-nowrap">MindOS</span>}
-        </button>
+        </Link>
 
         <div className={`${expanded ? 'mx-3' : 'mx-2'} border-t border-border`} />
 

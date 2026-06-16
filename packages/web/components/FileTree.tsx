@@ -50,6 +50,15 @@ function getCurrentFilePath(pathname: string): string {
   return encoded.split('/').map(decodeURIComponent).join('/');
 }
 
+function queryFileRowByPath(path: string): HTMLElement | null {
+  if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function') {
+    return document.querySelector(`[data-filepath="${CSS.escape(path)}"]`) as HTMLElement | null;
+  }
+
+  return Array.from(document.querySelectorAll<HTMLElement>('[data-filepath]'))
+    .find(el => el.dataset.filepath === path) ?? null;
+}
+
 // Counts are cached per node identity: the server sends a fresh tree object on
 // every refresh, so a WeakMap keyed on the node is invalidated exactly when the
 // data actually changes, and collapsed-space badges stop re-walking the whole
@@ -721,7 +730,7 @@ function FileTreeRoot(props: FileTreeProps) {
   useEffect(() => {
     if (!currentPath) return;
     const timer = setTimeout(() => {
-      const el = document.querySelector(`[data-filepath="${CSS.escape(currentPath)}"]`) as HTMLElement | null;
+      const el = queryFileRowByPath(currentPath);
       el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     }, 120);
     return () => clearTimeout(timer);

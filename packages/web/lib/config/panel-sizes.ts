@@ -10,6 +10,7 @@ import type { PanelId } from '@/lib/navigation-panel';
 export const STANDARD_LEFT_PANEL_WIDTH = 300;
 
 export const DEFAULT_LEFT_PANEL_WIDTH: Record<PanelId, number> = {
+  home: STANDARD_LEFT_PANEL_WIDTH,
   files: STANDARD_LEFT_PANEL_WIDTH,
   capture: STANDARD_LEFT_PANEL_WIDTH,
   search: STANDARD_LEFT_PANEL_WIDTH,
