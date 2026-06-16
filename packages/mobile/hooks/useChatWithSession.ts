@@ -11,6 +11,8 @@ import { useCallback, useRef, useState, useEffect } from 'react';
 import { useConnectionStore } from '@/lib/connection-store';
 import { streamChat, MessageBuilder } from '@/lib/sse-client';
 import { mindosClient } from '@/lib/api-client';
+import { preserveAgentRunTimelineParts } from '@/lib/agent-run-timeline';
+import { useAgentRunTimeline } from '@/hooks/useAgentRunTimeline';
 import type { Message, AskMode, AgentRuntimeIdentity } from '@/lib/types';
 
 export interface UseChatWithSessionOptions {
@@ -53,7 +55,7 @@ export function useChatWithSession({
       const final = builderRef.current.finalize();
       setMessages((prev) => {
         const updated = [...prev];
-        updated[updated.length - 1] = final;
+        updated[updated.length - 1] = preserveAgentRunTimelineParts(updated[updated.length - 1], final);
         return updated;
       });
     }
@@ -89,6 +91,14 @@ export function useChatWithSession({
     }, 500);
     return () => { if (notifyTimerRef.current) clearTimeout(notifyTimerRef.current); };
   }, [initialMessagesLoaded, messages, isStreaming, onMessagesChange, sessionId]);
+
+  useAgentRunTimeline({
+    chatSessionId: sessionId,
+    enabled: initialMessagesLoaded,
+    isStreaming,
+    messages,
+    setMessages,
+  });
 
   // --- Send message ---
   const send = useCallback(
@@ -168,7 +178,7 @@ export function useChatWithSession({
             const snapshot = builder.build();
             setMessages((prev) => {
               const updated = [...prev];
-              updated[updated.length - 1] = snapshot;
+              updated[updated.length - 1] = preserveAgentRunTimelineParts(updated[updated.length - 1], snapshot);
               return updated;
             });
           },

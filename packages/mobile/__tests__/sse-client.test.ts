@@ -132,4 +132,62 @@ describe('MessageBuilder', () => {
       }),
     ]);
   });
+
+  it('renders native runtime permission requests and resolved decisions as tool parts', () => {
+    const builder = new MessageBuilder();
+
+    builder.addRuntimePermissionRequest({
+      type: 'runtime_permission_request',
+      runId: 'run-1',
+      requestId: 'perm-1',
+      runtime: 'claude',
+      toolCallId: 'approval-1',
+      toolName: 'Bash',
+      input: { command: 'mindos file delete a.md' },
+      reason: 'Delete a file',
+      options: [
+        { id: 'accept', label: 'Allow once', intent: 'allow', scope: 'once' },
+        { id: 'decline', label: 'Deny', intent: 'deny' },
+      ],
+    });
+
+    expect(builder.build().parts).toEqual([
+      expect.objectContaining({
+        type: 'tool-call',
+        toolCallId: 'approval-1',
+        toolName: 'Bash',
+        runtime: 'claude',
+        input: { command: 'mindos file delete a.md' },
+        state: 'running',
+        runtimePermission: expect.objectContaining({
+          status: 'waiting',
+          requestId: 'perm-1',
+          options: [
+            expect.objectContaining({ id: 'accept', label: 'Allow once', intent: 'allow' }),
+            expect.objectContaining({ id: 'decline', label: 'Deny', intent: 'deny' }),
+          ],
+        }),
+      }),
+    ]);
+
+    builder.addRuntimePermissionResolved({
+      type: 'runtime_permission_resolved',
+      runId: 'run-1',
+      requestId: 'perm-1',
+      runtime: 'claude',
+      toolCallId: 'approval-1',
+      decision: 'accept',
+      decisionIntent: 'allow',
+      decisionLabel: 'Allow once',
+    });
+
+    expect(builder.build().parts?.[0]).toEqual(expect.objectContaining({
+      state: 'running',
+      runtimePermission: expect.objectContaining({
+        status: 'approved',
+        decision: 'accept',
+        decisionLabel: 'Allow once',
+      }),
+    }));
+  });
 });

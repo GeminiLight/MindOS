@@ -16,6 +16,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { mindosClient } from '@/lib/api-client';
 import { useConnectionStore } from '@/lib/connection-store';
 import QuickCaptureCard from '@/components/QuickCaptureCard';
+import RecentAgentActivityCard from '@/components/agent/RecentAgentActivityCard';
+import { useRecentAgentActivity } from '@/hooks/useRecentAgentActivity';
 import { flattenFiles, formatRelativeTime } from '@/lib/file-tree';
 import { getHomeEmptyState } from '@/lib/home-state';
 import type { FileNode } from '@/lib/types';
@@ -27,6 +29,17 @@ export default function HomeScreen() {
   const [tree, setTree] = useState<FileNode[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
+  const {
+    summary: recentAgentActivitySummary,
+    loading: recentAgentActivityLoading,
+    refreshing: recentAgentActivityRefreshing,
+    error: recentAgentActivityError,
+    lastCheckedAt: recentAgentActivityLastCheckedAt,
+    refresh: refreshRecentAgentActivity,
+  } = useRecentAgentActivity({
+    enabled: status === 'connected',
+    limit: 6,
+  });
 
   const loadData = useCallback(async () => {
     try {
@@ -45,9 +58,12 @@ export default function HomeScreen() {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await loadData();
+    await Promise.all([
+      loadData(),
+      status === 'connected' ? refreshRecentAgentActivity() : Promise.resolve(),
+    ]);
     setRefreshing(false);
-  }, [loadData]);
+  }, [loadData, refreshRecentAgentActivity, status]);
 
   const spaces = tree.filter((n) => n.type === 'directory' && n.isSpace);
   const allFiles = flattenFiles(tree);
@@ -106,6 +122,20 @@ export default function HomeScreen() {
             ) : null}
 
             <QuickCaptureCard onSaved={loadData} />
+
+            {status === 'connected' ? (
+              <View style={styles.agentActivitySection}>
+                <RecentAgentActivityCard
+                  summary={recentAgentActivitySummary}
+                  loading={recentAgentActivityLoading}
+                  refreshing={recentAgentActivityRefreshing}
+                  error={recentAgentActivityError}
+                  lastCheckedAt={recentAgentActivityLastCheckedAt}
+                  onRefresh={refreshRecentAgentActivity}
+                  onOpenAll={() => router.push('/agent-runs')}
+                />
+              </View>
+            ) : null}
 
             {spaces.length > 0 && (
               <View style={styles.section}>
@@ -193,6 +223,10 @@ const styles = StyleSheet.create({
   statusDotChecking: { backgroundColor: colors.warning },
   statusDotError: { backgroundColor: colors.error },
   statusText: { fontSize: 13, color: colors.textMuted },
+  agentActivitySection: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+  },
   section: { paddingHorizontal: 16, paddingTop: 20, paddingBottom: 8 },
   sectionTitle: { fontSize: 18, fontWeight: '700', color: '#fafaf9' },
   spacesGrid: {

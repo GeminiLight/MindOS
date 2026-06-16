@@ -16,7 +16,8 @@ import * as Clipboard from 'expo-clipboard';
 import Markdown from 'react-native-markdown-display';
 import { Ionicons } from '@expo/vector-icons';
 import { getMarkdownStyles } from '@/lib/markdown-styles';
-import type { Message, ToolCallPart, ReasoningPart, ImagePart } from '@/lib/types';
+import AgentRunTimelineCard from '@/components/chat/AgentRunTimelineCard';
+import type { AgentRunTimelinePart, Message, ToolCallPart, ReasoningPart } from '@/lib/types';
 
 interface MessageBubbleProps {
   message: Message;
@@ -26,6 +27,7 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
   const isUser = message.role === 'user';
   const toolCalls = message.parts?.filter((p) => p.type === 'tool-call') as ToolCallPart[] | undefined;
   const reasoning = message.parts?.filter((p) => p.type === 'reasoning') as ReasoningPart[] | undefined;
+  const agentRunTimelines = message.parts?.filter((p) => p.type === 'agent-run-timeline') as AgentRunTimelinePart[] | undefined;
 
   const handleLongPress = () => {
     if (!message.content) return;
@@ -94,6 +96,17 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
             </RNText>
             {toolCalls.map((tc, i) => (
               <ToolCallCard key={tc.toolCallId || i} tc={tc} />
+            ))}
+          </View>
+        )}
+
+        {agentRunTimelines && agentRunTimelines.length > 0 && (
+          <View style={styles.agentRunSection}>
+            {agentRunTimelines.map((part) => (
+              <AgentRunTimelineCard
+                key={`${part.chatSessionId}-${part.rootRunId ?? part.startedAfter ?? 'latest'}`}
+                part={part}
+              />
             ))}
           </View>
         )}
@@ -308,6 +321,9 @@ const styles = StyleSheet.create({
     borderTopColor: '#44403c',
     gap: 6,
   },
+  agentRunSection: {
+    marginTop: 10,
+  },
   toolsLabel: {
     fontSize: 11,
     color: '#78716c',
@@ -344,4 +360,3 @@ const styles = StyleSheet.create({
     fontFamily: 'monospace',
   },
 });
-

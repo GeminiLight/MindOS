@@ -10,16 +10,31 @@
  *   data:{"type":"done"}\n\n
  */
 
-import type { Message, MessagePart, ReasoningPart, ToolCallPart } from './types';
+import type {
+  Message,
+  MessagePart,
+  ReasoningPart,
+  RuntimePermissionOption,
+  RuntimePermissionRequest,
+  RuntimePermissionState,
+  ToolCallPart,
+} from './types';
 
 // ─── SSE Event Types ───────────────────────────────────────────
 
 export type SSEEventType =
+  | 'agent_run_context'
   | 'text_delta'
   | 'thinking_delta'
   | 'tool_start'
   | 'tool_delta'
   | 'tool_end'
+  | 'runtime_permission_request'
+  | 'runtime_permission_resolved'
+  | 'runtime_binding'
+  | 'user_question_start'
+  | 'user_question_answered'
+  | 'user_question_cancelled'
   | 'done'
   | 'error'
   | 'status';
@@ -27,9 +42,23 @@ export type SSEEventType =
 export interface SSEEvent {
   type: SSEEventType;
   delta?: string;
+  runId?: string;
+  requestId?: string;
+  runtime?: 'mindos' | 'acp' | 'codex' | 'claude';
   toolCallId?: string;
   toolName?: string;
   args?: unknown;
+  input?: unknown;
+  options?: RuntimePermissionOption[];
+  reason?: string;
+  action?: string;
+  resource?: string;
+  risk?: RuntimePermissionRequest['risk'];
+  decision?: string;
+  cancelled?: boolean;
+  decisionLabel?: string;
+  decisionIntent?: RuntimePermissionState['decisionIntent'];
+  decisionScope?: RuntimePermissionState['decisionScope'];
   output?: string;
   isError?: boolean;
   message?: string;
@@ -205,15 +234,10 @@ export class MessageBuilder {
   }
 
   addToolStart(toolCallId: string, toolName: string, args: unknown): void {
-    const toolCall: ToolCallPart = {
-      type: 'tool-call',
-      toolCallId,
-      toolName,
-      input: args,
-      state: 'running',
-    };
-    this.toolCalls.set(toolCallId, toolCall);
-    this.parts.push(toolCall);
+    const toolCall = this.findOrCreateToolCall(toolCallId, toolName);
+    toolCall.toolName = toolName;
+    toolCall.input = args;
+    toolCall.state = 'running';
   }
 
   addToolEnd(toolCallId: string, output: string, isError: boolean): void {
@@ -228,6 +252,77 @@ export class MessageBuilder {
     const tc = this.toolCalls.get(toolCallId);
     if (tc) {
       tc.output = `${tc.output ?? ''}${delta}`;
+    }
+  }
+
+  addRuntimePermissionRequest(event: SSEEvent): void {
+    const runtime = normalizeRuntime(event.runtime);
+    if (!event.toolCallId || !event.runId || !event.requestId || !runtime) return;
+
+    const toolName = event.toolName || 'approval_request';
+    const tc = this.findOrCreateToolCall(event.toolCallId, toolName);
+    tc.toolName = toolName;
+    tc.input = event.input ?? event.args ?? tc.input;
+    tc.runtime = runtime;
+    tc.runtimePermission = {
+      type: 'runtime_permission_request',
+      runId: event.runId,
+      requestId: event.requestId,
+      runtime,
+      toolCallId: event.toolCallId,
+      toolName,
+      input: event.input ?? event.args,
+      options: normalizePermissionOptions(event.options),
+      status: 'waiting',
+      ...(event.reason ? { reason: event.reason } : {}),
+      ...(event.action ? { action: event.action } : {}),
+      ...(event.resource ? { resource: event.resource } : {}),
+      ...(normalizePermissionRisk(event.risk) ? { risk: normalizePermissionRisk(event.risk) } : {}),
+    };
+    tc.state = 'running';
+  }
+
+  addRuntimePermissionResolved(event: SSEEvent): void {
+    if (!event.toolCallId) return;
+    const runtime = normalizeRuntime(event.runtime);
+    const tc = this.findOrCreateToolCall(event.toolCallId, event.toolName || 'approval_request');
+    if (runtime) tc.runtime = runtime;
+
+    if (!tc.runtimePermission && event.runId && event.requestId && runtime) {
+      tc.runtimePermission = {
+        type: 'runtime_permission_request',
+        runId: event.runId,
+        requestId: event.requestId,
+        runtime,
+        toolCallId: event.toolCallId,
+        toolName: tc.toolName,
+        options: [],
+        status: 'waiting',
+      };
+    }
+
+    const decision = typeof event.decision === 'string' ? event.decision : '';
+    const decisionIntent = normalizePermissionIntent(event.decisionIntent);
+    const denied = decisionIntent === 'deny' || decision === 'decline' || decision === 'deny' || decision === 'denied';
+
+    if (tc.runtimePermission) {
+      tc.runtimePermission.decision = decision;
+      if (event.decisionLabel) tc.runtimePermission.decisionLabel = event.decisionLabel;
+      if (decisionIntent) tc.runtimePermission.decisionIntent = decisionIntent;
+      const decisionScope = normalizePermissionScope(event.decisionScope);
+      if (decisionScope) tc.runtimePermission.decisionScope = decisionScope;
+      tc.runtimePermission.status = event.cancelled
+        ? 'cancelled'
+        : denied
+          ? 'denied'
+          : 'approved';
+    }
+
+    if (event.cancelled || denied) {
+      tc.state = 'error';
+      tc.output = decision
+        ? `Permission decision forwarded: ${decision}`
+        : 'Permission decision forwarded.';
     }
   }
 
@@ -251,4 +346,61 @@ export class MessageBuilder {
     }
     return this.build();
   }
+
+  private findOrCreateToolCall(toolCallId: string, toolName: string): ToolCallPart {
+    const existing = this.toolCalls.get(toolCallId);
+    if (existing) return existing;
+    const toolCall: ToolCallPart = {
+      type: 'tool-call',
+      toolCallId,
+      toolName,
+      input: {},
+      state: 'running',
+    };
+    this.toolCalls.set(toolCallId, toolCall);
+    this.parts.push(toolCall);
+    return toolCall;
+  }
+}
+
+function normalizeRuntime(runtime: SSEEvent['runtime']): 'codex' | 'claude' | undefined {
+  return runtime === 'codex' || runtime === 'claude' ? runtime : undefined;
+}
+
+function normalizePermissionOptions(options: SSEEvent['options']): RuntimePermissionOption[] {
+  if (!Array.isArray(options)) return [];
+  return options
+    .filter((option) => option && typeof option.id === 'string' && typeof option.label === 'string')
+    .map((option) => ({
+      id: option.id,
+      label: option.label,
+      ...(typeof option.description === 'string' ? { description: option.description } : {}),
+      ...(normalizePermissionIntent(option.intent) ? { intent: normalizePermissionIntent(option.intent) } : {}),
+      ...(normalizePermissionScope(option.scope) ? { scope: normalizePermissionScope(option.scope) } : {}),
+    }));
+}
+
+function normalizePermissionIntent(intent: unknown): RuntimePermissionState['decisionIntent'] | undefined {
+  return intent === 'allow' || intent === 'deny' || intent === 'cancel' ? intent : undefined;
+}
+
+function normalizePermissionScope(scope: unknown): RuntimePermissionState['decisionScope'] | undefined {
+  return scope === 'once' || scope === 'session' || scope === 'always' || scope === 'turn'
+    ? scope
+    : undefined;
+}
+
+function normalizePermissionRisk(risk: unknown): RuntimePermissionRequest['risk'] | undefined {
+  if (!risk || typeof risk !== 'object') return undefined;
+  const record = risk as Record<string, unknown>;
+  const level = record.level;
+  if (level !== 'low' && level !== 'medium' && level !== 'high') return undefined;
+  if (typeof record.summary !== 'string') return undefined;
+  return {
+    level,
+    summary: record.summary,
+    ...(Array.isArray(record.reasons)
+      ? { reasons: record.reasons.filter((reason): reason is string => typeof reason === 'string') }
+      : {}),
+  };
 }

@@ -154,6 +154,12 @@ export function useChat({ mode = 'chat', selectedRuntime = null }: UseChatOption
               case 'tool_end':
                 builder.addToolEnd(event.toolCallId || '', event.output || '', event.isError || false);
                 break;
+              case 'runtime_permission_request':
+                builder.addRuntimePermissionRequest(event);
+                break;
+              case 'runtime_permission_resolved':
+                builder.addRuntimePermissionResolved(event);
+                break;
               case 'error':
                 setError(event.message || 'Unknown error');
                 setLastFailedMessage(userMessage);
@@ -164,6 +170,11 @@ export function useChat({ mode = 'chat', selectedRuntime = null }: UseChatOption
                 finishCurrentStream();
                 return;
               case 'status':
+              case 'agent_run_context':
+              case 'runtime_binding':
+              case 'user_question_start':
+              case 'user_question_answered':
+              case 'user_question_cancelled':
                 break;
             }
 

@@ -23,14 +23,15 @@ import ChatHeader from '@/components/chat/ChatHeader';
 import ChatEmptyState from '@/components/chat/ChatEmptyState';
 import ChatStatusFooter from '@/components/chat/ChatStatusFooter';
 import ScrollToBottomButton from '@/components/chat/ScrollToBottomButton';
-import type { AskMode, Message } from '@/lib/types';
-
-const SUGGESTIONS = [
-  'Summarize my recent notes',
-  'What did I write about this week?',
-  'Find my TODO items',
-  'Help me brainstorm',
-];
+import RuntimePickerSheet from '@/components/chat/RuntimePickerSheet';
+import { useAgentRuntimes } from '@/hooks/useAgentRuntimes';
+import {
+  buildRuntimeComposerPresentation,
+  coerceSelectedRuntime,
+  runtimeKey,
+} from '@/lib/agent-runtime-companion';
+import { colors } from '@/lib/theme';
+import type { AgentRuntimeIdentity, AskMode, Message } from '@/lib/types';
 
 export default function ChatScreen() {
   const [mode, setMode] = useState<AskMode>('chat');
@@ -38,9 +39,12 @@ export default function ChatScreen() {
   const [selectedAttachments, setSelectedAttachments] = useState<string[]>([]);
   const [showAttachmentPicker, setShowAttachmentPicker] = useState(false);
   const [showSessionList, setShowSessionList] = useState(false);
+  const [showRuntimeSheet, setShowRuntimeSheet] = useState(false);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
   const [currentMessages, setCurrentMessages] = useState<Message[]>([]);
   const [currentMessagesLoaded, setCurrentMessagesLoaded] = useState(false);
+  const [selectedRuntime, setSelectedRuntime] = useState<AgentRuntimeIdentity | null>(null);
+  const agentRuntimeState = useAgentRuntimes();
   const listRef = useRef<FlatList>(null);
   const contentHeightRef = useRef(0);
   const scrollOffsetRef = useRef(0);
@@ -92,9 +96,17 @@ export default function ChatScreen() {
     initialMessages: currentMessages,
     initialMessagesLoaded: currentMessagesLoaded,
     mode,
+    selectedRuntime,
     onMessagesChange: handleMessagesChange,
   });
   const { messages, isStreaming, error, lastFailedMessage, send, retry, cancel } = chatState;
+
+  useEffect(() => {
+    setSelectedRuntime((current) => {
+      const next = coerceSelectedRuntime(current, agentRuntimeState.response);
+      return runtimeKey(current) === runtimeKey(next) ? current : next;
+    });
+  }, [agentRuntimeState.response]);
 
   const resetComposer = useCallback(() => {
     setInputText('');
@@ -147,11 +159,15 @@ export default function ChatScreen() {
   const headerTitle = sessions.find((session) => session.id === activeSessionId)?.title || 'New Chat';
   const isEmptyState = !messages.length && !isStreaming && !error;
   const hasAssistantContent = Boolean(messages[messages.length - 1]?.content);
+  const selectedRuntimeKey = runtimeKey(selectedRuntime);
+  const selectedRuntimeOption = agentRuntimeState.options.find((option) => option.id === selectedRuntimeKey)
+    ?? agentRuntimeState.options[0];
+  const composerPresentation = buildRuntimeComposerPresentation(selectedRuntimeOption, mode);
 
   if (!sessionsLoaded || !currentMessagesLoaded) {
     return (
       <SafeAreaView style={styles.container} edges={['left', 'right']}>
-        <ActivityIndicator color="#c8873a" style={styles.loader} />
+        <ActivityIndicator color={colors.amber} style={styles.loader} />
       </SafeAreaView>
     );
   }
@@ -165,13 +181,21 @@ export default function ChatScreen() {
       >
         <ChatHeader
           title={headerTitle}
+          runtimeLabel={selectedRuntimeOption?.name ?? 'MindOS Agent'}
+          runtimeStatusLabel={
+            agentRuntimeState.loading ? 'Checking' : selectedRuntimeOption?.statusLabel ?? 'Ready'
+          }
+          runtimeReady={selectedRuntimeOption?.selectable ?? false}
           onOpenSessions={() => setShowSessionList(true)}
+          onOpenRuntime={() => setShowRuntimeSheet(true)}
           onNewChat={() => { void handleNewChat(); }}
         />
 
         {isEmptyState ? (
           <ChatEmptyState
-            suggestions={SUGGESTIONS}
+            title={composerPresentation.emptyTitle}
+            subtitle={composerPresentation.emptySubtitle}
+            suggestions={composerPresentation.suggestions}
             onPickSuggestion={setInputText}
           />
         ) : (
@@ -216,6 +240,9 @@ export default function ChatScreen() {
           isLoading={isStreaming}
           mode={mode}
           onModeChange={setMode}
+          agentModeEnabled={composerPresentation.agentModeEnabled}
+          placeholder={composerPresentation.placeholder}
+          modeHint={composerPresentation.modeHint}
           canSend={!isStreaming}
           attachedPaths={selectedAttachments}
           onOpenAttachmentPicker={() => setShowAttachmentPicker(true)}
@@ -240,12 +267,30 @@ export default function ChatScreen() {
         onDelete={deleteSession}
         onClose={() => setShowSessionList(false)}
       />
+
+      <RuntimePickerSheet
+        visible={showRuntimeSheet}
+        options={agentRuntimeState.options}
+        selectedRuntime={selectedRuntime}
+        loading={agentRuntimeState.loading}
+        refreshing={agentRuntimeState.refreshing}
+        error={agentRuntimeState.error}
+        lastCheckedAt={agentRuntimeState.lastCheckedAt}
+        switchDisabled={isStreaming}
+        onRefresh={agentRuntimeState.refresh}
+        onSelect={(option) => {
+          if (isStreaming || !option.selectable) return;
+          setSelectedRuntime(option.selectedRuntime);
+          setShowRuntimeSheet(false);
+        }}
+        onClose={() => setShowRuntimeSheet(false)}
+      />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#1a1917' },
+  container: { flex: 1, backgroundColor: colors.background },
   flex: { flex: 1 },
   loader: { marginTop: 40 },
   messageList: { paddingVertical: 8 },

@@ -249,6 +249,95 @@ describe('mindosClient auth', () => {
     );
   });
 
+  it('loads agent run activity for the active mobile chat session', async () => {
+    mindosClient.setBaseUrl('http://127.0.0.1:4567');
+    mindosClient.setAuthToken('secret-token');
+
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(JSON.stringify({
+        runs: [
+          {
+            id: 'run-1',
+            chatSessionId: 'chat-1',
+            agentKind: 'pi-subagent',
+            runtimeId: 'reviewer',
+            displayName: 'Reviewer',
+            status: 'running',
+            permissionMode: 'agent',
+            inputSummary: 'Review',
+            startedAt: 1000,
+          },
+        ],
+        events: 'bad',
+      }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    await expect(mindosClient.getAgentRuns({
+      chatSessionId: 'chat-1',
+      startedAfter: 900,
+      limit: 20,
+    })).resolves.toMatchObject({
+      runs: [expect.objectContaining({ id: 'run-1' })],
+      events: [],
+    });
+
+    expect(fetch).toHaveBeenCalledWith(
+      'http://127.0.0.1:4567/api/agent-runs?chatSessionId=chat-1&startedAfter=900&limit=20&includeEvents=1',
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: 'Bearer secret-token',
+        }),
+      }),
+    );
+  });
+
+  it('loads recent global agent run activity for the mobile home surface', async () => {
+    mindosClient.setBaseUrl('http://127.0.0.1:4567');
+    mindosClient.setAuthToken('secret-token');
+
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(JSON.stringify({
+        runs: [
+          {
+            id: 'run-1',
+            agentKind: 'native-runtime',
+            runtimeId: 'codex',
+            displayName: 'Codex',
+            status: 'completed',
+            permissionMode: 'agent',
+            inputSummary: 'Fix tests',
+            startedAt: 1000,
+            completedAt: 1200,
+          },
+        ],
+        events: [],
+      }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    await expect(mindosClient.getAgentRuns({
+      limit: 6,
+      includeEvents: true,
+    })).resolves.toMatchObject({
+      runs: [expect.objectContaining({ id: 'run-1' })],
+      events: [],
+    });
+
+    expect(fetch).toHaveBeenCalledWith(
+      'http://127.0.0.1:4567/api/agent-runs?limit=6&includeEvents=1',
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: 'Bearer secret-token',
+        }),
+      }),
+    );
+  });
+
   it('notifies connection observers for API success and connection failures only', async () => {
     const events: unknown[] = [];
     mindosClient.setBaseUrl('http://127.0.0.1:4567');

@@ -12,6 +12,7 @@ import type {
   FileDeleteResponse,
   FileRenameResponse,
   AgentRuntimesResponse,
+  AgentRunsResponse,
 } from './types';
 import { normalizeFilesResponseToTree } from './file-tree';
 import type { ConnectionIssueReason } from './connection-diagnostics';
@@ -352,6 +353,38 @@ class MindOSClient {
       throw new ApiError(res.status, readErrorMessage(data, 'Permission request could not be resolved'));
     }
     return { ok: true };
+  }
+
+  async getAgentRuns(input: {
+    chatSessionId?: string;
+    rootRunId?: string;
+    startedAfter?: number;
+    limit?: number;
+    includeEvents?: boolean;
+    signal?: AbortSignal;
+  } = {}): Promise<AgentRunsResponse> {
+    const params = new URLSearchParams();
+    if (input.chatSessionId) params.set('chatSessionId', input.chatSessionId);
+    if (input.rootRunId) params.set('rootRunId', input.rootRunId);
+    if (typeof input.startedAfter === 'number' && Number.isFinite(input.startedAfter)) {
+      params.set('startedAfter', String(input.startedAfter));
+    }
+    params.set('limit', String(input.limit ?? 50));
+    if (input.includeEvents ?? true) params.set('includeEvents', '1');
+
+    const query = params.toString();
+    const res = await this.fetchWithTimeout(`/api/agent-runs${query ? `?${query}` : ''}`, {
+      timeout: 10_000,
+      signal: input.signal,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new ApiError(res.status, readErrorMessage(data, 'Failed to load agent activity'));
+    }
+    return {
+      runs: Array.isArray(data.runs) ? data.runs : [],
+      events: Array.isArray(data.events) ? data.events : [],
+    };
   }
 
   // ---------------------------------------------------------------------------
