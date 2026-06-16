@@ -609,12 +609,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
 
     const openerRuntime = pendingOpenAgentRef.current;
     const sessionRuntime = getSessionAgentRuntime(session.activeSession);
-    const currentRuntime = selectedAgentRuntimeRef.current;
-    const keepNativeRuntime =
-      currentRuntime?.kind === 'codex' || currentRuntime?.kind === 'claude'
-        ? currentRuntime
-        : null;
-    const restoredRuntime = sessionRuntime ?? openerRuntime ?? keepNativeRuntime;
+    const restoredRuntime = sessionRuntime ?? openerRuntime ?? null;
     const detectedRuntime = restoredRuntime?.kind === 'codex' || restoredRuntime?.kind === 'claude'
       ? nativeRuntimes.find((runtime) => runtime.kind === restoredRuntime.kind && runtime.id === restoredRuntime.id)
       : undefined;

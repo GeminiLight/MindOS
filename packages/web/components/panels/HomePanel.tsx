@@ -1,14 +1,14 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Brain, Loader2, MessageSquare, Network, Plus, RefreshCw, Search } from 'lucide-react';
+import { Archive, Brain, Loader2, MessageSquare, Network, Pin, PinOff, Plus, RefreshCw, Search } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import FileTree from '@/components/FileTree';
 import Logo from '@/components/Logo';
 import type { FileNode, ChatSession } from '@/lib/types';
 import type { MindSystemSlot } from '@/lib/mind-system';
 import { getRuntimeSessionSummary, getSessionAgentRuntime } from '@/lib/ask-agent';
-import { loadSession, refreshSessions, resetSession, useActiveSessionId, useSessions } from '@/lib/ask-session-store';
+import { deleteSession, loadSession, refreshSessions, resetSession, togglePinSession, useActiveSessionId, useSessions } from '@/lib/ask-session-store';
 import { useRunSummary } from '@/lib/ask-run-store';
 import { sessionTitle } from '@/hooks/useAskSession';
 import { useSmoothRouterPush } from '@/hooks/useSmoothRouterPush';
@@ -19,20 +19,6 @@ import MindSystemSidebarSection from './MindSystemSidebarSection';
 
 type HomeSidebarMode = 'sessions' | 'files';
 type SessionAgentFilter = 'all' | 'mindos' | 'codex' | 'claude' | 'acp';
-
-function compactTimeDistance(ts: number): string {
-  const diff = Date.now() - ts;
-  const mins = Math.max(0, Math.floor(diff / 60_000));
-  if (mins < 1) return '0m';
-  if (mins < 60) return `${mins}m`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h`;
-  const days = Math.floor(hours / 24);
-  if (days < 31) return `${days}d`;
-  const months = Math.floor(days / 30);
-  if (months < 12) return `${months}mo`;
-  return `${Math.floor(months / 12)}y`;
-}
 
 function sessionAgentKind(session: ChatSession): Exclude<SessionAgentFilter, 'all'> {
   const runtime = getSessionAgentRuntime(session);
@@ -99,12 +85,12 @@ function AgentMark({
   active?: boolean;
   size?: 'sm' | 'md';
 }) {
-  const boxSize = size === 'sm' ? 'h-6 w-6 rounded-lg' : 'h-7 w-7 rounded-lg';
-  const iconSize = size === 'sm' ? 12 : 13;
-  const logoClass = size === 'sm' ? 'h-2.5 w-[18px]' : 'h-3 w-5';
-  const runtimeLogoClass = size === 'sm' ? 'h-3.5 w-3.5' : 'h-4 w-4';
+  const boxSize = size === 'sm' ? 'h-5 w-5 rounded-md' : 'h-6 w-6 rounded-md';
+  const iconSize = size === 'sm' ? 10 : 12;
+  const logoClass = size === 'sm' ? 'h-2 w-3.5' : 'h-2.5 w-[18px]';
+  const runtimeLogoClass = size === 'sm' ? 'h-3 w-3' : 'h-3.5 w-3.5';
   const safeId = id.replace(/[^a-zA-Z0-9_-]/g, '-');
-  const shared = `inline-flex shrink-0 items-center justify-center border border-border/50 bg-background ${boxSize}`;
+  const shared = `inline-flex shrink-0 items-center justify-center border border-border/60 bg-white shadow-[0_1px_1px_0_color-mix(in_srgb,var(--foreground)_6%,transparent)] ${boxSize}`;
 
   if (kind === 'mindos') {
     return (
@@ -230,7 +216,7 @@ function HomeAgentFilter({
             aria-pressed={active}
             title={`${filter.label} (${counts[filter.id]})`}
             onClick={() => onChange(filter.id)}
-            className={`hit-target-box inline-flex h-7 min-w-7 items-center justify-center px-0.5 text-muted-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [--hit-target-radius:var(--radius-lg)] [--hit-target-hover-bg:var(--muted)] ${
+            className={`hit-target-box inline-flex h-6 min-w-6 items-center justify-center px-0.5 text-muted-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [--hit-target-radius:var(--radius-md)] [--hit-target-hover-bg:var(--muted)] ${
               active
                 ? 'text-foreground [--hit-target-border-width:1px] [--hit-target-active-bg:var(--amber-subtle)] [--hit-target-active-border:color-mix(in_srgb,var(--amber)_24%,transparent)]'
                 : 'hover:text-foreground'
@@ -257,32 +243,59 @@ function HomeSessionRow({
 }) {
   const { t } = useLocale();
   const runtimeSummary = getRuntimeSessionSummary(session);
+  const sessionRuntime = getSessionAgentRuntime(session);
   const agentKind = sessionAgentKind(session);
   const title = sessionDisplayTitle(session, t.ask.historyEmptyHint);
+  const pinLabel = session.pinned ? t.sidebar.homeUnpinSession : t.sidebar.homePinSession;
 
   return (
-    <button
-      type="button"
-      onClick={onOpen}
+    <div
       data-home-session-row={session.id}
       data-hit-active={active ? 'true' : undefined}
-      className={`hit-target-box group flex w-full min-w-0 items-center gap-2 px-2 py-1.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [--hit-target-radius:var(--radius-lg)] [--hit-target-hover-bg:var(--muted)] ${
+      className={`hit-target-box group flex w-full min-w-0 items-center gap-1.5 px-1.5 py-1 text-left transition-colors focus-within:text-foreground [--hit-target-radius:var(--radius-lg)] [--hit-target-hover-bg:var(--muted)] ${
         active
           ? '[--hit-target-border-width:1px] [--hit-target-active-bg:var(--amber-subtle)] [--hit-target-active-border:color-mix(in_srgb,var(--amber)_26%,transparent)]'
           : ''
       }`}
     >
-      <AgentMark kind={agentKind} id={session.id} active={active} />
-      <span className="flex min-w-0 flex-1 items-center gap-1.5">
-        <span className="min-w-0 flex-1 truncate text-[13px] leading-5 text-foreground" title={title}>
+      <button
+        type="button"
+        onClick={onOpen}
+        className="flex min-w-0 flex-1 items-center gap-1.5 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <AgentMark kind={agentKind} id={session.id} active={active} />
+        <span className="min-w-0 flex-1 truncate text-[12px] leading-4 text-foreground/90" title={title}>
           {title}
         </span>
-        <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground/70">
-          {compactTimeDistance(session.updatedAt)}
-        </span>
         <SessionStatusDot running={running} status={runtimeSummary?.status} />
+      </button>
+      <span className={`flex shrink-0 items-center gap-0.5 transition-opacity duration-100 ${
+        session.pinned
+          ? 'opacity-100'
+          : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'
+      }`}>
+        <button
+          type="button"
+          aria-label={pinLabel}
+          title={pinLabel}
+          onClick={() => togglePinSession(session.id)}
+          className={`hit-target-box inline-flex h-6 w-6 items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-md)] ${
+            session.pinned ? 'text-[var(--amber)]' : 'text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          {session.pinned ? <PinOff size={11} aria-hidden="true" /> : <Pin size={11} aria-hidden="true" />}
+        </button>
+        <button
+          type="button"
+          aria-label={t.sidebar.homeArchiveSession}
+          title={t.sidebar.homeArchiveSession}
+          onClick={() => deleteSession(session.id, { runtime: sessionRuntime })}
+          className="hit-target-box inline-flex h-6 w-6 items-center justify-center text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-md)]"
+        >
+          <Archive size={11} aria-hidden="true" />
+        </button>
       </span>
-    </button>
+    </div>
   );
 }
 
@@ -345,7 +358,6 @@ export default function HomePanel({
   const handleNewSession = useCallback(() => {
     resetSession();
     if (pathname !== '/') smoothPush('/');
-    window.dispatchEvent(new CustomEvent('mindos:open-ask-panel'));
   }, [pathname, smoothPush]);
 
   const handleRefreshSessions = useCallback(() => {
@@ -387,7 +399,7 @@ export default function HomePanel({
               <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-muted/40 text-muted-foreground">
                 <MessageSquare size={17} aria-hidden="true" />
               </div>
-              <p className="text-sm font-medium text-foreground">{t.sidebar.homeEmptySessions}</p>
+              <p className="text-sm text-foreground">{t.sidebar.homeEmptySessions}</p>
               <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{t.sidebar.homeEmptySessionsHint}</p>
             </div>
           ) : (

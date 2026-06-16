@@ -22,6 +22,7 @@ const DIFF_TOOLS = new Set([
 const TOOL_ICONS: Record<string, LucideIcon> = {
   web_search: Globe,
   search: Search,
+  WebSearch: Search,
   list_files: FolderOpen,
   read_file: BookOpen,
   write_file: Pencil,
@@ -207,7 +208,7 @@ function formatNativeRuntimeSummary(part: ToolCallPart): string {
   const command = getCommand(part.input);
   const description = getString(input.description) ?? getString(input.summary);
   const detail = description ?? command ?? formatInput(part.input);
-  return `${runtimeLabel(part.runtime)} · ${part.toolName}${detail ? ` · ${truncate(detail, 72)}` : ''}`;
+  return detail ? truncate(detail, 72) : '';
 }
 
 function isNativeRuntimeTool(part: ToolCallPart): boolean {
@@ -375,7 +376,6 @@ function NativeRuntimeToolDetails({ part, running }: { part: ToolCallPart; runni
   const description = getString(input.description) ?? getString(input.summary);
   const runtimePermission = part.runtimePermission;
   const approvalSensitive = Boolean(runtimePermission) || isDestructiveToolCall(part) || part.toolName === 'approval_request';
-  const label = runtimeLabel(part.runtime);
   const safeOutput = part.output ? redactSensitiveText(part.output) : part.output;
   const outputPreview = safeOutput && safeOutput.length > 1000 ? `${safeOutput.slice(0, 1000)}…` : safeOutput;
 
@@ -386,7 +386,7 @@ function NativeRuntimeToolDetails({ part, running }: { part: ToolCallPart; runni
           runtimePermission ? 'text-[var(--amber)]' : 'text-muted-foreground'
         }`}>
           {runtimePermission ? <ShieldAlert size={12} /> : <Loader2 size={12} className="animate-spin" />}
-          {runtimePermission ? `${label} is asking for approval` : `Running in ${label}`}
+          {runtimePermission ? 'Waiting for approval' : 'Running tool'}
         </div>
       )}
 
@@ -396,9 +396,6 @@ function NativeRuntimeToolDetails({ part, running }: { part: ToolCallPart; runni
           : 'border-border/35 bg-muted/10'
       }`}>
         <div className="mb-2 flex flex-wrap items-center gap-1.5">
-          <span className="inline-flex h-5 items-center gap-1 rounded border border-border/40 bg-background px-1.5 text-2xs font-medium text-muted-foreground">
-            {label}
-          </span>
           <span className="text-xs font-medium text-foreground">{part.toolName}</span>
           {description && <span className="text-2xs text-muted-foreground">{description}</span>}
         </div>

@@ -40,7 +40,7 @@ interface TitlebarRowProps {
   onSidebarExpandedChange?: (expanded: boolean) => void;
 }
 
-const TITLEBAR_ACTION_CLASS = 'mb-1 ml-1.5 hidden h-7 w-7 shrink-0 items-center justify-center self-end rounded-full text-muted-foreground transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:inline-flex';
+const TITLEBAR_ACTION_CLASS = 'mb-1 ml-1.5 hidden h-7 w-7 shrink-0 items-center justify-center self-end rounded-full transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:inline-flex';
 
 function TitlebarSearchTrigger({
   active,
@@ -63,8 +63,8 @@ function TitlebarSearchTrigger({
       onClick={onOpenOrFocus}
       className={`${TITLEBAR_ACTION_CLASS} ${
         active
-          ? 'bg-[var(--amber)]/10 text-[var(--amber)]'
-          : 'hover:bg-muted hover:text-foreground'
+          ? 'bg-[var(--amber-dim)] text-[var(--amber)]'
+          : 'text-muted-foreground hover:bg-muted hover:text-foreground'
       }`}
     >
       <Search size={15} aria-hidden="true" />
@@ -93,7 +93,7 @@ function TitlebarSidebarToggle({
       data-titlebar-sidebar-toggle
       style={NO_DRAG_STYLE}
       onClick={() => onExpandedChange?.(!expanded)}
-      className={`${TITLEBAR_ACTION_CLASS} ml-0 mr-1 hover:bg-muted hover:text-foreground`}
+      className={`${TITLEBAR_ACTION_CLASS} ml-0 mr-1 text-muted-foreground hover:bg-muted hover:text-foreground`}
     >
       {expanded ? <PanelLeftClose size={15} aria-hidden="true" /> : <PanelLeftOpen size={15} aria-hidden="true" />}
     </button>

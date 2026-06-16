@@ -446,6 +446,55 @@ describe('AskContent ACP session binding', () => {
     });
   });
 
+  it('resets the header runtime when switching from a native session to a MindOS session', async () => {
+    const codexSession: ChatSession = {
+      id: 's-codex',
+      title: 'Codex repo thread',
+      createdAt: 1,
+      updatedAt: 1,
+      messages: [{ role: 'user', content: 'fix code' }],
+      defaultAgentRuntime: { id: 'codex', name: 'Codex', kind: 'codex' },
+    };
+    const mindosSession: ChatSession = {
+      id: 's-mindos',
+      title: 'MindOS planning',
+      createdAt: 2,
+      updatedAt: 2,
+      messages: [{ role: 'user', content: 'plan' }],
+    };
+    mockSessions = [codexSession, mindosSession];
+    mockActiveSession = codexSession;
+    mockActiveSessionId = codexSession.id;
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<AskContent visible variant="panel" />);
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(host.querySelector('[data-testid="runtime-switcher"]')?.textContent).toBe('Codex');
+
+    mockActiveSession = mindosSession;
+    mockActiveSessionId = mindosSession.id;
+    await act(async () => {
+      root.render(<AskContent visible variant="panel" />);
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(host.querySelector('[data-testid="runtime-switcher"]')?.textContent).toBe('MindOS');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it('keeps the selected Codex runtime when the header new-chat button is clicked immediately after runtime selection', async () => {
     mockSessions = [{
       id: 's-mindos',

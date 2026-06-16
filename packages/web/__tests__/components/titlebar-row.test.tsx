@@ -117,6 +117,9 @@ describe('TitlebarRow (spec-titlebar-row Phase 1 + 2)', () => {
     expect(searchButton!.className).toContain('self-end');
     expect(searchButton!.className).toContain('mb-1');
     expect(searchButton!.className).toContain('rounded-full');
+    expect(searchButton!.className).toContain('bg-[var(--amber-dim)]');
+    expect(searchButton!.className).toContain('text-[var(--amber)]');
+    expect(searchButton!.className).not.toContain('text-muted-foreground');
     expect(searchButton!.className).not.toContain('self-center');
     expect(searchButton!.className).not.toMatch(/(^|\s)border(?:-|\s|$)/);
     expect(searchButton!.className).not.toContain('border-r');

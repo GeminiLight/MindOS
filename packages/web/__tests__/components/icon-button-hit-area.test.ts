@@ -47,7 +47,7 @@ describe('icon button hit areas', () => {
     const agentsPanelSource = readSource('components/panels/AgentsPanel.tsx');
     const searchPanelSource = readSource('components/panels/SearchPanel.tsx');
 
-    expect(panelHeaderSource).toContain('flex h-[46px] shrink-0 items-center');
+    expect(panelHeaderSource).toContain('flex h-[var(--app-titlebar-h)] min-h-10 shrink-0 items-center');
     expect(panelHeaderSource).not.toContain('px-4 py-3 h-[46px]');
     expect(panelHeaderSource).toContain('hit-target-box inline-flex h-8 w-8');
     expect(panelHeaderSource).not.toContain('className="p-1 rounded hover:bg-muted');

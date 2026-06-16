@@ -113,8 +113,11 @@ describe('HomePanel', () => {
     const title = Array.from(host.querySelectorAll('[data-home-session-row="s-codex"] span')).find((node) => (
       node.textContent === 'Investigate file tree open latency'
     )) as HTMLElement | undefined;
-    expect(title?.className).toContain('text-[13px]');
+    expect(title?.className).toContain('text-[12px]');
     expect(title?.className).not.toContain('font-medium');
+    expect(host.querySelector('[data-home-session-row="s-codex"] .tabular-nums')).toBeNull();
+    expect(host.querySelector('button[aria-label="Pin session"]')).not.toBeNull();
+    expect(host.querySelector('button[aria-label="Archive session"]')).not.toBeNull();
     expect(host.querySelector('[data-home-session-row="s-codex"] [data-home-session-status="running"]')).not.toBeNull();
   });
 
@@ -201,8 +204,25 @@ describe('HomePanel', () => {
 
     const mindosMark = host.querySelector('[data-home-session-row="s-mindos"] [data-home-session-agent="mindos"]') as HTMLElement | null;
     expect(mindosMark).not.toBeNull();
-    expect(mindosMark?.className).toContain('bg-background');
+    expect(mindosMark?.className).toContain('bg-white');
     expect(mindosMark?.className).toContain('border-border');
+  });
+
+  it('does not force-open the ask panel when creating a Home session', async () => {
+    installFetchMock([]);
+    const openAskPanel = vi.fn();
+    window.addEventListener('mindos:open-ask-panel', openAskPanel);
+    await renderHomePanel();
+
+    const newSession = host.querySelector('button[aria-label="New session"]') as HTMLButtonElement | null;
+    expect(newSession).not.toBeNull();
+
+    await act(async () => {
+      newSession!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(openAskPanel).not.toHaveBeenCalled();
+    window.removeEventListener('mindos:open-ask-panel', openAskPanel);
   });
 
   it('switches the Home sidebar header into Mind Files mode', async () => {
