@@ -47,6 +47,7 @@ vi.mock('@/lib/renderers/useRendererState', () => ({
 }));
 
 vi.mock('@/lib/renderers/registry', () => ({
+  registerRenderer: vi.fn(),
   resolveRenderer: () => undefined,
   isRendererEnabled: () => false,
 }));

@@ -9,6 +9,7 @@ import JsonView from '@/components/JsonView';
 import CsvView from '@/components/CsvView';
 import Backlinks from '@/components/Backlinks';
 import { useRendererState } from '@/lib/renderers/useRendererState';
+import '@/lib/renderers/index';
 import Breadcrumb from '@/components/Breadcrumb';
 import MarkdownEditor, { MdViewMode } from '@/components/MarkdownEditor';
 import EditorWrapper from '@/components/EditorWrapper';

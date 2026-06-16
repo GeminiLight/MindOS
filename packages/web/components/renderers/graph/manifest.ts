@@ -3,7 +3,7 @@ import type { RendererDefinition } from '@/lib/renderers/registry';
 export const manifest: RendererDefinition = {
   id: 'graph',
   name: 'Wiki Graph',
-  description: 'Force-directed graph of wikilink references across all markdown files. Supports Global and Local (2-hop) scope filters.',
+  description: 'Local-first wiki link map with stable layout, missing-link visibility, and optional global overview.',
   author: 'MindOS',
   icon: '🕸️',
   tags: ['graph', 'wiki', 'links', 'visualization'],

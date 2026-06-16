@@ -484,9 +484,14 @@ export {
   handleGraph,
   type BacklinkItem,
   type GraphData,
+  type GraphDirection,
   type GraphEdge,
+  type GraphEdgeKind,
   type GraphHandlerServices,
   type GraphNode,
+  type GraphNodeType,
+  type GraphScope,
+  type GraphStats,
 } from './handlers/graph.js';
 
 export {

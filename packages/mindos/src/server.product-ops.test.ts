@@ -72,11 +72,11 @@ describe('MindOS server contract: product operations', () => {
     const graph = handleGraph({ mindRoot: root });
     expect(graph.status).toBe(200);
     expect(graph.body.nodes).toEqual(expect.arrayContaining([
-      { id: 'source.md', label: 'source', folder: '.' },
-      { id: 'Space/target.md', label: 'target', folder: 'Space' },
+      expect.objectContaining({ id: 'source.md', label: 'source', folder: '.' }),
+      expect.objectContaining({ id: 'Space/target.md', label: 'Target', folder: 'Space' }),
     ]));
     expect(graph.body.edges).toEqual(expect.arrayContaining([
-      { source: 'source.md', target: 'Space/target.md' },
+      expect.objectContaining({ source: 'source.md', target: 'Space/target.md', count: 2 }),
     ]));
   });
 

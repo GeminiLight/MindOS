@@ -9,10 +9,23 @@ import { collectAllFilesFromMindRoot, readTextFileFromMindRoot } from './runtime
  * tree version changes (the tree cache bumps it on writes / watcher events).
  */
 
+export type LinkKind = 'wiki' | 'markdown';
+
+export type LinkResolution = 'resolved' | 'unresolved' | 'ambiguous';
+
 export type LinkHit = {
   source: string;
   target: string;
   snippet: string;
+  kind: LinkKind;
+  rawTarget: string;
+  resolution: LinkResolution;
+};
+
+export type FileLinkMetadata = {
+  title: string;
+  tags: string[];
+  wordCount: number;
 };
 
 export type LinkScanServices = {
@@ -26,6 +39,8 @@ export type LinkScanServices = {
 export type LinkSnapshot = {
   /** Normalized markdown file paths, sorted. */
   files: string[];
+  /** Lightweight metadata extracted during the same file scan. */
+  fileMetadata: Map<string, FileLinkMetadata>;
   /** Every resolved link occurrence with its source line snippet. */
   hits: LinkHit[];
   /** Backlink lookup table: target -> source -> unique snippets. */
@@ -63,6 +78,7 @@ export function buildLinkSnapshot(services: LinkScanServices): LinkSnapshot {
   const files = collectMarkdownFiles(services);
   const fileSet = new Set(files);
   const basenameMap = buildBasenameMap(files);
+  const fileMetadata = new Map<string, FileLinkMetadata>();
   const hits: LinkHit[] = [];
   const backlinksByTarget = new Map<string, Map<string, Set<string>>>();
 
@@ -74,6 +90,7 @@ export function buildLinkSnapshot(services: LinkScanServices): LinkSnapshot {
       // File deleted (or unreadable) between listing and reading — skip it.
       continue;
     }
+    fileMetadata.set(source, extractFileMetadata(content, source));
     for (const hit of extractLinkHits(content, source, fileSet, basenameMap)) {
       hits.push(hit);
       let sources = backlinksByTarget.get(hit.target);
@@ -90,7 +107,7 @@ export function buildLinkSnapshot(services: LinkScanServices): LinkSnapshot {
     }
   }
 
-  return { files, hits, backlinksByTarget };
+  return { files, fileMetadata, hits, backlinksByTarget };
 }
 
 export function normalizeTargetPath(value: string | undefined): string | undefined {
@@ -158,19 +175,25 @@ function extractLinkHits(
     const wikiRe = /\[\[([^\]|#]+)(?:#[^\]|]+)?(?:\|[^\]]+)?\]\]/g;
     let match: RegExpExecArray | null;
     while ((match = wikiRe.exec(line)) !== null) {
-      const target = resolveLinkTarget(match[1], sourceDir, fileSet, basenameMap, false);
-      if (target) hits.push({ source, target, snippet });
+      const target = resolveLinkTarget(match[1], sourceDir, fileSet, basenameMap, false, 'wiki');
+      if (target) hits.push({ source, snippet, kind: 'wiki', rawTarget: match[1]?.trim() ?? '', ...target });
     }
 
     const markdownRe = /\[[^\]]+\]\(([^)#]+)(?:#[^)]+)?\)/g;
     while ((match = markdownRe.exec(line)) !== null) {
-      const target = resolveLinkTarget(match[1], sourceDir, fileSet, basenameMap, true);
-      if (target) hits.push({ source, target, snippet });
+      if (match.index > 0 && line[match.index - 1] === '!') continue;
+      const target = resolveLinkTarget(match[1], sourceDir, fileSet, basenameMap, true, 'markdown');
+      if (target) hits.push({ source, snippet, kind: 'markdown', rawTarget: match[1]?.trim() ?? '', ...target });
     }
   }
 
   return hits;
 }
+
+type ResolvedLinkTarget = {
+  target: string;
+  resolution: LinkResolution;
+};
 
 function resolveLinkTarget(
   rawTarget: string | undefined,
@@ -178,9 +201,13 @@ function resolveLinkTarget(
   fileSet: Set<string>,
   basenameMap: Map<string, string[]>,
   relativeToSource: boolean,
-): string | undefined {
+  kind: LinkKind,
+): ResolvedLinkTarget | undefined {
   const target = normalizeTargetPath(rawTarget);
   if (!target || /^(https?:|mailto:|tel:)/i.test(target)) return undefined;
+
+  const targetExt = extname(target).toLowerCase();
+  if (kind === 'markdown' && targetExt && targetExt !== '.md') return undefined;
 
   const candidates = new Set<string>();
   candidates.add(target);
@@ -192,12 +219,76 @@ function resolveLinkTarget(
   }
 
   for (const candidate of candidates) {
-    if (fileSet.has(candidate)) return candidate;
+    if (fileSet.has(candidate)) return { target: candidate, resolution: 'resolved' };
   }
 
   const basename = posix.basename(target.endsWith('.md') ? target : `${target}.md`).toLowerCase();
   const basenameMatches = basenameMap.get(basename);
-  if (basenameMatches?.length === 1) return basenameMatches[0];
+  if (basenameMatches?.length === 1) {
+    const match = basenameMatches[0];
+    if (match) return { target: match, resolution: 'resolved' };
+  }
+  if (basenameMatches && basenameMatches.length > 1) {
+    return { target: toProbableMarkdownTarget(target, sourceDir, relativeToSource), resolution: 'ambiguous' };
+  }
 
-  return undefined;
+  return { target: toProbableMarkdownTarget(target, sourceDir, relativeToSource), resolution: 'unresolved' };
+}
+
+function toProbableMarkdownTarget(target: string, sourceDir: string, relativeToSource: boolean): string {
+  const withMarkdownExtension = target.endsWith('.md') ? target : `${target}.md`;
+  return relativeToSource ? posix.normalize(posix.join(sourceDir, withMarkdownExtension)) : withMarkdownExtension;
+}
+
+function extractFileMetadata(content: string, filePath: string): FileLinkMetadata {
+  const title = extractTitle(content) ?? posix.basename(filePath, '.md');
+  return {
+    title,
+    tags: extractTags(content),
+    wordCount: countWords(content),
+  };
+}
+
+function extractTitle(content: string): string | undefined {
+  const heading = content.match(/^#\s+(.+?)\s*$/m)?.[1]?.trim();
+  return heading || undefined;
+}
+
+function extractTags(content: string): string[] {
+  const tags = new Set<string>();
+  const frontmatter = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+  const frontmatterBody = frontmatter?.[1] ?? '';
+  const inlineTags = frontmatterBody.match(/^tags:\s*\[([^\]]*)\]\s*$/m)?.[1];
+  if (inlineTags) {
+    for (const value of inlineTags.split(',')) addTag(tags, value);
+  }
+
+  const tagList = frontmatterBody.match(/^tags:\s*\r?\n((?:\s*-\s*.+\r?\n?)+)/m)?.[1];
+  if (tagList) {
+    for (const line of tagList.split(/\r?\n/)) addTag(tags, line.replace(/^\s*-\s*/, ''));
+  }
+
+  if (!inlineTags && !tagList) {
+    const singleTag = frontmatterBody.match(/^tags:\s*([^\r\n]+)$/m)?.[1];
+    if (singleTag) addTag(tags, singleTag);
+  }
+
+  const inlineTagRe = /(^|\s)#([\p{L}\p{N}_/-]+)/gu;
+  let match: RegExpExecArray | null;
+  while ((match = inlineTagRe.exec(content)) !== null) addTag(tags, match[2]);
+
+  return [...tags].sort((a, b) => a.localeCompare(b));
+}
+
+function addTag(tags: Set<string>, value: string | undefined): void {
+  const normalized = value?.trim().replace(/^#/, '').replace(/^['"]|['"]$/g, '');
+  if (normalized) tags.add(normalized);
+}
+
+function countWords(content: string): number {
+  const tokens = content
+    .replace(/^---\r?\n[\s\S]*?\r?\n---/, ' ')
+    .replace(/```[\s\S]*?```/g, ' ')
+    .match(/[\p{L}\p{N}_-]+/gu);
+  return tokens?.length ?? 0;
 }

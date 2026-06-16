@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { handleBacklinks, handleGraph } from './handlers/graph.js';
+import { handleBacklinks, handleGraph, type GraphData } from './handlers/graph.js';
 import { getLinkSnapshot } from './link-index.js';
 
 type Library = Map<string, string>;
@@ -38,7 +38,9 @@ describe('server link index cache', () => {
 
     expect(second.body).toEqual(first.body);
     expect(graph.status).toBe(200);
-    expect(graph.body.edges).toEqual([{ source: 'source.md', target: 'Space/target.md' }]);
+    expect(graph.body.edges).toEqual([
+      expect.objectContaining({ source: 'source.md', target: 'Space/target.md', kind: 'wiki', count: 1 }),
+    ]);
     // No additional full-library reads for the cached calls.
     expect(services.readTextFile.mock.calls.length).toBe(readsAfterFirst);
   });
@@ -96,7 +98,7 @@ describe('server link index cache', () => {
 
   it('returns an empty graph and no backlinks for an empty library', () => {
     const services = createServices(new Map(), { getTreeVersion: () => 1 });
-    expect(handleGraph(services).body).toEqual({ nodes: [], edges: [] });
+    expect(handleGraph(services).body).toMatchObject({ nodes: [], edges: [], stats: { nodeCount: 0, edgeCount: 0 } });
     expect(handleBacklinks(new URLSearchParams('path=missing.md'), services).body).toEqual([]);
   });
 
@@ -151,10 +153,77 @@ describe('server link index cache', () => {
     const snapshot = getLinkSnapshot(services);
     expect(snapshot.files).toEqual(['image-note.md', 'source.md', 'target.md']);
     expect(snapshot.hits).toEqual([
-      { source: 'source.md', target: 'target.md', snippet: 'See [[target]].' },
+      expect.objectContaining({ source: 'source.md', target: 'target.md', snippet: 'See [[target]].', resolution: 'resolved' }),
     ]);
+    expect(snapshot.fileMetadata.get('target.md')).toMatchObject({ title: 'Target' });
     expect(snapshot.backlinksByTarget.get('target.md')?.get('source.md')).toEqual(new Set(['See [[target]].']));
     // Same version → identical snapshot instance (no re-scan).
     expect(getLinkSnapshot(services)).toBe(snapshot);
+  });
+
+  it('exposes unresolved, ambiguous, duplicate, and metadata details for graph rendering', () => {
+    const library: Library = new Map([
+      ['root.md', '---\ntags: [seed, graph]\n---\n# Root\nSee [[Existing]] and [[Existing]] plus [[Missing]] and [[Dup]]. [Child](Folder/Child.md) [pic](photo.png) ![mdpic](image-target.md)'],
+      ['Existing.md', '# Existing'],
+      ['Folder/Child.md', '# Child'],
+      ['image-target.md', '# Image target'],
+      ['Space/Dup.md', '# Dup 1'],
+      ['Other/Dup.md', '# Dup 2'],
+    ]);
+    const services = createServices(library, { getTreeVersion: () => 9 });
+
+    const graph = handleGraph(new URLSearchParams('scope=local&path=root.md&depth=1'), services).body as GraphData;
+
+    expect(graph.nodes).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'root.md', label: 'Root', tags: ['graph', 'seed'], isCurrent: true }),
+      expect.objectContaining({ id: 'Existing.md', isMissing: false }),
+      expect.objectContaining({ id: 'Missing.md', type: 'missing', isMissing: true }),
+      expect.objectContaining({ id: 'Dup.md', type: 'missing', isMissing: true }),
+      expect.objectContaining({ id: 'Folder/Child.md', isMissing: false }),
+    ]));
+    expect(graph.edges).toEqual(expect.arrayContaining([
+      expect.objectContaining({ source: 'root.md', target: 'Existing.md', kind: 'wiki', count: 2, unresolved: false }),
+      expect.objectContaining({ source: 'root.md', target: 'Missing.md', kind: 'wiki', unresolved: true }),
+      expect.objectContaining({ source: 'root.md', target: 'Dup.md', ambiguous: true }),
+      expect.objectContaining({ source: 'root.md', target: 'Folder/Child.md', kind: 'markdown' }),
+    ]));
+    expect(graph.edges.some((edge) => edge.target === 'photo.png')).toBe(false);
+    expect(graph.edges.some((edge) => edge.target === 'image-target.md')).toBe(false);
+    expect(graph.stats).toMatchObject({
+      scope: 'local',
+      depth: 1,
+      unresolvedCount: 2,
+      ambiguousCount: 1,
+      treeVersion: 9,
+    });
+
+    const resolvedOnly = handleGraph(
+      new URLSearchParams('scope=local&path=root.md&depth=1&includeUnresolved=false'),
+      services,
+    ).body as GraphData;
+    expect(resolvedOnly.nodes.map((node) => node.id)).not.toContain('Missing.md');
+    expect(resolvedOnly.nodes.map((node) => node.id)).not.toContain('Dup.md');
+  });
+
+  it('builds local graph projections by depth and direction', () => {
+    const library: Library = new Map([
+      ['A.md', 'Go [[B]].'],
+      ['B.md', 'Go [[C]].'],
+      ['C.md', '# C'],
+      ['D.md', 'Points to [[A]].'],
+    ]);
+    const services = createServices(library, { getTreeVersion: () => 4 });
+
+    const outgoing = handleGraph(new URLSearchParams('scope=local&path=A.md&depth=1&direction=outgoing'), services)
+      .body as GraphData;
+    expect(outgoing.nodes.map((node) => node.id).sort()).toEqual(['A.md', 'B.md']);
+
+    const incoming = handleGraph(new URLSearchParams('scope=local&path=A.md&depth=1&direction=incoming'), services)
+      .body as GraphData;
+    expect(incoming.nodes.map((node) => node.id).sort()).toEqual(['A.md', 'D.md']);
+
+    const twoHop = handleGraph(new URLSearchParams('scope=local&path=A.md&depth=2&direction=outgoing'), services)
+      .body as GraphData;
+    expect(twoHop.nodes.map((node) => node.id).sort()).toEqual(['A.md', 'B.md', 'C.md']);
   });
 });

@@ -360,7 +360,7 @@ async function handleRequest(
       return;
     }
     if (route === 'GET /api/graph') {
-      writeResponse(res, handleGraph(services));
+      writeResponse(res, handleGraph(url.searchParams, services));
       return;
     }
     if (route === 'GET /api/agent-activity') {
