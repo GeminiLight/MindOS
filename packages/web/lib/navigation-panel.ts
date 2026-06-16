@@ -63,6 +63,11 @@ function isRouteSegment(pathname: string, base: string): boolean {
   return pathname === base || pathname.startsWith(`${base}/`);
 }
 
+export function isStudioRoute(pathname: string | null | undefined): boolean {
+  if (!pathname) return false;
+  return isRouteSegment(pathname, '/studio');
+}
+
 function isViewContentRoute(pathname: string): boolean {
   return pathname.startsWith('/view/');
 }
@@ -85,7 +90,7 @@ export function getContentRoutePanel(pathname: string | null | undefined): Panel
 
 export function isNeutralContentRoute(pathname: string | null | undefined): boolean {
   if (!pathname) return false;
-  return isRouteSegment(pathname, '/settings') || isRouteSegment(pathname, '/trash');
+  return isRouteSegment(pathname, '/settings') || isRouteSegment(pathname, '/trash') || isStudioRoute(pathname);
 }
 
 export function getRouteControlledPanel(pathname: string | null | undefined): PanelId | null {

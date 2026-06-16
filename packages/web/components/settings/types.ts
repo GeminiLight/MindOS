@@ -58,7 +58,7 @@ export interface SettingsData {
   envValues?: Record<string, string>;
 }
 
-export type Tab = 'ai' | 'appearance' | 'knowledge' | 'plugins' | 'mcp' | 'sync' | 'update' | 'uninstall';
+export type Tab = 'ai' | 'appearance' | 'navigation' | 'knowledge' | 'plugins' | 'mcp' | 'sync' | 'update' | 'uninstall';
 export type PluginPanel = 'installed' | 'community' | 'import' | 'surfaces';
 
 export const CONTENT_WIDTH_DEFAULT = '80%';

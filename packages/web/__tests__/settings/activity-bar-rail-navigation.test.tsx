@@ -17,6 +17,7 @@ vi.mock('@/lib/stores/locale-store', () => ({
         searchTitle: 'Search',
         echo: 'Echo',
         agents: 'Agents',
+        studio: 'Studio',
         discover: 'Discover',
         workflows: 'Flows',
         help: 'Help',
@@ -155,6 +156,157 @@ describe('ActivityBar rail navigation', () => {
     const echoButton = host.querySelector('[data-walkthrough="echo-panel"]');
     expect(echoButton).not.toBeNull();
     expect(echoButton?.getAttribute('href')).toBe('/echo/imprint');
+
+    await act(async () => {
+      root.unmount();
+    });
+    host.remove();
+  });
+
+  it('keeps Studio and Flow hidden from the default rail', async () => {
+    const ActivityBar = (await import('@/components/ActivityBar')).default;
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(
+        <ActivityBar
+          activePanel={null}
+          onPanelChange={vi.fn()}
+          syncStatus={null}
+          expanded
+          onExpandedChange={vi.fn()}
+          onSettingsClick={vi.fn()}
+          onSyncClick={vi.fn()}
+        />,
+      );
+    });
+
+    expect(host.querySelector('[data-walkthrough="studio-page"]')).toBeNull();
+    expect(host.querySelector('button[aria-label="Flows"]')).toBeNull();
+
+    await act(async () => {
+      root.unmount();
+    });
+    host.remove();
+  });
+
+  it('shows optional Studio and Flow rail items after navigation preferences are enabled', async () => {
+    localStorage.setItem('mindos:rail-studio', '1');
+    localStorage.setItem('mindos:labs-workflows', '1');
+    const ActivityBar = (await import('@/components/ActivityBar')).default;
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(
+        <ActivityBar
+          activePanel={null}
+          onPanelChange={vi.fn()}
+          syncStatus={null}
+          expanded
+          onExpandedChange={vi.fn()}
+          onSettingsClick={vi.fn()}
+          onSyncClick={vi.fn()}
+        />,
+      );
+    });
+
+    const studio = host.querySelector<HTMLAnchorElement>('[data-walkthrough="studio-page"]');
+    expect(studio).not.toBeNull();
+    expect(studio?.getAttribute('href')).toBe('/studio');
+    expect(host.querySelector('button[aria-label="Flows"]')).not.toBeNull();
+
+    await act(async () => {
+      root.unmount();
+    });
+    host.remove();
+  });
+
+  it('uses segment-bound Studio route state for optional Studio rail item', async () => {
+    localStorage.setItem('mindos:rail-studio', '1');
+    const ActivityBar = (await import('@/components/ActivityBar')).default;
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    mockPathname = '/studio/launch-practice';
+    await act(async () => {
+      root.render(
+        <ActivityBar
+          activePanel={null}
+          onPanelChange={vi.fn()}
+          syncStatus={null}
+          expanded
+          onExpandedChange={vi.fn()}
+          onSettingsClick={vi.fn()}
+          onSyncClick={vi.fn()}
+        />,
+      );
+    });
+
+    const studio = host.querySelector<HTMLAnchorElement>('[data-walkthrough="studio-page"]');
+    expect(studio?.getAttribute('data-hit-active')).toBe('true');
+
+    mockPathname = '/studio-old';
+    await act(async () => {
+      root.render(
+        <ActivityBar
+          activePanel={null}
+          onPanelChange={vi.fn()}
+          syncStatus={null}
+          expanded
+          onExpandedChange={vi.fn()}
+          onSettingsClick={vi.fn()}
+          onSyncClick={vi.fn()}
+        />,
+      );
+    });
+
+    expect(host.querySelector<HTMLAnchorElement>('[data-walkthrough="studio-page"]')?.getAttribute('data-hit-active')).toBeNull();
+
+    await act(async () => {
+      root.unmount();
+    });
+    host.remove();
+  });
+
+  it('delegates Studio rail clicks to the layout navigation contract', async () => {
+    localStorage.setItem('mindos:rail-studio', '1');
+    const ActivityBar = (await import('@/components/ActivityBar')).default;
+    const onStudioClick = vi.fn((event: React.MouseEvent<HTMLAnchorElement>) => event.preventDefault());
+    const onPanelChange = vi.fn();
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(
+        <ActivityBar
+          activePanel={null}
+          onPanelChange={onPanelChange}
+          onStudioClick={onStudioClick}
+          syncStatus={null}
+          expanded
+          onExpandedChange={vi.fn()}
+          onSettingsClick={vi.fn()}
+          onSyncClick={vi.fn()}
+        />,
+      );
+    });
+
+    await act(async () => {
+      host.querySelector<HTMLAnchorElement>('[data-walkthrough="studio-page"]')?.click();
+    });
+
+    expect(onStudioClick).toHaveBeenCalledTimes(1);
+    expect(onPanelChange).not.toHaveBeenCalledWith(null);
 
     await act(async () => {
       root.unmount();

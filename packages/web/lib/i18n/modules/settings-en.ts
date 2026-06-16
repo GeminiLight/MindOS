@@ -3,7 +3,7 @@
 export const settingsEn = {
   settings: {
     title: 'Settings',
-    tabs: { ai: 'AI', appearance: 'Appearance', knowledge: 'General', sync: 'Sync', mcp: 'Connections', plugins: 'Plugins', shortcuts: 'Shortcuts', update: 'Update', uninstall: 'Uninstall' },
+    tabs: { ai: 'AI', appearance: 'Appearance', navigation: 'Navigation', knowledge: 'General', sync: 'Sync', mcp: 'Connections', plugins: 'Plugins', shortcuts: 'Shortcuts', update: 'Update', uninstall: 'Uninstall' },
     ai: {
       provider: 'Model Providers',
       apiKey: 'API Key',
@@ -101,9 +101,26 @@ export const settingsEn = {
       labsDesc: 'Experimental features still in development. May change or be removed.',
       labsEcho: 'Echo',
       labsEchoDesc: 'Reflective journaling powered by your notes.',
-      labsWorkflows: 'Flows',
-      labsWorkflowsDesc: 'Visual workflow automation for agents.',
       fontPreview: 'The quick brown fox jumps over the lazy dog.',
+    },
+    navigation: {
+      railTitle: 'Rail items',
+      railDesc: 'Keep daily navigation focused by choosing which optional work surfaces appear in the left rail.',
+      hiddenHint: 'Hidden items stay available from search, direct links, and related pages. Keep the rail small for daily focus.',
+      visible: 'Visible',
+      hidden: 'Hidden',
+      surfacePrefix: 'Rail item:',
+      toggleSuffix: 'rail visibility',
+      items: {
+        studio: {
+          label: 'Studio',
+          description: 'Project surface for long-running AI work, review, and growth. Hidden by default.',
+        },
+        flow: {
+          label: 'Flow',
+          description: 'Visual workflow automation for repeatable agent work. Hidden by default.',
+        },
+      },
     },
     knowledge: {
       cardTitle: 'Knowledge Base',

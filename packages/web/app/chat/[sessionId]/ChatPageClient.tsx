@@ -14,7 +14,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useLocale } from '@/lib/stores/locale-store';
 import AskContent from '@/components/ask/AskContent';
 import {
@@ -53,13 +53,20 @@ function selectSession(id: string) {
   }
 }
 
+function getSessionProjectId(id: string): string | undefined {
+  return getSessions().find((session) => session.id === id)?.projectId;
+}
+
 type Status = 'resolving' | 'ready' | 'missing';
 
 export default function ChatPageClient({ sessionId: rawSessionId }: { sessionId: string }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { t } = useLocale();
   const sessionId = decodeSessionId(rawSessionId);
   const isNew = sessionId === 'new';
+  const projectId = searchParams.get('projectId')?.trim() || undefined;
+  const handlingKey = isNew ? `${sessionId}:${projectId ?? ''}` : sessionId;
 
   // Async resolution result, tagged with the id it was resolved for —
   // navigating /chat/A → /chat/B re-renders this same page component, so a
@@ -70,11 +77,11 @@ export default function ChatPageClient({ sessionId: rawSessionId }: { sessionId:
   const handledIdRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (handledIdRef.current === sessionId) return;
-    handledIdRef.current = sessionId;
+    if (handledIdRef.current === handlingKey) return;
+    handledIdRef.current = handlingKey;
 
     if (isNew) {
-      resetSession();
+      resetSession({ projectId });
       const id = getActiveSessionId();
       if (id) router.replace(`/chat/${encodeURIComponent(id)}`);
       return;
@@ -89,7 +96,7 @@ export default function ChatPageClient({ sessionId: rawSessionId }: { sessionId:
     // Direct URL load: the store may simply not have fetched yet. refresh
     // (single-flight, no selection side-effects) then re-check.
     void refreshSessions().then(() => {
-      if (handledIdRef.current !== sessionId) return; // superseded by navigation
+      if (handledIdRef.current !== handlingKey) return; // superseded by navigation
       if (isSessionAlive(sessionId)) {
         selectSession(sessionId);
         setResolved({ id: sessionId, status: 'ready' });
@@ -97,7 +104,7 @@ export default function ChatPageClient({ sessionId: rawSessionId }: { sessionId:
         setResolved({ id: sessionId, status: 'missing' });
       }
     });
-  }, [sessionId, isNew, router]);
+  }, [sessionId, isNew, projectId, handlingKey, router]);
 
   // Synchronous fast path: in-app navigation hits the in-memory store before
   // the effect runs, so the chat mounts on the first paint without a loading
@@ -156,6 +163,7 @@ export default function ChatPageClient({ sessionId: rawSessionId }: { sessionId:
           variant="home"
           maximized
           initialSessionId={sessionId}
+          projectId={getSessionProjectId(sessionId)}
         />
       </div>
     </div>

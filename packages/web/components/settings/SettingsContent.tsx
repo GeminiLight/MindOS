@@ -1,13 +1,14 @@
 'use client';
 
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { Settings, Loader2, AlertCircle, CheckCircle2, RotateCcw, Sparkles, Palette, RefreshCw, Plug, Download, X, Trash2, HelpCircle, Puzzle } from 'lucide-react';
+import { Settings, Loader2, AlertCircle, CheckCircle2, RotateCcw, Sparkles, Palette, RefreshCw, Plug, Download, X, Trash2, HelpCircle, Puzzle, Compass } from 'lucide-react';
 import { useLocale } from '@/lib/stores/locale-store';
 import { apiFetch } from '@/lib/api';
 import type { AiSettings, AgentSettings, PluginPanel, SettingsData, Tab } from './types';
 import { AiTab } from './AiTab';
 import { AppearanceTab } from './AppearanceTab';
 import { KnowledgeTab } from './KnowledgeTab';
+import { NavigationTab } from './NavigationTab';
 import { SyncTab } from './SyncTab';
 import { McpTab } from './McpTab';
 import { PluginsTab } from './PluginsTab';
@@ -332,6 +333,7 @@ export default function SettingsContent({
     { id: 'ai', label: t.settings.tabs.ai, icon: <Sparkles size={iconSize} />, group: 'core' },
     { id: 'mcp', label: t.settings.tabs.mcp ?? 'Connections', icon: <Plug size={iconSize} />, group: 'core' },
     { id: 'plugins', label: t.settings.tabs.plugins ?? 'Plugins', icon: <Puzzle size={iconSize} />, group: 'core' },
+    { id: 'navigation', label: t.settings.tabs.navigation ?? 'Navigation', icon: <Compass size={iconSize} />, group: 'workspace' },
     { id: 'knowledge', label: t.settings.tabs.knowledge, icon: <Settings size={iconSize} />, group: 'workspace' },
     { id: 'appearance', label: t.settings.tabs.appearance, icon: <Palette size={iconSize} />, group: 'workspace' },
     { id: 'sync', label: t.settings.tabs.sync ?? 'Sync', icon: <RefreshCw size={iconSize} />, group: 'workspace' },
@@ -380,6 +382,7 @@ export default function SettingsContent({
         <>
           {tab === 'ai' && data?.ai && <AiTab data={data} setData={setData} updateAi={updateAi} updateAgent={updateAgent} t={t} />}
           {tab === 'appearance' && <AppearanceTab font={font} setFont={setFont} fontSize={fontSize} setFontSize={setFontSize} contentWidth={contentWidth} setContentWidth={setContentWidth} dark={dark} setDark={setDark} locale={locale} setLocale={setLocale} t={t} />}
+          {tab === 'navigation' && <NavigationTab />}
           {tab === 'knowledge' && data && <KnowledgeTab data={data} setData={setData} t={t} />}
           {tab === 'sync' && <SyncTab t={t} visible={visible} />}
           {tab === 'mcp' && <McpTab t={t} />}

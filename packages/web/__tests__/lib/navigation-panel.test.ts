@@ -9,6 +9,7 @@ import {
   getRailActivePanel,
   getRailPanelClickDecision,
   getRouteControlledPanel,
+  isStudioRoute,
   isNeutralContentRoute,
   recoverStaleCapturePanel,
   recoverStaleRoutePanel,
@@ -55,8 +56,18 @@ describe('navigation panel route recovery', () => {
     expect(isNeutralContentRoute('/settings/sync')).toBe(true);
     expect(isNeutralContentRoute('/trash')).toBe(true);
     expect(isNeutralContentRoute('/trash/expired')).toBe(true);
+    expect(isNeutralContentRoute('/studio')).toBe(true);
+    expect(isNeutralContentRoute('/studio/launch-practice')).toBe(true);
     expect(isNeutralContentRoute('/wiki')).toBe(false);
     expect(isNeutralContentRoute('/settings-old')).toBe(false);
+    expect(isNeutralContentRoute('/studio-old')).toBe(false);
+  });
+
+  it('matches Studio routes with segment boundaries', () => {
+    expect(isStudioRoute('/studio')).toBe(true);
+    expect(isStudioRoute('/studio/launch-practice')).toBe(true);
+    expect(isStudioRoute('/studio-old')).toBe(false);
+    expect(isStudioRoute('/studios')).toBe(false);
   });
 
   it('only route-controls workbench panels that must match their content route', () => {
@@ -87,6 +98,7 @@ describe('navigation panel route recovery', () => {
     expect(getActiveLeftPanel('/settings', 'files')).toBeNull();
     expect(getActiveLeftPanel('/settings', 'agents')).toBeNull();
     expect(getActiveLeftPanel('/trash', 'capture')).toBeNull();
+    expect(getActiveLeftPanel('/studio', 'agents')).toBeNull();
     expect(getActiveLeftPanel('/trash', 'search')).toBe('search');
     expect(getActiveLeftPanel('/settings', 'workflows')).toBe('workflows');
     expect(getRailActivePanel('/settings', 'files')).toBeNull();

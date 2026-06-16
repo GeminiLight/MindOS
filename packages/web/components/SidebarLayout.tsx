@@ -59,6 +59,7 @@ import {
   getRailPanelClickDecision,
   getRouteControlledPanel,
   isNeutralContentRoute,
+  isStudioRoute,
   recoverStaleRoutePanel,
   type PanelId,
   type PendingHomeNav,
@@ -428,12 +429,20 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
   // Listen for cross-component "open panel" events (e.g. GuideCard → Agents)
   useEffect(() => {
     const handler = (e: Event) => {
-      const panel = (e as CustomEvent).detail?.panel;
-      if (panel === 'search') {
-        openOrFocusSearchPanel();
+      const detail = (e as CustomEvent<{ panel?: PanelId | null }>).detail;
+      if (detail && Object.prototype.hasOwnProperty.call(detail, 'panel')) {
+        const panel = detail.panel;
+        if (panel === null) {
+          lp.setActivePanel(null);
+          return;
+        }
+        if (panel === 'search') {
+          openOrFocusSearchPanel();
+          return;
+        }
+        if (panel) lp.setActivePanel(panel);
         return;
       }
-      if (panel) lp.setActivePanel(panel);
     };
     window.addEventListener('mindos:open-panel', handler);
     return () => window.removeEventListener('mindos:open-panel', handler);
@@ -734,6 +743,20 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
     if (targetPanel === 'agents') setAgentDetailKey(null);
   }, [activeLeftPanel, exitAskMaximized, lp, pathname, smoothPush]);
 
+  const handleStudioClick = useCallback((event: React.MouseEvent<HTMLAnchorElement | HTMLButtonElement>) => {
+    if (!shouldHandleSmoothNavigation(event)) return;
+    event.preventDefault();
+    exitAskMaximized();
+    flushSync(() => {
+      previousSearchPanelRef.current = null;
+      setAgentDetailKey(null);
+      setPendingNav(null);
+      setPendingHomeNav(null);
+      lp.setActivePanel(null);
+    });
+    if (!isStudioRoute(pathname)) smoothPush('/studio');
+  }, [exitAskMaximized, lp.setActivePanel, pathname, smoothPush]);
+
   return (
     <InboxOrganizeProvider value={inboxOrganize}>
       <McpStoreInit />
@@ -762,6 +785,7 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
         onEchoClick={(event) => handleRoutePanelClick(event, 'echo')}
         onAgentsClick={(event) => handleRoutePanelClick(event, 'agents')}
         onDiscoverClick={(event) => handleRoutePanelClick(event, 'discover')}
+        onStudioClick={handleStudioClick}
         onSpacesClick={(event) => handleRoutePanelClick(event, 'files')}
         syncStatus={syncStatus}
         syncStale={syncStatusStale}

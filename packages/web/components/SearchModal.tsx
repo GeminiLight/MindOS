@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, useLayoutEffect, useMemo, useTransition } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { Search, X, FileText, Table, Settings, RotateCcw, Moon, Sun, Bot, Compass, HelpCircle, ChevronRight, GripVertical, Terminal } from 'lucide-react';
+import { Search, X, FileText, Table, Settings, RotateCcw, Moon, Sun, Bot, Compass, HelpCircle, ChevronRight, GripVertical, Terminal, Sparkles } from 'lucide-react';
 import { SearchResult } from '@/lib/types';
 import { encodePath } from '@/lib/utils';
 import { apiFetch } from '@/lib/api';
@@ -92,6 +92,9 @@ export default function SearchModal({ open, onClose }: SearchModalProps) {
 
   const isDark = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
   const pluginEditorContext = useMemo(() => pluginEditorCommandContextForPathname(pathname), [pathname]);
+  const clearLeftPanelForFullPageRoute = useCallback(() => {
+    window.dispatchEvent(new CustomEvent('mindos:open-panel', { detail: { panel: null } }));
+  }, []);
 
   const applyPluginActionResult = useCallback((result: Awaited<ReturnType<typeof choosePluginModalSuggestion>>) => {
     const showedNotice = toastPluginActionNotices(result);
@@ -227,6 +230,16 @@ export default function SearchModal({ open, onClose }: SearchModalProps) {
         execute: () => { onClose(); smoothPush('/agents'); },
       },
       {
+        id: 'go-studio',
+        label: t.search.goToStudio ?? 'Go to Studio',
+        icon: <Sparkles size={15} />,
+        execute: () => {
+          clearLeftPanelForFullPageRoute();
+          onClose();
+          smoothPush('/studio');
+        },
+      },
+      {
         id: 'go-discover',
         label: t.search.goToDiscover,
         icon: <Compass size={15} />,
@@ -290,7 +303,7 @@ export default function SearchModal({ open, onClose }: SearchModalProps) {
     }));
 
     return [...builtInActions, ...pluginActions];
-  }, [t, router, smoothPush, onClose, isDark, pluginCommands, pluginEditorContext]);
+  }, [t, router, smoothPush, onClose, isDark, pluginCommands, pluginEditorContext, clearLeftPanelForFullPageRoute]);
 
   useEffect(() => {
     if (!open) return;

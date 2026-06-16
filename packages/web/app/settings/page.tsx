@@ -11,6 +11,7 @@ const SETTINGS_TABS = new Set<Tab>([
   'plugins',
   'knowledge',
   'appearance',
+  'navigation',
   'sync',
   'update',
   'uninstall',

@@ -250,6 +250,8 @@ export interface NativeRuntimeOptions {
 export interface ChatSession {
   id: string;
   title?: string;
+  source?: 'quick' | 'project' | 'space' | 'file' | 'inbox' | 'external-runtime';
+  projectId?: string;
   currentFile?: string;
   createdAt: number;
   updatedAt: number;

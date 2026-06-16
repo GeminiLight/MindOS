@@ -42,7 +42,7 @@ export function sessionTitle(s: ChatSession): string {
   return line.length > 42 ? `${line.slice(0, 42)}...` : line || '(empty session)';
 }
 
-export function useAskSession(currentFile?: string) {
+export function useAskSession(currentFile?: string, projectId?: string) {
   const sessions = useSessions();
   const activeSessionId = useActiveSessionId();
   const messages = useSessionMessages(activeSessionId);
@@ -59,20 +59,20 @@ export function useAskSession(currentFile?: string) {
   }, []);
 
   const initSessions = useCallback(
-    (runtime?: AgentRuntimeIdentity | null) => storeInitSessions({ currentFile, runtime }),
-    [currentFile],
+    (runtime?: AgentRuntimeIdentity | null) => storeInitSessions({ currentFile, projectId, runtime }),
+    [currentFile, projectId],
   );
 
   const resetSession = useCallback(
-    (runtime?: AgentRuntimeIdentity | null) => storeResetSession({ currentFile, runtime }),
-    [currentFile],
+    (runtime?: AgentRuntimeIdentity | null) => storeResetSession({ currentFile, projectId, runtime }),
+    [currentFile, projectId],
   );
 
   const loadSession = useCallback((id: string) => storeLoadSession(id), []);
 
   const deleteSession = useCallback(
-    (id: string, runtime?: AgentRuntimeIdentity | null) => storeDeleteSession(id, { currentFile, runtime }),
-    [currentFile],
+    (id: string, runtime?: AgentRuntimeIdentity | null) => storeDeleteSession(id, { currentFile, projectId, runtime }),
+    [currentFile, projectId],
   );
 
   const renameSession = useCallback((id: string, newTitle: string) => storeRenameSession(id, newTitle), []);
@@ -98,16 +98,16 @@ export function useAskSession(currentFile?: string) {
       updatedAt?: number | string;
     },
     metadata?: { title?: string },
-  ): boolean => storeAttachRuntimeSession(runtime, binding, metadata, currentFile), [currentFile]);
+  ): boolean => storeAttachRuntimeSession(runtime, binding, metadata, currentFile, projectId), [currentFile, projectId]);
 
   const clearSessions = useCallback(
-    (ids?: string[], runtime?: AgentRuntimeIdentity | null) => storeClearSessions(ids, { currentFile, runtime }),
-    [currentFile],
+    (ids?: string[], runtime?: AgentRuntimeIdentity | null) => storeClearSessions(ids, { currentFile, projectId, runtime }),
+    [currentFile, projectId],
   );
 
   const clearAllSessions = useCallback(() => {
-    storeClearSessions(undefined, { currentFile, runtime: null });
-  }, [currentFile]);
+    storeClearSessions(undefined, { currentFile, projectId, runtime: null });
+  }, [currentFile, projectId]);
 
   /** Sessions sorted: pinned first, then by updatedAt desc */
   const sortedSessions = useMemo(() => [...sessions].sort((a, b) => {

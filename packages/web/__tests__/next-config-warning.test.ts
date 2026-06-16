@@ -59,7 +59,13 @@ describe('next config warning hygiene', () => {
   });
 
   it('suppresses only the known pi-ai dynamic dependency webpack warning', () => {
-    const config: { ignoreWarnings?: unknown[]; resolve?: { alias?: Record<string, string> } } = {};
+    const config: {
+      ignoreWarnings?: unknown[];
+      resolve?: {
+        alias?: Record<string, string>;
+        extensionAlias?: Record<string, string[]>;
+      };
+    } = {};
     const webpack = nextConfig.webpack;
     expect(typeof webpack).toBe('function');
     if (typeof webpack !== 'function') return;
@@ -72,6 +78,10 @@ describe('next config warning hygiene', () => {
       nextRuntime: 'nodejs',
       webpack: {},
     } as never);
+
+    expect(result.resolve?.extensionAlias?.['.js']).toEqual(['.ts', '.tsx', '.js']);
+    expect(result.resolve?.extensionAlias?.['.mjs']).toEqual(['.mts', '.mjs']);
+    expect(result.resolve?.extensionAlias?.['.cjs']).toEqual(['.cts', '.cjs']);
 
     const ignoreWarning = result.ignoreWarnings?.find((entry): entry is (warning: unknown) => boolean => {
       return typeof entry === 'function';

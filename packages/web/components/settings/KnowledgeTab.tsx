@@ -25,10 +25,6 @@ export function KnowledgeTab({ data, setData, t }: KnowledgeTabProps) {
   const [labsEcho, setLabsEcho] = useState(() =>
     typeof window !== 'undefined' ? localStorage.getItem('mindos:labs-echo') === '1' : false
   );
-  const [labsWorkflows, setLabsWorkflows] = useState(() =>
-    typeof window !== 'undefined' ? localStorage.getItem('mindos:labs-workflows') === '1' : false
-  );
-
   // Hidden files toggle
   const [showHidden, setShowHidden] = useState(() =>
     typeof window !== 'undefined' && localStorage.getItem('show-hidden-files') === 'true'
@@ -48,7 +44,6 @@ export function KnowledgeTab({ data, setData, t }: KnowledgeTabProps) {
   const [guideDismissed, setGuideDismissed] = useState(false);
 
   useEffect(() => {
-    // 🟢 MINOR #5: Use apiFetch instead of raw fetch for consistency
     apiFetch<{ guideState?: { active: boolean; dismissed: boolean } }>('/api/setup')
       .then(d => {
         const gs = d.guideState;
@@ -302,16 +297,6 @@ export function KnowledgeTab({ data, setData, t }: KnowledgeTabProps) {
             onChange={v => {
               setLabsEcho(v);
               localStorage.setItem('mindos:labs-echo', v ? '1' : '0');
-              window.dispatchEvent(new Event('mindos:labs-changed'));
-            }}
-          />
-          <LabsToggle
-            label={a.labsWorkflows ?? 'Flows'}
-            description={a.labsWorkflowsDesc ?? 'Visual workflow automation for agents.'}
-            checked={labsWorkflows}
-            onChange={v => {
-              setLabsWorkflows(v);
-              localStorage.setItem('mindos:labs-workflows', v ? '1' : '0');
               window.dispatchEvent(new Event('mindos:labs-changed'));
             }}
           />

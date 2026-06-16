@@ -3,7 +3,7 @@
 export const settingsZh = {
   settings: {
     title: '设置',
-    tabs: { ai: 'AI', appearance: '外观', knowledge: '通用', sync: '同步', mcp: '连接', plugins: '插件', shortcuts: '快捷键', update: '更新', uninstall: '卸载' },
+    tabs: { ai: 'AI', appearance: '外观', navigation: '导航', knowledge: '通用', sync: '同步', mcp: '连接', plugins: '插件', shortcuts: '快捷键', update: '更新', uninstall: '卸载' },
     ai: {
       provider: '模型服务商',
       apiKey: 'API 密钥',
@@ -101,9 +101,26 @@ export const settingsZh = {
       labsDesc: '仍在开发中的功能，可能会变更或移除。',
       labsEcho: '回响',
       labsEchoDesc: '基于笔记的反思性日记。',
-      labsWorkflows: '工作流',
-      labsWorkflowsDesc: 'Agent 可视化工作流自动化。',
       fontPreview: '人之初，性本善；性相近，习相远。',
+    },
+    navigation: {
+      railTitle: 'Rail 项',
+      railDesc: '选择哪些可选工作面显示在左侧 rail，让日常导航保持专注。',
+      hiddenHint: '隐藏的工作面仍可从搜索、直接链接和相关页面进入。日常 rail 默认保持轻量。',
+      visible: '已显示',
+      hidden: '已隐藏',
+      surfacePrefix: 'Rail 项：',
+      toggleSuffix: 'rail 显示状态',
+      items: {
+        studio: {
+          label: 'Studio',
+          description: '用于长期 AI 工作、复盘和成长的 Project 工作面。默认隐藏。',
+        },
+        flow: {
+          label: 'Flow',
+          description: '用于可重复 Agent 工作的可视化流程自动化。默认隐藏。',
+        },
+      },
     },
     knowledge: {
       cardTitle: '知识库',

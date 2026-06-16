@@ -70,11 +70,22 @@ const nextConfig: NextConfig = {
     config.resolve = config.resolve ?? {};
     config.resolve.alias = config.resolve.alias ?? {};
     const alias = config.resolve.alias as Record<string, string>;
+    const existingExtensionAlias = config.resolve.extensionAlias as Record<string, string[]> | undefined;
     const existingIgnoreWarnings = Array.isArray(config.ignoreWarnings) ? config.ignoreWarnings : [];
 
     if (inNodeModules) {
       alias['@'] = projectDir;
     }
+
+    // @geminilight/mindos source uses NodeNext-style `.js` specifiers in
+    // TypeScript files. TypeScript resolves those during typecheck, but webpack
+    // needs the same alias when the web app points package imports at src.
+    config.resolve.extensionAlias = {
+      ...existingExtensionAlias,
+      '.js': ['.ts', '.tsx', '.js'],
+      '.mjs': ['.mts', '.mjs'],
+      '.cjs': ['.cts', '.cjs'],
+    };
 
     // Replace onnxruntime-node (355MB native binary) with onnxruntime-web (WASM).
     // @huggingface/transformers statically imports onnxruntime-node in its Node.js

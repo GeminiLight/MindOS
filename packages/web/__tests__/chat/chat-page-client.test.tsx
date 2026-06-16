@@ -22,16 +22,17 @@ import { setMessages } from '@/lib/ask-run-store';
 import { getTabs, openTab } from '@/lib/workspace-tabs';
 import type { ChatSession } from '@/lib/types';
 
-const { routerPush, routerReplace, mockAskContentProps } = vi.hoisted(() => ({
+const { routerPush, routerReplace, mockAskContentProps, mockSearchParams } = vi.hoisted(() => ({
   routerPush: vi.fn(),
   routerReplace: vi.fn(),
   mockAskContentProps: vi.fn(),
+  mockSearchParams: { value: new URLSearchParams() },
 }));
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: routerPush, replace: routerReplace, prefetch: vi.fn(), back: vi.fn() }),
   usePathname: () => '/chat/xyz',
-  useSearchParams: () => new URLSearchParams(),
+  useSearchParams: () => mockSearchParams.value,
 }));
 
 vi.mock('@/lib/stores/locale-store', async () => {
@@ -80,6 +81,7 @@ async function renderPage(sessionId: string, opts: { strict?: boolean } = {}): P
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockSearchParams.value = new URLSearchParams();
   document.body.innerHTML = '';
   serverSessions = [];
   (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
@@ -98,6 +100,20 @@ describe('/chat/new creation flow', () => {
     // No flash of the fallback UI while creating.
     expect(host.textContent).not.toContain('This conversation no longer exists');
     expect(mockAskContentProps).not.toHaveBeenCalled();
+  });
+
+  it('creates a Project-scoped session from the projectId query param', async () => {
+    mockSearchParams.value = new URLSearchParams('projectId=launch-practice');
+
+    await renderPage('new');
+
+    const id = getActiveSessionId();
+    const session = getSessions().find((item) => item.id === id);
+    expect(session).toMatchObject({
+      source: 'project',
+      projectId: 'launch-practice',
+    });
+    expect(routerReplace).toHaveBeenCalledWith(`/chat/${encodeURIComponent(id!)}`);
   });
 });
 
@@ -158,6 +174,26 @@ describe('/chat/<id> with an alive session', () => {
 
     expect(getActiveSessionId()).toBe('srv-1');
     expect(host.querySelector('[data-testid="ask-content"]')).toBeTruthy();
+  });
+
+  it('passes Project scope to AskContent for Project-scoped chat routes', async () => {
+    serverSessions = [{
+      id: 'project-chat-1',
+      source: 'project',
+      projectId: 'launch-practice',
+      createdAt: 1,
+      updatedAt: 1,
+      messages: [{ role: 'user', content: 'from project' }],
+    }];
+
+    await renderPage('project-chat-1');
+
+    expect(mockAskContentProps).toHaveBeenCalledWith(
+      expect.objectContaining({
+        initialSessionId: 'project-chat-1',
+        projectId: 'launch-practice',
+      }),
+    );
   });
 });
 

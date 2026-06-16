@@ -20,14 +20,14 @@ const claudeRuntime: AgentRuntimeIdentity = { id: 'claude', name: 'Claude Code',
 
 type AskSessionState = ReturnType<typeof useAskSession>;
 
-function renderUseAskSession(): {
+function renderUseAskSession(projectId?: string): {
   getLatest: () => AskSessionState;
   root: Root;
 } {
   let latest: AskSessionState | null = null;
 
   function Probe() {
-    latest = useAskSession();
+    latest = useAskSession(undefined, projectId);
     return null;
   }
 
@@ -181,7 +181,9 @@ describe('useAskSession native runtime lane', () => {
       { role: 'user' as const, content: 'old question', timestamp: 10 },
       { role: 'assistant' as const, content: 'streamed final answer', timestamp: Date.now() },
     ];
-    storeSetMessages('persisted', newer, { skipPersist: true });
+    act(() => {
+      storeSetMessages('persisted', newer, { skipPersist: true });
+    });
     await act(async () => {
       await getLatest().initSessions();
     });
@@ -189,13 +191,17 @@ describe('useAskSession native runtime lane', () => {
 
     // Branch 3 (running): a live run's messages are untouchable even if the
     // server snapshot claims a future updatedAt.
-    startRun('persisted', { controller: new AbortController(), runtimeSnapshot: null, reconnectMax: 3 });
+    act(() => {
+      startRun('persisted', { controller: new AbortController(), runtimeSnapshot: null, reconnectMax: 3 });
+    });
     serverSession.updatedAt = Date.now() + 60_000;
     await act(async () => {
       await getLatest().initSessions();
     });
     expect(getMessages('persisted')[1].content).toBe('streamed final answer');
-    endRun('persisted');
+    act(() => {
+      endRun('persisted');
+    });
 
     act(() => {
       root.unmount();
@@ -260,6 +266,75 @@ describe('useAskSession native runtime lane', () => {
     });
   });
 
+  it('initializes into the requested Project lane instead of loading a newer unrelated chat', async () => {
+    const quickSession: ChatSession = {
+      id: 'newer-quick',
+      createdAt: 30,
+      updatedAt: 30,
+      messages: [{ role: 'user', content: 'quick chat' }],
+    };
+    const otherProjectSession: ChatSession = {
+      id: 'other-project',
+      source: 'project',
+      projectId: 'research-practice',
+      createdAt: 20,
+      updatedAt: 20,
+      messages: [{ role: 'user', content: 'research chat' }],
+    };
+    const launchProjectSession: ChatSession = {
+      id: 'launch-project',
+      source: 'project',
+      projectId: 'launch-practice',
+      createdAt: 10,
+      updatedAt: 10,
+      messages: [{ role: 'user', content: 'launch chat' }],
+    };
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      ok: true,
+      json: async () => [quickSession, otherProjectSession, launchProjectSession],
+    })));
+    const { getLatest, root } = renderUseAskSession('launch-practice');
+
+    await act(async () => {
+      await getLatest().initSessions();
+    });
+
+    expect(getLatest().activeSessionId).toBe('launch-project');
+    expect(getLatest().activeSession?.projectId).toBe('launch-practice');
+    expect(getLatest().messages).toEqual(launchProjectSession.messages);
+
+    act(() => {
+      root.unmount();
+    });
+  });
+
+  it('creates replacement empty sessions inside the requested Project lane', () => {
+    const { getLatest, root } = renderUseAskSession('launch-practice');
+
+    act(() => {
+      getLatest().resetSession();
+    });
+    const firstProjectSessionId = getLatest().activeSessionId;
+    expect(getLatest().activeSession).toMatchObject({
+      source: 'project',
+      projectId: 'launch-practice',
+    });
+
+    act(() => {
+      getLatest().deleteSession(firstProjectSessionId!);
+    });
+
+    expect(getLatest().activeSessionId).not.toBe(firstProjectSessionId);
+    expect(getLatest().activeSession).toMatchObject({
+      source: 'project',
+      projectId: 'launch-practice',
+    });
+
+    act(() => {
+      root.unmount();
+    });
+  });
+
   it('attaches an existing Codex thread as a persisted metadata-only session', async () => {
     const fetchMock = vi.fn(async () => ({ ok: true, json: async () => [] }));
     vi.stubGlobal('fetch', fetchMock);
@@ -305,6 +380,47 @@ describe('useAskSession native runtime lane', () => {
         runtimeId: 'codex',
         externalSessionId: 'thread_attached',
       },
+    });
+
+    act(() => {
+      root.unmount();
+    });
+  });
+
+  it('keeps attached Codex threads inside the requested Project lane', async () => {
+    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => [] }));
+    vi.stubGlobal('fetch', fetchMock);
+    const { getLatest, root } = renderUseAskSession('launch-practice');
+
+    act(() => {
+      getLatest().attachRuntimeSession(codexRuntime, {
+        externalSessionId: 'thread_project_attached',
+        cwd: '/tmp/project',
+        status: 'active',
+        updatedAt: 456,
+      }, {
+        title: 'Project attached thread',
+      });
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    });
+
+    expect(getLatest().activeSession).toMatchObject({
+      source: 'project',
+      projectId: 'launch-practice',
+      title: 'Project attached thread',
+      runtimeSessionBinding: {
+        externalSessionId: 'thread_project_attached',
+      },
+    });
+
+    const postCall = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST');
+    const body = JSON.parse(String(postCall?.[1]?.body));
+    expect(body.session).toMatchObject({
+      source: 'project',
+      projectId: 'launch-practice',
+      title: 'Project attached thread',
     });
 
     act(() => {

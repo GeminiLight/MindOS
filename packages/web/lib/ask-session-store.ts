@@ -46,6 +46,7 @@ export const MAX_SESSIONS = 30;
 
 export interface SessionLaneContext {
   currentFile?: string;
+  projectId?: string;
   /** undefined = no lane filter; null = mindos lane; identity = that runtime's lane. */
   runtime?: AgentRuntimeIdentity | null;
 }
@@ -68,10 +69,17 @@ function emitActive() {
 // ---------------------------------------------------------------------------
 // Factory (moved from useAskSession's module-private createSession)
 
-export function createSessionEntry(currentFile?: string, runtime?: AgentRuntimeIdentity | null): ChatSession {
+export function createSessionEntry(
+  currentFile?: string,
+  runtime?: AgentRuntimeIdentity | null,
+  projectId?: string,
+): ChatSession {
   const ts = Date.now();
+  const trimmedProjectId = projectId?.trim();
   const session: ChatSession = {
     id: `${ts}-${Math.random().toString(36).slice(2, 8)}`,
+    source: trimmedProjectId ? 'project' : 'quick',
+    projectId: trimmedProjectId || undefined,
     currentFile,
     createdAt: ts,
     updatedAt: ts,
@@ -95,6 +103,11 @@ function hasDurableRuntimeBinding(session: Pick<ChatSession, 'runtimeSessionBind
 
 function shouldPersistSession(session: Pick<ChatSession, 'messages' | 'runtimeSessionBinding' | 'externalAgentBinding'>): boolean {
   return session.messages.length > 0 || hasDurableRuntimeBinding(session);
+}
+
+function isSessionInProjectLane(session: Pick<ChatSession, 'projectId'>, projectId?: string): boolean {
+  const expected = projectId?.trim() || undefined;
+  return (session.projectId || undefined) === expected;
 }
 
 function runtimeBindingUpdatedAt(value?: number | string): number {
@@ -322,9 +335,10 @@ export async function initSessions(ctx: SessionLaneContext = {}): Promise<void> 
   }
   const sorted = await pendingFetchMerge;
 
-  const candidates = ctx.runtime === undefined
+  const candidates = (ctx.runtime === undefined
     ? sorted
-    : sorted.filter((sess) => isSessionInRuntimeLane(sess, ctx.runtime));
+    : sorted.filter((sess) => isSessionInRuntimeLane(sess, ctx.runtime)))
+    .filter((sess) => isSessionInProjectLane(sess, ctx.projectId));
   const matched = ctx.currentFile
     ? candidates.find((sess) => sess.currentFile === ctx.currentFile) ?? candidates[0]
     : candidates[0];
@@ -341,13 +355,14 @@ export async function initSessions(ctx: SessionLaneContext = {}): Promise<void> 
     && withStoreMessages(s).messages.length === 0
     && !hasDurableRuntimeBinding(s)
     && isSessionInRuntimeLane(s, ctx.runtime ?? null)
+    && isSessionInProjectLane(s, ctx.projectId)
   ));
   if (reusable) {
     setActiveSessionId(reusable.id);
     return;
   }
 
-  const fresh = createSessionEntry(ctx.currentFile, ctx.runtime);
+  const fresh = createSessionEntry(ctx.currentFile, ctx.runtime, ctx.projectId);
   setActiveSessionId(fresh.id);
   // Empty session lives only in memory — never persisted until first message.
   emitSessions([fresh, ...sessions].slice(0, MAX_SESSIONS));
@@ -367,10 +382,11 @@ export function resetSession(ctx: SessionLaneContext = {}) {
     active
     && activeMessages.length === 0
     && isSessionInRuntimeLane(active, ctx.runtime)
+    && isSessionInProjectLane(active, ctx.projectId)
     && !hasDurableRuntimeBinding(active)
   ) return;
 
-  const fresh = createSessionEntry(ctx.currentFile, ctx.runtime);
+  const fresh = createSessionEntry(ctx.currentFile, ctx.runtime, ctx.projectId);
   setActiveSessionId(fresh.id);
   emitSessions(sortAndCap([fresh, ...sessions]));
 }
@@ -411,7 +427,7 @@ export function deleteSession(id: string, ctx: SessionLaneContext = {}) {
 
   const remaining = sessions.filter((s) => s.id !== id);
   if (getActiveSessionId() === id) {
-    const fresh = createSessionEntry(ctx.currentFile, ctx.runtime);
+    const fresh = createSessionEntry(ctx.currentFile, ctx.runtime, ctx.projectId);
     setActiveSessionId(fresh.id);
     emitSessions([fresh, ...remaining].slice(0, MAX_SESSIONS));
   } else {
@@ -485,6 +501,7 @@ export function attachRuntimeSession(
   },
   metadata?: { title?: string },
   currentFile?: string,
+  projectId?: string,
 ): boolean {
   if (runtime.kind !== 'codex' && runtime.kind !== 'claude') return false;
   const externalSessionId = binding.externalSessionId.trim();
@@ -492,6 +509,7 @@ export function attachRuntimeSession(
 
   const now = Date.now();
   const bindingUpdatedAt = runtimeBindingUpdatedAt(binding.updatedAt);
+  const trimmedProjectId = projectId?.trim() || undefined;
 
   const existing = sessions.find((item) => (
     getMatchingRuntimeSessionBinding(item, runtime)?.externalSessionId === externalSessionId
@@ -500,9 +518,11 @@ export function attachRuntimeSession(
   // the UI from the run's submit-time snapshot. Browsing it is still fine.
   if (existing && getRun(existing.id)) return false;
 
-  const base = existing ?? createSessionEntry(currentFile, runtime);
+  const base = existing ?? createSessionEntry(currentFile, runtime, trimmedProjectId);
   const updated = bindSessionAgentRuntime({
     ...base,
+    source: base.projectId || trimmedProjectId ? 'project' : base.source,
+    projectId: base.projectId ?? trimmedProjectId,
     currentFile: base.currentFile ?? currentFile,
     title: metadata?.title?.trim() || base.title,
     updatedAt: now,
@@ -525,7 +545,14 @@ export function attachRuntimeSession(
 }
 
 export function clearSessions(ids?: string[], ctx: SessionLaneContext = {}) {
-  const targetIds = ids ? new Set(ids) : new Set(sessions.map((s) => s.id));
+  const targetIds = ids
+    ? new Set(ids)
+    : new Set(sessions
+      .filter((session) => (
+        (ctx.projectId ? isSessionInProjectLane(session, ctx.projectId) : true)
+        && (ctx.runtime === undefined ? true : isSessionInRuntimeLane(session, ctx.runtime))
+      ))
+      .map((s) => s.id));
   const persistedIds = sessions
     .filter((s) => targetIds.has(s.id) && shouldPersistSession(withStoreMessages(s)))
     .map((s) => s.id);
@@ -535,7 +562,7 @@ export function clearSessions(ids?: string[], ctx: SessionLaneContext = {}) {
   targetIds.forEach((id) => runStoreRemoveSession(id));
 
   const remaining = sessions.filter((s) => !targetIds.has(s.id));
-  const fresh = createSessionEntry(ctx.currentFile, ctx.runtime);
+  const fresh = createSessionEntry(ctx.currentFile, ctx.runtime, ctx.projectId);
   setActiveSessionId(fresh.id);
   emitSessions([fresh, ...remaining].slice(0, MAX_SESSIONS));
 }

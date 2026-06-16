@@ -3,7 +3,7 @@
 import { useRef, useCallback, useState, useEffect, useTransition, type CSSProperties } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Brain, Settings, RefreshCw, Bot, Compass, ChevronLeft, ChevronRight, Radio, Zap, Inbox, Puzzle } from 'lucide-react';
+import { Brain, Settings, RefreshCw, Bot, Compass, ChevronLeft, ChevronRight, Radio, Zap, Inbox, Puzzle, Sparkles } from 'lucide-react';
 import { useLocale } from '@/lib/stores/locale-store';
 import { DOT_COLORS, getStatusLevel } from './SyncStatusBar';
 import type { SyncStatus } from './settings/types';
@@ -13,11 +13,13 @@ import {
   getRailActivePanel,
   getRailPanelClickDecision,
   isContentRouteForPanel,
+  isStudioRoute,
   type PanelId,
   type RoutePanelId,
 } from '@/lib/navigation-panel';
 import { ACTIVITY_BAR } from '@/lib/config/panel-sizes';
 import { shouldHandleSmoothNavigation, useSmoothRouterPush } from '@/hooks/useSmoothRouterPush';
+import { useRailPreferences } from '@/lib/rail-preferences';
 
 export const RAIL_WIDTH_COLLAPSED = ACTIVITY_BAR.WIDTH_COLLAPSED;
 export const RAIL_WIDTH_EXPANDED = ACTIVITY_BAR.WIDTH_EXPANDED;
@@ -30,6 +32,7 @@ interface ActivityBarProps {
   onEchoClick?: React.MouseEventHandler<HTMLAnchorElement | HTMLButtonElement>;
   onAgentsClick?: React.MouseEventHandler<HTMLAnchorElement | HTMLButtonElement>;
   onDiscoverClick?: React.MouseEventHandler<HTMLAnchorElement | HTMLButtonElement>;
+  onStudioClick?: React.MouseEventHandler<HTMLAnchorElement | HTMLButtonElement>;
   onWorkflowsClick?: React.MouseEventHandler<HTMLAnchorElement | HTMLButtonElement>;
   onSpacesClick?: React.MouseEventHandler<HTMLAnchorElement | HTMLButtonElement>;
   onHomeClick?: React.MouseEventHandler<HTMLAnchorElement>;
@@ -161,6 +164,7 @@ export default function ActivityBar({
   onEchoClick,
   onAgentsClick,
   onDiscoverClick,
+  onStudioClick,
   onWorkflowsClick,
   onSpacesClick,
   onHomeClick,
@@ -183,7 +187,9 @@ export default function ActivityBar({
   const router = useRouter();
   const smoothPush = useSmoothRouterPush();
   const isHome = pathname === '/';
+  const railPreferences = useRailPreferences();
   const activeDestination = suppressRouteActive ? activePanel : getRailActivePanel(pathname, activePanel);
+  const studioRouteCurrent = !suppressRouteActive && isStudioRoute(pathname);
   const isCurrentRouteForPanel = useCallback((panel: RoutePanelId) => (
     !suppressRouteActive && isContentRouteForPanel(pathname, panel)
   ), [pathname, suppressRouteActive]);
@@ -248,17 +254,8 @@ export default function ActivityBar({
     };
   }, []);
 
-  // Labs feature flags (Workflows) — always start false to match SSR, hydrate from localStorage in effect.
-  // Echo is now the default entry surface, so its rail item must be always visible.
-  const [labsWorkflows, setLabsWorkflows] = useState(false);
-  useEffect(() => {
-    setLabsWorkflows(localStorage.getItem('mindos:labs-workflows') === '1');
-    const sync = () => {
-      setLabsWorkflows(localStorage.getItem('mindos:labs-workflows') === '1');
-    };
-    window.addEventListener('mindos:labs-changed', sync);
-    return () => window.removeEventListener('mindos:labs-changed', sync);
-  }, []);
+  // Echo is now the default entry surface. Studio and Flow are optional rail
+  // items controlled from Settings / Navigation.
 
   /** Debounce repeated clicks on the same rail target without swallowing destination changes. */
   const debounced = useCallback((key: string, fn: () => void): boolean => {
@@ -389,7 +386,26 @@ export default function ActivityBar({
             onClick={(event) => handleRouteRailClick(event, 'agents', onAgentsClick)}
             walkthroughId="agents-panel"
           />
-          {labsWorkflows && (
+          {railPreferences.studio && (
+            <RailButton
+              icon={<Sparkles size={18} />}
+              label={t.sidebar.studio ?? 'Studio'}
+              active={studioRouteCurrent}
+              current={studioRouteCurrent}
+              expanded={expanded}
+              href="/studio"
+              onClick={(event) => debouncedRailClick(event, 'route:studio', () => {
+                if (onStudioClick) {
+                  onStudioClick(event);
+                  return;
+                }
+                if (studioRouteCurrent) event.preventDefault();
+                onPanelChange(null);
+              })}
+              walkthroughId="studio-page"
+            />
+          )}
+          {railPreferences.flow && (
             <RailButton
               icon={<Zap size={18} />}
               label={t.sidebar.workflows ?? 'Flows'}

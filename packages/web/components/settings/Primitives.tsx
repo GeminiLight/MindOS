@@ -197,26 +197,13 @@ export function EnvBadge({ overridden }: { overridden: boolean }) {
   );
 }
 
-/**
- * 🟢 MINOR #6: Toggle component with aria accessibility
- * @param {boolean} checked - Toggle state
- * @param {function} onChange - Called when toggle state changes (if no onClick provided)
- * @param {string} size - 'sm' (h-4 w-7) or 'md' (h-5 w-9)
- * @param {boolean} disabled - Disable toggle
- * @param {string} title - Tooltip text
- * @param {function} onClick - Custom click handler (takes priority over onChange). Call onChange directly if needed.
- *
- * Usage:
- * - Basic: `<Toggle checked={x} onChange={setX} />`
- * - With custom handler: `<Toggle checked={x} onClick={(e) => { e.stopPropagation(); await save(); }} />`
- * - In lists: Use `onClick` to prevent event bubbling; manually call `onChange` for state sync
- */
-export function Toggle({ checked, onChange, size = 'md', disabled, title, onClick }: {
+export function Toggle({ checked, onChange, size = 'md', disabled, title, ariaLabel, onClick }: {
   checked: boolean;
   onChange?: (checked: boolean) => void;
   size?: 'sm' | 'md';
   disabled?: boolean;
   title?: string;
+  ariaLabel?: string;
   onClick?: (e: React.MouseEvent) => void;
 }) {
   const sm = size === 'sm';
@@ -225,6 +212,7 @@ export function Toggle({ checked, onChange, size = 'md', disabled, title, onClic
       type="button"
       role="switch"
       aria-checked={checked}
+      aria-label={ariaLabel}
       disabled={disabled}
       title={title}
       onClick={onClick ?? (() => onChange?.(!checked))}
@@ -241,10 +229,6 @@ export function Toggle({ checked, onChange, size = 'md', disabled, title, onClic
   );
 }
 
-/**
- * 💡 SUGGESTION #10: Unified primary button primitive for amber actions
- * Replaces inline `style={{ background: 'var(--amber)', color: 'var(--amber-foreground)' }}` pattern
- */
 export function PrimaryButton({ children, disabled, onClick, type = 'button', className = '', ...props }: {
   children: React.ReactNode;
   disabled?: boolean;

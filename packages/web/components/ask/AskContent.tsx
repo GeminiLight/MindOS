@@ -117,6 +117,8 @@ interface AskContentProps {
    * called loadSession, so init skips initSessions' selection phase (which
    * would clobber it) and only refreshes session metadata. */
   initialSessionId?: string;
+  /** Project lane for Studio-scoped work. */
+  projectId?: string;
   onFirstMessage?: () => void;
   /** 'modal' renders close button + ESC handler; 'panel' renders compact header; 'home' renders embedded on homepage */
   variant: 'modal' | 'panel' | 'home';
@@ -128,7 +130,7 @@ interface AskContentProps {
   onDockToPanel?: () => void;
 }
 
-export default function AskContent({ visible, currentFile, initialMessage, initialAcpAgent, initialAgentRuntime, initialSessionId, onFirstMessage, variant, onClose, maximized, onMaximize, onDockToPanel }: AskContentProps) {
+export default function AskContent({ visible, currentFile, initialMessage, initialAcpAgent, initialAgentRuntime, initialSessionId, projectId, onFirstMessage, variant, onClose, maximized, onMaximize, onDockToPanel }: AskContentProps) {
   const isPanel = variant === 'panel';
   const isHome = variant === 'home';
 
@@ -195,7 +197,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
     setModelOverride(persisted.model);
   }, []);
 
-  const session = useAskSession(currentFile);
+  const session = useAskSession(currentFile, projectId);
   const sessionRef = useRef(session);
   const uploadLabels = useMemo(() => ({ unsupportedType: t.fileImport?.unsupported }), [t]);
   const {
@@ -293,9 +295,13 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
       session.activeSession?.runtimeSessionBinding,
     ],
   );
+  const projectScopedSessions = useMemo(() => {
+    if (!projectId) return session.sessions;
+    return session.sessions.filter((item) => (item.projectId || undefined) === projectId);
+  }, [projectId, session.sessions]);
   const runtimeScopedSessions = useMemo(() => {
-    return filterSessionsByRuntimeLane(session.sessions, selectedAgentRuntime);
-  }, [selectedAgentRuntime, session.sessions]);
+    return filterSessionsByRuntimeLane(projectScopedSessions, selectedAgentRuntime);
+  }, [projectScopedSessions, selectedAgentRuntime]);
   const runtimeScopedActiveSessionId = useMemo(
     () => runtimeScopedSessions.some((item) => item.id === session.activeSessionId)
       ? session.activeSessionId
@@ -469,7 +475,10 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
       return;
     }
 
-    const target = sessionRef.current.sessions.find((item) => isSessionInRuntimeLane(item, agent));
+    const target = sessionRef.current.sessions.find((item) => (
+      (!projectId || (item.projectId || undefined) === projectId)
+      && isSessionInRuntimeLane(item, agent)
+    ));
     if (target) {
       sessionRef.current.loadSession(target.id);
       clearTransientComposerState();
@@ -483,7 +492,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
 
     sessionRef.current.resetSession(agent);
     clearTransientComposerState();
-  }, [bindActiveSessionToRuntime, chat.isLoadingRef, clearTransientComposerState, updateSelectedAgentRuntime]);
+  }, [bindActiveSessionToRuntime, chat.isLoadingRef, clearTransientComposerState, projectId, updateSelectedAgentRuntime]);
 
   const hasLoadingAttachments = localAttachments.some((f) => f.status === 'loading');
   const runtimeCheckingMessage = selectedAgentRuntime && selectedRuntimeChecking
@@ -888,12 +897,15 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
     if (chat.isLoadingRef.current) return;
     const runtime = selectedAgentRuntimeRef.current;
     const ids = sessionRef.current.sessions
-      .filter((item) => isSessionInRuntimeLane(item, runtime))
+      .filter((item) => (
+        (!projectId || (item.projectId || undefined) === projectId)
+        && isSessionInRuntimeLane(item, runtime)
+      ))
       .map((item) => item.id);
     sessionRef.current.clearSessions(ids, runtime);
     updateSelectedAgentRuntime(runtime);
     clearTransientComposerState();
-  }, [chat.isLoadingRef, clearTransientComposerState, updateSelectedAgentRuntime]);
+  }, [chat.isLoadingRef, clearTransientComposerState, projectId, updateSelectedAgentRuntime]);
 
   const handleAttachCodexThread = useCallback((thread: CodexThreadSummary) => {
     if (chat.isLoadingRef.current) return;
