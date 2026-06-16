@@ -204,6 +204,16 @@ export class Vault extends Events implements IVault {
     this.adapter = new VaultDataAdapter(this);
   }
 
+  static recurseChildren(root: TFolder, callback: (file: TAbstractFile) => void): void {
+    for (const child of root.children) {
+      callback(child);
+      const folder = child as Partial<TFolder>;
+      if (Array.isArray(folder.children)) {
+        Vault.recurseChildren(folder as TFolder, callback);
+      }
+    }
+  }
+
   private resolve(filePath: string): string {
     return resolveSafe(this.mindRoot, normalizeVaultPath(filePath));
   }

@@ -306,6 +306,8 @@ export interface IMetadataCache extends Events {
 
   getFileCache(file: TFile): CachedMetadata | null;
   getCache(path: string): CachedMetadata | null;
+  getCachedFiles(): string[];
+  getTags(): Record<string, number>;
   getFirstLinkpathDest(linkpath: string, sourcePath: string): TFile | null;
   fileToLinktext(file: TFile, sourcePath: string, omitMdExtension?: boolean): string;
 }
@@ -332,6 +334,9 @@ export interface App {
   plugins?: {
     plugins: Record<string, unknown>;
     enabledPlugins: Set<string>;
+    getPlugin?: (pluginId: string) => unknown;
+    enablePlugin?: (pluginId: string) => Promise<void>;
+    disablePlugin?: (pluginId: string) => Promise<void>;
   };
 
   isDarkMode(): boolean;
@@ -346,12 +351,16 @@ export interface Workspace {
   getActiveViewOfType<T>(type: abstract new (...args: any[]) => T): T | null;
   activeLeaf?: WorkspaceLeaf | null;
   activeEditor?: MarkdownView | null;
+  layoutReady?: boolean;
   onLayoutReady(callback: () => void): void;
   openLinkText(linktext: string, sourcePath: string, openState?: unknown): Promise<void>;
   getLeaf(newLeaf?: boolean | 'split' | 'tab' | 'window'): WorkspaceLeaf;
   getLeavesOfType(viewType: string): WorkspaceLeaf[];
   iterateRootLeaves(callback: (leaf: WorkspaceLeaf) => any): void;
   iterateAllLeaves(callback: (leaf: WorkspaceLeaf) => any): void;
+  registerHoverLinkSource?: (source: string, options: unknown) => void;
+  getLayout?: () => unknown;
+  changeLayout?: (layout: unknown) => Promise<void>;
 }
 
 export interface WorkspaceLeaf {

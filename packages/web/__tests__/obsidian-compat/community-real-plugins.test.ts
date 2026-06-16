@@ -194,8 +194,8 @@ describe.skipIf(!ENABLED)('real community plugin smoke suite', () => {
         const skipped = result.skipped.includes(fixture.id);
         expect(loaded || failed || skipped).toBe(true);
 
-        if (fixture.expectedCompatibilityLevel === 'compatible') {
-          expect(loaded, `${fixture.name} should load as a compatible real-plugin fixture`).toBe(true);
+        if (fixture.expectedCompatibilityLevel !== 'blocked') {
+          expect(loaded, `${fixture.name} should load as a non-blocked real-plugin fixture`).toBe(true);
         }
 
         if (loaded) {

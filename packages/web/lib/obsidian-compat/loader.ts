@@ -22,6 +22,7 @@ import { CompatError, CompatErrorCodes } from './errors';
 import { Plugin } from './shims/plugin';
 import { createObsidianModule } from './shims/obsidian';
 import { AppShim } from './shims/app';
+import { createObsidianElement } from './shims/dom';
 import { PluginManifest } from './types';
 import { resolveExistingSafe } from '@/lib/core/security';
 
@@ -30,6 +31,29 @@ export interface LoadedPlugin {
   instance: Plugin;
   pluginDir: string;
 }
+
+type PluginLocalStorage = {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+  removeItem(key: string): void;
+};
+
+type PluginDocumentShim = {
+  body: HTMLElement;
+  head: HTMLElement;
+  createElement(tagName: string): HTMLElement;
+  createEl(tagName: string, attrs?: unknown, callback?: (el: HTMLElement) => void): HTMLElement;
+  createDocumentFragment(): DocumentFragment | HTMLElement;
+  addEventListener(): void;
+  removeEventListener(): void;
+  on(): void;
+  off(): void;
+  querySelector(): HTMLElement | null;
+  querySelectorAll(): HTMLElement[];
+  getElementsByTagName(tagName: string): HTMLElement[];
+};
+
+class CompatibilityHTMLElement {}
 
 /**
  * Plugin loader: scans .plugins/ directory and loads valid plugins
@@ -242,10 +266,51 @@ export class PluginLoader {
       throw new CompatError(`Unsupported module: ${id}`, CompatErrorCodes.MODULE_NOT_SUPPORTED, { moduleId: id });
     };
 
+    const globals = this.createPluginGlobals(obsidianModule);
+
     try {
       const wrappedCode = `${code}\n//# sourceURL=obsidian-plugin:${manifest.id}/main.js`;
-      const fn = new Function('module', 'exports', 'require', 'console', wrappedCode);
-      fn(module, exports, require, console);
+      const fn = new Function(
+        'module',
+        'exports',
+        'require',
+        'console',
+        'window',
+        'document',
+        'activeWindow',
+        'self',
+        'app',
+        'createEl',
+        'createDiv',
+        'createSpan',
+        'createFragment',
+        'HTMLElement',
+        'setTimeout',
+        'clearTimeout',
+        'setInterval',
+        'clearInterval',
+        wrappedCode,
+      );
+      fn(
+        module,
+        exports,
+        require,
+        console,
+        globals.window,
+        globals.document,
+        globals.activeWindow,
+        globals.window,
+        this.app,
+        globals.createEl,
+        globals.createDiv,
+        globals.createSpan,
+        globals.createFragment,
+        globals.HTMLElement,
+        globals.setTimeout,
+        globals.clearTimeout,
+        globals.setInterval,
+        globals.clearInterval,
+      );
     } catch (err) {
       throw new Error(`Plugin code execution failed for "${manifest.id}": ${err instanceof Error ? err.message : String(err)}`);
     }
@@ -276,6 +341,147 @@ export class PluginLoader {
    */
   getApp(): AppShim {
     return this.app;
+  }
+
+  private createPluginGlobals(obsidianModule: Record<string, unknown>) {
+    const localStorage = this.createLocalStorageShim();
+    const documentShim = this.createDocumentShim();
+    const createEl = (tagName: string, attrs?: unknown, callback?: (el: HTMLElement) => void) => {
+      const element = createObsidianElement(tagName);
+      this.applyCreateElAttrs(element, attrs);
+      callback?.(element);
+      return element;
+    };
+    const createDiv = (attrs?: unknown, callback?: (el: HTMLElement) => void) => createEl('div', attrs, callback);
+    const createSpan = (attrs?: unknown, callback?: (el: HTMLElement) => void) => createEl('span', attrs, callback);
+    const createFragment = (callback?: (el: HTMLElement) => void) => {
+      const fragment = createObsidianElement('fragment');
+      callback?.(fragment);
+      return fragment;
+    };
+    const runSafely = (callback: unknown, args: unknown[]) => {
+      try {
+        if (typeof callback === 'function') {
+          (callback as (...values: unknown[]) => void)(...args);
+        }
+      } catch (err) {
+        this.app.getRuntimeHost().warn({
+          code: 'plugin-async-callback-error',
+          message: `Plugin async callback failed: ${err instanceof Error ? err.message : String(err)}`,
+        });
+      }
+    };
+    const safeSetTimeout = (callback: unknown, timeout?: number, ...args: unknown[]) => (
+      setTimeout(() => runSafely(callback, args), timeout)
+    );
+    const safeSetInterval = (callback: unknown, timeout?: number, ...args: unknown[]) => (
+      setInterval(() => runSafely(callback, args), timeout)
+    );
+
+    const windowShim = {
+      app: this.app,
+      document: documentShim,
+      localStorage,
+      moment: obsidianModule.moment,
+      setTimeout: safeSetTimeout,
+      clearTimeout,
+      setInterval: safeSetInterval,
+      clearInterval,
+      requestAnimationFrame: (callback: FrameRequestCallback) => setTimeout(() => callback(Date.now()), 0),
+      cancelAnimationFrame: (id: number) => clearTimeout(id),
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      getComputedStyle: () => ({
+        getPropertyValue: () => '',
+      }),
+    };
+
+    return {
+      window: windowShim,
+      document: documentShim,
+      activeWindow: windowShim,
+      createEl,
+      createDiv,
+      createSpan,
+      createFragment,
+      HTMLElement: typeof HTMLElement === 'undefined' ? CompatibilityHTMLElement : HTMLElement,
+      setTimeout: safeSetTimeout,
+      clearTimeout,
+      setInterval: safeSetInterval,
+      clearInterval,
+    };
+  }
+
+  private createLocalStorageShim(): PluginLocalStorage {
+    return {
+      getItem: (key: string) => {
+        const value = this.app.loadLocalStorage(key);
+        return typeof value === 'string' ? value : value == null ? null : JSON.stringify(value);
+      },
+      setItem: (key: string, value: string) => {
+        this.app.saveLocalStorage(key, value);
+      },
+      removeItem: (key: string) => {
+        this.app.saveLocalStorage(key, null);
+      },
+    };
+  }
+
+  private createDocumentShim(): PluginDocumentShim {
+    const body = createObsidianElement('body');
+    const head = createObsidianElement('head');
+    return {
+      body,
+      head,
+      createElement: (tagName: string) => createObsidianElement(tagName),
+      createEl: (tagName: string, attrs?: unknown, callback?: (el: HTMLElement) => void) => {
+        const element = createObsidianElement(tagName);
+        this.applyCreateElAttrs(element, attrs);
+        callback?.(element);
+        return element;
+      },
+      createDocumentFragment: () => createObsidianElement('fragment'),
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      on: () => {},
+      off: () => {},
+      querySelector: () => null,
+      querySelectorAll: () => [],
+      getElementsByTagName: (tagName: string) => {
+        const normalized = tagName.toLowerCase();
+        if (normalized === 'body') return [body];
+        if (normalized === 'head') return [head];
+        return [];
+      },
+    };
+  }
+
+  private applyCreateElAttrs(element: HTMLElement, attrs: unknown): void {
+    if (!attrs || typeof attrs !== 'object') return;
+    const values = attrs as {
+      text?: unknown;
+      cls?: unknown;
+      attr?: Record<string, unknown>;
+      href?: unknown;
+      title?: unknown;
+      type?: unknown;
+      value?: unknown;
+    };
+    if (values.text !== undefined) element.textContent = String(values.text);
+    if (typeof values.cls === 'string') {
+      element.classList.add(...values.cls.split(/\s+/).filter(Boolean));
+    } else if (Array.isArray(values.cls)) {
+      element.classList.add(...values.cls.map(String));
+    }
+    if (values.href !== undefined) element.setAttribute('href', String(values.href));
+    if (values.title !== undefined) element.setAttribute('title', String(values.title));
+    if (values.type !== undefined) element.setAttribute('type', String(values.type));
+    if (values.value !== undefined) {
+      (element as unknown as { value: string }).value = String(values.value);
+    }
+    for (const [key, value] of Object.entries(values.attr ?? {})) {
+      element.setAttribute(key, String(value));
+    }
   }
 
   private async cleanupPlugin(pluginId: string, instance: Plugin): Promise<void> {

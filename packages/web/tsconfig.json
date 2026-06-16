@@ -19,7 +19,8 @@
       }
     ],
     "paths": {
-      "@/*": ["./*"]
+      "@/*": ["./*"],
+      "@geminilight/mindos/agent": ["../mindos/src/agent.ts"]
     }
   },
   "include": [

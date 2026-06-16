@@ -165,6 +165,39 @@ describe('Component', () => {
     expect(tick).not.toHaveBeenCalled();
     vi.useRealTimers();
   });
+
+  it('keeps lifecycle children isolated from plugin-defined children properties', async () => {
+    const parent = new ParentComponent() as ParentComponent & { children: unknown[] };
+    const child = new ChildComponent();
+    parent.children = [];
+
+    expect(parent.addChild(child)).toBe(child);
+    await parent.unload();
+
+    expect(parent.children).toEqual([]);
+    expect(child.unloaded).toBe(true);
+  });
+
+  it('treats unload as idempotent and ignores reentrant unload calls', async () => {
+    class ReentrantComponent extends Component {
+      unloadCalls = 0;
+      callback = vi.fn();
+
+      override async onunload(): Promise<void> {
+        this.unloadCalls += 1;
+        await this.unload();
+      }
+    }
+
+    const component = new ReentrantComponent();
+    component.register(component.callback);
+
+    await component.unload();
+    await component.unload();
+
+    expect(component.unloadCalls).toBe(1);
+    expect(component.callback).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('Plugin', () => {

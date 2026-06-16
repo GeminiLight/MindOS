@@ -41,13 +41,13 @@ describe('obsidian import policy', () => {
     const review = getObsidianImportSupport(plugin('partial', {
       compatibility: {
         partialApis: ['registerView'],
-        unsupportedApis: ['FileSystemAdapter'],
+        unsupportedApis: ['ImaginaryNativeApi'],
         blockers: [],
       },
     }));
 
     expect(review).toMatchObject({ kind: 'review', importable: true, defaultSelected: false, label: 'Review' });
-    expect(review.reason).toContain('FileSystemAdapter');
+    expect(review.reason).toContain('ImaginaryNativeApi');
   });
 
   it('honors the source vault enabled list when choosing defaults', () => {

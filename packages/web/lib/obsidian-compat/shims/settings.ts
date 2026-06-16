@@ -7,16 +7,35 @@ import { Component } from '../component';
 import type { App, PluginSettingTab as IPluginSettingTab, PluginSettingItem } from '../types';
 import { createObsidianElement, ensureObsidianElement, type ObsidianElement } from './dom';
 
-class TextComponent {
-  private item: PluginSettingItem;
+function isPluginSettingItem(target: PluginSettingItem | HTMLElement): target is PluginSettingItem {
+  return !('tagName' in target);
+}
 
-  constructor(item: PluginSettingItem) {
-    this.item = item;
-    this.item.kind = 'text';
+function createSettingItem(target: PluginSettingItem | HTMLElement, kind: PluginSettingItem['kind']): PluginSettingItem {
+  if (isPluginSettingItem(target)) {
+    target.kind = kind;
+    return target;
+  }
+  const container = ensureObsidianElement(target);
+  container.__obsidianSettingItems ??= [];
+  const item: PluginSettingItem = { kind };
+  container.__obsidianSettingItems.push(item);
+  return item;
+}
+
+export class TextComponent {
+  private item: PluginSettingItem;
+  inputEl: ObsidianElement;
+
+  constructor(target: PluginSettingItem | HTMLElement) {
+    this.item = createSettingItem(target, 'text');
+    this.inputEl = createObsidianElement('input');
   }
 
   setValue(value: string): this {
     this.item.value = value;
+    this.inputEl.setAttribute('value', value);
+    (this.inputEl as unknown as { value: string }).value = value;
     return this;
   }
 
@@ -27,25 +46,37 @@ class TextComponent {
 
   setPlaceholder(value: string): this {
     this.item.placeholder = value;
+    this.inputEl.setAttribute('placeholder', value);
     return this;
   }
 
   setDisabled(value: boolean): this {
     this.item.disabled = value;
+    this.inputEl.toggleAttribute?.('disabled', value);
     return this;
   }
 }
 
-class ToggleComponent {
-  private item: PluginSettingItem;
+export class TextAreaComponent extends TextComponent {
+  constructor(target: PluginSettingItem | HTMLElement) {
+    super(target);
+    this.inputEl = createObsidianElement('textarea');
+  }
+}
 
-  constructor(item: PluginSettingItem) {
-    this.item = item;
-    this.item.kind = 'toggle';
+export class ToggleComponent {
+  private item: PluginSettingItem;
+  toggleEl: ObsidianElement;
+
+  constructor(target: PluginSettingItem | HTMLElement) {
+    this.item = createSettingItem(target, 'toggle');
+    this.toggleEl = createObsidianElement('input');
+    this.toggleEl.setAttribute('type', 'checkbox');
   }
 
   setValue(value: boolean): this {
     this.item.value = value;
+    if (value) this.toggleEl.setAttribute('checked', 'true');
     return this;
   }
 
@@ -56,17 +87,19 @@ class ToggleComponent {
 
   setDisabled(value: boolean): this {
     this.item.disabled = value;
+    this.toggleEl.toggleAttribute?.('disabled', value);
     return this;
   }
 }
 
-class DropdownComponent {
+export class DropdownComponent {
   private item: PluginSettingItem;
+  selectEl: ObsidianElement;
 
-  constructor(item: PluginSettingItem) {
-    this.item = item;
-    this.item.kind = 'dropdown';
+  constructor(target: PluginSettingItem | HTMLElement) {
+    this.item = createSettingItem(target, 'dropdown');
     this.item.options = [];
+    this.selectEl = createObsidianElement('select');
   }
 
   addOption(value: string, label: string): this {
@@ -93,20 +126,36 @@ class DropdownComponent {
 
   setDisabled(value: boolean): this {
     this.item.disabled = value;
+    this.selectEl.toggleAttribute?.('disabled', value);
     return this;
   }
 }
 
-class ButtonComponent {
+export class ButtonComponent {
   private item: PluginSettingItem;
+  buttonEl: ObsidianElement;
+  extraSettingsEl: ObsidianElement;
 
-  constructor(item: PluginSettingItem) {
-    this.item = item;
-    this.item.kind = 'button';
+  constructor(target: PluginSettingItem | HTMLElement) {
+    this.item = createSettingItem(target, 'button');
+    this.buttonEl = createObsidianElement('button');
+    this.extraSettingsEl = this.buttonEl;
   }
 
   setButtonText(label: string): this {
     this.item.buttonText = label;
+    this.buttonEl.textContent = label;
+    return this;
+  }
+
+  setIcon(icon: string): this {
+    this.buttonEl.setAttribute('data-obsidian-icon', icon);
+    return this;
+  }
+
+  setTooltip(tooltip: string): this {
+    this.buttonEl.setAttribute('title', tooltip);
+    this.buttonEl.setAttribute('aria-label', tooltip);
     return this;
   }
 
@@ -122,6 +171,7 @@ class ButtonComponent {
 
   setDisabled(value: boolean): this {
     this.item.disabled = value;
+    this.buttonEl.toggleAttribute?.('disabled', value);
     return this;
   }
 }
@@ -204,7 +254,7 @@ export class Setting {
   }
 
   addTextArea(configure: (component: TextComponent) => void): this {
-    configure(new TextComponent(this.item));
+    configure(new TextAreaComponent(this.item));
     return this;
   }
 

@@ -91,13 +91,13 @@ describe('Obsidian community preflight support projection', () => {
       compatibility: {
         level: 'partial',
         report: {
-          obsidianApis: ['Plugin', 'FileSystemAdapter'],
+          obsidianApis: ['Plugin', 'ImaginaryNativeApi'],
           moduleImports: [],
           nodeModules: [],
           unsupportedModules: [],
           supportedApis: ['Plugin'],
           partialApis: [],
-          unsupportedApis: ['FileSystemAdapter'],
+          unsupportedApis: ['ImaginaryNativeApi'],
           blockers: [],
         },
       },
@@ -106,7 +106,7 @@ describe('Obsidian community preflight support projection', () => {
     expect(buildObsidianCommunityPreflightSupport(input)).toMatchObject({
       kind: 'review',
       installable: true,
-      reason: 'Unsupported APIs need manual review: FileSystemAdapter',
+      reason: 'Unsupported APIs need manual review: ImaginaryNativeApi',
     });
     expect(buildObsidianCommunitySurfacePreview(input)).toEqual([]);
   });

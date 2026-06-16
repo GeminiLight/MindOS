@@ -108,12 +108,117 @@ function unique(values: string[]): string[] {
   return Array.from(new Set(values)).sort();
 }
 
+function stripStringsAndComments(code: string): string {
+  let output = '';
+  let index = 0;
+  let state: 'code' | 'single' | 'double' | 'template' | 'line-comment' | 'block-comment' = 'code';
+
+  while (index < code.length) {
+    const char = code[index] ?? '';
+    const next = code[index + 1] ?? '';
+
+    if (state === 'code') {
+      if (char === "'" || char === '"' || char === '`') {
+        state = char === "'" ? 'single' : char === '"' ? 'double' : 'template';
+        output += ' ';
+      } else if (char === '/' && next === '/') {
+        state = 'line-comment';
+        output += '  ';
+        index += 1;
+      } else if (char === '/' && next === '*') {
+        state = 'block-comment';
+        output += '  ';
+        index += 1;
+      } else {
+        output += char;
+      }
+      index += 1;
+      continue;
+    }
+
+    if (state === 'line-comment') {
+      if (char === '\n') {
+        state = 'code';
+        output += '\n';
+      } else {
+        output += ' ';
+      }
+      index += 1;
+      continue;
+    }
+
+    if (state === 'block-comment') {
+      if (char === '*' && next === '/') {
+        state = 'code';
+        output += '  ';
+        index += 2;
+      } else {
+        output += char === '\n' ? '\n' : ' ';
+        index += 1;
+      }
+      continue;
+    }
+
+    if (char === '\\') {
+      output += ' ';
+      if (index + 1 < code.length) {
+        output += code[index + 1] === '\n' ? '\n' : ' ';
+      }
+      index += 2;
+      continue;
+    }
+
+    if (
+      (state === 'single' && char === "'")
+      || (state === 'double' && char === '"')
+      || (state === 'template' && char === '`')
+    ) {
+      state = 'code';
+      output += ' ';
+    } else {
+      output += char === '\n' ? '\n' : ' ';
+    }
+    index += 1;
+  }
+
+  return output;
+}
+
+function normalizeImportedName(rawName: string): string | null {
+  const trimmed = rawName.trim();
+  if (!trimmed) return null;
+  const withoutAlias = trimmed
+    .replace(/\s+as\s+[A-Za-z_$][\w$]*$/u, '')
+    .replace(/:\s*[A-Za-z_$][\w$]*$/u, '')
+    .trim();
+  return withoutAlias || null;
+}
+
+function collectObsidianNamespaceAliases(code: string): string[] {
+  const aliases: string[] = [];
+
+  const commonJsAliases = code.matchAll(/\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*require\(['"]obsidian['"]\)/g);
+  for (const match of commonJsAliases) {
+    if (match[1]) aliases.push(match[1]);
+  }
+
+  const esmAliases = code.matchAll(/\bimport\s+\*\s+as\s+([A-Za-z_$][\w$]*)\s+from\s*['"]obsidian['"]/g);
+  for (const match of esmAliases) {
+    if (match[1]) aliases.push(match[1]);
+  }
+
+  return unique(aliases);
+}
+
 function collectObsidianImports(code: string): string[] {
   const apis: string[] = [];
 
   const destructured = code.matchAll(/require\(['"]obsidian['"]\)\s*;?|const\s*\{([^}]+)\}\s*=\s*require\(['"]obsidian['"]\)|import\s*\{([^}]+)\}\s*from\s*['"]obsidian['"]/g);
   for (const match of destructured) {
-    const names = (match[1] ?? match[2])?.split(',').map((item) => item.trim()).filter(Boolean) ?? [];
+    const names = (match[1] ?? match[2])
+      ?.split(',')
+      .map((item) => normalizeImportedName(item))
+      .filter((item): item is string => Boolean(item)) ?? [];
     apis.push(...names);
   }
 
@@ -185,10 +290,13 @@ function collectObsidianImports(code: string): string[] {
     }
   }
 
-  const namespaceMatches = code.matchAll(/\bobsidian\.([A-Za-z_$][\w$]*)/g);
-  for (const match of namespaceMatches) {
-    if (match[1]) {
-      apis.push(match[1]);
+  for (const alias of collectObsidianNamespaceAliases(code)) {
+    const escapedAlias = alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const namespaceMatches = code.matchAll(new RegExp(`\\b${escapedAlias}\\.([A-Za-z_$][\\w$]*)`, 'g'));
+    for (const match of namespaceMatches) {
+      if (match[1]) {
+        apis.push(match[1]);
+      }
     }
   }
 
@@ -255,10 +363,11 @@ function collectUnsupportedModules(moduleImports: string[], supportedModules: st
 
 function collectDynamicModuleBlockers(code: string): string[] {
   const blockers: string[] = [];
-  if (/require\s*\(\s*[^'"\s]/.test(code)) {
+  const codeOnly = stripStringsAndComments(code);
+  if (/(?<![.$\w\\])require\s*\(\s*[^'"\s)]/u.test(codeOnly)) {
     blockers.push('Uses dynamic require(), which the MindOS Obsidian runtime cannot safely resolve.');
   }
-  if (/import\s*\(\s*[^'"\s]/.test(code)) {
+  if (/(?<![.$\w])import\s*\(\s*[^'"\s)]/u.test(codeOnly)) {
     blockers.push('Uses dynamic import(), which the MindOS Obsidian runtime cannot safely resolve.');
   }
   return blockers;

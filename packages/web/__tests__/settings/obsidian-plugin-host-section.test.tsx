@@ -314,7 +314,7 @@ describe('ObsidianPluginHostSection', () => {
           compatibility: {
             supportedApis: ['Plugin'],
             partialApis: ['registerView'],
-            unsupportedApis: ['FileSystemAdapter'],
+            unsupportedApis: ['ImaginaryNativeApi'],
             blockers: [],
           },
         }),
@@ -328,7 +328,7 @@ describe('ObsidianPluginHostSection', () => {
     expect(host.textContent).toContain('Limited APIs are routed through safe MindOS hosts: registerMarkdownCodeBlockProcessor');
     expect(host.textContent).toContain('Review Like');
     expect(host.textContent).toContain('Review');
-    expect(host.textContent).toContain('Unsupported APIs need manual review: FileSystemAdapter');
+    expect(host.textContent).toContain('Unsupported APIs need manual review: ImaginaryNativeApi');
 
     await cleanup(root, host);
   });

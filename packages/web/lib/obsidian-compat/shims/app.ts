@@ -131,6 +131,7 @@ class ReadonlyMarkdownEditorShim implements Editor {
 class WorkspaceShim extends Events implements Workspace {
   activeLeaf: WorkspaceLeaf;
   activeEditor: MarkdownView | null = null;
+  layoutReady = true;
   private readonly leaves: WorkspaceLeaf[] = [];
   private activeFile: TFile | null = null;
 
@@ -207,6 +208,32 @@ class WorkspaceShim extends Events implements Workspace {
   iterateAllLeaves(callback: (leaf: WorkspaceLeaf) => any): void {
     this.iterateRootLeaves(callback);
   }
+
+  registerHoverLinkSource(source: string, options: unknown): void {
+    void options;
+    this.host.warn({
+      code: 'workspace-hover-link-source-recorded-only',
+      message: `Workspace.registerHoverLinkSource("${source}") is recorded as a no-op in MindOS Phase 1.`,
+    });
+  }
+
+  getLayout(): unknown {
+    return {
+      main: {
+        type: 'split',
+        children: [],
+      },
+      active: this.activeLeaf.getViewState().type,
+    };
+  }
+
+  async changeLayout(layout: unknown): Promise<void> {
+    void layout;
+    this.host.warn({
+      code: 'workspace-change-layout-recorded-only',
+      message: 'Workspace.changeLayout() is recorded as a no-op in MindOS Phase 1.',
+    });
+  }
 }
 
 /**
@@ -217,7 +244,15 @@ export class AppShim implements App {
   metadataCache: IMetadataCache;
   fileManager: IFileManager;
   workspace: Workspace;
-  plugins: { plugins: Record<string, unknown>; enabledPlugins: Set<string> };
+  plugins: NonNullable<App['plugins']>;
+  internalPlugins: { plugins: Record<string, unknown>; getPluginById: (pluginId: string) => unknown };
+  foldManager: { load: () => unknown; save: () => void };
+  dragManager: {
+    draggable: unknown;
+    onDragStart: (_evt: unknown, data: unknown) => void;
+    updateHover: () => void;
+    setAction: () => void;
+  };
 
   private commandRegistry: CommandRegistry;
   private runtimeHost: ObsidianRuntimeHost;
@@ -229,7 +264,33 @@ export class AppShim implements App {
     this.fileManager = new FileManagerShim(this);
     this.workspace = new WorkspaceShim(this, this.runtimeHost);
     this.commandRegistry = new CommandRegistry();
-    this.plugins = { plugins: {}, enabledPlugins: new Set() };
+    this.plugins = {
+      plugins: {},
+      enabledPlugins: new Set(),
+      getPlugin: (pluginId: string) => this.plugins.plugins[pluginId] ?? null,
+      enablePlugin: async (pluginId: string) => {
+        this.plugins.enabledPlugins.add(pluginId);
+      },
+      disablePlugin: async (pluginId: string) => {
+        this.plugins.enabledPlugins.delete(pluginId);
+      },
+    };
+    this.internalPlugins = {
+      plugins: {},
+      getPluginById: (pluginId: string) => this.internalPlugins.plugins[pluginId] ?? null,
+    };
+    this.foldManager = {
+      load: () => null,
+      save: () => {},
+    };
+    this.dragManager = {
+      draggable: null,
+      onDragStart: (_evt: unknown, data: unknown) => {
+        this.dragManager.draggable = data;
+      },
+      updateHover: () => {},
+      setAction: () => {},
+    };
   }
 
   isDarkMode(): boolean {

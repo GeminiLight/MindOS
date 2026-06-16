@@ -21,6 +21,8 @@ export type ObsidianElement = HTMLElement & {
   addClass(cls: string | string[]): ObsidianElement;
   removeClass(cls: string | string[]): ObsidianElement;
   toggleClass(cls: string, value?: boolean): ObsidianElement;
+  on(type: string, selectorOrCallback: string | EventListener, callback?: EventListener, options?: boolean | AddEventListenerOptions): ObsidianElement;
+  off(type: string, selectorOrCallback: string | EventListener, callback?: EventListener, options?: boolean | AddEventListenerOptions): ObsidianElement;
 };
 
 function normalizeClasses(cls: string | string[] | undefined): string[] {
@@ -114,6 +116,22 @@ function attachHelpers(el: HTMLElement): ObsidianElement {
 
   target.toggleClass ??= function toggleClass(cls, value) {
     this.classList.toggle(cls, value);
+    return this;
+  };
+
+  target.on ??= function on(type, selectorOrCallback, callback, options) {
+    const listener = typeof selectorOrCallback === 'function' ? selectorOrCallback : callback;
+    if (listener) {
+      this.addEventListener(type, listener, options);
+    }
+    return this;
+  };
+
+  target.off ??= function off(type, selectorOrCallback, callback, options) {
+    const listener = typeof selectorOrCallback === 'function' ? selectorOrCallback : callback;
+    if (listener) {
+      this.removeEventListener(type, listener, options);
+    }
     return this;
   };
 

@@ -3,16 +3,17 @@
  */
 
 import net from 'net';
+import yaml from 'js-yaml';
 import { Component } from '../component';
 import { Events } from '../events';
 import { Plugin } from './plugin';
 import { Notice, Modal } from './ui';
-import { PluginSettingTab, Setting } from './settings';
-import { TAbstractFileImpl, TFileImpl, TFolderImpl } from './vault';
+import { ButtonComponent, DropdownComponent, PluginSettingTab, Setting, TextAreaComponent, TextComponent, ToggleComponent } from './settings';
+import { TAbstractFileImpl, TFileImpl, TFolderImpl, Vault } from './vault';
 import { createObsidianElement } from './dom';
 import { MarkdownRenderer } from './markdown-renderer';
 import { getActiveObsidianRuntimeHost } from '../runtime';
-import type { RequestUrlParam, RequestUrlResponse, RequestUrlResponsePromise, WorkspaceLeaf } from '../types';
+import type { RequestUrlParam, RequestUrlResponse, RequestUrlResponsePromise, TFile, WorkspaceLeaf } from '../types';
 
 const REQUEST_URL_TIMEOUT_MS = 15_000;
 const REQUEST_URL_MAX_RESPONSE_BYTES = 5 * 1024 * 1024;
@@ -27,6 +28,89 @@ export function normalizePath(input: string): string {
     .replace(/^\.\//, '')
     .replace(/\/\.$/, '')
     .replace(/^\/+/, '');
+}
+
+export function parseYaml(yamlText: string): unknown {
+  return yaml.load(yamlText);
+}
+
+export function stringifyYaml(value: unknown): string {
+  return yaml.dump(value, {
+    lineWidth: -1,
+    noRefs: true,
+    sortKeys: false,
+  });
+}
+
+type DebouncedFunction<T extends unknown[]> = ((...args: T) => void) & { cancel: () => void; run: () => void };
+
+export function debounce<T extends unknown[]>(
+  callback: (...args: T) => unknown,
+  timeout = 0,
+  resetTimer = true,
+): DebouncedFunction<T> {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let lastArgs: T | null = null;
+
+  const clearPending = () => {
+    if (timer !== null) {
+      clearTimeout(timer);
+      timer = null;
+    }
+  };
+
+  const run = () => {
+    const args = lastArgs;
+    timer = null;
+    lastArgs = null;
+    if (args) {
+      callback(...args);
+    }
+  };
+
+  const debounced = ((...args: T) => {
+    lastArgs = args;
+    if (timer !== null && !resetTimer) {
+      return;
+    }
+    clearPending();
+    timer = setTimeout(run, Math.max(0, timeout));
+  }) as DebouncedFunction<T>;
+
+  debounced.cancel = () => {
+    clearPending();
+    lastArgs = null;
+  };
+  debounced.run = () => {
+    clearPending();
+    run();
+  };
+
+  return debounced;
+}
+
+const iconRegistry = new Map<string, string>();
+
+export function addIcon(iconId: string, svgContent: string): void {
+  iconRegistry.set(iconId, svgContent);
+}
+
+export function getIcon(iconId: string): string | null {
+  return iconRegistry.get(iconId) ?? null;
+}
+
+export function setIcon(parent: HTMLElement, iconId: string, size?: number): void {
+  parent.setAttribute('data-obsidian-icon', iconId);
+  parent.setAttribute('aria-label', iconId);
+  if (size !== undefined) {
+    parent.setAttribute('data-obsidian-icon-size', String(size));
+  }
+  parent.textContent = iconId;
+}
+
+export function setTooltip(parent: HTMLElement, tooltip: string): void {
+  parent.setAttribute('aria-label', tooltip);
+  parent.setAttribute('title', tooltip);
 }
 
 export class RequestUrlError extends Error {
@@ -440,7 +524,57 @@ export class ItemView extends Component {
   onClose(): Promise<void> | void {}
 }
 
+export class View extends ItemView {}
+
 export class MarkdownView extends ItemView {}
+
+export class FileView extends ItemView {
+  file: TFile | null = null;
+}
+
+export class AbstractInputSuggest<T> extends Component {
+  app: unknown;
+  inputEl: HTMLInputElement;
+  suggestions: T[] = [];
+
+  constructor(app: unknown, inputEl: HTMLInputElement) {
+    super();
+    this.app = app;
+    this.inputEl = inputEl;
+  }
+
+  getSuggestions(query: string): T[] | Promise<T[]> {
+    void query;
+    return [];
+  }
+
+  renderSuggestion(value: T, el: HTMLElement): void {
+    el.textContent = String(value);
+  }
+
+  selectSuggestion(value: T, evt: MouseEvent | KeyboardEvent): void {
+    void value;
+    void evt;
+  }
+
+  close(): void {}
+}
+
+export class SettingGroup extends Component {
+  containerEl: HTMLElement;
+
+  constructor(containerEl: HTMLElement = createObsidianElement('div')) {
+    super();
+    this.containerEl = containerEl;
+  }
+}
+
+export class SecretComponent extends TextComponent {
+  constructor(target: HTMLElement) {
+    super(target);
+    this.inputEl.setAttribute('type', 'password');
+  }
+}
 
 export class WorkspaceLeafShimExport {
   getViewState() {
@@ -452,6 +586,12 @@ export class WorkspaceLeafShimExport {
   async openFile(): Promise<void> {}
 
   detach(): void {}
+}
+
+export class FileSystemAdapter {
+  getBasePath(): string {
+    throw new Error('[obsidian-compat] FileSystemAdapter.getBasePath() is not available in the restricted MindOS plugin runtime.');
+  }
 }
 
 export class MenuItem {
@@ -559,6 +699,55 @@ export class SuggestModal<T> extends Modal {
 
 export class FuzzySuggestModal<T> extends SuggestModal<T> {}
 
+export const Keymap = {
+  isModEvent(event: MouseEvent | KeyboardEvent | { metaKey?: boolean; ctrlKey?: boolean }): boolean {
+    return Boolean(event?.metaKey || event?.ctrlKey);
+  },
+};
+
+export function parseFrontMatterAliases(frontmatter: Record<string, unknown> | null | undefined): string[] | null {
+  const value = frontmatter?.aliases ?? frontmatter?.alias ?? frontmatter?.Aliases;
+  if (Array.isArray(value)) {
+    return value.map(String);
+  }
+  if (typeof value === 'string') {
+    return [value];
+  }
+  return null;
+}
+
+export function parseFrontMatterTags(frontmatter: Record<string, unknown> | null | undefined): string[] | null {
+  const value = frontmatter?.tags ?? frontmatter?.tag ?? frontmatter?.Tags;
+  if (Array.isArray(value)) {
+    return value.map(String);
+  }
+  if (typeof value === 'string') {
+    return value.split(/[\s,]+/).filter(Boolean);
+  }
+  return null;
+}
+
+export function getLanguage(): string {
+  if (typeof navigator !== 'undefined' && navigator.language) {
+    return navigator.language;
+  }
+  return 'en';
+}
+
+export const apiVersion = '1.7.2-mindos-compat';
+
+export function prepareFuzzySearch(query: string): (text: string) => { score: number; matches: unknown[] } | null {
+  const normalizedQuery = query.trim().toLowerCase();
+  return (text: string) => {
+    if (!normalizedQuery) {
+      return { score: 0, matches: [] };
+    }
+    const normalizedText = text.toLowerCase();
+    const index = normalizedText.indexOf(normalizedQuery);
+    return index >= 0 ? { score: normalizedQuery.length / Math.max(text.length, 1), matches: [[index, index + normalizedQuery.length]] } : null;
+  };
+}
+
 export function createObsidianModule() {
   return {
     Plugin,
@@ -568,10 +757,23 @@ export function createObsidianModule() {
     Modal,
     PluginSettingTab,
     Setting,
+    ButtonComponent,
+    TextComponent,
+    TextAreaComponent,
+    ToggleComponent,
+    DropdownComponent,
     TAbstractFile: TAbstractFileImpl,
     TFile: TFileImpl,
     TFolder: TFolderImpl,
+    Vault,
     normalizePath,
+    parseYaml,
+    stringifyYaml,
+    debounce,
+    addIcon,
+    getIcon,
+    setIcon,
+    setTooltip,
     requestUrl,
     request,
     Platform,
@@ -579,11 +781,23 @@ export function createObsidianModule() {
     MarkdownRenderer,
     MarkdownRenderChild,
     ItemView,
+    View,
     MarkdownView,
+    FileView,
+    AbstractInputSuggest,
+    SettingGroup,
+    SecretComponent,
     WorkspaceLeaf: WorkspaceLeafShimExport,
+    FileSystemAdapter,
     Menu,
     MenuItem,
     SuggestModal,
     FuzzySuggestModal,
+    Keymap,
+    parseFrontMatterAliases,
+    parseFrontMatterTags,
+    getLanguage,
+    apiVersion,
+    prepareFuzzySearch,
   };
 }

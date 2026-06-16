@@ -595,6 +595,20 @@ export class MetadataCacheShim extends Events implements IMetadataCache {
     return file ? this.getFileCache(file) : null;
   }
 
+  getCachedFiles(): string[] {
+    return this.vault.getMarkdownFiles().map((file) => file.path);
+  }
+
+  getTags(): Record<string, number> {
+    const tags: Record<string, number> = {};
+    for (const file of this.vault.getMarkdownFiles()) {
+      for (const tag of this.getFileCache(file)?.tags ?? []) {
+        tags[tag.tag] = (tags[tag.tag] ?? 0) + 1;
+      }
+    }
+    return tags;
+  }
+
   getFirstLinkpathDest(linkpath: string, sourcePath: string): TFile | null {
     void sourcePath;
     const normalized = linkpath.replace(/\.md$/, '');

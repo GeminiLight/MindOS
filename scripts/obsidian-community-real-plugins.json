@@ -6,7 +6,7 @@
       "id": "obsidian-style-settings",
       "name": "Style Settings",
       "repo": "mgmeyers/obsidian-style-settings",
-      "expectedCompatibilityLevel": "compatible",
+      "expectedCompatibilityLevel": "partial",
       "requiredFiles": ["main.js", "manifest.json"],
       "optionalFiles": ["styles.css"]
     },
@@ -22,15 +22,15 @@
       "id": "tag-wrangler",
       "name": "Tag Wrangler",
       "repo": "pjeby/tag-wrangler",
-      "expectedCompatibilityLevel": "compatible",
+      "expectedCompatibilityLevel": "partial",
       "requiredFiles": ["main.js", "manifest.json"],
       "optionalFiles": []
     },
     {
-      "id": "obsidian-homepage",
+      "id": "homepage",
       "name": "Homepage",
       "repo": "mirnovov/obsidian-homepage",
-      "expectedCompatibilityLevel": "compatible",
+      "expectedCompatibilityLevel": "partial",
       "requiredFiles": ["main.js", "manifest.json"],
       "optionalFiles": ["styles.css"]
     }

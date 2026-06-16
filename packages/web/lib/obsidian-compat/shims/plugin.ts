@@ -106,4 +106,22 @@ export class Plugin extends Component implements IPlugin {
   registerMarkdownPostProcessor(processor: MarkdownPostProcessor): void {
     getRuntimeHost(this.app)?.registerMarkdownPostProcessor(this.manifest.id, processor);
   }
+
+  registerObsidianProtocolHandler(action: string, handler: (params: Record<string, string>) => unknown): void {
+    void handler;
+    getRuntimeHost(this.app)?.warn({
+      code: 'obsidian-protocol-handler-recorded-only',
+      message: `Plugin "${this.manifest.id}" registered obsidian://${action}; MindOS records protocol handlers as no-ops in Phase 1.`,
+    });
+  }
+
+  registerCliHandler(command: string, description: string, args: unknown, handler: (params: Record<string, string>) => unknown): boolean {
+    void args;
+    void handler;
+    getRuntimeHost(this.app)?.warn({
+      code: 'obsidian-cli-handler-recorded-only',
+      message: `Plugin "${this.manifest.id}" registered CLI handler "${command}" (${description}); MindOS records CLI handlers as no-ops in Phase 1.`,
+    });
+    return true;
+  }
 }

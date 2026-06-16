@@ -21,16 +21,25 @@ const TARGETS_PATH = path.join(__dirname, 'obsidian-community-real-plugins.json'
 const OUTPUT_DIR = path.join(__dirname, '../packages/web/__fixtures__/real-plugins');
 const MATRIX_PATH = path.join(OUTPUT_DIR, 'matrix.json');
 const HTTPS_TIMEOUT_MS = 20_000;
+const MAX_REDIRECTS = 5;
 const SAFE_PATH_SEGMENT = /^[A-Za-z0-9_.-]+$/;
 
 const targetsConfig = JSON.parse(fs.readFileSync(TARGETS_PATH, 'utf-8'));
 const targets = Array.isArray(targetsConfig.plugins) ? targetsConfig.plugins : [];
 
-function download(url, dest) {
+function isRedirectStatus(statusCode) {
+  return statusCode === 301
+    || statusCode === 302
+    || statusCode === 303
+    || statusCode === 307
+    || statusCode === 308;
+}
+
+function download(url, dest, redirectsRemaining = MAX_REDIRECTS) {
   return new Promise((resolve, reject) => {
     const file = fs.createWriteStream(dest);
     const request = https.get(url, (response) => {
-      if (response.statusCode === 302 || response.statusCode === 301) {
+      if (isRedirectStatus(response.statusCode)) {
         file.close();
         fs.rmSync(dest, { force: true });
         const location = response.headers.location;
@@ -38,7 +47,11 @@ function download(url, dest) {
           reject(new Error(`Redirect without location for ${url}`));
           return;
         }
-        download(new URL(location, url).toString(), dest).then(resolve).catch(reject);
+        if (redirectsRemaining <= 0) {
+          reject(new Error(`Too many redirects while downloading ${url}`));
+          return;
+        }
+        download(new URL(location, url).toString(), dest, redirectsRemaining - 1).then(resolve).catch(reject);
         return;
       }
 
@@ -73,11 +86,12 @@ function download(url, dest) {
   });
 }
 
-function getLatestRelease(repo) {
+function getLatestRelease(repo, redirectsRemaining = MAX_REDIRECTS, redirectedUrl = null) {
   return new Promise((resolve, reject) => {
+    const url = redirectedUrl ? new URL(redirectedUrl) : new URL(`https://api.github.com/repos/${repo}/releases/latest`);
     const options = {
-      hostname: 'api.github.com',
-      path: `/repos/${repo}/releases/latest`,
+      hostname: url.hostname,
+      path: `${url.pathname}${url.search}`,
       headers: {
         'User-Agent': 'MindOS-Obsidian-Plugin-Matrix',
         Accept: 'application/vnd.github+json',
@@ -90,6 +104,19 @@ function getLatestRelease(repo) {
         data += chunk;
       });
       response.on('end', () => {
+        if (isRedirectStatus(response.statusCode)) {
+          const location = response.headers.location;
+          if (!location) {
+            reject(new Error(`Redirect without location for ${repo}`));
+            return;
+          }
+          if (redirectsRemaining <= 0) {
+            reject(new Error(`Too many redirects while fetching release info for ${repo}`));
+            return;
+          }
+          getLatestRelease(repo, redirectsRemaining - 1, new URL(location, url).toString()).then(resolve).catch(reject);
+          return;
+        }
         if (response.statusCode === 200) {
           resolve(JSON.parse(data));
           return;

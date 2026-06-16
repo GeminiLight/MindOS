@@ -45,15 +45,16 @@ describe('Obsidian capability matrix', () => {
       expect.objectContaining({ api: 'Workspace.openLinkText', support: 'request-only', surface: 'workspace' }),
       expect.objectContaining({ api: 'registerEditorExtension', support: 'catalog-only', surface: 'editor' }),
       expect.objectContaining({ api: 'Notice', support: 'snapshot-only', surface: 'entries' }),
-      expect.objectContaining({ api: 'FileSystemAdapter', support: 'unsupported', surface: 'unsupported' }),
+      expect.objectContaining({ api: 'FileSystemAdapter', support: 'limited', surface: 'core' }),
       expect.objectContaining({ api: 'ImaginaryApi', support: 'unsupported', surface: 'unsupported' }),
     ]));
     expect(summarizeObsidianCapabilityCoverage(coverage)).toMatchObject({
       full: 1,
+      limited: 1,
       'request-only': 1,
       'catalog-only': 1,
       'snapshot-only': 1,
-      unsupported: 2,
+      unsupported: 1,
     });
   });
 });

@@ -80,6 +80,36 @@ describe('PluginLoader', () => {
     expect(commands[0]?.fullId).toBe('obsidian:hello-plugin:hello');
   });
 
+  it('provides Obsidian-like globals for bundled community plugins', async () => {
+    writePlugin(
+      'global-plugin',
+      { id: 'global-plugin', name: 'Global Plugin', version: '1.0.0' },
+      `
+        const { Plugin, View, Vault } = require('obsidian');
+        const language = window.localStorage.getItem('language');
+        const topLevelEl = document.createEl('div', { text: language || 'en' });
+        class GlobalView extends View {}
+        module.exports = class GlobalPlugin extends Plugin {
+          onload() {
+            if (window.app !== this.app || app !== this.app) {
+              throw new Error('missing app globals');
+            }
+            if (!(new GlobalView(this.app.workspace.getLeaf()) instanceof View)) {
+              throw new Error('missing View export');
+            }
+            Vault.recurseChildren(this.app.vault.getRoot(), () => {});
+            this.addCommand({ id: 'globals', name: topLevelEl.textContent || 'Globals', callback: () => {} });
+          }
+        };
+      `,
+    );
+
+    const loader = new PluginLoader(mindRoot);
+    await loader.loadPlugin('global-plugin');
+
+    expect(loader.getApp().getCommands()[0]?.fullId).toBe('obsidian:global-plugin:globals');
+  });
+
   it('unloads a plugin and removes all its registered commands', async () => {
     writePlugin(
       'cleanup-plugin',

@@ -7,10 +7,17 @@ import {
 describe('compatibility report', () => {
   it('detects high-frequency Obsidian APIs and preserves host-boundary levels', () => {
     const report = analyzePluginCompatibility(`
-      const { Plugin, Notice, Modal, PluginSettingTab, Setting, MarkdownRenderer } = require('obsidian');
+      const { Plugin, Notice, Modal, PluginSettingTab, Setting, MarkdownRenderer, parseYaml, stringifyYaml, debounce, addIcon, getIcon, setIcon, setTooltip } = require('obsidian');
       module.exports = class Example extends Plugin {
         async onload() {
           new Notice('loaded');
+          debounce(() => {}, 100);
+          parseYaml('title: Example');
+          stringifyYaml({ title: 'Example' });
+          addIcon('mindos-test', '<svg />');
+          getIcon('mindos-test');
+          setIcon(document.createElement('span'), 'mindos-test');
+          setTooltip(document.createElement('span'), 'Hint');
           this.addCommand({ id: 'test', name: 'Test', callback: () => {} });
           this.registerMarkdownPostProcessor(() => {});
           await MarkdownRenderer.renderMarkdown('# Heading', document.createElement('div'), 'notes/today.md');
@@ -38,6 +45,13 @@ describe('compatibility report', () => {
         'PluginSettingTab',
         'Setting',
         'MarkdownRenderer',
+        'parseYaml',
+        'stringifyYaml',
+        'debounce',
+        'addIcon',
+        'getIcon',
+        'setIcon',
+        'setTooltip',
         'addCommand',
         'registerMarkdownPostProcessor',
         'Vault.adapter',
@@ -63,6 +77,9 @@ describe('compatibility report', () => {
       'Vault.getResourcePath',
       'Vault.appendBinary',
       'Vault.trash',
+      'parseYaml',
+      'stringifyYaml',
+      'debounce',
     ]));
     expect(report.partialApis).toEqual(expect.arrayContaining([
       'MarkdownRenderer',
@@ -70,6 +87,10 @@ describe('compatibility report', () => {
       'FileManager.promptForDeletion',
       'Workspace.getActiveViewOfType',
       'Workspace.iterateAllLeaves',
+      'addIcon',
+      'getIcon',
+      'setIcon',
+      'setTooltip',
     ]));
     expect(report.nodeModules).toEqual([]);
   });
@@ -219,17 +240,95 @@ describe('compatibility report', () => {
     expect(getCompatibilityLevel(report)).toBe('partial');
   });
 
-  it('flags dynamic require and unknown Obsidian APIs for manual review', () => {
+  it('treats FileSystemAdapter as a limited native guard instead of an unsupported API', () => {
     const report = analyzePluginCompatibility(`
       const { Plugin, FileSystemAdapter } = require('obsidian');
+      module.exports = class NativeGuardPlugin extends Plugin {
+        onload() {
+          return this.app.vault.adapter instanceof FileSystemAdapter;
+        }
+      }
+    `);
+
+    expect(report.partialApis).toContain('FileSystemAdapter');
+    expect(report.unsupportedApis).not.toContain('FileSystemAdapter');
+    expect(report.blockers).toEqual([]);
+    expect(getCompatibilityLevel(report)).toBe('partial');
+  });
+
+  it('flags dynamic require and unknown Obsidian APIs for manual review', () => {
+    const report = analyzePluginCompatibility(`
+      const { Plugin, ImaginaryNativeApi } = require('obsidian');
       const moduleName = 'fs';
       require(moduleName);
       module.exports = class DynamicPlugin extends Plugin {}
     `);
 
-    expect(report.unsupportedApis).toContain('FileSystemAdapter');
+    expect(report.unsupportedApis).toContain('ImaginaryNativeApi');
     expect(report.blockers).toEqual(expect.arrayContaining([
       expect.stringMatching(/dynamic require/i),
+    ]));
+    expect(getCompatibilityLevel(report)).toBe('blocked');
+  });
+
+  it('detects namespace imports only when the alias actually comes from obsidian', () => {
+    const report = analyzePluginCompatibility(`
+      import * as ob from 'obsidian';
+      const local = { obsidian: { guide: true } };
+      const docsUrl = 'https://quickadd.obsidian.guide/docs';
+      module.exports = class NamespacePlugin extends ob.Plugin {
+        onload() {
+          new ob.Notice('loaded');
+          local.obsidian.guide = false;
+          return ob.normalizePath('notes//today.md');
+        }
+      }
+    `);
+
+    expect(report.obsidianApis).toEqual(expect.arrayContaining(['Plugin', 'Notice', 'normalizePath']));
+    expect(report.obsidianApis).not.toContain('guide');
+    expect(report.unsupportedApis).toEqual([]);
+    expect(report.blockers).toEqual([]);
+  });
+
+  it('does not treat bundle strings, methods, or window.require guards as dynamic module blockers', () => {
+    const report = analyzePluginCompatibility(`
+      const { Plugin } = require('obsidian');
+      class SettingsManager {
+        import() {
+          return 'ok';
+        }
+        export() {
+          return this.import();
+        }
+      }
+      const texCommands = ["\\\\require (non-standard)"];
+      module.exports = class BundlePlugin extends Plugin {
+        async onload() {
+          const moduleName = 'user-script';
+          const guardedRequire = (id) => window.require && window.require(id);
+          return { SettingsManager, texCommands, guardedRequire, moduleName };
+        }
+      }
+    `);
+
+    expect(report.blockers).toEqual([]);
+    expect(getCompatibilityLevel(report)).toBe('compatible');
+  });
+
+  it('still blocks bare dynamic import calls that the loader cannot resolve', () => {
+    const report = analyzePluginCompatibility(`
+      const { Plugin } = require('obsidian');
+      const chunkName = './chunk.js';
+      module.exports = class DynamicImportPlugin extends Plugin {
+        async onload() {
+          return import(chunkName);
+        }
+      }
+    `);
+
+    expect(report.blockers).toEqual(expect.arrayContaining([
+      expect.stringMatching(/dynamic import/i),
     ]));
     expect(getCompatibilityLevel(report)).toBe('blocked');
   });

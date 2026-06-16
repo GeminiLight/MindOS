@@ -152,13 +152,13 @@ describe('PluginsTabModel community preflight support preview', () => {
       compatibility: {
         level: 'partial',
         report: {
-          obsidianApis: ['Plugin', 'FileSystemAdapter'],
+          obsidianApis: ['Plugin', 'ImaginaryNativeApi'],
           moduleImports: [],
           nodeModules: [],
           unsupportedModules: [],
           supportedApis: ['Plugin'],
           partialApis: [],
-          unsupportedApis: ['FileSystemAdapter'],
+          unsupportedApis: ['ImaginaryNativeApi'],
           blockers: [],
         },
       },
