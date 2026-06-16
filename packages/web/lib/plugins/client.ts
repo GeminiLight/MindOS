@@ -363,6 +363,7 @@ function isApplePlatform(): boolean {
 export function matchesPluginCommandQuery(surface: PluginSurface, query: string): boolean {
   const raw = query.trim();
   if (!raw) return false;
+  if (!raw.startsWith('>')) return false;
   const normalized = raw.startsWith('>') ? raw.slice(1).trim() : raw;
   if (!normalized) return raw.startsWith('>');
 

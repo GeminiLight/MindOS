@@ -99,6 +99,8 @@ export interface ServerSettings {
     enableAgentsDir?: boolean;   // default true — include ~/.agents/skills
     custom?: string[];           // user-defined extra skill directories
   };
+  /** Custom paths excluded from MindOS file tree, search, semantic index, and agent file context. */
+  searchIgnoredPaths?: string[];
   guideState?: GuideState;
   /** Per-agent ACP overrides (command, args, env, enabled). Keyed by agent ID. */
   acpAgents?: Record<string, import('./acp/agent-descriptors').AcpAgentOverride>;
@@ -133,6 +135,28 @@ function parseSkillPathsField(raw: unknown): ServerSettings['skillPaths'] | unde
   }
 
   return Object.keys(result).length > 0 ? result : undefined;
+}
+
+function parseSearchIgnoredPathsField(raw: unknown): string[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const item of raw) {
+    if (typeof item !== 'string') continue;
+    const normalized = item
+      .trim()
+      .replace(/\\/g, '/')
+      .replace(/\/+/g, '/')
+      .replace(/^\.\//, '')
+      .replace(/^\/+/, '')
+      .replace(/\/+$/, '');
+    if (normalized.startsWith('#') || normalized.startsWith('!')) continue;
+    if (!normalized || normalized === '.' || normalized === '..' || normalized.split('/').includes('..')) continue;
+    if (seen.has(normalized)) continue;
+    seen.add(normalized);
+    result.push(normalized);
+  }
+  return result.length > 0 ? result : undefined;
 }
 
 const DEFAULTS: ServerSettings = {
@@ -306,6 +330,7 @@ export function readSettings(): ServerSettings {
       connectionMode: inferConnectionMode(parsed),
       customAgents: Array.isArray(parsed.customAgents) ? parsed.customAgents as import('./custom-agents').CustomAgentDef[] : undefined,
       skillPaths: parseSkillPathsField(parsed.skillPaths),
+      searchIgnoredPaths: parseSearchIgnoredPathsField(parsed.searchIgnoredPaths),
     };
 
     // Auto-persist migrated config so migration only runs once
@@ -350,6 +375,7 @@ export function writeSettings(settings: ServerSettings): void {
   if (settings.connectionMode !== undefined) merged.connectionMode = settings.connectionMode;
   if (settings.customAgents !== undefined) merged.customAgents = settings.customAgents;
   if (settings.skillPaths !== undefined) merged.skillPaths = settings.skillPaths;
+  if (settings.searchIgnoredPaths !== undefined) merged.searchIgnoredPaths = settings.searchIgnoredPaths;
   // Remove legacy customProviders (now merged into ai.providers array)
   delete merged.customProviders;
   // setupPending: false/undefined → remove the field (cleanup); true → set it

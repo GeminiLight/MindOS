@@ -13,6 +13,7 @@ import { invalidateCache } from '@/lib/fs';
 import { ALL_PROVIDER_IDS, getApiKeyEnvVar, getApiKeyFromEnv } from '@/lib/agent/providers';
 import { parseProviders } from '@/lib/custom-endpoints';
 import { getEmbeddingStatus } from '@/lib/core/hybrid-search';
+import { readMindosIgnoreFile, writeMindosIgnoreFile } from '@/lib/core/tree';
 import { handleRouteErrorSimple } from '@/lib/errors';
 import { toNextResponse } from '../_mindos-adapter';
 
@@ -26,6 +27,10 @@ function createSettingsServices(): MindosSettingsServices {
     parseProviders,
     getEmbeddingStatus,
     invalidateCache,
+    readSearchIgnoreFile: (mindRoot) => mindRoot ? readMindosIgnoreFile(mindRoot) : [],
+    writeSearchIgnoreFile: (mindRoot, ignoredPaths) => {
+      writeMindosIgnoreFile(mindRoot, ignoredPaths);
+    },
     providerEnv: {
       ids: [...ALL_PROVIDER_IDS],
       getApiKeyEnvVar,

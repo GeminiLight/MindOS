@@ -182,6 +182,68 @@ describe('MindOS server contract: settings, embedding, protocols', () => {
     expect(invalidated).toBe(true);
   });
 
+  it('merges search ignore settings with .mindosignore and writes explicit updates back', () => {
+    let settings: any = {
+      ai: { activeProvider: 'openai', providers: [] },
+      mindRoot: '/mind',
+      searchIgnoredPaths: ['Archive'],
+    };
+    let writtenIgnore: string[] = [];
+    let invalidated = false;
+
+    const readRes = handleSettingsGet({
+      readSettings: () => settings,
+      writeSettings: (next) => { settings = next; },
+      readWebSearchConfig: () => ({}),
+      writeWebSearchConfig: () => undefined,
+      parseProviders: (providers) => providers,
+      getEmbeddingStatus: () => ({}),
+      invalidateCache: () => { invalidated = true; },
+      readSearchIgnoreFile: () => ['node_modules', 'Private Notes/'],
+      writeSearchIgnoreFile: (_mindRoot, ignoredPaths) => {
+        writtenIgnore = ignoredPaths;
+      },
+      providerEnv: {
+        ids: [],
+        getApiKeyEnvVar: () => undefined,
+        getApiKeyFromEnv: () => undefined,
+      },
+    });
+
+    expect(readRes).toMatchObject({
+      status: 200,
+      body: {
+        searchIgnoredPaths: ['Archive', 'node_modules', 'Private Notes'],
+      },
+    });
+
+    const writeRes = handleSettingsPost({
+      searchIgnoredPaths: ['Archive/', '  Drafts  ', '../bad', '# comment', 'Archive'],
+    }, {
+      readSettings: () => settings,
+      writeSettings: (next) => { settings = next; },
+      readWebSearchConfig: () => ({}),
+      writeWebSearchConfig: () => undefined,
+      parseProviders: (providers) => providers,
+      getEmbeddingStatus: () => ({}),
+      invalidateCache: () => { invalidated = true; },
+      readSearchIgnoreFile: () => ['node_modules'],
+      writeSearchIgnoreFile: (_mindRoot, ignoredPaths) => {
+        writtenIgnore = ignoredPaths;
+      },
+      providerEnv: {
+        ids: [],
+        getApiKeyEnvVar: () => undefined,
+        getApiKeyFromEnv: () => undefined,
+      },
+    });
+
+    expect(writeRes).toEqual({ status: 200, body: { ok: true } });
+    expect(settings.searchIgnoredPaths).toEqual(['Archive', 'Drafts']);
+    expect(writtenIgnore).toEqual(['Archive', 'Drafts']);
+    expect(invalidated).toBe(true);
+  });
+
   it('normalizes settings writes so activeProvider points to a provider entry id', () => {
     let settings: any = {
       ai: {

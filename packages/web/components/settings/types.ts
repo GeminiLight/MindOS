@@ -48,6 +48,7 @@ export interface SettingsData {
     enableAgentsDir?: boolean;
     custom?: string[];
   };
+  searchIgnoredPaths?: string[];
   agentRuntimeEnv?: AgentRuntimeEnvironmentSettings;
   connectionMode?: {
     cli: boolean;

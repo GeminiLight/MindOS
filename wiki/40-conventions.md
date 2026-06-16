@@ -1,4 +1,4 @@
-<!-- Last verified: 2026-04-28 | Current version: v1.0 -->
+<!-- Last verified: 2026-06-16 | Current version: v1.1 -->
 
 # 编码约定 (Conventions)
 
@@ -34,6 +34,44 @@
 | CLI 模块 | kebab-case.js | `mcp-install.js`, `mcp-spawn.js` |
 | API Routes | kebab-case 目录 | `api/recent-files/route.ts` |
 | CSS 类 | Tailwind utility | 不写自定义 CSS class |
+
+## Markdown 元数据约定
+
+Markdown 笔记的文件内 metadata 统一使用顶部 YAML front matter，并遵守 `MindOS Properties v1`。完整规则见 `wiki/specs/spec-note-metadata-schema.md`。
+
+`type` 只表达知识生命周期，v1 只能使用：
+
+```text
+type: material | note | log
+```
+
+不要为来源渠道、场景或正文模板新增 `type`。`web-clip`、`readwise`、`voice-memo`、`session`、`meeting`、`daily`、`decision`、`rule` 等都通过 `source_type`、`source_platform`、正文结构或目录表达；只有明确需要跨库筛选时才补 `tags`。
+
+新写入 Markdown 时优先使用这些 canonical 字段：
+
+```yaml
+---
+title: "Title"
+description: "Optional short description"
+type: note
+status: active
+created: 2026-06-16
+tags:
+  - example
+---
+```
+
+素材型内容使用：
+
+```yaml
+type: material
+source_type: web
+source_url: "https://example.com"
+source_platform: github
+captured_at: 2026-06-16T10:30:00+08:00
+```
+
+兼容读取旧字段，但新写入不再使用 `source` 表示 URL，不再写 `clipped` / `clipped_at` / `saved_at`，统一写 `source_url` 和 `captured_at`。`description` 可选，缺失时由正文或索引层自动生成。不要把动态同步状态、索引状态、权限状态、摘要正文、密钥、token 或本机绝对路径写入 front matter。
 
 ## Git 提交
 

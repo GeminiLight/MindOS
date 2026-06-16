@@ -6,10 +6,12 @@ import {
   listDirectoriesFromMindRoot,
   listMindSpacesFromMindRoot,
   readLinesFromMindRoot,
+  readMindosIgnoreFile,
   readRuntimeSettings,
   readTextFileFromMindRoot,
   searchMindRoot,
   getSkillRootsFromRuntime,
+  writeMindosIgnoreFile,
   writeRuntimeSettings,
   type MindosRuntimeOptions,
   type MindosRuntimeSettings,
@@ -933,6 +935,10 @@ function createHttpSettingsServices(services: MindosHttpServices): MindosSetting
     parseProviders: parseMindosProviders,
     getEmbeddingStatus: () => ({ enabled: false, ready: false, building: false, docCount: 0 }),
     invalidateCache: () => {},
+    readSearchIgnoreFile: (mindRoot) => mindRoot ? readMindosIgnoreFile(mindRoot) : [],
+    writeSearchIgnoreFile: (mindRoot, ignoredPaths) => {
+      writeMindosIgnoreFile(mindRoot, ignoredPaths);
+    },
     providerEnv: {
       ids: Object.keys(MINDOS_PROVIDER_PRESETS),
       getApiKeyEnvVar: (id) => MINDOS_PROVIDER_PRESETS[id]?.envKeys[0],

@@ -4,6 +4,7 @@ import {
   type AgentRuntimeEnvironmentSettings,
 } from '../../agent-runtime/runtime-env.js';
 import { errorResponse, json, type MindosServerResponse } from '../response.js';
+import { normalizeSearchIgnoredPaths } from '../search-ignore.js';
 
 export type MindosSettingsAi = {
   activeProvider?: string;
@@ -35,6 +36,7 @@ export type MindosServerSettings = {
   mcpPort?: number;
   agent?: unknown;
   skillPaths?: Record<string, unknown>;
+  searchIgnoredPaths?: string[];
   agentRuntimeEnv?: AgentRuntimeEnvironmentSettings;
   startMode?: string;
   connectionMode?: MindosConnectionMode;
@@ -63,6 +65,8 @@ export type MindosSettingsServices = {
   parseProviders(providers: unknown, activeProvider?: unknown): unknown;
   getEmbeddingStatus(): unknown;
   invalidateCache(): void;
+  readSearchIgnoreFile?(mindRoot?: string): string[];
+  writeSearchIgnoreFile?(mindRoot: string, ignoredPaths: string[]): void;
   providerEnv: MindosProviderEnvServices;
 };
 
@@ -94,6 +98,7 @@ export type MindosSettingsPayload = {
   mcpPort: number;
   agent: unknown;
   skillPaths: Record<string, unknown>;
+  searchIgnoredPaths: string[];
   agentRuntimeEnv: AgentRuntimeEnvironmentSettings;
   envOverrides: Record<string, boolean>;
   envValues: Record<string, string>;
@@ -170,6 +175,18 @@ function resolveSkillPathsPatch(current: Record<string, unknown> | undefined, in
   return next;
 }
 
+function resolveSearchIgnoredPaths(
+  current: unknown,
+  fromFile: unknown,
+  incoming: unknown,
+): string[] {
+  if (incoming !== undefined) return normalizeSearchIgnoredPaths(incoming);
+  return normalizeSearchIgnoredPaths([
+    ...normalizeSearchIgnoredPaths(current),
+    ...normalizeSearchIgnoredPaths(fromFile),
+  ]);
+}
+
 function resolveWebSearchPatch(incoming: unknown, current: MindosWebSearchConfig): MindosWebSearchConfig | undefined {
   if (!incoming || typeof incoming !== 'object') return undefined;
   const ws = incoming as Record<string, unknown>;
@@ -232,6 +249,7 @@ export function handleSettingsGet(services: MindosSettingsServices): MindosServe
     }
 
     const webSearch = services.readWebSearchConfig();
+    const fileIgnoredPaths = services.readSearchIgnoreFile?.(settings.mindRoot) ?? [];
     return json({
       ai: {
         activeProvider,
@@ -253,6 +271,7 @@ export function handleSettingsGet(services: MindosSettingsServices): MindosServe
       mcpPort: settings.mcpPort ?? 8781,
       agent: settings.agent ?? {},
       skillPaths: settings.skillPaths ?? {},
+      searchIgnoredPaths: resolveSearchIgnoredPaths(settings.searchIgnoredPaths, fileIgnoredPaths, undefined),
       agentRuntimeEnv: settings.agentRuntimeEnv ?? {},
       envOverrides,
       envValues,
@@ -279,6 +298,12 @@ export function handleSettingsPost(
     const currentWebSearch = services.readWebSearchConfig();
     const nextWebSearch = resolveWebSearchPatch(body.webSearch, currentWebSearch);
     if (nextWebSearch) services.writeWebSearchConfig(nextWebSearch);
+    const currentFileIgnoredPaths = services.readSearchIgnoreFile?.(current.mindRoot) ?? [];
+    const nextSearchIgnoredPaths = resolveSearchIgnoredPaths(
+      current.searchIgnoredPaths,
+      currentFileIgnoredPaths,
+      body.searchIgnoredPaths,
+    );
 
     const resolvedAuthToken = body.authToken === '' ? '' : current.authToken;
     const resolvedWebPassword = typeof body.webPassword === 'string'
@@ -290,6 +315,7 @@ export function handleSettingsPost(
       mindRoot: body.mindRoot ?? current.mindRoot,
       agent: body.agent ?? current.agent,
       skillPaths: resolveSkillPathsPatch(current.skillPaths, body.skillPaths),
+      searchIgnoredPaths: nextSearchIgnoredPaths,
       agentRuntimeEnv: Object.prototype.hasOwnProperty.call(body, 'agentRuntimeEnv')
         ? (parseAgentRuntimeEnvironmentSettings(body.agentRuntimeEnv) ?? {})
         : current.agentRuntimeEnv,
@@ -308,13 +334,20 @@ export function handleSettingsPost(
     ensureWebSessionSecret(next, current.webPassword);
 
     services.writeSettings(next);
+    if (body.searchIgnoredPaths !== undefined && next.mindRoot) {
+      services.writeSearchIgnoreFile?.(next.mindRoot, nextSearchIgnoredPaths);
+    }
     if (JSON.stringify(next.ai) !== JSON.stringify(current.ai)) {
       const latest = services.readSettings();
       if (latest.baseUrlCompat && Object.keys(latest.baseUrlCompat).length > 0) {
         services.writeSettings({ ...latest, baseUrlCompat: {} });
       }
     }
-    if (next.mindRoot !== current.mindRoot) services.invalidateCache();
+    if (
+      next.mindRoot !== current.mindRoot
+      || body.searchIgnoredPaths !== undefined
+      || JSON.stringify(nextSearchIgnoredPaths) !== JSON.stringify(resolveSearchIgnoredPaths(current.searchIgnoredPaths, currentFileIgnoredPaths, undefined))
+    ) services.invalidateCache();
 
     return json({ ok: true });
   } catch (error) {

@@ -2,6 +2,12 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSy
 import { homedir } from 'node:os';
 import { dirname, extname, join, relative, resolve } from 'node:path';
 import { resolveExistingSafe, resolveSafe } from '../foundation/security/index.js';
+import {
+  createMindosSearchIgnoreMatcher,
+  readMindosIgnoreFile,
+  writeMindosIgnoreFile,
+  type MindosSearchIgnoreMatcher,
+} from './search-ignore.js';
 
 export const MINDOS_ALLOWED_FILE_EXTENSIONS = new Set([
   '.md', '.csv', '.json', '.pdf',
@@ -13,14 +19,42 @@ export const MINDOS_ALLOWED_FILE_EXTENSIONS = new Set([
 export const MINDOS_IGNORED_DIRS = new Set([
   '.git',
   'node_modules',
+  '__pycache__',
   'app',
   '.next',
   '.DS_Store',
+  '.cache',
+  '.cc-branch',
+  '.claude',
+  '.cursor',
+  '.idea',
+  '.mypy_cache',
+  '.nuxt',
+  '.output',
+  '.parcel-cache',
+  '.pnpm-store',
+  '.pytest_cache',
+  '.ruff_cache',
+  '.svelte-kit',
+  '.turbo',
+  '.venv',
+  '.vite',
+  '.vscode',
+  '.windsurf',
+  '.yarn',
   '.media',
   'mcp',
   '.mindos',
   '.obsidian',
   '.plugins',
+  'build',
+  'coverage',
+  'dist',
+  'env',
+  'out',
+  'target',
+  'venv',
+  'vendor',
 ]);
 
 export type MindosRuntimeFileNode = {
@@ -39,6 +73,7 @@ export type MindosRuntimeSettings = {
     enableAgentsDir?: boolean;
     custom?: string[];
   };
+  searchIgnoredPaths?: string[];
   installedSkillAgents?: Array<{ agent: string; skill: string; path: string }>;
   [key: string]: unknown;
 };
@@ -124,8 +159,9 @@ export function readLinesFromMindRoot(mindRoot: string, filePath: string): strin
 export function listMindSpacesFromMindRoot(mindRoot: string): string[] {
   const root = resolve(mindRoot);
   if (!existsSync(root)) return [];
+  const isIgnored = createMindosSearchIgnoreMatcher(root, MINDOS_IGNORED_DIRS);
   return readdirSync(root, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory() && !MINDOS_IGNORED_DIRS.has(entry.name))
+    .filter((entry) => entry.isDirectory() && !isIgnored(entry.name))
     .map((entry) => entry.name)
     .sort((a, b) => a.localeCompare(b));
 }
@@ -443,20 +479,36 @@ function walkMindRoot(
   visit: (absolutePath: string, relativePath: string, dirent: Dirent) => void,
   options: { includeDirectories?: boolean; includeFiles?: boolean } = {},
 ) {
+  const isIgnored = createMindosSearchIgnoreMatcher(root, MINDOS_IGNORED_DIRS);
+  walkMindRootWithMatcher(root, dir, visit, options, isIgnored);
+}
+
+function walkMindRootWithMatcher(
+  root: string,
+  dir: string,
+  visit: (absolutePath: string, relativePath: string, dirent: Dirent) => void,
+  options: { includeDirectories?: boolean; includeFiles?: boolean },
+  isIgnored: MindosSearchIgnoreMatcher,
+) {
   const includeDirectories = options.includeDirectories === true;
   const includeFiles = options.includeFiles !== false;
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    if (entry.isDirectory() && MINDOS_IGNORED_DIRS.has(entry.name)) continue;
     const abs = join(dir, entry.name);
     const rel = relative(root, abs).split('\\').join('/');
+    if (isIgnored(rel)) continue;
     if (entry.isDirectory()) {
       if (includeDirectories) visit(abs, rel, entry);
-      walkMindRoot(root, abs, visit, options);
+      walkMindRootWithMatcher(root, abs, visit, options, isIgnored);
       continue;
     }
     if (includeFiles && entry.isFile()) visit(abs, rel, entry);
   }
 }
+
+export {
+  readMindosIgnoreFile,
+  writeMindosIgnoreFile,
+};
 
 export function collectFileStatsFromMindRoot(mindRoot: string): MindosRuntimeFileStat[] {
   const root = resolve(mindRoot);

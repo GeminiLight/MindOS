@@ -81,4 +81,29 @@ describe('readSettings activeProvider normalization', () => {
       custom: ['/extra-skills', 'C:\\Users\\Ada\\.codex\\skills'],
     });
   });
+
+  it('normalizes search ignored paths when reading config', async () => {
+    fs.writeFileSync(configPath, JSON.stringify({
+      ai: {
+        activeProvider: 'p_openai01',
+        providers: [
+          { id: 'p_openai01', name: 'OpenAI', protocol: 'openai', apiKey: '', model: 'gpt-5.4', baseUrl: '' },
+        ],
+      },
+      mindRoot: '/tmp/mind',
+      searchIgnoredPaths: [
+        'Archive/',
+        './Archive',
+        '# comment',
+        '!Archive',
+        '../outside',
+        'Scratch/*.md',
+      ],
+    }), 'utf-8');
+
+    const { readSettings } = await import('@/lib/settings');
+    const settings = readSettings();
+
+    expect(settings.searchIgnoredPaths).toEqual(['Archive', 'Scratch/*.md']);
+  });
 });

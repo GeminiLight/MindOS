@@ -3,6 +3,7 @@ import path from 'path';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkTempMindRoot, cleanupMindRoot, seedFile } from './helpers';
 import { SearchIndex } from '@/lib/core/search-index';
+import { writeMindosIgnoreFile } from '@/lib/core/tree';
 
 vi.mock('@/lib/core/pdf-text', () => ({
   extractPdfText: vi.fn(() => 'leaked pdf token'),
@@ -229,6 +230,45 @@ describe('SearchIndex', () => {
 
       expect(index.getFileCount()).toBe(5);
       expect(index.getCandidates('blockchain')).toContain('Notes/fresh.md');
+    });
+
+    it('addFile and updateFile ignore dependency and generated paths', () => {
+      index.rebuild(mindRoot);
+      expect(index.getFileCount()).toBe(4);
+
+      seedFile(mindRoot, 'node_modules/pkg/index.md', 'dependency blockchain content');
+      seedFile(mindRoot, 'dist/generated.md', 'generated blockchain content');
+      index.addFile(mindRoot, 'node_modules/pkg/index.md');
+      index.addFile(mindRoot, 'dist/generated.md');
+
+      expect(index.getFileCount()).toBe(4);
+      expect(index.getCandidates('blockchain')).toHaveLength(0);
+
+      seedFile(mindRoot, 'Profile/Identity.md', 'safe before');
+      index.updateFile(mindRoot, 'Profile/Identity.md');
+      expect(index.getCandidates('safe')).toContain('Profile/Identity.md');
+      index.updateFile(mindRoot, 'node_modules/pkg/index.md');
+
+      expect(index.getCandidates('dependency')).toHaveLength(0);
+      expect(index.getCandidates('safe')).toContain('Profile/Identity.md');
+    });
+
+    it('addFile and updateFile remove paths ignored by .mindosignore', () => {
+      index.rebuild(mindRoot);
+      writeMindosIgnoreFile(mindRoot, ['Notes/private/']);
+      seedFile(mindRoot, 'Notes/private/secret.md', 'classified orchid content');
+      index.addFile(mindRoot, 'Notes/private/secret.md');
+
+      expect(index.getCandidates('orchid')).toHaveLength(0);
+      expect(index.getFileCount()).toBe(4);
+
+      seedFile(mindRoot, 'Profile/Identity.md', 'safe visible orchid');
+      index.updateFile(mindRoot, 'Profile/Identity.md');
+      expect(index.getCandidates('orchid')).toEqual(['Profile/Identity.md']);
+
+      index.updateFile(mindRoot, 'Notes/private/secret.md');
+      expect(index.getCandidates('classified')).toHaveLength(0);
+      expect(index.getCandidates('orchid')).toEqual(['Profile/Identity.md']);
     });
 
     it('addFile ignores PDF paths that resolve through symlinks outside mindRoot', () => {

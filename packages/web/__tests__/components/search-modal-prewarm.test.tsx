@@ -94,6 +94,7 @@ describe('SearchModal prewarm', () => {
       root.unmount();
     });
     document.body.removeChild(host);
+    vi.useRealTimers();
   });
 
   it('prewarms search when the modal opens', async () => {
@@ -221,5 +222,51 @@ describe('SearchModal prewarm', () => {
     expect(host.textContent).toContain('beta.md');
     expect(host.textContent).not.toContain('alpha.md');
     expect(apiFetchMock).toHaveBeenCalledWith('/api/search?q=beta', expect.objectContaining({ cache: 'no-store' }));
+  });
+
+  it('aborts stale search requests when the clear button is clicked', async () => {
+    vi.useFakeTimers();
+    let firstSearchSignal: AbortSignal | undefined;
+    let firstSearchResolve: ((value: Array<{ path: string; snippet: string; score: number }>) => void) | undefined;
+
+    apiFetchMock.mockImplementation((url: string, init?: RequestInit) => {
+      if (url === '/api/search/prewarm') {
+        return Promise.resolve({ warmed: true, cacheState: 'built', documentCount: 42 });
+      }
+      if (url === '/api/search?q=alpha') {
+        firstSearchSignal = init?.signal as AbortSignal | undefined;
+        return new Promise<Array<{ path: string; snippet: string; score: number }>>((resolve) => {
+          firstSearchResolve = resolve;
+        });
+      }
+      return Promise.resolve({ ok: true, surfaces: [] });
+    });
+
+    await act(async () => {
+      root.render(<SearchModal open={true} onClose={() => {}} />);
+      await Promise.resolve();
+    });
+
+    const input = host.querySelector('input[type="text"]') as HTMLInputElement;
+    await act(async () => {
+      setInputValue(input, 'alpha');
+    });
+    await advance(300);
+    expect(firstSearchSignal?.aborted).toBe(false);
+
+    const clearButton = host.querySelector('button[aria-label="Clear search"]') as HTMLButtonElement;
+    await act(async () => {
+      clearButton.click();
+      await Promise.resolve();
+    });
+    expect(firstSearchSignal?.aborted).toBe(true);
+
+    await act(async () => {
+      firstSearchResolve?.([{ path: 'alpha.md', snippet: 'alpha note', score: 10 }]);
+      await Promise.resolve();
+    });
+
+    expect(input.value).toBe('');
+    expect(host.textContent).not.toContain('alpha.md');
   });
 });

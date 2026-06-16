@@ -10,6 +10,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkTempMindRoot, cleanupMindRoot, seedFile } from './helpers';
 import { getEmbeddings, getEmbedding } from '@/lib/core/embedding-provider';
 import { EmbeddingIndex } from '@/lib/core/embedding-index';
+import { writeMindosIgnoreFile } from '@/lib/core/tree';
 
 vi.mock('@/lib/core/embedding-provider', () => ({
   getEmbeddingConfig: vi.fn(() => ({ provider: 'local', model: 'test-model', baseUrl: '', apiKey: '' })),
@@ -98,6 +99,18 @@ describe('EmbeddingIndex content-hash dedup', () => {
     expect(index.getDocCount()).toBe(3);
   });
 
+  it('updateFile removes files ignored by .mindosignore', async () => {
+    await index.rebuild(mindRoot);
+    seedFile(mindRoot, 'private/secret.md', 'fresh private content about grapes');
+    await index.updateFile(mindRoot, 'private/secret.md');
+    expect(index.getDocCount()).toBe(3);
+
+    writeMindosIgnoreFile(mindRoot, ['private/']);
+    await index.updateFile(mindRoot, 'private/secret.md');
+    expect(index.getDocCount()).toBe(2);
+    expect(getEmbedding).toHaveBeenCalledTimes(1);
+  });
+
   it('updateFile tolerates a missing file (no crash, no embedding call)', async () => {
     await index.rebuild(mindRoot);
     await index.updateFile(mindRoot, 'does-not-exist.md');
@@ -121,5 +134,28 @@ describe('EmbeddingIndex content-hash dedup', () => {
     vi.mocked(getEmbeddings).mockClear();
     await fresh.rebuild(mindRoot);
     expect(getEmbeddings).not.toHaveBeenCalled();
+  });
+
+  it('filters ignored or stale paths from a persisted embedding index', async () => {
+    await index.rebuild(mindRoot);
+    seedFile(mindRoot, 'node_modules/pkg/index.md', 'dependency content should stay ignored');
+
+    const persistedPath = path.join(persistDir, 'embedding-index.json');
+    const persisted = JSON.parse(fs.readFileSync(persistedPath, 'utf-8')) as {
+      docCount: number;
+      vectors: Record<string, number[]>;
+      hashes: Record<string, string>;
+    };
+    persisted.docCount = 3;
+    persisted.vectors['node_modules/pkg/index.md'] = [1, 0, 0];
+    persisted.hashes['node_modules/pkg/index.md'] = 'stale-ignored-hash';
+    fs.writeFileSync(persistedPath, JSON.stringify(persisted), 'utf-8');
+
+    const fresh = new EmbeddingIndex({ persistDir });
+    expect(fresh.load(mindRoot)).toBe(true);
+
+    expect(fresh.getDocCount()).toBe(2);
+    expect(fresh.searchByVector(new Float32Array([1, 0, 0])).map((result) => result.path))
+      .not.toContain('node_modules/pkg/index.md');
   });
 });

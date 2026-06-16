@@ -13,17 +13,45 @@ function toPosix(p: string): string {
   return process.platform === 'win32' ? p.replace(/\\/g, '/') : p;
 }
 
-const DEFAULT_IGNORED_DIRS = new Set([
+export const DEFAULT_IGNORED_DIRS = new Set([
   '.git',
   'node_modules',
+  '__pycache__',
   'app',
   '.next',
   '.DS_Store',
+  '.cache',
+  '.cc-branch',
+  '.claude',
+  '.cursor',
+  '.idea',
+  '.mypy_cache',
+  '.nuxt',
+  '.output',
+  '.parcel-cache',
+  '.pnpm-store',
+  '.pytest_cache',
+  '.ruff_cache',
+  '.svelte-kit',
+  '.turbo',
+  '.venv',
+  '.vite',
+  '.vscode',
+  '.windsurf',
+  '.yarn',
   'mcp',
   '.media',
   '.mindos',
   '.obsidian',
   '.plugins',
+  'build',
+  'coverage',
+  'dist',
+  'env',
+  'out',
+  'target',
+  'venv',
+  'vendor',
 ]);
 const DEFAULT_ALLOWED_EXTENSIONS = new Set([
   '.md', '.csv', '.pdf',
@@ -32,10 +60,162 @@ const DEFAULT_ALLOWED_EXTENSIONS = new Set([
   '.mp4', '.webm', '.mov', '.mkv',
 ]);
 const SYSTEM_FILES = new Set(['INSTRUCTION.md', 'README.md', 'CONFIG.json', 'CHANGELOG.md']);
+export const MINDOS_IGNORE_FILE = '.mindosignore';
 
 export interface TreeOptions {
   ignoredDirs?: Set<string>;
   allowedExtensions?: Set<string>;
+  ignoredPaths?: string[];
+}
+
+export type SearchIgnoredPathMatcher = (relativePath: string, isDirectory?: boolean) => boolean;
+
+function normalizePosixPath(input: string): string {
+  return input.replace(/\\/g, '/').replace(/\/+/g, '/');
+}
+
+function normalizeSearchIgnoredPath(input: string): string | null {
+  let value = normalizePosixPath(input.trim());
+  if (!value || value.startsWith('#')) return null;
+  // Negation is intentionally unsupported for the first MindOS ignore format.
+  // Treating it as a literal path would surprise users more than skipping it.
+  if (value.startsWith('!')) return null;
+  value = value.replace(/^\.\//, '').replace(/^\/+/, '').replace(/\/+$/, '');
+  if (!value || value === '.' || value === '..') return null;
+  if (value.split('/').includes('..')) return null;
+  return value;
+}
+
+export function normalizeSearchIgnoredPaths(input: unknown): string[] {
+  if (!Array.isArray(input)) return [];
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const item of input) {
+    if (typeof item !== 'string') continue;
+    const normalized = normalizeSearchIgnoredPath(item);
+    if (!normalized || seen.has(normalized)) continue;
+    seen.add(normalized);
+    result.push(normalized);
+  }
+  return result;
+}
+
+export function parseSearchIgnoredPathsContent(content: string): string[] {
+  return normalizeSearchIgnoredPaths(content.split(/\r?\n/));
+}
+
+export function readMindosIgnoreFile(mindRoot: string): string[] {
+  try {
+    const content = fs.readFileSync(path.join(mindRoot, MINDOS_IGNORE_FILE), 'utf-8');
+    return parseSearchIgnoredPathsContent(content);
+  } catch {
+    return [];
+  }
+}
+
+export function writeMindosIgnoreFile(mindRoot: string, ignoredPaths: string[]): string[] {
+  const normalized = normalizeSearchIgnoredPaths(ignoredPaths);
+  const content = [
+    '# MindOS search ignored paths',
+    '# One directory name, relative path, or simple glob per line.',
+    ...normalized,
+    '',
+  ].join('\n');
+  fs.mkdirSync(mindRoot, { recursive: true });
+  fs.writeFileSync(path.join(mindRoot, MINDOS_IGNORE_FILE), content, 'utf-8');
+  return normalized;
+}
+
+function hasGlob(rule: string): boolean {
+  return /[*?[]/.test(rule);
+}
+
+function escapeRegexChar(char: string): string {
+  return /[\\^$+?.()|{}[\]]/.test(char) ? `\\${char}` : char;
+}
+
+function globToRegExp(pattern: string): RegExp {
+  let source = '^';
+  for (let i = 0; i < pattern.length; i += 1) {
+    const char = pattern.charAt(i);
+    const next = pattern.charAt(i + 1);
+    if (char === '*' && next === '*') {
+      source += '.*';
+      i += 1;
+      continue;
+    }
+    if (char === '*') {
+      source += '[^/]*';
+      continue;
+    }
+    if (char === '?') {
+      source += '[^/]';
+      continue;
+    }
+    source += escapeRegexChar(char);
+  }
+  source += '$';
+  return new RegExp(source);
+}
+
+function createPatternMatcher(rule: string): SearchIgnoredPathMatcher {
+  if (hasGlob(rule)) {
+    const regex = globToRegExp(rule);
+    const basenameRegex = rule.includes('/') ? null : globToRegExp(rule);
+    const deepPrefix = rule.endsWith('/**') ? rule.slice(0, -3) : '';
+    return (relativePath) => {
+      const normalized = normalizePosixPath(relativePath).replace(/^\/+/, '');
+      if (deepPrefix && (normalized === deepPrefix || normalized.startsWith(`${deepPrefix}/`))) return true;
+      if (regex.test(normalized)) return true;
+      if (!basenameRegex) return false;
+      const basename = normalized.split('/').pop() ?? normalized;
+      return basenameRegex.test(basename);
+    };
+  }
+
+  if (rule.includes('/')) {
+    return (relativePath) => {
+      const normalized = normalizePosixPath(relativePath).replace(/^\/+/, '').replace(/\/+$/, '');
+      return normalized === rule || normalized.startsWith(`${rule}/`);
+    };
+  }
+
+  return (relativePath) => {
+    const normalized = normalizePosixPath(relativePath).replace(/^\/+/, '');
+    return normalized.split('/').includes(rule);
+  };
+}
+
+export function createSearchIgnoreMatcher(
+  mindRoot: string,
+  opts: Pick<TreeOptions, 'ignoredDirs' | 'ignoredPaths'> = {},
+): SearchIgnoredPathMatcher {
+  const ignoredDirs = opts.ignoredDirs ?? DEFAULT_IGNORED_DIRS;
+  const customRules = normalizeSearchIgnoredPaths([
+    ...readMindosIgnoreFile(mindRoot),
+    ...(opts.ignoredPaths ?? []),
+  ]);
+  const customMatchers = customRules.map(createPatternMatcher);
+
+  return (relativePath: string) => {
+    const normalized = normalizePosixPath(relativePath).replace(/^\/+/, '').replace(/\/+$/, '');
+    if (!normalized || normalized === '.') return false;
+    if (normalized.split('/').some((segment) => ignoredDirs.has(segment))) return true;
+    return customMatchers.some((matcher) => matcher(normalized));
+  };
+}
+
+export function isIgnoredTreePath(
+  filePath: string,
+  ignoredDirs: Set<string> = DEFAULT_IGNORED_DIRS,
+  ignoredPaths: string[] = [],
+): boolean {
+  const normalized = normalizePosixPath(filePath).replace(/^\/+/, '').replace(/\/+$/, '');
+  if (!normalized || normalized === '.') return false;
+  if (normalized.split('/').some((segment) => ignoredDirs.has(segment))) return true;
+  return normalizeSearchIgnoredPaths(ignoredPaths)
+    .map(createPatternMatcher)
+    .some((matcher) => matcher(normalized));
 }
 
 function isPathWithinRoot(resolved: string, root: string): boolean {
@@ -72,7 +252,49 @@ export function getFileTree(
   const start = resolveStartDirectory(mindRoot, dirPath);
   if (!start) return [];
   const { root, dir } = start;
-  const ignoredDirs = opts.ignoredDirs ?? DEFAULT_IGNORED_DIRS;
+  const allowedExtensions = opts.allowedExtensions ?? DEFAULT_ALLOWED_EXTENSIONS;
+  const isIgnored = createSearchIgnoreMatcher(root, opts);
+
+  let entries: fs.Dirent[];
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+
+  const nodes: FileNode[] = [];
+  for (const entry of entries) {
+    const fullPath = path.join(dir, entry.name);
+    const relativePath = toPosix(path.relative(root, fullPath));
+
+    if (entry.isDirectory()) {
+      if (isIgnored(relativePath, true)) continue;
+      const children = getFileTreeForResolvedRoot(root, fullPath, opts, isIgnored);
+      if (children.length > 0) {
+        nodes.push({ name: entry.name, path: relativePath, type: 'directory', children });
+      }
+    } else if (entry.isFile()) {
+      const ext = path.extname(entry.name).toLowerCase();
+      if (allowedExtensions.has(ext) && !isIgnored(relativePath, false)) {
+        nodes.push({ name: entry.name, path: relativePath, type: 'file', extension: ext });
+      }
+    }
+  }
+
+  nodes.sort((a, b) => {
+    if (a.type !== b.type) return a.type === 'directory' ? -1 : 1;
+    return a.name.localeCompare(b.name);
+  });
+
+  return nodes;
+}
+
+function getFileTreeForResolvedRoot(
+  root: string,
+  dir: string,
+  opts: TreeOptions,
+  isIgnored: SearchIgnoredPathMatcher,
+): FileNode[] {
   const allowedExtensions = opts.allowedExtensions ?? DEFAULT_ALLOWED_EXTENSIONS;
 
   let entries: fs.Dirent[];
@@ -88,14 +310,14 @@ export function getFileTree(
     const relativePath = toPosix(path.relative(root, fullPath));
 
     if (entry.isDirectory()) {
-      if (ignoredDirs.has(entry.name)) continue;
-      const children = getFileTree(mindRoot, fullPath, opts);
+      if (isIgnored(relativePath, true)) continue;
+      const children = getFileTreeForResolvedRoot(root, fullPath, opts, isIgnored);
       if (children.length > 0) {
         nodes.push({ name: entry.name, path: relativePath, type: 'directory', children });
       }
     } else if (entry.isFile()) {
       const ext = path.extname(entry.name).toLowerCase();
-      if (allowedExtensions.has(ext)) {
+      if (allowedExtensions.has(ext) && !isIgnored(relativePath, false)) {
         nodes.push({ name: entry.name, path: relativePath, type: 'file', extension: ext });
       }
     }
@@ -120,7 +342,40 @@ export function collectAllFiles(
   const start = resolveStartDirectory(mindRoot, dirPath);
   if (!start) return [];
   const { root, dir } = start;
-  const ignoredDirs = opts.ignoredDirs ?? DEFAULT_IGNORED_DIRS;
+  const allowedExtensions = opts.allowedExtensions ?? DEFAULT_ALLOWED_EXTENSIONS;
+  const isIgnored = createSearchIgnoreMatcher(root, opts);
+
+  let entries: fs.Dirent[];
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+
+  const files: string[] = [];
+  for (const entry of entries) {
+    const fullPath = path.join(dir, entry.name);
+    const relativePath = toPosix(path.relative(root, fullPath));
+    if (entry.isDirectory()) {
+      if (isIgnored(relativePath, true)) continue;
+      files.push(...collectAllFilesForResolvedRoot(root, fullPath, opts, isIgnored));
+    } else if (entry.isFile()) {
+      if (dir === root && SYSTEM_FILES.has(entry.name)) continue;
+      const ext = path.extname(entry.name).toLowerCase();
+      if (allowedExtensions.has(ext) && !isIgnored(relativePath, false)) {
+        if (!isDefaultMindSystemScaffoldFile(root, relativePath)) files.push(relativePath);
+      }
+    }
+  }
+  return files;
+}
+
+function collectAllFilesForResolvedRoot(
+  root: string,
+  dir: string,
+  opts: TreeOptions,
+  isIgnored: SearchIgnoredPathMatcher,
+): string[] {
   const allowedExtensions = opts.allowedExtensions ?? DEFAULT_ALLOWED_EXTENSIONS;
 
   let entries: fs.Dirent[];
@@ -133,14 +388,14 @@ export function collectAllFiles(
   const files: string[] = [];
   for (const entry of entries) {
     const fullPath = path.join(dir, entry.name);
+    const relativePath = toPosix(path.relative(root, fullPath));
     if (entry.isDirectory()) {
-      if (ignoredDirs.has(entry.name)) continue;
-      files.push(...collectAllFiles(mindRoot, fullPath, opts));
+      if (isIgnored(relativePath, true)) continue;
+      files.push(...collectAllFilesForResolvedRoot(root, fullPath, opts, isIgnored));
     } else if (entry.isFile()) {
       if (dir === root && SYSTEM_FILES.has(entry.name)) continue;
       const ext = path.extname(entry.name).toLowerCase();
-      if (allowedExtensions.has(ext)) {
-        const relativePath = toPosix(path.relative(root, fullPath));
+      if (allowedExtensions.has(ext) && !isIgnored(relativePath, false)) {
         if (!isDefaultMindSystemScaffoldFile(root, relativePath)) files.push(relativePath);
       }
     }
@@ -261,8 +516,8 @@ export async function collectAllFilesAsync(
   const start = resolveStartDirectory(mindRoot, dirPath);
   if (!start) return [];
   const { root, dir } = start;
-  const ignoredDirs = opts.ignoredDirs ?? DEFAULT_IGNORED_DIRS;
   const allowedExtensions = opts.allowedExtensions ?? DEFAULT_ALLOWED_EXTENSIONS;
+  const isIgnored = createSearchIgnoreMatcher(root, opts);
 
   let entries: fs.Dirent[];
   try {
@@ -276,14 +531,15 @@ export async function collectAllFilesAsync(
   const subdirPromises: Promise<string[]>[] = [];
   for (const entry of entries) {
     const fullPath = path.join(dir, entry.name);
+    const relativePath = toPosix(path.relative(root, fullPath));
     if (entry.isDirectory()) {
-      if (ignoredDirs.has(entry.name)) continue;
-      subdirPromises.push(collectAllFilesAsync(mindRoot, fullPath, opts));
+      if (isIgnored(relativePath, true)) continue;
+      subdirPromises.push(collectAllFilesAsyncForResolvedRoot(root, fullPath, opts, isIgnored));
     } else if (entry.isFile()) {
       if (dir === root && SYSTEM_FILES.has(entry.name)) continue;
       const ext = path.extname(entry.name).toLowerCase();
-      if (allowedExtensions.has(ext)) {
-        files.push(toPosix(path.relative(root, fullPath)));
+      if (allowedExtensions.has(ext) && !isIgnored(relativePath, false)) {
+        if (!isDefaultMindSystemScaffoldFile(root, relativePath)) files.push(relativePath);
       }
     }
   }
@@ -291,5 +547,41 @@ export async function collectAllFilesAsync(
   for (const subFiles of subdirResults) {
     files.push(...subFiles);
   }
+  return files;
+}
+
+async function collectAllFilesAsyncForResolvedRoot(
+  root: string,
+  dir: string,
+  opts: TreeOptions,
+  isIgnored: SearchIgnoredPathMatcher,
+): Promise<string[]> {
+  const allowedExtensions = opts.allowedExtensions ?? DEFAULT_ALLOWED_EXTENSIONS;
+
+  let entries: fs.Dirent[];
+  try {
+    entries = await fsp.readdir(dir, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+
+  const files: string[] = [];
+  const subdirPromises: Promise<string[]>[] = [];
+  for (const entry of entries) {
+    const fullPath = path.join(dir, entry.name);
+    const relativePath = toPosix(path.relative(root, fullPath));
+    if (entry.isDirectory()) {
+      if (isIgnored(relativePath, true)) continue;
+      subdirPromises.push(collectAllFilesAsyncForResolvedRoot(root, fullPath, opts, isIgnored));
+    } else if (entry.isFile()) {
+      if (dir === root && SYSTEM_FILES.has(entry.name)) continue;
+      const ext = path.extname(entry.name).toLowerCase();
+      if (allowedExtensions.has(ext) && !isIgnored(relativePath, false)) {
+        if (!isDefaultMindSystemScaffoldFile(root, relativePath)) files.push(relativePath);
+      }
+    }
+  }
+  const subdirResults = await Promise.all(subdirPromises);
+  for (const subFiles of subdirResults) files.push(...subFiles);
   return files;
 }

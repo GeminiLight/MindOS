@@ -19,7 +19,7 @@ export type SettingsSaveBody = {
 
 export type SettingsPatch = Partial<Pick<
   SettingsData,
-  'connectionMode' | 'mcpPort' | 'port' | 'skillPaths'
+  'connectionMode' | 'mcpPort' | 'port' | 'searchIgnoredPaths' | 'skillPaths'
 >>;
 
 export function buildSettingsSaveBody(data: SettingsData): SettingsSaveBody {

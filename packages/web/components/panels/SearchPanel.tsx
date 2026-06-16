@@ -36,18 +36,7 @@ import PluginActionMenuDialog from '@/components/plugins/PluginActionMenuDialog'
 import { createSearchResultDragPreview, scheduleSearchResultDragPreviewCleanup } from '@/lib/search-drag-preview';
 import { isPathAffected, notifyFilesChanged, subscribeFilesChanged } from '@/lib/files-changed';
 import { useSmoothRouterPush } from '@/hooks/useSmoothRouterPush';
-
-/** Highlight matched text fragments in a snippet based on the query */
-function highlightSnippet(snippet: string, query: string): React.ReactNode {
-  if (!query.trim()) return snippet;
-  const words = query.trim().split(/\s+/).filter(Boolean);
-  const escaped = words.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-  const pattern = new RegExp(`(${escaped.join('|')})`, 'gi');
-  const parts = snippet.split(pattern);
-  return parts.map((part, i) =>
-    pattern.test(part) ? <mark key={i} className="bg-[var(--amber)]/25 text-foreground rounded-sm px-0.5">{part}</mark> : part
-  );
-}
+import { highlightSearchSnippet } from '@/lib/search-highlight';
 
 /** Format file path as breadcrumb for cleaner display */
 function formatPath(fullPath: string): { name: string; breadcrumb: string[] } {
@@ -276,6 +265,12 @@ export default function SearchPanel({ active, focusRequest = 0, onNavigate, onCl
     doSearch(val);
   }, [doSearch]);
 
+  const clearSearch = useCallback(() => {
+    setQuery('');
+    doSearch('');
+    inputRef.current?.focus();
+  }, [doSearch]);
+
   const navigate = useCallback((result: SearchResult) => {
     smoothPush(`/view/${encodePath(result.path)}`);
     onNavigate?.();
@@ -489,10 +484,10 @@ export default function SearchPanel({ active, focusRequest = 0, onNavigate, onCl
           {loading && (
             <div className="h-4 w-4 shrink-0 flex-none animate-spin rounded-full border-2 border-muted-foreground/30 border-t-foreground" />
           )}
-          {!loading && query && (
+          {query && (
             <button
               type="button"
-              onClick={() => { setQuery(''); setResults([]); inputRef.current?.focus(); }}
+              onClick={clearSearch}
               className="hit-target-box inline-flex h-7 w-7 shrink-0 flex-none items-center justify-center text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-md)]"
               aria-label={t.search.clear}
             >
@@ -655,7 +650,7 @@ export default function SearchPanel({ active, focusRequest = 0, onNavigate, onCl
                     {/* Content snippet - muted and small */}
                     {result.snippet && (
                       <p className="text-xs text-muted-foreground mt-1 line-clamp-2 leading-relaxed" title={result.snippet}>
-                        {highlightSnippet(result.snippet, query)}
+                        {highlightSearchSnippet(result.snippet, query)}
                       </p>
                     )}
                   </div>

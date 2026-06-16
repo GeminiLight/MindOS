@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { collectAllFiles } from './tree';
+import { collectAllFiles, isIgnoredTreePath, readMindosIgnoreFile } from './tree';
 import { readFile } from './fs-ops';
 import { resolveExistingSafe } from './security';
 import { extractPdfText } from './pdf-text';
@@ -371,6 +371,7 @@ export class SearchIndex {
    */
   addFile(mindRoot: string, filePath: string): void {
     if (!this.invertedIndex) return;
+    if (isIgnoredTreePath(filePath, undefined, readMindosIgnoreFile(mindRoot))) return;
 
     let content: string;
     const ext = path.extname(filePath).toLowerCase();
@@ -415,6 +416,10 @@ export class SearchIndex {
    */
   updateFile(mindRoot: string, filePath: string): void {
     if (!this.invertedIndex) return;
+    if (isIgnoredTreePath(filePath, undefined, readMindosIgnoreFile(mindRoot))) {
+      this.removeFile(filePath);
+      return;
+    }
     this.removeFile(filePath);
     this.addFile(mindRoot, filePath);
   }
@@ -632,10 +637,17 @@ export class SearchIndex {
 
     if (data.version !== 2 || data.builtForRoot !== mindRoot) return false;
 
+    const currentIgnoredPaths = readMindosIgnoreFile(mindRoot);
     const currentFiles = collectAllFiles(mindRoot);
     if (currentFiles.length !== data.fileCount) return false;
     const currentSignature = buildFileSignature(mindRoot, currentFiles);
     if (!currentSignature || currentSignature !== data.fileSignature) return false;
+    if (
+      Object.keys(data.docLengths).some((filePath) => isIgnoredTreePath(filePath, undefined, currentIgnoredPaths))
+      || Object.values(data.invertedIndex).some((files) => files.some((filePath) => isIgnoredTreePath(filePath, undefined, currentIgnoredPaths)))
+    ) {
+      return false;
+    }
 
     // Restore state
     this.restoreFromPersisted(data);

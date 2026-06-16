@@ -57,6 +57,12 @@ import {
   notifySearchIndexFileChanged,
   notifySearchIndexPathRemoved,
 } from './core/search-index-bridge';
+import {
+  DEFAULT_IGNORED_DIRS,
+  MINDOS_IGNORE_FILE,
+  createSearchIgnoreMatcher,
+  type SearchIgnoredPathMatcher,
+} from './core/tree';
 import { extractPdfText } from './core/pdf-text';
 import { telemetry } from './telemetry';
 import { ensureDefaultMindSystemUpgrade } from './mind-system-upgrade';
@@ -69,18 +75,7 @@ export function getMindRoot(): string {
   return effectiveMindRoot();
 }
 
-const IGNORED_DIRS = new Set([
-  '.git',
-  'node_modules',
-  'app',
-  '.next',
-  '.DS_Store',
-  '.media',
-  'mcp',
-  '.mindos',
-  '.obsidian',
-  '.plugins',
-]);
+const IGNORED_DIRS = DEFAULT_IGNORED_DIRS;
 const ALLOWED_EXTENSIONS = new Set([
   '.md', '.csv', '.json', '.pdf',
   '.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.bmp', '.ico',
@@ -303,10 +298,12 @@ let _watchPendingRoot: string | null = null;
 let _watchOverflow = false;
 
 function isIgnoredWatcherPath(relPath: string): boolean {
-  for (const segment of relPath.split('/')) {
-    if (IGNORED_DIRS.has(segment)) return true;
+  if (relPath === MINDOS_IGNORE_FILE) return false;
+  try {
+    return createSearchIgnoreMatcher(getMindRoot())(relPath);
+  } catch {
+    return relPath.split('/').some((segment) => IGNORED_DIRS.has(segment));
   }
-  return false;
 }
 
 /**
@@ -322,6 +319,11 @@ export function handleWatcherEvent(filename: string | Buffer | null | undefined)
     return;
   }
   const rel = String(filename).split(path.sep).join('/');
+  if (rel === MINDOS_IGNORE_FILE) {
+    _watchOverflow = true;
+    scheduleWatcherFlush();
+    return;
+  }
   if (isIgnoredWatcherPath(rel)) return;
 
   let root: string;
@@ -484,8 +486,13 @@ function buildSpacePreview(dirAbsPath: string) {
   };
 }
 
-function buildFileTree(dirPath: string, rootOverride?: string): FileNode[] {
+function buildFileTree(
+  dirPath: string,
+  rootOverride?: string,
+  matcher?: SearchIgnoredPathMatcher,
+): FileNode[] {
   const root = rootOverride ?? getMindRoot();
+  const isIgnored = matcher ?? createSearchIgnoreMatcher(root);
   let entries: fs.Dirent[];
   try {
     entries = fs.readdirSync(dirPath, { withFileTypes: true });
@@ -497,11 +504,11 @@ function buildFileTree(dirPath: string, rootOverride?: string): FileNode[] {
 
   for (const entry of entries) {
     const fullPath = path.join(dirPath, entry.name);
-    const relativePath = path.relative(root, fullPath);
+    const relativePath = path.relative(root, fullPath).split(path.sep).join('/');
 
     if (entry.isDirectory()) {
-      if (IGNORED_DIRS.has(entry.name)) continue;
-      const children = buildFileTree(fullPath, root);
+      if (isIgnored(relativePath, true)) continue;
+      const children = buildFileTree(fullPath, root, isIgnored);
       if (children.length > 0) {
         const hasInstruction = children.some(c => c.type === 'file' && c.name === 'INSTRUCTION.md');
         const node: FileNode = { name: entry.name, path: relativePath, type: 'directory', children };
@@ -513,7 +520,7 @@ function buildFileTree(dirPath: string, rootOverride?: string): FileNode[] {
       }
     } else if (entry.isFile()) {
       const ext = path.extname(entry.name).toLowerCase();
-      if (ALLOWED_EXTENSIONS.has(ext)) {
+      if (ALLOWED_EXTENSIONS.has(ext) && !isIgnored(relativePath, false)) {
         nodes.push({ name: entry.name, path: relativePath, type: 'file', extension: ext });
       }
     }
@@ -532,8 +539,9 @@ export function buildFileTreeForTest(rootPath: string): FileNode[] {
   return buildFileTree(rootPath, rootPath);
 }
 
-function buildAllFiles(dirPath: string): string[] {
+function buildAllFiles(dirPath: string, matcher?: SearchIgnoredPathMatcher): string[] {
   const root = getMindRoot();
+  const isIgnored = matcher ?? createSearchIgnoreMatcher(root);
   let entries: fs.Dirent[];
   try {
     entries = fs.readdirSync(dirPath, { withFileTypes: true });
@@ -544,13 +552,13 @@ function buildAllFiles(dirPath: string): string[] {
   const files: string[] = [];
   for (const entry of entries) {
     const fullPath = path.join(dirPath, entry.name);
+    const relativePath = path.relative(root, fullPath).split(path.sep).join('/');
     if (entry.isDirectory()) {
-      if (IGNORED_DIRS.has(entry.name)) continue;
-      files.push(...buildAllFiles(fullPath));
+      if (isIgnored(relativePath, true)) continue;
+      files.push(...buildAllFiles(fullPath, isIgnored));
     } else if (entry.isFile()) {
       const ext = path.extname(entry.name).toLowerCase();
-      if (ALLOWED_EXTENSIONS.has(ext)) {
-        const relativePath = path.relative(root, fullPath);
+      if (ALLOWED_EXTENSIONS.has(ext) && !isIgnored(relativePath, false)) {
         if (!isDefaultMindSystemScaffoldFile(root, relativePath)) files.push(relativePath);
       }
     }
@@ -651,18 +659,19 @@ export function getDirEntries(dirPath: string): FileNode[] {
   }
 
   const nodes: FileNode[] = [];
+  const isIgnored = createSearchIgnoreMatcher(rootResolved);
   for (const entry of entries) {
-    if (IGNORED_DIRS.has(entry.name)) continue;
     const fullPath = path.join(resolved, entry.name);
-    const relativePath = path.relative(rootResolved, fullPath);
+    const relativePath = path.relative(rootResolved, fullPath).split(path.sep).join('/');
     if (entry.isDirectory()) {
-      const children = buildFileTree(fullPath);
+      if (isIgnored(relativePath, true)) continue;
+      const children = buildFileTree(fullPath, rootResolved, isIgnored);
       if (children.length > 0) {
         nodes.push({ name: entry.name, path: relativePath, type: 'directory', children });
       }
     } else if (entry.isFile()) {
       const ext = path.extname(entry.name).toLowerCase();
-      if (ALLOWED_EXTENSIONS.has(ext)) {
+      if (ALLOWED_EXTENSIONS.has(ext) && !isIgnored(relativePath, false)) {
         let mtime: number | undefined;
         try { mtime = fs.statSync(fullPath).mtimeMs; } catch { /* ignore */ }
         nodes.push({ name: entry.name, path: relativePath, type: 'file', extension: ext, mtime });

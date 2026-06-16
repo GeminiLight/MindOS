@@ -35,6 +35,7 @@ import { createSearchResultDragPreview, scheduleSearchResultDragPreviewCleanup }
 import { notifyFilesChanged } from '@/lib/files-changed';
 import { restartWalkthrough } from '@/lib/stores/walkthrough-store';
 import { useSmoothRouterPush } from '@/hooks/useSmoothRouterPush';
+import { highlightSearchSnippet } from '@/lib/search-highlight';
 
 interface SearchModalProps {
   open: boolean;
@@ -51,18 +52,6 @@ interface CommandAction {
   shortcutPolicy?: string;
   shortcutTitle?: string;
   execute: () => void;
-}
-
-/** Highlight matched text fragments in a snippet based on the query */
-function highlightSnippet(snippet: string, query: string): React.ReactNode {
-  if (!query.trim()) return snippet;
-  const words = query.trim().split(/\s+/).filter(Boolean);
-  const escaped = words.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-  const pattern = new RegExp(`(${escaped.join('|')})`, 'gi');
-  const parts = snippet.split(pattern);
-  return parts.map((part, i) =>
-    pattern.test(part) ? <mark key={i} className="bg-[var(--amber)]/25 text-foreground rounded-sm px-0.5">{part}</mark> : part
-  );
 }
 
 /** Format file path as breadcrumb for cleaner display */
@@ -379,6 +368,12 @@ export default function SearchModal({ open, onClose }: SearchModalProps) {
     doSearch(val);
   }, [doSearch]);
 
+  const clearSearch = useCallback(() => {
+    setQuery('');
+    doSearch('');
+    inputRef.current?.focus();
+  }, [doSearch]);
+
   const navigate = useCallback((result: SearchResult) => {
     onClose();
     smoothPush(`/view/${encodePath(result.path)}`);
@@ -508,13 +503,11 @@ export default function SearchModal({ open, onClose }: SearchModalProps) {
                 {loading && (
                   <div className="w-4 h-4 border-2 border-muted-foreground/30 border-t-foreground rounded-full animate-spin shrink-0 flex-none" />
                 )}
-                {!loading && query && (
+                {query && (
                   <button
                     onClick={() => {
                       startTransition(() => {
-                        setQuery('');
-                        setResults([]);
-                        inputRef.current?.focus();
+                        clearSearch();
                       });
                     }}
                     className="shrink-0 flex-none p-1 text-muted-foreground hover:text-foreground transition-colors"
@@ -621,7 +614,7 @@ export default function SearchModal({ open, onClose }: SearchModalProps) {
                       {/* Content snippet - muted and small */}
                       {result.snippet && (
                         <p className="text-xs text-muted-foreground mt-1 line-clamp-2 leading-relaxed" title={result.snippet}>
-                          {highlightSnippet(result.snippet, query)}
+                          {highlightSearchSnippet(result.snippet, query)}
                         </p>
                       )}
                     </div>

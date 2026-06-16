@@ -14,6 +14,7 @@ import { setShowHiddenFiles } from '@/components/FileTree';
 import { scanExampleFilesAction, cleanupExamplesAction } from '@/lib/actions';
 import WebPortSection from './WebPortSection';
 import { restartWalkthrough } from '@/lib/stores/walkthrough-store';
+import { SearchIgnoredPathsSection } from './SearchIgnoredPathsSection';
 
 export function KnowledgeTab({ data, setData, t }: KnowledgeTabProps) {
   const env = data.envOverrides ?? {};
@@ -179,6 +180,8 @@ export function KnowledgeTab({ data, setData, t }: KnowledgeTabProps) {
           </div>
         )}
       </SettingCard>
+
+      <SearchIgnoredPathsSection data={data} setData={setData} t={t} />
 
       {/* ── Web UI Port ── */}
       <WebPortSection m={t.settings?.mcp ?? {}} />

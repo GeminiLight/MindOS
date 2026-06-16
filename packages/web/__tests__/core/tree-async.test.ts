@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkTempMindRoot, cleanupMindRoot, seedFile } from './helpers';
-import { collectAllFiles } from '@/lib/core/tree';
-import { collectAllFilesAsync } from '@/lib/core/tree';
+import { collectAllFiles, collectAllFilesAsync, writeMindosIgnoreFile } from '@/lib/core/tree';
 import fs from 'fs';
 import path from 'path';
 
@@ -41,6 +40,18 @@ describe('collectAllFilesAsync', () => {
     seedFile(mindRoot, 'a/b/c/d.md', 'deep');
     const result = await collectAllFilesAsync(mindRoot);
     expect(result).toContain('a/b/c/d.md');
+  });
+
+  it('respects .mindosignore custom rules and default ignored directories', async () => {
+    writeMindosIgnoreFile(mindRoot, ['Archive/', 'Scratch/*.md', 'Private Notes']);
+    seedFile(mindRoot, 'Archive/old.md', 'archived');
+    seedFile(mindRoot, 'Scratch/draft.md', 'scratch');
+    seedFile(mindRoot, 'Private Notes/secret.md', 'secret');
+    seedFile(mindRoot, 'node_modules/pkg/index.md', 'dependency');
+    seedFile(mindRoot, 'Visible/real.md', 'content');
+
+    const result = (await collectAllFilesAsync(mindRoot)).sort();
+    expect(result).toEqual(['Visible/real.md']);
   });
 
   it('does not collect files from a symlinked start directory outside root', async () => {

@@ -683,12 +683,24 @@ Write a concise signal brief.
     const root = mkdtempSync(join(tmpdir(), 'mindos-runtime-files-'));
     mkdirSync(join(root, 'Space'), { recursive: true });
     mkdirSync(join(root, '.git'), { recursive: true });
+    mkdirSync(join(root, 'node_modules', 'pkg'), { recursive: true });
+    mkdirSync(join(root, 'dist'), { recursive: true });
+    mkdirSync(join(root, 'coverage'), { recursive: true });
+    mkdirSync(join(root, '.turbo'), { recursive: true });
+    mkdirSync(join(root, '.cc-branch'), { recursive: true });
+    mkdirSync(join(root, '.claude', 'worktrees', 'task'), { recursive: true });
     mkdirSync(join(root, '.obsidian'), { recursive: true });
     mkdirSync(join(root, '.plugins', 'sample'), { recursive: true });
     mkdirSync(join(root, '.mindos', 'assistant-runs'), { recursive: true });
     writeFileSync(join(root, 'a.md'), 'a');
     writeFileSync(join(root, 'Space', 'b.csv'), 'b');
     writeFileSync(join(root, '.git', 'ignored.md'), 'ignored');
+    writeFileSync(join(root, 'node_modules', 'pkg', 'ignored.md'), 'ignored');
+    writeFileSync(join(root, 'dist', 'ignored.md'), 'ignored');
+    writeFileSync(join(root, 'coverage', 'ignored.md'), 'ignored');
+    writeFileSync(join(root, '.turbo', 'ignored.md'), 'ignored');
+    writeFileSync(join(root, '.cc-branch', 'ignored.md'), 'ignored');
+    writeFileSync(join(root, '.claude', 'worktrees', 'task', 'ignored.md'), 'ignored');
     writeFileSync(join(root, '.obsidian', 'workspace.json'), '{"private":true}');
     writeFileSync(join(root, '.plugins', 'sample', 'data.json'), '{"private":true}');
     writeFileSync(join(root, '.mindos', 'assistant-runs', 'run.md'), 'private');
@@ -698,6 +710,19 @@ Write a concise signal brief.
     expect(getRecentlyModifiedFromMindRoot(root, 1)).toHaveLength(1);
     expect(getTreeVersionFromMindRoot(root)).toBeGreaterThan(0);
     expect(getTreeVersionFromMindRoot(join(root, 'missing'))).toBe(0);
+  });
+
+  it('applies .mindosignore to runtime file collection without Web dependencies', () => {
+    const root = mkdtempSync(join(tmpdir(), 'mindos-runtime-ignore-'));
+    mkdirSync(join(root, 'Archive'), { recursive: true });
+    mkdirSync(join(root, 'Visible'), { recursive: true });
+    writeFileSync(join(root, '.mindosignore'), 'Archive/\nScratch/*.md\n');
+    writeFileSync(join(root, 'Archive', 'old.md'), 'archived');
+    mkdirSync(join(root, 'Scratch'), { recursive: true });
+    writeFileSync(join(root, 'Scratch', 'draft.md'), 'scratch');
+    writeFileSync(join(root, 'Visible', 'real.md'), 'visible');
+
+    expect(collectAllFilesFromMindRoot(root)).toEqual(['Visible/real.md']);
   });
 
   it('resolves mind root from product config before env fallback', () => {
@@ -715,10 +740,14 @@ Write a concise signal brief.
   it('searches text files from a mind root without Web dependencies', async () => {
     const root = mkdtempSync(join(tmpdir(), 'mindos-runtime-search-'));
     mkdirSync(join(root, 'Space'), { recursive: true });
+    mkdirSync(join(root, 'node_modules', 'pkg'), { recursive: true });
+    mkdirSync(join(root, 'dist'), { recursive: true });
     mkdirSync(join(root, '.obsidian'), { recursive: true });
     mkdirSync(join(root, '.plugins', 'sample'), { recursive: true });
     writeFileSync(join(root, 'Space', 'note.md'), 'Alpha project\nBeta detail');
     writeFileSync(join(root, 'data.csv'), 'name,value\nalpha,1');
+    writeFileSync(join(root, 'node_modules', 'pkg', 'index.md'), 'alpha private dependency');
+    writeFileSync(join(root, 'dist', 'generated.md'), 'alpha generated output');
     writeFileSync(join(root, '.obsidian', 'app.json'), '{"query":"alpha private"}');
     writeFileSync(join(root, '.plugins', 'sample', 'data.json'), '{"query":"alpha private"}');
     writeFileSync(join(root, 'image.png'), Buffer.from('alpha'));
@@ -731,6 +760,19 @@ Write a concise signal brief.
       score: expect.any(Number),
       snippet: expect.stringContaining('Alpha project'),
     });
+  });
+
+  it('does not return .mindosignore-excluded paths from runtime search', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'mindos-runtime-search-ignore-'));
+    mkdirSync(join(root, 'Archive'), { recursive: true });
+    mkdirSync(join(root, 'Visible'), { recursive: true });
+    writeFileSync(join(root, '.mindosignore'), 'Archive/\n');
+    writeFileSync(join(root, 'Archive', 'old.md'), 'alpha archived private');
+    writeFileSync(join(root, 'Visible', 'note.md'), 'alpha visible');
+
+    const results = await searchMindRoot(root, 'alpha', { limit: 10 });
+
+    expect(results.map((item) => item.path)).toEqual(['Visible/note.md']);
   });
 
   it('applies runtime search filters and tokenized CJK matching', async () => {

@@ -13,7 +13,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import crypto from 'crypto';
-import { collectAllFiles } from './tree';
+import { collectAllFiles, isIgnoredTreePath, readMindosIgnoreFile } from './tree';
 import { readFile } from './fs-ops';
 import { getEmbeddings, getEmbedding, getEmbeddingConfig } from './embedding-provider';
 
@@ -147,6 +147,10 @@ export class EmbeddingIndex {
   /** Add or update a single file's embedding (skips unchanged content). */
   async updateFile(mindRoot: string, filePath: string): Promise<void> {
     if (!this._ready) return;
+    if (isIgnoredTreePath(filePath, undefined, readMindosIgnoreFile(mindRoot))) {
+      this.removeFile(filePath);
+      return;
+    }
     const ext = path.extname(filePath).toLowerCase();
     if (ext !== '.md' && ext !== '.csv') return;
 
@@ -264,11 +268,13 @@ export class EmbeddingIndex {
       if (data.version !== 1 || data.builtForRoot !== mindRoot) return false;
 
       // Basic staleness: check file count
+      const currentIgnoredPaths = readMindosIgnoreFile(mindRoot);
       const currentFiles = collectAllFiles(mindRoot);
-      const mdCsvCount = currentFiles.filter(f => {
+      const currentEmbeddableFiles = new Set(currentFiles.filter(f => {
         const ext = path.extname(f).toLowerCase();
         return ext === '.md' || ext === '.csv';
-      }).length;
+      }));
+      const mdCsvCount = currentEmbeddableFiles.size;
 
       // Allow some drift (files added/removed since last persist)
       // If >10% drift, force rebuild
@@ -280,9 +286,11 @@ export class EmbeddingIndex {
       this.fileHashes.clear();
       this.dimensions = data.dimensions;
       for (const [filePath, arr] of Object.entries(data.vectors)) {
+        if (isIgnoredTreePath(filePath, undefined, currentIgnoredPaths) || !currentEmbeddableFiles.has(filePath)) continue;
         this.vectors.set(filePath, new Float32Array(arr));
       }
       for (const [filePath, hash] of Object.entries(data.hashes ?? {})) {
+        if (isIgnoredTreePath(filePath, undefined, currentIgnoredPaths) || !currentEmbeddableFiles.has(filePath)) continue;
         this.fileHashes.set(filePath, hash);
       }
       this.builtForRoot = data.builtForRoot;

@@ -417,6 +417,24 @@ describe('plugin command surfaces', () => {
     expect(mocks.toastSuccess).toHaveBeenCalledWith('Ran Quick Capture');
   });
 
+  it('does not mix plugin commands into normal desktop search queries', async () => {
+    await act(async () => {
+      root.render(<SearchPanel active />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const input = host.querySelector('input[type="text"]') as HTMLInputElement;
+    await act(async () => {
+      setInputValue(input, 'Quick Capture');
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(host.textContent).not.toContain('Plugin commands');
+    expect(host.textContent).not.toContain('QuickAdd Like');
+  });
+
   it('shows plugin Notice feedback instead of a generic desktop command toast', async () => {
     mocks.apiFetch.mockImplementation(async (url: string, init?: RequestInit) => {
       if (url === '/api/plugins/surfaces?loadEnabled=1&kind=command') {
