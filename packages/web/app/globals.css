@@ -218,18 +218,6 @@ body {
 @media (min-width: 1280px) {
   :root { --toc-extra-right: var(--toc-width, 0px); }
   .toc-reserved-content { margin-right: max(220px, calc(var(--toc-width, 0px) + 8px)); }
-
-  .view-header-actions-reserve {
-    width: clamp(18rem, 28vw, 25rem);
-  }
-
-  .view-header-actions {
-    position: fixed;
-    top: calc(var(--app-titlebar-h) + 0.4375rem);
-    right: calc(var(--right-panel-width, 0px) + var(--right-agent-detail-width, 0px) + 1.5rem);
-    z-index: var(--z-app-nav);
-    max-width: min(42rem, calc(100vw - var(--right-panel-width, 0px) - var(--right-agent-detail-width, 0px) - 3rem));
-  }
 }
 
 ::-webkit-scrollbar { width: 5px; height: 5px; }

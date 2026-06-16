@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef, useCallback, useDeferredValue, useMemo } from 'react';
+import { useEffect, useState, useRef, useCallback, useLayoutEffect, useMemo } from 'react';
 import { ChevronRight } from 'lucide-react';
 import GithubSlugger from 'github-slugger';
 import { useLocale } from '@/lib/stores/locale-store';
@@ -57,6 +57,8 @@ function parseHeadings(content: string): Heading[] {
 
 const TOPBAR_H = 46;
 const NAV_W = 212;
+const TOC_COLLAPSED_KEY = 'mindos.toc.collapsed';
+const TOC_COLLAPSED_EVENT = 'mindos:toc-collapsed-change';
 
 // Desktop has a fixed titlebar row above the view header (wiki/41 rule 10).
 // Read var(--app-titlebar-h) at runtime so JS scroll math stays in sync with CSS.
@@ -121,25 +123,41 @@ interface TableOfContentsProps {
 
 export default function TableOfContents({ content }: TableOfContentsProps) {
   const { t } = useLocale();
-  const deferredContent = useDeferredValue(content);
   const { headings, minLevel } = useMemo(() => {
-    const h = parseHeadings(deferredContent);
+    const h = parseHeadings(content);
     return { headings: h, minLevel: h.length > 0 ? Math.min(...h.map(x => x.level)) : 1 };
-  }, [deferredContent]);
+  }, [content]);
   const [activeIdx, setActiveIdx] = useState(-1);
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.localStorage.getItem(TOC_COLLAPSED_KEY) === '1';
+  });
 
-  // Broadcast TOC width to content area via CSS variables
   useEffect(() => {
+    const sync = () => {
+      setCollapsed(window.localStorage.getItem(TOC_COLLAPSED_KEY) === '1');
+    };
+    window.addEventListener('storage', sync);
+    window.addEventListener(TOC_COLLAPSED_EVENT, sync);
+    return () => {
+      window.removeEventListener('storage', sync);
+      window.removeEventListener(TOC_COLLAPSED_EVENT, sync);
+    };
+  }, []);
+
+  // Broadcast TOC width before paint so switching between Markdown files does
+  // not first render full-width and then shift when the TOC effect lands.
+  useLayoutEffect(() => {
     const root = document.documentElement.style;
-    root.setProperty('--toc-width', collapsed ? '0px' : `${NAV_W}px`);
-    if (collapsed) {
+    const hasToc = headings.length >= 2;
+    root.setProperty('--toc-width', collapsed || !hasToc ? '0px' : `${NAV_W}px`);
+    if (collapsed || !hasToc) {
       root.removeProperty('--toc-margin');
     } else {
       root.setProperty('--toc-margin', `${NAV_W + 8}px`);
     }
     return () => { root.removeProperty('--toc-width'); root.removeProperty('--toc-margin'); };
-  }, [collapsed]);
+  }, [collapsed, headings.length]);
   const observerRef = useRef<IntersectionObserver | null>(null);
   const navRef = useRef<HTMLElement | null>(null);
   const linkRefs = useRef<Map<number, HTMLAnchorElement>>(new Map());
@@ -158,6 +176,13 @@ export default function TableOfContents({ content }: TableOfContentsProps) {
       link.scrollIntoView({ block: 'center', behavior: 'auto' });
     }
   }, []);
+
+  const handleCollapsedToggle = useCallback(() => {
+    const next = !collapsed;
+    setCollapsed(next);
+    window.localStorage.setItem(TOC_COLLAPSED_KEY, next ? '1' : '0');
+    window.dispatchEvent(new Event(TOC_COLLAPSED_EVENT));
+  }, [collapsed]);
 
   // Set up IntersectionObserver to track which heading is visible
   useEffect(() => {
@@ -209,7 +234,7 @@ export default function TableOfContents({ content }: TableOfContentsProps) {
     <>
       {/* Collapse / expand toggle — separate from aside so it stays visible */}
       <button
-        onClick={() => setCollapsed(v => !v)}
+        onClick={handleCollapsedToggle}
         className="hidden xl:flex fixed z-10 top-[calc(var(--app-titlebar-h)+46px)] flex items-center justify-center w-5 h-8 rounded-l-md border border-r-0 border-border hover:bg-muted transition-colors"
         style={{
           right: `calc(var(--right-panel-width, 0px) + ${collapsed ? 0 : NAV_W}px)`,
@@ -237,11 +262,6 @@ export default function TableOfContents({ content }: TableOfContentsProps) {
           transition: 'transform 200ms ease-in-out, right 200ms ease-out',
         }}
       >
-      <div className="flex items-center h-[46px] px-4 border-l border-b border-border" style={{ background: 'var(--background)' }}>
-        <p className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground/55 shrink-0">
-          {t.view.tocTitle}
-        </p>
-      </div>
       <nav
         ref={navRef}
         aria-label={t.view.tocTitle}

@@ -113,7 +113,7 @@ describe('ViewPageClient frontmatter markdown mode', () => {
     });
   }
 
-  it('opens markdown with frontmatter in view mode without mounting the editor pane', async () => {
+  it('opens markdown with frontmatter in source edit mode without mounting WYSIWYG', async () => {
     await act(async () => {
       root.render(
         <ViewPageClient
@@ -133,11 +133,14 @@ describe('ViewPageClient frontmatter markdown mode', () => {
     const editor = host.querySelector('[data-testid="markdown-editor"]');
     const view = host.querySelector('[data-testid="markdown-view"]');
 
-    expect(view).not.toBeNull();
-    expect(editor).toBeNull();
+    expect(editor).not.toBeNull();
+    expect(editor?.getAttribute('data-mode')).toBe('source');
+    expect(view).toBeNull();
   });
 
-  it('opens normal markdown in edit mode without mounting the preview pane', async () => {
+  it('opens normal markdown in edit mode even when the previous local preference was preview', async () => {
+    localStorage.setItem('md-view-mode', 'preview');
+
     await act(async () => {
       root.render(
         <ViewPageClient
@@ -159,5 +162,34 @@ describe('ViewPageClient frontmatter markdown mode', () => {
 
     expect(editor).not.toBeNull();
     expect(view).toBeNull();
+  });
+
+  it('shows markdown mode choices from a compact dropdown in Edit, View, Source order', async () => {
+    await act(async () => {
+      root.render(
+        <ViewPageClient
+          filePath="note.md"
+          content={'# Body'}
+          extension="md"
+          saveAction={vi.fn()}
+        />,
+      );
+    });
+
+    await flushDeferredFileBody();
+
+    const modeButton = [...host.querySelectorAll('button')]
+      .find(button => button.getAttribute('aria-label') === 'Markdown mode');
+    expect(modeButton).toBeTruthy();
+    expect(modeButton?.textContent).toContain('Edit');
+
+    await act(async () => {
+      modeButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    const labels = [...host.querySelectorAll('[role="menuitemradio"]')]
+      .map(item => item.textContent?.trim())
+      .filter(Boolean);
+    expect(labels).toEqual(['Edit', 'View', 'Source']);
   });
 });

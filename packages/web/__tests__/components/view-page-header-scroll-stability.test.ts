@@ -13,7 +13,7 @@ describe('ViewPageClient header scroll stability', () => {
     expect(source).not.toContain('var(--right-agent-detail-width, 0px)');
   });
 
-  it('does not depend on TOC width or any inline Header right padding', () => {
+  it('uses TOC width only for the decorative border extension', () => {
     const filePath = path.resolve(process.cwd(), 'app/view/[...path]/ViewPageClient.tsx');
     const source = fs.readFileSync(filePath, 'utf8');
 
@@ -24,7 +24,11 @@ describe('ViewPageClient header scroll stability', () => {
            l.includes('sticky') && l.includes('px-4') && l.includes('top-[52px]')
     );
 
-    expect(source).not.toContain('var(--toc-extra-right, 0px)');
+    expect(source).toContain('view-topbar-border-extension');
+    expect(source).toContain("right: 'calc(var(--toc-extra-right, 0px) * -1)'");
+    expect(source).not.toContain("width: 'calc(100% + var(--toc-extra-right, 0px))'");
+    expect(source).not.toContain("marginRight: 'calc(var(--toc-extra-right, 0px) * -1)'");
+    expect(source).not.toMatch(/paddingRight:\s*['\"`][^'\"`]*toc-extra-right/);
 
     if (headerLine) {
       expect(headerLine).not.toContain('paddingRight');

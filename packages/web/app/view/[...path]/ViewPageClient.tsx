@@ -2,7 +2,7 @@
 
 import { useState, useTransition, useCallback, useEffect, useRef, useSyncExternalStore, useMemo, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
-import { Edit3, Save, X, Loader2, LayoutTemplate, ArrowLeft, Share2, FileText, Code, MoreHorizontal, Copy, Pencil, Trash2, Star, Download, Eye, PanelLeft, PanelRightOpen, Puzzle } from 'lucide-react';
+import { Edit3, Save, X, Loader2, LayoutTemplate, ArrowLeft, Share2, FileText, Code, MoreHorizontal, Copy, Pencil, Trash2, Star, Download, Eye, PanelLeft, PanelRightOpen, Puzzle, ChevronDown } from 'lucide-react';
 import { lazy } from 'react';
 import MarkdownView from '@/components/MarkdownView';
 import JsonView from '@/components/JsonView';
@@ -139,8 +139,6 @@ export default function ViewPageClient({
     if (isBinaryFile) return false;
     // Always start in Edit for empty/new files regardless of persisted mode
     if (initialEditing || content === '') return true;
-    if (initialContentHasFrontmatter) return false;
-    if (isMarkdown && typeof window !== 'undefined' && localStorage.getItem('md-view-mode') === 'preview') return false;
     return isMarkdown;
   });
   const [editContent, setEditContent] = useState(content);
@@ -217,16 +215,32 @@ export default function ViewPageClient({
     };
   }, [editContent, savedContent, editing, isMarkdown, isDraft, saveAction, keepCurrentTab, filePath]);
   const [mdViewMode, setMdViewModeState] = useState<MdViewMode>(() => {
-    if (typeof window === 'undefined') return 'wysiwyg';
-    if (initialContentHasFrontmatter) return 'preview';
-    const stored = localStorage.getItem('md-view-mode');
-    if (stored === 'wysiwyg' || stored === 'source' || stored === 'preview') return stored;
+    if (initialContentHasFrontmatter) return 'source';
     return 'wysiwyg';
   });
   const setMdViewMode = useCallback((mode: MdViewMode) => {
     setMdViewModeState(mode);
     localStorage.setItem('md-view-mode', mode);
   }, []);
+  const [modeMenuOpen, setModeMenuOpen] = useState(false);
+  const modeButtonRef = useRef<HTMLButtonElement>(null);
+  const modeMenuRef = useRef<HTMLDivElement>(null);
+  const previousFilePathRef = useRef(filePath);
+  useEffect(() => {
+    if (previousFilePathRef.current === filePath) return;
+    previousFilePathRef.current = filePath;
+    serverContentRef.current = content;
+    setEditContent(content);
+    setSavedContent(content);
+    setSaveError(null);
+    setSaveSuccess(false);
+    setAutoSaveStatus('idle');
+    setGraphMode(false);
+    setModeMenuOpen(false);
+    const nextHasFrontmatter = isMarkdown && hasMarkdownFrontmatterFence(content);
+    setMdViewModeState(nextHasFrontmatter ? 'source' : 'wysiwyg');
+    setEditing(!isBinaryFile && (initialEditing || content === '' || isMarkdown));
+  }, [content, filePath, initialEditing, isBinaryFile, isMarkdown]);
   const [findOpen, setFindOpen] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
   const [moreOpen, setMoreOpen] = useState(false);
@@ -256,6 +270,20 @@ export default function ViewPageClient({
     document.addEventListener('keydown', keyHandler);
     return () => { document.removeEventListener('mousedown', handler); document.removeEventListener('keydown', keyHandler); };
   }, [moreOpen]);
+
+  useEffect(() => {
+    if (!modeMenuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (
+        modeButtonRef.current && !modeButtonRef.current.contains(e.target as Node) &&
+        modeMenuRef.current && !modeMenuRef.current.contains(e.target as Node)
+      ) setModeMenuOpen(false);
+    };
+    const keyHandler = (e: KeyboardEvent) => { if (e.key === 'Escape') setModeMenuOpen(false); };
+    document.addEventListener('mousedown', handler);
+    document.addEventListener('keydown', keyHandler);
+    return () => { document.removeEventListener('mousedown', handler); document.removeEventListener('keydown', keyHandler); };
+  }, [modeMenuOpen]);
 
   const handleCopyPath = useCallback(() => {
     navigator.clipboard.writeText(filePath).catch(() => {});
@@ -465,6 +493,48 @@ export default function ViewPageClient({
     notifyFilesChanged([filePath]);
   }, [saveAction, keepCurrentTab, filePath]);
 
+  const handleMarkdownModeSelect = useCallback((mode: 'wysiwyg' | 'preview' | 'source') => {
+    setModeMenuOpen(false);
+    startTransition(() => {
+      if (mode === 'preview') {
+        setMdViewMode('preview');
+        if (editing) {
+          const clean = twemojiToNative(editContent);
+          setSavedContent(clean);
+          if (clean !== savedContent) {
+            keepCurrentTab();
+            saveAction(clean)
+              .then(() => notifyFilesChanged([filePath]))
+              .catch(() => {});
+          }
+          setEditing(false);
+        }
+        return;
+      }
+
+      const source = editing ? editContent : savedContent;
+      const nextMode = mode === 'wysiwyg' && hasMarkdownFrontmatterFence(source)
+        ? 'source'
+        : mode;
+      setMdViewMode(nextMode);
+      if (!editing) {
+        keepCurrentTab();
+        setEditContent(savedContent);
+        setEditing(true);
+      }
+    });
+  }, [editContent, editing, filePath, keepCurrentTab, saveAction, savedContent, setMdViewMode]);
+
+  const markdownModeOptions = useMemo(() => ([
+    { id: 'wysiwyg' as const, icon: <Pencil size={13} />, label: 'Edit' },
+    { id: 'preview' as const, icon: <Eye size={13} />, label: 'View' },
+    { id: 'source' as const, icon: <PanelLeft size={13} />, label: 'Source' },
+  ]), []);
+  const activeMarkdownMode = !editing
+    ? 'preview'
+    : (mdViewMode === 'source' ? 'source' : 'wysiwyg');
+  const activeMarkdownModeOption = markdownModeOptions.find(option => option.id === activeMarkdownMode) ?? markdownModeOptions[0];
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const key = e.key.toLowerCase();
@@ -540,9 +610,22 @@ export default function ViewPageClient({
   return (
     <div className="flex flex-col min-h-[calc(100vh-var(--app-titlebar-h))]">
       {/* Top bar */}
-      <div className="view-page-topbar sticky top-[52px] md:top-[var(--app-titlebar-h)] z-20 border-b border-border px-4 md:px-6 h-[46px] flex items-center" style={{ background: 'var(--background)' }}>
+      <div
+        className="view-page-topbar sticky top-[52px] md:top-[var(--app-titlebar-h)] z-20 border-b-0 px-4 md:px-6 h-[46px] flex items-center"
+        style={{
+          background: 'var(--background)',
+        }}
+      >
+        <div
+          className="view-topbar-border-extension pointer-events-none absolute bottom-0 h-px bg-border"
+          style={{
+            left: 0,
+            right: 'calc(var(--toc-extra-right, 0px) * -1)',
+          }}
+          aria-hidden="true"
+        />
         <div className="view-header-row w-full min-w-0 flex items-center justify-between gap-3 h-full">
-          <div className="min-w-0 flex-1 flex items-center gap-1.5">
+          <div className="view-header-breadcrumb min-w-0 flex-1 flex items-center gap-1.5">
             <button
               onClick={() => router.back()}
               className="-ml-1 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors duration-75 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation md:hidden"
@@ -583,8 +666,6 @@ export default function ViewPageClient({
               <span className="text-xs text-error hidden sm:inline">{saveError}</span>
             )}
 
-            <div className="view-header-actions-reserve hidden xl:block shrink-0" aria-hidden="true" />
-
             <div className="view-header-actions flex items-center gap-1.5 md:gap-2 shrink-0">
               {/* Renderer toggle — only shown when a custom renderer exists (excludes graph-mode override and binary files) */}
               {registryRenderer && !editing && !isDraft && !graphRenderer && !isBinaryFile && (
@@ -604,51 +685,51 @@ export default function ViewPageClient({
 
               {/* Markdown editing: mode switcher in header */}
               {isMarkdown && !isDraft && (
-                <div className="flex items-center gap-0.5 rounded-md bg-muted p-0.5">
-                  {([
-                    { id: 'wysiwyg' as const, icon: <Pencil size={11} />, label: 'Edit' },
-                    { id: 'source' as const, icon: <PanelLeft size={11} />, label: 'Source' },
-                    { id: 'preview' as const, icon: <Eye size={11} />, label: 'View' },
-                  ] as const).map(m => (
-                    <button
-                      key={m.id}
-                      aria-label={m.label}
-                      title={m.label}
-                      onClick={() => {
-                        // Use startTransition to mark state updates as non-urgent
-                        startTransition(() => {
-                          const nextMode = m.id === 'wysiwyg' && hasMarkdownFrontmatterFence(editing ? editContent : savedContent)
-                            ? 'source'
-                            : m.id;
-                          setMdViewMode(nextMode);
-                          if (nextMode === 'preview') {
-                            // Sync latest edit content to savedContent before switching
-                            const clean = twemojiToNative(editContent);
-                            setSavedContent(clean);
-                            if (clean !== savedContent) {
-                              keepCurrentTab();
-                              saveAction(clean)
-                                .then(() => notifyFilesChanged([filePath]))
-                                .catch(() => {});
-                            }
-                            setEditing(false);
-                          } else if (!editing) {
-                            keepCurrentTab();
-                            setEditContent(savedContent);
-                            setEditing(true);
-                          }
-                        });
-                      }}
-                      className={`inline-flex h-8 min-w-8 items-center justify-center gap-1 rounded px-2.5 text-[11px] font-medium transition-colors duration-75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation ${
-                        mdViewMode === m.id
-                          ? 'bg-card text-foreground shadow-sm'
-                          : 'text-muted-foreground hover:bg-card/60 hover:text-foreground'
-                      }`}
+                <div className="relative">
+                  <button
+                    ref={modeButtonRef}
+                    type="button"
+                    aria-label="Markdown mode"
+                    aria-haspopup="menu"
+                    aria-expanded={modeMenuOpen}
+                    title="Markdown mode"
+                    onClick={() => setModeMenuOpen(value => !value)}
+                    className="inline-flex h-8 min-w-[5.5rem] items-center justify-center gap-1.5 rounded-md border border-border bg-card px-2.5 text-xs font-medium text-foreground shadow-sm transition-colors duration-75 hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation"
+                  >
+                    {activeMarkdownModeOption.icon}
+                    <span>{activeMarkdownModeOption.label}</span>
+                    <ChevronDown size={12} className={`text-muted-foreground transition-transform duration-150 ${modeMenuOpen ? 'rotate-180' : ''}`} />
+                  </button>
+                  {modeMenuOpen && (
+                    <div
+                      ref={modeMenuRef}
+                      role="menu"
+                      className="absolute right-0 top-full z-50 mt-1 w-36 rounded-lg border border-border bg-card py-1 shadow-lg"
                     >
-                      {m.icon}
-                      <span className="hidden md:inline">{m.label}</span>
-                    </button>
-                  ))}
+                      {markdownModeOptions.map(option => {
+                        const active = option.id === activeMarkdownMode;
+                        return (
+                          <button
+                            key={option.id}
+                            type="button"
+                            role="menuitemradio"
+                            aria-checked={active}
+                            onClick={() => handleMarkdownModeSelect(option.id)}
+                            className="flex min-h-8 w-full items-center gap-2 px-2.5 text-left text-xs text-foreground transition-colors duration-75 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          >
+                            <span className="flex h-5 w-5 shrink-0 items-center justify-center text-muted-foreground">
+                              {option.icon}
+                            </span>
+                            <span className="flex-1">{option.label}</span>
+                            <span
+                              className={`h-1.5 w-1.5 rounded-full ${active ? 'bg-[var(--amber)]' : 'bg-transparent'}`}
+                              aria-hidden="true"
+                            />
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
 

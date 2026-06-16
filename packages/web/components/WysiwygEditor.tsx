@@ -53,7 +53,7 @@ export default function WysiwygEditor({ value, onChange }: WysiwygEditorProps) {
   const theme = useEditorTheme(s => s.theme);
 
   return (
-    <div className="wysiwyg-wrapper h-full overflow-y-auto" data-editor-theme={theme}>
+    <div className="wysiwyg-wrapper min-h-[50vh] overflow-visible" data-editor-theme={theme}>
       <MilkdownProvider>
         <InnerEditor value={value} onChange={onChange} />
       </MilkdownProvider>

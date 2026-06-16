@@ -26,7 +26,7 @@ export default function MarkdownEditor({ value, onChange, viewMode }: MarkdownEd
     <>
       {/* WYSIWYG normalizes markdown on mount, so do not mount it for YAML frontmatter notes. */}
       {!hasFrontmatter && (
-        <div className="min-h-[50vh]" style={{ display: isWysiwyg ? undefined : 'none' }}>
+        <div className="min-h-[50vh] min-w-0" style={{ display: isWysiwyg ? undefined : 'none' }}>
           <WysiwygEditor value={value} onChange={onChange} />
         </div>
       )}
@@ -34,10 +34,10 @@ export default function MarkdownEditor({ value, onChange, viewMode }: MarkdownEd
       {/* Source: bordered editor container */}
       {isSource && (
         <div
-          className="rounded-xl overflow-hidden border border-border flex"
+          className="min-w-0 rounded-xl overflow-hidden border border-border flex"
           style={{ height: EDITOR_HEIGHT }}
         >
-          <div className="w-full h-full overflow-auto">
+          <div className="min-w-0 w-full h-full overflow-y-auto overflow-x-hidden">
             <EditorWrapper value={value} onChange={onChange} language="markdown" />
           </div>
         </div>

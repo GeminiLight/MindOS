@@ -19,14 +19,19 @@ const darkTheme = EditorView.theme({
   '&': {
     backgroundColor: 'var(--background)',
     height: '100%',
+    maxWidth: '100%',
+    minWidth: '0',
     fontSize: '0.875rem',
     fontFamily: 'var(--font-ibm-plex-mono), ui-monospace, monospace',
   },
   '.cm-scroller': {
-    overflow: 'auto',
+    overflowY: 'auto',
+    overflowX: 'hidden',
     lineHeight: '1.6',
   },
   '.cm-content': {
+    maxWidth: '100%',
+    minWidth: '0',
     padding: '16px',
     caretColor: 'var(--amber)',
   },

@@ -22,9 +22,19 @@
 
 /* ─── ProseMirror content area ─── */
 .milkdown .ProseMirror {
+  max-width: 100% !important;
   padding: 1rem 0 !important;
   line-height: 1.85 !important;
   color: var(--prose-body) !important;
+  overflow-wrap: anywhere !important;
+}
+
+.wysiwyg-wrapper,
+.wysiwyg-wrapper .milkdown,
+.wysiwyg-wrapper .milkdown > div {
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: clip;
 }
 
 /* ─── Headings ─── */

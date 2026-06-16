@@ -12,20 +12,23 @@ describe('ViewPageClient header layout', () => {
     expect(source).not.toContain('className="content-width flex items-center justify-between gap-2 h-full"');
   });
 
-  it('lets desktop actions occupy the TOC header band without moving document content', () => {
+  it('keeps actions in the normal header flow and lets breadcrumb own truncation', () => {
     const viewFile = path.resolve(process.cwd(), 'app/view/[...path]/ViewPageClient.tsx');
     const cssFile = path.resolve(process.cwd(), 'app/globals.css');
     const viewSource = fs.readFileSync(viewFile, 'utf8');
     const cssSource = fs.readFileSync(cssFile, 'utf8');
 
-    expect(viewSource).toContain('view-header-actions-reserve hidden xl:block shrink-0');
     expect(viewSource).toContain('className="view-header-actions flex items-center gap-1.5 md:gap-2 shrink-0"');
+    expect(viewSource).toContain('className="view-header-breadcrumb min-w-0 flex-1 flex items-center gap-1.5"');
+    expect(viewSource).toContain('view-topbar-border-extension');
+    expect(viewSource).toContain("right: 'calc(var(--toc-extra-right, 0px) * -1)'");
+    expect(viewSource).not.toContain("width: 'calc(100% + var(--toc-extra-right, 0px))'");
+    expect(viewSource).not.toContain("marginRight: 'calc(var(--toc-extra-right, 0px) * -1)'");
+    expect(viewSource).not.toContain('view-header-actions-reserve');
 
-    expect(cssSource).toContain('.view-header-actions-reserve');
-    expect(cssSource).toContain('.view-header-actions');
-    expect(cssSource).toContain('position: fixed;');
-    expect(cssSource).toContain('top: calc(var(--app-titlebar-h) + 0.4375rem);');
-    expect(cssSource).toContain('right: calc(var(--right-panel-width, 0px) + var(--right-agent-detail-width, 0px) + 1.5rem);');
-    expect(cssSource).toContain('z-index: var(--z-app-nav);');
+    expect(cssSource).not.toContain('.view-header-actions-reserve');
+    expect(cssSource).not.toContain('.view-header-actions {');
+    expect(cssSource).not.toContain('top: calc(var(--app-titlebar-h) + 0.4375rem);');
+    expect(cssSource).not.toContain('right: calc(var(--right-panel-width, 0px) + var(--right-agent-detail-width, 0px) + 1.5rem);');
   });
 });
