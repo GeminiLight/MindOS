@@ -154,6 +154,48 @@ describe('PluginManager', () => {
     expect(plugins.find((item) => item.id === 'disabled-plugin')).toMatchObject({ enabled: false, loaded: false });
   });
 
+  it('loads plugins that use supported native-compatible runtime modules', async () => {
+    writePlugin('safe-native-plugin', `
+      const { Plugin } = require('obsidian');
+      const path = require('path');
+      const crypto = require('crypto');
+      const { Buffer } = require('buffer');
+      const { EventEmitter } = require('events');
+      const { URL } = require('node:url');
+      const util = require('util');
+      const assert = require('assert');
+      module.exports = class SafeNativePlugin extends Plugin {
+        onload() {
+          const emitter = new EventEmitter();
+          const digest = crypto.createHash('sha256').update(path.basename('notes/example.md')).digest('hex');
+          const payload = Buffer.from(new URL('https://example.com/notes/example.md').pathname).toString('utf8');
+          assert.ok(payload.includes(path.basename('notes/example.md')));
+          emitter.emit('ready', payload);
+          this.addCommand({ id: 'digest', name: util.format('%s:%s', 'digest', digest.slice(0, 6)), callback: () => digest });
+        }
+      };
+    `);
+
+    const manager = new PluginManager(mindRoot);
+    await manager.discover();
+    await manager.enable('safe-native-plugin');
+    const result = await manager.loadEnabledPlugins();
+
+    expect(result.loaded).toEqual(['safe-native-plugin']);
+    const plugin = manager.list().find((item) => item.id === 'safe-native-plugin');
+    expect(plugin?.compatibilityLevel).toBe('partial');
+    expect(plugin?.compatibility.supportedModules).toEqual(expect.arrayContaining([
+      'path',
+      'crypto',
+      'buffer',
+      'events',
+      'node:url',
+      'util',
+      'assert',
+    ]));
+    expect(plugin?.loaded).toBe(true);
+  });
+
   it('captures plugin load errors or skips blocked plugins without aborting the whole load pass', async () => {
     writePlugin('good-plugin', `const { Plugin } = require('obsidian'); module.exports = class GoodPlugin extends Plugin {};`);
     writePlugin('bad-plugin', `

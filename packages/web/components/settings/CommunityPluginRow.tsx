@@ -138,6 +138,8 @@ export function CommunityPluginRow({
   onOpenImportPanel,
 }: CommunityPluginRowProps) {
   const preflightBlocker = preflight?.result?.installBlockedReasons?.[0];
+  const support = preflight?.result ? communityPreflightSupport(preflight.result) : null;
+  const supportLevel = support?.kind ?? null;
   const updatePlanResult = updatePlan?.result;
   const canInstall = !plugin.installed && preflight?.result?.installable === true;
   const remoteVersion = preflight?.result?.package.manifest.version;
@@ -366,14 +368,14 @@ export function CommunityPluginRow({
           <div className="flex flex-wrap items-center gap-2">
             <span className="inline-flex items-center gap-1.5 text-xs font-medium">
               <ShieldCheck size={12} />
-              {copy.communityPreflightStatus(preflight.result.compatibility.level, preflight.result.installable)}
+              {copy.communityPreflightStatus(supportLevel === 'native' ? 'native' : preflight.result.compatibility.level, preflight.result.installable)}
             </span>
             <span className="font-mono text-2xs opacity-80">
               {copy.communityPreflightAssets(preflight.result.package.manifest.version, preflight.result.package.assets.stylesCss)}
             </span>
           </div>
           <p className="mt-1 text-2xs leading-relaxed opacity-90">
-            {preflightBlocker ?? copy.communityPreflightNoBlockers}
+            {support?.kind === 'native' ? support.reason : preflightBlocker ?? copy.communityPreflightNoBlockers}
           </p>
           <CommunityPreflightSupportPreview copy={copy} result={preflight.result} />
         </div>

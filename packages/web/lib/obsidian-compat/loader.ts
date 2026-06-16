@@ -5,6 +5,18 @@
 
 import fs from 'fs';
 import path from 'path';
+import nodeAssert from 'assert';
+import nodeAssertStrict from 'assert/strict';
+import * as nodeBuffer from 'buffer';
+import * as nodeCrypto from 'crypto';
+import * as nodeEvents from 'events';
+import * as nodeQuerystring from 'querystring';
+import * as nodeStream from 'stream';
+import * as nodeStringDecoder from 'string_decoder';
+import * as nodeTimers from 'timers';
+import * as nodeTimersPromises from 'timers/promises';
+import * as nodeUrl from 'url';
+import * as nodeUtil from 'util';
 import { validateManifest, ManifestError } from './manifest';
 import { CompatError, CompatErrorCodes } from './errors';
 import { Plugin } from './shims/plugin';
@@ -191,10 +203,41 @@ export class PluginLoader {
     const exports = module.exports;
 
     const obsidianModule = createObsidianModule();
+    const supportedRuntimeModules: Record<string, unknown> = {
+      path,
+      'node:path': path,
+      assert: nodeAssert,
+      'node:assert': nodeAssert,
+      'assert/strict': nodeAssertStrict,
+      'node:assert/strict': nodeAssertStrict,
+      buffer: nodeBuffer,
+      'node:buffer': nodeBuffer,
+      crypto: nodeCrypto,
+      'node:crypto': nodeCrypto,
+      events: nodeEvents,
+      'node:events': nodeEvents,
+      querystring: nodeQuerystring,
+      'node:querystring': nodeQuerystring,
+      stream: nodeStream,
+      'node:stream': nodeStream,
+      string_decoder: nodeStringDecoder,
+      'node:string_decoder': nodeStringDecoder,
+      timers: nodeTimers,
+      'node:timers': nodeTimers,
+      'timers/promises': nodeTimersPromises,
+      'node:timers/promises': nodeTimersPromises,
+      url: nodeUrl,
+      'node:url': nodeUrl,
+      util: nodeUtil,
+      'node:util': nodeUtil,
+    };
 
     const require = (id: string) => {
       if (id === 'obsidian') {
         return obsidianModule;
+      }
+      if (Object.prototype.hasOwnProperty.call(supportedRuntimeModules, id)) {
+        return supportedRuntimeModules[id];
       }
       throw new CompatError(`Unsupported module: ${id}`, CompatErrorCodes.MODULE_NOT_SUPPORTED, { moduleId: id });
     };

@@ -117,6 +117,7 @@ export function communityStatusClass(status: ObsidianCommunityCatalogItem['insta
 }
 
 export function communityPreflightClass(result: ObsidianCommunityPluginPreflight): string {
+  if (result.support?.kind === 'native') return 'border-[var(--amber)]/25 bg-[var(--amber-subtle)] text-[var(--amber-text)]';
   if (!result.installable || result.compatibility.level === 'blocked') return 'border-error/25 bg-error/10 text-error';
   if (result.compatibility.level === 'partial') return 'border-[var(--amber)]/25 bg-[var(--amber-subtle)] text-[var(--amber-text)]';
   return 'border-success/25 bg-success/10 text-success';
@@ -126,6 +127,7 @@ export function communityUpdateClass(
   result: ObsidianCommunityPluginPreflight,
   versionState: CommunityVersionState,
 ): string {
+  if (result.support?.kind === 'native') return 'border-[var(--amber)]/25 bg-[var(--amber-subtle)] text-[var(--amber-text)]';
   if (!result.installable || result.compatibility.level === 'blocked') return 'border-error/25 bg-error/10 text-error';
   if (versionState === 'up-to-date') return 'border-success/25 bg-success/10 text-success';
   if (versionState === 'update-available' || versionState === 'local-newer') {
@@ -137,7 +139,7 @@ export function communityUpdateClass(
 export function communityPreflightSupportClass(level: CommunityPreflightSupportLevel): string {
   if (level === 'blocked') return 'border-error/25 bg-error/10 text-error';
   if (level === 'ready') return 'border-success/25 bg-success/10 text-success';
-  if (level === 'limited' || level === 'review') {
+  if (level === 'limited' || level === 'review' || level === 'native') {
     return 'border-[var(--amber)]/25 bg-[var(--amber-subtle)] text-[var(--amber-text)]';
   }
   return 'border-border bg-muted text-muted-foreground';

@@ -139,4 +139,34 @@ describe('Obsidian community preflight support projection', () => {
       { id: 'commands', state: 'blocked', count: 1 },
     ]);
   });
+
+  it('labels native runtime module blockers without turning every detected surface red', () => {
+    const input = supportInput({
+      compatibility: {
+        level: 'blocked',
+        report: {
+          obsidianApis: ['Plugin', 'addCommand'],
+          moduleImports: ['fs'],
+          nodeModules: ['fs'],
+          unsupportedModules: ['fs'],
+          supportedApis: ['Plugin', 'addCommand'],
+          partialApis: [],
+          unsupportedApis: [],
+          blockers: ['Requires unsupported runtime module: fs'],
+        },
+      },
+      installable: false,
+      installBlockedReasons: ['Requires unsupported runtime module: fs'],
+    });
+
+    expect(buildObsidianCommunityPreflightSupport(input)).toMatchObject({
+      kind: 'native',
+      label: 'Needs native runtime',
+      installable: false,
+      reason: 'Requires native Desktop capabilities that are not yet exposed to community plugins: fs.',
+    });
+    expect(buildObsidianCommunitySurfacePreview(input)).toEqual([
+      { id: 'commands', state: 'mounted', count: 1 },
+    ]);
+  });
 });

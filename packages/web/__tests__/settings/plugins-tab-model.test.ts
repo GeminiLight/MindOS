@@ -168,7 +168,7 @@ describe('PluginsTabModel community preflight support preview', () => {
     expect(communityPreflightSupportClass('review')).toContain('var(--amber)');
   });
 
-  it('marks blocked packages as blocked and turns predicted surfaces into blocked diagnostics', () => {
+  it('marks native-only blockers as native without turning predicted surfaces red', () => {
     const result = preflight({
       installable: false,
       installBlockedReasons: ['Requires unsupported runtime module: fs'],
@@ -187,9 +187,10 @@ describe('PluginsTabModel community preflight support preview', () => {
       },
     });
 
-    expect(communityPreflightSupportLevel(result)).toBe('blocked');
+    expect(communityPreflightSupportLevel(result)).toBe('native');
+    expect(communityPreflightSupportClass('native')).toContain('var(--amber)');
     expect(communityPreflightSurfaces(result)).toEqual([
-      { id: 'commands', state: 'blocked', count: 1 },
+      { id: 'commands', state: 'mounted', count: 1 },
     ]);
   });
 });

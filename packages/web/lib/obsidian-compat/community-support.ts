@@ -4,7 +4,7 @@ import {
 } from './import-policy';
 import type { CompatibilityLevel, PluginCompatibilityReport } from './compatibility-report';
 
-export type ObsidianCommunityPreflightSupportLevel = ObsidianImportSupportKind;
+export type ObsidianCommunityPreflightSupportLevel = ObsidianImportSupportKind | 'native';
 export type ObsidianCommunitySurfacePreviewId =
   | 'commands'
   | 'settings'
@@ -121,6 +121,16 @@ export function buildObsidianCommunityPreflightSupport(
   input: ObsidianCommunitySupportInput,
 ): ObsidianCommunityPreflightSupport {
   if (!input.installable) {
+    const nativeReason = nativeRuntimeReason(input);
+    if (nativeReason) {
+      return {
+        kind: 'native',
+        label: 'Needs native runtime',
+        reason: nativeReason,
+        installable: false,
+      };
+    }
+
     return {
       kind: 'blocked',
       label: 'Blocked',
@@ -128,6 +138,24 @@ export function buildObsidianCommunityPreflightSupport(
         ?? input.compatibility.report.blockers[0]
         ?? 'Blocked by preflight compatibility checks.',
       installable: false,
+    };
+  }
+
+  if (input.compatibility.report.platformRequirements?.desktop) {
+    return {
+      kind: 'review',
+      label: 'Desktop runtime',
+      reason: 'This plugin declares a desktop-only requirement. MindOS found no hard native blocker, but verify it in the local Desktop runtime after install.',
+      installable: true,
+    };
+  }
+
+  if ((input.compatibility.report.supportedModules?.length ?? 0) > 0) {
+    return {
+      kind: 'limited',
+      label: 'Limited',
+      reason: `Supported native-compatible modules are available through the MindOS runtime: ${input.compatibility.report.supportedModules?.slice(0, 4).join(', ')}`,
+      installable: true,
     };
   }
 
@@ -152,7 +180,8 @@ export function buildObsidianCommunitySurfacePreview(
   input: ObsidianCommunitySupportInput,
 ): ObsidianCommunitySurfacePreview[] {
   const apiNames = collectApiNames(input.compatibility.report);
-  const blocked = !input.installable || input.compatibility.level === 'blocked';
+  const nativeBlocked = Boolean(nativeRuntimeReason(input));
+  const blocked = (!input.installable || input.compatibility.level === 'blocked') && !nativeBlocked;
 
   return COMMUNITY_SURFACE_PREVIEW_DEFINITIONS
     .map((definition) => {
@@ -167,6 +196,23 @@ export function buildObsidianCommunitySurfacePreview(
       };
     })
     .filter((prediction): prediction is ObsidianCommunitySurfacePreview => prediction !== null);
+}
+
+function nativeRuntimeReason(input: ObsidianCommunitySupportInput): string | null {
+  const installBlockedReasons = input.installBlockedReasons ?? [];
+  const unsupportedNativeModules = new Set(
+    input.compatibility.report.unsupportedModules.filter((moduleName) => input.compatibility.report.nodeModules.includes(moduleName)),
+  );
+  const nativeBlockReasons = installBlockedReasons.filter((reason) => {
+    const match = reason.match(/^Requires unsupported runtime module: (.+)$/);
+    return Boolean(match?.[1] && unsupportedNativeModules.has(match[1]));
+  });
+
+  if (nativeBlockReasons.length === 0) return null;
+  if (nativeBlockReasons.length !== installBlockedReasons.length) return null;
+
+  const modules = Array.from(unsupportedNativeModules).slice(0, 4).join(', ');
+  return `Requires native Desktop capabilities that are not yet exposed to community plugins: ${modules}.`;
 }
 
 function collectApiNames(report: PluginCompatibilityReport): Set<string> {

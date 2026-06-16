@@ -11,24 +11,39 @@ import {
 
 export type CompatibilityLevel = 'compatible' | 'partial' | 'blocked';
 
+export interface PluginPlatformRequirements {
+  desktop: boolean;
+  reasons: string[];
+}
+
 export interface PluginCompatibilityReport {
   obsidianApis: string[];
   moduleImports: string[];
   nodeModules: string[];
+  supportedModules?: string[];
   unsupportedModules: string[];
+  platformRequirements?: PluginPlatformRequirements;
   supportedApis: string[];
   partialApis: string[];
   unsupportedApis: string[];
   blockers: string[];
 }
 
-const NODE_BLOCKLIST = new Set([
+const NODE_RUNTIME_MODULES = new Set([
   'fs',
   'node:fs',
   'path',
   'node:path',
+  'assert',
+  'node:assert',
+  'assert/strict',
+  'node:assert/strict',
+  'buffer',
+  'node:buffer',
   'child_process',
   'node:child_process',
+  'events',
+  'node:events',
   'electron',
   'os',
   'node:os',
@@ -42,8 +57,51 @@ const NODE_BLOCKLIST = new Set([
   'node:https',
   'crypto',
   'node:crypto',
+  'querystring',
+  'node:querystring',
+  'stream',
+  'node:stream',
+  'string_decoder',
+  'node:string_decoder',
+  'timers',
+  'node:timers',
+  'timers/promises',
+  'node:timers/promises',
+  'url',
+  'node:url',
+  'util',
+  'node:util',
   'worker_threads',
   'node:worker_threads',
+]);
+
+const SUPPORTED_RUNTIME_MODULES = new Set([
+  'path',
+  'node:path',
+  'assert',
+  'node:assert',
+  'assert/strict',
+  'node:assert/strict',
+  'buffer',
+  'node:buffer',
+  'crypto',
+  'node:crypto',
+  'events',
+  'node:events',
+  'querystring',
+  'node:querystring',
+  'stream',
+  'node:stream',
+  'string_decoder',
+  'node:string_decoder',
+  'timers',
+  'node:timers',
+  'timers/promises',
+  'node:timers/promises',
+  'url',
+  'node:url',
+  'util',
+  'node:util',
 ]);
 
 function unique(values: string[]): string[] {
@@ -179,15 +237,20 @@ function collectNodeModules(moduleImports: string[]): string[] {
   for (const moduleName of moduleImports) {
     if (!moduleName || moduleName.startsWith('.') || moduleName.startsWith('/')) continue;
     const normalizedModuleName = moduleName.replace(/^node:/, '');
-    if (NODE_BLOCKLIST.has(moduleName) || NODE_BLOCKLIST.has(normalizedModuleName)) {
+    if (NODE_RUNTIME_MODULES.has(moduleName) || NODE_RUNTIME_MODULES.has(normalizedModuleName)) {
       modules.push(moduleName);
     }
   }
   return unique(modules);
 }
 
-function collectUnsupportedModules(moduleImports: string[]): string[] {
-  return unique(moduleImports);
+function collectSupportedModules(moduleImports: string[]): string[] {
+  return unique(moduleImports.filter((moduleName) => SUPPORTED_RUNTIME_MODULES.has(moduleName)));
+}
+
+function collectUnsupportedModules(moduleImports: string[], supportedModules: string[]): string[] {
+  const supported = new Set(supportedModules);
+  return unique(moduleImports.filter((moduleName) => !supported.has(moduleName)));
 }
 
 function collectDynamicModuleBlockers(code: string): string[] {
@@ -205,14 +268,20 @@ export function analyzePluginCompatibility(code: string, manifest?: { isDesktopO
   const obsidianApis = collectObsidianImports(code);
   const moduleImports = collectModuleImports(code);
   const nodeModules = collectNodeModules(moduleImports);
-  const unsupportedModules = collectUnsupportedModules(moduleImports);
+  const supportedModules = collectSupportedModules(moduleImports);
+  const unsupportedModules = collectUnsupportedModules(moduleImports, supportedModules);
+  const platformRequirements: PluginPlatformRequirements = {
+    desktop: manifest?.isDesktopOnly === true,
+    reasons: manifest?.isDesktopOnly === true
+      ? ['Manifest declares this plugin is desktop-only.']
+      : [],
+  };
 
   const supportedApis = obsidianApis.filter(isFullySupportedObsidianApi);
   const partialApis = obsidianApis.filter(isPartiallySupportedObsidianApi);
   const unsupportedApis = obsidianApis.filter(isUnsupportedObsidianApi);
 
   const blockers = [
-    ...(manifest?.isDesktopOnly ? ['Manifest marks this plugin as desktop-only.'] : []),
     ...unsupportedModules.map((moduleName) => `Requires unsupported runtime module: ${moduleName}`),
     ...collectDynamicModuleBlockers(code),
   ];
@@ -221,7 +290,9 @@ export function analyzePluginCompatibility(code: string, manifest?: { isDesktopO
     obsidianApis,
     moduleImports,
     nodeModules,
+    supportedModules,
     unsupportedModules,
+    platformRequirements,
     supportedApis: unique(supportedApis),
     partialApis: unique(partialApis),
     unsupportedApis: unique(unsupportedApis),
@@ -233,7 +304,12 @@ export function getCompatibilityLevel(report: PluginCompatibilityReport): Compat
   if (report.blockers.length > 0) {
     return 'blocked';
   }
-  if (report.partialApis.length > 0 || report.unsupportedApis.length > 0) {
+  if (
+    report.platformRequirements?.desktop === true
+    || (report.supportedModules?.length ?? 0) > 0
+    || report.partialApis.length > 0
+    || report.unsupportedApis.length > 0
+  ) {
     return 'partial';
   }
   return 'compatible';

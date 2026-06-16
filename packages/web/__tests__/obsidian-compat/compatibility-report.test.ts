@@ -92,6 +92,33 @@ describe('compatibility report', () => {
     expect(getCompatibilityLevel(report)).toBe('blocked');
   });
 
+  it('allows safe runtime modules while still marking the package as partial', () => {
+    const report = analyzePluginCompatibility(`
+      const { Plugin } = require("obsidian");
+      const path = require("path");
+      const crypto = require("crypto");
+      const { Buffer } = require("buffer");
+      const { EventEmitter } = require("events");
+      const { URL } = require("node:url");
+      const util = require("util");
+      const assert = require("assert");
+      module.exports = class Example extends Plugin {
+        onload() {
+          const emitter = new EventEmitter();
+          assert.ok(Buffer.from(path.basename('notes/a.md')));
+          emitter.emit('ready', new URL('https://example.com'));
+          return util.format('%s:%s', 'digest', crypto.createHash('sha256').update('a').digest('hex'));
+        }
+      }
+    `);
+
+    expect(report.nodeModules).toEqual(expect.arrayContaining(['path', 'crypto', 'buffer', 'events', 'node:url', 'util', 'assert']));
+    expect(report.supportedModules).toEqual(expect.arrayContaining(['path', 'crypto', 'buffer', 'events', 'node:url', 'util', 'assert']));
+    expect(report.unsupportedModules).toEqual([]);
+    expect(report.blockers).toEqual([]);
+    expect(getCompatibilityLevel(report)).toBe('partial');
+  });
+
   it('classifies partially supported advanced APIs as partial compatibility', () => {
     const report = analyzePluginCompatibility(`
       const { Plugin, ItemView, requestUrl } = require('obsidian');
@@ -178,14 +205,18 @@ describe('compatibility report', () => {
     expect(getCompatibilityLevel(report)).toBe('compatible');
   });
 
-  it('blocks plugins marked desktop-only even when code has no node require', () => {
+  it('keeps desktop-only manifests as a platform requirement instead of a hard blocker', () => {
     const report = analyzePluginCompatibility(`
       const { Plugin } = require('obsidian');
       module.exports = class DesktopOnly extends Plugin {}
     `, { isDesktopOnly: true });
 
-    expect(report.blockers).toContain('Manifest marks this plugin as desktop-only.');
-    expect(getCompatibilityLevel(report)).toBe('blocked');
+    expect(report.platformRequirements).toMatchObject({
+      desktop: true,
+      reasons: ['Manifest declares this plugin is desktop-only.'],
+    });
+    expect(report.blockers).toEqual([]);
+    expect(getCompatibilityLevel(report)).toBe('partial');
   });
 
   it('flags dynamic require and unknown Obsidian APIs for manual review', () => {

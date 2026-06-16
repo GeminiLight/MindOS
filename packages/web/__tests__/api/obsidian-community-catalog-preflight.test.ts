@@ -228,8 +228,8 @@ describe('/api/obsidian/community-catalog/preflight', () => {
         },
       },
       support: {
-        kind: 'blocked',
-        label: 'Blocked',
+        kind: 'native',
+        label: 'Needs native runtime',
         installable: false,
       },
       installable: false,

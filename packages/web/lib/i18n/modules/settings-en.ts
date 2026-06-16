@@ -466,6 +466,7 @@ export const settingsEn = {
       communityPreflightStatus: (level: string, installable: boolean) => {
         if (level === 'compatible' && installable) return 'Ready to install';
         if (level === 'partial' && installable) return 'Installable with limited support';
+        if (level === 'native') return 'Needs native runtime';
         if (level === 'blocked') return 'Blocked by preflight';
         return installable ? 'Needs review before use' : 'Needs review';
       },
@@ -475,12 +476,14 @@ export const settingsEn = {
         ready: 'Recommended trial',
         limited: 'Limited trial',
         review: 'Manual review',
+        native: 'Desktop runtime required',
         blocked: 'Do not install',
       }[level] ?? 'Manual review'),
       communityPreflightRecommendationNote: (level: string) => ({
         ready: 'Good candidate for MindOS: detected APIs map to mounted local hosts.',
         limited: 'Can be tested locally, but at least one capability runs through a limited host.',
         review: 'Install only if you trust the plugin and have reviewed the unsupported APIs.',
+        native: 'This plugin needs native Desktop capabilities that are not yet exposed to community plugins.',
         blocked: 'Hard blockers prevent MindOS from installing or running this package.',
       }[level] ?? 'Review this plugin before relying on it.'),
       communityPreflightSupportTitle: 'MindOS compatibility preview',
@@ -488,12 +491,14 @@ export const settingsEn = {
         ready: 'Ready',
         limited: 'Limited',
         review: 'Review',
+        native: 'Native',
         blocked: 'Blocked',
       }[level] ?? level),
       communityPreflightSupportNote: (level: string) => ({
         ready: 'Supported APIs map to MindOS hosts after you enable and load the plugin.',
         limited: 'Some APIs use limited MindOS hosts such as snapshots, catalogs, or scoped views. Verify the plugin after install.',
         review: 'Unsupported APIs were detected. Review the report before relying on this plugin.',
+        native: 'Native Desktop capability support is required before this plugin can run in MindOS.',
         blocked: 'MindOS will not install this package until blocking compatibility issues are resolved.',
       }[level] ?? 'Review this plugin before relying on it.'),
       communityPreflightSupportReasonLabel: 'Reason:',

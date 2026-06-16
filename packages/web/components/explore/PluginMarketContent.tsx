@@ -618,7 +618,9 @@ const MarketPluginRow = memo(function MarketPluginRow({
   const supportLevel = preflight?.result ? communityPreflightSupportLevel(preflight.result) : null;
   const surfaces = preflight?.result ? communityPreflightSurfaces(preflight.result) : [];
   const preflightBlocker = preflight?.result?.installBlockedReasons?.[0];
-  const preflightSummary = preflightBlocker ?? support?.reason ?? copy.communityPreflightNoBlockers;
+  const preflightSummary = support?.kind === 'native'
+    ? support.reason
+    : preflightBlocker ?? support?.reason ?? copy.communityPreflightNoBlockers;
   const canInstall = !plugin.installed && preflight?.result?.installable === true;
 
   return (
@@ -727,7 +729,7 @@ const MarketPluginRow = memo(function MarketPluginRow({
           <div className="flex flex-wrap items-center gap-2">
             <span className="inline-flex items-center gap-1.5 text-xs font-medium">
               <ShieldCheck size={12} />
-              {copy.communityPreflightStatus(preflight.result.compatibility.level, preflight.result.installable)}
+              {copy.communityPreflightStatus(supportLevel === 'native' ? 'native' : preflight.result.compatibility.level, preflight.result.installable)}
             </span>
             <span className="font-mono text-2xs opacity-80">
               {copy.communityPreflightAssets(preflight.result.package.manifest.version, preflight.result.package.assets.stylesCss)}

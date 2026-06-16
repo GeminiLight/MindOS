@@ -479,6 +479,42 @@ describe('Obsidian community catalog adapter', () => {
     });
   });
 
+  it('treats desktop-only manifests as reviewable platform requirements when no native blocker is detected', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith('/manifest.json')) {
+        return new Response(JSON.stringify({
+          id: 'desktop-review',
+          name: 'Desktop Review',
+          version: '1.0.0',
+          isDesktopOnly: true,
+        }), { status: 200 });
+      }
+      if (url.endsWith('/main.js')) {
+        return new Response("const { Plugin } = require('obsidian'); module.exports = class DesktopReview extends Plugin {};", { status: 200 });
+      }
+      return new Response('missing', { status: 404 });
+    });
+
+    const preflight = await preflightObsidianCommunityPluginPackage({
+      repo: 'owner/desktop-review',
+      pluginId: 'desktop-review',
+      fetchImpl: fetchMock as unknown as typeof fetch,
+    });
+
+    expect(preflight.compatibility.level).toBe('partial');
+    expect(preflight.compatibility.report.platformRequirements).toMatchObject({
+      desktop: true,
+    });
+    expect(preflight.installable).toBe(true);
+    expect(preflight.installBlockedReasons).toEqual([]);
+    expect(preflight.support).toMatchObject({
+      kind: 'review',
+      label: 'Desktop runtime',
+      installable: true,
+    });
+  });
+
   it('blocks community plugin preflight when main.js imports unsupported modules', async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
@@ -507,6 +543,12 @@ describe('Obsidian community catalog adapter', () => {
     expect(preflight.installBlockedReasons).toEqual([
       'Requires unsupported runtime module: fs',
     ]);
+    expect(preflight.support).toMatchObject({
+      kind: 'native',
+      label: 'Needs native runtime',
+      installable: false,
+      reason: 'Requires native Desktop capabilities that are not yet exposed to community plugins: fs.',
+    });
   });
 
   it('rejects oversized release assets during community plugin preflight', async () => {

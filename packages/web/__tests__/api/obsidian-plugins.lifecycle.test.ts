@@ -165,25 +165,24 @@ describe('/api/obsidian-plugins lifecycle', () => {
   it('skips blocked plugins during load-enabled without aborting compatible plugins', async () => {
     writePlugin('good-plugin', `const { Plugin } = require('obsidian'); module.exports = class Good extends Plugin {};`);
     writePlugin(
-      'desktop-plugin',
-      `const { Plugin } = require('obsidian'); module.exports = class Desktop extends Plugin {};`,
-      { isDesktopOnly: true },
+      'fs-plugin',
+      `const fs = require('fs'); const { Plugin } = require('obsidian'); module.exports = class FsPlugin extends Plugin {};`,
     );
 
     const { POST } = await importLifecycleRoute();
     await POST(postRequest({ action: 'enable', pluginId: 'good-plugin' }));
-    await POST(postRequest({ action: 'enable', pluginId: 'desktop-plugin' }));
+    await POST(postRequest({ action: 'enable', pluginId: 'fs-plugin' }));
 
     const res = await POST(postRequest({ action: 'load-enabled' }));
     const json = await res.json();
 
     expect(res.status).toBe(200);
     expect(json.result.loaded).toEqual(['good-plugin']);
-    expect(json.result.skipped).toEqual(['desktop-plugin']);
-    expect(json.plugins.find((plugin: { id: string }) => plugin.id === 'desktop-plugin')).toMatchObject({
+    expect(json.result.skipped).toEqual(['fs-plugin']);
+    expect(json.plugins.find((plugin: { id: string }) => plugin.id === 'fs-plugin')).toMatchObject({
       compatibilityLevel: 'blocked',
       loaded: false,
-      lastError: 'Manifest marks this plugin as desktop-only.',
+      lastError: 'Requires unsupported runtime module: fs',
     });
   });
 });

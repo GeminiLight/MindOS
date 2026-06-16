@@ -73,6 +73,7 @@ describe('i18n plugin market keys', () => {
     expect(zh.settings.plugins.mindosRenderersTitle).toBe('内置扩展');
     expect(zh.settings.plugins.communityPreflightSupportLevel('ready')).toBe('可用');
     expect(zh.settings.plugins.communityPreflightSupportLevel('limited')).toBe('受限');
+    expect(zh.settings.plugins.communityPreflightSupportLevel('native')).toBe('本机能力');
   });
 });
 

@@ -466,6 +466,7 @@ export const settingsZh = {
       communityPreflightStatus: (level: string, installable: boolean) => {
         if (level === 'compatible' && installable) return '可安装';
         if (level === 'partial' && installable) return '可安装但支持受限';
+        if (level === 'native') return '需要本机运行时';
         if (level === 'blocked') return '预检阻断';
         return installable ? '使用前需要复核' : '需要复核';
       },
@@ -475,12 +476,14 @@ export const settingsZh = {
         ready: '推荐试用',
         limited: '可试用但受限',
         review: '需要人工复核',
+        native: '需要桌面运行时',
         blocked: '不应安装',
       }[level] ?? '需要人工复核'),
       communityPreflightRecommendationNote: (level: string) => ({
         ready: '这是较适合在 MindOS 中试用的插件：检测到的 API 能映射到已挂载的本机宿主。',
         limited: '可以在本机试用，但至少一类能力会通过受限宿主运行，安装后需要实际验证。',
         review: '只有在你信任该插件且已复核未支持 API 后才建议安装。',
+        native: '这个插件需要尚未开放给社区插件的 Desktop 原生能力。',
         blocked: '存在硬阻断，MindOS 不会安装或运行这个插件包。',
       }[level] ?? '依赖这个插件前需要先复核。'),
       communityPreflightSupportTitle: 'MindOS 兼容性预览',
@@ -488,12 +491,14 @@ export const settingsZh = {
         ready: '可用',
         limited: '受限',
         review: '需复核',
+        native: '本机能力',
         blocked: '已阻断',
       }[level] ?? level),
       communityPreflightSupportNote: (level: string) => ({
         ready: '支持的 API 会在你启用并加载插件后映射到 MindOS 宿主。',
         limited: '部分 API 会通过 snapshot、目录态、独立视图或受限宿主运行；安装后仍需要实际验证。',
         review: '检测到未支持 API。依赖这个插件前需要先人工复核报告。',
+        native: '这个插件需要 Desktop 原生能力支持后，才能在 MindOS 中运行。',
         blocked: '存在阻断级兼容问题，MindOS 不会安装这个插件包。',
       }[level] ?? '依赖这个插件前需要先复核。'),
       communityPreflightSupportReasonLabel: '原因：',
