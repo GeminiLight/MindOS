@@ -788,6 +788,7 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
         maximized={effectivePanelMaximized}
         onMaximize={lp.handlePanelMaximize}
         onImport={handleOpenImport}
+        onSearchOpenOrFocus={openOrFocusSearchPanel}
       >
         {isPanelMounted('echo') && (
           <div className={`flex flex-col h-full ${activeLeftPanel === 'echo' ? '' : 'hidden'}`}>

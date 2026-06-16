@@ -91,6 +91,8 @@ interface PanelProps {
   onMaximize?: () => void;
   /** Callback to open import modal for a space */
   onImport?: (space?: string) => void;
+  /** Callback to open or focus the search panel */
+  onSearchOpenOrFocus?: () => void;
   /** Lazy-loaded panel content for search/ask/plugins */
   children?: React.ReactNode;
 }
@@ -107,6 +109,7 @@ export default function Panel({
   onWidthCommit,
   maximized = false,
   onImport,
+  onSearchOpenOrFocus,
   children,
 }: PanelProps) {
   const open = activePanel !== null;
@@ -299,6 +302,7 @@ export default function Panel({
           fileTree={ordinaryFileTree}
           mindSystemSlots={mindSystemSlots}
           onNavigate={onNavigate}
+          onSearchOpenOrFocus={onSearchOpenOrFocus}
         />
       </div>
 

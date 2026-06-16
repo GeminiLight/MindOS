@@ -78,7 +78,7 @@ describe('HomePanel', () => {
     vi.unstubAllGlobals();
   });
 
-  it('defaults to agent sessions and shows runtime plus running status per item', async () => {
+  it('defaults to agent sessions and renders compact agent/status markers', async () => {
     const sessions = [
       session({
         id: 's-codex',
@@ -104,8 +104,105 @@ describe('HomePanel', () => {
 
     expect(host.querySelector('[data-home-session-list]')).not.toBeNull();
     expect(host.textContent).toContain('Investigate file tree open latency');
-    expect(host.textContent).toContain('Codex');
-    expect(host.textContent).toContain('Running');
+    expect(host.textContent).not.toContain('Codex');
+    expect(host.textContent).not.toContain('Running');
+    expect(host.querySelector('[data-home-session-row="s-codex"] [data-home-session-agent="codex"]')).not.toBeNull();
+    const codexLogo = host.querySelector('[data-home-session-row="s-codex"] [data-home-session-agent="codex"] img') as HTMLImageElement | null;
+    expect(codexLogo?.getAttribute('src')).toBe('/agent-icons/openai.svg');
+    expect(codexLogo?.closest('[data-home-session-row]')?.textContent).toContain('Investigate file tree open latency');
+    const title = Array.from(host.querySelectorAll('[data-home-session-row="s-codex"] span')).find((node) => (
+      node.textContent === 'Investigate file tree open latency'
+    )) as HTMLElement | undefined;
+    expect(title?.className).toContain('text-[13px]');
+    expect(title?.className).not.toContain('font-medium');
+    expect(host.querySelector('[data-home-session-row="s-codex"] [data-home-session-status="running"]')).not.toBeNull();
+  });
+
+  it('filters Home sessions by agent runtime', async () => {
+    const sessions = [
+      session({
+        id: 's-codex',
+        messages: [userMsg('Investigate file tree open latency')],
+        runtimeSessionBinding: {
+          kind: 'codex-thread',
+          runtime: 'codex',
+          runtimeId: 'codex',
+          externalSessionId: 'thread_1234567890abcdef',
+          status: 'active',
+          updatedAt: 2_000,
+        },
+      }),
+      session({
+        id: 's-claude',
+        messages: [userMsg('Review the prompt runtime plan')],
+        runtimeSessionBinding: {
+          kind: 'claude-session',
+          runtime: 'claude',
+          runtimeId: 'claude',
+          externalSessionId: 'claude-session-123',
+          status: 'active',
+          updatedAt: 2_000,
+        },
+      }),
+    ];
+    installFetchMock(sessions);
+    await initSessions({});
+
+    await renderHomePanel();
+
+    expect(host.textContent).toContain('Investigate file tree open latency');
+    expect(host.textContent).toContain('Review the prompt runtime plan');
+
+    const codexFilter = host.querySelector('[data-home-agent-filter="codex"]') as HTMLButtonElement | null;
+    expect(codexFilter).not.toBeNull();
+    await act(async () => {
+      codexFilter!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(host.textContent).toContain('Investigate file tree open latency');
+    expect(host.textContent).not.toContain('Review the prompt runtime plan');
+  });
+
+  it('uses the local Claude Code logo for Claude sessions', async () => {
+    const sessions = [
+      session({
+        id: 's-claude',
+        messages: [userMsg('Review the prompt runtime plan')],
+        runtimeSessionBinding: {
+          kind: 'claude-session',
+          runtime: 'claude',
+          runtimeId: 'claude',
+          externalSessionId: 'claude-session-123',
+          status: 'active',
+          updatedAt: 2_000,
+        },
+      }),
+    ];
+    installFetchMock(sessions);
+    await initSessions({});
+
+    await renderHomePanel();
+
+    const claudeLogo = host.querySelector('[data-home-session-row="s-claude"] [data-home-session-agent="claude"] img') as HTMLImageElement | null;
+    expect(claudeLogo?.getAttribute('src')).toBe('/agent-icons/claude.svg');
+  });
+
+  it('uses the same white logo shell for MindOS sessions', async () => {
+    const sessions = [
+      session({
+        id: 's-mindos',
+        messages: [userMsg('Open the daily planning note')],
+      }),
+    ];
+    installFetchMock(sessions);
+    await initSessions({});
+
+    await renderHomePanel();
+
+    const mindosMark = host.querySelector('[data-home-session-row="s-mindos"] [data-home-session-agent="mindos"]') as HTMLElement | null;
+    expect(mindosMark).not.toBeNull();
+    expect(mindosMark?.className).toContain('bg-background');
+    expect(mindosMark?.className).toContain('border-border');
   });
 
   it('switches the Home sidebar header into Mind Files mode', async () => {

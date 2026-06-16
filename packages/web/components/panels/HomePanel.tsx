@@ -1,13 +1,14 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Bot, Brain, Loader2, MessageSquare } from 'lucide-react';
+import { Brain, Loader2, MessageSquare, Network, Plus, RefreshCw, Search } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import FileTree from '@/components/FileTree';
+import Logo from '@/components/Logo';
 import type { FileNode, ChatSession } from '@/lib/types';
 import type { MindSystemSlot } from '@/lib/mind-system';
 import { getRuntimeSessionSummary, getSessionAgentRuntime } from '@/lib/ask-agent';
-import { loadSession, refreshSessions, useActiveSessionId, useSessions } from '@/lib/ask-session-store';
+import { loadSession, refreshSessions, resetSession, useActiveSessionId, useSessions } from '@/lib/ask-session-store';
 import { useRunSummary } from '@/lib/ask-run-store';
 import { sessionTitle } from '@/hooks/useAskSession';
 import { useSmoothRouterPush } from '@/hooks/useSmoothRouterPush';
@@ -17,32 +18,28 @@ import PanelHeader from './PanelHeader';
 import MindSystemSidebarSection from './MindSystemSidebarSection';
 
 type HomeSidebarMode = 'sessions' | 'files';
+type SessionAgentFilter = 'all' | 'mindos' | 'codex' | 'claude' | 'acp';
 
-function formatRelativeTime(ts: number): string {
+function compactTimeDistance(ts: number): string {
   const diff = Date.now() - ts;
-  const mins = Math.floor(diff / 60_000);
-  if (mins < 1) return 'now';
+  const mins = Math.max(0, Math.floor(diff / 60_000));
+  if (mins < 1) return '0m';
   if (mins < 60) return `${mins}m`;
   const hours = Math.floor(mins / 60);
   if (hours < 24) return `${hours}h`;
   const days = Math.floor(hours / 24);
-  if (days < 7) return `${days}d`;
-  return new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  if (days < 31) return `${days}d`;
+  const months = Math.floor(days / 30);
+  if (months < 12) return `${months}mo`;
+  return `${Math.floor(months / 12)}y`;
 }
 
-function runtimeLabel(session: ChatSession, mindosLabel: string): string {
+function sessionAgentKind(session: ChatSession): Exclude<SessionAgentFilter, 'all'> {
   const runtime = getSessionAgentRuntime(session);
-  if (!runtime || runtime.kind === 'mindos') return mindosLabel;
-  if (runtime.kind === 'codex') return 'Codex';
-  if (runtime.kind === 'claude') return 'Claude';
-  return runtime.name || 'ACP';
-}
-
-function runtimeInitial(label: string): string {
-  const trimmed = label.trim();
-  if (!trimmed) return 'M';
-  if (trimmed.toLowerCase().startsWith('claude')) return 'Cl';
-  return trimmed.slice(0, 1).toUpperCase();
+  if (!runtime || runtime.kind === 'mindos') return 'mindos';
+  if (runtime.kind === 'codex') return 'codex';
+  if (runtime.kind === 'claude') return 'claude';
+  return 'acp';
 }
 
 function sessionDisplayTitle(session: ChatSession, fallback: string): string {
@@ -91,39 +88,159 @@ function HomeModeSwitch({
   );
 }
 
-function SessionStatusBadge({
-  running,
-  unread,
+function AgentMark({
+  kind,
+  id,
   active,
+  size = 'md',
+}: {
+  kind: Exclude<SessionAgentFilter, 'all'>;
+  id: string;
+  active?: boolean;
+  size?: 'sm' | 'md';
+}) {
+  const boxSize = size === 'sm' ? 'h-6 w-6 rounded-lg' : 'h-7 w-7 rounded-lg';
+  const iconSize = size === 'sm' ? 12 : 13;
+  const logoClass = size === 'sm' ? 'h-2.5 w-[18px]' : 'h-3 w-5';
+  const runtimeLogoClass = size === 'sm' ? 'h-3.5 w-3.5' : 'h-4 w-4';
+  const safeId = id.replace(/[^a-zA-Z0-9_-]/g, '-');
+  const shared = `inline-flex shrink-0 items-center justify-center border border-border/50 bg-background ${boxSize}`;
+
+  if (kind === 'mindos') {
+    return (
+      <span
+        data-home-session-agent={kind}
+        className={`${shared} text-[var(--amber)] ${active ? 'shadow-[0_0_0_1px_color-mix(in_srgb,var(--amber)_22%,transparent)_inset]' : ''}`}
+      >
+        <Logo id={`home-agent-${safeId}`} className={logoClass} />
+      </span>
+    );
+  }
+
+  if (kind === 'codex') {
+    return (
+      <span data-home-session-agent={kind} className={shared}>
+        <img src="/agent-icons/openai.svg" alt="" aria-hidden="true" className={`${runtimeLogoClass} object-contain`} />
+      </span>
+    );
+  }
+
+  if (kind === 'claude') {
+    return (
+      <span data-home-session-agent={kind} className={shared}>
+        <img src="/agent-icons/claude.svg" alt="" aria-hidden="true" className={`${runtimeLogoClass} object-contain`} />
+      </span>
+    );
+  }
+
+  return (
+    <span data-home-session-agent={kind} className={`${shared} text-[var(--tool-read)]`}>
+      <Network size={iconSize} aria-hidden="true" />
+    </span>
+  );
+}
+
+function SessionStatusDot({
+  running,
   status,
 }: {
   running: boolean;
-  unread: boolean;
-  active: boolean;
   status?: string;
 }) {
   const { t } = useLocale();
-  const label = running
-    ? t.sidebar.homeRuntimeRunning
-    : unread
-      ? t.sidebar.homeRuntimeUnread
-      : active
-        ? t.sidebar.homeRuntimeActive
-        : status || t.sidebar.homeRuntimeIdle;
+  if (!running && (!status || status === 'active')) return null;
+
+  const failed = status === 'failed' || status === 'missing' || status === 'signed-out';
+  const label = running ? t.sidebar.homeRuntimeRunning : status || t.sidebar.homeRuntimeIdle;
 
   return (
     <span
-      className={`inline-flex h-5 shrink-0 items-center gap-1 rounded-full border px-1.5 text-[10px] font-medium leading-none ${
-        running
-          ? 'border-[var(--amber)]/25 bg-[var(--amber)]/10 text-[var(--amber)]'
-          : active || unread
-            ? 'border-[var(--amber)]/20 bg-[var(--amber-subtle)] text-[var(--amber)]'
-            : 'border-border/60 bg-muted/40 text-muted-foreground'
-      }`}
+      data-home-session-status={running ? 'running' : status}
+      className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full"
+      aria-label={label}
+      title={label}
     >
-      {running ? <Loader2 size={10} className="motion-safe:animate-spin" aria-hidden="true" /> : null}
-      {label}
+      <span
+        className={`h-2 w-2 rounded-full ${
+          running
+            ? 'bg-[var(--success)] shadow-[0_0_0_3px_color-mix(in_srgb,var(--success)_14%,transparent)] motion-safe:animate-pulse'
+            : failed
+              ? 'bg-[var(--error)] shadow-[0_0_0_3px_color-mix(in_srgb,var(--error)_12%,transparent)]'
+              : 'bg-[var(--amber)] shadow-[0_0_0_3px_var(--amber-subtle)]'
+        }`}
+      />
     </span>
+  );
+}
+
+function HomeHeaderIconButton({
+  label,
+  onClick,
+  children,
+  disabled,
+}: {
+  label: string;
+  onClick: () => void;
+  children: ReactNode;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="hit-target-box inline-flex h-8 w-8 items-center justify-center text-muted-foreground transition-colors duration-75 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-md)]"
+      aria-label={label}
+      title={label}
+    >
+      {children}
+    </button>
+  );
+}
+
+function HomeAgentFilter({
+  value,
+  onChange,
+  counts,
+}: {
+  value: SessionAgentFilter;
+  onChange: (value: SessionAgentFilter) => void;
+  counts: Record<SessionAgentFilter, number>;
+}) {
+  const { t } = useLocale();
+  const filters: Array<{ id: SessionAgentFilter; label: string; icon: ReactNode }> = [
+    { id: 'all', label: t.sidebar.homeFilterAll, icon: <MessageSquare size={13} aria-hidden="true" /> },
+    { id: 'mindos', label: t.sidebar.homeFilterMindOS, icon: <AgentMark kind="mindos" id="filter-mindos" size="sm" /> },
+    { id: 'codex', label: t.sidebar.homeFilterCodex, icon: <AgentMark kind="codex" id="filter-codex" size="sm" /> },
+    { id: 'claude', label: t.sidebar.homeFilterClaude, icon: <AgentMark kind="claude" id="filter-claude" size="sm" /> },
+    { id: 'acp', label: t.sidebar.homeFilterAcp, icon: <AgentMark kind="acp" id="filter-acp" size="sm" /> },
+  ];
+
+  return (
+    <div className="flex shrink-0 items-center gap-1 px-2 pb-1.5 pt-2" role="group" aria-label={t.sidebar.homeAgentFilter}>
+      {filters.map((filter) => {
+        const active = value === filter.id;
+        return (
+          <button
+            key={filter.id}
+            type="button"
+            data-home-agent-filter={filter.id}
+            data-hit-active={active ? 'true' : undefined}
+            aria-label={`${filter.label} (${counts[filter.id]})`}
+            aria-pressed={active}
+            title={`${filter.label} (${counts[filter.id]})`}
+            onClick={() => onChange(filter.id)}
+            className={`hit-target-box inline-flex h-7 min-w-7 items-center justify-center px-0.5 text-muted-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [--hit-target-radius:var(--radius-lg)] [--hit-target-hover-bg:var(--muted)] ${
+              active
+                ? 'text-foreground [--hit-target-border-width:1px] [--hit-target-active-bg:var(--amber-subtle)] [--hit-target-active-border:color-mix(in_srgb,var(--amber)_24%,transparent)]'
+                : 'hover:text-foreground'
+            }`}
+          >
+            {filter.icon}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
@@ -131,20 +248,17 @@ function HomeSessionRow({
   session,
   active,
   running,
-  unread,
   onOpen,
 }: {
   session: ChatSession;
   active: boolean;
   running: boolean;
-  unread: boolean;
   onOpen: () => void;
 }) {
   const { t } = useLocale();
-  const runtime = runtimeLabel(session, t.sidebar.homeRuntimeMindOS);
   const runtimeSummary = getRuntimeSessionSummary(session);
+  const agentKind = sessionAgentKind(session);
   const title = sessionDisplayTitle(session, t.ask.historyEmptyHint);
-  const msgCount = session.messages.length;
 
   return (
     <button
@@ -152,51 +266,21 @@ function HomeSessionRow({
       onClick={onOpen}
       data-home-session-row={session.id}
       data-hit-active={active ? 'true' : undefined}
-      className={`hit-target-box group relative flex w-full min-w-0 items-start gap-2.5 px-3 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [--hit-target-radius:var(--radius-lg)] [--hit-target-border-width:1px] [--hit-target-border:transparent] [--hit-target-hover-bg:var(--muted)] ${
+      className={`hit-target-box group flex w-full min-w-0 items-center gap-2 px-2 py-1.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [--hit-target-radius:var(--radius-lg)] [--hit-target-hover-bg:var(--muted)] ${
         active
-          ? '[--hit-target-active-bg:var(--amber-subtle)] [--hit-target-active-border:color-mix(in_srgb,var(--amber)_24%,transparent)]'
+          ? '[--hit-target-border-width:1px] [--hit-target-active-bg:var(--amber-subtle)] [--hit-target-active-border:color-mix(in_srgb,var(--amber)_26%,transparent)]'
           : ''
       }`}
     >
-      {active ? (
-        <span className="pointer-events-none absolute bottom-2 left-0 top-2 w-[3px] rounded-r-full bg-[var(--amber)]" aria-hidden="true" />
-      ) : null}
-      <span className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border text-[10px] font-semibold ${
-        active
-          ? 'border-[var(--amber)]/30 bg-[var(--amber)]/10 text-[var(--amber)]'
-          : 'border-border/70 bg-background text-muted-foreground group-hover:text-foreground'
-      }`}>
-        {runtimeInitial(runtime)}
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="flex min-w-0 items-center gap-2">
-          <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground" title={title}>
-            {title}
-          </span>
-          <SessionStatusBadge
-            running={running}
-            unread={unread}
-            active={active}
-            status={runtimeSummary?.status}
-          />
+      <AgentMark kind={agentKind} id={session.id} active={active} />
+      <span className="flex min-w-0 flex-1 items-center gap-1.5">
+        <span className="min-w-0 flex-1 truncate text-[13px] leading-5 text-foreground" title={title}>
+          {title}
         </span>
-        <span className="mt-1 flex min-w-0 items-center gap-1.5 text-2xs text-muted-foreground">
-          <Bot size={10} className="shrink-0 text-[var(--amber)]/70" aria-hidden="true" />
-          <span className="truncate">{runtime}</span>
-          {runtimeSummary?.binding.externalSessionId ? (
-            <>
-              <span className="shrink-0 text-muted-foreground/40">/</span>
-              <span className="truncate">{runtimeSummary.idLabel}</span>
-            </>
-          ) : null}
+        <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground/70">
+          {compactTimeDistance(session.updatedAt)}
         </span>
-        <span className="mt-1 flex min-w-0 items-center justify-between gap-2 text-2xs text-muted-foreground/60">
-          <span className="inline-flex min-w-0 items-center gap-1">
-            <MessageSquare size={10} className="shrink-0" aria-hidden="true" />
-            <span className="truncate">{t.ask.historyMsgs(msgCount)}</span>
-          </span>
-          <span className="shrink-0 tabular-nums">{formatRelativeTime(session.updatedAt)}</span>
-        </span>
+        <SessionStatusDot running={running} status={runtimeSummary?.status} />
       </span>
     </button>
   );
@@ -207,11 +291,13 @@ export default function HomePanel({
   fileTree,
   mindSystemSlots,
   onNavigate,
+  onSearchOpenOrFocus,
 }: {
   active: boolean;
   fileTree: FileNode[];
   mindSystemSlots: MindSystemSlot[];
   onNavigate?: () => void;
+  onSearchOpenOrFocus?: () => void;
 }) {
   const { t } = useLocale();
   const pathname = usePathname();
@@ -220,6 +306,8 @@ export default function HomePanel({
   const activeSessionId = useActiveSessionId();
   const runSummary = useRunSummary();
   const [mode, setMode] = useState<HomeSidebarMode>('sessions');
+  const [agentFilter, setAgentFilter] = useState<SessionAgentFilter>('all');
+  const [refreshingSessions, setRefreshingSessions] = useState(false);
 
   useEffect(() => {
     if (active) setMode('sessions');
@@ -236,6 +324,36 @@ export default function HomePanel({
     return b.updatedAt - a.updatedAt;
   }), [sessions]);
 
+  const agentCounts = useMemo(() => {
+    const counts: Record<SessionAgentFilter, number> = {
+      all: sortedSessions.length,
+      mindos: 0,
+      codex: 0,
+      claude: 0,
+      acp: 0,
+    };
+    for (const session of sortedSessions) counts[sessionAgentKind(session)] += 1;
+    return counts;
+  }, [sortedSessions]);
+
+  const filteredSessions = useMemo(() => (
+    agentFilter === 'all'
+      ? sortedSessions
+      : sortedSessions.filter((session) => sessionAgentKind(session) === agentFilter)
+  ), [agentFilter, sortedSessions]);
+
+  const handleNewSession = useCallback(() => {
+    resetSession();
+    if (pathname !== '/') smoothPush('/');
+    window.dispatchEvent(new CustomEvent('mindos:open-ask-panel'));
+  }, [pathname, smoothPush]);
+
+  const handleRefreshSessions = useCallback(() => {
+    if (refreshingSessions) return;
+    setRefreshingSessions(true);
+    void refreshSessions().finally(() => setRefreshingSessions(false));
+  }, [refreshingSessions]);
+
   const openSession = useCallback((id: string) => {
     loadSession(id);
     if (pathname !== '/') smoothPush('/');
@@ -244,11 +362,26 @@ export default function HomePanel({
   return (
     <div className="flex h-full flex-col" data-home-sidebar-panel>
       <PanelHeader title={t.sidebar.home}>
+        {mode === 'sessions' ? (
+          <>
+            <HomeHeaderIconButton label={t.sidebar.homeNewSession} onClick={handleNewSession}>
+              <Plus size={13} aria-hidden="true" />
+            </HomeHeaderIconButton>
+            <HomeHeaderIconButton label={t.sidebar.homeSearchSessions} onClick={onSearchOpenOrFocus ?? (() => {})}>
+              <Search size={13} aria-hidden="true" />
+            </HomeHeaderIconButton>
+            <HomeHeaderIconButton label={t.sidebar.homeRefreshSessions} onClick={handleRefreshSessions} disabled={refreshingSessions}>
+              {refreshingSessions ? <Loader2 size={13} className="motion-safe:animate-spin" aria-hidden="true" /> : <RefreshCw size={13} aria-hidden="true" />}
+            </HomeHeaderIconButton>
+          </>
+        ) : null}
         <HomeModeSwitch mode={mode} onModeChange={setMode} />
       </PanelHeader>
 
       {mode === 'sessions' ? (
-        <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2" data-home-session-list>
+        <>
+          <HomeAgentFilter value={agentFilter} onChange={setAgentFilter} counts={agentCounts} />
+          <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2" data-home-session-list>
           {sortedSessions.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center px-5 text-center">
               <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-muted/40 text-muted-foreground">
@@ -259,19 +392,19 @@ export default function HomePanel({
             </div>
           ) : (
             <div className="space-y-1">
-              {sortedSessions.map((session) => (
+              {filteredSessions.map((session) => (
                 <HomeSessionRow
                   key={session.id}
                   session={session}
                   active={session.id === activeSessionId}
                   running={runSummary.running.has(session.id)}
-                  unread={runSummary.unread.has(session.id)}
                   onOpen={() => openSession(session.id)}
                 />
               ))}
             </div>
           )}
-        </div>
+          </div>
+        </>
       ) : (
         <div
           className="min-h-0 flex-1 overflow-y-auto px-2 py-2"
