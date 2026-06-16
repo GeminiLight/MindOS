@@ -671,7 +671,7 @@ export default function ViewPageClient({
               {registryRenderer && !editing && !isDraft && !graphRenderer && !isBinaryFile && (
                 <button
                   onClick={handleToggleRaw}
-                  className="inline-flex min-h-8 items-center gap-1.5 rounded-md px-3 text-xs font-medium transition-colors duration-75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation"
+                  className="inline-flex h-8 min-w-8 items-center gap-1.5 rounded-md px-3 text-xs font-medium transition-colors duration-75 hover:bg-card/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation"
                   style={{
                     background: effectiveUseRaw ? `${'var(--amber)'}22` : 'var(--muted)',
                     color: effectiveUseRaw ? 'var(--amber)' : 'var(--muted-foreground)',
@@ -739,7 +739,7 @@ export default function ViewPageClient({
               {!editing && !showRenderer && !isDraft && !isBinaryFile && !isMarkdown && (
                 <button
                   onClick={handleEdit}
-                  className="inline-flex min-h-8 items-center gap-1.5 rounded-md px-3 text-xs font-medium transition-colors duration-75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation"
+                  className="inline-flex h-8 min-w-8 items-center gap-1.5 rounded-md px-3 text-xs font-medium transition-colors duration-75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation"
                   style={{ background: 'var(--muted)', color: 'var(--muted-foreground)' }}
                   onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--foreground)'; e.currentTarget.style.background = 'var(--accent)'; }}
                   onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--muted-foreground)'; e.currentTarget.style.background = 'var(--muted)'; }}
@@ -755,7 +755,7 @@ export default function ViewPageClient({
                   <button
                     onClick={handleCancel}
                     disabled={isPending}
-                    className="inline-flex min-h-8 items-center gap-1.5 rounded-md px-3 text-xs font-medium transition-colors duration-75 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation"
+                    className="inline-flex h-8 min-w-8 items-center gap-1.5 rounded-md px-3 text-xs font-medium transition-colors duration-75 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation"
                     style={{ background: 'var(--muted)', color: 'var(--muted-foreground)' }}
                     onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--accent)'; }}
                     onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--muted)'; }}
@@ -766,7 +766,7 @@ export default function ViewPageClient({
                   <button
                     onClick={isDraft && showSaveAs ? handleConfirmDraftSave : handleSave}
                     disabled={isPending}
-                    className="inline-flex min-h-8 items-center gap-1.5 rounded-md px-3 text-xs font-medium disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation"
+                    className="inline-flex h-8 min-w-8 items-center gap-1.5 rounded-md px-3 text-xs font-medium disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation"
                     style={{ background: 'var(--amber)', color: 'var(--amber-foreground)' }}
                   >
                     {isPending ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
@@ -780,7 +780,7 @@ export default function ViewPageClient({
                   <button
                     onClick={handleCancel}
                     disabled={isPending}
-                    className="inline-flex min-h-8 items-center gap-1.5 rounded-md px-3 text-xs font-medium transition-colors duration-75 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation"
+                    className="inline-flex h-8 min-w-8 items-center gap-1.5 rounded-md px-3 text-xs font-medium transition-colors duration-75 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation"
                     style={{ background: 'var(--muted)', color: 'var(--muted-foreground)' }}
                     onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--accent)'; }}
                     onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--muted)'; }}
@@ -791,7 +791,7 @@ export default function ViewPageClient({
                   <button
                     onClick={showSaveAs ? handleConfirmDraftSave : handleSave}
                     disabled={isPending}
-                    className="inline-flex min-h-8 items-center gap-1.5 rounded-md px-3 text-xs font-medium disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation"
+                    className="inline-flex h-8 min-w-8 items-center gap-1.5 rounded-md px-3 text-xs font-medium disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation"
                     style={{ background: 'var(--amber)', color: 'var(--amber-foreground)' }}
                   >
                     {isPending ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
@@ -806,7 +806,7 @@ export default function ViewPageClient({
                   <button
                     type="button"
                     onClick={() => togglePin(filePath)}
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors duration-75 hover:text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation"
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors duration-75 hover:bg-card/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation"
                     title={pinned ? t.fileTree.removeFromFavorites : t.fileTree.pinToFavorites}
                   >
                     <Star size={16} className={pinned ? 'fill-[var(--amber)] text-[var(--amber)]' : ''} />
@@ -815,7 +815,7 @@ export default function ViewPageClient({
                     ref={moreRef}
                     type="button"
                     onClick={() => setMoreOpen(v => !v)}
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors duration-75 hover:text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation"
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors duration-75 hover:bg-card/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation"
                     title={t.view?.more ?? 'More'}
                   >
                     <MoreHorizontal size={16} />
