@@ -8,9 +8,15 @@ import { installObsidianCommunityPlugin } from '@/lib/obsidian-compat/community-
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json() as { repo?: string; pluginId?: string; confirm?: boolean };
+    const body = await req.json() as {
+      repo?: string;
+      pluginId?: string;
+      confirm?: boolean;
+      appVersion?: string;
+    };
     const repo = body.repo?.trim();
     const pluginId = body.pluginId?.trim();
+    const targetAppVersion = body.appVersion?.trim() || undefined;
 
     if (!repo || !pluginId) {
       throw new MindOSError(ErrorCodes.INVALID_REQUEST, 'Missing repo or pluginId');
@@ -20,6 +26,7 @@ export async function POST(req: NextRequest) {
     const result = await installObsidianCommunityPlugin({
       repo,
       pluginId,
+      targetAppVersion,
       targetMindRoot: settings.mindRoot,
       confirm: body.confirm === true,
     });

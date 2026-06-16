@@ -96,7 +96,7 @@ describe('/api/obsidian/community-catalog/update-plan', () => {
     const json = await res.json();
 
     expect(res.status).toBe(200);
-    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
     expect(json).toMatchObject({
       ok: true,
       readOnly: true,

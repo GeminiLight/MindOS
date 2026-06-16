@@ -172,7 +172,7 @@ export const panelsZh = {
       useCases: '使用案例',
       useCasesDesc: '动手体验 MindOS 的典型场景',
       pluginMarket: '插件市场',
-      pluginMarketDesc: '扩展文件的渲染和编辑方式',
+      pluginMarketDesc: '浏览并安装社区插件',
       skillMarket: '技能市场',
       skillMarketDesc: '为 AI 智能体添加新能力',
       spaceTemplates: '空间模板',

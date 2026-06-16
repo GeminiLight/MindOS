@@ -10,6 +10,7 @@ export async function GET(req: NextRequest) {
   try {
     const repo = req.nextUrl.searchParams.get('repo')?.trim();
     const pluginId = req.nextUrl.searchParams.get('pluginId')?.trim();
+    const targetAppVersion = req.nextUrl.searchParams.get('appVersion')?.trim() || undefined;
 
     if (!repo || !pluginId) {
       throw new MindOSError(ErrorCodes.INVALID_REQUEST, 'Missing repo or pluginId');
@@ -19,6 +20,7 @@ export async function GET(req: NextRequest) {
     const result = await planObsidianCommunityPluginUpdate({
       repo,
       pluginId,
+      targetAppVersion,
       targetMindRoot: settings.mindRoot,
     });
 

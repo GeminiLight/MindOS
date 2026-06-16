@@ -36,6 +36,7 @@ export interface ManagedPlugin {
   id: string;
   name: string;
   version: string;
+  manifest: PluginManifest;
   enabled: boolean;
   loaded: boolean;
   compatibility: PluginCompatibilityReport;
@@ -538,6 +539,7 @@ export class PluginManager {
       id: manifest.id,
       name: manifest.name,
       version: manifest.version,
+      manifest,
       enabled: state.enabled[manifest.id] === true,
       loaded,
       compatibility,

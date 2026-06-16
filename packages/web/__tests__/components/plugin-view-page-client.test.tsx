@@ -200,7 +200,25 @@ describe('PluginViewPageClient', () => {
     expect(host.textContent).toContain('Daily Calendar');
     expect(host.textContent).toContain('Showing available plugin views');
     expect(Array.from(host.querySelectorAll('a')).some((link) => (
+      link.getAttribute('href') === '/explore/plugins'
+    ))).toBe(false);
+    expect(Array.from(host.querySelectorAll('a')).some((link) => (
       link.getAttribute('href') === '/plugins/views?pluginId=daily&viewType=daily-calendar'
     ))).toBe(true);
+  });
+
+  it('links empty plugin views to the plugin market instead of the settings manager', async () => {
+    mocks.fetchPluginSurfaces.mockResolvedValueOnce([]);
+
+    await act(async () => {
+      root.render(<PluginViewPageClient pluginId="" viewType="" />);
+      await flushPluginViewPromises();
+    });
+
+    expect(host.textContent).toContain('No plugin views are available yet.');
+    const links = Array.from(host.querySelectorAll('a')).map((link) => link.getAttribute('href'));
+    expect(links).toContain('/explore/plugins');
+    expect(links).not.toContain('/settings?tab=plugins&panel=community');
+    expect(host.textContent).toContain('Open plugin market');
   });
 });

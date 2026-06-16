@@ -41,6 +41,41 @@ describe('i18n explore keys', () => {
   });
 });
 
+describe('i18n plugin market keys', () => {
+  it('keeps the Discover entry and market page copy aligned in en and zh', () => {
+    expect(en.panels.discover.pluginMarket).toBe('Plugin Market');
+    expect(en.panels.discover.pluginMarketDesc).toContain('community plugins');
+    expect(zh.panels.discover.pluginMarket).toBe('插件市场');
+    expect(zh.panels.discover.pluginMarketDesc).toContain('社区插件');
+
+    for (const messages of [en, zh]) {
+      const p = messages.settings.plugins;
+      expect(p.marketTitle).toBeTruthy();
+      expect(p.marketSubtitle).toBeTruthy();
+      expect(p.marketResultNote).toBeTruthy();
+      expect(p.marketManageAction).toBeTruthy();
+      expect(p.browseMarketAction).toBeTruthy();
+      expect(p.marketCheckedAction).toBeTruthy();
+      expect(p.marketRetryAction).toBeTruthy();
+      expect(p.marketDetailsAction).toBeTruthy();
+      expect(p.marketCacheState('fresh')).toBeTruthy();
+      expect(p.marketClearSearch).toBeTruthy();
+      expect(p.marketFilterAll).toBeTruthy();
+      expect(p.marketFilterAvailable).toBeTruthy();
+      expect(p.marketShowingCount(1, 2)).toBeTruthy();
+      expect(p.marketShowMore(12)).toBeTruthy();
+      expect(p.marketLocalDeferred).toBeTruthy();
+      expect(p.marketLocalLoadAction).toBeTruthy();
+      expect(p.mindosRenderersTitle).toBeTruthy();
+    }
+
+    expect(en.settings.plugins.mindosRenderersTitle).toBe('Built-in extensions');
+    expect(zh.settings.plugins.mindosRenderersTitle).toBe('内置扩展');
+    expect(zh.settings.plugins.communityPreflightSupportLevel('ready')).toBe('可用');
+    expect(zh.settings.plugins.communityPreflightSupportLevel('limited')).toBe('受限');
+  });
+});
+
 describe('i18n walkthrough keys', () => {
   const w = en.walkthrough;
 

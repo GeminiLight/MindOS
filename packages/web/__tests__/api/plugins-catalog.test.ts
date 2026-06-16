@@ -46,7 +46,7 @@ describe('/api/plugins/catalog', () => {
     vi.clearAllMocks();
   });
 
-  it('returns one catalog containing MindOS renderers and loaded Obsidian plugins', async () => {
+  it('returns one catalog containing built-in extension manifests and loaded Obsidian plugins', async () => {
     writePlugin(
       'catalog-plugin',
       `
@@ -59,7 +59,15 @@ describe('/api/plugins/catalog', () => {
           }
         };
       `,
-      { name: 'Catalog Plugin' },
+      {
+        name: 'Catalog Plugin',
+        minAppVersion: '1.7.2',
+        description: 'Catalog plugin description.',
+        author: 'Fixture Author',
+        authorUrl: 'https://example.com/author',
+        fundingUrl: { Sponsor: 'https://example.com/sponsor' },
+        isDesktopOnly: false,
+      },
     );
     fs.writeFileSync(
       path.join(mindRoot, '.plugins', 'catalog-plugin', 'obsidian-community.json'),
@@ -87,22 +95,50 @@ describe('/api/plugins/catalog', () => {
         id: 'backlinks',
         source: 'mindos-renderer',
         name: 'Backlinks Explorer',
+        version: expect.stringMatching(/^\d+\.\d+\.\d+$/),
         status: 'enabled',
         enabled: true,
         loaded: true,
+        manifest: expect.objectContaining({
+          id: 'backlinks',
+          name: 'Backlinks Explorer',
+          version: expect.stringMatching(/^\d+\.\d+\.\d+$/),
+          minAppVersion: expect.stringMatching(/^\d+\.\d+\.\d+$/),
+          description: expect.any(String),
+          author: 'MindOS',
+          isDesktopOnly: false,
+        }),
         surfaces: expect.objectContaining({
           total: 1,
           available: 1,
           byKind: expect.objectContaining({ 'document-renderer': 1 }),
+        }),
+        metadata: expect.objectContaining({
+          manifest: expect.objectContaining({
+            id: 'backlinks',
+            isDesktopOnly: false,
+          }),
         }),
       }),
       expect.objectContaining({
         id: 'catalog-plugin',
         source: 'obsidian',
         name: 'Catalog Plugin',
+        description: 'Catalog plugin description.',
+        author: 'Fixture Author',
         status: 'loaded',
         enabled: true,
         loaded: true,
+        manifest: expect.objectContaining({
+          id: 'catalog-plugin',
+          name: 'Catalog Plugin',
+          version: '1.0.0',
+          minAppVersion: '1.7.2',
+          description: 'Catalog plugin description.',
+          author: 'Fixture Author',
+          authorUrl: 'https://example.com/author',
+          fundingUrl: { Sponsor: 'https://example.com/sponsor' },
+        }),
         compatibility: expect.objectContaining({
           level: 'partial',
           kind: 'limited',
@@ -117,6 +153,10 @@ describe('/api/plugins/catalog', () => {
           }),
         }),
         metadata: expect.objectContaining({
+          manifest: expect.objectContaining({
+            id: 'catalog-plugin',
+            author: 'Fixture Author',
+          }),
           dataFile: expect.objectContaining({
             exists: true,
             bytes: expect.any(Number),

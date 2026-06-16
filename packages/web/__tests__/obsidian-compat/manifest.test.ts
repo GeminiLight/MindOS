@@ -50,11 +50,24 @@ describe('validateManifest', () => {
       minAppVersion: '1.7.2',
       description: 'A test plugin',
       author: 'Test Author',
+      fundingUrl: { Sponsor: 'https://example.com/sponsor' },
       isDesktopOnly: true,
     });
     expect(manifest.minAppVersion).toBe('1.7.2');
     expect(manifest.description).toBe('A test plugin');
     expect(manifest.author).toBe('Test Author');
+    expect(manifest.fundingUrl).toEqual({ Sponsor: 'https://example.com/sponsor' });
     expect(manifest.isDesktopOnly).toBe(true);
+  });
+
+  it('preserves explicit desktop-only false values from Obsidian manifests', () => {
+    const manifest = validateManifest({
+      id: 'test-plugin',
+      name: 'Test Plugin',
+      version: '1.0.0',
+      isDesktopOnly: false,
+    });
+
+    expect(manifest.isDesktopOnly).toBe(false);
   });
 });

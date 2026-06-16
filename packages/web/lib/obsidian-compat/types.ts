@@ -6,6 +6,8 @@
 
 // ============ Plugin Manifest ============
 
+export type PluginFundingUrl = string | Record<string, string>;
+
 export interface PluginManifest {
   /** Unique plugin identifier (alphanumeric + dash) */
   id: string;
@@ -23,8 +25,8 @@ export interface PluginManifest {
   author?: string;
   /** Author URL */
   authorUrl?: string;
-  /** Funding URL */
-  fundingUrl?: string;
+  /** Funding URL or named funding URLs */
+  fundingUrl?: PluginFundingUrl;
   /** Is this a desktop-only plugin (requires Electron/Node.js APIs) */
   isDesktopOnly?: boolean;
 }

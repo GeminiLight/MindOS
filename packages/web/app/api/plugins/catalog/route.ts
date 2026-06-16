@@ -5,7 +5,7 @@ import '@/lib/renderers/index';
 import { handleRouteErrorSimple } from '@/lib/errors';
 import { readSettings } from '@/lib/settings';
 import { withObsidianPluginRuntime } from '@/lib/obsidian-compat/runtime-service';
-import { getPluginRenderers, isRendererEnabled } from '@/lib/renderers/registry';
+import { getPluginRenderers, isRendererEnabled, toRendererPluginManifest } from '@/lib/renderers/registry';
 import {
   buildObsidianPluginSurfaces,
   buildRendererPluginSurfaces,
@@ -56,6 +56,7 @@ export async function GET(req: NextRequest) {
         icon: renderer.icon,
         tags: renderer.tags,
         builtin: renderer.builtin,
+        manifest: toRendererPluginManifest(renderer),
         core: renderer.core,
         entryPath: renderer.entryPath,
         enabled: isRendererEnabled(renderer.id),

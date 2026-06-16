@@ -39,6 +39,7 @@ async function importRoute() {
 
 describe('/api/obsidian/community-catalog', () => {
   beforeEach(() => {
+    vi.resetModules();
     mindRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'mindos-obsidian-community-catalog-api-'));
     testState.mindRoot = mindRoot;
   });
@@ -108,11 +109,16 @@ describe('/api/obsidian/community-catalog', () => {
 
     expect(res.status).toBe(200);
     expect(fetchMock).toHaveBeenCalledWith(OBSIDIAN_COMMUNITY_PLUGINS_URL, expect.objectContaining({
-      cache: 'no-store',
+      cache: 'force-cache',
       headers: { Accept: 'application/json' },
+      next: { revalidate: 1800 },
       signal: expect.any(AbortSignal),
     }));
     expect(json.ok).toBe(true);
+    expect(json.cache).toMatchObject({
+      state: 'refreshed',
+      ttlMs: 1800000,
+    });
     expect(json.catalog).toMatchObject({
       query: 'data',
       counts: {
@@ -197,5 +203,37 @@ describe('/api/obsidian/community-catalog', () => {
     expect(json).toEqual({
       error: 'Failed to fetch Obsidian community plugin index: 503',
     });
+  });
+
+  it('returns stale cached catalog data when a forced refresh fails', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify([
+        {
+          id: 'quickadd',
+          name: 'QuickAdd',
+          description: 'Capture workflows',
+          author: 'Christian',
+          repo: 'chhoumann/quickadd',
+        },
+      ]), { status: 200 }))
+      .mockResolvedValueOnce(new Response('unavailable', { status: 503 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { GET } = await importRoute();
+    const first = await GET(new NextRequest('http://localhost/api/obsidian/community-catalog'));
+    expect(first.status).toBe(200);
+
+    const second = await GET(new NextRequest('http://localhost/api/obsidian/community-catalog?refresh=1'));
+    const json = await second.json();
+
+    expect(second.status).toBe(200);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(json.cache.state).toBe('stale');
+    expect(json.catalog.plugins).toEqual([
+      expect.objectContaining({
+        id: 'quickadd',
+        installStatus: 'available',
+      }),
+    ]);
   });
 });

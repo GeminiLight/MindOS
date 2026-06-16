@@ -1,4 +1,6 @@
 import { getObsidianImportSupport, type ObsidianImportSupport } from '@/lib/obsidian-compat/import-policy';
+import type { PluginManifest } from '@/lib/obsidian-compat/types';
+import type { RendererPluginManifest } from '@/lib/renderers/registry';
 
 export type PluginSurfaceSource = 'obsidian' | 'mindos-renderer' | 'mindos-native';
 
@@ -138,6 +140,7 @@ export interface ObsidianPluginForSurfaces {
   name: string;
   enabled: boolean;
   loaded: boolean;
+  manifest?: PluginManifest;
   compatibilityLevel: 'compatible' | 'partial' | 'blocked';
   compatibility?: {
     partialApis: string[];
@@ -156,6 +159,7 @@ export interface RendererPluginForSurfaces {
   icon: string;
   tags: string[];
   builtin: boolean;
+  manifest: RendererPluginManifest;
   core?: boolean;
   entryPath?: string;
   enabled?: boolean;
@@ -227,7 +231,10 @@ export function buildObsidianPluginSurfaces(plugins: ObsidianPluginForSurfaces[]
       compatibilityLevel: plugin.compatibilityLevel,
       compatibility: plugin.compatibility ?? { partialApis: [], unsupportedApis: [], blockers: [] },
     });
-    const supportMetadata = pluginSupportMetadata(support);
+    const supportMetadata = {
+      ...pluginSupportMetadata(support),
+      ...(plugin.manifest ? { manifest: plugin.manifest } : {}),
+    };
 
     for (const command of plugin.runtime.commandList ?? []) {
       const hotkeys = command.hotkeys ?? [];
@@ -548,6 +555,7 @@ export function buildRendererPluginSurfaces(renderers: RendererPluginForSurfaces
       builtin: renderer.builtin,
       core: renderer.core === true,
       entryPath: renderer.entryPath,
+      manifest: renderer.manifest,
     },
   }));
 }

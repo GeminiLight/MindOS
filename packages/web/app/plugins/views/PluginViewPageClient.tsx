@@ -289,11 +289,11 @@ export default function PluginViewPageClient({ pluginId, viewType, sourcePath = 
                   Install or import an Obsidian plugin with a custom view, then enable and load it from plugin settings.
                 </p>
                 <Link
-                  href="/settings?tab=plugins&panel=community"
+                  href="/explore/plugins"
                   className="mt-3 inline-flex h-8 items-center gap-1.5 rounded-md border border-[var(--amber)] bg-[var(--amber)] px-3 text-xs font-medium text-[var(--amber-foreground)] transition-colors hover:bg-[var(--amber)]/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <Puzzle size={13} />
-                  Open community plugins
+                  Open plugin market
                 </Link>
               </div>
             ) : (

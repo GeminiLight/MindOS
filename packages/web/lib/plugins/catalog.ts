@@ -1,6 +1,8 @@
 import { getObsidianImportSupport } from '@/lib/obsidian-compat/import-policy';
 import type { CompatibilityLevel, PluginCompatibilityReport } from '@/lib/obsidian-compat/compatibility-report';
 import type { PluginCommunityOriginSummary, PluginDataFileSummary } from '@/lib/obsidian-compat/plugin-manager';
+import type { PluginManifest } from '@/lib/obsidian-compat/types';
+import type { RendererPluginManifest } from '@/lib/renderers/registry';
 import type { PluginSurface, PluginSurfaceAvailability, PluginSurfaceKind, PluginSurfaceSource } from './surfaces';
 
 export type PluginCatalogSource = Extract<PluginSurfaceSource, 'obsidian' | 'mindos-renderer'>;
@@ -52,6 +54,7 @@ export interface PluginCatalogItem {
   author?: string;
   icon?: string;
   tags: string[];
+  manifest?: PluginManifest;
   builtin: boolean;
   core: boolean;
   enabled: boolean;
@@ -83,6 +86,7 @@ export interface ObsidianPluginForCatalog {
   loaded: boolean;
   compatibilityLevel: CompatibilityLevel;
   compatibility: PluginCompatibilityReport;
+  manifest?: PluginManifest;
   runtime?: {
     dataFile?: PluginDataFileSummary;
     communityOrigin?: PluginCommunityOriginSummary;
@@ -98,6 +102,7 @@ export interface RendererPluginForCatalog {
   icon: string;
   tags: string[];
   builtin: boolean;
+  manifest: RendererPluginManifest;
   core?: boolean;
   entryPath?: string;
   enabled?: boolean;
@@ -185,9 +190,11 @@ function rendererCatalogItem(renderer: RendererPluginForCatalog, surfaces: Plugi
     source: 'mindos-renderer',
     name: renderer.name,
     description: renderer.description,
-    author: renderer.author,
+    version: renderer.manifest.version,
+    author: renderer.manifest.author,
     icon: renderer.icon,
     tags: renderer.tags,
+    manifest: renderer.manifest,
     builtin: renderer.builtin,
     core: renderer.core === true,
     enabled,
@@ -196,6 +203,7 @@ function rendererCatalogItem(renderer: RendererPluginForCatalog, surfaces: Plugi
     surfaces: summarizePluginSurfaces(surfaces, 'mindos-renderer', renderer.id),
     metadata: {
       entryPath: renderer.entryPath,
+      manifest: renderer.manifest,
     },
   };
 }
@@ -209,8 +217,11 @@ function obsidianCatalogItem(plugin: ObsidianPluginForCatalog, surfaces: PluginS
     id: plugin.id,
     source: 'obsidian',
     name: plugin.name,
-    version: plugin.version,
+    description: plugin.manifest?.description,
+    version: plugin.manifest?.version ?? plugin.version,
+    author: plugin.manifest?.author,
     tags: [],
+    manifest: plugin.manifest,
     builtin: false,
     core: false,
     enabled: plugin.enabled,
@@ -232,6 +243,7 @@ function obsidianCatalogItem(plugin: ObsidianPluginForCatalog, surfaces: PluginS
       moduleImports: plugin.compatibility.moduleImports,
       nodeModules: plugin.compatibility.nodeModules,
       unsupportedModules: plugin.compatibility.unsupportedModules,
+      ...(plugin.manifest ? { manifest: plugin.manifest } : {}),
       dataFile: plugin.runtime?.dataFile ?? { exists: false, bytes: 0 },
       ...(plugin.runtime?.communityOrigin ? { communityOrigin: plugin.runtime.communityOrigin } : {}),
     },

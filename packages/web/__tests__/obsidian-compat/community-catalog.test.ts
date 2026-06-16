@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   OBSIDIAN_COMMUNITY_PLUGINS_URL,
+  buildObsidianCommunityPluginRepositoryUrls,
   buildObsidianCommunityPluginReleaseUrls,
   buildObsidianCommunityCatalog,
   fetchObsidianCommunityPluginPackage,
@@ -22,17 +23,36 @@ function entry(id: string, overrides: Partial<ObsidianCommunityCatalogEntry> = {
   };
 }
 
+function releaseUrls(repo: string, version: string, targetAppVersion?: string) {
+  const repositoryUrls = buildObsidianCommunityPluginRepositoryUrls(repo);
+  return buildObsidianCommunityPluginReleaseUrls(repo, version, {
+    strategy: targetAppVersion ? 'compatible-release' : 'latest-release',
+    latestVersion: version,
+    versionsUrl: repositoryUrls.versionsUrl,
+    targetAppVersion,
+  });
+}
+
 describe('Obsidian community catalog adapter', () => {
   it('builds release asset URLs for GitHub owner/repo values', () => {
     expect(githubUrlForRepo(' blacksmithgu/obsidian-dataview ')).toBe('https://github.com/blacksmithgu/obsidian-dataview');
     expect(githubUrlForRepo('not-a-repo')).toBeUndefined();
 
-    expect(buildObsidianCommunityPluginReleaseUrls('blacksmithgu/obsidian-dataview')).toEqual({
+    expect(buildObsidianCommunityPluginRepositoryUrls('blacksmithgu/obsidian-dataview')).toEqual({
       manifestUrl: 'https://raw.githubusercontent.com/blacksmithgu/obsidian-dataview/HEAD/manifest.json',
-      mainUrl: 'https://raw.githubusercontent.com/blacksmithgu/obsidian-dataview/HEAD/main.js',
-      stylesUrl: 'https://raw.githubusercontent.com/blacksmithgu/obsidian-dataview/HEAD/styles.css',
+      versionsUrl: 'https://raw.githubusercontent.com/blacksmithgu/obsidian-dataview/HEAD/versions.json',
     });
-    expect(() => buildObsidianCommunityPluginReleaseUrls('../bad/repo')).toThrow('Invalid Obsidian community repo');
+    expect(releaseUrls('blacksmithgu/obsidian-dataview', '1.2.3')).toEqual({
+      type: 'github-release',
+      strategy: 'latest-release',
+      resolvedVersion: '1.2.3',
+      latestVersion: '1.2.3',
+      versionsUrl: 'https://raw.githubusercontent.com/blacksmithgu/obsidian-dataview/HEAD/versions.json',
+      manifestUrl: 'https://github.com/blacksmithgu/obsidian-dataview/releases/download/1.2.3/manifest.json',
+      mainUrl: 'https://github.com/blacksmithgu/obsidian-dataview/releases/download/1.2.3/main.js',
+      stylesUrl: 'https://github.com/blacksmithgu/obsidian-dataview/releases/download/1.2.3/styles.css',
+    });
+    expect(() => buildObsidianCommunityPluginRepositoryUrls('../bad/repo')).toThrow('Invalid Obsidian community repo');
   });
 
   it('parses valid community plugin entries and derives GitHub URLs', () => {
@@ -217,10 +237,11 @@ describe('Obsidian community catalog adapter', () => {
   });
 
   it('preflights remote release files without installing or enabling the plugin', async () => {
-    const urls = buildObsidianCommunityPluginReleaseUrls('owner/quickadd');
+    const repositoryUrls = buildObsidianCommunityPluginRepositoryUrls('owner/quickadd');
+    const urls = releaseUrls('owner/quickadd', '1.2.3');
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
-      if (url === urls.manifestUrl) {
+      if (url === repositoryUrls.manifestUrl || url === urls.manifestUrl) {
         return new Response(JSON.stringify({
           id: 'quickadd',
           name: 'QuickAdd',
@@ -263,7 +284,7 @@ describe('Obsidian community catalog adapter', () => {
           mainJs: true,
           stylesCss: true,
         },
-        source: urls,
+        source: expect.objectContaining(urls),
       },
       compatibility: {
         level: 'compatible',
@@ -271,8 +292,8 @@ describe('Obsidian community catalog adapter', () => {
       installable: true,
       installBlockedReasons: [],
     });
-    expect(fetchMock).toHaveBeenCalledTimes(3);
-    expect(fetchMock).toHaveBeenNthCalledWith(1, urls.manifestUrl, expect.objectContaining({
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(fetchMock).toHaveBeenNthCalledWith(1, repositoryUrls.manifestUrl, expect.objectContaining({
       cache: 'no-store',
       headers: { Accept: 'application/json' },
       signal: expect.any(AbortSignal),
@@ -280,10 +301,11 @@ describe('Obsidian community catalog adapter', () => {
   });
 
   it('fetches remote community plugin package files for explicit install flows', async () => {
-    const urls = buildObsidianCommunityPluginReleaseUrls('owner/quickadd');
+    const repositoryUrls = buildObsidianCommunityPluginRepositoryUrls('owner/quickadd');
+    const urls = releaseUrls('owner/quickadd', '1.2.3');
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
-      if (url === urls.manifestUrl) {
+      if (url === repositoryUrls.manifestUrl || url === urls.manifestUrl) {
         return new Response(JSON.stringify({
           id: 'quickadd',
           name: 'QuickAdd',
@@ -310,6 +332,114 @@ describe('Obsidian community catalog adapter', () => {
     expect(fetched.files.manifestJson).toContain('"quickadd"');
     expect(fetched.files.mainJs).toContain('class QuickAdd');
     expect(fetched.files.stylesCss).toBe('.quickadd { display: block; }');
+  });
+
+  it('selects the newest app-compatible release from versions.json when latest requires a newer Obsidian app', async () => {
+    const repositoryUrls = buildObsidianCommunityPluginRepositoryUrls('owner/quickadd');
+    const compatibleUrls = buildObsidianCommunityPluginReleaseUrls('owner/quickadd', '1.5.0', {
+      strategy: 'compatible-release',
+      latestVersion: '2.0.0',
+      versionsUrl: repositoryUrls.versionsUrl,
+      targetAppVersion: '1.5.0',
+    });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === repositoryUrls.manifestUrl) {
+        return new Response(JSON.stringify({
+          id: 'quickadd',
+          name: 'QuickAdd',
+          version: '2.0.0',
+          minAppVersion: '2.0.0',
+        }), { status: 200 });
+      }
+      if (url === repositoryUrls.versionsUrl) {
+        return new Response(JSON.stringify({
+          '1.0.0': '1.0.0',
+          '1.5.0': '1.5.0',
+          '2.0.0': '2.0.0',
+        }), { status: 200 });
+      }
+      if (url === compatibleUrls.manifestUrl) {
+        return new Response(JSON.stringify({
+          id: 'quickadd',
+          name: 'QuickAdd',
+          version: '1.5.0',
+          minAppVersion: '1.5.0',
+        }), { status: 200 });
+      }
+      if (url === compatibleUrls.mainUrl) {
+        return new Response("const { Plugin } = require('obsidian'); module.exports = class QuickAdd extends Plugin {};", { status: 200 });
+      }
+      if (url === compatibleUrls.stylesUrl) {
+        return new Response('missing', { status: 404 });
+      }
+      return new Response('not found', { status: 404 });
+    });
+
+    const preflight = await preflightObsidianCommunityPluginPackage({
+      repo: 'owner/quickadd',
+      pluginId: 'quickadd',
+      targetAppVersion: '1.5.0',
+      fetchImpl: fetchMock as unknown as typeof fetch,
+    });
+
+    expect(preflight.package.manifest.version).toBe('1.5.0');
+    expect(preflight.package.source).toMatchObject({
+      type: 'github-release',
+      strategy: 'compatible-release',
+      resolvedVersion: '1.5.0',
+      latestVersion: '2.0.0',
+      targetAppVersion: '1.5.0',
+      versionsUrl: repositoryUrls.versionsUrl,
+      manifestUrl: compatibleUrls.manifestUrl,
+    });
+    expect(preflight.installable).toBe(true);
+    expect(fetchMock).toHaveBeenCalledWith(repositoryUrls.versionsUrl, expect.objectContaining({
+      cache: 'no-store',
+      headers: { Accept: 'application/json' },
+      signal: expect.any(AbortSignal),
+    }));
+  });
+
+  it('keeps latest release when target app version cannot be compared against manifest metadata', async () => {
+    const repositoryUrls = buildObsidianCommunityPluginRepositoryUrls('owner/legacy');
+    const urls = buildObsidianCommunityPluginReleaseUrls('owner/legacy', '1.0.0', {
+      strategy: 'latest-release',
+      latestVersion: '1.0.0',
+      versionsUrl: repositoryUrls.versionsUrl,
+      targetAppVersion: '1.5.0',
+    });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === repositoryUrls.manifestUrl || url === urls.manifestUrl) {
+        return new Response(JSON.stringify({
+          id: 'legacy',
+          name: 'Legacy',
+          version: '1.0.0',
+        }), { status: 200 });
+      }
+      if (url === urls.mainUrl) {
+        return new Response("const { Plugin } = require('obsidian'); module.exports = class Legacy extends Plugin {};", { status: 200 });
+      }
+      if (url === urls.stylesUrl) {
+        return new Response('missing', { status: 404 });
+      }
+      return new Response('not found', { status: 404 });
+    });
+
+    const preflight = await preflightObsidianCommunityPluginPackage({
+      repo: 'owner/legacy',
+      pluginId: 'legacy',
+      targetAppVersion: '1.5.0',
+      fetchImpl: fetchMock as unknown as typeof fetch,
+    });
+
+    expect(preflight.package.source).toMatchObject({
+      strategy: 'latest-release',
+      resolvedVersion: '1.0.0',
+      targetAppVersion: '1.5.0',
+    });
+    expect(fetchMock).not.toHaveBeenCalledWith(repositoryUrls.versionsUrl, expect.anything());
   });
 
   it('keeps manifest id mismatches as a blocked preflight result', async () => {

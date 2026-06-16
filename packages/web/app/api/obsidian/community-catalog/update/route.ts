@@ -15,11 +15,13 @@ export async function POST(req: NextRequest) {
       confirm?: boolean;
       expectedRemoteVersion?: string;
       expectedPackageDigest?: string;
+      appVersion?: string;
     };
     const repo = body.repo?.trim();
     const pluginId = body.pluginId?.trim();
     const expectedRemoteVersion = body.expectedRemoteVersion?.trim();
     const expectedPackageDigest = body.expectedPackageDigest?.trim();
+    const targetAppVersion = body.appVersion?.trim() || undefined;
 
     if (!repo || !pluginId) {
       throw new MindOSError(ErrorCodes.INVALID_REQUEST, 'Missing repo or pluginId');
@@ -42,6 +44,7 @@ export async function POST(req: NextRequest) {
       const result = await updateObsidianCommunityPlugin({
         repo,
         pluginId,
+        targetAppVersion,
         targetMindRoot: settings.mindRoot,
         confirm: true,
         expectedRemoteVersion,

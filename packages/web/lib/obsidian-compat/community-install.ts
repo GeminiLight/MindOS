@@ -25,6 +25,12 @@ export interface ObsidianCommunityInstallMetadata {
   pluginId: string;
   repo: string;
   githubUrl?: string;
+  sourceType: 'github-release';
+  sourceStrategy: 'latest-release' | 'compatible-release';
+  resolvedVersion: string;
+  latestVersion: string;
+  versionsUrl: string;
+  targetAppVersion?: string;
   manifestUrl: string;
   mainUrl: string;
   stylesUrl: string;
@@ -149,6 +155,7 @@ export async function installObsidianCommunityPlugin(
   const fetched = await fetchObsidianCommunityPluginPackage({
     repo: options.repo,
     pluginId,
+    targetAppVersion: options.targetAppVersion,
     fetchImpl: options.fetchImpl,
     timeoutMs: options.timeoutMs,
   });
@@ -235,6 +242,7 @@ export async function planObsidianCommunityPluginUpdate(
   const fetched = await fetchObsidianCommunityPluginPackage({
     repo: options.repo,
     pluginId,
+    targetAppVersion: options.targetAppVersion,
     fetchImpl: options.fetchImpl,
     timeoutMs: options.timeoutMs,
   });
@@ -303,6 +311,7 @@ export async function updateObsidianCommunityPlugin(
   const fetched = await fetchObsidianCommunityPluginPackage({
     repo: options.repo,
     pluginId,
+    targetAppVersion: options.targetAppVersion,
     fetchImpl: options.fetchImpl,
     timeoutMs: options.timeoutMs,
   });
@@ -610,6 +619,12 @@ function buildInstallMetadata(
     pluginId: preflight.package.manifest.id,
     repo: preflight.plugin.repo,
     ...(preflight.plugin.githubUrl ? { githubUrl: preflight.plugin.githubUrl } : {}),
+    sourceType: preflight.package.source.type,
+    sourceStrategy: preflight.package.source.strategy,
+    resolvedVersion: preflight.package.source.resolvedVersion,
+    latestVersion: preflight.package.source.latestVersion,
+    versionsUrl: preflight.package.source.versionsUrl,
+    ...(preflight.package.source.targetAppVersion ? { targetAppVersion: preflight.package.source.targetAppVersion } : {}),
     manifestUrl: preflight.package.source.manifestUrl,
     mainUrl: preflight.package.source.mainUrl,
     stylesUrl: preflight.package.source.stylesUrl,

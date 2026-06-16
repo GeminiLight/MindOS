@@ -570,6 +570,15 @@ describe('/api/plugins/surfaces', () => {
         pluginId: 'backlinks',
         title: 'Backlinks Explorer',
         host: expect.objectContaining({ state: 'mounted', label: 'Document renderer' }),
+        metadata: expect.objectContaining({
+          manifest: expect.objectContaining({
+            id: 'backlinks',
+            name: 'Backlinks Explorer',
+            version: expect.stringMatching(/^\d+\.\d+\.\d+$/),
+            minAppVersion: expect.stringMatching(/^\d+\.\d+\.\d+$/),
+            isDesktopOnly: false,
+          }),
+        }),
       }),
     ]));
     expect(json.counts.rendererPlugins).toBeGreaterThan(0);

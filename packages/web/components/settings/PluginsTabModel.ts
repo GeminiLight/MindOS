@@ -45,6 +45,11 @@ export interface ObsidianCommunityCatalogResponse {
   ok: boolean;
   catalog: ObsidianCommunityCatalog;
   skipped: Array<{ index: number; reason: string }>;
+  cache?: {
+    state: 'fresh' | 'refreshed' | 'stale';
+    fetchedAt: string;
+    ttlMs: number;
+  };
 }
 
 export interface CommunityPreflightState {

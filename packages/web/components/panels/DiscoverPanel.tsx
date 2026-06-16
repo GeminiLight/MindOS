@@ -1,16 +1,11 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { Lightbulb, Blocks, Zap, LayoutTemplate, User, Download, RefreshCw, Repeat, Rocket, Search, Handshake, ShieldCheck, ChevronDown } from 'lucide-react';
+import { Lightbulb, Blocks, Zap, LayoutTemplate, User, Download, RefreshCw, Repeat, Rocket, Search, Handshake, ShieldCheck } from 'lucide-react';
 import PanelHeader from './PanelHeader';
 import { PanelNavRow, ComingSoonBadge } from './PanelNavRow';
 import { useLocale } from '@/lib/stores/locale-store';
 import { useCases } from '@/components/explore/use-cases.generated';
 import { openAskModal } from '@/hooks/useAskModal';
-import { getPluginRenderers, isRendererEnabled, setRendererEnabled, loadDisabledState } from '@/lib/renderers/registry';
-import { fetchAllFilePaths } from '@/lib/client-cache';
-import { Toggle } from '../settings/Primitives';
-import { useSmoothRouterPush } from '@/hooks/useSmoothRouterPush';
 
 interface DiscoverPanelProps {
   active: boolean;
@@ -61,43 +56,6 @@ export default function DiscoverPanel({ active, maximized, onMaximize }: Discove
   const { t } = useLocale();
   const d = t.panels.discover;
   const e = t.explore;
-  const p = t.panels.plugins;
-  const smoothPush = useSmoothRouterPush();
-
-  const [pluginsMounted, setPluginsMounted] = useState(false);
-  const [showPlugins, setShowPlugins] = useState(false);
-  const [, forceUpdate] = useState(0);
-  const [existingFiles, setExistingFiles] = useState<Set<string>>(new Set());
-  const fetchedRef = useRef(false);
-
-  useEffect(() => {
-    loadDisabledState();
-    setPluginsMounted(true);
-  }, []);
-
-  useEffect(() => {
-    if (!pluginsMounted || fetchedRef.current) return;
-    fetchedRef.current = true;
-    const entryPaths = getPluginRenderers().map(r => r.entryPath).filter((ep): ep is string => !!ep);
-    if (entryPaths.length === 0) return;
-    // Shared client cache — deduped with other /api/files consumers
-    fetchAllFilePaths()
-      .then((allPaths: string[]) => {
-        const pathSet = new Set(allPaths);
-        setExistingFiles(new Set(entryPaths.filter(ep => pathSet.has(ep))));
-      })
-      .catch((err) => { console.warn("[DiscoverPanel] fetch /api/files failed:", err); });
-  }, [pluginsMounted]);
-
-  const handleToggle = useCallback((id: string, enabled: boolean) => {
-    setRendererEnabled(id, enabled);
-    forceUpdate(n => n + 1);
-    window.dispatchEvent(new Event('renderer-state-changed'));
-  }, []);
-
-  const handleOpenPlugin = useCallback((entryPath: string) => {
-    smoothPush(`/view/${entryPath.split('/').map(encodeURIComponent).join('/')}`);
-  }, [smoothPush]);
 
   const getUseCaseText = (id: string): { title: string; prompt: string } | undefined => {
     const map: Record<string, { title: string; desc: string; prompt: string }> = {
@@ -106,9 +64,6 @@ export default function DiscoverPanel({ active, maximized, onMaximize }: Discove
     };
     return map[id];
   };
-
-  const renderers = pluginsMounted ? getPluginRenderers() : [];
-  const enabledCount = pluginsMounted ? renderers.filter(r => isRendererEnabled(r.id)).length : 0;
 
   return (
     <div className={`flex flex-col h-full ${active ? '' : 'hidden'}`}>
@@ -126,7 +81,7 @@ export default function DiscoverPanel({ active, maximized, onMaximize }: Discove
             icon={<Blocks size={14} className="text-[var(--amber)]" />}
             title={d.pluginMarket}
             subtitle={d.pluginMarketDesc}
-            href="/settings?tab=plugins&panel=community"
+            href="/explore/plugins"
           />
           <PanelNavRow
             icon={<Zap size={14} className="text-muted-foreground" />}
@@ -138,53 +93,6 @@ export default function DiscoverPanel({ active, maximized, onMaximize }: Discove
             title={d.spaceTemplates}
             badge={<ComingSoonBadge label={d.comingSoon} />}
           />
-        </div>
-
-        <div className="mx-4 border-t border-border" />
-
-        {/* Installed extensions (merged from Plugins panel) */}
-        <div className="py-2">
-          <button
-            type="button"
-            onClick={() => setShowPlugins(v => !v)}
-            className="w-full flex items-center gap-1.5 px-4 py-1.5 text-left"
-          >
-            <ChevronDown size={11} className={`text-muted-foreground transition-transform duration-150 ${showPlugins ? '' : '-rotate-90'}`} />
-            <Blocks size={13} className="text-muted-foreground shrink-0" />
-            <span className="text-2xs font-medium text-muted-foreground uppercase tracking-wider flex-1">
-              {p.title}
-            </span>
-            <span className="text-2xs text-muted-foreground tabular-nums">{enabledCount}/{renderers.length}</span>
-          </button>
-          <div className={`grid transition-[grid-template-rows] duration-200 ease-out ${showPlugins ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
-            <div className="overflow-hidden" {...(!showPlugins && { inert: true } as React.HTMLAttributes<HTMLDivElement>)}>
-              {renderers.map(r => {
-                const enabled = isRendererEnabled(r.id);
-                const fileExists = r.entryPath ? existingFiles.has(r.entryPath) : false;
-                const canOpen = enabled && r.entryPath && fileExists;
-                return (
-                  <div
-                    key={r.id}
-                    className={`flex items-center gap-2 px-4 py-1.5 mx-1 rounded-sm transition-colors ${canOpen ? 'cursor-pointer hover:bg-muted/50' : ''} ${!enabled ? 'opacity-50' : ''}`}
-                    onClick={canOpen ? () => handleOpenPlugin(r.entryPath!) : undefined}
-                    role={canOpen ? 'link' : undefined}
-                    tabIndex={canOpen ? 0 : undefined}
-                    onKeyDown={canOpen ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleOpenPlugin(r.entryPath!); } } : undefined}
-                  >
-                    <span className="text-sm shrink-0" suppressHydrationWarning>{r.icon}</span>
-                    <span className="text-xs text-foreground truncate flex-1" title={r.name}>{r.name}</span>
-                    {r.core ? (
-                      <span className="text-2xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground shrink-0">{p.core}</span>
-                    ) : (
-                      <div onClick={e => e.stopPropagation()}>
-                        <Toggle checked={enabled} onChange={v => handleToggle(r.id, v)} size="sm" />
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
         </div>
 
         <div className="mx-4 border-t border-border" />

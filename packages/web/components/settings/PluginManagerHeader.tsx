@@ -1,6 +1,7 @@
 'use client';
 
-import type { LucideIcon } from 'lucide-react';
+import Link from 'next/link';
+import { ExternalLink, type LucideIcon } from 'lucide-react';
 import type { PluginsCopy } from './PluginsTabModel';
 import type { PluginPanel } from './types';
 
@@ -41,18 +42,27 @@ export function PluginManagerHeader({
           <p className="mt-1 max-w-2xl text-sm leading-relaxed text-muted-foreground">{copy.managerSubtitle}</p>
         </div>
 
-        <div className="grid min-w-0 grid-cols-3 overflow-hidden rounded-xl border border-border bg-card/50 text-center sm:min-w-72">
-          <div className="px-3 py-2">
-            <div className="font-mono text-sm font-semibold tabular-nums text-foreground">{managerStats.total}</div>
-            <div className="text-2xs text-muted-foreground">{copy.pluginsMetric}</div>
-          </div>
-          <div className="border-l border-border px-3 py-2">
-            <div className="font-mono text-sm font-semibold tabular-nums text-[var(--amber-text)]">{managerStats.obsidian}</div>
-            <div className="text-2xs text-muted-foreground">{copy.obsidianMetric}</div>
-          </div>
-          <div className="border-l border-border px-3 py-2">
-            <div className="font-mono text-sm font-semibold tabular-nums text-foreground">{managerStats.surfaces}</div>
-            <div className="text-2xs text-muted-foreground">{copy.surfacesMetric}</div>
+        <div className="flex min-w-0 flex-col items-stretch gap-2 sm:items-end">
+          <Link
+            href="/explore/plugins"
+            className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md border border-border bg-background px-2.5 text-xs font-medium text-foreground transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <ExternalLink size={13} />
+            {copy.browseMarketAction}
+          </Link>
+          <div className="grid min-w-0 grid-cols-3 overflow-hidden rounded-xl border border-border bg-card/50 text-center sm:min-w-72">
+            <div className="px-3 py-2">
+              <div className="font-mono text-sm font-semibold tabular-nums text-foreground">{managerStats.total}</div>
+              <div className="text-2xs text-muted-foreground">{copy.pluginsMetric}</div>
+            </div>
+            <div className="border-l border-border px-3 py-2">
+              <div className="font-mono text-sm font-semibold tabular-nums text-[var(--amber-text)]">{managerStats.obsidian}</div>
+              <div className="text-2xs text-muted-foreground">{copy.obsidianMetric}</div>
+            </div>
+            <div className="border-l border-border px-3 py-2">
+              <div className="font-mono text-sm font-semibold tabular-nums text-foreground">{managerStats.surfaces}</div>
+              <div className="text-2xs text-muted-foreground">{copy.surfacesMetric}</div>
+            </div>
           </div>
         </div>
       </div>

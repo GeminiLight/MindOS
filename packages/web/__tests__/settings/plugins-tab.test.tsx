@@ -49,6 +49,7 @@ const t = {
       title: 'Plugins',
       managerTitle: 'Plugin Manager',
       managerSubtitle: 'Manage plugin layers.',
+      browseMarketAction: 'Browse Plugin Market',
       sectionNavLabel: 'Plugin manager sections',
       installedTab: 'Installed',
       communityTab: 'Community',
@@ -57,7 +58,7 @@ const t = {
       pluginsMetric: 'plugins',
       obsidianMetric: 'Obsidian',
       surfacesMetric: 'surfaces',
-      renderersMetric: 'renderers',
+      renderersMetric: 'extensions',
       coreMetric: 'core',
       enabledMetric: 'enabled',
       optionalMetric: 'optional',
@@ -65,8 +66,8 @@ const t = {
       catalogInventoryDesc: 'Inventory description',
       catalogAllFilter: 'All',
       catalogAllFilterDesc: 'All packages',
-      catalogMindosFilter: 'MindOS',
-      catalogMindosFilterDesc: 'MindOS packages',
+      catalogMindosFilter: 'Built-in',
+      catalogMindosFilterDesc: 'Built-in extension packages',
       catalogObsidianFilter: 'Obsidian',
       catalogObsidianFilterDesc: 'Obsidian packages',
       catalogDisabledFilter: 'Disabled',
@@ -77,11 +78,11 @@ const t = {
       catalogFilteredTitle: (label: string) => `${label} inventory`,
       catalogFilteredDesc: 'Filtered inventory',
       catalogNoMatches: 'No matches',
-      catalogSourceMindos: 'MindOS',
+      catalogSourceMindos: 'Built-in extension',
       catalogSourceObsidian: 'Obsidian',
       catalogStatus: (status: string) => status,
-      mindosRenderersTitle: 'MindOS renderers',
-      mindosRenderersDesc: 'Renderer description',
+      mindosRenderersTitle: 'Built-in extensions',
+      mindosRenderersDesc: 'Built-in extension description',
       surfacesTitle: 'Plugin surfaces',
       surfacesDesc: 'Surfaces description',
       surfaceInventoryTitle: 'Live surface inventory',
@@ -237,6 +238,33 @@ const t = {
       communityUpdateApplyFailed: 'Could not apply update',
       communityUpdateApplySucceeded: (version: string) => `Updated locally ${version}`,
       communityUpdateApplyConfirm: (name: string, version: string) => `Apply ${name} ${version}?`,
+      marketTitle: 'Plugin Market',
+      marketSubtitle: 'Find plugins safely.',
+      marketSourceBadge: 'Official index',
+      marketBackToExplore: 'Explore',
+      marketImportAction: 'Import local',
+      marketManageAction: 'Manage installed',
+      marketCheckAction: 'Check compatibility',
+      marketCheckedAction: 'Checked',
+      marketResultNote: 'Market result note.',
+      marketEmptyHint: 'Try another search.',
+      marketRetryAction: 'Retry',
+      marketDetailsAction: 'Details',
+      marketCacheState: (state: string) => state,
+      marketClearSearch: 'Clear',
+      marketFilterTitle: 'Filter',
+      marketFilterAll: 'All',
+      marketFilterAvailable: 'Available',
+      marketFilterInstalled: 'Installed',
+      marketFilterIssues: 'Needs attention',
+      marketShowingCount: (shown: number, total: number) => `Showing ${shown} of ${total}`,
+      marketShowMore: (n: number) => `Show ${n} more`,
+      marketLocalTitle: 'Local snapshot',
+      marketLocalDesc: 'Local plugin inventory.',
+      marketLocalDeferred: 'Load local inventory on demand.',
+      marketLocalLoadAction: 'Load snapshot',
+      marketLocalEmpty: 'No local plugins.',
+      marketLocalLoadFailed: 'Could not load local plugin inventory',
       marketplaceTitle: 'Community marketplace',
       openAction: 'Open',
       unavailableAction: 'Soon',
@@ -246,8 +274,8 @@ const t = {
       enabled: 'Enabled',
       disabled: 'Disabled',
       matchHint: 'Auto-activates on',
-      coreHint: 'Core renderer - always enabled',
-      noPlugins: 'No renderers installed.',
+      coreHint: 'Core extension - always enabled',
+      noPlugins: 'No built-in extensions available.',
       comingSoon: 'Plugin marketplace coming soon.',
     },
   },
@@ -894,11 +922,11 @@ describe('PluginsTab', () => {
     });
   });
 
-  it('groups renderers and imported Obsidian plugins under the installed panel', async () => {
+  it('groups built-in extensions and imported Obsidian plugins under the installed panel', async () => {
     const { host, root } = await renderTab();
 
     expect(host.textContent).toContain('Plugin Manager');
-    expect(host.textContent).toContain('MindOS renderers');
+    expect(host.textContent).toContain('Built-in extensions');
     expect(host.textContent).toContain('Markdown');
     expect(host.textContent).toContain('Daily notes');
     expect(host.textContent).toContain('Obsidian plugin host');

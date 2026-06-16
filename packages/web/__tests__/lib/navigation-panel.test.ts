@@ -25,6 +25,7 @@ describe('navigation panel route recovery', () => {
     expect(getContentRoutePanel('/agents')).toBe('agents');
     expect(getContentRoutePanel('/agents/codex')).toBe('agents');
     expect(getContentRoutePanel('/explore')).toBe('discover');
+    expect(getContentRoutePanel('/explore/plugins')).toBe('discover');
     expect(getContentRoutePanel('/echo/about-you')).toBe('echo');
   });
 
@@ -64,6 +65,7 @@ describe('navigation panel route recovery', () => {
     expect(getRouteControlledPanel('/capture')).toBe('capture');
     expect(getRouteControlledPanel('/agents')).toBe('agents');
     expect(getRouteControlledPanel('/explore')).toBe('discover');
+    expect(getRouteControlledPanel('/explore/plugins')).toBe('discover');
     expect(getRouteControlledPanel('/echo/about-you')).toBe('echo');
   });
 
@@ -98,6 +100,7 @@ describe('navigation panel route recovery', () => {
   it('recovers sibling destination panels when leaving Inbox', () => {
     expect(recoverStaleCapturePanel('/agents', 'capture')).toBe('agents');
     expect(recoverStaleCapturePanel('/explore', 'capture')).toBe('discover');
+    expect(recoverStaleCapturePanel('/explore/plugins', 'capture')).toBe('discover');
     expect(recoverStaleCapturePanel('/echo/about-you', 'capture')).toBe('echo');
   });
 
