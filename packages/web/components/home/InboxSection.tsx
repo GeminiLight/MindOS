@@ -28,6 +28,7 @@ import { encodePath } from '@/lib/utils';
 import { quickDropToInbox, clipUrlToInbox, looksLikeUrl, extractUrlFromDrop, dragContainsUrl } from '@/lib/inbox-upload';
 import { loadHistory, type OrganizeHistoryEntry, type OrganizeSource } from '@/lib/organize-history';
 import { useInboxOrganize } from '@/components/inbox/InboxOrganizeContext';
+import { StableRowActionButton, StableRowTrailingSlot } from '@/components/shared/StableRowChrome';
 import { CAPTURE_ACCEPT } from '@/lib/capture-formats';
 import { SourceIcon, getInboxSourceLabel } from '@/components/inbox/SourceIcon';
 import { archiveInboxFiles, fetchInboxFiles, type InboxFileSourceInfo } from '@/lib/inbox-client';
@@ -541,27 +542,37 @@ function InboxFileRow({ file, onDelete }: { file: InboxFile; onDelete: (name: st
             </span>
           )}
         </span>
-        <span className="text-2xs text-muted-foreground/40 tabular-nums shrink-0 group-hover:hidden">
-          {age}
-        </span>
-        {file.isAging && (
-          <span title="7+ days" className="group-hover:hidden">
-            <AlertCircle
-              size={11}
-              className="shrink-0 text-[var(--amber)]/60"
-            />
-          </span>
-        )}
-        {/* Hover delete button */}
-        <button
-          type="button"
-          onClick={handleDelete}
-          aria-label={t.inbox.removeFile}
-          className="hit-target-box hidden group-hover:flex group-focus-within:flex max-sm:flex items-center justify-center w-5 h-5 shrink-0 text-muted-foreground/50 hover:text-destructive transition-all duration-150 ease-out focus-visible:ring-2 focus-visible:ring-ring [--hit-target-hover-bg:color-mix(in_srgb,var(--destructive)_10%,transparent)] [--hit-target-radius:var(--radius-sm)]"
-          title={t.inbox.removeFile}
-        >
-          <X size={12} />
-        </button>
+        <StableRowTrailingSlot
+          reserveClassName="w-16"
+          status={(
+            <span className="flex items-center justify-end gap-1">
+              <span className="text-2xs text-muted-foreground/40 tabular-nums shrink-0">
+                {age}
+              </span>
+              {file.isAging && (
+                <span title="7+ days">
+                  <AlertCircle
+                    size={11}
+                    className="shrink-0 text-[var(--amber)]/60"
+                  />
+                </span>
+              )}
+            </span>
+          )}
+          statusClassName="max-sm:opacity-0"
+          actionsClassName="max-sm:pointer-events-auto max-sm:opacity-100"
+          actions={(
+            <StableRowActionButton
+              size="sm"
+              tone="danger"
+              onClick={handleDelete}
+              aria-label={t.inbox.removeFile}
+              title={t.inbox.removeFile}
+            >
+              <X size={12} />
+            </StableRowActionButton>
+          )}
+        />
       </div>
       {ctxMenu && (
         <InboxFileContextMenu

@@ -7,6 +7,7 @@ import { usePinnedFiles } from '@/lib/hooks/usePinnedFiles';
 import { useLocale } from '@/lib/stores/locale-store';
 import { encodePath, relativeTime, extractEmoji, stripEmoji } from '@/lib/utils';
 import { InboxSection } from '@/components/home/InboxSection';
+import { StableRowActionButton, StableRowTrailingSlot } from '@/components/shared/StableRowChrome';
 import type { BuiltInMindSystemSpaceRecord, SpaceInfo } from '@/lib/space-records';
 import { Select } from '@/components/settings/Primitives';
 
@@ -269,7 +270,7 @@ export default function WikiHomeContent({ spaces, recent, mindSystemSpaces }: Wi
       <InboxSection />
 
       {/* ══════════ Pinned Files ══════════ */}
-      <PinnedFilesSection formatTime={formatTime} />
+      <PinnedFilesSection />
 
       {/* ── Visual divider ── */}
       <div className="border-t border-border/30 mb-8" />
@@ -399,7 +400,7 @@ function SectionTitle({ icon, children, count, action }: {
 }
 
 /* ── Pinned Files Section ── */
-function PinnedFilesSection({ formatTime }: { formatTime: (t: number) => string }) {
+function PinnedFilesSection() {
   const { t } = useLocale();
   const { pinnedFiles, removePin } = usePinnedFiles();
 
@@ -416,10 +417,10 @@ function PinnedFilesSection({ formatTime }: { formatTime: (t: number) => string 
           const dir = filePath.split('/').slice(0, -1).join('/');
           const isCSV = filePath.endsWith('.csv');
           return (
-            <div key={filePath} className="group/pin relative">
+            <div key={filePath} className="group group/pin relative flex items-center">
               <Link
                 href={`/view/${encodePath(filePath)}`}
-                className="flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-100 hover:translate-x-0.5 hover:bg-muted overflow-hidden"
+                className="flex min-w-0 flex-1 items-center gap-3 overflow-hidden rounded-lg px-3 py-2 transition-colors duration-100 hover:bg-muted"
               >
                 <Star size={12} className="shrink-0 fill-[var(--amber)] text-[var(--amber)]" />
                 {isCSV
@@ -431,13 +432,23 @@ function PinnedFilesSection({ formatTime }: { formatTime: (t: number) => string 
                   {dir && <span className="text-xs truncate block text-muted-foreground opacity-50" suppressHydrationWarning>{dir}</span>}
                 </div>
               </Link>
-              <button
-                onClick={(e) => { e.preventDefault(); e.stopPropagation(); removePin(filePath); }}
-                className="absolute right-2 top-1/2 -translate-y-1/2 hidden group-hover/pin:flex p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                title={t.pinnedFiles.removedToast}
-              >
-                <X size={12} />
-              </button>
+              <StableRowTrailingSlot
+                reserveClassName="w-8"
+                actions={(
+                  <StableRowActionButton
+                    size="sm"
+                    tone="danger"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      removePin(filePath);
+                    }}
+                    title={t.pinnedFiles.removedToast}
+                  >
+                    <X size={12} />
+                  </StableRowActionButton>
+                )}
+              />
             </div>
           );
         })}

@@ -128,9 +128,12 @@ describe('icon button hit areas', () => {
 
     expect(source).toContain('type="button"');
     expect(source).toContain('hit-target-box inline-flex h-7 w-7 shrink-0 items-center justify-center');
-    expect(source).toContain('hit-target-box inline-flex h-7 w-7 items-center justify-center');
+    expect(source).toContain('StableRowActionButton');
     expect(source).toContain('hit-target-box flex-1 flex min-h-7 items-center');
-    expect(source).toContain('hit-target-box w-full flex min-h-7 items-center');
+    expect(source).toContain('hit-target-box flex min-h-7 min-w-0 flex-1 items-center');
+    expect(source).not.toContain('hidden group-hover/dir:flex');
+    expect(source).not.toContain('hidden group-hover/file:flex');
+    expect(source).not.toContain('pr-16');
     expect(source).toContain('focus-visible:ring-2 focus-visible:ring-ring touch-manipulation');
     expect(source).not.toContain('className="shrink-0 p-1 rounded hover:bg-muted');
     expect(source).not.toContain('className="p-0.5 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"');
@@ -208,6 +211,7 @@ describe('icon button hit areas', () => {
     const saveSource = readSource('components/ask/SaveSessionInline.tsx');
     const historyPanelSource = readSource('components/ask/SessionHistoryPanel.tsx');
     const historySource = readSource('components/ask/SessionHistory.tsx');
+    const stableRowChromeSource = readSource('components/shared/StableRowChrome.tsx');
     const saveInsightSource = readSource('components/ask/SaveInsightInline.tsx');
     const providerCapsuleSource = readSource('components/ask/ProviderModelCapsule.tsx');
 
@@ -215,14 +219,20 @@ describe('icon button hit areas', () => {
       actionsSource,
       messageListSource,
       saveSource,
-      historyPanelSource,
-      historySource,
       saveInsightSource,
       providerCapsuleSource,
     ]) {
       expect(source).toContain('inline-flex h-7 w-7');
       expect(source).toContain('focus-visible:ring-2 focus-visible:ring-ring');
     }
+    expect(stableRowChromeSource).toContain("'h-6 w-6' : 'h-7 w-7'");
+    expect(stableRowChromeSource).toContain('focus-visible:ring-2 focus-visible:ring-ring');
+    expect(historyPanelSource).toContain('StableRowTrailingSlot');
+    expect(historyPanelSource).toContain('StableRowActionButton');
+    expect(historySource).toContain('StableRowTrailingSlot');
+    expect(historySource).toContain('StableRowActionButton');
+    expect(historyPanelSource).not.toContain('opacity-0 transition-opacity duration-75 group-hover:opacity-100');
+    expect(historySource).not.toContain('group-hover:opacity-100 focus-visible:opacity-100');
     expect(actionsSource).toContain('const btnBase = \'hit-target-box');
     expect(actionsSource).toContain('[--hit-target-hover-bg:var(--muted)]');
     expect(actionsSource).toContain('[--hit-target-hover-bg:color-mix(in_srgb,var(--amber)_10%,transparent)]');

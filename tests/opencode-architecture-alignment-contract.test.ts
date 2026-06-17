@@ -293,7 +293,8 @@ describe('OpenCode architecture alignment', () => {
     expect(askRoute).toContain("await import('@geminilight/mindos/agent/runtime/adapters/mindos')");
     expect(askRoute).toContain('createMindosAgentRuntime');
     expect(askRoute).toContain('const externalPrompt = await buildMindosContextPrompt');
-    expect(askRoute).toContain('const turnPrompt = await buildMindosContextPrompt');
+    expect(askRoute).toContain('const commonTurnPrompt = await buildMindosContextPrompt');
+    expect(askRoute).toContain('const turnPrompt = renderMindosPiSelectedSkillPrompt(commonTurnPrompt, selectedSkills)');
     expect(askRoute).toContain('prompt: externalPrompt');
     expect(askRoute).toContain('prompt: turnPrompt');
     expect(askRoute.indexOf('if (selectedNativeRuntime || selectedAcpAgent)')).toBeLessThan(
