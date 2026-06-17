@@ -129,6 +129,18 @@ describe('product npm publish contract', () => {
       types: './dist/agent/prompt/*.d.ts',
       import: './dist/agent/prompt/*.js',
     });
+    expect(pkg.exports?.['./agent/mindos-pi']).toEqual({
+      types: './dist/agent/mindos-pi/index.d.ts',
+      import: './dist/agent/mindos-pi/index.js',
+    });
+    expect(pkg.exports?.['./agent/mindos-pi/extension']).toEqual({
+      types: './dist/agent/mindos-pi/extension/index.d.ts',
+      import: './dist/agent/mindos-pi/extension/index.js',
+    });
+    expect(pkg.exports?.['./agent/mindos-pi/extension/*']).toEqual({
+      types: './dist/agent/mindos-pi/extension/*.d.ts',
+      import: './dist/agent/mindos-pi/extension/*.js',
+    });
     expect(pkg.exports?.['./agent/tool']).toEqual({
       types: './dist/agent/tool/index.d.ts',
       import: './dist/agent/tool/index.js',
@@ -171,13 +183,28 @@ describe('product npm publish contract', () => {
       'capability-registry',
       'file-write-lock',
       'index',
-      'kb-extension',
       'kb-tools',
       'line-diff',
       'paragraph-extract',
       'permission-policy',
     ]) {
       expect(existsSync(resolve(root, `packages/mindos/src/agent/tool/${module}.ts`))).toBe(true);
+    }
+    expect(readText('packages/mindos/src/agent/tool/index.ts')).not.toContain('kb-extension');
+    expect(readText('packages/mindos/src/agent/tool/kb-extension.ts')).toContain("from '../mindos-pi/extension/kb-extension.js'");
+    for (const module of [
+      'index',
+      'resource-types',
+      'runtime',
+    ]) {
+      expect(existsSync(resolve(root, `packages/mindos/src/agent/mindos-pi/${module}.ts`))).toBe(true);
+    }
+    for (const module of [
+      'extension-tools',
+      'index',
+      'kb-extension',
+    ]) {
+      expect(existsSync(resolve(root, `packages/mindos/src/agent/mindos-pi/extension/${module}.ts`))).toBe(true);
     }
 
     // kb-tools value-imports TypeBox schemas at runtime — it must be a real

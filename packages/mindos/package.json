@@ -77,6 +77,22 @@
       "types": "./dist/agent/prompt/*.d.ts",
       "import": "./dist/agent/prompt/*.js"
     },
+    "./agent/mindos-pi": {
+      "types": "./dist/agent/mindos-pi/index.d.ts",
+      "import": "./dist/agent/mindos-pi/index.js"
+    },
+    "./agent/mindos-pi/extension": {
+      "types": "./dist/agent/mindos-pi/extension/index.d.ts",
+      "import": "./dist/agent/mindos-pi/extension/index.js"
+    },
+    "./agent/mindos-pi/extension/*": {
+      "types": "./dist/agent/mindos-pi/extension/*.d.ts",
+      "import": "./dist/agent/mindos-pi/extension/*.js"
+    },
+    "./agent/mindos-pi/*": {
+      "types": "./dist/agent/mindos-pi/*.d.ts",
+      "import": "./dist/agent/mindos-pi/*.js"
+    },
     "./agent/pi": {
       "types": "./dist/agent/pi/index.d.ts",
       "import": "./dist/agent/pi/index.js"

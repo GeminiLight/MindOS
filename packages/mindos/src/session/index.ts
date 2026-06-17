@@ -2,12 +2,12 @@ import { redactSensitiveObject, redactSensitiveText } from './redaction.js';
 import {
   collectMindosRuntimeToolsForFallback,
   createMindosHeadlessExtensionContext,
-} from '../agent/pi/extension-tools.js';
+} from '../agent/mindos-pi/extension/extension-tools.js';
 import type {
   MindosDiscoveredSkill,
   MindosExtensionLoadError,
   MindosPiResourceLoaderAdapter,
-} from '../agent/pi/resource-types.js';
+} from '../agent/mindos-pi/resource-types.js';
 import type { MindosExecutableTool } from '../agent/tool/executable-tool.js';
 
 export { redactSensitiveObject, redactSensitiveText } from './redaction.js';
@@ -17,7 +17,7 @@ export type {
   MindosExtensionLoadError,
   MindosExtensionLoadResult,
   MindosPiResourceLoaderAdapter,
-} from '../agent/pi/resource-types.js';
+} from '../agent/mindos-pi/resource-types.js';
 export type { MindosExecutableTool } from '../agent/tool/executable-tool.js';
 
 export type MindosSessionEventType =

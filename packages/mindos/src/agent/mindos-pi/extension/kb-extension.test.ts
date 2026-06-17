@@ -9,7 +9,7 @@ import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import {
   createMindosAgentPermissionPolicy,
   type MindosAgentPermissionPolicy,
-} from './permission-policy.js';
+} from '../../tool/permission-policy.js';
 import {
   createMindosKbExtension,
   createMindosKbExtensionFromRegisteredHost,
@@ -21,8 +21,8 @@ import {
   setKbPermissionPolicy,
   type MindosKbAuditEntry,
 } from './kb-extension.js';
-import { deleteProcessGlobal, KB_EXTENSION_HOST_KEY } from '../global-state.js';
-import type { MindosAgentTool } from './kb-tools.js';
+import { deleteProcessGlobal, KB_EXTENSION_HOST_KEY } from '../../global-state.js';
+import type { MindosAgentTool } from '../../tool/kb-tools.js';
 
 type RegisteredTool = {
   name: string;

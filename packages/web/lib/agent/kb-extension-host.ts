@@ -6,7 +6,7 @@
 // resourceLoader.reload(); getMindosWebPiRuntimePaths() calls it on every
 // request (idempotent).
 
-import { registerMindosKbExtensionHost } from '@geminilight/mindos/agent/tool/kb-extension';
+import { registerMindosKbExtensionHost } from '@geminilight/mindos/agent/mindos-pi/extension/kb-extension';
 import { getToolsForMindosAgentPolicy } from './tools';
 import { logAgentOp } from './log';
 

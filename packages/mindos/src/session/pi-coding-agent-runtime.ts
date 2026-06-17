@@ -3,4 +3,4 @@ export {
   createMindosPiCodingAgentRuntimeServices,
   type MindosPiCodingAgentRuntimeHostServices,
   type MindosPiCodingAgentRuntimeOptions,
-} from '../agent/pi/runtime.js';
+} from '../agent/mindos-pi/runtime.js';

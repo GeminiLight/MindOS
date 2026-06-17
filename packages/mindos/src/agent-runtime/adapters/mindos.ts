@@ -1,7 +1,7 @@
 import {
   createMindosPiCodingAgentRuntime,
   type MindosPiCodingAgentRuntimeOptions,
-} from '../../agent/pi/runtime.js';
+} from '../../agent/mindos-pi/runtime.js';
 import type { MindosPiAgentRuntime } from '../../session/index.js';
 import { mindosRuntimeDescriptor } from '../descriptors.js';
 import type { AgentRuntimeDescriptor } from '../registry.js';

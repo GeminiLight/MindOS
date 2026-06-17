@@ -1,7 +1,7 @@
 // ─── Knowledge Base Extension (web entry) ────────────────────────────────────
 // Sunk into the core package (Wave 3, spec-agent-core-consolidation): policy
 // scoping, write-protection, and audit wrapping live in
-// packages/mindos/src/agent/tool/kb-extension.ts.
+// packages/mindos/src/agent/mindos-pi/extension/kb-extension.ts.
 //
 // This file must stay a REAL extension entry (default export factory): the pi
 // DefaultResourceLoader loads it by file path (mindos-pi-runtime-host.ts) in
@@ -16,7 +16,7 @@
 // loader-side reload() observe the same policy.
 
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
-import { createMindosKbExtensionFromRegisteredHost } from '@geminilight/mindos/agent/tool/kb-extension';
+import { createMindosKbExtensionFromRegisteredHost } from '@geminilight/mindos/agent/mindos-pi/extension/kb-extension';
 
 export {
   getEffectiveKbPermissionPolicy,
@@ -24,7 +24,7 @@ export {
   setKbMode,
   setKbPermissionPolicy,
   type KbMode,
-} from '@geminilight/mindos/agent/tool/kb-extension';
+} from '@geminilight/mindos/agent/mindos-pi/extension/kb-extension';
 
 const kbExtension = createMindosKbExtensionFromRegisteredHost();
 

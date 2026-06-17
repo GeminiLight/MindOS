@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   collectMindosRuntimeToolsForFallback,
   createMindosHeadlessExtensionContext,
-  type MindosPiResourceLoaderAdapter,
-} from './index.js';
-import type { MindosExecutableTool } from '../tool/index.js';
+} from './extension-tools.js';
+import type { MindosPiResourceLoaderAdapter } from '../resource-types.js';
+import type { MindosExecutableTool } from '../../tool/index.js';
 
 describe('MindOS pi extension tools', () => {
   it('adapts pi extension tool wrappers for the non-streaming fallback', async () => {

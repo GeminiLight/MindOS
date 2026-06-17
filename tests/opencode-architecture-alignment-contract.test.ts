@@ -70,6 +70,14 @@ describe('OpenCode architecture alignment', () => {
       types: './dist/agent.d.ts',
       import: './dist/agent.js',
     });
+    expect(pkg.exports?.['./agent/mindos-pi']).toEqual({
+      types: './dist/agent/mindos-pi/index.d.ts',
+      import: './dist/agent/mindos-pi/index.js',
+    });
+    expect(pkg.exports?.['./agent/mindos-pi/extension']).toEqual({
+      types: './dist/agent/mindos-pi/extension/index.d.ts',
+      import: './dist/agent/mindos-pi/extension/index.js',
+    });
     expect(pkg.exports?.['./agent/pi']).toEqual({
       types: './dist/agent/pi/index.d.ts',
       import: './dist/agent/pi/index.js',
@@ -150,7 +158,8 @@ describe('OpenCode architecture alignment', () => {
     const agent = readText('packages/mindos/src/agent.ts');
     const askRoute = readText('packages/web/app/api/ask/route.ts');
     const headlessAgent = readText('packages/web/lib/agent/headless.ts');
-    const piRuntimeAdapter = readText('packages/mindos/src/agent/pi/runtime.ts');
+    const piRuntimeAdapter = readText('packages/mindos/src/agent/mindos-pi/runtime.ts');
+    const piRuntimeCompatShim = readText('packages/mindos/src/agent/pi/runtime.ts');
     const piRuntimeCompat = readText('packages/mindos/src/session/pi-coding-agent-runtime.ts');
     const mindosRuntimeAdapter = readText('packages/mindos/src/agent-runtime/adapters/mindos.ts');
     const streamConsumer = readText('packages/web/lib/agent/stream-consumer.ts');
@@ -185,7 +194,11 @@ describe('OpenCode architecture alignment', () => {
     expect(readText('packages/mindos/src/agent/index.ts')).toContain('buildMindosContextPrompt');
     expect(readText('packages/mindos/src/agent/index.ts')).toContain('compactMindosPromptForTokenBudget');
     expect(readText('packages/mindos/src/agent/index.ts')).not.toContain("from './pi/index.js'");
+    expect(readText('packages/mindos/src/agent/index.ts')).not.toContain("from './mindos-pi/index.js'");
     expect(existsSync(resolve(root, 'packages/mindos/src/agent/prompt/context-prompt.ts'))).toBe(true);
+    expect(existsSync(resolve(root, 'packages/mindos/src/agent/mindos-pi/runtime.ts'))).toBe(true);
+    expect(existsSync(resolve(root, 'packages/mindos/src/agent/mindos-pi/extension/extension-tools.ts'))).toBe(true);
+    expect(existsSync(resolve(root, 'packages/mindos/src/agent/mindos-pi/extension/kb-extension.ts'))).toBe(true);
     expect(existsSync(resolve(root, 'packages/mindos/src/agent/pi/runtime.ts'))).toBe(true);
     expect(existsSync(resolve(root, 'packages/mindos/src/agent/pi/extension-tools.ts'))).toBe(true);
     expect(existsSync(resolve(root, 'packages/mindos/src/agent-runtime/adapters/mindos.ts'))).toBe(true);
@@ -238,7 +251,8 @@ describe('OpenCode architecture alignment', () => {
     expect(piRuntimeAdapter).toContain("import { nativeImport } from '../../foundation/native-import.js'");
     expect(piRuntimeAdapter).not.toMatch(/^import\s*\{[^}]*\}\s*from '@earendil-works\/pi-coding-agent';/m);
     expect(piRuntimeAdapter).not.toContain("from '@mariozechner/pi-coding-agent'");
-    expect(piRuntimeCompat).toContain("from '../agent/pi/runtime.js'");
+    expect(piRuntimeCompatShim).toContain("from '../mindos-pi/runtime.js'");
+    expect(piRuntimeCompat).toContain("from '../agent/mindos-pi/runtime.js'");
     expect(claudeSdkAdapter).toContain("import { nativeImport } from '../foundation/native-import.js'");
     expect(claudeSdkAdapter).not.toContain("import('@anthropic-ai/claude-agent-sdk')");
     expect(claudeSdkAdapter).not.toMatch(/^const requireFromHere = createRequire/m);
@@ -247,6 +261,10 @@ describe('OpenCode architecture alignment', () => {
     expect(mindosRuntimeAdapter).toContain('createMindosAgentRuntimeAdapter');
     expect(mindosRuntimeAdapter).toContain('createMindosAgentRuntime');
     expect(mindosRuntimeAdapter).toContain('createMindosPiCodingAgentRuntime');
+    expect(mindosRuntimeAdapter).toContain("from '../../agent/mindos-pi/runtime.js'");
+    expect(readText('packages/mindos/src/agent/tool/index.ts')).not.toContain('kb-extension');
+    expect(readText('packages/mindos/src/agent/tool/kb-extension.ts')).toContain("from '../mindos-pi/extension/kb-extension.js'");
+    expect(readText('packages/web/lib/agent/kb-extension.ts')).toContain('@geminilight/mindos/agent/mindos-pi/extension/kb-extension');
     expect(existsSync(resolve(root, 'packages/web/lib/agent/mindos-pi-runtime-adapter.ts'))).toBe(false);
     expect(headlessAgent).not.toContain("from '@mariozechner/pi-coding-agent'");
     expect(headlessAgent).not.toContain('createAgentSession');
