@@ -4,7 +4,7 @@ import { POST } from '@/app/api/ask/user-question/request/route';
 import {
   answerAskUserQuestion,
   runWithAskUserQuestionBridge,
-} from '@geminilight/mindos/agent/user-question-bridge';
+} from '@geminilight/mindos/agent/bridges/user-question-bridge';
 
 function postJson(body: Record<string, unknown>): NextRequest {
   return new NextRequest('http://localhost/api/ask/user-question/request', {

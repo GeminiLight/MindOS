@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   listAgentRuns,
   resetAgentRunsForTest,
-} from '@geminilight/mindos/agent/run-ledger';
+} from '@geminilight/mindos/agent/ledger/run-ledger';
 
 const mockFindAcpAgent = vi.fn();
 const mockGetAcpAgents = vi.fn();

@@ -1,4 +1,4 @@
-import type { ClaudeCodeCliPermissionPrompt } from '@geminilight/mindos/agent-runtime';
+import type { ClaudeCodeCliPermissionPrompt } from '@geminilight/mindos/agent/runtime';
 
 export const CLAUDE_PERMISSION_PROMPT_SERVER = 'mindos_runtime_permission';
 export const CLAUDE_PERMISSION_PROMPT_TOOL = 'mindos_runtime_permission';

@@ -6,13 +6,13 @@ import {
   readCodexConfigText,
   resolveCodexProviderEnvironment,
   type CodexShellEnvValueReader,
-} from '../../agent-runtime/codex-env.js';
+} from '../../agent/runtime/codex-env.js';
 import {
   type ClaudeCodeSdkModule,
-} from '../../agent-runtime/claude-code-sdk.js';
+} from '../../agent/runtime/claude-code-sdk.js';
 import {
   compactRuntimeFailureMessage,
-} from '../../agent-runtime/runtime-errors.js';
+} from '../../agent/runtime/runtime-errors.js';
 import {
   NATIVE_HEALTH_TIMEOUT_MS,
   RUNTIME_DETECTION_TIMEOUT_MS,
@@ -29,7 +29,7 @@ import {
   type NativeRuntimeHealthInput,
   type NativeRuntimeHealthResult,
   type NativeRuntimeId,
-} from '../../agent-runtime/registry.js';
+} from '../../agent/runtime/registry.js';
 import {
   classifyRuntimeFailure,
   isClaudeAgent,
@@ -37,10 +37,10 @@ import {
   isNativeRuntimeId,
   normalizeInstalled,
   normalizeMissing,
-} from '../../agent-runtime/detection.js';
+} from '../../agent/runtime/detection.js';
 import {
   nativeDescriptor,
-} from '../../agent-runtime/descriptors.js';
+} from '../../agent/runtime/descriptors.js';
 import { spawn } from 'node:child_process';
 import { errorResponse, json, privateCacheHeaders, type MindosServerResponse } from '../response.js';
 
@@ -66,7 +66,7 @@ export type {
   MissingRuntimeAgent,
   NativeRuntimeHealthInput,
   NativeRuntimeHealthResult,
-} from '../../agent-runtime/registry.js';
+} from '../../agent/runtime/registry.js';
 
 async function checkProcessVersion(
   command: string,

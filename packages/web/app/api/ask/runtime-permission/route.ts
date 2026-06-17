@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { resolveRuntimePermission } from '@geminilight/mindos/agent/runtime-permission-bridge';
+import { resolveRuntimePermission } from '@geminilight/mindos/agent/bridges/runtime-permission-bridge';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);

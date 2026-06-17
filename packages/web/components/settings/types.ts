@@ -1,7 +1,7 @@
 import type { Locale, Messages } from '@/lib/i18n';
 import type React from 'react';
 import type { Provider } from '@/lib/custom-endpoints';
-import type { AgentRuntimeEnvironmentSettings } from '@geminilight/mindos/agent-runtime/runtime-env';
+import type { AgentRuntimeEnvironmentSettings } from '@geminilight/mindos/agent/runtime/runtime-env';
 
 export interface AiSettings {
   activeProvider: string;

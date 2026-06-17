@@ -5,7 +5,7 @@ import {
   listAgentEvents,
   listAgentRuns,
   resetAgentRunsForTest,
-} from '@geminilight/mindos/agent/run-ledger';
+} from '@geminilight/mindos/agent/ledger/run-ledger';
 
 const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);

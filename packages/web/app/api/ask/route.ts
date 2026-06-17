@@ -38,7 +38,7 @@ import {
   resolveAgentRuntimeEnvOverlay,
   runMindosAgentRuntimeAskSession,
   type MindosAgentRuntimeSelection,
-} from '@geminilight/mindos/agent-runtime';
+} from '@geminilight/mindos/agent/runtime';
 import {
   handleAgentRuntimesGet,
   type AgentRuntimeDescriptor,
@@ -54,11 +54,11 @@ import {
   resolveSkillFile,
   resolveSkillReference,
 } from '@/lib/agent/skill-resolver';
-import { askUserQuestionViaBridge, runWithAskUserQuestionBridge } from '@geminilight/mindos/agent/user-question-bridge';
+import { askUserQuestionViaBridge, runWithAskUserQuestionBridge } from '@geminilight/mindos/agent/bridges/user-question-bridge';
 import {
   requestRuntimePermissionViaBridge,
   runWithRuntimePermissionBridge,
-} from '@geminilight/mindos/agent/runtime-permission-bridge';
+} from '@geminilight/mindos/agent/bridges/runtime-permission-bridge';
 import { compactRuntimeDisplayReason } from '@/lib/agent/runtime-error-display';
 import {
   createClaudePermissionPromptConfig,
@@ -70,7 +70,7 @@ import {
   startAgentRun,
   updateAgentRun,
   type AgentRunRecord,
-} from '@geminilight/mindos/agent/run-ledger';
+} from '@geminilight/mindos/agent/ledger/run-ledger';
 import {
   getCachedAvailableNativeRuntimeDescriptor,
   rememberAvailableNativeRuntimeDescriptor,
@@ -81,7 +81,7 @@ import {
   setAgentRunContextForResource,
 } from '@geminilight/mindos/agent/agent-run-context';
 import { toMindosUiAskMessages } from '@/lib/agent/to-agent-messages';
-import { isAbortLikeError } from '@geminilight/mindos/agent/run-cancellation';
+import { isAbortLikeError } from '@geminilight/mindos/agent/ledger/run-cancellation';
 
 const NATIVE_ASK_HEALTH_GATE_TIMEOUT_MS = 3000;
 
@@ -889,7 +889,7 @@ export async function POST(req: NextRequest) {
       getMindosWebRequestToolsForPolicy,
     } = await import('@/lib/agent/mindos-pi-runtime-host');
     const runtimePaths = getMindosWebPiRuntimePaths({ projectRoot, mindRoot, serverSettings, mode: askMode, permissionPolicy });
-    const { createMindosAgentRuntime } = await import('@geminilight/mindos/agent-runtime/adapters/mindos');
+    const { createMindosAgentRuntime } = await import('@geminilight/mindos/agent/runtime/adapters/mindos');
     const { runWithKbPermissionPolicy } = await import('@/lib/agent/kb-extension');
     // Scope the kb tool policy to this request: runtime creation reloads the
     // kb extension, and concurrent requests with different modes must not

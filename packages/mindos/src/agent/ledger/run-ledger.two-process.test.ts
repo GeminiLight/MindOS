@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { setMindRootResolverForTests } from '../foundation/mind-root/index.js';
+import { setMindRootResolverForTests } from '../../foundation/mind-root/index.js';
 import {
   listAgentRuns,
   reloadAgentRunsFromDiskForTest,
@@ -20,7 +20,7 @@ import {
  */
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const pkgRoot = path.resolve(here, '..', '..');
+const pkgRoot = path.resolve(here, '..', '..', '..');
 const distDir = path.join(pkgRoot, 'dist');
 const driverPath = path.join(here, 'run-ledger-two-process-driver.mjs');
 

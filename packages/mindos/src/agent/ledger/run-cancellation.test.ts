@@ -7,7 +7,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { setMindRootResolverForTests } from '../foundation/mind-root/index.js';
+import { setMindRootResolverForTests } from '../../foundation/mind-root/index.js';
 import {
   cancelAgentRunWithHandlers,
   linkAbortSignalToAgentRun,

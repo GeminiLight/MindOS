@@ -1,4 +1,4 @@
-import type { AgentRunRecord, AgentRunStatus } from './run-ledger-types.js';
+import type { AgentRunRecord, AgentRunStatus } from './ledger/run-ledger-types.js';
 
 export type ReducibleAgentRunStatus = Extract<AgentRunStatus, 'completed' | 'failed' | 'canceled' | 'timed_out'>;
 

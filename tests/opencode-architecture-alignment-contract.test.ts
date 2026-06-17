@@ -36,6 +36,32 @@ describe('OpenCode architecture alignment', () => {
     expect(spec).toContain('serve');
   });
 
+  it('documents the agent architecture cleanup and keeps Web on package exports', () => {
+    const specPath = 'wiki/specs/spec-agent-architecture-cleanup.md';
+    expect(existsSync(resolve(root, specPath))).toBe(true);
+
+    const spec = readText(specPath);
+    for (const section of [
+      '## 目标',
+      '## 现状分析',
+      '## 数据流 / 状态流',
+      '## 方案',
+      '## 影响范围',
+      '## 边界 case 与风险',
+      '## 验收标准',
+    ]) {
+      expect(spec).toContain(section);
+    }
+
+    expect(spec).toContain('packages/mindos/src/agent/runtime');
+    expect(spec).toContain('packages/mindos/src/agent/session');
+    expect(spec).toContain('packages/mindos/src/agent/mindos-pi/runtime.ts');
+    expect(spec).toContain('package exports');
+
+    const webTsconfig = readJson<{ compilerOptions?: { paths?: Record<string, unknown> } }>('packages/web/tsconfig.json');
+    expect(webTsconfig.compilerOptions?.paths?.['@geminilight/mindos/agent']).toBeUndefined();
+  });
+
   it('keeps the product package as the runtime owner but exposes a narrow client SDK boundary', () => {
     const pkg = readJson<{
       exports?: Record<string, { types?: string; import?: string }>;
@@ -69,6 +95,34 @@ describe('OpenCode architecture alignment', () => {
     expect(pkg.exports?.['./agent']).toEqual({
       types: './dist/agent.d.ts',
       import: './dist/agent.js',
+    });
+    expect(pkg.exports?.['./agent/session']).toEqual({
+      types: './dist/agent/session/index.d.ts',
+      import: './dist/agent/session/index.js',
+    });
+    expect(pkg.exports?.['./agent/runtime']).toEqual({
+      types: './dist/agent/runtime/index.d.ts',
+      import: './dist/agent/runtime/index.js',
+    });
+    expect(pkg.exports?.['./agent/runtime/adapters']).toEqual({
+      types: './dist/agent/runtime/adapters/index.d.ts',
+      import: './dist/agent/runtime/adapters/index.js',
+    });
+    expect(pkg.exports?.['./agent/ledger']).toEqual({
+      types: './dist/agent/ledger/index.d.ts',
+      import: './dist/agent/ledger/index.js',
+    });
+    expect(pkg.exports?.['./agent/bridges']).toEqual({
+      types: './dist/agent/bridges/index.d.ts',
+      import: './dist/agent/bridges/index.js',
+    });
+    expect(pkg.exports?.['./agent/stream']).toEqual({
+      types: './dist/agent/stream/index.d.ts',
+      import: './dist/agent/stream/index.js',
+    });
+    expect(pkg.exports?.['./agent/subagent']).toEqual({
+      types: './dist/agent/subagent/index.d.ts',
+      import: './dist/agent/subagent/index.js',
     });
     expect(pkg.exports?.['./agent/mindos-pi']).toEqual({
       types: './dist/agent/mindos-pi/index.d.ts',
@@ -161,32 +215,36 @@ describe('OpenCode architecture alignment', () => {
     const piRuntimeAdapter = readText('packages/mindos/src/agent/mindos-pi/runtime.ts');
     const piRuntimeCompatShim = readText('packages/mindos/src/agent/pi/runtime.ts');
     const piRuntimeCompat = readText('packages/mindos/src/session/pi-coding-agent-runtime.ts');
-    const mindosRuntimeAdapter = readText('packages/mindos/src/agent-runtime/adapters/mindos.ts');
+    const mindosRuntimeAdapter = readText('packages/mindos/src/agent/runtime/adapters/mindos.ts');
+    const mindosRuntimeCompat = readText('packages/mindos/src/agent-runtime/adapters/mindos.ts');
+    const sessionIndex = readText('packages/mindos/src/agent/session/index.ts');
+    const sessionCompatIndex = readText('packages/mindos/src/session/index.ts');
     const streamConsumer = readText('packages/web/lib/agent/stream-consumer.ts');
     const toAgentMessages = readText('packages/web/lib/agent/to-agent-messages.ts');
 
     expect(plugin).toContain("from './plugin/index.js'");
     expect(tool).toContain("from './tool/index.js'");
-    expect(session).toContain("from './session/index.js'");
+    expect(session).toContain("from './agent/session/index.js'");
     expect(agent).toContain("from './agent/index.js'");
+    expect(sessionCompatIndex).toContain("from '../agent/session/index.js'");
 
     expect(readText('packages/mindos/src/plugin/index.ts')).toContain('validateMindosPluginManifest');
     expect(readText('packages/mindos/src/tool/index.ts')).toContain('createMindosToolRegistry');
-    expect(readText('packages/mindos/src/session/index.ts')).toContain('MINDOS_SESSION_STREAM_SCHEMA');
-    expect(readText('packages/mindos/src/session/index.ts')).toContain('encodeMindosSseEvent');
-    expect(readText('packages/mindos/src/session/index.ts')).toContain('normalizeMindosAskMode');
-    expect(readText('packages/mindos/src/session/index.ts')).toContain('detectMindosAgentLoop');
-    expect(readText('packages/mindos/src/session/index.ts')).toContain('toMindosAgentMessages');
-    expect(readText('packages/mindos/src/session/index.ts')).toContain('runMindosAskWithRetry');
-    expect(readText('packages/mindos/src/session/index.ts')).toContain('mapMindosAcpUpdateToSseEvents');
-    expect(readText('packages/mindos/src/session/index.ts')).toContain('runMindosAcpAskSession');
-    expect(readText('packages/mindos/src/session/index.ts')).toContain('runMindosPiAgentAskSession');
-    expect(readText('packages/mindos/src/session/index.ts')).toContain('runMindosAskProxyFallback');
-    expect(readText('packages/mindos/src/session/index.ts')).toContain('createMindosAgentEventReducer');
-    expect(readText('packages/mindos/src/session/index.ts')).toContain('resolveMindosAgentTimeoutMs');
-    expect(readText('packages/mindos/src/session/index.ts')).toContain('runMindosNonStreamingFallback');
-    expect(readText('packages/mindos/src/session/index.ts')).toContain('buildMindosCompatEndpointCandidates');
-    expect(readText('packages/mindos/src/session/index.ts')).toContain('createMindosPiAgentRuntime');
+    expect(sessionIndex).toContain('MINDOS_SESSION_STREAM_SCHEMA');
+    expect(sessionIndex).toContain('encodeMindosSseEvent');
+    expect(sessionIndex).toContain('normalizeMindosAskMode');
+    expect(sessionIndex).toContain('detectMindosAgentLoop');
+    expect(sessionIndex).toContain('toMindosAgentMessages');
+    expect(sessionIndex).toContain('runMindosAskWithRetry');
+    expect(sessionIndex).toContain('mapMindosAcpUpdateToSseEvents');
+    expect(sessionIndex).toContain('runMindosAcpAskSession');
+    expect(sessionIndex).toContain('runMindosPiAgentAskSession');
+    expect(sessionIndex).toContain('runMindosAskProxyFallback');
+    expect(sessionIndex).toContain('createMindosAgentEventReducer');
+    expect(sessionIndex).toContain('resolveMindosAgentTimeoutMs');
+    expect(sessionIndex).toContain('runMindosNonStreamingFallback');
+    expect(sessionIndex).toContain('buildMindosCompatEndpointCandidates');
+    expect(sessionIndex).toContain('createMindosPiAgentRuntime');
     expect(readText('packages/mindos/src/agent/index.ts')).toContain('defineMindosAgent');
     expect(readText('packages/mindos/src/agent/index.ts')).toContain('MINDOS_SYSTEM_PROMPT');
     expect(readText('packages/mindos/src/agent/index.ts')).toContain('MINDOS_AGENT_MANIFEST');
@@ -201,6 +259,7 @@ describe('OpenCode architecture alignment', () => {
     expect(existsSync(resolve(root, 'packages/mindos/src/agent/mindos-pi/extension/kb-extension.ts'))).toBe(true);
     expect(existsSync(resolve(root, 'packages/mindos/src/agent/pi/runtime.ts'))).toBe(true);
     expect(existsSync(resolve(root, 'packages/mindos/src/agent/pi/extension-tools.ts'))).toBe(true);
+    expect(existsSync(resolve(root, 'packages/mindos/src/agent/runtime/adapters/mindos.ts'))).toBe(true);
     expect(existsSync(resolve(root, 'packages/mindos/src/agent-runtime/adapters/mindos.ts'))).toBe(true);
     expect(readText('packages/mindos/src/agent/prompt/system-prompt.ts')).toContain('buildMindosSystemPrompt');
     expect(readText('packages/mindos/src/agent/prompt/system-prompt.ts')).not.toContain('buildMindosContextPrompt');
@@ -231,21 +290,22 @@ describe('OpenCode architecture alignment', () => {
     expect(askRoute).toContain('buildMindosContextPrompt');
     expect(askRoute).not.toContain("from '@geminilight/mindos/session/pi-coding-agent'");
     expect(askRoute).not.toContain("await import('@geminilight/mindos/session/pi-coding-agent')");
-    expect(askRoute).toContain("await import('@geminilight/mindos/agent-runtime/adapters/mindos')");
+    expect(askRoute).toContain("await import('@geminilight/mindos/agent/runtime/adapters/mindos')");
     expect(askRoute).toContain('createMindosAgentRuntime');
     expect(askRoute).toContain('const externalPrompt = await buildMindosContextPrompt');
     expect(askRoute).toContain('const turnPrompt = await buildMindosContextPrompt');
     expect(askRoute).toContain('prompt: externalPrompt');
     expect(askRoute).toContain('prompt: turnPrompt');
     expect(askRoute.indexOf('if (selectedNativeRuntime || selectedAcpAgent)')).toBeLessThan(
-      askRoute.indexOf("await import('@geminilight/mindos/agent-runtime/adapters/mindos')"),
+      askRoute.indexOf("await import('@geminilight/mindos/agent/runtime/adapters/mindos')"),
     );
     // Native-only SDKs must load through the bundler-proof native import: a
     // static `import ... from` (or even a plain dynamic import) lets Next.js
     // inline a webpack copy of the SDK whose broken `import.meta` kills jiti
     // extension loading (no KB tools) and Claude SDK CLI resolution.
     const nativeImportHelper = readText('packages/mindos/src/foundation/native-import.ts');
-    const claudeSdkAdapter = readText('packages/mindos/src/agent-runtime/claude-code-sdk.ts');
+    const claudeSdkAdapter = readText('packages/mindos/src/agent/runtime/claude-code-sdk.ts');
+    const claudeSdkCompat = readText('packages/mindos/src/agent-runtime/claude-code-sdk.ts');
     expect(nativeImportHelper).toContain("new Function('specifier', 'return import(specifier)')");
     expect(piRuntimeAdapter).toContain('@earendil-works/pi-coding-agent');
     expect(piRuntimeAdapter).toContain("import { nativeImport } from '../../foundation/native-import.js'");
@@ -253,7 +313,8 @@ describe('OpenCode architecture alignment', () => {
     expect(piRuntimeAdapter).not.toContain("from '@mariozechner/pi-coding-agent'");
     expect(piRuntimeCompatShim).toContain("from '../mindos-pi/runtime.js'");
     expect(piRuntimeCompat).toContain("from '../agent/mindos-pi/runtime.js'");
-    expect(claudeSdkAdapter).toContain("import { nativeImport } from '../foundation/native-import.js'");
+    expect(claudeSdkAdapter).toContain("import { nativeImport } from '../../foundation/native-import.js'");
+    expect(claudeSdkCompat).toContain("from '../agent/runtime/claude-code-sdk.js'");
     expect(claudeSdkAdapter).not.toContain("import('@anthropic-ai/claude-agent-sdk')");
     expect(claudeSdkAdapter).not.toMatch(/^const requireFromHere = createRequire/m);
     expect(piRuntimeAdapter).toContain('createMindosPiAgentRuntime');
@@ -261,7 +322,8 @@ describe('OpenCode architecture alignment', () => {
     expect(mindosRuntimeAdapter).toContain('createMindosAgentRuntimeAdapter');
     expect(mindosRuntimeAdapter).toContain('createMindosAgentRuntime');
     expect(mindosRuntimeAdapter).toContain('createMindosPiCodingAgentRuntime');
-    expect(mindosRuntimeAdapter).toContain("from '../../agent/mindos-pi/runtime.js'");
+    expect(mindosRuntimeAdapter).toContain("from '../../mindos-pi/runtime.js'");
+    expect(mindosRuntimeCompat).toContain("from '../../agent/runtime/adapters/mindos.js'");
     expect(readText('packages/mindos/src/agent/tool/index.ts')).not.toContain('kb-extension');
     expect(readText('packages/mindos/src/agent/tool/kb-extension.ts')).toContain("from '../mindos-pi/extension/kb-extension.js'");
     expect(readText('packages/web/lib/agent/kb-extension.ts')).toContain('@geminilight/mindos/agent/mindos-pi/extension/kb-extension');
@@ -274,7 +336,7 @@ describe('OpenCode architecture alignment', () => {
     // Wave 4 (spec-agent-core-consolidation): the SSE parsing engine sank
     // into the core stream consumer; the web file is a thin adapter that
     // injects the browser files-changed emitter.
-    expect(streamConsumer).toContain("from '@geminilight/mindos/agent/stream-consumer'");
+    expect(streamConsumer).toContain("from '@geminilight/mindos/agent/stream/stream-consumer'");
 
     expect(readText('packages/web/lib/agent/prompt.ts')).toContain("from '@geminilight/mindos/agent'");
     expect(readText('packages/web/lib/agent/retry.ts')).toContain("from '@geminilight/mindos/session'");

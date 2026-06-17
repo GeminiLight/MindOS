@@ -2,9 +2,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { seedFile } from '../setup';
 import { invalidateCache } from '../../lib/fs';
-import type { MindosAgentRuntimeAskOptions } from '@geminilight/mindos/agent-runtime';
+import type { MindosAgentRuntimeAskOptions } from '@geminilight/mindos/agent/runtime';
 import type { AgentRuntimeDescriptor } from '@geminilight/mindos/server';
-import { listAgentEvents, listAgentRuns, resetAgentRunsForTest } from '@geminilight/mindos/agent/run-ledger';
+import { listAgentEvents, listAgentRuns, resetAgentRunsForTest } from '@geminilight/mindos/agent/ledger/run-ledger';
 import {
   rememberAvailableNativeRuntimeDescriptor,
   resetNativeRuntimeDescriptorCacheForTest,
@@ -74,7 +74,7 @@ vi.mock('@/lib/acp/detect-local', () => ({
   checkNativeRuntimeHealth: mockCheckNativeRuntimeHealth,
 }));
 
-vi.mock('@geminilight/mindos/agent-runtime', () => ({
+vi.mock('@geminilight/mindos/agent/runtime', () => ({
   buildAgentRuntimeEnv: vi.fn((input?: { settings?: { keys?: string[] } }) => ({
     env: {
       PATH: '/usr/bin',
@@ -115,7 +115,7 @@ vi.mock('@/lib/acp/session', () => ({
   closeSession: vi.fn(),
 }));
 
-vi.mock('@geminilight/mindos/agent-runtime/adapters/mindos', () => ({
+vi.mock('@geminilight/mindos/agent/runtime/adapters/mindos', () => ({
   createMindosAgentRuntime: vi.fn(() => {
     throw new Error('pi runtime should not initialize for native runtime requests');
   }),

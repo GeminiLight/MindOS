@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { askUserQuestionForRun } from '@geminilight/mindos/agent/user-question-bridge';
+import { askUserQuestionForRun } from '@geminilight/mindos/agent/bridges/user-question-bridge';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);

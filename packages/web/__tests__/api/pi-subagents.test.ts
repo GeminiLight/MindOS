@@ -10,7 +10,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { DefaultResourceLoader, SettingsManager } from '@earendil-works/pi-coding-agent';
-import { resetAgentRunsForTest } from '@geminilight/mindos/agent/run-ledger';
+import { resetAgentRunsForTest } from '@geminilight/mindos/agent/ledger/run-ledger';
 import {
   buildMindosPiChildRuntimeConfig,
   MINDOS_PI_CHILD_API_KEY_ENV,

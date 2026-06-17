@@ -5,7 +5,7 @@ import {
   completeAgentRun,
   resetAgentRunsForTest,
   startAgentRun,
-} from '@geminilight/mindos/agent/run-ledger';
+} from '@geminilight/mindos/agent/ledger/run-ledger';
 
 describe('/api/agent-runs', () => {
   beforeEach(() => {

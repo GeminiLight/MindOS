@@ -6,7 +6,7 @@ import {
   answerAskUserQuestion,
   cancelAskUserQuestion,
   type AskUserQuestionAnswer,
-} from '@geminilight/mindos/agent/user-question-bridge';
+} from '@geminilight/mindos/agent/bridges/user-question-bridge';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);

@@ -7,8 +7,8 @@ import {
   type CodexThreadListResult,
   type CodexThreadReadResult,
   type CodexThreadForkResult,
-} from '../../agent-runtime/codex-app-server.js';
-import { compactRuntimeFailureMessage } from '../../agent-runtime/runtime-errors.js';
+} from '../../agent/runtime/codex-app-server.js';
+import { compactRuntimeFailureMessage } from '../../agent/runtime/runtime-errors.js';
 import { resolveCommandPath } from '../../protocols/acp/index.js';
 import { errorResponse, json, type MindosServerResponse } from '../response.js';
 import {

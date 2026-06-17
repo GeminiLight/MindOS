@@ -6,7 +6,7 @@ import {
   resetAgentRunsForTest,
   startAgentRun,
   type AgentEvent,
-} from '@geminilight/mindos/agent/run-ledger';
+} from '@geminilight/mindos/agent/ledger/run-ledger';
 import { knowledgeBaseTools } from '@/lib/agent/tools';
 
 function getTool(name: string) {

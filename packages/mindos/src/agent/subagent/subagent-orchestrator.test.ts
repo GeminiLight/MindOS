@@ -7,9 +7,9 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { setMindRootResolverForTests } from '../foundation/mind-root/index.js';
+import { setMindRootResolverForTests } from '../../foundation/mind-root/index.js';
 import { executeSubagentOrchestrationPlan, type SubagentTaskExecutorResult } from './subagent-orchestrator.js';
-import { listAgentRuns, resetAgentRunsForTest } from './run-ledger.js';
+import { listAgentRuns, resetAgentRunsForTest } from '../ledger/run-ledger.js';
 
 function deferred<T>() {
   let resolve!: (value: T) => void;

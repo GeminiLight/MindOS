@@ -10,14 +10,14 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { setMindRootResolverForTests } from '../foundation/mind-root/index.js';
+import { setMindRootResolverForTests } from '../../foundation/mind-root/index.js';
 import { finalizeSubagentAsyncRunFromEvent, wrapSubagentToolForLedger } from './subagent-ledger-extension.js';
-import { getCurrentAgentRunContext, setAgentRunContextForResource } from './agent-run-context.js';
+import { getCurrentAgentRunContext, setAgentRunContextForResource } from '../agent-run-context.js';
 import {
   listAgentEvents,
   listAgentRuns,
   resetAgentRunsForTest,
-} from './run-ledger.js';
+} from '../ledger/run-ledger.js';
 
 function deferred<T>() {
   let resolve!: (value: T) => void;

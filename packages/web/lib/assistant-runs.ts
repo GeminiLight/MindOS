@@ -3,7 +3,7 @@ import {
   completeAgentRun,
   failAgentRun,
   startAgentRun,
-} from '@geminilight/mindos/agent/run-ledger';
+} from '@geminilight/mindos/agent/ledger/run-ledger';
 import { formatDreamingReport, runDreaming, type DreamingArtifacts, type DreamingRun } from './dreaming';
 import {
   DREAMING_ASSISTANT_ID,

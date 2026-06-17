@@ -1,1 +1,1 @@
-export * from './agent-runtime/index.js';
+export * from './agent/runtime/index.js';

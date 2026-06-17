@@ -18,7 +18,7 @@ import {
   type AcpLaunchOptions,
   type AcpRegistryEntry,
 } from '@geminilight/mindos/protocols/acp';
-import { resolveAgentRuntimeEnvOverlay } from '@geminilight/mindos/agent-runtime/runtime-env';
+import { resolveAgentRuntimeEnvOverlay } from '@geminilight/mindos/agent/runtime/runtime-env';
 import { readSettings } from '@/lib/settings';
 
 function withAcpOverrides(agentId: string, options?: AcpLaunchOptions): AcpLaunchOptions {

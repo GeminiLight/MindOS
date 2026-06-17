@@ -1,6 +1,6 @@
 /**
  * Web adapter over the core stream consumer
- * (@geminilight/mindos/agent/stream-consumer, Wave 4,
+ * (@geminilight/mindos/agent/stream/stream-consumer, Wave 4,
  * spec-agent-core-consolidation).
  *
  * The parsing/coalescing engine lives in the core package; this module wires
@@ -11,7 +11,7 @@
 import {
   consumeUIMessageStream as consumeUIMessageStreamCore,
   type ConsumeUIMessageStreamOptions,
-} from '@geminilight/mindos/agent/stream-consumer';
+} from '@geminilight/mindos/agent/stream/stream-consumer';
 import type { Message } from '@/lib/types';
 import { queueFilesChanged, flushFilesChanged } from './files-changed-emitter';
 
@@ -20,7 +20,7 @@ export type {
   ConsumeUIMessageStreamOptions,
   FilesChangedSink,
   RuntimeBindingMetadata,
-} from '@geminilight/mindos/agent/stream-consumer';
+} from '@geminilight/mindos/agent/stream/stream-consumer';
 
 export async function consumeUIMessageStream(
   body: ReadableStream<Uint8Array>,

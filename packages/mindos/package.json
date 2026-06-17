@@ -77,6 +77,62 @@
       "types": "./dist/agent/prompt/*.d.ts",
       "import": "./dist/agent/prompt/*.js"
     },
+    "./agent/session": {
+      "types": "./dist/agent/session/index.d.ts",
+      "import": "./dist/agent/session/index.js"
+    },
+    "./agent/session/*": {
+      "types": "./dist/agent/session/*.d.ts",
+      "import": "./dist/agent/session/*.js"
+    },
+    "./agent/runtime": {
+      "types": "./dist/agent/runtime/index.d.ts",
+      "import": "./dist/agent/runtime/index.js"
+    },
+    "./agent/runtime/adapters": {
+      "types": "./dist/agent/runtime/adapters/index.d.ts",
+      "import": "./dist/agent/runtime/adapters/index.js"
+    },
+    "./agent/runtime/adapters/*": {
+      "types": "./dist/agent/runtime/adapters/*.d.ts",
+      "import": "./dist/agent/runtime/adapters/*.js"
+    },
+    "./agent/runtime/*": {
+      "types": "./dist/agent/runtime/*.d.ts",
+      "import": "./dist/agent/runtime/*.js"
+    },
+    "./agent/ledger": {
+      "types": "./dist/agent/ledger/index.d.ts",
+      "import": "./dist/agent/ledger/index.js"
+    },
+    "./agent/ledger/*": {
+      "types": "./dist/agent/ledger/*.d.ts",
+      "import": "./dist/agent/ledger/*.js"
+    },
+    "./agent/bridges": {
+      "types": "./dist/agent/bridges/index.d.ts",
+      "import": "./dist/agent/bridges/index.js"
+    },
+    "./agent/bridges/*": {
+      "types": "./dist/agent/bridges/*.d.ts",
+      "import": "./dist/agent/bridges/*.js"
+    },
+    "./agent/stream": {
+      "types": "./dist/agent/stream/index.d.ts",
+      "import": "./dist/agent/stream/index.js"
+    },
+    "./agent/stream/*": {
+      "types": "./dist/agent/stream/*.d.ts",
+      "import": "./dist/agent/stream/*.js"
+    },
+    "./agent/subagent": {
+      "types": "./dist/agent/subagent/index.d.ts",
+      "import": "./dist/agent/subagent/index.js"
+    },
+    "./agent/subagent/*": {
+      "types": "./dist/agent/subagent/*.d.ts",
+      "import": "./dist/agent/subagent/*.js"
+    },
     "./agent/mindos-pi": {
       "types": "./dist/agent/mindos-pi/index.d.ts",
       "import": "./dist/agent/mindos-pi/index.js"

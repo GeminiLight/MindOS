@@ -3,7 +3,7 @@
  * spec-agent-core-consolidation).
  *
  * The ledger wrapping, orchestration routing, and async-completion logic
- * live in the core package (@geminilight/mindos/agent/subagent-ledger-extension).
+ * live in the core package (@geminilight/mindos/agent/subagent/subagent-ledger-extension).
  * This file stays a real pi extension entry: the pi DefaultResourceLoader
  * imports it by file path (see mindos-pi-runtime-host.ts), so it must keep a
  * default export. It owns the one host-specific concern — loading the
@@ -21,7 +21,7 @@ import {
   createMindosSubagentLedgerExtension,
   type SubagentChildRuntimeInput,
   type RegisterSubagentExtension,
-} from '@geminilight/mindos/agent/subagent-ledger-extension';
+} from '@geminilight/mindos/agent/subagent/subagent-ledger-extension';
 import { effectiveAiConfig } from '../settings';
 import { getDefaultApi, getDefaultBaseUrl, getPreset, toPiProvider, type ProviderId } from './providers';
 
@@ -29,7 +29,7 @@ export {
   finalizeSubagentAsyncRunFromEvent,
   wrapSubagentToolForLedger,
   type ToolWithRuntimeContext,
-} from '@geminilight/mindos/agent/subagent-ledger-extension';
+} from '@geminilight/mindos/agent/subagent/subagent-ledger-extension';
 
 export const MINDOS_PI_CHILD_API_KEY_ENV = 'MINDOS_PI_CHILD_API_KEY';
 export const PI_CODING_AGENT_DIR_ENV = 'PI_CODING_AGENT_DIR';

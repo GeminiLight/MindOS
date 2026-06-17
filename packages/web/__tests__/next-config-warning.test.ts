@@ -138,10 +138,10 @@ describe('next config warning hygiene', () => {
     }
 
     expect(readFileSync(resolve(appRoot, 'app/api/ask/route.ts'), 'utf-8')).toContain(
-      "await import('@geminilight/mindos/agent-runtime/adapters/mindos')",
+      "await import('@geminilight/mindos/agent/runtime/adapters/mindos')",
     );
     expect(readFileSync(resolve(appRoot, 'lib/agent/headless.ts'), 'utf-8')).toContain(
-      "await import('@geminilight/mindos/agent-runtime/adapters/mindos')",
+      "await import('@geminilight/mindos/agent/runtime/adapters/mindos')",
     );
     expect(readFileSync(resolve(appRoot, 'app/api/mcp/agents/route.ts'), 'utf-8')).toContain(
       "await import('@earendil-works/pi-coding-agent')",

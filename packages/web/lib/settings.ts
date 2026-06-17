@@ -6,7 +6,7 @@ import { parseAcpAgentOverrides } from './acp/agent-descriptors';
 import {
   parseAgentRuntimeEnvironmentSettings,
   type AgentRuntimeEnvironmentSettings,
-} from '@geminilight/mindos/agent-runtime/runtime-env';
+} from '@geminilight/mindos/agent/runtime/runtime-env';
 import { type ProviderId, PROVIDER_PRESETS, isProviderId, getApiKeyFromEnv } from './agent/providers';
 import { type Provider, parseProviders, findProvider, migrateProviders, isProviderEntryId } from './custom-endpoints';
 import { effectiveMindRoot } from './mind-root';

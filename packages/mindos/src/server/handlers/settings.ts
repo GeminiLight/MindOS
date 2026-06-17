@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto';
 import {
   parseAgentRuntimeEnvironmentSettings,
   type AgentRuntimeEnvironmentSettings,
-} from '../../agent-runtime/runtime-env.js';
+} from '../../agent/runtime/runtime-env.js';
 import { errorResponse, json, type MindosServerResponse } from '../response.js';
 import { normalizeSearchIgnoredPaths } from '../search-ignore.js';
 

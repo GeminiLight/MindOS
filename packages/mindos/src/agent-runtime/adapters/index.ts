@@ -1,1 +1,1 @@
-export * from './mindos.js';
+export * from '../../agent/runtime/adapters/index.js';

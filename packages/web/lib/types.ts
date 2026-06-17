@@ -5,7 +5,7 @@ export type { FileNode, SearchResult, BacklinkEntry } from './core/types';
 // spec-agent-core-consolidation). Edit
 // packages/mindos/src/agent/stream-message-types.ts instead of redefining
 // these here.
-import type { AgentRuntimeKind, Message } from '@geminilight/mindos/agent/stream-message-types';
+import type { AgentRuntimeKind, Message } from '@geminilight/mindos/agent/stream/stream-message-types';
 
 export type {
   AgentRuntimeKind,
@@ -30,7 +30,7 @@ export type {
   RuntimeStatusPart,
   TextPart,
   ToolCallPart,
-} from '@geminilight/mindos/agent/stream-message-types';
+} from '@geminilight/mindos/agent/stream/stream-message-types';
 
 /** System configuration files that should be hidden from file tree by default */
 export const SYSTEM_FILES = new Set([
