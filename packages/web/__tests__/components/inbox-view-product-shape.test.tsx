@@ -384,7 +384,7 @@ describe('InboxView product shape', () => {
     expect(host.textContent).toContain('1 selected');
     expect(host.textContent).toContain('Organize 1 selected');
     const actionColumn = host.querySelector('[data-inbox-row-actions]');
-    expect(actionColumn?.className).toContain('md:w-[184px]');
+    expect(actionColumn?.className).toContain('md:w-[118px]');
     expect(actionColumn?.className).toContain('pointer-events-none');
     expect(actionColumn?.className).not.toContain('group-hover:flex');
 

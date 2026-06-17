@@ -13,7 +13,6 @@ import { useRunSummary } from '@/lib/ask-run-store';
 import { sessionTitle } from '@/hooks/useAskSession';
 import { useSmoothRouterPush } from '@/hooks/useSmoothRouterPush';
 import { useLocale } from '@/lib/stores/locale-store';
-import { StableRowActionButton, StableRowTrailingSlot } from '@/components/shared/StableRowChrome';
 import PanelHeader from './PanelHeader';
 
 type HomeSidebarMode = 'sessions' | 'files';
@@ -248,7 +247,6 @@ function HomeSessionRow({
   const agentKind = sessionAgentKind(session);
   const title = sessionDisplayTitle(session, t.ask.historyEmptyHint);
   const pinLabel = session.pinned ? t.sidebar.homeUnpinSession : t.sidebar.homePinSession;
-  const hasRuntimeStatus = running || Boolean(runtimeSummary?.status && runtimeSummary.status !== 'active');
 
   return (
     <div
@@ -264,46 +262,46 @@ function HomeSessionRow({
         type="button"
         data-home-session-open
         onClick={onOpen}
-        className="flex min-w-0 flex-1 items-center gap-1.5 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="flex min-w-0 flex-1 items-center gap-1.5 rounded-md pr-12 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <AgentMark kind={agentKind} id={session.id} active={active} />
         <span className="min-w-0 flex-1 truncate text-[12px] leading-4 text-foreground/90" title={title}>
           {title}
         </span>
       </button>
-      <StableRowTrailingSlot
-        reserveClassName="w-14"
-        forceActionsVisible={session.pinned}
-        status={!session.pinned && hasRuntimeStatus ? (
-          <SessionStatusDot
-            running={running}
-            status={runtimeSummary?.status}
-          />
-        ) : null}
-        actionsClassName="gap-0.5"
-        actions={(
-          <span data-home-session-actions className="contents">
-            <StableRowActionButton
-              size="sm"
-              tone="amber"
-              active={session.pinned}
-              aria-label={pinLabel}
-              title={pinLabel}
-              onClick={() => togglePinSession(session.id)}
-            >
-              {session.pinned ? <PinOff size={11} aria-hidden="true" /> : <Pin size={11} aria-hidden="true" />}
-            </StableRowActionButton>
-            <StableRowActionButton
-              size="sm"
-              aria-label={t.sidebar.homeArchiveSession}
-              title={t.sidebar.homeArchiveSession}
-              onClick={() => deleteSession(session.id, { runtime: sessionRuntime })}
-            >
-              <Archive size={11} aria-hidden="true" />
-            </StableRowActionButton>
-          </span>
-        )}
+      <SessionStatusDot
+        running={running}
+        status={runtimeSummary?.status}
+        className={`pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 transition-opacity duration-100 group-hover:opacity-0 group-focus-within:opacity-0 ${
+          session.pinned ? 'opacity-0' : 'opacity-100'
+        }`}
       />
+      <span data-home-session-actions className={`absolute right-1.5 top-1/2 flex -translate-y-1/2 items-center gap-0.5 transition-opacity duration-100 ${
+        session.pinned
+          ? 'pointer-events-auto opacity-100'
+          : 'pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100'
+      }`}>
+        <button
+          type="button"
+          aria-label={pinLabel}
+          title={pinLabel}
+          onClick={() => togglePinSession(session.id)}
+          className={`hit-target-box inline-flex h-6 w-6 items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-md)] ${
+            session.pinned ? 'text-[var(--amber)]' : 'text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          {session.pinned ? <PinOff size={11} aria-hidden="true" /> : <Pin size={11} aria-hidden="true" />}
+        </button>
+        <button
+          type="button"
+          aria-label={t.sidebar.homeArchiveSession}
+          title={t.sidebar.homeArchiveSession}
+          onClick={() => deleteSession(session.id, { runtime: sessionRuntime })}
+          className="hit-target-box inline-flex h-6 w-6 items-center justify-center text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-md)]"
+        >
+          <Archive size={11} aria-hidden="true" />
+        </button>
+      </span>
     </div>
   );
 }

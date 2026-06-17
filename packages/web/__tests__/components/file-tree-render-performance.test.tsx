@@ -178,34 +178,6 @@ describe('FileTree navigation re-render scope', () => {
     expect(f1?.getAttribute('data-hit-active')).toBe('true');
   });
 
-  it('keeps file row content flexible before the reserved trailing slot', async () => {
-    const { default: FileTree } = await import('@/components/FileTree');
-    const tree: FileNode[] = [{
-      type: 'directory',
-      name: 'S',
-      path: 'S',
-      isSpace: true,
-      children: [{
-        type: 'file',
-        name: 'a-very-long-file-name-that-must-truncate-before-row-actions.md',
-        path: 'S/a-very-long-file-name-that-must-truncate-before-row-actions.md',
-        extension: '.md',
-      }],
-    }];
-
-    await render(<FileTree nodes={tree} />);
-
-    const fileButton = host.querySelector('[data-filepath="S/a-very-long-file-name-that-must-truncate-before-row-actions.md"]');
-    const row = fileButton?.parentElement;
-    const trailingSlot = row?.querySelector('[data-stable-row-trailing]');
-
-    expect(row?.className).toContain('flex items-center');
-    expect(fileButton?.className).toContain('min-w-0');
-    expect(fileButton?.className).toContain('flex-1');
-    expect(trailingSlot?.className).toContain('shrink-0');
-    expect(trailingSlot?.className).toContain('w-8');
-  });
-
   it('marks only the clicked file row as opening before route work finishes', async () => {
     const { default: FileTree } = await import('@/components/FileTree');
     const tree = buildSpaceTree();

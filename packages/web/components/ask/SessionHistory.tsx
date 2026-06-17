@@ -5,7 +5,6 @@ import { Trash2, Pencil, Pin, PinOff, Loader2 } from 'lucide-react';
 import type { ChatSession } from '@/lib/types';
 import { sessionTitle } from '@/hooks/useAskSession';
 import { useRunSummary } from '@/lib/ask-run-store';
-import { StableRowActionButton, StableRowTrailingSlot } from '@/components/shared/StableRowChrome';
 
 interface SessionHistoryProps {
   sessions: ChatSession[];
@@ -113,27 +112,9 @@ export default function SessionHistory({ sessions, activeSessionId, onLoad, onDe
           const isActive = activeSessionId === s.id;
           const isRunning = runSummary.running.has(s.id);
           const isUnread = !isRunning && runSummary.unread.has(s.id);
-          const statusIndicator = isRunning ? (
-            <span
-              data-testid="session-running-indicator"
-              title={labels.running}
-              aria-label={labels.running}
-              className="inline-flex text-[var(--amber)]"
-            >
-              <Loader2 size={11} className="animate-spin" />
-            </span>
-          ) : isUnread ? (
-            <span
-              data-testid="session-unread-indicator"
-              title={labels.unread}
-              aria-label={labels.unread}
-              className="h-1.5 w-1.5 rounded-full bg-[var(--amber)]"
-            />
-          ) : s.pinned ? (
-            <Pin size={10} className="-rotate-45 text-[var(--amber)]/70" />
-          ) : null;
           return (
             <div key={s.id} className="group flex items-center gap-0.5">
+              {s.pinned && <Pin size={10} className="shrink-0 text-[var(--amber)]/50 -rotate-45 ml-1" />}
               <button
                 type="button"
                 onClick={() => onLoad(s.id)}
@@ -161,41 +142,54 @@ export default function SessionHistory({ sessions, activeSessionId, onLoad, onDe
                 ) : (
                   <div className="flex items-center gap-1.5 min-w-0">
                     <div className="truncate font-medium">{sessionTitle(s)}</div>
+                    {isRunning && (
+                      <span
+                        data-testid="session-running-indicator"
+                        title={labels.running}
+                        aria-label={labels.running}
+                        className="inline-flex shrink-0 text-[var(--amber)]"
+                      >
+                        <Loader2 size={11} className="animate-spin" />
+                      </span>
+                    )}
+                    {isUnread && (
+                      <span
+                        data-testid="session-unread-indicator"
+                        title={labels.unread}
+                        aria-label={labels.unread}
+                        className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--amber)]"
+                      />
+                    )}
                   </div>
                 )}
                 {editingId !== s.id && (
                   <div className="text-2xs text-muted-foreground/50 mt-0.5">{formatRelativeTime(new Date(s.updatedAt))}</div>
                 )}
               </button>
-              <StableRowTrailingSlot
-                reserveClassName="w-[5.75rem]"
-                status={editingId === s.id ? null : statusIndicator}
-                actions={(
-                  <>
-                    <StableRowActionButton
-                      tone="amber"
-                      active={s.pinned}
-                      onClick={() => onTogglePin(s.id)}
-                      title={s.pinned ? 'Unpin' : 'Pin'}
-                    >
-                      {s.pinned ? <PinOff size={11} /> : <Pin size={11} />}
-                    </StableRowActionButton>
-                    <StableRowActionButton
-                      onClick={() => startRename(s)}
-                      title={labels.rename}
-                    >
-                      <Pencil size={11} />
-                    </StableRowActionButton>
-                    <StableRowActionButton
-                      tone="danger"
-                      onClick={() => onDelete(s.id)}
-                      title="Delete session"
-                    >
-                      <Trash2 size={11} />
-                    </StableRowActionButton>
-                  </>
-                )}
-              />
+              <button
+                type="button"
+                onClick={() => onTogglePin(s.id)}
+                className={`inline-flex h-7 w-7 items-center justify-center rounded-lg opacity-0 transition-colors duration-75 group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation ${s.pinned ? 'text-[var(--amber)] hover:bg-muted/60 hover:text-muted-foreground' : 'text-muted-foreground hover:bg-[var(--amber)]/10 hover:text-[var(--amber)]'}`}
+                title={s.pinned ? 'Unpin' : 'Pin'}
+              >
+                {s.pinned ? <PinOff size={11} /> : <Pin size={11} />}
+              </button>
+              <button
+                type="button"
+                onClick={() => startRename(s)}
+                className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground opacity-0 transition-colors duration-75 hover:text-foreground hover:bg-muted group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation"
+                title={labels.rename}
+              >
+                <Pencil size={11} />
+              </button>
+              <button
+                type="button"
+                onClick={() => onDelete(s.id)}
+                className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground opacity-0 transition-colors duration-75 hover:text-error hover:bg-error/5 group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation"
+                title="Delete session"
+              >
+                <Trash2 size={11} />
+              </button>
             </div>
           );
         })}

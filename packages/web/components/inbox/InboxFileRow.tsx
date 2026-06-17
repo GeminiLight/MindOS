@@ -69,7 +69,7 @@ export function InboxFileRow({
     : ext === 'json' ? 'text-violet-500/70'
       : ext === 'pdf' ? 'text-error/60'
         : 'text-muted-foreground/60';
-  const actionColumnWidth = 'md:w-[184px]';
+  const actionColumnWidth = secondaryAction ? 'md:w-[184px]' : 'md:w-[118px]';
   const actionColumnVisibility = selected
     ? 'pointer-events-auto opacity-100'
     : 'pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100';

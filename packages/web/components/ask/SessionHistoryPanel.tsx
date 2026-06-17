@@ -7,7 +7,6 @@ import { sessionTitle } from '@/hooks/useAskSession';
 import { useRunSummary } from '@/lib/ask-run-store';
 import { getRuntimeSessionSummary, shortRuntimeSessionId } from '@/lib/ask-agent';
 import { useLocale } from '@/lib/stores/locale-store';
-import { StableRowActionButton, StableRowTrailingSlot } from '@/components/shared/StableRowChrome';
 
 interface SessionHistoryPanelProps {
   sessions: ChatSession[];
@@ -47,6 +46,7 @@ function formatRelativeTime(date: Date): string {
 
 function getTimeGroup(ts: number): 'pinned' | 'today' | 'yesterday' | 'week' | 'older' {
   const now = new Date();
+  const date = new Date(ts);
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
   const startOfYesterday = startOfToday - 86400000;
   const startOfWeek = startOfToday - now.getDay() * 86400000;
@@ -160,7 +160,7 @@ function SessionHistoryPanel({
   onRefreshCodexThreads, onAttachCodexThread, onForkCodexThread, onArchiveCodexThread,
 }: SessionHistoryPanelProps) {
   const { t } = useLocale();
-  const [, startTransition] = useTransition();
+  const [isPending, startTransition] = useTransition();
   const ask = t.ask;
   // Run/unread state comes from ask-run-store's summary snapshot, which only
   // changes on run start/end or unread membership — streaming chunks never
@@ -582,28 +582,26 @@ function CodexThreadRow({
             )}
           </div>
         </div>
-        <StableRowTrailingSlot
-          reserveClassName="w-16"
-          actions={(
-            <>
-              <StableRowActionButton
-                onClick={() => onFork?.(thread)}
-                disabled={busy || !onFork}
-                title="Fork Codex thread"
-              >
-                <GitFork size={11} />
-              </StableRowActionButton>
-              <StableRowActionButton
-                tone="danger"
-                onClick={() => onArchive?.(thread)}
-                disabled={busy || !onArchive}
-                title="Archive Codex thread"
-              >
-                <Archive size={11} />
-              </StableRowActionButton>
-            </>
-          )}
-        />
+        <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity duration-75 group-hover:opacity-100 focus-within:opacity-100">
+          <button
+            type="button"
+            onClick={() => onFork?.(thread)}
+            disabled={busy || !onFork}
+            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground/40 transition-colors hover:bg-muted/60 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            title="Fork Codex thread"
+          >
+            <GitFork size={11} />
+          </button>
+          <button
+            type="button"
+            onClick={() => onArchive?.(thread)}
+            disabled={busy || !onArchive}
+            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground/40 transition-colors hover:bg-muted/60 hover:text-error disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            title="Archive Codex thread"
+          >
+            <Archive size={11} />
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -637,25 +635,6 @@ function SessionCard({
   const preview = meta?.preview ?? sessionPreview(s);
   const msgCount = s.messages.length;
   const runtimeSummary = meta?.runtimeSummary ?? getRuntimeSessionSummary(s);
-  const statusIndicator = !editing && isRunning ? (
-    <span
-      data-testid="session-running-indicator"
-      title={ask?.sessionRunningIndicator}
-      aria-label={ask?.sessionRunningIndicator}
-      className="inline-flex text-[var(--amber)]"
-    >
-      <Loader2 size={11} className="animate-spin" />
-    </span>
-  ) : !editing && isUnread ? (
-    <span
-      data-testid="session-unread-indicator"
-      title={ask?.sessionUnreadIndicator}
-      aria-label={ask?.sessionUnreadIndicator}
-      className="h-1.5 w-1.5 rounded-full bg-[var(--amber)]"
-    />
-  ) : !editing && s.pinned ? (
-    <Pin size={10} className="-rotate-45 text-[var(--amber)]/70" />
-  ) : null;
 
   return (
     <div
@@ -674,6 +653,7 @@ function SessionCard({
       <div className="px-3 py-2.5">
         {/* Title row */}
         <div className="flex items-center gap-1.5 mb-0.5">
+          {s.pinned && <Pin size={10} className="shrink-0 text-[var(--amber)]/60 -rotate-45" />}
           {editing ? (
             <input
               ref={inputRef}
@@ -693,47 +673,27 @@ function SessionCard({
               {title}
             </span>
           )}
+          {!editing && isRunning && (
+            <span
+              data-testid="session-running-indicator"
+              title={ask?.sessionRunningIndicator}
+              aria-label={ask?.sessionRunningIndicator}
+              className="inline-flex shrink-0 text-[var(--amber)]"
+            >
+              <Loader2 size={11} className="animate-spin" />
+            </span>
+          )}
+          {!editing && isUnread && (
+            <span
+              data-testid="session-unread-indicator"
+              title={ask?.sessionUnreadIndicator}
+              aria-label={ask?.sessionUnreadIndicator}
+              className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--amber)]"
+            />
+          )}
           <span className="text-2xs text-muted-foreground/40 shrink-0 tabular-nums">
             {formatRelativeTime(new Date(s.updatedAt))}
           </span>
-          <StableRowTrailingSlot
-            reserveClassName="w-[5.75rem]"
-            status={statusIndicator}
-            actions={(
-              <>
-                <StableRowActionButton
-                  tone="amber"
-                  active={s.pinned}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onTogglePin();
-                  }}
-                  title={s.pinned ? 'Unpin' : 'Pin'}
-                >
-                  {s.pinned ? <PinOff size={11} /> : <Pin size={11} />}
-                </StableRowActionButton>
-                <StableRowActionButton
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onStartRename();
-                  }}
-                  title={ask?.renameSession ?? 'Rename'}
-                >
-                  <Pencil size={11} />
-                </StableRowActionButton>
-                <StableRowActionButton
-                  tone="danger"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDelete();
-                  }}
-                  title="Delete"
-                >
-                  <Trash2 size={11} />
-                </StableRowActionButton>
-              </>
-            )}
-          />
         </div>
 
         {/* Preview */}
@@ -764,11 +724,39 @@ function SessionCard({
 
         {/* Meta row */}
         {!editing && (
-          <div className="flex items-center mt-1.5">
+          <div className="flex items-center justify-between mt-1.5">
             <span className="text-2xs text-muted-foreground/40 flex items-center gap-1">
               <MessageSquare size={9} />
               {ask?.historyMsgs?.(msgCount) ?? `${msgCount} msgs`}
             </span>
+
+            {/* Action buttons — visible on hover */}
+            <div className="flex items-center gap-0.5 opacity-0 transition-opacity duration-75 group-hover:opacity-100 focus-within:opacity-100" onClick={e => e.stopPropagation()}>
+              <button
+                type="button"
+                onClick={onTogglePin}
+                className={`inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors duration-75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation ${s.pinned ? 'text-[var(--amber)] hover:bg-muted/60 hover:text-muted-foreground' : 'text-muted-foreground/40 hover:bg-[var(--amber)]/10 hover:text-[var(--amber)]'}`}
+                title={s.pinned ? 'Unpin' : 'Pin'}
+              >
+                {s.pinned ? <PinOff size={11} /> : <Pin size={11} />}
+              </button>
+              <button
+                type="button"
+                onClick={onStartRename}
+                className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground/40 transition-colors duration-75 hover:text-foreground hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation"
+                title={ask?.renameSession ?? 'Rename'}
+              >
+                <Pencil size={11} />
+              </button>
+              <button
+                type="button"
+                onClick={onDelete}
+                className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground/40 transition-colors duration-75 hover:text-error hover:bg-error/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation"
+                title="Delete"
+              >
+                <Trash2 size={11} />
+              </button>
+            </div>
           </div>
         )}
       </div>

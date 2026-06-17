@@ -159,12 +159,8 @@ describe('InboxSection', () => {
 
     const removeButton = host.querySelector('button[aria-label="Remove from Inbox"]') as HTMLButtonElement | null;
     expect(removeButton).not.toBeNull();
-    const trailingSlot = removeButton?.closest('[data-stable-row-trailing]') as HTMLElement | null;
-    const actionsLayer = removeButton?.closest('[data-stable-row-actions]') as HTMLElement | null;
-    expect(trailingSlot?.className).toContain('w-16');
-    expect(trailingSlot?.className).toContain('shrink-0');
-    expect(actionsLayer?.className).toContain('group-focus-within:opacity-100');
-    expect(actionsLayer?.className).toContain('max-sm:opacity-100');
+    expect(removeButton?.className).toContain('group-focus-within:flex');
+    expect(removeButton?.className).toContain('max-sm:flex');
     expect(removeButton?.className).toContain('focus-visible:ring-2');
 
     await act(async () => {
