@@ -42,8 +42,8 @@ describe('MindOS copy alignment', () => {
   it('frames the local knowledge surface as Mind with a built-in mind system', () => {
     expect(navigationEn.sidebar.files).toBe('Mind');
     expect(navigationZh.sidebar.files).toBe('Mind');
-    expect(navigationEn.sidebar.builtInSpacesTitle).toBe('Mind System');
-    expect(navigationZh.sidebar.builtInSpacesTitle).toBe('Mind 系统');
+    expect(navigationEn.sidebar.builtInSpacesTitle).toBe('MindOS System');
+    expect(navigationZh.sidebar.builtInSpacesTitle).toBe('MindOS System');
     expect(navigationEn.sidebar.builtInSpacesRoot).toContain('Dao');
     expect(navigationEn.sidebar.builtInSpacesRoot).toContain('Shu');
     expect(navigationZh.sidebar.builtInSpacesRoot).toContain('道');

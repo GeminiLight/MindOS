@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Archive, Brain, Loader2, MessageSquare, Network, Pin, PinOff, Plus, RefreshCw, Search } from 'lucide-react';
 import { usePathname } from 'next/navigation';
-import FileTree from '@/components/FileTree';
 import Logo from '@/components/Logo';
+import MindFileTreeSections from '@/components/file-tree/MindFileTreeSections';
 import type { FileNode, ChatSession } from '@/lib/types';
 import type { MindSystemSlot } from '@/lib/mind-system';
 import { getRuntimeSessionSummary, getSessionAgentRuntime } from '@/lib/ask-agent';
@@ -13,9 +13,7 @@ import { useRunSummary } from '@/lib/ask-run-store';
 import { sessionTitle } from '@/hooks/useAskSession';
 import { useSmoothRouterPush } from '@/hooks/useSmoothRouterPush';
 import { useLocale } from '@/lib/stores/locale-store';
-import { encodePath } from '@/lib/utils';
 import PanelHeader from './PanelHeader';
-import MindSystemSidebarSection from './MindSystemSidebarSection';
 
 type HomeSidebarMode = 'sessions' | 'files';
 type SessionAgentFilter = 'all' | 'mindos' | 'codex' | 'claude' | 'acp';
@@ -434,13 +432,11 @@ export default function HomePanel({
           onDragOver={(e) => { if (e.dataTransfer.types.includes('Files')) { e.preventDefault(); e.stopPropagation(); } }}
           onDrop={(e) => { if (e.dataTransfer.types.includes('Files')) { e.preventDefault(); e.stopPropagation(); } }}
         >
-          <MindSystemSidebarSection
-            title={t.sidebar.builtInSpacesTitle}
-            slots={mindSystemSlots}
-            activePathname={pathname}
-            onOpen={(path) => smoothPush(`/view/${encodePath(path)}`)}
+          <MindFileTreeSections
+            fileTree={fileTree}
+            mindSystemSlots={mindSystemSlots}
+            onNavigate={onNavigate}
           />
-          <FileTree nodes={fileTree} onNavigate={onNavigate} />
         </div>
       )}
     </div>

@@ -6,11 +6,12 @@ import { ChevronsDownUp, ChevronsUpDown, Plus, Import, RefreshCw, FileText, Laye
 import type { PanelId } from '@/lib/navigation-panel';
 import type { FileNode } from '@/lib/types';
 import type { MindSystemSlot } from '@/lib/mind-system';
-import FileTree, { setShowHiddenFiles, useShowHiddenFiles } from './FileTree';
+import { setShowHiddenFiles, useShowHiddenFiles } from './FileTree';
 import SyncStatusBar from './SyncStatusBar';
 import PanelHeader from './panels/PanelHeader';
 import HomePanel from './panels/HomePanel';
-import MindSystemSidebarSection from './panels/MindSystemSidebarSection';
+import MindFileTreeSections from './file-tree/MindFileTreeSections';
+import { splitMindFileTreeSections } from './file-tree/mind-file-tree-sections';
 import { useResizeDrag } from '@/hooks/useResizeDrag';
 import { useFilesChanged } from '@/hooks/useFilesChanged';
 import { useSmoothRouterPush } from '@/hooks/useSmoothRouterPush';
@@ -18,7 +19,6 @@ import { notifyFilesChanged } from '@/lib/files-changed';
 import { useLocale } from '@/lib/stores/locale-store';
 import { listTrashAction } from '@/lib/actions';
 import { DEFAULT_LEFT_PANEL_WIDTH, LEFT_PANEL } from '@/lib/config/panel-sizes';
-import { encodePath } from '@/lib/utils';
 import { fetchInboxFiles } from '@/lib/inbox-client';
 
 const noop = () => {};
@@ -32,25 +32,6 @@ function getMaxDepth(nodes: FileNode[], current = 0): number {
     }
   }
   return max;
-}
-
-function filterMindSystemNodes(nodes: FileNode[], slots: MindSystemSlot[]): FileNode[] {
-  if (slots.length === 0) return nodes;
-  const hiddenTopLevelPaths = new Set(
-    slots
-      .flatMap(slot => [slot.path, slot.systemId])
-      .map(normalizeTopLevelPath)
-      .filter(Boolean),
-  );
-  return nodes.filter((node) => {
-    if (node.type !== 'directory') return true;
-    const nodeTopLevel = normalizeTopLevelPath(node.path || node.name);
-    return !nodeTopLevel || !hiddenTopLevelPaths.has(nodeTopLevel);
-  });
-}
-
-function normalizeTopLevelPath(value: string): string {
-  return value.replace(/^\/+|\/+$/g, '').split('/')[0] ?? '';
 }
 
 const DEFAULT_PANEL_WIDTH = DEFAULT_LEFT_PANEL_WIDTH;
@@ -127,13 +108,13 @@ export default function Panel({
 
   // File tree depth control: null = manual (no override), number = forced max open depth
   const [maxOpenDepth, setMaxOpenDepth] = useState<number | null>(null);
-  const ordinaryFileTree = useMemo(
-    () => filterMindSystemNodes(fileTree, mindSystemSlots),
+  const fileTreeSections = useMemo(
+    () => splitMindFileTreeSections(fileTree, mindSystemSlots),
     [fileTree, mindSystemSlots],
   );
   const treeMaxDepth = useMemo(
-    () => (activePanel === 'files' ? getMaxDepth(ordinaryFileTree) : 0),
-    [activePanel, ordinaryFileTree],
+    () => (activePanel === 'files' ? getMaxDepth(fileTreeSections.allTree) : 0),
+    [activePanel, fileTreeSections.allTree],
   );
 
   // "New" dropdown popover
@@ -299,7 +280,7 @@ export default function Panel({
       <div className={`flex flex-col h-full ${activePanel === 'home' ? '' : 'hidden'}`}>
         <HomePanel
           active={activePanel === 'home'}
-          fileTree={ordinaryFileTree}
+          fileTree={fileTree}
           mindSystemSlots={mindSystemSlots}
           onNavigate={onNavigate}
           onSearchOpenOrFocus={onSearchOpenOrFocus}
@@ -470,13 +451,13 @@ export default function Panel({
           onDragOver={(e) => { if (e.dataTransfer.types.includes('Files')) { e.preventDefault(); e.stopPropagation(); } }}
           onDrop={(e) => { if (e.dataTransfer.types.includes('Files')) { e.preventDefault(); e.stopPropagation(); } }}
         >
-          <MindSystemSidebarSection
-            title={t.sidebar.builtInSpacesTitle}
-            slots={mindSystemSlots}
-            activePathname={pathname}
-            onOpen={(path) => smoothPush(`/view/${encodePath(path)}`)}
+          <MindFileTreeSections
+            fileTree={fileTree}
+            mindSystemSlots={mindSystemSlots}
+            onNavigate={onNavigate}
+            maxOpenDepth={maxOpenDepth}
+            onImport={onImport}
           />
-          <FileTree nodes={ordinaryFileTree} onNavigate={onNavigate} maxOpenDepth={maxOpenDepth} onImport={onImport} />
         </div>
         {/* Inbox quick entry — always visible above sync bar */}
         <button

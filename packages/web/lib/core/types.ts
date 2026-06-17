@@ -9,6 +9,8 @@ export interface SpacePreview {
   lastCompiled?: string;
 }
 
+export type MindSystemNodeKey = 'dao' | 'fa' | 'shu' | 'qi';
+
 export interface FileNode {
   name: string;
   path: string;
@@ -17,6 +19,10 @@ export interface FileNode {
   extension?: string;
   mtime?: number;
   isSpace?: boolean;
+  /** Built-in Mind System space; shown as a tree node but protected from rename/delete UI. */
+  isMindSystem?: boolean;
+  /** Display-only key for built-in Mind System icons. */
+  mindSystemKey?: MindSystemNodeKey;
   spacePreview?: SpacePreview;
 }
 

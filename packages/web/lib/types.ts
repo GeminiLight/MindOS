@@ -1,5 +1,5 @@
 // Re-export core types as single source of truth
-export type { FileNode, SearchResult, BacklinkEntry } from './core/types';
+export type { FileNode, MindSystemNodeKey, SearchResult, BacklinkEntry } from './core/types';
 
 // Chat message model — sunk into the core package (Wave 4,
 // spec-agent-core-consolidation). Edit

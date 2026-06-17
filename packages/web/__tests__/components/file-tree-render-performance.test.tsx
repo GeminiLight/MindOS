@@ -308,7 +308,7 @@ describe('countContentFiles caching', () => {
     expect(countContentFiles(make(5))).toBe(5);
   });
 
-  it('shows the cached content count badge on a collapsed space', async () => {
+  it('does not show a collapsed-space content count badge in the sidebar', async () => {
     const { default: FileTree } = await import('@/components/FileTree');
     host = document.createElement('div');
     document.body.appendChild(host);
@@ -317,7 +317,7 @@ describe('countContentFiles caching', () => {
     await act(async () => {
       localRoot.render(<FileTree nodes={tree} maxOpenDepth={-1} />);
     });
-    expect(host.textContent).toContain(String(FILE_COUNT));
+    expect(host.textContent).not.toContain(String(FILE_COUNT));
     await act(async () => { localRoot.unmount(); });
     host.remove();
   });

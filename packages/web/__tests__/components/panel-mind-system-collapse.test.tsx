@@ -23,7 +23,7 @@ vi.mock('@/lib/actions', () => ({
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const MIND_SYSTEM_COLLAPSED_KEY = 'mindos.sidebar.mindSystemCollapsed';
-const SLOT_LIST_ID = 'mind-system-sidebar-slots';
+const MIND_SYSTEM_TREE_ID_PREFIX = 'mind-system-sidebar-tree';
 
 const mindSystemSlots: MindSystemSlot[] = [
   {
@@ -120,7 +120,7 @@ function renderPanel(
   root.render(
     <Panel
       activePanel="files"
-      fileTree={options.fileTree ?? []}
+      fileTree={options.fileTree ?? mindSystemFileTree}
       mindSystemSlots={options.slots ?? mindSystemSlots}
       onOpenSyncSettings={() => {}}
     />,
@@ -133,9 +133,19 @@ function renderFilesPanel(host: HTMLDivElement): Root {
 }
 
 function getMindSystemToggle(host: HTMLElement): HTMLButtonElement {
-  const button = host.querySelector<HTMLButtonElement>(`button[aria-controls="${SLOT_LIST_ID}"]`);
+  const button = host.querySelector<HTMLButtonElement>(`button[aria-controls^="${MIND_SYSTEM_TREE_ID_PREFIX}-"]`);
   if (!button) throw new Error('Mind System toggle not found');
   return button;
+}
+
+function getControlledTree(host: HTMLElement): HTMLElement | null {
+  const controls = getMindSystemToggle(host).getAttribute('aria-controls');
+  return controls ? host.querySelector<HTMLElement>(`#${controls}`) : null;
+}
+
+function getDaoTreeButton(host: HTMLElement): HTMLButtonElement | null {
+  return Array.from(host.querySelectorAll<HTMLButtonElement>('button'))
+    .find(button => button.textContent?.trim() === '道') ?? null;
 }
 
 describe('Panel Mind System collapse', () => {
@@ -163,37 +173,37 @@ describe('Panel Mind System collapse', () => {
     vi.unstubAllGlobals();
   });
 
-  it('defaults collapsed and toggles the Mind System parent without navigating', async () => {
+  it('defaults expanded and toggles the MindOS System parent without navigating', async () => {
     await act(async () => {
       root = renderPanel(host);
     });
 
     const toggle = getMindSystemToggle(host);
-    expect(toggle.getAttribute('aria-expanded')).toBe('false');
-    expect(toggle.getAttribute('data-state')).toBe('collapsed');
-    expect(host.querySelector(`#${SLOT_LIST_ID}`)).toBeNull();
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    expect(toggle.getAttribute('data-state')).toBe('expanded');
+    expect(getControlledTree(host)).not.toBeNull();
 
     await act(async () => {
       toggle.click();
     });
 
-    expect(toggle.getAttribute('aria-expanded')).toBe('true');
-    expect(toggle.getAttribute('data-state')).toBe('expanded');
-    expect(host.querySelector(`#${SLOT_LIST_ID}`)).not.toBeNull();
-    expect(localStorage.getItem(MIND_SYSTEM_COLLAPSED_KEY)).toBe('0');
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    expect(toggle.getAttribute('data-state')).toBe('collapsed');
+    expect(getControlledTree(host)).toBeNull();
+    expect(localStorage.getItem(MIND_SYSTEM_COLLAPSED_KEY)).toBe('1');
     expect(mockPush).not.toHaveBeenCalled();
   });
 
-  it('keeps the Mind System parent label inside the toggle row', async () => {
+  it('keeps the MindOS System parent label inside the toggle row', async () => {
     await act(async () => {
       root = renderPanel(host);
     });
 
-    const section = host.querySelector<HTMLElement>('section[aria-label="Mind System"]');
+    const section = host.querySelector<HTMLElement>('section[aria-label="MindOS System"]');
     const toggle = getMindSystemToggle(host);
 
     expect(section?.firstElementChild).toBe(toggle);
-    expect(toggle.textContent).toContain('Mind System');
+    expect(toggle.textContent).toContain('MindOS System');
     expect(toggle.textContent).not.toContain('Dao / Fa / Shu / Qi');
     expect(toggle.textContent).not.toContain('道 / 法 / 术 / 器');
     expect(toggle.textContent).not.toContain('心');
@@ -205,11 +215,12 @@ describe('Panel Mind System collapse', () => {
 
     await act(async () => {
       root = renderPanel(host);
+      await Promise.resolve();
     });
 
     expect(getMindSystemToggle(host).getAttribute('aria-expanded')).toBe('false');
     expect(getMindSystemToggle(host).getAttribute('data-state')).toBe('collapsed');
-    expect(host.querySelector(`#${SLOT_LIST_ID}`)).toBeNull();
+    expect(getControlledTree(host)).toBeNull();
   });
 
   it('restores the persisted expanded state', async () => {
@@ -217,11 +228,12 @@ describe('Panel Mind System collapse', () => {
 
     await act(async () => {
       root = renderPanel(host);
+      await Promise.resolve();
     });
 
     expect(getMindSystemToggle(host).getAttribute('aria-expanded')).toBe('true');
     expect(getMindSystemToggle(host).getAttribute('data-state')).toBe('expanded');
-    expect(host.querySelector(`#${SLOT_LIST_ID}`)).not.toBeNull();
+    expect(getControlledTree(host)).not.toBeNull();
   });
 
   it('does not duplicate visible Mind System slots in the ordinary file tree', async () => {
@@ -248,29 +260,23 @@ describe('Panel Mind System collapse', () => {
     expect(host.textContent).toContain('Projects');
   });
 
-  it('keeps Mind System sidebar rows focused on navigation only', async () => {
+  it('keeps MindOS System sidebar rows focused on navigation only', async () => {
     localStorage.setItem(MIND_SYSTEM_COLLAPSED_KEY, '0');
 
     await act(async () => {
       root = renderPanel(host);
     });
 
-    const openButton = host.querySelector<HTMLButtonElement>('[data-mind-system-sidebar-open="dao"]');
+    const openButton = getDaoTreeButton(host);
     const runButton = host.querySelector<HTMLButtonElement>('[data-mind-system-sidebar-run-once="dao"]');
 
     expect(openButton).not.toBeNull();
-    expect(openButton?.textContent).toContain('Values, direction, long-term judgment');
-    expect(openButton?.textContent).not.toContain('Daily signal curator');
-    expect(openButton?.textContent).not.toContain('+1 assistant');
+    expect(openButton?.textContent?.trim()).toBe('道');
     expect(runButton).toBeNull();
 
     await act(async () => {
       openButton?.click();
-    });
-
-    expect(mockPush).not.toHaveBeenCalled();
-    await act(async () => {
-      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      await new Promise(resolve => setTimeout(resolve, 220));
     });
 
     expect(mockPush).toHaveBeenCalledWith('/view/MIND_DAO');
@@ -321,7 +327,7 @@ describe('Panel Mind System collapse', () => {
     expect(moreMenu?.textContent).toContain('Trash');
   });
 
-  it('uses rounded active states for Mind System instead of vertical bars', async () => {
+  it('uses rounded active states for MindOS System instead of vertical bars', async () => {
     routeState.pathname = '/view/MIND_DAO';
     localStorage.setItem(MIND_SYSTEM_COLLAPSED_KEY, '0');
 
@@ -335,12 +341,12 @@ describe('Panel Mind System collapse', () => {
     expect(toggle.className).toContain('[--hit-target-active-border:color-mix(in_srgb,var(--amber)_28%,transparent)]');
     expect(toggle.querySelector('[class*="rounded-r-full"]')).toBeNull();
 
-    const openButton = host.querySelector<HTMLButtonElement>('[data-mind-system-sidebar-open="dao"]');
+    const openButton = getDaoTreeButton(host);
     expect(openButton).not.toBeNull();
-    expect(openButton?.getAttribute('aria-current')).toBe('page');
-    expect(openButton?.className).toContain('[--hit-target-radius:var(--radius-md)]');
-    expect(openButton?.className).toContain('[--hit-target-active-bg:var(--amber-subtle)]');
-    expect(openButton?.className).toContain('[--hit-target-active-border:color-mix(in_srgb,var(--amber)_24%,transparent)]');
+    expect(openButton?.getAttribute('data-hit-active')).toBe('true');
+    expect(openButton?.className).toContain('[--hit-target-radius:var(--radius-sm)]');
+    expect(openButton?.className).toContain('[--hit-target-active-bg:var(--muted)]');
+    expect(openButton?.parentElement?.className).toContain('bg-muted/70');
     expect(openButton?.querySelector('[class*="rounded-r-full"]')).toBeNull();
   });
 

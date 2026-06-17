@@ -2,12 +2,13 @@
 
 import { useState, useCallback, useRef, useTransition, useEffect, memo, useMemo } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { FileNode, SYSTEM_FILES, UNDELETABLE_FILES } from '@/lib/types';
+import { FileNode, SYSTEM_FILES, UNDELETABLE_FILES, type MindSystemNodeKey } from '@/lib/types';
 import { encodePath } from '@/lib/utils';
 import { ICON_SIZES } from '@/lib/config/icon-scale';
 import {
   ChevronDown, FileText, Table, Folder, FolderOpen, Loader2,
   Trash2, Pencil, Layers, Copy, MoreHorizontal, Star, Inbox,
+  Compass, ScrollText, Route, Wrench,
 } from 'lucide-react';
 import { createFileAction, deleteFileAction, renameFileAction, renameSpaceAction, deleteSpaceAction, deleteFolderAction, undoDeleteAction } from '@/lib/actions';
 import { toast } from '@/lib/toast';
@@ -33,6 +34,7 @@ interface FileTreeProps {
   depth?: number;
   onNavigate?: () => void;
   maxOpenDepth?: number | null;
+  defaultOpenDepth?: number;
   parentIsSpace?: boolean;
   onImport?: (space: string) => void;
 }
@@ -41,6 +43,25 @@ function getIcon(node: FileNode) {
   if (node.type === 'directory') return null;
   if (node.extension === '.csv') return <Table size={ICON_SIZES.md} className="text-success shrink-0" />;
   return <FileText size={ICON_SIZES.md} className="text-muted-foreground shrink-0" />;
+}
+
+function getMindSystemIcon(key: MindSystemNodeKey | undefined, active = false) {
+  const className = active
+    ? 'shrink-0 text-[var(--amber)]'
+    : 'shrink-0 text-[var(--amber)]/70';
+
+  switch (key) {
+    case 'dao':
+      return <Compass size={14} strokeWidth={2.1} className={className} />;
+    case 'fa':
+      return <ScrollText size={14} strokeWidth={2.1} className={className} />;
+    case 'shu':
+      return <Route size={14} strokeWidth={2.1} className={className} />;
+    case 'qi':
+      return <Wrench size={14} strokeWidth={2.1} className={className} />;
+    default:
+      return <Layers size={14} className={className} />;
+  }
 }
 
 function getCurrentFilePath(pathname: string): string {
@@ -180,9 +201,9 @@ function NewFileInline({ dirPath, depth, onDone }: { dirPath: string; depth: num
 
 // ─── DirectoryNode ────────────────────────────────────────────────────────────
 
-const DirectoryNode = memo(function DirectoryNode({ node, depth, onNavigate, maxOpenDepth, onImport }: {
+const DirectoryNode = memo(function DirectoryNode({ node, depth, onNavigate, maxOpenDepth, defaultOpenDepth = 0, onImport }: {
   node: FileNode; depth: number; onNavigate?: () => void;
-  maxOpenDepth?: number | null; onImport?: (space: string) => void;
+  maxOpenDepth?: number | null; defaultOpenDepth?: number; onImport?: (space: string) => void;
 }) {
   const router = useRouter();
   const smoothPush = useSmoothRouterPush();
@@ -190,10 +211,11 @@ const DirectoryNode = memo(function DirectoryNode({ node, depth, onNavigate, max
   // active path flips, not on every navigation (see active-path.ts).
   const isActive = useIsOnActivePath(node.path);
   const isSpace = !!node.isSpace;
-  const [open, setOpen] = useState(depth === 0 ? true : isActive);
+  const initiallyOpen = depth <= defaultOpenDepth || isActive;
+  const [open, setOpen] = useState(initiallyOpen);
   // Track whether this directory has ever been opened — only render children after first open.
   // This avoids mounting hundreds of hidden components for deep trees that haven't been explored.
-  const [hasBeenOpened, setHasBeenOpened] = useState(depth === 0 || isActive);
+  const [hasBeenOpened, setHasBeenOpened] = useState(initiallyOpen);
   const [showNewFile, setShowNewFile] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState(node.name);
@@ -291,9 +313,6 @@ const DirectoryNode = memo(function DirectoryNode({ node, depth, onNavigate, max
     setContextMenu({ x: e.clientX, y: e.clientY });
   }, []);
 
-  // Cached per node identity (WeakMap) and only needed while collapsed.
-  const contentCount = isSpace && !open ? countContentFiles(node) : 0;
-
   if (renaming) {
     return (
       <div className="relative px-2 py-0.5" style={{ paddingLeft: `${depth * 12 + 8}px` }}>
@@ -315,12 +334,18 @@ const DirectoryNode = memo(function DirectoryNode({ node, depth, onNavigate, max
   }
 
   const showBorder = isSpace && depth === 0;
+  const spaceRowActive = isSpace && isActive;
+  const spaceIconClassName = spaceRowActive
+    ? 'shrink-0 text-[var(--amber)]'
+    : 'shrink-0 text-[var(--amber)]/70';
 
   return (
     <div>
       <div
         className={`relative group/dir flex items-center transition-colors duration-100 ${ROW_CONTENT_VISIBILITY} ${
           isDragTarget ? 'bg-[var(--amber)]/10 rounded-md' : ''
+        } ${
+          spaceRowActive ? 'rounded-md bg-muted/70' : ''
         }`}
         onContextMenu={handleContextMenu}
         onDragEnter={handleRowDragEnter}
@@ -331,7 +356,13 @@ const DirectoryNode = memo(function DirectoryNode({ node, depth, onNavigate, max
         <button
           type="button"
           onClick={toggle}
-          className="hit-target-box inline-flex h-7 w-7 shrink-0 items-center justify-center text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-md)]"
+          className={`hit-target-box inline-flex h-7 w-7 shrink-0 items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation [--hit-target-radius:var(--radius-md)] ${
+            isSpace
+              ? '[--hit-target-hover-bg:transparent] [--hit-target-active-bg:transparent] hover:text-[var(--amber)]'
+              : '[--hit-target-hover-bg:var(--muted)] hover:text-foreground'
+          } ${
+            spaceRowActive ? 'text-[var(--amber)]' : 'text-muted-foreground'
+          }`}
           style={{ marginLeft: `${depth * 12 + 4}px` }}
           aria-label={open ? `Collapse ${node.name}` : `Expand ${node.name}`}
           aria-expanded={open}
@@ -353,22 +384,22 @@ const DirectoryNode = memo(function DirectoryNode({ node, depth, onNavigate, max
           className={`
             hit-target-box flex-1 flex min-h-7 items-center gap-1.5 px-1 text-left min-w-0 pr-16
             text-sm transition-colors duration-100
-            cursor-default [--hit-target-hover-bg:var(--muted)] [--hit-target-active-bg:var(--muted)] [--hit-target-radius:var(--radius-sm)]
+            cursor-default [--hit-target-radius:var(--radius-sm)]
+            [--hit-target-hover-bg:var(--muted)] [--hit-target-active-bg:var(--muted)]
             ${isActive ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'}
           `}
         >
           {isSpace
-            ? node.name === 'Inbox'
-              ? <Inbox size={14} className="shrink-0 text-[var(--amber)]" />
-              : <Layers size={14} className="shrink-0 text-[var(--amber)]" />
+            ? node.isMindSystem
+              ? getMindSystemIcon(node.mindSystemKey, spaceRowActive)
+              : node.name === 'Inbox'
+                ? <Inbox size={14} className={spaceIconClassName} />
+                : <Layers size={14} className={spaceIconClassName} />
             : open
               ? <FolderOpen size={14} className="text-yellow-400 shrink-0" />
               : <Folder size={14} className="text-yellow-400 shrink-0" />
           }
           <span className="truncate leading-5" suppressHydrationWarning>{node.name}</span>
-          {isSpace && !open && (
-            <span className="ml-auto text-xs text-muted-foreground shrink-0 tabular-nums pr-1">{contentCount}</span>
-          )}
         </button>
         <div className="absolute right-1 top-1/2 -translate-y-1/2 hidden group-hover/dir:flex items-center gap-0.5 z-10">
           <button
@@ -401,6 +432,7 @@ const DirectoryNode = memo(function DirectoryNode({ node, depth, onNavigate, max
               depth={showBorder ? 1 : depth + 1}
               onNavigate={onNavigate}
               maxOpenDepth={maxOpenDepth}
+              defaultOpenDepth={defaultOpenDepth}
               parentIsSpace={isSpace}
               onImport={onImport}
             />
@@ -746,7 +778,7 @@ function FileTreeRoot(props: FileTreeProps) {
   );
 }
 
-const FileTreeList = memo(function FileTreeList({ nodes, depth = 0, onNavigate, maxOpenDepth, onImport }: FileTreeProps) {
+const FileTreeList = memo(function FileTreeList({ nodes, depth = 0, onNavigate, maxOpenDepth, defaultOpenDepth, onImport }: FileTreeProps) {
   const showHidden = useShowHiddenFiles();
   const isRoot = depth === 0;
 
@@ -762,7 +794,7 @@ const FileTreeList = memo(function FileTreeList({ nodes, depth = 0, onNavigate, 
     <div className="flex flex-col gap-0.5">
       {visibleNodes.map((node) =>
         node.type === 'directory' ? (
-          <DirectoryNode key={node.path} node={node} depth={depth} onNavigate={onNavigate} maxOpenDepth={maxOpenDepth} onImport={onImport} />
+          <DirectoryNode key={node.path} node={node} depth={depth} onNavigate={onNavigate} maxOpenDepth={maxOpenDepth} defaultOpenDepth={defaultOpenDepth} onImport={onImport} />
         ) : (
           <FileNodeItem key={node.path} node={node} depth={depth} onNavigate={onNavigate} />
         )

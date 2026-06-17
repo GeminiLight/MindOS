@@ -52,9 +52,11 @@ export const navigationEn = {
     more: 'More',
     capture: 'Inbox',
     showHiddenFiles: 'Show hidden files',
-    builtInSpacesTitle: 'Mind System',
+    builtInSpacesTitle: 'MindOS System',
     builtInSpacesDesc: 'Built-in modules mapped to local folders.',
     builtInSpacesRoot: 'Dao / Fa / Shu / Qi',
+    spacesTitle: 'Spaces',
+    otherFilesTitle: 'Other Files',
     sync: {
       synced: 'Synced',
       syncReady: 'Sync ready',

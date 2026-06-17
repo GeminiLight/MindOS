@@ -52,9 +52,11 @@ export const navigationZh = {
     more: '更多',
     capture: '收集箱',
     showHiddenFiles: '显示隐藏文件',
-    builtInSpacesTitle: 'Mind 系统',
+    builtInSpacesTitle: 'MindOS System',
     builtInSpacesDesc: '内置模块映射到本地目录。',
     builtInSpacesRoot: '道 / 法 / 术 / 器',
+    spacesTitle: 'Spaces',
+    otherFilesTitle: '其他文件',
     sync: {
       synced: '已同步',
       syncReady: '同步已就绪',

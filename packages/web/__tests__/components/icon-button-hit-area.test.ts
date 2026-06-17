@@ -83,18 +83,44 @@ describe('icon button hit areas', () => {
 
   it('keeps built-in Mind System sidebar controls on rectangular hit targets', () => {
     const panelSource = readSource('components/Panel.tsx');
-    const source = readSource('components/panels/MindSystemSidebarSection.tsx');
+    const source = readSource('components/file-tree/MindFileTreeSections.tsx');
+    const fileTreeSource = readSource('components/FileTree.tsx');
+    const zhSource = readSource('lib/i18n/modules/navigation-zh.ts');
+    const enSource = readSource('lib/i18n/modules/navigation-en.ts');
 
-    expect(panelSource).toContain('<MindSystemSidebarSection');
-    expect(panelSource).toContain('slots={mindSystemSlots}');
-    expect(source).toContain("data-hit-active={expanded || activeSlotKey ? 'true' : undefined}");
-    expect(source).toContain('hit-target-box relative mb-1 flex w-full items-center gap-2');
-    expect(source).toContain('[--hit-target-active-bg:var(--amber-subtle)]');
-    expect(source).toContain('[--hit-target-active-border:color-mix(in_srgb,var(--amber)_28%,transparent)]');
+    expect(panelSource).toContain('<MindFileTreeSections');
+    expect(panelSource).toContain('mindSystemSlots={mindSystemSlots}');
+    expect(source).toContain('MIND_SYSTEM_COLLAPSED_KEY');
+    expect(source).toContain('<MindSystemTreeSection');
+    expect(source).toContain('<Activity size={15}');
+    expect(source).toContain('defaultOpenDepth={-1}');
+    expect(source).toContain('t.sidebar.builtInSpacesTitle');
+    expect(source).toContain('t.sidebar.spacesTitle');
+    expect(source).toContain('t.sidebar.otherFilesTitle');
+    expect(source).toContain('data-hit-active={!collapsed || activeSystemPath ? \'true\' : undefined}');
+    expect(source).toContain('hit-target-box relative flex w-full items-center gap-2 px-2.5 py-2');
+    expect(source).toContain('aria-controls={treeId}');
+    expect(source).toContain('<FileTree');
+    expect(zhSource).toContain("builtInSpacesTitle: 'MindOS System'");
+    expect(enSource).toContain("builtInSpacesTitle: 'MindOS System'");
+    expect(fileTreeSource).toContain('function getMindSystemIcon');
+    expect(fileTreeSource).toContain("case 'dao':");
+    expect(fileTreeSource).toContain("case 'fa':");
+    expect(fileTreeSource).toContain("case 'shu':");
+    expect(fileTreeSource).toContain("case 'qi':");
+    expect(fileTreeSource).toContain('const spaceRowActive = isSpace && isActive;');
+    expect(fileTreeSource).not.toContain('shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--amber)_22%,transparent)]');
+    expect(fileTreeSource).not.toContain('rounded-md bg-[var(--amber-subtle)]');
+    expect(fileTreeSource).toContain("spaceRowActive ? 'rounded-md bg-muted/70' : ''");
+    expect(fileTreeSource).toContain("const spaceIconClassName = spaceRowActive");
+    expect(fileTreeSource).toContain("getMindSystemIcon(node.mindSystemKey, spaceRowActive)");
+    expect(fileTreeSource).toContain('[--hit-target-hover-bg:transparent] [--hit-target-active-bg:transparent] hover:text-[var(--amber)]');
+    expect(fileTreeSource).toContain('[--hit-target-hover-bg:var(--muted)] [--hit-target-active-bg:var(--muted)]');
+    expect(fileTreeSource).toContain('[--hit-target-hover-bg:var(--muted)] [--hit-target-active-bg:var(--accent)]');
+    expect(fileTreeSource).not.toContain("text-[var(--amber)]'\n            : 'text-muted-foreground'");
+    expect(fileTreeSource).toContain('data-hit-active={isActive ? \'true\' : undefined}');
+    expect(fileTreeSource).toContain('hit-target-box inline-flex h-7 w-7 shrink-0 items-center justify-center');
     expect(source).not.toContain('w-[3px] rounded-r-full bg-[var(--amber)]');
-    expect(source).toContain('data-mind-system-sidebar-open={item.key}');
-    expect(source).toContain('hit-target-box relative flex w-full min-w-0 items-center gap-2');
-    expect(source).toContain('[--hit-target-active-border:color-mix(in_srgb,var(--amber)_24%,transparent)]');
   });
 
   it('keeps file tree row controls on stable hit targets', () => {

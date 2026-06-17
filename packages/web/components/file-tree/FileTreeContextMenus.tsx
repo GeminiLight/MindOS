@@ -72,6 +72,7 @@ export function SpaceContextMenu({ x, y, node, onClose, onRename, onNewFile, onI
   const { t } = useLocale();
   const { isPinned, togglePin } = usePinnedFiles();
   const pinned = isPinned(node.path);
+  const mutable = !node.isMindSystem;
 
   return (
     <ContextMenuShell x={x} y={y} onClose={onClose}>
@@ -94,14 +95,18 @@ export function SpaceContextMenu({ x, y, node, onClose, onRename, onNewFile, onI
       <button className={MENU_ITEM} onClick={() => { copyPathToClipboard(node.path); onClose(); }}>
         <Copy size={14} className="shrink-0" /> {t.fileTree.copyPath}
       </button>
-      <button className={MENU_ITEM} onClick={() => { onRename(); onClose(); }}>
-        <Pencil size={14} className="shrink-0" /> {t.fileTree.renameSpace}
-      </button>
-      <div className={MENU_DIVIDER} />
-      <button className={MENU_DANGER} onClick={() => { onClose(); onDelete(); }}>
-        <Trash2 size={14} className="shrink-0" />
-        {t.fileTree.deleteSpace}
-      </button>
+      {mutable && (
+        <>
+          <button className={MENU_ITEM} onClick={() => { onRename(); onClose(); }}>
+            <Pencil size={14} className="shrink-0" /> {t.fileTree.renameSpace}
+          </button>
+          <div className={MENU_DIVIDER} />
+          <button className={MENU_DANGER} onClick={() => { onClose(); onDelete(); }}>
+            <Trash2 size={14} className="shrink-0" />
+            {t.fileTree.deleteSpace}
+          </button>
+        </>
+      )}
     </ContextMenuShell>
   );
 }

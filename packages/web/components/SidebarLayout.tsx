@@ -8,7 +8,7 @@ import { Search, Settings, Menu, X, FolderInput } from 'lucide-react';
 import ActivityBar from './ActivityBar';
 import TitlebarRow from './TitlebarRow';
 import Panel from './Panel';
-import FileTree from './FileTree';
+import MindFileTreeSections from './file-tree/MindFileTreeSections';
 import Logo from './Logo';
 import AskFab from './AskFab';
 import PluginEntriesDock from './plugins/PluginEntriesDock';
@@ -953,7 +953,12 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
           </button>
         </div>
         <div className="flex-1 overflow-y-auto min-h-0 px-2 py-2">
-          <FileTree nodes={fileTree} onNavigate={handleMobileNavigate} onImport={handleOpenImport} />
+          <MindFileTreeSections
+            fileTree={fileTree}
+            mindSystemSlots={mindSystemSlots}
+            onNavigate={handleMobileNavigate}
+            onImport={handleOpenImport}
+          />
         </div>
       </aside>
 
