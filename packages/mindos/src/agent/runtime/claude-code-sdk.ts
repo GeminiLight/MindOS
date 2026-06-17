@@ -17,15 +17,45 @@ import type {
 } from './run.js';
 import type { ClaudeCodeCliClient } from './claude-code-cli.js';
 import { mindosSelectedSkillNames } from '../selected-skills.js';
+import {
+  getMindosRuntimeAttachmentImages,
+  readMindosRuntimeImageAsBase64,
+  type MindosRuntimeAttachment,
+} from './attachments.js';
 
 export type ClaudeCodeSdkQuery = AsyncIterable<Record<string, unknown>> & {
   interrupt?(): Promise<void>;
   close?(): void;
 };
 
+export type ClaudeCodeSdkTextBlock = {
+  type: 'text';
+  text: string;
+};
+
+export type ClaudeCodeSdkImageBlock = {
+  type: 'image';
+  source: {
+    type: 'base64';
+    media_type: string;
+    data: string;
+  };
+};
+
+export type ClaudeCodeSdkUserMessage = {
+  type: 'user';
+  message: {
+    role: 'user';
+    content: Array<ClaudeCodeSdkTextBlock | ClaudeCodeSdkImageBlock>;
+  };
+  parent_tool_use_id: null;
+};
+
+export type ClaudeCodeSdkPrompt = string | AsyncIterable<ClaudeCodeSdkUserMessage>;
+
 export type ClaudeCodeSdkModule = {
   query(params: {
-    prompt: string;
+    prompt: ClaudeCodeSdkPrompt;
     options?: Record<string, unknown>;
   }): ClaudeCodeSdkQuery;
 };
@@ -179,8 +209,9 @@ export function createClaudeCodeSdkClient(services: ClaudeCodeSdkClientServices)
       const state: ClaudeCodeSdkState = { emittedText: false, emittedDone: false };
       let lastSessionId: string | null = null;
       const selectedSkillNames = mindosSelectedSkillNames(input.selectedSkills);
+      const prompt = await createClaudeCodeSdkPrompt(input.prompt, input.attachments);
       queryHandle = services.sdk.query({
-        prompt: input.prompt,
+        prompt,
         options: {
           cwd: input.cwd,
           outputFormat: 'stream-json',
@@ -235,6 +266,48 @@ export function createClaudeCodeSdkClient(services: ClaudeCodeSdkClientServices)
     },
     close() {
       queryHandle?.close?.();
+    },
+  };
+}
+
+async function createClaudeCodeSdkPrompt(
+  prompt: string,
+  attachments: MindosRuntimeAttachment[] | undefined,
+): Promise<ClaudeCodeSdkPrompt> {
+  const imageBlocks: ClaudeCodeSdkImageBlock[] = [];
+  for (const attachment of getMindosRuntimeAttachmentImages(attachments)) {
+    const data = await readMindosRuntimeImageAsBase64(attachment);
+    if (!data) continue;
+    imageBlocks.push({
+      type: 'image',
+      source: {
+        type: 'base64',
+        media_type: attachment.mimeType ?? 'image/png',
+        data,
+      },
+    });
+  }
+
+  if (imageBlocks.length === 0) return prompt;
+  return createClaudeCodeSdkUserMessageIterable([
+    ...imageBlocks,
+    { type: 'text', text: prompt },
+  ]);
+}
+
+function createClaudeCodeSdkUserMessageIterable(
+  content: Array<ClaudeCodeSdkTextBlock | ClaudeCodeSdkImageBlock>,
+): AsyncIterable<ClaudeCodeSdkUserMessage> {
+  return {
+    async *[Symbol.asyncIterator]() {
+      yield {
+        type: 'user',
+        message: {
+          role: 'user',
+          content,
+        },
+        parent_tool_use_id: null,
+      };
     },
   };
 }

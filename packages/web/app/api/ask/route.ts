@@ -34,7 +34,11 @@ import {
   runMindosPiAgentAskSession,
 } from '@geminilight/mindos/session';
 import {
+  appendMindosRuntimeAttachmentPathContext,
   buildAgentRuntimeEnv,
+  createMindosRuntimeImageAttachments,
+  createMindosRuntimeUploadedFileAttachments,
+  materializeMindosRuntimeAttachments,
   resolveAgentRuntimeEnvOverlay,
   runMindosAgentRuntimeAskSession,
   type MindosAgentRuntimeSelection,
@@ -243,6 +247,15 @@ function getLastUserSkillName(messages: FrontendMessage[]): string | undefined {
   return undefined;
 }
 
+function getLastUserImages(messages: FrontendMessage[]): unknown[] {
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    const message = messages[i];
+    if (message?.role !== 'user') continue;
+    return Array.isArray(message.images) ? message.images : [];
+  }
+  return [];
+}
+
 function runtimeBindingResumeState(
   runtime: Partial<AgentRuntimeIdentity>,
   binding: unknown,
@@ -445,7 +458,13 @@ export async function POST(req: NextRequest) {
     messages: FrontendMessage[];
     currentFile?: string;
     attachedFiles?: string[];
-    uploadedFiles?: Array<{ name: string; content: string }>;
+    uploadedFiles?: Array<{
+      name: string;
+      content: string;
+      mimeType?: string;
+      size?: number;
+      dataBase64?: string;
+    }>;
     maxSteps?: number;
     /** Ask prompt mode. Tool permissions are controlled by runtimeOptions.permissionMode. */
     mode?: AskModeApi;
@@ -537,6 +556,10 @@ export async function POST(req: NextRequest) {
   // These are already truncated client-side (80K limit), so only apply a generous
   // server-side cap to guard against malformed requests.
   const uploadedParts = createMindosUploadedFileParts(uploadedFiles);
+  const runtimeAttachments = [
+    ...createMindosRuntimeUploadedFileAttachments(uploadedFiles),
+    ...createMindosRuntimeImageAttachments(getLastUserImages(messages)),
+  ];
   const selectedSkills = normalizeMindosSelectedSkills(undefined, getLastUserSkillName(messages));
 
   if (verifiedNativeRuntime || selectedAcpAgent) {
@@ -605,6 +628,7 @@ export async function POST(req: NextRequest) {
               runtime: nativeRuntime,
               cwd: mindRoot,
               prompt: externalPrompt,
+              attachments: runtimeAttachments,
               selectedSkills,
               permissionMode: nativePermissionMode,
               ...(nativeRuntimeOptions.modelOverride ? { modelOverride: nativeRuntimeOptions.modelOverride } : {}),
@@ -664,6 +688,12 @@ export async function POST(req: NextRequest) {
       }
 
       if (selectedAcpAgent) {
+        const materializedAttachments = await materializeMindosRuntimeAttachments(runtimeAttachments);
+        const acpPrompt = appendMindosRuntimeAttachmentPathContext(
+          externalPrompt,
+          materializedAttachments.attachments,
+          { includeImages: true },
+        );
         let hasContent = false;
         let outputSummary = '';
         const acpRun = startAgentRun({
@@ -687,7 +717,7 @@ export async function POST(req: NextRequest) {
           runMindosAcpAskSession({
             agentId: selectedAcpAgent.id,
             cwd: mindRoot,
-            prompt: externalPrompt,
+            prompt: acpPrompt,
             signal: req.signal,
             createSession: async (agentId, options) => {
               const optionEnv = compactStringEnv((options as { env?: Record<string, string | undefined> } | undefined)?.env);
@@ -731,6 +761,9 @@ export async function POST(req: NextRequest) {
               outputSummary,
             });
             throw error;
+          })
+          .finally(async () => {
+            await materializedAttachments.cleanup();
           });
         if (acpResult.error) {
           failAgentRun(acpRun.id, {

@@ -246,6 +246,63 @@ describe('agent runtime adapters: Claude Code', () => {
     ]);
   });
 
+  it('passes runtime image attachments to the Claude Agent SDK prompt stream', async () => {
+    const sdk = createFakeClaudeSdk([
+      { type: 'result', subtype: 'success', session_id: 'claude-sdk-attachments', is_error: false },
+    ]);
+
+    await runMindosAgentRuntimeAskSession({
+      runtime: { kind: 'claude', id: 'claude', name: 'Claude Code', binaryPath: '/usr/local/bin/claude' },
+      cwd: '/tmp/mind',
+      prompt: 'Review the uploaded image and file.',
+      attachments: [
+        {
+          kind: 'uploaded_file',
+          name: 'notes.md',
+          content: '# Notes',
+          mimeType: 'text/markdown',
+          size: 7,
+          dataBase64: 'IyBOb3Rlcw==',
+        },
+        {
+          kind: 'image',
+          name: 'diagram.png',
+          mimeType: 'image/png',
+          data: 'aW1nLWJ5dGVz',
+        },
+      ],
+      send: () => {},
+      services: {
+        loadClaudeSdk: () => sdk,
+      },
+    });
+
+    expect(typeof sdk.params?.prompt).not.toBe('string');
+    const messages: Record<string, unknown>[] = [];
+    for await (const message of sdk.params?.prompt as AsyncIterable<Record<string, unknown>>) {
+      messages.push(message);
+    }
+    const content = (messages[0] as {
+      message: { content: Array<Record<string, unknown>> };
+    }).message.content;
+
+    expect(content[0]).toEqual({
+      type: 'image',
+      source: {
+        type: 'base64',
+        media_type: 'image/png',
+        data: 'aW1nLWJ5dGVz',
+      },
+    });
+    expect(content[1]).toMatchObject({
+      type: 'text',
+      text: expect.stringContaining('Review the uploaded image and file.'),
+    });
+    expect(content[1]?.text).toContain('## Runtime Attachment Files');
+    expect(content[1]?.text).toContain('notes.md');
+    expect(content[1]?.text).toContain('diagram.png');
+  });
+
   it('does not start Claude Code without a detected local CLI path', async () => {
     const events: MindOSSSEvent[] = [];
     const loadClaudeSdk = vi.fn(async () => createFakeClaudeSdk([]));
@@ -651,6 +708,36 @@ describe('agent runtime adapters: Claude Code', () => {
       { type: 'text_delta', delta: 'Hello' },
       { type: 'done' },
     ]);
+  });
+
+  it('adds runtime attachment paths to Claude Code CLI prompts as a fallback', async () => {
+    const transport = createFakeClaudeTransport([
+      JSON.stringify({ type: 'result', subtype: 'success', session_id: 'claude-cli-attachment-paths' }),
+    ]);
+
+    await runMindosAgentRuntimeAskSession({
+      runtime: { kind: 'claude', id: 'claude', name: 'Claude Code', binaryPath: '/usr/local/bin/claude' },
+      cwd: '/tmp/mind',
+      prompt: 'Use the uploaded file.',
+      attachments: [{
+        kind: 'uploaded_file',
+        name: 'brief.txt',
+        content: 'hello',
+        mimeType: 'text/plain',
+        size: 5,
+      }],
+      send: () => {},
+      services: {
+        createClaudeClient: () => createClaudeCodeCliClient(transport),
+      },
+    });
+
+    const promptArg = transport.argv?.at(-1) ?? '';
+    expect(promptArg).toContain('Use the uploaded file.');
+    expect(promptArg).toContain('## Runtime Attachment Files');
+    expect(promptArg).toContain('brief.txt');
+    expect(promptArg).toContain('mindos-runtime-attachments');
+    expect(promptArg).toContain('- materialized_from: text_projection');
   });
 
   it('maps readonly MindOS native mode to Claude Code dontAsk permission mode', async () => {

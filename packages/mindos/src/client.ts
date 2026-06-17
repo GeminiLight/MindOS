@@ -62,11 +62,19 @@ export type MindosSelectedRuntime = {
   externalSessionId?: string;
 };
 
+export type MindosUploadedFile = {
+  name: string;
+  content: string;
+  mimeType?: string;
+  size?: number;
+  dataBase64?: string;
+};
+
 export type MindosAskStreamRequest = {
   messages: Array<Record<string, unknown>>;
   currentFile?: string;
   attachedFiles?: string[];
-  uploadedFiles?: Array<{ name: string; content: string }>;
+  uploadedFiles?: MindosUploadedFile[];
   maxSteps?: number;
   mode?: 'chat' | 'agent' | 'organize';
   selectedRuntime?: MindosSelectedRuntime | null;

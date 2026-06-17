@@ -216,6 +216,10 @@ export interface CodexThreadListResponse {
 export interface LocalAttachment {
   name: string;
   content: string;
+  mimeType?: string;
+  size?: number;
+  /** Base64-encoded original file bytes, kept only in the active browser session. */
+  dataBase64?: string;
   /** Extraction status for PDF uploads. Absent / undefined = legacy (treated as success). */
   status?: 'loading' | 'success' | 'error';
   /** Human-readable error message (only when status = 'error'). */

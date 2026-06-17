@@ -14,6 +14,7 @@ import { createFileAction, deleteFileAction, renameFileAction, renameSpaceAction
 import { toast } from '@/lib/toast';
 import { useLocale } from '@/lib/stores/locale-store';
 import { ConfirmDialog } from '@/components/agents/AgentsPrimitives';
+import { StableRowActionButton, StableRowTrailingSlot } from '@/components/shared/StableRowChrome';
 import { usePinnedFiles } from '@/lib/hooks/usePinnedFiles';
 import { useShowHiddenFiles, setShowHiddenFiles, filterHiddenNodes } from '@/lib/stores/hidden-files';
 import { notifyFilesChanged } from '@/lib/files-changed';
@@ -342,7 +343,7 @@ const DirectoryNode = memo(function DirectoryNode({ node, depth, onNavigate, max
   return (
     <div>
       <div
-        className={`relative group/dir flex items-center transition-colors duration-100 ${ROW_CONTENT_VISIBILITY} ${
+        className={`relative group group/dir flex items-center transition-colors duration-100 ${ROW_CONTENT_VISIBILITY} ${
           isDragTarget ? 'bg-[var(--amber)]/10 rounded-md' : ''
         } ${
           spaceRowActive ? 'rounded-md bg-muted/70' : ''
@@ -382,7 +383,7 @@ const DirectoryNode = memo(function DirectoryNode({ node, depth, onNavigate, max
           }}
           data-hit-active={isActive ? 'true' : undefined}
           className={`
-            hit-target-box flex-1 flex min-h-7 items-center gap-1.5 px-1 text-left min-w-0 pr-16
+            hit-target-box flex-1 flex min-h-7 items-center gap-1.5 px-1 text-left min-w-0
             text-sm transition-colors duration-100
             cursor-default [--hit-target-radius:var(--radius-sm)]
             [--hit-target-hover-bg:var(--muted)] [--hit-target-active-bg:var(--muted)]
@@ -401,21 +402,23 @@ const DirectoryNode = memo(function DirectoryNode({ node, depth, onNavigate, max
           }
           <span className="truncate leading-5" suppressHydrationWarning>{node.name}</span>
         </button>
-        <div className="absolute right-1 top-1/2 -translate-y-1/2 hidden group-hover/dir:flex items-center gap-0.5 z-10">
-          <button
-            type="button"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              const rect = e.currentTarget.getBoundingClientRect();
-              setContextMenu({ x: rect.left, y: rect.bottom + 4 });
-            }}
-            className="hit-target-box inline-flex h-7 w-7 items-center justify-center text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-md)]"
-            title="More"
-          >
-            <MoreHorizontal size={14} />
-          </button>
-        </div>
+        <StableRowTrailingSlot
+          className="mr-1"
+          forceActionsVisible={Boolean(contextMenu)}
+          actions={(
+            <StableRowActionButton
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const rect = e.currentTarget.getBoundingClientRect();
+                setContextMenu({ x: rect.left, y: rect.bottom + 4 });
+              }}
+              title="More"
+            >
+              <MoreHorizontal size={14} />
+            </StableRowActionButton>
+          )}
+        />
       </div>
 
       <div
@@ -636,7 +639,7 @@ const FileNodeItem = memo(function FileNodeItem({ node, depth, onNavigate }: {
   }
 
   return (
-    <div className="relative group/file">
+    <div className="relative group group/file flex items-center">
       <button
         onClick={handleClick}
         onContextMenu={handleContextMenu}
@@ -649,8 +652,8 @@ const FileNodeItem = memo(function FileNodeItem({ node, depth, onNavigate }: {
         data-file-opening={opening ? 'true' : undefined}
         aria-busy={opening ? 'true' : undefined}
         className={`
-          hit-target-box w-full flex min-h-7 items-center gap-1.5 px-2 text-left
-          text-sm transition-colors duration-100 cursor-default pr-16
+          hit-target-box flex min-h-7 min-w-0 flex-1 items-center gap-1.5 px-2 text-left
+          text-sm transition-colors duration-100 cursor-default
           ${ROW_CONTENT_VISIBILITY}
           [--hit-target-hover-bg:var(--muted)] [--hit-target-active-bg:var(--accent)] [--hit-target-radius:var(--radius-sm)]
           ${isActive || opening
@@ -662,22 +665,25 @@ const FileNodeItem = memo(function FileNodeItem({ node, depth, onNavigate }: {
       >
         {getIcon(node)}
         <span className="truncate leading-5" suppressHydrationWarning>{node.name}</span>
-        {pinned && <Star size={10} className="shrink-0 fill-[var(--amber)] text-[var(--amber)] opacity-60" />}
       </button>
-      <div className="absolute right-1 top-1/2 -translate-y-1/2 hidden group-hover/file:flex items-center gap-0.5">
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            const rect = e.currentTarget.getBoundingClientRect();
-            setContextMenu({ x: rect.left, y: rect.bottom + 4 });
-          }}
-          className="hit-target-box inline-flex h-7 w-7 items-center justify-center text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-md)]"
-          title="More"
-        >
-          <MoreHorizontal size={14} />
-        </button>
-      </div>
+      <StableRowTrailingSlot
+        className="mr-1"
+        forceActionsVisible={Boolean(contextMenu)}
+        status={pinned ? <Star size={10} className="fill-[var(--amber)] text-[var(--amber)] opacity-70" /> : null}
+        actions={(
+          <StableRowActionButton
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              const rect = e.currentTarget.getBoundingClientRect();
+              setContextMenu({ x: rect.left, y: rect.bottom + 4 });
+            }}
+            title="More"
+          >
+            <MoreHorizontal size={14} />
+          </StableRowActionButton>
+        )}
+      />
       {contextMenu && (
         <ContextMenuShell
           x={contextMenu.x}

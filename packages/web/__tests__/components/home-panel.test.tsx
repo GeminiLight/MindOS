@@ -120,16 +120,21 @@ describe('HomePanel', () => {
     expect(host.querySelector('button[aria-label="Archive session"]')).not.toBeNull();
     const status = host.querySelector('[data-home-session-row="s-codex"] [data-home-session-status="running"]') as HTMLElement | null;
     expect(status).not.toBeNull();
-    expect(status?.className).toContain('absolute');
-    expect(status?.className).toContain('right-3');
-    expect(status?.className).toContain('group-hover:opacity-0');
+    const trailingSlot = status?.closest('[data-stable-row-trailing]') as HTMLElement | null;
+    expect(trailingSlot).not.toBeNull();
+    expect(trailingSlot?.className).toContain('w-14');
+    expect(trailingSlot?.className).toContain('shrink-0');
+    const statusLayer = status?.closest('[data-stable-row-status]') as HTMLElement | null;
+    expect(statusLayer?.className).toContain('group-hover:opacity-0');
     const actions = host.querySelector('[data-home-session-row="s-codex"] [data-home-session-actions]') as HTMLElement | null;
     expect(actions).not.toBeNull();
-    expect(actions?.className).toContain('absolute');
-    expect(actions?.className).toContain('right-1.5');
-    expect(actions?.className).toContain('opacity-0');
+    const actionsLayer = actions?.closest('[data-stable-row-actions]') as HTMLElement | null;
+    expect(actionsLayer?.className).toContain('opacity-0');
+    expect(actionsLayer?.className).toContain('group-hover:opacity-100');
     const openButton = host.querySelector('[data-home-session-row="s-codex"] button[data-home-session-open]') as HTMLButtonElement | null;
-    expect(openButton?.className).toContain('pr-12');
+    expect(openButton?.className).toContain('min-w-0');
+    expect(openButton?.className).toContain('flex-1');
+    expect(openButton?.className).not.toContain('pr-12');
   });
 
   it('filters Home sessions by agent runtime', async () => {

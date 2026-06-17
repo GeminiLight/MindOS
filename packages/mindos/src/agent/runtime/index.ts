@@ -1,4 +1,5 @@
 export * from './adapters/index.js';
+export * from './attachments.js';
 export * from './capabilities.js';
 export * from './child-process.js';
 export * from './claude-code-cli.js';

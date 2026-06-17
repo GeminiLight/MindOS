@@ -271,6 +271,9 @@ export function useAskChat({
         .filter(f => f.status !== 'loading')
         .map(f => ({
           name: f.name,
+          ...(f.mimeType ? { mimeType: f.mimeType } : {}),
+          ...(typeof f.size === 'number' ? { size: f.size } : {}),
+          ...(f.dataBase64 ? { dataBase64: f.dataBase64 } : {}),
           content: f.content.length > 80_000
             ? f.content.slice(0, 80_000) + '\n\n[...truncated to first ~80000 chars]'
             : f.content,

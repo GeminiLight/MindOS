@@ -868,6 +868,53 @@ describe('agent runtime adapters: Codex app-server', () => {
     });
   });
 
+  it('passes structured runtime attachments to Codex as path context and local images', async () => {
+    const transport = createFakeCodexTransport();
+    await runMindosAgentRuntimeAskSession({
+      runtime: { kind: 'codex', id: 'codex', name: 'Codex' },
+      cwd: '/tmp/mind',
+      prompt: 'Inspect these attachments.',
+      attachments: [
+        {
+          kind: 'uploaded_file',
+          name: 'scan.pdf',
+          content: '[PDF TEXT EXTRACTED: scan.pdf]\n\nExtracted text',
+          mimeType: 'application/pdf',
+          size: 9,
+          dataBase64: 'cGRmLWJ5dGVz',
+        },
+        {
+          kind: 'image',
+          name: 'diagram.png',
+          mimeType: 'image/png',
+          data: 'aW1nLWJ5dGVz',
+        },
+      ],
+      send: () => {},
+      services: {
+        createCodexClient: () => createCodexAppServerClient(transport),
+      },
+    });
+
+    const turnStart = transport.sent.find((message): message is { method: string; params: { input: unknown[] } } => (
+      !!message && typeof message === 'object'
+      && (message as { method?: unknown }).method === 'turn/start'
+    ));
+    const input = turnStart?.params.input as Array<{ type: string; text?: string; path?: string }>;
+    const textInput = input.find((item) => item.type === 'text');
+    const imageInput = input.find((item) => item.type === 'localImage');
+
+    expect(textInput?.text).toContain('Inspect these attachments.');
+    expect(textInput?.text).toContain('## Runtime Attachment Files');
+    expect(textInput?.text).toContain('scan.pdf');
+    expect(textInput?.text).toContain('- materialized_from: original');
+    expect(textInput?.text).toContain('diagram.png');
+    expect(imageInput).toEqual({
+      type: 'localImage',
+      path: expect.stringContaining('mindos-runtime-attachments'),
+    });
+  });
+
   it('normalizes slash skill markers to Codex dollar markers', async () => {
     const transport = createFakeCodexTransport();
     await runMindosAgentRuntimeAskSession({

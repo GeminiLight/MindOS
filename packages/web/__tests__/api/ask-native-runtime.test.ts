@@ -74,31 +74,35 @@ vi.mock('@/lib/acp/detect-local', () => ({
   checkNativeRuntimeHealth: mockCheckNativeRuntimeHealth,
 }));
 
-vi.mock('@geminilight/mindos/agent/runtime', () => ({
-  buildAgentRuntimeEnv: vi.fn((input?: { settings?: { keys?: string[] } }) => ({
-    env: {
-      PATH: '/usr/bin',
-      ...(input?.settings?.keys?.includes('CLAUDE_CODE_OAUTH_TOKEN')
+vi.mock('@geminilight/mindos/agent/runtime', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@geminilight/mindos/agent/runtime')>();
+  return {
+    ...actual,
+    buildAgentRuntimeEnv: vi.fn((input?: { settings?: { keys?: string[] } }) => ({
+      env: {
+        PATH: '/usr/bin',
+        ...(input?.settings?.keys?.includes('CLAUDE_CODE_OAUTH_TOKEN')
+          ? { CLAUDE_CODE_OAUTH_TOKEN: 'runtime-token' }
+          : {}),
+      },
+      overlay: input?.settings?.keys?.includes('CLAUDE_CODE_OAUTH_TOKEN')
         ? { CLAUDE_CODE_OAUTH_TOKEN: 'runtime-token' }
-        : {}),
-    },
-    overlay: input?.settings?.keys?.includes('CLAUDE_CODE_OAUTH_TOKEN')
-      ? { CLAUDE_CODE_OAUTH_TOKEN: 'runtime-token' }
-      : {},
-    keys: input?.settings?.keys ?? [],
-    injectedKeys: input?.settings?.keys ?? [],
-    missingKeys: [],
-  })),
-  resolveAgentRuntimeEnvOverlay: vi.fn((input?: { settings?: { keys?: string[] } }) => ({
-    overlay: input?.settings?.keys?.includes('GEMINI_API_KEY')
-      ? { GEMINI_API_KEY: 'runtime-gemini' }
-      : {},
-    keys: input?.settings?.keys ?? [],
-    injectedKeys: input?.settings?.keys ?? [],
-    missingKeys: [],
-  })),
-  runMindosAgentRuntimeAskSession: mockRunMindosAgentRuntimeAskSession,
-}));
+        : {},
+      keys: input?.settings?.keys ?? [],
+      injectedKeys: input?.settings?.keys ?? [],
+      missingKeys: [],
+    })),
+    resolveAgentRuntimeEnvOverlay: vi.fn((input?: { settings?: { keys?: string[] } }) => ({
+      overlay: input?.settings?.keys?.includes('GEMINI_API_KEY')
+        ? { GEMINI_API_KEY: 'runtime-gemini' }
+        : {},
+      keys: input?.settings?.keys ?? [],
+      injectedKeys: input?.settings?.keys ?? [],
+      missingKeys: [],
+    })),
+    runMindosAgentRuntimeAskSession: mockRunMindosAgentRuntimeAskSession,
+  };
+});
 
 vi.mock('@geminilight/mindos/session', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@geminilight/mindos/session')>();
@@ -183,9 +187,21 @@ describe('/api/ask native runtime routing', () => {
 
     const { POST } = await import('../../app/api/ask/route');
     const res = await POST(askRequest({
-      messages: [{ role: 'user', content: 'Use the attached context', skillName: 'third-party' }],
+      messages: [{
+        role: 'user',
+        content: 'Use the attached context',
+        skillName: 'third-party',
+        images: [{ type: 'image', data: 'aW1n', mimeType: 'image/png', fileName: 'diagram.png' }],
+      }],
       currentFile: 'current.md',
       attachedFiles: ['attached.md'],
+      uploadedFiles: [{
+        name: 'brief.pdf',
+        content: '[PDF TEXT EXTRACTED: brief.pdf]\n\nOriginal extracted text',
+        mimeType: 'application/pdf',
+        size: 1234,
+        dataBase64: 'cGRmLWJ5dGVz',
+      }],
       selectedRuntime: { id: 'codex', name: 'Codex', kind: 'codex', binaryPath: '/usr/local/bin/codex' },
       runtimeBinding: {
         kind: 'codex-thread',
@@ -230,6 +246,23 @@ describe('/api/ask native runtime routing', () => {
     expect(capturedNativeOptions?.prompt).toContain('Current file body');
     expect(capturedNativeOptions?.prompt).toContain('attached.md');
     expect(capturedNativeOptions?.prompt).toContain('Attached file body');
+    expect(capturedNativeOptions?.prompt).toContain('brief.pdf');
+    expect(capturedNativeOptions?.attachments).toEqual([
+      {
+        kind: 'uploaded_file',
+        name: 'brief.pdf',
+        content: '[PDF TEXT EXTRACTED: brief.pdf]\n\nOriginal extracted text',
+        mimeType: 'application/pdf',
+        size: 1234,
+        dataBase64: 'cGRmLWJ5dGVz',
+      },
+      {
+        kind: 'image',
+        name: 'diagram.png',
+        data: 'aW1n',
+        mimeType: 'image/png',
+      },
+    ]);
     expect(capturedNativeOptions?.prompt).not.toContain('claude-test');
     expect(mockDetectLocalAcpAgents).not.toHaveBeenCalled();
     expect(mockResolveCommandPath).toHaveBeenCalledWith('codex');

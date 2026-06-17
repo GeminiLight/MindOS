@@ -111,6 +111,8 @@ export interface ImagePart {
   mimeType: ImageMimeType;
   /** Original file name, if available */
   fileName?: string;
+  /** Local runtime path when an adapter materializes the image for native tools. */
+  path?: string;
 }
 
 export interface RuntimeStatusPart {

@@ -9,6 +9,7 @@ import {
   type MindOSSSEvent,
 } from '../session/index.js';
 import type { MindosSelectedSkill } from '../selected-skills.js';
+import type { MindosRuntimeAttachment } from './attachments.js';
 
 export type ClaudeCodeCliTransport = {
   run(args: string[], options: { cwd: string; signal?: AbortSignal }): AsyncIterable<string>;
@@ -26,6 +27,7 @@ export type ClaudeCodeCliClient = {
   startTurn(input: {
     prompt: string;
     cwd: string;
+    attachments?: MindosRuntimeAttachment[];
     selectedSkills?: MindosSelectedSkill[];
     sessionId?: string;
     model?: string;

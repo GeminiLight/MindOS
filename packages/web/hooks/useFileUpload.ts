@@ -23,20 +23,57 @@ function uint8ToBase64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
+type FilePayload = {
+  dataBase64: string;
+  mimeType: string;
+  size: number;
+  buffer: ArrayBuffer;
+};
+
+async function readFilePayload(file: File): Promise<FilePayload> {
+  const buffer = await file.arrayBuffer();
+  return {
+    dataBase64: uint8ToBase64(new Uint8Array(buffer)),
+    mimeType: file.type || mimeTypeForExtension(getExt(file.name)),
+    size: file.size,
+    buffer,
+  };
+}
+
+function mimeTypeForExtension(ext: string): string {
+  switch (ext) {
+    case '.txt': return 'text/plain';
+    case '.md':
+    case '.markdown': return 'text/markdown';
+    case '.csv': return 'text/csv';
+    case '.json': return 'application/json';
+    case '.yaml':
+    case '.yml': return 'application/yaml';
+    case '.xml': return 'application/xml';
+    case '.html':
+    case '.htm': return 'text/html';
+    case '.pdf': return 'application/pdf';
+    case '.doc': return 'application/msword';
+    case '.docx': return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    case '.docm': return 'application/vnd.ms-word.document.macroEnabled.12';
+    default: return 'application/octet-stream';
+  }
+}
+
 async function extractPdfToAttachment(file: File): Promise<LocalAttachment> {
   const name = file.name;
+  let payload: FilePayload | undefined;
 
   try {
-    const buffer = await file.arrayBuffer();
-    const dataBase64 = uint8ToBase64(new Uint8Array(buffer));
+    payload = await readFilePayload(file);
 
     const res = await fetch('/api/extract-pdf', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, dataBase64 }),
+      body: JSON.stringify({ name, dataBase64: payload.dataBase64 }),
     });
 
-    let payload: {
+    let extractPayload: {
       text?: string;
       extracted?: 'success' | 'empty' | 'error';
       extractionError?: string;
@@ -46,31 +83,37 @@ async function extractPdfToAttachment(file: File): Promise<LocalAttachment> {
       pagesParsed?: number;
     } = {};
     try {
-      payload = await res.json();
+      extractPayload = await res.json();
     } catch {
       throw new Error('Failed to parse extraction response');
     }
 
     if (!res.ok) {
-      throw new Error(payload.error || `PDF extraction failed (${res.status})`);
+      throw new Error(extractPayload.error || `PDF extraction failed (${res.status})`);
     }
 
     // Handle extraction error state
-    if (payload.extracted === 'error') {
+    if (extractPayload.extracted === 'error') {
       return {
         name,
         content: `[PDF: ${name}] Failed to extract text from this PDF.`,
+        mimeType: payload.mimeType,
+        size: payload.size,
+        dataBase64: payload.dataBase64,
         status: 'error',
-        error: payload.extractionError || 'PDF extraction failed (unable to parse PDF)',
+        error: extractPayload.extractionError || 'PDF extraction failed (unable to parse PDF)',
       };
     }
 
     // Handle empty PDF (no extraction error, but no text)
-    const text = payload.extracted === 'success' ? (payload.text || '') : '';
+    const text = extractPayload.extracted === 'success' ? (extractPayload.text || '') : '';
     if (!text) {
       return {
         name,
         content: `[PDF: ${name}] Could not extract readable text (possibly scanned/image PDF).`,
+        mimeType: payload.mimeType,
+        size: payload.size,
+        dataBase64: payload.dataBase64,
         status: 'error',
         error: 'No extractable text found — PDF may be scanned, image-only, or have no text content',
       };
@@ -79,14 +122,17 @@ async function extractPdfToAttachment(file: File): Promise<LocalAttachment> {
     const att: LocalAttachment = {
       name,
       content: `[PDF TEXT EXTRACTED: ${name}]\n\n${text}`,
+      mimeType: payload.mimeType,
+      size: payload.size,
+      dataBase64: payload.dataBase64,
       status: 'success',
     };
 
-    if (payload.truncated && payload.totalChars) {
+    if (extractPayload.truncated && extractPayload.totalChars) {
       att.truncatedInfo = {
-        totalChars: payload.totalChars,
+        totalChars: extractPayload.totalChars,
         includedChars: text.length,
-        totalPages: payload.pagesParsed ?? 0,
+        totalPages: extractPayload.pagesParsed ?? 0,
       };
     }
 
@@ -96,6 +142,10 @@ async function extractPdfToAttachment(file: File): Promise<LocalAttachment> {
     return {
       name,
       content: `[PDF: ${name}] Failed to extract text from this PDF.`,
+      ...(payload ? { mimeType: payload.mimeType, size: payload.size, dataBase64: payload.dataBase64 } : {
+        mimeType: file.type || mimeTypeForExtension(getExt(file.name)),
+        size: file.size,
+      }),
       status: 'error',
       error: msg,
     };
@@ -104,18 +154,18 @@ async function extractPdfToAttachment(file: File): Promise<LocalAttachment> {
 
 async function extractDocxToAttachment(file: File): Promise<LocalAttachment> {
   const name = file.name;
+  let payload: FilePayload | undefined;
 
   try {
-    const buffer = await file.arrayBuffer();
-    const dataBase64 = uint8ToBase64(new Uint8Array(buffer));
+    payload = await readFilePayload(file);
 
     const res = await fetch('/api/extract-docx', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, dataBase64 }),
+      body: JSON.stringify({ name, dataBase64: payload.dataBase64 }),
     });
 
-    let payload: {
+    let extractPayload: {
       text?: string;
       markdown?: string;
       extracted?: boolean;
@@ -130,31 +180,37 @@ async function extractDocxToAttachment(file: File): Promise<LocalAttachment> {
       warning?: string;
     } = {};
     try {
-      payload = await res.json();
+      extractPayload = await res.json();
     } catch {
       throw new Error('Failed to parse extraction response');
     }
 
     if (!res.ok) {
-      throw new Error(payload.error || `Word extraction failed (${res.status})`);
+      throw new Error(extractPayload.error || `Word extraction failed (${res.status})`);
     }
 
     // Handle extraction error state
-    if (!payload.extracted) {
+    if (!extractPayload.extracted) {
       return {
         name,
         content: `[Word: ${name}] Failed to extract text from this Word document.`,
+        mimeType: payload.mimeType,
+        size: payload.size,
+        dataBase64: payload.dataBase64,
         status: 'error',
-        error: payload.errorMessage || 'Word extraction failed',
+        error: extractPayload.errorMessage || 'Word extraction failed',
       };
     }
 
     // Handle empty document
-    const text = payload.text || '';
+    const text = extractPayload.text || '';
     if (!text) {
       return {
         name,
         content: `[Word: ${name}] Could not extract readable text (empty document).`,
+        mimeType: payload.mimeType,
+        size: payload.size,
+        dataBase64: payload.dataBase64,
         status: 'error',
         error: 'No extractable text found — document may be empty or corrupted',
       };
@@ -163,28 +219,31 @@ async function extractDocxToAttachment(file: File): Promise<LocalAttachment> {
     const att: LocalAttachment = {
       name,
       content: `[WORD TEXT EXTRACTED: ${name}]\n\n${text}`,
+      mimeType: payload.mimeType,
+      size: payload.size,
+      dataBase64: payload.dataBase64,
       status: 'success',
     };
 
-    if (payload.truncated && payload.chars) {
+    if (extractPayload.truncated && extractPayload.chars) {
       const truncInfo = {
-        totalChars: payload.chars || 0,
-        includedChars: payload.charsTruncated || text.length,
-        totalPages: payload.pages ?? 0,
+        totalChars: extractPayload.chars || 0,
+        includedChars: extractPayload.charsTruncated || text.length,
+        totalPages: extractPayload.pages ?? 0,
       };
 
       att.truncatedInfo = truncInfo;
     }
 
-    if (payload.warning) {
+    if (extractPayload.warning) {
       if (!att.truncatedInfo) {
         att.truncatedInfo = {
-          totalChars: payload.chars || text.length,
+          totalChars: extractPayload.chars || text.length,
           includedChars: text.length,
-          totalPages: payload.pages ?? 0,
+          totalPages: extractPayload.pages ?? 0,
         };
       }
-      att.truncatedInfo.warning = payload.warning;
+      att.truncatedInfo.warning = extractPayload.warning;
     }
 
     return att;
@@ -193,6 +252,10 @@ async function extractDocxToAttachment(file: File): Promise<LocalAttachment> {
     return {
       name,
       content: `[Word: ${name}] Failed to extract text from this Word document.`,
+      ...(payload ? { mimeType: payload.mimeType, size: payload.size, dataBase64: payload.dataBase64 } : {
+        mimeType: file.type || mimeTypeForExtension(getExt(file.name)),
+        size: file.size,
+      }),
       status: 'error',
       error: msg,
     };
@@ -244,15 +307,19 @@ export function useFileUpload(labels?: FileUploadLabels) {
     for (const f of accepted) {
       const ext = getExt(f.name);
       if (ext === '.pdf') {
-        immediateItems.push({ name: f.name, content: '', status: 'loading' });
+        immediateItems.push({ name: f.name, content: '', mimeType: f.type || mimeTypeForExtension(ext), size: f.size, status: 'loading' });
         pdfFiles.push(f);
       } else if (ext === '.doc' || ext === '.docx' || ext === '.docm') {
-        immediateItems.push({ name: f.name, content: '', status: 'loading' });
+        immediateItems.push({ name: f.name, content: '', mimeType: f.type || mimeTypeForExtension(ext), size: f.size, status: 'loading' });
         docxFiles.push(f);
       } else {
+        const payload = await readFilePayload(f);
         immediateItems.push({
           name: f.name,
-          content: await f.text(),
+          content: new TextDecoder().decode(payload.buffer),
+          mimeType: payload.mimeType,
+          size: payload.size,
+          dataBase64: payload.dataBase64,
           status: 'success',
         });
       }

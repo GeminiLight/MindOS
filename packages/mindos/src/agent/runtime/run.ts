@@ -23,6 +23,11 @@ import {
 } from './codex-app-server.js';
 import { compactRuntimeFailureMessage } from './runtime-errors.js';
 import type { MindosSelectedSkill } from '../selected-skills.js';
+import {
+  appendMindosRuntimeAttachmentPathContext,
+  materializeMindosRuntimeAttachments,
+  type MindosRuntimeAttachment,
+} from './attachments.js';
 
 export type MindosNativeAgentRuntimeKind = 'codex' | 'claude';
 
@@ -131,6 +136,7 @@ export type MindosAgentRuntimeAskOptions = {
   runtime: MindosAgentRuntimeSelection;
   cwd: string;
   prompt: string;
+  attachments?: MindosRuntimeAttachment[];
   selectedSkills?: MindosSelectedSkill[];
   permissionMode?: 'readonly' | 'agent';
   modelOverride?: string;
@@ -392,39 +398,50 @@ async function runClaudeTurnWithClient(
   state: { sessionId?: string },
 ): Promise<string | undefined> {
   let sessionId = state.sessionId;
-  const permissionPrompt = resolvedClient.usesCliPermissionPrompt
-    ? await options.services?.createClaudePermissionPrompt?.({
-      cwd: options.cwd,
-      signal: options.signal,
-    })
-    : undefined;
-  const turnEvents = resolvedClient.client.startTurn({
-    prompt: options.prompt,
-    cwd: options.cwd,
-    selectedSkills: options.selectedSkills,
-    ...(sessionId ? { sessionId } : {}),
-    ...(options.modelOverride ? { model: options.modelOverride } : {}),
-    ...(options.reasoningEffort ? { effort: options.reasoningEffort } : {}),
-    permissionMode: claudeCliPermissionModeForMindosMode(options.permissionMode),
-    ...(permissionPrompt ? { permissionPrompt } : {}),
-    signal: options.signal,
-  });
-  for await (const event of iterateWithNativeRuntimeAbort(turnEvents, options.signal)) {
-    if (event.type === 'session_id') {
-      sessionId = event.sessionId;
-      state.sessionId = event.sessionId;
-      options.send({
-        type: 'runtime_binding',
-        runtime: 'claude',
-        externalSessionId: event.sessionId,
+  const materialized = await materializeMindosRuntimeAttachments(options.attachments);
+  try {
+    const permissionPrompt = resolvedClient.usesCliPermissionPrompt
+      ? await options.services?.createClaudePermissionPrompt?.({
         cwd: options.cwd,
-      });
-      sendNativeRuntimeStatus(options, 'claude', 'Claude Code is connected and working in this chat.');
-      continue;
+        signal: options.signal,
+      })
+      : undefined;
+    const prompt = appendMindosRuntimeAttachmentPathContext(
+      options.prompt,
+      materialized.attachments,
+      { includeImages: true },
+    );
+    const turnEvents = resolvedClient.client.startTurn({
+      prompt,
+      cwd: options.cwd,
+      attachments: materialized.attachments,
+      selectedSkills: options.selectedSkills,
+      ...(sessionId ? { sessionId } : {}),
+      ...(options.modelOverride ? { model: options.modelOverride } : {}),
+      ...(options.reasoningEffort ? { effort: options.reasoningEffort } : {}),
+      permissionMode: claudeCliPermissionModeForMindosMode(options.permissionMode),
+      ...(permissionPrompt ? { permissionPrompt } : {}),
+      signal: options.signal,
+    });
+    for await (const event of iterateWithNativeRuntimeAbort(turnEvents, options.signal)) {
+      if (event.type === 'session_id') {
+        sessionId = event.sessionId;
+        state.sessionId = event.sessionId;
+        options.send({
+          type: 'runtime_binding',
+          runtime: 'claude',
+          externalSessionId: event.sessionId,
+          cwd: options.cwd,
+        });
+        sendNativeRuntimeStatus(options, 'claude', 'Claude Code is connected and working in this chat.');
+        continue;
+      }
+      options.send(event);
     }
-    options.send(event);
+    return sessionId;
+  } finally {
+    await materialized.cleanup();
   }
-  return sessionId;
 }
 
 function shouldFallbackFromClaudeSdkTurnError(error: Error, signal?: AbortSignal): boolean {
@@ -480,13 +497,21 @@ async function runCodexAskSession(options: MindosAgentRuntimeAskOptions): Promis
       if (threadId) void client?.interruptTurn?.({ threadId }).catch(() => {});
     };
     options.signal?.addEventListener('abort', abortListener, { once: true });
+    let materialized: Awaited<ReturnType<typeof materializeMindosRuntimeAttachments>> | undefined;
     try {
+      materialized = await materializeMindosRuntimeAttachments(options.attachments);
+      const prompt = appendMindosRuntimeAttachmentPathContext(
+        options.prompt,
+        materialized.attachments,
+        { includeImages: true },
+      );
       const turnNotifications = client.startTurn({
         threadId,
         cwd: options.cwd,
         input: buildCodexTurnInput({
-          prompt: options.prompt,
+          prompt,
           selectedSkills: options.selectedSkills,
+          attachments: materialized.attachments,
         }),
         ...(options.modelOverride ? { model: options.modelOverride } : {}),
         ...(options.reasoningEffort ? { effort: options.reasoningEffort } : {}),
@@ -502,6 +527,7 @@ async function runCodexAskSession(options: MindosAgentRuntimeAskOptions): Promis
         }
       }
     } finally {
+      await materialized?.cleanup();
       options.signal?.removeEventListener('abort', abortListener);
     }
     throwIfNativeRuntimeTimedOut(options.signal);

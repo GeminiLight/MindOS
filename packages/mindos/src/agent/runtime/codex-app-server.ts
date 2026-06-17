@@ -13,6 +13,10 @@ import {
   mindosSelectedSkillNames,
   type MindosSelectedSkill,
 } from '../selected-skills.js';
+import {
+  getMindosRuntimeAttachmentImages,
+  type MindosRuntimeAttachment,
+} from './attachments.js';
 
 export type CodexAppServerClientInfo = {
   name: string;
@@ -70,7 +74,11 @@ export type CodexAppServerClientOptions = {
   handleServerRequest?: (request: CodexAppServerServerRequest) => Promise<unknown> | unknown;
 };
 
-export type CodexTurnInput = Array<{ type: 'text'; text: string }>;
+export type CodexTurnInput = Array<
+  | { type: 'text'; text: string }
+  | { type: 'image'; url: string }
+  | { type: 'localImage'; path: string }
+>;
 
 export type CodexThread = Record<string, unknown> & {
   id: string;
@@ -157,11 +165,19 @@ export type CodexAppServerClient = {
 export function buildCodexTurnInput(input: {
   prompt: string;
   selectedSkills?: MindosSelectedSkill[];
+  attachments?: MindosRuntimeAttachment[];
 }): CodexTurnInput {
-  return [{
+  const textInput: CodexTurnInput[number] = {
     type: 'text',
     text: renderCodexTextWithSkillMarkers(input.prompt, input.selectedSkills),
-  }];
+  };
+  const imageInputs = getMindosRuntimeAttachmentImages(input.attachments)
+    .flatMap((attachment): CodexTurnInput => {
+      if (attachment.path) return [{ type: 'localImage', path: attachment.path }];
+      return [];
+    });
+
+  return [textInput, ...imageInputs];
 }
 
 export function renderCodexTextWithSkillMarkers(

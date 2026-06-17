@@ -24,11 +24,19 @@ export type MindosRuntimeSessionBinding = {
   updatedAt: number;
 };
 
+export type MindosUploadedFile = {
+  name: string;
+  content: string;
+  mimeType?: string;
+  size?: number;
+  dataBase64?: string;
+};
+
 export type MindosAskStreamRequest = {
   messages: MindosAskMessage[];
   currentFile?: string;
   attachedFiles?: string[];
-  uploadedFiles?: Array<{ name: string; content: string }>;
+  uploadedFiles?: MindosUploadedFile[];
   maxSteps?: number;
   mode?: 'agent' | 'organize';
   selectedRuntime?: MindosSelectedRuntime | null;
@@ -99,11 +107,17 @@ function parseAskStreamRequest(body: unknown):
   };
 }
 
-function normalizeUploadedFiles(files: unknown[]): Array<{ name: string; content: string }> {
+function normalizeUploadedFiles(files: unknown[]): MindosUploadedFile[] {
   return files
     .filter((file): file is Record<string, unknown> => !!file && typeof file === 'object')
     .filter((file) => typeof file.name === 'string' && typeof file.content === 'string')
-    .map((file) => ({ name: file.name as string, content: file.content as string }));
+    .map((file) => ({
+      name: file.name as string,
+      content: file.content as string,
+      ...(typeof file.mimeType === 'string' && file.mimeType.trim() ? { mimeType: file.mimeType } : {}),
+      ...(typeof file.size === 'number' && Number.isFinite(file.size) ? { size: file.size } : {}),
+      ...(typeof file.dataBase64 === 'string' && file.dataBase64 ? { dataBase64: file.dataBase64 } : {}),
+    }));
 }
 
 function isSelectedAcpAgent(value: unknown): value is { id: string; name: string } | null {
