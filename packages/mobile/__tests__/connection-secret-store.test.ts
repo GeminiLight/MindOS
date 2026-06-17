@@ -17,6 +17,13 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
   },
 }));
 
+vi.mock('expo-secure-store', () => ({
+  isAvailableAsync: vi.fn(() => Promise.resolve(false)),
+  getItemAsync: vi.fn(() => Promise.resolve(null)),
+  setItemAsync: vi.fn(() => Promise.resolve()),
+  deleteItemAsync: vi.fn(() => Promise.resolve()),
+}));
+
 import {
   LEGACY_AUTH_TOKEN_STORAGE_KEY,
   clearConnectionAuthToken,
@@ -72,5 +79,23 @@ describe('connection secret store', () => {
 
     await expect(persistConnectionAuthToken('secret')).rejects.toThrow('secure store failed');
     expect(storage.has(LEGACY_AUTH_TOKEN_STORAGE_KEY)).toBe(false);
+  });
+
+  it('does not require secure storage when there is no token to persist', async () => {
+    setSecureTokenStoreAdapterForTests(null);
+    storage.set(LEGACY_AUTH_TOKEN_STORAGE_KEY, 'old-token');
+
+    await expect(persistConnectionAuthToken('')).resolves.toBeUndefined();
+    expect(storage.has(LEGACY_AUTH_TOKEN_STORAGE_KEY)).toBe(false);
+  });
+
+  it('still surfaces secure delete failures when secure storage is available', async () => {
+    setSecureTokenStoreAdapterForTests({
+      getItemAsync: vi.fn(() => Promise.resolve(null)),
+      setItemAsync: vi.fn(() => Promise.resolve()),
+      deleteItemAsync: vi.fn(() => Promise.reject(new Error('delete failed'))),
+    });
+
+    await expect(persistConnectionAuthToken('')).rejects.toThrow('delete failed');
   });
 });

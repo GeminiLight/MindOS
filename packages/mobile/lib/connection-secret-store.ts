@@ -30,22 +30,35 @@ export async function readConnectionAuthToken(): Promise<string> {
 }
 
 export async function persistConnectionAuthToken(token?: string): Promise<void> {
-  const adapter = await getSecureStoreAdapter();
   const trimmed = token?.trim() ?? '';
   if (trimmed) {
+    const adapter = await getSecureStoreAdapter();
     await adapter.setItemAsync(SECURE_AUTH_TOKEN_KEY, trimmed);
     await AsyncStorage.removeItem(LEGACY_AUTH_TOKEN_STORAGE_KEY).catch(() => {});
     return;
   }
 
-  await adapter.deleteItemAsync(SECURE_AUTH_TOKEN_KEY);
+  const adapter = await getOptionalSecureStoreAdapter();
+  if (adapter) {
+    await adapter.deleteItemAsync(SECURE_AUTH_TOKEN_KEY);
+  }
   await AsyncStorage.removeItem(LEGACY_AUTH_TOKEN_STORAGE_KEY).catch(() => {});
 }
 
 export async function clearConnectionAuthToken(): Promise<void> {
-  const adapter = await getSecureStoreAdapter();
-  await adapter.deleteItemAsync(SECURE_AUTH_TOKEN_KEY);
+  const adapter = await getOptionalSecureStoreAdapter();
+  if (adapter) {
+    await adapter.deleteItemAsync(SECURE_AUTH_TOKEN_KEY);
+  }
   await AsyncStorage.removeItem(LEGACY_AUTH_TOKEN_STORAGE_KEY).catch(() => {});
+}
+
+async function getOptionalSecureStoreAdapter(): Promise<SecureTokenStoreAdapter | null> {
+  try {
+    return await getSecureStoreAdapter();
+  } catch {
+    return null;
+  }
 }
 
 async function getSecureStoreAdapter(): Promise<SecureTokenStoreAdapter> {

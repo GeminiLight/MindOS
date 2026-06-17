@@ -23,6 +23,7 @@ import {
   getSearchEmptyState,
   getSearchErrorMessage,
 } from '@/lib/search-state';
+import { viewFileHref } from '@/lib/mobile-navigation';
 import { colors, hairlineWidth, hitSlop, radius, spacing, typography } from '@/lib/theme';
 import type { SearchResult } from '@/lib/types';
 
@@ -153,7 +154,7 @@ export default function SearchScreen() {
         renderItem={({ item }) => (
           <Pressable
             style={({ pressed }) => [styles.resultRow, pressed && styles.resultRowPressed]}
-            onPress={() => router.push(`/view/${item.path}` as any)}
+            onPress={() => router.push(viewFileHref(item.path))}
             accessibilityRole="button"
             accessibilityLabel={`Open ${item.path}`}
           >
@@ -169,7 +170,7 @@ export default function SearchScreen() {
         ListEmptyComponent={
           emptyState ? (
             <EmptyState
-              icon={emptyState.icon as any}
+              icon={emptyState.icon}
               title={emptyState.title}
               message={emptyState.message}
               actionLabel={emptyState.actionLabel}

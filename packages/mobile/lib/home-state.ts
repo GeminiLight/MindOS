@@ -1,3 +1,5 @@
+import type { MobileIconName } from './mobile-icons';
+
 export interface HomeEmptyStateInput {
   fileCount: number;
   spaceCount: number;
@@ -6,7 +8,7 @@ export interface HomeEmptyStateInput {
 }
 
 export interface HomeEmptyState {
-  icon: string;
+  icon: MobileIconName;
   title: string;
   message: string;
   actionLabel: string;

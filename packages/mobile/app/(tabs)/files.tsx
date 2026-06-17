@@ -4,8 +4,6 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   View,
-  Text,
-  TextInput,
   FlatList,
   Pressable,
   RefreshControl,
@@ -16,12 +14,17 @@ import {
 } from 'react-native';
 import { ActionSheetIOS, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { mindosClient } from '@/lib/api-client';
 import TextInputModal from '@/components/TextInputModal';
-import FilesErrorBanner from '@/components/files/FilesErrorBanner';
 import Breadcrumb from '@/components/Breadcrumb';
+import MindTextInput from '@/components/ui/MindTextInput';
+import {
+  EmptyState,
+  InlineBanner,
+  ListRow,
+  MindScreen,
+} from '@/components/ui/MobileScaffold';
 import {
   getFilesErrorMessage,
   getFilesTabViewState,
@@ -30,6 +33,9 @@ import {
   normalizeRenameTarget,
 } from '@/lib/files-tab-state';
 import { getChildrenAtPath, getParentPath, sortFileNodes } from '@/lib/file-tree';
+import { getFileNodeIcon } from '@/lib/mobile-icons';
+import { viewFileHref } from '@/lib/mobile-navigation';
+import { colors, hairlineWidth, hitSlop, minTouchTarget, radius, shadows, spacing, typography } from '@/lib/theme';
 import type { FileNode } from '@/lib/types';
 
 export default function FilesScreen() {
@@ -87,6 +93,32 @@ export default function FilesScreen() {
 
   const viewState = getFilesTabViewState(currentChildren, error);
 
+  const openFile = useCallback((filePath: string) => {
+    router.push(viewFileHref(filePath));
+  }, [router]);
+
+  const resetCreateFileDraft = useCallback(() => {
+    setShowNewFile(false);
+    setNewFileName('');
+  }, []);
+
+  const promptOpenExistingFile = useCallback((baseName: string, filePath: string) => {
+    Alert.alert(
+      'File Exists',
+      `"${baseName}" already exists. Open it instead?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Open',
+          onPress: () => {
+            resetCreateFileDraft();
+            openFile(filePath);
+          },
+        },
+      ],
+    );
+  }, [openFile, resetCreateFileDraft]);
+
   const handleCreateFile = useCallback(async () => {
     const normalized = normalizeNewMarkdownFileName(newFileName);
     if (!normalized.ok) {
@@ -100,58 +132,34 @@ export default function FilesScreen() {
     try {
       const exists = await mindosClient.fileExists(filePath);
       if (exists) {
-        Alert.alert(
-          'File Exists',
-          `"${baseName}" already exists. Open it instead?`,
-          [
-            { text: 'Cancel', style: 'cancel' },
-            {
-              text: 'Open',
-              onPress: () => {
-                setShowNewFile(false);
-                setNewFileName('');
-                router.push(`/view/${filePath}` as any);
-              },
-            },
-          ],
-        );
+        promptOpenExistingFile(baseName, filePath);
         return;
       }
       const created = await mindosClient.createFile(filePath, `# ${normalized.title}\n\n`);
       if (!created.ok && created.error === 'exists') {
-        Alert.alert(
-          'File Exists',
-          `"${baseName}" was created by another session. Open it instead?`,
-          [
-            { text: 'Cancel', style: 'cancel' },
-            {
-              text: 'Open',
-              onPress: () => {
-                setShowNewFile(false);
-                setNewFileName('');
-                router.push(`/view/${filePath}` as any);
-              },
-            },
-          ],
-        );
+        promptOpenExistingFile(baseName, filePath);
         return;
       }
-      setShowNewFile(false);
-      setNewFileName('');
+      resetCreateFileDraft();
       await load();
-      router.push(`/view/${filePath}` as any);
+      openFile(filePath);
     } catch (e) {
       Alert.alert('Error', (e as Error).message);
     } finally {
       setCreating(false);
     }
-  }, [newFileName, currentPath, load, router]);
+  }, [newFileName, currentPath, load, openFile, promptOpenExistingFile, resetCreateFileDraft]);
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
-        <ActivityIndicator color="#c8873a" style={{ marginTop: 40 }} />
-      </SafeAreaView>
+      <MindScreen>
+        <EmptyState
+          icon="folder-open-outline"
+          title="Loading files"
+          message="Refreshing the mobile file index."
+          loading
+        />
+      </MindScreen>
     );
   }
 
@@ -268,36 +276,27 @@ export default function FilesScreen() {
     }
   };
 
-  function iconForNode(node: FileNode) {
-    if (node.type === 'directory') {
-      return node.isSpace ? 'layers-outline' : 'folder-outline';
-    }
-    if (node.extension === '.csv') return 'grid-outline';
-    return 'document-text-outline';
-  }
-
   const handleItemPress = (item: FileNode) => {
     if (item.type === 'directory') {
       setCurrentPath(item.path);
     } else {
-      router.push(`/view/${item.path}` as any);
+      openFile(item.path);
     }
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['left', 'right']}>
+    <MindScreen>
       {/* Breadcrumb navigation */}
       <Breadcrumb currentPath={currentPath} onNavigate={setCurrentPath} />
 
       {/* New file input */}
       {showNewFile && (
         <View style={styles.newFileBar}>
-          <TextInput
+          <MindTextInput
             style={styles.newFileInput}
             value={newFileName}
             onChangeText={setNewFileName}
             placeholder="File name..."
-            placeholderTextColor="#78716c"
             autoFocus
             autoCapitalize="none"
             autoCorrect={false}
@@ -310,16 +309,19 @@ export default function FilesScreen() {
             disabled={!newFileName.trim() || creating}
           >
             {creating ? (
-              <ActivityIndicator size="small" color="#fff" />
+              <ActivityIndicator size="small" color={colors.white} />
             ) : (
-              <Ionicons name="checkmark" size={18} color="#fff" />
+              <Ionicons name="checkmark" size={18} color={colors.white} />
             )}
           </Pressable>
           <Pressable
             style={styles.newFileCancelBtn}
-            onPress={() => { setShowNewFile(false); setNewFileName(''); }}
+            onPress={resetCreateFileDraft}
+            hitSlop={hitSlop}
+            accessibilityRole="button"
+            accessibilityLabel="Cancel new file"
           >
-            <Ionicons name="close" size={18} color="#78716c" />
+            <Ionicons name="close" size={18} color={colors.textSubtle} />
           </Pressable>
         </View>
       )}
@@ -328,45 +330,46 @@ export default function FilesScreen() {
         data={viewState.tree}
         keyExtractor={(item) => item.path}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#c8873a" />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.amber} />
         }
-        ListHeaderComponent={viewState.banner ? <FilesErrorBanner banner={viewState.banner} onRetry={load} /> : null}
+        contentContainerStyle={viewState.showEmptyState ? styles.emptyList : undefined}
+        initialNumToRender={18}
+        windowSize={7}
+        removeClippedSubviews={Platform.OS === 'android'}
+        ListHeaderComponent={viewState.banner ? (
+          <View style={styles.bannerPad}>
+            <InlineBanner
+              tone="error"
+              title={viewState.banner.title}
+              message={viewState.banner.message}
+              actionLabel={viewState.banner.showRetry ? 'Retry' : undefined}
+              onAction={viewState.banner.showRetry ? load : undefined}
+            />
+          </View>
+        ) : null}
         renderItem={({ item }) => (
-          <Pressable
-            style={styles.row}
+          <ListRow
+            icon={getFileNodeIcon(item)}
+            iconColor={item.isSpace ? colors.amber : colors.textMuted}
+            title={item.name}
+            subtitle={item.type === 'directory'
+              ? `${item.children?.length ?? 0} items`
+              : item.path}
             onPress={() => handleItemPress(item)}
             onLongPress={() => handleLongPress(item)}
-          >
-            <Ionicons
-              name={iconForNode(item) as any}
-              size={20}
-              color={item.isSpace ? '#c8873a' : '#a8a29e'}
-            />
-            <Text style={styles.name} numberOfLines={1}>{item.name}</Text>
-            {item.type === 'directory' && (
-              <Ionicons name="chevron-forward" size={16} color="#44403c" />
-            )}
-          </Pressable>
+            accessibilityLabel={`Open ${item.path}`}
+          />
         )}
         ListEmptyComponent={viewState.showEmptyState ? (
-          <View style={styles.empty}>
-            <Ionicons
-              name={currentPath ? 'folder-open-outline' : 'document-text-outline'}
-              size={48}
-              color="#44403c"
-            />
-            <Text style={styles.emptyText}>
-              {currentPath ? 'This folder is empty' : 'No files yet'}
-            </Text>
-            <Pressable
-              style={styles.createFirstBtn}
-              onPress={() => setShowNewFile(true)}
-            >
-              <Text style={styles.createFirstText}>
-                {currentPath ? 'Create a note here' : 'Create your first note'}
-              </Text>
-            </Pressable>
-          </View>
+          <EmptyState
+            icon={currentPath ? 'folder-open-outline' : 'document-text-outline'}
+            title={currentPath ? 'This folder is empty' : 'No files yet'}
+            message={currentPath
+              ? 'Create a note here to keep this context together.'
+              : 'Create your first note, or pull to refresh if this device was just connected.'}
+            actionLabel={currentPath ? 'Create a note here' : 'Create your first note'}
+            onAction={() => setShowNewFile(true)}
+          />
         ) : null}
       />
 
@@ -375,8 +378,11 @@ export default function FilesScreen() {
         <Pressable
           style={({ pressed }) => [styles.fab, pressed && styles.fabPressed]}
           onPress={() => setShowNewFile(true)}
+          hitSlop={hitSlop}
+          accessibilityRole="button"
+          accessibilityLabel="Create new note"
         >
-          <Ionicons name="add" size={24} color="#fff" />
+          <Ionicons name="add" size={24} color={colors.white} />
         </Pressable>
       )}
 
@@ -391,88 +397,67 @@ export default function FilesScreen() {
         onCancel={() => { setRenameModalVisible(false); setRenameTarget(null); }}
         submitText="Rename"
       />
-    </SafeAreaView>
+    </MindScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#1a1917' },
   newFileBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#44403c',
-    backgroundColor: '#292524',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderBottomWidth: hairlineWidth,
+    borderBottomColor: colors.borderSubtle,
+    backgroundColor: colors.surface,
   },
   newFileInput: {
     flex: 1,
-    backgroundColor: '#1a1917',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    color: '#fafaf9',
-    fontSize: 14,
+    minHeight: minTouchTarget,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    fontSize: typography.body,
   },
   newFileBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 6,
-    backgroundColor: '#c8873a',
+    width: minTouchTarget,
+    height: minTouchTarget,
+    borderRadius: radius.md,
+    backgroundColor: colors.amber,
     justifyContent: 'center',
     alignItems: 'center',
   },
   newFileBtnDisabled: { opacity: 0.4 },
   newFileCancelBtn: {
-    width: 32,
-    height: 32,
+    width: minTouchTarget,
+    height: minTouchTarget,
+    borderRadius: radius.md,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    gap: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#292524',
+  bannerPad: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.xs,
   },
-  name: { flex: 1, fontSize: 15, color: '#fafaf9' },
-  empty: {
-    alignItems: 'center',
-    paddingTop: 80,
-    gap: 12,
+  emptyList: {
+    flexGrow: 1,
   },
-  emptyText: { fontSize: 15, color: '#78716c' },
-  createFirstBtn: {
-    backgroundColor: '#c8873a',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 8,
-    marginTop: 8,
-  },
-  createFirstText: { color: '#fff', fontWeight: '600', fontSize: 14 },
   fab: {
     position: 'absolute',
-    bottom: 24,
-    right: 24,
+    bottom: spacing.xl,
+    right: spacing.xl,
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#c8873a',
+    backgroundColor: colors.amber,
     justifyContent: 'center',
     alignItems: 'center',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
+    ...shadows.floating,
   },
   fabPressed: {
-    transform: [{ scale: 0.9 }],
-    opacity: 0.8,
+    transform: [{ scale: 0.96 }],
+    opacity: 0.86,
   },
 });

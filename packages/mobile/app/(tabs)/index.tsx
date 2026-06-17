@@ -26,6 +26,8 @@ import { mindosClient } from '@/lib/api-client';
 import { useConnectionStore } from '@/lib/connection-store';
 import { flattenFiles, formatRelativeTime } from '@/lib/file-tree';
 import { getHomeEmptyState } from '@/lib/home-state';
+import { getFileNodeIcon } from '@/lib/mobile-icons';
+import { filesTabHref, viewFileHref } from '@/lib/mobile-navigation';
 import { colors, radius, spacing, typography } from '@/lib/theme';
 import type { FileNode } from '@/lib/types';
 
@@ -171,7 +173,7 @@ export default function HomeScreen() {
                     <Pressable
                       key={space.path}
                       style={({ pressed }) => [styles.spaceCard, pressed && styles.pressed]}
-                      onPress={() => router.push(`/view/${space.path}` as any)}
+                      onPress={() => router.push(viewFileHref(space.path))}
                       accessibilityRole="button"
                       accessibilityLabel={`Open ${space.name}`}
                     >
@@ -199,19 +201,19 @@ export default function HomeScreen() {
         }
         renderItem={({ item }) => (
           <ListRow
-            icon={item.extension === '.csv' ? 'grid-outline' : 'document-text-outline'}
+            icon={getFileNodeIcon(item)}
             title={item.name}
             subtitle={item.mtime ? formatRelativeTime(item.mtime) : item.path}
-            onPress={() => router.push(`/view/${item.path}` as any)}
+            onPress={() => router.push(viewFileHref(item.path))}
           />
         )}
         ListEmptyComponent={
           <EmptyState
-            icon={(emptyState?.icon ?? 'archive-outline') as any}
+            icon={emptyState?.icon ?? 'archive-outline'}
             title={emptyState?.title ?? 'No recent activity yet'}
             message={emptyState?.message ?? 'Open Files to browse your notes.'}
             actionLabel={emptyState?.actionLabel ?? 'Open Files'}
-            onAction={() => router.push('/(tabs)/files' as any)}
+            onAction={() => router.push(filesTabHref)}
           />
         }
       />

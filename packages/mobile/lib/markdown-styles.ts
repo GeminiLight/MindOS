@@ -1,8 +1,8 @@
-import type { StyleSheet } from 'react-native';
+import type { ImageStyle, TextStyle, ViewStyle } from 'react-native';
 
 export type MarkdownStyleVariant = 'document' | 'bubble';
 
-export type MarkdownStyleMap = StyleSheet.NamedStyles<any>;
+export type MarkdownStyleMap = Record<string, TextStyle | ViewStyle | ImageStyle>;
 
 const documentMarkdownStyles: MarkdownStyleMap = {
   body: { color: '#d6d3d1', fontSize: 15, lineHeight: 24 },

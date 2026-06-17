@@ -1,3 +1,5 @@
+import type { MobileIconName } from './mobile-icons';
+
 export interface SearchStatusInput {
   query: string;
   searched: boolean;
@@ -7,7 +9,7 @@ export interface SearchStatusInput {
 }
 
 export interface SearchEmptyState {
-  icon: string;
+  icon: MobileIconName;
   title: string;
   message: string;
   actionLabel?: string;

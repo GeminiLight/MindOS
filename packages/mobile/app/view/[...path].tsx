@@ -20,6 +20,8 @@ import Markdown from 'react-native-markdown-display';
 import { mindosClient } from '@/lib/api-client';
 import { findNode, sortFileNodes } from '@/lib/file-tree';
 import { getMarkdownStyles } from '@/lib/markdown-styles';
+import { getFileNodeIcon } from '@/lib/mobile-icons';
+import { viewFileHref } from '@/lib/mobile-navigation';
 import { resolveReaderErrorMessage } from '@/lib/view-target-state';
 import MarkdownEditor, { clearMarkdownDraft } from '@/components/editor/MarkdownEditor';
 import CSVTable from '@/components/CSVTable';
@@ -212,12 +214,10 @@ export default function ViewScreen() {
           renderItem={({ item }) => (
             <Pressable
               style={styles.row}
-              onPress={() => router.push(`/view/${item.path}` as any)}
+              onPress={() => router.push(viewFileHref(item.path))}
             >
               <Ionicons
-                name={item.type === 'directory'
-                  ? (item.isSpace ? 'layers-outline' : 'folder-outline')
-                  : 'document-text-outline'}
+                name={getFileNodeIcon(item)}
                 size={20}
                 color={item.isSpace ? '#c8873a' : '#a8a29e'}
               />

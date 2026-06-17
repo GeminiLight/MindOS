@@ -4,6 +4,7 @@
 import { useRef, useEffect } from 'react';
 import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { colors, hairlineWidth, hitSlop, radius, spacing, typography } from '@/lib/theme';
 
 interface BreadcrumbProps {
   currentPath: string;
@@ -29,8 +30,10 @@ export default function Breadcrumb({ currentPath, onNavigate }: BreadcrumbProps)
   const segments = buildSegments(currentPath);
 
   useEffect(() => {
-    // Auto-scroll to the end when path changes
-    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50);
+    const frame = requestAnimationFrame(() => {
+      scrollRef.current?.scrollToEnd({ animated: true });
+    });
+    return () => cancelAnimationFrame(frame);
   }, [currentPath]);
 
   return (
@@ -44,9 +47,11 @@ export default function Breadcrumb({ currentPath, onNavigate }: BreadcrumbProps)
         <Pressable
           style={styles.segment}
           onPress={() => onNavigate('')}
-          hitSlop={8}
+          hitSlop={hitSlop}
+          accessibilityRole="button"
+          accessibilityLabel="Open file root"
         >
-          <Ionicons name="home-outline" size={14} color={segments.length === 0 ? '#c8873a' : '#a8a29e'} />
+          <Ionicons name="home-outline" size={14} color={segments.length === 0 ? colors.amber : colors.textMuted} />
           <Text style={[styles.segmentText, segments.length === 0 && styles.segmentTextActive]}>
             Files
           </Text>
@@ -56,11 +61,13 @@ export default function Breadcrumb({ currentPath, onNavigate }: BreadcrumbProps)
           const isLast = i === segments.length - 1;
           return (
             <View key={seg.path} style={styles.segmentRow}>
-              <Ionicons name="chevron-forward" size={12} color="#57534e" />
+              <Ionicons name="chevron-forward" size={12} color={colors.textSubtle} />
               <Pressable
                 style={styles.segment}
                 onPress={() => onNavigate(seg.path)}
-                hitSlop={8}
+                hitSlop={hitSlop}
+                accessibilityRole="button"
+                accessibilityLabel={`Open ${seg.path}`}
               >
                 <Text
                   style={[styles.segmentText, isLast && styles.segmentTextActive]}
@@ -79,37 +86,37 @@ export default function Breadcrumb({ currentPath, onNavigate }: BreadcrumbProps)
 
 const styles = StyleSheet.create({
   container: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#292524',
-    backgroundColor: '#1c1917',
+    borderBottomWidth: hairlineWidth,
+    borderBottomColor: colors.borderSubtle,
+    backgroundColor: colors.background,
   },
   scroll: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    gap: 2,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    gap: spacing.xs,
   },
   segmentRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
+    gap: spacing.xs,
   },
   segment: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingVertical: 2,
-    paddingHorizontal: 4,
-    borderRadius: 4,
+    gap: spacing.xs,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.xs,
+    borderRadius: radius.sm,
   },
   segmentText: {
-    fontSize: 13,
-    color: '#a8a29e',
+    fontSize: typography.caption,
+    color: colors.textMuted,
     maxWidth: 120,
   },
   segmentTextActive: {
-    color: '#c8873a',
+    color: colors.amber,
     fontWeight: '600',
   },
 });
