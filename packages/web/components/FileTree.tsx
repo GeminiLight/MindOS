@@ -92,11 +92,14 @@ const ROW_CONTENT_VISIBILITY = '[content-visibility:auto] [contain-intrinsic-blo
 
 let markdownEditorWarmup: Promise<unknown> | null = null;
 
-function warmMarkdownEditorChunkIfNeeded() {
-  if (markdownEditorWarmup) return;
-  if (typeof window === 'undefined') return;
+function shouldWarmMarkdownEditorChunk(): boolean {
+  if (typeof window === 'undefined') return false;
   const mode = window.localStorage.getItem('md-view-mode');
-  if (mode && mode !== 'wysiwyg') return;
+  return mode === null || mode === 'wysiwyg';
+}
+
+function warmMarkdownEditorChunkIfNeeded() {
+  if (markdownEditorWarmup || !shouldWarmMarkdownEditorChunk()) return;
   markdownEditorWarmup = import('@/components/WysiwygEditor').catch(() => {
     markdownEditorWarmup = null;
   });

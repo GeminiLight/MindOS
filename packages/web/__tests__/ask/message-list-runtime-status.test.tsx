@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from 'vitest';
-import React from 'react';
+import React, { act } from 'react';
+import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import MessageList from '@/components/ask/MessageList';
 import type { Message } from '@/lib/types';
@@ -26,6 +27,90 @@ describe('MessageList runtime status rendering', () => {
     generating: 'Generating',
     copyMessage: 'Copy',
   };
+
+  it('coalesces streaming auto-scroll work into a single animation frame', async () => {
+    (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    const frames: FrameRequestCallback[] = [];
+    const scrollTo = vi.fn();
+    const originalRaf = window.requestAnimationFrame;
+    const originalCancelRaf = window.cancelAnimationFrame;
+    const originalScrollTo = HTMLElement.prototype.scrollTo;
+    const originalScrollHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollHeight');
+
+    window.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
+      frames.push(callback);
+      return frames.length;
+    }) as typeof window.requestAnimationFrame;
+    window.cancelAnimationFrame = vi.fn() as typeof window.cancelAnimationFrame;
+    Object.defineProperty(HTMLElement.prototype, 'scrollTo', {
+      configurable: true,
+      value: scrollTo,
+    });
+    Object.defineProperty(HTMLElement.prototype, 'scrollHeight', {
+      configurable: true,
+      get: () => 640,
+    });
+
+    const renderMessages = async (content: string) => {
+      const messages: Message[] = [
+        { role: 'user', content: 'stream please', timestamp: 1 },
+        { role: 'assistant', content, timestamp: 2 },
+      ];
+      await act(async () => {
+        root.render(
+          <MessageList
+            messages={messages}
+            isLoading
+            loadingPhase="streaming"
+            emptyPrompt="Empty"
+            suggestions={[]}
+            onSuggestionClick={() => {}}
+            labels={labels}
+          />,
+        );
+      });
+    };
+
+    try {
+      await renderMessages('chunk 1');
+      await renderMessages('chunk 2');
+      await renderMessages('chunk 3');
+
+      expect(window.requestAnimationFrame).toHaveBeenCalledTimes(1);
+      expect(scrollTo).not.toHaveBeenCalled();
+
+      await act(async () => {
+        frames.shift()?.(performance.now());
+      });
+
+      expect(scrollTo).toHaveBeenCalledTimes(1);
+      expect(scrollTo).toHaveBeenCalledWith({ top: 640, behavior: 'instant' });
+    } finally {
+      await act(async () => {
+        root.unmount();
+      });
+      host.remove();
+      window.requestAnimationFrame = originalRaf;
+      window.cancelAnimationFrame = originalCancelRaf;
+      if (originalScrollTo) {
+        Object.defineProperty(HTMLElement.prototype, 'scrollTo', {
+          configurable: true,
+          value: originalScrollTo,
+        });
+      } else {
+        delete (HTMLElement.prototype as { scrollTo?: unknown }).scrollTo;
+      }
+      if (originalScrollHeight) {
+        Object.defineProperty(HTMLElement.prototype, 'scrollHeight', originalScrollHeight);
+      } else {
+        delete (HTMLElement.prototype as { scrollHeight?: unknown }).scrollHeight;
+      }
+      delete (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT;
+    }
+  });
 
   it('keeps completed message actions in floating docks outside the bubble flow', () => {
     const messages: Message[] = [

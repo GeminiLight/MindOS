@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback, useMemo, useTransition, memo } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo, useTransition, useDeferredValue, memo } from 'react';
 import { AlertCircle, Archive, GitFork, Loader2, RefreshCw, Search, Trash2, Pencil, Pin, PinOff, Link2, MessageSquare, SquarePen, X } from 'lucide-react';
 import type { AgentRuntimeIdentity, ChatSession, CodexThreadSummary } from '@/lib/types';
 import { sessionTitle } from '@/hooks/useAskSession';
@@ -63,6 +63,57 @@ function sessionPreview(s: ChatSession): string {
   return text.length > 60 ? `${text.slice(0, 60)}...` : text;
 }
 
+type RuntimeSessionSummary = ReturnType<typeof getRuntimeSessionSummary>;
+
+interface SessionHistoryMeta {
+  title: string;
+  preview: string;
+  runtimeSummary: RuntimeSessionSummary;
+  searchText: string;
+  hasListContent: boolean;
+}
+
+function normalizeSearchPart(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  return String(value).trim().toLowerCase();
+}
+
+function buildSessionHistoryMeta(session: ChatSession): SessionHistoryMeta {
+  const title = sessionTitle(session);
+  const preview = sessionPreview(session);
+  const runtimeSummary = getRuntimeSessionSummary(session);
+  const searchParts = [
+    title,
+    preview,
+    runtimeSummary?.idLabel,
+    runtimeSummary?.cwd,
+    runtimeSummary?.status,
+    runtimeSummary?.binding.externalSessionId,
+  ];
+
+  for (const message of session.messages) {
+    searchParts.push(message.content);
+  }
+
+  return {
+    title,
+    preview,
+    runtimeSummary,
+    searchText: searchParts.map(normalizeSearchPart).filter(Boolean).join('\n'),
+    hasListContent: session.messages.length > 0 || Boolean(runtimeSummary),
+  };
+}
+
+function buildCodexThreadSearchText(thread: CodexThreadSummary): string {
+  return [
+    thread.id,
+    thread.name,
+    thread.preview,
+    thread.cwd,
+    codexThreadStatus(thread),
+  ].map(normalizeSearchPart).filter(Boolean).join('\n');
+}
+
 function timestampMs(value: CodexThreadSummary['updatedAt'] | CodexThreadSummary['createdAt']): number | null {
   if (typeof value === 'number' && Number.isFinite(value)) {
     return value < 10_000_000_000 ? value * 1000 : value;
@@ -122,6 +173,9 @@ function SessionHistoryPanel({
   const clearTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const searchRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const normalizedQuery = query.trim().toLowerCase();
+  const deferredNormalizedQuery = useDeferredValue(normalizedQuery);
+  const searchQuery = normalizedQuery ? deferredNormalizedQuery : '';
 
   // Focus search on mount
   useEffect(() => { searchRef.current?.focus(); }, []);
@@ -132,39 +186,33 @@ function SessionHistoryPanel({
   // Clear timer cleanup
   useEffect(() => () => { if (clearTimer.current) clearTimeout(clearTimer.current); }, []);
 
+  const sessionMetaById = useMemo(() => {
+    const index = new Map<string, SessionHistoryMeta>();
+    for (const session of sessions) {
+      index.set(session.id, buildSessionHistoryMeta(session));
+    }
+    return index;
+  }, [sessions]);
+
+  const codexThreadSearchTextById = useMemo(() => {
+    const index = new Map<string, string>();
+    for (const thread of codexThreads) {
+      index.set(thread.id, buildCodexThreadSearchText(thread));
+    }
+    return index;
+  }, [codexThreads]);
+
   // Filter sessions by search query
   const filtered = useMemo(() => {
-    if (!query.trim()) return sessions;
-    const q = query.toLowerCase();
-    return sessions.filter(s => {
-      const title = sessionTitle(s).toLowerCase();
-      if (title.includes(q)) return true;
-      const runtimeSummary = getRuntimeSessionSummary(s);
-      if (
-        runtimeSummary &&
-        [
-          runtimeSummary.idLabel,
-          runtimeSummary.cwd,
-          runtimeSummary.status,
-          runtimeSummary.binding.externalSessionId,
-        ].filter(Boolean).some(value => String(value).toLowerCase().includes(q))
-      ) return true;
-      return s.messages.some(m => m.content.toLowerCase().includes(q));
-    });
-  }, [sessions, query]);
+    if (!searchQuery) return sessions;
+    return sessions.filter(s => sessionMetaById.get(s.id)?.searchText.includes(searchQuery));
+  }, [sessions, searchQuery, sessionMetaById]);
 
   const filteredCodexThreads = useMemo(() => {
     if (selectedAgentRuntime?.kind !== 'codex') return [];
-    if (!query.trim()) return codexThreads;
-    const q = query.toLowerCase();
-    return codexThreads.filter((thread) => [
-      thread.id,
-      thread.name,
-      thread.preview,
-      thread.cwd,
-      codexThreadStatus(thread),
-    ].filter(Boolean).some((value) => String(value).toLowerCase().includes(q)));
-  }, [codexThreads, query, selectedAgentRuntime?.kind]);
+    if (!searchQuery) return codexThreads;
+    return codexThreads.filter((thread) => codexThreadSearchTextById.get(thread.id)?.includes(searchQuery));
+  }, [codexThreads, codexThreadSearchTextById, searchQuery, selectedAgentRuntime?.kind]);
 
   // Group sessions by time
   const groups = useMemo(() => {
@@ -185,8 +233,14 @@ function SessionHistoryPanel({
     return { pinned, today, yesterday, week, older };
   }, [filtered]);
 
-  const pinnedCount = sessions.filter(s => s.pinned).length;
-  const totalCount = sessions.filter(s => s.messages.length > 0 || getRuntimeSessionSummary(s)).length;
+  const pinnedCount = useMemo(() => sessions.filter(s => s.pinned).length, [sessions]);
+  const totalCount = useMemo(() => {
+    let count = 0;
+    for (const session of sessions) {
+      if (sessionMetaById.get(session.id)?.hasListContent) count += 1;
+    }
+    return count;
+  }, [sessions, sessionMetaById]);
 
   const handleLoad = useCallback((id: string) => {
     startTransition(() => {
@@ -251,6 +305,7 @@ function SessionHistoryPanel({
             <SessionCard
               key={s.id}
               session={s}
+              meta={sessionMetaById.get(s.id)}
               isActive={s.id === activeSessionId}
               isRunning={runSummary.running.has(s.id)}
               isUnread={!runSummary.running.has(s.id) && runSummary.unread.has(s.id)}
@@ -555,11 +610,12 @@ function CodexThreadRow({
 // ── Session Card ──
 
 function SessionCard({
-  session: s, isActive, isRunning, isUnread, editing, editValue, onEditValueChange, inputRef,
+  session: s, meta, isActive, isRunning, isUnread, editing, editValue, onEditValueChange, inputRef,
   onLoad, onStartRename, onCommitRename, onCancelRename, onDelete, onTogglePin,
   ask,
 }: {
   session: ChatSession;
+  meta?: SessionHistoryMeta;
   isActive: boolean;
   isRunning: boolean;
   isUnread: boolean;
@@ -575,10 +631,10 @@ function SessionCard({
   onTogglePin: () => void;
   ask: Record<string, any>;
 }) {
-  const title = sessionTitle(s);
-  const preview = sessionPreview(s);
+  const title = meta?.title ?? sessionTitle(s);
+  const preview = meta?.preview ?? sessionPreview(s);
   const msgCount = s.messages.length;
-  const runtimeSummary = getRuntimeSessionSummary(s);
+  const runtimeSummary = meta?.runtimeSummary ?? getRuntimeSessionSummary(s);
 
   return (
     <div

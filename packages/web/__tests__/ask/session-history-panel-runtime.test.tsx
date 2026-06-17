@@ -82,6 +82,45 @@ describe('SessionHistoryPanel runtime session metadata', () => {
     (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
   });
 
+  it('keeps session message body search working through the cached search index', async () => {
+    const now = Date.now();
+    const sessions: ChatSession[] = [
+      {
+        id: 'deep-context',
+        title: 'Design review',
+        createdAt: now,
+        updatedAt: now,
+        messages: [
+          { role: 'user', content: 'Please inspect the quiet navigation latency regression.' },
+          { role: 'assistant', content: 'The likely cause is synchronous filtering.' },
+        ],
+      },
+      {
+        id: 'unrelated',
+        title: 'Release notes',
+        createdAt: now - 1000,
+        updatedAt: now - 1000,
+        messages: [{ role: 'user', content: 'Summarize the changelog.' }],
+      },
+    ];
+
+    const view = renderPanel(sessions);
+    const search = view.host.querySelector('input') as HTMLInputElement;
+
+    await act(async () => {
+      const setValue = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+      setValue?.call(search, 'latency regression');
+      search.dispatchEvent(new Event('input', { bubbles: true }));
+      search.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+
+    expect(view.host.textContent).toContain('Design review');
+    expect(view.host.textContent).toContain('quiet navigation latency regression');
+    expect(view.host.textContent).not.toContain('Release notes');
+
+    view.cleanup();
+  });
+
   it('shows linked native runtime session metadata and can search by external session id', async () => {
     const sessions: ChatSession[] = [
       {

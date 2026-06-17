@@ -91,7 +91,6 @@ describe('ViewPageClient frontmatter markdown mode', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
-    localStorage.setItem('md-view-mode', 'wysiwyg');
     (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     host = document.createElement('div');
     document.body.appendChild(host);
@@ -113,7 +112,7 @@ describe('ViewPageClient frontmatter markdown mode', () => {
     });
   }
 
-  it('opens markdown with frontmatter in source edit mode without mounting WYSIWYG', async () => {
+  it('opens existing frontmatter markdown in source edit mode when Edit is preferred', async () => {
     await act(async () => {
       root.render(
         <ViewPageClient
@@ -132,15 +131,16 @@ describe('ViewPageClient frontmatter markdown mode', () => {
 
     const editor = host.querySelector('[data-testid="markdown-editor"]');
     const view = host.querySelector('[data-testid="markdown-view"]');
+    const modeButton = [...host.querySelectorAll('button')]
+      .find(button => button.getAttribute('aria-label') === 'Markdown mode');
 
     expect(editor).not.toBeNull();
     expect(editor?.getAttribute('data-mode')).toBe('source');
     expect(view).toBeNull();
+    expect(modeButton?.textContent).toContain('Source');
   });
 
-  it('opens normal markdown in edit mode even when the previous local preference was preview', async () => {
-    localStorage.setItem('md-view-mode', 'preview');
-
+  it('opens existing normal markdown in WYSIWYG edit mode by default', async () => {
     await act(async () => {
       root.render(
         <ViewPageClient
@@ -159,9 +159,172 @@ describe('ViewPageClient frontmatter markdown mode', () => {
 
     const editor = host.querySelector('[data-testid="markdown-editor"]');
     const view = host.querySelector('[data-testid="markdown-view"]');
+    const modeButton = [...host.querySelectorAll('button')]
+      .find(button => button.getAttribute('aria-label') === 'Markdown mode');
 
     expect(editor).not.toBeNull();
+    expect(editor?.getAttribute('data-mode')).toBe('wysiwyg');
     expect(view).toBeNull();
+    expect(modeButton?.textContent).toContain('Edit');
+  });
+
+  it('honors the global preview preference across existing markdown files', async () => {
+    localStorage.setItem('md-view-mode', 'preview');
+
+    await act(async () => {
+      root.render(
+        <ViewPageClient
+          filePath="first.md"
+          content={'# First'}
+          extension="md"
+          saveAction={vi.fn()}
+        />,
+      );
+    });
+
+    await flushDeferredFileBody();
+
+    let editor = host.querySelector('[data-testid="markdown-editor"]');
+    let view = host.querySelector('[data-testid="markdown-view"]');
+    let modeButton = [...host.querySelectorAll('button')]
+      .find(button => button.getAttribute('aria-label') === 'Markdown mode');
+
+    expect(editor).toBeNull();
+    expect(view).not.toBeNull();
+    expect(modeButton?.textContent).toContain('View');
+
+    await act(async () => {
+      root.render(
+        <ViewPageClient
+          filePath="second.md"
+          content={'# Second'}
+          extension="md"
+          saveAction={vi.fn()}
+        />,
+      );
+    });
+
+    await flushDeferredFileBody();
+
+    editor = host.querySelector('[data-testid="markdown-editor"]');
+    view = host.querySelector('[data-testid="markdown-view"]');
+    modeButton = [...host.querySelectorAll('button')]
+      .find(button => button.getAttribute('aria-label') === 'Markdown mode');
+
+    expect(editor).toBeNull();
+    expect(view).not.toBeNull();
+    expect(modeButton?.textContent).toContain('View');
+  });
+
+  it('honors the global source preference for normal markdown files', async () => {
+    localStorage.setItem('md-view-mode', 'source');
+
+    await act(async () => {
+      root.render(
+        <ViewPageClient
+          filePath="source-mode.md"
+          content={'# Source Mode'}
+          extension="md"
+          saveAction={vi.fn()}
+        />,
+      );
+    });
+
+    await flushDeferredFileBody();
+
+    const editor = host.querySelector('[data-testid="markdown-editor"]');
+    const view = host.querySelector('[data-testid="markdown-view"]');
+    const modeButton = [...host.querySelectorAll('button')]
+      .find(button => button.getAttribute('aria-label') === 'Markdown mode');
+
+    expect(editor).not.toBeNull();
+    expect(editor?.getAttribute('data-mode')).toBe('source');
+    expect(view).toBeNull();
+    expect(modeButton?.textContent).toContain('Source');
+  });
+
+  it('remembers when the user switches back to Edit for later markdown files', async () => {
+    localStorage.setItem('md-view-mode', 'preview');
+
+    await act(async () => {
+      root.render(
+        <ViewPageClient
+          filePath="first.md"
+          content={'# First'}
+          extension="md"
+          saveAction={vi.fn()}
+        />,
+      );
+    });
+
+    await flushDeferredFileBody();
+
+    const modeButton = [...host.querySelectorAll('button')]
+      .find(button => button.getAttribute('aria-label') === 'Markdown mode');
+    expect(modeButton?.textContent).toContain('View');
+
+    await act(async () => {
+      modeButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    const editChoice = [...host.querySelectorAll('[role="menuitemradio"]')]
+      .find(item => item.textContent?.includes('Edit'));
+    expect(editChoice).toBeTruthy();
+
+    await act(async () => {
+      editChoice!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    const editorAfterEdit = host.querySelector('[data-testid="markdown-editor"]');
+    expect(editorAfterEdit).not.toBeNull();
+    expect(editorAfterEdit?.getAttribute('data-mode')).toBe('wysiwyg');
+    expect(localStorage.getItem('md-view-mode')).toBe('wysiwyg');
+
+    await act(async () => {
+      root.render(
+        <ViewPageClient
+          filePath="second.md"
+          content={'# Second'}
+          extension="md"
+          saveAction={vi.fn()}
+        />,
+      );
+    });
+
+    await flushDeferredFileBody();
+
+    const editorOnSecondFile = host.querySelector('[data-testid="markdown-editor"]');
+    const viewOnSecondFile = host.querySelector('[data-testid="markdown-view"]');
+    const secondModeButton = [...host.querySelectorAll('button')]
+      .find(button => button.getAttribute('aria-label') === 'Markdown mode');
+    expect(editorOnSecondFile).not.toBeNull();
+    expect(editorOnSecondFile?.getAttribute('data-mode')).toBe('wysiwyg');
+    expect(viewOnSecondFile).toBeNull();
+    expect(secondModeButton?.textContent).toContain('Edit');
+  });
+
+  it('keeps empty markdown immediately editable', async () => {
+    await act(async () => {
+      root.render(
+        <ViewPageClient
+          filePath="empty.md"
+          content=""
+          extension="md"
+          saveAction={vi.fn()}
+        />,
+      );
+    });
+
+    await flushDeferredFileBody();
+
+    const editor = host.querySelector('[data-testid="markdown-editor"]');
+    const view = host.querySelector('[data-testid="markdown-view"]');
+    const modeButton = [...host.querySelectorAll('button')]
+      .find(button => button.getAttribute('aria-label') === 'Markdown mode');
+
+    expect(editor).not.toBeNull();
+    expect(editor?.getAttribute('data-mode')).toBe('wysiwyg');
+    expect(view).toBeNull();
+    expect(modeButton?.textContent).toContain('Edit');
   });
 
   it('shows markdown mode choices from a compact dropdown in Edit, View, Source order', async () => {

@@ -24,9 +24,9 @@ export default function MarkdownEditor({ value, onChange, viewMode }: MarkdownEd
 
   return (
     <>
-      {/* WYSIWYG normalizes markdown on mount, so do not mount it for YAML frontmatter notes. */}
-      {!hasFrontmatter && (
-        <div className="min-h-[50vh] min-w-0" style={{ display: isWysiwyg ? undefined : 'none' }}>
+      {/* WYSIWYG normalizes markdown on mount; keep it off the path for frontmatter/source notes. */}
+      {isWysiwyg && (
+        <div className="min-h-[50vh] min-w-0">
           <WysiwygEditor value={value} onChange={onChange} />
         </div>
       )}

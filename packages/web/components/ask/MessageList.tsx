@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useEffect, memo, useState, useCallback, useMemo, type CSSProperties, type ReactNode } from 'react';
+import { useRef, useEffect, memo, useState, useCallback, useMemo, useDeferredValue, type CSSProperties, type ReactNode } from 'react';
 import { Loader2, AlertCircle, Wrench, WifiOff, Zap, Copy, Check, ArrowDown, FolderInput, Search, PenLine, Lightbulb, FileText, Paperclip, Bot, Sparkles } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -154,7 +154,9 @@ const AssistantAgentBadge = memo(function AssistantAgentBadge({ agentName, agent
 
 const AssistantMessage = memo(function AssistantMessage({ content, isStreaming }: { content: string; isStreaming: boolean }) {
   const cleaned = stripThinkingTags(content);
-  if (!cleaned && !isStreaming) return null;
+  const deferredCleaned = useDeferredValue(cleaned);
+  const renderedContent = isStreaming ? deferredCleaned : cleaned;
+  if (!renderedContent && !isStreaming) return null;
   return (
     <div className="prose prose-sm prose-panel dark:prose-invert max-w-none text-foreground
       prose-p:my-2 prose-p:leading-relaxed
@@ -169,7 +171,7 @@ const AssistantMessage = memo(function AssistantMessage({ content, isStreaming }
       prose-strong:text-foreground prose-strong:font-semibold
       prose-table:text-xs prose-th:py-1.5 prose-td:py-1
     ">
-      <ReactMarkdown remarkPlugins={MARKDOWN_REMARK_PLUGINS}>{cleaned}</ReactMarkdown>
+      <ReactMarkdown remarkPlugins={MARKDOWN_REMARK_PLUGINS}>{renderedContent}</ReactMarkdown>
       {isStreaming && (
         <span className="inline-block w-1.5 h-3.5 bg-[var(--amber)] ml-0.5 align-middle animate-pulse rounded-full" />
       )}
@@ -491,6 +493,9 @@ export default memo(function MessageList({
   const endRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [showScrollDown, setShowScrollDown] = useState(false);
+  const scrollFrameRef = useRef<number | null>(null);
+  const scrollFrameKindRef = useRef<'raf' | 'timeout' | null>(null);
+  const pendingScrollBehaviorRef = useRef<ScrollBehavior>('instant');
   // Track whether user has manually scrolled away from bottom during streaming.
   // When true, auto-scroll is suppressed so users can read earlier content.
   const userScrolledAwayRef = useRef(false);
@@ -504,10 +509,47 @@ export default memo(function MessageList({
     return -1;
   }, [messages]);
 
-  const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
+  const performScrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
     const container = scrollContainerRef.current;
     if (!container) return;
-    container.scrollTo({ top: container.scrollHeight, behavior });
+    if (typeof container.scrollTo === 'function') {
+      container.scrollTo({ top: container.scrollHeight, behavior });
+    } else {
+      container.scrollTop = container.scrollHeight;
+    }
+  }, []);
+
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
+    pendingScrollBehaviorRef.current = behavior;
+    if (scrollFrameRef.current !== null) return;
+
+    if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+      scrollFrameKindRef.current = 'raf';
+      scrollFrameRef.current = window.requestAnimationFrame(() => {
+        scrollFrameRef.current = null;
+        scrollFrameKindRef.current = null;
+        performScrollToBottom(pendingScrollBehaviorRef.current);
+      });
+      return;
+    }
+
+    scrollFrameKindRef.current = 'timeout';
+    scrollFrameRef.current = globalThis.setTimeout(() => {
+      scrollFrameRef.current = null;
+      scrollFrameKindRef.current = null;
+      performScrollToBottom(pendingScrollBehaviorRef.current);
+    }, 0) as unknown as number;
+  }, [performScrollToBottom]);
+
+  useEffect(() => () => {
+    if (scrollFrameRef.current === null) return;
+    if (scrollFrameKindRef.current === 'raf') {
+      window.cancelAnimationFrame(scrollFrameRef.current);
+    } else {
+      globalThis.clearTimeout(scrollFrameRef.current);
+    }
+    scrollFrameRef.current = null;
+    scrollFrameKindRef.current = null;
   }, []);
 
   // Auto-scroll: only when user hasn't scrolled away.

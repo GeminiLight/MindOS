@@ -98,6 +98,57 @@ function FileBodyWarmup({ isMarkdown, editing }: { isMarkdown: boolean; editing:
   );
 }
 
+const MARKDOWN_VIEW_MODE_STORAGE_KEY = 'md-view-mode';
+
+function normalizeMarkdownModePreference(value: string | null): MdViewMode {
+  if (value === 'preview' || value === 'source' || value === 'wysiwyg') return value;
+  return 'wysiwyg';
+}
+
+function readMarkdownModePreference(): MdViewMode {
+  if (typeof window === 'undefined') return 'wysiwyg';
+  return normalizeMarkdownModePreference(window.localStorage.getItem(MARKDOWN_VIEW_MODE_STORAGE_KEY));
+}
+
+function resolveMarkdownStartState(
+  isBinaryFile: boolean,
+  isMarkdown: boolean,
+  initialEditing: boolean,
+  content: string,
+): { editing: boolean; mode: MdViewMode } {
+  if (isBinaryFile || !isMarkdown) {
+    return { editing: !isBinaryFile && (initialEditing || content === ''), mode: 'wysiwyg' };
+  }
+
+  const preferredMode = readMarkdownModePreference();
+  const hasFrontmatter = hasMarkdownFrontmatterFence(content);
+  const mustEdit = initialEditing || content === '';
+
+  if (mustEdit) {
+    return { editing: true, mode: preferredMode === 'source' || hasFrontmatter ? 'source' : 'wysiwyg' };
+  }
+
+  const safeMode = preferredMode === 'wysiwyg' && hasFrontmatter ? 'source' : preferredMode;
+  return { editing: safeMode !== 'preview', mode: safeMode };
+}
+
+function scheduleViewIdleWork(callback: () => void): () => void {
+  const idleWindow = typeof window !== 'undefined'
+    ? window as Window & typeof globalThis & {
+      requestIdleCallback?: (cb: IdleRequestCallback, options?: IdleRequestOptions) => number;
+      cancelIdleCallback?: (handle: number) => void;
+    }
+    : null;
+
+  if (idleWindow?.requestIdleCallback) {
+    const handle = idleWindow.requestIdleCallback(() => callback(), { timeout: 800 });
+    return () => idleWindow.cancelIdleCallback?.(handle);
+  }
+
+  const handle = setTimeout(callback, 0);
+  return () => clearTimeout(handle);
+}
+
 export default function ViewPageClient({
   filePath,
   content,
@@ -131,15 +182,8 @@ export default function ViewPageClient({
   ].includes(extension);
   const isMarkdown = extension === 'md';
   const fileBodyReady = useDeferredFileBodyReady(filePath);
-  const initialContentHasFrontmatter = useMemo(
-    () => isMarkdown && hasMarkdownFrontmatterFence(content),
-    [isMarkdown, content],
-  );
   const [editing, setEditing] = useState(() => {
-    if (isBinaryFile) return false;
-    // Always start in Edit for empty/new files regardless of persisted mode
-    if (initialEditing || content === '') return true;
-    return isMarkdown;
+    return resolveMarkdownStartState(isBinaryFile, isMarkdown, initialEditing, content).editing;
   });
   const [editContent, setEditContent] = useState(content);
   const [savedContent, setSavedContent] = useState(content);
@@ -215,12 +259,11 @@ export default function ViewPageClient({
     };
   }, [editContent, savedContent, editing, isMarkdown, isDraft, saveAction, keepCurrentTab, filePath]);
   const [mdViewMode, setMdViewModeState] = useState<MdViewMode>(() => {
-    if (initialContentHasFrontmatter) return 'source';
-    return 'wysiwyg';
+    return resolveMarkdownStartState(isBinaryFile, isMarkdown, initialEditing, content).mode;
   });
   const setMdViewMode = useCallback((mode: MdViewMode) => {
     setMdViewModeState(mode);
-    localStorage.setItem('md-view-mode', mode);
+    localStorage.setItem(MARKDOWN_VIEW_MODE_STORAGE_KEY, mode);
   }, []);
   const [modeMenuOpen, setModeMenuOpen] = useState(false);
   const modeButtonRef = useRef<HTMLButtonElement>(null);
@@ -237,9 +280,9 @@ export default function ViewPageClient({
     setAutoSaveStatus('idle');
     setGraphMode(false);
     setModeMenuOpen(false);
-    const nextHasFrontmatter = isMarkdown && hasMarkdownFrontmatterFence(content);
-    setMdViewModeState(nextHasFrontmatter ? 'source' : 'wysiwyg');
-    setEditing(!isBinaryFile && (initialEditing || content === '' || isMarkdown));
+    const nextMarkdownState = resolveMarkdownStartState(isBinaryFile, isMarkdown, initialEditing, content);
+    setMdViewModeState(nextMarkdownState.mode);
+    setEditing(nextMarkdownState.editing);
   }, [content, filePath, initialEditing, isBinaryFile, isMarkdown]);
   const [findOpen, setFindOpen] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -366,24 +409,28 @@ export default function ViewPageClient({
   const pluginViewOverflowCount = Math.max(0, pluginViewSurfaces.length - visiblePluginViewSurfaces.length);
 
   useEffect(() => {
-    if (!extension || isBinaryFile || isDraft) {
+    if (!extension || isBinaryFile || isDraft || editing) {
       setPluginViewSurfaces([]);
       return;
     }
 
     let cancelled = false;
-    fetchPluginViewSurfacesForExtension(extension)
-      .then((surfaces) => {
-        if (!cancelled) setPluginViewSurfaces(surfaces);
-      })
-      .catch(() => {
-        if (!cancelled) setPluginViewSurfaces([]);
-      });
+    const cancelIdleWork = scheduleViewIdleWork(() => {
+      if (cancelled) return;
+      fetchPluginViewSurfacesForExtension(extension)
+        .then((surfaces) => {
+          if (!cancelled) setPluginViewSurfaces(surfaces);
+        })
+        .catch(() => {
+          if (!cancelled) setPluginViewSurfaces([]);
+        });
+    });
 
     return () => {
       cancelled = true;
+      cancelIdleWork();
     };
-  }, [extension, isBinaryFile, isDraft]);
+  }, [editing, extension, isBinaryFile, isDraft]);
 
   // Lazily resolve the renderer component for code-splitting
   const LazyComponent = useMemo(() => {
@@ -611,10 +658,10 @@ export default function ViewPageClient({
     <div className="flex flex-col min-h-[calc(100vh-var(--app-titlebar-h))]">
       {/* Top bar */}
       <div
-        className="view-page-topbar sticky top-[52px] md:top-[var(--app-titlebar-h)] z-20 border-b border-border px-4 md:px-6 h-[46px] flex items-center transition-[margin-right] duration-200"
+        className="view-page-topbar sticky top-[52px] md:top-[var(--app-titlebar-h)] z-20 border-b border-border px-4 md:px-6 h-[46px] flex items-center transition-[width] duration-200"
         style={{
           background: 'var(--background)',
-          marginRight: 'calc(var(--toc-extra-right, 0px) * -1)',
+          width: 'calc(100% + var(--toc-extra-right, 0px))',
         }}
       >
         <div className="view-header-row w-full min-w-0 flex items-center justify-between gap-3 h-full">

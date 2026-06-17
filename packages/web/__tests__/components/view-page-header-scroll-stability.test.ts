@@ -25,9 +25,9 @@ describe('ViewPageClient header scroll stability', () => {
            l.includes('sticky') && l.includes('px-4') && l.includes('top-[52px]')
     );
 
-    expect(source).toContain("marginRight: 'calc(var(--toc-extra-right, 0px) * -1)'");
+    expect(source).toContain("width: 'calc(100% + var(--toc-extra-right, 0px))'");
+    expect(source).not.toContain("marginRight: 'calc(var(--toc-extra-right, 0px) * -1)'");
     expect(source).not.toContain('view-topbar-border-extension');
-    expect(source).not.toContain("width: 'calc(100% + var(--toc-extra-right, 0px))'");
     expect(source).not.toMatch(/paddingRight:\s*['\"`][^'\"`]*toc-extra-right/);
 
     if (headerLine) {

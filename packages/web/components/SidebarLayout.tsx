@@ -989,7 +989,7 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
         {/* min-height subtracts the titlebar row: main already pads down by
             --app-titlebar-h, so a bare 100vh here would overflow the document
             by that amount and let content scroll underneath the fixed row */}
-        <div className="min-h-[calc(100vh-var(--app-titlebar-h))] bg-background" style={{ overflowX: 'clip' }}>
+        <div className="min-h-[calc(100vh-var(--app-titlebar-h))] bg-background">
           <ChangesBanner />
           {children}
         </div>

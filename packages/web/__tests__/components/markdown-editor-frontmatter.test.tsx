@@ -58,4 +58,11 @@ describe('MarkdownEditor frontmatter handling', () => {
     expect(host.querySelector('[data-testid="wysiwyg-editor"]')).not.toBeNull();
     expect(host.querySelector('[data-testid="source-editor"]')).toBeNull();
   });
+
+  it('does not mount hidden WYSIWYG while source mode is active', async () => {
+    await render('# Body\n\nPlain note', 'source');
+
+    expect(host.querySelector('[data-testid="wysiwyg-editor"]')).toBeNull();
+    expect(host.querySelector('[data-testid="source-editor"]')).not.toBeNull();
+  });
 });

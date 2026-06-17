@@ -127,6 +127,13 @@ describe('ViewPageClient plugin extension entry', () => {
     document.body.removeChild(host);
   });
 
+  async function flushIdlePluginLookup() {
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 0));
+      await Promise.resolve();
+    });
+  }
+
   it('shows a contextual plugin view entry for a registered file extension', async () => {
     mocks.fetchPluginViewSurfacesForExtension.mockResolvedValueOnce([kanbanSurface]);
 
@@ -139,9 +146,8 @@ describe('ViewPageClient plugin extension entry', () => {
           saveAction={vi.fn()}
         />,
       );
-      await Promise.resolve();
-      await Promise.resolve();
     });
+    await flushIdlePluginLookup();
 
     expect(mocks.fetchPluginViewSurfacesForExtension).toHaveBeenCalledWith('kanban');
     expect(host.querySelector('[data-testid="plugin-view-extension-entry"]')).not.toBeNull();
@@ -166,12 +172,28 @@ describe('ViewPageClient plugin extension entry', () => {
           saveAction={vi.fn()}
         />,
       );
-      await Promise.resolve();
-      await Promise.resolve();
     });
+    await flushIdlePluginLookup();
 
     expect(mocks.fetchPluginViewSurfacesForExtension).toHaveBeenCalledWith('txt');
     expect(host.querySelector('[data-testid="plugin-view-extension-entry"]')).toBeNull();
     expect(host.textContent).not.toContain('Plugin view available');
+  });
+
+  it('skips plugin view lookup while the file opens directly in edit mode', async () => {
+    await act(async () => {
+      root.render(
+        <ViewPageClient
+          filePath="notes/empty.md"
+          content=""
+          extension="md"
+          saveAction={vi.fn()}
+        />,
+      );
+    });
+    await flushIdlePluginLookup();
+
+    expect(mocks.fetchPluginViewSurfacesForExtension).not.toHaveBeenCalled();
+    expect(host.querySelector('[data-testid="plugin-view-extension-entry"]')).toBeNull();
   });
 });

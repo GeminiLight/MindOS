@@ -15,16 +15,20 @@ describe('ViewPageClient header layout', () => {
   it('lets the header span the TOC reserve without squeezing the breadcrumb', () => {
     const viewFile = path.resolve(process.cwd(), 'app/view/[...path]/ViewPageClient.tsx');
     const cssFile = path.resolve(process.cwd(), 'app/globals.css');
+    const layoutFile = path.resolve(process.cwd(), 'components/SidebarLayout.tsx');
     const viewSource = fs.readFileSync(viewFile, 'utf8');
     const cssSource = fs.readFileSync(cssFile, 'utf8');
+    const layoutSource = fs.readFileSync(layoutFile, 'utf8');
 
     expect(viewSource).toContain('className="view-header-actions flex items-center gap-1.5 md:gap-2 shrink-0"');
     expect(viewSource).toContain('className="view-header-breadcrumb min-w-0 flex-1 flex items-center gap-1.5"');
-    expect(viewSource).toContain("marginRight: 'calc(var(--toc-extra-right, 0px) * -1)'");
+    expect(viewSource).toContain("width: 'calc(100% + var(--toc-extra-right, 0px))'");
+    expect(viewSource).not.toContain("marginRight: 'calc(var(--toc-extra-right, 0px) * -1)'");
     expect(viewSource).not.toContain('view-topbar-border-extension');
-    expect(viewSource).not.toContain("width: 'calc(100% + var(--toc-extra-right, 0px))'");
     expect(viewSource).not.toMatch(/paddingRight:\s*['"`][^'"`]*toc-extra-right/);
     expect(viewSource).not.toContain('view-header-actions-reserve');
+    expect(layoutSource).not.toContain("overflowX: 'clip'");
+    expect(layoutSource).not.toContain('overflowClipMargin');
 
     expect(cssSource).not.toContain('.view-header-actions-reserve');
     expect(cssSource).not.toContain('.view-header-actions {');
