@@ -74,6 +74,18 @@ rg 'text-red-|bg-red-|border-red-|text-green-|bg-green-|border-blue-' packages/w
 
 发现新泄漏就当场修，别攒着。
 
+### 规则 5b：新增同类 UI 前先选 primitive，不先复制页面 class
+
+如果要新增按钮、Select、popover、modal、toast、页面壳、settings card、panel row、renderer badge/table，先查 `wiki/21-design-principle.md` 的「Primitive 决策表」和「Surface taxonomy」。
+
+默认流程：
+
+1. 现有 primitive 能覆盖，就复用 primitive。
+2. primitive 只差一个常见变体，就给 primitive 加 variant，再迁移当前使用点。
+3. 只有一次性、强业务绑定且不会复用的样式，才允许留在组件里；PR 里说明原因。
+
+不要把旧组件里的一整串 `bg-[var(--amber)] ... focus-visible:ring-*`、`fixed z-50`、`rounded-2xl shadow-2xl`、`--hit-target-*` 复制到新位置。复制 class 会把历史债务扩散成新的设计系统。
+
 ## 本次治理的教训
 
 | 教训 | 行动 |

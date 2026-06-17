@@ -13,6 +13,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
+import { Button } from '@/components/ui/button';
 import { useLocale } from '@/lib/stores/locale-store';
 import { refreshSessions, useSessions } from '@/lib/ask-session-store';
 import { useSmoothRouterPush } from '@/hooks/useSmoothRouterPush';
@@ -335,13 +336,16 @@ function ContinueProjectCard({
               <h2 className="text-xl font-semibold text-foreground">{title}</h2>
               <p className="mt-1 max-w-2xl text-sm leading-relaxed text-muted-foreground">{goal}</p>
             </div>
-            <Link
-              href={getStudioProjectHref(project.id)}
-              className="inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-lg bg-[var(--amber)] px-3.5 text-sm font-medium text-[var(--amber-foreground)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            <Button
+              render={<Link href={getStudioProjectHref(project.id)} />}
+              nativeButton={false}
+              variant="amber"
+              size="lg"
+              className="shrink-0"
             >
               {copy.openProject}
               <ArrowRight size={15} />
-            </Link>
+            </Button>
           </div>
 
           <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_220px]">
@@ -481,14 +485,16 @@ export default function StudioContent() {
               <p className="mt-1 max-w-2xl text-sm leading-relaxed text-muted-foreground">{copy.subtitle}</p>
             </div>
 
-            <button
+            <Button
               type="button"
               onClick={() => setIsCreating(true)}
-              className="inline-flex h-10 w-fit items-center gap-2 rounded-lg bg-[var(--amber)] px-4 text-sm font-medium text-[var(--amber-foreground)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              variant="amber"
+              size="xl"
+              className="w-fit"
             >
               <Plus size={15} aria-hidden="true" />
               {copy.newProject}
-            </button>
+            </Button>
           </div>
         </header>
 

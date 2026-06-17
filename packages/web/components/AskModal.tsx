@@ -21,14 +21,14 @@ export default function AskModal({ open, onClose, currentFile, initialMessage, i
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end md:items-start justify-center md:pt-[10vh] modal-backdrop"
+      className="fixed inset-0 z-app-modal flex items-end md:items-start justify-center md:pt-[10vh] modal-backdrop"
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
       <div
         role="dialog"
         aria-modal="true"
         aria-label={t.ask.title}
-        className="w-full md:max-w-2xl md:mx-4 bg-card border-t md:border border-border/60 rounded-t-2xl md:rounded-2xl shadow-2xl flex flex-col h-[92vh] md:h-auto md:max-h-[75vh]"
+        className="w-full md:max-w-2xl md:mx-4 bg-card border-t md:border border-border/60 rounded-t-xl md:rounded-xl shadow-xl flex flex-col h-[92vh] md:h-auto md:max-h-[75vh]"
       >
         <AskContent
           visible={open}

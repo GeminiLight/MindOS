@@ -455,10 +455,10 @@ export default function SearchModal({ open, onClose }: SearchModalProps) {
     <>
       {open && (
         <div
-          className="fixed inset-0 z-50 flex items-end md:items-start justify-center md:pt-[15vh] modal-backdrop"
+          className="fixed inset-0 z-app-modal flex items-end md:items-start justify-center md:pt-[15vh] modal-backdrop"
           onClick={(e) => e.target === e.currentTarget && onClose()}
         >
-          <div role="dialog" aria-modal="true" aria-label="Command palette" className="w-full md:max-w-xl md:mx-4 bg-card border-t md:border border-border rounded-t-2xl md:rounded-xl shadow-2xl overflow-hidden max-h-[85vh] md:max-h-none flex flex-col">
+          <div role="dialog" aria-modal="true" aria-label="Command palette" className="w-full md:max-w-xl md:mx-4 bg-card border-t md:border border-border rounded-t-xl md:rounded-xl shadow-xl overflow-hidden max-h-[85vh] md:max-h-none flex flex-col">
         {/* Mobile drag indicator */}
         <div className="flex justify-center pt-2 pb-0 md:hidden">
           <div className="w-8 h-1 rounded-full bg-muted-foreground/20" />

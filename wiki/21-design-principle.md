@@ -1,6 +1,11 @@
-<!-- Last verified: 2026-03-22 | Current stage: P1 -->
+<!-- Last verified: 2026-06-17 | Current stage: P1 -->
 
 # 设计原则 (Design Principle)
+
+本文件分两层使用：
+
+1. **设计哲学**：定义 MindOS 的长期视觉性格，不随单个页面或组件变化。
+2. **设计系统契约**：定义代码里应该复用的 primitive、token、surface、层级和交互规则。新组件优先遵守契约；契约没有覆盖时，先补契约再写局部样式。
 
 ## 核心品牌主张
 
@@ -13,6 +18,12 @@
 ## 设计哲学
 
 **Warm Amber — 人机共生的温暖工业感。** 琥珀色传递思考的温度，非对称结构表达人机互补。
+
+工程落地时，这句话翻译成三个硬约束：
+
+- **内容优先**：页面 chrome、阴影、装饰和浮层都让位于阅读与操作路径。
+- **克制强调**：Amber 只表达当前焦点、关键动作、轻提示和系统状态，不做大面积装饰。
+- **同类同形**：按钮、输入、下拉、浮层、卡片、badge、toast、页面壳必须优先使用同一套 primitive，不能在每个页面重新发明。
 
 ## Logo：不对称的无限大 (The Asymmetric Infinity)
 
@@ -41,7 +52,9 @@
 | Token | 值 | 语义用途 |
 |-------|-----|---------|
 | `--amber` | `#c8873a` | 品牌主色，交互高亮，链接，focus ring |
-| `--amber-dim` | `rgba(200,135,58,0.12)` | amber 背景色（badge、hover 底色） |
+| `--amber-text` | `#9a6a2b` | 浅 amber 底上的文字，不用于 amber 实底 |
+| `--amber-dim` | `rgba(200,135,58,0.18)` | 较强 amber 背景色（active、selected） |
+| `--amber-subtle` | `rgba(200,135,30,0.08)` | 轻 amber 背景色（icon shell、hint、quiet selected） |
 | `--amber-foreground` | `#ffffff` | amber 背景上的文字色（白色，确保可读性） |
 | `--background` | `#f8f6f1` | 页面背景（温暖米白） |
 | `--foreground` | `#1c1a17` | 正文前景色 |
@@ -66,7 +79,9 @@
 | Token | 值 | 语义用途 |
 |-------|-----|---------|
 | `--amber` | `#d4954a` | 品牌主色（暗色微提亮） |
-| `--amber-dim` | `rgba(212,149,74,0.12)` | amber 背景色 |
+| `--amber-text` | `#e0a85e` | 浅 amber 底上的文字，不用于 amber 实底 |
+| `--amber-dim` | `rgba(212,149,74,0.20)` | 较强 amber 背景色（active、selected） |
+| `--amber-subtle` | `rgba(212,149,74,0.10)` | 轻 amber 背景色（icon shell、hint、quiet selected） |
 | `--amber-foreground` | `#ffffff` | amber 背景上的文字色（白色，确保可读性） |
 | `--background` | `#131210` | 页面背景（近纯黑） |
 | `--foreground` | `#e8e4dc` | 正文前景色 |
@@ -104,7 +119,7 @@
 
 ### 状态色
 
-代码中频繁使用的语义色值，统一为 CSS 变量管理（计划中，当前仍为硬编码）：
+代码中频繁使用的语义色值，统一为 CSS 变量管理：
 
 | Token | 亮色 | 暗色 | 用途 |
 |-------|------|------|------|
@@ -121,7 +136,7 @@
 - **`--destructive` vs `--error`**：`--destructive` 用于按钮/操作背景（低饱和、配白字），`--error` 用于文字/图标提示（中等饱和、需要足够对比度）。两者不要混用。
 - **按钮用法**：`bg-destructive text-destructive-foreground`，hover 用 `hover:bg-destructive/90`。
 
-> **迁移状态**：已完成。CSS 变量已定义，Tailwind token 已注册（`text-success` / `text-error` / `bg-success`），全部硬编码已替换（含 `text-green-500` / `bg-green-500` / `accent-amber-500`）。装饰色（`yellow-400` 文件夹图标、`emerald-400` CSV 图标、`blue-500` sync 指示、`purple-500` skill badge、`red-400`/`blue-400` TODO 标签）暂保留 Tailwind 原始色，不纳入语义色管理。
+> **迁移状态**：核心 token 已存在，仍需要防止组件继续散落 `rgba(...)`、Tailwind 原色和局部 `color-mix(...)`。装饰色（例如文件类型、文件夹图标）可以保留原色，但必须限定在装饰语义；工具操作色（read/search/create/delete）应进入 renderer theme 或 CSS token，不在组件里重复硬编码。
 
 ### 硬编码色值禁令
 
@@ -135,6 +150,18 @@
 | **背景/边框** | `var(--card)` / `var(--border)` | `bg-card border-border` |
 
 **例外**：CodeMirror 等第三方编辑器的主题对象不走 DOM CSS 变量（它们有独立的主题系统），硬编码是唯一选择，需在代码注释中标注。
+
+### Amber 使用边界
+
+| Token | 使用场景 | 禁止 |
+|------|---------|------|
+| `--amber` | CTA 实底、focus ring、当前主焦点、链接 | 大面积背景、普通正文 |
+| `--amber-foreground` | 只用于 `--amber` 实底上的文字或图标 | 单独作为文字色；浅底上使用 |
+| `--amber-text` | `--amber-subtle` / `--amber-dim` 浅底上的文字 | 实底按钮文字 |
+| `--amber-subtle` | icon shell、quiet selected、轻提示背景 | 表达强 active 状态 |
+| `--amber-dim` | active row、selected chip、较强 hover/active 背景 | 普通页面区块背景 |
+
+组件中不要临时写 `color-mix(in_srgb,var(--amber)_XX%,...)` 来创造新的 amber 变体。确实需要新强度时，先补 token 或 primitive variant。
 
 ## 字体栈
 
@@ -155,6 +182,7 @@
 - 版本号和技术标识符（如 `v0.6.27`、commit hash）
 - JSON/CSV 数据视图
 - Agent 活动日志中的工具名和文件路径
+- Renderer 里的字段名、路径、计数、技术标签
 
 **禁止**在以下元素上使用 `.font-display`：
 - Section 标题（用默认 IBM Plex Sans）
@@ -164,6 +192,7 @@
 - Agent 名称、描述
 - 表单标签
 - Footer 文字
+- Renderer 里的普通按钮、空状态说明、非技术标题
 
 > 原因：等宽字体在中文环境下字间距不自然，且在 12-14px 小字号下显得"技术感过重"，不适合作为通用 UI 字体。
 
@@ -187,6 +216,37 @@
 | Minimal Chrome | 只保留内容与搜索，无多余装饰 |
 | Keyboard-driven | ⌘K 搜索、⌘/ AI 对话、⌘E 编辑模式 |
 | 长文阅读优化 | prose 行高 1.85，代码块高对比，serif 正文 |
+
+## 设计系统契约
+
+### Primitive 决策表
+
+同类 UI 必须优先复用同一入口，避免在页面里手写一套“看起来差不多”的样式。
+
+| 场景 | 优先使用 | 禁止 / 需要说明 |
+|------|---------|----------------|
+| 普通按钮、icon button、CTA | `components/ui/button.tsx` 的 `Button` / `buttonVariants` | 新增手写 `bg-[var(--amber)] text-[var(--amber-foreground)]` 按钮 |
+| Settings 表单和卡片 | `components/settings/Primitives.tsx` 的 `SettingCard`、`Field`、`Input`、`Select`、`Toggle` | 在 settings 子页新增裸 `rounded-xl border bg-card` surface |
+| 内容页容器 | `components/shared/ContentPageShell.tsx` | 手写 `max-w-* mx-auto px-*`，除非该页明确不是内容页 |
+| 左侧 panel 头部和导航行 | `panels/PanelHeader`、`panels/PanelNavRow` | 每个 panel 自己重写 header 高度、active 背景、icon button |
+| Modal / Dialog | `components/ui/dialog.tsx` 或统一 `ModalSurface` pattern | 自写 `rounded-2xl shadow-2xl`、自写 backdrop |
+| Popover / menu / listbox | 统一 floating/listbox primitive；没有时先抽取 | 组件内新增 `fixed z-50`、`z-[60]`、inline `zIndex` |
+| Renderer table / toolbar / badge | renderer shared primitives 或 renderer theme | renderer 内复制 status map、inline table style、局部 segmented control |
+| Hit target / hover area | `hit-target-box` 的既定 variant | 使用点直接堆 6 个以上 `--hit-target-*` 变量 |
+
+### Surface taxonomy
+
+| Surface | 默认样式 | 用途 |
+|---------|----------|------|
+| `CardSurface` | `rounded-lg border border-border bg-card` | 普通内容卡片、列表项容器 |
+| `SettingSurface` | `rounded-xl border border-border/60 bg-card/65 p-5` | Settings 中有图标、说明、控件的配置块 |
+| `PanelSurface` | 边框分隔，少阴影或无阴影 | 左右 panel、固定侧栏 |
+| `PopoverSurface` | `rounded-lg border border-border bg-card shadow-lg` | 菜单、下拉、轻量浮层 |
+| `ModalSurface` | `rounded-xl border border-border bg-card shadow-xl` | 居中 modal |
+| `BottomSheetSurface` | mobile only `rounded-t-xl` 或 `rounded-t-2xl` | 移动端底部 sheet |
+| `ToastSurface` | `rounded-lg` 或紧凑 `rounded-full` | 临时通知、状态提示 |
+
+`rounded-2xl`、`shadow-2xl` 只用于移动底部 sheet、品牌登录卡或特殊 walkthrough；新增使用必须在 PR 描述中说明。
 
 ## 组件模式
 
@@ -224,15 +284,16 @@ border-radius: 4px;
 
 ### Z-Index 层级
 
-| 层级 | Tailwind | 用途 |
-|------|----------|------|
-| 10 | `z-10` | 次要浮层（TOC 侧栏、tooltip） |
-| 20 | `z-20` | 页面内 sticky（top bar） |
-| 30 | `z-30` | 全局导航（sidebar、header） |
-| 40 | `z-40` | 遮罩层（mobile overlay） |
-| 50 | `z-50` | 最高层（modal、dialog） |
+| 语义 | Tailwind / CSS | 用途 |
+|------|----------------|------|
+| page-sticky | `z-10` / `z-20` | TOC、页面内 sticky、局部 action dock |
+| app-chrome | `z-30` | titlebar、activity rail、主 sidebar/header |
+| app-panel | `z-40` | 右侧 ask/detail panel、mobile overlay、可调整 panel handle |
+| app-popover | `z-50` | menu、listbox、tooltip、popover |
+| app-modal | `z-50` | modal、dialog、confirm |
+| system-overlay | 语义 class/token | update overlay、walkthrough、必须盖过 modal 的系统级引导 |
 
-**规则：** 新组件选择最接近的语义层级，不要使用表外的 z-index 值。
+**规则：** 新组件选择最接近的语义层级，不要直接写表外数字。新增 `z-[...]`、`zIndex: ...`、`9999` 必须先补语义 class/token 和说明。
 
 ## 动效规范
 
@@ -244,7 +305,7 @@ border-radius: 4px;
 | `transition-all` | default | default | toggle 滑块位移 |
 | CSS Grid 展开 | 0.2s | ease-out | 内联列表/目录展开收起 |
 
-**规则：** 动画时长不超过 0.3s，优先用 CSS transition 而非 keyframe animation。
+**规则：** hover/focus/layout 动画不超过 0.3s，优先用 CSS transition 而非 keyframe animation。连续进度条可以使用 0.3-0.5s，但只限 progress fill，不用于 hover、popover、panel 或布局切换。
 
 ### 内联展开动画
 
@@ -263,6 +324,29 @@ border-radius: 4px;
 - 开/关速度一致（不像 `maxHeight: 9999px` 关闭时延迟）
 - **例外**：AI 对话中的 `ToolCallBlock` / `ThinkingBlock` 等流式输出组件可保留条件渲染（内容长度不可预测，动画无意义）
 - **禁止**：`maxHeight: 9999px` hack、`height: auto` transition（浏览器不支持）
+
+## 机器可查 guardrails
+
+新增或修改 Web UI 时，PR 前至少跑一次对应 grep，新增命中必须解释或消除：
+
+```bash
+# 组件里禁止新增硬编码色与 rgba 派生状态色
+rg '#[0-9A-Fa-f]{3,8}|rgba?\(' packages/web/app packages/web/components --glob '*.{tsx,ts}' --glob '!*.test.*'
+
+# 禁止新增表外层级
+rg 'z-\[[^\]]+\]|zIndex:|9999' packages/web/app packages/web/components --glob '*.{tsx,ts}'
+
+# 禁止新增原生 select；优先使用自定义 Select/listbox primitive
+rg '<select|<option' packages/web/app packages/web/components --glob '*.{tsx,ts}'
+
+# 禁止继续复制 amber CTA class；优先使用 Button variant
+rg 'bg-\[var\(--amber\)\].*text-\[var\(--amber-foreground\)\]' packages/web/app packages/web/components --glob '*.{tsx,ts}'
+
+# 检查过度圆角/阴影是否属于 surface taxonomy
+rg 'rounded-2xl|shadow-2xl' packages/web/app packages/web/components --glob '*.{tsx,ts}'
+```
+
+这些 guardrails 是“新增债务拦截”，不是要求一次清空历史命中。做风格治理 PR 时按 primitive / surface / renderer 分批收口。
 
 ### 遮罩两级制
 

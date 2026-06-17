@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { Eye, EyeOff, ExternalLink, Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import type { PlatformDef } from '@/lib/im/platforms';
 import { ActionResult } from './shared';
 import { ChannelSetupMethods } from './ChannelSetupMethods';
@@ -123,15 +124,17 @@ export function ChannelSetupFlow({ platform, im, locale, onSaved }: {
           })}
 
           <div className="pt-2">
-            <button
+            <Button
               type="button"
               onClick={handleSave}
               disabled={saving || !isComplete}
-              className="inline-flex h-10 items-center gap-2 rounded-md bg-[var(--amber)] px-5 text-sm font-medium text-[var(--amber-foreground)] shadow-sm transition-all hover:opacity-90 hover:shadow focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40"
+              variant="amber"
+              size="xl"
+              className="px-5 disabled:opacity-40"
             >
               {saving && <Loader2 size={14} className="animate-spin" />}
               {saving ? im.saving : im.saveConfig}
-            </button>
+            </Button>
           </div>
 
           <ActionResult result={result} />

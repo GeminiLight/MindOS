@@ -81,20 +81,7 @@ export default function UpdateOverlay() {
   if (!visible) return null;
 
   return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 99999,
-        background: 'rgba(0,0,0,0.7)',
-        backdropFilter: 'blur(8px)',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        fontFamily: "var(--font-ui)",
-      }}
-    >
+    <div className="fixed inset-0 z-app-critical-overlay flex flex-col items-center justify-center bg-black/70 font-sans backdrop-blur-md">
       {done ? (
         <>
           <CheckCircle2 size={32} style={{ color: 'var(--success)', marginBottom: 12 }} />

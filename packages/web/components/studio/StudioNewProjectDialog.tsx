@@ -2,6 +2,7 @@
 
 import { Check, FolderOpen, Plus, Sparkles, Target, X, Zap } from 'lucide-react';
 import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from 'react';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import {
   localize,
@@ -247,13 +248,13 @@ export default function StudioNewProjectDialog({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 px-3 py-5 backdrop-blur-sm">
+    <div className="fixed inset-0 z-app-modal flex items-center justify-center bg-background/80 px-3 py-5 backdrop-blur-sm">
       <form
         role="dialog"
         aria-modal="true"
         aria-labelledby="studio-new-project-title"
         onSubmit={submit}
-        className="flex max-h-[min(880px,calc(100dvh-32px))] w-full max-w-4xl flex-col overflow-hidden rounded-xl border border-border bg-card shadow-2xl"
+        className="flex max-h-[min(880px,calc(100dvh-32px))] w-full max-w-4xl flex-col overflow-hidden rounded-xl border border-border bg-card shadow-xl"
       >
         <div className="flex items-start justify-between gap-4 border-b border-border/70 px-5 py-4">
           <div className="min-w-0">
@@ -266,14 +267,16 @@ export default function StudioNewProjectDialog({
             </h2>
             <p className="mt-1 max-w-2xl text-xs leading-relaxed text-muted-foreground">{copy.createDescription}</p>
           </div>
-          <button
+          <Button
             type="button"
             onClick={onClose}
             aria-label={copy.cancel}
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            variant="ghost"
+            size="icon"
+            className="rounded-md text-muted-foreground"
           >
             <X size={16} aria-hidden="true" />
-          </button>
+          </Button>
         </div>
 
         <div className="grid min-h-0 gap-4 overflow-y-auto px-5 py-4 lg:grid-cols-[300px_minmax(0,1fr)]">
@@ -366,20 +369,24 @@ export default function StudioNewProjectDialog({
         </div>
 
         <div className="flex items-center justify-end gap-2 border-t border-border/70 px-5 py-4">
-          <button
+          <Button
             type="button"
             onClick={onClose}
-            className="h-9 rounded-lg border border-border bg-background px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            variant="outline"
+            size="lg"
+            className="px-3 text-muted-foreground"
           >
             {copy.cancel}
-          </button>
-          <button
+          </Button>
+          <Button
             type="submit"
-            className="inline-flex h-9 items-center gap-2 rounded-lg bg-[var(--amber)] px-3.5 text-sm font-medium text-[var(--amber-foreground)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            variant="amber"
+            size="lg"
+            className="px-3.5"
           >
             <Plus size={15} aria-hidden="true" />
             {copy.create}
-          </button>
+          </Button>
         </div>
       </form>
     </div>

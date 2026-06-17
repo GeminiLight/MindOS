@@ -201,6 +201,9 @@ body {
 
 .z-app-rail { z-index: var(--z-app-rail); }
 .z-app-rail-affordance { z-index: var(--z-app-rail-affordance); }
+.z-app-sticky { z-index: var(--z-app-sticky); }
+.z-app-nav { z-index: var(--z-app-nav); }
+.z-app-overlay { z-index: var(--z-app-overlay); }
 .z-app-modal { z-index: var(--z-app-modal); }
 .z-app-popover { z-index: var(--z-app-popover); }
 .z-app-popover-flyout { z-index: var(--z-app-popover-flyout); }

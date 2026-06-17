@@ -89,7 +89,7 @@ export default function RightAgentDetailPanel({
   return (
     <aside
       className={`
-        hidden md:flex fixed top-[var(--app-titlebar-h)] h-[calc(100vh-var(--app-titlebar-h))] z-[31] flex-col bg-card border-l border-border shadow-sm
+        hidden md:flex fixed top-[var(--app-titlebar-h)] h-[calc(100vh-var(--app-titlebar-h))] z-app-overlay flex-col bg-card border-l border-border shadow-sm
         transition-transform duration-200 ease-out
         ${open ? 'translate-x-0' : 'translate-x-full pointer-events-none'}
       `}

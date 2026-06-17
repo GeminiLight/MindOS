@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Eye, EyeOff, Loader2, Trash2, AlertTriangle, ChevronDown } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import type { PlatformDef } from '@/lib/im/platforms';
 import { useLocale } from '@/lib/stores/locale-store';
 import { ActionResult } from './shared';
@@ -105,15 +106,17 @@ export function ChannelSettings({ platform, im, onSaved, onDisconnected }: {
               );
             })}
             <div className="flex items-center gap-3">
-              <button
+              <Button
                 type="button"
                 onClick={handleSave}
                 disabled={saving || !hasCredentialChanges}
-                className="inline-flex h-10 items-center gap-2 rounded-md bg-[var(--amber)] px-5 text-sm font-medium text-[var(--amber-foreground)] shadow-sm transition-all hover:opacity-90 hover:shadow focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40"
+                variant="amber"
+                size="xl"
+                className="px-5 disabled:opacity-40"
               >
                 {saving && <Loader2 size={14} className="animate-spin" />}
                 {saving ? im.saving : im.saveConfig}
-              </button>
+              </Button>
             </div>
             <ActionResult result={saveResult} />
           </div>

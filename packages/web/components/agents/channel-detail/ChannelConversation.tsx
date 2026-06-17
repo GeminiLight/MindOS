@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { Check, Copy, ExternalLink, Loader2, MessageCircle, Play, Settings2, Square } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { SectionCard, StatusDot, ActionResult } from './shared';
 
 type FeishuLongConnectionStatus = {
@@ -155,11 +156,13 @@ export function ChannelConversation({ status, im, platform, onSaved }: {
               {statusLabel}
             </div>
           </div>
-          <button
+          <Button
             type="button"
             onClick={handlePrimaryConversationAction}
             disabled={primaryBusy}
-            className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-md bg-[var(--amber)] px-5 text-sm font-medium text-[var(--amber-foreground)] shadow-sm transition-all hover:opacity-90 hover:shadow focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+            variant="amber"
+            size="xl"
+            className="h-11 px-5"
           >
             {primaryBusy ? (
               <Loader2 size={15} className="animate-spin" aria-hidden="true" />
@@ -169,7 +172,7 @@ export function ChannelConversation({ status, im, platform, onSaved }: {
               <Play size={15} aria-hidden="true" />
             )}
             {primaryButtonLabel}
-          </button>
+          </Button>
         </div>
 
         <div className="grid gap-2 sm:grid-cols-3">

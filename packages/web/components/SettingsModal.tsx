@@ -21,10 +21,10 @@ export default function SettingsModal({
   return (
     <div style={{ display: open ? undefined : 'none' }}>
       <div
-        className="fixed inset-0 z-50 flex items-end md:items-start justify-center md:pt-[10vh] modal-backdrop"
+        className="fixed inset-0 z-app-modal flex items-end md:items-start justify-center md:pt-[10vh] modal-backdrop"
         onClick={(e) => e.target === e.currentTarget && onClose()}
       >
-        <div role="dialog" aria-modal="true" aria-label="Settings" className="w-full md:max-w-4xl lg:max-w-5xl md:mx-4 bg-card border-t md:border border-border rounded-t-2xl md:rounded-xl shadow-2xl flex flex-col h-[88vh] md:h-[80vh] md:max-h-[85vh] overflow-hidden">
+        <div role="dialog" aria-modal="true" aria-label="Settings" className="w-full md:max-w-4xl lg:max-w-5xl md:mx-4 bg-card border-t md:border border-border rounded-t-xl md:rounded-xl shadow-xl flex flex-col h-[88vh] md:h-[80vh] md:max-h-[85vh] overflow-hidden">
           <SettingsContent
             visible={open}
             variant="modal"

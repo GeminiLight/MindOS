@@ -43,14 +43,14 @@ export default function KeyboardShortcuts() {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center modal-backdrop"
+      className="fixed inset-0 z-app-modal flex items-center justify-center modal-backdrop"
       onClick={e => e.target === e.currentTarget && setOpen(false)}
     >
       <div
         role="dialog"
         aria-modal="true"
         aria-label={s.title}
-        className="w-full max-w-md mx-4 bg-card border border-border rounded-xl shadow-2xl overflow-hidden"
+        className="w-full max-w-md mx-4 bg-card border border-border rounded-xl shadow-xl overflow-hidden"
       >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-border">
