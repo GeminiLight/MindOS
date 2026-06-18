@@ -624,12 +624,16 @@ export {
 
 export {
   handleMcpInstallPost,
+  handleMcpServerCopyPost,
   handleMcpUninstallPost,
   type MindosMcpAgentDef,
   type MindosMcpInstallItem,
   type MindosMcpInstallRequest,
   type MindosMcpInstallResult,
   type MindosMcpInstallServices,
+  type MindosMcpServerCopyRequest,
+  type MindosMcpServerCopyServices,
+  type MindosMcpServerCopyTarget,
   type MindosMcpUninstallRequest,
   type MindosMcpUninstallServices,
   type MindosSkillAgentRegistration,

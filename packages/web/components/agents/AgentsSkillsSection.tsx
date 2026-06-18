@@ -642,7 +642,6 @@ function VirtualizedSkillList({
         canLinkSkill
         && !skill.agents.includes(a.name)
         && a.present
-        && a.installed
         && Boolean(a.skillWorkspacePath)
         && a.skillCapabilities?.canReceiveLinkedSkills !== false)
       .map((a) => ({ key: a.key, name: a.name }));

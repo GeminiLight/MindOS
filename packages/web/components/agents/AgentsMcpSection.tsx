@@ -21,6 +21,7 @@ import {
 } from './AgentsPrimitives';
 import {
   aggregateCrossAgentMcpServers,
+  createMcpReconnectPlan,
 
   filterAgentsForMcpWorkspace,
   resolveAgentStatus,
@@ -49,7 +50,7 @@ export default function AgentsMcpSection({
     riskMcpStopped: string;
     bulkReconnectFiltered: string;
     bulkRunning: string;
-    bulkSummary: (ok: number, failed: number) => string;
+    bulkSummary: (ok: number, failed: number, skipped: number) => string;
     installMindos: string;
     mcpServerLabel: string;
     searchServersPlaceholder: string;
@@ -63,6 +64,8 @@ export default function AgentsMcpSection({
     manualRemoveHint: string;
     removeSuccess: string;
     removeFailed: string;
+    copyServerSuccess: (server: string, agent: string) => string;
+    copyServerFailed: (server: string, agent: string) => string;
     reconnectAllInServer: string;
     reconnectAllRunning: string;
     reconnectAllDone: (ok: number, failed: number) => string;
@@ -126,19 +129,54 @@ export default function AgentsMcpSection({
 
   async function handleBulkReconnect() {
     if (busyAction !== null || filteredAgents.length === 0) return;
+    const plan = createMcpReconnectPlan(filteredAgents);
+    if (plan.targets.length === 0) {
+      const summary = summarizeMcpBulkReconnectResults([], plan.skipped.length);
+      setBulkMessage(copy.bulkSummary(summary.succeeded, summary.failed, summary.skipped));
+      return;
+    }
     setBusyAction('bulk');
     setBulkMessage(copy.bulkRunning);
     const results: Array<{ agentKey: string; ok: boolean }> = [];
-    for (const agent of filteredAgents) {
+    for (const agent of plan.targets) {
       const scope = agent.scope === 'project' ? 'project' : 'global';
       const transport = agent.transport === 'http' ? 'http' : 'stdio';
       const ok = await mcp.installAgent(agent.key, { scope, transport });
       results.push({ agentKey: agent.key, ok });
     }
     await mcp.refresh({ force: true });
-    const summary = summarizeMcpBulkReconnectResults(results);
-    setBulkMessage(copy.bulkSummary(summary.succeeded, summary.failed));
+    const summary = summarizeMcpBulkReconnectResults(results, plan.skipped.length);
+    setBulkMessage(copy.bulkSummary(summary.succeeded, summary.failed, summary.skipped));
     setBusyAction(null);
+  }
+
+  async function handleCopyServer(serverName: string, sourceAgentKey: string, targetAgentKey: string) {
+    const busyKey = `copy-server:${serverName}:${targetAgentKey}`;
+    setBusyAction(busyKey);
+    try {
+      const target = mcp.agents.find((agent) => agent.key === targetAgentKey);
+      const res = await apiFetch<{ results: Array<{ agent?: string; status?: string; ok?: boolean; error?: string; message?: string }> }>('/api/mcp/copy-server', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          serverName,
+          sourceAgentKey,
+          targets: [{
+            key: targetAgentKey,
+            scope: target?.scope === 'project' ? 'project' : 'global',
+          }],
+        }),
+      });
+      const first = res.results?.[0];
+      const ok = first?.ok === true || first?.status === 'ok';
+      if (ok) await mcp.refresh({ force: true });
+      return ok;
+    } catch (err) {
+      console.error('[mcp] copy server failed', err);
+      return false;
+    } finally {
+      setBusyAction(null);
+    }
   }
 
   const isRefreshing = busyAction === 'refresh';
@@ -220,7 +258,7 @@ export default function AgentsMcpSection({
           servers={filteredServers}
           allAgents={sortedAgents}
           busyAction={busyAction}
-          onInstallMindos={handleInstallMindos}
+          onCopyServer={handleCopyServer}
           onReconnect={handleReconnect}
         />
       )}
@@ -342,9 +380,6 @@ function ByAgentView({
                         variant="primary"
                       />
                     )}
-                    {!agent.installed && (
-                      <span className="text-2xs text-muted-foreground/60">or CLI Skill</span>
-                    )}
                   </div>
                 </div>
 
@@ -375,14 +410,14 @@ function ByServerView({
   servers,
   allAgents,
   busyAction,
-  onInstallMindos,
+  onCopyServer,
   onReconnect,
 }: {
   copy: Parameters<typeof AgentsMcpSection>[0]['copy'];
   servers: ReturnType<typeof aggregateCrossAgentMcpServers>;
   allAgents: ReturnType<typeof sortAgentsByStatus>;
   busyAction: string | null;
-  onInstallMindos: (agentKey: string) => Promise<void>;
+  onCopyServer: (serverName: string, sourceAgentKey: string, targetAgentKey: string) => Promise<boolean>;
   onReconnect: (agent: ReturnType<typeof sortAgentsByStatus>[number]) => Promise<void>;
 }) {
   const [pickerServer, setPickerServer] = useState<string | null>(null);
@@ -391,14 +426,24 @@ function ByServerView({
   const [reconnectingServer, setReconnectingServer] = useState<string | null>(null);
   const [reconnectMsg, setReconnectMsg] = useState<Record<string, string>>({});
   const agentsByName = useMemo(() => new Map(allAgents.map((agent) => [agent.name, agent])), [allAgents]);
-  const allAgentPickerOptions = useMemo(() => allAgents.map((agent) => ({ key: agent.key, name: agent.name })), [allAgents]);
+  const allAgentPickerOptions = useMemo(
+    () => allAgents
+      .filter((agent) => agent.key !== 'mindos' && agent.present)
+      .map((agent) => ({ key: agent.key, name: agent.name })),
+    [allAgents],
+  );
 
   const handleAddAgent = useCallback(
-    async (agentKey: string) => {
+    async (serverName: string, sourceAgentKey: string, targetAgentKey: string) => {
       setPickerServer(null);
-      await onInstallMindos(agentKey);
+      const target = allAgents.find((agent) => agent.key === targetAgentKey);
+      const ok = await onCopyServer(serverName, sourceAgentKey, targetAgentKey);
+      setHintMessage(ok
+        ? copy.copyServerSuccess(serverName, target?.name ?? targetAgentKey)
+        : copy.copyServerFailed(serverName, target?.name ?? targetAgentKey));
+      setTimeout(() => setHintMessage(null), 4000);
     },
-    [onInstallMindos],
+    [allAgents, copy, onCopyServer],
   );
 
   const handleConfirmRemove = useCallback(async () => {
@@ -414,7 +459,7 @@ function ByServerView({
       await apiFetch('/api/mcp/uninstall', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ agents: [{ key: agentKey, scope }] }),
+        body: JSON.stringify({ agents: [{ key: agentKey, scope, serverName: confirmState.serverName }] }),
       });
       setHintMessage(copy.removeSuccess ?? 'Removed. Restart your agent to apply.');
     } catch {
@@ -460,6 +505,8 @@ function ByServerView({
           const agentDetails = srv.agents
             .map((name) => agentsByName.get(name))
             .filter(Boolean) as typeof allAgents;
+          const presentAgentDetails = agentDetails.filter((agent) => agent.present);
+          const sourceAgent = presentAgentDetails.find((agent) => agent.configuredMcpServers?.includes(srv.serverName)) ?? presentAgentDetails[0];
           const serverAgentNames = new Set(srv.agents);
           const orphanNames = srv.agents.filter((name) => !agentsByName.has(name));
           const availableToAdd = allAgentPickerOptions.filter((a) => !serverAgentNames.has(a.name));
@@ -479,8 +526,8 @@ function ByServerView({
                 <div className="flex items-center gap-1.5 shrink-0">
                   {agentDetails.length > 0 && (
                     <ActionButton
-                      onClick={() => void handleReconnectAllInServer(srv.serverName, agentDetails)}
-                      disabled={reconnectingServer !== null || busyAction !== null}
+                      onClick={() => void handleReconnectAllInServer(srv.serverName, presentAgentDetails)}
+                      disabled={reconnectingServer !== null || busyAction !== null || presentAgentDetails.length === 0}
                       busy={reconnectingServer === srv.serverName}
                       label={copy.reconnectAllInServer}
                       busyLabel={copy.reconnectAllRunning}
@@ -494,9 +541,9 @@ function ByServerView({
                     />
                     <AgentPickerPopover
                       open={pickerServer === srv.serverName}
-                      agents={availableToAdd}
+                      agents={sourceAgent ? availableToAdd : []}
                       emptyLabel={copy.noAvailableAgents}
-                      onSelect={(key) => void handleAddAgent(key)}
+                      onSelect={(key) => sourceAgent ? void handleAddAgent(srv.serverName, sourceAgent.key, key) : undefined}
                       onClose={() => setPickerServer(null)}
                     />
                   </div>

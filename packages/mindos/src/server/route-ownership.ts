@@ -124,6 +124,7 @@ export const MINDOS_WEB_API_ROUTE_OWNERSHIP: MindosWebApiRouteOwnership[] = [
   optional('/api/lint', 'Phase 5: content ingestion optional capabilities', 'medium', 'Knowledge linting remains Web-owned and should become an optional Product capability with bounded filesystem traversal.'),
   optional('/api/dreaming', 'Phase 5: content ingestion optional capabilities', 'medium', 'Dreaming remains Web-owned while the run artifact schema and review-first write boundary are still being validated.'),
   migrated('/api/mcp/agents', 'high'),
+  migrated('/api/mcp/copy-server', 'high'),
   migrated('/api/mcp/direct-tools', 'medium'),
   migrated('/api/mcp/install-skill', 'high'),
   migrated('/api/mcp/install', 'high'),

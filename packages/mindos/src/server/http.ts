@@ -76,9 +76,11 @@ import { handleInboxDelete, handleInboxGet, handleInboxPost } from './handlers/i
 import { handleMonitoringGet } from './handlers/monitoring.js';
 import {
   handleMcpInstallPost,
+  handleMcpServerCopyPost,
   handleMcpUninstallPost,
   type MindosMcpAgentDef,
   type MindosMcpInstallRequest,
+  type MindosMcpServerCopyRequest,
   type MindosMcpUninstallRequest,
 } from './handlers/mcp-install.js';
 import {
@@ -672,6 +674,14 @@ async function handleRequest(
     }
     if (route === 'POST /api/mcp/install') {
       writeResponse(res, await handleMcpInstallPost(await readJsonBody(req) as MindosMcpInstallRequest, {
+        agents: services.mcpAgents ?? {},
+        readSettings: services.readSettings,
+        env: process.env,
+      }));
+      return;
+    }
+    if (route === 'POST /api/mcp/copy-server') {
+      writeResponse(res, await handleMcpServerCopyPost(await readJsonBody(req) as MindosMcpServerCopyRequest, {
         agents: services.mcpAgents ?? {},
         readSettings: services.readSettings,
         env: process.env,

@@ -235,16 +235,40 @@ export interface McpBulkReconnectResult {
   ok: boolean;
 }
 
+export function createMcpReconnectPlan(agents: AgentInfo[]): {
+  targets: AgentInfo[];
+  skipped: AgentInfo[];
+} {
+  return {
+    targets: agents.filter((agent) => agent.present),
+    skipped: agents.filter((agent) => !agent.present),
+  };
+}
+
 export function summarizeMcpBulkReconnectResults(results: McpBulkReconnectResult[]): {
   total: number;
   succeeded: number;
   failed: number;
+  skipped: number;
+};
+export function summarizeMcpBulkReconnectResults(results: McpBulkReconnectResult[], skipped: number): {
+  total: number;
+  succeeded: number;
+  failed: number;
+  skipped: number;
+};
+export function summarizeMcpBulkReconnectResults(results: McpBulkReconnectResult[], skipped = 0): {
+  total: number;
+  succeeded: number;
+  failed: number;
+  skipped: number;
 } {
   const failed = results.filter((item) => !item.ok).length;
   return {
-    total: results.length,
+    total: results.length + skipped,
     succeeded: results.length - failed,
     failed,
+    skipped,
   };
 }
 

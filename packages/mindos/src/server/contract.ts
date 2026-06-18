@@ -105,6 +105,7 @@ export const MINDOS_SERVER_ROUTES: MindosServerRouteContract[] = [
   { id: 'mcp.tools', method: 'GET', path: '/api/mcp/tools', auth: 'required' },
   { id: 'mcp.direct-tools', method: 'POST', path: '/api/mcp/direct-tools', auth: 'required' },
   { id: 'mcp.install', method: 'POST', path: '/api/mcp/install', auth: 'required' },
+  { id: 'mcp.copy-server', method: 'POST', path: '/api/mcp/copy-server', auth: 'required' },
   { id: 'mcp.install-skill', method: 'POST', path: '/api/mcp/install-skill', auth: 'required' },
   { id: 'mcp.restart', method: 'POST', path: '/api/mcp/restart', auth: 'required' },
   { id: 'mcp.uninstall', method: 'POST', path: '/api/mcp/uninstall', auth: 'required' },

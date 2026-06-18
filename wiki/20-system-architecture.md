@@ -93,6 +93,7 @@ mindos/
 | `GET /api/update-check` | 检查更新 |
 | `GET /api/mcp/agents` | MCP Agent列表 |
 | `POST /api/mcp/install` | MCP安装 |
+| `POST /api/mcp/copy-server` | 将已配置的 MCP Server 复制/安装到另一个 Agent |
 | `POST /api/mcp/install-skill` | Skill安装 |
 | `GET /api/mcp/status` | MCP状态 |
 | `GET /api/setup` | 安装设置 |
@@ -126,7 +127,7 @@ mindos/
 | `GET /api/file/raw` | 原始文件内容（无解析） |
 | `POST /api/mcp/direct-tools` | MCP 工具直接调用 |
 | `GET /api/mcp/tools` | MCP 工具列表 |
-| `POST /api/mcp/uninstall` | MCP Agent 卸载 |
+| `POST /api/mcp/uninstall` | MCP Agent 卸载；可指定 `serverName` 移除非 MindOS server |
 | `POST /api/agents/copy-skill` | 跨 Agent 复制 Skill |
 | `GET/POST /api/agents/custom` | 自定义 Agent CRUD |
 | `POST /api/agents/custom/detect` | 自定义 Agent 检测 |

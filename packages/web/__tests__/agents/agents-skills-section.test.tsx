@@ -37,13 +37,13 @@ function makeAgent(
   key: string,
   name: string,
   installedSkillNames: string[],
-  options: { present?: boolean } = {},
+  options: { present?: boolean; installed?: boolean } = {},
 ): McpContextValue['agents'][number] {
   return {
     key,
     name,
     present: options.present ?? true,
-    installed: options.present ?? true,
+    installed: options.installed ?? (options.present ?? true),
     hasProjectScope: true,
     hasGlobalScope: true,
     preferredTransport: 'stdio',
@@ -358,6 +358,22 @@ describe('AgentsSkillsSection agent links', () => {
       body: JSON.stringify({ action: 'link', name: 'todo-task-lookup', agentKey: 'cursor' }),
     }));
     expect(mockApiFetch).not.toHaveBeenCalledWith('/api/agents/copy-skill', expect.anything());
+  });
+
+  it('offers skill-capable detected agents even when MindOS MCP is not installed', async () => {
+    const mcp = makeMcp({
+      agents: [
+        makeAgent('claude-code', 'Claude Code', ['todo-task-lookup']),
+        makeAgent('cursor', 'Cursor', [], { present: true, installed: false }),
+      ],
+    } as never);
+    const { container } = renderSection(mcp);
+
+    const card = skillCardOf(container, 'todo-task-lookup');
+    click(findButtonByLabel(card, copy.addAgentToSkill)!);
+
+    const option = findPickerOption(card, 'Cursor') ?? findButtonByText(card, 'Cursor');
+    expect(option, 'Cursor should be available for skill linking without MCP install').toBeTruthy();
   });
 
   it('adding an agent to a native skill still goes through the copy-skill route with its source path', async () => {

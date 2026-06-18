@@ -5,6 +5,7 @@ import {
   aggregateCrossAgentSkills,
   buildUnifiedSkillList,
   buildMcpRiskQueue,
+  createMcpReconnectPlan,
   createBulkSkillTogglePlan,
   filterAgentsForMcpWorkspace,
   filterSkillsForAgentDetail,
@@ -178,6 +179,23 @@ describe('MCP workspace model helpers', () => {
     const summary = summarizeMcpBulkReconnectResults([]);
     expect(summary.total).toBe(0);
     expect(summary.failed).toBe(0);
+    expect(summary.skipped).toBe(0);
+  });
+
+  it('plans reconnect only for present agents and reports skipped not-found agents', () => {
+    const plan = createMcpReconnectPlan(agents);
+    expect(plan.targets.map((agent) => agent.key)).toEqual(['cursor']);
+    expect(plan.skipped.map((agent) => agent.key)).toEqual(['ghost']);
+
+    const summary = summarizeMcpBulkReconnectResults([
+      { agentKey: 'cursor', ok: true },
+    ], plan.skipped.length);
+    expect(summary).toMatchObject({
+      total: 2,
+      succeeded: 1,
+      failed: 0,
+      skipped: 1,
+    });
   });
 
   it('builds risk queue from mcp running state and buckets (notFound excluded)', () => {
