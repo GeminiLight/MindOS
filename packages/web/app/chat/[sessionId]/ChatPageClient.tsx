@@ -13,7 +13,7 @@
  * instance needed), then replace the URL with the real session id.
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useLocale } from '@/lib/stores/locale-store';
 import AskContent from '@/components/ask/AskContent';
@@ -27,6 +27,7 @@ import {
 } from '@/lib/ask-session-store';
 import { getRun, hasMessages } from '@/lib/ask-run-store';
 import { closeByKey } from '@/lib/workspace-tabs';
+import { encodePath } from '@/lib/utils';
 
 function decodeSessionId(raw: string): string {
   try {
@@ -55,6 +56,13 @@ function selectSession(id: string) {
 
 function getSessionProjectId(id: string): string | undefined {
   return getSessions().find((session) => session.id === id)?.projectId;
+}
+
+function getSessionDockTarget(id: string): string {
+  const session = getSessions().find((item) => item.id === id);
+  if (session?.projectId) return `/studio/${encodeURIComponent(session.projectId)}`;
+  if (session?.currentFile) return `/view/${encodePath(session.currentFile)}`;
+  return '/wiki';
 }
 
 type Status = 'resolving' | 'ready' | 'missing';
@@ -113,6 +121,11 @@ export default function ChatPageClient({ sessionId: rawSessionId }: { sessionId:
     ? resolved.status
     : !isNew && isSessionAlive(sessionId) ? 'ready' : 'resolving';
 
+  const handleDockToPanel = useCallback(() => {
+    window.dispatchEvent(new Event('mindos:open-ask-panel'));
+    router.push(getSessionDockTarget(sessionId));
+  }, [router, sessionId]);
+
   if (status === 'missing') {
     return (
       <div className="flex h-[calc(100dvh-var(--app-titlebar-h))] items-center justify-center px-6">
@@ -164,6 +177,7 @@ export default function ChatPageClient({ sessionId: rawSessionId }: { sessionId:
           maximized
           initialSessionId={sessionId}
           projectId={getSessionProjectId(sessionId)}
+          onDockToPanel={handleDockToPanel}
         />
       </div>
     </div>

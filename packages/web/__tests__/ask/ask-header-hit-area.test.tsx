@@ -77,6 +77,30 @@ describe('AskHeader panel hit area', () => {
     expect(html).toContain('rounded-lg');
   });
 
+  it('shows dock and save actions together for maximized full-page sessions with content', () => {
+    const html = renderToStaticMarkup(
+      <AskHeader
+        isPanel
+        showHistory={false}
+        onToggleHistory={vi.fn()}
+        onReset={vi.fn()}
+        isLoading={false}
+        maximized
+        onDockToPanel={vi.fn()}
+        sessions={[
+          { id: '1', title: 'Full page session' } as any,
+        ]}
+        activeSessionId="1"
+        messages={[{ role: 'assistant', content: 'summary' } as any]}
+      />,
+    );
+
+    expect(html).toContain('title="Dock to side panel"');
+    expect(html).toContain('title="Save Session"');
+    expect(html).toContain('data-ask-header-actions');
+    expect(html).not.toContain('title="Focus mode"');
+  });
+
   it('opens the session dropdown for a single selected Claude Code session', async () => {
     const host = document.createElement('div');
     document.body.appendChild(host);

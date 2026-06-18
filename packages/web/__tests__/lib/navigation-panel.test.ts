@@ -9,11 +9,13 @@ import {
   getRailActivePanel,
   getRailPanelClickDecision,
   getRouteControlledPanel,
+  getTitlebarSidebarExpandPanel,
   isStudioRoute,
   isNeutralContentRoute,
   recoverStaleCapturePanel,
   recoverStaleRoutePanel,
   ROUTE_PANEL_HREF,
+  shouldSuppressRoutePanel,
 } from '@/lib/navigation-panel';
 
 describe('navigation panel route recovery', () => {
@@ -108,6 +110,23 @@ describe('navigation panel route recovery', () => {
     expect(getActiveLeftPanel('/chat/session-123', 'home')).toBe('home');
     expect(getActiveLeftPanel('/chat/session-123', 'studio')).toBe('studio');
     expect(getRailActivePanel('/chat/session-123', 'files')).toBe('files');
+  });
+
+  it('lets the titlebar restore the most relevant sidebar panel', () => {
+    expect(getTitlebarSidebarExpandPanel('/', 'files')).toBe('home');
+    expect(getTitlebarSidebarExpandPanel('/studio/launch-practice', 'files')).toBe('studio');
+    expect(getTitlebarSidebarExpandPanel('/agents', 'files')).toBe('agents');
+    expect(getTitlebarSidebarExpandPanel('/view/Notes/example.md', null)).toBe('files');
+    expect(getTitlebarSidebarExpandPanel('/chat/session-123', 'studio')).toBe('studio');
+    expect(getTitlebarSidebarExpandPanel('/settings', 'search')).toBe('files');
+  });
+
+  it('can suppress route-owned panels without losing their rail highlight', () => {
+    expect(shouldSuppressRoutePanel('/studio', 'studio', null, 'studio')).toBe(true);
+    expect(shouldSuppressRoutePanel('/agents/codex', 'agents', 'files', 'agents')).toBe(true);
+    expect(shouldSuppressRoutePanel('/studio', 'search', 'search', 'studio')).toBe(false);
+    expect(shouldSuppressRoutePanel('/studio', 'studio', null, 'agents')).toBe(false);
+    expect(getRailActivePanel('/studio', null)).toBe('studio');
   });
 
   it('clears stale workbench panels on neutral routes while preserving utility panels', () => {

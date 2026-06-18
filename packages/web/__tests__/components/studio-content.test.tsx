@@ -77,6 +77,7 @@ describe('StudioContent', () => {
 
     expect(host.textContent).toContain('New Project');
     expect(host.textContent).toContain('Projects');
+    expect(host.textContent).not.toContain('Project practice');
     expect(host.textContent).not.toContain('Recent Projects');
     expect(host.textContent).not.toContain('New session');
     expect(host.querySelector('a[href="/studio/launch-practice"]')).not.toBeNull();
@@ -95,8 +96,14 @@ describe('StudioContent', () => {
 
     expect(host.textContent).toContain('Overview');
     expect(host.textContent).toContain('Projects');
-    expect(host.querySelector('a[href="/studio"]')).not.toBeNull();
+    const overview = host.querySelector('a[href="/studio"]');
+    expect(overview).not.toBeNull();
+    expect(overview?.className).toContain('gap-3');
+    expect(overview?.className).toContain('px-4');
+    expect(overview?.className).toContain('py-2.5');
     expect(host.querySelector('a[href="/studio/launch-practice"]')).not.toBeNull();
+    expect(host.textContent).not.toContain('Research Kit');
+    expect(host.textContent).not.toContain('2 Sessions');
   });
 
   it('shows Sessions under the selected Project in the unified Studio panel', async () => {

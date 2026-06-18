@@ -84,9 +84,11 @@ export function useAskPanel(): AskPanelState {
     };
     window.addEventListener('storage', onStorage);
 
-    // Listen for "dock to panel" from home page fullscreen
+    // Listen for "dock to panel" from home page/full-page chat fullscreen.
+    // While on /chat/* the panel remains visually suppressed by SidebarLayout,
+    // but keeping askPanelOpen=true lets the next content route open docked
+    // without a lost event during navigation.
     const onOpenPanel = () => {
-      if (fullPageChat) return;
       setAskPanelOpen(true);
       if (askMaximizedRef.current) {
         setAskMaximized(false);

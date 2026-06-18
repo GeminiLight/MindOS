@@ -9,7 +9,6 @@ import {
   FolderOpen,
   ListChecks,
   Plus,
-  Sparkles,
   Target,
 } from 'lucide-react';
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
@@ -34,7 +33,6 @@ import StudioNewProjectDialog from './StudioNewProjectDialog';
 
 const COPY = {
   en: {
-    eyebrow: 'Project practice',
     title: 'Studio',
     subtitle: 'Projects carry context, sessions, and review.',
     continueTitle: 'Continue',
@@ -83,7 +81,6 @@ const COPY = {
     fromRecentProject: 'Recent Project',
   },
   zh: {
-    eyebrow: 'Project 实践',
     title: 'Studio',
     subtitle: 'Project 承载上下文、Session 和复盘。',
     continueTitle: '继续推进',
@@ -426,10 +423,6 @@ export default function StudioContent() {
         <header className="mb-6">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div className="min-w-0">
-              <div className="mb-3 inline-flex items-center gap-2 rounded-md border border-border/70 bg-card/70 px-2.5 py-1 text-xs font-medium text-muted-foreground">
-                <Sparkles size={12} className="text-[var(--amber)]" aria-hidden="true" />
-                {copy.eyebrow}
-              </div>
               <h1 className="text-2xl font-semibold text-foreground">
                 {copy.title}
               </h1>

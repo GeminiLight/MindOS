@@ -133,8 +133,40 @@ describe('/chat/<id> with an alive session', () => {
     expect(getActiveSessionId()).toBe(idA);
     expect(getSessions().some((s) => s.id === idB)).toBe(false);
     expect(mockAskContentProps).toHaveBeenCalledWith(
-      expect.objectContaining({ initialSessionId: idA, visible: true, variant: 'home' }),
+      expect.objectContaining({ initialSessionId: idA, visible: true, variant: 'home', onDockToPanel: expect.any(Function) }),
     );
+  });
+
+  it('docks a full-page chat back to the right panel on the wiki surface by default', async () => {
+    resetSession();
+    const id = getActiveSessionId()!;
+    setMessages(id, [{ role: 'user', content: 'hello' }], { skipPersist: true });
+
+    await renderPage(id);
+
+    const props = mockAskContentProps.mock.calls.at(-1)?.[0] as { onDockToPanel?: () => void };
+    expect(props.onDockToPanel).toEqual(expect.any(Function));
+
+    await act(async () => {
+      props.onDockToPanel?.();
+    });
+
+    expect(routerPush).toHaveBeenCalledWith('/wiki');
+  });
+
+  it('docks a file-scoped full-page chat back to its current file', async () => {
+    resetSession({ currentFile: 'Notes/example.md' });
+    const id = getActiveSessionId()!;
+    setMessages(id, [{ role: 'user', content: 'hello' }], { skipPersist: true });
+
+    await renderPage(id);
+
+    const props = mockAskContentProps.mock.calls.at(-1)?.[0] as { onDockToPanel?: () => void };
+    await act(async () => {
+      props.onDockToPanel?.();
+    });
+
+    expect(routerPush).toHaveBeenCalledWith('/view/Notes/example.md');
   });
 
   it('renders chat (not fallback) for a session alive only in the run store (evicted from server list)', async () => {
@@ -192,8 +224,16 @@ describe('/chat/<id> with an alive session', () => {
       expect.objectContaining({
         initialSessionId: 'project-chat-1',
         projectId: 'launch-practice',
+        onDockToPanel: expect.any(Function),
       }),
     );
+
+    const props = mockAskContentProps.mock.calls.at(-1)?.[0] as { onDockToPanel?: () => void };
+    await act(async () => {
+      props.onDockToPanel?.();
+    });
+
+    expect(routerPush).toHaveBeenCalledWith('/studio/launch-practice');
   });
 });
 

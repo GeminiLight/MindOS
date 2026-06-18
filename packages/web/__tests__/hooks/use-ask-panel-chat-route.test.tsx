@@ -74,7 +74,7 @@ describe('useAskPanel full-page chat guard', () => {
     act(() => root.unmount());
   });
 
-  it('refuses direct toggle and dock event on full-page chat routes', () => {
+  it('refuses direct toggle but preserves dock intent on full-page chat routes', () => {
     navState.pathname = '/chat/session-123';
     const { host, root } = renderProbe();
     const probe = host.querySelector('div');
@@ -87,7 +87,13 @@ describe('useAskPanel full-page chat guard', () => {
     act(() => {
       window.dispatchEvent(new CustomEvent('mindos:open-ask-panel'));
     });
-    expect(probe?.getAttribute('data-ask-open')).toBe('false');
+    expect(probe?.getAttribute('data-ask-open')).toBe('true');
+
+    navState.pathname = '/wiki';
+    act(() => {
+      root.render(<Probe />);
+    });
+    expect(probe?.getAttribute('data-ask-open')).toBe('true');
 
     act(() => root.unmount());
   });
@@ -129,7 +135,8 @@ describe('useAskPanel full-page chat guard', () => {
 
     expect(source).not.toContain('const activeLeftPanel = isFullPageChatRoute');
     expect(source).not.toContain('const railActivePanel = isFullPageChatRoute');
-    expect(source).toContain('const activeLeftPanel = homeNavPending');
+    expect(source).toContain('const derivedActiveLeftPanel = homeNavPending');
+    expect(source).toContain('const activeLeftPanel = shouldSuppressRoutePanel');
     expect(source).toContain('const railActivePanel = homeNavPending');
   });
 });

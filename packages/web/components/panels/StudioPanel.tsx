@@ -6,13 +6,13 @@ import { ChevronDown, ChevronRight, LayoutDashboard, Plus } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import PanelHeader from './PanelHeader';
 import { PanelNavRow } from './PanelNavRow';
+import { STABLE_ROW_DISCLOSURE_SLOT_CLASS } from '@/components/shared/StableRowChrome';
 import { refreshSessions, useActiveSessionId, useSessions } from '@/lib/ask-session-store';
 import { useLocale } from '@/lib/stores/locale-store';
 import { cn } from '@/lib/utils';
 import {
   getStudioProjectHref,
   localize,
-  localizeList,
   readStudioProjects,
   STUDIO_NEW_PROJECT_REQUESTED_EVENT,
   sessionStatusLabel,
@@ -61,10 +61,6 @@ function getProjectIdFromPath(pathname: string): string | null {
   } catch {
     return raw;
   }
-}
-
-function firstKit(project: StudioProject, locale: string): string {
-  return localizeList(project.kits, undefined, locale)[0] ?? 'Basic assistant';
 }
 
 function StudioSessionRow({
@@ -131,7 +127,7 @@ function StudioProjectRow({
     <div>
       <div
         className={cn(
-          'group relative flex min-w-0 items-center gap-1 rounded-md border border-transparent px-1 py-1 transition-colors',
+          'group relative flex min-w-0 items-center gap-2 px-3 py-1.5 transition-colors',
           selected ? 'bg-[var(--amber-subtle)] text-foreground' : 'hover:bg-muted/35',
         )}
       >
@@ -143,25 +139,25 @@ function StudioProjectRow({
           aria-label={`${toggleLabel}: ${title}`}
           aria-expanded={expanded}
           onClick={onToggle}
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className={cn(
+            STABLE_ROW_DISCLOSURE_SLOT_CLASS,
+            'rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+          )}
         >
           {expanded ? <ChevronDown size={14} aria-hidden="true" /> : <ChevronRight size={14} aria-hidden="true" />}
         </button>
         <Link
           href={getStudioProjectHref(project.id)}
           onClick={onSelect}
-          className="min-w-0 flex-1 rounded-md px-1.5 py-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="flex min-h-8 min-w-0 flex-1 items-center rounded-md px-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           aria-current={selected ? 'page' : undefined}
         >
           <span className="block truncate text-sm font-medium text-foreground">{title}</span>
-          <span className="mt-0.5 block truncate text-2xs text-muted-foreground">
-            {sessions.length} {copy.sessions} · {firstKit(project, locale)}
-          </span>
         </Link>
       </div>
 
       {expanded ? (
-        <div className="ml-9 mt-1 space-y-0.5 border-l border-border/55 pl-2" aria-label={`${title} ${copy.sessions}`}>
+        <div className="ml-10 mt-1 space-y-0.5 border-l border-border/55 pl-2" aria-label={`${title} ${copy.sessions}`}>
           {sessions.length ? (
             sessions.slice(0, 6).map((session) => (
               <StudioSessionRow key={session.id} session={session} locale={locale} copy={copy} />
@@ -239,8 +235,8 @@ export default function StudioPanel({ active }: StudioPanelProps) {
           <Plus size={13} aria-hidden="true" />
         </button>
       </PanelHeader>
-      <div className="flex-1 overflow-y-auto px-3 py-3">
-        <div className="px-1">
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="py-2">
           <PanelNavRow
             href="/studio"
             icon={<LayoutDashboard size={14} aria-hidden="true" />}
@@ -250,7 +246,7 @@ export default function StudioPanel({ active }: StudioPanelProps) {
           />
         </div>
 
-        <nav className="mt-4" aria-label={copy.recentProjects}>
+        <nav className="border-t border-border/60 px-3 py-3" aria-label={copy.recentProjects}>
           <p className="mb-1.5 px-1 text-2xs font-medium uppercase text-muted-foreground/50">
             {copy.recentProjects}
           </p>

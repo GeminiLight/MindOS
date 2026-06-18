@@ -95,9 +95,18 @@ export function isNeutralContentRoute(pathname: string | null | undefined): bool
   return isRouteSegment(pathname, '/settings') || isRouteSegment(pathname, '/trash');
 }
 
-export function getRouteControlledPanel(pathname: string | null | undefined): PanelId | null {
+export function getRouteControlledPanel(pathname: string | null | undefined): RoutePanelId | null {
   const panel = getContentRoutePanel(pathname);
-  return panel === 'files' ? null : panel;
+  switch (panel) {
+    case 'capture':
+    case 'echo':
+    case 'agents':
+    case 'studio':
+    case 'discover':
+      return panel;
+    default:
+      return null;
+  }
 }
 
 export function getActiveLeftPanel(
@@ -123,6 +132,29 @@ export function getRailActivePanel(
   localActivePanel: PanelId | null,
 ): PanelId | null {
   return getActiveLeftPanel(pathname, localActivePanel) ?? getContentRoutePanel(pathname);
+}
+
+export function getTitlebarSidebarExpandPanel(
+  pathname: string | null | undefined,
+  lastPanel: PanelId | null,
+): PanelId {
+  if (pathname === '/') return 'home';
+  const routePanel = getContentRoutePanel(pathname);
+  if (routePanel) return routePanel;
+  if (lastPanel && lastPanel !== 'search' && lastPanel !== 'workflows') return lastPanel;
+  return 'files';
+}
+
+export function shouldSuppressRoutePanel(
+  pathname: string | null | undefined,
+  activeLeftPanel: PanelId | null,
+  localActivePanel: PanelId | null,
+  suppressedRoutePanel: RoutePanelId | null,
+): boolean {
+  if (!suppressedRoutePanel) return false;
+  if (localActivePanel === 'search' || localActivePanel === 'workflows') return false;
+  const routePanel = getRouteControlledPanel(pathname);
+  return routePanel === suppressedRoutePanel && activeLeftPanel === routePanel;
 }
 
 export function getEffectivePanelMaximized(

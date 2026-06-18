@@ -58,8 +58,10 @@ import {
   getRailActivePanel,
   getRailPanelClickDecision,
   getRouteControlledPanel,
+  getTitlebarSidebarExpandPanel,
   isNeutralContentRoute,
   recoverStaleRoutePanel,
+  shouldSuppressRoutePanel,
   type PanelId,
   type PendingHomeNav,
   type PendingRouteNav,
@@ -248,12 +250,16 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
   // flicker). Any pathname change invalidates the pending entry in-render.
   const [pendingNav, setPendingNav] = useState<PendingRouteNav | null>(null);
   const [pendingHomeNav, setPendingHomeNav] = useState<PendingHomeNav | null>(null);
+  const [suppressedRoutePanel, setSuppressedRoutePanel] = useState<RoutePanelId | null>(null);
   const pendingRoutePanel = getPendingRoutePanel(pathname, pendingNav);
   const pendingHomePanel = getPendingHomePanel(pathname, pendingHomeNav);
   const homeNavPending = pendingHomeNav?.fromPathname === pathname;
-  const activeLeftPanel = homeNavPending
+  const derivedActiveLeftPanel = homeNavPending
     ? pendingHomePanel
     : pendingRoutePanel ?? getActiveLeftPanel(pathname, lp.activePanel);
+  const activeLeftPanel = shouldSuppressRoutePanel(pathname, derivedActiveLeftPanel, lp.activePanel, suppressedRoutePanel)
+    ? null
+    : derivedActiveLeftPanel;
   const railActivePanel = homeNavPending
     ? pendingHomePanel
     : pendingRoutePanel ?? getRailActivePanel(pathname, lp.activePanel);
@@ -265,6 +271,7 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
   // navigation transition animate through 2-4 widths — the flicker.
   const effectivePanelWidth = getLeftPanelWidth(activeLeftPanel, lp.panelWidth);
   const previousSearchPanelRef = useRef<PanelId | null>(null);
+  const lastSidebarPanelRef = useRef<PanelId | null>(pathname === '/' ? 'home' : 'files');
   const [searchFocusRequest, setSearchFocusRequest] = useState(0);
 
   const resolveSearchClosePanel = useCallback((): PanelId | null => {
@@ -307,7 +314,14 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
   // already ignores it from that render on — this is just state hygiene).
   useEffect(() => {
     setPendingNav((prev) => (prev && prev.fromPathname !== pathname ? null : prev));
+    setSuppressedRoutePanel(null);
   }, [pathname]);
+
+  useEffect(() => {
+    if (activeLeftPanel && activeLeftPanel !== 'search' && activeLeftPanel !== 'workflows') {
+      lastSidebarPanelRef.current = activeLeftPanel;
+    }
+  }, [activeLeftPanel]);
 
   useEffect(() => {
     if (!pendingHomeNav || pendingHomeNav.fromPathname === pathname) return;
@@ -698,11 +712,14 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
   const handleSidebarPanelExpandedChange = useCallback((expanded: boolean) => {
     previousSearchPanelRef.current = null;
     if (expanded) {
-      lp.setActivePanel(pathname === '/' ? 'home' : 'files');
+      setSuppressedRoutePanel(null);
+      lp.setActivePanel(getTitlebarSidebarExpandPanel(pathname, lastSidebarPanelRef.current));
     } else {
+      const routePanel = getRouteControlledPanel(pathname);
+      if (routePanel && activeLeftPanel === routePanel) setSuppressedRoutePanel(routePanel);
       lp.setActivePanel(null);
     }
-  }, [lp.setActivePanel, pathname]);
+  }, [activeLeftPanel, lp.setActivePanel, pathname]);
 
   const handleMobileNavigate = useCallback(() => setMobileOpen(false), []);
 
@@ -710,6 +727,7 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
     const nextPanel = getHomeClickPanel(activeLeftPanel);
     flushSync(() => {
       exitAskMaximized();
+      setSuppressedRoutePanel(null);
       previousSearchPanelRef.current = null;
       setAgentDetailKey(null);
       setPendingNav(null);
@@ -729,6 +747,7 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
     exitAskMaximized();
     const decision = getRailPanelClickDecision(pathname, activeLeftPanel, targetPanel);
     event.preventDefault();
+    setSuppressedRoutePanel(null);
     if (!decision.preventDefault) {
       // Real navigation starts — keep the clicked target active until it commits
       setPendingNav({ target: targetPanel, fromPathname: pathname });
