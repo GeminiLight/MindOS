@@ -8,13 +8,12 @@ describe('ViewPageClient header scroll stability', () => {
     const source = fs.readFileSync(filePath, 'utf8');
 
     // #main-content already compensates for Ask panel / agent detail.
-    // Header may reclaim only the TOC reserve so the breadcrumb/action row spans
-    // above both the markdown body and TOC, without sliding under right panels.
+    // The header itself should not duplicate those offsets.
     expect(source).not.toContain('var(--right-panel-width, 0px)');
     expect(source).not.toContain('var(--right-agent-detail-width, 0px)');
   });
 
-  it('uses TOC width only to extend the topbar over the TOC reserve', () => {
+  it('keeps TOC reserve out of the topbar so header actions do not jump', () => {
     const filePath = path.resolve(process.cwd(), 'app/view/[...path]/ViewPageClient.tsx');
     const source = fs.readFileSync(filePath, 'utf8');
 
@@ -25,10 +24,13 @@ describe('ViewPageClient header scroll stability', () => {
            l.includes('sticky') && l.includes('px-4') && l.includes('top-[52px]')
     );
 
-    expect(source).toContain("width: 'calc(100% + var(--toc-extra-right, 0px))'");
+    expect(source).toContain('className="view-page-topbar sticky top-[52px] md:top-[var(--app-titlebar-h)] z-20 border-b border-border');
+    expect(source).toContain('className={markdownContentClassName}');
+    expect(source).not.toContain("width: 'calc(100% + var(--toc-extra-right, 0px))'");
     expect(source).not.toContain("marginRight: 'calc(var(--toc-extra-right, 0px) * -1)'");
     expect(source).not.toContain('view-topbar-border-extension');
     expect(source).not.toMatch(/paddingRight:\s*['\"`][^'\"`]*toc-extra-right/);
+    expect(source).not.toContain('transition-[width]');
 
     if (headerLine) {
       expect(headerLine).not.toContain('paddingRight');

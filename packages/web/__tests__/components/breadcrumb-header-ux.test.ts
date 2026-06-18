@@ -12,6 +12,7 @@ describe('Breadcrumb header UX', () => {
     expect(source).toContain('MoreHorizontal');
     expect(source).toContain('Show hidden folders');
     expect(source).toContain('truncate max-w-[180px] sm:max-w-[260px] md:max-w-[360px]');
+    expect(source).toContain("const BREADCRUMB_HOME_HREF = '/wiki';");
     expect(source).not.toContain('flex-wrap');
   });
 

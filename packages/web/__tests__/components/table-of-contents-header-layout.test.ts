@@ -15,18 +15,30 @@ describe('TableOfContents header layout', () => {
     expect(source).not.toContain('py-5 pl-2 pr-3 border-l border-border');
   });
 
-  it('syncs TOC width before paint and persists collapse state globally', () => {
+  it('keeps collapse state global without publishing layout width to the app shell', () => {
     const filePath = path.resolve(process.cwd(), 'components/TableOfContents.tsx');
     const source = fs.readFileSync(filePath, 'utf8');
 
-    expect(source).toContain('useLayoutEffect');
+    expect(source).toContain('export function hasTableOfContents(content: string): boolean');
     expect(source).toContain("const TOC_COLLAPSED_KEY = 'mindos.toc.collapsed';");
     expect(source).toContain("const TOC_COLLAPSED_EVENT = 'mindos:toc-collapsed-change';");
     expect(source).toContain('parseHeadings(content)');
     expect(source).toContain('const handleCollapsedToggle = useCallback(() => {');
     expect(source).toContain('onClick={handleCollapsedToggle}');
+    expect(source).not.toContain('useLayoutEffect');
+    expect(source).not.toContain("setProperty('--toc-width'");
+    expect(source).not.toContain("setProperty('--toc-margin'");
+    expect(source).not.toContain('removeProperty(\'--toc-width\')');
     expect(source).not.toContain('setCollapsed(value => {');
     expect(source).not.toContain('useDeferredValue');
+  });
+
+  it('keeps the TOC handle anchored to a stable right-side lane', () => {
+    const filePath = path.resolve(process.cwd(), 'components/TableOfContents.tsx');
+    const source = fs.readFileSync(filePath, 'utf8');
+
+    expect(source).toContain('right: `calc(var(--right-panel-width, 0px) + ${NAV_W}px)`');
+    expect(source).not.toContain('right: `calc(var(--right-panel-width, 0px) + ${collapsed ? 0 : NAV_W}px)`');
   });
 
   it('does not swallow anchor navigation when rendered headings are not yet available', () => {

@@ -81,13 +81,17 @@ describe('Sidebar width contract', () => {
 
   it('wires the titlebar sidebar button to the left panel, not the rail width', () => {
     const sidebarLayout = readSource('components/SidebarLayout.tsx');
+    const leftPanel = readSource('hooks/useLeftPanel.ts');
 
     expect(sidebarLayout).toContain('const handleSidebarPanelExpandedChange = useCallback((expanded: boolean) => {');
+    expect(sidebarLayout).toContain('lp.handleSidebarExpandedChange(expanded);');
     expect(sidebarLayout).toContain('getTitlebarSidebarExpandPanel(pathname, lastSidebarPanelRef.current)');
     expect(sidebarLayout).toContain('lp.setActivePanel(null)');
+    expect(sidebarLayout).toContain('const activeLeftPanel = lp.sidebarExpanded && !routePanelSuppressed ? derivedActiveLeftPanel : null;');
     expect(sidebarLayout).toContain('sidebarExpanded={panelOpen}');
     expect(sidebarLayout).toContain('onSidebarExpandedChange={handleSidebarPanelExpandedChange}');
     expect(sidebarLayout).not.toContain('sidebarExpanded={lp.railExpanded}');
     expect(sidebarLayout).not.toContain('onSidebarExpandedChange={handleExpandedChange}');
+    expect(leftPanel).toContain("const SIDEBAR_EXPANDED_STORAGE_KEY = 'mindos.sidebar.expanded';");
   });
 });

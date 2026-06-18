@@ -56,7 +56,10 @@ vi.mock('@/components/CsvView', () => ({ default: () => <div /> }));
 vi.mock('@/components/Backlinks', () => ({ default: () => <div /> }));
 vi.mock('@/components/Breadcrumb', () => ({ default: () => <div /> }));
 vi.mock('@/components/EditorWrapper', () => ({ default: () => <div /> }));
-vi.mock('@/components/TableOfContents', () => ({ default: () => <div /> }));
+vi.mock('@/components/TableOfContents', () => ({
+  default: () => <div />,
+  hasTableOfContents: () => false,
+}));
 vi.mock('@/components/FindInPage', () => ({ default: () => <div /> }));
 vi.mock('@/components/DirPicker', () => ({ default: () => <div /> }));
 vi.mock('@/components/ExportModal', () => ({ default: () => null }));

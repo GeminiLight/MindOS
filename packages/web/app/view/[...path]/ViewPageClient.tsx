@@ -13,7 +13,7 @@ import '@/lib/renderers/index';
 import Breadcrumb from '@/components/Breadcrumb';
 import MarkdownEditor, { MdViewMode } from '@/components/MarkdownEditor';
 import EditorWrapper from '@/components/EditorWrapper';
-import TableOfContents from '@/components/TableOfContents';
+import TableOfContents, { hasTableOfContents } from '@/components/TableOfContents';
 import FindInPage from '@/components/FindInPage';
 import { resolveRenderer, isRendererEnabled } from '@/lib/renderers/registry';
 import { encodePath } from '@/lib/utils';
@@ -581,6 +581,14 @@ export default function ViewPageClient({
     ? 'preview'
     : (mdViewMode === 'source' ? 'source' : 'wysiwyg');
   const activeMarkdownModeOption = markdownModeOptions.find(option => option.id === activeMarkdownMode) ?? markdownModeOptions[0];
+  const shouldReserveTocLane = isMarkdown && !showRenderer && (
+    editing
+      ? mdViewMode !== 'source' && hasTableOfContents(editContent)
+      : hasTableOfContents(normalizedSavedMarkdown)
+  );
+  const markdownContentClassName = shouldReserveTocLane
+    ? 'content-width toc-reserved-content'
+    : 'content-width';
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -658,11 +666,8 @@ export default function ViewPageClient({
     <div className="flex flex-col min-h-[calc(100vh-var(--app-titlebar-h))]">
       {/* Top bar */}
       <div
-        className="view-page-topbar sticky top-[52px] md:top-[var(--app-titlebar-h)] z-20 border-b border-border px-4 md:px-6 h-[var(--workspace-header-h)] flex items-center transition-[width] duration-200"
-        style={{
-          background: 'var(--background)',
-          width: 'calc(100% + var(--toc-extra-right, 0px))',
-        }}
+        className="view-page-topbar sticky top-[52px] md:top-[var(--app-titlebar-h)] z-20 border-b border-border px-4 md:px-6 h-[var(--workspace-header-h)] flex items-center"
+        style={{ background: 'var(--background)' }}
       >
         <div className="view-header-row w-full min-w-0 flex items-center justify-between gap-3 h-full">
           <div className="view-header-breadcrumb min-w-0 flex-1 flex items-center gap-1.5">
@@ -944,7 +949,7 @@ export default function ViewPageClient({
         ) : isMarkdown && !showRenderer ? (
           <>
             {editing && (
-              <div className="content-width">
+              <div className={markdownContentClassName}>
                 {isDraft && showSaveAs && (
                   <div className="mb-3 rounded-lg border border-border bg-card p-3 flex flex-col gap-2">
                     <div>
@@ -979,7 +984,7 @@ export default function ViewPageClient({
               </div>
             )}
             {!editing && (
-              <div ref={contentRef} className="content-width">
+              <div ref={contentRef} className={markdownContentClassName}>
                 {findOpen && <FindInPage containerRef={contentRef} onClose={() => setFindOpen(false)} />}
                 <MarkdownView content={normalizedSavedMarkdown} sourcePath={filePath} highlightLines={changedLines} onDismissHighlight={() => setChangedLines([])} emptyPlaceholder={t.view?.emptyNote} />
                 <TableOfContents content={normalizedSavedMarkdown} />

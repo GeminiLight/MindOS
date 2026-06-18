@@ -8,6 +8,8 @@ import { RAIL_WIDTH_COLLAPSED, RAIL_WIDTH_EXPANDED } from '@/components/Activity
 export interface LeftPanelState {
   activePanel: PanelId | null;
   setActivePanel: (p: PanelId | null | ((prev: PanelId | null) => PanelId | null)) => void;
+  /** Global left-sidebar visibility preference, shared by all routes. */
+  sidebarExpanded: boolean;
   /** User-resized width (global across panels) — null until the user resizes */
   panelWidth: number | null;
   panelMaximized: boolean;
@@ -16,7 +18,20 @@ export interface LeftPanelState {
   handlePanelWidthChange: (w: number) => void;
   handlePanelWidthCommit: (w: number) => void;
   handlePanelMaximize: () => void;
+  handleSidebarExpandedChange: (expanded: boolean) => void;
   handleExpandedChange: (expanded: boolean) => void;
+}
+
+const SIDEBAR_EXPANDED_STORAGE_KEY = 'mindos.sidebar.expanded';
+
+function readSidebarExpanded(defaultExpanded: boolean): boolean {
+  if (typeof window === 'undefined') return defaultExpanded;
+  try {
+    const stored = window.localStorage.getItem(SIDEBAR_EXPANDED_STORAGE_KEY);
+    if (stored === 'true') return true;
+    if (stored === 'false') return false;
+  } catch {}
+  return defaultExpanded;
 }
 
 /**
@@ -25,6 +40,7 @@ export interface LeftPanelState {
  */
 export function useLeftPanel(initialActivePanel: PanelId | null = 'files'): LeftPanelState {
   const [activePanel, setActivePanel] = useState<PanelId | null>(initialActivePanel);
+  const [sidebarExpanded, setSidebarExpanded] = useState(() => readSidebarExpanded(initialActivePanel !== null));
   const [panelWidth, setPanelWidth] = useState<number | null>(null);
   const [panelMaximized, setPanelMaximized] = useState(false);
   const [railExpanded, setRailExpanded] = useState(false);
@@ -88,6 +104,11 @@ export function useLeftPanel(initialActivePanel: PanelId | null = 'files'): Left
   }, []);
   const handlePanelMaximize = useCallback(() => setPanelMaximized(v => !v), []);
 
+  const handleSidebarExpandedChange = useCallback((expanded: boolean) => {
+    setSidebarExpanded(expanded);
+    try { localStorage.setItem(SIDEBAR_EXPANDED_STORAGE_KEY, String(expanded)); } catch {}
+  }, []);
+
   const handleExpandedChange = useCallback((expanded: boolean) => {
     setRailExpanded(expanded);
     try { localStorage.setItem('rail-expanded', String(expanded)); } catch {}
@@ -97,8 +118,10 @@ export function useLeftPanel(initialActivePanel: PanelId | null = 'files'): Left
 
   return {
     activePanel, setActivePanel,
+    sidebarExpanded,
     panelWidth, panelMaximized, railExpanded, railWidth,
     handlePanelWidthChange, handlePanelWidthCommit, handlePanelMaximize,
+    handleSidebarExpandedChange,
     handleExpandedChange,
   };
 }

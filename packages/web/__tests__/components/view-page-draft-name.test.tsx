@@ -52,7 +52,10 @@ vi.mock('@/components/MarkdownEditor', () => ({
   default: () => <textarea aria-label="Editor" />,
 }));
 vi.mock('@/components/EditorWrapper', () => ({ default: ({ children }: { children: React.ReactNode }) => <>{children}</> }));
-vi.mock('@/components/TableOfContents', () => ({ default: () => <div /> }));
+vi.mock('@/components/TableOfContents', () => ({
+  default: () => <div />,
+  hasTableOfContents: () => false,
+}));
 vi.mock('@/components/FindInPage', () => ({ default: () => <div /> }));
 vi.mock('@/components/DirPicker', () => ({ default: () => <div /> }));
 vi.mock('@/components/ExportModal', () => ({ default: () => null }));

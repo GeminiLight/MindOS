@@ -113,6 +113,55 @@ describe('useLeftPanel drag width updates', () => {
     expect(latest!.panelWidth).toBe(312);
   });
 
+  it('persists the left sidebar expanded preference independently from the active panel', async () => {
+    expect(latest!.activePanel).toBe('files');
+    expect(latest!.sidebarExpanded).toBe(true);
+
+    await act(async () => {
+      latest!.handleSidebarExpandedChange(false);
+    });
+    expect(latest!.activePanel).toBe('files');
+    expect(latest!.sidebarExpanded).toBe(false);
+    expect(localStorage.getItem('mindos.sidebar.expanded')).toBe('false');
+
+    await act(async () => {
+      latest!.setActivePanel('agents');
+    });
+    expect(latest!.activePanel).toBe('agents');
+    expect(latest!.sidebarExpanded).toBe(false);
+
+    await act(async () => {
+      latest!.handleSidebarExpandedChange(true);
+    });
+    expect(latest!.sidebarExpanded).toBe(true);
+    expect(localStorage.getItem('mindos.sidebar.expanded')).toBe('true');
+  });
+
+  it('restores the persisted left sidebar collapsed preference on mount', async () => {
+    if (root) {
+      const r = root;
+      root = null;
+      await act(async () => { r.unmount(); });
+    }
+    host.remove();
+    localStorage.setItem('mindos.sidebar.expanded', 'false');
+
+    const { useLeftPanel } = await import('@/hooks/useLeftPanel');
+    function Probe() {
+      latest = useLeftPanel('files');
+      renderCount += 1;
+      return null;
+    }
+
+    host = document.createElement('div');
+    document.body.appendChild(host);
+    root = createRoot(host);
+    await act(async () => { root!.render(<Probe />); });
+
+    expect(latest!.activePanel).toBe('files');
+    expect(latest!.sidebarExpanded).toBe(false);
+  });
+
   it('keeps applying frames across a long drag', async () => {
     await act(async () => { latest!.handlePanelWidthChange(320); });
     await flushRaf();

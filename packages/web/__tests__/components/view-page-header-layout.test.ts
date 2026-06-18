@@ -14,7 +14,7 @@ describe('ViewPageClient header layout', () => {
     expect(source).not.toContain('h-[46px] flex items-center transition-[width]');
   });
 
-  it('lets the header span the TOC reserve without squeezing the breadcrumb', () => {
+  it('keeps the header independent from the Markdown TOC reserve', () => {
     const viewFile = path.resolve(process.cwd(), 'app/view/[...path]/ViewPageClient.tsx');
     const cssFile = path.resolve(process.cwd(), 'app/globals.css');
     const layoutFile = path.resolve(process.cwd(), 'components/SidebarLayout.tsx');
@@ -24,16 +24,23 @@ describe('ViewPageClient header layout', () => {
 
     expect(viewSource).toContain('className="view-header-actions flex items-center gap-1.5 md:gap-2 shrink-0"');
     expect(viewSource).toContain('className="view-header-breadcrumb min-w-0 flex-1 flex items-center gap-1.5"');
-    expect(viewSource).toContain("width: 'calc(100% + var(--toc-extra-right, 0px))'");
+    expect(viewSource).toContain("const markdownContentClassName = shouldReserveTocLane");
+    expect(viewSource).toContain("'content-width toc-reserved-content'");
+    expect(viewSource).not.toContain("width: 'calc(100% + var(--toc-extra-right, 0px))'");
     expect(viewSource).not.toContain("marginRight: 'calc(var(--toc-extra-right, 0px) * -1)'");
     expect(viewSource).not.toContain('view-topbar-border-extension');
     expect(viewSource).not.toMatch(/paddingRight:\s*['"`][^'"`]*toc-extra-right/);
     expect(viewSource).not.toContain('view-header-actions-reserve');
     expect(layoutSource).not.toContain("overflowX: 'clip'");
     expect(layoutSource).not.toContain('overflowClipMargin');
+    expect(layoutSource).toContain('padding-right: calc(var(--right-panel-width) + var(--right-agent-detail-width)) !important;');
+    expect(layoutSource).not.toContain('var(--toc-extra-right');
 
+    expect(cssSource).toContain('.toc-reserved-content { margin-right: 220px; }');
     expect(cssSource).not.toContain('.view-header-actions-reserve');
     expect(cssSource).not.toContain('.view-header-actions {');
+    expect(cssSource).not.toContain('--toc-width');
+    expect(cssSource).not.toContain('--toc-extra-right');
     expect(cssSource).not.toContain('top: calc(var(--app-titlebar-h) + 0.4375rem);');
     expect(cssSource).not.toContain('right: calc(var(--right-panel-width, 0px) + var(--right-agent-detail-width, 0px) + 1.5rem);');
   });

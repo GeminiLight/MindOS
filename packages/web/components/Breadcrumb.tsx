@@ -9,6 +9,8 @@ const FRIENDLY_PATHS: Record<string, { icon: React.ReactNode; getLabel: (t: Retu
   '.mindos/change-log.json': { icon: <History size={13} className="text-[var(--amber)] shrink-0" />, getLabel: (t) => t.changes.title },
 };
 
+const BREADCRUMB_HOME_HREF = '/wiki';
+
 function FileTypeIcon({ name }: { name: string }) {
   const ext = name.includes('.') ? name.slice(name.lastIndexOf('.')).toLowerCase() : '';
   if (ext === '.csv') return <Table size={13} className="text-success shrink-0" />;
@@ -127,9 +129,9 @@ export default function Breadcrumb({ filePath }: { filePath: string }) {
     return (
       <nav className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground flex-nowrap">
         <Link
-          href="/"
+          href={BREADCRUMB_HOME_HREF}
           className="hit-target-box inline-flex h-8 w-8 shrink-0 items-center justify-center text-muted-foreground transition-colors duration-75 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation [--hit-target-hover-bg:color-mix(in_srgb,var(--muted)_50%,transparent)] [--hit-target-radius:var(--radius-md)]"
-          title="Home"
+          title={t.sidebar.files}
         >
           <Home size={14} />
         </Link>
@@ -149,9 +151,9 @@ export default function Breadcrumb({ filePath }: { filePath: string }) {
   return (
     <nav ref={navRef} className="relative flex min-w-0 items-center gap-1 text-xs text-muted-foreground flex-nowrap">
       <Link
-        href="/"
+        href={BREADCRUMB_HOME_HREF}
         className="hit-target-box inline-flex h-8 w-8 shrink-0 items-center justify-center text-muted-foreground transition-colors duration-75 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation [--hit-target-hover-bg:color-mix(in_srgb,var(--muted)_50%,transparent)] [--hit-target-radius:var(--radius-md)]"
-        title="Home"
+        title={t.sidebar.files}
       >
         <Home size={14} />
       </Link>

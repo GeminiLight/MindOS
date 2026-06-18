@@ -61,7 +61,10 @@ vi.mock('@/components/MarkdownEditor', () => ({ default: () => <textarea aria-la
 vi.mock('@/components/EditorWrapper', () => ({
   default: ({ value }: { value: string }) => <textarea aria-label="Plain editor" defaultValue={value} />,
 }));
-vi.mock('@/components/TableOfContents', () => ({ default: () => <div /> }));
+vi.mock('@/components/TableOfContents', () => ({
+  default: () => <div />,
+  hasTableOfContents: () => false,
+}));
 vi.mock('@/components/FindInPage', () => ({ default: () => <div /> }));
 vi.mock('@/components/DirPicker', () => ({ default: () => <div /> }));
 vi.mock('@/components/ExportModal', () => ({ default: () => null }));

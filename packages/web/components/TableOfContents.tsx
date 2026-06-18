@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef, useCallback, useLayoutEffect, useMemo } from 'react';
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { ChevronRight } from 'lucide-react';
 import GithubSlugger from 'github-slugger';
 import { useLocale } from '@/lib/stores/locale-store';
@@ -53,6 +53,10 @@ function parseHeadings(content: string): Heading[] {
   }
 
   return headings;
+}
+
+export function hasTableOfContents(content: string): boolean {
+  return parseHeadings(content).length >= 2;
 }
 
 const VIEW_HEADER_FALLBACK_H = 40;
@@ -159,19 +163,6 @@ export default function TableOfContents({ content }: TableOfContentsProps) {
     };
   }, []);
 
-  // Broadcast TOC width before paint so switching between Markdown files does
-  // not first render full-width and then shift when the TOC effect lands.
-  useLayoutEffect(() => {
-    const root = document.documentElement.style;
-    const hasToc = headings.length >= 2;
-    root.setProperty('--toc-width', collapsed || !hasToc ? '0px' : `${NAV_W}px`);
-    if (collapsed || !hasToc) {
-      root.removeProperty('--toc-margin');
-    } else {
-      root.setProperty('--toc-margin', `${NAV_W + 8}px`);
-    }
-    return () => { root.removeProperty('--toc-width'); root.removeProperty('--toc-margin'); };
-  }, [collapsed, headings.length]);
   const observerRef = useRef<IntersectionObserver | null>(null);
   const navRef = useRef<HTMLElement | null>(null);
   const linkRefs = useRef<Map<number, HTMLAnchorElement>>(new Map());
@@ -254,7 +245,7 @@ export default function TableOfContents({ content }: TableOfContentsProps) {
         onClick={handleCollapsedToggle}
         className="hidden xl:flex fixed z-10 top-[calc(var(--app-titlebar-h)+var(--workspace-header-h))] flex items-center justify-center w-5 h-8 rounded-l-md border border-r-0 border-border hover:bg-muted transition-colors"
         style={{
-          right: `calc(var(--right-panel-width, 0px) + ${collapsed ? 0 : NAV_W}px)`,
+          right: `calc(var(--right-panel-width, 0px) + ${NAV_W}px)`,
           background: 'var(--background)',
           transition: 'right 200ms ease-in-out',
         }}

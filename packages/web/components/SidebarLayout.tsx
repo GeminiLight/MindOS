@@ -257,9 +257,8 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
   const derivedActiveLeftPanel = homeNavPending
     ? pendingHomePanel
     : pendingRoutePanel ?? getActiveLeftPanel(pathname, lp.activePanel);
-  const activeLeftPanel = shouldSuppressRoutePanel(pathname, derivedActiveLeftPanel, lp.activePanel, suppressedRoutePanel)
-    ? null
-    : derivedActiveLeftPanel;
+  const routePanelSuppressed = shouldSuppressRoutePanel(pathname, derivedActiveLeftPanel, lp.activePanel, suppressedRoutePanel);
+  const activeLeftPanel = lp.sidebarExpanded && !routePanelSuppressed ? derivedActiveLeftPanel : null;
   const railActivePanel = homeNavPending
     ? pendingHomePanel
     : pendingRoutePanel ?? getRailActivePanel(pathname, lp.activePanel);
@@ -288,15 +287,17 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
     if (activeLeftPanel && activeLeftPanel !== 'search') {
       previousSearchPanelRef.current = activeLeftPanel;
     }
+    lp.handleSidebarExpandedChange(true);
     lp.setActivePanel('search');
     setSearchFocusRequest((request) => request + 1);
-  }, [activeLeftPanel, lp.setActivePanel]);
+  }, [activeLeftPanel, lp]);
 
   const closeSearchPanel = useCallback(() => {
     const nextPanel = resolveSearchClosePanel();
     previousSearchPanelRef.current = null;
+    lp.handleSidebarExpandedChange(nextPanel !== null);
     lp.setActivePanel(nextPanel);
-  }, [lp.setActivePanel, resolveSearchClosePanel]);
+  }, [lp, resolveSearchClosePanel]);
 
   const toggleSearchPanel = useCallback(() => {
     if (activeLeftPanel === 'search') {
@@ -327,9 +328,10 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
     if (!pendingHomeNav || pendingHomeNav.fromPathname === pathname) return;
     setPendingHomeNav(null);
     if (pathname === '/' && pendingHomeNav.panel) {
+      lp.handleSidebarExpandedChange(true);
       lp.setActivePanel(pendingHomeNav.panel);
     }
-  }, [pathname, pendingHomeNav, lp.setActivePanel]);
+  }, [pathname, pendingHomeNav, lp]);
 
   useEffect(() => {
     if (!isFullPageChatRoute) return;
@@ -443,6 +445,7 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
       if (detail && Object.prototype.hasOwnProperty.call(detail, 'panel')) {
         const panel = detail.panel;
         if (panel === null) {
+          lp.handleSidebarExpandedChange(false);
           lp.setActivePanel(null);
           return;
         }
@@ -450,13 +453,16 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
           openOrFocusSearchPanel();
           return;
         }
-        if (panel) lp.setActivePanel(panel);
+        if (panel) {
+          lp.handleSidebarExpandedChange(true);
+          lp.setActivePanel(panel);
+        }
         return;
       }
     };
     window.addEventListener('mindos:open-panel', handler);
     return () => window.removeEventListener('mindos:open-panel', handler);
-  }, [lp.setActivePanel, openOrFocusSearchPanel]);
+  }, [lp, openOrFocusSearchPanel]);
 
   useEffect(() => {
     const handler = () => {
@@ -711,6 +717,7 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
 
   const handleSidebarPanelExpandedChange = useCallback((expanded: boolean) => {
     previousSearchPanelRef.current = null;
+    lp.handleSidebarExpandedChange(expanded);
     if (expanded) {
       setSuppressedRoutePanel(null);
       lp.setActivePanel(getTitlebarSidebarExpandPanel(pathname, lastSidebarPanelRef.current));
@@ -719,7 +726,7 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
       if (routePanel && activeLeftPanel === routePanel) setSuppressedRoutePanel(routePanel);
       lp.setActivePanel(null);
     }
-  }, [activeLeftPanel, lp.setActivePanel, pathname]);
+  }, [activeLeftPanel, lp, pathname]);
 
   const handleMobileNavigate = useCallback(() => setMobileOpen(false), []);
 
@@ -732,12 +739,13 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
       setAgentDetailKey(null);
       setPendingNav(null);
       setPendingHomeNav(pathname !== '/' ? { fromPathname: pathname, panel: nextPanel } : null);
+      lp.handleSidebarExpandedChange(true);
       lp.setActivePanel(nextPanel);
     });
     if (pathname !== '/') {
       smoothPush('/');
     }
-  }, [activeLeftPanel, exitAskMaximized, lp.setActivePanel, pathname, smoothPush]);
+  }, [activeLeftPanel, exitAskMaximized, lp, pathname, smoothPush]);
 
   const handleRoutePanelClick = useCallback((
     event: React.MouseEvent<HTMLAnchorElement | HTMLButtonElement>,
@@ -754,9 +762,15 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
       smoothPush(ROUTE_PANEL_HREF[targetPanel]);
     }
     previousSearchPanelRef.current = null;
+    lp.handleSidebarExpandedChange(decision.nextPanel !== null);
     lp.setActivePanel(decision.nextPanel);
     if (targetPanel === 'agents') setAgentDetailKey(null);
   }, [activeLeftPanel, exitAskMaximized, lp, pathname, smoothPush]);
+
+  const handleActivityPanelChange = useCallback((panel: PanelId | null) => {
+    lp.handleSidebarExpandedChange(panel !== null);
+    lp.setActivePanel(panel);
+  }, [lp]);
 
   return (
     <InboxOrganizeProvider value={inboxOrganize}>
@@ -780,7 +794,7 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
       <ActivityBar
         activePanel={railActivePanel}
         suppressRouteActive={homeNavPending}
-        onPanelChange={lp.setActivePanel}
+        onPanelChange={handleActivityPanelChange}
         onHomeClick={handleHomeClick}
         onCaptureClick={(event) => handleRoutePanelClick(event, 'capture')}
         onEchoClick={(event) => handleRoutePanelClick(event, 'echo')}
@@ -1065,7 +1079,7 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
           }
           #main-content {
             padding-left: ${panelOpen && effectivePanelMaximized ? '100vw' : `${panelOpen ? lp.railWidth + effectivePanelWidth : lp.railWidth}px`} !important;
-            padding-right: calc(var(--right-panel-width) + var(--right-agent-detail-width) + var(--toc-extra-right, 0px)) !important;
+            padding-right: calc(var(--right-panel-width) + var(--right-agent-detail-width)) !important;
             padding-top: var(--app-titlebar-h);
           }
         }

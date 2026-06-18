@@ -177,7 +177,6 @@ body {
 /* Content width — controlled by Settings > Appearance */
 :root {
   --content-width: 80%;
-  --toc-width: 0px;
   --z-app-page: 10;
   --z-app-sticky: 20;
   --z-app-nav: 30;
@@ -212,15 +211,11 @@ body {
 .z-app-walkthrough-tooltip { z-index: var(--z-app-walkthrough-tooltip); }
 .z-app-critical-overlay { z-index: var(--z-app-critical-overlay); }
 
-/* TOC offset — only on xl screens where TOC is visible.
-   --toc-width is set by TableOfContents.tsx (212px when expanded, 0px when collapsed).
-   Applied as padding-right on #main-content so content-width's margin:auto
-   centers within the remaining space (not overlapping the fixed TOC).
-   Note: SidebarLayout also sets padding-right via inline style with !important
-   for Ask panel; the TOC offset is added via --toc-extra-right there. */
+/* TOC reserve — only on xl screens where the fixed TOC rail is visible.
+   The reserve is local to Markdown content so the sticky page header and
+   right-side actions stay stable while TOC expands/collapses. */
 @media (min-width: 1280px) {
-  :root { --toc-extra-right: var(--toc-width, 0px); }
-  .toc-reserved-content { margin-right: max(220px, calc(var(--toc-width, 0px) + 8px)); }
+  .toc-reserved-content { margin-right: 220px; }
 }
 
 ::-webkit-scrollbar { width: 5px; height: 5px; }
