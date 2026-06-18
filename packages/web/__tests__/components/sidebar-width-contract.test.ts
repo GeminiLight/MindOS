@@ -83,7 +83,7 @@ describe('Sidebar width contract', () => {
     const sidebarLayout = readSource('components/SidebarLayout.tsx');
 
     expect(sidebarLayout).toContain('const handleSidebarPanelExpandedChange = useCallback((expanded: boolean) => {');
-    expect(sidebarLayout).toContain("lp.setActivePanel(pathname === '/' ? 'home' : 'files')");
+    expect(sidebarLayout).toContain('getTitlebarSidebarExpandPanel(pathname, lastSidebarPanelRef.current)');
     expect(sidebarLayout).toContain('lp.setActivePanel(null)');
     expect(sidebarLayout).toContain('sidebarExpanded={panelOpen}');
     expect(sidebarLayout).toContain('onSidebarExpandedChange={handleSidebarPanelExpandedChange}');
