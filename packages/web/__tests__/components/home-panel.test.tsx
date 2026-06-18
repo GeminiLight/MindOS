@@ -61,6 +61,14 @@ async function renderHomePanel() {
   });
 }
 
+function expectThemeAwareAgentShell(mark: HTMLElement | null) {
+  expect(mark).not.toBeNull();
+  expect(mark?.className).toContain('bg-background/85');
+  expect(mark?.className).toContain('dark:bg-muted/70');
+  expect(mark?.className).not.toContain('bg-white');
+  expect(mark?.className).toContain('border-border');
+}
+
 describe('HomePanel', () => {
   beforeEach(() => {
     resetAskRunStoreForTests();
@@ -106,7 +114,8 @@ describe('HomePanel', () => {
     expect(host.textContent).toContain('Investigate file tree open latency');
     expect(host.textContent).not.toContain('Codex');
     expect(host.textContent).not.toContain('Running');
-    expect(host.querySelector('[data-home-session-row="s-codex"] [data-home-session-agent="codex"]')).not.toBeNull();
+    const codexMark = host.querySelector('[data-home-session-row="s-codex"] [data-home-session-agent="codex"]') as HTMLElement | null;
+    expectThemeAwareAgentShell(codexMark);
     const codexLogo = host.querySelector('[data-home-session-row="s-codex"] [data-home-session-agent="codex"] img') as HTMLImageElement | null;
     expect(codexLogo?.getAttribute('src')).toBe('/agent-icons/openai.svg');
     expect(codexLogo?.closest('[data-home-session-row]')?.textContent).toContain('Investigate file tree open latency');
@@ -202,11 +211,13 @@ describe('HomePanel', () => {
 
     await renderHomePanel();
 
+    const claudeMark = host.querySelector('[data-home-session-row="s-claude"] [data-home-session-agent="claude"]') as HTMLElement | null;
+    expectThemeAwareAgentShell(claudeMark);
     const claudeLogo = host.querySelector('[data-home-session-row="s-claude"] [data-home-session-agent="claude"] img') as HTMLImageElement | null;
     expect(claudeLogo?.getAttribute('src')).toBe('/agent-icons/claude.svg');
   });
 
-  it('uses the same white logo shell for MindOS sessions', async () => {
+  it('uses a theme-aware logo shell for MindOS sessions', async () => {
     const sessions = [
       session({
         id: 's-mindos',
@@ -219,9 +230,7 @@ describe('HomePanel', () => {
     await renderHomePanel();
 
     const mindosMark = host.querySelector('[data-home-session-row="s-mindos"] [data-home-session-agent="mindos"]') as HTMLElement | null;
-    expect(mindosMark).not.toBeNull();
-    expect(mindosMark?.className).toContain('bg-white');
-    expect(mindosMark?.className).toContain('border-border');
+    expectThemeAwareAgentShell(mindosMark);
   });
 
   it('does not force-open the ask panel when creating a Home session', async () => {

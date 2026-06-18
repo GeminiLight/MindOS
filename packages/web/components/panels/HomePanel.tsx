@@ -89,7 +89,7 @@ function AgentMark({
   const logoClass = size === 'sm' ? 'h-2 w-3.5' : 'h-2.5 w-[18px]';
   const runtimeLogoClass = size === 'sm' ? 'h-3 w-3' : 'h-3.5 w-3.5';
   const safeId = id.replace(/[^a-zA-Z0-9_-]/g, '-');
-  const shared = `inline-flex shrink-0 items-center justify-center border border-border/60 bg-white shadow-[0_1px_1px_0_color-mix(in_srgb,var(--foreground)_6%,transparent)] ${boxSize}`;
+  const shared = `inline-flex shrink-0 items-center justify-center border border-border/60 bg-background/85 shadow-[0_1px_1px_0_color-mix(in_srgb,var(--foreground)_6%,transparent)] dark:bg-muted/70 dark:shadow-none ${boxSize}`;
 
   if (kind === 'mindos') {
     return (

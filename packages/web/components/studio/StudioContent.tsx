@@ -3,12 +3,12 @@
 import Link from 'next/link';
 import {
   ArrowRight,
-  BookOpenText,
-  Blocks,
+  BarChart3,
   CheckCircle2,
-  FolderOpen,
+  List,
   ListChecks,
   Plus,
+  Search,
   Target,
 } from 'lucide-react';
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
@@ -20,9 +20,7 @@ import {
   createStudioProject,
   getStudioProjectHref,
   localize,
-  localizeList,
   readStudioProjects,
-  stageLabel,
   STUDIO_NEW_PROJECT_REQUESTED_EVENT,
   type StudioProject,
   type StudioProjectDraft,
@@ -30,6 +28,12 @@ import {
 import { getChatSessionTitle } from './studio-session-summaries';
 import { StudioShell } from './StudioShell';
 import StudioNewProjectDialog from './StudioNewProjectDialog';
+import {
+  StudioAttentionItem,
+  StudioContextBraid,
+  StudioProjectItem,
+  StudioProjectStage,
+} from './StudioProjectItem';
 
 const COPY = {
   en: {
@@ -42,6 +46,34 @@ const COPY = {
     projectsHint: 'Long-running work with memory and review.',
     nextColumn: 'Next',
     sessions: 'sessions',
+    searchPlaceholder: 'Search projects...',
+    listView: 'List',
+    groupedView: 'Grouped',
+    statsView: 'Stats',
+    allProjects: 'All Projects',
+    allProjectsHint: 'All projects in your workspace.',
+    needsAttention: 'Needs attention',
+    needsAttentionHint: 'Projects with review due or waiting on you.',
+    inMotion: 'In motion',
+    inMotionHint: 'Active projects with ongoing work.',
+    drafts: 'Drafts',
+    draftsHint: 'Not started or early stage projects.',
+    viewAll: 'View all',
+    noMatchingProjects: 'No projects match this search.',
+    projectHealth: 'Project health',
+    sessionCadence: 'Session cadence',
+    reviewLoad: 'Review load',
+    contextCoverage: 'Context coverage',
+    activityRhythm: 'Activity rhythm',
+    stateDistribution: 'State distribution',
+    needingAttention: 'Projects needing attention',
+    activeLabel: 'Active',
+    draftLabel: 'Draft',
+    workDirs: 'Work dirs',
+    mindSpaces: 'Mind Spaces',
+    aiKits: 'AI Kits',
+    dueSoon: 'due soon',
+    thisWeek: 'this week',
     activeProjects: 'Active',
     reviewItems: 'Review',
     recentSessions: 'Sessions',
@@ -90,6 +122,34 @@ const COPY = {
     projectsHint: '带记忆和复盘的长期工作。',
     nextColumn: '下一步',
     sessions: 'Sessions',
+    searchPlaceholder: '搜索 Projects...',
+    listView: '列表',
+    groupedView: '分组',
+    statsView: '统计',
+    allProjects: '全部 Projects',
+    allProjectsHint: '工作区中的全部 Projects。',
+    needsAttention: '需要关注',
+    needsAttentionHint: '等待复盘或需要你处理的 Projects。',
+    inMotion: '推进中',
+    inMotionHint: '正在发生工作的 Projects。',
+    drafts: '草稿',
+    draftsHint: '还没开始或早期阶段的 Projects。',
+    viewAll: '查看全部',
+    noMatchingProjects: '没有匹配的 Project。',
+    projectHealth: 'Project 健康度',
+    sessionCadence: 'Session 节奏',
+    reviewLoad: '复盘负载',
+    contextCoverage: '上下文覆盖',
+    activityRhythm: '活动节奏',
+    stateDistribution: '状态分布',
+    needingAttention: '需要关注的 Projects',
+    activeLabel: '推进中',
+    draftLabel: '草稿',
+    workDirs: 'Work dirs',
+    mindSpaces: 'Mind Spaces',
+    aiKits: 'AI Kits',
+    dueSoon: '即将到期',
+    thisWeek: '本周',
     activeProjects: '推进中',
     reviewItems: '待复盘',
     recentSessions: '历史 Session',
@@ -131,21 +191,10 @@ const COPY = {
 } as const;
 
 type StudioCopy = (typeof COPY)[keyof typeof COPY];
+type StudioOverviewView = 'list' | 'grouped' | 'stats';
 
 function countReviewItems(projects: StudioProject[]): number {
   return projects.reduce((total, project) => total + project.reviewItems.length, 0);
-}
-
-function firstKit(project: StudioProject): string {
-  return project.kits[0] ?? 'Basic assistant';
-}
-
-function ProjectStage({ project, locale }: { project: StudioProject; locale: string }) {
-  return (
-    <span className="inline-flex h-6 items-center rounded-md border border-border/60 bg-background/70 px-2 text-[11px] font-medium text-muted-foreground">
-      {stageLabel(project.stage, locale)}
-    </span>
-  );
 }
 
 function ProgressBar({ value }: { value: number }) {
@@ -179,177 +228,386 @@ function StudioMetric({
   );
 }
 
-function MetaChip({
-  icon,
-  children,
-}: {
-  icon: ReactNode;
-  children: ReactNode;
-}) {
-  return (
-    <span className="inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-md border border-border/55 bg-background/45 px-2 py-1 text-xs text-muted-foreground">
-      <span className="shrink-0 text-[var(--amber)]">{icon}</span>
-      <span className="truncate">{children}</span>
-    </span>
-  );
-}
-
-function ProjectRow({
-  project,
-  locale,
+function ViewSwitch({
+  value,
+  onChange,
   copy,
-  sessionCount,
-  onPreview,
-  selected,
 }: {
-  project: StudioProject;
-  locale: string;
+  value: StudioOverviewView;
+  onChange: (view: StudioOverviewView) => void;
   copy: StudioCopy;
-  sessionCount: number;
-  onPreview: (projectId: string) => void;
-  selected: boolean;
 }) {
-  const title = localize(project.title, project.titleZh, locale);
-  const goal = localize(project.goal, project.goalZh, locale);
-  const space = localize(project.space, project.spaceZh, locale);
-  const workArea = localize(project.workArea, project.workAreaZh, locale);
-  const nextAction = localize(project.nextAction, project.nextActionZh, locale);
-  const kits = localizeList(project.kits, undefined, locale);
+  const views: Array<{ id: StudioOverviewView; label: string; icon: ReactNode }> = [
+    { id: 'list', label: copy.listView, icon: <List size={14} aria-hidden="true" /> },
+    { id: 'grouped', label: copy.groupedView, icon: <ListChecks size={14} aria-hidden="true" /> },
+    { id: 'stats', label: copy.statsView, icon: <BarChart3 size={14} aria-hidden="true" /> },
+  ];
 
   return (
-    <Link
-      href={getStudioProjectHref(project.id)}
-      onFocus={() => onPreview(project.id)}
-      onPointerEnter={() => onPreview(project.id)}
-      className={`group relative grid gap-3 border-t border-border/60 px-4 py-3.5 transition-colors first:border-t-0 hover:bg-card/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:grid-cols-[minmax(0,1fr)_minmax(190px,0.5fr)_86px] ${
-        selected ? 'bg-card/60' : ''
-      }`}
-    >
-      <span className={`pointer-events-none absolute bottom-3 left-0 top-3 w-px rounded-r-full transition-colors group-hover:bg-[var(--amber)] ${
-        selected ? 'bg-[var(--amber)]' : 'bg-transparent'
-      }`} />
-      <div className="min-w-0">
-        <div className="flex flex-wrap items-center gap-2">
-          <h3 className="min-w-0 text-sm font-semibold text-foreground">{title}</h3>
-          <ProjectStage project={project} locale={locale} />
-        </div>
-        <p className="mt-1 max-w-[58ch] text-xs leading-relaxed text-muted-foreground">{goal}</p>
-        <div className="mt-3 flex flex-wrap gap-1.5">
-          <MetaChip icon={<BookOpenText size={12} aria-hidden="true" />}>{space}</MetaChip>
-          <MetaChip icon={<Blocks size={12} aria-hidden="true" />}>{kits.length ? kits.join(' / ') : firstKit(project)}</MetaChip>
-          <MetaChip icon={<FolderOpen size={12} aria-hidden="true" />}>{workArea}</MetaChip>
-        </div>
-      </div>
-
-      <div className="min-w-0 lg:border-l lg:border-border/50 lg:pl-4">
-        <div className="mb-1 text-[11px] font-medium text-muted-foreground">{copy.nextColumn}</div>
-        <p className="text-xs leading-relaxed text-foreground">{nextAction}</p>
-        <p className="mt-2 text-[11px] font-medium text-muted-foreground">
-          {sessionCount} {copy.sessions} · {project.updated}
-        </p>
-      </div>
-
-      <div className="flex min-w-0 items-center justify-between gap-3 lg:flex-col lg:items-stretch lg:justify-center">
-        <div className="flex min-w-0 flex-1 items-center gap-2 lg:block">
-          <ProgressBar value={project.progress} />
-          <span className="shrink-0 text-[11px] font-medium text-muted-foreground [font-variant-numeric:tabular-nums] lg:mt-2 lg:block lg:text-right">
-            {project.progress}%
-          </span>
-        </div>
-        <ArrowRight size={16} className="shrink-0 text-muted-foreground/45 transition-colors group-hover:text-[var(--amber)]" />
-      </div>
-    </Link>
+    <div className="inline-flex rounded-lg border border-border/60 bg-background/55 p-1" role="tablist" aria-label="Studio view">
+      {views.map((view) => (
+        <button
+          key={view.id}
+          type="button"
+          role="tab"
+          aria-selected={value === view.id}
+          onClick={() => onChange(view.id)}
+          className={`inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+            value === view.id
+              ? 'bg-[var(--amber-subtle)] text-[var(--amber)] shadow-sm'
+              : 'text-muted-foreground hover:bg-card/70 hover:text-foreground'
+          }`}
+        >
+          {view.icon}
+          {view.label}
+        </button>
+      ))}
+    </div>
   );
 }
 
-function ProjectOverviewPanel({
+function projectMatches(project: StudioProject, query: string, locale: string): boolean {
+  const normalized = query.trim().toLowerCase();
+  if (!normalized) return true;
+  const fields = [
+    localize(project.title, project.titleZh, locale),
+    localize(project.goal, project.goalZh, locale),
+    localize(project.space, project.spaceZh, locale),
+    localize(project.workArea, project.workAreaZh, locale),
+    localize(project.nextAction, project.nextActionZh, locale),
+    ...project.kits,
+  ];
+  return fields.some((field) => field.toLowerCase().includes(normalized));
+}
+
+function ContinueNextPanel({
   project,
   locale,
   copy,
   latestSessionTitle,
   sessionCount,
-  stats,
 }: {
   project: StudioProject | undefined;
   locale: string;
   copy: StudioCopy;
   latestSessionTitle?: string;
   sessionCount: number;
-  stats: { active: number; review: number; sessions: number };
 }) {
   if (!project) {
     return (
-      <aside className="rounded-xl border border-border/60 bg-card/45 p-5">
+      <section className="rounded-xl border border-border/60 bg-card/45 p-5">
         <div className="text-sm font-semibold text-foreground">{copy.projects}</div>
         <p className="mt-1 text-sm text-muted-foreground">{copy.empty}</p>
-      </aside>
+      </section>
     );
   }
 
   const title = localize(project.title, project.titleZh, locale);
   const goal = localize(project.goal, project.goalZh, locale);
-  const space = localize(project.space, project.spaceZh, locale);
-  const workArea = localize(project.workArea, project.workAreaZh, locale);
   const nextAction = localize(project.nextAction, project.nextActionZh, locale);
-  const kits = localizeList(project.kits, undefined, locale);
   const latestSession = latestSessionTitle
     ?? (project.sessions[0] ? localize(project.sessions[0].title, project.sessions[0].titleZh, locale) : copy.noSessions);
 
   return (
-    <aside className="rounded-xl border border-border/60 bg-card/45 p-4 lg:sticky lg:top-6 lg:self-start">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs font-medium text-muted-foreground">{copy.continueTitle}</span>
-        <ProjectStage project={project} locale={locale} />
-        <span className="text-[11px] font-medium text-muted-foreground">{project.updated}</span>
-      </div>
-
-      <div className="mt-3">
-        <h2 className="text-lg font-semibold text-foreground">{title}</h2>
-        <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{goal}</p>
-      </div>
-
-      <div className="mt-4 rounded-lg border border-border/55 bg-background/45 p-3">
-        <div className="flex items-center justify-between gap-3 text-xs">
-          <span className="font-medium text-muted-foreground">{copy.continueHint}</span>
-          <span className="font-medium text-foreground [font-variant-numeric:tabular-nums]">{project.progress}%</span>
-        </div>
-        <p className="mt-2 text-sm leading-relaxed text-foreground">{nextAction}</p>
-        <div className="mt-3">
-          <ProgressBar value={project.progress} />
+    <section className="overflow-hidden rounded-xl border border-border/60 bg-card/45">
+      <div className="border-b border-border/55 px-4 py-3">
+        <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+          <span className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-[var(--amber-subtle)] text-[var(--amber)]">
+            <ArrowRight size={14} aria-hidden="true" />
+          </span>
+          {copy.continueTitle}
         </div>
       </div>
 
-      <div className="mt-4 grid gap-2">
-        <StudioMetric icon={<Target size={13} aria-hidden="true" />} label={copy.activeProjects} value={stats.active} />
-        <StudioMetric icon={<ListChecks size={13} aria-hidden="true" />} label={copy.reviewItems} value={stats.review} />
-        <StudioMetric icon={<CheckCircle2 size={13} aria-hidden="true" />} label={copy.recentSessions} value={stats.sessions} />
+      <div className="grid gap-5 px-4 py-5 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.55fr)]">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-xl font-semibold text-foreground">{title}</h2>
+            <StudioProjectStage project={project} locale={locale} />
+            <span className="text-[11px] font-medium text-muted-foreground">{project.updated}</span>
+          </div>
+          <p className="mt-2 max-w-3xl text-sm leading-relaxed text-muted-foreground">{goal}</p>
+          <div className="mt-4">
+            <StudioContextBraid project={project} locale={locale} />
+          </div>
+          <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
+            <span>{sessionCount} {copy.sessions}</span>
+            <span aria-hidden="true">/</span>
+            <span>{copy.latestSession}: {latestSession}</span>
+          </div>
+        </div>
+
+        <div className="min-w-0 border-border/55 lg:border-l lg:pl-5">
+          <div className="text-[11px] font-medium text-muted-foreground">{copy.continueHint}</div>
+          <p className="mt-2 text-sm leading-relaxed text-foreground">{nextAction}</p>
+          <div className="mt-3 flex items-center gap-3">
+            <div className="min-w-0 flex-1">
+              <ProgressBar value={project.progress} />
+            </div>
+            <span className="text-[11px] font-medium text-muted-foreground [font-variant-numeric:tabular-nums]">
+              {project.progress}%
+            </span>
+          </div>
+          <Button
+            render={<Link href={getStudioProjectHref(project.id)} />}
+            nativeButton={false}
+            variant="outline"
+            size="lg"
+            className="mt-4 w-full"
+          >
+            {copy.openProject}
+            <ArrowRight size={15} />
+          </Button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function StudioListView({
+  projects,
+  locale,
+  copy,
+  getProjectSessionCount,
+  selectedProjectId,
+  onPreview,
+}: {
+  projects: StudioProject[];
+  locale: string;
+  copy: StudioCopy;
+  getProjectSessionCount: (project: StudioProject) => number;
+  selectedProjectId?: string;
+  onPreview: (projectId: string) => void;
+}) {
+  return (
+    <section className="overflow-hidden rounded-xl border border-border/60 bg-card/45" aria-labelledby="studio-projects-list">
+      <div className="flex flex-col gap-2 border-b border-border/60 px-4 py-4 md:flex-row md:items-end md:justify-between">
+        <div>
+          <h2 id="studio-projects-list" className="text-sm font-semibold text-foreground">{copy.allProjects}</h2>
+          <p className="mt-1 text-xs text-muted-foreground">{copy.allProjectsHint}</p>
+        </div>
+      </div>
+      {projects.length ? (
+        <div>
+          {projects.map((project) => (
+            <StudioProjectItem
+              key={project.id}
+              project={project}
+              locale={locale}
+              sessionCount={getProjectSessionCount(project)}
+              selected={project.id === selectedProjectId}
+              onPreview={onPreview}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="px-4 py-12 text-center text-sm text-muted-foreground">{copy.noMatchingProjects}</div>
+      )}
+    </section>
+  );
+}
+
+function StudioGroupedView({
+  projects,
+  locale,
+  copy,
+  getProjectSessionCount,
+  selectedProjectId,
+  onPreview,
+}: {
+  projects: StudioProject[];
+  locale: string;
+  copy: StudioCopy;
+  getProjectSessionCount: (project: StudioProject) => number;
+  selectedProjectId?: string;
+  onPreview: (projectId: string) => void;
+}) {
+  const groups = [
+    {
+      key: 'needs-attention',
+      title: copy.needsAttention,
+      hint: copy.needsAttentionHint,
+      tone: 'bg-[var(--amber)]',
+      projects: projects.filter((project) => project.stage === 'review'),
+    },
+    {
+      key: 'in-motion',
+      title: copy.inMotion,
+      hint: copy.inMotionHint,
+      tone: 'bg-success',
+      projects: projects.filter((project) => project.stage === 'active'),
+    },
+    {
+      key: 'drafts',
+      title: copy.drafts,
+      hint: copy.draftsHint,
+      tone: 'bg-muted-foreground/50',
+      projects: projects.filter((project) => project.stage === 'draft'),
+    },
+  ];
+
+  return (
+    <div className="space-y-5">
+      {groups.map((group) => (
+        <section key={group.key} className="overflow-hidden rounded-xl border border-border/60 bg-card/45" aria-labelledby={`studio-group-${group.key}`}>
+          <div className="flex items-center justify-between gap-4 border-b border-border/60 px-4 py-3">
+            <div className="flex min-w-0 flex-wrap items-center gap-3">
+              <span className={`h-2 w-2 rounded-full ${group.tone}`} aria-hidden="true" />
+              <h2 id={`studio-group-${group.key}`} className="text-sm font-semibold text-foreground">{group.title}</h2>
+              <span className="rounded-md bg-muted/55 px-2 py-0.5 text-[11px] font-medium text-muted-foreground [font-variant-numeric:tabular-nums]">
+                {group.projects.length}
+              </span>
+              <p className="text-xs text-muted-foreground">{group.hint}</p>
+            </div>
+            <span className="hidden items-center gap-1 text-xs font-medium text-muted-foreground md:inline-flex">
+              {copy.viewAll}
+              <ArrowRight size={13} aria-hidden="true" />
+            </span>
+          </div>
+          {group.projects.length ? (
+            <div>
+              {group.projects.map((project) => (
+                <StudioProjectItem
+                  key={project.id}
+                  project={project}
+                  locale={locale}
+                  sessionCount={getProjectSessionCount(project)}
+                  selected={project.id === selectedProjectId}
+                  onPreview={onPreview}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="px-4 py-6 text-sm text-muted-foreground">{copy.noMatchingProjects}</div>
+          )}
+        </section>
+      ))}
+    </div>
+  );
+}
+
+function countValues(values: string[]): Array<{ value: string; count: number }> {
+  const counts = new Map<string, number>();
+  for (const value of values) counts.set(value, (counts.get(value) ?? 0) + 1);
+  return [...counts.entries()]
+    .map(([value, count]) => ({ value, count }))
+    .sort((a, b) => b.count - a.count || a.value.localeCompare(b.value));
+}
+
+function StudioStatsView({
+  projects,
+  locale,
+  copy,
+  getProjectSessionCount,
+}: {
+  projects: StudioProject[];
+  locale: string;
+  copy: StudioCopy;
+  getProjectSessionCount: (project: StudioProject) => number;
+}) {
+  const activeCount = projects.filter((project) => project.stage === 'active').length;
+  const draftCount = projects.filter((project) => project.stage === 'draft').length;
+  const reviewItemCount = countReviewItems(projects);
+  const reviewProjects = projects.filter((project) => project.stage === 'review');
+  const sessionTotal = projects.reduce((total, project) => total + getProjectSessionCount(project), 0);
+  const maxSessions = Math.max(1, ...projects.map((project) => getProjectSessionCount(project)));
+  const workAreas = countValues(projects.map((project) => localize(project.workArea, project.workAreaZh, locale)));
+  const spaces = countValues(projects.map((project) => localize(project.space, project.spaceZh, locale)));
+  const kits = countValues(projects.flatMap((project) => project.kits));
+  const attentionProjects = reviewProjects.length ? reviewProjects : projects.filter((project) => project.reviewItems.length > 0).slice(0, 2);
+
+  return (
+    <section className="space-y-5" aria-label={copy.statsView}>
+      <div className="grid gap-3 md:grid-cols-3">
+        <StudioMetric icon={<Target size={13} aria-hidden="true" />} label={copy.projectHealth} value={`${projects.length} / ${reviewItemCount} ${copy.dueSoon}`} />
+        <StudioMetric icon={<CheckCircle2 size={13} aria-hidden="true" />} label={copy.sessionCadence} value={`${sessionTotal} / ${copy.thisWeek}`} />
+        <StudioMetric icon={<ListChecks size={13} aria-hidden="true" />} label={copy.reviewLoad} value={reviewItemCount} />
       </div>
 
-      <div className="mt-4 space-y-1.5">
-        <MetaChip icon={<BookOpenText size={12} aria-hidden="true" />}>{space}</MetaChip>
-        <MetaChip icon={<Blocks size={12} aria-hidden="true" />}>{kits.length ? kits.join(' / ') : firstKit(project)}</MetaChip>
-        <MetaChip icon={<FolderOpen size={12} aria-hidden="true" />}>{workArea}</MetaChip>
-      </div>
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1.35fr)_minmax(280px,0.65fr)]">
+        <div className="rounded-xl border border-border/60 bg-card/45 p-4">
+          <div className="flex items-center justify-between gap-4">
+            <h2 className="text-sm font-semibold text-foreground">{copy.activityRhythm}</h2>
+            <span className="text-[11px] text-muted-foreground">14d</span>
+          </div>
+          <div className="mt-5 flex h-36 items-end gap-2 border-b border-border/50 pb-3">
+            {projects.concat(projects).slice(0, 8).map((project, index) => {
+              const count = getProjectSessionCount(project);
+              const height = 18 + (count / maxSessions) * 92;
+              return (
+                <div key={`${project.id}-${index}`} className="flex min-w-0 flex-1 flex-col items-center gap-2">
+                  <div
+                    className="w-full rounded-t-md bg-[var(--amber)]/75"
+                    style={{ height: `${height}px` }}
+                    title={`${localize(project.title, project.titleZh, locale)}: ${count} ${copy.sessions}`}
+                  />
+                  <span className="text-[10px] text-muted-foreground [font-variant-numeric:tabular-nums]">{index + 1}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
 
-      <div className="mt-4 border-t border-border/50 pt-3">
-        <div className="mb-1 text-[11px] font-medium text-muted-foreground">{copy.latestSession}</div>
-        <div className="text-sm leading-relaxed text-foreground">{latestSession}</div>
-        <div className="mt-1 text-[11px] text-muted-foreground">
-          {sessionCount} {copy.sessions}
+        <div className="rounded-xl border border-border/60 bg-card/45 p-4">
+          <h2 className="text-sm font-semibold text-foreground">{copy.stateDistribution}</h2>
+          <div className="mt-4 h-2 overflow-hidden rounded-full bg-muted">
+            <div className="flex h-full">
+              <span className="bg-success" style={{ width: `${(activeCount / Math.max(projects.length, 1)) * 100}%` }} />
+              <span className="bg-[var(--amber)]" style={{ width: `${(reviewProjects.length / Math.max(projects.length, 1)) * 100}%` }} />
+              <span className="bg-muted-foreground/35" style={{ width: `${(draftCount / Math.max(projects.length, 1)) * 100}%` }} />
+            </div>
+          </div>
+          <div className="mt-4 space-y-2 text-xs text-muted-foreground">
+            <div className="flex justify-between"><span>{copy.activeLabel}</span><span>{activeCount}</span></div>
+            <div className="flex justify-between"><span>{copy.review}</span><span>{reviewProjects.length}</span></div>
+            <div className="flex justify-between"><span>{copy.draftLabel}</span><span>{draftCount}</span></div>
+          </div>
         </div>
       </div>
 
-      <Button
-        render={<Link href={getStudioProjectHref(project.id)} />}
-        nativeButton={false}
-        variant="outline"
-        size="lg"
-        className="mt-4 w-full"
-      >
-        {copy.openProject}
-        <ArrowRight size={15} />
-      </Button>
-    </aside>
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+        <div className="rounded-xl border border-border/60 bg-card/45 p-4">
+          <h2 className="text-sm font-semibold text-foreground">{copy.contextCoverage}</h2>
+          <div className="mt-4 grid gap-3">
+            {[
+              [copy.workDirs, workAreas],
+              [copy.mindSpaces, spaces],
+              [copy.aiKits, kits],
+            ].map(([label, values]) => (
+              <div key={label as string} className="rounded-lg border border-border/50 bg-background/40 p-3">
+                <div className="mb-2 text-[11px] font-medium text-muted-foreground">{label as string}</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {(values as Array<{ value: string; count: number }>).slice(0, 4).map((item) => (
+                    <span key={item.value} className="inline-flex items-center gap-1 rounded-md bg-muted/50 px-2 py-1 text-xs text-muted-foreground">
+                      {item.value}
+                      <span className="text-[10px] [font-variant-numeric:tabular-nums]">{item.count}</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="overflow-hidden rounded-xl border border-border/60 bg-card/45">
+          <div className="border-b border-border/60 px-4 py-3">
+            <h2 className="text-sm font-semibold text-foreground">{copy.needingAttention}</h2>
+          </div>
+          {attentionProjects.length ? (
+            attentionProjects.map((project) => (
+              <StudioAttentionItem
+                key={project.id}
+                project={project}
+                locale={locale}
+                sessionCount={getProjectSessionCount(project)}
+              />
+            ))
+          ) : (
+            <div className="px-4 py-8 text-sm text-muted-foreground">{copy.empty}</div>
+          )}
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -360,6 +618,8 @@ export default function StudioContent() {
   const [projects, setProjects] = useState<StudioProject[]>(() => readStudioProjects());
   const [isCreating, setIsCreating] = useState(false);
   const [previewProjectId, setPreviewProjectId] = useState<string | null>(null);
+  const [view, setView] = useState<StudioOverviewView>('list');
+  const [query, setQuery] = useState('');
   const chatSessions = useSessions();
 
   useEffect(() => {
@@ -396,17 +656,13 @@ export default function StudioContent() {
     projectSessionStats.get(project.id)?.count ?? project.sessions.length
   );
 
-  const stats = useMemo(
-    () => ({
-      active: projects.filter((project) => project.stage === 'active').length,
-      review: countReviewItems(projects),
-      sessions: projects.reduce((total, project) => total + getProjectSessionCount(project), 0),
-    }),
-    [projectSessionStats, projects],
+  const filteredProjects = useMemo(
+    () => projects.filter((project) => projectMatches(project, query, locale)),
+    [locale, projects, query],
   );
   const previewProject = useMemo(
-    () => projects.find((project) => project.id === previewProjectId) ?? projects[0],
-    [previewProjectId, projects],
+    () => filteredProjects.find((project) => project.id === previewProjectId) ?? filteredProjects[0] ?? projects[0],
+    [filteredProjects, previewProjectId, projects],
   );
   const previewProjectIdResolved = previewProject?.id;
 
@@ -421,7 +677,7 @@ export default function StudioContent() {
     <StudioShell>
       <div className="min-w-0">
         <header className="mb-6">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
             <div className="min-w-0">
               <h1 className="text-2xl font-semibold text-foreground">
                 {copy.title}
@@ -429,53 +685,78 @@ export default function StudioContent() {
               <p className="mt-1 max-w-2xl text-sm leading-relaxed text-muted-foreground">{copy.subtitle}</p>
             </div>
 
-            <Button
-              type="button"
-              onClick={() => setIsCreating(true)}
-              variant="amber"
-              size="xl"
-              className="w-fit"
-            >
-              <Plus size={15} aria-hidden="true" />
-              {copy.newProject}
-            </Button>
+            <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center xl:w-auto">
+              <label className="relative min-w-0 flex-1 xl:w-72 xl:flex-none">
+                <span className="sr-only">{copy.searchPlaceholder}</span>
+                <Search size={15} aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder={copy.searchPlaceholder}
+                  className="h-10 w-full rounded-lg border border-border/60 bg-background/55 pl-9 pr-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/20"
+                />
+              </label>
+              <Button
+                type="button"
+                onClick={() => setIsCreating(true)}
+                variant="amber"
+                size="lg"
+                className="shrink-0"
+              >
+                <Plus size={15} aria-hidden="true" />
+                {copy.newProject}
+              </Button>
+            </div>
           </div>
         </header>
 
-        <section className="grid gap-5 [grid-template-columns:repeat(auto-fit,minmax(min(100%,32rem),1fr))] lg:items-start">
-          <div className="min-w-0 overflow-hidden rounded-xl border border-border/60 bg-card/45">
-            <div className="flex flex-col gap-3 border-b border-border/60 px-4 py-4 md:flex-row md:items-end md:justify-between">
-              <div>
-                <h2 className="text-sm font-semibold text-foreground">{copy.projects}</h2>
-                <p className="mt-1 text-xs text-muted-foreground">{copy.projectsHint}</p>
-              </div>
-            </div>
-            {projects.length ? (
-              <div className="max-h-[min(680px,calc(100dvh-14rem))] overflow-y-auto">
-                {projects.map((project) => (
-                  <ProjectRow
-                    key={project.id}
-                    project={project}
-                    locale={locale}
-                    copy={copy}
-                    sessionCount={getProjectSessionCount(project)}
-                    onPreview={setPreviewProjectId}
-                    selected={project.id === previewProjectIdResolved}
-                  />
-                ))}
-              </div>
-            ) : (
-              <div className="px-4 py-12 text-center text-sm text-muted-foreground">{copy.empty}</div>
-            )}
-          </div>
-          <ProjectOverviewPanel
+        <section className="space-y-5">
+          <ContinueNextPanel
             project={previewProject}
             locale={locale}
             copy={copy}
             latestSessionTitle={previewProject ? projectSessionStats.get(previewProject.id)?.latestTitle : undefined}
             sessionCount={previewProject ? getProjectSessionCount(previewProject) : 0}
-            stats={stats}
           />
+
+          <div className="flex flex-col gap-3 rounded-xl border border-border/60 bg-card/35 px-4 py-3 md:flex-row md:items-center md:justify-between">
+            <div className="min-w-0">
+              <h2 className="text-sm font-semibold text-foreground">{copy.projects}</h2>
+              <p className="mt-1 text-xs text-muted-foreground">{copy.projectsHint}</p>
+            </div>
+            <ViewSwitch value={view} onChange={setView} copy={copy} />
+          </div>
+
+          {view === 'list' ? (
+            <StudioListView
+              projects={filteredProjects}
+              locale={locale}
+              copy={copy}
+              getProjectSessionCount={getProjectSessionCount}
+              selectedProjectId={previewProjectIdResolved}
+              onPreview={setPreviewProjectId}
+            />
+          ) : null}
+
+          {view === 'grouped' ? (
+            <StudioGroupedView
+              projects={filteredProjects}
+              locale={locale}
+              copy={copy}
+              getProjectSessionCount={getProjectSessionCount}
+              selectedProjectId={previewProjectIdResolved}
+              onPreview={setPreviewProjectId}
+            />
+          ) : null}
+
+          {view === 'stats' ? (
+            <StudioStatsView
+              projects={filteredProjects}
+              locale={locale}
+              copy={copy}
+              getProjectSessionCount={getProjectSessionCount}
+            />
+          ) : null}
         </section>
       </div>
 

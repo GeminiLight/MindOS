@@ -85,6 +85,57 @@ describe('StudioContent', () => {
     expect(host.querySelector('aside[aria-label="Studio"]')).toBeNull();
   });
 
+  it('uses shared Project items with value-only context text', async () => {
+    await renderStudio();
+
+    const items = host.querySelectorAll('[data-studio-project-item="default"]');
+    expect(items.length).toBeGreaterThan(0);
+
+    const firstContext = items[0].querySelector('[data-studio-context-braid]');
+    expect(firstContext).not.toBeNull();
+    expect(firstContext?.textContent).toContain('Product Strategy');
+    expect(firstContext?.textContent).toContain('Research Kit');
+    expect(firstContext?.textContent).toContain('Session drafts');
+    expect(firstContext?.textContent).not.toContain('Work dir');
+    expect(firstContext?.textContent).not.toContain('Mind Space');
+    expect(firstContext?.textContent).not.toContain('AI Kit');
+    expect(firstContext?.querySelector('[title="Work dir"]')).not.toBeNull();
+    expect(firstContext?.querySelector('[title="Mind Space"]')).not.toBeNull();
+    expect(firstContext?.querySelector('[title="AI Kit"]')).not.toBeNull();
+  });
+
+  it('switches Studio overview between grouped and stats views', async () => {
+    await renderStudio();
+
+    const groupedTab = Array.from(host.querySelectorAll('button')).find((button) => (
+      button.textContent?.includes('Grouped')
+    ));
+    expect(groupedTab).not.toBeNull();
+
+    await act(async () => {
+      groupedTab!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(host.textContent).toContain('Needs attention');
+    expect(host.textContent).toContain('In motion');
+    expect(host.textContent).toContain('Drafts');
+    expect(host.querySelectorAll('[data-studio-project-item="default"]').length).toBeGreaterThan(0);
+
+    const statsTab = Array.from(host.querySelectorAll('button')).find((button) => (
+      button.textContent?.includes('Stats')
+    ));
+    expect(statsTab).not.toBeNull();
+
+    await act(async () => {
+      statsTab!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(host.textContent).toContain('Project health');
+    expect(host.textContent).toContain('Context coverage');
+    expect(host.textContent).toContain('Projects needing attention');
+    expect(host.querySelectorAll('[data-studio-project-item="compact"]').length).toBeGreaterThan(0);
+  });
+
   it('renders the unified Studio panel with Overview and Projects', async () => {
     host = document.createElement('div');
     document.body.appendChild(host);
