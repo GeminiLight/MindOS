@@ -23,6 +23,18 @@ export interface WebCrashDiagnostic {
   message: string;
   lastOutput: string;
   shouldRefreshPrivateNode: boolean;
+  actions: WebCrashDialogAction[];
+}
+
+export type WebCrashDialogActionId =
+  | 'repair-private-node'
+  | 'restart-services'
+  | 'open-log'
+  | 'dismiss';
+
+export interface WebCrashDialogAction {
+  id: WebCrashDialogActionId;
+  label: string;
 }
 
 const ANSI_ESCAPE_PATTERN = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, 'g');
@@ -101,8 +113,22 @@ export function buildWebCrashDiagnostic({
     cause,
     lastOutput,
     shouldRefreshPrivateNode,
+    actions: getWebCrashDialogActions(zh, shouldRefreshPrivateNode),
     message: `${zh ? 'Web 服务连续崩溃 3 次。' : 'The web server crashed 3 times.'}${hint}\n\n${logLine}${output}`,
   };
+}
+
+export function getWebCrashDialogActions(
+  zh: boolean,
+  shouldRefreshPrivateNode: boolean,
+): WebCrashDialogAction[] {
+  return [
+    shouldRefreshPrivateNode
+      ? { id: 'repair-private-node', label: zh ? '修复并重启' : 'Repair and Restart' }
+      : { id: 'restart-services', label: zh ? '重启服务' : 'Restart Services' },
+    { id: 'open-log', label: zh ? '打开日志' : 'Open Log' },
+    { id: 'dismiss', label: zh ? '稍后处理' : 'Dismiss' },
+  ];
 }
 
 function getLocalizedCrashHint(
@@ -130,8 +156,8 @@ function getLocalizedCrashHint(
     case 'node-native-crash':
       if (shouldRefreshPrivateNode) {
         return zh
-          ? '\n\n可能原因：MindOS 私有 Node.js 运行时发生 native 崩溃（V8/OpenSSL）。已标记下次启动自动刷新运行时；请完全退出 MindOS 后重新打开。若仍复现，请把 crash.log 发给我们。'
-          : '\n\nLikely cause: the private MindOS Node.js runtime crashed natively (V8/OpenSSL). MindOS will refresh the runtime on the next launch; fully quit and reopen MindOS. If it repeats, send crash.log to support.';
+          ? '\n\n可能原因：MindOS 私有 Node.js 运行时发生 native 崩溃（V8/OpenSSL）。点击「修复并重启」会自动刷新运行时并重新启动服务；如果先稍后处理，MindOS 也会在下次启动时自动刷新。若仍复现，请把 crash.log 发给我们。'
+          : '\n\nLikely cause: the private MindOS Node.js runtime crashed natively (V8/OpenSSL). Click "Repair and Restart" to refresh the runtime and restart services now; if you dismiss it, MindOS will still refresh the runtime on the next launch. If it repeats, send crash.log to support.';
       }
       return zh
         ? '\n\n可能原因：Node.js 运行时发生 native 崩溃（V8/OpenSSL），这通常不是知识库内容或普通设置错误。请完全退出 MindOS 后重新打开，并更新到最新桌面版；若仍复现，请把 crash.log 发给我们。'

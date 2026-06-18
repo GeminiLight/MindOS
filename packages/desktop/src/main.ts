@@ -33,7 +33,7 @@ import { testConnection } from './connection-sdk';
 import { getNodePath, getNpxPath, getNpmPath, getLocalBinPath, getEnrichedEnv } from './node-detect';
 import { resolveExecTarget } from './exec-target';
 import { downloadNode, getPrivateNodePath, installMindosWithPrivateNode } from './node-bootstrap';
-import { buildWebCrashDiagnostic } from './desktop-crash-diagnostics';
+import { buildWebCrashDiagnostic, type WebCrashDiagnostic } from './desktop-crash-diagnostics';
 import { resolveLocalMindOsProjectRoot } from './mindos-runtime-resolve';
 import { isNextBuildCurrent, BUILD_VERSION_FILE, analyzeMindOsLayout, resolveWebAppDir } from './mindos-runtime-layout';
 import { hasRequiredStandaloneAppFiles } from './runtime-health-contract';
@@ -307,6 +307,24 @@ function markNodeRuntimeRepairRequired(reason: string, nodePath: string | null |
 
 function clearNodeRuntimeRepairMarker(): void {
   try { unlinkSync(NODE_RUNTIME_REPAIR_MARKER); } catch { /* marker absent */ }
+}
+
+async function openCrashLog(): Promise<void> {
+  const logPath = path.join(CONFIG_DIR, 'crash.log');
+  if (!existsSync(logPath)) {
+    dialog.showErrorBox(
+      navigator_lang() === 'zh' ? '日志不存在' : 'Log Not Found',
+      logPath,
+    );
+    return;
+  }
+  const result = await shell.openPath(logPath);
+  if (result) {
+    dialog.showErrorBox(
+      navigator_lang() === 'zh' ? '无法打开日志' : 'Could Not Open Log',
+      result,
+    );
+  }
 }
 
 // ── Local Mode ──
@@ -704,10 +722,7 @@ async function startLocalMode(): Promise<string | null> {
         if (diagnostic.shouldRefreshPrivateNode) {
           markNodeRuntimeRepairRequired(diagnostic.cause, nodePath);
         }
-        dialog.showErrorBox(
-          zh ? 'MindOS 服务崩溃' : 'MindOS Service Crashed',
-          diagnostic.message,
-        );
+        void showWebCrashRecoveryDialog(diagnostic, nodePath);
       }
     }
   });
@@ -840,6 +855,92 @@ function updateMcpClientConfigs(oldPort: number, newPort: number): void {
 /** Update tray with current state — always includes ports/address */
 function refreshTray(status: 'starting' | 'running' | 'error'): void {
   updateTrayMenu(currentMode, status, currentRemoteAddress, currentWebPort, currentMcpPort);
+}
+
+function crashRepairOverlay(zh: boolean): string {
+  return `
+    <div style="position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.66);display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:system-ui;color:white;backdrop-filter:blur(8px)">
+      <div style="width:28px;height:28px;border:3px solid rgba(212,149,74,0.28);border-top-color:#d4954a;border-radius:50%;animation:spin 1s linear infinite;margin-bottom:14px"></div>
+      <div style="font-size:18px;font-weight:700">${zh ? '正在修复 MindOS 运行时...' : 'Repairing MindOS runtime...'}</div>
+      <div style="color:#c8c0b5;font-size:13px;margin-top:8px;text-align:center;max-width:340px;line-height:1.5">${zh ? '正在刷新私有 Node.js 并重启本地服务。完成后会自动恢复。' : 'Refreshing the private Node.js runtime and restarting local services. MindOS will recover automatically.'}</div>
+      <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
+    </div>
+  `;
+}
+
+let isCrashRepairing = false;
+
+async function repairPrivateNodeRuntimeAndRestart(
+  diagnostic: WebCrashDiagnostic,
+  nodePath: string | null | undefined,
+): Promise<void> {
+  if (isCrashRepairing || isQuitting || isUpdating) return;
+  isCrashRepairing = true;
+  const zh = navigator_lang() === 'zh';
+  try {
+    markNodeRuntimeRepairRequired(diagnostic.cause, nodePath);
+    refreshTray('starting');
+    await injectOverlay('mindos-crash-repair-overlay', crashRepairOverlay(zh));
+
+    if (processManager) {
+      processManager.removeAllListeners();
+      await processManager.stop().catch((err) => {
+        console.warn('[MindOS:repair] ProcessManager stop failed:', err instanceof Error ? err.message : err);
+      });
+      processManager = null;
+    }
+
+    await validatePrivateNode();
+    await downloadNode();
+
+    const url = await startLocalMode();
+    if (!url) {
+      throw new Error(zh ? '修复完成，但本地服务未能启动。' : 'Repair completed, but local services did not start.');
+    }
+
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      await mainWindow.loadURL(resolveLocalMindOsBrowseUrl(url));
+    }
+    await removeOverlay('mindos-crash-repair-overlay');
+    refreshTray('running');
+  } catch (err) {
+    await removeOverlay('mindos-crash-repair-overlay');
+    refreshTray('error');
+    const msg = err instanceof Error ? err.message : String(err);
+    dialog.showErrorBox(zh ? '修复失败' : 'Repair Failed', msg);
+  } finally {
+    isCrashRepairing = false;
+  }
+}
+
+async function showWebCrashRecoveryDialog(
+  diagnostic: WebCrashDiagnostic,
+  nodePath: string | null | undefined,
+): Promise<void> {
+  const zh = navigator_lang() === 'zh';
+  const title = zh ? 'MindOS 服务崩溃' : 'MindOS Service Crashed';
+  const buttons = diagnostic.actions.map((action) => action.label);
+  const options = {
+    type: 'error' as const,
+    title,
+    message: title,
+    detail: diagnostic.message,
+    buttons,
+    defaultId: 0,
+    cancelId: diagnostic.actions.findIndex((action) => action.id === 'dismiss'),
+  };
+  const result = mainWindow && !mainWindow.isDestroyed()
+    ? await dialog.showMessageBox(mainWindow, options)
+    : await dialog.showMessageBox(options);
+  const action = diagnostic.actions[result.response]?.id ?? 'dismiss';
+
+  if (action === 'repair-private-node') {
+    await repairPrivateNodeRuntimeAndRestart(diagnostic, nodePath);
+  } else if (action === 'restart-services') {
+    await handleRestartServices();
+  } else if (action === 'open-log') {
+    await openCrashLog();
+  }
 }
 
 // ── Boot-time Silent Healing ──

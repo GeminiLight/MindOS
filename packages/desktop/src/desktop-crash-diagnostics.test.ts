@@ -51,8 +51,14 @@ describe('desktop crash diagnostics', () => {
 
     expect(diagnostic.cause).toBe('node-native-crash');
     expect(diagnostic.shouldRefreshPrivateNode).toBe(true);
+    expect(diagnostic.actions.map((action) => action.id)).toEqual([
+      'repair-private-node',
+      'open-log',
+      'dismiss',
+    ]);
     expect(diagnostic.message).toContain('私有 Node.js 运行时发生 native 崩溃');
-    expect(diagnostic.message).toContain('已标记下次启动自动刷新运行时');
+    expect(diagnostic.message).toContain('修复并重启');
+    expect(diagnostic.message).toContain('下次启动时自动刷新');
     expect(diagnostic.message).not.toContain('请检查 Node.js 环境');
     expect(diagnostic.message).toContain('--- Last output ---');
   });
@@ -69,6 +75,11 @@ describe('desktop crash diagnostics', () => {
 
     expect(diagnostic.cause).toBe('node-native-crash');
     expect(diagnostic.shouldRefreshPrivateNode).toBe(false);
+    expect(diagnostic.actions.map((action) => action.id)).toEqual([
+      'restart-services',
+      'open-log',
+      'dismiss',
+    ]);
     expect(diagnostic.message).toContain('Node.js runtime crashed natively');
     expect(diagnostic.message).not.toContain('Please check your Node.js environment');
   });
