@@ -27,12 +27,14 @@ import {
   mapMindosAcpUpdateToSseEvents,
   buildMindosCompatEndpointCandidates,
   mindosPiMessagesToOpenAI,
+  parseMindosOpenAICompatResponse,
   reassembleMindosOpenAISse,
   createMindosPiAgentRuntime,
   buildMindosExternalRuntimePrompt,
   runMindosAcpAskSession,
   runMindosPiAgentAskSession,
   runMindosNonStreamingFallback,
+  runMindosOpenAICompatFallback,
   runMindosAskProxyFallback,
   runMindosAskWithRetry,
   safeParseMindosJsonObject,
@@ -676,6 +678,38 @@ describe('MindOS session event contract', () => {
     });
   });
 
+  it('normalizes JSON chunk-shaped responses for OpenAI-compatible fallback execution', () => {
+    const result = parseMindosOpenAICompatResponse(JSON.stringify({
+      choices: [{
+        delta: {
+          role: 'assistant',
+          content: 'Chunk-style JSON',
+          tool_calls: [{
+            id: 'call-json',
+            type: 'function',
+            function: { name: 'read_file', arguments: '{"path":"b.md"}' },
+          }],
+        },
+        finish_reason: 'tool_calls',
+      }],
+    }));
+
+    expect(result).toEqual({
+      choices: [{
+        message: {
+          role: 'assistant',
+          content: 'Chunk-style JSON',
+          tool_calls: [{
+            id: 'call-json',
+            type: 'function',
+            function: { name: 'read_file', arguments: '{"path":"b.md"}' },
+          }],
+        },
+        finish_reason: 'tool_calls',
+      }],
+    });
+  });
+
   it('runs the OpenAI-compatible non-streaming fallback loop from product session', async () => {
     const events: Array<{ type: string; delta?: string; toolCallId?: string; toolName?: string; output?: string; isError?: boolean }> = [];
     const calls: Array<{ url: string; body: any }> = [];
@@ -730,12 +764,93 @@ describe('MindOS session event contract', () => {
 
     expect(calls).toHaveLength(2);
     expect(calls[0]?.url).toBe('https://proxy.example/v1/chat/completions');
+    expect(calls[0]?.body.stream).toBe(false);
+    expect(calls[1]?.body.stream).toBe(false);
+    expect(calls[1]?.body.messages).toEqual([
+      { role: 'system', content: 'system' },
+      { role: 'user', content: 'read it' },
+      {
+        role: 'assistant',
+        content: null,
+        tool_calls: [{
+          id: 'call-1',
+          type: 'function',
+          function: { name: 'read_file', arguments: '{"path":"a.md"}' },
+        }],
+      },
+      { role: 'tool', tool_call_id: 'call-1', content: 'contents' },
+    ]);
     expect(events).toEqual([
       { type: 'tool_start', toolCallId: 'call-1', toolName: 'read_file', args: { path: 'a.md' } },
       { type: 'tool_delta', toolCallId: 'call-1', toolName: 'read_file', delta: 'Reading file...' },
       { type: 'tool_end', toolCallId: 'call-1', toolName: 'read_file', output: 'contents', isError: false },
       { type: 'text_delta', delta: 'Done' },
     ]);
+  });
+
+  it('keeps non-streaming fallback transport on stream:false while accepting proxy SSE responses', async () => {
+    const events: Array<{ type: string; delta?: string }> = [];
+    const calls: Array<{ body: any }> = [];
+    const fetchImpl = async (_url: string, init?: RequestInit) => {
+      calls.push({ body: JSON.parse(String(init?.body ?? '{}')) });
+      return new Response([
+        'data: {"choices":[{"delta":{"role":"assistant"},"finish_reason":null}]}',
+        'data: {"choices":[{"delta":{"content":"Proxy "},"finish_reason":null}]}',
+        'data: {"choices":[{"delta":{"content":"SSE"},"finish_reason":"stop"}]}',
+        'data: [DONE]',
+      ].join('\n'), { status: 200 });
+    };
+
+    await runMindosNonStreamingFallback({
+      baseUrl: 'https://proxy.example',
+      apiKey: 'key',
+      model: 'model',
+      systemPrompt: 'system',
+      historyMessages: [],
+      userContent: 'hello',
+      tools: [],
+      send: (event) => events.push(event),
+      signal: new AbortController().signal,
+      maxSteps: 1,
+      fetch: fetchImpl,
+      chunkDelayMs: 0,
+    });
+
+    expect(calls[0]?.body.stream).toBe(false);
+    expect(events).toEqual([{ type: 'text_delta', delta: 'Proxy SSE' }]);
+  });
+
+  it('can explicitly request streaming transport while keeping MindOS delivery events stable', async () => {
+    const events: Array<{ type: string; delta?: string }> = [];
+    const calls: Array<{ body: any }> = [];
+    const fetchImpl = async (_url: string, init?: RequestInit) => {
+      calls.push({ body: JSON.parse(String(init?.body ?? '{}')) });
+      return new Response(JSON.stringify({
+        choices: [{
+          message: { role: 'assistant', content: 'Streaming requested, JSON returned' },
+          finish_reason: 'stop',
+        }],
+      }), { status: 200 });
+    };
+
+    await runMindosOpenAICompatFallback({
+      baseUrl: 'https://proxy.example',
+      apiKey: 'key',
+      model: 'model',
+      systemPrompt: 'system',
+      historyMessages: [],
+      userContent: 'hello',
+      tools: [],
+      send: (event) => events.push(event),
+      signal: new AbortController().signal,
+      maxSteps: 1,
+      fetch: fetchImpl,
+      chunkDelayMs: 0,
+      requestStream: true,
+    });
+
+    expect(calls[0]?.body.stream).toBe(true);
+    expect(events).toEqual([{ type: 'text_delta', delta: 'Streaming requested, JSON returned' }]);
   });
 
   it('keeps Pi resource loading on projectRoot while executing the session in workDir', async () => {

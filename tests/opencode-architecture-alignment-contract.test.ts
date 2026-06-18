@@ -218,6 +218,7 @@ describe('OpenCode architecture alignment', () => {
     const mindosRuntimeAdapter = readText('packages/mindos/src/agent/runtime/adapters/mindos.ts');
     const mindosRuntimeCompat = readText('packages/mindos/src/agent-runtime/adapters/mindos.ts');
     const sessionIndex = readText('packages/mindos/src/agent/session/index.ts');
+    const openAiCompatFallback = readText('packages/mindos/src/agent/session/openai-compat-fallback.ts');
     const sessionCompatIndex = readText('packages/mindos/src/session/index.ts');
     const streamConsumer = readText('packages/web/lib/agent/stream-consumer.ts');
     const toAgentMessages = readText('packages/web/lib/agent/to-agent-messages.ts');
@@ -245,6 +246,10 @@ describe('OpenCode architecture alignment', () => {
     expect(sessionIndex).toContain('runMindosNonStreamingFallback');
     expect(sessionIndex).toContain('buildMindosCompatEndpointCandidates');
     expect(sessionIndex).toContain('createMindosPiAgentRuntime');
+    expect(openAiCompatFallback).toContain('runMindosOpenAICompatFallback');
+    expect(openAiCompatFallback).toContain('requestStream ?? false');
+    expect(openAiCompatFallback).toContain('parseMindosOpenAICompatResponse');
+    expect(openAiCompatFallback).toContain('reassembleMindosOpenAISse');
     expect(readText('packages/mindos/src/agent/index.ts')).toContain('defineMindosAgent');
     expect(readText('packages/mindos/src/agent/index.ts')).toContain('MINDOS_SYSTEM_PROMPT');
     expect(readText('packages/mindos/src/agent/index.ts')).toContain('MINDOS_AGENT_MANIFEST');

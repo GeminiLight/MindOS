@@ -1,4 +1,8 @@
-import { redactSensitiveObject, redactSensitiveText } from './redaction.js';
+import {
+  safeParseMindosJsonObject,
+  sanitizeToolArgs,
+  sanitizeToolOutput,
+} from './tool-event-safety.js';
 import {
   collectMindosPiRegisteredToolSummaries,
   collectMindosPiRuntimeToolsForFallback,
@@ -17,6 +21,28 @@ import {
 } from '../prompt/context-prompt.js';
 
 export { redactSensitiveObject, redactSensitiveText } from './redaction.js';
+export {
+  safeParseMindosJsonObject,
+  sanitizeToolArgs,
+  sanitizeToolOutput,
+} from './tool-event-safety.js';
+export {
+  buildMindosCompatEndpointCandidates,
+  mindosPiMessagesToOpenAI,
+  parseMindosOpenAICompatResponse,
+  reassembleMindosOpenAISse,
+  runMindosNonStreamingFallback,
+  runMindosOpenAICompatFallback,
+} from './openai-compat-fallback.js';
+export type {
+  MindosNonStreamingFallbackOptions,
+  MindosOpenAICompatChoice,
+  MindosOpenAICompatCompletion,
+  MindosOpenAICompatFallbackEvent,
+  MindosOpenAICompatFallbackOptions,
+  MindosOpenAIMessage,
+  MindosOpenAIToolCall,
+} from './openai-compat-fallback.js';
 export type {
   MindosDiscoveredSkill,
   MindosExtensionEntry,
@@ -369,34 +395,6 @@ export function createMindosAgentEventReducer(options: MindosAgentEventReducerOp
   };
 }
 
-export function sanitizeToolArgs(toolName: string, args: unknown): unknown {
-  if (!isRecord(args)) return typeof args === 'string' ? redactSensitiveText(args) : redactSensitiveObject(args);
-
-  if (toolName === 'batch_create_files' && Array.isArray(args.files)) {
-    return redactSensitiveObject({
-      ...args,
-      files: args.files
-        .filter(isRecord)
-        .map((file) => ({
-          path: file.path,
-          ...(file.description ? { description: file.description } : {}),
-        })),
-    });
-  }
-
-  if (typeof args.content === 'string' && args.content.length > 200) {
-    return redactSensitiveObject({ ...args, content: `[${args.content.length} chars]` });
-  }
-  if (typeof args.text === 'string' && args.text.length > 200) {
-    return redactSensitiveObject({ ...args, text: `[${args.text.length} chars]` });
-  }
-  return redactSensitiveObject(args);
-}
-
-export function sanitizeToolOutput(output: string): string {
-  return redactSensitiveText(output);
-}
-
 export function encodeMindosSseEvent(event: MindOSSSEvent): string {
   return `data:${JSON.stringify(event)}\n\n`;
 }
@@ -600,16 +598,6 @@ export function buildMindosExternalRuntimePrompt(input: MindosExternalRuntimePro
     sections,
     selectedSkills: [],
   });
-}
-
-export function safeParseMindosJsonObject(raw: string | undefined): Record<string, unknown> {
-  if (!raw) return {};
-  try {
-    const parsed = JSON.parse(raw) as unknown;
-    return isRecord(parsed) ? parsed : {};
-  } catch {
-    return {};
-  }
 }
 
 export function dirnameOfMindosPath(filePath?: string): string | null {
@@ -1534,367 +1522,6 @@ function isOpenAiCompatibleProxy(options: Pick<MindosAskProxyFallbackOptions, 'p
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
-}
-
-export function buildMindosCompatEndpointCandidates(baseUrl: string, endpointPath: string, apiType: string): string[] {
-  const base = baseUrl.replace(/\/+$/, '');
-  const cleanPath = endpointPath.startsWith('/') ? endpointPath : `/${endpointPath}`;
-  const hasVersionPrefix = /\/v\d+(?:$|\/)/.test(base);
-  const candidates = new Set<string>();
-
-  candidates.add(`${base}${cleanPath}`);
-
-  if (!hasVersionPrefix && (
-    apiType === 'openai-completions'
-    || apiType === 'openai-responses'
-    || apiType === 'anthropic-messages'
-  )) {
-    candidates.add(`${base}/v1${cleanPath}`);
-  }
-
-  return Array.from(candidates);
-}
-
-type MindosOpenAIMessage = {
-  role: string;
-  content?: unknown;
-  tool_calls?: unknown;
-  tool_call_id?: string;
-};
-
-type MindosOpenAIChunkToolCall = {
-  index?: number;
-  id?: string;
-  type?: string;
-  function?: {
-    name?: string;
-    arguments?: string;
-  };
-};
-
-type MindosOpenAIToolCall = {
-  id: string;
-  type: string;
-  function: {
-    name: string;
-    arguments: string;
-  };
-};
-
-export function reassembleMindosOpenAISse(sseText: string): {
-  choices: Array<{
-    message: {
-      role: string;
-      content: string | null;
-      tool_calls?: MindosOpenAIToolCall[];
-    };
-    finish_reason: string;
-  }>;
-} {
-  const lines = sseText.split('\n');
-  let content = '';
-  let role = 'assistant';
-  let finishReason = 'stop';
-  const toolCalls = new Map<number, MindosOpenAIToolCall>();
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed.startsWith('data:')) continue;
-    const payload = trimmed.slice(5).trim();
-    if (payload === '[DONE]') break;
-
-    const chunk = parseUnknownJson(payload);
-    if (!isRecord(chunk)) continue;
-    const choices = Array.isArray(chunk.choices) ? chunk.choices : [];
-    const firstChoice = choices[0];
-    if (!isRecord(firstChoice)) continue;
-    const delta = firstChoice.delta;
-    if (!isRecord(delta)) continue;
-
-    if (typeof delta.role === 'string') role = delta.role;
-    if (typeof delta.content === 'string') content += delta.content;
-    if (typeof firstChoice.finish_reason === 'string') finishReason = firstChoice.finish_reason;
-
-    if (Array.isArray(delta.tool_calls)) {
-      for (const rawToolCall of delta.tool_calls) {
-        if (!isRecord(rawToolCall)) continue;
-        const toolCall = rawToolCall as MindosOpenAIChunkToolCall;
-        const idx = typeof toolCall.index === 'number' ? toolCall.index : 0;
-        const existing = toolCalls.get(idx);
-        if (!existing) {
-          toolCalls.set(idx, {
-            id: toolCall.id ?? '',
-            type: toolCall.type ?? 'function',
-            function: {
-              name: toolCall.function?.name ?? '',
-              arguments: toolCall.function?.arguments ?? '',
-            },
-          });
-        } else {
-          if (toolCall.id) existing.id = toolCall.id;
-          if (toolCall.function?.name) existing.function.name += toolCall.function.name;
-          if (toolCall.function?.arguments) existing.function.arguments += toolCall.function.arguments;
-        }
-      }
-    }
-  }
-
-  const message: {
-    role: string;
-    content: string | null;
-    tool_calls?: MindosOpenAIToolCall[];
-  } = { role, content: content || null };
-  if (toolCalls.size > 0) message.tool_calls = Array.from(toolCalls.values());
-
-  return {
-    choices: [{ message, finish_reason: finishReason }],
-  };
-}
-
-export function mindosPiMessagesToOpenAI(piMessages: unknown[]): MindosOpenAIMessage[] {
-  return piMessages
-    .map((message) => {
-      if (!isRecord(message)) return null;
-      const role = message.role;
-
-      if (role === 'system') return null;
-
-      if (role === 'user') {
-        return {
-          role: 'user',
-          content: typeof message.content === 'string' ? message.content : message.content,
-        };
-      }
-
-      if (role === 'assistant') {
-        const assistantContent = message.content;
-        let textContent = '';
-        const toolCalls: MindosOpenAIToolCall[] = [];
-
-        if (Array.isArray(assistantContent)) {
-          for (const rawPart of assistantContent) {
-            if (!isRecord(rawPart)) continue;
-            if (rawPart.type === 'text' && typeof rawPart.text === 'string') {
-              textContent += rawPart.text;
-            } else if (rawPart.type === 'toolCall') {
-              toolCalls.push({
-                id: typeof rawPart.id === 'string' ? rawPart.id : `call_${Date.now()}`,
-                type: 'function',
-                function: {
-                  name: typeof rawPart.name === 'string' ? rawPart.name : 'unknown',
-                  arguments: JSON.stringify(rawPart.arguments ?? {}),
-                },
-              });
-            }
-          }
-        }
-
-        const result: MindosOpenAIMessage = { role: 'assistant', content: textContent || '' };
-        if (toolCalls.length > 0) result.tool_calls = toolCalls;
-        return result;
-      }
-
-      if (role === 'toolResult') {
-        const contentText = Array.isArray(message.content)
-          ? message.content
-              .filter((part): part is { type: string; text?: string } => isRecord(part) && part.type === 'text')
-              .map((part) => part.text ?? '')
-              .join('\n')
-          : String(message.content ?? '');
-
-        return {
-          role: 'tool',
-          tool_call_id: typeof message.toolCallId === 'string' ? message.toolCallId : 'unknown',
-          content: contentText,
-        };
-      }
-
-      return null;
-    })
-    .filter((message): message is MindosOpenAIMessage => message !== null);
-}
-
-export type MindosNonStreamingFallbackOptions = {
-  baseUrl: string;
-  apiKey: string;
-  model: string;
-  systemPrompt: string;
-  historyMessages: unknown[];
-  userContent: string;
-  tools: MindosExecutableTool[];
-  send(event: MindOSSSEvent): void;
-  signal: AbortSignal;
-  maxSteps: number;
-  fetch?: typeof fetch;
-  chunkDelayMs?: number;
-};
-
-export async function runMindosNonStreamingFallback(options: MindosNonStreamingFallbackOptions): Promise<void> {
-  const {
-    baseUrl,
-    apiKey,
-    model,
-    systemPrompt,
-    historyMessages,
-    userContent,
-    tools,
-    send,
-    signal,
-    maxSteps,
-  } = options;
-  const fetchImpl = options.fetch ?? fetch;
-  const chunkDelayMs = options.chunkDelayMs ?? 8;
-
-  const openaiTools = tools.map((tool) => ({
-    type: 'function' as const,
-    function: {
-      name: tool.name,
-      description: tool.description ?? '',
-      parameters: tool.parameters ?? { type: 'object', properties: {} },
-    },
-  }));
-
-  const messages: MindosOpenAIMessage[] = [
-    { role: 'system', content: systemPrompt },
-    ...mindosPiMessagesToOpenAI(historyMessages),
-    { role: 'user', content: userContent },
-  ];
-
-  const toolMap = new Map(tools.map((tool) => [tool.name, tool]));
-  const endpoints = buildMindosCompatEndpointCandidates(baseUrl, '/chat/completions', 'openai-completions');
-  let step = 0;
-
-  while (step < maxSteps) {
-    if (signal.aborted) throw new Error('Request aborted');
-    step += 1;
-
-    let response: Response | null = null;
-    let lastEndpointError = '';
-
-    for (const endpoint of endpoints) {
-      const attempt = await fetchImpl(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          model,
-          messages,
-          tools: openaiTools.length > 0 ? openaiTools : undefined,
-          tool_choice: openaiTools.length > 0 ? 'auto' : undefined,
-          stream: true,
-        }),
-        signal,
-      });
-
-      if (attempt.ok) {
-        response = attempt;
-        break;
-      }
-
-      const errorText = await attempt.text().catch(() => '');
-      lastEndpointError = `HTTP ${attempt.status} @ ${endpoint}: ${errorText.slice(0, 200)}`;
-      if (attempt.status !== 404) {
-        throw new Error(`Non-streaming API error ${lastEndpointError}`);
-      }
-    }
-
-    if (!response) {
-      throw new Error(`Non-streaming API error ${lastEndpointError || 'all endpoint candidates failed'}; tried ${endpoints.length} endpoint candidate(s)`);
-    }
-
-    const rawText = await response.text();
-    const trimmed = rawText.trimStart();
-    const data = trimmed.startsWith('data:')
-      ? reassembleMindosOpenAISse(trimmed)
-      : parseUnknownJson(rawText);
-
-    if (!isRecord(data)) {
-      throw new Error(`API returned invalid response: ${rawText.slice(0, 200)}`);
-    }
-
-    const choices = Array.isArray(data.choices) ? data.choices : [];
-    const choice = choices[0];
-    if (!isRecord(choice)) throw new Error('Empty response from API');
-
-    const message = isRecord(choice.message) ? choice.message : isRecord(choice.delta) ? choice.delta : {};
-    const finishReason = typeof choice.finish_reason === 'string' ? choice.finish_reason : 'stop';
-
-    if (typeof message.content === 'string' && message.content) {
-      const chunkSize = 40;
-      for (let i = 0; i < message.content.length; i += chunkSize) {
-        send({ type: 'text_delta', delta: message.content.slice(i, i + chunkSize) });
-        if (chunkDelayMs > 0) await new Promise((resolveDelay) => setTimeout(resolveDelay, chunkDelayMs));
-      }
-    }
-
-    const toolCalls = Array.isArray(message.tool_calls) ? message.tool_calls : [];
-    if (finishReason === 'stop' || toolCalls.length === 0) break;
-
-    const toolResultMessages: MindosOpenAIMessage[] = [];
-    for (const rawToolCall of toolCalls) {
-      if (!isRecord(rawToolCall)) continue;
-      const functionCall = isRecord(rawToolCall.function) ? rawToolCall.function : {};
-      const toolName = typeof functionCall.name === 'string' ? functionCall.name : '';
-      const toolCallId = typeof rawToolCall.id === 'string' ? rawToolCall.id : `call_${Date.now()}`;
-      const parsedArgs = safeParseMindosJsonObject(
-        typeof functionCall.arguments === 'string' ? functionCall.arguments : '{}',
-      );
-
-      const tool = toolMap.get(toolName);
-      send({ type: 'tool_start', toolCallId, toolName, args: sanitizeToolArgs(toolName, parsedArgs) });
-
-      let resultText = '';
-      let isError = false;
-      if (tool) {
-        try {
-          const result = await tool.execute(toolCallId, parsedArgs, signal, (update) => {
-            const delta = getMindosToolUpdateText(update);
-            if (delta) send({ type: 'tool_delta', toolCallId, toolName, delta: sanitizeToolOutput(delta) });
-          });
-          resultText = result.content
-            .filter((part) => part.type === 'text')
-            .map((part) => part.text ?? '')
-            .join('\n');
-        } catch (error) {
-          resultText = errorMessage(error);
-          isError = true;
-        }
-      } else {
-        resultText = `Tool "${toolName}" not found`;
-        isError = true;
-      }
-
-      send({ type: 'tool_end', toolCallId, toolName, output: sanitizeToolOutput(resultText), isError });
-      toolResultMessages.push({ role: 'tool', tool_call_id: toolCallId, content: resultText });
-    }
-
-    messages.push({
-      role: 'assistant',
-      content: message.content ?? null,
-      tool_calls: message.tool_calls,
-    });
-    messages.push(...toolResultMessages);
-  }
-}
-
-function getMindosToolUpdateText(update: unknown): string {
-  if (!isRecord(update) || !Array.isArray(update.content)) return '';
-  return update.content
-    .filter(isRecord)
-    .filter((part) => part.type === 'text' || part.type === undefined)
-    .map((part) => (typeof part.text === 'string' ? part.text : ''))
-    .filter(Boolean)
-    .join('\n');
-}
-
-function parseUnknownJson(raw: string): unknown {
-  try {
-    return JSON.parse(raw) as unknown;
-  } catch {
-    return null;
-  }
 }
 
 export function detectMindosAgentLoop(history: MindosAgentStepEntry[], threshold = 3): boolean {
