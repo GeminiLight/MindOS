@@ -12,14 +12,18 @@ import { compactRuntimeFailureMessage } from '../../agent/runtime/runtime-errors
 import { resolveCommandPath } from '../../protocols/acp/index.js';
 import { errorResponse, json, type MindosServerResponse } from '../response.js';
 import {
+  type AgentRuntimesServices,
   defaultCheckNativeRuntimeHealth,
+  selectCodexRuntimeCandidate,
   type NativeRuntimeHealthResult,
 } from './agent-runtimes.js';
 
 export type CodexThreadManagerServices = {
   createCodexClient?(): CodexAppServerClient | Promise<CodexAppServerClient>;
   resolveRuntimeCommand?(command: string): Promise<string | null>;
-  checkCodexRuntimeHealth?(binaryPath: string): Promise<NativeRuntimeHealthResult>;
+  resolveRuntimeCommandCandidates?: AgentRuntimesServices['resolveRuntimeCommandCandidates'];
+  readSettings?: AgentRuntimesServices['readSettings'];
+  checkCodexRuntimeHealth?(binaryPath: string, env?: NodeJS.ProcessEnv): Promise<NativeRuntimeHealthResult>;
 };
 
 export type CodexThreadListPayload = CodexThreadListResult;
@@ -131,8 +135,11 @@ async function withCodexClient<T>(
   services: CodexThreadManagerServices,
   run: (client: CodexAppServerClient) => Promise<T>,
 ): Promise<T> {
-  await ensureCodexThreadRuntimeAvailable(services);
-  const client = await (services.createCodexClient?.() ?? createCodexAppServerClient(createCodexAppServerStdioTransport()));
+  const runtime = await ensureCodexThreadRuntimeAvailable(services);
+  const client = await (services.createCodexClient?.() ?? createCodexAppServerClient(createCodexAppServerStdioTransport({
+    ...(runtime?.binaryPath ? { command: runtime.binaryPath } : {}),
+    ...(runtime?.env ? { env: runtime.env } : {}),
+  })));
   try {
     await client.initialize();
     return await run(client);
@@ -141,20 +148,31 @@ async function withCodexClient<T>(
   }
 }
 
-async function ensureCodexThreadRuntimeAvailable(services: CodexThreadManagerServices): Promise<void> {
-  if (services.createCodexClient) return;
+async function ensureCodexThreadRuntimeAvailable(
+  services: CodexThreadManagerServices,
+): Promise<{ binaryPath: string; env?: NodeJS.ProcessEnv } | undefined> {
+  if (services.createCodexClient) return undefined;
   const resolveRuntimeCommand = services.resolveRuntimeCommand ?? resolveCommandPath;
-  const binaryPath = await resolveRuntimeCommand('codex');
-  if (!binaryPath) {
+  const selected = await selectCodexRuntimeCandidate({
+    services: {
+      readSettings: services.readSettings,
+      resolveRuntimeCommand,
+      resolveRuntimeCommandCandidates: services.resolveRuntimeCommandCandidates,
+    },
+    checkCandidate: (binaryPath, env) => services.checkCodexRuntimeHealth?.(binaryPath, env) ?? defaultCheckNativeRuntimeHealth({
+      runtime: 'codex',
+      agent: { id: 'codex-acp', name: 'Codex', binaryPath },
+      ...(env ? { env } : {}),
+    }),
+  });
+  if (!selected) {
     throw new CodexThreadRuntimeUnavailableError('Codex executable was not detected. Install Codex or start MindOS from an environment where the codex command is available.');
   }
-  const health = await (services.checkCodexRuntimeHealth?.(binaryPath) ?? defaultCheckNativeRuntimeHealth({
-    runtime: 'codex',
-    agent: { id: 'codex-acp', name: 'Codex', binaryPath },
-  }));
+  const { binaryPath, health } = selected;
   if (health.status !== 'available') {
     throw new CodexThreadRuntimeUnavailableError(`Codex is ${health.status === 'signed-out' ? 'signed out' : 'unavailable'}.${health.reason ? ` ${health.reason}` : ''}`);
   }
+  return { binaryPath, ...(selected.env ? { env: selected.env } : {}) };
 }
 
 function parseThreadListParams(searchParams: URLSearchParams): CodexThreadListInput | { error: string } {

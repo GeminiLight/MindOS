@@ -15,6 +15,7 @@ let capturedNativeOptions: MindosAgentRuntimeAskOptions | null = null;
 let capturedAcpOptions: Record<string, any> | null = null;
 const mockDetectLocalAcpAgents = vi.fn();
 const mockResolveCommandPath = vi.fn();
+const mockResolveCommandPathCandidates = vi.fn();
 const mockCheckNativeRuntimeHealth = vi.fn();
 const mockRunMindosAgentRuntimeAskSession = vi.fn();
 const mockRunMindosAcpAskSession = vi.fn();
@@ -72,6 +73,7 @@ function availableNativeDescriptor(
 vi.mock('@/lib/acp/detect-local', () => ({
   detectLocalAcpAgents: mockDetectLocalAcpAgents,
   resolveCommandPath: mockResolveCommandPath,
+  resolveCommandPathCandidates: mockResolveCommandPathCandidates,
   checkNativeRuntimeHealth: mockCheckNativeRuntimeHealth,
 }));
 
@@ -140,6 +142,8 @@ describe('/api/ask native runtime routing', () => {
     capturedAcpOptions = null;
     mockDetectLocalAcpAgents.mockReset();
     mockResolveCommandPath.mockReset();
+    mockResolveCommandPathCandidates.mockReset();
+    mockResolveCommandPathCandidates.mockResolvedValue([]);
     mockCheckNativeRuntimeHealth.mockReset();
     mockRunMindosAgentRuntimeAskSession.mockReset();
     mockRunMindosAcpAskSession.mockReset();

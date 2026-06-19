@@ -70,6 +70,20 @@ function parseResolvedPath(stdout: string): string | null {
   return null;
 }
 
+function parseResolvedPaths(stdout: string): string[] {
+  const resolved: string[] = [];
+  const add = (candidate: string) => {
+    const expanded = expandHome(candidate);
+    if (!isPathLikeCommand(expanded)) return;
+    if (!resolved.includes(expanded)) resolved.push(expanded);
+  };
+  for (const line of stdout.split(/\r?\n/)) {
+    const candidate = line.trim();
+    if (candidate) add(candidate);
+  }
+  return resolved;
+}
+
 function shellEscape(command: string): string {
   return `'${command.replace(/'/g, `'\\''`)}'`;
 }
@@ -109,6 +123,11 @@ async function lookupCommandPathCurrentEnv(command: string): Promise<string | nu
   return stdout ? parseResolvedPath(stdout) : null;
 }
 
+async function lookupCommandPathCandidatesCurrentEnv(command: string): Promise<string[]> {
+  const stdout = await execFileText(process.platform === 'win32' ? 'where' : 'which', process.platform === 'win32' ? [command] : ['-a', command]);
+  return stdout ? parseResolvedPaths(stdout) : [];
+}
+
 function lookupCommandPathCurrentEnvSync(command: string): string | null {
   const stdout = execFileTextSync(process.platform === 'win32' ? 'where' : 'which', [command]);
   return stdout ? parseResolvedPath(stdout) : null;
@@ -122,6 +141,18 @@ async function lookupCommandPathLoginShell(command: string): Promise<string | nu
     if (resolved) return resolved;
   }
   return null;
+}
+
+async function lookupCommandPathCandidatesLoginShell(command: string): Promise<string[]> {
+  const candidates: string[] = [];
+  for (const shell of getLoginShells()) {
+    const stdout = await execFileText(shell, ['-lic', `which -a ${shellEscape(command)}`]);
+    if (!stdout) continue;
+    for (const candidate of parseResolvedPaths(stdout)) {
+      if (!candidates.includes(candidate)) candidates.push(candidate);
+    }
+  }
+  return candidates;
 }
 
 function lookupCommandPathLoginShellSync(command: string): string | null {
@@ -141,6 +172,23 @@ export async function resolveCommandPath(command: string | undefined): Promise<s
   const trimmed = command.trim();
   if (!trimmed || isPathLikeCommand(trimmed)) return null;
   return await lookupCommandPathCurrentEnv(trimmed) ?? await lookupCommandPathLoginShell(trimmed);
+}
+
+export async function resolveCommandPathCandidates(command: string | undefined): Promise<string[]> {
+  if (!command) return [];
+  const direct = resolveDirectCommandPath(command);
+  if (direct) return [direct];
+  const trimmed = command.trim();
+  if (!trimmed || isPathLikeCommand(trimmed)) return [];
+
+  const candidates: string[] = [];
+  for (const candidate of [
+    ...await lookupCommandPathCandidatesCurrentEnv(trimmed),
+    ...await lookupCommandPathCandidatesLoginShell(trimmed),
+  ]) {
+    if (!candidates.includes(candidate)) candidates.push(candidate);
+  }
+  return candidates;
 }
 
 export function resolveCommandPathSync(command: string | undefined): string | null {

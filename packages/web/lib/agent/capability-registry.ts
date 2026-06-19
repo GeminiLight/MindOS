@@ -10,7 +10,7 @@ import { fileURLToPath } from 'url';
 import type { AgentCapabilitiesServices, AgentRuntimesServices } from '@geminilight/mindos/server';
 import { createAgentCapabilitiesServices as createCoreServices } from '@geminilight/mindos/agent/tool/capability-registry';
 import { knowledgeBaseTools } from './tools';
-import { checkNativeRuntimeHealth, detectLocalAcpAgents, resolveCommandPath } from '@/lib/acp/detect-local';
+import { checkNativeRuntimeHealth, detectLocalAcpAgents, resolveCommandPath, resolveCommandPathCandidates } from '@/lib/acp/detect-local';
 import { readSettings } from '@/lib/settings';
 import { readMcpConfig, readMcpToolCache } from '@/lib/pi-integration/mcp-config';
 import { getDiscoveredAgents } from '@/lib/a2a/client';
@@ -24,6 +24,7 @@ export function createAgentCapabilitiesServices(): AgentCapabilitiesServices {
     readSettings: readSettings as AgentRuntimesServices['readSettings'],
     detectLocalAcpAgents: detectLocalAcpAgents as AgentRuntimesServices['detectLocalAcpAgents'],
     resolveRuntimeCommand: resolveCommandPath as AgentRuntimesServices['resolveRuntimeCommand'],
+    resolveRuntimeCommandCandidates: resolveCommandPathCandidates as AgentRuntimesServices['resolveRuntimeCommandCandidates'],
     checkNativeRuntimeHealth: checkNativeRuntimeHealth as AgentRuntimesServices['checkNativeRuntimeHealth'],
     readMcpConfig,
     readMcpToolCache,

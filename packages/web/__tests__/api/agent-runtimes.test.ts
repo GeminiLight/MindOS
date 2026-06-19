@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const mockDetectLocalAcpAgents = vi.fn();
 const mockResolveCommandPath = vi.fn();
+const mockResolveCommandPathCandidates = vi.fn();
 const mockCheckNativeRuntimeHealth = vi.fn();
 const RAW_CODEX_OPTIONAL_DEPENDENCY_STACK = [
   'file:///opt/homebrew/lib/node_modules/@openai/codex/bin/codex.js:102',
@@ -15,6 +16,7 @@ const RAW_CODEX_OPTIONAL_DEPENDENCY_STACK = [
 vi.mock('@/lib/acp/detect-local', () => ({
   detectLocalAcpAgents: mockDetectLocalAcpAgents,
   resolveCommandPath: mockResolveCommandPath,
+  resolveCommandPathCandidates: mockResolveCommandPathCandidates,
   checkNativeRuntimeHealth: mockCheckNativeRuntimeHealth,
 }));
 
@@ -26,6 +28,8 @@ describe('/api/agent-runtimes', () => {
   beforeEach(() => {
     mockDetectLocalAcpAgents.mockReset();
     mockResolveCommandPath.mockReset();
+    mockResolveCommandPathCandidates.mockReset();
+    mockResolveCommandPathCandidates.mockResolvedValue([]);
     mockCheckNativeRuntimeHealth.mockReset();
   });
 

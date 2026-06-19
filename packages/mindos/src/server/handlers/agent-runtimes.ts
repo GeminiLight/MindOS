@@ -1,12 +1,17 @@
 import {
   detectLocalAcpAgents as defaultDetectLocalAcpAgents,
+  findUserOverride,
   resolveCommandPath,
+  resolveCommandPathCandidates,
 } from '../../protocols/acp/index.js';
 import {
   readCodexConfigText,
   resolveCodexProviderEnvironment,
   type CodexShellEnvValueReader,
 } from '../../agent/runtime/codex-env.js';
+import {
+  buildAgentRuntimeEnv,
+} from '../../agent/runtime/runtime-env.js';
 import {
   type ClaudeCodeSdkModule,
 } from '../../agent/runtime/claude-code-sdk.js';
@@ -23,6 +28,7 @@ import {
   type AgentRuntimeDescriptor,
   type AgentRuntimePayload,
   type AgentRuntimesPayload,
+  type AgentRuntimesSettings,
   type AgentRuntimesServices,
   type DetectedRuntimeAgent,
   type MissingRuntimeAgent,
@@ -42,6 +48,8 @@ import {
   nativeDescriptor,
 } from '../../agent/runtime/descriptors.js';
 import { spawn } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import { delimiter, join } from 'node:path';
 import { errorResponse, json, privateCacheHeaders, type MindosServerResponse } from '../response.js';
 
 export {
@@ -73,9 +81,13 @@ async function checkProcessVersion(
   args: string[],
   timeoutMs: number,
   runtime?: NativeRuntimeId,
+  env?: NodeJS.ProcessEnv,
 ): Promise<NativeRuntimeHealthResult> {
   return new Promise((resolve) => {
-    const child = spawn(command, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(command, args, {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      ...(env ? { env } : {}),
+    });
     let stdout = '';
     let stderr = '';
     let done = false;
@@ -105,14 +117,14 @@ async function checkProcessVersion(
   });
 }
 
-async function checkCodexCliRuntime(command: string, timeoutMs: number): Promise<NativeRuntimeHealthResult> {
-  const appServerHelp = await checkProcessVersion(command, ['app-server', '--help'], timeoutMs, 'codex');
+async function checkCodexCliRuntime(command: string, timeoutMs: number, env?: NodeJS.ProcessEnv): Promise<NativeRuntimeHealthResult> {
+  const appServerHelp = await checkProcessVersion(command, ['app-server', '--help'], timeoutMs, 'codex', env);
   if (appServerHelp.status !== 'available') return appServerHelp;
 
-  const providerEnvironment = checkCodexProviderEnvironment();
+  const providerEnvironment = checkCodexProviderEnvironment({ env });
   if (providerEnvironment.status !== 'available') return providerEnvironment;
 
-  const loginStatus = await checkProcessVersion(command, ['login', 'status'], timeoutMs, 'codex');
+  const loginStatus = await checkProcessVersion(command, ['login', 'status'], timeoutMs, 'codex', env);
   return mergeCodexProviderAndLoginHealth(providerEnvironment, loginStatus);
 }
 
@@ -168,6 +180,142 @@ export function checkCodexProviderEnvironment(input: {
   };
 }
 
+function addUniqueRuntimeCommandCandidate(
+  candidates: string[],
+  candidate: string | null | undefined,
+  options: { requireExistingPath?: boolean } = {},
+): void {
+  const trimmed = candidate?.trim();
+  if (!trimmed) return;
+  if (options.requireExistingPath !== false) {
+    try {
+      if (!existsSync(trimmed)) return;
+    } catch {
+      return;
+    }
+  }
+  if (!candidates.includes(trimmed)) candidates.push(trimmed);
+}
+
+function addCodexPlatformFallbackCandidates(candidates: string[]): void {
+  if (process.platform === 'darwin') {
+    addUniqueRuntimeCommandCandidate(candidates, '/Applications/Codex.app/Contents/Resources/codex');
+  }
+}
+
+function addCommandCandidatesFromEnvPath(
+  candidates: string[],
+  command: string,
+  env: NodeJS.ProcessEnv | undefined,
+): void {
+  const pathValue = env?.PATH ?? env?.Path ?? env?.path;
+  if (!pathValue) return;
+  const extensions = process.platform === 'win32'
+    ? (env?.PATHEXT ?? '.COM;.EXE;.BAT;.CMD').split(';').filter(Boolean)
+    : [''];
+  for (const dir of pathValue.split(delimiter)) {
+    const trimmedDir = dir.trim();
+    if (!trimmedDir) continue;
+    for (const extension of extensions) {
+      addUniqueRuntimeCommandCandidate(candidates, join(trimmedDir, `${command}${extension}`));
+    }
+  }
+}
+
+type CodexRuntimeCommandPlan = {
+  candidates: string[];
+  explicit: boolean;
+  env?: NodeJS.ProcessEnv;
+};
+
+function resolveCodexRuntimeUserOverride(settings: AgentRuntimesSettings | undefined) {
+  return findUserOverride('codex-acp', settings?.acpAgents)
+    ?? findUserOverride('codex', settings?.acpAgents);
+}
+
+function buildCodexRuntimeEnv(
+  settings: AgentRuntimesSettings | undefined,
+  overrideEnv: Record<string, string> = {},
+): NodeJS.ProcessEnv | undefined {
+  if (!settings) return undefined;
+  const hasOverrideEnv = Object.keys(overrideEnv).length > 0;
+  const hasConfiguredRuntimeEnv = (settings.agentRuntimeEnv?.keys?.length ?? 0) > 0;
+  if (!hasOverrideEnv && !hasConfiguredRuntimeEnv) return undefined;
+  return buildAgentRuntimeEnv({
+    settings: settings.agentRuntimeEnv,
+    overrideEnv,
+  }).env;
+}
+
+async function resolveCodexRuntimeCommandPlan(
+  services: Pick<AgentRuntimesServices, 'readSettings' | 'resolveRuntimeCommand' | 'resolveRuntimeCommandCandidates'> = {},
+): Promise<CodexRuntimeCommandPlan> {
+  const candidates: string[] = [];
+  const resolveRuntimeCommand = services.resolveRuntimeCommand ?? resolveCommandPath;
+  const settings = services.readSettings?.();
+  const override = resolveCodexRuntimeUserOverride(settings);
+  const env = buildCodexRuntimeEnv(settings, override?.env);
+  const includePlatformFallback = !services.resolveRuntimeCommand || Boolean(services.resolveRuntimeCommandCandidates);
+  if (override?.command) {
+    addUniqueRuntimeCommandCandidate(candidates, override.command, { requireExistingPath: false });
+    return { candidates, explicit: true, env };
+  }
+
+  addCommandCandidatesFromEnvPath(candidates, 'codex', env);
+
+  if (services.resolveRuntimeCommandCandidates) {
+    for (const candidate of await services.resolveRuntimeCommandCandidates('codex')) {
+      addUniqueRuntimeCommandCandidate(candidates, candidate, { requireExistingPath: false });
+    }
+    addUniqueRuntimeCommandCandidate(candidates, await resolveRuntimeCommand('codex'), { requireExistingPath: false });
+  } else if (services.resolveRuntimeCommand) {
+    addUniqueRuntimeCommandCandidate(candidates, await resolveRuntimeCommand('codex'), { requireExistingPath: false });
+  } else {
+    for (const candidate of await resolveCommandPathCandidates('codex')) {
+      addUniqueRuntimeCommandCandidate(candidates, candidate, { requireExistingPath: false });
+    }
+    addUniqueRuntimeCommandCandidate(candidates, await resolveRuntimeCommand('codex'), { requireExistingPath: false });
+  }
+  if (includePlatformFallback) addCodexPlatformFallbackCandidates(candidates);
+  return { candidates, explicit: false, env };
+}
+
+export async function resolveCodexRuntimeCommandCandidates(
+  services: Pick<AgentRuntimesServices, 'readSettings' | 'resolveRuntimeCommand' | 'resolveRuntimeCommandCandidates'> = {},
+): Promise<string[]> {
+  return (await resolveCodexRuntimeCommandPlan(services)).candidates;
+}
+
+export async function selectCodexRuntimeCandidate(input: {
+  services?: Pick<AgentRuntimesServices, 'readSettings' | 'resolveRuntimeCommand' | 'resolveRuntimeCommandCandidates'>;
+  checkCandidate(binaryPath: string, env?: NodeJS.ProcessEnv): Promise<NativeRuntimeHealthResult>;
+}): Promise<{ binaryPath: string; health: NativeRuntimeHealthResult; env?: NodeJS.ProcessEnv } | null> {
+  const plan = await resolveCodexRuntimeCommandPlan(input.services);
+  let firstFailure: { binaryPath: string; health: NativeRuntimeHealthResult } | null = null;
+
+  for (const binaryPath of plan.candidates) {
+    const health = await input.checkCandidate(binaryPath, plan.env);
+    if (health.status === 'available') {
+      if (!firstFailure) return { binaryPath, health, ...(plan.env ? { env: plan.env } : {}) };
+      return {
+        binaryPath,
+        health: {
+          ...health,
+          diagnosticHints: [
+            `MindOS skipped an unhealthy Codex candidate at ${firstFailure.binaryPath}: ${compactRuntimeFailureMessage(firstFailure.health.reason ?? 'Codex candidate failed.', { runtime: 'codex' })}`,
+            ...(health.diagnosticHints ?? []),
+          ],
+        },
+        ...(plan.env ? { env: plan.env } : {}),
+      };
+    }
+    firstFailure ??= { binaryPath, health };
+    if (plan.explicit || health.status !== 'error') break;
+  }
+
+  return firstFailure;
+}
+
 function extractTomlStringValue(text: string, key: string): string | undefined {
   const escapedKey = escapeRegExp(key);
   const match = text.match(new RegExp(`^\\s*${escapedKey}\\s*=\\s*"([^"]*)"\\s*$`, 'm'));
@@ -181,7 +329,7 @@ function escapeRegExp(value: string): string {
 export async function defaultCheckNativeRuntimeHealth(input: NativeRuntimeHealthInput): Promise<NativeRuntimeHealthResult> {
   const timeoutMs = input.timeoutMs ?? NATIVE_HEALTH_TIMEOUT_MS;
   if (input.runtime === 'codex') {
-    return checkCodexCliRuntime(input.agent.binaryPath, timeoutMs);
+    return checkCodexCliRuntime(input.agent.binaryPath, timeoutMs, input.env);
   }
   return checkClaudeRuntimeHealth({ binaryPath: input.agent.binaryPath, timeoutMs });
 }
@@ -269,6 +417,9 @@ async function detectNativeRuntimeDefinition(
 ): Promise<DetectedRuntimeAgent | MissingRuntimeAgent> {
   const checkNativeRuntimeHealth = services.checkNativeRuntimeHealth ?? defaultCheckNativeRuntimeHealth;
   const resolveRuntimeCommand = services.resolveRuntimeCommand ?? resolveCommandPath;
+  if (candidate.runtime === 'codex') {
+    return detectCodexNativeRuntimeDefinition(candidate, services);
+  }
   if (candidate.runtime === 'claude') {
     return detectClaudeNativeRuntimeDefinition(candidate, services);
   }
@@ -310,6 +461,44 @@ async function detectNativeRuntimeDefinition(
       ...(result.reason ? { reason: result.reason } : {}),
     };
   }
+}
+
+async function detectCodexNativeRuntimeDefinition(
+  candidate: typeof nativeRuntimeDefinitions[number],
+  services: AgentRuntimesServices,
+): Promise<DetectedRuntimeAgent | MissingRuntimeAgent> {
+  const checkNativeRuntimeHealth = services.checkNativeRuntimeHealth ?? defaultCheckNativeRuntimeHealth;
+  const selected = await selectCodexRuntimeCandidate({
+    services,
+    checkCandidate: (binaryPath, env) => checkNativeRuntimeHealth({
+      runtime: candidate.runtime,
+      agent: { id: candidate.id, name: candidate.name, binaryPath },
+      timeoutMs: NATIVE_HEALTH_TIMEOUT_MS,
+      ...(env ? { env } : {}),
+    }),
+  });
+
+  if (!selected) {
+    return {
+      id: candidate.id,
+      name: candidate.name,
+      installCmd: candidate.installCmd,
+      packageName: candidate.installCmd.match(/npm install -g (.+)/)?.[1],
+      status: 'missing',
+      reason: `${candidate.name} executable was not detected.`,
+    };
+  }
+
+  return {
+    id: candidate.id,
+    name: candidate.name,
+    binaryPath: selected.binaryPath,
+    resolvedCommand: { cmd: candidate.command, args: [], source: 'descriptor' },
+    status: selected.health.status,
+    ...(selected.health.reason ? { reason: selected.health.reason } : {}),
+    ...(selected.health.diagnosticHints ? { diagnosticHints: selected.health.diagnosticHints } : {}),
+    ...(selected.health.runtimeBridge ? { runtimeBridge: selected.health.runtimeBridge } : {}),
+  };
 }
 
 async function detectClaudeNativeRuntimeDefinition(

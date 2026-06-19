@@ -167,6 +167,19 @@ describe('codex app-server stdio transport process handling', () => {
       return true;
     });
   });
+
+  it('passes the resolved runtime environment to the app-server child process', async () => {
+    const transport = createCodexAppServerStdioTransport({
+      command: process.execPath,
+      args: ['-e', 'console.log(JSON.stringify({ method: "env/value", params: { value: process.env.MINDOS_CODEX_TRANSPORT_ENV } }))'],
+      env: { MINDOS_CODEX_TRANSPORT_ENV: 'transport-value' },
+    });
+
+    await expect(drain(transport.read())).resolves.toEqual([{
+      method: 'env/value',
+      params: { value: 'transport-value' },
+    }]);
+  });
 });
 
 describe('killChildWithEscalation', () => {

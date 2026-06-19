@@ -4,6 +4,7 @@ export const runtime = 'nodejs';
 import { handleCodexThreadForkPost } from '@geminilight/mindos/server';
 import { toNextResponse } from '@/app/api/_mindos-adapter';
 import { getMindRoot } from '@/lib/fs';
+import { codexThreadServices } from '../../../_services';
 
 type RouteContext = {
   params: Promise<{ threadId: string }>;
@@ -25,5 +26,5 @@ export async function POST(req: Request, context: RouteContext) {
   const scopedBody = body && typeof body === 'object' && !Array.isArray(body) && !('cwd' in body)
     ? { ...body, cwd: getMindRoot() }
     : body;
-  return toNextResponse(await handleCodexThreadForkPost(params.threadId, scopedBody));
+  return toNextResponse(await handleCodexThreadForkPost(params.threadId, scopedBody, codexThreadServices));
 }

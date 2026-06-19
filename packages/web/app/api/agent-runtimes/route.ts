@@ -8,7 +8,7 @@ import {
   type AgentRuntimesPayload,
   type AgentRuntimesServices,
 } from '@geminilight/mindos/server';
-import { checkNativeRuntimeHealth, detectLocalAcpAgents, resolveCommandPath } from '@/lib/acp/detect-local';
+import { checkNativeRuntimeHealth, detectLocalAcpAgents, resolveCommandPath, resolveCommandPathCandidates } from '@/lib/acp/detect-local';
 import { readSettings } from '@/lib/settings';
 import { toNextResponse } from '../_mindos-adapter';
 import { rememberAvailableNativeRuntimeDescriptorsFromPayload } from '@/lib/agent/native-runtime-descriptor-cache';
@@ -18,6 +18,7 @@ const services: AgentRuntimesServices = {
   readSettings: readSettings as AgentRuntimesServices['readSettings'],
   detectLocalAcpAgents: detectLocalAcpAgents as AgentRuntimesServices['detectLocalAcpAgents'],
   resolveRuntimeCommand: resolveCommandPath as AgentRuntimesServices['resolveRuntimeCommand'],
+  resolveRuntimeCommandCandidates: resolveCommandPathCandidates as AgentRuntimesServices['resolveRuntimeCommandCandidates'],
   checkNativeRuntimeHealth: checkNativeRuntimeHealth as AgentRuntimesServices['checkNativeRuntimeHealth'],
 };
 

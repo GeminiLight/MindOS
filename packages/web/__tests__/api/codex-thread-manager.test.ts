@@ -56,12 +56,13 @@ describe('/api/agent-runtimes/codex/threads', () => {
     expect(await list.json()).toEqual({ data: [{ id: 'thr-existing' }], nextCursor: null, backwardsCursor: null });
     expect(list.headers.get('Cache-Control')).toBe('no-store');
     expect(await read.json()).toEqual({ thread: { id: 'thr-existing', turns: [{ id: 'turn-existing' }] } });
-    expect(mockHandleCodexThreadsGet).toHaveBeenCalledWith(expect.any(URLSearchParams));
+    expect(mockHandleCodexThreadsGet).toHaveBeenCalledWith(expect.any(URLSearchParams), expect.any(Object));
     expect(mockHandleCodexThreadsGet.mock.calls[0][0].get('limit')).toBe('20');
     expect(mockHandleCodexThreadsGet.mock.calls[0][0].get('cwd')).toBe('/tmp/mindos-root');
     expect(mockHandleCodexThreadGet).toHaveBeenCalledWith(
       'thr-existing',
       expect.any(URLSearchParams),
+      expect.any(Object),
     );
     expect(mockHandleCodexThreadGet.mock.calls[0][1].get('includeTurns')).toBe('1');
   });
@@ -107,9 +108,9 @@ describe('/api/agent-runtimes/codex/threads', () => {
     expect(await fork.json()).toEqual({ thread: { id: 'thr-forked' } });
     expect(await archive.json()).toEqual({ ok: true });
     expect(await unarchive.json()).toEqual({ thread: { id: 'thr-existing' } });
-    expect(mockHandleCodexThreadForkPost).toHaveBeenCalledWith('thr-existing', { cwd: '/tmp/forked' });
-    expect(mockHandleCodexThreadArchivePost).toHaveBeenCalledWith('thr-existing');
-    expect(mockHandleCodexThreadUnarchivePost).toHaveBeenCalledWith('thr-existing');
+    expect(mockHandleCodexThreadForkPost).toHaveBeenCalledWith('thr-existing', { cwd: '/tmp/forked' }, expect.any(Object));
+    expect(mockHandleCodexThreadArchivePost).toHaveBeenCalledWith('thr-existing', expect.any(Object));
+    expect(mockHandleCodexThreadUnarchivePost).toHaveBeenCalledWith('thr-existing', expect.any(Object));
   });
 
   it('rejects malformed JSON on Codex fork without mutating, while allowing an empty body', async () => {
@@ -141,7 +142,7 @@ describe('/api/agent-runtimes/codex/threads', () => {
 
     expect(emptyBody.status).toBe(200);
     expect(await emptyBody.json()).toEqual({ thread: { id: 'thr-forked' } });
-    expect(mockHandleCodexThreadForkPost).toHaveBeenCalledWith('thr-existing', { cwd: '/tmp/mindos-root' });
+    expect(mockHandleCodexThreadForkPost).toHaveBeenCalledWith('thr-existing', { cwd: '/tmp/mindos-root' }, expect.any(Object));
   });
 
   it('does not put native process or filesystem ownership in Codex thread Next routes', () => {

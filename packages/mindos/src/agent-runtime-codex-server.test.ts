@@ -181,4 +181,38 @@ describe('Codex thread manager product handlers', () => {
     expect(badThread.body).toEqual({ error: 'Missing Codex thread id.' });
     expect(services.calls).toEqual([]);
   });
+
+  it('uses the explicitly configured Codex command and env when checking thread runtime availability', async () => {
+    const explicitCommand = '/custom/codex-wrapper';
+    const healthCalls: Array<{ binaryPath: string; env?: NodeJS.ProcessEnv }> = [];
+    const res = await handleCodexThreadsGet(new URLSearchParams('limit=10'), {
+      readSettings: () => ({
+        acpAgents: {
+          codex: {
+            command: explicitCommand,
+            env: { PATH: '/custom/bin:/usr/bin', CODEX_HOME: '/custom/codex-home' },
+          },
+        },
+      }),
+      resolveRuntimeCommand: async () => '/usr/local/bin/codex',
+      resolveRuntimeCommandCandidates: async () => ['/usr/local/bin/codex'],
+      checkCodexRuntimeHealth: async (binaryPath, env) => {
+        healthCalls.push({ binaryPath, env });
+        return { status: 'signed-out', reason: 'explicit wrapper failed' };
+      },
+    });
+
+    expect(res).toEqual({
+      status: 409,
+      body: { error: 'Codex is signed out. explicit wrapper failed' },
+    });
+    expect(healthCalls).toHaveLength(1);
+    expect(healthCalls[0]).toMatchObject({
+      binaryPath: explicitCommand,
+      env: expect.objectContaining({
+        PATH: '/custom/bin:/usr/bin',
+        CODEX_HOME: '/custom/codex-home',
+      }),
+    });
+  });
 });

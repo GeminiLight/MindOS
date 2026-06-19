@@ -148,6 +148,7 @@ export type NativeRuntimeHealthInput = {
   runtime: NativeRuntimeId;
   agent: DetectedRuntimeAgent;
   timeoutMs?: number;
+  env?: NodeJS.ProcessEnv;
 };
 
 export type AgentRuntimesServices = {
@@ -158,6 +159,7 @@ export type AgentRuntimesServices = {
   }>;
   checkNativeRuntimeHealth?(input: NativeRuntimeHealthInput): Promise<NativeRuntimeHealthResult>;
   resolveRuntimeCommand?(command: string): Promise<string | null>;
+  resolveRuntimeCommandCandidates?(command: string): Promise<string[]>;
   now?(): number;
 };
 

@@ -18,7 +18,7 @@ import type {
   SessionWorkDir,
 } from '@/lib/types';
 import { readSettings, readBaseUrlCompat, writeBaseUrlCompat } from '@/lib/settings';
-import { checkNativeRuntimeHealth, detectLocalAcpAgents, resolveCommandPath } from '@/lib/acp/detect-local';
+import { checkNativeRuntimeHealth, detectLocalAcpAgents, resolveCommandPath, resolveCommandPathCandidates } from '@/lib/acp/detect-local';
 import { findUserOverride } from '@/lib/acp/agent-descriptors';
 import { en as i18nEn, zh as i18nZh } from '@/lib/i18n';
 import { MindOSError, apiError, ErrorCodes } from '@/lib/errors';
@@ -376,6 +376,7 @@ async function resolveAvailableNativeRuntime(
     readSettings: readSettings as AgentRuntimesServices['readSettings'],
     detectLocalAcpAgents: detectLocalAcpAgents as AgentRuntimesServices['detectLocalAcpAgents'],
     resolveRuntimeCommand: resolveCommandPath as AgentRuntimesServices['resolveRuntimeCommand'],
+    resolveRuntimeCommandCandidates: resolveCommandPathCandidates as AgentRuntimesServices['resolveRuntimeCommandCandidates'],
     checkNativeRuntimeHealth: checkNativeRuntimeHealth as AgentRuntimesServices['checkNativeRuntimeHealth'],
   };
   const res = await Promise.race([
@@ -583,8 +584,17 @@ export async function POST(req: NextRequest) {
   // Read agent config from settings
   const serverSettings = readSettings();
   const agentConfig = serverSettings.agent ?? {};
+  const nativeRuntimeOverrideEnv = selectedNativeRuntime
+    ? findUserOverride(
+      selectedNativeRuntime.kind === 'codex' ? 'codex-acp' : 'claude',
+      serverSettings.acpAgents,
+    )?.env ?? {}
+    : {};
   const nativeRuntimeEnv = selectedNativeRuntime
-    ? buildAgentRuntimeEnv({ settings: serverSettings.agentRuntimeEnv }).env
+    ? buildAgentRuntimeEnv({
+      settings: serverSettings.agentRuntimeEnv,
+      overrideEnv: nativeRuntimeOverrideEnv,
+    }).env
     : undefined;
   const acpOverrideEnv = selectedAcpAgent
     ? findUserOverride(selectedAcpAgent.id, serverSettings.acpAgents)?.env ?? {}

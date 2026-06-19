@@ -22,6 +22,7 @@ export {
   expandHome,
   isPathLikeCommand,
   resolveCommandPath,
+  resolveCommandPathCandidates,
   resolveCommandPathSync,
   resolveDirectCommandPath,
   resolveExistingPresenceDir,

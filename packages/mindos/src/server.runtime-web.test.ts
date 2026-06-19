@@ -449,6 +449,153 @@ describe('MindOS server contract: runtime, ask stream, static web', () => {
     expect(serialized).not.toContain('Node.js v22.16.0');
   });
 
+  it('uses the first healthy Codex command candidate when PATH contains a broken wrapper first', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'mindos-codex-candidates-'));
+    const broken = join(root, 'broken-codex');
+    const healthy = join(root, 'healthy-codex');
+    writeFileSync(broken, '#!/bin/sh\nexit 1\n');
+    writeFileSync(healthy, '#!/bin/sh\nexit 0\n');
+    const health = vi.fn(async ({ agent }: { agent: { binaryPath: string } }) => (
+      agent.binaryPath === broken
+        ? { status: 'error' as const, reason: 'Missing optional dependency @openai/codex-darwin-x64.' }
+        : { status: 'available' as const }
+    ));
+
+    const res = await handleAgentRuntimesGet(new URLSearchParams('runtime=codex'), {
+      now: () => Date.parse('2026-06-09T00:00:00.000Z'),
+      resolveRuntimeCommand: async () => broken,
+      resolveRuntimeCommandCandidates: async () => [broken, healthy],
+      checkNativeRuntimeHealth: health,
+    });
+
+    expect(health).toHaveBeenCalledTimes(2);
+    expect(res.status).toBe(200);
+    const runtime = 'runtime' in res.body ? res.body.runtime : null;
+    expect(runtime).toMatchObject({
+      id: 'codex',
+      status: 'available',
+      binaryPath: healthy,
+      availability: expect.objectContaining({
+        diagnosticHints: expect.arrayContaining([
+          expect.stringContaining(`MindOS skipped an unhealthy Codex candidate at ${broken}`),
+        ]),
+      }),
+    });
+  });
+
+  it('does not skip a signed-out Codex command candidate to use another binary', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'mindos-codex-signed-out-candidate-'));
+    const signedOut = join(root, 'signed-out-codex');
+    const healthy = join(root, 'healthy-codex');
+    writeFileSync(signedOut, '#!/bin/sh\nexit 0\n');
+    writeFileSync(healthy, '#!/bin/sh\nexit 0\n');
+    const health = vi.fn(async ({ agent }: { agent: { binaryPath: string } }) => (
+      agent.binaryPath === signedOut
+        ? { status: 'signed-out' as const, reason: 'Run codex login first.' }
+        : { status: 'available' as const }
+    ));
+
+    const res = await handleAgentRuntimesGet(new URLSearchParams('runtime=codex'), {
+      now: () => Date.parse('2026-06-09T00:00:00.000Z'),
+      resolveRuntimeCommand: async () => signedOut,
+      resolveRuntimeCommandCandidates: async () => [signedOut, healthy],
+      checkNativeRuntimeHealth: health,
+    });
+
+    expect(health).toHaveBeenCalledTimes(1);
+    expect(res.status).toBe(200);
+    const runtime = 'runtime' in res.body ? res.body.runtime : null;
+    expect(runtime).toMatchObject({
+      id: 'codex',
+      status: 'signed-out',
+      binaryPath: signedOut,
+      availability: expect.objectContaining({
+        reason: 'Run codex login first.',
+      }),
+    });
+  });
+
+  it('does not fallback to another Codex binary when the user explicitly configures a Codex command', async () => {
+    const explicitCommand = '/custom/codex-wrapper';
+    const health = vi.fn(async () => ({
+      status: 'error' as const,
+      reason: 'explicit wrapper failed',
+    }));
+
+    const res = await handleAgentRuntimesGet(new URLSearchParams('runtime=codex'), {
+      now: () => Date.parse('2026-06-09T00:00:00.000Z'),
+      readSettings: () => ({
+        acpAgents: {
+          codex: {
+            command: explicitCommand,
+            env: { PATH: '/custom/bin:/usr/bin' },
+          },
+        },
+      }),
+      resolveRuntimeCommand: async () => '/usr/local/bin/codex',
+      resolveRuntimeCommandCandidates: async () => ['/usr/local/bin/codex', '/Applications/Codex.app/Contents/Resources/codex'],
+      checkNativeRuntimeHealth: health,
+    });
+
+    expect(health).toHaveBeenCalledTimes(1);
+    expect(health).toHaveBeenCalledWith(expect.objectContaining({
+      agent: expect.objectContaining({ binaryPath: explicitCommand }),
+      env: expect.objectContaining({ PATH: '/custom/bin:/usr/bin' }),
+    }));
+    expect(res.status).toBe(200);
+    const runtime = 'runtime' in res.body ? res.body.runtime : null;
+    expect(runtime).toMatchObject({
+      id: 'codex',
+      status: 'error',
+      binaryPath: explicitCommand,
+      availability: expect.objectContaining({
+        reason: 'explicit wrapper failed',
+      }),
+    });
+  });
+
+  it('uses the Codex command from the configured runtime PATH before process PATH candidates', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'mindos-codex-env-path-'));
+    const configuredBin = join(root, 'configured-bin');
+    mkdirSync(configuredBin, { recursive: true });
+    const configuredCodex = join(configuredBin, 'codex');
+    const processPathCodex = join(root, 'process-path-codex');
+    writeFileSync(configuredCodex, '#!/bin/sh\nexit 0\n');
+    writeFileSync(processPathCodex, '#!/bin/sh\nexit 0\n');
+    const health = vi.fn(async ({ agent }: { agent: { binaryPath: string } }) => (
+      agent.binaryPath === configuredCodex
+        ? { status: 'available' as const }
+        : { status: 'error' as const, reason: `unexpected candidate ${agent.binaryPath}` }
+    ));
+
+    const res = await handleAgentRuntimesGet(new URLSearchParams('runtime=codex'), {
+      now: () => Date.parse('2026-06-09T00:00:00.000Z'),
+      readSettings: () => ({
+        acpAgents: {
+          codex: {
+            env: { PATH: configuredBin },
+          },
+        },
+      }),
+      resolveRuntimeCommand: async () => processPathCodex,
+      resolveRuntimeCommandCandidates: async () => [processPathCodex],
+      checkNativeRuntimeHealth: health,
+    });
+
+    expect(health).toHaveBeenCalledTimes(1);
+    expect(health).toHaveBeenCalledWith(expect.objectContaining({
+      agent: expect.objectContaining({ binaryPath: configuredCodex }),
+      env: expect.objectContaining({ PATH: configuredBin }),
+    }));
+    expect(res.status).toBe(200);
+    const runtime = 'runtime' in res.body ? res.body.runtime : null;
+    expect(runtime).toMatchObject({
+      id: 'codex',
+      status: 'available',
+      binaryPath: configuredCodex,
+    });
+  });
+
   it('marks Codex signed out when its configured provider requires a missing environment key', () => {
     const result = checkCodexProviderEnvironment({
       env: {},

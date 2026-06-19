@@ -97,6 +97,7 @@ export interface MindosAgentCapabilityRegistryServices {
   readSettings: AgentRuntimesServices['readSettings'];
   detectLocalAcpAgents: AgentRuntimesServices['detectLocalAcpAgents'];
   resolveRuntimeCommand: AgentRuntimesServices['resolveRuntimeCommand'];
+  resolveRuntimeCommandCandidates?: AgentRuntimesServices['resolveRuntimeCommandCandidates'];
   checkNativeRuntimeHealth: AgentRuntimesServices['checkNativeRuntimeHealth'];
   readMcpConfig(): MindosMcpConfigLike;
   readMcpToolCache(): MindosMcpToolCacheLike;
@@ -317,6 +318,7 @@ async function loadRuntimeDescriptors(services: MindosAgentCapabilityRegistrySer
     readSettings: services.readSettings,
     detectLocalAcpAgents: services.detectLocalAcpAgents,
     resolveRuntimeCommand: services.resolveRuntimeCommand,
+    resolveRuntimeCommandCandidates: services.resolveRuntimeCommandCandidates,
     checkNativeRuntimeHealth: services.checkNativeRuntimeHealth,
   };
   const response = await handleAgentRuntimesGet(new URLSearchParams(), {
