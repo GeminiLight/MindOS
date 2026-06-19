@@ -18,6 +18,7 @@ import { restoreAiSettingsFromEnvironment } from './ai-env-restore';
 import { saveSettingsDocument } from './settings-save';
 import { requestCommandCenterOpen, requestPluginEntriesOpen } from '@/lib/plugins/ui-events';
 import { useSmoothRouterPush } from '@/hooks/useSmoothRouterPush';
+import { MAIN_BODY_CONTENT_WIDTH_EVENT } from '@/lib/main-body-layout';
 
 interface SettingsContentProps {
   visible: boolean;
@@ -174,6 +175,7 @@ export default function SettingsContent({
   useEffect(() => {
     document.documentElement.style.setProperty('--content-width-override', contentWidth);
     localStorage.setItem('content-width', contentWidth);
+    window.dispatchEvent(new CustomEvent(MAIN_BODY_CONTENT_WIDTH_EVENT, { detail: { value: contentWidth } }));
   }, [contentWidth]);
 
   // Esc to close — modal only

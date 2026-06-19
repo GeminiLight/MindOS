@@ -40,6 +40,16 @@ export function getLeftPanelWidth(activeLeftPanel: PanelId | null, userWidth: nu
   return activeLeftPanel ? DEFAULT_LEFT_PANEL_WIDTH[activeLeftPanel] : LEFT_PANEL.DEFAULT;
 }
 
+// ── Main Body Content ──
+
+export const MAIN_CONTENT = {
+  COMFORT_MIN: 720,
+  GUTTER_MIN: 24,
+  DEFAULT_WIDTH_RATIO: 0.8,
+  MIN_WIDTH_RATIO: 0.5,
+  MAX_WIDTH_RATIO: 1,
+} as const;
+
 // ── Right Ask Panel ──
 
 export const RIGHT_ASK_PANEL: {
@@ -52,7 +62,7 @@ export const RIGHT_ASK_PANEL: {
   DEFAULT: 380,
   MIN: 320,
   MAX_ABS: 4000, // Unlikely but safe upper bound
-  MAIN_COMFORT_MIN: 720,
+  MAIN_COMFORT_MIN: MAIN_CONTENT.COMFORT_MIN,
   FOCUS_SNAP_LEFT_GAP: 96,
 };
 

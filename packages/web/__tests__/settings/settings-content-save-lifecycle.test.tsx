@@ -3,6 +3,7 @@ import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { SettingsData } from '@/components/settings/types';
+import { MAIN_BODY_CONTENT_WIDTH_EVENT } from '@/lib/main-body-layout';
 
 const mockApiFetch = vi.hoisted(() => vi.fn());
 const mockAiTab = vi.hoisted(() => vi.fn());
@@ -437,7 +438,7 @@ describe('SettingsContent save lifecycle', () => {
 
     expect(postBodies.map((body) => body.ai.activeProvider)).toEqual(['p_first', 'p_second']);
     expect(host.textContent).not.toContain('Save failed');
-    expect(dispatchSpy).not.toHaveBeenCalled();
+    expect(dispatchSpy).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'mindos:settings-changed' }));
 
     await act(async () => {
       secondPost.resolve({});
@@ -487,6 +488,11 @@ describe('SettingsContent save lifecycle', () => {
     const SettingsContent = (await import('@/components/settings/SettingsContent')).default;
     localStorage.setItem('prose-font', 'geist');
     localStorage.setItem('content-width', '960px');
+    const contentWidthEvents: string[] = [];
+    const handleContentWidthChange = (event: Event) => {
+      contentWidthEvents.push((event as CustomEvent<{ value: string }>).detail.value);
+    };
+    window.addEventListener(MAIN_BODY_CONTENT_WIDTH_EVENT, handleContentWidthChange);
     mockApiFetch.mockImplementation((url: string, opts?: RequestInit) => {
       if (url === '/api/settings' && !opts?.method) return Promise.resolve(makeSettings('p_initial'));
       if (url === '/api/settings' && opts?.method === 'POST') return Promise.resolve({});
@@ -505,10 +511,12 @@ describe('SettingsContent save lifecycle', () => {
 
     expect(localStorage.getItem('prose-font')).toBe('inter');
     expect(localStorage.getItem('content-width')).toBe('100%');
+    expect(contentWidthEvents).toContain('100%');
 
     await act(async () => {
       root.unmount();
     });
+    window.removeEventListener(MAIN_BODY_CONTENT_WIDTH_EVENT, handleContentWidthChange);
     host.remove();
   });
 });

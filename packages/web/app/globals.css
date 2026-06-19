@@ -191,7 +191,7 @@ body {
   --z-app-walkthrough-tooltip: 102;
   --z-app-critical-overlay: 99999;
 }
-.content-width { max-width: var(--content-width-override, var(--content-width)); margin-left: auto; margin-right: auto; padding-left: 0.75rem; padding-right: 0.75rem; }
+.content-width { max-width: var(--main-body-content-max-width, var(--content-width-override, var(--content-width))); margin-left: auto; margin-right: auto; padding-left: 0.75rem; padding-right: 0.75rem; }
 @media (max-width: 639px) {
   .content-width.workbench-content-page { max-width: 100%; }
   .content-width.agents-content-page { max-width: 100%; }

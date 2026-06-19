@@ -39,9 +39,11 @@ describe('ViewPageClient header layout', () => {
     expect(layoutSource).toContain('--right-ask-panel-visual-width:');
     expect(layoutSource).toContain('--right-dock-reserved-width:');
     expect(layoutSource).toContain('--right-panel-width: var(--right-dock-reserved-width);');
+    expect(layoutSource).toContain('--main-body-content-max-width:');
     expect(layoutSource).toContain('padding-right: var(--right-dock-reserved-width) !important;');
     expect(layoutSource).not.toContain('var(--toc-extra-right');
 
+    expect(cssSource).toContain('max-width: var(--main-body-content-max-width, var(--content-width-override, var(--content-width)))');
     expect(cssSource).toContain('.markdown-view-frame {');
     expect(cssSource).toContain('.markdown-view-frame--with-toc {');
     expect(cssSource).toContain('grid-template-columns: minmax(0, 1fr) 212px;');

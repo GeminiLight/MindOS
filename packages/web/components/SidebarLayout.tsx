@@ -68,7 +68,12 @@ import {
   type RoutePanelId,
 } from '@/lib/navigation-panel';
 import type { Tab } from './settings/types';
-import { MOBILE_SIDEBAR, RIGHT_AGENT_DETAIL_PANEL, RIGHT_ASK_PANEL, getLeftPanelWidth } from '@/lib/config/panel-sizes';
+import { MOBILE_SIDEBAR, RIGHT_AGENT_DETAIL_PANEL, getLeftPanelWidth } from '@/lib/config/panel-sizes';
+import {
+  MAIN_BODY_CONTENT_WIDTH_EVENT,
+  parseContentWidthRatio,
+  resolveMainBodyLayout,
+} from '@/lib/main-body-layout';
 import { resolveRightAskLayout } from '@/lib/right-ask-layout';
 
 const noop = () => {};
@@ -128,6 +133,15 @@ function useViewportWidth(): number {
   }, []);
 
   return viewportWidth;
+}
+
+function readStoredContentWidthRatio(): number {
+  if (typeof window === 'undefined') return parseContentWidthRatio(undefined);
+  try {
+    return parseContentWidthRatio(window.localStorage.getItem('content-width'));
+  } catch {
+    return parseContentWidthRatio(undefined);
+  }
 }
 
 function collectDirPaths(nodes: FileNode[], prefix = ''): string[] {
@@ -284,6 +298,34 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
   // navigation transition animate through 2-4 widths — the flicker.
   const effectivePanelWidth = getLeftPanelWidth(activeLeftPanel, lp.panelWidth);
   const viewportWidth = useViewportWidth();
+  const [contentWidthRatio, setContentWidthRatio] = useState(readStoredContentWidthRatio);
+  useEffect(() => {
+    const updateFromValue = (value: string | null | undefined) => {
+      setContentWidthRatio(parseContentWidthRatio(value));
+    };
+    const handleContentWidthChange = (event: Event) => {
+      const detail = (event as CustomEvent<{ value?: string }>).detail;
+      if (typeof detail?.value === 'string') {
+        updateFromValue(detail.value);
+        return;
+      }
+      try {
+        updateFromValue(window.localStorage.getItem('content-width'));
+      } catch {
+        updateFromValue(undefined);
+      }
+    };
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === 'content-width') updateFromValue(event.newValue);
+    };
+
+    window.addEventListener(MAIN_BODY_CONTENT_WIDTH_EVENT, handleContentWidthChange);
+    window.addEventListener('storage', handleStorage);
+    return () => {
+      window.removeEventListener(MAIN_BODY_CONTENT_WIDTH_EVENT, handleContentWidthChange);
+      window.removeEventListener('storage', handleStorage);
+    };
+  }, []);
   const contentLeftOffset = panelOpen ? lp.railWidth + effectivePanelWidth : lp.railWidth;
   const contentLeftOffsetCss = panelOpen && effectivePanelMaximized ? '100vw' : `${contentLeftOffset}px`;
   const rightAskLayout = useMemo(() => resolveRightAskLayout({
@@ -303,6 +345,23 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
     agentDockOpen,
     agentDetailWidth,
   ]);
+  const mainBodyLayout = useMemo(() => resolveMainBodyLayout({
+    viewportWidth,
+    leftOffset: contentLeftOffset,
+    rightReservedWidth: rightAskLayout.reservedRightWidth,
+    contentWidthRatio,
+  }), [
+    viewportWidth,
+    contentLeftOffset,
+    rightAskLayout.reservedRightWidth,
+    contentWidthRatio,
+  ]);
+  const mainBodyContentMaxWidthCss = panelOpen && effectivePanelMaximized
+    ? '100%'
+    : viewportWidth > 0
+      ? `${Math.round(mainBodyLayout.contentMaxWidth)}px`
+      : 'var(--content-width-override, var(--content-width))';
+  const rightDockReservedWidthCss = `${Math.round(rightAskLayout.reservedRightWidth)}px`;
   const previousSearchPanelRef = useRef<PanelId | null>(null);
   const lastSidebarPanelRef = useRef<PanelId | null>(pathname === '/' ? 'home' : 'files');
   const [searchFocusRequest, setSearchFocusRequest] = useState(0);
@@ -1112,10 +1171,10 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
             --right-ask-panel-visual-width: ${effectiveAskPanelOpen ? (ap.askMaximized ? `calc(100vw - ${contentLeftOffset}px)` : `min(${ap.askPanelWidth}px, calc(100vw - ${contentLeftOffset}px))`) : '0px'};
             --right-agent-detail-visual-width: ${agentDockOpen ? agentDetailWidth : 0}px;
             --right-stack-visual-width: calc(var(--right-ask-panel-visual-width) + var(--right-agent-detail-visual-width));
-            --right-stack-reserve-limit: max(0px, calc(100% - var(--content-left-offset) - ${RIGHT_ASK_PANEL.MAIN_COMFORT_MIN}px));
-            --right-dock-reserved-width: ${ap.askMaximized && effectiveAskPanelOpen ? '0px' : 'min(var(--right-stack-visual-width), var(--right-stack-reserve-limit))'};
+            --right-dock-reserved-width: ${rightDockReservedWidthCss};
             --right-panel-width: var(--right-dock-reserved-width);
             --right-agent-detail-width: 0px;
+            --main-body-content-max-width: ${mainBodyContentMaxWidthCss};
           }
           #main-content {
             padding-left: ${contentLeftOffsetCss} !important;
