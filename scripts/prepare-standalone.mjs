@@ -52,6 +52,11 @@ if (!existsSync(standaloneServerJs)) {
 }
 
 // ── Step 1: Materialize static + public into standalone dir ──────────────────
+// Some runtime-only packages are not traced by Next.js because they are loaded
+// from child-process scripts. Seed them before the shared Desktop materializer
+// runs its required-file checks, then refresh the closure after pruning.
+copyRuntimeDependencyClosure(resolve(standaloneAppDir, 'node_modules'), runtimeDependencySeeds);
+
 // Reuse the same logic Desktop uses.
 materializeStandaloneAssets(appDir, { runtimeDependencySeeds });
 copyRuntimeDependencyClosure(resolve(standaloneAppDir, 'node_modules'), runtimeDependencySeeds);
@@ -320,8 +325,21 @@ function resolvePackageDir(packageName, fromDir) {
     const entry = requireFromPackage.resolve(packageName);
     return findPackageRoot(entry, packageName);
   } catch {
-    return null;
+    // Fall through to pnpm store scan below.
   }
+
+  const repoRoot = resolve(appDir, '..', '..');
+  const pnpmDir = resolve(repoRoot, 'node_modules', '.pnpm');
+  if (!existsSync(pnpmDir)) return null;
+
+  const encodedName = packageName.replace('/', '+');
+  for (const entry of readdirSync(pnpmDir)) {
+    if (!entry.startsWith(`${encodedName}@`)) continue;
+    const candidate = resolve(pnpmDir, entry, 'node_modules', packageName);
+    if (existsSync(resolve(candidate, 'package.json'))) return candidate;
+  }
+
+  return null;
 }
 
 function findPackageRoot(startPath, packageName) {
