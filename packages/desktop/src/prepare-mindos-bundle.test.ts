@@ -3,9 +3,13 @@ import { tmpdir } from 'os';
 import path from 'path';
 import { describe, expect, it, afterEach } from 'vitest';
 import {
+  BUILTIN_AGENT_EXTENSION_RUNTIME_DEPENDENCY_SEEDS,
+  IM_RUNTIME_DEPENDENCY_SEEDS,
+  MINDOS_WEB_RUNTIME_EXTENSION_SOURCE_ENTRIES,
   copyAppForBundledRuntime,
   materializeStandaloneAssets,
   pruneClaudeAgentSdkNativePackages,
+  RUNTIME_DEPENDENCY_SEEDS,
 } from '../scripts/prepare-mindos-bundle.mjs';
 import { getStandaloneAppRequiredEntries } from '../scripts/runtime-health-contract.mjs';
 
@@ -18,6 +22,16 @@ function writeStandaloneApp(appDir: string, omit: string[] = []) {
     } else {
       mkdirSync(path.dirname(target), { recursive: true });
       writeFileSync(target, `// ${entry.path}`);
+    }
+    if (entry.path.startsWith('.next/standalone/lib/')) {
+      const sourceRel = entry.path.slice('.next/standalone/'.length);
+      const source = path.join(appDir, sourceRel);
+      if (entry.type === 'directory') {
+        mkdirSync(source, { recursive: true });
+      } else {
+        mkdirSync(path.dirname(source), { recursive: true });
+        writeFileSync(source, `// source ${sourceRel}`);
+      }
     }
   }
 }
@@ -180,6 +194,92 @@ describe('materializeStandaloneAssets', () => {
 
     expect(existsSync(path.join(tracedDependency, 'package.json'))).toBe(true);
     expect(readFileSync(path.join(tracedDependency, 'build', 'index.mjs'), 'utf-8')).toBe('export const Type = {};');
+  });
+
+  it('seeds every built-in PI agent extension package into runtime bundles', () => {
+    expect(BUILTIN_AGENT_EXTENSION_RUNTIME_DEPENDENCY_SEEDS).toEqual([
+      '@juicesharp/rpiv-ask-user-question',
+      'pi-mcp-adapter',
+      'pi-schedule-prompt',
+      'pi-subagents',
+      'pi-web-access',
+    ]);
+    expect(RUNTIME_DEPENDENCY_SEEDS).toEqual(expect.arrayContaining(BUILTIN_AGENT_EXTENSION_RUNTIME_DEPENDENCY_SEEDS));
+  });
+
+  it('seeds IM adapter SDK packages loaded dynamically by channel tools', () => {
+    expect(IM_RUNTIME_DEPENDENCY_SEEDS).toEqual([
+      '@larksuiteoapi/node-sdk',
+      '@slack/web-api',
+      'discord.js',
+      'grammy',
+    ]);
+    expect(RUNTIME_DEPENDENCY_SEEDS).toEqual(expect.arrayContaining(IM_RUNTIME_DEPENDENCY_SEEDS));
+  });
+
+  it('materializes MindOS-owned runtime extension sources into standalone bundles', () => {
+    const appDir = makeTemp('mindos-app-runtime-extension-sources-');
+    writeStandaloneApp(appDir);
+
+    const sourceFiles = [
+      'lib/acp/agent-descriptors.ts',
+      'lib/agent/ask-user-question-bridge-extension.ts',
+      'lib/agent/builtin-extension-runtime.ts',
+      'lib/agent/kb-extension.ts',
+      'lib/agent/mindos-mcp-adapter-extension.ts',
+      'lib/agent/providers.ts',
+      'lib/agent/reconnect.ts',
+      'lib/agent/subagent-ledger-extension.ts',
+      'lib/custom-endpoints.ts',
+      'lib/im/index.ts',
+      'lib/im/executor.ts',
+      'lib/im/adapters/telegram.ts',
+      'lib/im/adapters/feishu.ts',
+      'lib/im/adapters/slack.ts',
+      'lib/im/adapters/discord.ts',
+      'lib/mind-root.ts',
+      'lib/pi-integration/mcp-config.ts',
+      'lib/schedule-prompt/index.ts',
+      'lib/settings.ts',
+    ];
+
+    for (const rel of sourceFiles) {
+      const file = path.join(appDir, rel);
+      mkdirSync(path.dirname(file), { recursive: true });
+      writeFileSync(file, `// source ${rel}`);
+    }
+
+    materializeStandaloneAssets(appDir);
+
+    for (const rel of sourceFiles) {
+      expect(readFileSync(path.join(appDir, '.next', 'standalone', rel), 'utf-8')).toBe(`// source ${rel}`);
+    }
+    expect(MINDOS_WEB_RUNTIME_EXTENSION_SOURCE_ENTRIES).toContain('lib/im');
+  });
+
+  it('materializes TS-only built-in extension packages when Next did not trace them', () => {
+    const appDir = makeTemp('mindos-app-runtime-extension-seeds-');
+    writeStandaloneApp(appDir, [
+      '.next/standalone/node_modules/pi-web-access/index.ts',
+    ]);
+
+    const tracedExtension = path.join(appDir, '.next', 'standalone', 'node_modules', 'pi-web-access');
+    rmSync(tracedExtension, { recursive: true, force: true });
+
+    const sourceExtension = path.join(appDir, 'node_modules', 'pi-web-access');
+    mkdirSync(sourceExtension, { recursive: true });
+    writeFileSync(path.join(sourceExtension, 'package.json'), JSON.stringify({
+      name: 'pi-web-access',
+      version: '0.10.7',
+    }));
+    writeFileSync(path.join(sourceExtension, 'index.ts'), 'export default function webAccess() {}');
+
+    materializeStandaloneAssets(appDir, {
+      runtimeDependencySeeds: ['pi-web-access'],
+    });
+
+    expect(existsSync(path.join(tracedExtension, 'package.json'))).toBe(true);
+    expect(readFileSync(path.join(tracedExtension, 'index.ts'), 'utf-8')).toBe('export default function webAccess() {}');
   });
 
   it('prunes direct development tooling before dependency closure checks', () => {

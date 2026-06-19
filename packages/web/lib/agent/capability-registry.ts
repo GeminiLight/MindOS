@@ -15,6 +15,7 @@ import { readSettings } from '@/lib/settings';
 import { readMcpConfig, readMcpToolCache } from '@/lib/pi-integration/mcp-config';
 import { getDiscoveredAgents } from '@/lib/a2a/client';
 import { effectiveMindRoot } from '@/lib/mind-root';
+import { findBuiltinWebRuntimePackagePath } from './builtin-extension-runtime';
 
 export function createAgentCapabilitiesServices(): AgentCapabilitiesServices {
   return createCoreServices({
@@ -39,8 +40,8 @@ function resolveBuiltinSubagentsDir(): string | null {
     path.join(process.cwd(), 'packages', 'web'),
   ];
   for (const base of candidates) {
-    const dir = path.join(base, 'node_modules', 'pi-subagents', 'agents');
-    if (fs.existsSync(dir)) return dir;
+    const dir = findBuiltinWebRuntimePackagePath(base, 'pi-subagents', 'agents');
+    if (dir && fs.existsSync(dir)) return dir;
   }
   return null;
 }

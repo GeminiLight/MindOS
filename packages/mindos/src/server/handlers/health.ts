@@ -83,6 +83,7 @@ export function handleHealth(context: MindosServerContext = {}): MindosServerRes
     projectRoot: context.projectRoot,
     runtimeRoot: context.runtimeRoot ?? context.projectRoot,
     env: context.env,
+    authRequired: context.authRequired,
   }), { headers: CORS_HEADERS });
 }
 

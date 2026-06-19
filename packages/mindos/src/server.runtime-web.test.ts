@@ -1099,4 +1099,37 @@ describe('MindOS server contract: runtime, ask stream, static web', () => {
       await new Promise<void>((resolve, reject) => app.server.close((error) => error ? reject(error) : resolve()));
     }
   });
+
+  it('does not serve static Web artifacts without a session adapter when the Web UI is password-protected', async () => {
+    const staticRoot = mkdtempSync(join(tmpdir(), 'mindos-http-static-auth-'));
+    const root = mkdtempSync(join(tmpdir(), 'mindos-http-static-auth-root-'));
+    mkdirSync(join(staticRoot, 'assets'), { recursive: true });
+    writeFileSync(join(staticRoot, 'index.html'), '<main>MindOS shell</main>');
+    writeFileSync(join(staticRoot, 'assets', 'app.12345678.js'), 'window.__mindos=1');
+
+    const app = createMindosHttpServer({
+      hostname: '127.0.0.1',
+      port: 0,
+      staticRoot,
+      services: createDefaultMindosHttpServices({
+        staticRoot,
+        readSettings: () => ({ mindRoot: root, webPassword: 'web-secret' }),
+      }),
+    });
+    await new Promise<void>((resolve) => app.server.listen(0, '127.0.0.1', resolve));
+    const address = app.server.address();
+    if (!address || typeof address === 'string') throw new Error('expected TCP server address');
+    const base = `http://127.0.0.1:${address.port}`;
+    try {
+      const shell = await fetch(`${base}/wiki`);
+      expect(shell.status).toBe(401);
+      expect(await shell.json()).toEqual({
+        error: 'Password-protected Web UI requires the Next.js host auth adapter.',
+      });
+
+      expect((await fetch(`${base}/assets/app.12345678.js`)).status).toBe(401);
+    } finally {
+      await new Promise<void>((resolve, reject) => app.server.close((error) => error ? reject(error) : resolve()));
+    }
+  });
 });

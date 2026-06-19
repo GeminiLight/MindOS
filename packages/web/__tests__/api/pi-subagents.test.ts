@@ -67,17 +67,18 @@ describe('pi-subagents built-in extension', () => {
     });
 
     it('runtime adapter loads the MindOS subagent ledger wrapper instead of upstream directly', () => {
-      expect(runtimeAdapterContent).toContain("path.join(webAppDir, 'lib', 'agent', 'subagent-ledger-extension.ts')");
+      expect(runtimeAdapterContent).toContain("resolveMindosWebRuntimeSourcePath(webAppDir, 'lib', 'agent', 'subagent-ledger-extension.ts')");
       expect(runtimeAdapterContent).not.toContain("path.join(webAppDir, 'node_modules', 'pi-subagents', 'src', 'extension', 'index.ts')");
     });
 
     it('runtime adapter preserves the built-in schedule-prompt extension from the legacy app', () => {
       expect(runtimeAdapterContent).toContain('schedule-prompt');
-      expect(runtimeAdapterContent).toContain("path.join(webAppDir, 'lib', 'schedule-prompt', 'index.ts')");
+      expect(runtimeAdapterContent).toContain("resolveMindosWebRuntimeSourcePath(webAppDir, 'lib', 'schedule-prompt', 'index.ts')");
     });
 
     it('runtime adapter loads the MindOS MCP wrapper instead of upstream pi-mcp-adapter directly', () => {
       expect(runtimeAdapterContent).toContain('mindos-mcp-adapter-extension.ts');
+      expect(runtimeAdapterContent).toContain("resolveMindosWebRuntimeSourcePath(webAppDir, 'lib', 'agent', 'mindos-mcp-adapter-extension.ts')");
       expect(runtimeAdapterContent).not.toContain("path.join(webAppDir, 'node_modules', 'pi-mcp-adapter', 'index.ts')");
     });
 

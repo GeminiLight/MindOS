@@ -17,9 +17,43 @@ import path from 'path';
 import { createRequire } from 'module';
 import { assertStandaloneAppFiles } from './runtime-health-contract.mjs';
 
+export const BUILTIN_AGENT_EXTENSION_RUNTIME_DEPENDENCY_SEEDS = [
+  '@juicesharp/rpiv-ask-user-question',
+  'pi-mcp-adapter',
+  'pi-schedule-prompt',
+  'pi-subagents',
+  'pi-web-access',
+];
+
+export const IM_RUNTIME_DEPENDENCY_SEEDS = [
+  '@larksuiteoapi/node-sdk',
+  '@slack/web-api',
+  'discord.js',
+  'grammy',
+];
+
+export const MINDOS_WEB_RUNTIME_EXTENSION_SOURCE_ENTRIES = [
+  'lib/acp/agent-descriptors.ts',
+  'lib/agent/ask-user-question-bridge-extension.ts',
+  'lib/agent/builtin-extension-runtime.ts',
+  'lib/agent/kb-extension.ts',
+  'lib/agent/mindos-mcp-adapter-extension.ts',
+  'lib/agent/providers.ts',
+  'lib/agent/reconnect.ts',
+  'lib/agent/subagent-ledger-extension.ts',
+  'lib/custom-endpoints.ts',
+  'lib/im',
+  'lib/mind-root.ts',
+  'lib/pi-integration/mcp-config.ts',
+  'lib/schedule-prompt/index.ts',
+  'lib/settings.ts',
+];
+
 export const RUNTIME_DEPENDENCY_SEEDS = [
   '@sinclair/typebox',
   '@earendil-works/pi-ai',
+  ...BUILTIN_AGENT_EXTENSION_RUNTIME_DEPENDENCY_SEEDS,
+  ...IM_RUNTIME_DEPENDENCY_SEEDS,
 ];
 
 export function materializeStandaloneAssets(appDir, options = {}) {
@@ -49,6 +83,7 @@ export function materializeStandaloneAssets(appDir, options = {}) {
   materializeStandaloneNodeModules(appDir, standaloneDir);
   materializeNextServerLib(appDir, standaloneDir);
   materializeRuntimeDependencySeeds(appDir, standaloneDir, options.runtimeDependencySeeds ?? []);
+  materializeMindosWebRuntimeExtensionSources(appDir, standaloneDir);
   pruneDirectDevelopmentPackages(standaloneDir);
   materializeStandalonePackageDependencies(appDir, standaloneDir);
   prunePnpmVirtualStores(standaloneDir);
@@ -68,6 +103,28 @@ export function materializeStandaloneAssets(appDir, options = {}) {
   assertStandalonePackageDependencyClosure(standaloneDir);
   pruneStandaloneBuildJunk(standaloneDir);
   assertStandaloneAppFiles(appDir, 'prepare-mindos-bundle');
+}
+
+export function materializeMindosWebRuntimeExtensionSources(appDir, standaloneDir) {
+  const missing = [];
+  for (const rel of MINDOS_WEB_RUNTIME_EXTENSION_SOURCE_ENTRIES) {
+    const src = path.join(appDir, rel);
+    const dest = path.join(standaloneDir, rel);
+    if (!existsSync(src)) {
+      missing.push(rel);
+      continue;
+    }
+    rmSync(dest, { recursive: true, force: true });
+    mkdirSync(path.dirname(dest), { recursive: true });
+    copyDereferenced(src, dest);
+  }
+
+  if (missing.length > 0) {
+    throw new Error(
+      '[prepare-mindos-bundle] Runtime extension source(s) missing from standalone bundle:\n'
+      + missing.map((item) => `  - ${item}`).join('\n')
+    );
+  }
 }
 
 function materializeRuntimeDependencySeeds(appDir, standaloneDir, seeds) {

@@ -15,7 +15,10 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { materializeStandaloneAssets } from '../packages/desktop/scripts/prepare-mindos-bundle.mjs';
+import {
+  RUNTIME_DEPENDENCY_SEEDS,
+  materializeStandaloneAssets,
+} from '../packages/desktop/scripts/prepare-mindos-bundle.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, '..');
@@ -30,7 +33,7 @@ if (!existsSync(serverJs)) {
 }
 
 try {
-  materializeStandaloneAssets(appDir);
+  materializeStandaloneAssets(appDir, { runtimeDependencySeeds: RUNTIME_DEPENDENCY_SEEDS });
 } catch (e) {
   console.error(e instanceof Error ? e.message : String(e));
   process.exit(1);

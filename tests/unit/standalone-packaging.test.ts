@@ -29,6 +29,32 @@ function writeFile(path: string, content = '') {
   writeFileSync(path, content);
 }
 
+function writeMindosRuntimeExtensionSources(app: string) {
+  for (const rel of [
+    'lib/acp/agent-descriptors.ts',
+    'lib/agent/ask-user-question-bridge-extension.ts',
+    'lib/agent/builtin-extension-runtime.ts',
+    'lib/agent/kb-extension.ts',
+    'lib/agent/mindos-mcp-adapter-extension.ts',
+    'lib/agent/providers.ts',
+    'lib/agent/reconnect.ts',
+    'lib/agent/subagent-ledger-extension.ts',
+    'lib/custom-endpoints.ts',
+    'lib/im/index.ts',
+    'lib/im/executor.ts',
+    'lib/im/adapters/telegram.ts',
+    'lib/im/adapters/feishu.ts',
+    'lib/im/adapters/slack.ts',
+    'lib/im/adapters/discord.ts',
+    'lib/mind-root.ts',
+    'lib/pi-integration/mcp-config.ts',
+    'lib/schedule-prompt/index.ts',
+    'lib/settings.ts',
+  ]) {
+    writeFile(join(app, rel), `// ${rel}`);
+  }
+}
+
 describe('standalone runtime packaging', () => {
   afterEach(() => {
     for (const dir of tmpRoots) rmSync(dir, { recursive: true, force: true });
@@ -73,6 +99,14 @@ describe('standalone runtime packaging', () => {
     writeFile(join(app, '.next', 'standalone', 'node_modules', 'pdfjs-dist', 'legacy', 'build', 'pdf.worker.mjs'));
     writeFile(join(app, '.next', 'standalone', 'node_modules', 'mammoth', 'package.json'), '{"name":"mammoth","version":"1.0.0"}');
     writeFile(join(app, '.next', 'standalone', 'node_modules', 'word-extractor', 'package.json'), '{"name":"word-extractor","version":"1.0.0"}');
+    writeFile(join(app, '.next', 'standalone', 'node_modules', 'pi-web-access', 'index.ts'));
+    writeFile(join(app, '.next', 'standalone', 'node_modules', 'pi-subagents', 'src', 'extension', 'index.ts'));
+    mkdirSync(join(app, '.next', 'standalone', 'node_modules', 'pi-subagents', 'agents'), { recursive: true });
+    writeFile(join(app, '.next', 'standalone', 'node_modules', 'pi-mcp-adapter', 'index.ts'));
+    writeFile(join(app, '.next', 'standalone', 'node_modules', 'pi-schedule-prompt', 'src', 'tool.ts'));
+    writeFile(join(app, '.next', 'standalone', 'node_modules', 'pi-schedule-prompt', 'src', 'storage.ts'));
+    writeFile(join(app, '.next', 'standalone', 'node_modules', 'pi-schedule-prompt', 'src', 'scheduler.ts'));
+    writeFile(join(app, '.next', 'standalone', 'node_modules', '@juicesharp', 'rpiv-ask-user-question', 'index.ts'));
     writeFile(join(app, '.next', 'static', 'placeholder'));
     writeFile(
       join(app, 'node_modules', 'next', 'package.json'),
@@ -84,6 +118,7 @@ describe('standalone runtime packaging', () => {
     writeFile(join(app, 'node_modules', '@swc', 'helpers', 'package.json'), '{"name":"@swc/helpers","version":"1.0.0"}');
     writeFile(join(app, 'node_modules', 'react', 'package.json'), '{"name":"react","version":"1.0.0"}');
     writeFile(join(app, 'node_modules', 'react-dom', 'package.json'), '{"name":"react-dom","version":"1.0.0"}');
+    writeMindosRuntimeExtensionSources(app);
 
     materializeStandaloneAssets(app);
 

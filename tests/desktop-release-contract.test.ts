@@ -82,6 +82,17 @@ describe('Desktop release packaging contract', () => {
     expect(runtimeBundle).toContain("'.next/dev'");
     expect(runtimeBundle).toContain('prunePnpmVirtualStores(standaloneDir)');
     expect(runtimeBundle).toContain('pruneOptionalLocalEmbeddingRuntime(standaloneDir');
+    expect(runtimeBundle).toContain('BUILTIN_AGENT_EXTENSION_RUNTIME_DEPENDENCY_SEEDS');
+    expect(runtimeBundle).toContain('IM_RUNTIME_DEPENDENCY_SEEDS');
+    expect(runtimeBundle).toContain('MINDOS_WEB_RUNTIME_EXTENSION_SOURCE_ENTRIES');
+    expect(runtimeBundle).toContain('materializeMindosWebRuntimeExtensionSources(appDir, standaloneDir)');
+    expect(runtimeBundle).toContain("'pi-web-access'");
+    expect(runtimeBundle).toContain("'pi-subagents'");
+    expect(runtimeBundle).toContain("'pi-mcp-adapter'");
+    expect(runtimeBundle).toContain("'pi-schedule-prompt'");
+    expect(runtimeBundle).toContain("'@juicesharp/rpiv-ask-user-question'");
+    expect(runtimeBundle).toContain("'grammy'");
+    expect(runtimeBundle).toContain("'@slack/web-api'");
   });
 
   it('builds macOS updater metadata on architecture-specific channels', () => {
@@ -228,6 +239,17 @@ describe('Desktop release packaging contract', () => {
 
     expect(verifier).toContain('packages/web/.next/standalone/node_modules/@sinclair/typebox/package.json');
     expect(verifier).toContain('packages/web/.next/standalone/node_modules/@earendil-works/pi-ai/package.json');
+    expect(verifier).toContain('packages/web/.next/standalone/node_modules/pi-web-access/index.ts');
+    expect(verifier).toContain('packages/web/.next/standalone/node_modules/pi-subagents/src/extension/index.ts');
+    expect(verifier).toContain('packages/web/.next/standalone/node_modules/pi-mcp-adapter/index.ts');
+    expect(verifier).toContain('packages/web/.next/standalone/node_modules/pi-schedule-prompt/src/tool.ts');
+    expect(verifier).toContain('packages/web/.next/standalone/node_modules/@juicesharp/rpiv-ask-user-question/index.ts');
+    expect(verifier).toContain('packages/web/.next/standalone/lib/agent/kb-extension.ts');
+    expect(verifier).toContain('packages/web/.next/standalone/lib/agent/subagent-ledger-extension.ts');
+    expect(verifier).toContain('packages/web/.next/standalone/lib/schedule-prompt/index.ts');
+    expect(verifier).toContain('packages/web/.next/standalone/lib/im/index.ts');
+    expect(verifier).toContain('packages/web/.next/standalone/node_modules/grammy/package.json');
+    expect(verifier).toContain('packages/web/.next/standalone/node_modules/@slack/web-api/package.json');
     expect(verifier).toContain("import { fileURLToPath } from 'node:url'");
     expect(verifier).toContain("fileURLToPath(new URL('..', import.meta.url))");
     expect(verifier).not.toContain("new URL('..', import.meta.url).pathname");

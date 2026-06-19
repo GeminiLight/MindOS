@@ -7,6 +7,7 @@ import {
   ensureMindosAgentMcpRuntimeConfig,
   type MindosAgentMcpRuntimeConfig,
 } from '../pi-integration/mcp-config';
+import { resolveBuiltinWebRuntimePackagePath } from './builtin-extension-runtime';
 
 type RegisterMcpAdapterExtension = (pi: ExtensionAPI) => void | Promise<void>;
 
@@ -28,7 +29,7 @@ type ToolWithRuntimeContext = ToolDefinition & {
 async function loadUpstreamMcpAdapter(): Promise<RegisterMcpAdapterExtension> {
   const currentDir = path.dirname(fileURLToPath(import.meta.url));
   const webAppDir = path.resolve(currentDir, '..', '..');
-  const upstreamPath = path.join(webAppDir, 'node_modules', 'pi-mcp-adapter', 'index.ts');
+  const upstreamPath = resolveBuiltinWebRuntimePackagePath(webAppDir, 'pi-mcp-adapter', 'index.ts');
   const upstreamRealPath = fs.realpathSync(upstreamPath);
   const jiti = createJiti(upstreamRealPath, {
     moduleCache: false,

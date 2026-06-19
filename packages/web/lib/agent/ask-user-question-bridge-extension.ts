@@ -1,6 +1,10 @@
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import type { ExtensionAPI, ToolDefinition } from '@earendil-works/pi-coding-agent';
 import { createJiti } from 'jiti/static';
 import { askUserQuestionViaBridge, hasAskUserQuestionBridge } from '@geminilight/mindos/agent/bridges/user-question-bridge';
+import { resolveBuiltinWebRuntimePackagePath } from './builtin-extension-runtime';
 
 type ToolWithRuntimeContext = ToolDefinition & {
   execute: (
@@ -15,11 +19,15 @@ type ToolWithRuntimeContext = ToolDefinition & {
 type RegisterAskUserQuestionExtension = (pi: ExtensionAPI) => void | Promise<void>;
 
 async function loadUpstreamAskUserQuestionExtension(): Promise<RegisterAskUserQuestionExtension> {
-  const jiti = createJiti(import.meta.url, {
+  const currentDir = path.dirname(fileURLToPath(import.meta.url));
+  const webAppDir = path.resolve(currentDir, '..', '..');
+  const upstreamPath = resolveBuiltinWebRuntimePackagePath(webAppDir, '@juicesharp/rpiv-ask-user-question', 'index.ts');
+  const upstreamRealPath = fs.realpathSync(upstreamPath);
+  const jiti = createJiti(upstreamRealPath, {
     moduleCache: false,
     tryNative: false,
   });
-  const register = await jiti.import('@juicesharp/rpiv-ask-user-question', { default: true });
+  const register = await jiti.import(upstreamRealPath, { default: true });
   if (typeof register !== 'function') {
     throw new Error('@juicesharp/rpiv-ask-user-question did not export an extension factory.');
   }

@@ -46,14 +46,17 @@ export async function proxy(req: NextRequest) {
 
     if (!authToken) return withCors(NextResponse.next());
 
-    // Exempt same-origin browser requests (the app's own frontend).
-    // Sec-Fetch-Site is set by browsers automatically and cannot be spoofed by JS.
-    if (req.headers.get('sec-fetch-site') === 'same-origin') return withCors(NextResponse.next());
-
     // Exempt authenticated web UI sessions (valid JWT cookie = logged-in browser user)
     if (webPassword) {
       const token = req.cookies.get(WEB_SESSION_COOKIE_NAME)?.value ?? '';
       if (token && await verifyJwt(token, webSessionSecret)) return withCors(NextResponse.next());
+    }
+
+    // Preserve the open-browser-UI contract only when the UI has no password.
+    // When a Web password exists, Sec-Fetch-Site alone is not an auth signal:
+    // non-browser HTTP clients can send the same header value.
+    if (!webPassword && req.headers.get('sec-fetch-site') === 'same-origin') {
+      return withCors(NextResponse.next());
     }
 
     // External / cross-origin requests must provide a bearer token

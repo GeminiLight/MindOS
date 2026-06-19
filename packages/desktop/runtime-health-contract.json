@@ -81,6 +81,130 @@
         }
       ]
     },
+    "builtin-agent-extensions": {
+      "description": "Built-in PI extension packages loaded dynamically by MindOS Agent",
+      "required": true,
+      "files": [
+        {
+          "path": "packages/web/.next/standalone/node_modules/pi-web-access/index.ts",
+          "type": "file"
+        },
+        {
+          "path": "packages/web/.next/standalone/node_modules/pi-subagents/src/extension/index.ts",
+          "type": "file"
+        },
+        {
+          "path": "packages/web/.next/standalone/node_modules/pi-subagents/agents",
+          "type": "directory"
+        },
+        {
+          "path": "packages/web/.next/standalone/node_modules/pi-mcp-adapter/index.ts",
+          "type": "file"
+        },
+        {
+          "path": "packages/web/.next/standalone/node_modules/pi-schedule-prompt/src/tool.ts",
+          "type": "file"
+        },
+        {
+          "path": "packages/web/.next/standalone/node_modules/pi-schedule-prompt/src/storage.ts",
+          "type": "file"
+        },
+        {
+          "path": "packages/web/.next/standalone/node_modules/pi-schedule-prompt/src/scheduler.ts",
+          "type": "file"
+        },
+        {
+          "path": "packages/web/.next/standalone/node_modules/@juicesharp/rpiv-ask-user-question/index.ts",
+          "type": "file"
+        }
+      ]
+    },
+    "mindos-extension-sources": {
+      "description": "MindOS-owned PI extension wrapper sources loaded by file path",
+      "required": true,
+      "files": [
+        {
+          "path": "packages/web/.next/standalone/lib/acp/agent-descriptors.ts",
+          "type": "file"
+        },
+        {
+          "path": "packages/web/.next/standalone/lib/agent/ask-user-question-bridge-extension.ts",
+          "type": "file"
+        },
+        {
+          "path": "packages/web/.next/standalone/lib/agent/builtin-extension-runtime.ts",
+          "type": "file"
+        },
+        {
+          "path": "packages/web/.next/standalone/lib/agent/kb-extension.ts",
+          "type": "file"
+        },
+        {
+          "path": "packages/web/.next/standalone/lib/agent/mindos-mcp-adapter-extension.ts",
+          "type": "file"
+        },
+        {
+          "path": "packages/web/.next/standalone/lib/agent/providers.ts",
+          "type": "file"
+        },
+        {
+          "path": "packages/web/.next/standalone/lib/agent/reconnect.ts",
+          "type": "file"
+        },
+        {
+          "path": "packages/web/.next/standalone/lib/agent/subagent-ledger-extension.ts",
+          "type": "file"
+        },
+        {
+          "path": "packages/web/.next/standalone/lib/custom-endpoints.ts",
+          "type": "file"
+        },
+        {
+          "path": "packages/web/.next/standalone/lib/im",
+          "type": "directory"
+        },
+        {
+          "path": "packages/web/.next/standalone/lib/im/index.ts",
+          "type": "file"
+        },
+        {
+          "path": "packages/web/.next/standalone/lib/im/executor.ts",
+          "type": "file"
+        },
+        {
+          "path": "packages/web/.next/standalone/lib/im/adapters/telegram.ts",
+          "type": "file"
+        },
+        {
+          "path": "packages/web/.next/standalone/lib/im/adapters/feishu.ts",
+          "type": "file"
+        },
+        {
+          "path": "packages/web/.next/standalone/lib/im/adapters/slack.ts",
+          "type": "file"
+        },
+        {
+          "path": "packages/web/.next/standalone/lib/im/adapters/discord.ts",
+          "type": "file"
+        },
+        {
+          "path": "packages/web/.next/standalone/lib/mind-root.ts",
+          "type": "file"
+        },
+        {
+          "path": "packages/web/.next/standalone/lib/pi-integration/mcp-config.ts",
+          "type": "file"
+        },
+        {
+          "path": "packages/web/.next/standalone/lib/schedule-prompt/index.ts",
+          "type": "file"
+        },
+        {
+          "path": "packages/web/.next/standalone/lib/settings.ts",
+          "type": "file"
+        }
+      ]
+    },
     "mcp-dist": {
       "description": "Built MCP bundle for packaged and archived runtimes",
       "required": true,
@@ -131,7 +255,9 @@
       "web-standalone",
       "critical-routes",
       "pdf-runtime",
-      "docx-runtime"
+      "docx-runtime",
+      "builtin-agent-extensions",
+      "mindos-extension-sources"
     ],
     "bundledRuntimeRequiredFiles": [
       {
@@ -144,6 +270,8 @@
       "critical-routes",
       "pdf-runtime",
       "docx-runtime",
+      "builtin-agent-extensions",
+      "mindos-extension-sources",
       "mcp-dist",
       "cli-runtime"
     ],
@@ -158,6 +286,8 @@
       "critical-routes",
       "pdf-runtime",
       "docx-runtime",
+      "builtin-agent-extensions",
+      "mindos-extension-sources",
       "mcp-dist",
       "cli-runtime",
       "skills-data"

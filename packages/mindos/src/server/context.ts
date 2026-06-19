@@ -2,6 +2,7 @@ export type MindosServerContext = {
   runtimeRoot?: string;
   projectRoot?: string;
   env?: Record<string, string | undefined>;
+  authRequired?: boolean;
 };
 
 export type MindosRequestQuery = URLSearchParams | Record<string, string | string[] | undefined>;

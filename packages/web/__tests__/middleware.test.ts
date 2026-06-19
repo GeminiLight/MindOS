@@ -46,15 +46,48 @@ afterEach(() => {
 
 describe('middleware — API protection (AUTH_TOKEN)', () => {
   const original = process.env.AUTH_TOKEN;
+  const originalWebPassword = process.env.WEB_PASSWORD;
+  const originalSessionSecret = process.env.WEB_SESSION_SECRET;
 
   afterEach(() => {
     if (original === undefined) delete process.env.AUTH_TOKEN;
     else process.env.AUTH_TOKEN = original;
+    if (originalWebPassword === undefined) delete process.env.WEB_PASSWORD;
+    else process.env.WEB_PASSWORD = originalWebPassword;
+    if (originalSessionSecret === undefined) delete process.env.WEB_SESSION_SECRET;
+    else process.env.WEB_SESSION_SECRET = originalSessionSecret;
   });
 
-  it('allows same-origin requests', async () => {
+  it('allows same-origin API requests when the Web UI is not password-protected', async () => {
     process.env.AUTH_TOKEN = 'secret123';
+    delete process.env.WEB_PASSWORD;
     const res = await middleware(makeApiRequest({ 'sec-fetch-site': 'same-origin' }));
+    expect(res.status).toBe(200);
+  });
+
+  it('rejects spoofable same-origin API requests when the Web UI is password-protected', async () => {
+    process.env.AUTH_TOKEN = 'secret123';
+    process.env.WEB_PASSWORD = 'web-secret';
+
+    const res = await middleware(makeApiRequest({ 'sec-fetch-site': 'same-origin' }));
+
+    expect(res.status).toBe(401);
+  });
+
+  it('allows password-protected same-origin API requests with a valid Web session', async () => {
+    process.env.AUTH_TOKEN = 'secret123';
+    process.env.WEB_PASSWORD = 'web-secret';
+    process.env.WEB_SESSION_SECRET = 'stable-session-secret';
+    const token = await signJwt({
+      sub: 'user',
+      exp: Math.floor(Date.now() / 1000) + 60,
+    }, 'stable-session-secret');
+
+    const res = await middleware(makeApiRequest({
+      'sec-fetch-site': 'same-origin',
+      cookie: `mindos-session=${token}`,
+    }));
+
     expect(res.status).toBe(200);
   });
 

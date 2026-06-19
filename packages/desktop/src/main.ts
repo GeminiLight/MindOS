@@ -11,7 +11,7 @@
  * 2. Start new mode in background
  * 3. Success → loadURL new mode; Failure → remove overlay, keep old mode
  */
-import { app, BrowserWindow, dialog, ipcMain, shell, type IpcMainInvokeEvent } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, session, shell, type IpcMainInvokeEvent } from 'electron';
 import path from 'path';
 import { appendFileSync, mkdirSync, readFileSync, writeFileSync, existsSync, unlinkSync, rmSync } from 'fs';
 import { execFile as execFileChild, spawn as spawnChild, type ChildProcess } from 'child_process';
@@ -27,7 +27,7 @@ import { rewriteMcpClientConfig } from './mcp-config-rewrite';
 import { setupUpdater } from './updater';
 import { setupAppMenu } from './app-menu';
 import { ConnectionMonitor } from './connection-monitor';
-import { showConnectWindow, showModeSelectWindow, getActiveRemoteConnection, getLastSshConnection, setActiveRemoteConnection, loadPassword, clearActiveTunnel } from './connect-window';
+import { showConnectWindow, showModeSelectWindow, getActiveRemoteConnection, getLastSshConnection, setActiveRemoteConnection, loadPassword, clearActiveTunnel, adoptActiveTunnel } from './connect-window';
 import { cleanupOrphanedSshTunnel, SshTunnel } from './ssh-tunnel';
 import { testConnection } from './connection-sdk';
 import { getNodePath, getNpxPath, getNpmPath, getLocalBinPath, getEnrichedEnv } from './node-detect';
@@ -44,6 +44,7 @@ import { verifyMindOsWebHealth, verifyMindOsWebListening } from './mindos-web-he
 import { resolvePreferUnpacked } from './resolve-packaged-asset';
 import { registerMindosConnectSchemePrivileged, registerMindosConnectProtocol } from './mindos-connect-protocol';
 import { CoreUpdater } from './core-updater';
+import { authenticateRemoteWebSession } from './remote-auth';
 import { getAppConfigStore } from './app-config-store';
 import { desktopTelemetry } from './telemetry';
 import {
@@ -757,6 +758,21 @@ async function startLocalMode(): Promise<string | null> {
 
 // ── Remote Mode ──
 
+async function authenticateSavedRemoteSession(serverUrl: string, passwordKey = serverUrl): Promise<boolean> {
+  const password = loadPassword(passwordKey);
+  if (!password) return false;
+
+  const auth = await authenticateRemoteWebSession({
+    serverUrl,
+    password,
+    cookieStore: session.defaultSession.cookies,
+  });
+  if (!auth.ok) {
+    console.warn(`[MindOS] Saved remote password auth failed for ${serverUrl}: ${auth.error}`);
+  }
+  return auth.ok;
+}
+
 async function startRemoteMode(): Promise<string | null> {
   splashStatus({ status: 'connecting' });
   const savedAddress = getActiveRemoteConnection();
@@ -766,20 +782,10 @@ async function startRemoteMode(): Promise<string | null> {
       if (result.status === 'online') {
         // If auth required, try saved password for seamless reconnect
         if (result.authRequired) {
-          const password = loadPassword(savedAddress);
-          if (password) {
-            try {
-              const res = await fetch(`${savedAddress}/api/auth`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ password }),
-              });
-              if (res.ok) {
-                currentRemoteAddress = savedAddress;
-                closeSplash();
-                return savedAddress;
-              }
-            } catch { /* saved password failed, fall through */ }
+          if (await authenticateSavedRemoteSession(savedAddress)) {
+            currentRemoteAddress = savedAddress;
+            closeSplash();
+            return savedAddress;
           }
           // No password or auth failed → show connect window
         } else {
@@ -805,6 +811,18 @@ async function startRemoteMode(): Promise<string | null> {
       const url = `http://localhost:${localPort}`;
       const result = await testConnection(url);
       if (result.status === 'online') {
+        if (result.authRequired) {
+          const passwordKey = `ssh://${lastSsh.host}:${lastSsh.remotePort}`;
+          if (!(await authenticateSavedRemoteSession(url, passwordKey))) {
+            await tunnel.stop().catch(() => {});
+            // Saved password is absent, stale, or the auth request timed out.
+            // Fall through to the connect window so the user can retry.
+            closeSplash();
+            return showConnectWindow();
+          }
+        }
+
+        adoptActiveTunnel(tunnel);
         setActiveRemoteConnection(url);
         currentRemoteAddress = url;
         closeSplash();

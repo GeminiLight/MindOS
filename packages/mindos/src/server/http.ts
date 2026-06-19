@@ -334,7 +334,10 @@ async function handleRequest(
     }
 
     if (route === 'GET /api/health') {
-      writeResponse(res, handleHealth({ runtimeRoot: runtimeRoot ?? services.runtimeRoot }));
+      writeResponse(res, handleHealth({
+        runtimeRoot: runtimeRoot ?? services.runtimeRoot,
+        authRequired: Boolean(readWebPassword(services)),
+      }));
       return;
     }
     if (route === 'GET /api/files') {
@@ -842,6 +845,12 @@ async function handleRequest(
       return;
     }
     if (req.method === 'GET' && !url.pathname.startsWith('/api/')) {
+      if (readWebPassword(services)) {
+        writeResponse(res, json({
+          error: 'Password-protected Web UI requires the Next.js host auth adapter.',
+        }, { status: 401 }));
+        return;
+      }
       const staticResponse = handleStaticArtifact({
         staticRoot: optionsStaticRoot(services, runtimeRoot),
         path: url.pathname,
@@ -868,7 +877,7 @@ function isAuthorizedRequest(route: string, req: IncomingMessage, services: Mind
   const token = readAuthToken(services);
   if (!token) return true;
 
-  if (req.headers['sec-fetch-site'] === 'same-origin') return true;
+  if (!readWebPassword(services) && req.headers['sec-fetch-site'] === 'same-origin') return true;
 
   const authorization = req.headers.authorization ?? '';
   const match = /^Bearer\s+(.+)$/i.exec(authorization);
@@ -917,6 +926,17 @@ function readAuthToken(services: MindosHttpServices): string {
   }
 
   return process.env.MINDOS_AUTH_TOKEN || process.env.AUTH_TOKEN || '';
+}
+
+function readWebPassword(services: MindosHttpServices): string {
+  try {
+    const settings = services.readSettings();
+    if (typeof settings.webPassword === 'string' && settings.webPassword) return settings.webPassword;
+  } catch {
+    // Fall through to environment fallback.
+  }
+
+  return process.env.WEB_PASSWORD || '';
 }
 
 function safeTokenEquals(candidate: string, expected: string): boolean {

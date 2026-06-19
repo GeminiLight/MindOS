@@ -636,6 +636,31 @@ Write a concise signal brief.
     });
   });
 
+  it('reports persisted Web password protection through Product Server health', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'mindos-http-health-auth-'));
+    const app = createMindosHttpServer({
+      hostname: '127.0.0.1',
+      port: 0,
+      services: createDefaultMindosHttpServices({
+        homeDir: root,
+        readSettings: () => ({ mindRoot: root, webPassword: 'web-secret' }),
+      }),
+    });
+    await new Promise<void>((resolve) => app.server.listen(0, '127.0.0.1', resolve));
+    const address = app.server.address();
+    if (!address || typeof address === 'string') throw new Error('expected TCP server address');
+    const base = `http://127.0.0.1:${address.port}`;
+    try {
+      expect(await (await fetch(`${base}/api/health`)).json()).toMatchObject({
+        ok: true,
+        authRequired: true,
+      });
+    } finally {
+      await new Promise<void>((resolve, reject) => app.server.close((error) => error ? reject(error) : resolve()));
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('resolves product version from explicit env, repo root, or installed package root', () => {
     expect(readMindosProductVersion({ env: { npm_package_version: '9.9.9' } })).toBe('9.9.9');
 
@@ -1549,6 +1574,32 @@ Write a concise signal brief.
       })).status).toBe(404);
     } finally {
       await new Promise<void>((resolve, reject) => app.server.close((error) => error ? reject(error) : resolve()));
+    }
+  });
+
+  it('rejects spoofable same-origin Product Server API requests when the Web UI is password-protected', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'mindos-http-auth-web-password-'));
+    writeFileSync(join(root, 'note.md'), 'hello');
+
+    const app = createMindosHttpServer({
+      hostname: '127.0.0.1',
+      port: 0,
+      runtime: { readSettings: () => ({ mindRoot: root, authToken: 'secret-token', webPassword: 'web-secret' }) },
+    });
+    await new Promise<void>((resolve) => app.server.listen(0, '127.0.0.1', resolve));
+    const address = app.server.address();
+    if (!address || typeof address === 'string') throw new Error('expected TCP server address');
+    const base = `http://127.0.0.1:${address.port}`;
+    try {
+      expect((await fetch(`${base}/api/files`, {
+        headers: { 'sec-fetch-site': 'same-origin' },
+      })).status).toBe(401);
+      expect((await fetch(`${base}/api/files`, {
+        headers: { authorization: 'Bearer secret-token' },
+      })).status).toBe(200);
+    } finally {
+      await new Promise<void>((resolve, reject) => app.server.close((error) => error ? reject(error) : resolve()));
+      rmSync(root, { recursive: true, force: true });
     }
   });
 

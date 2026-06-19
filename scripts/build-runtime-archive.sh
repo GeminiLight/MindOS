@@ -78,8 +78,8 @@ if [ -d "$STANDALONE_NM" ]; then
   find "$STANDALONE_NM" -name '*.js.map' -delete
   find "$STANDALONE_NM" -name '*.mjs.map' -delete
   find "$STANDALONE_NM" -name '*.cjs.map' -delete
-  # TypeScript source files (compiled JS is what runs)
-  find "$STANDALONE_NM" -name '*.ts' ! -name '*.d.ts' -path '*/src/*' -delete
+  # Keep runtime .ts sources: built-in PI extensions such as pi-subagents and
+  # pi-schedule-prompt ship TS-only entrypoints that are loaded through jiti.
   # Markdown docs inside packages
   find "$STANDALONE_NM" -name 'README.md' -delete
   find "$STANDALONE_NM" -name 'CHANGELOG.md' -delete

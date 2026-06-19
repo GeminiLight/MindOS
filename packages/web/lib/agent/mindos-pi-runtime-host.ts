@@ -13,6 +13,10 @@ import { generateSkillsXml } from '@/lib/agent/skills-xml';
 import { getSkillSearchPaths } from '@/lib/agent/skill-paths';
 import { ensureMindosAgentMcpRuntimeConfig } from '@/lib/pi-integration/mcp-config';
 import {
+  resolveBuiltinWebRuntimePackagePath,
+  resolveMindosWebRuntimeSourcePath,
+} from './builtin-extension-runtime';
+import {
   createMindosAgentPermissionPolicy,
   hasMindosExtensionScope,
   type MindosAgentPermissionPolicy,
@@ -45,13 +49,13 @@ export function getMindosWebPiRuntimePaths(input: {
   registerWebKbExtensionHost();
 
   if (hasMindosExtensionScope(policy, 'kb')) {
-    additionalExtensionPaths.push(path.join(webAppDir, 'lib', 'agent', 'kb-extension.ts'));
+    additionalExtensionPaths.push(resolveMindosWebRuntimeSourcePath(webAppDir, 'lib', 'agent', 'kb-extension.ts'));
   }
   if (hasMindosExtensionScope(policy, 'ask-user-question')) {
-    additionalExtensionPaths.push(path.join(webAppDir, 'lib', 'agent', 'ask-user-question-bridge-extension.ts'));
+    additionalExtensionPaths.push(resolveMindosWebRuntimeSourcePath(webAppDir, 'lib', 'agent', 'ask-user-question-bridge-extension.ts'));
   }
   if (hasMindosExtensionScope(policy, 'pi-web-access')) {
-    additionalExtensionPaths.push(path.join(webAppDir, 'node_modules', 'pi-web-access', 'index.ts'));
+    additionalExtensionPaths.push(resolveBuiltinWebRuntimePackagePath(webAppDir, 'pi-web-access', 'index.ts'));
   }
   if (hasMindosExtensionScope(policy, 'user-extensions')) {
     additionalExtensionPaths.push(...scanExtensionPaths());
@@ -59,17 +63,17 @@ export function getMindosWebPiRuntimePaths(input: {
   if (hasMindosExtensionScope(policy, 'pi-mcp-adapter')) {
     const mcpRuntimeConfig = ensureMindosAgentMcpRuntimeConfig();
     if (mcpRuntimeConfig.serverCount > 0) {
-      additionalExtensionPaths.push(path.join(webAppDir, 'lib', 'agent', 'mindos-mcp-adapter-extension.ts'));
+      additionalExtensionPaths.push(resolveMindosWebRuntimeSourcePath(webAppDir, 'lib', 'agent', 'mindos-mcp-adapter-extension.ts'));
     }
   }
   if (hasMindosExtensionScope(policy, 'im')) {
-    additionalExtensionPaths.push(path.join(webAppDir, 'lib', 'im', 'index.ts'));
+    additionalExtensionPaths.push(resolveMindosWebRuntimeSourcePath(webAppDir, 'lib', 'im', 'index.ts'));
   }
   if (hasMindosExtensionScope(policy, 'subagents')) {
-    additionalExtensionPaths.push(path.join(webAppDir, 'lib', 'agent', 'subagent-ledger-extension.ts'));
+    additionalExtensionPaths.push(resolveMindosWebRuntimeSourcePath(webAppDir, 'lib', 'agent', 'subagent-ledger-extension.ts'));
   }
   if (hasMindosExtensionScope(policy, 'schedule-prompt')) {
-    additionalExtensionPaths.push(path.join(webAppDir, 'lib', 'schedule-prompt', 'index.ts'));
+    additionalExtensionPaths.push(resolveMindosWebRuntimeSourcePath(webAppDir, 'lib', 'schedule-prompt', 'index.ts'));
   }
 
   return {

@@ -12,6 +12,12 @@ import { cpSync, existsSync, readFileSync, readdirSync, realpathSync, renameSync
 import { createRequire } from 'node:module';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  BUILTIN_AGENT_EXTENSION_RUNTIME_DEPENDENCY_SEEDS,
+  IM_RUNTIME_DEPENDENCY_SEEDS,
+  materializeStandaloneAssets,
+  pruneClaudeAgentSdkNativePackages,
+} from '../packages/desktop/scripts/prepare-mindos-bundle.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, '..');
@@ -32,6 +38,8 @@ const runtimeDependencySeeds = [
   'ajv-formats',
   '@anthropic-ai/sdk',
   'openai',
+  ...BUILTIN_AGENT_EXTENSION_RUNTIME_DEPENDENCY_SEEDS,
+  ...IM_RUNTIME_DEPENDENCY_SEEDS,
 ];
 
 // ── Guard: ensure standalone build exists ────────────────────────────────────
@@ -45,11 +53,7 @@ if (!existsSync(standaloneServerJs)) {
 
 // ── Step 1: Materialize static + public into standalone dir ──────────────────
 // Reuse the same logic Desktop uses.
-import {
-  materializeStandaloneAssets,
-  pruneClaudeAgentSdkNativePackages,
-} from '../packages/desktop/scripts/prepare-mindos-bundle.mjs';
-materializeStandaloneAssets(appDir);
+materializeStandaloneAssets(appDir, { runtimeDependencySeeds });
 copyRuntimeDependencyClosure(resolve(standaloneAppDir, 'node_modules'), runtimeDependencySeeds);
 
 // ── Step 2: Copy standalone to top-level _standalone/ ────────────────────────
@@ -151,7 +155,6 @@ function pruneStandalonePayload(dir) {
     'components.json',
     'components',
     'hooks',
-    'lib',
     'styles',
     'types',
     'eslint.config.mjs',

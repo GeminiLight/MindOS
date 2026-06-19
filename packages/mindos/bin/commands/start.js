@@ -395,6 +395,7 @@ export const run = async (args, flags) => {
           NODE_ENV: 'production',
           HOSTNAME: webHost,
           PORT: webPort,
+          MINDOS_PROJECT_ROOT: PACKAGE_ROOT,
           NODE_PATH: [standaloneNodePath, process.env.NODE_PATH].filter(Boolean).join(pathSep),
         },
       });

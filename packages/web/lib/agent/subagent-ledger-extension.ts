@@ -22,6 +22,7 @@ import {
   type SubagentChildRuntimeInput,
   type RegisterSubagentExtension,
 } from '@geminilight/mindos/agent/subagent/subagent-ledger-extension';
+import { resolveBuiltinWebRuntimePackagePath } from './builtin-extension-runtime';
 import { effectiveAiConfig } from '../settings';
 import { getDefaultApi, getDefaultBaseUrl, getPreset, toPiProvider, type ProviderId } from './providers';
 
@@ -257,7 +258,7 @@ export async function withMindosSubagentChildRuntime<T>(
 async function loadUpstreamSubagentExtension(): Promise<RegisterSubagentExtension> {
   const currentDir = path.dirname(fileURLToPath(import.meta.url));
   const webAppDir = path.resolve(currentDir, '..', '..');
-  const upstreamPath = path.join(webAppDir, 'node_modules', 'pi-subagents', 'src', 'extension', 'index.ts');
+  const upstreamPath = resolveBuiltinWebRuntimePackagePath(webAppDir, 'pi-subagents', 'src', 'extension', 'index.ts');
   const upstreamRealPath = fs.realpathSync(upstreamPath);
   const jiti = createJiti(upstreamRealPath, {
     moduleCache: false,

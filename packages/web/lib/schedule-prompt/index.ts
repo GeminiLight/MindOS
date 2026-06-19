@@ -7,6 +7,11 @@
 
 import os from 'os';
 import path from 'path';
+import { createJiti } from 'jiti/static';
+import {
+  resolveBuiltinWebRuntimePackagePath,
+  resolveWebAppDirFromEntry,
+} from '../agent/builtin-extension-runtime';
 
 type ExtensionAPI = {
   registerTool(tool: unknown): void;
@@ -37,13 +42,18 @@ type SchedulePromptModules = {
 async function loadSchedulePromptModules(): Promise<SchedulePromptModules> {
   // pi-schedule-prompt 0.1.2 ships TypeScript source only. Keep these imports
   // dynamic so app typecheck does not typecheck the dependency's internal TS.
-  const storageModuleName = 'pi-schedule-prompt/src/storage.ts';
-  const schedulerModuleName = 'pi-schedule-prompt/src/scheduler.ts';
-  const toolModuleName = 'pi-schedule-prompt/src/tool.ts';
+  const webAppDir = resolveWebAppDirFromEntry(import.meta.url);
+  const storageModulePath = resolveBuiltinWebRuntimePackagePath(webAppDir, 'pi-schedule-prompt', 'src', 'storage.ts');
+  const schedulerModulePath = resolveBuiltinWebRuntimePackagePath(webAppDir, 'pi-schedule-prompt', 'src', 'scheduler.ts');
+  const toolModulePath = resolveBuiltinWebRuntimePackagePath(webAppDir, 'pi-schedule-prompt', 'src', 'tool.ts');
+  const jiti = createJiti(toolModulePath, {
+    moduleCache: false,
+    tryNative: false,
+  });
   const [{ CronStorage }, { CronScheduler }, { createCronTool }] = await Promise.all([
-    import(storageModuleName),
-    import(schedulerModuleName),
-    import(toolModuleName),
+    jiti.import(storageModulePath) as Promise<{ CronStorage: SchedulePromptModules['CronStorage'] }>,
+    jiti.import(schedulerModulePath) as Promise<{ CronScheduler: SchedulePromptModules['CronScheduler'] }>,
+    jiti.import(toolModulePath) as Promise<{ createCronTool: SchedulePromptModules['createCronTool'] }>,
   ]);
   return { CronStorage, CronScheduler, createCronTool };
 }
