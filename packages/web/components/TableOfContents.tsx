@@ -62,7 +62,6 @@ export function hasTableOfContents(content: string): boolean {
 const VIEW_HEADER_FALLBACK_H = 40;
 const VIEW_HEADER_CSS_VAR = 'var(--workspace-header-h)';
 const NAV_W = 212;
-const TOC_COLLAPSED_W = 28;
 export const TOC_COLLAPSED_KEY = 'mindos.toc.collapsed';
 export const TOC_COLLAPSED_EVENT = 'mindos:toc-collapsed-change';
 
@@ -254,12 +253,21 @@ export default function TableOfContents({ content }: TableOfContentsProps) {
 
   return (
     <aside
-      className="hidden xl:flex min-w-0 flex-col self-start sticky z-app-sticky relative overflow-visible"
+      className={cn(
+        'hidden xl:flex min-w-0 flex-col z-app-sticky overflow-visible',
+        collapsed
+          ? 'absolute right-0 top-0 h-8 w-0'
+          : 'self-start sticky relative',
+      )}
       data-markdown-toc-panel
       style={{
-        top: `calc(var(--app-titlebar-h) + ${VIEW_HEADER_CSS_VAR} + 24px)`,
-        maxHeight: `calc(100vh - var(--app-titlebar-h) - ${VIEW_HEADER_CSS_VAR} - 48px)`,
-        width: collapsed ? TOC_COLLAPSED_W : NAV_W,
+        ...(collapsed
+          ? {}
+          : {
+              top: `calc(var(--app-titlebar-h) + ${VIEW_HEADER_CSS_VAR} + 24px)`,
+              maxHeight: `calc(100vh - var(--app-titlebar-h) - ${VIEW_HEADER_CSS_VAR} - 48px)`,
+              width: NAV_W,
+            }),
       }}
     >
       <button
@@ -268,7 +276,7 @@ export default function TableOfContents({ content }: TableOfContentsProps) {
         className={cn(
           'absolute top-0 z-10 flex h-8 items-center justify-center border border-border bg-background text-muted-foreground/60 transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
           collapsed
-            ? 'left-0 w-7 rounded-md'
+            ? 'right-0 w-7 rounded-md shadow-sm'
             : '-left-5 w-5 rounded-l-md border-r-0',
         )}
         title={collapsed ? t.view.tocExpand : t.view.tocCollapse}

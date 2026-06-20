@@ -225,8 +225,9 @@ body {
     grid-template-columns: minmax(0, 1fr) 212px;
   }
   .markdown-view-frame--toc-collapsed {
-    grid-template-columns: minmax(0, 1fr) 28px;
-    gap: 0.75rem;
+    grid-template-columns: minmax(0, 1fr);
+    position: relative;
+    gap: 0;
   }
 }
 

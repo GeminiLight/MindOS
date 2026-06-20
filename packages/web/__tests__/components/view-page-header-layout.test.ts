@@ -51,7 +51,9 @@ describe('ViewPageClient header layout', () => {
     expect(cssSource).toContain('.markdown-view-frame--with-toc {');
     expect(cssSource).toContain('grid-template-columns: minmax(0, 1fr) 212px;');
     expect(cssSource).toContain('.markdown-view-frame--toc-collapsed {');
-    expect(cssSource).toContain('grid-template-columns: minmax(0, 1fr) 28px;');
+    expect(cssSource).toContain('grid-template-columns: minmax(0, 1fr);');
+    expect(cssSource).toContain('position: relative;');
+    expect(cssSource).toContain('gap: 0;');
     expect(cssSource).not.toContain('.toc-reserved-content');
     expect(cssSource).not.toContain('.view-header-actions-reserve');
     expect(cssSource).not.toContain('.view-header-actions {');
