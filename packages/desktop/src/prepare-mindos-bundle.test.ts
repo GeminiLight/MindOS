@@ -321,6 +321,28 @@ describe('materializeStandaloneAssets', () => {
     expect(readFileSync(path.join(tracedExtension, 'index.ts'), 'utf-8')).toBe('export default function webAccess() {}');
   });
 
+  it('prunes pi-web-access demo media from standalone runtime bundles', () => {
+    const appDir = makeTemp('mindos-app-runtime-extension-assets-');
+    writeStandaloneApp(appDir);
+
+    const webAccessPackage = path.join(appDir, '.next', 'standalone', 'node_modules', 'pi-web-access');
+    mkdirSync(webAccessPackage, { recursive: true });
+    writeFileSync(path.join(webAccessPackage, 'package.json'), JSON.stringify({
+      name: 'pi-web-access',
+      version: '0.10.7',
+    }));
+    writeFileSync(path.join(webAccessPackage, 'index.ts'), 'export default function webAccess() {}');
+    writeFileSync(path.join(webAccessPackage, 'pi-web-fetch-demo.mp4'), 'demo-video');
+    writeFileSync(path.join(webAccessPackage, 'banner.png'), 'demo-banner');
+
+    materializeStandaloneAssets(appDir);
+
+    expect(existsSync(path.join(webAccessPackage, 'package.json'))).toBe(true);
+    expect(readFileSync(path.join(webAccessPackage, 'index.ts'), 'utf-8')).toBe('export default function webAccess() {}');
+    expect(existsSync(path.join(webAccessPackage, 'pi-web-fetch-demo.mp4'))).toBe(false);
+    expect(existsSync(path.join(webAccessPackage, 'banner.png'))).toBe(false);
+  });
+
   it('does not copy package-internal publish artifacts when materializing runtime seeds', () => {
     const appDir = makeTemp('mindos-app-runtime-seed-artifacts-');
     writeStandaloneApp(appDir);
@@ -964,5 +986,28 @@ describe('copyAppForBundledRuntime', () => {
     expect(lstatSync(hashedDir).isSymbolicLink()).toBe(false);
     expect(readFileSync(path.join(hashedDir, 'dist', 'index.js'), 'utf-8')).toBe('module.exports = 1;');
     expect(readFileSync(path.join(hashedDir, 'package.json'), 'utf-8')).toContain('pi-agent-core');
+  });
+
+  it('prunes pi-web-access demo media from bundled runtime copies', () => {
+    const src = makeTemp('mindos-src-runtime-assets-');
+    const dest = path.join(makeTemp('mindos-dest-runtime-assets-'), 'app');
+    const webAccessPackage = path.join(src, '.next', 'standalone', 'node_modules', 'pi-web-access');
+
+    mkdirSync(webAccessPackage, { recursive: true });
+    writeFileSync(path.join(webAccessPackage, 'package.json'), JSON.stringify({
+      name: 'pi-web-access',
+      version: '0.10.7',
+    }));
+    writeFileSync(path.join(webAccessPackage, 'index.ts'), 'export default function webAccess() {}');
+    writeFileSync(path.join(webAccessPackage, 'pi-web-fetch-demo.mp4'), 'demo-video');
+    writeFileSync(path.join(webAccessPackage, 'banner.png'), 'demo-banner');
+
+    copyAppForBundledRuntime(src, dest);
+
+    const copiedPackage = path.join(dest, '.next', 'standalone', 'node_modules', 'pi-web-access');
+    expect(existsSync(path.join(copiedPackage, 'package.json'))).toBe(true);
+    expect(readFileSync(path.join(copiedPackage, 'index.ts'), 'utf-8')).toBe('export default function webAccess() {}');
+    expect(existsSync(path.join(copiedPackage, 'pi-web-fetch-demo.mp4'))).toBe(false);
+    expect(existsSync(path.join(copiedPackage, 'banner.png'))).toBe(false);
   });
 });

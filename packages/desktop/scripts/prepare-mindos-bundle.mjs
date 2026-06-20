@@ -60,6 +60,11 @@ export const RUNTIME_DEPENDENCY_SEEDS = [
   ...IM_RUNTIME_DEPENDENCY_SEEDS,
 ];
 
+export const RUNTIME_PACKAGE_ASSET_PRUNE_PATHS = [
+  path.join('pi-web-access', 'pi-web-fetch-demo.mp4'),
+  path.join('pi-web-access', 'banner.png'),
+];
+
 export function materializeStandaloneAssets(appDir, options = {}) {
   const standaloneDir = path.join(appDir, '.next', 'standalone');
   const serverJs = path.join(standaloneDir, 'server.js');
@@ -99,6 +104,7 @@ export function materializeStandaloneAssets(appDir, options = {}) {
   });
   pruneClaudeAgentSdkNativePackages(standaloneDir);
   prunePackageDevelopmentPayload(standaloneDir);
+  pruneRuntimePackageAssets(standaloneDir);
   pruneOptionalLocalEmbeddingRuntime(standaloneDir, {
     bundleLocalEmbeddingRuntime: options.bundleLocalEmbeddingRuntime === true
       || process.env.MINDOS_BUNDLE_LOCAL_EMBEDDING_RUNTIME === '1',
@@ -721,7 +727,23 @@ export function copyAppForBundledRuntime(sourceAppDir, destAppDir) {
   mkdirSync(destAppDir, { recursive: true });
   copyFiltered(sourceAppDir, destAppDir, '');
   fixTurbopackHashedExternals(destAppDir);
-  pruneClaudeAgentSdkNativePackages(path.join(destAppDir, '.next', 'standalone'));
+  const standaloneDir = path.join(destAppDir, '.next', 'standalone');
+  pruneRuntimePackageAssets(standaloneDir);
+  pruneClaudeAgentSdkNativePackages(standaloneDir);
+}
+
+export function pruneRuntimePackageAssets(standaloneDir) {
+  const nodeModulesDir = path.join(standaloneDir, 'node_modules');
+  if (!existsSync(nodeModulesDir)) return 0;
+
+  let removed = 0;
+  for (const rel of RUNTIME_PACKAGE_ASSET_PRUNE_PATHS) {
+    const target = path.join(nodeModulesDir, rel);
+    if (!existsSync(target)) continue;
+    rmSync(target, { recursive: true, force: true });
+    removed += 1;
+  }
+  return removed;
 }
 
 export function pruneClaudeAgentSdkNativePackages(rootDir) {

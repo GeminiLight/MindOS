@@ -57,7 +57,7 @@ describe('mindos npm shim runtime fallback', () => {
     }), 'utf-8');
 
     const cacheDir = path.join(tempDir, 'cache');
-    const run = () => spawnSync(process.execPath, [shimPath, '--version'], {
+    const run = () => spawnSync(process.execPath, [shimPath, 'fallback-check'], {
       cwd: tempDir,
       encoding: 'utf-8',
       env: {
@@ -70,7 +70,7 @@ describe('mindos npm shim runtime fallback', () => {
 
     const first = run();
     expect(first.status, first.stderr).toBe(0);
-    expect(first.stdout.trim()).toBe('fallback-runtime --version');
+    expect(first.stdout.trim()).toBe('fallback-runtime fallback-check');
     expect(fs.existsSync(path.join(cacheDir, '9.9.9', 'bin', 'cli.js'))).toBe(true);
 
     fs.rmSync(manifestPath);
@@ -78,6 +78,6 @@ describe('mindos npm shim runtime fallback', () => {
 
     const second = run();
     expect(second.status, second.stderr).toBe(0);
-    expect(second.stdout.trim()).toBe('fallback-runtime --version');
+    expect(second.stdout.trim()).toBe('fallback-runtime fallback-check');
   });
 });

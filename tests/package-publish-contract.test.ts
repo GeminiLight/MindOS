@@ -272,6 +272,7 @@ describe('product npm publish contract', () => {
     expect(prepareStandalone).toContain('pruneStandalonePayload');
     expect(prepareStandalone).toContain('pruneRuntimeNodeModules');
     expect(prepareStandalone).toContain('pruneClaudeAgentSdkNativePackages');
+    expect(prepareStandalone).toContain('pruneRuntimePackageAssets(standaloneAppDir)');
     expect(prepareStandalone).toContain('copyRuntimeDependencyClosure');
     expect(prepareStandalone).toContain('extract-pdf.cjs');
     expect(prepareStandalone).toContain('extract-docx.cjs');

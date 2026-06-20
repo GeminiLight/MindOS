@@ -17,6 +17,7 @@ import {
   IM_RUNTIME_DEPENDENCY_SEEDS,
   materializeStandaloneAssets,
   pruneClaudeAgentSdkNativePackages,
+  pruneRuntimePackageAssets,
 } from '../packages/desktop/scripts/prepare-mindos-bundle.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -60,6 +61,7 @@ copyRuntimeDependencyClosure(resolve(standaloneAppDir, 'node_modules'), runtimeD
 // Reuse the same logic Desktop uses.
 materializeStandaloneAssets(appDir, { runtimeDependencySeeds });
 copyRuntimeDependencyClosure(resolve(standaloneAppDir, 'node_modules'), runtimeDependencySeeds);
+pruneRuntimePackageAssets(standaloneAppDir);
 
 // ── Step 2: Copy standalone to top-level _standalone/ ────────────────────────
 console.log('[prepare-standalone] Copying standalone build to packages/mindos/_standalone/ ...');

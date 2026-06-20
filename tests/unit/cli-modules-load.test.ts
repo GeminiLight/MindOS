@@ -36,8 +36,13 @@ describe('packages/mindos/bin modules can be parsed by Node.js ESM loader', () =
     '%s loads without SyntaxError',
     (_label, modulePath) => {
       // Use a subprocess so a SyntaxError in one module doesn't kill the
-      // test runner. The script simply imports the module and exits.
-      const script = `import(${JSON.stringify('file://' + modulePath)}).then(() => process.exit(0)).catch(e => { process.stderr.write(e.message); process.exit(1); })`;
+      // test runner. The CLI entrypoint is intentionally side-effectful, so
+      // force its static help path instead of letting bare `mindos` enter the
+      // default agent.
+      const beforeImport = path.basename(modulePath as string) === 'cli.js'
+        ? `process.argv = [process.execPath, ${JSON.stringify(modulePath)}, '--help'];`
+        : '';
+      const script = `${beforeImport}import(${JSON.stringify('file://' + modulePath)}).then(() => process.exit(0)).catch(e => { process.stderr.write(e.message); process.exit(1); })`;
 
       try {
         execFileSync(process.execPath, ['--input-type=module', '-e', script], {
