@@ -103,7 +103,7 @@ mindSpace:
       expect(daoInstruction).toContain('id: dao');
       expect(daoInstruction).toContain('type: system');
       expect(daoInstruction).toContain('source: builtin');
-      expect(daoInstruction).toContain('version: 1');
+      expect(daoInstruction).toContain('version: 2');
       expect(daoInstruction).toContain('locale: zh');
       expect(daoInstruction).toContain('order: 10');
     } finally {

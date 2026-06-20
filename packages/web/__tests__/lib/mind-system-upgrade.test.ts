@@ -5,6 +5,11 @@ import { describe, expect, it } from 'vitest';
 import { cleanupMindRoot, mkTempMindRoot } from '../core/helpers';
 import { listMindSystemSlots } from '@/lib/mind-system';
 import { ensureDefaultMindSystemUpgrade } from '@/lib/mind-system-upgrade';
+import {
+  getDefaultMindSystemScaffoldContent,
+  getMindSystemScaffoldDescriptor,
+  isDefaultMindSystemScaffoldFile,
+} from '@/lib/mind-system-scaffold';
 
 const DEFAULT_DIRS = ['MIND_DAO', 'MIND_FA', 'MIND_SHU', 'MIND_QI'] as const;
 const DEFAULT_ASSISTANT_PROMPTS = [
@@ -20,6 +25,7 @@ describe('default mind-system upgrade', () => {
 
       expect(result.state).toBe('ready');
       expect(result.createdPaths).toEqual([...DEFAULT_DIRS]);
+      expect(result.updatedPaths).toEqual([]);
       expect(result.skippedPaths).toEqual([]);
       for (const dir of DEFAULT_DIRS) {
         expect(fs.statSync(path.join(mindRoot, dir)).isDirectory()).toBe(true);
@@ -42,7 +48,7 @@ describe('default mind-system upgrade', () => {
       expect(daoInstruction).toContain('id: dao');
       expect(daoInstruction).toContain('type: system');
       expect(daoInstruction).toContain('source: builtin');
-      expect(daoInstruction).toContain('version: 1');
+      expect(daoInstruction).toContain('version: 2');
       expect(daoInstruction).toContain('locale: zh');
       expect(daoInstruction).toContain('order: 10');
       expect(listMindSystemSlots(mindRoot).map(slot => slot.key)).toEqual(['dao', 'fa', 'shu', 'qi']);
@@ -83,6 +89,7 @@ describe('default mind-system upgrade', () => {
       expect(result.state).toBe('ready');
       expect(result.createdPaths).toEqual([]);
       expect(result.existingPaths).toEqual([...DEFAULT_DIRS]);
+      expect(result.updatedPaths).toEqual([]);
       expect(fs.readFileSync(path.join(mindRoot, 'MIND_DAO', 'README.md'), 'utf-8')).toBe('# Custom Dao\n');
       expect(fs.readFileSync(path.join(mindRoot, 'MIND_DAO', 'INSTRUCTION.md'), 'utf-8')).toBe('# Custom Agent Rules\n');
       expect(fs.readFileSync(path.join(mindRoot, 'MIND_DAO', 'Drafts', 'custom.md'), 'utf-8')).toBe('# Existing Draft\n');
@@ -99,6 +106,52 @@ describe('default mind-system upgrade', () => {
       expect(fs.readFileSync(path.join(mindRoot, '.mindos/assistants/dreaming/profile.json'), 'utf-8'))
         .toBe('{"name":"Custom Dreaming"}\n');
       expect(fs.existsSync(path.join(mindRoot, '.mindos/assistants/decision-synthesizer/prompt.md'))).toBe(false);
+    } finally {
+      cleanupMindRoot(mindRoot);
+    }
+  });
+
+  it('upgrades existing scaffold files when they still match a historical built-in default', () => {
+    const mindRoot = mkTempMindRoot();
+    try {
+      fs.mkdirSync(path.join(mindRoot, 'MIND_DAO'), { recursive: true });
+      const relativePath = 'MIND_DAO/INSTRUCTION.md';
+      const descriptor = getMindSystemScaffoldDescriptor(relativePath);
+      const historicalDefault = descriptor?.knownDefaultContents.find(content => content !== descriptor.currentContent);
+      expect(historicalDefault).toBeTruthy();
+      fs.writeFileSync(path.join(mindRoot, relativePath), historicalDefault!, 'utf-8');
+
+      expect(isDefaultMindSystemScaffoldFile(mindRoot, relativePath)).toBe(true);
+
+      const result = ensureDefaultMindSystemUpgrade(mindRoot);
+
+      expect(result.state).toBe('ready');
+      expect(result.createdPaths).toEqual(['MIND_FA', 'MIND_SHU', 'MIND_QI']);
+      expect(result.existingPaths).toEqual(['MIND_DAO']);
+      expect(result.updatedPaths).toEqual([relativePath]);
+      expect(fs.readFileSync(path.join(mindRoot, relativePath), 'utf-8'))
+        .toBe(getDefaultMindSystemScaffoldContent(relativePath));
+    } finally {
+      cleanupMindRoot(mindRoot);
+    }
+  });
+
+  it('does not upgrade scaffold files after the user edits the historical default', () => {
+    const mindRoot = mkTempMindRoot();
+    try {
+      fs.mkdirSync(path.join(mindRoot, 'MIND_DAO'), { recursive: true });
+      const relativePath = 'MIND_DAO/INSTRUCTION.md';
+      const descriptor = getMindSystemScaffoldDescriptor(relativePath);
+      const historicalDefault = descriptor?.knownDefaultContents.find(content => content !== descriptor.currentContent);
+      expect(historicalDefault).toBeTruthy();
+      const userEditedContent = `${historicalDefault!}\n# User note\n`;
+      fs.writeFileSync(path.join(mindRoot, relativePath), userEditedContent, 'utf-8');
+
+      const result = ensureDefaultMindSystemUpgrade(mindRoot);
+
+      expect(result.state).toBe('ready');
+      expect(result.updatedPaths).toEqual([]);
+      expect(fs.readFileSync(path.join(mindRoot, relativePath), 'utf-8')).toBe(userEditedContent);
     } finally {
       cleanupMindRoot(mindRoot);
     }

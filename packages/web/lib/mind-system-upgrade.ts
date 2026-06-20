@@ -8,6 +8,7 @@ import {
   getLegacyAssistantPromptPath,
 } from './mind-system-assistants';
 import {
+  getMindSystemScaffoldDescriptor,
   INSTRUCTION_BY_MIND_SYSTEM_SLOT,
   README_BY_MIND_SYSTEM_SLOT,
 } from './mind-system-scaffold';
@@ -21,12 +22,14 @@ export interface MindSystemUpgradeResult {
   state: 'ready' | 'partial';
   createdPaths: string[];
   existingPaths: string[];
+  updatedPaths: string[];
   skippedPaths: MindSystemUpgradeSkippedPath[];
 }
 
 export function ensureDefaultMindSystemUpgrade(mindRoot: string): MindSystemUpgradeResult {
   const createdPaths: string[] = [];
   const existingPaths: string[] = [];
+  const updatedPaths: string[] = [];
   const skippedPaths: MindSystemUpgradeSkippedPath[] = [];
 
   for (const assistant of getBuiltinAssistantMarkdownFiles()) {
@@ -41,15 +44,20 @@ export function ensureDefaultMindSystemUpgrade(mindRoot: string): MindSystemUpgr
 
   for (const slot of defaultMindSystemSlots().sort((a, b) => a.order - b.order)) {
     const result = ensureSlotDirectory(mindRoot, slot);
-    if (result === 'created') createdPaths.push(slot.path);
-    else if (result === 'existing') existingPaths.push(slot.path);
-    else skippedPaths.push({ path: slot.path, reason: result });
+    if (result.status === 'skipped') {
+      skippedPaths.push({ path: slot.path, reason: result.reason });
+      continue;
+    }
+    if (result.status === 'created') createdPaths.push(slot.path);
+    else existingPaths.push(slot.path);
+    updatedPaths.push(...result.updatedPaths);
   }
 
   return {
     state: skippedPaths.length > 0 ? 'partial' : 'ready',
     createdPaths,
     existingPaths,
+    updatedPaths,
     skippedPaths,
   };
 }
@@ -120,45 +128,61 @@ function stripLeadingFrontmatter(content: string): string {
   return normalized.slice(match[0].length).replace(/^\n+/, '').trim();
 }
 
-function ensureSlotDirectory(
-  mindRoot: string,
-  slot: MindSystemSlot,
-): 'created' | 'existing' | MindSystemUpgradeSkippedPath['reason'] {
+type SlotDirectoryEnsureResult =
+  | { status: 'created' | 'existing'; updatedPaths: string[] }
+  | { status: 'skipped'; reason: MindSystemUpgradeSkippedPath['reason'] };
+
+function ensureSlotDirectory(mindRoot: string, slot: MindSystemSlot): SlotDirectoryEnsureResult {
   let slotDir: string;
   try {
     slotDir = resolveExistingSafe(mindRoot, slot.path);
   } catch {
-    return 'unsafe_path';
+    return { status: 'skipped', reason: 'unsafe_path' };
   }
 
   try {
     if (fs.existsSync(slotDir)) {
-      if (!fs.statSync(slotDir).isDirectory()) return 'file_conflict';
-      ensureScaffoldFiles(slotDir, slot);
-      return 'existing';
+      if (!fs.statSync(slotDir).isDirectory()) return { status: 'skipped', reason: 'file_conflict' };
+      return { status: 'existing', updatedPaths: ensureScaffoldFiles(slotDir, slot) };
     }
 
     fs.mkdirSync(slotDir, { recursive: true });
-    ensureScaffoldFiles(slotDir, slot);
-    return 'created';
+    return { status: 'created', updatedPaths: ensureScaffoldFiles(slotDir, slot) };
   } catch {
-    return 'write_failed';
+    return { status: 'skipped', reason: 'write_failed' };
   }
 }
 
-function ensureScaffoldFiles(slotDir: string, slot: MindSystemSlot): void {
-  const readmePath = path.join(slotDir, 'README.md');
-  if (!fs.existsSync(readmePath)) {
-    fs.writeFileSync(readmePath, README_BY_MIND_SYSTEM_SLOT[slot.key], 'utf-8');
+function ensureScaffoldFiles(slotDir: string, slot: MindSystemSlot): string[] {
+  const updatedPaths: string[] = [];
+  if (ensureScaffoldFile(path.join(slotDir, 'README.md'), `${slot.path}/README.md`, README_BY_MIND_SYSTEM_SLOT[slot.key])) {
+    updatedPaths.push(`${slot.path}/README.md`);
   }
 
-  const instructionPath = path.join(slotDir, 'INSTRUCTION.md');
-  if (!fs.existsSync(instructionPath)) {
-    fs.writeFileSync(instructionPath, INSTRUCTION_BY_MIND_SYSTEM_SLOT[slot.key], 'utf-8');
+  if (ensureScaffoldFile(path.join(slotDir, 'INSTRUCTION.md'), `${slot.path}/INSTRUCTION.md`, INSTRUCTION_BY_MIND_SYSTEM_SLOT[slot.key])) {
+    updatedPaths.push(`${slot.path}/INSTRUCTION.md`);
   }
 
   const draftsPath = path.join(slotDir, 'Drafts');
   if (!fs.existsSync(draftsPath)) {
     fs.mkdirSync(draftsPath);
   }
+  return updatedPaths;
+}
+
+function ensureScaffoldFile(absPath: string, relativePath: string, currentContent: string): boolean {
+  if (!fs.existsSync(absPath)) {
+    fs.writeFileSync(absPath, currentContent, 'utf-8');
+    return false;
+  }
+  if (!fs.statSync(absPath).isFile()) return false;
+
+  const existingContent = fs.readFileSync(absPath, 'utf-8');
+  if (existingContent === currentContent) return false;
+
+  const descriptor = getMindSystemScaffoldDescriptor(relativePath);
+  if (!descriptor?.knownDefaultContents.includes(existingContent)) return false;
+
+  fs.writeFileSync(absPath, descriptor.currentContent, 'utf-8');
+  return true;
 }
