@@ -10,6 +10,7 @@ import { TableView } from './TableView';
 import { GalleryView } from './GalleryView';
 import { BoardView } from './BoardView';
 import { ConfigPanel } from './ConfigPanel';
+import { cn } from '@/lib/utils';
 
 const VIEW_TABS: { id: ViewType; icon: React.ReactNode; label: string }[] = [
   { id: 'table',   icon: <Table2 size={13} />,    label: 'Table' },
@@ -33,26 +34,28 @@ export function CsvRenderer({ filePath, content, saveAction }: RendererContext) 
     <div className="w-full py-2">
       {/* Toolbar */}
       <div className="flex items-center gap-2 mb-4 relative">
-        <div className="flex items-center gap-0.5 p-1 rounded-lg" style={{ background: 'var(--muted)' }}>
+        <div className="flex items-center gap-0.5 rounded-lg bg-muted p-1">
           {VIEW_TABS.map(tab => (
             <button key={tab.id} onClick={() => updateConfig({ ...cfg, activeView: tab.id })}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-colors font-display"
-              style={{
-                background: view === tab.id ? 'var(--card)' : 'transparent',
-                color: view === tab.id ? 'var(--foreground)' : 'var(--muted-foreground)',
-                boxShadow: view === tab.id ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-              }}
+              className={cn(
+                'flex items-center gap-1.5 rounded px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                view === tab.id
+                  ? 'bg-card text-foreground shadow-sm'
+                  : 'text-muted-foreground hover:bg-card/50 hover:text-foreground',
+              )}
             >{tab.icon}{tab.label}</button>
           ))}
         </div>
         <div className="flex-1" />
-        <span className="text-xs font-display" style={{ color: 'var(--muted-foreground)', opacity: 0.5 }}>
+        <span className="text-xs tabular-nums text-muted-foreground/50">
           {rows.length} rows
         </span>
         <div className="relative">
           <button onClick={() => setShowConfig(v => !v)}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs transition-colors"
-            style={{ background: showConfig ? 'var(--accent)' : 'var(--muted)', color: showConfig ? 'var(--foreground)' : 'var(--muted-foreground)' }}
+            className={cn(
+              'flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+              showConfig ? 'bg-accent text-foreground' : 'bg-muted text-muted-foreground hover:text-foreground',
+            )}
             title="View settings"
           ><Settings2 size={13} /></button>
           {showConfig && (

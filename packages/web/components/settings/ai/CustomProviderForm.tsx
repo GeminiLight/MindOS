@@ -8,6 +8,7 @@ import { PROVIDER_PRESETS } from '@/lib/agent/providers';
 import { useCustomProviderForm } from '../useCustomProviderForm';
 import CustomProviderFields from '../CustomProviderFields';
 import { TestButton } from '../TestButton';
+import { Button } from '@/components/ui/button';
 
 export function CustomProviderForm({
   onSave, onCancel, t, existingNames,
@@ -90,15 +91,17 @@ export function CustomProviderForm({
           >
             {locale === 'zh' ? '取消' : 'Cancel'}
           </button>
-          <button
+          <Button
+            variant="amber"
+            size="lg"
             type="button"
             onClick={form.handleSave}
             disabled={!form.canSave}
-            className="inline-flex h-9 min-w-20 items-center justify-center gap-1.5 rounded-lg bg-[var(--amber)] px-4 text-sm font-semibold text-[var(--amber-foreground)] transition-colors hover:bg-[var(--amber)]/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40"
+            className="min-w-20 gap-1.5 font-semibold disabled:cursor-not-allowed disabled:opacity-40"
           >
             <Check size={14} />
             {locale === 'zh' ? '保存' : 'Save'}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

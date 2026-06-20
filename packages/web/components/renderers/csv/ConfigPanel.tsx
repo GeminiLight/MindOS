@@ -3,6 +3,7 @@
 import { X } from 'lucide-react';
 import CustomSelect from '@/components/CustomSelect';
 import type { CsvConfig, ViewType } from './types';
+import { cn } from '@/lib/utils';
 
 export function ConfigPanel({ headers, cfg, view, onClose, onChange }: {
   headers: string[];
@@ -11,12 +12,10 @@ export function ConfigPanel({ headers, cfg, view, onClose, onChange }: {
   onClose: () => void;
   onChange: (cfg: CsvConfig) => void;
 }) {
-  const labelStyle: React.CSSProperties = { color: 'var(--muted-foreground)', fontSize: '0.72rem' };
-
   function FieldSelect({ label, value, onChange: onCh }: { label: string; value: string; onChange: (v: string) => void }) {
     return (
       <div className="flex items-center justify-between gap-2">
-        <span className="font-display" style={labelStyle}>{label}</span>
+        <span className="font-mono text-[0.72rem] text-muted-foreground">{label}</span>
         <CustomSelect
           value={value}
           onChange={onCh}
@@ -31,60 +30,59 @@ export function ConfigPanel({ headers, cfg, view, onClose, onChange }: {
   }
 
   return (
-    <div className="absolute right-0 top-10 z-20 w-72 rounded-xl border shadow-xl p-4 flex flex-col gap-3"
-      style={{ background: 'var(--card)', borderColor: 'var(--border)' }}
-    >
+    <div className="absolute right-0 top-10 z-20 flex w-72 flex-col gap-3 rounded-xl border border-border bg-card p-4 shadow-xl">
       <div className="flex items-center justify-between">
-        <span className="text-xs font-semibold uppercase tracking-wider" style={labelStyle}>{view} settings</span>
-        <button onClick={onClose} style={{ color: 'var(--muted-foreground)' }}><X size={13} /></button>
+        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{view} settings</span>
+        <button onClick={onClose} className="rounded text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><X size={13} /></button>
       </div>
 
       {view === 'table' && (
         <>
-          <div className="h-px" style={{ background: 'var(--border)' }} />
-          <p className="text-xs font-semibold uppercase tracking-wider" style={labelStyle}>Sort</p>
+          <div className="h-px bg-border" />
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Sort</p>
           <FieldSelect label="Sort by" value={cfg.table.sortField}
             onChange={v => onChange({ ...cfg, table: { ...cfg.table, sortField: v } })} />
           <div className="flex items-center justify-between gap-2">
-            <span style={labelStyle}>Direction</span>
-            <div className="flex rounded overflow-hidden border" style={{ borderColor: 'var(--border)' }}>
+            <span className="text-[0.72rem] text-muted-foreground">Direction</span>
+            <div className="flex overflow-hidden rounded border border-border">
               {(['asc', 'desc'] as const).map(d => (
                 <button key={d} onClick={() => onChange({ ...cfg, table: { ...cfg.table, sortDir: d } })}
-                  className="px-3 py-1 text-xs transition-colors font-display"
-                  style={{
-                    fontSize: '0.72rem',
-                    background: cfg.table.sortDir === d ? 'var(--amber)' : 'var(--background)',
-                    color: cfg.table.sortDir === d ? 'var(--amber-foreground)' : 'var(--muted-foreground)',
-                  }}
+                  className={cn(
+                    'px-3 py-1 text-[0.72rem] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                    cfg.table.sortDir === d
+                      ? 'bg-[var(--amber)] text-[var(--amber-foreground)]'
+                      : 'bg-background text-muted-foreground hover:bg-muted hover:text-foreground',
+                  )}
                 >{d}</button>
               ))}
             </div>
           </div>
 
-          <div className="h-px" style={{ background: 'var(--border)' }} />
-          <p className="text-xs font-semibold uppercase tracking-wider" style={labelStyle}>Group</p>
+          <div className="h-px bg-border" />
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Group</p>
           <FieldSelect label="Group by" value={cfg.table.groupField}
             onChange={v => onChange({ ...cfg, table: { ...cfg.table, groupField: v } })} />
 
-          <div className="h-px" style={{ background: 'var(--border)' }} />
-          <p className="text-xs font-semibold uppercase tracking-wider" style={labelStyle}>Columns</p>
+          <div className="h-px bg-border" />
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Columns</p>
           <div className="flex flex-col gap-1.5">
             {headers.map(h => {
               const hidden = cfg.table.hiddenFields.includes(h);
               return (
                 <div key={h} className="flex items-center justify-between">
-                  <span style={labelStyle}>{h}</span>
+                  <span className="text-[0.72rem] text-muted-foreground">{h}</span>
                   <button onClick={() => {
                     const next = hidden
                       ? cfg.table.hiddenFields.filter(f => f !== h)
                       : [...cfg.table.hiddenFields, h];
                     onChange({ ...cfg, table: { ...cfg.table, hiddenFields: next } });
                   }}
-                    className="text-xs px-2 py-0.5 rounded transition-colors font-display"
-                    style={{
-                      background: hidden ? 'var(--muted)' : 'var(--amber-dim)',
-                      color: hidden ? 'var(--muted-foreground)' : 'var(--amber)',
-                    }}
+                    className={cn(
+                      'rounded px-2 py-0.5 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                      hidden
+                        ? 'bg-muted text-muted-foreground hover:text-foreground'
+                        : 'bg-[var(--amber-dim)] text-[var(--amber-text)]',
+                    )}
                   >{hidden ? 'Hidden' : 'Visible'}</button>
                 </div>
               );

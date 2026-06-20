@@ -12,6 +12,7 @@ import type { SelectItem } from '@/components/CustomSelect';
 import AgentInstall from './McpAgentInstall';
 import McpPortSection from './McpPortSection';
 import { SettingCard } from './Primitives';
+import { Button } from '@/components/ui/button';
 
 export function useCopyField() {
   const [copiedField, setCopiedField] = useState<string | null>(null);
@@ -412,9 +413,9 @@ function McpStatusInline({ status, restarting, onRestart, onRefresh, m }: {
       </div>
       <div className="flex items-center gap-1.5">
         {!status.running && !restarting && (
-          <button onClick={onRestart} className="flex items-center gap-1 px-2 py-1 text-2xs rounded-md font-medium text-[var(--amber-foreground)] bg-[var(--amber)] transition-colors">
+          <Button variant="amber" size="xs" onClick={onRestart} className="gap-1 text-2xs">
             <RotateCcw size={11} /> {m?.restart ?? 'Restart'}
-          </button>
+          </Button>
         )}
         <button onClick={onRefresh} className="p-1 rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
           <RefreshCw size={11} />

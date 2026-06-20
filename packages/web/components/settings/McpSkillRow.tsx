@@ -6,6 +6,7 @@ import dynamic from 'next/dynamic';
 import { isAgentOwnedSkillOrigin, type SkillInfo, type SkillMatrix, type SettingsMcpMessages } from './types';
 import { isBuiltinSkillOrigin, skillSourceFolder } from '@/lib/skill-source';
 import SkillAgentChips from './McpSkillAgentChips';
+import { Button } from '@/components/ui/button';
 
 const MarkdownView = dynamic(() => import('@/components/MarkdownView'), { ssr: false });
 
@@ -134,14 +135,16 @@ export default function SkillRow({
                     className="w-full px-2.5 py-1.5 text-xs rounded-md border border-border bg-background text-foreground outline-none focus-visible:ring-1 focus-visible:ring-ring resize-y font-mono"
                   />
                   <div className="flex items-center gap-2">
-                    <button
+                    <Button
+                      variant="amber"
+                      size="xs"
                       onClick={() => onEditSave(skill.name)}
                       disabled={saving}
-                      className="flex items-center gap-1 px-2.5 py-1 text-xs rounded-md disabled:opacity-40 disabled:cursor-not-allowed transition-colors bg-[var(--amber)] text-[var(--amber-foreground)]"
+                      className="gap-1 disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       {saving && <Loader2 size={10} className="animate-spin" />}
                       {m?.saveSkill ?? 'Save'}
-                    </button>
+                    </Button>
                     <button
                       onClick={onEditCancel}
                       className="px-2.5 py-1 text-xs rounded-md border border-border text-muted-foreground hover:text-foreground transition-colors"

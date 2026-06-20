@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { X, Plus, Loader2, AlertCircle } from 'lucide-react';
 import type { SettingsMcpMessages } from './types';
+import { Button } from '@/components/ui/button';
 
 const skillFrontmatter = (n: string) => `---
 name: ${n}
@@ -158,14 +159,16 @@ export default function SkillCreateForm({ onSave, onCancel, saving, error, m }: 
         </p>
       )}
       <div className="flex items-center gap-2">
-        <button
+        <Button
+          variant="amber"
+          size="xs"
           onClick={() => onSave(newName.trim(), newContent || getTemplate(newName.trim() || 'my-skill'))}
           disabled={!newName.trim() || saving}
-          className="flex items-center gap-1 px-2.5 py-1 text-xs rounded-md disabled:opacity-40 disabled:cursor-not-allowed transition-colors bg-[var(--amber)] text-[var(--amber-foreground)]"
+          className="gap-1 disabled:cursor-not-allowed disabled:opacity-40"
         >
           {saving && <Loader2 size={10} className="animate-spin" />}
           {m?.saveSkill ?? 'Save'}
-        </button>
+        </Button>
         <button
           onClick={onCancel}
           className="px-2.5 py-1 text-xs rounded-md border border-border text-muted-foreground hover:text-foreground transition-colors"

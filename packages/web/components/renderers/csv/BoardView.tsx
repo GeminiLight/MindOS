@@ -3,7 +3,9 @@
 import { useState, useMemo, useEffect } from 'react';
 import { Plus } from 'lucide-react';
 import type { BoardConfig } from './types';
-import { serializeCSV, tagColor } from './types';
+import { serializeCSV, tagTone } from './types';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
 export function BoardView({ headers, rows, cfg, saveAction }: {
   headers: string[];
@@ -44,18 +46,20 @@ export function BoardView({ headers, rows, cfg, saveAction }: {
 
   function Column({ group }: { group: string }) {
     const cards = groups.get(group) ?? [];
-    const tc = tagColor(group);
+    const tone = tagTone(group);
     const isOver = dragOver === group;
     return (
       <div className="flex-shrink-0 w-64 flex flex-col gap-2">
         <div className="flex items-center gap-2 px-1 py-1.5">
-          <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: tc.text }} />
-          <span className="text-xs font-semibold uppercase tracking-wider truncate font-display" style={{ color: tc.text }}>{group}</span>
-          <span className="text-xs ml-auto shrink-0" style={{ color: 'var(--muted-foreground)', opacity: 0.5 }}>{cards.length}</span>
+          <span className={cn('h-2.5 w-2.5 shrink-0 rounded-full', tone.dot)} />
+          <span className={cn('truncate font-mono text-xs font-semibold uppercase tracking-wider', tone.text)}>{group}</span>
+          <span className="ml-auto shrink-0 text-xs tabular-nums text-muted-foreground/50">{cards.length}</span>
         </div>
         <div
-          className="flex flex-col gap-2 rounded-xl p-1.5 min-h-[80px] transition-colors"
-          style={{ background: isOver ? 'var(--amber-dim)' : 'var(--muted)', border: `1px solid ${isOver ? 'var(--amber)' : 'transparent'}` }}
+          className={cn(
+            'flex min-h-[80px] flex-col gap-2 rounded-lg border p-1.5 transition-colors',
+            isOver ? 'border-[var(--amber)] bg-[var(--amber-dim)]' : 'border-transparent bg-muted',
+          )}
           onDragOver={e => { e.preventDefault(); setDragOver(group); }}
           onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOver(null); }}
           onDrop={e => {
@@ -71,18 +75,15 @@ export function BoardView({ headers, rows, cfg, saveAction }: {
               <div key={origIdx} draggable
                 onDragStart={e => { e.dataTransfer.setData('origIdx', String(origIdx)); setDragOver(null); }}
                 onDragEnd={() => setDragOver(null)}
-                className="rounded-lg border p-3 flex flex-col gap-1.5 cursor-grab active:cursor-grabbing hover:bg-muted/50 transition-colors"
-                style={{ borderColor: 'var(--border)', background: 'var(--card)' }}
+                className="flex cursor-grab flex-col gap-1.5 rounded-lg border border-border bg-card p-3 transition-colors hover:bg-muted/50 active:cursor-grabbing"
               >
-                <p className="text-sm font-medium leading-snug" style={{ color: 'var(--foreground)' }}>{title}</p>
-                {desc && <p className="text-xs leading-relaxed line-clamp-2" style={{ color: 'var(--muted-foreground)' }}>{desc}</p>}
+                <p className="text-sm font-medium leading-snug text-foreground">{title}</p>
+                {desc && <p className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">{desc}</p>}
                 <div className="flex flex-wrap gap-1 mt-0.5">
                   {headers.map((h, ci) => {
                     if (ci === groupIdx || ci === titleIdx || ci === descIdx) return null;
                     const v = row[ci]; if (!v) return null;
-                    return <span key={ci} className="text-2xs px-1.5 py-0.5 rounded font-display"
-                      style={{ background: 'var(--muted)', color: 'var(--muted-foreground)' }}
-                    >{h}: {v}</span>;
+                    return <span key={ci} className="rounded bg-muted px-1.5 py-0.5 font-mono text-2xs text-muted-foreground">{h}: {v}</span>;
                   })}
                 </div>
               </div>
@@ -90,7 +91,7 @@ export function BoardView({ headers, rows, cfg, saveAction }: {
           })}
           {cards.length === 0 && (
             <div className="flex items-center justify-center h-12">
-              <span className="text-xs" style={{ color: 'var(--muted-foreground)', opacity: 0.4 }}>Drop here</span>
+              <span className="text-xs text-muted-foreground/40">Drop here</span>
             </div>
           )}
         </div>
@@ -105,7 +106,7 @@ export function BoardView({ headers, rows, cfg, saveAction }: {
       {/* New column */}
       <div className="flex-shrink-0 w-64">
         {showNewCol ? (
-          <div className="rounded-xl border p-3 flex flex-col gap-2" style={{ borderColor: 'var(--border)', background: 'var(--card)' }}>
+          <div className="flex flex-col gap-2 rounded-lg border border-border bg-card p-3">
             <input autoFocus value={newColInput} onChange={e => setNewColInput(e.target.value)}
               onKeyDown={e => {
                 if (e.key === 'Enter' && newColInput.trim()) {
@@ -115,27 +116,21 @@ export function BoardView({ headers, rows, cfg, saveAction }: {
                 if (e.key === 'Escape') { setNewColInput(''); setShowNewCol(false); }
               }}
               placeholder="Column name…"
-              className="text-xs bg-transparent outline-none w-full font-display"
-              style={{ color: 'var(--foreground)', borderBottom: '1px solid var(--amber)' }}
+              className="w-full border-b border-[var(--amber)] bg-transparent font-mono text-xs text-foreground outline-none"
             />
             <div className="flex gap-2">
-              <button onClick={() => {
+              <Button variant="amber" size="xs" onClick={() => {
                 setNewColInput('');
                 setShowNewCol(false);
-              }}
-                className="text-xs px-2 py-1 rounded font-display"
-                style={{ background: 'var(--amber)', color: 'var(--amber-foreground)' }}
-              >Create</button>
+              }}>Create</Button>
               <button onClick={() => { setNewColInput(''); setShowNewCol(false); }}
-                className="text-xs px-2 py-1 rounded font-display"
-                style={{ color: 'var(--muted-foreground)' }}
+                className="rounded px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >Cancel</button>
             </div>
           </div>
         ) : (
           <button onClick={() => setShowNewCol(true)}
-            className="flex items-center gap-1.5 text-xs px-3 py-2 rounded-xl border border-dashed w-full transition-colors hover:bg-muted font-display"
-            style={{ borderColor: 'var(--border)', color: 'var(--muted-foreground)' }}
+            className="flex w-full items-center gap-1.5 rounded-lg border border-dashed border-border px-3 py-2 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <Plus size={12} /> Add column
           </button>

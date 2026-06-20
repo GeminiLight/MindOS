@@ -7,6 +7,7 @@ import { toast } from '@/lib/toast';
 import { useLocale } from '@/lib/stores/locale-store';
 import type { AiTabProps } from '../types';
 import { Field, Input, PasswordInput, SettingCard, SettingRow, Toggle } from '../Primitives';
+import { Button } from '@/components/ui/button';
 
 type EmbeddingSettings = NonNullable<AiTabProps['data']['embedding']>;
 type LocalModelOption = {
@@ -323,14 +324,16 @@ export function EmbeddingSearchCard({ data, setData, t }: {
               </Field>
 
               {localModelDownloaded === false && downloadState === 'idle' && (
-                <button
+                <Button
+                  variant="amber"
+                  size="lg"
                   type="button"
                   onClick={handleDownloadModel}
-                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-[var(--amber)] text-[var(--amber-foreground)] hover:opacity-90 transition-opacity"
+                  className="gap-2"
                 >
                   <Download size={14} />
                   {e.downloadModel as string ?? 'Install Runtime & Download Model'}
-                </button>
+                </Button>
               )}
               {downloadState === 'starting' && (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">

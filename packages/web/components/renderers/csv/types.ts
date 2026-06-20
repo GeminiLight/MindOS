@@ -71,17 +71,47 @@ export function serializeCSV(headers: string[], rows: string[][]) {
 
 // ─── Tag color ────────────────────────────────────────────────────────────────
 
-const TAG_COLORS = [
-  { bg: 'rgba(200,135,58,0.12)', text: 'var(--amber)' },
-  { bg: 'rgba(122,173,128,0.12)', text: 'var(--success)' },
-  { bg: 'rgba(138,180,216,0.12)', text: 'var(--tool-read)' },
-  { bg: 'rgba(200,160,216,0.12)', text: 'var(--tool-search)' },
-  { bg: 'rgba(200,96,96,0.12)', text: 'var(--error)' },
-  { bg: 'rgba(150,150,150,0.12)', text: 'var(--muted-foreground)' },
+export interface TagTone {
+  badge: string;
+  dot: string;
+  text: string;
+}
+
+const TAG_TONES: TagTone[] = [
+  {
+    badge: 'bg-[var(--amber-subtle)] text-[var(--amber-text)]',
+    dot: 'bg-[var(--amber)]',
+    text: 'text-[var(--amber)]',
+  },
+  {
+    badge: 'bg-success/10 text-success',
+    dot: 'bg-success',
+    text: 'text-success',
+  },
+  {
+    badge: 'bg-[var(--tool-read)]/10 text-[var(--tool-read)]',
+    dot: 'bg-[var(--tool-read)]',
+    text: 'text-[var(--tool-read)]',
+  },
+  {
+    badge: 'bg-[var(--tool-search)]/10 text-[var(--tool-search)]',
+    dot: 'bg-[var(--tool-search)]',
+    text: 'text-[var(--tool-search)]',
+  },
+  {
+    badge: 'bg-error/10 text-error',
+    dot: 'bg-error',
+    text: 'text-error',
+  },
+  {
+    badge: 'bg-muted text-muted-foreground',
+    dot: 'bg-muted-foreground/50',
+    text: 'text-muted-foreground',
+  },
 ];
 
-export function tagColor(val: string) {
+export function tagTone(val: string): TagTone {
   let h = 0;
   for (let i = 0; i < val.length; i++) h = (h * 31 + val.charCodeAt(i)) & 0xffff;
-  return TAG_COLORS[h % TAG_COLORS.length];
+  return TAG_TONES[h % TAG_TONES.length];
 }

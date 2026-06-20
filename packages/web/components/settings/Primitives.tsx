@@ -2,6 +2,8 @@
 
 import React, { useState, useRef, useEffect, useCallback, useMemo, useId } from 'react';
 import { ChevronDown, Check, Eye, EyeOff } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
 export function SectionLabel({ children }: { children: React.ReactNode }) {
   return <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">{children}</p>;
@@ -237,15 +239,17 @@ export function PrimaryButton({ children, disabled, onClick, type = 'button', cl
   className?: string;
 } & React.ButtonHTMLAttributes<HTMLButtonElement>) {
   return (
-    <button
+    <Button
       type={type}
       onClick={onClick}
       disabled={disabled}
-      className={`px-4 py-2 text-sm font-medium rounded-lg bg-[var(--amber)] text-[var(--amber-foreground)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${className}`}
+      variant="amber"
+      size="lg"
+      className={cn('disabled:cursor-not-allowed disabled:opacity-40', className)}
       {...props}
     >
       {children}
-    </button>
+    </Button>
   );
 }
 

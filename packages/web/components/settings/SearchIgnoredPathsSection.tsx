@@ -5,6 +5,7 @@ import { Check, Loader2, RotateCcw, Save, SearchX } from 'lucide-react';
 import type { KnowledgeTabProps } from './types';
 import { SettingCard } from './Primitives';
 import { saveSettingsPatch } from './settings-save';
+import { Button } from '@/components/ui/button';
 
 const DEFAULT_PREVIEW_RULES = ['node_modules', '.git', 'dist', '.next', '.mindos'];
 
@@ -131,15 +132,17 @@ export function SearchIgnoredPathsSection({ data, setData, t }: KnowledgeTabProp
               <RotateCcw size={12} />
               {(k.searchIgnoredReset as string) ?? 'Reset'}
             </button>
-            <button
+            <Button
+              variant="amber"
+              size="sm"
               type="button"
               onClick={() => void save()}
               disabled={!dirty || saving}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--amber)] px-3 py-1.5 text-xs font-medium text-[var(--amber-foreground)] transition-colors disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="gap-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-40"
             >
               {saving ? <Loader2 size={12} className="animate-spin" /> : saved ? <Check size={12} /> : <Save size={12} />}
               {(k.searchIgnoredSave as string) ?? 'Save'}
-            </button>
+            </Button>
           </div>
         </div>
       </div>

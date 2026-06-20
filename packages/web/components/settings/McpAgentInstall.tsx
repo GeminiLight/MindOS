@@ -10,6 +10,7 @@ import { SKILL_AGENT_REGISTRY } from '@/lib/mcp-agent-registry';
 import { toast } from '@/lib/toast';
 import { PasswordInput } from './Primitives';
 import type { AgentInfo, McpAgentInstallProps, SettingsMcpMessages } from './types';
+import { Button } from '@/components/ui/button';
 
 /* ── Agent Install ─────────────────────────────────────────────── */
 
@@ -253,11 +254,16 @@ export default function AgentInstall({ agents, t, onRefresh, mode = 'mcp', activ
       )}
 
       {/* Install button */}
-      <button onClick={handleMcpInstall} disabled={selectedInstallableKeys.length === 0 || installing}
-        className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed bg-[var(--amber)] text-[var(--amber-foreground)]">
+      <Button
+        variant="amber"
+        size="sm"
+        onClick={handleMcpInstall}
+        disabled={selectedInstallableKeys.length === 0 || installing}
+        className="gap-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-40"
+      >
         {installing && <Loader2 size={12} className="animate-spin" />}
         {installing ? (m?.installing ?? 'Installing...') : (m?.installSelected ?? 'Install Selected')}
-      </button>
+      </Button>
 
       {/* Message */}
       {message && (
