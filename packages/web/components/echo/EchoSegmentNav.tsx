@@ -2,7 +2,7 @@
 
 import type { ReactNode } from 'react';
 import Link from 'next/link';
-import { Footprints, Brain, Eye } from 'lucide-react';
+import { Footprints, GitBranch, LayoutDashboard, Sprout } from 'lucide-react';
 import { useLocale } from '@/lib/stores/locale-store';
 import { cn } from '@/lib/utils';
 import { ECHO_SEGMENT_HREF, ECHO_SEGMENT_ORDER, type EchoSegment } from '@/lib/echo-segments';
@@ -13,12 +13,14 @@ function segmentMeta(
   echo: ReturnType<typeof useLocale>['t']['panels']['echo'],
 ): { label: string; icon: ReactNode } {
   switch (segment) {
+    case 'overview':
+      return { label: echo.overviewTitle, icon: <LayoutDashboard size={14} /> };
     case 'imprint':
       return { label: echo.imprintTitle, icon: <Footprints size={14} /> };
+    case 'threads':
+      return { label: echo.threadsTitle, icon: <GitBranch size={14} /> };
     case 'growth':
-      return { label: echo.growthTitle, icon: <Brain size={14} /> };
-    case 'self':
-      return { label: echo.selfTitle, icon: <Eye size={14} /> };
+      return { label: echo.growthTitle, icon: <Sprout size={14} /> };
   }
 }
 

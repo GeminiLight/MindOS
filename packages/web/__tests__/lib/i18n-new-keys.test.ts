@@ -295,9 +295,12 @@ describe('i18n agents content IA', () => {
 describe('i18n echo panel', () => {
   const echoKeys = [
     'title',
+    'overviewTitle',
     'imprintTitle',
+    'threadsTitle',
     'growthTitle',
-    'selfTitle',
+    'overviewDesc',
+    'threadsDesc',
   ] as const;
 
   it('en has all echo keys', () => {

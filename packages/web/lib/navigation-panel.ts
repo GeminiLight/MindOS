@@ -52,9 +52,9 @@ export function getPendingHomePanel(
 export const ROUTE_PANEL_HREF: Record<RoutePanelId, string> = {
   files: '/wiki',
   capture: '/capture',
-  // Must be a valid echo segment (see ECHO_SEGMENT_IDS) — 'about-you' is not
-  // one, so '/echo/about-you' 404s via app/echo/[segment] notFound().
-  echo: '/echo/imprint',
+  // Must be a valid echo segment (see ECHO_SEGMENT_IDS) so app/echo/[segment]
+  // can validate the route before rendering.
+  echo: '/echo/overview',
   agents: '/agents',
   studio: '/studio',
   discover: '/explore',

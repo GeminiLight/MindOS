@@ -57,7 +57,7 @@ describe('HomePage default route', () => {
     expect(html).toContain('data-testid="home-content"');
     expect(html).toContain('data-recent-count="1"');
     expect(html).toContain('data-space-count="1"');
-    expect(html).not.toContain('href="/echo/imprint"');
+    expect(html).not.toContain('href="/echo/overview"');
   });
 
   it('keeps setup as the first-run destination', () => {

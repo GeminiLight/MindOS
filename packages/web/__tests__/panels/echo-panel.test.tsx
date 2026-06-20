@@ -4,7 +4,7 @@ import EchoPanel from '@/components/panels/EchoPanel';
 import { messages } from '@/lib/i18n';
 
 const routeState = vi.hoisted(() => ({
-  pathname: '/echo/imprint',
+  pathname: '/echo/overview',
 }));
 
 vi.mock('next/navigation', () => ({
@@ -17,11 +17,11 @@ vi.mock('@/lib/stores/locale-store', () => ({
 
 describe('EchoPanel sidebar navigation', () => {
   it('marks the active Echo segment with the primary sidebar rail style', () => {
-    routeState.pathname = '/echo/imprint';
+    routeState.pathname = '/echo/overview';
 
     const html = renderToStaticMarkup(<EchoPanel active maximized={false} />);
 
-    expect(html).toMatch(/<a[^>]*aria-current="page"[^>]*href="\/echo\/imprint"/);
+    expect(html).toMatch(/<a[^>]*aria-current="page"[^>]*href="\/echo\/overview"/);
     expect(html).toContain('w-[3px] rounded-r-full bg-[var(--amber)]');
     expect(html).toContain('bg-[var(--amber-subtle)]');
     expect(html).not.toContain('border-[var(--amber)]/35 bg-[var(--amber-dim)]/45');
@@ -29,7 +29,7 @@ describe('EchoPanel sidebar navigation', () => {
   });
 
   it('uses the shared primary sidebar nav spacing under the panel header', () => {
-    routeState.pathname = '/echo/imprint';
+    routeState.pathname = '/echo/overview';
 
     const html = renderToStaticMarkup(<EchoPanel active maximized={false} />);
 
@@ -43,12 +43,13 @@ describe('EchoPanel sidebar navigation', () => {
     const html = renderToStaticMarkup(<EchoPanel active maximized={false} />);
 
     expect(html).toMatch(/<a[^>]*aria-current="page"[^>]*href="\/echo\/growth"/);
+    expect(html).toMatch(/<a(?![^>]*aria-current="page")[^>]*href="\/echo\/overview"/);
     expect(html).toMatch(/<a(?![^>]*aria-current="page")[^>]*href="\/echo\/imprint"/);
-    expect(html).toMatch(/<a(?![^>]*aria-current="page")[^>]*href="\/echo\/self"/);
+    expect(html).toMatch(/<a(?![^>]*aria-current="page")[^>]*href="\/echo\/threads"/);
   });
 
   it('does not expose a fullscreen control in the Echo sidebar header', () => {
-    routeState.pathname = '/echo/imprint';
+    routeState.pathname = '/echo/overview';
 
     const html = renderToStaticMarkup(<EchoPanel active maximized={false} onMaximize={() => {}} />);
 
@@ -57,7 +58,7 @@ describe('EchoPanel sidebar navigation', () => {
   });
 
   it('does not render the legacy Recent stats section', () => {
-    routeState.pathname = '/echo/imprint';
+    routeState.pathname = '/echo/overview';
 
     const html = renderToStaticMarkup(<EchoPanel active maximized={false} />);
 

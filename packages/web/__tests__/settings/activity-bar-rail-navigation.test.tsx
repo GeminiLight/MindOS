@@ -155,7 +155,7 @@ describe('ActivityBar rail navigation', () => {
 
     const echoButton = host.querySelector('[data-walkthrough="echo-panel"]');
     expect(echoButton).not.toBeNull();
-    expect(echoButton?.getAttribute('href')).toBe('/echo/imprint');
+    expect(echoButton?.getAttribute('href')).toBe('/echo/overview');
 
     await act(async () => {
       root.unmount();
@@ -419,7 +419,7 @@ describe('ActivityBar rail navigation', () => {
   });
 
   it('can suppress route-derived rail active state while Home navigation is pending', async () => {
-    mockPathname = '/echo/imprint';
+    mockPathname = '/echo/overview';
     const ActivityBar = (await import('@/components/ActivityBar')).default;
 
     const host = document.createElement('div');
@@ -453,7 +453,7 @@ describe('ActivityBar rail navigation', () => {
   });
 
   it('clicking the rail logo from Echo opens Home instead of Echo or Wiki', async () => {
-    mockPathname = '/echo/imprint';
+    mockPathname = '/echo/overview';
     const mockPanelChange = vi.fn();
     const ActivityBar = (await import('@/components/ActivityBar')).default;
 
@@ -486,7 +486,7 @@ describe('ActivityBar rail navigation', () => {
     await flushSmoothNavigation();
     expect(mockRouterPush).toHaveBeenCalledWith('/');
     expect(mockRouterPush).not.toHaveBeenCalledWith('/wiki');
-    expect(mockRouterPush).not.toHaveBeenCalledWith('/echo/imprint');
+    expect(mockRouterPush).not.toHaveBeenCalledWith('/echo/overview');
 
     await act(async () => {
       root.unmount();

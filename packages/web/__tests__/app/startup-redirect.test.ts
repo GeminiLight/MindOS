@@ -49,7 +49,7 @@ describe('startup redirects', () => {
 
   it('defaultEchoPath points at the default echo segment route', () => {
     expect(defaultEchoPath()).toBe(`/echo/${defaultEchoSegment()}`);
-    expect(defaultEchoPath()).toBe('/echo/imprint');
+    expect(defaultEchoPath()).toBe('/echo/overview');
   });
 
   it('/ renders the home page (no redirect to echo) when setup is complete', () => {

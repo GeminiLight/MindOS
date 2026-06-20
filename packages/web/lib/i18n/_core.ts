@@ -1,5 +1,5 @@
 /**
- * Recursively widen literal string types to `string` so zh values can differ from en.
+ * Recursively widen literal scalar types so zh values can differ from en.
  *
  * Without Widen<T>, TypeScript would require zh strings to be the *exact* literal values from en.
  * E.g., if en has `common: { hello: "hello" as const }`, zh would be required to also have "hello".
@@ -16,6 +16,8 @@
  */
 export type Widen<T> =
   T extends string ? string :
+  T extends number ? number :
+  T extends boolean ? boolean :
   T extends readonly (infer U)[] ? readonly Widen<U>[] :
   T extends (...args: infer A) => infer R ? (...args: A) => Widen<R> :
   T extends object ? { [K in keyof T]: Widen<T[K]> } :

@@ -2,7 +2,7 @@
 
 import type { ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
-import { Footprints, Brain, Eye } from 'lucide-react';
+import { Footprints, GitBranch, LayoutDashboard, Sprout } from 'lucide-react';
 import PanelHeader from './PanelHeader';
 import { PANEL_NAV_STACK_CLASS, PanelNavRow } from './PanelNavRow';
 import { useLocale } from '@/lib/stores/locale-store';
@@ -19,10 +19,11 @@ export default function EchoPanel({ active }: EchoPanelProps) {
   const e = t.panels.echo;
   const pathname = usePathname() ?? '';
 
-  const rowBySegment: Record<EchoSegment, { icon: ReactNode; title: string }> = {
-    imprint: { icon: <Footprints size={14} />, title: e.imprintTitle },
-    growth: { icon: <Brain size={14} />, title: e.growthTitle },
-    self: { icon: <Eye size={14} />, title: e.selfTitle },
+  const rowBySegment: Record<EchoSegment, { icon: ReactNode; title: string; subtitle: string }> = {
+    overview: { icon: <LayoutDashboard size={14} />, title: e.overviewTitle, subtitle: e.overviewDesc },
+    imprint: { icon: <Footprints size={14} />, title: e.imprintTitle, subtitle: e.imprintDesc },
+    threads: { icon: <GitBranch size={14} />, title: e.threadsTitle, subtitle: e.threadsDesc },
+    growth: { icon: <Sprout size={14} />, title: e.growthTitle, subtitle: e.growthDesc },
   };
 
   return (
@@ -35,7 +36,15 @@ export default function EchoPanel({ active }: EchoPanelProps) {
             const href = ECHO_SEGMENT_HREF[segment];
             const isActive = pathname === href || pathname.startsWith(`${href}/`);
             return (
-              <PanelNavRow key={segment} href={href} icon={row.icon} title={row.title} active={isActive} activeVariant="rail" />
+              <PanelNavRow
+                key={segment}
+                href={href}
+                icon={row.icon}
+                title={row.title}
+                subtitle={row.subtitle}
+                active={isActive}
+                activeVariant="rail"
+              />
             );
           })}
         </div>

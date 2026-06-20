@@ -197,7 +197,7 @@ describe('middleware — Web UI protection (WEB_PASSWORD)', () => {
     const location = new URL(res.headers.get('location') ?? '');
 
     expect(res.status).toBe(307);
-    expect(location.pathname).toBe('/echo/imprint');
+    expect(location.pathname).toBe('/echo/overview');
   });
 
   it('redirects the root page to setup during first-run setup', async () => {

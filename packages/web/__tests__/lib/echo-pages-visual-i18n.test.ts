@@ -5,13 +5,22 @@ import { zh } from '@/lib/i18n';
 /** Visual polish strings; en/zh must stay in sync. */
 const VISUAL_KEYS = [
   'segmentNavAria',
+  'backToOverviewLabel',
+  'backToOverviewAriaLabel',
   'generateInsightNoAi',
   'insightGenerating',
   'insightErrorPrefix',
   'insightRetry',
+  'overviewChatLabel',
   'imprintChatLabel',
+  'threadsChatLabel',
   'growthChatLabel',
-  'selfChatLabel',
+  'overviewLead',
+  'threadsLead',
+  'overviewOpenImprint',
+  'threadsListTitle',
+  'growthSignalsTitle',
+  'growthSaveLabel',
 ] as const;
 
 describe('echoPages visual polish i18n', () => {
