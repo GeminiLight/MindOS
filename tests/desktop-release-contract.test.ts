@@ -199,6 +199,9 @@ describe('Desktop release packaging contract', () => {
     expect(workflow).toContain('node scripts/smoke-desktop-app.mjs --skip-if-arch-mismatch --timeout 90000 --windows-runtime-only');
     expect(workflow.indexOf('Smoke packaged app')).toBeGreaterThan(workflow.indexOf('Package (${{ matrix.platform }})'));
     expect(workflow.indexOf('Upload artifacts')).toBeGreaterThan(workflow.indexOf('Smoke packaged app'));
+    expect(verifier).toContain('isPrunedStandaloneDependency');
+    expect(verifier).toContain("packageName.startsWith('@types/')");
+    expect(verifier).toContain("'caniuse-lite'");
     // mac x64 smokes under Rosetta on the arm64 runner instead of being skipped
     expect(smoke).toContain("['arch', '-x86_64']");
     expect(smoke).toContain('canRunUnderRosetta');

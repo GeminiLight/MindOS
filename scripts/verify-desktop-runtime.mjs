@@ -72,6 +72,11 @@ const fatalLogPatterns = [
   'path.join is not a function',
 ];
 
+const prunedStandaloneDependencies = new Set([
+  'caniuse-lite',
+  'typescript',
+]);
+
 const failures = [];
 
 for (const rel of requiredRuntimeFiles) {
@@ -136,6 +141,7 @@ function findMissingDependencyClosure(nodeModulesDir) {
 
     for (const dependencyName of Object.keys(pkg.dependencies ?? {})) {
       if (dependencyName.startsWith('node:')) continue;
+      if (isPrunedStandaloneDependency(dependencyName)) continue;
       const nested = join(packageDir, 'node_modules', dependencyName, 'package.json');
       const topLevel = join(nodeModulesDir, dependencyName, 'package.json');
       if (!existsSync(nested) && !existsSync(topLevel)) {
@@ -144,6 +150,10 @@ function findMissingDependencyClosure(nodeModulesDir) {
     }
   }
   return missing;
+}
+
+function isPrunedStandaloneDependency(packageName) {
+  return packageName.startsWith('@types/') || prunedStandaloneDependencies.has(packageName);
 }
 
 function listPackageNames(nodeModulesDir) {
