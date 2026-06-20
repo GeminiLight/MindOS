@@ -5,7 +5,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import HomePanel from '@/components/panels/HomePanel';
 import type { ChatSession, Message } from '@/lib/types';
 import {
+  getActiveSessionId,
   initSessions,
+  loadSession,
   resetAskSessionStoreForTests,
 } from '@/lib/ask-session-store';
 import {
@@ -141,9 +143,53 @@ describe('HomePanel', () => {
     expect(actionsLayer?.className).toContain('opacity-0');
     expect(actionsLayer?.className).toContain('group-hover:opacity-100');
     const openButton = host.querySelector('[data-home-session-row="s-codex"] button[data-home-session-open]') as HTMLButtonElement | null;
-    expect(openButton?.className).toContain('min-w-0');
-    expect(openButton?.className).toContain('flex-1');
-    expect(openButton?.className).not.toContain('pr-12');
+    expect(openButton?.className).toContain('absolute');
+    expect(openButton?.className).toContain('inset-0');
+    expect(openButton?.getAttribute('aria-label')).toBe('Investigate file tree open latency');
+    const visibleLabel = host.querySelector('[data-home-session-row="s-codex"] [data-home-session-label]') as HTMLElement | null;
+    expect(visibleLabel?.className).toContain('pointer-events-none');
+    expect(visibleLabel?.className).toContain('z-10');
+    expect(trailingSlot?.className).toContain('pointer-events-none');
+    expect(trailingSlot?.className).toContain('z-20');
+  });
+
+  it('opens Home sessions from the full-row layer without action buttons stealing selection', async () => {
+    const sessions = [
+      session({
+        id: 's-current',
+        messages: [userMsg('Current conversation')],
+      }),
+      session({
+        id: 's-target',
+        messages: [userMsg('Target conversation')],
+      }),
+    ];
+    installFetchMock(sessions);
+    await initSessions({});
+    loadSession('s-current');
+
+    await renderHomePanel();
+
+    const targetRow = host.querySelector('[data-home-session-row="s-target"]') as HTMLElement | null;
+    expect(targetRow).not.toBeNull();
+    const pinButton = targetRow!.querySelector('button[aria-label="Pin session"]') as HTMLButtonElement | null;
+    expect(pinButton).not.toBeNull();
+
+    await act(async () => {
+      pinButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(getActiveSessionId()).toBe('s-current');
+
+    const updatedTargetRow = host.querySelector('[data-home-session-row="s-target"]') as HTMLElement | null;
+    const openButton = updatedTargetRow!.querySelector('button[data-home-session-open]') as HTMLButtonElement | null;
+    expect(openButton).not.toBeNull();
+    expect(openButton?.className).toContain('absolute');
+    expect(openButton?.className).toContain('inset-0');
+
+    await act(async () => {
+      openButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(getActiveSessionId()).toBe('s-target');
   });
 
   it('filters Home sessions by agent runtime', async () => {

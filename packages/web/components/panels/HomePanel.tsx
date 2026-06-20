@@ -264,15 +264,23 @@ function HomeSessionRow({
         type="button"
         data-home-session-open
         onClick={onOpen}
-        className="flex min-w-0 flex-1 items-center gap-1.5 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        aria-label={title}
+        title={title}
+        className="absolute inset-0 z-0 cursor-pointer rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      />
+      <div
+        data-home-session-label
+        aria-hidden="true"
+        className="pointer-events-none relative z-10 flex min-w-0 flex-1 items-center gap-1.5"
       >
         <AgentMark kind={agentKind} id={session.id} active={active} />
         <span className="min-w-0 flex-1 truncate text-[12px] leading-4 text-foreground/90" title={title}>
           {title}
         </span>
-      </button>
+      </div>
       <StableRowTrailingSlot
         reserveClassName="w-14"
+        className="pointer-events-none relative z-20"
         forceActionsVisible={session.pinned}
         status={!session.pinned && hasRuntimeStatus ? (
           <SessionStatusDot
