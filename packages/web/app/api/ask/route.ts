@@ -231,6 +231,22 @@ function normalizeNativeRuntimeOptions(value: unknown): NativeRuntimeOptions {
   };
 }
 
+function normalizeMindosAgentOptions(value: unknown): { enableThinking?: boolean; thinkingBudget?: number } {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const record = value as Record<string, unknown>;
+  const options: { enableThinking?: boolean; thinkingBudget?: number } = {};
+
+  if (typeof record.enableThinking === 'boolean') {
+    options.enableThinking = record.enableThinking;
+  }
+
+  if (typeof record.thinkingBudget === 'number' && Number.isFinite(record.thinkingBudget)) {
+    options.thinkingBudget = Math.min(50000, Math.max(1000, Math.floor(record.thinkingBudget)));
+  }
+
+  return options;
+}
+
 function effectiveNativePermissionMode(
   askMode: AskModeApi,
   fallback: NativeRuntimePermissionMode,
@@ -510,6 +526,8 @@ export async function POST(req: NextRequest) {
     modelOverride?: string;
     /** Per-request native runtime controls for Codex / Claude Code. */
     runtimeOptions?: NativeRuntimeOptions;
+    /** Per-request MindOS PI agent controls. */
+    agentOptions?: { enableThinking?: boolean; thinkingBudget?: number };
     /** MindOS Chat Panel session id for run ledger correlation. */
     chatSessionId?: string;
   };
@@ -532,6 +550,7 @@ export async function POST(req: NextRequest) {
     return apiError(ErrorCodes.INVALID_REQUEST, 'mode must be agent or organize', 400);
   }
   const nativeRuntimeOptions = normalizeNativeRuntimeOptions(body.runtimeOptions);
+  const mindosAgentOptions = normalizeMindosAgentOptions(body.agentOptions);
   const permissionPolicy = createMindosAgentPermissionPolicy(
     permissionPolicyModeForRequest(askMode, nativeRuntimeOptions),
   );
@@ -619,8 +638,8 @@ export async function POST(req: NextRequest) {
     requestedMaxSteps: body.maxSteps,
     agentMaxSteps: agentConfig.maxSteps,
   });
-  const enableThinking = agentConfig.enableThinking ?? false;
-  const thinkingBudget = agentConfig.thinkingBudget ?? 5000;
+  const enableThinking = mindosAgentOptions.enableThinking ?? agentConfig.enableThinking ?? false;
+  const thinkingBudget = mindosAgentOptions.thinkingBudget ?? agentConfig.thinkingBudget ?? 5000;
   const contextStrategy = agentConfig.contextStrategy ?? 'auto';
 
   // Uploaded files — shared by all modes

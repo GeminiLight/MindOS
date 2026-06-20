@@ -13,13 +13,16 @@ import {
 
 let capturedNativeOptions: MindosAgentRuntimeAskOptions | null = null;
 let capturedAcpOptions: Record<string, any> | null = null;
+let capturedMindosRuntimeOptions: Record<string, any> | null = null;
 const mockDetectLocalAcpAgents = vi.fn();
 const mockResolveCommandPath = vi.fn();
 const mockResolveCommandPathCandidates = vi.fn();
 const mockCheckNativeRuntimeHealth = vi.fn();
 const mockRunMindosAgentRuntimeAskSession = vi.fn();
 const mockRunMindosAcpAskSession = vi.fn();
+const mockRunMindosPiAgentAskSession = vi.fn();
 const mockCreateAcpSession = vi.fn();
+const mockCreateMindosAgentRuntime = vi.fn();
 const originalAgentTimeoutMs = process.env.MINDOS_AGENT_TIMEOUT_MS;
 const RAW_CODEX_OPTIONAL_DEPENDENCY_STACK = [
   'file:///opt/homebrew/lib/node_modules/@openai/codex/bin/codex.js:102',
@@ -112,6 +115,7 @@ vi.mock('@geminilight/mindos/session', async (importOriginal) => {
   return {
     ...actual,
     runMindosAcpAskSession: mockRunMindosAcpAskSession,
+    runMindosPiAgentAskSession: mockRunMindosPiAgentAskSession,
   };
 });
 
@@ -123,9 +127,7 @@ vi.mock('@/lib/acp/session', () => ({
 }));
 
 vi.mock('@geminilight/mindos/agent/runtime/adapters/mindos', () => ({
-  createMindosAgentRuntime: vi.fn(() => {
-    throw new Error('pi runtime should not initialize for native runtime requests');
-  }),
+  createMindosAgentRuntime: mockCreateMindosAgentRuntime,
 }));
 
 function askRequest(body: unknown): NextRequest {
@@ -140,6 +142,7 @@ describe('/api/ask native runtime routing', () => {
   beforeEach(() => {
     capturedNativeOptions = null;
     capturedAcpOptions = null;
+    capturedMindosRuntimeOptions = null;
     mockDetectLocalAcpAgents.mockReset();
     mockResolveCommandPath.mockReset();
     mockResolveCommandPathCandidates.mockReset();
@@ -147,8 +150,13 @@ describe('/api/ask native runtime routing', () => {
     mockCheckNativeRuntimeHealth.mockReset();
     mockRunMindosAgentRuntimeAskSession.mockReset();
     mockRunMindosAcpAskSession.mockReset();
+    mockRunMindosPiAgentAskSession.mockReset();
     mockCreateAcpSession.mockReset();
     mockCreateAcpSession.mockResolvedValue({ id: 'acp-session-1' });
+    mockCreateMindosAgentRuntime.mockReset();
+    mockCreateMindosAgentRuntime.mockImplementation(() => {
+      throw new Error('pi runtime should not initialize for native runtime requests');
+    });
     resetNativeRuntimeDescriptorCacheForTest();
     mockRunMindosAgentRuntimeAskSession.mockImplementation(async (options: MindosAgentRuntimeAskOptions) => {
       capturedNativeOptions = options;
@@ -165,6 +173,13 @@ describe('/api/ask native runtime routing', () => {
       options.send({ type: 'done' });
       return {};
     });
+    mockRunMindosPiAgentAskSession.mockImplementation(async (options: {
+      send: (event: { type: string; delta?: string }) => void;
+    }) => {
+      options.send({ type: 'text_delta', delta: 'mindos ok' });
+      options.send({ type: 'done' });
+      return {};
+    });
     resetAgentRunsForTest();
   });
 
@@ -176,6 +191,52 @@ describe('/api/ask native runtime routing', () => {
       process.env.MINDOS_AGENT_TIMEOUT_MS = originalAgentTimeoutMs;
     }
   });
+
+  it('applies per-request MindOS agent options when creating the default PI runtime', async () => {
+    mockCreateMindosAgentRuntime.mockImplementation(async (options: Record<string, any>) => {
+      capturedMindosRuntimeOptions = options;
+      return {
+        systemPrompt: options.systemPrompt,
+        session: {
+          subscribe: vi.fn(),
+          prompt: vi.fn(),
+          steer: vi.fn(),
+          abort: vi.fn(),
+        },
+        agentRunContextResource: {},
+        llmHistoryMessages: [],
+        lastUserContent: 'Review the note',
+        lastUserImages: undefined,
+        fallbackTools: [],
+        apiKey: 'test-key',
+        modelName: 'claude-sonnet-4-20250514',
+        provider: 'anthropic',
+        baseUrl: '',
+      };
+    });
+
+    const { POST } = await import('../../app/api/ask/route');
+    const res = await POST(askRequest({
+      messages: [{ role: 'user', content: 'Review the note' }],
+      providerOverride: 'anthropic',
+      modelOverride: 'claude-sonnet-4-20250514',
+      runtimeOptions: { permissionMode: 'readonly' },
+      agentOptions: { enableThinking: true, thinkingBudget: 8000 },
+      mode: 'agent',
+    }));
+
+    expect(res.status).toBe(200);
+    expect(capturedMindosRuntimeOptions).toMatchObject({
+      providerOverride: 'anthropic',
+      modelOverride: 'claude-sonnet-4-20250514',
+      agentConfig: {
+        enableThinking: true,
+        thinkingBudget: 8000,
+        contextStrategy: 'auto',
+      },
+      allowProjectBash: false,
+    });
+  }, 15_000);
 
   it('routes Codex before MindOS pi runtime initialization and bridges MindOS context', async () => {
     mockResolveCommandPath.mockImplementation(async (command: string) => command === 'codex' ? '/usr/local/bin/codex' : null);

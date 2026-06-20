@@ -20,6 +20,11 @@ import { EXIT } from './command.js';
  * @param {boolean} opts.showTools - show tool calls in output
  * @param {string[]} [opts.attachedFiles] - initial file attachments
  * @param {number} [opts.maxSteps] - max agent steps per turn
+ * @param {string} [opts.providerOverride] - AI provider override
+ * @param {string} [opts.modelOverride] - model override
+ * @param {object} [opts.runtimeOptions] - runtime-specific request options
+ * @param {object} [opts.agentOptions] - MindOS agent request options
+ * @param {object} [opts.workDir] - request-scoped working directory
  */
 export async function startRepl(opts) {
   const {
@@ -27,6 +32,11 @@ export async function startRepl(opts) {
     showTools = true,
     attachedFiles,
     maxSteps,
+    providerOverride,
+    modelOverride,
+    runtimeOptions,
+    agentOptions,
+    workDir,
   } = opts;
 
   const healthy = await checkHealth(baseUrl);
@@ -89,6 +99,11 @@ export async function startRepl(opts) {
     const body = { messages: contextMessages, mode };
     if (attachedFiles) body.attachedFiles = attachedFiles;
     if (maxSteps) body.maxSteps = maxSteps;
+    if (providerOverride) body.providerOverride = providerOverride;
+    if (modelOverride) body.modelOverride = modelOverride;
+    if (runtimeOptions) body.runtimeOptions = runtimeOptions;
+    if (agentOptions) body.agentOptions = agentOptions;
+    if (workDir) body.workDir = workDir;
 
     process.stdout.write('\n');
 

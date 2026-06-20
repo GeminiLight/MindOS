@@ -335,8 +335,9 @@ MindOS/
 | `mindos file <sub>` | 文件操作（list, read, create, delete, search） |
 | `mindos space <sub>` | 空间管理（list, create, info） |
 | `mindos search "<query>"` | 搜索知识库 |
-| `mindos agent "<task>"` | 基于知识库运行 MindOS AI Agent |
-| `mindos agent <sub>` | AI Agent 管理（list, info） |
+| `mindos` | 进入 MindOS AI Agent 交互模式 |
+| `mindos "<task>"` / `mindos -p "<task>"` | 基于知识库运行 MindOS AI Agent |
+| `mindos agent <sub>` | 显式 agent 命令与管理（list, info） |
 | `mindos channel` / `mindos feishu-ws` | IM 渠道配置与飞书长连接 |
 | `mindos api <METHOD> <path>` | API 透传（开发者/Agent 用） |
 | **MCP 与配置** | |

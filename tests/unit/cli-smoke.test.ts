@@ -111,14 +111,14 @@ describe('CLI smoke tests', () => {
     expect(help.exitCode).toBe(0);
     expect(help.stdout).toContain('MindOS CLI');
     expect(help.stdout).toContain('agent');
-    expect(help.stdout).not.toContain('ask');
+    expect(help.stdout).not.toMatch(/\n\s+ask\s+/);
   });
 
   it('mindos --help exits 0 and outputs help text', () => {
     const { stdout, exitCode } = run(['--help']);
     expect(exitCode).toBe(0);
     expect(stdout).toContain('MindOS CLI');
-    expect(stdout).not.toContain('ask');
+    expect(stdout).not.toMatch(/\n\s+ask\s+/);
   });
 
   it('mindos doctor without config exits 1 and suggests onboard', () => {
@@ -251,6 +251,24 @@ describe('CLI smoke tests', () => {
     expect(ask.stderr).not.toContain('No question provided');
   });
 
+  it('bare mindos enters the agent instead of showing global help', () => {
+    writeDefaultConfig();
+
+    const result = run(['--port=9']);
+    expect(result.exitCode).toBe(3);
+    expect(result.stderr).toContain('MindOS is not running');
+    expect(result.stdout).not.toContain('COMMANDS');
+  });
+
+  it('mindos -p routes a top-level task to the agent', () => {
+    writeDefaultConfig();
+
+    const result = run(['-p', 'hello world', '--port=9']);
+    expect(result.exitCode).toBe(3);
+    expect(result.stderr).toContain('MindOS is not running');
+    expect(result.stderr).not.toContain('No task provided');
+  });
+
   it('mindos file list is paginated by default and supports --all', () => {
     const mindRoot = writeDefaultConfig();
     fs.writeFileSync(path.join(mindRoot, 'a.md'), 'a');
@@ -286,8 +304,11 @@ describe('CLI smoke tests', () => {
     expect(stdout).toMatch(/not configured/i);
   });
 
-  it('mindos nonexistent exits 1', () => {
-    const { exitCode } = run(['nonexistent']);
-    expect(exitCode).toBe(1);
+  it('unknown top-level text is treated as an agent task', () => {
+    writeDefaultConfig();
+
+    const { stderr, exitCode } = run(['nonexistent', '--port=9']);
+    expect(exitCode).toBe(3);
+    expect(stderr).toContain('MindOS is not running');
   });
 });

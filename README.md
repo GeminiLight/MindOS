@@ -335,8 +335,9 @@ MindOS/
 | `mindos file <sub>` | File operations (list, read, create, delete, search) |
 | `mindos space <sub>` | Space management (list, create, info) |
 | `mindos search "<query>"` | Search knowledge base |
-| `mindos agent "<task>"` | Run the MindOS AI Agent with your knowledge base |
-| `mindos agent <sub>` | AI Agent management (list, info) |
+| `mindos` | Open the MindOS AI Agent REPL |
+| `mindos "<task>"` / `mindos -p "<task>"` | Run the MindOS AI Agent with your knowledge base |
+| `mindos agent <sub>` | Explicit agent command and management (list, info) |
 | `mindos channel` / `mindos feishu-ws` | IM channel config and Feishu long connection |
 | `mindos api <METHOD> <path>` | Raw API passthrough for developers/agents |
 | **MCP & Config** | |

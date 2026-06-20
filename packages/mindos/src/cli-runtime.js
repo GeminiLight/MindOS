@@ -151,6 +151,7 @@ async function showGlobalHelp(showAll = false) {
     `${bold('MindOS CLI')} ${dim(`v${readProductVersion()}`)}`,
     '',
     `${bold('USAGE')}`,
+    `  ${cyan('mindos [task] [flags]')}`,
     `  ${cyan('mindos <command> [flags]')}`,
     '',
     `${bold('COMMANDS')}`,
@@ -170,6 +171,8 @@ async function showGlobalHelp(showAll = false) {
     flagRow('--version, -v', 'Show version'),
     flagRow('--json', 'Output as JSON'),
     '',
+    `  ${dim('Run')} ${cyan('mindos')} ${dim('to open the MindOS Agent.')}`,
+    `  ${dim('Run')} ${cyan('mindos -p "<task>"')} ${dim('for one-shot agent mode.')}`,
     `  ${dim('Run')} ${cyan('mindos <command> --help')} ${dim('for details on any command.')}`,
   );
 
@@ -229,8 +232,14 @@ export async function runMindosCli(argv = process.argv.slice(2)) {
   const mod = resolvedCmd ? await resolveCommandModule(resolvedCmd) : null;
 
   if (!mod) {
-    await showGlobalHelp(showAll);
-    process.exit(cmd && !hasHelp ? 1 : 0);
+    if (hasHelp) {
+      await showGlobalHelp(showAll);
+      process.exit(0);
+    }
+
+    const agentMod = await agentCmd();
+    await agentMod.run(cmd ? [cmd, ...cliArgs] : cliArgs, cliFlags);
+    return;
   }
 
   if (hasHelp) {

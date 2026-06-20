@@ -4,7 +4,7 @@
 
 | 命令 | 说明 |
 | :--- | :--- |
-| `mindos` | 显示帮助，或使用 `~/.mindos/config.json` 中保存的模式启动 |
+| `mindos` | 进入 MindOS AI Agent 交互模式 |
 | `mindos onboard` / `mindos init` | 交互式初始化（生成配置、选择模板） |
 | `mindos onboard --install-daemon` | 初始化 + 安装并启动后台服务 |
 | `mindos start` | 前台启动 Web + MCP 服务（生产模式） |
@@ -29,7 +29,8 @@
 | `mindos space create <name>` | 创建新空间 |
 | `mindos space info <name>` | 查看空间详情 |
 | `mindos search "<query>"` | 通过 API 搜索知识库 |
-| `mindos ask "<question>"` | 基于知识库向 AI 提问 |
+| `mindos "<task>"` / `mindos -p "<task>"` | 基于知识库运行 MindOS AI Agent |
+| `mindos agent [-p "<task>"]` | 脚本可使用的显式稳定 agent 命令 |
 | `mindos agent list` | 列出已检测到的 AI Agent |
 | `mindos agent info <name>` | 查看 Agent 详情和 MCP 配置 |
 | `mindos api <METHOD> <path>` | API 透传（GET/POST/PUT/DELETE） |

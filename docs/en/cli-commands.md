@@ -4,7 +4,7 @@
 
 | Command | Description |
 | :--- | :--- |
-| `mindos` | Show help or start using the mode saved in `~/.mindos/config.json` |
+| `mindos` | Open the MindOS AI Agent REPL |
 | `mindos onboard` / `mindos init` | Interactive setup (config, template, start mode) |
 | `mindos onboard --install-daemon` | Onboard + install and start background service |
 | `mindos start` | Start Web + MCP services (foreground, production mode) |
@@ -29,7 +29,8 @@
 | `mindos space create <name>` | Create a new space |
 | `mindos space info <name>` | Show space details |
 | `mindos search "<query>"` | Search knowledge base via API |
-| `mindos ask "<question>"` | Ask AI a question using your knowledge base |
+| `mindos "<task>"` / `mindos -p "<task>"` | Run the MindOS AI Agent with your knowledge base |
+| `mindos agent [-p "<task>"]` | Explicit stable agent command for scripts |
 | `mindos agent list` | List detected AI Agents |
 | `mindos agent info <name>` | Show Agent details and MCP config |
 | `mindos api <METHOD> <path>` | Raw API passthrough (GET/POST/PUT/DELETE) |

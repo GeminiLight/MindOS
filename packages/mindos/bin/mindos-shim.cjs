@@ -34,10 +34,11 @@ function printStaticHelp() {
 MindOS CLI v${version}
 
 USAGE
+  mindos [task] [flags]
   mindos <command> [flags]
 
 COMMANDS
-  agent         AI Agent: interactive REPL or one-shot (-p)
+  agent         MindOS AI Agent: interactive REPL or one-shot (-p)
   start         Start MindOS services
   stop          Stop services
   status        Show service status
@@ -59,11 +60,13 @@ FLAGS
   --version, -v Show version
   --json        Output as JSON
 
+  Run mindos to open the MindOS Agent.
+  Run mindos -p "<task>" for one-shot agent mode.
   Run mindos <command> --help for details on any command.
 `);
 }
 
-if (userArgs.length === 0 || (userArgs.length === 1 && (userArgs[0] === '--help' || userArgs[0] === '-h' || userArgs[0] === 'help'))) {
+if (userArgs.length === 1 && (userArgs[0] === '--help' || userArgs[0] === '-h' || userArgs[0] === 'help')) {
   printStaticHelp();
   process.exit(0);
 }

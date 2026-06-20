@@ -17,6 +17,20 @@ describe('CLI argument parser', () => {
     });
   });
 
+  it('keeps agent permission toggles as boolean flags so task text stays positional', () => {
+    expect(parseArgs(['agent', '--readonly', 'review this'])).toEqual({
+      command: 'agent',
+      args: ['review this'],
+      flags: { readonly: true },
+    });
+
+    expect(parseArgs(['agent', '--agent', '--no-thinking', 'fix this'])).toEqual({
+      command: 'agent',
+      args: ['fix this'],
+      flags: { agent: true, 'no-thinking': true },
+    });
+  });
+
   it('parses --flag=value without swallowing the next positional argument', () => {
     expect(parseArgs(['agent', '--port=4567', '--max-steps=3', 'summarize notes'])).toEqual({
       command: 'agent',

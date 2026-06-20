@@ -110,7 +110,9 @@ ACP  → IDE 集成（VS Code、Cursor 内调用 MindOS）
 
 ```bash
 # Layer 1: Shortcuts（人类/Agent 友好）
-mindos agent "总结今天的笔记"
+mindos
+mindos "总结今天的笔记"
+mindos -p "总结今天的笔记"
 mindos organize ~/Downloads/paper.pdf
 mindos search "RAG 实现方案"
 
@@ -130,7 +132,8 @@ mindos api POST /api/ask --body '{"question":"..."}'
 ```
 mindos file [create|read|delete|rename|move|list|search]
 mindos space [create|list|delete]
-mindos agent <task>
+mindos [task]
+mindos agent [-p <task>]
 mindos agent [list|info|stats]
 mindos config [get|set]
 mindos status

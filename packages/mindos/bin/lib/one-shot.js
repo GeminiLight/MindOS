@@ -20,6 +20,11 @@ import { EXIT } from './command.js';
  * @param {boolean} [opts.showTools=false] - show tool calls in output
  * @param {number} [opts.maxSteps] - max agent steps
  * @param {string[]} [opts.attachedFiles] - file attachments
+ * @param {string} [opts.providerOverride] - AI provider override
+ * @param {string} [opts.modelOverride] - model override
+ * @param {object} [opts.runtimeOptions] - runtime-specific request options
+ * @param {object} [opts.agentOptions] - MindOS agent request options
+ * @param {object} [opts.workDir] - request-scoped working directory
  * @param {boolean} [opts.json=false] - output as JSON
  */
 export async function executeOneShot(opts) {
@@ -28,6 +33,11 @@ export async function executeOneShot(opts) {
     showTools = false,
     maxSteps,
     attachedFiles,
+    providerOverride,
+    modelOverride,
+    runtimeOptions,
+    agentOptions,
+    workDir,
     json = false,
   } = opts;
 
@@ -47,6 +57,11 @@ export async function executeOneShot(opts) {
   };
   if (attachedFiles) body.attachedFiles = attachedFiles;
   if (maxSteps) body.maxSteps = maxSteps;
+  if (providerOverride) body.providerOverride = providerOverride;
+  if (modelOverride) body.modelOverride = modelOverride;
+  if (runtimeOptions) body.runtimeOptions = runtimeOptions;
+  if (agentOptions) body.agentOptions = agentOptions;
+  if (workDir) body.workDir = workDir;
 
   try {
     const res = await postAsk(baseUrl, body, token);
