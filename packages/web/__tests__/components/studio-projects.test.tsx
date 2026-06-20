@@ -102,7 +102,95 @@ describe('Studio Project UI', () => {
 
     const newSession = view.host.querySelector<HTMLAnchorElement>('a[href="/chat/new?projectId=launch-practice"]');
     expect(newSession).not.toBeNull();
+    expect(view.host.querySelectorAll<HTMLAnchorElement>('a[href="/chat/new?projectId=launch-practice"]')).toHaveLength(1);
 
+    await view.cleanup();
+  });
+
+  it('uses real workspace Spaces as Project defaults from the Project overview', async () => {
+    const StudioProjectContent = (await import('@/components/studio/StudioProjectContent')).default;
+    const { findStudioProject, getStudioProjectSpaceRefs, readStudioProjects } = await import('@/lib/studio-projects');
+    const view = await render(
+      <StudioProjectContent
+        projectId="launch-practice"
+        workspaceSpaces={[
+          {
+            name: 'Customer Research',
+            path: 'Customer Research/',
+            fileCount: 3,
+            description: 'Interview notes',
+          },
+        ]}
+      />,
+    );
+
+    const addSpace = view.host.querySelector<HTMLButtonElement>('button[aria-label="Add Space"]');
+    expect(addSpace).not.toBeNull();
+
+    await act(async () => {
+      addSpace!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    const search = view.host.querySelector<HTMLInputElement>('input[aria-label="Search Spaces"]');
+    expect(search).not.toBeNull();
+    await setInputValue(search!, 'Customer');
+
+    const workspaceOption = Array.from(view.host.querySelectorAll<HTMLButtonElement>('button')).find((button) => (
+      button.textContent?.includes('Customer Research')
+    ));
+    expect(workspaceOption).not.toBeNull();
+    expect(workspaceOption?.textContent).toContain('Interview notes');
+
+    await act(async () => {
+      workspaceOption!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    const updatedProject = findStudioProject(readStudioProjects(), 'launch-practice');
+    expect(getStudioProjectSpaceRefs(updatedProject!, 'en')).toEqual([
+      { path: 'Product Strategy', label: 'Product Strategy', source: 'project-default' },
+      { path: 'Customer Research', label: 'Customer Research', icon: 'C', source: 'filesystem' },
+    ]);
+
+    await view.cleanup();
+  });
+
+  it('closes the context picker on outside click and keeps Create Space wired to the Space flow', async () => {
+    const StudioProjectContent = (await import('@/components/studio/StudioProjectContent')).default;
+    const createSpaceEvents: Event[] = [];
+    const handler = (event: Event) => createSpaceEvents.push(event);
+    window.addEventListener('mindos:create-space', handler);
+    const view = await render(<StudioProjectContent projectId="launch-practice" />);
+
+    const addSpace = view.host.querySelector<HTMLButtonElement>('button[aria-label="Add Space"]');
+    expect(addSpace).not.toBeNull();
+
+    await act(async () => {
+      addSpace!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(view.host.querySelector('[data-context-token-picker="studio-project-spaces"]')).not.toBeNull();
+
+    await act(async () => {
+      document.body.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+    });
+    expect(view.host.querySelector('[data-context-token-picker="studio-project-spaces"]')).toBeNull();
+
+    await act(async () => {
+      addSpace!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    const createSpace = Array.from(view.host.querySelectorAll<HTMLButtonElement>('button')).find((button) => (
+      button.textContent?.includes('Create Space')
+    ));
+    expect(createSpace).not.toBeNull();
+
+    await act(async () => {
+      createSpace!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(createSpaceEvents).toHaveLength(1);
+    expect(view.host.querySelector('[data-context-token-picker="studio-project-spaces"]')).toBeNull();
+
+    window.removeEventListener('mindos:create-space', handler);
     await view.cleanup();
   });
 

@@ -227,7 +227,14 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
   const [importDefaultSpace, setImportDefaultSpace] = useState<string | undefined>(undefined);
   const [importInitialFiles, setImportInitialFiles] = useState<File[] | undefined>(undefined);
   const [dragOverlay, setDragOverlay] = useState(false);
+  const [createSpaceRequestId, setCreateSpaceRequestId] = useState(0);
   const dragCounterRef = useRef(0);
+
+  useEffect(() => {
+    const requestCreateSpace = () => setCreateSpaceRequestId((current) => current + 1);
+    window.addEventListener('mindos:create-space', requestCreateSpace);
+    return () => window.removeEventListener('mindos:create-space', requestCreateSpace);
+  }, []);
 
   const handleOpenImport = useCallback((space?: string) => {
     setImportDefaultSpace(space);
@@ -1131,7 +1138,7 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
         </div>
 
         <SpaceInitToast />
-        <CreateSpaceModal t={t} dirPaths={dirPaths} />
+        <CreateSpaceModal t={t} dirPaths={dirPaths} openRequestId={createSpaceRequestId} />
 
         {/* Global drag overlay — Quick Drop to Inbox */}
         {dragOverlay && !importModalOpen && (

@@ -29,6 +29,7 @@ import {
   spaceFromCandidate,
   studioContextPickerCopy,
   type StudioContextPickerKind,
+  type StudioWorkspaceSpace,
 } from './studioContextOptions';
 
 export interface StudioNewProjectCopy {
@@ -66,6 +67,7 @@ interface StudioNewProjectDialogProps {
   copy: StudioNewProjectCopy;
   locale: string;
   projects: StudioProject[];
+  workspaceSpaces?: StudioWorkspaceSpace[];
 }
 
 function shortPath(value: string | undefined, fallback: string): string {
@@ -158,6 +160,7 @@ function StudioNewProjectDialogForm({
   copy,
   locale,
   projects,
+  workspaceSpaces = [],
 }: Omit<StudioNewProjectDialogProps, 'open'>) {
   const labels = useMemo(() => studioContextPickerCopy(locale), [locale]);
   const [title, setTitle] = useState('');
@@ -171,8 +174,8 @@ function StudioNewProjectDialogForm({
   const [error, setError] = useState<string | null>(null);
 
   const spaceCandidates = useMemo(
-    () => buildSpaceCandidates(projects, locale, copy.fromRecentProject),
-    [copy.fromRecentProject, locale, projects],
+    () => buildSpaceCandidates(projects, locale, copy.fromRecentProject, workspaceSpaces),
+    [copy.fromRecentProject, locale, projects, workspaceSpaces],
   );
   const assistantCandidates = useMemo(
     () => buildAssistantCandidates(projects, locale, copy.fromRecentProject),
@@ -193,6 +196,13 @@ function StudioNewProjectDialogForm({
     setAssistants((current) => normalizeAssistants([...current, assistantFromCandidate(candidate)]));
     setAssistantQuery('');
     setOpenPicker(null);
+  };
+
+  const openCreateSpace = () => {
+    setOpenPicker(null);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('mindos:create-space'));
+    }
   };
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
@@ -350,6 +360,7 @@ function StudioNewProjectDialogForm({
                 onOpenChange={(nextOpen) => setOpenPicker(nextOpen ? 'spaces' : null)}
                 candidates={spaceCandidates}
                 selectedIds={new Set(spaces.map((space) => space.path))}
+                footerAction={{ label: labels.createSpace, onSelect: openCreateSpace }}
                 onSelect={selectSpace}
                 chips={spaces.map((space) => {
                   const label = contextChipLabel(space) || contextPathLabel(space.path);

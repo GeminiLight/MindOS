@@ -1,4 +1,5 @@
 import { readSetupPending } from '@/lib/setup-state';
+import { listWorkspaceSpaces } from '@/lib/space-records';
 import ClientRedirect from '@/components/ClientRedirect';
 import StudioProjectContent from '@/components/studio/StudioProjectContent';
 
@@ -11,5 +12,10 @@ export default async function StudioProjectPage({
 }) {
   if (readSetupPending()) return <ClientRedirect href="/setup" label="Opening setup..." />;
   const { projectId } = await params;
-  return <StudioProjectContent projectId={decodeURIComponent(projectId)} />;
+  return (
+    <StudioProjectContent
+      projectId={decodeURIComponent(projectId)}
+      workspaceSpaces={listWorkspaceSpaces()}
+    />
+  );
 }

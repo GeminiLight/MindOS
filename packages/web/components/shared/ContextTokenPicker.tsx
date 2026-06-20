@@ -1,7 +1,7 @@
 'use client';
 
 import { Check, Plus, Search, X } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 
 export type ContextPickerKind = 'spaces' | 'assistants' | string;
@@ -20,6 +20,12 @@ export interface ContextSelectedChip {
   title: string;
   removeLabel: string;
   onRemove: () => void;
+}
+
+export interface ContextPickerAction {
+  label: string;
+  title?: string;
+  onSelect: () => void;
 }
 
 export function contextPathLabel(path: string): string {
@@ -51,6 +57,7 @@ export function ContextSelectionRow({
   selectedIds,
   open,
   chips,
+  footerAction,
   onQueryChange,
   onOpenChange,
   onSelect,
@@ -66,19 +73,44 @@ export function ContextSelectionRow({
   selectedIds: Set<string>;
   open: boolean;
   chips: ContextSelectedChip[];
+  footerAction?: ContextPickerAction;
   onQueryChange: (value: string) => void;
   onOpenChange: (open: boolean) => void;
   onSelect: (candidate: ContextSelectableItem) => void;
 }) {
+  const rowRef = useRef<HTMLDivElement>(null);
   const normalizedQuery = query.trim().toLowerCase();
   const filteredCandidates = candidates.filter((candidate) => {
     if (!normalizedQuery) return true;
     return `${candidate.label} ${candidate.id} ${candidate.description ?? ''}`.toLowerCase().includes(normalizedQuery);
   });
 
+  useEffect(() => {
+    if (!open) return undefined;
+
+    const closeFromPointer = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (rowRef.current?.contains(target)) return;
+      onOpenChange(false);
+    };
+
+    const closeFromEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      onOpenChange(false);
+    };
+
+    document.addEventListener('pointerdown', closeFromPointer, true);
+    document.addEventListener('keydown', closeFromEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeFromPointer, true);
+      document.removeEventListener('keydown', closeFromEscape);
+    };
+  }, [onOpenChange, open]);
+
   return (
-    <div className="grid gap-1.5 sm:grid-cols-[88px_minmax(0,1fr)] sm:items-start">
-      <div className="flex items-center gap-1.5 pt-1 text-[11px] font-medium text-muted-foreground">
+    <div ref={rowRef} className="grid gap-1.5 sm:grid-cols-[76px_minmax(0,1fr)] sm:items-start">
+      <div className="flex min-h-6 items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
         {icon}
         <span>{label}</span>
       </div>
@@ -87,7 +119,7 @@ export function ContextSelectionRow({
           <span
             key={chip.id}
             title={chip.title}
-            className="group inline-flex max-w-[180px] items-center gap-1 rounded-md bg-muted/45 px-1.5 py-1 text-[11px] text-foreground transition-colors hover:bg-muted/65"
+            className="group inline-flex h-6 max-w-[180px] items-center gap-1 rounded-md bg-muted/45 px-1.5 text-[11px] text-foreground transition-colors hover:bg-muted/65"
           >
             <ContextTokenIcon value={chip.icon} />
             <span className="truncate">{chip.label}</span>
@@ -104,12 +136,12 @@ export function ContextSelectionRow({
         <button
           type="button"
           onClick={() => onOpenChange(!open)}
-          className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-dashed border-border/55 text-muted-foreground transition-colors hover:border-border hover:bg-muted/45 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-dashed border-border/55 text-muted-foreground transition-colors hover:border-border hover:bg-muted/45 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           title={addTitle}
           aria-label={addTitle}
           aria-expanded={open}
         >
-          <Plus size={13} />
+          <Plus size={12} />
         </button>
 
         {open ? (
@@ -122,6 +154,7 @@ export function ContextSelectionRow({
             selectedIds={selectedIds}
             onQueryChange={onQueryChange}
             onSelect={onSelect}
+            footerAction={footerAction}
           />
         ) : null}
       </div>
@@ -136,6 +169,7 @@ function ContextPickerPopover({
   query,
   candidates,
   selectedIds,
+  footerAction,
   onQueryChange,
   onSelect,
 }: {
@@ -145,6 +179,7 @@ function ContextPickerPopover({
   query: string;
   candidates: ContextSelectableItem[];
   selectedIds: Set<string>;
+  footerAction?: ContextPickerAction;
   onQueryChange: (value: string) => void;
   onSelect: (candidate: ContextSelectableItem) => void;
 }) {
@@ -193,6 +228,17 @@ function ContextPickerPopover({
           );
         })}
       </div>
+      {footerAction ? (
+        <button
+          type="button"
+          onClick={footerAction.onSelect}
+          title={footerAction.title}
+          className="mt-1 flex h-8 w-full items-center gap-2 rounded-md border border-border/45 bg-background/65 px-2 text-left text-xs font-medium text-muted-foreground transition-colors hover:border-[var(--amber)]/45 hover:bg-muted/45 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <Plus size={13} className="text-[var(--amber)]" aria-hidden="true" />
+          <span className="truncate">{footerAction.label}</span>
+        </button>
+      ) : null}
     </div>
   );
 }

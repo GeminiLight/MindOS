@@ -40,6 +40,7 @@ import {
   StudioProjectItem,
   StudioProjectStage,
 } from './StudioProjectItem';
+import type { StudioWorkspaceSpace } from './studioContextOptions';
 
 const COPY = {
   en: {
@@ -611,7 +612,11 @@ function StudioStatsView({
   );
 }
 
-export default function StudioContent() {
+export default function StudioContent({
+  workspaceSpaces = [],
+}: {
+  workspaceSpaces?: StudioWorkspaceSpace[];
+} = {}) {
   const push = useSmoothRouterPush();
   const { locale } = useLocale();
   const copy = locale === 'zh' ? COPY.zh : COPY.en;
@@ -777,6 +782,7 @@ export default function StudioContent() {
         copy={copy}
         locale={locale}
         projects={projects}
+        workspaceSpaces={workspaceSpaces}
       />
     </StudioShell>
   );

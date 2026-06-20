@@ -14,7 +14,15 @@ import { useSmoothRouterPush } from '@/hooks/useSmoothRouterPush';
 
 /* ── Create Space Modal ── */
 
-export default function CreateSpaceModal({ t, dirPaths }: { t: ReturnType<typeof useLocale>['t']; dirPaths: string[] }) {
+export default function CreateSpaceModal({
+  t,
+  dirPaths,
+  openRequestId,
+}: {
+  t: ReturnType<typeof useLocale>['t'];
+  dirPaths: string[];
+  openRequestId?: number;
+}) {
   const router = useRouter();
   const smoothPush = useSmoothRouterPush();
   const [open, setOpen] = useState(false);
@@ -28,16 +36,23 @@ export default function CreateSpaceModal({ t, dirPaths }: { t: ReturnType<typeof
   const [useAi, setUseAi] = useState(true);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  const openDialog = useCallback(() => {
+    setOpen(true);
+    setError('');
+    setNameHint('');
+    setTimeout(() => inputRef.current?.focus(), 80);
+  }, []);
+
   useEffect(() => {
-    const handler = () => {
-      setOpen(true);
-      setError('');
-      setNameHint('');
-      setTimeout(() => inputRef.current?.focus(), 80);
-    };
+    if (!openRequestId) return;
+    openDialog();
+  }, [openDialog, openRequestId]);
+
+  useEffect(() => {
+    const handler = () => openDialog();
     window.addEventListener('mindos:create-space', handler);
     return () => window.removeEventListener('mindos:create-space', handler);
-  }, []);
+  }, [openDialog]);
 
   useEffect(() => {
     if (!open || aiAvailable !== null) return;

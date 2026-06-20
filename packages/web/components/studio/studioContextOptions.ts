@@ -16,6 +16,17 @@ import {
 
 export type StudioContextPickerKind = 'spaces' | 'assistants';
 
+export interface StudioWorkspaceSpace {
+  name: string;
+  path: string;
+  fileCount: number;
+  description: string;
+}
+
+type StudioSpaceCandidate = ContextSelectableItem & {
+  spaceSource?: ContextSpaceRef['source'];
+};
+
 export const BUILT_IN_SPACES: ContextSelectableItem[] = [
   { id: 'MIND_DAO', label: '道', icon: '道', description: 'MindOS System' },
   { id: 'MIND_FA', label: '法', icon: '法', description: 'MindOS System' },
@@ -48,13 +59,37 @@ export function normalizeAssistants(assistants: ContextAssistantRef[]): ContextA
   return normalizeSessionContextSelectionForClient({ version: 1, spaces: [], assistants }).assistants;
 }
 
-export function spaceToCandidate(space: ContextSpaceRef, description?: string): ContextSelectableItem {
+export function spaceToCandidate(space: ContextSpaceRef, description?: string): StudioSpaceCandidate {
   const label = contextChipLabel(space) || contextPathLabel(space.path);
   return {
     id: space.path,
     label,
     icon: space.icon || contextItemIcon(label),
+    spaceSource: space.source ?? 'manual',
     ...(description ? { description } : {}),
+  };
+}
+
+function normalizeWorkspaceSpacePath(spacePath: string): string {
+  return spacePath.replace(/\\/g, '/').replace(/\/+$/, '');
+}
+
+function workspaceSpaceDescription(space: StudioWorkspaceSpace, locale: string): string {
+  const fileCount = locale === 'zh'
+    ? `${space.fileCount} 个文件`
+    : `${space.fileCount} file${space.fileCount === 1 ? '' : 's'}`;
+  return space.description ? `${space.description} · ${fileCount}` : fileCount;
+}
+
+export function workspaceSpaceToCandidate(space: StudioWorkspaceSpace, locale: string): StudioSpaceCandidate {
+  const path = normalizeWorkspaceSpacePath(space.path);
+  const label = space.name.trim() || contextPathLabel(path);
+  return {
+    id: path,
+    label,
+    icon: contextItemIcon(label),
+    spaceSource: 'filesystem',
+    description: workspaceSpaceDescription(space, locale),
   };
 }
 
@@ -68,12 +103,12 @@ export function assistantToCandidate(assistant: ContextAssistantRef, description
   };
 }
 
-export function spaceFromCandidate(candidate: ContextSelectableItem): ContextSpaceRef {
+export function spaceFromCandidate(candidate: ContextSelectableItem & { spaceSource?: ContextSpaceRef['source'] }): ContextSpaceRef {
   return {
     path: candidate.id,
     label: candidate.label || contextPathLabel(candidate.id),
     icon: candidate.icon,
-    source: 'manual',
+    source: candidate.spaceSource ?? 'manual',
   };
 }
 
@@ -86,12 +121,20 @@ export function assistantFromCandidate(candidate: ContextSelectableItem): Contex
   };
 }
 
-export function buildSpaceCandidates(projects: StudioProject[], locale: string, sourceLabel: string): ContextSelectableItem[] {
-  return projects
-    .flatMap((project) => getStudioProjectSpaceRefs(project, locale).map((space) => (
+export function buildSpaceCandidates(
+  projects: StudioProject[],
+  locale: string,
+  sourceLabel: string,
+  workspaceSpaces: StudioWorkspaceSpace[] = [],
+): ContextSelectableItem[] {
+  const candidates: ContextSelectableItem[] = [
+    ...workspaceSpaces.map((space) => workspaceSpaceToCandidate(space, locale)),
+    ...BUILT_IN_SPACES,
+    ...projects.flatMap((project) => getStudioProjectSpaceRefs(project, locale).map((space) => (
       spaceToCandidate(space, `${sourceLabel}: ${localize(project.title, project.titleZh, locale)}`)
-    )))
-    .reduce(addUniqueContextItem, BUILT_IN_SPACES);
+    ))),
+  ];
+  return candidates.reduce<ContextSelectableItem[]>((items, item) => addUniqueContextItem(items, item), []);
 }
 
 export function buildAssistantCandidates(projects: StudioProject[], locale: string, sourceLabel: string): ContextSelectableItem[] {
@@ -107,6 +150,7 @@ export function studioContextPickerCopy(locale: string) {
     return {
       mind: '心智',
       addSpace: '添加空间',
+      createSpace: '创建新空间',
       addAssistant: '添加 AI Kit',
       searchSpaces: '搜索空间',
       searchAssistants: '搜索 AI Kit',
@@ -119,6 +163,7 @@ export function studioContextPickerCopy(locale: string) {
   return {
     mind: 'Mind',
     addSpace: 'Add Space',
+    createSpace: 'Create Space',
     addAssistant: 'Add AI Kit',
     searchSpaces: 'Search Spaces',
     searchAssistants: 'Search AI Kit',

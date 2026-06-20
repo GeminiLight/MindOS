@@ -58,6 +58,7 @@ import {
   spaceFromCandidate,
   studioContextPickerCopy,
   type StudioContextPickerKind,
+  type StudioWorkspaceSpace,
 } from './studioContextOptions';
 
 const COPY = {
@@ -187,6 +188,7 @@ function ProjectContextOverview({
   locale,
   copy,
   goal,
+  workspaceSpaces,
   onProjectsChanged,
 }: {
   project: StudioProject;
@@ -194,6 +196,7 @@ function ProjectContextOverview({
   locale: string;
   copy: ProjectCopy;
   goal: string;
+  workspaceSpaces: StudioWorkspaceSpace[];
   onProjectsChanged: () => void;
 }) {
   const labels = useMemo(() => studioContextPickerCopy(locale), [locale]);
@@ -206,8 +209,8 @@ function ProjectContextOverview({
   const spaces = useMemo(() => getStudioProjectSpaceRefs(project, locale), [locale, project]);
   const assistants = useMemo(() => getStudioProjectAssistantRefs(project), [project]);
   const spaceCandidates = useMemo(
-    () => buildSpaceCandidates(projects, locale, copy.fromRecentProject),
-    [copy.fromRecentProject, locale, projects],
+    () => buildSpaceCandidates(projects, locale, copy.fromRecentProject, workspaceSpaces),
+    [copy.fromRecentProject, locale, projects, workspaceSpaces],
   );
   const assistantCandidates = useMemo(
     () => buildAssistantCandidates(projects, locale, copy.fromRecentProject),
@@ -225,10 +228,16 @@ function ProjectContextOverview({
   const getLatestProject = () => findStudioProject(readStudioProjects(), project.id) ?? project;
   const getLatestSpaces = () => getStudioProjectSpaceRefs(getLatestProject(), locale);
   const getLatestAssistants = () => getStudioProjectAssistantRefs(getLatestProject());
+  const openCreateSpace = () => {
+    setOpenPicker(null);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('mindos:create-space'));
+    }
+  };
 
   return (
     <section className="overflow-visible rounded-xl border border-border/60 bg-card/45" aria-label={copy.configuration}>
-      <div className="border-b border-border/60 px-4 py-4">
+      <div className="border-b border-border/60 px-3.5 py-3">
         <div className="mb-2 flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
           <Target size={13} aria-hidden="true" />
           <span>{copy.goal}</span>
@@ -236,15 +245,15 @@ function ProjectContextOverview({
         <p className="max-w-[72ch] text-sm leading-relaxed text-foreground">{goal}</p>
       </div>
 
-      <div data-studio-project-overview-context className="space-y-3 px-4 py-4">
-        <div className="grid gap-1.5 sm:grid-cols-[88px_minmax(0,1fr)] sm:items-start">
-          <div className="flex items-center gap-1.5 pt-1 text-[11px] font-medium text-muted-foreground">
+      <div data-studio-project-overview-context className="space-y-2.5 px-3.5 py-3">
+        <div className="grid gap-1.5 sm:grid-cols-[76px_minmax(0,1fr)] sm:items-start">
+          <div className="flex min-h-6 items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
             <FolderOpen size={13} aria-hidden="true" />
             <span>{copy.directory}</span>
           </div>
           <div className="min-w-0">
             <span
-              className="inline-flex max-w-full items-center gap-1.5 rounded-md bg-muted/45 px-2 py-1 text-[11px] text-foreground"
+              className="inline-flex h-6 max-w-full items-center gap-1.5 rounded-md bg-muted/45 px-1.5 text-[11px] text-foreground"
               title={workDirTitle}
             >
               <FolderOpen size={12} className="shrink-0 text-muted-foreground" aria-hidden="true" />
@@ -264,6 +273,7 @@ function ProjectContextOverview({
           candidates={spaceCandidates}
           selectedIds={new Set(spaces.map((space) => space.path))}
           open={openPicker === 'spaces'}
+          footerAction={{ label: labels.createSpace, onSelect: openCreateSpace }}
           chips={spaces.map((space) => {
             const label = contextChipLabel(space) || contextPathLabel(space.path);
             return {
@@ -429,7 +439,13 @@ function MissingProject({ copy }: { copy: ProjectCopy }) {
   );
 }
 
-export default function StudioProjectContent({ projectId }: { projectId: string }) {
+export default function StudioProjectContent({
+  projectId,
+  workspaceSpaces = [],
+}: {
+  projectId: string;
+  workspaceSpaces?: StudioWorkspaceSpace[];
+}) {
   const push = useSmoothRouterPush();
   const { locale } = useLocale();
   const copy = locale === 'zh' ? COPY.zh : COPY.en;
@@ -553,6 +569,7 @@ export default function StudioProjectContent({ projectId }: { projectId: string 
           copy={copy}
           locale={locale}
           projects={projects}
+          workspaceSpaces={workspaceSpaces}
         />
       </StudioShell>
     );
@@ -569,23 +586,9 @@ export default function StudioProjectContent({ projectId }: { projectId: string 
             <ArrowLeft size={15} aria-hidden="true" />
             {copy.returnStudio}
           </Link>
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div className="min-w-0">
-              <h1 className="text-2xl font-semibold text-foreground">
-                {localized.title}
-              </h1>
-            </div>
-            <Button
-              render={<Link href={`/chat/new?projectId=${encodeURIComponent(project.id)}`} />}
-              nativeButton={false}
-              variant="amber"
-              size="xl"
-              className="w-fit"
-            >
-              <MessageSquarePlus size={15} aria-hidden="true" />
-              {copy.newSession}
-            </Button>
-          </div>
+          <h1 className="min-w-0 text-2xl font-semibold text-foreground">
+            {localized.title}
+          </h1>
         </header>
 
         <ProjectContextOverview
@@ -594,6 +597,7 @@ export default function StudioProjectContent({ projectId }: { projectId: string 
           locale={locale}
           copy={copy}
           goal={localized.goal}
+          workspaceSpaces={workspaceSpaces}
           onProjectsChanged={() => setProjects(readStudioProjects())}
         />
 
