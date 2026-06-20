@@ -13,7 +13,9 @@ describe('Content page shell contract', () => {
     expect(source).toContain("import { ContentPageShell } from '@/components/shared/ContentPageShell'");
     expect(source).toContain('<ContentPageShell');
     expect(source).toContain('as="article"');
-    expect(source).toContain('className="echo-content-page"');
+    expect(source).toContain('const echoPageClass =');
+    expect(source).toContain("'echo-content-page");
+    expect(source).toContain('className={echoPageClass}');
     expect(source).not.toContain('mx-auto max-w-3xl px-4 py-6');
   });
 
