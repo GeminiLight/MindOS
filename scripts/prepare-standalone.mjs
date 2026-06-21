@@ -15,7 +15,6 @@ import { fileURLToPath } from 'node:url';
 import {
   BUILTIN_AGENT_EXTENSION_RUNTIME_DEPENDENCY_SEEDS,
   IM_RUNTIME_DEPENDENCY_SEEDS,
-  PI_SCHEDULE_PROMPT_LEGACY_RUNTIME_DEPENDENCY_SEEDS,
   materializeStandaloneAssets,
   pruneClaudeAgentSdkNativePackages,
   pruneRuntimePackageAssets,
@@ -41,7 +40,6 @@ const runtimeDependencySeeds = [
   '@anthropic-ai/sdk',
   'openai',
   ...BUILTIN_AGENT_EXTENSION_RUNTIME_DEPENDENCY_SEEDS,
-  ...PI_SCHEDULE_PROMPT_LEGACY_RUNTIME_DEPENDENCY_SEEDS,
   ...IM_RUNTIME_DEPENDENCY_SEEDS,
 ];
 

@@ -6,7 +6,7 @@ import {
   BUILTIN_AGENT_EXTENSION_RUNTIME_DEPENDENCY_SEEDS,
   IM_RUNTIME_DEPENDENCY_SEEDS,
   MINDOS_WEB_RUNTIME_EXTENSION_SOURCE_ENTRIES,
-  PI_SCHEDULE_PROMPT_LEGACY_RUNTIME_DEPENDENCY_SEEDS,
+  PI_SCHEDULE_PROMPT_STALE_RUNTIME_DEPENDENCIES,
   copyAppForBundledRuntime,
   materializeStandaloneAssets,
   pruneClaudeAgentSdkNativePackages,
@@ -259,16 +259,37 @@ describe('materializeStandaloneAssets', () => {
 
   it('seeds the current PI coding agent package into runtime bundles', () => {
     expect(RUNTIME_DEPENDENCY_SEEDS).toContain('@earendil-works/pi-coding-agent');
+    expect(RUNTIME_DEPENDENCY_SEEDS).not.toContain('@mariozechner/pi-coding-agent');
     expect(BUILTIN_AGENT_EXTENSION_RUNTIME_DEPENDENCY_SEEDS).not.toContain('@mariozechner/pi-coding-agent');
   });
 
-  it('seeds the legacy PI coding agent package required by pi-schedule-prompt', () => {
-    expect(PI_SCHEDULE_PROMPT_LEGACY_RUNTIME_DEPENDENCY_SEEDS).toEqual([
+  it('tracks stale pi-schedule-prompt runtime dependencies without seeding them', () => {
+    expect(PI_SCHEDULE_PROMPT_STALE_RUNTIME_DEPENDENCIES).toEqual([
       '@mariozechner/pi-coding-agent',
     ]);
-    expect(RUNTIME_DEPENDENCY_SEEDS).toEqual(
-      expect.arrayContaining(PI_SCHEDULE_PROMPT_LEGACY_RUNTIME_DEPENDENCY_SEEDS),
+    expect(RUNTIME_DEPENDENCY_SEEDS).not.toEqual(
+      expect.arrayContaining(PI_SCHEDULE_PROMPT_STALE_RUNTIME_DEPENDENCIES),
     );
+  });
+
+  it('prunes stale pi-schedule-prompt dependencies from the standalone package metadata', () => {
+    const appDir = makeTemp('mindos-app-stale-schedule-prompt-deps-');
+    writeStandaloneApp(appDir);
+
+    const schedulePromptPackage = path.join(appDir, '.next', 'standalone', 'node_modules', 'pi-schedule-prompt');
+    mkdirSync(schedulePromptPackage, { recursive: true });
+    writeFileSync(path.join(schedulePromptPackage, 'package.json'), JSON.stringify({
+      name: 'pi-schedule-prompt',
+      version: '0.1.2',
+      dependencies: {
+        '@mariozechner/pi-coding-agent': 'latest',
+      },
+    }));
+
+    materializeStandaloneAssets(appDir);
+
+    const pkg = JSON.parse(readFileSync(path.join(schedulePromptPackage, 'package.json'), 'utf-8'));
+    expect(pkg.dependencies).not.toHaveProperty('@mariozechner/pi-coding-agent');
   });
 
   it('materializes MindOS-owned runtime extension sources into standalone bundles', () => {

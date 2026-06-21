@@ -12,6 +12,7 @@ import {
   realpathSync,
   rmSync,
   unlinkSync,
+  writeFileSync,
 } from 'fs';
 import path from 'path';
 import { createRequire } from 'module';
@@ -25,9 +26,9 @@ export const BUILTIN_AGENT_EXTENSION_RUNTIME_DEPENDENCY_SEEDS = [
   'pi-web-access',
 ];
 
-export const PI_SCHEDULE_PROMPT_LEGACY_RUNTIME_DEPENDENCY_SEEDS = [
-  // pi-schedule-prompt@0.1.2 still declares the pre-rename package. Keep this
-  // as a packaging compatibility seed until the extension moves to @earendil.
+export const PI_SCHEDULE_PROMPT_STALE_RUNTIME_DEPENDENCIES = [
+  // pi-schedule-prompt@0.1.2 still declares this pre-rename package, but the
+  // MindOS wrapper only loads source files where it is a type-only import.
   '@mariozechner/pi-coding-agent',
 ];
 
@@ -64,7 +65,6 @@ export const RUNTIME_DEPENDENCY_SEEDS = [
   'typebox',
   'yaml',
   ...BUILTIN_AGENT_EXTENSION_RUNTIME_DEPENDENCY_SEEDS,
-  ...PI_SCHEDULE_PROMPT_LEGACY_RUNTIME_DEPENDENCY_SEEDS,
   ...IM_RUNTIME_DEPENDENCY_SEEDS,
 ];
 
@@ -113,6 +113,7 @@ export function materializeStandaloneAssets(appDir, options = {}) {
   pruneClaudeAgentSdkNativePackages(standaloneDir);
   prunePackageDevelopmentPayload(standaloneDir);
   pruneRuntimePackageAssets(standaloneDir);
+  prunePiSchedulePromptStaleDependencies(standaloneDir);
   pruneOptionalLocalEmbeddingRuntime(standaloneDir, {
     bundleLocalEmbeddingRuntime: options.bundleLocalEmbeddingRuntime === true
       || process.env.MINDOS_BUNDLE_LOCAL_EMBEDDING_RUNTIME === '1',
@@ -750,6 +751,30 @@ export function pruneRuntimePackageAssets(standaloneDir) {
     if (!existsSync(target)) continue;
     rmSync(target, { recursive: true, force: true });
     removed += 1;
+  }
+  return removed;
+}
+
+export function prunePiSchedulePromptStaleDependencies(standaloneDir) {
+  const packageJsonPath = path.join(standaloneDir, 'node_modules', 'pi-schedule-prompt', 'package.json');
+  if (!existsSync(packageJsonPath)) return 0;
+
+  let pkg;
+  try {
+    pkg = JSON.parse(readFileSync(packageJsonPath, 'utf-8'));
+  } catch {
+    return 0;
+  }
+
+  let removed = 0;
+  for (const dependencyName of PI_SCHEDULE_PROMPT_STALE_RUNTIME_DEPENDENCIES) {
+    if (!pkg.dependencies || !Object.hasOwn(pkg.dependencies, dependencyName)) continue;
+    delete pkg.dependencies[dependencyName];
+    removed += 1;
+  }
+
+  if (removed > 0) {
+    writeFileSync(packageJsonPath, `${JSON.stringify(pkg, null, 2)}\n`, 'utf-8');
   }
   return removed;
 }
