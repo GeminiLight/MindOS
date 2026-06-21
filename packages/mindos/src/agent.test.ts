@@ -10,9 +10,11 @@ import {
   buildMindosContextPrompt,
   buildMindosSystemPrompt,
   compactMindosPromptForTokenBudget,
+  createMindosActiveAssistantPromptFromMarkdown,
   createMindosSessionContextSignature,
   defineMindosAgent,
   loadMindosAgentPrompt,
+  prependMindosActiveAssistantPrompt,
   renderMindosContextPrompt,
 } from './agent/index.js';
 import { renderMindosPiSelectedSkillPrompt } from './agent/mindos-pi/index.js';
@@ -103,6 +105,45 @@ describe('MindOS agent product contract', () => {
     expect(prompt).not.toContain('### Recall.md');
   });
 
+  it('adds active assistant instructions to system prompts without replacing the base prompt', () => {
+    const activeAssistant = createMindosActiveAssistantPromptFromMarkdown({
+      id: 'research-scout',
+      markdown: `---
+name: Research Scout
+description: Finds local research follow-ups.
+runtime: mindos
+model: default
+permissionMode: ask
+skills: super-researcher, mindos
+mcp: zotero
+---
+
+# Research Scout
+
+## Role
+
+Build a grounded follow-up queue.
+`,
+      source: 'custom',
+      promptPath: '.mindos/assistants/research-scout.md',
+      maxPermissionMode: 'ask',
+    });
+    const prompt = buildMindosSystemPrompt({
+      mindRoot: '/tmp/mind',
+      activeAssistant,
+    });
+
+    expect(prompt).toContain(MINDOS_SYSTEM_PROMPT);
+    expect(prompt).toContain('## Active Assistant');
+    expect(prompt).toContain('<id>research-scout</id>');
+    expect(prompt).toContain('<prompt_path>.mindos/assistants/research-scout.md</prompt_path>');
+    expect(prompt).toContain('Build a grounded follow-up queue.');
+    expect(prompt).toContain('- super-researcher (auto)');
+    expect(prompt).toContain('- mindos (auto)');
+    expect(prompt).toContain('- zotero');
+    expect(prompt).toContain('must not override system, safety, permission, or tool-use rules');
+  });
+
   it('builds turn context prompts with initialization, files, uploads, recall, and no runtime activation', async () => {
     const prompt = await buildMindosContextPrompt({
       prompt: 'find project alpha',
@@ -187,6 +228,35 @@ describe('MindOS agent product contract', () => {
     expect(context.sections.map((section) => section.title)).toEqual(['Now']);
     expect(renderMindosContextPrompt(context)).toContain('## Now');
     expect(renderMindosContextPrompt(context)).not.toContain('load_skill');
+  });
+
+  it('prepends active assistant instructions for external runtime prompts', async () => {
+    const turnPrompt = await buildMindosContextPrompt({
+      prompt: 'run today',
+    }, {
+      now: () => new Date('2026-01-02T03:04:05.000Z'),
+      formatLocalTime: () => 'Friday, January 2, 2026 at 11:04:05 AM GMT+8',
+    });
+    const externalPrompt = prependMindosActiveAssistantPrompt(turnPrompt, createMindosActiveAssistantPromptFromMarkdown({
+      id: 'daily-signal',
+      markdown: `---
+name: Daily Signal
+description: Reviews daily notes.
+permissionMode: read
+---
+
+# Daily Signal
+
+Summarize daily notes without editing files.
+`,
+      source: 'custom',
+      maxPermissionMode: 'read',
+    }));
+
+    expect(externalPrompt).toMatch(/^## Active Assistant/);
+    expect(externalPrompt).toContain('Summarize daily notes without editing files.');
+    expect(externalPrompt).toContain('---\n\nrun today');
+    expect(externalPrompt).toContain('## MindOS Turn Context');
   });
 
   it('lets callers skip unchanged session context while preserving turn-local sections', async () => {

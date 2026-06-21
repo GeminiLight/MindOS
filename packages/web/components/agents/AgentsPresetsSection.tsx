@@ -2070,10 +2070,6 @@ Use this assistant profile:
 - skills: ${assistant.skills.length > 0 ? assistant.skills.join(', ') : 'none'}
 - mcp: ${assistant.mcp.length > 0 ? assistant.mcp.join(', ') : 'none'}
 
-Assistant prompt:
-
-${assistant.promptContent || assistant.promptPreview}
-
 Return a concise result for the user. Do not write files or make external changes unless a later run explicitly grants a stronger permission mode.`;
 }
 

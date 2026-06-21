@@ -8,7 +8,7 @@ export interface AssistantPromptLoadOptions {
 }
 
 export interface AssistantRunPromptOptions {
-  assistantPrompt: string;
+  assistantPrompt?: string;
   runTitle: string;
   intro?: string;
   itemsLabel?: string;
@@ -55,15 +55,20 @@ export function buildAssistantRunPrompt({
   items = [],
   rules = [],
 }: AssistantRunPromptOptions): string {
-  const basePrompt = assistantPrompt.trim();
-  const lines: string[] = [
-    basePrompt,
-    '',
-    '---',
-    '',
-    `# ${runTitle}`,
-    '',
-  ];
+  const basePrompt = assistantPrompt?.trim();
+  const lines: string[] = basePrompt
+    ? [
+      basePrompt,
+      '',
+      '---',
+      '',
+      `# ${runTitle}`,
+      '',
+    ]
+    : [
+      `# ${runTitle}`,
+      '',
+    ];
 
   if (intro?.trim()) {
     lines.push(intro.trim(), '');

@@ -3,12 +3,19 @@ export const runtime = 'nodejs';
 
 import { NextResponse } from 'next/server';
 import type { LocalAttachment, Message } from '@/lib/types';
+import { getMindRoot } from '@/lib/fs';
 import { buildAssistantAgentTurnRequestBody } from '@/lib/assistant-runner';
 import { DREAMING_ASSISTANT_ID, buildDreamingAssistantRunPrompt } from '@/lib/dreaming-assistant';
 import { isRegisteredAssistantRun } from '@/lib/assistant-runtime-registry';
+import { getDefaultAssistantPrompt } from '@/lib/mind-system-assistants';
 import { handleRouteErrorSimple } from '@/lib/errors';
 import { runAgentTurnRequestBody } from '../agent/_lib/turn-runner';
 import type { AgentTurnRequestBody } from '../agent/_lib/turn-request';
+import {
+  createMindosActiveAssistantPrompt,
+  createMindosActiveAssistantPromptFromMarkdown,
+  type MindosActiveAssistantPrompt,
+} from '@geminilight/mindos/agent';
 
 class AssistantRunError extends Error {
   constructor(
@@ -23,6 +30,25 @@ class AssistantRunError extends Error {
 
 const SAFE_ASSISTANT_ID = /^[a-z0-9][a-z0-9-]*$/;
 
+type AssistantLibraryItem = {
+  id: string;
+  name: string;
+  description?: string;
+  source?: string;
+  runtime?: string;
+  model?: string;
+  permissionMode?: string;
+  preferredAgent?: string;
+  skills?: string[];
+  mcp?: string[];
+  paths?: { prompt?: string; file?: string };
+  prompt?: { content?: string };
+};
+
+type AssistantsServerModule = {
+  listLocalAssistants?: (mindRoot: string) => AssistantLibraryItem[];
+};
+
 export async function POST(req: Request) {
   const body = await readJsonBody(req);
 
@@ -32,10 +58,12 @@ export async function POST(req: Request) {
     if (!assistantId) {
       throw new AssistantRunError(400, 'INVALID_ASSISTANT_ID', 'Invalid assistant id.');
     }
-    return runAgentTurnRequestBody(createAssistantAgentTurnBody(record, assistantId), {
+    const { body: agentTurnBody, activeAssistant } = await createAssistantAgentTurnBody(record, assistantId);
+    return runAgentTurnRequestBody(agentTurnBody, {
       headers: req.headers,
       signal: req.signal,
       request: req,
+      activeAssistant,
     });
   } catch (error) {
     if (error instanceof AssistantRunError) {
@@ -48,14 +76,15 @@ export async function POST(req: Request) {
   }
 }
 
-function createAssistantAgentTurnBody(
+async function createAssistantAgentTurnBody(
   body: Record<string, unknown>,
   assistantId: string,
-): AgentTurnRequestBody {
+): Promise<{ body: AgentTurnRequestBody; activeAssistant: MindosActiveAssistantPrompt }> {
   const messages = resolveAssistantMessages(body, assistantId);
   if (messages.length === 0) {
     throw new AssistantRunError(400, 'INVALID_MESSAGES', 'Assistant Runs require at least one message.');
   }
+  const activeAssistant = await resolveActiveAssistantPrompt(assistantId);
 
   const agentTurnBody = buildAssistantAgentTurnRequestBody({
     assistantId,
@@ -69,7 +98,10 @@ function createAssistantAgentTurnBody(
     runtimeOptions: normalizeAssistantRuntimeOptions(body.runtimeOptions),
   }) as AgentTurnRequestBody;
 
-  return copyAgentTurnContextFields(agentTurnBody, body);
+  return {
+    body: copyAgentTurnContextFields(agentTurnBody, body),
+    activeAssistant,
+  };
 }
 
 function copyAgentTurnContextFields(
@@ -153,6 +185,57 @@ function normalizeAssistantPermissionMode(
   if (value === undefined) return isRegisteredAssistantRun(assistantId) ? undefined : 'read';
   if (value === 'read' || value === 'ask' || value === 'auto' || value === 'full') return value;
   throw new AssistantRunError(400, 'INVALID_PERMISSION_MODE', 'permissionMode must be read, ask, auto, or full.');
+}
+
+async function resolveActiveAssistantPrompt(assistantId: string): Promise<MindosActiveAssistantPrompt> {
+  const local = await readLocalAssistant(assistantId);
+  if (local) {
+    return createMindosActiveAssistantPrompt({
+      id: local.id,
+      name: local.name,
+      description: local.description,
+      source: local.source,
+      runtime: local.runtime ?? local.preferredAgent,
+      model: local.model,
+      permissionMode: local.permissionMode,
+      maxPermissionMode: local.permissionMode,
+      promptPath: local.paths?.prompt ?? local.paths?.file,
+      instructions: local.prompt?.content,
+      skills: local.skills,
+      mcp: local.mcp,
+    });
+  }
+
+  if (isRegisteredAssistantRun(assistantId)) {
+    return createMindosActiveAssistantPromptFromMarkdown({
+      id: assistantId,
+      markdown: getDefaultAssistantPrompt(assistantId),
+      source: 'builtin-default',
+      promptPath: `.mindos/assistants/${assistantId}.md`,
+      maxPermissionMode: 'ask',
+    });
+  }
+
+  return createMindosActiveAssistantPrompt({
+    id: assistantId,
+    source: 'request',
+    permissionMode: 'read',
+    maxPermissionMode: 'read',
+  });
+}
+
+async function readLocalAssistant(assistantId: string): Promise<AssistantLibraryItem | undefined> {
+  try {
+    const mindRoot = getMindRoot();
+    const mod = await import(
+      /* webpackIgnore: true */
+      '@geminilight/mindos/server'
+    ) as AssistantsServerModule;
+    const assistants = mod.listLocalAssistants?.(mindRoot) ?? [];
+    return assistants.find((assistant) => assistant.id === assistantId);
+  } catch {
+    return undefined;
+  }
 }
 
 async function readJsonBody(req: Request): Promise<unknown> {

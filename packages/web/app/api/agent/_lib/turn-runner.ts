@@ -22,6 +22,7 @@ import {
   buildMindosSystemPrompt,
   createMindosSessionContextSignature,
   normalizeMindosSelectedSkills,
+  prependMindosActiveAssistantPrompt,
   type MindosAgentInitializationContext,
 } from '@geminilight/mindos/agent';
 import { renderMindosPiSelectedSkillPrompt } from '@geminilight/mindos/agent/mindos-pi';
@@ -168,6 +169,7 @@ export async function runAgentTurnRequestBody(
   if (agentModeError) return agentModeError;
   const permissionModeError = validateAgentPermissionMode(body.permissionMode);
   if (permissionModeError) return permissionModeError;
+  const activeAssistant = requestContext.activeAssistant;
   const agentMode = normalizeAgentMode(body.agentMode) ?? 'default';
   const requestPermissionModeInput = normalizeAgentPermissionMode(body.permissionMode);
   const mindosUiMessages = toMindosUiAgentMessages(messages);
@@ -313,7 +315,7 @@ export async function runAgentTurnRequestBody(
       sessionSpaces: sessionContext.resolvedSelection.spaces,
       activeRecall: agentConfig.activeRecall,
     });
-    const externalPrompt = await buildMindosContextPrompt({
+    const externalPromptBase = await buildMindosContextPrompt({
       prompt: lastUserContent,
       mindRoot,
       fileContext: promptFileContext,
@@ -325,6 +327,7 @@ export async function runAgentTurnRequestBody(
       sessionContextSelection: sessionContext.resolvedSelection,
       sessionContextIssues: sessionContext.issues,
     });
+    const externalPrompt = prependMindosActiveAssistantPrompt(externalPromptBase, activeAssistant);
     const sessionContextMetadata = sessionContextRunMetadata(sessionContextSignature, includeSessionContext);
 
     const { runExternalRuntimeTurn } = await import('./turn-runner-external');
@@ -465,6 +468,7 @@ export async function runAgentTurnRequestBody(
   });
   const systemPromptBase = buildMindosSystemPrompt({
     mindRoot,
+    activeAssistant,
     environment: {
       projectRoot,
       cwd: executionCwd,

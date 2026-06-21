@@ -43,7 +43,7 @@ Write Dreaming run artifacts under .mindos/dreaming: a run JSON file, latest.jso
 `;
 
 export function buildDreamingAssistantRunPrompt({
-  assistantPrompt = DREAMING_ASSISTANT_DEFAULT_PROMPT,
+  assistantPrompt,
   space,
   dryRun,
 }: {
@@ -52,7 +52,7 @@ export function buildDreamingAssistantRunPrompt({
   dryRun?: boolean;
 } = {}): string {
   return buildAssistantRunPrompt({
-    assistantPrompt: assistantPrompt.trim() || DREAMING_ASSISTANT_DEFAULT_PROMPT.trim(),
+    ...(assistantPrompt?.trim() ? { assistantPrompt: assistantPrompt.trim() } : {}),
     runTitle: 'Current Dreaming Run',
     intro: 'Use the assistant instructions above as the operating prompt for this run.',
     itemsLabel: 'Dreaming scope',

@@ -16,6 +16,21 @@ export {
 } from './system-prompt.js';
 
 export {
+  createMindosActiveAssistantPrompt,
+  createMindosActiveAssistantPromptFromMarkdown,
+  normalizeMindosAssistantSkillBindings,
+  parseMindosAssistantMarkdownPrompt,
+  prependMindosActiveAssistantPrompt,
+  renderMindosActiveAssistantPromptSection,
+  renderMindosActiveAssistantSectionContent,
+  type CreateMindosActiveAssistantPromptInput,
+  type MindosActiveAssistantPrompt,
+  type MindosAssistantMarkdownPrompt,
+  type MindosAssistantSkillActivation,
+  type MindosAssistantSkillBinding,
+} from './assistant-prompt.js';
+
+export {
   buildMindosTurnContext,
   buildMindosContextPrompt,
   compactMindosPromptForTokenBudget,

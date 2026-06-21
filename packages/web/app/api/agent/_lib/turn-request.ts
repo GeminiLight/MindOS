@@ -1,4 +1,7 @@
 import type {
+  MindosActiveAssistantPrompt,
+} from '@geminilight/mindos/agent';
+import type {
   AgentMode,
   AgentPermissionMode,
   AgentRuntimeIdentity,
@@ -59,6 +62,7 @@ export type AgentTurnRequestContext = {
   headers?: Headers;
   signal?: AbortSignal;
   request?: Request;
+  activeAssistant?: MindosActiveAssistantPrompt;
 };
 
 export function normalizeNativeRuntimeOptions(value: unknown): NativeRuntimeOptions {

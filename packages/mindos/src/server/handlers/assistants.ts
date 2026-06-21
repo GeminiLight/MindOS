@@ -181,6 +181,8 @@ export function handleAssistantsPost(
       hidden: readBoolean(record.hidden, false),
       color: sanitizeString(record.color, 48) ?? 'amber',
       steps: sanitizePositiveInteger(record.steps) ?? 12,
+      skills: sanitizeStringArray(record.skills) ?? [],
+      mcp: sanitizeStringArray(record.mcp) ?? [],
     };
 
     writeFileSync(
@@ -302,8 +304,8 @@ function readAssistantMarkdownFile(mindRoot: string, assistantId: string): Mindo
     ...(parsed.profile.color ? { color: parsed.profile.color } : {}),
     ...(parsed.profile.steps ? { steps: parsed.profile.steps } : {}),
     preferredAgent: runtimeToPreferredAgent(parsed.profile.runtime),
-    skills: [],
-    mcp: [],
+    skills: parsed.profile.skills,
+    mcp: parsed.profile.mcp,
     source,
     format: 'markdown',
     deletable: source === 'custom',
@@ -411,6 +413,8 @@ type AssistantMarkdownProfile = {
   hidden: boolean;
   color?: string;
   steps?: number;
+  skills: string[];
+  mcp: string[];
 };
 
 type AssistantMarkdownReadResult = {
@@ -521,6 +525,8 @@ function parseAssistantMarkdown(content: string): AssistantMarkdownReadResult {
     hidden: readBoolean(split.fields.hidden, DEFAULT_ASSISTANT_PROFILE.hidden),
     ...(color ? { color } : {}),
     ...(steps ? { steps } : {}),
+    skills: sanitizeStringArray(split.fields.skills) ?? [],
+    mcp: sanitizeStringArray(split.fields.mcp) ?? [],
   };
   const hasInvalidVersion = rawVersion !== undefined && version.invalid;
   const ready = !split.invalid && !hasInvalidVersion && !split.missing;
@@ -759,6 +765,8 @@ function serializeAssistantMarkdown(profile: AssistantMarkdownProfile, body: str
     ['hidden', profile.hidden],
     ['color', profile.color],
     ['steps', profile.steps],
+    ['skills', profile.skills.length > 0 ? profile.skills.join(', ') : undefined],
+    ['mcp', profile.mcp.length > 0 ? profile.mcp.join(', ') : undefined],
   ];
   const lines = frontmatter
     .filter((entry): entry is [string, string | number | boolean] => entry[1] !== undefined && entry[1] !== '')
@@ -769,7 +777,7 @@ function serializeAssistantMarkdown(profile: AssistantMarkdownProfile, body: str
 
 function formatFrontmatterScalar(value: string | number | boolean): string {
   if (typeof value === 'number' || typeof value === 'boolean') return String(value);
-  if (/^[A-Za-z0-9][A-Za-z0-9 ._/-]*$/.test(value) && !/^(true|false|null)$/i.test(value)) {
+  if (/^[A-Za-z0-9][A-Za-z0-9 ._,/-]*$/.test(value) && !/^(true|false|null)$/i.test(value)) {
     return value;
   }
   return JSON.stringify(value);

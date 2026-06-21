@@ -50,14 +50,14 @@ export function normalizeInboxOrganizerFilePath(nameOrPath: string): string {
 
 export function buildInboxOrganizerRunPrompt(
   fileNames: string[],
-  assistantPrompt = INBOX_ORGANIZER_DEFAULT_PROMPT,
+  assistantPrompt?: string,
 ): string {
   const fileList = fileNames
     .map(normalizeInboxOrganizerFilePath)
     .filter(Boolean);
 
   return buildAssistantRunPrompt({
-    assistantPrompt: assistantPrompt.trim() || INBOX_ORGANIZER_DEFAULT_PROMPT.trim(),
+    ...(assistantPrompt?.trim() ? { assistantPrompt: assistantPrompt.trim() } : {}),
     runTitle: 'Current Inbox Review Run',
     intro: 'Use the assistant instructions above as the operating prompt for this run.',
     itemsLabel: 'Files in this review run',

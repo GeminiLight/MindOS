@@ -4,10 +4,6 @@ import React, { act, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 import { useInboxOrganizeController } from '@/hooks/useInboxOrganizeController';
 import type { InboxOrganizeFile, InboxOrganizeOptions } from '@/hooks/useInboxOrganizeController';
-import {
-  INBOX_ORGANIZER_ASSISTANT_PROMPT_PATH,
-  INBOX_ORGANIZER_DEFAULT_PROMPT,
-} from '@/lib/inbox-assistant';
 
 const toastError = vi.hoisted(() => vi.fn());
 
@@ -30,8 +26,6 @@ const labels = {
   organizeNoAi: 'Configure an AI API key before running the Inbox Organizer. Capture still works without AI.',
   organizeFailed: 'Inbox Organizer failed.',
 };
-
-const inboxOrganizerPromptUrl = `/api/file?path=${encodeURIComponent(INBOX_ORGANIZER_ASSISTANT_PROMPT_PATH)}&op=read_file`;
 
 function InboxOrganizeHarness({
   files,
@@ -79,12 +73,6 @@ describe('useInboxOrganizeController', () => {
           }),
         };
       }
-      if (url === inboxOrganizerPromptUrl) {
-        return {
-          ok: true,
-          json: async () => ({ content: `${INBOX_ORGANIZER_DEFAULT_PROMPT}\n\nUse the user's inbox taxonomy.` }),
-        };
-      }
       if (url.startsWith('/api/file?')) {
         return {
           ok: true,
@@ -107,7 +95,7 @@ describe('useInboxOrganizeController', () => {
     expect(startMock).toHaveBeenCalledTimes(1);
     expect(startMock).toHaveBeenCalledWith(
       [{ name: 'capture.md', content: 'Inbox capture content' }],
-      expect.stringContaining('Use the user\'s inbox taxonomy.'),
+      expect.stringContaining('Current Inbox Review Run'),
       'inbox-organize',
       { assistantId: 'inbox-organizer' },
     );
@@ -137,9 +125,6 @@ describe('useInboxOrganizeController', () => {
           }),
         };
       }
-      if (url === inboxOrganizerPromptUrl) {
-        return { ok: false, status: 404, json: async () => ({ error: 'missing' }) };
-      }
       if (url.startsWith('/api/file?')) {
         return {
           ok: true,
@@ -162,11 +147,11 @@ describe('useInboxOrganizeController', () => {
     expect(toastError).not.toHaveBeenCalledWith(labels.organizeNoAi, expect.anything());
     expect(startMock).toHaveBeenCalledWith(
       [{ name: 'capture.md', content: 'Inbox capture content' }],
-      expect.stringContaining('version: 1'),
+      expect.stringContaining('Current Inbox Review Run'),
       'inbox-organize',
       { ...options, assistantId: 'inbox-organizer' },
     );
-    expect(startMock.mock.calls[0]?.[1]).toContain('mode: subagent');
+    expect(startMock.mock.calls[0]?.[1]).not.toContain('mode: subagent');
     expect(startMock.mock.calls[0]?.[1]).toContain('Inbox/capture.md');
     expect(resultMock).toHaveBeenCalledWith({ started: true });
 
@@ -196,9 +181,6 @@ describe('useInboxOrganizeController', () => {
             envOverrides: {},
           }),
         };
-      }
-      if (url === inboxOrganizerPromptUrl) {
-        return { ok: true, json: async () => ({ content: INBOX_ORGANIZER_DEFAULT_PROMPT }) };
       }
       if (url.startsWith('/api/file?path=Inbox%2Fnotes.md')) {
         return { ok: true, json: async () => ({ content: 'Readable notes' }) };
@@ -266,9 +248,6 @@ describe('useInboxOrganizeController', () => {
             envOverrides: {},
           }),
         };
-      }
-      if (url === inboxOrganizerPromptUrl) {
-        return { ok: true, json: async () => ({ content: INBOX_ORGANIZER_DEFAULT_PROMPT }) };
       }
       if (url.startsWith('/api/file?')) {
         return { ok: true, json: async () => ({ content: 'Readable notes' }) };

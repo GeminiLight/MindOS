@@ -454,6 +454,8 @@ permission: ask
 hidden: false
 color: amber
 steps: 8
+skills: super-researcher, mindos
+mcp: zotero
 ---
 
 # Custom Research
@@ -517,8 +519,8 @@ Write a ranked reading queue.
         source: 'custom',
         deletable: true,
         preferredAgent: 'codex',
-        skills: [],
-        mcp: [],
+        skills: ['super-researcher', 'mindos'],
+        mcp: ['zotero'],
         paths: {
           root: '.mindos/assistants',
           profile: '.mindos/assistants/custom-research.md',
@@ -555,6 +557,8 @@ Write a ranked reading queue.
         model: 'gpt-5',
         permission: 'ask',
         permissionMode: 'ask',
+        skills: ['super-researcher', 'mindos'],
+        mcp: ['zotero'],
         schedule: { mode: 'daily' },
         surface: ['agents'],
         outputPolicy: { mode: 'draft' },
@@ -586,6 +590,8 @@ Write a ranked reading queue.
       expect(savedMarkdown).toContain('runtime: codex');
       expect(savedMarkdown).toContain('model: gpt-5');
       expect(savedMarkdown).toContain('permissionMode: ask');
+      expect(savedMarkdown).toContain('skills: super-researcher, mindos');
+      expect(savedMarkdown).toContain('mcp: zotero');
       expect(savedMarkdown).not.toContain('schemaVersion');
       expect(savedMarkdown).not.toContain('permission:');
       expect(savedMarkdown).not.toContain('schedule:');

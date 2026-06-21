@@ -2,14 +2,25 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { POST } from '@/app/api/assistant-runs/route';
 
 const agentTurnPostMock = vi.hoisted(() => vi.fn());
+const listLocalAssistantsMock = vi.hoisted(() => vi.fn(() => []));
 
 vi.mock('@/app/api/agent/_lib/turn-runner', () => ({
   runAgentTurnRequestBody: agentTurnPostMock,
 }));
 
+vi.mock('@/lib/fs', () => ({
+  getMindRoot: () => '/tmp/mind',
+}));
+
+vi.mock('@geminilight/mindos/server', () => ({
+  listLocalAssistants: listLocalAssistantsMock,
+}));
+
 describe('POST /api/assistant-runs', () => {
   beforeEach(() => {
     agentTurnPostMock.mockReset();
+    listLocalAssistantsMock.mockReset();
+    listLocalAssistantsMock.mockReturnValue([]);
   });
 
   it('delegates Inbox Organizer runs to the shared agent turn streaming runner', async () => {
@@ -33,9 +44,20 @@ describe('POST /api/assistant-runs', () => {
 
     expect(agentTurnPostMock).toHaveBeenCalledTimes(1);
     const delegatedBody = agentTurnPostMock.mock.calls[0]?.[0] as Record<string, unknown>;
-    const delegatedContext = agentTurnPostMock.mock.calls[0]?.[1] as { headers?: Headers; request?: Request; signal?: AbortSignal };
+    const delegatedContext = agentTurnPostMock.mock.calls[0]?.[1] as {
+      headers?: Headers;
+      request?: Request;
+      signal?: AbortSignal;
+      activeAssistant?: { id: string; name: string; instructions?: string; permissionMode?: string };
+    };
     expect(delegatedContext.headers?.get('accept-language')).toBe('zh-CN');
     expect(delegatedContext.request?.url).toBe('http://localhost/api/assistant-runs');
+    expect(delegatedContext.activeAssistant).toMatchObject({
+      id: 'inbox-organizer',
+      name: 'Inbox Organizer',
+      permissionMode: 'ask',
+    });
+    expect(delegatedContext.activeAssistant?.instructions).toContain('Review staged Inbox material');
     expect(delegatedBody).toMatchObject({
       assistantId: 'inbox-organizer',
       messages: [{ role: 'user', content: 'Organize this Inbox item.' }],
@@ -121,7 +143,16 @@ describe('POST /api/assistant-runs', () => {
     expect(messages[0].content).toContain('First call the local `dreaming` tool exactly once');
     expect(messages[0].content).toContain('space: all');
     expect(messages[0].content).toContain('writeArtifacts: true');
-    expect(messages[0].content).toContain('.mindos/dreaming');
+    expect(messages[0].content).not.toContain('# Dreaming');
+    const delegatedContext = agentTurnPostMock.mock.calls[0]?.[1] as {
+      activeAssistant?: { id: string; name: string; instructions?: string; permissionMode?: string };
+    };
+    expect(delegatedContext.activeAssistant).toMatchObject({
+      id: 'dreaming',
+      name: 'Dreaming',
+      permissionMode: 'ask',
+    });
+    expect(delegatedContext.activeAssistant?.instructions).toContain('.mindos/dreaming');
     expect(response.headers.get('content-type')).toContain('text/event-stream');
   });
 
@@ -172,6 +203,14 @@ describe('POST /api/assistant-runs', () => {
       messages: [{ role: 'user', content: 'Run this assistant.' }],
       permissionMode: 'read',
       runtimeOptions: { reasoningEffort: 'high' },
+    });
+    const delegatedContext = agentTurnPostMock.mock.calls[0]?.[1] as {
+      activeAssistant?: { id: string; name: string; permissionMode?: string };
+    };
+    expect(delegatedContext.activeAssistant).toMatchObject({
+      id: 'daily-signal',
+      name: 'Daily Signal',
+      permissionMode: 'read',
     });
   });
 

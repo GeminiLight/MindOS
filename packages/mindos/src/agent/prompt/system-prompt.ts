@@ -1,6 +1,10 @@
 import {
   MINDOS_SYSTEM_PROMPT,
 } from './base-prompt.js';
+import {
+  renderMindosActiveAssistantSectionContent,
+  type MindosActiveAssistantPrompt,
+} from './assistant-prompt.js';
 
 export type MindosAgentManifest = {
   id: 'mindos';
@@ -29,6 +33,7 @@ export type BuildMindosSystemPromptInput = {
   mindRoot: string;
   agent?: Partial<MindosAgentManifest>;
   environment?: Partial<MindosSystemPromptEnvironment>;
+  activeAssistant?: MindosActiveAssistantPrompt;
   skillsPrompt?: string;
   extraSections?: MindosPromptSection[];
 };
@@ -70,6 +75,14 @@ export function buildMindosSystemPrompt(input: BuildMindosSystemPromptInput): st
         'Skills are optional specialized workflows. Use the skill-loading tool only when the current task matches a listed skill or the user explicitly selected one.',
         skillsPrompt,
       ],
+    });
+  }
+
+  const activeAssistantContent = renderMindosActiveAssistantSectionContent(input.activeAssistant);
+  if (activeAssistantContent) {
+    sections.push({
+      title: 'Active Assistant',
+      content: activeAssistantContent,
     });
   }
 
