@@ -318,7 +318,7 @@ ViewPageClient ─────┤
   ├─→ 点击 📎 → 本地文件上传 → 显示在 Uploaded Files
   │
   ├─→ 提交消息
-  │     ├─ POST /api/ask (streaming)
+  │     ├─ POST /api/agent/sessions/:sessionId/turns (streaming)
   │     ├─ 状态流：connecting → thinking → streaming
   │     ├─ 实时更新最后一条 assistant 消息
   │     └─ 完成 / 错误 / 中止

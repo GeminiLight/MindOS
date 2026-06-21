@@ -55,10 +55,10 @@ sequenceDiagram
     participant KB as 知识库
     
     U->>G: 发送消息
-    G->>A: POST /api/ask
+    G->>A: POST /api/agent/sessions/:sessionId/turns
     A->>KB: 读取上下文文件
     KB-->>A: 返回上下文
-    A->>AI: 流式请求 (Vercel AI SDK)
+    A->>AI: Runtime-specific stream (MindOS Pi / Codex / Claude / ACP)
     AI-->>A: 流式响应
     A-->>G: 流式显示
     G-->>U: 实时显示结果

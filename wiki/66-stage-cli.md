@@ -124,7 +124,7 @@ mindos space create "项目文档"
 
 # Layer 3: Raw API（开发者/高级 Agent）
 mindos api GET /api/files
-mindos api POST /api/ask --body '{"question":"..."}'
+mindos api POST /api/agent/sessions/cli-demo/turns --body '{"messages":[{"role":"user","content":"..."}],"agentMode":"default","permissionMode":"ask"}'
 ```
 
 ### 核心命令（短期 1-2 周）

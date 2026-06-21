@@ -72,7 +72,7 @@ Quick reference for 150+ MindOS components. For full implementation details, see
 ### Chat/Ask
 - **AskFab** — Floating action button (Cmd+Shift+K)
 - **AskModal** — Quick ask modal
-- **AskContent** — Chat message display + input
+- **ChatContent** — Chat message display + input
 - **RightAskPanel** — Chat history sidebar
 - **ToolCallBlock** — LLM tool invocation display
 - **SessionHistory** — Chat session list (inline rename)
@@ -208,4 +208,3 @@ export function MyComponent({ title, isLoading }: {
 - **Progressive enhancement** — Works without JS (forms, links)
 - **Design tokens** — All magic numbers in `lib/config/*.ts`
 - **Consistent naming** — Components exported at `app/components/`
-
