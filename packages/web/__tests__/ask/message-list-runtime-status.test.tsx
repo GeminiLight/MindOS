@@ -145,7 +145,7 @@ describe('MessageList runtime status rendering', () => {
     expect(html).not.toContain('mt-2 flex justify-end');
   });
 
-  it('does not render empty native runtime streaming placeholders for routine statuses', () => {
+  it('renders a generic loading placeholder while native runtime routine statuses are the only parts', () => {
     const messages: Message[] = [
       {
         role: 'user',
@@ -181,8 +181,8 @@ describe('MessageList runtime status rendering', () => {
 
     expect(html).toContain('OK');
     expect(html).not.toContain('Starting Codex locally.');
-    expect(html).not.toContain('Thinking');
-    expect(html).not.toContain('/agent-icons/openai.svg');
+    expect(html).toContain('Thinking');
+    expect(html).toContain('/agent-icons/openai.svg');
   });
 
   it('renders visible runtime status as a compact status card without assistant text', () => {

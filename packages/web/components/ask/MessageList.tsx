@@ -387,14 +387,14 @@ const MessageRow = memo(function MessageRow({
     || Boolean(message.parts?.some(hasVisiblePart))
   );
   const isErrorMessage = message.role === 'assistant' && message.content.startsWith('__error__');
-  const suppressEmptyNativePlaceholder = message.role === 'assistant'
+  const suppressEmptyCompletedPlaceholder = message.role === 'assistant'
     && !isErrorMessage
     && !assistantHasRenderableBody
-    && (isStreamingLast ? isNativeRuntimeMessage(message) : true);
+    && !isStreamingLast;
   const hasFloatingDock = message.role === 'user'
     || (message.role === 'assistant' && !isStreamingLast && !isErrorMessage && cleanedAssistantContent.trim().length > 0);
 
-  if (suppressEmptyNativePlaceholder) return null;
+  if (suppressEmptyCompletedPlaceholder) return null;
 
   return (
     <div style={hasFloatingDock ? undefined : MESSAGE_ROW_STYLE} className={`group/message flex gap-3 animate-[fadeSlideUp_0.22s_ease_both] ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
