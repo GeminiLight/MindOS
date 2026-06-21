@@ -17,11 +17,11 @@ vi.mock('@/lib/stores/locale-store', () => ({
 
 describe('EchoPanel sidebar navigation', () => {
   it('marks the active Echo segment with the primary sidebar rail style', () => {
-    routeState.pathname = '/echo/overview';
+    routeState.pathname = '/echo/imprint';
 
     const html = renderToStaticMarkup(<EchoPanel active maximized={false} />);
 
-    expect(html).toMatch(/<a[^>]*aria-current="page"[^>]*href="\/echo\/overview"/);
+    expect(html).toMatch(/<a[^>]*aria-current="page"[^>]*href="\/echo\/imprint"/);
     expect(html).toContain('w-[3px] rounded-r-full bg-[var(--amber)]');
     expect(html).toContain('bg-[var(--amber-subtle)]');
     expect(html).not.toContain('border-[var(--amber)]/35 bg-[var(--amber-dim)]/45');
@@ -42,14 +42,16 @@ describe('EchoPanel sidebar navigation', () => {
 
     const html = renderToStaticMarkup(<EchoPanel active maximized={false} />);
 
-    expect(html).toContain(messages.en.panels.echo.overviewTitle);
     expect(html).toContain(messages.en.panels.echo.imprintTitle);
     expect(html).toContain(messages.en.panels.echo.threadsTitle);
     expect(html).toContain(messages.en.panels.echo.growthTitle);
+    expect(html).toContain(messages.en.panels.echo.practiceTitle);
+    expect(html).not.toContain(messages.en.panels.echo.overviewTitle);
     expect(html).not.toContain(messages.en.panels.echo.overviewDesc);
     expect(html).not.toContain(messages.en.panels.echo.imprintDesc);
     expect(html).not.toContain(messages.en.panels.echo.threadsDesc);
     expect(html).not.toContain(messages.en.panels.echo.growthDesc);
+    expect(html).not.toContain(messages.en.panels.echo.practiceDesc);
   });
 
   it('keeps inactive Echo segments out of the active/current state', () => {
@@ -58,9 +60,9 @@ describe('EchoPanel sidebar navigation', () => {
     const html = renderToStaticMarkup(<EchoPanel active maximized={false} />);
 
     expect(html).toMatch(/<a[^>]*aria-current="page"[^>]*href="\/echo\/growth"/);
-    expect(html).toMatch(/<a(?![^>]*aria-current="page")[^>]*href="\/echo\/overview"/);
     expect(html).toMatch(/<a(?![^>]*aria-current="page")[^>]*href="\/echo\/imprint"/);
     expect(html).toMatch(/<a(?![^>]*aria-current="page")[^>]*href="\/echo\/threads"/);
+    expect(html).toMatch(/<a(?![^>]*aria-current="page")[^>]*href="\/echo\/practice"/);
   });
 
   it('does not expose a fullscreen control in the Echo sidebar header', () => {

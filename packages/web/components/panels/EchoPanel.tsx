@@ -2,7 +2,7 @@
 
 import type { ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
-import { Footprints, GitBranch, LayoutDashboard, Sprout } from 'lucide-react';
+import { FlaskConical, Footprints, GitBranch, LayoutDashboard, Sprout } from 'lucide-react';
 import PanelHeader from './PanelHeader';
 import { PANEL_NAV_STACK_CLASS, PanelNavRow } from './PanelNavRow';
 import { useLocale } from '@/lib/stores/locale-store';
@@ -24,6 +24,7 @@ export default function EchoPanel({ active }: EchoPanelProps) {
     imprint: { icon: <Footprints size={14} />, title: e.imprintTitle },
     threads: { icon: <GitBranch size={14} />, title: e.threadsTitle },
     growth: { icon: <Sprout size={14} />, title: e.growthTitle },
+    practice: { icon: <FlaskConical size={14} />, title: e.practiceTitle },
   };
 
   return (

@@ -299,8 +299,10 @@ describe('i18n echo panel', () => {
     'imprintTitle',
     'threadsTitle',
     'growthTitle',
+    'practiceTitle',
     'overviewDesc',
     'threadsDesc',
+    'practiceDesc',
   ] as const;
 
   it('en has all echo keys', () => {

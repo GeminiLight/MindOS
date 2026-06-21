@@ -2,11 +2,11 @@
  * Echo content routes: segment slugs and validation.
  */
 
-export const ECHO_SEGMENT_IDS = ['overview', 'imprint', 'threads', 'growth'] as const;
+export const ECHO_SEGMENT_IDS = ['overview', 'imprint', 'threads', 'growth', 'practice'] as const;
 
 export type EchoSegment = (typeof ECHO_SEGMENT_IDS)[number];
 
-export const ECHO_SEGMENT_ORDER: readonly EchoSegment[] = ECHO_SEGMENT_IDS;
+export const ECHO_SEGMENT_ORDER: readonly EchoSegment[] = ['imprint', 'threads', 'growth', 'practice'];
 
 /** App Router paths for each segment (single source for panel + in-page nav). */
 export const ECHO_SEGMENT_HREF: Record<EchoSegment, string> = {
@@ -14,6 +14,7 @@ export const ECHO_SEGMENT_HREF: Record<EchoSegment, string> = {
   imprint: '/echo/imprint',
   threads: '/echo/threads',
   growth: '/echo/growth',
+  practice: '/echo/practice',
 };
 
 export function isEchoSegment(value: string): value is EchoSegment {

@@ -8,9 +8,9 @@ import {
 } from '@/lib/echo-segments';
 
 describe('echo-segments', () => {
-  it('lists four segments in product order', () => {
-    expect(ECHO_SEGMENT_IDS).toEqual(['overview', 'imprint', 'threads', 'growth']);
-    expect(ECHO_SEGMENT_ORDER).toBe(ECHO_SEGMENT_IDS);
+  it('lists overview plus the four Echo modules', () => {
+    expect(ECHO_SEGMENT_IDS).toEqual(['overview', 'imprint', 'threads', 'growth', 'practice']);
+    expect(ECHO_SEGMENT_ORDER).toEqual(['imprint', 'threads', 'growth', 'practice']);
   });
 
   it('accepts valid segment slugs', () => {

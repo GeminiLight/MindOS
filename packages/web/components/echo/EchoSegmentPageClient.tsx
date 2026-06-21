@@ -9,6 +9,7 @@ import {
   Bookmark,
   Check,
   ChevronLeft,
+  FlaskConical,
   Flag,
   Infinity,
   Leaf,
@@ -29,7 +30,6 @@ import { openAskModal } from '@/hooks/useAskModal';
 import { ContentPageShell } from '@/components/shared/ContentPageShell';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { EchoHero } from './EchoHero';
-import EchoSegmentNav from './EchoSegmentNav';
 import { EchoInsightCollapsible } from './EchoInsightCollapsible';
 import DailyEchoReportButton from './DailyEcho/DailyEchoReportButton';
 import DailyEchoReportDrawer from './DailyEcho/DailyEchoReportDrawer';
@@ -52,6 +52,8 @@ function segmentTitle(segment: EchoSegment, echo: ReturnType<typeof useLocale>['
       return echo.threadsTitle;
     case 'growth':
       return echo.growthTitle;
+    case 'practice':
+      return echo.practiceTitle;
   }
 }
 
@@ -65,6 +67,8 @@ function segmentLead(segment: EchoSegment, p: EchoCopy): string {
       return p.threadsLead;
     case 'growth':
       return p.growthLead;
+    case 'practice':
+      return p.practiceLead;
   }
 }
 
@@ -78,6 +82,8 @@ function echoSnapshotCopy(segment: EchoSegment, p: EchoCopy): { title: string; b
       return { title: p.snapshotThreadsTitle, body: p.snapshotThreadsBody };
     case 'growth':
       return { title: p.snapshotGrowthTitle, body: p.snapshotGrowthBody };
+    case 'practice':
+      return { title: p.snapshotPracticeTitle, body: p.snapshotPracticeBody };
   }
 }
 
@@ -151,9 +157,7 @@ function EchoPageHeader({
         <BackToOverviewLink label={p.backToOverviewLabel} ariaLabel={p.backToOverviewAriaLabel} />
       )}
       actions={actions}
-    >
-      <EchoSegmentNav activeSegment={segment} />
-    </EchoHero>
+    />
   );
 }
 
@@ -201,7 +205,7 @@ function OverviewPanel({
         </div>
       </section>
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <OverviewStatCard
           href={ECHO_SEGMENT_HREF.imprint}
           icon={<NotebookText size={25} strokeWidth={1.65} />}
@@ -225,6 +229,14 @@ function OverviewPanel({
           value={p.overviewMetrics[2]?.value ?? ''}
           body={p.overviewGrowthBody}
           tone="sage"
+        />
+        <OverviewStatCard
+          href={ECHO_SEGMENT_HREF.practice}
+          icon={<FlaskConical size={25} strokeWidth={1.65} />}
+          title={p.overviewPracticeTitle}
+          value={p.overviewMetrics[3]?.value ?? ''}
+          body={p.overviewPracticeBody}
+          tone="graphite"
         />
       </div>
     </>
@@ -524,6 +536,58 @@ function GrowthPanel({
   );
 }
 
+function PracticePanel({ p }: { p: EchoCopy }) {
+  return (
+    <>
+      <section className={cn(echoSurfaceClass, 'p-7 md:p-8')}>
+        <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+          <div>
+            <div className="mb-4 inline-flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--amber-subtle)] text-[var(--amber-text)]" aria-hidden>
+              <FlaskConical size={21} strokeWidth={1.7} />
+            </div>
+            <h2 className={panelHeadingClass}>{p.practiceExperimentsTitle}</h2>
+            <p className="mt-3 max-w-2xl font-sans text-sm leading-7 text-muted-foreground">{p.practiceExperimentsBody}</p>
+          </div>
+          <span className="w-fit rounded-md bg-muted/55 px-3 py-1.5 font-sans text-xs text-muted-foreground">
+            {p.practiceCycleLabel}
+          </span>
+        </div>
+      </section>
+
+      <div className="grid gap-4 lg:grid-cols-3">
+        {p.practiceExperiments.map((experiment, index) => (
+          <section key={experiment.title} className={cn(echoPanelClass, 'flex min-h-[17rem] flex-col p-5')}>
+            <div className="mb-5 flex items-start justify-between gap-3">
+              <span className="rounded-md bg-[var(--amber-subtle)] px-2.5 py-1 font-sans text-xs text-[var(--amber-text)]">
+                {p.practiceExperimentLabel} {index + 1}
+              </span>
+              <span className="rounded-md bg-muted/50 px-2.5 py-1 font-sans text-xs text-muted-foreground">{experiment.status}</span>
+            </div>
+            <h2 className="font-sans text-base font-medium leading-snug text-foreground">{experiment.title}</h2>
+            <div className="mt-5 space-y-4 font-sans text-sm leading-6 text-muted-foreground">
+              <p>
+                <span className="font-medium text-foreground">{p.practiceHypothesisLabel}</span>
+                <br />
+                {experiment.hypothesis}
+              </p>
+              <p>
+                <span className="font-medium text-foreground">{p.practiceActionLabel}</span>
+                <br />
+                {experiment.action}
+              </p>
+              <p>
+                <span className="font-medium text-foreground">{p.practiceCheckLabel}</span>
+                <br />
+                {experiment.check}
+              </p>
+            </div>
+          </section>
+        ))}
+      </div>
+    </>
+  );
+}
+
 export default function EchoSegmentPageClient({ segment }: { segment: EchoSegment }) {
   const { t, locale } = useLocale();
   const p = t.echoPages;
@@ -653,6 +717,12 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
             {p.growthChatLabel}
           </Button>
         )
+      : segment === 'practice'
+        ? (
+            <Button type="button" variant="amber" size="xl" onClick={openSegmentAsk}>
+              {p.practiceChatLabel}
+            </Button>
+          )
       : undefined;
 
   return (
@@ -708,7 +778,11 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
           />
         )}
 
-        {(segment === 'threads' || segment === 'growth') && (
+        {segment === 'practice' && (
+          <PracticePanel p={p} />
+        )}
+
+        {(segment === 'threads' || segment === 'growth' || segment === 'practice') && (
           <EchoInsightCollapsible
             title={p.insightTitle}
             showLabel={p.insightShow}

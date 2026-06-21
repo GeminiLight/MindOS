@@ -19,7 +19,7 @@ describe('Content page shell contract', () => {
     expect(source).toContain('className={echoPageClass}');
     expect(source).toContain('const echoBodyClass =');
     expect(source).toContain('max-w-5xl');
-    expect(source).toContain('<EchoSegmentNav activeSegment={segment} />');
+    expect(source).not.toContain('EchoSegmentNav');
     expect(source).not.toContain('mx-auto max-w-3xl px-4 py-6');
     expect(source).not.toContain('bg-[radial-gradient');
     expect(source).not.toContain('color-mix');

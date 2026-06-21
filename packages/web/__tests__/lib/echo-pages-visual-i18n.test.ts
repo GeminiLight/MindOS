@@ -4,7 +4,6 @@ import { zh } from '@/lib/i18n';
 
 /** Visual polish strings; en/zh must stay in sync. */
 const VISUAL_KEYS = [
-  'segmentNavAria',
   'backToOverviewLabel',
   'backToOverviewAriaLabel',
   'generateInsightNoAi',
@@ -15,11 +14,14 @@ const VISUAL_KEYS = [
   'imprintChatLabel',
   'threadsChatLabel',
   'growthChatLabel',
+  'practiceChatLabel',
   'overviewLead',
   'threadsLead',
+  'practiceLead',
   'overviewOpenImprint',
   'threadsListTitle',
   'growthSignalsTitle',
+  'practiceExperimentsTitle',
   'growthSaveLabel',
 ] as const;
 
