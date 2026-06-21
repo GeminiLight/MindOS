@@ -37,6 +37,21 @@ describe('EchoPanel sidebar navigation', () => {
     expect(html).not.toContain('py-1.5');
   });
 
+  it('renders Echo segment rows without sidebar subtitles', () => {
+    routeState.pathname = '/echo/overview';
+
+    const html = renderToStaticMarkup(<EchoPanel active maximized={false} />);
+
+    expect(html).toContain(messages.en.panels.echo.overviewTitle);
+    expect(html).toContain(messages.en.panels.echo.imprintTitle);
+    expect(html).toContain(messages.en.panels.echo.threadsTitle);
+    expect(html).toContain(messages.en.panels.echo.growthTitle);
+    expect(html).not.toContain(messages.en.panels.echo.overviewDesc);
+    expect(html).not.toContain(messages.en.panels.echo.imprintDesc);
+    expect(html).not.toContain(messages.en.panels.echo.threadsDesc);
+    expect(html).not.toContain(messages.en.panels.echo.growthDesc);
+  });
+
   it('keeps inactive Echo segments out of the active/current state', () => {
     routeState.pathname = '/echo/growth';
 

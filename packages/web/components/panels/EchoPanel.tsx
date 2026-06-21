@@ -19,11 +19,11 @@ export default function EchoPanel({ active }: EchoPanelProps) {
   const e = t.panels.echo;
   const pathname = usePathname() ?? '';
 
-  const rowBySegment: Record<EchoSegment, { icon: ReactNode; title: string; subtitle: string }> = {
-    overview: { icon: <LayoutDashboard size={14} />, title: e.overviewTitle, subtitle: e.overviewDesc },
-    imprint: { icon: <Footprints size={14} />, title: e.imprintTitle, subtitle: e.imprintDesc },
-    threads: { icon: <GitBranch size={14} />, title: e.threadsTitle, subtitle: e.threadsDesc },
-    growth: { icon: <Sprout size={14} />, title: e.growthTitle, subtitle: e.growthDesc },
+  const rowBySegment: Record<EchoSegment, { icon: ReactNode; title: string }> = {
+    overview: { icon: <LayoutDashboard size={14} />, title: e.overviewTitle },
+    imprint: { icon: <Footprints size={14} />, title: e.imprintTitle },
+    threads: { icon: <GitBranch size={14} />, title: e.threadsTitle },
+    growth: { icon: <Sprout size={14} />, title: e.growthTitle },
   };
 
   return (
@@ -41,7 +41,6 @@ export default function EchoPanel({ active }: EchoPanelProps) {
                 href={href}
                 icon={row.icon}
                 title={row.title}
-                subtitle={row.subtitle}
                 active={isActive}
                 activeVariant="rail"
               />
