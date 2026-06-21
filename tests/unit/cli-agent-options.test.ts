@@ -31,10 +31,10 @@ describe('CLI agent option normalization', () => {
     })).toMatchObject({
       taskArgs: ['review'],
       maxSteps: 7,
+      permissionMode: 'read',
       providerOverride: 'anthropic',
       modelOverride: 'claude-sonnet-4-20250514',
       runtimeOptions: {
-        permissionMode: 'readonly',
         modelOverride: 'claude-sonnet-4-20250514',
         reasoningEffort: 'medium',
       },
