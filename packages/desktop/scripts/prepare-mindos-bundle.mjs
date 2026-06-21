@@ -19,7 +19,6 @@ import { assertStandaloneAppFiles } from './runtime-health-contract.mjs';
 
 export const BUILTIN_AGENT_EXTENSION_RUNTIME_DEPENDENCY_SEEDS = [
   '@juicesharp/rpiv-ask-user-question',
-  '@mariozechner/pi-coding-agent',
   'pi-mcp-adapter',
   'pi-schedule-prompt',
   'pi-subagents',
@@ -54,6 +53,7 @@ export const RUNTIME_DEPENDENCY_SEEDS = [
   '@sinclair/typebox',
   '@earendil-works/pi-agent-core',
   '@earendil-works/pi-ai',
+  '@earendil-works/pi-coding-agent',
   'ignore',
   'typebox',
   'yaml',

@@ -238,7 +238,6 @@ describe('materializeStandaloneAssets', () => {
   it('seeds every built-in PI agent extension package into runtime bundles', () => {
     expect(BUILTIN_AGENT_EXTENSION_RUNTIME_DEPENDENCY_SEEDS).toEqual([
       '@juicesharp/rpiv-ask-user-question',
-      '@mariozechner/pi-coding-agent',
       'pi-mcp-adapter',
       'pi-schedule-prompt',
       'pi-subagents',
@@ -255,6 +254,12 @@ describe('materializeStandaloneAssets', () => {
       'grammy',
     ]);
     expect(RUNTIME_DEPENDENCY_SEEDS).toEqual(expect.arrayContaining(IM_RUNTIME_DEPENDENCY_SEEDS));
+  });
+
+  it('seeds the current PI coding agent package into runtime bundles', () => {
+    expect(RUNTIME_DEPENDENCY_SEEDS).toContain('@earendil-works/pi-coding-agent');
+    expect(RUNTIME_DEPENDENCY_SEEDS).not.toContain('@mariozechner/pi-coding-agent');
+    expect(BUILTIN_AGENT_EXTENSION_RUNTIME_DEPENDENCY_SEEDS).not.toContain('@mariozechner/pi-coding-agent');
   });
 
   it('materializes MindOS-owned runtime extension sources into standalone bundles', () => {
