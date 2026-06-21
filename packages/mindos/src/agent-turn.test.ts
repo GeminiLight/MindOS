@@ -1091,7 +1091,7 @@ describe('MindOS session event contract', () => {
     ]);
   });
 
-  it('owns ACP ask session lifecycle and update mapping', async () => {
+  it('owns ACP agent session lifecycle and update mapping', async () => {
     const events: Array<{ type: string; delta?: string }> = [];
     const closed: string[] = [];
 
@@ -1190,7 +1190,7 @@ describe('MindOS session event contract', () => {
     ]);
   });
 
-  it('owns pi-agent ask session subscription, prompt execution, and completion', async () => {
+  it('owns pi-agent turn session subscription, prompt execution, and completion', async () => {
     const events: Array<{ type: string; delta?: string }> = [];
     let subscribed: ((event: unknown) => void) | undefined;
     let tokenUsage = '';

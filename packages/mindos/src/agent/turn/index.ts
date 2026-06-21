@@ -469,7 +469,7 @@ export function loadMindosAgentFileContext(
       newCumulativeSize: cumulativeSize,
     };
     if (!validation.valid) {
-      services.warn?.(`[ask] file size validation failed for "${filePath}": ${validation.error ?? 'invalid'}`);
+      services.warn?.(`[agent] file size validation failed for "${filePath}": ${validation.error ?? 'invalid'}`);
       failedFiles.push(filePath);
       return;
     }
@@ -480,7 +480,7 @@ export function loadMindosAgentFileContext(
       contextParts.push(`### ${label}: ${filePath}\n\n${content}`);
       cumulativeSize = validation.newCumulativeSize;
     } catch (error) {
-      services.warn?.(`[ask] failed to read ${label.startsWith('Attached') ? 'attached file' : 'currentFile'} "${filePath}":`, error);
+      services.warn?.(`[agent] failed to read ${label.startsWith('Attached') ? 'attached file' : 'currentFile'} "${filePath}":`, error);
       failedFiles.push(filePath);
     }
   }

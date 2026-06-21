@@ -26,7 +26,7 @@ export function loadAttachedFileContext(
         contextParts.push(`### Attached file from the MindOS knowledge base: ${filePath}\n\n${content}`);
       } catch (err) {
         console.warn(
-          `[ask] ${mode}: failed to read attached file "${filePath}":`,
+          `[agent] ${mode}: failed to read attached file "${filePath}":`,
           err instanceof Error ? err.message : err,
         );
         failedFiles.push(filePath);
@@ -41,7 +41,7 @@ export function loadAttachedFileContext(
       contextParts.push(`### Current file from the MindOS knowledge base: ${currentFile}\n\n${content}`);
     } catch (err) {
       console.warn(
-        `[ask] ${mode}: failed to read currentFile "${currentFile}":`,
+        `[agent] ${mode}: failed to read currentFile "${currentFile}":`,
         err instanceof Error ? err.message : err,
       );
       failedFiles.push(currentFile);

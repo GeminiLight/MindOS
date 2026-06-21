@@ -202,7 +202,7 @@ describe('MindOS server contract: product operations', () => {
     expect(JSON.stringify(agent.body)).not.toContain('token-secret');
   });
 
-  it('persists ask sessions in the product runtime store', () => {
+  it('persists agent sessions in the product runtime store', () => {
     const root = mkdtempSync(join(tmpdir(), 'mindos-agent-sessions-'));
     const storePath = join(root, 'sessions.json');
     const session = {

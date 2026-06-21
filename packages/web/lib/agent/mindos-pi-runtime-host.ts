@@ -123,21 +123,21 @@ export function createWebMindosPiRuntimeHostServices(
     estimateTokens: estimateStringTokens,
     onOllamaContext: ({ modelName, contextWindow, promptTokens, maxPromptTokens }) => {
       if (contextWindow) {
-        console.log(`[ask] Ollama model="${modelName}" context=${contextWindow} promptTokens=${promptTokens} maxPromptTokens=${maxPromptTokens}`);
+        console.log(`[agent] Ollama model="${modelName}" context=${contextWindow} promptTokens=${promptTokens} maxPromptTokens=${maxPromptTokens}`);
       }
       if (maxPromptTokens && promptTokens > maxPromptTokens) {
-        console.warn(`[ask] Ollama context overflow: prompt ${promptTokens} tokens > ${maxPromptTokens} max (${contextWindow} ctx). Compacting...`);
+        console.warn(`[agent] Ollama context overflow: prompt ${promptTokens} tokens > ${maxPromptTokens} max (${contextWindow} ctx). Compacting...`);
       }
     },
     onOllamaCompactStrip: (section, sectionTokens) => {
-      console.log(`[ask] Ollama compact: stripping section (${sectionTokens} tokens): ${section.slice(0, 80)}...`);
+      console.log(`[agent] Ollama compact: stripping section (${sectionTokens} tokens): ${section.slice(0, 80)}...`);
     },
     onOllamaCompacted: ({ beforeTokens, afterTokens }) => {
-      console.log(`[ask] Ollama compacted: ${beforeTokens} -> ${afterTokens} tokens`);
+      console.log(`[agent] Ollama compacted: ${beforeTokens} -> ${afterTokens} tokens`);
     },
     onExtensionLoadErrors: (errors) => {
       for (const entry of errors) {
-        console.error(`[ask] extension failed to load: ${entry.path}: ${entry.error}`);
+        console.error(`[agent] extension failed to load: ${entry.path}: ${entry.error}`);
       }
     },
   };

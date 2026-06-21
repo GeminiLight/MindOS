@@ -307,7 +307,7 @@ export async function compactMessages(
       .map(p => (p as { text?: string }).text)
       .join('');
 
-    if (DEV) console.log(`[ask] Compacted ${earlyMessages.length} early messages into summary (${summaryText.length} chars)`);
+    if (DEV) console.log(`[agent] Compacted ${earlyMessages.length} early messages into summary (${summaryText.length} chars)`);
 
     const summaryContent = `[System Note: Older conversation history has been truncated due to context length limits, but here is an AI-generated summary of what was discussed so far.]\n\n${summaryText}`;
 
@@ -341,10 +341,10 @@ export async function compactMessages(
     };
   } catch (err) {
     // API failure: fall back to hard prune instead of risking context overflow
-    console.warn('[ask] Compact failed, applying hard prune as fallback:', err);
+    console.warn('[agent] Compact failed, applying hard prune as fallback:', err);
     const pruned = hardPrune(messages, systemPrompt, modelName);
     if (pruned.length < messages.length) {
-      if (DEV) console.log(`[ask] Hard prune fallback succeeded (${messages.length} → ${pruned.length} messages)`);
+      if (DEV) console.log(`[agent] Hard prune fallback succeeded (${messages.length} → ${pruned.length} messages)`);
       return { messages: pruned, compacted: false };
     }
     // If pruning also can't help, let it bubble up so request fails safely
@@ -395,7 +395,7 @@ export function hardPrune(
   // Fallback: if no user message found in remaining messages, inject a synthetic one
   const pruned = cutIdx > 0 ? messages.slice(cutIdx) : messages;
   if (pruned.length > 0 && asMsg(pruned[0]).role !== 'user') {
-    if (DEV) console.log(`[ask] Hard pruned ${cutIdx} messages, injecting synthetic user message (${messages.length} → ${pruned.length + 1})`);
+    if (DEV) console.log(`[agent] Hard pruned ${cutIdx} messages, injecting synthetic user message (${messages.length} → ${pruned.length + 1})`);
     const syntheticUser: UserMessage = {
       role: 'user',
       content: '[System Note: Older conversation history has been truncated due to context length limits. The user may refer to things you can no longer see. If so, kindly ask them to repeat the context.]',
@@ -417,7 +417,7 @@ export function hardPrune(
   }
 
   if (cutIdx > 0) {
-    if (DEV) console.log(`[ask] Hard pruned ${cutIdx} messages (${messages.length} → ${messages.length - cutIdx})`);
+    if (DEV) console.log(`[agent] Hard pruned ${cutIdx} messages (${messages.length} → ${messages.length - cutIdx})`);
     return pruned;
   }
 
@@ -446,11 +446,11 @@ export function createTransformContext(
     const preTokens = estimateTokens(result);
     const sysTokens = estimateStringTokens(systemPrompt);
     const ctxLimit = getContextLimit(modelName);
-    if (DEV) console.log(`[ask] Context: ~${preTokens + sysTokens} tokens (messages=${preTokens}, system=${sysTokens}), limit=${ctxLimit}`);
+    if (DEV) console.log(`[agent] Context: ~${preTokens + sysTokens} tokens (messages=${preTokens}, system=${sysTokens}), limit=${ctxLimit}`);
 
     // 2. Compact if >70% context limit (skip if user disabled)
     if (contextStrategy === 'auto' && needsCompact(result, systemPrompt, modelName)) {
-      if (DEV) console.log('[ask] Context >70% limit, compacting...');
+      if (DEV) console.log('[agent] Context >70% limit, compacting...');
       const compactResult = await compactMessages(
         result,
         getCompactModel(),
@@ -461,9 +461,9 @@ export function createTransformContext(
       result = compactResult.messages;
       if (compactResult.compacted) {
         const postTokens = estimateTokens(result);
-        if (DEV) console.log(`[ask] After compact: ~${postTokens + sysTokens} tokens`);
+        if (DEV) console.log(`[agent] After compact: ~${postTokens + sysTokens} tokens`);
       } else {
-        if (DEV) console.log('[ask] Compact skipped (too few messages or fallback used), hard prune will handle overflow if needed');
+        if (DEV) console.log('[agent] Compact skipped (too few messages or fallback used), hard prune will handle overflow if needed');
       }
     }
 

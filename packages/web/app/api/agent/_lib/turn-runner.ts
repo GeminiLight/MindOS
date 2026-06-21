@@ -835,9 +835,9 @@ export async function runAgentTurnRequestBody(
               maxSteps: stepLimit,
             });
 
-            const askRunId = randomUUID();
+            const agentRunId = randomUUID();
             await runWithAskUserQuestionBridge({
-              runId: askRunId,
+              runId: agentRunId,
               send: (event) => sendWithLedger(event as unknown as MindOSSSEvent),
             }, () => runMindosPiAgentTurnSession({
               session: {
