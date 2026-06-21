@@ -238,6 +238,7 @@ describe('materializeStandaloneAssets', () => {
   it('seeds every built-in PI agent extension package into runtime bundles', () => {
     expect(BUILTIN_AGENT_EXTENSION_RUNTIME_DEPENDENCY_SEEDS).toEqual([
       '@juicesharp/rpiv-ask-user-question',
+      '@mariozechner/pi-coding-agent',
       'pi-mcp-adapter',
       'pi-schedule-prompt',
       'pi-subagents',
