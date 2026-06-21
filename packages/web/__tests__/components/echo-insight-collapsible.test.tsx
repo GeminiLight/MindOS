@@ -102,4 +102,61 @@ describe('EchoInsightCollapsible', () => {
     expect(consumeUIMessageStreamMock).toHaveBeenCalledTimes(1);
     expect(host.textContent).toContain('Generated.');
   });
+
+  it('lets a page-level action trigger generation and open the result panel', async () => {
+    await act(async () => {
+      root.render(
+        <EchoInsightCollapsible
+          title="Assistant draft"
+          showLabel="Show"
+          hideLabel="Hide"
+          hint="Generate from context."
+          generateLabel="Generate"
+          noAiHint="No AI"
+          generatingLabel="Generating"
+          errorPrefix="Error:"
+          retryLabel="Retry"
+          assistantId="echo-threader"
+          userPrompt="Visible thread context"
+          generateSignal={0}
+          maxSteps={8}
+        />,
+      );
+    });
+
+    expect(host.querySelector('button[aria-expanded="false"]')).toBeTruthy();
+
+    await act(async () => {
+      root.render(
+        <EchoInsightCollapsible
+          title="Assistant draft"
+          showLabel="Show"
+          hideLabel="Hide"
+          hint="Generate from context."
+          generateLabel="Generate"
+          noAiHint="No AI"
+          generatingLabel="Generating"
+          errorPrefix="Error:"
+          retryLabel="Retry"
+          assistantId="echo-threader"
+          userPrompt="Visible thread context"
+          generateSignal={1}
+          maxSteps={8}
+        />,
+      );
+    });
+
+    expect(host.querySelector('button[aria-expanded="true"]')).toBeTruthy();
+    expect(fetchMock).toHaveBeenCalledWith('/api/assistant-runs', expect.objectContaining({
+      method: 'POST',
+    }));
+    const [, init] = fetchMock.mock.calls[0];
+    expect(JSON.parse(String(init.body))).toMatchObject({
+      assistantId: 'echo-threader',
+      permissionMode: 'read',
+      maxSteps: 8,
+      messages: [{ role: 'user', content: 'Visible thread context' }],
+    });
+    expect(host.textContent).toContain('Generated.');
+  });
 });

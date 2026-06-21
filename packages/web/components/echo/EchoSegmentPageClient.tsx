@@ -18,6 +18,7 @@ import {
   NotebookText,
   Repeat2,
   Scale,
+  Sparkles,
   SunMedium,
   Target,
 } from 'lucide-react';
@@ -93,6 +94,35 @@ function echoSnapshotCopy(segment: EchoSegment, p: EchoCopy): { title: string; b
   }
 }
 
+function echoAssistantActionCopy(segment: Exclude<EchoSegment, 'overview'>, p: EchoCopy): { title: string; label: string; icon: ReactNode } {
+  switch (segment) {
+    case 'imprint':
+      return {
+        title: p.assistantImprintTitle,
+        label: p.assistantGenerateImprint,
+        icon: <NotebookText size={18} strokeWidth={1.7} />,
+      };
+    case 'threads':
+      return {
+        title: p.assistantThreadsTitle,
+        label: p.assistantGenerateThreads,
+        icon: <MessageSquareText size={18} strokeWidth={1.7} />,
+      };
+    case 'growth':
+      return {
+        title: p.assistantGrowthTitle,
+        label: p.assistantGenerateGrowth,
+        icon: <Leaf size={18} strokeWidth={1.7} />,
+      };
+    case 'practice':
+      return {
+        title: p.assistantPracticeTitle,
+        label: p.assistantGeneratePractice,
+        icon: <FlaskConical size={18} strokeWidth={1.7} />,
+      };
+  }
+}
+
 const threadIcons = [
   <SunMedium key="sun" size={20} strokeWidth={1.7} />,
   <Target key="target" size={20} strokeWidth={1.7} />,
@@ -164,6 +194,42 @@ function EchoPageHeader({
       )}
       actions={actions}
     />
+  );
+}
+
+function EchoAssistantActionStrip({
+  p,
+  segment,
+  onGenerate,
+}: {
+  p: EchoCopy;
+  segment: Exclude<EchoSegment, 'overview'>;
+  onGenerate: () => void;
+}) {
+  const action = echoAssistantActionCopy(segment, p);
+
+  return (
+    <section
+      className={cn(
+        echoPanelClass,
+        'flex flex-col gap-4 border-[var(--amber)]/20 bg-[var(--amber-subtle)]/25 p-4 md:flex-row md:items-center md:justify-between',
+      )}
+      aria-label={action.title}
+    >
+      <div className="flex min-w-0 items-center gap-3">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[var(--amber)]/20 bg-background/75 text-[var(--amber)]" aria-hidden>
+          {action.icon}
+        </span>
+        <div className="min-w-0">
+          <h2 className="truncate font-sans text-sm font-medium text-foreground">{action.title}</h2>
+          <p className="mt-0.5 truncate font-sans text-xs text-muted-foreground">{p.assistantActionHint}</p>
+        </div>
+      </div>
+      <Button type="button" variant="amber" size="lg" onClick={onGenerate}>
+        <Sparkles size={15} aria-hidden />
+        {action.label}
+      </Button>
+    </section>
   );
 }
 
@@ -611,6 +677,7 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
   const [dailyEchoReport, setDailyEchoReport] = useState<DailyEchoReport | null>(null);
   const [isDailyEchoOpen, setIsDailyEchoOpen] = useState(false);
   const [isDailyEchoGenerating, setIsDailyEchoGenerating] = useState(false);
+  const [assistantGenerateSignal, setAssistantGenerateSignal] = useState(0);
   const dailySavedTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const growthSavedTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
@@ -689,6 +756,7 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
   }, []);
 
   const echoAssistantId = getEchoAssistantIdForSegment(segment);
+  const activeEchoSegment = segment === 'overview' ? null : segment;
   const recentSessions = useMemo(() => buildEchoRecentSessionSummaries(sessions), [sessions]);
   const selectedThread = p.threadItems[selectedThreadIndex] ?? p.threadItems[0];
   const echoAssistantPrompt = useMemo(() => {
@@ -769,6 +837,10 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
     title,
   ]);
 
+  const triggerEchoAssistantGenerate = useCallback(() => {
+    setAssistantGenerateSignal((value) => value + 1);
+  }, []);
+
   const headerActions = segment === 'imprint'
     ? (
         <>
@@ -812,6 +884,14 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
           titleId={pageTitleId}
           actions={headerActions}
         />
+
+        {activeEchoSegment && (
+          <EchoAssistantActionStrip
+            p={p}
+            segment={activeEchoSegment}
+            onGenerate={triggerEchoAssistantGenerate}
+          />
+        )}
 
         {segment === 'overview' && (
           <OverviewPanel
@@ -866,6 +946,7 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
             retryLabel={p.insightRetry}
             assistantId={echoAssistantId}
             userPrompt={echoAssistantPrompt}
+            generateSignal={assistantGenerateSignal}
           />
         )}
       </div>

@@ -34,6 +34,7 @@ export function EchoInsightCollapsible({
   retryLabel,
   assistantId,
   userPrompt,
+  generateSignal = 0,
   maxSteps = 12,
 }: {
   title: string;
@@ -47,6 +48,7 @@ export function EchoInsightCollapsible({
   retryLabel: string;
   assistantId: EchoAssistantId;
   userPrompt: string;
+  generateSignal?: number;
   maxSteps?: number;
 }) {
   const [open, setOpen] = useState(false);
@@ -56,6 +58,7 @@ export function EchoInsightCollapsible({
   const panelId = useId();
   const btnId = `${panelId}-btn`;
   const abortRef = useRef<AbortController | null>(null);
+  const lastGenerateSignalRef = useRef(generateSignal);
   const { ready: aiReady, loading: aiLoading } = useSettingsAiAvailable();
   const { t } = useLocale();
 
@@ -80,6 +83,9 @@ export function EchoInsightCollapsible({
   useEffect(() => () => abortRef.current?.abort(), []);
 
   const runGenerate = useCallback(async () => {
+    setOpen(true);
+    if (aiLoading || !aiReady || streaming) return;
+
     abortRef.current?.abort();
     const ctrl = new AbortController();
     abortRef.current = ctrl;
@@ -126,9 +132,15 @@ export function EchoInsightCollapsible({
       setStreaming(false);
       abortRef.current = null;
     }
-  }, [assistantId, maxSteps, userPrompt]);
+  }, [aiLoading, aiReady, assistantId, maxSteps, streaming, userPrompt]);
 
   const generateDisabled = aiLoading || !aiReady || streaming;
+
+  useEffect(() => {
+    if (generateSignal === lastGenerateSignalRef.current) return;
+    lastGenerateSignalRef.current = generateSignal;
+    void runGenerate();
+  }, [generateSignal, runGenerate]);
 
   return (
     <div className="mt-10 overflow-hidden rounded-xl border border-border bg-card shadow-sm transition-[border-color,box-shadow] duration-150 ease-out hover:border-[var(--amber)]/25 hover:shadow">
