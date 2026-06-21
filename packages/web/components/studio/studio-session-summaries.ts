@@ -1,4 +1,4 @@
-import { getMessages, hasMessages } from '@/lib/ask-run-store';
+import { getMessages, hasMessages } from '@/lib/agent-run-store';
 import type { ChatSession, Message } from '@/lib/types';
 import type { StudioSessionSummary } from '@/lib/studio-projects';
 import { getSessionAgentRuntime } from '@/lib/ask-agent';

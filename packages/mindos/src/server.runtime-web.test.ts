@@ -989,7 +989,7 @@ describe('MindOS server contract: runtime, agent turn stream, static web', () =>
     expect(removedMode).toMatchObject({
       ok: false,
       status: 400,
-      body: { error: 'mode is no longer supported' },
+      body: { error: 'Unknown field: mode' },
     });
 
     const valid = handleAgentTurnStream({
@@ -1042,17 +1042,17 @@ describe('MindOS server contract: runtime, agent turn stream, static web', () =>
     const valid = handleAgentSessionTurnStream('session-from-path', {
       chatSessionId: 'body-should-not-win',
       message: { text: 'hello from turn', skillName: 'research' },
-      runtime: { id: 'codex', name: 'Codex', kind: 'codex' },
+      selectedRuntime: { id: 'codex', name: 'Codex', kind: 'codex' },
       context: {
         workDir: { source: 'manual', path: '/repo/app', label: 'app' },
-        selection: {
+        contextSelection: {
           spaces: [{ path: 'Research', label: 'Research' }],
           assistants: [],
         },
         attachedFiles: ['note.md', 123],
       },
       permissionMode: 'read',
-      options: {
+      runtimeOptions: {
         reasoningEffort: 'high',
         modelOverride: 'gpt-test',
       },
@@ -1126,20 +1126,26 @@ describe('MindOS server contract: runtime, agent turn stream, static web', () =>
     ]);
   });
 
-  it('preserves native runtime external session ids in agent turn stream requests', async () => {
+  it('uses runtimeBinding as the only native runtime external session source', async () => {
     const valid = handleAgentTurnStream({
       messages: [{ role: 'user', content: 'continue' }],
       selectedRuntime: {
         id: 'codex',
         name: 'Codex',
         kind: 'codex',
+      },
+      runtimeBinding: {
+        kind: 'codex-thread',
+        runtime: 'codex',
+        runtimeId: 'codex',
         externalSessionId: 'thr_123',
+        updatedAt: 1,
       },
     }, {
       agentTurnStream: async function* (input) {
         yield {
           type: 'status',
-          message: `${input.selectedRuntime?.kind}:${input.selectedRuntime?.externalSessionId ?? 'missing'}`,
+          message: `${input.selectedRuntime?.kind}:${input.runtimeBinding?.externalSessionId ?? 'missing'}`,
         };
       },
     });

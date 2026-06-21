@@ -120,22 +120,25 @@ function normalizeAssistantRuntimeOptions(
   value: unknown,
 ): Record<string, unknown> | undefined {
   const runtimeOptions = objectBodyOrUndefined(value);
-  if (runtimeOptions?.permissionMode !== undefined) {
+  const unknownField = runtimeOptions ? firstUnknownField(runtimeOptions, ASSISTANT_RUNTIME_OPTION_FIELDS, 'runtimeOptions') : null;
+  if (unknownField) {
     throw new AssistantRunError(
       400,
       'INVALID_RUNTIME_OPTIONS',
-      'runtimeOptions.permissionMode is no longer supported; use top-level permissionMode.',
-    );
-  }
-  if (runtimeOptions?.agentMode !== undefined) {
-    throw new AssistantRunError(
-      400,
-      'INVALID_RUNTIME_OPTIONS',
-      'runtimeOptions.agentMode is no longer supported; use top-level agentMode.',
+      unknownField,
     );
   }
   return runtimeOptions;
 }
+
+function firstUnknownField(record: Record<string, unknown>, allowed: ReadonlySet<string>, prefix?: string): string | null {
+  for (const key of Object.keys(record)) {
+    if (!allowed.has(key)) return `Unknown field: ${prefix ? `${prefix}.` : ''}${key}`;
+  }
+  return null;
+}
+
+const ASSISTANT_RUNTIME_OPTION_FIELDS = new Set(['reasoningEffort', 'modelOverride']);
 
 function normalizeAgentMode(value: unknown): AgentTurnRequestBody['agentMode'] {
   if (value === undefined) return undefined;

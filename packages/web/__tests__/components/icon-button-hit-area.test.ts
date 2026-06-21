@@ -157,9 +157,9 @@ describe('icon button hit areas', () => {
     const headerSource = readSource('components/ask/AskHeader.tsx');
     const runtimeSource = readSource('components/ask/RuntimeIconSwitcher.tsx');
     const saveSource = readSource('components/ask/SaveSessionInline.tsx');
-    const contentSource = readSource('components/ask/AskContent.tsx');
+    const contentSource = readSource('components/chat/ChatContent.tsx');
     // Composer textarea + send/stop buttons were extracted into their own
-    // component (streaming-render perf: keystrokes no longer re-render AskContent).
+    // component (streaming-render perf: keystrokes no longer re-render ChatContent).
     const composerSource = readSource('components/ask/AskComposerInput.tsx');
     const modeSource = readSource('components/ask/ModeCapsule.tsx');
     const optionCapsuleSource = readSource('components/ask/AskOptionCapsule.tsx');

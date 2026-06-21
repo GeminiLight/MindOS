@@ -4,7 +4,7 @@
  * SessionHistoryPanel run/unread indicators + render-isolation performance bar
  * (wiki/specs/spec-chat-session-concurrency.md, PR2 acceptance).
  *
- * The panel subscribes to ask-run-store's run summary internally, so a card
+ * The panel subscribes to agent-run-store's run summary internally, so a card
  * shows a spinner while its session has a live run and an amber dot once a
  * background run finishes unread. Streaming chunks must NOT re-render the
  * panel: the summary snapshot only changes on run/unread membership, and the
@@ -37,12 +37,12 @@ import {
   markUnread,
   clearUnread,
   replaceLastMessage,
-  resetAskRunStoreForTests,
+  resetAgentRunStoreForTests,
   setActiveSession,
   setMessages,
   startRun,
   useSessionMessages,
-} from '@/lib/ask-run-store';
+} from '@/lib/agent-run-store';
 
 function makeSession(id: string, title: string): ChatSession {
   const now = Date.now();
@@ -75,7 +75,7 @@ describe('SessionHistoryPanel run/unread indicators', () => {
 
   beforeEach(() => {
     (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
-    resetAskRunStoreForTests();
+    resetAgentRunStoreForTests();
     localeSpy.renders = 0;
     vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({}) })));
     host = document.createElement('div');
@@ -141,7 +141,7 @@ describe('SessionHistoryPanel run/unread indicators', () => {
     setActiveSession('b');
     setMessages('a', [{ role: 'user', content: 'go', timestamp: 1 }], { skipPersist: true });
 
-    // The harness mimics AskContent: it subscribes to the streaming session's
+    // The harness mimics ChatContent: it subscribes to the streaming session's
     // messages, so every chunk re-renders the parent around the panel.
     let harnessRenders = 0;
     function Harness() {

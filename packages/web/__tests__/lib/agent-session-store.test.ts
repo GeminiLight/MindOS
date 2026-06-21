@@ -1,5 +1,5 @@
 /**
- * ask-session-store — component-independent session metadata store
+ * agent-session-store — component-independent session metadata store
  * (wiki/specs/spec-chat-session-concurrency.md, PR3 展开设计 v3).
  *
  * Covers the PR3 acceptance items that live at store level: shared metadata,
@@ -22,20 +22,20 @@ import {
   noteCurrentFile,
   refreshSessions,
   renameSession,
-  resetAskSessionStoreForTests,
+  resetAgentSessionStoreForTests,
   resetSession,
   togglePinSession,
-} from '@/lib/ask-session-store';
+} from '@/lib/agent-session-store';
 import {
   endRun,
   flushPersist,
   getActiveSession as runStoreActiveSession,
   getMessages,
   getUnread,
-  resetAskRunStoreForTests,
+  resetAgentRunStoreForTests,
   setMessages as storeSetMessages,
   startRun,
-} from '@/lib/ask-run-store';
+} from '@/lib/agent-run-store';
 import { createStudioProject } from '@/lib/studio-projects';
 
 const codexRuntime: AgentRuntimeIdentity = { id: 'codex', name: 'Codex', kind: 'codex' };
@@ -77,15 +77,15 @@ function lastPostPayload(byMethod: (m: string) => FetchCall[]): ChatSession {
 }
 
 beforeEach(() => {
-  resetAskRunStoreForTests();
-  resetAskSessionStoreForTests();
+  resetAgentRunStoreForTests();
+  resetAgentSessionStoreForTests();
 });
 
 afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('ask-session-store', () => {
+describe('agent-session-store', () => {
   describe('createSessionEntry (legacy createSession semantics)', () => {
     it('creates an unbound session for mindos / no runtime', () => {
       const plain = createSessionEntry('notes/a.md');
@@ -210,8 +210,8 @@ describe('ask-session-store', () => {
       // setup.ts resets the run store (which nulls the bridge slots) and then the
       // session store; the session store reset must re-wire or persistence would
       // silently lose metadata for every test (and HMR reload) thereafter.
-      resetAskRunStoreForTests();
-      resetAskSessionStoreForTests();
+      resetAgentRunStoreForTests();
+      resetAgentSessionStoreForTests();
 
       const { byMethod } = installFetchMock([serverSession({ id: 's2', title: 'After reset' })]);
       await initSessions({});
@@ -372,7 +372,7 @@ describe('ask-session-store', () => {
       installFetchMock([serverSession({ id: 'kept' })]);
       await refreshSessions();
       expect(getSessionsLoaded()).toBe(true);
-      resetAskSessionStoreForTests();
+      resetAgentSessionStoreForTests();
 
       // Network down: a failure result must not be merged as an empty list,
       // or the tab-strip reconcile would close every chat tab.

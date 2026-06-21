@@ -1,36 +1,23 @@
 import path from 'path';
-import { randomUUID } from 'crypto';
 import { getMindRoot } from '@/lib/fs';
 import type { AgentPermissionMode } from '@/lib/types';
-import { readSettings, readBaseUrlCompat, writeBaseUrlCompat } from '@/lib/settings';
+import { readSettings } from '@/lib/settings';
 import { resolveAssistantPermissionMode } from '@/lib/assistant-runtime-registry';
 import { findUserOverride } from '@/lib/acp/agent-descriptors';
 import { en as i18nEn, zh as i18nZh } from '@/lib/i18n';
-import { MindOSError, apiError, ErrorCodes } from '@/lib/errors';
-import { metrics } from '@/lib/metrics';
-import { resolveAgentTurnCompatMode } from '@/lib/agent/agent-turn-compat';
-import { createSession, promptStream, cancelPrompt, closeSession } from '@/lib/acp/session';
+import { apiError, ErrorCodes } from '@/lib/errors';
 import { getProjectRoot } from '@/lib/project-root';
 import {
-  type MindOSSSEvent,
   createMindosUploadedFileParts,
   normalizeMindosAgentStepLimit,
-  resolveMindosAgentTimeoutMs,
-  runMindosAcpAgentTurn,
-  runMindosNonStreamingFallback,
 } from '@geminilight/mindos/agent/turn';
-import { runMindosPiAgentTurnSession } from '@geminilight/mindos/agent/mindos-pi';
 import {
-  appendMindosRuntimeAttachmentPathContext,
   buildAgentRuntimeEnv,
   createMindosRuntimeImageAttachments,
   createMindosRuntimeUploadedFileAttachments,
-  materializeMindosRuntimeAttachments,
   resolveAgentRuntimeEnvOverlay,
-  runMindosNativeAgentTurn,
 } from '@geminilight/mindos/agent/runtime';
 import {
-  appendSseEventToAgentRun,
   buildMindosContextPrompt,
   buildMindosSystemPrompt,
   createMindosSessionContextSignature,
@@ -42,44 +29,18 @@ import {
   resolveSkillFile,
   resolveSkillReference,
 } from '@/lib/agent/skill-resolver';
-import { askUserQuestionViaBridge, runWithAskUserQuestionBridge } from '@geminilight/mindos/agent/bridges/user-question-bridge';
-import {
-  requestRuntimePermissionViaBridge,
-  runWithRuntimePermissionBridge,
-} from '@geminilight/mindos/agent/bridges/runtime-permission-bridge';
-import {
-  createClaudePermissionPromptConfig,
-  resolveRuntimePermissionBaseUrl,
-} from '@/lib/agent/claude-permission-prompt';
-import {
-  completeAgentRun,
-  failAgentRun,
-  listAgentRuns,
-  startAgentRun,
-  updateAgentRun,
-} from '@geminilight/mindos/agent/ledger/run-ledger';
+import { listAgentRuns } from '@geminilight/mindos/agent/ledger/run-ledger';
 import {
   createMindosAgentPermissionPolicy,
   type MindosPermissionMode,
 } from '@geminilight/mindos/agent/mindos-pi/permission';
-import {
-  runWithAgentRunContext,
-  setAgentRunContextForResource,
-} from '@geminilight/mindos/agent/agent-run-context';
 import { toMindosUiAgentMessages } from '@/lib/agent/to-agent-messages';
 import {
   readPersistedAgentSession,
   resolveSessionContext,
   SessionContextResolutionError,
 } from '@/lib/session-context-server';
-import {
-  agentRunErrorStatus,
-  compactStringEnv,
-  createAgentTurnSseResponse,
-  formatMindosPiExtensionLoadStatus,
-  omitEnvKeys,
-  sendAgentRunContext,
-} from './turn-sse';
+import { omitEnvKeys } from './turn-sse';
 import {
   getLastUserContent,
   getLastUserImages,
@@ -90,6 +51,7 @@ import {
   normalizeAssistantId,
   normalizeMindosAgentOptions,
   normalizeNativeRuntimeOptions,
+  validateAgentTurnRequestContract,
   validateAgentMode,
   validateAgentPermissionMode,
   validateNativeRuntimeOptions,
@@ -103,14 +65,19 @@ import {
   isMindosRuntimeSelection,
   nativeAgentRuntimeFromSelection,
   resolveAvailableNativeRuntime,
+  validateRuntimeBindingMatchesSelection,
 } from './runtime-selection';
 import {
   dirnameOf,
   expandAttachedFiles,
+  createMindosFileContextSignature,
+  fileContextForPrompt,
+  fileContextRunMetadata,
   loadAttachedFileContext,
   readKnowledgeFile,
   recallMindosTurnKnowledge,
   sessionContextRunMetadata,
+  shouldInjectFileContext,
   shouldInjectSessionContext,
 } from './turn-context';
 
@@ -138,14 +105,6 @@ function permissionModeForRequest(
 // ---------------------------------------------------------------------------
 // POST /api/agent/sessions/:sessionId/turns
 // ---------------------------------------------------------------------------
-
-function resolveRuntimePermissionBaseUrlForAgentTurnContext(context: AgentTurnRequestContext): string {
-  if (context.request) return resolveRuntimePermissionBaseUrl(context.request);
-  if (process.env.MINDOS_INTERNAL_URL || process.env.MINDOS_URL || process.env.MINDOS_WEB_PORT) {
-    return resolveRuntimePermissionBaseUrl(new Request('http://127.0.0.1/'));
-  }
-  throw new Error('Agent turn runner request context must include the original request for Claude Code permission callbacks.');
-}
 
 export async function handleAgentTurnRouteRequest(req: Request) {
   let body: AgentTurnRequestBody;
@@ -203,9 +162,8 @@ export async function runAgentTurnRequestBody(
   const requestSignal = requestContext.signal ?? new AbortController().signal;
 
   const { messages, currentFile, attachedFiles: rawAttached, uploadedFiles } = body;
-  if (Object.prototype.hasOwnProperty.call(body as Record<string, unknown>, 'mode')) {
-    return apiError(ErrorCodes.INVALID_REQUEST, 'mode is no longer supported', 400);
-  }
+  const contractError = validateAgentTurnRequestContract(body);
+  if (contractError) return contractError;
   const agentModeError = validateAgentMode(body.agentMode);
   if (agentModeError) return agentModeError;
   const permissionModeError = validateAgentPermissionMode(body.permissionMode);
@@ -213,6 +171,8 @@ export async function runAgentTurnRequestBody(
   const agentMode = normalizeAgentMode(body.agentMode) ?? 'default';
   const requestPermissionModeInput = normalizeAgentPermissionMode(body.permissionMode);
   const mindosUiMessages = toMindosUiAgentMessages(messages);
+  const runtimeBindingError = validateRuntimeBindingMatchesSelection(body.selectedRuntime, body.runtimeBinding);
+  if (runtimeBindingError) return apiError(ErrorCodes.INVALID_REQUEST, runtimeBindingError, 400);
   const selectedNativeRuntime = nativeAgentRuntimeFromSelection(body.selectedRuntime, body.runtimeBinding);
   const legacySelectedAcpAgent = acpAgentFromLegacySelection(body.selectedAcpAgent);
   const selectedAcpAgent = selectedNativeRuntime || body.selectedRuntime === null || isMindosRuntimeSelection(body.selectedRuntime)
@@ -242,6 +202,12 @@ export async function runAgentTurnRequestBody(
         ? run.metadata.externalSessionId
         : undefined,
     }));
+  const requestExternalSessionId = body.runtimeBinding
+    && (!body.runtimeBinding.status || body.runtimeBinding.status === 'active')
+    && typeof body.runtimeBinding.externalSessionId === 'string'
+    && body.runtimeBinding.externalSessionId.trim()
+    ? body.runtimeBinding.externalSessionId.trim()
+    : undefined;
   let sessionContext: ReturnType<typeof resolveSessionContext>;
   try {
     sessionContext = resolveSessionContext({
@@ -251,7 +217,7 @@ export async function runAgentTurnRequestBody(
       projectRoot,
       priorSession,
       requestRuntimeBinding: body.runtimeBinding,
-      requestExternalSessionId: selectedNativeRuntime?.externalSessionId,
+      requestExternalSessionId,
       priorRuns,
       env: process.env,
     });
@@ -327,10 +293,18 @@ export async function runAgentTurnRequestBody(
     ...createMindosRuntimeImageAttachments(getLastUserImages(messages)),
   ];
   const selectedSkills = normalizeMindosSelectedSkills(undefined, getLastUserSkillName(messages));
+  const loadedFileContext = loadAttachedFileContext(attachedFiles, currentFile);
+  const fileContextSignature = createMindosFileContextSignature(loadedFileContext);
+  const includeFileContext = shouldInjectFileContext({
+    chatSessionId,
+    signature: fileContextSignature,
+    priorRuns: recentSessionRuns,
+  });
+  const promptFileContext = fileContextForPrompt(loadedFileContext, includeFileContext);
+  const fileContextMetadata = fileContextRunMetadata(fileContextSignature, includeFileContext, loadedFileContext);
 
   if (verifiedNativeRuntime || selectedAcpAgent) {
     const lastUserContent = getLastUserContent(messages);
-    const fileContext = loadAttachedFileContext(attachedFiles, currentFile);
     const recalledKnowledge = await recallMindosTurnKnowledge({
       mindRoot,
       lastUserContent,
@@ -342,7 +316,7 @@ export async function runAgentTurnRequestBody(
     const externalPrompt = await buildMindosContextPrompt({
       prompt: lastUserContent,
       mindRoot,
-      fileContext,
+      fileContext: promptFileContext,
       uploadedParts,
       recalledKnowledge,
       selectedSkills,
@@ -353,223 +327,29 @@ export async function runAgentTurnRequestBody(
     });
     const sessionContextMetadata = sessionContextRunMetadata(sessionContextSignature, includeSessionContext);
 
-    return createAgentTurnSseResponse((send) => runWithAgentRunContext({ chatSessionId }, async () => {
-      const nativeRuntime = verifiedNativeRuntime;
-      if (nativeRuntime) {
-        const runtimeRunId = randomUUID();
-        let outputSummary = '';
-        const nativeRun = startAgentRun({
-          agentKind: 'native-runtime',
-          runtimeId: nativeRuntime.id,
-          displayName: nativeRuntime.name,
-          cwd: executionCwd,
-          permissionMode: nativePermissionMode,
-          inputSummary: externalPrompt,
-          metadata: {
-            agentMode,
-            runtimeKind: nativeRuntime.kind,
-            source: 'selected-native-runtime',
-            permissionCompilation: {
-              requested: nativePermissionMode,
-              applied: permissionPolicy.runtimePermissionMode,
-              target: nativeRuntime.kind,
-            },
-            ...sessionContextMetadata,
-            sessionWorkDir: sessionContext.resolvedWorkDir.path,
-            sessionSpaces: sessionContext.resolvedSelection.spaces.map((space) => space.path),
-            sessionAssistants: sessionContext.resolvedSelection.assistants.map((assistant) => assistant.id),
-            ...(assistantId ? { assistantId } : {}),
-          },
-        });
-        const sendWithLedger = (event: MindOSSSEvent) => {
-          if (event.type === 'text_delta') outputSummary += event.delta;
-          appendSseEventToAgentRun(nativeRun.id, event);
-          send(event);
-        };
-        sendAgentRunContext(send, nativeRun);
-        try {
-          const result = await runWithAgentRunContext({
-            chatSessionId,
-            rootRunId: nativeRun.rootRunId ?? nativeRun.id,
-            parentRunId: nativeRun.id,
-          }, () => (
-            runWithRuntimePermissionBridge({
-              runId: runtimeRunId,
-              send: sendWithLedger,
-            }, () => runWithAskUserQuestionBridge({
-              runId: runtimeRunId,
-              send: (event) => sendWithLedger(event as unknown as MindOSSSEvent),
-            }, () => runMindosNativeAgentTurn({
-              runtime: nativeRuntime,
-              cwd: executionCwd,
-              prompt: externalPrompt,
-              attachments: runtimeAttachments,
-              selectedSkills,
-              permissionMode: nativePermissionMode,
-              ...(nativeRuntimeOptions.modelOverride ? { modelOverride: nativeRuntimeOptions.modelOverride } : {}),
-              ...(nativeRuntimeOptions.reasoningEffort
-                ? { reasoningEffort: nativeRuntimeOptions.reasoningEffort }
-                : {}),
-              timeoutMs: resolveMindosAgentTimeoutMs(process.env.MINDOS_AGENT_TIMEOUT_MS),
-              ...(nativeRuntimeEnv ? { runtimeEnv: nativeRuntimeEnv } : {}),
-              signal: requestSignal,
-              send: sendWithLedger,
-              services: {
-                ...(nativeRuntime.kind === 'claude' ? {
-                  createClaudePermissionPrompt: () => createClaudePermissionPromptConfig({
-                    runId: runtimeRunId,
-                    baseUrl: resolveRuntimePermissionBaseUrlForAgentTurnContext(requestContext),
-                  }),
-                } : {}),
-                requestRuntimePermission: requestRuntimePermissionViaBridge,
-                requestUserQuestion: (request, callOptions) => askUserQuestionViaBridge({
-                  toolCallId: request.toolCallId,
-                  params: { questions: request.questions },
-                  signal: callOptions?.signal,
-                }),
-              },
-            }))
-          )));
-          if (result.error) {
-            failAgentRun(nativeRun.id, {
-              status: agentRunErrorStatus(result.error, requestSignal),
-              error: result.error,
-              outputSummary,
-              ...(result.externalSessionId ? { archive: { sessionId: result.externalSessionId } } : {}),
-              metadata: {
-                runtimeKind: nativeRuntime.kind,
-                ...(result.externalSessionId ? { externalSessionId: result.externalSessionId } : {}),
-              },
-            });
-            return;
-          }
-          completeAgentRun(nativeRun.id, {
-            outputSummary,
-            ...(result.externalSessionId ? { archive: { sessionId: result.externalSessionId } } : {}),
-            metadata: {
-              runtimeKind: nativeRuntime.kind,
-              permissionCompilation: {
-                requested: nativePermissionMode,
-                applied: permissionPolicy.runtimePermissionMode,
-                target: nativeRuntime.kind,
-              },
-              ...sessionContextMetadata,
-              ...(result.externalSessionId ? { externalSessionId: result.externalSessionId } : {}),
-            },
-          });
-        } catch (error) {
-          failAgentRun(nativeRun.id, {
-            status: agentRunErrorStatus(error, requestSignal),
-            error,
-            outputSummary,
-          });
-          throw error;
-        }
-        return;
-      }
-
-      if (selectedAcpAgent) {
-        const materializedAttachments = await materializeMindosRuntimeAttachments(runtimeAttachments);
-        const acpPrompt = appendMindosRuntimeAttachmentPathContext(
-          externalPrompt,
-          materializedAttachments.attachments,
-          { includeImages: true },
-        );
-        let hasContent = false;
-        let outputSummary = '';
-        const acpRun = startAgentRun({
-          agentKind: 'acp',
-          runtimeId: selectedAcpAgent.id,
-          displayName: selectedAcpAgent.name,
-          cwd: executionCwd,
-          permissionMode: permissionPolicy.permissionMode,
-          inputSummary: externalPrompt,
-          metadata: {
-            agentMode,
-            source: 'selected-acp-runtime',
-            phase: 'create_session',
-            permissionCompilation: {
-              requested: permissionPolicy.permissionMode,
-              applied: permissionPolicy.acpPermissionMode,
-              target: 'acp',
-            },
-            ...sessionContextMetadata,
-            sessionWorkDir: sessionContext.resolvedWorkDir.path,
-            sessionSpaces: sessionContext.resolvedSelection.spaces.map((space) => space.path),
-            sessionAssistants: sessionContext.resolvedSelection.assistants.map((assistant) => assistant.id),
-            ...(assistantId ? { assistantId } : {}),
-          },
-        });
-        sendAgentRunContext(send, acpRun);
-        const acpResult = await runWithAgentRunContext({
-          chatSessionId,
-          rootRunId: acpRun.rootRunId ?? acpRun.id,
-          parentRunId: acpRun.id,
-        }, () => (
-          runMindosAcpAgentTurn({
-            agentId: selectedAcpAgent.id,
-            cwd: executionCwd,
-            prompt: acpPrompt,
-            signal: requestSignal,
-            createSession: async (agentId, options) => {
-              const optionEnv = compactStringEnv((options as { env?: Record<string, string | undefined> } | undefined)?.env);
-              const mergedEnv = compactStringEnv({ ...(acpRuntimeEnvOverlay ?? {}), ...(optionEnv ?? {}) });
-              const session = await createSession(agentId, {
-                ...options,
-                ...(mergedEnv ? { env: mergedEnv } : {}),
-                permissionMode: permissionPolicy.acpPermissionMode,
-              });
-              updateAgentRun(acpRun.id, {
-                archive: { sessionId: session.id },
-                metadata: {
-                  phase: 'prompt',
-                  sessionId: session.id,
-                },
-              });
-              return session;
-            },
-            timeoutMs: resolveMindosAgentTimeoutMs(process.env.MINDOS_AGENT_TIMEOUT_MS),
-            hasContent: () => hasContent,
-            onVisibleContent: () => { hasContent = true; },
-            send: (event) => {
-              if (event.type === 'text_delta') outputSummary += event.delta;
-              appendSseEventToAgentRun(acpRun.id, event);
-              send(event);
-            },
-            promptStream: async (sessionId, prompt, onUpdate) => {
-              await promptStream(sessionId, prompt, onUpdate);
-            },
-            cancelPrompt,
-            closeSession,
-            errorMessage: (error) => ((error as any).code === 'TIMEOUT'
-              ? t.agentTimeout
-              : `ACP Agent Error: ${error.message}`),
-          })
-        ))
-          .catch((error) => {
-            failAgentRun(acpRun.id, {
-              status: agentRunErrorStatus(error, requestSignal),
-              error,
-              outputSummary,
-            });
-            throw error;
-          })
-          .finally(async () => {
-            await materializedAttachments.cleanup();
-          });
-        if (acpResult.error) {
-          failAgentRun(acpRun.id, {
-            status: agentRunErrorStatus(acpResult.error, requestSignal),
-            error: acpResult.error,
-            outputSummary,
-          });
-        } else {
-          completeAgentRun(acpRun.id, { outputSummary });
-        }
-      }
-    }), (err) => {
-      if (err instanceof Error && (err as any).code === 'TIMEOUT') return t.agentTimeout;
-      return err instanceof Error ? err.message : String(err);
+    const { runExternalRuntimeTurn } = await import('./turn-runner-external');
+    return runExternalRuntimeTurn({
+      verifiedNativeRuntime,
+      selectedAcpAgent,
+      externalPrompt,
+      chatSessionId,
+      executionCwd,
+      nativePermissionMode,
+      permissionPolicy,
+      agentMode,
+      sessionContextMetadata,
+      fileContextMetadata,
+      sessionWorkDir: sessionContext.resolvedWorkDir,
+      sessionContextSelection: sessionContext.resolvedSelection,
+      assistantId,
+      runtimeAttachments,
+      selectedSkills,
+      nativeRuntimeOptions,
+      nativeRuntimeEnv,
+      requestSignal,
+      requestContext,
+      acpRuntimeEnvOverlay,
+      t,
     });
   }
 
@@ -675,7 +455,6 @@ export async function runAgentTurnRequestBody(
   }
 
   const lastUserContent = getLastUserContent(messages);
-  const fileContext = loadAttachedFileContext(attachedFiles, currentFile);
   const recalledKnowledge = await recallMindosTurnKnowledge({
     mindRoot,
     lastUserContent,
@@ -694,7 +473,7 @@ export async function runAgentTurnRequestBody(
   const commonTurnPrompt = await buildMindosContextPrompt({
     prompt: lastUserContent,
     mindRoot,
-    fileContext,
+    fileContext: promptFileContext,
     uploadedParts,
     recalledKnowledge,
     agentInitialization,
@@ -710,189 +489,34 @@ export async function runAgentTurnRequestBody(
   // Log system prompt size for diagnosing context truncation issues (e.g. Ollama)
   console.log(`[agent-turn] systemPrompt=${systemPrompt.length} chars (~${Math.ceil(systemPrompt.length / 4)} tokens)`);
 
-  try {
-    const {
-      createWebMindosPiRuntimeHostServices,
-      getMindosWebPiRuntimePaths,
-    } = await import('@/lib/agent/mindos-pi-runtime-host');
-    const runtimePaths = getMindosWebPiRuntimePaths({ projectRoot, mindRoot, serverSettings, permissionPolicy });
-    const { createMindosAgentRuntime } = await import('@geminilight/mindos/agent/runtime/adapters/mindos');
-    const { runWithKbPermissionPolicy } = await import('@/lib/agent/kb-extension');
-    // Scope the kb tool policy to this request: runtime creation reloads the
-    // kb extension, and concurrent requests with different permissions must not
-    // race on the module-level policy.
-    const runtime = await runWithKbPermissionPolicy(permissionPolicy, () => createMindosAgentRuntime({
-      messages: mindosUiMessages,
-      systemPrompt,
-      providerOverride: body.providerOverride,
-      modelOverride: typeof body.modelOverride === 'string' ? body.modelOverride : undefined,
-      projectRoot,
-      agentDir: runtimePaths.agentDir,
-      mindRoot,
-      workDir: executionCwd,
-      agentConfig: {
-        enableThinking,
-        thinkingBudget,
-        contextStrategy,
-      },
-      serverSettings,
-      additionalSkillPaths: runtimePaths.additionalSkillPaths,
-      additionalExtensionPaths: runtimePaths.additionalExtensionPaths,
-      allowProjectBash: permissionPolicy.toolScope.terminal,
-      hostServices: createWebMindosPiRuntimeHostServices(serverSettings),
-    }));
-    systemPrompt = runtime.systemPrompt;
-    const {
-      session,
-      agentRunContextResource,
-      llmHistoryMessages,
-      lastUserContent,
-      lastUserImages,
-      fallbackTools,
-      apiKey,
-      modelName,
-      provider,
-      baseUrl,
-    } = runtime;
-    const extensionLoadErrors = (runtime as { extensionLoadErrors?: Array<{ path: string; error: string }> }).extensionLoadErrors;
-    const extensionLoadStatus = formatMindosPiExtensionLoadStatus(extensionLoadErrors);
-    const sessionContextMetadata = sessionContextRunMetadata(sessionContextSignature, includeSessionContext);
-
-    // ── SSE Stream ──
-    return createAgentTurnSseResponse(async (send) => {
-      let outputSummary = '';
-      const mainRun = startAgentRun({
-        agentKind: 'mindos-main',
-        runtimeId: 'mindos',
-        displayName: 'MindOS Agent',
-        chatSessionId,
-        cwd: executionCwd,
-        permissionMode: permissionPolicy.permissionMode,
-        inputSummary: typeof lastUserContent === 'string' ? lastUserContent : JSON.stringify(lastUserContent),
-        metadata: {
-          agentMode,
-          sessionWorkDir: sessionContext.resolvedWorkDir.path,
-          permissionCompilation: {
-            requested: permissionPolicy.permissionMode,
-            applied: permissionPolicy.runtimePermissionMode,
-            target: 'mindos-pi',
-          },
-          ...sessionContextMetadata,
-          sessionSpaces: sessionContext.resolvedSelection.spaces.map((space) => space.path),
-          sessionAssistants: sessionContext.resolvedSelection.assistants.map((assistant) => assistant.id),
-          ...(assistantId ? { assistantId } : {}),
-        },
-      });
-      sendAgentRunContext(send, mainRun);
-      const sendWithLedger = (event: MindOSSSEvent) => {
-        if (event.type === 'text_delta') outputSummary += event.delta;
-        appendSseEventToAgentRun(mainRun.id, event);
-        send(event);
-      };
-      if (extensionLoadStatus) {
-        sendWithLedger({
-          type: 'status',
-          runtime: 'mindos',
-          visible: true,
-          message: extensionLoadStatus,
-        });
-      }
-      try {
-        const agentRunContext = {
-          chatSessionId,
-          rootRunId: mainRun.rootRunId ?? mainRun.id,
-          parentRunId: mainRun.id,
-        };
-        const restoreAgentRunResourceContext = setAgentRunContextForResource(agentRunContextResource, agentRunContext);
-        try {
-          await runWithAgentRunContext(agentRunContext, async () => {
-            // ── Proxy compatibility check ──
-            // If this baseUrl is known to reject stream+tools, skip session.prompt() entirely
-            // and go straight to the non-streaming fallback path.
-            const compatCache = readBaseUrlCompat();
-            const effectiveBaseUrlKey = baseUrl || 'default';
-            const compatMode = resolveAgentTurnCompatMode({
-              provider,
-              baseUrl,
-              cachedMode: compatCache[effectiveBaseUrlKey],
-            });
-            const proxyFallbackMessages = {
-              proxyCompatMode: t.proxyCompatMode,
-              proxyCompatDetecting: t.proxyCompatDetecting,
-              proxyCompatFailed: t.proxyCompatFailed,
-              proxyCompatAlsoFailed: t.proxyCompatAlsoFailed,
-            };
-            const runProxyFallback = () => runMindosNonStreamingFallback({
-              baseUrl: baseUrl ?? '',
-              apiKey,
-              model: modelName,
-              systemPrompt,
-              historyMessages: llmHistoryMessages,
-              userContent: turnPrompt,
-              tools: fallbackTools,
-              send: sendWithLedger,
-              signal: requestSignal,
-              maxSteps: stepLimit,
-            });
-
-            const agentRunId = randomUUID();
-            await runWithAskUserQuestionBridge({
-              runId: agentRunId,
-              send: (event) => sendWithLedger(event as unknown as MindOSSSEvent),
-            }, () => runMindosPiAgentTurnSession({
-              session: {
-                subscribe: (callback) => { session.subscribe(callback); },
-                prompt: async (prompt, options) => { await session.prompt(prompt, options as any); },
-                steer: (message) => session.steer(message),
-                abort: () => session.abort(),
-              },
-              prompt: turnPrompt,
-              promptOptions: lastUserImages ? { images: lastUserImages } : undefined,
-              stepLimit,
-              timeoutMs: resolveMindosAgentTimeoutMs(process.env.MINDOS_AGENT_TIMEOUT_MS),
-              signal: requestSignal,
-              provider,
-              baseUrl,
-              effectiveBaseUrlKey,
-              compatMode,
-              send: sendWithLedger,
-              runFallback: runProxyFallback,
-              proxyMessages: proxyFallbackMessages,
-              onToolExecution: () => metrics.recordToolExecution(),
-              onTokens: (input, output) => metrics.recordTokens(input, output),
-              onStep: (step, maxSteps) => {
-                if (process.env.NODE_ENV === 'development') console.log(`[agent-turn] Step ${step}/${maxSteps}`);
-              },
-              writeCompat: (key, mode) => {
-                writeBaseUrlCompat(key, mode);
-                console.log(`[agent-turn] Proxy compat detected: ${key} → ${mode} (cached)`);
-              },
-            }));
-          });
-        } finally {
-          restoreAgentRunResourceContext();
-        }
-        completeAgentRun(mainRun.id, { outputSummary });
-      } catch (error) {
-        failAgentRun(mainRun.id, {
-          status: agentRunErrorStatus(error, requestSignal),
-          error,
-          outputSummary,
-        });
-        throw error;
-      }
-    }, (err) => {
-      if (err instanceof Error && (err as any).code === 'TIMEOUT') return t.agentTimeout;
-      return err instanceof Error ? err.message : String(err);
-    });
-  } catch (err) {
-    console.error('[agent-turn] Failed to initialize model:', err);
-    if (err instanceof MindOSError) {
-      return apiError(err.code, err.message);
-    }
-    if ((err as { code?: unknown })?.code === ErrorCodes.INVALID_REQUEST) {
-      return apiError(ErrorCodes.INVALID_REQUEST, err instanceof Error ? err.message : 'Invalid ask request', 400);
-    }
-    return apiError(ErrorCodes.MODEL_INIT_FAILED, err instanceof Error ? err.message : 'Failed to initialize AI model', 500);
-  }
+  const sessionContextMetadata = sessionContextRunMetadata(sessionContextSignature, includeSessionContext);
+  const { runMindosPiTurn } = await import('./turn-runner-mindos-pi');
+  return runMindosPiTurn({
+    mindosUiMessages,
+    systemPrompt,
+    turnPrompt,
+    providerOverride: body.providerOverride,
+    modelOverride: typeof body.modelOverride === 'string' ? body.modelOverride : undefined,
+    projectRoot,
+    mindRoot,
+    executionCwd,
+    agentConfig: {
+      enableThinking,
+      thinkingBudget,
+      contextStrategy,
+    },
+    serverSettings,
+    permissionPolicy,
+    chatSessionId,
+    agentMode,
+    sessionContextMetadata,
+    fileContextMetadata,
+    sessionWorkDirPath: sessionContext.resolvedWorkDir.path,
+    sessionSpaces: sessionContext.resolvedSelection.spaces.map((space) => space.path),
+    sessionAssistants: sessionContext.resolvedSelection.assistants.map((assistant) => assistant.id),
+    assistantId,
+    requestSignal,
+    stepLimit,
+    t,
+  });
 }

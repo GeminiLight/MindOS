@@ -5,8 +5,8 @@
  * resolution (metadata list OR run-store survivors), URL decoding, and the
  * missing-session fallback page with both actions wired.
  *
- * Real ask-session-store / ask-run-store / workspace-tabs modules are used
- * (setup.ts resets them after each test); AskContent is mocked to observe the
+ * Real agent-session-store / agent-run-store / workspace-tabs modules are used
+ * (setup.ts resets them after each test); ChatContent is mocked to observe the
  * props the route passes down.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -17,15 +17,15 @@ import {
   getActiveSessionId,
   getSessions,
   resetSession,
-} from '@/lib/ask-session-store';
-import { setMessages } from '@/lib/ask-run-store';
+} from '@/lib/agent-session-store';
+import { setMessages } from '@/lib/agent-run-store';
 import { getTabs, openTab } from '@/lib/workspace-tabs';
 import type { ChatSession } from '@/lib/types';
 
-const { routerPush, routerReplace, mockAskContentProps, mockSearchParams } = vi.hoisted(() => ({
+const { routerPush, routerReplace, mockChatContentProps, mockSearchParams } = vi.hoisted(() => ({
   routerPush: vi.fn(),
   routerReplace: vi.fn(),
-  mockAskContentProps: vi.fn(),
+  mockChatContentProps: vi.fn(),
   mockSearchParams: { value: new URLSearchParams() },
 }));
 
@@ -42,9 +42,9 @@ vi.mock('@/lib/stores/locale-store', async () => {
   };
 });
 
-vi.mock('@/components/ask/AskContent', () => ({
+vi.mock('@/components/chat/ChatContent', () => ({
   default: (props: Record<string, unknown>) => {
-    mockAskContentProps(props);
+    mockChatContentProps(props);
     return <div data-testid="ask-content" />;
   },
 }));
@@ -99,7 +99,7 @@ describe('/chat/new creation flow', () => {
     expect(routerReplace).toHaveBeenCalledWith(`/chat/${encodeURIComponent(id!)}`);
     // No flash of the fallback UI while creating.
     expect(host.textContent).not.toContain('This conversation no longer exists');
-    expect(mockAskContentProps).not.toHaveBeenCalled();
+    expect(mockChatContentProps).not.toHaveBeenCalled();
   });
 
   it('creates a Project-scoped session from the projectId query param', async () => {
@@ -133,7 +133,7 @@ describe('/chat/new creation flow', () => {
 });
 
 describe('/chat/<id> with an alive session', () => {
-  it('selects an existing session via loadSession and renders AskContent with initialSessionId', async () => {
+  it('selects an existing session via loadSession and renders ChatContent with initialSessionId', async () => {
     // Seed session A (has messages) then B (fresh empty, active).
     resetSession();
     const idA = getActiveSessionId()!;
@@ -147,7 +147,7 @@ describe('/chat/<id> with an alive session', () => {
     // loadSession ran: A is active and the abandoned empty B was dropped.
     expect(getActiveSessionId()).toBe(idA);
     expect(getSessions().some((s) => s.id === idB)).toBe(false);
-    expect(mockAskContentProps).toHaveBeenCalledWith(
+    expect(mockChatContentProps).toHaveBeenCalledWith(
       expect.objectContaining({ initialSessionId: idA, visible: true, variant: 'home', onDockToPanel: expect.any(Function) }),
     );
   });
@@ -159,7 +159,7 @@ describe('/chat/<id> with an alive session', () => {
 
     await renderPage(id);
 
-    const props = mockAskContentProps.mock.calls.at(-1)?.[0] as { onDockToPanel?: () => void };
+    const props = mockChatContentProps.mock.calls.at(-1)?.[0] as { onDockToPanel?: () => void };
     expect(props.onDockToPanel).toEqual(expect.any(Function));
 
     await act(async () => {
@@ -176,7 +176,7 @@ describe('/chat/<id> with an alive session', () => {
 
     await renderPage(id);
 
-    const props = mockAskContentProps.mock.calls.at(-1)?.[0] as { onDockToPanel?: () => void };
+    const props = mockChatContentProps.mock.calls.at(-1)?.[0] as { onDockToPanel?: () => void };
     await act(async () => {
       props.onDockToPanel?.();
     });
@@ -193,7 +193,7 @@ describe('/chat/<id> with an alive session', () => {
     expect(host.querySelector('[data-testid="ask-content"]')).toBeTruthy();
     expect(host.textContent).not.toContain('This conversation no longer exists');
     expect(getActiveSessionId()).toBe('evicted-1');
-    expect(mockAskContentProps).toHaveBeenCalledWith(
+    expect(mockChatContentProps).toHaveBeenCalledWith(
       expect.objectContaining({ initialSessionId: 'evicted-1' }),
     );
   });
@@ -204,7 +204,7 @@ describe('/chat/<id> with an alive session', () => {
     await renderPage('id%20with%20space');
 
     expect(getActiveSessionId()).toBe('id with space');
-    expect(mockAskContentProps).toHaveBeenCalledWith(
+    expect(mockChatContentProps).toHaveBeenCalledWith(
       expect.objectContaining({ initialSessionId: 'id with space' }),
     );
   });
@@ -223,7 +223,7 @@ describe('/chat/<id> with an alive session', () => {
     expect(host.querySelector('[data-testid="ask-content"]')).toBeTruthy();
   });
 
-  it('passes Project scope to AskContent for Project-scoped chat routes', async () => {
+  it('passes Project scope to ChatContent for Project-scoped chat routes', async () => {
     serverSessions = [{
       id: 'project-chat-1',
       source: 'project',
@@ -235,7 +235,7 @@ describe('/chat/<id> with an alive session', () => {
 
     await renderPage('project-chat-1');
 
-    expect(mockAskContentProps).toHaveBeenCalledWith(
+    expect(mockChatContentProps).toHaveBeenCalledWith(
       expect.objectContaining({
         initialSessionId: 'project-chat-1',
         projectId: 'launch-practice',
@@ -243,7 +243,7 @@ describe('/chat/<id> with an alive session', () => {
       }),
     );
 
-    const props = mockAskContentProps.mock.calls.at(-1)?.[0] as { onDockToPanel?: () => void };
+    const props = mockChatContentProps.mock.calls.at(-1)?.[0] as { onDockToPanel?: () => void };
     await act(async () => {
       props.onDockToPanel?.();
     });

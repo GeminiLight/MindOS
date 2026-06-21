@@ -1,7 +1,7 @@
 /**
- * SSE streaming client for CLI → /api/ask
+ * SSE streaming client for CLI → /api/agent/sessions/:sessionId/turns
  *
- * Handles the text/event-stream protocol emitted by the MindOS Ask API.
+ * Handles the text/event-stream protocol emitted by the MindOS Agent API.
  * Supports text_delta, thinking_delta, tool_start, tool_end, done, error, status events.
  */
 
@@ -19,7 +19,7 @@ function valueField(event, primary, fallback) {
 }
 
 /**
- * Stream an SSE response from /api/ask and print to stdout.
+ * Stream an SSE response from the agent session turn endpoint and print to stdout.
  *
  * @param {Response} res - fetch Response with Content-Type: text/event-stream
  * @param {object} opts
@@ -147,18 +147,19 @@ export async function streamSSE(res, opts = {}) {
 }
 
 /**
- * POST to /api/ask with proper headers and message format.
+ * POST to /api/agent/sessions/:sessionId/turns with proper headers and message format.
  *
  * @param {string} baseUrl - e.g. http://localhost:3456
- * @param {object} body - { messages, mode, attachedFiles, maxSteps, ... }
+ * @param {string} sessionId - MindOS chat/session id for this CLI conversation
+ * @param {object} body - { messages, agentMode, permissionMode, attachedFiles, maxSteps, ... }
  * @param {string} [token] - Auth token
  * @returns {Promise<Response>}
  */
-export async function postAsk(baseUrl, body, token) {
+export async function postAgentTurn(baseUrl, sessionId, body, token) {
   const headers = { 'Content-Type': 'application/json' };
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
-  return fetch(`${baseUrl}/api/ask`, {
+  return fetch(`${baseUrl}/api/agent/sessions/${encodeURIComponent(sessionId)}/turns`, {
     method: 'POST',
     headers,
     body: JSON.stringify(body),

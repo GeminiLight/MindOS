@@ -1,14 +1,14 @@
 'use client';
 
 /**
- * Thin subscription layer over ask-session-store + ask-run-store
+ * Thin subscription layer over agent-session-store + agent-run-store
  * (wiki/specs/spec-chat-session-concurrency.md, PR3 展开设计 v3).
  *
  * Session metadata, the createSession factory, and the active-session fact all
- * live in component-independent stores shared by every AskContent instance
+ * live in component-independent stores shared by every ChatContent instance
  * (home / right panel / future /chat route). This hook only subscribes, sorts
  * for display, and threads the caller's `currentFile` into store calls. The
- * return shape is unchanged — AskContent needs no edits.
+ * return shape is unchanged — ChatContent needs no edits.
  */
 
 import { useCallback, useEffect, useMemo } from 'react';
@@ -21,7 +21,7 @@ import type {
   SessionContextSelection,
   SessionWorkDir,
 } from '@/lib/types';
-import { setMessages as storeSetMessages, useSessionMessages } from '@/lib/ask-run-store';
+import { setMessages as storeSetMessages, useSessionMessages } from '@/lib/agent-run-store';
 import {
   attachRuntimeSession as storeAttachRuntimeSession,
   clearSessions as storeClearSessions,
@@ -39,7 +39,7 @@ import {
   togglePinSession as storeTogglePinSession,
   useActiveSessionId,
   useSessions,
-} from '@/lib/ask-session-store';
+} from '@/lib/agent-session-store';
 
 export function sessionTitle(s: ChatSession): string {
   if (s.title) return s.title;

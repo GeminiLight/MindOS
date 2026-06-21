@@ -16,7 +16,7 @@ describe('hook ref lint contract', () => {
         '-f',
         'json',
         'hooks/useAiOrganize.ts',
-        'hooks/useAskChat.ts',
+        'hooks/useAgentChat.ts',
         'hooks/useAskPanel.ts',
         'hooks/useFileUpload.ts',
       ],

@@ -2,7 +2,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
-import AskContent from '@/components/ask/AskContent';
+import ChatContent from '@/components/chat/ChatContent';
 
 const mockSetMessages = vi.fn();
 const mockPersistSession = vi.fn();
@@ -156,7 +156,7 @@ vi.mock('@/lib/agent/stream-consumer', () => ({
   consumeUIMessageStream: () => new Promise(() => {}),
 }));
 
-describe('AskContent input behavior while running', () => {
+describe('ChatContent input behavior while running', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockLocalAttachments = [];
@@ -174,7 +174,7 @@ describe('AskContent input behavior while running', () => {
     const root = createRoot(host);
 
     await act(async () => {
-      root.render(<AskContent visible variant="panel" initialMessage="run a task" />);
+      root.render(<ChatContent visible variant="panel" initialMessage="run a task" />);
     });
 
     const textarea = host.querySelector('textarea') as HTMLTextAreaElement;
@@ -215,7 +215,7 @@ describe('AskContent input behavior while running', () => {
     const root = createRoot(host);
 
     await act(async () => {
-      root.render(<AskContent visible variant="panel" initialMessage="read the appendix" />);
+      root.render(<ChatContent visible variant="panel" initialMessage="read the appendix" />);
     });
 
     const submitButton = host.querySelector('button[type="submit"]') as HTMLButtonElement;
@@ -248,7 +248,7 @@ describe('AskContent input behavior while running', () => {
     const root = createRoot(host);
 
     await act(async () => {
-      root.render(<AskContent visible variant="modal" initialMessage="hello world" onClose={() => {}} />);
+      root.render(<ChatContent visible variant="modal" initialMessage="hello world" onClose={() => {}} />);
     });
 
     const textarea = host.querySelector('textarea') as HTMLTextAreaElement;

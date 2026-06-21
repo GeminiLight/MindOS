@@ -25,7 +25,7 @@ import SessionContextDock from '@/components/ask/SessionContextDock';
 import ProviderModelCapsule, { getPersistedProviderModel } from '@/components/ask/ProviderModelCapsule';
 import NativeRuntimeOptionsCapsule, { getPersistedNativeRuntimeOptions, persistNativeRuntimeOptions } from '@/components/ask/NativeRuntimeOptionsCapsule';
 import type { ProviderId } from '@/lib/agent/providers';
-import { useAskChat } from '@/hooks/useAskChat';
+import { useAgentChat } from '@/hooks/useAgentChat';
 import { useAgentRunTimeline } from '@/hooks/useAgentRunTimeline';
 import {
   filterSessionsByRuntimeLane,
@@ -40,7 +40,7 @@ import {
   loadLastSelectedAgentRuntime,
   persistLastSelectedAgentRuntime,
 } from '@/lib/ask-runtime-preference';
-import { canEditSessionWorkDir, refreshSessions } from '@/lib/ask-session-store';
+import { canEditSessionWorkDir, refreshSessions } from '@/lib/agent-session-store';
 import { cn } from '@/lib/utils';
 import { useNativeRuntimeDetection } from '@/hooks/useNativeRuntimeDetection';
 import type { AcpAgentSelection } from '@/hooks/useAskModal';
@@ -104,7 +104,7 @@ function codexThreadUpdatedAt(thread: CodexThreadSummary): number | string | und
   return thread.updatedAt ?? thread.createdAt;
 }
 
-interface AskContentProps {
+interface ChatContentProps {
   /** Controls visibility — 'open' for modal, 'active' for panel */
   visible: boolean;
   currentFile?: string;
@@ -131,7 +131,7 @@ interface AskContentProps {
   onDockToPanel?: () => void;
 }
 
-export default function AskContent({ visible, currentFile, initialMessage, initialAcpAgent, initialAgentRuntime, initialSessionId, projectId, contextRequest, onFirstMessage, variant, onClose, maximized, onMaximize, onDockToPanel }: AskContentProps) {
+export default function ChatContent({ visible, currentFile, initialMessage, initialAcpAgent, initialAgentRuntime, initialSessionId, projectId, contextRequest, onFirstMessage, variant, onClose, maximized, onMaximize, onDockToPanel }: ChatContentProps) {
   const isPanel = variant === 'panel';
   const isHome = variant === 'home';
 
@@ -405,7 +405,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
     selectedAgentRuntimeRef,
     attachedFilesRef,
   }), []);
-  const chat = useAskChat({
+  const chat = useAgentChat({
     currentFile,
     providerOverride,
     modelOverride,
@@ -654,7 +654,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
     updateSelectedAgentRuntime,
   ]);
 
-  // Persistence is handled by ask-run-store (every message write schedules a
+  // Persistence is handled by agent-run-store (every message write schedules a
   // debounced flush; the placeholder-skip rule lives in flushPersist).
 
   // Esc to close modal or exit focus mode (skip for home variant)
@@ -855,7 +855,7 @@ export default function AskContent({ visible, currentFile, initialMessage, initi
           // Surface unexpected errors to the user via composerStatusMessage
           const errorMsg = err instanceof Error ? err.message : 'Failed to process dropped files';
           setDropError(errorMsg);
-          console.error('[AskContent] Drop file processing failed:', err);
+          console.error('[ChatContent] Drop file processing failed:', err);
         }
       })();
     }

@@ -6,7 +6,7 @@ import { FolderSync, PenLine, BarChart3, Sparkles, ArrowUpRight } from 'lucide-r
 import OnboardingView from './OnboardingView';
 import Logo from './Logo';
 import GuideCard from './GuideCard';
-import AskContent from '@/components/ask/AskContent';
+import ChatContent from '@/components/chat/ChatContent';
 import type { SpaceInfo } from '@/lib/space-records';
 import { useSmoothRouterPush } from '@/hooks/useSmoothRouterPush';
 
@@ -52,7 +52,7 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
   const current = categories[activeTab];
 
   /*
-   * Single render tree — AskContent is always mounted in the same position.
+   * Single render tree — ChatContent is always mounted in the same position.
    * Normal vs fullscreen is purely a CSS layout change, so chat state is preserved.
    */
   return (
@@ -102,7 +102,7 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
             data-walkthrough="ask-button"
             className={maximized ? 'flex-1 min-h-0 flex flex-col overflow-hidden' : 'rounded-xl border border-border/70 shadow-sm overflow-hidden flex flex-col max-h-[50vh]'}
           >
-            <AskContent
+            <ChatContent
               visible={true}
               variant="home"
               maximized={maximized}

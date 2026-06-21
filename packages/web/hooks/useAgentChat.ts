@@ -4,7 +4,7 @@ import { useRef, useCallback, useLayoutEffect } from 'react';
 import type { AgentIdentity, AgentPermissionMode, AgentRuntimeIdentity, Message, ImagePart, LocalAttachment, RuntimeSessionBinding, NativeRuntimeOptions } from '@/lib/types';
 import type { ProviderId } from '@/lib/agent/providers';
 import { consumeUIMessageStream } from '@/lib/agent/stream-consumer';
-import { annotateMessageWithAgentRuntime, compactAgentRuntimeIdentity, getMatchingRuntimeSessionBinding, isRuntimeSessionBindingResumable } from '@/lib/ask-agent';
+import { annotateMessageWithAgentRuntime, compactAgentRuntimeIdentity, getMatchingRuntimeSessionBinding } from '@/lib/ask-agent';
 import { isRetryableError, retryDelay, sleep } from '@/lib/agent/reconnect';
 import { buildAgentTurnEndpoint } from '@/lib/agent-turn-endpoint';
 import {
@@ -22,26 +22,24 @@ import {
   updateRun,
   useSessionRun,
   writeRuntimeBinding,
-} from '@/lib/ask-run-store';
-import { getSessionSubmitContextSnapshot } from '@/lib/ask-session-store';
+} from '@/lib/agent-run-store';
+import { getSessionSubmitContextSnapshot } from '@/lib/agent-session-store';
 import { openTab } from '@/lib/workspace-tabs';
 import { toast } from '@/lib/toast';
 
 export type LoadingPhase = 'connecting' | 'thinking' | 'streaming' | 'reconnecting';
 
-type AskRequestRuntime = AgentRuntimeIdentity & {
+type AgentRequestRuntime = AgentRuntimeIdentity & {
   binaryPath?: string;
-  externalSessionId?: string;
 };
 
-function runtimeForAskRequest(runtime: AskRequestRuntime | null | undefined): AskRequestRuntime | null {
+function runtimeForAgentRequest(runtime: AgentRequestRuntime | null | undefined): AgentRequestRuntime | null {
   if (!runtime) return null;
   return {
     id: runtime.id,
     name: runtime.name,
     kind: runtime.kind,
     ...(runtime.binaryPath ? { binaryPath: runtime.binaryPath } : {}),
-    ...(runtime.externalSessionId ? { externalSessionId: runtime.externalSessionId } : {}),
   };
 }
 
@@ -51,7 +49,7 @@ function chatTabTitleFromDraft(text: string, fallback = 'Chat session'): string 
   return line.length > 42 ? `${line.slice(0, 42)}...` : line;
 }
 
-export interface AskChatRefs {
+export interface AgentChatRefs {
   inputValueRef: React.RefObject<string>;
   mentionRef: React.RefObject<{ mentionQuery: string | null }>;
   slashRef: React.RefObject<{ slashQuery: string | null }>;
@@ -83,7 +81,7 @@ export interface AskChatRefs {
   attachedFilesRef: React.RefObject<string[]>;
 }
 
-interface UseAskChatOpts {
+interface UseAgentChatOpts {
   currentFile?: string;
   providerOverride: ProviderId | `p_${string}` | null;
   modelOverride: string | null;
@@ -91,7 +89,7 @@ interface UseAskChatOpts {
   nativeRuntimeOptions?: NativeRuntimeOptions;
   activeSessionId: string | null;
   onFirstMessage?: () => void;
-  refs: AskChatRefs;
+  refs: AgentChatRefs;
   errorLabels: { noResponse: string; stopped: string; concurrentLimit: string; tabLimitReached: string };
   resetInputState: () => void;
   onRestoreInput?: (userMessage: Message) => void;
@@ -114,7 +112,7 @@ function isWorkDirContextError(error: Error & { httpStatus?: number; issueCode?:
   );
 }
 
-export function useAskChat({
+export function useAgentChat({
   currentFile,
   providerOverride,
   modelOverride,
@@ -127,8 +125,8 @@ export function useAskChat({
   resetInputState,
   onRestoreInput,
   onTransientError,
-}: UseAskChatOpts) {
-  // All run state lives in ask-run-store, keyed by session. The hook derives
+}: UseAgentChatOpts) {
+  // All run state lives in agent-run-store, keyed by session. The hook derives
   // UI state for the *active* session — background runs keep going on their
   // own and never touch these values.
   const activeRun = useSessionRun(activeSessionId);
@@ -210,13 +208,7 @@ export function useAskChat({
       ? { id: selectedRuntimeBase.id, name: selectedRuntimeBase.name }
       : null;
     const matchingRuntimeBinding = getMatchingRuntimeSessionBinding(sess.activeSession, selectedRuntimeBase);
-    const selectedRuntimeWithBinding = selectedRuntimeBase && isRuntimeSessionBindingResumable(matchingRuntimeBinding)
-      ? {
-          ...selectedRuntimeBase,
-          externalSessionId: matchingRuntimeBinding.externalSessionId,
-        }
-      : selectedRuntimeBase;
-    const selectedRuntime = runtimeForAskRequest(selectedRuntimeWithBinding);
+    const selectedRuntime = runtimeForAgentRequest(selectedRuntimeBase);
     const runtimeForMessage = selectedRuntimeBase ?? null;
     const pendingImages = img.images.length > 0 ? [...img.images] : undefined;
     // Only store explicitly user-chosen files (filter out auto-included currentFile)
@@ -359,7 +351,7 @@ export function useAskChat({
           } else if (typeof errBody?.message === 'string' && errBody.message.trim()) {
             errorMsg = errBody.message;
           }
-        } catch (err) { console.warn("[useAskChat] error body parse failed:", err); }
+        } catch (err) { console.warn("[useAgentChat] error body parse failed:", err); }
         const err = new Error(errorMsg);
         (err as Error & { httpStatus?: number }).httpStatus = res.status;
         if (issueCode) (err as Error & { issueCode?: string }).issueCode = issueCode;

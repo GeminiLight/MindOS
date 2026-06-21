@@ -2,8 +2,8 @@
 
 /**
  * AskComposerInput — composer textarea + send/stop buttons with LOCAL input
- * state. Extracted from AskContent so a keystroke re-renders only this small
- * component instead of the whole AskContent tree (message list, popovers,
+ * state. Extracted from ChatContent so a keystroke re-renders only this small
+ * component instead of the whole ChatContent tree (message list, popovers,
  * capsules).
  *
  * Value plumbing (parent stays render-stable per keystroke):

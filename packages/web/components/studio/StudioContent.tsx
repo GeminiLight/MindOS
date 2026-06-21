@@ -14,7 +14,7 @@ import {
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useLocale } from '@/lib/stores/locale-store';
-import { refreshSessions, useSessions } from '@/lib/ask-session-store';
+import { refreshSessions, useSessions } from '@/lib/agent-session-store';
 import { useSmoothRouterPush } from '@/hooks/useSmoothRouterPush';
 import {
   createStudioProject,

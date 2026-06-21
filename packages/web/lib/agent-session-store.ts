@@ -1,20 +1,20 @@
 'use client';
 
 /**
- * ask-session-store — component-independent session **metadata** store
+ * agent-session-store — component-independent session **metadata** store
  * (wiki/specs/spec-chat-session-concurrency.md, PR3 展开设计 v3).
  *
  * Owns the session list (id/title/pinned/currentFile/bindings/updatedAt) and
- * the createSession factory, shared by every AskContent instance (home,
+ * the createSession factory, shared by every ChatContent instance (home,
  * right panel, future /chat route). Messages, runs, unread marks and the
- * persistence channel stay in ask-run-store; the dependency is strictly
- * one-way (this module imports ask-run-store, never the reverse).
+ * persistence channel stay in agent-run-store; the dependency is strictly
+ * one-way (this module imports agent-run-store, never the reverse).
  *
  * The run store's metaResolver / sessionsUpdater / runtimeBindingWriter
  * injection points are wired here exactly once at module load — they used to
  * be registered per component instance ("last registration wins"), which was
  * unreliable with multiple mounted instances. wireRunStoreBridges() is
- * idempotent and re-run by resetAskSessionStoreForTests() because the run
+ * idempotent and re-run by resetAgentSessionStoreForTests() because the run
  * store's own test reset nulls the slots.
  */
 
@@ -56,7 +56,7 @@ import {
   schedulePersist,
   setActiveSession as runStoreSetActiveSession,
   setMessages as storeSetMessages,
-} from '@/lib/ask-run-store';
+} from '@/lib/agent-run-store';
 import {
   findStudioProject,
   getStudioProjectSessionDefaults,
@@ -163,7 +163,7 @@ function runtimeBindingUpdatedAt(value?: number | string): number {
   return Date.now();
 }
 
-/** Messages live in ask-run-store; metadata entries may carry a stale snapshot. */
+/** Messages live in agent-run-store; metadata entries may carry a stale snapshot. */
 function withStoreMessages(session: ChatSession): ChatSession {
   return storeHasMessages(session.id)
     ? { ...session, messages: storeGetMessages(session.id) }
@@ -288,7 +288,7 @@ export function wireRunStoreBridges() {
 wireRunStoreBridges();
 
 // ---------------------------------------------------------------------------
-// Active session — variable lives in ask-run-store (endRun judges unread
+// Active session — variable lives in agent-run-store (endRun judges unread
 // there); this setter is the single write entry and adds change notification.
 
 export function setActiveSessionId(sessionId: string | null) {
@@ -742,13 +742,13 @@ export function useActiveSessionId(): string | null {
 
 // ---------------------------------------------------------------------------
 
-export function resetAskSessionStoreForTests() {
+export function resetAgentSessionStoreForTests() {
   sessions = EMPTY_SESSIONS;
   pendingFetchMerge = null;
   sessionsLoaded = false;
   sessionsListeners.clear();
   activeListeners.clear();
-  // resetAskRunStoreForTests() nulls the bridge slots — restore them so the
+  // resetAgentRunStoreForTests() nulls the bridge slots — restore them so the
   // next test (and the app after an HMR reload) keeps slot-free persistence.
   wireRunStoreBridges();
 }

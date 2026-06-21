@@ -59,7 +59,17 @@ export type MindosSelectedRuntime = {
   id: string;
   name: string;
   kind: MindosAgentRuntimeKind;
+  binaryPath?: string;
+};
+
+export type MindosRuntimeSessionBinding = {
+  kind: 'codex-thread' | 'claude-session' | 'acp-session';
+  runtime: Exclude<MindosAgentRuntimeKind, 'mindos'>;
+  runtimeId: string;
   externalSessionId?: string;
+  cwd?: string;
+  status?: 'active' | 'missing' | 'signed-out' | 'archived' | 'failed';
+  updatedAt: number;
 };
 
 export type MindosUploadedFile = {
@@ -81,6 +91,7 @@ export type MindosAgentTurnRequest = {
   maxSteps?: number;
   assistantId?: string;
   selectedRuntime?: MindosSelectedRuntime | null;
+  runtimeBinding?: MindosRuntimeSessionBinding | null;
   selectedAcpAgent?: { id: string; name: string } | null;
   runtimeOptions?: {
     reasoningEffort?: 'low' | 'medium' | 'high' | 'xhigh';

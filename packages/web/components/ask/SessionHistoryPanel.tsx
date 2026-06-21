@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useCallback, useMemo, useTransition, useDe
 import { AlertCircle, Archive, GitFork, Loader2, RefreshCw, Search, Trash2, Pencil, Pin, PinOff, Link2, MessageSquare, SquarePen, X } from 'lucide-react';
 import type { AgentRuntimeIdentity, ChatSession, CodexThreadSummary } from '@/lib/types';
 import { sessionTitle } from '@/hooks/useAskSession';
-import { useRunSummary } from '@/lib/ask-run-store';
+import { useRunSummary } from '@/lib/agent-run-store';
 import { getRuntimeSessionSummary, shortRuntimeSessionId } from '@/lib/ask-agent';
 import { useLocale } from '@/lib/stores/locale-store';
 import { StableRowActionButton, StableRowTrailingSlot } from '@/components/shared/StableRowChrome';
@@ -162,7 +162,7 @@ function SessionHistoryPanel({
   const { t } = useLocale();
   const [, startTransition] = useTransition();
   const ask = t.ask;
-  // Run/unread state comes from ask-run-store's summary snapshot, which only
+  // Run/unread state comes from agent-run-store's summary snapshot, which only
   // changes on run start/end or unread membership — streaming chunks never
   // re-render the list (spec-chat-session-concurrency.md performance bar).
   const runSummary = useRunSummary();
@@ -444,7 +444,7 @@ function SessionHistoryPanel({
   );
 }
 
-// Memoized: AskContent re-renders on every streamed chunk (it subscribes to the
+// Memoized: ChatContent re-renders on every streamed chunk (it subscribes to the
 // active session's messages), but every prop here is referentially stable during
 // a stream, so memo keeps the open history panel from reconciling per chunk.
 export default memo(SessionHistoryPanel);

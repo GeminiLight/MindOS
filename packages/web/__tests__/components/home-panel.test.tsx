@@ -8,12 +8,12 @@ import {
   getActiveSessionId,
   initSessions,
   loadSession,
-  resetAskSessionStoreForTests,
-} from '@/lib/ask-session-store';
+  resetAgentSessionStoreForTests,
+} from '@/lib/agent-session-store';
 import {
-  resetAskRunStoreForTests,
+  resetAgentRunStoreForTests,
   startRun,
-} from '@/lib/ask-run-store';
+} from '@/lib/agent-run-store';
 
 const push = vi.fn();
 
@@ -73,8 +73,8 @@ function expectThemeAwareAgentShell(mark: HTMLElement | null) {
 
 describe('HomePanel', () => {
   beforeEach(() => {
-    resetAskRunStoreForTests();
-    resetAskSessionStoreForTests();
+    resetAgentRunStoreForTests();
+    resetAgentSessionStoreForTests();
     push.mockClear();
   });
 

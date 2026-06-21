@@ -2,7 +2,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
-import AskContent from '@/components/ask/AskContent';
+import ChatContent from '@/components/chat/ChatContent';
 import { LAST_AGENT_RUNTIME_STORAGE_KEY } from '@/lib/ask-runtime-preference';
 import type { ChatSession } from '@/lib/types';
 
@@ -353,7 +353,7 @@ vi.mock('@/lib/agent/stream-consumer', () => ({
   consumeUIMessageStream: () => new Promise(() => {}),
 }));
 
-describe('AskContent ACP session binding', () => {
+describe('ChatContent ACP session binding', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
@@ -381,7 +381,7 @@ describe('AskContent ACP session binding', () => {
     const root = createRoot(host);
 
     await act(async () => {
-      root.render(<AskContent visible variant="panel" />);
+      root.render(<ChatContent visible variant="panel" />);
     });
 
     await act(async () => {
@@ -436,7 +436,7 @@ describe('AskContent ACP session binding', () => {
     const root = createRoot(host);
 
     await act(async () => {
-      root.render(<AskContent visible variant="panel" />);
+      root.render(<ChatContent visible variant="panel" />);
     });
 
     expect(host.querySelector('[data-testid="header-session-list"]')?.textContent).toContain('MindOS planning');
@@ -498,7 +498,7 @@ describe('AskContent ACP session binding', () => {
     const root = createRoot(host);
 
     await act(async () => {
-      root.render(<AskContent visible variant="panel" />);
+      root.render(<ChatContent visible variant="panel" />);
     });
     await act(async () => {
       await Promise.resolve();
@@ -509,7 +509,7 @@ describe('AskContent ACP session binding', () => {
     mockActiveSession = mindosSession;
     mockActiveSessionId = mindosSession.id;
     await act(async () => {
-      root.render(<AskContent visible variant="panel" />);
+      root.render(<ChatContent visible variant="panel" />);
     });
     await act(async () => {
       await Promise.resolve();
@@ -538,7 +538,7 @@ describe('AskContent ACP session binding', () => {
     const root = createRoot(host);
 
     await act(async () => {
-      root.render(<AskContent visible variant="panel" />);
+      root.render(<ChatContent visible variant="panel" />);
     });
 
     const selectCodex = Array.from(host.querySelectorAll('button')).find((button) => button.textContent === 'Select Codex') as HTMLButtonElement;
@@ -583,7 +583,7 @@ describe('AskContent ACP session binding', () => {
     const root = createRoot(host);
 
     await act(async () => {
-      root.render(<AskContent visible variant="panel" />);
+      root.render(<ChatContent visible variant="panel" />);
     });
 
     const selectClaudeNative = Array.from(host.querySelectorAll('button')).find((button) => button.textContent === 'Select Claude Native') as HTMLButtonElement;
@@ -627,7 +627,7 @@ describe('AskContent ACP session binding', () => {
     const root = createRoot(host);
 
     await act(async () => {
-      root.render(<AskContent visible variant="panel" />);
+      root.render(<ChatContent visible variant="panel" />);
     });
 
     const deleteActive = Array.from(host.querySelectorAll('button')).find((button) => button.textContent === 'Header Delete Active') as HTMLButtonElement;
@@ -649,7 +649,7 @@ describe('AskContent ACP session binding', () => {
     const root = createRoot(host);
 
     await act(async () => {
-      root.render(<AskContent visible variant="panel" initialMessage="review this diff" />);
+      root.render(<ChatContent visible variant="panel" initialMessage="review this diff" />);
     });
 
     await act(async () => {
@@ -676,7 +676,7 @@ describe('AskContent ACP session binding', () => {
     const root = createRoot(host);
 
     await act(async () => {
-      root.render(<AskContent visible variant="panel" initialMessage="review this diff" />);
+      root.render(<ChatContent visible variant="panel" initialMessage="review this diff" />);
     });
 
     await act(async () => {
@@ -737,7 +737,7 @@ describe('AskContent ACP session binding', () => {
     const root = createRoot(host);
 
     await act(async () => {
-      root.render(<AskContent visible variant="panel" initialMessage="use the selected folder" />);
+      root.render(<ChatContent visible variant="panel" initialMessage="use the selected folder" />);
     });
 
     await act(async () => {
@@ -783,7 +783,7 @@ describe('AskContent ACP session binding', () => {
 
     await act(async () => {
       root.render(
-        <AskContent
+        <ChatContent
           visible
           variant="panel"
           initialMessage="answer with mindos"
@@ -849,7 +849,7 @@ describe('AskContent ACP session binding', () => {
     const root = createRoot(host);
 
     await act(async () => {
-      root.render(<AskContent visible variant="panel" initialMessage="summarize this repo" />);
+      root.render(<ChatContent visible variant="panel" initialMessage="summarize this repo" />);
     });
 
     await act(async () => {
@@ -915,7 +915,7 @@ describe('AskContent ACP session binding', () => {
 
     await act(async () => {
       root.render(
-        <AskContent
+        <ChatContent
           visible
           variant="panel"
           initialMessage="continue with codex"
@@ -985,7 +985,7 @@ describe('AskContent ACP session binding', () => {
     const root = createRoot(host);
 
     await act(async () => {
-      root.render(<AskContent visible variant="panel" initialMessage="continue last runtime" />);
+      root.render(<ChatContent visible variant="panel" initialMessage="continue last runtime" />);
     });
 
     await act(async () => {
@@ -1045,7 +1045,7 @@ describe('AskContent ACP session binding', () => {
     const root = createRoot(host);
 
     await act(async () => {
-      root.render(<AskContent visible variant="panel" initialMessage="review this diff" />);
+      root.render(<ChatContent visible variant="panel" initialMessage="review this diff" />);
     });
 
     await act(async () => {
@@ -1124,7 +1124,7 @@ describe('AskContent ACP session binding', () => {
     const root = createRoot(host);
 
     await act(async () => {
-      root.render(<AskContent visible variant="panel" initialMessage="continue safely" />);
+      root.render(<ChatContent visible variant="panel" initialMessage="continue safely" />);
     });
 
     await act(async () => {
@@ -1193,7 +1193,7 @@ describe('AskContent ACP session binding', () => {
     const root = createRoot(host);
 
     await act(async () => {
-      root.render(<AskContent visible variant="panel" />);
+      root.render(<ChatContent visible variant="panel" />);
     });
 
     const selectButton = Array.from(host.querySelectorAll('button')).find((button) => button.textContent === 'Select Claude Native') as HTMLButtonElement;
@@ -1263,7 +1263,7 @@ describe('AskContent ACP session binding', () => {
     const root = createRoot(host);
 
     await act(async () => {
-      root.render(<AskContent visible variant="panel" />);
+      root.render(<ChatContent visible variant="panel" />);
     });
 
     const selectCodex = Array.from(host.querySelectorAll('button')).find((button) => button.textContent === 'Select Codex') as HTMLButtonElement;
@@ -1361,7 +1361,7 @@ describe('AskContent ACP session binding', () => {
     const root = createRoot(host);
 
     await act(async () => {
-      root.render(<AskContent visible variant="panel" />);
+      root.render(<ChatContent visible variant="panel" />);
     });
     const selectCodex = Array.from(host.querySelectorAll('button')).find((button) => button.textContent === 'Select Codex') as HTMLButtonElement;
     await act(async () => {
@@ -1421,7 +1421,7 @@ describe('AskContent ACP session binding', () => {
     const root = createRoot(host);
 
     await act(async () => {
-      root.render(<AskContent visible variant="panel" initialMessage="summarize this repo" />);
+      root.render(<ChatContent visible variant="panel" initialMessage="summarize this repo" />);
     });
 
     const selectButton = Array.from(host.querySelectorAll('button')).find((button) => button.textContent === 'Select Codex') as HTMLButtonElement;
@@ -1471,7 +1471,7 @@ describe('AskContent ACP session binding', () => {
     const root = createRoot(host);
 
     await act(async () => {
-      root.render(<AskContent visible variant="panel" initialMessage="summarize this repo" />);
+      root.render(<ChatContent visible variant="panel" initialMessage="summarize this repo" />);
     });
 
     await act(async () => {
@@ -1517,7 +1517,7 @@ describe('AskContent ACP session binding', () => {
     const root = createRoot(host);
 
     await act(async () => {
-      root.render(<AskContent visible variant="panel" initialMessage="summarize this repo" />);
+      root.render(<ChatContent visible variant="panel" initialMessage="summarize this repo" />);
     });
 
     const selectButton = Array.from(host.querySelectorAll('button')).find((button) => button.textContent === 'Select Claude Native') as HTMLButtonElement;
@@ -1550,7 +1550,7 @@ describe('AskContent ACP session binding', () => {
 
     // Submit in s1 — the mocked stream never resolves, so s1 keeps a live run.
     await act(async () => {
-      root.render(<AskContent visible variant="panel" initialMessage="long running task" />);
+      root.render(<ChatContent visible variant="panel" initialMessage="long running task" />);
     });
     const form = host.querySelector('form') as HTMLFormElement;
     await act(async () => {
@@ -1575,7 +1575,7 @@ describe('AskContent ACP session binding', () => {
     mockActiveSession = emptySession;
     mockActiveSessionId = emptySession.id;
     await act(async () => {
-      root.render(<AskContent visible variant="panel" />);
+      root.render(<ChatContent visible variant="panel" />);
     });
     const selectCodexAgain = Array.from(host.querySelectorAll('button')).find((button) => button.textContent === 'Select Codex') as HTMLButtonElement;
     await act(async () => {
@@ -1619,7 +1619,7 @@ describe('AskContent ACP session binding', () => {
     const root = createRoot(host);
 
     await act(async () => {
-      root.render(<AskContent visible variant="panel" />);
+      root.render(<ChatContent visible variant="panel" />);
     });
     const selectCodex = Array.from(host.querySelectorAll('button')).find((button) => button.textContent === 'Select Codex') as HTMLButtonElement;
     await act(async () => {

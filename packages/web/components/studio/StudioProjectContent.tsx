@@ -24,7 +24,7 @@ import {
 } from '@/components/shared/ContextTokenPicker';
 import { StableRowTrailingSlot } from '@/components/shared/StableRowChrome';
 import { useLocale } from '@/lib/stores/locale-store';
-import { refreshSessions, useActiveSessionId, useSessions } from '@/lib/ask-session-store';
+import { refreshSessions, useActiveSessionId, useSessions } from '@/lib/agent-session-store';
 import { useSmoothRouterPush } from '@/hooks/useSmoothRouterPush';
 import { cn } from '@/lib/utils';
 import {

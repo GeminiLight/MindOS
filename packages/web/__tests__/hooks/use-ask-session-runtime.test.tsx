@@ -12,7 +12,7 @@ import {
   setMessages as storeSetMessages,
   startRun,
   endRun,
-} from '@/lib/ask-run-store';
+} from '@/lib/agent-run-store';
 import type { AgentRuntimeIdentity, ChatSession } from '@/lib/types';
 
 const codexRuntime: AgentRuntimeIdentity = { id: 'codex', name: 'Codex', kind: 'codex' };

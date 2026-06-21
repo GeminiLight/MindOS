@@ -98,7 +98,7 @@ export async function handleAgentCapabilitiesGet(
   services: AgentCapabilitiesServices = {},
 ): Promise<MindosServerResponse<AgentCapabilitiesPayload | { error: string }>> {
   if (searchParams.has('mode')) {
-    return json({ error: 'mode is no longer supported' }, { status: 400 });
+    return json({ error: 'Unknown field: mode' }, { status: 400 });
   }
   const include = normalizeInclude(searchParams.get('include'));
   const sources: AgentCapabilitySourceStatus[] = [];

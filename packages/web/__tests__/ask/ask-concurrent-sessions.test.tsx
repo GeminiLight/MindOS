@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  *
- * Integration tests for concurrent chat sessions at the useAskChat level
+ * Integration tests for concurrent chat sessions at the useAgentChat level
  * (wiki/specs/spec-chat-session-concurrency.md, PR1 acceptance).
  *
  * The stream consumer is mocked with manually-driven runs so two sessions can
@@ -51,7 +51,7 @@ vi.mock('@/lib/agent/stream-consumer', () => ({
   ),
 }));
 
-import { useAskChat, type AskChatRefs } from '@/hooks/useAskChat';
+import { useAgentChat, type AgentChatRefs } from '@/hooks/useAgentChat';
 import { toast } from '@/lib/toast';
 import {
   MAX_CONCURRENT_RUNS,
@@ -61,14 +61,14 @@ import {
   getUnread,
   isInSubmitCooldown,
   registerRuntimeBindingWriter,
-  resetAskRunStoreForTests,
+  resetAgentRunStoreForTests,
   setActiveSession,
-} from '@/lib/ask-run-store';
+} from '@/lib/agent-run-store';
 import { MAX_TABS, openTab, resetWorkspaceTabsForTests } from '@/lib/workspace-tabs';
 
-type ChatApi = ReturnType<typeof useAskChat>;
+type ChatApi = ReturnType<typeof useAgentChat>;
 
-function makeRefs(activeSessionId: string): AskChatRefs {
+function makeRefs(activeSessionId: string): AgentChatRefs {
   return {
     inputValueRef: { current: '' },
     mentionRef: { current: { mentionQuery: null } },
@@ -89,15 +89,15 @@ function makeRefs(activeSessionId: string): AskChatRefs {
   };
 }
 
-describe('concurrent chat sessions (useAskChat × ask-run-store)', () => {
+describe('concurrent chat sessions (useAgentChat × agent-run-store)', () => {
   let host: HTMLDivElement;
   let root: Root;
   let chat: ChatApi;
-  let refs: AskChatRefs;
+  let refs: AgentChatRefs;
   let restoredInputs: Message[];
 
   function Harness({ activeSessionId }: { activeSessionId: string | null }) {
-    chat = useAskChat({
+    chat = useAgentChat({
       providerOverride: null,
       modelOverride: null,
       activeSessionId,
@@ -141,7 +141,7 @@ describe('concurrent chat sessions (useAskChat × ask-run-store)', () => {
 
   beforeEach(() => {
     (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
-    resetAskRunStoreForTests();
+    resetAgentRunStoreForTests();
     resetWorkspaceTabsForTests();
     harness.captured.length = 0;
     restoredInputs = [];

@@ -14,7 +14,7 @@ export const meta = {
   examples: [
     'mindos api GET /api/health',
     'mindos api GET /api/files',
-    'mindos api POST /api/ask --body \'{"messages":[...],"mode":"agent"}\'',
+    'mindos api POST /api/agent/sessions/demo/turns --body \'{"messages":[{"role":"user","content":"hello"}],"permissionMode":"ask"}\'',
   ],
 };
 

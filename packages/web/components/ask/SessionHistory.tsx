@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { Trash2, Pencil, Pin, PinOff, Loader2 } from 'lucide-react';
 import type { ChatSession } from '@/lib/types';
 import { sessionTitle } from '@/hooks/useAskSession';
-import { useRunSummary } from '@/lib/ask-run-store';
+import { useRunSummary } from '@/lib/agent-run-store';
 import { StableRowActionButton, StableRowTrailingSlot } from '@/components/shared/StableRowChrome';
 
 interface SessionHistoryProps {
@@ -40,7 +40,7 @@ function formatRelativeTime(date: Date): string {
 }
 
 export default function SessionHistory({ sessions, activeSessionId, onLoad, onDelete, onRename, onTogglePin, onClearAll, labels }: SessionHistoryProps) {
-  // Run/unread state lives in ask-run-store; the summary snapshot only changes
+  // Run/unread state lives in agent-run-store; the summary snapshot only changes
   // on run start/end or unread membership, so streaming chunks never re-render
   // this list (spec-chat-session-concurrency.md performance acceptance).
   const runSummary = useRunSummary();

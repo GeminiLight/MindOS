@@ -2,7 +2,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
-import AskContent from '@/components/ask/AskContent';
+import ChatContent from '@/components/chat/ChatContent';
 
 const mockInstalledAgents: Array<{ id: string; name: string; binaryPath: string }> = [];
 
@@ -151,8 +151,8 @@ vi.mock('@/hooks/useAcpDetection', () => ({
   }),
 }));
 
-vi.mock('@/hooks/useAskChat', () => ({
-  useAskChat: () => ({
+vi.mock('@/hooks/useAgentChat', () => ({
+  useAgentChat: () => ({
     isLoading: false,
     isLoadingRef: { current: false },
     loadingPhase: 'connecting',
@@ -191,7 +191,7 @@ vi.mock('@/components/ask/AgentSelectorCapsule', () => ({
 }));
 vi.mock('@/lib/utils', () => ({ cn: (...parts: Array<string | false | null | undefined>) => parts.filter(Boolean).join(' ') }));
 
-describe('AskContent runtime selector placement', () => {
+describe('ChatContent runtime selector placement', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockInstalledAgents.length = 0;
@@ -204,7 +204,7 @@ describe('AskContent runtime selector placement', () => {
     const root = createRoot(host);
 
     await act(async () => {
-      root.render(<AskContent visible variant="panel" />);
+      root.render(<ChatContent visible variant="panel" />);
     });
 
     await act(async () => {

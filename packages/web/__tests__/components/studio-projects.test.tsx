@@ -2,8 +2,8 @@
 import React, { act } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRoot } from 'react-dom/client';
-import { getActiveSessionId, resetSession } from '@/lib/ask-session-store';
-import { setMessages } from '@/lib/ask-run-store';
+import { getActiveSessionId, resetSession } from '@/lib/agent-session-store';
+import { setMessages } from '@/lib/agent-run-store';
 
 vi.mock('@/lib/stores/locale-store', () => ({
   useLocale: () => ({ locale: 'en' as const }),

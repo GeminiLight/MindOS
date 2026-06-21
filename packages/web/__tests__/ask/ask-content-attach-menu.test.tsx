@@ -2,7 +2,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
-import AskContent from '@/components/ask/AskContent';
+import ChatContent from '@/components/chat/ChatContent';
 
 const mockUploadInputRef = { current: null as HTMLInputElement | null };
 const mockImageInputRef = { current: null as HTMLInputElement | null };
@@ -140,8 +140,8 @@ vi.mock('@/hooks/useAcpDetection', () => ({
   }),
 }));
 
-vi.mock('@/hooks/useAskChat', () => ({
-  useAskChat: () => ({
+vi.mock('@/hooks/useAgentChat', () => ({
+  useAgentChat: () => ({
     isLoading: false,
     isLoadingRef: { current: false },
     loadingPhase: 'connecting',
@@ -172,7 +172,7 @@ vi.mock('@/components/ask/ModeCapsule', () => ({
 }));
 vi.mock('@/lib/utils', () => ({ cn: (...parts: Array<string | false | null | undefined>) => parts.filter(Boolean).join(' ') }));
 
-describe('AskContent attach menu', () => {
+describe('ChatContent attach menu', () => {
   let host: HTMLDivElement;
   let root: ReturnType<typeof createRoot>;
 
@@ -196,7 +196,7 @@ describe('AskContent attach menu', () => {
     const inputClickSpy = vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => {});
 
     await act(async () => {
-      root.render(<AskContent visible variant="panel" />);
+      root.render(<ChatContent visible variant="panel" />);
     });
 
     const attachButton = host.querySelector('button[title="Attach local file"]') as HTMLButtonElement;

@@ -39,18 +39,51 @@ export function acpAgentFromLegacySelection(agent: unknown): { id: string; name:
 
 export function nativeAgentRuntimeFromSelection(runtime: unknown, binding?: unknown): MindosAgentRuntimeSelection | null {
   if (!runtime || typeof runtime !== 'object') return null;
-  const record = runtime as Partial<AgentRuntimeIdentity> & { externalSessionId?: unknown };
+  const record = runtime as Partial<AgentRuntimeIdentity>;
   if (record.kind !== 'codex' && record.kind !== 'claude') return null;
   if (typeof record.id !== 'string' || typeof record.name !== 'string') return null;
   const bindingResume = runtimeBindingResumeState(record, binding);
-  const hasTypedBinding = !!binding && typeof binding === 'object';
   return {
     id: record.id,
     name: record.name,
     kind: record.kind,
     ...(bindingResume.externalSessionId ? { externalSessionId: bindingResume.externalSessionId } : {}),
-    ...(!hasTypedBinding && !bindingResume.matched && typeof record.externalSessionId === 'string' ? { externalSessionId: record.externalSessionId } : {}),
   };
+}
+
+export function validateRuntimeBindingMatchesSelection(runtime: unknown, binding: unknown): string | null {
+  if (binding === undefined || binding === null) return null;
+  if (!runtime || typeof runtime !== 'object') {
+    return 'runtimeBinding requires selectedRuntime';
+  }
+  if (!binding || typeof binding !== 'object' || Array.isArray(binding)) {
+    return 'runtimeBinding must be an object';
+  }
+
+  const runtimeRecord = runtime as Partial<AgentRuntimeIdentity>;
+  const bindingRecord = binding as Partial<RuntimeSessionBinding>;
+  if (runtimeRecord.kind === 'mindos') {
+    return 'runtimeBinding is only valid for external runtimes';
+  }
+  if (runtimeRecord.kind !== 'codex' && runtimeRecord.kind !== 'claude' && runtimeRecord.kind !== 'acp') {
+    return 'runtimeBinding requires a valid selectedRuntime';
+  }
+  if (typeof runtimeRecord.id !== 'string' || runtimeRecord.id.length === 0) {
+    return 'runtimeBinding requires selectedRuntime.id';
+  }
+  if (bindingRecord.runtime !== runtimeRecord.kind || bindingRecord.runtimeId !== runtimeRecord.id) {
+    return 'runtimeBinding must match selectedRuntime';
+  }
+  if (runtimeRecord.kind === 'codex' && bindingRecord.kind !== 'codex-thread') {
+    return 'runtimeBinding.kind must be codex-thread for Codex';
+  }
+  if (runtimeRecord.kind === 'claude' && bindingRecord.kind !== 'claude-session') {
+    return 'runtimeBinding.kind must be claude-session for Claude Code';
+  }
+  if (runtimeRecord.kind === 'acp' && bindingRecord.kind !== 'acp-session') {
+    return 'runtimeBinding.kind must be acp-session for ACP';
+  }
+  return null;
 }
 
 export function isMindosRuntimeSelection(runtime: unknown): boolean {

@@ -58,7 +58,7 @@ describe('consumeUIMessageStream — status event handling', () => {
     // Status-only stream (no text_delta, no done) — after the fix,
     // status events should NOT appear as visible text in the message
     // because they are transient UI state, not conversation content.
-    // The frontend AskContent handles reconnect UI via loadingPhase state.
+    // The frontend ChatContent handles reconnect UI via loadingPhase state.
     const stream = makeStream(
       { type: 'status', message: 'Request failed, retrying (1/3)...' },
       { type: 'done' },

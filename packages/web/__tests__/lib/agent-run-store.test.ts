@@ -1,5 +1,5 @@
 /**
- * Unit tests for the module-level ask-run-store (spec-chat-session-concurrency v2.1).
+ * Unit tests for the module-level agent-run-store (spec-chat-session-concurrency v2.1).
  * Covers: per-session message isolation, run lifecycle, late-write guards,
  * unread tracking, persistence channel (debounce + skip rules + image stripping),
  * removeSession cleanup, and submit cooldown.
@@ -23,14 +23,14 @@ import {
   registerSessionsUpdater,
   removeSession,
   replaceLastMessage,
-  resetAskRunStoreForTests,
+  resetAgentRunStoreForTests,
   schedulePersist,
   setActiveSession,
   setMessages,
   startRun,
   startSubmitCooldown,
   updateRun,
-} from '@/lib/ask-run-store';
+} from '@/lib/agent-run-store';
 import type { ChatSession, Message } from '@/lib/types';
 
 function msg(role: 'user' | 'assistant', content: string, extra: Partial<Message> = {}): Message {
@@ -45,15 +45,15 @@ function startTestRun(sessionId: string) {
   });
 }
 
-describe('ask-run-store', () => {
+describe('agent-run-store', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) }));
-    resetAskRunStoreForTests();
+    resetAgentRunStoreForTests();
   });
 
   afterEach(() => {
-    resetAskRunStoreForTests();
+    resetAgentRunStoreForTests();
     vi.unstubAllGlobals();
     vi.useRealTimers();
   });

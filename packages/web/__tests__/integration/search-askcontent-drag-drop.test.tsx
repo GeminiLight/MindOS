@@ -146,7 +146,7 @@ vi.mock('react-virtuoso', () => ({
   ),
 }));
 
-describe('SearchPanel -> AskContent Drag-Drop Integration', () => {
+describe('SearchPanel -> ChatContent Drag-Drop Integration', () => {
   let host: HTMLDivElement;
   let root: ReturnType<typeof createRoot>;
 
@@ -200,8 +200,8 @@ describe('SearchPanel -> AskContent Drag-Drop Integration', () => {
         );
       };
 
-      // Simulate AskContent render with drop handler
-      const AskContent = ({ onDragOver, onDragLeave, onDrop }: any) => {
+      // Simulate ChatContent render with drop handler
+      const ChatContent = ({ onDragOver, onDragLeave, onDrop }: any) => {
         const [attachedFiles, setAttachedFiles] = React.useState<string[]>([]);
 
         return (
@@ -233,7 +233,7 @@ describe('SearchPanel -> AskContent Drag-Drop Integration', () => {
       const Container = () => (
         <div style={{ display: 'flex' }}>
           <SearchPanel onNavigate={() => {}} />
-          <AskContent />
+          <ChatContent />
         </div>
       );
 

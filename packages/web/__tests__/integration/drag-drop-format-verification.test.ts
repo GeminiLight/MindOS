@@ -2,7 +2,7 @@
 import { describe, it, expect, vi } from 'vitest';
 
 /**
- * Drag-Drop Integration Tests for Search -> AskContent
+ * Drag-Drop Integration Tests for Search -> ChatContent
  * 
  * These tests verify that the drag-drop data format is correct
  * for integrating search results with the chat input.
@@ -50,21 +50,21 @@ describe('SearchPanel Drag-Drop Data Format', () => {
   });
 });
 
-describe('AskContent Drop Handler Compatibility', () => {
+describe('ChatContent Drop Handler Compatibility', () => {
   it('should receive text/mindos-path in drop event', () => {
-    // AskContent's handleDrop checks: e.dataTransfer.getData('text/mindos-path')
+    // ChatContent's handleDrop checks: e.dataTransfer.getData('text/mindos-path')
     // This should match the data set by SearchPanel
     
     const filePath = 'docs/test.md';
     const dataFormat = 'text/mindos-path';
     
-    // AskContent code (line 448):
+    // ChatContent code (line 448):
     // const filePath = e.dataTransfer.getData('text/mindos-path');
     expect(dataFormat).toBe('text/mindos-path');
   });
 
   it('should receive text/mindos-type to validate file type', () => {
-    // AskContent's handleDrop checks: e.dataTransfer.getData('text/mindos-type')
+    // ChatContent's handleDrop checks: e.dataTransfer.getData('text/mindos-type')
     // This helps distinguish between different draggable types
     
     const dataFormat = 'text/mindos-type';
@@ -74,14 +74,14 @@ describe('AskContent Drop Handler Compatibility', () => {
     expect(fileType).toBe('file');
   });
 
-  it('should attach file to AskContent when dropped', () => {
-    // When AskContent receives drop with valid mindos-path,
+  it('should attach file to ChatContent when dropped', () => {
+    // When ChatContent receives drop with valid mindos-path,
     // it should attach the file: setAttachedFiles([...prev, key])
     
     const filePath = 'wiki/db/data.csv';
     const pathType = 'file';
     
-    // AskContent logic (lines 449-455):
+    // ChatContent logic (lines 449-455):
     if (pathType === 'file' && filePath) {
       const key = filePath; // or filePath.replace(/\/?$/, '/') for directories
       expect(key).toBe('wiki/db/data.csv');
@@ -193,7 +193,7 @@ describe('End-to-End Drag-Drop Flow', () => {
     // 2. Results render with draggable items
     // 3. User drags result item
     // 4. dragstart sets: text/mindos-path = file path
-    // 5. User drops in AskContent
+    // 5. User drops in ChatContent
     // 6. drop handler retrieves: text/mindos-path
     // 7. File gets attached to message
 

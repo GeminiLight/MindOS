@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * ask-run-store — module-level store for concurrent chat sessions
+ * agent-run-store — module-level store for concurrent chat sessions
  * (wiki/specs/spec-chat-session-concurrency.md, PR1).
  *
  * Single in-memory source of truth for per-session messages, active runs,
@@ -19,12 +19,12 @@ import { useSyncExternalStore } from 'react';
 import type { AgentRuntimeIdentity, ChatSession, Message, RuntimeSessionBinding } from '@/lib/types';
 import type { AgentRunContextMetadata } from '@/lib/agent/stream-consumer';
 
-export type AskRunPhase = 'connecting' | 'thinking' | 'streaming' | 'reconnecting';
+export type AgentRunPhase = 'connecting' | 'thinking' | 'streaming' | 'reconnecting';
 
-export interface AskRun {
+export interface AgentRun {
   sessionId: string;
   controller: AbortController;
-  phase: AskRunPhase;
+  phase: AgentRunPhase;
   reconnectAttempt: number;
   reconnectMax: number;
   agentRunContext: AgentRunContextMetadata | null;
@@ -36,7 +36,7 @@ export interface AskRun {
   startedAt: number;
 }
 
-export interface AskRunInit {
+export interface AgentRunInit {
   controller: AbortController;
   runtimeSnapshot: AgentRuntimeIdentity | null;
   reconnectMax: number;
@@ -78,7 +78,7 @@ type RuntimeBindingWriter = (
 const messagesBySession = new Map<string, Message[]>();
 /** Last local write time per session — initSessions uses it for newer-wins vs server updatedAt. */
 const messageWriteAt = new Map<string, number>();
-const runs = new Map<string, AskRun>();
+const runs = new Map<string, AgentRun>();
 const unread = new Set<string>();
 const persistTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const cooldownUntil = new Map<string, number>();
@@ -88,7 +88,7 @@ const sessionListeners = new Map<string, Set<() => void>>();
 const summaryListeners = new Set<() => void>();
 let summarySnapshot: RunSummary = EMPTY_SUMMARY;
 
-// Injection seam kept to avoid a two-way import with ask-session-store, which
+// Injection seam kept to avoid a two-way import with agent-session-store, which
 // wires all three slots exactly once at its module load (PR3) — registration
 // is no longer tied to any component instance.
 let metaResolver: MetaResolver | null = null;
@@ -177,8 +177,8 @@ export function replaceLastMessage(sessionId: string, msg: Message, opts?: Write
 // ---------------------------------------------------------------------------
 // Runs
 
-export function startRun(sessionId: string, init: AskRunInit): AskRun {
-  const run: AskRun = {
+export function startRun(sessionId: string, init: AgentRunInit): AgentRun {
+  const run: AgentRun = {
     sessionId,
     controller: init.controller,
     phase: 'connecting',
@@ -196,7 +196,7 @@ export function startRun(sessionId: string, init: AskRunInit): AskRun {
   return run;
 }
 
-export function getRun(sessionId: string | null): AskRun | null {
+export function getRun(sessionId: string | null): AgentRun | null {
   if (!sessionId) return null;
   return runs.get(sessionId) ?? null;
 }
@@ -206,7 +206,7 @@ export function getRunCount(): number {
 }
 
 /** Immutable update so useSyncExternalStore subscribers see a new snapshot. */
-export function updateRun(sessionId: string, patch: Partial<Omit<AskRun, 'sessionId' | 'controller'>>): AskRun | null {
+export function updateRun(sessionId: string, patch: Partial<Omit<AgentRun, 'sessionId' | 'controller'>>): AgentRun | null {
   const run = runs.get(sessionId);
   if (!run) return null;
   const next = { ...run, ...patch };
@@ -264,7 +264,7 @@ export function getUnread(): ReadonlySet<string> {
 }
 
 // ---------------------------------------------------------------------------
-// Submit cooldown (per-session; outlives the run, so it cannot live on AskRun)
+// Submit cooldown (per-session; outlives the run, so it cannot live on AgentRun)
 
 export function startSubmitCooldown(sessionId: string) {
   cooldownUntil.set(sessionId, Date.now() + SUBMIT_COOLDOWN_MS);
@@ -281,7 +281,7 @@ export function isInSubmitCooldown(sessionId: string): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// Persistence channel (component-independent; rules moved from AskContent's
+// Persistence channel (component-independent; rules moved from ChatContent's
 // persist effect and useAskSession.persistSession/upsertSession)
 
 export function registerMetaResolver(fn: MetaResolver) {
@@ -355,7 +355,7 @@ export function flushPersist(sessionId: string) {
   cancelPersist(sessionId);
 
   // While a run is still streaming into an empty assistant placeholder there
-  // is nothing worth persisting yet (rule moved from AskContent's effect).
+  // is nothing worth persisting yet (rule moved from ChatContent's effect).
   const msgs = messagesBySession.get(sessionId);
   if (runs.has(sessionId) && msgs && msgs.length > 0) {
     const last = msgs[msgs.length - 1];
@@ -402,7 +402,7 @@ export function useSessionMessages(sessionId: string | null): Message[] {
   );
 }
 
-export function useSessionRun(sessionId: string | null): AskRun | null {
+export function useSessionRun(sessionId: string | null): AgentRun | null {
   return useSyncExternalStore(
     (fn) => (sessionId ? subscribeSession(sessionId, fn) : () => {}),
     () => getRun(sessionId),
@@ -436,7 +436,7 @@ if (typeof window !== 'undefined') {
   });
 }
 
-export function resetAskRunStoreForTests() {
+export function resetAgentRunStoreForTests() {
   runs.forEach((run) => run.controller.abort());
   runs.clear();
   persistTimers.forEach((timer) => clearTimeout(timer));

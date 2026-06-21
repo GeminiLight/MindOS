@@ -6,7 +6,7 @@
  */
 
 import { dim, red } from './colors.js';
-import { streamSSE, postAsk, checkHealth } from './sse-stream.js';
+import { streamSSE, postAgentTurn, checkHealth } from './sse-stream.js';
 import { EXIT } from './command.js';
 
 /**
@@ -16,7 +16,8 @@ import { EXIT } from './command.js';
  * @param {string} opts.baseUrl - e.g. http://localhost:3456
  * @param {string} opts.token - auth token
  * @param {string} opts.message - user message / task
- * @param {'agent'|'organize'} opts.mode
+ * @param {'default'|'plan'|'goal'} [opts.agentMode]
+ * @param {'read'|'ask'|'auto'|'full'} [opts.permissionMode]
  * @param {boolean} [opts.showTools=false] - show tool calls in output
  * @param {number} [opts.maxSteps] - max agent steps
  * @param {string[]} [opts.attachedFiles] - file attachments
@@ -29,7 +30,9 @@ import { EXIT } from './command.js';
  */
 export async function executeOneShot(opts) {
   const {
-    baseUrl, token, message, mode,
+    baseUrl, token, message,
+    agentMode = 'default',
+    permissionMode,
     showTools = false,
     maxSteps,
     attachedFiles,
@@ -53,8 +56,9 @@ export async function executeOneShot(opts) {
 
   const body = {
     messages: [{ role: 'user', content: message, timestamp: Date.now() }],
-    mode,
+    agentMode,
   };
+  if (permissionMode) body.permissionMode = permissionMode;
   if (attachedFiles) body.attachedFiles = attachedFiles;
   if (maxSteps) body.maxSteps = maxSteps;
   if (providerOverride) body.providerOverride = providerOverride;
@@ -64,7 +68,8 @@ export async function executeOneShot(opts) {
   if (workDir) body.workDir = workDir;
 
   try {
-    const res = await postAsk(baseUrl, body, token);
+    const sessionId = `cli-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    const res = await postAgentTurn(baseUrl, sessionId, body, token);
 
     if (!res.ok) {
       const errText = await res.text();

@@ -15,7 +15,6 @@ export type MindosSelectedRuntime = {
   name: string;
   kind: MindosAgentRuntimeKind;
   binaryPath?: string;
-  externalSessionId?: string;
 };
 
 export type MindosRuntimeSessionBinding = {
@@ -130,13 +129,14 @@ function parseAgentTurnRequest(body: unknown):
   }
 
   const record = body as Record<string, unknown>;
+  const unknownTopLevel = firstUnknownField(record, AGENT_TURN_TOP_LEVEL_FIELDS);
+  if (unknownTopLevel) {
+    return { ok: false, status: 400, body: { error: unknownTopLevel } };
+  }
   if (!Array.isArray(record.messages)) {
     return { ok: false, status: 400, body: { error: 'messages must be an array' } };
   }
 
-  if ('mode' in record) {
-    return { ok: false, status: 400, body: { error: 'mode is no longer supported' } };
-  }
   if (record.agentMode !== undefined && !isMindosAgentMode(record.agentMode)) {
     return { ok: false, status: 400, body: { error: 'agentMode must be default, plan, or goal' } };
   }
@@ -146,25 +146,36 @@ function parseAgentTurnRequest(body: unknown):
 
   const selectedRuntime = normalizeSelectedRuntime(record);
   const runtimeBinding = normalizeRuntimeSessionBinding(record.runtimeBinding);
+  const runtimeBindingError = validateRuntimeBindingMatchesSelectedRuntime(selectedRuntime, runtimeBinding);
+  if (runtimeBindingError) return { ok: false, status: 400, body: { error: runtimeBindingError } };
   const workDir = normalizeSessionWorkDir(record.workDir);
   const contextSelection = normalizeSessionContextSelection(record.contextSelection);
   const runtimeOptionsRecord = record.runtimeOptions && typeof record.runtimeOptions === 'object' && !Array.isArray(record.runtimeOptions)
     ? record.runtimeOptions as Record<string, unknown>
     : undefined;
-  if (runtimeOptionsRecord?.permissionMode !== undefined) {
+  const unknownRuntimeOptions = runtimeOptionsRecord ? firstUnknownField(runtimeOptionsRecord, NATIVE_RUNTIME_OPTION_FIELDS, 'runtimeOptions') : null;
+  if (unknownRuntimeOptions) {
     return {
       ok: false,
       status: 400,
-      body: { error: 'runtimeOptions.permissionMode is no longer supported; use top-level permissionMode' },
+      body: { error: unknownRuntimeOptions },
     };
   }
-  if (runtimeOptionsRecord?.agentMode !== undefined) {
-    return {
-      ok: false,
-      status: 400,
-      body: { error: 'runtimeOptions.agentMode is no longer supported; use top-level agentMode' },
-    };
-  }
+  const agentOptionsRecord = record.agentOptions && typeof record.agentOptions === 'object' && !Array.isArray(record.agentOptions)
+    ? record.agentOptions as Record<string, unknown>
+    : undefined;
+  const unknownAgentOptions = agentOptionsRecord ? firstUnknownField(agentOptionsRecord, MINDOS_AGENT_OPTION_FIELDS, 'agentOptions') : null;
+  if (unknownAgentOptions) return { ok: false, status: 400, body: { error: unknownAgentOptions } };
+  const selectedRuntimeRecord = record.selectedRuntime && typeof record.selectedRuntime === 'object' && !Array.isArray(record.selectedRuntime)
+    ? record.selectedRuntime as Record<string, unknown>
+    : undefined;
+  const unknownSelectedRuntime = selectedRuntimeRecord ? firstUnknownField(selectedRuntimeRecord, SELECTED_RUNTIME_FIELDS, 'selectedRuntime') : null;
+  if (unknownSelectedRuntime) return { ok: false, status: 400, body: { error: unknownSelectedRuntime } };
+  const runtimeBindingRecord = record.runtimeBinding && typeof record.runtimeBinding === 'object' && !Array.isArray(record.runtimeBinding)
+    ? record.runtimeBinding as Record<string, unknown>
+    : undefined;
+  const unknownRuntimeBinding = runtimeBindingRecord ? firstUnknownField(runtimeBindingRecord, RUNTIME_BINDING_FIELDS, 'runtimeBinding') : null;
+  if (unknownRuntimeBinding) return { ok: false, status: 400, body: { error: unknownRuntimeBinding } };
   const runtimeOptions = normalizeNativeRuntimeOptions(record.runtimeOptions);
 
   return {
@@ -202,29 +213,41 @@ function normalizeAgentSessionTurnBody(sessionId: string, body: unknown):
   }
 
   const record = body as Record<string, unknown>;
-  if ('mode' in record || 'mode' in (objectField(record, 'options') ?? {})) {
-    return { ok: false, status: 400, body: { error: 'mode is no longer supported' } };
-  }
-  const options = objectField(record, 'options');
-  if (options?.agentMode !== undefined) {
-    return { ok: false, status: 400, body: { error: 'options.agentMode is no longer supported; use top-level agentMode' } };
-  }
-  if (options?.permissionMode !== undefined) {
-    return { ok: false, status: 400, body: { error: 'options.permissionMode is no longer supported; use top-level permissionMode' } };
-  }
+  const unknownTopLevel = firstUnknownField(record, AGENT_TURN_TOP_LEVEL_FIELDS);
+  if (unknownTopLevel) return { ok: false, status: 400, body: { error: unknownTopLevel } };
+  const unknownRuntimeOptions = objectField(record, 'runtimeOptions')
+    ? firstUnknownField(objectField(record, 'runtimeOptions')!, NATIVE_RUNTIME_OPTION_FIELDS, 'runtimeOptions')
+    : null;
+  if (unknownRuntimeOptions) return { ok: false, status: 400, body: { error: unknownRuntimeOptions } };
+  const unknownAgentOptions = objectField(record, 'agentOptions')
+    ? firstUnknownField(objectField(record, 'agentOptions')!, MINDOS_AGENT_OPTION_FIELDS, 'agentOptions')
+    : null;
+  if (unknownAgentOptions) return { ok: false, status: 400, body: { error: unknownAgentOptions } };
+  const unknownSelectedRuntime = objectField(record, 'selectedRuntime')
+    ? firstUnknownField(objectField(record, 'selectedRuntime')!, SELECTED_RUNTIME_FIELDS, 'selectedRuntime')
+    : null;
+  if (unknownSelectedRuntime) return { ok: false, status: 400, body: { error: unknownSelectedRuntime } };
+  const unknownRuntimeBinding = objectField(record, 'runtimeBinding')
+    ? firstUnknownField(objectField(record, 'runtimeBinding')!, RUNTIME_BINDING_FIELDS, 'runtimeBinding')
+    : null;
+  if (unknownRuntimeBinding) return { ok: false, status: 400, body: { error: unknownRuntimeBinding } };
+  const context = objectField(record, 'context');
+  const unknownContext = context ? firstUnknownField(context, AGENT_TURN_CONTEXT_FIELDS, 'context') : null;
+  if (unknownContext) return { ok: false, status: 400, body: { error: unknownContext } };
+  const message = objectField(record, 'message');
+  const unknownMessage = message ? firstUnknownField(message, AGENT_TURN_MESSAGE_FIELDS, 'message') : null;
+  if (unknownMessage) return { ok: false, status: 400, body: { error: unknownMessage } };
   if (Array.isArray(record.messages)) {
     return { ok: true, body: { ...record, chatSessionId: sessionId } };
   }
 
-  const message = objectField(record, 'message');
   const text = stringField(message, 'text') ?? stringField(message, 'content') ?? stringField(record, 'prompt');
   const images = arrayField(message, 'images') ?? arrayField(record, 'images');
   if (!text && (!images || images.length === 0)) {
     return { ok: false, status: 400, body: { error: 'message.text is required' } };
   }
 
-  const context = objectField(record, 'context');
-  const runtimeOptions = objectField(options, 'runtimeOptions') ?? pickRuntimeOptions(options) ?? objectField(record, 'runtimeOptions');
+  const runtimeOptions = objectField(record, 'runtimeOptions');
   return {
     ok: true,
     body: {
@@ -251,21 +274,21 @@ function normalizeAgentSessionTurnBody(sessionId: string, body: unknown):
       ...(objectField(context, 'workDir') ?? objectField(record, 'workDir')
         ? { workDir: objectField(context, 'workDir') ?? objectField(record, 'workDir') }
         : {}),
-      ...(objectField(context, 'contextSelection') ?? objectField(context, 'selection') ?? objectField(record, 'contextSelection')
-        ? { contextSelection: objectField(context, 'contextSelection') ?? objectField(context, 'selection') ?? objectField(record, 'contextSelection') }
+      ...(objectField(context, 'contextSelection') ?? objectField(record, 'contextSelection')
+        ? { contextSelection: objectField(context, 'contextSelection') ?? objectField(record, 'contextSelection') }
         : {}),
-      ...(objectField(record, 'runtime') ?? objectField(record, 'selectedRuntime')
-        ? { selectedRuntime: objectField(record, 'runtime') ?? objectField(record, 'selectedRuntime') }
+      ...(objectField(record, 'selectedRuntime')
+        ? { selectedRuntime: objectField(record, 'selectedRuntime') }
         : {}),
       ...(objectField(record, 'runtimeBinding') ? { runtimeBinding: objectField(record, 'runtimeBinding') } : {}),
       ...(runtimeOptions ? { runtimeOptions } : {}),
-      ...(objectField(record, 'agentOptions') ?? objectField(options, 'agentOptions')
-        ? { agentOptions: objectField(record, 'agentOptions') ?? objectField(options, 'agentOptions') }
+      ...(objectField(record, 'agentOptions')
+        ? { agentOptions: objectField(record, 'agentOptions') }
         : {}),
       ...(typeof record.maxSteps === 'number' && Number.isFinite(record.maxSteps) ? { maxSteps: record.maxSteps } : {}),
       ...(stringField(record, 'providerOverride') ? { providerOverride: stringField(record, 'providerOverride') } : {}),
-      ...(stringField(record, 'modelOverride') ?? stringField(options, 'modelOverride')
-        ? { modelOverride: stringField(record, 'modelOverride') ?? stringField(options, 'modelOverride') }
+      ...(stringField(record, 'modelOverride')
+        ? { modelOverride: stringField(record, 'modelOverride') }
         : {}),
     },
   };
@@ -291,14 +314,43 @@ function stringArrayField(record: Record<string, unknown> | undefined, key: stri
   return values && values.length > 0 ? values : undefined;
 }
 
-function pickRuntimeOptions(record: Record<string, unknown> | undefined): Record<string, unknown> | undefined {
-  if (!record) return undefined;
-  const runtimeOptions: Record<string, unknown> = {};
-  for (const key of ['reasoningEffort', 'modelOverride']) {
-    if (record[key] !== undefined) runtimeOptions[key] = record[key];
+function firstUnknownField(record: Record<string, unknown>, allowed: ReadonlySet<string>, prefix?: string): string | null {
+  for (const key of Object.keys(record)) {
+    if (!allowed.has(key)) return `Unknown field: ${prefix ? `${prefix}.` : ''}${key}`;
   }
-  return Object.keys(runtimeOptions).length > 0 ? runtimeOptions : undefined;
+  return null;
 }
+
+const AGENT_TURN_TOP_LEVEL_FIELDS = new Set([
+  'messages',
+  'message',
+  'prompt',
+  'images',
+  'agentMode',
+  'permissionMode',
+  'currentFile',
+  'attachedFiles',
+  'uploadedFiles',
+  'maxSteps',
+  'assistantId',
+  'selectedAcpAgent',
+  'selectedRuntime',
+  'runtimeBinding',
+  'workDir',
+  'contextSelection',
+  'context',
+  'providerOverride',
+  'modelOverride',
+  'runtimeOptions',
+  'agentOptions',
+  'chatSessionId',
+]);
+const AGENT_TURN_CONTEXT_FIELDS = new Set(['currentFile', 'attachedFiles', 'uploadedFiles', 'workDir', 'contextSelection']);
+const AGENT_TURN_MESSAGE_FIELDS = new Set(['text', 'content', 'images', 'skillName']);
+const NATIVE_RUNTIME_OPTION_FIELDS = new Set(['reasoningEffort', 'modelOverride']);
+const MINDOS_AGENT_OPTION_FIELDS = new Set(['enableThinking', 'thinkingBudget']);
+const SELECTED_RUNTIME_FIELDS = new Set(['id', 'name', 'kind', 'binaryPath']);
+const RUNTIME_BINDING_FIELDS = new Set(['kind', 'runtime', 'runtimeId', 'externalSessionId', 'cwd', 'status', 'updatedAt']);
 
 function normalizeUploadedFiles(files: unknown[]): MindosUploadedFile[] {
   return files
@@ -430,6 +482,20 @@ function normalizeRuntimeSessionBinding(value: unknown): MindosRuntimeSessionBin
   return binding;
 }
 
+function validateRuntimeBindingMatchesSelectedRuntime(
+  runtime: MindosSelectedRuntime | null | undefined,
+  binding: MindosRuntimeSessionBinding | null | undefined,
+): string | null {
+  if (!binding) return null;
+  if (!runtime) return 'runtimeBinding requires selectedRuntime';
+  if (runtime.kind === 'mindos') return 'runtimeBinding is only valid for external runtimes';
+  if (binding.runtime !== runtime.kind || binding.runtimeId !== runtime.id) return 'runtimeBinding must match selectedRuntime';
+  if (runtime.kind === 'codex' && binding.kind !== 'codex-thread') return 'runtimeBinding.kind must be codex-thread for Codex';
+  if (runtime.kind === 'claude' && binding.kind !== 'claude-session') return 'runtimeBinding.kind must be claude-session for Claude Code';
+  if (runtime.kind === 'acp' && binding.kind !== 'acp-session') return 'runtimeBinding.kind must be acp-session for ACP';
+  return null;
+}
+
 function isRuntimeSessionKind(value: unknown): value is MindosRuntimeSessionBinding['kind'] {
   return value === 'codex-thread' || value === 'claude-session' || value === 'acp-session';
 }
@@ -452,9 +518,6 @@ function normalizeSelectedRuntime(record: Record<string, unknown>): MindosSelect
       kind: runtime.kind as MindosAgentRuntimeKind,
       ...(typeof runtime.binaryPath === 'string' && runtime.binaryPath.trim()
         ? { binaryPath: runtime.binaryPath }
-        : {}),
-      ...(typeof runtime.externalSessionId === 'string' && runtime.externalSessionId
-        ? { externalSessionId: runtime.externalSessionId }
         : {}),
     };
   }

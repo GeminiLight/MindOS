@@ -270,19 +270,19 @@ describe('SearchPanel Drag-Drop Tests', () => {
     }
   });
 
-  it('should be compatible with AskContent drop handler', async () => {
+  it('should be compatible with ChatContent drop handler', async () => {
     // Test data format compatibility
     const testData = {
       path: 'docs/test.md',
       type: 'file',
     };
 
-    // Simulate what AskContent does on drop
+    // Simulate what ChatContent does on drop
     const dt = new DataTransfer();
     dt.setData('text/mindos-path', testData.path);
     dt.setData('text/mindos-type', testData.type);
 
-    // AskContent should be able to retrieve this
+    // ChatContent should be able to retrieve this
     expect(dt.getData('text/mindos-path')).toBe('docs/test.md');
     expect(dt.getData('text/mindos-type')).toBe('file');
   });

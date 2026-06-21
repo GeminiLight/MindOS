@@ -331,6 +331,14 @@ function appendFileContextSections(
         context.contextParts.join('\n\n---\n\n'),
       ],
     });
+  } else if (context.mode === 'reference' && context.fileReferences?.length) {
+    sections.push({
+      title: 'Attached files from the MindOS knowledge base',
+      content: [
+        'These selected MindOS files are unchanged since the last turn, so their full content is not repeated. Use file tools to re-read exact content if needed.',
+        context.fileReferences.map((file) => `- ${file.label === 'current' ? 'Current' : 'Attached'}: ${file.path}`).join('\n'),
+      ],
+    });
   }
   if (context.failedFiles.length > 0) {
     sections.push({

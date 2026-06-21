@@ -95,12 +95,6 @@ function normalizeRuntimeOptions(flags = {}) {
   const modelOverride = nonEmptyString(flags.model);
   const thinking = normalizeThinking(flags);
 
-  if (flags.readonly === true) {
-    runtimeOptions.permissionMode = 'readonly';
-  } else if (flags.agent === true) {
-    runtimeOptions.permissionMode = 'agent';
-  }
-
   if (modelOverride) runtimeOptions.modelOverride = modelOverride;
   if (thinking.runtimeOptions) Object.assign(runtimeOptions, thinking.runtimeOptions);
 
@@ -108,6 +102,12 @@ function normalizeRuntimeOptions(flags = {}) {
     runtimeOptions: Object.keys(runtimeOptions).length > 0 ? runtimeOptions : undefined,
     agentOptions: thinking.agentOptions,
   };
+}
+
+function normalizePermissionMode(flags = {}) {
+  if (flags.readonly === true) return 'read';
+  if (flags.agent === true) return 'ask';
+  return undefined;
 }
 
 function normalizeWorkDir(flags = {}) {
@@ -127,6 +127,7 @@ export function normalizeAgentInvocation(args = [], flags = {}) {
   const providerOverride = nonEmptyString(flags.provider);
   const modelOverride = nonEmptyString(flags.model);
   const { runtimeOptions, agentOptions } = normalizeRuntimeOptions(flags);
+  const permissionMode = normalizePermissionMode(flags);
   const workDir = normalizeWorkDir(flags);
 
   return {
@@ -135,6 +136,7 @@ export function normalizeAgentInvocation(args = [], flags = {}) {
     maxSteps,
     providerOverride,
     modelOverride,
+    permissionMode,
     runtimeOptions,
     agentOptions,
     workDir,

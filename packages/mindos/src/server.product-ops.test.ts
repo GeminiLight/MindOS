@@ -164,7 +164,7 @@ describe('MindOS server contract: product operations', () => {
 
     const removedMode = await handleAgentCapabilitiesGet(new URLSearchParams('mode=agent'), {});
     expect(removedMode.status).toBe(400);
-    expect(removedMode.body).toEqual({ error: 'mode is no longer supported' });
+    expect(removedMode.body).toEqual({ error: 'Unknown field: mode' });
 
     const agent = await handleAgentCapabilitiesGet(new URLSearchParams('include=kb,mcp,a2a'), {
       kb: () => [{

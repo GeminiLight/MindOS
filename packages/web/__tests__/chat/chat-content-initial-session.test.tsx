@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * AskContent initialSessionId prop (spec-titlebar-row.md Phase 2, /chat route):
+ * ChatContent initialSessionId prop (spec-titlebar-row.md Phase 2, /chat route):
  * when the route already selected a session via loadSession, the init effect
  * must NOT run initSessions (its selection phase would clobber the route's
  * choice) — it refreshes session metadata instead. The default path (no
@@ -10,7 +10,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import React from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { flushSync } from 'react-dom';
-import AskContent from '@/components/ask/AskContent';
+import ChatContent from '@/components/chat/ChatContent';
 import type { ChatSession } from '@/lib/types';
 
 const { mockInitSessions, mockRefreshSessions } = vi.hoisted(() => ({
@@ -35,8 +35,8 @@ const emptySession: ChatSession = {
   messages: [],
 };
 
-vi.mock('@/lib/ask-session-store', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/ask-session-store')>();
+vi.mock('@/lib/agent-session-store', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/agent-session-store')>();
   return { ...actual, refreshSessions: mockRefreshSessions };
 });
 
@@ -153,8 +153,8 @@ vi.mock('@/hooks/useNativeRuntimeDetection', () => ({
   }),
 }));
 
-vi.mock('@/hooks/useAskChat', () => ({
-  useAskChat: () => ({
+vi.mock('@/hooks/useAgentChat', () => ({
+  useAgentChat: () => ({
     isLoading: false,
     loadingPhase: 'connecting',
     reconnectAttempt: 0,
@@ -237,13 +237,13 @@ vi.mock('@/lib/agent/stream-consumer', () => ({
 
 const mountedRoots: Array<{ root: Root; host: HTMLDivElement }> = [];
 
-async function renderAskContent(props: Partial<React.ComponentProps<typeof AskContent>> = {}) {
+async function renderChatContent(props: Partial<React.ComponentProps<typeof ChatContent>> = {}) {
   const host = document.createElement('div');
   document.body.appendChild(host);
   const root = createRoot(host);
   mountedRoots.push({ root, host });
   flushSync(() => {
-    root.render(<AskContent visible variant="home" {...props} />);
+    root.render(<ChatContent visible variant="home" {...props} />);
   });
   await new Promise((resolve) => setTimeout(resolve, 0));
   await new Promise((resolve) => setTimeout(resolve, 0));
@@ -275,23 +275,23 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('AskContent initialSessionId', () => {
+describe('ChatContent initialSessionId', () => {
   it('skips initSessions and refreshes metadata when initialSessionId is provided', async () => {
-    await renderAskContent({ initialSessionId: 's1', maximized: true });
+    await renderChatContent({ initialSessionId: 's1', maximized: true });
 
     expect(mockInitSessions).not.toHaveBeenCalled();
     expect(mockRefreshSessions).toHaveBeenCalledTimes(1);
   });
 
   it('still calls initSessions on open without initialSessionId', async () => {
-    await renderAskContent();
+    await renderChatContent();
 
     expect(mockInitSessions).toHaveBeenCalledTimes(1);
     expect(mockRefreshSessions).not.toHaveBeenCalled();
   });
 
   it('keeps the rest of the open path working with initialSessionId (initialMessage applied)', async () => {
-    const { host } = await renderAskContent({ initialSessionId: 's1', initialMessage: 'hello from route' });
+    const { host } = await renderChatContent({ initialSessionId: 's1', initialMessage: 'hello from route' });
 
     const textarea = host.querySelector('textarea');
     expect(textarea?.value).toBe('hello from route');

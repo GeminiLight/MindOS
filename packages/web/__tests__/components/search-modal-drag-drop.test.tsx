@@ -163,7 +163,7 @@ describe('SearchModal Drag-Drop Integration', () => {
         resultButton.dispatchEvent(dragEvent);
       });
 
-      // Verify correct data format for AskContent integration
+      // Verify correct data format for ChatContent integration
       expect(setDataSpy).toHaveBeenCalledWith('text/mindos-path', expect.any(String));
       expect(setDataSpy).toHaveBeenCalledWith('text/mindos-type', 'file');
 
@@ -267,7 +267,7 @@ describe('SearchModal Drag-Drop Integration', () => {
     });
   });
 
-  describe('Drag-drop data compatibility with AskContent', () => {
+  describe('Drag-drop data compatibility with ChatContent', () => {
     it('should use standard mindos drag-drop format', async () => {
       await act(async () => {
         root.render(
@@ -312,7 +312,7 @@ describe('SearchModal Drag-Drop Integration', () => {
           resultButton.dispatchEvent(dragEvent);
         });
 
-        // Verify data format matches AskContent expectations
+        // Verify data format matches ChatContent expectations
         expect(pathData).toMatch(/\.(md|csv)$/);
         expect(typeData).toBe('file');
       }

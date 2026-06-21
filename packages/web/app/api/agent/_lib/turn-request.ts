@@ -32,7 +32,7 @@ export type AgentTurnRequestBody = {
   /** ACP agent selection: if present, route to ACP instead of MindOS */
   selectedAcpAgent?: { id: string; name: string } | null;
   /** Unified runtime selection. ACP values mirror selectedAcpAgent for compatibility. */
-  selectedRuntime?: (AgentRuntimeIdentity & { externalSessionId?: string }) | null;
+  selectedRuntime?: AgentRuntimeIdentity | null;
   /** Typed external runtime binding for native Codex/Claude resume. */
   runtimeBinding?: RuntimeSessionBinding | null;
   /** Session-bound execution cwd. */
@@ -82,17 +82,11 @@ export function normalizeNativeRuntimeOptions(value: unknown): NativeRuntimeOpti
 export function validateNativeRuntimeOptions(value: unknown) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const record = value as Record<string, unknown>;
-  if (record.permissionMode !== undefined) {
+  const unknown = firstUnknownField(record, NATIVE_RUNTIME_OPTION_FIELDS, 'runtimeOptions');
+  if (unknown) {
     return apiError(
       ErrorCodes.INVALID_REQUEST,
-      'runtimeOptions.permissionMode is no longer supported; use top-level permissionMode',
-      400,
-    );
-  }
-  if (record.agentMode !== undefined) {
-    return apiError(
-      ErrorCodes.INVALID_REQUEST,
-      'runtimeOptions.agentMode is no longer supported; use top-level agentMode',
+      unknown,
       400,
     );
   }
@@ -186,16 +180,30 @@ export function normalizeAgentSessionTurnBody(
   }
 
   const record = rawBody as Record<string, unknown>;
-  if ('mode' in record || 'mode' in (objectField(record, 'options') ?? {})) {
-    return { ok: false, message: 'mode is no longer supported' };
-  }
-  const options = objectField(record, 'options');
-  if (options?.agentMode !== undefined) {
-    return { ok: false, message: 'options.agentMode is no longer supported; use top-level agentMode' };
-  }
-  if (options?.permissionMode !== undefined) {
-    return { ok: false, message: 'options.permissionMode is no longer supported; use top-level permissionMode' };
-  }
+  const unknownTopLevel = firstUnknownField(record, AGENT_SESSION_TURN_TOP_LEVEL_FIELDS);
+  if (unknownTopLevel) return { ok: false, message: unknownTopLevel };
+  const unknownRuntimeOptions = objectField(record, 'runtimeOptions')
+    ? firstUnknownField(objectField(record, 'runtimeOptions')!, NATIVE_RUNTIME_OPTION_FIELDS, 'runtimeOptions')
+    : null;
+  if (unknownRuntimeOptions) return { ok: false, message: unknownRuntimeOptions };
+  const unknownAgentOptions = objectField(record, 'agentOptions')
+    ? firstUnknownField(objectField(record, 'agentOptions')!, MINDOS_AGENT_OPTION_FIELDS, 'agentOptions')
+    : null;
+  if (unknownAgentOptions) return { ok: false, message: unknownAgentOptions };
+  const unknownSelectedRuntime = objectField(record, 'selectedRuntime')
+    ? firstUnknownField(objectField(record, 'selectedRuntime')!, SELECTED_RUNTIME_FIELDS, 'selectedRuntime')
+    : null;
+  if (unknownSelectedRuntime) return { ok: false, message: unknownSelectedRuntime };
+  const unknownRuntimeBinding = objectField(record, 'runtimeBinding')
+    ? firstUnknownField(objectField(record, 'runtimeBinding')!, RUNTIME_BINDING_FIELDS, 'runtimeBinding')
+    : null;
+  if (unknownRuntimeBinding) return { ok: false, message: unknownRuntimeBinding };
+  const context = objectField(record, 'context');
+  const unknownContext = context ? firstUnknownField(context, AGENT_TURN_CONTEXT_FIELDS, 'context') : null;
+  if (unknownContext) return { ok: false, message: unknownContext };
+  const messageRecord = objectField(record, 'message');
+  const unknownMessage = messageRecord ? firstUnknownField(messageRecord, AGENT_TURN_MESSAGE_FIELDS, 'message') : null;
+  if (unknownMessage) return { ok: false, message: unknownMessage };
   if (Array.isArray(record.messages)) {
     return {
       ok: true,
@@ -206,15 +214,13 @@ export function normalizeAgentSessionTurnBody(
     };
   }
 
-  const messageRecord = objectField(record, 'message');
   const text = stringField(messageRecord, 'text') ?? stringField(messageRecord, 'content') ?? stringField(record, 'prompt');
   const images = arrayField(messageRecord, 'images') ?? arrayField(record, 'images');
   if (!text && (!images || images.length === 0)) {
     return { ok: false, message: 'message.text is required' };
   }
 
-  const context = objectField(record, 'context');
-  const runtimeOptions = objectField(options, 'runtimeOptions') ?? pickRuntimeOptions(options) ?? record.runtimeOptions;
+  const runtimeOptions = record.runtimeOptions;
   const message: FrontendMessage = {
     role: 'user',
     content: text ?? '',
@@ -243,11 +249,11 @@ export function normalizeAgentSessionTurnBody(
       ...(objectField(context, 'workDir') ?? objectField(record, 'workDir')
         ? { workDir: (objectField(context, 'workDir') ?? objectField(record, 'workDir')) as AgentTurnRequestBody['workDir'] }
         : {}),
-      ...(objectField(context, 'contextSelection') ?? objectField(context, 'selection') ?? objectField(record, 'contextSelection')
-        ? { contextSelection: (objectField(context, 'contextSelection') ?? objectField(context, 'selection') ?? objectField(record, 'contextSelection')) as AgentTurnRequestBody['contextSelection'] }
+      ...(objectField(context, 'contextSelection') ?? objectField(record, 'contextSelection')
+        ? { contextSelection: (objectField(context, 'contextSelection') ?? objectField(record, 'contextSelection')) as AgentTurnRequestBody['contextSelection'] }
         : {}),
-      ...(objectField(record, 'runtime') ?? objectField(record, 'selectedRuntime')
-        ? { selectedRuntime: (objectField(record, 'runtime') ?? objectField(record, 'selectedRuntime')) as AgentTurnRequestBody['selectedRuntime'] }
+      ...(objectField(record, 'selectedRuntime')
+        ? { selectedRuntime: objectField(record, 'selectedRuntime') as AgentTurnRequestBody['selectedRuntime'] }
         : {}),
       ...(objectField(record, 'runtimeBinding')
         ? { runtimeBinding: objectField(record, 'runtimeBinding') as AgentTurnRequestBody['runtimeBinding'] }
@@ -255,16 +261,42 @@ export function normalizeAgentSessionTurnBody(
       ...(runtimeOptions && typeof runtimeOptions === 'object' && !Array.isArray(runtimeOptions)
         ? { runtimeOptions: runtimeOptions as AgentTurnRequestBody['runtimeOptions'] }
         : {}),
-      ...(objectField(record, 'agentOptions') ?? objectField(options, 'agentOptions')
-        ? { agentOptions: (objectField(record, 'agentOptions') ?? objectField(options, 'agentOptions')) as AgentTurnRequestBody['agentOptions'] }
+      ...(objectField(record, 'agentOptions')
+        ? { agentOptions: objectField(record, 'agentOptions') as AgentTurnRequestBody['agentOptions'] }
         : {}),
       ...(typeof record.maxSteps === 'number' && Number.isFinite(record.maxSteps) ? { maxSteps: record.maxSteps } : {}),
       ...(stringField(record, 'providerOverride') ? { providerOverride: stringField(record, 'providerOverride') } : {}),
-      ...(stringField(record, 'modelOverride') ?? stringField(options, 'modelOverride')
-        ? { modelOverride: stringField(record, 'modelOverride') ?? stringField(options, 'modelOverride') }
+      ...(stringField(record, 'modelOverride')
+        ? { modelOverride: stringField(record, 'modelOverride') }
         : {}),
     },
   };
+}
+
+export function validateAgentTurnRequestContract(body: unknown) {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return apiError(ErrorCodes.INVALID_REQUEST, 'Invalid agent session turn request body', 400);
+  }
+  const record = body as Record<string, unknown>;
+  const unknownTopLevel = firstUnknownField(record, AGENT_SESSION_TURN_TOP_LEVEL_FIELDS);
+  if (unknownTopLevel) return apiError(ErrorCodes.INVALID_REQUEST, unknownTopLevel, 400);
+  const unknownRuntimeOptions = objectField(record, 'runtimeOptions')
+    ? firstUnknownField(objectField(record, 'runtimeOptions')!, NATIVE_RUNTIME_OPTION_FIELDS, 'runtimeOptions')
+    : null;
+  if (unknownRuntimeOptions) return apiError(ErrorCodes.INVALID_REQUEST, unknownRuntimeOptions, 400);
+  const unknownAgentOptions = objectField(record, 'agentOptions')
+    ? firstUnknownField(objectField(record, 'agentOptions')!, MINDOS_AGENT_OPTION_FIELDS, 'agentOptions')
+    : null;
+  if (unknownAgentOptions) return apiError(ErrorCodes.INVALID_REQUEST, unknownAgentOptions, 400);
+  const unknownSelectedRuntime = objectField(record, 'selectedRuntime')
+    ? firstUnknownField(objectField(record, 'selectedRuntime')!, SELECTED_RUNTIME_FIELDS, 'selectedRuntime')
+    : null;
+  if (unknownSelectedRuntime) return apiError(ErrorCodes.INVALID_REQUEST, unknownSelectedRuntime, 400);
+  const unknownRuntimeBinding = objectField(record, 'runtimeBinding')
+    ? firstUnknownField(objectField(record, 'runtimeBinding')!, RUNTIME_BINDING_FIELDS, 'runtimeBinding')
+    : null;
+  if (unknownRuntimeBinding) return apiError(ErrorCodes.INVALID_REQUEST, unknownRuntimeBinding, 400);
+  return null;
 }
 
 function objectField(record: Record<string, unknown> | undefined, key: string): Record<string, unknown> | undefined {
@@ -287,11 +319,40 @@ function stringArrayField(record: Record<string, unknown> | undefined, key: stri
   return values && values.length > 0 ? values : undefined;
 }
 
-function pickRuntimeOptions(record: Record<string, unknown> | undefined): Record<string, unknown> | undefined {
-  if (!record) return undefined;
-  const runtimeOptions: Record<string, unknown> = {};
-  for (const key of ['reasoningEffort', 'modelOverride']) {
-    if (record[key] !== undefined) runtimeOptions[key] = record[key];
+function firstUnknownField(record: Record<string, unknown>, allowed: ReadonlySet<string>, prefix?: string): string | null {
+  for (const key of Object.keys(record)) {
+    if (!allowed.has(key)) return `Unknown field: ${prefix ? `${prefix}.` : ''}${key}`;
   }
-  return Object.keys(runtimeOptions).length > 0 ? runtimeOptions : undefined;
+  return null;
 }
+
+const AGENT_SESSION_TURN_TOP_LEVEL_FIELDS = new Set([
+  'messages',
+  'message',
+  'prompt',
+  'images',
+  'agentMode',
+  'permissionMode',
+  'currentFile',
+  'attachedFiles',
+  'uploadedFiles',
+  'maxSteps',
+  'assistantId',
+  'selectedAcpAgent',
+  'selectedRuntime',
+  'runtimeBinding',
+  'workDir',
+  'contextSelection',
+  'context',
+  'providerOverride',
+  'modelOverride',
+  'runtimeOptions',
+  'agentOptions',
+  'chatSessionId',
+]);
+const AGENT_TURN_CONTEXT_FIELDS = new Set(['currentFile', 'attachedFiles', 'uploadedFiles', 'workDir', 'contextSelection']);
+const AGENT_TURN_MESSAGE_FIELDS = new Set(['text', 'content', 'images', 'skillName']);
+const NATIVE_RUNTIME_OPTION_FIELDS = new Set(['reasoningEffort', 'modelOverride']);
+const MINDOS_AGENT_OPTION_FIELDS = new Set(['enableThinking', 'thinkingBudget']);
+const SELECTED_RUNTIME_FIELDS = new Set(['id', 'name', 'kind', 'binaryPath']);
+const RUNTIME_BINDING_FIELDS = new Set(['kind', 'runtime', 'runtimeId', 'externalSessionId', 'cwd', 'status', 'updatedAt']);

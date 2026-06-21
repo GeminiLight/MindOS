@@ -64,6 +64,6 @@ describe('GET /api/agent-capabilities', () => {
     const res = await GET(new Request('http://localhost/api/agent-capabilities?mode=organize'));
 
     expect(res.status).toBe(400);
-    await expect(res.json()).resolves.toMatchObject({ error: 'mode is no longer supported' });
+    await expect(res.json()).resolves.toMatchObject({ error: 'Unknown field: mode' });
   });
 });

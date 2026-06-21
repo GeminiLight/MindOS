@@ -4,11 +4,11 @@ import { describe, expect, it } from 'vitest';
 
 const repoRoot = resolve(__dirname, '../../../..');
 
-describe('AskContent lint contract', () => {
+describe('ChatContent lint contract', () => {
   it('does not access refs during render', () => {
     const result = spawnSync(
       'pnpm',
-      ['--filter', '@mindos/web', 'exec', 'eslint', '-f', 'json', 'components/ask/AskContent.tsx'],
+      ['--filter', '@mindos/web', 'exec', 'eslint', '-f', 'json', 'components/chat/ChatContent.tsx'],
       {
         cwd: repoRoot,
         encoding: 'utf-8',

@@ -9,14 +9,14 @@
  * server list once (direct URL loads land before any fetch) and re-check;
  * still missing → calm fallback page covering the deleted/evicted race window.
  *
- * 'new' is the creation flow: create via the shared store (no AskContent
+ * 'new' is the creation flow: create via the shared store (no ChatContent
  * instance needed), then replace the URL with the real session id.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useLocale } from '@/lib/stores/locale-store';
-import AskContent from '@/components/ask/AskContent';
+import ChatContent from '@/components/chat/ChatContent';
 import {
   getActiveSessionId,
   getSessions,
@@ -25,8 +25,8 @@ import {
   refreshSessions,
   resetSession,
   setActiveSessionId,
-} from '@/lib/ask-session-store';
-import { getRun, hasMessages } from '@/lib/ask-run-store';
+} from '@/lib/agent-session-store';
+import { getRun, hasMessages } from '@/lib/agent-run-store';
 import { closeByKey } from '@/lib/workspace-tabs';
 import { encodePath } from '@/lib/utils';
 
@@ -173,7 +173,7 @@ export default function ChatPageClient({ sessionId: rawSessionId }: { sessionId:
   return (
     <div className="flex flex-col h-[calc(100dvh-var(--app-titlebar-h))]">
       <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-        <AskContent
+        <ChatContent
           visible
           variant="home"
           maximized

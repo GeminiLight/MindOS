@@ -138,7 +138,11 @@ describe('next config warning hygiene', () => {
       );
     }
 
-    expect(readFileSync(resolve(appRoot, 'app/api/agent/_lib/turn-runner.ts'), 'utf-8')).toContain(
+    const turnRunnerSource = readFileSync(resolve(appRoot, 'app/api/agent/_lib/turn-runner.ts'), 'utf-8');
+    const mindosPiRunnerSource = readFileSync(resolve(appRoot, 'app/api/agent/_lib/turn-runner-mindos-pi.ts'), 'utf-8');
+
+    expect(turnRunnerSource).toContain("await import('./turn-runner-mindos-pi')");
+    expect(mindosPiRunnerSource).toContain(
       "await import('@geminilight/mindos/agent/runtime/adapters/mindos')",
     );
     expect(readFileSync(resolve(appRoot, 'lib/agent/headless.ts'), 'utf-8')).toContain(
@@ -156,7 +160,7 @@ describe('next config warning hygiene', () => {
     expect(readFileSync(resolve(appRoot, 'lib/compile.ts'), 'utf-8')).toContain(
       "await import('@earendil-works/pi-ai')",
     );
-    expect(readFileSync(resolve(appRoot, 'app/api/agent/_lib/turn-runner.ts'), 'utf-8')).toContain(
+    expect(mindosPiRunnerSource).toContain(
       "await import('@/lib/agent/mindos-pi-runtime-host')",
     );
     expect(readFileSync(resolve(appRoot, 'lib/agent/headless.ts'), 'utf-8')).toContain(

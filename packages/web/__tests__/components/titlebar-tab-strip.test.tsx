@@ -15,8 +15,8 @@ import { createRoot, type Root } from 'react-dom/client';
 import TitlebarTabStrip, { computeVisibleCount, computeVisibleRange, TAB_MIN_W } from '@/components/TitlebarTabStrip';
 import { parseActiveTab, tabHref } from '@/hooks/useWorkspaceTabSync';
 import { getTabs, initWorkspaceTabs, keepTab, openTab, MAX_TABS } from '@/lib/workspace-tabs';
-import { getSessionsLoaded, renameSession } from '@/lib/ask-session-store';
-import { endRun, startRun } from '@/lib/ask-run-store';
+import { getSessionsLoaded, renameSession } from '@/lib/agent-session-store';
+import { endRun, startRun } from '@/lib/agent-run-store';
 import type { ChatSession } from '@/lib/types';
 
 const h = vi.hoisted(() => ({

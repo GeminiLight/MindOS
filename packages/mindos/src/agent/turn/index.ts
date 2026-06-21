@@ -406,9 +406,18 @@ export type MindosAgentFileContextServices = {
   warn?: (message: string, error?: unknown) => void;
 };
 
+export type MindosAgentFileContextReference = {
+  path: string;
+  label: 'attached' | 'current';
+  contentHash?: string;
+  size?: number;
+};
+
 export type MindosAgentFileContext = {
   contextParts: string[];
   failedFiles: string[];
+  fileReferences?: MindosAgentFileContextReference[];
+  mode?: 'full' | 'reference';
 };
 
 export function normalizeMindosAgentStepLimit(options: {
@@ -457,12 +466,18 @@ export function loadMindosAgentFileContext(
 ): MindosAgentFileContext {
   const contextParts: string[] = [];
   const failedFiles: string[] = [];
+  const fileReferences: MindosAgentFileContextReference[] = [];
   const seen = new Set<string>();
   let cumulativeSize = 0;
 
   function appendFile(filePath: string, label: 'Attached file from the MindOS knowledge base' | 'Current file from the MindOS knowledge base') {
     if (seen.has(filePath)) return;
     seen.add(filePath);
+    const reference: MindosAgentFileContextReference = {
+      path: filePath,
+      label: label.startsWith('Attached') ? 'attached' : 'current',
+    };
+    fileReferences.push(reference);
 
     const validation = services.validateFileSize?.(filePath, cumulativeSize) ?? {
       valid: true,
@@ -477,6 +492,8 @@ export function loadMindosAgentFileContext(
     try {
       const raw = services.readFile(filePath);
       const content = services.truncate ? services.truncate(raw) : raw;
+      reference.contentHash = stableMindosFileContextHash(raw);
+      reference.size = raw.length;
       contextParts.push(`### ${label}: ${filePath}\n\n${content}`);
       cumulativeSize = validation.newCumulativeSize;
     } catch (error) {
@@ -488,7 +505,16 @@ export function loadMindosAgentFileContext(
   for (const filePath of attachedFiles ?? []) appendFile(filePath, 'Attached file from the MindOS knowledge base');
   if (currentFile) appendFile(currentFile, 'Current file from the MindOS knowledge base');
 
-  return { contextParts, failedFiles };
+  return { contextParts, failedFiles, fileReferences, mode: 'full' };
+}
+
+function stableMindosFileContextHash(content: string): string {
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < content.length; index += 1) {
+    hash ^= content.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash.toString(16).padStart(8, '0');
 }
 
 export function createMindosUploadedFileParts(
@@ -534,6 +560,14 @@ export function buildMindosExternalRuntimePrompt(input: MindosExternalRuntimePro
       content: [
         'The following content already exists in MindOS and was explicitly attached for this turn. Cite stable paths when using it.',
         input.fileContext.contextParts.join('\n\n---\n\n'),
+      ],
+    });
+  } else if (input.fileContext?.mode === 'reference' && input.fileContext.fileReferences?.length) {
+    sections.push({
+      title: 'Attached files from the MindOS knowledge base',
+      content: [
+        'These selected MindOS files are unchanged since the last turn, so their full content is not repeated. Use file tools to re-read exact content if needed.',
+        input.fileContext.fileReferences.map((file) => `- ${file.label === 'current' ? 'Current' : 'Attached'}: ${file.path}`).join('\n'),
       ],
     });
   }

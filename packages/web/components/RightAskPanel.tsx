@@ -2,7 +2,7 @@
 
 import { useCallback, useRef, useState } from 'react';
 import { AlertCircle } from 'lucide-react';
-import AskContent from '@/components/ask/AskContent';
+import ChatContent from '@/components/chat/ChatContent';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import { useResizeDrag } from '@/hooks/useResizeDrag';
 import { RIGHT_ASK_PANEL } from '@/lib/config/panel-sizes';
@@ -131,7 +131,7 @@ export default function RightAskPanel({
         </div>
       }>
         <div className="flex min-h-0 w-full flex-1 flex-col overflow-hidden">
-          <AskContent
+          <ChatContent
             visible={open}
             variant="panel"
             currentFile={open ? currentFile : undefined}

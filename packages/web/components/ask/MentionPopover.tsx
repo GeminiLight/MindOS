@@ -12,7 +12,7 @@ interface MentionPopoverProps {
 }
 
 /**
- * Popover for @ file mentions. Renders as a flex child within the AskContent
+ * Popover for @ file mentions. Renders as a flex child within the ChatContent
  * column (not absolutely positioned) to avoid clipping by the panel's
  * overflow-hidden. Uses a dynamic max-height that caps at 50% of the
  * viewport so the popover never overflows the visible area.

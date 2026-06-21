@@ -68,7 +68,7 @@ mindos/
 
 | 端点 | 功能 |
 |------|------|
-| `POST /api/ask` | AI 对话 — 流式输出，自动注入 bootstrap + skill |
+| `POST /api/agent/sessions/:sessionId/turns` | Agent turn — SSE 流式输出，按 runtime/permission/context 组装本轮请求 |
 | `GET /api/agent/sessions` | 多轮对话历史 |
 | `POST /api/auth` | Token 认证 |
 | `GET /api/backlinks?path=` | 反向链接查询 |
@@ -149,7 +149,7 @@ mindos/
 | FileTree | 861 行 | 619 行 + FileTreeContextMenus.tsx, useDirectoryDragDrop hook | -28% |
 | SyncTab | 775 行 | 556 行 + SyncEmptyState.tsx | -28% |
 | AgentsSkillsSection | 869 行 | 655 行 + AgentsSkillsByAgent.tsx | -25% |
-| AskContent | 771 行 | 771 行 | 跳过 (编排型组件，拆分反增复杂度) |
+| ChatContent | 771 行 | 771 行 | 跳过 (编排型组件，拆分反增复杂度) |
 
 **插件渲染器 (14个)：**
 
@@ -382,9 +382,10 @@ Web 的 `packages/web/app/api/file/route.ts` 只保留 Next.js adapter：读取 
 ### AI 对话流
 
 ```
-用户消息 → POST /api/ask
-    ├── 注入：Skill + Bootstrap (INSTRUCTION + README + CONFIG) + 当前文件 + 附件
-    └── pi-coding-agent session → Anthropic/OpenAI → 24 个 KB tools + 6 个 A2A tools + 2 个 ACP tools + 2 个 IM tools → 流式输出
+用户消息 → POST /api/agent/sessions/:sessionId/turns
+    ├── 注入：本轮 context（时间、session context、初始化材料、当前/附加文件、上传文件、active recall）
+    ├── MindOS Pi runtime：pi-coding-agent session + MindOS extension/tools
+    └── 外部 runtime：Codex / Claude Code / ACP adapter → SSE 流式输出
 ```
 
 ### 外部 Agent (MCP)

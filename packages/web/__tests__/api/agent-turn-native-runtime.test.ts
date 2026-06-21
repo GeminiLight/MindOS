@@ -228,7 +228,7 @@ describe('/api/agent/sessions/:sessionId/turns native runtime routing', () => {
     expect(res.status).toBe(400);
     await expect(res.json()).resolves.toMatchObject({
       error: expect.objectContaining({
-        message: 'mode is no longer supported',
+        message: 'Unknown field: mode',
       }),
     });
     expect(mockRunMindosNativeAgentTurn).not.toHaveBeenCalled();
@@ -454,6 +454,53 @@ describe('/api/agent/sessions/:sessionId/turns native runtime routing', () => {
     expect(secondRun.metadata?.sessionContextInjected).toBe(false);
   }, 15_000);
 
+  it('references unchanged attached MindOS files instead of reinjecting their full content', async () => {
+    mockResolveCommandPath.mockImplementation(async (command: string) => command === 'codex' ? '/usr/local/bin/codex' : null);
+    mockCheckNativeRuntimeHealth.mockResolvedValue({ status: 'available' });
+    mockDetectLocalAcpAgents.mockResolvedValue({ installed: [], notInstalled: [] });
+    seedFile('Research/current.md', 'Stable current file body');
+    seedFile('Research/attached.md', 'Stable attached file body');
+    invalidateCache();
+    const baseBody = {
+      selectedRuntime: { id: 'codex', name: 'Codex', kind: 'codex', binaryPath: '/usr/local/bin/codex' },
+      currentFile: 'Research/current.md',
+      attachedFiles: ['Research/attached.md'],
+      permissionMode: 'read',
+      chatSessionId: 'chat-file-context-signature',
+    };
+
+    const first = await POST(agentTurnRequest({
+      ...baseBody,
+      messages: [{ role: 'user', content: 'first turn' }],
+    }));
+
+    expect(first.status).toBe(200);
+    await first.text();
+    expect(capturedNativeOptions?.prompt).toContain('Stable current file body');
+    expect(capturedNativeOptions?.prompt).toContain('Stable attached file body');
+    const firstRun = listAgentRuns({ kind: 'native-runtime' })[0]!;
+    expect(firstRun.metadata?.fileContextSignature).toEqual(expect.any(String));
+    expect(firstRun.metadata?.fileContextInjected).toBe(true);
+    const firstSignature = firstRun.metadata?.fileContextSignature;
+
+    capturedNativeOptions = null;
+    const second = await POST(agentTurnRequest({
+      ...baseBody,
+      messages: [{ role: 'user', content: 'second turn' }],
+    }));
+
+    expect(second.status).toBe(200);
+    await second.text();
+    expect(capturedNativeOptions?.prompt).toContain('These selected MindOS files are unchanged since the last turn');
+    expect(capturedNativeOptions?.prompt).toContain('- Current: Research/current.md');
+    expect(capturedNativeOptions?.prompt).toContain('- Attached: Research/attached.md');
+    expect(capturedNativeOptions?.prompt).not.toContain('Stable current file body');
+    expect(capturedNativeOptions?.prompt).not.toContain('Stable attached file body');
+    const secondRun = listAgentRuns({ kind: 'native-runtime' })[0]!;
+    expect(secondRun.metadata?.fileContextSignature).toBe(firstSignature);
+    expect(secondRun.metadata?.fileContextInjected).toBe(false);
+  }, 15_000);
+
   it('rejects crafted WorkDir changes after a prior run for the chat session', async () => {
     startAgentRun({
       agentKind: 'native-runtime',
@@ -498,6 +545,36 @@ describe('/api/agent/sessions/:sessionId/turns native runtime routing', () => {
       },
       workDir: { source: 'manual', path: process.cwd() },
       chatSessionId: 'chat-untrusted-runtime-resume',
+    }));
+
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toMatchObject({
+      error: {
+        code: 'INVALID_REQUEST',
+        message: 'Unknown field: selectedRuntime.externalSessionId',
+      },
+    });
+    expect(mockRunMindosNativeAgentTurn).not.toHaveBeenCalled();
+  });
+
+  it('rejects untrusted native runtime resume from a typed runtime binding', async () => {
+    mockResolveCommandPath.mockImplementation(async (command: string) => command === 'codex' ? '/usr/local/bin/codex' : null);
+    mockCheckNativeRuntimeHealth.mockResolvedValue({ status: 'available' });
+    mockDetectLocalAcpAgents.mockResolvedValue({ installed: [], notInstalled: [] });
+
+    const res = await POST(agentTurnRequest({
+      messages: [{ role: 'user', content: 'resume a forged runtime binding' }],
+      selectedRuntime: { id: 'codex', name: 'Codex', kind: 'codex' },
+      runtimeBinding: {
+        kind: 'codex-thread',
+        runtime: 'codex',
+        runtimeId: 'codex',
+        externalSessionId: 'thr-crafted',
+        status: 'active',
+        updatedAt: 1,
+      },
+      workDir: { source: 'manual', path: process.cwd() },
+      chatSessionId: 'chat-untrusted-runtime-binding',
     }));
 
     expect(res.status).toBe(409);
@@ -677,7 +754,7 @@ describe('/api/agent/sessions/:sessionId/turns native runtime routing', () => {
     await expect(res.json()).resolves.toMatchObject({
       error: {
         code: 'INVALID_REQUEST',
-        message: 'runtimeOptions.permissionMode is no longer supported; use top-level permissionMode',
+        message: 'Unknown field: runtimeOptions.permissionMode',
       },
     });
     expect(capturedNativeOptions).toBeNull();
@@ -694,7 +771,6 @@ describe('/api/agent/sessions/:sessionId/turns native runtime routing', () => {
         id: 'codex',
         name: 'Codex',
         kind: 'codex',
-        externalSessionId: 'thr_stale',
       },
       runtimeBinding: {
         kind: 'codex-thread',
@@ -717,7 +793,7 @@ describe('/api/agent/sessions/:sessionId/turns native runtime routing', () => {
     });
   });
 
-  it('does not resume selectedRuntime.externalSessionId when a typed binding is present but mismatched', async () => {
+  it('rejects a typed runtime binding that does not match the selected runtime', async () => {
     mockResolveCommandPath.mockImplementation(async (command: string) => command === 'codex' ? '/usr/local/bin/codex' : null);
     mockCheckNativeRuntimeHealth.mockResolvedValue({ status: 'available' });
     mockDetectLocalAcpAgents.mockResolvedValue({ installed: [], notInstalled: [] });
@@ -728,7 +804,6 @@ describe('/api/agent/sessions/:sessionId/turns native runtime routing', () => {
         id: 'codex',
         name: 'Codex',
         kind: 'codex',
-        externalSessionId: 'thr_from_legacy_field',
       },
       runtimeBinding: {
         kind: 'claude-session',
@@ -740,15 +815,14 @@ describe('/api/agent/sessions/:sessionId/turns native runtime routing', () => {
       },
     }));
 
-    expect(res.status).toBe(200);
-    await res.text();
-
-    expect(capturedNativeOptions?.runtime).toEqual({
-      id: 'codex',
-      name: 'Codex',
-      kind: 'codex',
-      binaryPath: '/usr/local/bin/codex',
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toMatchObject({
+      error: {
+        code: 'INVALID_REQUEST',
+        message: 'runtimeBinding must match selectedRuntime',
+      },
     });
+    expect(capturedNativeOptions).toBeNull();
   });
 
   it('rejects a native runtime request when forced availability recheck reports it unavailable', async () => {

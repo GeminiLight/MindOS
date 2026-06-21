@@ -336,6 +336,12 @@ describe('MindOS session event contract', () => {
       '### Current file from the MindOS knowledge base: current.md\n\ncontent:current.md',
     ]);
     expect(loaded.failedFiles).toEqual(['too-big.md']);
+    expect(loaded.mode).toBe('full');
+    expect(loaded.fileReferences).toEqual([
+      expect.objectContaining({ path: 'a.md', label: 'attached', contentHash: expect.any(String), size: 'content:a.md'.length }),
+      { path: 'too-big.md', label: 'attached' },
+      expect.objectContaining({ path: 'current.md', label: 'current', contentHash: expect.any(String), size: 'content:current.md'.length }),
+    ]);
   });
 
   it('creates uploaded file context and safe JSON objects', () => {

@@ -1,6 +1,6 @@
 # MindOS Agent 架构
 
-> 最后更新: 2026-04-27
+> 最后更新: 2026-06-21
 > 
 > **2026-04-10 更新**：Ask Panel UX 改进已上线。参见"Ask Panel 近期改进"部分。
 
@@ -9,19 +9,22 @@
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                         Web UI (浏览器)                          │
-│  AskContent.tsx → useAskSession hook → sessions.json (前端持久化) │
-│  发送: { messages[], sessionId, currentFile, attachedFiles }     │
+│  ChatContent.tsx → useAgentChat/useAskSession → sessions.json    │
+│  发送: { messages[], sessionId, currentFile, attachedFiles,      │
+│        selectedRuntime, runtimeBinding, agentMode, permissionMode }│
 └────────────────────────────┬────────────────────────────────────┘
-                             │ POST /api/ask (SSE)
+                             │ POST /api/agent/sessions/:sessionId/turns (SSE)
                              ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                    Next.js API Route Layer                       │
-│                  packages/web/app/api/ask/route.ts                   │
+│        packages/web/app/api/agent/sessions/[sessionId]/turns      │
+│        packages/web/app/api/agent/_lib/turn-runner.ts             │
 │                                                                 │
-│  1. System Prompt 组装                                           │
-│  2. Tools 组装 (内置 + Skills + MCP)                             │
-│  3. Session 创建 (持久化或 inMemory)                              │
-│  4. SSE 流式响应                                                 │
+│  1. Strict request contract validation                           │
+│  2. Runtime selection + runtimeBinding validation                 │
+│  3. Turn context prompt 组装                                      │
+│  4. MindOS Pi / Codex / Claude / ACP runtime 分发                 │
+│  5. SSE + run ledger 写入                                        │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -202,14 +205,15 @@ MCP_AGENTS 注册表 (packages/web/lib/mcp-agents.ts)
 
 ## 八、SSE 流协议
 
-POST /api/ask 返回 Server-Sent Events，自定义 6 种事件类型：
+POST /api/agent/sessions/:sessionId/turns 返回 Server-Sent Events，核心事件类型：
 
 | 事件 | 格式 | 说明 |
 |---|---|---|
-| `text_delta` | `{ content: string }` | 文本增量 |
-| `thinking_delta` | `{ content: string }` | Extended Thinking 增量 |
-| `tool_start` | `{ name, args }` | 工具调用开始 |
-| `tool_end` | `{ name, result }` | 工具调用结束 |
+| `text_delta` | `{ delta: string }` | 文本增量 |
+| `thinking_delta` | `{ delta: string }` | Extended Thinking 增量 |
+| `tool_start` | `{ toolName, args }` | 工具调用开始 |
+| `tool_end` | `{ toolName, output, isError }` | 工具调用结束 |
+| `runtime_binding` | `{ runtime, externalSessionId, ... }` | 外部 runtime session/thread 绑定 |
 | `done` | `{ usage }` | 流结束 |
 | `error` | `{ message, code }` | 错误 |
 
@@ -241,7 +245,10 @@ MindOS 集成了 ACP 协议，可作为客户端调用远程 ACP Agent：
 
 | 文件 | 职责 |
 |---|---|
-| `packages/web/app/api/ask/route.ts` | 核心入口：prompt 组装、session 创建、SSE 流 |
+| `packages/web/app/api/agent/sessions/[sessionId]/turns/route.ts` | Canonical turn endpoint |
+| `packages/web/app/api/agent/_lib/turn-runner.ts` | turn 总控：contract、context、runtime 分发 |
+| `packages/web/app/api/agent/_lib/turn-runner-mindos-pi.ts` | MindOS Pi runtime 执行路径 |
+| `packages/web/app/api/agent/_lib/turn-runner-external.ts` | Codex / Claude / ACP 执行路径 |
 | `packages/web/lib/agent/prompt.ts` | 静态 system prompt 模板 |
 | `packages/web/lib/agent/tools.ts` | 工具定义 + request-scoped 动态组装 |
 | `packages/web/lib/agent/to-agent-messages.ts` | 前端消息 → pi AgentMessage 转换 |
@@ -254,7 +261,7 @@ MindOS 集成了 ACP 协议，可作为客户端调用远程 ACP Agent：
 | `packages/web/lib/mcp-agents.ts` | agent 注册表（含 MindOS） |
 | `packages/web/lib/settings.ts` | 持久化配置（disabledSkills/Extensions） |
 | `packages/web/lib/im/index.ts` | IM Extension 注册（pi 兼容） |
-| `packages/web/components/ask/AskContent.tsx` | 前端发消息入口 |
+| `packages/web/components/chat/ChatContent.tsx` | 前端发消息入口 |
 | `packages/web/hooks/useAskSession.ts` | 前端 session 管理 |
 
 ## 十一、Ask Panel 近期改进（2026-04-10）

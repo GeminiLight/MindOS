@@ -190,7 +190,7 @@ describe('POST /api/assistant-runs', () => {
       ok: false,
       error: {
         code: 'INVALID_RUNTIME_OPTIONS',
-        message: 'runtimeOptions.permissionMode is no longer supported; use top-level permissionMode.',
+        message: 'Unknown field: runtimeOptions.permissionMode',
       },
     });
     expect(agentTurnPostMock).not.toHaveBeenCalled();

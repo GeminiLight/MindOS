@@ -168,15 +168,15 @@ beforeEach(() => {
 
 afterEach(async () => {
   fs.rmSync(state.root, { recursive: true, force: true });
-  // ask-run-store / ask-session-store keep runs/messages/metadata at module
+  // agent-run-store / agent-session-store keep runs/messages/metadata at module
   // level so background chat runs survive unmounts — in tests that means state
   // leaks across cases unless reset here. Order matters: the run-store reset
   // nulls its bridge slots, the session-store reset re-wires them. Dynamic
   // import keeps non-web suites from paying the cost.
-  const { resetAskRunStoreForTests } = await import('@/lib/ask-run-store');
-  resetAskRunStoreForTests();
-  const { resetAskSessionStoreForTests } = await import('@/lib/ask-session-store');
-  resetAskSessionStoreForTests();
+  const { resetAgentRunStoreForTests } = await import('@/lib/agent-run-store');
+  resetAgentRunStoreForTests();
+  const { resetAgentSessionStoreForTests } = await import('@/lib/agent-session-store');
+  resetAgentSessionStoreForTests();
   const { resetWorkspaceTabsForTests } = await import('@/lib/workspace-tabs');
   resetWorkspaceTabsForTests();
 });

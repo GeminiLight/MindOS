@@ -35,8 +35,8 @@ import {
   type WorkspaceTab,
   type WorkspaceTabKind,
 } from '@/lib/workspace-tabs';
-import { getSessionsLoaded, refreshSessions, useSessions } from '@/lib/ask-session-store';
-import { useRunSummary } from '@/lib/ask-run-store';
+import { getSessionsLoaded, refreshSessions, useSessions } from '@/lib/agent-session-store';
+import { useRunSummary } from '@/lib/agent-run-store';
 import { getSessionAgentRuntime } from '@/lib/ask-agent';
 import type { AgentRuntimeIdentity, ChatSession } from '@/lib/types';
 import { sessionTitle } from '@/hooks/useAskSession';

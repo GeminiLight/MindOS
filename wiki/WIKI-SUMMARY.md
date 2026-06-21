@@ -71,7 +71,7 @@ packages/
 
 ### API Route 状态 (78 总数)
 - **65** 个已迁移为 Product Server thin-adapter
-- **1** 个 stream adapter (`/api/ask`)
+- **1** 个 canonical agent turn stream adapter (`/api/agent/sessions/:sessionId/turns`)
 - **9** 个 optional-capability (import/export/extract/Obsidian/lint/inbox-clip)
 - **3** 个 host-owned (auth, raw inbound IM/webhook)
 
