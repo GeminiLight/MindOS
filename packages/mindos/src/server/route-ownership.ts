@@ -97,6 +97,7 @@ export const MINDOS_WEB_API_ROUTE_OWNERSHIP: MindosWebApiRouteOwnership[] = [
   migrated('/api/changes'),
   migrated('/api/channels/verify', 'medium'),
   migrated('/api/connect'),
+  host('/api/echo', 'Echo save/list APIs currently use Web-owned echo-store helpers and local content-change logging; Product Server should own this once Echo persistence is promoted.', 'medium'),
   migrated('/api/embedding', 'medium'),
   optional('/api/export', 'Phase 5: content ingestion optional capabilities', 'high', 'Export/archive logic carries heavy dependencies and filesystem writes that need optional capability packaging.'),
   migrated('/api/extract-docx', 'high'),

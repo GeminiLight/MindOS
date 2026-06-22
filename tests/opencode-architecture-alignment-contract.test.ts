@@ -298,7 +298,7 @@ describe('OpenCode architecture alignment', () => {
     expect(agentTurnRunner).toContain('const commonTurnPrompt = await buildMindosContextPrompt');
     expect(agentTurnRunner).toContain('const turnPrompt = renderMindosPiSelectedSkillPrompt(commonTurnPrompt, selectedSkills)');
     expect(externalTurnRunner).toContain('prompt: input.externalPrompt');
-    expect(mindosPiTurnRunner).toContain('prompt: input.turnPrompt');
+    expect(mindosPiTurnRunner).toContain('prompt: turnPrompt');
     expect(agentTurnRunner.indexOf('if (verifiedNativeRuntime || selectedAcpAgent)')).toBeLessThan(
       agentTurnRunner.indexOf("await import('./turn-runner-mindos-pi')"),
     );
