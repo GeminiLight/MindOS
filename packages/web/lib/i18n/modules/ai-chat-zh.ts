@@ -173,7 +173,12 @@ export const aiChatZh = {
   },
   changes: {
     unreadBanner: (n: number) => `${n} 条内容变更未读`,
+    agentUnreadBanner: (n: number, files: number) => `${n} 条 Agent 改动待审阅${files > 0 ? `，涉及 ${files} 个文件` : ''}`,
     reviewNow: '立即查看',
+    reviewAgentChanges: '审阅变更',
+    reviewAgentShort: '审阅',
+    reviewFileAgentChanges: '审阅此文件的 Agent 改动',
+    agentEditedChip: 'Agent 已修改 · 审阅',
     dismiss: '关闭提醒',
     title: '内容变更',
     subtitle: '集中查看用户与 Agent 的最近编辑记录。',

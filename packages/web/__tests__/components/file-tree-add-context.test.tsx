@@ -7,12 +7,18 @@ import { ASK_ADD_CONTEXT_EVENT } from '@/lib/ask-context-events';
 import { useAskPanel } from '@/hooks/useAskPanel';
 
 const nav = vi.hoisted(() => ({ pathname: '/view/Research/notes.md' }));
+const mockPush = vi.fn();
 const mockTogglePin = vi.fn();
 const mockToastSuccess = vi.fn();
+const apiFetchMock = vi.fn();
 
 vi.mock('next/navigation', () => ({
   usePathname: () => nav.pathname,
-  useRouter: () => ({ push: vi.fn(), refresh: vi.fn(), prefetch: vi.fn() }),
+  useRouter: () => ({ push: mockPush, refresh: vi.fn(), prefetch: vi.fn() }),
+}));
+
+vi.mock('@/lib/api', () => ({
+  apiFetch: (...args: unknown[]) => apiFetchMock(...args),
 }));
 
 vi.mock('@/lib/actions', () => ({
@@ -112,6 +118,16 @@ function captureNextContextEvent() {
   return () => detail;
 }
 
+function waitForAnimationFrame() {
+  return new Promise<void>((resolve) => {
+    if (typeof window.requestAnimationFrame === 'function') {
+      window.requestAnimationFrame(() => resolve());
+      return;
+    }
+    setTimeout(resolve, 0);
+  });
+}
+
 describe('File tree Add as Context menu actions', () => {
   let host: HTMLDivElement;
   let root: Root;
@@ -120,6 +136,24 @@ describe('File tree Add as Context menu actions', () => {
     vi.clearAllMocks();
     nav.pathname = '/view/Research/notes.md';
     localStorage.clear();
+    apiFetchMock.mockImplementation(async (url: string) => {
+      if (url === '/api/changes?op=summary') {
+        return { unreadCount: 1, totalCount: 1, lastSeenAt: '2026-06-22T00:00:00.000Z' };
+      }
+      if (url.startsWith('/api/changes?') && url.includes('source=agent')) {
+        return {
+          events: [{
+            id: 'agent-1',
+            ts: '2026-06-22T00:01:00.000Z',
+            op: 'update_lines',
+            path: 'Research/notes.md',
+            source: 'agent',
+            summary: 'Updated lines 1-2',
+          }],
+        };
+      }
+      return {};
+    });
     host = document.createElement('div');
     document.body.appendChild(host);
     root = createRoot(host);
@@ -153,6 +187,38 @@ describe('File tree Add as Context menu actions', () => {
 
     expect(getDetail()).toEqual({ path: 'Research/notes.md', type: 'file', label: 'notes.md' });
     expect(mockToastSuccess).toHaveBeenCalledWith('Added to context', 1600);
+  });
+
+  it('marks files with pending agent changes and opens scoped review from the menu', async () => {
+    const { default: FileTree } = await import('@/components/FileTree');
+    const nodes: FileNode[] = [{ type: 'file', name: 'notes.md', path: 'Research/notes.md', extension: '.md' }];
+
+    await act(async () => {
+      root.render(<FileTree nodes={nodes} />);
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(host.querySelector('[data-agent-review-dot]')).not.toBeNull();
+
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('button[title="More"]')?.click();
+    });
+
+    const reviewButton = [...document.body.querySelectorAll('button')]
+      .find(button => button.textContent?.includes('Review changes'));
+    expect(reviewButton).toBeTruthy();
+
+    await act(async () => {
+      reviewButton?.click();
+    });
+    await act(async () => {
+      await waitForAnimationFrame();
+    });
+
+    expect(mockPush).toHaveBeenCalledWith('/changelog?source=agent&path=Research%2Fnotes.md');
   });
 
   it('places Add as Context before favorites in folder and space menus', async () => {

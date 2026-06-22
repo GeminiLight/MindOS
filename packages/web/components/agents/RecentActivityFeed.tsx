@@ -2,9 +2,10 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
-import { CheckCircle2, AlertCircle, ChevronDown, Activity, ArrowRight } from 'lucide-react';
+import { CheckCircle2, AlertCircle, ChevronDown, Activity, ArrowRight, History } from 'lucide-react';
 import { encodePath } from '@/lib/utils';
 import { useLocale } from '@/lib/stores/locale-store';
+import { agentReviewHref } from '@/lib/agent-review-links';
 import { AgentSectionHeading } from './AgentsPrimitives';
 import {
   type AgentOp,
@@ -87,6 +88,7 @@ export default function RecentActivityFeed() {
         {visible.map((op, i) => {
           const kind = opKind(op.tool);
           const filePath = getFilePath(op.params);
+          const canReviewChanges = !!filePath && (kind === 'write' || kind === 'create' || kind === 'delete');
 
           return (
             <div
@@ -107,6 +109,17 @@ export default function RecentActivityFeed() {
                 </Link>
               ) : (
                 <span className="flex-1" />
+              )}
+
+              {canReviewChanges && (
+                <Link
+                  href={agentReviewHref(filePath ?? undefined)}
+                  className="inline-flex h-6 shrink-0 items-center gap-1 rounded-md border border-[var(--amber)]/20 bg-[var(--amber-subtle)] px-1.5 text-[0.65rem] font-medium text-[var(--amber-text)] transition-colors hover:bg-[var(--amber)]/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  title={copy?.reviewChanges ?? 'Review changes'}
+                >
+                  <History size={10} />
+                  <span className="hidden xl:inline">{copy?.reviewChanges ?? 'Review'}</span>
+                </Link>
               )}
 
               {/* agent name badge */}

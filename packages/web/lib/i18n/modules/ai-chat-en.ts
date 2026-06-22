@@ -174,7 +174,12 @@ export const aiChatEn = {
   },
   changes: {
     unreadBanner: (n: number) => `${n} content change${n === 1 ? '' : 's'} unread`,
+    agentUnreadBanner: (n: number, files: number) => `${n} agent change${n === 1 ? '' : 's'} pending review${files > 0 ? ` in ${files} file${files === 1 ? '' : 's'}` : ''}`,
     reviewNow: 'Review now',
+    reviewAgentChanges: 'Review changes',
+    reviewAgentShort: 'Review',
+    reviewFileAgentChanges: 'Review agent changes for this file',
+    agentEditedChip: 'Agent edited · Review',
     dismiss: 'Dismiss notification',
     title: 'Content changes',
     subtitle: 'Review recent edits across user and agent operations.',

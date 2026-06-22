@@ -1,20 +1,15 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { History, X } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
-import { useVisiblePolling } from '@/lib/use-visible-polling';
-import { useFilesChanged } from '@/hooks/useFilesChanged';
 import { useLocale } from '@/lib/stores/locale-store';
-
-interface ChangeSummaryPayload {
-  unreadCount: number;
-}
+import { agentReviewHref } from '@/lib/agent-review-links';
+import { useAgentChangeReview } from '@/hooks/useAgentChangeReview';
 
 export default function ChangesBanner() {
-  const [unreadCount, setUnreadCount] = useState(0);
   const [dismissedAtCount, setDismissedAtCount] = useState<number | null>(null);
   const [autoDismissed, setAutoDismissed] = useState(false);
   const prevUnreadRef = useRef(0);
@@ -22,42 +17,29 @@ export default function ChangesBanner() {
   const [isVisible, setIsVisible] = useState(false);
   const pathname = usePathname();
   const { t } = useLocale();
-
-  const mountedRef = useRef(true);
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => { mountedRef.current = false; };
-  }, []);
-
-  const fetchSummary = useCallback(async () => {
-    try {
-      const summary = await apiFetch<ChangeSummaryPayload>('/api/changes?op=summary');
-      if (mountedRef.current) setUnreadCount(summary.unreadCount);
-    } catch {
-      if (mountedRef.current) setUnreadCount(0);
-    }
-  }, []);
-
-  // Content writes arrive via files-changed events; the slow poll only
-  // backstops changes the event contract cannot see (e.g. other tabs).
-  useVisiblePolling(() => void fetchSummary(), 60_000);
-  useFilesChanged(() => void fetchSummary());
+  const review = useAgentChangeReview();
+  const hasAgentReview = review.unreadAgentCount > 0;
+  const activeUnreadCount = hasAgentReview ? review.unreadAgentCount : review.unreadCount;
+  const bannerLabel = hasAgentReview
+    ? t.changes.agentUnreadBanner(review.unreadAgentCount, review.unreviewedPathCount)
+    : t.changes.unreadBanner(activeUnreadCount);
+  const reviewHref = hasAgentReview ? agentReviewHref() : '/changelog';
 
   // Re-show banner when new changes arrive after auto-dismiss
   useEffect(() => {
-    if (unreadCount > prevUnreadRef.current && autoDismissed) {
+    if (activeUnreadCount > prevUnreadRef.current && autoDismissed) {
       setAutoDismissed(false);
     }
-    prevUnreadRef.current = unreadCount;
-  }, [unreadCount, autoDismissed]);
+    prevUnreadRef.current = activeUnreadCount;
+  }, [activeUnreadCount, autoDismissed]);
 
   const shouldShow = useMemo(() => {
-    if (unreadCount <= 0) return false;
+    if (activeUnreadCount <= 0) return false;
     if (pathname?.startsWith('/changes') || pathname?.startsWith('/changelog')) return false;
-    if (dismissedAtCount !== null && unreadCount <= dismissedAtCount) return false;
+    if (dismissedAtCount !== null && activeUnreadCount <= dismissedAtCount) return false;
     if (autoDismissed) return false;
     return true;
-  }, [dismissedAtCount, pathname, unreadCount, autoDismissed]);
+  }, [activeUnreadCount, dismissedAtCount, pathname, autoDismissed]);
 
   // Auto-dismiss after 10 seconds
   useEffect(() => {
@@ -88,8 +70,8 @@ export default function ChangesBanner() {
     } catch {
       // Keep UI resilient; polling will recover server state.
     } finally {
-      setUnreadCount(0);
       setDismissedAtCount(0);
+      await review.refresh();
     }
   }
 
@@ -116,14 +98,14 @@ export default function ChangesBanner() {
           </span>
           <div className="min-w-0 flex-1">
             <p className="text-xs text-foreground font-medium whitespace-nowrap">
-              {t.changes.unreadBanner(unreadCount)}
+              {bannerLabel}
             </p>
             <div className="mt-1 flex items-center gap-1.5">
               <Link
-                href="/changelog"
+                href={reviewHref}
                 className="hit-target-box inline-flex items-center px-2.5 py-1 text-xs font-medium text-[var(--amber-foreground)] focus-visible:ring-2 focus-visible:ring-ring hover:opacity-90 [--hit-target-bg:var(--amber)] [--hit-target-hover-bg:var(--amber)] [--hit-target-radius:var(--radius-md)]"
               >
-                {t.changes.reviewNow}
+                {hasAgentReview ? t.changes.reviewAgentChanges : t.changes.reviewNow}
               </Link>
               <button
                 type="button"
@@ -136,7 +118,7 @@ export default function ChangesBanner() {
           </div>
           <button
             type="button"
-            onClick={() => setDismissedAtCount(unreadCount)}
+            onClick={() => setDismissedAtCount(activeUnreadCount)}
             aria-label={t.changes.dismiss}
             className="hit-target-box inline-flex h-6 w-6 items-center justify-center text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring [--hit-target-hover-bg:color-mix(in_srgb,var(--muted)_60%,transparent)] [--hit-target-radius:var(--radius-md)]"
           >

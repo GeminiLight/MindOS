@@ -875,6 +875,7 @@ export const panelsEn = {
       actionOpen: 'Open',
       recentActivity: 'Recent runs',
       viewAll: 'View all',
+      reviewChanges: 'Review changes',
       showLess: 'Show less',
       addCustomAgent: 'Add your own agent',
       addCustomAgentTitle: 'Add Custom Agent',

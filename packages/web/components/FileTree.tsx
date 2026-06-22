@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useRef, useTransition, useEffect, memo, useMemo } from 'react';
+import { useState, useCallback, useRef, useTransition, useEffect, memo, useMemo, createContext, useContext } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { FileNode, SYSTEM_FILES, UNDELETABLE_FILES, type MindSystemNodeKey } from '@/lib/types';
 import { encodePath } from '@/lib/utils';
@@ -8,7 +8,7 @@ import { ICON_SIZES } from '@/lib/config/icon-scale';
 import {
   ChevronDown, FileText, Table, Folder, FolderOpen, Loader2,
   Trash2, Pencil, Layers, Copy, MoreHorizontal, Star, Inbox,
-  Compass, ScrollText, Route, Wrench, MessageSquarePlus,
+  Compass, ScrollText, Route, Wrench, MessageSquarePlus, History,
 } from 'lucide-react';
 import { createFileAction, deleteFileAction, renameFileAction, renameSpaceAction, deleteSpaceAction, deleteFolderAction, undoDeleteAction } from '@/lib/actions';
 import { toast } from '@/lib/toast';
@@ -28,12 +28,21 @@ import { requestAddAskContext } from '@/lib/ask-context-events';
 import { ContextMenuShell, SpaceContextMenu, FolderContextMenu, MENU_ITEM, MENU_DANGER, MENU_DIVIDER, type ContextMenuAlign } from '@/components/file-tree/FileTreeContextMenus';
 import { useDirectoryDragDrop } from '@/lib/hooks/useDirectoryDragDrop';
 import { ActivePathContext, createActivePathStore, useIsActiveFile, useIsOnActivePath, type ActivePathStore } from '@/components/file-tree/active-path';
+import { agentReviewHref } from '@/lib/agent-review-links';
+import { useAgentChangeReview } from '@/hooks/useAgentChangeReview';
 
 async function copyPathToClipboard(path: string) {
   try { await navigator.clipboard.writeText(path); } catch { /* noop */ }
 }
 
 type RowContextMenuState = { x: number; y: number; align?: ContextMenuAlign };
+
+const EMPTY_AGENT_REVIEW_PATHS = new Set<string>();
+const AgentReviewPathsContext = createContext<ReadonlySet<string>>(EMPTY_AGENT_REVIEW_PATHS);
+
+function useHasPendingAgentReview(path: string): boolean {
+  return useContext(AgentReviewPathsContext).has(path);
+}
 
 interface FileTreeProps {
   nodes: FileNode[];
@@ -534,6 +543,8 @@ const FileNodeItem = memo(function FileNodeItem({ node, depth, onNavigate }: {
   const { t } = useLocale();
   const { isPinned, togglePin } = usePinnedFiles();
   const pinned = isPinned(node.path);
+  const hasPendingAgentReview = useHasPendingAgentReview(node.path);
+  const reviewLabel = t.fileTree.reviewAgentChanges ?? 'Review changes';
   const isProtected = !node.path.includes('/') && UNDELETABLE_FILES.has(node.name);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [contextMenu, setContextMenu] = useState<RowContextMenuState | null>(null);
@@ -682,19 +693,47 @@ const FileNodeItem = memo(function FileNodeItem({ node, depth, onNavigate }: {
       <StableRowTrailingSlot
         className="mr-1"
         forceActionsVisible={Boolean(contextMenu)}
-        status={pinned ? <Star size={10} className="fill-[var(--amber)] text-[var(--amber)] opacity-70" /> : null}
+        reserveClassName={hasPendingAgentReview ? 'w-14' : 'w-8'}
+        status={(pinned || hasPendingAgentReview) ? (
+          <span className="inline-flex items-center justify-end gap-1" title={hasPendingAgentReview ? reviewLabel : undefined}>
+            {hasPendingAgentReview && (
+              <span
+                data-agent-review-dot
+                className="h-1.5 w-1.5 rounded-full bg-[var(--amber)] shadow-[0_0_0_2px_var(--background)]"
+              >
+                <span className="sr-only">{reviewLabel}</span>
+              </span>
+            )}
+            {pinned && <Star size={10} className="fill-[var(--amber)] text-[var(--amber)] opacity-70" />}
+          </span>
+        ) : null}
         actions={(
-          <StableRowActionButton
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              const rect = e.currentTarget.getBoundingClientRect();
-              setContextMenu({ x: rect.right, y: rect.bottom + 6, align: 'end' });
-            }}
-            title="More"
-          >
-            <MoreHorizontal size={14} />
-          </StableRowActionButton>
+          <>
+            {hasPendingAgentReview && (
+              <StableRowActionButton
+                tone="amber"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  smoothPush(agentReviewHref(node.path));
+                }}
+                title={reviewLabel}
+              >
+                <History size={14} />
+              </StableRowActionButton>
+            )}
+            <StableRowActionButton
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const rect = e.currentTarget.getBoundingClientRect();
+                setContextMenu({ x: rect.right, y: rect.bottom + 6, align: 'end' });
+              }}
+              title="More"
+            >
+              <MoreHorizontal size={14} />
+            </StableRowActionButton>
+          </>
         )}
       />
       {contextMenu && (
@@ -708,6 +747,11 @@ const FileNodeItem = memo(function FileNodeItem({ node, depth, onNavigate }: {
           <button className={MENU_ITEM} onClick={() => { requestAddAskContext({ path: node.path, type: 'file', label: node.name }); toast.success(t.fileTree.addedAsContext, 1600); setContextMenu(null); }}>
             <MessageSquarePlus size={14} className="shrink-0" /> {t.fileTree.addAsContext}
           </button>
+          {hasPendingAgentReview && (
+            <button className={MENU_ITEM} onClick={() => { setContextMenu(null); smoothPush(agentReviewHref(node.path)); }}>
+              <History size={14} className="shrink-0 text-[var(--amber)]" /> {reviewLabel}
+            </button>
+          )}
           <button className={MENU_ITEM} onClick={() => { copyPathToClipboard(node.path); setContextMenu(null); }}>
             <Copy size={14} className="shrink-0" /> {t.fileTree.copyPath}
           </button>
@@ -774,6 +818,7 @@ export default function FileTree(props: FileTreeProps) {
 function FileTreeRoot(props: FileTreeProps) {
   const pathname = usePathname();
   const currentPath = getCurrentFilePath(pathname);
+  const agentReview = useAgentChangeReview({ limit: 200 });
 
   // The store lives for the lifetime of the tree; rows subscribe to derived
   // booleans so only the rows affected by a navigation re-render.
@@ -796,7 +841,9 @@ function FileTreeRoot(props: FileTreeProps) {
 
   return (
     <ActivePathContext.Provider value={store}>
-      <FileTreeList {...props} onNavigate={onNavigate} onImport={onImport} />
+      <AgentReviewPathsContext.Provider value={agentReview.unreviewedPaths}>
+        <FileTreeList {...props} onNavigate={onNavigate} onImport={onImport} />
+      </AgentReviewPathsContext.Provider>
     </ActivePathContext.Provider>
   );
 }

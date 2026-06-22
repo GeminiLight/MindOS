@@ -875,6 +875,7 @@ export const panelsZh = {
       actionOpen: '打开',
       recentActivity: '最近运行',
       viewAll: '查看全部',
+      reviewChanges: '审阅变更',
       showLess: '收起',
       addCustomAgent: '添加自定义 Agent',
       addCustomAgentTitle: '添加自定义 Agent',

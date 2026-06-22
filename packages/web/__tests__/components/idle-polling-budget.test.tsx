@@ -88,7 +88,7 @@ describe('idle polling budget (35s 空闲请求数 ≤10 的支撑契约)', () =
     await renderComponent(<ChangesBanner />);
     await act(() => vi.advanceTimersByTimeAsync(50));
     const initialCalls = apiFetchMock.mock.calls.length;
-    expect(initialCalls).toBe(1);
+    expect(initialCalls).toBe(2);
 
     await act(() => vi.advanceTimersByTimeAsync(35_000));
     expect(apiFetchMock.mock.calls.length).toBe(initialCalls);
@@ -101,7 +101,35 @@ describe('idle polling budget (35s 空闲请求数 ≤10 的支撑契约)', () =
 
     emitFilesChanged();
     await act(() => vi.advanceTimersByTimeAsync(500));
-    expect(apiFetchMock.mock.calls.length).toBe(initialCalls + 1);
+    expect(apiFetchMock.mock.calls.length).toBe(initialCalls + 2);
+  });
+
+  it('ChangesBanner links unread agent changes to the scoped review surface', async () => {
+    apiFetchMock.mockImplementation(async (url: string) => {
+      if (url === '/api/changes?op=summary') {
+        return { unreadCount: 1, totalCount: 1, lastSeenAt: '2026-06-22T00:00:00.000Z' };
+      }
+      if (url.startsWith('/api/changes?') && url.includes('source=agent')) {
+        return {
+          events: [{
+            id: 'agent-1',
+            ts: '2026-06-22T00:01:00.000Z',
+            op: 'update_lines',
+            path: 'Research/notes.md',
+            source: 'agent',
+            summary: 'Updated lines 1-2',
+          }],
+        };
+      }
+      return {};
+    });
+
+    await renderComponent(<ChangesBanner />);
+    await act(() => vi.advanceTimersByTimeAsync(50));
+
+    expect(host.textContent).toContain('1 agent change pending review in 1 file');
+    const link = host.querySelector<HTMLAnchorElement>('a[href^="/changelog?source=agent"]');
+    expect(link?.getAttribute('href')).toBe('/changelog?source=agent');
   });
 
   it('SidebarLayout tree-version poll runs at most every 15s (own writes arrive via events)', () => {

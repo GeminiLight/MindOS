@@ -454,6 +454,7 @@ export const knowledgeZh = {
     addedAsContext: '已添加到 Context',
     copyPath: '复制路径',
     pathCopied: '路径已复制',
+    reviewAgentChanges: '审阅变更',
     pinToFavorites: '固定到收藏',
     removeFromFavorites: '取消收藏',
     export: '导出...',

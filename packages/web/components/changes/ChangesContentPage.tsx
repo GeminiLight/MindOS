@@ -98,6 +98,8 @@ interface ListPayload {
   events: ChangeEvent[];
 }
 
+type SourceFilter = 'all' | 'agent' | 'user' | 'system';
+
 function relativeTime(ts: string, t: ReturnType<typeof useLocale>['t']): string {
   const delta = Date.now() - new Date(ts).getTime();
   const mins = Math.floor(delta / 60000);
@@ -160,10 +162,16 @@ function translateSummary(summary: string, t: ReturnType<typeof useLocale>['t'])
   return summary; // fallback: show original
 }
 
-export default function ChangesContentPage({ initialPath = '' }: { initialPath?: string }) {
+export default function ChangesContentPage({
+  initialPath = '',
+  initialSource = 'all',
+}: {
+  initialPath?: string;
+  initialSource?: SourceFilter;
+}) {
   const { t } = useLocale();
   const [pathFilter, setPathFilter] = useState(initialPath);
-  const [sourceFilter, setSourceFilter] = useState<'all' | 'agent' | 'user' | 'system'>('all');
+  const [sourceFilter, setSourceFilter] = useState<SourceFilter>(initialSource);
   const [opFilter, setOpFilter] = useState<string>('all');
   const [queryFilter, setQueryFilter] = useState('');
   const [events, setEvents] = useState<ChangeEvent[]>([]);
@@ -171,6 +179,14 @@ export default function ChangesContentPage({ initialPath = '' }: { initialPath?:
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setPathFilter(initialPath);
+  }, [initialPath]);
+
+  useEffect(() => {
+    setSourceFilter(initialSource);
+  }, [initialSource]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -324,7 +340,7 @@ export default function ChangesContentPage({ initialPath = '' }: { initialPath?:
                   </span>
                   <CustomSelect
                     value={sourceFilter}
-                    onChange={(v) => setSourceFilter(v as 'all' | 'agent' | 'user' | 'system')}
+                    onChange={(v) => setSourceFilter(v as SourceFilter)}
                     options={sourceSelectOptions}
                   />
                 </div>

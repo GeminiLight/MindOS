@@ -5,10 +5,11 @@
  * Used by both AgentActivitySection (full audit log) and RecentActivityFeed (compact list).
  */
 
-import { AlertCircle, CheckCircle2, ChevronDown, Clock, FileEdit, FilePlus, Search, Terminal, Trash2 } from 'lucide-react';
+import { AlertCircle, CheckCircle2, ChevronDown, Clock, FileEdit, FilePlus, History, Search, Terminal, Trash2 } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { useSmoothRouterPush } from '@/hooks/useSmoothRouterPush';
 import { cn } from '@/lib/utils';
+import { agentReviewHref } from '@/lib/agent-review-links';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -216,6 +217,9 @@ export function AgentActivityOpCard({
   const filePath = getFilePath(op.params);
   const toolShort = op.tool.replace(/^mindos_/, '');
   const shouldShowTool = showToolName || !filePath;
+  const canReviewChanges = !!filePath && (kind === 'write' || kind === 'create' || kind === 'delete');
+  const lang = langFromLocale(locale);
+  const reviewLabel = lang === 'zh' ? '审阅变更' : 'Review changes';
 
   const toggleExpanded = () => setExpanded(v => !v);
 
@@ -260,6 +264,21 @@ export function AgentActivityOpCard({
         {!filePath && <span className="min-w-0 flex-1" />}
 
         <div className="ml-auto flex shrink-0 items-center gap-2">
+          {canReviewChanges && (
+            <button
+              type="button"
+              className="inline-flex h-6 items-center gap-1 rounded-md border border-[var(--amber)]/25 bg-[var(--amber-subtle)] px-1.5 text-[0.65rem] font-medium text-[var(--amber-text)] transition-colors hover:bg-[var(--amber)]/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              onClick={event => {
+                event.stopPropagation();
+                smoothPush(agentReviewHref(filePath ?? undefined));
+              }}
+              onKeyDown={event => event.stopPropagation()}
+              title={reviewLabel}
+            >
+              <History size={10} />
+              <span className="hidden sm:inline">{reviewLabel}</span>
+            </button>
+          )}
           {op.agentName && (
             <span className="max-w-[7.5rem] truncate rounded-full bg-muted/70 px-1.5 py-0.5 text-[0.62rem] font-medium text-muted-foreground" title={op.agentName}>
               {op.agentName.length > 30 ? op.agentName.slice(0, 30) + '...' : op.agentName}

@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useTransition, useCallback, useEffect, useRef, useSyncExternalStore, useMemo, Suspense } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Edit3, Save, X, Loader2, LayoutTemplate, ArrowLeft, Share2, FileText, Code, MoreHorizontal, Copy, Pencil, Trash2, Star, Download, Eye, PanelLeft, PanelRightOpen, Puzzle, ChevronDown } from 'lucide-react';
+import { Edit3, Save, X, Loader2, LayoutTemplate, ArrowLeft, Share2, FileText, Code, MoreHorizontal, Copy, Pencil, Trash2, Star, Download, Eye, PanelLeft, PanelRightOpen, Puzzle, ChevronDown, History } from 'lucide-react';
 import { lazy } from 'react';
 import MarkdownView from '@/components/MarkdownView';
 import JsonView from '@/components/JsonView';
@@ -35,6 +36,8 @@ import { hasMarkdownFrontmatterFence } from '@/lib/parsing/frontmatter';
 import { isPathAffected, notifyFilesChanged, subscribeFilesChanged } from '@/lib/files-changed';
 import { closeByKey, keepTab, openTab } from '@/lib/workspace-tabs';
 import { fetchPluginViewSurfacesForExtension, pluginViewSurfaceHref } from '@/lib/plugins/client';
+import { agentReviewHref } from '@/lib/agent-review-links';
+import { useAgentChangeReview } from '@/hooks/useAgentChangeReview';
 import type { PluginSurface } from '@/lib/plugins/surfaces';
 
 interface ViewPageClientProps {
@@ -167,6 +170,8 @@ export default function ViewPageClient({
   const { t } = useLocale();
   const { isPinned, togglePin } = usePinnedFiles();
   const pinned = isPinned(filePath);
+  const agentReview = useAgentChangeReview({ path: filePath, enabled: !isDraft, limit: 40 });
+  const hasPendingAgentReview = agentReview.unreadAgentCount > 0;
   const [exportOpen, setExportOpen] = useState(false);
   const editorTheme = useEditorTheme(s => s.theme);
   const hydrated = useSyncExternalStore(
@@ -703,6 +708,17 @@ export default function ViewPageClient({
               <ArrowLeft size={16} />
             </button>
             <Breadcrumb filePath={filePath} />
+            {hasPendingAgentReview && (
+              <Link
+                href={agentReviewHref(filePath)}
+                className="ml-1 inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md border border-[var(--amber)]/25 bg-[var(--amber-subtle)] px-2 text-[0.68rem] font-medium text-[var(--amber-text)] transition-colors duration-75 hover:bg-[var(--amber)]/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                title={t.changes.reviewFileAgentChanges}
+              >
+                <History size={12} />
+                <span className="hidden sm:inline">{t.changes.agentEditedChip}</span>
+                <span className="sm:hidden">{t.changes.reviewAgentShort}</span>
+              </Link>
+            )}
           </div>
 
           <div className="flex items-center gap-1.5 md:gap-2 shrink-0">

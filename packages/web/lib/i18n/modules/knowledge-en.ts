@@ -454,6 +454,7 @@ Read the assistant prompt at ${promptPath} first, then read this space's INSTRUC
     addedAsContext: 'Added to context',
     copyPath: 'Copy Path',
     pathCopied: 'Path copied',
+    reviewAgentChanges: 'Review changes',
     pinToFavorites: 'Pin to Favorites',
     removeFromFavorites: 'Remove from Favorites',
     export: 'Export...',
