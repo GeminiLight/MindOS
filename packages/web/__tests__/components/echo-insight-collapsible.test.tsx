@@ -55,15 +55,10 @@ describe('EchoInsightCollapsible', () => {
     vi.unstubAllGlobals();
   });
 
-  it('runs Echo generation through the assistant-runs endpoint', async () => {
+  it('stays hidden before a page-level action triggers generation', async () => {
     await act(async () => {
       root.render(
         <EchoInsightCollapsible
-          title="Insight"
-          showLabel="Show"
-          hideLabel="Hide"
-          hint="Generate from context."
-          generateLabel="Generate"
           noAiHint="No AI"
           generatingLabel="Generating"
           errorPrefix="Error:"
@@ -75,43 +70,15 @@ describe('EchoInsightCollapsible', () => {
       );
     });
 
-    const toggle = host.querySelector('button[aria-expanded="false"]') as HTMLButtonElement;
-    expect(toggle).toBeTruthy();
-    await act(async () => {
-      toggle.click();
-    });
-
-    const generate = Array.from(host.querySelectorAll('button'))
-      .find((button) => button.textContent?.includes('Generate')) as HTMLButtonElement;
-    expect(generate).toBeTruthy();
-    await act(async () => {
-      generate.click();
-    });
-
-    expect(fetchMock).toHaveBeenCalledWith('/api/assistant-runs', expect.objectContaining({
-      method: 'POST',
-    }));
-    const [, init] = fetchMock.mock.calls[0];
-    const body = JSON.parse(String(init.body));
-    expect(body).toMatchObject({
-      assistantId: 'echo-imprint',
-      permissionMode: 'read',
-      maxSteps: 10,
-      messages: [{ role: 'user', content: 'Visible Echo context' }],
-    });
-    expect(consumeUIMessageStreamMock).toHaveBeenCalledTimes(1);
-    expect(host.textContent).toContain('Generated.');
+    expect(host.textContent).toBe('');
+    expect(host.querySelector('button')).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('lets a page-level action trigger generation and open the result panel', async () => {
+  it('runs Echo generation through assistant-runs when page-level action fires', async () => {
     await act(async () => {
       root.render(
         <EchoInsightCollapsible
-          title="Assistant draft"
-          showLabel="Show"
-          hideLabel="Hide"
-          hint="Generate from context."
-          generateLabel="Generate"
           noAiHint="No AI"
           generatingLabel="Generating"
           errorPrefix="Error:"
@@ -124,16 +91,12 @@ describe('EchoInsightCollapsible', () => {
       );
     });
 
-    expect(host.querySelector('button[aria-expanded="false"]')).toBeTruthy();
+    expect(host.textContent).not.toContain('Assistant draft');
+    expect(host.textContent).not.toContain('Generate');
 
     await act(async () => {
       root.render(
         <EchoInsightCollapsible
-          title="Assistant draft"
-          showLabel="Show"
-          hideLabel="Hide"
-          hint="Generate from context."
-          generateLabel="Generate"
           noAiHint="No AI"
           generatingLabel="Generating"
           errorPrefix="Error:"
@@ -146,7 +109,6 @@ describe('EchoInsightCollapsible', () => {
       );
     });
 
-    expect(host.querySelector('button[aria-expanded="true"]')).toBeTruthy();
     expect(fetchMock).toHaveBeenCalledWith('/api/assistant-runs', expect.objectContaining({
       method: 'POST',
     }));
@@ -157,6 +119,8 @@ describe('EchoInsightCollapsible', () => {
       maxSteps: 8,
       messages: [{ role: 'user', content: 'Visible thread context' }],
     });
+    expect(host.querySelector('button')).toBeNull();
+    expect(host.textContent).not.toContain('Assistant draft');
     expect(host.textContent).toContain('Generated.');
   });
 });

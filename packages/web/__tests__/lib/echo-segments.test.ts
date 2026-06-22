@@ -10,7 +10,7 @@ import {
 describe('echo-segments', () => {
   it('lists overview plus the four Echo modules', () => {
     expect(ECHO_SEGMENT_IDS).toEqual(['overview', 'imprint', 'threads', 'growth', 'practice']);
-    expect(ECHO_SEGMENT_ORDER).toEqual(['imprint', 'threads', 'growth', 'practice']);
+    expect(ECHO_SEGMENT_ORDER).toEqual(['overview', 'imprint', 'threads', 'growth', 'practice']);
   });
 
   it('accepts valid segment slugs', () => {

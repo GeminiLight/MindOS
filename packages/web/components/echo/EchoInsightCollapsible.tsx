@@ -1,8 +1,7 @@
 'use client';
 
 import { type ComponentType, useCallback, useEffect, useId, useRef, useState } from 'react';
-import { ChevronDown, Loader2, Sparkles } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { Loader2 } from 'lucide-react';
 import { consumeUIMessageStream } from '@/lib/agent/stream-consumer';
 import type { EchoAssistantId } from '@/lib/echo-assistants';
 import { useSettingsAiAvailable } from '@/hooks/useSettingsAiAvailable';
@@ -23,11 +22,6 @@ const proseInsight =
   'prose-strong:text-foreground prose-strong:font-semibold';
 
 export function EchoInsightCollapsible({
-  title,
-  showLabel,
-  hideLabel,
-  hint,
-  generateLabel,
   noAiHint,
   generatingLabel,
   errorPrefix,
@@ -37,11 +31,6 @@ export function EchoInsightCollapsible({
   generateSignal = 0,
   maxSteps = 12,
 }: {
-  title: string;
-  showLabel: string;
-  hideLabel: string;
-  hint: string;
-  generateLabel: string;
   noAiHint: string;
   generatingLabel: string;
   errorPrefix: string;
@@ -51,23 +40,22 @@ export function EchoInsightCollapsible({
   generateSignal?: number;
   maxSteps?: number;
 }) {
-  const [open, setOpen] = useState(false);
+  const [requested, setRequested] = useState(false);
   const [streaming, setStreaming] = useState(false);
   const [insightMd, setInsightMd] = useState('');
   const [err, setErr] = useState('');
   const panelId = useId();
-  const btnId = `${panelId}-btn`;
   const abortRef = useRef<AbortController | null>(null);
   const lastGenerateSignalRef = useRef(generateSignal);
   const { ready: aiReady, loading: aiLoading } = useSettingsAiAvailable();
   const { t } = useLocale();
 
   // react-markdown (~46KB gz) stays out of the Echo first-screen chunk: the
-  // renderer is dynamic-imported once the panel opens. Until it arrives, the
-  // raw insight text renders as a lightweight pre-wrapped fallback.
+  // renderer is dynamic-imported only after generated content exists. Until it
+  // arrives, the raw insight text renders as a lightweight pre-wrapped fallback.
   const [InsightMarkdown, setInsightMarkdown] = useState<InsightMarkdownComponent | null>(null);
   useEffect(() => {
-    if (!open || InsightMarkdown) return;
+    if (!insightMd || InsightMarkdown) return;
     let cancelled = false;
     import('./EchoInsightMarkdown')
       .then((mod) => {
@@ -78,12 +66,12 @@ export function EchoInsightCollapsible({
         console.error('[EchoInsightCollapsible] Failed to load markdown renderer:', err);
       });
     return () => { cancelled = true; };
-  }, [open, InsightMarkdown]);
+  }, [insightMd, InsightMarkdown]);
 
   useEffect(() => () => abortRef.current?.abort(), []);
 
   const runGenerate = useCallback(async () => {
-    setOpen(true);
+    setRequested(true);
     if (aiLoading || !aiReady || streaming) return;
 
     abortRef.current?.abort();
@@ -134,109 +122,64 @@ export function EchoInsightCollapsible({
     }
   }, [aiLoading, aiReady, assistantId, maxSteps, streaming, userPrompt]);
 
-  const generateDisabled = aiLoading || !aiReady || streaming;
-
   useEffect(() => {
     if (generateSignal === lastGenerateSignalRef.current) return;
     lastGenerateSignalRef.current = generateSignal;
     void runGenerate();
   }, [generateSignal, runGenerate]);
 
+  if (!requested && !streaming && !insightMd && !err) {
+    return null;
+  }
+
   return (
-    <div className="mt-10 overflow-hidden rounded-xl border border-border bg-card shadow-sm transition-[border-color,box-shadow] duration-150 ease-out hover:border-[var(--amber)]/25 hover:shadow">
-      <button
-        id={btnId}
-        type="button"
-        className="flex w-full items-center gap-3 px-5 py-4 text-left transition-[background-color] duration-200 hover:bg-muted/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-        aria-expanded={open}
-        aria-controls={panelId}
-        onClick={() => setOpen((v) => !v)}
-      >
-          <span
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--amber-dim)] text-[var(--amber)]"
-          aria-hidden
-        >
-          <Sparkles size={16} strokeWidth={1.75} />
-        </span>
-        <span className="flex-1 font-sans text-sm font-medium text-foreground">{title}</span>
-        <ChevronDown
-          size={16}
-          className={cn(
-            'shrink-0 text-muted-foreground transition-transform duration-200',
-            open && 'rotate-180',
-          )}
-          aria-hidden
-        />
-        <span className="sr-only">{open ? hideLabel : showLabel}</span>
-      </button>
-      <div
-        id={panelId}
-        role="region"
-        aria-labelledby={btnId}
-        className={cn(
-          'grid transition-[grid-template-rows] duration-200 ease-out',
-          open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]',
-        )}
-      >
-        <div className="overflow-hidden" {...(!open && { inert: true } as React.HTMLAttributes<HTMLDivElement>)}>
-          <div className="border-t border-border/60 px-5 pb-5 pt-4">
-            <p className="font-sans text-sm leading-relaxed text-muted-foreground">{hint}</p>
-            <div className="mt-4 flex flex-wrap items-center gap-2">
-              <Button
-                type="button"
-                disabled={generateDisabled}
-                title={generateDisabled ? t.hints.aiNotConfigured : undefined}
-                onClick={runGenerate}
-                variant="amber"
-                size="lg"
-              >
-                {streaming ? (
-                  <Loader2 size={16} className="animate-spin shrink-0" aria-hidden />
-                ) : (
-                  <Sparkles size={15} className="shrink-0" aria-hidden />
-                )}
-                {streaming ? generatingLabel : generateLabel}
-              </Button>
-              {err ? (
-                <Button
-                  type="button"
-                  onClick={runGenerate}
-                  disabled={streaming || !aiReady}
-                  title={streaming || !aiReady ? t.hints.generationInProgress : undefined}
-                  variant="ghost"
-                  size="sm"
-                  className="text-[var(--amber)]"
-                >
-                  {retryLabel}
-                </Button>
-              ) : null}
-            </div>
-            {!aiLoading && !aiReady ? (
-              <p className="mt-2 font-sans text-xs text-muted-foreground">{noAiHint}</p>
-            ) : null}
-            {err ? (
-              <p className="mt-3 font-sans text-sm text-error" role="alert">
-                {errorPrefix} {err}
-              </p>
-            ) : null}
-            {insightMd ? (
-              <div className={cn(proseInsight, 'mt-4 border-t border-border/50 pt-4')}>
-                {InsightMarkdown ? (
-                  <InsightMarkdown markdown={insightMd} />
-                ) : (
-                  <p className="whitespace-pre-wrap">{insightMd}</p>
-                )}
-                {streaming ? (
-                  <span
-                    className="ml-0.5 inline-block h-3.5 w-1 animate-pulse rounded-sm bg-[var(--amber)] align-middle"
-                    aria-hidden
-                  />
-                ) : null}
-              </div>
-            ) : null}
-          </div>
+    <section
+      id={panelId}
+      aria-live="polite"
+      className="mt-6 rounded-xl border border-border/55 bg-card/45 p-5 shadow-sm"
+    >
+      {streaming && !insightMd ? (
+        <p className="flex items-center gap-2 font-sans text-sm text-muted-foreground">
+          <Loader2 size={15} className="animate-spin shrink-0" aria-hidden />
+          {generatingLabel}
+        </p>
+      ) : null}
+      {!aiLoading && !aiReady ? (
+        <p className="font-sans text-sm text-muted-foreground">{noAiHint}</p>
+      ) : null}
+      {err ? (
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="font-sans text-sm text-error" role="alert">
+            {errorPrefix} {err}
+          </p>
+          <Button
+            type="button"
+            onClick={runGenerate}
+            disabled={streaming || !aiReady}
+            title={streaming || !aiReady ? t.hints.generationInProgress : undefined}
+            variant="ghost"
+            size="sm"
+            className="w-fit text-[var(--amber)]"
+          >
+            {retryLabel}
+          </Button>
         </div>
-      </div>
-    </div>
+      ) : null}
+      {insightMd ? (
+        <div className={proseInsight}>
+          {InsightMarkdown ? (
+            <InsightMarkdown markdown={insightMd} />
+          ) : (
+            <p className="whitespace-pre-wrap">{insightMd}</p>
+          )}
+          {streaming ? (
+            <span
+              className="ml-0.5 inline-block h-3.5 w-1 animate-pulse rounded-sm bg-[var(--amber)] align-middle"
+              aria-hidden
+            />
+          ) : null}
+        </div>
+      ) : null}
+    </section>
   );
 }

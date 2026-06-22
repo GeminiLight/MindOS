@@ -94,32 +94,16 @@ function echoSnapshotCopy(segment: EchoSegment, p: EchoCopy): { title: string; b
   }
 }
 
-function echoAssistantActionCopy(segment: Exclude<EchoSegment, 'overview'>, p: EchoCopy): { title: string; label: string; icon: ReactNode } {
+function echoAssistantGenerateLabel(segment: Exclude<EchoSegment, 'overview'>, p: EchoCopy): string {
   switch (segment) {
     case 'imprint':
-      return {
-        title: p.assistantImprintTitle,
-        label: p.assistantGenerateImprint,
-        icon: <NotebookText size={18} strokeWidth={1.7} />,
-      };
+      return p.assistantGenerateImprint;
     case 'threads':
-      return {
-        title: p.assistantThreadsTitle,
-        label: p.assistantGenerateThreads,
-        icon: <MessageSquareText size={18} strokeWidth={1.7} />,
-      };
+      return p.assistantGenerateThreads;
     case 'growth':
-      return {
-        title: p.assistantGrowthTitle,
-        label: p.assistantGenerateGrowth,
-        icon: <Leaf size={18} strokeWidth={1.7} />,
-      };
+      return p.assistantGenerateGrowth;
     case 'practice':
-      return {
-        title: p.assistantPracticeTitle,
-        label: p.assistantGeneratePractice,
-        icon: <FlaskConical size={18} strokeWidth={1.7} />,
-      };
+      return p.assistantGeneratePractice;
   }
 }
 
@@ -175,6 +159,7 @@ function EchoPageHeader({
   title,
   lead,
   titleId,
+  assistantAction,
   actions,
 }: {
   p: EchoCopy;
@@ -182,6 +167,7 @@ function EchoPageHeader({
   title: string;
   lead: string;
   titleId: string;
+  assistantAction?: ReactNode;
   actions?: ReactNode;
 }) {
   return (
@@ -190,14 +176,17 @@ function EchoPageHeader({
       lead={lead}
       titleId={titleId}
       beforeTitle={segment === 'overview' ? undefined : (
-        <BackToOverviewLink label={p.backToOverviewLabel} ariaLabel={p.backToOverviewAriaLabel} />
+        <div className="flex flex-wrap items-center gap-2">
+          <BackToOverviewLink label={p.backToOverviewLabel} ariaLabel={p.backToOverviewAriaLabel} />
+          {assistantAction}
+        </div>
       )}
       actions={actions}
     />
   );
 }
 
-function EchoAssistantActionStrip({
+function EchoAssistantGenerateButton({
   p,
   segment,
   onGenerate,
@@ -206,30 +195,19 @@ function EchoAssistantActionStrip({
   segment: Exclude<EchoSegment, 'overview'>;
   onGenerate: () => void;
 }) {
-  const action = echoAssistantActionCopy(segment, p);
+  const label = echoAssistantGenerateLabel(segment, p);
 
   return (
-    <section
-      className={cn(
-        echoPanelClass,
-        'flex flex-col gap-4 border-[var(--amber)]/20 bg-[var(--amber-subtle)]/25 p-4 md:flex-row md:items-center md:justify-between',
-      )}
-      aria-label={action.title}
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      onClick={onGenerate}
+      className="h-8 border-[var(--amber)]/25 bg-[var(--amber-subtle)]/35 px-3 text-xs text-[var(--amber-text)] hover:border-[var(--amber)]/35 hover:bg-[var(--amber-subtle)]/55"
     >
-      <div className="flex min-w-0 items-center gap-3">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[var(--amber)]/20 bg-background/75 text-[var(--amber)]" aria-hidden>
-          {action.icon}
-        </span>
-        <div className="min-w-0">
-          <h2 className="truncate font-sans text-sm font-medium text-foreground">{action.title}</h2>
-          <p className="mt-0.5 truncate font-sans text-xs text-muted-foreground">{p.assistantActionHint}</p>
-        </div>
-      </div>
-      <Button type="button" variant="amber" size="lg" onClick={onGenerate}>
-        <Sparkles size={15} aria-hidden />
-        {action.label}
-      </Button>
-    </section>
+      <Sparkles size={14} aria-hidden />
+      {label}
+    </Button>
   );
 }
 
@@ -867,6 +845,15 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
             </Button>
           )
       : undefined;
+  const assistantHeaderAction = activeEchoSegment
+    ? (
+        <EchoAssistantGenerateButton
+          p={p}
+          segment={activeEchoSegment}
+          onGenerate={triggerEchoAssistantGenerate}
+        />
+      )
+    : undefined;
 
   return (
     <ContentPageShell
@@ -882,16 +869,9 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
           title={title}
           lead={lead}
           titleId={pageTitleId}
+          assistantAction={assistantHeaderAction}
           actions={headerActions}
         />
-
-        {activeEchoSegment && (
-          <EchoAssistantActionStrip
-            p={p}
-            segment={activeEchoSegment}
-            onGenerate={triggerEchoAssistantGenerate}
-          />
-        )}
 
         {segment === 'overview' && (
           <OverviewPanel
@@ -935,11 +915,6 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
 
         {echoAssistantId && segment !== 'overview' && (
           <EchoInsightCollapsible
-            title={p.insightTitle}
-            showLabel={p.insightShow}
-            hideLabel={p.insightHide}
-            hint={p.insightHint}
-            generateLabel={p.generateInsight}
             noAiHint={p.generateInsightNoAi}
             generatingLabel={p.insightGenerating}
             errorPrefix={p.insightErrorPrefix}
