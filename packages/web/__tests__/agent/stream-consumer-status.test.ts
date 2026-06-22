@@ -54,6 +54,47 @@ describe('consumeUIMessageStream — status event handling', () => {
     expect(result.parts).toEqual([]);
   });
 
+  it('emits context usage metadata without adding visible message parts', async () => {
+    const onContextUsage = vi.fn();
+    const result = await consumeUIMessageStream(
+      makeStream(
+        {
+          type: 'context_usage',
+          runtime: 'mindos',
+          phase: 'preflight',
+          action: 'history_pruned',
+          modelName: 'local-model',
+          percent: 81,
+          usedTokens: 81_000,
+          contextWindow: 100_000,
+          budgetTokens: 84_000,
+          reserveTokens: 16_000,
+          keepRecentTokens: 20_000,
+          systemPromptTokens: 10_000,
+          turnPromptTokens: 21_000,
+          historyTokens: 50_000,
+          prunedMessages: 12,
+          message: 'MindOS prepared context.',
+        },
+        { type: 'done' },
+      ),
+      vi.fn(),
+      undefined,
+      { onContextUsage },
+    );
+
+    expect(onContextUsage).toHaveBeenCalledWith(expect.objectContaining({
+      runtime: 'mindos',
+      phase: 'preflight',
+      action: 'history_pruned',
+      modelName: 'local-model',
+      percent: 81,
+      prunedMessages: 12,
+    }));
+    expect(result.content).toBe('');
+    expect(result.parts).toEqual([]);
+  });
+
   it('ignores status events when no text has been emitted yet (silent reconnect)', async () => {
     // Status-only stream (no text_delta, no done) — after the fix,
     // status events should NOT appear as visible text in the message

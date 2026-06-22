@@ -90,6 +90,7 @@ export async function runMindosPiTurn(input: RunMindosPiTurnInput): Promise<Resp
     const runtime = await runWithKbPermissionPolicy(input.permissionPolicy, () => createMindosAgentRuntime({
       messages: input.mindosUiMessages,
       systemPrompt,
+      turnPrompt: input.turnPrompt,
       providerOverride: input.providerOverride,
       modelOverride: input.modelOverride,
       projectRoot: input.projectRoot,
@@ -112,6 +113,8 @@ export async function runMindosPiTurn(input: RunMindosPiTurnInput): Promise<Resp
       lastUserContent,
       lastUserImages,
       fallbackTools,
+      turnPrompt,
+      contextUsage,
       apiKey,
       modelName,
       provider,
@@ -151,6 +154,17 @@ export async function runMindosPiTurn(input: RunMindosPiTurnInput): Promise<Resp
         appendSseEventToAgentRun(mainRun.id, event);
         send(event);
       };
+      if (contextUsage) {
+        sendWithLedger(contextUsage);
+        if (contextUsage.action !== 'none' && contextUsage.message) {
+          sendWithLedger({
+            type: 'status',
+            runtime: 'mindos',
+            visible: true,
+            message: contextUsage.message,
+          });
+        }
+      }
       if (extensionLoadStatus) {
         sendWithLedger({
           type: 'status',
@@ -181,7 +195,7 @@ export async function runMindosPiTurn(input: RunMindosPiTurnInput): Promise<Resp
               model: modelName,
               systemPrompt,
               historyMessages: llmHistoryMessages,
-              userContent: input.turnPrompt,
+              userContent: turnPrompt,
               tools: fallbackTools,
               send: sendWithLedger,
               signal: input.requestSignal,
@@ -199,7 +213,7 @@ export async function runMindosPiTurn(input: RunMindosPiTurnInput): Promise<Resp
                 steer: (message) => session.steer(message),
                 abort: () => session.abort(),
               },
-              prompt: input.turnPrompt,
+              prompt: turnPrompt,
               promptOptions: lastUserImages ? { images: lastUserImages } : undefined,
               stepLimit: input.stepLimit,
               timeoutMs: resolveMindosAgentTimeoutMs(process.env.MINDOS_AGENT_TIMEOUT_MS),

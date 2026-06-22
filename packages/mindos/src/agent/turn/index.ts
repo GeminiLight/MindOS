@@ -77,6 +77,32 @@ export function createMindosSessionEvent<TData>(
 
 export type MindOSSSEvent =
   | { type: 'agent_run_context'; rootRunId: string; chatSessionId?: string; startedAt: number }
+  | {
+      type: 'context_usage';
+      runtime?: 'mindos' | 'acp' | 'codex' | 'claude';
+      phase: 'preflight' | 'post';
+      action:
+        | 'none'
+        | 'prompt_compacted'
+        | 'prompt_truncated'
+        | 'history_pruned'
+        | 'prompt_compacted_history_pruned'
+        | 'prompt_truncated_history_pruned';
+      modelName?: string;
+      percent: number;
+      usedTokens: number;
+      contextWindow: number;
+      budgetTokens: number;
+      reserveTokens: number;
+      keepRecentTokens?: number;
+      systemPromptTokens: number;
+      turnPromptTokens: number;
+      historyTokens: number;
+      originalUsedTokens?: number;
+      originalHistoryTokens?: number;
+      prunedMessages?: number;
+      message?: string;
+    }
   | { type: 'text_delta'; delta: string }
   | { type: 'thinking_delta'; delta: string }
   | { type: 'tool_start'; toolCallId: string; toolName: string; args: unknown; runtime?: 'mindos' | 'acp' | 'codex' | 'claude' }
@@ -127,6 +153,7 @@ export const MINDOS_AGENT_TURN_STREAM_EVENT_TYPES = [
   'text_delta',
   'thinking_delta',
   'agent_run_context',
+  'context_usage',
   'tool_start',
   'tool_delta',
   'tool_end',

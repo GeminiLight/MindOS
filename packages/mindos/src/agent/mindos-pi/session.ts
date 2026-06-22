@@ -12,6 +12,10 @@ import type {
 import type { MindosPermissionMode } from '../permission/index.js';
 import type { MindosExecutableTool } from '../tool/executable-tool.js';
 import {
+  prepareMindosPiContextBudget,
+  type MindosPiContextUsageEvent,
+} from './context-budget.js';
+import {
   createMindosAgentEventReducer,
   resolveMindosAgentTimeoutMs,
   runMindosAgentTurnWithRetry,
@@ -290,6 +294,7 @@ function isMindosPiWebAccessExtensionPath(extensionPath: string): boolean {
 export type MindosPiAgentRuntimeOptions = {
   messages: MindosUiAgentMessage[];
   systemPrompt: string;
+  turnPrompt?: string;
   providerOverride?: string;
   modelOverride?: string;
   projectRoot: string;
@@ -318,6 +323,8 @@ export type MindosPiAgentRuntime = {
   llmHistoryMessages: unknown[];
   fallbackTools: MindosExecutableTool[];
   systemPrompt: string;
+  turnPrompt: string;
+  contextUsage?: MindosPiContextUsageEvent;
   model: unknown;
   modelName: string;
   apiKey: string;
@@ -368,7 +375,10 @@ export async function createMindosPiAgentRuntime(options: MindosPiAgentRuntimeOp
 
   const agentMessages = toMindosAgentMessages(options.messages);
   const historyMessages = agentMessages.slice(0, -1);
-  const llmHistoryMessages = options.services.convertToLlm(historyMessages);
+  let effectiveHistoryMessages = historyMessages;
+  let llmHistoryMessages = options.services.convertToLlm(effectiveHistoryMessages);
+  let turnPrompt = options.turnPrompt ?? lastUserContent;
+  let contextUsage: MindosPiContextUsageEvent | undefined;
 
   const authStorage = options.services.createAuthStorage();
   authStorage.setRuntimeApiKey(options.services.toRuntimeProvider(modelConfig.provider), modelConfig.apiKey);
@@ -447,6 +457,25 @@ export async function createMindosPiAgentRuntime(options: MindosPiAgentRuntimeOp
     }
   }
 
+  if (options.services.estimateTokens) {
+    const preparedContext = prepareMindosPiContextBudget({
+      systemPrompt,
+      turnPrompt,
+      historyMessages: effectiveHistoryMessages,
+      model: modelConfig.model,
+      modelName: modelConfig.modelName,
+      estimateTokens: options.services.estimateTokens,
+      compactPrompt: options.services.compactPrompt,
+    });
+    systemPrompt = preparedContext.systemPrompt;
+    turnPrompt = preparedContext.turnPrompt;
+    contextUsage = preparedContext.usage;
+    if (preparedContext.historyMessages !== effectiveHistoryMessages) {
+      effectiveHistoryMessages = preparedContext.historyMessages;
+      llmHistoryMessages = options.services.convertToLlm(effectiveHistoryMessages);
+    }
+  }
+
   const sessionManager = options.services.createSessionManager();
   for (const message of llmHistoryMessages) {
     sessionManager.appendMessage(message);
@@ -490,6 +519,8 @@ export async function createMindosPiAgentRuntime(options: MindosPiAgentRuntimeOp
     llmHistoryMessages,
     fallbackTools,
     systemPrompt,
+    turnPrompt,
+    contextUsage,
     model: modelConfig.model,
     modelName: modelConfig.modelName,
     apiKey: modelConfig.apiKey,

@@ -20,7 +20,9 @@ import {
   startRun,
   startSubmitCooldown,
   updateRun,
+  useSessionContextUsage,
   useSessionRun,
+  writeContextUsage,
   writeRuntimeBinding,
 } from '@/lib/agent-run-store';
 import { getSessionSubmitContextSnapshot } from '@/lib/agent-session-store';
@@ -135,6 +137,7 @@ export function useAgentChat({
   const reconnectAttempt = activeRun?.reconnectAttempt ?? 0;
   const reconnectMax = activeRun?.reconnectMax ?? 3;
   const agentRunContext = activeRun?.agentRunContext ?? null;
+  const contextUsage = useSessionContextUsage(activeSessionId);
 
   const reconnectMaxRef = useRef(3);
   const abortRef = useRef<AbortController | null>(null);
@@ -388,6 +391,9 @@ export function useAgentChat({
           onAgentRunContext: (context) => {
             updateRun(sessionId, { agentRunContext: context });
           },
+          onContextUsage: (usage) => {
+            writeContextUsage(sessionId, usage);
+          },
         },
       );
       return { finalMessage };
@@ -483,6 +489,7 @@ export function useAgentChat({
     reconnectAttempt,
     reconnectMax,
     agentRunContext,
+    contextUsage,
     reconnectMaxRef,
     abortRef,
     firstMessageFired,

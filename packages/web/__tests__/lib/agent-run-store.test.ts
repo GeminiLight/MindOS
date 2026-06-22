@@ -13,6 +13,7 @@ import {
   cancelPersist,
   clearUnread,
   endRun,
+  getContextUsage,
   flushPersist,
   getMessages,
   getRun,
@@ -30,6 +31,7 @@ import {
   startRun,
   startSubmitCooldown,
   updateRun,
+  writeContextUsage,
 } from '@/lib/agent-run-store';
 import type { ChatSession, Message } from '@/lib/types';
 
@@ -131,6 +133,26 @@ describe('agent-run-store', () => {
       abortRun('a');
       expect(run.controller.signal.aborted).toBe(true);
       expect(getRun('a')).not.toBeNull();
+    });
+
+    it('clears stale context usage when a new run starts', () => {
+      writeContextUsage('a', {
+        runtime: 'mindos',
+        phase: 'preflight',
+        action: 'history_pruned',
+        percent: 88,
+        usedTokens: 88_000,
+        contextWindow: 100_000,
+        budgetTokens: 84_000,
+        reserveTokens: 16_000,
+        systemPromptTokens: 10_000,
+        turnPromptTokens: 18_000,
+        historyTokens: 60_000,
+      });
+
+      expect(getContextUsage('a')?.percent).toBe(88);
+      startTestRun('a');
+      expect(getContextUsage('a')).toBeNull();
     });
 
     it('marks unread on endRun only when the session is not active', () => {

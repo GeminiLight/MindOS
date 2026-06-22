@@ -8,6 +8,7 @@ import type { AgentRuntimeDescriptor, AgentRuntimeIdentity, ChatSession, Runtime
 import { getRuntimeSessionSummary } from '@/lib/ask-agent';
 import { sessionTitle } from '@/hooks/useAskSession';
 import type { NotInstalledAgent } from '@/hooks/useAcpDetection';
+import type { ContextUsageMetadata } from '@/lib/agent/stream-consumer';
 
 interface AskHeaderProps {
   isPanel: boolean;
@@ -40,6 +41,7 @@ interface AskHeaderProps {
   agentLoadingByKind?: Partial<Record<'codex' | 'claude', boolean>>;
   agentErrorByKind?: Partial<Record<'codex' | 'claude', string | null>>;
   onRefreshNativeRuntimes?: () => void;
+  contextUsage?: ContextUsageMetadata | null;
 }
 
 function nativeSavedSessionLabel(runtime: AgentRuntimeIdentity | null | undefined): string {
@@ -49,12 +51,79 @@ function nativeSavedSessionLabel(runtime: AgentRuntimeIdentity | null | undefine
   return 'Saved chats';
 }
 
+function formatTokenCount(value: number | undefined): string {
+  if (!Number.isFinite(value)) return '0';
+  const normalized = Math.max(0, Math.round(value ?? 0));
+  if (normalized >= 1_000_000) return `${(normalized / 1_000_000).toFixed(1)}M`;
+  if (normalized >= 1_000) return `${(normalized / 1_000).toFixed(1)}k`;
+  return `${normalized}`;
+}
+
+function contextActionLabel(action: ContextUsageMetadata['action']): string {
+  if (action === 'prompt_compacted') return 'Prompt compacted';
+  if (action === 'prompt_truncated') return 'Prompt truncated';
+  if (action === 'history_pruned') return 'History pruned';
+  if (action === 'prompt_compacted_history_pruned') return 'Prompt compacted + history pruned';
+  if (action === 'prompt_truncated_history_pruned') return 'Prompt truncated + history pruned';
+  return 'No pruning';
+}
+
+function contextUsageTooltip(usage: ContextUsageMetadata): string {
+  return [
+    `${contextActionLabel(usage.action)} before sending.`,
+    `${formatTokenCount(usage.usedTokens)} / ${formatTokenCount(usage.contextWindow)} tokens (${Math.round(usage.percent)}%).`,
+    `System ${formatTokenCount(usage.systemPromptTokens)} · Turn ${formatTokenCount(usage.turnPromptTokens)} · History ${formatTokenCount(usage.historyTokens)} · Reserve ${formatTokenCount(usage.reserveTokens)}.`,
+    usage.prunedMessages ? `Pruned ${usage.prunedMessages} old message${usage.prunedMessages === 1 ? '' : 's'}.` : '',
+    usage.modelName ? `Model: ${usage.modelName}.` : '',
+  ].filter(Boolean).join(' ');
+}
+
+function ContextUsageCircle({ usage }: { usage: ContextUsageMetadata | null | undefined }) {
+  if (!usage) return null;
+  const percent = Math.max(0, Math.round(usage.percent));
+  const clampedPercent = Math.max(0, Math.min(100, percent));
+  const tooltip = contextUsageTooltip(usage);
+  const displayPercent = percent > 99 ? '99+' : String(percent);
+  const toneClass = percent >= 90
+    ? 'text-error'
+    : percent >= 75
+      ? 'text-[var(--amber)]'
+      : 'text-muted-foreground';
+
+  return (
+    <div className="group relative z-20 flex h-9 w-9 shrink-0 items-center justify-center">
+      <div
+        className="grid h-8 w-8 place-items-center rounded-full p-[2px] shadow-sm ring-1 ring-border/40"
+        style={{
+          background: `conic-gradient(var(--amber) ${clampedPercent * 3.6}deg, color-mix(in srgb, var(--border) 55%, transparent) 0deg)`,
+        }}
+        role="status"
+        aria-label={`Context usage ${percent}%`}
+        tabIndex={0}
+      >
+        <div className="grid h-full w-full place-items-center rounded-full bg-background">
+          <span className={`text-[9px] font-semibold leading-none ${toneClass}`}>
+            {displayPercent}<span className="text-[7px]">%</span>
+          </span>
+        </div>
+      </div>
+      <div
+        role="tooltip"
+        className="pointer-events-none absolute right-0 top-[calc(100%+6px)] z-50 hidden w-72 rounded-md border border-border/50 bg-popover px-3 py-2 text-left text-[11px] leading-relaxed text-popover-foreground shadow-lg group-hover:block group-focus-within:block"
+      >
+        <div className="mb-1 font-medium text-foreground">Context usage</div>
+        <div className="text-muted-foreground">{tooltip}</div>
+      </div>
+    </div>
+  );
+}
+
 export default memo(function AskHeader({
   isPanel, showHistory, onToggleHistory, onReset, isLoading,
   maximized, onMaximize, onClose, onDockToPanel, hideTitle,
   sessions, activeSessionId, onLoadSession, onDeleteSession, onRenameSession, onTogglePinSession,
   messages, selectedAgentRuntime, onSelectAgentRuntime, runtimeSessionBinding,
-  nativeRuntimes = [], notInstalledAgents = [], agentLoading, agentLoadingByKind, agentErrorByKind, onRefreshNativeRuntimes,
+  nativeRuntimes = [], notInstalledAgents = [], agentLoading, agentLoadingByKind, agentErrorByKind, onRefreshNativeRuntimes, contextUsage,
 }: AskHeaderProps) {
   const { t } = useLocale();
   const [isPending, startTransition] = useTransition();
@@ -330,6 +399,7 @@ export default memo(function AskHeader({
       )}
       {hideTitle && <div />}
       <div data-ask-header-actions className="relative z-10 flex items-center gap-1 shrink-0 pointer-events-auto">
+        <ContextUsageCircle usage={contextUsage} />
         <button type="button" onClick={(e) => { e.stopPropagation(); startTransition(() => onToggleHistory()); }} aria-pressed={showHistory} data-hit-active={showHistory ? 'true' : undefined} className={`${headerButtonClass} ${showHistory ? 'text-[var(--amber)]' : 'text-muted-foreground hover:text-foreground'}`} title={t.hints.sessionHistory}>
           <History size={iconSize} />
         </button>

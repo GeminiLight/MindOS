@@ -101,6 +101,44 @@ describe('AskHeader panel hit area', () => {
     expect(html).not.toContain('title="Focus mode"');
   });
 
+  it('renders the context usage circle and hover tooltip details', () => {
+    const html = renderToStaticMarkup(
+      <AskHeader
+        isPanel
+        showHistory={false}
+        onToggleHistory={vi.fn()}
+        onReset={vi.fn()}
+        isLoading={false}
+        sessions={[{ id: '1', title: 'Context session' } as any]}
+        activeSessionId="1"
+        messages={[]}
+        contextUsage={{
+          runtime: 'mindos',
+          phase: 'preflight',
+          action: 'history_pruned',
+          modelName: 'local-model',
+          percent: 78,
+          usedTokens: 78_000,
+          contextWindow: 100_000,
+          budgetTokens: 84_000,
+          reserveTokens: 16_000,
+          keepRecentTokens: 20_000,
+          systemPromptTokens: 10_000,
+          turnPromptTokens: 18_000,
+          historyTokens: 50_000,
+          prunedMessages: 8,
+        }}
+      />,
+    );
+
+    expect(html).toContain('aria-label="Context usage 78%"');
+    expect(html).toContain('78');
+    expect(html).toContain('Context usage');
+    expect(html).toContain('History pruned before sending.');
+    expect(html).toContain('78.0k / 100.0k tokens');
+    expect(html).toContain('Pruned 8 old messages.');
+  });
+
   it('opens the session dropdown for a single selected Claude Code session', async () => {
     const host = document.createElement('div');
     document.body.appendChild(host);

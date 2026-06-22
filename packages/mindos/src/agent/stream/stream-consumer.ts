@@ -60,6 +60,32 @@ export interface AgentRunContextMetadata {
   startedAt: number;
 }
 
+export interface ContextUsageMetadata {
+  runtime?: 'mindos' | 'acp' | 'codex' | 'claude';
+  phase: 'preflight' | 'post';
+  action:
+    | 'none'
+    | 'prompt_compacted'
+    | 'prompt_truncated'
+    | 'history_pruned'
+    | 'prompt_compacted_history_pruned'
+    | 'prompt_truncated_history_pruned';
+  modelName?: string;
+  percent: number;
+  usedTokens: number;
+  contextWindow: number;
+  budgetTokens: number;
+  reserveTokens: number;
+  keepRecentTokens?: number;
+  systemPromptTokens: number;
+  turnPromptTokens: number;
+  historyTokens: number;
+  originalUsedTokens?: number;
+  originalHistoryTokens?: number;
+  prunedMessages?: number;
+  message?: string;
+}
+
 /**
  * Host sink for "files changed during this run" notifications. The web host
  * forwards these to its coalesced window CustomEvent emitter; headless hosts
@@ -75,6 +101,7 @@ export interface FilesChangedSink {
 export interface ConsumeUIMessageStreamOptions {
   onRuntimeBinding?: (binding: RuntimeBindingMetadata) => void;
   onAgentRunContext?: (context: AgentRunContextMetadata) => void;
+  onContextUsage?: (usage: ContextUsageMetadata) => void;
   /**
    * Minimum interval between onUpdate emissions (leading emit + trailing
    * flush). Terminal state (completion/error/abort) always flushes
@@ -158,6 +185,65 @@ function normalizeRuntime(value: unknown): ToolCallPart['runtime'] | undefined {
   return value === 'mindos' || value === 'acp' || value === 'codex' || value === 'claude'
     ? value
     : undefined;
+}
+
+function finiteNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+function normalizeContextUsageAction(value: unknown): ContextUsageMetadata['action'] {
+  if (
+    value === 'prompt_compacted'
+    || value === 'prompt_truncated'
+    || value === 'history_pruned'
+    || value === 'prompt_compacted_history_pruned'
+    || value === 'prompt_truncated_history_pruned'
+  ) {
+    return value;
+  }
+  return 'none';
+}
+
+function normalizeContextUsage(eventRecord: Record<string, unknown>): ContextUsageMetadata | null {
+  const percent = finiteNumber(eventRecord.percent);
+  const usedTokens = finiteNumber(eventRecord.usedTokens);
+  const contextWindow = finiteNumber(eventRecord.contextWindow);
+  const budgetTokens = finiteNumber(eventRecord.budgetTokens);
+  const reserveTokens = finiteNumber(eventRecord.reserveTokens);
+  const systemPromptTokens = finiteNumber(eventRecord.systemPromptTokens);
+  const turnPromptTokens = finiteNumber(eventRecord.turnPromptTokens);
+  const historyTokens = finiteNumber(eventRecord.historyTokens);
+  if (
+    percent === undefined
+    || usedTokens === undefined
+    || contextWindow === undefined
+    || budgetTokens === undefined
+    || reserveTokens === undefined
+    || systemPromptTokens === undefined
+    || turnPromptTokens === undefined
+    || historyTokens === undefined
+  ) {
+    return null;
+  }
+  return {
+    runtime: normalizeRuntime(eventRecord.runtime),
+    phase: eventRecord.phase === 'post' ? 'post' : 'preflight',
+    action: normalizeContextUsageAction(eventRecord.action),
+    ...(typeof eventRecord.modelName === 'string' ? { modelName: redactSensitiveText(eventRecord.modelName) } : {}),
+    percent,
+    usedTokens,
+    contextWindow,
+    budgetTokens,
+    reserveTokens,
+    ...(finiteNumber(eventRecord.keepRecentTokens) !== undefined ? { keepRecentTokens: finiteNumber(eventRecord.keepRecentTokens) } : {}),
+    systemPromptTokens,
+    turnPromptTokens,
+    historyTokens,
+    ...(finiteNumber(eventRecord.originalUsedTokens) !== undefined ? { originalUsedTokens: finiteNumber(eventRecord.originalUsedTokens) } : {}),
+    ...(finiteNumber(eventRecord.originalHistoryTokens) !== undefined ? { originalHistoryTokens: finiteNumber(eventRecord.originalHistoryTokens) } : {}),
+    ...(finiteNumber(eventRecord.prunedMessages) !== undefined ? { prunedMessages: finiteNumber(eventRecord.prunedMessages) } : {}),
+    ...(typeof eventRecord.message === 'string' ? { message: redactSensitiveText(eventRecord.message) } : {}),
+  };
 }
 
 function normalizeRuntimePermissionIntent(value: unknown): 'allow' | 'deny' | 'cancel' | undefined {
@@ -446,6 +532,12 @@ export async function consumeUIMessageStream(
                 ? eventRecord.startedAt
                 : Date.now(),
             });
+            break;
+          }
+
+          case 'context_usage': {
+            const usage = normalizeContextUsage(eventRecord);
+            if (usage) options.onContextUsage?.(usage);
             break;
           }
 

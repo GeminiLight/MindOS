@@ -17,7 +17,7 @@
 
 import { useSyncExternalStore } from 'react';
 import type { AgentRuntimeIdentity, ChatSession, Message, RuntimeSessionBinding } from '@/lib/types';
-import type { AgentRunContextMetadata } from '@/lib/agent/stream-consumer';
+import type { AgentRunContextMetadata, ContextUsageMetadata } from '@/lib/agent/stream-consumer';
 
 export type AgentRunPhase = 'connecting' | 'thinking' | 'streaming' | 'reconnecting';
 
@@ -76,6 +76,7 @@ type RuntimeBindingWriter = (
 ) => void;
 
 const messagesBySession = new Map<string, Message[]>();
+const contextUsageBySession = new Map<string, ContextUsageMetadata>();
 /** Last local write time per session — initSessions uses it for newer-wins vs server updatedAt. */
 const messageWriteAt = new Map<string, number>();
 const runs = new Map<string, AgentRun>();
@@ -175,9 +176,28 @@ export function replaceLastMessage(sessionId: string, msg: Message, opts?: Write
 }
 
 // ---------------------------------------------------------------------------
+// Context usage
+
+export function getContextUsage(sessionId: string | null): ContextUsageMetadata | null {
+  if (!sessionId) return null;
+  return contextUsageBySession.get(sessionId) ?? null;
+}
+
+export function writeContextUsage(sessionId: string, usage: ContextUsageMetadata) {
+  contextUsageBySession.set(sessionId, usage);
+  emitSession(sessionId);
+}
+
+export function clearContextUsage(sessionId: string) {
+  const hadUsage = contextUsageBySession.delete(sessionId);
+  if (hadUsage) emitSession(sessionId);
+}
+
+// ---------------------------------------------------------------------------
 // Runs
 
 export function startRun(sessionId: string, init: AgentRunInit): AgentRun {
+  contextUsageBySession.delete(sessionId);
   const run: AgentRun = {
     sessionId,
     controller: init.controller,
@@ -386,6 +406,7 @@ export function removeSession(sessionId: string) {
   messagesBySession.delete(sessionId);
   messageWriteAt.delete(sessionId);
   cooldownUntil.delete(sessionId);
+  contextUsageBySession.delete(sessionId);
   const hadUnread = unread.delete(sessionId);
   emitSession(sessionId);
   if (hadUnread || summarySnapshot.running.has(sessionId)) emitSummary();
@@ -445,6 +466,7 @@ export function resetAgentRunStoreForTests() {
   messageWriteAt.clear();
   unread.clear();
   cooldownUntil.clear();
+  contextUsageBySession.clear();
   activeSessionId = null;
   metaResolver = null;
   sessionsUpdater = null;
@@ -452,4 +474,12 @@ export function resetAgentRunStoreForTests() {
   sessionListeners.clear();
   summaryListeners.clear();
   summarySnapshot = EMPTY_SUMMARY;
+}
+
+export function useSessionContextUsage(sessionId: string | null): ContextUsageMetadata | null {
+  return useSyncExternalStore(
+    (fn) => (sessionId ? subscribeSession(sessionId, fn) : () => {}),
+    () => getContextUsage(sessionId),
+    () => null,
+  );
 }

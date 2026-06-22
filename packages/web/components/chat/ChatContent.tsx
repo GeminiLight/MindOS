@@ -441,7 +441,7 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
     onRestoreInput: handleRestoreInput,
     onTransientError: setDropError,
   });
-  const { isLoading, loadingPhase, reconnectAttempt, reconnectMax } = chat;
+  const { isLoading, loadingPhase, reconnectAttempt, reconnectMax, contextUsage } = chat;
   useAgentRunTimeline({
     chatSessionId: session.activeSessionId,
     rootRunId: chat.agentRunContext?.chatSessionId && chat.agentRunContext.chatSessionId !== session.activeSessionId
@@ -1136,6 +1136,7 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
         agentLoadingByKind={nativeDetection.loadingByKind}
         agentErrorByKind={nativeDetection.errorByKind}
         onRefreshNativeRuntimes={nativeDetection.refresh}
+        contextUsage={contextUsage}
       />
 
       {showHistory && (

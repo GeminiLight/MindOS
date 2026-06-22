@@ -76,6 +76,7 @@ describe('MindOS session event contract', () => {
       'text_delta',
       'thinking_delta',
       'agent_run_context',
+      'context_usage',
       'tool_start',
       'tool_delta',
       'tool_end',
@@ -97,6 +98,25 @@ describe('MindOS session event contract', () => {
     const encoded = encodeMindosSseEvent({ type: 'text_delta', delta: 'hello' });
     expect(encoded).toBe('data:{"type":"text_delta","delta":"hello"}\n\n');
     expect(parseMindosSseLine(encoded.trim())).toEqual({ type: 'text_delta', delta: 'hello' });
+    expect(parseMindosSseLine(encodeMindosSseEvent({
+      type: 'context_usage',
+      runtime: 'mindos',
+      phase: 'preflight',
+      action: 'history_pruned',
+      percent: 72,
+      usedTokens: 72_000,
+      contextWindow: 100_000,
+      budgetTokens: 84_000,
+      reserveTokens: 16_000,
+      systemPromptTokens: 10_000,
+      turnPromptTokens: 12_000,
+      historyTokens: 50_000,
+    }).trim())).toMatchObject({
+      type: 'context_usage',
+      runtime: 'mindos',
+      action: 'history_pruned',
+      percent: 72,
+    });
     expect(parseMindosSseLine(encodeMindosSseEvent({
       type: 'agent_run_context',
       rootRunId: 'root-1',

@@ -17,6 +17,7 @@ import { queueFilesChanged, flushFilesChanged } from './files-changed-emitter';
 
 export type {
   AgentRunContextMetadata,
+  ContextUsageMetadata,
   ConsumeUIMessageStreamOptions,
   FilesChangedSink,
   RuntimeBindingMetadata,
