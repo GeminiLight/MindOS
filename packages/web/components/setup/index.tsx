@@ -14,6 +14,7 @@ import StepAI from './StepAI';
 import StepReview from './StepReview';
 import { RestartButton } from './StepReview';
 import StepDots from './StepDots';
+import { resolveSetupAgentTargets } from './installTargets';
 
 // ─── Helpers (shared by handleComplete + retryAgent) ─────────────────────────
 
@@ -128,6 +129,21 @@ async function installSkills(
     console.warn('[SetupWizard] Skill installation failed:', e);
     return false;
   }
+}
+
+async function fetchSetupAgents(): Promise<AgentEntry[]> {
+  const res = await fetch('/api/mcp/agents');
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+  return Array.isArray(data.agents)
+    ? (data.agents as AgentEntry[]).filter(a => a.scope !== 'builtin')
+    : [];
+}
+
+function defaultSelectedAgents(agents: AgentEntry[]): Set<string> {
+  return new Set(
+    agents.filter(a => a.installed || a.present).map(a => a.key),
+  );
 }
 
 async function requestSetupToken(): Promise<string> {
@@ -248,16 +264,10 @@ export default function SetupWizard() {
   useEffect(() => {
     if (step === STEP_AI && !agentsLoaded && !agentsLoading) {
       setAgentsLoading(true);
-      fetch('/api/mcp/agents')
-        .then(r => r.json())
-        .then(data => {
-          if (data.agents) {
-            const externalAgents = (data.agents as AgentEntry[]).filter(a => a.scope !== 'builtin');
-            setAgents(externalAgents);
-            setSelectedAgents(new Set(
-              externalAgents.filter(a => a.installed || a.present).map(a => a.key)
-            ));
-          }
+      fetchSetupAgents()
+        .then(externalAgents => {
+          setAgents(externalAgents);
+          setSelectedAgents(defaultSelectedAgents(externalAgents));
           setAgentsLoaded(true);
         })
         .catch(e => { console.warn('[SetupWizard] Failed to load agents:', e); setAgentsLoaded(true); })
@@ -341,10 +351,25 @@ export default function SetupWizard() {
   const handleComplete = async () => {
     setSubmitting(true);
     setError('');
-    const presentAgentKeys = new Set(agents.filter(agent => agent.present).map(agent => agent.key));
-    const agentKeys = connectionMode.mcp
-      ? Array.from(selectedAgents).filter(key => presentAgentKeys.has(key))
-      : [];
+    let effectiveAgents = agents;
+    let effectiveSelectedAgents = selectedAgents;
+    if (!agentsLoaded) {
+      try {
+        effectiveAgents = await fetchSetupAgents();
+        const detectedAgents = defaultSelectedAgents(effectiveAgents);
+        effectiveSelectedAgents = selectedAgents.size > 0 ? selectedAgents : detectedAgents;
+        setAgents(effectiveAgents);
+        setSelectedAgents(effectiveSelectedAgents);
+        setAgentsLoaded(true);
+      } catch (e) {
+        console.warn('[SetupWizard] final agent detection failed:', e);
+      }
+    }
+    const { skillAgentKeys, mcpAgentKeys } = resolveSetupAgentTargets({
+      agents: effectiveAgents,
+      selectedAgents: effectiveSelectedAgents,
+      mcpEnabled: connectionMode.mcp,
+    });
 
     // Ensure auth token exists before saving. Web Password is optional.
     let finalState = state;
@@ -372,29 +397,29 @@ export default function SetupWizard() {
       return;
     }
 
-    if (connectionMode.mcp && agentKeys.length > 0) {
+    if (mcpAgentKeys.length > 0) {
       setSetupPhase('agents');
       const initialStatuses: Record<string, AgentInstallStatus> = {};
-      for (const key of agentKeys) initialStatuses[key] = { state: 'installing' };
+      for (const key of mcpAgentKeys) initialStatuses[key] = { state: 'installing' };
       setAgentStatuses(initialStatuses);
 
       try {
-        const statuses = await installAgents(agentKeys, agents, agentTransport, agentScope, finalState.mcpPort, finalState.authToken);
+        const statuses = await installAgents(mcpAgentKeys, agents, agentTransport, agentScope, finalState.mcpPort, finalState.authToken);
         setAgentStatuses(statuses);
       } catch (e) {
         console.warn('[SetupWizard] agent batch install failed:', e);
         const errStatuses: Record<string, AgentInstallStatus> = {};
-        for (const key of agentKeys) errStatuses[key] = { state: 'error' };
+        for (const key of mcpAgentKeys) errStatuses[key] = { state: 'error' };
         setAgentStatuses(errStatuses);
       }
     }
 
-    if (agentKeys.length > 0) {
+    if (skillAgentKeys.length > 0) {
       setSetupPhase('skills');
       setSkillInstallStatus('installing');
       const skillName = finalState.initialSpaceLocale === 'zh' ? 'mindos-zh' : 'mindos';
       try {
-        const skillOk = await installSkills(skillName, agentKeys);
+        const skillOk = await installSkills(skillName, skillAgentKeys);
         setSkillInstallStatus(skillOk ? 'ok' : 'error');
       } catch (e) {
         console.warn('[SetupWizard] skill install failed:', e);
@@ -527,7 +552,7 @@ export default function SetupWizard() {
             needsRestart ? (
               <RestartButton s={s} newPort={state.webPort} webPassword={state.webPassword} />
             ) : (
-              <a href="/?welcome=1"
+              <a href="/"
                 className="flex items-center gap-1.5 rounded-lg bg-[var(--amber)] px-5 py-2 text-sm font-medium text-[var(--amber-foreground)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                 {s.healthGoHome ?? 'Go to MindOS'} &rarr;
               </a>

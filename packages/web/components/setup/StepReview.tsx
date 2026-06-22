@@ -48,7 +48,7 @@ export function RestartButton({ s, newPort, webPassword }: { s: SetupMessages; n
       const rawHost = window.location.hostname || 'localhost';
       const host = rawHost.includes(':') ? `[${rawHost}]` : rawHost;
       const baseUrl = `http://${host}:${newPort}`;
-      const redirect = () => { window.location.href = `${baseUrl}/?welcome=1`; };
+      const redirect = () => { window.location.href = `${baseUrl}/`; };
 
       let attempts = 0;
       clearInterval(pollRef.current);
@@ -208,6 +208,7 @@ export default function StepReview({
   const failedAgents = Object.entries(agentStatuses).filter(([, v]) => v.state === 'error');
   const modeLabel = cliEnabled && mcpEnabled ? 'CLI + MCP' : cliEnabled ? 'CLI' : mcpEnabled ? 'MCP' : (locale === 'zh' ? '未选择' : 'None');
   const showMcpAgentWork = mcpEnabled && selectedAgents.size > 0;
+  const showSkillWork = selectedAgents.size > 0;
   const reviewRows: ReviewStatusRow[] = [
     {
       title: s.reviewInitialSpaces,
@@ -251,7 +252,7 @@ export default function StepReview({
 
   type Phase = typeof setupPhase;
   const showAgentPhase = showMcpAgentWork;
-  const showSkillPhase = showMcpAgentWork;
+  const showSkillPhase = showSkillWork;
   const phases: { key: Phase; label: string }[] = [
     { key: 'saving', label: s.phaseSaving },
     ...(showAgentPhase ? [{ key: 'agents' as Phase, label: s.phaseAgents }] : []),
@@ -400,10 +401,11 @@ function HealthCheckView({
   const hasInitialSpaces = state.initialSpaces.length > 0;
   const aiOk = state.activeProvider !== 'skip' && state.providers.length > 0;
   const hasToken = !!state.authToken;
+  const selectedSkillAgentCount = selectedAgents.size;
   const selectedMcpAgentCount = mcpEnabled ? selectedAgents.size : 0;
   const successAgents = Object.values(agentStatuses).filter(a => a.state === 'ok').length;
   const mcpAgentsOk = selectedMcpAgentCount > 0 && successAgents > 0;
-  const skillsRelevant = selectedMcpAgentCount > 0;
+  const skillsRelevant = selectedSkillAgentCount > 0;
   const skillsOk = skillInstallStatus === 'ok';
   const agentConnectionOk = cliEnabled || mcpAgentsOk;
   const agentConnectionDetail = (() => {

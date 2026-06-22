@@ -421,6 +421,8 @@ function createGuideState(template: string | undefined): MindosSetupGuideState {
     askedAI: false,
     agentPromptDone: false,
     nextStepIndex: 0,
+    walkthroughStep: 0,
+    walkthroughDismissed: false,
   };
 }
 

@@ -251,6 +251,27 @@ describe('POST /api/setup — config writing', () => {
     expect(body.needsRestart).toBe(true);
   });
 
+  it('writes first-time guide state with a pending walkthrough step', async () => {
+    mockSettings.setupPending = true;
+    const { POST } = await importSetupRoute();
+    const req = new NextRequest('http://localhost/api/setup', {
+      method: 'POST',
+      body: JSON.stringify({ mindRoot: path.join(tempDir, 'first-walkthrough'), template: 'en' }),
+      headers: { 'content-type': 'application/json' },
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+    expect(writtenConfig).not.toBeNull();
+    expect((writtenConfig as Record<string, unknown>).guideState).toMatchObject({
+      active: true,
+      dismissed: false,
+      template: 'en',
+      walkthroughStep: 0,
+      walkthroughDismissed: false,
+    });
+  });
+
   it('detects needsRestart when port changes on re-setup', async () => {
     const existingRoot = path.join(tempDir, 'existing');
     fs.mkdirSync(existingRoot, { recursive: true });

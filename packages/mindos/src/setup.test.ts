@@ -145,6 +145,30 @@ describe('MindOS setup domain operations', () => {
     });
   });
 
+  it('arms the walkthrough in guide state during first-time setup without requiring a welcome URL', () => {
+    const { services, state } = makeMutableServices({
+      ai: { activeProvider: '', providers: [] },
+      mindRoot: '',
+      setupPending: true,
+    });
+
+    expect(applyMindosSetupConfig({
+      mindRoot: '~/mind',
+      template: 'en',
+    }, services)).toMatchObject({
+      status: 200,
+      body: { ok: true, needsRestart: true },
+    });
+
+    expect(state.settings.guideState).toMatchObject({
+      active: true,
+      dismissed: false,
+      template: 'en',
+      walkthroughStep: 0,
+      walkthroughDismissed: false,
+    });
+  });
+
   it('validates and applies selected initial Mind Spaces after the base template', () => {
     const { services, templates, initialSpaces } = makeMutableServices({
       ai: { activeProvider: '', providers: [] },
