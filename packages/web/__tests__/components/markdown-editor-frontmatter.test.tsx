@@ -5,8 +5,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import MarkdownEditor from '@/components/MarkdownEditor';
 
 vi.mock('next/dynamic', () => ({
-  default: () => function MockWysiwygEditor() {
-    return <div data-testid="wysiwyg-editor" />;
+  default: () => function MockWysiwygEditor({ value }: { value: string }) {
+    const React = require('react') as typeof import('react');
+    const initialValue = React.useRef(value);
+    return <div data-testid="wysiwyg-editor">{initialValue.current}</div>;
   },
 }));
 
@@ -32,9 +34,9 @@ describe('MarkdownEditor frontmatter handling', () => {
     document.body.removeChild(host);
   });
 
-  async function render(value: string, viewMode: 'wysiwyg' | 'source') {
+  async function render(value: string, viewMode: 'wysiwyg' | 'source', editorKey?: string) {
     await act(async () => {
-      root.render(<MarkdownEditor value={value} viewMode={viewMode} onChange={vi.fn()} />);
+      root.render(<MarkdownEditor value={value} viewMode={viewMode} onChange={vi.fn()} editorKey={editorKey} />);
     });
   }
 
@@ -64,5 +66,13 @@ describe('MarkdownEditor frontmatter handling', () => {
 
     expect(host.querySelector('[data-testid="wysiwyg-editor"]')).toBeNull();
     expect(host.querySelector('[data-testid="source-editor"]')).not.toBeNull();
+  });
+
+  it('remounts WYSIWYG when the editor key changes between markdown files', async () => {
+    await render('# First file', 'wysiwyg', 'first.md');
+    expect(host.querySelector('[data-testid="wysiwyg-editor"]')?.textContent).toBe('# First file');
+
+    await render('# Second file', 'wysiwyg', 'second.md');
+    expect(host.querySelector('[data-testid="wysiwyg-editor"]')?.textContent).toBe('# Second file');
   });
 });

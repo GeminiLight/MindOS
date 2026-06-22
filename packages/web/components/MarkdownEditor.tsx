@@ -13,11 +13,12 @@ interface MarkdownEditorProps {
   value: string;
   onChange: (v: string) => void;
   viewMode: MdViewMode;
+  editorKey?: string;
 }
 
 const EDITOR_HEIGHT = 'calc(100vh - 160px)';
 
-export default function MarkdownEditor({ value, onChange, viewMode }: MarkdownEditorProps) {
+export default function MarkdownEditor({ value, onChange, viewMode, editorKey }: MarkdownEditorProps) {
   const hasFrontmatter = hasMarkdownFrontmatterFence(value);
   const isWysiwyg = viewMode === 'wysiwyg' && !hasFrontmatter;
   const isSource = viewMode === 'source' || (viewMode === 'wysiwyg' && hasFrontmatter);
@@ -27,7 +28,7 @@ export default function MarkdownEditor({ value, onChange, viewMode }: MarkdownEd
       {/* WYSIWYG normalizes markdown on mount; keep it off the path for frontmatter/source notes. */}
       {isWysiwyg && (
         <div className="min-h-[50vh] min-w-0">
-          <WysiwygEditor value={value} onChange={onChange} />
+          <WysiwygEditor key={editorKey ?? 'wysiwyg'} value={value} onChange={onChange} />
         </div>
       )}
 

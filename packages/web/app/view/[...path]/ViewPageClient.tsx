@@ -1000,6 +1000,7 @@ export default function ViewPageClient({
                     value={editContent}
                     onChange={setEditContent}
                     viewMode={mdViewMode}
+                    editorKey={filePath}
                   />
                 </div>
                 {shouldRenderEditingToc && <TableOfContents content={editContent} />}
