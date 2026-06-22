@@ -8,7 +8,7 @@ export const MINDOS_CORE_COMMANDS = [
   'space',
   'search',
   'mcp',
-  'init',
+  'onboard',
   'config',
   'auth',
   'channel',

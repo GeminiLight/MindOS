@@ -180,7 +180,7 @@ export const meta = {
   summary: 'Start MindOS services',
   usage: 'mindos start',
   flags: {
-    '--daemon': 'Run as background daemon',
+    '--daemon': 'Run as background daemon (macOS/Linux only)',
     '--verbose': 'Show detailed output',
     '--port <port>': 'Override web port',
   },

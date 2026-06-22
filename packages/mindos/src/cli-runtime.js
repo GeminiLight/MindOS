@@ -83,6 +83,7 @@ const loaderByDisplayName = {
   space: spaceCmd,
   search: searchCmd,
   mcp: mcpCmd,
+  onboard: onboardCmd,
   init: onboardCmd,
   config: configCmd,
   auth: authCmd,

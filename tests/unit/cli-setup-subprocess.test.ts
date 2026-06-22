@@ -18,6 +18,9 @@ describe('setup.js subprocess contract', () => {
     expect(source).toContain("execFileSync('cmd.exe', ['/c', 'start', '', url]");
     expect(source).toContain("execFileSync(process.execPath, [cliPath, 'restart']");
     expect(source).toContain("resolveNpxInvocation(args)");
-    expect(source).toContain("resolveNpmInvocation(['link'])");
+    expect(source).toContain("function supportsDaemonService(platform = process.platform)");
+    expect(source).toContain("resolveNpmInvocation(['link', '--global'])");
+    expect(source).toContain("cwd: resolve(ROOT, 'packages', 'mindos')");
+    expect(source).toContain("--install-daemon is only supported on macOS/Linux");
   });
 });

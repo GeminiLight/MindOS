@@ -225,6 +225,14 @@ describe('Desktop release packaging contract', () => {
     expect(workflow).toContain('xcrun stapler validate "$file"');
     expect(workflow).toContain('gh release delete-asset "$DESIRED_TAG" "MindOS.Setup.${VERSION}.exe" --yes');
     expect(workflow).toContain('gh release delete-asset "$DESIRED_TAG" "MindOS.Setup.${VERSION}.exe.blockmap" --yes');
+    expect(workflow).toContain('copy_alias "artifacts/MindOS-${VERSION}-arm64.dmg" "MindOS-arm64.dmg"');
+    expect(workflow).toContain('copy_alias "artifacts/MindOS-${VERSION}.dmg" "MindOS.dmg"');
+    expect(workflow).toContain('copy_alias "artifacts/MindOS-Setup-${VERSION}.exe" "MindOS-Setup.exe"');
+    expect(workflow).toContain('copy_alias "artifacts/MindOS-Setup-${VERSION}-arm64.exe" "MindOS-Setup-arm64.exe"');
+    expect(workflow).toContain('copy_alias "artifacts/MindOS-${VERSION}.AppImage" "MindOS.AppImage"');
+    expect(workflow).toContain('copy_alias "artifacts/mindos-desktop_${VERSION}_amd64.deb" "mindos-desktop_amd64.deb"');
+    expect(workflow).toContain('gh release view "$DESIRED_TAG" --json assets --jq \'.assets[].name\'');
+    expect(workflow).toContain('grep -Fx "$required_asset" /tmp/mindos-desktop-assets.txt');
     expect(workflow).toContain('candidates=(');
     expect(workflow).toContain('artifacts/*.dmg');
     // Only updater feeds (latest*.yml) are published — a bare *.yml/*.yaml glob

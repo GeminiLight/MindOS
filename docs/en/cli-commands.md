@@ -6,9 +6,9 @@
 | :--- | :--- |
 | `mindos` | Open the MindOS AI Agent REPL |
 | `mindos onboard` / `mindos init` | Interactive setup (config, template, start mode) |
-| `mindos onboard --install-daemon` | Onboard + install and start background service |
+| `mindos onboard --install-daemon` | Onboard + install and start background service (macOS/Linux only) |
 | `mindos start` | Start Web + MCP services (foreground, production mode) |
-| `mindos start --daemon` | Install + start as a background OS service (survives terminal close, auto-restarts on crash) |
+| `mindos start --daemon` | Install + start as a background OS service on macOS/Linux (survives terminal close, auto-restarts on crash) |
 | `mindos dev` | Start Web + MCP services (dev mode, hot reload via webpack) |
 | `mindos open` | Open the Web UI in the default browser |
 | `mindos stop` | Stop running MindOS processes |

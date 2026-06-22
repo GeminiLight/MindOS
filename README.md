@@ -153,6 +153,8 @@ npm install -g @geminilight/mindos@latest
 git clone https://github.com/GeminiLight/MindOS
 cd MindOS
 pnpm install
+pnpm --filter @geminilight/mindos build
+cd packages/mindos
 pnpm link --global   # registers the `mindos` command globally
 ```
 
@@ -167,7 +169,7 @@ mindos onboard
 The setup wizard guides you through knowledge base path, template, ports, auth, AI provider, and start mode — all with sensible defaults. Config is saved to `~/.mindos/config.json`. See **[docs/en/configuration.md](docs/en/configuration.md)** for all fields.
 
 > [!TIP]
-> Choose "Background service" during onboard for auto-start on boot. Run `mindos update` anytime to upgrade.
+> On macOS/Linux, choose "Background service" during onboard for auto-start on boot. On Windows CLI installs, use foreground mode; Windows auto-start is handled by the Desktop app. Run `mindos update` anytime to upgrade.
 
 Open the Web UI in your browser:
 
@@ -325,7 +327,7 @@ MindOS/
 | **Core** | |
 | `mindos onboard` | Interactive setup (config, template, start mode) |
 | `mindos start` | Start Web + MCP services |
-| `mindos start --daemon` | Start as background OS service |
+| `mindos start --daemon` | Start as background OS service (macOS/Linux only) |
 | `mindos stop` / `restart` | Stop or restart running processes |
 | `mindos dev` | Start in dev mode |
 | `mindos build` | Build for production |
@@ -345,7 +347,7 @@ MindOS/
 | `mindos token` | Show auth token and MCP config |
 | `mindos config <sub>` | View/update config (show, set, validate) |
 | `mindos sync` | Show sync status (init, now, conflicts, on/off) |
-| `mindos gateway <sub>` | Manage background service (install, start, stop) |
+| `mindos gateway <sub>` | Manage background service on macOS/Linux (install, start, stop) |
 | `mindos doctor` | Health check |
 | `mindos update` | Update to latest version |
 

@@ -6,9 +6,9 @@
 | :--- | :--- |
 | `mindos` | 进入 MindOS AI Agent 交互模式 |
 | `mindos onboard` / `mindos init` | 交互式初始化（生成配置、选择模板） |
-| `mindos onboard --install-daemon` | 初始化 + 安装并启动后台服务 |
+| `mindos onboard --install-daemon` | 初始化 + 安装并启动后台服务（仅 macOS/Linux） |
 | `mindos start` | 前台启动 Web + MCP 服务（生产模式） |
-| `mindos start --daemon` | 安装并以后台 OS 服务方式启动（关闭终端仍运行，崩溃自动重启） |
+| `mindos start --daemon` | 在 macOS/Linux 安装并以后台 OS 服务方式启动（关闭终端仍运行，崩溃自动重启） |
 | `mindos dev` | 启动 Web + MCP 服务（开发模式，使用 webpack 热更新） |
 | `mindos open` | 在默认浏览器中打开 Web UI |
 | `mindos stop` | 停止正在运行的 MindOS 进程 |

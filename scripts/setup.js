@@ -40,6 +40,10 @@ const MINDOS_DIR = resolve(homedir(), '.mindos');
 const CONFIG_PATH = resolve(MINDOS_DIR, 'config.json');
 const LOG_PATH = resolve(MINDOS_DIR, 'mindos.log');
 
+function supportsDaemonService(platform = process.platform) {
+  return platform === 'darwin' || platform === 'linux';
+}
+
 // ── i18n ─────────────────────────────────────────────────────────────────────
 
 const T = {
@@ -113,9 +117,10 @@ const T = {
 
   // start mode
   startModePrompt: { en: 'Start Mode', zh: '启动方式' },
-  startModeOpts:   { en: ['Background service (recommended, auto-start on boot)', 'Foreground (manual start each time)'], zh: ['后台服务（推荐，开机自启）', '前台运行（每次手动启动）'] },
+  startModeOpts:   { en: ['Background service (macOS/Linux, auto-start on boot)', 'Foreground (manual start each time)'], zh: ['后台服务（macOS/Linux，开机自启）', '前台运行（每次手动启动）'] },
   startModeVals:   ['daemon', 'start'],
-  startModeSkip:   { en: '  → Daemon not supported on this platform, using foreground mode', zh: '  → 当前平台不支持后台服务，使用前台模式' },
+  startModeSkip:   { en: '  → Background service is only supported on macOS/Linux. Using foreground mode.', zh: '  → 后台服务仅支持 macOS/Linux。当前使用前台模式。' },
+  startModeFlagSkip: { en: '  → --install-daemon is only supported on macOS/Linux. Using foreground mode.', zh: '  → --install-daemon 仅支持 macOS/Linux。当前使用前台模式。' },
   cfgKept:        { en: '✔ Keeping existing config', zh: '✔ 保留现有配置' },
   cfgKeptNote:    { en: '  Settings from this session were not saved', zh: '  本次填写的设置未保存' },
   cfgSaved:       { en: '✔ Config saved', zh: '✔ 配置已保存' },
@@ -1166,7 +1171,7 @@ async function main() {
       const existingMindRoot = existing.mindRoot  || resolve(homedir(), 'MindOS', 'mind');
       console.log(`\n${c.green(t('cfgKept'))}  ${c.dim(CONFIG_PATH)}`);
       write(c.dim(t('cfgKeptNote') + '\n'));
-      const installDaemon = process.argv.includes('--install-daemon');
+      const installDaemon = process.argv.includes('--install-daemon') && supportsDaemonService();
       finish(existingMindRoot, existingMode, existingMcpPort, existingAuth, installDaemon);
       return;
     }
@@ -1342,9 +1347,12 @@ async function main() {
   stepHeader(6);
 
   let startMode = 'start';
-  const daemonPlatform = process.platform === 'darwin' || process.platform === 'linux';
-  if (daemonPlatform) {
+  const daemonSupported = supportsDaemonService();
+  const daemonRequestedByFlag = process.argv.includes('--install-daemon');
+  if (daemonSupported) {
     startMode = await select('startModePrompt', 'startModeOpts', 'startModeVals');
+  } else if (daemonRequestedByFlag) {
+    write(c.dim(t('startModeFlagSkip') + '\n'));
   } else {
     write(c.dim(t('startModeSkip') + '\n'));
   }
@@ -1451,7 +1459,7 @@ async function main() {
   // ── Register CLI globally if not already in PATH ────────────────────────────
   ensureCliInPath();
 
-  const installDaemon = startMode === 'daemon' || process.argv.includes('--install-daemon');
+  const installDaemon = supportsDaemonService() && (startMode === 'daemon' || process.argv.includes('--install-daemon'));
   finish(mindDir, config.startMode, config.mcpPort, config.authToken, installDaemon, needsRestart, resumeCfg.port ?? 3456);
 }
 
@@ -1469,15 +1477,15 @@ function ensureCliInPath() {
 
   write('\n');
   try {
-    const invocation = resolveNpmInvocation(['link']);
-    execFileSync(invocation.command, invocation.args, { cwd: ROOT, stdio: 'ignore' });
+    const invocation = resolveNpmInvocation(['link', '--global']);
+    execFileSync(invocation.command, invocation.args, { cwd: resolve(ROOT, 'packages', 'mindos'), stdio: 'ignore' });
     write(c.green(uiLang === 'zh'
       ? '  ✔ mindos CLI 已注册到全局路径\n'
       : '  ✔ mindos CLI registered globally\n'));
   } catch {
     write(c.yellow(uiLang === 'zh'
-      ? '  ⚠ 无法自动注册 CLI，请手动运行：npm link\n'
-      : '  ⚠ Could not register CLI automatically. Run manually: npm link\n'));
+      ? '  ⚠ 无法自动注册 CLI，请手动运行：cd packages/mindos && npm link --global\n'
+      : '  ⚠ Could not register CLI automatically. Run manually: cd packages/mindos && npm link --global\n'));
   }
 }
 
@@ -1493,8 +1501,12 @@ function getLocalIP() {
 async function finish(mindDir, startMode = 'start', mcpPort = 8781, authToken = '', installDaemon = false, needsRestart = false, oldPort = 3456) {
   // startMode 'daemon' stored in config is equivalent to installDaemon flag
   if (startMode === 'daemon') {
-    installDaemon = true;
+    installDaemon = supportsDaemonService();
     startMode = 'start';
+  }
+  if (installDaemon && !supportsDaemonService()) {
+    write(c.dim(t('startModeFlagSkip') + '\n'));
+    installDaemon = false;
   }
   if (needsRestart) {
     const isRunning = await isSelfPort(oldPort);

@@ -131,6 +131,6 @@ API Key 和 Apple ID 同时配置时优先使用 API Key。
 CI publish 模式自动上传到：
 - **Cloudflare R2**（国际）：`desktop/latest/MindOS-arm64.dmg`、`desktop/latest/mindos-desktop_amd64.deb` 等（去版本号）
 - **阿里云 OSS**（中国）：同上
-- **GitHub Releases**：原始文件名（带版本号）
+- **GitHub Releases**：原始文件名（带版本号）+ 官网 fallback 用稳定别名（如 `MindOS-Setup.exe`、`MindOS-arm64.dmg`）
 
 Landing 页面下载链接指向 CDN `latest/` 路径，每次发版自动覆盖。

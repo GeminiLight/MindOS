@@ -47,7 +47,7 @@ COMMANDS
   space         Manage spaces (list, tree, create, rename)
   search        Search your knowledge base
   mcp           Manage AI agent connections
-  init          First-time setup wizard
+  onboard      First-time setup wizard (aliases: init, setup)
   config        View or update configuration
   auth          Manage local Web UI authentication
   channel       Manage IM platform configurations

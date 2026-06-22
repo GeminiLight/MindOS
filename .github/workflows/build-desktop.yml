@@ -604,6 +604,24 @@ jobs:
           shopt -s nullglob
           gh release delete-asset "$DESIRED_TAG" "MindOS.Setup.${VERSION}.exe" --yes 2>/dev/null || true
           gh release delete-asset "$DESIRED_TAG" "MindOS.Setup.${VERSION}.exe.blockmap" --yes 2>/dev/null || true
+
+          # Stable aliases keep website buttons and /latest/download/... links from
+          # depending on the current Desktop version string. The versioned assets
+          # above remain the canonical release artifacts and updater metadata.
+          copy_alias() {
+            local src="$1"
+            local dest="$2"
+            if [ -f "$src" ]; then
+              cp -f "$src" "artifacts/${dest}"
+            fi
+          }
+          copy_alias "artifacts/MindOS-${VERSION}-arm64.dmg" "MindOS-arm64.dmg"
+          copy_alias "artifacts/MindOS-${VERSION}.dmg" "MindOS.dmg"
+          copy_alias "artifacts/MindOS-Setup-${VERSION}.exe" "MindOS-Setup.exe"
+          copy_alias "artifacts/MindOS-Setup-${VERSION}-arm64.exe" "MindOS-Setup-arm64.exe"
+          copy_alias "artifacts/MindOS-${VERSION}.AppImage" "MindOS.AppImage"
+          copy_alias "artifacts/mindos-desktop_${VERSION}_amd64.deb" "mindos-desktop_amd64.deb"
+
           candidates=(
             artifacts/*.dmg
             artifacts/*.zip
@@ -622,3 +640,14 @@ jobs:
             exit 1
           fi
           gh release upload "$DESIRED_TAG" "${assets[@]}" --clobber
+
+          gh release view "$DESIRED_TAG" --json assets --jq '.assets[].name' > /tmp/mindos-desktop-assets.txt
+          for required_asset in \
+            "MindOS-arm64.dmg" \
+            "MindOS.dmg" \
+            "MindOS-Setup.exe" \
+            "MindOS-Setup-arm64.exe" \
+            "MindOS.AppImage" \
+            "mindos-desktop_amd64.deb"; do
+            grep -Fx "$required_asset" /tmp/mindos-desktop-assets.txt
+          done

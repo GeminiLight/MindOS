@@ -9,7 +9,7 @@
 所有 Desktop 下载链接指向 GitHub Releases：
 
 ```
-https://github.com/GeminiLight/MindOS/releases/latest/download/MindOS-mac-arm64.dmg
+https://github.com/GeminiLight/MindOS/releases/latest/download/MindOS-arm64.dmg
 ```
 
 **问题：**
@@ -18,7 +18,7 @@ https://github.com/GeminiLight/MindOS/releases/latest/download/MindOS-mac-arm64.
 |------|------|
 | GitHub Releases 国内访问慢或不通 | 中国用户下载失败/超时 |
 | 单一源，无容灾 | GitHub CDN 偶发故障时全球不可用 |
-| `latest` tag 指向 npm 版本而非 Desktop 版本 | Desktop 用 `desktop-v0.1.0` tag，latest 可能匹配不上 |
+| 官网按钮使用无版本号文件名，而 GitHub Release 只上传带版本号资产 | `latest/download/MindOS-Setup.exe` / `MindOS-arm64.dmg` 会 404 |
 
 ---
 
@@ -34,8 +34,8 @@ https://github.com/GeminiLight/MindOS/releases/latest/download/MindOS-mac-arm64.
 - **URL 结构**：
 
 ```
-dl.mindos.ai/desktop/v0.1.0/MindOS-mac-arm64.dmg
-dl.mindos.ai/desktop/latest/MindOS-mac-arm64.dmg  (每次构建覆盖)
+dl.mindos.ai/desktop/v0.1.0/MindOS-arm64.dmg
+dl.mindos.ai/desktop/latest/MindOS-arm64.dmg  (每次构建覆盖)
 ```
 
 ### 方案 B：Cloudflare R2 + 阿里云 OSS 双源（国内最优）
@@ -76,16 +76,16 @@ dl.mindos.ai/desktop/latest/MindOS-mac-arm64.dmg  (每次构建覆盖)
 
 ### 2. Landing Page 链接更新
 
-- HTML `href` 保持 GitHub Releases 作为静态默认（无 JS 时可用）
-- JS 运行后根据地理位置动态替换为 R2 或 OSS 地址
-- 每个下载按钮通过 `data-dl-file` 属性标记文件名
+- HTML `href` 保持 GitHub Releases 页面作为静态默认（无 JS 时可用）
+- JS 运行后根据地理位置动态替换为 R2 或 OSS 地址；如果 CDN 不可用，fallback 到 `https://github.com/GeminiLight/MindOS/releases/latest/download/<data-dl-file>`
+- 每个下载按钮通过 `data-dl-file` 属性标记稳定文件名：`MindOS-arm64.dmg`、`MindOS.dmg`、`MindOS-Setup.exe`、`MindOS.AppImage`
 
 ### 3. 地理路由（landing/main.js）
 
 - 通过 `navigator.language` + `Intl.DateTimeFormat().timeZone` 判断中国用户
 - 国内用户 → 阿里云 OSS 原生域名（`BUCKET.oss-cn-xxx.aliyuncs.com`）
 - 国际用户 → Cloudflare R2 原生域名（`pub-xxx.r2.dev`）
-- HEAD 请求探测可达性，失败时 fallback 到 GitHub Releases
+- HEAD 请求探测可达性，失败时 fallback 到 GitHub Releases 的稳定别名资产
 - **部署时需要**：在 `main.js` 中替换 `DL_INTL` 和 `DL_CN` 两个 TODO 占位符
 
 ### 4. 基础设施配置（使用平台原生域名，无需自定义域名）
@@ -119,6 +119,7 @@ dl.mindos.ai/desktop/latest/MindOS-mac-arm64.dmg  (每次构建覆盖)
 - [ ] 阿里云 OSS bucket 确认 + 权限公共读
 - [ ] OSS Secrets 配置到 GitHub repo
 - [x] CI workflow 加双源上传 step（`build-desktop.yml` finalize job）
+- [x] GitHub Release 上传稳定别名资产（`MindOS-Setup.exe`、`MindOS-arm64.dmg` 等），支撑 `latest/download/<data-dl-file>`
 - [x] Landing page 下载按钮加 `data-dl-file` 属性
 - [x] Landing page geo-routing JS（`main.js`）
 - [ ] 替换 `main.js` 中 `DL_INTL` 和 `DL_CN` 的 TODO 占位符为实际域名

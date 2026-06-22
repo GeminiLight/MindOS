@@ -61,6 +61,8 @@ describe('cli-runtime lazy command loading', () => {
     expect(stdout).toContain('COMMANDS');
     expect(stdout).toContain('mcp');
     expect(stdout).toContain('agent');
+    expect(stdout).toContain('onboard');
+    expect(stdout).not.toMatch(/\n\s+init\s+/);
     expect(stdout).not.toMatch(/\n\s+ask\s+/);
     expect(stdout).toContain('mindos [task] [flags]');
     expect(stdout).toContain('mindos <command> [flags]');

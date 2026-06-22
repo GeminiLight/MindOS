@@ -111,6 +111,8 @@ describe('CLI smoke tests', () => {
     expect(help.exitCode).toBe(0);
     expect(help.stdout).toContain('MindOS CLI');
     expect(help.stdout).toContain('agent');
+    expect(help.stdout).toContain('onboard');
+    expect(help.stdout).not.toMatch(/\n\s+init\s+/);
     expect(help.stdout).not.toMatch(/\n\s+ask\s+/);
   });
 
@@ -118,6 +120,8 @@ describe('CLI smoke tests', () => {
     const { stdout, exitCode } = run(['--help']);
     expect(exitCode).toBe(0);
     expect(stdout).toContain('MindOS CLI');
+    expect(stdout).toContain('onboard');
+    expect(stdout).not.toMatch(/\n\s+init\s+/);
     expect(stdout).not.toMatch(/\n\s+ask\s+/);
   });
 

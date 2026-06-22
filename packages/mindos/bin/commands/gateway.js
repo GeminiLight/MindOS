@@ -1,5 +1,5 @@
 /**
- * mindos gateway — Manage MindOS as a background OS service
+ * mindos gateway — Manage MindOS as a background OS service on macOS/Linux
  */
 
 import { bold, dim, cyan } from '../lib/colors.js';
@@ -7,7 +7,7 @@ import { bold, dim, cyan } from '../lib/colors.js';
 export const meta = {
   name: 'gateway',
   group: 'Gateway',
-  summary: 'Manage background service (launchd/systemd)',
+  summary: 'Manage background service (macOS launchd / Linux systemd)',
   usage: 'mindos gateway <subcommand>',
   examples: [
     'mindos gateway install',
@@ -23,7 +23,7 @@ export const run = async (args) => {
   if (!sub) {
     const row = (c, d) => `  ${cyan(c.padEnd(32))}${dim(d)}`;
     console.log(`
-${bold('mindos gateway')} — manage MindOS as a background OS service
+${bold('mindos gateway')} — manage MindOS as a background OS service on macOS/Linux
 
 ${bold('Subcommands:')}
 ${row('mindos gateway install',   'Install and enable the service (systemd/launchd)')}

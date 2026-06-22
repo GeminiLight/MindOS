@@ -153,6 +153,8 @@ npm install -g @geminilight/mindos@latest
 git clone https://github.com/GeminiLight/MindOS
 cd MindOS
 pnpm install
+pnpm --filter @geminilight/mindos build
+cd packages/mindos
 pnpm link --global   # 将 mindos 命令注册为全局命令
 ```
 
@@ -167,7 +169,7 @@ mindos onboard
 配置向导会引导你完成知识库路径、模板、端口、认证、AI 服务商、启动模式等配置——所有选项都有合理默认值。配置自动保存到 `~/.mindos/config.json`。完整字段说明见 **[docs/zh/configuration.md](docs/zh/configuration.md)**。
 
 > [!TIP]
-> 选择"后台服务"模式可开机自启。随时运行 `mindos update` 升级到最新版本。
+> macOS/Linux 可在 onboard 中选择"后台服务"实现开机自启。Windows CLI 安装请使用前台模式；Windows 自启动由 Desktop 客户端处理。随时运行 `mindos update` 升级到最新版本。
 
 在浏览器中打开 Web UI：
 
@@ -325,7 +327,7 @@ MindOS/
 | **核心** | |
 | `mindos onboard` | 交互式初始化（生成配置、选择模板） |
 | `mindos start` | 前台启动 app + MCP 服务 |
-| `mindos start --daemon` | 以后台 OS 服务方式启动 |
+| `mindos start --daemon` | 以后台 OS 服务方式启动（仅 macOS/Linux） |
 | `mindos stop` / `restart` | 停止或重启服务 |
 | `mindos dev` | 开发模式启动 |
 | `mindos build` | 构建生产版本 |
@@ -345,7 +347,7 @@ MindOS/
 | `mindos token` | 查看认证令牌和 MCP 配置 |
 | `mindos config <sub>` | 查看/修改配置（show, set, validate） |
 | `mindos sync` | 同步状态（init, now, conflicts, on/off） |
-| `mindos gateway <sub>` | 管理后台服务（install, start, stop） |
+| `mindos gateway <sub>` | 管理 macOS/Linux 后台服务（install, start, stop） |
 | `mindos doctor` | 健康检查 |
 | `mindos update` | 更新到最新版本 |
 
