@@ -8,6 +8,7 @@ export const OBSIDIAN_PLUGIN_MANAGER_STATE_FILE = '.plugin-manager.json';
 export const OBSIDIAN_PLUGIN_LOCAL_STORAGE_FILE = '.local-storage.json';
 export const OBSIDIAN_PLUGIN_SECRET_STORAGE_FILE = '.secret-storage.json';
 export const OBSIDIAN_PLUGIN_SECRET_STORAGE_KEY_FILE = '.secret-storage.key';
+export const OBSIDIAN_PLUGIN_DESKTOP_SECRET_STORAGE_FILE = '.secret-storage.desktop-safe-storage.json';
 
 export interface ObsidianPluginRootLocation {
   rootDir: string;
@@ -133,6 +134,10 @@ export function resolveCanonicalPluginSecretStoragePath(mindRoot: string): strin
 
 export function resolveCanonicalPluginSecretStorageKeyPath(mindRoot: string): string {
   return path.join(resolveCanonicalObsidianPluginRoot(mindRoot).rootDir, OBSIDIAN_PLUGIN_SECRET_STORAGE_KEY_FILE);
+}
+
+export function resolveCanonicalPluginDesktopSecretStoragePath(mindRoot: string): string {
+  return path.join(resolveCanonicalObsidianPluginRoot(mindRoot).rootDir, OBSIDIAN_PLUGIN_DESKTOP_SECRET_STORAGE_FILE);
 }
 
 function pluginLocationFromRoot(mindRoot: string, root: ObsidianPluginRootLocation, pluginId: string): ObsidianPluginLocation {

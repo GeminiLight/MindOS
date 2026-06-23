@@ -47,6 +47,7 @@ import { CoreUpdater } from './core-updater';
 import { authenticateRemoteWebSession } from './remote-auth';
 import { getAppConfigStore } from './app-config-store';
 import { desktopTelemetry } from './telemetry';
+import { startObsidianSecretStorageBroker, type ObsidianSecretStorageBrokerHandle } from './obsidian-secret-storage-broker';
 import {
   CONFIG_DIR,
   DEFAULT_MCP_PORT,
@@ -106,6 +107,7 @@ const MAIN_PRELOAD = resolvePreferUnpacked('dist-electron', 'preload', 'index.js
 let splashWindow: BrowserWindow | null = null;
 let mainWindow: BrowserWindow | null = null;
 let processManager: ProcessManager | null = null;
+let obsidianSecretStorageBroker: ObsidianSecretStorageBrokerHandle | null = null;
 let connectionMonitor: ConnectionMonitor | null = null;
 let isQuitting = false;
 let isUpdating = false; // Set before quitAndInstall — skips cleanup so the installer can launch
@@ -119,6 +121,31 @@ let currentMcpPort: number | undefined;
 let currentRemoteAddress: string | undefined;
 const coreUpdater = new CoreUpdater();
 let currentCoreVersion: string | null = null;
+
+async function ensureObsidianSecretStorageBroker(): Promise<ObsidianSecretStorageBrokerHandle | null> {
+  if (obsidianSecretStorageBroker) return obsidianSecretStorageBroker;
+  try {
+    obsidianSecretStorageBroker = await startObsidianSecretStorageBroker();
+    if (obsidianSecretStorageBroker) {
+      console.info('[MindOS] Obsidian SecretStorage safeStorage broker started');
+    }
+  } catch (err) {
+    console.warn('[MindOS] Obsidian SecretStorage safeStorage broker unavailable:', err instanceof Error ? err.message : String(err));
+    obsidianSecretStorageBroker = null;
+  }
+  return obsidianSecretStorageBroker;
+}
+
+async function stopObsidianSecretStorageBroker(): Promise<void> {
+  const broker = obsidianSecretStorageBroker;
+  obsidianSecretStorageBroker = null;
+  if (!broker) return;
+  try {
+    await broker.close();
+  } catch (err) {
+    console.warn('[MindOS] Obsidian SecretStorage safeStorage broker cleanup failed:', err instanceof Error ? err.message : String(err));
+  }
+}
 
 // ── Single instance ──
 // A second instance would run healPreviousInstallation() and kill THIS
@@ -577,6 +604,8 @@ async function startLocalMode(): Promise<string | null> {
     }
   }
 
+  const secretStorageBroker = await ensureObsidianSecretStorageBroker();
+
   const createProcessManager = (wp: number, mp: number) => new ProcessManager({
     nodePath, npxPath, projectRoot, webPort: wp, mcpPort: mp,
     mindRoot:
@@ -585,6 +614,9 @@ async function startLocalMode(): Promise<string | null> {
     authToken: config.authToken,
     webPassword: typeof config.webPassword === 'string' ? config.webPassword : undefined,
     installDir: getDesktopInstallPath(),
+    obsidianSecretStorageBroker: secretStorageBroker
+      ? { url: secretStorageBroker.url, token: secretStorageBroker.token }
+      : undefined,
     verbose: false,
     env: getEnrichedEnv(nodePath),
   });
@@ -607,8 +639,14 @@ async function startLocalMode(): Promise<string | null> {
       try { await processManager.stop(); } catch { /* best-effort */ }
       ({ webPort, mcpPort } = await findLocalModePorts(webPort + 1, mcpPort + 1));
       processManager = createProcessManager(webPort, mcpPort);
-      await processManager.start(); // let this throw if it fails again
+      try {
+        await processManager.start();
+      } catch (retryErr) {
+        await stopObsidianSecretStorageBroker();
+        throw retryErr;
+      }
     } else {
+      await stopObsidianSecretStorageBroker();
       throw startErr;
     }
   }
@@ -1394,6 +1432,7 @@ async function switchToMode(targetMode: 'local' | 'remote'): Promise<void> {
   const oldWebPort = currentWebPort;
   const oldMcpPort = currentMcpPort;
   const oldRemoteAddress = currentRemoteAddress;
+  const shouldStopOldSecretStorageBroker = oldMode === 'local' && targetMode === 'remote';
   processManager = null;
   connectionMonitor = null;
   if (targetMode === 'local') { clearActiveTunnel(); currentRemoteAddress = undefined; }
@@ -1421,10 +1460,18 @@ async function switchToMode(targetMode: 'local' | 'remote'): Promise<void> {
     refreshTray('running');
     // Stop old processes with timeout to avoid hanging
     if (oldPM) {
-      Promise.race([
+      const stopOldProcesses = Promise.race([
         oldPM.stop(),
         new Promise<void>((_, reject) => setTimeout(() => reject(new Error('stop timeout')), 5000)),
-      ]).catch((err) => console.warn('[MindOS] Old process cleanup:', err instanceof Error ? err.message : err));
+      ]);
+      stopOldProcesses.catch((err) => console.warn('[MindOS] Old process cleanup:', err instanceof Error ? err.message : err));
+      if (shouldStopOldSecretStorageBroker) {
+        stopOldProcesses.finally(() => {
+          void stopObsidianSecretStorageBroker();
+        }).catch(() => {});
+      }
+    } else if (shouldStopOldSecretStorageBroker) {
+      void stopObsidianSecretStorageBroker();
     }
     if (oldCM) oldCM.stop();
   } else {
@@ -2160,6 +2207,7 @@ app.on('before-quit', (e) => {
           ]);
         }
       } catch { /* best-effort */ }
+      await stopObsidianSecretStorageBroker();
       if (connectionMonitor) connectionMonitor.stop();
       if (activeRecoveryPoll) { clearInterval(activeRecoveryPoll); activeRecoveryPoll = null; }
       if (cleanupUpdater) { cleanupUpdater(); cleanupUpdater = null; }

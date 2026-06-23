@@ -117,6 +117,48 @@ describe('ProcessManager hostname binding', () => {
     expect(options?.env?.HOSTNAME).not.toBe('my-machine.local');
   });
 
+  it('passes the Obsidian SecretStorage broker only to the web process', async () => {
+    const pm = new ProcessManager({
+      nodePath: '/usr/bin/node',
+      npxPath: '/usr/bin/npx',
+      projectRoot: '/fake',
+      webPort: testWebPort,
+      mcpPort: testMcpPort,
+      mindRoot: '/fake/mind',
+      obsidianSecretStorageBroker: {
+        url: 'http://127.0.0.1:34567',
+        token: 'broker-token',
+      },
+    });
+
+    (pm as any).waitForReady = vi.fn().mockResolvedValue(true);
+
+    try {
+      await pm.start();
+    } catch {
+      // ignore
+    }
+
+    const mcpCall = spawnMock.mock.calls.find((call) => {
+      const scriptPath = call[1]?.[0];
+      return typeof scriptPath === 'string' && scriptPath.includes('mcp');
+    });
+    const webCall = spawnMock.mock.calls.find((call) => {
+      const scriptPath = call[1]?.[0];
+      return typeof scriptPath === 'string' && (
+        scriptPath.includes('server.js') ||
+        scriptPath.includes('.bin/next')
+      );
+    });
+
+    expect(mcpCall).toBeDefined();
+    expect(webCall).toBeDefined();
+    expect(webCall?.[2]?.env?.MINDOS_OBSIDIAN_SECRET_BROKER_URL).toBe('http://127.0.0.1:34567');
+    expect(webCall?.[2]?.env?.MINDOS_OBSIDIAN_SECRET_BROKER_TOKEN).toBe('broker-token');
+    expect(mcpCall?.[2]?.env?.MINDOS_OBSIDIAN_SECRET_BROKER_URL).toBeUndefined();
+    expect(mcpCall?.[2]?.env?.MINDOS_OBSIDIAN_SECRET_BROKER_TOKEN).toBeUndefined();
+  });
+
   it('should ensure health check can reach 127.0.0.1 (same binding)', async () => {
     const pm = new ProcessManager({
       nodePath: '/usr/bin/node',

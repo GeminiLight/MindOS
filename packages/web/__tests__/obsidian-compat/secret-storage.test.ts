@@ -6,6 +6,9 @@ import { PluginLoader } from '@/lib/obsidian-compat/loader';
 import { PluginManager } from '@/lib/obsidian-compat/plugin-manager';
 import { ObsidianRuntimeHost } from '@/lib/obsidian-compat/runtime';
 import {
+  createDefaultObsidianSecretStorageBackend,
+  DesktopSafeStorageBrokerBackend,
+  getDesktopSecretStorageBrokerConfigFromEnv,
   ObsidianSecretStorage,
   normalizeSecretId,
   type ObsidianSecretStorageBackend,
@@ -65,6 +68,29 @@ class MemorySecretStorageBackend implements ObsidianSecretStorageBackend {
       secrets: this.entries.get(pluginId)?.size ?? 0,
     };
   }
+}
+
+function makeBrokerFetch(): ReturnType<typeof vi.fn> {
+  return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = input instanceof URL ? input.toString() : String(input);
+    const body = JSON.parse(String(init?.body ?? '{}')) as { plaintext?: string; data?: string };
+    if (init?.headers && JSON.stringify(init.headers).includes('bad-token')) {
+      return new Response(JSON.stringify({ ok: false, error: 'unauthorized' }), { status: 401 });
+    }
+    if (url.endsWith('/v1/obsidian-secret-storage/encrypt')) {
+      return Response.json({
+        ok: true,
+        data: Buffer.from(`safe-storage:${body.plaintext ?? ''}`, 'utf-8').toString('base64'),
+      });
+    }
+    if (url.endsWith('/v1/obsidian-secret-storage/decrypt')) {
+      return Response.json({
+        ok: true,
+        plaintext: Buffer.from(body.data ?? '', 'base64').toString('utf-8').replace(/^safe-storage:/, ''),
+      });
+    }
+    return new Response(JSON.stringify({ ok: false, error: 'not-found' }), { status: 404 });
+  });
 }
 
 describe('Obsidian SecretStorage shim', () => {
@@ -253,5 +279,85 @@ describe('Obsidian SecretStorage shim', () => {
       expect.objectContaining({ method: 'removePluginSecrets', pluginId: 'managed-secret-plugin' }),
     ]));
     expect(backend.getSummary('managed-secret-plugin').secrets).toBe(0);
+  });
+
+  it('uses the desktop safeStorage broker backend only for loopback broker env', () => {
+    const backend = createDefaultObsidianSecretStorageBackend(mindRoot, {
+      MINDOS_OBSIDIAN_SECRET_BROKER_URL: 'http://127.0.0.1:34567',
+      MINDOS_OBSIDIAN_SECRET_BROKER_TOKEN: 'secret-token',
+    });
+
+    expect(backend.backend).toBe('desktop-safe-storage-broker');
+    expect(getDesktopSecretStorageBrokerConfigFromEnv({
+      MINDOS_OBSIDIAN_SECRET_BROKER_URL: 'https://127.0.0.1:34567',
+      MINDOS_OBSIDIAN_SECRET_BROKER_TOKEN: 'secret-token',
+    })).toBeNull();
+    expect(createDefaultObsidianSecretStorageBackend(mindRoot, {
+      MINDOS_OBSIDIAN_SECRET_BROKER_URL: 'http://example.com:34567',
+      MINDOS_OBSIDIAN_SECRET_BROKER_TOKEN: 'secret-token',
+    }).backend).toBe('local-aes-256-gcm-file');
+  });
+
+  it('stores only safeStorage broker ciphertext while preserving plugin-scoped list/remove/summary behavior', async () => {
+    const host = new ObsidianRuntimeHost();
+    const fetchMock = makeBrokerFetch();
+    const backend = new DesktopSafeStorageBrokerBackend(mindRoot, {
+      url: 'http://127.0.0.1:34567',
+      token: 'secret-token',
+      fetch: fetchMock,
+    });
+    const storage = new ObsidianSecretStorage(mindRoot, () => host.getCurrentPluginId(), undefined, backend);
+
+    await host.runWithPluginContext('desktop-secret-plugin', async () => {
+      await storage.setSecret('api-key', 'desktop-secret-value');
+      await storage.setSecret('z-token', 'another-secret-value');
+    });
+
+    await expect(host.runWithPluginContext('desktop-secret-plugin', () => storage.getSecret('api-key'))).resolves.toBe('desktop-secret-value');
+    await expect(host.runWithPluginContext('desktop-secret-plugin', () => storage.listSecrets())).resolves.toEqual(['api-key', 'z-token']);
+    expect(storage.getSummary('desktop-secret-plugin')).toMatchObject({
+      backend: 'desktop-safe-storage-broker',
+      encrypted: true,
+      path: '.mindos/plugins/.secret-storage.desktop-safe-storage.json',
+      pluginId: 'desktop-secret-plugin',
+      secrets: 2,
+    });
+
+    const storePath = path.join(mindRoot, '.mindos', 'plugins', '.secret-storage.desktop-safe-storage.json');
+    const raw = fs.readFileSync(storePath, 'utf-8');
+    expect(raw).toContain('desktop-secret-plugin');
+    expect(raw).toContain('api-key');
+    expect(raw).not.toContain('desktop-secret-value');
+    expect(raw).not.toContain('another-secret-value');
+    expect(raw).not.toContain('.secret-storage.key');
+    expect(fs.existsSync(path.join(mindRoot, '.mindos', 'plugins', '.secret-storage.key'))).toBe(false);
+
+    await expect(storage.removePluginSecrets('desktop-secret-plugin')).resolves.toBe(2);
+    expect(storage.getSummary('desktop-secret-plugin').secrets).toBe(0);
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/v1/obsidian-secret-storage/encrypt'), expect.objectContaining({
+      headers: expect.objectContaining({ authorization: 'Bearer secret-token' }),
+    }));
+  });
+
+  it('sanitizes desktop broker failures before routing warnings to the host', async () => {
+    const host = new ObsidianRuntimeHost();
+    const warn = vi.fn((warning) => host.warn(warning));
+    const backend = new DesktopSafeStorageBrokerBackend(mindRoot, {
+      url: 'http://127.0.0.1:34567',
+      token: 'secret-token',
+      fetch: vi.fn(async () => new Response(
+        JSON.stringify({ ok: false, error: 'backend leaked desktop-secret-value' }),
+        { status: 500 },
+      )),
+    });
+    const storage = new ObsidianSecretStorage(mindRoot, () => host.getCurrentPluginId(), warn, backend);
+
+    await expect(host.runWithPluginContext('desktop-broken-plugin', () => storage.setSecret('api-key', 'desktop-secret-value'))).rejects.toThrow(/SecretStorage backend/);
+    expect(warn).toHaveBeenCalledWith(expect.objectContaining({
+      pluginId: 'desktop-broken-plugin',
+      code: 'secret-storage-set-failed',
+    }));
+    expect(JSON.stringify(warn.mock.calls)).not.toContain('desktop-secret-value');
+    expect(JSON.stringify(warn.mock.calls)).not.toContain('backend leaked');
   });
 });
