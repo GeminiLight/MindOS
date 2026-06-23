@@ -396,6 +396,7 @@ const DirectoryNode = memo(function DirectoryNode({ node, depth, onNavigate, max
             e.dataTransfer.setData('text/mindos-type', 'directory');
             e.dataTransfer.effectAllowed = 'copy';
           }}
+          data-filepath={node.path}
           data-hit-active={isActive ? 'true' : undefined}
           className={`
             hit-target-box flex-1 flex min-h-7 items-center gap-1.5 px-1 text-left min-w-0

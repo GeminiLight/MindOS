@@ -132,8 +132,18 @@ function getControlledTree(host: HTMLElement): HTMLElement | null {
 }
 
 function getDaoTreeButton(host: HTMLElement): HTMLButtonElement | null {
-  return Array.from(host.querySelectorAll<HTMLButtonElement>('button'))
-    .find(button => button.textContent?.trim() === '道') ?? null;
+  return getControlledTree(host)?.querySelector<HTMLButtonElement>('button[data-filepath="MIND_DAO"]') ?? null;
+}
+
+async function waitForRouterPush(path: string) {
+  const deadline = Date.now() + 1500;
+  while (Date.now() < deadline) {
+    if (mockPush.mock.calls.some(([href]) => href === path)) return;
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 25));
+    });
+  }
+  expect(mockPush).toHaveBeenCalledWith(path);
 }
 
 describe('Panel Mind System collapse', () => {
@@ -264,10 +274,9 @@ describe('Panel Mind System collapse', () => {
 
     await act(async () => {
       openButton?.click();
-      await new Promise(resolve => setTimeout(resolve, 220));
     });
 
-    expect(mockPush).toHaveBeenCalledWith('/view/MIND_DAO');
+    await waitForRouterPush('/view/MIND_DAO');
   });
 
   it('opens the top New menu toward the panel content and puts Import first', async () => {

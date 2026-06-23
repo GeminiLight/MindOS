@@ -25,12 +25,15 @@ export function SyncTab({ t, visible }: SyncTabProps) {
   const [confirmingReset, setConfirmingReset] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const resetConfirmTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const successMessageTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const { syncing, syncResult, syncError, syncNow } = useSyncAction(fetchStatus, syncT);
 
   const showSuccess = useCallback((text: string) => {
+    if (successMessageTimerRef.current) clearTimeout(successMessageTimerRef.current);
     setMessage({ type: 'success', text });
-    setTimeout(() => {
+    successMessageTimerRef.current = setTimeout(() => {
       setMessage(current => (current?.type === 'success' && current.text === text ? null : current));
+      successMessageTimerRef.current = undefined;
     }, 3000);
   }, []);
 
@@ -77,6 +80,7 @@ export function SyncTab({ t, visible }: SyncTabProps) {
 
   useEffect(() => () => {
     if (resetConfirmTimerRef.current) clearTimeout(resetConfirmTimerRef.current);
+    if (successMessageTimerRef.current) clearTimeout(successMessageTimerRef.current);
   }, []);
 
   const blockUnsafeMutation = useCallback(() => {
