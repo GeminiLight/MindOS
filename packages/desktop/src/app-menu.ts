@@ -8,6 +8,7 @@
  * Chinese translations when the system locale is zh-*.
  */
 import { Menu, app, shell, BrowserWindow } from 'electron';
+import { MINDOS_DOCUMENTATION_URL, MINDOS_SITE_URL } from './public-urls';
 
 function isZh(): boolean {
   return app.getLocale()?.startsWith('zh') ?? false;
@@ -123,7 +124,7 @@ export function setupAppMenu(callbacks: AppMenuCallbacks): void {
     submenu: [
       {
         label: zh ? 'MindOS 文档' : 'MindOS Documentation',
-        click: () => { shell.openExternal('https://mindos.app/docs'); },
+        click: () => { shell.openExternal(MINDOS_DOCUMENTATION_URL); },
       },
       {
         label: zh ? '报告问题' : 'Report Issue',
@@ -141,8 +142,8 @@ export function setupAppMenu(callbacks: AppMenuCallbacks): void {
               title: 'MindOS',
               message: `MindOS Desktop v${app.getVersion()}`,
               detail: zh
-                ? '本地优先的 AI 知识管理工具\nhttps://mindos.app'
-                : 'Local-first AI knowledge management\nhttps://mindos.app',
+                ? `本地优先的 AI 知识管理工具\n${MINDOS_SITE_URL}`
+                : `Local-first AI knowledge management\n${MINDOS_SITE_URL}`,
             });
           }
         },

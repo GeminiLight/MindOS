@@ -18,6 +18,7 @@ import {
 import { getDefaultBundledMindOsDirectory } from './mindos-runtime-path';
 import { resolveCliPath } from './mindos-runtime-layout';
 import { getDesktopConfigDir, getDesktopHome } from './desktop-home';
+import { MINDOS_DOWNLOAD_URL } from './public-urls';
 import semver from 'semver';
 
 const SHELL_MARKER = '# MindOS Desktop — CLI (mindos)';
@@ -110,7 +111,7 @@ if [ ! -f "$CLI" ]; then
     echo "" >&2
     echo "  To reinstall CLI:      npm install -g @geminilight/mindos" >&2
     echo "  To clean up residuals:  bash ~/.mindos/uninstall.sh" >&2
-    echo "  To reinstall Desktop:   https://mindos.app/download" >&2
+    echo "  To reinstall Desktop:   ${MINDOS_DOWNLOAD_URL}" >&2
     exit 127
   fi
 fi

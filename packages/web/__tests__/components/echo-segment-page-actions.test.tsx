@@ -170,7 +170,7 @@ describe('Echo segment page actions', () => {
     });
 
     expect(fetchMock).toHaveBeenCalledWith('/api/echo?segment=growth&path=Echo%2FInsights%2F%E6%B4%9E%E5%AF%9F.md', expect.any(Object));
-    expect(host.textContent).toContain(messages.zh.echoPages.echoSavedDetailTitle);
+    expect(host.querySelector('#echo-memory-reader-title')?.textContent).toBe(messages.zh.panels.echo.growthTitle);
     expect(host.textContent).toContain('Generated insight.');
     expect(host.textContent).toContain('Echo/Insights/洞察.md');
     expect(host.querySelector('a[href="/view/Echo/Insights/%E6%B4%9E%E5%AF%9F.md"]')).not.toBeNull();
