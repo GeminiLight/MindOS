@@ -21,6 +21,8 @@ const VISUAL_KEYS = [
   'echoSavedListTitle',
   'echoSavedLoadingLabel',
   'echoSavedOpenLabel',
+  'echoReaderEmptyLabel',
+  'echoReaderDetailEmptyLabel',
   'overviewChatLabel',
   'imprintChatLabel',
   'threadsChatLabel',

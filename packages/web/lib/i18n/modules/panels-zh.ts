@@ -409,6 +409,8 @@ export const panelsZh = {
     echoSavedLoadingLabel: '加载中…',
     echoSavedOpenLabel: '打开',
     echoSavedEmptyLabel: '还没有保存的回响。生成后点击“保存到回响”，这里会沉淀成可回看的条目。',
+    echoReaderEmptyLabel: '还没有条目。生成后保存到回响，会出现在这里。',
+    echoReaderDetailEmptyLabel: '选择左侧条目查看内容。',
     echoSavedDetailTitle: '详情',
     echoSavedDetailLoadingLabel: '正在加载详情…',
     echoSavedDetailErrorPrefix: '详情加载失败：',

@@ -409,6 +409,8 @@ export const panelsEn = {
     echoSavedLoadingLabel: 'Loading…',
     echoSavedOpenLabel: 'Open',
     echoSavedEmptyLabel: 'No Echo items saved yet. Generate a draft and save it to Echo to keep it here.',
+    echoReaderEmptyLabel: 'No items yet. Generate a draft and save it to Echo to keep it here.',
+    echoReaderDetailEmptyLabel: 'Select an item on the left to read it here.',
     echoSavedDetailTitle: 'Details',
     echoSavedDetailLoadingLabel: 'Loading details…',
     echoSavedDetailErrorPrefix: 'Failed to load details:',

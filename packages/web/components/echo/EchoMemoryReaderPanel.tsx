@@ -68,6 +68,20 @@ function segmentIcon(segment: EchoStoredSegment, index: number) {
   return icons[Math.max(0, index) % icons.length];
 }
 
+function stripDuplicateTitleHeading(markdown: string, title: string): string {
+  const lines = markdown.split(/\r?\n/);
+  const firstContentIndex = lines.findIndex((line) => line.trim().length > 0);
+  if (firstContentIndex < 0) return markdown;
+
+  const firstLine = lines[firstContentIndex]?.trim() ?? '';
+  const headingTitle = firstLine.match(/^#\s+(.+)$/)?.[1]?.trim();
+  if (!headingTitle || headingTitle !== title.trim()) return markdown;
+
+  const nextLines = lines.slice(firstContentIndex + 1);
+  while (nextLines[0]?.trim() === '') nextLines.shift();
+  return nextLines.join('\n').trim();
+}
+
 export default function EchoMemoryReaderPanel({
   segment,
   listTitle,
@@ -95,6 +109,9 @@ export default function EchoMemoryReaderPanel({
 }) {
   const [EchoMarkdown, setEchoMarkdown] = useState<EchoMarkdownComponent | null>(null);
   const selectedItem = detail ?? items.find((item) => item.path === selectedPath) ?? null;
+  const readableMarkdown = detail?.markdown && selectedItem
+    ? stripDuplicateTitleHeading(detail.markdown, selectedItem.title)
+    : detail?.markdown ?? '';
 
   useEffect(() => {
     if (!detail?.markdown || EchoMarkdown) return;
@@ -160,7 +177,7 @@ export default function EchoMemoryReaderPanel({
             </div>
           ) : (
             <div className="flex h-full min-h-56 items-center justify-center px-6 py-10 text-center">
-              <p className="max-w-xs font-sans text-sm leading-6 text-muted-foreground">{p.echoSavedEmptyLabel}</p>
+              <p className="max-w-xs font-sans text-sm leading-6 text-muted-foreground">{p.echoReaderEmptyLabel}</p>
             </div>
           )}
         </div>
@@ -202,12 +219,12 @@ export default function EchoMemoryReaderPanel({
             </header>
 
             <div className="min-h-0 flex-1 overflow-y-auto px-8 py-7 md:px-10 md:py-8">
-              {detail?.markdown ? (
+              {readableMarkdown ? (
                 <div className={echoDetailProseClass}>
                   {EchoMarkdown ? (
-                    <EchoMarkdown markdown={detail.markdown} />
+                    <EchoMarkdown markdown={readableMarkdown} />
                   ) : (
-                    <p className="whitespace-pre-wrap font-sans text-base leading-8 text-muted-foreground">{detail.markdown}</p>
+                    <p className="whitespace-pre-wrap font-sans text-base leading-8 text-muted-foreground">{readableMarkdown}</p>
                   )}
                 </div>
               ) : (
@@ -217,7 +234,7 @@ export default function EchoMemoryReaderPanel({
           </article>
         ) : (
           <div className="flex min-h-[30rem] flex-1 items-center justify-center px-8 py-10 text-center">
-            <p className="max-w-sm font-sans text-sm leading-6 text-muted-foreground">{p.echoSavedEmptyLabel}</p>
+            <p className="max-w-sm font-sans text-sm leading-6 text-muted-foreground">{p.echoReaderDetailEmptyLabel}</p>
           </div>
         )}
       </section>
