@@ -132,4 +132,13 @@ describe('titlebar geometry contract (no content may slide under the fixed row)'
       }
     }
   });
+
+  it('floating changes banner clears and layers above the fixed titlebar row', () => {
+    const src = readFileSync(path.join(webRoot, 'components/changes/ChangesBanner.tsx'), 'utf-8');
+
+    expect(src).toContain('top-[calc(var(--app-titlebar-h)+60px)]');
+    expect(src).toContain('md:top-[calc(var(--app-titlebar-h)+12px)]');
+    expect(src).toContain('z-app-popover');
+    expect(src).not.toContain('md:top-4 z-30');
+  });
 });

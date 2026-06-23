@@ -79,7 +79,7 @@ export default function ChangesBanner() {
 
   return (
     <div
-      className={`fixed right-3 top-[60px] md:right-6 md:top-4 z-30 transition-all duration-150 ease-out ${
+      className={`fixed right-3 top-[calc(var(--app-titlebar-h)+60px)] md:right-6 md:top-[calc(var(--app-titlebar-h)+12px)] z-app-popover transition-all duration-150 ease-out ${
         isVisible ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 -translate-y-2 scale-[0.98] pointer-events-none'
       }`}
     >
