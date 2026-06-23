@@ -121,6 +121,48 @@ describe('consumeUIMessageStream (core)', () => {
     });
   });
 
+  it('surfaces source-tracked context usage through the option callback', async () => {
+    const onContextUsage = vi.fn();
+
+    await consumeUIMessageStream(makeStream(
+      {
+        type: 'context_usage',
+        runtime: 'mindos',
+        phase: 'preflight',
+        action: 'prompt_compacted',
+        modelName: 'step-3.7-flash',
+        percent: 42,
+        usedTokens: 42_000,
+        contextWindow: 100_000,
+        nativeContextWindow: 256_000,
+        contextTokens: 100_000,
+        contextWindowSource: 'catalog',
+        contextWindowIsFallback: false,
+        budgetTokens: 84_000,
+        reserveTokens: 16_000,
+        keepRecentTokens: 20_000,
+        systemPromptTokens: 10_000,
+        turnPromptTokens: 12_000,
+        historyTokens: 20_000,
+        originalUsedTokens: 120_000,
+      },
+      { type: 'done' },
+    ), () => {}, undefined, { emitCoalesceMs: 0, onContextUsage });
+
+    expect(onContextUsage).toHaveBeenCalledWith(expect.objectContaining({
+      runtime: 'mindos',
+      phase: 'preflight',
+      action: 'prompt_compacted',
+      modelName: 'step-3.7-flash',
+      contextWindow: 100_000,
+      nativeContextWindow: 256_000,
+      contextTokens: 100_000,
+      contextWindowSource: 'catalog',
+      contextWindowIsFallback: false,
+      originalUsedTokens: 120_000,
+    }));
+  });
+
   it('captures AskUserQuestion lifecycles raised via dedicated events', async () => {
     const result = await consumeUIMessageStream(makeStream(
       {

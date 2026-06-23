@@ -21,6 +21,22 @@ export type MindosPiContextBudgetAction =
 
 export type MindosPiContextUsageEvent = Extract<MindOSSSEvent, { type: 'context_usage' }>;
 
+export type MindosPiContextWindowSource =
+  | 'user'
+  | 'catalog'
+  | 'discovered'
+  | 'pi-ai'
+  | 'fallback'
+  | 'model';
+
+export type MindosPiContextWindowInfo = {
+  contextWindow: number;
+  nativeContextWindow?: number;
+  contextTokens?: number;
+  source: MindosPiContextWindowSource;
+  isFallback: boolean;
+};
+
 export type PrepareMindosPiContextBudgetOptions = {
   systemPrompt: string;
   turnPrompt: string;
@@ -47,14 +63,42 @@ export type PreparedMindosPiContextBudget = {
   usage: MindosPiContextUsageEvent;
 };
 
-export function resolveMindosPiContextWindow(model: unknown): number {
+export function resolveMindosPiContextWindowInfo(model: unknown): MindosPiContextWindowInfo {
   if (isRecord(model)) {
+    const caps = isRecord(model.mindosCaps) ? model.mindosCaps : undefined;
+    const effectiveContextWindow = positiveInteger(caps?.effectiveContextWindow);
+    if (effectiveContextWindow !== undefined) {
+      const nativeContextWindow = positiveInteger(caps?.contextWindow);
+      const contextTokens = positiveInteger(caps?.contextTokens);
+      const source = normalizeContextWindowSource(caps?.source);
+      return {
+        contextWindow: effectiveContextWindow,
+        ...(nativeContextWindow !== undefined ? { nativeContextWindow } : {}),
+        ...(contextTokens !== undefined ? { contextTokens } : {}),
+        source,
+        isFallback: caps?.isFallback === true || source === 'fallback',
+      };
+    }
+
     const value = model.contextWindow;
     if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
-      return Math.floor(value);
+      return {
+        contextWindow: Math.floor(value),
+        nativeContextWindow: Math.floor(value),
+        source: 'model',
+        isFallback: false,
+      };
     }
   }
-  return MINDOS_PI_DEFAULT_CONTEXT_WINDOW;
+  return {
+    contextWindow: MINDOS_PI_DEFAULT_CONTEXT_WINDOW,
+    source: 'fallback',
+    isFallback: true,
+  };
+}
+
+export function resolveMindosPiContextWindow(model: unknown): number {
+  return resolveMindosPiContextWindowInfo(model).contextWindow;
 }
 
 export function resolveMindosPiReserveTokens(contextWindow: number, reserveTokens?: number): number {
@@ -70,7 +114,8 @@ export function resolveMindosPiReserveTokens(contextWindow: number, reserveToken
 export function prepareMindosPiContextBudget(
   options: PrepareMindosPiContextBudgetOptions,
 ): PreparedMindosPiContextBudget {
-  const contextWindow = resolveMindosPiContextWindow(options.model);
+  const contextWindowInfo = resolveMindosPiContextWindowInfo(options.model);
+  const contextWindow = contextWindowInfo.contextWindow;
   const reserveTokens = resolveMindosPiReserveTokens(contextWindow, options.reserveTokens);
   const keepRecentTokens = positiveInteger(options.keepRecentTokens) ?? MINDOS_PI_DEFAULT_KEEP_RECENT_TOKENS;
   const budgetTokens = Math.max(0, contextWindow - reserveTokens);
@@ -136,6 +181,10 @@ export function prepareMindosPiContextBudget(
       percent: percentage(usedTokens, contextWindow),
       usedTokens,
       contextWindow,
+      ...(contextWindowInfo.nativeContextWindow !== undefined ? { nativeContextWindow: contextWindowInfo.nativeContextWindow } : {}),
+      ...(contextWindowInfo.contextTokens !== undefined ? { contextTokens: contextWindowInfo.contextTokens } : {}),
+      contextWindowSource: contextWindowInfo.source,
+      contextWindowIsFallback: contextWindowInfo.isFallback,
       budgetTokens,
       reserveTokens,
       keepRecentTokens,
@@ -148,6 +197,19 @@ export function prepareMindosPiContextBudget(
       message: contextUsageMessage(action, usedTokens, contextWindow, pruned.prunedMessages),
     },
   };
+}
+
+function normalizeContextWindowSource(value: unknown): MindosPiContextWindowSource {
+  if (
+    value === 'user'
+    || value === 'catalog'
+    || value === 'discovered'
+    || value === 'pi-ai'
+    || value === 'model'
+  ) {
+    return value;
+  }
+  return 'fallback';
 }
 
 export function estimateHistoryTokens(
@@ -357,7 +419,7 @@ function percentage(usedTokens: number, contextWindow: number): number {
   return Math.max(0, Math.ceil((usedTokens / contextWindow) * 100));
 }
 
-function positiveInteger(value: number | undefined): number | undefined {
+function positiveInteger(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.floor(value) : undefined;
 }
 

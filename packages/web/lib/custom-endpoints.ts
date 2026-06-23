@@ -14,6 +14,28 @@ export interface Provider {
   apiKey: string;
   model: string;
   baseUrl: string;
+  contextWindow?: number;
+  contextTokens?: number;
+  maxTokens?: number;
+  models?: ProviderModelCapability[];
+}
+
+export type ProviderModelCapabilitySource =
+  | 'user'
+  | 'catalog'
+  | 'discovered'
+  | 'pi-ai'
+  | 'fallback';
+
+export interface ProviderModelCapability {
+  id: string;
+  contextWindow?: number;
+  contextTokens?: number;
+  maxTokens?: number;
+  input?: Array<'text' | 'image' | 'audio' | 'video'>;
+  reasoning?: boolean;
+  source?: ProviderModelCapabilitySource;
+  updatedAt?: string;
 }
 
 const P_PREFIX = 'p_';
@@ -45,6 +67,8 @@ function normalizeProvider(e: unknown): Provider | null {
     ? obj.name
     : PROVIDER_PRESETS[protocol].name;
 
+  const caps = normalizeProviderCapabilityFields(obj);
+
   return {
     id: obj.id as string,
     name,
@@ -52,7 +76,95 @@ function normalizeProvider(e: unknown): Provider | null {
     apiKey: obj.apiKey as string,
     model: obj.model as string,
     baseUrl: obj.baseUrl as string,
+    ...caps,
   };
+}
+
+const CAPABILITY_SOURCES = new Set<ProviderModelCapabilitySource>([
+  'user',
+  'catalog',
+  'discovered',
+  'pi-ai',
+  'fallback',
+]);
+
+const INPUT_MODALITIES = new Set(['text', 'image', 'audio', 'video']);
+
+function positiveInteger(value: unknown): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return undefined;
+  const normalized = Math.floor(value);
+  return normalized > 0 ? normalized : undefined;
+}
+
+function normalizeInputModalities(raw: unknown): ProviderModelCapability['input'] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const result: NonNullable<ProviderModelCapability['input']> = [];
+  const seen = new Set<string>();
+  for (const item of raw) {
+    if (typeof item !== 'string' || !INPUT_MODALITIES.has(item) || seen.has(item)) continue;
+    seen.add(item);
+    result.push(item as NonNullable<ProviderModelCapability['input']>[number]);
+  }
+  return result.length > 0 ? result : undefined;
+}
+
+function normalizeCapabilitySource(raw: unknown): ProviderModelCapabilitySource | undefined {
+  return typeof raw === 'string' && CAPABILITY_SOURCES.has(raw as ProviderModelCapabilitySource)
+    ? raw as ProviderModelCapabilitySource
+    : undefined;
+}
+
+function normalizeProviderModelCapability(raw: unknown): ProviderModelCapability | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const source = raw as Record<string, unknown>;
+  const id = typeof source.id === 'string' ? source.id.trim() : '';
+  if (!id) return null;
+
+  const capability: ProviderModelCapability = { id };
+  const contextWindow = positiveInteger(source.contextWindow);
+  const contextTokens = positiveInteger(source.contextTokens);
+  const maxTokens = positiveInteger(source.maxTokens);
+  const input = normalizeInputModalities(source.input);
+  const capabilitySource = normalizeCapabilitySource(source.source);
+
+  if (contextWindow !== undefined) capability.contextWindow = contextWindow;
+  if (contextTokens !== undefined) capability.contextTokens = contextTokens;
+  if (maxTokens !== undefined) capability.maxTokens = maxTokens;
+  if (input) capability.input = input;
+  if (typeof source.reasoning === 'boolean') capability.reasoning = source.reasoning;
+  if (capabilitySource) capability.source = capabilitySource;
+  if (typeof source.updatedAt === 'string' && source.updatedAt.trim()) {
+    capability.updatedAt = source.updatedAt.trim();
+  }
+
+  return hasMeaningfulModelCapability(capability) ? capability : null;
+}
+
+function hasMeaningfulModelCapability(capability: ProviderModelCapability): boolean {
+  return capability.contextWindow !== undefined
+    || capability.contextTokens !== undefined
+    || capability.maxTokens !== undefined
+    || (capability.input !== undefined && capability.input.length > 0)
+    || typeof capability.reasoning === 'boolean';
+}
+
+function normalizeProviderCapabilityFields(source: Record<string, unknown>): Pick<Provider, 'contextWindow' | 'contextTokens' | 'maxTokens' | 'models'> {
+  const result: Pick<Provider, 'contextWindow' | 'contextTokens' | 'maxTokens' | 'models'> = {};
+  const contextWindow = positiveInteger(source.contextWindow);
+  const contextTokens = positiveInteger(source.contextTokens);
+  const maxTokens = positiveInteger(source.maxTokens);
+  const models = Array.isArray(source.models)
+    ? source.models
+      .map(normalizeProviderModelCapability)
+      .filter((model): model is ProviderModelCapability => model !== null)
+    : [];
+
+  if (contextWindow !== undefined) result.contextWindow = contextWindow;
+  if (contextTokens !== undefined) result.contextTokens = contextTokens;
+  if (maxTokens !== undefined) result.maxTokens = maxTokens;
+  if (models.length > 0) result.models = models;
+
+  return result;
 }
 
 /** Parse an array of providers from unknown config data, filtering invalid entries */

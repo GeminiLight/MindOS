@@ -1,4 +1,6 @@
 import { effectiveAiConfig } from '@/lib/settings';
+import type { Provider } from '@/lib/custom-endpoints';
+import { resolveModelCapabilities, type ResolvedModelCapabilities } from './model-capabilities';
 import { type ProviderId, getPreset, toPiProvider, getDefaultApi, getDefaultBaseUrl } from './providers';
 
 type Model<T = unknown> = {
@@ -13,6 +15,7 @@ type Model<T = unknown> = {
   contextWindow: number;
   maxTokens: number;
   compat?: Record<string, unknown>;
+  mindosCaps?: ResolvedModelCapabilities;
 } & T & Record<string, unknown>;
 
 type PiAiRuntime = {
@@ -57,6 +60,7 @@ export interface ModelConfigOverrides {
   model?: string;
   baseUrl?: string;
   hasImages?: boolean;
+  providerEntry?: Provider;
 }
 
 /**
@@ -71,9 +75,15 @@ export function getModelConfig(options?: ModelConfigOverrides): {
   apiKey: string;
   provider: ProviderId;
   baseUrl: string;
+  resolvedCaps: ResolvedModelCapabilities;
 } {
   const saved = effectiveAiConfig(options?.provider);
   const provider = options?.provider ?? saved.provider;
+  const hasExplicitConnectionOverride = options?.apiKey !== undefined
+    || options?.model !== undefined
+    || options?.baseUrl !== undefined;
+  const providerEntry = options?.providerEntry
+    ?? (hasExplicitConnectionOverride ? undefined : saved.providerEntry);
 
   const cfg = {
     provider,
@@ -84,33 +94,43 @@ export function getModelConfig(options?: ModelConfigOverrides): {
 
   const modelName = cfg.model;
   const normalizedBaseUrl = normalizeBaseUrl(cfg.baseUrl);
-  let model = resolveModel(cfg.provider, modelName, normalizedBaseUrl);
+  const resolved = resolveModel(cfg.provider, modelName, normalizedBaseUrl);
+  const resolvedCaps = resolveModelCapabilities({
+    providerEntry,
+    protocol: cfg.provider,
+    baseUrl: normalizedBaseUrl,
+    modelId: modelName,
+    registryModel: resolved.registryModel,
+  });
+  let model = {
+    ...resolved.model,
+    contextWindow: resolvedCaps.effectiveContextWindow,
+    maxTokens: resolvedCaps.maxTokens ?? resolved.model.maxTokens,
+    mindosCaps: resolvedCaps,
+  };
 
   if (options?.hasImages) {
     model = ensureVisionCapable(model);
   }
 
-  return { model, modelName, apiKey: cfg.apiKey, provider: cfg.provider, baseUrl: normalizedBaseUrl };
+  return { model, modelName, apiKey: cfg.apiKey, provider: cfg.provider, baseUrl: normalizedBaseUrl, resolvedCaps };
 }
 
 /**
  * Try pi-ai registry first, then fall back to a manually constructed Model.
  * Applies baseUrl overrides and compat flags for custom endpoints.
  */
-function resolveModel(providerId: ProviderId, modelName: string, baseUrl: string): Model<any> {
+function resolveModel(providerId: ProviderId, modelName: string, baseUrl: string): { model: Model<any>; registryModel?: Model<any> } {
   const piProvider = toPiProvider(providerId);
   const preset = getPreset(providerId);
   let model: Model<any>;
-
-  // Normalize user-provided baseUrl before use
-  const normalizedBaseUrl = normalizeBaseUrl(baseUrl);
-  const hasCustomBase = !!normalizedBaseUrl;
 
   // 1. Try pi-ai registry lookup
   try {
     const resolved = loadPiAiRuntime()?.getModel?.(piProvider, modelName);
     if (!resolved) throw new Error('Model not in registry');
     model = resolved;
+    return { model: applyEndpointOverrides(model, providerId, baseUrl), registryModel: resolved };
   } catch {
     // 2. Fallback: construct minimal Model using pi-ai derived defaults
     model = {
@@ -126,6 +146,14 @@ function resolveModel(providerId: ProviderId, modelName: string, baseUrl: string
       maxTokens: 16_384,
     };
   }
+
+  return { model: applyEndpointOverrides(model, providerId, baseUrl) };
+}
+
+function applyEndpointOverrides(model: Model<any>, providerId: ProviderId, baseUrl: string): Model<any> {
+  const preset = getPreset(providerId);
+  const normalizedBaseUrl = normalizeBaseUrl(baseUrl);
+  const hasCustomBase = !!normalizedBaseUrl;
 
   // 2.5. Apply preset fixedBaseUrl when registry lookup succeeded but needs endpoint override
   // (zai-cn: domestic endpoint, deepseek: fixed baseUrl, ollama: localhost)

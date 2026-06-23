@@ -74,6 +74,10 @@ export interface ContextUsageMetadata {
   percent: number;
   usedTokens: number;
   contextWindow: number;
+  nativeContextWindow?: number;
+  contextTokens?: number;
+  contextWindowSource?: 'user' | 'catalog' | 'discovered' | 'pi-ai' | 'fallback' | 'model';
+  contextWindowIsFallback?: boolean;
   budgetTokens: number;
   reserveTokens: number;
   keepRecentTokens?: number;
@@ -204,6 +208,20 @@ function normalizeContextUsageAction(value: unknown): ContextUsageMetadata['acti
   return 'none';
 }
 
+function normalizeContextWindowSource(value: unknown): ContextUsageMetadata['contextWindowSource'] {
+  if (
+    value === 'user'
+    || value === 'catalog'
+    || value === 'discovered'
+    || value === 'pi-ai'
+    || value === 'fallback'
+    || value === 'model'
+  ) {
+    return value;
+  }
+  return undefined;
+}
+
 function normalizeContextUsage(eventRecord: Record<string, unknown>): ContextUsageMetadata | null {
   const percent = finiteNumber(eventRecord.percent);
   const usedTokens = finiteNumber(eventRecord.usedTokens);
@@ -213,6 +231,13 @@ function normalizeContextUsage(eventRecord: Record<string, unknown>): ContextUsa
   const systemPromptTokens = finiteNumber(eventRecord.systemPromptTokens);
   const turnPromptTokens = finiteNumber(eventRecord.turnPromptTokens);
   const historyTokens = finiteNumber(eventRecord.historyTokens);
+  const nativeContextWindow = finiteNumber(eventRecord.nativeContextWindow);
+  const contextTokens = finiteNumber(eventRecord.contextTokens);
+  const contextWindowSource = normalizeContextWindowSource(eventRecord.contextWindowSource);
+  const keepRecentTokens = finiteNumber(eventRecord.keepRecentTokens);
+  const originalUsedTokens = finiteNumber(eventRecord.originalUsedTokens);
+  const originalHistoryTokens = finiteNumber(eventRecord.originalHistoryTokens);
+  const prunedMessages = finiteNumber(eventRecord.prunedMessages);
   if (
     percent === undefined
     || usedTokens === undefined
@@ -233,15 +258,19 @@ function normalizeContextUsage(eventRecord: Record<string, unknown>): ContextUsa
     percent,
     usedTokens,
     contextWindow,
+    ...(nativeContextWindow !== undefined ? { nativeContextWindow } : {}),
+    ...(contextTokens !== undefined ? { contextTokens } : {}),
+    ...(contextWindowSource ? { contextWindowSource } : {}),
+    ...(typeof eventRecord.contextWindowIsFallback === 'boolean' ? { contextWindowIsFallback: eventRecord.contextWindowIsFallback } : {}),
     budgetTokens,
     reserveTokens,
-    ...(finiteNumber(eventRecord.keepRecentTokens) !== undefined ? { keepRecentTokens: finiteNumber(eventRecord.keepRecentTokens) } : {}),
+    ...(keepRecentTokens !== undefined ? { keepRecentTokens } : {}),
     systemPromptTokens,
     turnPromptTokens,
     historyTokens,
-    ...(finiteNumber(eventRecord.originalUsedTokens) !== undefined ? { originalUsedTokens: finiteNumber(eventRecord.originalUsedTokens) } : {}),
-    ...(finiteNumber(eventRecord.originalHistoryTokens) !== undefined ? { originalHistoryTokens: finiteNumber(eventRecord.originalHistoryTokens) } : {}),
-    ...(finiteNumber(eventRecord.prunedMessages) !== undefined ? { prunedMessages: finiteNumber(eventRecord.prunedMessages) } : {}),
+    ...(originalUsedTokens !== undefined ? { originalUsedTokens } : {}),
+    ...(originalHistoryTokens !== undefined ? { originalHistoryTokens } : {}),
+    ...(prunedMessages !== undefined ? { prunedMessages } : {}),
     ...(typeof eventRecord.message === 'string' ? { message: redactSensitiveText(eventRecord.message) } : {}),
   };
 }

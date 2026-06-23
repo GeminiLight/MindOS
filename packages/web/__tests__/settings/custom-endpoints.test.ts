@@ -30,6 +30,65 @@ describe('parseProviders', () => {
       { id: 'p_unknown01', name: 'Unknown', protocol: 'missing', apiKey: '', model: 'x', baseUrl: '' },
     ])).toEqual([]);
   });
+
+  it('preserves validated provider and per-model capability metadata', () => {
+    expect(parseProviders([
+      {
+        id: 'p_stepfun01',
+        name: 'StepFun',
+        protocol: 'openai',
+        apiKey: 'sk-test',
+        model: 'step-3.7-flash',
+        baseUrl: 'https://api.stepfun.com/v1',
+        contextWindow: 256_000.8,
+        contextTokens: 200_000,
+        maxTokens: 32_000,
+        models: [
+          {
+            id: 'step-3.7-flash',
+            contextWindow: 256_000,
+            contextTokens: 180_000,
+            maxTokens: 64_000,
+            input: ['text', 'image', 'text', 'bad'],
+            reasoning: true,
+            source: 'user',
+            updatedAt: ' 2026-06-24T00:00:00.000Z ',
+          },
+          {
+            id: 'bad-numbers',
+            contextWindow: -1,
+            contextTokens: Number.NaN,
+            maxTokens: 0,
+          },
+          { id: '' },
+        ],
+      },
+    ])).toEqual([
+      {
+        id: 'p_stepfun01',
+        name: 'StepFun',
+        protocol: 'openai',
+        apiKey: 'sk-test',
+        model: 'step-3.7-flash',
+        baseUrl: 'https://api.stepfun.com/v1',
+        contextWindow: 256_000,
+        contextTokens: 200_000,
+        maxTokens: 32_000,
+        models: [
+          {
+            id: 'step-3.7-flash',
+            contextWindow: 256_000,
+            contextTokens: 180_000,
+            maxTokens: 64_000,
+            input: ['text', 'image'],
+            reasoning: true,
+            source: 'user',
+            updatedAt: '2026-06-24T00:00:00.000Z',
+          },
+        ],
+      },
+    ]);
+  });
 });
 
 describe('migrateProviders', () => {

@@ -68,10 +68,32 @@ function contextActionLabel(action: ContextUsageMetadata['action']): string {
   return 'No pruning';
 }
 
+function contextWindowSourceLabel(source: ContextUsageMetadata['contextWindowSource']): string {
+  if (source === 'user') return 'user config';
+  if (source === 'catalog') return 'model catalog';
+  if (source === 'discovered') return 'live discovery';
+  if (source === 'pi-ai') return 'pi-ai registry';
+  if (source === 'model') return 'runtime model';
+  if (source === 'fallback') return 'fallback estimate';
+  return 'runtime metadata';
+}
+
 function contextUsageTooltip(usage: ContextUsageMetadata): string {
+  const contextSource = contextWindowSourceLabel(usage.contextWindowSource);
+  const nativeWindow = usage.nativeContextWindow !== undefined
+    ? ` Native window ${formatTokenCount(usage.nativeContextWindow)}.`
+    : '';
+  const contextTokens = usage.contextTokens !== undefined
+    ? ` Effective cap ${formatTokenCount(usage.contextTokens)}.`
+    : '';
+  const fallbackNotice = usage.contextWindowIsFallback
+    ? ' Unknown model window; MindOS used the conservative fallback budget.'
+    : '';
+
   return [
     `${contextActionLabel(usage.action)} before sending.`,
     `${formatTokenCount(usage.usedTokens)} / ${formatTokenCount(usage.contextWindow)} tokens (${Math.round(usage.percent)}%).`,
+    `Window source: ${contextSource}.${nativeWindow}${contextTokens}${fallbackNotice}`,
     `System ${formatTokenCount(usage.systemPromptTokens)} · Turn ${formatTokenCount(usage.turnPromptTokens)} · History ${formatTokenCount(usage.historyTokens)} · Reserve ${formatTokenCount(usage.reserveTokens)}.`,
     usage.prunedMessages ? `Pruned ${usage.prunedMessages} old message${usage.prunedMessages === 1 ? '' : 's'}.` : '',
     usage.modelName ? `Model: ${usage.modelName}.` : '',

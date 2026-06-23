@@ -414,6 +414,7 @@ export function effectiveAiConfig(providerOverride?: string): {
   apiKey: string;
   model: string;
   baseUrl: string;
+  providerEntry?: Provider;
 } {
   const s = readSettings();
 
@@ -440,7 +441,7 @@ export function effectiveAiConfig(providerOverride?: string): {
       || '';
     const model = entry.model || preset?.defaultModel || '';
     const baseUrl = entry.baseUrl || preset?.fixedBaseUrl || '';
-    return { provider: entry.protocol, apiKey, model, baseUrl };
+    return { provider: entry.protocol, apiKey, model, baseUrl, providerEntry: entry };
   }
 
   // Fallback: no matching entry — if a protocol override was requested, honor it.

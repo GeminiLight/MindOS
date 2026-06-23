@@ -16,6 +16,28 @@ export type MindosProviderEntry = {
   apiKey: string;
   model: string;
   baseUrl: string;
+  contextWindow?: number;
+  contextTokens?: number;
+  maxTokens?: number;
+  models?: MindosProviderModelCapability[];
+};
+
+export type MindosProviderModelCapabilitySource =
+  | 'user'
+  | 'catalog'
+  | 'discovered'
+  | 'pi-ai'
+  | 'fallback';
+
+export type MindosProviderModelCapability = {
+  id: string;
+  contextWindow?: number;
+  contextTokens?: number;
+  maxTokens?: number;
+  input?: Array<'text' | 'image' | 'audio' | 'video'>;
+  reasoning?: boolean;
+  source?: MindosProviderModelCapabilitySource;
+  updatedAt?: string;
 };
 
 const PROVIDER_ID_PREFIX = 'p_';
@@ -203,6 +225,7 @@ export function normalizeMindosProvider(entry: unknown): MindosProviderEntry | n
     apiKey: source.apiKey,
     model: source.model,
     baseUrl: source.baseUrl,
+    ...normalizeMindosProviderCapabilityFields(source),
   };
 }
 
@@ -232,9 +255,99 @@ export function parseMindosProviders(raw: unknown, activeProvider?: unknown): Mi
       apiKey,
       model: model || preset.defaultModel,
       baseUrl: baseUrl || preset.defaultBaseUrl || '',
+      ...normalizeMindosProviderCapabilityFields(source),
     });
   }
   return providers;
+}
+
+const MODEL_CAPABILITY_SOURCES = new Set<MindosProviderModelCapabilitySource>([
+  'user',
+  'catalog',
+  'discovered',
+  'pi-ai',
+  'fallback',
+]);
+
+const MODEL_INPUT_MODALITIES = new Set(['text', 'image', 'audio', 'video']);
+
+function positiveInteger(value: unknown): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return undefined;
+  const normalized = Math.floor(value);
+  return normalized > 0 ? normalized : undefined;
+}
+
+function normalizeMindosModelInput(raw: unknown): MindosProviderModelCapability['input'] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const result: NonNullable<MindosProviderModelCapability['input']> = [];
+  const seen = new Set<string>();
+  for (const item of raw) {
+    if (typeof item !== 'string' || !MODEL_INPUT_MODALITIES.has(item) || seen.has(item)) continue;
+    seen.add(item);
+    result.push(item as NonNullable<MindosProviderModelCapability['input']>[number]);
+  }
+  return result.length > 0 ? result : undefined;
+}
+
+function normalizeMindosModelCapabilitySource(raw: unknown): MindosProviderModelCapabilitySource | undefined {
+  return typeof raw === 'string' && MODEL_CAPABILITY_SOURCES.has(raw as MindosProviderModelCapabilitySource)
+    ? raw as MindosProviderModelCapabilitySource
+    : undefined;
+}
+
+function normalizeMindosProviderModelCapability(raw: unknown): MindosProviderModelCapability | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const source = raw as Record<string, unknown>;
+  const id = typeof source.id === 'string' ? source.id.trim() : '';
+  if (!id) return null;
+
+  const result: MindosProviderModelCapability = { id };
+  const contextWindow = positiveInteger(source.contextWindow);
+  const contextTokens = positiveInteger(source.contextTokens);
+  const maxTokens = positiveInteger(source.maxTokens);
+  const input = normalizeMindosModelInput(source.input);
+  const capabilitySource = normalizeMindosModelCapabilitySource(source.source);
+
+  if (contextWindow !== undefined) result.contextWindow = contextWindow;
+  if (contextTokens !== undefined) result.contextTokens = contextTokens;
+  if (maxTokens !== undefined) result.maxTokens = maxTokens;
+  if (input) result.input = input;
+  if (typeof source.reasoning === 'boolean') result.reasoning = source.reasoning;
+  if (capabilitySource) result.source = capabilitySource;
+  if (typeof source.updatedAt === 'string' && source.updatedAt.trim()) {
+    result.updatedAt = source.updatedAt.trim();
+  }
+
+  return hasMeaningfulMindosModelCapability(result) ? result : null;
+}
+
+function hasMeaningfulMindosModelCapability(capability: MindosProviderModelCapability): boolean {
+  return capability.contextWindow !== undefined
+    || capability.contextTokens !== undefined
+    || capability.maxTokens !== undefined
+    || (capability.input !== undefined && capability.input.length > 0)
+    || typeof capability.reasoning === 'boolean';
+}
+
+function normalizeMindosProviderCapabilityFields(
+  source: Record<string, unknown>,
+): Pick<MindosProviderEntry, 'contextWindow' | 'contextTokens' | 'maxTokens' | 'models'> {
+  const result: Pick<MindosProviderEntry, 'contextWindow' | 'contextTokens' | 'maxTokens' | 'models'> = {};
+  const contextWindow = positiveInteger(source.contextWindow);
+  const contextTokens = positiveInteger(source.contextTokens);
+  const maxTokens = positiveInteger(source.maxTokens);
+  const models = Array.isArray(source.models)
+    ? source.models
+      .map(normalizeMindosProviderModelCapability)
+      .filter((model): model is MindosProviderModelCapability => model !== null)
+    : [];
+
+  if (contextWindow !== undefined) result.contextWindow = contextWindow;
+  if (contextTokens !== undefined) result.contextTokens = contextTokens;
+  if (maxTokens !== undefined) result.maxTokens = maxTokens;
+  if (models.length > 0) result.models = models;
+
+  return result;
 }
 
 export function findMindosProvider(providers: unknown[], id: string): MindosProviderEntry | undefined {

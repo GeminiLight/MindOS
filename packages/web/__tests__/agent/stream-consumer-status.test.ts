@@ -67,6 +67,10 @@ describe('consumeUIMessageStream — status event handling', () => {
           percent: 81,
           usedTokens: 81_000,
           contextWindow: 100_000,
+          nativeContextWindow: 256_000,
+          contextTokens: 100_000,
+          contextWindowSource: 'catalog',
+          contextWindowIsFallback: false,
           budgetTokens: 84_000,
           reserveTokens: 16_000,
           keepRecentTokens: 20_000,
@@ -90,6 +94,10 @@ describe('consumeUIMessageStream — status event handling', () => {
       modelName: 'local-model',
       percent: 81,
       prunedMessages: 12,
+      nativeContextWindow: 256_000,
+      contextTokens: 100_000,
+      contextWindowSource: 'catalog',
+      contextWindowIsFallback: false,
     }));
     expect(result.content).toBe('');
     expect(result.parts).toEqual([]);

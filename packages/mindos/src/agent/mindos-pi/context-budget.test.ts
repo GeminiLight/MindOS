@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   prepareMindosPiContextBudget,
   resolveMindosPiContextWindow,
+  resolveMindosPiContextWindowInfo,
   resolveMindosPiReserveTokens,
 } from './context-budget.js';
 import type { MindosAgentHistoryMessage } from '../turn/index.js';
@@ -31,6 +32,37 @@ describe('MindOS Pi context budget preflight', () => {
     expect(resolveMindosPiReserveTokens(8_000, 16_000)).toBe(7_999);
   });
 
+  it('uses source-tracked MindOS model caps before the raw runtime model window', () => {
+    expect(resolveMindosPiContextWindowInfo({
+      contextWindow: 128_000,
+      mindosCaps: {
+        contextWindow: 256_000,
+        contextTokens: 96_000,
+        effectiveContextWindow: 96_000,
+        source: 'catalog',
+        isFallback: false,
+      },
+    })).toEqual({
+      contextWindow: 96_000,
+      nativeContextWindow: 256_000,
+      contextTokens: 96_000,
+      source: 'catalog',
+      isFallback: false,
+    });
+
+    expect(resolveMindosPiContextWindowInfo({
+      mindosCaps: {
+        effectiveContextWindow: 128_000,
+        source: 'fallback',
+        isFallback: true,
+      },
+    })).toEqual({
+      contextWindow: 128_000,
+      source: 'fallback',
+      isFallback: true,
+    });
+  });
+
   it('reports context usage without changing an under-budget prompt', () => {
     const history = [user('hello'), assistant('hi')];
     const result = prepareMindosPiContextBudget({
@@ -55,8 +87,42 @@ describe('MindOS Pi context budget preflight', () => {
       contextWindow: 10_000,
       budgetTokens: 9_900,
       reserveTokens: 100,
+      nativeContextWindow: 10_000,
+      contextWindowSource: 'model',
+      contextWindowIsFallback: false,
     });
     expect(result.usage.percent).toBeGreaterThan(0);
+  });
+
+  it('emits context window source metadata in the preflight usage event', () => {
+    const result = prepareMindosPiContextBudget({
+      systemPrompt: 'system',
+      turnPrompt: 'current request',
+      historyMessages: [],
+      model: {
+        contextWindow: 128_000,
+        mindosCaps: {
+          contextWindow: 256_000,
+          contextTokens: 64_000,
+          effectiveContextWindow: 64_000,
+          source: 'user',
+          isFallback: false,
+        },
+      },
+      modelName: 'capped-model',
+      reserveTokens: 4_000,
+      keepRecentTokens: 50,
+      estimateTokens,
+    });
+
+    expect(result.usage).toMatchObject({
+      contextWindow: 64_000,
+      nativeContextWindow: 256_000,
+      contextTokens: 64_000,
+      contextWindowSource: 'user',
+      contextWindowIsFallback: false,
+      budgetTokens: 60_000,
+    });
   });
 
   it('prunes oldest history on a user boundary and prefixes a transparent note', () => {
@@ -90,8 +156,9 @@ describe('MindOS Pi context budget preflight', () => {
   });
 
   it('compacts then truncates an oversized turn prompt before history is appended', () => {
+    const latestRequest = 'LATEST USER REQUEST: answer the provider/model capability question';
     const hugePrompt = [
-      'user request',
+      latestRequest,
       '## MindOS Turn Context',
       `## Auto-Recalled MindOS Knowledge\n\n${'r'.repeat(5_000)}`,
       `## Files uploaded by the user for this request\n\n${'u'.repeat(5_000)}`,
@@ -125,6 +192,7 @@ describe('MindOS Pi context budget preflight', () => {
     });
 
     expect(strippedSections.length).toBeGreaterThan(0);
+    expect(result.turnPrompt).toContain(latestRequest);
     expect(result.turnPrompt.length).toBeLessThan(hugePrompt.length);
     expect(result.usage.action).toMatch(/prompt_(compacted|truncated)/);
     expect(result.usage.usedTokens).toBeLessThan(result.usage.originalUsedTokens ?? 0);

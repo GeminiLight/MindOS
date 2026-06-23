@@ -87,6 +87,7 @@ export function createWebMindosPiRuntimeHostServices(
     resolveModelConfig: (input) => {
       let providerOverride: ProviderId | undefined;
       let customProviderConfig: { apiKey: string; model: string; baseUrl: string } | undefined;
+      let customProviderEntry: ReturnType<typeof findProvider> | undefined;
 
       if (input.providerOverride) {
         if (isProviderEntryId(input.providerOverride)) {
@@ -98,6 +99,7 @@ export function createWebMindosPiRuntimeHostServices(
             throw error;
           }
           providerOverride = customProvider.protocol;
+          customProviderEntry = customProvider;
           customProviderConfig = {
             apiKey: customProvider.apiKey,
             model: customProvider.model,
@@ -115,6 +117,7 @@ export function createWebMindosPiRuntimeHostServices(
         model: modelOverride ?? customProviderConfig?.model,
         baseUrl: customProviderConfig?.baseUrl,
         hasImages: hasImages(input.messages as any),
+        providerEntry: customProviderEntry,
       });
     },
     toRuntimeProvider: (provider) => toPiProvider(provider as ProviderId),

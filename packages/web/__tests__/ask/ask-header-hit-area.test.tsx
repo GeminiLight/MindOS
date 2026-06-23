@@ -120,6 +120,10 @@ describe('AskHeader panel hit area', () => {
           percent: 78,
           usedTokens: 78_000,
           contextWindow: 100_000,
+          nativeContextWindow: 256_000,
+          contextTokens: 100_000,
+          contextWindowSource: 'catalog',
+          contextWindowIsFallback: false,
           budgetTokens: 84_000,
           reserveTokens: 16_000,
           keepRecentTokens: 20_000,
@@ -136,7 +140,44 @@ describe('AskHeader panel hit area', () => {
     expect(html).toContain('Context usage');
     expect(html).toContain('History pruned before sending.');
     expect(html).toContain('78.0k / 100.0k tokens');
+    expect(html).toContain('Window source: model catalog.');
+    expect(html).toContain('Native window 256.0k.');
+    expect(html).toContain('Effective cap 100.0k.');
     expect(html).toContain('Pruned 8 old messages.');
+  });
+
+  it('labels fallback context windows as estimates in the context usage tooltip', () => {
+    const html = renderToStaticMarkup(
+      <AskHeader
+        isPanel
+        showHistory={false}
+        onToggleHistory={vi.fn()}
+        onReset={vi.fn()}
+        isLoading={false}
+        sessions={[{ id: '1', title: 'Fallback session' } as any]}
+        activeSessionId="1"
+        messages={[]}
+        contextUsage={{
+          runtime: 'mindos',
+          phase: 'preflight',
+          action: 'prompt_truncated',
+          modelName: 'unknown-model',
+          percent: 99,
+          usedTokens: 127_000,
+          contextWindow: 128_000,
+          contextWindowSource: 'fallback',
+          contextWindowIsFallback: true,
+          budgetTokens: 111_616,
+          reserveTokens: 16_384,
+          systemPromptTokens: 10_000,
+          turnPromptTokens: 101_616,
+          historyTokens: 0,
+        }}
+      />,
+    );
+
+    expect(html).toContain('Window source: fallback estimate.');
+    expect(html).toContain('Unknown model window; MindOS used the conservative fallback budget.');
   });
 
   it('opens the session dropdown for a single selected Claude Code session', async () => {

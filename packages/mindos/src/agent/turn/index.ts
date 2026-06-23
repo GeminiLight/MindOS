@@ -92,6 +92,10 @@ export type MindOSSSEvent =
       percent: number;
       usedTokens: number;
       contextWindow: number;
+      nativeContextWindow?: number;
+      contextTokens?: number;
+      contextWindowSource?: 'user' | 'catalog' | 'discovered' | 'pi-ai' | 'fallback' | 'model';
+      contextWindowIsFallback?: boolean;
       budgetTokens: number;
       reserveTokens: number;
       keepRecentTokens?: number;
