@@ -323,4 +323,94 @@ describe('StudioContent', () => {
     expect(form!.textContent).toContain('Product Strategy');
     expect(form!.textContent).toContain('Review Kit');
   });
+
+  it('creates, edits, and pauses Studio automations from the overview', async () => {
+    await renderStudio();
+
+    expect(host.textContent).toContain('Automation');
+    expect(host.textContent).toContain('Create automation');
+    expect(host.textContent).toContain('Existing automations');
+    expect(host.textContent).toContain('Daily research radar');
+
+    await setInputValue('input[aria-label="Automation title"]', 'Release readiness sweep');
+    await setInputValue(
+      'textarea[aria-label="Automation prompt"]',
+      'Every morning, review open release notes and summarize blockers.',
+    );
+
+    const createAutomationButton = Array.from(host.querySelectorAll('button')).find((button) => (
+      button.textContent?.includes('Create automation')
+    ));
+    expect(createAutomationButton).not.toBeNull();
+
+    await act(async () => {
+      createAutomationButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(host.textContent).toContain('Release readiness sweep');
+    expect(host.textContent).toContain('Every morning, review open release notes and summarize blockers.');
+
+    const releaseCard = Array.from(host.querySelectorAll('[data-studio-automation-card]')).find((card) => (
+      card.textContent?.includes('Release readiness sweep')
+    ));
+    expect(releaseCard).not.toBeNull();
+
+    const editButton = Array.from(releaseCard!.querySelectorAll('button')).find((button) => (
+      button.textContent?.includes('Edit')
+    ));
+    expect(editButton).not.toBeNull();
+
+    await act(async () => {
+      editButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    await setInputValue('input[aria-label="Automation title"]', 'Release signal sweep');
+
+    const saveButton = Array.from(host.querySelectorAll('button')).find((button) => (
+      button.textContent?.includes('Save changes')
+    ));
+    expect(saveButton).not.toBeNull();
+
+    await act(async () => {
+      saveButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(host.textContent).toContain('Release signal sweep');
+    expect(host.textContent).not.toContain('Release readiness sweep');
+
+    const updatedCard = Array.from(host.querySelectorAll('[data-studio-automation-card]')).find((card) => (
+      card.textContent?.includes('Release signal sweep')
+    ));
+    expect(updatedCard).not.toBeNull();
+
+    const pauseButton = Array.from(updatedCard!.querySelectorAll('button')).find((button) => (
+      button.textContent?.includes('Pause')
+    ));
+    expect(pauseButton).not.toBeNull();
+
+    await act(async () => {
+      pauseButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(updatedCard!.textContent).toContain('Paused');
+    expect(Array.from(updatedCard!.querySelectorAll('button')).some((button) => button.textContent?.includes('Resume'))).toBe(true);
+  });
+
+  it('prevents creating an automation without a prompt', async () => {
+    await renderStudio();
+
+    await setInputValue('input[aria-label="Automation title"]', 'Empty automation');
+
+    const createAutomationButton = Array.from(host.querySelectorAll('button')).find((button) => (
+      button.textContent?.includes('Create automation')
+    ));
+    expect(createAutomationButton).not.toBeNull();
+
+    await act(async () => {
+      createAutomationButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(host.textContent).toContain('Add a prompt before creating an automation.');
+    expect(host.textContent).not.toContain('Empty automationActive');
+  });
 });

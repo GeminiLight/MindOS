@@ -33,6 +33,7 @@ import {
 } from '@/lib/studio-projects';
 import { getChatSessionTitle } from './studio-session-summaries';
 import { StudioShell } from './StudioShell';
+import StudioAutomationSection from './StudioAutomationSection';
 import StudioNewProjectDialog from './StudioNewProjectDialog';
 import {
   StudioAttentionItem,
@@ -772,6 +773,8 @@ export default function StudioContent({
               getProjectSessionCount={getProjectSessionCount}
             />
           ) : null}
+
+          <StudioAutomationSection projects={projects} locale={locale} />
         </section>
       </div>
 
