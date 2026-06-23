@@ -74,6 +74,28 @@ describe('studio projects', () => {
     expect(project.kits).toEqual(['Research Kit', 'Review Kit']);
   });
 
+  it('uses the WorkDir folder name when title is blank and keeps goal optional', () => {
+    const project = createStudioProject({
+      title: '   ',
+      goal: '   ',
+      workDir: {
+        source: 'manual',
+        path: '/Users/moonshot/projects/product/mindos-dev',
+        label: 'mindos-dev',
+      },
+      spaces: [],
+      assistants: [],
+    });
+
+    expect(project).toMatchObject({
+      id: 'mindos-dev',
+      title: 'mindos-dev',
+      goal: '',
+      workArea: 'mindos-dev',
+    });
+    expect(readStudioProjects()[0]?.id).toBe('mindos-dev');
+  });
+
   it('keeps project routes segment-local and url encoded', () => {
     expect(getStudioProjectHref('launch-practice')).toBe('/studio/launch-practice');
     expect(getStudioProjectHref('产品 发布')).toBe('/studio/%E4%BA%A7%E5%93%81%20%E5%8F%91%E5%B8%83');

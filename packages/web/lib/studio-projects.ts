@@ -55,8 +55,8 @@ export interface StudioProject {
 }
 
 export interface StudioProjectDraft {
-  title: string;
-  goal: string;
+  title?: string;
+  goal?: string;
   space?: string;
   kit?: string;
   workArea?: string;
@@ -262,6 +262,13 @@ function pathLabel(path: string): string {
   return path.replace(/\\/g, '/').split('/').filter(Boolean).at(-1) || path;
 }
 
+function projectTitleFromWorkDir(workDir: SessionWorkDir | undefined): string | undefined {
+  const label = cleanLabel(workDir?.label);
+  if (label) return label;
+  const path = cleanLabel(workDir?.path);
+  return path ? pathLabel(path) : undefined;
+}
+
 function assistantIdFromName(name: string): string {
   return name
     .trim()
@@ -379,9 +386,11 @@ export function buildStudioProjectFromDraft(
   existingProjects: StudioProject[],
 ): StudioProject {
   const existingIds = new Set(existingProjects.map((project) => project.id));
-  const title = draft.title.trim() || 'Untitled Project';
-  const goal = draft.goal.trim() || 'Define the next durable outcome.';
   const normalizedWorkDir = draft.workDir ? normalizeSessionWorkDirForClient(draft.workDir) : undefined;
+  const title = cleanLabel(draft.title)
+    || projectTitleFromWorkDir(normalizedWorkDir)
+    || 'Untitled Project';
+  const goal = cleanLabel(draft.goal) || '';
   const draftSpaces = normalizeProjectSpaces(draft.spaces);
   const draftAssistants = normalizeProjectAssistants(draft.assistants);
   const legacySpace = cleanLabel(draft.space);

@@ -229,6 +229,38 @@ describe('StudioContent', () => {
     expect(push).toHaveBeenCalledWith('/studio/growth-room');
   });
 
+  it('allows an optional goal and falls back to the WorkDir folder when the Project name is blank', async () => {
+    await renderStudio();
+
+    const newProjectButton = Array.from(host.querySelectorAll('button')).find((button) => (
+      button.textContent?.includes('New Project')
+    ));
+    expect(newProjectButton).not.toBeNull();
+
+    await act(async () => {
+      newProjectButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    const form = host.querySelector('form[role="dialog"]') as HTMLFormElement | null;
+    expect(form).not.toBeNull();
+    const workDir = form!.querySelector('input[aria-label="WorkDir"]') as HTMLInputElement | null;
+    expect(workDir).not.toBeNull();
+
+    await act(async () => {
+      const descriptor = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(workDir!), 'value');
+      descriptor?.set?.call(workDir!, '/Users/moonshot/projects/product/mindos-dev');
+      workDir!.dispatchEvent(new Event('input', { bubbles: true }));
+      workDir!.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+
+    await act(async () => {
+      form!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    });
+
+    expect(host.textContent).not.toContain('Name and goal are required.');
+    expect(push).toHaveBeenCalledWith('/studio/mindos-dev');
+  });
+
   it('uses WorkDir input and searchable chip pickers for Project setup', async () => {
     await renderStudio();
 

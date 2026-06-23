@@ -207,17 +207,14 @@ function StudioNewProjectDialogForm({
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!title.trim() || !goal.trim()) {
-      setError(copy.required);
-      return;
-    }
 
     const normalizedSpaces = normalizeSpaces(spaces);
     const normalizedAssistants = normalizeAssistants(assistants);
     const workDir = workDirFromInput(workDirInput, labels.mind);
+    setError(null);
     onCreate({
-      title,
-      goal,
+      title: title.trim(),
+      goal: goal.trim(),
       workDir,
       spaces: normalizedSpaces,
       assistants: normalizedAssistants,
