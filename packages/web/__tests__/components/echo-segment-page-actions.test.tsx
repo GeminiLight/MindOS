@@ -55,7 +55,26 @@ describe('Echo segment page actions', () => {
             date: '2026-06-23',
             updatedAt: '2026-06-23T00:00:00.000Z',
             excerpt: '点击 logo 后 rail 激活态短暂跳到 Wiki，最后修复为稳定 Home 状态。',
-            markdown: '# 修复 sidebar 激活态抖动\n\n## 现场\n\n点击 logo 后 rail 激活态短暂跳到 Wiki。\n\n## 结果\n\n稳定回到 Home。',
+            markdown: [
+              '# 修复 sidebar 激活态抖动',
+              '',
+              '## 现场',
+              '',
+              '点击 logo 后 rail 激活态短暂跳到 Wiki。',
+              '',
+              '## 结果',
+              '',
+              '- 稳定回到 Home。',
+              '- 避免用户误以为进入 Wiki。',
+              '',
+              '## 关键片段',
+              '',
+              'Rail 状态来自路由切换。',
+              '',
+              '## 待梳理',
+              '',
+              '- 是否需要为 Home sidebar 补回归截图？',
+            ].join('\n'),
             assistantId: 'echo-imprint',
           },
         });
@@ -281,6 +300,24 @@ describe('Echo segment page actions', () => {
     expect(host.querySelector('a[href="/echo/threads"]')).not.toBeNull();
     expect(host.querySelector('a[href="/echo/growth"]')).not.toBeNull();
     expect(host.querySelector('a[href="/echo/practice"]')).not.toBeNull();
+
+    const layout = host.querySelector('[data-testid="echo-memory-reader-layout"]');
+    expect(layout?.className).toContain('lg:grid-cols-[minmax(16rem,22rem)_minmax(0,1fr)]');
+
+    const detailBody = host.querySelector('[data-testid="echo-imprint-detail-body"]');
+    expect(detailBody?.className).not.toContain('grid-cols');
+
+    const sceneCard = host.querySelector('[data-testid="echo-imprint-scene-card"]');
+    expect(sceneCard?.textContent).toContain('点击 logo 后 rail 激活态短暂跳到 Wiki。');
+    expect(sceneCard?.textContent).not.toContain('稳定回到 Home。');
+    expect(sceneCard?.textContent).not.toContain(messages.zh.echoPages.imprintDetailEvidenceTitle);
+
+    const resultCard = host.querySelector('[data-testid="echo-imprint-result-card"]');
+    expect(resultCard?.textContent).toContain('稳定回到 Home。');
+    expect(resultCard?.textContent).toContain('避免用户误以为进入 Wiki。');
+
+    const evidenceCard = host.querySelector('[data-testid="echo-imprint-evidence-card"]');
+    expect(evidenceCard?.textContent).toContain('Echo/Daily/2026/06/2026-06-23.md');
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/echo?segment=imprint&path=Echo%2FDaily%2F2026%2F06%2F2026-06-23.md',
       expect.any(Object),
