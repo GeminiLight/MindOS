@@ -119,6 +119,18 @@ export {
 } from './handlers/runtime-permission-projections.js';
 
 export {
+  buildAgentRuntimeArtifactProjectionsPayload,
+  handleAgentRuntimeArtifactProjectionsGet,
+  type AgentRuntimeArtifactHandoffTarget,
+  type AgentRuntimeArtifactOutputKind,
+  type AgentRuntimeArtifactProjection,
+  type AgentRuntimeArtifactProjectionReason,
+  type AgentRuntimeArtifactProjectionServices,
+  type AgentRuntimeArtifactProjectionStatus,
+  type AgentRuntimeArtifactProjectionsPayload,
+} from './handlers/runtime-artifact-projections.js';
+
+export {
   evaluateSkillRuntimeMatch,
   type MindosSkillRuntimeMatch,
   type MindosSkillRuntimeMatchInput,

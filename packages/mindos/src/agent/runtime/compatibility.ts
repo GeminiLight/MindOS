@@ -195,6 +195,7 @@ export function mindosRuntimeCompatibilityProfile(input: RuntimeCompatibilityInp
         summary: 'MindOS can emit text/artifact output, but a unified artifact index for cross-runtime comparison and review is not first-class yet.',
         requirements: [
           requirement('artifact-output', input.harnessCapabilities.output.includes('artifact') ? 'satisfied' : 'missing', 'mindos', 'Runtime can emit artifacts.'),
+          requirement('artifact-projection-contract', 'satisfied', 'mindos', 'MindOS exposes read-only artifact readiness diagnostics for runtime outputs and handoff shapes.'),
           requirement('artifact-index', 'missing', 'mindos', 'MindOS needs a cross-runtime artifact index for durable review.'),
         ],
         blockers: ['artifact-index'],
@@ -317,6 +318,7 @@ export function nativeRuntimeCompatibilityProfile(
         summary: `${name} can produce reviewable coding output, but MindOS does not yet have a unified artifact index across runtimes.`,
         requirements: [
           requirement('runtime-review-output', 'satisfied', 'external', `${name} can emit text, diffs, artifacts, branches, or PR references through its native workflow.`),
+          requirement('artifact-projection-contract', 'satisfied', 'mindos', 'MindOS exposes read-only artifact readiness diagnostics for native runtime outputs.'),
           requirement('artifact-index', 'missing', 'mindos', 'MindOS needs a cross-runtime artifact index for durable review and comparison.'),
         ],
         blockers: ['artifact-index'],
@@ -416,6 +418,7 @@ export function acpRuntimeCompatibilityProfile(input: RuntimeCompatibilityInput)
         owner: 'shared',
         summary: 'Generic ACP descriptors only prove text/tool-event streaming; durable artifact, diff, branch, or PR outputs are not declared.',
         requirements: [
+          requirement('artifact-projection-contract', 'satisfied', 'mindos', 'MindOS exposes read-only artifact readiness diagnostics for runtime descriptors.'),
           requirement('artifact-output-contract', 'missing', 'external', 'ACP adapters must declare artifact/diff/output capabilities.'),
           requirement('artifact-index', 'missing', 'mindos', 'MindOS needs a cross-runtime artifact index for durable review.'),
         ],

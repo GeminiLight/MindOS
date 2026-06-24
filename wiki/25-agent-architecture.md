@@ -132,7 +132,7 @@ detect → health → configure → launch → session → context
 - `permission-governance` 已有只读 permission runtime projection contract。它能解释 Pi 的 `read/ask/auto/full` policy、native runtime 的交互式 permission bridge、ACP adapter 的未知审批契约；但 durable approval queue 还没有实现，所以 native bridge 不能等同 24/7 可用。
 - `skill-execution` 现在是 `limited`。MindOS 能注入/加载 skill，读取 `SKILL.md` runtime requirements，提供 skill × runtime matcher，并在明确 `blocked` 时阻止显式选中的不兼容 skill；但还没有自动 runtime routing，也不会把 `limited/unknown` 在 turn 前变成 UI warning。
 - `mcp-tooling` 对 native runtime 仍是 `limited`。MindOS 已有只读 MCP runtime projection contract，可以解释每个 runtime 当前是 `ready` / `projectable` / `limited` / `blocked` / `unknown`；但不会自动改写 Codex / Claude / ACP adapter 的外部 MCP 配置。
-- `artifact-governance` 现在是 `limited` 或 `blocked`。部分 runtime 能产出 diff/artifact/branch/PR，但 MindOS 还没有跨 runtime artifact index。
+- `artifact-governance` 现在是 `limited` / `blocked` / `unknown`。MindOS 已有只读 artifact runtime projection contract，可以解释 runtime 的 text/diff/checkpoint/artifact/branch/PR 输出形态；但 MindOS 还没有跨 runtime artifact index，所以不能把“runtime 会产出”说成“MindOS 已统一治理”。
 
 ### Permission Runtime Projection
 
@@ -178,6 +178,31 @@ projection 输出：
 
 - **不泄露 secrets**：只暴露 server 名称、来源和状态，不返回 command、args、env、headers、token。
 - **不自动写配置**：`projectable` 只表示 MindOS 有足够信息提示用户去 install/copy/sync，不代表当前 runtime 已可用；外部 runtime 的 MCP config 仍由显式 `/api/mcp/install`、`/api/mcp/copy-server` 或用户自己的配置动作修改。
+
+### Artifact Runtime Projection
+
+Artifact runtime projection 是 `artifact-governance` compatibility 的只读诊断契约，位于 `packages/mindos/src/server/handlers/runtime-artifact-projections.ts`，通过 `/api/agent-runtimes/artifact-projections` 暴露。它把 runtime descriptor 中的 `harnessCapabilities.output` 投影成产品可解释的产物治理状态，不创建、不修改、不索引真实 artifact。
+
+projection 输出：
+
+| 字段 | 语义 |
+|---|---|
+| `status` | `ready` / `limited` / `blocked` / `unknown`；当前通常不会是 `ready`，因为统一 artifact index 尚未实现 |
+| `outputKinds` | runtime 声明可产出的原始输出形态：`text` / `diff` / `checkpoint` / `artifact` / `branch` / `pr` |
+| `reviewableOutputKinds` | 可复查或可交付的输出子集：`diff` / `checkpoint` / `artifact` / `branch` / `pr` |
+| `nativeHandoffTargets` | 面向 UI / Runtime Doctor 的交付目标：message、diff、checkpoint、artifact、branch、pull-request |
+| `nativeReview` | runtime 是否声明了可复查输出；Codex / Claude 通常是有，generic ACP 需要 adapter 声明 |
+| `artifactIndex` | MindOS 是否已经具备统一 cross-runtime artifact index；当前为 `missing` |
+| `rollback` | runtime 是否声明 checkpoint 输出，可作为未来 Compare / Restore / rollback 的锚点 |
+| `branchPr` | runtime 是否能交付 branch 或 PR reference |
+| `reasons` / `blockers` | runtime availability、output contract、artifact projection contract、artifact index、checkpoint、branch/PR 等逐项判断 |
+
+当前结论：
+
+- MindOS Pi 有 text/artifact 输出，所以 artifact projection 是 `limited`：能说明产物形态，但缺统一 artifact index。
+- Codex / Claude 能声明 diff/artifact/branch/PR 等 native coding output，所以适合 Runtime Doctor 展示“可复查输出”，但仍不能跳过 MindOS artifact index。
+- Generic ACP 默认是 `unknown`：ACP 只证明 text/tool-event streaming，不证明 adapter 能交付 diff、branch、PR 或 checkpoint。
+- Artifact projection 的边界是诊断和路由，不代替真实 artifact 存储；下一步如果要从 `limited` 走向 `ready`，需要实现 cross-runtime artifact index、source/run binding、review/rollback metadata。
 
 ## 五、执行路径
 
@@ -347,6 +372,7 @@ MindOS Pi 的 persisted session 由 Pi `SessionManager` 自己持有完整 JSONL
 | `packages/mindos/src/agent/runtime/descriptors.ts` | Runtime descriptor 组装，统一暴露 capability / harness / lifecycle |
 | `packages/mindos/src/server/handlers/runtime-permission-projections.ts` | Permission runtime projection contract，统一解释每个 runtime 的交互式审批与 unattended permission readiness |
 | `packages/mindos/src/server/handlers/mcp-runtime-projections.ts` | MCP runtime projection contract，统一解释每个 runtime 的 MCP ready/projectable/limited/blocked/unknown |
+| `packages/mindos/src/server/handlers/runtime-artifact-projections.ts` | Artifact runtime projection contract，统一解释每个 runtime 的 output/handoff/artifact-index readiness |
 | `packages/mindos/src/agent/prompt/agent-prompt.txt` | MindOS 默认 base prompt |
 | `packages/mindos/src/agent/prompt/assistant-prompt.ts` | Active Assistant overlay 解析与渲染 |
 | `packages/mindos/src/agent/prompt/context-prompt.ts` | context prompt 渲染 |
