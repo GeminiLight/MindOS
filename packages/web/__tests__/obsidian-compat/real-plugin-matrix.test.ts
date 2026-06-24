@@ -37,8 +37,10 @@ describe('Obsidian real plugin matrix', () => {
         matrixItem({
           id: 'blocked-plugin',
           name: 'Blocked Plugin',
+          category: 'editor-enhancement',
           supportKind: 'blocked',
           compatibilityLevel: 'blocked',
+          unsupportedModules: ['@codemirror/state', '@codemirror/view'],
           gate: gateReport({ status: 'blocked', blockedReasons: ['Unsupported API.'] }),
           smoke: { outcome: 'skipped', stage: 'capability-gate', reason: 'Unsupported API.' },
           downloads: 30,
@@ -60,12 +62,27 @@ describe('Obsidian real plugin matrix', () => {
         blocked: 1,
         investigate: 0,
       },
+      byEditorAdapterPlan: {
+        'not-editor-scoped': 2,
+        'declarative-adapter-candidate': 0,
+        'native-product-feature': 0,
+        'full-codemirror-host': 1,
+        'native-or-desktop-host': 0,
+      },
     });
     expect(matrix.plugins.map((plugin) => [plugin.id, plugin.recommendation])).toEqual([
       ['loaded-plugin', 'runtime-candidate'],
       ['native-plugin', 'catalog-or-native'],
       ['blocked-plugin', 'blocked'],
     ]);
+    expect(matrix.plugins.find((plugin) => plugin.id === 'blocked-plugin')?.editorAdapterPlan).toMatchObject({
+      status: 'full-codemirror-host',
+      route: 'full-codemirror-host',
+      signals: expect.arrayContaining(['unsupported module: @codemirror/state']),
+      nextSteps: expect.arrayContaining([
+        expect.stringContaining('Keep raw CodeMirror extensions catalog-only'),
+      ]),
+    });
     expect(matrix.failures).toEqual([{ id: 'oversized-plugin', stage: 'preflight', error: 'main.js is too large' }]);
   });
 
@@ -81,6 +98,7 @@ describe('Obsidian real plugin matrix', () => {
           name: 'Review Plugin',
           supportKind: 'review',
           compatibilityLevel: 'partial',
+          obsidianApis: ['registerEditorExtension'],
           gate: gateReport({
             status: 'review',
             requiresConfirmation: true,
@@ -97,9 +115,15 @@ describe('Obsidian real plugin matrix', () => {
     const matrixRow = markdown.split('\n').find((line) => line.includes('`review-plugin`'));
 
     expect(matrixRow).toBeDefined();
-    expect(matrixRow?.split('|')).toHaveLength(10);
+    expect(matrixRow?.split('|')).toHaveLength(11);
     expect(matrixRow).toContain('review (confirmation)');
     expect(matrixRow).toContain('commands:mountedx2');
+    expect(matrixRow).toContain('declarative adapter candidate');
+    expect(markdown).toContain('| Declarative editor adapter candidates | 1 |');
+    expect(markdown).toContain('## Editor Adapter Plans');
+    expect(markdown).toContain('### Review Plugin');
+    expect(markdown).toContain('- Route: `browser-editor-sandbox`');
+    expect(markdown).toContain('- Signal: Obsidian API: registerEditorExtension');
     expect(markdown).toContain('## Blockers And Review Reasons');
     expect(markdown).toContain('- Vault APIs can read or change local MindOS files inside the vault boundary.');
     expect(markdown).toContain('## Harness Failures');
@@ -110,18 +134,22 @@ describe('Obsidian real plugin matrix', () => {
 function matrixItem(options: {
   id: string;
   name: string;
+  category?: string;
   supportKind: ObsidianCommunityPluginPreflight['support']['kind'];
   compatibilityLevel: ObsidianCommunityPluginPreflight['compatibility']['level'];
   gate: ObsidianCapabilityGateReport;
   smoke: ObsidianRealPluginSmokeResult;
   downloads?: number;
   surfaces?: ObsidianCommunityPluginPreflight['surfacePreview'];
+  obsidianApis?: string[];
+  unsupportedApis?: string[];
+  unsupportedModules?: string[];
 }): ObsidianRealPluginMatrixInputItem {
   return {
     target: {
       id: options.id,
       priority: 'P0',
-      category: 'test-category',
+      category: options.category ?? 'test-category',
       reason: 'Representative test plugin.',
     },
     catalog: {
@@ -139,6 +167,9 @@ function matrixItem(options: {
       supportKind: options.supportKind,
       compatibilityLevel: options.compatibilityLevel,
       surfaces: options.surfaces,
+      obsidianApis: options.obsidianApis,
+      unsupportedApis: options.unsupportedApis,
+      unsupportedModules: options.unsupportedModules,
     }),
     capabilityGate: options.gate,
     smoke: options.smoke,
@@ -151,8 +182,14 @@ function preflight(options: {
   supportKind: ObsidianCommunityPluginPreflight['support']['kind'];
   compatibilityLevel: ObsidianCommunityPluginPreflight['compatibility']['level'];
   surfaces?: ObsidianCommunityPluginPreflight['surfacePreview'];
+  obsidianApis?: string[];
+  unsupportedApis?: string[];
+  unsupportedModules?: string[];
 }): ObsidianCommunityPluginPreflight {
   const blocked = options.compatibilityLevel === 'blocked';
+  const obsidianApis = options.obsidianApis ?? [];
+  const unsupportedApis = options.unsupportedApis ?? [];
+  const unsupportedModules = options.unsupportedModules ?? [];
   return {
     ok: true,
     plugin: {
@@ -192,14 +229,14 @@ function preflight(options: {
     compatibility: {
       level: options.compatibilityLevel,
       report: {
-        obsidianApis: [],
+        obsidianApis,
         moduleImports: [],
         nodeModules: [],
         supportedModules: [],
-        unsupportedModules: [],
+        unsupportedModules,
         supportedApis: [],
         partialApis: [],
-        unsupportedApis: [],
+        unsupportedApis,
         blockers: blocked ? ['Unsupported API.'] : [],
       },
     },
