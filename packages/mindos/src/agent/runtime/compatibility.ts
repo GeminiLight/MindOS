@@ -176,13 +176,14 @@ export function mindosRuntimeCompatibilityProfile(input: RuntimeCompatibilityInp
       'skill-execution': assessment({
         level: 'limited',
         owner: 'mindos',
-        summary: 'MindOS Pi can load selected skills and read their runtime requirements, but automatic runtime matching and enforcement are not first-class yet.',
+        summary: 'MindOS Pi can load selected skills, read their runtime requirements, and expose runtime match diagnostics; automatic enforcement before routing is not first-class yet.',
         requirements: [
           requirement('load-skill-tool', input.harnessCapabilities.tools.includes('skills') ? 'satisfied' : 'missing', 'mindos', 'Pi runtime can load skill instructions on demand.'),
           requirement('skill-runtime-requirements', 'satisfied', 'mindos', 'Skills can declare machine-readable runtime, tool, remote, unattended, approval, and user-input requirements.'),
-          requirement('skill-runtime-matcher', 'missing', 'mindos', 'MindOS still needs to match and enforce skill requirements against selected runtime capabilities before automatic routing is reliable.'),
+          requirement('skill-runtime-matcher', 'satisfied', 'mindos', 'MindOS can explain skill/runtime matches from skill requirements and runtime descriptors.'),
+          requirement('skill-runtime-enforcement', 'missing', 'mindos', 'MindOS still needs to enforce matcher results before automatic routing is reliable.'),
         ],
-        blockers: ['skill-runtime-matcher'],
+        blockers: ['skill-runtime-enforcement'],
       }),
       'artifact-governance': assessment({
         level: 'limited',
@@ -290,13 +291,14 @@ export function nativeRuntimeCompatibilityProfile(
       'skill-execution': assessment({
         level: 'limited',
         owner: 'shared',
-        summary: `MindOS can prepend skill instructions and expose runtime requirements for ${name}, but it does not yet enforce those requirements against native runtime capabilities.`,
+        summary: `MindOS can prepend skill instructions, expose runtime requirements, and explain matches for ${name}; automatic enforcement before routing is still separate.`,
         requirements: [
           requirement('skill-prompt-bridge', 'satisfied', 'mindos', 'MindOS can inject active skill instructions into external runtime prompts.'),
           requirement('skill-runtime-requirements', 'satisfied', 'mindos', 'Skills can declare machine-readable runtime, tool, remote, unattended, approval, and user-input requirements.'),
-          requirement('skill-runtime-matcher', 'missing', 'mindos', 'MindOS still needs to match and enforce skill requirements against selected runtime capabilities before automatic routing is reliable.'),
+          requirement('skill-runtime-matcher', 'satisfied', 'mindos', 'MindOS can explain skill/runtime matches from skill requirements and runtime descriptors.'),
+          requirement('skill-runtime-enforcement', 'missing', 'mindos', 'MindOS still needs to enforce matcher results before automatic routing is reliable.'),
         ],
-        blockers: ['skill-runtime-matcher'],
+        blockers: ['skill-runtime-enforcement'],
       }),
       'artifact-governance': assessment({
         level: input.harnessCapabilities.output.some((kind) => kind === 'diff' || kind === 'artifact' || kind === 'branch' || kind === 'pr')
@@ -388,13 +390,14 @@ export function acpRuntimeCompatibilityProfile(input: RuntimeCompatibilityInput)
       'skill-execution': assessment({
         level: 'limited',
         owner: 'shared',
-        summary: 'MindOS can prepend skill instructions to ACP prompts and expose their runtime requirements, but skill/runtime requirement matching is not first-class.',
+        summary: 'MindOS can prepend skill instructions to ACP prompts, expose their runtime requirements, and explain runtime matches; enforcement is not first-class.',
         requirements: [
           requirement('skill-prompt-bridge', 'satisfied', 'mindos', 'MindOS can inject active skill instructions into ACP prompts.'),
           requirement('skill-runtime-requirements', 'satisfied', 'mindos', 'Skills can declare machine-readable runtime, tool, remote, unattended, approval, and user-input requirements.'),
-          requirement('skill-runtime-matcher', 'missing', 'mindos', 'MindOS still needs to match and enforce skill requirements against selected runtime capabilities before automatic routing is reliable.'),
+          requirement('skill-runtime-matcher', 'satisfied', 'mindos', 'MindOS can explain skill/runtime matches from skill requirements and runtime descriptors.'),
+          requirement('skill-runtime-enforcement', 'missing', 'mindos', 'MindOS still needs to enforce matcher results before automatic routing is reliable.'),
         ],
-        blockers: ['skill-runtime-matcher'],
+        blockers: ['skill-runtime-enforcement'],
       }),
       'artifact-governance': assessment({
         level: 'blocked',

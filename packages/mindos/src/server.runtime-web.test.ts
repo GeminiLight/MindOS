@@ -376,9 +376,10 @@ describe('MindOS server contract: runtime, agent turn stream, static web', () =>
               level: 'limited',
               requirements: expect.arrayContaining([
                 expect.objectContaining({ id: 'skill-runtime-requirements', status: 'satisfied' }),
-                expect.objectContaining({ id: 'skill-runtime-matcher', status: 'missing' }),
+                expect.objectContaining({ id: 'skill-runtime-matcher', status: 'satisfied' }),
+                expect.objectContaining({ id: 'skill-runtime-enforcement', status: 'missing' }),
               ]),
-              blockers: expect.arrayContaining(['skill-runtime-matcher']),
+              blockers: expect.arrayContaining(['skill-runtime-enforcement']),
             }),
             'remote-control': expect.objectContaining({ level: 'limited' }),
             'unattended-automation': expect.objectContaining({

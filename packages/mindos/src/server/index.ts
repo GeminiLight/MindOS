@@ -89,6 +89,31 @@ export {
 } from './handlers/agent-runtimes.js';
 
 export {
+  buildSkillRuntimeMatchesPayload,
+  handleSkillRuntimeMatchesGet,
+  type MindosSkillRuntimeMatchesPayload,
+  type SkillRuntimeMatchesHandlerServices,
+} from './handlers/skill-runtime-matches.js';
+
+export {
+  evaluateSkillRuntimeMatch,
+  type MindosSkillRuntimeMatch,
+  type MindosSkillRuntimeMatchInput,
+  type MindosSkillRuntimeMatchLevel,
+  type MindosSkillRuntimeMatchReason,
+  type MindosSkillRuntimeMatchReasonStatus,
+} from '../agent/runtime/skill-runtime-matcher.js';
+
+export {
+  emptySkillRuntimeRequirements,
+  type MindosSkillRuntimeKindRequirement,
+  type MindosSkillRuntimeNeed,
+  type MindosSkillRuntimeRequirements,
+  type MindosSkillRuntimeSafety,
+  type MindosSkillRuntimeToolRequirement,
+} from '../agent/runtime/skill-runtime-requirements.js';
+
+export {
   handleCodexThreadArchivePost,
   handleCodexThreadForkPost,
   handleCodexThreadGet,
@@ -534,15 +559,9 @@ export {
 } from './handlers/skills.js';
 
 export {
-  emptySkillRuntimeRequirements,
   parseSkillMarkdownMetadata,
   parseSkillRuntimeRequirements,
   type MindosSkillMetadata,
-  type MindosSkillRuntimeKindRequirement,
-  type MindosSkillRuntimeNeed,
-  type MindosSkillRuntimeRequirements,
-  type MindosSkillRuntimeSafety,
-  type MindosSkillRuntimeToolRequirement,
 } from './handlers/skill-metadata.js';
 
 export {

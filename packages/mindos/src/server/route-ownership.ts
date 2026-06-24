@@ -166,6 +166,7 @@ export const MINDOS_WEB_API_ROUTE_OWNERSHIP: MindosWebApiRouteOwnership[] = [
   optional('/api/skill-market/search', 'Phase 5: plugin optional capabilities', 'medium', 'Skill market search is still Web-owned because it combines remote catalog fetches, host runtime skill discovery, and in-memory cache state that need optional capability boundaries.'),
   migrated('/api/skills', 'high'),
   migrated('/api/skills/matrix', 'high'),
+  migrated('/api/skills/runtime-matches', 'medium'),
   migrated('/api/space-overview'),
   migrated('/api/sync', 'high'),
   migrated('/api/tree-version'),

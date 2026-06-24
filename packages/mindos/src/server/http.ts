@@ -133,6 +133,7 @@ import { handleSetupGenerateToken } from './handlers/setup-token.js';
 import { handleSetupCheckPath, handleSetupListDirectories } from './handlers/setup-path.js';
 import { handleSetupGet, handleSetupPatch, handleSetupPost } from './handlers/setup.js';
 import { handleSkillMatrixGet, handleSkillsGet, handleSkillsPost, type MindosSkillRoot } from './handlers/skills.js';
+import { handleSkillRuntimeMatchesGet } from './handlers/skill-runtime-matches.js';
 import { handleSpaceOverviewGet } from './handlers/space-overview.js';
 import { handleStaticArtifact } from './handlers/static.js';
 import { handleSyncGet, handleSyncPost } from './handlers/sync.js';
@@ -643,6 +644,23 @@ async function handleRequest(
       const listLinkAgents = createHttpSkillLinkAgents(services);
       const { disabledSkills, skillRoots } = services.listSkills();
       writeResponse(res, handleSkillMatrixGet({ disabledSkills, skillRoots, listLinkAgents }));
+      return;
+    }
+    if (route === 'GET /api/skills/runtime-matches') {
+      const { disabledSkills, skillRoots } = services.listSkills();
+      writeResponse(res, await handleSkillRuntimeMatchesGet(url.searchParams, {
+        disabledSkills,
+        skillRoots,
+        listRuntimes: async () => {
+          const runtimeParams = new URLSearchParams();
+          if (url.searchParams.get('force') === '1') runtimeParams.set('force', '1');
+          const runtimeResponse = await handleAgentRuntimesGet(runtimeParams, services);
+          if (runtimeResponse.status === 200 && runtimeResponse.body && 'runtimes' in runtimeResponse.body) {
+            return runtimeResponse.body.runtimes;
+          }
+          throw new Error('Failed to build runtime descriptors for skill runtime matches.');
+        },
+      }));
       return;
     }
     if (route === 'GET /api/mcp/tools') {
