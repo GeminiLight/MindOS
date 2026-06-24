@@ -127,12 +127,33 @@ detect → health → configure → launch → session → context
 
 当前几个刻意保守的结论：
 
-- `remote-control` 与 `unattended-automation` 分开。Codex / Claude / ACP / MindOS Pi 可以是 `server-runnable`，但 24/7 仍是 `limited`，因为还缺 scheduler、approval routing、wake/resume、failure audit。
+- `remote-control` 与 `unattended-automation` 分开。Codex / Claude / ACP / MindOS Pi 可以是 `server-runnable`，但 24/7 仍是 `limited`，因为还缺 scheduler、approval routing、wake/resume、failure audit。MindOS 已有只读 automation runtime projection contract，把“可远程手动控制”和“可无人值守自动化”拆成两个 readiness 字段。
 - `team-coordination` 现在最多是 `limited`。MindOS 已有 shared context，但还没有 first-class mailbox / task-board primitives，不应该在 UI 上承诺复杂 Team Mode。
 - `permission-governance` 已有只读 permission runtime projection contract。它能解释 Pi 的 `read/ask/auto/full` policy、native runtime 的交互式 permission bridge、ACP adapter 的未知审批契约；但 durable approval queue 还没有实现，所以 native bridge 不能等同 24/7 可用。
 - `skill-execution` 现在是 `limited`。MindOS 能注入/加载 skill，读取 `SKILL.md` runtime requirements，提供 skill × runtime matcher，并在明确 `blocked` 时阻止显式选中的不兼容 skill；但还没有自动 runtime routing，也不会把 `limited/unknown` 在 turn 前变成 UI warning。
 - `mcp-tooling` 对 native runtime 仍是 `limited`。MindOS 已有只读 MCP runtime projection contract，可以解释每个 runtime 当前是 `ready` / `projectable` / `limited` / `blocked` / `unknown`；但不会自动改写 Codex / Claude / ACP adapter 的外部 MCP 配置。
 - `artifact-governance` 现在是 `limited` / `blocked` / `unknown`。MindOS 已有只读 artifact runtime projection contract，可以解释 runtime 的 text/diff/checkpoint/artifact/branch/PR 输出形态；但 MindOS 还没有跨 runtime artifact index，所以不能把“runtime 会产出”说成“MindOS 已统一治理”。
+
+### Automation Runtime Projection
+
+Automation runtime projection 是 `remote-control` 和 `unattended-automation` compatibility 的只读诊断契约，位于 `packages/mindos/src/server/handlers/runtime-automation-projections.ts`，通过 `/api/agent-runtimes/automation-projections` 暴露。它不启动后台任务，也不创建 scheduler；只解释 runtime 当前是否能被远程手动控制，以及距离 24/7 / scheduled / headless 自动化还缺什么。
+
+projection 输出：
+
+| 字段 | 语义 |
+|---|---|
+| `status` | `ready` / `remote-only` / `limited` / `blocked` / `unknown`；当前通常是 `limited`，因为 24/7 前置条件未齐 |
+| `remoteControl` | runtime 是否可在 MindOS server host 上被远程手动控制；包含 `mode`（如 `server-runnable`）和 remote blockers |
+| `unattendedAutomation` | runtime 是否适合 24/7 / scheduled / headless；明确区分 technical runnable 与 product-ready automation |
+| `productPrerequisites` | 当前统一列出 `scheduler`、`approval-routing`、`wake-resume`、`failure-audit` 四个产品层前置条件 |
+| `reasons` / `blockers` | runtime availability、server-runnable、remote control surface、unattended automation 及各前置条件的逐项判断 |
+
+当前结论：
+
+- MindOS Pi / Codex / Claude / ACP 可以是 `server-runnable`，但这只证明 remote/manual control 的底层可能性。
+- 24/7 readiness 需要 durable scheduler、无人值守审批路由、wake/resume/missed trigger reconciliation、failure audit；缺一项就不能在 UI 上承诺 fully unattended。
+- Native runtime 的 permission bridge 是交互式能力，不自动升级成后台任务审批；automation projection 会继续把它标成 `limited`，直到 durable approval queue 落地。
+- Generic ACP 需要 adapter-specific health / permission / artifact contract 才能进一步从 `limited` 或 `unknown` 提升。
 
 ### Permission Runtime Projection
 
@@ -373,6 +394,7 @@ MindOS Pi 的 persisted session 由 Pi `SessionManager` 自己持有完整 JSONL
 | `packages/mindos/src/server/handlers/runtime-permission-projections.ts` | Permission runtime projection contract，统一解释每个 runtime 的交互式审批与 unattended permission readiness |
 | `packages/mindos/src/server/handlers/mcp-runtime-projections.ts` | MCP runtime projection contract，统一解释每个 runtime 的 MCP ready/projectable/limited/blocked/unknown |
 | `packages/mindos/src/server/handlers/runtime-artifact-projections.ts` | Artifact runtime projection contract，统一解释每个 runtime 的 output/handoff/artifact-index readiness |
+| `packages/mindos/src/server/handlers/runtime-automation-projections.ts` | Automation runtime projection contract，统一解释 remote-control 与 24/7 unattended readiness |
 | `packages/mindos/src/agent/prompt/agent-prompt.txt` | MindOS 默认 base prompt |
 | `packages/mindos/src/agent/prompt/assistant-prompt.ts` | Active Assistant overlay 解析与渲染 |
 | `packages/mindos/src/agent/prompt/context-prompt.ts` | context prompt 渲染 |

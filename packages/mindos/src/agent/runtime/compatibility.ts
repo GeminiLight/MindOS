@@ -59,6 +59,7 @@ function unattendedAssessment(runtimeName: string, input: RuntimeCompatibilityIn
       requirements: [
         requirement('background-runner', 'satisfied', 'mindos', 'MindOS exposes a background run lane for this runtime.'),
         requirement('approval-routing', 'satisfied', 'shared', 'Approvals can be resolved without blocking a headless run.'),
+        requirement('automation-projection-contract', 'satisfied', 'mindos', 'MindOS exposes remote-control and unattended automation readiness diagnostics.'),
       ],
     });
   }
@@ -72,6 +73,7 @@ function unattendedAssessment(runtimeName: string, input: RuntimeCompatibilityIn
       requirement('approval-routing', 'missing', 'shared', 'Permission prompts need an unattended-safe approval route before headless automation can be trusted.'),
       requirement('wake-resume', 'missing', 'mindos', 'MindOS must be able to wake, resume, and reconcile missed triggers.'),
       requirement('failure-audit', 'missing', 'mindos', 'Failed or partial background work needs a user-visible audit trail.'),
+      requirement('automation-projection-contract', 'satisfied', 'mindos', 'MindOS exposes remote-control and unattended automation readiness diagnostics.'),
     ],
     blockers: ['scheduler', 'approval-routing', 'wake-resume', 'failure-audit'],
   });

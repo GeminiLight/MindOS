@@ -131,6 +131,17 @@ export {
 } from './handlers/runtime-artifact-projections.js';
 
 export {
+  buildAgentRuntimeAutomationProjectionsPayload,
+  handleAgentRuntimeAutomationProjectionsGet,
+  type AgentRuntimeAutomationProjection,
+  type AgentRuntimeAutomationProjectionReason,
+  type AgentRuntimeAutomationProjectionServices,
+  type AgentRuntimeAutomationProjectionStatus,
+  type AgentRuntimeAutomationProjectionsPayload,
+  type AgentRuntimeAutomationReadinessStatus,
+} from './handlers/runtime-automation-projections.js';
+
+export {
   evaluateSkillRuntimeMatch,
   type MindosSkillRuntimeMatch,
   type MindosSkillRuntimeMatchInput,
