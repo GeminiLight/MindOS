@@ -28,11 +28,14 @@ class ParentComponent extends Component {
 const createAppStub = () => {
   const registerCommand = vi.fn((pluginId: string, command: Command) => command);
   const unregisterCommand = vi.fn();
+  const registerHoverLinkSource = vi.fn();
 
   const app: App = {
     vault: {} as App['vault'],
     metadataCache: {} as App['metadataCache'],
-    workspace: {} as App['workspace'],
+    workspace: {
+      registerHoverLinkSource,
+    } as unknown as App['workspace'],
     fileManager: {} as App['fileManager'],
     secretStorage: {
       setSecret: vi.fn(),
@@ -44,9 +47,11 @@ const createAppStub = () => {
     saveLocalStorage: () => {},
     registerCommand,
     unregisterCommand,
+    commands: {} as App['commands'],
+    customCss: {} as App['customCss'],
   };
 
-  return { app, registerCommand, unregisterCommand };
+  return { app, registerCommand, unregisterCommand, registerHoverLinkSource };
 };
 
 const manifest: PluginManifest = {
@@ -252,6 +257,19 @@ describe('Plugin', () => {
 
     expect(registerCommand).toHaveBeenCalledWith('test-plugin', command);
     expect(unregisterCommand).toHaveBeenCalledWith('test-plugin', 'hello');
+  });
+
+  it('delegates hover link source registration through the workspace host', () => {
+    const { app, registerHoverLinkSource } = createAppStub();
+    const plugin = new Plugin(app, manifest, pluginDir);
+    const options = {
+      display: 'Test links',
+      defaultMod: true,
+    };
+
+    plugin.registerHoverLinkSource('test-plugin', options);
+
+    expect(registerHoverLinkSource).toHaveBeenCalledWith('test-plugin', options);
   });
 
   it('creates ribbon and status bar stubs safely outside browser environments', () => {

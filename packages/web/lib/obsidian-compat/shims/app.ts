@@ -408,6 +408,9 @@ export class AppShim implements App {
       },
       listCommands: () => app.commandRegistry.list(),
       findCommand: (id: string) => app.findCommand(id),
+      removeCommand: (id: string) => {
+        app.removeCommandById(id);
+      },
       executeCommandById: async (id: string) => {
         const command = app.findCommand(id);
         if (!command) {
@@ -420,6 +423,59 @@ export class AppShim implements App {
 
   private findCommand(id: string) {
     return this.commandRegistry.list().find((command) => command.fullId === id || command.id === id);
+  }
+
+  private removeCommandById(id: string): void {
+    const normalizedId = String(id ?? '').trim();
+    if (!normalizedId) {
+      return;
+    }
+
+    const currentPluginId = this.runtimeHost.getCurrentPluginId();
+    const command = this.findCommandForRemoval(normalizedId, currentPluginId);
+    if (command) {
+      this.commandRegistry.unregister(command.pluginId, command.id);
+      return;
+    }
+
+    if (currentPluginId) {
+      this.commandRegistry.unregister(currentPluginId, this.commandIdForCurrentPlugin(normalizedId, currentPluginId));
+    }
+  }
+
+  private commandIdForCurrentPlugin(id: string, pluginId: string): string {
+    const mindosFullIdPrefix = `obsidian:${pluginId}:`;
+    if (id.startsWith(mindosFullIdPrefix)) {
+      return id.slice(mindosFullIdPrefix.length);
+    }
+
+    const obsidianPluginIdPrefix = `${pluginId}:`;
+    if (id.startsWith(obsidianPluginIdPrefix)) {
+      return id.slice(obsidianPluginIdPrefix.length);
+    }
+
+    return id;
+  }
+
+  private findCommandForRemoval(id: string, pluginId?: string) {
+    const commands = this.commandRegistry.list();
+    const matchingCurrentPlugin = pluginId
+      ? commands.find((command) =>
+        command.pluginId === pluginId
+        && (
+          command.fullId === id
+          || command.id === id
+          || `${command.pluginId}:${command.id}` === id
+        ),
+      )
+      : undefined;
+
+    return matchingCurrentPlugin
+      ?? commands.find((command) =>
+        command.fullId === id
+        || `${command.pluginId}:${command.id}` === id
+        || command.id === id,
+      );
   }
 
   private createCustomCssShim(): App['customCss'] {

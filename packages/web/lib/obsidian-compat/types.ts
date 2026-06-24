@@ -265,6 +265,7 @@ export interface IPlugin extends IComponent {
 
   registerView(type: string, creator: ViewCreator): void;
   registerExtensions(extensions: string[], viewType: string): void;
+  registerHoverLinkSource(source: string, options: unknown): void;
   registerEditorExtension(extension: unknown): void;
   registerEditorSuggest(editorSuggest: unknown): void;
   registerMarkdownCodeBlockProcessor(language: string, processor: CodeBlockProcessor): void;
@@ -339,6 +340,7 @@ export interface App {
     commands: Record<string, Command>;
     listCommands(): Command[];
     findCommand(id: string): Command | undefined;
+    removeCommand(id: string): void;
     executeCommandById(id: string): Promise<void>;
   };
   customCss: {

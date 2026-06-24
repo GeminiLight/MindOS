@@ -297,10 +297,19 @@ describe('obsidian compat integration', () => {
         module.exports = class CommandsFacadePlugin extends Plugin {
           onload() {
             this.addCommand({ id: 'hello', name: 'Hello command', callback: () => {} });
+            this.addCommand({ id: 'prefixed', name: 'Prefixed command', callback: () => {} });
+            this.addCommand({ id: 'full', name: 'Full command', callback: () => {} });
+            this.addCommand({ id: 'keep', name: 'Keep command', callback: () => {} });
+            this.app.commands.removeCommand('hello');
+            this.app.commands.removeCommand('commands-facade-plugin:prefixed');
+            this.app.commands.removeCommand('obsidian:commands-facade-plugin:full');
             this.commandCheck = {
               names: this.app.commands.listCommands().map((command) => command.name),
               ids: Object.keys(this.app.commands.commands),
               found: this.app.commands.findCommand('hello')?.name,
+              removedPrefixed: this.app.commands.findCommand('prefixed')?.name,
+              removedFull: this.app.commands.findCommand('full')?.name,
+              kept: this.app.commands.findCommand('keep')?.name,
             };
           }
         };
@@ -311,10 +320,41 @@ describe('obsidian compat integration', () => {
     const loaded = await loader.loadPlugin('commands-facade-plugin');
 
     expect((loaded.instance as any).commandCheck).toEqual({
-      names: ['Hello command'],
-      ids: ['obsidian:commands-facade-plugin:hello'],
-      found: 'Hello command',
+      names: ['Keep command'],
+      ids: ['obsidian:commands-facade-plugin:keep'],
+      found: undefined,
+      removedPrefixed: undefined,
+      removedFull: undefined,
+      kept: 'Keep command',
     });
+  });
+
+  it('records plugin hover link source registrations without requiring an Obsidian pane host', async () => {
+    writePlugin(
+      'hover-link-source-plugin',
+      `
+        const { Plugin } = require('obsidian');
+        module.exports = class HoverLinkSourcePlugin extends Plugin {
+          onload() {
+            this.registerHoverLinkSource('hover-link-source-plugin', {
+              display: 'Hover link source plugin',
+              defaultMod: true,
+            });
+            this.hoverLinkSourceRegistered = true;
+          }
+        };
+      `,
+    );
+
+    const loader = new PluginLoader(mindRoot);
+    const loaded = await loader.loadPlugin('hover-link-source-plugin');
+
+    expect((loaded.instance as any).hoverLinkSourceRegistered).toBe(true);
+    expect(loader.getApp().getRuntimeHost().getWarnings()).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        code: 'workspace-hover-link-source-recorded-only',
+      }),
+    ]));
   });
 
   it('provides safe custom CSS and CodeMirror compatibility globals', async () => {

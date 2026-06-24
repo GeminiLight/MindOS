@@ -95,6 +95,10 @@ export class Plugin extends Component implements IPlugin {
     getRuntimeHost(this.app)?.registerViewExtensions(this.manifest.id, extensions, viewType);
   }
 
+  registerHoverLinkSource(source: string, options: unknown): void {
+    this.app.workspace.registerHoverLinkSource?.(source, options);
+  }
+
   registerEditorExtension(extension: unknown): void {
     getRuntimeHost(this.app)?.registerEditorExtension(this.manifest.id, extension);
   }
