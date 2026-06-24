@@ -70,6 +70,41 @@ describe('detectLocalAcpAgents', () => {
     expect(result.installed.some((agent) => agent.id === 'claude' && agent.binaryPath === '/opt/tools/claude')).toBe(true);
   });
 
+  it('detects user-configured custom ACP agents and skips disabled entries', async () => {
+    mockExecFile.mockImplementation((_command, args, _options, callback) => {
+      const binary = String(Array.isArray(args) ? args.at(-1) : '');
+      const stdout = binary === 'custom-acp' ? '/usr/local/bin/custom-acp\n' : '';
+      callback?.(stdout ? null : new Error('not found'), stdout, '');
+      return {} as never;
+    });
+
+    const result = await detectLocalAcpAgents({
+      acpAgents: {
+        'custom-acp': {
+          name: 'Custom ACP',
+          command: 'custom-acp',
+          args: ['--acp'],
+          detectCommands: ['custom-acp'],
+          installCmd: 'npm install -g custom-acp',
+        },
+        'disabled-acp': {
+          name: 'Disabled ACP',
+          command: 'disabled-acp',
+          enabled: false,
+        },
+      },
+    } as any);
+
+    expect(result.installed).toContainEqual(expect.objectContaining({
+      id: 'custom-acp',
+      name: 'Custom ACP',
+      binaryPath: '/usr/local/bin/custom-acp',
+      resolvedCommand: { cmd: 'custom-acp', args: ['--acp'], source: 'user-override' },
+    }));
+    expect(result.installed.some((agent) => agent.id === 'disabled-acp')).toBe(false);
+    expect(result.notInstalled.some((agent) => agent.id === 'disabled-acp')).toBe(false);
+  });
+
   it('tries the Windows where command on win32', async () => {
     Object.defineProperty(process, 'platform', { value: 'win32' });
     mockExecFile.mockImplementation((command, args, _options, callback) => {

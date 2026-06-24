@@ -15,6 +15,8 @@ import {
   setConfigOption as defaultSetConfigOption,
   getSession as defaultGetSession,
   getActiveSessions as defaultGetActiveSessions,
+  parseAcpAgentOverrides,
+  resolveConfiguredAcpAgentEntry,
   type AcpAgentOverride,
 } from '../../protocols/acp/index.js';
 import { errorResponse, json, type MindosServerResponse } from '../response.js';
@@ -46,13 +48,21 @@ export type AcpInstallServices = {
 };
 
 export type AcpRegistryServices = {
+  readSettings?(): AcpSettings;
   fetchAcpRegistry?(): Promise<unknown | null>;
   findAcpAgent?(agentId: string): Promise<unknown | null>;
 };
 
+type AcpSessionLaunchOptions = {
+  env?: Record<string, string>;
+  cwd?: string;
+  overrides?: Record<string, AcpAgentOverride>;
+};
+
 export type AcpSessionServices = {
-  createSession?(agentId: string, options?: { env?: Record<string, string>; cwd?: string }): Promise<unknown>;
-  loadSession?(agentId: string, sessionId: string, options?: { env?: Record<string, string>; cwd?: string }): Promise<unknown>;
+  readSettings?(): AcpSettings;
+  createSession?(agentId: string, options?: AcpSessionLaunchOptions): Promise<unknown>;
+  loadSession?(agentId: string, sessionId: string, options?: AcpSessionLaunchOptions): Promise<unknown>;
   listSessions?(sessionId: string, options?: { cursor?: string; cwd?: string }): Promise<unknown>;
   closeSession?(sessionId: string): Promise<unknown>;
   prompt?(sessionId: string, text: string): Promise<unknown>;
@@ -198,9 +208,12 @@ export async function handleAcpRegistryGet(
   services: AcpRegistryServices = {},
 ): Promise<MindosServerResponse<{ registry: unknown } | { agent: unknown } | { error: string; agent?: null; registry?: null }>> {
   try {
+    const overrides = readAcpAgentOverrides(services);
     const agentId = searchParams.get('agent');
     if (agentId) {
       if (!isValidAcpAgentId(agentId.trim())) return json({ error: 'Invalid agent id', agent: null }, { status: 400 });
+      const configuredAgent = resolveConfiguredAcpAgentEntry(agentId.trim(), overrides);
+      if (configuredAgent) return json({ agent: configuredAgent });
       const findAcpAgent = services.findAcpAgent ?? defaultFindAcpAgent;
       const agent = await findAcpAgent(agentId.trim());
       if (!agent) return json({ error: 'Agent not found', agent: null }, { status: 404 });
@@ -210,7 +223,7 @@ export async function handleAcpRegistryGet(
     const fetchAcpRegistry = services.fetchAcpRegistry ?? defaultFetchAcpRegistry;
     const registry = await fetchAcpRegistry();
     if (!registry) return json({ error: 'Failed to fetch registry', registry: null }, { status: 502 });
-    return json({ registry });
+    return json({ registry: appendConfiguredAgentsToRegistry(registry, overrides) });
   } catch (error) {
     return errorResponse(error);
   }
@@ -276,48 +289,44 @@ export async function handleAcpSessionDelete(
 }
 
 function sanitizeAcpAgentOverride(input: unknown): AcpAgentOverride | null {
-  if (!input || typeof input !== 'object' || Array.isArray(input)) return null;
-  const config = input as AcpAgentOverride;
-  const sanitized: AcpAgentOverride = {};
-
-  if (typeof config.command === 'string' && config.command.trim()) {
-    sanitized.command = config.command.trim();
-  }
-  if (Array.isArray(config.args)) {
-    sanitized.args = config.args.filter((arg): arg is string => typeof arg === 'string');
-  }
-  if (config.env && typeof config.env === 'object' && !Array.isArray(config.env)) {
-    const env: Record<string, string> = {};
-    for (const [key, value] of Object.entries(config.env)) {
-      if (typeof value === 'string' && isValidEnvKey(key)) env[key] = value;
-    }
-    if (Object.keys(env).length > 0) sanitized.env = env;
-  }
-  if (typeof config.enabled === 'boolean') {
-    sanitized.enabled = config.enabled;
-  }
-
-  return sanitized;
+  const parsed = parseAcpAgentOverrides({ agent: input });
+  return parsed?.agent ?? null;
 }
 
 function sanitizeAcpAgentOverrides(input: unknown): Record<string, AcpAgentOverride> | undefined {
-  if (!input || typeof input !== 'object' || Array.isArray(input)) return undefined;
-  const result: Record<string, AcpAgentOverride> = {};
-  for (const [agentId, config] of Object.entries(input)) {
-    if (!isValidAcpAgentId(agentId)) continue;
-    const sanitized = sanitizeAcpAgentOverride(config);
-    if (sanitized) result[agentId] = sanitized;
-  }
-  return Object.keys(result).length > 0 ? result : undefined;
+  return parseAcpAgentOverrides(input);
 }
 
-function readAcpAgentOverrides(services: AcpDetectServices): Record<string, AcpAgentOverride> | undefined {
+function readAcpAgentOverrides(services: { readSettings?(): AcpSettings }): Record<string, AcpAgentOverride> | undefined {
   try {
     const settings = services.readSettings?.();
     return sanitizeAcpAgentOverrides(settings?.acpAgents);
   } catch {
     return undefined;
   }
+}
+
+function appendConfiguredAgentsToRegistry(
+  registry: unknown,
+  overrides?: Record<string, AcpAgentOverride>,
+): unknown {
+  if (!overrides || !registry || typeof registry !== 'object' || Array.isArray(registry)) return registry;
+  const configured = Object.keys(overrides)
+    .map((agentId) => resolveConfiguredAcpAgentEntry(agentId, overrides))
+    .filter((entry): entry is NonNullable<ReturnType<typeof resolveConfiguredAcpAgentEntry>> => !!entry);
+  if (configured.length === 0) return registry;
+
+  const current = registry as Record<string, unknown>;
+  const rawAgents = Array.isArray(current.agents) ? current.agents : [];
+  const existingIds = new Set(rawAgents
+    .filter((entry): entry is Record<string, unknown> => !!entry && typeof entry === 'object' && !Array.isArray(entry))
+    .map((entry) => typeof entry.id === 'string' ? entry.id : null)
+    .filter((id): id is string => !!id));
+  const agents = [
+    ...rawAgents,
+    ...configured.filter((entry) => !existingIds.has(entry.id)),
+  ];
+  return { ...current, agents };
 }
 
 function isValidNpmPackageName(packageName: string): boolean {
@@ -381,6 +390,7 @@ async function handleAcpSessionCreate(payload: Record<string, unknown>, services
   const options = {
     env: readStringRecord(payload.env),
     cwd: typeof payload.cwd === 'string' ? payload.cwd : undefined,
+    overrides: readAcpAgentOverrides(services),
   };
   const createSession = services.createSession ?? defaultCreateSession;
   const session = await createSession(agentId, options);
@@ -408,6 +418,7 @@ async function handleAcpSessionLoad(payload: Record<string, unknown>, services: 
   const session = await (services.loadSession ?? defaultLoadSession)(agentId, sessionId, {
     env: readStringRecord(payload.env),
     cwd: typeof payload.cwd === 'string' ? payload.cwd : undefined,
+    overrides: readAcpAgentOverrides(services),
   });
   return json({ session });
 }

@@ -29,12 +29,22 @@ export interface AcpAgentDescriptor {
 
 /** User override for a specific agent, persisted in settings. */
 export interface AcpAgentOverride {
+  /** Optional display name for custom ACP agents. Built-in descriptors still own curated names. */
+  name?: string;
+  /** Optional description for custom ACP agents. */
+  description?: string;
   /** Override command path (e.g., "/usr/local/bin/gemini") */
   command?: string;
   /** Override CLI args (e.g., ["--acp", "--verbose"]) */
   args?: string[];
   /** Extra environment variables */
   env?: Record<string, string>;
+  /** Additional command names to probe on PATH for custom ACP agents */
+  detectCommands?: string[];
+  /** Presence directories/config paths used as a fallback signal when PATH probing fails */
+  presenceDirs?: string[];
+  /** Install command shown in UI when a custom ACP agent is not detected */
+  installCmd?: string;
   /** false = skip this agent entirely (default: true) */
   enabled?: boolean;
 }
@@ -247,22 +257,27 @@ export interface DetectableAgent {
   presenceDirs?: string[];
   installCmd?: string;
   description?: string;
+  source: 'descriptor' | 'user-config';
 }
 
 /**
  * Return the canonical list of agents for local detection.
  * Pure local data — no CDN fetch, no async, no network dependency.
  */
-export function getDetectableAgents(): DetectableAgent[] {
-  return Object.entries(AGENT_DESCRIPTORS).map(([id, desc]) => ({
-    id,
-    name: desc.displayName ?? id,
-    binary: desc.binary,
-    detectCommands: desc.detectCommands,
-    presenceDirs: desc.presenceDirs,
-    installCmd: desc.installCmd,
-    description: desc.description,
-  }));
+export function getDetectableAgents(overrides?: Record<string, AcpAgentOverride>): DetectableAgent[] {
+  return [
+    ...Object.entries(AGENT_DESCRIPTORS).map(([id, desc]) => ({
+      id,
+      name: desc.displayName ?? id,
+      binary: desc.binary,
+      detectCommands: desc.detectCommands,
+      presenceDirs: desc.presenceDirs,
+      installCmd: desc.installCmd,
+      description: desc.description,
+      source: 'descriptor' as const,
+    })),
+    ...getConfiguredDetectableAgents(overrides),
+  ];
 }
 
 /**
@@ -291,10 +306,15 @@ export function parseAcpAgentOverrides(raw: unknown): Record<string, AcpAgentOve
   let hasEntries = false;
 
   for (const [key, val] of Object.entries(obj)) {
+    if (!isSafeAgentId(key)) continue;
     if (!val || typeof val !== 'object' || Array.isArray(val)) continue;
     const entry = val as Record<string, unknown>;
     const override: AcpAgentOverride = {};
 
+    const name = sanitizeOptionalString(entry.name, 80);
+    if (name) override.name = name;
+    const description = sanitizeOptionalString(entry.description, 500);
+    if (description) override.description = description;
     if (typeof entry.command === 'string' && entry.command.trim()) {
       override.command = entry.command.trim();
     }
@@ -311,6 +331,12 @@ export function parseAcpAgentOverrides(raw: unknown): Record<string, AcpAgentOve
     if (typeof entry.enabled === 'boolean') {
       override.enabled = entry.enabled;
     }
+    const detectCommands = sanitizeStringArray(entry.detectCommands, 16, 160);
+    if (detectCommands) override.detectCommands = detectCommands;
+    const presenceDirs = sanitizeStringArray(entry.presenceDirs, 16, 500);
+    if (presenceDirs) override.presenceDirs = presenceDirs;
+    const installCmd = sanitizeOptionalString(entry.installCmd, 500);
+    if (installCmd) override.installCmd = installCmd;
 
     if (Object.keys(override).length > 0) {
       result[key] = override;
@@ -321,9 +347,93 @@ export function parseAcpAgentOverrides(raw: unknown): Record<string, AcpAgentOve
   return hasEntries ? result : undefined;
 }
 
+/** Return user-configured ACP agents that are not built into MindOS. */
+export function getConfiguredDetectableAgents(
+  overrides?: Record<string, AcpAgentOverride>,
+): DetectableAgent[] {
+  if (!overrides) return [];
+  const agents: DetectableAgent[] = [];
+  for (const [agentId, override] of Object.entries(overrides)) {
+    const agent = overrideToDetectableAgent(agentId, override);
+    if (agent) agents.push(agent);
+  }
+  return agents;
+}
+
+/** Convert a user-configured custom ACP agent into a registry entry for runtime launch. */
+export function resolveConfiguredAcpAgentEntry(
+  agentId: string,
+  overrides?: Record<string, AcpAgentOverride>,
+): AcpRegistryEntry | null {
+  if (!isSafeAgentId(agentId)) return null;
+  const override = findUserOverride(agentId, overrides);
+  if (!isCustomAcpAgentOverride(agentId, override)) return null;
+  return {
+    id: agentId,
+    name: override.name ?? agentId,
+    description: override.description ?? '',
+    transport: 'stdio',
+    command: override.command,
+    args: override.args ?? [],
+    env: override.env,
+  };
+}
+
 function isSafeEnvKey(key: string): boolean {
   return /^[A-Za-z_][A-Za-z0-9_]*$/.test(key)
     && key !== '__proto__'
     && key !== 'constructor'
     && key !== 'prototype';
+}
+
+function isSafeAgentId(agentId: string): boolean {
+  return /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(agentId)
+    && agentId !== '__proto__'
+    && agentId !== 'constructor'
+    && agentId !== 'prototype';
+}
+
+function sanitizeOptionalString(value: unknown, maxLength: number): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  return trimmed ? trimmed.slice(0, maxLength) : undefined;
+}
+
+function sanitizeStringArray(value: unknown, maxItems: number, maxLength: number): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const result = Array.from(new Set(value
+    .filter((entry): entry is string => typeof entry === 'string')
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .map((entry) => entry.slice(0, maxLength))))
+    .slice(0, maxItems);
+  return result.length > 0 ? result : undefined;
+}
+
+function isCustomAcpAgentOverride(
+  agentId: string,
+  override: AcpAgentOverride | undefined,
+): override is AcpAgentOverride & { command: string } {
+  if (!override || override.enabled === false || !override.command) return false;
+  return !AGENT_DESCRIPTORS[resolveAlias(agentId)];
+}
+
+function overrideToDetectableAgent(
+  agentId: string,
+  override: AcpAgentOverride,
+): DetectableAgent | null {
+  if (!isSafeAgentId(agentId)) return null;
+  if (!isCustomAcpAgentOverride(agentId, override)) return null;
+  const command = override.command.trim();
+  const detectCommands = override.detectCommands ?? [command];
+  return {
+    id: agentId,
+    name: override.name ?? agentId,
+    binary: detectCommands[0] ?? command,
+    detectCommands,
+    presenceDirs: override.presenceDirs,
+    installCmd: override.installCmd,
+    description: override.description,
+    source: 'user-config',
+  };
 }

@@ -459,19 +459,19 @@ async function handleRequest(
       return;
     }
     if (route === 'GET /api/acp/registry') {
-      writeResponse(res, await handleAcpRegistryGet(url.searchParams));
+      writeResponse(res, await handleAcpRegistryGet(url.searchParams, services));
       return;
     }
     if (route === 'GET /api/acp/session') {
-      writeResponse(res, handleAcpSessionGet());
+      writeResponse(res, handleAcpSessionGet(services));
       return;
     }
     if (route === 'POST /api/acp/session') {
-      writeResponse(res, await handleAcpSessionPost(await readJsonBody(req)));
+      writeResponse(res, await handleAcpSessionPost(await readJsonBody(req), services));
       return;
     }
     if (route === 'DELETE /api/acp/session') {
-      writeResponse(res, await handleAcpSessionDelete(await readJsonBody(req)));
+      writeResponse(res, await handleAcpSessionDelete(await readJsonBody(req), services));
       return;
     }
     if (route === 'GET /api/bootstrap') {

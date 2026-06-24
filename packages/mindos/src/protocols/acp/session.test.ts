@@ -45,6 +45,7 @@ vi.mock('./subprocess.js', () => ({
 
 import { createSession, createSessionFromEntry, loadSession, listSessions, prompt, promptStream, cancelPrompt, closeSession, setMode, setConfigOption, getSession, getActiveSessions } from './session';
 import { findAcpAgent } from './registry.js';
+import { spawnAndConnect } from './subprocess.js';
 
 const MOCK_ENTRY: AcpRegistryEntry = {
   id: 'test-agent',
@@ -334,6 +335,31 @@ describe('ACP Session (SDK-based)', () => {
       (findAcpAgent as ReturnType<typeof vi.fn>).mockResolvedValueOnce(MOCK_ENTRY);
       const session = await createSession('test-agent');
       expect(session.agentId).toBe('test-agent');
+    });
+
+    it('creates sessions for configured custom ACP agents without registry lookup', async () => {
+      const session = await createSession('custom-acp', {
+        overrides: {
+          'custom-acp': {
+            name: 'Custom ACP',
+            command: 'custom-acp',
+            args: ['--acp'],
+          },
+        },
+      });
+
+      expect(session.agentId).toBe('custom-acp');
+      expect(findAcpAgent).not.toHaveBeenCalled();
+      expect(spawnAndConnect).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 'custom-acp',
+          name: 'Custom ACP',
+          command: 'custom-acp',
+          args: ['--acp'],
+          transport: 'stdio',
+        }),
+        expect.any(Object),
+      );
     });
   });
 

@@ -640,6 +640,8 @@ describe('MindOS server contract: settings, embedding, protocols', () => {
       acpAgents: { gemini: { command: 'gemini', args: ['--experimental-acp'] } },
     };
     let detectCalls = 0;
+    const createSessionCalls: Array<{ agentId: string; options?: any }> = [];
+    const loadSessionCalls: Array<{ agentId: string; sessionId: string; options?: any }> = [];
     const activeSession = { id: 'ses-1', agentId: 'gemini', state: 'idle' };
     const services = {
       readSettings: () => settings,
@@ -658,8 +660,14 @@ describe('MindOS server contract: settings, embedding, protocols', () => {
       findAcpAgent: async (agentId: string) => agentId === 'gemini' ? { id: 'gemini', name: 'Gemini' } : null,
       getActiveSessions: () => [activeSession],
       getSession: (sessionId: string) => sessionId === 'ses-1' ? activeSession : null,
-      createSession: async (agentId: string, options?: any) => ({ ...activeSession, agentId, cwd: options?.cwd }),
-      loadSession: async (agentId: string, sessionId: string) => ({ id: sessionId, agentId, state: 'idle' }),
+      createSession: async (agentId: string, options?: any) => {
+        createSessionCalls.push({ agentId, options });
+        return { ...activeSession, agentId, cwd: options?.cwd };
+      },
+      loadSession: async (agentId: string, sessionId: string, options?: any) => {
+        loadSessionCalls.push({ agentId, sessionId, options });
+        return { id: sessionId, agentId, state: 'idle', cwd: options?.cwd };
+      },
       prompt: async (sessionId: string, text: string) => ({ sessionId, text: `echo:${text}`, done: true }),
       cancelPrompt: async () => {},
       closeSession: async () => {},
@@ -674,10 +682,35 @@ describe('MindOS server contract: settings, embedding, protocols', () => {
     });
     expect(handleAcpConfigPost({
       agentId: 'claude',
-      config: { command: ' claude ', args: ['--acp', 1], env: { GOOD: 'yes', BAD: 1, ['__proto__']: 'polluted' }, enabled: false },
+      config: {
+        name: 'Claude Wrapper',
+        description: 'Custom ACP wrapper',
+        command: ' claude ',
+        args: ['--acp', 1],
+        env: { GOOD: 'yes', BAD: 1, ['__proto__']: 'polluted' },
+        detectCommands: ['claude', 1, 'claude'],
+        presenceDirs: ['~/.claude/'],
+        installCmd: 'npm install -g @anthropic-ai/claude-code',
+        enabled: false,
+      },
     }, services)).toMatchObject({
       status: 200,
-      body: { ok: true, agents: { claude: { command: 'claude', args: ['--acp'], env: { GOOD: 'yes' }, enabled: false } } },
+      body: {
+        ok: true,
+        agents: {
+          claude: {
+            name: 'Claude Wrapper',
+            description: 'Custom ACP wrapper',
+            command: 'claude',
+            args: ['--acp'],
+            env: { GOOD: 'yes' },
+            detectCommands: ['claude'],
+            presenceDirs: ['~/.claude/'],
+            installCmd: 'npm install -g @anthropic-ai/claude-code',
+            enabled: false,
+          },
+        },
+      },
     });
     expect(handleAcpConfigPost({
       agentId: '__proto__',
@@ -736,6 +769,73 @@ describe('MindOS server contract: settings, embedding, protocols', () => {
     await expect(handleAcpRegistryGet(new URLSearchParams(), services)).resolves.toMatchObject({
       status: 200,
       body: { registry: { agents: [{ id: 'gemini' }] } },
+    });
+    expect(handleAcpConfigPost({
+      agentId: 'custom-acp',
+      config: { name: 'Custom ACP', command: 'custom-acp', args: ['--acp'] },
+    }, services)).toMatchObject({
+      status: 200,
+      body: {
+        ok: true,
+        agents: {
+          'custom-acp': { name: 'Custom ACP', command: 'custom-acp', args: ['--acp'] },
+        },
+      },
+    });
+    await expect(handleAcpRegistryGet(new URLSearchParams('agent=custom-acp'), {
+      ...services,
+      findAcpAgent: async () => null,
+    })).resolves.toMatchObject({
+      status: 200,
+      body: {
+        agent: {
+          id: 'custom-acp',
+          name: 'Custom ACP',
+          command: 'custom-acp',
+          args: ['--acp'],
+          transport: 'stdio',
+        },
+      },
+    });
+    await expect(handleAcpRegistryGet(new URLSearchParams(), {
+      ...services,
+      fetchAcpRegistry: async () => ({ version: 'test', agents: [], fetchedAt: '2026-05-09T00:00:00.000Z' }),
+    })).resolves.toMatchObject({
+      status: 200,
+      body: {
+        registry: {
+          agents: [
+            expect.objectContaining({ id: 'custom-acp', command: 'custom-acp' }),
+          ],
+        },
+      },
+    });
+    await expect(handleAcpSessionPost({ agentId: 'custom-acp', cwd: '/tmp/custom' }, services)).resolves.toMatchObject({
+      status: 200,
+      body: { session: { agentId: 'custom-acp', cwd: '/tmp/custom' } },
+    });
+    expect(createSessionCalls.at(-1)).toMatchObject({
+      agentId: 'custom-acp',
+      options: {
+        cwd: '/tmp/custom',
+        overrides: {
+          'custom-acp': { name: 'Custom ACP', command: 'custom-acp', args: ['--acp'] },
+        },
+      },
+    });
+    await expect(handleAcpSessionPost({ action: 'load', agentId: 'custom-acp', sessionId: 'ses-custom', cwd: '/tmp/custom' }, services)).resolves.toMatchObject({
+      status: 200,
+      body: { session: { id: 'ses-custom', agentId: 'custom-acp', cwd: '/tmp/custom' } },
+    });
+    expect(loadSessionCalls.at(-1)).toMatchObject({
+      agentId: 'custom-acp',
+      sessionId: 'ses-custom',
+      options: {
+        cwd: '/tmp/custom',
+        overrides: {
+          'custom-acp': { name: 'Custom ACP', command: 'custom-acp', args: ['--acp'] },
+        },
+      },
     });
 
     expect(handleAcpSessionGet(services)).toMatchObject({

@@ -6,8 +6,10 @@ export {
   getDescriptorDescription,
   getDescriptorDisplayName,
   getDescriptorInstallCmd,
+  getConfiguredDetectableAgents,
   getDetectableAgents,
   parseAcpAgentOverrides,
+  resolveConfiguredAcpAgentEntry,
   resolveAgentCommand,
   resolveAlias,
 } from '@geminilight/mindos/protocols/acp';

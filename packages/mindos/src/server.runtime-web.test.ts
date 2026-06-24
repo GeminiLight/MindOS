@@ -249,6 +249,42 @@ describe('MindOS server contract: runtime, agent turn stream, static web', () =>
     });
   });
 
+  it('passes configured custom ACP agents into scoped runtime detection', async () => {
+    const acpAgents = {
+      'custom-acp': {
+        name: 'Custom ACP',
+        command: 'custom-acp',
+        args: ['--acp'],
+      },
+    };
+    const detectLocalAcpAgents = vi.fn(async (options?: { overrides?: Record<string, unknown> }) => ({
+      installed: options?.overrides?.['custom-acp']
+        ? [{ id: 'custom-acp', name: 'Custom ACP', binaryPath: '/usr/local/bin/custom-acp' }]
+        : [],
+      notInstalled: [],
+    }));
+
+    const res = await handleAgentRuntimesGet(new URLSearchParams('scope=acp'), {
+      now: () => Date.parse('2026-06-09T00:00:00.000Z'),
+      readSettings: () => ({ acpAgents }),
+      detectLocalAcpAgents,
+    });
+
+    expect(detectLocalAcpAgents).toHaveBeenCalledWith({ overrides: acpAgents });
+    expect(res).toMatchObject({
+      status: 200,
+      body: {
+        runtimes: [
+          expect.objectContaining({
+            id: 'custom-acp',
+            kind: 'acp',
+            binaryPath: '/usr/local/bin/custom-acp',
+          }),
+        ],
+      },
+    });
+  });
+
   it('describes runtime registry categories and harness capabilities without changing legacy capability fields', async () => {
     const res = await handleAgentRuntimesGet(new URLSearchParams(), {
       now: () => Date.parse('2026-06-09T00:00:00.000Z'),

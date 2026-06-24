@@ -316,6 +316,8 @@ Web 的 `packages/web/app/api/file/route.ts` 只保留 Next.js adapter：读取 
 
 **核心源码：** `packages/mindos/src/protocols/acp` 是 ACP source of truth，负责类型、Agent descriptor、注册表、安装探测、subprocess 生命周期和 session 管理，并通过 `@geminilight/mindos/protocols/acp` 暴露给 Web adapters。
 
+**自定义 ACP Agent：** `settings.acpAgents` 不只覆盖内置 descriptor，也可声明 custom ACP adapter（`name` / `description` / `command` / `args` / `env` / `detectCommands` / `presenceDirs` / `installCmd`）。检测层会把启用的 custom adapter 纳入 `/api/acp/detect` 与 `/api/agent-runtimes?scope=acp`，session 层会先从 settings 解析 custom registry entry，再回退 CDN / built-in registry；`enabled:false` 表示从检测和运行时列表跳过。
+
 **Web 适配：** `packages/web/lib/acp` 只保留 thin adapters、A2A bridge 和 `acp-tools`。用户配置通过 Web settings 注入为 `overrides`，核心包不读取 Web-only settings。
 
 **SDK 集成：** `packages/mindos/src/protocols/acp/subprocess.ts` 使用 SDK `ClientSideConnection` + `ndJsonStream` 建立连接，`packages/mindos/src/protocols/acp/session.ts` 通过 SDK 方法管理完整生命周期（initialize → authenticate → session/new → prompt → cancel → close）

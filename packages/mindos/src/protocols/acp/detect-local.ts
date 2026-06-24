@@ -209,7 +209,7 @@ async function lookupCommandPaths(commands: string[]): Promise<Map<string, strin
 export async function detectLocalAcpAgents(
   options: LocalAcpDetectionOptions = {},
 ): Promise<{ installed: InstalledAgent[]; notInstalled: NotInstalledAgent[] }> {
-  const agents = getDetectableAgents();
+  const agents = getDetectableAgents(options.overrides);
 
   const plans = agents.map((agent) => {
     const userOverride = findUserOverride(agent.id, options.overrides);
@@ -229,6 +229,8 @@ export async function detectLocalAcpAgents(
   const notInstalled: NotInstalledAgent[] = [];
 
   for (const { agent, resolved, directOverridePath, presenceCommands } of plans) {
+    if (!resolved.enabled) continue;
+
     const detectedCommandPath = presenceCommands.map((command) => presenceLookup.get(command) ?? null).find(Boolean);
     const presencePath = directOverridePath
       ?? detectedCommandPath

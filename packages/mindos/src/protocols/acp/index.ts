@@ -6,8 +6,10 @@ export {
   getDescriptorDescription,
   getDescriptorDisplayName,
   getDescriptorInstallCmd,
+  getConfiguredDetectableAgents,
   getDetectableAgents,
   parseAcpAgentOverrides,
+  resolveConfiguredAcpAgentEntry,
   resolveAgentCommand,
   resolveAlias,
 } from './agent-descriptors.js';

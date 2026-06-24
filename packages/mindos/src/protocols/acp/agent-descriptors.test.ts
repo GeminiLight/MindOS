@@ -9,6 +9,8 @@ import {
   getDescriptorBinary,
   getDescriptorInstallCmd,
   getDetectableAgents,
+  getConfiguredDetectableAgents,
+  resolveConfiguredAcpAgentEntry,
 } from './agent-descriptors';
 import type { AcpRegistryEntry } from './types';
 
@@ -110,6 +112,31 @@ describe('parseAcpAgentOverrides', () => {
     expect(result).toEqual({ 'gemini': { command: '/usr/local/bin/gemini' } });
   });
 
+  it('parses custom ACP adapter metadata', () => {
+    const result = parseAcpAgentOverrides({
+      'my-agent': {
+        name: 'My Agent',
+        description: 'Local ACP adapter',
+        command: 'my-agent',
+        args: ['--acp', '--verbose'],
+        detectCommands: ['my-agent', 'my-agent-beta', 'my-agent'],
+        presenceDirs: ['~/.my-agent/'],
+        installCmd: 'npm install -g my-agent',
+      },
+    });
+    expect(result).toEqual({
+      'my-agent': {
+        name: 'My Agent',
+        description: 'Local ACP adapter',
+        command: 'my-agent',
+        args: ['--acp', '--verbose'],
+        detectCommands: ['my-agent', 'my-agent-beta'],
+        presenceDirs: ['~/.my-agent/'],
+        installCmd: 'npm install -g my-agent',
+      },
+    });
+  });
+
   it('parses valid config with args', () => {
     const result = parseAcpAgentOverrides({ 'gemini': { args: ['--acp', '--verbose'] } });
     expect(result).toEqual({ 'gemini': { args: ['--acp', '--verbose'] } });
@@ -149,6 +176,16 @@ describe('parseAcpAgentOverrides', () => {
   it('skips invalid entries', () => {
     const result = parseAcpAgentOverrides({ 'good': { command: 'x' }, 'bad': 'not-an-object' });
     expect(result).toEqual({ 'good': { command: 'x' } });
+  });
+
+  it('skips unsafe agent ids while parsing overrides', () => {
+    const result = parseAcpAgentOverrides({
+      '__proto__': { command: 'bad' },
+      'bad id': { command: 'bad' },
+      'good-id': { command: 'ok' },
+    });
+    expect(result).toEqual({ 'good-id': { command: 'ok' } });
+    expect(({} as Record<string, unknown>).command).toBeUndefined();
   });
 
   it('trims command whitespace', () => {
@@ -300,5 +337,83 @@ describe('getDetectableAgents', () => {
     const binaries = agents.map(a => a.binary);
     const unique = new Set(binaries);
     expect(binaries.length).toBe(unique.size);
+  });
+
+  it('appends enabled user-configured custom ACP agents', () => {
+    const agents = getDetectableAgents({
+      'my-agent': {
+        name: 'My Agent',
+        command: 'my-agent',
+        args: ['--acp'],
+        detectCommands: ['my-agent-beta'],
+        description: 'Custom local ACP agent',
+      },
+      'disabled-agent': {
+        command: 'disabled-agent',
+        enabled: false,
+      },
+      'gemini': {
+        name: 'Renamed Gemini',
+        command: 'gemini-custom',
+      },
+    });
+
+    expect(agents).toContainEqual(expect.objectContaining({
+      id: 'my-agent',
+      name: 'My Agent',
+      binary: 'my-agent-beta',
+      detectCommands: ['my-agent-beta'],
+      source: 'user-config',
+    }));
+    expect(agents.some((agent) => agent.id === 'disabled-agent')).toBe(false);
+    expect(agents.filter((agent) => agent.id === 'gemini')).toHaveLength(1);
+  });
+});
+
+describe('getConfiguredDetectableAgents', () => {
+  it('returns only custom agents with a command', () => {
+    expect(getConfiguredDetectableAgents({
+      'custom-acp': { command: 'custom-acp', name: 'Custom ACP' },
+      'no-command': { name: 'No command' },
+      'claude': { command: 'claude-custom' },
+    })).toEqual([
+      expect.objectContaining({
+        id: 'custom-acp',
+        name: 'Custom ACP',
+        binary: 'custom-acp',
+        source: 'user-config',
+      }),
+    ]);
+  });
+});
+
+describe('resolveConfiguredAcpAgentEntry', () => {
+  it('creates a registry entry for a custom configured ACP agent', () => {
+    expect(resolveConfiguredAcpAgentEntry('my-agent', {
+      'my-agent': {
+        name: 'My Agent',
+        description: 'Custom ACP',
+        command: 'my-agent',
+        args: ['--acp'],
+        env: { MY_AGENT_TOKEN: 'secret' },
+      },
+    })).toEqual({
+      id: 'my-agent',
+      name: 'My Agent',
+      description: 'Custom ACP',
+      transport: 'stdio',
+      command: 'my-agent',
+      args: ['--acp'],
+      env: { MY_AGENT_TOKEN: 'secret' },
+    });
+  });
+
+  it('does not shadow built-in descriptors or disabled custom agents', () => {
+    expect(resolveConfiguredAcpAgentEntry('gemini', {
+      gemini: { command: 'gemini-custom' },
+    })).toBeNull();
+    expect(resolveConfiguredAcpAgentEntry('my-agent', {
+      'my-agent': { command: 'my-agent', enabled: false },
+    })).toBeNull();
   });
 });

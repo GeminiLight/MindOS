@@ -32,6 +32,7 @@ import {
   type AcpProcess,
 } from './subprocess.js';
 import { findAcpAgent } from './registry.js';
+import { resolveConfiguredAcpAgentEntry } from './agent-descriptors.js';
 
 export interface AcpSessionOptions extends AcpLaunchOptions {
   clientVersion?: string;
@@ -115,7 +116,8 @@ export async function createSession(
   agentId: string,
   options?: AcpSessionOptions,
 ): Promise<AcpSession> {
-  const entry = await findAcpAgent(agentId);
+  const entry = resolveConfiguredAcpAgentEntry(agentId, options?.overrides)
+    ?? await findAcpAgent(agentId);
   if (!entry) {
     throw new Error(`ACP agent not found in registry: ${agentId}`);
   }
@@ -217,7 +219,8 @@ export async function loadSession(
   existingSessionId: string,
   options?: AcpSessionOptions,
 ): Promise<AcpSession> {
-  const entry = await findAcpAgent(agentId);
+  const entry = resolveConfiguredAcpAgentEntry(agentId, options?.overrides)
+    ?? await findAcpAgent(agentId);
   if (!entry) {
     throw new Error(`ACP agent not found in registry: ${agentId}`);
   }

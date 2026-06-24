@@ -690,6 +690,63 @@ hidden: true
     }
   });
 
+  it('passes configured ACP agent overrides through Product Server session routes', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'mindos-http-acp-session-'));
+    let observedOptions: { overrides?: Record<string, unknown>; cwd?: string } | undefined;
+    const app = createMindosHttpServer({
+      hostname: '127.0.0.1',
+      port: 0,
+      services: {
+        ...createDefaultMindosHttpServices({
+          readSettings: () => ({
+            mindRoot: root,
+            acpAgents: {
+              'custom-acp': { name: 'Custom ACP', command: 'custom-acp', args: ['--acp'] },
+            },
+          }),
+        }),
+        createSession: async (agentId: string, options?: { overrides?: Record<string, unknown>; cwd?: string }) => {
+          observedOptions = options;
+          return {
+            id: 'ses-custom',
+            agentId,
+            hasCustomOverride: Boolean(options?.overrides?.['custom-acp']),
+            cwd: options?.cwd,
+          };
+        },
+      },
+    });
+    await new Promise<void>((resolve) => app.server.listen(0, '127.0.0.1', resolve));
+    const address = app.server.address();
+    if (!address || typeof address === 'string') throw new Error('expected TCP server address');
+    const base = `http://127.0.0.1:${address.port}`;
+    try {
+      const response = await fetch(`${base}/api/acp/session`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'sec-fetch-site': 'same-origin' },
+        body: JSON.stringify({ agentId: 'custom-acp', cwd: '/tmp/custom-acp' }),
+      });
+      expect(response.status).toBe(200);
+      await expect(response.json()).resolves.toMatchObject({
+        session: {
+          id: 'ses-custom',
+          agentId: 'custom-acp',
+          hasCustomOverride: true,
+          cwd: '/tmp/custom-acp',
+        },
+      });
+      expect(observedOptions).toMatchObject({
+        cwd: '/tmp/custom-acp',
+        overrides: {
+          'custom-acp': { name: 'Custom ACP', command: 'custom-acp', args: ['--acp'] },
+        },
+      });
+    } finally {
+      await new Promise<void>((resolve, reject) => app.server.close((error) => error ? reject(error) : resolve()));
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('resolves product version from explicit env, repo root, or installed package root', () => {
     expect(readMindosProductVersion({ env: { npm_package_version: '9.9.9' } })).toBe('9.9.9');
 
