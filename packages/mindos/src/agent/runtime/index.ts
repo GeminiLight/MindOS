@@ -8,6 +8,7 @@ export * from './codex-app-server.js';
 export * from './codex-env.js';
 export * from './descriptors.js';
 export * from './detection.js';
+export * from './lifecycle.js';
 export * from './registry.js';
 export * from './runtime-env.js';
 export * from './runtime-errors.js';

@@ -34,6 +34,36 @@ const RAW_CODEX_OPTIONAL_DEPENDENCY_STACK = [
   'Node.js v22.16.0',
 ].join('\n');
 
+const TEST_RUNTIME_LIFECYCLE: AgentRuntimeDescriptor['lifecycle'] = {
+  schemaVersion: 1,
+  stages: {
+    detect: { support: 'owned', owner: 'mindos', summary: 'test' },
+    health: { support: 'owned', owner: 'mindos', summary: 'test' },
+    configure: { support: 'delegated', owner: 'external', summary: 'test' },
+    launch: { support: 'delegated', owner: 'external', summary: 'test' },
+    session: { support: 'delegated', owner: 'external', summary: 'test' },
+    context: { support: 'delegated', owner: 'external', summary: 'test' },
+    execute: { support: 'delegated', owner: 'external', summary: 'test' },
+    interrupt: { support: 'delegated', owner: 'external', summary: 'test' },
+    archive: { support: 'unsupported', owner: 'external', summary: 'test' },
+    remote: { support: 'delegated', owner: 'external', summary: 'test' },
+    coordinate: { support: 'delegated', owner: 'external', summary: 'test' },
+  },
+  remote: {
+    supported: true,
+    mode: 'server-runnable',
+    unattended: 'limited',
+    summary: 'test',
+  },
+  coordination: {
+    role: 'external-worker',
+    supportsSharedContext: true,
+    supportsMailbox: false,
+    supportsTaskBoard: false,
+    summary: 'test',
+  },
+};
+
 function availableNativeDescriptor(
   input: Pick<AgentRuntimeDescriptor, 'id' | 'name' | 'kind' | 'adapter'> & { binaryPath: string },
 ): AgentRuntimeDescriptor {
@@ -67,6 +97,7 @@ function availableNativeDescriptor(
       supportsBackgroundRuns: false,
       supportsMcpConfig: input.kind === 'claude',
     },
+    lifecycle: TEST_RUNTIME_LIFECYCLE,
     availability: {
       checkedAt: '2026-06-10T00:00:00.000Z',
       sources: ['native-health'],

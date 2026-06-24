@@ -260,3 +260,45 @@ describe('a2a-agent capabilities', () => {
     });
   });
 });
+
+describe('runtime capabilities', () => {
+  it('projects runtime lifecycle metadata into native and ACP capability records', async () => {
+    const listers = createAgentCapabilitiesServices(createServices({
+      resolveRuntimeCommand: (command) => {
+        if (command === 'codex') return '/usr/local/bin/codex';
+        if (command === 'claude') return '/usr/local/bin/claude';
+        return null;
+      },
+      checkNativeRuntimeHealth: async () => ({ status: 'available' }),
+      detectLocalAcpAgents: async () => ({
+        installed: [{ id: 'gemini', name: 'Gemini CLI', binaryPath: '/usr/local/bin/gemini' }],
+        notInstalled: [],
+      }),
+    }));
+
+    const native = await listers.native?.();
+    const acp = await listers.acp?.();
+    const codex = native?.find((cap) => cap.id === 'native-runtime:codex:codex');
+    const gemini = acp?.find((cap) => cap.id === 'native-runtime:acp:gemini');
+
+    expect(codex?.metadata).toMatchObject({
+      lifecycle: expect.objectContaining({
+        stages: expect.objectContaining({
+          detect: expect.objectContaining({ support: 'owned', owner: 'mindos' }),
+          session: expect.objectContaining({ support: 'delegated', owner: 'external' }),
+        }),
+        remote: expect.objectContaining({ mode: 'server-runnable', unattended: 'limited' }),
+        coordination: expect.objectContaining({ role: 'external-worker', supportsSharedContext: true }),
+      }),
+    });
+    expect(gemini?.metadata).toMatchObject({
+      lifecycle: expect.objectContaining({
+        stages: expect.objectContaining({
+          health: expect.objectContaining({ support: 'unknown', owner: 'external' }),
+          execute: expect.objectContaining({ support: 'delegated', owner: 'external' }),
+        }),
+        coordination: expect.objectContaining({ supportsMailbox: false, supportsTaskBoard: false }),
+      }),
+    });
+  });
+});

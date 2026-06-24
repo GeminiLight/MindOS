@@ -12,6 +12,11 @@ import {
   compactRuntimeHintsForDescriptor,
 } from './detection.js';
 import {
+  acpRuntimeLifecycle,
+  mindosRuntimeLifecycle,
+  nativeRuntimeLifecycle,
+} from './lifecycle.js';
+import {
   summarizeRuntimeFailure,
 } from './runtime-errors.js';
 import type {
@@ -72,6 +77,7 @@ export function nativeDescriptor(input: {
 }): AgentRuntimeDescriptor {
   const status = input.source ? input.source.status ?? 'available' : input.missing?.status ?? 'missing';
   const runtimeBridge = input.source?.runtimeBridge;
+  const capabilities = input.id === 'codex' ? codexCapabilities : claudeCapabilities;
   const rawReason = input.source?.reason ?? input.missing?.reason;
   const reasonSummary = rawReason ? summarizeRuntimeFailure(rawReason, { runtime: input.id }) : null;
   const reason = reasonSummary?.reason;
@@ -105,8 +111,9 @@ export function nativeDescriptor(input: {
     permissionOwner: 'external',
     sessionOwner: 'external',
     status,
-    capabilities: input.id === 'codex' ? codexCapabilities : claudeCapabilities,
+    capabilities,
     harnessCapabilities: input.id === 'codex' ? codexHarnessCapabilities : claudeHarnessCapabilities,
+    lifecycle: nativeRuntimeLifecycle(input.id, capabilities),
     ...(runtimeBridge ? { runtimeBridge } : {}),
     description: input.id === 'codex'
       ? 'Local Codex app-server runtime. Model, approval, and thread behavior are owned by Codex.'
@@ -153,6 +160,7 @@ export function mindosRuntimeDescriptor(checkedAt: string): AgentRuntimeDescript
     status: 'available',
     capabilities: mindosCapabilities,
     harnessCapabilities: mindosHarnessCapabilities,
+    lifecycle: mindosRuntimeLifecycle(mindosCapabilities),
     description: 'MindOS internal agent using the selected provider and model.',
     availability: { checkedAt, sources: ['settings'] },
   };
@@ -173,6 +181,7 @@ export function acpRuntimeDescriptor(agent: DetectedRuntimeAgent, checkedAt: str
     status: agent.status ?? 'available',
     capabilities: acpCapabilities,
     harnessCapabilities: acpHarnessCapabilities,
+    lifecycle: acpRuntimeLifecycle(acpCapabilities),
     description: 'ACP agent selected as the Chat Panel runtime.',
     sourceAgentId: agent.id,
     canonicalAgentId: agent.id,

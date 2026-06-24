@@ -18,7 +18,10 @@ function cacheKey(kind: NativeRuntimeKind, id: string): string {
 function isNativeRuntimeDescriptor(value: unknown): value is AgentRuntimeDescriptor & { kind: NativeRuntimeKind } {
   if (!value || typeof value !== 'object') return false;
   const record = value as Partial<AgentRuntimeDescriptor>;
-  return (record.kind === 'codex' || record.kind === 'claude') && typeof record.id === 'string';
+  return (record.kind === 'codex' || record.kind === 'claude') &&
+    typeof record.id === 'string' &&
+    !!record.lifecycle &&
+    typeof record.lifecycle === 'object';
 }
 
 export function rememberAvailableNativeRuntimeDescriptor(

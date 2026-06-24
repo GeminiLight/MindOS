@@ -48,6 +48,20 @@ function throwingAsyncIterable<T>(error: Error): AsyncIterable<T> {
   };
 }
 
+const RUNTIME_LIFECYCLE_STAGES = [
+  'detect',
+  'health',
+  'configure',
+  'launch',
+  'session',
+  'context',
+  'execute',
+  'interrupt',
+  'archive',
+  'remote',
+  'coordinate',
+];
+
 describe('MindOS server contract: runtime, agent turn stream, static web', () => {
   it('handles monitoring snapshots without Web dependencies', () => {
     const root = mkdtempSync(join(tmpdir(), 'mindos-monitoring-'));
@@ -285,7 +299,7 @@ describe('MindOS server contract: runtime, agent turn stream, static web', () =>
     });
   });
 
-  it('describes runtime registry categories and harness capabilities without changing legacy capability fields', async () => {
+	it('describes runtime registry categories and harness capabilities without changing legacy capability fields', async () => {
     const res = await handleAgentRuntimesGet(new URLSearchParams(), {
       now: () => Date.parse('2026-06-09T00:00:00.000Z'),
       readSettings: () => ({ acpAgents: {} }),
@@ -314,6 +328,7 @@ describe('MindOS server contract: runtime, agent turn stream, static web', () =>
 
     expect(res.status).toBe(200);
     const runtimes = 'runtimes' in res.body ? res.body.runtimes : [];
+    const byId = new Map(runtimes.map((runtime) => [runtime.id, runtime]));
     expect(runtimes).toEqual(expect.arrayContaining([
       expect.objectContaining({
         id: 'mindos',
@@ -325,6 +340,20 @@ describe('MindOS server contract: runtime, agent turn stream, static web', () =>
           session: 'local-id',
           permissions: 'mindos-only',
           tools: expect.arrayContaining(['file', 'skills']),
+        }),
+        lifecycle: expect.objectContaining({
+          schemaVersion: 1,
+          stages: expect.objectContaining({
+            session: expect.objectContaining({ support: 'owned', owner: 'mindos' }),
+            context: expect.objectContaining({ support: 'owned', owner: 'mindos' }),
+            remote: expect.objectContaining({ support: 'owned', owner: 'mindos' }),
+          }),
+          remote: expect.objectContaining({ mode: 'server-runnable', unattended: 'limited' }),
+          coordination: expect.objectContaining({
+            role: 'primary',
+            supportsSharedContext: true,
+            supportsMailbox: false,
+          }),
         }),
       }),
       expect.objectContaining({
@@ -343,6 +372,17 @@ describe('MindOS server contract: runtime, agent turn stream, static web', () =>
           permissions: 'runtime-bridged',
           eventStream: expect.arrayContaining(['thread-turn-item', 'permissions']),
         }),
+        lifecycle: expect.objectContaining({
+          schemaVersion: 1,
+          stages: expect.objectContaining({
+            detect: expect.objectContaining({ support: 'owned', owner: 'mindos' }),
+            session: expect.objectContaining({ support: 'delegated', owner: 'external' }),
+            context: expect.objectContaining({ support: 'delegated', owner: 'external' }),
+            archive: expect.objectContaining({ support: 'delegated', owner: 'external' }),
+          }),
+          remote: expect.objectContaining({ supported: true, mode: 'server-runnable' }),
+          coordination: expect.objectContaining({ role: 'external-worker', supportsSharedContext: true }),
+        }),
       }),
       expect.objectContaining({
         id: 'claude',
@@ -354,6 +394,14 @@ describe('MindOS server contract: runtime, agent turn stream, static web', () =>
         harnessCapabilities: expect.objectContaining({
           session: 'local-id',
           permissions: 'runtime-bridged',
+        }),
+        lifecycle: expect.objectContaining({
+          stages: expect.objectContaining({
+            detect: expect.objectContaining({ support: 'owned', owner: 'mindos' }),
+            session: expect.objectContaining({ support: 'delegated', owner: 'external' }),
+            archive: expect.objectContaining({ support: 'unsupported', owner: 'external' }),
+          }),
+          remote: expect.objectContaining({ supported: true, unattended: 'limited' }),
         }),
       }),
       expect.objectContaining({
@@ -370,8 +418,24 @@ describe('MindOS server contract: runtime, agent turn stream, static web', () =>
           session: 'none',
           permissions: 'none',
         }),
+        lifecycle: expect.objectContaining({
+          stages: expect.objectContaining({
+            detect: expect.objectContaining({ support: 'owned', owner: 'mindos' }),
+            health: expect.objectContaining({ support: 'unknown', owner: 'external' }),
+            execute: expect.objectContaining({ support: 'delegated', owner: 'external' }),
+          }),
+          coordination: expect.objectContaining({
+            role: 'external-worker',
+            supportsMailbox: false,
+            supportsTaskBoard: false,
+          }),
+        }),
       }),
     ]));
+    for (const id of ['mindos', 'codex', 'claude', 'gemini']) {
+      const runtime = byId.get(id);
+      expect(Object.keys(runtime?.lifecycle.stages ?? {}).sort()).toEqual([...RUNTIME_LIFECYCLE_STAGES].sort());
+    }
   });
 
   it('keeps native runtime detection out of ACP installed payload lists', async () => {

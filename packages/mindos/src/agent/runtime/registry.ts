@@ -57,6 +57,68 @@ export type AgentRuntimeAdapter =
 
 export type AgentRuntimeOwner = 'mindos' | 'external';
 
+export type AgentRuntimeLifecycleStage =
+  | 'detect'
+  | 'health'
+  | 'configure'
+  | 'launch'
+  | 'session'
+  | 'context'
+  | 'execute'
+  | 'interrupt'
+  | 'archive'
+  | 'remote'
+  | 'coordinate';
+
+export type AgentRuntimeLifecycleSupport = 'owned' | 'delegated' | 'unsupported' | 'unknown';
+
+export type AgentRuntimeLifecycleSource =
+  | 'settings'
+  | 'runtime-registry'
+  | 'native-health'
+  | 'acp-detect'
+  | 'acp-registry'
+  | 'turn-runner'
+  | 'runtime-bridge'
+  | 'codex-app-server'
+  | 'claude-bridge'
+  | 'acp-session'
+  | 'mindos-pi-session'
+  | 'run-ledger';
+
+export type AgentRuntimeLifecycleStageDescriptor = {
+  support: AgentRuntimeLifecycleSupport;
+  owner: AgentRuntimeOwner;
+  summary: string;
+  required?: boolean;
+  sources?: AgentRuntimeLifecycleSource[];
+  diagnosticHints?: string[];
+};
+
+export type AgentRuntimeRemoteMode = 'local-only' | 'server-runnable' | 'external-runtime' | 'cloud-task' | 'unknown';
+
+export type AgentRuntimeUnattendedSupport = 'supported' | 'limited' | 'unsupported' | 'unknown';
+
+export type AgentRuntimeCoordinationRole = 'primary' | 'external-worker' | 'subagent-capable' | 'unknown';
+
+export type AgentRuntimeLifecycle = {
+  schemaVersion: 1;
+  stages: Record<AgentRuntimeLifecycleStage, AgentRuntimeLifecycleStageDescriptor>;
+  remote: {
+    supported: boolean;
+    mode: AgentRuntimeRemoteMode;
+    unattended: AgentRuntimeUnattendedSupport;
+    summary: string;
+  };
+  coordination: {
+    role: AgentRuntimeCoordinationRole;
+    supportsSharedContext: boolean;
+    supportsMailbox: boolean;
+    supportsTaskBoard: boolean;
+    summary: string;
+  };
+};
+
 export type AgentRuntimeBridge = {
   kind: 'codex-app-server' | 'claude-sdk' | 'claude-cli';
   label: string;
@@ -78,6 +140,7 @@ export type AgentRuntimeDescriptor = {
   status: AgentRuntimeStatus;
   capabilities: AgentRuntimeCapabilities;
   harnessCapabilities?: AgentRuntimeHarnessCapabilities;
+  lifecycle: AgentRuntimeLifecycle;
   runtimeBridge?: AgentRuntimeBridge;
   description?: string;
   sourceAgentId?: string;

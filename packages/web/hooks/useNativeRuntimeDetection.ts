@@ -20,7 +20,8 @@ interface NativeRuntimeDetectionState {
 }
 
 const RUNTIME_KINDS: NativeRuntimeKind[] = ['codex', 'claude'];
-const STORAGE_PREFIX = 'mindos:native-runtime-detection:v1:';
+const STORAGE_PREFIX = 'mindos:native-runtime-detection:v2:';
+const LEGACY_STORAGE_PREFIXES = ['mindos:native-runtime-detection:v1:'];
 const STALE_TTL_MS = 30 * 60 * 1000;
 const DETECTION_TIMEOUT_MS = 30000;
 
@@ -38,7 +39,8 @@ function isNativeRuntimeDescriptor(value: unknown, kind: NativeRuntimeKind): val
     value.id === kind &&
     typeof value.name === 'string' &&
     typeof value.status === 'string' &&
-    isRecord(value.capabilities);
+    isRecord(value.capabilities) &&
+    isRecord(value.lifecycle);
 }
 
 function readRuntimeCache(kind: NativeRuntimeKind): NativeRuntimeCache | null {
@@ -68,6 +70,9 @@ function writeRuntimeCache(kind: NativeRuntimeKind, runtime: AgentRuntimeDescrip
 
 function removeRuntimeCache(kind: NativeRuntimeKind): void {
   try { sessionStorage.removeItem(cacheKey(kind)); } catch { /* ignore */ }
+  for (const prefix of LEGACY_STORAGE_PREFIXES) {
+    try { sessionStorage.removeItem(`${prefix}${kind}`); } catch { /* ignore */ }
+  }
 }
 
 function shouldRevalidate(): boolean {

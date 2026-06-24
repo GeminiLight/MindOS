@@ -72,6 +72,14 @@ describe('/api/agent-runtimes', () => {
           supportsToolEvents: true,
           supportsRuntimeStatus: true,
         }),
+        lifecycle: expect.objectContaining({
+          stages: expect.objectContaining({
+            session: expect.objectContaining({ support: 'owned', owner: 'mindos' }),
+            context: expect.objectContaining({ support: 'owned', owner: 'mindos' }),
+          }),
+          remote: expect.objectContaining({ mode: 'server-runnable', unattended: 'limited' }),
+          coordination: expect.objectContaining({ role: 'primary', supportsSharedContext: true }),
+        }),
       }),
       expect.objectContaining({
         id: 'codex',
@@ -97,6 +105,15 @@ describe('/api/agent-runtimes', () => {
           supportsToolEvents: true,
           supportsCheckpoints: false,
         }),
+        lifecycle: expect.objectContaining({
+          stages: expect.objectContaining({
+            detect: expect.objectContaining({ support: 'owned', owner: 'mindos' }),
+            session: expect.objectContaining({ support: 'delegated', owner: 'external' }),
+            context: expect.objectContaining({ support: 'delegated', owner: 'external' }),
+            archive: expect.objectContaining({ support: 'delegated', owner: 'external' }),
+          }),
+          coordination: expect.objectContaining({ role: 'external-worker', supportsMailbox: false }),
+        }),
       }),
       expect.objectContaining({
         id: 'claude',
@@ -110,6 +127,13 @@ describe('/api/agent-runtimes', () => {
         binaryPath: '/usr/local/bin/claude',
         availability: expect.objectContaining({
           sources: ['native-health'],
+        }),
+        lifecycle: expect.objectContaining({
+          stages: expect.objectContaining({
+            session: expect.objectContaining({ support: 'delegated', owner: 'external' }),
+            archive: expect.objectContaining({ support: 'unsupported', owner: 'external' }),
+          }),
+          remote: expect.objectContaining({ supported: true, mode: 'server-runnable' }),
         }),
       }),
       expect.objectContaining({
@@ -125,6 +149,13 @@ describe('/api/agent-runtimes', () => {
           supportsResume: false,
           supportsToolEvents: true,
           supportsApprovals: false,
+        }),
+        lifecycle: expect.objectContaining({
+          stages: expect.objectContaining({
+            health: expect.objectContaining({ support: 'unknown', owner: 'external' }),
+            execute: expect.objectContaining({ support: 'delegated', owner: 'external' }),
+          }),
+          remote: expect.objectContaining({ unattended: 'limited' }),
         }),
       }),
     ]));

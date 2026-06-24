@@ -32,8 +32,8 @@ interface AcpDetectionState {
   refresh: () => void;
 }
 
-const STORAGE_KEY = 'mindos:acp-detection:v3';
-const LEGACY_STORAGE_KEYS = ['mindos:acp-detection:v2', 'mindos:acp-detection'];
+const STORAGE_KEY = 'mindos:acp-detection:v4';
+const LEGACY_STORAGE_KEYS = ['mindos:acp-detection:v3', 'mindos:acp-detection:v2', 'mindos:acp-detection'];
 const STALE_TTL_MS = 30 * 60 * 1000;
 const REVALIDATE_TTL_MS = 30 * 60 * 1000;
 const DETECTION_TIMEOUT_MS = 30000;
@@ -47,6 +47,16 @@ export interface DetectionCache {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isAcpRuntimeDescriptor(value: unknown): value is AgentRuntimeDescriptor {
+  return isRecord(value) &&
+    value.kind === 'acp' &&
+    typeof value.id === 'string' &&
+    typeof value.name === 'string' &&
+    typeof value.status === 'string' &&
+    isRecord(value.capabilities) &&
+    isRecord(value.lifecycle);
 }
 
 export function readAcpDetectionCacheFromStorage(): DetectionCache | null {
@@ -67,7 +77,7 @@ export function readAcpDetectionCacheFromStorage(): DetectionCache | null {
       installed: parsed.installed as DetectedAgent[],
       notInstalled: parsed.notInstalled as NotInstalledAgent[],
       ...(Array.isArray(parsed.runtimes)
-        ? { runtimes: (parsed.runtimes as AgentRuntimeDescriptor[]).filter((runtime) => runtime.kind === 'acp') }
+        ? { runtimes: parsed.runtimes.filter(isAcpRuntimeDescriptor) }
         : {}),
       ts: parsed.ts,
     };
@@ -81,7 +91,7 @@ function writeStorage(installed: DetectedAgent[], notInstalled: NotInstalledAgen
     sessionStorage.setItem(STORAGE_KEY, JSON.stringify({
       installed,
       notInstalled,
-      runtimes: runtimes.filter((runtime) => runtime.kind === 'acp'),
+      runtimes: runtimes.filter(isAcpRuntimeDescriptor),
       ts: Date.now(),
     }));
   } catch { /* quota exceeded */ }
@@ -145,7 +155,7 @@ export function useAcpDetection(): AcpDetectionState {
         if (cancelled) return;
         const inst: DetectedAgent[] = data.installed ?? [];
         const notInst: NotInstalledAgent[] = data.notInstalled ?? [];
-        const runtimeData: AgentRuntimeDescriptor[] = Array.isArray(data.runtimes) ? data.runtimes : [];
+        const runtimeData: AgentRuntimeDescriptor[] = Array.isArray(data.runtimes) ? data.runtimes.filter(isAcpRuntimeDescriptor) : [];
         writeStorage(inst, notInst, runtimeData);
         cached.current = { installed: inst, notInstalled: notInst, runtimes: runtimeData, ts: Date.now() };
         setInstalledAgents(inst);
