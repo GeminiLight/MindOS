@@ -8,6 +8,7 @@ const mockInstalledAgents: Array<{ id: string; name: string; binaryPath: string 
 
 vi.mock('@/lib/stores/locale-store', () => ({
   useLocale: () => ({
+    locale: 'zh' as const,
     t: {
       ask: {
         title: 'MindOS',
@@ -161,6 +162,20 @@ vi.mock('@/hooks/useAgentChat', () => ({
     reconnectMaxRef: { current: 3 },
     abortRef: { current: null },
     firstMessageFired: { current: false },
+    contextUsage: {
+      runtime: 'mindos',
+      phase: 'preflight',
+      action: 'history_pruned',
+      percent: 73,
+      usedTokens: 36_000,
+      contextWindow: 128_000,
+      budgetTokens: 112_000,
+      reserveTokens: 16_000,
+      keepRecentTokens: 20_000,
+      systemPromptTokens: 8_000,
+      turnPromptTokens: 12_000,
+      historyTokens: 16_000,
+    },
     submit: (e: Event) => e.preventDefault(),
     stop: vi.fn(),
   }),
@@ -214,6 +229,9 @@ describe('ChatContent runtime selector placement', () => {
 
     expect(host.querySelector('[data-testid="permission-capsule"]')).toBeTruthy();
     expect(host.querySelector('[data-testid="provider-capsule"]')).toBeTruthy();
+    expect(host.querySelector('button[aria-label*="索引中 73%"]')).toBeTruthy();
+    expect(host.textContent).toContain('上下文窗口: 128K tokens');
+    expect(host.textContent).toContain('已占用: 36K · 可用: 92K');
     expect(host.querySelector('[data-testid="runtime-switcher"]')?.textContent).toBe('MindOS');
     expect(host.querySelector('[data-testid="agent-selector"]')).toBeNull();
 

@@ -21,6 +21,7 @@ import SessionHistoryPanel from '@/components/ask/SessionHistoryPanel';
 import AskHeader from '@/components/ask/AskHeader';
 import FileChip from '@/components/ask/FileChip';
 import AskComposerInput from '@/components/ask/AskComposerInput';
+import ContextStatusButton from '@/components/ask/ContextStatusButton';
 import SessionContextDock from '@/components/ask/SessionContextDock';
 import ProviderModelCapsule, { getPersistedProviderModel } from '@/components/ask/ProviderModelCapsule';
 import NativeRuntimeOptionsCapsule, { getPersistedNativeRuntimeOptions, persistNativeRuntimeOptions } from '@/components/ask/NativeRuntimeOptionsCapsule';
@@ -1179,7 +1180,6 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
         agentLoadingByKind={nativeDetection.loadingByKind}
         agentErrorByKind={nativeDetection.errorByKind}
         onRefreshNativeRuntimes={nativeDetection.refresh}
-        contextUsage={contextUsage}
       />
 
       {showHistory && (
@@ -1431,24 +1431,25 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
           <div className={cn('relative z-20 flex items-center justify-between border-t border-border/10', isPanel ? 'px-2 pb-1.5 pt-1 gap-1' : 'px-3 pb-2 pt-1.5')}>
             <div className={cn('flex items-center flex-wrap', isPanel ? 'gap-1' : 'gap-2')}>
               <ModeCapsule mode={permissionMode} onChange={setPermissionMode} disabled={isLoading} />
-            {mounted && isMindosRuntime && (
-              <ProviderModelCapsule
-                providerValue={providerOverride}
-                onProviderChange={handleProviderChange}
-                modelValue={modelOverride}
-                onModelChange={handleModelChange}
-                disabled={isLoading}
-                persistSelection={false}
-              />
-            )}
-            {mounted && isNativeRuntime && selectedNativeRuntimeKind && (
-              <NativeRuntimeOptionsCapsule
-                runtimeKind={selectedNativeRuntimeKind}
-                value={nativeRuntimeOptions}
-                onChange={handleNativeRuntimeOptionsChange}
-                disabled={isLoading}
-              />
-            )}
+              {mounted && isMindosRuntime && (
+                <ProviderModelCapsule
+                  providerValue={providerOverride}
+                  onProviderChange={handleProviderChange}
+                  modelValue={modelOverride}
+                  onModelChange={handleModelChange}
+                  disabled={isLoading}
+                  persistSelection={false}
+                />
+              )}
+              {mounted && isNativeRuntime && selectedNativeRuntimeKind && (
+                <NativeRuntimeOptionsCapsule
+                  runtimeKind={selectedNativeRuntimeKind}
+                  value={nativeRuntimeOptions}
+                  onChange={handleNativeRuntimeOptionsChange}
+                  disabled={isLoading}
+                />
+              )}
+              <ContextStatusButton usage={contextUsage} />
             </div>
             {/* Keyboard hint — hidden in panel (too narrow) and home (compact) */}
             {!isPanel && !isHome && (
