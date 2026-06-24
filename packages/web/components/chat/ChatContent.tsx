@@ -43,6 +43,7 @@ import {
 import { canEditSessionWorkDir, refreshSessions } from '@/lib/agent-session-store';
 import { cn } from '@/lib/utils';
 import { useNativeRuntimeDetection } from '@/hooks/useNativeRuntimeDetection';
+import { useRuntimeReadiness } from '@/hooks/useRuntimeReadiness';
 import type { AcpAgentSelection } from '@/hooks/useAskModal';
 import { compactRuntimeDisplayReason } from '@/lib/agent/runtime-error-display';
 import type { CodexThreadListResponse, CodexThreadSummary, RuntimeSessionBinding } from '@/lib/types';
@@ -249,6 +250,7 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
   const mention = useMention();
   const slash = useSlashCommand();
   const nativeDetection = useNativeRuntimeDetection();
+  const runtimeReadiness = useRuntimeReadiness({ visible, permissionMode });
   const nativeRuntimes = useMemo<Array<AgentRuntimeIdentity & Partial<Pick<AgentRuntimeDescriptor, 'status' | 'availability' | 'installCmd' | 'packageName' | 'binaryPath' | 'runtimeBridge'>>>>(() => {
     return nativeDetection.runtimes
       .filter((runtime) => runtime.kind === 'codex' || runtime.kind === 'claude')
@@ -1150,6 +1152,10 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
       persistNativeRuntimeOptions(runtime.kind, next);
     }
   }, []);
+  const handleRefreshRuntimeState = useCallback(() => {
+    nativeDetection.refresh();
+    runtimeReadiness.refresh();
+  }, [nativeDetection.refresh, runtimeReadiness.refresh]);
 
   return (
     <div className="flex min-h-0 w-full flex-col h-full">
@@ -1179,7 +1185,9 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
         agentLoading={false}
         agentLoadingByKind={nativeDetection.loadingByKind}
         agentErrorByKind={nativeDetection.errorByKind}
-        onRefreshNativeRuntimes={nativeDetection.refresh}
+        runtimeReadinessByRuntimeId={runtimeReadiness.readinessByRuntimeId}
+        runtimeReadinessLoading={runtimeReadiness.loading}
+        onRefreshNativeRuntimes={handleRefreshRuntimeState}
       />
 
       {showHistory && (

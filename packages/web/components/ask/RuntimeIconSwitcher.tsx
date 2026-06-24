@@ -3,7 +3,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, ChevronDown, Loader2, RefreshCw } from 'lucide-react';
-import type { AgentRuntimeDescriptor, AgentRuntimeIdentity, AgentRuntimeStatus, RuntimeSessionBinding } from '@/lib/types';
+import type {
+  AgentRuntimeDescriptor,
+  AgentRuntimeIdentity,
+  AgentRuntimeReadinessGap,
+  AgentRuntimeReadinessProjection,
+  AgentRuntimeReadinessStatus,
+  AgentRuntimeStatus,
+  RuntimeSessionBinding,
+} from '@/lib/types';
 import type { NotInstalledAgent } from '@/hooks/useAcpDetection';
 import { useLocale } from '@/lib/stores/locale-store';
 import { compactRuntimeDisplayHints, compactRuntimeDisplayReason } from '@/lib/agent/runtime-error-display';
@@ -18,6 +26,8 @@ interface RuntimeIconSwitcherProps {
   loading?: boolean;
   loadingByKind?: Partial<Record<'codex' | 'claude', boolean>>;
   errorByKind?: Partial<Record<'codex' | 'claude', string | null>>;
+  runtimeReadinessByRuntimeId?: Record<string, AgentRuntimeReadinessProjection>;
+  runtimeReadinessLoading?: boolean;
   onRefreshNativeRuntimes?: () => void;
   disabled?: boolean;
 }
@@ -31,6 +41,7 @@ type RuntimeOption = {
   icon: 'mindos' | 'codex' | 'claude' | 'agent';
   disabled?: boolean;
   status?: AgentRuntimeStatus | 'checking';
+  readiness?: AgentRuntimeReadinessProjection;
 };
 
 type RuntimeSelectable = AgentRuntimeIdentity & { status?: AgentRuntimeStatus };
@@ -74,6 +85,60 @@ function runtimeOptionStatusLabel(status: RuntimeOption['status']): string | nul
   if (!status || status === 'available') return null;
   if (status === 'checking') return 'Checking...';
   return runtimeStatusLabel(status);
+}
+
+function runtimeReadinessStatusLabel(status: AgentRuntimeReadinessStatus | undefined): string | null {
+  if (!status || status === 'ready') return null;
+  if (status === 'usable') return 'Usable';
+  if (status === 'limited') return 'Limited';
+  if (status === 'blocked') return 'Blocked';
+  return 'Unknown';
+}
+
+function runtimeReadinessBadgeClass(status: AgentRuntimeReadinessStatus): string {
+  if (status === 'blocked') return 'border-[var(--error)]/30 bg-[var(--error)]/10 text-[var(--error)]';
+  if (status === 'limited') return 'border-[var(--amber)]/35 bg-[var(--amber)]/10 text-[var(--amber)]';
+  if (status === 'unknown') return 'border-border/60 bg-muted/40 text-muted-foreground';
+  return 'border-border/60 bg-background/70 text-muted-foreground';
+}
+
+function runtimeReadinessGapPrefix(gap: AgentRuntimeReadinessGap): string {
+  if (gap.category === 'mindos-product') return 'MindOS';
+  if (gap.category === 'runtime-native') return 'Runtime';
+  if (gap.category === 'adapter-contract') return 'Adapter';
+  if (gap.category === 'deployment') return 'Deploy';
+  if (gap.category === 'user-setup') return 'Setup';
+  return 'Shared';
+}
+
+function topReadinessGap(readiness: AgentRuntimeReadinessProjection | undefined): AgentRuntimeReadinessGap | null {
+  if (!readiness?.gaps.length) return null;
+  const severityRank: Record<AgentRuntimeReadinessGap['severity'], number> = {
+    blocking: 3,
+    warning: 2,
+    info: 1,
+  };
+  const categoryRank: Record<AgentRuntimeReadinessGap['category'], number> = {
+    'mindos-product': 5,
+    deployment: 4,
+    'adapter-contract': 3,
+    'runtime-native': 2,
+    'user-setup': 1,
+    shared: 0,
+  };
+  return [...readiness.gaps].sort((left, right) => (
+    severityRank[right.severity] - severityRank[left.severity] ||
+    categoryRank[right.category] - categoryRank[left.category] ||
+    left.id.localeCompare(right.id)
+  ))[0] ?? null;
+}
+
+function runtimeReadinessNote(readiness: AgentRuntimeReadinessProjection | undefined): string | null {
+  if (!readiness) return null;
+  const gap = topReadinessGap(readiness);
+  if (gap) return `${runtimeReadinessGapPrefix(gap)}: ${gap.summary}`;
+  if (readiness.overallStatus !== 'ready') return readiness.summary;
+  return null;
 }
 
 function resolveNativeOptionStatus(
@@ -142,6 +207,8 @@ export default function RuntimeIconSwitcher({
   loading = false,
   loadingByKind = {},
   errorByKind = {},
+  runtimeReadinessByRuntimeId = {},
+  runtimeReadinessLoading = false,
   onRefreshNativeRuntimes,
   disabled = false,
 }: RuntimeIconSwitcherProps) {
@@ -161,6 +228,12 @@ export default function RuntimeIconSwitcher({
     const claudeRuntime = nativeRuntimes.find((runtime) => runtime.kind === 'claude');
     const missingCodex = notInstalledAgents.find(isCodexAgent);
     const missingClaude = notInstalledAgents.find(isClaudeAgent);
+    const getReadiness = (runtime: RuntimeSelectable | null | undefined, fallbackKey: string) => {
+      const runtimeId = runtime?.id ?? fallbackKey;
+      return runtimeReadinessByRuntimeId[runtimeId] ??
+        (runtime?.kind ? runtimeReadinessByRuntimeId[runtime.kind] : undefined) ??
+        runtimeReadinessByRuntimeId[fallbackKey];
+    };
 
     const nativeOption = (
       kind: 'codex' | 'claude',
@@ -197,6 +270,7 @@ export default function RuntimeIconSwitcher({
         icon: kind,
         disabled: status !== 'available',
         status,
+        readiness: getReadiness(runtime ?? { id: kind, name: label, kind }, kind),
       };
     };
 
@@ -214,11 +288,12 @@ export default function RuntimeIconSwitcher({
         runtime: null,
         icon: 'mindos',
         status: 'available',
+        readiness: getReadiness(null, 'mindos'),
       },
       codexOption,
       claudeOption,
     ];
-  }, [errorByKind, loading, loadingByKind, nativeRuntimes, notInstalledAgents, p.acpDefaultAgent]);
+  }, [errorByKind, loading, loadingByKind, nativeRuntimes, notInstalledAgents, p.acpDefaultAgent, runtimeReadinessByRuntimeId]);
 
   const selectedOption = useMemo<RuntimeOption>(() => {
     if (!selectedRuntime) return options[0];
@@ -232,8 +307,9 @@ export default function RuntimeIconSwitcher({
       runtime: selectedRuntime,
       icon: selectedRuntime.kind === 'codex' ? 'codex' : selectedRuntime.kind === 'claude' ? 'claude' : 'agent',
       status: 'available',
+      readiness: runtimeReadinessByRuntimeId[selectedRuntime.id] ?? runtimeReadinessByRuntimeId[selectedRuntime.kind],
     };
-  }, [options, selectedRuntime]);
+  }, [options, runtimeReadinessByRuntimeId, selectedRuntime]);
   const canShowSessionBinding = selectedRuntime?.kind === 'codex' || selectedRuntime?.kind === 'claude';
   const sessionLabel = selectedRuntime ? runtimeSessionLabel(selectedRuntime) : 'Session';
   const hasExternalSession = canShowSessionBinding && !!runtimeSessionBinding?.externalSessionId;
@@ -314,6 +390,12 @@ export default function RuntimeIconSwitcher({
         <span className="text-2xs font-medium uppercase tracking-wide text-muted-foreground/70">
           Runtime
         </span>
+        {runtimeReadinessLoading && (
+          <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground/70">
+            <Loader2 size={10} className="animate-spin" />
+            Readiness
+          </span>
+        )}
         {onRefreshNativeRuntimes && (
           <button
             type="button"
@@ -360,7 +442,9 @@ export default function RuntimeIconSwitcher({
         const runtime = option.runtime;
         const isSelected = !selectedRuntime
           ? runtime === null
-          : runtime?.kind === selectedRuntime.kind && runtime.id === selectedRuntime.id;
+          : !!runtime && runtime.kind === selectedRuntime.kind && runtime.id === selectedRuntime.id;
+        const readinessLabel = runtimeReadinessStatusLabel(option.readiness?.overallStatus);
+        const readinessNote = runtimeReadinessNote(option.readiness);
         return (
           <button
             key={option.key}
@@ -380,8 +464,18 @@ export default function RuntimeIconSwitcher({
                     {runtimeOptionStatusLabel(option.status)}
                   </span>
                 )}
+                {readinessLabel && option.readiness && (
+                  <span className={`rounded-full border px-1.5 py-0.5 text-[10px] ${runtimeReadinessBadgeClass(option.readiness.overallStatus)}`}>
+                    {readinessLabel}
+                  </span>
+                )}
               </span>
               <span className="block text-2xs leading-snug text-muted-foreground [overflow-wrap:anywhere]">{option.description}</span>
+              {readinessNote && (
+                <span className="mt-1 block line-clamp-2 text-[10px] leading-snug text-muted-foreground/80 [overflow-wrap:anywhere]">
+                  {readinessNote}
+                </span>
+              )}
               {option.diagnosticHints && option.diagnosticHints.length > 0 && (
                 <span className="mt-1 block space-y-0.5 text-[10px] leading-snug text-muted-foreground/70">
                   {option.diagnosticHints.map((hint) => (

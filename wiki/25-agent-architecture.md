@@ -130,7 +130,7 @@ detect → health → configure → launch → session → context
 - `remote-control` 与 `unattended-automation` 分开。Codex / Claude / ACP / MindOS Pi 可以是 `server-runnable`，但 24/7 仍是 `limited`，因为还缺 scheduler、approval routing、wake/resume、failure audit。MindOS 已有只读 automation runtime projection contract，把“可远程手动控制”和“可无人值守自动化”拆成两个 readiness 字段。
 - `team-coordination` 现在最多是 `limited`。MindOS 已有 shared context，但还没有 first-class mailbox / task-board primitives，不应该在 UI 上承诺复杂 Team Mode。
 - `permission-governance` 已有只读 permission runtime projection contract。它能解释 Pi 的 `read/ask/auto/full` policy、native runtime 的交互式 permission bridge、ACP adapter 的未知审批契约；但 durable approval queue 还没有实现，所以 native bridge 不能等同 24/7 可用。
-- `skill-execution` 现在是 `limited`。MindOS 能注入/加载 skill，读取 `SKILL.md` runtime requirements，提供 skill × runtime matcher，并在明确 `blocked` 时阻止显式选中的不兼容 skill；但还没有自动 runtime routing，也不会把 `limited/unknown` 在 turn 前变成 UI warning。
+- `skill-execution` 现在是 `limited`。MindOS 能注入/加载 skill，读取 `SKILL.md` runtime requirements，提供 skill × runtime matcher，并在明确 `blocked` 时阻止显式选中的不兼容 skill；runtime selector 会在 turn 前展示聚合 readiness 与主要 gap，但还不会自动 runtime routing。
 - `mcp-tooling` 对 native runtime 仍是 `limited`。MindOS 已有只读 MCP runtime projection contract，可以解释每个 runtime 当前是 `ready` / `projectable` / `limited` / `blocked` / `unknown`；但不会自动改写 Codex / Claude / ACP adapter 的外部 MCP 配置。
 - `artifact-governance` 现在是 `limited` / `blocked` / `unknown`。MindOS 已有只读 artifact runtime projection contract，可以解释 runtime 的 text/diff/checkpoint/artifact/branch/PR 输出形态；但 MindOS 还没有跨 runtime artifact index，所以不能把“runtime 会产出”说成“MindOS 已统一治理”。
 
@@ -305,7 +305,7 @@ Skill runtime enforcement 是 `skill-execution` compatibility 的第三层 turn-
 3. 用 matcher 计算 `interactive-turn` 匹配结果；
 4. 只在 `level=blocked` 时返回 `409 skill-runtime-blocked`，并带上 `runtimeId`、`runtimeKind`、`skillName`、`blockers` 与逐项 `reasons`。
 
-这条 gate 只处理“明确不能跑”的硬不兼容。缺少 requirements 的旧 skill、`unknown`、`limited` 仍继续进入当前 runtime，避免破坏现有 skill 生态。当前 readiness blocker 因此前移到 `skill-runtime-routing`：MindOS 还不会自动帮用户切换到更合适的 runtime，也还没有在 turn 前把 `limited/unknown` 以 UI warning 的方式展示出来。
+这条 gate 只处理“明确不能跑”的硬不兼容。缺少 requirements 的旧 skill、`unknown`、`limited` 仍继续进入当前 runtime，避免破坏现有 skill 生态。Runtime selector 会以只读提示展示聚合 readiness 与主要 gap，帮助用户在 turn 前理解风险；它不自动切换 runtime，也不把 `limited/unknown` 升级成硬阻断。
 
 ## 六、Prompt 与上下文
 

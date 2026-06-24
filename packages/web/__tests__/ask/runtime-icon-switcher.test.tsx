@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import RuntimeIconSwitcher from '@/components/ask/RuntimeIconSwitcher';
+import type { AgentRuntimeReadinessProjection } from '@/lib/types';
 
 vi.mock('@/lib/stores/locale-store', () => ({
   useLocale: () => ({
@@ -26,6 +27,27 @@ const RAW_CODEX_OPTIONAL_DEPENDENCY_STACK = [
   'at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)',
   'Node.js v22.16.0',
 ].join('\n');
+
+function readinessProjection(
+  runtimeId: string,
+  runtimeName: string,
+  runtimeKind: AgentRuntimeReadinessProjection['runtimeKind'],
+  overrides: Partial<AgentRuntimeReadinessProjection> = {},
+): AgentRuntimeReadinessProjection {
+  return {
+    schemaVersion: 1,
+    runtimeId,
+    runtimeName,
+    runtimeKind,
+    runtimeStatus: 'available',
+    overallStatus: 'limited',
+    summary: `${runtimeName} has partial runtime readiness.`,
+    recommendations: [],
+    useCases: [],
+    gaps: [],
+    ...overrides,
+  };
+}
 
 describe('RuntimeIconSwitcher', () => {
   beforeEach(() => {
@@ -173,6 +195,167 @@ describe('RuntimeIconSwitcher', () => {
         reason: 'SDK missing',
       },
     });
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('surfaces runtime readiness gaps without disabling an available native runtime', async () => {
+    const onSelect = vi.fn();
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(
+        <RuntimeIconSwitcher
+          selectedRuntime={null}
+          onSelect={onSelect}
+          nativeRuntimes={[{ id: 'codex', name: 'Codex', kind: 'codex', status: 'available' }]}
+          loading={false}
+          runtimeReadinessByRuntimeId={{
+            codex: readinessProjection('codex', 'Codex', 'codex', {
+              overallStatus: 'limited',
+              gaps: [
+                {
+                  id: 'artifact-index',
+                  category: 'mindos-product',
+                  severity: 'warning',
+                  summary: 'MindOS needs a unified artifact index before Codex outputs are fully governed.',
+                  useCases: ['artifact-governance'],
+                },
+              ],
+            }),
+          }}
+        />,
+      );
+    });
+
+    const trigger = host.querySelector('button[aria-haspopup="listbox"]') as HTMLButtonElement;
+    await act(async () => {
+      trigger.click();
+    });
+
+    expect(document.body.textContent).toContain('Limited');
+    expect(document.body.textContent).toContain('MindOS: MindOS needs a unified artifact index before Codex outputs are fully governed.');
+    const codexButton = Array.from(document.body.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('Use local Codex.')) as HTMLButtonElement;
+    expect(codexButton.disabled).toBe(false);
+
+    await act(async () => {
+      codexButton.click();
+    });
+    expect(onSelect).toHaveBeenCalledWith({ id: 'codex', name: 'Codex', kind: 'codex', status: 'available' });
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('keeps native detection status as the hard disable reason even when readiness is blocked', async () => {
+    const onSelect = vi.fn();
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(
+        <RuntimeIconSwitcher
+          selectedRuntime={null}
+          onSelect={onSelect}
+          nativeRuntimes={[
+            {
+              id: 'codex',
+              name: 'Codex',
+              kind: 'codex',
+              status: 'signed-out',
+              availability: {
+                checkedAt: '2026-06-09T00:00:00.000Z',
+                sources: ['native-health'],
+                reason: 'Run codex login first.',
+              },
+            },
+          ]}
+          loading={false}
+          runtimeReadinessByRuntimeId={{
+            codex: readinessProjection('codex', 'Codex', 'codex', {
+              overallStatus: 'blocked',
+              gaps: [
+                {
+                  id: 'runtime-authenticated',
+                  category: 'user-setup',
+                  severity: 'blocking',
+                  summary: 'Codex must be authenticated before readiness can be trusted.',
+                  useCases: ['interactive-turn'],
+                },
+              ],
+            }),
+          }}
+        />,
+      );
+    });
+
+    const trigger = host.querySelector('button[aria-haspopup="listbox"]') as HTMLButtonElement;
+    await act(async () => {
+      trigger.click();
+    });
+
+    expect(document.body.textContent).toContain('Signed out');
+    expect(document.body.textContent).toContain('Blocked');
+    expect(document.body.textContent).toContain('Setup: Codex must be authenticated before readiness can be trusted.');
+    const codexButton = Array.from(document.body.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('Run codex login first.')) as HTMLButtonElement;
+    expect(codexButton.disabled).toBe(true);
+    await act(async () => {
+      codexButton.click();
+    });
+    expect(onSelect).not.toHaveBeenCalled();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('shows MindOS product readiness gaps on the default runtime option', async () => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(
+        <RuntimeIconSwitcher
+          selectedRuntime={null}
+          onSelect={vi.fn()}
+          nativeRuntimes={[]}
+          runtimeReadinessByRuntimeId={{
+            mindos: readinessProjection('mindos', 'MindOS', 'mindos', {
+              overallStatus: 'limited',
+              gaps: [
+                {
+                  id: 'scheduler',
+                  category: 'mindos-product',
+                  severity: 'warning',
+                  summary: 'MindOS needs scheduler and wake-resume support before 24/7 automation is ready.',
+                  useCases: ['unattended-automation'],
+                },
+              ],
+            }),
+          }}
+        />,
+      );
+    });
+
+    const trigger = host.querySelector('button[aria-haspopup="listbox"]') as HTMLButtonElement;
+    await act(async () => {
+      trigger.click();
+    });
+
+    const mindosButton = Array.from(document.body.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('Use MindOS')) as HTMLButtonElement;
+    expect(mindosButton.disabled).toBe(false);
+    expect(mindosButton.textContent).toContain('Limited');
+    expect(mindosButton.textContent).toContain('MindOS: MindOS needs scheduler and wake-resume support before 24/7 automation is ready.');
 
     await act(async () => {
       root.unmount();

@@ -239,6 +239,76 @@ export interface AgentRuntimeCompatibilityProfile {
   summary: string;
 }
 
+export type AgentRuntimeReadinessStatus = 'ready' | 'usable' | 'limited' | 'blocked' | 'unknown';
+export type AgentRuntimeReadinessSource =
+  | 'compatibility-profile'
+  | 'permission-projection'
+  | 'mcp-projection'
+  | 'artifact-projection'
+  | 'automation-projection';
+export type AgentRuntimeReadinessGapCategory =
+  | 'mindos-product'
+  | 'runtime-native'
+  | 'adapter-contract'
+  | 'deployment'
+  | 'user-setup'
+  | 'shared';
+export type AgentRuntimeReadinessGapSeverity = 'info' | 'warning' | 'blocking';
+
+export interface AgentRuntimeReadinessRequirement {
+  id: string;
+  status: AgentRuntimeCompatibilityRequirementStatus;
+  owner: AgentRuntimeCompatibilityOwner;
+  summary: string;
+}
+
+export interface AgentRuntimeReadinessUseCase {
+  id: AgentRuntimeCompatibilityScenario;
+  label: string;
+  status: AgentRuntimeReadinessStatus;
+  source: AgentRuntimeReadinessSource;
+  sourceStatus: string;
+  owner: AgentRuntimeCompatibilityOwner;
+  summary: string;
+  requirements: AgentRuntimeReadinessRequirement[];
+  blockers?: string[];
+  details?: Record<string, unknown>;
+}
+
+export interface AgentRuntimeReadinessRecommendation {
+  useCase: AgentRuntimeCompatibilityScenario;
+  confidence: 'strong' | 'conditional';
+  summary: string;
+}
+
+export interface AgentRuntimeReadinessGap {
+  id: string;
+  category: AgentRuntimeReadinessGapCategory;
+  severity: AgentRuntimeReadinessGapSeverity;
+  summary: string;
+  useCases: AgentRuntimeCompatibilityScenario[];
+}
+
+export interface AgentRuntimeReadinessProjection {
+  schemaVersion: 1;
+  runtimeId: string;
+  runtimeName: string;
+  runtimeKind: AgentRuntimeKind;
+  runtimeStatus: AgentRuntimeStatus;
+  overallStatus: AgentRuntimeReadinessStatus;
+  summary: string;
+  recommendations: AgentRuntimeReadinessRecommendation[];
+  useCases: AgentRuntimeReadinessUseCase[];
+  gaps: AgentRuntimeReadinessGap[];
+  blockers?: string[];
+}
+
+export interface AgentRuntimeReadinessPayload {
+  schemaVersion: 1;
+  requestedPermissionMode: AgentPermissionMode;
+  projections: AgentRuntimeReadinessProjection[];
+}
+
 export interface AgentRuntimeBridge {
   kind: 'codex-app-server' | 'claude-sdk' | 'claude-cli';
   label: string;

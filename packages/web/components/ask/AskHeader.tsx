@@ -4,7 +4,13 @@ import { SquarePen, History, X, Maximize2, Minimize2, PanelRight, ChevronDown, C
 import { SaveSessionButton } from './SaveSessionInline';
 import RuntimeIconSwitcher from './RuntimeIconSwitcher';
 import { useLocale } from '@/lib/stores/locale-store';
-import type { AgentRuntimeDescriptor, AgentRuntimeIdentity, ChatSession, RuntimeSessionBinding } from '@/lib/types';
+import type {
+  AgentRuntimeDescriptor,
+  AgentRuntimeIdentity,
+  AgentRuntimeReadinessProjection,
+  ChatSession,
+  RuntimeSessionBinding,
+} from '@/lib/types';
 import { getRuntimeSessionSummary } from '@/lib/ask-agent';
 import { sessionTitle } from '@/hooks/useAskSession';
 import type { NotInstalledAgent } from '@/hooks/useAcpDetection';
@@ -39,6 +45,8 @@ interface AskHeaderProps {
   agentLoading?: boolean;
   agentLoadingByKind?: Partial<Record<'codex' | 'claude', boolean>>;
   agentErrorByKind?: Partial<Record<'codex' | 'claude', string | null>>;
+  runtimeReadinessByRuntimeId?: Record<string, AgentRuntimeReadinessProjection>;
+  runtimeReadinessLoading?: boolean;
   onRefreshNativeRuntimes?: () => void;
 }
 
@@ -54,7 +62,8 @@ export default memo(function AskHeader({
   maximized, onMaximize, onClose, onDockToPanel, hideTitle,
   sessions, activeSessionId, onLoadSession, onDeleteSession, onRenameSession, onTogglePinSession,
   messages, selectedAgentRuntime, onSelectAgentRuntime, runtimeSessionBinding,
-  nativeRuntimes = [], notInstalledAgents = [], agentLoading, agentLoadingByKind, agentErrorByKind, onRefreshNativeRuntimes,
+  nativeRuntimes = [], notInstalledAgents = [], agentLoading, agentLoadingByKind, agentErrorByKind,
+  runtimeReadinessByRuntimeId, runtimeReadinessLoading, onRefreshNativeRuntimes,
 }: AskHeaderProps) {
   const { t } = useLocale();
   const [isPending, startTransition] = useTransition();
@@ -283,6 +292,8 @@ export default memo(function AskHeader({
               loading={agentLoading}
               loadingByKind={agentLoadingByKind}
               errorByKind={agentErrorByKind}
+              runtimeReadinessByRuntimeId={runtimeReadinessByRuntimeId}
+              runtimeReadinessLoading={runtimeReadinessLoading}
               onRefreshNativeRuntimes={onRefreshNativeRuntimes}
               disabled={isLoading}
             />
