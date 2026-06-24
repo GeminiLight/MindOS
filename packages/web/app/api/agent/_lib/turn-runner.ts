@@ -69,6 +69,7 @@ import {
   validateRuntimeBindingMatchesSelection,
 } from './runtime-selection';
 import { resolveRuntimeTurnLane } from './turn-runtime-lane';
+import { enforceSelectedSkillRuntimeMatches } from './skill-runtime-enforcement';
 import {
   dirnameOf,
   expandAttachedFiles,
@@ -300,6 +301,15 @@ export async function runAgentTurnRequestBody(
     ...createMindosRuntimeImageAttachments(getLastUserImages(messages)),
   ];
   const selectedSkills = normalizeMindosSelectedSkills(undefined, getLastUserSkillName(messages));
+  const skillRuntimeEnforcementError = await enforceSelectedSkillRuntimeMatches({
+    selectedSkills,
+    runtimeLane,
+    selectedAcpAgent,
+    mindRoot,
+    projectRoot,
+    serverSettings,
+  });
+  if (skillRuntimeEnforcementError) return skillRuntimeEnforcementError;
   const loadedFileContext = loadAttachedFileContext(attachedFiles, currentFile);
   const fileContextSignature = createMindosFileContextSignature(loadedFileContext);
   const includeFileContext = shouldInjectFileContext({

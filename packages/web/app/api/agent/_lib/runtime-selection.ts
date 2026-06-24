@@ -23,6 +23,16 @@ import type { MindosAgentRuntimeSelection } from '@geminilight/mindos/agent/runt
 
 const NATIVE_AGENT_TURN_HEALTH_GATE_TIMEOUT_MS = 3000;
 
+export function createAgentRuntimesServices(): AgentRuntimesServices {
+  return {
+    readSettings: readSettings as AgentRuntimesServices['readSettings'],
+    detectLocalAcpAgents: detectLocalAcpAgents as AgentRuntimesServices['detectLocalAcpAgents'],
+    resolveRuntimeCommand: resolveCommandPath as AgentRuntimesServices['resolveRuntimeCommand'],
+    resolveRuntimeCommandCandidates: resolveCommandPathCandidates as AgentRuntimesServices['resolveRuntimeCommandCandidates'],
+    checkNativeRuntimeHealth: checkNativeRuntimeHealth as AgentRuntimesServices['checkNativeRuntimeHealth'],
+  };
+}
+
 export function acpAgentFromRuntime(runtime: unknown): { id: string; name: string } | null {
   if (!runtime || typeof runtime !== 'object') return null;
   const record = runtime as Partial<AgentRuntimeIdentity>;
@@ -95,13 +105,7 @@ export function isMindosRuntimeSelection(runtime: unknown): boolean {
 export async function resolveAvailableNativeRuntime(
   runtime: MindosAgentRuntimeSelection,
 ): Promise<{ runtime: MindosAgentRuntimeSelection; unavailableReason: null } | { runtime: null; unavailableReason: string }> {
-  const services: AgentRuntimesServices = {
-    readSettings: readSettings as AgentRuntimesServices['readSettings'],
-    detectLocalAcpAgents: detectLocalAcpAgents as AgentRuntimesServices['detectLocalAcpAgents'],
-    resolveRuntimeCommand: resolveCommandPath as AgentRuntimesServices['resolveRuntimeCommand'],
-    resolveRuntimeCommandCandidates: resolveCommandPathCandidates as AgentRuntimesServices['resolveRuntimeCommandCandidates'],
-    checkNativeRuntimeHealth: checkNativeRuntimeHealth as AgentRuntimesServices['checkNativeRuntimeHealth'],
-  };
+  const services = createAgentRuntimesServices();
   const res = await Promise.race([
     handleAgentRuntimesGet(new URLSearchParams(`runtime=${runtime.kind}&force=1`), services),
     new Promise<null>((resolve) => setTimeout(() => resolve(null), NATIVE_AGENT_TURN_HEALTH_GATE_TIMEOUT_MS)),

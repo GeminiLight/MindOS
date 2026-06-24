@@ -273,6 +273,109 @@ describe('/api/agent/sessions/:sessionId/turns native runtime routing', () => {
     expect(mockCreateMindosAgentRuntime).not.toHaveBeenCalled();
   });
 
+  it('blocks an explicitly selected skill when the current runtime match is blocked', async () => {
+    seedFile('.skills/codex-only/SKILL.md', [
+      '---',
+      'name: codex-only',
+      'runtimeKinds: codex',
+      '---',
+      '',
+      '# Codex Only',
+    ].join('\n'));
+    invalidateCache();
+
+    const res = await POST(agentTurnRequest({
+      messages: [{ role: 'user', content: 'Run this skill here', skillName: 'codex-only' }],
+    }));
+
+    expect(res.status).toBe(409);
+    await expect(res.json()).resolves.toMatchObject({
+      error: {
+        code: 'CONFLICT',
+        issueCode: 'skill-runtime-blocked',
+        context: {
+          scenario: 'interactive-turn',
+          runtimeId: 'mindos',
+          runtimeKind: 'mindos',
+          skillName: 'codex-only',
+          blockers: expect.arrayContaining(['runtime-kind']),
+        },
+      },
+    });
+    expect(mockRunMindosNativeAgentTurn).not.toHaveBeenCalled();
+    expect(mockRunMindosAcpAgentTurn).not.toHaveBeenCalled();
+    expect(mockCreateMindosAgentRuntime).not.toHaveBeenCalled();
+  });
+
+  it('allows undeclared legacy skills instead of hard-blocking unknown requirements', async () => {
+    seedFile('.skills/legacy-skill/SKILL.md', '# Legacy Skill');
+    invalidateCache();
+    mockCreateMindosAgentRuntime.mockImplementation(async (options: Record<string, any>) => {
+      capturedMindosRuntimeOptions = options;
+      return {
+        systemPrompt: options.systemPrompt,
+        session: {
+          subscribe: vi.fn(),
+          prompt: vi.fn(),
+          steer: vi.fn(),
+          abort: vi.fn(),
+        },
+        agentRunContextResource: {},
+        llmHistoryMessages: [],
+        lastUserContent: 'Use the legacy skill',
+        lastUserImages: undefined,
+        fallbackTools: [],
+        apiKey: 'test-key',
+        modelName: 'claude-sonnet-4-20250514',
+        provider: 'anthropic',
+        baseUrl: '',
+      };
+    });
+
+    const res = await POST(agentTurnRequest({
+      messages: [{ role: 'user', content: 'Use the legacy skill', skillName: 'legacy-skill' }],
+      permissionMode: 'read',
+    }));
+
+    expect(res.status).toBe(200);
+    await res.text();
+    expect(capturedMindosRuntimeOptions?.turnPrompt).toContain('load_skill("legacy-skill")');
+  }, 15_000);
+
+  it('allows a selected skill when it matches the selected native runtime', async () => {
+    seedFile('.skills/codex-only/SKILL.md', [
+      '---',
+      'name: codex-only',
+      'runtimeKinds: codex',
+      'requiredTools: git',
+      '---',
+      '',
+      '# Codex Only',
+    ].join('\n'));
+    invalidateCache();
+    mockResolveCommandPath.mockImplementation(async (command: string) => command === 'codex' ? '/usr/local/bin/codex' : null);
+    mockCheckNativeRuntimeHealth.mockResolvedValue({ status: 'available' });
+    mockDetectLocalAcpAgents.mockResolvedValue({
+      installed: [
+        { id: 'codex-acp', name: 'Codex', binaryPath: '/usr/local/bin/codex', status: 'available' },
+      ],
+      notInstalled: [],
+    });
+
+    const res = await POST(agentTurnRequest({
+      messages: [{ role: 'user', content: 'Use Codex for this', skillName: 'codex-only' }],
+      selectedRuntime: { id: 'codex', name: 'Codex', kind: 'codex', binaryPath: '/usr/local/bin/codex' },
+      permissionMode: 'read',
+    }));
+
+    expect(res.status).toBe(200);
+    await res.text();
+    expect(capturedNativeOptions?.selectedSkills).toEqual([
+      { name: 'codex-only', source: 'user-selected' },
+    ]);
+    expect(mockCreateMindosAgentRuntime).not.toHaveBeenCalled();
+  }, 15_000);
+
   it('applies per-request MindOS agent options when creating the default PI runtime', async () => {
     mockCreateMindosAgentRuntime.mockImplementation(async (options: Record<string, any>) => {
       capturedMindosRuntimeOptions = options;
