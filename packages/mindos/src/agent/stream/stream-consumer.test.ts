@@ -129,7 +129,7 @@ describe('consumeUIMessageStream (core)', () => {
         type: 'context_usage',
         runtime: 'mindos',
         phase: 'preflight',
-        action: 'prompt_compacted',
+        action: 'prompt_compacted_history_compacted',
         modelName: 'step-3.7-flash',
         percent: 42,
         usedTokens: 42_000,
@@ -145,6 +145,9 @@ describe('consumeUIMessageStream (core)', () => {
         turnPromptTokens: 12_000,
         historyTokens: 20_000,
         originalUsedTokens: 120_000,
+        compactedMessages: 8,
+        historyCompactTokens: 20_000,
+        historyBeforeCompactTokens: 98_000,
       },
       { type: 'done' },
     ), () => {}, undefined, { emitCoalesceMs: 0, onContextUsage });
@@ -152,7 +155,7 @@ describe('consumeUIMessageStream (core)', () => {
     expect(onContextUsage).toHaveBeenCalledWith(expect.objectContaining({
       runtime: 'mindos',
       phase: 'preflight',
-      action: 'prompt_compacted',
+      action: 'prompt_compacted_history_compacted',
       modelName: 'step-3.7-flash',
       contextWindow: 100_000,
       nativeContextWindow: 256_000,
@@ -160,6 +163,9 @@ describe('consumeUIMessageStream (core)', () => {
       contextWindowSource: 'catalog',
       contextWindowIsFallback: false,
       originalUsedTokens: 120_000,
+      compactedMessages: 8,
+      historyCompactTokens: 20_000,
+      historyBeforeCompactTokens: 98_000,
     }));
   });
 

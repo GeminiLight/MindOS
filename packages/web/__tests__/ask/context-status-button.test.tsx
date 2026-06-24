@@ -76,6 +76,37 @@ describe('ContextStatusButton', () => {
     expect(html).toContain('未知模型窗口，MindOS 使用保守预算。');
   });
 
+  it('labels semantic history compaction distinctly from emergency pruning', () => {
+    const html = renderToStaticMarkup(
+      <ContextStatusButton
+        usage={{
+          runtime: 'mindos',
+          phase: 'preflight',
+          action: 'history_compacted',
+          modelName: 'local-model',
+          percent: 82,
+          usedTokens: 82_000,
+          contextWindow: 100_000,
+          contextWindowSource: 'model',
+          contextWindowIsFallback: false,
+          budgetTokens: 84_000,
+          reserveTokens: 16_000,
+          keepRecentTokens: 20_000,
+          systemPromptTokens: 10_000,
+          turnPromptTokens: 12_000,
+          historyTokens: 60_000,
+          compactedMessages: 8,
+          historyCompactTokens: 60_000,
+          historyBeforeCompactTokens: 140_000,
+        }}
+      />,
+    );
+
+    expect(html).toContain('已压缩历史消息: 8');
+    expect(html).toContain('已压缩历史');
+    expect(html).not.toContain('已裁剪历史');
+  });
+
   it('renders nothing when context usage is unavailable', () => {
     const html = renderToStaticMarkup(<ContextStatusButton usage={null} />);
 

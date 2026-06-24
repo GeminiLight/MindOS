@@ -85,9 +85,15 @@ export type MindOSSSEvent =
         | 'none'
         | 'prompt_compacted'
         | 'prompt_truncated'
+        | 'history_compacted'
         | 'history_pruned'
+        | 'history_compacted_history_pruned'
+        | 'prompt_compacted_history_compacted'
         | 'prompt_compacted_history_pruned'
-        | 'prompt_truncated_history_pruned';
+        | 'prompt_compacted_history_compacted_history_pruned'
+        | 'prompt_truncated_history_compacted'
+        | 'prompt_truncated_history_pruned'
+        | 'prompt_truncated_history_compacted_history_pruned';
       modelName?: string;
       percent: number;
       usedTokens: number;
@@ -104,6 +110,9 @@ export type MindOSSSEvent =
       historyTokens: number;
       originalUsedTokens?: number;
       originalHistoryTokens?: number;
+      compactedMessages?: number;
+      historyCompactTokens?: number;
+      historyBeforeCompactTokens?: number;
       prunedMessages?: number;
       message?: string;
     }

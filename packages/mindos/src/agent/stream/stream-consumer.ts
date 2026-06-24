@@ -67,9 +67,15 @@ export interface ContextUsageMetadata {
     | 'none'
     | 'prompt_compacted'
     | 'prompt_truncated'
+    | 'history_compacted'
     | 'history_pruned'
+    | 'history_compacted_history_pruned'
+    | 'prompt_compacted_history_compacted'
     | 'prompt_compacted_history_pruned'
-    | 'prompt_truncated_history_pruned';
+    | 'prompt_compacted_history_compacted_history_pruned'
+    | 'prompt_truncated_history_compacted'
+    | 'prompt_truncated_history_pruned'
+    | 'prompt_truncated_history_compacted_history_pruned';
   modelName?: string;
   percent: number;
   usedTokens: number;
@@ -86,6 +92,9 @@ export interface ContextUsageMetadata {
   historyTokens: number;
   originalUsedTokens?: number;
   originalHistoryTokens?: number;
+  compactedMessages?: number;
+  historyCompactTokens?: number;
+  historyBeforeCompactTokens?: number;
   prunedMessages?: number;
   message?: string;
 }
@@ -199,9 +208,15 @@ function normalizeContextUsageAction(value: unknown): ContextUsageMetadata['acti
   if (
     value === 'prompt_compacted'
     || value === 'prompt_truncated'
+    || value === 'history_compacted'
     || value === 'history_pruned'
+    || value === 'history_compacted_history_pruned'
+    || value === 'prompt_compacted_history_compacted'
     || value === 'prompt_compacted_history_pruned'
+    || value === 'prompt_compacted_history_compacted_history_pruned'
+    || value === 'prompt_truncated_history_compacted'
     || value === 'prompt_truncated_history_pruned'
+    || value === 'prompt_truncated_history_compacted_history_pruned'
   ) {
     return value;
   }
@@ -237,6 +252,9 @@ function normalizeContextUsage(eventRecord: Record<string, unknown>): ContextUsa
   const keepRecentTokens = finiteNumber(eventRecord.keepRecentTokens);
   const originalUsedTokens = finiteNumber(eventRecord.originalUsedTokens);
   const originalHistoryTokens = finiteNumber(eventRecord.originalHistoryTokens);
+  const compactedMessages = finiteNumber(eventRecord.compactedMessages);
+  const historyCompactTokens = finiteNumber(eventRecord.historyCompactTokens);
+  const historyBeforeCompactTokens = finiteNumber(eventRecord.historyBeforeCompactTokens);
   const prunedMessages = finiteNumber(eventRecord.prunedMessages);
   if (
     percent === undefined
@@ -270,6 +288,9 @@ function normalizeContextUsage(eventRecord: Record<string, unknown>): ContextUsa
     historyTokens,
     ...(originalUsedTokens !== undefined ? { originalUsedTokens } : {}),
     ...(originalHistoryTokens !== undefined ? { originalHistoryTokens } : {}),
+    ...(compactedMessages !== undefined ? { compactedMessages } : {}),
+    ...(historyCompactTokens !== undefined ? { historyCompactTokens } : {}),
+    ...(historyBeforeCompactTokens !== undefined ? { historyBeforeCompactTokens } : {}),
     ...(prunedMessages !== undefined ? { prunedMessages } : {}),
     ...(typeof eventRecord.message === 'string' ? { message: redactSensitiveText(eventRecord.message) } : {}),
   };

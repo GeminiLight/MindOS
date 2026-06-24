@@ -20,16 +20,28 @@ function contextActionLabel(action: ContextUsageMetadata['action'], locale: stri
   if (locale === 'zh') {
     if (action === 'prompt_compacted') return '已压缩提示词';
     if (action === 'prompt_truncated') return '已截断提示词';
+    if (action === 'history_compacted') return '已压缩历史';
     if (action === 'history_pruned') return '已裁剪历史';
+    if (action === 'history_compacted_history_pruned') return '已压缩并裁剪历史';
+    if (action === 'prompt_compacted_history_compacted') return '已压缩提示词和历史';
     if (action === 'prompt_compacted_history_pruned') return '已压缩提示词并裁剪历史';
+    if (action === 'prompt_compacted_history_compacted_history_pruned') return '已压缩提示词，并压缩/裁剪历史';
+    if (action === 'prompt_truncated_history_compacted') return '已截断提示词并压缩历史';
     if (action === 'prompt_truncated_history_pruned') return '已截断提示词并裁剪历史';
+    if (action === 'prompt_truncated_history_compacted_history_pruned') return '已截断提示词，并压缩/裁剪历史';
     return '无需裁剪';
   }
   if (action === 'prompt_compacted') return 'Prompt compacted';
   if (action === 'prompt_truncated') return 'Prompt truncated';
+  if (action === 'history_compacted') return 'History compacted';
   if (action === 'history_pruned') return 'History pruned';
+  if (action === 'history_compacted_history_pruned') return 'History compacted + pruned';
+  if (action === 'prompt_compacted_history_compacted') return 'Prompt compacted + history compacted';
   if (action === 'prompt_compacted_history_pruned') return 'Prompt compacted + history pruned';
+  if (action === 'prompt_compacted_history_compacted_history_pruned') return 'Prompt compacted + history compacted/pruned';
+  if (action === 'prompt_truncated_history_compacted') return 'Prompt truncated + history compacted';
   if (action === 'prompt_truncated_history_pruned') return 'Prompt truncated + history pruned';
+  if (action === 'prompt_truncated_history_compacted_history_pruned') return 'Prompt truncated + history compacted/pruned';
   return 'No pruning';
 }
 
@@ -68,6 +80,7 @@ function buildTooltipLines(usage: ContextUsageMetadata, locale: string): string[
       usage.nativeContextWindow !== undefined ? `原生窗口: ${formatTokenCount(usage.nativeContextWindow)} tokens` : '',
       usage.contextTokens !== undefined ? `有效上限: ${formatTokenCount(usage.contextTokens)} tokens` : '',
       usage.contextWindowIsFallback ? '未知模型窗口，MindOS 使用保守预算。' : '',
+      usage.compactedMessages !== undefined ? `已压缩历史消息: ${formatTokenCount(usage.compactedMessages)}` : '',
       contextActionLabel(usage.action, locale),
     ].filter(Boolean);
   }
@@ -80,6 +93,7 @@ function buildTooltipLines(usage: ContextUsageMetadata, locale: string): string[
     usage.nativeContextWindow !== undefined ? `Native window: ${formatTokenCount(usage.nativeContextWindow)} tokens` : '',
     usage.contextTokens !== undefined ? `Effective cap: ${formatTokenCount(usage.contextTokens)} tokens` : '',
     usage.contextWindowIsFallback ? 'Unknown model window; MindOS used the conservative fallback budget.' : '',
+    usage.compactedMessages !== undefined ? `Compacted history messages: ${formatTokenCount(usage.compactedMessages)}` : '',
     contextActionLabel(usage.action, locale),
   ].filter(Boolean);
 }

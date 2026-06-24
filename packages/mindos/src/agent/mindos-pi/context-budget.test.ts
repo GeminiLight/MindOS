@@ -125,7 +125,40 @@ describe('MindOS Pi context budget preflight', () => {
     });
   });
 
-  it('prunes oldest history on a user boundary and prefixes a transparent note', () => {
+  it('compacts older history by default before emergency pruning is needed', () => {
+    const long = 'x'.repeat(1_000);
+    const history = [
+      user(`oldest request ${long}`),
+      assistant(`oldest answer ${long}`),
+      user(`middle request ${long}`),
+      assistant(`middle answer ${long}`),
+      user(`recent request ${long}`),
+      assistant('short answer'),
+    ];
+
+    const result = prepareMindosPiContextBudget({
+      systemPrompt: 'system prompt',
+      turnPrompt: 'current prompt',
+      historyMessages: history,
+      model: { contextWindow: 560 },
+      modelName: 'small-window',
+      reserveTokens: 100,
+      keepRecentTokens: 80,
+      estimateTokens,
+    });
+
+    expect(result.historyMessages.length).toBeLessThan(history.length);
+    expect(result.historyMessages[0]).toMatchObject({ role: 'user' });
+    expect(String(result.historyMessages[0]?.content)).toContain('older chat history was compacted');
+    expect(String(result.historyMessages[0]?.content)).toContain('Compacted earlier history');
+    expect(String(result.historyMessages[0]?.content)).toContain('oldest request');
+    expect(result.usage.action).toBe('history_compacted');
+    expect(result.usage.compactedMessages).toBeGreaterThan(0);
+    expect(result.usage.prunedMessages).toBe(0);
+    expect(result.usage.usedTokens).toBeLessThanOrEqual(result.usage.budgetTokens);
+  });
+
+  it('skips summary compaction when context strategy is off and keeps emergency pruning', () => {
     const long = 'x'.repeat(1_000);
     const history = [
       user(`oldest ${long}`),
@@ -144,13 +177,16 @@ describe('MindOS Pi context budget preflight', () => {
       modelName: 'small-window',
       reserveTokens: 100,
       keepRecentTokens: 50,
+      contextStrategy: 'off',
       estimateTokens,
     });
 
     expect(result.historyMessages.length).toBeLessThan(history.length);
     expect(result.historyMessages[0]).toMatchObject({ role: 'user' });
     expect(String(result.historyMessages[0]?.content)).toContain('older chat history was pruned');
+    expect(String(result.historyMessages[0]?.content)).not.toContain('older chat history was compacted');
     expect(result.usage.action).toBe('history_pruned');
+    expect(result.usage.compactedMessages).toBeUndefined();
     expect(result.usage.prunedMessages).toBeGreaterThan(0);
     expect(result.usage.usedTokens).toBeLessThanOrEqual(result.usage.budgetTokens);
   });

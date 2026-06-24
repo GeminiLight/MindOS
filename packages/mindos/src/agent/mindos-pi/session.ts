@@ -466,6 +466,7 @@ export async function createMindosPiAgentRuntime(options: MindosPiAgentRuntimeOp
       modelName: modelConfig.modelName,
       estimateTokens: options.services.estimateTokens,
       compactPrompt: options.services.compactPrompt,
+      contextStrategy: options.agentConfig?.contextStrategy === 'off' ? 'off' : 'auto',
     });
     systemPrompt = preparedContext.systemPrompt;
     turnPrompt = preparedContext.turnPrompt;
@@ -580,10 +581,10 @@ function createMindosPiSettingsConfig(
 ): Record<string, unknown> {
   return {
     enableSkillCommands: true,
+    compaction: { enabled: false },
     ...(agentConfig.enableThinking && provider === 'anthropic'
       ? { thinkingBudgets: { medium: agentConfig.thinkingBudget ?? 5000 } }
       : {}),
-    ...(agentConfig.contextStrategy === 'off' ? { compaction: { enabled: false } } : {}),
   };
 }
 

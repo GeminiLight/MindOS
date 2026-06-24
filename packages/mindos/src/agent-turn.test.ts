@@ -888,6 +888,7 @@ describe('MindOS session event contract', () => {
       resourceCwd?: string;
       sessionCwd?: string;
       extensionCwd?: unknown;
+      settings?: unknown;
     } = {};
     const extensionTool = {
       name: 'capture_context',
@@ -943,7 +944,10 @@ describe('MindOS session event contract', () => {
         toRuntimeProvider: (provider) => provider,
         createAuthStorage: () => ({ setRuntimeApiKey: () => {} }),
         createModelRegistry: () => ({ registry: true }),
-        createSettingsManager: (settings) => ({ settings }),
+        createSettingsManager: (settings) => {
+          captured.settings = settings;
+          return { settings };
+        },
         createSessionManager: () => ({ appendMessage: () => {} }),
         createResourceLoader: (config) => {
           captured.resourceCwd = config.cwd;
@@ -964,6 +968,7 @@ describe('MindOS session event contract', () => {
     expect(captured.resourceCwd).toBe('/repo');
     expect(captured.sessionCwd).toBe('/repo/app');
     expect(captured.extensionCwd).toBe('/repo/app');
+    expect(captured.settings).toMatchObject({ compaction: { enabled: false } });
   });
 
   it('runs extension-registered tools in the non-streaming fallback with headless context', async () => {
@@ -1487,7 +1492,7 @@ describe('MindOS session event contract', () => {
       'model:openai:gpt-test:true',
       'convert:2',
       'auth:runtime:anthropic:key',
-      'settings:{"enableSkillCommands":true,"thinkingBudgets":{"medium":3000},"compaction":{"enabled":false}}',
+      'settings:{"enableSkillCommands":true,"compaction":{"enabled":false},"thinkingBudgets":{"medium":3000}}',
       'loader:/repo:/skills:/ext',
       'resource.reload',
       'resource.reload',
