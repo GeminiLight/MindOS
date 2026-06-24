@@ -289,6 +289,8 @@ export class PluginLoader {
         'activeWindow',
         'activeDocument',
         'self',
+        'globalThis',
+        'localStorage',
         'app',
         'createEl',
         'createDiv',
@@ -313,6 +315,8 @@ export class PluginLoader {
         globals.activeWindow,
         globals.document,
         globals.window,
+        globals.window,
+        globals.localStorage,
         this.app,
         globals.createEl,
         globals.createDiv,
@@ -414,12 +418,17 @@ export class PluginLoader {
       getComputedStyle: () => ({
         getPropertyValue: () => '',
       }),
-    };
+    } as Record<string, unknown>;
+    windowShim.window = windowShim;
+    windowShim.self = windowShim;
+    windowShim.globalThis = windowShim;
+    windowShim.activeWindow = windowShim;
 
     return {
       window: windowShim,
       document: documentShim,
       activeWindow: windowShim,
+      localStorage,
       createEl,
       createDiv,
       createSpan,
@@ -437,14 +446,14 @@ export class PluginLoader {
   private createLocalStorageShim(): PluginLocalStorage {
     return {
       getItem: (key: string) => {
-        const value = this.app.loadLocalStorage(key);
+        const value = this.app.loadLocalStorage(String(key));
         return typeof value === 'string' ? value : value == null ? null : JSON.stringify(value);
       },
       setItem: (key: string, value: string) => {
-        this.app.saveLocalStorage(key, value);
+        this.app.saveLocalStorage(String(key), String(value));
       },
       removeItem: (key: string) => {
-        this.app.saveLocalStorage(key, null);
+        this.app.removeLocalStorage(String(key));
       },
     };
   }

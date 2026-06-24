@@ -48,6 +48,12 @@ describe('Obsidian capability matrix', () => {
         'prepareSimpleSearch',
         'renderMatches',
         'htmlToMarkdown',
+        'getLinkpath',
+        'parseLinktext',
+        'arrayBufferToBase64',
+        'base64ToArrayBuffer',
+        'getAllTags',
+        'requireApiVersion',
         'Notice',
         'FileSystemAdapter',
         'ImaginaryApi',
@@ -71,13 +77,19 @@ describe('Obsidian capability matrix', () => {
       expect.objectContaining({ api: 'prepareSimpleSearch', support: 'limited', surface: 'core' }),
       expect.objectContaining({ api: 'renderMatches', support: 'snapshot-only', surface: 'document' }),
       expect.objectContaining({ api: 'htmlToMarkdown', support: 'limited', surface: 'document' }),
+      expect.objectContaining({ api: 'getLinkpath', support: 'limited', surface: 'metadata' }),
+      expect.objectContaining({ api: 'parseLinktext', support: 'limited', surface: 'metadata' }),
+      expect.objectContaining({ api: 'arrayBufferToBase64', support: 'full', surface: 'core' }),
+      expect.objectContaining({ api: 'base64ToArrayBuffer', support: 'full', surface: 'core' }),
+      expect.objectContaining({ api: 'getAllTags', support: 'limited', surface: 'metadata' }),
+      expect.objectContaining({ api: 'requireApiVersion', support: 'limited', surface: 'core' }),
       expect.objectContaining({ api: 'Notice', support: 'snapshot-only', surface: 'entries' }),
       expect.objectContaining({ api: 'FileSystemAdapter', support: 'limited', surface: 'core' }),
       expect.objectContaining({ api: 'ImaginaryApi', support: 'unsupported', surface: 'unsupported' }),
     ]));
     expect(summarizeObsidianCapabilityCoverage(coverage)).toMatchObject({
-      full: 1,
-      limited: 8,
+      full: 3,
+      limited: 12,
       'request-only': 1,
       'catalog-only': 6,
       'snapshot-only': 2,
@@ -105,6 +117,10 @@ describe('Obsidian capability matrix', () => {
         'getIconIds',
         'prepareSimpleSearch',
         'htmlToMarkdown',
+        'getLinkpath',
+        'parseLinktext',
+        'getAllTags',
+        'requireApiVersion',
       ],
     });
 
@@ -148,9 +164,14 @@ describe('Obsidian capability matrix', () => {
         supportSummary: expect.objectContaining({ 'catalog-only': 4 }),
       }),
       expect.objectContaining({
-        surface: 'core',
+        surface: 'metadata',
         apiCount: 3,
-        supportSummary: expect.objectContaining({ full: 1, limited: 2 }),
+        supportSummary: expect.objectContaining({ limited: 3 }),
+      }),
+      expect.objectContaining({
+        surface: 'core',
+        apiCount: 4,
+        supportSummary: expect.objectContaining({ full: 1, limited: 3 }),
       }),
     ]);
   });

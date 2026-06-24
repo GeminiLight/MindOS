@@ -40,6 +40,8 @@ interface CliOptions {
   targetsPath: string;
   outJson: string;
   outMarkdown: string;
+  communityIndexPath?: string;
+  communityStatsPath?: string;
   skipSmoke: boolean;
   timeoutMs: number;
   mainJsMaxChars: number;
@@ -81,6 +83,12 @@ function parseArgs(argv: string[]): CliOptions {
     } else if (arg === '--out-md') {
       options.outMarkdown = resolveRequiredValue(argv, index);
       index += 1;
+    } else if (arg === '--community-index-file') {
+      options.communityIndexPath = resolveRequiredValue(argv, index);
+      index += 1;
+    } else if (arg === '--community-stats-file') {
+      options.communityStatsPath = resolveRequiredValue(argv, index);
+      index += 1;
     } else if (arg === '--skip-smoke') {
       options.skipSmoke = true;
     } else if (arg === '--timeout-ms') {
@@ -102,6 +110,8 @@ function parseArgs(argv: string[]): CliOptions {
     targetsPath: path.resolve(repoRoot, options.targetsPath),
     outJson: path.resolve(repoRoot, options.outJson),
     outMarkdown: path.resolve(repoRoot, options.outMarkdown),
+    ...(options.communityIndexPath ? { communityIndexPath: path.resolve(repoRoot, options.communityIndexPath) } : {}),
+    ...(options.communityStatsPath ? { communityStatsPath: path.resolve(repoRoot, options.communityStatsPath) } : {}),
   };
 }
 
@@ -128,6 +138,10 @@ Options:
   --targets <path>      Target JSON path. Default: scripts/obsidian-real-plugin-p0-targets.json
   --out-json <path>     Output matrix JSON path.
   --out-md <path>       Output Markdown report path.
+  --community-index-file <path>
+                        Read community-plugins.json from a local official snapshot.
+  --community-stats-file <path>
+                        Read community-plugin-stats.json from a local official snapshot.
   --skip-smoke          Generate preflight matrix without loading plugins in a temp Mind root.
   --timeout-ms <ms>     Network asset timeout passed to preflight fetches. Default: ${DEFAULT_TIMEOUT_MS}
   --main-js-max-mb <mb> Max plugin main.js size for this offline matrix harness. Default: ${DEFAULT_MAIN_JS_MAX_MB}
@@ -142,13 +156,21 @@ async function main(): Promise<void> {
   const sourcePolicy = targetConfig.sourcePolicy ?? 'obsidian-community-index+github-release-assets';
 
   console.log(`[obsidian-matrix] Targets: ${targets.length}`);
-  console.log(`[obsidian-matrix] Fetching community index: ${OBSIDIAN_COMMUNITY_PLUGINS_URL}`);
-  const catalogRaw = await fetchJson(OBSIDIAN_COMMUNITY_PLUGINS_URL, options.timeoutMs);
+  const catalogRaw = await readJsonOrFetch({
+    label: 'community index',
+    localPath: options.communityIndexPath,
+    url: OBSIDIAN_COMMUNITY_PLUGINS_URL,
+    timeoutMs: options.timeoutMs,
+  });
   const parsedCatalog = parseObsidianCommunityCatalog(catalogRaw);
   const catalogById = new Map(parsedCatalog.items.map((item) => [item.id, item]));
 
-  console.log(`[obsidian-matrix] Fetching community stats: ${OBSIDIAN_COMMUNITY_STATS_URL}`);
-  const statsById = await fetchJson(OBSIDIAN_COMMUNITY_STATS_URL, options.timeoutMs) as CommunityStatsById;
+  const statsById = await readJsonOrFetch({
+    label: 'community stats',
+    localPath: options.communityStatsPath,
+    url: OBSIDIAN_COMMUNITY_STATS_URL,
+    timeoutMs: options.timeoutMs,
+  }) as CommunityStatsById;
 
   const plugins: ObsidianRealPluginMatrixInputItem[] = [];
   const failures: ObsidianRealPluginMatrixFailure[] = [];
@@ -264,6 +286,20 @@ async function fetchJson(url: string, timeoutMs: number): Promise<unknown> {
   } finally {
     clearTimeout(timeout);
   }
+}
+
+async function readJsonOrFetch(options: {
+  label: string;
+  localPath?: string;
+  url: string;
+  timeoutMs: number;
+}): Promise<unknown> {
+  if (options.localPath) {
+    console.log(`[obsidian-matrix] Reading ${options.label}: ${path.relative(repoRoot, options.localPath)}`);
+    return readJson<unknown>(options.localPath);
+  }
+  console.log(`[obsidian-matrix] Fetching ${options.label}: ${options.url}`);
+  return fetchJson(options.url, options.timeoutMs);
 }
 
 async function runPluginSmoke(

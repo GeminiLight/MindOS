@@ -76,7 +76,13 @@ describe('obsidian compat integration', () => {
               hasDebounce: typeof obsidian.debounce === 'function',
               hasParseYaml: typeof obsidian.parseYaml === 'function',
               hasStringifyYaml: typeof obsidian.stringifyYaml === 'function',
+              hasParseLinktext: typeof obsidian.parseLinktext === 'function',
+              hasGetLinkpath: typeof obsidian.getLinkpath === 'function',
+              hasArrayBufferToBase64: typeof obsidian.arrayBufferToBase64 === 'function',
+              hasBase64ToArrayBuffer: typeof obsidian.base64ToArrayBuffer === 'function',
               hasHtmlToMarkdown: typeof obsidian.htmlToMarkdown === 'function',
+              hasGetAllTags: typeof obsidian.getAllTags === 'function',
+              hasRequireApiVersion: typeof obsidian.requireApiVersion === 'function',
               hasPrepareSimpleSearch: typeof obsidian.prepareSimpleSearch === 'function',
               hasRenderMatches: typeof obsidian.renderMatches === 'function',
               hasSetIcon: typeof obsidian.setIcon === 'function',
@@ -118,7 +124,13 @@ describe('obsidian compat integration', () => {
       hasDebounce: true,
       hasParseYaml: true,
       hasStringifyYaml: true,
+      hasParseLinktext: true,
+      hasGetLinkpath: true,
+      hasArrayBufferToBase64: true,
+      hasBase64ToArrayBuffer: true,
       hasHtmlToMarkdown: true,
+      hasGetAllTags: true,
+      hasRequireApiVersion: true,
       hasPrepareSimpleSearch: true,
       hasRenderMatches: true,
       hasSetIcon: true,
@@ -137,7 +149,7 @@ describe('obsidian compat integration', () => {
     writePlugin(
       'utility-plugin',
       `
-        const { Plugin, Modal, FileSystemAdapter, Scope, debounce, parseYaml, stringifyYaml, htmlToMarkdown, addIcon, getIcon, getIconIds, setIcon, setTooltip, moment, prepareSimpleSearch, renderMatches } = require('obsidian');
+        const { Plugin, Modal, FileSystemAdapter, Scope, debounce, parseYaml, stringifyYaml, parseLinktext, getLinkpath, arrayBufferToBase64, base64ToArrayBuffer, htmlToMarkdown, getAllTags, requireApiVersion, addIcon, getIcon, getIconIds, setIcon, setTooltip, moment, prepareSimpleSearch, renderMatches } = require('obsidian');
         module.exports = class UtilityPlugin extends Plugin {
           onload() {
             const modal = new Modal(this.app);
@@ -169,9 +181,18 @@ describe('obsidian compat integration', () => {
               adapterIsNative: this.app.vault.adapter instanceof FileSystemAdapter,
               parsed: parseYaml('title: Hello\\ncount: 2\\n'),
               yaml: stringifyYaml({ ready: true }).trim(),
+              link: parseLinktext('Folder/Note#Heading|Alias'),
+              linkPath: getLinkpath('Folder/Note#Heading|Alias'),
+              base64: arrayBufferToBase64(base64ToArrayBuffer('SGVsbG8=')),
               htmlMarkdown: htmlToMarkdown('<h1>Title</h1><p><strong>Bold</strong> <a href="https://example.com">Link</a></p>'),
               stubMarkdown: htmlToMarkdown(stubHtml),
               fragmentMarkdown: htmlToMarkdown(fragmentLike),
+              tags: getAllTags({
+                frontmatter: { tags: ['alpha', '#beta'] },
+                tags: [{ tag: '#body' }, { tag: 'alpha' }],
+              }),
+              apiVersionOk: requireApiVersion('1.7.2'),
+              apiVersionFuture: requireApiVersion('99.0.0'),
               icon: getIcon('mindos-test'),
               iconIds: getIconIds(),
               iconAttr: button.getAttribute('data-obsidian-icon'),
@@ -210,9 +231,15 @@ describe('obsidian compat integration', () => {
       expect(check.adapterIsNative).toBe(false);
       expect(check.parsed).toEqual({ title: 'Hello', count: 2 });
       expect(check.yaml).toContain('ready: true');
+      expect(check.link).toEqual({ path: 'Folder/Note', subpath: '#Heading' });
+      expect(check.linkPath).toBe('Folder/Note');
+      expect(check.base64).toBe('SGVsbG8=');
       expect(check.htmlMarkdown).toBe('# Title\n\n**Bold** [Link](https://example.com)');
       expect(check.stubMarkdown).toBe('Plain fallback');
       expect(check.fragmentMarkdown).toBe('**Fragment** text');
+      expect(check.tags).toEqual(['#alpha', '#beta', '#body']);
+      expect(check.apiVersionOk).toBe(true);
+      expect(check.apiVersionFuture).toBe(false);
       expect(check.icon).toBe('<svg><path /></svg>');
       expect(check.iconIds).toEqual(expect.arrayContaining(['mindos-test', 'settings']));
       expect(check.iconAttr).toBe('mindos-test');

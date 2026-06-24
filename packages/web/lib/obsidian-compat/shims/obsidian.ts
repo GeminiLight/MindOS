@@ -14,7 +14,7 @@ import { TAbstractFileImpl, TFileImpl, TFolderImpl, Vault } from './vault';
 import { createObsidianElement } from './dom';
 import { MarkdownRenderer } from './markdown-renderer';
 import { getActiveObsidianRuntimeHost } from '../runtime';
-import type { RequestUrlParam, RequestUrlResponse, RequestUrlResponsePromise, SecretStorage, TFile, WorkspaceLeaf } from '../types';
+import type { CachedMetadata, RequestUrlParam, RequestUrlResponse, RequestUrlResponsePromise, SecretStorage, TFile, WorkspaceLeaf } from '../types';
 
 const REQUEST_URL_TIMEOUT_MS = 15_000;
 const REQUEST_URL_MAX_RESPONSE_BYTES = 5 * 1024 * 1024;
@@ -46,6 +46,31 @@ export function stringifyYaml(value: unknown): string {
     noRefs: true,
     sortKeys: false,
   });
+}
+
+export function parseLinktext(linktext: string): { path: string; subpath: string } {
+  const withoutAlias = String(linktext ?? '').split('|')[0]?.trim() ?? '';
+  const hashIndex = withoutAlias.indexOf('#');
+  if (hashIndex < 0) {
+    return { path: withoutAlias, subpath: '' };
+  }
+  return {
+    path: withoutAlias.slice(0, hashIndex),
+    subpath: withoutAlias.slice(hashIndex),
+  };
+}
+
+export function getLinkpath(linktext: string): string {
+  return parseLinktext(linktext).path;
+}
+
+export function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  return Buffer.from(buffer).toString('base64');
+}
+
+export function base64ToArrayBuffer(base64: string): ArrayBuffer {
+  const buffer = Buffer.from(String(base64), 'base64');
+  return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
 }
 
 function htmlNodeText(value: unknown): string {
@@ -930,6 +955,30 @@ export function parseFrontMatterTags(frontmatter: Record<string, unknown> | null
   return null;
 }
 
+function normalizeTagValue(tag: unknown): string | null {
+  const value = String(tag ?? '').trim();
+  if (!value) return null;
+  return value.startsWith('#') ? value : `#${value}`;
+}
+
+export function getAllTags(cache: CachedMetadata | null | undefined): string[] | null {
+  if (!cache) return null;
+  const tags: string[] = [];
+  const add = (value: unknown) => {
+    const tag = normalizeTagValue(value);
+    if (tag && !tags.includes(tag)) {
+      tags.push(tag);
+    }
+  };
+  for (const tag of parseFrontMatterTags(cache.frontmatter) ?? []) {
+    add(tag);
+  }
+  for (const tag of cache.tags ?? []) {
+    add(tag.tag);
+  }
+  return tags.length > 0 ? tags : null;
+}
+
 export function getLanguage(): string {
   if (typeof navigator !== 'undefined' && navigator.language) {
     return navigator.language;
@@ -937,7 +986,27 @@ export function getLanguage(): string {
   return 'en';
 }
 
-export const apiVersion = '1.7.2-mindos-compat';
+const OBSIDIAN_COMPAT_API_VERSION = '1.7.2';
+export const apiVersion = `${OBSIDIAN_COMPAT_API_VERSION}-mindos-compat`;
+
+function versionParts(version: string): number[] {
+  return String(version ?? '')
+    .split(/[.-]/)
+    .map((part) => Number.parseInt(part, 10))
+    .filter((part) => Number.isFinite(part));
+}
+
+export function requireApiVersion(version: string): boolean {
+  const required = versionParts(version);
+  const current = versionParts(OBSIDIAN_COMPAT_API_VERSION);
+  for (let index = 0; index < Math.max(required.length, current.length); index += 1) {
+    const requiredPart = required[index] ?? 0;
+    const currentPart = current[index] ?? 0;
+    if (currentPart > requiredPart) return true;
+    if (currentPart < requiredPart) return false;
+  }
+  return true;
+}
 
 export type SearchMatch = [number, number] | { start: number; end: number };
 
@@ -1051,6 +1120,10 @@ export function createObsidianModule() {
     normalizePath,
     parseYaml,
     stringifyYaml,
+    parseLinktext,
+    getLinkpath,
+    arrayBufferToBase64,
+    base64ToArrayBuffer,
     htmlToMarkdown,
     debounce,
     addIcon,
@@ -1082,8 +1155,10 @@ export function createObsidianModule() {
     Scope,
     parseFrontMatterAliases,
     parseFrontMatterTags,
+    getAllTags,
     getLanguage,
     apiVersion,
+    requireApiVersion,
     prepareSimpleSearch,
     prepareFuzzySearch,
     renderMatches,

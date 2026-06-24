@@ -45,6 +45,7 @@ const createAppStub = () => {
     isDarkMode: () => false,
     loadLocalStorage: () => null,
     saveLocalStorage: () => {},
+    removeLocalStorage: () => {},
     registerCommand,
     unregisterCommand,
     commands: {} as App['commands'],

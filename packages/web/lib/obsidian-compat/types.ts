@@ -359,6 +359,7 @@ export interface App {
   isDarkMode(): boolean;
   loadLocalStorage(key: string): unknown;
   saveLocalStorage(key: string, data: unknown): void;
+  removeLocalStorage(key: string): void;
   registerCommand(pluginId: string, command: Command): Command;
   unregisterCommand(pluginId: string, commandId: string): void;
 }

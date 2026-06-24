@@ -131,13 +131,26 @@ describe('PluginLoader', () => {
       { id: 'global-plugin', name: 'Global Plugin', version: '1.0.0' },
       `
         const { Plugin, View, Vault } = require('obsidian');
+        localStorage.setItem('language', 'zh-cn');
         const language = window.localStorage.getItem('language');
+        const topLevelLanguage = localStorage.getItem('language');
+        const selfLanguage = self.localStorage.getItem('language');
+        const globalLanguage = globalThis.localStorage.getItem('language');
+        globalThis.localStorage.setItem('numeric', 42);
+        self.localStorage.setItem('temporary', 'remove-me');
+        activeWindow.localStorage.removeItem('temporary');
         const topLevelEl = document.createEl('div', { text: language || 'en' });
         class GlobalView extends View {}
         module.exports = class GlobalPlugin extends Plugin {
           onload() {
-            if (window.app !== this.app || app !== this.app) {
+            if (window.app !== this.app || app !== this.app || activeWindow.app !== this.app || globalThis.app !== this.app) {
               throw new Error('missing app globals');
+            }
+            if (topLevelLanguage !== 'zh-cn' || selfLanguage !== 'zh-cn' || globalLanguage !== 'zh-cn') {
+              throw new Error('missing localStorage globals');
+            }
+            if (localStorage.getItem('numeric') !== '42' || localStorage.getItem('temporary') !== null) {
+              throw new Error('localStorage did not preserve browser semantics');
             }
             if (!(new GlobalView(this.app.workspace.getLeaf()) instanceof View)) {
               throw new Error('missing View export');
@@ -153,6 +166,9 @@ describe('PluginLoader', () => {
     await loader.loadPlugin('global-plugin');
 
     expect(loader.getApp().getCommands()[0]?.fullId).toBe('obsidian:global-plugin:globals');
+    expect(loader.getApp().loadLocalStorage('language')).toBe('zh-cn');
+    expect(loader.getApp().loadLocalStorage('numeric')).toBe('42');
+    expect(loader.getApp().loadLocalStorage('temporary')).toBeNull();
   });
 
   it('unloads a plugin and removes all its registered commands', async () => {
@@ -188,9 +204,10 @@ describe('PluginLoader', () => {
         const { Plugin } = require('obsidian');
         module.exports = class PartialPlugin extends Plugin {
           onload() {
-            globalThis.__mindosPartialPluginCleanupCount = 0;
+            localStorage.setItem('__mindosPartialPluginCleanupCount', '0');
             this.register(() => {
-              globalThis.__mindosPartialPluginCleanupCount += 1;
+              const count = Number(localStorage.getItem('__mindosPartialPluginCleanupCount') || '0');
+              localStorage.setItem('__mindosPartialPluginCleanupCount', String(count + 1));
             });
             this.addCommand({ id: 'partial', name: 'Partial', callback: () => {} });
             this.addRibbonIcon('sparkles', 'Partial ribbon', () => {});
@@ -212,7 +229,8 @@ describe('PluginLoader', () => {
 
     const app = loader.getApp();
     const host = app.getRuntimeHost();
-    expect((globalThis as { __mindosPartialPluginCleanupCount?: number }).__mindosPartialPluginCleanupCount).toBe(1);
+    expect(app.loadLocalStorage('__mindosPartialPluginCleanupCount')).toBe('1');
+    expect((globalThis as { __mindosPartialPluginCleanupCount?: number }).__mindosPartialPluginCleanupCount).toBeUndefined();
     expect(loader.getLoadedPlugins()).toHaveLength(0);
     expect(app.getCommands()).toHaveLength(0);
     expect(app.plugins.plugins['partial-plugin']).toBeUndefined();

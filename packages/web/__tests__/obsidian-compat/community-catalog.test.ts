@@ -334,6 +334,43 @@ describe('Obsidian community catalog adapter', () => {
     expect(fetched.files.stylesCss).toBe('.quickadd { display: block; }');
   });
 
+  it('retries transient network failures while fetching release assets', async () => {
+    const repositoryUrls = buildObsidianCommunityPluginRepositoryUrls('owner/quickadd');
+    const urls = releaseUrls('owner/quickadd', '1.2.3');
+    let mainJsAttempts = 0;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === repositoryUrls.manifestUrl || url === urls.manifestUrl) {
+        return new Response(JSON.stringify({
+          id: 'quickadd',
+          name: 'QuickAdd',
+          version: '1.2.3',
+        }), { status: 200 });
+      }
+      if (url === urls.mainUrl) {
+        mainJsAttempts += 1;
+        if (mainJsAttempts === 1) {
+          throw new TypeError('fetch failed');
+        }
+        return new Response("const { Plugin } = require('obsidian'); module.exports = class QuickAdd extends Plugin {};", { status: 200 });
+      }
+      if (url === urls.stylesUrl) {
+        return new Response('missing', { status: 404 });
+      }
+      return new Response('not found', { status: 404 });
+    });
+
+    const fetched = await fetchObsidianCommunityPluginPackage({
+      repo: 'owner/quickadd',
+      pluginId: 'quickadd',
+      fetchImpl: fetchMock as unknown as typeof fetch,
+    });
+
+    expect(fetched.preflight.installable).toBe(true);
+    expect(fetched.files.mainJs).toContain('class QuickAdd');
+    expect(mainJsAttempts).toBe(2);
+  });
+
   it('selects the newest app-compatible release from versions.json when latest requires a newer Obsidian app', async () => {
     const repositoryUrls = buildObsidianCommunityPluginRepositoryUrls('owner/quickadd');
     const compatibleUrls = buildObsidianCommunityPluginReleaseUrls('owner/quickadd', '1.5.0', {

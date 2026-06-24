@@ -17,6 +17,7 @@ const appStub: App = {
   isDarkMode: () => false,
   loadLocalStorage: () => null,
   saveLocalStorage: () => {},
+  removeLocalStorage: () => {},
   registerCommand: () => ({ id: 'noop', name: 'noop' }),
   unregisterCommand: () => {},
 };

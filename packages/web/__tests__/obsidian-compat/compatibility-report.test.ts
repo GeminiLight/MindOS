@@ -7,7 +7,7 @@ import {
 describe('compatibility report', () => {
   it('detects high-frequency Obsidian APIs and preserves host-boundary levels', () => {
     const report = analyzePluginCompatibility(`
-      const { Plugin, Notice, Modal, PluginSettingTab, Setting, SecretStorage, MarkdownRenderer, EditorSuggest, Scope, parseYaml, stringifyYaml, htmlToMarkdown, debounce, addIcon, getIcon, getIconIds, setIcon, setTooltip, prepareSimpleSearch, renderMatches } = require('obsidian');
+      const { Plugin, Notice, Modal, PluginSettingTab, Setting, SecretStorage, MarkdownRenderer, EditorSuggest, Scope, parseYaml, stringifyYaml, parseLinktext, getLinkpath, arrayBufferToBase64, base64ToArrayBuffer, htmlToMarkdown, getAllTags, requireApiVersion, debounce, addIcon, getIcon, getIconIds, setIcon, setTooltip, prepareSimpleSearch, renderMatches } = require('obsidian');
       module.exports = class Example extends Plugin {
         getSettingDefinitions() {
           return [];
@@ -18,7 +18,12 @@ describe('compatibility report', () => {
           debounce(() => {}, 100);
           parseYaml('title: Example');
           stringifyYaml({ title: 'Example' });
+          parseLinktext('Folder/Note#Heading|Alias');
+          getLinkpath('Folder/Note#Heading|Alias');
+          arrayBufferToBase64(base64ToArrayBuffer('SGVsbG8='));
           htmlToMarkdown('<h1>Heading</h1>');
+          getAllTags({ frontmatter: { tags: ['alpha'] }, tags: [{ tag: '#body' }] });
+          requireApiVersion('1.7.2');
           addIcon('mindos-test', '<svg />');
           getIcon('mindos-test');
           getIconIds();
@@ -71,7 +76,13 @@ describe('compatibility report', () => {
         'Scope',
         'parseYaml',
         'stringifyYaml',
+        'parseLinktext',
+        'getLinkpath',
+        'arrayBufferToBase64',
+        'base64ToArrayBuffer',
         'htmlToMarkdown',
+        'getAllTags',
+        'requireApiVersion',
         'debounce',
         'addIcon',
         'getIcon',
@@ -120,6 +131,8 @@ describe('compatibility report', () => {
       'Vault.trash',
       'parseYaml',
       'stringifyYaml',
+      'arrayBufferToBase64',
+      'base64ToArrayBuffer',
       'debounce',
     ]));
     expect(report.partialApis).toEqual(expect.arrayContaining([
@@ -142,6 +155,10 @@ describe('compatibility report', () => {
       'prepareSimpleSearch',
       'renderMatches',
       'htmlToMarkdown',
+      'parseLinktext',
+      'getLinkpath',
+      'getAllTags',
+      'requireApiVersion',
       'Commands.listCommands',
       'CustomCss.getSnippetPath',
       'CustomCss.setCssEnabledStatus',

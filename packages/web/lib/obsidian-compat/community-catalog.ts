@@ -32,6 +32,8 @@ const RAW_GITHUB_HEAD_BASE_URL = 'https://raw.githubusercontent.com';
 const GITHUB_RELEASE_BASE_URL = 'https://github.com';
 const GITHUB_REPO_PATTERN = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 export const OBSIDIAN_COMMUNITY_PACKAGE_FETCH_TIMEOUT_MS = 8000;
+const OBSIDIAN_COMMUNITY_PACKAGE_FETCH_ATTEMPTS = 3;
+const OBSIDIAN_COMMUNITY_PACKAGE_FETCH_RETRY_DELAY_MS = 250;
 export const OBSIDIAN_COMMUNITY_MANIFEST_MAX_CHARS = 64 * 1024;
 export const OBSIDIAN_COMMUNITY_VERSIONS_MAX_CHARS = 128 * 1024;
 export const OBSIDIAN_COMMUNITY_MAIN_JS_MAX_CHARS = 2 * 1024 * 1024;
@@ -725,22 +727,44 @@ async function fetchWithTimeout(
   label: string,
   init: RequestInit,
 ): Promise<Response> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= OBSIDIAN_COMMUNITY_PACKAGE_FETCH_ATTEMPTS; attempt += 1) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    let shouldRetry = false;
 
-  try {
-    return await fetchImpl(url, {
-      ...init,
-      signal: controller.signal,
-    });
-  } catch (err) {
-    if (err instanceof Error && err.name === 'AbortError') {
-      throw new MindOSError(ErrorCodes.INTERNAL_ERROR, `Timed out fetching Obsidian plugin ${label}.`);
+    try {
+      return await fetchImpl(url, {
+        ...init,
+        signal: controller.signal,
+      });
+    } catch (err) {
+      lastError = err instanceof Error && err.name === 'AbortError'
+        ? new MindOSError(ErrorCodes.INTERNAL_ERROR, `Timed out fetching Obsidian plugin ${label}.`)
+        : err;
+      if (attempt >= OBSIDIAN_COMMUNITY_PACKAGE_FETCH_ATTEMPTS || !isRetryableFetchError(lastError)) {
+        throw lastError;
+      }
+      shouldRetry = true;
+    } finally {
+      clearTimeout(timeout);
     }
-    throw err;
-  } finally {
-    clearTimeout(timeout);
+    if (shouldRetry) {
+      await delay(OBSIDIAN_COMMUNITY_PACKAGE_FETCH_RETRY_DELAY_MS * attempt);
+    }
   }
+  throw lastError;
+}
+
+function isRetryableFetchError(err: unknown): boolean {
+  if (err instanceof MindOSError) {
+    return err.message.startsWith('Timed out fetching Obsidian plugin ');
+  }
+  return err instanceof TypeError || (err instanceof Error && err.message === 'fetch failed');
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function validatePreflightManifest(rawManifest: unknown): PluginManifest {

@@ -356,6 +356,12 @@ export class AppShim implements App {
     this.writeLocalStorageStore(store);
   }
 
+  removeLocalStorage(key: string): void {
+    const store = this.readLocalStorageStore();
+    delete store[key];
+    this.writeLocalStorageStore(store);
+  }
+
   registerCommand(pluginId: string, command: Command): Command {
     return this.commandRegistry.register(pluginId, command);
   }
