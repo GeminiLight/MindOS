@@ -92,6 +92,23 @@ detect → health → configure → launch → session → context
 | Codex / Claude Code | MindOS 拥有 detect / health / prompt bridge；外部 runtime 拥有 model、auth、permission、session、compact、execute |
 | ACP | MindOS 拥有 registry/detect 与 launch metadata；具体 adapter 拥有 auth、session、context window、execute |
 
+### Runtime Adapter Contract
+
+`AgentRuntimeDescriptor.adapterContract` 是 runtime lifecycle 的 adapter-facing 只读 contract。它不替代 `lifecycle` / `compatibility`，而是把“这个 runtime 如何接入 MindOS”拆成四个可被 Runtime Doctor、Compatibility Center、未来 Agent Pack 消费的面：
+
+| 字段 | 语义 |
+|---|---|
+| `connection` | MindOS 通过 internal / stdio / app-server / SDK / CLI 哪种方式连接 runtime，以及 launch command 的安全摘要 |
+| `configuration` | 模型、凭证、settings 是 MindOS session/settings 持有，还是 runtime/adapter 自己持有 |
+| `health` | health 由 MindOS native probe、runtime native check、adapter 声明，还是未知 |
+| `commands` | slash/native command 是 MindOS skill 生成、runtime event 发现、adapter 静态声明，还是未知 |
+
+这层的安全边界：
+
+- 只暴露命令名、健康检查摘要、静态 command 名称等非敏感 metadata；不返回 env、headers、token。
+- 不启动 runtime、不执行 health check、不同步外部 settings，只描述当前已知 adapter contract。
+- ACP custom adapter 可以通过 settings 声明 `adapterMetadata.healthCheck` 与 `adapterMetadata.commands`；MindOS 只把这些作为兼容诊断和未来 command UI 的输入，不自动信任为 ready。
+
 `lifecycle.remote` 不等于“已经有 24/7 调度器”。它只回答 runtime 是否能在 MindOS server 所在主机运行，以及 unattended 能力是否完整。当前 native / ACP / MindOS Pi 都是 `server-runnable`，但 unattended 仍是 `limited`：还需要 scheduler、approval routing、wake/resume、missed trigger 和失败审计这些产品层能力。
 
 `lifecycle.coordination` 是未来 Team Mode 的底层边界，不是当前 UI 承诺。现在只声明 runtime 是否能消费共享 MindOS context，以及是否已有 mailbox / task-board primitives。当前共享 context 已有，mailbox 与 task-board 还没有 first-class contract。
@@ -418,6 +435,7 @@ MindOS Pi 的 persisted session 由 Pi `SessionManager` 自己持有完整 JSONL
 | `packages/mindos/src/agent/runtime/registry.ts` | Runtime descriptor / capability / lifecycle 类型源头 |
 | `packages/mindos/src/agent/runtime/lifecycle.ts` | MindOS Pi / native / ACP lifecycle metadata builder |
 | `packages/mindos/src/agent/runtime/compatibility.ts` | Runtime compatibility profile builder，投影 interactive / remote / unattended / skill / team 场景 readiness |
+| `packages/mindos/src/agent/runtime/adapter-contracts.ts` | Runtime adapter contract builder，描述 connection / configuration / health / commands 的只读接入契约 |
 | `packages/mindos/src/agent/runtime/descriptors.ts` | Runtime descriptor 组装，统一暴露 capability / harness / lifecycle |
 | `packages/mindos/src/server/handlers/runtime-permission-projections.ts` | Permission runtime projection contract，统一解释每个 runtime 的交互式审批与 unattended permission readiness |
 | `packages/mindos/src/server/handlers/mcp-runtime-projections.ts` | MCP runtime projection contract，统一解释每个 runtime 的 MCP ready/projectable/limited/blocked/unknown |

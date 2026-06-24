@@ -1,4 +1,9 @@
 import {
+  acpAdapterContract,
+  mindosAdapterContract,
+  nativeAdapterContract,
+} from './adapter-contracts.js';
+import {
   acpCapabilities,
   acpHarnessCapabilities,
   claudeCapabilities,
@@ -127,6 +132,12 @@ export function nativeDescriptor(input: {
       lifecycle,
       status,
     }),
+    adapterContract: nativeAdapterContract({
+      id: input.id,
+      command: input.source?.resolvedCommand?.cmd,
+      commandSource: input.source?.resolvedCommand?.source,
+      bridgeKind: input.id === 'codex' ? 'codex-app-server' : runtimeBridge?.kind,
+    }),
     ...(runtimeBridge ? { runtimeBridge } : {}),
     description: input.id === 'codex'
       ? 'Local Codex app-server runtime. Model, approval, and thread behavior are owned by Codex.'
@@ -181,6 +192,7 @@ export function mindosRuntimeDescriptor(checkedAt: string): AgentRuntimeDescript
       lifecycle,
       status: 'available',
     }),
+    adapterContract: mindosAdapterContract(),
     description: 'MindOS internal agent using the selected provider and model.',
     availability: { checkedAt, sources: ['settings'] },
   };
@@ -210,6 +222,7 @@ export function acpRuntimeDescriptor(agent: DetectedRuntimeAgent, checkedAt: str
       lifecycle,
       status,
     }),
+    adapterContract: acpAdapterContract(agent),
     description: 'ACP agent selected as the Chat Panel runtime.',
     sourceAgentId: agent.id,
     canonicalAgentId: agent.id,

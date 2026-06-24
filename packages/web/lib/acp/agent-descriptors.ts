@@ -15,6 +15,8 @@ export {
 } from '@geminilight/mindos/protocols/acp';
 export type {
   AcpAgentDescriptor,
+  AcpAgentAdapterCommandDeclaration,
+  AcpAgentAdapterMetadata,
   AcpAgentOverride,
   DetectableAgent,
   ResolvedAgentCommand,

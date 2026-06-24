@@ -61,9 +61,20 @@ function compactNativeRuntimeDescriptor(runtime: AgentRuntimeDescriptor): AgentR
       reason: compactRuntimeDisplayReason(inferredRuntimeBridge.reason, { runtime: runtime.kind }),
     }
     : inferredRuntimeBridge;
+  const adapterContract = runtime.kind === 'claude' && runtimeBridge?.kind === 'claude-cli'
+    ? {
+      ...runtime.adapterContract,
+      connection: {
+        ...runtime.adapterContract.connection,
+        kind: 'cli' as const,
+        summary: 'MindOS uses the Claude Code CLI fallback when the SDK bridge is unavailable.',
+      },
+    }
+    : runtime.adapterContract;
   return {
     ...runtime,
     ...(runtime.kind === 'claude' && runtimeBridge?.kind === 'claude-cli' ? { adapter: 'claude-cli' as const } : {}),
+    adapterContract,
     ...(runtimeBridge ? { runtimeBridge } : {}),
     availability: {
       ...runtime.availability,

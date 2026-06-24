@@ -42,7 +42,13 @@ describe('/api/agent-runtimes', () => {
     mockCheckNativeRuntimeHealth.mockResolvedValue({ status: 'available' });
     mockDetectLocalAcpAgents.mockResolvedValue({
       installed: [
-        { id: 'codex-acp', name: 'Codex', binaryPath: '/usr/local/bin/codex', status: 'available' },
+        {
+          id: 'codex-acp',
+          name: 'Codex',
+          binaryPath: '/usr/local/bin/codex',
+          resolvedCommand: { cmd: 'codex', args: [], source: 'descriptor' },
+          status: 'available',
+        },
         { id: 'gemini', name: 'Gemini CLI', binaryPath: '/usr/local/bin/gemini', status: 'available' },
       ],
       notInstalled: [
@@ -90,6 +96,14 @@ describe('/api/agent-runtimes', () => {
             }),
           }),
         }),
+        adapterContract: expect.objectContaining({
+          connection: expect.objectContaining({ kind: 'internal', owner: 'mindos' }),
+          configuration: expect.objectContaining({
+            modelSelection: 'mindos-session',
+            credentials: 'mindos-settings',
+          }),
+          commands: expect.objectContaining({ discovery: 'mindos-skills' }),
+        }),
       }),
       expect.objectContaining({
         id: 'codex',
@@ -130,6 +144,19 @@ describe('/api/agent-runtimes', () => {
             'remote-control': expect.objectContaining({ level: 'limited' }),
           }),
         }),
+        adapterContract: expect.objectContaining({
+          connection: expect.objectContaining({
+            kind: 'app-server',
+            owner: 'mindos',
+            command: 'codex',
+          }),
+          configuration: expect.objectContaining({
+            modelSelection: 'runtime-native',
+            credentials: 'runtime-native',
+          }),
+          health: expect.objectContaining({ mode: 'mindos-native', timeoutMs: 20000 }),
+          commands: expect.objectContaining({ discovery: 'runtime-event' }),
+        }),
       }),
       expect.objectContaining({
         id: 'claude',
@@ -158,6 +185,11 @@ describe('/api/agent-runtimes', () => {
               blockers: expect.arrayContaining(['list-attach-archive']),
             }),
           }),
+        }),
+        adapterContract: expect.objectContaining({
+          connection: expect.objectContaining({ kind: 'sdk', owner: 'mindos' }),
+          configuration: expect.objectContaining({ modelSelection: 'runtime-native' }),
+          health: expect.objectContaining({ mode: 'mindos-native' }),
         }),
       }),
       expect.objectContaining({
@@ -189,6 +221,12 @@ describe('/api/agent-runtimes', () => {
             }),
             'permission-governance': expect.objectContaining({ level: 'unknown' }),
           }),
+        }),
+        adapterContract: expect.objectContaining({
+          connection: expect.objectContaining({ kind: 'stdio', owner: 'mindos' }),
+          configuration: expect.objectContaining({ modelSelection: 'adapter-declared' }),
+          health: expect.objectContaining({ mode: 'unknown' }),
+          commands: expect.objectContaining({ discovery: 'unknown' }),
         }),
       }),
     ]));
@@ -351,6 +389,9 @@ describe('/api/agent-runtimes', () => {
       kind: 'claude',
       adapter: 'claude-cli',
       status: 'available',
+      adapterContract: expect.objectContaining({
+        connection: expect.objectContaining({ kind: 'cli' }),
+      }),
       runtimeBridge: {
         kind: 'claude-cli',
         label: 'CLI fallback active',
@@ -358,6 +399,103 @@ describe('/api/agent-runtimes', () => {
         reason: 'SDK missing',
       },
     });
+  });
+
+  it('keeps the adapter contract aligned when Claude CLI fallback is inferred from diagnostics', async () => {
+    mockResolveCommandPath.mockImplementation(async (command: string) => {
+      if (command === 'claude') return '/usr/local/bin/claude';
+      return null;
+    });
+    mockCheckNativeRuntimeHealth.mockResolvedValue({
+      status: 'available',
+      diagnosticHints: ['Claude Code CLI is available; Claude Agent SDK bridge is unavailable, so MindOS will use CLI fallback. SDK missing'],
+    });
+    mockDetectLocalAcpAgents.mockResolvedValue({ installed: [], notInstalled: [] });
+
+    const { GET } = await import('../../app/api/agent-runtimes/route');
+    const res = await GET(new Request('http://localhost/api/agent-runtimes?runtime=claude'));
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.runtime).toMatchObject({
+      id: 'claude',
+      adapter: 'claude-cli',
+      adapterContract: expect.objectContaining({
+        connection: expect.objectContaining({
+          kind: 'cli',
+          summary: 'MindOS uses the Claude Code CLI fallback when the SDK bridge is unavailable.',
+        }),
+      }),
+      runtimeBridge: expect.objectContaining({
+        kind: 'claude-cli',
+        fallback: true,
+      }),
+    });
+  });
+
+  it('surfaces non-sensitive custom ACP adapter contract metadata', async () => {
+    mockResolveCommandPath.mockResolvedValue(null);
+    mockCheckNativeRuntimeHealth.mockResolvedValue({ status: 'available' });
+    mockDetectLocalAcpAgents.mockResolvedValue({
+      installed: [
+        {
+          id: 'custom-acp',
+          name: 'Custom ACP',
+          binaryPath: '/usr/local/bin/custom-acp',
+          resolvedCommand: { cmd: 'custom-acp', args: ['--acp'], source: 'user-override' },
+          adapterMetadata: {
+            healthCheck: {
+              command: 'custom-acp doctor',
+              timeoutMs: 4000,
+              summary: 'Runs custom ACP self-checks.',
+              env: { TOKEN: 'secret' },
+            },
+            commands: [
+              { name: 'review', description: 'Review the active workspace.', env: { TOKEN: 'secret' } },
+            ],
+            env: { TOKEN: 'secret' },
+          },
+          status: 'available',
+        },
+      ],
+      notInstalled: [],
+    });
+
+    const { GET } = await import('../../app/api/agent-runtimes/route');
+    const res = await GET(new Request('http://localhost/api/agent-runtimes?scope=acp'));
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.runtimes).toEqual([
+      expect.objectContaining({
+        id: 'custom-acp',
+        adapterContract: expect.objectContaining({
+          connection: expect.objectContaining({
+            kind: 'stdio',
+            command: 'custom-acp',
+            commandSource: 'user-override',
+          }),
+          configuration: expect.objectContaining({
+            credentials: 'adapter-declared',
+            settings: 'adapter-declared',
+          }),
+          health: expect.objectContaining({
+            mode: 'adapter-declared',
+            command: 'custom-acp doctor',
+            timeoutMs: 4000,
+            summary: 'Runs custom ACP self-checks.',
+          }),
+          commands: expect.objectContaining({
+            discovery: 'adapter-declared',
+            commands: [
+              { name: 'review', description: 'Review the active workspace.', source: 'adapter-declared' },
+            ],
+          }),
+        }),
+      }),
+    ]);
+    expect(JSON.stringify(body)).not.toContain('TOKEN');
+    expect(JSON.stringify(body)).not.toContain('secret');
   });
 
   it('compacts native runtime startup stacks before returning them to the UI', async () => {

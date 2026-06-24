@@ -27,6 +27,20 @@ export interface AcpAgentDescriptor {
   description?: string;
 }
 
+export interface AcpAgentAdapterCommandDeclaration {
+  name: string;
+  description?: string;
+}
+
+export interface AcpAgentAdapterMetadata {
+  healthCheck?: {
+    command?: string;
+    timeoutMs?: number;
+    summary?: string;
+  };
+  commands?: AcpAgentAdapterCommandDeclaration[];
+}
+
 /** User override for a specific agent, persisted in settings. */
 export interface AcpAgentOverride {
   /** Optional display name for custom ACP agents. Built-in descriptors still own curated names. */
@@ -45,6 +59,8 @@ export interface AcpAgentOverride {
   presenceDirs?: string[];
   /** Install command shown in UI when a custom ACP agent is not detected */
   installCmd?: string;
+  /** Non-sensitive adapter contract metadata surfaced in runtime diagnostics. */
+  adapterMetadata?: AcpAgentAdapterMetadata;
   /** false = skip this agent entirely (default: true) */
   enabled?: boolean;
 }
@@ -257,6 +273,7 @@ export interface DetectableAgent {
   presenceDirs?: string[];
   installCmd?: string;
   description?: string;
+  adapterMetadata?: AcpAgentAdapterMetadata;
   source: 'descriptor' | 'user-config';
 }
 
@@ -337,6 +354,8 @@ export function parseAcpAgentOverrides(raw: unknown): Record<string, AcpAgentOve
     if (presenceDirs) override.presenceDirs = presenceDirs;
     const installCmd = sanitizeOptionalString(entry.installCmd, 500);
     if (installCmd) override.installCmd = installCmd;
+    const adapterMetadata = sanitizeAdapterMetadata(entry.adapterMetadata);
+    if (adapterMetadata) override.adapterMetadata = adapterMetadata;
 
     if (Object.keys(override).length > 0) {
       result[key] = override;
@@ -434,6 +453,50 @@ function overrideToDetectableAgent(
     presenceDirs: override.presenceDirs,
     installCmd: override.installCmd,
     description: override.description,
+    adapterMetadata: override.adapterMetadata,
     source: 'user-config',
   };
+}
+
+function sanitizePositiveInteger(value: unknown, max: number): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return undefined;
+  const normalized = Math.floor(value);
+  if (normalized <= 0) return undefined;
+  return Math.min(normalized, max);
+}
+
+function sanitizeAdapterMetadata(value: unknown): AcpAgentAdapterMetadata | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const entry = value as Record<string, unknown>;
+  const metadata: AcpAgentAdapterMetadata = {};
+  if (entry.healthCheck && typeof entry.healthCheck === 'object' && !Array.isArray(entry.healthCheck)) {
+    const health = entry.healthCheck as Record<string, unknown>;
+    const command = sanitizeOptionalString(health.command, 240);
+    const summary = sanitizeOptionalString(health.summary, 300);
+    const timeoutMs = sanitizePositiveInteger(health.timeoutMs, 60_000);
+    if (command || summary || timeoutMs !== undefined) {
+      metadata.healthCheck = {
+        ...(command ? { command } : {}),
+        ...(timeoutMs !== undefined ? { timeoutMs } : {}),
+        ...(summary ? { summary } : {}),
+      };
+    }
+  }
+  if (Array.isArray(entry.commands)) {
+    const commands = entry.commands
+      .filter((command): command is Record<string, unknown> => !!command && typeof command === 'object' && !Array.isArray(command))
+      .map((command) => {
+        const name = sanitizeOptionalString(command.name, 80);
+        if (!name) return null;
+        const description = sanitizeOptionalString(command.description, 240);
+        return {
+          name,
+          ...(description ? { description } : {}),
+        };
+      })
+      .filter((command): command is AcpAgentAdapterCommandDeclaration => command !== null)
+      .slice(0, 50);
+    if (commands.length > 0) metadata.commands = commands;
+  }
+  return metadata.healthCheck || metadata.commands ? metadata : undefined;
 }

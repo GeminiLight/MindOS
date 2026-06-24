@@ -171,6 +171,90 @@ export type AgentRuntimeBridge = {
   reason?: string;
 };
 
+export type AgentRuntimeAdapterConnectionKind =
+  | 'internal'
+  | 'stdio'
+  | 'app-server'
+  | 'sdk'
+  | 'cli'
+  | 'unknown';
+
+export type AgentRuntimeAdapterConfigurationOwner =
+  | 'mindos-session'
+  | 'mindos-settings'
+  | 'runtime-native'
+  | 'adapter-declared'
+  | 'unsupported'
+  | 'unknown';
+
+export type AgentRuntimeAdapterHealthMode =
+  | 'mindos-native'
+  | 'runtime-native'
+  | 'adapter-declared'
+  | 'unsupported'
+  | 'unknown';
+
+export type AgentRuntimeAdapterCommandDiscovery =
+  | 'mindos-skills'
+  | 'runtime-event'
+  | 'adapter-declared'
+  | 'unsupported'
+  | 'unknown';
+
+export type AgentRuntimeAdapterCommandSource =
+  | 'mindos'
+  | 'runtime-native'
+  | 'adapter-declared';
+
+export type AgentRuntimeResolvedCommandSource = 'user-override' | 'descriptor' | 'registry';
+
+export type AgentRuntimeAdapterDeclaredCommand = {
+  name: string;
+  description?: string;
+  source: AgentRuntimeAdapterCommandSource;
+};
+
+export type AgentRuntimeAdapterMetadata = {
+  healthCheck?: {
+    command?: string;
+    timeoutMs?: number;
+    summary?: string;
+  };
+  commands?: Array<{
+    name: string;
+    description?: string;
+  }>;
+};
+
+export type AgentRuntimeAdapterContract = {
+  schemaVersion: 1;
+  connection: {
+    kind: AgentRuntimeAdapterConnectionKind;
+    owner: AgentRuntimeOwner;
+    summary: string;
+    command?: string;
+    commandSource?: AgentRuntimeResolvedCommandSource;
+  };
+  configuration: {
+    modelSelection: AgentRuntimeAdapterConfigurationOwner;
+    credentials: AgentRuntimeAdapterConfigurationOwner;
+    settings: AgentRuntimeAdapterConfigurationOwner;
+    summary: string;
+  };
+  health: {
+    mode: AgentRuntimeAdapterHealthMode;
+    owner: AgentRuntimeOwner;
+    summary: string;
+    command?: string;
+    timeoutMs?: number;
+  };
+  commands: {
+    discovery: AgentRuntimeAdapterCommandDiscovery;
+    commands: AgentRuntimeAdapterDeclaredCommand[];
+    summary: string;
+  };
+};
+
 export type AgentRuntimeDescriptor = {
   id: string;
   name: string;
@@ -187,6 +271,7 @@ export type AgentRuntimeDescriptor = {
   harnessCapabilities?: AgentRuntimeHarnessCapabilities;
   lifecycle: AgentRuntimeLifecycle;
   compatibility: AgentRuntimeCompatibilityProfile;
+  adapterContract: AgentRuntimeAdapterContract;
   runtimeBridge?: AgentRuntimeBridge;
   description?: string;
   sourceAgentId?: string;
@@ -197,7 +282,7 @@ export type AgentRuntimeDescriptor = {
   resolvedCommand?: {
     cmd: string;
     args: string[];
-    source: 'user-override' | 'descriptor' | 'registry';
+    source: AgentRuntimeResolvedCommandSource;
   };
   installCmd?: string;
   packageName?: string;
@@ -215,6 +300,7 @@ export type DetectedRuntimeAgent = {
   name: string;
   binaryPath: string;
   resolvedCommand?: NonNullable<AgentRuntimeDescriptor['resolvedCommand']>;
+  adapterMetadata?: AgentRuntimeAdapterMetadata;
   status?: Exclude<AgentRuntimeStatus, 'missing'>;
   reason?: string;
   diagnosticHints?: string[];

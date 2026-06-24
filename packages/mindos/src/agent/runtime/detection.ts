@@ -4,6 +4,7 @@ import {
   summarizeRuntimeFailure,
 } from './runtime-errors.js';
 import type {
+  AgentRuntimeAdapterMetadata,
   AgentRuntimeBridge,
   AgentRuntimeDescriptor,
   AgentRuntimeStatus,
@@ -91,17 +92,67 @@ export function normalizeRuntimeBridge(value: unknown): AgentRuntimeBridge | und
   };
 }
 
+function sanitizeOptionalString(value: unknown, maxLength: number): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  return trimmed ? trimmed.slice(0, maxLength) : undefined;
+}
+
+function normalizePositiveInteger(value: unknown, max: number): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return undefined;
+  const normalized = Math.floor(value);
+  if (normalized <= 0) return undefined;
+  return Math.min(normalized, max);
+}
+
+function normalizeAdapterMetadata(value: unknown): AgentRuntimeAdapterMetadata | undefined {
+  if (!isRecord(value)) return undefined;
+  const metadata: AgentRuntimeAdapterMetadata = {};
+  if (isRecord(value.healthCheck)) {
+    const command = sanitizeOptionalString(value.healthCheck.command, 240);
+    const summary = sanitizeOptionalString(value.healthCheck.summary, 300);
+    const timeoutMs = normalizePositiveInteger(value.healthCheck.timeoutMs, 60_000);
+    if (command || summary || timeoutMs !== undefined) {
+      metadata.healthCheck = {
+        ...(command ? { command } : {}),
+        ...(timeoutMs !== undefined ? { timeoutMs } : {}),
+        ...(summary ? { summary } : {}),
+      };
+    }
+  }
+  if (Array.isArray(value.commands)) {
+    const commands = value.commands
+      .filter(isRecord)
+      .map((command) => {
+        const name = sanitizeOptionalString(command.name, 80);
+        if (!name) return null;
+        const description = sanitizeOptionalString(command.description, 240);
+        const normalizedCommand: NonNullable<AgentRuntimeAdapterMetadata['commands']>[number] = {
+          name,
+          ...(description ? { description } : {}),
+        };
+        return normalizedCommand;
+      })
+      .filter((command): command is NonNullable<AgentRuntimeAdapterMetadata['commands']>[number] => command !== null)
+      .slice(0, 50);
+    if (commands.length > 0) metadata.commands = commands;
+  }
+  return metadata.healthCheck || metadata.commands ? metadata : undefined;
+}
+
 export function normalizeInstalled(value: unknown): DetectedRuntimeAgent | null {
   if (!isRecord(value)) return null;
   if (typeof value.id !== 'string' || typeof value.name !== 'string' || typeof value.binaryPath !== 'string') return null;
   const resolved = normalizeResolvedCommand(value.resolvedCommand);
   const diagnosticHints = normalizeDiagnosticHints(value.diagnosticHints);
   const runtimeBridge = normalizeRuntimeBridge(value.runtimeBridge);
+  const adapterMetadata = normalizeAdapterMetadata(value.adapterMetadata);
   return {
     id: value.id,
     name: value.name,
     binaryPath: value.binaryPath,
     ...(resolved ? { resolvedCommand: resolved } : {}),
+    ...(adapterMetadata ? { adapterMetadata } : {}),
     ...(isInstalledRuntimeStatus(value.status) ? { status: value.status } : {}),
     ...(typeof value.reason === 'string' && value.reason.trim() ? { reason: value.reason } : {}),
     ...(diagnosticHints ? { diagnosticHints } : {}),

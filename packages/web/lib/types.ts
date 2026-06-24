@@ -316,6 +316,78 @@ export interface AgentRuntimeBridge {
   reason?: string;
 }
 
+export type AgentRuntimeAdapterConnectionKind =
+  | 'internal'
+  | 'stdio'
+  | 'app-server'
+  | 'sdk'
+  | 'cli'
+  | 'unknown';
+
+export type AgentRuntimeAdapterConfigurationOwner =
+  | 'mindos-session'
+  | 'mindos-settings'
+  | 'runtime-native'
+  | 'adapter-declared'
+  | 'unsupported'
+  | 'unknown';
+
+export type AgentRuntimeAdapterHealthMode =
+  | 'mindos-native'
+  | 'runtime-native'
+  | 'adapter-declared'
+  | 'unsupported'
+  | 'unknown';
+
+export type AgentRuntimeAdapterCommandDiscovery =
+  | 'mindos-skills'
+  | 'runtime-event'
+  | 'adapter-declared'
+  | 'unsupported'
+  | 'unknown';
+
+export type AgentRuntimeAdapterCommandSource =
+  | 'mindos'
+  | 'runtime-native'
+  | 'adapter-declared';
+
+export type AgentRuntimeResolvedCommandSource = 'user-override' | 'descriptor' | 'registry';
+
+export interface AgentRuntimeAdapterDeclaredCommand {
+  name: string;
+  description?: string;
+  source: AgentRuntimeAdapterCommandSource;
+}
+
+export interface AgentRuntimeAdapterContract {
+  schemaVersion: 1;
+  connection: {
+    kind: AgentRuntimeAdapterConnectionKind;
+    owner: AgentRuntimeOwner;
+    summary: string;
+    command?: string;
+    commandSource?: AgentRuntimeResolvedCommandSource;
+  };
+  configuration: {
+    modelSelection: AgentRuntimeAdapterConfigurationOwner;
+    credentials: AgentRuntimeAdapterConfigurationOwner;
+    settings: AgentRuntimeAdapterConfigurationOwner;
+    summary: string;
+  };
+  health: {
+    mode: AgentRuntimeAdapterHealthMode;
+    owner: AgentRuntimeOwner;
+    summary: string;
+    command?: string;
+    timeoutMs?: number;
+  };
+  commands: {
+    discovery: AgentRuntimeAdapterCommandDiscovery;
+    commands: AgentRuntimeAdapterDeclaredCommand[];
+    summary: string;
+  };
+}
+
 export interface AgentRuntimeDescriptor extends AgentRuntimeIdentity {
   category?: AgentRuntimeCategory;
   runtimeId?: string;
@@ -329,6 +401,7 @@ export interface AgentRuntimeDescriptor extends AgentRuntimeIdentity {
   harnessCapabilities?: AgentRuntimeHarnessCapabilities;
   lifecycle: AgentRuntimeLifecycle;
   compatibility: AgentRuntimeCompatibilityProfile;
+  adapterContract: AgentRuntimeAdapterContract;
   runtimeBridge?: AgentRuntimeBridge;
   description?: string;
   sourceAgentId?: string;
@@ -339,7 +412,7 @@ export interface AgentRuntimeDescriptor extends AgentRuntimeIdentity {
   resolvedCommand?: {
     cmd: string;
     args: string[];
-    source: 'user-override' | 'descriptor' | 'registry';
+    source: AgentRuntimeResolvedCommandSource;
   };
   installCmd?: string;
   packageName?: string;

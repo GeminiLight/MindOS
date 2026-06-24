@@ -3,7 +3,7 @@ import os from 'os';
 import path from 'path';
 import { execFile, execFileSync } from 'child_process';
 import { findUserOverride, getDetectableAgents, resolveAgentCommand } from './agent-descriptors.js';
-import type { AcpAgentOverride } from './agent-descriptors.js';
+import type { AcpAgentAdapterMetadata, AcpAgentOverride } from './agent-descriptors.js';
 
 export interface InstalledAgent {
   id: string;
@@ -14,6 +14,7 @@ export interface InstalledAgent {
     args: string[];
     source: 'user-override' | 'descriptor' | 'registry';
   };
+  adapterMetadata?: AcpAgentAdapterMetadata;
 }
 
 export interface NotInstalledAgent {
@@ -246,6 +247,7 @@ export async function detectLocalAcpAgents(
         name: agent.name,
         binaryPath: launchPath,
         resolvedCommand: { cmd: resolved.cmd, args: resolved.args, source: resolved.source },
+        ...(agent.adapterMetadata ? { adapterMetadata: agent.adapterMetadata } : {}),
       });
     } else {
       const packageName = agent.installCmd?.match(/npm install -g (.+)/)?.[1];

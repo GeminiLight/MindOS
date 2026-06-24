@@ -122,6 +122,21 @@ describe('parseAcpAgentOverrides', () => {
         detectCommands: ['my-agent', 'my-agent-beta', 'my-agent'],
         presenceDirs: ['~/.my-agent/'],
         installCmd: 'npm install -g my-agent',
+        adapterMetadata: {
+          healthCheck: {
+            command: 'my-agent doctor',
+            timeoutMs: 4500.9,
+            summary: 'Runs the custom adapter self-check.',
+            env: { SECRET_TOKEN: 'must-not-pass' },
+          },
+          commands: [
+            { name: 'review', description: 'Review the active workspace.' },
+            { name: 'review', description: 'duplicate is allowed by adapter order' },
+            { name: '', description: 'ignored' },
+            { name: 42 },
+          ],
+          env: { API_KEY: 'must-not-pass' },
+        },
       },
     });
     expect(result).toEqual({
@@ -133,6 +148,17 @@ describe('parseAcpAgentOverrides', () => {
         detectCommands: ['my-agent', 'my-agent-beta'],
         presenceDirs: ['~/.my-agent/'],
         installCmd: 'npm install -g my-agent',
+        adapterMetadata: {
+          healthCheck: {
+            command: 'my-agent doctor',
+            timeoutMs: 4500,
+            summary: 'Runs the custom adapter self-check.',
+          },
+          commands: [
+            { name: 'review', description: 'Review the active workspace.' },
+            { name: 'review', description: 'duplicate is allowed by adapter order' },
+          ],
+        },
       },
     });
   });
@@ -347,6 +373,9 @@ describe('getDetectableAgents', () => {
         args: ['--acp'],
         detectCommands: ['my-agent-beta'],
         description: 'Custom local ACP agent',
+        adapterMetadata: {
+          commands: [{ name: 'plan', description: 'Create a plan.' }],
+        },
       },
       'disabled-agent': {
         command: 'disabled-agent',
@@ -363,6 +392,9 @@ describe('getDetectableAgents', () => {
       name: 'My Agent',
       binary: 'my-agent-beta',
       detectCommands: ['my-agent-beta'],
+      adapterMetadata: {
+        commands: [{ name: 'plan', description: 'Create a plan.' }],
+      },
       source: 'user-config',
     }));
     expect(agents.some((agent) => agent.id === 'disabled-agent')).toBe(false);

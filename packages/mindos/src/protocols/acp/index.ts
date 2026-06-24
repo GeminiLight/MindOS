@@ -54,6 +54,8 @@ export {
 } from './session.js';
 export { ACP_ERRORS } from './types.js';
 export type {
+  AcpAgentAdapterCommandDeclaration,
+  AcpAgentAdapterMetadata,
   AcpAgentDescriptor,
   AcpAgentOverride,
   DetectableAgent,

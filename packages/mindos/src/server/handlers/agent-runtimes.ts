@@ -58,6 +58,14 @@ export {
 
 export type {
   AgentRuntimeAdapter,
+  AgentRuntimeAdapterCommandDiscovery,
+  AgentRuntimeAdapterCommandSource,
+  AgentRuntimeAdapterConfigurationOwner,
+  AgentRuntimeAdapterConnectionKind,
+  AgentRuntimeAdapterContract,
+  AgentRuntimeAdapterDeclaredCommand,
+  AgentRuntimeAdapterHealthMode,
+  AgentRuntimeAdapterMetadata,
   AgentRuntimeBridge,
   AgentRuntimeCapabilities,
   AgentRuntimeCategory,
