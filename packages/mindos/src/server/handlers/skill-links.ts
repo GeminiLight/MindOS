@@ -15,6 +15,7 @@ import {
 } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 import type { MindosSkillInfo, MindosSkillRoot } from './skills.js';
+import { emptySkillRuntimeRequirements } from './skill-metadata.js';
 
 /** Marker file written inside copy-fallback installs so uninstall can tell our copies from user directories. */
 export const MINDOS_MANAGED_MARKER = '.mindos-managed';
@@ -67,7 +68,7 @@ export type MindosSkillMatrixCell = {
 };
 
 export type MindosSkillMatrix = {
-  skills: Array<Pick<MindosSkillInfo, 'name' | 'description' | 'source' | 'origin' | 'path'>>;
+  skills: Array<Pick<MindosSkillInfo, 'name' | 'description' | 'source' | 'origin' | 'path' | 'runtimeRequirements'>>;
   agents: MindosSkillMatrixAgent[];
   state: Record<string, Record<string, boolean>>;
   cells: Record<string, Record<string, MindosSkillMatrixCell>>;
@@ -438,7 +439,14 @@ export function buildSkillMatrix(options: {
   // the skill roots entirely (their body dir doubled as a root, e.g. Codex's
   // ~/.codex/skills). They must stay visible here, or they become
   // unrestorable from any UI.
-  const baseSkills = options.skills.map(({ name, description, source, origin, path }) => ({ name, description, source, origin, path }));
+  const baseSkills = options.skills.map(({ name, description, source, origin, path, runtimeRequirements }) => ({
+    name,
+    description,
+    source,
+    origin,
+    path,
+    runtimeRequirements,
+  }));
   const parkedOnly = collectParkedOnlySkills(options.agents, new Set(baseSkills.map((skill) => skill.name)));
   const allSkills = [...baseSkills, ...parkedOnly].sort((a, b) => a.name.localeCompare(b.name));
   const parkedOnlyNames = new Set(parkedOnly.map((skill) => skill.name));
@@ -498,7 +506,14 @@ function collectParkedOnlySkills(
         }
         knownNames.add(entry.name);
         // Keyed by the directory name — that is what restore operates on.
-        found.push({ name: entry.name, description, source: 'builtin', origin: 'custom', path: skillFile });
+        found.push({
+          name: entry.name,
+          description,
+          source: 'builtin',
+          origin: 'custom',
+          path: skillFile,
+          runtimeRequirements: emptySkillRuntimeRequirements(),
+        });
       }
     }
   }

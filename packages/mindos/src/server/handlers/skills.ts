@@ -12,6 +12,10 @@ import {
   type MindosSkillLinkOutcome,
   type MindosSkillMatrix,
 } from './skill-links.js';
+import {
+  parseSkillMarkdownMetadata,
+  type MindosSkillRuntimeRequirements,
+} from './skill-metadata.js';
 
 export type MindosSkillSource = 'builtin' | 'user';
 export type MindosSkillOrigin = 'app-builtin' | 'mindos-user' | 'mindos-global' | 'agents-global' | 'custom' | 'project-builtin';
@@ -31,6 +35,7 @@ export type MindosSkillInfo = {
   enabled: boolean;
   editable: boolean;
   origin: MindosSkillOrigin;
+  runtimeRequirements: MindosSkillRuntimeRequirements;
 };
 
 export type SkillsHandlerServices = {
@@ -262,7 +267,7 @@ function readSkillsFromRoot(root: MindosSkillRoot, disabled: Set<string>): Mindo
     const skillFile = join(root.path, entry.name, 'SKILL.md');
     if (!existsSync(skillFile) || !statSync(skillFile).isFile()) continue;
     const content = readFileSync(skillFile, 'utf-8');
-    const parsed = parseSkillMd(content);
+    const parsed = parseSkillMarkdownMetadata(content);
     const name = parsed.name || entry.name;
     skills.push({
       name,
@@ -272,6 +277,7 @@ function readSkillsFromRoot(root: MindosSkillRoot, disabled: Set<string>): Mindo
       enabled: !disabled.has(name),
       editable: root.editable,
       origin: root.origin,
+      runtimeRequirements: parsed.runtimeRequirements,
     });
   }
 
@@ -282,7 +288,7 @@ function readDirectSkillFromRoot(root: MindosSkillRoot, disabled: Set<string>): 
   const skillFile = join(root.path, 'SKILL.md');
   if (!existsSync(skillFile) || !statSync(skillFile).isFile()) return null;
   const content = readFileSync(skillFile, 'utf-8');
-  const parsed = parseSkillMd(content);
+  const parsed = parseSkillMarkdownMetadata(content);
   const name = parsed.name || basename(root.path);
   return {
     name,
@@ -292,6 +298,7 @@ function readDirectSkillFromRoot(root: MindosSkillRoot, disabled: Set<string>): 
     enabled: !disabled.has(name),
     editable: root.editable,
     origin: root.origin,
+    runtimeRequirements: parsed.runtimeRequirements,
   };
 }
 
@@ -310,22 +317,6 @@ function isSkillDirectoryEntry(root: MindosSkillRoot, entry: import('node:fs').D
 function resolveUserSkillsDir(mindRoot: string): string {
   if (!existsSync(mindRoot)) return join(mindRoot, '.skills');
   return resolveExistingSafe(mindRoot, '.skills');
-}
-
-function parseSkillMd(content: string): { name?: string; description?: string } {
-  const match = content.match(/^---\s*\n([\s\S]*?)\n---/);
-  if (!match) return {};
-  const frontmatter = match[1] ?? '';
-  const result: { name?: string; description?: string } = {};
-  for (const line of frontmatter.split(/\r?\n/)) {
-    const separator = line.indexOf(':');
-    if (separator < 0) continue;
-    const key = line.slice(0, separator).trim();
-    const value = line.slice(separator + 1).trim().replace(/^['"]|['"]$/g, '');
-    if (key === 'name') result.name = value;
-    if (key === 'description') result.description = value;
-  }
-  return result;
 }
 
 function normalizeSkillsPostPayload(body: unknown): SkillsPostPayload {
@@ -429,7 +420,7 @@ function readSkillByName(
     const directSkillFile = join(root.path, 'SKILL.md');
     if (!existsSync(directSkillFile)) continue;
     const content = readFileSync(directSkillFile, 'utf-8');
-    const parsed = parseSkillMd(content);
+    const parsed = parseSkillMarkdownMetadata(content);
     if ((parsed.name || basename(root.path)) === name) return json({ content });
   }
   return json({ error: 'Skill not found' }, { status: 404 });
@@ -454,14 +445,14 @@ function readNativeSkill(
     const directSkillFile = resolve(nativeBase, 'SKILL.md');
     if (!existsSync(directSkillFile)) return json({ error: 'Skill not found' }, { status: 404 });
     const directContent = readFileSync(directSkillFile, 'utf-8');
-    const parsed = parseSkillMd(directContent);
+    const parsed = parseSkillMarkdownMetadata(directContent);
     if ((parsed.name || basename(nativeBase)) !== name) {
       return json({ error: 'Skill not found' }, { status: 404 });
     }
     return json({ content: directContent, description: parsed.description });
   }
   const content = readFileSync(nativeSkillFile, 'utf-8');
-  return json({ content, description: parseSkillMd(content).description });
+  return json({ content, description: parseSkillMarkdownMetadata(content).description });
 }
 
 function isRegisteredSkillRoot(sourcePath: string, skillRoots: MindosSkillRoot[], trustedNativeSkillRoots: string[]): boolean {

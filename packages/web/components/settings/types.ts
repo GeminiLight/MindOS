@@ -156,6 +156,7 @@ export interface SkillInfo {
   origin?: string;
   enabled: boolean;
   editable: boolean;
+  runtimeRequirements?: SkillRuntimeRequirements;
 }
 
 /** Roots owned by an external agent (or the npx skills ecosystem) — read-only in MindOS. */
@@ -195,6 +196,7 @@ export interface SkillMatrixSkill {
   source: 'builtin' | 'user';
   origin: string;
   path: string;
+  runtimeRequirements?: SkillRuntimeRequirements;
 }
 
 export interface SkillMatrix {
@@ -202,6 +204,40 @@ export interface SkillMatrix {
   agents: SkillMatrixAgent[];
   state: Record<string, Record<string, boolean>>;
   cells: Record<string, Record<string, SkillMatrixCell>>;
+}
+
+export type SkillRuntimeKindRequirement =
+  | 'any'
+  | 'mindos'
+  | 'codex'
+  | 'claude'
+  | 'acp'
+  | 'native';
+
+export type SkillRuntimeToolRequirement =
+  | 'shell'
+  | 'file'
+  | 'git'
+  | 'browser'
+  | 'mcp'
+  | 'plugins'
+  | 'skills';
+
+export type SkillRuntimeSafety = 'safe' | 'unsafe' | 'unknown';
+
+export type SkillRuntimeNeed = 'required' | 'not-required' | 'unknown';
+
+export interface SkillRuntimeRequirements {
+  schemaVersion: 1;
+  declared: boolean;
+  runtimeKinds: SkillRuntimeKindRequirement[];
+  requiredTools: SkillRuntimeToolRequirement[];
+  requiredCapabilities: string[];
+  remote: SkillRuntimeSafety;
+  unattended: SkillRuntimeSafety;
+  approvals: SkillRuntimeNeed;
+  userInput: SkillRuntimeNeed;
+  notes: string[];
 }
 
 export interface SyncStatus {

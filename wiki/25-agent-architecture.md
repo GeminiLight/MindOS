@@ -129,7 +129,7 @@ detect → health → configure → launch → session → context
 
 - `remote-control` 与 `unattended-automation` 分开。Codex / Claude / ACP / MindOS Pi 可以是 `server-runnable`，但 24/7 仍是 `limited`，因为还缺 scheduler、approval routing、wake/resume、failure audit。
 - `team-coordination` 现在最多是 `limited`。MindOS 已有 shared context，但还没有 first-class mailbox / task-board primitives，不应该在 UI 上承诺复杂 Team Mode。
-- `skill-execution` 现在是 `limited`。MindOS 能注入/加载 skill，但还没有机器可读的 skill runtime requirements，因此不能可靠自动判断某个 skill 应该跑在 Pi、Codex、Claude 还是 ACP。
+- `skill-execution` 现在是 `limited`。MindOS 能注入/加载 skill，也能从 `SKILL.md` frontmatter 读取机器可读的 skill runtime requirements；但还没有 first-class matcher/enforcement，因此不能可靠自动判断某个 skill 应该跑在 Pi、Codex、Claude 还是 ACP。
 - `mcp-tooling` 对 native runtime 是 `limited`。外部 runtime 可能有自己的 MCP 配置，但 MindOS 还没有“配置一次、按 runtime 投影”的统一 MCP projection contract。
 - `artifact-governance` 现在是 `limited` 或 `blocked`。部分 runtime 能产出 diff/artifact/branch/PR，但 MindOS 还没有跨 runtime artifact index。
 
@@ -146,6 +146,25 @@ detect → health → configure → launch → session → context
 | Shared request/context | `turn-request.ts` / `turn-context.ts` / `runtime-selection.ts` | 请求校验、上下文装载、runtime/binding 解析 |
 
 为了避免 Next.js route 静态引入 Node-only pi runtime，各 lane 在执行时使用动态 import 加载具体 runner。
+
+### Skill Runtime Requirements
+
+Skill requirements 是 `skill-execution` compatibility 的第一层机器可读契约，来源于每个 `SKILL.md` 的 frontmatter，由 server handler 统一解析并投影到 `/api/skills` 与 `/api/skills/matrix`。缺少 requirements 的旧 skill 继续可用，但 `runtimeRequirements.declared=false`，且 remote / unattended / approval / user-input 状态都是 `unknown`，不能被 runtime matcher 当作“全 runtime 安全”。
+
+当前支持的字段：
+
+| Field | 语义 |
+|---|---|
+| `runtimeKinds` / `runtimes` | 可声明 `mindos`、`codex`、`claude`、`acp`、`native`、`any` |
+| `requiredTools` / `tools` | 可声明 `shell`、`file`、`git`、`browser`、`mcp`、`plugins`、`skills` |
+| `requiredCapabilities` / `capabilities` | 额外能力标签，如 `artifact-output`、`approval-routing` |
+| `remoteSafe` | skill 是否适合远程手动控制场景 |
+| `unattendedSafe` | skill 是否适合 24/7 / scheduled / headless 场景 |
+| `requiresApprovals` | skill 是否需要人工或 runtime 权限审批 |
+| `requiresUserInput` | skill 执行中是否需要用户输入 |
+| `runtimeNotes` | 给 runtime matcher / UI / 审计看的简短说明 |
+
+这层只解决“skill 需要什么”的 declaration，不等于已经有自动调度。下一步 readiness blocker 是 `skill-runtime-matcher`：把 skill requirements 与 `AgentRuntimeDescriptor.compatibility` / `harnessCapabilities` 做匹配、解释、拦截或降级。
 
 ## 六、Prompt 与上下文
 

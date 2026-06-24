@@ -598,6 +598,99 @@ describe('skill source resolution', () => {
   });
 });
 
+describe('skill runtime requirements metadata', () => {
+  it('parses machine-readable runtime requirements from SKILL.md frontmatter', () => {
+    const base = makeTempDir('mindos-skill-requirements-');
+    const root = join(base, 'root');
+    const dir = join(root, 'ship-it');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'SKILL.md'), [
+      '---',
+      'name: ship-it',
+      'description: Shipping workflow',
+      'runtimeKinds: mindos, codex, claude-code, acp',
+      'requiredTools: shell, file, git, mcp',
+      'requiredCapabilities: artifact-output, approval-routing',
+      'remoteSafe: false',
+      'unattendedSafe: false',
+      'requiresApprovals: true',
+      'requiresUserInput: false',
+      'runtimeNotes: Needs local checkout; requires review before push',
+      '---',
+      '',
+      'Ship code.',
+    ].join('\n'), 'utf-8');
+    const skillRoots: MindosSkillRoot[] = [{ path: root, source: 'user', origin: 'custom', editable: true }];
+
+    const [skill] = collectSkillInfos(skillRoots, new Set());
+
+    expect(skill?.runtimeRequirements).toEqual({
+      schemaVersion: 1,
+      declared: true,
+      runtimeKinds: ['mindos', 'codex', 'claude', 'acp'],
+      requiredTools: ['shell', 'file', 'git', 'mcp'],
+      requiredCapabilities: ['artifact-output', 'approval-routing'],
+      remote: 'unsafe',
+      unattended: 'unsafe',
+      approvals: 'required',
+      userInput: 'not-required',
+      notes: ['Needs local checkout', 'requires review before push'],
+    });
+  });
+
+  it('defaults undeclared requirements to unknown instead of treating the skill as safe everywhere', () => {
+    const { skillRoots } = makeFixture();
+
+    const skill = collectSkillInfos(skillRoots, new Set()).find((entry) => entry.name === 'demo');
+
+    expect(skill?.runtimeRequirements).toMatchObject({
+      schemaVersion: 1,
+      declared: false,
+      runtimeKinds: [],
+      requiredTools: [],
+      requiredCapabilities: [],
+      remote: 'unknown',
+      unattended: 'unknown',
+      approvals: 'unknown',
+      userInput: 'unknown',
+      notes: [],
+    });
+  });
+
+  it('carries requirements through the skill matrix payload', () => {
+    const base = makeTempDir('mindos-skill-matrix-requirements-');
+    const root = join(base, 'root');
+    const dir = join(root, 'browser-skill');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'SKILL.md'), [
+      '---',
+      'name: browser-skill',
+      'description: Browser skill',
+      'runtimeKinds: mindos',
+      'tools: browser, mcp',
+      'remoteSafe: true',
+      '---',
+      '',
+      'Use browser automation.',
+    ].join('\n'), 'utf-8');
+    const skillRoots: MindosSkillRoot[] = [{ path: root, source: 'user', origin: 'custom', editable: true }];
+
+    const matrix = buildSkillMatrix({
+      skills: collectSkillInfos(skillRoots, new Set()),
+      agents: [],
+    });
+
+    expect(matrix.skills).toHaveLength(1);
+    expect(matrix.skills[0]?.runtimeRequirements).toMatchObject({
+      declared: true,
+      runtimeKinds: ['mindos'],
+      requiredTools: ['browser', 'mcp'],
+      remote: 'safe',
+      unattended: 'unknown',
+    });
+  });
+});
+
 describe('the unified skill matrix', () => {
   function makeMatrixFixture() {
     const fixture = makeFixture();

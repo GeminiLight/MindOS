@@ -534,6 +534,18 @@ export {
 } from './handlers/skills.js';
 
 export {
+  emptySkillRuntimeRequirements,
+  parseSkillMarkdownMetadata,
+  parseSkillRuntimeRequirements,
+  type MindosSkillMetadata,
+  type MindosSkillRuntimeKindRequirement,
+  type MindosSkillRuntimeNeed,
+  type MindosSkillRuntimeRequirements,
+  type MindosSkillRuntimeSafety,
+  type MindosSkillRuntimeToolRequirement,
+} from './handlers/skill-metadata.js';
+
+export {
   buildSkillMatrix,
   disableNativeSkill,
   enableNativeSkill,
