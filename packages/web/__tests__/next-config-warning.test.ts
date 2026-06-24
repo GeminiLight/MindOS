@@ -110,6 +110,7 @@ describe('next config warning hygiene', () => {
     const startupBoundaryFiles = [
       'app/api/agent/sessions/[sessionId]/turns/route.ts',
       'app/api/agent/_lib/turn-runner.ts',
+      'app/api/agent/_lib/turn-runtime-lane.ts',
       'lib/agent/headless.ts',
       'app/api/mcp/agents/route.ts',
       'app/api/settings/list-models/route.ts',
@@ -139,9 +140,13 @@ describe('next config warning hygiene', () => {
     }
 
     const turnRunnerSource = readFileSync(resolve(appRoot, 'app/api/agent/_lib/turn-runner.ts'), 'utf-8');
+    const runtimeLaneSource = readFileSync(resolve(appRoot, 'app/api/agent/_lib/turn-runtime-lane.ts'), 'utf-8');
     const mindosPiRunnerSource = readFileSync(resolve(appRoot, 'app/api/agent/_lib/turn-runner-mindos-pi.ts'), 'utf-8');
+    const piSessionStoreSource = readFileSync(resolve(appRoot, 'lib/pi-integration/session-store.ts'), 'utf-8');
 
-    expect(turnRunnerSource).toContain("await import('./turn-runner-mindos-pi')");
+    expect(turnRunnerSource).toContain("import { resolveRuntimeTurnLane } from './turn-runtime-lane'");
+    expect(runtimeLaneSource).toContain("await import('./turn-runner-mindos-pi')");
+    expect(runtimeLaneSource).toContain("await import('./turn-runner-external')");
     expect(mindosPiRunnerSource).toContain(
       "await import('@geminilight/mindos/agent/runtime/adapters/mindos')",
     );
@@ -172,6 +177,7 @@ describe('next config warning hygiene', () => {
     expect(readFileSync(resolve(appRoot, 'lib/compile.ts'), 'utf-8')).toContain(
       "await import('@/lib/agent/model')",
     );
+    expect(piSessionStoreSource).not.toContain('@earendil-works/pi-coding-agent');
   });
 
   it('marks API routes that import Node-only modules as nodejs runtime routes', () => {

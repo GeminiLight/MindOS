@@ -1,7 +1,6 @@
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { SessionManager } from '@earendil-works/pi-coding-agent';
 
 function getSessionsRoot(): string {
   return path.join(os.homedir(), '.mindos', 'sessions');
@@ -20,32 +19,6 @@ export function sessionDirExists(sessionId: string): boolean {
     return fs.readdirSync(sessionDir).some((f) => f.endsWith('.jsonl'));
   } catch {
     return false;
-  }
-}
-
-export function getOrCreateSessionManager(
-  sessionId: string | undefined,
-  cwd: string,
-): SessionManager {
-  if (!sessionId) {
-    return SessionManager.inMemory(cwd);
-  }
-
-  const sessionDir = getSessionDir(sessionId);
-
-  try {
-    fs.mkdirSync(sessionDir, { recursive: true });
-
-    if (sessionDirExists(sessionId)) {
-      // Reuse the most recent session in this directory
-      return SessionManager.continueRecent(cwd, sessionDir);
-    }
-
-    // Brand new — create fresh session file
-    return SessionManager.create(cwd, sessionDir);
-  } catch (error) {
-    console.error(`[session-store] Failed to open/create session ${sessionId}, falling back to inMemory:`, error);
-    return SessionManager.inMemory(cwd);
   }
 }
 

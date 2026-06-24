@@ -3,7 +3,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
-import { deleteSessionDir, getOrCreateSessionManager, getSessionDir, sessionDirExists } from '@/lib/pi-integration/session-store';
+import { deleteSessionDir, getSessionDir, sessionDirExists } from '@/lib/pi-integration/session-store';
 
 let tempRoot: string;
 let originalHome: string | undefined;
@@ -32,16 +32,6 @@ describe('session-store', () => {
     expect(dir).toContain('sessions');
   });
 
-  it('creates a persistent session manager when sessionId is provided', () => {
-    const sm = getOrCreateSessionManager('test-session-1', '/tmp/cwd');
-    expect(sm.isPersisted()).toBe(true);
-  });
-
-  it('returns inMemory when sessionId is undefined', () => {
-    const sm = getOrCreateSessionManager(undefined, '/tmp/cwd');
-    expect(sm.isPersisted()).toBe(false);
-  });
-
   it('sessionDirExists returns false for non-existent session', () => {
     expect(sessionDirExists('nonexistent')).toBe(false);
   });
@@ -50,9 +40,19 @@ describe('session-store', () => {
     expect(deleteSessionDir('nonexistent')).toBe(false);
   });
 
-  it('creates session dir on getOrCreateSessionManager', () => {
-    getOrCreateSessionManager('dir-test', '/tmp/cwd');
+  it('sessionDirExists detects persisted jsonl sessions', () => {
     const dir = getSessionDir('dir-test');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'session.jsonl'), '{}\n');
     expect(fs.existsSync(dir)).toBe(true);
+    expect(sessionDirExists('dir-test')).toBe(true);
+  });
+
+  it('deleteSessionDir removes persisted session directories', () => {
+    const dir = getSessionDir('dir-delete');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'session.jsonl'), '{}\n');
+    expect(deleteSessionDir('dir-delete')).toBe(true);
+    expect(fs.existsSync(dir)).toBe(false);
   });
 });
