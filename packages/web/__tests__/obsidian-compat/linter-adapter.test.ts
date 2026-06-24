@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { validateBrowserEditorSandboxContributions } from '@/lib/obsidian-compat/browser-editor-sandbox';
 import {
+  applyObsidianLinterFixes,
   buildObsidianLinterSandboxContributions,
+  normalizeObsidianLinterRuleProfile,
   type ObsidianLinterAdapterRuleId,
 } from '@/lib/obsidian-compat/linter-adapter';
 
@@ -101,5 +103,72 @@ describe('Obsidian Linter declarative adapter', () => {
       }),
     ]);
     expect(JSON.stringify(result.contributions)).not.toContain('function');
+  });
+
+  it('normalizes rule profiles while preserving explicit disabled rules', () => {
+    const profile = normalizeObsidianLinterRuleProfile({
+      maxConsecutiveBlankLines: 2,
+      enabledRules: {
+        'hard-tab': false,
+        'missing-final-newline': false,
+      },
+    });
+
+    expect(profile.maxConsecutiveBlankLines).toBe(2);
+    expect(profile.enabledRules).toMatchObject({
+      'heading-space': true,
+      'trailing-whitespace': true,
+      'hard-tab': false,
+      'multiple-blank-lines': true,
+      'missing-final-newline': false,
+    });
+  });
+
+  it('applies safe markdown fixes through the MindOS-owned adapter', () => {
+    const markdown = [
+      '#Title',
+      'alpha  ',
+      '\tindented',
+      '',
+      '',
+      'tail',
+    ].join('\n');
+
+    const result = applyObsidianLinterFixes(markdown);
+
+    expect(result.markdown).toBe([
+      '# Title',
+      'alpha',
+      '  indented',
+      '',
+      'tail',
+      '',
+    ].join('\n'));
+    expect(result.applied).toEqual([
+      { ruleId: 'heading-space', count: 1 },
+      { ruleId: 'trailing-whitespace', count: 1 },
+      { ruleId: 'hard-tab', count: 1 },
+      { ruleId: 'multiple-blank-lines', count: 1 },
+      { ruleId: 'missing-final-newline', count: 1 },
+    ]);
+  });
+
+  it('respects profile overrides when applying fixes', () => {
+    const markdown = '#Title  \n\tindented';
+
+    const result = applyObsidianLinterFixes(markdown, {
+      profile: {
+        enabledRules: {
+          'heading-space': false,
+          'hard-tab': false,
+          'missing-final-newline': false,
+        },
+      },
+    });
+
+    expect(result.markdown).toBe('#Title\n\tindented');
+    expect(result.applied).toEqual([
+      { ruleId: 'trailing-whitespace', count: 1 },
+    ]);
   });
 });

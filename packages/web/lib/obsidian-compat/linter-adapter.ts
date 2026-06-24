@@ -32,6 +32,7 @@ export interface ObsidianLinterAdapterOptions {
   pluginId?: string;
   maxIssues?: number;
   maxConsecutiveBlankLines?: number;
+  profile?: ObsidianLinterRuleProfileInput;
   enabledRules?: Partial<Record<ObsidianLinterAdapterRuleId, boolean>>;
 }
 
@@ -40,6 +41,26 @@ export interface ObsidianLinterAdapterResult {
   issues: ObsidianLinterAdapterIssue[];
   contributions: BrowserEditorSandboxContribution[];
   skipped: ObsidianLinterAdapterSkippedIssueSummary[];
+}
+
+export interface ObsidianLinterRuleProfile {
+  enabledRules: Record<ObsidianLinterAdapterRuleId, boolean>;
+  maxConsecutiveBlankLines: number;
+}
+
+export interface ObsidianLinterRuleProfileInput {
+  enabledRules?: Partial<Record<ObsidianLinterAdapterRuleId, boolean>>;
+  maxConsecutiveBlankLines?: number;
+}
+
+export interface ObsidianLinterAppliedFixSummary {
+  ruleId: ObsidianLinterAdapterRuleId;
+  count: number;
+}
+
+export interface ObsidianLinterApplyFixResult {
+  markdown: string;
+  applied: ObsidianLinterAppliedFixSummary[];
 }
 
 interface MarkdownLine {
@@ -53,6 +74,17 @@ const DEFAULT_PLUGIN_ID = 'obsidian-linter';
 const DEFAULT_MAX_ISSUES = 80;
 const DEFAULT_MAX_CONSECUTIVE_BLANK_LINES = 1;
 const SAFE_PLUGIN_ID_PATTERN = /^[a-z0-9][a-z0-9_-]{0,63}$/;
+
+export const DEFAULT_OBSIDIAN_LINTER_RULE_PROFILE: ObsidianLinterRuleProfile = {
+  enabledRules: {
+    'heading-space': true,
+    'trailing-whitespace': true,
+    'hard-tab': true,
+    'multiple-blank-lines': true,
+    'missing-final-newline': true,
+  },
+  maxConsecutiveBlankLines: DEFAULT_MAX_CONSECUTIVE_BLANK_LINES,
+};
 
 const RULE_MESSAGES: Record<ObsidianLinterAdapterRuleId, string> = {
   'heading-space': 'Heading marker should be followed by a space.',
@@ -68,11 +100,17 @@ export function buildObsidianLinterSandboxContributions(
 ): ObsidianLinterAdapterResult {
   const pluginId = normalizePluginId(options.pluginId);
   const maxIssues = normalizePositiveInteger(options.maxIssues, DEFAULT_MAX_ISSUES);
-  const maxConsecutiveBlankLines = normalizePositiveInteger(
-    options.maxConsecutiveBlankLines,
-    DEFAULT_MAX_CONSECUTIVE_BLANK_LINES,
-  );
-  const enabledRules = options.enabledRules ?? {};
+  const profile = normalizeObsidianLinterRuleProfile({
+    ...options.profile,
+    ...(options.maxConsecutiveBlankLines !== undefined
+      ? { maxConsecutiveBlankLines: options.maxConsecutiveBlankLines }
+      : {}),
+    enabledRules: {
+      ...options.profile?.enabledRules,
+      ...options.enabledRules,
+    },
+  });
+  const { enabledRules, maxConsecutiveBlankLines } = profile;
   const issues: ObsidianLinterAdapterIssue[] = [];
   const lines = splitMarkdownLines(String(markdown));
 
@@ -128,6 +166,101 @@ export function buildObsidianLinterSandboxContributions(
     issues: acceptedIssues,
     contributions: acceptedIssues.map((issue) => issueToContribution(pluginId, issue)),
     skipped: skippedCount > 0 ? [{ reason: 'max-issues', count: skippedCount }] : [],
+  };
+}
+
+export function normalizeObsidianLinterRuleProfile(
+  profile: ObsidianLinterRuleProfileInput = {},
+): ObsidianLinterRuleProfile {
+  return {
+    enabledRules: {
+      ...DEFAULT_OBSIDIAN_LINTER_RULE_PROFILE.enabledRules,
+      ...profile.enabledRules,
+    },
+    maxConsecutiveBlankLines: normalizePositiveInteger(
+      profile.maxConsecutiveBlankLines,
+      DEFAULT_OBSIDIAN_LINTER_RULE_PROFILE.maxConsecutiveBlankLines,
+    ),
+  };
+}
+
+export function applyObsidianLinterFixes(
+  markdown: string,
+  options: Pick<ObsidianLinterAdapterOptions, 'profile' | 'enabledRules' | 'maxConsecutiveBlankLines'> = {},
+): ObsidianLinterApplyFixResult {
+  const profile = normalizeObsidianLinterRuleProfile({
+    ...options.profile,
+    ...(options.maxConsecutiveBlankLines !== undefined
+      ? { maxConsecutiveBlankLines: options.maxConsecutiveBlankLines }
+      : {}),
+    enabledRules: {
+      ...options.profile?.enabledRules,
+      ...options.enabledRules,
+    },
+  });
+  const applied = new Map<ObsidianLinterAdapterRuleId, number>();
+  const bump = (ruleId: ObsidianLinterAdapterRuleId, count = 1) => {
+    if (count <= 0) return;
+    applied.set(ruleId, (applied.get(ruleId) ?? 0) + count);
+  };
+
+  let lines = String(markdown).split('\n');
+
+  if (profile.enabledRules['heading-space']) {
+    lines = lines.map((line) => {
+      const fixed = line.replace(/^(#{1,6})(?![\s#])/, '$1 ');
+      if (fixed !== line) bump('heading-space');
+      return fixed;
+    });
+  }
+
+  if (profile.enabledRules['trailing-whitespace']) {
+    lines = lines.map((line) => {
+      const fixed = line.replace(/[ \t]+$/, '');
+      if (fixed !== line) bump('trailing-whitespace');
+      return fixed;
+    });
+  }
+
+  if (profile.enabledRules['hard-tab']) {
+    lines = lines.map((line) => {
+      const tabCount = line.split('\t').length - 1;
+      if (tabCount > 0) bump('hard-tab', tabCount);
+      return line.replace(/\t/g, '  ');
+    });
+  }
+
+  if (profile.enabledRules['multiple-blank-lines']) {
+    const nextLines: string[] = [];
+    let blankRun = 0;
+    for (const line of lines) {
+      if (line.trim().length === 0) {
+        blankRun += 1;
+        if (blankRun > profile.maxConsecutiveBlankLines) {
+          bump('multiple-blank-lines');
+          continue;
+        }
+      } else {
+        blankRun = 0;
+      }
+      nextLines.push(line);
+    }
+    lines = nextLines;
+  }
+
+  let fixedMarkdown = lines.join('\n');
+  if (
+    profile.enabledRules['missing-final-newline']
+    && fixedMarkdown.length > 0
+    && !fixedMarkdown.endsWith('\n')
+  ) {
+    fixedMarkdown += '\n';
+    bump('missing-final-newline');
+  }
+
+  return {
+    markdown: fixedMarkdown,
+    applied: Array.from(applied.entries()).map(([ruleId, count]) => ({ ruleId, count })),
   };
 }
 

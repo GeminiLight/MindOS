@@ -3,7 +3,7 @@
 import { useState, useTransition, useCallback, useEffect, useRef, useSyncExternalStore, useMemo, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Edit3, Save, X, Loader2, LayoutTemplate, ArrowLeft, Share2, FileText, Code, MoreHorizontal, Copy, Pencil, Trash2, Star, Download, Eye, PanelLeft, PanelRightOpen, Puzzle, ChevronDown, History, ListChecks } from 'lucide-react';
+import { Edit3, Save, X, Loader2, LayoutTemplate, ArrowLeft, Share2, FileText, Code, MoreHorizontal, Copy, Pencil, Trash2, Star, Download, Eye, PanelLeft, PanelRightOpen, Puzzle, ChevronDown, History, ListChecks, Wand2 } from 'lucide-react';
 import { lazy } from 'react';
 import MarkdownView from '@/components/MarkdownView';
 import JsonView from '@/components/JsonView';
@@ -39,7 +39,11 @@ import { fetchPluginViewSurfacesForExtension, pluginViewSurfaceHref } from '@/li
 import { agentReviewHref } from '@/lib/agent-review-links';
 import { useAgentChangeReview } from '@/hooks/useAgentChangeReview';
 import { refreshPreservingDocumentScroll } from '@/lib/scroll-preservation';
-import { buildObsidianLinterSandboxContributions } from '@/lib/obsidian-compat/linter-adapter';
+import {
+  applyObsidianLinterFixes,
+  buildObsidianLinterSandboxContributions,
+  type ObsidianLinterRuleProfileInput,
+} from '@/lib/obsidian-compat/linter-adapter';
 import type { PluginSurface } from '@/lib/plugins/surfaces';
 
 interface ViewPageClientProps {
@@ -108,6 +112,16 @@ function FileBodyWarmup({ isMarkdown, editing }: { isMarkdown: boolean; editing:
 }
 
 const MARKDOWN_VIEW_MODE_STORAGE_KEY = 'md-view-mode';
+const SOURCE_EDITOR_LINTER_PROFILE: ObsidianLinterRuleProfileInput = {
+  maxConsecutiveBlankLines: 1,
+  enabledRules: {
+    'heading-space': true,
+    'trailing-whitespace': true,
+    'hard-tab': true,
+    'multiple-blank-lines': true,
+    'missing-final-newline': true,
+  },
+};
 
 function normalizeMarkdownModePreference(value: string | null): MdViewMode {
   if (value === 'preview' || value === 'source' || value === 'wysiwyg') return value;
@@ -614,12 +628,30 @@ export default function ViewPageClient({
   }, [canShowLinterPreview, linterPreviewEnabled]);
   const linterPreview = useMemo(() => {
     if (!canShowLinterPreview || !linterPreviewEnabled) return null;
-    return buildObsidianLinterSandboxContributions(editContent);
+    return buildObsidianLinterSandboxContributions(editContent, {
+      profile: SOURCE_EDITOR_LINTER_PROFILE,
+    });
   }, [canShowLinterPreview, editContent, linterPreviewEnabled]);
   const linterSandboxContributions = linterPreview?.contributions ?? [];
   const linterIssueCountLabel = linterPreview
     ? `${linterPreview.issues.length}${linterPreview.skipped.length > 0 ? '+' : ''}`
     : '';
+  const canApplyLinterFixes = Boolean(
+    linterPreview
+    && linterPreview.skipped.length === 0
+    && linterPreview.issues.some(issue => issue.fixable),
+  );
+  const handleApplyLinterFixes = useCallback(() => {
+    if (!canShowLinterPreview || !linterPreviewEnabled || !canApplyLinterFixes) return;
+    const result = applyObsidianLinterFixes(editContent, {
+      profile: SOURCE_EDITOR_LINTER_PROFILE,
+    });
+    if (result.markdown === editContent) return;
+    keepCurrentTab();
+    setSaveError(null);
+    setEditContent(result.markdown);
+    setAutoSaveStatus('idle');
+  }, [canApplyLinterFixes, canShowLinterPreview, editContent, keepCurrentTab, linterPreviewEnabled]);
   const tocCollapsed = useSyncExternalStore(
     subscribeTableOfContentsCollapsed,
     readTableOfContentsCollapsed,
@@ -865,6 +897,19 @@ export default function ViewPageClient({
                       {linterIssueCountLabel}
                     </span>
                   )}
+                </button>
+              )}
+
+              {canShowLinterPreview && canApplyLinterFixes && (
+                <button
+                  type="button"
+                  aria-label="Apply Linter fixes"
+                  title={`Apply ${linterPreview?.issues.length ?? 0} Linter fix${(linterPreview?.issues.length ?? 0) === 1 ? '' : 'es'} to editor`}
+                  onClick={handleApplyLinterFixes}
+                  className="inline-flex h-8 min-w-8 items-center justify-center gap-1.5 rounded-md border border-border bg-card px-2.5 text-xs font-medium text-muted-foreground shadow-sm transition-colors duration-75 hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation"
+                >
+                  <Wand2 size={13} />
+                  <span className="hidden sm:inline">Apply</span>
                 </button>
               )}
 

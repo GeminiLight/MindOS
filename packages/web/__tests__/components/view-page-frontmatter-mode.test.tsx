@@ -297,6 +297,47 @@ describe('ViewPageClient frontmatter markdown mode', () => {
     expect(editorAfter?.getAttribute('data-sandbox-count')).toBe('2');
   });
 
+  it('applies Linter fixes only after an explicit source-mode action', async () => {
+    localStorage.setItem('md-view-mode', 'source');
+
+    await act(async () => {
+      root.render(
+        <ViewPageClient
+          filePath="source-mode.md"
+          content={'#Title\nLine with space  \n'}
+          extension="md"
+          saveAction={vi.fn()}
+        />,
+      );
+    });
+
+    await flushDeferredFileBody();
+
+    const lintButton = [...host.querySelectorAll('button')]
+      .find(button => button.getAttribute('aria-label') === 'Toggle Linter preview');
+    expect(lintButton).toBeTruthy();
+    expect([...host.querySelectorAll('button')]
+      .find(button => button.getAttribute('aria-label') === 'Apply Linter fixes')).toBeFalsy();
+
+    await act(async () => {
+      lintButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    const applyButton = [...host.querySelectorAll('button')]
+      .find(button => button.getAttribute('aria-label') === 'Apply Linter fixes');
+    expect(applyButton).toBeTruthy();
+
+    await act(async () => {
+      applyButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    const editorAfter = host.querySelector('[data-testid="markdown-editor"]');
+    expect(editorAfter?.textContent).toBe('# Title\nLine with space\n');
+    expect(editorAfter?.getAttribute('data-sandbox-count')).toBe('0');
+    expect([...host.querySelectorAll('button')]
+      .find(button => button.getAttribute('aria-label') === 'Apply Linter fixes')).toBeFalsy();
+  });
+
   it('remembers when the user switches back to Edit for later markdown files', async () => {
     localStorage.setItem('md-view-mode', 'preview');
 
