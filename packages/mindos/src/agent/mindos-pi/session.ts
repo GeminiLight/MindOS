@@ -531,10 +531,13 @@ export async function createMindosPiAgentRuntime(options: MindosPiAgentRuntimeOp
   }
 
   if (options.services.estimateTokens) {
+    const historyMessagesForPreflight = sessionManagerHandle.bootstrapHistory
+      ? effectiveHistoryMessages
+      : (llmHistoryMessages as MindosAgentHistoryMessage[]);
     const preparedContext = prepareMindosPiContextBudget({
       systemPrompt,
       turnPrompt,
-      historyMessages: effectiveHistoryMessages,
+      historyMessages: historyMessagesForPreflight,
       model: modelConfig.model,
       modelName: modelConfig.modelName,
       estimateTokens: options.services.estimateTokens,
@@ -544,9 +547,13 @@ export async function createMindosPiAgentRuntime(options: MindosPiAgentRuntimeOp
     systemPrompt = preparedContext.systemPrompt;
     turnPrompt = preparedContext.turnPrompt;
     contextUsage = preparedContext.usage;
-    if (preparedContext.historyMessages !== effectiveHistoryMessages) {
-      effectiveHistoryMessages = preparedContext.historyMessages;
-      llmHistoryMessages = options.services.convertToLlm(effectiveHistoryMessages);
+    if (preparedContext.historyMessages !== historyMessagesForPreflight) {
+      if (sessionManagerHandle.bootstrapHistory) {
+        effectiveHistoryMessages = preparedContext.historyMessages;
+        llmHistoryMessages = options.services.convertToLlm(effectiveHistoryMessages);
+      } else {
+        llmHistoryMessages = preparedContext.historyMessages;
+      }
     }
   }
 

@@ -169,6 +169,8 @@ MindOS 区分两类文件：
 
 Run metadata 会记录 `sessionContextSignature`、`fileContextSignature`、是否注入全文、以及相关路径，供下一轮 turn 判断是否需要重复注入。
 
+MindOS Pi 的 persisted session 由 Pi `SessionManager` 自己持有完整 JSONL history 与 compaction entry；common layer 只在新建/空 session 时 bootstrap 一次 UI history。恢复已有 Pi session 时，MindOS 可以读取 `buildSessionContext()` 计算 context usage / fallback payload，但不能把 common history 重新 append 进 Pi session，也不能用 run ledger 代存完整 transcript。Run ledger 只保留 run 索引、状态摘要和 runtime archive pointer（`sessionId` / `path`）。
+
 ## 九、关键文件索引
 
 | 文件 | 职责 |

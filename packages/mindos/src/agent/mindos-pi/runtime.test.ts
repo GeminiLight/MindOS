@@ -125,7 +125,7 @@ describe('MindOS Pi coding agent runtime', () => {
   });
 
   it('resumes a persisted Pi session without replaying UI transcript history', async () => {
-    const compactedMessages = [{ role: 'user', content: 'runtime-owned compacted history' }];
+    const compactedMessages = [{ role: 'user', content: 'runtime-owned compacted history'.repeat(12) }];
     piState.continuedEntries = [{ type: 'compaction', id: 'cmp_1' }];
     piState.continuedContextMessages = compactedMessages;
 
@@ -152,6 +152,7 @@ describe('MindOS Pi coding agent runtime', () => {
           provider: 'openai',
         }),
         toRuntimeProvider: (provider) => provider,
+        estimateTokens: (content) => content.length,
       },
     });
 
@@ -160,6 +161,8 @@ describe('MindOS Pi coding agent runtime', () => {
     ]);
     expect(piState.managers[0]?.appended).toEqual([]);
     expect(runtime.llmHistoryMessages).toEqual(compactedMessages);
+    expect(runtime.contextUsage?.historyTokens).toBeGreaterThan(0);
+    expect(runtime.contextUsage?.originalHistoryTokens).toBe(runtime.contextUsage?.historyTokens);
     expect(runtime.runtimeSession).toMatchObject({
       externalSessionId: 'pi-session-1',
       sessionDir: '/home/test/.mindos/sessions/chat-1',
