@@ -64,7 +64,7 @@ describe('community plugin smoke suite', () => {
 
     const manager = new PluginManager(mindRoot);
     await manager.discover();
-    await manager.enable(fixture.pluginId);
+    await manager.enable(fixture.pluginId, { confirmCapabilityGate: true });
     const result = await manager.loadEnabledPlugins();
 
     expect(result.loaded).toEqual([fixture.pluginId]);
@@ -90,7 +90,7 @@ Body #important with ![[image.png]]
 
     const manager = new PluginManager(mindRoot);
     await manager.discover();
-    await manager.enable(fixture.pluginId);
+    await manager.enable(fixture.pluginId, { confirmCapabilityGate: true });
     const result = await manager.executeCommand('obsidian:dataview-tasks-like:build-metadata-report');
 
     const rows = readJsonFile<Array<{
@@ -124,7 +124,7 @@ Body #important with ![[image.png]]
 
     const manager = new PluginManager(mindRoot);
     await manager.discover();
-    await manager.enable(fixture.pluginId);
+    await manager.enable(fixture.pluginId, { confirmCapabilityGate: true });
     const result = await manager.executeCommand('obsidian:attachment-lifecycle-like:capture-attachment');
 
     const attachment = readJsonFile<{ attachmentPath: string; resourcePath: string }>('reports/attachment.json');
@@ -182,7 +182,7 @@ Body #important with ![[image.png]]
         compatibilityLevel: 'partial',
       });
 
-      await manager.enable(pluginId);
+      await manager.enable(pluginId, { confirmCapabilityGate: true });
       const load = await manager.loadEnabledPlugins();
       expect(load).toEqual({ loaded: [pluginId], failed: [], skipped: [] });
 

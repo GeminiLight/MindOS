@@ -69,6 +69,14 @@ export function postRequest(body: unknown) {
   });
 }
 
+export function confirmedEnableRequest(pluginId: string) {
+  return postRequest({
+    action: 'enable',
+    pluginId,
+    confirmCapabilityGate: true,
+  });
+}
+
 export function settingsPostRequest(body: unknown) {
   return new NextRequest('http://localhost/api/obsidian-plugins/settings', {
     method: 'POST',

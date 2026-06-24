@@ -15,6 +15,16 @@ import {
   type ObsidianCapabilitySupport,
 } from './capability-matrix';
 import {
+  buildObsidianCapabilityGateReport,
+  type ObsidianCapabilityGateConfirmation,
+  type ObsidianCapabilityGateReport,
+} from './capability-gate';
+import {
+  assertPluginCapabilityGateAllowsEnable,
+  assertPluginCapabilityGateAllowsLoad,
+  buildPluginCapabilityGateReport,
+} from './capability-gate-enforcement';
+import {
   importObsidianPlugin,
   readImportedObsidianPluginConfig,
   scanObsidianVaultPlugins,
@@ -52,6 +62,7 @@ import { ErrorCodes, MindOSError } from '@/lib/errors';
 
 interface PluginManagerState {
   enabled: Record<string, boolean>;
+  capabilityConfirmations?: Record<string, ObsidianCapabilityGateConfirmation>;
 }
 
 export type PluginManagerOptions = PluginLoaderOptions;
@@ -75,9 +86,14 @@ export interface ManagedPlugin {
   coverage: ObsidianCapabilityCoverage[];
   coverageSummary: Record<ObsidianCapabilitySupport, number>;
   surfaceSummary: ObsidianCapabilitySurfaceSummary[];
+  capabilityGate: ObsidianCapabilityGateReport;
   packageLocation?: ManagedPluginPackageLocation;
   runtime: PluginRuntimeSummary;
   lastError?: string;
+}
+
+export interface PluginEnableOptions {
+  confirmCapabilityGate?: boolean;
 }
 
 export interface LoadEnabledResult {
@@ -200,6 +216,7 @@ const EMPTY_STATE: PluginManagerState = { enabled: {} };
 export class PluginManager {
   private readonly loader: PluginLoader;
   private plugins = new Map<string, ManagedPlugin>();
+  private state: PluginManagerState = EMPTY_STATE;
   private modalEditorSessions = new Map<string, EditorExecutionSession>();
   private menuEditorSessions = new Map<string, EditorExecutionSession>();
 
@@ -208,12 +225,12 @@ export class PluginManager {
   }
 
   async discover(): Promise<ManagedPlugin[]> {
-    const persisted = this.readState();
+    this.state = this.readState();
     const manifests = this.loader.discoverPlugins();
 
     this.plugins.clear();
     for (const manifest of manifests) {
-      this.plugins.set(manifest.id, this.toManagedPlugin(manifest, persisted));
+      this.plugins.set(manifest.id, this.toManagedPlugin(manifest, this.state));
     }
 
     return this.list();
@@ -236,8 +253,9 @@ export class PluginManager {
     return Array.from(this.plugins.values()).sort((a, b) => a.id.localeCompare(b.id));
   }
 
-  async enable(pluginId: string): Promise<void> {
+  async enable(pluginId: string, options: PluginEnableOptions = {}): Promise<void> {
     const plugin = this.requirePlugin(pluginId);
+    this.assertCapabilityGateAllowsEnable(plugin, options);
     plugin.enabled = true;
     plugin.lastError = undefined;
     this.writeState();
@@ -284,7 +302,7 @@ export class PluginManager {
     this.applyRuntimeState(plugin);
   }
 
-  async load(pluginId: string): Promise<void> {
+  async load(pluginId: string, options: PluginEnableOptions = {}): Promise<void> {
     const plugin = this.requirePlugin(pluginId);
     if (plugin.compatibilityLevel === 'blocked') {
       plugin.loaded = false;
@@ -292,7 +310,10 @@ export class PluginManager {
       throw new Error(plugin.lastError);
     }
     if (!plugin.enabled) {
+      this.assertCapabilityGateAllowsEnable(plugin, options);
       plugin.enabled = true;
+    } else {
+      this.assertCapabilityGateAllowsLoad(plugin);
     }
 
     try {
@@ -319,6 +340,12 @@ export class PluginManager {
       if (plugin.compatibilityLevel === 'blocked') {
         plugin.loaded = false;
         plugin.lastError = plugin.compatibility.blockers[0] ?? 'Plugin is blocked by compatibility report.';
+        result.skipped.push(plugin.id);
+        continue;
+      }
+      if (plugin.capabilityGate.requiresConfirmation && !plugin.capabilityGate.confirmed) {
+        plugin.loaded = false;
+        plugin.lastError = 'Obsidian plugin enable requires capability confirmation.';
         result.skipped.push(plugin.id);
         continue;
       }
@@ -467,11 +494,11 @@ export class PluginManager {
     const plugin = this.requirePlugin(pluginId);
     this.applyRuntimeState(plugin);
 
-    if (!plugin.enabled) {
-      throw new MindOSError(ErrorCodes.PERMISSION_DENIED, `Plugin stylesheet is only available for enabled plugins: ${pluginId}`);
-    }
     if (plugin.compatibilityLevel === 'blocked') {
       throw new MindOSError(ErrorCodes.INVALID_REQUEST, plugin.compatibility.blockers[0] ?? `Plugin is blocked: ${pluginId}`);
+    }
+    if (!plugin.enabled) {
+      throw new MindOSError(ErrorCodes.PERMISSION_DENIED, `Plugin stylesheet is only available for enabled plugins: ${pluginId}`);
     }
     if (!plugin.loaded) {
       throw new MindOSError(ErrorCodes.INVALID_REQUEST, plugin.lastError ?? `Plugin is not loaded: ${pluginId}`);
@@ -598,19 +625,31 @@ export class PluginManager {
     }
     const compatibility = analyzePluginCompatibility(code, manifest);
     const coverage = buildObsidianCapabilityCoverage(compatibility);
+    const compatibilityLevel = getCompatibilityLevel(compatibility);
+    const capabilityGate = buildObsidianCapabilityGateReport({
+      manifest,
+      compatibility,
+      compatibilityLevel,
+      coverage,
+      confirmation: state.capabilityConfirmations?.[manifest.id],
+    });
+    const enabled = state.enabled[manifest.id] === true
+      && !capabilityGate.blocked
+      && (!capabilityGate.requiresConfirmation || capabilityGate.confirmed);
 
     return {
       id: manifest.id,
       name: manifest.name,
       version: manifest.version,
       manifest,
-      enabled: state.enabled[manifest.id] === true,
+      enabled,
       loaded,
       compatibility,
-      compatibilityLevel: getCompatibilityLevel(compatibility),
+      compatibilityLevel,
       coverage,
       coverageSummary: summarizeObsidianCapabilityCoverage(coverage),
       surfaceSummary: summarizeObsidianCapabilitySurfaces(coverage),
+      capabilityGate,
       packageLocation: this.packageLocationFor(manifest.id),
       runtime: this.runtimeSummaryFor(manifest.id),
     };
@@ -949,8 +988,42 @@ export class PluginManager {
     return plugin;
   }
 
+  private refreshCapabilityGate(plugin: ManagedPlugin): ObsidianCapabilityGateReport {
+    const gate = buildPluginCapabilityGateReport(plugin, this.state);
+    plugin.capabilityGate = gate;
+    return gate;
+  }
+
+  private assertCapabilityGateAllowsEnable(plugin: ManagedPlugin, options: PluginEnableOptions): void {
+    try {
+      const result = assertPluginCapabilityGateAllowsEnable(plugin, this.state, options);
+      this.state = {
+        ...this.state,
+        ...result.confirmationStore,
+      };
+      plugin.capabilityGate = result.report;
+    } catch (error) {
+      plugin.lastError = error instanceof MindOSError
+        ? error.message
+        : 'Obsidian plugin enable requires capability confirmation.';
+      throw error;
+    }
+  }
+
+  private assertCapabilityGateAllowsLoad(plugin: ManagedPlugin): void {
+    try {
+      plugin.capabilityGate = assertPluginCapabilityGateAllowsLoad(plugin, this.state);
+    } catch (error) {
+      plugin.lastError = error instanceof MindOSError
+        ? error.message
+        : 'Obsidian plugin enable requires capability confirmation.';
+      throw error;
+    }
+  }
+
   private readState(): PluginManagerState {
     const enabled: Record<string, boolean> = {};
+    const capabilityConfirmations: Record<string, ObsidianCapabilityGateConfirmation> = {};
     for (const stateFilePath of resolvePluginManagerStatePathsForRead(this.mindRoot)) {
       if (!fs.existsSync(stateFilePath)) {
         continue;
@@ -959,29 +1032,71 @@ export class PluginManager {
         const raw = fs.readFileSync(stateFilePath, 'utf-8');
         const parsed = JSON.parse(raw) as Partial<PluginManagerState>;
         Object.assign(enabled, parsed.enabled ?? {});
+        Object.assign(capabilityConfirmations, normalizeCapabilityConfirmations(parsed.capabilityConfirmations));
       } catch {
         // Ignore malformed state files and keep any already-read state.
       }
     }
-    return { ...EMPTY_STATE, enabled };
+    return {
+      ...EMPTY_STATE,
+      enabled,
+      ...(Object.keys(capabilityConfirmations).length > 0 ? { capabilityConfirmations } : {}),
+    };
   }
 
   private writeState(): void {
     const enabled: Record<string, boolean> = {};
+    const capabilityConfirmations: Record<string, ObsidianCapabilityGateConfirmation> = {};
     for (const plugin of this.plugins.values()) {
       if (plugin.enabled) {
         enabled[plugin.id] = true;
       }
+      const confirmation = this.state.capabilityConfirmations?.[plugin.id];
+      if (confirmation) {
+        const gate = buildObsidianCapabilityGateReport({
+          manifest: plugin.manifest,
+          compatibility: plugin.compatibility,
+          compatibilityLevel: plugin.compatibilityLevel,
+          coverage: plugin.coverage,
+          confirmation,
+        });
+        if (gate.confirmed) {
+          capabilityConfirmations[plugin.id] = confirmation;
+          plugin.capabilityGate = gate;
+        }
+      }
     }
+    this.state = {
+      enabled,
+      ...(Object.keys(capabilityConfirmations).length > 0 ? { capabilityConfirmations } : {}),
+    };
 
     try {
       const stateFilePath = resolveCanonicalPluginManagerStatePath(this.mindRoot);
       fs.mkdirSync(path.dirname(stateFilePath), { recursive: true });
-      fs.writeFileSync(stateFilePath, JSON.stringify({ enabled }, null, 2), 'utf-8');
+      fs.writeFileSync(stateFilePath, JSON.stringify(this.state, null, 2), 'utf-8');
     } catch (err) {
       console.error(`[obsidian-compat] Failed to write plugin state: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
+}
+
+function normalizeCapabilityConfirmations(value: unknown): Record<string, ObsidianCapabilityGateConfirmation> {
+  if (!value || typeof value !== 'object') return {};
+  const result: Record<string, ObsidianCapabilityGateConfirmation> = {};
+  for (const [pluginId, rawConfirmation] of Object.entries(value as Record<string, unknown>)) {
+    if (!rawConfirmation || typeof rawConfirmation !== 'object') continue;
+    const record = rawConfirmation as Record<string, unknown>;
+    if (typeof record.confirmedAt !== 'string' || typeof record.fingerprint !== 'string') continue;
+    result[pluginId] = {
+      confirmedAt: record.confirmedAt,
+      fingerprint: record.fingerprint,
+      surfaces: Array.isArray(record.surfaces)
+        ? record.surfaces.filter((surface): surface is ObsidianCapabilityGateConfirmation['surfaces'][number] => typeof surface === 'string')
+        : [],
+    };
+  }
+  return result;
 }
 
 function isCompatibilityLevel(value: unknown): value is CompatibilityLevel {

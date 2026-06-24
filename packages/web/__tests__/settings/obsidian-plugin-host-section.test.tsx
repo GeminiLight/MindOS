@@ -160,6 +160,101 @@ describe('ObsidianPluginHostSection', () => {
     await cleanup(root, host);
   });
 
+  it('asks for capability confirmation before enabling gated plugins', async () => {
+    const gatedPlugin = plugin({
+      compatibility: {
+        supportedApis: ['Plugin'],
+        partialApis: ['requestUrl'],
+        unsupportedApis: [],
+        blockers: [],
+      },
+      coverage: [{ api: 'requestUrl', surface: 'network', support: 'limited', host: 'Restricted network shim', notes: 'network' }],
+      coverageSummary: { full: 1, limited: 1, 'snapshot-only': 0, 'catalog-only': 0, 'request-only': 0, unsupported: 0 },
+      surfaceSummary: [{
+        surface: 'network',
+        apiCount: 1,
+        supportSummary: { full: 0, limited: 1, 'snapshot-only': 0, 'catalog-only': 0, 'request-only': 0, unsupported: 0 },
+        apis: ['requestUrl'],
+        hosts: ['Restricted network shim'],
+        routes: [],
+      }],
+      capabilityGate: {
+        status: 'review',
+        fingerprint: 'abc123',
+        requiresConfirmation: true,
+        confirmed: false,
+        blocked: false,
+        items: [{
+          surface: 'network',
+          decision: 'requires-confirmation',
+          risk: 'high',
+          apiCount: 1,
+          apis: ['requestUrl'],
+          supportSummary: { full: 0, limited: 1, 'snapshot-only': 0, 'catalog-only': 0, 'request-only': 0, unsupported: 0 },
+          reason: 'Network APIs can contact external services.',
+        }],
+        confirmReasons: ['Network APIs can contact external services.'],
+        blockedReasons: [],
+      },
+    });
+
+    mocks.apiFetch.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url === '/api/obsidian-plugins' && !init?.method) {
+        return { ok: true, plugins: [gatedPlugin] };
+      }
+      if (url === '/api/obsidian-plugins' && init?.method === 'POST') {
+        expect(JSON.parse(String(init.body))).toEqual({
+          action: 'enable',
+          pluginId: 'quickadd-like',
+          confirmCapabilityGate: true,
+        });
+        return {
+          ok: true,
+          plugins: [
+            plugin({
+              ...gatedPlugin,
+              enabled: true,
+              capabilityGate: {
+                ...gatedPlugin.capabilityGate,
+                status: 'limited',
+                confirmed: true,
+                confirmedAt: '2026-06-24T00:00:00.000Z',
+              },
+            }),
+          ],
+        };
+      }
+      throw new Error(`Unexpected apiFetch call: ${url}`);
+    });
+
+    const { host, root } = await renderSection();
+
+    expect(host.textContent).toContain('review gate');
+    const toggle = host.querySelector('button[role="switch"]') as HTMLButtonElement;
+    await act(async () => {
+      toggle.click();
+      await Promise.resolve();
+    });
+
+    expect(mocks.apiFetch).toHaveBeenCalledTimes(1);
+    expect(portalRoot().textContent).toContain('Enable QuickAdd Like?');
+    expect(portalRoot().textContent).toContain('Network APIs can contact external services.');
+
+    const confirmButton = Array.from(portalRoot().querySelectorAll('button'))
+      .filter((button) => button.textContent?.trim() === 'Enable')
+      .pop() as HTMLButtonElement;
+    await act(async () => {
+      confirmButton.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(host.textContent).toContain('1 enabled');
+    expect(mocks.apiFetch).toHaveBeenCalledTimes(2);
+
+    await cleanup(root, host);
+  });
+
   it('shows package location and migrates legacy packages through the lifecycle API', async () => {
     let migrated = false;
     mocks.apiFetch.mockImplementation(async (url: string, init?: RequestInit) => {

@@ -5,6 +5,7 @@ import {
   installObsidianPluginApiHarness,
   writePlugin,
   importLifecycleRoute,
+  confirmedEnableRequest,
   postRequest,
 } from './obsidian-plugin-api-test-utils';
 
@@ -31,7 +32,7 @@ describe('/api/obsidian-plugins ribbon actions', () => {
     );
 
     const { POST } = await importLifecycleRoute();
-    await POST(postRequest({ action: 'enable', pluginId: 'ribbon-plugin' }));
+    await POST(confirmedEnableRequest('ribbon-plugin'));
     const res = await POST(postRequest({ action: 'execute-ribbon-action', pluginId: 'ribbon-plugin', ribbonIndex: 0 }));
     const json = await res.json();
 
@@ -56,7 +57,7 @@ describe('/api/obsidian-plugins ribbon actions', () => {
     );
 
     const { POST } = await importLifecycleRoute();
-    await POST(postRequest({ action: 'enable', pluginId: 'ribbon-notice-plugin' }));
+    await POST(confirmedEnableRequest('ribbon-notice-plugin'));
     const res = await POST(postRequest({ action: 'execute-ribbon-action', pluginId: 'ribbon-notice-plugin', ribbonIndex: 0 }));
     const json = await res.json();
 
@@ -98,7 +99,7 @@ describe('/api/obsidian-plugins ribbon actions', () => {
     );
 
     const { POST } = await importLifecycleRoute();
-    await POST(postRequest({ action: 'enable', pluginId: 'ribbon-modal-plugin' }));
+    await POST(confirmedEnableRequest('ribbon-modal-plugin'));
     const res = await POST(postRequest({ action: 'execute-ribbon-action', pluginId: 'ribbon-modal-plugin', ribbonIndex: 0 }));
     const json = await res.json();
 
@@ -137,7 +138,7 @@ describe('/api/obsidian-plugins ribbon actions', () => {
     );
 
     const { POST } = await importLifecycleRoute();
-    await POST(postRequest({ action: 'enable', pluginId: 'ribbon-menu-plugin' }));
+    await POST(confirmedEnableRequest('ribbon-menu-plugin'));
     const res = await POST(postRequest({ action: 'execute-ribbon-action', pluginId: 'ribbon-menu-plugin', ribbonIndex: 0 }));
     const json = await res.json();
 

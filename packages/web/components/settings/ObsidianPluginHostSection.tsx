@@ -50,6 +50,10 @@ import { ConfirmDialog } from '@/components/agents/AgentsPrimitives';
 import PluginActionMenuDialog from '@/components/plugins/PluginActionMenuDialog';
 import PluginActionModalDialog from '@/components/plugins/PluginActionModalDialog';
 import {
+  ObsidianCapabilityGatePanel,
+  capabilityGateEnableMessage,
+} from './ObsidianCapabilityGatePanel';
+import {
   compatibilityNote,
   isLoadResult,
   isPluginActionResult,
@@ -251,6 +255,7 @@ export function ObsidianPluginHostSection({
   const [settingsErrors, setSettingsErrors] = useState<Record<string, string>>({});
   const [pluginModal, setPluginModal] = useState<PluginModalSnapshot | null>(null);
   const [pluginMenu, setPluginMenu] = useState<PluginMenuSnapshot | null>(null);
+  const [enableTarget, setEnableTarget] = useState<ObsidianPluginStatus | null>(null);
   const [choosingSuggestionIndex, setChoosingSuggestionIndex] = useState<number | null>(null);
   const [modalChoiceError, setModalChoiceError] = useState<string | null>(null);
   const [choosingMenuItemIndex, setChoosingMenuItemIndex] = useState<number | null>(null);
@@ -396,7 +401,12 @@ export function ObsidianPluginHostSection({
 
   const runAction = useCallback(async (
     action: PluginLifecycleAction,
-    options: { pluginId?: string; commandId?: string; editorContext?: PluginEditorCommandContext } = {},
+    options: {
+      pluginId?: string;
+      commandId?: string;
+      editorContext?: PluginEditorCommandContext;
+      confirmCapabilityGate?: boolean;
+    } = {},
   ) => {
     const key = `${action}:${options.pluginId ?? options.commandId ?? 'all'}`;
     setBusyKey(key);
@@ -460,6 +470,25 @@ export function ObsidianPluginHostSection({
     setMigrateTarget(null);
     await runAction('migrate-legacy', { pluginId });
   }, [migrateTarget, runAction]);
+
+  const requestTogglePlugin = useCallback((plugin: ObsidianPluginStatus) => {
+    if (plugin.enabled) {
+      void runAction('disable', { pluginId: plugin.id });
+      return;
+    }
+    if (plugin.capabilityGate?.requiresConfirmation && !plugin.capabilityGate.confirmed) {
+      setEnableTarget(plugin);
+      return;
+    }
+    void runAction('enable', { pluginId: plugin.id });
+  }, [runAction]);
+
+  const confirmEnablePlugin = useCallback(async () => {
+    if (!enableTarget) return;
+    const pluginId = enableTarget.id;
+    setEnableTarget(null);
+    await runAction('enable', { pluginId, confirmCapabilityGate: true });
+  }, [enableTarget, runAction]);
 
   const applySettingsResponse = useCallback((data: ObsidianPluginSettingsResponse) => {
     if (data.status) {
@@ -805,6 +834,11 @@ export function ObsidianPluginHostSection({
                               legacy path
                             </span>
                           )}
+                          {plugin.capabilityGate?.requiresConfirmation && !plugin.capabilityGate.confirmed && (
+                            <span className="rounded bg-[var(--amber-subtle)] px-1.5 py-0.5 font-mono text-2xs text-[var(--amber-text)]">
+                              review gate
+                            </span>
+                          )}
                         </span>
                         <span className="mt-1 block text-xs text-muted-foreground">{compatibilityNote(plugin)}</span>
                         {plugin.lastError && (
@@ -816,9 +850,9 @@ export function ObsidianPluginHostSection({
                     <div className="flex shrink-0 items-center gap-2">
                       <Toggle
                         checked={plugin.enabled}
-                        disabled={plugin.compatibilityLevel === 'blocked' || busyKey !== null}
+                        disabled={plugin.compatibilityLevel === 'blocked' || plugin.capabilityGate?.blocked === true || busyKey !== null}
                         title={plugin.enabled ? 'Disable plugin' : 'Enable plugin'}
-                        onChange={() => runAction(plugin.enabled ? 'disable' : 'enable', { pluginId: plugin.id })}
+                        onChange={() => requestTogglePlugin(plugin)}
                       />
                       <button
                         type="button"
@@ -894,6 +928,7 @@ export function ObsidianPluginHostSection({
                             {plugin.coverage?.length ?? 0} detected API surface{(plugin.coverage?.length ?? 0) === 1 ? '' : 's'}
                           </p>
                         </div>
+                        <ObsidianCapabilityGatePanel plugin={plugin} />
                       </div>
 
                       {(plugin.surfaceSummary?.length ?? 0) > 0 && (
@@ -1109,6 +1144,16 @@ export function ObsidianPluginHostSection({
           setPluginMenu(null);
           setMenuChoiceError(null);
         }}
+      />
+      <ConfirmDialog
+        open={enableTarget !== null}
+        title={enableTarget ? `Enable ${enableTarget.name}?` : 'Enable Obsidian plugin?'}
+        message={enableTarget ? capabilityGateEnableMessage(enableTarget) : 'This plugin requires capability confirmation before it can be enabled.'}
+        confirmLabel="Enable"
+        cancelLabel="Cancel"
+        onConfirm={() => { void confirmEnablePlugin(); }}
+        onCancel={() => setEnableTarget(null)}
+        variant="default"
       />
       <ConfirmDialog
         open={removeTarget !== null}

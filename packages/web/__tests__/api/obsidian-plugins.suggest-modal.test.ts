@@ -6,6 +6,7 @@ import {
   installObsidianPluginApiHarness,
   writePlugin,
   importLifecycleRoute,
+  confirmedEnableRequest,
   postRequest,
 } from './obsidian-plugin-api-test-utils';
 
@@ -56,7 +57,7 @@ describe('/api/obsidian-plugins suggest modal interactions', () => {
     );
 
     const { POST } = await importLifecycleRoute();
-    await POST(postRequest({ action: 'enable', pluginId: 'suggest-command-plugin' }));
+    await POST(confirmedEnableRequest('suggest-command-plugin'));
     const res = await POST(postRequest({ action: 'execute-command', commandId: 'obsidian:suggest-command-plugin:open-suggest' }));
     const json = await res.json();
 
@@ -126,7 +127,7 @@ describe('/api/obsidian-plugins suggest modal interactions', () => {
     );
 
     const { POST } = await importLifecycleRoute();
-    await POST(postRequest({ action: 'enable', pluginId: 'suggest-choice-plugin' }));
+    await POST(confirmedEnableRequest('suggest-choice-plugin'));
     const openRes = await POST(postRequest({ action: 'execute-command', commandId: 'obsidian:suggest-choice-plugin:open-suggest' }));
     const openJson = await openRes.json();
     const modalId = openJson.result.modalSnapshots[0].id;
@@ -189,7 +190,7 @@ describe('/api/obsidian-plugins suggest modal interactions', () => {
     );
 
     const { POST } = await importLifecycleRoute();
-    await POST(postRequest({ action: 'enable', pluginId: 'stale-suggest-plugin' }));
+    await POST(confirmedEnableRequest('stale-suggest-plugin'));
     const openRes = await POST(postRequest({ action: 'execute-command', commandId: 'obsidian:stale-suggest-plugin:open-suggest' }));
     const openJson = await openRes.json();
     const modal = openJson.result.modalSnapshots[0];
@@ -237,7 +238,7 @@ describe('/api/obsidian-plugins suggest modal interactions', () => {
     );
 
     const { POST } = await importLifecycleRoute();
-    await POST(postRequest({ action: 'enable', pluginId: 'ttl-suggest-plugin' }));
+    await POST(confirmedEnableRequest('ttl-suggest-plugin'));
     const openRes = await POST(postRequest({ action: 'execute-command', commandId: 'obsidian:ttl-suggest-plugin:open-suggest' }));
     const openJson = await openRes.json();
     const modal = openJson.result.modalSnapshots[0];
@@ -286,7 +287,7 @@ describe('/api/obsidian-plugins suggest modal interactions', () => {
     );
 
     const { POST } = await importLifecycleRoute();
-    await POST(postRequest({ action: 'enable', pluginId: 'suggest-replay-plugin' }));
+    await POST(confirmedEnableRequest('suggest-replay-plugin'));
     const openRes = await POST(postRequest({ action: 'execute-command', commandId: 'obsidian:suggest-replay-plugin:open-suggest' }));
     const openJson = await openRes.json();
     const modal = openJson.result.modalSnapshots[0];
@@ -357,7 +358,7 @@ describe('/api/obsidian-plugins suggest modal interactions', () => {
     );
 
     const { POST } = await importLifecycleRoute();
-    await POST(postRequest({ action: 'enable', pluginId: 'suggest-editor-choice-plugin' }));
+    await POST(confirmedEnableRequest('suggest-editor-choice-plugin'));
     const openRes = await POST(postRequest({
       action: 'execute-command',
       commandId: 'obsidian:suggest-editor-choice-plugin:insert-template',
@@ -421,7 +422,7 @@ describe('/api/obsidian-plugins suggest modal interactions', () => {
     );
 
     const { POST } = await importLifecycleRoute();
-    await POST(postRequest({ action: 'enable', pluginId: 'suggest-error-plugin' }));
+    await POST(confirmedEnableRequest('suggest-error-plugin'));
     const res = await POST(postRequest({ action: 'execute-command', commandId: 'obsidian:suggest-error-plugin:open-suggest' }));
     const json = await res.json();
 

@@ -184,6 +184,123 @@ describe('PluginManager', () => {
     expect(plugins[0]).toMatchObject({ id: 'persist-plugin', enabled: true });
   });
 
+  it('requires explicit capability confirmation before enabling network-capable plugins', async () => {
+    writePlugin(
+      'network-plugin',
+      `
+        const { Plugin, requestUrl } = require('obsidian');
+        module.exports = class NetworkPlugin extends Plugin {
+          onload() {
+            requestUrl('https://example.com/api');
+          }
+        };
+      `,
+    );
+
+    const manager = new PluginManager(mindRoot);
+    await manager.discover();
+
+    await expect(manager.enable('network-plugin')).rejects.toThrow(/requires capability confirmation/i);
+    expect(manager.list()[0]).toMatchObject({
+      id: 'network-plugin',
+      enabled: false,
+      capabilityGate: {
+        status: 'review',
+        requiresConfirmation: true,
+        confirmed: false,
+      },
+    });
+
+    await manager.enable('network-plugin', { confirmCapabilityGate: true });
+    const state = JSON.parse(fs.readFileSync(path.join(mindRoot, '.mindos', 'plugins', '.plugin-manager.json'), 'utf-8'));
+    expect(state.enabled).toEqual({ 'network-plugin': true });
+    expect(state.capabilityConfirmations['network-plugin']).toMatchObject({
+      fingerprint: expect.any(String),
+      confirmedAt: expect.any(String),
+      surfaces: ['network'],
+    });
+    expect(manager.list()[0]).toMatchObject({
+      enabled: true,
+      capabilityGate: {
+        status: 'limited',
+        requiresConfirmation: true,
+        confirmed: true,
+      },
+    });
+
+    const second = new PluginManager(mindRoot);
+    await second.discover();
+    await second.disable('network-plugin');
+    await expect(second.enable('network-plugin')).resolves.toBeUndefined();
+  });
+
+  it('does not reuse a stale capability confirmation after plugin capabilities change', async () => {
+    writePlugin(
+      'changing-plugin',
+      `
+        const { Plugin, requestUrl } = require('obsidian');
+        module.exports = class ChangingPlugin extends Plugin {
+          onload() {
+            requestUrl('https://example.com/api');
+          }
+        };
+      `,
+    );
+
+    const first = new PluginManager(mindRoot);
+    await first.discover();
+    await first.enable('changing-plugin', { confirmCapabilityGate: true });
+
+    fs.writeFileSync(
+      path.join(mindRoot, '.plugins', 'changing-plugin', 'main.js'),
+      `
+        const { Plugin, requestUrl } = require('obsidian');
+        module.exports = class ChangingPlugin extends Plugin {
+          async onload() {
+            requestUrl('https://example.com/api');
+            const file = this.app.vault.getFileByPath('notes/today.md');
+            if (file) await this.app.vault.modify(file, 'changed');
+          }
+        };
+      `,
+      'utf-8',
+    );
+
+    const second = new PluginManager(mindRoot);
+    const plugins = await second.discover();
+    expect(plugins[0]).toMatchObject({
+      enabled: false,
+      capabilityGate: {
+        status: 'review',
+        requiresConfirmation: true,
+        confirmed: false,
+      },
+    });
+
+    await expect(second.load('changing-plugin')).rejects.toThrow(/requires capability confirmation/i);
+    await expect(second.enable('changing-plugin', { confirmCapabilityGate: true })).resolves.toBeUndefined();
+  });
+
+  it('rejects newly enabling blocked plugins even with capability confirmation', async () => {
+    writePlugin(
+      'blocked-plugin',
+      `const fs = require('fs'); const { Plugin } = require('obsidian'); module.exports = class BlockedPlugin extends Plugin {};`,
+    );
+
+    const manager = new PluginManager(mindRoot);
+    await manager.discover();
+
+    await expect(manager.enable('blocked-plugin', { confirmCapabilityGate: true })).rejects.toThrow(/unsupported runtime module: fs/i);
+    expect(manager.list()[0]).toMatchObject({
+      enabled: false,
+      compatibilityLevel: 'blocked',
+      capabilityGate: {
+        status: 'blocked',
+        blocked: true,
+      },
+    });
+  });
+
   it('does not discover or persist state through a symlinked .plugins directory outside mindRoot', async () => {
     const outsideRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'mindos-obsidian-manager-outside-'));
     fs.rmSync(path.join(mindRoot, '.plugins'), { recursive: true, force: true });
@@ -291,11 +408,11 @@ describe('PluginManager', () => {
     const manager = new PluginManager(mindRoot);
     await manager.discover();
     await manager.enable('good-plugin');
-    await manager.enable('bad-plugin');
+    await expect(manager.enable('bad-plugin')).rejects.toThrow(/unsupported runtime module: electron/i);
     const result = await manager.loadEnabledPlugins();
 
     expect(result.loaded).toContain('good-plugin');
-    expect(result.skipped).toContain('bad-plugin');
+    expect(result.skipped).toEqual([]);
 
     const bad = manager.list().find((item) => item.id === 'bad-plugin');
     expect(bad?.compatibilityLevel).toBe('blocked');

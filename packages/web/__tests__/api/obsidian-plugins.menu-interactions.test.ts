@@ -6,6 +6,7 @@ import {
   installObsidianPluginApiHarness,
   writePlugin,
   importLifecycleRoute,
+  confirmedEnableRequest,
   postRequest,
 } from './obsidian-plugin-api-test-utils';
 
@@ -41,7 +42,7 @@ describe('/api/obsidian-plugins menu interactions', () => {
     );
 
     const { POST } = await importLifecycleRoute();
-    await POST(postRequest({ action: 'enable', pluginId: 'menu-command-plugin' }));
+    await POST(confirmedEnableRequest('menu-command-plugin'));
     const res = await POST(postRequest({ action: 'execute-command', commandId: 'obsidian:menu-command-plugin:open-menu' }));
     const json = await res.json();
 
@@ -117,7 +118,7 @@ describe('/api/obsidian-plugins menu interactions', () => {
     );
 
     const { POST } = await importLifecycleRoute();
-    await POST(postRequest({ action: 'enable', pluginId: 'menu-choice-plugin' }));
+    await POST(confirmedEnableRequest('menu-choice-plugin'));
     const openRes = await POST(postRequest({ action: 'execute-command', commandId: 'obsidian:menu-choice-plugin:open-menu' }));
     const openJson = await openRes.json();
     const menu = openJson.result.menuSnapshots[0];
@@ -172,7 +173,7 @@ describe('/api/obsidian-plugins menu interactions', () => {
     );
 
     const { POST } = await importLifecycleRoute();
-    await POST(postRequest({ action: 'enable', pluginId: 'stale-menu-plugin' }));
+    await POST(confirmedEnableRequest('stale-menu-plugin'));
     const openRes = await POST(postRequest({ action: 'execute-command', commandId: 'obsidian:stale-menu-plugin:open-menu' }));
     const openJson = await openRes.json();
     const menu = openJson.result.menuSnapshots[0];
@@ -216,7 +217,7 @@ describe('/api/obsidian-plugins menu interactions', () => {
     );
 
     const { POST } = await importLifecycleRoute();
-    await POST(postRequest({ action: 'enable', pluginId: 'ttl-menu-plugin' }));
+    await POST(confirmedEnableRequest('ttl-menu-plugin'));
     const openRes = await POST(postRequest({ action: 'execute-command', commandId: 'obsidian:ttl-menu-plugin:open-menu' }));
     const openJson = await openRes.json();
     const menu = openJson.result.menuSnapshots[0];
@@ -261,7 +262,7 @@ describe('/api/obsidian-plugins menu interactions', () => {
     );
 
     const { POST } = await importLifecycleRoute();
-    await POST(postRequest({ action: 'enable', pluginId: 'menu-replay-plugin' }));
+    await POST(confirmedEnableRequest('menu-replay-plugin'));
     const openRes = await POST(postRequest({ action: 'execute-command', commandId: 'obsidian:menu-replay-plugin:open-menu' }));
     const openJson = await openRes.json();
     const menu = openJson.result.menuSnapshots[0];
@@ -317,7 +318,7 @@ describe('/api/obsidian-plugins menu interactions', () => {
     );
 
     const { POST } = await importLifecycleRoute();
-    await POST(postRequest({ action: 'enable', pluginId: 'menu-editor-choice-plugin' }));
+    await POST(confirmedEnableRequest('menu-editor-choice-plugin'));
     const openRes = await POST(postRequest({
       action: 'execute-command',
       commandId: 'obsidian:menu-editor-choice-plugin:insert-menu-template',

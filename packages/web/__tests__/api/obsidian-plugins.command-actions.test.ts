@@ -5,6 +5,7 @@ import {
   installObsidianPluginApiHarness,
   writePlugin,
   importLifecycleRoute,
+  confirmedEnableRequest,
   postRequest,
 } from './obsidian-plugin-api-test-utils';
 
@@ -35,7 +36,7 @@ describe('/api/obsidian-plugins command actions', () => {
     );
 
     const { POST } = await importLifecycleRoute();
-    await POST(postRequest({ action: 'enable', pluginId: 'command-plugin' }));
+    await POST(confirmedEnableRequest('command-plugin'));
     const res = await POST(postRequest({ action: 'execute-command', commandId: 'obsidian:command-plugin:write-note' }));
     const json = await res.json();
 
@@ -65,7 +66,7 @@ describe('/api/obsidian-plugins command actions', () => {
     );
 
     const { POST } = await importLifecycleRoute();
-    await POST(postRequest({ action: 'enable', pluginId: 'hidden-command-plugin' }));
+    await POST(confirmedEnableRequest('hidden-command-plugin'));
     const res = await POST(postRequest({ action: 'execute-command', commandId: 'obsidian:hidden-command-plugin:hidden' }));
     const json = await res.json();
 
@@ -96,7 +97,7 @@ describe('/api/obsidian-plugins command actions', () => {
     );
 
     const { POST } = await importLifecycleRoute();
-    await POST(postRequest({ action: 'enable', pluginId: 'editor-command-plugin' }));
+    await POST(confirmedEnableRequest('editor-command-plugin'));
 
     const unavailable = await POST(postRequest({
       action: 'execute-command',
@@ -146,7 +147,7 @@ describe('/api/obsidian-plugins command actions', () => {
     );
 
     const { POST } = await importLifecycleRoute();
-    await POST(postRequest({ action: 'enable', pluginId: 'editor-check-command-plugin' }));
+    await POST(confirmedEnableRequest('editor-check-command-plugin'));
     const res = await POST(postRequest({
       action: 'execute-command',
       commandId: 'obsidian:editor-check-command-plugin:finish',
@@ -180,7 +181,7 @@ describe('/api/obsidian-plugins command actions', () => {
     );
 
     const { POST } = await importLifecycleRoute();
-    await POST(postRequest({ action: 'enable', pluginId: 'open-command-plugin' }));
+    await POST(confirmedEnableRequest('open-command-plugin'));
     const res = await POST(postRequest({ action: 'execute-command', commandId: 'obsidian:open-command-plugin:open-note' }));
     const json = await res.json();
 
@@ -217,7 +218,7 @@ describe('/api/obsidian-plugins command actions', () => {
     );
 
     const { POST } = await importLifecycleRoute();
-    await POST(postRequest({ action: 'enable', pluginId: 'notice-command-plugin' }));
+    await POST(confirmedEnableRequest('notice-command-plugin'));
     const res = await POST(postRequest({ action: 'execute-command', commandId: 'obsidian:notice-command-plugin:save-note' }));
     const json = await res.json();
 
@@ -263,7 +264,7 @@ describe('/api/obsidian-plugins command actions', () => {
     );
 
     const { POST } = await importLifecycleRoute();
-    await POST(postRequest({ action: 'enable', pluginId: 'modal-command-plugin' }));
+    await POST(confirmedEnableRequest('modal-command-plugin'));
     const res = await POST(postRequest({ action: 'execute-command', commandId: 'obsidian:modal-command-plugin:open-modal' }));
     const json = await res.json();
 

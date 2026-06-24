@@ -5,6 +5,7 @@ import { ErrorCodes, handleRouteErrorSimple, MindOSError } from '@/lib/errors';
 import { readSettings } from '@/lib/settings';
 import { withObsidianPluginRuntime } from '@/lib/obsidian-compat/runtime-service';
 import type { PluginEditorCommandContext } from '@/lib/obsidian-compat/plugin-manager';
+import { isObsidianCapabilityGateConfirmationRequiredError } from '@/lib/obsidian-compat/capability-gate';
 
 type PluginAction = 'enable' | 'disable' | 'load' | 'load-enabled' | 'execute-command' | 'execute-ribbon-action' | 'choose-modal-suggestion' | 'choose-menu-item' | 'uninstall' | 'migrate-legacy';
 
@@ -120,6 +121,7 @@ export async function POST(req: NextRequest) {
       itemIndex?: number;
       interactionId?: string;
       editorContext?: unknown;
+      confirmCapabilityGate?: boolean;
     };
     const action = body.action;
     if (!action || !VALID_PLUGIN_ACTIONS.includes(action)) {
@@ -132,11 +134,15 @@ export async function POST(req: NextRequest) {
       let result: unknown = null;
 
       if (action === 'enable') {
-        await manager.enable(requirePluginId(action, body.pluginId));
+        await manager.enable(requirePluginId(action, body.pluginId), {
+          confirmCapabilityGate: body.confirmCapabilityGate === true,
+        });
       } else if (action === 'disable') {
         await manager.disable(requirePluginId(action, body.pluginId));
       } else if (action === 'load') {
-        await manager.load(requirePluginId(action, body.pluginId));
+        await manager.load(requirePluginId(action, body.pluginId), {
+          confirmCapabilityGate: body.confirmCapabilityGate === true,
+        });
       } else if (action === 'load-enabled') {
         result = await manager.loadEnabledPlugins();
       } else if (action === 'uninstall') {
@@ -173,6 +179,13 @@ export async function POST(req: NextRequest) {
       });
     });
   } catch (err) {
+    if (isObsidianCapabilityGateConfirmationRequiredError(err)) {
+      return NextResponse.json({
+        ok: false,
+        error: err.message,
+        capabilityGate: err.report,
+      }, { status: 409 });
+    }
     return handleRouteErrorSimple(err);
   }
 }

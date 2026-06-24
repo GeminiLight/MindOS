@@ -213,12 +213,12 @@ describe('/api/plugins/catalog', () => {
     const item = json.plugins.find((plugin: { id: string }) => plugin.id === 'desktop-only-plugin');
 
     expect(res.status).toBe(200);
-    expect(json.result).toEqual({ loaded: [], failed: [], skipped: ['desktop-only-plugin'] });
+    expect(json.result).toEqual({ loaded: [], failed: [], skipped: [] });
     expect(item).toMatchObject({
       id: 'desktop-only-plugin',
       source: 'obsidian',
       status: 'blocked',
-      enabled: true,
+      enabled: false,
       loaded: false,
       compatibility: expect.objectContaining({
         level: 'blocked',

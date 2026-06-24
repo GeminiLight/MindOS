@@ -14,6 +14,7 @@ import type {
   ObsidianCapabilitySurfaceSummary,
   ObsidianCapabilitySupport,
 } from '@/lib/obsidian-compat/capability-matrix';
+import type { ObsidianCapabilityGateReport } from '@/lib/obsidian-compat/capability-gate';
 import { getObsidianImportSupport } from '@/lib/obsidian-compat/import-policy';
 import type { PluginActionResult } from '@/lib/plugins/client';
 
@@ -107,6 +108,7 @@ export interface ObsidianPluginStatus {
   coverage?: ObsidianCapabilityCoverage[];
   coverageSummary?: Record<ObsidianCapabilitySupport, number>;
   surfaceSummary?: ObsidianCapabilitySurfaceSummary[];
+  capabilityGate?: ObsidianCapabilityGateReport;
   packageLocation?: {
     relativePath: string;
     rootRelativePath: string;
@@ -127,6 +129,7 @@ export interface ObsidianPluginsResponse {
   ok: boolean;
   result?: ObsidianPluginLoadResult | PluginActionResult;
   plugins: ObsidianPluginStatus[];
+  capabilityGate?: ObsidianCapabilityGateReport;
 }
 
 export interface ObsidianSettingItem {

@@ -105,6 +105,59 @@ describe('/api/obsidian-plugins lifecycle', () => {
     });
   });
 
+  it('requires capability confirmation before enabling network-capable plugins', async () => {
+    writePlugin(
+      'network-api-plugin',
+      `
+        const { Plugin, requestUrl } = require('obsidian');
+        module.exports = class NetworkApiPlugin extends Plugin {
+          onload() {
+            requestUrl('https://example.com/api');
+          }
+        };
+      `,
+    );
+
+    const { POST } = await importLifecycleRoute();
+    let res = await POST(postRequest({ action: 'enable', pluginId: 'network-api-plugin' }));
+    let json = await res.json();
+
+    expect(res.status).toBe(409);
+    expect(json).toMatchObject({
+      ok: false,
+      error: 'Obsidian plugin enable requires capability confirmation.',
+      capabilityGate: {
+        status: 'review',
+        requiresConfirmation: true,
+        confirmed: false,
+      },
+    });
+    expect(fs.existsSync(path.join(mindRoot, '.mindos', 'plugins', '.plugin-manager.json'))).toBe(false);
+
+    res = await POST(postRequest({
+      action: 'enable',
+      pluginId: 'network-api-plugin',
+      confirmCapabilityGate: true,
+    }));
+    json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json.plugins[0]).toMatchObject({
+      id: 'network-api-plugin',
+      enabled: true,
+      capabilityGate: {
+        status: 'limited',
+        requiresConfirmation: true,
+        confirmed: true,
+      },
+    });
+    const state = JSON.parse(fs.readFileSync(path.join(mindRoot, '.mindos', 'plugins', '.plugin-manager.json'), 'utf-8'));
+    expect(state.capabilityConfirmations['network-api-plugin']).toMatchObject({
+      surfaces: ['network'],
+      fingerprint: expect.any(String),
+    });
+  });
+
   it('returns editor extension capability gate metadata in the runtime summary', async () => {
     writePlugin(
       'editor-gate-plugin',
@@ -197,7 +250,7 @@ describe('/api/obsidian-plugins lifecycle', () => {
     expect(state.enabled).toEqual({});
   });
 
-  it('skips blocked plugins during load-enabled without aborting compatible plugins', async () => {
+  it('rejects newly enabling blocked plugins without aborting compatible plugin loads', async () => {
     writePlugin('good-plugin', `const { Plugin } = require('obsidian'); module.exports = class Good extends Plugin {};`);
     writePlugin(
       'fs-plugin',
@@ -206,18 +259,22 @@ describe('/api/obsidian-plugins lifecycle', () => {
 
     const { POST } = await importLifecycleRoute();
     await POST(postRequest({ action: 'enable', pluginId: 'good-plugin' }));
-    await POST(postRequest({ action: 'enable', pluginId: 'fs-plugin' }));
+    const blockedEnable = await POST(postRequest({ action: 'enable', pluginId: 'fs-plugin', confirmCapabilityGate: true }));
+    expect(blockedEnable.status).toBe(400);
+    await expect(blockedEnable.json()).resolves.toEqual({
+      error: 'Requires unsupported runtime module: fs',
+    });
 
     const res = await POST(postRequest({ action: 'load-enabled' }));
     const json = await res.json();
 
     expect(res.status).toBe(200);
     expect(json.result.loaded).toEqual(['good-plugin']);
-    expect(json.result.skipped).toEqual(['fs-plugin']);
+    expect(json.result.skipped).toEqual([]);
     expect(json.plugins.find((plugin: { id: string }) => plugin.id === 'fs-plugin')).toMatchObject({
       compatibilityLevel: 'blocked',
+      enabled: false,
       loaded: false,
-      lastError: 'Requires unsupported runtime module: fs',
     });
   });
 });

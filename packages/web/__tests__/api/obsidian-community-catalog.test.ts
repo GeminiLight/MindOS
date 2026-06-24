@@ -187,7 +187,7 @@ describe('/api/obsidian/community-catalog', () => {
     ]);
     expect(json.catalog.counts).toMatchObject({
       installed: 1,
-      enabled: 1,
+      enabled: 0,
       blocked: 1,
     });
   });
