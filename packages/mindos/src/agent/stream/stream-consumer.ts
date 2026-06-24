@@ -92,6 +92,7 @@ export interface ContextUsageMetadata {
   historyTokens: number;
   originalUsedTokens?: number;
   originalHistoryTokens?: number;
+  runtimeMessageCompaction?: boolean;
   compactedMessages?: number;
   historyCompactTokens?: number;
   historyBeforeCompactTokens?: number;
@@ -252,6 +253,9 @@ function normalizeContextUsage(eventRecord: Record<string, unknown>): ContextUsa
   const keepRecentTokens = finiteNumber(eventRecord.keepRecentTokens);
   const originalUsedTokens = finiteNumber(eventRecord.originalUsedTokens);
   const originalHistoryTokens = finiteNumber(eventRecord.originalHistoryTokens);
+  const runtimeMessageCompaction = typeof eventRecord.runtimeMessageCompaction === 'boolean'
+    ? eventRecord.runtimeMessageCompaction
+    : undefined;
   const compactedMessages = finiteNumber(eventRecord.compactedMessages);
   const historyCompactTokens = finiteNumber(eventRecord.historyCompactTokens);
   const historyBeforeCompactTokens = finiteNumber(eventRecord.historyBeforeCompactTokens);
@@ -288,6 +292,7 @@ function normalizeContextUsage(eventRecord: Record<string, unknown>): ContextUsa
     historyTokens,
     ...(originalUsedTokens !== undefined ? { originalUsedTokens } : {}),
     ...(originalHistoryTokens !== undefined ? { originalHistoryTokens } : {}),
+    ...(runtimeMessageCompaction !== undefined ? { runtimeMessageCompaction } : {}),
     ...(compactedMessages !== undefined ? { compactedMessages } : {}),
     ...(historyCompactTokens !== undefined ? { historyCompactTokens } : {}),
     ...(historyBeforeCompactTokens !== undefined ? { historyBeforeCompactTokens } : {}),

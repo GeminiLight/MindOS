@@ -95,6 +95,7 @@ describe('ContextStatusButton', () => {
           systemPromptTokens: 10_000,
           turnPromptTokens: 12_000,
           historyTokens: 60_000,
+          runtimeMessageCompaction: true,
           compactedMessages: 8,
           historyCompactTokens: 60_000,
           historyBeforeCompactTokens: 140_000,
@@ -103,8 +104,38 @@ describe('ContextStatusButton', () => {
     );
 
     expect(html).toContain('已压缩历史消息: 8');
+    expect(html).toContain('运行时历史压缩: 开启');
     expect(html).toContain('已压缩历史');
     expect(html).not.toContain('已裁剪历史');
+  });
+
+  it('explains when history compaction is delegated to the runtime', () => {
+    const html = renderToStaticMarkup(
+      <ContextStatusButton
+        usage={{
+          runtime: 'mindos',
+          phase: 'preflight',
+          action: 'none',
+          modelName: 'local-model',
+          percent: 126,
+          usedTokens: 126_000,
+          contextWindow: 100_000,
+          contextWindowSource: 'model',
+          contextWindowIsFallback: false,
+          budgetTokens: 84_000,
+          reserveTokens: 16_000,
+          keepRecentTokens: 20_000,
+          systemPromptTokens: 10_000,
+          turnPromptTokens: 14_000,
+          historyTokens: 102_000,
+          runtimeMessageCompaction: true,
+        }}
+      />,
+    );
+
+    expect(html).toContain('运行时历史压缩: 开启');
+    expect(html).toContain('历史将交由运行时按需压缩');
+    expect(html).not.toContain('无需裁剪');
   });
 
   it('renders nothing when context usage is unavailable', () => {

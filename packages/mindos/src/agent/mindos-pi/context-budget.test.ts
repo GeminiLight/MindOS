@@ -125,7 +125,7 @@ describe('MindOS Pi context budget preflight', () => {
     });
   });
 
-  it('compacts older history by default before emergency pruning is needed', () => {
+  it('leaves older history to the Pi runtime compactor by default', () => {
     const long = 'x'.repeat(1_000);
     const history = [
       user(`oldest request ${long}`),
@@ -147,15 +147,13 @@ describe('MindOS Pi context budget preflight', () => {
       estimateTokens,
     });
 
-    expect(result.historyMessages.length).toBeLessThan(history.length);
-    expect(result.historyMessages[0]).toMatchObject({ role: 'user' });
-    expect(String(result.historyMessages[0]?.content)).toContain('older chat history was compacted');
-    expect(String(result.historyMessages[0]?.content)).toContain('Compacted earlier history');
-    expect(String(result.historyMessages[0]?.content)).toContain('oldest request');
-    expect(result.usage.action).toBe('history_compacted');
-    expect(result.usage.compactedMessages).toBeGreaterThan(0);
+    expect(result.historyMessages).toBe(history);
+    expect(String(result.historyMessages[0]?.content)).not.toContain('older chat history was compacted');
+    expect(result.usage.action).toBe('none');
+    expect(result.usage.runtimeMessageCompaction).toBe(true);
+    expect(result.usage.compactedMessages).toBeUndefined();
     expect(result.usage.prunedMessages).toBe(0);
-    expect(result.usage.usedTokens).toBeLessThanOrEqual(result.usage.budgetTokens);
+    expect(result.usage.usedTokens).toBeGreaterThan(result.usage.budgetTokens);
   });
 
   it('skips summary compaction when context strategy is off and keeps emergency pruning', () => {
@@ -186,6 +184,7 @@ describe('MindOS Pi context budget preflight', () => {
     expect(String(result.historyMessages[0]?.content)).toContain('older chat history was pruned');
     expect(String(result.historyMessages[0]?.content)).not.toContain('older chat history was compacted');
     expect(result.usage.action).toBe('history_pruned');
+    expect(result.usage.runtimeMessageCompaction).toBe(false);
     expect(result.usage.compactedMessages).toBeUndefined();
     expect(result.usage.prunedMessages).toBeGreaterThan(0);
     expect(result.usage.usedTokens).toBeLessThanOrEqual(result.usage.budgetTokens);

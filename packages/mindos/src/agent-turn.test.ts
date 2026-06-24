@@ -968,7 +968,7 @@ describe('MindOS session event contract', () => {
     expect(captured.resourceCwd).toBe('/repo');
     expect(captured.sessionCwd).toBe('/repo/app');
     expect(captured.extensionCwd).toBe('/repo/app');
-    expect(captured.settings).toMatchObject({ compaction: { enabled: false } });
+    expect(captured.settings).toMatchObject({ compaction: { enabled: true } });
   });
 
   it('runs extension-registered tools in the non-streaming fallback with headless context', async () => {

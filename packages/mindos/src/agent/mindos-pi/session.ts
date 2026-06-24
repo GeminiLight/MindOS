@@ -581,7 +581,7 @@ function createMindosPiSettingsConfig(
 ): Record<string, unknown> {
   return {
     enableSkillCommands: true,
-    compaction: { enabled: false },
+    compaction: { enabled: agentConfig.contextStrategy !== 'off' },
     ...(agentConfig.enableThinking && provider === 'anthropic'
       ? { thinkingBudgets: { medium: agentConfig.thinkingBudget ?? 5000 } }
       : {}),

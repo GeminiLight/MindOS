@@ -70,6 +70,10 @@ function buildTooltipLines(usage: ContextUsageMetadata, locale: string): string[
   const contextWindow = Math.max(0, Math.round(usage.contextWindow));
   const available = Math.max(0, contextWindow - used);
   const source = contextWindowSourceLabel(usage.contextWindowSource, locale);
+  const maxHistoryTokens = Math.max(0, usage.budgetTokens - usage.systemPromptTokens - usage.turnPromptTokens);
+  const runtimeWillCompactHistory = usage.runtimeMessageCompaction === true
+    && usage.action === 'none'
+    && usage.historyTokens > maxHistoryTokens;
 
   if (locale === 'zh') {
     return [
@@ -80,8 +84,9 @@ function buildTooltipLines(usage: ContextUsageMetadata, locale: string): string[
       usage.nativeContextWindow !== undefined ? `原生窗口: ${formatTokenCount(usage.nativeContextWindow)} tokens` : '',
       usage.contextTokens !== undefined ? `有效上限: ${formatTokenCount(usage.contextTokens)} tokens` : '',
       usage.contextWindowIsFallback ? '未知模型窗口，MindOS 使用保守预算。' : '',
+      usage.runtimeMessageCompaction !== undefined ? `运行时历史压缩: ${usage.runtimeMessageCompaction ? '开启' : '关闭'}` : '',
       usage.compactedMessages !== undefined ? `已压缩历史消息: ${formatTokenCount(usage.compactedMessages)}` : '',
-      contextActionLabel(usage.action, locale),
+      runtimeWillCompactHistory ? '历史将交由运行时按需压缩' : contextActionLabel(usage.action, locale),
     ].filter(Boolean);
   }
 
@@ -93,8 +98,9 @@ function buildTooltipLines(usage: ContextUsageMetadata, locale: string): string[
     usage.nativeContextWindow !== undefined ? `Native window: ${formatTokenCount(usage.nativeContextWindow)} tokens` : '',
     usage.contextTokens !== undefined ? `Effective cap: ${formatTokenCount(usage.contextTokens)} tokens` : '',
     usage.contextWindowIsFallback ? 'Unknown model window; MindOS used the conservative fallback budget.' : '',
+    usage.runtimeMessageCompaction !== undefined ? `Runtime history compaction: ${usage.runtimeMessageCompaction ? 'on' : 'off'}` : '',
     usage.compactedMessages !== undefined ? `Compacted history messages: ${formatTokenCount(usage.compactedMessages)}` : '',
-    contextActionLabel(usage.action, locale),
+    runtimeWillCompactHistory ? 'History will be compacted by the runtime as needed' : contextActionLabel(usage.action, locale),
   ].filter(Boolean);
 }
 

@@ -9,7 +9,6 @@ export const MINDOS_PI_DEFAULT_KEEP_RECENT_TOKENS = 20_000;
 export const MINDOS_PI_MIN_RESERVE_TOKENS = 512;
 
 const PRUNE_NOTE = '[MindOS context preflight: older chat history was pruned before this request to avoid overflowing the model context window.]';
-const HISTORY_COMPACT_NOTE = '[MindOS context preflight: older chat history was compacted before this request to keep a concise outline within the model window.]';
 const TRUNCATION_NOTE = '\n\n[MindOS context preflight: middle content omitted to stay within the model context window.]\n\n';
 
 export type MindosPiContextBudgetAction =
@@ -165,26 +164,20 @@ export function prepareMindosPiContextBudget(
   const systemPromptTokens = options.estimateTokens(systemPrompt);
   const turnPromptTokens = options.estimateTokens(turnPrompt);
   const maxHistoryTokens = Math.max(0, budgetTokens - systemPromptTokens - turnPromptTokens);
-  const historyBeforeCompactTokens = estimateHistoryTokens(historyMessages, options.estimateTokens);
-  const compacted = options.contextStrategy !== 'off'
-    ? compactHistoryToBudget(historyMessages, {
+  const runtimeMessageCompactionEnabled = options.contextStrategy !== 'off';
+  const shouldPruneHistoryInPreflight = !runtimeMessageCompactionEnabled || maxHistoryTokens <= 0;
+  const pruned = shouldPruneHistoryInPreflight
+    ? pruneHistoryToBudget(historyMessages, {
       maxHistoryTokens,
       keepRecentTokens,
       estimateTokens: options.estimateTokens,
     })
-    : { historyMessages, compactedMessages: 0 };
-  historyMessages = compacted.historyMessages;
-  const pruned = pruneHistoryToBudget(historyMessages, {
-    maxHistoryTokens,
-    keepRecentTokens,
-    estimateTokens: options.estimateTokens,
-  });
+    : { historyMessages, prunedMessages: 0 };
   historyMessages = pruned.historyMessages;
   const historyTokens = estimateHistoryTokens(historyMessages, options.estimateTokens);
   const usedTokens = systemPromptTokens + turnPromptTokens + historyTokens;
-  const historyCompacted = compacted.compactedMessages > 0;
   const historyPruned = pruned.prunedMessages > 0;
-  const action = combineActions(promptAction, historyCompacted, historyPruned);
+  const action = combineActions(promptAction, historyPruned);
 
   return {
     systemPrompt,
@@ -211,13 +204,9 @@ export function prepareMindosPiContextBudget(
       historyTokens,
       originalUsedTokens,
       originalHistoryTokens,
-      ...(historyCompacted ? {
-        compactedMessages: compacted.compactedMessages,
-        historyCompactTokens: estimateHistoryTokens(compacted.historyMessages, options.estimateTokens),
-        historyBeforeCompactTokens,
-      } : {}),
+      runtimeMessageCompaction: runtimeMessageCompactionEnabled,
       prunedMessages: pruned.prunedMessages,
-      message: contextUsageMessage(action, usedTokens, contextWindow, compacted.compactedMessages, pruned.prunedMessages),
+      message: contextUsageMessage(action, usedTokens, contextWindow, pruned.prunedMessages),
     },
   };
 }
@@ -240,63 +229,6 @@ export function estimateHistoryTokens(
   estimateTokens: (content: string) => number,
 ): number {
   return messages.reduce((total, message) => total + estimateTokens(historyMessageToText(message)), 0);
-}
-
-function compactHistoryToBudget(input: MindosAgentHistoryMessage[], options: {
-  maxHistoryTokens: number;
-  keepRecentTokens: number;
-  estimateTokens(content: string): number;
-}): { historyMessages: MindosAgentHistoryMessage[]; compactedMessages: number } {
-  if (input.length < 4 || options.maxHistoryTokens <= 0) {
-    return { historyMessages: input, compactedMessages: 0 };
-  }
-
-  const currentTokens = estimateHistoryTokens(input, options.estimateTokens);
-  if (currentTokens <= options.maxHistoryTokens) {
-    return { historyMessages: input, compactedMessages: 0 };
-  }
-
-  const messageTokens = input.map((message) => options.estimateTokens(historyMessageToText(message)));
-  const summaryReserveTokens = Math.min(
-    Math.max(64, Math.floor(options.maxHistoryTokens * 0.25)),
-    Math.max(0, options.maxHistoryTokens - 1),
-  );
-  const desiredRecentTokens = Math.max(options.keepRecentTokens, Math.floor(options.maxHistoryTokens * 0.75));
-  const recentTargetTokens = Math.min(
-    desiredRecentTokens,
-    Math.max(0, options.maxHistoryTokens - summaryReserveTokens),
-  );
-  let cutIndex = findNewestUserSuffixIndex(input, messageTokens, recentTargetTokens);
-  if (cutIndex <= 0 || cutIndex >= input.length) {
-    return { historyMessages: input, compactedMessages: 0 };
-  }
-
-  while (cutIndex < input.length) {
-    const recentMessages = input.slice(cutIndex);
-    const recentTokens = estimateHistoryTokens(recentMessages, options.estimateTokens);
-    const summaryBudget = options.maxHistoryTokens - recentTokens;
-    if (summaryBudget > 0) {
-      const summary = renderHistoryCompactSummary(input.slice(0, cutIndex), {
-        maxSummaryTokens: summaryBudget,
-        estimateTokens: options.estimateTokens,
-      });
-      if (!summary.trim()) return { historyMessages: input, compactedMessages: 0 };
-      const candidate = prependHistoryCompactSummary(recentMessages, summary);
-      if (estimateHistoryTokens(candidate, options.estimateTokens) <= options.maxHistoryTokens) {
-        return {
-          historyMessages: candidate,
-          compactedMessages: cutIndex,
-        };
-      }
-    }
-
-    cutIndex += 1;
-    while (cutIndex < input.length && roleOf(input[cutIndex]) !== 'user') {
-      cutIndex += 1;
-    }
-  }
-
-  return { historyMessages: input, compactedMessages: 0 };
 }
 
 function pruneHistoryToBudget(input: MindosAgentHistoryMessage[], options: {
@@ -344,27 +276,6 @@ function pruneHistoryToBudget(input: MindosAgentHistoryMessage[], options: {
   return buildPrunedHistorySuffix(input, cutIndex, options);
 }
 
-function findNewestUserSuffixIndex(
-  input: MindosAgentHistoryMessage[],
-  messageTokens: number[],
-  targetTokens: number,
-): number {
-  let cutIndex = 0;
-  let remainingTokens = messageTokens.reduce((sum, tokens) => sum + tokens, 0);
-
-  while (cutIndex < input.length && remainingTokens > targetTokens) {
-    remainingTokens -= messageTokens[cutIndex] ?? 0;
-    cutIndex += 1;
-  }
-
-  while (cutIndex < input.length && roleOf(input[cutIndex]) !== 'user') {
-    remainingTokens -= messageTokens[cutIndex] ?? 0;
-    cutIndex += 1;
-  }
-
-  return cutIndex;
-}
-
 function buildPrunedHistorySuffix(input: MindosAgentHistoryMessage[], startIndex: number, options: {
   maxHistoryTokens: number;
   estimateTokens(content: string): number;
@@ -409,69 +320,12 @@ function prefixPruneNote(messages: MindosAgentHistoryMessage[]): MindosAgentHist
   return [{ ...first, content: PRUNE_NOTE }, ...rest];
 }
 
-function prependHistoryCompactSummary(
-  messages: MindosAgentHistoryMessage[],
-  summary: string,
-): MindosAgentHistoryMessage[] {
-  const first = messages[0];
-  if (!first) return [{ role: 'user', content: summary, timestamp: Date.now() }];
-  const rest = messages.slice(1);
-
-  if (roleOf(first) !== 'user') {
-    return [{ role: 'user', content: summary, timestamp: Date.now() }, ...messages];
-  }
-
-  const content = first.content;
-  if (typeof content === 'string') {
-    return [{ ...first, content: `${summary}\n\n---\n\n${content}` }, ...rest];
-  }
-  if (Array.isArray(content)) {
-    return [{
-      ...first,
-      content: [{ type: 'text', text: `${summary}\n\n---\n\n` }, ...content],
-    }, ...rest];
-  }
-  return [{ ...first, content: summary }, ...rest];
-}
-
-function renderHistoryCompactSummary(input: MindosAgentHistoryMessage[], options: {
-  maxSummaryTokens: number;
-  estimateTokens(content: string): number;
-}): string {
-  const lines = [
-    HISTORY_COMPACT_NOTE,
-    '',
-    'Compacted earlier history:',
-    ...input.map((message, index) => {
-      const role = roleOf(message) || 'message';
-      const text = compactHistoryText(historyMessageToText(message), 220);
-      return `- ${index + 1}. ${role}: ${text}`;
-    }),
-  ];
-  return truncateEndByEstimatedTokens(lines.join('\n'), options.maxSummaryTokens, options.estimateTokens);
-}
-
-function compactHistoryText(value: string, maxLength: number): string {
-  return value
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, maxLength)
-    || '[empty]';
-}
-
 function combineActions(
   promptAction: Extract<MindosPiContextBudgetAction, 'none' | 'prompt_compacted' | 'prompt_truncated'>,
-  historyCompacted: boolean,
   historyPruned: boolean,
 ): MindosPiContextBudgetAction {
-  if (promptAction === 'prompt_compacted' && historyCompacted && historyPruned) return 'prompt_compacted_history_compacted_history_pruned';
-  if (promptAction === 'prompt_compacted' && historyCompacted) return 'prompt_compacted_history_compacted';
   if (promptAction === 'prompt_compacted' && historyPruned) return 'prompt_compacted_history_pruned';
-  if (promptAction === 'prompt_truncated' && historyCompacted && historyPruned) return 'prompt_truncated_history_compacted_history_pruned';
-  if (promptAction === 'prompt_truncated' && historyCompacted) return 'prompt_truncated_history_compacted';
   if (promptAction === 'prompt_truncated' && historyPruned) return 'prompt_truncated_history_pruned';
-  if (historyCompacted && historyPruned) return 'history_compacted_history_pruned';
-  if (historyCompacted) return 'history_compacted';
   if (historyPruned) return 'history_pruned';
   return promptAction;
 }
@@ -480,14 +334,12 @@ function contextUsageMessage(
   action: MindosPiContextBudgetAction,
   usedTokens: number,
   contextWindow: number,
-  compactedMessages: number,
   prunedMessages: number,
 ): string {
   const percent = percentage(usedTokens, contextWindow);
   if (action === 'none') return `MindOS context preflight: ${percent}% of the model window is in use.`;
-  const compactedText = compactedMessages > 0 ? `, compacted ${compactedMessages} old message${compactedMessages === 1 ? '' : 's'}` : '';
   const prunedText = prunedMessages > 0 ? `, pruned ${prunedMessages} old message${prunedMessages === 1 ? '' : 's'}` : '';
-  return `MindOS prepared the context before sending (${percent}% used${compactedText}${prunedText}).`;
+  return `MindOS prepared the context before sending (${percent}% used${prunedText}).`;
 }
 
 function truncateByEstimatedTokens(

@@ -110,6 +110,7 @@ export type MindOSSSEvent =
       historyTokens: number;
       originalUsedTokens?: number;
       originalHistoryTokens?: number;
+      runtimeMessageCompaction?: boolean;
       compactedMessages?: number;
       historyCompactTokens?: number;
       historyBeforeCompactTokens?: number;
