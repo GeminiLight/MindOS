@@ -3,12 +3,39 @@ import { validateBrowserEditorSandboxContributions } from '@/lib/obsidian-compat
 import {
   applyObsidianLinterFixes,
   buildObsidianLinterSandboxContributions,
+  getObsidianLinterRuleMetadata,
   normalizeObsidianLinterRuleProfile,
+  OBSIDIAN_LINTER_RULE_METADATA,
   previewObsidianLinterFixes,
   type ObsidianLinterAdapterRuleId,
 } from '@/lib/obsidian-compat/linter-adapter';
 
 describe('Obsidian Linter declarative adapter', () => {
+  it('exposes a stable rule metadata catalog for UI and profile controls', () => {
+    expect(OBSIDIAN_LINTER_RULE_METADATA.map((rule) => rule.id)).toEqual([
+      'heading-space',
+      'trailing-whitespace',
+      'hard-tab',
+      'multiple-blank-lines',
+      'missing-final-newline',
+    ]);
+    expect(getObsidianLinterRuleMetadata('heading-space')).toMatchObject({
+      label: 'heading spacing',
+      severity: 'warning',
+      fixable: true,
+      defaultEnabled: true,
+    });
+    expect(getObsidianLinterRuleMetadata('missing-final-newline')).toMatchObject({
+      label: 'final newline',
+      severity: 'info',
+      fixable: true,
+      defaultEnabled: true,
+    });
+    expect(normalizeObsidianLinterRuleProfile().enabledRules).toEqual(
+      Object.fromEntries(OBSIDIAN_LINTER_RULE_METADATA.map((rule) => [rule.id, rule.defaultEnabled])),
+    );
+  });
+
   it('maps common markdown formatting issues to MindOS-signed editor sandbox contributions', () => {
     const markdown = [
       '#Title',

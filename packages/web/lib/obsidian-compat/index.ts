@@ -19,7 +19,9 @@ export { ObsidianRuntimeHost } from './runtime';
 export {
   applyObsidianLinterFixes,
   buildObsidianLinterSandboxContributions,
+  getObsidianLinterRuleMetadata,
   normalizeObsidianLinterRuleProfile,
+  OBSIDIAN_LINTER_RULE_METADATA,
   previewObsidianLinterFixes,
 } from './linter-adapter';
 export {
@@ -98,6 +100,7 @@ export type {
   ObsidianLinterAppliedFixSummary,
   ObsidianLinterApplyFixResult,
   ObsidianLinterFixPreviewResult,
+  ObsidianLinterRuleMetadata,
   ObsidianLinterRuleProfile,
   ObsidianLinterRuleProfileInput,
 } from './linter-adapter';

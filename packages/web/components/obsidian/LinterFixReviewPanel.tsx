@@ -4,21 +4,13 @@ import { useMemo } from 'react';
 import { Wand2, X } from 'lucide-react';
 import { buildLineDiff, collapseDiffContext } from '@/components/changes/line-diff';
 import type { DiffRow } from '@/components/changes/line-diff';
-import type {
-  ObsidianLinterAdapterRuleId,
-  ObsidianLinterAppliedFixSummary,
+import {
+  getObsidianLinterRuleMetadata,
+  type ObsidianLinterAppliedFixSummary,
 } from '@/lib/obsidian-compat/linter-adapter';
 
 const DIFF_LINE_LIMIT = 600;
 const VISIBLE_DIFF_ROWS = 18;
-
-const RULE_LABELS: Record<ObsidianLinterAdapterRuleId, string> = {
-  'heading-space': 'heading spacing',
-  'trailing-whitespace': 'trailing whitespace',
-  'hard-tab': 'hard tabs',
-  'multiple-blank-lines': 'blank lines',
-  'missing-final-newline': 'final newline',
-};
 
 interface LinterFixReviewPanelProps {
   beforeMarkdown: string;
@@ -61,7 +53,7 @@ export default function LinterFixReviewPanel({
   const visibleRows = diffPreview.rows.slice(0, VISIBLE_DIFF_ROWS);
   const hiddenRowCount = Math.max(0, diffPreview.rows.length - visibleRows.length);
   const ruleSummary = applied
-    .map((item) => `${RULE_LABELS[item.ruleId]} x${item.count}`)
+    .map((item) => `${getObsidianLinterRuleMetadata(item.ruleId).label} x${item.count}`)
     .join(' · ');
 
   return (

@@ -68,6 +68,15 @@ export interface ObsidianLinterFixPreviewResult extends ObsidianLinterApplyFixRe
   fixCount: number;
 }
 
+export interface ObsidianLinterRuleMetadata {
+  id: ObsidianLinterAdapterRuleId;
+  label: string;
+  message: string;
+  severity: ObsidianLinterAdapterSeverity;
+  fixable: boolean;
+  defaultEnabled: boolean;
+}
+
 interface MarkdownLine {
   number: number;
   text: string;
@@ -80,24 +89,67 @@ const DEFAULT_MAX_ISSUES = 80;
 const DEFAULT_MAX_CONSECUTIVE_BLANK_LINES = 1;
 const SAFE_PLUGIN_ID_PATTERN = /^[a-z0-9][a-z0-9_-]{0,63}$/;
 
-export const DEFAULT_OBSIDIAN_LINTER_RULE_PROFILE: ObsidianLinterRuleProfile = {
-  enabledRules: {
-    'heading-space': true,
-    'trailing-whitespace': true,
-    'hard-tab': true,
-    'multiple-blank-lines': true,
-    'missing-final-newline': true,
+export const OBSIDIAN_LINTER_RULE_METADATA: readonly ObsidianLinterRuleMetadata[] = [
+  {
+    id: 'heading-space',
+    label: 'heading spacing',
+    message: 'Heading marker should be followed by a space.',
+    severity: 'warning',
+    fixable: true,
+    defaultEnabled: true,
   },
+  {
+    id: 'trailing-whitespace',
+    label: 'trailing whitespace',
+    message: 'Line has trailing whitespace.',
+    severity: 'warning',
+    fixable: true,
+    defaultEnabled: true,
+  },
+  {
+    id: 'hard-tab',
+    label: 'hard tabs',
+    message: 'Line contains hard tab indentation.',
+    severity: 'warning',
+    fixable: true,
+    defaultEnabled: true,
+  },
+  {
+    id: 'multiple-blank-lines',
+    label: 'blank lines',
+    message: 'Line exceeds the configured consecutive blank line limit.',
+    severity: 'info',
+    fixable: true,
+    defaultEnabled: true,
+  },
+  {
+    id: 'missing-final-newline',
+    label: 'final newline',
+    message: 'File should end with a newline.',
+    severity: 'info',
+    fixable: true,
+    defaultEnabled: true,
+  },
+] as const;
+
+const RULE_METADATA_BY_ID = OBSIDIAN_LINTER_RULE_METADATA.reduce((acc, rule) => {
+  acc[rule.id] = rule;
+  return acc;
+}, {} as Record<ObsidianLinterAdapterRuleId, ObsidianLinterRuleMetadata>);
+
+export const DEFAULT_OBSIDIAN_LINTER_RULE_PROFILE: ObsidianLinterRuleProfile = {
+  enabledRules: OBSIDIAN_LINTER_RULE_METADATA.reduce((acc, rule) => {
+    acc[rule.id] = rule.defaultEnabled;
+    return acc;
+  }, {} as Record<ObsidianLinterAdapterRuleId, boolean>),
   maxConsecutiveBlankLines: DEFAULT_MAX_CONSECUTIVE_BLANK_LINES,
 };
 
-const RULE_MESSAGES: Record<ObsidianLinterAdapterRuleId, string> = {
-  'heading-space': 'Heading marker should be followed by a space.',
-  'trailing-whitespace': 'Line has trailing whitespace.',
-  'hard-tab': 'Line contains hard tab indentation.',
-  'multiple-blank-lines': 'Line exceeds the configured consecutive blank line limit.',
-  'missing-final-newline': 'File should end with a newline.',
-};
+export function getObsidianLinterRuleMetadata(
+  ruleId: ObsidianLinterAdapterRuleId,
+): ObsidianLinterRuleMetadata {
+  return RULE_METADATA_BY_ID[ruleId];
+}
 
 export function buildObsidianLinterSandboxContributions(
   markdown: string,
@@ -332,12 +384,13 @@ function createRangeIssue(
   from: number,
   to: number,
 ): ObsidianLinterAdapterIssue {
+  const metadata = getObsidianLinterRuleMetadata(ruleId);
   return {
     ruleId,
-    message: RULE_MESSAGES[ruleId],
+    message: metadata.message,
     line: line.number,
-    severity: 'warning',
-    fixable: true,
+    severity: metadata.severity,
+    fixable: metadata.fixable,
     from,
     to,
   };
@@ -347,12 +400,13 @@ function createLineIssue(
   ruleId: ObsidianLinterAdapterRuleId,
   line: MarkdownLine,
 ): ObsidianLinterAdapterIssue {
+  const metadata = getObsidianLinterRuleMetadata(ruleId);
   return {
     ruleId,
-    message: RULE_MESSAGES[ruleId],
+    message: metadata.message,
     line: line.number,
-    severity: ruleId === 'missing-final-newline' || ruleId === 'multiple-blank-lines' ? 'info' : 'warning',
-    fixable: true,
+    severity: metadata.severity,
+    fixable: metadata.fixable,
   };
 }
 
