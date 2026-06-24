@@ -3,7 +3,7 @@
 import { useState, useTransition, useCallback, useEffect, useRef, useSyncExternalStore, useMemo, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Edit3, Save, X, Loader2, LayoutTemplate, ArrowLeft, Share2, FileText, Code, MoreHorizontal, Copy, Pencil, Trash2, Star, Download, Eye, PanelLeft, PanelRightOpen, Puzzle, ChevronDown, History } from 'lucide-react';
+import { Edit3, Save, X, Loader2, LayoutTemplate, ArrowLeft, Share2, FileText, Code, MoreHorizontal, Copy, Pencil, Trash2, Star, Download, Eye, PanelLeft, PanelRightOpen, Puzzle, ChevronDown, History, ListChecks } from 'lucide-react';
 import { lazy } from 'react';
 import MarkdownView from '@/components/MarkdownView';
 import JsonView from '@/components/JsonView';
@@ -39,6 +39,7 @@ import { fetchPluginViewSurfacesForExtension, pluginViewSurfaceHref } from '@/li
 import { agentReviewHref } from '@/lib/agent-review-links';
 import { useAgentChangeReview } from '@/hooks/useAgentChangeReview';
 import { refreshPreservingDocumentScroll } from '@/lib/scroll-preservation';
+import { buildObsidianLinterSandboxContributions } from '@/lib/obsidian-compat/linter-adapter';
 import type { PluginSurface } from '@/lib/plugins/surfaces';
 
 interface ViewPageClientProps {
@@ -290,6 +291,7 @@ export default function ViewPageClient({
   const [modeMenuOpen, setModeMenuOpen] = useState(false);
   const modeButtonRef = useRef<HTMLButtonElement>(null);
   const modeMenuRef = useRef<HTMLDivElement>(null);
+  const [linterPreviewEnabled, setLinterPreviewEnabled] = useState(false);
   const previousFilePathRef = useRef(filePath);
   useEffect(() => {
     if (previousFilePathRef.current === filePath) return;
@@ -302,6 +304,7 @@ export default function ViewPageClient({
     setAutoSaveStatus('idle');
     setGraphMode(false);
     setModeMenuOpen(false);
+    setLinterPreviewEnabled(false);
     const nextMarkdownState = resolveMarkdownStartState(isBinaryFile, isMarkdown, initialEditing, content);
     setMdViewModeState(nextMarkdownState.mode);
     setEditing(nextMarkdownState.editing);
@@ -603,6 +606,20 @@ export default function ViewPageClient({
     ? 'preview'
     : (mdViewMode === 'source' ? 'source' : 'wysiwyg');
   const activeMarkdownModeOption = markdownModeOptions.find(option => option.id === activeMarkdownMode) ?? markdownModeOptions[0];
+  const canShowLinterPreview = isMarkdown && editing && mdViewMode === 'source' && !isDraft;
+  useEffect(() => {
+    if (!canShowLinterPreview && linterPreviewEnabled) {
+      setLinterPreviewEnabled(false);
+    }
+  }, [canShowLinterPreview, linterPreviewEnabled]);
+  const linterPreview = useMemo(() => {
+    if (!canShowLinterPreview || !linterPreviewEnabled) return null;
+    return buildObsidianLinterSandboxContributions(editContent);
+  }, [canShowLinterPreview, editContent, linterPreviewEnabled]);
+  const linterSandboxContributions = linterPreview?.contributions ?? [];
+  const linterIssueCountLabel = linterPreview
+    ? `${linterPreview.issues.length}${linterPreview.skipped.length > 0 ? '+' : ''}`
+    : '';
   const tocCollapsed = useSyncExternalStore(
     subscribeTableOfContentsCollapsed,
     readTableOfContentsCollapsed,
@@ -826,6 +843,31 @@ export default function ViewPageClient({
                 </div>
               )}
 
+              {canShowLinterPreview && (
+                <button
+                  type="button"
+                  aria-label="Toggle Linter preview"
+                  aria-pressed={linterPreviewEnabled}
+                  title={linterPreviewEnabled
+                    ? `Hide Linter preview${linterIssueCountLabel ? ` (${linterIssueCountLabel})` : ''}`
+                    : 'Show Linter preview'}
+                  onClick={() => setLinterPreviewEnabled(value => !value)}
+                  className={`inline-flex h-8 min-w-8 items-center justify-center gap-1.5 rounded-md border px-2.5 text-xs font-medium shadow-sm transition-colors duration-75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation ${
+                    linterPreviewEnabled
+                      ? 'border-[var(--amber)] bg-[var(--amber-subtle)] text-[var(--amber)]'
+                      : 'border-border bg-card text-muted-foreground hover:bg-muted/60 hover:text-foreground'
+                  }`}
+                >
+                  <ListChecks size={13} />
+                  <span className="hidden sm:inline">Lint</span>
+                  {linterPreviewEnabled && linterIssueCountLabel && (
+                    <span className="ml-0.5 inline-flex min-w-4 justify-center rounded-full bg-background/80 px-1 text-2xs font-semibold text-foreground">
+                      {linterIssueCountLabel}
+                    </span>
+                  )}
+                </button>
+              )}
+
               {/* Editor theme picker — hidden for now, may move to Settings later */}
 
               {/* Edit button — shown in view mode for non-markdown editable file types */}
@@ -1029,6 +1071,7 @@ export default function ViewPageClient({
                     onChange={setEditContent}
                     viewMode={mdViewMode}
                     editorKey={filePath}
+                    sandboxContributions={linterSandboxContributions}
                   />
                 </div>
                 {shouldRenderEditingToc && <TableOfContents headings={markdownTocHeadings} />}

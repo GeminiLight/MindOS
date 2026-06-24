@@ -3,6 +3,21 @@ import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import MarkdownEditor from '@/components/MarkdownEditor';
+import type { BrowserEditorSandboxContribution } from '@/lib/obsidian-compat/browser-editor-sandbox';
+
+const sandboxContribution: BrowserEditorSandboxContribution = {
+  sandboxVersion: 1,
+  id: 'test-plugin:lint:1',
+  pluginId: 'test-plugin',
+  source: 'mindos-signed',
+  kind: 'line-highlight',
+  line: 1,
+  permissionGrant: {
+    scope: 'browser-editor-sandbox',
+    grantedBy: 'mindos',
+    permissions: ['editor.read', 'editor.decorations'],
+  },
+};
 
 vi.mock('next/dynamic', () => ({
   default: () => function MockWysiwygEditor({ value }: { value: string }) {
@@ -13,8 +28,8 @@ vi.mock('next/dynamic', () => ({
 }));
 
 vi.mock('@/components/EditorWrapper', () => ({
-  default: ({ value }: { value: string }) => (
-    <textarea data-testid="source-editor" readOnly value={value} />
+  default: ({ value, sandboxContributions = [] }: { value: string; sandboxContributions?: unknown[] }) => (
+    <textarea data-testid="source-editor" data-sandbox-count={sandboxContributions.length} readOnly value={value} />
   ),
 }));
 
@@ -34,9 +49,22 @@ describe('MarkdownEditor frontmatter handling', () => {
     document.body.removeChild(host);
   });
 
-  async function render(value: string, viewMode: 'wysiwyg' | 'source', editorKey?: string) {
+  async function render(
+    value: string,
+    viewMode: 'wysiwyg' | 'source',
+    editorKey?: string,
+    sandboxContributions: BrowserEditorSandboxContribution[] = [],
+  ) {
     await act(async () => {
-      root.render(<MarkdownEditor value={value} viewMode={viewMode} onChange={vi.fn()} editorKey={editorKey} />);
+      root.render(
+        <MarkdownEditor
+          value={value}
+          viewMode={viewMode}
+          onChange={vi.fn()}
+          editorKey={editorKey}
+          sandboxContributions={sandboxContributions}
+        />,
+      );
     });
   }
 
@@ -66,6 +94,17 @@ describe('MarkdownEditor frontmatter handling', () => {
 
     expect(host.querySelector('[data-testid="wysiwyg-editor"]')).toBeNull();
     expect(host.querySelector('[data-testid="source-editor"]')).not.toBeNull();
+  });
+
+  it('passes browser editor sandbox contributions only to source mode', async () => {
+    await render('# Body', 'source', 'source.md', [sandboxContribution]);
+
+    expect(host.querySelector('[data-testid="source-editor"]')?.getAttribute('data-sandbox-count')).toBe('1');
+
+    await render('# Body', 'wysiwyg', 'wysiwyg.md', [sandboxContribution]);
+
+    expect(host.querySelector('[data-testid="wysiwyg-editor"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="source-editor"]')).toBeNull();
   });
 
   it('remounts WYSIWYG when the editor key changes between markdown files', async () => {

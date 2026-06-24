@@ -43,8 +43,22 @@ vi.mock('@/components/MarkdownView', () => ({
   default: ({ content }: { content: string }) => <div data-testid="markdown-view">{content}</div>,
 }));
 vi.mock('@/components/MarkdownEditor', () => ({
-  default: ({ value, viewMode }: { value: string; viewMode: string }) => (
-    <div data-testid="markdown-editor" data-mode={viewMode}>{value}</div>
+  default: ({
+    value,
+    viewMode,
+    sandboxContributions = [],
+  }: {
+    value: string;
+    viewMode: string;
+    sandboxContributions?: unknown[];
+  }) => (
+    <div
+      data-testid="markdown-editor"
+      data-mode={viewMode}
+      data-sandbox-count={sandboxContributions.length}
+    >
+      {value}
+    </div>
   ),
 }));
 vi.mock('@/components/JsonView', () => ({ default: () => <div /> }));
@@ -246,6 +260,41 @@ describe('ViewPageClient frontmatter markdown mode', () => {
     expect(editor?.getAttribute('data-mode')).toBe('source');
     expect(view).toBeNull();
     expect(modeButton?.textContent).toContain('Source');
+  });
+
+  it('enables Linter preview decorations explicitly in markdown source mode', async () => {
+    localStorage.setItem('md-view-mode', 'source');
+
+    await act(async () => {
+      root.render(
+        <ViewPageClient
+          filePath="source-mode.md"
+          content={'#Title\nLine with space  \n'}
+          extension="md"
+          saveAction={vi.fn()}
+        />,
+      );
+    });
+
+    await flushDeferredFileBody();
+
+    const editorBefore = host.querySelector('[data-testid="markdown-editor"]');
+    const lintButton = [...host.querySelectorAll('button')]
+      .find(button => button.getAttribute('aria-label') === 'Toggle Linter preview');
+
+    expect(editorBefore?.getAttribute('data-mode')).toBe('source');
+    expect(editorBefore?.getAttribute('data-sandbox-count')).toBe('0');
+    expect(lintButton).toBeTruthy();
+    expect(lintButton?.getAttribute('aria-pressed')).toBe('false');
+
+    await act(async () => {
+      lintButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    const editorAfter = host.querySelector('[data-testid="markdown-editor"]');
+    expect(lintButton?.getAttribute('aria-pressed')).toBe('true');
+    expect(lintButton?.textContent).toContain('2');
+    expect(editorAfter?.getAttribute('data-sandbox-count')).toBe('2');
   });
 
   it('remembers when the user switches back to Edit for later markdown files', async () => {

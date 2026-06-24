@@ -3,6 +3,7 @@
 import dynamic from 'next/dynamic';
 import EditorWrapper from './EditorWrapper';
 import { hasMarkdownFrontmatterFence } from '@/lib/parsing/frontmatter';
+import type { BrowserEditorSandboxContribution } from '@/lib/obsidian-compat/browser-editor-sandbox';
 
 // WysiwygEditor uses browser APIs — load client-side only
 const WysiwygEditor = dynamic(() => import('./WysiwygEditor'), { ssr: false });
@@ -14,11 +15,18 @@ interface MarkdownEditorProps {
   onChange: (v: string) => void;
   viewMode: MdViewMode;
   editorKey?: string;
+  sandboxContributions?: BrowserEditorSandboxContribution[];
 }
 
 const EDITOR_HEIGHT = 'calc(100vh - 160px)';
 
-export default function MarkdownEditor({ value, onChange, viewMode, editorKey }: MarkdownEditorProps) {
+export default function MarkdownEditor({
+  value,
+  onChange,
+  viewMode,
+  editorKey,
+  sandboxContributions = [],
+}: MarkdownEditorProps) {
   const hasFrontmatter = hasMarkdownFrontmatterFence(value);
   const isWysiwyg = viewMode === 'wysiwyg' && !hasFrontmatter;
   const isSource = viewMode === 'source' || (viewMode === 'wysiwyg' && hasFrontmatter);
@@ -39,7 +47,12 @@ export default function MarkdownEditor({ value, onChange, viewMode, editorKey }:
           style={{ height: EDITOR_HEIGHT }}
         >
           <div className="min-w-0 w-full h-full overflow-y-auto overflow-x-hidden">
-            <EditorWrapper value={value} onChange={onChange} language="markdown" />
+            <EditorWrapper
+              value={value}
+              onChange={onChange}
+              language="markdown"
+              sandboxContributions={sandboxContributions}
+            />
           </div>
         </div>
       )}
