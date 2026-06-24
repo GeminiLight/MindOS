@@ -4,15 +4,18 @@ import { useEffect, useLayoutEffect, useRef, useCallback, useState } from 'react
 import { EditorView, basicSetup } from 'codemirror';
 import { markdown } from '@codemirror/lang-markdown';
 import { oneDark } from '@codemirror/theme-one-dark';
-import { EditorState } from '@codemirror/state';
+import { Compartment, EditorState } from '@codemirror/state';
 import { Image as ImageIcon } from 'lucide-react';
 import { useEditorImageUpload } from '@/hooks/useEditorImageUpload';
+import { createBrowserEditorSandboxExtension } from '@/lib/editor/browser-editor-sandbox-codemirror';
 import { toast } from '@/lib/toast';
+import type { BrowserEditorSandboxContribution } from '@/lib/obsidian-compat/browser-editor-sandbox';
 
 interface EditorProps {
   value: string;
   onChange: (value: string) => void;
   language?: 'markdown' | 'plain';
+  sandboxContributions?: BrowserEditorSandboxContribution[];
 }
 
 const darkTheme = EditorView.theme({
@@ -64,10 +67,20 @@ const darkTheme = EditorView.theme({
   },
 });
 
-export default function Editor({ value, onChange, language = 'markdown' }: EditorProps) {
+export default function Editor({
+  value,
+  onChange,
+  language = 'markdown',
+  sandboxContributions = [],
+}: EditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const onChangeRef = useRef(onChange);
+  const sandboxContributionsRef = useRef(sandboxContributions);
+  const sandboxCompartmentRef = useRef<Compartment | null>(null);
+  if (sandboxCompartmentRef.current == null) {
+    sandboxCompartmentRef.current = new Compartment();
+  }
 
   // Track whether update is from external value change
   const isExternalUpdate = useRef(false);
@@ -79,7 +92,8 @@ export default function Editor({ value, onChange, language = 'markdown' }: Edito
   useLayoutEffect(() => {
     onChangeRef.current = onChange;
     uploadRef.current = uploadToMedia;
-  }, [onChange, uploadToMedia]);
+    sandboxContributionsRef.current = sandboxContributions;
+  }, [onChange, sandboxContributions, uploadToMedia]);
 
   const insertImages = useCallback(async (files: File[]) => {
     const view = viewRef.current;
@@ -124,6 +138,8 @@ export default function Editor({ value, onChange, language = 'markdown' }: Edito
 
   useEffect(() => {
     if (!containerRef.current) return;
+    const sandboxCompartment = sandboxCompartmentRef.current;
+    if (!sandboxCompartment) return;
 
     const updateListener = EditorView.updateListener.of((update) => {
       if (update.docChanged && !isExternalUpdate.current) {
@@ -140,6 +156,9 @@ export default function Editor({ value, onChange, language = 'markdown' }: Edito
         language === 'markdown' ? markdown() : [],
         updateListener,
         EditorView.lineWrapping,
+        sandboxCompartment.of(
+          createBrowserEditorSandboxExtension(sandboxContributionsRef.current),
+        ),
       ],
     });
 
@@ -156,6 +175,18 @@ export default function Editor({ value, onChange, language = 'markdown' }: Edito
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    const view = viewRef.current;
+    const sandboxCompartment = sandboxCompartmentRef.current;
+    if (!view || !sandboxCompartment) return;
+
+    view.dispatch({
+      effects: sandboxCompartment.reconfigure(
+        createBrowserEditorSandboxExtension(sandboxContributions),
+      ),
+    });
+  }, [sandboxContributions]);
 
   // Set up paste and drag/drop handlers
   useEffect(() => {
