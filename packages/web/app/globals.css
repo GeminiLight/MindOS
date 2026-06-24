@@ -225,11 +225,13 @@ body {
   min-width: 0;
 }
 @media (min-width: 1280px) {
-  .markdown-view-frame--with-toc,
-  .markdown-view-frame--toc-collapsed {
+  .markdown-view-frame--with-toc {
     grid-template-columns: minmax(0, 1fr) 212px;
+    gap: 1.75rem;
   }
   .markdown-view-frame--toc-collapsed {
+    grid-template-columns: minmax(0, 1fr) 0;
+    gap: 0;
     position: relative;
   }
 }

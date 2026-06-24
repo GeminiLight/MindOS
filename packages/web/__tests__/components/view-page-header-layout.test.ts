@@ -22,6 +22,7 @@ describe('ViewPageClient header layout', () => {
     const cssSource = fs.readFileSync(cssFile, 'utf8');
     const layoutSource = fs.readFileSync(layoutFile, 'utf8');
     const tocCollapsedBlock = cssSource.match(/\.markdown-view-frame--toc-collapsed \{[^}]*\}/)?.[0] ?? '';
+    const tocExpandedBlock = cssSource.match(/\.markdown-view-frame--with-toc \{[^}]*\}/)?.[0] ?? '';
 
     expect(viewSource).toContain('className="view-header-actions flex items-center gap-1.5 md:gap-2 shrink-0"');
     expect(viewSource).toContain('className="view-header-breadcrumb min-w-0 flex-1 flex items-center gap-1.5"');
@@ -50,11 +51,12 @@ describe('ViewPageClient header layout', () => {
 
     expect(cssSource).toContain('max-width: var(--main-body-content-max-width, var(--content-width-override, var(--content-width)))');
     expect(cssSource).toContain('.markdown-view-frame {');
-    expect(cssSource).toContain('.markdown-view-frame--with-toc,');
-    expect(cssSource).toContain('grid-template-columns: minmax(0, 1fr) 212px;');
+    expect(cssSource).toContain('.markdown-view-frame--with-toc {');
+    expect(tocExpandedBlock).toContain('grid-template-columns: minmax(0, 1fr) 212px;');
+    expect(tocExpandedBlock).toContain('gap: 1.75rem;');
     expect(cssSource).toContain('.markdown-view-frame--toc-collapsed {');
-    expect(cssSource).toContain('grid-template-columns: minmax(0, 1fr) 212px;');
-    expect(tocCollapsedBlock).not.toContain('gap: 0;');
+    expect(tocCollapsedBlock).toContain('grid-template-columns: minmax(0, 1fr) 0;');
+    expect(tocCollapsedBlock).toContain('gap: 0;');
     expect(cssSource).not.toContain('.toc-reserved-content');
     expect(cssSource).not.toContain('.view-header-actions-reserve');
     expect(cssSource).not.toContain('.view-header-actions {');

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
-import { ChevronRight } from 'lucide-react';
+import { PanelRightClose, PanelRightOpen } from 'lucide-react';
 import GithubSlugger from 'github-slugger';
 import { useLocale } from '@/lib/stores/locale-store';
 import { cn } from '@/lib/utils';
@@ -237,6 +237,8 @@ export default function TableOfContents({ content = '', headings: providedHeadin
 
   if (headings.length < 2) return null;
 
+  const toggleLabel = collapsed ? t.view.tocExpandLabel : t.view.tocCollapseLabel;
+
   const handleClick = (e: React.MouseEvent, idx: number) => {
     // Re-find elements in case DOM changed since observer setup
     const els = findHeadingElements(headings);
@@ -259,26 +261,23 @@ export default function TableOfContents({ content = '', headings: providedHeadin
       style={{
         top: `calc(var(--app-titlebar-h) + ${VIEW_HEADER_CSS_VAR} + 24px)`,
         maxHeight: `calc(100vh - var(--app-titlebar-h) - ${VIEW_HEADER_CSS_VAR} - 48px)`,
-        width: NAV_W,
+        width: collapsed ? 0 : NAV_W,
       }}
     >
       <button
         type="button"
         onClick={handleCollapsedToggle}
         className={cn(
-          'absolute top-0 z-10 flex h-8 items-center justify-center border border-border bg-background text-muted-foreground/60 transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-          '-left-5 w-5 rounded-l-md border-r-0 shadow-sm',
+          'absolute top-12 z-10 flex h-8 items-center justify-center border border-border bg-background text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+          'w-7 shadow-sm',
+          collapsed ? 'left-0 rounded-md' : '-left-7 rounded-l-md border-r-0',
         )}
-        title={collapsed ? t.view.tocExpand : t.view.tocCollapse}
-        aria-label={collapsed ? t.view.tocExpand : t.view.tocCollapse}
+        title={toggleLabel}
+        aria-label={toggleLabel}
         aria-expanded={!collapsed}
         data-markdown-toc-toggle
       >
-        <ChevronRight
-          size={11}
-          className="transition-transform duration-200"
-          style={{ transform: collapsed ? 'rotate(180deg)' : 'rotate(0deg)' }}
-        />
+        {collapsed ? <PanelRightOpen size={13} aria-hidden="true" /> : <PanelRightClose size={13} aria-hidden="true" />}
       </button>
       <nav
         ref={navRef}
