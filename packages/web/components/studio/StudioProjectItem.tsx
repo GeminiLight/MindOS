@@ -69,43 +69,70 @@ function contextTokenGroups(project: StudioProject, locale: string): Array<{
   ];
 }
 
+function contextTokens(project: StudioProject, locale: string): Array<{
+  label: string;
+  value: string;
+  icon: LucideIcon;
+}> {
+  return contextTokenGroups(project, locale).flatMap((token) => (
+    token.values.filter(Boolean).map((value) => ({
+      label: token.label,
+      value,
+      icon: token.icon,
+    }))
+  ));
+}
+
 export function StudioContextBraid({
   project,
   locale,
   density = 'default',
+  maxVisible = 3,
 }: {
   project: StudioProject;
   locale: string;
   density?: StudioProjectItemDensity;
+  maxVisible?: number;
 }) {
+  const tokens = contextTokens(project, locale);
+  const visibleTokens = tokens.slice(0, maxVisible);
+  const overflow = Math.max(0, tokens.length - visibleTokens.length);
+
   return (
     <div data-studio-context-braid className={`flex min-w-0 flex-wrap items-center ${
       density === 'compact' ? 'gap-1.5 text-[11px]' : 'gap-2 text-xs'
     } text-muted-foreground`}>
-      {contextTokenGroups(project, locale).flatMap((token) => (
-        token.values.filter(Boolean).map((value, index) => {
-          const Icon = token.icon;
-          return (
+      {visibleTokens.map((token, index) => {
+        const Icon = token.icon;
+        return (
+          <span
+            key={`${token.label}-${token.value}-${index}`}
+            data-studio-context-chip
+            className="inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-md border border-border/50 bg-background/55 px-2 py-1 transition-colors hover:border-[var(--amber)]/40 hover:bg-[var(--amber-subtle)]"
+            title={`${token.label}: ${token.value}`}
+          >
             <span
-              key={`${token.label}-${value}-${index}`}
-              data-studio-context-chip
-              className="inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-md border border-border/50 bg-background/55 px-2 py-1 transition-colors hover:border-[var(--amber)]/40 hover:bg-[var(--amber-subtle)]"
-              title={`${token.label}: ${value}`}
+              aria-label={token.label}
+              title={token.label}
+              className="inline-flex h-4 w-4 shrink-0 items-center justify-center text-[var(--amber)]"
             >
-              <span
-                aria-label={token.label}
-                title={token.label}
-                className="inline-flex h-4 w-4 shrink-0 items-center justify-center text-[var(--amber)]"
-              >
-                <Icon size={density === 'compact' ? 11 : 12} aria-hidden="true" />
-              </span>
-              <span className={`${density === 'compact' ? 'max-w-[10rem]' : 'max-w-[14rem]'} min-w-0 truncate`}>
-                {value}
-              </span>
+              <Icon size={density === 'compact' ? 11 : 12} aria-hidden="true" />
             </span>
-          );
-        })
-      ))}
+            <span className={`${density === 'compact' ? 'max-w-[9rem]' : 'max-w-[13rem]'} min-w-0 truncate`}>
+              {token.value}
+            </span>
+          </span>
+        );
+      })}
+      {overflow > 0 ? (
+        <span
+          data-studio-context-overflow
+          className="inline-flex h-7 items-center rounded-md border border-border/45 bg-muted/35 px-2 text-[11px] font-medium text-muted-foreground [font-variant-numeric:tabular-nums]"
+          title={locale === 'zh' ? `还有 ${overflow} 个上下文` : `${overflow} more context items`}
+        >
+          +{overflow}
+        </span>
+      ) : null}
     </div>
   );
 }
@@ -143,8 +170,10 @@ export function StudioProjectItem({
 }) {
   const title = localize(project.title, project.titleZh, locale);
   const goal = localize(project.goal, project.goalZh, locale);
-  const nextAction = localize(project.nextAction, project.nextActionZh, locale);
   const compact = density === 'compact';
+  const sessionLabel = locale === 'zh'
+    ? `${sessionCount} 个对话`
+    : `${sessionCount} ${sessionCount === 1 ? 'session' : 'sessions'}`;
 
   return (
     <Link
@@ -154,16 +183,16 @@ export function StudioProjectItem({
       onPointerEnter={() => onPreview?.(project.id)}
       className={`group relative grid min-w-0 gap-3 border-t border-border/55 transition-colors first:border-t-0 hover:bg-card/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
         compact
-          ? 'px-3 py-3 xl:grid-cols-[minmax(0,1.1fr)_minmax(180px,0.75fr)_auto]'
-          : 'px-4 py-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(220px,0.75fr)_minmax(110px,0.22fr)_28px]'
+          ? 'px-3 py-3 xl:grid-cols-[minmax(0,1fr)_minmax(104px,auto)_20px] xl:items-center'
+          : 'px-4 py-4 xl:grid-cols-[minmax(0,1fr)_minmax(128px,auto)_28px] xl:items-center'
       } ${selected ? 'bg-card/70' : ''}`}
     >
       <span className={`pointer-events-none absolute bottom-3 left-0 top-3 w-px rounded-r-full transition-colors group-hover:bg-[var(--amber)] ${
         selected ? 'bg-[var(--amber)]' : 'bg-transparent'
       }`} />
 
-      <div className="flex min-w-0 gap-3">
-        <span className={`mt-0.5 hidden shrink-0 items-center justify-center rounded-lg border border-border/55 bg-background/50 text-[var(--amber)] sm:inline-flex ${
+      <div className="flex min-w-0 gap-3 pr-6 xl:pr-0">
+        <span className={`mt-0.5 hidden shrink-0 items-center justify-center rounded-lg border border-border/55 bg-background/50 text-[var(--amber)] transition-colors group-hover:border-[var(--amber)]/35 group-hover:bg-[var(--amber-subtle)] sm:inline-flex ${
           compact ? 'h-8 w-8' : 'h-9 w-9'
         }`}>
           {renderProjectIcon(project, compact ? 14 : 15)}
@@ -184,33 +213,18 @@ export function StudioProjectItem({
         </div>
       </div>
 
-      <div className="min-w-0 xl:border-l xl:border-border/45 xl:pl-4">
-        <div className="mb-1 text-[11px] font-medium text-muted-foreground">
-          {locale === 'zh' ? '下一步' : 'Next move'}
+      <div className="flex min-w-0 items-center justify-between gap-3 text-left xl:block xl:text-right">
+        <div className="text-[11px] font-semibold text-foreground [font-variant-numeric:tabular-nums]">
+          {sessionLabel}
         </div>
-        <p className={`${compact ? 'text-[12px]' : 'text-xs'} leading-relaxed text-foreground`}>
-          {nextAction}
-        </p>
-      </div>
-
-      <div className={`${compact ? 'flex items-center justify-between gap-3 xl:block' : 'flex items-center justify-between gap-3 xl:block'} min-w-0`}>
-        <div className="text-[11px] font-medium text-muted-foreground [font-variant-numeric:tabular-nums]">
-          {locale === 'zh' ? `${sessionCount} 个对话` : `${sessionCount} ${sessionCount === 1 ? 'session' : 'sessions'}`}
-        </div>
-        <div className="mt-1 text-[11px] text-muted-foreground">
+        <div className="text-[11px] text-muted-foreground xl:mt-1">
           {trailingMeta ?? project.updated}
         </div>
       </div>
 
-      {!compact ? (
-        <div className="hidden items-center justify-end xl:flex">
-          <ArrowRight size={16} className="text-muted-foreground/45 transition-colors group-hover:text-[var(--amber)]" />
-        </div>
-      ) : (
-        <div className="flex items-center justify-end xl:hidden">
-          <ArrowRight size={15} className="text-muted-foreground/45 transition-colors group-hover:text-[var(--amber)]" />
-        </div>
-      )}
+      <div className="absolute right-4 top-4 flex items-center justify-end xl:static">
+        <ArrowRight size={compact ? 15 : 16} className="text-muted-foreground/45 transition-colors group-hover:text-[var(--amber)]" />
+      </div>
     </Link>
   );
 }

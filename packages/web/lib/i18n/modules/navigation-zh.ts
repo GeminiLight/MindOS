@@ -32,6 +32,7 @@ export const navigationZh = {
     plugins: '插件',
     agents: '智能体',
     studio: '工作台',
+    apps: '应用',
     echo: '回响',
     discover: '探索',
     workflows: '流程',

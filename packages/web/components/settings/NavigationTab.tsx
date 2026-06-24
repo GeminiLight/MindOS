@@ -1,9 +1,10 @@
 'use client';
 
 import type React from 'react';
-import { Compass, Eye, EyeOff, Sparkles, Zap } from 'lucide-react';
+import { Compass, Eye, EyeOff, LayoutGrid, Sparkles, Zap } from 'lucide-react';
 import { useLocale } from '@/lib/stores/locale-store';
 import {
+  OPTIONAL_RAIL_ITEMS,
   useRailPreferences,
   writeRailPreference,
   type OptionalRailItem,
@@ -12,6 +13,7 @@ import { SettingCard, Toggle } from './Primitives';
 
 const ITEM_META: Record<OptionalRailItem, { icon: React.ReactNode; detail: string }> = {
   studio: { icon: <Sparkles size={15} />, detail: 'Studio (/studio)' },
+  apps: { icon: <LayoutGrid size={15} />, detail: 'Apps (/apps)' },
   flow: { icon: <Zap size={15} />, detail: 'Flow panel' },
 };
 
@@ -32,7 +34,7 @@ export function NavigationTab() {
         description={nav.railDesc}
       >
         <div className="divide-y divide-border/60 rounded-lg border border-border/60 bg-background/45">
-          {(['studio', 'flow'] as const).map((item) => (
+          {OPTIONAL_RAIL_ITEMS.map((item) => (
             <div
               key={item}
               className="flex items-center justify-between gap-4 px-3 py-3"

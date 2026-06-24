@@ -18,6 +18,7 @@ vi.mock('@/lib/stores/locale-store', () => ({
         echo: 'Echo',
         agents: 'Agents',
         studio: 'Studio',
+        apps: 'Apps',
         discover: 'Discover',
         workflows: 'Flows',
         help: 'Help',
@@ -163,7 +164,7 @@ describe('ActivityBar rail navigation', () => {
     host.remove();
   });
 
-  it('shows Studio by default below Files while keeping Flow hidden', async () => {
+  it('shows Studio by default below Files while keeping Apps and Flow hidden', async () => {
     const ActivityBar = (await import('@/components/ActivityBar')).default;
 
     const host = document.createElement('div');
@@ -190,7 +191,44 @@ describe('ActivityBar rail navigation', () => {
     expect(studio).not.toBeNull();
     expect(files?.compareDocumentPosition(studio!)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     expect(studio?.compareDocumentPosition(echo!)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(host.querySelector('[data-walkthrough="apps-page"]')).toBeNull();
     expect(host.querySelector('button[aria-label="Flows"]')).toBeNull();
+
+    await act(async () => {
+      root.unmount();
+    });
+    host.remove();
+  });
+
+  it('shows Apps between Studio and Echo after the experiment is enabled', async () => {
+    localStorage.setItem('mindos:labs-apps', '1');
+    const ActivityBar = (await import('@/components/ActivityBar')).default;
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(
+        <ActivityBar
+          activePanel={null}
+          onPanelChange={vi.fn()}
+          syncStatus={null}
+          expanded
+          onExpandedChange={vi.fn()}
+          onSettingsClick={vi.fn()}
+          onSyncClick={vi.fn()}
+        />,
+      );
+    });
+
+    const studio = host.querySelector<HTMLAnchorElement>('[data-walkthrough="studio-page"]');
+    const apps = host.querySelector<HTMLAnchorElement>('[data-walkthrough="apps-page"]');
+    const echo = host.querySelector('[data-walkthrough="echo-panel"]');
+    expect(apps).not.toBeNull();
+    expect(apps?.getAttribute('href')).toBe('/apps');
+    expect(studio?.compareDocumentPosition(apps!)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(apps?.compareDocumentPosition(echo!)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
 
     await act(async () => {
       root.unmount();

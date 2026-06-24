@@ -3,7 +3,7 @@
 import { useRef, useCallback, useState, useEffect, useTransition, type CSSProperties } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Brain, Settings, RefreshCw, Bot, Compass, ChevronLeft, ChevronRight, Radio, Zap, Inbox, Puzzle, DraftingCompass } from 'lucide-react';
+import { Brain, Settings, RefreshCw, Bot, Compass, ChevronLeft, ChevronRight, Radio, Zap, Inbox, Puzzle, DraftingCompass, LayoutGrid } from 'lucide-react';
 import { useLocale } from '@/lib/stores/locale-store';
 import { DOT_COLORS, getStatusLevel } from './SyncStatusBar';
 import type { SyncStatus } from './settings/types';
@@ -32,6 +32,7 @@ interface ActivityBarProps {
   onAgentsClick?: React.MouseEventHandler<HTMLAnchorElement | HTMLButtonElement>;
   onDiscoverClick?: React.MouseEventHandler<HTMLAnchorElement | HTMLButtonElement>;
   onStudioClick?: React.MouseEventHandler<HTMLAnchorElement | HTMLButtonElement>;
+  onAppsClick?: React.MouseEventHandler<HTMLAnchorElement | HTMLButtonElement>;
   onWorkflowsClick?: React.MouseEventHandler<HTMLAnchorElement | HTMLButtonElement>;
   onSpacesClick?: React.MouseEventHandler<HTMLAnchorElement | HTMLButtonElement>;
   onHomeClick?: React.MouseEventHandler<HTMLAnchorElement>;
@@ -164,6 +165,7 @@ export default function ActivityBar({
   onAgentsClick,
   onDiscoverClick,
   onStudioClick,
+  onAppsClick,
   onWorkflowsClick,
   onSpacesClick,
   onHomeClick,
@@ -252,8 +254,8 @@ export default function ActivityBar({
     };
   }, []);
 
-  // Echo is a first-class content surface. Studio is visible by default; Flow
-  // remains an experimental rail item controlled from Settings / Experiments.
+  // Echo is a first-class content surface. Studio is visible by default. Apps
+  // and Flow remain experimental rail items controlled from Settings / Experiments.
 
   /** Debounce repeated clicks on the same rail target without swallowing destination changes. */
   const debounced = useCallback((key: string, fn: () => void): boolean => {
@@ -374,6 +376,18 @@ export default function ActivityBar({
               href={ROUTE_PANEL_HREF.studio}
               onClick={(event) => handleRouteRailClick(event, 'studio', onStudioClick)}
               walkthroughId="studio-page"
+            />
+          )}
+          {railPreferences.apps && (
+            <RailButton
+              icon={<LayoutGrid size={18} />}
+              label={t.sidebar.apps ?? 'Apps'}
+              active={activeDestination === 'apps'}
+              current={isCurrentRouteForPanel('apps')}
+              expanded={expanded}
+              href={ROUTE_PANEL_HREF.apps}
+              onClick={(event) => handleRouteRailClick(event, 'apps', onAppsClick)}
+              walkthroughId="apps-page"
             />
           )}
           <RailButton

@@ -10,7 +10,7 @@ describe('Agents panel loading copy', () => {
 
     expect(source).toContain("import PanelLoadingFallback from './panels/PanelLoadingFallback'");
     expect(source).toContain('function RoutePanelLoading');
-    for (const panel of ['search', 'capture', 'agents', 'studio', 'discover', 'echo', 'workflows']) {
+    for (const panel of ['search', 'capture', 'agents', 'studio', 'apps', 'discover', 'echo', 'workflows']) {
       expect(source).toContain(`loading: () => <RoutePanelLoading panel="${panel}" />`);
     }
     expect(source).not.toContain('AgentsPanelLoading');

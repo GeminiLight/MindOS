@@ -2,10 +2,13 @@
 
 import { useSyncExternalStore } from 'react';
 
-export type OptionalRailItem = 'studio' | 'flow';
+export const OPTIONAL_RAIL_ITEMS = ['studio', 'apps', 'flow'] as const;
+
+export type OptionalRailItem = (typeof OPTIONAL_RAIL_ITEMS)[number];
 
 export interface RailPreferences {
   studio: boolean;
+  apps: boolean;
   flow: boolean;
 }
 
@@ -14,11 +17,13 @@ export const LEGACY_LABS_CHANGED_EVENT = 'mindos:labs-changed';
 
 export const RAIL_STORAGE_KEYS: Record<OptionalRailItem, string> = {
   studio: 'mindos:rail-studio',
+  apps: 'mindos:labs-apps',
   flow: 'mindos:labs-workflows',
 };
 
 export const DEFAULT_RAIL_PREFERENCES: RailPreferences = {
   studio: true,
+  apps: false,
   flow: false,
 };
 
@@ -42,10 +47,15 @@ function readFlag(key: string, defaultValue: boolean): boolean {
 export function readRailPreferences(): RailPreferences {
   const next = {
     studio: readFlag(RAIL_STORAGE_KEYS.studio, DEFAULT_RAIL_PREFERENCES.studio),
+    apps: readFlag(RAIL_STORAGE_KEYS.apps, DEFAULT_RAIL_PREFERENCES.apps),
     flow: readFlag(RAIL_STORAGE_KEYS.flow, DEFAULT_RAIL_PREFERENCES.flow),
   };
 
-  if (next.studio === cachedSnapshot.studio && next.flow === cachedSnapshot.flow) {
+  if (
+    next.studio === cachedSnapshot.studio &&
+    next.apps === cachedSnapshot.apps &&
+    next.flow === cachedSnapshot.flow
+  ) {
     return cachedSnapshot;
   }
 
@@ -64,7 +74,7 @@ export function writeRailPreference(item: OptionalRailItem, enabled: boolean): v
 
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new Event(RAIL_PREFERENCES_CHANGED_EVENT));
-    if (item === 'flow') {
+    if (item === 'apps' || item === 'flow') {
       window.dispatchEvent(new Event(LEGACY_LABS_CHANGED_EVENT));
     }
   }

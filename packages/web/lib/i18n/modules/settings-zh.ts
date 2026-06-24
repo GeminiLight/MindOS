@@ -106,7 +106,7 @@ export const settingsZh = {
     navigation: {
       railTitle: 'Rail 项',
       railDesc: '选择哪些可选或实验性工作面显示在左侧 rail，让日常导航保持专注。',
-      hiddenHint: '隐藏的工作面仍可从搜索、直接链接和相关页面进入。工作台默认显示；Flow 仍保持实验性。',
+      hiddenHint: '工作台默认显示。应用和 Flow 仍保持实验性；应用只有在这里开启后才可访问。',
       visible: '已显示',
       hidden: '已隐藏',
       surfacePrefix: 'Rail 项：',
@@ -115,6 +115,10 @@ export const settingsZh = {
         studio: {
           label: '工作台',
           description: '用于长期 AI 工作、复盘和成长的项目工作面。默认显示。',
+        },
+        apps: {
+          label: '应用',
+          description: '基于场景的 context 工作台。开启实验后才显示。',
         },
         flow: {
           label: 'Flow',

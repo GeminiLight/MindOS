@@ -86,7 +86,7 @@ const SYNC_POPOVER_ID = 'sync-popover';
 function RoutePanelLoading({
   panel,
 }: {
-  panel: 'search' | 'capture' | 'agents' | 'studio' | 'discover' | 'echo' | 'workflows';
+  panel: 'search' | 'capture' | 'agents' | 'studio' | 'apps' | 'discover' | 'echo' | 'workflows';
 }) {
   const { t } = useLocale();
   const titles = {
@@ -94,6 +94,7 @@ function RoutePanelLoading({
     capture: t.sidebar.capture,
     agents: t.panels.agents.title,
     studio: t.sidebar.studio,
+    apps: t.sidebar.apps ?? 'Apps',
     discover: t.sidebar.discover,
     echo: t.sidebar.echo,
     workflows: t.sidebar.workflows,
@@ -117,6 +118,10 @@ const AgentsPanel = dynamic(() => import('./panels/AgentsPanel'), {
 const StudioPanel = dynamic(() => import('./panels/StudioPanel'), {
   ssr: false,
   loading: () => <RoutePanelLoading panel="studio" />,
+});
+const AppsPanel = dynamic(() => import('./panels/AppsPanel'), {
+  ssr: false,
+  loading: () => <RoutePanelLoading panel="apps" />,
 });
 const DiscoverPanel = dynamic(() => import('./panels/DiscoverPanel'), {
   ssr: false,
@@ -937,6 +942,7 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
         onEchoClick={(event) => handleRoutePanelClick(event, 'echo')}
         onAgentsClick={(event) => handleRoutePanelClick(event, 'agents')}
         onStudioClick={(event) => handleRoutePanelClick(event, 'studio')}
+        onAppsClick={(event) => handleRoutePanelClick(event, 'apps')}
         onDiscoverClick={(event) => handleRoutePanelClick(event, 'discover')}
         onSpacesClick={(event) => handleRoutePanelClick(event, 'files')}
         syncStatus={syncStatus}
@@ -996,6 +1002,11 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
         {isPanelMounted('studio') && (
           <div className={`flex flex-col h-full ${activeLeftPanel === 'studio' ? '' : 'hidden'}`}>
             <StudioPanel active={activeLeftPanel === 'studio'} />
+          </div>
+        )}
+        {isPanelMounted('apps') && (
+          <div className={`flex flex-col h-full ${activeLeftPanel === 'apps' ? '' : 'hidden'}`}>
+            <AppsPanel active={activeLeftPanel === 'apps'} />
           </div>
         )}
         {isPanelMounted('discover') && (

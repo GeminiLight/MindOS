@@ -93,9 +93,17 @@ describe('StudioContent', () => {
     expect(host.textContent).not.toContain('Project practice');
     expect(host.textContent).not.toContain('Recent Projects');
     expect(host.textContent).not.toContain('New session');
+    expect(host.textContent).not.toContain('Long-running work with memory and review.');
     expect(host.querySelector('a[href="/studio/launch-practice"]')).not.toBeNull();
     expect(host.querySelector('[data-content-page-shell="studio"]')?.className).toContain('workbench-content-page');
     expect(host.querySelector('aside[aria-label="Studio"]')).toBeNull();
+
+    const projectsSurface = host.querySelector('[data-studio-projects-surface]');
+    expect(projectsSurface).not.toBeNull();
+    expect(projectsSurface?.textContent).toContain('All Projects');
+    expect(projectsSurface?.textContent).toContain('List');
+    expect(projectsSurface?.textContent).toContain('Grouped');
+    expect(projectsSurface?.textContent).toContain('Stats');
   });
 
   it('uses shared Project items with value-only context text', async () => {
@@ -112,14 +120,19 @@ describe('StudioContent', () => {
     expect(firstContext?.textContent).toContain('Product Strategy');
     expect(firstContext?.textContent).toContain('Research Kit');
     expect(firstContext?.textContent).toContain('Mind');
+    expect(firstContext?.textContent).toContain('+');
+    expect(firstContext?.textContent).not.toContain('Launch Writing Kit');
     expect(firstContext?.textContent).not.toContain('Work dir');
     expect(firstContext?.textContent).not.toContain('Mind Space');
     expect(firstContext?.textContent).not.toContain('AI Kit');
     expect(firstContext?.querySelector('[title="Work dir"]')).not.toBeNull();
     expect(firstContext?.querySelector('[title="Mind Space"]')).not.toBeNull();
     expect(firstContext?.querySelector('[title="AI Kit"]')).not.toBeNull();
-    expect(firstContext?.querySelectorAll('[data-studio-context-chip]').length).toBeGreaterThanOrEqual(3);
+    expect(firstContext?.querySelectorAll('[data-studio-context-chip]')).toHaveLength(3);
+    expect(firstContext?.querySelector('[data-studio-context-overflow]')).not.toBeNull();
     expect(firstContext?.querySelector('.border-l')).toBeNull();
+    expect(items[0].textContent).not.toContain('Next move');
+    expect(items[0].textContent).not.toContain('Draft launch brief from accepted evidence.');
   });
 
   it('switches Studio overview between grouped and stats views', async () => {

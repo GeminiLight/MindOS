@@ -32,6 +32,7 @@ export const navigationEn = {
     plugins: 'Plugins',
     agents: 'Agents',
     studio: 'Studio',
+    apps: 'Apps',
     echo: 'Echo',
     discover: 'Discover',
     workflows: 'Flows',

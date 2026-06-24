@@ -50,8 +50,6 @@ const COPY = {
     continueHint: 'Best next move',
     newProject: 'New Project',
     projects: 'Projects',
-    projectsHint: 'Long-running work with memory and review.',
-    nextColumn: 'Next',
     sessions: 'sessions',
     searchPlaceholder: 'Search projects...',
     listView: 'List',
@@ -126,8 +124,6 @@ const COPY = {
     continueHint: '最值得做的下一步',
     newProject: '新建项目',
     projects: '项目',
-    projectsHint: '带记忆和复盘的长期工作。',
-    nextColumn: '下一步',
     sessions: '对话',
     searchPlaceholder: '搜索项目...',
     listView: '列表',
@@ -385,13 +381,7 @@ function StudioListView({
   selectedProjectId?: string;
 }) {
   return (
-    <section className="overflow-hidden rounded-xl border border-border/60 bg-card/45" aria-labelledby="studio-projects-list">
-      <div className="flex flex-col gap-2 border-b border-border/60 px-4 py-4 md:flex-row md:items-end md:justify-between">
-        <div>
-          <h2 id="studio-projects-list" className="text-sm font-semibold text-foreground">{copy.allProjects}</h2>
-          <p className="mt-1 text-xs text-muted-foreground">{copy.allProjectsHint}</p>
-        </div>
-      </div>
+    <>
       {projects.length ? (
         <div>
           {projects.map((project) => (
@@ -407,7 +397,7 @@ function StudioListView({
       ) : (
         <div className="px-4 py-12 text-center text-sm text-muted-foreground">{copy.noMatchingProjects}</div>
       )}
-    </section>
+    </>
   );
 }
 
@@ -449,10 +439,10 @@ function StudioGroupedView({
   ];
 
   return (
-    <div className="space-y-5">
+    <div>
       {groups.map((group) => (
-        <section key={group.key} className="overflow-hidden rounded-xl border border-border/60 bg-card/45" aria-labelledby={`studio-group-${group.key}`}>
-          <div className="flex items-center justify-between gap-4 border-b border-border/60 px-4 py-3">
+        <section key={group.key} className="border-t border-border/60 first:border-t-0" aria-labelledby={`studio-group-${group.key}`}>
+          <div className="flex items-center justify-between gap-4 border-b border-border/50 bg-background/25 px-4 py-3">
             <div className="flex min-w-0 flex-wrap items-center gap-3">
               <span className={`h-2 w-2 rounded-full ${group.tone}`} aria-hidden="true" />
               <h2 id={`studio-group-${group.key}`} className="text-sm font-semibold text-foreground">{group.title}</h2>
@@ -484,6 +474,71 @@ function StudioGroupedView({
         </section>
       ))}
     </div>
+  );
+}
+
+function StudioProjectsSurface({
+  projects,
+  locale,
+  copy,
+  getProjectSessionCount,
+  selectedProjectId,
+  view,
+  onViewChange,
+}: {
+  projects: StudioProject[];
+  locale: string;
+  copy: StudioCopy;
+  getProjectSessionCount: (project: StudioProject) => number;
+  selectedProjectId?: string;
+  view: StudioOverviewView;
+  onViewChange: (view: StudioOverviewView) => void;
+}) {
+  return (
+    <section
+      data-studio-projects-surface
+      className="overflow-hidden rounded-xl border border-border/60 bg-card/45"
+      aria-labelledby="studio-projects-list"
+    >
+      <div className="flex flex-col gap-3 border-b border-border/60 px-4 py-4 md:flex-row md:items-center md:justify-between">
+        <div className="min-w-0">
+          <h2 id="studio-projects-list" className="text-sm font-semibold text-foreground">{copy.allProjects}</h2>
+          <p className="mt-1 text-xs text-muted-foreground">{copy.allProjectsHint}</p>
+        </div>
+        <ViewSwitch value={view} onChange={onViewChange} copy={copy} />
+      </div>
+
+      {view === 'list' ? (
+        <StudioListView
+          projects={projects}
+          locale={locale}
+          copy={copy}
+          getProjectSessionCount={getProjectSessionCount}
+          selectedProjectId={selectedProjectId}
+        />
+      ) : null}
+
+      {view === 'grouped' ? (
+        <StudioGroupedView
+          projects={projects}
+          locale={locale}
+          copy={copy}
+          getProjectSessionCount={getProjectSessionCount}
+          selectedProjectId={selectedProjectId}
+        />
+      ) : null}
+
+      {view === 'stats' ? (
+        <div className="p-4">
+          <StudioStatsView
+            projects={projects}
+            locale={locale}
+            copy={copy}
+            getProjectSessionCount={getProjectSessionCount}
+          />
+        </div>
+      ) : null}
+    </section>
   );
 }
 
@@ -736,42 +791,15 @@ export default function StudioContent({
             sessionCount={continueProject ? getProjectSessionCount(continueProject) : 0}
           />
 
-          <div className="flex flex-col gap-3 rounded-xl border border-border/60 bg-card/35 px-4 py-3 md:flex-row md:items-center md:justify-between">
-            <div className="min-w-0">
-              <h2 className="text-sm font-semibold text-foreground">{copy.projects}</h2>
-              <p className="mt-1 text-xs text-muted-foreground">{copy.projectsHint}</p>
-            </div>
-            <ViewSwitch value={view} onChange={setView} copy={copy} />
-          </div>
-
-          {view === 'list' ? (
-            <StudioListView
-              projects={filteredProjects}
-              locale={locale}
-              copy={copy}
-              getProjectSessionCount={getProjectSessionCount}
-              selectedProjectId={continueProjectId}
-            />
-          ) : null}
-
-          {view === 'grouped' ? (
-            <StudioGroupedView
-              projects={filteredProjects}
-              locale={locale}
-              copy={copy}
-              getProjectSessionCount={getProjectSessionCount}
-              selectedProjectId={continueProjectId}
-            />
-          ) : null}
-
-          {view === 'stats' ? (
-            <StudioStatsView
-              projects={filteredProjects}
-              locale={locale}
-              copy={copy}
-              getProjectSessionCount={getProjectSessionCount}
-            />
-          ) : null}
+          <StudioProjectsSurface
+            projects={filteredProjects}
+            locale={locale}
+            copy={copy}
+            getProjectSessionCount={getProjectSessionCount}
+            selectedProjectId={continueProjectId}
+            view={view}
+            onViewChange={setView}
+          />
 
         </section>
       </div>
