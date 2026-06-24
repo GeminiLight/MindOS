@@ -41,6 +41,7 @@ import {
   type CodexThreadManagerServices,
 } from './handlers/agent-runtimes-codex.js';
 import { handleAgentRuntimesGet } from './handlers/agent-runtimes.js';
+import { handleAgentRuntimeMcpProjectionsGet } from './handlers/mcp-runtime-projections.js';
 import {
   handleAgentCopySkillPost,
   handleCustomAgentDetectPost,
@@ -391,6 +392,10 @@ async function handleRequest(
     }
     if (route === 'GET /api/agent-runtimes') {
       writeResponse(res, await handleAgentRuntimesGet(url.searchParams, services));
+      return;
+    }
+    if (route === 'GET /api/agent-runtimes/mcp-projections') {
+      writeResponse(res, await handleAgentRuntimeMcpProjectionsGet(url.searchParams, createHttpMcpProjectionServices(services, url.searchParams)));
       return;
     }
     if (route === 'GET /api/agent-runtimes/codex/threads') {
@@ -1209,6 +1214,31 @@ function createHttpSkillLinkAgents(services: MindosHttpServices): () => MindosSk
     agents: (services.mcpAgents ?? {}) as Record<string, MindosMcpAgentRegistryDef>,
     skillAgentRegistry: createDefaultSkillAgentRegistry(),
   });
+}
+
+function createHttpMcpProjectionServices(services: MindosHttpServices, searchParams: URLSearchParams) {
+  return {
+    listRuntimes: async () => {
+      const runtimeParams = new URLSearchParams();
+      if (searchParams.get('force') === '1') runtimeParams.set('force', '1');
+      const response = await handleAgentRuntimesGet(runtimeParams, services);
+      if (response.status === 200 && response.body && 'runtimes' in response.body) return response.body.runtimes;
+      throw new Error('Failed to build runtime descriptors for MCP projections.');
+    },
+    listMcpAgents: async () => {
+      const response = await handleMcpAgentsGet({
+        agents: (services.mcpAgents ?? {}) as Record<string, MindosMcpAgentRegistryDef>,
+        readSettings: services.readSettings,
+        env: process.env,
+        mindRoot: services.mindRoot,
+        projectRoot: services.runtimeRoot ?? process.cwd(),
+        skillAgentRegistry: createDefaultSkillAgentRegistry(),
+      });
+      if (response.status === 200 && response.body && 'agents' in response.body) return response.body.agents;
+      throw new Error('Failed to build MCP agent profiles for runtime projections.');
+    },
+    readMcpConfig: () => services.mcpTools?.readMcpConfig() ?? { mcpServers: {} },
+  };
 }
 
 function optionsStaticRoot(services: MindosHttpServices, runtimeRoot?: string): string | undefined {

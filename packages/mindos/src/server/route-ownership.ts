@@ -76,6 +76,7 @@ export const MINDOS_WEB_API_ROUTE_OWNERSHIP: MindosWebApiRouteOwnership[] = [
   host('/api/assistant-runs', 'Assistant run execution currently normalizes assistant requests and delegates into the Web Ask runner; Product Server owns the profile registry only until Runtime Context and Schedule persistence are promoted.', 'medium'),
   migrated('/api/assistants', 'medium'),
   migrated('/api/agent-runtimes', 'medium'),
+  migrated('/api/agent-runtimes/mcp-projections', 'medium'),
   migrated('/api/agent-runtimes/codex/threads', 'medium'),
   migrated('/api/agent-runtimes/codex/threads/[threadId]', 'medium'),
   migrated('/api/agent-runtimes/codex/threads/[threadId]/archive', 'medium'),

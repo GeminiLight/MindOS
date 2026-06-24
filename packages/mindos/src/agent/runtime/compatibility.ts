@@ -168,9 +168,11 @@ export function mindosRuntimeCompatibilityProfile(input: RuntimeCompatibilityInp
       'mcp-tooling': assessment({
         level: input.capabilities.supportsMcpConfig ? 'ready' : 'blocked',
         owner: 'mindos',
-        summary: 'MindOS can project MCP-configured tools into the Pi runtime when allowed by settings.',
+        summary: 'MindOS can project explicitly allowlisted MCP tools into the Pi runtime through the read-only MCP runtime projection contract.',
         requirements: [
           requirement('mcp-config', input.capabilities.supportsMcpConfig ? 'satisfied' : 'missing', 'mindos', 'MindOS must own MCP configuration for this runtime.'),
+          requirement('mcp-runtime-projection-contract', 'satisfied', 'mindos', 'MindOS exposes per-runtime MCP readiness diagnostics without leaking server secrets.'),
+          requirement('mindos-agent-allowlist', 'satisfied', 'mindos', 'Pi only receives MCP servers explicitly allowlisted for MindOS Agent runtime exposure.'),
         ],
       }),
       'skill-execution': assessment({
@@ -282,12 +284,13 @@ export function nativeRuntimeCompatibilityProfile(
       'mcp-tooling': assessment({
         level: input.capabilities.supportsMcpConfig ? 'limited' : 'blocked',
         owner: 'shared',
-        summary: `${name} may support MCP through native configuration, but MindOS does not yet have a universal per-runtime MCP projection contract.`,
+        summary: `${name} may support MCP through native configuration. MindOS can now report per-runtime MCP projection readiness, while actual native config sync remains explicit.`,
         requirements: [
           requirement('native-mcp-config', input.capabilities.supportsMcpConfig ? 'external' : 'missing', 'external', `${name} must own or consume its native MCP configuration.`),
-          requirement('mindos-mcp-projection', 'missing', 'mindos', 'MindOS still needs a shared MCP projection layer for configure-once, runtime-specific exposure.'),
+          requirement('mindos-mcp-projection-contract', 'satisfied', 'mindos', 'MindOS exposes read-only MCP projection diagnostics for runtime-specific exposure.'),
+          requirement('runtime-mcp-sync', 'missing', 'shared', 'MindOS does not automatically mutate native MCP configs; users still need explicit install/copy/sync action.'),
         ],
-        blockers: ['mindos-mcp-projection'],
+        blockers: ['runtime-mcp-sync'],
       }),
       'skill-execution': assessment({
         level: 'limited',
@@ -384,8 +387,9 @@ export function acpRuntimeCompatibilityProfile(input: RuntimeCompatibilityInput)
       'mcp-tooling': assessment({
         level: 'unknown',
         owner: 'external',
-        summary: 'Generic ACP adapters may own their own MCP/tool configuration; MindOS does not yet project MCP tools into arbitrary ACP runtimes.',
+        summary: 'Generic ACP adapters may own their own MCP/tool configuration; MindOS can report known MCP profiles, but adapter-specific tool contracts remain required.',
         requirements: [
+          requirement('mindos-mcp-projection-contract', 'satisfied', 'mindos', 'MindOS exposes read-only MCP projection diagnostics for runtimes with known MCP profiles.'),
           requirement('adapter-mcp-contract', 'unknown', 'external', 'Adapter-specific MCP/tool projection needs to be declared.'),
         ],
       }),

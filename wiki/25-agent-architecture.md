@@ -129,9 +129,32 @@ detect → health → configure → launch → session → context
 
 - `remote-control` 与 `unattended-automation` 分开。Codex / Claude / ACP / MindOS Pi 可以是 `server-runnable`，但 24/7 仍是 `limited`，因为还缺 scheduler、approval routing、wake/resume、failure audit。
 - `team-coordination` 现在最多是 `limited`。MindOS 已有 shared context，但还没有 first-class mailbox / task-board primitives，不应该在 UI 上承诺复杂 Team Mode。
-- `skill-execution` 现在是 `limited`。MindOS 能注入/加载 skill，也能从 `SKILL.md` frontmatter 读取机器可读的 skill runtime requirements；但还没有 first-class matcher/enforcement，因此不能可靠自动判断某个 skill 应该跑在 Pi、Codex、Claude 还是 ACP。
-- `mcp-tooling` 对 native runtime 是 `limited`。外部 runtime 可能有自己的 MCP 配置，但 MindOS 还没有“配置一次、按 runtime 投影”的统一 MCP projection contract。
+- `skill-execution` 现在是 `limited`。MindOS 能注入/加载 skill，读取 `SKILL.md` runtime requirements，提供 skill × runtime matcher，并在明确 `blocked` 时阻止显式选中的不兼容 skill；但还没有自动 runtime routing，也不会把 `limited/unknown` 在 turn 前变成 UI warning。
+- `mcp-tooling` 对 native runtime 仍是 `limited`。MindOS 已有只读 MCP runtime projection contract，可以解释每个 runtime 当前是 `ready` / `projectable` / `limited` / `blocked` / `unknown`；但不会自动改写 Codex / Claude / ACP adapter 的外部 MCP 配置。
 - `artifact-governance` 现在是 `limited` 或 `blocked`。部分 runtime 能产出 diff/artifact/branch/PR，但 MindOS 还没有跨 runtime artifact index。
+
+### MCP Runtime Projection
+
+MCP runtime projection 是 `mcp-tooling` compatibility 的只读诊断契约，位于 `packages/mindos/src/server/handlers/mcp-runtime-projections.ts`，通过 `/api/agent-runtimes/mcp-projections` 暴露。它把三类现有信息合在一起：
+
+1. `AgentRuntimeDescriptor`：runtime identity、kind、status、capabilities、`mcpAgentKey`；
+2. MCP agent profile：来自 `/api/mcp/agents` 的每个 agent 配置路径、已检测 server 名称与来源；
+3. canonical MindOS MCP config：`~/.mindos/mcp.json` 中的 server 名称，以及 MindOS Agent runtime allowlist。
+
+projection 输出：
+
+| 字段 | 语义 |
+|---|---|
+| `status` | `ready` / `projectable` / `limited` / `blocked` / `unknown` |
+| `configuredServers` | 当前 runtime 自己的 MCP 配置中已检测到的 server 名称 |
+| `mindosConfigServers` | canonical MindOS MCP config 中的 server 名称 |
+| `projectedServers` | 当前 runtime 实际可投影的 server 名称；MindOS Pi 只包含显式 allowlist，native runtime 等同其已检测配置 |
+| `reasons` / `blockers` | runtime availability、MCP profile、MindOS config、allowlist/native config 等逐项判断 |
+
+这层有两个硬边界：
+
+- **不泄露 secrets**：只暴露 server 名称、来源和状态，不返回 command、args、env、headers、token。
+- **不自动写配置**：`projectable` 只表示 MindOS 有足够信息提示用户去 install/copy/sync，不代表当前 runtime 已可用；外部 runtime 的 MCP config 仍由显式 `/api/mcp/install`、`/api/mcp/copy-server` 或用户自己的配置动作修改。
 
 ## 五、执行路径
 
@@ -299,6 +322,7 @@ MindOS Pi 的 persisted session 由 Pi `SessionManager` 自己持有完整 JSONL
 | `packages/mindos/src/agent/runtime/lifecycle.ts` | MindOS Pi / native / ACP lifecycle metadata builder |
 | `packages/mindos/src/agent/runtime/compatibility.ts` | Runtime compatibility profile builder，投影 interactive / remote / unattended / skill / team 场景 readiness |
 | `packages/mindos/src/agent/runtime/descriptors.ts` | Runtime descriptor 组装，统一暴露 capability / harness / lifecycle |
+| `packages/mindos/src/server/handlers/mcp-runtime-projections.ts` | MCP runtime projection contract，统一解释每个 runtime 的 MCP ready/projectable/limited/blocked/unknown |
 | `packages/mindos/src/agent/prompt/agent-prompt.txt` | MindOS 默认 base prompt |
 | `packages/mindos/src/agent/prompt/assistant-prompt.ts` | Active Assistant overlay 解析与渲染 |
 | `packages/mindos/src/agent/prompt/context-prompt.ts` | context prompt 渲染 |

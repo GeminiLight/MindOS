@@ -96,6 +96,16 @@ export {
 } from './handlers/skill-runtime-matches.js';
 
 export {
+  buildAgentRuntimeMcpProjectionsPayload,
+  handleAgentRuntimeMcpProjectionsGet,
+  type AgentRuntimeMcpProjection,
+  type AgentRuntimeMcpProjectionReason,
+  type AgentRuntimeMcpProjectionServices,
+  type AgentRuntimeMcpProjectionStatus,
+  type AgentRuntimeMcpProjectionsPayload,
+} from './handlers/mcp-runtime-projections.js';
+
+export {
   evaluateSkillRuntimeMatch,
   type MindosSkillRuntimeMatch,
   type MindosSkillRuntimeMatchInput,

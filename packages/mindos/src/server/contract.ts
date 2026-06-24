@@ -46,6 +46,7 @@ export const MINDOS_SERVER_ROUTES: MindosServerRouteContract[] = [
   { id: 'assistants.delete', method: 'DELETE', path: '/api/assistants', auth: 'required' },
   { id: 'agent-capabilities', method: 'GET', path: '/api/agent-capabilities', auth: 'required' },
   { id: 'agent-runtimes', method: 'GET', path: '/api/agent-runtimes', auth: 'required' },
+  { id: 'agent-runtimes.mcp-projections', method: 'GET', path: '/api/agent-runtimes/mcp-projections', auth: 'required' },
   { id: 'agent-runtimes.codex.threads', method: 'GET', path: '/api/agent-runtimes/codex/threads', auth: 'required' },
   { id: 'agent-runtimes.codex.thread', method: 'GET', path: '/api/agent-runtimes/codex/threads/[threadId]', auth: 'required' },
   { id: 'agent-runtimes.codex.thread.fork', method: 'POST', path: '/api/agent-runtimes/codex/threads/[threadId]/fork', auth: 'required' },
