@@ -184,11 +184,11 @@ export interface ExternalAgentBinding {
   updatedAt: number;
 }
 
-export type RuntimeSessionKind = 'codex-thread' | 'claude-session' | 'acp-session';
+export type RuntimeSessionKind = 'mindos-pi-session' | 'codex-thread' | 'claude-session' | 'acp-session';
 
 export interface RuntimeSessionBinding {
   kind: RuntimeSessionKind;
-  runtime: Exclude<AgentRuntimeKind, 'mindos'>;
+  runtime: AgentRuntimeKind;
   runtimeId: string;
   externalSessionId?: string;
   cwd?: string;

@@ -592,8 +592,8 @@ export function deleteSession(id: string, ctx: SessionLaneContext = {}) {
   // before touching metadata, so late chunks and zombie persists are impossible.
   runStoreRemoveSession(id);
 
-  // Only remove the local MindOS record. This never deletes the external
-  // Codex/Claude session referenced by runtimeSessionBinding.
+  // Only remove the local MindOS record. This never deletes the runtime-owned
+  // session referenced by runtimeSessionBinding.
   if (persisted) void removeSessionRemote(id);
 
   const remaining = sessions.filter((s) => s.id !== id);

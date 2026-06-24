@@ -825,6 +825,34 @@ describe('/api/agent/sessions/:sessionId/turns native runtime routing', () => {
     expect(capturedNativeOptions).toBeNull();
   });
 
+  it('rejects a MindOS runtime binding with the wrong session kind', async () => {
+    const res = await POST(agentTurnRequest({
+      messages: [{ role: 'user', content: 'Do not accept a mismatched Pi binding' }],
+      selectedRuntime: {
+        id: 'mindos',
+        name: 'MindOS',
+        kind: 'mindos',
+      },
+      runtimeBinding: {
+        kind: 'codex-thread',
+        runtime: 'mindos',
+        runtimeId: 'mindos',
+        externalSessionId: 'pi-session-1',
+        status: 'active',
+        updatedAt: 1,
+      },
+    }));
+
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toMatchObject({
+      error: {
+        code: 'INVALID_REQUEST',
+        message: 'runtimeBinding.kind must be mindos-pi-session for MindOS',
+      },
+    });
+    expect(mockCreateMindosAgentRuntime).not.toHaveBeenCalled();
+  });
+
   it('rejects a native runtime request when forced availability recheck reports it unavailable', async () => {
     mockResolveCommandPath.mockImplementation(async (command: string) => command === 'codex' ? '/usr/local/bin/codex' : null);
     mockCheckNativeRuntimeHealth.mockImplementation(async ({ runtime }) => (

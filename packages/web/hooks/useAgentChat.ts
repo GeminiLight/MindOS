@@ -4,7 +4,7 @@ import { useRef, useCallback, useLayoutEffect } from 'react';
 import type { AgentIdentity, AgentPermissionMode, AgentRuntimeIdentity, Message, ImagePart, LocalAttachment, RuntimeSessionBinding, NativeRuntimeOptions } from '@/lib/types';
 import type { ProviderId } from '@/lib/agent/providers';
 import { consumeUIMessageStream } from '@/lib/agent/stream-consumer';
-import { annotateMessageWithAgentRuntime, compactAgentRuntimeIdentity, getMatchingRuntimeSessionBinding } from '@/lib/ask-agent';
+import { MINDOS_AGENT, annotateMessageWithAgentRuntime, compactAgentRuntimeIdentity, getMatchingRuntimeSessionBinding } from '@/lib/ask-agent';
 import { isRetryableError, retryDelay, sleep } from '@/lib/agent/reconnect';
 import { buildAgentTurnEndpoint } from '@/lib/agent-turn-endpoint';
 import {
@@ -34,6 +34,8 @@ export type LoadingPhase = 'connecting' | 'thinking' | 'streaming' | 'reconnecti
 type AgentRequestRuntime = AgentRuntimeIdentity & {
   binaryPath?: string;
 };
+
+const MINDOS_RUNTIME: AgentRuntimeIdentity = { ...MINDOS_AGENT, kind: 'mindos' };
 
 function runtimeForAgentRequest(runtime: AgentRequestRuntime | null | undefined): AgentRequestRuntime | null {
   if (!runtime) return null;
@@ -207,12 +209,16 @@ export function useAgentChat({
 
     const skill = refs.selectedSkillRef.current;
     const selectedRuntimeBase = compactAgentRuntimeIdentity(refs.selectedAgentRuntimeRef.current);
-    const acpAgent: AgentIdentity | null = selectedRuntimeBase?.kind === 'acp'
-      ? { id: selectedRuntimeBase.id, name: selectedRuntimeBase.name }
+    const requestRuntimeBase = selectedRuntimeBase?.kind === 'mindos' ? null : selectedRuntimeBase;
+    const runtimeSnapshot = selectedRuntimeBase ?? MINDOS_RUNTIME;
+    const acpAgent: AgentIdentity | null = requestRuntimeBase?.kind === 'acp'
+      ? { id: requestRuntimeBase.id, name: requestRuntimeBase.name }
       : null;
-    const matchingRuntimeBinding = getMatchingRuntimeSessionBinding(sess.activeSession, selectedRuntimeBase);
-    const selectedRuntime = runtimeForAgentRequest(selectedRuntimeBase);
-    const runtimeForMessage = selectedRuntimeBase ?? null;
+    const matchingRuntimeBinding = requestRuntimeBase
+      ? getMatchingRuntimeSessionBinding(sess.activeSession, requestRuntimeBase)
+      : null;
+    const selectedRuntime = runtimeForAgentRequest(requestRuntimeBase);
+    const runtimeForMessage = requestRuntimeBase;
     const pendingImages = img.images.length > 0 ? [...img.images] : undefined;
     // Only store explicitly user-chosen files (filter out auto-included currentFile)
     const explicitAttached = refs.attachedFilesRef.current.filter(f => f !== currentFile);
@@ -277,12 +283,12 @@ export function useAgentChat({
 
     startRun(sessionId, {
       controller,
-      runtimeSnapshot: runtimeForMessage,
+      runtimeSnapshot,
       reconnectMax: maxRetries,
       pendingUserMessage: userMsg,
     });
 
-    const selectedRuntimeIsNative = selectedRuntimeBase?.kind === 'codex' || selectedRuntimeBase?.kind === 'claude';
+    const selectedRuntimeIsNative = requestRuntimeBase?.kind === 'codex' || requestRuntimeBase?.kind === 'claude';
     const compactRuntimeOptions: NativeRuntimeOptions = {
       ...(nativeRuntimeOptions.modelOverride?.trim() ? { modelOverride: nativeRuntimeOptions.modelOverride.trim() } : {}),
       ...(selectedRuntimeIsNative && nativeRuntimeOptions.reasoningEffort
@@ -313,8 +319,8 @@ export function useAgentChat({
       workDir: sessionContextSnapshot.workDir,
       contextSelection: sessionContextSnapshot.contextSelection,
       chatSessionId: sessionId,
-      providerOverride: selectedRuntimeBase && selectedRuntimeBase.kind !== 'mindos' ? undefined : providerOverride ?? undefined,
-      modelOverride: selectedRuntimeBase && selectedRuntimeBase.kind !== 'mindos' ? undefined : modelOverride ?? undefined,
+      providerOverride: requestRuntimeBase ? undefined : providerOverride ?? undefined,
+      modelOverride: requestRuntimeBase ? undefined : modelOverride ?? undefined,
       runtimeOptions: Object.keys(compactRuntimeOptions).length > 0
         ? compactRuntimeOptions
         : undefined,

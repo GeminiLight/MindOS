@@ -26,6 +26,7 @@ import {
 import {
   createMindosAgentPermissionPolicy,
 } from '@geminilight/mindos/agent/mindos-pi/permission';
+import { getSessionDir } from '@/lib/pi-integration/session-store';
 import {
   agentRunErrorStatus,
   createAgentTurnSseResponse,
@@ -103,6 +104,7 @@ export async function runMindosPiTurn(input: RunMindosPiTurnInput): Promise<Resp
       additionalExtensionPaths: runtimePaths.additionalExtensionPaths,
       allowProjectBash: input.permissionPolicy.toolScope.terminal,
       permissionMode: input.permissionPolicy.permissionMode,
+      ...(input.chatSessionId ? { runtimeSession: { sessionDir: getSessionDir(input.chatSessionId) } } : {}),
       hostServices: createWebMindosPiRuntimeHostServices(input.serverSettings),
     }));
     systemPrompt = runtime.systemPrompt;
@@ -119,6 +121,7 @@ export async function runMindosPiTurn(input: RunMindosPiTurnInput): Promise<Resp
       modelName,
       provider,
       baseUrl,
+      runtimeSession,
     } = runtime;
     const extensionLoadErrors = (runtime as { extensionLoadErrors?: Array<{ path: string; error: string }> }).extensionLoadErrors;
     const extensionLoadStatus = formatMindosPiExtensionLoadStatus(extensionLoadErrors);
@@ -154,6 +157,14 @@ export async function runMindosPiTurn(input: RunMindosPiTurnInput): Promise<Resp
         appendSseEventToAgentRun(mainRun.id, event);
         send(event);
       };
+      if (runtimeSession) {
+        sendWithLedger({
+          type: 'runtime_binding',
+          runtime: 'mindos',
+          externalSessionId: runtimeSession.externalSessionId,
+          cwd: input.executionCwd,
+        });
+      }
       if (contextUsage) {
         sendWithLedger(contextUsage);
         if (contextUsage.action !== 'none' && contextUsage.message) {
@@ -244,12 +255,36 @@ export async function runMindosPiTurn(input: RunMindosPiTurnInput): Promise<Resp
         } finally {
           restoreAgentRunResourceContext();
         }
-        completeAgentRun(mainRun.id, { outputSummary });
+        completeAgentRun(mainRun.id, {
+          outputSummary,
+          ...(runtimeSession ? {
+            archive: {
+              sessionId: runtimeSession.externalSessionId,
+              path: runtimeSession.sessionFile,
+            },
+            metadata: {
+              externalSessionId: runtimeSession.externalSessionId,
+              runtimeSessionDir: runtimeSession.sessionDir,
+              runtimeSessionResumed: runtimeSession.resumed,
+            },
+          } : {}),
+        });
       } catch (error) {
         failAgentRun(mainRun.id, {
           status: agentRunErrorStatus(error, input.requestSignal),
           error,
           outputSummary,
+          ...(runtimeSession ? {
+            archive: {
+              sessionId: runtimeSession.externalSessionId,
+              path: runtimeSession.sessionFile,
+            },
+            metadata: {
+              externalSessionId: runtimeSession.externalSessionId,
+              runtimeSessionDir: runtimeSession.sessionDir,
+              runtimeSessionResumed: runtimeSession.resumed,
+            },
+          } : {}),
         });
         throw error;
       }

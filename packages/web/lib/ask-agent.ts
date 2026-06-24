@@ -84,7 +84,7 @@ export function getSessionAgentRuntime(
   session: Pick<ChatSession, 'defaultAgentRuntime' | 'defaultAcpAgent' | 'runtimeSessionBinding' | 'externalAgentBinding'> | null | undefined,
 ): AgentRuntimeIdentity | null {
   const explicit = session?.defaultAgentRuntime ?? toAgentRuntime(session?.defaultAcpAgent);
-  if (explicit) return explicit;
+  if (explicit?.kind && explicit.kind !== 'mindos') return explicit;
 
   const binding = getDisplayRuntimeSessionBinding(session);
   if (binding?.runtime === 'codex') {
@@ -146,6 +146,7 @@ export function shortRuntimeSessionId(id: string): string {
 }
 
 export function runtimeSessionKindLabel(kind: RuntimeSessionKind): string {
+  if (kind === 'mindos-pi-session') return 'MindOS Pi session';
   if (kind === 'codex-thread') return 'Codex thread';
   if (kind === 'claude-session') return 'Claude Code session';
   return 'ACP session';
@@ -214,6 +215,7 @@ export function bindSessionAgent(session: ChatSession, agent: AgentIdentity | nu
 }
 
 function runtimeSessionKind(runtime: AgentRuntimeIdentity): RuntimeSessionKind | null {
+  if (runtime.kind === 'mindos') return 'mindos-pi-session';
   if (runtime.kind === 'codex') return 'codex-thread';
   if (runtime.kind === 'claude') return 'claude-session';
   return null;
@@ -223,7 +225,7 @@ export function getMatchingRuntimeSessionBinding(
   session: Pick<ChatSession, 'runtimeSessionBinding' | 'externalAgentBinding'> | null | undefined,
   runtime: AgentRuntimeIdentity | null | undefined,
 ): RuntimeSessionBinding | null {
-  if (!session || !runtime || runtime.kind === 'mindos') return null;
+  if (!session || !runtime) return null;
 
   const typed = session.runtimeSessionBinding;
   if (typed?.runtime === runtime.kind && typed.runtimeId === runtime.id) {
@@ -278,7 +280,8 @@ export function bindSessionAgentRuntime(
       } satisfies ExternalAgentBinding
     : null;
   const kind = runtime ? runtimeSessionKind(runtime) : null;
-  const runtimeSessionBinding = runtime && runtime.kind !== 'mindos' && kind
+  const shouldBindRuntimeSession = runtime && kind && (runtime.kind !== 'mindos' || Boolean(binding?.externalSessionId?.trim()));
+  const runtimeSessionBinding = shouldBindRuntimeSession
     ? {
         kind,
         runtime: runtime.kind,
@@ -293,7 +296,7 @@ export function bindSessionAgentRuntime(
   return {
     ...session,
     defaultAcpAgent: runtime?.kind === 'acp' ? { id: runtime.id, name: runtime.name } : null,
-    defaultAgentRuntime: runtime,
+    defaultAgentRuntime: runtime?.kind === 'mindos' ? null : runtime,
     externalAgentBinding,
     runtimeSessionBinding,
   };

@@ -18,7 +18,7 @@ import { redactSensitiveObject, redactSensitiveText } from '../redaction.js';
  * store (spec-agent-core-consolidation B.1/C).
  *
  * Each runtime keeps its own full archive (Claude Code: ~/.claude, Codex:
- * ~/.codex, embedded pi: in-memory session injected per request). The ledger
+ * ~/.codex, embedded Pi: SessionManager archive when session-bound). The ledger
  * persists only run records — id / kind / status / parent-child links /
  * timestamps / capped summaries / an `archive` pointer into the runtime's
  * own archive. Fine-grained timeline events still flow through the in-memory

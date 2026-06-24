@@ -62,10 +62,7 @@ export function validateRuntimeBindingMatchesSelection(runtime: unknown, binding
 
   const runtimeRecord = runtime as Partial<AgentRuntimeIdentity>;
   const bindingRecord = binding as Partial<RuntimeSessionBinding>;
-  if (runtimeRecord.kind === 'mindos') {
-    return 'runtimeBinding is only valid for external runtimes';
-  }
-  if (runtimeRecord.kind !== 'codex' && runtimeRecord.kind !== 'claude' && runtimeRecord.kind !== 'acp') {
+  if (runtimeRecord.kind !== 'mindos' && runtimeRecord.kind !== 'codex' && runtimeRecord.kind !== 'claude' && runtimeRecord.kind !== 'acp') {
     return 'runtimeBinding requires a valid selectedRuntime';
   }
   if (typeof runtimeRecord.id !== 'string' || runtimeRecord.id.length === 0) {
@@ -73,6 +70,9 @@ export function validateRuntimeBindingMatchesSelection(runtime: unknown, binding
   }
   if (bindingRecord.runtime !== runtimeRecord.kind || bindingRecord.runtimeId !== runtimeRecord.id) {
     return 'runtimeBinding must match selectedRuntime';
+  }
+  if (runtimeRecord.kind === 'mindos' && bindingRecord.kind !== 'mindos-pi-session') {
+    return 'runtimeBinding.kind must be mindos-pi-session for MindOS';
   }
   if (runtimeRecord.kind === 'codex' && bindingRecord.kind !== 'codex-thread') {
     return 'runtimeBinding.kind must be codex-thread for Codex';

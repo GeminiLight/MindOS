@@ -27,10 +27,9 @@ export type AgentRunPermissionMode = 'read' | 'ask' | 'auto' | 'full';
 
 /**
  * Pointer to the runtime's own conversation archive. Each runtime keeps its
- * own full transcript (Claude Code under ~/.claude, Codex under ~/.codex);
- * the ledger is only an index card across runtimes, so it stores a pointer
- * instead of re-saving content. Embedded pi currently runs with
- * `SessionManager.inMemory()` — no archive file, so its runs carry no ref.
+ * own full transcript (Claude Code under ~/.claude, Codex under ~/.codex,
+ * session-bound Pi under its SessionManager directory); the ledger is only an
+ * index card across runtimes, so it stores a pointer instead of re-saving content.
  */
 export interface AgentRunArchiveRef {
   /** Runtime-side session/conversation id (Claude session id, Codex thread id). */

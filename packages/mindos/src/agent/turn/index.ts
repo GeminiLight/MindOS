@@ -153,7 +153,7 @@ export type MindOSSSEvent =
   | { type: 'user_question_cancelled'; runId: string; toolCallId: string; reason: string }
   | {
       type: 'runtime_binding';
-      runtime: 'acp' | 'codex' | 'claude';
+      runtime: 'mindos' | 'acp' | 'codex' | 'claude';
       externalSessionId: string;
       cwd?: string;
       status?: 'active' | 'missing' | 'signed-out' | 'archived' | 'failed';

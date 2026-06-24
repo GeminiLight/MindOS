@@ -47,7 +47,7 @@ const FILE_MUTATING_TOOLS = new Set([
 ]);
 
 export interface RuntimeBindingMetadata {
-  runtime: 'acp' | 'codex' | 'claude';
+  runtime: 'mindos' | 'acp' | 'codex' | 'claude';
   externalSessionId: string;
   cwd?: string;
   status?: 'active' | 'missing' | 'signed-out' | 'archived' | 'failed';
@@ -816,7 +816,7 @@ export async function consumeUIMessageStream(
             const runtime = eventRecord.runtime;
             const externalSessionId = eventRecord.externalSessionId;
             if (
-              (runtime === 'acp' || runtime === 'codex' || runtime === 'claude') &&
+              (runtime === 'mindos' || runtime === 'acp' || runtime === 'codex' || runtime === 'claude') &&
               typeof externalSessionId === 'string' &&
               externalSessionId
             ) {

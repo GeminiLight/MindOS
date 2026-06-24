@@ -104,7 +104,7 @@ describe('consumeUIMessageStream (core)', () => {
 
     await consumeUIMessageStream(makeStream(
       { type: 'agent_run_context', rootRunId: 'run-1', chatSessionId: 'chat-1', startedAt: 1700000000000 },
-      { type: 'runtime_binding', runtime: 'codex', externalSessionId: 'thread-9', cwd: '/tmp/kb', status: 'active' },
+      { type: 'runtime_binding', runtime: 'mindos', externalSessionId: 'pi-session-9', cwd: '/tmp/kb', status: 'active' },
       { type: 'done' },
     ), () => {}, undefined, { emitCoalesceMs: 0, onAgentRunContext, onRuntimeBinding });
 
@@ -114,8 +114,8 @@ describe('consumeUIMessageStream (core)', () => {
       startedAt: 1700000000000,
     });
     expect(onRuntimeBinding).toHaveBeenCalledWith({
-      runtime: 'codex',
-      externalSessionId: 'thread-9',
+      runtime: 'mindos',
+      externalSessionId: 'pi-session-9',
       cwd: '/tmp/kb',
       status: 'active',
     });

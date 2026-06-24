@@ -215,6 +215,29 @@ export type MindosPiRuntimeCreateAgentSessionConfig = {
 
 export type MindosPiSessionManagerAdapter = {
   appendMessage(message: unknown): void;
+  buildSessionContext?(): { messages?: unknown[] } | undefined;
+  getEntries?(): unknown[];
+  getSessionId?(): string;
+  getSessionDir?(): string;
+  getSessionFile?(): string | undefined;
+  isPersisted?(): boolean;
+};
+
+export type MindosPiRuntimeSessionOptions = {
+  sessionDir?: string;
+};
+
+export type MindosPiSessionManagerFactoryInput = {
+  cwd: string;
+  runtimeSession?: MindosPiRuntimeSessionOptions;
+};
+
+export type MindosPiSessionManagerHandle = {
+  manager: MindosPiSessionManagerAdapter;
+  bootstrapHistory?: boolean;
+  externalSessionId?: string;
+  sessionDir?: string;
+  sessionFile?: string;
 };
 
 export type MindosPiAgentRuntimeServices = {
@@ -228,7 +251,7 @@ export type MindosPiAgentRuntimeServices = {
   createAuthStorage(): { setRuntimeApiKey(provider: string, apiKey: string): void };
   createModelRegistry(authStorage: unknown): unknown;
   createSettingsManager(settings: Record<string, unknown>): unknown;
-  createSessionManager(): MindosPiSessionManagerAdapter;
+  createSessionManager(input: MindosPiSessionManagerFactoryInput): MindosPiSessionManagerAdapter | MindosPiSessionManagerHandle;
   createResourceLoader(config: MindosPiRuntimeResourceLoaderConfig): MindosPiResourceLoaderAdapter;
   createAgentSession(config: MindosPiRuntimeCreateAgentSessionConfig): Promise<{ session: MindosPiAgentSessionAdapter }>;
   convertToLlm(messages: MindosAgentHistoryMessage[]): unknown[];
@@ -313,6 +336,7 @@ export type MindosPiAgentRuntimeOptions = {
   additionalExtensionPaths?: string[];
   allowProjectBash?: boolean;
   permissionMode?: MindosPermissionMode;
+  runtimeSession?: MindosPiRuntimeSessionOptions;
   bashTool: unknown;
   services: MindosPiAgentRuntimeServices;
 };
@@ -334,7 +358,49 @@ export type MindosPiAgentRuntime = {
   lastUserImages?: MindosUiImagePart[];
   lastUserSkillName?: string;
   extensionLoadErrors: MindosExtensionLoadError[];
+  runtimeSession?: {
+    externalSessionId: string;
+    sessionDir?: string;
+    sessionFile?: string;
+    resumed: boolean;
+  };
 };
+
+function normalizeMindosPiSessionManagerHandle(
+  value: MindosPiSessionManagerAdapter | MindosPiSessionManagerHandle,
+): Required<Pick<MindosPiSessionManagerHandle, 'manager' | 'bootstrapHistory'>> & Omit<MindosPiSessionManagerHandle, 'manager' | 'bootstrapHistory'> {
+  const maybeHandle = value as Partial<MindosPiSessionManagerHandle>;
+  const manager = maybeHandle.manager ?? (value as MindosPiSessionManagerAdapter);
+  const entries = manager.getEntries?.();
+  const hasRuntimeHistory = Array.isArray(entries) && entries.length > 0;
+  return {
+    manager,
+    bootstrapHistory: maybeHandle.bootstrapHistory ?? !hasRuntimeHistory,
+    ...(maybeHandle.externalSessionId ? { externalSessionId: maybeHandle.externalSessionId } : {}),
+    ...(maybeHandle.sessionDir ? { sessionDir: maybeHandle.sessionDir } : {}),
+    ...(maybeHandle.sessionFile ? { sessionFile: maybeHandle.sessionFile } : {}),
+  };
+}
+
+function mindosPiSessionContextMessages(sessionManager: MindosPiSessionManagerAdapter): unknown[] | undefined {
+  const context = sessionManager.buildSessionContext?.();
+  const messages = context?.messages;
+  return Array.isArray(messages) ? messages : undefined;
+}
+
+function mindosPiRuntimeSessionInfo(
+  handle: ReturnType<typeof normalizeMindosPiSessionManagerHandle>,
+): MindosPiAgentRuntime['runtimeSession'] {
+  if (handle.manager.isPersisted?.() === false) return undefined;
+  const externalSessionId = handle.externalSessionId ?? handle.manager.getSessionId?.();
+  if (!externalSessionId?.trim()) return undefined;
+  return {
+    externalSessionId,
+    sessionDir: handle.sessionDir ?? handle.manager.getSessionDir?.(),
+    sessionFile: handle.sessionFile ?? handle.manager.getSessionFile?.(),
+    resumed: !handle.bootstrapHistory,
+  };
+}
 
 export async function createMindosPiAgentRuntime(options: MindosPiAgentRuntimeOptions): Promise<MindosPiAgentRuntime> {
   const workDir = options.workDir ?? options.mindRoot;
@@ -375,8 +441,15 @@ export async function createMindosPiAgentRuntime(options: MindosPiAgentRuntimeOp
 
   const agentMessages = toMindosAgentMessages(options.messages);
   const historyMessages = agentMessages.slice(0, -1);
-  let effectiveHistoryMessages = historyMessages;
-  let llmHistoryMessages = options.services.convertToLlm(effectiveHistoryMessages);
+  const sessionManagerHandle = normalizeMindosPiSessionManagerHandle(options.services.createSessionManager({
+    cwd: workDir,
+    runtimeSession: options.runtimeSession,
+  }));
+  const sessionManager = sessionManagerHandle.manager;
+  let effectiveHistoryMessages = sessionManagerHandle.bootstrapHistory ? historyMessages : [];
+  let llmHistoryMessages = sessionManagerHandle.bootstrapHistory
+    ? options.services.convertToLlm(effectiveHistoryMessages)
+    : (mindosPiSessionContextMessages(sessionManager) ?? []);
   let turnPrompt = options.turnPrompt ?? lastUserContent;
   let contextUsage: MindosPiContextUsageEvent | undefined;
 
@@ -477,10 +550,13 @@ export async function createMindosPiAgentRuntime(options: MindosPiAgentRuntimeOp
     }
   }
 
-  const sessionManager = options.services.createSessionManager();
-  for (const message of llmHistoryMessages) {
-    sessionManager.appendMessage(message);
+  if (sessionManagerHandle.bootstrapHistory) {
+    for (const message of llmHistoryMessages) {
+      sessionManager.appendMessage(message);
+    }
+    llmHistoryMessages = mindosPiSessionContextMessages(sessionManager) ?? llmHistoryMessages;
   }
+  const runtimeSession = mindosPiRuntimeSessionInfo(sessionManagerHandle);
 
   const { session } = await options.services.createAgentSession({
     cwd: workDir,
@@ -531,6 +607,7 @@ export async function createMindosPiAgentRuntime(options: MindosPiAgentRuntimeOp
     lastUserImages,
     lastUserSkillName,
     extensionLoadErrors: [...extensionLoadErrorsByKey.values()],
+    ...(runtimeSession ? { runtimeSession } : {}),
   };
 }
 

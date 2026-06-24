@@ -222,6 +222,45 @@ describe('ask agent helpers', () => {
     });
   });
 
+  it('binds MindOS Pi runtime session metadata only after the runtime returns a session id', () => {
+    const session: ChatSession = {
+      id: 's1',
+      createdAt: 1,
+      updatedAt: 1,
+      messages: [],
+    };
+    const runtime = { id: 'mindos', name: 'MindOS', kind: 'mindos' as const };
+
+    expect(bindSessionAgentRuntime(session, runtime)).toEqual({
+      ...session,
+      defaultAcpAgent: null,
+      defaultAgentRuntime: null,
+      externalAgentBinding: null,
+      runtimeSessionBinding: null,
+    });
+
+    const bound = bindSessionAgentRuntime(session, runtime, {
+      externalSessionId: 'pi-session-1',
+      cwd: '/tmp/mind',
+      updatedAt: 123,
+    });
+
+    expect(bound.runtimeSessionBinding).toEqual({
+      kind: 'mindos-pi-session',
+      runtime: 'mindos',
+      runtimeId: 'mindos',
+      externalSessionId: 'pi-session-1',
+      cwd: '/tmp/mind',
+      status: 'active',
+      updatedAt: 123,
+    });
+    expect(bound.externalAgentBinding).toBeNull();
+    expect(bound.defaultAgentRuntime).toBeNull();
+    expect(getSessionAgentRuntime(bound)).toBeNull();
+    expect(getMatchingRuntimeSessionBinding(bound, runtime)).toEqual(bound.runtimeSessionBinding);
+    expect(getRuntimeSessionSummary(bound)?.label).toBe('MindOS Pi session');
+  });
+
   it('filters Chat Panel sessions into MindOS and native runtime lanes', () => {
     const mindosSession: ChatSession = {
       id: 'mindos-session',

@@ -48,7 +48,18 @@ export function createMindosPiCodingAgentRuntimeServices(
     createAuthStorage: () => pi.AuthStorage.create(),
     createModelRegistry: (authStorage) => pi.ModelRegistry.create(authStorage as any),
     createSettingsManager: (settings) => pi.SettingsManager.inMemory(settings as any),
-    createSessionManager: () => pi.SessionManager.inMemory(),
+    createSessionManager: ({ cwd, runtimeSession }) => {
+      if (!runtimeSession?.sessionDir) return pi.SessionManager.inMemory(cwd);
+      const manager = pi.SessionManager.continueRecent(cwd, runtimeSession.sessionDir);
+      const entries = typeof manager.getEntries === 'function' ? manager.getEntries() : [];
+      return {
+        manager,
+        bootstrapHistory: entries.length === 0,
+        externalSessionId: typeof manager.getSessionId === 'function' ? manager.getSessionId() : undefined,
+        sessionDir: typeof manager.getSessionDir === 'function' ? manager.getSessionDir() : runtimeSession.sessionDir,
+        sessionFile: typeof manager.getSessionFile === 'function' ? manager.getSessionFile() : undefined,
+      };
+    },
     createResourceLoader: (config) => new pi.DefaultResourceLoader(config as any) as any,
     createAgentSession: (config) => pi.createAgentSession(config as any) as any,
     convertToLlm: (messages) => pi.convertToLlm(messages as any) as unknown[],
