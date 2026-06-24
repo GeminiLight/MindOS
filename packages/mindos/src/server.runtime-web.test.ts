@@ -61,6 +61,19 @@ const RUNTIME_LIFECYCLE_STAGES = [
   'remote',
   'coordinate',
 ];
+const RUNTIME_COMPATIBILITY_SCENARIOS = [
+  'interactive-turn',
+  'coding-workflow',
+  'session-continuity',
+  'context-governance',
+  'permission-governance',
+  'mcp-tooling',
+  'skill-execution',
+  'artifact-governance',
+  'remote-control',
+  'unattended-automation',
+  'team-coordination',
+];
 
 describe('MindOS server contract: runtime, agent turn stream, static web', () => {
   it('handles monitoring snapshots without Web dependencies', () => {
@@ -355,6 +368,25 @@ describe('MindOS server contract: runtime, agent turn stream, static web', () =>
             supportsMailbox: false,
           }),
         }),
+        compatibility: expect.objectContaining({
+          schemaVersion: 1,
+          scenarios: expect.objectContaining({
+            'interactive-turn': expect.objectContaining({ level: 'ready', owner: 'mindos' }),
+            'skill-execution': expect.objectContaining({
+              level: 'limited',
+              blockers: expect.arrayContaining(['skill-runtime-requirements']),
+            }),
+            'remote-control': expect.objectContaining({ level: 'limited' }),
+            'unattended-automation': expect.objectContaining({
+              level: 'limited',
+              blockers: expect.arrayContaining(['scheduler', 'approval-routing', 'wake-resume', 'failure-audit']),
+            }),
+            'team-coordination': expect.objectContaining({
+              level: 'limited',
+              blockers: expect.arrayContaining(['mailbox', 'task-board']),
+            }),
+          }),
+        }),
       }),
       expect.objectContaining({
         id: 'codex',
@@ -383,6 +415,17 @@ describe('MindOS server contract: runtime, agent turn stream, static web', () =>
           remote: expect.objectContaining({ supported: true, mode: 'server-runnable' }),
           coordination: expect.objectContaining({ role: 'external-worker', supportsSharedContext: true }),
         }),
+        compatibility: expect.objectContaining({
+          scenarios: expect.objectContaining({
+            'coding-workflow': expect.objectContaining({ level: 'ready', owner: 'external' }),
+            'session-continuity': expect.objectContaining({ level: 'ready', owner: 'external' }),
+            'remote-control': expect.objectContaining({ level: 'limited' }),
+            'unattended-automation': expect.objectContaining({
+              level: 'limited',
+              blockers: expect.arrayContaining(['approval-routing']),
+            }),
+          }),
+        }),
       }),
       expect.objectContaining({
         id: 'claude',
@@ -402,6 +445,15 @@ describe('MindOS server contract: runtime, agent turn stream, static web', () =>
             archive: expect.objectContaining({ support: 'unsupported', owner: 'external' }),
           }),
           remote: expect.objectContaining({ supported: true, unattended: 'limited' }),
+        }),
+        compatibility: expect.objectContaining({
+          scenarios: expect.objectContaining({
+            'session-continuity': expect.objectContaining({
+              level: 'limited',
+              blockers: expect.arrayContaining(['list-attach-archive']),
+            }),
+            'remote-control': expect.objectContaining({ level: 'limited' }),
+          }),
         }),
       }),
       expect.objectContaining({
@@ -430,11 +482,25 @@ describe('MindOS server contract: runtime, agent turn stream, static web', () =>
             supportsTaskBoard: false,
           }),
         }),
+        compatibility: expect.objectContaining({
+          scenarios: expect.objectContaining({
+            'interactive-turn': expect.objectContaining({ level: 'ready' }),
+            'coding-workflow': expect.objectContaining({
+              level: 'limited',
+              blockers: expect.arrayContaining(['adapter-tool-declaration']),
+            }),
+            'artifact-governance': expect.objectContaining({
+              level: 'blocked',
+              blockers: expect.arrayContaining(['artifact-output-contract', 'artifact-index']),
+            }),
+          }),
+        }),
       }),
     ]));
     for (const id of ['mindos', 'codex', 'claude', 'gemini']) {
       const runtime = byId.get(id);
       expect(Object.keys(runtime?.lifecycle.stages ?? {}).sort()).toEqual([...RUNTIME_LIFECYCLE_STAGES].sort());
+      expect(Object.keys(runtime?.compatibility.scenarios ?? {}).sort()).toEqual([...RUNTIME_COMPATIBILITY_SCENARIOS].sort());
     }
   });
 

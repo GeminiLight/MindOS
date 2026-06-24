@@ -119,6 +119,51 @@ export type AgentRuntimeLifecycle = {
   };
 };
 
+export type AgentRuntimeCompatibilityLevel = 'ready' | 'limited' | 'blocked' | 'unknown';
+
+export type AgentRuntimeCompatibilityOwner = AgentRuntimeOwner | 'shared';
+
+export type AgentRuntimeCompatibilityScenario =
+  | 'interactive-turn'
+  | 'coding-workflow'
+  | 'session-continuity'
+  | 'context-governance'
+  | 'permission-governance'
+  | 'mcp-tooling'
+  | 'skill-execution'
+  | 'artifact-governance'
+  | 'remote-control'
+  | 'unattended-automation'
+  | 'team-coordination';
+
+export type AgentRuntimeCompatibilityRequirementStatus =
+  | 'satisfied'
+  | 'external'
+  | 'missing'
+  | 'unknown'
+  | 'not-applicable';
+
+export type AgentRuntimeCompatibilityRequirement = {
+  id: string;
+  status: AgentRuntimeCompatibilityRequirementStatus;
+  owner: AgentRuntimeCompatibilityOwner;
+  summary: string;
+};
+
+export type AgentRuntimeCompatibilityAssessment = {
+  level: AgentRuntimeCompatibilityLevel;
+  owner: AgentRuntimeCompatibilityOwner;
+  summary: string;
+  requirements: AgentRuntimeCompatibilityRequirement[];
+  blockers?: string[];
+};
+
+export type AgentRuntimeCompatibilityProfile = {
+  schemaVersion: 1;
+  scenarios: Record<AgentRuntimeCompatibilityScenario, AgentRuntimeCompatibilityAssessment>;
+  summary: string;
+};
+
 export type AgentRuntimeBridge = {
   kind: 'codex-app-server' | 'claude-sdk' | 'claude-cli';
   label: string;
@@ -141,6 +186,7 @@ export type AgentRuntimeDescriptor = {
   capabilities: AgentRuntimeCapabilities;
   harnessCapabilities?: AgentRuntimeHarnessCapabilities;
   lifecycle: AgentRuntimeLifecycle;
+  compatibility: AgentRuntimeCompatibilityProfile;
   runtimeBridge?: AgentRuntimeBridge;
   description?: string;
   sourceAgentId?: string;

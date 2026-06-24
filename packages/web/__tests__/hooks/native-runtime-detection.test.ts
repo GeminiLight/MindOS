@@ -19,6 +19,11 @@ const TEST_RUNTIME_LIFECYCLE = {
     summary: 'test',
   },
 };
+const TEST_RUNTIME_COMPATIBILITY = {
+  schemaVersion: 1,
+  summary: 'test',
+  scenarios: {},
+};
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -82,6 +87,7 @@ describe('useNativeRuntimeDetection', () => {
           status: 'available',
           capabilities: {},
           lifecycle: TEST_RUNTIME_LIFECYCLE,
+          compatibility: TEST_RUNTIME_COMPATIBILITY,
         },
       }), { status: 200 }));
       await Promise.resolve();
@@ -102,6 +108,7 @@ describe('useNativeRuntimeDetection', () => {
           status: 'signed-out',
           capabilities: {},
           lifecycle: TEST_RUNTIME_LIFECYCLE,
+          compatibility: TEST_RUNTIME_COMPATIBILITY,
           availability: { checkedAt: '2026-06-09T00:00:00.000Z', sources: ['native-health'], reason: 'STAFF_KEY missing.' },
         },
       }), { status: 200 }));
@@ -121,7 +128,7 @@ describe('useNativeRuntimeDetection', () => {
   });
 
   it('revalidates cached available native runtimes in the background', async () => {
-    sessionStorage.setItem('mindos:native-runtime-detection:v2:codex', JSON.stringify({
+    sessionStorage.setItem('mindos:native-runtime-detection:v3:codex', JSON.stringify({
       ts: Date.now(),
       runtime: {
         id: 'codex',
@@ -130,6 +137,7 @@ describe('useNativeRuntimeDetection', () => {
         status: 'available',
         capabilities: {},
         lifecycle: TEST_RUNTIME_LIFECYCLE,
+        compatibility: TEST_RUNTIME_COMPATIBILITY,
       },
     }));
     const fetchMock = vi.fn((url: string) => {
@@ -142,6 +150,7 @@ describe('useNativeRuntimeDetection', () => {
           status: 'available',
           capabilities: {},
           lifecycle: TEST_RUNTIME_LIFECYCLE,
+          compatibility: TEST_RUNTIME_COMPATIBILITY,
         },
       }), { status: 200 }));
     });
@@ -174,7 +183,7 @@ describe('useNativeRuntimeDetection', () => {
   });
 
   it('marks stale cached available runtime state as unavailable when background detection fails', async () => {
-    sessionStorage.setItem('mindos:native-runtime-detection:v2:claude', JSON.stringify({
+    sessionStorage.setItem('mindos:native-runtime-detection:v3:claude', JSON.stringify({
       ts: Date.now(),
       runtime: {
         id: 'claude',
@@ -183,6 +192,7 @@ describe('useNativeRuntimeDetection', () => {
         status: 'available',
         capabilities: {},
         lifecycle: TEST_RUNTIME_LIFECYCLE,
+        compatibility: TEST_RUNTIME_COMPATIBILITY,
       },
     }));
     const fetchMock = vi.fn((url: string) => {
@@ -195,6 +205,7 @@ describe('useNativeRuntimeDetection', () => {
           status: 'missing',
           capabilities: {},
           lifecycle: TEST_RUNTIME_LIFECYCLE,
+          compatibility: TEST_RUNTIME_COMPATIBILITY,
         },
       }), { status: 200 }));
     });
@@ -228,7 +239,7 @@ describe('useNativeRuntimeDetection', () => {
         }),
       }),
     ]));
-    expect(sessionStorage.getItem('mindos:native-runtime-detection:v2:claude')).toBeNull();
+    expect(sessionStorage.getItem('mindos:native-runtime-detection:v3:claude')).toBeNull();
 
     await act(async () => {
       root.unmount();

@@ -357,6 +357,7 @@ function runtimeToCapability(runtime: AgentRuntimeDescriptor): AgentCapabilityIn
       mcpAgentKey: runtime.mcpAgentKey,
       capabilities: runtime.capabilities,
       lifecycle: runtime.lifecycle,
+      compatibility: runtime.compatibility,
       availability: runtime.availability,
       binaryPath: runtime.binaryPath?.startsWith('sdk:') ? runtime.binaryPath : undefined,
       installCmd: runtime.installCmd,

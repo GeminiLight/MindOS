@@ -9,6 +9,11 @@ import {
   mindosHarnessCapabilities,
 } from './capabilities.js';
 import {
+  acpRuntimeCompatibilityProfile,
+  mindosRuntimeCompatibilityProfile,
+  nativeRuntimeCompatibilityProfile,
+} from './compatibility.js';
+import {
   compactRuntimeHintsForDescriptor,
 } from './detection.js';
 import {
@@ -98,6 +103,8 @@ export function nativeDescriptor(input: {
       installCmd: input.missing?.installCmd,
     }),
   ]));
+  const harnessCapabilities = input.id === 'codex' ? codexHarnessCapabilities : claudeHarnessCapabilities;
+  const lifecycle = nativeRuntimeLifecycle(input.id, capabilities);
 
   return {
     id: input.id,
@@ -112,8 +119,14 @@ export function nativeDescriptor(input: {
     sessionOwner: 'external',
     status,
     capabilities,
-    harnessCapabilities: input.id === 'codex' ? codexHarnessCapabilities : claudeHarnessCapabilities,
-    lifecycle: nativeRuntimeLifecycle(input.id, capabilities),
+    harnessCapabilities,
+    lifecycle,
+    compatibility: nativeRuntimeCompatibilityProfile(input.id, {
+      capabilities,
+      harnessCapabilities,
+      lifecycle,
+      status,
+    }),
     ...(runtimeBridge ? { runtimeBridge } : {}),
     description: input.id === 'codex'
       ? 'Local Codex app-server runtime. Model, approval, and thread behavior are owned by Codex.'
@@ -146,6 +159,7 @@ export function nativeDescriptor(input: {
 }
 
 export function mindosRuntimeDescriptor(checkedAt: string): AgentRuntimeDescriptor {
+  const lifecycle = mindosRuntimeLifecycle(mindosCapabilities);
   return {
     id: 'mindos',
     runtimeId: 'mindos',
@@ -160,13 +174,21 @@ export function mindosRuntimeDescriptor(checkedAt: string): AgentRuntimeDescript
     status: 'available',
     capabilities: mindosCapabilities,
     harnessCapabilities: mindosHarnessCapabilities,
-    lifecycle: mindosRuntimeLifecycle(mindosCapabilities),
+    lifecycle,
+    compatibility: mindosRuntimeCompatibilityProfile({
+      capabilities: mindosCapabilities,
+      harnessCapabilities: mindosHarnessCapabilities,
+      lifecycle,
+      status: 'available',
+    }),
     description: 'MindOS internal agent using the selected provider and model.',
     availability: { checkedAt, sources: ['settings'] },
   };
 }
 
 export function acpRuntimeDescriptor(agent: DetectedRuntimeAgent, checkedAt: string): AgentRuntimeDescriptor {
+  const status = agent.status ?? 'available';
+  const lifecycle = acpRuntimeLifecycle(acpCapabilities);
   return {
     id: agent.id,
     runtimeId: agent.id,
@@ -178,10 +200,16 @@ export function acpRuntimeDescriptor(agent: DetectedRuntimeAgent, checkedAt: str
     authOwner: 'external',
     permissionOwner: 'external',
     sessionOwner: 'external',
-    status: agent.status ?? 'available',
+    status,
     capabilities: acpCapabilities,
     harnessCapabilities: acpHarnessCapabilities,
-    lifecycle: acpRuntimeLifecycle(acpCapabilities),
+    lifecycle,
+    compatibility: acpRuntimeCompatibilityProfile({
+      capabilities: acpCapabilities,
+      harnessCapabilities: acpHarnessCapabilities,
+      lifecycle,
+      status,
+    }),
     description: 'ACP agent selected as the Chat Panel runtime.',
     sourceAgentId: agent.id,
     canonicalAgentId: agent.id,

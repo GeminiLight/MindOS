@@ -8,7 +8,8 @@ import { createRoot } from 'react-dom/client';
 import { readAcpDetectionCacheFromStorage, useAcpDetection } from '@/hooks/useAcpDetection';
 import { readAcpRegistryCacheFromStorage } from '@/hooks/useAcpRegistry';
 
-const DETECTION_STORAGE_KEY = 'mindos:acp-detection:v4';
+const DETECTION_STORAGE_KEY = 'mindos:acp-detection:v5';
+const LEGACY_DETECTION_STORAGE_KEY_V4 = 'mindos:acp-detection:v4';
 const LEGACY_DETECTION_STORAGE_KEY_V3 = 'mindos:acp-detection:v3';
 const LEGACY_DETECTION_STORAGE_KEY_V2 = 'mindos:acp-detection:v2';
 const LEGACY_DETECTION_STORAGE_KEY = 'mindos:acp-detection';
@@ -23,6 +24,11 @@ const TEST_RUNTIME_LIFECYCLE = {
     supportsTaskBoard: false,
     summary: 'test',
   },
+};
+const TEST_RUNTIME_COMPATIBILITY = {
+  schemaVersion: 1,
+  summary: 'test',
+  scenarios: {},
 };
 
 describe('ACP hook storage caches', () => {
@@ -51,8 +57,8 @@ describe('ACP hook storage caches', () => {
       installed: [{ id: 'codex', name: 'Codex', binaryPath: '/usr/bin/codex' }],
       notInstalled: [{ id: 'claude', name: 'Claude', installCmd: 'npm i -g claude' }],
       runtimes: [
-        { id: 'codex', name: 'Codex', kind: 'codex', status: 'available', capabilities: {}, lifecycle: TEST_RUNTIME_LIFECYCLE },
-        { id: 'gemini', name: 'Gemini CLI', kind: 'acp', status: 'available', capabilities: {}, lifecycle: TEST_RUNTIME_LIFECYCLE },
+        { id: 'codex', name: 'Codex', kind: 'codex', status: 'available', capabilities: {}, lifecycle: TEST_RUNTIME_LIFECYCLE, compatibility: TEST_RUNTIME_COMPATIBILITY },
+        { id: 'gemini', name: 'Gemini CLI', kind: 'acp', status: 'available', capabilities: {}, lifecycle: TEST_RUNTIME_LIFECYCLE, compatibility: TEST_RUNTIME_COMPATIBILITY },
       ],
       ts: Date.now(),
     };
@@ -61,12 +67,18 @@ describe('ACP hook storage caches', () => {
     expect(readAcpDetectionCacheFromStorage()).toEqual({
       ...cache,
       runtimes: [
-        { id: 'gemini', name: 'Gemini CLI', kind: 'acp', status: 'available', capabilities: {}, lifecycle: TEST_RUNTIME_LIFECYCLE },
+        { id: 'gemini', name: 'Gemini CLI', kind: 'acp', status: 'available', capabilities: {}, lifecycle: TEST_RUNTIME_LIFECYCLE, compatibility: TEST_RUNTIME_COMPATIBILITY },
       ],
     });
   });
 
   it('ignores legacy ACP detection cache keys', () => {
+    sessionStorage.setItem(LEGACY_DETECTION_STORAGE_KEY_V4, JSON.stringify({
+      installed: [{ id: 'gemini', name: 'Gemini CLI', binaryPath: '/usr/bin/gemini' }],
+      notInstalled: [],
+      runtimes: [{ id: 'gemini', name: 'Gemini CLI', kind: 'acp', status: 'available', capabilities: {}, lifecycle: TEST_RUNTIME_LIFECYCLE, compatibility: TEST_RUNTIME_COMPATIBILITY }],
+      ts: Date.now(),
+    }));
     sessionStorage.setItem(LEGACY_DETECTION_STORAGE_KEY_V3, JSON.stringify({
       installed: [{ id: 'gemini', name: 'Gemini CLI', binaryPath: '/usr/bin/gemini' }],
       notInstalled: [],
@@ -156,6 +168,7 @@ describe('ACP hook storage caches', () => {
         status: 'error',
         capabilities: {},
         lifecycle: TEST_RUNTIME_LIFECYCLE,
+        compatibility: TEST_RUNTIME_COMPATIBILITY,
         availability: {
           checkedAt: '2026-06-09T00:00:00.000Z',
           sources: ['native-health'],
@@ -206,6 +219,7 @@ describe('ACP hook storage caches', () => {
           status: 'available',
           capabilities: {},
           lifecycle: TEST_RUNTIME_LIFECYCLE,
+          compatibility: TEST_RUNTIME_COMPATIBILITY,
         }],
       }),
     });

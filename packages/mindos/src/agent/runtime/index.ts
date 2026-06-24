@@ -4,6 +4,7 @@ export * from './capabilities.js';
 export * from './child-process.js';
 export * from './claude-code-cli.js';
 export * from './claude-code-sdk.js';
+export * from './compatibility.js';
 export * from './codex-app-server.js';
 export * from './codex-env.js';
 export * from './descriptors.js';

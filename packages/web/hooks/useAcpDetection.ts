@@ -32,8 +32,8 @@ interface AcpDetectionState {
   refresh: () => void;
 }
 
-const STORAGE_KEY = 'mindos:acp-detection:v4';
-const LEGACY_STORAGE_KEYS = ['mindos:acp-detection:v3', 'mindos:acp-detection:v2', 'mindos:acp-detection'];
+const STORAGE_KEY = 'mindos:acp-detection:v5';
+const LEGACY_STORAGE_KEYS = ['mindos:acp-detection:v4', 'mindos:acp-detection:v3', 'mindos:acp-detection:v2', 'mindos:acp-detection'];
 const STALE_TTL_MS = 30 * 60 * 1000;
 const REVALIDATE_TTL_MS = 30 * 60 * 1000;
 const DETECTION_TIMEOUT_MS = 30000;
@@ -56,7 +56,8 @@ function isAcpRuntimeDescriptor(value: unknown): value is AgentRuntimeDescriptor
     typeof value.name === 'string' &&
     typeof value.status === 'string' &&
     isRecord(value.capabilities) &&
-    isRecord(value.lifecycle);
+    isRecord(value.lifecycle) &&
+    isRecord(value.compatibility);
 }
 
 export function readAcpDetectionCacheFromStorage(): DetectionCache | null {

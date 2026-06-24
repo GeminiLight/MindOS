@@ -96,6 +96,43 @@ detect → health → configure → launch → session → context
 
 `lifecycle.coordination` 是未来 Team Mode 的底层边界，不是当前 UI 承诺。现在只声明 runtime 是否能消费共享 MindOS context，以及是否已有 mailbox / task-board primitives。当前共享 context 已有，mailbox 与 task-board 还没有 first-class contract。
 
+### Runtime Compatibility Profile
+
+`AgentRuntimeDescriptor.compatibility` 是 lifecycle 的场景化投影：lifecycle 回答“哪个阶段由谁拥有”，compatibility 回答“这个 runtime 适不适合某类产品场景，以及还缺什么”。它同样是 core runtime descriptor 的一部分，由 `packages/mindos/src/agent/runtime/compatibility.ts` 生成，Web/API/Capability Registry 只消费结果，不重复推断。
+
+当前 profile 覆盖这些场景：
+
+| Scenario | 语义 |
+|---|---|
+| `interactive-turn` | 当前 runtime 是否适合一轮普通交互式对话/执行 |
+| `coding-workflow` | 是否适合真实 coding agent 工作流，如 shell/file/git/diff/branch/PR |
+| `session-continuity` | 是否有清晰的 resume/list/attach/archive 或等价 session 续跑能力 |
+| `context-governance` | MindOS 与 runtime 如何分工 context 注入、history、compact、context-window |
+| `permission-governance` | 权限请求由谁处理，能否被 MindOS 桥接和审计 |
+| `mcp-tooling` | MCP/tool 配置是否可由 MindOS 投影到 runtime |
+| `skill-execution` | Skill 能否被当前 runtime 正确加载/执行，以及是否已有机器可读 runtime requirements |
+| `artifact-governance` | 产物、diff、branch、PR、artifact 是否能被 MindOS 统一索引和复查 |
+| `remote-control` | 这个 runtime 是否能在 MindOS server host 上被远程手动控制 |
+| `unattended-automation` | 是否适合 24/7 / scheduled / headless 自动化 |
+| `team-coordination` | 是否具备 shared context、mailbox、task-board 等多 agent 协作 primitives |
+
+每个 scenario 使用：
+
+| 字段 | 语义 |
+|---|---|
+| `level` | `ready` / `limited` / `blocked` / `unknown` |
+| `owner` | `mindos` / `external` / `shared` |
+| `requirements` | 机器可读的已满足、外部拥有、缺失或未知前置条件 |
+| `blockers` | 阻止该场景成为 ready 的关键缺口 |
+
+当前几个刻意保守的结论：
+
+- `remote-control` 与 `unattended-automation` 分开。Codex / Claude / ACP / MindOS Pi 可以是 `server-runnable`，但 24/7 仍是 `limited`，因为还缺 scheduler、approval routing、wake/resume、failure audit。
+- `team-coordination` 现在最多是 `limited`。MindOS 已有 shared context，但还没有 first-class mailbox / task-board primitives，不应该在 UI 上承诺复杂 Team Mode。
+- `skill-execution` 现在是 `limited`。MindOS 能注入/加载 skill，但还没有机器可读的 skill runtime requirements，因此不能可靠自动判断某个 skill 应该跑在 Pi、Codex、Claude 还是 ACP。
+- `mcp-tooling` 对 native runtime 是 `limited`。外部 runtime 可能有自己的 MCP 配置，但 MindOS 还没有“配置一次、按 runtime 投影”的统一 MCP projection contract。
+- `artifact-governance` 现在是 `limited` 或 `blocked`。部分 runtime 能产出 diff/artifact/branch/PR，但 MindOS 还没有跨 runtime artifact index。
+
 ## 五、执行路径
 
 `turn-runner.ts` 只做总控：完成 request/session/file context 解析后，通过 `turn-runtime-lane.ts` 选择 runtime lane，再把本轮 turn input 交给对应 lane。这样 MindOS Pi、Codex、Claude、ACP 在入口上并列，runtime/session/compact 语义仍由各 runtime 自己拥有。
@@ -220,6 +257,7 @@ MindOS Pi 的 persisted session 由 Pi `SessionManager` 自己持有完整 JSONL
 | `packages/web/app/api/assistant-runs/route.ts` | Assistant run 入口，解析 Active Assistant 后委托 agent turn |
 | `packages/mindos/src/agent/runtime/registry.ts` | Runtime descriptor / capability / lifecycle 类型源头 |
 | `packages/mindos/src/agent/runtime/lifecycle.ts` | MindOS Pi / native / ACP lifecycle metadata builder |
+| `packages/mindos/src/agent/runtime/compatibility.ts` | Runtime compatibility profile builder，投影 interactive / remote / unattended / skill / team 场景 readiness |
 | `packages/mindos/src/agent/runtime/descriptors.ts` | Runtime descriptor 组装，统一暴露 capability / harness / lifecycle |
 | `packages/mindos/src/agent/prompt/agent-prompt.txt` | MindOS 默认 base prompt |
 | `packages/mindos/src/agent/prompt/assistant-prompt.ts` | Active Assistant overlay 解析与渲染 |

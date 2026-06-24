@@ -80,6 +80,16 @@ describe('/api/agent-runtimes', () => {
           remote: expect.objectContaining({ mode: 'server-runnable', unattended: 'limited' }),
           coordination: expect.objectContaining({ role: 'primary', supportsSharedContext: true }),
         }),
+        compatibility: expect.objectContaining({
+          scenarios: expect.objectContaining({
+            'interactive-turn': expect.objectContaining({ level: 'ready' }),
+            'remote-control': expect.objectContaining({ level: 'limited' }),
+            'unattended-automation': expect.objectContaining({
+              level: 'limited',
+              blockers: expect.arrayContaining(['scheduler', 'approval-routing']),
+            }),
+          }),
+        }),
       }),
       expect.objectContaining({
         id: 'codex',
@@ -114,6 +124,12 @@ describe('/api/agent-runtimes', () => {
           }),
           coordination: expect.objectContaining({ role: 'external-worker', supportsMailbox: false }),
         }),
+        compatibility: expect.objectContaining({
+          scenarios: expect.objectContaining({
+            'coding-workflow': expect.objectContaining({ level: 'ready' }),
+            'remote-control': expect.objectContaining({ level: 'limited' }),
+          }),
+        }),
       }),
       expect.objectContaining({
         id: 'claude',
@@ -134,6 +150,14 @@ describe('/api/agent-runtimes', () => {
             archive: expect.objectContaining({ support: 'unsupported', owner: 'external' }),
           }),
           remote: expect.objectContaining({ supported: true, mode: 'server-runnable' }),
+        }),
+        compatibility: expect.objectContaining({
+          scenarios: expect.objectContaining({
+            'session-continuity': expect.objectContaining({
+              level: 'limited',
+              blockers: expect.arrayContaining(['list-attach-archive']),
+            }),
+          }),
         }),
       }),
       expect.objectContaining({
@@ -156,6 +180,15 @@ describe('/api/agent-runtimes', () => {
             execute: expect.objectContaining({ support: 'delegated', owner: 'external' }),
           }),
           remote: expect.objectContaining({ unattended: 'limited' }),
+        }),
+        compatibility: expect.objectContaining({
+          scenarios: expect.objectContaining({
+            'coding-workflow': expect.objectContaining({
+              level: 'limited',
+              blockers: expect.arrayContaining(['adapter-tool-declaration']),
+            }),
+            'permission-governance': expect.objectContaining({ level: 'unknown' }),
+          }),
         }),
       }),
     ]));

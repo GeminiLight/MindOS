@@ -63,6 +63,11 @@ const TEST_RUNTIME_LIFECYCLE: AgentRuntimeDescriptor['lifecycle'] = {
     summary: 'test',
   },
 };
+const TEST_RUNTIME_COMPATIBILITY = {
+  schemaVersion: 1,
+  summary: 'test',
+  scenarios: {},
+} as AgentRuntimeDescriptor['compatibility'];
 
 function availableNativeDescriptor(
   input: Pick<AgentRuntimeDescriptor, 'id' | 'name' | 'kind' | 'adapter'> & { binaryPath: string },
@@ -98,6 +103,7 @@ function availableNativeDescriptor(
       supportsMcpConfig: input.kind === 'claude',
     },
     lifecycle: TEST_RUNTIME_LIFECYCLE,
+    compatibility: TEST_RUNTIME_COMPATIBILITY,
     availability: {
       checkedAt: '2026-06-10T00:00:00.000Z',
       sources: ['native-health'],

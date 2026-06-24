@@ -262,7 +262,7 @@ describe('a2a-agent capabilities', () => {
 });
 
 describe('runtime capabilities', () => {
-  it('projects runtime lifecycle metadata into native and ACP capability records', async () => {
+  it('projects runtime lifecycle and compatibility metadata into native and ACP capability records', async () => {
     const listers = createAgentCapabilitiesServices(createServices({
       resolveRuntimeCommand: (command) => {
         if (command === 'codex') return '/usr/local/bin/codex';
@@ -290,6 +290,16 @@ describe('runtime capabilities', () => {
         remote: expect.objectContaining({ mode: 'server-runnable', unattended: 'limited' }),
         coordination: expect.objectContaining({ role: 'external-worker', supportsSharedContext: true }),
       }),
+      compatibility: expect.objectContaining({
+        scenarios: expect.objectContaining({
+          'coding-workflow': expect.objectContaining({ level: 'ready' }),
+          'remote-control': expect.objectContaining({ level: 'limited' }),
+          'unattended-automation': expect.objectContaining({
+            level: 'limited',
+            blockers: expect.arrayContaining(['scheduler', 'approval-routing']),
+          }),
+        }),
+      }),
     });
     expect(gemini?.metadata).toMatchObject({
       lifecycle: expect.objectContaining({
@@ -298,6 +308,19 @@ describe('runtime capabilities', () => {
           execute: expect.objectContaining({ support: 'delegated', owner: 'external' }),
         }),
         coordination: expect.objectContaining({ supportsMailbox: false, supportsTaskBoard: false }),
+      }),
+      compatibility: expect.objectContaining({
+        scenarios: expect.objectContaining({
+          'coding-workflow': expect.objectContaining({
+            level: 'limited',
+            blockers: expect.arrayContaining(['adapter-tool-declaration']),
+          }),
+          'permission-governance': expect.objectContaining({ level: 'unknown' }),
+          'artifact-governance': expect.objectContaining({
+            level: 'blocked',
+            blockers: expect.arrayContaining(['artifact-output-contract']),
+          }),
+        }),
       }),
     });
   });

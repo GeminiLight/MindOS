@@ -21,7 +21,9 @@ function isNativeRuntimeDescriptor(value: unknown): value is AgentRuntimeDescrip
   return (record.kind === 'codex' || record.kind === 'claude') &&
     typeof record.id === 'string' &&
     !!record.lifecycle &&
-    typeof record.lifecycle === 'object';
+    typeof record.lifecycle === 'object' &&
+    !!record.compatibility &&
+    typeof record.compatibility === 'object';
 }
 
 export function rememberAvailableNativeRuntimeDescriptor(
