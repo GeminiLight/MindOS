@@ -3,6 +3,7 @@ import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import StudioContent from '@/components/studio/StudioContent';
+import StudioAutomationContent from '@/components/studio/StudioAutomationContent';
 import StudioPanel from '@/components/panels/StudioPanel';
 
 const push = vi.fn();
@@ -43,6 +44,16 @@ async function renderStudio() {
   });
 }
 
+async function renderStudioAutomation() {
+  host = document.createElement('div');
+  document.body.appendChild(host);
+  root = createRoot(host);
+
+  await act(async () => {
+    root!.render(<StudioAutomationContent />);
+  });
+}
+
 async function setInputValue(selector: string, value: string) {
   const input = host.querySelector(selector) as HTMLInputElement | HTMLTextAreaElement | null;
   expect(input).not.toBeNull();
@@ -77,6 +88,8 @@ describe('StudioContent', () => {
 
     expect(host.textContent).toContain('New Project');
     expect(host.textContent).toContain('Projects');
+    expect(host.textContent).not.toContain('Automation');
+    expect(host.textContent).not.toContain('Create automation');
     expect(host.textContent).not.toContain('Project practice');
     expect(host.textContent).not.toContain('Recent Projects');
     expect(host.textContent).not.toContain('New session');
@@ -141,7 +154,7 @@ describe('StudioContent', () => {
     expect(host.querySelectorAll('[data-studio-project-item="compact"]').length).toBeGreaterThan(0);
   });
 
-  it('renders the unified Studio panel with Overview and Projects', async () => {
+  it('renders the unified Studio panel with Overview, Automation and Projects', async () => {
     host = document.createElement('div');
     document.body.appendChild(host);
     root = createRoot(host);
@@ -151,15 +164,36 @@ describe('StudioContent', () => {
     });
 
     expect(host.textContent).toContain('Overview');
+    expect(host.textContent).toContain('Automation');
     expect(host.textContent).toContain('Projects');
     const overview = host.querySelector('a[href="/studio"]');
+    const automation = host.querySelector('a[href="/studio/automation"]');
     expect(overview).not.toBeNull();
+    expect(automation).not.toBeNull();
     expect(overview?.className).toContain('gap-3');
     expect(overview?.className).toContain('px-4');
     expect(overview?.className).toContain('py-2.5');
     expect(host.querySelector('a[href="/studio/launch-practice"]')).not.toBeNull();
     expect(host.textContent).not.toContain('Research Kit');
     expect(host.textContent).not.toContain('2 Sessions');
+  });
+
+  it('selects the Automation sidebar route without treating it as a Project', async () => {
+    mockPathname = '/studio/automation';
+    host = document.createElement('div');
+    document.body.appendChild(host);
+    root = createRoot(host);
+
+    await act(async () => {
+      root!.render(<StudioPanel active />);
+    });
+
+    const overview = host.querySelector('a[href="/studio"]');
+    const automation = host.querySelector('a[href="/studio/automation"]');
+    const launchProject = host.querySelector('a[href="/studio/launch-practice"]');
+    expect(overview?.getAttribute('aria-current')).toBeNull();
+    expect(automation?.getAttribute('aria-current')).toBe('page');
+    expect(launchProject?.getAttribute('aria-current')).toBeNull();
   });
 
   it('keeps Studio panel Project rows flat without expandable Sessions', async () => {
@@ -324,8 +358,8 @@ describe('StudioContent', () => {
     expect(form!.textContent).toContain('Review Kit');
   });
 
-  it('creates, edits, and pauses Studio automations from the overview', async () => {
-    await renderStudio();
+  it('creates, edits, and pauses Studio automations from the Automation page', async () => {
+    await renderStudioAutomation();
 
     expect(host.textContent).toContain('Automation');
     expect(host.textContent).toContain('Create automation');
@@ -397,7 +431,7 @@ describe('StudioContent', () => {
   });
 
   it('prevents creating an automation without a prompt', async () => {
-    await renderStudio();
+    await renderStudioAutomation();
 
     await setInputValue('input[aria-label="Automation title"]', 'Empty automation');
 

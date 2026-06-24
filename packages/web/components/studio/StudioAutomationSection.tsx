@@ -356,11 +356,15 @@ function AutomationCard({
 export default function StudioAutomationSection({
   projects,
   locale,
+  titleLevel = 2,
 }: {
   projects: StudioProject[];
   locale: string;
+  titleLevel?: 1 | 2;
 }) {
   const copy = locale === 'zh' ? COPY.zh : COPY.en;
+  const TitleTag = titleLevel === 1 ? 'h1' : 'h2';
+  const titleClassName = titleLevel === 1 ? 'text-2xl font-semibold text-foreground' : 'text-sm font-semibold text-foreground';
   const [automations, setAutomations] = useState<StudioAutomation[]>(() => readStudioAutomations());
   const [draft, setDraft] = useState<StudioAutomationDraft>(() => defaultDraft(projects));
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -458,7 +462,7 @@ export default function StudioAutomationSection({
               <Sparkles size={12} className="text-[var(--amber)]" aria-hidden="true" />
               {copy.localNote}
             </div>
-            <h2 id="studio-automation-title" className="text-sm font-semibold text-foreground">{copy.title}</h2>
+            <TitleTag id="studio-automation-title" className={titleClassName}>{copy.title}</TitleTag>
             <p className="mt-1 max-w-3xl text-xs leading-relaxed text-muted-foreground">{copy.subtitle}</p>
           </div>
           <div className="grid min-w-0 gap-2 sm:grid-cols-2">

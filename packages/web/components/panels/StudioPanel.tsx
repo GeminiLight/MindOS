@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { FolderOpen, LayoutDashboard, Plus } from 'lucide-react';
+import { CalendarClock, FolderOpen, LayoutDashboard, Plus } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import PanelHeader from './PanelHeader';
 import { PANEL_NAV_SECTION_CLASS, PanelNavRow } from './PanelNavRow';
@@ -25,19 +25,29 @@ const COPY = {
   en: {
     title: 'Studio',
     overview: 'Overview',
+    automation: 'Automation',
     newProject: 'New Project',
     recentProjects: 'Projects',
   },
   zh: {
     title: '工作台',
-    overview: '概览',
+    overview: '总览',
+    automation: '自动化',
     newProject: '新建项目',
     recentProjects: '项目',
   },
 } as const;
 
+function isStudioOverviewPath(pathname: string): boolean {
+  return pathname === '/studio' || pathname === '/studio/';
+}
+
+function isStudioAutomationPath(pathname: string): boolean {
+  return pathname === '/studio/automation' || pathname.startsWith('/studio/automation/');
+}
+
 function getProjectIdFromPath(pathname: string): string | null {
-  if (pathname === '/studio' || pathname === '/studio/') return null;
+  if (isStudioOverviewPath(pathname) || isStudioAutomationPath(pathname)) return null;
   if (!pathname.startsWith('/studio/')) return null;
   const raw = pathname.slice('/studio/'.length).split('/', 1)[0];
   if (!raw) return null;
@@ -90,6 +100,8 @@ export default function StudioPanel({ active }: StudioPanelProps) {
   const { locale } = useLocale();
   const copy = locale === 'zh' ? COPY.zh : COPY.en;
   const pathname = usePathname() ?? '';
+  const overviewActive = isStudioOverviewPath(pathname);
+  const automationActive = isStudioAutomationPath(pathname);
   const currentProjectId = getProjectIdFromPath(pathname);
   const [projects, setProjects] = useState<StudioProject[]>(() => readStudioProjects());
 
@@ -122,7 +134,14 @@ export default function StudioPanel({ active }: StudioPanelProps) {
             href="/studio"
             icon={<LayoutDashboard size={14} aria-hidden="true" />}
             title={copy.overview}
-            active={!currentProjectId}
+            active={overviewActive}
+            activeVariant="rail"
+          />
+          <PanelNavRow
+            href="/studio/automation"
+            icon={<CalendarClock size={14} aria-hidden="true" />}
+            title={copy.automation}
+            active={automationActive}
             activeVariant="rail"
           />
         </div>

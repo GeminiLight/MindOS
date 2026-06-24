@@ -30,6 +30,7 @@ describe('navigation panel route recovery', () => {
     expect(getContentRoutePanel('/agents')).toBe('agents');
     expect(getContentRoutePanel('/agents/codex')).toBe('agents');
     expect(getContentRoutePanel('/studio')).toBe('studio');
+    expect(getContentRoutePanel('/studio/automation')).toBe('studio');
     expect(getContentRoutePanel('/studio/launch-practice')).toBe('studio');
     expect(getContentRoutePanel('/explore')).toBe('discover');
     expect(getContentRoutePanel('/explore/capabilities')).toBe('discover');
@@ -67,6 +68,7 @@ describe('navigation panel route recovery', () => {
     expect(isNeutralContentRoute('/trash')).toBe(true);
     expect(isNeutralContentRoute('/trash/expired')).toBe(true);
     expect(isNeutralContentRoute('/studio')).toBe(false);
+    expect(isNeutralContentRoute('/studio/automation')).toBe(false);
     expect(isNeutralContentRoute('/studio/launch-practice')).toBe(false);
     expect(isNeutralContentRoute('/wiki')).toBe(false);
     expect(isNeutralContentRoute('/settings-old')).toBe(false);
@@ -75,6 +77,7 @@ describe('navigation panel route recovery', () => {
 
   it('matches Studio routes with segment boundaries', () => {
     expect(isStudioRoute('/studio')).toBe(true);
+    expect(isStudioRoute('/studio/automation')).toBe(true);
     expect(isStudioRoute('/studio/launch-practice')).toBe(true);
     expect(isStudioRoute('/studio-old')).toBe(false);
     expect(isStudioRoute('/studios')).toBe(false);
@@ -86,6 +89,7 @@ describe('navigation panel route recovery', () => {
     expect(getRouteControlledPanel('/capture')).toBe('capture');
     expect(getRouteControlledPanel('/agents')).toBe('agents');
     expect(getRouteControlledPanel('/studio')).toBe('studio');
+    expect(getRouteControlledPanel('/studio/automation')).toBe('studio');
     expect(getRouteControlledPanel('/studio/launch-practice')).toBe('studio');
     expect(getRouteControlledPanel('/explore')).toBe('discover');
     expect(getRouteControlledPanel('/explore/capabilities')).toBe('discover');
