@@ -13,6 +13,7 @@ import { useRendererState } from '@/lib/renderers/useRendererState';
 import '@/lib/renderers/index';
 import Breadcrumb from '@/components/Breadcrumb';
 import MarkdownEditor, { MdViewMode } from '@/components/MarkdownEditor';
+import LinterFixReviewPanel from '@/components/obsidian/LinterFixReviewPanel';
 import EditorWrapper from '@/components/EditorWrapper';
 import TableOfContents, {
   parseTableOfContentsHeadings,
@@ -40,8 +41,8 @@ import { agentReviewHref } from '@/lib/agent-review-links';
 import { useAgentChangeReview } from '@/hooks/useAgentChangeReview';
 import { refreshPreservingDocumentScroll } from '@/lib/scroll-preservation';
 import {
-  applyObsidianLinterFixes,
   buildObsidianLinterSandboxContributions,
+  previewObsidianLinterFixes,
   type ObsidianLinterRuleProfileInput,
 } from '@/lib/obsidian-compat/linter-adapter';
 import type { PluginSurface } from '@/lib/plugins/surfaces';
@@ -306,6 +307,7 @@ export default function ViewPageClient({
   const modeButtonRef = useRef<HTMLButtonElement>(null);
   const modeMenuRef = useRef<HTMLDivElement>(null);
   const [linterPreviewEnabled, setLinterPreviewEnabled] = useState(false);
+  const [linterFixReviewOpen, setLinterFixReviewOpen] = useState(false);
   const previousFilePathRef = useRef(filePath);
   useEffect(() => {
     if (previousFilePathRef.current === filePath) return;
@@ -319,6 +321,7 @@ export default function ViewPageClient({
     setGraphMode(false);
     setModeMenuOpen(false);
     setLinterPreviewEnabled(false);
+    setLinterFixReviewOpen(false);
     const nextMarkdownState = resolveMarkdownStartState(isBinaryFile, isMarkdown, initialEditing, content);
     setMdViewModeState(nextMarkdownState.mode);
     setEditing(nextMarkdownState.editing);
@@ -636,22 +639,43 @@ export default function ViewPageClient({
   const linterIssueCountLabel = linterPreview
     ? `${linterPreview.issues.length}${linterPreview.skipped.length > 0 ? '+' : ''}`
     : '';
-  const canApplyLinterFixes = Boolean(
+  const hasFixableLinterIssues = Boolean(
     linterPreview
     && linterPreview.skipped.length === 0
     && linterPreview.issues.some(issue => issue.fixable),
   );
-  const handleApplyLinterFixes = useCallback(() => {
-    if (!canShowLinterPreview || !linterPreviewEnabled || !canApplyLinterFixes) return;
-    const result = applyObsidianLinterFixes(editContent, {
+  const linterFixPreview = useMemo(() => {
+    if (!canShowLinterPreview || !linterPreviewEnabled || !hasFixableLinterIssues) return null;
+    const preview = previewObsidianLinterFixes(editContent, {
       profile: SOURCE_EDITOR_LINTER_PROFILE,
     });
-    if (result.markdown === editContent) return;
+    return preview.changed ? preview : null;
+  }, [canShowLinterPreview, editContent, hasFixableLinterIssues, linterPreviewEnabled]);
+  const canReviewLinterFixes = Boolean(linterFixPreview);
+  useEffect(() => {
+    if (!canReviewLinterFixes && linterFixReviewOpen) {
+      setLinterFixReviewOpen(false);
+    }
+  }, [canReviewLinterFixes, linterFixReviewOpen]);
+  const handleApplyReviewedLinterFixes = useCallback(() => {
+    if (!linterFixPreview) return;
+    const previousMarkdown = editContent;
+    const nextMarkdown = linterFixPreview.markdown;
+    if (nextMarkdown === previousMarkdown) return;
     keepCurrentTab();
     setSaveError(null);
-    setEditContent(result.markdown);
+    setEditContent(nextMarkdown);
     setAutoSaveStatus('idle');
-  }, [canApplyLinterFixes, canShowLinterPreview, editContent, keepCurrentTab, linterPreviewEnabled]);
+    setLinterFixReviewOpen(false);
+    const fixCount = linterFixPreview.fixCount;
+    toast.undo(`Applied ${fixCount} Linter fix${fixCount === 1 ? '' : 'es'}`, () => {
+      keepCurrentTab();
+      setSaveError(null);
+      setEditContent(previousMarkdown);
+      setAutoSaveStatus('idle');
+      setLinterPreviewEnabled(true);
+    }, { label: 'Undo' });
+  }, [editContent, keepCurrentTab, linterFixPreview]);
   const tocCollapsed = useSyncExternalStore(
     subscribeTableOfContentsCollapsed,
     readTableOfContentsCollapsed,
@@ -900,16 +924,16 @@ export default function ViewPageClient({
                 </button>
               )}
 
-              {canShowLinterPreview && canApplyLinterFixes && (
+              {canShowLinterPreview && canReviewLinterFixes && (
                 <button
                   type="button"
-                  aria-label="Apply Linter fixes"
-                  title={`Apply ${linterPreview?.issues.length ?? 0} Linter fix${(linterPreview?.issues.length ?? 0) === 1 ? '' : 'es'} to editor`}
-                  onClick={handleApplyLinterFixes}
+                  aria-label="Review Linter fixes"
+                  title={`Review ${linterFixPreview?.fixCount ?? 0} Linter fix${(linterFixPreview?.fixCount ?? 0) === 1 ? '' : 'es'}`}
+                  onClick={() => setLinterFixReviewOpen(true)}
                   className="inline-flex h-8 min-w-8 items-center justify-center gap-1.5 rounded-md border border-border bg-card px-2.5 text-xs font-medium text-muted-foreground shadow-sm transition-colors duration-75 hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation"
                 >
                   <Wand2 size={13} />
-                  <span className="hidden sm:inline">Apply</span>
+                  <span className="hidden sm:inline">Review</span>
                 </button>
               )}
 
@@ -1110,6 +1134,16 @@ export default function ViewPageClient({
                         />
                       </div>
                     </div>
+                  )}
+                  {linterFixReviewOpen && linterFixPreview && (
+                    <LinterFixReviewPanel
+                      beforeMarkdown={editContent}
+                      afterMarkdown={linterFixPreview.markdown}
+                      applied={linterFixPreview.applied}
+                      fixCount={linterFixPreview.fixCount}
+                      onApply={handleApplyReviewedLinterFixes}
+                      onClose={() => setLinterFixReviewOpen(false)}
+                    />
                   )}
                   <MarkdownEditor
                     value={editContent}

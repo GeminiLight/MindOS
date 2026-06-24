@@ -16,7 +16,12 @@ export { CommandRegistry } from './command-registry';
 export { Component } from './component';
 export { Events } from './events';
 export { ObsidianRuntimeHost } from './runtime';
-export { buildObsidianLinterSandboxContributions } from './linter-adapter';
+export {
+  applyObsidianLinterFixes,
+  buildObsidianLinterSandboxContributions,
+  normalizeObsidianLinterRuleProfile,
+  previewObsidianLinterFixes,
+} from './linter-adapter';
 export {
   createDefaultObsidianSecretStorageBackend,
   DesktopSafeStorageBrokerBackend,
@@ -90,4 +95,9 @@ export type {
   ObsidianLinterAdapterRuleId,
   ObsidianLinterAdapterSeverity,
   ObsidianLinterAdapterSkippedIssueSummary,
+  ObsidianLinterAppliedFixSummary,
+  ObsidianLinterApplyFixResult,
+  ObsidianLinterFixPreviewResult,
+  ObsidianLinterRuleProfile,
+  ObsidianLinterRuleProfileInput,
 } from './linter-adapter';

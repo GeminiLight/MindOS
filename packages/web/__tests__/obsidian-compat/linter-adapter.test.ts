@@ -4,6 +4,7 @@ import {
   applyObsidianLinterFixes,
   buildObsidianLinterSandboxContributions,
   normalizeObsidianLinterRuleProfile,
+  previewObsidianLinterFixes,
   type ObsidianLinterAdapterRuleId,
 } from '@/lib/obsidian-compat/linter-adapter';
 
@@ -170,5 +171,17 @@ describe('Obsidian Linter declarative adapter', () => {
     expect(result.applied).toEqual([
       { ruleId: 'trailing-whitespace', count: 1 },
     ]);
+  });
+
+  it('previews fix counts without mutating clean markdown', () => {
+    const dirty = previewObsidianLinterFixes('#Title  \n');
+    expect(dirty.changed).toBe(true);
+    expect(dirty.fixCount).toBe(2);
+    expect(dirty.markdown).toBe('# Title\n');
+
+    const clean = previewObsidianLinterFixes('# Title\n');
+    expect(clean.changed).toBe(false);
+    expect(clean.fixCount).toBe(0);
+    expect(clean.applied).toEqual([]);
   });
 });

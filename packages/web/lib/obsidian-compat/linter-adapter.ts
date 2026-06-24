@@ -63,6 +63,11 @@ export interface ObsidianLinterApplyFixResult {
   applied: ObsidianLinterAppliedFixSummary[];
 }
 
+export interface ObsidianLinterFixPreviewResult extends ObsidianLinterApplyFixResult {
+  changed: boolean;
+  fixCount: number;
+}
+
 interface MarkdownLine {
   number: number;
   text: string;
@@ -261,6 +266,21 @@ export function applyObsidianLinterFixes(
   return {
     markdown: fixedMarkdown,
     applied: Array.from(applied.entries()).map(([ruleId, count]) => ({ ruleId, count })),
+  };
+}
+
+export function previewObsidianLinterFixes(
+  markdown: string,
+  options: Pick<ObsidianLinterAdapterOptions, 'profile' | 'enabledRules' | 'maxConsecutiveBlankLines'> = {},
+): ObsidianLinterFixPreviewResult {
+  const originalMarkdown = String(markdown);
+  const result = applyObsidianLinterFixes(originalMarkdown, options);
+  const fixCount = result.applied.reduce((total, item) => total + item.count, 0);
+
+  return {
+    ...result,
+    changed: result.markdown !== originalMarkdown,
+    fixCount,
   };
 }
 

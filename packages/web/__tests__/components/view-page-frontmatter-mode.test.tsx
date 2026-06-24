@@ -3,6 +3,7 @@ import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import ViewPageClient from '@/app/view/[...path]/ViewPageClient';
+import { toast } from '@/lib/toast';
 
 const mocks = vi.hoisted(() => ({
   twemojiToNative: vi.fn((value: string) => value),
@@ -79,7 +80,11 @@ vi.mock('@/components/agents/AgentsPrimitives', () => ({
   ConfirmDialog: () => null,
 }));
 vi.mock('@/components/changes/line-diff', () => ({
-  buildLineDiff: () => [],
+  buildLineDiff: (before: string, after: string) => [
+    { type: 'delete', text: before.split('\n')[0] ?? '' },
+    { type: 'insert', text: after.split('\n')[0] ?? '' },
+  ],
+  collapseDiffContext: (rows: unknown[]) => rows,
 }));
 vi.mock('@/lib/actions', () => ({
   renameFileAction: vi.fn(),
@@ -297,7 +302,7 @@ describe('ViewPageClient frontmatter markdown mode', () => {
     expect(editorAfter?.getAttribute('data-sandbox-count')).toBe('2');
   });
 
-  it('applies Linter fixes only after an explicit source-mode action', async () => {
+  it('reviews and applies Linter fixes only through an explicit source-mode action with undo', async () => {
     localStorage.setItem('md-view-mode', 'source');
 
     await act(async () => {
@@ -318,24 +323,52 @@ describe('ViewPageClient frontmatter markdown mode', () => {
     expect(lintButton).toBeTruthy();
     expect([...host.querySelectorAll('button')]
       .find(button => button.getAttribute('aria-label') === 'Apply Linter fixes')).toBeFalsy();
+    expect([...host.querySelectorAll('button')]
+      .find(button => button.getAttribute('aria-label') === 'Review Linter fixes')).toBeFalsy();
 
     await act(async () => {
       lintButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
-    const applyButton = [...host.querySelectorAll('button')]
-      .find(button => button.getAttribute('aria-label') === 'Apply Linter fixes');
-    expect(applyButton).toBeTruthy();
+    const reviewButton = [...host.querySelectorAll('button')]
+      .find(button => button.getAttribute('aria-label') === 'Review Linter fixes');
+    expect(reviewButton).toBeTruthy();
+    expect(host.querySelector('[data-testid="linter-fix-review"]')).toBeNull();
 
     await act(async () => {
-      applyButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      reviewButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(host.querySelector('[data-testid="linter-fix-review"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="linter-fix-review-summary"]')?.textContent).toContain('2 fixes');
+    expect(host.querySelector('[data-testid="markdown-editor"]')?.textContent).toBe('#Title\nLine with space  \n');
+
+    const applyReviewedButton = [...host.querySelectorAll('button')]
+      .find(button => button.getAttribute('aria-label') === 'Apply reviewed Linter fixes');
+    expect(applyReviewedButton).toBeTruthy();
+
+    await act(async () => {
+      applyReviewedButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
     const editorAfter = host.querySelector('[data-testid="markdown-editor"]');
     expect(editorAfter?.textContent).toBe('# Title\nLine with space\n');
     expect(editorAfter?.getAttribute('data-sandbox-count')).toBe('0');
-    expect([...host.querySelectorAll('button')]
-      .find(button => button.getAttribute('aria-label') === 'Apply Linter fixes')).toBeFalsy();
+    expect(host.querySelector('[data-testid="linter-fix-review"]')).toBeNull();
+    expect(toast.undo).toHaveBeenCalledWith(
+      'Applied 2 Linter fixes',
+      expect.any(Function),
+      { label: 'Undo' },
+    );
+
+    const undo = vi.mocked(toast.undo).mock.calls.at(-1)?.[1];
+    expect(undo).toBeTruthy();
+
+    await act(async () => {
+      undo?.();
+    });
+
+    expect(host.querySelector('[data-testid="markdown-editor"]')?.textContent).toBe('#Title\nLine with space  \n');
   });
 
   it('remembers when the user switches back to Edit for later markdown files', async () => {
