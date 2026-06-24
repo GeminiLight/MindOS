@@ -38,6 +38,7 @@ import { closeByKey, keepTab, openTab } from '@/lib/workspace-tabs';
 import { fetchPluginViewSurfacesForExtension, pluginViewSurfaceHref } from '@/lib/plugins/client';
 import { agentReviewHref } from '@/lib/agent-review-links';
 import { useAgentChangeReview } from '@/hooks/useAgentChangeReview';
+import { refreshPreservingDocumentScroll } from '@/lib/scroll-preservation';
 import type { PluginSurface } from '@/lib/plugins/surfaces';
 
 interface ViewPageClientProps {
@@ -215,6 +216,13 @@ export default function ViewPageClient({
     selfSavedPathsRef.current.add(targetPath);
     notifyFilesChanged([targetPath]);
   }, [filePath]);
+  const refreshCurrentView = useCallback((options: { preserveScroll?: boolean } = {}) => {
+    if (options.preserveScroll) {
+      refreshPreservingDocumentScroll(() => router.refresh());
+      return;
+    }
+    router.refresh();
+  }, [router]);
 
   // Sync savedContent when server re-renders with new content (e.g. after router.refresh)
   const serverContentRef = useRef(content);
@@ -363,11 +371,11 @@ export default function ViewPageClient({
       if (result.success && result.newPath) {
         retargetKeptDocTab(filePath, result.newPath);
         router.push(`/view/${encodePath(result.newPath)}`);
-        router.refresh();
+        refreshCurrentView();
         notifyFilesChanged([filePath, result.newPath]);
       }
     });
-  }, [renameValue, filePath, router, retargetKeptDocTab]);
+  }, [renameValue, filePath, router, retargetKeptDocTab, refreshCurrentView]);
 
   const handleConfirmDelete = useCallback(() => {
     setShowDeleteConfirm(false);
@@ -380,7 +388,7 @@ export default function ViewPageClient({
           toast.undo(`${t.trash?.movedToTrash ?? 'Deleted'} ${fileName}`, async () => {
             const undo = await undoDeleteAction(trashId);
             if (undo.success) {
-              router.refresh();
+              refreshCurrentView();
               notifyFilesChanged([filePath]);
             } else {
               toast.error(undo.error ?? 'Undo failed');
@@ -388,11 +396,11 @@ export default function ViewPageClient({
           }, { label: t.trash?.undo ?? 'Undo' });
         }
         router.push('/');
-        router.refresh();
+        refreshCurrentView();
         notifyFilesChanged([filePath]);
       }
     });
-  }, [filePath, router, t]);
+  }, [filePath, router, t, refreshCurrentView]);
 
   // Keep first paint deterministic between server and client to avoid hydration mismatch.
   const effectiveUseRaw = hydrated ? useRaw : false;
@@ -505,13 +513,13 @@ export default function ViewPageClient({
         setSaveSuccess(true);
         setTimeout(() => setSaveSuccess(false), 2500);
         router.push(`/view/${encodePath(targetPath)}`);
-        router.refresh();
+        refreshCurrentView();
         notifyFilesChanged([targetPath]);
       } catch (err) {
         setSaveError(err instanceof Error ? err.message : 'Failed to save');
       }
     });
-  }, [saveName, createDraftAction, saveDir, editContent, filePath, router, retargetKeptDocTab]);
+  }, [saveName, createDraftAction, saveDir, editContent, filePath, router, retargetKeptDocTab, refreshCurrentView]);
 
   const handleSave = useCallback(() => {
     if (isCsv) {
@@ -684,12 +692,12 @@ export default function ViewPageClient({
       if (paths && isPathAffected(paths, filePath) && selfSavedPathsRef.current.delete(filePath)) return;
       if (editing) return;
       aiTriggeredRef.current = true;
-      router.refresh();
+      refreshCurrentView({ preserveScroll: paths === undefined });
       setFileUpdated(true);
       if (updatedTimerRef.current) clearTimeout(updatedTimerRef.current);
       updatedTimerRef.current = setTimeout(() => setFileUpdated(false), 3000);
     }, { isRelevant: (paths) => isPathAffected(paths, filePath) });
-  }, [editing, router, filePath]);
+  }, [editing, refreshCurrentView, filePath]);
 
   return (
     <div className="flex flex-col min-h-[calc(100vh-var(--app-titlebar-h))]">

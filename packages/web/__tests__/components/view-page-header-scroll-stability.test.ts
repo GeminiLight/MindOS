@@ -50,4 +50,16 @@ describe('ViewPageClient header scroll stability', () => {
     expect(source).toContain('selfSavedPathsRef.current.add(targetPath);');
     expect(source).toContain('if (paths && isPathAffected(paths, filePath) && selfSavedPathsRef.current.delete(filePath)) return;');
   });
+
+  it('preserves reading scroll when a generic files-changed event refreshes the current view', () => {
+    const viewPath = path.resolve(process.cwd(), 'app/view/[...path]/ViewPageClient.tsx');
+    const sidebarPath = path.resolve(process.cwd(), 'components/SidebarLayout.tsx');
+    const viewSource = fs.readFileSync(viewPath, 'utf8');
+    const sidebarSource = fs.readFileSync(sidebarPath, 'utf8');
+
+    expect(viewSource).toContain("import { refreshPreservingDocumentScroll } from '@/lib/scroll-preservation';");
+    expect(viewSource).toContain('refreshCurrentView({ preserveScroll: paths === undefined });');
+    expect(sidebarSource).toContain("import { refreshPreservingDocumentScroll } from '@/lib/scroll-preservation';");
+    expect(sidebarSource).toContain('refreshPreservingDocumentScroll(() => router.refresh());');
+  });
 });

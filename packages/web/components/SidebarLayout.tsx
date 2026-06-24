@@ -25,6 +25,7 @@ import type { MindSystemSlot } from '@/lib/mind-system';
 import { useLocale } from '@/lib/stores/locale-store';
 import { telemetry } from '@/lib/telemetry';
 import { notifyFilesChanged } from '@/lib/files-changed';
+import { refreshPreservingDocumentScroll } from '@/lib/scroll-preservation';
 import dynamic from 'next/dynamic';
 
 const SearchModal = dynamic(() => import('./SearchModal'), { ssr: false });
@@ -688,7 +689,7 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
       lastRefreshTime = Date.now();
       const stopRefresh = telemetry.startTimer('tree.refresh.trigger');
       startTransition(() => {
-        router.refresh();
+        refreshPreservingDocumentScroll(() => router.refresh());
       });
       stopRefresh({ previousVersion, version, reason: 'tree_version_changed' });
       notifyFilesChanged();
