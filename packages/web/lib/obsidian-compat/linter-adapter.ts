@@ -230,10 +230,7 @@ export function normalizeObsidianLinterRuleProfile(
   profile: ObsidianLinterRuleProfileInput = {},
 ): ObsidianLinterRuleProfile {
   return {
-    enabledRules: {
-      ...DEFAULT_OBSIDIAN_LINTER_RULE_PROFILE.enabledRules,
-      ...profile.enabledRules,
-    },
+    enabledRules: normalizeEnabledRules(profile.enabledRules),
     maxConsecutiveBlankLines: normalizePositiveInteger(
       profile.maxConsecutiveBlankLines,
       DEFAULT_OBSIDIAN_LINTER_RULE_PROFILE.maxConsecutiveBlankLines,
@@ -466,6 +463,22 @@ function normalizePluginId(pluginId: string | undefined): string {
 function normalizePositiveInteger(value: number | undefined, fallback: number): number {
   if (typeof value !== 'number' || !Number.isSafeInteger(value) || value <= 0) return fallback;
   return value;
+}
+
+function normalizeEnabledRules(
+  enabledRules: ObsidianLinterRuleProfileInput['enabledRules'],
+): Record<ObsidianLinterAdapterRuleId, boolean> {
+  const normalized = { ...DEFAULT_OBSIDIAN_LINTER_RULE_PROFILE.enabledRules };
+  if (!enabledRules || typeof enabledRules !== 'object') return normalized;
+
+  for (const rule of OBSIDIAN_LINTER_RULE_METADATA) {
+    const value = enabledRules[rule.id];
+    if (typeof value === 'boolean') {
+      normalized[rule.id] = value;
+    }
+  }
+
+  return normalized;
 }
 
 function isRuleEnabled(

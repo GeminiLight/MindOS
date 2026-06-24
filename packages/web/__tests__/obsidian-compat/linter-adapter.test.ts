@@ -152,6 +152,27 @@ describe('Obsidian Linter declarative adapter', () => {
     });
   });
 
+  it('ignores unknown rules and non-boolean enabled values when normalizing profiles', () => {
+    const profile = normalizeObsidianLinterRuleProfile({
+      maxConsecutiveBlankLines: Number.NaN,
+      enabledRules: {
+        'heading-space': 'false',
+        'trailing-whitespace': false,
+        unknown: false,
+      } as unknown as Partial<Record<ObsidianLinterAdapterRuleId, boolean>>,
+    });
+
+    expect(profile.maxConsecutiveBlankLines).toBe(1);
+    expect(profile.enabledRules).toEqual({
+      'heading-space': true,
+      'trailing-whitespace': false,
+      'hard-tab': true,
+      'multiple-blank-lines': true,
+      'missing-final-newline': true,
+    });
+    expect('unknown' in profile.enabledRules).toBe(false);
+  });
+
   it('applies safe markdown fixes through the MindOS-owned adapter', () => {
     const markdown = [
       '#Title',

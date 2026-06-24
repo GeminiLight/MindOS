@@ -14,6 +14,7 @@ import '@/lib/renderers/index';
 import Breadcrumb from '@/components/Breadcrumb';
 import MarkdownEditor, { MdViewMode } from '@/components/MarkdownEditor';
 import LinterFixReviewPanel from '@/components/obsidian/LinterFixReviewPanel';
+import ObsidianLinterProfileMenu from '@/components/obsidian/ObsidianLinterProfileMenu';
 import EditorWrapper from '@/components/EditorWrapper';
 import TableOfContents, {
   parseTableOfContentsHeadings,
@@ -43,8 +44,8 @@ import { refreshPreservingDocumentScroll } from '@/lib/scroll-preservation';
 import {
   buildObsidianLinterSandboxContributions,
   previewObsidianLinterFixes,
-  type ObsidianLinterRuleProfileInput,
 } from '@/lib/obsidian-compat/linter-adapter';
+import { useObsidianLinterProfile } from '@/lib/stores/obsidian-linter-profile-store';
 import type { PluginSurface } from '@/lib/plugins/surfaces';
 
 interface ViewPageClientProps {
@@ -113,16 +114,6 @@ function FileBodyWarmup({ isMarkdown, editing }: { isMarkdown: boolean; editing:
 }
 
 const MARKDOWN_VIEW_MODE_STORAGE_KEY = 'md-view-mode';
-const SOURCE_EDITOR_LINTER_PROFILE: ObsidianLinterRuleProfileInput = {
-  maxConsecutiveBlankLines: 1,
-  enabledRules: {
-    'heading-space': true,
-    'trailing-whitespace': true,
-    'hard-tab': true,
-    'multiple-blank-lines': true,
-    'missing-final-newline': true,
-  },
-};
 
 function normalizeMarkdownModePreference(value: string | null): MdViewMode {
   if (value === 'preview' || value === 'source' || value === 'wysiwyg') return value;
@@ -306,6 +297,7 @@ export default function ViewPageClient({
   const [modeMenuOpen, setModeMenuOpen] = useState(false);
   const modeButtonRef = useRef<HTMLButtonElement>(null);
   const modeMenuRef = useRef<HTMLDivElement>(null);
+  const obsidianLinterProfile = useObsidianLinterProfile();
   const [linterPreviewEnabled, setLinterPreviewEnabled] = useState(false);
   const [linterFixReviewOpen, setLinterFixReviewOpen] = useState(false);
   const previousFilePathRef = useRef(filePath);
@@ -632,9 +624,9 @@ export default function ViewPageClient({
   const linterPreview = useMemo(() => {
     if (!canShowLinterPreview || !linterPreviewEnabled) return null;
     return buildObsidianLinterSandboxContributions(editContent, {
-      profile: SOURCE_EDITOR_LINTER_PROFILE,
+      profile: obsidianLinterProfile,
     });
-  }, [canShowLinterPreview, editContent, linterPreviewEnabled]);
+  }, [canShowLinterPreview, editContent, linterPreviewEnabled, obsidianLinterProfile]);
   const linterSandboxContributions = linterPreview?.contributions ?? [];
   const linterIssueCountLabel = linterPreview
     ? `${linterPreview.issues.length}${linterPreview.skipped.length > 0 ? '+' : ''}`
@@ -647,10 +639,10 @@ export default function ViewPageClient({
   const linterFixPreview = useMemo(() => {
     if (!canShowLinterPreview || !linterPreviewEnabled || !hasFixableLinterIssues) return null;
     const preview = previewObsidianLinterFixes(editContent, {
-      profile: SOURCE_EDITOR_LINTER_PROFILE,
+      profile: obsidianLinterProfile,
     });
     return preview.changed ? preview : null;
-  }, [canShowLinterPreview, editContent, hasFixableLinterIssues, linterPreviewEnabled]);
+  }, [canShowLinterPreview, editContent, hasFixableLinterIssues, linterPreviewEnabled, obsidianLinterProfile]);
   const canReviewLinterFixes = Boolean(linterFixPreview);
   useEffect(() => {
     if (!canReviewLinterFixes && linterFixReviewOpen) {
@@ -922,6 +914,10 @@ export default function ViewPageClient({
                     </span>
                   )}
                 </button>
+              )}
+
+              {canShowLinterPreview && (
+                <ObsidianLinterProfileMenu />
               )}
 
               {canShowLinterPreview && canReviewLinterFixes && (

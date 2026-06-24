@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import ViewPageClient from '@/app/view/[...path]/ViewPageClient';
 import { toast } from '@/lib/toast';
+import { OBSIDIAN_LINTER_PROFILE_STORAGE_KEY } from '@/lib/stores/obsidian-linter-profile-store';
 
 const mocks = vi.hoisted(() => ({
   twemojiToNative: vi.fn((value: string) => value),
@@ -300,6 +301,64 @@ describe('ViewPageClient frontmatter markdown mode', () => {
     expect(lintButton?.getAttribute('aria-pressed')).toBe('true');
     expect(lintButton?.textContent).toContain('2');
     expect(editorAfter?.getAttribute('data-sandbox-count')).toBe('2');
+  });
+
+  it('uses the persisted Obsidian Linter profile and updates preview when rules change', async () => {
+    localStorage.setItem('md-view-mode', 'source');
+    localStorage.setItem(OBSIDIAN_LINTER_PROFILE_STORAGE_KEY, JSON.stringify({
+      version: 1,
+      enabledRules: {
+        'trailing-whitespace': false,
+      },
+      maxConsecutiveBlankLines: 1,
+    }));
+
+    await act(async () => {
+      root.render(
+        <ViewPageClient
+          filePath="source-mode.md"
+          content={'#Title\nLine with space  \n'}
+          extension="md"
+          saveAction={vi.fn()}
+        />,
+      );
+    });
+
+    await flushDeferredFileBody();
+
+    const lintButton = [...host.querySelectorAll('button')]
+      .find(button => button.getAttribute('aria-label') === 'Toggle Linter preview');
+    expect(lintButton).toBeTruthy();
+
+    await act(async () => {
+      lintButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(lintButton?.textContent).toContain('1');
+    expect(host.querySelector('[data-testid="markdown-editor"]')?.getAttribute('data-sandbox-count')).toBe('1');
+
+    const rulesButton = [...host.querySelectorAll('button')]
+      .find(button => button.getAttribute('aria-label') === 'Configure Linter rules');
+    expect(rulesButton).toBeTruthy();
+
+    await act(async () => {
+      rulesButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    const trailingWhitespaceToggle = host.querySelector(
+      '[data-testid="linter-rule-toggle-trailing-whitespace"]',
+    ) as HTMLInputElement | null;
+    expect(trailingWhitespaceToggle).toBeTruthy();
+    expect(trailingWhitespaceToggle?.checked).toBe(false);
+
+    await act(async () => {
+      trailingWhitespaceToggle!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    const updatedPreference = JSON.parse(localStorage.getItem(OBSIDIAN_LINTER_PROFILE_STORAGE_KEY) ?? '{}');
+    expect(updatedPreference.enabledRules['trailing-whitespace']).toBe(true);
+    expect(host.querySelector('[data-testid="markdown-editor"]')?.getAttribute('data-sandbox-count')).toBe('2');
+    expect(lintButton?.textContent).toContain('2');
   });
 
   it('reviews and applies Linter fixes only through an explicit source-mode action with undo', async () => {
