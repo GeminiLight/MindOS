@@ -53,6 +53,12 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+html {
+  /* The viewport is the document scroll owner; keep its right gutter stable
+     so route changes do not reflow content when a page starts scrolling. */
+  scrollbar-gutter: stable;
+}
+
 body {
   font-family: var(--font-ui), 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji';
   scrollbar-gutter: stable;
