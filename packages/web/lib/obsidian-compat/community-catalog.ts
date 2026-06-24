@@ -106,6 +106,7 @@ export interface PreflightObsidianCommunityPluginPackageOptions {
   targetAppVersion?: string;
   fetchImpl?: typeof fetch;
   timeoutMs?: number;
+  mainJsMaxChars?: number;
 }
 
 export type FetchObsidianCommunityPluginPackageOptions = PreflightObsidianCommunityPluginPackageOptions;
@@ -416,6 +417,10 @@ export async function fetchObsidianCommunityPluginPackage(
     fetchImpl,
     timeoutMs,
   });
+  const mainJsMaxChars = normalizePackageAssetMaxChars(
+    options.mainJsMaxChars,
+    OBSIDIAN_COMMUNITY_MAIN_JS_MAX_CHARS,
+  );
   const manifestJson = await fetchRequiredTextAsset(
     source.manifestUrl,
     fetchImpl,
@@ -432,7 +437,7 @@ export async function fetchObsidianCommunityPluginPackage(
     timeoutMs,
     'main.js',
     'text/javascript',
-    OBSIDIAN_COMMUNITY_MAIN_JS_MAX_CHARS,
+    mainJsMaxChars,
   );
   const stylesCss = await fetchOptionalTextAsset(
     source.stylesUrl,
@@ -537,7 +542,12 @@ function sha256(value: string): string {
 
 function normalizePackageFetchTimeout(value: number | undefined): number {
   if (!Number.isFinite(value) || !value || value < 1) return OBSIDIAN_COMMUNITY_PACKAGE_FETCH_TIMEOUT_MS;
-  return Math.min(value, OBSIDIAN_COMMUNITY_PACKAGE_FETCH_TIMEOUT_MS);
+  return Math.max(1000, Math.min(30_000, Math.floor(value)));
+}
+
+function normalizePackageAssetMaxChars(value: number | undefined, fallback: number): number {
+  if (!Number.isFinite(value) || !value || value < 1) return fallback;
+  return Math.max(1024, Math.floor(value));
 }
 
 function normalizeTargetAppVersion(value: string | undefined): string | undefined {

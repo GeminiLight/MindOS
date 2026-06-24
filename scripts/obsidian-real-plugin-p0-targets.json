@@ -1,0 +1,127 @@
+{
+  "schemaVersion": 1,
+  "targetSet": "obsidian-p0-ecosystem-sample-2026-06-24",
+  "sourcePolicy": "obsidian-community-index+github-release-assets",
+  "plugins": [
+    {
+      "id": "obsidian-style-settings",
+      "priority": "P0",
+      "category": "settings-appearance",
+      "reason": "Representative settings and CSS plugin; a good low-risk runtime compatibility canary."
+    },
+    {
+      "id": "quickadd",
+      "priority": "P0",
+      "category": "commands-automation",
+      "reason": "High-value command and capture workflow plugin that exercises commands, modal, vault, and settings surfaces."
+    },
+    {
+      "id": "tag-wrangler",
+      "priority": "P0",
+      "category": "metadata",
+      "reason": "Metadata/tag management plugin that tests note inspection and controlled vault updates."
+    },
+    {
+      "id": "homepage",
+      "priority": "P0",
+      "category": "workspace-navigation",
+      "reason": "Workspace startup/navigation plugin that tests workspace request surfaces without requiring full pane parity."
+    },
+    {
+      "id": "templater-obsidian",
+      "priority": "P0",
+      "category": "commands-automation",
+      "reason": "Core migration blocker for Obsidian users; needs explicit gate visibility even when native/script execution is blocked."
+    },
+    {
+      "id": "dataview",
+      "priority": "P0",
+      "category": "metadata-query",
+      "reason": "Canonical metadata/query plugin; guides native MindOS query and markdown processor compatibility priorities."
+    },
+    {
+      "id": "obsidian-tasks-plugin",
+      "priority": "P0",
+      "category": "metadata-query",
+      "reason": "Task query/rendering plugin that probes metadata cache, markdown post-processing, and future native task views."
+    },
+    {
+      "id": "calendar",
+      "priority": "P0",
+      "category": "views-navigation",
+      "reason": "Popular view/navigation plugin; useful for validating snapshot view and workspace request boundaries."
+    },
+    {
+      "id": "obsidian-kanban",
+      "priority": "P0",
+      "category": "custom-view",
+      "reason": "Custom view with real workflow value; should become catalog/native rather than accidental full workspace emulation."
+    },
+    {
+      "id": "obsidian-excalidraw-plugin",
+      "priority": "P0",
+      "category": "custom-view",
+      "reason": "Top downloaded complex UI plugin; establishes the boundary between file compatibility and full runtime compatibility."
+    },
+    {
+      "id": "table-editor-obsidian",
+      "priority": "P0",
+      "category": "editor-enhancement",
+      "reason": "Representative editor enhancement plugin; validates CodeMirror/editor catalog-only gating."
+    },
+    {
+      "id": "obsidian-minimal-settings",
+      "priority": "P0",
+      "category": "settings-appearance",
+      "reason": "Theme settings plugin that should stay in the lightweight settings/CSS compatibility lane."
+    },
+    {
+      "id": "obsidian-linter",
+      "priority": "P0",
+      "category": "editor-enhancement",
+      "reason": "Markdown formatting plugin that exercises settings, commands, editor-adjacent APIs, and no-op/catalog editor shims."
+    },
+    {
+      "id": "obsidian-admonition",
+      "priority": "P0",
+      "category": "document-rendering",
+      "reason": "Markdown/codeblock rendering plugin that validates document snapshot and style handling."
+    },
+    {
+      "id": "omnisearch",
+      "priority": "P0",
+      "category": "search-navigation",
+      "reason": "Search/navigation plugin that highlights overlap with native MindOS retrieval and plugin catalog needs."
+    },
+    {
+      "id": "metadata-menu",
+      "priority": "P0",
+      "category": "metadata",
+      "reason": "Metadata editing plugin that stresses frontmatter, file manager, settings, and controlled write boundaries."
+    },
+    {
+      "id": "buttons",
+      "priority": "P0",
+      "category": "commands-automation",
+      "reason": "Command/button automation plugin that probes safe interaction continuation and markdown UI boundaries."
+    },
+    {
+      "id": "recent-files-obsidian",
+      "priority": "P0",
+      "category": "search-navigation",
+      "reason": "Lightweight navigation plugin that should map to MindOS activity/recent file surfaces."
+    },
+    {
+      "id": "periodic-notes",
+      "priority": "P0",
+      "category": "workspace-navigation",
+      "reason": "Daily/periodic notes workflow plugin that tests file creation, workspace opening, and date helpers."
+    },
+    {
+      "id": "obsidian-icon-folder",
+      "priority": "P0",
+      "category": "settings-appearance",
+      "reason": "Icon/style metadata plugin that probes scoped style/icon policy and native UI replacement boundaries."
+    }
+  ]
+}

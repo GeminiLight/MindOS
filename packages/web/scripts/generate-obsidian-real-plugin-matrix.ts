@@ -1,0 +1,399 @@
+#!/usr/bin/env node
+
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import {
+  OBSIDIAN_COMMUNITY_PLUGINS_URL,
+  fetchObsidianCommunityPluginPackage,
+  githubUrlForRepo,
+  parseObsidianCommunityCatalog,
+} from '@/lib/obsidian-compat/community-catalog';
+import { buildObsidianCapabilityGateReport } from '@/lib/obsidian-compat/capability-gate';
+import {
+  buildObsidianRealPluginMatrix,
+  renderObsidianRealPluginMatrixMarkdown,
+  type ObsidianRealPluginMatrixFailure,
+  type ObsidianRealPluginMatrixInputItem,
+  type ObsidianRealPluginSmokeResult,
+  type ObsidianRealPluginTarget,
+} from '@/lib/obsidian-compat/real-plugin-matrix';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const webRoot = path.resolve(__dirname, '..');
+const repoRoot = path.resolve(webRoot, '../..');
+const DEFAULT_TARGETS_PATH = path.join(repoRoot, 'scripts/obsidian-real-plugin-p0-targets.json');
+const DEFAULT_OUT_JSON = path.join(repoRoot, 'wiki/reviews/obsidian-p0-plugin-compatibility-matrix-2026-06-24.json');
+const DEFAULT_OUT_MD = path.join(repoRoot, 'wiki/reviews/obsidian-p0-plugin-compatibility-matrix-2026-06-24.md');
+const OBSIDIAN_COMMUNITY_STATS_URL = 'https://raw.githubusercontent.com/obsidianmd/obsidian-releases/master/community-plugin-stats.json';
+const DEFAULT_TIMEOUT_MS = 20_000;
+const DEFAULT_MAIN_JS_MAX_MB = 12;
+
+interface TargetConfig {
+  targetSet?: string;
+  sourcePolicy?: string;
+  plugins?: ObsidianRealPluginTarget[];
+}
+
+interface CliOptions {
+  targetsPath: string;
+  outJson: string;
+  outMarkdown: string;
+  skipSmoke: boolean;
+  timeoutMs: number;
+  mainJsMaxChars: number;
+}
+
+interface CommunityStatsRecord {
+  downloads?: number;
+  updated?: number;
+}
+
+interface CommunityStatsById {
+  [pluginId: string]: CommunityStatsRecord | undefined;
+}
+
+interface RuntimeSummarySource {
+  runtime?: ObsidianRealPluginSmokeResult['runtime'] | null;
+}
+
+function parseArgs(argv: string[]): CliOptions {
+  const options: CliOptions = {
+    targetsPath: DEFAULT_TARGETS_PATH,
+    outJson: DEFAULT_OUT_JSON,
+    outMarkdown: DEFAULT_OUT_MD,
+    skipSmoke: false,
+    timeoutMs: DEFAULT_TIMEOUT_MS,
+    mainJsMaxChars: DEFAULT_MAIN_JS_MAX_MB * 1024 * 1024,
+  };
+
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index];
+    if (arg === '--') {
+      continue;
+    } else if (arg === '--targets') {
+      options.targetsPath = resolveRequiredValue(argv, index);
+      index += 1;
+    } else if (arg === '--out-json') {
+      options.outJson = resolveRequiredValue(argv, index);
+      index += 1;
+    } else if (arg === '--out-md') {
+      options.outMarkdown = resolveRequiredValue(argv, index);
+      index += 1;
+    } else if (arg === '--skip-smoke') {
+      options.skipSmoke = true;
+    } else if (arg === '--timeout-ms') {
+      options.timeoutMs = parsePositiveInteger(resolveRequiredValue(argv, index), '--timeout-ms');
+      index += 1;
+    } else if (arg === '--main-js-max-mb') {
+      options.mainJsMaxChars = parsePositiveInteger(resolveRequiredValue(argv, index), '--main-js-max-mb') * 1024 * 1024;
+      index += 1;
+    } else if (arg === '--help' || arg === '-h') {
+      printHelp();
+      process.exit(0);
+    } else {
+      throw new Error(`Unknown argument: ${arg}`);
+    }
+  }
+
+  return {
+    ...options,
+    targetsPath: path.resolve(repoRoot, options.targetsPath),
+    outJson: path.resolve(repoRoot, options.outJson),
+    outMarkdown: path.resolve(repoRoot, options.outMarkdown),
+  };
+}
+
+function resolveRequiredValue(argv: string[], index: number): string {
+  const value = argv[index + 1];
+  if (!value || value.startsWith('--')) {
+    throw new Error(`Missing value for ${argv[index]}`);
+  }
+  return value;
+}
+
+function parsePositiveInteger(value: string, label: string): number {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    throw new Error(`${label} must be a positive integer.`);
+  }
+  return parsed;
+}
+
+function printHelp(): void {
+  console.log(`Usage: pnpm run obsidian:matrix -- [options]
+
+Options:
+  --targets <path>      Target JSON path. Default: scripts/obsidian-real-plugin-p0-targets.json
+  --out-json <path>     Output matrix JSON path.
+  --out-md <path>       Output Markdown report path.
+  --skip-smoke          Generate preflight matrix without loading plugins in a temp Mind root.
+  --timeout-ms <ms>     Network asset timeout passed to preflight fetches. Default: ${DEFAULT_TIMEOUT_MS}
+  --main-js-max-mb <mb> Max plugin main.js size for this offline matrix harness. Default: ${DEFAULT_MAIN_JS_MAX_MB}
+`);
+}
+
+async function main(): Promise<void> {
+  const options = parseArgs(process.argv.slice(2));
+  const targetConfig = readJson<TargetConfig>(options.targetsPath);
+  const targets = normalizeTargets(targetConfig);
+  const targetSet = targetConfig.targetSet ?? 'obsidian-p0-ecosystem-sample';
+  const sourcePolicy = targetConfig.sourcePolicy ?? 'obsidian-community-index+github-release-assets';
+
+  console.log(`[obsidian-matrix] Targets: ${targets.length}`);
+  console.log(`[obsidian-matrix] Fetching community index: ${OBSIDIAN_COMMUNITY_PLUGINS_URL}`);
+  const catalogRaw = await fetchJson(OBSIDIAN_COMMUNITY_PLUGINS_URL, options.timeoutMs);
+  const parsedCatalog = parseObsidianCommunityCatalog(catalogRaw);
+  const catalogById = new Map(parsedCatalog.items.map((item) => [item.id, item]));
+
+  console.log(`[obsidian-matrix] Fetching community stats: ${OBSIDIAN_COMMUNITY_STATS_URL}`);
+  const statsById = await fetchJson(OBSIDIAN_COMMUNITY_STATS_URL, options.timeoutMs) as CommunityStatsById;
+
+  const plugins: ObsidianRealPluginMatrixInputItem[] = [];
+  const failures: ObsidianRealPluginMatrixFailure[] = [];
+
+  for (const target of targets) {
+    const catalog = catalogById.get(target.id);
+    if (!catalog) {
+      failures.push({ id: target.id, stage: 'catalog', error: 'Plugin id was not found in the Obsidian community index.' });
+      console.warn(`[obsidian-matrix] ! ${target.id}: not found in community index`);
+      continue;
+    }
+
+    try {
+      console.log(`[obsidian-matrix] Preflight ${catalog.name} (${catalog.repo})`);
+      const fetched = await fetchObsidianCommunityPluginPackage({
+        repo: catalog.repo,
+        pluginId: catalog.id,
+        timeoutMs: options.timeoutMs,
+        mainJsMaxChars: options.mainJsMaxChars,
+      });
+      const capabilityGate = buildObsidianCapabilityGateReport({
+        manifest: fetched.preflight.package.manifest,
+        compatibility: fetched.preflight.compatibility.report,
+        compatibilityLevel: fetched.preflight.compatibility.level,
+        coverage: fetched.preflight.derivedCapabilities.coverage,
+      });
+      const smoke = options.skipSmoke
+        ? notRunSmoke('Smoke harness was skipped by --skip-smoke.')
+        : await runPluginSmoke(catalog.id, fetched.files, capabilityGate.blocked).catch((error) => failedSmoke(
+          'load',
+          error instanceof Error ? error.message : String(error),
+        ));
+      plugins.push({
+        target,
+        catalog: {
+          id: catalog.id,
+          name: catalog.name,
+          description: catalog.description,
+          author: catalog.author,
+          repo: catalog.repo,
+          ...(catalog.githubUrl ?? githubUrlForRepo(catalog.repo) ? { githubUrl: catalog.githubUrl ?? githubUrlForRepo(catalog.repo) } : {}),
+        },
+        stats: statsFor(statsById[catalog.id]),
+        preflight: fetched.preflight,
+        capabilityGate,
+        smoke,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      failures.push({ id: target.id, stage: 'preflight', error: message });
+      console.warn(`[obsidian-matrix] ! ${target.id}: ${message}`);
+    }
+  }
+
+  const matrix = buildObsidianRealPluginMatrix({
+    generatedAt: new Date().toISOString(),
+    targetSet,
+    sourcePolicy,
+    sources: {
+      communityPlugins: OBSIDIAN_COMMUNITY_PLUGINS_URL,
+      communityStats: OBSIDIAN_COMMUNITY_STATS_URL,
+      releaseAssets: 'https://github.com/<owner>/<repo>/releases/download/<manifest.version>/{manifest.json,main.js,styles.css}',
+    },
+    plugins,
+    failures,
+  });
+
+  writeText(options.outJson, `${JSON.stringify(matrix, null, 2)}\n`);
+  writeText(options.outMarkdown, renderObsidianRealPluginMatrixMarkdown(matrix));
+
+  console.log(`[obsidian-matrix] Wrote ${path.relative(repoRoot, options.outJson)}`);
+  console.log(`[obsidian-matrix] Wrote ${path.relative(repoRoot, options.outMarkdown)}`);
+  if (failures.length > 0) {
+    console.warn(`[obsidian-matrix] Completed with ${failures.length} recorded failure(s). See the report for details.`);
+  }
+}
+
+function normalizeTargets(config: TargetConfig): ObsidianRealPluginTarget[] {
+  if (!Array.isArray(config.plugins) || config.plugins.length === 0) {
+    throw new Error('Target config must include a non-empty plugins array.');
+  }
+  const seen = new Set<string>();
+  return config.plugins.map((plugin, index) => {
+    if (!plugin || typeof plugin !== 'object') {
+      throw new Error(`Invalid target at index ${index}.`);
+    }
+    const id = normalizeRequiredString(plugin.id, `plugins[${index}].id`);
+    if (seen.has(id)) throw new Error(`Duplicate plugin target id: ${id}`);
+    seen.add(id);
+    return {
+      id,
+      priority: plugin.priority,
+      category: normalizeRequiredString(plugin.category, `plugins[${index}].category`),
+      reason: normalizeRequiredString(plugin.reason, `plugins[${index}].reason`),
+    };
+  });
+}
+
+function normalizeRequiredString(value: unknown, label: string): string {
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    throw new Error(`${label} must be a non-empty string.`);
+  }
+  return value.trim();
+}
+
+async function fetchJson(url: string, timeoutMs: number): Promise<unknown> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, { signal: controller.signal });
+    if (!response.ok) throw new Error(`HTTP ${response.status} while fetching ${url}`);
+    return await response.json();
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function runPluginSmoke(
+  pluginId: string,
+  files: { manifestJson: string; mainJs: string; stylesCss?: string },
+  gateBlocked: boolean,
+): Promise<ObsidianRealPluginSmokeResult> {
+  const mindRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'mindos-obsidian-p0-smoke-'));
+  try {
+    const { PluginManager } = await import('@/lib/obsidian-compat/plugin-manager');
+    writePluginPackage(mindRoot, pluginId, files);
+    const manager = new PluginManager(mindRoot);
+    await manager.discover();
+    const discovered = manager.list().find((plugin) => plugin.id === pluginId);
+    if (!discovered) {
+      return { outcome: 'failed', stage: 'load', reason: 'Plugin package was not discovered after writing release assets.' };
+    }
+    if (gateBlocked) {
+      return {
+        outcome: 'skipped',
+        stage: 'capability-gate',
+        reason: discovered.capabilityGate.blockedReasons[0] ?? discovered.compatibility.blockers[0] ?? 'Blocked by capability gate.',
+      };
+    }
+
+    try {
+      await manager.enable(pluginId, { confirmCapabilityGate: true });
+    } catch (error) {
+      return {
+        outcome: 'failed',
+        stage: 'enable',
+        reason: error instanceof Error ? error.message : String(error),
+      };
+    }
+
+    const load = await manager.loadEnabledPlugins();
+    const afterLoad = manager.list().find((plugin) => plugin.id === pluginId);
+    if (load.loaded.includes(pluginId)) {
+      return {
+        outcome: 'loaded',
+        stage: 'load',
+        loaded: load.loaded,
+        failed: load.failed,
+        skipped: load.skipped,
+        ...(afterLoad ? { runtime: runtimeSummary(afterLoad) } : {}),
+      };
+    }
+    if (load.skipped.includes(pluginId)) {
+      return {
+        outcome: 'skipped',
+        stage: 'load',
+        reason: afterLoad?.capabilityGate.blockedReasons[0] ?? afterLoad?.lastError ?? 'Skipped by loadEnabledPlugins().',
+        loaded: load.loaded,
+        failed: load.failed,
+        skipped: load.skipped,
+      };
+    }
+    return {
+      outcome: 'failed',
+      stage: 'load',
+      reason: afterLoad?.lastError ?? 'Plugin did not load and no runtime error was recorded.',
+      loaded: load.loaded,
+      failed: load.failed,
+      skipped: load.skipped,
+      ...(afterLoad ? { runtime: runtimeSummary(afterLoad) } : {}),
+    };
+  } finally {
+    fs.rmSync(mindRoot, { recursive: true, force: true });
+  }
+}
+
+function writePluginPackage(
+  mindRoot: string,
+  pluginId: string,
+  files: { manifestJson: string; mainJs: string; stylesCss?: string },
+): void {
+  const pluginDir = path.join(mindRoot, '.mindos', 'plugins', pluginId);
+  fs.mkdirSync(pluginDir, { recursive: true });
+  fs.writeFileSync(path.join(pluginDir, 'manifest.json'), files.manifestJson, 'utf-8');
+  fs.writeFileSync(path.join(pluginDir, 'main.js'), files.mainJs, 'utf-8');
+  if (typeof files.stylesCss === 'string') {
+    fs.writeFileSync(path.join(pluginDir, 'styles.css'), files.stylesCss, 'utf-8');
+  }
+}
+
+function runtimeSummary(plugin: RuntimeSummarySource): NonNullable<ObsidianRealPluginSmokeResult['runtime']> {
+  const runtime = plugin.runtime;
+  return {
+    commands: runtime?.commands ?? 0,
+    settingTabs: runtime?.settingTabs ?? 0,
+    views: runtime?.views ?? 0,
+    markdownPostProcessors: runtime?.markdownPostProcessors ?? 0,
+    markdownCodeBlockProcessors: runtime?.markdownCodeBlockProcessors ?? 0,
+    ribbonIcons: runtime?.ribbonIcons ?? 0,
+    statusBarItems: runtime?.statusBarItems ?? 0,
+    styleSheets: runtime?.styleSheets ?? 0,
+    editorExtensions: runtime?.editorExtensions ?? 0,
+  };
+}
+
+function notRunSmoke(reason: string): ObsidianRealPluginSmokeResult {
+  return { outcome: 'not-run', stage: 'not-run', reason };
+}
+
+function failedSmoke(stage: ObsidianRealPluginSmokeResult['stage'], reason: string): ObsidianRealPluginSmokeResult {
+  return { outcome: 'failed', stage, reason };
+}
+
+function statsFor(stats: CommunityStatsRecord | undefined): { downloads?: number; updated?: string } | undefined {
+  if (!stats) return undefined;
+  return {
+    ...(typeof stats.downloads === 'number' ? { downloads: stats.downloads } : {}),
+    ...(typeof stats.updated === 'number' ? { updated: new Date(stats.updated).toISOString() } : {}),
+  };
+}
+
+function readJson<T>(filePath: string): T {
+  return JSON.parse(fs.readFileSync(filePath, 'utf-8')) as T;
+}
+
+function writeText(filePath: string, content: string): void {
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.writeFileSync(filePath, content, 'utf-8');
+}
+
+main()
+  .then(() => {
+    process.exit(0);
+  })
+  .catch((error) => {
+    console.error(error instanceof Error ? error.stack ?? error.message : error);
+    process.exit(1);
+  });
