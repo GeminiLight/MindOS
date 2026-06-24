@@ -45,6 +45,7 @@ import { handleAgentRuntimeMcpProjectionsGet } from './handlers/mcp-runtime-proj
 import { handleAgentRuntimePermissionProjectionsGet } from './handlers/runtime-permission-projections.js';
 import { handleAgentRuntimeArtifactProjectionsGet } from './handlers/runtime-artifact-projections.js';
 import { handleAgentRuntimeAutomationProjectionsGet } from './handlers/runtime-automation-projections.js';
+import { handleAgentRuntimeReadinessGet } from './handlers/runtime-readiness.js';
 import {
   handleAgentCopySkillPost,
   handleCustomAgentDetectPost,
@@ -411,6 +412,10 @@ async function handleRequest(
     }
     if (route === 'GET /api/agent-runtimes/automation-projections') {
       writeResponse(res, await handleAgentRuntimeAutomationProjectionsGet(url.searchParams, createHttpRuntimeProjectionServices(services, url.searchParams)));
+      return;
+    }
+    if (route === 'GET /api/agent-runtimes/readiness') {
+      writeResponse(res, await handleAgentRuntimeReadinessGet(url.searchParams, createHttpMcpProjectionServices(services, url.searchParams)));
       return;
     }
     if (route === 'GET /api/agent-runtimes/codex/threads') {

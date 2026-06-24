@@ -134,6 +134,34 @@ detect → health → configure → launch → session → context
 - `mcp-tooling` 对 native runtime 仍是 `limited`。MindOS 已有只读 MCP runtime projection contract，可以解释每个 runtime 当前是 `ready` / `projectable` / `limited` / `blocked` / `unknown`；但不会自动改写 Codex / Claude / ACP adapter 的外部 MCP 配置。
 - `artifact-governance` 现在是 `limited` / `blocked` / `unknown`。MindOS 已有只读 artifact runtime projection contract，可以解释 runtime 的 text/diff/checkpoint/artifact/branch/PR 输出形态；但 MindOS 还没有跨 runtime artifact index，所以不能把“runtime 会产出”说成“MindOS 已统一治理”。
 
+### Runtime Readiness Aggregation
+
+Runtime readiness aggregation 是 Runtime Doctor / Compatibility Center 的只读聚合契约，位于 `packages/mindos/src/server/handlers/runtime-readiness.ts`，通过 `/api/agent-runtimes/readiness?permissionMode=<read|ask|auto|full>` 暴露。它把 `AgentRuntimeDescriptor.compatibility` 与四个细分 projection 合并成每个 runtime 的用例级 readiness：
+
+| 用例 | 来源 |
+|---|---|
+| `interactive-turn` / `coding-workflow` / `session-continuity` / `context-governance` / `skill-execution` / `team-coordination` | runtime compatibility profile |
+| `permission-governance` | permission runtime projection |
+| `mcp-tooling` | MCP runtime projection |
+| `artifact-governance` | artifact runtime projection |
+| `remote-control` / `unattended-automation` | automation runtime projection |
+
+aggregation 输出：
+
+| 字段 | 语义 |
+|---|---|
+| `overallStatus` | `ready` / `usable` / `limited` / `blocked` / `unknown`；只用于总览，不替代用例级判断 |
+| `recommendations` | 当前 runtime 适合强推荐或条件推荐的用例，例如交互式 coding、MCP tooling、remote manual control |
+| `useCases` | 每个场景的 `status`、`source`、`sourceStatus`、requirements、blockers 和少量安全的 details |
+| `gaps` | 去重后的缺口清单，按 `mindos-product` / `runtime-native` / `adapter-contract` / `deployment` / `user-setup` / `shared` 分类 |
+| `blockers` | 只列 truly blocking 的缺口，例如 runtime 不可用；`limited` 的产品缺口仍留在 `gaps` 中 |
+
+这层有三个硬边界：
+
+- **不做自动路由**：它解释 runtime 适合什么，不替用户切 runtime，也不在 turn 前自动改写选择。
+- **不触发副作用**：它不启动 runtime、不同步 MCP、不创建 scheduler、不写 artifact index，只聚合现有只读诊断。
+- **不把单点能力说成产品 ready**：Codex / Claude 的 native permission bridge 仍只是 `interactive-only`；server-runnable 仍不等于 24/7；reviewable output 仍不等于 MindOS artifact governance ready。
+
 ### Automation Runtime Projection
 
 Automation runtime projection 是 `remote-control` 和 `unattended-automation` compatibility 的只读诊断契约，位于 `packages/mindos/src/server/handlers/runtime-automation-projections.ts`，通过 `/api/agent-runtimes/automation-projections` 暴露。它不启动后台任务，也不创建 scheduler；只解释 runtime 当前是否能被远程手动控制，以及距离 24/7 / scheduled / headless 自动化还缺什么。
@@ -395,6 +423,7 @@ MindOS Pi 的 persisted session 由 Pi `SessionManager` 自己持有完整 JSONL
 | `packages/mindos/src/server/handlers/mcp-runtime-projections.ts` | MCP runtime projection contract，统一解释每个 runtime 的 MCP ready/projectable/limited/blocked/unknown |
 | `packages/mindos/src/server/handlers/runtime-artifact-projections.ts` | Artifact runtime projection contract，统一解释每个 runtime 的 output/handoff/artifact-index readiness |
 | `packages/mindos/src/server/handlers/runtime-automation-projections.ts` | Automation runtime projection contract，统一解释 remote-control 与 24/7 unattended readiness |
+| `packages/mindos/src/server/handlers/runtime-readiness.ts` | Runtime Doctor 聚合契约，把 compatibility profile 与 permission/MCP/artifact/automation projection 合并成用例级 readiness / gaps / recommendations |
 | `packages/mindos/src/agent/prompt/agent-prompt.txt` | MindOS 默认 base prompt |
 | `packages/mindos/src/agent/prompt/assistant-prompt.ts` | Active Assistant overlay 解析与渲染 |
 | `packages/mindos/src/agent/prompt/context-prompt.ts` | context prompt 渲染 |

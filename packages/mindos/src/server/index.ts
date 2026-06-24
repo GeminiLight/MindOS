@@ -142,6 +142,22 @@ export {
 } from './handlers/runtime-automation-projections.js';
 
 export {
+  buildAgentRuntimeReadinessPayload,
+  handleAgentRuntimeReadinessGet,
+  type AgentRuntimeReadinessGap,
+  type AgentRuntimeReadinessGapCategory,
+  type AgentRuntimeReadinessGapSeverity,
+  type AgentRuntimeReadinessPayload,
+  type AgentRuntimeReadinessProjection,
+  type AgentRuntimeReadinessRecommendation,
+  type AgentRuntimeReadinessRequirement,
+  type AgentRuntimeReadinessServices,
+  type AgentRuntimeReadinessSource,
+  type AgentRuntimeReadinessStatus,
+  type AgentRuntimeReadinessUseCase,
+} from './handlers/runtime-readiness.js';
+
+export {
   evaluateSkillRuntimeMatch,
   type MindosSkillRuntimeMatch,
   type MindosSkillRuntimeMatchInput,
