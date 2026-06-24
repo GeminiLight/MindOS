@@ -51,8 +51,6 @@ type PermissionPolicy = ReturnType<typeof createMindosAgentPermissionPolicy>;
 type ExternalTurnLocalization = { agentTimeout: string };
 
 export type RunExternalRuntimeTurnInput = {
-  verifiedNativeRuntime: MindosAgentRuntimeSelection | null;
-  selectedAcpAgent: { id: string; name: string } | null;
   externalPrompt: string;
   chatSessionId?: string;
   executionCwd: string;
@@ -74,15 +72,26 @@ export type RunExternalRuntimeTurnInput = {
   t: ExternalTurnLocalization;
 };
 
-export function runExternalRuntimeTurn(input: RunExternalRuntimeTurnInput): Response {
+export type RunNativeRuntimeLaneTurnInput = RunExternalRuntimeTurnInput & {
+  nativeRuntime: MindosAgentRuntimeSelection;
+};
+
+export type RunAcpRuntimeLaneTurnInput = RunExternalRuntimeTurnInput & {
+  acpAgent: { id: string; name: string };
+};
+
+export function runNativeRuntimeLaneTurn(input: RunNativeRuntimeLaneTurnInput): Response {
   return createAgentTurnSseResponse((send) => runWithAgentRunContext({ chatSessionId: input.chatSessionId }, async () => {
-    if (input.verifiedNativeRuntime) {
-      await runNativeRuntimeTurn(input, input.verifiedNativeRuntime, send);
-      return;
-    }
-    if (input.selectedAcpAgent) {
-      await runAcpRuntimeTurn(input, input.selectedAcpAgent, send);
-    }
+    await runNativeRuntimeTurn(input, input.nativeRuntime, send);
+  }), (err) => {
+    if (err instanceof Error && (err as any).code === 'TIMEOUT') return input.t.agentTimeout;
+    return err instanceof Error ? err.message : String(err);
+  });
+}
+
+export function runAcpRuntimeLaneTurn(input: RunAcpRuntimeLaneTurnInput): Response {
+  return createAgentTurnSseResponse((send) => runWithAgentRunContext({ chatSessionId: input.chatSessionId }, async () => {
+    await runAcpRuntimeTurn(input, input.acpAgent, send);
   }), (err) => {
     if (err instanceof Error && (err as any).code === 'TIMEOUT') return input.t.agentTimeout;
     return err instanceof Error ? err.message : String(err);
@@ -90,7 +99,7 @@ export function runExternalRuntimeTurn(input: RunExternalRuntimeTurnInput): Resp
 }
 
 async function runNativeRuntimeTurn(
-  input: RunExternalRuntimeTurnInput,
+  input: RunNativeRuntimeLaneTurnInput,
   nativeRuntime: MindosAgentRuntimeSelection,
   send: (event: MindOSSSEvent) => void,
 ): Promise<void> {
@@ -206,7 +215,7 @@ async function runNativeRuntimeTurn(
 }
 
 async function runAcpRuntimeTurn(
-  input: RunExternalRuntimeTurnInput,
+  input: RunAcpRuntimeLaneTurnInput,
   selectedAcpAgent: { id: string; name: string },
   send: (event: MindOSSSEvent) => void,
 ): Promise<void> {

@@ -68,6 +68,7 @@ import {
   resolveAvailableNativeRuntime,
   validateRuntimeBindingMatchesSelection,
 } from './runtime-selection';
+import { resolveRuntimeTurnLane } from './turn-runtime-lane';
 import {
   dirnameOf,
   expandAttachedFiles,
@@ -275,6 +276,10 @@ export async function runAgentTurnRequestBody(
     }
     verifiedNativeRuntime = runtime;
   }
+  const runtimeLane = resolveRuntimeTurnLane({
+    verifiedNativeRuntime,
+    selectedAcpAgent,
+  });
 
   // Detect locale from Accept-Language header for i18n status messages
   const acceptLang = requestHeaders.get('accept-language') ?? '';
@@ -305,7 +310,7 @@ export async function runAgentTurnRequestBody(
   const promptFileContext = fileContextForPrompt(loadedFileContext, includeFileContext);
   const fileContextMetadata = fileContextRunMetadata(fileContextSignature, includeFileContext, loadedFileContext);
 
-  if (verifiedNativeRuntime || selectedAcpAgent) {
+  if (runtimeLane.kind !== 'mindos-pi') {
     const lastUserContent = getLastUserContent(messages);
     const recalledKnowledge = await recallMindosTurnKnowledge({
       mindRoot,
@@ -330,10 +335,7 @@ export async function runAgentTurnRequestBody(
     const externalPrompt = prependMindosActiveAssistantPrompt(externalPromptBase, activeAssistant);
     const sessionContextMetadata = sessionContextRunMetadata(sessionContextSignature, includeSessionContext);
 
-    const { runExternalRuntimeTurn } = await import('./turn-runner-external');
-    return runExternalRuntimeTurn({
-      verifiedNativeRuntime,
-      selectedAcpAgent,
+    return runtimeLane.runTurn({
       externalPrompt,
       chatSessionId,
       executionCwd,
@@ -494,8 +496,7 @@ export async function runAgentTurnRequestBody(
   console.log(`[agent-turn] systemPrompt=${systemPrompt.length} chars (~${Math.ceil(systemPrompt.length / 4)} tokens)`);
 
   const sessionContextMetadata = sessionContextRunMetadata(sessionContextSignature, includeSessionContext);
-  const { runMindosPiTurn } = await import('./turn-runner-mindos-pi');
-  return runMindosPiTurn({
+  return runtimeLane.runTurn({
     mindosUiMessages,
     systemPrompt,
     turnPrompt,
