@@ -32,6 +32,8 @@ describe('navigation panel route recovery', () => {
     expect(getContentRoutePanel('/studio')).toBe('studio');
     expect(getContentRoutePanel('/studio/launch-practice')).toBe('studio');
     expect(getContentRoutePanel('/explore')).toBe('discover');
+    expect(getContentRoutePanel('/explore/capabilities')).toBe('discover');
+    expect(getContentRoutePanel('/explore/mcp')).toBe('discover');
     expect(getContentRoutePanel('/explore/plugins')).toBe('discover');
     expect(getContentRoutePanel('/echo/about-you')).toBe('echo');
   });
@@ -86,6 +88,8 @@ describe('navigation panel route recovery', () => {
     expect(getRouteControlledPanel('/studio')).toBe('studio');
     expect(getRouteControlledPanel('/studio/launch-practice')).toBe('studio');
     expect(getRouteControlledPanel('/explore')).toBe('discover');
+    expect(getRouteControlledPanel('/explore/capabilities')).toBe('discover');
+    expect(getRouteControlledPanel('/explore/mcp')).toBe('discover');
     expect(getRouteControlledPanel('/explore/plugins')).toBe('discover');
     expect(getRouteControlledPanel('/echo/about-you')).toBe('echo');
   });
@@ -149,6 +153,8 @@ describe('navigation panel route recovery', () => {
     expect(recoverStaleCapturePanel('/agents', 'capture')).toBe('agents');
     expect(recoverStaleCapturePanel('/studio', 'capture')).toBe('studio');
     expect(recoverStaleCapturePanel('/explore', 'capture')).toBe('discover');
+    expect(recoverStaleCapturePanel('/explore/capabilities', 'capture')).toBe('discover');
+    expect(recoverStaleCapturePanel('/explore/mcp', 'capture')).toBe('discover');
     expect(recoverStaleCapturePanel('/explore/plugins', 'capture')).toBe('discover');
     expect(recoverStaleCapturePanel('/echo/about-you', 'capture')).toBe('echo');
   });

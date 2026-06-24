@@ -1,7 +1,7 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
-import { Lightbulb, Blocks, Zap, LayoutTemplate, User, Download, RefreshCw, Repeat, Rocket, Search, Handshake, ShieldCheck } from 'lucide-react';
+import { Lightbulb, Blocks, Zap, LayoutTemplate, User, Download, RefreshCw, Repeat, Rocket, Search, Handshake, ShieldCheck, Compass, Server } from 'lucide-react';
 import PanelHeader from './PanelHeader';
 import { PANEL_NAV_STACK_CLASS, PanelNavRow, ComingSoonBadge } from './PanelNavRow';
 import { useLocale } from '@/lib/stores/locale-store';
@@ -58,8 +58,10 @@ export default function DiscoverPanel({ active }: DiscoverPanelProps) {
   const d = t.panels.discover;
   const e = t.explore;
   const pathname = usePathname() ?? '';
+  const capabilityMarketActive = pathname === '/explore/capabilities';
   const pluginMarketActive = pathname === '/explore/plugins';
   const skillMarketActive = pathname === '/explore/skills';
+  const mcpMarketActive = pathname === '/explore/mcp';
   const useCasesActive = pathname === '/explore';
 
   const getUseCaseText = (id: string): { title: string; prompt: string } | undefined => {
@@ -77,10 +79,10 @@ export default function DiscoverPanel({ active }: DiscoverPanelProps) {
         {/* Navigation entries */}
         <div className={PANEL_NAV_STACK_CLASS}>
           <PanelNavRow
-            icon={<Blocks size={14} className={pluginMarketActive ? 'text-[var(--amber)]' : 'text-muted-foreground'} />}
-            title={d.pluginMarket}
-            href="/explore/plugins"
-            active={pluginMarketActive}
+            icon={<Compass size={14} className={capabilityMarketActive ? 'text-[var(--amber)]' : 'text-muted-foreground'} />}
+            title={d.capabilityMarketplace}
+            href="/explore/capabilities"
+            active={capabilityMarketActive}
             activeVariant="rail"
           />
           <PanelNavRow
@@ -88,6 +90,20 @@ export default function DiscoverPanel({ active }: DiscoverPanelProps) {
             title={d.skillMarket}
             href="/explore/skills"
             active={skillMarketActive}
+            activeVariant="rail"
+          />
+          <PanelNavRow
+            icon={<Server size={14} className={mcpMarketActive ? 'text-[var(--amber)]' : 'text-muted-foreground'} />}
+            title={d.mcpServers}
+            href="/explore/mcp"
+            active={mcpMarketActive}
+            activeVariant="rail"
+          />
+          <PanelNavRow
+            icon={<Blocks size={14} className={pluginMarketActive ? 'text-[var(--amber)]' : 'text-muted-foreground'} />}
+            title={d.pluginMarket}
+            href="/explore/plugins"
+            active={pluginMarketActive}
             activeVariant="rail"
           />
           <PanelNavRow
