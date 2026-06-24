@@ -76,6 +76,7 @@ describe('obsidian compat integration', () => {
               hasDebounce: typeof obsidian.debounce === 'function',
               hasParseYaml: typeof obsidian.parseYaml === 'function',
               hasStringifyYaml: typeof obsidian.stringifyYaml === 'function',
+              hasHtmlToMarkdown: typeof obsidian.htmlToMarkdown === 'function',
               hasPrepareSimpleSearch: typeof obsidian.prepareSimpleSearch === 'function',
               hasRenderMatches: typeof obsidian.renderMatches === 'function',
               hasSetIcon: typeof obsidian.setIcon === 'function',
@@ -117,6 +118,7 @@ describe('obsidian compat integration', () => {
       hasDebounce: true,
       hasParseYaml: true,
       hasStringifyYaml: true,
+      hasHtmlToMarkdown: true,
       hasPrepareSimpleSearch: true,
       hasRenderMatches: true,
       hasSetIcon: true,
@@ -135,12 +137,15 @@ describe('obsidian compat integration', () => {
     writePlugin(
       'utility-plugin',
       `
-        const { Plugin, Modal, FileSystemAdapter, Scope, debounce, parseYaml, stringifyYaml, addIcon, getIcon, getIconIds, setIcon, setTooltip, moment, prepareSimpleSearch, renderMatches } = require('obsidian');
+        const { Plugin, Modal, FileSystemAdapter, Scope, debounce, parseYaml, stringifyYaml, htmlToMarkdown, addIcon, getIcon, getIconIds, setIcon, setTooltip, moment, prepareSimpleSearch, renderMatches } = require('obsidian');
         module.exports = class UtilityPlugin extends Plugin {
           onload() {
             const modal = new Modal(this.app);
             const button = modal.contentEl.createEl('button');
             const matchEl = document.createEl('div');
+            const stubHtml = document.createEl('div');
+            stubHtml.createEl('strong', { text: 'Plain fallback' });
+            const fragmentLike = { childNodes: [{ outerHTML: '<strong>Fragment</strong>' }, { textContent: ' text' }] };
             const simpleSearchResult = prepareSimpleSearch('theme')('minimal theme settings');
             renderMatches(matchEl, 'minimal theme settings', simpleSearchResult.matches);
             const scope = new Scope();
@@ -164,6 +169,9 @@ describe('obsidian compat integration', () => {
               adapterIsNative: this.app.vault.adapter instanceof FileSystemAdapter,
               parsed: parseYaml('title: Hello\\ncount: 2\\n'),
               yaml: stringifyYaml({ ready: true }).trim(),
+              htmlMarkdown: htmlToMarkdown('<h1>Title</h1><p><strong>Bold</strong> <a href="https://example.com">Link</a></p>'),
+              stubMarkdown: htmlToMarkdown(stubHtml),
+              fragmentMarkdown: htmlToMarkdown(fragmentLike),
               icon: getIcon('mindos-test'),
               iconIds: getIconIds(),
               iconAttr: button.getAttribute('data-obsidian-icon'),
@@ -202,6 +210,9 @@ describe('obsidian compat integration', () => {
       expect(check.adapterIsNative).toBe(false);
       expect(check.parsed).toEqual({ title: 'Hello', count: 2 });
       expect(check.yaml).toContain('ready: true');
+      expect(check.htmlMarkdown).toBe('# Title\n\n**Bold** [Link](https://example.com)');
+      expect(check.stubMarkdown).toBe('Plain fallback');
+      expect(check.fragmentMarkdown).toBe('**Fragment** text');
       expect(check.icon).toBe('<svg><path /></svg>');
       expect(check.iconIds).toEqual(expect.arrayContaining(['mindos-test', 'settings']));
       expect(check.iconAttr).toBe('mindos-test');

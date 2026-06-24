@@ -363,6 +363,14 @@ export const OBSIDIAN_CAPABILITY_MATRIX: ObsidianCapabilityRow[] = [
     notes: 'YAML serialization is backed by the same serializer used by MindOS frontmatter handling.',
   },
   {
+    api: 'htmlToMarkdown',
+    surface: 'document',
+    support: 'limited',
+    host: 'Obsidian module shim',
+    tests: ['obsidian-compat/integration.test.ts', 'obsidian-compat/compatibility-report.test.ts'],
+    notes: 'HTML-to-Markdown conversion uses the existing Turndown dependency and falls back to text for non-standard shim elements; it does not mount or execute plugin DOM.',
+  },
+  {
     api: 'debounce',
     surface: 'core',
     support: 'full',

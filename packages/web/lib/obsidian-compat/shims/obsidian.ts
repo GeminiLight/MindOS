@@ -4,6 +4,7 @@
 
 import net from 'net';
 import yaml from 'js-yaml';
+import TurndownService from 'turndown';
 import { Component } from '../component';
 import { Events } from '../events';
 import { Plugin } from './plugin';
@@ -20,6 +21,11 @@ const REQUEST_URL_MAX_RESPONSE_BYTES = 5 * 1024 * 1024;
 const REQUEST_URL_MAX_REDIRECTS = 5;
 const REQUEST_URL_ALLOWED_METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD']);
 const SENSITIVE_REDIRECT_HEADER = /^(authorization|cookie|proxy-authorization)$|api[-_]?key|token|secret|session/i;
+const htmlToMarkdownConverter = new TurndownService({
+  bulletListMarker: '-',
+  codeBlockStyle: 'fenced',
+  headingStyle: 'atx',
+});
 
 export function normalizePath(input: string): string {
   return input
@@ -40,6 +46,62 @@ export function stringifyYaml(value: unknown): string {
     noRefs: true,
     sortKeys: false,
   });
+}
+
+function htmlNodeText(value: unknown): string {
+  if (!value || typeof value !== 'object') return '';
+  const record = value as { textContent?: unknown; childNodes?: Iterable<unknown>; children?: Iterable<unknown> };
+  if (typeof record.textContent === 'string' && record.textContent.length > 0) {
+    return record.textContent;
+  }
+  const children = record.childNodes ?? record.children;
+  if (!children) return '';
+  return Array.from(children).map((child) => htmlNodeText(child)).join('');
+}
+
+function htmlNodeChildren(value: unknown): unknown[] {
+  if (!value || typeof value !== 'object') return [];
+  const children = (value as { childNodes?: unknown; children?: unknown }).childNodes
+    ?? (value as { childNodes?: unknown; children?: unknown }).children;
+  if (!children || typeof children !== 'object') return [];
+  if (Symbol.iterator in children) return Array.from(children as Iterable<unknown>);
+  const length = (children as { length?: unknown }).length;
+  if (typeof length === 'number') return Array.from(children as ArrayLike<unknown>);
+  return [];
+}
+
+function htmlNodeMarkup(value: unknown): string {
+  if (!value || typeof value !== 'object') return '';
+  const record = value as { outerHTML?: unknown; textContent?: unknown; innerHTML?: unknown };
+  if (typeof record.outerHTML === 'string') return record.outerHTML;
+  const children = htmlNodeChildren(value);
+  if (children.length > 0) return children.map((child) => htmlNodeMarkup(child)).join('');
+  if (typeof record.textContent === 'string') return record.textContent;
+  if (typeof record.innerHTML === 'string') return record.innerHTML;
+  return '';
+}
+
+function htmlToTurndownInput(html: string | HTMLElement | Document | DocumentFragment): string | HTMLElement | Document {
+  if (typeof html === 'string') return html;
+  const record = html as {
+    outerHTML?: unknown;
+    innerHTML?: unknown;
+    body?: { innerHTML?: unknown };
+    documentElement?: { outerHTML?: unknown };
+    childNodes?: Iterable<unknown>;
+  };
+  if (typeof record.outerHTML === 'string') return record.outerHTML;
+  if (typeof record.body?.innerHTML === 'string') return record.body.innerHTML;
+  if (typeof record.documentElement?.outerHTML === 'string') return record.documentElement.outerHTML;
+  const childMarkup = htmlNodeChildren(html).map((child) => htmlNodeMarkup(child)).join('');
+  if (childMarkup.length > 0) return childMarkup;
+  if (typeof record.innerHTML === 'string' && (record.innerHTML.length > 0 || !record.childNodes)) return record.innerHTML;
+  const text = htmlNodeText(html);
+  return text;
+}
+
+export function htmlToMarkdown(html: string | HTMLElement | Document | DocumentFragment): string {
+  return htmlToMarkdownConverter.turndown(htmlToTurndownInput(html)).trim();
 }
 
 type DebouncedFunction<T extends unknown[]> = ((...args: T) => void) & { cancel: () => void; run: () => void };
@@ -989,6 +1051,7 @@ export function createObsidianModule() {
     normalizePath,
     parseYaml,
     stringifyYaml,
+    htmlToMarkdown,
     debounce,
     addIcon,
     getIcon,

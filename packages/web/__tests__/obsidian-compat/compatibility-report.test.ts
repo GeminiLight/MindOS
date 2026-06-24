@@ -7,7 +7,7 @@ import {
 describe('compatibility report', () => {
   it('detects high-frequency Obsidian APIs and preserves host-boundary levels', () => {
     const report = analyzePluginCompatibility(`
-      const { Plugin, Notice, Modal, PluginSettingTab, Setting, SecretStorage, MarkdownRenderer, EditorSuggest, Scope, parseYaml, stringifyYaml, debounce, addIcon, getIcon, getIconIds, setIcon, setTooltip, prepareSimpleSearch, renderMatches } = require('obsidian');
+      const { Plugin, Notice, Modal, PluginSettingTab, Setting, SecretStorage, MarkdownRenderer, EditorSuggest, Scope, parseYaml, stringifyYaml, htmlToMarkdown, debounce, addIcon, getIcon, getIconIds, setIcon, setTooltip, prepareSimpleSearch, renderMatches } = require('obsidian');
       module.exports = class Example extends Plugin {
         getSettingDefinitions() {
           return [];
@@ -18,6 +18,7 @@ describe('compatibility report', () => {
           debounce(() => {}, 100);
           parseYaml('title: Example');
           stringifyYaml({ title: 'Example' });
+          htmlToMarkdown('<h1>Heading</h1>');
           addIcon('mindos-test', '<svg />');
           getIcon('mindos-test');
           getIconIds();
@@ -70,6 +71,7 @@ describe('compatibility report', () => {
         'Scope',
         'parseYaml',
         'stringifyYaml',
+        'htmlToMarkdown',
         'debounce',
         'addIcon',
         'getIcon',
@@ -139,6 +141,7 @@ describe('compatibility report', () => {
       'registerEditorSuggest',
       'prepareSimpleSearch',
       'renderMatches',
+      'htmlToMarkdown',
       'Commands.listCommands',
       'CustomCss.getSnippetPath',
       'CustomCss.setCssEnabledStatus',

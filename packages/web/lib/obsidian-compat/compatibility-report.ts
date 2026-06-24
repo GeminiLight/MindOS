@@ -294,6 +294,7 @@ function collectObsidianImports(code: string): string[] {
     [/\brequestUrl\s*\(/, 'requestUrl'],
     [/\brequest\s*\(/, 'request'],
     [/\bMarkdownRenderer\.renderMarkdown\s*\(|\bMarkdownRenderer\.render\s*\(/, 'MarkdownRenderer'],
+    [/\bhtmlToMarkdown\s*\(/, 'htmlToMarkdown'],
     [/\bnormalizePath\s*\(/, 'normalizePath'],
     [/\bprepareSimpleSearch\s*\(/, 'prepareSimpleSearch'],
     [/\brenderMatches\s*\(/, 'renderMatches'],

@@ -47,6 +47,7 @@ describe('Obsidian capability matrix', () => {
         'getIconIds',
         'prepareSimpleSearch',
         'renderMatches',
+        'htmlToMarkdown',
         'Notice',
         'FileSystemAdapter',
         'ImaginaryApi',
@@ -69,13 +70,14 @@ describe('Obsidian capability matrix', () => {
       expect.objectContaining({ api: 'getIconIds', support: 'limited', surface: 'core' }),
       expect.objectContaining({ api: 'prepareSimpleSearch', support: 'limited', surface: 'core' }),
       expect.objectContaining({ api: 'renderMatches', support: 'snapshot-only', surface: 'document' }),
+      expect.objectContaining({ api: 'htmlToMarkdown', support: 'limited', surface: 'document' }),
       expect.objectContaining({ api: 'Notice', support: 'snapshot-only', surface: 'entries' }),
       expect.objectContaining({ api: 'FileSystemAdapter', support: 'limited', surface: 'core' }),
       expect.objectContaining({ api: 'ImaginaryApi', support: 'unsupported', surface: 'unsupported' }),
     ]));
     expect(summarizeObsidianCapabilityCoverage(coverage)).toMatchObject({
       full: 1,
-      limited: 7,
+      limited: 8,
       'request-only': 1,
       'catalog-only': 6,
       'snapshot-only': 2,
@@ -102,6 +104,7 @@ describe('Obsidian capability matrix', () => {
         'Workspace.iterateCodeMirrors',
         'getIconIds',
         'prepareSimpleSearch',
+        'htmlToMarkdown',
       ],
     });
 
@@ -125,8 +128,8 @@ describe('Obsidian capability matrix', () => {
       }),
       expect.objectContaining({
         surface: 'document',
-        apiCount: 2,
-        supportSummary: expect.objectContaining({ limited: 1, 'snapshot-only': 1 }),
+        apiCount: 3,
+        supportSummary: expect.objectContaining({ limited: 2, 'snapshot-only': 1 }),
       }),
       expect.objectContaining({
         surface: 'network',
