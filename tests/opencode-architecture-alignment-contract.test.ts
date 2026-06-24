@@ -197,6 +197,7 @@ describe('OpenCode architecture alignment', () => {
     const agent = readText('packages/mindos/src/agent.ts');
     const agentTurnRoute = readText('packages/web/app/api/agent/sessions/[sessionId]/turns/route.ts');
     const agentTurnRunner = readText('packages/web/app/api/agent/_lib/turn-runner.ts');
+    const agentTurnRuntimeLane = readText('packages/web/app/api/agent/_lib/turn-runtime-lane.ts');
     const externalTurnRunner = readText('packages/web/app/api/agent/_lib/turn-runner-external.ts');
     const mindosPiTurnRunner = readText('packages/web/app/api/agent/_lib/turn-runner-mindos-pi.ts');
     const headlessAgent = readText('packages/web/lib/agent/headless.ts');
@@ -263,8 +264,9 @@ describe('OpenCode architecture alignment', () => {
     expect(agentTurnRoute).toContain('handleAgentSessionTurnRouteRequest');
     expect(agentTurnRunner).toContain("from '@geminilight/mindos/agent/turn'");
     expect(agentTurnRunner).toContain("from '@geminilight/mindos/agent/mindos-pi'");
-    expect(agentTurnRunner).toContain("await import('./turn-runner-external')");
-    expect(agentTurnRunner).toContain("await import('./turn-runner-mindos-pi')");
+    expect(agentTurnRunner).toContain("from './turn-runtime-lane'");
+    expect(agentTurnRuntimeLane).toContain("await import('./turn-runner-external')");
+    expect(agentTurnRuntimeLane).toContain("await import('./turn-runner-mindos-pi')");
     expect(agentTurnRunner).not.toContain('runMindosAcpAgentTurn');
     expect(agentTurnRunner).not.toContain('runMindosPiAgentTurnSession');
     expect(agentTurnRunner).not.toContain('resolveMindosAgentTimeoutMs');
@@ -299,8 +301,12 @@ describe('OpenCode architecture alignment', () => {
     expect(agentTurnRunner).toContain('const turnPrompt = renderMindosPiSelectedSkillPrompt(commonTurnPrompt, selectedSkills)');
     expect(externalTurnRunner).toContain('prompt: input.externalPrompt');
     expect(mindosPiTurnRunner).toContain('prompt: turnPrompt');
-    expect(agentTurnRunner.indexOf('if (verifiedNativeRuntime || selectedAcpAgent)')).toBeLessThan(
-      agentTurnRunner.indexOf("await import('./turn-runner-mindos-pi')"),
+    expect(agentTurnRunner).toContain('const runtimeLane = resolveRuntimeTurnLane');
+    expect(agentTurnRuntimeLane.indexOf('if (verifiedNativeRuntime)')).toBeLessThan(
+      agentTurnRuntimeLane.indexOf('if (selectedAcpAgent)'),
+    );
+    expect(agentTurnRuntimeLane.indexOf('if (selectedAcpAgent)')).toBeLessThan(
+      agentTurnRuntimeLane.indexOf("return {\n    kind: 'mindos-pi'"),
     );
     // Native-only SDKs must load through the bundler-proof native import: a
     // static `import ... from` (or even a plain dynamic import) lets Next.js
