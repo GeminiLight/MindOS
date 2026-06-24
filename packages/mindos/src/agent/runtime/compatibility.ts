@@ -160,9 +160,10 @@ export function mindosRuntimeCompatibilityProfile(input: RuntimeCompatibilityInp
       'permission-governance': assessment({
         level: 'ready',
         owner: 'mindos',
-        summary: 'MindOS permission mode maps directly to the Pi permission policy.',
+        summary: 'MindOS permission mode maps directly to the Pi permission policy and is exposed through the runtime permission projection contract.',
         requirements: [
           requirement('permission-policy', 'satisfied', 'mindos', 'MindOS can enforce read/ask/auto/full policy inside the Pi lane.'),
+          requirement('permission-projection-contract', 'satisfied', 'mindos', 'MindOS exposes per-runtime permission readiness diagnostics for interactive and unattended scenarios.'),
         ],
       }),
       'mcp-tooling': assessment({
@@ -279,7 +280,10 @@ export function nativeRuntimeCompatibilityProfile(
         requirements: [
           requirement('runtime-approvals', input.capabilities.supportsApprovals ? 'external' : 'unknown', 'external', `${name} must expose approval prompts or a safe native permission mode.`),
           requirement('mindos-permission-bridge', input.capabilities.supportsApprovals ? 'satisfied' : 'unknown', 'mindos', 'MindOS can route supported native approval requests into product stream events.'),
+          requirement('permission-projection-contract', 'satisfied', 'mindos', 'MindOS exposes read-only permission readiness diagnostics for native runtime bridges.'),
+          requirement('durable-approval-queue', 'missing', 'mindos', 'Native approval prompts are still in-process and interactive, not durable for headless or resumed runs.'),
         ],
+        ...(input.capabilities.supportsApprovals ? { blockers: ['durable-approval-queue'] } : {}),
       }),
       'mcp-tooling': assessment({
         level: input.capabilities.supportsMcpConfig ? 'limited' : 'blocked',
@@ -381,6 +385,7 @@ export function acpRuntimeCompatibilityProfile(input: RuntimeCompatibilityInput)
         owner: 'external',
         summary: 'Generic ACP does not expose a shared permission/approval prompt contract through MindOS yet.',
         requirements: [
+          requirement('permission-projection-contract', 'satisfied', 'mindos', 'MindOS exposes read-only permission readiness diagnostics for runtime descriptors.'),
           requirement('adapter-approval-contract', 'unknown', 'external', 'Adapter-specific permission semantics must be declared before MindOS can route approvals reliably.'),
         ],
       }),

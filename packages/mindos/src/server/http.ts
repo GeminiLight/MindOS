@@ -42,6 +42,7 @@ import {
 } from './handlers/agent-runtimes-codex.js';
 import { handleAgentRuntimesGet } from './handlers/agent-runtimes.js';
 import { handleAgentRuntimeMcpProjectionsGet } from './handlers/mcp-runtime-projections.js';
+import { handleAgentRuntimePermissionProjectionsGet } from './handlers/runtime-permission-projections.js';
 import {
   handleAgentCopySkillPost,
   handleCustomAgentDetectPost,
@@ -396,6 +397,10 @@ async function handleRequest(
     }
     if (route === 'GET /api/agent-runtimes/mcp-projections') {
       writeResponse(res, await handleAgentRuntimeMcpProjectionsGet(url.searchParams, createHttpMcpProjectionServices(services, url.searchParams)));
+      return;
+    }
+    if (route === 'GET /api/agent-runtimes/permission-projections') {
+      writeResponse(res, await handleAgentRuntimePermissionProjectionsGet(url.searchParams, createHttpRuntimeProjectionServices(services, url.searchParams)));
       return;
     }
     if (route === 'GET /api/agent-runtimes/codex/threads') {
@@ -1218,13 +1223,7 @@ function createHttpSkillLinkAgents(services: MindosHttpServices): () => MindosSk
 
 function createHttpMcpProjectionServices(services: MindosHttpServices, searchParams: URLSearchParams) {
   return {
-    listRuntimes: async () => {
-      const runtimeParams = new URLSearchParams();
-      if (searchParams.get('force') === '1') runtimeParams.set('force', '1');
-      const response = await handleAgentRuntimesGet(runtimeParams, services);
-      if (response.status === 200 && response.body && 'runtimes' in response.body) return response.body.runtimes;
-      throw new Error('Failed to build runtime descriptors for MCP projections.');
-    },
+    listRuntimes: () => listHttpRuntimeDescriptors(services, searchParams),
     listMcpAgents: async () => {
       const response = await handleMcpAgentsGet({
         agents: (services.mcpAgents ?? {}) as Record<string, MindosMcpAgentRegistryDef>,
@@ -1239,6 +1238,20 @@ function createHttpMcpProjectionServices(services: MindosHttpServices, searchPar
     },
     readMcpConfig: () => services.mcpTools?.readMcpConfig() ?? { mcpServers: {} },
   };
+}
+
+function createHttpRuntimeProjectionServices(services: MindosHttpServices, searchParams: URLSearchParams) {
+  return {
+    listRuntimes: () => listHttpRuntimeDescriptors(services, searchParams),
+  };
+}
+
+async function listHttpRuntimeDescriptors(services: MindosHttpServices, searchParams: URLSearchParams) {
+  const runtimeParams = new URLSearchParams();
+  if (searchParams.get('force') === '1') runtimeParams.set('force', '1');
+  const response = await handleAgentRuntimesGet(runtimeParams, services);
+  if (response.status === 200 && response.body && 'runtimes' in response.body) return response.body.runtimes;
+  throw new Error('Failed to build runtime descriptors for runtime projections.');
 }
 
 function optionsStaticRoot(services: MindosHttpServices, runtimeRoot?: string): string | undefined {

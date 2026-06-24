@@ -129,9 +129,32 @@ detect → health → configure → launch → session → context
 
 - `remote-control` 与 `unattended-automation` 分开。Codex / Claude / ACP / MindOS Pi 可以是 `server-runnable`，但 24/7 仍是 `limited`，因为还缺 scheduler、approval routing、wake/resume、failure audit。
 - `team-coordination` 现在最多是 `limited`。MindOS 已有 shared context，但还没有 first-class mailbox / task-board primitives，不应该在 UI 上承诺复杂 Team Mode。
+- `permission-governance` 已有只读 permission runtime projection contract。它能解释 Pi 的 `read/ask/auto/full` policy、native runtime 的交互式 permission bridge、ACP adapter 的未知审批契约；但 durable approval queue 还没有实现，所以 native bridge 不能等同 24/7 可用。
 - `skill-execution` 现在是 `limited`。MindOS 能注入/加载 skill，读取 `SKILL.md` runtime requirements，提供 skill × runtime matcher，并在明确 `blocked` 时阻止显式选中的不兼容 skill；但还没有自动 runtime routing，也不会把 `limited/unknown` 在 turn 前变成 UI warning。
 - `mcp-tooling` 对 native runtime 仍是 `limited`。MindOS 已有只读 MCP runtime projection contract，可以解释每个 runtime 当前是 `ready` / `projectable` / `limited` / `blocked` / `unknown`；但不会自动改写 Codex / Claude / ACP adapter 的外部 MCP 配置。
 - `artifact-governance` 现在是 `limited` 或 `blocked`。部分 runtime 能产出 diff/artifact/branch/PR，但 MindOS 还没有跨 runtime artifact index。
+
+### Permission Runtime Projection
+
+Permission runtime projection 是 `permission-governance` compatibility 的只读诊断契约，位于 `packages/mindos/src/server/handlers/runtime-permission-projections.ts`，通过 `/api/agent-runtimes/permission-projections?permissionMode=<read|ask|auto|full>` 暴露。它只解释当前 runtime 在某个 MindOS permission mode 下的权限治理状态，不直接批准、拒绝或重放任何运行时请求。
+
+projection 输出：
+
+| 字段 | 语义 |
+|---|---|
+| `status` | `ready` / `interactive-only` / `limited` / `blocked` / `unknown` |
+| `harnessPermissionModel` | runtime harness 当前声明的权限模型：`mindos-only` / `runtime-bridged` / `none` / `unknown` |
+| `interactiveApproval` | 交互式场景中权限由 Pi policy、native bridge、external runtime 还是 adapter 自己处理 |
+| `unattendedApproval` | 只从 permission 角度判断是否适合 headless / scheduled；scheduler、wake/resume、failure audit 仍属于 `unattended-automation` 场景 |
+| `policy` / `policyModes` | MindOS Pi 的 `read/ask/auto/full` policy 摘要：KB 写入范围、terminal/MCP/IM/schedule/user-extension/delegation 是否开启 |
+| `reasons` / `blockers` | runtime availability、permission owner、bridge、durable approval queue、adapter approval contract 等逐项判断 |
+
+当前结论：
+
+- MindOS Pi 的 `read` mode 从 permission 角度可无人值守，因为没有写入、terminal、MCP、IM、schedule 或 user-extension scope；但真正 24/7 仍需要 scheduler / wake-resume / failure audit。
+- MindOS Pi 的 `ask` mode 是交互安全默认值，不等于 durable approval queue；后台任务如果需要保留“问用户”的语义，还需要持久审批队列。
+- Codex / Claude 的 permission bridge 是 `interactive-only`：MindOS 能把 native permission prompt 变成产品流事件，但 pending 状态在 active run 的进程内，不能当作 headless / resumed run 的 durable approval。
+- Generic ACP 仍是 `unknown`：ACP adapter 必须声明自己的 approval contract，MindOS 才能可靠路由或预授权。
 
 ### MCP Runtime Projection
 
@@ -322,6 +345,7 @@ MindOS Pi 的 persisted session 由 Pi `SessionManager` 自己持有完整 JSONL
 | `packages/mindos/src/agent/runtime/lifecycle.ts` | MindOS Pi / native / ACP lifecycle metadata builder |
 | `packages/mindos/src/agent/runtime/compatibility.ts` | Runtime compatibility profile builder，投影 interactive / remote / unattended / skill / team 场景 readiness |
 | `packages/mindos/src/agent/runtime/descriptors.ts` | Runtime descriptor 组装，统一暴露 capability / harness / lifecycle |
+| `packages/mindos/src/server/handlers/runtime-permission-projections.ts` | Permission runtime projection contract，统一解释每个 runtime 的交互式审批与 unattended permission readiness |
 | `packages/mindos/src/server/handlers/mcp-runtime-projections.ts` | MCP runtime projection contract，统一解释每个 runtime 的 MCP ready/projectable/limited/blocked/unknown |
 | `packages/mindos/src/agent/prompt/agent-prompt.txt` | MindOS 默认 base prompt |
 | `packages/mindos/src/agent/prompt/assistant-prompt.ts` | Active Assistant overlay 解析与渲染 |

@@ -336,6 +336,12 @@ describe('MindOS server contract: core, files, HTTP', () => {
       auth: 'required',
     });
     expect(contract.routes).toContainEqual({
+      id: 'agent-runtimes.permission-projections',
+      method: 'GET',
+      path: '/api/agent-runtimes/permission-projections',
+      auth: 'required',
+    });
+    expect(contract.routes).toContainEqual({
       id: 'agent-runtimes.codex.threads',
       method: 'GET',
       path: '/api/agent-runtimes/codex/threads',

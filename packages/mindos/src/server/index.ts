@@ -106,6 +106,19 @@ export {
 } from './handlers/mcp-runtime-projections.js';
 
 export {
+  buildAgentRuntimePermissionProjectionsPayload,
+  handleAgentRuntimePermissionProjectionsGet,
+  type AgentRuntimePermissionApprovalRoute,
+  type AgentRuntimePermissionPolicyProjection,
+  type AgentRuntimePermissionProjection,
+  type AgentRuntimePermissionProjectionReason,
+  type AgentRuntimePermissionProjectionServices,
+  type AgentRuntimePermissionProjectionStatus,
+  type AgentRuntimePermissionProjectionsPayload,
+  type AgentRuntimePermissionUnattendedStatus,
+} from './handlers/runtime-permission-projections.js';
+
+export {
   evaluateSkillRuntimeMatch,
   type MindosSkillRuntimeMatch,
   type MindosSkillRuntimeMatchInput,
