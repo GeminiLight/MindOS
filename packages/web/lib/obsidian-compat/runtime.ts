@@ -56,6 +56,23 @@ export const EDITOR_SUGGEST_CAPABILITY_GATE = 'browser-editor-suggest-host';
 export const EDITOR_SUGGEST_MOUNT_REASON = 'EditorSuggest registrations depend on live editor cursor/context hooks. MindOS catalogs them until a per-plugin editor suggest host and explicit activation path exist.';
 export const PLUGIN_INTERACTION_TTL_MS = 5 * 60 * 1000;
 
+export type BrowserEditorSandboxTarget = 'codemirror-extension' | 'editor-suggest';
+export type BrowserEditorSandboxStatus = 'requires-browser-sandbox';
+
+export interface BrowserEditorSandboxPlan {
+  phase: 'p3a-browser-editor-sandbox';
+  target: BrowserEditorSandboxTarget;
+  host: 'browser-codemirror-sandbox';
+  status: BrowserEditorSandboxStatus;
+  transferable: boolean;
+  permissionGate: typeof EDITOR_EXTENSION_CAPABILITY_GATE | typeof EDITOR_SUGGEST_CAPABILITY_GATE;
+  canAutoMount: false;
+  cleanupRequired: true;
+  requiredPermissions: Array<'editor.read' | 'editor.write' | 'editor.selection' | 'editor.decorations' | 'editor.suggest'>;
+  requirements: string[];
+  reasons: string[];
+}
+
 export interface EditorExtensionSummary {
   kind: EditorExtensionKind;
   valueType: string;
@@ -67,6 +84,7 @@ export interface EditorExtensionSummary {
   capabilityGate: typeof EDITOR_EXTENSION_CAPABILITY_GATE;
   mountReason: string;
   autoMount: false;
+  sandbox: BrowserEditorSandboxPlan;
 }
 
 export interface RegisteredEditorExtension {
@@ -88,6 +106,7 @@ export interface EditorSuggestSummary {
   capabilityGate: typeof EDITOR_SUGGEST_CAPABILITY_GATE;
   mountReason: string;
   autoMount: false;
+  sandbox: BrowserEditorSandboxPlan;
 }
 
 export interface RegisteredEditorSuggest {
@@ -902,21 +921,38 @@ function summarizeEditorSuggest(suggest: unknown): EditorSuggestSummary {
     ? suggest as Record<string, unknown>
     : {};
 
+  const hasOnTrigger = typeof record.onTrigger === 'function';
+  const hasGetSuggestions = typeof record.getSuggestions === 'function';
+  const hasRenderSuggestion = typeof record.renderSuggestion === 'function';
+  const hasSelectSuggestion = typeof record.selectSuggestion === 'function';
+
   return {
     constructorName: getConstructorName(record),
-    hasOnTrigger: typeof record.onTrigger === 'function',
-    hasGetSuggestions: typeof record.getSuggestions === 'function',
-    hasRenderSuggestion: typeof record.renderSuggestion === 'function',
-    hasSelectSuggestion: typeof record.selectSuggestion === 'function',
+    hasOnTrigger,
+    hasGetSuggestions,
+    hasRenderSuggestion,
+    hasSelectSuggestion,
     mountStatus: 'catalog-only',
     capabilityGate: EDITOR_SUGGEST_CAPABILITY_GATE,
     mountReason: EDITOR_SUGGEST_MOUNT_REASON,
     autoMount: false,
+    sandbox: buildBrowserEditorSandboxPlan({
+      target: 'editor-suggest',
+      transferable: false,
+      permissionGate: EDITOR_SUGGEST_CAPABILITY_GATE,
+      requiredPermissions: ['editor.read', 'editor.selection', 'editor.suggest'],
+      reasons: [
+        'EditorSuggest instances keep live callbacks and cursor state inside the plugin runtime.',
+        hasOnTrigger && hasGetSuggestions
+          ? 'Trigger and suggestion callbacks must run through an explicit browser editor suggest bridge.'
+          : 'This registration does not expose the full trigger/suggestion callback shape needed by the browser host.',
+      ],
+    }),
   };
 }
 
 function withEditorExtensionGate(
-  summary: Omit<EditorExtensionSummary, 'mountStatus' | 'capabilityGate' | 'mountReason' | 'autoMount'>,
+  summary: Omit<EditorExtensionSummary, 'mountStatus' | 'capabilityGate' | 'mountReason' | 'autoMount' | 'sandbox'>,
 ): EditorExtensionSummary {
   return {
     ...summary,
@@ -924,6 +960,45 @@ function withEditorExtensionGate(
     capabilityGate: EDITOR_EXTENSION_CAPABILITY_GATE,
     mountReason: EDITOR_EXTENSION_MOUNT_REASON,
     autoMount: false,
+    sandbox: buildBrowserEditorSandboxPlan({
+      target: 'codemirror-extension',
+      transferable: summary.serializable,
+      permissionGate: EDITOR_EXTENSION_CAPABILITY_GATE,
+      requiredPermissions: ['editor.read', 'editor.write', 'editor.selection', 'editor.decorations'],
+      reasons: [
+        summary.serializable
+          ? 'The registration summary is serializable, but the original CodeMirror extension still cannot be mounted from the server runtime.'
+          : 'The registered CodeMirror extension contains functions or prototype objects that are not safely transferable to React.',
+        'MindOS must create the extension inside an isolated browser editor host and tie it to plugin unload cleanup before mounting.',
+      ],
+    }),
+  };
+}
+
+function buildBrowserEditorSandboxPlan(input: {
+  target: BrowserEditorSandboxTarget;
+  transferable: boolean;
+  permissionGate: BrowserEditorSandboxPlan['permissionGate'];
+  requiredPermissions: BrowserEditorSandboxPlan['requiredPermissions'];
+  reasons: string[];
+}): BrowserEditorSandboxPlan {
+  return {
+    phase: 'p3a-browser-editor-sandbox',
+    target: input.target,
+    host: 'browser-codemirror-sandbox',
+    status: 'requires-browser-sandbox',
+    transferable: input.transferable,
+    permissionGate: input.permissionGate,
+    canAutoMount: false,
+    cleanupRequired: true,
+    requiredPermissions: input.requiredPermissions,
+    requirements: [
+      'per-plugin browser editor sandbox',
+      'explicit user permission gate',
+      'transaction boundary for editor reads and writes',
+      'deterministic unload cleanup for extensions, keymaps, suggestions, and decorations',
+    ],
+    reasons: input.reasons,
   };
 }
 

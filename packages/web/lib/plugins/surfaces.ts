@@ -124,7 +124,22 @@ export interface ObsidianRuntimeSummaryForSurfaces {
     capabilityGate?: string;
     mountReason?: string;
     autoMount?: false;
+    sandbox?: BrowserEditorSandboxPlanLike;
   }>;
+}
+
+export interface BrowserEditorSandboxPlanLike {
+  phase?: 'p3a-browser-editor-sandbox';
+  target?: 'codemirror-extension' | 'editor-suggest';
+  host?: 'browser-codemirror-sandbox';
+  status?: 'requires-browser-sandbox';
+  transferable?: boolean;
+  permissionGate?: string;
+  canAutoMount?: false;
+  cleanupRequired?: boolean;
+  requiredPermissions?: string[];
+  requirements?: string[];
+  reasons?: string[];
 }
 
 export interface PluginCapabilityGate {
@@ -133,6 +148,18 @@ export interface PluginCapabilityGate {
   autoEnable: false;
   reason: string;
   nextStep: string;
+}
+
+export interface BrowserEditorSandboxSurfaceSummary {
+  phase: 'p3a-browser-editor-sandbox';
+  host: 'browser-codemirror-sandbox';
+  status: 'requires-browser-sandbox';
+  registrations: number;
+  transferableRegistrations: number;
+  cleanupRequired: true;
+  canAutoMount: false;
+  permissionGate: 'browser-editor-extension-host';
+  requirements: string[];
 }
 
 export interface ObsidianPluginForSurfaces {
@@ -522,6 +549,7 @@ export function buildObsidianPluginSurfaces(plugins: ObsidianPluginForSurfaces[]
           editorExtensions,
           mountPolicy: 'catalog-only',
           capabilityGate: EDITOR_EXTENSION_CAPABILITY_GATE,
+          browserEditorSandbox: buildBrowserEditorSandboxSurfaceSummary(editorExtensions),
         },
       });
     }
@@ -604,6 +632,42 @@ function viewExtensionsForType(
     }
   }
   return Array.from(extensions).sort();
+}
+
+function buildBrowserEditorSandboxSurfaceSummary(
+  editorExtensions: NonNullable<ObsidianRuntimeSummaryForSurfaces['editorExtensionList']>,
+): BrowserEditorSandboxSurfaceSummary {
+  const requirements = new Set<string>();
+  let transferableRegistrations = 0;
+
+  for (const extension of editorExtensions) {
+    if ((extension.sandbox?.transferable ?? extension.serializable) === true) {
+      transferableRegistrations += 1;
+    }
+    for (const requirement of extension.sandbox?.requirements ?? []) {
+      if (typeof requirement === 'string' && requirement.trim()) {
+        requirements.add(requirement.trim());
+      }
+    }
+  }
+
+  if (requirements.size === 0) {
+    requirements.add('per-plugin browser editor sandbox');
+    requirements.add('explicit user permission gate');
+    requirements.add('deterministic unload cleanup for extensions, keymaps, suggestions, and decorations');
+  }
+
+  return {
+    phase: 'p3a-browser-editor-sandbox',
+    host: 'browser-codemirror-sandbox',
+    status: 'requires-browser-sandbox',
+    registrations: editorExtensions.length,
+    transferableRegistrations,
+    cleanupRequired: true,
+    canAutoMount: false,
+    permissionGate: 'browser-editor-extension-host',
+    requirements: Array.from(requirements),
+  };
 }
 
 function buildCommandHotkeyPolicy(command: ObsidianRuntimeCommand, commandHotkeyOwners: Map<string, HotkeyOwner[]>): PluginHotkeyPolicy {

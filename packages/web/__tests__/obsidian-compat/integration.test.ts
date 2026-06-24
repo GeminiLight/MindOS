@@ -278,6 +278,22 @@ describe('obsidian compat integration', () => {
           hasSelectSuggestion: true,
           mountStatus: 'catalog-only',
           autoMount: false,
+          sandbox: expect.objectContaining({
+            phase: 'p3a-browser-editor-sandbox',
+            target: 'editor-suggest',
+            host: 'browser-codemirror-sandbox',
+            status: 'requires-browser-sandbox',
+            transferable: false,
+            permissionGate: 'browser-editor-suggest-host',
+            canAutoMount: false,
+            cleanupRequired: true,
+            requiredPermissions: ['editor.read', 'editor.selection', 'editor.suggest'],
+            requirements: expect.arrayContaining([
+              'per-plugin browser editor sandbox',
+              'explicit user permission gate',
+              'deterministic unload cleanup for extensions, keymaps, suggestions, and decorations',
+            ]),
+          }),
         }),
       }),
     ]);

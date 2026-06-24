@@ -191,6 +191,17 @@ describe('/api/obsidian-plugins lifecycle', () => {
           capabilityGate: 'browser-editor-extension-host',
           mountReason: expect.stringContaining('per-plugin editor sandbox'),
           autoMount: false,
+          sandbox: expect.objectContaining({
+            phase: 'p3a-browser-editor-sandbox',
+            target: 'codemirror-extension',
+            host: 'browser-codemirror-sandbox',
+            status: 'requires-browser-sandbox',
+            transferable: true,
+            permissionGate: 'browser-editor-extension-host',
+            canAutoMount: false,
+            cleanupRequired: true,
+            requiredPermissions: ['editor.read', 'editor.write', 'editor.selection', 'editor.decorations'],
+          }),
         })],
       },
     });

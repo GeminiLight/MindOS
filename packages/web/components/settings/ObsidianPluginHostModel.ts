@@ -88,6 +88,19 @@ export interface ObsidianPluginRuntime {
     capabilityGate?: string;
     mountReason?: string;
     autoMount?: boolean;
+    sandbox?: {
+      phase?: string;
+      target?: string;
+      host?: string;
+      status?: string;
+      transferable?: boolean;
+      permissionGate?: string;
+      canAutoMount?: boolean;
+      cleanupRequired?: boolean;
+      requiredPermissions?: string[];
+      requirements?: string[];
+      reasons?: string[];
+    };
   }>;
   warnings: string[];
 }

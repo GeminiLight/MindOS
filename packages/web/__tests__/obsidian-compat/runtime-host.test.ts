@@ -69,6 +69,25 @@ describe('ObsidianRuntimeHost', () => {
         capabilityGate: 'browser-editor-extension-host',
         mountReason: expect.stringContaining('per-plugin editor sandbox'),
         autoMount: false,
+        sandbox: expect.objectContaining({
+          phase: 'p3a-browser-editor-sandbox',
+          target: 'codemirror-extension',
+          host: 'browser-codemirror-sandbox',
+          status: 'requires-browser-sandbox',
+          transferable: true,
+          permissionGate: 'browser-editor-extension-host',
+          canAutoMount: false,
+          cleanupRequired: true,
+          requiredPermissions: ['editor.read', 'editor.write', 'editor.selection', 'editor.decorations'],
+          requirements: expect.arrayContaining([
+            'per-plugin browser editor sandbox',
+            'explicit user permission gate',
+            'deterministic unload cleanup for extensions, keymaps, suggestions, and decorations',
+          ]),
+          reasons: expect.arrayContaining([
+            expect.stringContaining('cannot be mounted from the server runtime'),
+          ]),
+        }),
       },
     }]);
     expect(host.getViews()).toMatchObject([{ pluginId: 'runtime-plugin', type: 'calendar-view' }]);
@@ -116,6 +135,12 @@ describe('ObsidianRuntimeHost', () => {
           capabilityGate: 'browser-editor-extension-host',
           mountReason: expect.stringContaining('per-plugin editor sandbox'),
           autoMount: false,
+          sandbox: expect.objectContaining({
+            target: 'codemirror-extension',
+            status: 'requires-browser-sandbox',
+            transferable: true,
+            cleanupRequired: true,
+          }),
         },
       },
       {
@@ -129,6 +154,12 @@ describe('ObsidianRuntimeHost', () => {
           capabilityGate: 'browser-editor-extension-host',
           mountReason: expect.stringContaining('per-plugin editor sandbox'),
           autoMount: false,
+          sandbox: expect.objectContaining({
+            target: 'codemirror-extension',
+            status: 'requires-browser-sandbox',
+            transferable: false,
+            cleanupRequired: true,
+          }),
         },
       },
     ]);

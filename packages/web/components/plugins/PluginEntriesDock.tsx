@@ -117,6 +117,15 @@ type EditorExtensionMetadata = {
   capabilityGate?: string;
   mountReason?: string;
   autoMount?: boolean;
+  sandbox?: {
+    phase?: string;
+    host?: string;
+    status?: string;
+    transferable?: boolean;
+    cleanupRequired?: boolean;
+    requirements?: string[];
+    reasons?: string[];
+  };
 };
 
 type CapabilityGateMetadata = {

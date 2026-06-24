@@ -1075,7 +1075,7 @@ export const OBSIDIAN_CAPABILITY_MATRIX: ObsidianCapabilityRow[] = [
     support: 'catalog-only',
     host: 'Editor extension catalog',
     tests: ['obsidian-compat/runtime-host.test.ts'],
-    notes: 'Editor extensions are recorded for review; MindOS does not mount CodeMirror extensions into every editor.',
+    notes: 'Editor extensions are recorded with a P3a browser editor sandbox plan; MindOS does not auto-mount CodeMirror extensions into live editors.',
   },
   {
     api: 'registerEditorSuggest',
@@ -1083,7 +1083,7 @@ export const OBSIDIAN_CAPABILITY_MATRIX: ObsidianCapabilityRow[] = [
     support: 'catalog-only',
     host: 'Editor suggest catalog',
     tests: ['obsidian-compat/integration.test.ts'],
-    notes: 'Editor suggestions are recorded for diagnostics; MindOS does not attach them to live editor cursor events until the browser editor suggest host exists.',
+    notes: 'Editor suggestions are recorded with a browser suggest sandbox plan; MindOS does not attach them to live cursor events until the editor suggest host exists.',
   },
   {
     api: 'request',
