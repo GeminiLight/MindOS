@@ -28,6 +28,7 @@ import { useLocale } from '@/lib/stores/locale-store';
 import { useSmoothRouterPush } from '@/hooks/useSmoothRouterPush';
 import { StableRowTrailingSlot } from '@/components/shared/StableRowChrome';
 import { FLOATING_SURFACE_CLASS } from '@/components/shared/FloatingSurface';
+import { requestAskPanelSessionActivation } from '@/lib/ask-panel-session-activation';
 import type { AgentRuntimeIdentity } from '@/lib/types';
 
 const NO_DRAG = { WebkitAppRegion: 'no-drag' } as React.CSSProperties;
@@ -255,6 +256,12 @@ export default function TitlebarTabStrip() {
   }, [pathname, smoothPush]);
 
   const navigate = useCallback((tab: WorkspaceTab) => {
+    setMenuOpen(false);
+    setContextMenu(null);
+    if (tab.kind === 'chat' && requestAskPanelSessionActivation(tab.key)) {
+      setPendingRoute(null);
+      return;
+    }
     scheduleNavigation(tabHref(tab), tab.id);
   }, [scheduleNavigation]);
 

@@ -54,6 +54,10 @@ import {
   type ProviderSelection,
 } from '@/lib/session-model-selection';
 import { isAiConfiguredForAgentTurn, type SettingsJsonForAi } from '@/lib/settings-ai-client';
+import {
+  ASK_PANEL_SESSION_ACTIVATE_EVENT,
+  getAskPanelSessionActivationDetail,
+} from '@/lib/ask-panel-session-activation';
 
 /** Stable empty array — a fresh [] literal per render would bust MessageList's memo */
 const EMPTY_SUGGESTIONS: ReadonlyArray<{ label: string; prompt: string }> = [];
@@ -936,10 +940,11 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
     }
   }, []);
 
-  const handleLoadSession = useCallback((id: string) => {
+  const handleLoadSession = useCallback((id: string): boolean => {
     // Concurrency: switching away from a streaming session is allowed — its
     // run keeps writing to the store and the list shows a running indicator.
     const targetSession = session.sessions.find((item) => item.id === id) ?? null;
+    if (!targetSession) return false;
     sessionRef.current.loadSession(id);
     setShowHistory(false);
     setComposerValue('');
@@ -953,7 +958,21 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
     updateSelectedAgentRuntime(targetRuntime);
     persistLastSelectedAgentRuntime(targetRuntime);
     setTimeout(() => inputRef.current?.focus(), 0);
+    return true;
   }, [chat.isLoadingRef, currentFile, session.sessions, updateSelectedAgentRuntime]);
+
+  useEffect(() => {
+    if (!visible || variant !== 'panel' || maximized) return;
+    const handleAskPanelSessionActivation = (event: Event) => {
+      const detail = getAskPanelSessionActivationDetail(event);
+      if (!detail) return;
+      if (handleLoadSession(detail.sessionId)) {
+        event.preventDefault();
+      }
+    };
+    window.addEventListener(ASK_PANEL_SESSION_ACTIVATE_EVENT, handleAskPanelSessionActivation);
+    return () => window.removeEventListener(ASK_PANEL_SESSION_ACTIVATE_EVENT, handleAskPanelSessionActivation);
+  }, [handleLoadSession, maximized, variant, visible]);
 
   const handleDeleteSession = useCallback((id: string) => {
     // Deleting a running session is allowed: the store aborts its run and

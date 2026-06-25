@@ -17,6 +17,7 @@ import { parseActiveTab, tabHref } from '@/hooks/useWorkspaceTabSync';
 import { getTabs, initWorkspaceTabs, keepTab, openTab, MAX_TABS } from '@/lib/workspace-tabs';
 import { getSessionsLoaded, renameSession } from '@/lib/agent-session-store';
 import { endRun, startRun } from '@/lib/agent-run-store';
+import { ASK_PANEL_SESSION_ACTIVATE_EVENT } from '@/lib/ask-panel-session-activation';
 import type { ChatSession } from '@/lib/types';
 
 const h = vi.hoisted(() => ({
@@ -277,6 +278,40 @@ describe('TitlebarTabStrip (spec-titlebar-row Phase 2)', () => {
     await click(findTab('日记😀.md')!);
     await flushSmoothNavigation();
     expect(h.push).toHaveBeenCalledWith(encoded);
+  });
+
+  it('lets an open Ask side panel consume chat tab clicks without full-page navigation', async () => {
+    deferServerSessions();
+    await navigateTo('/chat/s-side-panel');
+    await navigateTo('/wiki');
+    const handler = vi.fn((event: Event) => {
+      expect((event as CustomEvent<{ sessionId: string }>).detail.sessionId).toBe('s-side-panel');
+      event.preventDefault();
+    });
+    window.addEventListener(ASK_PANEL_SESSION_ACTIVATE_EVENT, handler);
+
+    try {
+      h.push.mockClear();
+      await click(findTab('Chat session')!);
+      await flushSmoothNavigation();
+
+      expect(handler).toHaveBeenCalledTimes(1);
+      expect(h.push).not.toHaveBeenCalled();
+    } finally {
+      window.removeEventListener(ASK_PANEL_SESSION_ACTIVATE_EVENT, handler);
+    }
+  });
+
+  it('keeps chat tab clicks routed to full-page chat when the side panel does not consume them', async () => {
+    deferServerSessions();
+    await navigateTo('/chat/s-full-page');
+    await navigateTo('/wiki');
+
+    h.push.mockClear();
+    await click(findTab('Chat session')!);
+    await flushSmoothNavigation();
+
+    expect(h.push).toHaveBeenCalledWith('/chat/s-full-page');
   });
 
   it('marks no tab selected on non-home place routes but keeps them open (dim state)', async () => {

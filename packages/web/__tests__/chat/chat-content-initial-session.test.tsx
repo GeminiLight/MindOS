@@ -11,11 +11,13 @@ import React from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { flushSync } from 'react-dom';
 import ChatContent from '@/components/chat/ChatContent';
+import { requestAskPanelSessionActivation } from '@/lib/ask-panel-session-activation';
 import type { ChatSession } from '@/lib/types';
 
-const { mockInitSessions, mockRefreshSessions } = vi.hoisted(() => ({
+const { mockInitSessions, mockRefreshSessions, mockLoadSession } = vi.hoisted(() => ({
   mockInitSessions: vi.fn(),
   mockRefreshSessions: vi.fn(() => Promise.resolve()),
+  mockLoadSession: vi.fn(),
 }));
 
 const { mockSubmit, mockStop, mockFirstMessageFired, mockIsLoadingRef, mockAbortRef } = vi.hoisted(() => ({
@@ -88,7 +90,7 @@ vi.mock('@/hooks/useAskSession', () => ({
     setSessionAgentRuntimeBinding: vi.fn(),
     attachRuntimeSession: vi.fn(() => true),
     resetSession: vi.fn(),
-    loadSession: vi.fn(),
+    loadSession: mockLoadSession,
     deleteSession: vi.fn(),
     renameSession: vi.fn(),
     togglePinSession: vi.fn(),
@@ -295,5 +297,29 @@ describe('ChatContent initialSessionId', () => {
 
     const textarea = host.querySelector('textarea');
     expect(textarea?.value).toBe('hello from route');
+  });
+
+  it('consumes titlebar session activation when rendered as a visible side panel', async () => {
+    await renderChatContent({ variant: 'panel' });
+
+    let consumed = false;
+    flushSync(() => {
+      consumed = requestAskPanelSessionActivation('s1');
+    });
+
+    expect(consumed).toBe(true);
+    expect(mockLoadSession).toHaveBeenCalledWith('s1');
+  });
+
+  it('does not consume titlebar session activation while panel mode is maximized', async () => {
+    await renderChatContent({ variant: 'panel', maximized: true });
+
+    let consumed = false;
+    flushSync(() => {
+      consumed = requestAskPanelSessionActivation('s1');
+    });
+
+    expect(consumed).toBe(false);
+    expect(mockLoadSession).not.toHaveBeenCalled();
   });
 });
