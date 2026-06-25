@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { CalendarClock, FolderOpen, LayoutDashboard, Plus } from 'lucide-react';
+import { CalendarClock, FolderOpen, LayoutDashboard, LayoutGrid, Plus } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import PanelHeader from './PanelHeader';
 import { PANEL_NAV_SECTION_CLASS, PanelNavRow } from './PanelNavRow';
@@ -25,6 +25,7 @@ const COPY = {
   en: {
     title: 'Studio',
     overview: 'Overview',
+    apps: 'Apps',
     automation: 'Automation',
     newProject: 'New Project',
     recentProjects: 'Projects',
@@ -32,6 +33,7 @@ const COPY = {
   zh: {
     title: '工作台',
     overview: '总览',
+    apps: '应用',
     automation: '自动化',
     newProject: '新建项目',
     recentProjects: '项目',
@@ -46,8 +48,12 @@ function isStudioAutomationPath(pathname: string): boolean {
   return pathname === '/studio/automation' || pathname.startsWith('/studio/automation/');
 }
 
+function isStudioAppsPath(pathname: string): boolean {
+  return pathname === '/studio/apps' || pathname.startsWith('/studio/apps/');
+}
+
 function getProjectIdFromPath(pathname: string): string | null {
-  if (isStudioOverviewPath(pathname) || isStudioAutomationPath(pathname)) return null;
+  if (isStudioOverviewPath(pathname) || isStudioAutomationPath(pathname) || isStudioAppsPath(pathname)) return null;
   if (!pathname.startsWith('/studio/')) return null;
   const raw = pathname.slice('/studio/'.length).split('/', 1)[0];
   if (!raw) return null;
@@ -101,6 +107,7 @@ export default function StudioPanel({ active }: StudioPanelProps) {
   const copy = locale === 'zh' ? COPY.zh : COPY.en;
   const pathname = usePathname() ?? '';
   const overviewActive = isStudioOverviewPath(pathname);
+  const appsActive = isStudioAppsPath(pathname);
   const automationActive = isStudioAutomationPath(pathname);
   const currentProjectId = getProjectIdFromPath(pathname);
   const [projects, setProjects] = useState<StudioProject[]>(() => readStudioProjects());
@@ -135,6 +142,13 @@ export default function StudioPanel({ active }: StudioPanelProps) {
             icon={<LayoutDashboard size={14} aria-hidden="true" />}
             title={copy.overview}
             active={overviewActive}
+            activeVariant="rail"
+          />
+          <PanelNavRow
+            href="/studio/apps"
+            icon={<LayoutGrid size={14} aria-hidden="true" />}
+            title={copy.apps}
+            active={appsActive}
             activeVariant="rail"
           />
           <PanelNavRow

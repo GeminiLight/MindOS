@@ -93,7 +93,7 @@ Drawer (triggered by ☰):
 
 ## 页面清单
 
-> **2026-04-10 更新**：共 15 个页面路由（含 3 个动态路由）
+> **2026-06-25 更新**：页面路由以当前 App Router 为准；新增/移除路由时同步维护本表。
 
 | 路由 | 页面 | 组件入口 | 说明 |
 |------|------|---------|------|
@@ -107,6 +107,10 @@ Drawer (triggered by ☰):
 | `/echo/[segment]` | 回响内容页 | `app/echo/[segment]/page.tsx` | 与你有关 / 未完待续 / 每日回响 / 历史的你 / 心向生长；见 `spec-echo-content-pages.md` |
 | `/agents` | 智能体总览 | `app/agents/page.tsx` | 总览 / Assistant / Agent / Skills & MCP / 频道五组 IA；旧 MCP / Skills / Network / Sessions / Activity query 仍作为兼容入口 |
 | `/agents/[agentKey]` | 智能体详情 | `app/agents/[agentKey]/page.tsx` | Skill 管理 + MCP 状态 + Runtime 诊断 |
+| `/studio` | Studio / 工作台 | `app/studio/page.tsx` | 项目工作台；承载 Project、Session、上下文与复盘 |
+| `/studio/apps` | Studio 应用 | `app/studio/apps/page.tsx` | 场景应用入口；关系记忆、学习练习等 context 工作面 |
+| `/studio/automation` | Studio 自动化 | `app/studio/automation/page.tsx` | 本地自动化计划/编辑器，后端执行待接入 |
+| `/studio/[projectId]` | Studio 项目详情 | `app/studio/[projectId]/page.tsx` | 单个 Project 的上下文、对话、复盘与运行记录 |
 | `/trash` | 回收站 | `app/trash/page.tsx` | 已删除文件恢复/永久删除 |
 | `/wiki` | Wiki 入口 | `app/wiki/page.tsx` | 项目 Wiki 浏览 |
 | `/capture` | Inbox | `app/capture/page.tsx` | 默认只展示捕获框；Queue / History 通过页内 segment 延后展开，避免队列和 AI 面板挤占捕获动作 |

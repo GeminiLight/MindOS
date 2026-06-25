@@ -38,6 +38,7 @@ describe('Studio Chinese copy contract', () => {
     expect(source).toContain("title: '工作台'");
     expect(source).toContain("studio: '工作台'");
     expect(studioPanelSource).toContain("overview: '总览'");
+    expect(studioPanelSource).toContain("apps: '应用'");
     expect(studioPanelSource).toContain("automation: '自动化'");
     expect(source).toContain("returnStudio: '返回工作台'");
     expect(source).toContain("newProject: '新建项目'");

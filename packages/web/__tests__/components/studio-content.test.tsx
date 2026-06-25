@@ -3,6 +3,7 @@ import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import StudioContent from '@/components/studio/StudioContent';
+import StudioAppsContent from '@/components/studio/StudioAppsContent';
 import StudioAutomationContent from '@/components/studio/StudioAutomationContent';
 import StudioPanel from '@/components/panels/StudioPanel';
 
@@ -51,6 +52,16 @@ async function renderStudioAutomation() {
 
   await act(async () => {
     root!.render(<StudioAutomationContent />);
+  });
+}
+
+async function renderStudioApps() {
+  host = document.createElement('div');
+  document.body.appendChild(host);
+  root = createRoot(host);
+
+  await act(async () => {
+    root!.render(<StudioAppsContent />);
   });
 }
 
@@ -178,7 +189,7 @@ describe('StudioContent', () => {
     expect(host.querySelectorAll('[data-studio-project-item="compact"]').length).toBeGreaterThan(0);
   });
 
-  it('renders the unified Studio panel with Overview, Automation and Projects', async () => {
+  it('renders the unified Studio panel with Overview, Apps, Automation and Projects', async () => {
     host = document.createElement('div');
     document.body.appendChild(host);
     root = createRoot(host);
@@ -188,11 +199,14 @@ describe('StudioContent', () => {
     });
 
     expect(host.textContent).toContain('Overview');
+    expect(host.textContent).toContain('Apps');
     expect(host.textContent).toContain('Automation');
     expect(host.textContent).toContain('Projects');
     const overview = host.querySelector('a[href="/studio"]');
+    const apps = host.querySelector('a[href="/studio/apps"]');
     const automation = host.querySelector('a[href="/studio/automation"]');
     expect(overview).not.toBeNull();
+    expect(apps).not.toBeNull();
     expect(automation).not.toBeNull();
     expect(overview?.className).toContain('gap-3');
     expect(overview?.className).toContain('px-4');
@@ -200,6 +214,26 @@ describe('StudioContent', () => {
     expect(host.querySelector('a[href="/studio/launch-practice"]')).not.toBeNull();
     expect(host.textContent).not.toContain('Research Kit');
     expect(host.textContent).not.toContain('2 Sessions');
+  });
+
+  it('selects the Apps sidebar route without treating it as a Project', async () => {
+    mockPathname = '/studio/apps';
+    host = document.createElement('div');
+    document.body.appendChild(host);
+    root = createRoot(host);
+
+    await act(async () => {
+      root!.render(<StudioPanel active />);
+    });
+
+    const overview = host.querySelector('a[href="/studio"]');
+    const apps = host.querySelector('a[href="/studio/apps"]');
+    const automation = host.querySelector('a[href="/studio/automation"]');
+    const launchProject = host.querySelector('a[href="/studio/launch-practice"]');
+    expect(overview?.getAttribute('aria-current')).toBeNull();
+    expect(apps?.getAttribute('aria-current')).toBe('page');
+    expect(automation?.getAttribute('aria-current')).toBeNull();
+    expect(launchProject?.getAttribute('aria-current')).toBeNull();
   });
 
   it('selects the Automation sidebar route without treating it as a Project', async () => {
@@ -218,6 +252,19 @@ describe('StudioContent', () => {
     expect(overview?.getAttribute('aria-current')).toBeNull();
     expect(automation?.getAttribute('aria-current')).toBe('page');
     expect(launchProject?.getAttribute('aria-current')).toBeNull();
+  });
+
+  it('renders Studio Apps as a scene-app surface', async () => {
+    await renderStudioApps();
+
+    expect(host.querySelector('[data-content-page-shell="studio"]')).not.toBeNull();
+    expect(host.textContent).toContain('Apps');
+    expect(host.textContent).toContain('Relationships');
+    expect(host.textContent).toContain('Relationship Memory');
+    expect(host.textContent).toContain('Learning Practice');
+    expect(host.textContent).toContain('Record touchpoint');
+    expect(host.querySelector('a[href="/capture"]')).not.toBeNull();
+    expect(host.querySelector('a[href="/echo/growth"]')).not.toBeNull();
   });
 
   it('keeps Studio panel Project rows flat without expandable Sessions', async () => {
