@@ -28,6 +28,11 @@ import type {
 } from '@/lib/obsidian-compat/community-support';
 import type { ObsidianCapabilitySupport } from '@/lib/obsidian-compat/capability-matrix';
 import { notifyObsidianPluginPackagesChanged } from '@/lib/plugins/events';
+import {
+  readObsidianLinterProfilePreference,
+  saveObsidianLinterProfilePreference,
+} from '@/lib/stores/obsidian-linter-profile-store';
+import type { ImportedObsidianLinterProfile } from '@/lib/obsidian-compat/linter-settings-profile';
 
 interface ScannedPlugin {
   id: string;
@@ -103,6 +108,7 @@ interface ImportResult {
   id: string;
   ok: boolean;
   copiedFiles?: string[];
+  linterProfile?: ImportedObsidianLinterProfile;
   error?: string;
 }
 
@@ -267,12 +273,28 @@ export function ObsidianImportSection({
     const results: ImportResult[] = [];
     for (const pluginId of selectedImportableIds) {
       try {
-        const data = await apiFetch<{ imported?: { copiedFiles?: string[] } }>('/api/obsidian/import', {
+        const data = await apiFetch<{ imported?: { copiedFiles?: string[]; linterProfile?: ImportedObsidianLinterProfile } }>('/api/obsidian/import', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ vaultRoot: report.vaultRoot, pluginId, configDir: activeConfigDir }),
         });
-        results.push({ id: pluginId, ok: true, copiedFiles: data.imported?.copiedFiles });
+        if (data.imported?.linterProfile) {
+          const currentProfile = readObsidianLinterProfilePreference();
+          const enabledRules = { ...currentProfile.enabledRules };
+          for (const ruleId of data.imported.linterProfile.mappedRules) {
+            enabledRules[ruleId] = data.imported.linterProfile.profile.enabledRules[ruleId];
+          }
+          saveObsidianLinterProfilePreference({
+            ...currentProfile,
+            enabledRules,
+          });
+        }
+        results.push({
+          id: pluginId,
+          ok: true,
+          copiedFiles: data.imported?.copiedFiles,
+          linterProfile: data.imported?.linterProfile,
+        });
       } catch (err) {
         results.push({ id: pluginId, ok: false, error: err instanceof Error ? err.message : 'Failed' });
       }
@@ -585,7 +607,7 @@ export function ObsidianImportSection({
                         <span className={result.ok ? 'text-muted-foreground' : 'text-error'}>
                           <span className="font-medium text-foreground">{result.id}</span>
                           {result.ok
-                            ? ` copied ${result.copiedFiles?.join(', ') ?? 'plugin files'}`
+                            ? ` copied ${result.copiedFiles?.join(', ') ?? 'plugin files'}${result.linterProfile ? `; applied Linter profile (${result.linterProfile.mappedRules.length} rules)` : ''}`
                             : ` failed: ${result.error}`}
                         </span>
                       </div>

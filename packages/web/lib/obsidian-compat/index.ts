@@ -25,6 +25,12 @@ export {
   previewObsidianLinterFixes,
 } from './linter-adapter';
 export {
+  buildImportedObsidianLinterProfile,
+  OBSIDIAN_LINTER_DATA_JSON_RULE_MAPPINGS,
+  OBSIDIAN_LINTER_PLUGIN_ID,
+  parseImportedObsidianLinterProfileJson,
+} from './linter-settings-profile';
+export {
   createDefaultObsidianSecretStorageBackend,
   DesktopSafeStorageBrokerBackend,
   getDesktopSecretStorageBrokerConfigFromEnv,
@@ -104,3 +110,7 @@ export type {
   ObsidianLinterRuleProfile,
   ObsidianLinterRuleProfileInput,
 } from './linter-adapter';
+export type {
+  ImportedObsidianLinterProfile,
+  ObsidianLinterDataJsonRuleMapping,
+} from './linter-settings-profile';

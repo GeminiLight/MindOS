@@ -201,6 +201,50 @@ describe('obsidian import scanner', () => {
     expect(imported.copiedFiles).toEqual(['manifest.json', 'main.js', 'styles.css', 'data.json', 'obsidian-import.json']);
   });
 
+  it('returns a safe MindOS Linter profile mapping when importing Obsidian Linter data.json', async () => {
+    writeVaultPlugin(
+      'obsidian-linter',
+      `const { Plugin } = require('obsidian'); module.exports = class ObsidianLinter extends Plugin {};`,
+      {
+        data: {
+          ruleConfigs: {
+            'trailing-spaces': { enabled: false },
+            'consecutive-blank-lines': { enabled: false },
+            'line-break-at-document-end': { enabled: true },
+            'yaml-title': { enabled: false },
+          },
+        },
+      },
+    );
+
+    const imported = await importObsidianPlugin({
+      vaultRoot,
+      pluginId: 'obsidian-linter',
+      targetMindRoot: mindRoot,
+    });
+
+    expect(JSON.parse(fs.readFileSync(path.join(imported.targetDir, 'data.json'), 'utf-8'))).toMatchObject({
+      ruleConfigs: {
+        'trailing-spaces': { enabled: false },
+      },
+    });
+    expect(imported.linterProfile).toMatchObject({
+      schemaVersion: 1,
+      source: 'obsidian-linter-data-json',
+      pluginId: 'obsidian-linter',
+      mappedRules: ['trailing-whitespace', 'multiple-blank-lines', 'missing-final-newline'],
+      ignoredRules: ['yaml-title'],
+      profile: {
+        enabledRules: {
+          'trailing-whitespace': false,
+          'multiple-blank-lines': false,
+          'missing-final-newline': true,
+        },
+      },
+    });
+    expect(JSON.parse(fs.readFileSync(path.join(imported.targetDir, 'obsidian-import.json'), 'utf-8'))).not.toHaveProperty('linterProfile');
+  });
+
   it('imports from a custom config folder and records its source config directory', async () => {
     writeObsidianConfig('community-plugins.json', ['custom-import'], 'config/obsidian');
     writeObsidianConfig('hotkeys.json', { 'custom-import:open': [{ modifiers: ['Mod'], key: 'U' }] }, 'config/obsidian');

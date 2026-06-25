@@ -14,6 +14,10 @@ import {
   resolveCanonicalObsidianPluginDir,
   resolveInstalledObsidianPluginDir,
 } from './plugin-paths';
+import {
+  parseImportedObsidianLinterProfileJson,
+  type ImportedObsidianLinterProfile,
+} from './linter-settings-profile';
 
 export interface ObsidianPluginHotkey {
   modifiers: string[];
@@ -88,6 +92,7 @@ export interface ImportedObsidianPlugin {
   targetDir: string;
   copiedFiles: string[];
   obsidianConfig: ImportedObsidianPluginConfig;
+  linterProfile?: ImportedObsidianLinterProfile;
 }
 
 export const DEFAULT_OBSIDIAN_CONFIG_DIR = '.obsidian';
@@ -444,12 +449,19 @@ export async function importObsidianPlugin(options: ImportObsidianPluginOptions)
   fs.mkdirSync(targetDir, { recursive: true });
 
   const copiedFiles: string[] = [];
+  let linterProfile: ImportedObsidianLinterProfile | undefined;
   for (const fileName of ['manifest.json', 'main.js', 'styles.css', 'data.json']) {
     const from = maybeResolveRegularPluginFile(sourceDir, fileName);
     if (!from) continue;
     const to = path.join(targetDir, fileName);
     fs.copyFileSync(from, to);
     copiedFiles.push(fileName);
+    if (fileName === 'data.json') {
+      linterProfile = parseImportedObsidianLinterProfileJson(
+        options.pluginId,
+        fs.readFileSync(from, 'utf-8'),
+      ) ?? undefined;
+    }
   }
   const obsidianConfig = toImportedObsidianPluginConfig(
     options.pluginId,
@@ -468,5 +480,6 @@ export async function importObsidianPlugin(options: ImportObsidianPluginOptions)
     targetDir,
     copiedFiles,
     obsidianConfig,
+    ...(linterProfile ? { linterProfile } : {}),
   };
 }

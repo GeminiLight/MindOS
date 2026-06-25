@@ -145,6 +145,78 @@ describe('POST /api/obsidian/import', () => {
     expect(scanObsidianVaultPlugins).toHaveBeenCalledWith(expect.any(String), { configDir: '.obsidian' });
   });
 
+  it('passes imported Obsidian Linter profile metadata through to the client', async () => {
+    scanObsidianVaultPlugins.mockResolvedValue({
+      plugins: [
+        {
+          id: 'obsidian-linter',
+          manifest: { id: 'obsidian-linter', name: 'Linter', version: '1.0.0' },
+          sourceDir: '/tmp/vault/.obsidian/plugins/obsidian-linter',
+          compatibilityLevel: 'compatible',
+          compatibility: {
+            obsidianApis: ['Plugin'],
+            moduleImports: [],
+            nodeModules: [],
+            unsupportedModules: [],
+            supportedApis: ['Plugin'],
+            partialApis: [],
+            unsupportedApis: [],
+            blockers: [],
+          },
+          hasStyles: false,
+          hasData: true,
+          obsidianConfig: { enabledInObsidian: true, hasEnabledList: true, hotkeys: [], hotkeyCount: 0 },
+        },
+      ],
+      skipped: [],
+      vault: { pluginsDirFound: true, hasEnabledList: true, configDir: '.obsidian', pluginsRelativePath: '.obsidian/plugins' },
+    });
+    importObsidianPlugin.mockResolvedValue({
+      pluginId: 'obsidian-linter',
+      targetDir: '/tmp/mindRoot/.mindos/plugins/obsidian-linter',
+      copiedFiles: ['manifest.json', 'main.js', 'data.json', 'obsidian-import.json'],
+      obsidianConfig: { enabledInObsidian: true, hasEnabledList: true, hotkeys: [], hotkeyCount: 0, sourceConfigDir: '.obsidian' },
+      linterProfile: {
+        schemaVersion: 1,
+        source: 'obsidian-linter-data-json',
+        pluginId: 'obsidian-linter',
+        mappedRules: ['trailing-whitespace'],
+        ignoredRules: [],
+        warnings: [],
+        profile: {
+          enabledRules: {
+            'heading-space': true,
+            'trailing-whitespace': false,
+            'hard-tab': true,
+            'multiple-blank-lines': true,
+            'missing-final-newline': true,
+          },
+          maxConsecutiveBlankLines: 1,
+        },
+      },
+    });
+
+    const req = new NextRequest('http://localhost/api/obsidian/import', {
+      method: 'POST',
+      body: JSON.stringify({ vaultRoot: '~/vault', pluginId: 'obsidian-linter' }),
+      headers: { 'content-type': 'application/json' },
+    });
+
+    const res = await POST(req);
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json.imported.linterProfile).toMatchObject({
+      source: 'obsidian-linter-data-json',
+      mappedRules: ['trailing-whitespace'],
+      profile: {
+        enabledRules: {
+          'trailing-whitespace': false,
+        },
+      },
+    });
+  });
+
   it('imports with a custom Obsidian config folder override', async () => {
     scanObsidianVaultPlugins.mockResolvedValue({
       plugins: [
