@@ -97,10 +97,34 @@ describe('/api/obsidian-plugins lifecycle', () => {
       id: 'run-plugin',
       enabled: true,
       loaded: true,
+      capabilityLedger: expect.arrayContaining([
+        expect.objectContaining({
+          capability: 'addCommand',
+          phase: 'predicted',
+        }),
+        expect.objectContaining({
+          capability: 'addCommand',
+          phase: 'registered',
+        }),
+        expect.objectContaining({
+          capability: 'registerMarkdownCodeBlockProcessor',
+          phase: 'registered',
+        }),
+      ]),
       runtime: {
         commands: 1,
         commandList: [{ id: 'hello', fullId: 'obsidian:run-plugin:hello', name: 'Hello' }],
         markdownCodeBlockProcessors: 1,
+        capabilityLedger: expect.arrayContaining([
+          expect.objectContaining({
+            capability: 'addCommand',
+            phase: 'registered',
+          }),
+          expect.objectContaining({
+            capability: 'registerMarkdownCodeBlockProcessor',
+            phase: 'registered',
+          }),
+        ]),
       },
     });
   });

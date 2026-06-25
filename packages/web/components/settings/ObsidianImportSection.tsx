@@ -27,6 +27,11 @@ import type {
   ObsidianCommunitySurfacePreviewState,
 } from '@/lib/obsidian-compat/community-support';
 import type { ObsidianCapabilitySupport } from '@/lib/obsidian-compat/capability-matrix';
+import type {
+  ObsidianCompatibilityPreview,
+  ObsidianRuntimeCapabilityLedgerPhase,
+  ObsidianWorkflowOutcomeStatus,
+} from '@/lib/obsidian-compat/compatibility-preview';
 import { notifyObsidianPluginPackagesChanged } from '@/lib/plugins/events';
 import {
   readObsidianLinterProfilePreference,
@@ -52,6 +57,7 @@ interface ScannedPlugin {
   support?: ObsidianImportSupport;
   surfacePreview?: ObsidianCommunitySurfacePreview[];
   coverageSummary?: Record<ObsidianCapabilitySupport, number>;
+  compatibilityPreview?: ObsidianCompatibilityPreview;
   migrationPlan?: {
     copiedFiles: string[];
     sourceVaultUnchanged: boolean;
@@ -193,6 +199,44 @@ function compactCoverageSummary(summary?: Record<ObsidianCapabilitySupport, numb
     summary.unsupported ? `${summary.unsupported} unsupported` : '',
   ].filter(Boolean);
   return parts.length > 0 ? parts.join(' / ') : null;
+}
+
+function workflowStatusLabel(status: ObsidianWorkflowOutcomeStatus): string {
+  return {
+    available: 'available',
+    limited: 'limited',
+    'preview-only': 'preview',
+    'not-available': 'unavailable',
+    'native-replacement': 'native',
+  }[status];
+}
+
+function workflowStatusClass(status: ObsidianWorkflowOutcomeStatus): string {
+  if (status === 'available') return 'text-success';
+  if (status === 'not-available') return 'text-error';
+  if (status === 'native-replacement') return 'text-[var(--amber-text)]';
+  return 'text-muted-foreground';
+}
+
+function settingsMappingSummary(preview: ObsidianCompatibilityPreview): string | null {
+  const mapping = preview.settingsMappings.find((item) => item.id === 'obsidian-linter-profile' || item.mappedItems.length > 0)
+    ?? preview.settingsMappings[0];
+  if (!mapping) return null;
+  const parts = [
+    `${mapping.label}`,
+    `${mapping.mappedItems.length} mapped`,
+    mapping.ignoredItems.length > 0 ? `${mapping.ignoredItems.length} ignored` : '',
+    mapping.warnings.length > 0 ? `${mapping.warnings.length} warning${mapping.warnings.length === 1 ? '' : 's'}` : '',
+  ].filter(Boolean);
+  return parts.join(' / ');
+}
+
+function ledgerSummary(preview: ObsidianCompatibilityPreview): string {
+  const counts = preview.runtimeCapabilityLedger.reduce<Record<ObsidianRuntimeCapabilityLedgerPhase, number>>((summary, entry) => {
+    summary[entry.phase] += 1;
+    return summary;
+  }, { predicted: 0, registered: 0, called: 0, blocked: 0 });
+  return `${counts.predicted} predicted${counts.blocked > 0 ? ` / ${counts.blocked} blocked` : ''}`;
 }
 
 export function ObsidianImportSection({
@@ -490,6 +534,9 @@ export function ObsidianImportSection({
                     const canSelect = plugin.importable ?? support.importable;
                     const isSelected = selected.has(plugin.id);
                     const coverage = compactCoverageSummary(plugin.coverageSummary);
+                    const preview = plugin.compatibilityPreview;
+                    const mappingSummary = preview ? settingsMappingSummary(preview) : null;
+                    const primaryWorkflow = preview?.workflowOutcomes[0];
                     return (
                       <label
                         key={plugin.id}
@@ -548,6 +595,41 @@ export function ObsidianImportSection({
                               </span>
                             )}
                           </div>
+                          {preview && (
+                            <div className="mt-2 space-y-1.5 border-l border-border/70 pl-2.5 text-2xs text-muted-foreground">
+                              <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                                <span className="font-medium text-foreground">Path</span>
+                                <span className="min-w-0 break-all font-mono text-foreground">{preview.packagePath.sourcePath}</span>
+                                <ArrowRight size={10} className="shrink-0 text-muted-foreground/70" />
+                                <span className="min-w-0 break-all font-mono text-foreground">{preview.packagePath.targetPath}</span>
+                              </div>
+                              <div className="flex flex-wrap gap-1.5">
+                                {mappingSummary && (
+                                  <span className="rounded border border-border bg-background px-1.5 py-0.5">
+                                    Settings: {mappingSummary}
+                                  </span>
+                                )}
+                                {primaryWorkflow && (
+                                  <span className="rounded border border-border bg-background px-1.5 py-0.5">
+                                    Workflow: {primaryWorkflow.label} <span className={workflowStatusClass(primaryWorkflow.status)}>{workflowStatusLabel(primaryWorkflow.status)}</span>
+                                  </span>
+                                )}
+                                <span className="rounded border border-border bg-background px-1.5 py-0.5">
+                                  Ledger: {ledgerSummary(preview)}
+                                </span>
+                              </div>
+                              {preview.blockedReasons.length > 0 && (
+                                <div className="text-error">
+                                  Blocked: {preview.blockedReasons[0]}
+                                </div>
+                              )}
+                              {preview.nextSteps[0] && (
+                                <div>
+                                  Next: {preview.nextSteps[0]}
+                                </div>
+                              )}
+                            </div>
+                          )}
                           <div className="mt-2 flex flex-wrap items-center gap-1.5 text-2xs text-muted-foreground">
                             <ListChecks size={11} />
                             <span>Copy {copiedFilesFor(plugin).join(', ')}</span>

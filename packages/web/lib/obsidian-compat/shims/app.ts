@@ -363,11 +363,14 @@ export class AppShim implements App {
   }
 
   registerCommand(pluginId: string, command: Command): Command {
-    return this.commandRegistry.register(pluginId, command);
+    const registered = this.commandRegistry.register(pluginId, command);
+    this.runtimeHost.recordRuntimeCapability(pluginId, 'addCommand', 'registered', `Plugin registered command "${registered.id}".`);
+    return registered;
   }
 
   unregisterCommand(pluginId: string, commandId: string): void {
     this.commandRegistry.unregister(pluginId, commandId);
+    this.runtimeHost.recordRuntimeCapability(pluginId, 'removeCommand', 'called', `Plugin removed command "${commandId}".`);
   }
 
   unregisterAllCommands(pluginId: string): void {
@@ -378,12 +381,13 @@ export class AppShim implements App {
     return this.commandRegistry.list();
   }
 
-  executeCommand(fullId: string, context?: CommandExecutionContext): Promise<void> {
+  async executeCommand(fullId: string, context?: CommandExecutionContext): Promise<void> {
     const command = this.commandRegistry.get(fullId);
     if (!command) {
       return this.commandRegistry.execute(fullId, context);
     }
-    return this.runtimeHost.runWithPluginContext(command.pluginId, () => this.commandRegistry.execute(fullId, context));
+    await this.runtimeHost.runWithPluginContext(command.pluginId, () => this.commandRegistry.execute(fullId, context));
+    this.runtimeHost.recordRuntimeCapability(command.pluginId, 'addCommand', 'called', `Plugin command "${command.id}" executed.`);
   }
 
   getRuntimeHost(): ObsidianRuntimeHost {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  capabilityLedgerSummary,
   isLoadResult,
   isPluginActionResult,
   runtimeSummary,
@@ -125,6 +126,42 @@ describe('ObsidianPluginHostModel', () => {
         value: 'Obsidian Community · chhoumann/quickadd · installed 2026-06-14 · updated 2026-06-15 · previous 1.0.0',
       }),
     ]);
+  });
+
+  it('summarizes merged capability ledger phases', () => {
+    const item = plugin({
+      capabilityLedger: [
+        {
+          pluginId: 'quickadd-like',
+          capability: 'addCommand',
+          surface: 'commands',
+          support: 'full',
+          phase: 'predicted',
+          source: 'static-analysis',
+          evidence: 'static',
+        },
+        {
+          pluginId: 'quickadd-like',
+          capability: 'addCommand',
+          surface: 'commands',
+          support: 'full',
+          phase: 'registered',
+          source: 'runtime-ledger',
+          evidence: 'registered',
+        },
+        {
+          pluginId: 'quickadd-like',
+          capability: 'addCommand',
+          surface: 'commands',
+          support: 'full',
+          phase: 'called',
+          source: 'runtime-ledger',
+          evidence: 'called',
+        },
+      ],
+    });
+
+    expect(capabilityLedgerSummary(item)).toBe('1 predicted / 1 registered / 1 called');
   });
 
   it('keeps API result type guards narrow', () => {

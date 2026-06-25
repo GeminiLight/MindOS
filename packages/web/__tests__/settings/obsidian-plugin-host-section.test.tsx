@@ -278,6 +278,39 @@ describe('ObsidianPluginHostSection', () => {
               },
               coverage: [{ api: 'Notice', surface: 'entries', support: 'snapshot-only', host: 'Plugin entries dock', notes: 'snapshot' }],
               coverageSummary: { full: 2, limited: 0, 'snapshot-only': 1, 'catalog-only': 0, 'request-only': 0, unsupported: 0 },
+              capabilityLedger: [
+                {
+                  pluginId: 'quickadd-like',
+                  capability: 'Notice',
+                  surface: 'entries',
+                  support: 'snapshot-only',
+                  phase: 'predicted',
+                  source: 'static-analysis',
+                  evidence: 'static',
+                },
+                {
+                  pluginId: 'quickadd-like',
+                  capability: 'Notice',
+                  surface: 'entries',
+                  support: 'snapshot-only',
+                  phase: 'called',
+                  source: 'runtime-ledger',
+                  evidence: 'called',
+                },
+              ],
+              runtime: runtime({
+                capabilityLedger: [
+                  {
+                    pluginId: 'quickadd-like',
+                    capability: 'Notice',
+                    surface: 'entries',
+                    support: 'snapshot-only',
+                    phase: 'called',
+                    source: 'runtime-ledger',
+                    evidence: 'called',
+                  },
+                ],
+              }),
               surfaceSummary: [{
                 surface: 'entries',
                 apiCount: 1,
@@ -330,6 +363,9 @@ describe('ObsidianPluginHostSection', () => {
     expect(host.textContent).toContain('.plugins/quickadd-like');
     expect(host.textContent).toContain('2 full / 1 snapshot');
     expect(host.textContent).toContain('1 detected API surface');
+    expect(host.textContent).toContain('Capability ledger');
+    expect(host.textContent).toContain('1 predicted / 1 called');
+    expect(host.textContent).toContain('1 actual runtime event');
     expect(host.textContent).toContain('Detected MindOS surfaces');
     expect(host.textContent).toContain('Entries');
     expect(host.textContent).toContain('1 snapshot');

@@ -20,6 +20,10 @@ import {
   type ObsidianCapabilityGateReport,
 } from './capability-gate';
 import {
+  mergeObsidianRuntimeCapabilityLedger,
+  type ObsidianRuntimeCapabilityLedgerEntry,
+} from './compatibility-preview';
+import {
   assertPluginCapabilityGateAllowsEnable,
   assertPluginCapabilityGateAllowsLoad,
   buildPluginCapabilityGateReport,
@@ -87,6 +91,7 @@ export interface ManagedPlugin {
   coverageSummary: Record<ObsidianCapabilitySupport, number>;
   surfaceSummary: ObsidianCapabilitySurfaceSummary[];
   capabilityGate: ObsidianCapabilityGateReport;
+  capabilityLedger: ObsidianRuntimeCapabilityLedgerEntry[];
   packageLocation?: ManagedPluginPackageLocation;
   runtime: PluginRuntimeSummary;
   lastError?: string;
@@ -198,6 +203,7 @@ export interface PluginRuntimeSummary {
   styleSheetList: Array<{ path: string; bytes: number }>;
   editorExtensions: number;
   editorExtensionList: Array<{ id: string } & EditorExtensionSummary>;
+  capabilityLedger: ObsidianRuntimeCapabilityLedgerEntry[];
   warnings: string[];
 }
 
@@ -637,6 +643,8 @@ export class PluginManager {
       && !capabilityGate.blocked
       && (!capabilityGate.requiresConfirmation || capabilityGate.confirmed);
 
+    const runtime = this.runtimeSummaryFor(manifest.id);
+
     return {
       id: manifest.id,
       name: manifest.name,
@@ -650,14 +658,28 @@ export class PluginManager {
       coverageSummary: summarizeObsidianCapabilityCoverage(coverage),
       surfaceSummary: summarizeObsidianCapabilitySurfaces(coverage),
       capabilityGate,
+      capabilityLedger: mergeObsidianRuntimeCapabilityLedger({
+        pluginId: manifest.id,
+        coverage,
+        unsupportedModules: compatibility.unsupportedModules,
+        capabilityGate,
+        runtimeEntries: runtime.capabilityLedger,
+      }),
       packageLocation: this.packageLocationFor(manifest.id),
-      runtime: this.runtimeSummaryFor(manifest.id),
+      runtime,
     };
   }
 
   private applyRuntimeState(plugin: ManagedPlugin, commandContext?: CommandExecutionContext): void {
     plugin.loaded = this.loader.getLoadedPlugins().some((loaded) => loaded.manifest.id === plugin.id);
     plugin.runtime = this.runtimeSummaryFor(plugin.id, commandContext);
+    plugin.capabilityLedger = mergeObsidianRuntimeCapabilityLedger({
+      pluginId: plugin.id,
+      coverage: plugin.coverage,
+      unsupportedModules: plugin.compatibility.unsupportedModules,
+      capabilityGate: plugin.capabilityGate,
+      runtimeEntries: plugin.runtime.capabilityLedger,
+    });
   }
 
   private async actionResultSince(
@@ -808,6 +830,7 @@ export class PluginManager {
         id: item.id,
         ...item.summary,
       })),
+      capabilityLedger: host.getRuntimeCapabilityLedger(pluginId),
       warnings: host.getWarnings().filter((item) => item.pluginId === pluginId).map((item) => item.message),
     };
   }

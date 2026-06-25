@@ -347,7 +347,36 @@ describe('PluginManager', () => {
     expect(result.failed).toEqual([]);
 
     const plugins = manager.list();
-    expect(plugins.find((item) => item.id === 'enabled-plugin')).toMatchObject({ enabled: true, loaded: true });
+    const enabled = plugins.find((item) => item.id === 'enabled-plugin');
+    expect(enabled).toMatchObject({ enabled: true, loaded: true });
+    expect(enabled?.runtime.capabilityLedger).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        capability: 'addCommand',
+        phase: 'registered',
+        source: 'runtime-ledger',
+      }),
+    ]));
+    expect(enabled?.capabilityLedger).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        capability: 'addCommand',
+        phase: 'predicted',
+        source: 'static-analysis',
+      }),
+      expect.objectContaining({
+        capability: 'addCommand',
+        phase: 'registered',
+        source: 'runtime-ledger',
+      }),
+    ]));
+    await manager.executeCommand(enabled?.runtime.commandList[0]?.fullId ?? '');
+    const afterCommand = manager.list().find((item) => item.id === 'enabled-plugin');
+    expect(afterCommand?.runtime.capabilityLedger).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        capability: 'addCommand',
+        phase: 'called',
+        source: 'runtime-ledger',
+      }),
+    ]));
     expect(plugins.find((item) => item.id === 'disabled-plugin')).toMatchObject({ enabled: false, loaded: false });
   });
 

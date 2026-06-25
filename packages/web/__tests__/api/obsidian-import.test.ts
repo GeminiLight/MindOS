@@ -123,6 +123,42 @@ describe('POST /api/obsidian/import', () => {
       expect.objectContaining({ api: 'Modal', support: 'snapshot-only' }),
       expect.objectContaining({ api: 'Notice', support: 'snapshot-only' }),
     ]));
+    expect(json.plugin.compatibilityPreview).toMatchObject({
+      schemaVersion: 1,
+      pluginId: 'quickadd-like',
+      packagePath: {
+        sourcePath: '.obsidian/plugins/quickadd-like',
+        targetPath: '.mindos/plugins/quickadd-like',
+        copiedFiles: ['manifest.json', 'main.js', 'data.json', 'obsidian-import.json'],
+        sourceVaultUnchanged: true,
+        enableAfterImport: false,
+      },
+      supportKind: 'limited',
+      workflowOutcomes: expect.arrayContaining([
+        expect.objectContaining({
+          id: 'quickadd-command-capture',
+          status: 'limited',
+        }),
+        expect.objectContaining({
+          id: 'generic-plugin-commands',
+          status: 'available',
+        }),
+      ]),
+      runtimeCapabilityLedger: expect.arrayContaining([
+        expect.objectContaining({
+          capability: 'Modal',
+          phase: 'predicted',
+          support: 'snapshot-only',
+        }),
+      ]),
+      nextSteps: expect.arrayContaining([
+        'Import package into .mindos/plugins/quickadd-like.',
+      ]),
+    });
+    expect(json.compatibilityPreview).toMatchObject({
+      pluginId: 'quickadd-like',
+      packagePath: { targetPath: '.mindos/plugins/quickadd-like' },
+    });
     expect(json.nextStep).toMatchObject({
       manageHref: '/settings?tab=plugins',
       surfacesHref: '/settings?tab=plugins&panel=surfaces',

@@ -100,6 +100,51 @@ describe('ObsidianImportSection', () => {
               },
               surfacePreview: [{ id: 'commands', state: 'mounted', count: 1 }],
               coverageSummary: { full: 2, limited: 0, 'snapshot-only': 0, 'catalog-only': 0, 'request-only': 0, unsupported: 0 },
+              compatibilityPreview: {
+                schemaVersion: 1,
+                pluginId: 'ready-plugin',
+                packagePath: {
+                  sourcePath: '.obsidian-mobile/plugins/ready-plugin',
+                  targetPath: '.mindos/plugins/ready-plugin',
+                  copiedFiles: ['manifest.json', 'main.js', 'styles.css', 'data.json', 'obsidian-import.json'],
+                  sourceVaultUnchanged: true,
+                  enableAfterImport: false,
+                },
+                supportKind: 'ready',
+                blockedReasons: [],
+                warnings: [],
+                settingsMappings: [
+                  {
+                    id: 'obsidian-enabled-state',
+                    label: 'Source enabled state',
+                    source: 'community-plugins.json',
+                    mappedItems: ['ready-plugin'],
+                    ignoredItems: [],
+                    warnings: ['Source enabled state only affects default selection; imported plugins remain disabled until enabled in MindOS.'],
+                    appliedOnImport: false,
+                  },
+                ],
+                workflowOutcomes: [
+                  {
+                    id: 'generic-plugin-commands',
+                    label: 'Run plugin commands',
+                    status: 'available',
+                    evidence: ['Command APIs map to MindOS Command Center.'],
+                    nextStep: 'Enable the plugin, then run commands from Command Center.',
+                  },
+                ],
+                runtimeCapabilityLedger: [
+                  {
+                    capability: 'addCommand',
+                    surface: 'commands',
+                    support: 'full',
+                    phase: 'predicted',
+                    source: 'static-analysis',
+                    evidence: 'main.js static analysis detected Obsidian API "addCommand".',
+                  },
+                ],
+                nextSteps: ['Import package into .mindos/plugins/ready-plugin.'],
+              },
               migrationPlan: {
                 copiedFiles: ['manifest.json', 'main.js', 'styles.css', 'data.json', 'obsidian-import.json'],
                 sourceVaultUnchanged: true,
@@ -199,6 +244,11 @@ describe('ObsidianImportSection', () => {
     expect(host.textContent).toContain('broken-plugin');
     expect(host.textContent).toContain('manifest.json is missing');
     expect(host.textContent).toContain('Copy manifest.json, main.js, styles.css, data.json, obsidian-import.json');
+    expect(host.textContent).toContain('.obsidian-mobile/plugins/ready-plugin');
+    expect(host.textContent).toContain('.mindos/plugins/ready-plugin');
+    expect(host.textContent).toContain('Workflow: Run plugin commands available');
+    expect(host.textContent).toContain('Ledger: 1 predicted');
+    expect(host.textContent).toContain('Next: Import package into .mindos/plugins/ready-plugin.');
     expect(host.textContent).toContain('.obsidian-mobile/plugins');
     expect(host.textContent).toContain('.mindos/plugins/<plugin-id>');
     expect((host.querySelector('input[type="checkbox"]') as HTMLInputElement).checked).toBe(true);
@@ -283,6 +333,54 @@ describe('ObsidianImportSection', () => {
               },
               surfacePreview: [],
               coverageSummary: { full: 1, limited: 0, 'snapshot-only': 0, 'catalog-only': 0, 'request-only': 0, unsupported: 0 },
+              compatibilityPreview: {
+                schemaVersion: 1,
+                pluginId: 'obsidian-linter',
+                packagePath: {
+                  sourcePath: '.obsidian/plugins/obsidian-linter',
+                  targetPath: '.mindos/plugins/obsidian-linter',
+                  copiedFiles: ['manifest.json', 'main.js', 'data.json', 'obsidian-import.json'],
+                  sourceVaultUnchanged: true,
+                  enableAfterImport: false,
+                },
+                supportKind: 'ready',
+                blockedReasons: [],
+                warnings: [],
+                settingsMappings: [
+                  {
+                    id: 'obsidian-linter-profile',
+                    label: 'Linter rule profile',
+                    source: 'data.json',
+                    mappedItems: ['trailing-whitespace', 'multiple-blank-lines', 'missing-final-newline'],
+                    ignoredItems: ['yaml-title'],
+                    warnings: [],
+                    appliedOnImport: true,
+                  },
+                ],
+                workflowOutcomes: [
+                  {
+                    id: 'linter-markdown-source-editor',
+                    label: 'Lint Markdown in the source editor',
+                    status: 'available',
+                    evidence: ['MindOS uses its own Linter adapter and explicit review/apply/undo flow.'],
+                    nextStep: 'Import, then open a Markdown source editor and use Lint preview.',
+                  },
+                ],
+                runtimeCapabilityLedger: [
+                  {
+                    capability: 'Plugin',
+                    surface: 'core',
+                    support: 'full',
+                    phase: 'predicted',
+                    source: 'static-analysis',
+                    evidence: 'main.js static analysis detected Obsidian API "Plugin".',
+                  },
+                ],
+                nextSteps: [
+                  'Import package into .mindos/plugins/obsidian-linter.',
+                  'Review mapped Linter settings before enabling source-editor linting.',
+                ],
+              },
               migrationPlan: {
                 copiedFiles: ['manifest.json', 'main.js', 'data.json', 'obsidian-import.json'],
                 sourceVaultUnchanged: true,
@@ -364,6 +462,8 @@ describe('ObsidianImportSection', () => {
       },
     });
     expect(localStorage.getItem(OBSIDIAN_LINTER_PROFILE_STORAGE_KEY)).toContain('trailing-whitespace');
+    expect(host.textContent).toContain('Settings: Linter rule profile / 3 mapped / 1 ignored');
+    expect(host.textContent).toContain('Workflow: Lint Markdown in the source editor available');
     expect(host.textContent).toContain('obsidian-linter copied manifest.json, main.js, data.json, obsidian-import.json; applied Linter profile (3 rules)');
   });
 });

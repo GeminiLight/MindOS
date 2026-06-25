@@ -54,6 +54,7 @@ import {
   capabilityGateEnableMessage,
 } from './ObsidianCapabilityGatePanel';
 import {
+  capabilityLedgerSummary,
   compatibilityNote,
   isLoadResult,
   isPluginActionResult,
@@ -926,6 +927,15 @@ export function ObsidianPluginHostSection({
                           </p>
                           <p className="mt-1 text-2xs text-muted-foreground/70">
                             {plugin.coverage?.length ?? 0} detected API surface{(plugin.coverage?.length ?? 0) === 1 ? '' : 's'}
+                          </p>
+                        </div>
+                        <div className="rounded-lg border border-border/50 bg-card/60 px-3 py-2.5">
+                          <p className="text-2xs font-medium uppercase tracking-wider text-muted-foreground">Capability ledger</p>
+                          <p className="mt-1 font-mono text-2xs text-muted-foreground">
+                            {capabilityLedgerSummary(plugin)}
+                          </p>
+                          <p className="mt-1 text-2xs text-muted-foreground/70">
+                            {plugin.runtime.capabilityLedger?.length ?? 0} actual runtime event{(plugin.runtime.capabilityLedger?.length ?? 0) === 1 ? '' : 's'}
                           </p>
                         </div>
                         <ObsidianCapabilityGatePanel plugin={plugin} />

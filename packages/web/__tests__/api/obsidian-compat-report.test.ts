@@ -131,6 +131,46 @@ describe('GET /api/obsidian/compat-report', () => {
       coverage: expect.arrayContaining([
         expect.objectContaining({ api: 'registerMarkdownCodeBlockProcessor', support: 'limited' }),
       ]),
+      compatibilityPreview: {
+        schemaVersion: 1,
+        pluginId: 'kanban-like',
+        packagePath: {
+          sourcePath: '.obsidian/plugins/kanban-like',
+          targetPath: '.mindos/plugins/kanban-like',
+          copiedFiles: ['manifest.json', 'main.js', 'styles.css', 'obsidian-import.json'],
+          sourceVaultUnchanged: true,
+          enableAfterImport: false,
+        },
+        supportKind: 'limited',
+        blockedReasons: [],
+        settingsMappings: expect.arrayContaining([
+          expect.objectContaining({
+            id: 'obsidian-hotkeys',
+            source: 'hotkeys.json',
+            appliedOnImport: false,
+          }),
+          expect.objectContaining({
+            id: 'obsidian-enabled-state',
+            source: 'community-plugins.json',
+            ignoredItems: ['kanban-like'],
+          }),
+        ]),
+        workflowOutcomes: expect.arrayContaining([
+          expect.objectContaining({
+            id: 'generic-document-contributions',
+            status: 'preview-only',
+          }),
+        ]),
+        runtimeCapabilityLedger: expect.arrayContaining([
+          expect.objectContaining({
+            capability: 'registerMarkdownCodeBlockProcessor',
+            phase: 'predicted',
+          }),
+        ]),
+        nextSteps: expect.arrayContaining([
+          'Import package into .mindos/plugins/kanban-like.',
+        ]),
+      },
       migrationPlan: {
         copiedFiles: ['manifest.json', 'main.js', 'styles.css', 'obsidian-import.json'],
         sourceVaultUnchanged: true,

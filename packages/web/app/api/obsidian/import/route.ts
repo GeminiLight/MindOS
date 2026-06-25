@@ -6,6 +6,7 @@ import { importObsidianPlugin, normalizeObsidianConfigDir, scanObsidianVaultPlug
 import { getObsidianImportSupport } from '@/lib/obsidian-compat/import-policy';
 import { buildObsidianCapabilityCoverage, summarizeObsidianCapabilityCoverage } from '@/lib/obsidian-compat/capability-matrix';
 import { buildObsidianCommunitySurfacePreview } from '@/lib/obsidian-compat/community-support';
+import { buildObsidianCompatibilityPreview } from '@/lib/obsidian-compat/compatibility-preview';
 import { OBSIDIAN_PLUGIN_ROOT_RELATIVE_PATH } from '@/lib/obsidian-compat/plugin-paths';
 import { expandSetupPathHome } from '@/app/api/setup/path-utils';
 import { readSettings } from '@/lib/settings';
@@ -63,6 +64,12 @@ export async function POST(req: NextRequest) {
       configDir,
     });
     const coverage = buildObsidianCapabilityCoverage(plugin.compatibility);
+    const compatibilityPreview = buildObsidianCompatibilityPreview(plugin, {
+      sourcePluginsPath: result.vault.pluginsRelativePath,
+      hasEnabledList: result.vault.hasEnabledList,
+      support,
+      coverage,
+    });
     const { sourceDir: _sourceDir, ...publicPlugin } = plugin;
     const { targetDir: _targetDir, ...publicImported } = imported;
 
@@ -82,7 +89,9 @@ export async function POST(req: NextRequest) {
           installable: support.importable,
           stylesCss: plugin.hasStyles,
         }),
+        compatibilityPreview,
       },
+      compatibilityPreview,
       imported: {
         ...publicImported,
         targetPath: `${OBSIDIAN_PLUGIN_ROOT_RELATIVE_PATH}/${imported.pluginId}`,

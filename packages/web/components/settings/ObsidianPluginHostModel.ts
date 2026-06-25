@@ -15,6 +15,10 @@ import type {
   ObsidianCapabilitySupport,
 } from '@/lib/obsidian-compat/capability-matrix';
 import type { ObsidianCapabilityGateReport } from '@/lib/obsidian-compat/capability-gate';
+import type {
+  ObsidianRuntimeCapabilityLedgerEntry,
+  ObsidianRuntimeCapabilityLedgerPhase,
+} from '@/lib/obsidian-compat/compatibility-preview';
 import { getObsidianImportSupport } from '@/lib/obsidian-compat/import-policy';
 import type { PluginActionResult } from '@/lib/plugins/client';
 
@@ -102,6 +106,7 @@ export interface ObsidianPluginRuntime {
       reasons?: string[];
     };
   }>;
+  capabilityLedger?: ObsidianRuntimeCapabilityLedgerEntry[];
   warnings: string[];
 }
 
@@ -122,6 +127,7 @@ export interface ObsidianPluginStatus {
   coverageSummary?: Record<ObsidianCapabilitySupport, number>;
   surfaceSummary?: ObsidianCapabilitySurfaceSummary[];
   capabilityGate?: ObsidianCapabilityGateReport;
+  capabilityLedger?: ObsidianRuntimeCapabilityLedgerEntry[];
   packageLocation?: {
     relativePath: string;
     rootRelativePath: string;
@@ -277,6 +283,21 @@ export function runtimeSummary(plugin: ObsidianPluginStatus): string {
   ].filter(Boolean);
 
   return parts.length > 0 ? parts.join(' · ') : 'No runtime registrations yet';
+}
+
+export function capabilityLedgerSummary(plugin: ObsidianPluginStatus): string {
+  const ledger = plugin.capabilityLedger ?? plugin.runtime.capabilityLedger ?? [];
+  if (ledger.length === 0) return 'No capability ledger yet';
+  const counts = ledger.reduce<Record<ObsidianRuntimeCapabilityLedgerPhase, number>>((summary, entry) => {
+    summary[entry.phase] += 1;
+    return summary;
+  }, { predicted: 0, registered: 0, called: 0, blocked: 0 });
+  return [
+    counts.predicted ? `${counts.predicted} predicted` : '',
+    counts.registered ? `${counts.registered} registered` : '',
+    counts.called ? `${counts.called} called` : '',
+    counts.blocked ? `${counts.blocked} blocked` : '',
+  ].filter(Boolean).join(' / ');
 }
 
 export function compatibilityNote(plugin: ObsidianPluginStatus): string {

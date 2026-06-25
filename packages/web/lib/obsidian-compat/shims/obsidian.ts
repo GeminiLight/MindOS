@@ -495,17 +495,22 @@ async function fetchRequestUrlWithRedirects(
 
 export function requestUrl(input: string | RequestUrlParam): RequestUrlResponsePromise {
   const params: RequestUrlParam = typeof input === 'string' ? { url: input } : input;
+  const host = getActiveObsidianRuntimeHost();
+  const pluginId = host?.getCurrentPluginId();
   let parsedUrl: URL;
   let method: string;
   try {
     parsedUrl = assertRequestUrlAllowed(params.url);
     method = normalizeRequestMethod(params.method);
   } catch (err) {
+    host?.recordRuntimeCapability(pluginId, 'requestUrl', 'blocked', err instanceof Error ? err.message : String(err));
     return rejectRequestUrl(err instanceof Error ? err : new Error(String(err)));
   }
   if (typeof fetch !== 'function') {
+    host?.recordRuntimeCapability(pluginId, 'requestUrl', 'blocked', '[obsidian-compat] requestUrl requires fetch support in the current runtime.');
     return rejectRequestUrl(new Error('[obsidian-compat] requestUrl requires fetch support in the current runtime.'));
   }
+  host?.recordRuntimeCapability(pluginId, 'requestUrl', 'called', `Plugin requested ${method} ${parsedUrl.origin}.`);
 
   return createRequestUrlPromise((async (): Promise<RequestUrlResponse> => {
     const abortController = new AbortController();

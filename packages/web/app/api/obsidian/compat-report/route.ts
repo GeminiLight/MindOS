@@ -18,9 +18,10 @@ import {
 } from '@/lib/obsidian-compat/capability-matrix';
 import { buildObsidianCommunitySurfacePreview } from '@/lib/obsidian-compat/community-support';
 import { OBSIDIAN_PLUGIN_ROOT_RELATIVE_PATH } from '@/lib/obsidian-compat/plugin-paths';
+import { buildObsidianCompatibilityPreview } from '@/lib/obsidian-compat/compatibility-preview';
 import { expandSetupPathHome } from '@/app/api/setup/path-utils';
 
-function enrichPlugin(plugin: ScannedObsidianPlugin, hasEnabledList: boolean) {
+function enrichPlugin(plugin: ScannedObsidianPlugin, hasEnabledList: boolean, sourcePluginsPath: string) {
   const support = getObsidianImportSupport(plugin, { hasEnabledList });
   const coverage = buildObsidianCapabilityCoverage(plugin.compatibility);
   const surfacePreview = buildObsidianCommunitySurfacePreview({
@@ -41,6 +42,12 @@ function enrichPlugin(plugin: ScannedObsidianPlugin, hasEnabledList: boolean) {
     coverageSummary: summarizeObsidianCapabilityCoverage(coverage),
     surfaceSummary: summarizeObsidianCapabilitySurfaces(coverage),
     surfacePreview,
+    compatibilityPreview: buildObsidianCompatibilityPreview(plugin, {
+      sourcePluginsPath,
+      hasEnabledList,
+      support,
+      coverage,
+    }),
     migrationPlan: {
       copiedFiles: [
         'manifest.json',
@@ -79,7 +86,7 @@ export async function GET(req: NextRequest) {
     }
     const result = await scanObsidianVaultPlugins(vaultRoot, { configDir });
     const hasEnabledList = result.vault.hasEnabledList;
-    const plugins = result.plugins.map((plugin) => enrichPlugin(plugin, hasEnabledList));
+    const plugins = result.plugins.map((plugin) => enrichPlugin(plugin, hasEnabledList, result.vault.pluginsRelativePath));
     const supportCounts = plugins.reduce<Record<ObsidianImportSupportKind, number>>((counts, plugin) => {
       counts[plugin.support.kind] += 1;
       return counts;

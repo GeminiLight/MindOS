@@ -8,6 +8,8 @@ import {
   seedMarkdownPreviewElement,
 } from './shims/markdown-renderer';
 import { ErrorCodes, MindOSError } from '@/lib/errors';
+import { getObsidianCapability } from './capability-matrix';
+import type { ObsidianRuntimeCapabilityLedgerEntry, ObsidianRuntimeCapabilityLedgerPhase } from './compatibility-preview';
 
 export interface RegisteredMarkdownPostProcessor {
   id: string;
@@ -257,6 +259,7 @@ export class ObsidianRuntimeHost extends Events {
   private notices: RegisteredPluginNotice[] = [];
   private pluginContextStack: string[] = [];
   private warnings: RuntimeWarning[] = [];
+  private capabilityLedger: ObsidianRuntimeCapabilityLedgerEntry[] = [];
 
   registerMarkdownPostProcessor(pluginId: string, processor: MarkdownPostProcessor): void {
     this.markdownPostProcessorSeq += 1;
@@ -265,6 +268,7 @@ export class ObsidianRuntimeHost extends Events {
       pluginId,
       processor,
     });
+    this.recordCapability(pluginId, 'registerMarkdownPostProcessor', 'registered', 'Plugin registered a Markdown post processor.');
   }
 
   registerMarkdownCodeBlockProcessor(pluginId: string, language: string, processor: CodeBlockProcessor): void {
@@ -275,10 +279,12 @@ export class ObsidianRuntimeHost extends Events {
       language,
       processor,
     });
+    this.recordCapability(pluginId, 'registerMarkdownCodeBlockProcessor', 'registered', `Plugin registered a Markdown code block processor for "${language}".`);
   }
 
   registerView(pluginId: string, type: string, creator: ViewCreator): void {
     this.views.push({ pluginId, type, creator });
+    this.recordCapability(pluginId, 'registerView', 'registered', `Plugin registered view "${type}".`);
     this.warn({
       pluginId,
       code: 'view-registered-without-native-host',
@@ -290,6 +296,7 @@ export class ObsidianRuntimeHost extends Events {
     const normalizedExtensions = Array.from(new Set(extensions.map(normalizeViewExtension).filter(Boolean)));
     const normalizedViewType = viewType.trim();
     if (normalizedExtensions.length === 0 || !normalizedViewType) {
+      this.recordCapability(pluginId, 'registerExtensions', 'blocked', 'Plugin attempted to register file extensions without a valid extension list or view type.');
       this.warn({
         pluginId,
         code: 'file-extension-registration-ignored',
@@ -303,6 +310,7 @@ export class ObsidianRuntimeHost extends Events {
       extensions: normalizedExtensions,
       viewType: normalizedViewType,
     });
+    this.recordCapability(pluginId, 'registerExtensions', 'registered', `Plugin registered file extensions ${normalizedExtensions.join(', ')} for view "${normalizedViewType}".`);
     this.warn({
       pluginId,
       code: 'file-extension-registration-recorded-only',
@@ -318,10 +326,12 @@ export class ObsidianRuntimeHost extends Events {
     callback: (evt: MouseEvent) => unknown,
   ): void {
     this.ribbonIcons.push({ pluginId, icon, title, element, callback });
+    this.recordCapability(pluginId, 'addRibbonIcon', 'registered', `Plugin registered ribbon action "${title}".`);
   }
 
   registerStatusBarItem(pluginId: string, element: HTMLElement): void {
     this.statusBarItems.push({ pluginId, element });
+    this.recordCapability(pluginId, 'addStatusBarItem', 'registered', 'Plugin registered a status bar item.');
   }
 
   registerEditorExtension(pluginId: string, extension: unknown): void {
@@ -332,6 +342,7 @@ export class ObsidianRuntimeHost extends Events {
       extension,
       summary: summarizeEditorExtension(extension),
     });
+    this.recordCapability(pluginId, 'registerEditorExtension', 'registered', 'Plugin registered an editor extension in the catalog-only host.');
     this.warn({
       pluginId,
       code: 'editor-extension-recorded-only',
@@ -347,6 +358,7 @@ export class ObsidianRuntimeHost extends Events {
       suggest,
       summary: summarizeEditorSuggest(suggest),
     });
+    this.recordCapability(pluginId, 'registerEditorSuggest', 'registered', 'Plugin registered an editor suggest in the catalog-only host.');
     this.warn({
       pluginId,
       code: 'editor-suggest-recorded-only',
@@ -356,6 +368,7 @@ export class ObsidianRuntimeHost extends Events {
 
   recordWorkspaceOpen(request: WorkspaceOpenRequest): void {
     this.workspaceOpenRequests.push(request);
+    this.recordCapability(this.getCurrentPluginId(), 'Workspace.openLinkText', 'called', `Plugin requested workspace navigation to "${request.linktext}".`);
     this.trigger('workspace-open-link', request);
   }
 
@@ -374,6 +387,9 @@ export class ObsidianRuntimeHost extends Events {
       close: input.close,
     };
     this.modals.push(modal);
+    this.recordCapability(modal.pluginId, modal.kind === 'suggest' ? 'SuggestModal' : 'Modal', 'called', modal.kind === 'suggest'
+      ? 'Plugin opened an Obsidian SuggestModal snapshot.'
+      : 'Plugin opened an Obsidian Modal snapshot.');
     this.warn({
       pluginId: modal.pluginId,
       code: modal.kind === 'suggest' ? 'suggest-modal-continuation-limited' : 'modal-snapshot-only',
@@ -405,6 +421,7 @@ export class ObsidianRuntimeHost extends Events {
       menu.interactionExpiresAt = interaction.expiresAt;
     }
     this.menus.push(menu);
+    this.recordCapability(menu.pluginId, 'Menu', 'called', 'Plugin opened an Obsidian Menu snapshot.');
     this.warn({
       pluginId: menu.pluginId,
       code: menu.interactionId ? 'menu-continuation-limited' : 'menu-snapshot-only',
@@ -431,6 +448,7 @@ export class ObsidianRuntimeHost extends Events {
       level: input.level ?? inferPluginNoticeLevel(input.message),
     };
     this.notices.push(notice);
+    this.recordCapability(pluginId, 'Notice', 'called', 'Plugin emitted a Notice.');
     return notice;
   }
 
@@ -456,6 +474,15 @@ export class ObsidianRuntimeHost extends Events {
     this.trigger('warning', warning);
   }
 
+  recordRuntimeCapability(
+    pluginId: string | undefined,
+    capability: string,
+    phase: ObsidianRuntimeCapabilityLedgerPhase,
+    evidence: string,
+  ): void {
+    this.recordCapability(pluginId, capability, phase, evidence);
+  }
+
   unregisterPlugin(pluginId: string): void {
     this.markdownPostProcessors = this.markdownPostProcessors.filter((item) => item.pluginId !== pluginId);
     this.markdownCodeBlockProcessors = this.markdownCodeBlockProcessors.filter((item) => item.pluginId !== pluginId);
@@ -469,6 +496,7 @@ export class ObsidianRuntimeHost extends Events {
     this.menus = this.menus.filter((item) => item.pluginId !== pluginId);
     this.notices = this.notices.filter((item) => item.pluginId !== pluginId);
     this.warnings = this.warnings.filter((item) => item.pluginId !== pluginId);
+    this.capabilityLedger = this.capabilityLedger.filter((item) => item.pluginId !== pluginId);
   }
 
   getMarkdownPostProcessors(): RegisteredMarkdownPostProcessor[] {
@@ -487,6 +515,7 @@ export class ObsidianRuntimeHost extends Events {
 
     const element = createObsidianElement('div');
     await Promise.resolve(registration.processor(source, element, createMarkdownPostProcessorContext()));
+    this.recordCapability(registration.pluginId, 'registerMarkdownCodeBlockProcessor', 'called', `Markdown code block processor "${registration.language}" executed.`);
 
     return {
       processorId: registration.id,
@@ -512,6 +541,7 @@ export class ObsidianRuntimeHost extends Events {
     const beforeText = collectElementText(element);
 
     await Promise.resolve(registration.processor(element, createMarkdownPostProcessorContext(sourcePath)));
+    this.recordCapability(registration.pluginId, 'registerMarkdownPostProcessor', 'called', `Markdown post processor executed for "${sourcePath}".`);
 
     const children = getElementChildren(element);
     const appendedText = children.slice(initialChildren).map(collectElementText).filter(Boolean).join('\n').trim();
@@ -551,6 +581,7 @@ export class ObsidianRuntimeHost extends Events {
     if (viewRecord && typeof viewRecord.onOpen === 'function') {
       await viewRecord.onOpen();
     }
+    this.recordCapability(pluginId, 'registerView', 'called', `Plugin view "${viewType}" rendered through the compatibility host.`);
 
     return {
       pluginId,
@@ -577,6 +608,7 @@ export class ObsidianRuntimeHost extends Events {
     }
 
     await this.runWithPluginContext(pluginId, () => ribbon.callback(createSyntheticMouseEvent()));
+    this.recordCapability(pluginId, 'addRibbonIcon', 'called', `Ribbon action "${ribbon.title}" executed.`);
   }
 
   getStatusBarItems(): RegisteredStatusBarItem[] {
@@ -641,6 +673,7 @@ export class ObsidianRuntimeHost extends Events {
     modal.suggestionInteractionExpiresAt = undefined;
     modal.suggestionValues = [];
     await this.runWithPluginContext(modal.pluginId ?? 'unknown', () => modal.chooseSuggestion!(value));
+    this.recordCapability(modal.pluginId, 'SuggestModal', 'called', `SuggestModal choice ${suggestionIndex} executed.`);
     modal.close?.();
   }
 
@@ -689,6 +722,7 @@ export class ObsidianRuntimeHost extends Events {
     menu.interactionId = undefined;
     menu.interactionExpiresAt = undefined;
     await this.runWithPluginContext(menu.pluginId ?? 'unknown', () => item.callback!(createSyntheticMouseEvent()));
+    this.recordCapability(menu.pluginId, 'MenuItem', 'called', `Menu item ${itemIndex} executed.`);
   }
 
   dismissMenu(menuId: string): void {
@@ -711,6 +745,30 @@ export class ObsidianRuntimeHost extends Events {
 
   getWarnings(): RuntimeWarning[] {
     return [...this.warnings];
+  }
+
+  getRuntimeCapabilityLedger(pluginId?: string): ObsidianRuntimeCapabilityLedgerEntry[] {
+    return this.capabilityLedger
+      .filter((entry) => !pluginId || entry.pluginId === pluginId)
+      .map((entry) => ({ ...entry }));
+  }
+
+  private recordCapability(
+    pluginId: string | undefined,
+    capability: string,
+    phase: ObsidianRuntimeCapabilityLedgerPhase,
+    evidence: string,
+  ): void {
+    const row = getObsidianCapability(capability);
+    this.capabilityLedger.push({
+      ...(pluginId ? { pluginId } : {}),
+      capability,
+      surface: row?.surface ?? 'unsupported',
+      support: row?.support ?? 'unsupported',
+      phase,
+      source: 'runtime-ledger',
+      evidence,
+    });
   }
 
   private async renderModalSnapshot(modal: RegisteredPluginModal): Promise<PluginModalSnapshot> {
