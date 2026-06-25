@@ -108,7 +108,7 @@ export function StudioContextBraid({
           <span
             key={`${token.label}-${token.value}-${index}`}
             data-studio-context-chip
-            className="inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-md border border-border/50 bg-background/55 px-2 py-1 transition-colors hover:border-[var(--amber)]/40 hover:bg-[var(--amber-subtle)]"
+            className="inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-md bg-muted/35 px-2 py-1 transition-colors hover:bg-[var(--amber-subtle)]"
             title={`${token.label}: ${token.value}`}
           >
             <span
@@ -127,7 +127,7 @@ export function StudioContextBraid({
       {overflow > 0 ? (
         <span
           data-studio-context-overflow
-          className="inline-flex h-7 items-center rounded-md border border-border/45 bg-muted/35 px-2 text-[11px] font-medium text-muted-foreground [font-variant-numeric:tabular-nums]"
+          className="inline-flex h-7 items-center rounded-md bg-muted/35 px-2 text-[11px] font-medium text-muted-foreground [font-variant-numeric:tabular-nums]"
           title={locale === 'zh' ? `还有 ${overflow} 个上下文` : `${overflow} more context items`}
         >
           +{overflow}
@@ -181,18 +181,18 @@ export function StudioProjectItem({
       data-studio-project-item={density}
       onFocus={() => onPreview?.(project.id)}
       onPointerEnter={() => onPreview?.(project.id)}
-      className={`group relative grid min-w-0 gap-3 border-t border-border/55 transition-colors first:border-t-0 hover:bg-card/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+      className={`group relative grid min-w-0 gap-3 border-t border-border/55 transition-colors first:border-t-0 hover:bg-muted/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
         compact
           ? 'px-3 py-3 xl:grid-cols-[minmax(0,1fr)_minmax(104px,auto)_20px] xl:items-center'
           : 'px-4 py-4 xl:grid-cols-[minmax(0,1fr)_minmax(128px,auto)_28px] xl:items-center'
-      } ${selected ? 'bg-card/70' : ''}`}
+      } ${selected ? 'bg-[var(--amber-subtle)]' : ''}`}
     >
       <span className={`pointer-events-none absolute bottom-3 left-0 top-3 w-px rounded-r-full transition-colors group-hover:bg-[var(--amber)] ${
         selected ? 'bg-[var(--amber)]' : 'bg-transparent'
       }`} />
 
       <div className="flex min-w-0 gap-3 pr-6 xl:pr-0">
-        <span className={`mt-0.5 hidden shrink-0 items-center justify-center rounded-lg border border-border/55 bg-background/50 text-[var(--amber)] transition-colors group-hover:border-[var(--amber)]/35 group-hover:bg-[var(--amber-subtle)] sm:inline-flex ${
+        <span className={`mt-0.5 hidden shrink-0 items-center justify-center rounded-md bg-[var(--amber-subtle)] text-[var(--amber)] transition-colors group-hover:bg-[var(--amber-dim)] sm:inline-flex ${
           compact ? 'h-8 w-8' : 'h-9 w-9'
         }`}>
           {renderProjectIcon(project, compact ? 14 : 15)}

@@ -100,10 +100,19 @@ describe('StudioContent', () => {
 
     const projectsSurface = host.querySelector('[data-studio-projects-surface]');
     expect(projectsSurface).not.toBeNull();
+    expect(projectsSurface?.className).toContain('space-y-3');
+    expect(projectsSurface?.className).not.toContain('rounded-xl');
+    expect(projectsSurface?.className).not.toContain('bg-card/45');
     expect(projectsSurface?.textContent).toContain('All Projects');
     expect(projectsSurface?.textContent).toContain('List');
     expect(projectsSurface?.textContent).toContain('Grouped');
     expect(projectsSurface?.textContent).toContain('Stats');
+
+    const continuePanel = host.querySelector('[data-studio-continue-panel]');
+    expect(continuePanel).not.toBeNull();
+    expect(continuePanel?.className).toContain('border-y');
+    expect(continuePanel?.className).not.toContain('rounded-xl');
+    expect(continuePanel?.className).not.toContain('bg-card/45');
   });
 
   it('uses shared Project items with value-only context text', async () => {
@@ -131,6 +140,8 @@ describe('StudioContent', () => {
     expect(firstContext?.querySelectorAll('[data-studio-context-chip]')).toHaveLength(3);
     expect(firstContext?.querySelector('[data-studio-context-overflow]')).not.toBeNull();
     expect(firstContext?.querySelector('.border-l')).toBeNull();
+    expect(firstContext?.querySelector('[data-studio-context-chip]')?.className).toContain('bg-muted/35');
+    expect(firstContext?.querySelector('[data-studio-context-chip]')?.className).not.toContain('border-border');
     expect(items[0].textContent).not.toContain('Next move');
     expect(items[0].textContent).not.toContain('Draft launch brief from accepted evidence.');
   });

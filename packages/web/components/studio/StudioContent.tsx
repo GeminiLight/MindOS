@@ -219,7 +219,7 @@ function StudioMetric({
   value: string | number;
 }) {
   return (
-    <div className="flex min-w-0 items-center gap-2 rounded-lg border border-border/55 bg-background/45 px-3 py-2">
+    <div className="flex min-w-0 items-center gap-2 border-l border-border/70 pl-3">
       <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[var(--amber-subtle)] text-[var(--amber)]">
         {icon}
       </div>
@@ -247,7 +247,7 @@ function ViewSwitch({
   ];
 
   return (
-    <div className="inline-flex rounded-lg border border-border/60 bg-background/55 p-1" role="tablist" aria-label="Studio view">
+    <div className="inline-flex rounded-lg border border-border/60 bg-muted/30 p-1" role="tablist" aria-label="Studio view">
       {views.map((view) => (
         <button
           key={view.id}
@@ -257,8 +257,8 @@ function ViewSwitch({
           onClick={() => onChange(view.id)}
           className={`inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
             value === view.id
-              ? 'bg-[var(--amber-subtle)] text-[var(--amber)] shadow-sm'
-              : 'text-muted-foreground hover:bg-card/70 hover:text-foreground'
+              ? 'bg-background text-foreground'
+              : 'text-muted-foreground hover:bg-background/60 hover:text-foreground'
           }`}
         >
           {view.icon}
@@ -298,7 +298,7 @@ function ContinueNextPanel({
 }) {
   if (!project) {
     return (
-    <section data-studio-continue-panel className="rounded-xl border border-border/60 bg-card/45 p-5">
+      <section data-studio-continue-panel className="border-y border-border/60 py-5">
         <div className="text-sm font-semibold text-foreground">{copy.projects}</div>
         <p className="mt-1 text-sm text-muted-foreground">{copy.empty}</p>
       </section>
@@ -312,19 +312,16 @@ function ContinueNextPanel({
     ?? (project.sessions[0] ? localize(project.sessions[0].title, project.sessions[0].titleZh, locale) : copy.noSessions);
 
   return (
-    <section data-studio-continue-panel className="overflow-hidden rounded-xl border border-border/60 bg-card/45">
-      <div className="border-b border-border/55 px-4 py-3">
-        <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-          <span className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-[var(--amber-subtle)] text-[var(--amber)]">
-            <ArrowRight size={14} aria-hidden="true" />
-          </span>
-          {copy.continueTitle}
-        </div>
-      </div>
-
-      <div className="grid gap-5 px-4 py-5 xl:grid-cols-[minmax(0,1fr)_minmax(280px,0.55fr)]">
+    <section data-studio-continue-panel className="border-y border-border/60 py-5">
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(280px,0.52fr)] xl:items-start">
         <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+            <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-[var(--amber-subtle)] text-[var(--amber)]">
+              <ArrowRight size={13} aria-hidden="true" />
+            </span>
+            {copy.continueTitle}
+          </div>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
             <h2 className="text-xl font-semibold text-foreground">{title}</h2>
             <StudioProjectStage project={project} locale={locale} />
             <span className="text-[11px] font-medium text-muted-foreground">{project.updated}</span>
@@ -335,12 +332,12 @@ function ContinueNextPanel({
           </div>
           <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
             <span>{sessionCount} {copy.sessions}</span>
-            <span aria-hidden="true">/</span>
+            <span aria-hidden="true">·</span>
             <span>{copy.latestSession}: {latestSession}</span>
           </div>
         </div>
 
-        <div className="min-w-0 border-border/55 xl:border-l xl:pl-5">
+        <div className="min-w-0 rounded-lg border border-border/60 bg-background/35 p-4">
           <div className="text-[11px] font-medium text-muted-foreground">{copy.continueHint}</div>
           <p className="mt-2 text-sm leading-relaxed text-foreground">{nextAction}</p>
           <div className="mt-3 flex items-center gap-3">
@@ -497,10 +494,10 @@ function StudioProjectsSurface({
   return (
     <section
       data-studio-projects-surface
-      className="overflow-hidden rounded-xl border border-border/60 bg-card/45"
+      className="space-y-3"
       aria-labelledby="studio-projects-list"
     >
-      <div className="flex flex-col gap-3 border-b border-border/60 px-4 py-4 md:flex-row md:items-center md:justify-between">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div className="min-w-0">
           <h2 id="studio-projects-list" className="text-sm font-semibold text-foreground">{copy.allProjects}</h2>
           <p className="mt-1 text-xs text-muted-foreground">{copy.allProjectsHint}</p>
@@ -508,36 +505,38 @@ function StudioProjectsSurface({
         <ViewSwitch value={view} onChange={onViewChange} copy={copy} />
       </div>
 
-      {view === 'list' ? (
-        <StudioListView
-          projects={projects}
-          locale={locale}
-          copy={copy}
-          getProjectSessionCount={getProjectSessionCount}
-          selectedProjectId={selectedProjectId}
-        />
-      ) : null}
+      <div className="overflow-hidden rounded-lg border border-border/60 bg-background/35">
+        {view === 'list' ? (
+          <StudioListView
+            projects={projects}
+            locale={locale}
+            copy={copy}
+            getProjectSessionCount={getProjectSessionCount}
+            selectedProjectId={selectedProjectId}
+          />
+        ) : null}
 
-      {view === 'grouped' ? (
-        <StudioGroupedView
-          projects={projects}
-          locale={locale}
-          copy={copy}
-          getProjectSessionCount={getProjectSessionCount}
-          selectedProjectId={selectedProjectId}
-        />
-      ) : null}
+        {view === 'grouped' ? (
+          <StudioGroupedView
+            projects={projects}
+            locale={locale}
+            copy={copy}
+            getProjectSessionCount={getProjectSessionCount}
+            selectedProjectId={selectedProjectId}
+          />
+        ) : null}
 
-      {view === 'stats' ? (
-        <div className="p-4">
+        {view === 'stats' ? (
+          <div className="p-4">
           <StudioStatsView
             projects={projects}
             locale={locale}
             copy={copy}
             getProjectSessionCount={getProjectSessionCount}
           />
-        </div>
-      ) : null}
+          </div>
+        ) : null}
+      </div>
     </section>
   );
 }
@@ -581,7 +580,7 @@ function StudioStatsView({
       </div>
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(280px,0.65fr)]">
-        <div className="rounded-xl border border-border/60 bg-card/45 p-4">
+        <div className="rounded-lg border border-border/60 bg-card/35 p-4">
           <div className="flex items-center justify-between gap-4">
             <h2 className="text-sm font-semibold text-foreground">{copy.activityRhythm}</h2>
             <span className="text-[11px] text-muted-foreground">14d</span>
@@ -604,7 +603,7 @@ function StudioStatsView({
           </div>
         </div>
 
-        <div className="rounded-xl border border-border/60 bg-card/45 p-4">
+        <div className="rounded-lg border border-border/60 bg-card/35 p-4">
           <h2 className="text-sm font-semibold text-foreground">{copy.stateDistribution}</h2>
           <div className="mt-4 h-2 overflow-hidden rounded-full bg-muted">
             <div className="flex h-full">
@@ -622,7 +621,7 @@ function StudioStatsView({
       </div>
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-        <div className="rounded-xl border border-border/60 bg-card/45 p-4">
+        <div className="rounded-lg border border-border/60 bg-card/35 p-4">
           <h2 className="text-sm font-semibold text-foreground">{copy.contextCoverage}</h2>
           <div className="mt-4 grid gap-3">
             {[
@@ -630,7 +629,7 @@ function StudioStatsView({
               [copy.mindSpaces, spaces],
               [copy.aiKits, kits],
             ].map(([label, values]) => (
-              <div key={label as string} className="rounded-lg border border-border/50 bg-background/40 p-3">
+              <div key={label as string} className="border-t border-border/55 pt-3 first:border-t-0 first:pt-0">
                 <div className="mb-2 text-[11px] font-medium text-muted-foreground">{label as string}</div>
                 <div className="flex flex-wrap gap-1.5">
                   {(values as Array<{ value: string; count: number }>).slice(0, 4).map((item) => (
@@ -645,7 +644,7 @@ function StudioStatsView({
           </div>
         </div>
 
-        <div className="overflow-hidden rounded-xl border border-border/60 bg-card/45">
+        <div className="overflow-hidden rounded-lg border border-border/60 bg-card/35">
           <div className="border-b border-border/60 px-4 py-3">
             <h2 className="text-sm font-semibold text-foreground">{copy.needingAttention}</h2>
           </div>
@@ -747,8 +746,8 @@ export default function StudioContent({
 
   return (
     <StudioShell>
-      <div className="min-w-0">
-        <header className="mb-6">
+      <div className="mx-auto flex w-full max-w-6xl min-w-0 flex-col gap-6">
+        <header className="border-b border-border/60 pb-6">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
             <div className="min-w-0">
               <h1 className="text-2xl font-semibold text-foreground">
@@ -782,7 +781,7 @@ export default function StudioContent({
           </div>
         </header>
 
-        <section className="space-y-5">
+        <section className="space-y-6">
           <ContinueNextPanel
             project={continueProject}
             locale={locale}
