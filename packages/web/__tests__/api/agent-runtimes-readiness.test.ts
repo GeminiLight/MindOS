@@ -168,6 +168,11 @@ describe('GET /api/agent-runtimes/readiness', () => {
         expect.objectContaining({ id: 'artifact-index', category: 'mindos-product' }),
       ]),
     });
+    expect(mindos.useCases.find((entry: { id: string }) => entry.id === 'adapter-contract')).toMatchObject({
+      source: 'adapter-projection',
+      sourceStatus: 'ready',
+      status: 'ready',
+    });
     expect(codex).toMatchObject({
       overallStatus: 'usable',
       recommendations: expect.arrayContaining([

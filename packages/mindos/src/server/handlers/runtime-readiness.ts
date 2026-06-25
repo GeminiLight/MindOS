@@ -22,6 +22,10 @@ import {
   type AgentRuntimeAutomationProjection,
 } from './runtime-automation-projections.js';
 import {
+  buildAgentRuntimeAdapterProjectionsPayload,
+  type AgentRuntimeAdapterProjection,
+} from './runtime-adapter-projections.js';
+import {
   buildAgentRuntimePermissionProjectionsPayload,
   type AgentRuntimePermissionProjection,
 } from './runtime-permission-projections.js';
@@ -40,6 +44,7 @@ export type AgentRuntimeReadinessStatus =
 
 export type AgentRuntimeReadinessSource =
   | 'compatibility-profile'
+  | 'adapter-projection'
   | 'permission-projection'
   | 'mcp-projection'
   | 'artifact-projection'
@@ -65,8 +70,12 @@ export type AgentRuntimeReadinessRequirement = {
   summary: string;
 };
 
+export type AgentRuntimeReadinessUseCaseId =
+  | AgentRuntimeCompatibilityScenario
+  | 'adapter-contract';
+
 export type AgentRuntimeReadinessUseCase = {
-  id: AgentRuntimeCompatibilityScenario;
+  id: AgentRuntimeReadinessUseCaseId;
   label: string;
   status: AgentRuntimeReadinessStatus;
   source: AgentRuntimeReadinessSource;
@@ -89,7 +98,7 @@ export type AgentRuntimeReadinessGap = {
   category: AgentRuntimeReadinessGapCategory;
   severity: AgentRuntimeReadinessGapSeverity;
   summary: string;
-  useCases: AgentRuntimeCompatibilityScenario[];
+  useCases: AgentRuntimeReadinessUseCaseId[];
 };
 
 export type AgentRuntimeReadinessProjection = {
@@ -115,13 +124,15 @@ export type AgentRuntimeReadinessPayload = {
 export type AgentRuntimeReadinessServices = AgentRuntimeMcpProjectionServices;
 
 type RuntimeProjectionContext = {
+  adapterByRuntime: Map<string, AgentRuntimeAdapterProjection>;
   permissionByRuntime: Map<string, AgentRuntimePermissionProjection>;
   mcpByRuntime: Map<string, AgentRuntimeMcpProjection>;
   artifactByRuntime: Map<string, AgentRuntimeArtifactProjection>;
   automationByRuntime: Map<string, AgentRuntimeAutomationProjection>;
 };
 
-const USE_CASE_LABELS: Record<AgentRuntimeCompatibilityScenario, string> = {
+const USE_CASE_LABELS: Record<AgentRuntimeReadinessUseCaseId, string> = {
+  'adapter-contract': 'Adapter contract',
   'interactive-turn': 'Interactive turn',
   'coding-workflow': 'Coding workflow',
   'session-continuity': 'Session continuity',
@@ -193,7 +204,9 @@ export function buildAgentRuntimeReadinessPayload(input: {
   });
   const artifactPayload = buildAgentRuntimeArtifactProjectionsPayload({ runtimes: input.runtimes });
   const automationPayload = buildAgentRuntimeAutomationProjectionsPayload({ runtimes: input.runtimes });
+  const adapterPayload = buildAgentRuntimeAdapterProjectionsPayload({ runtimes: input.runtimes });
   const context: RuntimeProjectionContext = {
+    adapterByRuntime: byRuntime(adapterPayload.projections),
     permissionByRuntime: byRuntime(permissionPayload.projections),
     mcpByRuntime: byRuntime(mcpPayload.projections),
     artifactByRuntime: byRuntime(artifactPayload.projections),
@@ -212,6 +225,7 @@ function buildRuntimeReadinessProjection(
   context: RuntimeProjectionContext,
 ): AgentRuntimeReadinessProjection {
   const useCases = [
+    adapterUseCase(runtime, context.adapterByRuntime.get(runtimeKey(runtime))),
     ...BASE_COMPATIBILITY_USE_CASES.map((scenario) => compatibilityUseCase(runtime, scenario)),
     permissionUseCase(runtime, context.permissionByRuntime.get(runtimeKey(runtime))),
     mcpUseCase(runtime, context.mcpByRuntime.get(runtimeKey(runtime))),
@@ -236,6 +250,30 @@ function buildRuntimeReadinessProjection(
     gaps,
     ...(blockers.length > 0 ? { blockers } : {}),
   };
+}
+
+function adapterUseCase(
+  runtime: AgentRuntimeDescriptor,
+  projection: AgentRuntimeAdapterProjection | undefined,
+): AgentRuntimeReadinessUseCase {
+  if (!projection) return missingProjectionUseCase(runtime, 'adapter-contract', 'adapter-projection');
+  return runtimeGate(runtime, {
+    id: 'adapter-contract',
+    label: USE_CASE_LABELS['adapter-contract'],
+    status: adapterStatusToReadiness(projection.status),
+    source: 'adapter-projection',
+    sourceStatus: projection.status,
+    owner: 'shared',
+    summary: adapterSummary(projection),
+    requirements: projection.reasons.map(requirementFromReason),
+    ...(projection.blockers?.length ? { blockers: uniqSorted(projection.blockers) } : {}),
+    details: {
+      connection: projection.connection,
+      configuration: projection.configuration,
+      health: projection.health,
+      commands: projection.commands,
+    },
+  });
 }
 
 function compatibilityUseCase(
@@ -400,7 +438,7 @@ function runtimeGate(
 
 function missingProjectionUseCase(
   runtime: AgentRuntimeDescriptor,
-  id: AgentRuntimeCompatibilityScenario,
+  id: AgentRuntimeReadinessUseCaseId,
   source: Exclude<AgentRuntimeReadinessSource, 'compatibility-profile'>,
 ): AgentRuntimeReadinessUseCase {
   return runtimeGate(runtime, {
@@ -431,9 +469,12 @@ function resolveOverallStatus(
   const context = byId.get('context-governance')?.status;
   const coding = byId.get('coding-workflow')?.status;
   const permission = byId.get('permission-governance')?.status;
+  const adapter = byId.get('adapter-contract')?.status;
+  if (adapter === 'blocked') return 'blocked';
   if (
     interactive === 'ready' &&
     readyEnough(permission) &&
+    readyEnough(adapter) &&
     (coding === 'ready' || context === 'ready')
   ) {
     const coreStatuses = ['session-continuity', 'context-governance', 'permission-governance']
@@ -452,6 +493,7 @@ function buildRecommendations(
 ): AgentRuntimeReadinessRecommendation[] {
   const recommendations: AgentRuntimeReadinessRecommendation[] = [];
   for (const useCase of useCases) {
+    if (!isCompatibilityScenario(useCase.id)) continue;
     if (useCase.status === 'ready' || useCase.status === 'usable') {
       recommendations.push({
         useCase: useCase.id,
@@ -486,7 +528,7 @@ function collectReadinessGaps(useCases: AgentRuntimeReadinessUseCase[]): AgentRu
       const requirement = useCase.requirements.find((entry) => entry.id === blocker);
       const severity = useCase.status === 'blocked' ? 'blocking' : 'warning';
       if (existing) {
-        existing.useCases = uniqSorted([...existing.useCases, useCase.id]) as AgentRuntimeCompatibilityScenario[];
+        existing.useCases = uniqSorted([...existing.useCases, useCase.id]) as AgentRuntimeReadinessUseCaseId[];
         if (severity === 'blocking') existing.severity = 'blocking';
         continue;
       }
@@ -550,6 +592,23 @@ function mcpStatusToReadiness(status: AgentRuntimeMcpProjection['status']): Agen
   return status;
 }
 
+function adapterStatusToReadiness(status: AgentRuntimeAdapterProjection['status']): AgentRuntimeReadinessStatus {
+  return status;
+}
+
+function adapterSummary(projection: AgentRuntimeAdapterProjection): string {
+  if (projection.status === 'ready') {
+    return `${projection.runtimeName} adapter contract is ready across connection, configuration, health, and commands.`;
+  }
+  if (projection.status === 'limited') {
+    return `${projection.runtimeName} adapter contract is usable, but some adapter diagnostics remain limited or undeclared.`;
+  }
+  if (projection.status === 'blocked') {
+    return `${projection.runtimeName} adapter contract is blocked.`;
+  }
+  return `${projection.runtimeName} adapter contract readiness is unknown.`;
+}
+
 function mcpSummary(projection: AgentRuntimeMcpProjection): string {
   if (projection.status === 'ready') {
     return `${projection.runtimeName} has ${projection.projectedServerCount} MCP server(s) available through its current runtime surface.`;
@@ -589,6 +648,10 @@ function byRuntime<T extends { runtimeId: string }>(projections: T[]): Map<strin
 
 function runtimeKey(runtime: AgentRuntimeDescriptor): string {
   return runtime.runtimeId ?? runtime.id;
+}
+
+function isCompatibilityScenario(id: AgentRuntimeReadinessUseCaseId): id is AgentRuntimeCompatibilityScenario {
+  return id !== 'adapter-contract';
 }
 
 function parsePermissionMode(value: string | null):

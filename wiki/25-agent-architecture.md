@@ -109,6 +109,19 @@ detect → health → configure → launch → session → context
 - 不启动 runtime、不执行 health check、不同步外部 settings，只描述当前已知 adapter contract。
 - ACP custom adapter 可以通过 settings 声明 `adapterMetadata.healthCheck` 与 `adapterMetadata.commands`；MindOS 只把这些作为兼容诊断和未来 command UI 的输入，不自动信任为 ready。
 
+### Runtime Adapter Projection
+
+Runtime adapter projection 是 `adapterContract` 的只读诊断投影，位于 `packages/mindos/src/server/handlers/runtime-adapter-projections.ts`，通过 `/api/agent-runtimes/adapter-projections` 暴露。它不解释 runtime 场景本身，而是把 adapter-facing contract 拆成四个 facet 供 Runtime Doctor 和调试 UI 使用：
+
+| 字段 | 语义 |
+|---|---|
+| `connection` | 连接形态、owner、launch command 的安全摘要，以及是否存在已知连接契约 |
+| `configuration` | 模型选择、凭证、settings 由谁拥有，是 MindOS session/settings、runtime-native 还是 adapter-declared |
+| `health` | 运行时健康语义由 MindOS native probe、runtime native check、adapter 声明，还是未知 |
+| `commands` | command discovery 来源、静态 command 名称与数量，以及是否存在已声明的 adapter 命令 |
+
+这层同样是只读的，不启动 runtime、不执行 health check、不同步外部 settings，也不暴露 env / token / secret。它的作用是让 readiness 能够先看到“接入契约本身是否完整”，再谈场景级 readiness。
+
 `lifecycle.remote` 不等于“已经有 24/7 调度器”。它只回答 runtime 是否能在 MindOS server 所在主机运行，以及 unattended 能力是否完整。当前 native / ACP / MindOS Pi 都是 `server-runnable`，但 unattended 仍是 `limited`：还需要 scheduler、approval routing、wake/resume、missed trigger 和失败审计这些产品层能力。
 
 `lifecycle.coordination` 是未来 Team Mode 的底层边界，不是当前 UI 承诺。现在只声明 runtime 是否能消费共享 MindOS context，以及是否已有 mailbox / task-board primitives。当前共享 context 已有，mailbox 与 task-board 还没有 first-class contract。
@@ -153,10 +166,11 @@ detect → health → configure → launch → session → context
 
 ### Runtime Readiness Aggregation
 
-Runtime readiness aggregation 是 Runtime Doctor / Compatibility Center 的只读聚合契约，位于 `packages/mindos/src/server/handlers/runtime-readiness.ts`，通过 `/api/agent-runtimes/readiness?permissionMode=<read|ask|auto|full>` 暴露。它把 `AgentRuntimeDescriptor.compatibility` 与四个细分 projection 合并成每个 runtime 的用例级 readiness：
+Runtime readiness aggregation 是 Runtime Doctor / Compatibility Center 的只读聚合契约，位于 `packages/mindos/src/server/handlers/runtime-readiness.ts`，通过 `/api/agent-runtimes/readiness?permissionMode=<read|ask|auto|full>` 暴露。它把 `AgentRuntimeDescriptor.compatibility` 与五个细分 projection 合并成每个 runtime 的用例级 readiness：
 
 | 用例 | 来源 |
 |---|---|
+| `adapter-contract` | runtime adapter projection |
 | `interactive-turn` / `coding-workflow` / `session-continuity` / `context-governance` / `skill-execution` / `team-coordination` | runtime compatibility profile |
 | `permission-governance` | permission runtime projection |
 | `mcp-tooling` | MCP runtime projection |
@@ -434,6 +448,7 @@ MindOS Pi 的 persisted session 由 Pi `SessionManager` 自己持有完整 JSONL
 | `packages/web/app/api/assistant-runs/route.ts` | Assistant run 入口，解析 Active Assistant 后委托 agent turn |
 | `packages/mindos/src/agent/runtime/registry.ts` | Runtime descriptor / capability / lifecycle 类型源头 |
 | `packages/mindos/src/agent/runtime/lifecycle.ts` | MindOS Pi / native / ACP lifecycle metadata builder |
+| `packages/mindos/src/server/handlers/runtime-adapter-projections.ts` | Runtime adapter projection contract，统一解释 connection / configuration / health / commands 的只读接入诊断 |
 | `packages/mindos/src/agent/runtime/compatibility.ts` | Runtime compatibility profile builder，投影 interactive / remote / unattended / skill / team 场景 readiness |
 | `packages/mindos/src/agent/runtime/adapter-contracts.ts` | Runtime adapter contract builder，描述 connection / configuration / health / commands 的只读接入契约 |
 | `packages/mindos/src/agent/runtime/descriptors.ts` | Runtime descriptor 组装，统一暴露 capability / harness / lifecycle |

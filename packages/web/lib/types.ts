@@ -242,6 +242,7 @@ export interface AgentRuntimeCompatibilityProfile {
 export type AgentRuntimeReadinessStatus = 'ready' | 'usable' | 'limited' | 'blocked' | 'unknown';
 export type AgentRuntimeReadinessSource =
   | 'compatibility-profile'
+  | 'adapter-projection'
   | 'permission-projection'
   | 'mcp-projection'
   | 'artifact-projection'
@@ -262,8 +263,12 @@ export interface AgentRuntimeReadinessRequirement {
   summary: string;
 }
 
+export type AgentRuntimeReadinessUseCaseId =
+  | AgentRuntimeCompatibilityScenario
+  | 'adapter-contract';
+
 export interface AgentRuntimeReadinessUseCase {
-  id: AgentRuntimeCompatibilityScenario;
+  id: AgentRuntimeReadinessUseCaseId;
   label: string;
   status: AgentRuntimeReadinessStatus;
   source: AgentRuntimeReadinessSource;
@@ -286,7 +291,7 @@ export interface AgentRuntimeReadinessGap {
   category: AgentRuntimeReadinessGapCategory;
   severity: AgentRuntimeReadinessGapSeverity;
   summary: string;
-  useCases: AgentRuntimeCompatibilityScenario[];
+  useCases: AgentRuntimeReadinessUseCaseId[];
 }
 
 export interface AgentRuntimeReadinessProjection {
@@ -386,6 +391,70 @@ export interface AgentRuntimeAdapterContract {
     commands: AgentRuntimeAdapterDeclaredCommand[];
     summary: string;
   };
+}
+
+export type AgentRuntimeAdapterProjectionStatus = 'ready' | 'limited' | 'blocked' | 'unknown';
+export type AgentRuntimeAdapterFacetStatus = 'ready' | 'limited' | 'blocked' | 'unknown';
+
+export interface AgentRuntimeAdapterProjectionReason {
+  id: string;
+  status: AgentRuntimeCompatibilityRequirementStatus;
+  owner: AgentRuntimeCompatibilityOwner;
+  summary: string;
+}
+
+export interface AgentRuntimeAdapterProjectionFacetBase {
+  status: AgentRuntimeAdapterFacetStatus;
+  summary: string;
+  reasons: AgentRuntimeAdapterProjectionReason[];
+  blockers?: string[];
+}
+
+export interface AgentRuntimeAdapterConnectionProjection extends AgentRuntimeAdapterProjectionFacetBase {
+  kind: AgentRuntimeAdapterConnectionKind;
+  owner: AgentRuntimeOwner;
+  hasCommand: boolean;
+  commandSource?: AgentRuntimeResolvedCommandSource;
+}
+
+export interface AgentRuntimeAdapterConfigurationProjection extends AgentRuntimeAdapterProjectionFacetBase {
+  modelSelection: AgentRuntimeAdapterConfigurationOwner;
+  credentials: AgentRuntimeAdapterConfigurationOwner;
+  settings: AgentRuntimeAdapterConfigurationOwner;
+}
+
+export interface AgentRuntimeAdapterHealthProjection extends AgentRuntimeAdapterProjectionFacetBase {
+  mode: AgentRuntimeAdapterHealthMode;
+  owner: AgentRuntimeOwner;
+  hasCommand: boolean;
+  timeoutMs?: number;
+}
+
+export interface AgentRuntimeAdapterCommandsProjection extends AgentRuntimeAdapterProjectionFacetBase {
+  discovery: AgentRuntimeAdapterCommandDiscovery;
+  commandCount: number;
+  commandNames: string[];
+  commands: AgentRuntimeAdapterDeclaredCommand[];
+}
+
+export interface AgentRuntimeAdapterProjection {
+  schemaVersion: 1;
+  runtimeId: string;
+  runtimeName: string;
+  runtimeKind: AgentRuntimeKind;
+  runtimeStatus: AgentRuntimeStatus;
+  status: AgentRuntimeAdapterProjectionStatus;
+  connection: AgentRuntimeAdapterConnectionProjection;
+  configuration: AgentRuntimeAdapterConfigurationProjection;
+  health: AgentRuntimeAdapterHealthProjection;
+  commands: AgentRuntimeAdapterCommandsProjection;
+  reasons: AgentRuntimeAdapterProjectionReason[];
+  blockers?: string[];
+}
+
+export interface AgentRuntimeAdapterProjectionsPayload {
+  schemaVersion: 1;
+  projections: AgentRuntimeAdapterProjection[];
 }
 
 export interface AgentRuntimeDescriptor extends AgentRuntimeIdentity {

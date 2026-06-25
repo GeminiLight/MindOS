@@ -77,6 +77,7 @@ export const MINDOS_WEB_API_ROUTE_OWNERSHIP: MindosWebApiRouteOwnership[] = [
   migrated('/api/assistants', 'medium'),
   migrated('/api/agent-runtimes', 'medium'),
   migrated('/api/agent-runtimes/mcp-projections', 'medium'),
+  migrated('/api/agent-runtimes/adapter-projections', 'medium'),
   migrated('/api/agent-runtimes/permission-projections', 'medium'),
   migrated('/api/agent-runtimes/artifact-projections', 'medium'),
   migrated('/api/agent-runtimes/automation-projections', 'medium'),

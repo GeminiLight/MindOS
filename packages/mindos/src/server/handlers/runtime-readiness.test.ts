@@ -145,6 +145,15 @@ describe('runtime readiness projections', () => {
         expect.objectContaining({ id: 'mailbox', category: 'mindos-product', severity: 'warning' }),
       ]),
     });
+    expect(mindos?.useCases.find((entry) => entry.id === 'adapter-contract')).toMatchObject({
+      source: 'adapter-projection',
+      sourceStatus: 'ready',
+      status: 'ready',
+      details: expect.objectContaining({
+        connection: expect.objectContaining({ kind: 'internal' }),
+        health: expect.objectContaining({ mode: 'mindos-native' }),
+      }),
+    });
     expect(mindos?.useCases.find((entry) => entry.id === 'permission-governance')).toMatchObject({
       source: 'permission-projection',
       sourceStatus: 'ready',
@@ -187,9 +196,16 @@ describe('runtime readiness projections', () => {
     expect(acp).toMatchObject({
       overallStatus: 'limited',
       gaps: expect.arrayContaining([
+        expect.objectContaining({ id: 'adapter-health-contract', category: 'adapter-contract' }),
+        expect.objectContaining({ id: 'adapter-command-discovery', category: 'adapter-contract' }),
         expect.objectContaining({ id: 'adapter-approval-contract', category: 'adapter-contract' }),
         expect.objectContaining({ id: 'adapter-artifact-contract', category: 'adapter-contract' }),
       ]),
+    });
+    expect(acp?.useCases.find((entry) => entry.id === 'adapter-contract')).toMatchObject({
+      source: 'adapter-projection',
+      sourceStatus: 'limited',
+      status: 'limited',
     });
     expect(acp?.useCases.find((entry) => entry.id === 'artifact-governance')).toMatchObject({
       source: 'artifact-projection',

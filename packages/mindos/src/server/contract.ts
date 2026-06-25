@@ -47,6 +47,7 @@ export const MINDOS_SERVER_ROUTES: MindosServerRouteContract[] = [
   { id: 'agent-capabilities', method: 'GET', path: '/api/agent-capabilities', auth: 'required' },
   { id: 'agent-runtimes', method: 'GET', path: '/api/agent-runtimes', auth: 'required' },
   { id: 'agent-runtimes.mcp-projections', method: 'GET', path: '/api/agent-runtimes/mcp-projections', auth: 'required' },
+  { id: 'agent-runtimes.adapter-projections', method: 'GET', path: '/api/agent-runtimes/adapter-projections', auth: 'required' },
   { id: 'agent-runtimes.permission-projections', method: 'GET', path: '/api/agent-runtimes/permission-projections', auth: 'required' },
   { id: 'agent-runtimes.artifact-projections', method: 'GET', path: '/api/agent-runtimes/artifact-projections', auth: 'required' },
   { id: 'agent-runtimes.automation-projections', method: 'GET', path: '/api/agent-runtimes/automation-projections', auth: 'required' },

@@ -106,6 +106,21 @@ export {
 } from './handlers/mcp-runtime-projections.js';
 
 export {
+  buildAgentRuntimeAdapterProjectionsPayload,
+  handleAgentRuntimeAdapterProjectionsGet,
+  type AgentRuntimeAdapterCommandsProjection,
+  type AgentRuntimeAdapterConfigurationProjection,
+  type AgentRuntimeAdapterConnectionProjection,
+  type AgentRuntimeAdapterFacetStatus,
+  type AgentRuntimeAdapterHealthProjection,
+  type AgentRuntimeAdapterProjection,
+  type AgentRuntimeAdapterProjectionReason,
+  type AgentRuntimeAdapterProjectionServices,
+  type AgentRuntimeAdapterProjectionStatus,
+  type AgentRuntimeAdapterProjectionsPayload,
+} from './handlers/runtime-adapter-projections.js';
+
+export {
   buildAgentRuntimePermissionProjectionsPayload,
   handleAgentRuntimePermissionProjectionsGet,
   type AgentRuntimePermissionApprovalRoute,
