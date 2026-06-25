@@ -42,7 +42,7 @@ Run this before executing any write path:
 2. **Discover structure**
    - Only need top-level zones? → `mindos_list_spaces` (lighter; includes README blurbs)
    - Need a specific file path? → confirm zone with `mindos_list_spaces`, then `mindos_list_files` inside that zone
-   - Know keywords? → fire 2-4 parallel `mindos_search_notes` covering CN/EN variants and abbreviations
+   - Know keywords? → start with one precise `mindos_search_notes` query. Add a second or third query only when results are sparse or the topic has obvious CN/EN variants and abbreviations.
    - **Never assume top-level directory names** — the user's KB may use Chinese, pinyin, or unconventional hierarchy
 3. **Load local governance** — Read `README.md` / `INSTRUCTION.md` near the target path. Local conventions override global assumptions.
 4. **Match existing SOP** — If the task is procedural: scan tree for a procedure-holding directory (names like `Workflows/`, `SOPs/`, `流程/` are hints — don't assume). Search by keywords + `<!-- keywords: -->` metadata. If found, read and follow. If execution diverges, propose updating the SOP after.
@@ -75,7 +75,7 @@ If context is missing, continue with best effort and state assumptions.
 Search → read target + read 1-2 sibling files for local conventions → apply minimal edit (prefer `update_section` / `update_lines` / `insert_after_heading` over full rewrite) → verify heading/style match → summarize what changed.
 
 ### Multi-file routing
-Parse unstructured input into discrete semantic units → for each unit: search 2-4 keyword variants to find best-fit file → **present routing table** (content snippet → target file → insertion point) → wait for user confirmation → execute edits one file at a time → summarize all changes with file paths.
+Parse unstructured input into discrete semantic units → for each unit: search the strongest keyword first, adding variants only when needed to find a best-fit file → **present routing table** (content snippet → target file → insertion point) → wait for user confirmation → execute edits one file at a time → summarize all changes with file paths.
 
 ### Conversation retrospective
 Confirm scope (which session? which topics?) → extract: decisions made, rationale, pitfalls encountered, next actions → for each artifact, find the best existing file via search → route each to the right place → append a one-line change trace per file touched.

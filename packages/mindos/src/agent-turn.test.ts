@@ -264,6 +264,28 @@ describe('MindOS session event contract', () => {
     expect(third.steerMessage).toContain('loop');
   });
 
+  it('steers once for a final answer when the step limit is reached after a tool call', () => {
+    const reducer = createMindosAgentEventReducer({ stepLimit: 2 });
+
+    reducer.handle({
+      type: 'turn_end',
+      toolResults: [{ toolName: 'read_file', content: { path: 'a.md' } }],
+    });
+
+    const second = reducer.handle({
+      type: 'turn_end',
+      toolResults: [{ toolName: 'read_file', content: { path: 'b.md' } }],
+    });
+    expect(second.shouldAbort).toBeUndefined();
+    expect(second.steerMessage).toContain('provide a concise final answer');
+
+    const third = reducer.handle({
+      type: 'turn_end',
+      toolResults: [{ toolName: 'read_file', content: { path: 'c.md' } }],
+    });
+    expect(third.shouldAbort).toBe(true);
+  });
+
   it('captures model errors from agent_end events', () => {
     const reducer = createMindosAgentEventReducer({ stepLimit: 20 });
     const result = reducer.handle({

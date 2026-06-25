@@ -325,9 +325,11 @@ export function createMindosAgentEventReducer(options: MindosAgentEventReducerOp
   const stepHistory: MindosAgentStepEntry[] = [];
   let stepCount = 0;
   let loopCooldown = 0;
+  let finalAnswerSteered = false;
   let lastModelError = '';
   const loopWarningMessage = options.loopWarningMessage
     ?? '[SYSTEM WARNING] You appear to be in a loop — repeating the same tool calls in a cycle. Try a completely different approach or ask the user for clarification.';
+  const finalAnswerWarningMessage = '[SYSTEM WARNING] You have reached the tool step budget. Stop using tools and provide a concise final answer from the evidence already gathered.';
 
   return {
     get lastModelError() {
@@ -389,6 +391,11 @@ export function createMindosAgentEventReducer(options: MindosAgentEventReducerOp
         }
 
         if (stepCount >= options.stepLimit) {
+          if (toolResults.length > 0 && !finalAnswerSteered && !effect.steerMessage) {
+            finalAnswerSteered = true;
+            effect.steerMessage = finalAnswerWarningMessage;
+            return effect;
+          }
           effect.shouldAbort = true;
         }
 

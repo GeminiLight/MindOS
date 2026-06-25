@@ -37,6 +37,7 @@
     "test:unit": "vitest run tests/unit/*.test.ts",
     "test:integration": "vitest run --config tests/integration/vitest.config.ts",
     "test:e2e": "playwright test -c tests/e2e/playwright.config.ts",
+    "benchmark:agent": "node benchmark/Agent/run-agent-benchmark.mjs",
     "lint": "turbo run lint",
     "type-check": "turbo run type-check",
     "verify:standalone": "node scripts/verify-standalone.mjs",

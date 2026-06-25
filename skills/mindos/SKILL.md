@@ -13,7 +13,7 @@ description: >
 
 # MindOS Skill
 
-<!-- version: 3.2.0 — CLI-first, MCP optional -->
+<!-- version: 3.3.1 — CLI-first, MCP optional -->
 
 ## CLI commands
 
@@ -57,6 +57,22 @@ npm install -g @geminilight/mindos
 4. **Multi-file edits require a plan first.** Present the full change list; execute only after approval.
 5. After create/delete/move/rename → **sync affected READMEs** automatically.
 6. **Read before write.** Always read a file before overwriting it. Never write based on assumptions.
+7. **Close the turn cleanly.** Match the requested action and stop there; do not add a needless follow-up question after a complete lookup or write.
+8. **Respect the source-code boundary.** This skill is for the MindOS KB. If the user asks to edit app/source code and no source file or code workspace tool is available, ask for the concrete repo/file/code context instead of searching or writing KB notes. For a bare coding request, do not use KB list/search/read tools to hunt for source files.
+
+---
+
+## Answer contract
+
+Use this completion contract before any optional post-task hook:
+
+- **Lookup / summary / quote:** Answer first, cite the stable file path(s), and explicitly avoid writes. If the user named a specific local file path, include that exact path in the final answer. If the user said not to modify or asked for read-only handling, end with a short no-change sentence in the user's language (Chinese: "未做任何修改。"; English: "No changes were made."). Do not end with "want me to save/record/update this?" unless the user asked for a next step or the evidence is incomplete.
+- **Write / update / append:** Only after a write tool succeeds, report the exact path and operation in the user's language. English: `Saved to <path>`, `Updated <path>`, `Appended to <path>`. Chinese: `已保存到 <路径>`、`已更新 <路径>`、`已追加到 <路径>`。Add at most one short summary sentence.
+- **Uploaded content write:** If the user asks to turn uploaded content into a note and the target type is clear, use the uploaded content directly, do at most one light structure/README check, then write the note. Do not stop after directory listing.
+- **Clarification:** Ask one concrete question only when the missing answer would change destination, scope, cost, safety, or reversibility. Offer 2-3 realistic options when helpful.
+- **Missing evidence or tool failure:** Say what was not found or what failed, name the attempted source/tool when useful, and give the next concrete recovery step. For missing-evidence lookups, do not offer to save, record, create, or add the missing idea unless the user asked to capture it. Never return an empty answer.
+- **Language fidelity:** Preserve the user's language and the source note's key terms. If a note uses a Chinese term, reuse that term; put an English gloss in parentheses only when it helps.
+- **Read-only completion:** If the user asked for a summary, meeting context, or next step only, stop after answering. Do not append an unsolicited "want me to save/record/draft/write/supplement/amend/export/run this?" offer. End with a declarative sentence, not a question. When following a SOP or workflow, cite the SOP/workflow path used. If the user asked only for the next step, do not ask whether to execute it.
 
 ---
 
@@ -168,11 +184,22 @@ User request
 - "save this" / "record" / "write down" = write
 - "search" / "summarize" / "look up" = read-only
 - "organize" → ask: display only, or write back?
+- "organize these things" / vague object with no files, current file, upload, or scope → ask what to organize. A single lightweight list/tree check is acceptable only to offer concrete scopes such as `Inbox/`, a specific Space, or the current file; do not move or deeply inspect content before clarification.
+- "tell me the next step" → read the SOP or workflow, answer the next step with its path, and stop. Do not ask to execute, draft, save, write, or continue unless the user asked you to continue.
 
 **File location uncertainty:**
 - Can't decide in 5 seconds → save to `Inbox/`, inform user, propose classification later
 - "Just put it somewhere" / "先放着" → save to `Inbox/`
 - User drags files or pastes unstructured content without specifying location → `Inbox/`
+
+**Stable routing and filenames:**
+- If a relevant existing file is obvious, update that file instead of creating a duplicate.
+- If the user explicitly asks to record a fact that is already captured in an obvious existing file, update that file minimally or say it is already recorded there. Do not ask whether to create a duplicate Inbox note.
+- Debugging lessons go under `Debugging/` when that directory exists; handoffs under `Handoffs/`; meeting notes under `Meetings/`; unclear quick captures under `Inbox/`.
+- Explicit handoff requests should create or update one concise note under `Handoffs/` after reading local handoff guidance when available. Include objective, relevant files, verification state, and remaining risks; report the saved path.
+- Derive new filenames from the concrete topic, using lowercase ASCII kebab-case when the KB does not show another convention. Preserve established product tokens and existing sibling spelling (`mindroot` vs `mind-root`) instead of inventing a variant.
+- Prefer durable subject filenames over clever summaries: debugging notes about Agent benchmark `MIND_ROOT` should use an `agent-benchmark-mindroot...` filename; quick captures about Skill optimization and query replay should keep both `skill-optimization` and the core topic in the name when practical.
+- If the user says "current file", treat `currentFile` as the target unless it conflicts with safety or local governance.
 
 **Scope creep:**
 - Input routes to >5 files → pause, confirm scope
@@ -201,6 +228,8 @@ If a hook triggers → read [references/post-task-hooks.md](./references/post-ta
 
 When user expresses a standing preference → read [references/preference-capture.md](./references/preference-capture.md) and follow confirm-then-write flow.
 
+Future-tense preference wording such as "from now on...", "next time...", or "以后..." is a preference signal, not automatic permission to write. Acknowledge the preference and ask whether to save it unless the user explicitly says "save/record/write this preference".
+
 ## SOP authoring
 
 When creating/rewriting an SOP → read [references/sop-template.md](./references/sop-template.md).
@@ -223,7 +252,7 @@ mindos file create "Inbox/<filename>.md" --content "..."
 1. List Inbox files: `mindos file list Inbox/`
 2. Read each file to understand its content
 3. For each file, propose the best destination directory based on KB structure
-4. Present the full routing plan to user for approval
+4. Present the full routing plan to user for approval. Use explicit words such as "routing plan" / "路由方案" and include each source file path.
 5. Move files: `mindos file rename "Inbox/<file>" "<target-dir>/<file>"`
 6. After moving, check if the target directory's README needs updating
 
@@ -237,6 +266,15 @@ Quick summary of what gets checked:
 - **Contradictions**: conflicting facts across files on the same topic
 - **Broken links**: references to files that no longer exist
 - **Stale content**: files with outdated date markers or untouched for >6 months
+
+## Failure recovery
+
+When the user names a file path that does not exist:
+
+1. Report that the requested path does not exist.
+2. Infer a recovery query from the filename and user wording, not only the literal word "missing".
+3. Search/list for plausible alternative records.
+4. If alternatives exist, name the strongest candidate paths. If not, say no related record was found and what was checked.
 - **Duplicates**: two files covering the same ground without cross-referencing
 - **Orphan files**: files with zero backlinks, hard to discover
 - **Structural issues**: wrong directory, missing READMEs, aging Inbox files

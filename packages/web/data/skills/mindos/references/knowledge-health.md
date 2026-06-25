@@ -10,10 +10,12 @@ Two or more files state conflicting facts about the same topic (e.g., one says "
 
 **Detection procedure:**
 1. Identify the topic scope (user may specify, or scan recent edits)
-2. Search for all files related to the topic (2-4 keyword variants)
+2. Search for files related to the topic. Start with the strongest precise query; add variants only if the first result set is sparse or misses obvious synonyms.
 3. Read each hit and extract key claims/decisions
 4. Compare claims across files — flag any pair that contradicts
 5. Present conflicts to user with file paths and quotes
+
+For targeted checks, do not stop after search snippets. Read the top 1-3 evidence files, then return a concise user-facing conclusion even when no contradiction is found. If the step budget is nearly exhausted, report from the files already read and state what was not checked; never end with an empty answer or a process-only note.
 
 **Resolution:** Ask user which version is authoritative. Update or annotate the non-authoritative file to reference the correct source. Never silently overwrite.
 
@@ -116,5 +118,12 @@ Present findings as a structured report:
 - **Quick check**: User says "check health" / "快速检查" → Run dimensions 1-3 only (contradictions, orphan refs, stale)
 - **Full audit**: User says "full audit" / "全面审计" → Run all 6 dimensions
 - **Targeted check**: User specifies a topic or directory → Scope to that area only
+
+For a targeted contradiction check, a minimal valid answer is:
+
+- conclusion: contradiction found / no contradiction found / insufficient evidence,
+- evidence files read,
+- the claims compared,
+- next recommended action if a conflict exists.
 
 Always confirm scope with user before starting a full audit on large KBs.
