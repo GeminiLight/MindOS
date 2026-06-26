@@ -33,6 +33,10 @@ import type {
   ObsidianSurfaceCatalogStatus,
   ObsidianWorkflowOutcomeStatus,
 } from '@/lib/obsidian-compat/compatibility-preview';
+import type {
+  ObsidianImportDecisionSeverity,
+  ObsidianSurfaceLedgerProjectionStatus,
+} from '@/lib/obsidian-compat/surface-decision';
 import { notifyObsidianPluginPackagesChanged } from '@/lib/plugins/events';
 import {
   readObsidianLinterProfilePreference,
@@ -236,6 +240,41 @@ function surfaceCatalogStatusClass(status: ObsidianSurfaceCatalogStatus): string
   if (status === 'blocked') return 'text-error';
   if (status === 'native-gated') return 'text-[var(--amber-text)]';
   return 'text-muted-foreground';
+}
+
+function importDecisionSeverityClass(severity: ObsidianImportDecisionSeverity): string {
+  if (severity === 'success') return 'text-success';
+  if (severity === 'danger') return 'text-error';
+  if (severity === 'warning') return 'text-[var(--amber-text)]';
+  return 'text-muted-foreground';
+}
+
+function ledgerProjectionStatusLabel(status: ObsidianSurfaceLedgerProjectionStatus): string {
+  return {
+    'static-only': 'static',
+    registered: 'registered',
+    called: 'called',
+    'native-gated': 'native',
+    blocked: 'blocked',
+  }[status];
+}
+
+function ledgerProjectionStatusClass(status: ObsidianSurfaceLedgerProjectionStatus): string {
+  if (status === 'called' || status === 'registered') return 'text-success';
+  if (status === 'blocked') return 'text-error';
+  if (status === 'native-gated') return 'text-[var(--amber-text)]';
+  return 'text-muted-foreground';
+}
+
+function ledgerProjectionCounts(entry: NonNullable<ObsidianCompatibilityPreview['surfaceCatalog']>[number]): string {
+  const projection = entry.ledgerProjection;
+  if (!projection) return 'runtime evidence pending';
+  return [
+    projection.predicted ? `${projection.predicted} predicted` : '',
+    projection.registered ? `${projection.registered} registered` : '',
+    projection.called ? `${projection.called} called` : '',
+    projection.blocked ? `${projection.blocked} blocked` : '',
+  ].filter(Boolean).join(' / ') || 'runtime evidence pending';
 }
 
 function surfaceCatalogSummary(preview: ObsidianCompatibilityPreview): string | null {
@@ -569,7 +608,9 @@ export function ObsidianImportSection({
                     const preview = plugin.compatibilityPreview;
                     const surfaceEntries = (preview?.surfaceCatalog ?? []).filter((entry) => entry.surface !== 'core').slice(0, 4);
                     const hiddenSurfaceCount = (preview?.surfaceCatalog ?? []).filter((entry) => entry.surface !== 'core').length - surfaceEntries.length;
+                    const surfaceDetailEntries = (preview?.surfaceCatalog ?? []).filter((entry) => entry.surface !== 'core').slice(0, 3);
                     const surfaceSummary = preview ? surfaceCatalogSummary(preview) : null;
+                    const decision = preview?.importDecision;
                     const mappingSummary = preview ? settingsMappingSummary(preview) : null;
                     const primaryWorkflow = preview?.workflowOutcomes[0];
                     return (
@@ -639,6 +680,11 @@ export function ObsidianImportSection({
                                 <span className="min-w-0 break-all font-mono text-foreground">{preview.packagePath.targetPath}</span>
                               </div>
                               <div className="flex flex-wrap gap-1.5">
+                                {decision && (
+                                  <span className="rounded border border-border bg-background px-1.5 py-0.5">
+                                    Decision: <span className={importDecisionSeverityClass(decision.severity)}>{decision.label}</span>
+                                  </span>
+                                )}
                                 {surfaceSummary && (
                                   <span className="rounded border border-border bg-background px-1.5 py-0.5">
                                     Surfaces: {surfaceEntries.map((entry, index) => (
@@ -669,6 +715,46 @@ export function ObsidianImportSection({
                               {preview.blockedReasons.length > 0 && (
                                 <div className="text-error">
                                   Blocked: {preview.blockedReasons[0]}
+                                </div>
+                              )}
+                              {decision && (
+                                <div className="space-y-0.5">
+                                  <div className="flex flex-wrap items-center gap-1.5">
+                                    <span className="font-medium text-foreground">Import decision</span>
+                                    <span className={importDecisionSeverityClass(decision.severity)}>{decision.action}</span>
+                                    <span className="font-mono text-muted-foreground/70">{decision.confidence}</span>
+                                  </div>
+                                  <p className="line-clamp-2">{decision.summary}</p>
+                                  {decision.requiredEvidence[0] && (
+                                    <p className="line-clamp-1 text-muted-foreground/70">
+                                      Evidence: {decision.requiredEvidence[0]}
+                                    </p>
+                                  )}
+                                </div>
+                              )}
+                              {surfaceDetailEntries.length > 0 && (
+                                <div className="grid gap-1.5 sm:grid-cols-2">
+                                  {surfaceDetailEntries.map((entry) => (
+                                    <div key={entry.surface} className="min-w-0 border-l border-border/70 pl-2">
+                                      <div className="flex min-w-0 flex-wrap items-center gap-1">
+                                        <span className="font-medium text-foreground">{entry.label}</span>
+                                        <span className={surfaceCatalogStatusClass(entry.status)}>{surfaceCatalogStatusLabel(entry.status)}</span>
+                                        {entry.ledgerProjection && (
+                                          <span className={ledgerProjectionStatusClass(entry.ledgerProjection.status)}>
+                                            {ledgerProjectionStatusLabel(entry.ledgerProjection.status)}
+                                          </span>
+                                        )}
+                                      </div>
+                                      <p className="line-clamp-1 font-mono text-muted-foreground/70">
+                                        Runtime: {ledgerProjectionCounts(entry)}
+                                      </p>
+                                      {entry.ledgerProjection?.nextStep && (
+                                        <p className="line-clamp-1 text-muted-foreground/70">
+                                          {entry.ledgerProjection.nextStep}
+                                        </p>
+                                      )}
+                                    </div>
+                                  ))}
                                 </div>
                               )}
                               {preview.nextSteps[0] && (

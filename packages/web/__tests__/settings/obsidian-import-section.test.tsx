@@ -135,11 +135,36 @@ describe('ObsidianImportSection', () => {
                     hosts: ['Command Center'],
                     routes: ['/api/obsidian-plugins'],
                     supportSummary: { full: 1, limited: 0, 'snapshot-only': 0, 'catalog-only': 0, 'request-only': 0, unsupported: 0 },
+                    ledgerProjection: {
+                      status: 'static-only',
+                      predicted: 1,
+                      registered: 0,
+                      called: 0,
+                      blocked: 0,
+                      summary: 'Commands is only predicted by static analysis until the plugin is loaded and checked against the runtime ledger.',
+                      nextStep: 'Load the plugin and compare registered/called ledger events with this prediction.',
+                    },
                     summary: 'Command registrations map to MindOS Command Center.',
                     limitations: [],
                     nextStep: 'Enable the plugin and verify registered behavior in the corresponding MindOS surface.',
                   },
                 ],
+                importDecision: {
+                  action: 'enable-after-review',
+                  label: 'Ready for import review',
+                  severity: 'success',
+                  importable: true,
+                  defaultSelected: true,
+                  enableAfterImport: false,
+                  confidence: 'static-analysis',
+                  summary: 'The package is importable, but runtime registration and workflow proof are still required before claiming observed compatibility.',
+                  reasons: ['1 predicted surface API from static analysis.', 'Commands: ready'],
+                  requiredEvidence: [
+                    'Load from Installed and confirm runtime ledger registration for predicted surfaces.',
+                    'Run focused workflow probes before marking workflows observed.',
+                  ],
+                  nextStep: 'Import the package, then enable from Installed after reviewing capability prompts.',
+                },
                 workflowOutcomes: [
                   {
                     id: 'generic-plugin-commands',
@@ -262,7 +287,11 @@ describe('ObsidianImportSection', () => {
     expect(host.textContent).toContain('Copy manifest.json, main.js, styles.css, data.json, obsidian-import.json');
     expect(host.textContent).toContain('.obsidian-mobile/plugins/ready-plugin');
     expect(host.textContent).toContain('.mindos/plugins/ready-plugin');
+    expect(host.textContent).toContain('Decision: Ready for import review');
     expect(host.textContent).toContain('Surfaces: Commands ready');
+    expect(host.textContent).toContain('Import decision');
+    expect(host.textContent).toContain('Runtime: 1 predicted');
+    expect(host.textContent).toContain('Load the plugin and compare registered/called ledger events with this prediction.');
     expect(host.textContent).toContain('Workflow: Run plugin commands available');
     expect(host.textContent).toContain('Ledger: 1 predicted');
     expect(host.textContent).toContain('Next: Import package into .mindos/plugins/ready-plugin.');

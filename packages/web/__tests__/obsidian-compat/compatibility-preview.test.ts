@@ -173,6 +173,13 @@ describe('Obsidian compatibility preview', () => {
         source: 'static-analysis',
         apis: ['addCommand'],
         hosts: ['Command Center'],
+        ledgerProjection: expect.objectContaining({
+          status: 'static-only',
+          predicted: 1,
+          registered: 0,
+          called: 0,
+          blocked: 0,
+        }),
         summary: 'Command registrations map to MindOS Command Center.',
       }),
       expect.objectContaining({
@@ -183,6 +190,10 @@ describe('Obsidian compatibility preview', () => {
         limitations: expect.arrayContaining([
           'Limited APIs require capability review and focused workflow verification before relying on them.',
         ]),
+        ledgerProjection: expect.objectContaining({
+          status: 'static-only',
+          predicted: 2,
+        }),
       }),
       expect.objectContaining({
         surface: 'network',
@@ -204,6 +215,21 @@ describe('Obsidian compatibility preview', () => {
         status: 'limited',
       }),
     ]));
+    expect(preview.importDecision).toMatchObject({
+      action: 'enable-after-review',
+      label: 'Limited import review',
+      severity: 'warning',
+      importable: true,
+      defaultSelected: true,
+      enableAfterImport: false,
+      confidence: 'static-analysis',
+      summary: 'The package is importable with limited surfaces; capability review, runtime ledger evidence, and workflow probes are required before relying on it.',
+      requiredEvidence: expect.arrayContaining([
+        'Load from Installed and confirm runtime ledger registration for predicted surfaces.',
+        'Run focused workflow probes before marking workflows observed.',
+        'Review capability prompts and limited surface restrictions before enabling user workflows.',
+      ]),
+    });
     expect(preview.runtimeCapabilityLedger).toEqual(expect.arrayContaining([
       expect.objectContaining({
         capability: 'addCommand',
@@ -332,11 +358,27 @@ describe('Obsidian compatibility preview', () => {
         label: 'Blocked capability',
         status: 'blocked',
         apis: ['module:@codemirror/language', 'module:@codemirror/state', 'module:child_process'],
+        ledgerProjection: expect.objectContaining({
+          status: 'blocked',
+          blocked: 3,
+        }),
         limitations: expect.arrayContaining([
           'Unsupported runtime modules: @codemirror/language, @codemirror/state, child_process.',
         ]),
       }),
     ]));
+    expect(preview.importDecision).toMatchObject({
+      action: 'blocked',
+      label: 'Blocked',
+      severity: 'danger',
+      importable: false,
+      defaultSelected: false,
+      requiredEvidence: expect.arrayContaining([
+        'Remove or replace blocked Obsidian APIs, Node/Electron modules, or capability-gate failures.',
+        'Re-run static analysis and capability gate checks before import.',
+      ]),
+      nextStep: 'Keep this plugin unchecked and route the workflow to a MindOS-native replacement or explicit adapter work.',
+    });
     expect(preview.workflowOutcomes).toEqual(expect.arrayContaining([
       expect.objectContaining({
         id: 'templater-runtime-gate',
@@ -415,6 +457,46 @@ describe('Obsidian compatibility preview', () => {
     expect(preview.nextSteps[0]).toBe('Do not import until blocked capabilities are replaced or explicitly supported.');
   });
 
+  it('prefers MindOS native replacement for query/index plugins without runnable generic surfaces', () => {
+    const plugin = makePlugin({
+      id: 'dataview',
+      manifest: { id: 'dataview', name: 'Dataview', version: '0.5.0' },
+      compatibilityLevel: 'compatible',
+      compatibility: {
+        obsidianApis: ['Plugin'],
+        moduleImports: [],
+        nodeModules: [],
+        unsupportedModules: [],
+        supportedApis: ['Plugin'],
+        partialApis: [],
+        unsupportedApis: [],
+        blockers: [],
+      },
+    });
+
+    const preview = buildObsidianCompatibilityPreview(plugin, {
+      sourcePluginsPath: '.obsidian/plugins',
+    });
+
+    expect(preview.workflowOutcomes).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: 'native-query-index-replacement',
+        status: 'native-replacement',
+      }),
+    ]));
+    expect(preview.importDecision).toMatchObject({
+      action: 'use-native-replacement',
+      label: 'Use native replacement',
+      severity: 'neutral',
+      importable: true,
+      defaultSelected: true,
+      requiredEvidence: expect.arrayContaining([
+        'Design or use a MindOS-native adapter for the gated workflow.',
+        'Only treat the community package as reference/config material until native behavior is proven.',
+      ]),
+    });
+  });
+
   it('generates generic outcomes for unknown plugins from detected surfaces', () => {
     const plugin = makePlugin({
       id: 'command-settings-like',
@@ -464,9 +546,25 @@ describe('Obsidian compatibility preview', () => {
       expect.objectContaining({
         surface: 'editor',
         status: 'native-gated',
+        ledgerProjection: expect.objectContaining({
+          status: 'native-gated',
+          predicted: 1,
+        }),
         nextStep: 'Route this behavior through a MindOS native adapter instead of raw community plugin mounting.',
       }),
     ]));
+    expect(preview.importDecision).toMatchObject({
+      action: 'import-package-only',
+      label: 'Import package only',
+      severity: 'warning',
+      importable: true,
+      confidence: 'static-analysis',
+      requiredEvidence: expect.arrayContaining([
+        'Review native-gated or review-only surfaces before enabling.',
+        'Load from Installed and compare registered/called ledger entries with predicted surfaces.',
+        'Run focused workflow probes before marking workflows observed.',
+      ]),
+    });
     expect(preview.nextSteps).toEqual(expect.arrayContaining([
       'Use MindOS native editor adapters for editor-heavy behavior; raw CodeMirror extensions are not auto-mounted.',
     ]));

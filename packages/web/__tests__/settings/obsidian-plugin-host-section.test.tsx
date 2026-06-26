@@ -417,6 +417,7 @@ describe('ObsidianPluginHostSection', () => {
     expect(host.textContent).toContain('Detected MindOS surfaces');
     expect(host.textContent).toContain('Entries');
     expect(host.textContent).toContain('1 snapshot');
+    expect(host.textContent).toContain('Called');
 
     const migrateButton = Array.from(host.querySelectorAll('button'))
       .find((button) => button.textContent?.includes('Migrate')) as HTMLButtonElement;

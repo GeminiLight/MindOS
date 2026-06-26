@@ -20,10 +20,7 @@ import {
 import { apiFetch } from '@/lib/api';
 import { encodePath } from '@/lib/utils';
 import { getObsidianImportSupport, type ObsidianImportSupportKind } from '@/lib/obsidian-compat/import-policy';
-import type {
-  ObsidianCapabilitySupport,
-  ObsidianCapabilitySurfaceSummary,
-} from '@/lib/obsidian-compat/capability-matrix';
+import type { ObsidianCapabilitySupport } from '@/lib/obsidian-compat/capability-matrix';
 import {
   choosePluginMenuItem,
   choosePluginModalSuggestion,
@@ -61,6 +58,7 @@ import {
   isLoadResult,
   isPluginActionResult,
   runtimeSummary,
+  surfaceLedgerProjections,
   surfaceRouting,
   workflowAuditStatusClass,
   workflowAuditStatusLabel,
@@ -72,6 +70,7 @@ import {
   type ObsidianPluginsResponse,
   type PluginLifecycleAction,
   type SettingAction,
+  type SurfaceLedgerProjectionView,
   type SurfaceRoute,
   type SurfaceRouteState,
   type SurfaceRouteTarget,
@@ -136,23 +135,6 @@ const CAPABILITY_SUPPORT_LABEL: Record<ObsidianCapabilitySupport, string> = {
   unsupported: 'unsupported',
 };
 
-const CAPABILITY_SURFACE_LABEL: Record<string, string> = {
-  commands: 'Commands',
-  settings: 'Settings',
-  entries: 'Entries',
-  views: 'Views',
-  document: 'Document',
-  styles: 'Styles',
-  editor: 'Editor catalog',
-  secret: 'Secrets',
-  vault: 'Vault',
-  metadata: 'Metadata',
-  workspace: 'Workspace',
-  network: 'Network',
-  core: 'Core',
-  unsupported: 'Unsupported',
-};
-
 function compactCoverageSummary(summary: Partial<Record<ObsidianCapabilitySupport, number>> | undefined): string {
   const parts = CAPABILITY_SUPPORT_ORDER
     .map((support) => {
@@ -161,22 +143,6 @@ function compactCoverageSummary(summary: Partial<Record<ObsidianCapabilitySuppor
     })
     .filter(Boolean);
   return parts.length > 0 ? parts.join(' / ') : 'No Obsidian API usage detected';
-}
-
-function compactSurfaceSupport(summary: ObsidianCapabilitySurfaceSummary): string {
-  return CAPABILITY_SUPPORT_ORDER
-    .map((support) => {
-      const count = summary.supportSummary[support] ?? 0;
-      return count > 0 ? `${count} ${CAPABILITY_SUPPORT_LABEL[support]}` : '';
-    })
-    .filter(Boolean)
-    .join(' / ');
-}
-
-function surfaceApiPreview(summary: ObsidianCapabilitySurfaceSummary): string {
-  const firstApis = summary.apis.slice(0, 3).join(', ');
-  const remaining = summary.apis.length - 3;
-  return remaining > 0 ? `${firstApis}, +${remaining}` : firstApis;
 }
 
 function packageLocationLabel(plugin: ObsidianPluginStatus): string {
@@ -198,6 +164,35 @@ function surfaceRouteStateClass(state: SurfaceRouteState): string {
     return 'border-[var(--amber)]/25 bg-[var(--amber-subtle)] text-[var(--amber-text)]';
   }
   return 'border-border bg-muted/60 text-muted-foreground';
+}
+
+function surfaceLedgerProjectionStatusLabel(status: SurfaceLedgerProjectionView['projection']['status']): string {
+  return {
+    'static-only': 'Static',
+    registered: 'Registered',
+    called: 'Called',
+    'native-gated': 'Native',
+    blocked: 'Blocked',
+  }[status];
+}
+
+function surfaceLedgerProjectionStatusClass(status: SurfaceLedgerProjectionView['projection']['status']): string {
+  if (status === 'called' || status === 'registered') {
+    return 'border-success/30 bg-[color-mix(in_srgb,var(--success)_12%,transparent)] text-success';
+  }
+  if (status === 'blocked') return 'border-error/30 bg-[color-mix(in_srgb,var(--error)_12%,transparent)] text-error';
+  if (status === 'native-gated') return 'border-[var(--amber)]/25 bg-[var(--amber-subtle)] text-[var(--amber-text)]';
+  return 'border-border bg-muted/60 text-muted-foreground';
+}
+
+function surfaceLedgerCountSummary(item: SurfaceLedgerProjectionView): string {
+  const projection = item.projection;
+  return [
+    projection.predicted ? `${projection.predicted} predicted` : '',
+    projection.registered ? `${projection.registered} registered` : '',
+    projection.called ? `${projection.called} called` : '',
+    projection.blocked ? `${projection.blocked} blocked` : '',
+  ].filter(Boolean).join(' / ') || 'no ledger evidence';
 }
 
 function SurfaceRouteCard({
@@ -816,6 +811,7 @@ export function ObsidianPluginHostSection({
               const removeKey = `uninstall:${plugin.id}`;
               const migrateKey = `migrate-legacy:${plugin.id}`;
               const surfaceRoutes = surfaceRouting(plugin);
+              const surfaceLedgerChecks = surfaceLedgerProjections(plugin);
               const isFocused = highlightedPluginId === plugin.id;
               return (
                 <div
@@ -1029,24 +1025,28 @@ export function ObsidianPluginHostSection({
                         </div>
                       )}
 
-                      {(plugin.surfaceSummary?.length ?? 0) > 0 && (
+                      {surfaceLedgerChecks.length > 0 && (
                         <div className="rounded-lg border border-border/50 bg-card/60 px-3 py-2.5">
                           <div className="flex flex-wrap items-center justify-between gap-2">
                             <p className="text-2xs font-medium uppercase tracking-wider text-muted-foreground">Detected MindOS surfaces</p>
                             <span className="font-mono text-2xs text-muted-foreground">
-                              {plugin.surfaceSummary?.length ?? 0} surface{(plugin.surfaceSummary?.length ?? 0) === 1 ? '' : 's'}
+                              {surfaceLedgerChecks.length} surface{surfaceLedgerChecks.length === 1 ? '' : 's'}
                             </span>
                           </div>
                           <div className="mt-2 flex flex-wrap gap-1.5">
-                            {(plugin.surfaceSummary ?? []).map((summary) => (
+                            {surfaceLedgerChecks.map((summary) => (
                               <span
                                 key={summary.surface}
                                 className="inline-flex max-w-full items-center gap-1.5 rounded-md border border-border bg-background px-2 py-1 font-mono text-2xs text-muted-foreground"
-                                title={`${surfaceApiPreview(summary)}${summary.routes.length ? ` | ${summary.routes.join(', ')}` : ''}`}
+                                title={`${summary.apiPreview}${summary.routes.length ? ` | ${summary.routes.join(', ')}` : ''} | ${summary.projection.nextStep}`}
                               >
-                                <span className="text-foreground">{CAPABILITY_SURFACE_LABEL[summary.surface] ?? summary.surface}</span>
+                                <span className="text-foreground">{summary.label}</span>
                                 <span>{summary.apiCount}</span>
-                                <span className="text-muted-foreground/70">{compactSurfaceSupport(summary)}</span>
+                                <span className="text-muted-foreground/70">{summary.support}</span>
+                                <span className={`rounded border px-1 py-0.5 ${surfaceLedgerProjectionStatusClass(summary.projection.status)}`}>
+                                  {surfaceLedgerProjectionStatusLabel(summary.projection.status)}
+                                </span>
+                                <span className="text-muted-foreground/70">{surfaceLedgerCountSummary(summary)}</span>
                               </span>
                             ))}
                           </div>

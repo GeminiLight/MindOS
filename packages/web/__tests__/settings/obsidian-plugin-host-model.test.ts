@@ -5,6 +5,7 @@ import {
   isLoadResult,
   isPluginActionResult,
   runtimeSummary,
+  surfaceLedgerProjections,
   surfaceRouting,
   workflowAuditStatusLabel,
   type ObsidianPluginStatus,
@@ -164,6 +165,53 @@ describe('ObsidianPluginHostModel', () => {
     });
 
     expect(capabilityLedgerSummary(item)).toBe('1 predicted / 1 registered / 1 called');
+  });
+
+  it('projects detected surfaces against runtime ledger evidence', () => {
+    const item = plugin({
+      surfaceSummary: [{
+        surface: 'entries',
+        apiCount: 1,
+        supportSummary: { full: 0, limited: 0, 'snapshot-only': 1, 'catalog-only': 0, 'request-only': 0, unsupported: 0 },
+        apis: ['Notice'],
+        hosts: ['Plugin entries dock'],
+        routes: ['/api/obsidian-plugins'],
+      }],
+      capabilityLedger: [
+        {
+          pluginId: 'quickadd-like',
+          capability: 'Notice',
+          surface: 'entries',
+          support: 'snapshot-only',
+          phase: 'predicted',
+          source: 'static-analysis',
+          evidence: 'static',
+        },
+        {
+          pluginId: 'quickadd-like',
+          capability: 'Notice',
+          surface: 'entries',
+          support: 'snapshot-only',
+          phase: 'called',
+          source: 'runtime-ledger',
+          evidence: 'called',
+        },
+      ],
+    });
+
+    expect(surfaceLedgerProjections(item)).toEqual([
+      expect.objectContaining({
+        surface: 'entries',
+        label: 'Entries',
+        support: '1 snapshot',
+        apiPreview: 'Notice',
+        projection: expect.objectContaining({
+          status: 'called',
+          predicted: 1,
+          called: 1,
+        }),
+      }),
+    ]);
   });
 
   it('summarizes historical runtime ledger without counting static predictions', () => {

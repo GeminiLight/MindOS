@@ -20,6 +20,12 @@ import {
   parseImportedObsidianLinterProfileJson,
 } from './linter-settings-profile';
 import {
+  buildObsidianImportDecision,
+  buildObsidianSurfaceLedgerProjection,
+  type ObsidianImportDecision,
+  type ObsidianSurfaceLedgerProjection,
+} from './surface-decision';
+import {
   parseImportedQuickAddChoiceInventoryJson,
   type ImportedQuickAddChoiceInventory,
 } from './quickadd-choice-inventory';
@@ -84,6 +90,7 @@ export interface ObsidianSurfaceCatalogEntry {
   hosts: string[];
   routes: string[];
   supportSummary: Record<ObsidianCapabilitySupport, number>;
+  ledgerProjection: ObsidianSurfaceLedgerProjection;
   summary: string;
   limitations: string[];
   nextStep: string;
@@ -114,6 +121,7 @@ export interface ObsidianCompatibilityPreview {
   warnings: string[];
   settingsMappings: ObsidianCompatibilityPreviewSettingsMapping[];
   surfaceCatalog: ObsidianSurfaceCatalogEntry[];
+  importDecision: ObsidianImportDecision;
   workflowOutcomes: ObsidianWorkflowOutcome[];
   runtimeCapabilityLedger: ObsidianRuntimeCapabilityLedgerEntry[];
   nextSteps: string[];
@@ -136,9 +144,16 @@ export function buildObsidianCompatibilityPreview(
   const packagePath = buildPackagePath(plugin, options);
   const settingsMappings = buildSettingsMappings(plugin);
   const blockedReasons = buildBlockedReasons(plugin, support);
-  const surfaceCatalog = buildSurfaceCatalog(plugin, coverage);
-  const workflowOutcomes = buildWorkflowOutcomes(plugin, support, coverage, settingsMappings);
   const runtimeCapabilityLedger = buildPredictedRuntimeCapabilityLedger(plugin, coverage);
+  const surfaceCatalog = buildSurfaceCatalog(plugin, coverage, runtimeCapabilityLedger);
+  const workflowOutcomes = buildWorkflowOutcomes(plugin, support, coverage, settingsMappings);
+  const importDecision = buildObsidianImportDecision({
+    support,
+    blockedReasons,
+    surfaceCatalog,
+    workflowOutcomes,
+    runtimeCapabilityLedger,
+  });
   const warnings = unique([
     ...settingsMappings.flatMap((mapping) => mapping.warnings),
     ...workflowOutcomes
@@ -156,6 +171,7 @@ export function buildObsidianCompatibilityPreview(
     warnings,
     settingsMappings,
     surfaceCatalog,
+    importDecision,
     workflowOutcomes,
     runtimeCapabilityLedger,
     nextSteps: buildNextSteps(plugin, support, coverage, packagePath, settingsMappings, blockedReasons),
@@ -400,12 +416,14 @@ function buildBlockedReasons(plugin: ScannedObsidianPlugin, support: ObsidianImp
 function buildSurfaceCatalog(
   plugin: ScannedObsidianPlugin,
   coverage: ObsidianCapabilityCoverage[],
+  runtimeCapabilityLedger: ObsidianRuntimeCapabilityLedgerEntry[],
 ): ObsidianSurfaceCatalogEntry[] {
   const entries = summarizeObsidianCapabilitySurfaces(coverage).map((summary) => {
     const status = surfaceCatalogStatus(summary.surface, summary.supportSummary);
+    const label = surfaceCatalogLabel(summary.surface);
     return {
       surface: summary.surface,
-      label: surfaceCatalogLabel(summary.surface),
+      label,
       status,
       source: 'static-analysis' as const,
       apiCount: summary.apiCount,
@@ -413,6 +431,12 @@ function buildSurfaceCatalog(
       hosts: summary.hosts,
       routes: summary.routes,
       supportSummary: summary.supportSummary,
+      ledgerProjection: buildObsidianSurfaceLedgerProjection({
+        surface: summary.surface,
+        label,
+        status,
+        ledger: runtimeCapabilityLedger,
+      }),
       summary: surfaceCatalogSummary(summary.surface, status),
       limitations: surfaceCatalogLimitations(summary.surface, status, summary.supportSummary),
       nextStep: surfaceCatalogNextStep(summary.surface, status),
@@ -432,9 +456,10 @@ function buildSurfaceCatalog(
         `Unsupported runtime modules: ${plugin.compatibility.unsupportedModules.join(', ')}.`,
       ]);
     } else {
+      const label = surfaceCatalogLabel('unsupported');
       entries.push({
         surface: 'unsupported',
-        label: surfaceCatalogLabel('unsupported'),
+        label,
         status: 'blocked',
         source: 'static-analysis',
         apiCount: moduleApis.length,
@@ -449,11 +474,27 @@ function buildSurfaceCatalog(
           'request-only': 0,
           unsupported: moduleApis.length,
         },
+        ledgerProjection: buildObsidianSurfaceLedgerProjection({
+          surface: 'unsupported',
+          label,
+          status: 'blocked',
+          ledger: runtimeCapabilityLedger,
+        }),
         summary: surfaceCatalogSummary('unsupported', 'blocked'),
         limitations: [`Unsupported runtime modules: ${plugin.compatibility.unsupportedModules.join(', ')}.`],
         nextStep: surfaceCatalogNextStep('unsupported', 'blocked'),
       });
     }
+  }
+
+  for (const entry of entries) {
+    if (entry.surface !== 'unsupported') continue;
+    entry.ledgerProjection = buildObsidianSurfaceLedgerProjection({
+      surface: entry.surface,
+      label: entry.label,
+      status: entry.status,
+      ledger: runtimeCapabilityLedger,
+    });
   }
 
   return entries;

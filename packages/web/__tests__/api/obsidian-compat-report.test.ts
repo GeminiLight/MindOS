@@ -160,8 +160,17 @@ describe('GET /api/obsidian/compat-report', () => {
             surface: 'document',
             status: 'limited',
             apis: ['registerMarkdownCodeBlockProcessor'],
+            ledgerProjection: expect.objectContaining({
+              status: 'static-only',
+              predicted: 1,
+            }),
           }),
         ]),
+        importDecision: expect.objectContaining({
+          action: 'enable-after-review',
+          label: 'Limited import review',
+          confidence: 'static-analysis',
+        }),
         workflowOutcomes: expect.arrayContaining([
           expect.objectContaining({
             id: 'generic-document-contributions',

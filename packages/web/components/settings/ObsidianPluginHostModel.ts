@@ -18,7 +18,12 @@ import type { ObsidianCapabilityGateReport } from '@/lib/obsidian-compat/capabil
 import type {
   ObsidianRuntimeCapabilityLedgerEntry,
   ObsidianRuntimeCapabilityLedgerPhase,
+  ObsidianSurfaceCatalogStatus,
 } from '@/lib/obsidian-compat/compatibility-preview';
+import {
+  buildObsidianSurfaceLedgerProjection,
+  type ObsidianSurfaceLedgerProjection,
+} from '@/lib/obsidian-compat/surface-decision';
 import type {
   ObsidianRuntimeCapabilityLedgerHistory,
 } from '@/lib/obsidian-compat/runtime-capability-ledger-store';
@@ -279,6 +284,16 @@ export interface SurfaceRoute {
   actionLabel?: string;
 }
 
+export interface SurfaceLedgerProjectionView {
+  surface: ObsidianCapabilitySurfaceSummary['surface'];
+  label: string;
+  apiCount: number;
+  support: string;
+  apiPreview: string;
+  routes: string[];
+  projection: ObsidianSurfaceLedgerProjection;
+}
+
 export function runtimeSummary(plugin: ObsidianPluginStatus): string {
   const parts = [
     plugin.runtime.commands ? `${plugin.runtime.commands} command${plugin.runtime.commands === 1 ? '' : 's'}` : '',
@@ -325,12 +340,89 @@ export function capabilityLedgerHistorySummary(plugin: ObsidianPluginStatus): st
   return parts.length > 0 ? `${history.total} historical · ${parts.join(' / ')}` : `${history.total} historical`;
 }
 
+export function surfaceLedgerProjections(plugin: ObsidianPluginStatus): SurfaceLedgerProjectionView[] {
+  const ledger = plugin.capabilityLedger ?? plugin.runtime.capabilityLedger ?? [];
+  return (plugin.surfaceSummary ?? []).map((summary) => {
+    const label = surfaceLabel(summary.surface);
+    return {
+      surface: summary.surface,
+      label,
+      apiCount: summary.apiCount,
+      support: compactSurfaceSupport(summary.supportSummary),
+      apiPreview: surfaceApiPreview(summary.apis),
+      routes: summary.routes,
+      projection: buildObsidianSurfaceLedgerProjection({
+        surface: summary.surface,
+        label,
+        status: surfaceCatalogStatusFromSupport(summary.surface, summary.supportSummary),
+        ledger,
+      }),
+    };
+  });
+}
+
 export function workflowAuditStatusLabel(status: ObsidianWorkflowAuditStatus): string {
   if (status === 'observed') return 'observed';
   if (status === 'partial') return 'partial';
   if (status === 'blocked') return 'blocked';
   if (status === 'native-replacement') return 'native';
   return 'not observed';
+}
+
+function surfaceLabel(surface: ObsidianCapabilitySurfaceSummary['surface']): string {
+  return {
+    commands: 'Commands',
+    settings: 'Settings',
+    views: 'Views',
+    document: 'Document',
+    network: 'Network',
+    secret: 'Secrets',
+    editor: 'Editor',
+    vault: 'Vault',
+    metadata: 'Metadata',
+    workspace: 'Workspace',
+    entries: 'Entries',
+    styles: 'Styles',
+    core: 'Core runtime',
+    unsupported: 'Blocked capability',
+  }[surface];
+}
+
+function compactSurfaceSupport(summary: Record<ObsidianCapabilitySupport, number>): string {
+  const parts = [
+    summary.full ? `${summary.full} full` : '',
+    summary.limited ? `${summary.limited} limited` : '',
+    summary['snapshot-only'] ? `${summary['snapshot-only']} snapshot` : '',
+    summary['catalog-only'] ? `${summary['catalog-only']} catalog` : '',
+    summary['request-only'] ? `${summary['request-only']} request` : '',
+    summary.unsupported ? `${summary.unsupported} unsupported` : '',
+  ].filter(Boolean);
+  return parts.join(' / ');
+}
+
+function surfaceApiPreview(apis: string[]): string {
+  const firstApis = apis.slice(0, 3).join(', ');
+  const remaining = apis.length - 3;
+  return remaining > 0 ? `${firstApis}, +${remaining}` : firstApis;
+}
+
+function surfaceCatalogStatusFromSupport(
+  surface: ObsidianCapabilitySurfaceSummary['surface'],
+  summary: Record<ObsidianCapabilitySupport, number>,
+): ObsidianSurfaceCatalogStatus {
+  if (surface === 'unsupported' || summary.unsupported > 0) return 'blocked';
+  if (surface === 'editor') return 'native-gated';
+  if (summary['snapshot-only'] > 0) return 'preview-only';
+  if (summary['catalog-only'] > 0 && summary.full === 0 && summary.limited === 0 && summary['request-only'] === 0) {
+    return 'catalog-only';
+  }
+  if (summary['request-only'] > 0 && summary.full === 0 && summary.limited === 0 && summary['catalog-only'] === 0) {
+    return 'request-only';
+  }
+  if (summary.limited > 0 || summary['catalog-only'] > 0 || summary['request-only'] > 0) {
+    return 'limited';
+  }
+  return 'ready';
 }
 
 export function workflowAuditProbeSummary(audit: ObsidianWorkflowAudit): string {

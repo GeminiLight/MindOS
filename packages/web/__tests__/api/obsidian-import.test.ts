@@ -224,6 +224,11 @@ describe('POST /api/obsidian/import', () => {
           support: 'snapshot-only',
         }),
       ]),
+      importDecision: expect.objectContaining({
+        action: 'enable-after-review',
+        label: 'Limited import review',
+        confidence: 'static-analysis',
+      }),
       nextSteps: expect.arrayContaining([
         'Import package into .mindos/plugins/quickadd-like.',
       ]),

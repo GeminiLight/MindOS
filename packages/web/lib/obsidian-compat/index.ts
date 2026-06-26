@@ -24,6 +24,10 @@ export {
   buildObsidianWorkflowAudits,
 } from './workflow-audit';
 export {
+  buildObsidianImportDecision,
+  buildObsidianSurfaceLedgerProjection,
+} from './surface-decision';
+export {
   ObsidianWorkflowProbeStore,
   buildObsidianWorkflowProbeAudits,
   isObsidianWorkflowProbeId,
@@ -134,6 +138,14 @@ export type {
   ObsidianRuntimeCapabilityLedgerStoreOptions,
   PersistentObsidianRuntimeCapabilityLedgerEntry,
 } from './runtime-capability-ledger-store';
+export type {
+  ObsidianImportDecision,
+  ObsidianImportDecisionAction,
+  ObsidianImportDecisionConfidence,
+  ObsidianImportDecisionSeverity,
+  ObsidianSurfaceLedgerProjection,
+  ObsidianSurfaceLedgerProjectionStatus,
+} from './surface-decision';
 export type {
   BuildObsidianWorkflowAuditsInput,
   ObsidianWorkflowAudit,
