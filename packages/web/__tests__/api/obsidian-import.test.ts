@@ -1,4 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { POST } from '../../app/api/obsidian/import/route';
 
@@ -30,6 +33,61 @@ const {
   scanObsidianVaultPlugins,
   testState,
 } = mockedObsidianImport;
+
+const tempRoots: string[] = [];
+
+afterEach(() => {
+  for (const root of tempRoots.splice(0)) {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+function writeQuickAddPluginData(pluginId: string): string {
+  const sourceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'mindos-obsidian-import-api-'));
+  tempRoots.push(sourceRoot);
+  const sourceDir = path.join(sourceRoot, pluginId);
+  fs.mkdirSync(sourceDir, { recursive: true });
+  fs.writeFileSync(path.join(sourceDir, 'data.json'), JSON.stringify({
+    choices: [
+      {
+        id: 'capture',
+        name: 'Inbox Capture',
+        type: 'Capture',
+        command: true,
+        onePageInput: 'never',
+        captureTo: 'Inbox/capture.md',
+        captureToActiveFile: false,
+        captureToCanvasNodeId: '',
+        useSelectionAsCaptureValue: false,
+        format: { enabled: true, format: 'Captured text' },
+        createFileIfItDoesntExist: { enabled: true, createWithTemplate: false },
+        insertAfter: { enabled: false },
+        insertBefore: { enabled: false },
+        newLineCapture: { enabled: false },
+        templater: { afterCapture: 'none' },
+      },
+      {
+        id: 'template',
+        name: 'Daily Note',
+        type: 'Template',
+        command: true,
+        templatePath: 'Templates/daily.md',
+        folder: {
+          enabled: true,
+          folders: ['Daily'],
+          chooseWhenCreatingNote: false,
+          createInSameFolderAsActiveFile: false,
+          chooseFromSubfolders: false,
+        },
+        fileNameFormat: {
+          enabled: true,
+          format: 'today',
+        },
+      },
+    ],
+  }), 'utf-8');
+  return sourceDir;
+}
 
 vi.mock('@/lib/obsidian-compat/obsidian-import', () => ({
   importObsidianPlugin: mockedObsidianImport.importObsidianPlugin,
@@ -72,12 +130,13 @@ describe('POST /api/obsidian/import', () => {
   });
 
   it('imports a plugin and returns compatibility details', async () => {
+    const sourceDir = writeQuickAddPluginData('quickadd-like');
     scanObsidianVaultPlugins.mockResolvedValue({
       plugins: [
         {
           id: 'quickadd-like',
           manifest: { id: 'quickadd-like', name: 'QuickAdd', version: '1.0.0' },
-          sourceDir: '/tmp/vault/.obsidian/plugins/quickadd-like',
+          sourceDir,
           compatibilityLevel: 'partial',
           compatibility: {
             obsidianApis: ['Plugin', 'Modal', 'Notice', 'addCommand'],
@@ -134,9 +193,23 @@ describe('POST /api/obsidian/import', () => {
         enableAfterImport: false,
       },
       supportKind: 'limited',
+      settingsMappings: expect.arrayContaining([
+        expect.objectContaining({
+          id: 'quickadd-choice-inventory',
+          mappedItems: [
+            'Capture: Inbox Capture -> Inbox/capture.md',
+            'Template: Daily Note -> Daily/today.md from Templates/daily.md',
+          ],
+          appliedOnImport: false,
+        }),
+      ]),
       workflowOutcomes: expect.arrayContaining([
         expect.objectContaining({
-          id: 'quickadd-command-capture',
+          id: 'quickadd-capture-choice',
+          status: 'limited',
+        }),
+        expect.objectContaining({
+          id: 'quickadd-template-choice',
           status: 'limited',
         }),
         expect.objectContaining({

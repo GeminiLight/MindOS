@@ -57,6 +57,54 @@ function makePlugin(overrides: Partial<ScannedObsidianPlugin> & { id: string }):
   };
 }
 
+function writeQuickAddDataJson(plugin: ScannedObsidianPlugin): void {
+  fs.writeFileSync(path.join(plugin.sourceDir, 'data.json'), JSON.stringify({
+    choices: [
+      {
+        id: 'capture',
+        name: 'Inbox Capture',
+        type: 'Capture',
+        command: true,
+        onePageInput: 'never',
+        captureTo: 'Inbox/capture.md',
+        captureToActiveFile: false,
+        captureToCanvasNodeId: '',
+        useSelectionAsCaptureValue: false,
+        format: { enabled: true, format: 'Captured text' },
+        createFileIfItDoesntExist: { enabled: true, createWithTemplate: false },
+        insertAfter: { enabled: false },
+        insertBefore: { enabled: false },
+        newLineCapture: { enabled: false },
+        templater: { afterCapture: 'none' },
+      },
+      {
+        id: 'template',
+        name: 'Daily Note',
+        type: 'Template',
+        command: true,
+        templatePath: 'Templates/daily.md',
+        folder: {
+          enabled: true,
+          folders: ['Daily'],
+          chooseWhenCreatingNote: false,
+          createInSameFolderAsActiveFile: false,
+          chooseFromSubfolders: false,
+        },
+        fileNameFormat: {
+          enabled: true,
+          format: 'today',
+        },
+      },
+      {
+        id: 'macro',
+        name: 'Needs Macro Review',
+        type: 'Macro',
+        command: true,
+      },
+    ],
+  }), 'utf-8');
+}
+
 describe('Obsidian compatibility preview', () => {
   it('previews package paths, Linter settings mapping, workflows, ledger entries, and next steps', () => {
     const plugin = makePlugin({
@@ -150,6 +198,121 @@ describe('Obsidian compatibility preview', () => {
       'Import package into .mindos/plugins/obsidian-linter.',
       'Review mapped Linter settings before enabling source-editor linting.',
       'Confirm network capability during enable/load if this plugin still needs outbound requests.',
+    ]));
+  });
+
+  it('surfaces QuickAdd data.json Capture and Template choices in the migration preview without applying them', () => {
+    const plugin = makePlugin({
+      id: 'quickadd',
+      manifest: { id: 'quickadd', name: 'QuickAdd', version: '2.13.1' },
+      compatibilityLevel: 'partial',
+      compatibility: {
+        obsidianApis: ['Plugin', 'addCommand', 'Modal', 'Notice'],
+        moduleImports: [],
+        nodeModules: [],
+        unsupportedModules: [],
+        supportedApis: ['Plugin', 'addCommand'],
+        partialApis: ['Modal', 'Notice'],
+        unsupportedApis: [],
+        blockers: [],
+      },
+      hasData: true,
+    });
+    writeQuickAddDataJson(plugin);
+
+    const preview = buildObsidianCompatibilityPreview(plugin, {
+      sourcePluginsPath: '.obsidian/plugins',
+      hasEnabledList: true,
+    });
+
+    expect(preview.settingsMappings).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: 'quickadd-choice-inventory',
+        label: 'QuickAdd choice inventory',
+        source: 'data.json',
+        mappedItems: [
+          'Capture: Inbox Capture -> Inbox/capture.md',
+          'Template: Daily Note -> Daily/today.md from Templates/daily.md',
+        ],
+        ignoredItems: ['Macro: Needs Macro Review (requires review)'],
+        warnings: ['QuickAdd choices are copied for review; MindOS does not rewrite or auto-run them during import.'],
+        appliedOnImport: false,
+      }),
+    ]));
+    expect(preview.workflowOutcomes).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: 'quickadd-capture-choice',
+        status: 'limited',
+        evidence: expect.arrayContaining([
+          'Detected 1 command-enabled Capture choice in QuickAdd data.json.',
+          'Capture: Inbox Capture -> Inbox/capture.md',
+        ]),
+      }),
+      expect.objectContaining({
+        id: 'quickadd-template-choice',
+        status: 'limited',
+        evidence: expect.arrayContaining([
+          'Detected 1 command-enabled Template choice in QuickAdd data.json.',
+          'Template: Daily Note -> Daily/today.md from Templates/daily.md',
+        ]),
+      }),
+    ]));
+    expect(preview.nextSteps).toEqual(expect.arrayContaining([
+      'Review imported QuickAdd choices, then run workflow probes before treating Capture or Template choices as observed.',
+    ]));
+    expect(preview.packagePath.copiedFiles).toEqual(['manifest.json', 'main.js', 'data.json', 'obsidian-import.json']);
+  });
+
+  it('keeps official Templater runtime behind explicit editor and native gates', () => {
+    const plugin = makePlugin({
+      id: 'templater-obsidian',
+      manifest: { id: 'templater-obsidian', name: 'Templater', version: '2.23.0' },
+      compatibilityLevel: 'blocked',
+      compatibility: {
+        obsidianApis: ['Plugin', 'registerEditorExtension'],
+        moduleImports: ['@codemirror/language', '@codemirror/state', 'child_process'],
+        nodeModules: ['child_process'],
+        unsupportedModules: ['@codemirror/language', '@codemirror/state', 'child_process'],
+        supportedApis: ['Plugin'],
+        partialApis: ['registerEditorExtension'],
+        unsupportedApis: [],
+        blockers: [
+          'Requires unsupported runtime module: @codemirror/language',
+          'Requires unsupported runtime module: @codemirror/state',
+          'Requires unsupported runtime module: child_process',
+        ],
+      },
+      hasData: true,
+    });
+
+    const preview = buildObsidianCompatibilityPreview(plugin, {
+      sourcePluginsPath: '.obsidian/plugins',
+      coverage: buildObsidianCapabilityCoverage(plugin.compatibility),
+    });
+
+    expect(preview.supportKind).toBe('blocked');
+    expect(preview.workflowOutcomes).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: 'templater-runtime-gate',
+        label: 'Run dynamic Templater scripts',
+        status: 'not-available',
+        evidence: expect.arrayContaining([
+          'Official Templater runtime depends on editor and scripting capabilities that must stay behind explicit gates.',
+          'Current blockers: @codemirror/language, @codemirror/state, child_process.',
+        ]),
+        nextStep: 'Use QuickAdd Template choice migration for the safe template-note subset; keep official Templater behind CodeMirror/native/script gates.',
+      }),
+      expect.objectContaining({
+        id: 'editor-native-adapter',
+        status: 'native-replacement',
+      }),
+      expect.objectContaining({
+        id: 'desktop-broker-native-replacement',
+        status: 'native-replacement',
+      }),
+    ]));
+    expect(preview.nextSteps).toEqual(expect.arrayContaining([
+      'Use MindOS native editor adapters for editor-heavy behavior; raw CodeMirror extensions are not auto-mounted.',
     ]));
   });
 

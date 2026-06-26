@@ -18,6 +18,10 @@ import {
   OBSIDIAN_LINTER_PLUGIN_ID,
   parseImportedObsidianLinterProfileJson,
 } from './linter-settings-profile';
+import {
+  parseImportedQuickAddChoiceInventoryJson,
+  type ImportedQuickAddChoiceInventory,
+} from './quickadd-choice-inventory';
 import type { ScannedObsidianPlugin } from './obsidian-import';
 import type { ObsidianCapabilityGateReport } from './capability-gate';
 
@@ -277,6 +281,40 @@ function buildSettingsMappings(plugin: ScannedObsidianPlugin): ObsidianCompatibi
     }
   }
 
+  if (pluginIdentity(plugin) === 'quickadd' && plugin.hasData) {
+    const rawDataJson = readRegularPluginFile(plugin.sourceDir, 'data.json');
+    if (rawDataJson === null) {
+      mappings.push({
+        id: 'quickadd-choice-inventory',
+        label: 'QuickAdd choice inventory',
+        source: 'data.json',
+        mappedItems: [],
+        ignoredItems: [],
+        warnings: ['QuickAdd data.json is present but could not be read as a regular file.'],
+        appliedOnImport: false,
+      });
+    } else {
+      const inventory = parseImportedQuickAddChoiceInventoryJson(plugin.id, rawDataJson);
+      if (inventory) {
+        mappings.push({
+          id: 'quickadd-choice-inventory',
+          label: 'QuickAdd choice inventory',
+          source: 'data.json',
+          mappedItems: inventory.safeSubsetChoices,
+          ignoredItems: [
+            ...inventory.reviewChoices,
+            ...inventory.ignoredChoices,
+          ],
+          warnings: [
+            ...inventory.warnings,
+            'QuickAdd choices are copied for review; MindOS does not rewrite or auto-run them during import.',
+          ],
+          appliedOnImport: false,
+        });
+      }
+    }
+  }
+
   if (plugin.obsidianConfig.hotkeyCount > 0) {
     mappings.push({
       id: 'obsidian-hotkeys',
@@ -357,15 +395,23 @@ function buildWorkflowOutcomes(
   }
 
   if (identity === 'quickadd') {
+    const quickAddInventory = readQuickAddChoiceInventory(plugin);
+    const quickAddOutcomes = buildQuickAddChoiceOutcomes(plugin, blocked, coverage, quickAddInventory);
+    outcomes.push(...quickAddOutcomes);
+  }
+
+  if (identity === 'templater') {
     outcomes.push({
-      id: 'quickadd-command-capture',
-      label: 'Run QuickAdd command entries',
-      status: blocked ? 'not-available' : 'limited',
+      id: 'templater-runtime-gate',
+      label: 'Run dynamic Templater scripts',
+      status: blocked ? 'not-available' : 'native-replacement',
       evidence: [
-        hasSurface(coverage, 'commands') ? 'Command registration maps to MindOS Command Center.' : 'No command surface was detected.',
-        hasSurface(coverage, 'entries') ? 'Modal and suggest flows are exposed as bounded review snapshots.' : 'No modal/suggest entry surface was detected.',
+        'Official Templater runtime depends on editor and scripting capabilities that must stay behind explicit gates.',
+        plugin.compatibility.unsupportedModules.length > 0
+          ? `Current blockers: ${plugin.compatibility.unsupportedModules.join(', ')}.`
+          : 'No safe Templater script execution subset has been proven yet.',
       ],
-      nextStep: blocked ? 'Use MindOS workflows instead of this blocked package.' : 'Import, enable after capability review, then test each capture/macro command.',
+      nextStep: 'Use QuickAdd Template choice migration for the safe template-note subset; keep official Templater behind CodeMirror/native/script gates.',
     });
   }
 
@@ -467,6 +513,64 @@ function buildNativeReplacementOutcomes(
   return outcomes;
 }
 
+function buildQuickAddChoiceOutcomes(
+  plugin: ScannedObsidianPlugin,
+  blocked: boolean,
+  coverage: ObsidianCapabilityCoverage[],
+  inventory: ImportedQuickAddChoiceInventory | null,
+): ObsidianWorkflowOutcome[] {
+  const outcomes: ObsidianWorkflowOutcome[] = [];
+  const safeChoices = inventory?.choices.filter((choice) => choice.support === 'safe-subset') ?? [];
+  const captureChoices = safeChoices.filter((choice) => choice.kind === 'capture');
+  const templateChoices = safeChoices.filter((choice) => choice.kind === 'template');
+
+  if (captureChoices.length > 0) {
+    outcomes.push({
+      id: 'quickadd-capture-choice',
+      label: 'Run data.json Capture choices',
+      status: blocked ? 'not-available' : 'limited',
+      evidence: [
+        `Detected ${captureChoices.length} command-enabled Capture choice${captureChoices.length === 1 ? '' : 's'} in QuickAdd data.json.`,
+        ...captureChoices.slice(0, 3).map((choice) => choice.summary),
+      ],
+      nextStep: blocked
+        ? 'Use MindOS workflows instead of this blocked package.'
+        : 'Import, enable after capability review, then run workflow probes before treating capture workflows as observed.',
+    });
+  }
+
+  if (templateChoices.length > 0) {
+    outcomes.push({
+      id: 'quickadd-template-choice',
+      label: 'Create notes from data.json Template choices',
+      status: blocked ? 'not-available' : 'limited',
+      evidence: [
+        `Detected ${templateChoices.length} command-enabled Template choice${templateChoices.length === 1 ? '' : 's'} in QuickAdd data.json.`,
+        ...templateChoices.slice(0, 3).map((choice) => choice.summary),
+      ],
+      nextStep: blocked
+        ? 'Use MindOS-native templates instead of this blocked package.'
+        : 'Import, enable after capability review, then verify each template choice; dynamic filename tokens, prompts, scripts, and Templater integrations still require review.',
+    });
+  }
+
+  if (outcomes.length > 0) {
+    return outcomes;
+  }
+
+  return [{
+    id: 'quickadd-command-capture',
+    label: 'Run QuickAdd command entries',
+    status: blocked ? 'not-available' : 'limited',
+    evidence: [
+      hasSurface(coverage, 'commands') ? 'Command registration maps to MindOS Command Center.' : 'No command surface was detected.',
+      hasSurface(coverage, 'entries') ? 'Modal and suggest flows are exposed as bounded review snapshots.' : 'No modal/suggest entry surface was detected.',
+      inventory && inventory.choices.length === 0 ? 'No supported Capture or Template choices were found in QuickAdd data.json.' : '',
+    ],
+    nextStep: blocked ? 'Use MindOS workflows instead of this blocked package.' : 'Import, enable after capability review, then test each capture/macro command.',
+  }];
+}
+
 function buildGenericSurfaceOutcomes(coverage: ObsidianCapabilityCoverage[]): ObsidianWorkflowOutcome[] {
   const outcomes: ObsidianWorkflowOutcome[] = [];
 
@@ -558,6 +662,10 @@ function buildNextSteps(
     steps.push('Review mapped Linter settings before enabling source-editor linting.');
   }
 
+  if (settingsMappings.some((mapping) => mapping.id === 'quickadd-choice-inventory' && mapping.mappedItems.length > 0)) {
+    steps.push('Review imported QuickAdd choices, then run workflow probes before treating Capture or Template choices as observed.');
+  }
+
   if (hasSurface(coverage, 'network')) {
     steps.push('Confirm network capability during enable/load if this plugin still needs outbound requests.');
   }
@@ -577,11 +685,12 @@ function buildNextSteps(
   return unique(steps);
 }
 
-function pluginIdentity(plugin: ScannedObsidianPlugin): 'linter' | 'quickadd' | 'tag-wrangler' | 'calendar' | 'admonition' | 'dataview' | 'tasks' | 'unknown' {
+function pluginIdentity(plugin: ScannedObsidianPlugin): 'linter' | 'quickadd' | 'templater' | 'tag-wrangler' | 'calendar' | 'admonition' | 'dataview' | 'tasks' | 'unknown' {
   const id = plugin.id.toLowerCase();
   const name = plugin.manifest.name.toLowerCase();
   if (id === OBSIDIAN_LINTER_PLUGIN_ID || name === 'linter') return 'linter';
   if (id === 'quickadd' || id.includes('quickadd') || name.includes('quickadd')) return 'quickadd';
+  if (id === 'templater-obsidian' || id.includes('templater') || name.includes('templater')) return 'templater';
   if (id === 'tag-wrangler' || name.includes('tag wrangler')) return 'tag-wrangler';
   if (id === 'calendar' || name === 'calendar' || name.includes('calendar')) return 'calendar';
   if (id === 'obsidian-admonition' || id.includes('admonition') || name.includes('admonition')) return 'admonition';
@@ -600,6 +709,12 @@ function hasAnySurface(coverage: ObsidianCapabilityCoverage[], surfaces: Obsidia
 
 function isNativeOrSyncModule(moduleName: string): boolean {
   return /^(electron|node:electron|child_process|node:child_process|fs|node:fs|net|node:net|tls|node:tls)$/u.test(moduleName);
+}
+
+function readQuickAddChoiceInventory(plugin: ScannedObsidianPlugin): ImportedQuickAddChoiceInventory | null {
+  if (!plugin.hasData) return null;
+  const rawDataJson = readRegularPluginFile(plugin.sourceDir, 'data.json');
+  return rawDataJson === null ? null : parseImportedQuickAddChoiceInventoryJson(plugin.id, rawDataJson);
 }
 
 function dedupeOutcomes(outcomes: ObsidianWorkflowOutcome[]): ObsidianWorkflowOutcome[] {
