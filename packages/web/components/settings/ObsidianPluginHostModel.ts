@@ -23,6 +23,8 @@ import type {
 } from '@/lib/obsidian-compat/compatibility-preview';
 import {
   buildObsidianSurfaceLedgerProjection,
+  buildObsidianSurfacePolicyDecision,
+  type ObsidianSurfacePolicyAction,
   type ObsidianSurfaceLedgerProjection,
 } from '@/lib/obsidian-compat/surface-decision';
 import type {
@@ -276,6 +278,14 @@ export type SettingAction = 'set-value' | 'click-button' | 'list-add' | 'list-de
 export type SurfaceRouteState = 'mounted' | 'catalog' | 'diagnostic';
 export type SurfaceRouteTarget = 'command-center' | 'plugin-entries' | 'plugin-views';
 
+const SURFACE_POLICY_ACTION_ORDER: ObsidianSurfacePolicyAction[] = [
+  'review-before-enable',
+  'native-adapter',
+  'blocked',
+  'catalog-only',
+  'allow-after-load',
+];
+
 export interface SurfaceRoute {
   label: string;
   value: string;
@@ -293,6 +303,27 @@ export interface SurfaceLedgerProjectionView {
   apiPreview: string;
   routes: string[];
   projection: ObsidianSurfaceLedgerProjection;
+}
+
+export interface SurfacePolicyAuditView {
+  summary: string;
+  boundary: string;
+  counts: Record<ObsidianSurfacePolicyAction, number>;
+  items: SurfacePolicyAuditItem[];
+}
+
+export interface SurfacePolicyAuditItem {
+  surface: ObsidianCapabilitySurfaceSummary['surface'];
+  label: string;
+  apiCount: number;
+  apiPreview: string;
+  action: ObsidianSurfacePolicyAction;
+  actionLabel: string;
+  risk: string;
+  runtimeDefault: string;
+  permissionBoundary: string;
+  requiredEvidencePreview: string;
+  nextStep: string;
 }
 
 export type CapabilityApprovalReviewStatus =
@@ -565,12 +596,80 @@ export function surfaceLedgerProjections(plugin: ObsidianPluginStatus): SurfaceL
   });
 }
 
+export function surfacePolicyAudit(
+  plugin: ObsidianPluginStatus,
+  options: { excludeSurfaces?: ObsidianCapabilitySurfaceSummary['surface'][] } = {},
+): SurfacePolicyAuditView {
+  const counts = emptySurfacePolicyActionCounts();
+  const excludedSurfaces = new Set(options.excludeSurfaces ?? []);
+  const items = (plugin.surfaceSummary ?? []).filter((summary) => !excludedSurfaces.has(summary.surface)).map((summary) => {
+    const label = surfaceLabel(summary.surface);
+    const policy = buildObsidianSurfacePolicyDecision({
+      surface: summary.surface,
+      label,
+      status: surfaceCatalogStatusFromSupport(summary.surface, summary.supportSummary),
+    });
+    counts[policy.action] += 1;
+    return {
+      surface: summary.surface,
+      label,
+      apiCount: summary.apiCount,
+      apiPreview: surfaceApiPreview(summary.apis),
+      action: policy.action,
+      actionLabel: policy.action.replaceAll('-', ' '),
+      risk: policy.risk,
+      runtimeDefault: policy.runtimeDefault,
+      permissionBoundary: policy.permissionBoundary,
+      requiredEvidencePreview: surfacePolicyEvidencePreview(policy.requiredEvidence),
+      nextStep: policy.nextStep,
+    };
+  });
+
+  return {
+    summary: surfacePolicyAuditSummary(counts),
+    boundary: 'Surface policy is an evidence and default-handling layer; it does not grant network, secret, vault, editor, native, or filesystem permissions.',
+    counts,
+    items,
+  };
+}
+
 export function workflowAuditStatusLabel(status: ObsidianWorkflowAuditStatus): string {
   if (status === 'observed') return 'observed';
   if (status === 'partial') return 'partial';
   if (status === 'blocked') return 'blocked';
   if (status === 'native-replacement') return 'native';
   return 'not observed';
+}
+
+function emptySurfacePolicyActionCounts(): Record<ObsidianSurfacePolicyAction, number> {
+  return {
+    'allow-after-load': 0,
+    'review-before-enable': 0,
+    'catalog-only': 0,
+    'native-adapter': 0,
+    blocked: 0,
+  };
+}
+
+function surfacePolicyAuditSummary(counts: Record<ObsidianSurfacePolicyAction, number>): string {
+  const parts = SURFACE_POLICY_ACTION_ORDER
+    .map((action) => counts[action] > 0 ? `${counts[action]} ${surfacePolicyActionShortLabel(action)}` : '')
+    .filter(Boolean);
+  return parts.length > 0 ? parts.join(' / ') : 'No surface policy decisions yet';
+}
+
+function surfacePolicyActionShortLabel(action: ObsidianSurfacePolicyAction): string {
+  return {
+    'review-before-enable': 'review',
+    'native-adapter': 'native',
+    blocked: 'blocked',
+    'catalog-only': 'catalog',
+    'allow-after-load': 'allow',
+  }[action];
+}
+
+function surfacePolicyEvidencePreview(evidence: string[]): string {
+  return evidence.slice(0, 2).join(' / ');
 }
 
 function runtimePhaseEvidenceCount(

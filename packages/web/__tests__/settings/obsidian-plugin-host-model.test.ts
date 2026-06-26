@@ -6,6 +6,7 @@ import {
   isLoadResult,
   isPluginActionResult,
   runtimeSummary,
+  surfacePolicyAudit,
   surfaceLedgerProjections,
   surfaceRouting,
   workflowAuditStatusLabel,
@@ -462,6 +463,114 @@ describe('ObsidianPluginHostModel', () => {
         }),
       }),
     ]);
+  });
+
+  it('summarizes installed plugin surface policy decisions without granting permissions', () => {
+    const item = plugin({
+      surfaceSummary: [
+        {
+          surface: 'commands',
+          apiCount: 1,
+          supportSummary: { full: 1, limited: 0, 'snapshot-only': 0, 'catalog-only': 0, 'request-only': 0, unsupported: 0 },
+          apis: ['addCommand'],
+          hosts: ['Command Center'],
+          routes: ['/commands'],
+        },
+        {
+          surface: 'network',
+          apiCount: 1,
+          supportSummary: { full: 0, limited: 1, 'snapshot-only': 0, 'catalog-only': 0, 'request-only': 0, unsupported: 0 },
+          apis: ['requestUrl'],
+          hosts: ['Restricted network shim'],
+          routes: [],
+        },
+        {
+          surface: 'editor',
+          apiCount: 1,
+          supportSummary: { full: 0, limited: 0, 'snapshot-only': 0, 'catalog-only': 1, 'request-only': 0, unsupported: 0 },
+          apis: ['registerEditorExtension'],
+          hosts: ['Browser editor sandbox'],
+          routes: [],
+        },
+        {
+          surface: 'unsupported',
+          apiCount: 1,
+          supportSummary: { full: 0, limited: 0, 'snapshot-only': 0, 'catalog-only': 0, 'request-only': 0, unsupported: 1 },
+          apis: ['child_process'],
+          hosts: ['Unsupported runtime module'],
+          routes: [],
+        },
+      ],
+    });
+
+    const audit = surfacePolicyAudit(item);
+
+    expect(audit.summary).toBe('1 review / 1 native / 1 blocked / 1 allow');
+    expect(audit.boundary).toContain('does not grant network, secret, vault, editor, native, or filesystem permissions');
+    expect(audit.counts).toEqual({
+      'allow-after-load': 1,
+      'review-before-enable': 1,
+      'catalog-only': 0,
+      'native-adapter': 1,
+      blocked: 1,
+    });
+    expect(audit.items).toEqual([
+      expect.objectContaining({
+        surface: 'commands',
+        label: 'Commands',
+        action: 'allow-after-load',
+        actionLabel: 'allow after load',
+        apiPreview: 'addCommand',
+        requiredEvidencePreview: 'Runtime registered evidence for command ids. / Called ledger evidence or workflow probe before claiming user-visible workflow success.',
+      }),
+      expect.objectContaining({
+        surface: 'network',
+        label: 'Network',
+        action: 'review-before-enable',
+        actionLabel: 'review before enable',
+        risk: 'high',
+        runtimeDefault: 'restricted',
+      }),
+      expect.objectContaining({
+        surface: 'editor',
+        label: 'Editor',
+        action: 'native-adapter',
+        runtimeDefault: 'native-gated',
+      }),
+      expect.objectContaining({
+        surface: 'unsupported',
+        label: 'Blocked capability',
+        action: 'blocked',
+        risk: 'critical',
+      }),
+    ]);
+  });
+
+  it('can exclude core surfaces from visible policy audit summaries', () => {
+    const item = plugin({
+      surfaceSummary: [
+        {
+          surface: 'core',
+          apiCount: 1,
+          supportSummary: { full: 1, limited: 0, 'snapshot-only': 0, 'catalog-only': 0, 'request-only': 0, unsupported: 0 },
+          apis: ['Plugin.registerEvent'],
+          hosts: ['Plugin runtime'],
+          routes: [],
+        },
+        {
+          surface: 'network',
+          apiCount: 1,
+          supportSummary: { full: 0, limited: 1, 'snapshot-only': 0, 'catalog-only': 0, 'request-only': 0, unsupported: 0 },
+          apis: ['requestUrl'],
+          hosts: ['Restricted network shim'],
+          routes: [],
+        },
+      ],
+    });
+
+    expect(surfacePolicyAudit(item).summary).toBe('1 review / 1 allow');
+    expect(surfacePolicyAudit(item, { excludeSurfaces: ['core'] }).summary).toBe('1 review');
+    expect(surfacePolicyAudit(item, { excludeSurfaces: ['core'] }).items).toHaveLength(1);
   });
 
   it('projects runtime policy denials ahead of called evidence for a surface', () => {

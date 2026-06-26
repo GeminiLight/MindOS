@@ -19,6 +19,7 @@ import {
   capabilityLedgerHistorySummary,
   capabilityLedgerSummary,
   runtimeSummary,
+  surfacePolicyAudit,
   workflowAuditStatusClass,
   workflowAuditStatusLabel,
   workflowAuditProbeSummary,
@@ -27,6 +28,7 @@ import {
   type PluginLifecycleAction,
   type SettingAction,
   type SurfaceLedgerProjectionView,
+  type SurfacePolicyAuditItem,
   type SurfaceRoute,
   type SurfaceRouteState,
   type SurfaceRouteTarget,
@@ -123,6 +125,8 @@ export function ObsidianPluginHostDetails({
   onPreviewDeclarative,
 }: ObsidianPluginHostDetailsProps) {
   const settings = settingsByPlugin[plugin.id];
+  const policyAudit = surfacePolicyAudit(plugin, { excludeSurfaces: ['core'] });
+  const policyAuditItems = policyAudit.items;
 
   return (
     <div className="mt-3 ml-6 space-y-3 rounded-lg border border-border/60 bg-background/60 p-3">
@@ -265,6 +269,30 @@ export function ObsidianPluginHostDetails({
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {policyAuditItems.length > 0 && (
+        <div className="rounded-lg border border-border/50 bg-card/60 px-3 py-2.5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-2xs font-medium uppercase tracking-wider text-muted-foreground">Surface policy audit</p>
+            <span className="rounded border border-border bg-background px-1.5 py-0.5 font-mono text-2xs text-muted-foreground">
+              {policyAudit.summary}
+            </span>
+          </div>
+          <p className="mt-1 text-2xs text-muted-foreground">
+            {policyAudit.boundary}
+          </p>
+          <div className="mt-2 grid gap-1.5 sm:grid-cols-2">
+            {policyAuditItems.slice(0, 6).map((item) => (
+              <SurfacePolicyAuditCard key={item.surface} item={item} />
+            ))}
+          </div>
+          {policyAuditItems.length > 6 && (
+            <p className="mt-1 text-2xs text-muted-foreground/70">
+              {policyAuditItems.length - 6} more surface policy decision{policyAuditItems.length - 6 === 1 ? '' : 's'} hidden.
+            </p>
+          )}
         </div>
       )}
 
@@ -461,6 +489,33 @@ export function ObsidianPluginHostDetails({
   );
 }
 
+function SurfacePolicyAuditCard({ item }: { item: SurfacePolicyAuditItem }) {
+  return (
+    <div
+      className="min-w-0 rounded-md border border-border bg-background px-2.5 py-2"
+      title={`${item.permissionBoundary} | ${item.nextStep}`}
+    >
+      <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+        <span className="text-2xs font-medium text-foreground">{item.label}</span>
+        <span className={`rounded border px-1.5 py-0.5 font-mono text-2xs ${surfacePolicyActionClass(item.action)}`}>
+          {item.actionLabel}
+        </span>
+        <span className="rounded border border-border/70 bg-muted/50 px-1.5 py-0.5 font-mono text-2xs text-muted-foreground">
+          {item.risk}
+        </span>
+      </div>
+      <p className="mt-1 line-clamp-1 font-mono text-2xs text-muted-foreground/70">
+        {item.apiPreview || `${item.apiCount} API${item.apiCount === 1 ? '' : 's'}`} · {item.runtimeDefault}
+      </p>
+      {item.requiredEvidencePreview && (
+        <p className="mt-1 line-clamp-2 text-2xs text-muted-foreground">
+          Evidence: {item.requiredEvidencePreview}
+        </p>
+      )}
+    </div>
+  );
+}
+
 function compactCoverageSummary(summary: Partial<Record<ObsidianCapabilitySupport, number>> | undefined): string {
   const parts = CAPABILITY_SUPPORT_ORDER
     .map((support) => {
@@ -509,6 +564,15 @@ function surfaceLedgerProjectionStatusClass(status: SurfaceLedgerProjectionView[
   }
   if (status === 'blocked' || status === 'denied') return 'border-error/30 bg-[color-mix(in_srgb,var(--error)_12%,transparent)] text-error';
   if (status === 'native-gated') return 'border-[var(--amber)]/25 bg-[var(--amber-subtle)] text-[var(--amber-text)]';
+  return 'border-border bg-muted/60 text-muted-foreground';
+}
+
+function surfacePolicyActionClass(action: SurfacePolicyAuditItem['action']): string {
+  if (action === 'allow-after-load') return 'border-success/30 bg-[color-mix(in_srgb,var(--success)_12%,transparent)] text-success';
+  if (action === 'blocked') return 'border-error/30 bg-[color-mix(in_srgb,var(--error)_12%,transparent)] text-error';
+  if (action === 'review-before-enable' || action === 'native-adapter') {
+    return 'border-[var(--amber)]/25 bg-[var(--amber-subtle)] text-[var(--amber-text)]';
+  }
   return 'border-border bg-muted/60 text-muted-foreground';
 }
 

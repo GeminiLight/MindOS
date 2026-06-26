@@ -36,6 +36,7 @@ import type {
 import type {
   ObsidianImportDecisionSeverity,
   ObsidianSurfaceLedgerProjectionStatus,
+  ObsidianSurfacePolicyAction,
 } from '@/lib/obsidian-compat/surface-decision';
 import { notifyObsidianPluginPackagesChanged } from '@/lib/plugins/events';
 import {
@@ -264,6 +265,13 @@ function ledgerProjectionStatusClass(status: ObsidianSurfaceLedgerProjectionStat
   if (status === 'called' || status === 'registered') return 'text-success';
   if (status === 'blocked') return 'text-error';
   if (status === 'native-gated') return 'text-[var(--amber-text)]';
+  return 'text-muted-foreground';
+}
+
+function surfacePolicyActionClass(action: ObsidianSurfacePolicyAction): string {
+  if (action === 'allow-after-load') return 'text-success';
+  if (action === 'blocked') return 'text-error';
+  if (action === 'review-before-enable' || action === 'native-adapter') return 'text-[var(--amber-text)]';
   return 'text-muted-foreground';
 }
 
@@ -749,10 +757,20 @@ export function ObsidianImportSection({
                                             {ledgerProjectionStatusLabel(entry.ledgerProjection.status)}
                                           </span>
                                         )}
+                                        {entry.policy && (
+                                          <span className={surfacePolicyActionClass(entry.policy.action)}>
+                                            {entry.policy.label}
+                                          </span>
+                                        )}
                                       </div>
                                       <p className="line-clamp-1 font-mono text-muted-foreground/70">
                                         Runtime: {ledgerProjectionCounts(entry)}
                                       </p>
+                                      {entry.policy?.requiredEvidence[0] && (
+                                        <p className="line-clamp-1 text-muted-foreground/70">
+                                          Policy: {entry.policy.requiredEvidence[0]}
+                                        </p>
+                                      )}
                                       {entry.ledgerProjection?.nextStep && (
                                         <p className="line-clamp-1 text-muted-foreground/70">
                                           {entry.ledgerProjection.nextStep}

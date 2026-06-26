@@ -148,6 +148,19 @@ describe('ObsidianImportSection', () => {
                     summary: 'Command registrations map to MindOS Command Center.',
                     limitations: [],
                     nextStep: 'Enable the plugin and verify registered behavior in the corresponding MindOS surface.',
+                    policy: {
+                      action: 'allow-after-load',
+                      label: 'Allow after load',
+                      risk: 'low',
+                      runtimeDefault: 'mounted',
+                      summary: 'Commands can enter the generic compatibility runtime after plugin load checks.',
+                      permissionBoundary: 'Commands register MindOS command entries; execution still requires explicit user action.',
+                      requiredEvidence: [
+                        'Runtime registered evidence for command ids.',
+                        'Called ledger evidence or workflow probe before claiming user-visible workflow success.',
+                      ],
+                      nextStep: 'Load the plugin, compare runtime registered/called evidence, and keep workflow success evidence separate.',
+                    },
                   },
                 ],
                 importDecision: {
@@ -292,6 +305,8 @@ describe('ObsidianImportSection', () => {
     expect(host.textContent).toContain('Surfaces: Commands ready');
     expect(host.textContent).toContain('Import decision');
     expect(host.textContent).toContain('Runtime: 1 predicted');
+    expect(host.textContent).toContain('Allow after load');
+    expect(host.textContent).toContain('Policy: Runtime registered evidence for command ids.');
     expect(host.textContent).toContain('Load the plugin and compare registered/called ledger events with this prediction.');
     expect(host.textContent).toContain('Workflow: Run plugin commands available');
     expect(host.textContent).toContain('Ledger: 1 predicted');

@@ -376,6 +376,11 @@ describe('ObsidianPluginHostSection', () => {
     expect(host.textContent).toContain('1 high risk');
     expect(host.textContent).toContain('requires approval · high risk');
     expect(host.textContent).toContain('Network APIs can contact external services.');
+    expect(host.textContent).toContain('Surface policy audit');
+    expect(host.textContent).toContain('1 review');
+    expect(host.textContent).toContain('does not grant network, secret, vault, editor, native, or filesystem permissions');
+    expect(host.textContent).toContain('review before enable');
+    expect(host.textContent).toContain('Runtime denied/called ledger review for this surface.');
 
     const toggle = host.querySelector('button[role="switch"]') as HTMLButtonElement;
     await act(async () => {
