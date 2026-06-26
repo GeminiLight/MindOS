@@ -1,5 +1,19 @@
 export type StudioAutomationScope = 'worktree' | 'project' | 'mind';
-export type StudioAutomationSchedule = 'manual' | 'daily-0900' | 'weekdays-0900' | 'weekly-review';
+export type StudioAutomationSchedule =
+  | 'manual'
+  | 'hourly'
+  | 'every-2-hours'
+  | 'every-4-hours'
+  | 'daily-0900'
+  | 'daily-1800'
+  | 'twice-daily'
+  | 'weekdays-0900'
+  | 'weekdays-1800'
+  | 'weekly-monday-0900'
+  | 'weekly-friday-1730'
+  | 'weekly-review'
+  | 'monthly-first-0900'
+  | 'monthly-last-1700';
 export type StudioAutomationModel = 'mindos-auto' | 'gpt-5.5' | 'claude-code' | 'local-agent';
 export type StudioAutomationEffort = 'normal' | 'high' | 'extra-high';
 export type StudioAutomationStatus = 'active' | 'paused';

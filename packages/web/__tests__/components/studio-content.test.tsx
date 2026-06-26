@@ -439,16 +439,48 @@ describe('StudioContent', () => {
 
     const automationSection = host.querySelector('[data-studio-automation-section]');
     const summaryRail = host.querySelector('[data-studio-automation-summary]');
-    const composer = host.querySelector('[data-studio-automation-composer]');
+    const createButton = host.querySelector('[data-studio-automation-create]');
     const automationList = host.querySelector('[data-studio-automation-list]');
     const seededCard = host.querySelector('[data-studio-automation-card]');
     expect(automationSection).not.toBeNull();
     expect(summaryRail?.className).toContain('overflow-hidden rounded-lg');
-    expect(composer?.className).toContain('bg-background/35');
+    expect(createButton).not.toBeNull();
+    expect(host.querySelector('[data-studio-automation-drawer]')).toBeNull();
+    expect(host.querySelector('[data-studio-automation-composer]')).toBeNull();
     expect(automationList).not.toBeNull();
     expect(seededCard?.className).toContain('group relative border-t');
     expect(seededCard?.className).not.toContain('rounded-xl');
     expect(seededCard?.className).not.toContain('bg-card/45');
+
+    await act(async () => {
+      createButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    const composer = host.querySelector('[data-studio-automation-composer]');
+    expect(host.querySelector('[data-studio-automation-drawer]')).not.toBeNull();
+    expect(composer).not.toBeNull();
+    expect(composer?.className).toContain('fixed bottom-0 right-0 top-[calc(var(--app-titlebar-h)+52px)]');
+    expect(composer?.className).toContain('md:top-[var(--app-titlebar-h)]');
+    expect(composer?.textContent).toContain('Repeats');
+    expect(composer?.textContent).toContain('Every day 9:00 AM');
+    expect(composer?.textContent).toContain('Interval');
+
+    const everyFourHours = composer!.querySelector('[data-studio-automation-repeat-option="every-4-hours"]');
+    expect(everyFourHours).toBeNull();
+
+    const intervalTab = Array.from(composer!.querySelectorAll('button')).find((button) => (
+      button.textContent?.includes('Interval')
+    ));
+    expect(intervalTab).not.toBeNull();
+    await act(async () => {
+      intervalTab!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    const everyFourHoursOption = host.querySelector('[data-studio-automation-repeat-option="every-4-hours"]');
+    expect(everyFourHoursOption).not.toBeNull();
+    await act(async () => {
+      everyFourHoursOption!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
 
     await setInputValue('input[aria-label="Automation title"]', 'Release readiness sweep');
     await setInputValue(
@@ -456,7 +488,7 @@ describe('StudioContent', () => {
       'Every morning, review open release notes and summarize blockers.',
     );
 
-    const createAutomationButton = Array.from(host.querySelectorAll('button')).find((button) => (
+    const createAutomationButton = Array.from(composer!.querySelectorAll('button')).find((button) => (
       button.textContent?.includes('Create automation')
     ));
     expect(createAutomationButton).not.toBeNull();
@@ -467,6 +499,8 @@ describe('StudioContent', () => {
 
     expect(host.textContent).toContain('Release readiness sweep');
     expect(host.textContent).toContain('Every morning, review open release notes and summarize blockers.');
+    expect(host.textContent).toContain('Every 4 hours');
+    expect(host.querySelector('[data-studio-automation-drawer]')).toBeNull();
 
     const releaseCard = Array.from(host.querySelectorAll('[data-studio-automation-card]')).find((card) => (
       card.textContent?.includes('Release readiness sweep')
@@ -482,6 +516,7 @@ describe('StudioContent', () => {
       editButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
+    expect(host.querySelector('[data-studio-automation-drawer]')).not.toBeNull();
     await setInputValue('input[aria-label="Automation title"]', 'Release signal sweep');
 
     const saveButton = Array.from(host.querySelectorAll('button')).find((button) => (
@@ -495,6 +530,7 @@ describe('StudioContent', () => {
 
     expect(host.textContent).toContain('Release signal sweep');
     expect(host.textContent).not.toContain('Release readiness sweep');
+    expect(host.querySelector('[data-studio-automation-drawer]')).toBeNull();
 
     const updatedCard = Array.from(host.querySelectorAll('[data-studio-automation-card]')).find((card) => (
       card.textContent?.includes('Release signal sweep')
@@ -517,9 +553,18 @@ describe('StudioContent', () => {
   it('prevents creating an automation without a prompt', async () => {
     await renderStudioAutomation();
 
+    const createButton = host.querySelector('[data-studio-automation-create]');
+    expect(createButton).not.toBeNull();
+    await act(async () => {
+      createButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
     await setInputValue('input[aria-label="Automation title"]', 'Empty automation');
 
-    const createAutomationButton = Array.from(host.querySelectorAll('button')).find((button) => (
+    const composer = host.querySelector('[data-studio-automation-composer]');
+    expect(composer).not.toBeNull();
+
+    const createAutomationButton = Array.from(composer!.querySelectorAll('button')).find((button) => (
       button.textContent?.includes('Create automation')
     ));
     expect(createAutomationButton).not.toBeNull();
