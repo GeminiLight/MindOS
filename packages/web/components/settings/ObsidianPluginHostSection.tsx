@@ -46,6 +46,7 @@ import PluginActionMenuDialog from '@/components/plugins/PluginActionMenuDialog'
 import PluginActionModalDialog from '@/components/plugins/PluginActionModalDialog';
 import {
   capabilityGateEnableMessage,
+  capabilityGateRevokeMessage,
 } from './ObsidianCapabilityGatePanel';
 import {
   compatibilityNote,
@@ -134,6 +135,7 @@ export function ObsidianPluginHostSection({
   const [pluginModal, setPluginModal] = useState<PluginModalSnapshot | null>(null);
   const [pluginMenu, setPluginMenu] = useState<PluginMenuSnapshot | null>(null);
   const [enableTarget, setEnableTarget] = useState<ObsidianPluginStatus | null>(null);
+  const [revokeApprovalTarget, setRevokeApprovalTarget] = useState<ObsidianPluginStatus | null>(null);
   const [choosingSuggestionIndex, setChoosingSuggestionIndex] = useState<number | null>(null);
   const [submittingModalText, setSubmittingModalText] = useState(false);
   const [modalChoiceError, setModalChoiceError] = useState<string | null>(null);
@@ -391,6 +393,13 @@ export function ObsidianPluginHostSection({
     setEnableTarget(null);
     await runAction('enable', { pluginId, confirmCapabilityGate: true });
   }, [enableTarget, runAction]);
+
+  const confirmRevokeApproval = useCallback(async () => {
+    if (!revokeApprovalTarget) return;
+    const pluginId = revokeApprovalTarget.id;
+    setRevokeApprovalTarget(null);
+    await runAction('revoke-capability-approval', { pluginId });
+  }, [revokeApprovalTarget, runAction]);
 
   const applySettingsResponse = useCallback((data: ObsidianPluginSettingsResponse) => {
     if (data.status) {
@@ -830,6 +839,7 @@ export function ObsidianPluginHostSection({
                       surfaceRoutes={surfaceRoutes}
                       surfaceLedgerChecks={surfaceLedgerChecks}
                       onOpenRoute={openRoute}
+                      onRequestRevokeApproval={setRevokeApprovalTarget}
                       onRunAction={(action, options) => { void runAction(action, options); }}
                       onLoadSettings={(pluginId) => { void loadSettings(pluginId); }}
                       onRunSettingAction={(pluginId, tabIndex, itemIndex, settingAction, value) => {
@@ -890,6 +900,16 @@ export function ObsidianPluginHostSection({
         cancelLabel="Cancel"
         onConfirm={() => { void confirmRemovePlugin(); }}
         onCancel={() => setRemoveTarget(null)}
+        variant="destructive"
+      />
+      <ConfirmDialog
+        open={revokeApprovalTarget !== null}
+        title={revokeApprovalTarget ? `Revoke approval for ${revokeApprovalTarget.name}?` : 'Revoke capability approval?'}
+        message={revokeApprovalTarget ? capabilityGateRevokeMessage(revokeApprovalTarget) : 'This clears the current capability approval and requires review before gated capabilities can be enabled again.'}
+        confirmLabel="Revoke approval"
+        cancelLabel="Cancel"
+        onConfirm={() => { void confirmRevokeApproval(); }}
+        onCancel={() => setRevokeApprovalTarget(null)}
         variant="destructive"
       />
       <ConfirmDialog

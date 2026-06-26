@@ -315,6 +315,32 @@ export class PluginManager {
     this.writeState();
   }
 
+  async revokeCapabilityApproval(pluginId: string): Promise<void> {
+    const plugin = this.requirePlugin(pluginId);
+    const confirmation = this.state.capabilityConfirmations?.[pluginId];
+    const loaded = this.loader.getLoadedPlugins().some((loadedPlugin) => loadedPlugin.manifest.id === pluginId);
+    if (loaded || plugin.loaded) {
+      await this.loader.unloadPlugin(pluginId);
+    }
+
+    this.forgetEditorSessionsForPlugin(pluginId);
+    const capabilityConfirmations = { ...(this.state.capabilityConfirmations ?? {}) };
+    delete capabilityConfirmations[pluginId];
+    this.state = {
+      ...this.state,
+      capabilityConfirmations,
+    };
+    plugin.enabled = false;
+    plugin.loaded = false;
+    plugin.lastError = undefined;
+    plugin.capabilityGate = buildPluginCapabilityGateReport(plugin, this.state);
+    if (confirmation) {
+      this.recordCapabilityApprovalRevoked(plugin, confirmation);
+    }
+    this.applyRuntimeState(plugin);
+    this.writeState();
+  }
+
   async uninstall(pluginId: string): Promise<void> {
     const plugin = this.requirePlugin(pluginId);
     const loaded = this.loader.getLoadedPlugins().some((loadedPlugin) => loadedPlugin.manifest.id === pluginId);
@@ -1258,6 +1284,27 @@ export class PluginManager {
         });
       } catch {
         // Ledger writes must not change the enable/load decision.
+      }
+    }
+  }
+
+  private recordCapabilityApprovalRevoked(plugin: ManagedPlugin, confirmation: ObsidianCapabilityGateConfirmation): void {
+    const gatedItems = plugin.capabilityGate.items.filter((item) => item.decision === 'requires-confirmation');
+    const surfaces = confirmation.surfaces.length > 0 ? confirmation.surfaces : gatedItems.map((item) => item.surface);
+    for (const surface of surfaces) {
+      const item = gatedItems.find((candidate) => candidate.surface === surface) ?? gatedItems[0];
+      try {
+        this.runtimeCapabilityLedgerStore.append({
+          pluginId: plugin.id,
+          capability: 'capability-gate:revoke',
+          surface: item?.surface ?? surface,
+          support: 'limited',
+          phase: 'denied',
+          source: 'runtime-ledger',
+          evidence: `Capability approval revoked by user for fingerprint ${confirmation.fingerprint}.`,
+        });
+      } catch {
+        // Ledger writes must not keep a revoked approval active.
       }
     }
   }

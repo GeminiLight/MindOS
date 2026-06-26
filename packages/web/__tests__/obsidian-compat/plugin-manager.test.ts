@@ -241,6 +241,63 @@ describe('PluginManager', () => {
     await expect(second.enable('network-plugin')).resolves.toBeUndefined();
   });
 
+  it('revokes confirmed capability approvals and disables gated plugins', async () => {
+    writePlugin(
+      'revoked-network-plugin',
+      `
+        const { Plugin, requestUrl } = require('obsidian');
+        module.exports = class RevokedNetworkPlugin extends Plugin {
+          onload() {
+            requestUrl('https://example.com/api');
+          }
+        };
+      `,
+    );
+
+    const manager = new PluginManager(mindRoot);
+    await manager.discover();
+    await manager.enable('revoked-network-plugin', { confirmCapabilityGate: true });
+
+    await manager.revokeCapabilityApproval('revoked-network-plugin');
+
+    const state = JSON.parse(fs.readFileSync(path.join(mindRoot, '.mindos', 'plugins', '.plugin-manager.json'), 'utf-8'));
+    expect(state).toEqual({ enabled: {} });
+    expect(manager.list()[0]).toMatchObject({
+      id: 'revoked-network-plugin',
+      enabled: false,
+      loaded: false,
+      capabilityGate: {
+        status: 'review',
+        requiresConfirmation: true,
+        confirmed: false,
+      },
+      capabilityLedgerHistory: {
+        total: 1,
+        summary: expect.objectContaining({
+          denied: 1,
+          blocked: 0,
+        }),
+        entries: [
+          expect.objectContaining({
+            capability: 'capability-gate:revoke',
+            phase: 'denied',
+            surface: 'network',
+            evidence: expect.stringContaining('Capability approval revoked by user'),
+          }),
+        ],
+      },
+    });
+
+    const second = new PluginManager(mindRoot);
+    await second.discover();
+    expect(second.list()[0]).toMatchObject({
+      enabled: false,
+      capabilityGate: {
+        confirmed: false,
+      },
+    });
+  });
+
   it('does not reuse a stale capability confirmation after plugin capabilities change', async () => {
     writePlugin(
       'changing-plugin',

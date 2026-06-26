@@ -246,6 +246,63 @@ describe('/api/obsidian-plugins lifecycle', () => {
     });
   });
 
+  it('revokes capability approval through the lifecycle API', async () => {
+    writePlugin(
+      'revoke-api-plugin',
+      `
+        const { Plugin, requestUrl } = require('obsidian');
+        module.exports = class RevokeApiPlugin extends Plugin {
+          onload() {
+            requestUrl('https://example.com/api');
+          }
+        };
+      `,
+    );
+
+    const { POST } = await importLifecycleRoute();
+    let res = await POST(postRequest({
+      action: 'enable',
+      pluginId: 'revoke-api-plugin',
+      confirmCapabilityGate: true,
+    }));
+    expect(res.status).toBe(200);
+
+    res = await POST(postRequest({
+      action: 'revoke-capability-approval',
+      pluginId: 'revoke-api-plugin',
+    }));
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json.plugins[0]).toMatchObject({
+      id: 'revoke-api-plugin',
+      enabled: false,
+      loaded: false,
+      capabilityGate: {
+        status: 'review',
+        requiresConfirmation: true,
+        confirmed: false,
+      },
+      capabilityLedgerHistory: {
+        total: 1,
+        summary: expect.objectContaining({
+          denied: 1,
+          blocked: 0,
+        }),
+        entries: [
+          expect.objectContaining({
+            capability: 'capability-gate:revoke',
+            phase: 'denied',
+            surface: 'network',
+            evidence: expect.stringContaining('Capability approval revoked by user'),
+          }),
+        ],
+      },
+    });
+    const state = JSON.parse(fs.readFileSync(path.join(mindRoot, '.mindos', 'plugins', '.plugin-manager.json'), 'utf-8'));
+    expect(state).toEqual({ enabled: {} });
+  });
+
   it('returns editor extension capability gate metadata in the runtime summary', async () => {
     writePlugin(
       'editor-gate-plugin',

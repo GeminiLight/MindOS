@@ -286,7 +286,18 @@ describe('ObsidianPluginHostModel', () => {
       },
       capabilityLedgerHistory: {
         total: 1,
-        entries: [],
+        entries: [{
+          schemaVersion: 1,
+          pluginId: 'quickadd-like',
+          capability: 'requestUrl',
+          surface: 'network',
+          support: 'limited',
+          phase: 'denied',
+          source: 'runtime-ledger',
+          evidence: 'requestUrl blocks local/private hosts',
+          recordedAt: '2026-06-26T08:00:00.000Z',
+          sessionId: 'session-1',
+        }],
         summary: { predicted: 0, registered: 0, called: 0, denied: 1, blocked: 0 },
         latestBlocked: [],
         skippedCorruptLines: 0,
@@ -304,6 +315,72 @@ describe('ObsidianPluginHostModel', () => {
       pendingSurfaces: ['Network'],
     });
     expect(review.summary).toContain('Runtime policy denial evidence');
+    expect(review.evidence).toEqual([
+      expect.objectContaining({
+        phase: 'denied',
+        source: 'history',
+        sourceLabel: 'history',
+        label: 'Network',
+        capability: 'requestUrl',
+        evidence: 'requestUrl blocks local/private hosts',
+        recordedAt: '2026-06-26T08:00:00.000Z',
+      }),
+    ]);
+  });
+
+  it('lists current and historical denied or blocked approval evidence', () => {
+    const item = plugin({
+      runtime: {
+        ...plugin().runtime,
+        capabilityLedger: [{
+          pluginId: 'quickadd-like',
+          capability: 'requestUrl',
+          surface: 'network',
+          support: 'limited',
+          phase: 'denied',
+          source: 'runtime-ledger',
+          evidence: 'requestUrl blocks local/private hosts',
+        }],
+      },
+      capabilityLedgerHistory: {
+        total: 1,
+        entries: [{
+          schemaVersion: 1,
+          pluginId: 'quickadd-like',
+          capability: 'capability-gate:load',
+          surface: 'unsupported',
+          support: 'unsupported',
+          phase: 'blocked',
+          source: 'runtime-ledger',
+          evidence: 'Capability gate blocked load: Unsupported Node module.',
+          recordedAt: '2026-06-26T09:00:00.000Z',
+          sessionId: 'session-2',
+        }],
+        summary: { predicted: 0, registered: 0, called: 0, denied: 0, blocked: 1 },
+        latestBlocked: [],
+        skippedCorruptLines: 0,
+      },
+    });
+
+    const review = capabilityApprovalReview(item);
+
+    expect(review.status).toBe('blocked');
+    expect(review.evidence).toEqual([
+      expect.objectContaining({
+        phase: 'denied',
+        source: 'current-session',
+        sourceLabel: 'current session',
+        label: 'Network',
+        capability: 'requestUrl',
+      }),
+      expect.objectContaining({
+        phase: 'blocked',
+        source: 'history',
+        label: 'Blocked capability',
+        capability: 'capability-gate:load',
+        recordedAt: '2026-06-26T09:00:00.000Z',
+      }),
+    ]);
   });
 
   it('blocks approval when hard blocker evidence is present', () => {

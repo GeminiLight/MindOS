@@ -8,7 +8,7 @@ import type { PluginEditorCommandContext } from '@/lib/obsidian-compat/plugin-ma
 import { isObsidianCapabilityGateConfirmationRequiredError } from '@/lib/obsidian-compat/capability-gate';
 import { isObsidianWorkflowProbeId, type ObsidianWorkflowProbeId } from '@/lib/obsidian-compat/workflow-probes';
 
-type PluginAction = 'enable' | 'disable' | 'load' | 'load-enabled' | 'execute-command' | 'run-workflow-probe' | 'execute-ribbon-action' | 'choose-modal-suggestion' | 'submit-modal-text' | 'choose-menu-item' | 'uninstall' | 'migrate-legacy';
+type PluginAction = 'enable' | 'disable' | 'load' | 'load-enabled' | 'execute-command' | 'run-workflow-probe' | 'execute-ribbon-action' | 'choose-modal-suggestion' | 'submit-modal-text' | 'choose-menu-item' | 'uninstall' | 'migrate-legacy' | 'revoke-capability-approval';
 
 const VALID_PLUGIN_ACTIONS: PluginAction[] = [
   'enable',
@@ -23,6 +23,7 @@ const VALID_PLUGIN_ACTIONS: PluginAction[] = [
   'choose-menu-item',
   'uninstall',
   'migrate-legacy',
+  'revoke-capability-approval',
 ];
 
 function requirePluginId(action: PluginAction, pluginId: unknown): string {
@@ -170,6 +171,8 @@ export async function POST(req: NextRequest) {
         await manager.uninstall(requirePluginId(action, body.pluginId));
       } else if (action === 'migrate-legacy') {
         result = await manager.migrateLegacyPlugin(requirePluginId(action, body.pluginId));
+      } else if (action === 'revoke-capability-approval') {
+        await manager.revokeCapabilityApproval(requirePluginId(action, body.pluginId));
       } else if (action === 'execute-command') {
         result = await manager.executeCommand(requireCommandId(body.commandId), {
           editor: parseEditorContext(body.editorContext),

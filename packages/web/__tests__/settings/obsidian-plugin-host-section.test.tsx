@@ -449,7 +449,127 @@ describe('ObsidianPluginHostSection', () => {
     expect(host.textContent).toContain('Runtime policy denial evidence is present.');
     expect(host.textContent).toContain('Review denied runtime policy events before broadening this plugin capability');
     expect(host.textContent).toContain('1 denied event');
+    expect(host.textContent).toContain('Runtime evidence');
+    expect(host.textContent).toContain('requestUrl blocks local/private hosts');
+    expect(host.textContent).toContain('history · 2026-06-26T08:00:00.000Z');
     expect(host.textContent).toContain('1 historical · 1 denied');
+
+    await cleanup(root, host);
+  });
+
+  it('revokes a confirmed capability approval through the lifecycle API', async () => {
+    const approvedPlugin = plugin({
+      enabled: true,
+      loaded: true,
+      compatibility: {
+        supportedApis: ['Plugin'],
+        partialApis: ['requestUrl'],
+        unsupportedApis: [],
+        blockers: [],
+      },
+      capabilityGate: {
+        status: 'limited',
+        fingerprint: 'abc123',
+        requiresConfirmation: true,
+        confirmed: true,
+        confirmedAt: '2026-06-24T00:00:00.000Z',
+        blocked: false,
+        items: [{
+          surface: 'network',
+          decision: 'requires-confirmation',
+          risk: 'high',
+          apiCount: 1,
+          apis: ['requestUrl'],
+          supportSummary: { full: 0, limited: 1, 'snapshot-only': 0, 'catalog-only': 0, 'request-only': 0, unsupported: 0 },
+          reason: 'Network APIs can contact external services.',
+        }],
+        confirmReasons: ['Network APIs can contact external services.'],
+        blockedReasons: [],
+      },
+    });
+
+    mocks.apiFetch.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url === '/api/obsidian-plugins' && !init?.method) {
+        return { ok: true, plugins: [approvedPlugin] };
+      }
+      if (url === '/api/obsidian-plugins' && init?.method === 'POST') {
+        expect(JSON.parse(String(init.body))).toEqual({
+          action: 'revoke-capability-approval',
+          pluginId: 'quickadd-like',
+        });
+        return {
+          ok: true,
+          plugins: [
+            plugin({
+              ...approvedPlugin,
+              enabled: false,
+              loaded: false,
+              capabilityGate: {
+                ...approvedPlugin.capabilityGate,
+                status: 'review',
+                confirmed: false,
+                confirmedAt: undefined,
+              },
+              capabilityLedgerHistory: {
+                total: 1,
+                entries: [{
+                  schemaVersion: 1,
+                  pluginId: 'quickadd-like',
+                  capability: 'capability-gate:revoke',
+                  surface: 'network',
+                  support: 'limited',
+                  phase: 'denied',
+                  source: 'runtime-ledger',
+                  evidence: 'Capability approval revoked by user for fingerprint abc123.',
+                  recordedAt: '2026-06-26T09:00:00.000Z',
+                  sessionId: 'session-1',
+                }],
+                summary: { predicted: 0, registered: 0, called: 0, denied: 1, blocked: 0 },
+                latestBlocked: [],
+                skippedCorruptLines: 0,
+              },
+            }),
+          ],
+        };
+      }
+      throw new Error(`Unexpected apiFetch call: ${url}`);
+    });
+
+    const { host, root } = await renderSection();
+    const row = host.querySelector('[data-obsidian-plugin-row="quickadd-like"]') as HTMLElement;
+    const expandButton = row.querySelector('button') as HTMLButtonElement;
+
+    await act(async () => {
+      expandButton.click();
+      await Promise.resolve();
+    });
+
+    expect(host.textContent).toContain('Approved');
+    expect(host.textContent).toContain('Revoke approval');
+
+    const revokeButton = Array.from(host.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('Revoke approval')) as HTMLButtonElement;
+    await act(async () => {
+      revokeButton.click();
+      await Promise.resolve();
+    });
+
+    expect(portalRoot().textContent).toContain('Revoke approval for QuickAdd Like?');
+    expect(portalRoot().textContent).toContain('clear the current capability approval');
+
+    const confirmButton = Array.from(portalRoot().querySelectorAll('button'))
+      .filter((button) => button.textContent?.trim() === 'Revoke approval')
+      .pop() as HTMLButtonElement;
+    await act(async () => {
+      confirmButton.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(host.textContent).toContain('0 enabled');
+    expect(host.textContent).toContain('Policy denied');
+    expect(host.textContent).toContain('Capability approval revoked by user for fingerprint abc123.');
+    expect(mocks.apiFetch).toHaveBeenCalledTimes(2);
 
     await cleanup(root, host);
   });

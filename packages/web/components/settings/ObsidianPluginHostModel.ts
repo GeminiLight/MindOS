@@ -271,7 +271,7 @@ export interface ObsidianPluginSettingsResponse {
   preview?: ObsidianDeclarativeSettingPreview;
 }
 
-export type PluginLifecycleAction = 'enable' | 'disable' | 'load' | 'load-enabled' | 'execute-command' | 'run-workflow-probe' | 'uninstall' | 'migrate-legacy';
+export type PluginLifecycleAction = 'enable' | 'disable' | 'load' | 'load-enabled' | 'execute-command' | 'run-workflow-probe' | 'uninstall' | 'migrate-legacy' | 'revoke-capability-approval';
 export type SettingAction = 'set-value' | 'click-button' | 'list-add' | 'list-delete' | 'list-reorder' | 'preview-render' | 'preview-page';
 export type SurfaceRouteState = 'mounted' | 'catalog' | 'diagnostic';
 export type SurfaceRouteTarget = 'command-center' | 'plugin-entries' | 'plugin-views';
@@ -315,6 +315,17 @@ export interface CapabilityApprovalReviewItem {
   reason: string;
 }
 
+export interface CapabilityApprovalReviewEvidence {
+  phase: 'denied' | 'blocked';
+  source: 'current-session' | 'history';
+  sourceLabel: string;
+  surface: ObsidianCapabilitySurface;
+  label: string;
+  capability: string;
+  evidence: string;
+  recordedAt?: string;
+}
+
 export interface CapabilityApprovalReview {
   status: CapabilityApprovalReviewStatus;
   label: string;
@@ -328,6 +339,7 @@ export interface CapabilityApprovalReview {
   deniedEvents: number;
   blockedEvents: number;
   items: CapabilityApprovalReviewItem[];
+  evidence: CapabilityApprovalReviewEvidence[];
 }
 
 export function runtimeSummary(plugin: ObsidianPluginStatus): string {
@@ -370,6 +382,7 @@ export function capabilityApprovalReview(plugin: ObsidianPluginStatus): Capabili
   const gate = plugin.capabilityGate;
   const deniedEvents = runtimePhaseEvidenceCount(plugin, 'denied');
   const blockedEvents = runtimePhaseEvidenceCount(plugin, 'blocked');
+  const evidence = capabilityApprovalRuntimeEvidence(plugin);
   const hardBlocked = gate?.blocked === true || blockedEvents > 0;
   const approved = gate?.requiresConfirmation === true && gate.confirmed === true;
   const canApprove = gate?.requiresConfirmation === true && gate.confirmed !== true && !hardBlocked;
@@ -406,6 +419,7 @@ export function capabilityApprovalReview(plugin: ObsidianPluginStatus): Capabili
       deniedEvents,
       blockedEvents,
       items,
+      evidence,
     };
   }
 
@@ -425,6 +439,7 @@ export function capabilityApprovalReview(plugin: ObsidianPluginStatus): Capabili
       deniedEvents,
       blockedEvents,
       items,
+      evidence,
     };
   }
 
@@ -440,6 +455,7 @@ export function capabilityApprovalReview(plugin: ObsidianPluginStatus): Capabili
       deniedEvents,
       blockedEvents,
       items: [],
+      evidence,
     };
   }
 
@@ -459,6 +475,7 @@ export function capabilityApprovalReview(plugin: ObsidianPluginStatus): Capabili
       deniedEvents,
       blockedEvents,
       items,
+      evidence,
     };
   }
 
@@ -476,6 +493,7 @@ export function capabilityApprovalReview(plugin: ObsidianPluginStatus): Capabili
       deniedEvents,
       blockedEvents,
       items,
+      evidence,
     };
   }
 
@@ -493,6 +511,7 @@ export function capabilityApprovalReview(plugin: ObsidianPluginStatus): Capabili
       deniedEvents,
       blockedEvents,
       items,
+      evidence,
     };
   }
 
@@ -509,6 +528,7 @@ export function capabilityApprovalReview(plugin: ObsidianPluginStatus): Capabili
     deniedEvents,
     blockedEvents,
     items,
+    evidence,
   };
 }
 
@@ -562,6 +582,33 @@ function runtimePhaseEvidenceCount(
     .length;
   const historical = plugin.capabilityLedgerHistory?.summary[phase] ?? 0;
   return Math.max(current, historical);
+}
+
+function capabilityApprovalRuntimeEvidence(plugin: ObsidianPluginStatus): CapabilityApprovalReviewEvidence[] {
+  const current = (plugin.runtime.capabilityLedger ?? [])
+    .filter((entry) => entry.phase === 'denied' || entry.phase === 'blocked')
+    .map((entry) => capabilityApprovalEvidenceFromEntry(entry, 'current-session'));
+  const historical = [...(plugin.capabilityLedgerHistory?.entries ?? [])]
+    .reverse()
+    .filter((entry) => entry.phase === 'denied' || entry.phase === 'blocked')
+    .map((entry) => capabilityApprovalEvidenceFromEntry(entry, 'history'));
+  return [...current, ...historical];
+}
+
+function capabilityApprovalEvidenceFromEntry(
+  entry: ObsidianRuntimeCapabilityLedgerEntry & { recordedAt?: string },
+  source: CapabilityApprovalReviewEvidence['source'],
+): CapabilityApprovalReviewEvidence {
+  return {
+    phase: entry.phase === 'blocked' ? 'blocked' : 'denied',
+    source,
+    sourceLabel: source === 'current-session' ? 'current session' : 'history',
+    surface: entry.surface,
+    label: surfaceLabel(entry.surface),
+    capability: entry.capability,
+    evidence: entry.evidence,
+    ...(entry.recordedAt ? { recordedAt: entry.recordedAt } : {}),
+  };
 }
 
 function capabilityGateDecisionLabel(decision: ObsidianCapabilityGateReport['items'][number]['decision']): string {

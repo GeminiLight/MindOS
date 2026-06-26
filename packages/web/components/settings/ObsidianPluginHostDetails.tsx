@@ -71,6 +71,7 @@ interface ObsidianPluginHostDetailsProps {
   surfaceRoutes: SurfaceRoute[];
   surfaceLedgerChecks: SurfaceLedgerProjectionView[];
   onOpenRoute: (target: SurfaceRouteTarget) => void;
+  onRequestRevokeApproval: (plugin: ObsidianPluginStatus) => void;
   onRunAction: (
     action: PluginLifecycleAction,
     options?: {
@@ -112,6 +113,7 @@ export function ObsidianPluginHostDetails({
   surfaceRoutes,
   surfaceLedgerChecks,
   onOpenRoute,
+  onRequestRevokeApproval,
   onRunAction,
   onLoadSettings,
   onRunSettingAction,
@@ -169,7 +171,11 @@ export function ObsidianPluginHostDetails({
             {capabilityLedgerHistorySummary(plugin)}
           </p>
         </div>
-        <ObsidianCapabilityGatePanel plugin={plugin} />
+        <ObsidianCapabilityGatePanel
+          plugin={plugin}
+          busy={busyKey !== null}
+          onRevokeApproval={() => onRequestRevokeApproval(plugin)}
+        />
       </div>
 
       <div className="rounded-lg border border-border/50 bg-card/60 px-3 py-2.5">
