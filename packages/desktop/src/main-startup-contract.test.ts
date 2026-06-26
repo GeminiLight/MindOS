@@ -81,4 +81,16 @@ describe('desktop main startup contract', () => {
     expect(source).toContain('await downloadNode();');
     expect(source).toContain('await openCrashLog();');
   });
+
+  it('does not let the Obsidian SecretStorage broker block local service startup', () => {
+    const brokerIdx = source.indexOf('await ensureObsidianSecretStorageBroker();');
+    const processManagerIdx = source.indexOf('processManager = createProcessManager(webPort, mcpPort);');
+
+    expect(source).toContain('MINDOS_DISABLE_OBSIDIAN_SECRET_STORAGE_BROKER');
+    expect(source).toContain('MINDOS_OBSIDIAN_SECRET_STORAGE_BROKER_TIMEOUT_MS');
+    expect(source).toContain('startObsidianSecretStorageBrokerWithTimeout(timeoutMs)');
+    expect(source).toContain('startup timed out after ${timeoutMs}ms');
+    expect(brokerIdx).toBeGreaterThan(-1);
+    expect(processManagerIdx).toBeGreaterThan(brokerIdx);
+  });
 });

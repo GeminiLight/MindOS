@@ -278,6 +278,7 @@ describe('Desktop release packaging contract', () => {
     expect(smoke).toContain('setupPending: false');
     expect(smoke).toContain("MINDOS_DESKTOP_HOME_DIR: home");
     expect(smoke).toContain("MINDOS_DISABLE_CLI_SHIM_PATH_APPEND: '1'");
+    expect(smoke).toContain("MINDOS_DISABLE_OBSIDIAN_SECRET_STORAGE_BROKER: '1'");
     expect(smoke).toContain("mindosRuntimePolicy: 'bundled-only'");
     expect(smoke).not.toContain("join(homedir(), '.mindos', 'config.json')");
     expect(smoke).not.toContain("join(userInfo().homedir, '.mindos', 'config.json')");

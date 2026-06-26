@@ -121,11 +121,59 @@ let currentMcpPort: number | undefined;
 let currentRemoteAddress: string | undefined;
 const coreUpdater = new CoreUpdater();
 let currentCoreVersion: string | null = null;
+const OBSIDIAN_SECRET_STORAGE_BROKER_TIMEOUT_MS = 2_500;
+
+function getObsidianSecretStorageBrokerTimeoutMs(): number {
+  const value = Number(process.env.MINDOS_OBSIDIAN_SECRET_STORAGE_BROKER_TIMEOUT_MS);
+  return Number.isFinite(value) && value > 0
+    ? value
+    : OBSIDIAN_SECRET_STORAGE_BROKER_TIMEOUT_MS;
+}
+
+function startObsidianSecretStorageBrokerWithTimeout(
+  timeoutMs: number,
+): Promise<ObsidianSecretStorageBrokerHandle | null> {
+  let timedOut = false;
+  let timeout: ReturnType<typeof setTimeout> | null = null;
+  const brokerPromise = Promise.resolve().then(() => startObsidianSecretStorageBroker());
+
+  brokerPromise.then(
+    (broker) => {
+      if (timedOut && broker) void broker.close();
+    },
+    (err) => {
+      if (timedOut) {
+        console.warn(
+          '[MindOS] Obsidian SecretStorage safeStorage broker eventually failed after startup moved on:',
+          err instanceof Error ? err.message : String(err),
+        );
+      }
+    },
+  );
+
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeout = setTimeout(() => {
+      timedOut = true;
+      reject(new Error(`startup timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+    timeout.unref?.();
+  });
+
+  return Promise.race([brokerPromise, timeoutPromise]).finally(() => {
+    if (timeout) clearTimeout(timeout);
+  });
+}
 
 async function ensureObsidianSecretStorageBroker(): Promise<ObsidianSecretStorageBrokerHandle | null> {
   if (obsidianSecretStorageBroker) return obsidianSecretStorageBroker;
+  if (process.env.MINDOS_DISABLE_OBSIDIAN_SECRET_STORAGE_BROKER === '1') {
+    console.info('[MindOS] Obsidian SecretStorage safeStorage broker disabled by env');
+    return null;
+  }
   try {
-    obsidianSecretStorageBroker = await startObsidianSecretStorageBroker();
+    const timeoutMs = getObsidianSecretStorageBrokerTimeoutMs();
+    console.info(`[MindOS] Starting Obsidian SecretStorage safeStorage broker (timeout ${timeoutMs}ms)`);
+    obsidianSecretStorageBroker = await startObsidianSecretStorageBrokerWithTimeout(timeoutMs);
     if (obsidianSecretStorageBroker) {
       console.info('[MindOS] Obsidian SecretStorage safeStorage broker started');
     }
