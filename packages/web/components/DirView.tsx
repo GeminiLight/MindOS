@@ -613,7 +613,7 @@ export default function DirView({ dirPath, entries, spacePreview }: DirViewProps
   return (
     <div className="flex flex-col min-h-[calc(100vh-var(--app-titlebar-h))]">
       {/* Topbar */}
-      <div className="sticky top-[52px] md:top-[var(--app-titlebar-h)] z-20 border-b border-border px-4 md:px-6 h-[var(--workspace-header-h)] flex items-center bg-background">
+      <div className="sticky top-[52px] md:top-0 z-20 border-b border-border px-4 md:px-6 h-[var(--workspace-header-h)] flex items-center bg-background">
         <div className="w-full flex items-center justify-between gap-2">
           <div className="min-w-0 flex-1">
             <Breadcrumb filePath={dirPath} />

@@ -5,6 +5,7 @@ import { PanelRightClose, PanelRightOpen } from 'lucide-react';
 import GithubSlugger from 'github-slugger';
 import { useLocale } from '@/lib/stores/locale-store';
 import { cn } from '@/lib/utils';
+import { getMainScrollContainer, getMainScrollRelativeTop, scrollMainTo } from '@/lib/main-scroll-container';
 
 export interface TableOfContentsHeading {
   id: string;
@@ -101,7 +102,7 @@ function viewHeaderHeight(): number {
 }
 
 function scrollOffset(): number {
-  return titlebarOffset() + viewHeaderHeight() + 12;
+  return (getMainScrollContainer() ? 0 : titlebarOffset()) + viewHeaderHeight() + 12;
 }
 
 /**
@@ -211,6 +212,7 @@ export default function TableOfContents({ content = '', headings: providedHeadin
       headingElsRef.current = els;
       const validEls = els.filter(Boolean) as HTMLElement[];
       if (validEls.length === 0) return;
+      const scrollRoot = getMainScrollContainer();
 
       observerRef.current?.disconnect();
       observerRef.current = new IntersectionObserver(
@@ -227,7 +229,7 @@ export default function TableOfContents({ content = '', headings: providedHeadin
             }
           }
         },
-        { rootMargin: `-${scrollOffset()}px 0% -70% 0%`, threshold: 0 }
+        { root: scrollRoot, rootMargin: `-${scrollOffset()}px 0% -70% 0%`, threshold: 0 }
       );
       validEls.forEach(el => observerRef.current?.observe(el));
     }, 300);
@@ -249,8 +251,8 @@ export default function TableOfContents({ content = '', headings: providedHeadin
       return;
     }
     e.preventDefault();
-    const top = el.getBoundingClientRect().top + window.scrollY - scrollOffset();
-    window.scrollTo({ top, behavior: 'smooth' });
+    const top = getMainScrollRelativeTop(el) - scrollOffset();
+    scrollMainTo({ top, behavior: 'smooth' });
     setActiveIdx(idx);
   };
 
@@ -259,8 +261,8 @@ export default function TableOfContents({ content = '', headings: providedHeadin
       className="hidden xl:flex min-w-0 flex-col z-app-sticky overflow-visible self-start sticky relative"
       data-markdown-toc-panel
       style={{
-        top: `calc(var(--app-titlebar-h) + ${VIEW_HEADER_CSS_VAR} + 24px)`,
-        maxHeight: `calc(100vh - var(--app-titlebar-h) - ${VIEW_HEADER_CSS_VAR} - 48px)`,
+        top: `calc(${VIEW_HEADER_CSS_VAR} + 24px)`,
+        maxHeight: `calc(100dvh - var(--app-titlebar-h) - ${VIEW_HEADER_CSS_VAR} - 48px)`,
         width: collapsed ? 0 : NAV_W,
       }}
     >

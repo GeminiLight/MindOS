@@ -11,20 +11,31 @@ function cssBlock(source: string, selector: string): string {
   return source.match(new RegExp(`${escapedSelector}\\s*\\{[^}]*\\}`))?.[0] ?? '';
 }
 
-describe('main viewport scrollbar gutter stability', () => {
-  it('reserves the document viewport gutter on the root scroll owner', () => {
+describe('main content scrollport gutter stability', () => {
+  it('reserves the gutter on the app content scrollport below the titlebar', () => {
     const css = read('app/globals.css');
-
-    expect(cssBlock(css, 'html')).toContain('scrollbar-gutter: stable;');
-    expect(cssBlock(css, 'body')).toContain('scrollbar-gutter: stable;');
-  });
-
-  it('keeps main content on document scroll instead of an inner overflow scroller', () => {
     const source = read('components/SidebarLayout.tsx');
     const mainOpeningTag = source.match(/<main[\s\S]*?id="main-content"[\s\S]*?>/)?.[0] ?? '';
 
+    expect(cssBlock(css, '.app-main-scrollport')).toContain('scrollbar-gutter: stable;');
     expect(mainOpeningTag).toContain('id="main-content"');
-    expect(mainOpeningTag).not.toContain('overflow-y-auto');
+    expect(mainOpeningTag).toContain('tabIndex={-1}');
+    expect(mainOpeningTag).toContain('app-main-scrollport');
+    expect(mainOpeningTag).toContain('fixed');
+    expect(mainOpeningTag).toContain('top-[var(--app-titlebar-h)]');
+    expect(mainOpeningTag).toContain('bottom-0');
+  });
+
+  it('keeps the titlebar outside the app scrollport and avoids duplicate top padding', () => {
+    const source = read('components/SidebarLayout.tsx');
+    const mainOpeningTag = source.match(/<main[\s\S]*?id="main-content"[\s\S]*?>/)?.[0] ?? '';
+
+    expect(source.indexOf('<TitlebarRow')).toBeLessThan(source.indexOf('<main'));
+    expect(mainOpeningTag).toContain('overflow-y-auto');
     expect(mainOpeningTag).not.toContain('overflow-y-scroll');
+    expect(source).toContain("import { getMainScrollContainer } from '@/lib/main-scroll-container';");
+    expect(source).toContain("getMainScrollContainer()?.scrollTo({ left: 0, top: 0, behavior: 'auto' });");
+    expect(source).not.toContain('padding-top: var(--app-titlebar-h);');
+    expect(source).toContain('min-h-full bg-background');
   });
 });

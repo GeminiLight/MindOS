@@ -43,6 +43,7 @@ import { useInboxOrganizeController } from '@/hooks/useInboxOrganizeController';
 import { shouldHandleSmoothNavigation, useSmoothRouterPush } from '@/hooks/useSmoothRouterPush';
 import { InboxOrganizeProvider } from '@/components/inbox/InboxOrganizeContext';
 import { quickDropToInbox } from '@/lib/inbox-upload';
+import { getMainScrollContainer } from '@/lib/main-scroll-container';
 import {
   COMMAND_CENTER_OPEN_EVENT,
   PLUGIN_ENTRIES_STATE_EVENT,
@@ -914,6 +915,10 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
     lp.setActivePanel(panel);
   }, [lp]);
 
+  useEffect(() => {
+    getMainScrollContainer()?.scrollTo({ left: 0, top: 0, behavior: 'auto' });
+  }, [pathname]);
+
   return (
     <InboxOrganizeProvider value={inboxOrganize}>
       <McpStoreInit />
@@ -1164,9 +1169,10 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
 
       <main
         id="main-content"
+        tabIndex={-1}
         aria-hidden={mobileOpen || undefined}
         inert={mobileOpen ? true : undefined}
-        className="min-h-screen transition-[padding-left,padding-right] duration-200 pt-[52px] md:pt-0"
+        className="app-main-scrollport fixed inset-x-0 bottom-0 top-[var(--app-titlebar-h)] overflow-y-auto overflow-x-hidden transition-[padding-left,padding-right] duration-200 pt-[52px] md:pt-0"
         onDragEnter={(e) => {
           if (!e.dataTransfer.types.includes('Files')) return;
           e.preventDefault();
@@ -1190,10 +1196,9 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
           }
         }}
       >
-        {/* min-height subtracts the titlebar row: main already pads down by
-            --app-titlebar-h, so a bare 100vh here would overflow the document
-            by that amount and let content scroll underneath the fixed row */}
-        <div className="min-h-[calc(100vh-var(--app-titlebar-h))] bg-background">
+        {/* The app scrollport starts below the titlebar row, so the scrollbar gutter
+            is reserved only in the content area and the tab header stays full width. */}
+        <div className="min-h-full bg-background">
           <ChangesBanner />
           {children}
         </div>
@@ -1249,7 +1254,6 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
           #main-content {
             padding-left: ${contentLeftOffsetCss} !important;
             padding-right: var(--right-dock-reserved-width) !important;
-            padding-top: var(--app-titlebar-h);
           }
         }
       `}</style>

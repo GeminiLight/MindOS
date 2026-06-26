@@ -772,7 +772,7 @@ export default function ViewPageClient({
     <div className="flex flex-col min-h-[calc(100vh-var(--app-titlebar-h))]">
       {/* Top bar */}
       <div
-        className="view-page-topbar sticky top-[52px] md:top-[var(--app-titlebar-h)] z-20 border-b border-border px-4 md:px-6 h-[var(--workspace-header-h)] flex items-center"
+        className="view-page-topbar sticky top-[52px] md:top-0 z-20 border-b border-border px-4 md:px-6 h-[var(--workspace-header-h)] flex items-center"
         style={{ background: 'var(--background)' }}
       >
         <div className="view-header-row w-full min-w-0 flex items-center justify-between gap-3 h-full">

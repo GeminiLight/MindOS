@@ -39,6 +39,7 @@ describe('refreshPreservingDocumentScroll', () => {
   });
 
   afterEach(() => {
+    document.getElementById('main-content')?.remove();
     window.scrollTo = originalScrollTo;
     window.requestAnimationFrame = originalRequestAnimationFrame;
     vi.useRealTimers();
@@ -67,5 +68,37 @@ describe('refreshPreservingDocumentScroll', () => {
     await vi.advanceTimersByTimeAsync(400);
     expect(window.scrollTo).not.toHaveBeenCalled();
     expect(scrollY).toBe(0);
+  });
+
+  it('restores the app content scrollport when it is mounted', async () => {
+    const container = document.createElement('main');
+    container.id = 'main-content';
+    container.scrollTop = 720;
+    container.scrollLeft = 4;
+    const containerScrollTo = vi.fn((x: number | ScrollToOptions, y?: number) => {
+      if (typeof x === 'object') {
+        container.scrollLeft = x.left ?? container.scrollLeft;
+        container.scrollTop = x.top ?? container.scrollTop;
+        return;
+      }
+      container.scrollLeft = x;
+      container.scrollTop = y ?? container.scrollTop;
+    });
+    Object.defineProperty(container, 'scrollTo', {
+      configurable: true,
+      value: containerScrollTo,
+    });
+    document.body.appendChild(container);
+
+    refreshPreservingDocumentScroll(() => {
+      container.scrollTop = 0;
+      container.scrollLeft = 0;
+    });
+
+    await vi.advanceTimersByTimeAsync(20);
+    expect(containerScrollTo).toHaveBeenCalledWith(4, 720);
+    expect(window.scrollTo).not.toHaveBeenCalled();
+    expect(container.scrollLeft).toBe(4);
+    expect(container.scrollTop).toBe(720);
   });
 });

@@ -1076,7 +1076,7 @@ export default function InboxView() {
             )}
 
             {activeView === 'queue' && (
-              <aside className="lg:sticky lg:top-[calc(var(--app-titlebar-h)+24px)] lg:self-start">
+              <aside className="lg:sticky lg:top-6 lg:self-start">
                 <InboxItemDetailsPanel
                   file={selectedFile}
                   understanding={selectedUnderstanding}
@@ -1088,7 +1088,7 @@ export default function InboxView() {
             )}
 
             {activeView === 'shelved' && (
-              <aside className="lg:sticky lg:top-[calc(var(--app-titlebar-h)+24px)] lg:self-start">
+              <aside className="lg:sticky lg:top-6 lg:self-start">
                 <InboxItemDetailsPanel
                   file={selectedFile}
                   understanding={selectedUnderstanding}

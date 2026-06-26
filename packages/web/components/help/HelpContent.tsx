@@ -272,7 +272,7 @@ export default function HelpContent() {
 
       {/* ── Sticky TOC (wide screens only) ── */}
       <nav className="hidden xl:block shrink-0 w-40" aria-label="Table of contents">
-        <div className="sticky top-[calc(var(--app-titlebar-h)+50px)]">
+        <div className="sticky top-[50px]">
           <ul className="space-y-1 border-l border-border pl-3">
             {tocItems.map(item => (
               <li key={item.id}>

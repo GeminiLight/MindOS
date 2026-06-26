@@ -1,17 +1,12 @@
-type ScrollRefresh = () => void;
+import { getMainScrollPosition, scrollMainTo } from '@/lib/main-scroll-container';
 
-function currentScrollPosition(): { x: number; y: number } {
-  return {
-    x: window.scrollX || window.document.documentElement.scrollLeft || window.document.body.scrollLeft || 0,
-    y: window.scrollY || window.document.documentElement.scrollTop || window.document.body.scrollTop || 0,
-  };
-}
+type ScrollRefresh = () => void;
 
 function restoreDocumentScroll(snapshot: { href: string; x: number; y: number }): void {
   if (window.location.href !== snapshot.href) return;
-  const current = currentScrollPosition();
+  const current = getMainScrollPosition();
   if (Math.abs(current.x - snapshot.x) <= 1 && Math.abs(current.y - snapshot.y) <= 1) return;
-  window.scrollTo(snapshot.x, snapshot.y);
+  scrollMainTo(snapshot.x, snapshot.y);
 }
 
 function scheduleScrollRestore(snapshot: { href: string; x: number; y: number }): void {
@@ -39,7 +34,7 @@ export function refreshPreservingDocumentScroll(refresh: ScrollRefresh): void {
 
   const snapshot = {
     href: window.location.href,
-    ...currentScrollPosition(),
+    ...getMainScrollPosition(),
   };
 
   refresh();

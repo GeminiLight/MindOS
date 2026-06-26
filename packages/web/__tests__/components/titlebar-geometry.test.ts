@@ -6,17 +6,17 @@ import { describe, expect, it } from 'vitest';
  * Repo-wide geometry contract for the fixed titlebar row (spec-titlebar-row,
  * 实现调整记录 12/13).
  *
- * #main-content gets `padding-top: var(--app-titlebar-h)` (42px on desktop),
- * and `.titlebar-row` is `fixed top-0 z-30`. Two recurring bug classes follow:
+ * #main-content is a fixed scrollport that starts at `top: var(--app-titlebar-h)`
+ * (42px on desktop), and `.titlebar-row` is `fixed top-0 z-30`.
+ * Two recurring bug classes follow:
  *
- *  A. Any element in normal document flow sized with a bare full-viewport
- *     height (min-h-screen / h-[100dvh] / ...) makes the document a titlebar row taller
- *     than the window. Scrolling that slack slides content underneath the
- *     fixed row, which then swallows its clicks (user-reported three times:
- *     chat focus-mode header, /view breadcrumb, Edit/Source/View toggle).
+ *  A. Any element sized with a bare full-viewport height
+ *     (min-h-screen / h-[100dvh] / ...) becomes taller than the bounded app
+ *     scrollport and creates avoidable scroll slack.
  *
- *  B. Any element that sticks to the *document* scroll with `top-0` on
- *     desktop pins itself at viewport y=0 — underneath the fixed row.
+ *  B. Sticky elements inside the main scrollport must use local scrollport
+ *     offsets. They should not add `var(--app-titlebar-h)` again; the scrollport
+ *     itself already starts below the fixed titlebar row.
  *
  * These tests scan the full source tree so a new offender fails CI instead of
  * shipping. If you genuinely need a full-viewport element (fixed overlay that
@@ -37,7 +37,7 @@ const VIEWPORT_HEIGHT_ALLOWLIST: Record<string, string> = {
   'components/ActivityBar.tsx':
     'fixed rail intentionally spans the full viewport — its logo row lives inside the titlebar row',
   'components/SidebarLayout.tsx':
-    '#main-content is border-box, so min-h-screen already includes its titlebar padding; the mobile drawer is a fixed overlay',
+    'mobile drawer is a fixed overlay that intentionally spans the full viewport',
 };
 
 function walk(dir: string): string[] {
@@ -94,42 +94,38 @@ describe('titlebar geometry contract (no content may slide under the fixed row)'
     }
   });
 
-  it('no document-scroll sticky pins itself at md:top-0 (underneath the fixed row)', () => {
-    const violations: string[] = [];
-    for (const { rel, lines } of sources) {
-      lines.forEach((line, i) => {
-        if (line.includes('sticky') && /(?:md|lg|xl):top-0(?![-\w.])/.test(line)) {
-          violations.push(`${rel}:${i + 1}: ${line.trim()}`);
-        }
-      });
-    }
-    expect(
-      violations,
-      `On desktop the titlebar row occupies viewport y 0–var(--app-titlebar-h); a responsive sticky ` +
-        `top-0 sticks underneath it and its top edge becomes unclickable. ` +
-        `Use top-[var(--app-titlebar-h)] (plus any extra offset) instead:\n${violations.join('\n')}`,
-    ).toEqual([]);
+  it('main content owns a bounded scrollport below the fixed titlebar row', () => {
+    const src = readFileSync(path.join(webRoot, 'components/SidebarLayout.tsx'), 'utf-8');
+    const mainOpeningTag = src.match(/<main[\s\S]*?id="main-content"[\s\S]*?>/)?.[0] ?? '';
+
+    expect(mainOpeningTag).toContain('app-main-scrollport');
+    expect(mainOpeningTag).toContain('fixed');
+    expect(mainOpeningTag).toContain('top-[var(--app-titlebar-h)]');
+    expect(mainOpeningTag).toContain('bottom-0');
+    expect(mainOpeningTag).toContain('overflow-y-auto');
+    expect(src).not.toContain('padding-top: var(--app-titlebar-h);');
   });
 
-  it('known document-scroll sticky headers offset by var(--app-titlebar-h)', () => {
-    // These stick against the *document* scroll (no overflow ancestor), so
-    // their top value is in viewport coordinates and must clear the fixed row.
-    // Sticky top-0 inside inner overflow-y-auto containers is fine and not listed.
+  it('known main-scrollport sticky headers use local scrollport offsets', () => {
+    // The main scrollport starts below the titlebar, so page-local sticky values
+    // are relative to that scrollport rather than the viewport.
     const registry: Record<string, string[]> = {
-      'app/view/[...path]/ViewPageClient.tsx': ['sticky top-[52px] md:top-[var(--app-titlebar-h)]'],
-      'components/DirView.tsx': ['sticky top-[52px] md:top-[var(--app-titlebar-h)]'],
+      'app/view/[...path]/ViewPageClient.tsx': ['sticky top-[52px] md:top-0'],
+      'components/DirView.tsx': ['sticky top-[52px] md:top-0'],
       // floats just below the shared /view header
-      'components/FindInPage.tsx': ['sticky top-[calc(52px+var(--workspace-header-h))] md:top-[calc(var(--app-titlebar-h)+var(--workspace-header-h))]'],
-      // 24px breathing room below the row (was top-[70px] pre-titlebar)
-      'components/InboxView.tsx': ['lg:sticky lg:top-[calc(var(--app-titlebar-h)+24px)]'],
-      // help TOC (was top-24 = 96px)
-      'components/help/HelpContent.tsx': ['sticky top-[calc(var(--app-titlebar-h)+50px)]'],
+      'components/FindInPage.tsx': ['sticky top-[calc(52px+var(--workspace-header-h))] md:top-[var(--workspace-header-h)]'],
+      // 24px breathing room below the scrollport top
+      'components/InboxView.tsx': ['lg:sticky lg:top-6'],
+      // help TOC keeps the previous 50px local breathing room
+      'components/help/HelpContent.tsx': ['sticky top-[50px]'],
     };
     for (const [rel, expectedSnippets] of Object.entries(registry)) {
       const src = readFileSync(path.join(webRoot, rel), 'utf-8');
       for (const snippet of expectedSnippets) {
         expect(src, `${rel} must contain "${snippet}"`).toContain(snippet);
       }
+      expect(src, `${rel} should not add titlebar height inside the main scrollport`).not.toContain('top-[var(--app-titlebar-h)]');
+      expect(src, `${rel} should not add titlebar height inside the main scrollport`).not.toContain('top-[calc(var(--app-titlebar-h)');
     }
   });
 

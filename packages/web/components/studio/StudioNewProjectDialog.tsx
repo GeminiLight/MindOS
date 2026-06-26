@@ -257,7 +257,7 @@ function StudioNewProjectDialogForm({
         </div>
 
         <div className="grid min-h-0 gap-4 overflow-y-auto px-5 py-4 lg:grid-cols-[300px_minmax(0,1fr)]">
-          <aside className="min-w-0 lg:sticky lg:top-[var(--app-titlebar-h)] lg:self-start">
+          <aside className="min-w-0 lg:sticky lg:top-0 lg:self-start">
             <div className="rounded-xl border border-border/60 bg-background/45 p-4">
               <h3 className="text-sm font-semibold text-foreground">{copy.projectDetailsTitle}</h3>
               <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{copy.projectDetailsDescription}</p>

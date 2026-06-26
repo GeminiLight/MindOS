@@ -198,12 +198,10 @@ describe('TitlebarRow (spec-titlebar-row Phase 1 + 2)', () => {
     expect(css).not.toContain('.electron-mac-titlebar-pad');
   });
 
-  it('full-viewport pages subtract the titlebar height instead of using bare 100dvh', () => {
-    // #main-content gets padding-top: var(--app-titlebar-h). A child sized
-    // h-[100dvh] overflows the document by that padding, so the page can
-    // scroll the view's header underneath the fixed titlebar row, which then
-    // swallows its clicks (user-reported: focus-mode chat header buttons only
-    // clickable along their bottom edge).
+  it('full-viewport pages subtract the titlebar height and the layout owns a bounded scrollport', () => {
+    // #main-content is fixed below var(--app-titlebar-h). Full-height pages
+    // still subtract the titlebar height so their own internal layouts match
+    // the visible app scrollport rather than the full browser viewport.
     const fullHeightPages = [
       path.join(webRoot, 'components', 'HomeContent.tsx'),
       path.join(webRoot, 'app', 'chat', '[sessionId]', 'ChatPageClient.tsx'),
@@ -213,10 +211,11 @@ describe('TitlebarRow (spec-titlebar-row Phase 1 + 2)', () => {
       expect(src, `${file} must not size itself with bare 100dvh`).not.toMatch(/h-\[100dvh\]/);
       expect(src).toContain('h-[calc(100dvh-var(--app-titlebar-h))]');
     }
-    // The SidebarLayout children wrapper guarantees a full-height background —
-    // it must subtract the titlebar height too, or every page gets a titlebar-height
-    // document scroll slack on desktop.
+    // The SidebarLayout children wrapper fills the bounded scrollport; main
+    // itself is the titlebar-below scroll container.
     const layoutSrc = readFileSync(path.join(webRoot, 'components', 'SidebarLayout.tsx'), 'utf-8');
-    expect(layoutSrc).toContain('min-h-[calc(100vh-var(--app-titlebar-h))] bg-background');
+    expect(layoutSrc).toContain('app-main-scrollport fixed inset-x-0 bottom-0 top-[var(--app-titlebar-h)]');
+    expect(layoutSrc).toContain('min-h-full bg-background');
+    expect(layoutSrc).not.toContain('padding-top: var(--app-titlebar-h);');
   });
 });
