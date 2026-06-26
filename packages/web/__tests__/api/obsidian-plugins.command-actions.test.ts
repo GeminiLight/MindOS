@@ -211,7 +211,7 @@ describe('/api/obsidian-plugins command actions', () => {
           async onload() {
             const settings = await this.loadData();
             for (const choice of settings.choices || []) {
-              if (!choice.command) continue;
+              if (!choice.command || choice.type !== 'Capture') continue;
               this.addCommand({
                 id: 'choice:' + choice.id,
                 name: choice.name,

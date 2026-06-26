@@ -8,6 +8,7 @@ import {
   buildObsidianWorkflowProbeAudits,
 } from '@/lib/obsidian-compat/workflow-probes';
 import {
+  QUICKADD_TEMPLATE_WORKFLOW_PROBE_FIXTURE,
   QUICKADD_WORKFLOW_PROBE_FIXTURE,
   buildQuickAddWorkflowProbeDataJson,
 } from '@/lib/obsidian-compat/quickadd-workflow-fixture';
@@ -31,6 +32,12 @@ const writePluginData = (pluginId: string, data: unknown) => {
   fs.writeFileSync(path.join(pluginDir, 'data.json'), JSON.stringify(data, null, 2), 'utf-8');
 };
 
+const writeQuickAddTemplateFixture = () => {
+  const templatePath = path.join(mindRoot, QUICKADD_TEMPLATE_WORKFLOW_PROBE_FIXTURE.templatePath);
+  fs.mkdirSync(path.dirname(templatePath), { recursive: true });
+  fs.writeFileSync(templatePath, QUICKADD_TEMPLATE_WORKFLOW_PROBE_FIXTURE.templateContent, 'utf-8');
+};
+
 describe('Obsidian workflow probes', () => {
   beforeEach(() => {
     mindRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'mindos-obsidian-workflow-probes-'));
@@ -52,7 +59,7 @@ describe('Obsidian workflow probes', () => {
             callback: () => new Notice('QuickAdd picker only')
           });
           for (const choice of settings.choices || []) {
-            if (!choice.command) continue;
+            if (!choice.command || choice.type !== 'Capture') continue;
             this.addCommand({
               id: 'choice:' + choice.id,
               name: choice.name,
@@ -82,7 +89,7 @@ describe('Obsidian workflow probes', () => {
       source: 'workflow-probe',
     });
     expect(result.evidence).toEqual(expect.arrayContaining([
-      expect.stringContaining('Executed QuickAdd choice command "MindOS Capture"'),
+      expect.stringContaining('Executed QuickAdd capture choice command "MindOS Capture"'),
       expect.stringContaining(QUICKADD_WORKFLOW_PROBE_FIXTURE.targetPath),
     ]));
     expect(result.assertions).toEqual(expect.arrayContaining([
@@ -167,6 +174,116 @@ describe('Obsidian workflow probes', () => {
         lastProbedAt: result.completedAt,
       }),
     ]);
+  });
+
+  it('passes the QuickAdd template probe only after a Template choice creates the fixture note from a template file', async () => {
+    writePlugin('quickadd', `
+      const { Notice, Plugin } = require('obsidian');
+      module.exports = class QuickAddPlugin extends Plugin {
+        async onload() {
+          const settings = await this.loadData();
+          for (const choice of settings.choices || []) {
+            if (!choice.command || choice.type !== 'Template') continue;
+            this.addCommand({
+              id: 'choice:' + choice.id,
+              name: choice.name,
+              callback: async () => {
+                const template = this.app.vault.getFileByPath(choice.templatePath);
+                if (!template) throw new Error('Missing template fixture: ' + choice.templatePath);
+                const templateContent = await this.app.vault.cachedRead(template);
+                const folder = choice.folder.enabled ? choice.folder.folders[0] : '';
+                if (folder) await this.app.vault.createFolder(folder);
+                const fileName = choice.fileNameFormat.enabled ? choice.fileNameFormat.format : choice.name;
+                const targetPath = (folder ? folder + '/' : '') + fileName.replace(/\\.md$/i, '') + '.md';
+                await this.app.vault.create(targetPath, templateContent);
+                new Notice('QuickAdd template complete');
+              }
+            });
+          }
+        }
+      };
+    `);
+    writePluginData('quickadd', buildQuickAddWorkflowProbeDataJson('2.13.1'));
+    writeQuickAddTemplateFixture();
+
+    const manager = new PluginManager(mindRoot);
+    await manager.discover();
+    await manager.enable('quickadd', { confirmCapabilityGate: true });
+
+    const result = await manager.runWorkflowProbe('quickadd', 'quickadd-template-note');
+
+    expect(result).toMatchObject({
+      pluginId: 'quickadd',
+      id: 'quickadd-template-note',
+      status: 'passed',
+      source: 'workflow-probe',
+    });
+    expect(result.evidence).toEqual(expect.arrayContaining([
+      expect.stringContaining('Executed QuickAdd template choice command "MindOS Template"'),
+      expect.stringContaining(QUICKADD_TEMPLATE_WORKFLOW_PROBE_FIXTURE.targetPath),
+    ]));
+    expect(result.assertions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'execute-command', passed: true }),
+      expect.objectContaining({ id: 'quickadd-choice-command', passed: true }),
+      expect.objectContaining({ id: 'observable-result', passed: true }),
+      expect.objectContaining({ id: 'fixture-template-note-written', passed: true }),
+      expect.objectContaining({ id: 'fixture-template-note-content', passed: true }),
+      expect.objectContaining({ id: 'vault-write-called-ledger', passed: true }),
+      expect.objectContaining({ id: 'runtime-called-ledger', passed: true }),
+    ]));
+    expect(fs.readFileSync(path.join(mindRoot, QUICKADD_TEMPLATE_WORKFLOW_PROBE_FIXTURE.targetPath), 'utf-8'))
+      .toBe(QUICKADD_TEMPLATE_WORKFLOW_PROBE_FIXTURE.templateContent);
+    const plugin = manager.list().find((item) => item.id === 'quickadd');
+    expect(plugin?.runtime.capabilityLedger).toEqual(expect.arrayContaining([
+      expect.objectContaining({ capability: 'Vault.create', phase: 'called' }),
+    ]));
+    expect(plugin?.workflowAudits).toEqual([
+      expect.objectContaining({ id: 'quickadd-capture-macro' }),
+      expect.objectContaining({
+        id: 'quickadd-template-note',
+        status: 'observed',
+        source: 'workflow-probe',
+        lastProbeStatus: 'passed',
+      }),
+    ]);
+  });
+
+  it('fails the QuickAdd template probe when the Template choice does not create the fixture target', async () => {
+    writePlugin('quickadd', `
+      const { Plugin } = require('obsidian');
+      module.exports = class QuickAddPlugin extends Plugin {
+        onload() {
+          this.addCommand({
+            id: 'choice:${QUICKADD_TEMPLATE_WORKFLOW_PROBE_FIXTURE.choiceId}',
+            name: '${QUICKADD_TEMPLATE_WORKFLOW_PROBE_FIXTURE.choiceName}',
+            callback: async () => {
+              await this.app.vault.create('Generated/wrong-template-note.md', 'wrong content');
+            }
+          });
+        }
+      };
+    `);
+    writePluginData('quickadd', buildQuickAddWorkflowProbeDataJson('2.13.1'));
+    writeQuickAddTemplateFixture();
+
+    const manager = new PluginManager(mindRoot);
+    await manager.discover();
+    await manager.enable('quickadd', { confirmCapabilityGate: true });
+
+    const result = await manager.runWorkflowProbe('quickadd', 'quickadd-template-note');
+
+    expect(result).toMatchObject({
+      id: 'quickadd-template-note',
+      status: 'failed',
+      failureReason: expect.stringContaining(QUICKADD_TEMPLATE_WORKFLOW_PROBE_FIXTURE.targetPath),
+    });
+    expect(result.assertions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'execute-command', passed: true }),
+      expect.objectContaining({ id: 'observable-result', passed: true }),
+      expect.objectContaining({ id: 'fixture-template-note-written', passed: false }),
+      expect.objectContaining({ id: 'fixture-template-note-content', passed: false }),
+      expect.objectContaining({ id: 'vault-write-called-ledger', passed: true }),
+    ]));
   });
 
   it('passes the Calendar open-periodic-note probe through workspace navigation evidence', async () => {

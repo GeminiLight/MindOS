@@ -462,6 +462,7 @@ export class Vault extends Events implements IVault {
       const file = new TFileImpl(this, normalizedPath, this.mindRoot);
       this.fileCache.set(normalizedPath, file);
       this.trigger('create', file);
+      this.recordCapability('Vault.create', `Plugin created "${file.path}".`);
       return file;
     } catch (err) {
       throw new Error(`Failed to create file: ${filePath}: ${err instanceof Error ? err.message : String(err)}`);
@@ -479,6 +480,7 @@ export class Vault extends Events implements IVault {
       const file = new TFileImpl(this, normalizedPath, this.mindRoot);
       this.fileCache.set(normalizedPath, file);
       this.trigger('create', file);
+      this.recordCapability('Vault.createBinary', `Plugin created binary file "${file.path}".`);
       return file;
     } catch (err) {
       throw new Error(`Failed to create binary file: ${filePath}: ${err instanceof Error ? err.message : String(err)}`);

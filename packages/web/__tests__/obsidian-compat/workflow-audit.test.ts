@@ -135,6 +135,69 @@ describe('buildObsidianWorkflowAudits', () => {
     ]);
   });
 
+  it('adds the QuickAdd template workflow audit when a template probe has run', () => {
+    const captureResult = {
+      schemaVersion: 1 as const,
+      pluginId: 'quickadd',
+      id: 'quickadd-capture-macro' as const,
+      label: 'Run capture or macro commands',
+      status: 'passed' as const,
+      source: 'workflow-probe' as const,
+      startedAt: '2026-06-26T08:00:00.000Z',
+      completedAt: '2026-06-26T08:00:01.000Z',
+      evidence: ['Capture probe observed a vault file write.'],
+      assertions: [
+        { id: 'execute-command', label: 'Executed command', passed: true },
+      ],
+    };
+    const templateResult = {
+      schemaVersion: 1 as const,
+      pluginId: 'quickadd',
+      id: 'quickadd-template-note' as const,
+      label: 'Create note from template choice',
+      status: 'passed' as const,
+      source: 'workflow-probe' as const,
+      startedAt: '2026-06-26T08:01:00.000Z',
+      completedAt: '2026-06-26T08:01:01.000Z',
+      evidence: ['Template probe created the fixture note.'],
+      assertions: [
+        { id: 'fixture-template-note-written', label: 'Created fixture note', passed: true },
+      ],
+    };
+
+    const audits = buildObsidianWorkflowAudits({
+      pluginId: 'quickadd',
+      pluginName: 'QuickAdd',
+      coverage: [],
+      capabilityGate: readyGate,
+      runtimeEntries: [],
+      history: history(),
+      workflowProbeHistory: {
+        total: 2,
+        entries: [captureResult, templateResult],
+        latestById: {
+          'quickadd-capture-macro': captureResult,
+          'quickadd-template-note': templateResult,
+        },
+        skippedCorruptLines: 0,
+        updatedAt: '2026-06-26T08:01:01.000Z',
+      },
+    });
+
+    expect(audits).toEqual([
+      expect.objectContaining({
+        id: 'quickadd-capture-macro',
+        status: 'observed',
+      }),
+      expect.objectContaining({
+        id: 'quickadd-template-note',
+        status: 'observed',
+        source: 'workflow-probe',
+        lastObservedAt: '2026-06-26T08:01:01.000Z',
+      }),
+    ]);
+  });
+
   it('keeps static Linter evidence partial instead of claiming runtime observation', () => {
     const coverage: ObsidianCapabilityCoverage[] = [{
       api: 'addCommand',

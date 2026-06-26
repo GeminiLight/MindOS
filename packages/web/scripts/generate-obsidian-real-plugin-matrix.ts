@@ -20,7 +20,10 @@ import {
   type ObsidianRealPluginSmokeResult,
   type ObsidianRealPluginTarget,
 } from '@/lib/obsidian-compat/real-plugin-matrix';
-import { buildQuickAddWorkflowProbeDataJson } from '@/lib/obsidian-compat/quickadd-workflow-fixture';
+import {
+  QUICKADD_TEMPLATE_WORKFLOW_PROBE_FIXTURE,
+  buildQuickAddWorkflowProbeDataJson,
+} from '@/lib/obsidian-compat/quickadd-workflow-fixture';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const webRoot = path.resolve(__dirname, '..');
@@ -414,6 +417,9 @@ function writeWorkflowProbeFixture(
     `${JSON.stringify(buildQuickAddWorkflowProbeDataJson(version), null, 2)}\n`,
     'utf-8',
   );
+  const templatePath = path.join(mindRoot, QUICKADD_TEMPLATE_WORKFLOW_PROBE_FIXTURE.templatePath);
+  fs.mkdirSync(path.dirname(templatePath), { recursive: true });
+  fs.writeFileSync(templatePath, QUICKADD_TEMPLATE_WORKFLOW_PROBE_FIXTURE.templateContent, 'utf-8');
 }
 
 function runtimeSummary(plugin: RuntimeSummarySource): NonNullable<ObsidianRealPluginSmokeResult['runtime']> {

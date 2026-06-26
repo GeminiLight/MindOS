@@ -5,6 +5,16 @@ export const QUICKADD_WORKFLOW_PROBE_FIXTURE = {
   captureContent: 'Captured by QuickAdd fixture',
 } as const;
 
+export const QUICKADD_TEMPLATE_WORKFLOW_PROBE_FIXTURE = {
+  choiceId: 'mindos-template',
+  choiceName: 'MindOS Template',
+  templatePath: 'Templates/quickadd-template.md',
+  templateContent: '# QuickAdd Template Fixture\n\nCreated by QuickAdd template fixture.\n',
+  targetFolder: 'Generated',
+  fileNameFormat: 'quickadd-template-note',
+  targetPath: 'Generated/quickadd-template-note.md',
+} as const;
+
 export function buildQuickAddWorkflowProbeDataJson(version = '0.0.0'): Record<string, unknown> {
   return {
     choices: [
@@ -61,6 +71,37 @@ export function buildQuickAddWorkflowProbeDataJson(version = '0.0.0'): Record<st
         },
         templater: {
           afterCapture: 'none',
+        },
+      },
+      {
+        id: QUICKADD_TEMPLATE_WORKFLOW_PROBE_FIXTURE.choiceId,
+        name: QUICKADD_TEMPLATE_WORKFLOW_PROBE_FIXTURE.choiceName,
+        type: 'Template',
+        command: true,
+        onePageInput: 'never',
+        templatePath: QUICKADD_TEMPLATE_WORKFLOW_PROBE_FIXTURE.templatePath,
+        folder: {
+          enabled: true,
+          folders: [QUICKADD_TEMPLATE_WORKFLOW_PROBE_FIXTURE.targetFolder],
+          chooseWhenCreatingNote: false,
+          createInSameFolderAsActiveFile: false,
+          chooseFromSubfolders: false,
+        },
+        fileNameFormat: {
+          enabled: true,
+          format: QUICKADD_TEMPLATE_WORKFLOW_PROBE_FIXTURE.fileNameFormat,
+        },
+        appendLink: false,
+        openFile: false,
+        fileOpening: {
+          location: 'tab',
+          direction: 'vertical',
+          mode: 'default',
+          focus: false,
+        },
+        fileExistsBehavior: {
+          kind: 'apply',
+          mode: 'overwrite',
         },
       },
     ],

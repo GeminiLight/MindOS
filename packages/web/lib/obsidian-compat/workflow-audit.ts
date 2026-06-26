@@ -63,7 +63,7 @@ export function buildObsidianWorkflowAudits(input: BuildObsidianWorkflowAuditsIn
   const audits: ObsidianWorkflowAudit[] = [];
 
   if (LINTER_PLUGIN_IDS.has(pluginId)) audits.push(buildLinterAudit(input));
-  if (QUICKADD_PLUGIN_IDS.has(pluginId)) audits.push(buildQuickAddAudit(input));
+  if (QUICKADD_PLUGIN_IDS.has(pluginId)) audits.push(...buildQuickAddAudits(input));
   if (TAG_WRANGLER_PLUGIN_IDS.has(pluginId)) audits.push(buildTagWranglerAudit(input));
   if (CALENDAR_PLUGIN_IDS.has(pluginId)) audits.push(buildCalendarAudit(input));
   if (ADMONITION_PLUGIN_IDS.has(pluginId)) audits.push(buildAdmonitionAudit(input));
@@ -113,7 +113,14 @@ function buildLinterAudit(input: BuildObsidianWorkflowAuditsInput): ObsidianWork
   return staticAudit(input, 'linter-review-apply', 'Review and apply Markdown lint fixes', ['commands', 'editor'], 'Import settings, load the plugin, then verify the native MindOS Linter adapter path.');
 }
 
-function buildQuickAddAudit(input: BuildObsidianWorkflowAuditsInput): ObsidianWorkflowAudit {
+function buildQuickAddAudits(input: BuildObsidianWorkflowAuditsInput): ObsidianWorkflowAudit[] {
+  const audits = [buildQuickAddCaptureAudit(input)];
+  const templateAudit = probedAudit(input, 'quickadd-template-note');
+  if (templateAudit) audits.push(templateAudit);
+  return audits;
+}
+
+function buildQuickAddCaptureAudit(input: BuildObsidianWorkflowAuditsInput): ObsidianWorkflowAudit {
   const probed = probedAudit(input, 'quickadd-capture-macro');
   if (probed) return probed;
   const called = latestEntries(input, { capabilities: ['addCommand', 'Modal', 'SuggestModal', 'Menu', 'MenuItem'], phases: ['called'] });

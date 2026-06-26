@@ -5,7 +5,10 @@ import type { ManagedPluginMarkdownPostProcessorSnapshot } from './plugin-manage
 import type { ObsidianWorkflowAudit } from './workflow-audit';
 import { redactRuntimeCapabilityEvidence } from './runtime-capability-ledger-store';
 import { resolveCanonicalPluginWorkflowProbePath } from './plugin-paths';
-import { QUICKADD_WORKFLOW_PROBE_FIXTURE } from './quickadd-workflow-fixture';
+import {
+  QUICKADD_TEMPLATE_WORKFLOW_PROBE_FIXTURE,
+  QUICKADD_WORKFLOW_PROBE_FIXTURE,
+} from './quickadd-workflow-fixture';
 
 export const OBSIDIAN_WORKFLOW_PROBE_SCHEMA_VERSION = 1;
 export const DEFAULT_OBSIDIAN_WORKFLOW_PROBE_MAX_ENTRIES = 100;
@@ -13,6 +16,7 @@ export const DEFAULT_OBSIDIAN_WORKFLOW_PROBE_READ_LIMIT = 50;
 
 export type ObsidianWorkflowProbeId =
   | 'quickadd-capture-macro'
+  | 'quickadd-template-note'
   | 'calendar-open-periodic-note'
   | 'tag-wrangler-rename'
   | 'linter-review-apply'
@@ -124,6 +128,26 @@ interface WorkflowProbeDraft {
 
 interface VaultSnapshot {
   files: Map<string, { size: number; mtimeMs: number }>;
+}
+
+interface QuickAddFixtureCommandSpec {
+  choiceId: string;
+  choiceName: string;
+}
+
+interface QuickAddChoiceProbeSpec {
+  command: ObsidianWorkflowProbeCommand | undefined;
+  missingCommandReason: string;
+  workflowKind: string;
+  targetDescription: string;
+  targetPath: string;
+  expectedContent: string;
+  contentDescription: string;
+  targetAssertionId: string;
+  targetAssertionLabel: string;
+  contentAssertionId: string;
+  contentAssertionLabel: string;
+  fixture: QuickAddFixtureCommandSpec;
 }
 
 export class ObsidianWorkflowProbeStore {
@@ -317,6 +341,12 @@ const PROBE_DEFINITIONS: WorkflowProbeDefinition[] = [
     run: runQuickAddProbe,
   },
   {
+    id: 'quickadd-template-note',
+    label: 'Create note from template choice',
+    pluginIds: new Set(['quickadd']),
+    run: runQuickAddTemplateProbe,
+  },
+  {
     id: 'calendar-open-periodic-note',
     label: 'Open calendar views and notes',
     pluginIds: new Set(['calendar', 'obsidian-calendar-plugin']),
@@ -343,9 +373,46 @@ const PROBE_DEFINITIONS: WorkflowProbeDefinition[] = [
 ];
 
 async function runQuickAddProbe(input: WorkflowProbeRuntimeInput): Promise<WorkflowProbeDraft> {
-  const command = selectQuickAddChoiceCommand(input.plugin);
+  return runQuickAddChoiceProbe(input, {
+    command: selectQuickAddChoiceCommand(input.plugin),
+    missingCommandReason: 'No configured QuickAdd choice command was registered; this probe requires a data.json-backed choice command, not only the generic Run modal.',
+    workflowKind: 'capture',
+    targetDescription: 'QuickAdd fixture note',
+    targetPath: QUICKADD_WORKFLOW_PROBE_FIXTURE.targetPath,
+    expectedContent: QUICKADD_WORKFLOW_PROBE_FIXTURE.captureContent,
+    contentDescription: 'capture text',
+    targetAssertionId: 'fixture-note-written',
+    targetAssertionLabel: 'Changed the QuickAdd fixture capture note',
+    contentAssertionId: 'fixture-note-content',
+    contentAssertionLabel: 'Wrote the expected QuickAdd fixture capture content',
+    fixture: QUICKADD_WORKFLOW_PROBE_FIXTURE,
+  });
+}
+
+async function runQuickAddTemplateProbe(input: WorkflowProbeRuntimeInput): Promise<WorkflowProbeDraft> {
+  return runQuickAddChoiceProbe(input, {
+    command: selectQuickAddTemplateChoiceCommand(input.plugin),
+    missingCommandReason: 'No configured QuickAdd Template choice command was registered; this probe requires the controlled MindOS Template data.json choice.',
+    workflowKind: 'template',
+    targetDescription: 'QuickAdd template fixture note',
+    targetPath: QUICKADD_TEMPLATE_WORKFLOW_PROBE_FIXTURE.targetPath,
+    expectedContent: QUICKADD_TEMPLATE_WORKFLOW_PROBE_FIXTURE.templateContent,
+    contentDescription: 'template content',
+    targetAssertionId: 'fixture-template-note-written',
+    targetAssertionLabel: 'Created the QuickAdd fixture template note',
+    contentAssertionId: 'fixture-template-note-content',
+    contentAssertionLabel: 'Wrote the expected QuickAdd fixture template content',
+    fixture: QUICKADD_TEMPLATE_WORKFLOW_PROBE_FIXTURE,
+  });
+}
+
+async function runQuickAddChoiceProbe(
+  input: WorkflowProbeRuntimeInput,
+  spec: QuickAddChoiceProbeSpec,
+): Promise<WorkflowProbeDraft> {
+  const command = spec.command;
   if (!command) {
-    return skippedDraft('No configured QuickAdd choice command was registered; this probe requires a data.json-backed choice command, not only the generic Run modal.');
+    return skippedDraft(spec.missingCommandReason);
   }
 
   const before = snapshotVault(input.mindRoot);
@@ -355,47 +422,47 @@ async function runQuickAddProbe(input: WorkflowProbeRuntimeInput): Promise<Workf
   const changedPaths = changedVaultPaths(changes);
   const observable = observableEvidence(action, changes);
   const choiceCommandCalled = hasCalledLedger(input.host, input.plugin.id, ['addCommand']);
-  const vaultWriteCalled = hasCalledLedger(input.host, input.plugin.id, ['Vault.modify', 'Vault.process', 'Vault.rename']);
+  const vaultWriteCalled = hasCalledLedger(input.host, input.plugin.id, QUICKADD_VAULT_WRITE_CAPABILITIES);
   const publicVaultWrite = changedPaths.size > 0;
-  const fixtureCommand = isQuickAddFixtureCommand(command);
-  const fixturePathChanged = changedPaths.has(QUICKADD_WORKFLOW_PROBE_FIXTURE.targetPath);
-  const fixtureContent = fs.existsSync(path.join(input.mindRoot, QUICKADD_WORKFLOW_PROBE_FIXTURE.targetPath))
-    ? readVaultFile(input.mindRoot, QUICKADD_WORKFLOW_PROBE_FIXTURE.targetPath)
+  const fixtureCommand = isQuickAddFixtureCommand(command, spec.fixture);
+  const fixturePathChanged = changedPaths.has(spec.targetPath);
+  const fixtureContent = fs.existsSync(path.join(input.mindRoot, spec.targetPath))
+    ? readVaultFile(input.mindRoot, spec.targetPath)
     : '';
-  const fixtureContentMatches = fixtureContent.includes(QUICKADD_WORKFLOW_PROBE_FIXTURE.captureContent);
+  const fixtureContentMatches = fixtureContent.includes(spec.expectedContent);
   const fixturePassed = fixtureCommand ? fixturePathChanged && fixtureContentMatches : true;
   const passed = choiceCommandCalled && vaultWriteCalled && publicVaultWrite && fixturePassed;
   const failureReason = passed ? undefined : [
     !choiceCommandCalled ? 'runtime ledger did not record QuickAdd command execution' : '',
-    !vaultWriteCalled ? 'runtime ledger did not record a vault write for the QuickAdd choice' : '',
+    !vaultWriteCalled ? 'runtime ledger did not record a vault create/modify/write for the QuickAdd choice' : '',
     !publicVaultWrite ? 'configured QuickAdd choice did not change any public vault file' : '',
-    fixtureCommand && !fixturePathChanged ? `QuickAdd fixture note was not changed: ${QUICKADD_WORKFLOW_PROBE_FIXTURE.targetPath}` : '',
-    fixtureCommand && !fixtureContentMatches ? `QuickAdd fixture note did not contain expected capture text: ${QUICKADD_WORKFLOW_PROBE_FIXTURE.captureContent}` : '',
+    fixtureCommand && !fixturePathChanged ? `${spec.targetDescription} was not changed: ${spec.targetPath}` : '',
+    fixtureCommand && !fixtureContentMatches ? `${spec.targetDescription} did not contain expected ${spec.contentDescription}: ${spec.expectedContent}` : '',
   ].filter(Boolean).join('; ');
 
   return {
     status: passed ? 'passed' : 'failed',
     evidence: [
-      `Executed QuickAdd choice command "${command.name}" (${command.fullId}).`,
+      `Executed QuickAdd ${spec.workflowKind} choice command "${command.name}" (${command.fullId}).`,
       ...(fixtureCommand ? [
         fixturePathChanged
-          ? `Observed QuickAdd fixture note change: ${QUICKADD_WORKFLOW_PROBE_FIXTURE.targetPath}.`
-          : `Expected QuickAdd fixture note to change: ${QUICKADD_WORKFLOW_PROBE_FIXTURE.targetPath}.`,
+          ? `Observed ${spec.targetDescription} change: ${spec.targetPath}.`
+          : `Expected ${spec.targetDescription} to change: ${spec.targetPath}.`,
         fixtureContentMatches
-          ? `Verified QuickAdd fixture note "${QUICKADD_WORKFLOW_PROBE_FIXTURE.targetPath}" contains "${QUICKADD_WORKFLOW_PROBE_FIXTURE.captureContent}".`
-          : `Expected QuickAdd fixture note "${QUICKADD_WORKFLOW_PROBE_FIXTURE.targetPath}" to contain "${QUICKADD_WORKFLOW_PROBE_FIXTURE.captureContent}".`,
+          ? `Verified ${spec.targetDescription} "${spec.targetPath}" contains the expected ${spec.contentDescription}.`
+          : `Expected ${spec.targetDescription} "${spec.targetPath}" to contain "${spec.expectedContent}".`,
       ] : []),
       ...observable,
       ...(!publicVaultWrite ? ['No public vault file changed after the QuickAdd choice command executed.'] : []),
-      ...(fixtureCommand && !fixtureContentMatches ? [`Observed QuickAdd fixture note content: ${fixtureContent.slice(0, 160) || '(missing)'}`] : []),
+      ...(fixtureCommand && !fixtureContentMatches ? [`Observed ${spec.targetDescription} content: ${fixtureContent.slice(0, 160) || '(missing)'}`] : []),
     ],
     assertions: [
       { id: 'execute-command', label: 'Executed the selected QuickAdd choice command', passed: true, detail: command.fullId },
       { id: 'quickadd-choice-command', label: 'Selected a configured QuickAdd choice command', passed: true, detail: command.id },
       { id: 'observable-result', label: 'QuickAdd choice changed a public vault file', passed: publicVaultWrite, detail: Array.from(changedPaths).join(', ') || 'No changed files.' },
       ...(fixtureCommand ? [
-        { id: 'fixture-note-written', label: 'Changed the QuickAdd fixture capture note', passed: fixturePathChanged, detail: QUICKADD_WORKFLOW_PROBE_FIXTURE.targetPath },
-        { id: 'fixture-note-content', label: 'Wrote the expected QuickAdd fixture capture content', passed: fixtureContentMatches, detail: QUICKADD_WORKFLOW_PROBE_FIXTURE.captureContent },
+        { id: spec.targetAssertionId, label: spec.targetAssertionLabel, passed: fixturePathChanged, detail: spec.targetPath },
+        { id: spec.contentAssertionId, label: spec.contentAssertionLabel, passed: fixtureContentMatches, detail: spec.expectedContent },
       ] : []),
       { id: 'vault-write-called-ledger', label: 'Recorded vault write evidence for the QuickAdd choice', passed: vaultWriteCalled },
       { id: 'runtime-called-ledger', label: 'Recorded called runtime ledger evidence', passed: choiceCommandCalled },
@@ -720,7 +787,7 @@ function selectCommand(plugin: ObsidianWorkflowProbePlugin, patterns: RegExp[]):
 
 function selectQuickAddChoiceCommand(plugin: ObsidianWorkflowProbePlugin): ObsidianWorkflowProbeCommand | undefined {
   const commands = plugin.runtime.commandList.filter((command) => command.executable !== false);
-  return commands.find(isQuickAddFixtureCommand)
+  return commands.find((command) => isQuickAddFixtureCommand(command, QUICKADD_WORKFLOW_PROBE_FIXTURE))
     ?? commands.find((command) => isQuickAddChoiceCommand(command) && /capture|macro|quickadd|add|mindos/i.test([
       command.id,
       command.fullId,
@@ -729,17 +796,22 @@ function selectQuickAddChoiceCommand(plugin: ObsidianWorkflowProbePlugin): Obsid
     ?? commands.find(isQuickAddChoiceCommand);
 }
 
+function selectQuickAddTemplateChoiceCommand(plugin: ObsidianWorkflowProbePlugin): ObsidianWorkflowProbeCommand | undefined {
+  const commands = plugin.runtime.commandList.filter((command) => command.executable !== false);
+  return commands.find((command) => isQuickAddFixtureCommand(command, QUICKADD_TEMPLATE_WORKFLOW_PROBE_FIXTURE));
+}
+
 function isQuickAddChoiceCommand(command: ObsidianWorkflowProbeCommand): boolean {
   return command.id.startsWith('choice:')
     || /(^|:)choice:[^:]+$/.test(command.fullId);
 }
 
-function isQuickAddFixtureCommand(command: ObsidianWorkflowProbeCommand): boolean {
-  const commandId = `choice:${QUICKADD_WORKFLOW_PROBE_FIXTURE.choiceId}`;
+function isQuickAddFixtureCommand(command: ObsidianWorkflowProbeCommand, fixture: QuickAddFixtureCommandSpec): boolean {
+  const commandId = `choice:${fixture.choiceId}`;
   return command.id === commandId
     || command.fullId === `quickadd:${commandId}`
     || command.fullId.endsWith(`:${commandId}`)
-    || command.name === QUICKADD_WORKFLOW_PROBE_FIXTURE.choiceName;
+    || command.name === fixture.choiceName;
 }
 
 function hasCalledLedger(host: ObsidianWorkflowProbeHost, pluginId: string, capabilities: string[]): boolean {
@@ -1086,11 +1158,20 @@ function toPosixPath(value: string): string {
 
 const PROBE_IDS = new Set<ObsidianWorkflowProbeId>([
   'quickadd-capture-macro',
+  'quickadd-template-note',
   'calendar-open-periodic-note',
   'tag-wrangler-rename',
   'linter-review-apply',
   'admonition-render-markdown',
 ]);
+
+const QUICKADD_VAULT_WRITE_CAPABILITIES = [
+  'Vault.create',
+  'Vault.createBinary',
+  'Vault.modify',
+  'Vault.process',
+  'Vault.rename',
+];
 
 const PRIVATE_ROOTS = new Set(['.git', '.mindos', '.obsidian', '.plugins', 'node_modules']);
 const ADMONITION_MARKDOWN_FIXTURE = '```admonition\nnote\nMindOS workflow probe\n```';
