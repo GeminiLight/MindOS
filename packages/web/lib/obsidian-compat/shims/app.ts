@@ -299,8 +299,8 @@ export class AppShim implements App {
 
   constructor(private mindRoot: string, runtimeHost = new ObsidianRuntimeHost(), options: AppShimOptions = {}) {
     this.runtimeHost = runtimeHost;
-    this.vault = new Vault(mindRoot);
-    this.metadataCache = new MetadataCacheShim(mindRoot, this.vault);
+    this.vault = new Vault(mindRoot, this.runtimeHost);
+    this.metadataCache = new MetadataCacheShim(mindRoot, this.vault, this.runtimeHost);
     this.fileManager = new FileManagerShim(this);
     this.secretStorage = new ObsidianSecretStorage(
       mindRoot,

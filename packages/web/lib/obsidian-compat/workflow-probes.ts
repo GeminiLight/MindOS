@@ -390,12 +390,69 @@ async function runCalendarViewProbe(input: WorkflowProbeRuntimeInput, viewType: 
 async function runTagWranglerProbe(input: WorkflowProbeRuntimeInput): Promise<WorkflowProbeDraft> {
   const command = selectCommand(input.plugin, [/tag/i, /rename/i, /wrangler/i]);
   if (!command) return skippedDraft('No executable Tag Wrangler command was registered; full rename/write probe remains a later stage.');
-  return runCommandProbe({
-    ...input,
-    command,
-    calledCapabilities: ['addCommand', 'Menu', 'Vault.modify', 'MetadataCache'],
-    observableLabel: 'Tag Wrangler command produced a menu, notice, navigation, or vault update.',
-  });
+
+  writeTagWranglerFixture(input.mindRoot);
+  const before = snapshotVault(input.mindRoot);
+  const action = await input.host.executeCommand(command.fullId);
+  const after = snapshotVault(input.mindRoot);
+  const changes = diffVaultSnapshots(before, after);
+  const fixture = readTagWranglerFixture(input.mindRoot);
+  const changedPaths = changedVaultPaths(changes);
+  const changedFixturePaths = TAG_WRANGLER_FIXTURE_PATHS.filter((filePath) => changedPaths.has(filePath));
+  const unexpectedChanges = Array.from(changedPaths).filter((filePath) => !TAG_WRANGLER_FIXTURE_PATHS.includes(filePath));
+  const frontmatterRenamed = fixture.every((file) => frontmatterTagRenamed(file.content));
+  const bodyRenamed = fixture.every((file) => bodyTagRenamed(file.content));
+  const oldTagGone = fixture.every((file) => !file.content.includes(TAG_WRANGLER_OLD_TAG));
+  const newTagPresent = fixture.every((file) => file.content.includes(TAG_WRANGLER_NEW_TAG));
+  const commandCalled = hasCalledLedger(input.host, input.plugin.id, ['addCommand']);
+  const metadataCalled = hasCalledLedger(input.host, input.plugin.id, [
+    'MetadataCache.getCache',
+    'MetadataCache.getCachedFiles',
+    'MetadataCache.getFileCache',
+    'MetadataCache.getTags',
+  ]);
+  const writeCalled = hasCalledLedger(input.host, input.plugin.id, ['Vault.modify', 'Vault.process']);
+  const changedExpectedFiles = changedFixturePaths.length === TAG_WRANGLER_FIXTURE_PATHS.length && unexpectedChanges.length === 0;
+  const observable = observableEvidence(action, changes);
+  const passed = frontmatterRenamed
+    && bodyRenamed
+    && oldTagGone
+    && newTagPresent
+    && changedExpectedFiles
+    && commandCalled
+    && metadataCalled
+    && writeCalled;
+
+  return {
+    status: passed ? 'passed' : 'failed',
+    evidence: [
+      `Executed command "${command.name}" (${command.fullId}).`,
+      `Fixture rename ${TAG_WRANGLER_OLD_TAG} -> ${TAG_WRANGLER_NEW_TAG}.`,
+      ...observable,
+      ...(!changedExpectedFiles ? [`Unexpected fixture write scope: changed=${Array.from(changedPaths).join(', ') || 'none'}`] : []),
+    ],
+    assertions: [
+      { id: 'execute-command', label: 'Executed the selected Tag Wrangler workflow command', passed: true, detail: command.fullId },
+      { id: 'frontmatter-tags-renamed', label: 'Renamed tags in YAML frontmatter', passed: frontmatterRenamed },
+      { id: 'body-tags-renamed', label: 'Renamed inline body tags', passed: bodyRenamed },
+      { id: 'old-tag-removed', label: 'Removed the old tag from every fixture note', passed: oldTagGone },
+      { id: 'new-tag-present', label: 'Inserted the new tag in every fixture note', passed: newTagPresent },
+      { id: 'fixture-write-scope', label: 'Only the Tag Wrangler fixture notes changed', passed: changedExpectedFiles, detail: Array.from(changedPaths).join(', ') || 'No changed files.' },
+      { id: 'metadata-cache-called-ledger', label: 'Recorded metadata cache lookup evidence', passed: metadataCalled },
+      { id: 'vault-write-called-ledger', label: 'Recorded vault write evidence', passed: writeCalled },
+      { id: 'runtime-called-ledger', label: 'Recorded command execution evidence', passed: commandCalled },
+    ],
+    ...(!passed ? { failureReason: tagWranglerFailureReason({
+      frontmatterRenamed,
+      bodyRenamed,
+      oldTagGone,
+      newTagPresent,
+      changedExpectedFiles,
+      commandCalled,
+      metadataCalled,
+      writeCalled,
+    }) } : {}),
+  };
 }
 
 async function runLinterProbe(input: WorkflowProbeRuntimeInput): Promise<WorkflowProbeDraft> {
@@ -545,6 +602,68 @@ function observableEvidence(action: PluginActionResult, changes: string[]): stri
   return evidence;
 }
 
+interface TagWranglerFixtureFile {
+  path: string;
+  content: string;
+}
+
+function writeTagWranglerFixture(mindRoot: string): void {
+  for (const fixture of TAG_WRANGLER_FIXTURE_FILES) {
+    writeVaultFile(mindRoot, fixture.path, fixture.content);
+  }
+}
+
+function readTagWranglerFixture(mindRoot: string): TagWranglerFixtureFile[] {
+  return TAG_WRANGLER_FIXTURE_PATHS.map((filePath) => ({
+    path: filePath,
+    content: readVaultFile(mindRoot, filePath),
+  }));
+}
+
+function frontmatterTagRenamed(content: string): boolean {
+  const frontmatter = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+  if (!frontmatter?.[1]) return false;
+  return frontmatter[1].includes(TAG_WRANGLER_NEW_TAG_NAME)
+    && !frontmatter[1].includes(TAG_WRANGLER_OLD_TAG_NAME);
+}
+
+function bodyTagRenamed(content: string): boolean {
+  const body = content.replace(/^---\r?\n[\s\S]*?\r?\n---(?:\r?\n)?/, '');
+  return body.includes(TAG_WRANGLER_NEW_TAG)
+    && !body.includes(TAG_WRANGLER_OLD_TAG);
+}
+
+function tagWranglerFailureReason(input: {
+  frontmatterRenamed: boolean;
+  bodyRenamed: boolean;
+  oldTagGone: boolean;
+  newTagPresent: boolean;
+  changedExpectedFiles: boolean;
+  commandCalled: boolean;
+  metadataCalled: boolean;
+  writeCalled: boolean;
+}): string {
+  return [
+    !input.frontmatterRenamed ? 'frontmatter tags were not renamed in every fixture note' : '',
+    !input.bodyRenamed ? 'inline body tags were not renamed in every fixture note' : '',
+    !input.oldTagGone ? 'old tag remains in at least one fixture note' : '',
+    !input.newTagPresent ? 'new tag missing from at least one fixture note' : '',
+    !input.changedExpectedFiles ? 'changed files did not match the controlled Tag Wrangler fixture set' : '',
+    !input.commandCalled ? 'runtime ledger did not record command execution' : '',
+    !input.metadataCalled ? 'runtime ledger did not record metadata cache lookup evidence' : '',
+    !input.writeCalled ? 'runtime ledger did not record vault write evidence' : '',
+  ].filter(Boolean).join('; ');
+}
+
+function changedVaultPaths(changes: string[]): Set<string> {
+  const result = new Set<string>();
+  for (const change of changes) {
+    const match = change.match(/^(.+) (?:created|changed|deleted)$/);
+    if (match?.[1]) result.add(match[1]);
+  }
+  return result;
+}
+
 interface NativeAdmonitionSnapshot {
   type: string;
   body: string;
@@ -631,6 +750,10 @@ function writeVaultFile(mindRoot: string, relativePath: string, content: string)
   fs.writeFileSync(fullPath, content, 'utf-8');
 }
 
+function readVaultFile(mindRoot: string, relativePath: string): string {
+  return fs.readFileSync(path.join(mindRoot, relativePath), 'utf-8');
+}
+
 function probeEvidence(result: ObsidianWorkflowProbeResult): string[] {
   const assertions = result.assertions
     .filter((assertion) => !assertion.passed)
@@ -708,3 +831,32 @@ const PROBE_IDS = new Set<ObsidianWorkflowProbeId>([
 const PRIVATE_ROOTS = new Set(['.git', '.mindos', '.obsidian', '.plugins', 'node_modules']);
 const ADMONITION_MARKDOWN_FIXTURE = '```admonition\nnote\nMindOS workflow probe\n```';
 const ADMONITION_NATIVE_CALLOUT_FIXTURE = '> [!note]\n> MindOS workflow probe';
+const TAG_WRANGLER_OLD_TAG_NAME = 'mindos/legacy';
+const TAG_WRANGLER_NEW_TAG_NAME = 'mindos/renamed';
+const TAG_WRANGLER_OLD_TAG = `#${TAG_WRANGLER_OLD_TAG_NAME}`;
+const TAG_WRANGLER_NEW_TAG = `#${TAG_WRANGLER_NEW_TAG_NAME}`;
+const TAG_WRANGLER_FIXTURE_FILES: TagWranglerFixtureFile[] = [
+  {
+    path: 'workflow-probes/tag-wrangler/alpha.md',
+    content: `---
+tags:
+  - ${TAG_WRANGLER_OLD_TAG_NAME}
+  - keep/tag
+---
+# Alpha
+
+Primary rename fixture with ${TAG_WRANGLER_OLD_TAG} in prose.
+`,
+  },
+  {
+    path: 'workflow-probes/tag-wrangler/beta.md',
+    content: `---
+tags: [${TAG_WRANGLER_OLD_TAG_NAME}, keep/tag]
+---
+# Beta
+
+Second rename fixture with ${TAG_WRANGLER_OLD_TAG} and another untouched #keep/tag.
+`,
+  },
+];
+const TAG_WRANGLER_FIXTURE_PATHS = TAG_WRANGLER_FIXTURE_FILES.map((fixture) => fixture.path);

@@ -8,6 +8,7 @@ import path from 'path';
 import { resolveExistingSafe, resolveSafe } from '@/lib/core/security';
 import { Events } from '../events';
 import { DataAdapter, DataWriteOptions, IVault, ListedFiles, Stat, TFile, TFolder, TAbstractFile } from '../types';
+import type { ObsidianRuntimeHost } from '../runtime';
 
 const PRIVATE_VAULT_DIRS = new Set(['.mindos', '.obsidian', '.plugins']);
 const DEFAULT_VAULT_CONFIG: Record<string, unknown> = {
@@ -215,7 +216,10 @@ export class Vault extends Events implements IVault {
   private fileCache: Map<string, TFile> = new Map();
   private readonly configValues = new Map<string, unknown>(Object.entries(DEFAULT_VAULT_CONFIG));
 
-  constructor(private mindRoot: string) {
+  constructor(
+    private mindRoot: string,
+    private readonly runtimeHost?: ObsidianRuntimeHost,
+  ) {
     super();
     this.adapter = new VaultDataAdapter(this);
   }
@@ -504,6 +508,7 @@ export class Vault extends Events implements IVault {
         this.fileCache.set(file.path, file);
       }
       this.trigger('modify', file);
+      this.recordCapability('Vault.modify', `Plugin modified "${file.path}".`);
     } catch (err) {
       throw new Error(`Failed to modify file: ${file.path}: ${err instanceof Error ? err.message : String(err)}`);
     }
@@ -558,6 +563,7 @@ export class Vault extends Events implements IVault {
   async process(file: TFile, fn: (data: string) => string, options?: DataWriteOptions): Promise<string> {
     const nextData = fn(await this.read(file));
     await this.modify(file, nextData, options);
+    this.recordCapability('Vault.process', `Plugin processed "${file.path}".`);
     return nextData;
   }
 
@@ -614,6 +620,7 @@ export class Vault extends Events implements IVault {
         file.name = path.basename(normalizedNewPath);
       }
       this.trigger('rename', file, oldPath);
+      this.recordCapability('Vault.rename', `Plugin renamed "${oldPath}" to "${file.path}".`);
     } catch (err) {
       throw new Error(`Failed to rename file: ${file.path} -> ${newPath}: ${err instanceof Error ? err.message : String(err)}`);
     }
@@ -794,5 +801,14 @@ export class Vault extends Events implements IVault {
       this.fileCache.set(normalizedNewPath, created);
     }
     this.trigger('create', created);
+  }
+
+  private recordCapability(capability: string, evidence: string): void {
+    this.runtimeHost?.recordRuntimeCapability(
+      this.runtimeHost.getCurrentPluginId(),
+      capability,
+      'called',
+      evidence,
+    );
   }
 }

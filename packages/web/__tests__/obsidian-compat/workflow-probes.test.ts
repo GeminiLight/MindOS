@@ -125,6 +125,69 @@ describe('Obsidian workflow probes', () => {
     ]));
   });
 
+  it('passes the Tag Wrangler rename probe only after fixture frontmatter and body tags are rewritten', async () => {
+    writePlugin('tag-wrangler', `
+      const { Plugin } = require('obsidian');
+      module.exports = class TagWranglerPlugin extends Plugin {
+        onload() {
+          this.addCommand({
+            id: 'rename-tag',
+            name: 'Rename Tag',
+            callback: async () => {
+              const oldTag = 'mindos/legacy';
+              const newTag = 'mindos/renamed';
+              const paths = this.app.metadataCache
+                .getCachedFiles()
+                .filter((filePath) => filePath.startsWith('workflow-probes/tag-wrangler/'));
+              this.app.metadataCache.getTags();
+              for (const filePath of paths) {
+                this.app.metadataCache.getCache(filePath);
+                const file = this.app.vault.getFileByPath(filePath);
+                if (!file) continue;
+                const markdown = await this.app.vault.read(file);
+                await this.app.vault.modify(file, markdown.split(oldTag).join(newTag));
+              }
+            }
+          });
+        }
+      };
+    `);
+
+    const manager = new PluginManager(mindRoot);
+    await manager.discover();
+    await manager.enable('tag-wrangler', { confirmCapabilityGate: true });
+
+    const result = await manager.runWorkflowProbe('tag-wrangler', 'tag-wrangler-rename');
+
+    expect(result).toMatchObject({
+      pluginId: 'tag-wrangler',
+      id: 'tag-wrangler-rename',
+      status: 'passed',
+      source: 'workflow-probe',
+    });
+    expect(result.assertions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'frontmatter-tags-renamed', passed: true }),
+      expect.objectContaining({ id: 'body-tags-renamed', passed: true }),
+      expect.objectContaining({ id: 'metadata-cache-called-ledger', passed: true }),
+      expect.objectContaining({ id: 'vault-write-called-ledger', passed: true }),
+      expect.objectContaining({ id: 'runtime-called-ledger', passed: true }),
+    ]));
+    const alpha = fs.readFileSync(path.join(mindRoot, 'workflow-probes/tag-wrangler/alpha.md'), 'utf-8');
+    const beta = fs.readFileSync(path.join(mindRoot, 'workflow-probes/tag-wrangler/beta.md'), 'utf-8');
+    expect(alpha).toContain('mindos/renamed');
+    expect(alpha).not.toContain('mindos/legacy');
+    expect(beta).toContain('#mindos/renamed');
+    expect(beta).not.toContain('#mindos/legacy');
+    expect(manager.list().find((item) => item.id === 'tag-wrangler')?.workflowAudits).toEqual([
+      expect.objectContaining({
+        id: 'tag-wrangler-rename',
+        status: 'observed',
+        source: 'workflow-probe',
+        lastProbeStatus: 'passed',
+      }),
+    ]);
+  });
+
   it('passes the Admonition render probe only when plugin output aligns with the native callout snapshot', async () => {
     writePlugin('obsidian-admonition', `
       const { Plugin } = require('obsidian');

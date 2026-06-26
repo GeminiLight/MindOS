@@ -6,6 +6,7 @@
 import fs from 'fs';
 import yaml from 'js-yaml';
 import { Events } from '../events';
+import type { ObsidianRuntimeHost } from '../runtime';
 import type {
   BlockCache,
   CachedMetadata,
@@ -408,6 +409,7 @@ export class MetadataCacheShim extends Events implements IMetadataCache {
   constructor(
     private mindRoot: string,
     private vault: IVault,
+    private readonly runtimeHost?: ObsidianRuntimeHost,
   ) {
     super();
     this.bindVaultEvents();
@@ -567,6 +569,7 @@ export class MetadataCacheShim extends Events implements IMetadataCache {
   }
 
   getFileCache(file: TFile): CachedMetadata | null {
+    this.recordCapability('MetadataCache.getFileCache', `Plugin read metadata for "${file.path}".`);
     const content = readMarkdownFile(this.mindRoot, file);
     if (content === null) {
       return null;
@@ -591,15 +594,18 @@ export class MetadataCacheShim extends Events implements IMetadataCache {
   }
 
   getCache(filePath: string): CachedMetadata | null {
+    this.recordCapability('MetadataCache.getCache', `Plugin read metadata for "${filePath}".`);
     const file = this.vault.getFileByPath(filePath);
     return file ? this.getFileCache(file) : null;
   }
 
   getCachedFiles(): string[] {
+    this.recordCapability('MetadataCache.getCachedFiles', 'Plugin listed cached Markdown files.');
     return this.vault.getMarkdownFiles().map((file) => file.path);
   }
 
   getTags(): Record<string, number> {
+    this.recordCapability('MetadataCache.getTags', 'Plugin listed indexed tags.');
     const tags: Record<string, number> = {};
     for (const file of this.vault.getMarkdownFiles()) {
       for (const tag of this.getFileCache(file)?.tags ?? []) {
@@ -627,6 +633,15 @@ export class MetadataCacheShim extends Events implements IMetadataCache {
       return file.path.replace(/\.md$/, '');
     }
     return file.path;
+  }
+
+  private recordCapability(capability: string, evidence: string): void {
+    this.runtimeHost?.recordRuntimeCapability(
+      this.runtimeHost.getCurrentPluginId(),
+      capability,
+      'called',
+      evidence,
+    );
   }
 }
 
