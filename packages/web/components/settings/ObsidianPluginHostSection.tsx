@@ -77,9 +77,13 @@ import {
 } from './ObsidianPluginHostModel';
 import {
   compatibilityEvidenceStatusClass,
-  compatibilityPosture,
   compatibilityPostureStatusClass,
 } from './ObsidianCompatibilityPostureModel';
+import {
+  buildObsidianPluginInventory,
+  type ObsidianPostureFilter,
+} from './ObsidianPluginHostInventoryModel';
+import { ObsidianPluginHostInventoryFilters } from './ObsidianPluginHostInventoryFilters';
 import {
   DeclarativeSettingsCatalog,
   SettingControl,
@@ -255,6 +259,7 @@ export function ObsidianPluginHostSection({
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [postureFilter, setPostureFilter] = useState<ObsidianPostureFilter>('all');
   const [lastResult, setLastResult] = useState<ObsidianPluginLoadResult | null>(null);
   const [settingsByPlugin, setSettingsByPlugin] = useState<Record<string, ObsidianPluginSettings>>({});
   const [settingsBusyKey, setSettingsBusyKey] = useState<string | null>(null);
@@ -286,6 +291,10 @@ export function ObsidianPluginHostSection({
     loaded: plugins.filter((plugin) => plugin.loaded).length,
     blocked: plugins.filter((plugin) => plugin.compatibilityLevel === 'blocked').length,
   }), [plugins]);
+  const inventory = useMemo(
+    () => buildObsidianPluginInventory(plugins, postureFilter),
+    [plugins, postureFilter],
+  );
 
   const refresh = useCallback(async (loadEnabled = false) => {
     setLoading(true);
@@ -773,6 +782,12 @@ export function ObsidianPluginHostSection({
             </span>
           )}
         </div>
+        {plugins.length > 0 && (
+          <ObsidianPluginHostInventoryFilters
+            inventory={inventory}
+            onChange={setPostureFilter}
+          />
+        )}
 
         {error && (
           <div className="mt-3 flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
@@ -804,9 +819,20 @@ export function ObsidianPluginHostSection({
             <p className="text-sm text-muted-foreground">No imported Obsidian plugins found.</p>
             <p className="mt-1 text-xs text-muted-foreground/70">Use Import from Obsidian first, then refresh this host.</p>
           </div>
+        ) : inventory.visibleCount === 0 ? (
+          <div className="py-8 text-center">
+            <p className="text-sm text-muted-foreground">No imported plugins match this compatibility posture.</p>
+            <button
+              type="button"
+              onClick={() => setPostureFilter('all')}
+              className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 text-xs text-foreground transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              Show all
+            </button>
+          </div>
         ) : (
           <div className="mt-3 divide-y divide-border/60">
-            {plugins.map((plugin) => {
+            {inventory.items.map(({ plugin, posture }) => {
               const support = getObsidianImportSupport(plugin);
               const supportMeta = SUPPORT_META[support.kind];
               const LevelIcon = supportMeta.icon;
@@ -817,7 +843,6 @@ export function ObsidianPluginHostSection({
               const migrateKey = `migrate-legacy:${plugin.id}`;
               const surfaceRoutes = surfaceRouting(plugin);
               const surfaceLedgerChecks = surfaceLedgerProjections(plugin);
-              const posture = compatibilityPosture(plugin);
               const isFocused = highlightedPluginId === plugin.id;
               return (
                 <div
@@ -830,6 +855,7 @@ export function ObsidianPluginHostSection({
                     isFocused ? 'bg-[var(--amber-subtle)]/70 ring-1 ring-[var(--amber)]/25' : ''
                   }`}
                   data-obsidian-plugin-row={plugin.id}
+                  data-obsidian-posture={posture.status}
                   data-obsidian-plugin-focused={isFocused ? 'true' : undefined}
                 >
                   <div className="flex items-start justify-between gap-3">
@@ -851,6 +877,9 @@ export function ObsidianPluginHostSection({
                           >
                             <LevelIcon size={10} />
                             {support.label}
+                          </span>
+                          <span className={`rounded border px-1.5 py-0.5 font-mono text-2xs ${compatibilityPostureStatusClass(posture.status)}`}>
+                            {posture.label}
                           </span>
                           {plugin.loaded && (
                             <span className="rounded bg-[color-mix(in_srgb,var(--success)_12%,transparent)] px-1.5 py-0.5 font-mono text-2xs text-[var(--success)]">

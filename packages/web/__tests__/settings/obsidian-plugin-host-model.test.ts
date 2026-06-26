@@ -13,6 +13,9 @@ import {
 import {
   compatibilityPosture,
 } from '@/components/settings/ObsidianCompatibilityPostureModel';
+import {
+  buildObsidianPluginInventory,
+} from '@/components/settings/ObsidianPluginHostInventoryModel';
 
 function plugin(overrides: Partial<ObsidianPluginStatus> = {}): ObsidianPluginStatus {
   return {
@@ -329,6 +332,107 @@ describe('ObsidianPluginHostModel', () => {
     expect(posture.evidence.find((step) => step.layer === 'workflow')).toMatchObject({
       status: 'native',
     });
+  });
+
+  it('sorts and filters imported plugin inventory by compatibility posture', () => {
+    const blocked = plugin({
+      id: 'blocked-plugin',
+      name: 'Blocked Plugin',
+      compatibility: {
+        supportedApis: ['Plugin'],
+        partialApis: [],
+        unsupportedApis: ['child_process'],
+        blockers: ['Unsupported Node module: child_process.'],
+      },
+    });
+    const review = plugin({
+      id: 'review-plugin',
+      name: 'Review Plugin',
+      capabilityGate: {
+        status: 'review',
+        fingerprint: 'review',
+        requiresConfirmation: true,
+        confirmed: false,
+        blocked: false,
+        items: [],
+        confirmReasons: ['Network APIs can contact external services.'],
+        blockedReasons: [],
+      },
+    });
+    const limited = plugin({
+      id: 'limited-plugin',
+      name: 'Limited Plugin',
+      runtime: {
+        ...plugin().runtime,
+        capabilityLedger: [{
+          pluginId: 'limited-plugin',
+          capability: 'addCommand',
+          surface: 'commands',
+          support: 'full',
+          phase: 'called',
+          source: 'runtime-ledger',
+          evidence: 'Plugin command executed.',
+        }],
+      },
+    });
+    const native = plugin({
+      id: 'native-plugin',
+      name: 'Native Plugin',
+      workflowAudits: [{
+        id: 'dataview-native-query',
+        label: 'Query notes and metadata',
+        status: 'native-replacement',
+        source: 'native-replacement',
+        evidence: ['Use MindOS native query surfaces.'],
+      }],
+    });
+    const observed = plugin({
+      id: 'observed-plugin',
+      name: 'Observed Plugin',
+      workflowAudits: [{
+        id: 'quickadd-capture-macro',
+        label: 'Run capture or macro commands',
+        status: 'observed',
+        source: 'workflow-probe',
+        evidence: ['Probe observed a vault file write.'],
+        lastProbedAt: '2026-06-26T08:00:00.000Z',
+        lastProbeStatus: 'passed',
+      }],
+    });
+
+    const inventory = buildObsidianPluginInventory([
+      observed,
+      limited,
+      blocked,
+      native,
+      review,
+    ]);
+
+    expect(inventory.allItems.map((item) => `${item.posture.status}:${item.plugin.name}`)).toEqual([
+      'blocked:Blocked Plugin',
+      'review:Review Plugin',
+      'limited:Limited Plugin',
+      'native:Native Plugin',
+      'observed:Observed Plugin',
+    ]);
+    expect(inventory.filterOptions).toEqual(expect.arrayContaining([
+      { value: 'all', label: 'All', count: 5 },
+      { value: 'blocked', label: 'Blocked', count: 1 },
+      { value: 'review', label: 'Review', count: 1 },
+      { value: 'limited', label: 'Limited', count: 1 },
+      { value: 'native', label: 'Native', count: 1 },
+      { value: 'ready', label: 'Ready', count: 0 },
+      { value: 'observed', label: 'Observed', count: 1 },
+    ]));
+
+    const observedOnly = buildObsidianPluginInventory([
+      observed,
+      limited,
+      blocked,
+      native,
+      review,
+    ], 'observed');
+    expect(observedOnly.items.map((item) => item.plugin.id)).toEqual(['observed-plugin']);
   });
 
   it('summarizes historical runtime ledger without counting static predictions', () => {

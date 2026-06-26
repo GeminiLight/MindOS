@@ -160,6 +160,83 @@ describe('ObsidianPluginHostSection', () => {
     await cleanup(root, host);
   });
 
+  it('sorts and filters imported plugins by compatibility posture', async () => {
+    const observed = plugin({
+      id: 'observed-plugin',
+      name: 'Observed Plugin',
+      workflowAudits: [{
+        id: 'quickadd-capture-macro',
+        label: 'Run capture or macro commands',
+        status: 'observed',
+        source: 'workflow-probe',
+        evidence: ['Probe observed a vault file write.'],
+        lastProbedAt: '2026-06-26T08:00:00.000Z',
+        lastProbeStatus: 'passed',
+      }],
+    });
+    const limited = plugin({
+      id: 'limited-plugin',
+      name: 'Limited Plugin',
+      runtime: runtime({
+        capabilityLedger: [{
+          pluginId: 'limited-plugin',
+          capability: 'addCommand',
+          surface: 'commands',
+          support: 'full',
+          phase: 'called',
+          source: 'runtime-ledger',
+          evidence: 'Plugin command executed.',
+        }],
+      }),
+    });
+    const blocked = plugin({
+      id: 'blocked-plugin',
+      name: 'Blocked Plugin',
+      compatibilityLevel: 'blocked',
+      compatibility: {
+        supportedApis: ['Plugin'],
+        partialApis: [],
+        unsupportedApis: ['child_process'],
+        blockers: ['Unsupported Node module: child_process.'],
+      },
+    });
+
+    mocks.apiFetch.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url === '/api/obsidian-plugins' && !init?.method) {
+        return { ok: true, plugins: [observed, limited, blocked] };
+      }
+      throw new Error(`Unexpected apiFetch call: ${url}`);
+    });
+
+    const { host, root } = await renderSection();
+    const rowIds = () => Array.from(host.querySelectorAll('[data-obsidian-plugin-row]'))
+      .map((node) => (node as HTMLElement).dataset.obsidianPluginRow);
+    const filterText = (filter: string) => (
+      host.querySelector(`[data-obsidian-posture-filter="${filter}"]`)?.textContent ?? ''
+    );
+
+    expect(rowIds()).toEqual(['blocked-plugin', 'limited-plugin', 'observed-plugin']);
+    expect(filterText('blocked')).toContain('Blocked');
+    expect(filterText('blocked')).toContain('1');
+    expect(filterText('limited')).toContain('Limited');
+    expect(filterText('limited')).toContain('1');
+    expect(filterText('observed')).toContain('Observed');
+    expect(filterText('observed')).toContain('1');
+
+    const observedFilter = host.querySelector('[data-obsidian-posture-filter="observed"]') as HTMLButtonElement;
+    await act(async () => {
+      observedFilter.click();
+      await Promise.resolve();
+    });
+
+    expect(rowIds()).toEqual(['observed-plugin']);
+    expect(host.textContent).toContain('Workflow observed');
+    expect(host.textContent).not.toContain('Blocked Plugin');
+    expect(host.textContent).not.toContain('Limited Plugin');
+
+    await cleanup(root, host);
+  });
+
   it('shows historical runtime ledger and workflow audit in expanded plugin details', async () => {
     mocks.apiFetch.mockImplementation(async (url: string, init?: RequestInit) => {
       if (url === '/api/obsidian-plugins' && !init?.method) {
@@ -680,7 +757,8 @@ describe('ObsidianPluginHostSection', () => {
     });
 
     expect(host.textContent).toContain('QuickAdd');
-    expect(mocks.apiFetch).toHaveBeenCalledTimes(2);
+    expect(calls).toBeGreaterThanOrEqual(2);
+    expect(mocks.apiFetch).toHaveBeenCalledWith('/api/obsidian-plugins', { cache: 'no-store' });
 
     await cleanup(root, host);
   });
