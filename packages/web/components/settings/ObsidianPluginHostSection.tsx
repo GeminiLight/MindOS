@@ -31,6 +31,7 @@ import {
   firstPluginActionModalSnapshot,
   firstPluginActionTargetPath,
   pluginEditorCommandContextForPathname,
+  submitPluginModalText,
   toastPluginActionNotices,
   type PluginEditorCommandContext,
   type PluginActionResult,
@@ -262,6 +263,7 @@ export function ObsidianPluginHostSection({
   const [pluginMenu, setPluginMenu] = useState<PluginMenuSnapshot | null>(null);
   const [enableTarget, setEnableTarget] = useState<ObsidianPluginStatus | null>(null);
   const [choosingSuggestionIndex, setChoosingSuggestionIndex] = useState<number | null>(null);
+  const [submittingModalText, setSubmittingModalText] = useState(false);
   const [modalChoiceError, setModalChoiceError] = useState<string | null>(null);
   const [choosingMenuItemIndex, setChoosingMenuItemIndex] = useState<number | null>(null);
   const [menuChoiceError, setMenuChoiceError] = useState<string | null>(null);
@@ -385,6 +387,22 @@ export function ObsidianPluginHostSection({
       setModalChoiceError(error instanceof Error ? error.message : 'Failed to choose plugin suggestion');
     } finally {
       setChoosingSuggestionIndex(null);
+    }
+  }, [handlePluginActionResult]);
+
+  const submitModalText = useCallback(async (modal: PluginModalSnapshot, text: string) => {
+    setSubmittingModalText(true);
+    setModalChoiceError(null);
+    try {
+      if (!modal.interactionId) {
+        throw new Error('Plugin modal interaction expired. Run the command again.');
+      }
+      const result = await submitPluginModalText(modal.id, text, modal.interactionId);
+      handlePluginActionResult(result);
+    } catch (error) {
+      setModalChoiceError(error instanceof Error ? error.message : 'Failed to submit plugin modal text');
+    } finally {
+      setSubmittingModalText(false);
     }
   }, [handlePluginActionResult]);
 
@@ -1208,7 +1226,9 @@ export function ObsidianPluginHostSection({
       <PluginActionModalDialog
         modal={pluginModal}
         onChooseSuggestion={(modal, suggestion) => void chooseModalSuggestion(modal, suggestion)}
+        onSubmitText={(modal, text) => void submitModalText(modal, text)}
         choosingSuggestionIndex={choosingSuggestionIndex}
+        submittingText={submittingModalText}
         choiceError={modalChoiceError}
         onClose={() => {
           setPluginModal(null);

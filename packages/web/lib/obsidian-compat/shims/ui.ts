@@ -19,6 +19,12 @@ type SuggestModalLike = Modal & {
   onChooseSuggestion?: (value: unknown) => unknown;
 };
 
+type TextModalLike = Modal & {
+  inputEl?: HTMLElement;
+  okButton?: HTMLElement;
+  onOK?: (event: MouseEvent | KeyboardEvent) => boolean | void | Promise<boolean | void>;
+};
+
 function getRuntimeHost(app: App): ObsidianRuntimeHost | null {
   return (app as RuntimeApp).getRuntimeHost?.() ?? null;
 }
@@ -82,6 +88,7 @@ export class Notice {
 export class Modal extends Component {
   app: App;
   containerEl: ObsidianElement;
+  modalEl: ObsidianElement;
   contentEl: ObsidianElement;
   titleEl: ObsidianElement;
   isOpen = false;
@@ -92,8 +99,12 @@ export class Modal extends Component {
     super();
     this.app = app;
     this.containerEl = createObsidianElement('div');
+    this.modalEl = createObsidianElement('div');
     this.contentEl = createObsidianElement('div');
     this.titleEl = createObsidianElement('div');
+    this.containerEl.appendChild(this.modalEl);
+    this.modalEl.appendChild(this.titleEl);
+    this.modalEl.appendChild(this.contentEl);
   }
 
   open(): void {
@@ -106,6 +117,7 @@ export class Modal extends Component {
     }
 
     const suggest = this as SuggestModalLike;
+    const textInput = findTextInputElement(this);
     getRuntimeHost(this.app)?.recordModalOpen({
       kind: typeof suggest.getSuggestions === 'function' ? 'suggest' : 'modal',
       titleEl: this.titleEl,
@@ -114,11 +126,14 @@ export class Modal extends Component {
       getSuggestions: suggest.getSuggestions?.bind(this),
       renderSuggestion: suggest.renderSuggestion?.bind(this),
       chooseSuggestion: hasPluginMethodOverride(this, 'onChooseSuggestion') ? suggest.onChooseSuggestion?.bind(this) : undefined,
+      textInputEl: textInput,
+      submitText: textInput ? createTextModalSubmitter(this, textInput) : undefined,
       close: this.close.bind(this),
     });
   }
 
   close(): void {
+    if (!this.isOpen) return;
     this.isOpen = false;
 
     // Remove modal from DOM
@@ -273,4 +288,81 @@ export class Modal extends Component {
     `;
     document.head.appendChild(style);
   }
+}
+
+function findTextInputElement(modal: Modal): HTMLElement | undefined {
+  const direct = (modal as TextModalLike).inputEl;
+  if (isTextInputElement(direct)) return direct;
+  const fromContent = modal.contentEl.querySelector('input, textarea');
+  if (isTextInputElement(fromContent)) return fromContent;
+  const fromModal = modal.modalEl.querySelector('input, textarea');
+  if (isTextInputElement(fromModal)) return fromModal;
+  return undefined;
+}
+
+function isTextInputElement(element: Element | null | undefined): element is HTMLElement {
+  if (!element) return false;
+  const tagName = element.tagName.toLowerCase();
+  if (tagName === 'textarea') return true;
+  if (tagName !== 'input') return false;
+  const type = (element.getAttribute('type') ?? (element as HTMLInputElement).type ?? 'text').toLowerCase();
+  return !['button', 'checkbox', 'color', 'file', 'hidden', 'image', 'radio', 'range', 'reset', 'submit'].includes(type);
+}
+
+function findSubmitButton(modal: Modal): HTMLElement | undefined {
+  const direct = (modal as TextModalLike).okButton;
+  if (direct) return direct;
+  const button = modal.modalEl.querySelector('button:not([disabled]), input[type="submit"]:not([disabled])');
+  return (typeof HTMLElement !== 'undefined' && button instanceof HTMLElement) || isStubElement(button)
+    ? button as HTMLElement
+    : undefined;
+}
+
+function isStubElement(element: Element | null | undefined): boolean {
+  return Boolean(element && typeof (element as ObsidianElement).__dispatchObsidianEvent === 'function');
+}
+
+function createTextModalSubmitter(modal: Modal, inputEl: HTMLElement): (value: string) => Promise<void> {
+  return async (value: string) => {
+    (inputEl as HTMLInputElement | HTMLTextAreaElement).value = value;
+    await dispatchObsidianElementEvent(inputEl, 'input');
+
+    const button = findSubmitButton(modal);
+    if (button) {
+      await dispatchObsidianElementEvent(button, 'click');
+      return;
+    }
+
+    await dispatchObsidianElementEvent(inputEl, 'keypress', { key: 'Enter', isComposing: false });
+    const onOK = (modal as TextModalLike).onOK;
+    if (typeof onOK === 'function') {
+      const refused = await Promise.resolve(onOK.call(modal, createTextModalEvent('click') as MouseEvent));
+      if (!refused) modal.close();
+    }
+  };
+}
+
+async function dispatchObsidianElementEvent(element: HTMLElement, type: string, init: Record<string, unknown> = {}): Promise<void> {
+  const dispatcher = (element as ObsidianElement).__dispatchObsidianEvent;
+  if (dispatcher) {
+    await dispatcher(type, init);
+    return;
+  }
+  if (typeof Event !== 'undefined' && typeof element.dispatchEvent === 'function') {
+    const event = type.startsWith('key') && typeof KeyboardEvent !== 'undefined'
+      ? new KeyboardEvent(type, init)
+      : new Event(type, { bubbles: true, cancelable: true });
+    element.dispatchEvent(event);
+  }
+}
+
+function createTextModalEvent(type: string): MouseEvent | KeyboardEvent | Event {
+  if (typeof MouseEvent !== 'undefined') {
+    return new MouseEvent(type);
+  }
+  return {
+    type,
+    preventDefault() {},
+    stopPropagation() {},
+  } as Event;
 }

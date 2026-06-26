@@ -24,6 +24,7 @@ import type {
   IVault,
 } from '../types';
 import { resolveExistingSafe } from '@/lib/core/security';
+import { normalizeObsidianTag, parseFrontMatterTagValues } from './tags';
 
 const FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n)?/;
 const TAG_RE = /(^|\s)(#([\p{L}\p{N}_/-]+))/gu;
@@ -607,9 +608,19 @@ export class MetadataCacheShim extends Events implements IMetadataCache {
   getTags(): Record<string, number> {
     this.recordCapability('MetadataCache.getTags', 'Plugin listed indexed tags.');
     const tags: Record<string, number> = {};
+    const count = (value: unknown) => {
+      const tag = normalizeObsidianTag(value);
+      if (!tag) return;
+      tags[tag] = (tags[tag] ?? 0) + 1;
+    };
+
     for (const file of this.vault.getMarkdownFiles()) {
-      for (const tag of this.getFileCache(file)?.tags ?? []) {
-        tags[tag.tag] = (tags[tag.tag] ?? 0) + 1;
+      const cache = this.getFileCache(file);
+      for (const tag of parseFrontMatterTagValues(cache?.frontmatter) ?? []) {
+        count(tag);
+      }
+      for (const tag of cache?.tags ?? []) {
+        count(tag.tag);
       }
     }
     return tags;

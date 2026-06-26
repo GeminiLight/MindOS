@@ -134,6 +134,8 @@ export interface RegisteredPluginModal {
   titleEl: HTMLElement;
   contentEl: HTMLElement;
   placeholder?: string;
+  textInputEl?: HTMLElement;
+  submitText?: (value: string) => unknown;
   getSuggestions?: (query: string) => unknown[] | Promise<unknown[]>;
   renderSuggestion?: (value: unknown, el: HTMLElement) => void;
   chooseSuggestion?: (value: unknown) => unknown;
@@ -141,6 +143,9 @@ export interface RegisteredPluginModal {
   suggestionInteractionId?: string;
   suggestionInteractionExpiresAt?: number;
   suggestionValues?: unknown[];
+  textInteractionId?: string;
+  textInteractionExpiresAt?: number;
+  pendingContinuation?: Promise<unknown>;
 }
 
 export interface PluginModalSnapshot {
@@ -150,6 +155,10 @@ export interface PluginModalSnapshot {
   title: string;
   text: string;
   placeholder?: string;
+  textInput?: {
+    value: string;
+    placeholder?: string;
+  };
   suggestions?: Array<{ index: number; label: string }>;
   interactionId?: string;
   suggestionError?: string;
@@ -241,6 +250,11 @@ export interface ObsidianRuntimeHostOptions {
   capabilityLedgerStore?: Pick<ObsidianRuntimeCapabilityLedgerStore, 'append'>;
 }
 
+interface ModalOpenWaiter {
+  offset: number;
+  resolve: (modal: RegisteredPluginModal) => void;
+}
+
 /**
  * Request-local plugin host state. It records registrations that MindOS can
  * expose or diagnose without pretending to implement the full Obsidian UI.
@@ -261,6 +275,7 @@ export class ObsidianRuntimeHost extends Events {
   private workspaceOpenRequests: WorkspaceOpenRequest[] = [];
   private modalSeq = 0;
   private modals: RegisteredPluginModal[] = [];
+  private modalOpenWaiters: ModalOpenWaiter[] = [];
   private menuSeq = 0;
   private menus: RegisteredPluginMenu[] = [];
   private noticeSeq = 0;
@@ -393,21 +408,26 @@ export class ObsidianRuntimeHost extends Events {
       titleEl: input.titleEl,
       contentEl: input.contentEl,
       placeholder: input.placeholder,
+      textInputEl: input.textInputEl,
+      submitText: input.submitText,
       getSuggestions: input.getSuggestions,
       renderSuggestion: input.renderSuggestion,
       chooseSuggestion: input.chooseSuggestion,
       close: input.close,
     };
     this.modals.push(modal);
+    this.resolveModalOpenWaiters(modal);
     this.recordCapability(modal.pluginId, modal.kind === 'suggest' ? 'SuggestModal' : 'Modal', 'called', modal.kind === 'suggest'
       ? 'Plugin opened an Obsidian SuggestModal snapshot.'
       : 'Plugin opened an Obsidian Modal snapshot.');
     this.warn({
       pluginId: modal.pluginId,
-      code: modal.kind === 'suggest' ? 'suggest-modal-continuation-limited' : 'modal-snapshot-only',
+      code: modal.kind === 'suggest' ? 'suggest-modal-continuation-limited' : modal.submitText ? 'modal-text-continuation-limited' : 'modal-snapshot-only',
       message: modal.kind === 'suggest'
         ? 'Plugin opened an Obsidian SuggestModal. MindOS shows a safe text snapshot and can continue through explicit suggestion choices.'
-        : 'Plugin opened an Obsidian modal. MindOS shows a safe text snapshot; arbitrary modal DOM callbacks are not mounted yet.',
+        : modal.submitText
+          ? 'Plugin opened an Obsidian modal with a text input. MindOS can continue through explicit text submission; arbitrary modal DOM callbacks are still not mounted.'
+          : 'Plugin opened an Obsidian modal. MindOS shows a safe text snapshot; arbitrary modal DOM callbacks are not mounted yet.',
     });
     return modal;
   }
@@ -476,6 +496,75 @@ export class ObsidianRuntimeHost extends Events {
       activeRuntimeHost = previousHost;
       this.pluginContextStack.pop();
     }
+  }
+
+  private createModalOpenWaiter(offset: number): { promise: Promise<RegisteredPluginModal>; cancel: () => void } {
+    const existing = this.modals.slice(Math.max(0, offset))[0];
+    if (existing) {
+      return {
+        promise: Promise.resolve(existing),
+        cancel: () => {},
+      };
+    }
+
+    let waiter: ModalOpenWaiter | null = null;
+    const promise = new Promise<RegisteredPluginModal>((resolve) => {
+      waiter = { offset, resolve };
+      this.modalOpenWaiters.push(waiter);
+    });
+    return {
+      promise,
+      cancel: () => {
+        if (!waiter) return;
+        this.modalOpenWaiters = this.modalOpenWaiters.filter((item) => item !== waiter);
+        waiter = null;
+      },
+    };
+  }
+
+  private resolveModalOpenWaiters(modal: RegisteredPluginModal): void {
+    const ready = this.modalOpenWaiters.filter((waiter) => this.modals.length > waiter.offset);
+    if (ready.length === 0) return;
+    this.modalOpenWaiters = this.modalOpenWaiters.filter((waiter) => !ready.includes(waiter));
+    for (const waiter of ready) {
+      waiter.resolve(modal);
+    }
+  }
+
+  private async runWithPluginContextUntilModalOrSettled(
+    pluginId: string,
+    modalOffset: number,
+    callback: () => unknown,
+  ): Promise<void> {
+    const callbackPromise = this.runWithPluginContext(pluginId, async () => callback());
+    const waiter = this.createModalOpenWaiter(modalOffset);
+    const outcome = await Promise.race([
+      callbackPromise.then(
+        () => ({ kind: 'settled' as const }),
+        (error: unknown) => ({ kind: 'rejected' as const, error }),
+      ),
+      waiter.promise.then((modal) => ({ kind: 'modal' as const, modal })),
+    ]);
+    waiter.cancel();
+
+    if (outcome.kind === 'rejected') {
+      throw outcome.error;
+    }
+    if (outcome.kind === 'modal') {
+      for (const modal of this.modals.slice(Math.max(0, modalOffset))) {
+        modal.pendingContinuation = callbackPromise;
+      }
+      callbackPromise.catch((error) => {
+        this.warn({
+          pluginId,
+          code: 'modal-continuation-error',
+          message: `Plugin modal continuation failed: ${error instanceof Error ? error.message : String(error)}`,
+        });
+      });
+      return;
+    }
+
+    await callbackPromise;
   }
 
   getCurrentPluginId(): string | undefined {
@@ -690,6 +779,42 @@ export class ObsidianRuntimeHost extends Events {
     modal.close?.();
   }
 
+  async submitModalText(modalId: string, text: string, interactionId: string): Promise<void> {
+    if (typeof text !== 'string' || text.length > 10_000) {
+      throw new MindOSError(ErrorCodes.INVALID_REQUEST, 'Invalid modal text value');
+    }
+    if (!interactionId.trim()) {
+      throw new MindOSError(ErrorCodes.INVALID_REQUEST, 'Missing modal text interaction id');
+    }
+
+    const modal = this.modals.find((item) => item.id === modalId);
+    if (!modal) {
+      throw new MindOSError(ErrorCodes.INVALID_REQUEST, `Unknown plugin modal: ${modalId}`);
+    }
+    if (!modal.submitText || !modal.textInputEl) {
+      throw new MindOSError(ErrorCodes.INVALID_REQUEST, `Plugin modal does not expose a text continuation: ${modalId}`);
+    }
+    if (isExpiredInteraction(modal.textInteractionId, modal.textInteractionExpiresAt)) {
+      modal.textInteractionId = undefined;
+      modal.textInteractionExpiresAt = undefined;
+      throw new MindOSError(ErrorCodes.INVALID_REQUEST, `Expired plugin modal interaction: ${modalId}`);
+    }
+    if (modal.textInteractionId !== interactionId) {
+      throw new MindOSError(ErrorCodes.INVALID_REQUEST, `Expired plugin modal interaction: ${modalId}`);
+    }
+
+    modal.textInteractionId = undefined;
+    modal.textInteractionExpiresAt = undefined;
+    const pendingContinuation = modal.pendingContinuation;
+    modal.pendingContinuation = undefined;
+    await this.runWithPluginContext(modal.pluginId ?? 'unknown', () => modal.submitText!(text));
+    if (pendingContinuation) {
+      await pendingContinuation;
+    }
+    this.recordCapability(modal.pluginId, 'Modal', 'called', 'Modal text submission executed.');
+    modal.close?.();
+  }
+
   dismissModal(modalId: string): void {
     this.modals = this.modals.filter((modal) => modal.id !== modalId);
   }
@@ -734,7 +859,12 @@ export class ObsidianRuntimeHost extends Events {
 
     menu.interactionId = undefined;
     menu.interactionExpiresAt = undefined;
-    await this.runWithPluginContext(menu.pluginId ?? 'unknown', () => item.callback!(createSyntheticMouseEvent()));
+    const modalOffset = this.modals.length;
+    await this.runWithPluginContextUntilModalOrSettled(
+      menu.pluginId ?? 'unknown',
+      modalOffset,
+      () => item.callback!(createSyntheticMouseEvent()),
+    );
     this.recordCapability(menu.pluginId, 'MenuItem', 'called', `Menu item ${itemIndex} executed.`);
   }
 
@@ -797,15 +927,17 @@ export class ObsidianRuntimeHost extends Events {
 
   private async renderModalSnapshot(modal: RegisteredPluginModal): Promise<PluginModalSnapshot> {
     const suggestions = modal.kind === 'suggest' ? await renderSuggestionSnapshots(modal) : undefined;
+    const textInput = modal.kind === 'modal' ? renderTextInputSnapshot(modal) : undefined;
     return {
       id: modal.id,
       pluginId: modal.pluginId,
       kind: modal.kind,
       title: clampText(collectElementText(modal.titleEl) || (modal.kind === 'suggest' ? 'Suggestion modal' : 'Modal'), 200),
       text: clampText(collectElementText(modal.contentEl), 4000),
-      placeholder: modal.placeholder ? clampText(modal.placeholder, 200) : undefined,
+      placeholder: modal.placeholder ? clampText(modal.placeholder, 200) : textInput?.placeholder,
+      textInput: textInput?.input,
       suggestions: suggestions?.items,
-      interactionId: suggestions?.interactionId,
+      interactionId: suggestions?.interactionId ?? textInput?.interactionId,
       suggestionError: suggestions?.error,
     };
   }
@@ -906,6 +1038,34 @@ async function renderSuggestionSnapshots(modal: RegisteredPluginModal): Promise<
       error: error instanceof Error ? error.message : String(error),
     };
   }
+}
+
+function renderTextInputSnapshot(modal: RegisteredPluginModal): {
+  input: {
+    value: string;
+    placeholder?: string;
+  };
+  interactionId?: string;
+  placeholder?: string;
+} | undefined {
+  if (!modal.textInputEl) return undefined;
+  const value = clampText(String((modal.textInputEl as HTMLInputElement | HTMLTextAreaElement).value ?? ''), 1000);
+  const rawPlaceholder = modal.textInputEl.getAttribute('placeholder')
+    ?? (typeof (modal.textInputEl as HTMLInputElement | HTMLTextAreaElement).placeholder === 'string'
+      ? (modal.textInputEl as HTMLInputElement | HTMLTextAreaElement).placeholder
+      : '');
+  const placeholder = rawPlaceholder.trim() || undefined;
+  const interaction = modal.submitText ? createInteractionToken() : undefined;
+  modal.textInteractionId = interaction?.id;
+  modal.textInteractionExpiresAt = interaction?.expiresAt;
+  return {
+    input: {
+      value,
+      ...(placeholder ? { placeholder: clampText(placeholder, 200) } : {}),
+    },
+    ...(interaction ? { interactionId: interaction.id } : {}),
+    ...(placeholder ? { placeholder: clampText(placeholder, 200) } : {}),
+  };
 }
 
 function createInteractionId(): string {

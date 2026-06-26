@@ -439,4 +439,81 @@ describe('/api/obsidian-plugins suggest modal interactions', () => {
     ]);
     expect(json.result.menuSnapshots).toEqual([]);
   });
+
+  it('continues a text Modal by submitting the recorded input value', async () => {
+    fs.writeFileSync(path.join(mindRoot, 'rename-target.md'), '#mindos/legacy\n', 'utf-8');
+    writePlugin(
+      'text-modal-plugin',
+      `
+        const { Modal, Notice, Plugin } = require('obsidian');
+        class RenamePrompt extends Modal {
+          onOpen() {
+            this.setTitle('Rename tag');
+            this.contentEl.createDiv({ text: 'Enter a new tag name.' });
+            this.inputEl = this.contentEl.createEl('input', { type: 'text', value: 'mindos/legacy' });
+            this.okButton = this.modalEl.createEl('button', { text: 'Rename' });
+            this.okButton.addEventListener('click', async () => {
+              const file = this.app.vault.getFileByPath('rename-target.md');
+              const markdown = await this.app.vault.read(file);
+              await this.app.vault.modify(file, markdown.replace('mindos/legacy', this.inputEl.value));
+              new Notice('Renamed tag');
+              this.close();
+            });
+          }
+        }
+        module.exports = class TextModalPlugin extends Plugin {
+          onload() {
+            this.addCommand({
+              id: 'rename-tag',
+              name: 'Rename tag',
+              callback: () => new RenamePrompt(this.app).open()
+            });
+          }
+        };
+      `,
+    );
+
+    const { POST } = await importLifecycleRoute();
+    await POST(confirmedEnableRequest('text-modal-plugin'));
+    const openRes = await POST(postRequest({ action: 'execute-command', commandId: 'obsidian:text-modal-plugin:rename-tag' }));
+    const openJson = await openRes.json();
+    const modal = openJson.result.modalSnapshots[0];
+
+    expect(openRes.status).toBe(200);
+    expect(modal).toEqual(expect.objectContaining({
+      id: 'text-modal-plugin:modal:1',
+      pluginId: 'text-modal-plugin',
+      kind: 'modal',
+      title: 'Rename tag',
+      text: 'Enter a new tag name.',
+      textInput: {
+        value: 'mindos/legacy',
+      },
+      interactionId: expect.any(String),
+    }));
+
+    const submitRes = await POST(postRequest({
+      action: 'submit-modal-text',
+      modalId: modal.id,
+      text: 'mindos/renamed',
+      interactionId: modal.interactionId,
+    }));
+    const submitJson = await submitRes.json();
+
+    expect(submitRes.status).toBe(200);
+    expect(submitJson.ok).toBe(true);
+    expect(fs.readFileSync(path.join(mindRoot, 'rename-target.md'), 'utf-8')).toBe('#mindos/renamed\n');
+    expect(submitJson.result).toEqual({
+      workspaceOpenRequests: [],
+      modalSnapshots: [],
+      menuSnapshots: [],
+      noticeSnapshots: [{
+        id: 'text-modal-plugin:notice:1',
+        pluginId: 'text-modal-plugin',
+        message: 'Renamed tag',
+        timeout: undefined,
+        level: 'info',
+      }],
+    });
+  });
 });

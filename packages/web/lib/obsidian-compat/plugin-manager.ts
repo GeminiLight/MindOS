@@ -485,6 +485,30 @@ export class PluginManager {
     return result;
   }
 
+  async submitModalText(modalId: string, text: string, interactionId: string): Promise<PluginActionResult> {
+    await this.loadEnabledPlugins();
+    const host = this.loader.getApp().getRuntimeHost();
+    const requestOffset = host.getWorkspaceOpenRequests().length;
+    const modalOffset = host.getModalSnapshotCount();
+    const menuOffset = host.getMenuSnapshotCount();
+    const noticeOffset = host.getNoticeSnapshotCount();
+    const editorSession = this.modalEditorSessions.get(modalId);
+
+    if (editorSession) {
+      await this.loader.getApp().withActiveFile(editorSession.file, () => (
+        host.submitModalText(modalId, text, interactionId)
+      ));
+    } else {
+      await host.submitModalText(modalId, text, interactionId);
+    }
+
+    const editorUpdates = editorSession ? await this.flushEditorSession(editorSession) : [];
+    const result = await this.actionResultSince(requestOffset, modalOffset, menuOffset, noticeOffset, editorUpdates);
+    host.dismissModal(modalId);
+    this.modalEditorSessions.delete(modalId);
+    return result;
+  }
+
   async chooseMenuItem(menuId: string, itemIndex: number, interactionId: string): Promise<PluginActionResult> {
     await this.loadEnabledPlugins();
     const host = this.loader.getApp().getRuntimeHost();

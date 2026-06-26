@@ -88,6 +88,7 @@ export interface ObsidianWorkflowProbeHost {
   executeCommand(commandId: string, context?: PluginRuntimeContext): Promise<PluginActionResult>;
   triggerEditorMenu?(pluginId: string, context: PluginEditorMenuContext): Promise<PluginActionResult>;
   chooseMenuItem?(menuId: string, itemIndex: number, interactionId: string): Promise<PluginActionResult>;
+  submitModalText?(modalId: string, text: string, interactionId: string): Promise<PluginActionResult>;
   renderView(pluginId: string, viewType: string, context?: PluginViewContext): Promise<{ text?: string; displayText?: string }>;
   renderMarkdownPostProcessors(markdown: string, sourcePath?: string): Promise<ManagedPluginMarkdownPostProcessorSnapshot[]>;
 }
@@ -432,24 +433,40 @@ async function runTagWranglerEditorMenuProbe(input: WorkflowProbeRuntimeInput): 
   });
   const menuChoice = selectTagWranglerRenameMenuItem(openAction);
   let chooseAction: PluginActionResult | null = null;
+  let submitAction: PluginActionResult | null = null;
   let chooseError = '';
+  let submitError = '';
+  let textPromptChoice: TagWranglerTextPromptChoice | null = null;
 
   if (menuChoice) {
     try {
       chooseAction = await input.host.chooseMenuItem(menuChoice.menuId, menuChoice.itemIndex, menuChoice.interactionId);
+      textPromptChoice = selectTagWranglerRenameTextPrompt(chooseAction);
+      if (textPromptChoice) {
+        if (!input.host.submitModalText) {
+          submitError = 'host cannot submit text modal continuations';
+        } else {
+          submitAction = await input.host.submitModalText(textPromptChoice.modalId, TAG_WRANGLER_NEW_TAG_NAME, textPromptChoice.interactionId);
+        }
+      }
     } catch (error) {
-      chooseError = error instanceof Error ? error.message : String(error);
+      if (textPromptChoice) {
+        submitError = error instanceof Error ? error.message : String(error);
+      } else {
+        chooseError = error instanceof Error ? error.message : String(error);
+      }
     }
   }
 
   const after = snapshotVault(input.mindRoot);
   const changes = diffVaultSnapshots(before, after);
-  const action = mergePluginActionResults(openAction, chooseAction);
+  const action = mergePluginActionResults(mergePluginActionResults(openAction, chooseAction), submitAction);
   const editorMenuCalled = hasCalledLedger(input.host, input.plugin.id, ['Workspace.editor-menu']);
   const menuCalled = hasCalledLedger(input.host, input.plugin.id, ['Menu']);
   const menuItemCalled = hasCalledLedger(input.host, input.plugin.id, ['MenuItem']);
   const menuItemAvailable = Boolean(menuChoice);
   const menuItemExecuted = Boolean(menuChoice && chooseAction && !chooseError);
+  const textPromptSubmitted = Boolean(textPromptChoice && submitAction && !submitError);
 
   return buildTagWranglerRenameDraft(input, {
     action,
@@ -458,12 +475,15 @@ async function runTagWranglerEditorMenuProbe(input: WorkflowProbeRuntimeInput): 
       `Triggered editor-menu for ${TAG_WRANGLER_OLD_TAG} in "${TAG_WRANGLER_FIXTURE_PATHS[0]}".`,
       ...openAction.menuSnapshots.flatMap((menu) => menu.items.map((item) => `Editor menu item: ${item.title || '(separator)'}`)).slice(0, 8),
       ...(menuChoice ? [`Selected menu item "${menuChoice.title}" from ${menuChoice.menuId}#${menuChoice.itemIndex}.`] : ['No executable Rename menu item was available after editor-menu trigger.']),
+      ...(textPromptChoice ? [`Submitted text prompt "${textPromptChoice.title}" with "${TAG_WRANGLER_NEW_TAG_NAME}".`] : []),
       ...(chooseError ? [`Menu item execution failed: ${chooseError}`] : []),
+      ...(submitError ? [`Text prompt submission failed: ${submitError}`] : []),
     ],
     entrypointAssertions: [
       { id: 'editor-menu-triggered', label: 'Triggered the Obsidian editor-menu event for a tag token', passed: editorMenuCalled },
       { id: 'rename-menu-item-available', label: 'Observed an executable Rename tag menu item', passed: menuItemAvailable, detail: menuChoice?.title ?? 'No executable rename item.' },
       { id: 'menu-item-executed', label: 'Executed the Rename tag menu item', passed: menuItemExecuted, detail: chooseError || menuChoice?.title || 'No menu item executed.' },
+      ...(textPromptChoice ? [{ id: 'rename-text-prompt-submitted', label: 'Submitted the Rename tag text prompt', passed: textPromptSubmitted, detail: submitError || textPromptChoice.title }] : []),
       { id: 'menu-called-ledger', label: 'Recorded menu snapshot evidence', passed: menuCalled },
       { id: 'runtime-called-ledger', label: 'Recorded editor-menu and menu-item runtime evidence', passed: editorMenuCalled && menuItemCalled },
     ],
@@ -471,9 +491,11 @@ async function runTagWranglerEditorMenuProbe(input: WorkflowProbeRuntimeInput): 
       !editorMenuCalled ? 'runtime ledger did not record editor-menu execution' : '',
       !menuItemAvailable ? 'editor-menu did not expose an executable Rename tag item' : '',
       !menuItemExecuted ? 'rename menu item was not executed successfully' : '',
+      textPromptChoice && !textPromptSubmitted ? 'rename text prompt was not submitted successfully' : '',
       !menuCalled ? 'runtime ledger did not record menu snapshot evidence' : '',
       !menuItemCalled ? 'runtime ledger did not record menu item execution' : '',
       chooseError ? `menu item execution failed: ${chooseError}` : '',
+      submitError ? `text prompt submission failed: ${submitError}` : '',
     ],
   });
 }
@@ -700,6 +722,12 @@ interface TagWranglerMenuChoice {
   title: string;
 }
 
+interface TagWranglerTextPromptChoice {
+  modalId: string;
+  interactionId: string;
+  title: string;
+}
+
 function selectTagWranglerRenameMenuItem(action: PluginActionResult): TagWranglerMenuChoice | null {
   for (const menu of action.menuSnapshots) {
     if (!menu.interactionId) continue;
@@ -718,6 +746,21 @@ function selectTagWranglerRenameMenuItem(action: PluginActionResult): TagWrangle
       interactionId: menu.interactionId,
       itemIndex: item.index,
       title: item.title,
+    };
+  }
+  return null;
+}
+
+function selectTagWranglerRenameTextPrompt(action: PluginActionResult): TagWranglerTextPromptChoice | null {
+  for (const modal of action.modalSnapshots) {
+    if (!modal.interactionId || !modal.textInput) continue;
+    const title = modal.title || modal.placeholder || 'Plugin text prompt';
+    const promptText = [title, modal.text, modal.placeholder].filter(Boolean).join(' ');
+    if (!/(renam|tag)/i.test(promptText)) continue;
+    return {
+      modalId: modal.id,
+      interactionId: modal.interactionId,
+      title,
     };
   }
   return null;

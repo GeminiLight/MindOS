@@ -12,6 +12,7 @@ export interface ObsidianCreateElAttrs {
 
 export type ObsidianElement = HTMLElement & {
   __obsidianSettingItems?: PluginSettingItem[];
+  __dispatchObsidianEvent?: (type: string, init?: Record<string, unknown>) => Promise<boolean>;
   empty(): void;
   createEl(tagName: string, attrs?: ObsidianCreateElAttrs | string, callback?: (el: ObsidianElement) => void): ObsidianElement;
   createDiv(attrs?: ObsidianCreateElAttrs | string, callback?: (el: ObsidianElement) => void): ObsidianElement;
@@ -190,6 +191,8 @@ type StubElementInternals = ObsidianElement & {
   __stubAttributes?: Map<string, string>;
 };
 
+type StubEventListener = (event: Event) => unknown;
+
 function getStubChildren(element: ObsidianElement): ObsidianElement[] {
   return Array.from((element as unknown as { children?: Iterable<ObsidianElement> }).children ?? []);
 }
@@ -245,6 +248,7 @@ function createStubElement(tagName: string): ObsidianElement {
   const classList = createStubClassList();
   const styleValues = new Map<string, string>();
   const cssRules: Array<{ cssText: string }> = [];
+  const listeners = new Map<string, Set<StubEventListener>>();
   let parentElement: ObsidianElement | null = null;
   const style = {
     setProperty(key: string, value: string) {
@@ -271,6 +275,33 @@ function createStubElement(tagName: string): ObsidianElement {
   const releaseChild = (child: ObsidianElement) => {
     (child as unknown as { parentElement?: ObsidianElement | null }).parentElement = null;
     (child as unknown as { parentNode?: ObsidianElement | null }).parentNode = null;
+  };
+  const dispatchStubEvent = async (type: string, init: Record<string, unknown> = {}) => {
+    const target = el as unknown as EventTarget;
+    let defaultPrevented = false;
+    const event = {
+      type,
+      target,
+      currentTarget: target,
+      isComposing: false,
+      ...init,
+      get defaultPrevented() {
+        return defaultPrevented;
+      },
+      preventDefault() {
+        defaultPrevented = true;
+      },
+      stopPropagation() {},
+      stopImmediatePropagation() {},
+    } as unknown as Event & { defaultPrevented: boolean };
+    const propertyHandler = (el as Record<string, unknown>)[`on${type}`];
+    if (typeof propertyHandler === 'function') {
+      await Promise.resolve((propertyHandler as StubEventListener)(event));
+    }
+    for (const listener of Array.from(listeners.get(type) ?? [])) {
+      await Promise.resolve(listener(event));
+    }
+    return !event.defaultPrevented;
   };
 
   const el: Record<string, unknown> = {
@@ -331,10 +362,33 @@ function createStubElement(tagName: string): ObsidianElement {
       const currentParent = (el as unknown as { parentElement?: ObsidianElement | null }).parentElement ?? parentElement;
       currentParent?.removeChild(el as unknown as ObsidianElement);
     },
-    addEventListener() {},
-    removeEventListener() {},
+    addEventListener(type: string, listener: unknown) {
+      if (typeof listener !== 'function') return;
+      const normalizedType = String(type);
+      const bucket = listeners.get(normalizedType) ?? new Set<StubEventListener>();
+      bucket.add(listener as StubEventListener);
+      listeners.set(normalizedType, bucket);
+    },
+    removeEventListener(type: string, listener: unknown) {
+      if (typeof listener !== 'function') return;
+      listeners.get(String(type))?.delete(listener as StubEventListener);
+    },
+    dispatchEvent(event: Event) {
+      void dispatchStubEvent(String(event.type || ''), event as unknown as Record<string, unknown>);
+      return !(event as { defaultPrevented?: boolean }).defaultPrevented;
+    },
+    async __dispatchObsidianEvent(type: string, init?: Record<string, unknown>) {
+      return dispatchStubEvent(type, init);
+    },
+    click() {
+      void dispatchStubEvent('click');
+    },
+    focus() {},
+    select() {},
+    blur() {},
     setAttribute(key: string, value: string) {
       attributes.set(key, value);
+      (el as Record<string, unknown>)[key] = String(value);
     },
     getAttribute(key: string) {
       return attributes.get(key) ?? null;
@@ -344,6 +398,16 @@ function createStubElement(tagName: string): ObsidianElement {
     },
     removeAttribute(key: string) {
       attributes.delete(key);
+      delete (el as Record<string, unknown>)[key];
+    },
+    toggleAttribute(key: string, force?: boolean) {
+      const next = force ?? !attributes.has(key);
+      if (next) {
+        attributes.set(key, '');
+      } else {
+        attributes.delete(key);
+      }
+      return next;
     },
     querySelector(selector: string) {
       return queryStubDescendants(el as unknown as ObsidianElement, selector)[0] ?? null;

@@ -4,6 +4,7 @@ import os from 'os';
 import path from 'path';
 import { Vault } from '@/lib/obsidian-compat/shims/vault';
 import { MetadataCacheShim } from '@/lib/obsidian-compat/shims/metadata-cache';
+import { parseFrontMatterTags } from '@/lib/obsidian-compat/shims/obsidian';
 
 let mindRoot: string;
 let vault: Vault;
@@ -18,6 +19,16 @@ describe('MetadataCache', () => {
 
   afterEach(() => {
     fs.rmSync(mindRoot, { recursive: true, force: true });
+  });
+
+  describe('frontmatter tag helpers', () => {
+    it('normalizes frontmatter tag values to Obsidian hash-prefixed tags', () => {
+      expect(parseFrontMatterTags({
+        tags: ['mindos/legacy', '#already-prefixed', 'split one,#two'],
+      })).toEqual(['#mindos/legacy', '#already-prefixed', '#split', '#one', '#two']);
+      expect(parseFrontMatterTags({ tag: 'alpha, beta #gamma' })).toEqual(['#alpha', '#beta', '#gamma']);
+      expect(parseFrontMatterTags({ title: 'No tags' })).toBeNull();
+    });
   });
 
   describe('getFileCache', () => {
@@ -166,6 +177,31 @@ Body #real-tag links [[Real]] and [[Real|Again]].
       const file = { path: 'nonexistent.md', basename: 'nonexistent', extension: 'md' };
       const cache = metadataCache.getFileCache(file);
       expect(cache).toBeNull();
+    });
+  });
+
+  describe('getTags', () => {
+    it('counts frontmatter and body tags with Obsidian hash prefixes', async () => {
+      await vault.create('frontmatter.md', `---
+tags: [mindos/legacy, "#existing"]
+---
+
+Body keeps #body-tag and repeats #mindos/legacy.
+`);
+      await vault.create('string-tag.md', `---
+tag: alpha, beta
+---
+
+# Heading
+`);
+
+      expect(metadataCache.getTags()).toEqual({
+        '#mindos/legacy': 2,
+        '#existing': 1,
+        '#body-tag': 1,
+        '#alpha': 1,
+        '#beta': 1,
+      });
     });
   });
 

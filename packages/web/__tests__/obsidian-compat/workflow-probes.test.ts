@@ -265,6 +265,83 @@ describe('Obsidian workflow probes', () => {
     ]);
   });
 
+  it('passes the Tag Wrangler rename probe when the editor-menu entrypoint opens a text prompt', async () => {
+    writePlugin('tag-wrangler', `
+      const { Modal, Plugin } = require('obsidian');
+      class RenameTagPrompt extends Modal {
+        constructor(app, oldTag) {
+          super(app);
+          this.oldTag = oldTag;
+        }
+        onOpen() {
+          this.setTitle('Renaming #' + this.oldTag + ' (and any sub-tags)');
+          this.contentEl.createDiv({ text: 'Enter new name (must be a valid Obsidian tag name):' });
+          this.inputEl = this.contentEl.createEl('input', { type: 'text', value: this.oldTag });
+          this.okButton = this.modalEl.createEl('button', { text: 'Continue' });
+          this.okButton.addEventListener('click', async () => {
+            const newTag = this.inputEl.value;
+            if (!newTag || newTag === this.oldTag) {
+              this.close();
+              return;
+            }
+            const paths = this.app.metadataCache
+              .getCachedFiles()
+              .filter((filePath) => filePath.startsWith('workflow-probes/tag-wrangler/'));
+            this.app.metadataCache.getTags();
+            for (const filePath of paths) {
+              this.app.metadataCache.getCache(filePath);
+              const file = this.app.vault.getFileByPath(filePath);
+              if (!file) continue;
+              const markdown = await this.app.vault.read(file);
+              await this.app.vault.modify(file, markdown.split(this.oldTag).join(newTag));
+            }
+            this.close();
+          });
+        }
+      }
+      module.exports = class TagWranglerPromptPlugin extends Plugin {
+        onload() {
+          this.registerEvent(this.app.workspace.on('editor-menu', (menu, editor) => {
+            const token = editor.getClickableTokenAt(editor.getCursor());
+            if (token?.type !== 'tag') return;
+            const oldTag = token.text.replace(/^#/, '');
+            menu.addItem((item) => item
+              .setSection('tag-rename')
+              .setIcon('pencil')
+              .setTitle('Rename #' + oldTag)
+              .onClick(() => new RenameTagPrompt(this.app, oldTag).open()));
+          }));
+        }
+      };
+    `);
+
+    const manager = new PluginManager(mindRoot);
+    await manager.discover();
+    await manager.enable('tag-wrangler', { confirmCapabilityGate: true });
+
+    const result = await manager.runWorkflowProbe('tag-wrangler', 'tag-wrangler-rename');
+
+    expect(result).toMatchObject({
+      pluginId: 'tag-wrangler',
+      id: 'tag-wrangler-rename',
+      status: 'passed',
+      source: 'workflow-probe',
+    });
+    expect(result.evidence).toEqual(expect.arrayContaining([
+      expect.stringContaining('Triggered editor-menu for #mindos/legacy'),
+      expect.stringContaining('Selected menu item "Rename #mindos/legacy"'),
+      expect.stringContaining('Submitted text prompt "Renaming #mindos/legacy'),
+    ]));
+    expect(result.assertions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'menu-item-executed', passed: true }),
+      expect.objectContaining({ id: 'rename-text-prompt-submitted', passed: true }),
+      expect.objectContaining({ id: 'frontmatter-tags-renamed', passed: true }),
+      expect.objectContaining({ id: 'body-tags-renamed', passed: true }),
+      expect.objectContaining({ id: 'metadata-cache-called-ledger', passed: true }),
+      expect.objectContaining({ id: 'vault-write-called-ledger', passed: true }),
+    ]));
+  });
+
   it('passes the Admonition render probe only when plugin output aligns with the native callout snapshot', async () => {
     writePlugin('obsidian-admonition', `
       const { Plugin } = require('obsidian');

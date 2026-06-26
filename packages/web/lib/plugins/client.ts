@@ -32,6 +32,10 @@ export interface PluginModalSnapshot {
   title: string;
   text: string;
   placeholder?: string;
+  textInput?: {
+    value: string;
+    placeholder?: string;
+  };
   suggestions?: Array<{ index: number; label: string }>;
   interactionId?: string;
   suggestionError?: string;
@@ -638,6 +642,24 @@ export async function choosePluginModalSuggestion(
       action: 'choose-modal-suggestion',
       modalId,
       suggestionIndex,
+      interactionId,
+    }),
+  });
+  return data.result ?? {};
+}
+
+export async function submitPluginModalText(
+  modalId: string,
+  text: string,
+  interactionId: string,
+): Promise<PluginActionResult> {
+  const data = await apiFetch<ObsidianPluginActionResponse>('/api/obsidian-plugins', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      action: 'submit-modal-text',
+      modalId,
+      text,
       interactionId,
     }),
   });

@@ -14,6 +14,7 @@ import { TAbstractFileImpl, TFileImpl, TFolderImpl, Vault } from './vault';
 import { createObsidianElement } from './dom';
 import { MarkdownRenderer } from './markdown-renderer';
 import { getActiveObsidianRuntimeHost } from '../runtime';
+import { normalizeObsidianTag, parseFrontMatterTagValues } from './tags';
 import type { CachedMetadata, RequestUrlParam, RequestUrlResponse, RequestUrlResponsePromise, SecretStorage, TFile, WorkspaceLeaf } from '../types';
 import { moment } from './moment';
 
@@ -913,27 +914,14 @@ export function parseFrontMatterAliases(frontmatter: Record<string, unknown> | n
 }
 
 export function parseFrontMatterTags(frontmatter: Record<string, unknown> | null | undefined): string[] | null {
-  const value = frontmatter?.tags ?? frontmatter?.tag ?? frontmatter?.Tags;
-  if (Array.isArray(value)) {
-    return value.map(String);
-  }
-  if (typeof value === 'string') {
-    return value.split(/[\s,]+/).filter(Boolean);
-  }
-  return null;
-}
-
-function normalizeTagValue(tag: unknown): string | null {
-  const value = String(tag ?? '').trim();
-  if (!value) return null;
-  return value.startsWith('#') ? value : `#${value}`;
+  return parseFrontMatterTagValues(frontmatter);
 }
 
 export function getAllTags(cache: CachedMetadata | null | undefined): string[] | null {
   if (!cache) return null;
   const tags: string[] = [];
   const add = (value: unknown) => {
-    const tag = normalizeTagValue(value);
+    const tag = normalizeObsidianTag(value);
     if (tag && !tags.includes(tag)) {
       tags.push(tag);
     }

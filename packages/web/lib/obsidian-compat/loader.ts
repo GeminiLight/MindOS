@@ -55,6 +55,8 @@ type PluginDocumentShim = {
   createElementNS(namespaceURI: string, qualifiedName: string): HTMLElement;
   createTextNode(text: string): Text | HTMLElement;
   createEl(tagName: string, attrs?: unknown, callback?: (el: HTMLElement) => void): HTMLElement;
+  createDiv(attrs?: unknown, callback?: (el: HTMLElement) => void): HTMLElement;
+  createSpan(attrs?: unknown, callback?: (el: HTMLElement) => void): HTMLElement;
   createDocumentFragment(): DocumentFragment | HTMLElement;
   addEventListener(): void;
   removeEventListener(): void;
@@ -310,6 +312,8 @@ export class PluginLoader {
         'createDiv',
         'createSpan',
         'createFragment',
+        'i18next',
+        'String',
         'HTMLElement',
         'CodeMirror',
         'CodeMirrorAdapter',
@@ -336,6 +340,8 @@ export class PluginLoader {
         globals.createDiv,
         globals.createSpan,
         globals.createFragment,
+        globals.i18next,
+        globals.String,
         globals.HTMLElement,
         globals.CodeMirror,
         globals.CodeMirrorAdapter,
@@ -381,6 +387,14 @@ export class PluginLoader {
     const documentShim = this.createDocumentShim();
     const codeMirrorShim = this.createCodeMirrorShim();
     const codeMirrorAdapterShim = { commands: {} as Record<string, unknown> };
+    const stringShim = this.createStringShim();
+    const i18next = {
+      t: (key: string) => {
+        if (key === 'dialogue.button-continue') return 'Continue';
+        if (key === 'dialogue.button-cancel') return 'Cancel';
+        return String(key);
+      },
+    };
     const createEl = (tagName: string, attrs?: unknown, callback?: (el: HTMLElement) => void) => {
       const element = createObsidianElement(tagName);
       this.applyCreateElAttrs(element, attrs);
@@ -421,6 +435,8 @@ export class PluginLoader {
       CodeMirrorAdapter: codeMirrorAdapterShim,
       localStorage,
       moment: obsidianModule.moment,
+      i18next,
+      String: stringShim,
       setTimeout: safeSetTimeout,
       clearTimeout,
       setInterval: safeSetInterval,
@@ -432,6 +448,10 @@ export class PluginLoader {
       getComputedStyle: () => ({
         getPropertyValue: () => '',
       }),
+      createEl,
+      createDiv,
+      createSpan,
+      createDocumentFragment: createFragment,
     } as Record<string, unknown>;
     windowShim.window = windowShim;
     windowShim.self = windowShim;
@@ -447,6 +467,8 @@ export class PluginLoader {
       createDiv,
       createSpan,
       createFragment,
+      i18next,
+      String: stringShim,
       HTMLElement: typeof HTMLElement === 'undefined' ? CompatibilityHTMLElement : HTMLElement,
       CodeMirror: codeMirrorShim,
       CodeMirrorAdapter: codeMirrorAdapterShim,
@@ -470,6 +492,12 @@ export class PluginLoader {
         this.app.removeLocalStorage(String(key));
       },
     };
+  }
+
+  private createStringShim(): StringConstructor & { isString?: (value: unknown) => boolean } {
+    const stringShim = String as StringConstructor & { isString?: (value: unknown) => boolean };
+    stringShim.isString ??= (value: unknown) => typeof value === 'string' || value instanceof String;
+    return stringShim;
   }
 
   private createDocumentShim(): PluginDocumentShim {
@@ -516,6 +544,18 @@ export class PluginLoader {
       },
       createEl: (tagName: string, attrs?: unknown, callback?: (el: HTMLElement) => void) => {
         const element = createObsidianElement(tagName);
+        this.applyCreateElAttrs(element, attrs);
+        callback?.(element);
+        return element;
+      },
+      createDiv: (attrs?: unknown, callback?: (el: HTMLElement) => void) => {
+        const element = createObsidianElement('div');
+        this.applyCreateElAttrs(element, attrs);
+        callback?.(element);
+        return element;
+      },
+      createSpan: (attrs?: unknown, callback?: (el: HTMLElement) => void) => {
+        const element = createObsidianElement('span');
         this.applyCreateElAttrs(element, attrs);
         callback?.(element);
         return element;

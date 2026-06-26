@@ -1,6 +1,7 @@
 'use client';
 
-import { ListChecks, Loader2, Terminal } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Check, ListChecks, Loader2, Terminal } from 'lucide-react';
 import type { PluginModalSnapshot, PluginModalSuggestionChoice } from '@/lib/plugins/client';
 import {
   Dialog,
@@ -15,7 +16,9 @@ interface PluginActionModalDialogProps {
   modal: PluginModalSnapshot | null;
   onClose: () => void;
   onChooseSuggestion?: (modal: PluginModalSnapshot, suggestion: PluginModalSuggestionChoice) => void;
+  onSubmitText?: (modal: PluginModalSnapshot, text: string) => void;
   choosingSuggestionIndex?: number | null;
+  submittingText?: boolean;
   choiceError?: string | null;
 }
 
@@ -23,13 +26,23 @@ export default function PluginActionModalDialog({
   modal,
   onClose,
   onChooseSuggestion,
+  onSubmitText,
   choosingSuggestionIndex = null,
+  submittingText = false,
   choiceError = null,
 }: PluginActionModalDialogProps) {
+  const [textValue, setTextValue] = useState('');
+
+  useEffect(() => {
+    setTextValue(modal?.textInput?.value ?? '');
+  }, [modal?.id, modal?.textInput?.value]);
+
   if (!modal) return null;
 
   const hasSuggestions = modal.kind === 'suggest' && (modal.suggestions?.length ?? 0) > 0;
+  const hasTextInput = modal.kind === 'modal' && Boolean(modal.textInput);
   const canChooseSuggestions = Boolean(onChooseSuggestion && modal.interactionId);
+  const canSubmitText = Boolean(onSubmitText && modal.interactionId && hasTextInput);
   const title = modal.title || (modal.kind === 'suggest' ? 'Suggestion modal' : 'Plugin modal');
 
   return (
@@ -53,7 +66,9 @@ export default function PluginActionModalDialog({
           <div className="rounded-lg border border-border/70 bg-background/70 px-3 py-2 text-xs text-muted-foreground">
             {canChooseSuggestions && modal.kind === 'suggest'
               ? 'Choose a suggestion to continue in the MindOS compatibility host.'
-              : 'Safe plugin modal snapshot.'}
+              : canSubmitText
+                ? 'Submit text to continue in the MindOS compatibility host.'
+                : 'Safe plugin modal snapshot.'}
           </div>
 
           {modal.placeholder && (
@@ -67,6 +82,24 @@ export default function PluginActionModalDialog({
             <div className="rounded-lg border border-border/70 bg-card/70 px-3 py-2">
               <div className="text-2xs uppercase tracking-wider text-muted-foreground/70">Content</div>
               <pre className="mt-1 whitespace-pre-wrap break-words font-sans text-sm leading-5 text-foreground">{modal.text}</pre>
+            </div>
+          )}
+
+          {hasTextInput && (
+            <div className="space-y-1.5">
+              <div className="text-2xs font-medium uppercase tracking-wider text-muted-foreground">Input</div>
+              <input
+                value={textValue}
+                placeholder={modal.textInput?.placeholder ?? modal.placeholder}
+                onChange={(event) => setTextValue(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' && canSubmitText && !submittingText) {
+                    onSubmitText?.(modal, textValue);
+                  }
+                }}
+                disabled={!canSubmitText || submittingText}
+                className="h-9 w-full rounded-md border border-border/70 bg-background px-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground/60 focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
+              />
             </div>
           )}
 
@@ -98,6 +131,17 @@ export default function PluginActionModalDialog({
         </div>
 
         <DialogFooter className="mx-0 mb-0 flex-row rounded-none border-t border-border/70 bg-card/95 px-5 py-3">
+          {hasTextInput && (
+            <button
+              type="button"
+              onClick={() => onSubmitText?.(modal, textValue)}
+              disabled={!canSubmitText || submittingText}
+              className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md bg-[var(--amber)] px-3 text-xs font-medium text-[var(--amber-foreground)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-60"
+            >
+              {submittingText ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
+              Submit
+            </button>
+          )}
           <button
             type="button"
             onClick={onClose}

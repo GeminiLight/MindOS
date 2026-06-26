@@ -8,7 +8,7 @@ import type { PluginEditorCommandContext } from '@/lib/obsidian-compat/plugin-ma
 import { isObsidianCapabilityGateConfirmationRequiredError } from '@/lib/obsidian-compat/capability-gate';
 import { isObsidianWorkflowProbeId, type ObsidianWorkflowProbeId } from '@/lib/obsidian-compat/workflow-probes';
 
-type PluginAction = 'enable' | 'disable' | 'load' | 'load-enabled' | 'execute-command' | 'run-workflow-probe' | 'execute-ribbon-action' | 'choose-modal-suggestion' | 'choose-menu-item' | 'uninstall' | 'migrate-legacy';
+type PluginAction = 'enable' | 'disable' | 'load' | 'load-enabled' | 'execute-command' | 'run-workflow-probe' | 'execute-ribbon-action' | 'choose-modal-suggestion' | 'submit-modal-text' | 'choose-menu-item' | 'uninstall' | 'migrate-legacy';
 
 const VALID_PLUGIN_ACTIONS: PluginAction[] = [
   'enable',
@@ -19,6 +19,7 @@ const VALID_PLUGIN_ACTIONS: PluginAction[] = [
   'run-workflow-probe',
   'execute-ribbon-action',
   'choose-modal-suggestion',
+  'submit-modal-text',
   'choose-menu-item',
   'uninstall',
   'migrate-legacy',
@@ -59,9 +60,16 @@ function requireRibbonIndex(index: unknown): number {
 
 function requireModalId(modalId: unknown): string {
   if (typeof modalId !== 'string' || modalId.trim().length === 0) {
-    throw new MindOSError(ErrorCodes.INVALID_REQUEST, 'Missing modalId for choose-modal-suggestion');
+    throw new MindOSError(ErrorCodes.INVALID_REQUEST, 'Missing modalId for modal continuation');
   }
   return modalId.trim();
+}
+
+function requireModalText(text: unknown): string {
+  if (typeof text !== 'string' || text.length > 10_000) {
+    throw new MindOSError(ErrorCodes.INVALID_REQUEST, 'Missing or invalid text for submit-modal-text');
+  }
+  return text;
 }
 
 function requireSuggestionIndex(index: unknown): number {
@@ -127,6 +135,7 @@ export async function POST(req: NextRequest) {
       commandId?: string;
       ribbonIndex?: number;
       modalId?: string;
+      text?: string;
       suggestionIndex?: number;
       menuId?: string;
       itemIndex?: number;
@@ -179,6 +188,12 @@ export async function POST(req: NextRequest) {
         result = await manager.chooseModalSuggestion(
           requireModalId(body.modalId),
           requireSuggestionIndex(body.suggestionIndex),
+          requireInteractionId(action, body.interactionId),
+        );
+      } else if (action === 'submit-modal-text') {
+        result = await manager.submitModalText(
+          requireModalId(body.modalId),
+          requireModalText(body.text),
           requireInteractionId(action, body.interactionId),
         );
       } else {
