@@ -4,11 +4,12 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import rehypeSlug from 'rehype-slug';
-import { useState, useCallback, useEffect, useId, useMemo } from 'react';
+import { useState, useCallback, useEffect, useId, useMemo, type MouseEvent as ReactMouseEvent } from 'react';
 import { Copy, Check, X, ChevronDown } from 'lucide-react';
 import { copyToClipboard } from '@/lib/clipboard';
 import { toast } from '@/lib/toast';
 import { resolveImagePath } from '@/lib/image';
+import { isExternalMarkdownHref, resolveMarkdownInternalHref } from '@/lib/markdown-links';
 import { splitMarkdownFrontmatter, type FrontmatterValue } from '@/lib/parsing/frontmatter';
 import {
   fetchPluginMarkdownCodeBlockSnapshots,
@@ -20,6 +21,7 @@ import {
 } from '@/lib/plugins/client';
 import type { PluginSurface } from '@/lib/plugins/surfaces';
 import type { Components, Options as ReactMarkdownOptions } from 'react-markdown';
+import { shouldHandleSmoothNavigation, useSmoothRouterPush } from '@/hooks/useSmoothRouterPush';
 
 type RehypePlugin = NonNullable<ReactMarkdownOptions['rehypePlugins']>[number];
 
@@ -213,7 +215,12 @@ function MarkdownPostProcessorSnapshots({ renders }: { renders: PluginMarkdownPo
   );
 }
 
-function createMarkdownComponents(markdownHooks: MarkdownHookMap, markdownRenders: MarkdownRenderMap): Components {
+function createMarkdownComponents(
+  markdownHooks: MarkdownHookMap,
+  markdownRenders: MarkdownRenderMap,
+  sourcePath: string,
+  navigateInternalHref: (href: string) => void,
+): Components {
   return {
     h1: makeHeading('h1'),
     h2: makeHeading('h2'),
@@ -331,13 +338,21 @@ function createMarkdownComponents(markdownHooks: MarkdownHookMap, markdownRender
     },
     a({ href, children, node, ...rest }) {
       void node;
-      const isExternal = href?.startsWith('http');
+      const resolvedHref = resolveMarkdownInternalHref(href, sourcePath);
+      const isExternal = isExternalMarkdownHref(resolvedHref);
+      const isInternalDocumentLink = typeof resolvedHref === 'string' && resolvedHref.startsWith('/view/');
+      const handleClick = (event: ReactMouseEvent<HTMLAnchorElement>) => {
+        if (!isInternalDocumentLink || !shouldHandleSmoothNavigation(event)) return;
+        event.preventDefault();
+        navigateInternalHref(resolvedHref);
+      };
       return (
         <a
-          href={href}
+          {...stripNonDom(rest)}
+          href={resolvedHref}
           target={isExternal ? '_blank' : undefined}
           rel={isExternal ? 'noopener noreferrer' : undefined}
-          {...stripNonDom(rest)}
+          onClick={handleClick}
         >
           {children}
         </a>
@@ -436,6 +451,7 @@ function FrontmatterPanel({ frontmatter }: { frontmatter: NonNullable<ReturnType
 }
 
 export default function MarkdownView({ content, highlightLines, onDismissHighlight, emptyPlaceholder, sourcePath = '' }: MarkdownViewProps) {
+  const navigateInternalHref = useSmoothRouterPush();
   const hasHighlights = highlightLines && highlightLines.length > 0;
   const parsedMarkdown = useMemo(() => splitMarkdownFrontmatter(content), [content]);
   const hasFencedCodeBlocks = useMemo(() => /(^|\n)(```|~~~)/.test(parsedMarkdown.body), [parsedMarkdown.body]);
@@ -550,7 +566,10 @@ export default function MarkdownView({ content, highlightLines, onDismissHighlig
     }
     return next;
   }, [markdownCodeBlockRenders]);
-  const markdownComponents = useMemo(() => createMarkdownComponents(markdownHooks, markdownRenders), [markdownHooks, markdownRenders]);
+  const markdownComponents = useMemo(
+    () => createMarkdownComponents(markdownHooks, markdownRenders, sourcePath, navigateInternalHref),
+    [markdownHooks, markdownRenders, navigateInternalHref, sourcePath],
+  );
 
   // rehype-highlight pulls in highlight.js (~100KB gz) — load it lazily so it
   // stays out of the /view route's first-load chunk. Code renders

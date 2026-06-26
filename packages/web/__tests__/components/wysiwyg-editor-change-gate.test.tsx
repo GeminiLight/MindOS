@@ -6,6 +6,11 @@ import WysiwygEditor from '@/components/WysiwygEditor';
 
 const milkdownMocks = vi.hoisted(() => ({
   markdownUpdatedHandlers: [] as Array<(_ctx: unknown, markdown: string) => void>,
+  routerPush: vi.fn(),
+}));
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: milkdownMocks.routerPush }),
 }));
 
 vi.mock('@milkdown/crepe', () => ({
@@ -47,6 +52,7 @@ describe('WysiwygEditor change gate', () => {
 
   beforeEach(() => {
     milkdownMocks.markdownUpdatedHandlers = [];
+    milkdownMocks.routerPush.mockClear();
     (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     host = document.createElement('div');
     document.body.appendChild(host);
@@ -58,9 +64,9 @@ describe('WysiwygEditor change gate', () => {
     document.body.removeChild(host);
   });
 
-  async function renderEditor(onChange = vi.fn()) {
+  async function renderEditor(onChange = vi.fn(), sourcePath = '') {
     await act(async () => {
-      root.render(<WysiwygEditor value="# Body" onChange={onChange} />);
+      root.render(<WysiwygEditor value="# Body" onChange={onChange} sourcePath={sourcePath} />);
     });
     expect(milkdownMocks.markdownUpdatedHandlers).toHaveLength(1);
     const wrapper = host.querySelector('.wysiwyg-wrapper');
@@ -111,5 +117,21 @@ describe('WysiwygEditor change gate', () => {
 
     expect(onChange).toHaveBeenCalledTimes(1);
     expect(onChange).toHaveBeenCalledWith('**# Body**');
+  });
+
+  it('routes local markdown link clicks through the app instead of the browser default', async () => {
+    const { wrapper } = await renderEditor(vi.fn(), 'Notes/source.md');
+    const link = document.createElement('a');
+    link.setAttribute('href', 'other.md');
+    link.setAttribute('target', '_blank');
+    link.textContent = 'Other';
+    wrapper.appendChild(link);
+
+    await act(async () => {
+      link.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 }));
+      await new Promise(resolve => setTimeout(resolve, 20));
+    });
+
+    expect(milkdownMocks.routerPush).toHaveBeenCalledWith('/view/Notes/other.md');
   });
 });

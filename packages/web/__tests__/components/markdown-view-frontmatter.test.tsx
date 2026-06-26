@@ -36,9 +36,9 @@ describe('MarkdownView frontmatter rendering', () => {
     document.body.removeChild(host);
   });
 
-  async function render(content: string) {
+  async function render(content: string, sourcePath = '') {
     await act(async () => {
-      root.render(<MarkdownView content={content} />);
+      root.render(<MarkdownView content={content} sourcePath={sourcePath} />);
       await Promise.resolve();
       await Promise.resolve();
     });
@@ -93,6 +93,20 @@ Body`);
     expect(host.querySelector('.markdown-frontmatter')).toBeNull();
     expect(host.querySelector('.prose h1')?.textContent).toBe('Hello');
     expect(host.querySelectorAll('.prose hr')).toHaveLength(1);
+  });
+
+  it('routes local markdown links through the app view instead of opening them as external links', async () => {
+    await render('[Sibling](other.md) [Nested](./sub/next.md#Part) [External](https://example.com/other.md)', 'Notes/source.md');
+
+    const links = Array.from(host.querySelectorAll<HTMLAnchorElement>('.prose a'));
+    expect(links.map(link => link.getAttribute('href'))).toEqual([
+      '/view/Notes/other.md',
+      '/view/Notes/sub/next.md#Part',
+      'https://example.com/other.md',
+    ]);
+    expect(links[0].getAttribute('target')).toBeNull();
+    expect(links[1].getAttribute('target')).toBeNull();
+    expect(links[2].getAttribute('target')).toBe('_blank');
   });
 
   it('keeps malformed frontmatter visible as markdown instead of hiding content', async () => {

@@ -1150,6 +1150,7 @@ export default function ViewPageClient({
                     onChange={setEditContent}
                     viewMode={mdViewMode}
                     editorKey={filePath}
+                    sourcePath={filePath}
                     sandboxContributions={linterSandboxContributions}
                   />
                 </div>

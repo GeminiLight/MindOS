@@ -1,10 +1,12 @@
 'use client';
 
-import { useCallback, useEffect, useLayoutEffect, useRef, type MutableRefObject } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, type MouseEvent as ReactMouseEvent, type MutableRefObject } from 'react';
 import { Crepe, CrepeFeature } from '@milkdown/crepe';
 import { Milkdown, MilkdownProvider, useEditor } from '@milkdown/react';
 import '@milkdown/crepe/theme/common/style.css';
 import '@/styles/milkdown-overrides.css';
+import { shouldHandleSmoothNavigation, useSmoothRouterPush } from '@/hooks/useSmoothRouterPush';
+import { resolveMarkdownInternalHref } from '@/lib/markdown-links';
 import { useEditorTheme } from '@/lib/stores/editor-theme-store';
 import { twemojiToNative } from '@/lib/twemoji';
 
@@ -59,10 +61,12 @@ function InnerEditor({
 interface WysiwygEditorProps {
   value: string;
   onChange: (markdown: string) => void;
+  sourcePath?: string;
 }
 
-export default function WysiwygEditor({ value, onChange }: WysiwygEditorProps) {
+export default function WysiwygEditor({ value, onChange, sourcePath = '' }: WysiwygEditorProps) {
   const theme = useEditorTheme(s => s.theme);
+  const smoothPush = useSmoothRouterPush();
   const userInteractedRef = useRef(false);
   const editorReadyForPointerRef = useRef(false);
 
@@ -84,6 +88,18 @@ export default function WysiwygEditor({ value, onChange }: WysiwygEditorProps) {
     }
   }, []);
 
+  const handleLinkClick = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {
+    if (!shouldHandleSmoothNavigation(event)) return;
+    const target = event.target instanceof Element ? event.target : null;
+    const anchor = target?.closest('a[href]');
+    if (!(anchor instanceof HTMLAnchorElement)) return;
+    const href = anchor.getAttribute('href') ?? '';
+    const resolvedHref = resolveMarkdownInternalHref(href, sourcePath);
+    if (!resolvedHref?.startsWith('/view/')) return;
+    event.preventDefault();
+    smoothPush(resolvedHref);
+  }, [smoothPush, sourcePath]);
+
   return (
     <div
       className="wysiwyg-wrapper min-h-[50vh] overflow-visible"
@@ -95,6 +111,7 @@ export default function WysiwygEditor({ value, onChange }: WysiwygEditorProps) {
       onKeyDownCapture={markTextEditingIntent}
       onPasteCapture={markTextEditingIntent}
       onPointerDownCapture={markPointerEditingIntent}
+      onClickCapture={handleLinkClick}
     >
       <MilkdownProvider>
         <InnerEditor

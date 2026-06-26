@@ -20,6 +20,7 @@ interface MarkdownEditorProps {
   onChange: (v: string) => void;
   viewMode: MdViewMode;
   editorKey?: string;
+  sourcePath?: string;
   sandboxContributions?: BrowserEditorSandboxContribution[];
 }
 
@@ -30,6 +31,7 @@ export default function MarkdownEditor({
   onChange,
   viewMode,
   editorKey,
+  sourcePath = '',
   sandboxContributions = [],
 }: MarkdownEditorProps) {
   const parsedFrontmatter = useMemo(() => splitMarkdownFrontmatter(value), [value]);
@@ -49,7 +51,7 @@ export default function MarkdownEditor({
       {/* Keep valid frontmatter out of Milkdown's normalization path, then splice it back unchanged. */}
       {isWysiwyg && (
         <div className="min-h-[50vh] min-w-0">
-          <WysiwygEditor key={editorKey ?? 'wysiwyg'} value={wysiwygValue} onChange={handleWysiwygChange} />
+          <WysiwygEditor key={editorKey ?? 'wysiwyg'} value={wysiwygValue} onChange={handleWysiwygChange} sourcePath={sourcePath} />
         </div>
       )}
 
