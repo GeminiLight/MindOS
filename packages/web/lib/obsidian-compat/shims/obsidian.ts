@@ -29,6 +29,33 @@ const htmlToMarkdownConverter = new TurndownService({
   headingStyle: 'atx',
 });
 
+export function installObsidianArrayPrototypeCompat(): void {
+  const prototype = Array.prototype as Array<unknown> & {
+    contains?: (value: unknown) => boolean;
+    first?: () => unknown;
+  };
+  if (typeof prototype.contains !== 'function') {
+    Object.defineProperty(prototype, 'contains', {
+      configurable: true,
+      enumerable: false,
+      writable: true,
+      value(this: unknown[], value: unknown): boolean {
+        return this.includes(value);
+      },
+    });
+  }
+  if (typeof prototype.first !== 'function') {
+    Object.defineProperty(prototype, 'first', {
+      configurable: true,
+      enumerable: false,
+      writable: true,
+      value(this: unknown[]): unknown {
+        return this[0];
+      },
+    });
+  }
+}
+
 export function normalizePath(input: string): string {
   return input
     .replace(/\\/g, '/')

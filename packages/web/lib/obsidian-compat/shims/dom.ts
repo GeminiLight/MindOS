@@ -19,6 +19,7 @@ export type ObsidianElement = HTMLElement & {
   createSpan(attrs?: ObsidianCreateElAttrs | string, callback?: (el: ObsidianElement) => void): ObsidianElement;
   setText(text: string): ObsidianElement;
   appendText(text: string): ObsidianElement;
+  setChildrenInPlace(children: Iterable<HTMLElement | Text | string>): ObsidianElement;
   addClass(cls: string | string[]): ObsidianElement;
   removeClass(cls: string | string[]): ObsidianElement;
   toggleClass(cls: string, value?: boolean): ObsidianElement;
@@ -101,6 +102,18 @@ function attachHelpers(el: HTMLElement): ObsidianElement {
 
   target.appendText ??= function appendText(text) {
     this.textContent = `${this.textContent ?? ''}${text}`;
+    return this;
+  };
+
+  target.setChildrenInPlace ??= function setChildrenInPlace(children) {
+    this.empty();
+    for (const child of children ?? []) {
+      if (typeof child === 'string') {
+        this.appendText(child);
+      } else {
+        this.appendChild(child);
+      }
+    }
     return this;
   };
 

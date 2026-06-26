@@ -1070,6 +1070,15 @@ export const OBSIDIAN_CAPABILITY_MATRIX: ObsidianCapabilityRow[] = [
     notes: 'Returns compatibility leaves for registered plugin view types.',
   },
   {
+    api: 'Workspace.revealLeaf',
+    surface: 'views',
+    support: 'limited',
+    host: 'Plugin view host',
+    route: '/plugins/views',
+    tests: ['obsidian-compat/workspace.test.ts'],
+    notes: 'MindOS records reveal requests for compatibility leaves; it does not mount native Obsidian panes.',
+  },
+  {
     api: 'WorkspaceLeaf',
     surface: 'views',
     support: 'limited',

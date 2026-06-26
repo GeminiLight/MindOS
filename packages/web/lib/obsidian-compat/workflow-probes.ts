@@ -20,7 +20,8 @@ export type ObsidianWorkflowProbeId =
   | 'calendar-open-periodic-note'
   | 'tag-wrangler-rename'
   | 'linter-review-apply'
-  | 'admonition-render-markdown';
+  | 'admonition-render-markdown'
+  | 'recent-files-open-view';
 
 export type ObsidianWorkflowProbeStatus = 'passed' | 'failed' | 'skipped';
 export type ObsidianWorkflowProbeSource = 'workflow-probe';
@@ -369,6 +370,12 @@ const PROBE_DEFINITIONS: WorkflowProbeDefinition[] = [
     label: 'Render admonition blocks',
     pluginIds: new Set(['obsidian-admonition', 'admonition']),
     run: runAdmonitionProbe,
+  },
+  {
+    id: 'recent-files-open-view',
+    label: 'Open recent files view',
+    pluginIds: new Set(['recent-files-obsidian']),
+    run: runRecentFilesProbe,
   },
 ];
 
@@ -731,6 +738,40 @@ async function runAdmonitionProbe(input: WorkflowProbeRuntimeInput): Promise<Wor
   };
 }
 
+async function runRecentFilesProbe(input: WorkflowProbeRuntimeInput): Promise<WorkflowProbeDraft> {
+  const command = selectCommand(input.plugin, [/recent/i, /file/i, /open/i]);
+  const view = input.plugin.runtime.viewList?.find((item) => /recent/i.test(item.type))
+    ?? input.plugin.runtime.viewList?.[0];
+  if (!command || !view) {
+    return skippedDraft('No executable Recent Files command and registered view were available to probe.');
+  }
+
+  const action = await input.host.executeCommand(command.fullId);
+  const snapshot = await input.host.renderView(input.plugin.id, view.type);
+  const text = [snapshot.displayText, snapshot.text].filter(Boolean).join(' ').trim();
+  const commandCalled = hasCalledLedger(input.host, input.plugin.id, ['addCommand']);
+  const viewCalled = hasCalledLedger(input.host, input.plugin.id, ['registerView']);
+  const visible = Boolean(text);
+  const passed = commandCalled && viewCalled && visible;
+  const observable = observableEvidence(action, []);
+
+  return {
+    status: passed ? 'passed' : 'failed',
+    evidence: [
+      `Executed Recent Files command "${command.name}" (${command.fullId}).`,
+      `Rendered Recent Files view "${view.type}": ${text.slice(0, 160) || '(empty)'}.`,
+      ...observable,
+    ],
+    assertions: [
+      { id: 'execute-command', label: 'Executed the selected Recent Files command', passed: true, detail: command.fullId },
+      { id: 'render-view', label: 'Rendered the Recent Files view snapshot', passed: visible, detail: view.type },
+      { id: 'command-called-ledger', label: 'Recorded command execution evidence', passed: commandCalled },
+      { id: 'view-called-ledger', label: 'Recorded view snapshot evidence', passed: viewCalled },
+    ],
+    ...(!passed ? { failureReason: recentFilesFailureReason({ commandCalled, viewCalled, visible }) } : {}),
+  };
+}
+
 async function runCommandProbe(input: WorkflowProbeRuntimeInput & {
   command: ObsidianWorkflowProbeCommand;
   calledCapabilities: string[];
@@ -1041,6 +1082,14 @@ function admonitionFailureReason(input: { visible: boolean; called: boolean; ali
   ].filter(Boolean).join('; ');
 }
 
+function recentFilesFailureReason(input: { commandCalled: boolean; viewCalled: boolean; visible: boolean }): string {
+  return [
+    !input.commandCalled ? 'runtime ledger did not record Recent Files command execution' : '',
+    !input.viewCalled ? 'runtime ledger did not record Recent Files view rendering' : '',
+    !input.visible ? 'Recent Files view rendered without visible snapshot text' : '',
+  ].filter(Boolean).join('; ');
+}
+
 function normalizeSnapshotText(value: string): string {
   return value.replace(/\s+/g, ' ').trim().toLowerCase();
 }
@@ -1163,6 +1212,7 @@ const PROBE_IDS = new Set<ObsidianWorkflowProbeId>([
   'tag-wrangler-rename',
   'linter-review-apply',
   'admonition-render-markdown',
+  'recent-files-open-view',
 ]);
 
 const QUICKADD_VAULT_WRITE_CAPABILITIES = [

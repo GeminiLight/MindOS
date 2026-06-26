@@ -38,6 +38,7 @@ describe('Obsidian capability matrix', () => {
         'SecretStorage',
         'Vault.getConfig',
         'Workspace.getRightLeaf',
+        'Workspace.revealLeaf',
         'registerEditorExtension',
         'registerEditorSuggest',
         'EditorSuggest',
@@ -67,6 +68,7 @@ describe('Obsidian capability matrix', () => {
       expect.objectContaining({ api: 'SecretStorage', support: 'limited', surface: 'secret' }),
       expect.objectContaining({ api: 'Vault.getConfig', support: 'limited', surface: 'vault' }),
       expect.objectContaining({ api: 'Workspace.getRightLeaf', support: 'limited', surface: 'views' }),
+      expect.objectContaining({ api: 'Workspace.revealLeaf', support: 'limited', surface: 'views' }),
       expect.objectContaining({ api: 'registerEditorExtension', support: 'catalog-only', surface: 'editor' }),
       expect.objectContaining({ api: 'registerEditorSuggest', support: 'catalog-only', surface: 'editor' }),
       expect.objectContaining({ api: 'EditorSuggest', support: 'catalog-only', surface: 'editor' }),
@@ -89,7 +91,7 @@ describe('Obsidian capability matrix', () => {
     ]));
     expect(summarizeObsidianCapabilityCoverage(coverage)).toMatchObject({
       full: 3,
-      limited: 12,
+      limited: 13,
       'request-only': 1,
       'catalog-only': 6,
       'snapshot-only': 2,
@@ -107,6 +109,7 @@ describe('Obsidian capability matrix', () => {
         'PluginSettingTab',
         'SecretStorage',
         'registerView',
+        'Workspace.revealLeaf',
         'MarkdownRenderer',
         'renderMatches',
         'requestUrl',
@@ -139,8 +142,8 @@ describe('Obsidian capability matrix', () => {
       }),
       expect.objectContaining({
         surface: 'views',
-        apiCount: 1,
-        supportSummary: expect.objectContaining({ limited: 1 }),
+        apiCount: 2,
+        supportSummary: expect.objectContaining({ limited: 2 }),
       }),
       expect.objectContaining({
         surface: 'document',

@@ -289,6 +289,7 @@ function collectObsidianImports(code: string): string[] {
     [/workspace\.getRightLeaf\s*\(/, 'Workspace.getRightLeaf'],
     [/workspace\.getLeaf\s*\(/, 'Workspace.getLeaf'],
     [/workspace\.getLeavesOfType\s*\(/, 'Workspace.getLeavesOfType'],
+    [/workspace\.revealLeaf\s*\(/, 'Workspace.revealLeaf'],
     [/customCss\.getSnippetPath\s*\(/, 'CustomCss.getSnippetPath'],
     [/customCss\.setCssEnabledStatus\s*\(/, 'CustomCss.setCssEnabledStatus'],
     [/customCss\.readSnippets\s*\(/, 'CustomCss.readSnippets'],

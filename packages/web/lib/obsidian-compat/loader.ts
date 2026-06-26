@@ -20,7 +20,7 @@ import * as nodeUtil from 'util';
 import { validateManifest, ManifestError } from './manifest';
 import { CompatError, CompatErrorCodes } from './errors';
 import { Plugin } from './shims/plugin';
-import { createObsidianModule } from './shims/obsidian';
+import { createObsidianModule, installObsidianArrayPrototypeCompat } from './shims/obsidian';
 import { AppShim, type AppShimOptions } from './shims/app';
 import { createObsidianElement } from './shims/dom';
 import { ObsidianRuntimeHost } from './runtime';
@@ -251,6 +251,7 @@ export class PluginLoader {
     const module = { exports: {} as any };
     const exports = module.exports;
 
+    installObsidianArrayPrototypeCompat();
     const obsidianModule = createObsidianModule();
     const supportedRuntimeModules: Record<string, unknown> = {
       path,

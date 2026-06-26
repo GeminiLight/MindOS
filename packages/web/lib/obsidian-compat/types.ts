@@ -394,6 +394,7 @@ export interface Workspace {
   getLeftLeaf(split?: boolean): WorkspaceLeaf | null;
   getRightLeaf(split?: boolean): WorkspaceLeaf | null;
   getLeavesOfType(viewType: string): WorkspaceLeaf[];
+  revealLeaf(leaf: WorkspaceLeaf): Promise<void>;
   iterateCodeMirrors(callback: (codeMirror: { getOption(key: string): unknown; setOption(key: string, value: unknown): void }) => any): void;
   iterateRootLeaves(callback: (leaf: WorkspaceLeaf) => any): void;
   iterateAllLeaves(callback: (leaf: WorkspaceLeaf) => any): void;

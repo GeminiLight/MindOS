@@ -327,6 +327,108 @@ describe('Obsidian workflow probes', () => {
     ]));
   });
 
+  it('passes the Recent Files probe after executing the command and rendering the view snapshot', async () => {
+    writePlugin('recent-files-obsidian', `
+      const { ItemView, Plugin } = require('obsidian');
+      class RecentFilesView extends ItemView {
+        getViewType() {
+          return 'recent-files';
+        }
+        getDisplayText() {
+          return 'Recent Files';
+        }
+        onOpen() {
+          const root = createDiv({ cls: 'nav-folder mod-root' });
+          if ([].contains('explorer')) {
+            root.createDiv({ text: 'Explorer aliases enabled' });
+          }
+          root.createDiv({ text: 'Alpha.md' });
+          root.createDiv({ text: 'Beta.md' });
+          this.contentEl.setChildrenInPlace([root]);
+        }
+      }
+      module.exports = class RecentFilesPlugin extends Plugin {
+        onload() {
+          this.registerView('recent-files', (leaf) => new RecentFilesView(leaf));
+          this.addCommand({
+            id: 'open-recent-files',
+            name: 'Open recent files',
+            callback: async () => {
+              let leaf = this.app.workspace.getLeavesOfType('recent-files').first();
+              if (!leaf) {
+                leaf = this.app.workspace.getRightLeaf(false);
+                await leaf.setViewState({ type: 'recent-files' });
+              }
+              await this.app.workspace.revealLeaf(leaf);
+            }
+          });
+        }
+      };
+    `);
+
+    const manager = new PluginManager(mindRoot);
+    await manager.discover();
+    await manager.enable('recent-files-obsidian', { confirmCapabilityGate: true });
+
+    const result = await manager.runWorkflowProbe('recent-files-obsidian', 'recent-files-open-view');
+
+    expect(result).toMatchObject({
+      pluginId: 'recent-files-obsidian',
+      id: 'recent-files-open-view',
+      status: 'passed',
+      source: 'workflow-probe',
+    });
+    expect(result.evidence).toEqual(expect.arrayContaining([
+      expect.stringContaining('Executed Recent Files command "Open recent files"'),
+      expect.stringContaining('Rendered Recent Files view "recent-files"'),
+    ]));
+    expect(result.assertions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'execute-command', passed: true }),
+      expect.objectContaining({ id: 'render-view', passed: true }),
+      expect.objectContaining({ id: 'command-called-ledger', passed: true }),
+      expect.objectContaining({ id: 'view-called-ledger', passed: true }),
+    ]));
+    expect(manager.list().find((item) => item.id === 'recent-files-obsidian')?.workflowAudits).toEqual([
+      expect.objectContaining({
+        id: 'recent-files-open-view',
+        status: 'observed',
+        source: 'workflow-probe',
+        lastProbeStatus: 'passed',
+      }),
+    ]);
+  });
+
+  it('skips the Recent Files probe when no view snapshot target is registered', async () => {
+    writePlugin('recent-files-obsidian', `
+      const { Plugin } = require('obsidian');
+      module.exports = class RecentFilesPlugin extends Plugin {
+        onload() {
+          this.addCommand({
+            id: 'open-recent-files',
+            name: 'Open recent files',
+            callback: () => {}
+          });
+        }
+      };
+    `);
+
+    const manager = new PluginManager(mindRoot);
+    await manager.discover();
+    await manager.enable('recent-files-obsidian', { confirmCapabilityGate: true });
+
+    const result = await manager.runWorkflowProbe('recent-files-obsidian', 'recent-files-open-view');
+
+    expect(result).toMatchObject({
+      pluginId: 'recent-files-obsidian',
+      id: 'recent-files-open-view',
+      status: 'skipped',
+      failureReason: expect.stringContaining('registered view'),
+    });
+    expect(result.assertions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'probe-available', passed: false }),
+    ]));
+  });
+
   it('passes the Tag Wrangler rename probe only after fixture frontmatter and body tags are rewritten', async () => {
     writePlugin('tag-wrangler', `
       const { Plugin } = require('obsidian');

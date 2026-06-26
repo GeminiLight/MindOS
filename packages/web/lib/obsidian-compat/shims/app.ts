@@ -228,6 +228,16 @@ class WorkspaceShim extends Events implements Workspace {
     return this.leaves.filter((leaf) => leaf.getViewState().type === viewType);
   }
 
+  async revealLeaf(leaf: WorkspaceLeaf): Promise<void> {
+    const viewType = leaf.getViewState().type;
+    this.host.recordRuntimeCapability(
+      this.host.getCurrentPluginId(),
+      'Workspace.revealLeaf',
+      'called',
+      `Plugin requested reveal for workspace leaf "${viewType}".`,
+    );
+  }
+
   iterateRootLeaves(callback: (leaf: WorkspaceLeaf) => any): void {
     for (const leaf of this.leaves) {
       callback(leaf);
@@ -425,22 +435,22 @@ export class AppShim implements App {
   }
 
   private createCommandsShim(): App['commands'] {
-    const app = this;
+    const commandRegistry = this.commandRegistry;
     return {
       get commands() {
-        return Object.fromEntries(app.commandRegistry.list().map((command) => [command.fullId, command]));
+        return Object.fromEntries(commandRegistry.list().map((command) => [command.fullId, command]));
       },
-      listCommands: () => app.commandRegistry.list(),
-      findCommand: (id: string) => app.findCommand(id),
+      listCommands: () => commandRegistry.list(),
+      findCommand: (id: string) => this.findCommand(id),
       removeCommand: (id: string) => {
-        app.removeCommandById(id);
+        this.removeCommandById(id);
       },
       executeCommandById: async (id: string) => {
-        const command = app.findCommand(id);
+        const command = this.findCommand(id);
         if (!command) {
           throw new Error(`Command not found: ${id}`);
         }
-        await app.executeCommand(command.fullId);
+        await this.executeCommand(command.fullId);
       },
     };
   }

@@ -57,6 +57,7 @@ const QUICKADD_PLUGIN_IDS = new Set(['quickadd']);
 const TAG_WRANGLER_PLUGIN_IDS = new Set(['tag-wrangler']);
 const CALENDAR_PLUGIN_IDS = new Set(['calendar', 'obsidian-calendar-plugin']);
 const ADMONITION_PLUGIN_IDS = new Set(['obsidian-admonition', 'admonition']);
+const RECENT_FILES_PLUGIN_IDS = new Set(['recent-files-obsidian']);
 
 export function buildObsidianWorkflowAudits(input: BuildObsidianWorkflowAuditsInput): ObsidianWorkflowAudit[] {
   const pluginId = input.pluginId.toLowerCase();
@@ -67,6 +68,7 @@ export function buildObsidianWorkflowAudits(input: BuildObsidianWorkflowAuditsIn
   if (TAG_WRANGLER_PLUGIN_IDS.has(pluginId)) audits.push(buildTagWranglerAudit(input));
   if (CALENDAR_PLUGIN_IDS.has(pluginId)) audits.push(buildCalendarAudit(input));
   if (ADMONITION_PLUGIN_IDS.has(pluginId)) audits.push(buildAdmonitionAudit(input));
+  if (RECENT_FILES_PLUGIN_IDS.has(pluginId)) audits.push(buildRecentFilesAudit(input));
   if (DATAVIEW_PLUGIN_IDS.has(pluginId)) audits.push(buildNativeReplacementAudit(
     input,
     'dataview-native-query',
@@ -185,6 +187,21 @@ function buildAdmonitionAudit(input: BuildObsidianWorkflowAuditsInput): Obsidian
     evidence: ['MindOS can cover this workflow with native Markdown callout rendering before mounting arbitrary plugin DOM.'],
     nextStep: 'Prefer native callout rendering unless runtime snapshots prove plugin-specific syntax that MindOS does not cover.',
   };
+}
+
+function buildRecentFilesAudit(input: BuildObsidianWorkflowAuditsInput): ObsidianWorkflowAudit {
+  const probed = probedAudit(input, 'recent-files-open-view');
+  if (probed) return probed;
+  const called = latestEntries(input, { capabilities: ['addCommand', 'registerView'], phases: ['called'] });
+  const registered = latestEntries(input, { capabilities: ['addCommand', 'registerView'], phases: ['registered'] });
+  if (called.length > 0) {
+    return partialAudit('recent-files-open-view', 'Open recent files view', 'runtime-ledger', called, 'Run the Recent Files workflow probe and verify the command opens a bounded view snapshot before marking the workflow observed.');
+  }
+  if (input.capabilityGate.blocked) return blockedAudit(input, 'recent-files-open-view', 'Open recent files view');
+  if (registered.length > 0) {
+    return partialAudit('recent-files-open-view', 'Open recent files view', 'runtime-ledger', registered, 'Execute the recent-files command and render the registered view through the snapshot host.');
+  }
+  return staticAudit(input, 'recent-files-open-view', 'Open recent files view', ['commands', 'views', 'workspace'], 'Load the plugin, execute the recent-files command, then verify the view snapshot output.');
 }
 
 function buildNativeReplacementAudit(

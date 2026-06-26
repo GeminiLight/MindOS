@@ -91,6 +91,25 @@ describe('Workspace shim', () => {
     });
   });
 
+  it('records revealLeaf requests without mounting native panes', async () => {
+    const leaf = app.workspace.getRightLeaf(false);
+    await leaf?.setViewState({ type: 'recent-files', state: { source: 'test' } });
+
+    await app.getRuntimeHost().runWithPluginContext('recent-files-obsidian', async () => {
+      await app.workspace.revealLeaf(leaf!);
+    });
+
+    expect(app.getRuntimeHost().getRuntimeCapabilityLedger('recent-files-obsidian')).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        capability: 'Workspace.revealLeaf',
+        surface: 'views',
+        support: 'limited',
+        phase: 'called',
+        evidence: expect.stringContaining('recent-files'),
+      }),
+    ]));
+  });
+
   it('keeps the active MarkdownView editor read-only outside editor command execution', async () => {
     const file = await app.vault.create('notes/today.md', '# Today\nBody');
 
