@@ -1,10 +1,21 @@
 import type { ObsidianCapabilityGateReport } from './capability-gate';
 import type { ObsidianCommunityPluginPreflight } from './community-catalog';
+import {
+  summarizeObsidianCapabilitySurfaces,
+  type ObsidianCapabilitySurface,
+} from './capability-matrix';
 import type {
   ObsidianCommunityPreflightSupportLevel,
   ObsidianCommunitySurfacePreview,
 } from './community-support';
 import type { CompatibilityLevel } from './compatibility-report';
+import {
+  buildObsidianSurfacePolicyDecision,
+  type ObsidianSurfacePolicyAction,
+  type ObsidianSurfacePolicyRisk,
+  type ObsidianSurfacePolicyRuntimeDefault,
+} from './surface-decision';
+import type { ObsidianSurfaceCatalogStatus } from './compatibility-preview';
 import type {
   ObsidianWorkflowProbeResult,
 } from './workflow-probes';
@@ -147,6 +158,7 @@ export interface ObsidianRealPluginMatrixRow {
     installable: boolean;
   };
   surfaces: ObsidianCommunitySurfacePreview[];
+  surfacePolicies: ObsidianRealPluginSurfacePolicy[];
   smoke: ObsidianRealPluginSmokeResult;
   recommendation: ObsidianRealPluginRecommendation;
   editorAdapterPlan: ObsidianEditorAdapterPlan;
@@ -159,7 +171,20 @@ export interface ObsidianRealPluginMatrixSummary {
   bySmokeOutcome: Record<ObsidianRealPluginSmokeOutcome, number>;
   byRecommendation: Record<ObsidianRealPluginRecommendation, number>;
   byEditorAdapterPlan: Record<ObsidianEditorAdapterPlanStatus, number>;
+  bySurfacePolicyAction: Record<ObsidianSurfacePolicyAction, number>;
   totalDownloads: number;
+}
+
+export interface ObsidianRealPluginSurfacePolicy {
+  surface: ObsidianCapabilitySurface;
+  label: string;
+  apiCount: number;
+  action: ObsidianSurfacePolicyAction;
+  risk: ObsidianSurfacePolicyRisk;
+  runtimeDefault: ObsidianSurfacePolicyRuntimeDefault;
+  permissionBoundary: string;
+  requiredEvidence: string[];
+  nextStep: string;
 }
 
 export interface ObsidianEditorAdapterPlan {
@@ -239,11 +264,15 @@ export function renderObsidianRealPluginMatrixMarkdown(matrix: ObsidianRealPlugi
     `| Declarative editor adapter candidates | ${matrix.summary.byEditorAdapterPlan['declarative-adapter-candidate']} |`,
     `| Full CodeMirror host required | ${matrix.summary.byEditorAdapterPlan['full-codemirror-host']} |`,
     `| Native product feature preferred | ${matrix.summary.byEditorAdapterPlan['native-product-feature']} |`,
+    `| Surfaces requiring review | ${matrix.summary.bySurfacePolicyAction['review-before-enable']} |`,
+    `| Catalog-only surfaces | ${matrix.summary.bySurfacePolicyAction['catalog-only']} |`,
+    `| Native adapter surfaces | ${matrix.summary.bySurfacePolicyAction['native-adapter']} |`,
+    `| Blocked surfaces | ${matrix.summary.bySurfacePolicyAction.blocked} |`,
     '',
     '## Matrix',
     '',
-    '| Plugin | Category | Downloads | Compat | Gate | Smoke | Probes | Surfaces | Editor Plan | Recommendation |',
-    '|---|---|---:|---|---|---|---|---|---|---|',
+    '| Plugin | Category | Downloads | Compat | Gate | Smoke | Probes | Surfaces | Policy | Editor Plan | Recommendation |',
+    '|---|---|---:|---|---|---|---|---|---|---|---|',
     ...matrix.plugins.map((plugin) => `| ${[
       `${markdownLink(plugin.name, plugin.githubUrl)} (${inlineCode(plugin.id)})`,
       plugin.category,
@@ -253,13 +282,35 @@ export function renderObsidianRealPluginMatrixMarkdown(matrix: ObsidianRealPlugi
       smokeLabel(plugin.smoke),
       workflowProbeLabel(plugin.smoke.workflowProbes),
       surfaceLabel(plugin.surfaces),
+      surfacePolicyLabel(plugin.surfacePolicies),
       editorAdapterPlanLabel(plugin.editorAdapterPlan),
       recommendationLabel(plugin.recommendation),
     ].join(' | ')} |`),
     '',
-    '## Editor Adapter Plans',
+    '## Surface Policy Decisions',
     '',
   ];
+
+  for (const plugin of matrix.plugins) {
+    const actionablePolicies = plugin.surfacePolicies.filter((policy) => policy.action !== 'allow-after-load');
+    if (actionablePolicies.length === 0) continue;
+    lines.push(`### ${plugin.name}`);
+    lines.push('');
+    for (const policy of actionablePolicies.slice(0, 8)) {
+      lines.push(`- ${policy.label}: ${surfacePolicyActionLabel(policy.action)} (${policy.risk}; ${policy.runtimeDefault})`);
+      lines.push(`  - Boundary: ${policy.permissionBoundary}`);
+      for (const evidence of policy.requiredEvidence.slice(0, 2)) {
+        lines.push(`  - Evidence: ${evidence}`);
+      }
+      lines.push(`  - Next: ${policy.nextStep}`);
+    }
+    lines.push('');
+  }
+
+  lines.push(
+    '## Editor Adapter Plans',
+    '',
+  );
 
   for (const plugin of matrix.plugins) {
     if (plugin.editorAdapterPlan.status === 'not-editor-scoped') continue;
@@ -376,6 +427,7 @@ function toMatrixRow(input: ObsidianRealPluginMatrixInputItem): ObsidianRealPlug
     },
     support: input.preflight.support,
     surfaces: input.preflight.surfacePreview,
+    surfacePolicies: surfacePoliciesFor(input),
     smoke: input.smoke,
     recommendation: recommendationFor(input),
     editorAdapterPlan: editorAdapterPlanFor(input),
@@ -391,6 +443,49 @@ function recommendationFor(input: ObsidianRealPluginMatrixInputItem): ObsidianRe
   if (input.smoke.outcome === 'failed') return 'investigate';
   if (input.preflight.support.kind === 'ready' || input.preflight.support.kind === 'limited') return 'review-before-enable';
   return 'investigate';
+}
+
+function surfacePoliciesFor(input: ObsidianRealPluginMatrixInputItem): ObsidianRealPluginSurfacePolicy[] {
+  const coverage = input.preflight.derivedCapabilities.coverage;
+  const summaries = summarizeObsidianCapabilitySurfaces(coverage);
+
+  if (input.preflight.compatibility.report.unsupportedModules.length > 0) {
+    summaries.push({
+      surface: 'unsupported',
+      apiCount: input.preflight.compatibility.report.unsupportedModules.length,
+      supportSummary: {
+        full: 0,
+        limited: 0,
+        'snapshot-only': 0,
+        'catalog-only': 0,
+        'request-only': 0,
+        unsupported: input.preflight.compatibility.report.unsupportedModules.length,
+      },
+      apis: input.preflight.compatibility.report.unsupportedModules.map((moduleName) => `module:${moduleName}`),
+      hosts: ['Unsupported runtime module'],
+      routes: [],
+    });
+  }
+
+  return summaries.map((summary) => {
+    const label = surfacePolicyLabelForSurface(summary.surface);
+    const decision = buildObsidianSurfacePolicyDecision({
+      surface: summary.surface,
+      label,
+      status: matrixSurfacePolicyStatus(summary),
+    });
+    return {
+      surface: summary.surface,
+      label,
+      apiCount: summary.apiCount,
+      action: decision.action,
+      risk: decision.risk,
+      runtimeDefault: decision.runtimeDefault,
+      permissionBoundary: decision.permissionBoundary,
+      requiredEvidence: decision.requiredEvidence,
+      nextStep: decision.nextStep,
+    };
+  });
 }
 
 const CODEMIRROR_MODULE_PREFIXES = ['@codemirror/', '@lezer/'];
@@ -523,6 +618,7 @@ function summarizeRows(rows: ObsidianRealPluginMatrixRow[]): ObsidianRealPluginM
   const bySmokeOutcome = emptySmokeCounts();
   const byRecommendation = emptyRecommendationCounts();
   const byEditorAdapterPlan = emptyEditorAdapterPlanCounts();
+  const bySurfacePolicyAction = emptySurfacePolicyActionCounts();
   let totalDownloads = 0;
 
   for (const row of rows) {
@@ -531,6 +627,9 @@ function summarizeRows(rows: ObsidianRealPluginMatrixRow[]): ObsidianRealPluginM
     bySmokeOutcome[row.smoke.outcome] += 1;
     byRecommendation[row.recommendation] += 1;
     byEditorAdapterPlan[row.editorAdapterPlan.status] += 1;
+    for (const policy of row.surfacePolicies) {
+      bySurfacePolicyAction[policy.action] += 1;
+    }
     totalDownloads += row.downloads ?? 0;
   }
 
@@ -541,6 +640,7 @@ function summarizeRows(rows: ObsidianRealPluginMatrixRow[]): ObsidianRealPluginM
     bySmokeOutcome,
     byRecommendation,
     byEditorAdapterPlan,
+    bySurfacePolicyAction,
     totalDownloads,
   };
 }
@@ -574,6 +674,16 @@ function emptyEditorAdapterPlanCounts(): Record<ObsidianEditorAdapterPlanStatus,
     'native-product-feature': 0,
     'full-codemirror-host': 0,
     'native-or-desktop-host': 0,
+  };
+}
+
+function emptySurfacePolicyActionCounts(): Record<ObsidianSurfacePolicyAction, number> {
+  return {
+    'allow-after-load': 0,
+    'review-before-enable': 0,
+    'catalog-only': 0,
+    'native-adapter': 0,
+    blocked: 0,
   };
 }
 
@@ -622,12 +732,75 @@ function surfaceLabel(surfaces: ObsidianCommunitySurfacePreview[]): string {
     .join(', ');
 }
 
+function surfacePolicyLabel(policies: ObsidianRealPluginSurfacePolicy[]): string {
+  if (policies.length === 0) return '-';
+  const counts = emptySurfacePolicyActionCounts();
+  for (const policy of policies) {
+    counts[policy.action] += 1;
+  }
+  return (Object.keys(counts) as ObsidianSurfacePolicyAction[])
+    .filter((action) => counts[action] > 0)
+    .map((action) => `${action}${counts[action] > 1 ? `x${counts[action]}` : ''}`)
+    .join(', ');
+}
+
 function recommendationLabel(recommendation: ObsidianRealPluginRecommendation): string {
   return recommendation.replaceAll('-', ' ');
 }
 
 function editorAdapterPlanLabel(plan: ObsidianEditorAdapterPlan): string {
   return plan.status.replaceAll('-', ' ');
+}
+
+function surfacePolicyActionLabel(action: ObsidianSurfacePolicyAction): string {
+  return action.replaceAll('-', ' ');
+}
+
+function matrixSurfacePolicyStatus(
+  summary: ReturnType<typeof summarizeObsidianCapabilitySurfaces>[number],
+): ObsidianSurfaceCatalogStatus {
+  if (summary.surface === 'unsupported' || summary.supportSummary.unsupported > 0) return 'blocked';
+  if (summary.surface === 'editor') return 'native-gated';
+  if (summary.supportSummary['snapshot-only'] > 0) return 'preview-only';
+  if (
+    summary.supportSummary['catalog-only'] > 0
+    && summary.supportSummary.full === 0
+    && summary.supportSummary.limited === 0
+    && summary.supportSummary['request-only'] === 0
+  ) {
+    return 'catalog-only';
+  }
+  if (
+    summary.supportSummary['request-only'] > 0
+    && summary.supportSummary.full === 0
+    && summary.supportSummary.limited === 0
+    && summary.supportSummary['catalog-only'] === 0
+  ) {
+    return 'request-only';
+  }
+  if (summary.supportSummary.limited > 0 || summary.supportSummary['catalog-only'] > 0 || summary.supportSummary['request-only'] > 0) {
+    return 'limited';
+  }
+  return 'ready';
+}
+
+function surfacePolicyLabelForSurface(surface: ObsidianCapabilitySurface): string {
+  return {
+    commands: 'Commands',
+    settings: 'Settings',
+    entries: 'Entries',
+    views: 'Views',
+    document: 'Document',
+    styles: 'Styles',
+    editor: 'Editor',
+    secret: 'Secrets',
+    vault: 'Vault',
+    metadata: 'Metadata',
+    workspace: 'Workspace',
+    network: 'Network',
+    core: 'Core runtime',
+    unsupported: 'Blocked capability',
+  }[surface];
 }
 
 function formatNumber(value: number): string {

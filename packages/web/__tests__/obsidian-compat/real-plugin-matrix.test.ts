@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { ObsidianCapabilityGateReport } from '@/lib/obsidian-compat/capability-gate';
 import {
+  buildObsidianCapabilityCoverage,
+  summarizeObsidianCapabilityCoverage,
+} from '@/lib/obsidian-compat/capability-matrix';
+import {
   buildObsidianRealPluginMatrix,
   renderObsidianRealPluginMatrixMarkdown,
   type ObsidianRealPluginMatrixInputItem,
@@ -86,6 +90,13 @@ describe('Obsidian real plugin matrix', () => {
         'full-codemirror-host': 1,
         'native-or-desktop-host': 0,
       },
+      bySurfacePolicyAction: {
+        'allow-after-load': 0,
+        'review-before-enable': 0,
+        'catalog-only': 0,
+        'native-adapter': 0,
+        blocked: 1,
+      },
     });
     expect(matrix.plugins.map((plugin) => [plugin.id, plugin.recommendation])).toEqual([
       ['loaded-plugin', 'runtime-candidate'],
@@ -100,6 +111,14 @@ describe('Obsidian real plugin matrix', () => {
         expect.stringContaining('Keep raw CodeMirror extensions catalog-only'),
       ]),
     });
+    expect(matrix.plugins.find((plugin) => plugin.id === 'blocked-plugin')?.surfacePolicies).toEqual([
+      expect.objectContaining({
+        surface: 'unsupported',
+        action: 'blocked',
+        risk: 'critical',
+        apiCount: 2,
+      }),
+    ]);
     expect(matrix.failures).toEqual([{ id: 'oversized-plugin', stage: 'preflight', error: 'main.js is too large' }]);
   });
 
@@ -115,7 +134,7 @@ describe('Obsidian real plugin matrix', () => {
           name: 'Review Plugin',
           supportKind: 'review',
           compatibilityLevel: 'partial',
-          obsidianApis: ['registerEditorExtension'],
+          obsidianApis: ['addCommand', 'requestUrl', 'registerEditorExtension'],
           gate: gateReport({
             status: 'review',
             requiresConfirmation: true,
@@ -132,17 +151,24 @@ describe('Obsidian real plugin matrix', () => {
     const matrixRow = markdown.split('\n').find((line) => line.includes('`review-plugin`'));
 
     expect(matrixRow).toBeDefined();
-    expect(matrixRow?.split('|')).toHaveLength(12);
+    expect(matrixRow?.split('|')).toHaveLength(13);
     expect(matrixRow).toContain('review (confirmation)');
     expect(matrixRow).toContain('not run');
     expect(matrixRow).toContain('| - |');
     expect(matrixRow).toContain('commands:mountedx2');
     expect(matrixRow).toContain('declarative adapter candidate');
+    expect(matrixRow).toContain('allow-after-load, review-before-enable, native-adapter');
     expect(markdown).toContain('| Declarative editor adapter candidates | 1 |');
+    expect(markdown).toContain('| Surfaces requiring review | 1 |');
+    expect(markdown).toContain('| Native adapter surfaces | 1 |');
     expect(markdown).toContain('## Editor Adapter Plans');
     expect(markdown).toContain('### Review Plugin');
     expect(markdown).toContain('- Route: `browser-editor-sandbox`');
     expect(markdown).toContain('- Signal: Obsidian API: registerEditorExtension');
+    expect(markdown).toContain('## Surface Policy Decisions');
+    expect(markdown).toContain('### Review Plugin');
+    expect(markdown).toContain('- Network: review before enable');
+    expect(markdown).toContain('- Editor: native adapter');
     expect(markdown).toContain('## Blockers And Review Reasons');
     expect(markdown).toContain('- Vault APIs can read or change local MindOS files inside the vault boundary.');
     expect(markdown).toContain('## Harness Failures');
@@ -209,6 +235,17 @@ function preflight(options: {
   const obsidianApis = options.obsidianApis ?? [];
   const unsupportedApis = options.unsupportedApis ?? [];
   const unsupportedModules = options.unsupportedModules ?? [];
+  const coverage = buildObsidianCapabilityCoverage({
+    obsidianApis,
+    moduleImports: [],
+    nodeModules: [],
+    supportedModules: [],
+    unsupportedModules,
+    supportedApis: [],
+    partialApis: [],
+    unsupportedApis,
+    blockers: blocked ? ['Unsupported API.'] : [],
+  });
   return {
     ok: true,
     plugin: {
@@ -264,15 +301,8 @@ function preflight(options: {
       issues: [],
     },
     derivedCapabilities: {
-      coverage: [],
-      summary: {
-        full: 0,
-        limited: 0,
-        'snapshot-only': 0,
-        'catalog-only': 0,
-        'request-only': 0,
-        unsupported: 0,
-      },
+      coverage,
+      summary: summarizeObsidianCapabilityCoverage(coverage),
     },
     support: {
       kind: options.supportKind,

@@ -181,6 +181,14 @@ describe('Obsidian compatibility preview', () => {
           blocked: 0,
         }),
         summary: 'Command registrations map to MindOS Command Center.',
+        policy: expect.objectContaining({
+          action: 'allow-after-load',
+          risk: 'medium',
+          runtimeDefault: 'mounted',
+          requiredEvidence: expect.arrayContaining([
+            'Runtime registered evidence for command ids.',
+          ]),
+        }),
       }),
       expect.objectContaining({
         surface: 'document',
@@ -194,6 +202,10 @@ describe('Obsidian compatibility preview', () => {
           status: 'static-only',
           predicted: 2,
         }),
+        policy: expect.objectContaining({
+          action: 'review-before-enable',
+          runtimeDefault: 'restricted',
+        }),
       }),
       expect.objectContaining({
         surface: 'network',
@@ -203,6 +215,11 @@ describe('Obsidian compatibility preview', () => {
         limitations: expect.arrayContaining([
           'Outbound requests are limited by protocol, host, timeout, and size policy.',
         ]),
+        policy: expect.objectContaining({
+          action: 'review-before-enable',
+          risk: 'high',
+          permissionBoundary: 'Outbound requests stay behind protocol, host, timeout, response-size, and credentials policy.',
+        }),
       }),
     ]));
     expect(preview.workflowOutcomes).toEqual(expect.arrayContaining([
@@ -352,6 +369,10 @@ describe('Obsidian compatibility preview', () => {
         label: 'Editor',
         status: 'native-gated',
         apis: ['registerEditorExtension'],
+        policy: expect.objectContaining({
+          action: 'native-adapter',
+          runtimeDefault: 'native-gated',
+        }),
       }),
       expect.objectContaining({
         surface: 'unsupported',
@@ -365,6 +386,10 @@ describe('Obsidian compatibility preview', () => {
         limitations: expect.arrayContaining([
           'Unsupported runtime modules: @codemirror/language, @codemirror/state, child_process.',
         ]),
+        policy: expect.objectContaining({
+          action: 'blocked',
+          risk: 'critical',
+        }),
       }),
     ]));
     expect(preview.importDecision).toMatchObject({

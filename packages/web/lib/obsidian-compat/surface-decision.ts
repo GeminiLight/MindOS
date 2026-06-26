@@ -15,6 +15,34 @@ export type ObsidianSurfaceLedgerProjectionStatus =
   | 'native-gated'
   | 'blocked';
 
+export type ObsidianSurfacePolicyAction =
+  | 'allow-after-load'
+  | 'review-before-enable'
+  | 'catalog-only'
+  | 'native-adapter'
+  | 'blocked';
+
+export type ObsidianSurfacePolicyRisk = 'low' | 'medium' | 'high' | 'critical';
+export type ObsidianSurfacePolicyRuntimeDefault =
+  | 'mounted'
+  | 'restricted'
+  | 'snapshot'
+  | 'request'
+  | 'catalog'
+  | 'native-gated'
+  | 'blocked';
+
+export interface ObsidianSurfacePolicyDecision {
+  action: ObsidianSurfacePolicyAction;
+  label: string;
+  risk: ObsidianSurfacePolicyRisk;
+  runtimeDefault: ObsidianSurfacePolicyRuntimeDefault;
+  summary: string;
+  permissionBoundary: string;
+  requiredEvidence: string[];
+  nextStep: string;
+}
+
 export interface ObsidianSurfaceLedgerProjection {
   status: ObsidianSurfaceLedgerProjectionStatus;
   predicted: number;
@@ -90,6 +118,125 @@ export function buildObsidianSurfaceLedgerProjection(
     summary: surfaceLedgerProjectionSummary(input.label, status),
     nextStep: surfaceLedgerProjectionNextStep(status),
   };
+}
+
+export function buildObsidianSurfacePolicyDecision(input: {
+  surface: ObsidianCapabilitySurface;
+  label: string;
+  status: ObsidianSurfaceCatalogStatus;
+}): ObsidianSurfacePolicyDecision {
+  if (input.status === 'blocked' || input.surface === 'unsupported') {
+    return surfacePolicy({
+      action: 'blocked',
+      label: 'Blocked',
+      risk: 'critical',
+      runtimeDefault: 'blocked',
+      summary: `${input.label} is not exposed through the generic Obsidian compatibility runtime.`,
+      permissionBoundary: 'Unsupported Obsidian APIs or Node/Electron modules are not exposed by the generic runtime.',
+      requiredEvidence: [
+        'Remove or replace blocked APIs/modules, or add an explicit reviewed adapter.',
+        'Re-run static analysis and capability gate checks before import or enable.',
+      ],
+      nextStep: 'Keep this surface disabled and route the workflow to a MindOS-native replacement or explicit adapter.',
+    });
+  }
+
+  if (input.status === 'native-gated' || input.surface === 'editor') {
+    return surfacePolicy({
+      action: 'native-adapter',
+      label: 'Native adapter',
+      risk: 'high',
+      runtimeDefault: 'native-gated',
+      summary: `${input.label} requires a MindOS-owned adapter before it can become runnable.`,
+      permissionBoundary: 'Raw editor and CodeMirror behavior is not mounted directly; use MindOS-owned adapter contracts.',
+      requiredEvidence: [
+        'Adapter contract covering allowed editor reads, decorations, commands, and cleanup.',
+        'Fixture tests proving mount/unmount isolation before changing this surface from native-gated.',
+      ],
+      nextStep: 'Keep raw community behavior catalog-only and implement a narrow MindOS adapter first.',
+    });
+  }
+
+  if (input.status === 'catalog-only') {
+    return surfacePolicy({
+      action: 'catalog-only',
+      label: 'Catalog only',
+      risk: 'medium',
+      runtimeDefault: 'catalog',
+      summary: `${input.label} is visible for planning but not mounted as live behavior.`,
+      permissionBoundary: 'Catalog-only registrations may be displayed or migrated, but plugin callbacks are not executed.',
+      requiredEvidence: [
+        'A MindOS adapter or explicit host implementation for the cataloged behavior.',
+        'Runtime registered/called ledger evidence after the host exists.',
+      ],
+      nextStep: 'Use this surface for migration planning until a focused host or native replacement exists.',
+    });
+  }
+
+  if (input.status === 'request-only') {
+    return surfacePolicy({
+      action: 'catalog-only',
+      label: 'Request only',
+      risk: 'medium',
+      runtimeDefault: 'request',
+      summary: `${input.label} records intent for MindOS handling instead of replaying Obsidian side effects.`,
+      permissionBoundary: 'Requests are captured and must be fulfilled by a MindOS-owned surface or workflow.',
+      requiredEvidence: [
+        'Mapped MindOS handler for the recorded request.',
+        'Workflow probe proving the request produced the intended user-visible result.',
+      ],
+      nextStep: 'Map the request to a MindOS-native action before relying on workflow behavior.',
+    });
+  }
+
+  if (input.status === 'preview-only') {
+    return surfacePolicy({
+      action: 'review-before-enable',
+      label: 'Preview review',
+      risk: riskForSurface(input.surface),
+      runtimeDefault: 'snapshot',
+      summary: `${input.label} can produce bounded snapshots, but snapshots are not full Obsidian UI equivalence.`,
+      permissionBoundary: boundaryForSurface(input.surface),
+      requiredEvidence: [
+        'Snapshot output review for sensitive content and expected structure.',
+        'Focused workflow probe before marking the workflow observed.',
+      ],
+      nextStep: 'Inspect snapshot evidence and keep user actions explicit until workflow probes pass.',
+    });
+  }
+
+  if (input.status === 'limited' || requiresReviewSurface(input.surface)) {
+    return surfacePolicy({
+      action: 'review-before-enable',
+      label: 'Review before enable',
+      risk: riskForSurface(input.surface),
+      runtimeDefault: runtimeDefaultForSurface(input.surface),
+      summary: `${input.label} is available only inside MindOS capability and runtime policy boundaries.`,
+      permissionBoundary: boundaryForSurface(input.surface),
+      requiredEvidence: [
+        'Capability gate confirmation for the current fingerprint.',
+        'Runtime denied/called ledger review for this surface.',
+        'Focused workflow probe before marking behavior observed.',
+      ],
+      nextStep: 'Keep enable explicit, review ledger evidence, then run a focused workflow probe.',
+    });
+  }
+
+  return surfacePolicy({
+    action: 'allow-after-load',
+    label: 'Allow after load',
+    risk: riskForSurface(input.surface),
+    runtimeDefault: runtimeDefaultForSurface(input.surface),
+    summary: `${input.label} can enter the generic compatibility runtime after plugin load checks.`,
+    permissionBoundary: boundaryForSurface(input.surface),
+    requiredEvidence: [
+      input.surface === 'commands'
+        ? 'Runtime registered evidence for command ids.'
+        : 'Runtime registered evidence for this surface.',
+      'Called ledger evidence or workflow probe before claiming user-visible workflow success.',
+    ],
+    nextStep: 'Load the plugin, compare runtime registered/called evidence, and keep workflow success evidence separate.',
+  });
 }
 
 export function buildObsidianImportDecision(
@@ -283,4 +430,54 @@ function decisionReasons(
 
 function unique<T>(items: T[]): T[] {
   return Array.from(new Set(items));
+}
+
+function surfacePolicy(input: ObsidianSurfacePolicyDecision): ObsidianSurfacePolicyDecision {
+  return input;
+}
+
+function requiresReviewSurface(surface: ObsidianCapabilitySurface): boolean {
+  return surface === 'network'
+    || surface === 'secret'
+    || surface === 'vault'
+    || surface === 'metadata'
+    || surface === 'document'
+    || surface === 'views'
+    || surface === 'workspace';
+}
+
+function riskForSurface(surface: ObsidianCapabilitySurface): ObsidianSurfacePolicyRisk {
+  if (surface === 'unsupported') return 'critical';
+  if (surface === 'network' || surface === 'secret' || surface === 'vault' || surface === 'editor') return 'high';
+  if (surface === 'metadata' || surface === 'workspace' || surface === 'document' || surface === 'views') return 'medium';
+  if (surface === 'commands' || surface === 'settings' || surface === 'entries') return 'medium';
+  return 'low';
+}
+
+function runtimeDefaultForSurface(surface: ObsidianCapabilitySurface): ObsidianSurfacePolicyRuntimeDefault {
+  if (surface === 'network' || surface === 'secret' || surface === 'vault' || surface === 'metadata' || surface === 'document' || surface === 'views' || surface === 'workspace') {
+    return 'restricted';
+  }
+  if (surface === 'editor') return 'native-gated';
+  if (surface === 'unsupported') return 'blocked';
+  return 'mounted';
+}
+
+function boundaryForSurface(surface: ObsidianCapabilitySurface): string {
+  return {
+    commands: 'Commands may register in MindOS Command Center, but execution still inherits downstream surface gates.',
+    settings: 'Settings may render through MindOS settings hosts; write actions stay explicit and plugin-scoped.',
+    entries: 'Entry surfaces are represented as bounded snapshots or explicit continuations, not arbitrary global DOM control.',
+    views: 'Views may mount only through MindOS compatibility view hosts; full Obsidian pane graph behavior is not emulated.',
+    document: 'Document rendering uses safe snapshot/renderer paths and must not inject arbitrary script into the main UI.',
+    styles: 'Styles are scoped to compatibility hosts and must not mutate global MindOS chrome.',
+    editor: 'Raw editor and CodeMirror behavior is not mounted directly; use MindOS-owned adapter contracts.',
+    secret: 'Secrets stay plugin-scoped and must use the MindOS secret vault or future native broker.',
+    vault: 'Vault access is scoped to public MindOS content; private plugin/system directories stay hidden.',
+    metadata: 'Metadata reads come from MindOS parsed markdown/frontmatter/tag/link caches, not arbitrary vault traversal.',
+    workspace: 'Workspace side effects are captured as explicit requests or MindOS-routed actions.',
+    network: 'Outbound requests stay behind protocol, host, timeout, response-size, and credentials policy.',
+    core: 'Core lifecycle runs inside the restricted compatibility wrapper and does not imply broader surface permission.',
+    unsupported: 'Unsupported Obsidian APIs or Node/Electron modules are not exposed by the generic runtime.',
+  }[surface];
 }

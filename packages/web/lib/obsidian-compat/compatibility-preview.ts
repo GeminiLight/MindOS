@@ -12,9 +12,7 @@ import {
   type ObsidianImportSupport,
   type ObsidianImportSupportKind,
 } from './import-policy';
-import {
-  OBSIDIAN_PLUGIN_ROOT_RELATIVE_PATH,
-} from './plugin-paths';
+import { OBSIDIAN_PLUGIN_ROOT_RELATIVE_PATH } from './plugin-paths';
 import {
   OBSIDIAN_LINTER_PLUGIN_ID,
   parseImportedObsidianLinterProfileJson,
@@ -22,8 +20,8 @@ import {
 import {
   buildObsidianImportDecision,
   buildObsidianSurfaceLedgerProjection,
-  type ObsidianImportDecision,
-  type ObsidianSurfaceLedgerProjection,
+  buildObsidianSurfacePolicyDecision,
+  type ObsidianImportDecision, type ObsidianSurfaceLedgerProjection, type ObsidianSurfacePolicyDecision,
 } from './surface-decision';
 import {
   parseImportedQuickAddChoiceInventoryJson,
@@ -91,6 +89,7 @@ export interface ObsidianSurfaceCatalogEntry {
   routes: string[];
   supportSummary: Record<ObsidianCapabilitySupport, number>;
   ledgerProjection: ObsidianSurfaceLedgerProjection;
+  policy: ObsidianSurfacePolicyDecision;
   summary: string;
   limitations: string[];
   nextStep: string;
@@ -438,6 +437,7 @@ function buildSurfaceCatalog(
         status,
         ledger: runtimeCapabilityLedger,
       }),
+      policy: buildObsidianSurfacePolicyDecision({ surface: summary.surface, label, status }),
       summary: surfaceCatalogSummary(summary.surface, status),
       limitations: surfaceCatalogLimitations(summary.surface, status, summary.supportSummary),
       nextStep: surfaceCatalogNextStep(summary.surface, status),
@@ -481,6 +481,7 @@ function buildSurfaceCatalog(
           status: 'blocked',
           ledger: runtimeCapabilityLedger,
         }),
+        policy: buildObsidianSurfacePolicyDecision({ surface: 'unsupported', label, status: 'blocked' }),
         summary: surfaceCatalogSummary('unsupported', 'blocked'),
         limitations: [`Unsupported runtime modules: ${plugin.compatibility.unsupportedModules.join(', ')}.`],
         nextStep: surfaceCatalogNextStep('unsupported', 'blocked'),
@@ -496,6 +497,7 @@ function buildSurfaceCatalog(
       status: entry.status,
       ledger: runtimeCapabilityLedger,
     });
+    entry.policy = buildObsidianSurfacePolicyDecision({ surface: entry.surface, label: entry.label, status: entry.status });
   }
 
   return entries;
