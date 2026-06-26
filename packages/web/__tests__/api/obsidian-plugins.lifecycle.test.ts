@@ -170,8 +170,9 @@ describe('/api/obsidian-plugins lifecycle', () => {
       workflowAudits: [
         expect.objectContaining({
           id: 'quickadd-capture-macro',
-          status: 'observed',
+          status: 'partial',
           source: 'runtime-ledger',
+          nextStep: expect.stringContaining('Run the workflow probe'),
         }),
       ],
     });

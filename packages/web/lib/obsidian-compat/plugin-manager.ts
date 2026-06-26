@@ -67,6 +67,14 @@ import {
   buildObsidianWorkflowAudits,
   type ObsidianWorkflowAudit,
 } from './workflow-audit';
+import {
+  ObsidianWorkflowProbeStore,
+  runObsidianWorkflowProbe,
+  runObsidianWorkflowProbes,
+  type ObsidianWorkflowProbeHistory,
+  type ObsidianWorkflowProbeId,
+  type ObsidianWorkflowProbeResult,
+} from './workflow-probes';
 import type { ObsidianSecretStorageSummary } from './secret-storage';
 import type { PluginManifest, TFile } from './types';
 import type { EditorExtensionSummary, PluginMarkdownCodeBlockSnapshot, PluginMarkdownPostProcessorSnapshot, PluginMenuSnapshot, PluginModalSnapshot, PluginNoticeSnapshot, PluginViewSnapshot, RegisteredViewExtension, WorkspaceOpenRequest } from './runtime';
@@ -78,7 +86,9 @@ interface PluginManagerState {
   capabilityConfirmations?: Record<string, ObsidianCapabilityGateConfirmation>;
 }
 
-export type PluginManagerOptions = PluginLoaderOptions;
+export interface PluginManagerOptions extends PluginLoaderOptions {
+  workflowProbeStore?: ObsidianWorkflowProbeStore;
+}
 
 export interface ManagedPluginPackageLocation {
   relativePath: string;
@@ -102,6 +112,7 @@ export interface ManagedPlugin {
   capabilityGate: ObsidianCapabilityGateReport;
   capabilityLedger: ObsidianRuntimeCapabilityLedgerEntry[];
   capabilityLedgerHistory: ObsidianRuntimeCapabilityLedgerHistory;
+  workflowProbeHistory: ObsidianWorkflowProbeHistory;
   workflowAudits: ObsidianWorkflowAudit[];
   packageLocation?: ManagedPluginPackageLocation;
   runtime: PluginRuntimeSummary;
@@ -233,14 +244,16 @@ const EMPTY_STATE: PluginManagerState = { enabled: {} };
 export class PluginManager {
   private readonly loader: PluginLoader;
   private readonly runtimeCapabilityLedgerStore: ObsidianRuntimeCapabilityLedgerStore;
+  private readonly workflowProbeStore: ObsidianWorkflowProbeStore;
   private plugins = new Map<string, ManagedPlugin>();
   private state: PluginManagerState = EMPTY_STATE;
   private modalEditorSessions = new Map<string, EditorExecutionSession>();
   private menuEditorSessions = new Map<string, EditorExecutionSession>();
 
   constructor(private mindRoot: string, options: PluginManagerOptions = {}) {
-    const { runtimeCapabilityLedgerStore, ...loaderOptions } = options;
+    const { runtimeCapabilityLedgerStore, workflowProbeStore, ...loaderOptions } = options;
     this.runtimeCapabilityLedgerStore = runtimeCapabilityLedgerStore ?? new ObsidianRuntimeCapabilityLedgerStore(mindRoot);
+    this.workflowProbeStore = workflowProbeStore ?? new ObsidianWorkflowProbeStore(mindRoot);
     this.loader = new PluginLoader(mindRoot, {
       ...loaderOptions,
       runtimeCapabilityLedgerStore: this.runtimeCapabilityLedgerStore,
@@ -605,6 +618,35 @@ export class PluginManager {
     return snapshots;
   }
 
+  async runWorkflowProbe(pluginId: string, probeId?: ObsidianWorkflowProbeId): Promise<ObsidianWorkflowProbeResult> {
+    await this.loadEnabledPlugins();
+    const result = await runObsidianWorkflowProbe({
+      mindRoot: this.mindRoot,
+      host: this,
+      pluginId,
+      ...(probeId ? { probeId } : {}),
+      now: () => new Date(this.workflowProbeStore.timestamp()),
+    });
+    const persisted = this.workflowProbeStore.append(result);
+    const plugin = this.plugins.get(pluginId);
+    if (plugin) this.applyRuntimeState(plugin);
+    return persisted;
+  }
+
+  async runWorkflowProbes(pluginId: string): Promise<ObsidianWorkflowProbeResult[]> {
+    await this.loadEnabledPlugins();
+    const results = await runObsidianWorkflowProbes({
+      mindRoot: this.mindRoot,
+      host: this,
+      pluginId,
+      now: () => new Date(this.workflowProbeStore.timestamp()),
+    });
+    const persisted = results.map((result) => this.workflowProbeStore.append(result));
+    const plugin = this.plugins.get(pluginId);
+    if (plugin) this.applyRuntimeState(plugin);
+    return persisted;
+  }
+
   async scanObsidianVault(vaultRoot: string, options: ObsidianVaultConfigOptions = {}): Promise<ScanResult> {
     return scanObsidianVaultPlugins(vaultRoot, options);
   }
@@ -663,6 +705,7 @@ export class PluginManager {
 
     const runtime = this.runtimeSummaryFor(manifest.id);
     const capabilityLedgerHistory = this.runtimeCapabilityLedgerStore.read(manifest.id);
+    const workflowProbeHistory = this.workflowProbeStore.read(manifest.id);
     const capabilityLedger = mergeObsidianRuntimeCapabilityLedger({
       pluginId: manifest.id,
       coverage,
@@ -686,6 +729,7 @@ export class PluginManager {
       capabilityGate,
       capabilityLedger,
       capabilityLedgerHistory,
+      workflowProbeHistory,
       workflowAudits: buildObsidianWorkflowAudits({
         pluginId: manifest.id,
         pluginName: manifest.name,
@@ -693,6 +737,7 @@ export class PluginManager {
         capabilityGate,
         runtimeEntries: runtime.capabilityLedger,
         history: capabilityLedgerHistory,
+        workflowProbeHistory,
       }),
       packageLocation: this.packageLocationFor(manifest.id),
       runtime,
@@ -710,6 +755,7 @@ export class PluginManager {
       runtimeEntries: plugin.runtime.capabilityLedger,
     });
     plugin.capabilityLedgerHistory = this.runtimeCapabilityLedgerStore.read(plugin.id);
+    plugin.workflowProbeHistory = this.workflowProbeStore.read(plugin.id);
     plugin.workflowAudits = buildObsidianWorkflowAudits({
       pluginId: plugin.id,
       pluginName: plugin.name,
@@ -717,6 +763,7 @@ export class PluginManager {
       capabilityGate: plugin.capabilityGate,
       runtimeEntries: plugin.runtime.capabilityLedger,
       history: plugin.capabilityLedgerHistory,
+      workflowProbeHistory: plugin.workflowProbeHistory,
     });
   }
 

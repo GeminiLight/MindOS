@@ -52,6 +52,8 @@ type PluginDocumentShim = {
   body: HTMLElement;
   head: HTMLElement;
   createElement(tagName: string): HTMLElement;
+  createElementNS(namespaceURI: string, qualifiedName: string): HTMLElement;
+  createTextNode(text: string): Text | HTMLElement;
   createEl(tagName: string, attrs?: unknown, callback?: (el: HTMLElement) => void): HTMLElement;
   createDocumentFragment(): DocumentFragment | HTMLElement;
   addEventListener(): void;
@@ -60,6 +62,7 @@ type PluginDocumentShim = {
   off(): void;
   querySelector(selector: string): HTMLElement | null;
   querySelectorAll(selector: string): HTMLElement[];
+  getElementById(id: string): HTMLElement | null;
   getElementsByTagName(tagName: string): HTMLElement[];
   getElementsByClassName(className: string): HTMLElement[];
 };
@@ -476,6 +479,22 @@ export class PluginLoader {
       ...Array.from(body.querySelectorAll(selector)),
       ...Array.from(head.querySelectorAll(selector)),
     ] as HTMLElement[];
+    const getElementId = (element: HTMLElement): string | null => {
+      const directId = (element as { id?: unknown }).id;
+      if (typeof directId === 'string' && directId.length > 0) return directId;
+      return element.getAttribute('id');
+    };
+    const findElementById = (element: HTMLElement, id: string): HTMLElement | null => {
+      if (getElementId(element) === id) return element;
+      const children = (element as { children?: Iterable<HTMLElement>; childNodes?: Iterable<HTMLElement> }).children
+        ?? (element as { children?: Iterable<HTMLElement>; childNodes?: Iterable<HTMLElement> }).childNodes
+        ?? [];
+      for (const child of Array.from(children)) {
+        const match = findElementById(child, id);
+        if (match) return match;
+      }
+      return null;
+    };
     const classSelector = (className: string): string => className
       .split(/\s+/)
       .map((item) => item.trim())
@@ -486,6 +505,15 @@ export class PluginLoader {
       body,
       head,
       createElement: (tagName: string) => createObsidianElement(tagName),
+      createElementNS: (_namespaceURI: string, qualifiedName: string) => createObsidianElement(qualifiedName),
+      createTextNode: (text: string) => {
+        if (typeof document !== 'undefined' && typeof document.createTextNode === 'function') {
+          return document.createTextNode(String(text));
+        }
+        const node = createObsidianElement('text');
+        node.textContent = String(text);
+        return node;
+      },
       createEl: (tagName: string, attrs?: unknown, callback?: (el: HTMLElement) => void) => {
         const element = createObsidianElement(tagName);
         this.applyCreateElAttrs(element, attrs);
@@ -499,6 +527,7 @@ export class PluginLoader {
       off: () => {},
       querySelector: (selector: string) => querySelectorAll(selector)[0] ?? null,
       querySelectorAll,
+      getElementById: (id: string) => findElementById(body, String(id)) ?? findElementById(head, String(id)),
       getElementsByTagName: (tagName: string) => {
         const normalized = tagName.toLowerCase();
         if (normalized === 'body') return [body];

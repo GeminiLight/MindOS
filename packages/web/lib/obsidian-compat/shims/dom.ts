@@ -259,6 +259,19 @@ function createStubElement(tagName: string): ObsidianElement {
       return styleValues.get(key) ?? '';
     },
   };
+  const adoptChild = (child: ObsidianElement) => {
+    const parent = el as unknown as ObsidianElement;
+    const previousParent = (child as unknown as { parentElement?: ObsidianElement | null }).parentElement;
+    if (previousParent && previousParent !== parent) {
+      previousParent.removeChild(child);
+    }
+    (child as unknown as { parentElement?: ObsidianElement | null }).parentElement = parent;
+    (child as unknown as { parentNode?: ObsidianElement | null }).parentNode = parent;
+  };
+  const releaseChild = (child: ObsidianElement) => {
+    (child as unknown as { parentElement?: ObsidianElement | null }).parentElement = null;
+    (child as unknown as { parentNode?: ObsidianElement | null }).parentNode = null;
+  };
 
   const el: Record<string, unknown> = {
     tagName: tagName.toUpperCase(),
@@ -289,11 +302,19 @@ function createStubElement(tagName: string): ObsidianElement {
     classList,
     __stubAttributes: attributes,
     appendChild(child: ObsidianElement) {
-      Object.defineProperty(child, 'parentElement', {
-        configurable: true,
-        get: () => el as unknown as ObsidianElement,
-      });
+      adoptChild(child);
       children.push(child);
+      el.firstChild = children[0] ?? null;
+      return child;
+    },
+    insertBefore(child: ObsidianElement, referenceChild: ObsidianElement | null) {
+      adoptChild(child);
+      const index = referenceChild ? children.indexOf(referenceChild) : -1;
+      if (index >= 0) {
+        children.splice(index, 0, child);
+      } else {
+        children.push(child);
+      }
       el.firstChild = children[0] ?? null;
       return child;
     },
@@ -301,6 +322,7 @@ function createStubElement(tagName: string): ObsidianElement {
       const index = children.indexOf(child);
       if (index >= 0) {
         children.splice(index, 1);
+        releaseChild(child);
       }
       el.firstChild = children[0] ?? null;
       return child;
@@ -316,6 +338,12 @@ function createStubElement(tagName: string): ObsidianElement {
     },
     getAttribute(key: string) {
       return attributes.get(key) ?? null;
+    },
+    hasAttribute(key: string) {
+      return attributes.has(key);
+    },
+    removeAttribute(key: string) {
+      attributes.delete(key);
     },
     querySelector(selector: string) {
       return queryStubDescendants(el as unknown as ObsidianElement, selector)[0] ?? null;
@@ -336,6 +364,31 @@ function createStubElement(tagName: string): ObsidianElement {
     get: () => parentElement,
     set: (next: ObsidianElement | null) => {
       parentElement = next;
+    },
+  });
+  Object.defineProperty(el, 'parentNode', {
+    configurable: true,
+    get: () => parentElement,
+    set: (next: ObsidianElement | null) => {
+      parentElement = next;
+    },
+  });
+  Object.defineProperty(el, 'nextSibling', {
+    configurable: true,
+    get: () => {
+      if (!parentElement) return null;
+      const siblings = getStubChildren(parentElement);
+      const index = siblings.indexOf(el as unknown as ObsidianElement);
+      return index >= 0 ? siblings[index + 1] ?? null : null;
+    },
+  });
+  Object.defineProperty(el, 'previousSibling', {
+    configurable: true,
+    get: () => {
+      if (!parentElement) return null;
+      const siblings = getStubChildren(parentElement);
+      const index = siblings.indexOf(el as unknown as ObsidianElement);
+      return index > 0 ? siblings[index - 1] ?? null : null;
     },
   });
 

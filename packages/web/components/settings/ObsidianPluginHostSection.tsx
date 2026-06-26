@@ -63,6 +63,7 @@ import {
   surfaceRouting,
   workflowAuditStatusClass,
   workflowAuditStatusLabel,
+  workflowAuditProbeSummary,
   type ObsidianPluginLoadResult,
   type ObsidianPluginSettings,
   type ObsidianPluginSettingsResponse,
@@ -408,11 +409,12 @@ export function ObsidianPluginHostSection({
     options: {
       pluginId?: string;
       commandId?: string;
+      probeId?: string;
       editorContext?: PluginEditorCommandContext;
       confirmCapabilityGate?: boolean;
     } = {},
   ) => {
-    const key = `${action}:${options.pluginId ?? options.commandId ?? 'all'}`;
+    const key = `${action}:${options.probeId ?? options.pluginId ?? options.commandId ?? 'all'}`;
     setBusyKey(key);
     setError('');
     try {
@@ -426,6 +428,8 @@ export function ObsidianPluginHostSection({
         if (isPluginActionResult(data.result)) {
           handlePluginActionResult(data.result);
         }
+      } else if (action === 'run-workflow-probe') {
+        setLastResult(null);
       } else {
         setLastResult(isLoadResult(data.result) ? data.result : null);
       }
@@ -960,13 +964,40 @@ export function ObsidianPluginHostSection({
                               <div key={audit.id} className="rounded-md border border-border bg-background px-2.5 py-2">
                                 <div className="flex flex-wrap items-center justify-between gap-2">
                                   <span className="text-xs font-medium text-foreground">{audit.label}</span>
-                                  <span className={`rounded border px-1.5 py-0.5 font-mono text-2xs ${workflowAuditStatusClass(audit.status)}`}>
-                                    {workflowAuditStatusLabel(audit.status)}
-                                  </span>
+                                  <div className="flex flex-wrap items-center gap-1.5">
+                                    <span className={`rounded border px-1.5 py-0.5 font-mono text-2xs ${workflowAuditStatusClass(audit.status)}`}>
+                                      {workflowAuditStatusLabel(audit.status)}
+                                    </span>
+                                    {audit.source === 'workflow-probe' && (
+                                      <span className="rounded border border-border/70 bg-muted/40 px-1.5 py-0.5 font-mono text-2xs text-muted-foreground">
+                                        probed
+                                      </span>
+                                    )}
+                                    <button
+                                      type="button"
+                                      onClick={() => runAction('run-workflow-probe', { pluginId: plugin.id, probeId: audit.id })}
+                                      disabled={!plugin.loaded || busyKey !== null}
+                                      className="inline-flex items-center gap-1 rounded border border-border bg-card px-1.5 py-0.5 text-2xs text-foreground transition-colors hover:bg-muted/60 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                      title={plugin.loaded ? `Run workflow probe: ${audit.label}` : 'Load the plugin before running workflow probes'}
+                                    >
+                                      {busyKey === `run-workflow-probe:${audit.id}` ? <Loader2 size={10} className="animate-spin" /> : <Play size={10} />}
+                                      Probe
+                                    </button>
+                                  </div>
                                 </div>
+                                {workflowAuditProbeSummary(audit) && (
+                                  <p className="mt-1 font-mono text-2xs text-muted-foreground/70">
+                                    {workflowAuditProbeSummary(audit)}
+                                  </p>
+                                )}
                                 {audit.evidence[0] && (
                                   <p className="mt-1 line-clamp-2 text-2xs text-muted-foreground">
                                     {audit.evidence[0]}
+                                  </p>
+                                )}
+                                {audit.probeFailureReason && (
+                                  <p className="mt-1 line-clamp-2 text-2xs text-error">
+                                    {audit.probeFailureReason}
                                   </p>
                                 )}
                                 {audit.nextStep && (

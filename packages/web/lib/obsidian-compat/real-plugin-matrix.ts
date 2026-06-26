@@ -5,6 +5,9 @@ import type {
   ObsidianCommunitySurfacePreview,
 } from './community-support';
 import type { CompatibilityLevel } from './compatibility-report';
+import type {
+  ObsidianWorkflowProbeResult,
+} from './workflow-probes';
 
 export type ObsidianRealPluginPriority = 'P0' | 'P1' | 'P2';
 export type ObsidianRealPluginSmokeOutcome = 'loaded' | 'skipped' | 'failed' | 'not-run';
@@ -68,6 +71,15 @@ export interface ObsidianRealPluginSmokeResult {
     styleSheets: number;
     editorExtensions: number;
   };
+  workflowProbes?: ObsidianRealPluginWorkflowProbeSummary;
+}
+
+export interface ObsidianRealPluginWorkflowProbeSummary {
+  total: number;
+  passed: number;
+  failed: number;
+  skipped: number;
+  results: Array<Pick<ObsidianWorkflowProbeResult, 'id' | 'label' | 'status' | 'completedAt' | 'failureReason' | 'evidence'>>;
 }
 
 export interface ObsidianRealPluginMatrixInputItem {
@@ -230,8 +242,8 @@ export function renderObsidianRealPluginMatrixMarkdown(matrix: ObsidianRealPlugi
     '',
     '## Matrix',
     '',
-    '| Plugin | Category | Downloads | Compat | Gate | Smoke | Surfaces | Editor Plan | Recommendation |',
-    '|---|---|---:|---|---|---|---|---|---|',
+    '| Plugin | Category | Downloads | Compat | Gate | Smoke | Probes | Surfaces | Editor Plan | Recommendation |',
+    '|---|---|---:|---|---|---|---|---|---|---|',
     ...matrix.plugins.map((plugin) => `| ${[
       `${markdownLink(plugin.name, plugin.githubUrl)} (${inlineCode(plugin.id)})`,
       plugin.category,
@@ -239,6 +251,7 @@ export function renderObsidianRealPluginMatrixMarkdown(matrix: ObsidianRealPlugi
       plugin.compatibility.level,
       gateLabel(plugin),
       smokeLabel(plugin.smoke),
+      workflowProbeLabel(plugin.smoke.workflowProbes),
       surfaceLabel(plugin.surfaces),
       editorAdapterPlanLabel(plugin.editorAdapterPlan),
       recommendationLabel(plugin.recommendation),
@@ -277,6 +290,9 @@ export function renderObsidianRealPluginMatrixMarkdown(matrix: ObsidianRealPlugi
       ...plugin.capabilityGate.blockedReasons,
       ...plugin.capabilityGate.confirmReasons,
       ...(plugin.smoke.reason ? [`Smoke: ${plugin.smoke.reason}`] : []),
+      ...(plugin.smoke.workflowProbes?.results ?? [])
+        .filter((result) => result.status === 'failed')
+        .map((result) => `Workflow probe ${result.id}: ${result.failureReason ?? 'failed'}`),
     ];
     if (reasons.length === 0) continue;
     lines.push(`### ${plugin.name}`);
@@ -301,6 +317,7 @@ export function renderObsidianRealPluginMatrixMarkdown(matrix: ObsidianRealPlugi
   lines.push('## Reading The Result');
   lines.push('');
   lines.push('- `runtime-candidate` means the plugin reached a loadable MindOS runtime state in the smoke harness.');
+  lines.push('- `Probes` are explicit workflow executions with result assertions; a loaded smoke without passed probes is still only load-level evidence.');
   lines.push('- `review-before-enable` means MindOS can install/analyze it, but enable/load requires explicit capability confirmation.');
   lines.push('- `catalog-or-native` means MindOS should expose catalog/surface metadata or build a native MindOS feature instead of running the plugin as-is.');
   lines.push('- `blocked` means the compatibility gate found hard blockers such as unsupported native modules or unsupported Obsidian APIs.');
@@ -567,6 +584,35 @@ function gateLabel(plugin: ObsidianRealPluginMatrixRow): string {
 
 function smokeLabel(smoke: ObsidianRealPluginSmokeResult): string {
   return smoke.outcome === 'not-run' ? 'not run' : `${smoke.outcome} (${smoke.stage})`;
+}
+
+export function summarizeObsidianWorkflowProbeResults(results: ObsidianWorkflowProbeResult[]): ObsidianRealPluginWorkflowProbeSummary {
+  const counts = { passed: 0, failed: 0, skipped: 0 };
+  for (const result of results) {
+    counts[result.status] += 1;
+  }
+  return {
+    total: results.length,
+    ...counts,
+    results: results.map((result) => ({
+      id: result.id,
+      label: result.label,
+      status: result.status,
+      completedAt: result.completedAt,
+      ...(result.failureReason ? { failureReason: result.failureReason } : {}),
+      evidence: result.evidence.slice(0, 3),
+    })),
+  };
+}
+
+function workflowProbeLabel(summary: ObsidianRealPluginWorkflowProbeSummary | undefined): string {
+  if (!summary) return '-';
+  if (summary.total === 0) return 'none';
+  return [
+    summary.passed ? `${summary.passed} passed` : '',
+    summary.failed ? `${summary.failed} failed` : '',
+    summary.skipped ? `${summary.skipped} skipped` : '',
+  ].filter(Boolean).join(', ');
 }
 
 function surfaceLabel(surfaces: ObsidianCommunitySurfacePreview[]): string {

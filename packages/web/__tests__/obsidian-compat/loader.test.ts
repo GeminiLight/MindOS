@@ -145,7 +145,7 @@ describe('PluginLoader', () => {
       'global-plugin',
       { id: 'global-plugin', name: 'Global Plugin', version: '1.0.0' },
       `
-        const { Plugin, View, Vault } = require('obsidian');
+        const { moment, Plugin, View, Vault } = require('obsidian');
         localStorage.setItem('language', 'zh-cn');
         const language = window.localStorage.getItem('language');
         const topLevelLanguage = localStorage.getItem('language');
@@ -155,6 +155,21 @@ describe('PluginLoader', () => {
         self.localStorage.setItem('temporary', 'remove-me');
         activeWindow.localStorage.removeItem('temporary');
         const topLevelEl = document.createEl('div', { text: language || 'en' });
+        const lookupEl = document.createEl('div', { text: 'lookup-ready', attr: { id: 'calendar-root' } });
+        const textNode = document.createTextNode('calendar-text-node');
+        const svgNode = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        lookupEl.setAttribute('data-ready', 'yes');
+        lookupEl.removeAttribute('data-ready');
+        document.body.insertBefore(textNode, lookupEl);
+        document.body.appendChild(lookupEl);
+        document.body.appendChild(svgNode);
+        moment.updateLocale('en-us', { week: { dow: 1 } });
+        const calendarDate = moment('2026-06-15T10:20:30')
+          .clone()
+          .startOf('week')
+          .add(1, 'day')
+          .set({ hour: 8, minute: 5, second: 3 });
+        const weekdayDate = moment('2026-06-15').weekday(2);
         class GlobalView extends View {}
         module.exports = class GlobalPlugin extends Plugin {
           onload() {
@@ -169,6 +184,36 @@ describe('PluginLoader', () => {
             }
             if (!(new GlobalView(this.app.workspace.getLeaf()) instanceof View)) {
               throw new Error('missing View export');
+            }
+            if (moment.locale() !== 'en-us' || moment.localeData().weekdaysShort()[0] !== 'Sun' || moment().localeData().monthsShort()[0] !== 'Jan') {
+              throw new Error('missing moment locale helpers');
+            }
+            if (moment.localeData()._week.dow !== 1 || calendarDate.format('YYYY-MM-DD HH:mm:ss') !== '2026-06-16 08:05:03' || calendarDate.get('hour') !== 8) {
+              throw new Error('missing chainable moment date helpers');
+            }
+            if (moment.weekdaysShort(true)[0] !== 'Mon' || moment.weekdays()[0] !== 'Sunday') {
+              throw new Error('missing static moment weekday helpers');
+            }
+            if (!moment().calendar().startsWith('Today')) {
+              throw new Error('missing moment calendar helper');
+            }
+            if (weekdayDate.format('YYYY-MM-DD') !== '2026-06-17') {
+              throw new Error('missing moment weekday helper');
+            }
+            if (moment('2026-06-21').isoWeekday() !== 7) {
+              throw new Error('missing moment isoWeekday helper');
+            }
+            if (document.getElementById('calendar-root').textContent !== 'lookup-ready') {
+              throw new Error('missing document.getElementById helper');
+            }
+            if (lookupEl.hasAttribute('data-ready') || lookupEl.getAttribute('data-ready') !== null) {
+              throw new Error('missing document removeAttribute helper');
+            }
+            if (lookupEl.parentNode !== document.body || textNode.nextSibling !== lookupEl || lookupEl.previousSibling !== textNode) {
+              throw new Error('missing document parent/sibling helpers');
+            }
+            if (document.body.childNodes[0].textContent !== 'calendar-text-node' || svgNode.tagName.toLowerCase() !== 'svg') {
+              throw new Error('missing document text/svg insertion helpers');
             }
             Vault.recurseChildren(this.app.vault.getRoot(), () => {});
             this.addCommand({ id: 'globals', name: topLevelEl.textContent || 'Globals', callback: () => {} });

@@ -24,6 +24,14 @@ export {
   buildObsidianWorkflowAudits,
 } from './workflow-audit';
 export {
+  ObsidianWorkflowProbeStore,
+  buildObsidianWorkflowProbeAudits,
+  isObsidianWorkflowProbeId,
+  runObsidianWorkflowProbe,
+  runObsidianWorkflowProbes,
+  workflowAuditFromProbeResult,
+} from './workflow-probes';
+export {
   applyObsidianLinterFixes,
   buildObsidianLinterSandboxContributions,
   getObsidianLinterRuleMetadata,
@@ -132,3 +140,11 @@ export type {
   ObsidianWorkflowAuditSource,
   ObsidianWorkflowAuditStatus,
 } from './workflow-audit';
+export type {
+  ObsidianWorkflowProbeAssertion,
+  ObsidianWorkflowProbeHistory,
+  ObsidianWorkflowProbeId,
+  ObsidianWorkflowProbeResult,
+  ObsidianWorkflowProbeSource,
+  ObsidianWorkflowProbeStatus,
+} from './workflow-probes';

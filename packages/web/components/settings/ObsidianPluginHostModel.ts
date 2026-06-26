@@ -26,6 +26,10 @@ import type {
   ObsidianWorkflowAudit,
   ObsidianWorkflowAuditStatus,
 } from '@/lib/obsidian-compat/workflow-audit';
+import type {
+  ObsidianWorkflowProbeHistory,
+  ObsidianWorkflowProbeResult,
+} from '@/lib/obsidian-compat/workflow-probes';
 import { getObsidianImportSupport } from '@/lib/obsidian-compat/import-policy';
 import type { PluginActionResult } from '@/lib/plugins/client';
 
@@ -136,6 +140,7 @@ export interface ObsidianPluginStatus {
   capabilityGate?: ObsidianCapabilityGateReport;
   capabilityLedger?: ObsidianRuntimeCapabilityLedgerEntry[];
   capabilityLedgerHistory?: ObsidianRuntimeCapabilityLedgerHistory;
+  workflowProbeHistory?: ObsidianWorkflowProbeHistory;
   workflowAudits?: ObsidianWorkflowAudit[];
   packageLocation?: {
     relativePath: string;
@@ -155,7 +160,7 @@ export interface ObsidianPluginLoadResult {
 
 export interface ObsidianPluginsResponse {
   ok: boolean;
-  result?: ObsidianPluginLoadResult | PluginActionResult;
+  result?: ObsidianPluginLoadResult | PluginActionResult | ObsidianWorkflowProbeResult | ObsidianWorkflowProbeResult[];
   plugins: ObsidianPluginStatus[];
   capabilityGate?: ObsidianCapabilityGateReport;
 }
@@ -260,7 +265,7 @@ export interface ObsidianPluginSettingsResponse {
   preview?: ObsidianDeclarativeSettingPreview;
 }
 
-export type PluginLifecycleAction = 'enable' | 'disable' | 'load' | 'load-enabled' | 'execute-command' | 'uninstall' | 'migrate-legacy';
+export type PluginLifecycleAction = 'enable' | 'disable' | 'load' | 'load-enabled' | 'execute-command' | 'run-workflow-probe' | 'uninstall' | 'migrate-legacy';
 export type SettingAction = 'set-value' | 'click-button' | 'list-add' | 'list-delete' | 'list-reorder' | 'preview-render' | 'preview-page';
 export type SurfaceRouteState = 'mounted' | 'catalog' | 'diagnostic';
 export type SurfaceRouteTarget = 'command-center' | 'plugin-entries' | 'plugin-views';
@@ -326,6 +331,12 @@ export function workflowAuditStatusLabel(status: ObsidianWorkflowAuditStatus): s
   if (status === 'blocked') return 'blocked';
   if (status === 'native-replacement') return 'native';
   return 'not observed';
+}
+
+export function workflowAuditProbeSummary(audit: ObsidianWorkflowAudit): string {
+  if (!audit.lastProbedAt || !audit.lastProbeStatus) return '';
+  const date = audit.lastProbedAt.slice(0, 19).replace('T', ' ');
+  return `Last probe ${audit.lastProbeStatus} · ${date}`;
 }
 
 export function workflowAuditStatusClass(status: ObsidianWorkflowAuditStatus): string {

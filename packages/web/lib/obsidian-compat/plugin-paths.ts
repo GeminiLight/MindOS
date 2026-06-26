@@ -10,6 +10,7 @@ export const OBSIDIAN_PLUGIN_SECRET_STORAGE_FILE = '.secret-storage.json';
 export const OBSIDIAN_PLUGIN_SECRET_STORAGE_KEY_FILE = '.secret-storage.key';
 export const OBSIDIAN_PLUGIN_DESKTOP_SECRET_STORAGE_FILE = '.secret-storage.desktop-safe-storage.json';
 export const OBSIDIAN_PLUGIN_RUNTIME_CAPABILITY_LEDGER_DIR = '.runtime-capability-ledger';
+export const OBSIDIAN_PLUGIN_WORKFLOW_PROBE_DIR = '.workflow-probes';
 
 export interface ObsidianPluginRootLocation {
   rootDir: string;
@@ -148,6 +149,15 @@ export function resolveCanonicalPluginRuntimeCapabilityLedgerDir(mindRoot: strin
 export function resolveCanonicalPluginRuntimeCapabilityLedgerPath(mindRoot: string, pluginId: string): string {
   assertSafeObsidianPluginId(pluginId);
   return path.join(resolveCanonicalPluginRuntimeCapabilityLedgerDir(mindRoot), `${pluginId}.jsonl`);
+}
+
+export function resolveCanonicalPluginWorkflowProbeDir(mindRoot: string): string {
+  return path.join(resolveCanonicalObsidianPluginRoot(mindRoot).rootDir, OBSIDIAN_PLUGIN_WORKFLOW_PROBE_DIR);
+}
+
+export function resolveCanonicalPluginWorkflowProbePath(mindRoot: string, pluginId: string): string {
+  assertSafeObsidianPluginId(pluginId);
+  return path.join(resolveCanonicalPluginWorkflowProbeDir(mindRoot), `${pluginId}.jsonl`);
 }
 
 function pluginLocationFromRoot(mindRoot: string, root: ObsidianPluginRootLocation, pluginId: string): ObsidianPluginLocation {

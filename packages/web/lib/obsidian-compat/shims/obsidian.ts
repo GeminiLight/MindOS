@@ -15,6 +15,7 @@ import { createObsidianElement } from './dom';
 import { MarkdownRenderer } from './markdown-renderer';
 import { getActiveObsidianRuntimeHost } from '../runtime';
 import type { CachedMetadata, RequestUrlParam, RequestUrlResponse, RequestUrlResponsePromise, SecretStorage, TFile, WorkspaceLeaf } from '../types';
+import { moment } from './moment';
 
 const REQUEST_URL_TIMEOUT_MS = 15_000;
 const REQUEST_URL_MAX_RESPONSE_BYTES = 5 * 1024 * 1024;
@@ -576,54 +577,7 @@ export const Platform = {
   isLinux: runtimePlatform === 'linux',
 };
 
-function pad(value: number, size = 2): string {
-  return String(value).padStart(size, '0');
-}
-
-function formatDate(date: Date, format: string): string {
-  return format
-    .replace(/YYYY/g, String(date.getFullYear()))
-    .replace(/YY/g, String(date.getFullYear()).slice(-2))
-    .replace(/MM/g, pad(date.getMonth() + 1))
-    .replace(/DD/g, pad(date.getDate()))
-    .replace(/HH/g, pad(date.getHours()))
-    .replace(/mm/g, pad(date.getMinutes()))
-    .replace(/ss/g, pad(date.getSeconds()));
-}
-
-export function moment(input?: string | number | Date) {
-  const date = input instanceof Date ? new Date(input) : input === undefined ? new Date() : new Date(input);
-  return {
-    format: (format = 'YYYY-MM-DDTHH:mm:ss') => formatDate(date, format),
-    toDate: () => new Date(date),
-    valueOf: () => date.valueOf(),
-    unix: () => Math.floor(date.valueOf() / 1000),
-    isValid: () => !Number.isNaN(date.valueOf()),
-  };
-}
-
-let currentMomentLocale = 'en';
-
-moment.now = Date.now;
-moment.utc = moment;
-moment.unix = (seconds: number) => moment(seconds * 1000);
-moment.locale = (locale?: string): string => {
-  if (typeof locale === 'string' && locale.trim()) {
-    currentMomentLocale = locale.trim();
-  }
-  return currentMomentLocale;
-};
-moment.localeData = () => ({
-  firstDayOfWeek: () => 0,
-  longDateFormat: (token: string) => ({
-    L: 'YYYY-MM-DD',
-    LL: 'MMMM D, YYYY',
-    LLL: 'MMMM D, YYYY HH:mm',
-    LLLL: 'dddd, MMMM D, YYYY HH:mm',
-    LT: 'HH:mm',
-    LTS: 'HH:mm:ss',
-  })[token] ?? token,
-});
+export { moment };
 
 export class MarkdownRenderChild extends Component {
   containerEl: HTMLElement;
@@ -636,12 +590,14 @@ export class MarkdownRenderChild extends Component {
 
 export class ItemView extends Component {
   leaf?: WorkspaceLeaf;
+  app?: unknown;
   containerEl: HTMLElement;
   contentEl: HTMLElement;
 
   constructor(leaf?: WorkspaceLeaf) {
     super();
     this.leaf = leaf;
+    this.app = (leaf as { app?: unknown } | undefined)?.app;
     this.containerEl = createObsidianElement('div');
     this.contentEl = createObsidianElement('div');
     this.containerEl.appendChild(this.contentEl);

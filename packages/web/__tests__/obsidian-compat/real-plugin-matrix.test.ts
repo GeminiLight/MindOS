@@ -22,7 +22,24 @@ describe('Obsidian real plugin matrix', () => {
           supportKind: 'limited',
           compatibilityLevel: 'partial',
           gate: gateReport({ status: 'limited' }),
-          smoke: { outcome: 'loaded', stage: 'load', runtime: runtimeSummary({ commands: 2 }) },
+          smoke: {
+            outcome: 'loaded',
+            stage: 'load',
+            runtime: runtimeSummary({ commands: 2 }),
+            workflowProbes: {
+              total: 1,
+              passed: 1,
+              failed: 0,
+              skipped: 0,
+              results: [{
+                id: 'quickadd-capture-macro',
+                label: 'Run capture or macro commands',
+                status: 'passed',
+                completedAt: '2026-06-24T00:00:00.000Z',
+                evidence: ['Probe passed.'],
+              }],
+            },
+          },
           downloads: 10,
         }),
         matrixItem({
@@ -115,8 +132,10 @@ describe('Obsidian real plugin matrix', () => {
     const matrixRow = markdown.split('\n').find((line) => line.includes('`review-plugin`'));
 
     expect(matrixRow).toBeDefined();
-    expect(matrixRow?.split('|')).toHaveLength(11);
+    expect(matrixRow?.split('|')).toHaveLength(12);
     expect(matrixRow).toContain('review (confirmation)');
+    expect(matrixRow).toContain('not run');
+    expect(matrixRow).toContain('| - |');
     expect(matrixRow).toContain('commands:mountedx2');
     expect(matrixRow).toContain('declarative adapter candidate');
     expect(markdown).toContain('| Declarative editor adapter candidates | 1 |');

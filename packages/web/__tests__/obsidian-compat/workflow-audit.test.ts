@@ -56,7 +56,7 @@ function runtimeEntry(overrides: Partial<ObsidianRuntimeCapabilityLedgerEntry> =
 }
 
 describe('buildObsidianWorkflowAudits', () => {
-  it('marks QuickAdd workflows observed only when runtime called evidence exists', () => {
+  it('keeps QuickAdd runtime called evidence partial until a workflow probe proves the result', () => {
     const audits = buildObsidianWorkflowAudits({
       pluginId: 'quickadd',
       pluginName: 'QuickAdd',
@@ -69,9 +69,68 @@ describe('buildObsidianWorkflowAudits', () => {
     expect(audits).toEqual([
       expect.objectContaining({
         id: 'quickadd-capture-macro',
-        status: 'observed',
+        status: 'partial',
         source: 'runtime-ledger',
         lastObservedAt: '2026-06-26T08:00:00.000Z',
+      }),
+    ]);
+  });
+
+  it('marks QuickAdd workflows observed when a workflow probe passes with result assertions', () => {
+    const audits = buildObsidianWorkflowAudits({
+      pluginId: 'quickadd',
+      pluginName: 'QuickAdd',
+      coverage: [],
+      capabilityGate: readyGate,
+      runtimeEntries: [],
+      history: history([runtimeEntry({ recordedAt: '2026-06-26T08:00:00.000Z' })]),
+      workflowProbeHistory: {
+        total: 1,
+        entries: [{
+          schemaVersion: 1,
+          pluginId: 'quickadd',
+          id: 'quickadd-capture-macro',
+          label: 'Run capture or macro commands',
+          status: 'passed',
+          source: 'workflow-probe',
+          startedAt: '2026-06-26T08:00:00.000Z',
+          completedAt: '2026-06-26T08:00:01.000Z',
+          evidence: ['Probe executed command and observed a vault file write.'],
+          assertions: [
+            { id: 'execute-command', label: 'Executed command', passed: true },
+            { id: 'observable-result', label: 'Observed workflow result', passed: true },
+          ],
+        }],
+        latestById: {
+          'quickadd-capture-macro': {
+            schemaVersion: 1,
+            pluginId: 'quickadd',
+            id: 'quickadd-capture-macro',
+            label: 'Run capture or macro commands',
+            status: 'passed',
+            source: 'workflow-probe',
+            startedAt: '2026-06-26T08:00:00.000Z',
+            completedAt: '2026-06-26T08:00:01.000Z',
+            evidence: ['Probe executed command and observed a vault file write.'],
+            assertions: [
+              { id: 'execute-command', label: 'Executed command', passed: true },
+              { id: 'observable-result', label: 'Observed workflow result', passed: true },
+            ],
+          },
+        },
+        skippedCorruptLines: 0,
+        updatedAt: '2026-06-26T08:00:01.000Z',
+      },
+    });
+
+    expect(audits).toEqual([
+      expect.objectContaining({
+        id: 'quickadd-capture-macro',
+        status: 'observed',
+        source: 'workflow-probe',
+        lastObservedAt: '2026-06-26T08:00:01.000Z',
+        lastProbeStatus: 'passed',
+        lastProbedAt: '2026-06-26T08:00:01.000Z',
       }),
     ]);
   });

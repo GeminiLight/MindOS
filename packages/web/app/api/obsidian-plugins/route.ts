@@ -6,8 +6,9 @@ import { readSettings } from '@/lib/settings';
 import { withObsidianPluginRuntime } from '@/lib/obsidian-compat/runtime-service';
 import type { PluginEditorCommandContext } from '@/lib/obsidian-compat/plugin-manager';
 import { isObsidianCapabilityGateConfirmationRequiredError } from '@/lib/obsidian-compat/capability-gate';
+import { isObsidianWorkflowProbeId, type ObsidianWorkflowProbeId } from '@/lib/obsidian-compat/workflow-probes';
 
-type PluginAction = 'enable' | 'disable' | 'load' | 'load-enabled' | 'execute-command' | 'execute-ribbon-action' | 'choose-modal-suggestion' | 'choose-menu-item' | 'uninstall' | 'migrate-legacy';
+type PluginAction = 'enable' | 'disable' | 'load' | 'load-enabled' | 'execute-command' | 'run-workflow-probe' | 'execute-ribbon-action' | 'choose-modal-suggestion' | 'choose-menu-item' | 'uninstall' | 'migrate-legacy';
 
 const VALID_PLUGIN_ACTIONS: PluginAction[] = [
   'enable',
@@ -15,6 +16,7 @@ const VALID_PLUGIN_ACTIONS: PluginAction[] = [
   'load',
   'load-enabled',
   'execute-command',
+  'run-workflow-probe',
   'execute-ribbon-action',
   'choose-modal-suggestion',
   'choose-menu-item',
@@ -90,6 +92,15 @@ function requireInteractionId(action: PluginAction, interactionId: unknown): str
   return interactionId.trim();
 }
 
+function parseProbeId(probeId: unknown): ObsidianWorkflowProbeId | undefined {
+  if (typeof probeId !== 'string' || probeId.trim().length === 0) return undefined;
+  const trimmed = probeId.trim();
+  if (!isObsidianWorkflowProbeId(trimmed)) {
+    throw new MindOSError(ErrorCodes.INVALID_REQUEST, `Unknown workflow probe id: ${trimmed}`);
+  }
+  return trimmed;
+}
+
 export async function GET(req: NextRequest) {
   try {
     const settings = readSettings();
@@ -121,6 +132,7 @@ export async function POST(req: NextRequest) {
       itemIndex?: number;
       interactionId?: string;
       editorContext?: unknown;
+      probeId?: string;
       confirmCapabilityGate?: boolean;
     };
     const action = body.action;
@@ -153,6 +165,11 @@ export async function POST(req: NextRequest) {
         result = await manager.executeCommand(requireCommandId(body.commandId), {
           editor: parseEditorContext(body.editorContext),
         });
+      } else if (action === 'run-workflow-probe') {
+        result = await manager.runWorkflowProbe(
+          requirePluginId(action, body.pluginId),
+          parseProbeId(body.probeId),
+        );
       } else if (action === 'execute-ribbon-action') {
         result = await manager.executeRibbonIcon(
           requirePluginId(action, body.pluginId),

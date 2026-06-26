@@ -198,6 +198,80 @@ describe('/api/obsidian-plugins command actions', () => {
     });
   });
 
+  it('runs a workflow probe through the lifecycle API and exposes refreshed audit state', async () => {
+    writePlugin(
+      'quickadd',
+      `
+        const { Plugin } = require('obsidian');
+        module.exports = class QuickAddPlugin extends Plugin {
+          onload() {
+            this.addCommand({
+              id: 'capture',
+              name: 'QuickAdd Capture',
+              callback: async () => {
+                await this.app.vault.create('Inbox/api-probe.md', 'captured');
+              }
+            });
+          }
+        };
+      `,
+    );
+
+    const { POST } = await importLifecycleRoute();
+    await POST(confirmedEnableRequest('quickadd'));
+    const res = await POST(postRequest({
+      action: 'run-workflow-probe',
+      pluginId: 'quickadd',
+      probeId: 'quickadd-capture-macro',
+    }));
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json.result).toMatchObject({
+      id: 'quickadd-capture-macro',
+      status: 'passed',
+    });
+    expect(json.plugins.find((plugin: { id: string }) => plugin.id === 'quickadd')).toMatchObject({
+      workflowProbeHistory: {
+        total: 1,
+      },
+      workflowAudits: [
+        expect.objectContaining({
+          id: 'quickadd-capture-macro',
+          status: 'observed',
+          source: 'workflow-probe',
+        }),
+      ],
+    });
+    expect(fs.readFileSync(path.join(mindRoot, 'Inbox', 'api-probe.md'), 'utf-8')).toBe('captured');
+  });
+
+  it('rejects unknown workflow probe ids as invalid requests', async () => {
+    writePlugin(
+      'quickadd',
+      `
+        const { Plugin } = require('obsidian');
+        module.exports = class QuickAddPlugin extends Plugin {
+          onload() {
+            this.addCommand({ id: 'capture', name: 'QuickAdd Capture', callback: () => {} });
+          }
+        };
+      `,
+    );
+
+    const { POST } = await importLifecycleRoute();
+    await POST(confirmedEnableRequest('quickadd'));
+    const res = await POST(postRequest({
+      action: 'run-workflow-probe',
+      pluginId: 'quickadd',
+      probeId: 'not-a-probe',
+    }));
+    const json = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(json.error).toBe('Unknown workflow probe id: not-a-probe');
+  });
+
   it('returns notice snapshots from executed plugin commands', async () => {
     writePlugin(
       'notice-command-plugin',

@@ -59,6 +59,41 @@ describe('/api/obsidian-plugins views', () => {
     });
   });
 
+  it('provides app access to ItemView subclasses during view rendering', async () => {
+    writePlugin(
+      'view-app-plugin',
+      `
+        const { Plugin, ItemView } = require('obsidian');
+        class AppAwareView extends ItemView {
+          getViewType() {
+            return 'app-aware-view';
+          }
+          getDisplayText() {
+            return 'App aware';
+          }
+          onOpen() {
+            this.contentEl.createDiv({ text: this.app && this.app.workspace ? 'workspace-ready' : 'workspace-missing' });
+          }
+        }
+        module.exports = class ViewAppPlugin extends Plugin {
+          onload() {
+            this.registerView('app-aware-view', (leaf) => new AppAwareView(leaf));
+          }
+        };
+      `,
+    );
+
+    const lifecycle = await importLifecycleRoute();
+    await lifecycle.POST(postRequest({ action: 'enable', pluginId: 'view-app-plugin' }));
+
+    const { GET } = await importViewsRoute();
+    const res = await GET(viewGetRequest({ pluginId: 'view-app-plugin', viewType: 'app-aware-view' }));
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json.view.text).toBe('workspace-ready');
+  });
+
   it('opens plugin views with active file context when sourcePath is provided', async () => {
     fs.mkdirSync(path.join(mindRoot, 'projects'), { recursive: true });
     fs.writeFileSync(path.join(mindRoot, 'projects', 'roadmap.kanban'), '- Todo', 'utf-8');

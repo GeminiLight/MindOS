@@ -5,6 +5,12 @@ import type {
 } from './capability-matrix';
 import type { ObsidianRuntimeCapabilityLedgerEntry } from './compatibility-preview';
 import type { ObsidianRuntimeCapabilityLedgerHistory } from './runtime-capability-ledger-store';
+import {
+  workflowAuditFromProbeResult,
+  type ObsidianWorkflowProbeHistory,
+  type ObsidianWorkflowProbeId,
+  type ObsidianWorkflowProbeStatus,
+} from './workflow-probes';
 
 export type ObsidianWorkflowAuditStatus =
   | 'observed'
@@ -15,6 +21,7 @@ export type ObsidianWorkflowAuditStatus =
 
 export type ObsidianWorkflowAuditSource =
   | 'runtime-ledger'
+  | 'workflow-probe'
   | 'capability-gate'
   | 'static-preview'
   | 'native-replacement';
@@ -26,6 +33,9 @@ export interface ObsidianWorkflowAudit {
   source: ObsidianWorkflowAuditSource;
   evidence: string[];
   lastObservedAt?: string;
+  lastProbedAt?: string;
+  lastProbeStatus?: ObsidianWorkflowProbeStatus;
+  probeFailureReason?: string;
   blockedReasons?: string[];
   nextStep?: string;
 }
@@ -37,6 +47,7 @@ export interface BuildObsidianWorkflowAuditsInput {
   capabilityGate: ObsidianCapabilityGateReport;
   runtimeEntries: ObsidianRuntimeCapabilityLedgerEntry[];
   history: ObsidianRuntimeCapabilityLedgerHistory;
+  workflowProbeHistory?: ObsidianWorkflowProbeHistory;
 }
 
 const DATAVIEW_PLUGIN_IDS = new Set(['dataview']);
@@ -88,10 +99,12 @@ export function buildObsidianWorkflowAudits(input: BuildObsidianWorkflowAuditsIn
 }
 
 function buildLinterAudit(input: BuildObsidianWorkflowAuditsInput): ObsidianWorkflowAudit {
+  const probed = probedAudit(input, 'linter-review-apply');
+  if (probed) return probed;
   const called = latestEntries(input, { capabilities: ['addCommand'], phases: ['called'] });
   const registered = latestEntries(input, { capabilities: ['addCommand', 'registerEditorExtension'], phases: ['registered'] });
   if (called.length > 0) {
-    return observedAudit('linter-review-apply', 'Review and apply Markdown lint fixes', called, 'Keep mapping high-confidence Linter rules into MindOS-owned preview/apply/undo behavior.');
+    return partialAudit('linter-review-apply', 'Review and apply Markdown lint fixes', 'runtime-ledger', called, 'Run the workflow probe and verify preview/apply/undo output before calling this workflow observed.');
   }
   if (input.capabilityGate.blocked) return blockedAudit(input, 'linter-review-apply', 'Review and apply Markdown lint fixes');
   if (registered.length > 0) {
@@ -101,10 +114,12 @@ function buildLinterAudit(input: BuildObsidianWorkflowAuditsInput): ObsidianWork
 }
 
 function buildQuickAddAudit(input: BuildObsidianWorkflowAuditsInput): ObsidianWorkflowAudit {
+  const probed = probedAudit(input, 'quickadd-capture-macro');
+  if (probed) return probed;
   const called = latestEntries(input, { capabilities: ['addCommand', 'Modal', 'SuggestModal', 'Menu', 'MenuItem'], phases: ['called'] });
   const registered = latestEntries(input, { capabilities: ['addCommand'], phases: ['registered'] });
   if (called.length > 0) {
-    return observedAudit('quickadd-capture-macro', 'Run capture or macro commands', called, 'Verify each capture path with real note writes, modal choices, and rollback behavior.');
+    return partialAudit('quickadd-capture-macro', 'Run capture or macro commands', 'runtime-ledger', called, 'Run the workflow probe and verify real note writes, modal choices, or rollback behavior before calling this workflow observed.');
   }
   if (input.capabilityGate.blocked) return blockedAudit(input, 'quickadd-capture-macro', 'Run capture or macro commands');
   if (registered.length > 0) {
@@ -114,10 +129,12 @@ function buildQuickAddAudit(input: BuildObsidianWorkflowAuditsInput): ObsidianWo
 }
 
 function buildTagWranglerAudit(input: BuildObsidianWorkflowAuditsInput): ObsidianWorkflowAudit {
+  const probed = probedAudit(input, 'tag-wrangler-rename');
+  if (probed) return probed;
   const called = latestEntries(input, { surfaces: ['metadata', 'vault', 'workspace'], phases: ['called'] });
   const registered = latestEntries(input, { capabilities: ['addCommand', 'Menu'], phases: ['registered', 'called'] });
   if (called.length > 0) {
-    return observedAudit('tag-wrangler-rename', 'Rename or organize tags', called, 'Verify file rewrites, metadata cache refresh, and undo behavior on a fixture vault.');
+    return partialAudit('tag-wrangler-rename', 'Rename or organize tags', 'runtime-ledger', called, 'Run the workflow probe against a fixture note set before calling tag rename compatible.');
   }
   if (input.capabilityGate.blocked) return blockedAudit(input, 'tag-wrangler-rename', 'Rename or organize tags');
   if (registered.length > 0) {
@@ -127,10 +144,12 @@ function buildTagWranglerAudit(input: BuildObsidianWorkflowAuditsInput): Obsidia
 }
 
 function buildCalendarAudit(input: BuildObsidianWorkflowAuditsInput): ObsidianWorkflowAudit {
+  const probed = probedAudit(input, 'calendar-open-periodic-note');
+  if (probed) return probed;
   const called = latestEntries(input, { capabilities: ['registerView', 'Workspace.openLinkText'], phases: ['called'] });
   const registered = latestEntries(input, { capabilities: ['registerView', 'addCommand'], phases: ['registered'] });
   if (called.length > 0) {
-    return observedAudit('calendar-open-periodic-note', 'Open calendar views and notes', called, 'Verify date navigation against MindOS note paths and periodic-note naming rules.');
+    return partialAudit('calendar-open-periodic-note', 'Open calendar views and notes', 'runtime-ledger', called, 'Run the workflow probe and verify date navigation against MindOS note paths before calling this workflow observed.');
   }
   if (input.capabilityGate.blocked) return blockedAudit(input, 'calendar-open-periodic-note', 'Open calendar views and notes');
   if (registered.length > 0) {
@@ -140,10 +159,12 @@ function buildCalendarAudit(input: BuildObsidianWorkflowAuditsInput): ObsidianWo
 }
 
 function buildAdmonitionAudit(input: BuildObsidianWorkflowAuditsInput): ObsidianWorkflowAudit {
+  const probed = probedAudit(input, 'admonition-render-markdown');
+  if (probed) return probed;
   const called = latestEntries(input, { capabilities: ['registerMarkdownPostProcessor', 'registerMarkdownCodeBlockProcessor'], phases: ['called'] });
   const registered = latestEntries(input, { capabilities: ['registerMarkdownPostProcessor', 'registerMarkdownCodeBlockProcessor'], phases: ['registered'] });
   if (called.length > 0) {
-    return observedAudit('admonition-render-markdown', 'Render admonition blocks', called, 'Compare rendered output with MindOS native callouts before exposing it as compatible.');
+    return partialAudit('admonition-render-markdown', 'Render admonition blocks', 'runtime-ledger', called, 'Run a Markdown fixture through the workflow probe and compare output snapshots before exposing it as observed.');
   }
   if (input.capabilityGate.blocked) return blockedAudit(input, 'admonition-render-markdown', 'Render admonition blocks');
   if (registered.length > 0) {
@@ -177,21 +198,9 @@ function buildNativeReplacementAudit(
   };
 }
 
-function observedAudit(
-  id: string,
-  label: string,
-  entries: Array<ObsidianRuntimeCapabilityLedgerEntry & { recordedAt?: string }>,
-  nextStep: string,
-): ObsidianWorkflowAudit {
-  return {
-    id,
-    label,
-    status: 'observed',
-    source: 'runtime-ledger',
-    evidence: evidenceFor(entries),
-    lastObservedAt: entries[0]?.recordedAt,
-    nextStep,
-  };
+function probedAudit(input: BuildObsidianWorkflowAuditsInput, id: ObsidianWorkflowProbeId): ObsidianWorkflowAudit | null {
+  const result = input.workflowProbeHistory?.latestById[id];
+  return result ? workflowAuditFromProbeResult(result) : null;
 }
 
 function partialAudit(

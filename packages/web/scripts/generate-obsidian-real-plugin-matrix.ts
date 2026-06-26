@@ -14,6 +14,7 @@ import { buildObsidianCapabilityGateReport } from '@/lib/obsidian-compat/capabil
 import {
   buildObsidianRealPluginMatrix,
   renderObsidianRealPluginMatrixMarkdown,
+  summarizeObsidianWorkflowProbeResults,
   type ObsidianRealPluginMatrixFailure,
   type ObsidianRealPluginMatrixInputItem,
   type ObsidianRealPluginSmokeResult,
@@ -43,6 +44,7 @@ interface CliOptions {
   communityIndexPath?: string;
   communityStatsPath?: string;
   skipSmoke: boolean;
+  runWorkflowProbes: boolean;
   timeoutMs: number;
   mainJsMaxChars: number;
 }
@@ -66,6 +68,7 @@ function parseArgs(argv: string[]): CliOptions {
     outJson: DEFAULT_OUT_JSON,
     outMarkdown: DEFAULT_OUT_MD,
     skipSmoke: false,
+    runWorkflowProbes: false,
     timeoutMs: DEFAULT_TIMEOUT_MS,
     mainJsMaxChars: DEFAULT_MAIN_JS_MAX_MB * 1024 * 1024,
   };
@@ -91,6 +94,8 @@ function parseArgs(argv: string[]): CliOptions {
       index += 1;
     } else if (arg === '--skip-smoke') {
       options.skipSmoke = true;
+    } else if (arg === '--run-workflow-probes') {
+      options.runWorkflowProbes = true;
     } else if (arg === '--timeout-ms') {
       options.timeoutMs = parsePositiveInteger(resolveRequiredValue(argv, index), '--timeout-ms');
       index += 1;
@@ -143,6 +148,7 @@ Options:
   --community-stats-file <path>
                         Read community-plugin-stats.json from a local official snapshot.
   --skip-smoke          Generate preflight matrix without loading plugins in a temp Mind root.
+  --run-workflow-probes Run explicit workflow probes after successful load smoke.
   --timeout-ms <ms>     Network asset timeout passed to preflight fetches. Default: ${DEFAULT_TIMEOUT_MS}
   --main-js-max-mb <mb> Max plugin main.js size for this offline matrix harness. Default: ${DEFAULT_MAIN_JS_MAX_MB}
 `);
@@ -199,7 +205,7 @@ async function main(): Promise<void> {
       });
       const smoke = options.skipSmoke
         ? notRunSmoke('Smoke harness was skipped by --skip-smoke.')
-        : await runPluginSmoke(catalog.id, fetched.files, capabilityGate.blocked).catch((error) => failedSmoke(
+        : await runPluginSmoke(catalog.id, fetched.files, capabilityGate.blocked, options.runWorkflowProbes).catch((error) => failedSmoke(
           'load',
           error instanceof Error ? error.message : String(error),
         ));
@@ -306,6 +312,7 @@ async function runPluginSmoke(
   pluginId: string,
   files: { manifestJson: string; mainJs: string; stylesCss?: string },
   gateBlocked: boolean,
+  runWorkflowProbes: boolean,
 ): Promise<ObsidianRealPluginSmokeResult> {
   const mindRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'mindos-obsidian-p0-smoke-'));
   try {
@@ -338,6 +345,9 @@ async function runPluginSmoke(
     const load = await manager.loadEnabledPlugins();
     const afterLoad = manager.list().find((plugin) => plugin.id === pluginId);
     if (load.loaded.includes(pluginId)) {
+      const workflowProbes = runWorkflowProbes
+        ? summarizeObsidianWorkflowProbeResults(await manager.runWorkflowProbes(pluginId))
+        : undefined;
       return {
         outcome: 'loaded',
         stage: 'load',
@@ -345,6 +355,7 @@ async function runPluginSmoke(
         failed: load.failed,
         skipped: load.skipped,
         ...(afterLoad ? { runtime: runtimeSummary(afterLoad) } : {}),
+        ...(workflowProbes ? { workflowProbes } : {}),
       };
     }
     if (load.skipped.includes(pluginId)) {

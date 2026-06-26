@@ -42,6 +42,7 @@
     "type-check": "turbo run type-check",
     "verify:standalone": "node scripts/verify-standalone.mjs",
     "obsidian:matrix": "pnpm --dir packages/web exec node --conditions=import --import tsx scripts/generate-obsidian-real-plugin-matrix.ts",
+    "obsidian:workflow-probe": "pnpm run obsidian:matrix -- --run-workflow-probes",
     "clean:product-stage": "node scripts/clean-product-stage.mjs --include-package-docs",
     "release": "bash scripts/release.sh",
     "clean": "turbo run clean && node scripts/remove-node-modules.mjs",
