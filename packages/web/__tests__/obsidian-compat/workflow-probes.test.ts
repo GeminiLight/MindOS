@@ -125,6 +125,52 @@ describe('Obsidian workflow probes', () => {
     ]));
   });
 
+  it('passes the Admonition render probe only when plugin output aligns with the native callout snapshot', async () => {
+    writePlugin('obsidian-admonition', `
+      const { Plugin } = require('obsidian');
+      module.exports = class AdmonitionPlugin extends Plugin {
+        onload() {
+          this.registerMarkdownPostProcessor((el) => {
+            const code = el.querySelector('code');
+            if (!code || !code.textContent.includes('MindOS workflow probe')) return;
+            el.createDiv({ text: 'note\\nMindOS workflow probe' });
+          });
+        }
+      };
+    `);
+
+    const manager = new PluginManager(mindRoot);
+    await manager.discover();
+    await manager.enable('obsidian-admonition', { confirmCapabilityGate: true });
+
+    const result = await manager.runWorkflowProbe('obsidian-admonition', 'admonition-render-markdown');
+
+    expect(result).toMatchObject({
+      pluginId: 'obsidian-admonition',
+      id: 'admonition-render-markdown',
+      status: 'passed',
+      source: 'workflow-probe',
+    });
+    expect(result.evidence).toEqual(expect.arrayContaining([
+      expect.stringContaining('Native callout snapshot: note'),
+      expect.stringContaining('Processor output: note'),
+    ]));
+    expect(result.assertions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'render-markdown', passed: true }),
+      expect.objectContaining({ id: 'native-callout-snapshot', passed: true }),
+      expect.objectContaining({ id: 'plugin-native-snapshot-alignment', passed: true }),
+      expect.objectContaining({ id: 'runtime-called-ledger', passed: true }),
+    ]));
+    expect(manager.list().find((item) => item.id === 'obsidian-admonition')?.workflowAudits).toEqual([
+      expect.objectContaining({
+        id: 'admonition-render-markdown',
+        status: 'observed',
+        source: 'workflow-probe',
+        lastProbeStatus: 'passed',
+      }),
+    ]);
+  });
+
   it('fails a probed workflow when command execution has no observable side effect', async () => {
     writePlugin('quickadd', `
       const { Plugin } = require('obsidian');

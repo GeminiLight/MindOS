@@ -413,20 +413,33 @@ async function runLinterProbe(input: WorkflowProbeRuntimeInput): Promise<Workflo
 }
 
 async function runAdmonitionProbe(input: WorkflowProbeRuntimeInput): Promise<WorkflowProbeDraft> {
-  const renders = await input.host.renderMarkdownPostProcessors('```admonition\nnote\n```', 'workflow-probes/admonition.md');
+  const nativeSnapshot = nativeAdmonitionCalloutSnapshot();
+  const renders = await input.host.renderMarkdownPostProcessors(ADMONITION_MARKDOWN_FIXTURE, 'workflow-probes/admonition.md');
   const ownRenders = renders.filter((render) => render.pluginId === input.plugin.id);
-  const visible = ownRenders.some((render) => Boolean(render.text.trim()) && !render.error);
+  const visibleOutputs = ownRenders
+    .filter((render) => Boolean(render.text.trim()) && !render.error)
+    .map((render) => render.text);
+  const visible = visibleOutputs.length > 0;
+  const called = hasCalledLedger(input.host, input.plugin.id, ['registerMarkdownPostProcessor']);
+  const alignedWithNative = visibleOutputs.some((text) => snapshotsSemanticallyAlign(text, nativeSnapshot));
+  const passed = visible && called && alignedWithNative;
   if (ownRenders.length === 0) {
     return skippedDraft('No Admonition Markdown post processor was available; prefer MindOS native callout rendering until a processor is registered.');
   }
   return {
-    status: visible ? 'passed' : 'failed',
-    evidence: ownRenders.map((render) => render.error ? `Processor failed: ${render.error}` : `Processor output: ${render.text.slice(0, 160)}`),
+    status: passed ? 'passed' : 'failed',
+    evidence: [
+      `Native callout snapshot: ${nativeSnapshot.text}`,
+      ...ownRenders.map((render) => render.error ? `Processor failed: ${render.error}` : `Processor output: ${render.text.slice(0, 160)}`),
+      ...(!alignedWithNative ? ['Plugin processor output did not match the native callout type/content snapshot.'] : []),
+    ],
     assertions: [
       { id: 'render-markdown', label: 'Rendered an Admonition Markdown fixture', passed: visible },
-      { id: 'runtime-called-ledger', label: 'Recorded called runtime ledger evidence', passed: hasCalledLedger(input.host, input.plugin.id, ['registerMarkdownPostProcessor']) },
+      { id: 'native-callout-snapshot', label: 'Generated the MindOS native callout comparison snapshot', passed: Boolean(nativeSnapshot.normalizedText), detail: nativeSnapshot.markdown },
+      { id: 'plugin-native-snapshot-alignment', label: 'Plugin processor output matches native callout semantics', passed: alignedWithNative },
+      { id: 'runtime-called-ledger', label: 'Recorded called runtime ledger evidence', passed: called },
     ],
-    ...(!visible ? { failureReason: 'Admonition processor did not produce visible snapshot output.' } : {}),
+    ...(!passed ? { failureReason: admonitionFailureReason({ visible, called, alignedWithNative }) } : {}),
   };
 }
 
@@ -530,6 +543,51 @@ function observableEvidence(action: PluginActionResult, changes: string[]): stri
     evidence.push(`Observed vault file change: ${change}.`);
   }
   return evidence;
+}
+
+interface NativeAdmonitionSnapshot {
+  type: string;
+  body: string;
+  markdown: string;
+  text: string;
+  normalizedText: string;
+}
+
+function nativeAdmonitionCalloutSnapshot(): NativeAdmonitionSnapshot {
+  const lines = ADMONITION_NATIVE_CALLOUT_FIXTURE.split(/\r?\n/);
+  const marker = lines[0]?.match(/^>\s*\[!([^\]]+)\]\s*(.*)$/);
+  const type = marker?.[1]?.trim().toLowerCase() ?? 'note';
+  const title = marker?.[2]?.trim() ?? '';
+  const body = lines.slice(1)
+    .map((line) => line.replace(/^>\s?/, '').trim())
+    .filter(Boolean)
+    .join('\n');
+  const text = [type, title, body].filter(Boolean).join('\n');
+  return {
+    type,
+    body,
+    markdown: ADMONITION_NATIVE_CALLOUT_FIXTURE,
+    text,
+    normalizedText: normalizeSnapshotText(text),
+  };
+}
+
+function snapshotsSemanticallyAlign(pluginText: string, nativeSnapshot: NativeAdmonitionSnapshot): boolean {
+  const normalized = normalizeSnapshotText(pluginText);
+  return normalized.includes(normalizeSnapshotText(nativeSnapshot.type))
+    && normalized.includes(normalizeSnapshotText(nativeSnapshot.body));
+}
+
+function admonitionFailureReason(input: { visible: boolean; called: boolean; alignedWithNative: boolean }): string {
+  return [
+    !input.visible ? 'Admonition processor did not produce visible snapshot output' : '',
+    !input.called ? 'runtime ledger did not record called evidence for the Markdown processor' : '',
+    !input.alignedWithNative ? 'processor output did not align with the MindOS native callout snapshot' : '',
+  ].filter(Boolean).join('; ');
+}
+
+function normalizeSnapshotText(value: string): string {
+  return value.replace(/\s+/g, ' ').trim().toLowerCase();
 }
 
 function snapshotVault(mindRoot: string): VaultSnapshot {
@@ -648,3 +706,5 @@ const PROBE_IDS = new Set<ObsidianWorkflowProbeId>([
 ]);
 
 const PRIVATE_ROOTS = new Set(['.git', '.mindos', '.obsidian', '.plugins', 'node_modules']);
+const ADMONITION_MARKDOWN_FIXTURE = '```admonition\nnote\nMindOS workflow probe\n```';
+const ADMONITION_NATIVE_CALLOUT_FIXTURE = '> [!note]\n> MindOS workflow probe';
