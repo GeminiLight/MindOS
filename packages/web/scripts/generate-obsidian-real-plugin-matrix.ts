@@ -25,6 +25,10 @@ import {
   renderObsidianRealPluginPolicyAuditMarkdown,
 } from '@/lib/obsidian-compat/real-plugin-policy-audit';
 import {
+  buildObsidianRealPluginAdapterPriorityReport,
+  renderObsidianRealPluginAdapterPriorityMarkdown,
+} from '@/lib/obsidian-compat/real-plugin-adapter-priority';
+import {
   QUICKADD_TEMPLATE_WORKFLOW_PROBE_FIXTURE,
   buildQuickAddWorkflowProbeDataJson,
 } from '@/lib/obsidian-compat/quickadd-workflow-fixture';
@@ -51,6 +55,8 @@ interface CliOptions {
   outMarkdown: string;
   outPolicyAuditJson?: string;
   outPolicyAuditMarkdown?: string;
+  outAdapterPriorityJson?: string;
+  outAdapterPriorityMarkdown?: string;
   communityIndexPath?: string;
   communityStatsPath?: string;
   skipSmoke: boolean;
@@ -102,6 +108,12 @@ function parseArgs(argv: string[]): CliOptions {
     } else if (arg === '--out-policy-audit-md') {
       options.outPolicyAuditMarkdown = resolveRequiredValue(argv, index);
       index += 1;
+    } else if (arg === '--out-adapter-priority-json') {
+      options.outAdapterPriorityJson = resolveRequiredValue(argv, index);
+      index += 1;
+    } else if (arg === '--out-adapter-priority-md') {
+      options.outAdapterPriorityMarkdown = resolveRequiredValue(argv, index);
+      index += 1;
     } else if (arg === '--community-index-file') {
       options.communityIndexPath = resolveRequiredValue(argv, index);
       index += 1;
@@ -133,6 +145,8 @@ function parseArgs(argv: string[]): CliOptions {
     outMarkdown: path.resolve(repoRoot, options.outMarkdown),
     ...(options.outPolicyAuditJson ? { outPolicyAuditJson: path.resolve(repoRoot, options.outPolicyAuditJson) } : {}),
     ...(options.outPolicyAuditMarkdown ? { outPolicyAuditMarkdown: path.resolve(repoRoot, options.outPolicyAuditMarkdown) } : {}),
+    ...(options.outAdapterPriorityJson ? { outAdapterPriorityJson: path.resolve(repoRoot, options.outAdapterPriorityJson) } : {}),
+    ...(options.outAdapterPriorityMarkdown ? { outAdapterPriorityMarkdown: path.resolve(repoRoot, options.outAdapterPriorityMarkdown) } : {}),
     ...(options.communityIndexPath ? { communityIndexPath: path.resolve(repoRoot, options.communityIndexPath) } : {}),
     ...(options.communityStatsPath ? { communityStatsPath: path.resolve(repoRoot, options.communityStatsPath) } : {}),
   };
@@ -165,6 +179,10 @@ Options:
                         Optional policy audit JSON output path.
   --out-policy-audit-md <path>
                         Optional policy audit Markdown output path.
+  --out-adapter-priority-json <path>
+                        Optional adapter priority JSON output path.
+  --out-adapter-priority-md <path>
+                        Optional adapter priority Markdown output path.
   --community-index-file <path>
                         Read community-plugins.json from a local official snapshot.
   --community-stats-file <path>
@@ -280,6 +298,17 @@ async function main(): Promise<void> {
     if (options.outPolicyAuditMarkdown) {
       writeText(options.outPolicyAuditMarkdown, renderObsidianRealPluginPolicyAuditMarkdown(audit));
       console.log(`[obsidian-matrix] Wrote ${path.relative(repoRoot, options.outPolicyAuditMarkdown)}`);
+    }
+  }
+  if (options.outAdapterPriorityJson || options.outAdapterPriorityMarkdown) {
+    const adapterPriority = buildObsidianRealPluginAdapterPriorityReport(matrix);
+    if (options.outAdapterPriorityJson) {
+      writeText(options.outAdapterPriorityJson, `${JSON.stringify(adapterPriority, null, 2)}\n`);
+      console.log(`[obsidian-matrix] Wrote ${path.relative(repoRoot, options.outAdapterPriorityJson)}`);
+    }
+    if (options.outAdapterPriorityMarkdown) {
+      writeText(options.outAdapterPriorityMarkdown, renderObsidianRealPluginAdapterPriorityMarkdown(adapterPriority));
+      console.log(`[obsidian-matrix] Wrote ${path.relative(repoRoot, options.outAdapterPriorityMarkdown)}`);
     }
   }
   if (failures.length > 0) {
