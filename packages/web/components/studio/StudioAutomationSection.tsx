@@ -17,6 +17,7 @@ import {
   X,
 } from 'lucide-react';
 import { type FormEvent, type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/button';
 import {
   scheduleLabel,
@@ -401,51 +402,49 @@ function AutomationCard({
     : scopeLabel(automation.scope, copy);
 
   return (
-    <article data-studio-automation-card className="group relative border-t border-border/55 px-4 py-4 transition-colors first:border-t-0 hover:bg-muted/20">
+    <article data-studio-automation-card className="group relative grid min-w-0 gap-3 border-t border-border/55 px-4 py-4 transition-colors first:border-t-0 hover:bg-muted/25 xl:grid-cols-[minmax(0,1fr)_minmax(220px,auto)] xl:items-center">
       <span className={`pointer-events-none absolute bottom-3 left-0 top-3 w-px rounded-r-full transition-colors group-hover:bg-[var(--amber)] ${
         isActive ? 'bg-[var(--amber)]' : 'bg-transparent'
       }`} />
-      <div className="grid gap-3 2xl:grid-cols-[minmax(0,1fr)_minmax(176px,auto)] 2xl:items-start">
-        <div className="flex min-w-0 gap-3">
-          <span className={`mt-0.5 hidden h-9 w-9 shrink-0 items-center justify-center rounded-md transition-colors sm:inline-flex ${
-            isActive
-              ? 'bg-[var(--amber-subtle)] text-[var(--amber)] group-hover:bg-[var(--amber-dim)]'
-              : 'bg-muted/45 text-muted-foreground'
-          }`}>
-            {isActive ? <Play size={15} aria-hidden="true" /> : <Pause size={15} aria-hidden="true" />}
-          </span>
-          <div className="min-w-0">
-            <div className="flex min-w-0 flex-wrap items-center gap-2">
-              <h3 className="min-w-0 text-sm font-semibold text-foreground">{title}</h3>
-              <span className={`inline-flex h-6 shrink-0 items-center rounded-md border px-2 text-[11px] font-medium ${statusClass}`}>
-                {statusLabel}
-              </span>
-            </div>
-            <p className="mt-2 line-clamp-2 max-w-3xl text-xs leading-relaxed text-muted-foreground">{prompt}</p>
-            <div className="mt-3 flex flex-wrap gap-1.5">
-              <TextPill icon={<FolderGit2 size={12} />} label={scopeText} />
-              <TextPill icon={<CalendarClock size={12} />} label={scheduleLabel(automation.schedule, copy)} />
-              <TextPill icon={<Bot size={12} />} label={`${modelLabel(automation.model, copy)} / ${effortLabel(automation.effort, copy)}`} />
-            </div>
+      <div className="flex min-w-0 gap-3 pr-0">
+        <span className={`mt-0.5 hidden h-9 w-9 shrink-0 items-center justify-center rounded-md transition-colors sm:inline-flex ${
+          isActive
+            ? 'bg-[var(--amber-subtle)] text-[var(--amber)] group-hover:bg-[var(--amber-dim)]'
+            : 'bg-muted/45 text-muted-foreground'
+        }`}>
+          {isActive ? <Play size={15} aria-hidden="true" /> : <Pause size={15} aria-hidden="true" />}
+        </span>
+        <div className="min-w-0">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <h3 className="min-w-0 text-[15px] font-semibold text-foreground">{title}</h3>
+            <span className={`inline-flex h-6 shrink-0 items-center rounded-md border px-2 text-[11px] font-medium ${statusClass}`}>
+              {statusLabel}
+            </span>
+          </div>
+          <p className="mt-1 line-clamp-2 max-w-[64ch] text-xs leading-relaxed text-muted-foreground">{prompt}</p>
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            <TextPill icon={<FolderGit2 size={12} />} label={scopeText} />
+            <TextPill icon={<CalendarClock size={12} />} label={scheduleLabel(automation.schedule, copy)} />
+            <TextPill icon={<Bot size={12} />} label={`${modelLabel(automation.model, copy)} / ${effortLabel(automation.effort, copy)}`} />
           </div>
         </div>
+      </div>
 
-        <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between 2xl:items-end 2xl:justify-start 2xl:text-right">
-          <div className="flex min-w-0 flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground 2xl:block 2xl:space-y-1">
-            <span className="block">{copy.nextRun}: {automation.nextRun ?? copy.localNote}</span>
-            <span className="block">{copy.lastRun}: {automation.lastRun ?? copy.localNote}</span>
-            <span className="block [font-variant-numeric:tabular-nums]">{automation.runCount} {copy.runs}</span>
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
-            <Button type="button" variant="outline" size="sm" onClick={() => onEdit(automation)}>
-              <Edit3 size={13} aria-hidden="true" />
-              {copy.edit}
-            </Button>
-            <Button type="button" variant="ghost" size="sm" onClick={() => onToggle(automation)}>
-              {automation.status === 'active' ? <Pause size={13} aria-hidden="true" /> : <Play size={13} aria-hidden="true" />}
-              {automation.status === 'active' ? copy.pause : copy.resume}
-            </Button>
-          </div>
+      <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between xl:block xl:text-right">
+        <div className="flex min-w-0 flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground xl:block xl:space-y-1">
+          <span className="block">{copy.nextRun}: {automation.nextRun ?? copy.localNote}</span>
+          <span className="block">{copy.lastRun}: {automation.lastRun ?? copy.localNote}</span>
+          <span className="block [font-variant-numeric:tabular-nums]">{automation.runCount} {copy.runs}</span>
+        </div>
+        <div className="flex shrink-0 items-center gap-2 xl:mt-3 xl:justify-end">
+          <Button type="button" variant="outline" size="sm" onClick={() => onEdit(automation)}>
+            <Edit3 size={13} aria-hidden="true" />
+            {copy.edit}
+          </Button>
+          <Button type="button" variant="ghost" size="sm" onClick={() => onToggle(automation)}>
+            {automation.status === 'active' ? <Pause size={13} aria-hidden="true" /> : <Play size={13} aria-hidden="true" />}
+            {automation.status === 'active' ? copy.pause : copy.resume}
+          </Button>
         </div>
       </div>
     </article>
@@ -483,7 +482,7 @@ function AutomationDrawer({
 }) {
   if (!open) return null;
 
-  return (
+  const drawer = (
     <>
       <div
         className="fixed inset-x-0 bottom-0 top-[calc(var(--app-titlebar-h)+52px)] z-app-popover overlay-backdrop transition-opacity duration-200 md:top-[var(--app-titlebar-h)]"
@@ -638,6 +637,8 @@ function AutomationDrawer({
       </form>
     </>
   );
+
+  return typeof document === 'undefined' ? drawer : createPortal(drawer, document.body);
 }
 
 export default function StudioAutomationSection({
@@ -773,66 +774,67 @@ export default function StudioAutomationSection({
       className="scroll-mt-[calc(var(--app-titlebar-h)+0.75rem)] space-y-6"
     >
       <header className="border-b border-border/60 pb-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0 flex-1">
-            <div className="mb-2 flex items-center gap-2 text-xs font-medium text-muted-foreground">
-              <Sparkles size={13} className="text-[var(--amber)]" aria-hidden="true" />
-              {copy.localNote}
-            </div>
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+          <div className="min-w-0">
             <TitleTag id="studio-automation-title" className={titleClassName}>{copy.title}</TitleTag>
-            <p className="mt-1 max-w-3xl text-sm leading-relaxed text-muted-foreground">{copy.subtitle}</p>
+            <p className="mt-1 max-w-2xl text-sm leading-relaxed text-muted-foreground">{copy.subtitle}</p>
           </div>
-          <button
+          <Button
             data-studio-automation-create
             type="button"
             onClick={openCreate}
-            className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 self-start rounded-lg border border-[var(--amber)] bg-[var(--amber)] px-3 text-sm font-medium text-[var(--amber-foreground)] shadow-sm transition-all hover:bg-[var(--amber)]/90 hover:shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:self-center"
+            variant="amber"
+            size="lg"
+            className="shrink-0"
           >
-            <Plus size={14} aria-hidden="true" />
+            <Plus size={15} aria-hidden="true" />
             {copy.create}
-          </button>
+          </Button>
         </div>
-        <div data-studio-automation-summary className="mt-5 grid overflow-hidden rounded-lg border border-border/60 bg-background/35 sm:grid-cols-3 xl:max-w-3xl">
+      </header>
+
+      <section className="space-y-6">
+        <div data-studio-automation-summary className="grid overflow-hidden rounded-lg border border-border/60 bg-background/35 sm:grid-cols-3">
           <AutomationMetric icon={<Play size={13} aria-hidden="true" />} label={copy.active} value={activeCount} />
           <AutomationMetric icon={<Clock3 size={13} aria-hidden="true" />} label={copy.nextRun} value={nextAutomation?.nextRun ?? copy.manual} />
           <AutomationMetric icon={<Layers3 size={13} aria-hidden="true" />} label={copy.total} value={automations.length} />
         </div>
-      </header>
 
-      <section data-studio-automation-list className="min-w-0 space-y-3" aria-labelledby="studio-automation-existing">
-        <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <div className="flex items-center gap-2">
-              <h3 id="studio-automation-existing" className="text-sm font-semibold text-foreground">{copy.existingTitle}</h3>
-              <span className="rounded-md bg-muted/55 px-2 py-0.5 text-[11px] font-medium text-muted-foreground [font-variant-numeric:tabular-nums]">
-                {automations.length}
-              </span>
+        <section data-studio-automation-list className="min-w-0 space-y-3" aria-labelledby="studio-automation-existing">
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 id="studio-automation-existing" className="text-sm font-semibold text-foreground">{copy.existingTitle}</h3>
+                <span className="rounded-md bg-muted/55 px-2 py-0.5 text-[11px] font-medium text-muted-foreground [font-variant-numeric:tabular-nums]">
+                  {automations.length}
+                </span>
+              </div>
+              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{copy.existingHint}</p>
             </div>
-            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{copy.existingHint}</p>
           </div>
-        </div>
-        {automations.length ? (
-          <div className="overflow-hidden rounded-lg border border-border/60 bg-background/35">
-            {automations.map((automation) => (
-              <AutomationCard
-                key={automation.id}
-                automation={automation}
-                projects={projects}
-                locale={locale}
-                copy={copy}
-                onEdit={beginEdit}
-                onToggle={(item) => {
-                  toggleStudioAutomationStatus(item.id);
-                  setAutomations(readStudioAutomations());
-                }}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="rounded-lg border border-dashed border-border/70 bg-background/35 px-4 py-8 text-center text-sm text-muted-foreground">
-            {copy.empty}
-          </div>
-        )}
+          {automations.length ? (
+            <div className="overflow-hidden rounded-lg border border-border/60 bg-background/35">
+              {automations.map((automation) => (
+                <AutomationCard
+                  key={automation.id}
+                  automation={automation}
+                  projects={projects}
+                  locale={locale}
+                  copy={copy}
+                  onEdit={beginEdit}
+                  onToggle={(item) => {
+                    toggleStudioAutomationStatus(item.id);
+                    setAutomations(readStudioAutomations());
+                  }}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-lg border border-dashed border-border/70 bg-background/35 px-4 py-8 text-center text-sm text-muted-foreground">
+              {copy.empty}
+            </div>
+          )}
+        </section>
       </section>
 
       <AutomationDrawer

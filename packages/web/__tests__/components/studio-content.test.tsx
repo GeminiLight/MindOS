@@ -66,7 +66,7 @@ async function renderStudioApps() {
 }
 
 async function setInputValue(selector: string, value: string) {
-  const input = host.querySelector(selector) as HTMLInputElement | HTMLTextAreaElement | null;
+  const input = document.body.querySelector(selector) as HTMLInputElement | HTMLTextAreaElement | null;
   expect(input).not.toBeNull();
   await act(async () => {
     const descriptor = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(input!), 'value');
@@ -438,17 +438,23 @@ describe('StudioContent', () => {
     expect(host.textContent).toContain('Daily research radar');
 
     const automationSection = host.querySelector('[data-studio-automation-section]');
+    const automationContent = host.querySelector('[data-studio-automation-content]');
+    const studioShell = host.querySelector('[data-content-page-shell="studio"]');
     const summaryRail = host.querySelector('[data-studio-automation-summary]');
     const createButton = host.querySelector('[data-studio-automation-create]');
     const automationList = host.querySelector('[data-studio-automation-list]');
     const seededCard = host.querySelector('[data-studio-automation-card]');
     expect(automationSection).not.toBeNull();
+    expect(automationContent?.className).toContain('max-w-6xl');
+    expect(studioShell?.className).not.toContain('[--main-body-content-max-width:100%]');
     expect(summaryRail?.className).toContain('overflow-hidden rounded-lg');
     expect(createButton).not.toBeNull();
-    expect(host.querySelector('[data-studio-automation-drawer]')).toBeNull();
-    expect(host.querySelector('[data-studio-automation-composer]')).toBeNull();
+    expect(document.body.querySelector('[data-studio-automation-drawer]')).toBeNull();
+    expect(document.body.querySelector('[data-studio-automation-composer]')).toBeNull();
     expect(automationList).not.toBeNull();
-    expect(seededCard?.className).toContain('group relative border-t');
+    expect(seededCard?.className).toContain('group relative grid');
+    expect(seededCard?.className).toContain('border-t');
+    expect(seededCard?.className).toContain('xl:grid-cols-');
     expect(seededCard?.className).not.toContain('rounded-xl');
     expect(seededCard?.className).not.toContain('bg-card/45');
 
@@ -456,8 +462,9 @@ describe('StudioContent', () => {
       createButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
-    const composer = host.querySelector('[data-studio-automation-composer]');
-    expect(host.querySelector('[data-studio-automation-drawer]')).not.toBeNull();
+    const composer = document.body.querySelector('[data-studio-automation-composer]');
+    expect(document.body.querySelector('[data-studio-automation-drawer]')).not.toBeNull();
+    expect(host.querySelector('[data-studio-automation-drawer]')).toBeNull();
     expect(composer).not.toBeNull();
     expect(composer?.className).toContain('fixed bottom-0 right-0 top-[calc(var(--app-titlebar-h)+52px)]');
     expect(composer?.className).toContain('md:top-[var(--app-titlebar-h)]');
@@ -476,7 +483,7 @@ describe('StudioContent', () => {
       intervalTab!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
-    const everyFourHoursOption = host.querySelector('[data-studio-automation-repeat-option="every-4-hours"]');
+    const everyFourHoursOption = document.body.querySelector('[data-studio-automation-repeat-option="every-4-hours"]');
     expect(everyFourHoursOption).not.toBeNull();
     await act(async () => {
       everyFourHoursOption!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -500,7 +507,7 @@ describe('StudioContent', () => {
     expect(host.textContent).toContain('Release readiness sweep');
     expect(host.textContent).toContain('Every morning, review open release notes and summarize blockers.');
     expect(host.textContent).toContain('Every 4 hours');
-    expect(host.querySelector('[data-studio-automation-drawer]')).toBeNull();
+    expect(document.body.querySelector('[data-studio-automation-drawer]')).toBeNull();
 
     const releaseCard = Array.from(host.querySelectorAll('[data-studio-automation-card]')).find((card) => (
       card.textContent?.includes('Release readiness sweep')
@@ -516,10 +523,10 @@ describe('StudioContent', () => {
       editButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
-    expect(host.querySelector('[data-studio-automation-drawer]')).not.toBeNull();
+    expect(document.body.querySelector('[data-studio-automation-drawer]')).not.toBeNull();
     await setInputValue('input[aria-label="Automation title"]', 'Release signal sweep');
 
-    const saveButton = Array.from(host.querySelectorAll('button')).find((button) => (
+    const saveButton = Array.from(document.body.querySelectorAll('button')).find((button) => (
       button.textContent?.includes('Save changes')
     ));
     expect(saveButton).not.toBeNull();
@@ -530,7 +537,7 @@ describe('StudioContent', () => {
 
     expect(host.textContent).toContain('Release signal sweep');
     expect(host.textContent).not.toContain('Release readiness sweep');
-    expect(host.querySelector('[data-studio-automation-drawer]')).toBeNull();
+    expect(document.body.querySelector('[data-studio-automation-drawer]')).toBeNull();
 
     const updatedCard = Array.from(host.querySelectorAll('[data-studio-automation-card]')).find((card) => (
       card.textContent?.includes('Release signal sweep')
@@ -561,7 +568,7 @@ describe('StudioContent', () => {
 
     await setInputValue('input[aria-label="Automation title"]', 'Empty automation');
 
-    const composer = host.querySelector('[data-studio-automation-composer]');
+    const composer = document.body.querySelector('[data-studio-automation-composer]');
     expect(composer).not.toBeNull();
 
     const createAutomationButton = Array.from(composer!.querySelectorAll('button')).find((button) => (
@@ -573,7 +580,7 @@ describe('StudioContent', () => {
       createAutomationButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
-    expect(host.textContent).toContain('Add a prompt before creating an automation.');
+    expect(document.body.textContent).toContain('Add a prompt before creating an automation.');
     expect(host.textContent).not.toContain('Empty automationActive');
   });
 });
