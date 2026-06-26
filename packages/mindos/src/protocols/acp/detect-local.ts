@@ -85,6 +85,149 @@ function parseResolvedPaths(stdout: string): string[] {
   return resolved;
 }
 
+function dedupePathEntries(entries: string[]): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const entry of entries) {
+    const trimmed = entry.trim().replace(/^"|"$/g, '');
+    if (!trimmed) continue;
+    const key = process.platform === 'win32' ? trimmed.toLowerCase() : trimmed;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(trimmed);
+  }
+  return result;
+}
+
+function isExistingDirectory(dirPath: string): boolean {
+  try {
+    return fs.statSync(dirPath).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+function isExecutableFile(filePath: string): boolean {
+  try {
+    const stat = fs.statSync(filePath);
+    if (!stat.isFile()) return false;
+    if (process.platform === 'win32') return true;
+    fs.accessSync(filePath, fs.constants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function envPathValue(env: NodeJS.ProcessEnv = process.env): string {
+  return env.PATH ?? env.Path ?? env.path ?? '';
+}
+
+function splitEnvPath(value: string): string[] {
+  return value.split(path.delimiter).map((entry) => entry.trim()).filter(Boolean);
+}
+
+function pathFromHome(...segments: string[]): string | null {
+  try {
+    const home = os.homedir();
+    return home ? path.join(home, ...segments) : null;
+  } catch {
+    return null;
+  }
+}
+
+function collectChildBinDirs(parentDir: string | null): string[] {
+  if (!parentDir || !isExistingDirectory(parentDir)) return [];
+  try {
+    return fs.readdirSync(parentDir, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => path.join(parentDir, entry.name, 'bin'))
+      .filter(isExistingDirectory)
+      .sort()
+      .reverse();
+  } catch {
+    return [];
+  }
+}
+
+function supplementalPathEntries(env: NodeJS.ProcessEnv = process.env): string[] {
+  const entries = [
+    pathFromHome('.local', 'bin'),
+    pathFromHome('bin'),
+    pathFromHome('.npm-global', 'bin'),
+    pathFromHome('.cargo', 'bin'),
+    pathFromHome('.bun', 'bin'),
+    pathFromHome('.deno', 'bin'),
+    pathFromHome('.volta', 'bin'),
+    pathFromHome('.asdf', 'shims'),
+    pathFromHome('.nodenv', 'shims'),
+    pathFromHome('.pyenv', 'shims'),
+    pathFromHome('.local', 'share', 'pnpm'),
+    pathFromHome('Library', 'pnpm'),
+    pathFromHome('.codex', 'bin'),
+    pathFromHome('.claude', 'bin'),
+    pathFromHome('.claude', 'local'),
+    pathFromHome('.gemini', 'bin'),
+    pathFromHome('.qwen', 'bin'),
+    pathFromHome('.kimi-code', 'bin'),
+    ...collectChildBinDirs(pathFromHome('.nvm', 'versions', 'node')),
+  ].filter((entry): entry is string => Boolean(entry));
+
+  if (process.platform === 'win32') {
+    const userProfile = env.USERPROFILE ?? env.HOME;
+    const appData = env.APPDATA ?? (userProfile ? path.win32.join(userProfile, 'AppData', 'Roaming') : undefined);
+    const localAppData = env.LOCALAPPDATA ?? (userProfile ? path.win32.join(userProfile, 'AppData', 'Local') : undefined);
+    entries.push(
+      ...(appData ? [path.win32.join(appData, 'npm')] : []),
+      ...(localAppData ? [path.win32.join(localAppData, 'pnpm')] : []),
+      ...(userProfile ? [
+        path.win32.join(userProfile, 'scoop', 'shims'),
+        path.win32.join(userProfile, '.cargo', 'bin'),
+        path.win32.join(userProfile, '.bun', 'bin'),
+        path.win32.join(userProfile, '.deno', 'bin'),
+        path.win32.join(userProfile, '.volta', 'bin'),
+      ] : []),
+    );
+  } else {
+    entries.push('/opt/homebrew/bin', '/usr/local/bin', '/usr/bin', '/bin', '/usr/sbin', '/sbin');
+  }
+
+  return dedupePathEntries(entries).filter(isExistingDirectory);
+}
+
+function commandSearchPaths(env: NodeJS.ProcessEnv = process.env): string[] {
+  return dedupePathEntries([
+    ...splitEnvPath(envPathValue(env)),
+    ...supplementalPathEntries(env),
+  ]);
+}
+
+function commandFileNames(command: string, env: NodeJS.ProcessEnv = process.env): string[] {
+  if (process.platform !== 'win32') return [command];
+  if (path.win32.extname(command)) return [command];
+  const extensions = (env.PATHEXT ?? '.COM;.EXE;.BAT;.CMD')
+    .split(';')
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+  return dedupePathEntries([command, ...extensions.map((extension) => `${command}${extension}`)]);
+}
+
+function lookupCommandPathFromSearchPaths(command: string, env: NodeJS.ProcessEnv = process.env): string | null {
+  return lookupCommandPathCandidatesFromSearchPaths(command, env)[0] ?? null;
+}
+
+function lookupCommandPathCandidatesFromSearchPaths(command: string, env: NodeJS.ProcessEnv = process.env): string[] {
+  const candidates: string[] = [];
+  for (const dir of commandSearchPaths(env)) {
+    for (const fileName of commandFileNames(command, env)) {
+      const candidate = path.join(dir, fileName);
+      if (!isExecutableFile(candidate)) continue;
+      if (!candidates.includes(candidate)) candidates.push(candidate);
+    }
+  }
+  return candidates;
+}
+
 function shellEscape(command: string): string {
   return `'${command.replace(/'/g, `'\\''`)}'`;
 }
@@ -172,7 +315,9 @@ export async function resolveCommandPath(command: string | undefined): Promise<s
   if (direct) return direct;
   const trimmed = command.trim();
   if (!trimmed || isPathLikeCommand(trimmed)) return null;
-  return await lookupCommandPathCurrentEnv(trimmed) ?? await lookupCommandPathLoginShell(trimmed);
+  return await lookupCommandPathCurrentEnv(trimmed)
+    ?? await lookupCommandPathLoginShell(trimmed)
+    ?? lookupCommandPathFromSearchPaths(trimmed);
 }
 
 export async function resolveCommandPathCandidates(command: string | undefined): Promise<string[]> {
@@ -186,6 +331,7 @@ export async function resolveCommandPathCandidates(command: string | undefined):
   for (const candidate of [
     ...await lookupCommandPathCandidatesCurrentEnv(trimmed),
     ...await lookupCommandPathCandidatesLoginShell(trimmed),
+    ...lookupCommandPathCandidatesFromSearchPaths(trimmed),
   ]) {
     if (!candidates.includes(candidate)) candidates.push(candidate);
   }
@@ -198,7 +344,9 @@ export function resolveCommandPathSync(command: string | undefined): string | nu
   if (direct) return direct;
   const trimmed = command.trim();
   if (!trimmed || isPathLikeCommand(trimmed)) return null;
-  return lookupCommandPathCurrentEnvSync(trimmed) ?? lookupCommandPathLoginShellSync(trimmed);
+  return lookupCommandPathCurrentEnvSync(trimmed)
+    ?? lookupCommandPathLoginShellSync(trimmed)
+    ?? lookupCommandPathFromSearchPaths(trimmed);
 }
 
 async function lookupCommandPaths(commands: string[]): Promise<Map<string, string | null>> {
