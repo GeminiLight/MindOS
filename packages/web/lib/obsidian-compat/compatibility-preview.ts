@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import {
   buildObsidianCapabilityCoverage,
+  summarizeObsidianCapabilitySurfaces,
   type ObsidianCapabilityCoverage,
   type ObsidianCapabilitySupport,
   type ObsidianCapabilitySurface,
@@ -64,6 +65,30 @@ export interface ObsidianWorkflowOutcome {
   nextStep?: string;
 }
 
+export type ObsidianSurfaceCatalogStatus =
+  | 'ready'
+  | 'limited'
+  | 'preview-only'
+  | 'catalog-only'
+  | 'request-only'
+  | 'native-gated'
+  | 'blocked';
+
+export interface ObsidianSurfaceCatalogEntry {
+  surface: ObsidianCapabilitySurface;
+  label: string;
+  status: ObsidianSurfaceCatalogStatus;
+  source: 'static-analysis';
+  apiCount: number;
+  apis: string[];
+  hosts: string[];
+  routes: string[];
+  supportSummary: Record<ObsidianCapabilitySupport, number>;
+  summary: string;
+  limitations: string[];
+  nextStep: string;
+}
+
 export type ObsidianRuntimeCapabilityLedgerPhase =
   | 'predicted'
   | 'registered'
@@ -88,6 +113,7 @@ export interface ObsidianCompatibilityPreview {
   blockedReasons: string[];
   warnings: string[];
   settingsMappings: ObsidianCompatibilityPreviewSettingsMapping[];
+  surfaceCatalog: ObsidianSurfaceCatalogEntry[];
   workflowOutcomes: ObsidianWorkflowOutcome[];
   runtimeCapabilityLedger: ObsidianRuntimeCapabilityLedgerEntry[];
   nextSteps: string[];
@@ -110,6 +136,7 @@ export function buildObsidianCompatibilityPreview(
   const packagePath = buildPackagePath(plugin, options);
   const settingsMappings = buildSettingsMappings(plugin);
   const blockedReasons = buildBlockedReasons(plugin, support);
+  const surfaceCatalog = buildSurfaceCatalog(plugin, coverage);
   const workflowOutcomes = buildWorkflowOutcomes(plugin, support, coverage, settingsMappings);
   const runtimeCapabilityLedger = buildPredictedRuntimeCapabilityLedger(plugin, coverage);
   const warnings = unique([
@@ -128,6 +155,7 @@ export function buildObsidianCompatibilityPreview(
     blockedReasons,
     warnings,
     settingsMappings,
+    surfaceCatalog,
     workflowOutcomes,
     runtimeCapabilityLedger,
     nextSteps: buildNextSteps(plugin, support, coverage, packagePath, settingsMappings, blockedReasons),
@@ -367,6 +395,193 @@ function buildBlockedReasons(plugin: ScannedObsidianPlugin, support: ObsidianImp
       : []),
   ];
   return unique(reasons);
+}
+
+function buildSurfaceCatalog(
+  plugin: ScannedObsidianPlugin,
+  coverage: ObsidianCapabilityCoverage[],
+): ObsidianSurfaceCatalogEntry[] {
+  const entries = summarizeObsidianCapabilitySurfaces(coverage).map((summary) => {
+    const status = surfaceCatalogStatus(summary.surface, summary.supportSummary);
+    return {
+      surface: summary.surface,
+      label: surfaceCatalogLabel(summary.surface),
+      status,
+      source: 'static-analysis' as const,
+      apiCount: summary.apiCount,
+      apis: summary.apis,
+      hosts: summary.hosts,
+      routes: summary.routes,
+      supportSummary: summary.supportSummary,
+      summary: surfaceCatalogSummary(summary.surface, status),
+      limitations: surfaceCatalogLimitations(summary.surface, status, summary.supportSummary),
+      nextStep: surfaceCatalogNextStep(summary.surface, status),
+    };
+  });
+
+  if (plugin.compatibility.unsupportedModules.length > 0) {
+    const unsupportedEntry = entries.find((entry) => entry.surface === 'unsupported');
+    const moduleApis = plugin.compatibility.unsupportedModules.map((moduleName) => `module:${moduleName}`);
+    if (unsupportedEntry) {
+      unsupportedEntry.apis = unique([...unsupportedEntry.apis, ...moduleApis]).sort((a, b) => a.localeCompare(b, 'en'));
+      unsupportedEntry.hosts = unique([...unsupportedEntry.hosts, 'Unsupported runtime module']).sort((a, b) => a.localeCompare(b, 'en'));
+      unsupportedEntry.apiCount = unsupportedEntry.apis.length;
+      unsupportedEntry.supportSummary.unsupported += moduleApis.length;
+      unsupportedEntry.limitations = unique([
+        ...unsupportedEntry.limitations,
+        `Unsupported runtime modules: ${plugin.compatibility.unsupportedModules.join(', ')}.`,
+      ]);
+    } else {
+      entries.push({
+        surface: 'unsupported',
+        label: surfaceCatalogLabel('unsupported'),
+        status: 'blocked',
+        source: 'static-analysis',
+        apiCount: moduleApis.length,
+        apis: moduleApis,
+        hosts: ['Unsupported runtime module'],
+        routes: [],
+        supportSummary: {
+          full: 0,
+          limited: 0,
+          'snapshot-only': 0,
+          'catalog-only': 0,
+          'request-only': 0,
+          unsupported: moduleApis.length,
+        },
+        summary: surfaceCatalogSummary('unsupported', 'blocked'),
+        limitations: [`Unsupported runtime modules: ${plugin.compatibility.unsupportedModules.join(', ')}.`],
+        nextStep: surfaceCatalogNextStep('unsupported', 'blocked'),
+      });
+    }
+  }
+
+  return entries;
+}
+
+function surfaceCatalogStatus(
+  surface: ObsidianCapabilitySurface,
+  supportSummary: Record<ObsidianCapabilitySupport, number>,
+): ObsidianSurfaceCatalogStatus {
+  if (surface === 'unsupported' || supportSummary.unsupported > 0) return 'blocked';
+  if (surface === 'editor') return 'native-gated';
+  if (supportSummary['snapshot-only'] > 0) return 'preview-only';
+  if (
+    supportSummary['catalog-only'] > 0
+    && supportSummary.full === 0
+    && supportSummary.limited === 0
+    && supportSummary['request-only'] === 0
+  ) {
+    return 'catalog-only';
+  }
+  if (
+    supportSummary['request-only'] > 0
+    && supportSummary.full === 0
+    && supportSummary.limited === 0
+    && supportSummary['catalog-only'] === 0
+  ) {
+    return 'request-only';
+  }
+  if (supportSummary.limited > 0 || supportSummary['catalog-only'] > 0 || supportSummary['request-only'] > 0) {
+    return 'limited';
+  }
+  return 'ready';
+}
+
+function surfaceCatalogLabel(surface: ObsidianCapabilitySurface): string {
+  return {
+    commands: 'Commands',
+    settings: 'Settings',
+    entries: 'Entries',
+    views: 'Views',
+    document: 'Document',
+    styles: 'Styles',
+    editor: 'Editor',
+    secret: 'Secrets',
+    vault: 'Vault',
+    metadata: 'Metadata',
+    workspace: 'Workspace',
+    network: 'Network',
+    core: 'Core runtime',
+    unsupported: 'Blocked capability',
+  }[surface];
+}
+
+function surfaceCatalogSummary(
+  surface: ObsidianCapabilitySurface,
+  status: ObsidianSurfaceCatalogStatus,
+): string {
+  if (status === 'blocked') return 'Static analysis found APIs or runtime modules that the generic MindOS Obsidian host does not expose.';
+  return {
+    commands: 'Command registrations map to MindOS Command Center.',
+    settings: 'Settings APIs map to MindOS plugin settings host or settings catalog.',
+    entries: 'Ribbon, status, modal, menu, notice, and suggest entrypoints are captured as bounded plugin entries.',
+    views: 'View APIs are cataloged or exposed through MindOS compatibility view hosts.',
+    document: 'Markdown renderer and document helpers map to safe document snapshot paths.',
+    styles: 'Style APIs are scoped to compatibility hosts instead of mutating global Obsidian chrome.',
+    editor: 'Editor and CodeMirror APIs are cataloged, but live editor mounting stays behind native adapter gates.',
+    secret: 'Secret APIs map to the MindOS plugin secret vault.',
+    vault: 'Vault and file APIs are scoped to MindOS local content with private directories hidden.',
+    metadata: 'Metadata APIs read MindOS parsed markdown, frontmatter, tag, and link caches.',
+    workspace: 'Workspace requests and selected events are recorded or explicitly triggered by MindOS.',
+    network: 'Network APIs route through the restricted request host.',
+    core: 'Core lifecycle and utility APIs run inside the restricted compatibility host.',
+    unsupported: 'Static analysis found APIs or runtime modules that the generic MindOS Obsidian host does not expose.',
+  }[surface];
+}
+
+function surfaceCatalogLimitations(
+  surface: ObsidianCapabilitySurface,
+  status: ObsidianSurfaceCatalogStatus,
+  supportSummary: Record<ObsidianCapabilitySupport, number>,
+): string[] {
+  const limitations: string[] = [];
+  if (status === 'preview-only') {
+    limitations.push('Snapshot evidence is reviewable, but it is not equivalent to native Obsidian UI behavior.');
+  }
+  if (status === 'catalog-only') {
+    limitations.push('Cataloged registrations are visible for planning, but MindOS does not mount the live behavior yet.');
+  }
+  if (status === 'request-only') {
+    limitations.push('Requests are recorded for MindOS handling; full Obsidian workspace side effects are not replayed.');
+  }
+  if (status === 'native-gated') {
+    limitations.push('Live editor or CodeMirror integration requires a MindOS native adapter before it can be treated as runnable.');
+  }
+  if (status === 'limited') {
+    limitations.push('Limited APIs require capability review and focused workflow verification before relying on them.');
+  }
+  if (status === 'blocked') {
+    limitations.push('Blocked APIs or modules prevent generic runtime execution until replaced or explicitly supported.');
+  }
+  if (surface === 'vault') {
+    limitations.push('Vault access remains scoped to public MindOS content; private plugin and system directories stay hidden.');
+  }
+  if (surface === 'network') {
+    limitations.push('Outbound requests are limited by protocol, host, timeout, and size policy.');
+  }
+  if (surface === 'settings' && supportSummary['catalog-only'] > 0) {
+    limitations.push('Declarative or custom settings may be visible before every control becomes editable.');
+  }
+  if (surface === 'views') {
+    limitations.push('MindOS does not emulate the full Obsidian pane layout graph.');
+  }
+  return unique(limitations);
+}
+
+function surfaceCatalogNextStep(
+  surface: ObsidianCapabilitySurface,
+  status: ObsidianSurfaceCatalogStatus,
+): string {
+  if (status === 'ready') return 'Enable the plugin and verify registered behavior in the corresponding MindOS surface.';
+  if (status === 'preview-only') return 'Inspect the snapshot output and run workflow probes before treating it as observed.';
+  if (status === 'catalog-only') return 'Use the catalog for migration planning, then add a MindOS adapter before relying on live behavior.';
+  if (status === 'request-only') return 'Confirm the recorded request is handled by a MindOS-native surface or workflow.';
+  if (status === 'native-gated') return 'Route this behavior through a MindOS native adapter instead of raw community plugin mounting.';
+  if (status === 'blocked') return 'Do not import or enable until blocked capabilities are replaced or explicitly supported.';
+  if (surface === 'network') return 'Review the network capability gate and verify allowed outbound hosts during enable/load.';
+  if (surface === 'vault' || surface === 'metadata') return 'Review vault and metadata capability prompts before enabling write or index workflows.';
+  return 'Review capability prompts and run focused smoke or workflow probes after enable/load.';
 }
 
 function buildWorkflowOutcomes(

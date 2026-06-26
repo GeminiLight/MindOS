@@ -155,6 +155,13 @@ describe('GET /api/obsidian/compat-report', () => {
             ignoredItems: ['kanban-like'],
           }),
         ]),
+        surfaceCatalog: expect.arrayContaining([
+          expect.objectContaining({
+            surface: 'document',
+            status: 'limited',
+            apis: ['registerMarkdownCodeBlockProcessor'],
+          }),
+        ]),
         workflowOutcomes: expect.arrayContaining([
           expect.objectContaining({
             id: 'generic-document-contributions',

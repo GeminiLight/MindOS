@@ -165,6 +165,35 @@ describe('Obsidian compatibility preview', () => {
         appliedOnImport: false,
       }),
     ]));
+    expect(preview.surfaceCatalog).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        surface: 'commands',
+        label: 'Commands',
+        status: 'ready',
+        source: 'static-analysis',
+        apis: ['addCommand'],
+        hosts: ['Command Center'],
+        summary: 'Command registrations map to MindOS Command Center.',
+      }),
+      expect.objectContaining({
+        surface: 'document',
+        label: 'Document',
+        status: 'limited',
+        apis: expect.arrayContaining(['htmlToMarkdown', 'MarkdownView']),
+        limitations: expect.arrayContaining([
+          'Limited APIs require capability review and focused workflow verification before relying on them.',
+        ]),
+      }),
+      expect.objectContaining({
+        surface: 'network',
+        label: 'Network',
+        status: 'limited',
+        apis: ['requestUrl'],
+        limitations: expect.arrayContaining([
+          'Outbound requests are limited by protocol, host, timeout, and size policy.',
+        ]),
+      }),
+    ]));
     expect(preview.workflowOutcomes).toEqual(expect.arrayContaining([
       expect.objectContaining({
         id: 'linter-markdown-source-editor',
@@ -291,6 +320,23 @@ describe('Obsidian compatibility preview', () => {
     });
 
     expect(preview.supportKind).toBe('blocked');
+    expect(preview.surfaceCatalog).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        surface: 'editor',
+        label: 'Editor',
+        status: 'native-gated',
+        apis: ['registerEditorExtension'],
+      }),
+      expect.objectContaining({
+        surface: 'unsupported',
+        label: 'Blocked capability',
+        status: 'blocked',
+        apis: ['module:@codemirror/language', 'module:@codemirror/state', 'module:child_process'],
+        limitations: expect.arrayContaining([
+          'Unsupported runtime modules: @codemirror/language, @codemirror/state, child_process.',
+        ]),
+      }),
+    ]));
     expect(preview.workflowOutcomes).toEqual(expect.arrayContaining([
       expect.objectContaining({
         id: 'templater-runtime-gate',
@@ -404,6 +450,21 @@ describe('Obsidian compatibility preview', () => {
       expect.objectContaining({
         id: 'editor-native-adapter',
         status: 'native-replacement',
+      }),
+    ]));
+    expect(preview.surfaceCatalog).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        surface: 'commands',
+        status: 'ready',
+      }),
+      expect.objectContaining({
+        surface: 'settings',
+        status: 'ready',
+      }),
+      expect.objectContaining({
+        surface: 'editor',
+        status: 'native-gated',
+        nextStep: 'Route this behavior through a MindOS native adapter instead of raw community plugin mounting.',
       }),
     ]));
     expect(preview.nextSteps).toEqual(expect.arrayContaining([

@@ -124,6 +124,22 @@ describe('ObsidianImportSection', () => {
                     appliedOnImport: false,
                   },
                 ],
+                surfaceCatalog: [
+                  {
+                    surface: 'commands',
+                    label: 'Commands',
+                    status: 'ready',
+                    source: 'static-analysis',
+                    apiCount: 1,
+                    apis: ['addCommand'],
+                    hosts: ['Command Center'],
+                    routes: ['/api/obsidian-plugins'],
+                    supportSummary: { full: 1, limited: 0, 'snapshot-only': 0, 'catalog-only': 0, 'request-only': 0, unsupported: 0 },
+                    summary: 'Command registrations map to MindOS Command Center.',
+                    limitations: [],
+                    nextStep: 'Enable the plugin and verify registered behavior in the corresponding MindOS surface.',
+                  },
+                ],
                 workflowOutcomes: [
                   {
                     id: 'generic-plugin-commands',
@@ -246,6 +262,7 @@ describe('ObsidianImportSection', () => {
     expect(host.textContent).toContain('Copy manifest.json, main.js, styles.css, data.json, obsidian-import.json');
     expect(host.textContent).toContain('.obsidian-mobile/plugins/ready-plugin');
     expect(host.textContent).toContain('.mindos/plugins/ready-plugin');
+    expect(host.textContent).toContain('Surfaces: Commands ready');
     expect(host.textContent).toContain('Workflow: Run plugin commands available');
     expect(host.textContent).toContain('Ledger: 1 predicted');
     expect(host.textContent).toContain('Next: Import package into .mindos/plugins/ready-plugin.');

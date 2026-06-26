@@ -30,6 +30,7 @@ import type { ObsidianCapabilitySupport } from '@/lib/obsidian-compat/capability
 import type {
   ObsidianCompatibilityPreview,
   ObsidianRuntimeCapabilityLedgerPhase,
+  ObsidianSurfaceCatalogStatus,
   ObsidianWorkflowOutcomeStatus,
 } from '@/lib/obsidian-compat/compatibility-preview';
 import { notifyObsidianPluginPackagesChanged } from '@/lib/plugins/events';
@@ -216,6 +217,37 @@ function workflowStatusClass(status: ObsidianWorkflowOutcomeStatus): string {
   if (status === 'not-available') return 'text-error';
   if (status === 'native-replacement') return 'text-[var(--amber-text)]';
   return 'text-muted-foreground';
+}
+
+function surfaceCatalogStatusLabel(status: ObsidianSurfaceCatalogStatus): string {
+  return {
+    ready: 'ready',
+    limited: 'limited',
+    'preview-only': 'preview',
+    'catalog-only': 'catalog',
+    'request-only': 'request',
+    'native-gated': 'native',
+    blocked: 'blocked',
+  }[status];
+}
+
+function surfaceCatalogStatusClass(status: ObsidianSurfaceCatalogStatus): string {
+  if (status === 'ready') return 'text-success';
+  if (status === 'blocked') return 'text-error';
+  if (status === 'native-gated') return 'text-[var(--amber-text)]';
+  return 'text-muted-foreground';
+}
+
+function surfaceCatalogSummary(preview: ObsidianCompatibilityPreview): string | null {
+  const entries = (preview.surfaceCatalog ?? [])
+    .filter((entry) => entry.surface !== 'core')
+    .slice(0, 4);
+  if (entries.length === 0) return null;
+  const hiddenCount = (preview.surfaceCatalog ?? []).filter((entry) => entry.surface !== 'core').length - entries.length;
+  return [
+    ...entries.map((entry) => `${entry.label} ${surfaceCatalogStatusLabel(entry.status)}`),
+    hiddenCount > 0 ? `+${hiddenCount}` : '',
+  ].filter(Boolean).join(' / ');
 }
 
 function settingsMappingSummary(preview: ObsidianCompatibilityPreview): string | null {
@@ -535,6 +567,9 @@ export function ObsidianImportSection({
                     const isSelected = selected.has(plugin.id);
                     const coverage = compactCoverageSummary(plugin.coverageSummary);
                     const preview = plugin.compatibilityPreview;
+                    const surfaceEntries = (preview?.surfaceCatalog ?? []).filter((entry) => entry.surface !== 'core').slice(0, 4);
+                    const hiddenSurfaceCount = (preview?.surfaceCatalog ?? []).filter((entry) => entry.surface !== 'core').length - surfaceEntries.length;
+                    const surfaceSummary = preview ? surfaceCatalogSummary(preview) : null;
                     const mappingSummary = preview ? settingsMappingSummary(preview) : null;
                     const primaryWorkflow = preview?.workflowOutcomes[0];
                     return (
@@ -604,6 +639,19 @@ export function ObsidianImportSection({
                                 <span className="min-w-0 break-all font-mono text-foreground">{preview.packagePath.targetPath}</span>
                               </div>
                               <div className="flex flex-wrap gap-1.5">
+                                {surfaceSummary && (
+                                  <span className="rounded border border-border bg-background px-1.5 py-0.5">
+                                    Surfaces: {surfaceEntries.map((entry, index) => (
+                                      <span key={entry.surface}>
+                                        {index > 0 ? ' / ' : ''}
+                                        {entry.label} <span className={surfaceCatalogStatusClass(entry.status)}>{surfaceCatalogStatusLabel(entry.status)}</span>
+                                      </span>
+                                    ))}
+                                    {hiddenSurfaceCount > 0 && (
+                                      <span> / +{hiddenSurfaceCount}</span>
+                                    )}
+                                  </span>
+                                )}
                                 {mappingSummary && (
                                   <span className="rounded border border-border bg-background px-1.5 py-0.5">
                                     Settings: {mappingSummary}
