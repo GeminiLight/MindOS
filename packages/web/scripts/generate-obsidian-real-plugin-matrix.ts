@@ -21,6 +21,10 @@ import {
   type ObsidianRealPluginTarget,
 } from '@/lib/obsidian-compat/real-plugin-matrix';
 import {
+  buildObsidianRealPluginPolicyAudit,
+  renderObsidianRealPluginPolicyAuditMarkdown,
+} from '@/lib/obsidian-compat/real-plugin-policy-audit';
+import {
   QUICKADD_TEMPLATE_WORKFLOW_PROBE_FIXTURE,
   buildQuickAddWorkflowProbeDataJson,
 } from '@/lib/obsidian-compat/quickadd-workflow-fixture';
@@ -45,6 +49,8 @@ interface CliOptions {
   targetsPath: string;
   outJson: string;
   outMarkdown: string;
+  outPolicyAuditJson?: string;
+  outPolicyAuditMarkdown?: string;
   communityIndexPath?: string;
   communityStatsPath?: string;
   skipSmoke: boolean;
@@ -90,6 +96,12 @@ function parseArgs(argv: string[]): CliOptions {
     } else if (arg === '--out-md') {
       options.outMarkdown = resolveRequiredValue(argv, index);
       index += 1;
+    } else if (arg === '--out-policy-audit-json') {
+      options.outPolicyAuditJson = resolveRequiredValue(argv, index);
+      index += 1;
+    } else if (arg === '--out-policy-audit-md') {
+      options.outPolicyAuditMarkdown = resolveRequiredValue(argv, index);
+      index += 1;
     } else if (arg === '--community-index-file') {
       options.communityIndexPath = resolveRequiredValue(argv, index);
       index += 1;
@@ -119,6 +131,8 @@ function parseArgs(argv: string[]): CliOptions {
     targetsPath: path.resolve(repoRoot, options.targetsPath),
     outJson: path.resolve(repoRoot, options.outJson),
     outMarkdown: path.resolve(repoRoot, options.outMarkdown),
+    ...(options.outPolicyAuditJson ? { outPolicyAuditJson: path.resolve(repoRoot, options.outPolicyAuditJson) } : {}),
+    ...(options.outPolicyAuditMarkdown ? { outPolicyAuditMarkdown: path.resolve(repoRoot, options.outPolicyAuditMarkdown) } : {}),
     ...(options.communityIndexPath ? { communityIndexPath: path.resolve(repoRoot, options.communityIndexPath) } : {}),
     ...(options.communityStatsPath ? { communityStatsPath: path.resolve(repoRoot, options.communityStatsPath) } : {}),
   };
@@ -147,6 +161,10 @@ Options:
   --targets <path>      Target JSON path. Default: scripts/obsidian-real-plugin-p0-targets.json
   --out-json <path>     Output matrix JSON path.
   --out-md <path>       Output Markdown report path.
+  --out-policy-audit-json <path>
+                        Optional policy audit JSON output path.
+  --out-policy-audit-md <path>
+                        Optional policy audit Markdown output path.
   --community-index-file <path>
                         Read community-plugins.json from a local official snapshot.
   --community-stats-file <path>
@@ -253,6 +271,17 @@ async function main(): Promise<void> {
 
   console.log(`[obsidian-matrix] Wrote ${path.relative(repoRoot, options.outJson)}`);
   console.log(`[obsidian-matrix] Wrote ${path.relative(repoRoot, options.outMarkdown)}`);
+  if (options.outPolicyAuditJson || options.outPolicyAuditMarkdown) {
+    const audit = buildObsidianRealPluginPolicyAudit(matrix);
+    if (options.outPolicyAuditJson) {
+      writeText(options.outPolicyAuditJson, `${JSON.stringify(audit, null, 2)}\n`);
+      console.log(`[obsidian-matrix] Wrote ${path.relative(repoRoot, options.outPolicyAuditJson)}`);
+    }
+    if (options.outPolicyAuditMarkdown) {
+      writeText(options.outPolicyAuditMarkdown, renderObsidianRealPluginPolicyAuditMarkdown(audit));
+      console.log(`[obsidian-matrix] Wrote ${path.relative(repoRoot, options.outPolicyAuditMarkdown)}`);
+    }
+  }
   if (failures.length > 0) {
     console.warn(`[obsidian-matrix] Completed with ${failures.length} recorded failure(s). See the report for details.`);
   }
