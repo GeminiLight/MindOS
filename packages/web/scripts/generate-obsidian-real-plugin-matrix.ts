@@ -20,6 +20,7 @@ import {
   type ObsidianRealPluginSmokeResult,
   type ObsidianRealPluginTarget,
 } from '@/lib/obsidian-compat/real-plugin-matrix';
+import { buildQuickAddWorkflowProbeDataJson } from '@/lib/obsidian-compat/quickadd-workflow-fixture';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const webRoot = path.resolve(__dirname, '..');
@@ -318,6 +319,9 @@ async function runPluginSmoke(
   try {
     const { PluginManager } = await import('@/lib/obsidian-compat/plugin-manager');
     writePluginPackage(mindRoot, pluginId, files);
+    if (runWorkflowProbes) {
+      writeWorkflowProbeFixture(mindRoot, pluginId, files);
+    }
     const manager = new PluginManager(mindRoot);
     await manager.discover();
     const discovered = manager.list().find((plugin) => plugin.id === pluginId);
@@ -396,6 +400,22 @@ function writePluginPackage(
   }
 }
 
+function writeWorkflowProbeFixture(
+  mindRoot: string,
+  pluginId: string,
+  files: { manifestJson: string },
+): void {
+  if (pluginId !== 'quickadd') return;
+  const pluginDir = path.join(mindRoot, '.mindos', 'plugins', pluginId);
+  const manifest = parseJsonObject(files.manifestJson);
+  const version = typeof manifest?.version === 'string' ? manifest.version : undefined;
+  fs.writeFileSync(
+    path.join(pluginDir, 'data.json'),
+    `${JSON.stringify(buildQuickAddWorkflowProbeDataJson(version), null, 2)}\n`,
+    'utf-8',
+  );
+}
+
 function runtimeSummary(plugin: RuntimeSummarySource): NonNullable<ObsidianRealPluginSmokeResult['runtime']> {
   const runtime = plugin.runtime;
   return {
@@ -429,6 +449,17 @@ function statsFor(stats: CommunityStatsRecord | undefined): { downloads?: number
 
 function readJson<T>(filePath: string): T {
   return JSON.parse(fs.readFileSync(filePath, 'utf-8')) as T;
+}
+
+function parseJsonObject(raw: string): Record<string, unknown> | null {
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : null;
+  } catch {
+    return null;
+  }
 }
 
 function writeText(filePath: string, content: string): void {

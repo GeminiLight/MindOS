@@ -8,6 +8,10 @@ import {
   confirmedEnableRequest,
   postRequest,
 } from './obsidian-plugin-api-test-utils';
+import {
+  QUICKADD_WORKFLOW_PROBE_FIXTURE,
+  buildQuickAddWorkflowProbeDataJson,
+} from '@/lib/obsidian-compat/quickadd-workflow-fixture';
 
 let mindRoot: string;
 
@@ -204,17 +208,28 @@ describe('/api/obsidian-plugins command actions', () => {
       `
         const { Plugin } = require('obsidian');
         module.exports = class QuickAddPlugin extends Plugin {
-          onload() {
-            this.addCommand({
-              id: 'capture',
-              name: 'QuickAdd Capture',
-              callback: async () => {
-                await this.app.vault.create('Inbox/api-probe.md', 'captured');
-              }
-            });
+          async onload() {
+            const settings = await this.loadData();
+            for (const choice of settings.choices || []) {
+              if (!choice.command) continue;
+              this.addCommand({
+                id: 'choice:' + choice.id,
+                name: choice.name,
+                callback: async () => {
+                  const existing = this.app.vault.getFileByPath(choice.captureTo);
+                  const file = existing || await this.app.vault.create(choice.captureTo, '');
+                  await this.app.vault.modify(file, choice.format.format);
+                }
+              });
+            }
           }
         };
       `,
+    );
+    fs.writeFileSync(
+      path.join(mindRoot, '.plugins', 'quickadd', 'data.json'),
+      JSON.stringify(buildQuickAddWorkflowProbeDataJson('2.13.1'), null, 2),
+      'utf-8',
     );
 
     const { POST } = await importLifecycleRoute();
@@ -243,7 +258,7 @@ describe('/api/obsidian-plugins command actions', () => {
         }),
       ],
     });
-    expect(fs.readFileSync(path.join(mindRoot, 'Inbox', 'api-probe.md'), 'utf-8')).toBe('captured');
+    expect(fs.readFileSync(path.join(mindRoot, QUICKADD_WORKFLOW_PROBE_FIXTURE.targetPath), 'utf-8')).toBe(QUICKADD_WORKFLOW_PROBE_FIXTURE.captureContent);
   });
 
   it('rejects unknown workflow probe ids as invalid requests', async () => {

@@ -7,6 +7,10 @@ import {
   ObsidianWorkflowProbeStore,
   buildObsidianWorkflowProbeAudits,
 } from '@/lib/obsidian-compat/workflow-probes';
+import {
+  QUICKADD_WORKFLOW_PROBE_FIXTURE,
+  buildQuickAddWorkflowProbeDataJson,
+} from '@/lib/obsidian-compat/quickadd-workflow-fixture';
 
 let mindRoot: string;
 
@@ -21,6 +25,12 @@ const writePlugin = (pluginId: string, mainJs: string) => {
   fs.writeFileSync(path.join(pluginDir, 'main.js'), mainJs, 'utf-8');
 };
 
+const writePluginData = (pluginId: string, data: unknown) => {
+  const pluginDir = path.join(mindRoot, '.mindos', 'plugins', pluginId);
+  fs.mkdirSync(pluginDir, { recursive: true });
+  fs.writeFileSync(path.join(pluginDir, 'data.json'), JSON.stringify(data, null, 2), 'utf-8');
+};
+
 describe('Obsidian workflow probes', () => {
   beforeEach(() => {
     mindRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'mindos-obsidian-workflow-probes-'));
@@ -30,22 +40,34 @@ describe('Obsidian workflow probes', () => {
     fs.rmSync(mindRoot, { recursive: true, force: true });
   });
 
-  it('passes the QuickAdd capture/macro probe only after command execution creates an observable vault result', async () => {
+  it('passes the QuickAdd capture/macro probe only after a data.json choice command writes the fixture note', async () => {
     writePlugin('quickadd', `
       const { Notice, Plugin } = require('obsidian');
       module.exports = class QuickAddPlugin extends Plugin {
-        onload() {
+        async onload() {
+          const settings = await this.loadData();
           this.addCommand({
-            id: 'capture',
-            name: 'QuickAdd Capture',
-            callback: async () => {
-              await this.app.vault.create('Inbox/quickadd-probe.md', '# Captured from QuickAdd');
-              new Notice('QuickAdd capture complete');
-            }
+            id: 'runQuickAdd',
+            name: 'Run',
+            callback: () => new Notice('QuickAdd picker only')
           });
+          for (const choice of settings.choices || []) {
+            if (!choice.command) continue;
+            this.addCommand({
+              id: 'choice:' + choice.id,
+              name: choice.name,
+              callback: async () => {
+                const existing = this.app.vault.getFileByPath(choice.captureTo);
+                const file = existing || await this.app.vault.create(choice.captureTo, '');
+                await this.app.vault.modify(file, choice.format.format);
+                new Notice('QuickAdd capture complete');
+              }
+            });
+          }
         }
       };
     `);
+    writePluginData('quickadd', buildQuickAddWorkflowProbeDataJson('2.13.1'));
 
     const manager = new PluginManager(mindRoot);
     await manager.discover();
@@ -59,12 +81,20 @@ describe('Obsidian workflow probes', () => {
       status: 'passed',
       source: 'workflow-probe',
     });
+    expect(result.evidence).toEqual(expect.arrayContaining([
+      expect.stringContaining('Executed QuickAdd choice command "MindOS Capture"'),
+      expect.stringContaining(QUICKADD_WORKFLOW_PROBE_FIXTURE.targetPath),
+    ]));
     expect(result.assertions).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: 'execute-command', passed: true }),
+      expect.objectContaining({ id: 'quickadd-choice-command', passed: true }),
       expect.objectContaining({ id: 'observable-result', passed: true }),
+      expect.objectContaining({ id: 'fixture-note-written', passed: true }),
+      expect.objectContaining({ id: 'fixture-note-content', passed: true }),
+      expect.objectContaining({ id: 'vault-write-called-ledger', passed: true }),
       expect.objectContaining({ id: 'runtime-called-ledger', passed: true }),
     ]));
-    expect(fs.readFileSync(path.join(mindRoot, 'Inbox', 'quickadd-probe.md'), 'utf-8')).toBe('# Captured from QuickAdd');
+    expect(fs.readFileSync(path.join(mindRoot, QUICKADD_WORKFLOW_PROBE_FIXTURE.targetPath), 'utf-8')).toBe(QUICKADD_WORKFLOW_PROBE_FIXTURE.captureContent);
 
     const plugin = manager.list().find((item) => item.id === 'quickadd');
     expect(plugin?.workflowProbeHistory).toMatchObject({
@@ -79,6 +109,61 @@ describe('Obsidian workflow probes', () => {
         status: 'observed',
         source: 'workflow-probe',
         lastProbeStatus: 'passed',
+        lastProbedAt: result.completedAt,
+      }),
+    ]);
+  });
+
+  it('does not pass the QuickAdd capture/macro probe from the generic Run modal alone', async () => {
+    writePlugin('quickadd', `
+      const { Modal, Plugin } = require('obsidian');
+      class QuickAddPicker extends Modal {
+        onOpen() {
+          this.setTitle('Run QuickAdd');
+          this.contentEl.createDiv({ text: 'No configured choices' });
+        }
+      }
+      module.exports = class QuickAddPlugin extends Plugin {
+        onload() {
+          this.addCommand({
+            id: 'runQuickAdd',
+            name: 'Run',
+            callback: () => new QuickAddPicker(this.app).open()
+          });
+        }
+      };
+    `);
+
+    const manager = new PluginManager(mindRoot);
+    await manager.discover();
+    await manager.enable('quickadd', { confirmCapabilityGate: true });
+
+    const result = await manager.runWorkflowProbe('quickadd', 'quickadd-capture-macro');
+
+    expect(result).toMatchObject({
+      pluginId: 'quickadd',
+      id: 'quickadd-capture-macro',
+      status: 'skipped',
+      source: 'workflow-probe',
+      failureReason: expect.stringContaining('data.json-backed choice command'),
+    });
+    expect(result.assertions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'probe-available', passed: false }),
+    ]));
+
+    const plugin = manager.list().find((item) => item.id === 'quickadd');
+    expect(plugin?.workflowProbeHistory).toMatchObject({
+      total: 1,
+      latestById: {
+        'quickadd-capture-macro': expect.objectContaining({ status: 'skipped' }),
+      },
+    });
+    expect(plugin?.workflowAudits).toEqual([
+      expect.objectContaining({
+        id: 'quickadd-capture-macro',
+        status: 'not-observed',
+        source: 'workflow-probe',
+        lastProbeStatus: 'skipped',
         lastProbedAt: result.completedAt,
       }),
     ]);
@@ -388,19 +473,20 @@ describe('Obsidian workflow probes', () => {
     ]);
   });
 
-  it('fails a probed workflow when command execution has no observable side effect', async () => {
+  it('fails the QuickAdd probe when the configured choice command does not write the fixture note', async () => {
     writePlugin('quickadd', `
       const { Plugin } = require('obsidian');
       module.exports = class QuickAddPlugin extends Plugin {
         onload() {
           this.addCommand({
-            id: 'capture',
-            name: 'QuickAdd Capture',
+            id: 'choice:${QUICKADD_WORKFLOW_PROBE_FIXTURE.choiceId}',
+            name: '${QUICKADD_WORKFLOW_PROBE_FIXTURE.choiceName}',
             callback: () => {}
           });
         }
       };
     `);
+    writePluginData('quickadd', buildQuickAddWorkflowProbeDataJson('2.13.1'));
 
     const manager = new PluginManager(mindRoot);
     await manager.discover();
@@ -411,11 +497,13 @@ describe('Obsidian workflow probes', () => {
     expect(result).toMatchObject({
       id: 'quickadd-capture-macro',
       status: 'failed',
-      failureReason: expect.stringContaining('no observable workflow result'),
+      failureReason: expect.stringContaining('did not change any public vault file'),
     });
     expect(result.assertions).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: 'execute-command', passed: true }),
       expect.objectContaining({ id: 'observable-result', passed: false }),
+      expect.objectContaining({ id: 'fixture-note-written', passed: false }),
+      expect.objectContaining({ id: 'fixture-note-content', passed: false }),
     ]));
     expect(manager.list().find((item) => item.id === 'quickadd')?.workflowAudits).toEqual([
       expect.objectContaining({
@@ -423,7 +511,7 @@ describe('Obsidian workflow probes', () => {
         status: 'partial',
         source: 'workflow-probe',
         lastProbeStatus: 'failed',
-        probeFailureReason: expect.stringContaining('no observable workflow result'),
+        probeFailureReason: expect.stringContaining('did not change any public vault file'),
       }),
     ]);
   });
