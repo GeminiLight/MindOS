@@ -64,6 +64,7 @@ const COPY = {
     required: 'Add a prompt before creating an automation.',
     existingTitle: 'Existing automations',
     existingHint: 'Created automations stay editable; pause them when they should stop appearing as active work.',
+    total: 'Total',
     active: 'Active',
     paused: 'Paused',
     pause: 'Pause',
@@ -117,6 +118,7 @@ const COPY = {
     required: '创建自动化前需要先写提示词。',
     existingTitle: '已有自动化',
     existingHint: '已创建的自动化可以随时编辑；暂时不用时可以暂停。',
+    total: '总数',
     active: '启用',
     paused: '暂停',
     pause: '暂停',
@@ -234,33 +236,61 @@ function ControlSelect<T extends string>({
   renderLabel: (value: T) => string;
 }) {
   return (
-    <label className={`group flex h-10 min-w-0 items-center gap-2 rounded-lg border border-border/60 bg-background/60 px-3 text-xs text-muted-foreground transition-colors focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/20 ${
-      disabled ? 'opacity-55' : 'hover:border-[var(--amber)]/45 hover:bg-background'
-    }`}>
-      <span className="shrink-0 text-[var(--amber)]" aria-hidden="true">{icon}</span>
-      <span className="sr-only">{label}</span>
-      <select
-        aria-label={label}
-        disabled={disabled}
-        value={value}
-        onChange={(event) => onChange(event.target.value as T)}
-        className="min-w-0 flex-1 appearance-none bg-transparent text-xs font-medium text-foreground outline-none disabled:cursor-not-allowed"
-      >
-        {values.map((item) => (
-          <option key={item} value={item}>{renderLabel(item)}</option>
-        ))}
-      </select>
-      <ChevronDown size={13} className="shrink-0 text-muted-foreground/60" aria-hidden="true" />
+    <label className={`grid min-w-0 gap-1.5 ${disabled ? 'opacity-55' : ''}`}>
+      <span className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+        <span className="shrink-0 text-[var(--amber)]" aria-hidden="true">{icon}</span>
+        {label}
+      </span>
+      <span className={`group flex h-10 min-w-0 items-center gap-2 rounded-lg border border-border/60 bg-background/65 px-3 text-xs transition-colors focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/20 ${
+        disabled ? '' : 'hover:border-[var(--amber)]/40 hover:bg-background'
+      }`}>
+        <select
+          aria-label={label}
+          disabled={disabled}
+          value={value}
+          onChange={(event) => onChange(event.target.value as T)}
+          className="min-w-0 flex-1 appearance-none bg-transparent text-xs font-medium text-foreground outline-none disabled:cursor-not-allowed"
+        >
+          {values.map((item) => (
+            <option key={item} value={item}>{renderLabel(item)}</option>
+          ))}
+        </select>
+        <ChevronDown size={13} className="shrink-0 text-muted-foreground/60" aria-hidden="true" />
+      </span>
     </label>
   );
 }
 
 function TextPill({ icon, label }: { icon: ReactNode; label: string }) {
   return (
-    <span className="inline-flex min-w-0 items-center gap-1.5 rounded-md border border-border/55 bg-background/55 px-2 py-1 text-[11px] font-medium text-muted-foreground">
+    <span className="inline-flex min-w-0 items-center gap-1.5 rounded-md bg-muted/35 px-2 py-1 text-[11px] font-medium text-muted-foreground">
       <span className="shrink-0 text-[var(--amber)]" aria-hidden="true">{icon}</span>
       <span className="min-w-0 truncate">{label}</span>
     </span>
+  );
+}
+
+function AutomationMetric({
+  icon,
+  label,
+  value,
+}: {
+  icon: ReactNode;
+  label: string;
+  value: string | number;
+}) {
+  return (
+    <div className="flex min-w-0 items-center gap-2 border-t border-border/60 p-3 first:border-t-0 sm:border-l sm:border-t-0 sm:first:border-l-0">
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[var(--amber-subtle)] text-[var(--amber)]">
+        {icon}
+      </span>
+      <span className="min-w-0">
+        <span className="block text-[11px] text-muted-foreground">{label}</span>
+        <span className="block truncate text-sm font-semibold text-foreground [font-variant-numeric:tabular-nums]">
+          {value}
+        </span>
+      </span>
+    </div>
   );
 }
 
@@ -280,7 +310,7 @@ function TemplateButton({
       type="button"
       title={prompt}
       onClick={onUse}
-      className="inline-flex max-w-full items-center gap-1.5 rounded-md border border-border/60 bg-card/55 px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-[var(--amber)]/45 hover:bg-[var(--amber-subtle)] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="inline-flex max-w-full items-center gap-1.5 rounded-md bg-muted/35 px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-[var(--amber-subtle)] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       <WandSparkles size={12} className="shrink-0 text-[var(--amber)]" aria-hidden="true" />
       <span className="truncate">{title}</span>
@@ -307,6 +337,7 @@ function AutomationCard({
   const title = automationTitle(automation, locale);
   const prompt = automationPrompt(automation, locale);
   const statusLabel = automation.status === 'active' ? copy.active : copy.paused;
+  const isActive = automation.status === 'active';
   const statusClass = automation.status === 'active'
     ? 'border-success/30 bg-success/10 text-success'
     : 'border-border/60 bg-muted/45 text-muted-foreground';
@@ -315,39 +346,52 @@ function AutomationCard({
     : scopeLabel(automation.scope, copy);
 
   return (
-    <article data-studio-automation-card className="rounded-xl border border-border/60 bg-card/45 p-4 transition-colors hover:border-[var(--amber)]/35 hover:bg-card/65">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <h3 className="min-w-0 text-sm font-semibold text-foreground">{title}</h3>
-            <span className={`inline-flex h-6 items-center rounded-md border px-2 text-[11px] font-medium ${statusClass}`}>
-              {statusLabel}
-            </span>
+    <article data-studio-automation-card className="group relative border-t border-border/55 px-4 py-4 transition-colors first:border-t-0 hover:bg-muted/20">
+      <span className={`pointer-events-none absolute bottom-3 left-0 top-3 w-px rounded-r-full transition-colors group-hover:bg-[var(--amber)] ${
+        isActive ? 'bg-[var(--amber)]' : 'bg-transparent'
+      }`} />
+      <div className="grid gap-3 2xl:grid-cols-[minmax(0,1fr)_minmax(176px,auto)] 2xl:items-start">
+        <div className="flex min-w-0 gap-3">
+          <span className={`mt-0.5 hidden h-9 w-9 shrink-0 items-center justify-center rounded-md transition-colors sm:inline-flex ${
+            isActive
+              ? 'bg-[var(--amber-subtle)] text-[var(--amber)] group-hover:bg-[var(--amber-dim)]'
+              : 'bg-muted/45 text-muted-foreground'
+          }`}>
+            {isActive ? <Play size={15} aria-hidden="true" /> : <Pause size={15} aria-hidden="true" />}
+          </span>
+          <div className="min-w-0">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <h3 className="min-w-0 text-sm font-semibold text-foreground">{title}</h3>
+              <span className={`inline-flex h-6 shrink-0 items-center rounded-md border px-2 text-[11px] font-medium ${statusClass}`}>
+                {statusLabel}
+              </span>
+            </div>
+            <p className="mt-2 line-clamp-2 max-w-3xl text-xs leading-relaxed text-muted-foreground">{prompt}</p>
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              <TextPill icon={<FolderGit2 size={12} />} label={scopeText} />
+              <TextPill icon={<CalendarClock size={12} />} label={scheduleLabel(automation.schedule, copy)} />
+              <TextPill icon={<Bot size={12} />} label={`${modelLabel(automation.model, copy)} / ${effortLabel(automation.effort, copy)}`} />
+            </div>
           </div>
-          <p className="mt-2 line-clamp-2 max-w-3xl text-xs leading-relaxed text-muted-foreground">{prompt}</p>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <Button type="button" variant="outline" size="sm" onClick={() => onEdit(automation)}>
-            <Edit3 size={13} aria-hidden="true" />
-            {copy.edit}
-          </Button>
-          <Button type="button" variant="ghost" size="sm" onClick={() => onToggle(automation)}>
-            {automation.status === 'active' ? <Pause size={13} aria-hidden="true" /> : <Play size={13} aria-hidden="true" />}
-            {automation.status === 'active' ? copy.pause : copy.resume}
-          </Button>
+
+        <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between 2xl:items-end 2xl:justify-start 2xl:text-right">
+          <div className="flex min-w-0 flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground 2xl:block 2xl:space-y-1">
+            <span className="block">{copy.nextRun}: {automation.nextRun ?? copy.localNote}</span>
+            <span className="block">{copy.lastRun}: {automation.lastRun ?? copy.localNote}</span>
+            <span className="block [font-variant-numeric:tabular-nums]">{automation.runCount} {copy.runs}</span>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <Button type="button" variant="outline" size="sm" onClick={() => onEdit(automation)}>
+              <Edit3 size={13} aria-hidden="true" />
+              {copy.edit}
+            </Button>
+            <Button type="button" variant="ghost" size="sm" onClick={() => onToggle(automation)}>
+              {automation.status === 'active' ? <Pause size={13} aria-hidden="true" /> : <Play size={13} aria-hidden="true" />}
+              {automation.status === 'active' ? copy.pause : copy.resume}
+            </Button>
+          </div>
         </div>
-      </div>
-
-      <div className="mt-4 flex flex-wrap gap-1.5">
-        <TextPill icon={<FolderGit2 size={12} />} label={scopeText} />
-        <TextPill icon={<CalendarClock size={12} />} label={scheduleLabel(automation.schedule, copy)} />
-        <TextPill icon={<Bot size={12} />} label={`${modelLabel(automation.model, copy)} / ${effortLabel(automation.effort, copy)}`} />
-      </div>
-
-      <div className="mt-4 grid gap-2 border-t border-border/50 pt-3 text-[11px] text-muted-foreground sm:grid-cols-3">
-        <span>{copy.lastRun}: {automation.lastRun ?? copy.localNote}</span>
-        <span>{copy.nextRun}: {automation.nextRun ?? copy.localNote}</span>
-        <span className="[font-variant-numeric:tabular-nums]">{automation.runCount} {copy.runs}</span>
       </div>
     </article>
   );
@@ -454,29 +498,38 @@ export default function StudioAutomationSection({
   ];
 
   return (
-    <section aria-labelledby="studio-automation-title" className="scroll-mt-[calc(var(--app-titlebar-h)+0.75rem)] overflow-hidden rounded-xl border border-border/60 bg-card/45">
-      <div className="border-b border-border/60 px-4 py-4">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+    <section
+      data-studio-automation-section
+      aria-labelledby="studio-automation-title"
+      className="scroll-mt-[calc(var(--app-titlebar-h)+0.75rem)] space-y-6"
+    >
+      <header className="border-b border-border/60 pb-6">
+        <div className="grid gap-5 2xl:grid-cols-[minmax(0,1fr)_minmax(420px,0.72fr)] 2xl:items-start">
           <div className="min-w-0">
-            <div className="mb-2 inline-flex items-center gap-2 rounded-md border border-border/60 bg-background/60 px-2 py-1 text-[11px] font-medium text-muted-foreground">
-              <Sparkles size={12} className="text-[var(--amber)]" aria-hidden="true" />
+            <div className="mb-2 flex items-center gap-2 text-xs font-medium text-muted-foreground">
+              <Sparkles size={13} className="text-[var(--amber)]" aria-hidden="true" />
               {copy.localNote}
             </div>
             <TitleTag id="studio-automation-title" className={titleClassName}>{copy.title}</TitleTag>
-            <p className="mt-1 max-w-3xl text-xs leading-relaxed text-muted-foreground">{copy.subtitle}</p>
+            <p className="mt-1 max-w-3xl text-sm leading-relaxed text-muted-foreground">{copy.subtitle}</p>
           </div>
-          <div className="grid min-w-0 gap-2 sm:grid-cols-2">
-            <TextPill icon={<Play size={12} />} label={`${activeCount} ${copy.active}`} />
-            <TextPill icon={<Clock3 size={12} />} label={nextAutomation?.nextRun ?? copy.manual} />
+          <div data-studio-automation-summary className="grid overflow-hidden rounded-lg border border-border/60 bg-background/35 sm:grid-cols-3">
+            <AutomationMetric icon={<Play size={13} aria-hidden="true" />} label={copy.active} value={activeCount} />
+            <AutomationMetric icon={<Clock3 size={13} aria-hidden="true" />} label={copy.nextRun} value={nextAutomation?.nextRun ?? copy.manual} />
+            <AutomationMetric icon={<Layers3 size={13} aria-hidden="true" />} label={copy.total} value={automations.length} />
           </div>
         </div>
-      </div>
+      </header>
 
-      <div className="grid gap-0 xl:grid-cols-[minmax(0,1.05fr)_minmax(340px,0.95fr)]">
-        <form onSubmit={submit} className="border-b border-border/60 p-4 xl:border-b-0 xl:border-r">
+      <div className="grid gap-6 2xl:grid-cols-[minmax(340px,0.76fr)_minmax(0,1fr)] 2xl:items-start">
+        <form
+          data-studio-automation-composer
+          onSubmit={submit}
+          className="rounded-lg border border-border/60 bg-background/35 p-4 md:p-5"
+        >
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="min-w-0">
-              <div className="text-[11px] font-medium text-[var(--amber)]">
+              <div className="text-[11px] font-medium text-muted-foreground">
                 {editing ? copy.editKicker : copy.createKicker}
               </div>
               <h3 className="mt-1 text-base font-semibold text-foreground">{editing ? copy.editTitle : copy.createTitle}</h3>
@@ -491,108 +544,118 @@ export default function StudioAutomationSection({
 
           <p className="mt-2 text-xs leading-relaxed text-muted-foreground">{copy.createHint}</p>
 
-          <div className="mt-4 grid gap-3">
-            <label className="grid gap-1.5">
-              <span className="text-xs font-medium text-muted-foreground">{copy.titleLabel}</span>
-              <input
-                aria-label={copy.titleAria}
-                value={draft.title}
-                onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))}
-                placeholder={copy.titlePlaceholder}
-                className="h-11 rounded-lg border border-border/70 bg-background/75 px-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground/55 focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/35"
-              />
-            </label>
-            <label className="grid gap-1.5">
-              <span className="text-xs font-medium text-muted-foreground">{copy.promptLabel}</span>
-              <textarea
-                aria-label={copy.promptAria}
-                value={draft.prompt}
-                onChange={(event) => setDraft((current) => ({ ...current, prompt: event.target.value }))}
-                placeholder={copy.promptPlaceholder}
-                rows={7}
-                className="min-h-40 resize-none rounded-lg border border-border/70 bg-background/75 px-3 py-3 text-sm leading-relaxed text-foreground outline-none transition-colors placeholder:text-muted-foreground/55 focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/35"
-              />
-            </label>
-          </div>
-
-          <div className="mt-3">
-            <div className="mb-2 flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
-              <Info size={12} aria-hidden="true" />
-              {copy.templates}
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {templates.map((template) => (
-                <TemplateButton
-                  key={template.title}
-                  title={template.title}
-                  prompt={template.prompt}
-                  copy={copy}
-                  onUse={() => applyTemplate(template)}
+          <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.42fr)] lg:items-start">
+            <div className="grid gap-3">
+              <label className="grid gap-1.5">
+                <span className="text-xs font-medium text-muted-foreground">{copy.titleLabel}</span>
+                <input
+                  aria-label={copy.titleAria}
+                  value={draft.title}
+                  onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))}
+                  placeholder={copy.titlePlaceholder}
+                  className="h-11 rounded-lg border border-border/70 bg-background/75 px-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground/55 focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/35"
                 />
-              ))}
+              </label>
+              <label className="grid gap-1.5">
+                <span className="text-xs font-medium text-muted-foreground">{copy.promptLabel}</span>
+                <textarea
+                  aria-label={copy.promptAria}
+                  value={draft.prompt}
+                  onChange={(event) => setDraft((current) => ({ ...current, prompt: event.target.value }))}
+                  placeholder={copy.promptPlaceholder}
+                  rows={6}
+                  className="min-h-36 resize-none rounded-lg border border-border/70 bg-background/75 px-3 py-3 text-sm leading-relaxed text-foreground outline-none transition-colors placeholder:text-muted-foreground/55 focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/35"
+                />
+              </label>
             </div>
-          </div>
 
-          <div className="mt-4 grid gap-2 sm:grid-cols-2">
-            <ControlSelect
-              icon={<FolderGit2 size={13} />}
-              label={copy.scopeLabel}
-              value={draft.scope}
-              values={SCOPE_OPTIONS}
-              onChange={(scope) => setDraft((current) => ({ ...current, scope }))}
-              renderLabel={(scope) => scopeLabel(scope, copy)}
-            />
-            <ControlSelect
-              icon={<Layers3 size={13} />}
-              label={copy.projectLabel}
-              value={draft.projectId ?? ''}
-              values={projectOptions.length ? projectOptions : ['']}
-              disabled={draft.scope !== 'project' || projectOptions.length === 0}
-              onChange={(projectId) => setDraft((current) => ({ ...current, projectId }))}
-              renderLabel={(projectId) => projectLabel(projects, projectId, locale, copy.noProject)}
-            />
-            <ControlSelect
-              icon={<CalendarClock size={13} />}
-              label={copy.scheduleLabel}
-              value={draft.schedule}
-              values={SCHEDULE_OPTIONS}
-              onChange={(schedule) => setDraft((current) => ({ ...current, schedule }))}
-              renderLabel={(schedule) => scheduleLabel(schedule, copy)}
-            />
-            <ControlSelect
-              icon={<Bot size={13} />}
-              label={copy.modelLabel}
-              value={draft.model}
-              values={MODEL_OPTIONS}
-              onChange={(model) => setDraft((current) => ({ ...current, model }))}
-              renderLabel={(model) => modelLabel(model, copy)}
-            />
-            <ControlSelect
-              icon={<Sparkles size={13} />}
-              label={copy.effortLabel}
-              value={draft.effort}
-              values={EFFORT_OPTIONS}
-              onChange={(effort) => setDraft((current) => ({ ...current, effort }))}
-              renderLabel={(effort) => effortLabel(effort, copy)}
-            />
-            <Button type="submit" variant="amber" size="xl" className="h-10 justify-center">
-              <Plus size={14} aria-hidden="true" />
-              {editing ? copy.save : copy.create}
-            </Button>
+            <div className="grid gap-4 border-t border-border/55 pt-3 lg:border-l lg:border-t-0 lg:pl-4 lg:pt-0">
+              <div>
+                <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                  <Info size={12} aria-hidden="true" />
+                  {copy.templates}
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {templates.map((template) => (
+                    <TemplateButton
+                      key={template.title}
+                      title={template.title}
+                      prompt={template.prompt}
+                      copy={copy}
+                      onUse={() => applyTemplate(template)}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <ControlSelect
+                  icon={<FolderGit2 size={13} />}
+                  label={copy.scopeLabel}
+                  value={draft.scope}
+                  values={SCOPE_OPTIONS}
+                  onChange={(scope) => setDraft((current) => ({ ...current, scope }))}
+                  renderLabel={(scope) => scopeLabel(scope, copy)}
+                />
+                <ControlSelect
+                  icon={<Layers3 size={13} />}
+                  label={copy.projectLabel}
+                  value={draft.projectId ?? ''}
+                  values={projectOptions.length ? projectOptions : ['']}
+                  disabled={draft.scope !== 'project' || projectOptions.length === 0}
+                  onChange={(projectId) => setDraft((current) => ({ ...current, projectId }))}
+                  renderLabel={(projectId) => projectLabel(projects, projectId, locale, copy.noProject)}
+                />
+                <ControlSelect
+                  icon={<CalendarClock size={13} />}
+                  label={copy.scheduleLabel}
+                  value={draft.schedule}
+                  values={SCHEDULE_OPTIONS}
+                  onChange={(schedule) => setDraft((current) => ({ ...current, schedule }))}
+                  renderLabel={(schedule) => scheduleLabel(schedule, copy)}
+                />
+                <ControlSelect
+                  icon={<Bot size={13} />}
+                  label={copy.modelLabel}
+                  value={draft.model}
+                  values={MODEL_OPTIONS}
+                  onChange={(model) => setDraft((current) => ({ ...current, model }))}
+                  renderLabel={(model) => modelLabel(model, copy)}
+                />
+                <ControlSelect
+                  icon={<Sparkles size={13} />}
+                  label={copy.effortLabel}
+                  value={draft.effort}
+                  values={EFFORT_OPTIONS}
+                  onChange={(effort) => setDraft((current) => ({ ...current, effort }))}
+                  renderLabel={(effort) => effortLabel(effort, copy)}
+                />
+              </div>
+
+              <Button type="submit" variant="amber" size="xl" className="w-full justify-center">
+                <Plus size={14} aria-hidden="true" />
+                {editing ? copy.save : copy.create}
+              </Button>
+            </div>
           </div>
 
           {error ? <p className="mt-3 text-xs font-medium text-error">{error}</p> : null}
         </form>
 
-        <div className="min-w-0 p-4">
-          <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+        <section data-studio-automation-list className="min-w-0 space-y-3" aria-labelledby="studio-automation-existing">
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <h3 className="text-sm font-semibold text-foreground">{copy.existingTitle}</h3>
+              <div className="flex items-center gap-2">
+                <h3 id="studio-automation-existing" className="text-sm font-semibold text-foreground">{copy.existingTitle}</h3>
+                <span className="rounded-md bg-muted/55 px-2 py-0.5 text-[11px] font-medium text-muted-foreground [font-variant-numeric:tabular-nums]">
+                  {automations.length}
+                </span>
+              </div>
               <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{copy.existingHint}</p>
             </div>
           </div>
           {automations.length ? (
-            <div className="grid gap-3">
+            <div className="overflow-hidden rounded-lg border border-border/60 bg-background/35">
               {automations.map((automation) => (
                 <AutomationCard
                   key={automation.id}
@@ -609,11 +672,11 @@ export default function StudioAutomationSection({
               ))}
             </div>
           ) : (
-            <div className="rounded-lg border border-dashed border-border/70 px-4 py-8 text-center text-sm text-muted-foreground">
+            <div className="rounded-lg border border-dashed border-border/70 bg-background/35 px-4 py-8 text-center text-sm text-muted-foreground">
               {copy.empty}
             </div>
           )}
-        </div>
+        </section>
       </div>
     </section>
   );

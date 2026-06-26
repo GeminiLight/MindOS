@@ -437,6 +437,19 @@ describe('StudioContent', () => {
     expect(host.textContent).toContain('Existing automations');
     expect(host.textContent).toContain('Daily research radar');
 
+    const automationSection = host.querySelector('[data-studio-automation-section]');
+    const summaryRail = host.querySelector('[data-studio-automation-summary]');
+    const composer = host.querySelector('[data-studio-automation-composer]');
+    const automationList = host.querySelector('[data-studio-automation-list]');
+    const seededCard = host.querySelector('[data-studio-automation-card]');
+    expect(automationSection).not.toBeNull();
+    expect(summaryRail?.className).toContain('overflow-hidden rounded-lg');
+    expect(composer?.className).toContain('bg-background/35');
+    expect(automationList).not.toBeNull();
+    expect(seededCard?.className).toContain('group relative border-t');
+    expect(seededCard?.className).not.toContain('rounded-xl');
+    expect(seededCard?.className).not.toContain('bg-card/45');
+
     await setInputValue('input[aria-label="Automation title"]', 'Release readiness sweep');
     await setInputValue(
       'textarea[aria-label="Automation prompt"]',

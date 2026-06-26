@@ -25,8 +25,8 @@ export default function StudioAutomationContent() {
   }, []);
 
   return (
-    <StudioShell>
-      <div className="min-w-0">
+    <StudioShell contentMaxWidth="full">
+      <div className="flex w-full min-w-0 flex-col gap-6">
         <StudioAutomationSection projects={projects} locale={locale} titleLevel={1} />
       </div>
     </StudioShell>
