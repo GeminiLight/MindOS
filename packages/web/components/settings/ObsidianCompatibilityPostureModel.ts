@@ -23,6 +23,7 @@ export type ObsidianCompatibilityEvidenceStatus =
   | 'partial'
   | 'registered'
   | 'called'
+  | 'denied'
   | 'missing';
 
 export type ObsidianCompatibilityEvidenceLayer = 'static' | 'runtime' | 'workflow';
@@ -59,12 +60,14 @@ export function compatibilityPosture(plugin: ObsidianPluginStatus): ObsidianComp
     ...(plugin.capabilityGate?.blockedReasons ?? []),
     support.kind === 'blocked' ? support.reason : '',
   ].filter(Boolean);
+  const deniedEvidence = mergedLedgerCounts.denied + runtimeCounts.denied;
   const hasBlocked = blockedReasons.length > 0
     || plugin.capabilityGate?.blocked === true
     || auditCounts.blocked > 0
+    || deniedEvidence > 0
     || mergedLedgerCounts.blocked > 0
     || runtimeCounts.blocked > 0
-    || surfaces.some((surface) => surface.projection.status === 'blocked');
+    || surfaces.some((surface) => surface.projection.status === 'blocked' || surface.projection.status === 'denied');
   const nativeSurfaceCount = surfaces.filter((surface) => surface.projection.status === 'native-gated').length;
   const hasNativeEvidence = auditCounts.native > 0 || nativeSurfaceCount > 0;
   const needsReview = support.kind === 'review'
@@ -87,8 +90,10 @@ export function compatibilityPosture(plugin: ObsidianPluginStatus): ObsidianComp
     return {
       status: 'blocked',
       label: 'Blocked',
-      summary: blockedReasons[0] ?? 'Blocked capability or workflow evidence is present.',
-      nextStep: 'Resolve blocked APIs, capability gates, or workflow failures before enabling this plugin for user workflows.',
+      summary: blockedReasons[0] ?? (deniedEvidence > 0 ? 'Runtime policy denial evidence is present.' : 'Blocked capability or workflow evidence is present.'),
+      nextStep: deniedEvidence > 0
+        ? 'Review denied runtime policy events before broadening this plugin capability or relying on the workflow.'
+        : 'Resolve blocked APIs, capability gates, or workflow failures before enabling this plugin for user workflows.',
       evidence,
       observedWorkflows: auditCounts.observed,
       partialWorkflows: auditCounts.partial + auditCounts.notObserved,
@@ -186,7 +191,7 @@ export function compatibilityEvidenceStatusClass(status: ObsidianCompatibilityEv
   if (status === 'observed' || status === 'ready') {
     return 'border-success/30 bg-[color-mix(in_srgb,var(--success)_12%,transparent)] text-success';
   }
-  if (status === 'blocked') {
+  if (status === 'blocked' || status === 'denied') {
     return 'border-error/30 bg-[color-mix(in_srgb,var(--error)_12%,transparent)] text-error';
   }
   if (status === 'limited' || status === 'review' || status === 'partial' || status === 'registered' || status === 'called') {
@@ -206,16 +211,17 @@ function countLedgerPhases(
   return entries.reduce<Record<ObsidianRuntimeCapabilityLedgerPhase, number>>((summary, entry) => {
     summary[entry.phase] += 1;
     return summary;
-  }, { predicted: 0, registered: 0, called: 0, blocked: 0 });
+  }, { predicted: 0, registered: 0, called: 0, denied: 0, blocked: 0 });
 }
 
 function runtimeEvidenceCounts(plugin: ObsidianPluginStatus): Record<ObsidianRuntimeCapabilityLedgerPhase, number> {
   const current = countLedgerPhases(plugin.runtime.capabilityLedger ?? []);
-  const history = plugin.capabilityLedgerHistory?.summary ?? { predicted: 0, registered: 0, called: 0, blocked: 0 };
+  const history = plugin.capabilityLedgerHistory?.summary ?? { predicted: 0, registered: 0, called: 0, denied: 0, blocked: 0 };
   return {
     predicted: current.predicted + history.predicted,
     registered: current.registered + history.registered,
     called: current.called + history.called,
+    denied: current.denied + history.denied,
     blocked: current.blocked + history.blocked,
   };
 }
@@ -255,6 +261,9 @@ function staticEvidenceStep(
   if (blockedReasons.length > 0 || ledgerCounts.blocked > 0 || surfaces.some((surface) => surface.projection.status === 'blocked')) {
     status = 'blocked';
     summary = blockedReasons[0] ?? `${ledgerCounts.blocked} blocked static/runtime ledger item${ledgerCounts.blocked === 1 ? '' : 's'} found.`;
+  } else if (ledgerCounts.denied > 0 || surfaces.some((surface) => surface.projection.status === 'denied')) {
+    status = 'denied';
+    summary = `${ledgerCounts.denied} runtime policy denial${ledgerCounts.denied === 1 ? '' : 's'} found.`;
   } else if (nativeSurfaces > 0) {
     status = 'native';
     summary = `${nativeSurfaces} surface${nativeSurfaces === 1 ? '' : 's'} need a MindOS-native adapter gate.`;
@@ -287,6 +296,9 @@ function runtimeEvidenceStep(
   if (runtimeCounts.blocked > 0) {
     status = 'blocked';
     summary = `${runtimeCounts.blocked} blocked runtime event${runtimeCounts.blocked === 1 ? '' : 's'} recorded.`;
+  } else if (runtimeCounts.denied > 0) {
+    status = 'denied';
+    summary = `${runtimeCounts.denied} runtime policy denial${runtimeCounts.denied === 1 ? '' : 's'} recorded.`;
   } else if (runtimeCounts.called > 0) {
     status = 'called';
     summary = `${runtimeCounts.called} called event${runtimeCounts.called === 1 ? '' : 's'} recorded; this is still below workflow observation.`;
@@ -346,5 +358,6 @@ function compatibilityEvidenceStatusLabel(status: ObsidianCompatibilityEvidenceS
   if (status === 'partial') return 'partial';
   if (status === 'registered') return 'registered';
   if (status === 'called') return 'called';
+  if (status === 'denied') return 'denied';
   return 'missing';
 }

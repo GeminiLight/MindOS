@@ -140,6 +140,7 @@ describe('ObsidianImportSection', () => {
                       predicted: 1,
                       registered: 0,
                       called: 0,
+                      denied: 0,
                       blocked: 0,
                       summary: 'Commands is only predicted by static analysis until the plugin is loaded and checked against the runtime ledger.',
                       nextStep: 'Load the plugin and compare registered/called ledger events with this prediction.',

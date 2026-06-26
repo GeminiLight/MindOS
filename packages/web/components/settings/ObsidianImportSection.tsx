@@ -254,6 +254,7 @@ function ledgerProjectionStatusLabel(status: ObsidianSurfaceLedgerProjectionStat
     'static-only': 'static',
     registered: 'registered',
     called: 'called',
+    denied: 'denied',
     'native-gated': 'native',
     blocked: 'blocked',
   }[status];
@@ -306,8 +307,12 @@ function ledgerSummary(preview: ObsidianCompatibilityPreview): string {
   const counts = preview.runtimeCapabilityLedger.reduce<Record<ObsidianRuntimeCapabilityLedgerPhase, number>>((summary, entry) => {
     summary[entry.phase] += 1;
     return summary;
-  }, { predicted: 0, registered: 0, called: 0, blocked: 0 });
-  return `${counts.predicted} predicted${counts.blocked > 0 ? ` / ${counts.blocked} blocked` : ''}`;
+  }, { predicted: 0, registered: 0, called: 0, denied: 0, blocked: 0 });
+  return [
+    `${counts.predicted} predicted`,
+    counts.denied > 0 ? `${counts.denied} denied` : '',
+    counts.blocked > 0 ? `${counts.blocked} blocked` : '',
+  ].filter(Boolean).join(' / ');
 }
 
 export function ObsidianImportSection({

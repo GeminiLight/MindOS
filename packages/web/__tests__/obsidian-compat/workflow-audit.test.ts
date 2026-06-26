@@ -35,6 +35,7 @@ function history(entries: Array<ObsidianRuntimeCapabilityLedgerEntry & { recorde
       predicted: 0,
       registered: entries.filter((entry) => entry.phase === 'registered').length,
       called: entries.filter((entry) => entry.phase === 'called').length,
+      denied: entries.filter((entry) => entry.phase === 'denied').length,
       blocked: entries.filter((entry) => entry.phase === 'blocked').length,
     },
     latestBlocked: [],

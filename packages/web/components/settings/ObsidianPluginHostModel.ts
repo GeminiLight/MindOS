@@ -320,11 +320,12 @@ export function capabilityLedgerSummary(plugin: ObsidianPluginStatus): string {
   const counts = ledger.reduce<Record<ObsidianRuntimeCapabilityLedgerPhase, number>>((summary, entry) => {
     summary[entry.phase] += 1;
     return summary;
-  }, { predicted: 0, registered: 0, called: 0, blocked: 0 });
+  }, { predicted: 0, registered: 0, called: 0, denied: 0, blocked: 0 });
   return [
     counts.predicted ? `${counts.predicted} predicted` : '',
     counts.registered ? `${counts.registered} registered` : '',
     counts.called ? `${counts.called} called` : '',
+    counts.denied ? `${counts.denied} denied` : '',
     counts.blocked ? `${counts.blocked} blocked` : '',
   ].filter(Boolean).join(' / ');
 }
@@ -335,6 +336,7 @@ export function capabilityLedgerHistorySummary(plugin: ObsidianPluginStatus): st
   const parts = [
     history.summary.registered ? `${history.summary.registered} registered` : '',
     history.summary.called ? `${history.summary.called} called` : '',
+    history.summary.denied ? `${history.summary.denied} denied` : '',
     history.summary.blocked ? `${history.summary.blocked} blocked` : '',
   ].filter(Boolean);
   return parts.length > 0 ? `${history.total} historical · ${parts.join(' / ')}` : `${history.total} historical`;

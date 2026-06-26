@@ -38,7 +38,7 @@ export interface ObsidianRuntimeCapabilityLedgerStoreOptions {
   defaultReadLimit?: number;
 }
 
-const RUNTIME_PHASES: ObsidianRuntimeCapabilityLedgerPhase[] = ['predicted', 'registered', 'called', 'blocked'];
+const RUNTIME_PHASES: ObsidianRuntimeCapabilityLedgerPhase[] = ['predicted', 'registered', 'called', 'denied', 'blocked'];
 const CAPABILITY_SURFACES: ObsidianCapabilitySurface[] = [
   'commands',
   'settings',
@@ -69,6 +69,7 @@ function emptyPhaseSummary(): Record<ObsidianRuntimeCapabilityLedgerPhase, numbe
     predicted: 0,
     registered: 0,
     called: 0,
+    denied: 0,
     blocked: 0,
   };
 }

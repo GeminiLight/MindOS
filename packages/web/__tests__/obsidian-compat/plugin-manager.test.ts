@@ -209,6 +209,13 @@ describe('PluginManager', () => {
         requiresConfirmation: true,
         confirmed: false,
       },
+      capabilityLedgerHistory: {
+        total: 1,
+        summary: expect.objectContaining({
+          denied: 1,
+          blocked: 0,
+        }),
+      },
     });
 
     await manager.enable('network-plugin', { confirmCapabilityGate: true });
@@ -297,6 +304,13 @@ describe('PluginManager', () => {
       capabilityGate: {
         status: 'blocked',
         blocked: true,
+      },
+      capabilityLedgerHistory: {
+        total: 1,
+        summary: expect.objectContaining({
+          denied: 0,
+          blocked: 1,
+        }),
       },
     });
   });

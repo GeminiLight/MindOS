@@ -1250,7 +1250,7 @@ export class PluginManager {
           capability: `capability-gate:${action}`,
           surface: item?.surface ?? 'unsupported',
           support: item?.decision === 'blocked' ? 'unsupported' : 'limited',
-          phase: 'blocked',
+          phase: item?.decision === 'requires-confirmation' ? 'denied' : 'blocked',
           source: 'runtime-ledger',
           evidence: item?.decision === 'requires-confirmation'
             ? `Capability gate requires review before ${action}: ${reason}`

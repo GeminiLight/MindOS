@@ -248,7 +248,7 @@ describe('ObsidianPluginHostSection', () => {
             capabilityLedgerHistory: {
               total: 2,
               entries: [],
-              summary: { predicted: 0, registered: 1, called: 1, blocked: 0 },
+              summary: { predicted: 0, registered: 1, called: 1, denied: 0, blocked: 0 },
               latestBlocked: [],
               skippedCorruptLines: 0,
             },

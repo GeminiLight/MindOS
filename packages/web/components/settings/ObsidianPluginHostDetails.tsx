@@ -491,6 +491,7 @@ function surfaceLedgerProjectionStatusLabel(status: SurfaceLedgerProjectionView[
     'static-only': 'Static',
     registered: 'Registered',
     called: 'Called',
+    denied: 'Denied',
     'native-gated': 'Native',
     blocked: 'Blocked',
   }[status];
@@ -500,7 +501,7 @@ function surfaceLedgerProjectionStatusClass(status: SurfaceLedgerProjectionView[
   if (status === 'called' || status === 'registered') {
     return 'border-success/30 bg-[color-mix(in_srgb,var(--success)_12%,transparent)] text-success';
   }
-  if (status === 'blocked') return 'border-error/30 bg-[color-mix(in_srgb,var(--error)_12%,transparent)] text-error';
+  if (status === 'blocked' || status === 'denied') return 'border-error/30 bg-[color-mix(in_srgb,var(--error)_12%,transparent)] text-error';
   if (status === 'native-gated') return 'border-[var(--amber)]/25 bg-[var(--amber-subtle)] text-[var(--amber-text)]';
   return 'border-border bg-muted/60 text-muted-foreground';
 }
@@ -511,6 +512,7 @@ function surfaceLedgerCountSummary(item: SurfaceLedgerProjectionView): string {
     projection.predicted ? `${projection.predicted} predicted` : '',
     projection.registered ? `${projection.registered} registered` : '',
     projection.called ? `${projection.called} called` : '',
+    projection.denied ? `${projection.denied} denied` : '',
     projection.blocked ? `${projection.blocked} blocked` : '',
   ].filter(Boolean).join(' / ') || 'no ledger evidence';
 }

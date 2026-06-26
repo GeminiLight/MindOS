@@ -191,7 +191,7 @@ describe('/api/obsidian-plugins lifecycle', () => {
       `,
     );
 
-    const { POST } = await importLifecycleRoute();
+    const { GET, POST } = await importLifecycleRoute();
     let res = await POST(postRequest({ action: 'enable', pluginId: 'network-api-plugin' }));
     let json = await res.json();
 
@@ -206,6 +206,21 @@ describe('/api/obsidian-plugins lifecycle', () => {
       },
     });
     expect(fs.existsSync(path.join(mindRoot, '.mindos', 'plugins', '.plugin-manager.json'))).toBe(false);
+
+    const listRes = await GET(new NextRequest('http://localhost/api/obsidian-plugins'));
+    const listJson = await listRes.json();
+    expect(listRes.status).toBe(200);
+    expect(listJson.plugins[0]).toMatchObject({
+      id: 'network-api-plugin',
+      enabled: false,
+      capabilityLedgerHistory: {
+        total: 1,
+        summary: expect.objectContaining({
+          denied: 1,
+          blocked: 0,
+        }),
+      },
+    });
 
     res = await POST(postRequest({
       action: 'enable',

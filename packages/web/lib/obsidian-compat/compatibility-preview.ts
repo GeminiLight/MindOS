@@ -100,6 +100,7 @@ export type ObsidianRuntimeCapabilityLedgerPhase =
   | 'predicted'
   | 'registered'
   | 'called'
+  | 'denied'
   | 'blocked';
 
 export interface ObsidianRuntimeCapabilityLedgerEntry {
@@ -184,7 +185,7 @@ export function summarizeObsidianRuntimeCapabilityLedger(
   return entries.reduce<Record<ObsidianRuntimeCapabilityLedgerPhase, number>>((summary, entry) => {
     summary[entry.phase] += 1;
     return summary;
-  }, { predicted: 0, registered: 0, called: 0, blocked: 0 });
+  }, { predicted: 0, registered: 0, called: 0, denied: 0, blocked: 0 });
 }
 
 export interface MergeObsidianRuntimeCapabilityLedgerInput {

@@ -52,6 +52,7 @@ describe('ObsidianRuntimeCapabilityLedgerStore', () => {
         predicted: 0,
         registered: 1,
         called: 1,
+        denied: 0,
         blocked: 0,
       },
       skippedCorruptLines: 0,
@@ -103,6 +104,42 @@ describe('ObsidianRuntimeCapabilityLedgerStore', () => {
     expect(history.latestBlocked).toEqual([
       expect.objectContaining({ evidence: 'blocked after corrupt line' }),
     ]);
+  });
+
+  it('persists runtime policy denial events without treating them as hard blockers', () => {
+    const store = new ObsidianRuntimeCapabilityLedgerStore(mindRoot, {
+      sessionId: 'denied-session',
+      now: () => new Date('2026-06-26T01:00:00.000Z'),
+    });
+
+    store.append(entry({
+      capability: 'requestUrl',
+      surface: 'network',
+      support: 'limited',
+      phase: 'denied',
+      evidence: '[obsidian-compat] requestUrl blocks local/private hosts: http://localhost:3000/private',
+    }));
+
+    const history = store.read('quickadd');
+    expect(history).toMatchObject({
+      total: 1,
+      summary: {
+        predicted: 0,
+        registered: 0,
+        called: 0,
+        denied: 1,
+        blocked: 0,
+      },
+      latestBlocked: [],
+      updatedAt: '2026-06-26T01:00:00.000Z',
+    });
+    expect(history.entries[0]).toMatchObject({
+      pluginId: 'quickadd',
+      sessionId: 'denied-session',
+      capability: 'requestUrl',
+      phase: 'denied',
+      source: 'runtime-ledger',
+    });
   });
 
   it('caps retained history per plugin', () => {

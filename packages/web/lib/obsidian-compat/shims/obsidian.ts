@@ -499,17 +499,20 @@ export function requestUrl(input: string | RequestUrlParam): RequestUrlResponseP
   const params: RequestUrlParam = typeof input === 'string' ? { url: input } : input;
   const host = getActiveObsidianRuntimeHost();
   const pluginId = host?.getCurrentPluginId();
+  const recordDenied = (error: unknown) => {
+    host?.recordRuntimeCapability(pluginId, 'requestUrl', 'denied', error instanceof Error ? error.message : String(error));
+  };
   let parsedUrl: URL;
   let method: string;
   try {
     parsedUrl = assertRequestUrlAllowed(params.url);
     method = normalizeRequestMethod(params.method);
   } catch (err) {
-    host?.recordRuntimeCapability(pluginId, 'requestUrl', 'blocked', err instanceof Error ? err.message : String(err));
+    recordDenied(err);
     return rejectRequestUrl(err instanceof Error ? err : new Error(String(err)));
   }
   if (typeof fetch !== 'function') {
-    host?.recordRuntimeCapability(pluginId, 'requestUrl', 'blocked', '[obsidian-compat] requestUrl requires fetch support in the current runtime.');
+    recordDenied('[obsidian-compat] requestUrl requires fetch support in the current runtime.');
     return rejectRequestUrl(new Error('[obsidian-compat] requestUrl requires fetch support in the current runtime.'));
   }
   host?.recordRuntimeCapability(pluginId, 'requestUrl', 'called', `Plugin requested ${method} ${parsedUrl.origin}.`);
@@ -527,7 +530,12 @@ export function requestUrl(input: string | RequestUrlParam): RequestUrlResponseP
       arrayBuffer = await readResponseArrayBuffer(response, finalUrl);
     } catch (err) {
       if (abortController.signal.aborted) {
-        throw new Error(`[obsidian-compat] requestUrl timed out after ${REQUEST_URL_TIMEOUT_MS}ms: ${parsedUrl.toString()}`);
+        const timeoutError = new Error(`[obsidian-compat] requestUrl timed out after ${REQUEST_URL_TIMEOUT_MS}ms: ${parsedUrl.toString()}`);
+        recordDenied(timeoutError);
+        throw timeoutError;
+      }
+      if (isRequestUrlPolicyDenial(err)) {
+        recordDenied(err);
       }
       throw err;
     } finally {
@@ -560,6 +568,13 @@ export function requestUrl(input: string | RequestUrlParam): RequestUrlResponseP
 
     return result;
   })());
+}
+
+function isRequestUrlPolicyDenial(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  return (
+    /\[obsidian-compat\] requestUrl (?:received an invalid URL|only supports|blocks|does not allow credentials|method is not allowed|response is too large|followed too many redirects|timed out)/.test(error.message)
+  );
 }
 
 export async function request(input: string | RequestUrlParam): Promise<string> {

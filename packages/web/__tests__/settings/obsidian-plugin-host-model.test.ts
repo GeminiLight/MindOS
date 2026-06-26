@@ -167,10 +167,19 @@ describe('ObsidianPluginHostModel', () => {
           source: 'runtime-ledger',
           evidence: 'called',
         },
+        {
+          pluginId: 'quickadd-like',
+          capability: 'requestUrl',
+          surface: 'network',
+          support: 'limited',
+          phase: 'denied',
+          source: 'runtime-ledger',
+          evidence: 'policy denied',
+        },
       ],
     });
 
-    expect(capabilityLedgerSummary(item)).toBe('1 predicted / 1 registered / 1 called');
+    expect(capabilityLedgerSummary(item)).toBe('1 predicted / 1 registered / 1 called / 1 denied');
   });
 
   it('projects detected surfaces against runtime ledger evidence', () => {
@@ -215,6 +224,53 @@ describe('ObsidianPluginHostModel', () => {
           status: 'called',
           predicted: 1,
           called: 1,
+        }),
+      }),
+    ]);
+  });
+
+  it('projects runtime policy denials ahead of called evidence for a surface', () => {
+    const item = plugin({
+      surfaceSummary: [{
+        surface: 'network',
+        apiCount: 1,
+        supportSummary: { full: 0, limited: 1, 'snapshot-only': 0, 'catalog-only': 0, 'request-only': 0, unsupported: 0 },
+        apis: ['requestUrl'],
+        hosts: ['Network policy gate'],
+        routes: ['/api/obsidian-plugins'],
+      }],
+      capabilityLedger: [
+        {
+          pluginId: 'quickadd-like',
+          capability: 'requestUrl',
+          surface: 'network',
+          support: 'limited',
+          phase: 'called',
+          source: 'runtime-ledger',
+          evidence: 'attempted request',
+        },
+        {
+          pluginId: 'quickadd-like',
+          capability: 'requestUrl',
+          surface: 'network',
+          support: 'limited',
+          phase: 'denied',
+          source: 'runtime-ledger',
+          evidence: 'requestUrl blocks local/private hosts',
+        },
+      ],
+    });
+
+    expect(surfaceLedgerProjections(item)).toEqual([
+      expect.objectContaining({
+        surface: 'network',
+        label: 'Network',
+        projection: expect.objectContaining({
+          status: 'denied',
+          called: 1,
+          denied: 1,
+          summary: 'Network has runtime policy denial evidence; this capability was not granted to the plugin.',
+          nextStep: 'Review the denied runtime policy event before broadening this plugin capability.',
         }),
       }),
     ]);
@@ -310,6 +366,46 @@ describe('ObsidianPluginHostModel', () => {
     expect(posture.summary).toBe('Unsupported Node module: child_process.');
     expect(posture.evidence.find((step) => step.layer === 'static')).toMatchObject({
       status: 'blocked',
+    });
+  });
+
+  it('marks posture blocked when runtime policy denial evidence is present', () => {
+    const item = plugin({
+      capabilityLedger: [{
+        pluginId: 'quickadd-like',
+        capability: 'requestUrl',
+        surface: 'network',
+        support: 'limited',
+        phase: 'denied',
+        source: 'runtime-ledger',
+        evidence: 'requestUrl blocks local/private hosts',
+      }],
+      runtime: {
+        ...plugin().runtime,
+        capabilityLedger: [{
+          pluginId: 'quickadd-like',
+          capability: 'requestUrl',
+          surface: 'network',
+          support: 'limited',
+          phase: 'denied',
+          source: 'runtime-ledger',
+          evidence: 'requestUrl blocks local/private hosts',
+        }],
+      },
+    });
+
+    const posture = compatibilityPosture(item);
+
+    expect(posture.status).toBe('blocked');
+    expect(posture.summary).toBe('Runtime policy denial evidence is present.');
+    expect(posture.nextStep).toBe('Review denied runtime policy events before broadening this plugin capability or relying on the workflow.');
+    expect(posture.evidence.find((step) => step.layer === 'static')).toMatchObject({
+      status: 'denied',
+      statusLabel: 'denied',
+    });
+    expect(posture.evidence.find((step) => step.layer === 'runtime')).toMatchObject({
+      status: 'denied',
+      statusLabel: 'denied',
     });
   });
 
@@ -438,12 +534,13 @@ describe('ObsidianPluginHostModel', () => {
   it('summarizes historical runtime ledger without counting static predictions', () => {
     const item = plugin({
       capabilityLedgerHistory: {
-        total: 3,
+        total: 4,
         entries: [],
         summary: {
           predicted: 0,
           registered: 1,
           called: 1,
+          denied: 1,
           blocked: 1,
         },
         latestBlocked: [],
@@ -451,7 +548,7 @@ describe('ObsidianPluginHostModel', () => {
       },
     });
 
-    expect(capabilityLedgerHistorySummary(item)).toBe('3 historical · 1 registered / 1 called / 1 blocked');
+    expect(capabilityLedgerHistorySummary(item)).toBe('4 historical · 1 registered / 1 called / 1 denied / 1 blocked');
     expect(workflowAuditStatusLabel('native-replacement')).toBe('native');
   });
 

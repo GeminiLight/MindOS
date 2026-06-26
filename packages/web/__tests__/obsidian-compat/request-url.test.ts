@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { ObsidianRuntimeHost } from '@/lib/obsidian-compat/runtime';
 import { request, requestUrl } from '@/lib/obsidian-compat/shims/obsidian';
 
 function arrayBufferFrom(value: string): ArrayBuffer {
@@ -42,6 +43,27 @@ describe('obsidian requestUrl shim', () => {
       json: { ok: true },
     });
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('records called runtime ledger evidence for allowed requests', async () => {
+    stubFetchResponse('{"ok":true}');
+    const host = new ObsidianRuntimeHost();
+
+    await host.runWithPluginContext('network-plugin', async () => {
+      await expect(requestUrl('https://example.com/api')).resolves.toMatchObject({
+        status: 200,
+        json: { ok: true },
+      });
+    });
+
+    expect(host.getRuntimeCapabilityLedger('network-plugin')).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        capability: 'requestUrl',
+        surface: 'network',
+        phase: 'called',
+        source: 'runtime-ledger',
+      }),
+    ]));
   });
 
   it('uses request() as a text shortcut', async () => {
@@ -211,13 +233,48 @@ describe('obsidian requestUrl shim', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it('records denied runtime ledger evidence for requestUrl policy rejections', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const host = new ObsidianRuntimeHost();
+
+    await host.runWithPluginContext('network-plugin', async () => {
+      await expect(requestUrl('http://localhost:3000/private')).rejects.toThrow(/local\/private hosts/);
+    });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(host.getRuntimeCapabilityLedger('network-plugin')).toEqual([
+      expect.objectContaining({
+        capability: 'requestUrl',
+        surface: 'network',
+        phase: 'denied',
+        source: 'runtime-ledger',
+        evidence: expect.stringContaining('local/private hosts'),
+      }),
+    ]);
+  });
+
   it('rejects oversized responses before reading the body when content-length is known', async () => {
     const { fetchMock, arrayBuffer } = stubFetchResponse('too large', {
       headers: { 'content-length': String(6 * 1024 * 1024) },
     });
+    const host = new ObsidianRuntimeHost();
 
-    await expect(requestUrl('https://example.com/large')).rejects.toThrow(/too large/);
+    await host.runWithPluginContext('network-plugin', async () => {
+      await expect(requestUrl('https://example.com/large')).rejects.toThrow(/too large/);
+    });
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(arrayBuffer).not.toHaveBeenCalled();
+    expect(host.getRuntimeCapabilityLedger('network-plugin')).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        capability: 'requestUrl',
+        phase: 'called',
+      }),
+      expect.objectContaining({
+        capability: 'requestUrl',
+        phase: 'denied',
+        evidence: expect.stringContaining('too large'),
+      }),
+    ]));
   });
 });
