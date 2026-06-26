@@ -267,7 +267,7 @@ describe('navigation panel route recovery', () => {
       preventDefault: false,
     });
     expect(getRailPanelClickDecision('/wiki', 'files', 'files')).toEqual({
-      nextPanel: null,
+      nextPanel: 'files',
       preventDefault: true,
     });
     expect(getRailPanelClickDecision('/capture', 'capture', 'capture')).toEqual({
@@ -303,9 +303,9 @@ describe('navigation panel route recovery', () => {
     expect(getRoutePanelClickSidebarExpanded(true, crossRouteDecision)).toBe(true);
   });
 
-  it('uses same-route rail clicks as explicit panel open or close intents', () => {
+  it('uses same-route rail clicks as explicit panel open intents', () => {
     const reopenCurrentAgentsDecision = getRailPanelClickDecision('/agents', null, 'agents');
-    const closeCurrentFilesDecision = getRailPanelClickDecision('/wiki', 'files', 'files');
+    const keepCurrentFilesDecision = getRailPanelClickDecision('/wiki', 'files', 'files');
 
     expect(reopenCurrentAgentsDecision).toEqual({
       nextPanel: 'agents',
@@ -313,10 +313,11 @@ describe('navigation panel route recovery', () => {
     });
     expect(getRoutePanelClickSidebarExpanded(false, reopenCurrentAgentsDecision)).toBe(true);
 
-    expect(closeCurrentFilesDecision).toEqual({
-      nextPanel: null,
+    expect(keepCurrentFilesDecision).toEqual({
+      nextPanel: 'files',
       preventDefault: true,
     });
-    expect(getRoutePanelClickSidebarExpanded(true, closeCurrentFilesDecision)).toBe(false);
+    expect(getRoutePanelClickSidebarExpanded(false, keepCurrentFilesDecision)).toBe(true);
+    expect(getRoutePanelClickSidebarExpanded(true, keepCurrentFilesDecision)).toBe(true);
   });
 });

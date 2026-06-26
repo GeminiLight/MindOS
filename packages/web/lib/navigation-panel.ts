@@ -211,16 +211,12 @@ export function isContentRouteForPanel(
 
 export function getRailPanelClickDecision(
   pathname: string | null | undefined,
-  activePanel: PanelId | null,
+  _activePanel: PanelId | null,
   targetPanel: RoutePanelId,
 ): RailPanelClickDecision {
   const onTargetRoute = isContentRouteForPanel(pathname, targetPanel);
-  const targetIsActive = activePanel === targetPanel;
 
   if (onTargetRoute) {
-    if (targetPanel === 'files' && targetIsActive) {
-      return { nextPanel: null, preventDefault: true };
-    }
     return { nextPanel: targetPanel, preventDefault: true };
   }
 

@@ -706,7 +706,7 @@ describe('ActivityBar rail navigation', () => {
     host.remove();
   });
 
-  it('clicking Files on /wiki page toggles sidebar off', async () => {
+  it('clicking Files on /wiki page keeps the files panel open', async () => {
     mockPathname = '/wiki';
     const mockPanelChange = vi.fn();
 
@@ -739,8 +739,7 @@ describe('ActivityBar rail navigation', () => {
       await new Promise(r => setTimeout(r, 200));
     });
 
-    // On /wiki with files already active, should toggle off
-    expect(mockPanelChange).toHaveBeenCalledWith(null);
+    expect(mockPanelChange).toHaveBeenCalledWith('files');
     expect(mockRouterPush).not.toHaveBeenCalled();
 
     await act(async () => {
