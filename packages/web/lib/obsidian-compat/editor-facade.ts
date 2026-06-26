@@ -1,10 +1,11 @@
-import type { Editor, EditorPosition, MarkdownView, TFile } from './types';
+import type { ClickableToken, Editor, EditorPosition, MarkdownView, TFile } from './types';
 
 export interface MarkdownEditorContextInput {
   content: string;
   selectionStart?: number;
   selectionEnd?: number;
   cursorOffset?: number;
+  clickableToken?: ClickableToken | null;
 }
 
 export interface MarkdownEditorCommandContext {
@@ -16,6 +17,7 @@ export class MarkdownTextEditorFacade implements Editor {
   private content: string;
   private selectionStart = 0;
   private selectionEnd = 0;
+  private clickableToken: ClickableToken | null = null;
 
   constructor(input: MarkdownEditorContextInput) {
     this.content = input.content;
@@ -26,6 +28,7 @@ export class MarkdownTextEditorFacade implements Editor {
     const start = typeof input.selectionStart === 'number' ? input.selectionStart : fallbackOffset;
     const end = typeof input.selectionEnd === 'number' ? input.selectionEnd : start;
     this.setSelectionOffsets(start, end);
+    this.clickableToken = normalizeClickableToken(input.clickableToken);
   }
 
   getValue(): string {
@@ -49,6 +52,14 @@ export class MarkdownTextEditorFacade implements Editor {
   getCursor(which?: 'from' | 'to' | 'anchor' | 'head'): EditorPosition {
     const offset = which === 'from' || which === 'anchor' ? this.selectionStart : this.selectionEnd;
     return offsetToPosition(this.content, offset);
+  }
+
+  getClickableTokenAt(_position: EditorPosition): ClickableToken | null {
+    return this.clickableToken ? { ...this.clickableToken } : null;
+  }
+
+  setClickableToken(token: ClickableToken | null | undefined): void {
+    this.clickableToken = normalizeClickableToken(token);
   }
 
   setCursor(posOrLine: EditorPosition | number, ch?: number): void {
@@ -154,4 +165,17 @@ function positionToOffset(content: string, position: EditorPosition): number {
   }
   const ch = Math.max(0, Math.min(Math.trunc(position.ch), lines[line]?.length ?? 0));
   return offset + ch;
+}
+
+function normalizeClickableToken(token: ClickableToken | null | undefined): ClickableToken | null {
+  if (!token) return null;
+  const text = token.text.trim();
+  const type = token.type.trim();
+  if (!text || !type) return null;
+  return {
+    type,
+    text,
+    ...(token.start ? { start: { ...token.start } } : {}),
+    ...(token.end ? { end: { ...token.end } } : {}),
+  };
 }

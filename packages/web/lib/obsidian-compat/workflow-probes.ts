@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import type { PluginActionResult, PluginRuntimeContext, PluginViewContext } from './plugin-manager';
+import type { PluginActionResult, PluginEditorMenuContext, PluginRuntimeContext, PluginViewContext } from './plugin-manager';
 import type { ManagedPluginMarkdownPostProcessorSnapshot } from './plugin-manager';
 import type { ObsidianWorkflowAudit } from './workflow-audit';
 import { redactRuntimeCapabilityEvidence } from './runtime-capability-ledger-store';
@@ -86,6 +86,8 @@ export interface ObsidianWorkflowProbePlugin {
 export interface ObsidianWorkflowProbeHost {
   list(context?: PluginRuntimeContext): ObsidianWorkflowProbePlugin[];
   executeCommand(commandId: string, context?: PluginRuntimeContext): Promise<PluginActionResult>;
+  triggerEditorMenu?(pluginId: string, context: PluginEditorMenuContext): Promise<PluginActionResult>;
+  chooseMenuItem?(menuId: string, itemIndex: number, interactionId: string): Promise<PluginActionResult>;
   renderView(pluginId: string, viewType: string, context?: PluginViewContext): Promise<{ text?: string; displayText?: string }>;
   renderMarkdownPostProcessors(markdown: string, sourcePath?: string): Promise<ManagedPluginMarkdownPostProcessorSnapshot[]>;
 }
@@ -389,22 +391,111 @@ async function runCalendarViewProbe(input: WorkflowProbeRuntimeInput, viewType: 
 
 async function runTagWranglerProbe(input: WorkflowProbeRuntimeInput): Promise<WorkflowProbeDraft> {
   const command = selectCommand(input.plugin, [/tag/i, /rename/i, /wrangler/i]);
-  if (!command) return skippedDraft('No executable Tag Wrangler command was registered; full rename/write probe remains a later stage.');
+  if (command) return runTagWranglerCommandProbe(input, command);
+  return runTagWranglerEditorMenuProbe(input);
+}
 
+async function runTagWranglerCommandProbe(input: WorkflowProbeRuntimeInput, command: ObsidianWorkflowProbeCommand): Promise<WorkflowProbeDraft> {
   writeTagWranglerFixture(input.mindRoot);
   const before = snapshotVault(input.mindRoot);
   const action = await input.host.executeCommand(command.fullId);
   const after = snapshotVault(input.mindRoot);
   const changes = diffVaultSnapshots(before, after);
+  const commandCalled = hasCalledLedger(input.host, input.plugin.id, ['addCommand']);
+  return buildTagWranglerRenameDraft(input, {
+    action,
+    changes,
+    entrypointEvidence: [
+      `Executed command "${command.name}" (${command.fullId}).`,
+    ],
+    entrypointAssertions: [
+      { id: 'execute-command', label: 'Executed the selected Tag Wrangler workflow command', passed: true, detail: command.fullId },
+      { id: 'runtime-called-ledger', label: 'Recorded command execution evidence', passed: commandCalled },
+    ],
+    entrypointFailures: [
+      !commandCalled ? 'runtime ledger did not record command execution' : '',
+    ],
+  });
+}
+
+async function runTagWranglerEditorMenuProbe(input: WorkflowProbeRuntimeInput): Promise<WorkflowProbeDraft> {
+  if (!input.host.triggerEditorMenu || !input.host.chooseMenuItem) {
+    return skippedDraft('No executable Tag Wrangler command was registered, and this host cannot trigger editor-menu/menu-item workflow probes yet.');
+  }
+
+  writeTagWranglerFixture(input.mindRoot);
+  const before = snapshotVault(input.mindRoot);
+  const openAction = await input.host.triggerEditorMenu(input.plugin.id, {
+    sourcePath: TAG_WRANGLER_FIXTURE_PATHS[0],
+    tagText: TAG_WRANGLER_OLD_TAG,
+    cursorOffset: tagWranglerFixtureCursorOffset(),
+  });
+  const menuChoice = selectTagWranglerRenameMenuItem(openAction);
+  let chooseAction: PluginActionResult | null = null;
+  let chooseError = '';
+
+  if (menuChoice) {
+    try {
+      chooseAction = await input.host.chooseMenuItem(menuChoice.menuId, menuChoice.itemIndex, menuChoice.interactionId);
+    } catch (error) {
+      chooseError = error instanceof Error ? error.message : String(error);
+    }
+  }
+
+  const after = snapshotVault(input.mindRoot);
+  const changes = diffVaultSnapshots(before, after);
+  const action = mergePluginActionResults(openAction, chooseAction);
+  const editorMenuCalled = hasCalledLedger(input.host, input.plugin.id, ['Workspace.editor-menu']);
+  const menuCalled = hasCalledLedger(input.host, input.plugin.id, ['Menu']);
+  const menuItemCalled = hasCalledLedger(input.host, input.plugin.id, ['MenuItem']);
+  const menuItemAvailable = Boolean(menuChoice);
+  const menuItemExecuted = Boolean(menuChoice && chooseAction && !chooseError);
+
+  return buildTagWranglerRenameDraft(input, {
+    action,
+    changes,
+    entrypointEvidence: [
+      `Triggered editor-menu for ${TAG_WRANGLER_OLD_TAG} in "${TAG_WRANGLER_FIXTURE_PATHS[0]}".`,
+      ...openAction.menuSnapshots.flatMap((menu) => menu.items.map((item) => `Editor menu item: ${item.title || '(separator)'}`)).slice(0, 8),
+      ...(menuChoice ? [`Selected menu item "${menuChoice.title}" from ${menuChoice.menuId}#${menuChoice.itemIndex}.`] : ['No executable Rename menu item was available after editor-menu trigger.']),
+      ...(chooseError ? [`Menu item execution failed: ${chooseError}`] : []),
+    ],
+    entrypointAssertions: [
+      { id: 'editor-menu-triggered', label: 'Triggered the Obsidian editor-menu event for a tag token', passed: editorMenuCalled },
+      { id: 'rename-menu-item-available', label: 'Observed an executable Rename tag menu item', passed: menuItemAvailable, detail: menuChoice?.title ?? 'No executable rename item.' },
+      { id: 'menu-item-executed', label: 'Executed the Rename tag menu item', passed: menuItemExecuted, detail: chooseError || menuChoice?.title || 'No menu item executed.' },
+      { id: 'menu-called-ledger', label: 'Recorded menu snapshot evidence', passed: menuCalled },
+      { id: 'runtime-called-ledger', label: 'Recorded editor-menu and menu-item runtime evidence', passed: editorMenuCalled && menuItemCalled },
+    ],
+    entrypointFailures: [
+      !editorMenuCalled ? 'runtime ledger did not record editor-menu execution' : '',
+      !menuItemAvailable ? 'editor-menu did not expose an executable Rename tag item' : '',
+      !menuItemExecuted ? 'rename menu item was not executed successfully' : '',
+      !menuCalled ? 'runtime ledger did not record menu snapshot evidence' : '',
+      !menuItemCalled ? 'runtime ledger did not record menu item execution' : '',
+      chooseError ? `menu item execution failed: ${chooseError}` : '',
+    ],
+  });
+}
+
+function buildTagWranglerRenameDraft(
+  input: WorkflowProbeRuntimeInput,
+  result: {
+    action: PluginActionResult;
+    changes: string[];
+    entrypointEvidence: string[];
+    entrypointAssertions: ObsidianWorkflowProbeAssertion[];
+    entrypointFailures: string[];
+  },
+): WorkflowProbeDraft {
   const fixture = readTagWranglerFixture(input.mindRoot);
-  const changedPaths = changedVaultPaths(changes);
+  const changedPaths = changedVaultPaths(result.changes);
   const changedFixturePaths = TAG_WRANGLER_FIXTURE_PATHS.filter((filePath) => changedPaths.has(filePath));
   const unexpectedChanges = Array.from(changedPaths).filter((filePath) => !TAG_WRANGLER_FIXTURE_PATHS.includes(filePath));
   const frontmatterRenamed = fixture.every((file) => frontmatterTagRenamed(file.content));
   const bodyRenamed = fixture.every((file) => bodyTagRenamed(file.content));
   const oldTagGone = fixture.every((file) => !file.content.includes(TAG_WRANGLER_OLD_TAG));
   const newTagPresent = fixture.every((file) => file.content.includes(TAG_WRANGLER_NEW_TAG));
-  const commandCalled = hasCalledLedger(input.host, input.plugin.id, ['addCommand']);
   const metadataCalled = hasCalledLedger(input.host, input.plugin.id, [
     'MetadataCache.getCache',
     'MetadataCache.getCachedFiles',
@@ -413,26 +504,26 @@ async function runTagWranglerProbe(input: WorkflowProbeRuntimeInput): Promise<Wo
   ]);
   const writeCalled = hasCalledLedger(input.host, input.plugin.id, ['Vault.modify', 'Vault.process']);
   const changedExpectedFiles = changedFixturePaths.length === TAG_WRANGLER_FIXTURE_PATHS.length && unexpectedChanges.length === 0;
-  const observable = observableEvidence(action, changes);
+  const observable = observableEvidence(result.action, result.changes);
   const passed = frontmatterRenamed
     && bodyRenamed
     && oldTagGone
     && newTagPresent
     && changedExpectedFiles
-    && commandCalled
+    && result.entrypointAssertions.every((assertion) => assertion.passed)
     && metadataCalled
     && writeCalled;
 
   return {
     status: passed ? 'passed' : 'failed',
     evidence: [
-      `Executed command "${command.name}" (${command.fullId}).`,
+      ...result.entrypointEvidence,
       `Fixture rename ${TAG_WRANGLER_OLD_TAG} -> ${TAG_WRANGLER_NEW_TAG}.`,
       ...observable,
       ...(!changedExpectedFiles ? [`Unexpected fixture write scope: changed=${Array.from(changedPaths).join(', ') || 'none'}`] : []),
     ],
     assertions: [
-      { id: 'execute-command', label: 'Executed the selected Tag Wrangler workflow command', passed: true, detail: command.fullId },
+      ...result.entrypointAssertions,
       { id: 'frontmatter-tags-renamed', label: 'Renamed tags in YAML frontmatter', passed: frontmatterRenamed },
       { id: 'body-tags-renamed', label: 'Renamed inline body tags', passed: bodyRenamed },
       { id: 'old-tag-removed', label: 'Removed the old tag from every fixture note', passed: oldTagGone },
@@ -440,15 +531,15 @@ async function runTagWranglerProbe(input: WorkflowProbeRuntimeInput): Promise<Wo
       { id: 'fixture-write-scope', label: 'Only the Tag Wrangler fixture notes changed', passed: changedExpectedFiles, detail: Array.from(changedPaths).join(', ') || 'No changed files.' },
       { id: 'metadata-cache-called-ledger', label: 'Recorded metadata cache lookup evidence', passed: metadataCalled },
       { id: 'vault-write-called-ledger', label: 'Recorded vault write evidence', passed: writeCalled },
-      { id: 'runtime-called-ledger', label: 'Recorded command execution evidence', passed: commandCalled },
     ],
     ...(!passed ? { failureReason: tagWranglerFailureReason({
+      entrypointFailures: result.entrypointFailures,
+      renameContinuationHint: result.entrypointAssertions.some((assertion) => assertion.id === 'menu-item-executed' && assertion.passed) && !writeCalled,
       frontmatterRenamed,
       bodyRenamed,
       oldTagGone,
       newTagPresent,
       changedExpectedFiles,
-      commandCalled,
       metadataCalled,
       writeCalled,
     }) } : {}),
@@ -602,6 +693,59 @@ function observableEvidence(action: PluginActionResult, changes: string[]): stri
   return evidence;
 }
 
+interface TagWranglerMenuChoice {
+  menuId: string;
+  interactionId: string;
+  itemIndex: number;
+  title: string;
+}
+
+function selectTagWranglerRenameMenuItem(action: PluginActionResult): TagWranglerMenuChoice | null {
+  for (const menu of action.menuSnapshots) {
+    if (!menu.interactionId) continue;
+    const item = menu.items.find((candidate) => (
+      candidate.canRun === true
+      && /rename/i.test(candidate.title)
+      && (
+        candidate.title.includes(TAG_WRANGLER_OLD_TAG)
+        || candidate.title.includes(TAG_WRANGLER_OLD_TAG_NAME)
+        || /tag/i.test(candidate.title)
+      )
+    ));
+    if (!item) continue;
+    return {
+      menuId: menu.id,
+      interactionId: menu.interactionId,
+      itemIndex: item.index,
+      title: item.title,
+    };
+  }
+  return null;
+}
+
+function mergePluginActionResults(first: PluginActionResult, second: PluginActionResult | null): PluginActionResult {
+  if (!second) return first;
+  const noticeSnapshots = [
+    ...(first.noticeSnapshots ?? []),
+    ...(second.noticeSnapshots ?? []),
+  ];
+  const editorUpdates = [
+    ...(first.editorUpdates ?? []),
+    ...(second.editorUpdates ?? []),
+  ];
+  return {
+    workspaceOpenRequests: [...first.workspaceOpenRequests, ...second.workspaceOpenRequests],
+    modalSnapshots: [...first.modalSnapshots, ...second.modalSnapshots],
+    menuSnapshots: [...first.menuSnapshots, ...second.menuSnapshots],
+    ...(noticeSnapshots.length > 0 ? { noticeSnapshots } : {}),
+    ...(editorUpdates.length > 0 ? { editorUpdates } : {}),
+  };
+}
+
+function tagWranglerFixtureCursorOffset(): number {
+  return TAG_WRANGLER_FIXTURE_FILES[0]?.content.indexOf(TAG_WRANGLER_OLD_TAG) ?? 0;
+}
+
 interface TagWranglerFixtureFile {
   path: string;
   content: string;
@@ -634,22 +778,24 @@ function bodyTagRenamed(content: string): boolean {
 }
 
 function tagWranglerFailureReason(input: {
+  entrypointFailures?: string[];
+  renameContinuationHint?: boolean;
   frontmatterRenamed: boolean;
   bodyRenamed: boolean;
   oldTagGone: boolean;
   newTagPresent: boolean;
   changedExpectedFiles: boolean;
-  commandCalled: boolean;
   metadataCalled: boolean;
   writeCalled: boolean;
 }): string {
   return [
+    ...(input.entrypointFailures ?? []),
+    input.renameContinuationHint ? 'editor-menu/menu item ran but the rename/write continuation did not complete; the plugin may require text prompt or modal continuation support' : '',
     !input.frontmatterRenamed ? 'frontmatter tags were not renamed in every fixture note' : '',
     !input.bodyRenamed ? 'inline body tags were not renamed in every fixture note' : '',
     !input.oldTagGone ? 'old tag remains in at least one fixture note' : '',
     !input.newTagPresent ? 'new tag missing from at least one fixture note' : '',
     !input.changedExpectedFiles ? 'changed files did not match the controlled Tag Wrangler fixture set' : '',
-    !input.commandCalled ? 'runtime ledger did not record command execution' : '',
     !input.metadataCalled ? 'runtime ledger did not record metadata cache lookup evidence' : '',
     !input.writeCalled ? 'runtime ledger did not record vault write evidence' : '',
   ].filter(Boolean).join('; ');

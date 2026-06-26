@@ -132,13 +132,13 @@ function buildTagWranglerAudit(input: BuildObsidianWorkflowAuditsInput): Obsidia
   const probed = probedAudit(input, 'tag-wrangler-rename');
   if (probed) return probed;
   const called = latestEntries(input, { surfaces: ['metadata', 'vault', 'workspace'], phases: ['called'] });
-  const registered = latestEntries(input, { capabilities: ['addCommand', 'Menu'], phases: ['registered', 'called'] });
+  const registered = latestEntries(input, { capabilities: ['addCommand', 'Workspace.on', 'Workspace.editor-menu', 'Menu'], phases: ['registered', 'called'] });
   if (called.length > 0) {
     return partialAudit('tag-wrangler-rename', 'Rename or organize tags', 'runtime-ledger', called, 'Run the workflow probe against a fixture note set before calling tag rename compatible.');
   }
   if (input.capabilityGate.blocked) return blockedAudit(input, 'tag-wrangler-rename', 'Rename or organize tags');
   if (registered.length > 0) {
-    return partialAudit('tag-wrangler-rename', 'Rename or organize tags', 'runtime-ledger', registered, 'Run the tag command against a fixture note set before calling this workflow compatible.');
+    return partialAudit('tag-wrangler-rename', 'Rename or organize tags', 'runtime-ledger', registered, 'Run the tag command or editor-menu probe against a fixture note set before calling this workflow compatible.');
   }
   return staticAudit(input, 'tag-wrangler-rename', 'Rename or organize tags', ['metadata', 'vault'], 'Keep this on review until metadata and write-path probes prove the full rename workflow.');
 }

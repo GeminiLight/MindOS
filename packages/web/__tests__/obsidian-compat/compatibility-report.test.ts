@@ -286,6 +286,33 @@ describe('compatibility report', () => {
     expect(report.unsupportedApis).toEqual([]);
   });
 
+  it('recognizes workspace editor-menu event entrypoints used by context-menu plugins', () => {
+    const report = analyzePluginCompatibility(`
+      const { Plugin } = require('obsidian');
+      module.exports = class Example extends Plugin {
+        onload() {
+          this.registerEvent(this.app.workspace.on('editor-menu', (menu, editor) => {
+            const token = editor.getClickableTokenAt(editor.getCursor());
+            if (token?.type === 'tag') menu.addItem((item) => item.setTitle('Rename ' + token.text));
+          }));
+          this.app.workspace.trigger('tag-wrangler:contextmenu', {});
+        }
+      }
+    `);
+
+    expect(report.obsidianApis).toEqual(expect.arrayContaining([
+      'Workspace.on',
+      'Workspace.editor-menu',
+      'Workspace.trigger',
+    ]));
+    expect(report.partialApis).toEqual(expect.arrayContaining([
+      'Workspace.on',
+      'Workspace.editor-menu',
+      'Workspace.trigger',
+    ]));
+    expect(getCompatibilityLevel(report)).toBe('partial');
+  });
+
   it('classifies simple command and metadata plugins as compatible', () => {
     const report = analyzePluginCompatibility(`
       const { Plugin } = require('obsidian');

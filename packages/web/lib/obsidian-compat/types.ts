@@ -169,12 +169,20 @@ export interface EditorPosition {
   ch: number;
 }
 
+export interface ClickableToken {
+  type: string;
+  text: string;
+  start?: EditorPosition;
+  end?: EditorPosition;
+}
+
 export interface Editor {
   getValue(): string;
   setValue(value: string): void;
   getSelection(): string;
   replaceSelection(replacement: string): void;
   getCursor(which?: 'from' | 'to' | 'anchor' | 'head'): EditorPosition;
+  getClickableTokenAt?(position: EditorPosition): ClickableToken | null;
   setCursor(pos: EditorPosition): void;
   setCursor(line: number, ch?: number): void;
   setSelection(anchor: EditorPosition, head?: EditorPosition): void;
@@ -371,6 +379,10 @@ export interface SecretStorage {
 }
 
 export interface Workspace {
+  on(name: string, callback: EventCallback, ctx?: unknown): EventRefLike;
+  off(name: string, callback: EventCallback): void;
+  offref(ref: EventRefLike): void;
+  trigger(name: string, ...args: any[]): unknown[];
   getActiveFile(): TFile | null;
   getActiveViewOfType<T>(type: abstract new (...args: any[]) => T): T | null;
   activeLeaf?: WorkspaceLeaf | null;

@@ -7,7 +7,7 @@ import { Vault } from './vault';
 import { MetadataCacheShim } from './metadata-cache';
 import { FileManagerShim } from './file-manager';
 import { CommandRegistry } from '../command-registry';
-import { Events } from '../events';
+import { Events, type EventCallback, type EventRef } from '../events';
 import { ObsidianRuntimeHost } from '../runtime';
 import type { App, Command, Editor, IFileManager, IMetadataCache, MarkdownView, SecretStorage, TFile, Workspace, WorkspaceLeaf } from '../types';
 import type { CommandExecutionContext } from '../command-registry';
@@ -153,6 +153,20 @@ class WorkspaceShim extends Events implements Workspace {
 
   getActiveFile(): TFile | null {
     return this.activeFile;
+  }
+
+  override on(name: string, callback: EventCallback, ctx?: unknown): EventRef {
+    const ref = super.on(name, callback, ctx);
+    const pluginId = this.host.getCurrentPluginId();
+    if (pluginId) {
+      ref.ownerPluginId = pluginId;
+      this.host.recordRuntimeCapability(pluginId, 'Workspace.on', 'registered', `Plugin registered workspace event "${name}".`);
+    }
+    return ref;
+  }
+
+  triggerForPlugin(pluginId: string, name: string, ...args: unknown[]): unknown[] {
+    return this.triggerWhere(name, (ref) => ref.ownerPluginId === pluginId, ...args);
   }
 
   setActiveFile(file: TFile | null): void {

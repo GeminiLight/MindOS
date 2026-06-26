@@ -158,16 +158,19 @@ export interface PluginModalSnapshot {
 export interface RegisteredPluginMenuItem {
   title: string;
   icon?: string;
+  section?: string;
   checked?: boolean;
   disabled?: boolean;
   separator?: boolean;
   callback?: (evt?: MouseEvent) => unknown;
 }
 
+export type PluginMenuSource = 'mouse' | 'position' | 'workspace-editor-menu';
+
 export interface RegisteredPluginMenu {
   id: string;
   pluginId?: string;
-  source: 'mouse' | 'position';
+  source: PluginMenuSource;
   items: RegisteredPluginMenuItem[];
   interactionId?: string;
   interactionExpiresAt?: number;
@@ -176,7 +179,7 @@ export interface RegisteredPluginMenu {
 export interface PluginMenuSnapshot {
   id: string;
   pluginId?: string;
-  source: 'mouse' | 'position';
+  source: PluginMenuSource;
   interactionId?: string;
   items: Array<Omit<RegisteredPluginMenuItem, 'callback'> & { index: number; canRun?: boolean }>;
 }
@@ -418,6 +421,7 @@ export class ObsidianRuntimeHost extends Events {
       items: input.items.map((item) => ({
         title: item.title,
         icon: item.icon,
+        section: item.section,
         checked: item.checked === true,
         disabled: item.disabled === true,
         separator: item.separator === true,
@@ -821,6 +825,7 @@ export class ObsidianRuntimeHost extends Events {
         index,
         title: clampText(item.title, 200),
         icon: item.icon ? clampText(item.icon, 120) : undefined,
+        section: item.section ? clampText(item.section, 120) : undefined,
         checked: item.checked === true,
         disabled: item.disabled === true,
         separator: item.separator === true,

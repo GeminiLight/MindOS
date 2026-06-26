@@ -76,8 +76,9 @@ import {
   type ObsidianWorkflowProbeResult,
 } from './workflow-probes';
 import type { ObsidianSecretStorageSummary } from './secret-storage';
-import type { PluginManifest, TFile } from './types';
+import type { ClickableToken, PluginManifest, TFile } from './types';
 import type { EditorExtensionSummary, PluginMarkdownCodeBlockSnapshot, PluginMarkdownPostProcessorSnapshot, PluginMenuSnapshot, PluginModalSnapshot, PluginNoticeSnapshot, PluginViewSnapshot, RegisteredViewExtension, WorkspaceOpenRequest } from './runtime';
+import { Menu } from './shims/obsidian';
 import { resolveExistingSafe } from '@/lib/core/security';
 import { ErrorCodes, MindOSError } from '@/lib/errors';
 
@@ -148,6 +149,11 @@ export interface PluginEditorCommandContext {
   selectionStart?: number;
   selectionEnd?: number;
   cursorOffset?: number;
+  clickableToken?: ClickableToken | null;
+}
+
+export interface PluginEditorMenuContext extends PluginEditorCommandContext {
+  tagText?: string;
 }
 
 export interface PluginEditorUpdate {
@@ -501,6 +507,73 @@ export class PluginManager {
     host.dismissMenu(menuId);
     this.menuEditorSessions.delete(menuId);
     return result;
+  }
+
+  async triggerEditorMenu(pluginId: string, context: PluginEditorMenuContext): Promise<PluginActionResult> {
+    await this.loadEnabledPlugins();
+    this.requirePlugin(pluginId);
+    const host = this.loader.getApp().getRuntimeHost();
+    const requestOffset = host.getWorkspaceOpenRequests().length;
+    const modalOffset = host.getModalSnapshotCount();
+    const menuOffset = host.getMenuSnapshotCount();
+    const noticeOffset = host.getNoticeSnapshotCount();
+    const editorSession = await this.editorExecutionSessionFor({
+      ...context,
+      clickableToken: context.clickableToken ?? clickableTokenForEditorMenu(context),
+    });
+
+    if (!editorSession) {
+      throw new MindOSError(ErrorCodes.INVALID_REQUEST, `Editor menu source file not found or not Markdown: ${context.sourcePath}`);
+    }
+
+    const app = this.loader.getApp();
+    const menu = new Menu();
+
+    await app.withActiveFile(editorSession.file, async () => {
+      await host.runWithPluginContext(pluginId, async () => {
+        const workspace = app.workspace as typeof app.workspace & {
+          triggerForPlugin?: (targetPluginId: string, name: string, ...args: unknown[]) => unknown[];
+        };
+        const results = typeof workspace.triggerForPlugin === 'function'
+          ? workspace.triggerForPlugin(pluginId, 'editor-menu', menu, editorSession.commandContext.editor, editorSession.commandContext.view)
+          : workspace.trigger('editor-menu', menu, editorSession.commandContext.editor, editorSession.commandContext.view);
+        await Promise.all(results.map((result) => Promise.resolve(result)));
+        host.recordRuntimeCapability(
+          pluginId,
+          'Workspace.editor-menu',
+          'called',
+          context.tagText
+            ? `Triggered workspace editor-menu for "${context.sourcePath}" at tag "${context.tagText}".`
+            : `Triggered workspace editor-menu for "${context.sourcePath}".`,
+        );
+        host.recordMenuOpen({
+          pluginId,
+          source: 'workspace-editor-menu',
+          items: menu.items.map((item) => ({
+            title: item.title,
+            icon: item.icon,
+            section: item.section,
+            checked: item.checked,
+            disabled: item.disabled,
+            separator: item.separator,
+            callback: item.callback,
+          })),
+        });
+      });
+    });
+
+    const changed = editorSession.commandContext.editor.getValue() !== editorSession.initialContent;
+    if (changed) {
+      await app.vault.modify(editorSession.file, editorSession.commandContext.editor.getValue());
+    }
+    this.rememberEditorSessionForMenus(menuOffset, {
+      ...editorSession,
+      initialContent: editorSession.commandContext.editor.getValue(),
+    });
+    return this.actionResultSince(requestOffset, modalOffset, menuOffset, noticeOffset, changed ? [{
+      sourcePath: editorSession.file.path,
+      changed,
+    }] : []);
   }
 
   async renderView(pluginId: string, viewType: string, context: PluginViewContext = {}): Promise<PluginViewSnapshot> {
@@ -1065,6 +1138,7 @@ export class PluginManager {
         selectionStart: editorContext.selectionStart,
         selectionEnd: editorContext.selectionEnd,
         cursorOffset: editorContext.cursorOffset,
+        clickableToken: editorContext.clickableToken,
       }),
     };
   }
@@ -1244,6 +1318,16 @@ function normalizeCapabilityConfirmations(value: unknown): Record<string, Obsidi
 
 function isCompatibilityLevel(value: unknown): value is CompatibilityLevel {
   return value === 'compatible' || value === 'partial' || value === 'blocked';
+}
+
+function clickableTokenForEditorMenu(context: PluginEditorMenuContext): ClickableToken | null {
+  const tagText = context.tagText?.trim();
+  if (!tagText) return null;
+  const normalizedTag = tagText.startsWith('#') ? tagText : `#${tagText}`;
+  return {
+    type: 'tag',
+    text: normalizedTag,
+  };
 }
 
 function normalizeWorkspaceLink(value: string): string {

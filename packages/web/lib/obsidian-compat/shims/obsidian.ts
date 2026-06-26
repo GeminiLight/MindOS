@@ -735,6 +735,7 @@ export class FileSystemAdapter {
 export class MenuItem {
   title = '';
   icon = '';
+  section = '';
   checked = false;
   disabled = false;
   separator = false;
@@ -747,6 +748,11 @@ export class MenuItem {
 
   setIcon(icon: string): this {
     this.icon = icon;
+    return this;
+  }
+
+  setSection(section: string): this {
+    this.section = section;
     return this;
   }
 
@@ -804,6 +810,7 @@ export class Menu {
       items: this.items.map((item) => ({
         title: item.title,
         icon: item.icon,
+        section: item.section,
         checked: item.checked,
         disabled: item.disabled,
         separator: item.separator,

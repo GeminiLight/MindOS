@@ -8,6 +8,7 @@ export type EventRef = {
   name?: string;
   callback?: EventCallback;
   ctx?: unknown;
+  ownerPluginId?: string;
   off: () => void;
 };
 
@@ -61,12 +62,17 @@ export class Events {
     return this.tryTrigger(name, args);
   }
 
-  tryTrigger(name: string, args: any[]): unknown[] {
+  triggerWhere(name: string, predicate: (ref: EventRef) => boolean, ...args: any[]): unknown[] {
+    return this.tryTrigger(name, args, predicate);
+  }
+
+  tryTrigger(name: string, args: any[], predicate?: (ref: EventRef) => boolean): unknown[] {
     const set = this.listeners.get(name);
     if (!set) return [];
 
     const results: unknown[] = [];
     for (const ref of Array.from(set)) {
+      if (predicate && !predicate(ref)) continue;
       try {
         results.push(ref.callback?.apply(ref.ctx, args));
       } catch (err) {
