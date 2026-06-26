@@ -13,6 +13,7 @@ import type {
   ObsidianCapabilityCoverage,
   ObsidianCapabilitySurfaceSummary,
   ObsidianCapabilitySupport,
+  ObsidianCapabilitySurface,
 } from '@/lib/obsidian-compat/capability-matrix';
 import type { ObsidianCapabilityGateReport } from '@/lib/obsidian-compat/capability-gate';
 import type {
@@ -294,6 +295,41 @@ export interface SurfaceLedgerProjectionView {
   projection: ObsidianSurfaceLedgerProjection;
 }
 
+export type CapabilityApprovalReviewStatus =
+  | 'not-evaluated'
+  | 'ready'
+  | 'limited'
+  | 'needs-review'
+  | 'confirmed'
+  | 'policy-denied'
+  | 'blocked';
+
+export interface CapabilityApprovalReviewItem {
+  surface: ObsidianCapabilitySurface;
+  label: string;
+  decision: string;
+  risk: string;
+  apiCount: number;
+  apisPreview: string;
+  support: string;
+  reason: string;
+}
+
+export interface CapabilityApprovalReview {
+  status: CapabilityApprovalReviewStatus;
+  label: string;
+  summary: string;
+  nextStep: string;
+  canApprove: boolean;
+  approved: boolean;
+  fingerprint?: string;
+  confirmedAt?: string;
+  pendingSurfaces: string[];
+  deniedEvents: number;
+  blockedEvents: number;
+  items: CapabilityApprovalReviewItem[];
+}
+
 export function runtimeSummary(plugin: ObsidianPluginStatus): string {
   const parts = [
     plugin.runtime.commands ? `${plugin.runtime.commands} command${plugin.runtime.commands === 1 ? '' : 's'}` : '',
@@ -328,6 +364,152 @@ export function capabilityLedgerSummary(plugin: ObsidianPluginStatus): string {
     counts.denied ? `${counts.denied} denied` : '',
     counts.blocked ? `${counts.blocked} blocked` : '',
   ].filter(Boolean).join(' / ');
+}
+
+export function capabilityApprovalReview(plugin: ObsidianPluginStatus): CapabilityApprovalReview {
+  const gate = plugin.capabilityGate;
+  const deniedEvents = runtimePhaseEvidenceCount(plugin, 'denied');
+  const blockedEvents = runtimePhaseEvidenceCount(plugin, 'blocked');
+  const hardBlocked = gate?.blocked === true || blockedEvents > 0;
+  const approved = gate?.requiresConfirmation === true && gate.confirmed === true;
+  const canApprove = gate?.requiresConfirmation === true && gate.confirmed !== true && !hardBlocked;
+  const pendingSurfaces = Array.from(new Set(
+    (gate?.items ?? [])
+      .filter((item) => item.decision === 'requires-confirmation')
+      .map((item) => surfaceLabel(item.surface)),
+  ));
+  const items = (gate?.items ?? []).map((item) => ({
+    surface: item.surface,
+    label: surfaceLabel(item.surface),
+    decision: capabilityGateDecisionLabel(item.decision),
+    risk: capabilityGateRiskLabel(item.risk),
+    apiCount: item.apiCount,
+    apisPreview: surfaceApiPreview(item.apis),
+    support: compactSurfaceSupport(item.supportSummary),
+    reason: item.reason,
+  }));
+
+  if (hardBlocked) {
+    const reason = gate?.blockedReasons[0]
+      ?? plugin.capabilityLedgerHistory?.latestBlocked[0]?.evidence
+      ?? 'Hard blocker evidence is present.';
+    return {
+      status: 'blocked',
+      label: 'Blocked',
+      summary: 'Hard blocker evidence is present; this plugin cannot be enabled safely in the current compatibility host.',
+      nextStep: reason,
+      canApprove: false,
+      approved,
+      fingerprint: gate?.fingerprint,
+      confirmedAt: gate?.confirmedAt,
+      pendingSurfaces,
+      deniedEvents,
+      blockedEvents,
+      items,
+    };
+  }
+
+  if (deniedEvents > 0) {
+    return {
+      status: 'policy-denied',
+      label: 'Policy denied',
+      summary: 'Runtime policy denial evidence is present. Review denied events before approving or relying on this plugin.',
+      nextStep: canApprove
+        ? 'Review the denied runtime policy events, then approve only if the requested capability should be granted for this plugin.'
+        : 'Review denied runtime policy events before broadening this plugin capability or relying on the workflow.',
+      canApprove,
+      approved,
+      fingerprint: gate?.fingerprint,
+      confirmedAt: gate?.confirmedAt,
+      pendingSurfaces,
+      deniedEvents,
+      blockedEvents,
+      items,
+    };
+  }
+
+  if (!gate) {
+    return {
+      status: 'not-evaluated',
+      label: 'Not evaluated',
+      summary: 'Capability gate has not produced a fingerprint for this plugin yet.',
+      nextStep: 'Run import preview or refresh the plugin host so MindOS can derive the capability profile.',
+      canApprove: false,
+      approved: false,
+      pendingSurfaces: [],
+      deniedEvents,
+      blockedEvents,
+      items: [],
+    };
+  }
+
+  if (gate.requiresConfirmation && !gate.confirmed) {
+    return {
+      status: 'needs-review',
+      label: 'Needs approval',
+      summary: 'Explicit approval is required before enabling this plugin in the Obsidian compatibility host.',
+      nextStep: pendingSurfaces.length > 0
+        ? `Review requested surfaces: ${pendingSurfaces.join(', ')}.`
+        : 'Review the derived capability profile before enabling.',
+      canApprove,
+      approved: false,
+      fingerprint: gate.fingerprint,
+      confirmedAt: gate.confirmedAt,
+      pendingSurfaces,
+      deniedEvents,
+      blockedEvents,
+      items,
+    };
+  }
+
+  if (gate.requiresConfirmation && gate.confirmed) {
+    return {
+      status: 'confirmed',
+      label: 'Approved',
+      summary: 'Approved for the current capability fingerprint.',
+      nextStep: 'MindOS will ask again if static analysis or runtime evidence changes this plugin capability profile.',
+      canApprove: false,
+      approved: true,
+      fingerprint: gate.fingerprint,
+      confirmedAt: gate.confirmedAt,
+      pendingSurfaces,
+      deniedEvents,
+      blockedEvents,
+      items,
+    };
+  }
+
+  if (gate.status === 'limited') {
+    return {
+      status: 'limited',
+      label: 'Limited host',
+      summary: 'No explicit approval is pending, but one or more surfaces run through limited, catalog, request, or snapshot hosts.',
+      nextStep: 'Use runtime ledger and workflow probes before treating this as full workflow compatibility.',
+      canApprove: false,
+      approved: false,
+      fingerprint: gate.fingerprint,
+      confirmedAt: gate.confirmedAt,
+      pendingSurfaces,
+      deniedEvents,
+      blockedEvents,
+      items,
+    };
+  }
+
+  return {
+    status: 'ready',
+    label: 'Ready',
+    summary: 'No gated or blocked capability evidence is present for this plugin.',
+    nextStep: 'Enable and verify real workflows before marking the plugin observed.',
+    canApprove: false,
+    approved: false,
+    fingerprint: gate.fingerprint,
+    confirmedAt: gate.confirmedAt,
+    pendingSurfaces,
+    deniedEvents,
+    blockedEvents,
+    items,
+  };
 }
 
 export function capabilityLedgerHistorySummary(plugin: ObsidianPluginStatus): string {
@@ -369,6 +551,37 @@ export function workflowAuditStatusLabel(status: ObsidianWorkflowAuditStatus): s
   if (status === 'blocked') return 'blocked';
   if (status === 'native-replacement') return 'native';
   return 'not observed';
+}
+
+function runtimePhaseEvidenceCount(
+  plugin: ObsidianPluginStatus,
+  phase: ObsidianRuntimeCapabilityLedgerPhase,
+): number {
+  const current = (plugin.runtime.capabilityLedger ?? [])
+    .filter((entry) => entry.phase === phase)
+    .length;
+  const historical = plugin.capabilityLedgerHistory?.summary[phase] ?? 0;
+  return Math.max(current, historical);
+}
+
+function capabilityGateDecisionLabel(decision: ObsidianCapabilityGateReport['items'][number]['decision']): string {
+  return {
+    granted: 'granted',
+    limited: 'limited',
+    'snapshot-only': 'snapshot only',
+    'catalog-only': 'catalog only',
+    'request-only': 'request only',
+    'requires-confirmation': 'requires approval',
+    blocked: 'blocked',
+  }[decision];
+}
+
+function capabilityGateRiskLabel(risk: ObsidianCapabilityGateReport['items'][number]['risk']): string {
+  return {
+    low: 'low risk',
+    medium: 'medium risk',
+    high: 'high risk',
+  }[risk];
 }
 
 function surfaceLabel(surface: ObsidianCapabilitySurfaceSummary['surface']): string {

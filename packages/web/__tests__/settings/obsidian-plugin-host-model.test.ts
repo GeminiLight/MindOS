@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  capabilityApprovalReview,
   capabilityLedgerHistorySummary,
   capabilityLedgerSummary,
   isLoadResult,
@@ -180,6 +181,163 @@ describe('ObsidianPluginHostModel', () => {
     });
 
     expect(capabilityLedgerSummary(item)).toBe('1 predicted / 1 registered / 1 called / 1 denied');
+  });
+
+  it('summarizes pending approval for gated capability surfaces', () => {
+    const item = plugin({
+      capabilityGate: {
+        status: 'review',
+        fingerprint: 'abc123',
+        requiresConfirmation: true,
+        confirmed: false,
+        blocked: false,
+        items: [{
+          surface: 'network',
+          decision: 'requires-confirmation',
+          risk: 'high',
+          apiCount: 1,
+          apis: ['requestUrl'],
+          supportSummary: { full: 0, limited: 1, 'snapshot-only': 0, 'catalog-only': 0, 'request-only': 0, unsupported: 0 },
+          reason: 'Network APIs can contact external services.',
+        }],
+        confirmReasons: ['Network APIs can contact external services.'],
+        blockedReasons: [],
+      },
+    });
+
+    const review = capabilityApprovalReview(item);
+
+    expect(review).toMatchObject({
+      status: 'needs-review',
+      label: 'Needs approval',
+      canApprove: true,
+      approved: false,
+      fingerprint: 'abc123',
+      pendingSurfaces: ['Network'],
+      deniedEvents: 0,
+      blockedEvents: 0,
+    });
+    expect(review.items).toEqual([
+      expect.objectContaining({
+        label: 'Network',
+        decision: 'requires approval',
+        risk: 'high risk',
+        apisPreview: 'requestUrl',
+      }),
+    ]);
+  });
+
+  it('keeps confirmed approvals tied to the current capability fingerprint', () => {
+    const item = plugin({
+      capabilityGate: {
+        status: 'limited',
+        fingerprint: 'abc123',
+        requiresConfirmation: true,
+        confirmed: true,
+        confirmedAt: '2026-06-24T00:00:00.000Z',
+        blocked: false,
+        items: [{
+          surface: 'secret',
+          decision: 'requires-confirmation',
+          risk: 'high',
+          apiCount: 1,
+          apis: ['SecretStorage.set'],
+          supportSummary: { full: 0, limited: 1, 'snapshot-only': 0, 'catalog-only': 0, 'request-only': 0, unsupported: 0 },
+          reason: 'Secret APIs can read and write plugin-scoped encrypted secrets.',
+        }],
+        confirmReasons: ['Secret APIs can read and write plugin-scoped encrypted secrets.'],
+        blockedReasons: [],
+      },
+    });
+
+    const review = capabilityApprovalReview(item);
+
+    expect(review).toMatchObject({
+      status: 'confirmed',
+      label: 'Approved',
+      canApprove: false,
+      approved: true,
+      fingerprint: 'abc123',
+      confirmedAt: '2026-06-24T00:00:00.000Z',
+      pendingSurfaces: ['Secrets'],
+    });
+    expect(review.nextStep).toContain('ask again');
+  });
+
+  it('surfaces runtime policy denials ahead of approval readiness', () => {
+    const item = plugin({
+      capabilityGate: {
+        status: 'review',
+        fingerprint: 'abc123',
+        requiresConfirmation: true,
+        confirmed: false,
+        blocked: false,
+        items: [{
+          surface: 'network',
+          decision: 'requires-confirmation',
+          risk: 'high',
+          apiCount: 1,
+          apis: ['requestUrl'],
+          supportSummary: { full: 0, limited: 1, 'snapshot-only': 0, 'catalog-only': 0, 'request-only': 0, unsupported: 0 },
+          reason: 'Network APIs can contact external services.',
+        }],
+        confirmReasons: ['Network APIs can contact external services.'],
+        blockedReasons: [],
+      },
+      capabilityLedgerHistory: {
+        total: 1,
+        entries: [],
+        summary: { predicted: 0, registered: 0, called: 0, denied: 1, blocked: 0 },
+        latestBlocked: [],
+        skippedCorruptLines: 0,
+      },
+    });
+
+    const review = capabilityApprovalReview(item);
+
+    expect(review).toMatchObject({
+      status: 'policy-denied',
+      label: 'Policy denied',
+      canApprove: true,
+      deniedEvents: 1,
+      blockedEvents: 0,
+      pendingSurfaces: ['Network'],
+    });
+    expect(review.summary).toContain('Runtime policy denial evidence');
+  });
+
+  it('blocks approval when hard blocker evidence is present', () => {
+    const item = plugin({
+      capabilityGate: {
+        status: 'blocked',
+        fingerprint: 'blocked',
+        requiresConfirmation: false,
+        confirmed: false,
+        blocked: true,
+        items: [{
+          surface: 'unsupported',
+          decision: 'blocked',
+          risk: 'high',
+          apiCount: 1,
+          apis: ['child_process'],
+          supportSummary: { full: 0, limited: 0, 'snapshot-only': 0, 'catalog-only': 0, 'request-only': 0, unsupported: 1 },
+          reason: 'Unsupported Obsidian APIs require a native or compatibility host before this plugin can run: child_process.',
+        }],
+        confirmReasons: [],
+        blockedReasons: ['Unsupported Node module: child_process.'],
+      },
+    });
+
+    const review = capabilityApprovalReview(item);
+
+    expect(review).toMatchObject({
+      status: 'blocked',
+      label: 'Blocked',
+      canApprove: false,
+      blockedEvents: 0,
+      fingerprint: 'blocked',
+    });
+    expect(review.nextStep).toBe('Unsupported Node module: child_process.');
   });
 
   it('projects detected surfaces against runtime ledger evidence', () => {

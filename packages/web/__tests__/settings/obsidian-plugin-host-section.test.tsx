@@ -362,6 +362,21 @@ describe('ObsidianPluginHostSection', () => {
     const { host, root } = await renderSection();
 
     expect(host.textContent).toContain('review gate');
+    const row = host.querySelector('[data-obsidian-plugin-row="quickadd-like"]') as HTMLElement;
+    const expandButton = row.querySelector('button') as HTMLButtonElement;
+    await act(async () => {
+      expandButton.click();
+      await Promise.resolve();
+    });
+
+    expect(host.textContent).toContain('Capability gate');
+    expect(host.textContent).toContain('Needs approval');
+    expect(host.textContent).toContain('Explicit approval is required before enabling');
+    expect(host.textContent).toContain('Network');
+    expect(host.textContent).toContain('1 high risk');
+    expect(host.textContent).toContain('requires approval · high risk');
+    expect(host.textContent).toContain('Network APIs can contact external services.');
+
     const toggle = host.querySelector('button[role="switch"]') as HTMLButtonElement;
     await act(async () => {
       toggle.click();
@@ -370,6 +385,7 @@ describe('ObsidianPluginHostSection', () => {
 
     expect(mocks.apiFetch).toHaveBeenCalledTimes(1);
     expect(portalRoot().textContent).toContain('Enable QuickAdd Like?');
+    expect(portalRoot().textContent).toContain('Requested surfaces: Network.');
     expect(portalRoot().textContent).toContain('Network APIs can contact external services.');
 
     const confirmButton = Array.from(portalRoot().querySelectorAll('button'))
@@ -383,6 +399,57 @@ describe('ObsidianPluginHostSection', () => {
 
     expect(host.textContent).toContain('1 enabled');
     expect(mocks.apiFetch).toHaveBeenCalledTimes(2);
+
+    await cleanup(root, host);
+  });
+
+  it('surfaces policy denied runtime evidence in expanded plugin details', async () => {
+    mocks.apiFetch.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url === '/api/obsidian-plugins' && !init?.method) {
+        return {
+          ok: true,
+          plugins: [plugin({
+            enabled: true,
+            loaded: false,
+            capabilityLedgerHistory: {
+              total: 1,
+              entries: [{
+                schemaVersion: 1,
+                pluginId: 'quickadd-like',
+                capability: 'requestUrl',
+                surface: 'network',
+                support: 'limited',
+                phase: 'denied',
+                source: 'runtime-ledger',
+                evidence: 'requestUrl blocks local/private hosts',
+                recordedAt: '2026-06-26T08:00:00.000Z',
+                sessionId: 'session-1',
+              }],
+              summary: { predicted: 0, registered: 0, called: 0, denied: 1, blocked: 0 },
+              latestBlocked: [],
+              skippedCorruptLines: 0,
+            },
+          })],
+        };
+      }
+      throw new Error(`Unexpected apiFetch call: ${url}`);
+    });
+
+    const { host, root } = await renderSection();
+    const row = host.querySelector('[data-obsidian-plugin-row="quickadd-like"]') as HTMLElement;
+    const expandButton = row.querySelector('button') as HTMLButtonElement;
+
+    await act(async () => {
+      expandButton.click();
+      await Promise.resolve();
+    });
+
+    expect(host.textContent).toContain('Capability gate');
+    expect(host.textContent).toContain('Policy denied');
+    expect(host.textContent).toContain('Runtime policy denial evidence is present.');
+    expect(host.textContent).toContain('Review denied runtime policy events before broadening this plugin capability');
+    expect(host.textContent).toContain('1 denied event');
+    expect(host.textContent).toContain('1 historical · 1 denied');
 
     await cleanup(root, host);
   });
