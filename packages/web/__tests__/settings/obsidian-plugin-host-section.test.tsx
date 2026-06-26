@@ -179,9 +179,11 @@ describe('ObsidianPluginHostSection', () => {
               id: 'quickadd-capture-macro',
               label: 'Run capture or macro commands',
               status: 'observed',
-              source: 'runtime-ledger',
+              source: 'workflow-probe',
               evidence: ['2026-06-26T08:00:00.000Z: Plugin command "capture" executed.'],
               lastObservedAt: '2026-06-26T08:00:00.000Z',
+              lastProbedAt: '2026-06-26T08:00:00.000Z',
+              lastProbeStatus: 'passed',
               nextStep: 'Verify each capture path with real note writes.',
             }],
           })],
@@ -200,9 +202,14 @@ describe('ObsidianPluginHostSection', () => {
     });
 
     expect(host.textContent).toContain('2 historical · 1 registered / 1 called');
+    expect(host.textContent).toContain('Compatibility posture');
+    expect(host.textContent).toContain('Workflow observed');
+    expect(host.textContent).toContain('Static');
+    expect(host.textContent).toContain('Runtime');
     expect(host.textContent).toContain('Workflow audit');
     expect(host.textContent).toContain('Run capture or macro commands');
     expect(host.textContent).toContain('observed');
+    expect(host.textContent).toContain('Last probe passed');
     expect(host.textContent).toContain('Plugin command "capture" executed.');
 
     await cleanup(root, host);

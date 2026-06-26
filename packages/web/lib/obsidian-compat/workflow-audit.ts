@@ -87,7 +87,7 @@ export function buildObsidianWorkflowAudits(input: BuildObsidianWorkflowAuditsIn
     return [{
       id: 'runtime-observed',
       label: 'Runtime interactions',
-      status: 'observed',
+      status: 'partial',
       source: 'runtime-ledger',
       evidence: evidenceFor(observedRuntime),
       lastObservedAt: observedRuntime[0]?.recordedAt,

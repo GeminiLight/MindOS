@@ -76,6 +76,33 @@ describe('buildObsidianWorkflowAudits', () => {
     ]);
   });
 
+  it('keeps generic runtime called evidence partial until a named workflow is defined', () => {
+    const audits = buildObsidianWorkflowAudits({
+      pluginId: 'unknown-plugin',
+      pluginName: 'Unknown Plugin',
+      coverage: [],
+      capabilityGate: readyGate,
+      runtimeEntries: [],
+      history: history([runtimeEntry({
+        pluginId: 'unknown-plugin',
+        capability: 'requestUrl',
+        surface: 'network',
+        support: 'limited',
+        recordedAt: '2026-06-26T09:00:00.000Z',
+        evidence: 'Plugin called requestUrl.',
+      })]),
+    });
+
+    expect(audits).toEqual([
+      expect.objectContaining({
+        id: 'runtime-observed',
+        status: 'partial',
+        source: 'runtime-ledger',
+        lastObservedAt: '2026-06-26T09:00:00.000Z',
+      }),
+    ]);
+  });
+
   it('marks QuickAdd workflows observed when a workflow probe passes with result assertions', () => {
     const audits = buildObsidianWorkflowAudits({
       pluginId: 'quickadd',

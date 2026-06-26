@@ -10,6 +10,9 @@ import {
   workflowAuditStatusLabel,
   type ObsidianPluginStatus,
 } from '@/components/settings/ObsidianPluginHostModel';
+import {
+  compatibilityPosture,
+} from '@/components/settings/ObsidianCompatibilityPostureModel';
 
 function plugin(overrides: Partial<ObsidianPluginStatus> = {}): ObsidianPluginStatus {
   return {
@@ -212,6 +215,120 @@ describe('ObsidianPluginHostModel', () => {
         }),
       }),
     ]);
+  });
+
+  it('keeps runtime called evidence limited until workflow proof exists', () => {
+    const item = plugin({
+      runtime: {
+        ...plugin().runtime,
+        capabilityLedger: [{
+          pluginId: 'quickadd-like',
+          capability: 'addCommand',
+          surface: 'commands',
+          support: 'full',
+          phase: 'called',
+          source: 'runtime-ledger',
+          evidence: 'Plugin command executed.',
+        }],
+      },
+      capabilityLedger: [
+        {
+          pluginId: 'quickadd-like',
+          capability: 'addCommand',
+          surface: 'commands',
+          support: 'full',
+          phase: 'predicted',
+          source: 'static-analysis',
+          evidence: 'static',
+        },
+        {
+          pluginId: 'quickadd-like',
+          capability: 'addCommand',
+          surface: 'commands',
+          support: 'full',
+          phase: 'called',
+          source: 'runtime-ledger',
+          evidence: 'Plugin command executed.',
+        },
+      ],
+    });
+
+    const posture = compatibilityPosture(item);
+
+    expect(posture.status).toBe('limited');
+    expect(posture.summary).toContain('Runtime registration or called evidence exists');
+    expect(posture.evidence.find((step) => step.layer === 'runtime')).toMatchObject({
+      status: 'called',
+      statusLabel: 'called',
+    });
+    expect(posture.evidence.find((step) => step.layer === 'workflow')).toMatchObject({
+      status: 'missing',
+    });
+  });
+
+  it('marks posture observed only when a named workflow audit has probe evidence', () => {
+    const item = plugin({
+      workflowAudits: [{
+        id: 'quickadd-capture-macro',
+        label: 'Run capture or macro commands',
+        status: 'observed',
+        source: 'workflow-probe',
+        evidence: ['Probe executed command and observed a vault file write.'],
+        lastObservedAt: '2026-06-26T08:00:01.000Z',
+        lastProbedAt: '2026-06-26T08:00:01.000Z',
+        lastProbeStatus: 'passed',
+      }],
+    });
+
+    const posture = compatibilityPosture(item);
+
+    expect(posture.status).toBe('observed');
+    expect(posture.label).toBe('Workflow observed');
+    expect(posture.observedWorkflows).toBe(1);
+    expect(posture.evidence.find((step) => step.layer === 'workflow')).toMatchObject({
+      status: 'observed',
+      summary: '1 workflow passed probe/audit evidence.',
+    });
+  });
+
+  it('marks posture blocked when capability blockers are present', () => {
+    const item = plugin({
+      compatibility: {
+        supportedApis: ['Plugin'],
+        partialApis: [],
+        unsupportedApis: ['child_process'],
+        blockers: ['Unsupported Node module: child_process.'],
+      },
+    });
+
+    const posture = compatibilityPosture(item);
+
+    expect(posture.status).toBe('blocked');
+    expect(posture.summary).toBe('Unsupported Node module: child_process.');
+    expect(posture.evidence.find((step) => step.layer === 'static')).toMatchObject({
+      status: 'blocked',
+    });
+  });
+
+  it('uses native posture for native replacement workflow audits', () => {
+    const item = plugin({
+      workflowAudits: [{
+        id: 'dataview-native-query',
+        label: 'Query notes and metadata',
+        status: 'native-replacement',
+        source: 'native-replacement',
+        evidence: ['Use MindOS native query surfaces.'],
+        nextStep: 'Route Dataview-style tables to MindOS native query.',
+      }],
+    });
+
+    const posture = compatibilityPosture(item);
+
+    expect(posture.status).toBe('native');
+    expect(posture.nativeWorkflows).toBe(1);
+    expect(posture.evidence.find((step) => step.layer === 'workflow')).toMatchObject({
+      status: 'native',
+    });
   });
 
   it('summarizes historical runtime ledger without counting static predictions', () => {

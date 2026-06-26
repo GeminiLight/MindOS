@@ -76,6 +76,11 @@ import {
   type SurfaceRouteTarget,
 } from './ObsidianPluginHostModel';
 import {
+  compatibilityEvidenceStatusClass,
+  compatibilityPosture,
+  compatibilityPostureStatusClass,
+} from './ObsidianCompatibilityPostureModel';
+import {
   DeclarativeSettingsCatalog,
   SettingControl,
   declarativePreviewKey,
@@ -812,6 +817,7 @@ export function ObsidianPluginHostSection({
               const migrateKey = `migrate-legacy:${plugin.id}`;
               const surfaceRoutes = surfaceRouting(plugin);
               const surfaceLedgerChecks = surfaceLedgerProjections(plugin);
+              const posture = compatibilityPosture(plugin);
               const isFocused = highlightedPluginId === plugin.id;
               return (
                 <div
@@ -963,6 +969,36 @@ export function ObsidianPluginHostSection({
                           </p>
                         </div>
                         <ObsidianCapabilityGatePanel plugin={plugin} />
+                      </div>
+
+                      <div className="rounded-lg border border-border/50 bg-card/60 px-3 py-2.5">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <p className="text-2xs font-medium uppercase tracking-wider text-muted-foreground">Compatibility posture</p>
+                          <span className={`rounded border px-1.5 py-0.5 font-mono text-2xs ${compatibilityPostureStatusClass(posture.status)}`}>
+                            {posture.label}
+                          </span>
+                        </div>
+                        <p className="mt-1 text-2xs text-muted-foreground">
+                          {posture.summary}
+                        </p>
+                        <div className="mt-2 grid gap-1.5 sm:grid-cols-3">
+                          {posture.evidence.map((step) => (
+                            <div key={step.layer} className="rounded-md border border-border bg-background px-2.5 py-2">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-2xs font-medium text-foreground">{step.label}</span>
+                                <span className={`rounded border px-1.5 py-0.5 font-mono text-2xs ${compatibilityEvidenceStatusClass(step.status)}`}>
+                                  {step.statusLabel}
+                                </span>
+                              </div>
+                              <p className="mt-1 line-clamp-2 text-2xs text-muted-foreground">
+                                {step.summary}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                        <p className="mt-2 line-clamp-2 text-2xs text-muted-foreground/70">
+                          {posture.nextStep}
+                        </p>
                       </div>
 
                       {(plugin.workflowAudits?.length ?? 0) > 0 && (
