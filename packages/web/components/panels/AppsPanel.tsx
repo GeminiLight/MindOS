@@ -12,7 +12,7 @@ import {
   Users,
 } from 'lucide-react';
 import PanelHeader from './PanelHeader';
-import { PANEL_NAV_STACK_CLASS, PanelNavRow } from './PanelNavRow';
+import { PanelPrimaryNav, PanelNavRow } from './PanelNavRow';
 import { useLocale } from '@/lib/stores/locale-store';
 
 interface AppsPanelProps {
@@ -62,18 +62,18 @@ export default function AppsPanel({ active }: AppsPanelProps) {
     >
       <PanelHeader title={copy.title} />
 
-      <div className="sidebar-scroll-area min-h-0 flex-1 overflow-y-auto">
-        <div className={PANEL_NAV_STACK_CLASS}>
-          <PanelNavRow
-            icon={<LayoutGrid size={14} aria-hidden="true" />}
-            title={copy.overview}
-            href="/apps"
-            active={appsActive}
-            activeVariant="rail"
-          />
-        </div>
+      <PanelPrimaryNav aria-label={copy.title}>
+        <PanelNavRow
+          icon={<LayoutGrid size={14} aria-hidden="true" />}
+          title={copy.overview}
+          href="/apps"
+          active={appsActive}
+          activeVariant="rail"
+        />
+      </PanelPrimaryNav>
 
-        <nav className="border-t border-border/60 px-3 py-3" aria-label={copy.scenarios}>
+      <div className="sidebar-scroll-area min-h-0 flex-1 overflow-y-auto">
+        <nav className="px-3 py-3" aria-label={copy.scenarios}>
           <p className="mb-1.5 px-1 text-2xs font-medium uppercase text-muted-foreground/50">
             {copy.scenarios}
           </p>

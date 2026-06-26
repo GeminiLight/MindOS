@@ -88,18 +88,18 @@ export default function AgentsPanel({
       copy={hubCopy}
       connectedCount={connected.length}
       channelsActive={isChannelsTab}
+      ariaLabel={p.title}
     />
   );
 
   return (
     <div className={`flex flex-col h-full ${active ? '' : 'hidden'}`}>
       <PanelHeader title={p.title} />
+      {hub}
 
       <div className="sidebar-scroll-area flex-1 overflow-y-auto min-h-0">
         {isAgentTab ? (
           <div className="pb-3">
-            {hub}
-            <div className="mx-4 border-t border-border" />
             <AgentsRuntimeSection
               variant="panel"
             />
@@ -135,8 +135,6 @@ export default function AgentsPanel({
           </div>
         ) : (
           <div className="pb-3">
-            {hub}
-            <div className="mx-4 border-t border-border" />
             {isChannelsTab ? (
               <IMChannelsView />
             ) : mcp.loading ? (

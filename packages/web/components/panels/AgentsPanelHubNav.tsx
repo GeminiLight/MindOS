@@ -2,7 +2,7 @@
 
 import { usePathname, useSearchParams } from 'next/navigation';
 import { Bot, LayoutDashboard, MessageSquare, Server, Sparkles } from 'lucide-react';
-import { PANEL_NAV_STACK_CLASS, PanelNavRow } from './PanelNavRow';
+import { PanelPrimaryNav, PanelNavRow } from './PanelNavRow';
 
 type HubCopy = {
   navOverview: string;
@@ -22,10 +22,12 @@ export function AgentsPanelHubNav({
   copy,
   connectedCount,
   channelsActive = false,
+  ariaLabel,
 }: {
   copy: HubCopy;
   connectedCount: number;
   channelsActive?: boolean;
+  ariaLabel?: string;
 }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -44,7 +46,7 @@ export function AgentsPanelHubNav({
   const channelsHubActive = (routeActive && inAgentsIndexRoute && tab === 'channels') || channelsActive;
 
   return (
-    <div className={PANEL_NAV_STACK_CLASS}>
+    <PanelPrimaryNav aria-label={ariaLabel}>
       <PanelNavRow
         icon={<LayoutDashboard size={14} className={overviewActive ? 'text-[var(--amber)]' : 'text-muted-foreground'} />}
         title={copy.navOverview}
@@ -81,6 +83,6 @@ export function AgentsPanelHubNav({
         active={channelsHubActive}
         activeVariant="rail"
       />
-    </div>
+    </PanelPrimaryNav>
   );
 }

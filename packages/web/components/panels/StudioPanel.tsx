@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import { CalendarClock, FolderOpen, LayoutDashboard, LayoutGrid, Plus } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import PanelHeader from './PanelHeader';
-import { PANEL_NAV_STACK_CLASS, PanelNavRow } from './PanelNavRow';
+import { PanelPrimaryNav, PanelNavRow } from './PanelNavRow';
 import { useLocale } from '@/lib/stores/locale-store';
 import { cn } from '@/lib/utils';
 import {
@@ -135,32 +135,32 @@ export default function StudioPanel({ active }: StudioPanelProps) {
           <Plus size={13} aria-hidden="true" />
         </button>
       </PanelHeader>
-      <div className="sidebar-scroll-area min-h-0 flex-1 overflow-y-auto">
-        <div className={PANEL_NAV_STACK_CLASS}>
-          <PanelNavRow
-            href="/studio"
-            icon={<LayoutDashboard size={14} aria-hidden="true" />}
-            title={copy.overview}
-            active={overviewActive}
-            activeVariant="rail"
-          />
-          <PanelNavRow
-            href="/studio/apps"
-            icon={<LayoutGrid size={14} aria-hidden="true" />}
-            title={copy.apps}
-            active={appsActive}
-            activeVariant="rail"
-          />
-          <PanelNavRow
-            href="/studio/automation"
-            icon={<CalendarClock size={14} aria-hidden="true" />}
-            title={copy.automation}
-            active={automationActive}
-            activeVariant="rail"
-          />
-        </div>
+      <PanelPrimaryNav aria-label={copy.title}>
+        <PanelNavRow
+          href="/studio"
+          icon={<LayoutDashboard size={14} aria-hidden="true" />}
+          title={copy.overview}
+          active={overviewActive}
+          activeVariant="rail"
+        />
+        <PanelNavRow
+          href="/studio/apps"
+          icon={<LayoutGrid size={14} aria-hidden="true" />}
+          title={copy.apps}
+          active={appsActive}
+          activeVariant="rail"
+        />
+        <PanelNavRow
+          href="/studio/automation"
+          icon={<CalendarClock size={14} aria-hidden="true" />}
+          title={copy.automation}
+          active={automationActive}
+          activeVariant="rail"
+        />
+      </PanelPrimaryNav>
 
-        <nav className="border-t border-border/60 px-3 py-3" aria-label={copy.recentProjects}>
+      <div className="sidebar-scroll-area min-h-0 flex-1 overflow-y-auto">
+        <nav className="px-3 py-3" aria-label={copy.recentProjects}>
           <p className="mb-1.5 px-1 text-2xs font-medium uppercase text-muted-foreground/50">
             {copy.recentProjects}
           </p>

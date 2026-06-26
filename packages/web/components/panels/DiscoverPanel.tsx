@@ -3,7 +3,7 @@
 import { usePathname } from 'next/navigation';
 import { Lightbulb, Blocks, Zap, LayoutTemplate, User, Download, RefreshCw, Repeat, Rocket, Search, Handshake, ShieldCheck, Compass, Server } from 'lucide-react';
 import PanelHeader from './PanelHeader';
-import { PANEL_NAV_STACK_CLASS, PanelNavRow, ComingSoonBadge } from './PanelNavRow';
+import { PanelPrimaryNav, PanelNavRow, ComingSoonBadge } from './PanelNavRow';
 import { useLocale } from '@/lib/stores/locale-store';
 import { useCases } from '@/components/explore/use-cases.generated';
 import { openAskModal } from '@/hooks/useAskModal';
@@ -75,55 +75,52 @@ export default function DiscoverPanel({ active }: DiscoverPanelProps) {
   return (
     <div className={`flex flex-col h-full ${active ? '' : 'hidden'}`}>
       <PanelHeader title={d.title} />
+      <PanelPrimaryNav aria-label={d.title}>
+        <PanelNavRow
+          icon={<Compass size={14} className={capabilityMarketActive ? 'text-[var(--amber)]' : 'text-muted-foreground'} />}
+          title={d.capabilityMarketplace}
+          href="/explore/capabilities"
+          active={capabilityMarketActive}
+          activeVariant="rail"
+        />
+        <PanelNavRow
+          icon={<Zap size={14} className={skillMarketActive ? 'text-[var(--amber)]' : 'text-muted-foreground'} />}
+          title={d.skillMarket}
+          href="/explore/skills"
+          active={skillMarketActive}
+          activeVariant="rail"
+        />
+        <PanelNavRow
+          icon={<Server size={14} className={mcpMarketActive ? 'text-[var(--amber)]' : 'text-muted-foreground'} />}
+          title={d.mcpServers}
+          href="/explore/mcp"
+          active={mcpMarketActive}
+          activeVariant="rail"
+        />
+        <PanelNavRow
+          icon={<Blocks size={14} className={pluginMarketActive ? 'text-[var(--amber)]' : 'text-muted-foreground'} />}
+          title={d.pluginMarket}
+          href="/explore/plugins"
+          active={pluginMarketActive}
+          activeVariant="rail"
+        />
+        <PanelNavRow
+          icon={<LayoutTemplate size={14} className="text-muted-foreground" />}
+          title={d.spaceTemplates}
+          badge={<ComingSoonBadge label={d.comingSoon} />}
+          activeVariant="rail"
+        />
+        <PanelNavRow
+          icon={<Lightbulb size={14} className={useCasesActive ? 'text-[var(--amber)]' : 'text-muted-foreground'} />}
+          title={d.useCases}
+          badge={<span className="text-2xs tabular-nums text-muted-foreground">{useCases.length}</span>}
+          href="/explore"
+          active={useCasesActive}
+          activeVariant="rail"
+        />
+      </PanelPrimaryNav>
+
       <div className="sidebar-scroll-area flex-1 overflow-y-auto min-h-0">
-        {/* Navigation entries */}
-        <div className={PANEL_NAV_STACK_CLASS}>
-          <PanelNavRow
-            icon={<Compass size={14} className={capabilityMarketActive ? 'text-[var(--amber)]' : 'text-muted-foreground'} />}
-            title={d.capabilityMarketplace}
-            href="/explore/capabilities"
-            active={capabilityMarketActive}
-            activeVariant="rail"
-          />
-          <PanelNavRow
-            icon={<Zap size={14} className={skillMarketActive ? 'text-[var(--amber)]' : 'text-muted-foreground'} />}
-            title={d.skillMarket}
-            href="/explore/skills"
-            active={skillMarketActive}
-            activeVariant="rail"
-          />
-          <PanelNavRow
-            icon={<Server size={14} className={mcpMarketActive ? 'text-[var(--amber)]' : 'text-muted-foreground'} />}
-            title={d.mcpServers}
-            href="/explore/mcp"
-            active={mcpMarketActive}
-            activeVariant="rail"
-          />
-          <PanelNavRow
-            icon={<Blocks size={14} className={pluginMarketActive ? 'text-[var(--amber)]' : 'text-muted-foreground'} />}
-            title={d.pluginMarket}
-            href="/explore/plugins"
-            active={pluginMarketActive}
-            activeVariant="rail"
-          />
-          <PanelNavRow
-            icon={<LayoutTemplate size={14} className="text-muted-foreground" />}
-            title={d.spaceTemplates}
-            badge={<ComingSoonBadge label={d.comingSoon} />}
-            activeVariant="rail"
-          />
-          <PanelNavRow
-            icon={<Lightbulb size={14} className={useCasesActive ? 'text-[var(--amber)]' : 'text-muted-foreground'} />}
-            title={d.useCases}
-            badge={<span className="text-2xs tabular-nums text-muted-foreground">{useCases.length}</span>}
-            href="/explore"
-            active={useCasesActive}
-            activeVariant="rail"
-          />
-        </div>
-
-        <div className="mx-4 border-t border-border" />
-
         {/* Quick try — use case list */}
         <div className="py-2">
           <div className="px-4 py-1.5">

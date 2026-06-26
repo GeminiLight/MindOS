@@ -1,12 +1,21 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import type { HTMLAttributes, ReactNode } from 'react';
 import Link from 'next/link';
 import { ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { shouldHandleSmoothNavigation, useSmoothRouterPush } from '@/hooks/useSmoothRouterPush';
 
 export const PANEL_NAV_STACK_CLASS = 'flex flex-col gap-0.5 py-2';
+
+export function PanelPrimaryNav({ className, ...props }: HTMLAttributes<HTMLElement>) {
+  return (
+    <nav
+      {...props}
+      className={cn(PANEL_NAV_STACK_CLASS, 'shrink-0 border-b border-border/60', className)}
+    />
+  );
+}
 
 /** Row matching Discover panel nav: icon tile, title, optional subtitle, optional badge, chevron. */
 export function PanelNavRow({
