@@ -198,7 +198,9 @@ describe('OpenCode architecture alignment', () => {
     const agentTurnRoute = readText('packages/web/app/api/agent/sessions/[sessionId]/turns/route.ts');
     const agentTurnRunner = readText('packages/web/app/api/agent/_lib/turn-runner.ts');
     const agentTurnRuntimeLane = readText('packages/web/app/api/agent/_lib/turn-runtime-lane.ts');
-    const externalTurnRunner = readText('packages/web/app/api/agent/_lib/turn-runner-external.ts');
+    const nativeTurnLane = readText('packages/web/app/api/agent/_lib/turn-lane-native.ts');
+    const acpTurnLane = readText('packages/web/app/api/agent/_lib/turn-lane-acp.ts');
+    const sharedTurnLane = readText('packages/web/app/api/agent/_lib/turn-lane-shared.ts');
     const mindosPiTurnRunner = readText('packages/web/app/api/agent/_lib/turn-runner-mindos-pi.ts');
     const headlessAgent = readText('packages/web/lib/agent/headless.ts');
     const piRuntimeAdapter = readText('packages/mindos/src/agent/mindos-pi/runtime.ts');
@@ -265,14 +267,21 @@ describe('OpenCode architecture alignment', () => {
     expect(agentTurnRunner).toContain("from '@geminilight/mindos/agent/turn'");
     expect(agentTurnRunner).toContain("from '@geminilight/mindos/agent/mindos-pi'");
     expect(agentTurnRunner).toContain("from './turn-runtime-lane'");
-    expect(agentTurnRuntimeLane).toContain("await import('./turn-runner-external')");
+    expect(agentTurnRuntimeLane).toContain("await import('./turn-lane-native')");
+    expect(agentTurnRuntimeLane).toContain("await import('./turn-lane-acp')");
     expect(agentTurnRuntimeLane).toContain("await import('./turn-runner-mindos-pi')");
     expect(agentTurnRunner).not.toContain('runMindosAcpAgentTurn');
     expect(agentTurnRunner).not.toContain('runMindosPiAgentTurnSession');
     expect(agentTurnRunner).not.toContain('resolveMindosAgentTimeoutMs');
     expect(agentTurnRunner).not.toContain('runMindosNonStreamingFallback');
-    expect(externalTurnRunner).toContain('runMindosAcpAgentTurn');
-    expect(externalTurnRunner).toContain('resolveMindosAgentTimeoutMs');
+    expect(nativeTurnLane).toContain('runMindosNativeAgentTurn');
+    expect(nativeTurnLane).toContain('resolveMindosAgentTimeoutMs');
+    expect(nativeTurnLane).not.toContain('runMindosAcpAgentTurn');
+    expect(acpTurnLane).toContain('runMindosAcpAgentTurn');
+    expect(acpTurnLane).toContain('resolveMindosAgentTimeoutMs');
+    expect(acpTurnLane).not.toContain('runMindosNativeAgentTurn');
+    expect(sharedTurnLane).toContain('NativeRuntimeLaneTurnInput');
+    expect(sharedTurnLane).toContain('AcpRuntimeLaneTurnInput');
     expect(mindosPiTurnRunner).toContain('runMindosPiAgentTurnSession');
     expect(mindosPiTurnRunner).toContain('resolveMindosAgentTimeoutMs');
     expect(mindosPiTurnRunner).toContain('runMindosNonStreamingFallback');
@@ -299,7 +308,8 @@ describe('OpenCode architecture alignment', () => {
     expect(agentTurnRunner).toContain('const externalPrompt = prependMindosActiveAssistantPrompt(externalPromptBase, activeAssistant)');
     expect(agentTurnRunner).toContain('const commonTurnPrompt = await buildMindosContextPrompt');
     expect(agentTurnRunner).toContain('const turnPrompt = renderMindosPiSelectedSkillPrompt(commonTurnPrompt, selectedSkills)');
-    expect(externalTurnRunner).toContain('prompt: input.externalPrompt');
+    expect(nativeTurnLane).toContain('prompt: input.externalPrompt');
+    expect(acpTurnLane).toContain('input.externalPrompt');
     expect(mindosPiTurnRunner).toContain('prompt: turnPrompt');
     expect(agentTurnRunner).toContain('const runtimeLane = resolveRuntimeTurnLane');
     expect(agentTurnRuntimeLane.indexOf('if (verifiedNativeRuntime)')).toBeLessThan(

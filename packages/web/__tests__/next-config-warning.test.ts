@@ -146,7 +146,8 @@ describe('next config warning hygiene', () => {
 
     expect(turnRunnerSource).toContain("import { resolveRuntimeTurnLane } from './turn-runtime-lane'");
     expect(runtimeLaneSource).toContain("await import('./turn-runner-mindos-pi')");
-    expect(runtimeLaneSource).toContain("await import('./turn-runner-external')");
+    expect(runtimeLaneSource).toContain("await import('./turn-lane-native')");
+    expect(runtimeLaneSource).toContain("await import('./turn-lane-acp')");
     expect(mindosPiRunnerSource).toContain(
       "await import('@geminilight/mindos/agent/runtime/adapters/mindos')",
     );

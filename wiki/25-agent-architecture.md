@@ -329,8 +329,9 @@ projection 输出：
 |---|---|---|
 | Runtime lane facade | `packages/web/app/api/agent/_lib/turn-runtime-lane.ts` | 将已校验的 `selectedRuntime` / ACP 选择解析为 `native`、`acp`、`mindos-pi` lane |
 | MindOS Pi lane | `packages/web/app/api/agent/_lib/turn-runner-mindos-pi.ts` | 创建 MindOS Pi runtime，注入 system/context prompt，注册 MindOS Pi tools/extensions |
-| Native runtime lane | `packages/web/app/api/agent/_lib/turn-runner-external.ts` | Codex / Claude 的 prompt bridge、permission bridge、stream 转换、ledger 写入 |
-| ACP runtime lane | `packages/web/app/api/agent/_lib/turn-runner-external.ts` | ACP session create/prompt stream/close、permission 映射、ledger 写入 |
+| Native runtime lane | `packages/web/app/api/agent/_lib/turn-lane-native.ts` | Codex / Claude 的 prompt bridge、permission bridge、stream 转换、ledger 写入 |
+| ACP runtime lane | `packages/web/app/api/agent/_lib/turn-lane-acp.ts` | ACP session create/prompt stream/close、permission 映射、ledger 写入 |
+| Shared runtime lane contract | `packages/web/app/api/agent/_lib/turn-lane-shared.ts` | native / ACP 共享的 turn 输入基类，以及各 lane 独有 options 的类型边界 |
 | Shared request/context | `turn-request.ts` / `turn-context.ts` / `runtime-selection.ts` | 请求校验、上下文装载、runtime/binding 解析 |
 
 为了避免 Next.js route 静态引入 Node-only pi runtime，各 lane 在执行时使用动态 import 加载具体 runner。
@@ -483,7 +484,9 @@ MindOS Pi 的 persisted session 由 Pi `SessionManager` 自己持有完整 JSONL
 | `packages/web/app/api/agent/_lib/turn-runner.ts` | turn 总控 |
 | `packages/web/app/api/agent/_lib/turn-runtime-lane.ts` | runtime lane facade，统一 MindOS Pi / native / ACP 入口 |
 | `packages/web/app/api/agent/_lib/turn-runner-mindos-pi.ts` | MindOS Pi 执行路径 |
-| `packages/web/app/api/agent/_lib/turn-runner-external.ts` | Codex / Claude / ACP 执行路径 |
+| `packages/web/app/api/agent/_lib/turn-lane-native.ts` | Codex / Claude native runtime 执行路径 |
+| `packages/web/app/api/agent/_lib/turn-lane-acp.ts` | ACP runtime 执行路径 |
+| `packages/web/app/api/agent/_lib/turn-lane-shared.ts` | native / ACP runtime lane 共享输入契约 |
 | `packages/web/app/api/assistant-runs/route.ts` | Assistant run 入口，解析 Active Assistant 后委托 agent turn |
 | `packages/mindos/src/agent/runtime/registry.ts` | Runtime descriptor / capability / lifecycle 类型源头 |
 | `packages/mindos/src/agent/runtime/lifecycle.ts` | MindOS Pi / native / ACP lifecycle metadata builder |

@@ -349,12 +349,10 @@ export async function runAgentTurnRequestBody(
     });
     const externalPrompt = prependMindosActiveAssistantPrompt(externalPromptBase, activeAssistant);
     const sessionContextMetadata = sessionContextRunMetadata(sessionContextSignature, includeSessionContext);
-
-    return runtimeLane.runTurn({
+    const externalTurnBase = {
       externalPrompt,
       chatSessionId,
       executionCwd,
-      nativePermissionMode,
       permissionPolicy,
       agentMode,
       sessionContextMetadata,
@@ -364,13 +362,24 @@ export async function runAgentTurnRequestBody(
       assistantId,
       runtimeAttachments,
       selectedSkills,
-      nativeRuntimeOptions,
-      acpRuntimeOptions,
-      nativeRuntimeEnv,
       requestSignal,
-      requestContext,
-      acpRuntimeEnvOverlay,
       t,
+    };
+
+    if (runtimeLane.kind === 'native') {
+      return runtimeLane.runTurn({
+        ...externalTurnBase,
+        nativePermissionMode,
+        nativeRuntimeOptions,
+        nativeRuntimeEnv,
+        requestContext,
+      });
+    }
+
+    return runtimeLane.runTurn({
+      ...externalTurnBase,
+      acpRuntimeOptions,
+      acpRuntimeEnvOverlay,
     });
   }
 

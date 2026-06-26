@@ -1,13 +1,22 @@
 import type { MindosAgentRuntimeSelection } from '@geminilight/mindos/agent/runtime';
-import type { RunExternalRuntimeTurnInput } from './turn-runner-external';
+import type {
+  AcpRuntimeLaneTurnInput,
+  NativeRuntimeLaneTurnInput,
+} from './turn-lane-shared';
 import type { RunMindosPiTurnInput } from './turn-runner-mindos-pi';
 
 type SelectedAcpAgent = { id: string; name: string };
 
-export type ExternalRuntimeTurnLane = {
-  kind: 'native' | 'acp';
-  runtimeKind: 'codex' | 'claude' | 'acp';
-  runTurn(input: RunExternalRuntimeTurnInput): Promise<Response>;
+export type NativeRuntimeTurnLane = {
+  kind: 'native';
+  runtimeKind: 'codex' | 'claude';
+  runTurn(input: NativeRuntimeLaneTurnInput): Promise<Response>;
+};
+
+export type AcpRuntimeTurnLane = {
+  kind: 'acp';
+  runtimeKind: 'acp';
+  runTurn(input: AcpRuntimeLaneTurnInput): Promise<Response>;
 };
 
 export type MindosPiRuntimeTurnLane = {
@@ -16,7 +25,7 @@ export type MindosPiRuntimeTurnLane = {
   runTurn(input: RunMindosPiTurnInput): Promise<Response>;
 };
 
-export type RuntimeTurnLane = ExternalRuntimeTurnLane | MindosPiRuntimeTurnLane;
+export type RuntimeTurnLane = NativeRuntimeTurnLane | AcpRuntimeTurnLane | MindosPiRuntimeTurnLane;
 
 export function resolveRuntimeTurnLane(input: {
   verifiedNativeRuntime: MindosAgentRuntimeSelection | null;
@@ -28,7 +37,7 @@ export function resolveRuntimeTurnLane(input: {
       kind: 'native',
       runtimeKind: verifiedNativeRuntime.kind,
       runTurn: async (turnInput) => {
-        const { runNativeRuntimeLaneTurn } = await import('./turn-runner-external');
+        const { runNativeRuntimeLaneTurn } = await import('./turn-lane-native');
         return runNativeRuntimeLaneTurn({
           ...turnInput,
           nativeRuntime: verifiedNativeRuntime,
@@ -43,7 +52,7 @@ export function resolveRuntimeTurnLane(input: {
       kind: 'acp',
       runtimeKind: 'acp',
       runTurn: async (turnInput) => {
-        const { runAcpRuntimeLaneTurn } = await import('./turn-runner-external');
+        const { runAcpRuntimeLaneTurn } = await import('./turn-lane-acp');
         return runAcpRuntimeLaneTurn({
           ...turnInput,
           acpAgent: selectedAcpAgent,
