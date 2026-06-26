@@ -11,8 +11,14 @@ describe('rail preferences', () => {
     localStorage.clear();
   });
 
-  it('shows Studio by default while keeping Apps and Flow experimental', () => {
-    expect(readRailPreferences()).toEqual({ studio: true, apps: false, flow: false });
+  it('shows Studio by default while keeping Flow experimental', () => {
+    expect(readRailPreferences()).toEqual({ studio: true, flow: false });
+  });
+
+  it('ignores the legacy Apps rail experiment flag', () => {
+    localStorage.setItem('mindos:labs-apps', '1');
+
+    expect(readRailPreferences()).toEqual({ studio: true, flow: false });
   });
 
   it('returns a stable snapshot when preference values do not change', () => {
@@ -24,16 +30,13 @@ describe('rail preferences', () => {
 
   it('persists Studio and Flow visibility independently', () => {
     writeRailPreference('flow', true);
-    expect(readRailPreferences()).toEqual({ studio: true, apps: false, flow: true });
-
-    writeRailPreference('apps', true);
-    expect(readRailPreferences()).toEqual({ studio: true, apps: true, flow: true });
+    expect(readRailPreferences()).toEqual({ studio: true, flow: true });
 
     writeRailPreference('studio', false);
-    expect(readRailPreferences()).toEqual({ studio: false, apps: true, flow: true });
+    expect(readRailPreferences()).toEqual({ studio: false, flow: true });
 
     writeRailPreference('studio', true);
-    expect(readRailPreferences()).toEqual({ studio: true, apps: true, flow: true });
+    expect(readRailPreferences()).toEqual({ studio: true, flow: true });
   });
 
   it('notifies the rail when preferences change', () => {

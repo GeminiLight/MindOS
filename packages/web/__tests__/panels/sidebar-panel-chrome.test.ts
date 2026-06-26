@@ -18,7 +18,6 @@ describe('primary sidebar panel chrome', () => {
       'components/panels/StudioPanel.tsx',
       'components/panels/EchoPanel.tsx',
       'components/panels/DiscoverPanel.tsx',
-      'components/panels/AppsPanel.tsx',
     ];
 
     for (const file of files) {
@@ -40,18 +39,6 @@ describe('primary sidebar panel chrome', () => {
     expect(hubSource).toContain('<PanelPrimaryNav aria-label={ariaLabel}>');
     expect(hubSource).not.toContain('PANEL_NAV_SECTION_CLASS');
     expect(panelSource.indexOf('{hub}')).toBeLessThan(panelSource.indexOf('sidebar-scroll-area'));
-  });
-
-  it('does not keep a custom Apps intro block above the shared header scroll rhythm', () => {
-    const appsSource = read('components/panels/AppsPanel.tsx');
-    const rowSource = read('components/panels/PanelNavRow.tsx');
-
-    expect(appsSource).toContain('<PanelHeader title={copy.title} />');
-    expect(appsSource).toContain('<PanelPrimaryNav aria-label={copy.title}>');
-    expect(appsSource).not.toContain('Experimental scenario workspaces');
-    expect(appsSource).not.toContain('实验中的场景工作台');
-    expect(appsSource).not.toContain('border-b border-border px-4 py-4');
-    expect(rowSource).not.toContain('PANEL_NAV_SECTION_CLASS');
   });
 
   it('defines the fixed primary nav as chrome, not scroll content', () => {

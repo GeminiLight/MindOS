@@ -106,7 +106,7 @@ export const settingsEn = {
     navigation: {
       railTitle: 'Rail items',
       railDesc: 'Keep daily navigation focused by choosing which optional or experimental work surfaces appear in the left rail.',
-      hiddenHint: 'Studio is shown by default. Apps and Flow stay experimental; Apps is unavailable until enabled here.',
+      hiddenHint: 'Studio is shown by default. Flow stays experimental until enabled here. Apps lives inside Studio.',
       visible: 'Visible',
       hidden: 'Hidden',
       surfacePrefix: 'Rail item:',
@@ -115,10 +115,6 @@ export const settingsEn = {
         studio: {
           label: 'Studio',
           description: 'Project surface for long-running AI work, review, and growth. Shown by default.',
-        },
-        apps: {
-          label: 'Apps',
-          description: 'Context apps for scenario workspaces. Hidden until this experiment is enabled.',
         },
         flow: {
           label: 'Flow',

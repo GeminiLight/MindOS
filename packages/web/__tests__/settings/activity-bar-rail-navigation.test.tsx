@@ -164,7 +164,7 @@ describe('ActivityBar rail navigation', () => {
     host.remove();
   });
 
-  it('shows Studio by default below Files while keeping Apps and Flow hidden', async () => {
+  it('shows Studio by default below Files while keeping Apps off the rail', async () => {
     const ActivityBar = (await import('@/components/ActivityBar')).default;
 
     const host = document.createElement('div');
@@ -200,7 +200,7 @@ describe('ActivityBar rail navigation', () => {
     host.remove();
   });
 
-  it('shows Apps between Studio and Echo after the experiment is enabled', async () => {
+  it('ignores the legacy Apps experiment flag', async () => {
     localStorage.setItem('mindos:labs-apps', '1');
     const ActivityBar = (await import('@/components/ActivityBar')).default;
 
@@ -225,10 +225,10 @@ describe('ActivityBar rail navigation', () => {
     const studio = host.querySelector<HTMLAnchorElement>('[data-walkthrough="studio-page"]');
     const apps = host.querySelector<HTMLAnchorElement>('[data-walkthrough="apps-page"]');
     const echo = host.querySelector('[data-walkthrough="echo-panel"]');
-    expect(apps).not.toBeNull();
-    expect(apps?.getAttribute('href')).toBe('/apps');
-    expect(studio?.compareDocumentPosition(apps!)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
-    expect(apps?.compareDocumentPosition(echo!)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(apps).toBeNull();
+    expect(studio).not.toBeNull();
+    expect(echo).not.toBeNull();
+    expect(studio?.compareDocumentPosition(echo!)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
 
     await act(async () => {
       root.unmount();

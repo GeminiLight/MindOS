@@ -1,6 +1,6 @@
-export type PanelId = 'home' | 'files' | 'capture' | 'search' | 'echo' | 'agents' | 'studio' | 'apps' | 'discover' | 'workflows';
+export type PanelId = 'home' | 'files' | 'capture' | 'search' | 'echo' | 'agents' | 'studio' | 'discover' | 'workflows';
 
-export type RoutePanelId = Extract<PanelId, 'files' | 'capture' | 'echo' | 'agents' | 'studio' | 'apps' | 'discover'>;
+export type RoutePanelId = Extract<PanelId, 'files' | 'capture' | 'echo' | 'agents' | 'studio' | 'discover'>;
 
 export interface RailPanelClickDecision {
   nextPanel: PanelId | null;
@@ -57,7 +57,6 @@ export const ROUTE_PANEL_HREF: Record<RoutePanelId, string> = {
   echo: '/echo/overview',
   agents: '/agents',
   studio: '/studio',
-  apps: '/apps',
   discover: '/explore',
 };
 
@@ -68,11 +67,6 @@ function isRouteSegment(pathname: string, base: string): boolean {
 export function isStudioRoute(pathname: string | null | undefined): boolean {
   if (!pathname) return false;
   return isRouteSegment(pathname, '/studio');
-}
-
-export function isAppsRoute(pathname: string | null | undefined): boolean {
-  if (!pathname) return false;
-  return isRouteSegment(pathname, '/apps');
 }
 
 function isViewContentRoute(pathname: string): boolean {
@@ -90,7 +84,6 @@ export function getContentRoutePanel(pathname: string | null | undefined): Panel
   }
   if (isRouteSegment(pathname, '/agents')) return 'agents';
   if (isStudioRoute(pathname)) return 'studio';
-  if (isAppsRoute(pathname)) return 'apps';
   if (isRouteSegment(pathname, '/explore')) return 'discover';
   if (isRouteSegment(pathname, '/echo')) return 'echo';
   if (isRouteSegment(pathname, '/capture') || isLegacyInboxContentRoute(pathname)) return 'capture';
@@ -109,7 +102,6 @@ export function getRouteControlledPanel(pathname: string | null | undefined): Ro
     case 'echo':
     case 'agents':
     case 'studio':
-    case 'apps':
     case 'discover':
       return panel;
     default:
