@@ -16,6 +16,7 @@ import {
 } from './capability-matrix';
 import {
   buildObsidianCapabilityGateReport,
+  isObsidianCapabilityGateConfirmationRequiredError,
   type ObsidianCapabilityGateConfirmation,
   type ObsidianCapabilityGateReport,
 } from './capability-gate';
@@ -58,6 +59,14 @@ import {
   type LegacyPluginMigrationPlan,
   type LegacyPluginMigrationResult,
 } from './plugin-migration';
+import {
+  ObsidianRuntimeCapabilityLedgerStore,
+  type ObsidianRuntimeCapabilityLedgerHistory,
+} from './runtime-capability-ledger-store';
+import {
+  buildObsidianWorkflowAudits,
+  type ObsidianWorkflowAudit,
+} from './workflow-audit';
 import type { ObsidianSecretStorageSummary } from './secret-storage';
 import type { PluginManifest, TFile } from './types';
 import type { EditorExtensionSummary, PluginMarkdownCodeBlockSnapshot, PluginMarkdownPostProcessorSnapshot, PluginMenuSnapshot, PluginModalSnapshot, PluginNoticeSnapshot, PluginViewSnapshot, RegisteredViewExtension, WorkspaceOpenRequest } from './runtime';
@@ -92,6 +101,8 @@ export interface ManagedPlugin {
   surfaceSummary: ObsidianCapabilitySurfaceSummary[];
   capabilityGate: ObsidianCapabilityGateReport;
   capabilityLedger: ObsidianRuntimeCapabilityLedgerEntry[];
+  capabilityLedgerHistory: ObsidianRuntimeCapabilityLedgerHistory;
+  workflowAudits: ObsidianWorkflowAudit[];
   packageLocation?: ManagedPluginPackageLocation;
   runtime: PluginRuntimeSummary;
   lastError?: string;
@@ -221,13 +232,19 @@ const EMPTY_STATE: PluginManagerState = { enabled: {} };
 
 export class PluginManager {
   private readonly loader: PluginLoader;
+  private readonly runtimeCapabilityLedgerStore: ObsidianRuntimeCapabilityLedgerStore;
   private plugins = new Map<string, ManagedPlugin>();
   private state: PluginManagerState = EMPTY_STATE;
   private modalEditorSessions = new Map<string, EditorExecutionSession>();
   private menuEditorSessions = new Map<string, EditorExecutionSession>();
 
   constructor(private mindRoot: string, options: PluginManagerOptions = {}) {
-    this.loader = new PluginLoader(mindRoot, options);
+    const { runtimeCapabilityLedgerStore, ...loaderOptions } = options;
+    this.runtimeCapabilityLedgerStore = runtimeCapabilityLedgerStore ?? new ObsidianRuntimeCapabilityLedgerStore(mindRoot);
+    this.loader = new PluginLoader(mindRoot, {
+      ...loaderOptions,
+      runtimeCapabilityLedgerStore: this.runtimeCapabilityLedgerStore,
+    });
   }
 
   async discover(): Promise<ManagedPlugin[]> {
@@ -313,6 +330,7 @@ export class PluginManager {
     if (plugin.compatibilityLevel === 'blocked') {
       plugin.loaded = false;
       plugin.lastError = plugin.compatibility.blockers[0] ?? 'Plugin is blocked by compatibility report.';
+      this.recordCapabilityGateLedgerEvent(plugin, 'load', plugin.lastError);
       throw new Error(plugin.lastError);
     }
     if (!plugin.enabled) {
@@ -644,6 +662,14 @@ export class PluginManager {
       && (!capabilityGate.requiresConfirmation || capabilityGate.confirmed);
 
     const runtime = this.runtimeSummaryFor(manifest.id);
+    const capabilityLedgerHistory = this.runtimeCapabilityLedgerStore.read(manifest.id);
+    const capabilityLedger = mergeObsidianRuntimeCapabilityLedger({
+      pluginId: manifest.id,
+      coverage,
+      unsupportedModules: compatibility.unsupportedModules,
+      capabilityGate,
+      runtimeEntries: runtime.capabilityLedger,
+    });
 
     return {
       id: manifest.id,
@@ -658,12 +684,15 @@ export class PluginManager {
       coverageSummary: summarizeObsidianCapabilityCoverage(coverage),
       surfaceSummary: summarizeObsidianCapabilitySurfaces(coverage),
       capabilityGate,
-      capabilityLedger: mergeObsidianRuntimeCapabilityLedger({
+      capabilityLedger,
+      capabilityLedgerHistory,
+      workflowAudits: buildObsidianWorkflowAudits({
         pluginId: manifest.id,
+        pluginName: manifest.name,
         coverage,
-        unsupportedModules: compatibility.unsupportedModules,
         capabilityGate,
         runtimeEntries: runtime.capabilityLedger,
+        history: capabilityLedgerHistory,
       }),
       packageLocation: this.packageLocationFor(manifest.id),
       runtime,
@@ -679,6 +708,15 @@ export class PluginManager {
       unsupportedModules: plugin.compatibility.unsupportedModules,
       capabilityGate: plugin.capabilityGate,
       runtimeEntries: plugin.runtime.capabilityLedger,
+    });
+    plugin.capabilityLedgerHistory = this.runtimeCapabilityLedgerStore.read(plugin.id);
+    plugin.workflowAudits = buildObsidianWorkflowAudits({
+      pluginId: plugin.id,
+      pluginName: plugin.name,
+      coverage: plugin.coverage,
+      capabilityGate: plugin.capabilityGate,
+      runtimeEntries: plugin.runtime.capabilityLedger,
+      history: plugin.capabilityLedgerHistory,
     });
   }
 
@@ -1026,6 +1064,7 @@ export class PluginManager {
       };
       plugin.capabilityGate = result.report;
     } catch (error) {
+      this.recordCapabilityGateLedgerEvent(plugin, 'enable', error);
       plugin.lastError = error instanceof MindOSError
         ? error.message
         : 'Obsidian plugin enable requires capability confirmation.';
@@ -1037,10 +1076,44 @@ export class PluginManager {
     try {
       plugin.capabilityGate = assertPluginCapabilityGateAllowsLoad(plugin, this.state);
     } catch (error) {
+      this.recordCapabilityGateLedgerEvent(plugin, 'load', error);
       plugin.lastError = error instanceof MindOSError
         ? error.message
         : 'Obsidian plugin enable requires capability confirmation.';
       throw error;
+    }
+  }
+
+  private recordCapabilityGateLedgerEvent(plugin: ManagedPlugin, action: 'enable' | 'load', error: unknown): void {
+    const report = isObsidianCapabilityGateConfirmationRequiredError(error)
+      ? error.report
+      : this.refreshCapabilityGate(plugin);
+    const gatedItems = report.items.filter((item) => (
+      item.decision === 'blocked' || item.decision === 'requires-confirmation'
+    ));
+    const reasons = report.blockedReasons.length > 0
+      ? report.blockedReasons
+      : report.confirmReasons.length > 0
+        ? report.confirmReasons
+        : [error instanceof Error ? error.message : String(error)];
+
+    for (const [index, reason] of reasons.entries()) {
+      const item = gatedItems[index] ?? gatedItems[0];
+      try {
+        this.runtimeCapabilityLedgerStore.append({
+          pluginId: plugin.id,
+          capability: `capability-gate:${action}`,
+          surface: item?.surface ?? 'unsupported',
+          support: item?.decision === 'blocked' ? 'unsupported' : 'limited',
+          phase: 'blocked',
+          source: 'runtime-ledger',
+          evidence: item?.decision === 'requires-confirmation'
+            ? `Capability gate requires review before ${action}: ${reason}`
+            : `Capability gate blocked ${action}: ${reason}`,
+        });
+      } catch {
+        // Ledger writes must not change the enable/load decision.
+      }
     }
   }
 

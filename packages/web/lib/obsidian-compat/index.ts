@@ -17,6 +17,13 @@ export { Component } from './component';
 export { Events } from './events';
 export { ObsidianRuntimeHost } from './runtime';
 export {
+  ObsidianRuntimeCapabilityLedgerStore,
+  redactRuntimeCapabilityEvidence,
+} from './runtime-capability-ledger-store';
+export {
+  buildObsidianWorkflowAudits,
+} from './workflow-audit';
+export {
   applyObsidianLinterFixes,
   buildObsidianLinterSandboxContributions,
   getObsidianLinterRuleMetadata,
@@ -114,3 +121,14 @@ export type {
   ImportedObsidianLinterProfile,
   ObsidianLinterDataJsonRuleMapping,
 } from './linter-settings-profile';
+export type {
+  ObsidianRuntimeCapabilityLedgerHistory,
+  ObsidianRuntimeCapabilityLedgerStoreOptions,
+  PersistentObsidianRuntimeCapabilityLedgerEntry,
+} from './runtime-capability-ledger-store';
+export type {
+  BuildObsidianWorkflowAuditsInput,
+  ObsidianWorkflowAudit,
+  ObsidianWorkflowAuditSource,
+  ObsidianWorkflowAuditStatus,
+} from './workflow-audit';

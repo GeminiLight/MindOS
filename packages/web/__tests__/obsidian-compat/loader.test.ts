@@ -65,6 +65,21 @@ describe('PluginLoader', () => {
     expect(plugins).toEqual([]);
   });
 
+  it('ignores hidden MindOS control entries in the plugin root', () => {
+    writeCanonicalPlugin(
+      'visible-plugin',
+      { id: 'visible-plugin', name: 'Visible Plugin', version: '1.0.0' },
+      "module.exports = class {}",
+    );
+    fs.mkdirSync(path.join(mindRoot, '.mindos', 'plugins', '.runtime-capability-ledger'), { recursive: true });
+    fs.writeFileSync(path.join(mindRoot, '.mindos', 'plugins', '.plugin-manager.json'), '{"enabled":{}}', 'utf-8');
+
+    const loader = new PluginLoader(mindRoot);
+    const plugins = loader.discoverPlugins();
+
+    expect(plugins.map((plugin) => plugin.id)).toEqual(['visible-plugin']);
+  });
+
   it('loads a valid plugin and registers its command during onload', async () => {
     writePlugin(
       'hello-plugin',

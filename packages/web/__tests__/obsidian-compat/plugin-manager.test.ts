@@ -377,7 +377,59 @@ describe('PluginManager', () => {
         source: 'runtime-ledger',
       }),
     ]));
+    expect(afterCommand?.capabilityLedgerHistory).toMatchObject({
+      total: expect.any(Number),
+      summary: expect.objectContaining({
+        registered: expect.any(Number),
+        called: expect.any(Number),
+      }),
+    });
     expect(plugins.find((item) => item.id === 'disabled-plugin')).toMatchObject({ enabled: false, loaded: false });
+  });
+
+  it('keeps runtime capability history after plugin unload and manager restart', async () => {
+    writePlugin('quickadd', `
+      const { Plugin } = require('obsidian');
+      module.exports = class QuickAddPlugin extends Plugin {
+        onload() {
+          this.addCommand({ id: 'capture', name: 'Capture', callback: () => {} });
+        }
+      };
+    `);
+
+    const manager = new PluginManager(mindRoot);
+    await manager.discover();
+    await manager.enable('quickadd');
+    await manager.loadEnabledPlugins();
+    const loaded = manager.list().find((item) => item.id === 'quickadd');
+    expect(loaded?.runtime.capabilityLedger).toEqual(expect.arrayContaining([
+      expect.objectContaining({ capability: 'addCommand', phase: 'registered' }),
+    ]));
+    expect(loaded?.workflowAudits).toEqual([
+      expect.objectContaining({
+        id: 'quickadd-capture-macro',
+        status: 'partial',
+      }),
+    ]);
+
+    await manager.disable('quickadd');
+
+    const restarted = new PluginManager(mindRoot);
+    await restarted.discover();
+    const persisted = restarted.list().find((item) => item.id === 'quickadd');
+
+    expect(persisted?.runtime.capabilityLedger).toEqual([]);
+    expect(persisted?.capabilityLedgerHistory).toMatchObject({
+      total: 1,
+      summary: expect.objectContaining({ registered: 1 }),
+    });
+    expect(persisted?.workflowAudits).toEqual([
+      expect.objectContaining({
+        id: 'quickadd-capture-macro',
+        status: 'partial',
+        source: 'runtime-ledger',
+      }),
+    ]);
   });
 
   it('loads plugins that use supported native-compatible runtime modules', async () => {

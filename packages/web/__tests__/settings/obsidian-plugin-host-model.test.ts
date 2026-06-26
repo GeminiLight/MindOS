@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
+  capabilityLedgerHistorySummary,
   capabilityLedgerSummary,
   isLoadResult,
   isPluginActionResult,
   runtimeSummary,
   surfaceRouting,
+  workflowAuditStatusLabel,
   type ObsidianPluginStatus,
 } from '@/components/settings/ObsidianPluginHostModel';
 
@@ -162,6 +164,26 @@ describe('ObsidianPluginHostModel', () => {
     });
 
     expect(capabilityLedgerSummary(item)).toBe('1 predicted / 1 registered / 1 called');
+  });
+
+  it('summarizes historical runtime ledger without counting static predictions', () => {
+    const item = plugin({
+      capabilityLedgerHistory: {
+        total: 3,
+        entries: [],
+        summary: {
+          predicted: 0,
+          registered: 1,
+          called: 1,
+          blocked: 1,
+        },
+        latestBlocked: [],
+        skippedCorruptLines: 0,
+      },
+    });
+
+    expect(capabilityLedgerHistorySummary(item)).toBe('3 historical · 1 registered / 1 called / 1 blocked');
+    expect(workflowAuditStatusLabel('native-replacement')).toBe('native');
   });
 
   it('keeps API result type guards narrow', () => {

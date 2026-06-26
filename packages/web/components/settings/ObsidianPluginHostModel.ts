@@ -19,6 +19,13 @@ import type {
   ObsidianRuntimeCapabilityLedgerEntry,
   ObsidianRuntimeCapabilityLedgerPhase,
 } from '@/lib/obsidian-compat/compatibility-preview';
+import type {
+  ObsidianRuntimeCapabilityLedgerHistory,
+} from '@/lib/obsidian-compat/runtime-capability-ledger-store';
+import type {
+  ObsidianWorkflowAudit,
+  ObsidianWorkflowAuditStatus,
+} from '@/lib/obsidian-compat/workflow-audit';
 import { getObsidianImportSupport } from '@/lib/obsidian-compat/import-policy';
 import type { PluginActionResult } from '@/lib/plugins/client';
 
@@ -128,6 +135,8 @@ export interface ObsidianPluginStatus {
   surfaceSummary?: ObsidianCapabilitySurfaceSummary[];
   capabilityGate?: ObsidianCapabilityGateReport;
   capabilityLedger?: ObsidianRuntimeCapabilityLedgerEntry[];
+  capabilityLedgerHistory?: ObsidianRuntimeCapabilityLedgerHistory;
+  workflowAudits?: ObsidianWorkflowAudit[];
   packageLocation?: {
     relativePath: string;
     rootRelativePath: string;
@@ -298,6 +307,33 @@ export function capabilityLedgerSummary(plugin: ObsidianPluginStatus): string {
     counts.called ? `${counts.called} called` : '',
     counts.blocked ? `${counts.blocked} blocked` : '',
   ].filter(Boolean).join(' / ');
+}
+
+export function capabilityLedgerHistorySummary(plugin: ObsidianPluginStatus): string {
+  const history = plugin.capabilityLedgerHistory;
+  if (!history || history.total === 0) return 'No historical events yet';
+  const parts = [
+    history.summary.registered ? `${history.summary.registered} registered` : '',
+    history.summary.called ? `${history.summary.called} called` : '',
+    history.summary.blocked ? `${history.summary.blocked} blocked` : '',
+  ].filter(Boolean);
+  return parts.length > 0 ? `${history.total} historical · ${parts.join(' / ')}` : `${history.total} historical`;
+}
+
+export function workflowAuditStatusLabel(status: ObsidianWorkflowAuditStatus): string {
+  if (status === 'observed') return 'observed';
+  if (status === 'partial') return 'partial';
+  if (status === 'blocked') return 'blocked';
+  if (status === 'native-replacement') return 'native';
+  return 'not observed';
+}
+
+export function workflowAuditStatusClass(status: ObsidianWorkflowAuditStatus): string {
+  if (status === 'observed') return 'border-success/30 bg-[color-mix(in_srgb,var(--success)_12%,transparent)] text-success';
+  if (status === 'partial') return 'border-[var(--amber)]/25 bg-[var(--amber-subtle)] text-[var(--amber-text)]';
+  if (status === 'blocked') return 'border-error/30 bg-[color-mix(in_srgb,var(--error)_12%,transparent)] text-error';
+  if (status === 'native-replacement') return 'border-border bg-background text-foreground';
+  return 'border-border bg-background text-muted-foreground';
 }
 
 export function compatibilityNote(plugin: ObsidianPluginStatus): string {

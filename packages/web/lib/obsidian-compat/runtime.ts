@@ -10,6 +10,7 @@ import {
 import { ErrorCodes, MindOSError } from '@/lib/errors';
 import { getObsidianCapability } from './capability-matrix';
 import type { ObsidianRuntimeCapabilityLedgerEntry, ObsidianRuntimeCapabilityLedgerPhase } from './compatibility-preview';
+import type { ObsidianRuntimeCapabilityLedgerStore } from './runtime-capability-ledger-store';
 
 export interface RegisteredMarkdownPostProcessor {
   id: string;
@@ -233,6 +234,10 @@ export interface PluginMarkdownPostProcessorSnapshot {
   text: string;
 }
 
+export interface ObsidianRuntimeHostOptions {
+  capabilityLedgerStore?: Pick<ObsidianRuntimeCapabilityLedgerStore, 'append'>;
+}
+
 /**
  * Request-local plugin host state. It records registrations that MindOS can
  * expose or diagnose without pretending to implement the full Obsidian UI.
@@ -260,6 +265,10 @@ export class ObsidianRuntimeHost extends Events {
   private pluginContextStack: string[] = [];
   private warnings: RuntimeWarning[] = [];
   private capabilityLedger: ObsidianRuntimeCapabilityLedgerEntry[] = [];
+
+  constructor(private readonly options: ObsidianRuntimeHostOptions = {}) {
+    super();
+  }
 
   registerMarkdownPostProcessor(pluginId: string, processor: MarkdownPostProcessor): void {
     this.markdownPostProcessorSeq += 1;
@@ -760,7 +769,7 @@ export class ObsidianRuntimeHost extends Events {
     evidence: string,
   ): void {
     const row = getObsidianCapability(capability);
-    this.capabilityLedger.push({
+    const entry: ObsidianRuntimeCapabilityLedgerEntry = {
       ...(pluginId ? { pluginId } : {}),
       capability,
       surface: row?.surface ?? 'unsupported',
@@ -768,7 +777,18 @@ export class ObsidianRuntimeHost extends Events {
       phase,
       source: 'runtime-ledger',
       evidence,
-    });
+    };
+    this.capabilityLedger.push(entry);
+    if (!pluginId) return;
+    try {
+      this.options.capabilityLedgerStore?.append(entry);
+    } catch (error) {
+      this.warn({
+        pluginId,
+        code: 'runtime-capability-ledger-persist-failed',
+        message: `Runtime capability ledger could not be persisted: ${error instanceof Error ? error.message : String(error)}`,
+      });
+    }
   }
 
   private async renderModalSnapshot(modal: RegisteredPluginModal): Promise<PluginModalSnapshot> {

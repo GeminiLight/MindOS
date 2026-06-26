@@ -54,12 +54,15 @@ import {
   capabilityGateEnableMessage,
 } from './ObsidianCapabilityGatePanel';
 import {
+  capabilityLedgerHistorySummary,
   capabilityLedgerSummary,
   compatibilityNote,
   isLoadResult,
   isPluginActionResult,
   runtimeSummary,
   surfaceRouting,
+  workflowAuditStatusClass,
+  workflowAuditStatusLabel,
   type ObsidianPluginLoadResult,
   type ObsidianPluginSettings,
   type ObsidianPluginSettingsResponse,
@@ -937,9 +940,45 @@ export function ObsidianPluginHostSection({
                           <p className="mt-1 text-2xs text-muted-foreground/70">
                             {plugin.runtime.capabilityLedger?.length ?? 0} actual runtime event{(plugin.runtime.capabilityLedger?.length ?? 0) === 1 ? '' : 's'}
                           </p>
+                          <p className="mt-1 font-mono text-2xs text-muted-foreground/70">
+                            {capabilityLedgerHistorySummary(plugin)}
+                          </p>
                         </div>
                         <ObsidianCapabilityGatePanel plugin={plugin} />
                       </div>
+
+                      {(plugin.workflowAudits?.length ?? 0) > 0 && (
+                        <div className="rounded-lg border border-border/50 bg-card/60 px-3 py-2.5">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <p className="text-2xs font-medium uppercase tracking-wider text-muted-foreground">Workflow audit</p>
+                            <span className="font-mono text-2xs text-muted-foreground">
+                              {plugin.workflowAudits?.length ?? 0} workflow{(plugin.workflowAudits?.length ?? 0) === 1 ? '' : 's'}
+                            </span>
+                          </div>
+                          <div className="mt-2 grid gap-2">
+                            {(plugin.workflowAudits ?? []).map((audit) => (
+                              <div key={audit.id} className="rounded-md border border-border bg-background px-2.5 py-2">
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                  <span className="text-xs font-medium text-foreground">{audit.label}</span>
+                                  <span className={`rounded border px-1.5 py-0.5 font-mono text-2xs ${workflowAuditStatusClass(audit.status)}`}>
+                                    {workflowAuditStatusLabel(audit.status)}
+                                  </span>
+                                </div>
+                                {audit.evidence[0] && (
+                                  <p className="mt-1 line-clamp-2 text-2xs text-muted-foreground">
+                                    {audit.evidence[0]}
+                                  </p>
+                                )}
+                                {audit.nextStep && (
+                                  <p className="mt-1 line-clamp-2 text-2xs text-muted-foreground/70">
+                                    {audit.nextStep}
+                                  </p>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
 
                       {(plugin.surfaceSummary?.length ?? 0) > 0 && (
                         <div className="rounded-lg border border-border/50 bg-card/60 px-3 py-2.5">

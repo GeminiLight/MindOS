@@ -23,6 +23,8 @@ import { Plugin } from './shims/plugin';
 import { createObsidianModule } from './shims/obsidian';
 import { AppShim, type AppShimOptions } from './shims/app';
 import { createObsidianElement } from './shims/dom';
+import { ObsidianRuntimeHost } from './runtime';
+import { ObsidianRuntimeCapabilityLedgerStore } from './runtime-capability-ledger-store';
 import { PluginManifest } from './types';
 import {
   assertSafeObsidianPluginId,
@@ -36,7 +38,9 @@ export interface LoadedPlugin {
   pluginDir: string;
 }
 
-export type PluginLoaderOptions = AppShimOptions;
+export interface PluginLoaderOptions extends AppShimOptions {
+  runtimeCapabilityLedgerStore?: ObsidianRuntimeCapabilityLedgerStore;
+}
 
 type PluginLocalStorage = {
   getItem(key: string): string | null;
@@ -70,7 +74,11 @@ export class PluginLoader {
   private app: AppShim;
 
   constructor(private mindRoot: string, options: PluginLoaderOptions = {}) {
-    this.app = new AppShim(mindRoot, undefined, options);
+    const { runtimeCapabilityLedgerStore, ...appOptions } = options;
+    const ledgerStore = runtimeCapabilityLedgerStore ?? new ObsidianRuntimeCapabilityLedgerStore(mindRoot);
+    this.app = new AppShim(mindRoot, new ObsidianRuntimeHost({
+      capabilityLedgerStore: ledgerStore,
+    }), appOptions);
   }
 
   private resolvePluginDir(pluginId: string): string {
@@ -102,6 +110,9 @@ export class PluginLoader {
         continue;
       }
       for (const entry of entries) {
+        if (entry.startsWith('.')) {
+          continue;
+        }
         const pluginDir = path.join(root.rootDir, entry);
         const manifestPath = path.join(pluginDir, 'manifest.json');
 

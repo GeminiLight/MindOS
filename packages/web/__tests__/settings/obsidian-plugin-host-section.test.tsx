@@ -160,6 +160,54 @@ describe('ObsidianPluginHostSection', () => {
     await cleanup(root, host);
   });
 
+  it('shows historical runtime ledger and workflow audit in expanded plugin details', async () => {
+    mocks.apiFetch.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url === '/api/obsidian-plugins' && !init?.method) {
+        return {
+          ok: true,
+          plugins: [plugin({
+            enabled: true,
+            loaded: false,
+            capabilityLedgerHistory: {
+              total: 2,
+              entries: [],
+              summary: { predicted: 0, registered: 1, called: 1, blocked: 0 },
+              latestBlocked: [],
+              skippedCorruptLines: 0,
+            },
+            workflowAudits: [{
+              id: 'quickadd-capture-macro',
+              label: 'Run capture or macro commands',
+              status: 'observed',
+              source: 'runtime-ledger',
+              evidence: ['2026-06-26T08:00:00.000Z: Plugin command "capture" executed.'],
+              lastObservedAt: '2026-06-26T08:00:00.000Z',
+              nextStep: 'Verify each capture path with real note writes.',
+            }],
+          })],
+        };
+      }
+      throw new Error(`Unexpected apiFetch call: ${url}`);
+    });
+
+    const { host, root } = await renderSection();
+    const row = host.querySelector('[data-obsidian-plugin-row="quickadd-like"]') as HTMLElement;
+    const expandButton = row.querySelector('button') as HTMLButtonElement;
+
+    await act(async () => {
+      expandButton.click();
+      await Promise.resolve();
+    });
+
+    expect(host.textContent).toContain('2 historical · 1 registered / 1 called');
+    expect(host.textContent).toContain('Workflow audit');
+    expect(host.textContent).toContain('Run capture or macro commands');
+    expect(host.textContent).toContain('observed');
+    expect(host.textContent).toContain('Plugin command "capture" executed.');
+
+    await cleanup(root, host);
+  });
+
   it('asks for capability confirmation before enabling gated plugins', async () => {
     const gatedPlugin = plugin({
       compatibility: {

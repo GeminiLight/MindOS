@@ -8,6 +8,7 @@ import {
   importLifecycleRoute,
   postRequest,
 } from './obsidian-plugin-api-test-utils';
+import { resetObsidianPluginRuntimeServicesForTests } from '@/lib/obsidian-compat/runtime-service';
 
 let mindRoot: string;
 
@@ -126,6 +127,53 @@ describe('/api/obsidian-plugins lifecycle', () => {
           }),
         ]),
       },
+    });
+  });
+
+  it('returns persisted runtime capability history after runtime service reset', async () => {
+    writePlugin(
+      'quickadd',
+      `
+        const { Plugin } = require('obsidian');
+        module.exports = class QuickAddPlugin extends Plugin {
+          onload() {
+            this.addCommand({ id: 'capture', name: 'Capture', callback: () => {} });
+          }
+        };
+      `,
+    );
+
+    const { GET, POST } = await importLifecycleRoute();
+    await POST(postRequest({ action: 'enable', pluginId: 'quickadd' }));
+    await POST(postRequest({ action: 'load-enabled' }));
+    await POST(postRequest({ action: 'execute-command', commandId: 'obsidian:quickadd:capture' }));
+
+    resetObsidianPluginRuntimeServicesForTests();
+
+    const res = await GET(new NextRequest('http://localhost/api/obsidian-plugins'));
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json.plugins[0]).toMatchObject({
+      id: 'quickadd',
+      loaded: false,
+      runtime: {
+        capabilityLedger: [],
+      },
+      capabilityLedgerHistory: {
+        total: 2,
+        summary: expect.objectContaining({
+          registered: 1,
+          called: 1,
+        }),
+      },
+      workflowAudits: [
+        expect.objectContaining({
+          id: 'quickadd-capture-macro',
+          status: 'observed',
+          source: 'runtime-ledger',
+        }),
+      ],
     });
   });
 
