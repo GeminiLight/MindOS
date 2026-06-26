@@ -40,7 +40,13 @@ import {
   loadLastSelectedAgentRuntime,
   persistLastSelectedAgentRuntime,
 } from '@/lib/ask-runtime-preference';
-import { canEditSessionWorkDir, refreshSessions } from '@/lib/agent-session-store';
+import {
+  canEditSessionWorkDir,
+  getActiveSessionId,
+  refreshSessions,
+  renameSession as renameStoredSession,
+  resetSession as resetStoredSession,
+} from '@/lib/agent-session-store';
 import { cn } from '@/lib/utils';
 import { useNativeRuntimeDetection } from '@/hooks/useNativeRuntimeDetection';
 import { useRuntimeReadiness } from '@/hooks/useRuntimeReadiness';
@@ -57,6 +63,7 @@ import { isAiConfiguredForAgentTurn, type SettingsJsonForAi } from '@/lib/settin
 import {
   ASK_PANEL_SESSION_ACTIVATE_EVENT,
   getAskPanelSessionActivationDetail,
+  type AskPanelNewSessionDetail,
 } from '@/lib/ask-panel-session-activation';
 
 /** Stable empty array — a fresh [] literal per render would bust MessageList's memo */
@@ -879,6 +886,29 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
     clearTransientComposerState();
   }, [clearTransientComposerState, updateSelectedAgentRuntime]);
 
+  const handleNewSessionActivation = useCallback((detail: AskPanelNewSessionDetail): boolean => {
+    // Project-scoped launchers, like Studio seed sessions, need to create the
+    // same lane that /chat/new?projectId=... would create without replacing the
+    // already-open Ask surface with the full-page route.
+    const runtime = selectedAgentRuntimeRef.current;
+    const requestedProjectId = detail.projectId?.trim() || undefined;
+    const requestedTitle = detail.title?.trim() || undefined;
+    if (requestedProjectId || requestedTitle) {
+      resetStoredSession({
+        currentFile,
+        projectId: requestedProjectId ?? projectId,
+        runtime,
+      });
+      const id = getActiveSessionId();
+      if (id && requestedTitle) renameStoredSession(id, requestedTitle);
+    } else {
+      sessionRef.current.resetSession(runtime);
+    }
+    updateSelectedAgentRuntime(runtime);
+    clearTransientComposerState();
+    return true;
+  }, [clearTransientComposerState, currentFile, projectId, updateSelectedAgentRuntime]);
+
   const handleDragOver = useCallback((e: React.DragEvent) => {
     // Accept mindos file paths and image drops
     if (e.dataTransfer.types.includes('text/mindos-path') || e.dataTransfer.types.includes('Files')) {
@@ -962,17 +992,22 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
   }, [chat.isLoadingRef, currentFile, session.sessions, updateSelectedAgentRuntime]);
 
   useEffect(() => {
-    if (!visible || variant !== 'panel' || maximized) return;
+    if (!visible || maximized || (variant !== 'panel' && variant !== 'modal')) return;
     const handleAskPanelSessionActivation = (event: Event) => {
+      if (event.defaultPrevented) return;
       const detail = getAskPanelSessionActivationDetail(event);
       if (!detail) return;
+      if (detail.action === 'new') {
+        if (handleNewSessionActivation(detail)) event.preventDefault();
+        return;
+      }
       if (handleLoadSession(detail.sessionId)) {
         event.preventDefault();
       }
     };
     window.addEventListener(ASK_PANEL_SESSION_ACTIVATE_EVENT, handleAskPanelSessionActivation);
     return () => window.removeEventListener(ASK_PANEL_SESSION_ACTIVATE_EVENT, handleAskPanelSessionActivation);
-  }, [handleLoadSession, maximized, variant, visible]);
+  }, [handleLoadSession, handleNewSessionActivation, maximized, variant, visible]);
 
   const handleDeleteSession = useCallback((id: string) => {
     // Deleting a running session is allowed: the store aborts its run and

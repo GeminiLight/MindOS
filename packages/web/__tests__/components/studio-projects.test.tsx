@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRoot } from 'react-dom/client';
 import { getActiveSessionId, resetSession } from '@/lib/agent-session-store';
 import { setMessages } from '@/lib/agent-run-store';
+import { ASK_PANEL_SESSION_ACTIVATE_EVENT } from '@/lib/ask-panel-session-activation';
 
 vi.mock('@/lib/stores/locale-store', () => ({
   useLocale: () => ({ locale: 'en' as const }),
@@ -117,6 +118,48 @@ describe('Studio Project UI', () => {
     expect(newSession).not.toBeNull();
     expect(view.host.querySelectorAll<HTMLAnchorElement>('a[href="/chat/new?projectId=launch-practice"]')).toHaveLength(1);
 
+    await view.cleanup();
+  });
+
+  it('lets an open Ask surface consume Studio Project new-session links', async () => {
+    const StudioProjectContent = (await import('@/components/studio/StudioProjectContent')).default;
+    const details: Array<{ action?: string; projectId?: string; source?: string; title?: string }> = [];
+    const handler = vi.fn((event: Event) => {
+      details.push((event as CustomEvent<{ action?: string; projectId?: string; source?: string; title?: string }>).detail);
+      event.preventDefault();
+    });
+    window.addEventListener(ASK_PANEL_SESSION_ACTIVATE_EVENT, handler);
+    const view = await render(<StudioProjectContent projectId="launch-practice" />);
+
+    const newSession = view.host.querySelector<HTMLAnchorElement>('a[href="/chat/new?projectId=launch-practice"]');
+    expect(newSession).not.toBeNull();
+    const newSessionClick = new MouseEvent('click', { bubbles: true, cancelable: true });
+    await act(async () => {
+      newSession!.dispatchEvent(newSessionClick);
+    });
+    expect(newSessionClick.defaultPrevented).toBe(true);
+    expect(details.at(-1)).toMatchObject({
+      action: 'new',
+      projectId: 'launch-practice',
+      source: 'studio-project',
+    });
+
+    const seedSession = view.host.querySelector<HTMLAnchorElement>('a[href*="title=Launch+brief+review"]');
+    expect(seedSession).not.toBeNull();
+    const seedClick = new MouseEvent('click', { bubbles: true, cancelable: true });
+    await act(async () => {
+      seedSession!.dispatchEvent(seedClick);
+    });
+    expect(seedClick.defaultPrevented).toBe(true);
+    expect(details.at(-1)).toMatchObject({
+      action: 'new',
+      projectId: 'launch-practice',
+      source: 'studio-project',
+      title: 'Launch brief review',
+    });
+
+    expect(handler).toHaveBeenCalledTimes(2);
+    window.removeEventListener(ASK_PANEL_SESSION_ACTIVATE_EVENT, handler);
     await view.cleanup();
   });
 

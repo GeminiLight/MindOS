@@ -11,13 +11,28 @@ import React from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { flushSync } from 'react-dom';
 import ChatContent from '@/components/chat/ChatContent';
-import { requestAskPanelSessionActivation } from '@/lib/ask-panel-session-activation';
+import {
+  requestAskPanelNewSessionActivation,
+  requestAskPanelSessionActivation,
+} from '@/lib/ask-panel-session-activation';
 import type { ChatSession } from '@/lib/types';
 
-const { mockInitSessions, mockRefreshSessions, mockLoadSession } = vi.hoisted(() => ({
+const {
+  mockInitSessions,
+  mockRefreshSessions,
+  mockLoadSession,
+  mockResetSession,
+  mockStoreGetActiveSessionId,
+  mockStoreRenameSession,
+  mockStoreResetSession,
+} = vi.hoisted(() => ({
   mockInitSessions: vi.fn(),
   mockRefreshSessions: vi.fn(() => Promise.resolve()),
   mockLoadSession: vi.fn(),
+  mockResetSession: vi.fn(),
+  mockStoreGetActiveSessionId: vi.fn(() => 'fresh-project-session'),
+  mockStoreRenameSession: vi.fn(),
+  mockStoreResetSession: vi.fn(),
 }));
 
 const { mockSubmit, mockStop, mockFirstMessageFired, mockIsLoadingRef, mockAbortRef } = vi.hoisted(() => ({
@@ -39,7 +54,13 @@ const emptySession: ChatSession = {
 
 vi.mock('@/lib/agent-session-store', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/agent-session-store')>();
-  return { ...actual, refreshSessions: mockRefreshSessions };
+  return {
+    ...actual,
+    getActiveSessionId: mockStoreGetActiveSessionId,
+    refreshSessions: mockRefreshSessions,
+    renameSession: mockStoreRenameSession,
+    resetSession: mockStoreResetSession,
+  };
 });
 
 vi.mock('@/lib/stores/locale-store', () => ({
@@ -89,7 +110,7 @@ vi.mock('@/hooks/useAskSession', () => ({
     setSessionDefaultAcpAgent: vi.fn(),
     setSessionAgentRuntimeBinding: vi.fn(),
     attachRuntimeSession: vi.fn(() => true),
-    resetSession: vi.fn(),
+    resetSession: mockResetSession,
     loadSession: mockLoadSession,
     deleteSession: vi.fn(),
     renameSession: vi.fn(),
@@ -311,6 +332,52 @@ describe('ChatContent initialSessionId', () => {
     expect(mockLoadSession).toHaveBeenCalledWith('s1');
   });
 
+  it('consumes titlebar new-session activation when rendered as a visible side panel', async () => {
+    await renderChatContent({ variant: 'panel' });
+
+    let consumed = false;
+    flushSync(() => {
+      consumed = requestAskPanelNewSessionActivation();
+    });
+
+    expect(consumed).toBe(true);
+    expect(mockResetSession).toHaveBeenCalledTimes(1);
+    expect(mockStoreResetSession).not.toHaveBeenCalled();
+  });
+
+  it('consumes Project-scoped new-session activation without routing away from the Ask surface', async () => {
+    await renderChatContent({ variant: 'panel' });
+
+    let consumed = false;
+    flushSync(() => {
+      consumed = requestAskPanelNewSessionActivation({
+        projectId: ' launch-practice ',
+        title: ' Launch brief review ',
+        source: 'studio-project',
+      });
+    });
+
+    expect(consumed).toBe(true);
+    expect(mockStoreResetSession).toHaveBeenCalledWith(expect.objectContaining({
+      projectId: 'launch-practice',
+      runtime: null,
+    }));
+    expect(mockStoreRenameSession).toHaveBeenCalledWith('fresh-project-session', 'Launch brief review');
+    expect(mockResetSession).not.toHaveBeenCalled();
+  });
+
+  it('lets the Ask modal consume session activation too', async () => {
+    await renderChatContent({ variant: 'modal' });
+
+    let consumed = false;
+    flushSync(() => {
+      consumed = requestAskPanelSessionActivation('s1');
+    });
+
+    expect(consumed).toBe(true);
+    expect(mockLoadSession).toHaveBeenCalledWith('s1');
+  });
+
   it('does not consume titlebar session activation while panel mode is maximized', async () => {
     await renderChatContent({ variant: 'panel', maximized: true });
 
@@ -321,5 +388,18 @@ describe('ChatContent initialSessionId', () => {
 
     expect(consumed).toBe(false);
     expect(mockLoadSession).not.toHaveBeenCalled();
+  });
+
+  it('does not consume new-session activation while panel mode is maximized', async () => {
+    await renderChatContent({ variant: 'panel', maximized: true });
+
+    let consumed = false;
+    flushSync(() => {
+      consumed = requestAskPanelNewSessionActivation();
+    });
+
+    expect(consumed).toBe(false);
+    expect(mockResetSession).not.toHaveBeenCalled();
+    expect(mockStoreResetSession).not.toHaveBeenCalled();
   });
 });

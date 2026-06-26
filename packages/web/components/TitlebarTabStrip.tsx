@@ -28,7 +28,10 @@ import { useLocale } from '@/lib/stores/locale-store';
 import { useSmoothRouterPush } from '@/hooks/useSmoothRouterPush';
 import { StableRowTrailingSlot } from '@/components/shared/StableRowChrome';
 import { FLOATING_SURFACE_CLASS } from '@/components/shared/FloatingSurface';
-import { requestAskPanelSessionActivation } from '@/lib/ask-panel-session-activation';
+import {
+  requestAskPanelNewSessionActivation,
+  requestAskPanelSessionActivation,
+} from '@/lib/ask-panel-session-activation';
 import type { AgentRuntimeIdentity } from '@/lib/types';
 
 const NO_DRAG = { WebkitAppRegion: 'no-drag' } as React.CSSProperties;
@@ -265,6 +268,16 @@ export default function TitlebarTabStrip() {
     scheduleNavigation(tabHref(tab), tab.id);
   }, [scheduleNavigation]);
 
+  const handleNewChat = useCallback(() => {
+    setMenuOpen(false);
+    setContextMenu(null);
+    if (requestAskPanelNewSessionActivation({ source: 'titlebar-new' })) {
+      setPendingRoute(null);
+      return;
+    }
+    scheduleNavigation('/chat/new', null);
+  }, [scheduleNavigation]);
+
   const navigateHome = useCallback(() => {
     scheduleNavigation('/', null);
   }, [scheduleNavigation]);
@@ -467,7 +480,7 @@ export default function TitlebarTabStrip() {
         style={NO_DRAG}
         title={t.workspaceTabs.newChat}
         aria-label={t.workspaceTabs.newChat}
-        onClick={() => scheduleNavigation('/chat/new', null)}
+        onClick={handleNewChat}
         className="mb-1 ml-1 flex h-7 w-7 shrink-0 items-center justify-center self-end rounded-full text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <Plus size={15} aria-hidden="true" />

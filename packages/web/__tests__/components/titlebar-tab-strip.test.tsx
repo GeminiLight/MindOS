@@ -388,6 +388,29 @@ describe('TitlebarTabStrip (spec-titlebar-row Phase 2)', () => {
     expect(h.push).toHaveBeenCalledWith('/chat/new');
   });
 
+  it('lets an open Ask surface consume the new-chat button without full-page navigation', async () => {
+    await navigateTo('/');
+    const handler = vi.fn((event: Event) => {
+      expect((event as CustomEvent<{ action: string; source: string }>).detail).toMatchObject({
+        action: 'new',
+        source: 'titlebar-new',
+      });
+      event.preventDefault();
+    });
+    window.addEventListener(ASK_PANEL_SESSION_ACTIVATE_EVENT, handler);
+
+    try {
+      h.push.mockClear();
+      await click(document.querySelector('button[aria-label="New chat"]')!);
+      await flushSmoothNavigation();
+
+      expect(handler).toHaveBeenCalledTimes(1);
+      expect(h.push).not.toHaveBeenCalled();
+    } finally {
+      window.removeEventListener(ASK_PANEL_SESSION_ACTIVATE_EVENT, handler);
+    }
+  });
+
   it('keeps a Home launcher visible on place routes without creating a tab', async () => {
     initWorkspaceTabs('default');
     await navigateTo('/capture');

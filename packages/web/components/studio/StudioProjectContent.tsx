@@ -25,6 +25,7 @@ import {
 import { StableRowTrailingSlot } from '@/components/shared/StableRowChrome';
 import { useLocale } from '@/lib/stores/locale-store';
 import { refreshSessions, useActiveSessionId, useSessions } from '@/lib/agent-session-store';
+import { requestAskPanelNewSessionActivation } from '@/lib/ask-panel-session-activation';
 import { useSmoothRouterPush } from '@/hooks/useSmoothRouterPush';
 import { cn } from '@/lib/utils';
 import {
@@ -337,6 +338,15 @@ function sessionAgentId(session: StudioSessionSummary): string {
   return session.agentId?.trim() || sessionAgentName(session).toLowerCase().replace(/\s+/g, '-');
 }
 
+function askPanelNewSessionRequestFromHref(href?: string): { projectId?: string; title?: string } | null {
+  if (!href) return null;
+  const url = new URL(href, 'http://mindos.local');
+  if (url.pathname !== '/chat/new') return null;
+  const projectId = url.searchParams.get('projectId')?.trim() || undefined;
+  const title = url.searchParams.get('title')?.trim() || undefined;
+  return projectId || title ? { projectId, title } : {};
+}
+
 function SessionRow({
   session,
   locale,
@@ -409,6 +419,13 @@ function SessionRow({
         data-studio-session-row
         className={className}
         aria-label={`${title} · ${agentName}`}
+        onClick={(event) => {
+          const request = askPanelNewSessionRequestFromHref(session.href);
+          if (!request) return;
+          if (requestAskPanelNewSessionActivation({ ...request, source: 'studio-project' })) {
+            event.preventDefault();
+          }
+        }}
       >
         {content}
       </Link>
@@ -576,6 +593,8 @@ export default function StudioProjectContent({
     );
   }
 
+  const projectNewSessionHref = `/chat/new?projectId=${encodeURIComponent(project.id)}`;
+
   return (
     <StudioShell>
       <div className="min-w-0 space-y-6">
@@ -637,7 +656,19 @@ export default function StudioProjectContent({
                   </select>
                 </label>
                 <Button
-                  render={<Link href={`/chat/new?projectId=${encodeURIComponent(project.id)}`} />}
+                  render={(
+                    <Link
+                      href={projectNewSessionHref}
+                      onClick={(event) => {
+                        if (requestAskPanelNewSessionActivation({
+                          projectId: project.id,
+                          source: 'studio-project',
+                        })) {
+                          event.preventDefault();
+                        }
+                      }}
+                    />
+                  )}
                   nativeButton={false}
                   variant="outline"
                   size="lg"
