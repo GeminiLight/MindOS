@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Zap } from 'lucide-react';
+import { Terminal, Zap } from 'lucide-react';
 import type { SlashItem } from '@/hooks/useSlashCommand';
 import HighlightMatch from './HighlightMatch';
 
@@ -41,18 +41,20 @@ export default function SlashCommandPopover({ results, selectedIndex, query, onS
   }, [selectedIndex]);
 
   if (results.length === 0) return null;
+  const hasRuntimeCommands = results.some((item) => item.type === 'runtime-command');
+  const headerLabel = hasRuntimeCommands ? 'Commands' : 'Skills';
 
   return (
     <div ref={containerRef} className="border border-border rounded-lg bg-card shadow-lg overflow-hidden">
       <div className="px-3 py-1.5 border-b border-border flex items-center gap-1.5">
         <Zap size={11} className="text-[var(--amber)]/50" />
-        <span className="text-2xs font-medium text-muted-foreground/70 uppercase tracking-wider">Skills</span>
+        <span className="text-2xs font-medium text-muted-foreground/70 uppercase tracking-wider">{headerLabel}</span>
         <span className="text-2xs text-muted-foreground/40 ml-auto">{results.length}</span>
       </div>
       <div ref={listRef} className="overflow-y-auto" style={{ maxHeight: maxListH }}>
         {results.map((item, idx) => (
           <button
-            key={item.name}
+            key={`${item.type}:${item.name}`}
             type="button"
             onMouseDown={(e) => {
               e.preventDefault();
@@ -64,7 +66,9 @@ export default function SlashCommandPopover({ results, selectedIndex, query, onS
                 : 'text-muted-foreground hover:bg-muted'
             }`}
           >
-            <Zap size={13} className="text-[var(--amber)] shrink-0" />
+            {item.type === 'runtime-command'
+              ? <Terminal size={13} className="text-[var(--amber)] shrink-0" />
+              : <Zap size={13} className="text-[var(--amber)] shrink-0" />}
             <span className="text-sm font-medium shrink-0">/<HighlightMatch text={item.name} query={query} /></span>
             {item.description && (
               <span className="text-2xs text-muted-foreground/50 truncate min-w-0 flex-1" title={item.description}>{item.description}</span>

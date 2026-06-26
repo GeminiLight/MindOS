@@ -523,7 +523,7 @@ describe('MindOS session event contract', () => {
         rawInput: '{"path":"a.md"}',
       },
     })).toEqual({
-      events: [{ type: 'tool_start', toolCallId: 'call-1', toolName: 'Read', args: { path: 'a.md' } }],
+      events: [{ type: 'tool_start', toolCallId: 'call-1', toolName: 'Read', runtime: 'acp', args: { path: 'a.md' } }],
       hasVisibleContent: true,
     });
     expect(mapMindosAcpUpdateToSseEvents({
@@ -534,7 +534,7 @@ describe('MindOS session event contract', () => {
         rawOutput: 'boom',
       },
     })).toEqual({
-      events: [{ type: 'tool_end', toolCallId: 'call-1', output: 'boom', isError: true }],
+      events: [{ type: 'tool_end', toolCallId: 'call-1', output: 'boom', isError: true, runtime: 'acp' }],
       hasVisibleContent: false,
     });
     expect(mapMindosAcpUpdateToSseEvents({
@@ -549,6 +549,7 @@ describe('MindOS session event contract', () => {
         type: 'tool_start',
         toolCallId: 'call-secret',
         toolName: 'HTTP',
+        runtime: 'acp',
         args: {
           headers: { Authorization: '[redacted]' },
           url: 'https://x.test/?token=[redacted]',
@@ -564,7 +565,63 @@ describe('MindOS session event contract', () => {
         rawOutput: 'Authorization: Bearer ghp_abcdefghijklmnopqrstuvwxyz123456',
       },
     })).toEqual({
-      events: [{ type: 'tool_end', toolCallId: 'call-secret', output: 'Authorization: Bearer [redacted]', isError: false }],
+      events: [{ type: 'tool_end', toolCallId: 'call-secret', output: 'Authorization: Bearer [redacted]', isError: false, runtime: 'acp' }],
+      hasVisibleContent: false,
+    });
+    expect(mapMindosAcpUpdateToSseEvents({
+      type: 'permission_request',
+      permission: {
+        requestId: 'perm-1',
+        sessionId: 'ses-1',
+        toolCallId: 'call-1',
+        toolName: 'Write file',
+        status: 'pending',
+        options: [
+          { id: 'allow', label: 'Allow once', kind: 'allow_once' },
+          { id: 'reject', label: 'Reject once', kind: 'reject_once' },
+        ],
+      },
+    }, { permissionRunId: 'run-acp' })).toEqual({
+      events: [{
+        type: 'runtime_permission_request',
+        runId: 'run-acp',
+        requestId: 'perm-1',
+        runtime: 'acp',
+        toolCallId: 'call-1',
+        toolName: 'Write file',
+        input: {},
+        options: [
+          { id: 'allow', label: 'Allow once', intent: 'allow', scope: 'once' },
+          { id: 'reject', label: 'Reject once', intent: 'deny', scope: 'once' },
+        ],
+        reason: 'ACP adapter requested permission for a tool call.',
+      }],
+      hasVisibleContent: false,
+    });
+    expect(mapMindosAcpUpdateToSseEvents({
+      type: 'permission_resolved',
+      permission: {
+        requestId: 'perm-1',
+        sessionId: 'ses-1',
+        toolCallId: 'call-1',
+        toolName: 'Write file',
+        status: 'resolved',
+        options: [],
+        selectedOptionId: 'allow',
+        outcome: 'allow_once',
+      },
+    }, { permissionRunId: 'run-acp' })).toEqual({
+      events: [{
+        type: 'runtime_permission_resolved',
+        runId: 'run-acp',
+        requestId: 'perm-1',
+        runtime: 'acp',
+        toolCallId: 'call-1',
+        decision: 'allow',
+        cancelled: false,
+        decisionIntent: 'allow',
+        decisionScope: 'once',
+      }],
       hasVisibleContent: false,
     });
     expect(mapMindosAcpUpdateToSseEvents({ type: 'error', error: 'bad' }, { suppressErrors: true })).toEqual({

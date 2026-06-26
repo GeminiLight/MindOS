@@ -46,6 +46,7 @@ import {
   getLastUserContent,
   getLastUserImages,
   getLastUserSkillName,
+  normalizeAcpRuntimeOptions,
   normalizeAgentMode,
   normalizeAgentPermissionMode,
   normalizeAgentSessionTurnBody,
@@ -55,6 +56,7 @@ import {
   validateAgentTurnRequestContract,
   validateAgentMode,
   validateAgentPermissionMode,
+  validateAcpRuntimeOptions,
   validateNativeRuntimeOptions,
   type AgentSessionTurnRouteContext,
   type AgentTurnRequestBody,
@@ -186,7 +188,10 @@ export async function runAgentTurnRequestBody(
   const assistantId = normalizeAssistantId(body.assistantId);
   const nativeRuntimeOptionsError = validateNativeRuntimeOptions(body.runtimeOptions);
   if (nativeRuntimeOptionsError) return nativeRuntimeOptionsError;
+  const acpRuntimeOptionsError = validateAcpRuntimeOptions(body.acpRuntimeOptions);
+  if (acpRuntimeOptionsError) return acpRuntimeOptionsError;
   const nativeRuntimeOptions = normalizeNativeRuntimeOptions(body.runtimeOptions);
+  const acpRuntimeOptions = normalizeAcpRuntimeOptions(body.acpRuntimeOptions);
   const mindosAgentOptions = normalizeMindosAgentOptions(body.agentOptions);
   const requestPermissionMode = permissionModeForRequest(assistantId, requestPermissionModeInput);
   const permissionPolicy = createMindosAgentPermissionPolicy(requestPermissionMode);
@@ -360,6 +365,7 @@ export async function runAgentTurnRequestBody(
       runtimeAttachments,
       selectedSkills,
       nativeRuntimeOptions,
+      acpRuntimeOptions,
       nativeRuntimeEnv,
       requestSignal,
       requestContext,

@@ -2,11 +2,26 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import type { SkillInfo } from '@/components/settings/types';
+import type { AcpAvailableCommand } from '@/lib/types';
 
-export interface SlashItem {
+export type SlashItem =
+  | SkillSlashItem
+  | RuntimeCommandSlashItem;
+
+export interface SkillSlashItem {
   type: 'skill';
   name: string;
   description: string;
+}
+
+export interface RuntimeCommandSlashItem {
+  type: 'runtime-command';
+  name: string;
+  description: string;
+}
+
+interface UseSlashCommandOptions {
+  runtimeCommands?: AcpAvailableCommand[];
 }
 
 function safeFetchSkills(): Promise<SkillInfo[]> {
@@ -16,7 +31,8 @@ function safeFetchSkills(): Promise<SkillInfo[]> {
     .catch(() => [] as SkillInfo[]);
 }
 
-export function useSlashCommand() {
+export function useSlashCommand(options: UseSlashCommandOptions = {}) {
+  const runtimeCommands = options.runtimeCommands ?? [];
   const [allSkills, setAllSkills] = useState<SkillInfo[]>([]);
   const [slashQuery, setSlashQuery] = useState<string | null>(null);
   const [slashResults, setSlashResults] = useState<SlashItem[]>([]);
@@ -66,6 +82,30 @@ export function useSlashCommand() {
       }
 
       const q = query.toLowerCase();
+      const runtimeItems = runtimeCommands
+        .map((command) => ({
+          name: command.name.trim().replace(/^\//, ''),
+          description: command.description?.trim() || 'Runtime command',
+        }))
+        .filter((command) => command.name)
+        .map((command) => {
+          const nl = command.name.toLowerCase();
+          const dl = command.description.toLowerCase();
+          let score = 0;
+          if (!q) score = 80;
+          else if (nl.startsWith(q)) score = 120;
+          else if (nl.includes(q)) score = 70;
+          else if (dl.includes(q)) score = 15;
+          return { command, score };
+        })
+        .filter((item) => item.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 20)
+        .map((item): RuntimeCommandSlashItem => ({
+          type: 'runtime-command',
+          name: item.command.name,
+          description: item.command.description,
+        }));
       const items: SlashItem[] = (q
         ? allSkills
             .map((s) => {
@@ -84,8 +124,9 @@ export function useSlashCommand() {
             .slice(0, 20)
             .map((s) => ({ type: 'skill' as const, name: s.name, description: s.description }))
       );
+      const mergedItems = [...runtimeItems, ...items].slice(0, 20);
 
-      if (items.length === 0) {
+      if (mergedItems.length === 0) {
         setSlashQuery(null);
         setSlashResults([]);
         setSlashIndex(0);
@@ -93,10 +134,10 @@ export function useSlashCommand() {
       }
 
       setSlashQuery(query);
-      setSlashResults(items);
+      setSlashResults(mergedItems);
       setSlashIndex(0);
     },
-    [allSkills, loadSkills],
+    [allSkills, loadSkills, runtimeCommands],
   );
 
   const navigateSlash = useCallback(

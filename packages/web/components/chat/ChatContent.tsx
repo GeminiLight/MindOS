@@ -4,7 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState, useCallback, useMemo } fr
 import { createPortal } from 'react-dom';
 import { Plus, FileText, ImageIcon } from 'lucide-react';
 import { useLocale } from '@/lib/stores/locale-store';
-import type { AgentPermissionMode, AgentRuntimeDescriptor, AgentRuntimeIdentity, Message, NativeRuntimeOptions } from '@/lib/types';
+import type { AcpRuntimeOptions, AgentPermissionMode, AgentRuntimeDescriptor, AgentRuntimeIdentity, Message, NativeRuntimeOptions } from '@/lib/types';
 import ModeCapsule, {
   getPersistedPermissionMode,
 } from '@/components/ask/ModeCapsule';
@@ -13,7 +13,7 @@ import { useFileUpload } from '@/hooks/useFileUpload';
 import { useImageUpload } from '@/hooks/useImageUpload';
 import { useMention } from '@/hooks/useMention';
 import { useSlashCommand } from '@/hooks/useSlashCommand';
-import type { SlashItem } from '@/hooks/useSlashCommand';
+import type { SkillSlashItem, SlashItem } from '@/hooks/useSlashCommand';
 import MessageList from '@/components/ask/MessageList';
 import MentionPopover from '@/components/ask/MentionPopover';
 import SlashCommandPopover from '@/components/ask/SlashCommandPopover';
@@ -25,8 +25,10 @@ import ContextStatusButton from '@/components/ask/ContextStatusButton';
 import SessionContextDock from '@/components/ask/SessionContextDock';
 import ProviderModelCapsule, { getPersistedProviderModel } from '@/components/ask/ProviderModelCapsule';
 import NativeRuntimeOptionsCapsule, { getPersistedNativeRuntimeOptions, persistNativeRuntimeOptions } from '@/components/ask/NativeRuntimeOptionsCapsule';
+import AcpRuntimeOptionsCapsule from '@/components/ask/AcpRuntimeOptionsCapsule';
 import { useAgentChat } from '@/hooks/useAgentChat';
 import { useAgentRunTimeline } from '@/hooks/useAgentRunTimeline';
+import { useRuntimeSessionProjection } from '@/hooks/useRuntimeSessionProjection';
 import {
   filterSessionsByRuntimeLane,
   compactAgentRuntimeIdentity,
@@ -183,7 +185,7 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
   const [dropError, setDropError] = useState('');
   const codexThreadsRequestSeqRef = useRef(0);
 
-  const [selectedSkill, setSelectedSkill] = useState<SlashItem | null>(null);
+  const [selectedSkill, setSelectedSkill] = useState<SkillSlashItem | null>(null);
   const selectedSkillRef = useRef(selectedSkill);
   const [selectedAgentRuntime, setSelectedAgentRuntime] = useState<SelectedAgentRuntime | null>(null);
   const selectedAgentRuntimeRef = useRef(selectedAgentRuntime);
@@ -193,6 +195,7 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
   const providerOverrideRef = useRef<ProviderSelection>(null);
   const [modelOverride, setModelOverride] = useState<string | null>(null);
   const [nativeRuntimeOptions, setNativeRuntimeOptions] = useState<NativeRuntimeOptions>({});
+  const [acpRuntimeOptions, setAcpRuntimeOptions] = useState<AcpRuntimeOptions>({});
 
   const updateSelectedAgentRuntime = useCallback((runtime: AgentRuntimeIdentity | null) => {
     const normalized = normalizeSelectedAgentRuntime(runtime);
@@ -203,6 +206,7 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
     } else {
       setNativeRuntimeOptions({});
     }
+    setAcpRuntimeOptions({});
   }, []);
 
   const session = useAskSession(currentFile, projectId);
@@ -258,8 +262,20 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
     handleDrop: handleImageDrop,
     handlePaste: handleImagePaste,
   }), [clearImages, handleImageDrop, handleImagePaste, images]);
+  const isMindosRuntime = !selectedAgentRuntime || selectedAgentRuntime.kind === 'mindos';
+  const isAcpRuntime = selectedAgentRuntime?.kind === 'acp';
+  const selectedNativeRuntimeKind = selectedAgentRuntime?.kind === 'codex' || selectedAgentRuntime?.kind === 'claude'
+    ? selectedAgentRuntime.kind
+    : null;
+  const isNativeRuntime = selectedNativeRuntimeKind !== null;
+  const runtimeSessionProjection = useRuntimeSessionProjection({ visible, runtime: selectedAgentRuntime });
+  const acpRuntimeCommands = useMemo(() => (
+    isAcpRuntime
+      ? runtimeSessionProjection.selectedProjection?.slashCommands.commands ?? []
+      : []
+  ), [isAcpRuntime, runtimeSessionProjection.selectedProjection?.slashCommands.commands]);
   const mention = useMention();
-  const slash = useSlashCommand();
+  const slash = useSlashCommand({ runtimeCommands: acpRuntimeCommands });
   const nativeDetection = useNativeRuntimeDetection();
   const runtimeReadiness = useRuntimeReadiness({ visible, permissionMode });
   const nativeRuntimes = useMemo<Array<AgentRuntimeIdentity & Partial<Pick<AgentRuntimeDescriptor, 'status' | 'availability' | 'installCmd' | 'packageName' | 'binaryPath' | 'runtimeBridge'>>>>(() => {
@@ -277,11 +293,6 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
         ...(runtime.packageName ? { packageName: runtime.packageName } : {}),
       }));
   }, [nativeDetection.runtimes]);
-  const isMindosRuntime = !selectedAgentRuntime || selectedAgentRuntime.kind === 'mindos';
-  const selectedNativeRuntimeKind = selectedAgentRuntime?.kind === 'codex' || selectedAgentRuntime?.kind === 'claude'
-    ? selectedAgentRuntime.kind
-    : null;
-  const isNativeRuntime = selectedNativeRuntimeKind !== null;
   const selectedRuntimeChecking = useMemo(() => {
     if (!selectedAgentRuntime || selectedAgentRuntime.kind === 'mindos') return false;
     const nativeKind = selectedAgentRuntime.kind;
@@ -479,6 +490,7 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
     modelOverride,
     permissionMode,
     nativeRuntimeOptions,
+    acpRuntimeOptions,
     activeSessionId: session.activeSessionId,
     onFirstMessage,
     refs: chatRefs,
@@ -806,6 +818,19 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
     const cursorPos = el?.selectionStart ?? val.length;
     const before = val.slice(0, cursorPos);
     const slashIdx = before.lastIndexOf('/');
+    if (item.type === 'runtime-command') {
+      const command = `/${item.name} `;
+      const nextCursor = slashIdx + command.length;
+      const newVal = val.slice(0, slashIdx) + command + val.slice(cursorPos);
+      setComposerValue(newVal);
+      setSelectedSkill(null);
+      slashRef.current.resetSlash();
+      setTimeout(() => {
+        inputRef.current?.focus();
+        inputRef.current?.setSelectionRange(nextCursor, nextCursor);
+      }, 0);
+      return;
+    }
     const newVal = val.slice(0, slashIdx) + val.slice(cursorPos);
     setComposerValue(newVal);
     setSelectedSkill(item);
@@ -1206,10 +1231,14 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
       persistNativeRuntimeOptions(runtime.kind, next);
     }
   }, []);
+  const handleAcpRuntimeOptionsChange = useCallback((next: AcpRuntimeOptions) => {
+    setAcpRuntimeOptions(next);
+  }, []);
   const handleRefreshRuntimeState = useCallback(() => {
     nativeDetection.refresh();
     runtimeReadiness.refresh();
-  }, [nativeDetection.refresh, runtimeReadiness.refresh]);
+    void runtimeSessionProjection.refresh();
+  }, [nativeDetection.refresh, runtimeReadiness.refresh, runtimeSessionProjection.refresh]);
 
   return (
     <div className="flex min-h-0 w-full flex-col h-full">
@@ -1508,6 +1537,14 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
                   runtimeKind={selectedNativeRuntimeKind}
                   value={nativeRuntimeOptions}
                   onChange={handleNativeRuntimeOptionsChange}
+                  disabled={isLoading}
+                />
+              )}
+              {mounted && isAcpRuntime && runtimeSessionProjection.selectedProjection && (
+                <AcpRuntimeOptionsCapsule
+                  projection={runtimeSessionProjection.selectedProjection}
+                  value={acpRuntimeOptions}
+                  onChange={handleAcpRuntimeOptionsChange}
                   disabled={isLoading}
                 />
               )}

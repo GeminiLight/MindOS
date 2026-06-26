@@ -15,9 +15,11 @@ import {
   setConfigOption as defaultSetConfigOption,
   getSession as defaultGetSession,
   getActiveSessions as defaultGetActiveSessions,
+  getActiveSessionSnapshots as defaultGetActiveSessionSnapshots,
   parseAcpAgentOverrides,
   resolveConfiguredAcpAgentEntry,
   type AcpAgentOverride,
+  type AcpSessionSnapshot,
 } from '../../protocols/acp/index.js';
 import { errorResponse, json, type MindosServerResponse } from '../response.js';
 
@@ -71,6 +73,7 @@ export type AcpSessionServices = {
   setConfigOption?(sessionId: string, configId: string, value: string): Promise<unknown>;
   getSession?(sessionId: string): unknown | null;
   getActiveSessions?(): unknown[];
+  getActiveSessionSnapshots?(): AcpSessionSnapshot[];
 };
 
 export type AcpServices =
@@ -237,6 +240,10 @@ export function handleAcpSessionGet(
   } catch (error) {
     return errorResponse(error);
   }
+}
+
+export function getAcpSessionSnapshots(services: AcpSessionServices = {}): AcpSessionSnapshot[] {
+  return (services.getActiveSessionSnapshots ?? defaultGetActiveSessionSnapshots)();
 }
 
 export async function handleAcpSessionPost(

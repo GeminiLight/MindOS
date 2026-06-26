@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useCallback, useLayoutEffect } from 'react';
-import type { AgentIdentity, AgentPermissionMode, AgentRuntimeIdentity, Message, ImagePart, LocalAttachment, RuntimeSessionBinding, NativeRuntimeOptions } from '@/lib/types';
+import type { AcpRuntimeOptions, AgentIdentity, AgentPermissionMode, AgentRuntimeIdentity, Message, ImagePart, LocalAttachment, RuntimeSessionBinding, NativeRuntimeOptions } from '@/lib/types';
 import type { ProviderId } from '@/lib/agent/providers';
 import { consumeUIMessageStream } from '@/lib/agent/stream-consumer';
 import { MINDOS_AGENT, annotateMessageWithAgentRuntime, compactAgentRuntimeIdentity, getMatchingRuntimeSessionBinding } from '@/lib/ask-agent';
@@ -91,6 +91,7 @@ interface UseAgentChatOpts {
   modelOverride: string | null;
   permissionMode?: AgentPermissionMode;
   nativeRuntimeOptions?: NativeRuntimeOptions;
+  acpRuntimeOptions?: AcpRuntimeOptions;
   activeSessionId: string | null;
   onFirstMessage?: () => void;
   refs: AgentChatRefs;
@@ -122,6 +123,7 @@ export function useAgentChat({
   modelOverride,
   permissionMode = 'ask',
   nativeRuntimeOptions = {},
+  acpRuntimeOptions = {},
   activeSessionId,
   onFirstMessage,
   refs,
@@ -289,12 +291,28 @@ export function useAgentChat({
     });
 
     const selectedRuntimeIsNative = requestRuntimeBase?.kind === 'codex' || requestRuntimeBase?.kind === 'claude';
+    const selectedRuntimeIsAcp = requestRuntimeBase?.kind === 'acp';
     const compactRuntimeOptions: NativeRuntimeOptions = {
       ...(nativeRuntimeOptions.modelOverride?.trim() ? { modelOverride: nativeRuntimeOptions.modelOverride.trim() } : {}),
       ...(selectedRuntimeIsNative && nativeRuntimeOptions.reasoningEffort
         ? { reasoningEffort: nativeRuntimeOptions.reasoningEffort }
         : {}),
     };
+    const compactAcpRuntimeOptions: AcpRuntimeOptions = {
+      ...(selectedRuntimeIsAcp && acpRuntimeOptions.modeId?.trim()
+        ? { modeId: acpRuntimeOptions.modeId.trim() }
+        : {}),
+      ...(selectedRuntimeIsAcp && acpRuntimeOptions.configValues
+        ? { configValues: Object.fromEntries(
+            Object.entries(acpRuntimeOptions.configValues)
+              .map(([key, value]) => [key.trim(), value.trim()] as const)
+              .filter(([key, value]) => key && value),
+          ) }
+        : {}),
+    };
+    if (compactAcpRuntimeOptions.configValues && Object.keys(compactAcpRuntimeOptions.configValues).length === 0) {
+      delete compactAcpRuntimeOptions.configValues;
+    }
     const sessionContextSnapshot = getSessionSubmitContextSnapshot(sessionId);
     const requestBody = JSON.stringify({
       messages: requestMessages,
@@ -323,6 +341,9 @@ export function useAgentChat({
       modelOverride: requestRuntimeBase ? undefined : modelOverride ?? undefined,
       runtimeOptions: Object.keys(compactRuntimeOptions).length > 0
         ? compactRuntimeOptions
+        : undefined,
+      acpRuntimeOptions: Object.keys(compactAcpRuntimeOptions).length > 0
+        ? compactAcpRuntimeOptions
         : undefined,
     });
 
@@ -486,7 +507,7 @@ export function useAgentChat({
       endRun(sessionId);
       if (abortRef.current === controller) abortRef.current = null;
     }
-  }, [currentFile, providerOverride, modelOverride, permissionMode, nativeRuntimeOptions, errorLabels.noResponse, errorLabels.stopped, errorLabels.concurrentLimit, errorLabels.tabLimitReached, onFirstMessage, refs, resetInputState, onRestoreInput, onTransientError]);
+  }, [currentFile, providerOverride, modelOverride, permissionMode, nativeRuntimeOptions, acpRuntimeOptions, errorLabels.noResponse, errorLabels.stopped, errorLabels.concurrentLimit, errorLabels.tabLimitReached, onFirstMessage, refs, resetInputState, onRestoreInput, onTransientError]);
 
   return {
     isLoading,

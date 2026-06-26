@@ -34,8 +34,8 @@ import {
   type MindosPermissionMode,
 } from '@geminilight/mindos/agent/mindos-pi/permission';
 import type { MindosAgentRuntimeSelection } from '@geminilight/mindos/agent/runtime';
-import type { AgentPermissionMode, NativeRuntimeOptions, SessionContextSelection, SessionWorkDir } from '@/lib/types';
-import { createSession, promptStream, cancelPrompt, closeSession } from '@/lib/acp/session';
+import type { AcpRuntimeOptions, AgentPermissionMode, NativeRuntimeOptions, SessionContextSelection, SessionWorkDir } from '@/lib/types';
+import { createSession, promptStream, cancelPrompt, closeSession, setConfigOption, setMode } from '@/lib/acp/session';
 import { createClaudePermissionPromptConfig, resolveRuntimePermissionBaseUrl } from '@/lib/agent/claude-permission-prompt';
 import {
   agentRunErrorStatus,
@@ -65,6 +65,7 @@ export type RunExternalRuntimeTurnInput = {
   runtimeAttachments: MindosRuntimeAttachment[];
   selectedSkills: MindosSelectedSkill[];
   nativeRuntimeOptions: NativeRuntimeOptions;
+  acpRuntimeOptions: AcpRuntimeOptions;
   nativeRuntimeEnv?: NodeJS.ProcessEnv;
   requestSignal: AbortSignal;
   requestContext: AgentTurnRequestContext;
@@ -262,6 +263,7 @@ async function runAcpRuntimeTurn(
       cwd: input.executionCwd,
       prompt: acpPrompt,
       signal: input.requestSignal,
+      permissionRunId: acpRun.id,
       createSession: async (agentId, options) => {
         const optionEnv = compactStringEnv((options as { env?: Record<string, string | undefined> } | undefined)?.env);
         const mergedEnv = compactStringEnv({ ...(input.acpRuntimeEnvOverlay ?? {}), ...(optionEnv ?? {}) });
@@ -270,6 +272,7 @@ async function runAcpRuntimeTurn(
           ...(mergedEnv ? { env: mergedEnv } : {}),
           permissionMode: input.permissionPolicy.acpPermissionMode,
         });
+        await applyAcpRuntimeOptions(session.id, input.acpRuntimeOptions);
         updateAgentRun(acpRun.id, {
           archive: { sessionId: session.id },
           metadata: {
@@ -316,6 +319,17 @@ async function runAcpRuntimeTurn(
     });
   } else {
     completeAgentRun(acpRun.id, { outputSummary });
+  }
+}
+
+async function applyAcpRuntimeOptions(sessionId: string, options: AcpRuntimeOptions): Promise<void> {
+  if (options.modeId) {
+    await setMode(sessionId, options.modeId);
+  }
+  const configValues = options.configValues ?? {};
+  for (const [configId, value] of Object.entries(configValues)) {
+    if (!configId.trim() || !value.trim()) continue;
+    await setConfigOption(sessionId, configId, value);
   }
 }
 

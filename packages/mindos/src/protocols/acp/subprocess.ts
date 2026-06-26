@@ -32,7 +32,7 @@ import {
   type RequestPermissionRequest,
   type RequestPermissionResponse,
 } from '@agentclientprotocol/sdk';
-import type { AcpRegistryEntry } from './types.js';
+import type { AcpPermissionEvent, AcpPermissionOption, AcpRegistryEntry } from './types.js';
 import { resolveAgentCommand, findUserOverride, type AcpAgentOverride } from './agent-descriptors.js';
 import { resolveCommandPathSync } from './detect-local.js';
 
@@ -53,6 +53,8 @@ export interface AcpProcess {
  */
 export interface AcpClientCallbacks {
   onSessionUpdate?: (params: SessionNotification) => void;
+  onPermissionRequest?: (event: AcpPermissionEvent) => void;
+  onPermissionResolved?: (event: AcpPermissionEvent) => void;
 }
 
 export interface AcpConnection {
@@ -267,6 +269,71 @@ export function killAllAgents(): void {
   }
 }
 
+function createPermissionRequestId(
+  proc: AcpProcess,
+  params: RequestPermissionRequest,
+  requestedAt: string,
+): string {
+  const toolCallId = params.toolCall?.toolCallId ?? 'tool';
+  return `${proc.id}:${params.sessionId}:${toolCallId}:${Date.parse(requestedAt) || Date.now()}`;
+}
+
+function buildPermissionEvent(input: {
+  requestId: string;
+  params: RequestPermissionRequest;
+  status: AcpPermissionEvent['status'];
+  requestedAt: string;
+}): AcpPermissionEvent {
+  const toolCall = input.params.toolCall;
+  return {
+    requestId: input.requestId,
+    sessionId: input.params.sessionId,
+    toolCallId: toolCall?.toolCallId ?? '',
+    toolName: permissionToolName(toolCall),
+    status: input.status,
+    options: normalizePermissionOptions(input.params.options),
+    requestedAt: input.requestedAt,
+  };
+}
+
+function normalizePermissionOptions(options: RequestPermissionRequest['options']): AcpPermissionOption[] {
+  return (options ?? [])
+    .map((option) => ({
+      id: option.optionId,
+      label: option.name,
+      kind: option.kind,
+    }))
+    .filter((option) => option.id && option.label);
+}
+
+function permissionToolName(toolCall: RequestPermissionRequest['toolCall'] | undefined): string {
+  if (!toolCall) return 'tool';
+  if (typeof toolCall.title === 'string' && toolCall.title.trim()) return toolCall.title.trim();
+  if (typeof toolCall.kind === 'string' && toolCall.kind.trim()) return toolCall.kind.trim();
+  return 'tool';
+}
+
+function resolvePermissionEvent(
+  pending: AcpPermissionEvent,
+  response: RequestPermissionResponse,
+): AcpPermissionEvent {
+  const selectedOptionId = response.outcome.outcome === 'selected'
+    ? response.outcome.optionId
+    : undefined;
+  const selectedOption = selectedOptionId
+    ? pending.options.find((option) => option.id === selectedOptionId)
+    : undefined;
+  return {
+    ...pending,
+    status: 'resolved',
+    ...(selectedOptionId ? { selectedOptionId } : {}),
+    outcome: response.outcome.outcome === 'cancelled'
+      ? 'cancelled'
+      : selectedOption?.kind ?? 'allow_once',
+    resolvedAt: new Date().toISOString(),
+  };
+}
+
 export function resolveTerminalSpawn(command: string): TerminalSpawnSpec {
   const resolvedCommand = resolveCommandPathSync(command) ?? command;
   const needsWindowsShell =
@@ -289,14 +356,27 @@ export function createMindosClient(
 ): Client {
   return {
     async requestPermission(params: RequestPermissionRequest): Promise<RequestPermissionResponse> {
+      const requestedAt = new Date().toISOString();
+      const requestId = createPermissionRequestId(proc, params, requestedAt);
+      const pendingEvent = buildPermissionEvent({
+        requestId,
+        params,
+        status: 'pending',
+        requestedAt,
+      });
+      callbacks.onPermissionRequest?.(pendingEvent);
+
+      let response: RequestPermissionResponse;
       if (permissionMode === 'readonly') {
         console.log(`[ACP] Reject permission in readonly mode: agent=${proc.agentId} ${JSON.stringify(params.toolCall ?? params).slice(0, 200)}`);
         const rejectOption =
           params.options?.find(o => o.kind === 'reject_once') ??
           params.options?.find(o => o.kind === 'reject_always');
-        return rejectOption
+        response = rejectOption
           ? { outcome: { outcome: 'selected', optionId: rejectOption.optionId } }
           : { outcome: { outcome: 'cancelled' } };
+        callbacks.onPermissionResolved?.(resolvePermissionEvent(pendingEvent, response));
+        return response;
       }
       console.log(`[ACP] Auto-approve permission: agent=${proc.agentId} ${JSON.stringify(params.toolCall ?? params).slice(0, 200)}`);
       const options = params.options ?? [];
@@ -304,7 +384,9 @@ export function createMindosClient(
         options.find(o => o.kind === 'allow_once') ??
         options.find(o => o.kind === 'allow_always') ??
         options[0];
-      return { outcome: { outcome: 'selected', optionId: selected?.optionId ?? 'allow_once' } };
+      response = { outcome: { outcome: 'selected', optionId: selected?.optionId ?? 'allow_once' } };
+      callbacks.onPermissionResolved?.(resolvePermissionEvent(pendingEvent, response));
+      return response;
     },
 
     async sessionUpdate(params: SessionNotification): Promise<void> {

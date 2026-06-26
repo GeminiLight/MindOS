@@ -22,6 +22,8 @@ const mockRunMindosNativeAgentTurn = vi.fn();
 const mockRunMindosAcpAgentTurn = vi.fn();
 const mockRunMindosPiAgentTurnSession = vi.fn();
 const mockCreateAcpSession = vi.fn();
+const mockSetAcpMode = vi.fn();
+const mockSetAcpConfigOption = vi.fn();
 const mockCreateMindosAgentRuntime = vi.fn();
 const originalAgentTimeoutMs = process.env.MINDOS_AGENT_TIMEOUT_MS;
 const TEST_SESSION_ID = 'test-session';
@@ -166,6 +168,8 @@ vi.mock('@geminilight/mindos/agent/mindos-pi', async (importOriginal) => {
 
 vi.mock('@/lib/acp/session', () => ({
   createSession: mockCreateAcpSession,
+  setMode: mockSetAcpMode,
+  setConfigOption: mockSetAcpConfigOption,
   promptStream: vi.fn(),
   cancelPrompt: vi.fn(),
   closeSession: vi.fn(),
@@ -217,6 +221,10 @@ describe('/api/agent/sessions/:sessionId/turns native runtime routing', () => {
     mockRunMindosPiAgentTurnSession.mockReset();
     mockCreateAcpSession.mockReset();
     mockCreateAcpSession.mockResolvedValue({ id: 'acp-session-1' });
+    mockSetAcpMode.mockReset();
+    mockSetAcpMode.mockResolvedValue(undefined);
+    mockSetAcpConfigOption.mockReset();
+    mockSetAcpConfigOption.mockResolvedValue([]);
     mockCreateMindosAgentRuntime.mockReset();
     mockCreateMindosAgentRuntime.mockImplementation(() => {
       throw new Error('pi runtime should not initialize for native runtime requests');
@@ -1353,6 +1361,38 @@ describe('/api/agent/sessions/:sessionId/turns native runtime routing', () => {
     expect(acpRuns[0]?.rootRunId).toBe(acpRuns[0]?.id);
     expect(text).toContain('"type":"agent_run_context"');
     expect(text).toContain(`"rootRunId":"${acpRuns[0]?.id}"`);
+  });
+
+  it('applies selected ACP runtime options before prompting', async () => {
+    mockRunMindosAcpAgentTurn.mockImplementationOnce(async (options: Record<string, any>) => {
+      capturedAcpOptions = options;
+      await options.createSession(options.agentId, { cwd: '/tmp/mindos-test' });
+      options.send({ type: 'text_delta', delta: 'acp configured ok' });
+      options.send({ type: 'done' });
+      return {};
+    });
+
+    const res = await POST(agentTurnRequest({
+      messages: [{ role: 'user', content: 'Use ACP with projected controls' }],
+      selectedRuntime: { id: 'gemini', name: 'Gemini ACP', kind: 'acp' },
+      acpRuntimeOptions: {
+        modeId: 'code',
+        configValues: {
+          model: 'smart',
+          reasoning_effort: 'high',
+          ignored_empty: ' ',
+        },
+      },
+    }));
+    const text = await res.text();
+
+    expect(res.status).toBe(200);
+    expect(text).toContain('acp configured ok');
+    expect(capturedAcpOptions?.agentId).toBe('gemini');
+    expect(mockSetAcpMode).toHaveBeenCalledWith('acp-session-1', 'code');
+    expect(mockSetAcpConfigOption).toHaveBeenCalledWith('acp-session-1', 'model', 'smart');
+    expect(mockSetAcpConfigOption).toHaveBeenCalledWith('acp-session-1', 'reasoning_effort', 'high');
+    expect(mockSetAcpConfigOption).not.toHaveBeenCalledWith('acp-session-1', 'ignored_empty', expect.anything());
   });
 
   it('records selected ACP streaming runtime failures in the run ledger', async () => {

@@ -6,6 +6,7 @@ import type {
   AgentPermissionMode,
   AgentRuntimeIdentity,
   RuntimeSessionBinding,
+  AcpRuntimeOptions,
   NativeRuntimeOptions,
   NativeRuntimeEffort,
   SessionContextSelection,
@@ -48,6 +49,8 @@ export type AgentTurnRequestBody = {
   modelOverride?: string;
   /** Per-request native runtime controls for Codex / Claude Code. */
   runtimeOptions?: NativeRuntimeOptions;
+  /** Per-request ACP runtime controls projected from the active ACP session. */
+  acpRuntimeOptions?: AcpRuntimeOptions;
   /** Per-request MindOS PI agent controls. */
   agentOptions?: { enableThinking?: boolean; thinkingBudget?: number };
   /** MindOS Chat Panel session id for run ledger correlation. */
@@ -87,6 +90,33 @@ export function validateNativeRuntimeOptions(value: unknown) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const record = value as Record<string, unknown>;
   const unknown = firstUnknownField(record, NATIVE_RUNTIME_OPTION_FIELDS, 'runtimeOptions');
+  if (unknown) {
+    return apiError(
+      ErrorCodes.INVALID_REQUEST,
+      unknown,
+      400,
+    );
+  }
+  return null;
+}
+
+export function normalizeAcpRuntimeOptions(value: unknown): AcpRuntimeOptions {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const record = value as Record<string, unknown>;
+  const modeId = typeof record.modeId === 'string' && record.modeId.trim()
+    ? record.modeId.trim()
+    : undefined;
+  const configValues = normalizeStringRecord(record.configValues);
+  return {
+    ...(modeId ? { modeId } : {}),
+    ...(configValues ? { configValues } : {}),
+  };
+}
+
+export function validateAcpRuntimeOptions(value: unknown) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  const unknown = firstUnknownField(record, ACP_RUNTIME_OPTION_FIELDS, 'acpRuntimeOptions');
   if (unknown) {
     return apiError(
       ErrorCodes.INVALID_REQUEST,
@@ -190,6 +220,10 @@ export function normalizeAgentSessionTurnBody(
     ? firstUnknownField(objectField(record, 'runtimeOptions')!, NATIVE_RUNTIME_OPTION_FIELDS, 'runtimeOptions')
     : null;
   if (unknownRuntimeOptions) return { ok: false, message: unknownRuntimeOptions };
+  const unknownAcpRuntimeOptions = objectField(record, 'acpRuntimeOptions')
+    ? firstUnknownField(objectField(record, 'acpRuntimeOptions')!, ACP_RUNTIME_OPTION_FIELDS, 'acpRuntimeOptions')
+    : null;
+  if (unknownAcpRuntimeOptions) return { ok: false, message: unknownAcpRuntimeOptions };
   const unknownAgentOptions = objectField(record, 'agentOptions')
     ? firstUnknownField(objectField(record, 'agentOptions')!, MINDOS_AGENT_OPTION_FIELDS, 'agentOptions')
     : null;
@@ -225,6 +259,7 @@ export function normalizeAgentSessionTurnBody(
   }
 
   const runtimeOptions = record.runtimeOptions;
+  const acpRuntimeOptions = normalizeAcpRuntimeOptions(record.acpRuntimeOptions);
   const message: FrontendMessage = {
     role: 'user',
     content: text ?? '',
@@ -265,6 +300,9 @@ export function normalizeAgentSessionTurnBody(
       ...(runtimeOptions && typeof runtimeOptions === 'object' && !Array.isArray(runtimeOptions)
         ? { runtimeOptions: runtimeOptions as AgentTurnRequestBody['runtimeOptions'] }
         : {}),
+      ...(Object.keys(acpRuntimeOptions).length > 0
+        ? { acpRuntimeOptions }
+        : {}),
       ...(objectField(record, 'agentOptions')
         ? { agentOptions: objectField(record, 'agentOptions') as AgentTurnRequestBody['agentOptions'] }
         : {}),
@@ -288,6 +326,10 @@ export function validateAgentTurnRequestContract(body: unknown) {
     ? firstUnknownField(objectField(record, 'runtimeOptions')!, NATIVE_RUNTIME_OPTION_FIELDS, 'runtimeOptions')
     : null;
   if (unknownRuntimeOptions) return apiError(ErrorCodes.INVALID_REQUEST, unknownRuntimeOptions, 400);
+  const unknownAcpRuntimeOptions = objectField(record, 'acpRuntimeOptions')
+    ? firstUnknownField(objectField(record, 'acpRuntimeOptions')!, ACP_RUNTIME_OPTION_FIELDS, 'acpRuntimeOptions')
+    : null;
+  if (unknownAcpRuntimeOptions) return apiError(ErrorCodes.INVALID_REQUEST, unknownAcpRuntimeOptions, 400);
   const unknownAgentOptions = objectField(record, 'agentOptions')
     ? firstUnknownField(objectField(record, 'agentOptions')!, MINDOS_AGENT_OPTION_FIELDS, 'agentOptions')
     : null;
@@ -323,6 +365,18 @@ function stringArrayField(record: Record<string, unknown> | undefined, key: stri
   return values && values.length > 0 ? values : undefined;
 }
 
+function normalizeStringRecord(value: unknown): Record<string, string> | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const entries = Object.entries(value as Record<string, unknown>)
+    .map(([key, raw]) => {
+      const cleanKey = key.trim();
+      const cleanValue = typeof raw === 'string' ? raw.trim() : '';
+      return cleanKey && cleanValue ? [cleanKey, cleanValue] as const : null;
+    })
+    .filter((entry): entry is readonly [string, string] => entry !== null);
+  return entries.length > 0 ? Object.fromEntries(entries) : undefined;
+}
+
 function firstUnknownField(record: Record<string, unknown>, allowed: ReadonlySet<string>, prefix?: string): string | null {
   for (const key of Object.keys(record)) {
     if (!allowed.has(key)) return `Unknown field: ${prefix ? `${prefix}.` : ''}${key}`;
@@ -351,12 +405,14 @@ const AGENT_SESSION_TURN_TOP_LEVEL_FIELDS = new Set([
   'providerOverride',
   'modelOverride',
   'runtimeOptions',
+  'acpRuntimeOptions',
   'agentOptions',
   'chatSessionId',
 ]);
 const AGENT_TURN_CONTEXT_FIELDS = new Set(['currentFile', 'attachedFiles', 'uploadedFiles', 'workDir', 'contextSelection']);
 const AGENT_TURN_MESSAGE_FIELDS = new Set(['text', 'content', 'images', 'skillName']);
 const NATIVE_RUNTIME_OPTION_FIELDS = new Set(['reasoningEffort', 'modelOverride']);
+const ACP_RUNTIME_OPTION_FIELDS = new Set(['modeId', 'configValues']);
 const MINDOS_AGENT_OPTION_FIELDS = new Set(['enableThinking', 'thinkingBudget']);
 const SELECTED_RUNTIME_FIELDS = new Set(['id', 'name', 'kind', 'binaryPath']);
 const RUNTIME_BINDING_FIELDS = new Set(['kind', 'runtime', 'runtimeId', 'externalSessionId', 'cwd', 'status', 'updatedAt']);

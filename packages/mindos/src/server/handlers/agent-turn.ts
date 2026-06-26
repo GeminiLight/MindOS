@@ -68,6 +68,11 @@ export type MindosNativeRuntimeOptions = {
   modelOverride?: string;
 };
 
+export type MindosAcpRuntimeOptions = {
+  modeId?: string;
+  configValues?: Record<string, string>;
+};
+
 export type MindosAgentTurnRequest = {
   messages: MindosAgentTurnMessage[];
   agentMode?: MindosAgentMode;
@@ -83,6 +88,7 @@ export type MindosAgentTurnRequest = {
   workDir?: MindosSessionWorkDir;
   contextSelection?: MindosSessionContextSelection;
   runtimeOptions?: MindosNativeRuntimeOptions;
+  acpRuntimeOptions?: MindosAcpRuntimeOptions;
   chatSessionId?: string;
   providerOverride?: string;
   modelOverride?: string;
@@ -161,6 +167,17 @@ function parseAgentTurnRequest(body: unknown):
       body: { error: unknownRuntimeOptions },
     };
   }
+  const acpRuntimeOptionsRecord = record.acpRuntimeOptions && typeof record.acpRuntimeOptions === 'object' && !Array.isArray(record.acpRuntimeOptions)
+    ? record.acpRuntimeOptions as Record<string, unknown>
+    : undefined;
+  const unknownAcpRuntimeOptions = acpRuntimeOptionsRecord ? firstUnknownField(acpRuntimeOptionsRecord, ACP_RUNTIME_OPTION_FIELDS, 'acpRuntimeOptions') : null;
+  if (unknownAcpRuntimeOptions) {
+    return {
+      ok: false,
+      status: 400,
+      body: { error: unknownAcpRuntimeOptions },
+    };
+  }
   const agentOptionsRecord = record.agentOptions && typeof record.agentOptions === 'object' && !Array.isArray(record.agentOptions)
     ? record.agentOptions as Record<string, unknown>
     : undefined;
@@ -177,6 +194,7 @@ function parseAgentTurnRequest(body: unknown):
   const unknownRuntimeBinding = runtimeBindingRecord ? firstUnknownField(runtimeBindingRecord, RUNTIME_BINDING_FIELDS, 'runtimeBinding') : null;
   if (unknownRuntimeBinding) return { ok: false, status: 400, body: { error: unknownRuntimeBinding } };
   const runtimeOptions = normalizeNativeRuntimeOptions(record.runtimeOptions);
+  const acpRuntimeOptions = normalizeAcpRuntimeOptions(record.acpRuntimeOptions);
 
   return {
     ok: true,
@@ -195,6 +213,7 @@ function parseAgentTurnRequest(body: unknown):
       ...(workDir !== undefined ? { workDir } : {}),
       ...(contextSelection !== undefined ? { contextSelection } : {}),
       ...(runtimeOptions !== undefined ? { runtimeOptions } : {}),
+      ...(acpRuntimeOptions !== undefined ? { acpRuntimeOptions } : {}),
       ...(typeof record.chatSessionId === 'string' && record.chatSessionId.trim() ? { chatSessionId: record.chatSessionId.trim() } : {}),
       ...(typeof record.providerOverride === 'string' ? { providerOverride: record.providerOverride } : {}),
       ...(typeof record.modelOverride === 'string' ? { modelOverride: record.modelOverride } : {}),
@@ -219,6 +238,10 @@ function normalizeAgentSessionTurnBody(sessionId: string, body: unknown):
     ? firstUnknownField(objectField(record, 'runtimeOptions')!, NATIVE_RUNTIME_OPTION_FIELDS, 'runtimeOptions')
     : null;
   if (unknownRuntimeOptions) return { ok: false, status: 400, body: { error: unknownRuntimeOptions } };
+  const unknownAcpRuntimeOptions = objectField(record, 'acpRuntimeOptions')
+    ? firstUnknownField(objectField(record, 'acpRuntimeOptions')!, ACP_RUNTIME_OPTION_FIELDS, 'acpRuntimeOptions')
+    : null;
+  if (unknownAcpRuntimeOptions) return { ok: false, status: 400, body: { error: unknownAcpRuntimeOptions } };
   const unknownAgentOptions = objectField(record, 'agentOptions')
     ? firstUnknownField(objectField(record, 'agentOptions')!, MINDOS_AGENT_OPTION_FIELDS, 'agentOptions')
     : null;
@@ -248,6 +271,7 @@ function normalizeAgentSessionTurnBody(sessionId: string, body: unknown):
   }
 
   const runtimeOptions = objectField(record, 'runtimeOptions');
+  const acpRuntimeOptions = normalizeAcpRuntimeOptions(record.acpRuntimeOptions);
   return {
     ok: true,
     body: {
@@ -282,6 +306,7 @@ function normalizeAgentSessionTurnBody(sessionId: string, body: unknown):
         : {}),
       ...(objectField(record, 'runtimeBinding') ? { runtimeBinding: objectField(record, 'runtimeBinding') } : {}),
       ...(runtimeOptions ? { runtimeOptions } : {}),
+      ...(acpRuntimeOptions ? { acpRuntimeOptions } : {}),
       ...(objectField(record, 'agentOptions')
         ? { agentOptions: objectField(record, 'agentOptions') }
         : {}),
@@ -342,12 +367,14 @@ const AGENT_TURN_TOP_LEVEL_FIELDS = new Set([
   'providerOverride',
   'modelOverride',
   'runtimeOptions',
+  'acpRuntimeOptions',
   'agentOptions',
   'chatSessionId',
 ]);
 const AGENT_TURN_CONTEXT_FIELDS = new Set(['currentFile', 'attachedFiles', 'uploadedFiles', 'workDir', 'contextSelection']);
 const AGENT_TURN_MESSAGE_FIELDS = new Set(['text', 'content', 'images', 'skillName']);
 const NATIVE_RUNTIME_OPTION_FIELDS = new Set(['reasoningEffort', 'modelOverride']);
+const ACP_RUNTIME_OPTION_FIELDS = new Set(['modeId', 'configValues']);
 const MINDOS_AGENT_OPTION_FIELDS = new Set(['enableThinking', 'thinkingBudget']);
 const SELECTED_RUNTIME_FIELDS = new Set(['id', 'name', 'kind', 'binaryPath']);
 const RUNTIME_BINDING_FIELDS = new Set(['kind', 'runtime', 'runtimeId', 'externalSessionId', 'cwd', 'status', 'updatedAt']);
@@ -447,6 +474,30 @@ function normalizeNativeRuntimeOptions(value: unknown): MindosNativeRuntimeOptio
     ...(reasoningEffort ? { reasoningEffort } : {}),
     ...(modelOverride ? { modelOverride } : {}),
   };
+}
+
+function normalizeAcpRuntimeOptions(value: unknown): MindosAcpRuntimeOptions | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const record = value as Record<string, unknown>;
+  const modeId = cleanString(record.modeId, 240);
+  const configValues = normalizeStringRecord(record.configValues);
+  if (!modeId && !configValues) return undefined;
+  return {
+    ...(modeId ? { modeId } : {}),
+    ...(configValues ? { configValues } : {}),
+  };
+}
+
+function normalizeStringRecord(value: unknown): Record<string, string> | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const entries = Object.entries(value as Record<string, unknown>)
+    .map(([key, raw]) => {
+      const cleanKey = cleanString(key, 240);
+      const cleanValue = cleanString(raw, 1000);
+      return cleanKey && cleanValue ? [cleanKey, cleanValue] as const : null;
+    })
+    .filter((entry): entry is readonly [string, string] => entry !== null);
+  return entries.length > 0 ? Object.fromEntries(entries) : undefined;
 }
 
 function isMindosAgentMode(value: unknown): value is MindosAgentMode {

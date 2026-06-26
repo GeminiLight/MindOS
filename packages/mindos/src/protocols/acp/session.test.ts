@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { AcpRegistryEntry } from './types';
+import type { AcpPermissionEvent, AcpRegistryEntry } from './types';
 
 // Mock SDK connection that records calls
 let mockInitialize: ReturnType<typeof vi.fn>;
@@ -12,7 +12,11 @@ let mockSetSessionConfigOption: ReturnType<typeof vi.fn>;
 let mockUnstableCloseSession: ReturnType<typeof vi.fn>;
 let mockLoadSession: ReturnType<typeof vi.fn>;
 let mockListSessions: ReturnType<typeof vi.fn>;
-let capturedCallbacks: { onSessionUpdate?: (params: unknown) => void } = {};
+let capturedCallbacks: {
+  onSessionUpdate?: (params: unknown) => void;
+  onPermissionRequest?: (event: AcpPermissionEvent) => void;
+  onPermissionResolved?: (event: AcpPermissionEvent) => void;
+} = {};
 
 vi.mock('./registry.js', () => ({
   findAcpAgent: vi.fn(),
@@ -43,7 +47,7 @@ vi.mock('./subprocess.js', () => ({
   killAgent: vi.fn((p: { alive: boolean }) => { p.alive = false; }),
 }));
 
-import { createSession, createSessionFromEntry, loadSession, listSessions, prompt, promptStream, cancelPrompt, closeSession, setMode, setConfigOption, getSession, getActiveSessions } from './session';
+import { createSession, createSessionFromEntry, loadSession, listSessions, prompt, promptStream, cancelPrompt, closeSession, setMode, setConfigOption, getSession, getActiveSessions, getSessionSnapshot, getActiveSessionSnapshots } from './session';
 import { findAcpAgent } from './registry.js';
 import { spawnAndConnect } from './subprocess.js';
 
@@ -113,6 +117,7 @@ describe('ACP Session (SDK-based)', () => {
       expect(session.modes).toHaveLength(2);
       expect(session.modes![0]).toEqual({ id: 'default', name: 'Default', description: undefined });
       expect(session.modes![1]).toEqual({ id: 'code', name: 'Code Mode', description: 'Optimized for coding' });
+      expect(session.currentModeId).toBe('default');
     });
 
     it('parses modes from flat array format', async () => {
@@ -251,6 +256,145 @@ describe('ACP Session (SDK-based)', () => {
       expect(response.text).toBe('streaming...');
       expect(updates.length).toBeGreaterThanOrEqual(1);
       expect(updates[updates.length - 1]).toEqual(expect.objectContaining({ type: 'done' }));
+    });
+
+    it('updates the session snapshot from dynamic ACP updates', async () => {
+      mockNewSession.mockResolvedValueOnce({
+        sessionId: 'agent-ses-snapshot',
+        modes: {
+          availableModes: [
+            { id: 'default', name: 'Default' },
+            { id: 'code', name: 'Code' },
+          ],
+          currentModeId: 'default',
+        },
+        configOptions: [
+          {
+            configId: 'model',
+            category: 'model',
+            currentValue: 'cheap',
+            options: [{ id: 'cheap', label: 'Cheap' }, { id: 'smart', label: 'Smart' }],
+          },
+          {
+            configId: 'reasoning_effort',
+            category: 'thought_level',
+            currentValue: 'medium',
+            options: [{ id: 'low', label: 'Low' }, { id: 'medium', label: 'Medium' }],
+          },
+        ],
+      });
+      mockPrompt.mockImplementationOnce(async () => {
+        capturedCallbacks.onSessionUpdate?.({
+          sessionId: 'agent-ses-snapshot',
+          update: {
+            sessionUpdate: 'available_commands_update',
+            availableCommands: [
+              { name: 'commit', description: 'Prepare a commit.' },
+              '/plan',
+            ],
+          },
+        });
+        capturedCallbacks.onSessionUpdate?.({
+          sessionId: 'agent-ses-snapshot',
+          update: { sessionUpdate: 'current_mode_update', currentModeId: 'code' },
+        });
+        capturedCallbacks.onSessionUpdate?.({
+          sessionId: 'agent-ses-snapshot',
+          update: {
+            sessionUpdate: 'tool_call',
+            toolCallId: 'tc-1',
+            title: 'Read file',
+            status: 'pending',
+            kind: 'read',
+            rawInput: '{"path":"README.md"}',
+          },
+        });
+        capturedCallbacks.onSessionUpdate?.({
+          sessionId: 'agent-ses-snapshot',
+          update: {
+            sessionUpdate: 'tool_call_update',
+            toolCallId: 'tc-1',
+            status: 'completed',
+            rawOutput: 'ok',
+          },
+        });
+        return { stopReason: 'end_turn' };
+      });
+
+      const session = await createSessionFromEntry(MOCK_ENTRY);
+      await promptStream(session.id, 'inspect', () => {});
+
+      const snapshot = getSessionSnapshot(session.id);
+      expect(snapshot).toMatchObject({
+        schemaVersion: 1,
+        sessionId: session.id,
+        agentId: 'test-agent',
+        agentSessionId: 'agent-ses-snapshot',
+        currentModeId: 'code',
+        controls: {
+          model: { status: 'available', currentValue: 'cheap', options: [{ id: 'cheap', label: 'Cheap' }, { id: 'smart', label: 'Smart' }] },
+          mode: { status: 'available', currentValue: 'code' },
+          thoughtLevel: { status: 'available', currentValue: 'medium' },
+        },
+        availableCommands: [
+          { id: 'commit', name: 'commit', description: 'Prepare a commit.' },
+          { id: 'plan', name: 'plan' },
+        ],
+        toolSummary: { total: 1, completed: 1 },
+      });
+      expect(snapshot?.toolCalls[0]).toMatchObject({
+        toolCallId: 'tc-1',
+        status: 'completed',
+        rawOutput: 'ok',
+      });
+      expect(getActiveSessionSnapshots().some((item) => item.sessionId === session.id)).toBe(true);
+    });
+
+    it('stores ACP permission request and resolution events in the session snapshot', async () => {
+      mockPrompt.mockImplementationOnce(async () => {
+        capturedCallbacks.onPermissionRequest?.({
+          requestId: 'perm-1',
+          sessionId: 'agent-ses-perm',
+          toolCallId: 'tc-perm',
+          toolName: 'Write file',
+          status: 'pending',
+          options: [
+            { id: 'allow', label: 'Allow', kind: 'allow_once' },
+            { id: 'reject', label: 'Reject', kind: 'reject_once' },
+          ],
+          requestedAt: '2026-06-26T00:00:00.000Z',
+        });
+        capturedCallbacks.onPermissionResolved?.({
+          requestId: 'perm-1',
+          sessionId: 'agent-ses-perm',
+          toolCallId: 'tc-perm',
+          toolName: 'Write file',
+          status: 'resolved',
+          options: [
+            { id: 'allow', label: 'Allow', kind: 'allow_once' },
+            { id: 'reject', label: 'Reject', kind: 'reject_once' },
+          ],
+          selectedOptionId: 'allow',
+          outcome: 'allow_once',
+          requestedAt: '2026-06-26T00:00:00.000Z',
+          resolvedAt: '2026-06-26T00:00:01.000Z',
+        });
+        return { stopReason: 'end_turn' };
+      });
+
+      const session = await createSessionFromEntry(MOCK_ENTRY);
+      await promptStream(session.id, 'needs permission', () => {});
+
+      const snapshot = getSessionSnapshot(session.id);
+      expect(snapshot?.permissionEvents).toEqual([
+        expect.objectContaining({
+          requestId: 'perm-1',
+          status: 'resolved',
+          selectedOptionId: 'allow',
+          outcome: 'allow_once',
+        }),
+      ]);
+      expect(snapshot?.pendingPermissions).toEqual([]);
     });
   });
 

@@ -135,6 +135,20 @@ export {
 } from './handlers/runtime-permission-projections.js';
 
 export {
+  buildRuntimeSessionProjectionsPayload,
+  handleRuntimeSessionProjectionsGet,
+  type AgentRuntimeSessionProjectionReason,
+  type AgentRuntimeSessionProjectionStatus,
+  type RuntimeSessionProjection,
+  type RuntimeSessionProjectionCommands,
+  type RuntimeSessionProjectionControl,
+  type RuntimeSessionProjectionPermissionEvents,
+  type RuntimeSessionProjectionServices,
+  type RuntimeSessionProjectionToolEvents,
+  type RuntimeSessionProjectionsPayload,
+} from './handlers/runtime-session-projections.js';
+
+export {
   buildAgentRuntimeArtifactProjectionsPayload,
   handleAgentRuntimeArtifactProjectionsGet,
   type AgentRuntimeArtifactHandoffTarget,
@@ -356,6 +370,7 @@ export {
   handleAcpSessionDelete,
   handleAcpSessionGet,
   handleAcpSessionPost,
+  getAcpSessionSnapshots,
   resolveNpmInvocation,
   type AcpConfigServices,
   type AcpDetectServices,

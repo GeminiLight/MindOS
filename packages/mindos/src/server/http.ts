@@ -30,6 +30,7 @@ import {
   handleAcpSessionDelete,
   handleAcpSessionGet,
   handleAcpSessionPost,
+  getAcpSessionSnapshots,
 } from './handlers/acp.js';
 import { handleAgentActivity, handleAgentActivityPost } from './handlers/agent-activity.js';
 import {
@@ -44,6 +45,7 @@ import { handleAgentRuntimesGet } from './handlers/agent-runtimes.js';
 import { handleAgentRuntimeMcpProjectionsGet } from './handlers/mcp-runtime-projections.js';
 import { handleAgentRuntimeAdapterProjectionsGet } from './handlers/runtime-adapter-projections.js';
 import { handleAgentRuntimePermissionProjectionsGet } from './handlers/runtime-permission-projections.js';
+import { handleRuntimeSessionProjectionsGet } from './handlers/runtime-session-projections.js';
 import { handleAgentRuntimeArtifactProjectionsGet } from './handlers/runtime-artifact-projections.js';
 import { handleAgentRuntimeAutomationProjectionsGet } from './handlers/runtime-automation-projections.js';
 import { handleAgentRuntimeReadinessGet } from './handlers/runtime-readiness.js';
@@ -409,6 +411,13 @@ async function handleRequest(
     }
     if (route === 'GET /api/agent-runtimes/permission-projections') {
       writeResponse(res, await handleAgentRuntimePermissionProjectionsGet(url.searchParams, createHttpRuntimeProjectionServices(services, url.searchParams)));
+      return;
+    }
+    if (route === 'GET /api/agent-runtimes/session-projections') {
+      writeResponse(res, await handleRuntimeSessionProjectionsGet(url.searchParams, {
+        ...createHttpRuntimeProjectionServices(services, url.searchParams),
+        getAcpSessionSnapshots: () => getAcpSessionSnapshots(services),
+      }));
       return;
     }
     if (route === 'GET /api/agent-runtimes/artifact-projections') {

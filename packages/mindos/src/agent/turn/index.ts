@@ -126,7 +126,7 @@ export type MindOSSSEvent =
       type: 'runtime_permission_request';
       runId: string;
       requestId: string;
-      runtime: 'codex' | 'claude';
+      runtime: 'acp' | 'codex' | 'claude';
       toolCallId: string;
       toolName: string;
       input: unknown;
@@ -140,7 +140,7 @@ export type MindOSSSEvent =
       type: 'runtime_permission_resolved';
       runId: string;
       requestId: string;
-      runtime: 'codex' | 'claude';
+      runtime: 'acp' | 'codex' | 'claude';
       toolCallId: string;
       decision: string;
       cancelled?: boolean;
@@ -774,6 +774,16 @@ export type MindosAcpSessionUpdate = {
   type: string;
   text?: string;
   error?: string;
+  permission?: {
+    requestId: string;
+    sessionId: string;
+    toolCallId: string;
+    toolName: string;
+    status: 'pending' | 'resolved';
+    options: Array<{ id: string; label: string; kind: string }>;
+    selectedOptionId?: string;
+    outcome?: string;
+  };
   toolCall?: {
     toolCallId: string;
     title?: string;
@@ -789,6 +799,7 @@ export type MindosAcpSessionUpdate = {
 
 export type MindosAcpUpdateMappingOptions = {
   suppressErrors?: boolean;
+  permissionRunId?: string;
 };
 
 export function mapMindosAcpUpdateToSseEvents(
@@ -812,6 +823,7 @@ export function mapMindosAcpUpdateToSseEvents(
           type: 'tool_start',
           toolCallId: update.toolCall.toolCallId,
           toolName: update.toolCall.title ?? update.toolCall.kind ?? 'tool',
+          runtime: 'acp',
           args: sanitizeToolArgs(
             update.toolCall.title ?? update.toolCall.kind ?? 'tool',
             safeParseMindosJsonObject(update.toolCall.rawInput),
@@ -830,6 +842,46 @@ export function mapMindosAcpUpdateToSseEvents(
           toolCallId: update.toolCall.toolCallId,
           output: sanitizeToolOutput(update.toolCall.rawOutput ?? ''),
           isError: update.toolCall.status === 'failed',
+          runtime: 'acp',
+        }],
+        hasVisibleContent: false,
+      };
+
+    case 'permission_request':
+      if (!update.permission) return { events: [], hasVisibleContent: false };
+      return {
+        events: [{
+          type: 'runtime_permission_request',
+          runId: options.permissionRunId ?? update.permission.sessionId,
+          requestId: update.permission.requestId,
+          runtime: 'acp',
+          toolCallId: update.permission.toolCallId,
+          toolName: update.permission.toolName,
+          input: {},
+          options: update.permission.options.map((option) => ({
+            id: option.id,
+            label: option.label,
+            intent: option.kind.startsWith('reject') ? 'deny' : 'allow',
+            scope: option.kind.endsWith('_always') ? 'session' : 'once',
+          })),
+          reason: 'ACP adapter requested permission for a tool call.',
+        }],
+        hasVisibleContent: false,
+      };
+
+    case 'permission_resolved':
+      if (!update.permission) return { events: [], hasVisibleContent: false };
+      return {
+        events: [{
+          type: 'runtime_permission_resolved',
+          runId: options.permissionRunId ?? update.permission.sessionId,
+          requestId: update.permission.requestId,
+          runtime: 'acp',
+          toolCallId: update.permission.toolCallId,
+          decision: update.permission.selectedOptionId ?? update.permission.outcome ?? 'unknown',
+          cancelled: update.permission.outcome === 'cancelled',
+          decisionIntent: update.permission.outcome?.startsWith('reject') ? 'deny' : update.permission.outcome === 'cancelled' ? 'cancel' : 'allow',
+          decisionScope: update.permission.outcome?.endsWith('_always') ? 'session' : 'once',
         }],
         hasVisibleContent: false,
       };
@@ -881,6 +933,7 @@ export type MindosAcpAgentTurnOptions = MindosAcpAgentTurnServices & {
   hasContent(): boolean;
   onVisibleContent?(): void;
   send(event: MindOSSSEvent): void;
+  permissionRunId?: string;
   sleep?: (ms: number, signal?: AbortSignal) => Promise<void>;
   retryDelay?: (attempt: number) => number;
   timeoutMessage?: (timeoutMs: number) => string;
@@ -934,7 +987,10 @@ export async function runMindosAcpAgentTurn(options: MindosAcpAgentTurnOptions):
         await runMindosWithTimeout(
           Promise.race([
             options.promptStream(sessionId, options.prompt, (update) => {
-              const mapped = mapMindosAcpUpdateToSseEvents(update, { suppressErrors: options.hasContent() });
+              const mapped = mapMindosAcpUpdateToSseEvents(update, {
+                suppressErrors: options.hasContent(),
+                permissionRunId: options.permissionRunId,
+              });
               if (mapped.hasVisibleContent) options.onVisibleContent?.();
               for (const event of mapped.events) options.send(event);
             }, options.signal),

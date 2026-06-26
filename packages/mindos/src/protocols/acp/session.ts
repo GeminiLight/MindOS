@@ -22,6 +22,10 @@ import type {
   AcpStopReason,
   AcpAuthMethod,
   AcpContentBlock,
+  AcpAvailableCommand,
+  AcpPermissionEvent,
+  AcpSessionSnapshot,
+  AcpToolCallFull,
 } from './types.js';
 import {
   spawnAndConnect,
@@ -170,6 +174,7 @@ export async function createSessionFromEntry(
   // Phase 3: session/new
   let modes: AcpMode[] | undefined;
   let configOptions: AcpConfigOption[] | undefined;
+  let currentModeId: string | undefined;
   let agentSessionId: string | undefined;
 
   try {
@@ -182,7 +187,9 @@ export async function createSessionFromEntry(
       agentSessionId = newResult.sessionId;
     }
     modes = parseModes(newResult.modes);
+    currentModeId = parseCurrentModeId(newResult.modes);
     configOptions = parseConfigOptions(newResult.configOptions);
+    currentModeId ??= currentModeFromConfig(configOptions);
   } catch (sessionErr) {
     const msg = (sessionErr as Error).message ?? '';
     killAgent(conn.process);
@@ -203,6 +210,7 @@ export async function createSessionFromEntry(
     agentCapabilities,
     modes,
     configOptions,
+    currentModeId,
     authMethods,
   };
 
@@ -251,6 +259,7 @@ export async function loadSession(
 
   let modes: AcpMode[] | undefined;
   let configOptions: AcpConfigOption[] | undefined;
+  let currentModeId: string | undefined;
 
   try {
     const loadResult = await conn.connection.loadSession({
@@ -259,7 +268,9 @@ export async function loadSession(
       mcpServers: [],
     });
     modes = parseModes(loadResult.modes);
+    currentModeId = parseCurrentModeId(loadResult.modes);
     configOptions = parseConfigOptions(loadResult.configOptions);
+    currentModeId ??= currentModeFromConfig(configOptions);
   } catch (err) {
     killAgent(conn.process);
     throw new Error(`session/load failed: ${(err as Error).message}`);
@@ -276,6 +287,7 @@ export async function loadSession(
     agentCapabilities,
     modes,
     configOptions,
+    currentModeId,
   };
 
   sessions.set(existingSessionId, session);
@@ -336,9 +348,16 @@ export async function prompt(
   let notificationText = '';
   conn.callbacks.onSessionUpdate = (params) => {
     const update = sdkNotificationToUpdate(sessionId, params);
+    applySessionUpdate(session, update);
     if ((update.type === 'agent_message_chunk' || update.type === 'text') && update.text) {
       notificationText += update.text;
     }
+  };
+  conn.callbacks.onPermissionRequest = (event) => {
+    applySessionUpdate(session, { sessionId, type: 'permission_request', permission: event });
+  };
+  conn.callbacks.onPermissionResolved = (event) => {
+    applySessionUpdate(session, { sessionId, type: 'permission_resolved', permission: event });
   };
 
   try {
@@ -363,6 +382,8 @@ export async function prompt(
     throw err;
   } finally {
     conn.callbacks.onSessionUpdate = undefined;
+    conn.callbacks.onPermissionRequest = undefined;
+    conn.callbacks.onPermissionResolved = undefined;
   }
 }
 
@@ -386,14 +407,22 @@ export async function promptStream(
   let aggregatedText = '';
   conn.callbacks.onSessionUpdate = (params) => {
     const update = sdkNotificationToUpdate(sessionId, params);
+    applySessionUpdate(session, update);
     onUpdate(update);
 
     if ((update.type === 'agent_message_chunk' || update.type === 'text') && update.text) {
       aggregatedText += update.text;
     }
-    if (update.type === 'config_option_update' && update.configOptions) {
-      session.configOptions = update.configOptions;
-    }
+  };
+  conn.callbacks.onPermissionRequest = (event) => {
+    const update: AcpSessionUpdate = { sessionId, type: 'permission_request', permission: event };
+    applySessionUpdate(session, update);
+    onUpdate(update);
+  };
+  conn.callbacks.onPermissionResolved = (event) => {
+    const update: AcpSessionUpdate = { sessionId, type: 'permission_resolved', permission: event };
+    applySessionUpdate(session, update);
+    onUpdate(update);
   };
 
   try {
@@ -419,6 +448,8 @@ export async function promptStream(
     throw err;
   } finally {
     conn.callbacks.onSessionUpdate = undefined;
+    conn.callbacks.onPermissionRequest = undefined;
+    conn.callbacks.onPermissionResolved = undefined;
   }
 }
 
@@ -441,6 +472,7 @@ export async function setMode(sessionId: string, modeId: string): Promise<void> 
   const { session, conn } = getSessionAndConn(sessionId);
   const wireSessionId = session.agentSessionId ?? sessionId;
   await conn.connection.setSessionMode({ sessionId: wireSessionId, modeId });
+  session.currentModeId = modeId;
   session.lastActivityAt = new Date().toISOString();
 }
 
@@ -459,7 +491,10 @@ export async function setConfigOption(
   });
 
   const configOptions = parseConfigOptions(result.configOptions);
-  if (configOptions) session.configOptions = configOptions;
+  if (configOptions) {
+    session.configOptions = configOptions;
+    session.currentModeId = currentModeFromConfig(configOptions) ?? session.currentModeId;
+  }
   session.lastActivityAt = new Date().toISOString();
   return session.configOptions ?? [];
 }
@@ -493,6 +528,16 @@ export function getActiveSessions(): AcpSession[] {
   return [...sessions.values()];
 }
 
+export function getSessionSnapshot(sessionId: string): AcpSessionSnapshot | undefined {
+  const session = sessions.get(sessionId);
+  return session ? buildAcpSessionSnapshot(session) : undefined;
+}
+
+export function getActiveSessionSnapshots(): AcpSessionSnapshot[] {
+  reapStaleSessions();
+  return [...sessions.values()].map(buildAcpSessionSnapshot);
+}
+
 export async function closeAllSessions(): Promise<void> {
   const ids = [...sessions.keys()];
   await Promise.allSettled(ids.map(id => closeSession(id)));
@@ -516,6 +561,70 @@ function getSessionAndConn(sessionId: string): { session: AcpSession; conn: AcpC
 function updateSessionState(session: AcpSession, state: AcpSessionState): void {
   session.state = state;
   session.lastActivityAt = new Date().toISOString();
+}
+
+export function buildAcpSessionSnapshot(session: AcpSession): AcpSessionSnapshot {
+  const modes = session.modes ?? [];
+  const configOptions = session.configOptions ?? [];
+  const toolCalls = session.toolCalls ?? [];
+  const permissionEvents = session.permissionEvents ?? [];
+  return {
+    schemaVersion: 1,
+    sessionId: session.id,
+    agentId: session.agentId,
+    ...(session.agentSessionId ? { agentSessionId: session.agentSessionId } : {}),
+    state: session.state,
+    ...(session.cwd ? { cwd: session.cwd } : {}),
+    createdAt: session.createdAt,
+    lastActivityAt: session.lastActivityAt,
+    ...(session.agentCapabilities ? { agentCapabilities: session.agentCapabilities } : {}),
+    authMethods: session.authMethods ?? [],
+    modes,
+    ...(session.currentModeId ? { currentModeId: session.currentModeId } : {}),
+    configOptions,
+    controls: {
+      model: buildControlSnapshot(configOptions, 'model'),
+      mode: buildModeControlSnapshot(configOptions, modes, session.currentModeId),
+      thoughtLevel: buildControlSnapshot(configOptions, 'thought_level'),
+    },
+    availableCommands: session.availableCommands ?? [],
+    toolCalls,
+    toolSummary: summarizeToolCalls(toolCalls),
+    permissionEvents,
+    pendingPermissions: permissionEvents.filter((event) => event.status === 'pending'),
+    ...(session.sessionInfo ? { sessionInfo: session.sessionInfo } : {}),
+  };
+}
+
+function applySessionUpdate(session: AcpSession, update: AcpSessionUpdate): void {
+  session.lastActivityAt = new Date().toISOString();
+  if (update.type === 'available_commands_update') {
+    session.availableCommands = parseAvailableCommands(update.availableCommands);
+    return;
+  }
+  if (update.type === 'current_mode_update' && update.currentModeId) {
+    session.currentModeId = update.currentModeId;
+    return;
+  }
+  if (update.type === 'config_option_update' && update.configOptions) {
+    session.configOptions = update.configOptions;
+    session.currentModeId = currentModeFromConfig(update.configOptions) ?? session.currentModeId;
+    return;
+  }
+  if ((update.type === 'tool_call' || update.type === 'tool_call_update') && update.toolCall) {
+    session.toolCalls = upsertToolCall(session.toolCalls, update.toolCall);
+    return;
+  }
+  if (update.type === 'session_info_update' && update.sessionInfo) {
+    session.sessionInfo = {
+      ...session.sessionInfo,
+      ...update.sessionInfo,
+    };
+    return;
+  }
+  if ((update.type === 'permission_request' || update.type === 'permission_resolved') && update.permission) {
+    session.permissionEvents = upsertPermissionEvent(session.permissionEvents, update.permission);
+  }
 }
 
 /* ── Internal — SDK notification → MindOS update ──────────────────────── */
@@ -640,6 +749,18 @@ function parseModes(raw: unknown): AcpMode[] | undefined {
     .filter(m => m.id && m.name);
 }
 
+function parseCurrentModeId(raw: unknown): string | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const obj = raw as Record<string, unknown>;
+  if (typeof obj.currentModeId === 'string' && obj.currentModeId.trim()) return obj.currentModeId.trim();
+  const currentMode = obj.currentMode;
+  if (currentMode && typeof currentMode === 'object' && !Array.isArray(currentMode)) {
+    const id = (currentMode as Record<string, unknown>).id;
+    if (typeof id === 'string' && id.trim()) return id.trim();
+  }
+  return undefined;
+}
+
 function parseConfigOptions(raw: unknown): AcpConfigOption[] | undefined {
   if (!Array.isArray(raw) || raw.length === 0) return undefined;
   return raw
@@ -648,14 +769,181 @@ function parseConfigOptions(raw: unknown): AcpConfigOption[] | undefined {
       type: 'select' as const,
       configId: String(o.configId ?? o.id ?? ''),
       category: String(o.category ?? 'other'),
-      label: typeof o.label === 'string' ? o.label : undefined,
+      label: typeof o.label === 'string' ? o.label : typeof o.name === 'string' ? o.name : undefined,
       currentValue: String(o.currentValue ?? ''),
-      options: Array.isArray(o.options) ? o.options.map((opt: unknown) => {
-        const optObj = opt as Record<string, unknown>;
-        return { id: String(optObj.id ?? ''), label: String(optObj.label ?? '') };
-      }) : [],
+      options: parseConfigOptionEntries(o.options),
     }))
     .filter(o => o.configId);
+}
+
+function parseConfigOptionEntries(raw: unknown): AcpConfigOption['options'] {
+  if (!Array.isArray(raw)) return [];
+  const entries: AcpConfigOption['options'] = [];
+  const pushEntry = (option: unknown) => {
+    if (!option || typeof option !== 'object' || Array.isArray(option)) return;
+    const record = option as Record<string, unknown>;
+    const id = String(record.id ?? record.value ?? '').trim();
+    const label = String(record.label ?? record.name ?? id).trim();
+    if (id) entries.push({ id, label: label || id });
+  };
+  for (const item of raw) {
+    if (item && typeof item === 'object' && !Array.isArray(item) && Array.isArray((item as Record<string, unknown>).options)) {
+      for (const nested of (item as Record<string, unknown>).options as unknown[]) {
+        pushEntry(nested);
+      }
+      continue;
+    }
+    pushEntry(item);
+  }
+  return entries;
+}
+
+function parseAvailableCommands(raw: unknown): AcpAvailableCommand[] {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set<string>();
+  const commands: AcpAvailableCommand[] = [];
+  for (const entry of raw) {
+    const command = normalizeAvailableCommand(entry);
+    if (!command || seen.has(command.id)) continue;
+    seen.add(command.id);
+    commands.push(command);
+    if (commands.length >= 100) break;
+  }
+  return commands;
+}
+
+function normalizeAvailableCommand(entry: unknown): AcpAvailableCommand | null {
+  if (typeof entry === 'string') {
+    const name = entry.trim().replace(/^\//, '');
+    return name ? { id: name, name } : null;
+  }
+  if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return null;
+  const record = entry as Record<string, unknown>;
+  const rawName = record.name ?? record.id ?? record.command ?? record.title;
+  if (typeof rawName !== 'string') return null;
+  const name = rawName.trim().replace(/^\//, '');
+  if (!name) return null;
+  const id = typeof record.id === 'string' && record.id.trim()
+    ? record.id.trim().replace(/^\//, '')
+    : name;
+  const description = typeof record.description === 'string' && record.description.trim()
+    ? record.description.trim().slice(0, 300)
+    : undefined;
+  return {
+    id,
+    name,
+    ...(description ? { description } : {}),
+  };
+}
+
+function currentModeFromConfig(configOptions: AcpConfigOption[] | undefined): string | undefined {
+  const option = findConfigOption(configOptions ?? [], 'mode');
+  return option?.currentValue?.trim() || undefined;
+}
+
+function buildControlSnapshot(configOptions: AcpConfigOption[], category: string): AcpSessionSnapshot['controls']['model'] {
+  const option = findConfigOption(configOptions, category);
+  if (!option) {
+    return {
+      status: 'unavailable',
+      source: 'unavailable',
+      options: [],
+    };
+  }
+  return {
+    status: 'available',
+    source: 'observed',
+    configId: option.configId,
+    currentValue: option.currentValue,
+    options: option.options,
+  };
+}
+
+function buildModeControlSnapshot(
+  configOptions: AcpConfigOption[],
+  modes: AcpMode[],
+  currentModeId: string | undefined,
+): AcpSessionSnapshot['controls']['mode'] {
+  const option = findConfigOption(configOptions, 'mode');
+  if (option) {
+    return {
+      status: 'available',
+      source: 'observed',
+      configId: option.configId,
+      ...(currentModeId ?? option.currentValue ? { currentValue: currentModeId ?? option.currentValue } : {}),
+      options: option.options,
+    };
+  }
+  if (modes.length === 0) {
+    return {
+      status: 'unavailable',
+      source: 'unavailable',
+      options: [],
+    };
+  }
+  return {
+    status: 'available',
+    source: currentModeId ? 'observed' : 'declared',
+    ...(currentModeId ? { currentValue: currentModeId } : {}),
+    options: modes.map((mode) => ({ id: mode.id, label: mode.name })),
+  };
+}
+
+function findConfigOption(configOptions: AcpConfigOption[], category: string): AcpConfigOption | undefined {
+  return configOptions.find((option) => {
+    const optionCategory = option.category.toLowerCase();
+    const configId = option.configId.toLowerCase();
+    if (category === 'thought_level') {
+      return optionCategory === 'thought_level'
+        || optionCategory === 'reasoning'
+        || configId === 'thought_level'
+        || configId === 'thinking'
+        || configId === 'reasoning_effort';
+    }
+    return optionCategory === category || configId === category;
+  });
+}
+
+function upsertToolCall(
+  existing: AcpToolCallFull[] | undefined,
+  update: AcpToolCallFull,
+): AcpToolCallFull[] {
+  if (!update.toolCallId) return existing ?? [];
+  const next = [...(existing ?? [])];
+  const index = next.findIndex((toolCall) => toolCall.toolCallId === update.toolCallId);
+  if (index === -1) return [...next, update].slice(-100);
+  next[index] = {
+    ...next[index],
+    ...update,
+    status: update.status ?? next[index]!.status,
+  };
+  return next;
+}
+
+function summarizeToolCalls(toolCalls: AcpToolCallFull[]): AcpSessionSnapshot['toolSummary'] {
+  return {
+    total: toolCalls.length,
+    pending: toolCalls.filter((toolCall) => toolCall.status === 'pending').length,
+    inProgress: toolCalls.filter((toolCall) => toolCall.status === 'in_progress').length,
+    completed: toolCalls.filter((toolCall) => toolCall.status === 'completed').length,
+    failed: toolCalls.filter((toolCall) => toolCall.status === 'failed').length,
+  };
+}
+
+function upsertPermissionEvent(
+  existing: AcpPermissionEvent[] | undefined,
+  update: AcpPermissionEvent,
+): AcpPermissionEvent[] {
+  const next = [...(existing ?? [])];
+  const index = next.findIndex((event) => event.requestId === update.requestId);
+  if (index === -1) return [...next, update].slice(-100);
+  next[index] = {
+    ...next[index],
+    ...update,
+    options: update.options.length > 0 ? update.options : next[index]!.options,
+    requestedAt: next[index]!.requestedAt || update.requestedAt,
+  };
+  return next;
 }
 
 /* ── Internal — Session limits ─────────────────────────────────────────── */

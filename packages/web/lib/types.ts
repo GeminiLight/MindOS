@@ -378,6 +378,50 @@ export interface AcpSessionCapabilities {
   close?: boolean;
 }
 
+export interface AcpConfigOptionEntry {
+  id: string;
+  label: string;
+}
+
+export interface AcpAvailableCommand {
+  id: string;
+  name: string;
+  description?: string;
+}
+
+export type AcpToolCallStatus = 'pending' | 'in_progress' | 'completed' | 'failed';
+
+export interface AcpToolCallFull {
+  toolCallId: string;
+  title?: string;
+  kind?: string;
+  status: AcpToolCallStatus;
+  rawInput?: string;
+  rawOutput?: string;
+}
+
+export type AcpPermissionEventStatus = 'pending' | 'resolved';
+export type AcpPermissionOutcome = 'allow_once' | 'allow_always' | 'reject_once' | 'reject_always';
+
+export interface AcpPermissionOption {
+  id: string;
+  label: string;
+  kind: AcpPermissionOutcome;
+}
+
+export interface AcpPermissionEvent {
+  requestId: string;
+  sessionId: string;
+  toolCallId: string;
+  toolName: string;
+  status: AcpPermissionEventStatus;
+  options: AcpPermissionOption[];
+  selectedOptionId?: string;
+  outcome?: AcpPermissionOutcome | 'cancelled';
+  requestedAt: string;
+  resolvedAt?: string;
+}
+
 export interface AgentRuntimeAdapterDeclaredCommand {
   name: string;
   description?: string;
@@ -512,6 +556,86 @@ export interface AgentRuntimeAdapterProjectionsPayload {
   projections: AgentRuntimeAdapterProjection[];
 }
 
+export type AgentRuntimeSessionProjectionStatus = 'ready' | 'active' | 'idle' | 'limited' | 'blocked' | 'unknown';
+
+export interface AgentRuntimeSessionProjectionReason {
+  id: string;
+  status: AgentRuntimeCompatibilityRequirementStatus;
+  owner: AgentRuntimeCompatibilityOwner;
+  summary: string;
+}
+
+export interface RuntimeSessionProjectionControl {
+  status: 'available' | 'unavailable';
+  owner: AgentRuntimeOwner;
+  source: 'session-observed' | 'adapter-declared' | 'runtime-native' | 'mindos-session' | 'unavailable';
+  configId?: string;
+  currentValue?: string;
+  options: AcpConfigOptionEntry[];
+  summary: string;
+}
+
+export interface RuntimeSessionProjectionCommands {
+  status: 'available' | 'unavailable';
+  source: 'session-observed' | 'adapter-declared' | 'runtime-native' | 'mindos-skills' | 'unavailable';
+  commands: AcpAvailableCommand[];
+  summary: string;
+}
+
+export interface RuntimeSessionProjectionToolEvents {
+  status: 'available' | 'unavailable';
+  calls: AcpToolCallFull[];
+  summary: {
+    total: number;
+    pending: number;
+    inProgress: number;
+    completed: number;
+    failed: number;
+  };
+}
+
+export interface RuntimeSessionProjectionPermissionEvents {
+  status: 'available' | 'unavailable';
+  events: AcpPermissionEvent[];
+  pending: AcpPermissionEvent[];
+  summary: string;
+}
+
+export interface RuntimeSessionProjection {
+  schemaVersion: 1;
+  runtimeId: string;
+  runtimeName: string;
+  runtimeKind: AgentRuntimeKind;
+  runtimeStatus: AgentRuntimeStatus;
+  sessionOwner: AgentRuntimeOwner;
+  permissionOwner: AgentRuntimeOwner;
+  status: AgentRuntimeSessionProjectionStatus;
+  source: 'acp-session-snapshot' | 'runtime-descriptor' | 'none';
+  session?: {
+    kind: 'acp-session' | 'native-runtime-session' | 'mindos-pi-session';
+    sessionId?: string;
+    externalSessionId?: string;
+    state?: string;
+    cwd?: string;
+    updatedAt?: string;
+  };
+  controls: {
+    model: RuntimeSessionProjectionControl;
+    mode: RuntimeSessionProjectionControl;
+    thoughtLevel: RuntimeSessionProjectionControl;
+  };
+  slashCommands: RuntimeSessionProjectionCommands;
+  toolEvents: RuntimeSessionProjectionToolEvents;
+  permissionEvents: RuntimeSessionProjectionPermissionEvents;
+  reasons: AgentRuntimeSessionProjectionReason[];
+  blockers?: string[];
+}
+
+export interface RuntimeSessionProjectionsPayload {
+  schemaVersion: 1;
+  projections: RuntimeSessionProjection[];
+}
+
 export interface AgentRuntimeDescriptor extends AgentRuntimeIdentity {
   category?: AgentRuntimeCategory;
   runtimeId?: string;
@@ -616,6 +740,11 @@ export type NativeRuntimeEffort = 'low' | 'medium' | 'high' | 'xhigh';
 export interface NativeRuntimeOptions {
   modelOverride?: string;
   reasoningEffort?: NativeRuntimeEffort;
+}
+
+export interface AcpRuntimeOptions {
+  modeId?: string;
+  configValues?: Record<string, string>;
 }
 
 export type SessionWorkDirSource = 'mind-root' | 'project-default' | 'runtime-binding' | 'manual';
