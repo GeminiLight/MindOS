@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import { CalendarClock, FolderOpen, LayoutDashboard, LayoutGrid, Plus } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import PanelHeader from './PanelHeader';
-import { PANEL_NAV_SECTION_CLASS, PanelNavRow } from './PanelNavRow';
+import { PANEL_NAV_STACK_CLASS, PanelNavRow } from './PanelNavRow';
 import { useLocale } from '@/lib/stores/locale-store';
 import { cn } from '@/lib/utils';
 import {
@@ -136,7 +136,7 @@ export default function StudioPanel({ active }: StudioPanelProps) {
         </button>
       </PanelHeader>
       <div className="sidebar-scroll-area min-h-0 flex-1 overflow-y-auto">
-        <div className={PANEL_NAV_SECTION_CLASS}>
+        <div className={PANEL_NAV_STACK_CLASS}>
           <PanelNavRow
             href="/studio"
             icon={<LayoutDashboard size={14} aria-hidden="true" />}

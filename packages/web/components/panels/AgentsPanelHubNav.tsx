@@ -2,7 +2,7 @@
 
 import { usePathname, useSearchParams } from 'next/navigation';
 import { Bot, LayoutDashboard, MessageSquare, Server, Sparkles } from 'lucide-react';
-import { PANEL_NAV_SECTION_CLASS, PanelNavRow } from './PanelNavRow';
+import { PANEL_NAV_STACK_CLASS, PanelNavRow } from './PanelNavRow';
 
 type HubCopy = {
   navOverview: string;
@@ -44,7 +44,7 @@ export function AgentsPanelHubNav({
   const channelsHubActive = (routeActive && inAgentsIndexRoute && tab === 'channels') || channelsActive;
 
   return (
-    <div className={PANEL_NAV_SECTION_CLASS}>
+    <div className={PANEL_NAV_STACK_CLASS}>
       <PanelNavRow
         icon={<LayoutDashboard size={14} className={overviewActive ? 'text-[var(--amber)]' : 'text-muted-foreground'} />}
         title={copy.navOverview}

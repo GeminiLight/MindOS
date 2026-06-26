@@ -1,8 +1,8 @@
 'use client';
 
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import {
-  ArrowRight,
   BookOpen,
   GraduationCap,
   LayoutGrid,
@@ -11,6 +11,8 @@ import {
   Settings2,
   Users,
 } from 'lucide-react';
+import PanelHeader from './PanelHeader';
+import { PANEL_NAV_STACK_CLASS, PanelNavRow } from './PanelNavRow';
 import { useLocale } from '@/lib/stores/locale-store';
 
 interface AppsPanelProps {
@@ -20,8 +22,8 @@ interface AppsPanelProps {
 const COPY = {
   en: {
     title: 'Apps',
-    subtitle: 'Experimental scenario workspaces.',
-    open: 'Open Apps',
+    overview: 'Overview',
+    scenarios: 'Scenarios',
     experiments: 'Experiments',
     items: [
       { id: 'research-radar', label: 'Research Radar', icon: BookOpen },
@@ -33,8 +35,8 @@ const COPY = {
   },
   zh: {
     title: '应用',
-    subtitle: '实验中的场景工作台。',
-    open: '打开应用',
+    overview: '总览',
+    scenarios: '场景',
     experiments: '实验设置',
     items: [
       { id: 'research-radar', label: '科研雷达', icon: BookOpen },
@@ -49,50 +51,56 @@ const COPY = {
 export default function AppsPanel({ active }: AppsPanelProps) {
   const { locale } = useLocale();
   const copy = locale === 'zh' ? COPY.zh : COPY.en;
+  const pathname = usePathname() ?? '';
+  const appsActive = pathname === '/apps' || pathname.startsWith('/apps/');
 
   return (
     <div
-      className="flex h-full flex-col bg-background"
+      className={`flex h-full flex-col bg-background ${active ? '' : 'hidden'}`}
       aria-label={copy.title}
       aria-hidden={!active}
     >
-      <div className="border-b border-border px-4 py-4">
-        <div className="mb-3 flex h-8 w-8 items-center justify-center rounded-lg border border-border/60 bg-[var(--amber-subtle)] text-[var(--amber)]">
-          <LayoutGrid size={16} />
+      <PanelHeader title={copy.title} />
+
+      <div className="sidebar-scroll-area min-h-0 flex-1 overflow-y-auto">
+        <div className={PANEL_NAV_STACK_CLASS}>
+          <PanelNavRow
+            icon={<LayoutGrid size={14} aria-hidden="true" />}
+            title={copy.overview}
+            href="/apps"
+            active={appsActive}
+            activeVariant="rail"
+          />
         </div>
-        <h2 className="text-sm font-semibold text-foreground">{copy.title}</h2>
-        <p className="mt-1 text-xs leading-5 text-muted-foreground">{copy.subtitle}</p>
+
+        <nav className="border-t border-border/60 px-3 py-3" aria-label={copy.scenarios}>
+          <p className="mb-1.5 px-1 text-2xs font-medium uppercase text-muted-foreground/50">
+            {copy.scenarios}
+          </p>
+          <div className="space-y-1">
+            {copy.items.map((item) => {
+              const Icon = item.icon;
+              return (
+                <Link
+                  key={item.id}
+                  href="/apps"
+                  className="hit-target-box flex items-center gap-2.5 px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted/45 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [--hit-target-radius:var(--radius-md)]"
+                >
+                  <Icon size={15} aria-hidden="true" />
+                  <span className="min-w-0 truncate">{item.label}</span>
+                </Link>
+              );
+            })}
+          </div>
+        </nav>
       </div>
 
-      <nav className="min-h-0 flex-1 overflow-y-auto px-2 py-2" aria-label={copy.title}>
-        {copy.items.map((item) => {
-          const Icon = item.icon;
-          return (
-            <Link
-              key={item.id}
-              href="/apps"
-              className="hit-target-box flex items-center gap-2.5 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <Icon size={15} />
-              <span className="min-w-0 truncate">{item.label}</span>
-            </Link>
-          );
-        })}
-      </nav>
-
-      <div className="border-t border-border p-2">
-        <Link
-          href="/apps"
-          className="hit-target-box flex items-center justify-between rounded-md px-3 py-2 text-xs font-medium text-foreground hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <span>{copy.open}</span>
-          <ArrowRight size={13} />
-        </Link>
+      <div className="shrink-0 border-t border-border px-3 py-2">
         <Link
           href="/settings?tab=navigation"
-          className="hit-target-box mt-1 flex items-center gap-2 rounded-md px-3 py-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+          className="hit-target-box flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground transition-colors hover:bg-muted/45 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [--hit-target-radius:var(--radius-md)]"
         >
-          <Settings2 size={13} />
+          <Settings2 size={13} aria-hidden="true" />
           <span>{copy.experiments}</span>
         </Link>
       </div>
