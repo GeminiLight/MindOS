@@ -20,10 +20,24 @@ const sandboxContribution: BrowserEditorSandboxContribution = {
 };
 
 vi.mock('next/dynamic', () => ({
-  default: () => function MockWysiwygEditor({ value }: { value: string }) {
+  default: () => function MockWysiwygEditor({
+    value,
+    onChange,
+  }: {
+    value: string;
+    onChange: (value: string) => void;
+  }) {
     const React = require('react') as typeof import('react');
     const initialValue = React.useRef(value);
-    return <div data-testid="wysiwyg-editor">{initialValue.current}</div>;
+    return (
+      <button
+        type="button"
+        data-testid="wysiwyg-editor"
+        onClick={() => onChange('# Edited')}
+      >
+        {initialValue.current}
+      </button>
+    );
   },
 }));
 
@@ -54,25 +68,34 @@ describe('MarkdownEditor frontmatter handling', () => {
     viewMode: 'wysiwyg' | 'source',
     editorKey?: string,
     sandboxContributions: BrowserEditorSandboxContribution[] = [],
+    onChange = vi.fn(),
   ) {
     await act(async () => {
       root.render(
         <MarkdownEditor
           value={value}
           viewMode={viewMode}
-          onChange={vi.fn()}
+          onChange={onChange}
           editorKey={editorKey}
           sandboxContributions={sandboxContributions}
         />,
       );
     });
+    return { onChange };
   }
 
-  it('does not mount WYSIWYG when markdown has YAML frontmatter', async () => {
-    await render('---\ntype: sop\nstatus: active\n---\n\n# Body', 'wysiwyg');
+  it('opens WYSIWYG for valid frontmatter markdown while preserving the original properties block', async () => {
+    const { onChange } = await render('---\ntype: sop\nstatus: active\n---\n\n# Body', 'wysiwyg');
 
-    expect(host.querySelector('[data-testid="wysiwyg-editor"]')).toBeNull();
-    expect(host.querySelector('[data-testid="source-editor"]')).not.toBeNull();
+    const editor = host.querySelector<HTMLButtonElement>('[data-testid="wysiwyg-editor"]');
+    expect(editor).not.toBeNull();
+    expect(editor?.textContent).toBe('# Body');
+    expect(host.querySelector('[data-testid="source-editor"]')).toBeNull();
+
+    await act(async () => {
+      editor!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(onChange).toHaveBeenCalledWith('---\ntype: sop\nstatus: active\n---\n\n# Edited');
   });
 
   it('keeps malformed frontmatter-like notes in source mode', async () => {

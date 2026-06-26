@@ -137,7 +137,7 @@ describe('ViewPageClient frontmatter markdown mode', () => {
     });
   }
 
-  it('opens existing frontmatter markdown in source edit mode when Edit is preferred', async () => {
+  it('opens existing valid frontmatter markdown in WYSIWYG edit mode when Edit is preferred', async () => {
     await act(async () => {
       root.render(
         <ViewPageClient
@@ -151,6 +151,31 @@ describe('ViewPageClient frontmatter markdown mode', () => {
 
     expect(host.querySelector('[data-file-body-warmup]')).not.toBeNull();
     expect(mocks.twemojiToNative).not.toHaveBeenCalled();
+
+    await flushDeferredFileBody();
+
+    const editor = host.querySelector('[data-testid="markdown-editor"]');
+    const view = host.querySelector('[data-testid="markdown-view"]');
+    const modeButton = [...host.querySelectorAll('button')]
+      .find(button => button.getAttribute('aria-label') === 'Markdown mode');
+
+    expect(editor).not.toBeNull();
+    expect(editor?.getAttribute('data-mode')).toBe('wysiwyg');
+    expect(view).toBeNull();
+    expect(modeButton?.textContent).toContain('Edit');
+  });
+
+  it('keeps malformed frontmatter-like markdown in source edit mode', async () => {
+    await act(async () => {
+      root.render(
+        <ViewPageClient
+          filePath="broken-frontmatter.md"
+          content={'---\ntitle: [broken\n---\n\n# Body'}
+          extension="md"
+          saveAction={vi.fn()}
+        />,
+      );
+    });
 
     await flushDeferredFileBody();
 

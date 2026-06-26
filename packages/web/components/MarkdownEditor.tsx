@@ -1,8 +1,13 @@
 'use client';
 
 import dynamic from 'next/dynamic';
+import { useCallback, useMemo } from 'react';
 import EditorWrapper from './EditorWrapper';
-import { hasMarkdownFrontmatterFence } from '@/lib/parsing/frontmatter';
+import {
+  composeMarkdownFrontmatter,
+  hasMarkdownFrontmatterFence,
+  splitMarkdownFrontmatter,
+} from '@/lib/parsing/frontmatter';
 import type { BrowserEditorSandboxContribution } from '@/lib/obsidian-compat/browser-editor-sandbox';
 
 // WysiwygEditor uses browser APIs — load client-side only
@@ -27,16 +32,24 @@ export default function MarkdownEditor({
   editorKey,
   sandboxContributions = [],
 }: MarkdownEditorProps) {
-  const hasFrontmatter = hasMarkdownFrontmatterFence(value);
-  const isWysiwyg = viewMode === 'wysiwyg' && !hasFrontmatter;
-  const isSource = viewMode === 'source' || (viewMode === 'wysiwyg' && hasFrontmatter);
+  const parsedFrontmatter = useMemo(() => splitMarkdownFrontmatter(value), [value]);
+  const hasFrontmatterFence = hasMarkdownFrontmatterFence(value);
+  const hasSafeFrontmatter = parsedFrontmatter.frontmatter !== null;
+  const isWysiwyg = viewMode === 'wysiwyg' && (!hasFrontmatterFence || hasSafeFrontmatter);
+  const isSource = viewMode === 'source' || (viewMode === 'wysiwyg' && hasFrontmatterFence && !hasSafeFrontmatter);
+  const wysiwygValue = hasSafeFrontmatter ? parsedFrontmatter.body : value;
+  const handleWysiwygChange = useCallback((markdownBody: string) => {
+    onChange(parsedFrontmatter.frontmatter
+      ? composeMarkdownFrontmatter(parsedFrontmatter.frontmatter, markdownBody)
+      : markdownBody);
+  }, [onChange, parsedFrontmatter.frontmatter]);
 
   return (
     <>
-      {/* WYSIWYG normalizes markdown on mount; keep it off the path for frontmatter/source notes. */}
+      {/* Keep valid frontmatter out of Milkdown's normalization path, then splice it back unchanged. */}
       {isWysiwyg && (
         <div className="min-h-[50vh] min-w-0">
-          <WysiwygEditor key={editorKey ?? 'wysiwyg'} value={value} onChange={onChange} />
+          <WysiwygEditor key={editorKey ?? 'wysiwyg'} value={wysiwygValue} onChange={handleWysiwygChange} />
         </div>
       )}
 

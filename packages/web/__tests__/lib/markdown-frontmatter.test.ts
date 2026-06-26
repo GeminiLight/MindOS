@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  composeMarkdownFrontmatter,
   hasMarkdownFrontmatterFence,
   serializeMarkdownFrontmatter,
   splitMarkdownFrontmatter,
@@ -20,6 +21,17 @@ draft: false
 Body`);
 
     expect(result.body).toBe('# Note\n\nBody');
+    expect(result.frontmatter?.block).toBe([
+      '---',
+      'title: Frontmatter Test',
+      'tags: [clip, reading]',
+      'source: "https://example.com/a:b"',
+      'published: 2026-06-09',
+      'draft: false',
+      '---',
+      '',
+    ].join('\n'));
+    expect(result.frontmatter?.bodySeparator).toBe('\n');
     expect(result.frontmatter?.entries).toEqual([
       { key: 'title', value: 'Frontmatter Test' },
       { key: 'tags', value: ['clip', 'reading'] },
@@ -34,6 +46,15 @@ Body`);
 
     expect(result.body).toBe('# Body');
     expect(result.frontmatter?.entries).toEqual([{ key: 'title', value: 'Windows' }]);
+  });
+
+  it('recombines the original frontmatter block with an edited markdown body', () => {
+    const result = splitMarkdownFrontmatter('---\r\ntitle: Windows\r\n---\r\n\r\n# Body');
+
+    expect(result.frontmatter).not.toBeNull();
+    expect(composeMarkdownFrontmatter(result.frontmatter!, '# Edited')).toBe(
+      '---\r\ntitle: Windows\r\n---\r\n\r\n# Edited',
+    );
   });
 
   it('returns empty entries for an empty frontmatter block', () => {

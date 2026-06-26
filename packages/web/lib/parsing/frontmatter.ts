@@ -14,6 +14,10 @@ export interface FrontmatterEntry {
 
 export interface MarkdownFrontmatter {
   raw: string;
+  /** Original leading `--- ... ---` block, including the closing fence newline. */
+  block: string;
+  /** Original separator between the frontmatter block and the markdown body. */
+  bodySeparator: string;
   entries: FrontmatterEntry[];
 }
 
@@ -95,9 +99,9 @@ function findFrontmatterFenceBounds(content: string): FrontmatterFenceBounds | n
 }
 
 /**
- * Cheap guard for editor routing. It intentionally does not parse YAML: any
- * leading frontmatter-like fence should stay in source mode so WYSIWYG
- * normalization cannot rewrite user properties or malformed metadata.
+ * Cheap guard for editor routing. It intentionally does not parse YAML: callers
+ * combine this with splitMarkdownFrontmatter when they need to distinguish
+ * safe properties from malformed frontmatter-like markdown.
  */
 export function hasMarkdownFrontmatterFence(content: string): boolean {
   return findFrontmatterFenceBounds(content) !== null;
@@ -108,7 +112,14 @@ export function splitMarkdownFrontmatter(content: string): SplitMarkdownFrontmat
   if (!bounds) return { body: content, frontmatter: null };
 
   const raw = content.slice(bounds.openingEnd, bounds.closingStart).replace(/\r?\n$/, '');
-  const body = content.slice(bounds.closingEnd).replace(/^\r?\n/, '');
+  const block = content.slice(0, bounds.closingEnd);
+  const afterBlock = content.slice(bounds.closingEnd);
+  const bodySeparator = afterBlock.startsWith('\r\n')
+    ? '\r\n'
+    : afterBlock.startsWith('\n')
+      ? '\n'
+      : '';
+  const body = content.slice(bounds.closingEnd + bodySeparator.length);
 
   let parsed: unknown;
   try {
@@ -118,7 +129,7 @@ export function splitMarkdownFrontmatter(content: string): SplitMarkdownFrontmat
   }
 
   if (parsed == null) {
-    return { body, frontmatter: { raw, entries: [] } };
+    return { body, frontmatter: { raw, block, bodySeparator, entries: [] } };
   }
 
   if (!isRecord(parsed)) {
@@ -129,12 +140,18 @@ export function splitMarkdownFrontmatter(content: string): SplitMarkdownFrontmat
     body,
     frontmatter: {
       raw,
+      block,
+      bodySeparator,
       entries: Object.entries(parsed).map(([key, value]) => ({
         key,
         value: normalizeValue(value),
       })),
     },
   };
+}
+
+export function composeMarkdownFrontmatter(frontmatter: MarkdownFrontmatter, body: string): string {
+  return `${frontmatter.block}${frontmatter.bodySeparator}${body}`;
 }
 
 export function serializeMarkdownFrontmatter(fields: Record<string, FrontmatterValue | undefined>): string {

@@ -34,7 +34,7 @@ import { usePinnedFiles } from '@/lib/hooks/usePinnedFiles';
 import ExportModal from '@/components/ExportModal';
 import { useEditorTheme } from '@/lib/stores/editor-theme-store';
 import { twemojiToNative } from '@/lib/twemoji';
-import { hasMarkdownFrontmatterFence } from '@/lib/parsing/frontmatter';
+import { hasMarkdownFrontmatterFence, splitMarkdownFrontmatter } from '@/lib/parsing/frontmatter';
 import { isPathAffected, notifyFilesChanged, subscribeFilesChanged } from '@/lib/files-changed';
 import { closeByKey, keepTab, openTab } from '@/lib/workspace-tabs';
 import { fetchPluginViewSurfacesForExtension, pluginViewSurfaceHref } from '@/lib/plugins/client';
@@ -125,6 +125,10 @@ function readMarkdownModePreference(): MdViewMode {
   return normalizeMarkdownModePreference(window.localStorage.getItem(MARKDOWN_VIEW_MODE_STORAGE_KEY));
 }
 
+function hasUnsafeMarkdownFrontmatterFence(content: string): boolean {
+  return hasMarkdownFrontmatterFence(content) && splitMarkdownFrontmatter(content).frontmatter === null;
+}
+
 function resolveMarkdownStartState(
   isBinaryFile: boolean,
   isMarkdown: boolean,
@@ -136,14 +140,14 @@ function resolveMarkdownStartState(
   }
 
   const preferredMode = readMarkdownModePreference();
-  const hasFrontmatter = hasMarkdownFrontmatterFence(content);
+  const hasUnsafeFrontmatter = hasUnsafeMarkdownFrontmatterFence(content);
   const mustEdit = initialEditing || content === '';
 
   if (mustEdit) {
-    return { editing: true, mode: preferredMode === 'source' || hasFrontmatter ? 'source' : 'wysiwyg' };
+    return { editing: true, mode: preferredMode === 'source' || hasUnsafeFrontmatter ? 'source' : 'wysiwyg' };
   }
 
-  const safeMode = preferredMode === 'wysiwyg' && hasFrontmatter ? 'source' : preferredMode;
+  const safeMode = preferredMode === 'wysiwyg' && hasUnsafeFrontmatter ? 'source' : preferredMode;
   return { editing: safeMode !== 'preview', mode: safeMode };
 }
 
@@ -477,7 +481,7 @@ export default function ViewPageClient({
   const handleEdit = useCallback(() => {
     keepCurrentTab();
     setEditContent(savedContent);
-    if (isMarkdown && hasMarkdownFrontmatterFence(savedContent)) {
+    if (isMarkdown && hasUnsafeMarkdownFrontmatterFence(savedContent)) {
       setMdViewMode('source');
     }
     setEditing(true);
@@ -594,7 +598,7 @@ export default function ViewPageClient({
       }
 
       const source = editing ? editContent : savedContent;
-      const nextMode = mode === 'wysiwyg' && hasMarkdownFrontmatterFence(source)
+      const nextMode = mode === 'wysiwyg' && hasUnsafeMarkdownFrontmatterFence(source)
         ? 'source'
         : mode;
       setMdViewMode(nextMode);
