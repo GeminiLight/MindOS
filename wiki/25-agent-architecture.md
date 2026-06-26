@@ -94,7 +94,7 @@ detect → health → configure → launch → session → context
 
 ### Runtime Adapter Contract
 
-`AgentRuntimeDescriptor.adapterContract` 是 runtime lifecycle 的 adapter-facing 只读 contract。它不替代 `lifecycle` / `compatibility`，而是把“这个 runtime 如何接入 MindOS”拆成四个可被 Runtime Doctor、Compatibility Center、未来 Agent Pack 消费的面：
+`AgentRuntimeDescriptor.adapterContract` 是 runtime lifecycle 的 adapter-facing 只读 contract。它不替代 `lifecycle` / `compatibility`，而是把“这个 runtime 如何接入 MindOS”拆成五个可被 Runtime Doctor、Compatibility Center、未来 Agent Pack 消费的面：
 
 | 字段 | 语义 |
 |---|---|
@@ -102,16 +102,19 @@ detect → health → configure → launch → session → context
 | `configuration` | 模型、凭证、settings 是 MindOS session/settings 持有，还是 runtime/adapter 自己持有 |
 | `health` | health 由 MindOS native probe、runtime native check、adapter 声明，还是未知 |
 | `commands` | slash/native command 是 MindOS skill 生成、runtime event 发现、adapter 静态声明，还是未知 |
+| `protocol` | ACP / native runtime 是否声明 streaming、auth、model、prompt、MCP、session lifecycle 等协议能力 |
 
 这层的安全边界：
 
 - 只暴露命令名、健康检查摘要、静态 command 名称等非敏感 metadata；不返回 env、headers、token。
 - 不启动 runtime、不执行 health check、不同步外部 settings，只描述当前已知 adapter contract。
-- ACP custom adapter 可以通过 settings 声明 `adapterMetadata.healthCheck` 与 `adapterMetadata.commands`；MindOS 只把这些作为兼容诊断和未来 command UI 的输入，不自动信任为 ready。
+- ACP custom adapter 可以通过 settings 声明 `adapterMetadata.healthCheck`、`adapterMetadata.commands` 与 `connectionType` / `supportsStreaming` 等 protocol 相关能力；MindOS 只把这些作为兼容诊断和未来 command / model / session UI 的输入，不自动信任为完整 ready。
+- AionUI/adapter-pack 风格的 top-level 字段（如 `connectionType`、`supportsStreaming`、`authRequired`、`models`、`promptCapabilities`、`mcpCapabilities`、`sessionCapabilities`）会被归一化进非敏感 `adapterMetadata`。`env`、`headers`、`apiKeyFields` 等敏感字段不会进入 adapter contract 或 projection。
+- AionUI extension manifest 的 `contributes.acpAdapters` 与 `acp-adapters.json` 数组可以归一化为 MindOS custom ACP overrides；`cliCommand` / `defaultCliPath` / `acpArgs` / `healthCheck.versionCommand` / `healthCheck.timeout` 会映射到 MindOS 的 command / args / healthCheck contract。`connectionType: "cli"` 作为本地 CLI ACP adapter 兼容写法处理。
 
 ### Runtime Adapter Projection
 
-Runtime adapter projection 是 `adapterContract` 的只读诊断投影，位于 `packages/mindos/src/server/handlers/runtime-adapter-projections.ts`，通过 `/api/agent-runtimes/adapter-projections` 暴露。它不解释 runtime 场景本身，而是把 adapter-facing contract 拆成四个 facet 供 Runtime Doctor 和调试 UI 使用：
+Runtime adapter projection 是 `adapterContract` 的只读诊断投影，位于 `packages/mindos/src/server/handlers/runtime-adapter-projections.ts`，通过 `/api/agent-runtimes/adapter-projections` 暴露。它不解释 runtime 场景本身，而是把 adapter-facing contract 拆成五个 facet 供 Runtime Doctor 和调试 UI 使用：
 
 | 字段 | 语义 |
 |---|---|
@@ -119,8 +122,11 @@ Runtime adapter projection 是 `adapterContract` 的只读诊断投影，位于 
 | `configuration` | 模型选择、凭证、settings 由谁拥有，是 MindOS session/settings、runtime-native 还是 adapter-declared |
 | `health` | 运行时健康语义由 MindOS native probe、runtime native check、adapter 声明，还是未知 |
 | `commands` | command discovery 来源、静态 command 名称与数量，以及是否存在已声明的 adapter 命令 |
+| `protocol` | streaming/auth 是否明确、静态 model 数量、prompt/MCP/session capability flags，以及声明连接类型是否与 MindOS 当前 ACP launch 能力匹配 |
 
 这层同样是只读的，不启动 runtime、不执行 health check、不同步外部 settings，也不暴露 env / token / secret。它的作用是让 readiness 能够先看到“接入契约本身是否完整”，再谈场景级 readiness。
+
+当前 generic ACP launch 仍以本地 CLI / stdio 为主：`connectionType: "cli"` 会被视为本地进程启动的 ACP adapter，`connectionType: "stdio"` 仍是直接 stdio adapter。如果 adapter 声明 `connectionType: "http"` 或 `"sse"`，projection 会保留该事实并把 `protocol` facet 标记为 `limited`，而不是假装已经支持这些 transport。后续要真正支持 http/sse，需要先扩展 ACP subprocess / session transport 层，再把 readiness 从 limited 提升。
 
 `lifecycle.remote` 不等于“已经有 24/7 调度器”。它只回答 runtime 是否能在 MindOS server 所在主机运行，以及 unattended 能力是否完整。当前 native / ACP / MindOS Pi 都是 `server-runnable`，但 unattended 仍是 `limited`：还需要 scheduler、approval routing、wake/resume、missed trigger 和失败审计这些产品层能力。
 
@@ -448,9 +454,9 @@ MindOS Pi 的 persisted session 由 Pi `SessionManager` 自己持有完整 JSONL
 | `packages/web/app/api/assistant-runs/route.ts` | Assistant run 入口，解析 Active Assistant 后委托 agent turn |
 | `packages/mindos/src/agent/runtime/registry.ts` | Runtime descriptor / capability / lifecycle 类型源头 |
 | `packages/mindos/src/agent/runtime/lifecycle.ts` | MindOS Pi / native / ACP lifecycle metadata builder |
-| `packages/mindos/src/server/handlers/runtime-adapter-projections.ts` | Runtime adapter projection contract，统一解释 connection / configuration / health / commands 的只读接入诊断 |
+| `packages/mindos/src/server/handlers/runtime-adapter-projections.ts` | Runtime adapter projection contract，统一解释 connection / configuration / health / commands / protocol 的只读接入诊断 |
 | `packages/mindos/src/agent/runtime/compatibility.ts` | Runtime compatibility profile builder，投影 interactive / remote / unattended / skill / team 场景 readiness |
-| `packages/mindos/src/agent/runtime/adapter-contracts.ts` | Runtime adapter contract builder，描述 connection / configuration / health / commands 的只读接入契约 |
+| `packages/mindos/src/agent/runtime/adapter-contracts.ts` | Runtime adapter contract builder，描述 connection / configuration / health / commands / protocol 的只读接入契约 |
 | `packages/mindos/src/agent/runtime/descriptors.ts` | Runtime descriptor 组装，统一暴露 capability / harness / lifecycle |
 | `packages/mindos/src/server/handlers/runtime-permission-projections.ts` | Permission runtime projection contract，统一解释每个 runtime 的交互式审批与 unattended permission readiness |
 | `packages/mindos/src/server/handlers/mcp-runtime-projections.ts` | MCP runtime projection contract，统一解释每个 runtime 的 MCP ready/projectable/limited/blocked/unknown |

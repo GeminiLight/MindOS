@@ -3,7 +3,14 @@
  * Replaces the previously separate AGENT_BINARY_MAP, AGENT_OVERRIDES, and INSTALL_COMMANDS maps.
  */
 
-import type { AcpRegistryEntry, AcpTransportType } from './types.js';
+import type {
+  AcpAdapterConnectionType,
+  AcpMcpCapabilities,
+  AcpPromptCapabilities,
+  AcpRegistryEntry,
+  AcpSessionCapabilities,
+  AcpTransportType,
+} from './types.js';
 
 /* ── Types ─────────────────────────────────────────────────────────────── */
 
@@ -21,6 +28,8 @@ export interface AcpAgentDescriptor {
   args: string[];
   /** Install command shown in UI / used by auto-install */
   installCmd?: string;
+  /** Non-sensitive adapter contract metadata surfaced in runtime diagnostics. */
+  adapterMetadata?: AcpAgentAdapterMetadata;
   /** Curated display name (overrides registry name) */
   displayName?: string;
   /** Curated description (overrides registry description) */
@@ -32,7 +41,24 @@ export interface AcpAgentAdapterCommandDeclaration {
   description?: string;
 }
 
+export interface AcpAgentAdapterModelDeclaration {
+  id: string;
+  label?: string;
+  description?: string;
+}
+
+export interface AcpAgentAdapterSessionCapabilities extends AcpSessionCapabilities {
+  loadSession?: boolean;
+}
+
 export interface AcpAgentAdapterMetadata {
+  connectionType?: AcpAdapterConnectionType;
+  authRequired?: boolean;
+  supportsStreaming?: boolean;
+  models?: AcpAgentAdapterModelDeclaration[];
+  promptCapabilities?: AcpPromptCapabilities;
+  mcpCapabilities?: AcpMcpCapabilities;
+  sessionCapabilities?: AcpAgentAdapterSessionCapabilities;
   healthCheck?: {
     command?: string;
     timeoutMs?: number;
@@ -291,6 +317,7 @@ export function getDetectableAgents(overrides?: Record<string, AcpAgentOverride>
       presenceDirs: desc.presenceDirs,
       installCmd: desc.installCmd,
       description: desc.description,
+      adapterMetadata: desc.adapterMetadata,
       source: 'descriptor' as const,
     })),
     ...getConfiguredDetectableAgents(overrides),
@@ -317,26 +344,26 @@ export function findUserOverride(
 
 /** Parse and validate acpAgents config from raw settings JSON. */
 export function parseAcpAgentOverrides(raw: unknown): Record<string, AcpAgentOverride> | undefined {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
-  const obj = raw as Record<string, unknown>;
+  const entries = normalizeAcpAgentOverrideEntries(raw);
+  if (!entries) return undefined;
   const result: Record<string, AcpAgentOverride> = {};
   let hasEntries = false;
 
-  for (const [key, val] of Object.entries(obj)) {
+  for (const [key, entry] of entries) {
     if (!isSafeAgentId(key)) continue;
-    if (!val || typeof val !== 'object' || Array.isArray(val)) continue;
-    const entry = val as Record<string, unknown>;
     const override: AcpAgentOverride = {};
 
     const name = sanitizeOptionalString(entry.name, 80);
     if (name) override.name = name;
     const description = sanitizeOptionalString(entry.description, 500);
     if (description) override.description = description;
-    if (typeof entry.command === 'string' && entry.command.trim()) {
-      override.command = entry.command.trim();
+    const command = sanitizeOptionalString(entry.command ?? entry.cliCommand ?? entry.defaultCliPath, 500);
+    if (command) {
+      override.command = command;
     }
-    if (Array.isArray(entry.args)) {
-      override.args = entry.args.filter((a): a is string => typeof a === 'string');
+    if (Array.isArray(entry.args) || Array.isArray(entry.acpArgs)) {
+      const args = sanitizeStringArray(entry.args ?? entry.acpArgs, 100, 500);
+      if (args) override.args = args;
     }
     if (entry.env && typeof entry.env === 'object' && !Array.isArray(entry.env)) {
       const env: Record<string, string> = {};
@@ -348,13 +375,17 @@ export function parseAcpAgentOverrides(raw: unknown): Record<string, AcpAgentOve
     if (typeof entry.enabled === 'boolean') {
       override.enabled = entry.enabled;
     }
-    const detectCommands = sanitizeStringArray(entry.detectCommands, 16, 160);
+    const detectCommands = sanitizeStringArray(
+      entry.detectCommands ?? (entry.cliCommand ? [entry.cliCommand] : undefined),
+      16,
+      160,
+    );
     if (detectCommands) override.detectCommands = detectCommands;
     const presenceDirs = sanitizeStringArray(entry.presenceDirs, 16, 500);
     if (presenceDirs) override.presenceDirs = presenceDirs;
     const installCmd = sanitizeOptionalString(entry.installCmd, 500);
     if (installCmd) override.installCmd = installCmd;
-    const adapterMetadata = sanitizeAdapterMetadata(entry.adapterMetadata);
+    const adapterMetadata = sanitizeAdapterMetadata(mergeAdapterMetadataInput(entry));
     if (adapterMetadata) override.adapterMetadata = adapterMetadata;
 
     if (Object.keys(override).length > 0) {
@@ -418,6 +449,60 @@ function sanitizeOptionalString(value: unknown, maxLength: number): string | und
   return trimmed ? trimmed.slice(0, maxLength) : undefined;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function normalizeAcpAgentOverrideEntries(raw: unknown): Array<[string, Record<string, unknown>]> | undefined {
+  const contributedAdapters = extractContributedAcpAdapters(raw);
+  if (contributedAdapters) {
+    const entries = contributedAdapters
+      .map((adapter): [string, Record<string, unknown>] | null => {
+        const id = sanitizeOptionalString(adapter.id, 120);
+        return id ? [id, adapter] : null;
+      })
+      .filter((entry): entry is [string, Record<string, unknown>] => entry !== null);
+    return entries.length > 0 ? entries : undefined;
+  }
+
+  if (!isRecord(raw)) return undefined;
+  return Object.entries(raw)
+    .filter((entry): entry is [string, Record<string, unknown>] => isRecord(entry[1]));
+}
+
+function extractContributedAcpAdapters(raw: unknown): Record<string, unknown>[] | undefined {
+  if (Array.isArray(raw)) {
+    const entries = raw.filter(isRecord);
+    return entries.length > 0 ? entries : undefined;
+  }
+  if (!isRecord(raw)) return undefined;
+  const contributes = isRecord(raw.contributes) ? raw.contributes : undefined;
+  const candidates = Array.isArray(raw.acpAdapters)
+    ? raw.acpAdapters
+    : Array.isArray(contributes?.acpAdapters)
+      ? contributes.acpAdapters
+      : undefined;
+  if (!candidates) return undefined;
+  const entries = candidates.filter(isRecord);
+  return entries.length > 0 ? entries : undefined;
+}
+
+function mergeAdapterMetadataInput(entry: Record<string, unknown>): unknown {
+  const nested = isRecord(entry.adapterMetadata) ? entry.adapterMetadata : {};
+  return {
+    ...nested,
+    connectionType: nested.connectionType ?? entry.connectionType,
+    authRequired: nested.authRequired ?? entry.authRequired,
+    supportsStreaming: nested.supportsStreaming ?? entry.supportsStreaming,
+    models: nested.models ?? entry.models,
+    promptCapabilities: nested.promptCapabilities ?? entry.promptCapabilities,
+    mcpCapabilities: nested.mcpCapabilities ?? entry.mcpCapabilities,
+    sessionCapabilities: nested.sessionCapabilities ?? entry.sessionCapabilities,
+    healthCheck: nested.healthCheck ?? entry.healthCheck,
+    commands: nested.commands ?? entry.commands,
+  };
+}
+
 function sanitizeStringArray(value: unknown, maxItems: number, maxLength: number): string[] | undefined {
   if (!Array.isArray(value)) return undefined;
   const result = Array.from(new Set(value
@@ -426,6 +511,50 @@ function sanitizeStringArray(value: unknown, maxItems: number, maxLength: number
     .filter(Boolean)
     .map((entry) => entry.slice(0, maxLength))))
     .slice(0, maxItems);
+  return result.length > 0 ? result : undefined;
+}
+
+function sanitizeBoolean(value: unknown): boolean | undefined {
+  return typeof value === 'boolean' ? value : undefined;
+}
+
+function sanitizeConnectionType(value: unknown): AcpAdapterConnectionType | undefined {
+  return value === 'stdio' || value === 'cli' || value === 'http' || value === 'sse' ? value : undefined;
+}
+
+function sanitizeCapabilityFlags<T>(
+  value: unknown,
+  keys: Array<keyof T & string>,
+): T | undefined {
+  if (!isRecord(value)) return undefined;
+  const result: Record<string, boolean> = {};
+  for (const key of keys) {
+    if (typeof value[key] === 'boolean') result[key] = value[key] as boolean;
+  }
+  return Object.keys(result).length > 0 ? result as T : undefined;
+}
+
+function sanitizeModels(value: unknown): AcpAgentAdapterModelDeclaration[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const result = value
+    .map((model) => {
+      if (typeof model === 'string') {
+        const id = sanitizeOptionalString(model, 120);
+        return id ? { id, label: id } : null;
+      }
+      if (!isRecord(model)) return null;
+      const id = sanitizeOptionalString(model.id ?? model.value, 120);
+      if (!id) return null;
+      const label = sanitizeOptionalString(model.label ?? model.name, 120);
+      const description = sanitizeOptionalString(model.description, 300);
+      return {
+        id,
+        ...(label ? { label } : {}),
+        ...(description ? { description } : {}),
+      };
+    })
+    .filter((model): model is AcpAgentAdapterModelDeclaration => model !== null)
+    .slice(0, 100);
   return result.length > 0 ? result : undefined;
 }
 
@@ -466,14 +595,37 @@ function sanitizePositiveInteger(value: unknown, max: number): number | undefine
 }
 
 function sanitizeAdapterMetadata(value: unknown): AcpAgentAdapterMetadata | undefined {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
-  const entry = value as Record<string, unknown>;
+  if (!isRecord(value)) return undefined;
+  const entry = value;
   const metadata: AcpAgentAdapterMetadata = {};
+  const connectionType = sanitizeConnectionType(entry.connectionType);
+  if (connectionType) metadata.connectionType = connectionType;
+  const authRequired = sanitizeBoolean(entry.authRequired);
+  if (authRequired !== undefined) metadata.authRequired = authRequired;
+  const supportsStreaming = sanitizeBoolean(entry.supportsStreaming);
+  if (supportsStreaming !== undefined) metadata.supportsStreaming = supportsStreaming;
+  const models = sanitizeModels(entry.models);
+  if (models) metadata.models = models;
+  const promptCapabilities = sanitizeCapabilityFlags<AcpPromptCapabilities>(
+    entry.promptCapabilities,
+    ['image', 'audio', 'embeddedContext'],
+  );
+  if (promptCapabilities) metadata.promptCapabilities = promptCapabilities;
+  const mcpCapabilities = sanitizeCapabilityFlags<AcpMcpCapabilities>(
+    entry.mcpCapabilities,
+    ['stdio', 'http', 'sse'],
+  );
+  if (mcpCapabilities) metadata.mcpCapabilities = mcpCapabilities;
+  const sessionCapabilities = sanitizeCapabilityFlags<AcpAgentAdapterSessionCapabilities>(
+    entry.sessionCapabilities,
+    ['loadSession', 'list', 'resume', 'fork', 'close'],
+  );
+  if (sessionCapabilities) metadata.sessionCapabilities = sessionCapabilities;
   if (entry.healthCheck && typeof entry.healthCheck === 'object' && !Array.isArray(entry.healthCheck)) {
     const health = entry.healthCheck as Record<string, unknown>;
-    const command = sanitizeOptionalString(health.command, 240);
+    const command = sanitizeOptionalString(health.command ?? health.versionCommand, 240);
     const summary = sanitizeOptionalString(health.summary, 300);
-    const timeoutMs = sanitizePositiveInteger(health.timeoutMs, 60_000);
+    const timeoutMs = sanitizePositiveInteger(health.timeoutMs ?? health.timeout, 60_000);
     if (command || summary || timeoutMs !== undefined) {
       metadata.healthCheck = {
         ...(command ? { command } : {}),
@@ -498,5 +650,5 @@ function sanitizeAdapterMetadata(value: unknown): AcpAgentAdapterMetadata | unde
       .slice(0, 50);
     if (commands.length > 0) metadata.commands = commands;
   }
-  return metadata.healthCheck || metadata.commands ? metadata : undefined;
+  return Object.keys(metadata).length > 0 ? metadata : undefined;
 }

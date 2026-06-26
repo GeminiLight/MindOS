@@ -52,6 +52,16 @@ function runtimeFixtures() {
         source: 'user-override',
       },
       adapterMetadata: {
+        connectionType: 'cli',
+        authRequired: true,
+        supportsStreaming: true,
+        models: [
+          { id: 'fast-model', label: 'Fast Model' },
+          { id: 'smart-model', label: 'Smart Model' },
+        ],
+        promptCapabilities: { image: true, embeddedContext: true },
+        mcpCapabilities: { stdio: true, http: false, sse: false },
+        sessionCapabilities: { loadSession: true, list: true, resume: true, fork: false, close: true },
         healthCheck: {
           command: 'TOKEN=must-not-leak declared health',
           timeoutMs: 5_000,
@@ -92,6 +102,7 @@ describe('runtime adapter projections', () => {
       },
       health: { status: 'ready', mode: 'mindos-native', owner: 'mindos' },
       commands: { status: 'ready', discovery: 'mindos-skills', commandCount: 0 },
+      protocol: { status: 'ready', supportsStreaming: true, authRequired: false, modelCount: 0 },
     });
 
     expect(codex).toMatchObject({
@@ -105,6 +116,7 @@ describe('runtime adapter projections', () => {
       },
       health: { status: 'ready', mode: 'mindos-native' },
       commands: { status: 'ready', discovery: 'runtime-event' },
+      protocol: { status: 'ready', supportsStreaming: true, authRequired: true, modelCount: 0 },
     });
 
     expect(claude).toMatchObject({
@@ -114,6 +126,7 @@ describe('runtime adapter projections', () => {
       connection: { status: 'blocked' },
       health: { status: 'blocked' },
       commands: { status: 'blocked' },
+      protocol: { status: 'blocked' },
     });
 
     expect(opaque).toMatchObject({
@@ -121,7 +134,13 @@ describe('runtime adapter projections', () => {
       connection: { status: 'ready', kind: 'stdio' },
       health: { status: 'unknown', mode: 'unknown' },
       commands: { status: 'unknown', discovery: 'unknown' },
-      blockers: ['adapter-command-discovery', 'adapter-health-contract'],
+      protocol: { status: 'limited', supportsStreaming: null, authRequired: null },
+      blockers: [
+        'adapter-command-discovery',
+        'adapter-health-contract',
+        'adapter-protocol-auth',
+        'adapter-protocol-streaming',
+      ],
     });
 
     expect(declared).toMatchObject({
@@ -149,6 +168,20 @@ describe('runtime adapter projections', () => {
         commandCount: 2,
         commandNames: ['commit', 'plan'],
       },
+      protocol: {
+        status: 'ready',
+        declaredConnectionType: 'cli',
+        supportsStreaming: true,
+        authRequired: true,
+        modelCount: 2,
+        models: [
+          { id: 'fast-model', label: 'Fast Model' },
+          { id: 'smart-model', label: 'Smart Model' },
+        ],
+        promptCapabilities: { image: true, embeddedContext: true },
+        mcpCapabilities: { stdio: true, http: false, sse: false },
+        sessionCapabilities: { loadSession: true, list: true, resume: true, fork: false, close: true },
+      },
     });
   });
 
@@ -162,13 +195,48 @@ describe('runtime adapter projections', () => {
       body: {
         projections: [
           expect.objectContaining({
-            runtimeId: 'opaque-acp',
-            status: 'limited',
-            blockers: ['adapter-command-discovery', 'adapter-health-contract'],
-          }),
-        ],
+          runtimeId: 'opaque-acp',
+          status: 'limited',
+          blockers: [
+            'adapter-command-discovery',
+            'adapter-health-contract',
+            'adapter-protocol-auth',
+            'adapter-protocol-streaming',
+          ],
+        }),
+      ],
       },
       headers: { 'Cache-Control': 'no-store' },
+    });
+  });
+
+  it('keeps non-stdio ACP connection declarations limited until transport support exists', () => {
+    const payload = buildAgentRuntimeAdapterProjectionsPayload({
+      runtimes: [
+        acpRuntimeDescriptor({
+          id: 'http-acp',
+          name: 'HTTP ACP',
+          binaryPath: '/usr/local/bin/http-acp',
+          status: 'available',
+          adapterMetadata: {
+            connectionType: 'http',
+            supportsStreaming: true,
+            authRequired: true,
+          },
+        }, CHECKED_AT),
+      ],
+    });
+
+    expect(payload.projections[0]).toMatchObject({
+      runtimeId: 'http-acp',
+      status: 'limited',
+      protocol: {
+        status: 'limited',
+        declaredConnectionType: 'http',
+        supportsStreaming: true,
+        authRequired: true,
+      },
+      blockers: ['adapter-command-discovery', 'adapter-health-contract', 'adapter-protocol-connection'],
     });
   });
 });

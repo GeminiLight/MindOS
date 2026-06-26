@@ -167,12 +167,13 @@ describe('AcpAgentCapabilities', () => {
   it('supports all capability fields', () => {
     const caps: AcpAgentCapabilities = {
       loadSession: true,
-      mcpCapabilities: { http: true, sse: false },
+      mcpCapabilities: { stdio: true, http: true, sse: false },
       promptCapabilities: { audio: false, embeddedContext: true, image: true },
-      sessionCapabilities: { list: true },
+      sessionCapabilities: { list: true, resume: true, fork: false, close: true },
     };
     expect(caps.loadSession).toBe(true);
     expect(caps.sessionCapabilities?.list).toBe(true);
+    expect(caps.mcpCapabilities?.stdio).toBe(true);
   });
 });
 

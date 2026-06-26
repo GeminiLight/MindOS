@@ -1,4 +1,10 @@
-import type { AcpAgentOverride } from '../../protocols/acp/index.js';
+import type {
+  AcpAdapterConnectionType,
+  AcpMcpCapabilities,
+  AcpPromptCapabilities,
+  AcpSessionCapabilities,
+  AcpAgentOverride,
+} from '../../protocols/acp/index.js';
 import {
   acpRuntimeDescriptor,
   mindosRuntimeDescriptor,
@@ -215,6 +221,19 @@ export type AgentRuntimeAdapterDeclaredCommand = {
 };
 
 export type AgentRuntimeAdapterMetadata = {
+  connectionType?: AcpAdapterConnectionType;
+  authRequired?: boolean;
+  supportsStreaming?: boolean;
+  models?: Array<{
+    id: string;
+    label?: string;
+    description?: string;
+  }>;
+  promptCapabilities?: AcpPromptCapabilities;
+  mcpCapabilities?: AcpMcpCapabilities;
+  sessionCapabilities?: AcpSessionCapabilities & {
+    loadSession?: boolean;
+  };
   healthCheck?: {
     command?: string;
     timeoutMs?: number;
@@ -251,6 +270,23 @@ export type AgentRuntimeAdapterContract = {
   commands: {
     discovery: AgentRuntimeAdapterCommandDiscovery;
     commands: AgentRuntimeAdapterDeclaredCommand[];
+    summary: string;
+  };
+  protocol: {
+    declaredConnectionType?: AcpAdapterConnectionType;
+    supportsStreaming: boolean | null;
+    authRequired: boolean | null;
+    modelCount: number;
+    models: Array<{
+      id: string;
+      label?: string;
+      description?: string;
+    }>;
+    promptCapabilities?: AcpPromptCapabilities;
+    mcpCapabilities?: AcpMcpCapabilities;
+    sessionCapabilities?: AcpSessionCapabilities & {
+      loadSession?: boolean;
+    };
     summary: string;
   };
 };

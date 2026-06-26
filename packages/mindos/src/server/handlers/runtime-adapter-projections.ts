@@ -11,6 +11,12 @@ import type {
   AgentRuntimeResolvedCommandSource,
   AgentRuntimeStatus,
 } from '../../agent/runtime/registry.js';
+import type {
+  AcpAdapterConnectionType,
+  AcpMcpCapabilities,
+  AcpPromptCapabilities,
+  AcpSessionCapabilities,
+} from '../../protocols/acp/index.js';
 import { errorResponse, json, type MindosServerResponse } from '../response.js';
 
 export type AgentRuntimeAdapterProjectionStatus =
@@ -70,6 +76,23 @@ export type AgentRuntimeAdapterCommandsProjection = AdapterFacetBase & {
   }>;
 };
 
+export type AgentRuntimeAdapterProtocolProjection = AdapterFacetBase & {
+  declaredConnectionType?: AcpAdapterConnectionType;
+  supportsStreaming: boolean | null;
+  authRequired: boolean | null;
+  modelCount: number;
+  models: Array<{
+    id: string;
+    label?: string;
+    description?: string;
+  }>;
+  promptCapabilities?: AcpPromptCapabilities;
+  mcpCapabilities?: AcpMcpCapabilities;
+  sessionCapabilities?: AcpSessionCapabilities & {
+    loadSession?: boolean;
+  };
+};
+
 export type AgentRuntimeAdapterProjection = {
   schemaVersion: 1;
   runtimeId: string;
@@ -81,6 +104,7 @@ export type AgentRuntimeAdapterProjection = {
   configuration: AgentRuntimeAdapterConfigurationProjection;
   health: AgentRuntimeAdapterHealthProjection;
   commands: AgentRuntimeAdapterCommandsProjection;
+  protocol: AgentRuntimeAdapterProtocolProjection;
   reasons: AgentRuntimeAdapterProjectionReason[];
   blockers?: string[];
 };
@@ -128,7 +152,8 @@ function buildRuntimeAdapterProjection(runtime: AgentRuntimeDescriptor): AgentRu
   const configuration = buildConfigurationProjection(runtime);
   const health = buildHealthProjection(runtime);
   const commands = buildCommandsProjection(runtime);
-  const facets = [connection, configuration, health, commands];
+  const protocol = buildProtocolProjection(runtime);
+  const facets = [connection, configuration, health, commands, protocol];
   const blockers = uniqSorted(facets.flatMap((facet) => facet.blockers ?? []));
 
   return {
@@ -142,16 +167,111 @@ function buildRuntimeAdapterProjection(runtime: AgentRuntimeDescriptor): AgentRu
       configuration,
       health,
       commands,
+      protocol,
     }),
     connection,
     configuration,
     health,
     commands,
+    protocol,
     reasons: [
       runtimeAvailableReason(runtime),
       ...facets.flatMap((facet) => facet.reasons),
     ],
     ...(blockers.length > 0 ? { blockers } : {}),
+  };
+}
+
+function buildProtocolProjection(runtime: AgentRuntimeDescriptor): AgentRuntimeAdapterProtocolProjection {
+  const contract = runtime.adapterContract.protocol;
+  const blockers: string[] = [];
+  const declaredConnectionType = contract.declaredConnectionType;
+  const unsupportedDeclaredConnection = declaredConnectionType === 'http' || declaredConnectionType === 'sse';
+  const streamingUnknown = contract.supportsStreaming === null;
+  const streamingUnsupported = contract.supportsStreaming === false;
+  const authUnknown = contract.authRequired === null;
+
+  if (runtime.status !== 'available') blockers.push('runtime-available');
+  if (unsupportedDeclaredConnection) blockers.push('adapter-protocol-connection');
+  if (streamingUnknown || streamingUnsupported) blockers.push('adapter-protocol-streaming');
+  if (authUnknown) blockers.push('adapter-protocol-auth');
+
+  const status = runtime.status !== 'available'
+    ? 'blocked'
+    : unsupportedDeclaredConnection || streamingUnknown || streamingUnsupported || authUnknown
+      ? 'limited'
+      : 'ready';
+
+  return {
+    status,
+    ...(declaredConnectionType ? { declaredConnectionType } : {}),
+    supportsStreaming: contract.supportsStreaming,
+    authRequired: contract.authRequired,
+    modelCount: contract.modelCount,
+    models: contract.models.map((model) => ({
+      id: model.id,
+      ...(model.label ? { label: model.label } : {}),
+      ...(model.description ? { description: model.description } : {}),
+    })),
+    ...(contract.promptCapabilities ? { promptCapabilities: contract.promptCapabilities } : {}),
+    ...(contract.mcpCapabilities ? { mcpCapabilities: contract.mcpCapabilities } : {}),
+    ...(contract.sessionCapabilities ? { sessionCapabilities: contract.sessionCapabilities } : {}),
+    summary: contract.summary,
+    reasons: [
+      reason(
+        'adapter-protocol-connection',
+        unsupportedDeclaredConnection ? 'missing' : 'satisfied',
+        unsupportedDeclaredConnection ? 'shared' : protocolOwner(runtime),
+        protocolConnectionSummary(runtime, declaredConnectionType),
+      ),
+      reason(
+        'adapter-protocol-streaming',
+        contract.supportsStreaming === null ? 'unknown' : contract.supportsStreaming ? 'satisfied' : 'missing',
+        protocolOwner(runtime),
+        protocolStreamingSummary(runtime.name, contract.supportsStreaming),
+      ),
+      reason(
+        'adapter-protocol-auth',
+        contract.authRequired === null ? 'unknown' : 'satisfied',
+        protocolOwner(runtime),
+        contract.authRequired === null
+          ? `${runtime.name} does not declare whether adapter authentication is required.`
+          : `${runtime.name} declares adapter authentication as ${contract.authRequired ? 'required' : 'not required'}.`,
+      ),
+      reason(
+        'adapter-protocol-models',
+        contract.modelCount > 0 ? 'satisfied' : 'not-applicable',
+        protocolOwner(runtime),
+        contract.modelCount > 0
+          ? `${runtime.name} declares ${contract.modelCount} adapter model option(s).`
+          : `${runtime.name} does not declare static adapter model options.`,
+      ),
+      reason(
+        'adapter-protocol-prompt-capabilities',
+        contract.promptCapabilities ? 'satisfied' : 'not-applicable',
+        protocolOwner(runtime),
+        contract.promptCapabilities
+          ? `${runtime.name} declares prompt input capability flags.`
+          : `${runtime.name} does not declare prompt input capability flags.`,
+      ),
+      reason(
+        'adapter-protocol-mcp-capabilities',
+        contract.mcpCapabilities ? 'satisfied' : 'not-applicable',
+        protocolOwner(runtime),
+        contract.mcpCapabilities
+          ? `${runtime.name} declares MCP transport capability flags.`
+          : `${runtime.name} does not declare MCP transport capability flags.`,
+      ),
+      reason(
+        'adapter-protocol-session-capabilities',
+        contract.sessionCapabilities ? 'satisfied' : 'not-applicable',
+        protocolOwner(runtime),
+        contract.sessionCapabilities
+          ? `${runtime.name} declares session lifecycle capability flags.`
+          : `${runtime.name} does not declare session lifecycle capability flags.`,
+      ),
+    ],
+    ...(blockers.length > 0 ? { blockers: uniqSorted(blockers) } : {}),
   };
 }
 
@@ -297,6 +417,7 @@ function resolveAdapterProjectionStatus(
     configuration: AdapterFacetBase;
     health: AdapterFacetBase;
     commands: AdapterFacetBase;
+    protocol: AdapterFacetBase;
   },
 ): AgentRuntimeAdapterProjectionStatus {
   if (runtime.status !== 'available') return 'blocked';
@@ -304,8 +425,38 @@ function resolveAdapterProjectionStatus(
     return 'blocked';
   }
   if (facets.connection.status === 'unknown' || facets.configuration.status === 'unknown') return 'unknown';
-  if (facets.health.status !== 'ready' || facets.commands.status !== 'ready') return 'limited';
+  if (facets.health.status !== 'ready' || facets.commands.status !== 'ready' || facets.protocol.status !== 'ready') return 'limited';
   return 'ready';
+}
+
+function protocolOwner(runtime: AgentRuntimeDescriptor): AgentRuntimeCompatibilityOwner {
+  return runtime.kind === 'mindos' ? 'mindos' : 'external';
+}
+
+function protocolConnectionSummary(
+  runtime: AgentRuntimeDescriptor,
+  declaredConnectionType: AcpAdapterConnectionType | undefined,
+): string {
+  if (!declaredConnectionType) {
+    return `${runtime.name} does not declare an adapter connection type, so MindOS uses the ${runtime.adapterContract.connection.kind} adapter contract.`;
+  }
+  if (declaredConnectionType === 'stdio') {
+    return `${runtime.name} declares a stdio ACP adapter connection.`;
+  }
+  if (declaredConnectionType === 'cli') {
+    return `${runtime.name} declares a local CLI ACP adapter connection, which MindOS treats as a stdio-launched adapter.`;
+  }
+  return `${runtime.name} declares a ${declaredConnectionType} ACP adapter connection, but MindOS currently launches generic ACP adapters over stdio.`;
+}
+
+function protocolStreamingSummary(runtimeName: string, supportsStreaming: boolean | null): string {
+  if (supportsStreaming === true) {
+    return `${runtimeName} declares streaming support for prompt responses.`;
+  }
+  if (supportsStreaming === false) {
+    return `${runtimeName} declares that streaming prompt responses are unsupported.`;
+  }
+  return `${runtimeName} does not declare streaming support yet.`;
 }
 
 function configurationOwnerStatus(owner: AgentRuntimeAdapterConfigurationOwner): AgentRuntimeCompatibilityRequirementStatus {

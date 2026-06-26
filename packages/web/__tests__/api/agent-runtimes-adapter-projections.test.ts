@@ -43,6 +43,13 @@ beforeEach(() => {
         binaryPath: '/usr/local/bin/declared',
         status: 'available',
         adapterMetadata: {
+          connectionType: 'cli',
+          authRequired: true,
+          supportsStreaming: true,
+          models: [{ id: 'fast-model', label: 'Fast Model' }],
+          promptCapabilities: { image: true },
+          mcpCapabilities: { stdio: true, http: false },
+          sessionCapabilities: { loadSession: true, list: true, resume: true },
           healthCheck: {
             command: 'TOKEN=must-not-leak declared health',
             timeoutMs: 5_000,
@@ -85,6 +92,7 @@ describe('GET /api/agent-runtimes/adapter-projections', () => {
       configuration: { modelSelection: 'mindos-session' },
       health: { mode: 'mindos-native' },
       commands: { discovery: 'mindos-skills' },
+      protocol: { status: 'ready', supportsStreaming: true, authRequired: false },
     });
     expect(codex).toMatchObject({
       status: 'ready',
@@ -92,16 +100,34 @@ describe('GET /api/agent-runtimes/adapter-projections', () => {
       configuration: { modelSelection: 'runtime-native' },
       health: { mode: 'mindos-native' },
       commands: { discovery: 'runtime-event' },
+      protocol: { status: 'ready', supportsStreaming: true, authRequired: true },
     });
     expect(declared).toMatchObject({
       status: 'ready',
       connection: { kind: 'stdio' },
       health: { mode: 'adapter-declared', hasCommand: true, timeoutMs: 5_000 },
       commands: { discovery: 'adapter-declared', commandNames: ['commit', 'plan'] },
+      protocol: {
+        status: 'ready',
+        declaredConnectionType: 'cli',
+        supportsStreaming: true,
+        authRequired: true,
+        modelCount: 1,
+        models: [{ id: 'fast-model', label: 'Fast Model' }],
+        promptCapabilities: { image: true },
+        mcpCapabilities: { stdio: true, http: false },
+        sessionCapabilities: { loadSession: true, list: true, resume: true },
+      },
     });
     expect(opaque).toMatchObject({
       status: 'limited',
-      blockers: ['adapter-command-discovery', 'adapter-health-contract'],
+      blockers: [
+        'adapter-command-discovery',
+        'adapter-health-contract',
+        'adapter-protocol-auth',
+        'adapter-protocol-streaming',
+      ],
+      protocol: { status: 'limited', supportsStreaming: null, authRequired: null },
     });
   });
 

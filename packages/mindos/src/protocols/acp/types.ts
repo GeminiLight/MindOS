@@ -10,6 +10,9 @@
 /** How an ACP agent is spawned */
 export type AcpTransportType = 'stdio' | 'npx' | 'uvx' | 'binary';
 
+/** ACP adapter connection surface declared by an adapter manifest. */
+export type AcpAdapterConnectionType = 'stdio' | 'cli' | 'http' | 'sse';
+
 /* ── ContentBlock (ACP prompt format) ─────────────────────────────────── */
 
 export type AcpContentBlock =
@@ -55,12 +58,31 @@ export interface AcpAuthMethod {
 
 /* ── Capabilities ─────────────────────────────────────────────────────── */
 
+export interface AcpPromptCapabilities {
+  audio?: boolean;
+  embeddedContext?: boolean;
+  image?: boolean;
+}
+
+export interface AcpMcpCapabilities {
+  stdio?: boolean;
+  http?: boolean;
+  sse?: boolean;
+}
+
+export interface AcpSessionCapabilities {
+  list?: boolean;
+  resume?: boolean;
+  fork?: boolean;
+  close?: boolean;
+}
+
 /** What the agent declares it supports (from initialize response). */
 export interface AcpAgentCapabilities {
   loadSession?: boolean;
-  mcpCapabilities?: { http?: boolean; sse?: boolean };
-  promptCapabilities?: { audio?: boolean; embeddedContext?: boolean; image?: boolean };
-  sessionCapabilities?: { list?: boolean };
+  mcpCapabilities?: AcpMcpCapabilities;
+  promptCapabilities?: AcpPromptCapabilities;
+  sessionCapabilities?: AcpSessionCapabilities;
 }
 
 /** What MindOS declares as a client (sent in initialize request). */

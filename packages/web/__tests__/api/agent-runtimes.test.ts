@@ -444,6 +444,13 @@ describe('/api/agent-runtimes', () => {
           binaryPath: '/usr/local/bin/custom-acp',
           resolvedCommand: { cmd: 'custom-acp', args: ['--acp'], source: 'user-override' },
           adapterMetadata: {
+            connectionType: 'cli',
+            authRequired: true,
+            supportsStreaming: true,
+            models: [{ id: 'custom-fast', label: 'Custom Fast' }],
+            promptCapabilities: { image: true },
+            mcpCapabilities: { stdio: true },
+            sessionCapabilities: { loadSession: true, list: true, resume: true },
             healthCheck: {
               command: 'custom-acp doctor',
               timeoutMs: 4000,
@@ -490,6 +497,16 @@ describe('/api/agent-runtimes', () => {
             commands: [
               { name: 'review', description: 'Review the active workspace.', source: 'adapter-declared' },
             ],
+          }),
+          protocol: expect.objectContaining({
+            declaredConnectionType: 'cli',
+            supportsStreaming: true,
+            authRequired: true,
+            modelCount: 1,
+            models: [{ id: 'custom-fast', label: 'Custom Fast' }],
+            promptCapabilities: { image: true },
+            mcpCapabilities: { stdio: true },
+            sessionCapabilities: { loadSession: true, list: true, resume: true },
           }),
         }),
       }),

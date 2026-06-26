@@ -272,6 +272,7 @@ function adapterUseCase(
       configuration: projection.configuration,
       health: projection.health,
       commands: projection.commands,
+      protocol: projection.protocol,
     },
   });
 }
@@ -598,7 +599,7 @@ function adapterStatusToReadiness(status: AgentRuntimeAdapterProjection['status'
 
 function adapterSummary(projection: AgentRuntimeAdapterProjection): string {
   if (projection.status === 'ready') {
-    return `${projection.runtimeName} adapter contract is ready across connection, configuration, health, and commands.`;
+    return `${projection.runtimeName} adapter contract is ready across connection, configuration, health, commands, and protocol metadata.`;
   }
   if (projection.status === 'limited') {
     return `${projection.runtimeName} adapter contract is usable, but some adapter diagnostics remain limited or undeclared.`;

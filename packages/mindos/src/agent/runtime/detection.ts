@@ -105,13 +105,80 @@ function normalizePositiveInteger(value: unknown, max: number): number | undefin
   return Math.min(normalized, max);
 }
 
+function normalizeBoolean(value: unknown): boolean | undefined {
+  return typeof value === 'boolean' ? value : undefined;
+}
+
+function normalizeConnectionType(value: unknown): AgentRuntimeAdapterMetadata['connectionType'] | undefined {
+  return value === 'stdio' || value === 'cli' || value === 'http' || value === 'sse' ? value : undefined;
+}
+
+function normalizeCapabilityFlags<T>(
+  value: unknown,
+  keys: Array<keyof T & string>,
+): T | undefined {
+  if (!isRecord(value)) return undefined;
+  const result: Record<string, boolean> = {};
+  for (const key of keys) {
+    if (typeof value[key] === 'boolean') result[key] = value[key] as boolean;
+  }
+  return Object.keys(result).length > 0 ? result as T : undefined;
+}
+
+function normalizeAdapterModels(value: unknown): NonNullable<AgentRuntimeAdapterMetadata['models']> | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const models = value
+    .map((model) => {
+      if (typeof model === 'string') {
+        const id = sanitizeOptionalString(model, 120);
+        return id ? { id, label: id } : null;
+      }
+      if (!isRecord(model)) return null;
+      const id = sanitizeOptionalString(model.id ?? model.value, 120);
+      if (!id) return null;
+      const label = sanitizeOptionalString(model.label ?? model.name, 120);
+      const description = sanitizeOptionalString(model.description, 300);
+      return {
+        id,
+        ...(label ? { label } : {}),
+        ...(description ? { description } : {}),
+      };
+    })
+    .filter((model): model is NonNullable<AgentRuntimeAdapterMetadata['models']>[number] => model !== null)
+    .slice(0, 100);
+  return models.length > 0 ? models : undefined;
+}
+
 function normalizeAdapterMetadata(value: unknown): AgentRuntimeAdapterMetadata | undefined {
   if (!isRecord(value)) return undefined;
   const metadata: AgentRuntimeAdapterMetadata = {};
+  const connectionType = normalizeConnectionType(value.connectionType);
+  if (connectionType) metadata.connectionType = connectionType;
+  const authRequired = normalizeBoolean(value.authRequired);
+  if (authRequired !== undefined) metadata.authRequired = authRequired;
+  const supportsStreaming = normalizeBoolean(value.supportsStreaming);
+  if (supportsStreaming !== undefined) metadata.supportsStreaming = supportsStreaming;
+  const models = normalizeAdapterModels(value.models);
+  if (models) metadata.models = models;
+  const promptCapabilities = normalizeCapabilityFlags<NonNullable<AgentRuntimeAdapterMetadata['promptCapabilities']>>(
+    value.promptCapabilities,
+    ['image', 'audio', 'embeddedContext'],
+  );
+  if (promptCapabilities) metadata.promptCapabilities = promptCapabilities;
+  const mcpCapabilities = normalizeCapabilityFlags<NonNullable<AgentRuntimeAdapterMetadata['mcpCapabilities']>>(
+    value.mcpCapabilities,
+    ['stdio', 'http', 'sse'],
+  );
+  if (mcpCapabilities) metadata.mcpCapabilities = mcpCapabilities;
+  const sessionCapabilities = normalizeCapabilityFlags<NonNullable<AgentRuntimeAdapterMetadata['sessionCapabilities']>>(
+    value.sessionCapabilities,
+    ['loadSession', 'list', 'resume', 'fork', 'close'],
+  );
+  if (sessionCapabilities) metadata.sessionCapabilities = sessionCapabilities;
   if (isRecord(value.healthCheck)) {
-    const command = sanitizeOptionalString(value.healthCheck.command, 240);
+    const command = sanitizeOptionalString(value.healthCheck.command ?? value.healthCheck.versionCommand, 240);
     const summary = sanitizeOptionalString(value.healthCheck.summary, 300);
-    const timeoutMs = normalizePositiveInteger(value.healthCheck.timeoutMs, 60_000);
+    const timeoutMs = normalizePositiveInteger(value.healthCheck.timeoutMs ?? value.healthCheck.timeout, 60_000);
     if (command || summary || timeoutMs !== undefined) {
       metadata.healthCheck = {
         ...(command ? { command } : {}),
@@ -137,7 +204,7 @@ function normalizeAdapterMetadata(value: unknown): AgentRuntimeAdapterMetadata |
       .slice(0, 50);
     if (commands.length > 0) metadata.commands = commands;
   }
-  return metadata.healthCheck || metadata.commands ? metadata : undefined;
+  return Object.keys(metadata).length > 0 ? metadata : undefined;
 }
 
 export function normalizeInstalled(value: unknown): DetectedRuntimeAgent | null {

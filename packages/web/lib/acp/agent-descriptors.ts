@@ -16,7 +16,9 @@ export {
 export type {
   AcpAgentDescriptor,
   AcpAgentAdapterCommandDeclaration,
+  AcpAgentAdapterModelDeclaration,
   AcpAgentAdapterMetadata,
+  AcpAgentAdapterSessionCapabilities,
   AcpAgentOverride,
   DetectableAgent,
   ResolvedAgentCommand,

@@ -17,6 +17,27 @@ function declaredCommands(
   }));
 }
 
+function protocolContract(input: {
+  summary: string;
+  metadata?: AgentRuntimeAdapterMetadata;
+  supportsStreaming?: boolean | null;
+  authRequired?: boolean | null;
+}): AgentRuntimeAdapterContract['protocol'] {
+  const metadata = input.metadata;
+  const models = metadata?.models ?? [];
+  return {
+    ...(metadata?.connectionType ? { declaredConnectionType: metadata.connectionType } : {}),
+    supportsStreaming: metadata?.supportsStreaming ?? input.supportsStreaming ?? null,
+    authRequired: metadata?.authRequired ?? input.authRequired ?? null,
+    modelCount: models.length,
+    models,
+    ...(metadata?.promptCapabilities ? { promptCapabilities: metadata.promptCapabilities } : {}),
+    ...(metadata?.mcpCapabilities ? { mcpCapabilities: metadata.mcpCapabilities } : {}),
+    ...(metadata?.sessionCapabilities ? { sessionCapabilities: metadata.sessionCapabilities } : {}),
+    summary: input.summary,
+  };
+}
+
 export function mindosAdapterContract(): AgentRuntimeAdapterContract {
   return {
     schemaVersion: 1,
@@ -41,6 +62,11 @@ export function mindosAdapterContract(): AgentRuntimeAdapterContract {
       commands: [],
       summary: 'MindOS slash commands are assembled from enabled MindOS skills; runtime-native command discovery is not needed.',
     },
+    protocol: protocolContract({
+      supportsStreaming: true,
+      authRequired: false,
+      summary: 'MindOS is an internal runtime, so protocol capabilities are owned by the product runtime rather than an external ACP handshake.',
+    }),
   };
 }
 
@@ -87,6 +113,13 @@ export function nativeAdapterContract(input: {
       commands: [],
       summary: 'Runtime-native command discovery is delegated to the external coding runtime when it exposes command events.',
     },
+    protocol: protocolContract({
+      supportsStreaming: true,
+      authRequired: true,
+      summary: isCodex
+        ? 'Codex exposes runtime-native streaming and auth through its app-server and CLI profile rather than generic ACP metadata.'
+        : 'Claude Code exposes runtime-native streaming and auth through its SDK/CLI bridge rather than generic ACP metadata.',
+    }),
   };
 }
 
@@ -125,5 +158,11 @@ export function acpAdapterContract(agent: DetectedRuntimeAgent): AgentRuntimeAda
         ? 'This ACP adapter declares static slash commands for MindOS to surface in command-aware UI.'
         : 'MindOS has no adapter-specific command declaration yet; runtime command discovery remains unknown.',
     },
+    protocol: protocolContract({
+      metadata,
+      summary: metadata
+        ? 'This ACP adapter declares protocol capabilities that MindOS can project into runtime diagnostics.'
+        : 'This ACP adapter has not declared protocol capabilities yet; MindOS only knows it can launch a stdio ACP process.',
+    }),
   };
 }

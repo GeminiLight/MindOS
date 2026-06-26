@@ -99,7 +99,7 @@ describe('parseAcpAgentOverrides', () => {
     expect(parseAcpAgentOverrides(42)).toBeUndefined();
   });
 
-  it('returns undefined for array', () => {
+  it('returns undefined for empty array', () => {
     expect(parseAcpAgentOverrides([])).toBeUndefined();
   });
 
@@ -158,6 +158,153 @@ describe('parseAcpAgentOverrides', () => {
             { name: 'review', description: 'Review the active workspace.' },
             { name: 'review', description: 'duplicate is allowed by adapter order' },
           ],
+        },
+      },
+    });
+  });
+
+  it('parses AionUI-style top-level ACP capability declarations without secrets', () => {
+    const result = parseAcpAgentOverrides({
+      'adapter-pack-agent': {
+        name: 'Adapter Pack Agent',
+        cliCommand: 'adapter-pack-agent',
+        acpArgs: ['--acp'],
+        connectionType: 'cli',
+        authRequired: true,
+        supportsStreaming: true,
+        models: [
+          'cheap-model',
+          { id: 'fast-model', label: 'Fast Model', description: 'Low cost model.' },
+          { value: 'smart-model', name: 'Smart Model' },
+          { id: '' },
+        ],
+        promptCapabilities: { image: true, audio: false, embeddedContext: true, ignored: true },
+        mcpCapabilities: { stdio: true, http: true, sse: false, headers: true },
+        sessionCapabilities: { loadSession: true, list: true, resume: false, fork: true, close: true },
+        healthCheck: {
+          versionCommand: 'adapter-pack-agent --version',
+          timeout: 3000,
+          summary: 'Runs adapter pack diagnostics.',
+          env: { API_KEY: 'must-not-pass' },
+        },
+        commands: [
+          { name: 'plan', description: 'Create an implementation plan.' },
+        ],
+        apiKeyFields: ['API_KEY'],
+        env: { API_KEY: 'allowed-launch-env-but-not-adapter-metadata' },
+      },
+    });
+
+    expect(result).toEqual({
+      'adapter-pack-agent': {
+        name: 'Adapter Pack Agent',
+        command: 'adapter-pack-agent',
+        args: ['--acp'],
+        detectCommands: ['adapter-pack-agent'],
+        env: { API_KEY: 'allowed-launch-env-but-not-adapter-metadata' },
+        adapterMetadata: {
+          connectionType: 'cli',
+          authRequired: true,
+          supportsStreaming: true,
+          models: [
+            { id: 'cheap-model', label: 'cheap-model' },
+            { id: 'fast-model', label: 'Fast Model', description: 'Low cost model.' },
+            { id: 'smart-model', label: 'Smart Model' },
+          ],
+          promptCapabilities: { image: true, audio: false, embeddedContext: true },
+          mcpCapabilities: { stdio: true, http: true, sse: false },
+          sessionCapabilities: { loadSession: true, list: true, resume: false, fork: true, close: true },
+          healthCheck: {
+            command: 'adapter-pack-agent --version',
+            timeoutMs: 3000,
+            summary: 'Runs adapter pack diagnostics.',
+          },
+          commands: [
+            { name: 'plan', description: 'Create an implementation plan.' },
+          ],
+        },
+      },
+    });
+    expect(JSON.stringify(result?.['adapter-pack-agent'].adapterMetadata)).not.toContain('API_KEY');
+    expect(JSON.stringify(result?.['adapter-pack-agent'].adapterMetadata)).not.toContain('must-not-pass');
+  });
+
+  it('parses AionUI extension contributes.acpAdapters manifests', () => {
+    const result = parseAcpAgentOverrides({
+      name: 'example-acp-adapter',
+      contributes: {
+        acpAdapters: [
+          {
+            id: 'ext-buddy',
+            name: 'ext-buddy',
+            description: 'Extension-provided ACP adapter',
+            connectionType: 'cli',
+            cliCommand: 'codebuddy',
+            defaultCliPath: 'npx @tencent-ai/codebuddy-code',
+            acpArgs: ['--acp'],
+            authRequired: true,
+            supportsStreaming: false,
+            models: ['demo-model'],
+            healthCheck: {
+              versionCommand: 'codebuddy --version',
+              timeout: 3000,
+            },
+            apiKeyFields: [
+              { key: 'CODEBUDDY_TOKEN', label: 'Token', type: 'password', required: true },
+            ],
+          },
+          { id: '', cliCommand: 'ignored' },
+          'not-an-adapter',
+        ],
+      },
+    });
+
+    expect(result).toEqual({
+      'ext-buddy': {
+        name: 'ext-buddy',
+        description: 'Extension-provided ACP adapter',
+        command: 'codebuddy',
+        args: ['--acp'],
+        detectCommands: ['codebuddy'],
+        adapterMetadata: {
+          connectionType: 'cli',
+          authRequired: true,
+          supportsStreaming: false,
+          models: [{ id: 'demo-model', label: 'demo-model' }],
+          healthCheck: {
+            command: 'codebuddy --version',
+            timeoutMs: 3000,
+          },
+        },
+      },
+    });
+    expect(JSON.stringify(result)).not.toContain('CODEBUDDY_TOKEN');
+  });
+
+  it('parses AionUI acp-adapters arrays directly', () => {
+    const result = parseAcpAgentOverrides([
+      {
+        id: 'hello-stdio-agent',
+        name: 'Hello Stdio Agent',
+        connectionType: 'stdio',
+        cliCommand: 'echo',
+        defaultCliPath: 'echo',
+        acpArgs: ['--acp'],
+        supportsStreaming: true,
+        models: ['demo-model'],
+      },
+    ]);
+
+    expect(result).toEqual({
+      'hello-stdio-agent': {
+        name: 'Hello Stdio Agent',
+        command: 'echo',
+        args: ['--acp'],
+        detectCommands: ['echo'],
+        adapterMetadata: {
+          connectionType: 'stdio',
+          supportsStreaming: true,
+          models: [{ id: 'demo-model', label: 'demo-model' }],
         },
       },
     });

@@ -357,6 +357,26 @@ export type AgentRuntimeAdapterCommandSource =
   | 'adapter-declared';
 
 export type AgentRuntimeResolvedCommandSource = 'user-override' | 'descriptor' | 'registry';
+export type AcpAdapterConnectionType = 'stdio' | 'cli' | 'http' | 'sse';
+
+export interface AcpPromptCapabilities {
+  audio?: boolean;
+  embeddedContext?: boolean;
+  image?: boolean;
+}
+
+export interface AcpMcpCapabilities {
+  stdio?: boolean;
+  http?: boolean;
+  sse?: boolean;
+}
+
+export interface AcpSessionCapabilities {
+  list?: boolean;
+  resume?: boolean;
+  fork?: boolean;
+  close?: boolean;
+}
 
 export interface AgentRuntimeAdapterDeclaredCommand {
   name: string;
@@ -389,6 +409,23 @@ export interface AgentRuntimeAdapterContract {
   commands: {
     discovery: AgentRuntimeAdapterCommandDiscovery;
     commands: AgentRuntimeAdapterDeclaredCommand[];
+    summary: string;
+  };
+  protocol: {
+    declaredConnectionType?: AcpAdapterConnectionType;
+    supportsStreaming: boolean | null;
+    authRequired: boolean | null;
+    modelCount: number;
+    models: Array<{
+      id: string;
+      label?: string;
+      description?: string;
+    }>;
+    promptCapabilities?: AcpPromptCapabilities;
+    mcpCapabilities?: AcpMcpCapabilities;
+    sessionCapabilities?: AcpSessionCapabilities & {
+      loadSession?: boolean;
+    };
     summary: string;
   };
 }
@@ -437,6 +474,23 @@ export interface AgentRuntimeAdapterCommandsProjection extends AgentRuntimeAdapt
   commands: AgentRuntimeAdapterDeclaredCommand[];
 }
 
+export interface AgentRuntimeAdapterProtocolProjection extends AgentRuntimeAdapterProjectionFacetBase {
+  declaredConnectionType?: AcpAdapterConnectionType;
+  supportsStreaming: boolean | null;
+  authRequired: boolean | null;
+  modelCount: number;
+  models: Array<{
+    id: string;
+    label?: string;
+    description?: string;
+  }>;
+  promptCapabilities?: AcpPromptCapabilities;
+  mcpCapabilities?: AcpMcpCapabilities;
+  sessionCapabilities?: AcpSessionCapabilities & {
+    loadSession?: boolean;
+  };
+}
+
 export interface AgentRuntimeAdapterProjection {
   schemaVersion: 1;
   runtimeId: string;
@@ -448,6 +502,7 @@ export interface AgentRuntimeAdapterProjection {
   configuration: AgentRuntimeAdapterConfigurationProjection;
   health: AgentRuntimeAdapterHealthProjection;
   commands: AgentRuntimeAdapterCommandsProjection;
+  protocol: AgentRuntimeAdapterProtocolProjection;
   reasons: AgentRuntimeAdapterProjectionReason[];
   blockers?: string[];
 }

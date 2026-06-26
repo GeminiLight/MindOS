@@ -113,6 +113,7 @@ export {
   type AgentRuntimeAdapterConnectionProjection,
   type AgentRuntimeAdapterFacetStatus,
   type AgentRuntimeAdapterHealthProjection,
+  type AgentRuntimeAdapterProtocolProjection,
   type AgentRuntimeAdapterProjection,
   type AgentRuntimeAdapterProjectionReason,
   type AgentRuntimeAdapterProjectionServices,
