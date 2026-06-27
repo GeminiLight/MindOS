@@ -112,10 +112,11 @@ export class TFileImpl extends TAbstractFileImpl implements TFile {
 }
 
 export class TFolderImpl extends TAbstractFileImpl implements TFolder {
-  children: TAbstractFile[] = [];
+  children: TAbstractFile[];
 
-  constructor(vault: IVault, dirPath: string) {
+  constructor(vault: IVault, dirPath: string, children: TAbstractFile[] = []) {
     super(vault, dirPath);
+    this.children = children;
   }
 
   isRoot(): boolean {
@@ -311,11 +312,39 @@ export class Vault extends Events implements IVault {
     }
   }
 
+  private toFolder(vaultPath: string, resolvedPath?: string): TFolder {
+    const normalized = normalizeVaultPath(vaultPath);
+    const resolved = resolvedPath ?? this.resolveExisting(normalized);
+    const children: TAbstractFile[] = [];
+
+    try {
+      const entries = fs.readdirSync(resolved);
+      for (const entry of entries) {
+        const childVaultPath = normalized ? `${normalized}/${entry}` : entry;
+        if (isPrivateVaultPath(childVaultPath)) {
+          continue;
+        }
+        const childResolvedPath = path.join(resolved, entry);
+        const stats = fs.lstatSync(childResolvedPath);
+        if (stats.isSymbolicLink() || !this.isRealPathWithinRoot(childResolvedPath)) {
+          continue;
+        }
+        children.push(stats.isDirectory()
+          ? this.toFolder(childVaultPath, childResolvedPath)
+          : this.toAbstractFile(childVaultPath, childResolvedPath));
+      }
+    } catch {
+      // Obsidian folder children are best-effort snapshots in this shim.
+    }
+
+    return new TFolderImpl(this, normalized, children);
+  }
+
   private toAbstractFile(vaultPath: string, resolvedPath?: string): TAbstractFile {
     const normalized = normalizeVaultPath(vaultPath);
     const resolved = resolvedPath ?? this.resolveExisting(normalized);
     return fs.existsSync(resolved) && fs.statSync(resolved).isDirectory()
-      ? new TFolderImpl(this, normalized)
+      ? this.toFolder(normalized, resolved)
       : new TFileImpl(this, normalized, this.mindRoot);
   }
 
@@ -348,7 +377,7 @@ export class Vault extends Events implements IVault {
         return null;
       }
       const stats = fs.statSync(resolved);
-      return stats.isDirectory() ? new TFolderImpl(this, normalizedPath) : new TFileImpl(this, normalizedPath, this.mindRoot);
+      return stats.isDirectory() ? this.toFolder(normalizedPath, resolved) : new TFileImpl(this, normalizedPath, this.mindRoot);
     } catch {
       return null;
     }
@@ -377,14 +406,14 @@ export class Vault extends Events implements IVault {
       if (!fs.existsSync(resolved) || !fs.statSync(resolved).isDirectory()) {
         return null;
       }
-      return new TFolderImpl(this, normalizedPath);
+      return this.toFolder(normalizedPath, resolved);
     } catch {
       return null;
     }
   }
 
   getRoot(): TFolder {
-    return new TFolderImpl(this, '');
+    return this.toFolder('');
   }
 
   getMarkdownFiles(): TFile[] {

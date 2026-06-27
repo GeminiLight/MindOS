@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import type { PluginActionResult, PluginEditorMenuContext, PluginRuntimeContext, PluginViewContext } from './plugin-manager';
+import type { PluginActionResult, PluginCalendarDateContext, PluginEditorMenuContext, PluginRuntimeContext, PluginViewContext } from './plugin-manager';
 import type { ManagedPluginMarkdownPostProcessorSnapshot } from './plugin-manager';
 import type { ObsidianWorkflowAudit } from './workflow-audit';
 import { redactRuntimeCapabilityEvidence } from './runtime-capability-ledger-store';
@@ -11,6 +11,7 @@ import {
 } from './quickadd-workflow-fixture';
 import { PERIODIC_NOTES_WORKFLOW_PROBE_FIXTURE } from './periodic-notes-workflow-fixture';
 import { HOMEPAGE_WORKFLOW_PROBE_FIXTURE } from './homepage-workflow-fixture';
+import { CALENDAR_WORKFLOW_PROBE_FIXTURE } from './calendar-workflow-fixture';
 
 export const OBSIDIAN_WORKFLOW_PROBE_SCHEMA_VERSION = 1;
 export const DEFAULT_OBSIDIAN_WORKFLOW_PROBE_MAX_ENTRIES = 100;
@@ -100,6 +101,7 @@ export interface ObsidianWorkflowProbeHost {
   chooseMenuItem?(menuId: string, itemIndex: number, interactionId: string): Promise<PluginActionResult>;
   submitModalText?(modalId: string, text: string, interactionId: string): Promise<PluginActionResult>;
   renderView(pluginId: string, viewType: string, context?: PluginViewContext): Promise<{ text?: string; displayText?: string }>;
+  openCalendarDate?(pluginId: string, context: PluginCalendarDateContext): Promise<PluginActionResult>;
   renderMarkdownPostProcessors(markdown: string, sourcePath?: string): Promise<ManagedPluginMarkdownPostProcessorSnapshot[]>;
 }
 
@@ -354,7 +356,7 @@ const PROBE_DEFINITIONS: WorkflowProbeDefinition[] = [
   {
     id: 'calendar-open-periodic-note',
     label: 'Open calendar views and notes',
-    pluginIds: new Set(['calendar', 'obsidian-calendar-plugin']),
+    pluginIds: new Set(['calendar', 'calendar-beta', 'obsidian-calendar-plugin']),
     run: runCalendarProbe,
   },
   {
@@ -495,39 +497,85 @@ async function runQuickAddChoiceProbe(
 }
 
 async function runCalendarProbe(input: WorkflowProbeRuntimeInput): Promise<WorkflowProbeDraft> {
-  const view = input.plugin.runtime.viewList?.[0];
-  if (view) {
-    const viewDraft = await runCalendarViewProbe(input, view.type);
-    if (viewDraft.status === 'passed') return viewDraft;
+  if (!input.host.openCalendarDate) {
+    return skippedDraft('Workflow host cannot trigger Calendar date navigation.');
+  }
+  const view = selectCalendarView(input.plugin);
+  if (!view) {
+    return skippedDraft('No registered Calendar view was available to trigger date navigation.');
+  }
+  if (!hasCalendarFixtureNote(input.mindRoot)) {
+    return skippedDraft(`No controlled Calendar daily note fixture was available at ${CALENDAR_WORKFLOW_PROBE_FIXTURE.targetPath}; seed the existing note before marking this workflow observed.`);
   }
 
-  const command = selectCommand(input.plugin, [/today/i, /daily/i, /periodic/i, /calendar/i, /open/i]);
-  if (command) {
-    return runCommandProbe({
-      ...input,
-      command,
-      calledCapabilities: ['Workspace.openLinkText', 'registerView', 'addCommand'],
-      observableLabel: 'Calendar command produced a workspace navigation, view, notice, or vault result.',
-      requireWorkspaceOrView: true,
+  const targetPath = CALENDAR_WORKFLOW_PROBE_FIXTURE.targetPath;
+  const targetContent = readVaultFile(input.mindRoot, targetPath);
+  const targetContentMatches = targetContent.includes(CALENDAR_WORKFLOW_PROBE_FIXTURE.expectedContent);
+  let action: PluginActionResult;
+
+  try {
+    action = await input.host.openCalendarDate(input.plugin.id, {
+      viewType: view.type,
+      targetDate: CALENDAR_WORKFLOW_PROBE_FIXTURE.targetDate,
+      targetPath,
+      granularity: CALENDAR_WORKFLOW_PROBE_FIXTURE.granularity,
     });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const viewCalled = hasCalledLedger(input.host, input.plugin.id, ['registerView']);
+    const workspaceCalled = hasCalledLedger(input.host, input.plugin.id, ['Workspace.openLinkText']);
+    return {
+      status: 'failed',
+      evidence: [
+        `Calendar date navigation for ${CALENDAR_WORKFLOW_PROBE_FIXTURE.targetDate} failed before workspace evidence: ${message}`,
+      ],
+      assertions: [
+        { id: 'calendar-fixture-note-content', label: 'Verified the Calendar daily note fixture content', passed: targetContentMatches, detail: targetPath },
+        { id: 'calendar-date-navigation', label: 'Triggered Calendar date navigation handler', passed: false, detail: message },
+        { id: 'workspace-open', label: 'Requested workspace opening for the Calendar daily note', passed: false, detail: targetPath },
+        { id: 'view-called-ledger', label: 'Recorded Calendar view handler evidence', passed: viewCalled },
+        { id: 'workspace-open-called-ledger', label: 'Recorded workspace open evidence for the Calendar daily note', passed: workspaceCalled },
+      ],
+      failureReason: message,
+    };
   }
 
-  if (!view) return skippedDraft('No executable Calendar command or registered view was available to probe.');
-  return runCalendarViewProbe(input, view.type);
-}
+  const workspaceOpened = action.workspaceOpenRequests.some((request) => (
+    workflowPathMatches(request.targetPath ?? request.linktext, targetPath)
+  ));
+  const viewCalled = hasCalledLedger(input.host, input.plugin.id, ['registerView']);
+  const workspaceCalled = hasCalledLedger(input.host, input.plugin.id, ['Workspace.openLinkText']);
+  const observable = observableEvidence(action, []);
+  const passed = targetContentMatches && workspaceOpened && viewCalled && workspaceCalled;
 
-async function runCalendarViewProbe(input: WorkflowProbeRuntimeInput, viewType: string): Promise<WorkflowProbeDraft> {
-  const snapshot = await input.host.renderView(input.plugin.id, viewType);
-  const text = [snapshot.displayText, snapshot.text].filter(Boolean).join(' ').trim();
-  const called = hasCalledLedger(input.host, input.plugin.id, ['registerView']);
   return {
-    status: text && called ? 'passed' : 'failed',
-    evidence: text ? [`Rendered Calendar view "${viewType}": ${text.slice(0, 160)}`] : [`Calendar view "${viewType}" rendered without visible text.`],
-    assertions: [
-      { id: 'render-view', label: 'Rendered a registered Calendar view', passed: Boolean(text), detail: viewType },
-      { id: 'runtime-called-ledger', label: 'Recorded called runtime ledger evidence', passed: called },
+    status: passed ? 'passed' : 'failed',
+    evidence: [
+      `Triggered Calendar date navigation for ${CALENDAR_WORKFLOW_PROBE_FIXTURE.targetDate} through view "${view.type}".`,
+      targetContentMatches
+        ? `Verified Calendar fixture note "${targetPath}" contains the expected content.`
+        : `Expected Calendar fixture note "${targetPath}" to contain "${CALENDAR_WORKFLOW_PROBE_FIXTURE.expectedContent}".`,
+      workspaceOpened
+        ? `Observed workspace open request for Calendar fixture: ${targetPath}.`
+        : `Expected workspace open request for Calendar fixture: ${targetPath}.`,
+      ...observable,
+      ...(!targetContentMatches ? [`Observed Calendar fixture note content: ${targetContent.slice(0, 160) || '(missing)'}`] : []),
     ],
-    ...(!text || !called ? { failureReason: 'Calendar probe rendered a view but did not produce visible output with called ledger evidence.' } : {}),
+    assertions: [
+      { id: 'calendar-fixture-note-content', label: 'Verified the Calendar daily note fixture content', passed: targetContentMatches, detail: targetPath },
+      { id: 'calendar-date-navigation', label: 'Triggered Calendar date navigation handler', passed: true, detail: CALENDAR_WORKFLOW_PROBE_FIXTURE.targetDate },
+      { id: 'workspace-open', label: 'Requested workspace opening for the Calendar daily note', passed: workspaceOpened, detail: targetPath },
+      { id: 'view-called-ledger', label: 'Recorded Calendar view handler evidence', passed: viewCalled },
+      { id: 'workspace-open-called-ledger', label: 'Recorded workspace open evidence for the Calendar daily note', passed: workspaceCalled },
+    ],
+    ...(!passed ? {
+      failureReason: calendarFailureReason({
+        targetContentMatches,
+        workspaceOpened,
+        viewCalled,
+        workspaceCalled,
+      }),
+    } : {}),
   };
 }
 
@@ -989,6 +1037,13 @@ function selectCommand(plugin: ObsidianWorkflowProbePlugin, patterns: RegExp[]):
   return commands[0];
 }
 
+function selectCalendarView(plugin: ObsidianWorkflowProbePlugin): { type: string } | undefined {
+  const views = plugin.runtime.viewList ?? [];
+  return views.find((view) => view.type === CALENDAR_WORKFLOW_PROBE_FIXTURE.viewType)
+    ?? views.find((view) => /calendar/i.test(view.type))
+    ?? views[0];
+}
+
 function selectPeriodicNotesDailyCommand(plugin: ObsidianWorkflowProbePlugin): ObsidianWorkflowProbeCommand | undefined {
   const commands = plugin.runtime.commandList.filter((command) => command.executable !== false);
   return commands.find((command) => (
@@ -1292,6 +1347,20 @@ function recentFilesFailureReason(input: { commandCalled: boolean; viewCalled: b
   ].filter(Boolean).join('; ');
 }
 
+function calendarFailureReason(input: {
+  targetContentMatches: boolean;
+  workspaceOpened: boolean;
+  viewCalled: boolean;
+  workspaceCalled: boolean;
+}): string {
+  return [
+    !input.targetContentMatches ? 'Calendar fixture note did not contain expected content' : '',
+    !input.workspaceOpened ? 'Calendar did not request opening the daily fixture note' : '',
+    !input.viewCalled ? 'runtime ledger did not record Calendar view handler evidence' : '',
+    !input.workspaceCalled ? 'runtime ledger did not record Calendar workspace open evidence' : '',
+  ].filter(Boolean).join('; ');
+}
+
 function homepageFailureReason(input: {
   commandCalled: boolean;
   workspaceCalled: boolean;
@@ -1324,6 +1393,12 @@ function hasPeriodicNotesDailyFixtureSettings(mindRoot: string, pluginId: string
   } catch {
     return false;
   }
+}
+
+function hasCalendarFixtureNote(mindRoot: string): boolean {
+  const targetPath = path.join(mindRoot, CALENDAR_WORKFLOW_PROBE_FIXTURE.targetPath);
+  if (!fs.existsSync(targetPath) || !fs.statSync(targetPath).isFile()) return false;
+  return fs.readFileSync(targetPath, 'utf-8').includes(CALENDAR_WORKFLOW_PROBE_FIXTURE.expectedContent);
 }
 
 function hasHomepageFixtureSettings(mindRoot: string, pluginId: string): boolean {

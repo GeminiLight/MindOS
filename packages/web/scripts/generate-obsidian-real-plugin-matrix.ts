@@ -44,6 +44,7 @@ import {
   HOMEPAGE_WORKFLOW_PROBE_FIXTURE,
   buildHomepageWorkflowProbeDataJson,
 } from '@/lib/obsidian-compat/homepage-workflow-fixture';
+import { CALENDAR_WORKFLOW_PROBE_FIXTURE } from '@/lib/obsidian-compat/calendar-workflow-fixture';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const webRoot = path.resolve(__dirname, '..');
@@ -479,6 +480,12 @@ function writeWorkflowProbeFixture(
   files: { manifestJson: string },
 ): void {
   const pluginDir = path.join(mindRoot, '.mindos', 'plugins', pluginId);
+  if (pluginId === 'calendar' || pluginId === 'calendar-beta') {
+    const notePath = path.join(mindRoot, CALENDAR_WORKFLOW_PROBE_FIXTURE.targetPath);
+    fs.mkdirSync(path.dirname(notePath), { recursive: true });
+    fs.writeFileSync(notePath, CALENDAR_WORKFLOW_PROBE_FIXTURE.content, 'utf-8');
+    return;
+  }
   if (pluginId === 'recent-files-obsidian') {
     fs.writeFileSync(
       path.join(pluginDir, 'data.json'),

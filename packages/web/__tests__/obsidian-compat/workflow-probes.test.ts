@@ -24,6 +24,7 @@ import {
   HOMEPAGE_WORKFLOW_PROBE_FIXTURE,
   buildHomepageWorkflowProbeDataJson,
 } from '@/lib/obsidian-compat/homepage-workflow-fixture';
+import { CALENDAR_WORKFLOW_PROBE_FIXTURE } from '@/lib/obsidian-compat/calendar-workflow-fixture';
 
 let mindRoot: string;
 
@@ -72,6 +73,12 @@ const writeHomepageFixture = () => {
   const homepagePath = path.join(mindRoot, HOMEPAGE_WORKFLOW_PROBE_FIXTURE.targetPath);
   fs.mkdirSync(path.dirname(homepagePath), { recursive: true });
   fs.writeFileSync(homepagePath, HOMEPAGE_WORKFLOW_PROBE_FIXTURE.content, 'utf-8');
+};
+
+const writeCalendarFixture = () => {
+  const calendarPath = path.join(mindRoot, CALENDAR_WORKFLOW_PROBE_FIXTURE.targetPath);
+  fs.mkdirSync(path.dirname(calendarPath), { recursive: true });
+  fs.writeFileSync(calendarPath, CALENDAR_WORKFLOW_PROBE_FIXTURE.content, 'utf-8');
 };
 
 describe('Obsidian workflow probes', () => {
@@ -322,19 +329,31 @@ describe('Obsidian workflow probes', () => {
     ]));
   });
 
-  it('passes the Calendar open-periodic-note probe through workspace navigation evidence', async () => {
-    fs.writeFileSync(path.join(mindRoot, '2026-06-26.md'), '# Today', 'utf-8');
+  it('passes the Calendar open-periodic-note probe through existing daily note date navigation evidence', async () => {
+    writeCalendarFixture();
     writePlugin('calendar', `
-      const { Plugin } = require('obsidian');
+      const { ItemView, Plugin } = require('obsidian');
+      class CalendarView extends ItemView {
+        getViewType() {
+          return 'calendar';
+        }
+        getDisplayText() {
+          return 'Calendar';
+        }
+        async onOpen() {
+          this.contentEl.setText('Calendar ready');
+        }
+        async openOrCreatePeriodicNote(granularity, date, existingFile, inNewSplit) {
+          if (granularity !== 'day' || date.format('YYYY-MM-DD') !== '2026-06-26' || inNewSplit !== false) {
+            throw new Error('Unexpected Calendar date navigation arguments');
+          }
+          this.contentEl.setText('Opening ' + date.format('YYYY-MM-DD'));
+          await this.leaf.openFile(existingFile);
+        }
+      }
       module.exports = class CalendarPlugin extends Plugin {
         onload() {
-          this.addCommand({
-            id: 'open-today',
-            name: 'Open today',
-            callback: async () => {
-              await this.app.workspace.openLinkText('2026-06-26', 'Daily/source.md');
-            }
-          });
+          this.registerView('calendar', (leaf) => new CalendarView(leaf));
         }
       };
     `);
@@ -355,11 +374,146 @@ describe('Obsidian workflow probes', () => {
       completedAt: '2026-06-26T09:00:00.000Z',
     });
     expect(result.evidence).toEqual(expect.arrayContaining([
-      expect.stringContaining('workspace open request'),
+      expect.stringContaining('Triggered Calendar date navigation for 2026-06-26'),
+      expect.stringContaining('Observed workspace open request for Calendar fixture: 2026-06-26.md'),
     ]));
     expect(result.assertions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'calendar-fixture-note-content', passed: true }),
+      expect.objectContaining({ id: 'calendar-date-navigation', passed: true }),
       expect.objectContaining({ id: 'workspace-open', passed: true }),
-      expect.objectContaining({ id: 'runtime-called-ledger', passed: true }),
+      expect.objectContaining({ id: 'view-called-ledger', passed: true }),
+      expect.objectContaining({ id: 'workspace-open-called-ledger', passed: true }),
+    ]));
+  });
+
+  it('skips the Calendar probe when only the view is available without a controlled daily note fixture', async () => {
+    writePlugin('calendar', `
+      const { ItemView, Plugin } = require('obsidian');
+      class CalendarView extends ItemView {
+        getViewType() {
+          return 'calendar';
+        }
+        getDisplayText() {
+          return 'Calendar';
+        }
+        async onOpen() {
+          this.contentEl.setText('Calendar ready');
+        }
+        async openOrCreatePeriodicNote(_granularity, _date, existingFile) {
+          await this.leaf.openFile(existingFile);
+        }
+      }
+      module.exports = class CalendarPlugin extends Plugin {
+        onload() {
+          this.registerView('calendar', (leaf) => new CalendarView(leaf));
+        }
+      };
+    `);
+
+    const manager = new PluginManager(mindRoot);
+    await manager.discover();
+    await manager.enable('calendar', { confirmCapabilityGate: true });
+
+    const result = await manager.runWorkflowProbe('calendar', 'calendar-open-periodic-note');
+
+    expect(result).toMatchObject({
+      id: 'calendar-open-periodic-note',
+      status: 'skipped',
+      failureReason: expect.stringContaining(CALENDAR_WORKFLOW_PROBE_FIXTURE.targetPath),
+    });
+  });
+
+  it('passes the Calendar probe through the stable daily-note view handler', async () => {
+    writeCalendarFixture();
+    writePlugin('calendar', `
+      const { ItemView, Plugin } = require('obsidian');
+      class CalendarView extends ItemView {
+        getViewType() {
+          return 'calendar';
+        }
+        getDisplayText() {
+          return 'Calendar';
+        }
+        async onOpen() {
+          this.contentEl.setText('Calendar ready');
+        }
+        async openOrCreateDailyNote(date, inNewSplit) {
+          if (date.format('YYYY-MM-DD') !== '2026-06-26' || inNewSplit !== false) {
+            throw new Error('Unexpected stable Calendar daily note arguments');
+          }
+          await this.leaf.openFile(this.app.vault.getFileByPath(date.format('YYYY-MM-DD') + '.md'));
+        }
+      }
+      module.exports = class CalendarPlugin extends Plugin {
+        onload() {
+          this.registerView('calendar', (leaf) => new CalendarView(leaf));
+        }
+      };
+    `);
+
+    const manager = new PluginManager(mindRoot);
+    await manager.discover();
+    await manager.enable('calendar', { confirmCapabilityGate: true });
+
+    const result = await manager.runWorkflowProbe('calendar', 'calendar-open-periodic-note');
+
+    expect(result).toMatchObject({
+      id: 'calendar-open-periodic-note',
+      status: 'passed',
+    });
+    expect(result.assertions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'calendar-date-navigation', passed: true }),
+      expect.objectContaining({ id: 'workspace-open', passed: true }),
+      expect.objectContaining({ id: 'workspace-open-called-ledger', passed: true }),
+    ]));
+  });
+
+  it('fails the Calendar probe when the date handler opens a different note', async () => {
+    writeCalendarFixture();
+    fs.writeFileSync(path.join(mindRoot, 'wrong-day.md'), '# Wrong day', 'utf-8');
+    writePlugin('calendar', `
+      const { ItemView, Plugin } = require('obsidian');
+      class CalendarView extends ItemView {
+        getViewType() {
+          return 'calendar';
+        }
+        getDisplayText() {
+          return 'Calendar';
+        }
+        async onOpen() {
+          this.contentEl.setText('Calendar ready');
+        }
+        async openOrCreatePeriodicNote(_granularity, _date, _existingFile) {
+          await this.leaf.openFile(this.app.vault.getFileByPath('wrong-day.md'));
+        }
+      }
+      module.exports = class CalendarPlugin extends Plugin {
+        onload() {
+          this.registerView('calendar', (leaf) => new CalendarView(leaf));
+        }
+      };
+    `);
+
+    const manager = new PluginManager(mindRoot);
+    await manager.discover();
+    await manager.enable('calendar', { confirmCapabilityGate: true });
+
+    const result = await manager.runWorkflowProbe('calendar', 'calendar-open-periodic-note');
+
+    expect(result).toMatchObject({
+      id: 'calendar-open-periodic-note',
+      status: 'failed',
+      failureReason: expect.stringContaining('did not request opening the daily fixture note'),
+    });
+    expect(result.evidence).toEqual(expect.arrayContaining([
+      expect.stringContaining('Expected workspace open request for Calendar fixture: 2026-06-26.md'),
+      expect.stringContaining('wrong-day.md'),
+    ]));
+    expect(result.assertions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'calendar-date-navigation', passed: true }),
+      expect.objectContaining({ id: 'workspace-open', passed: false }),
+      expect.objectContaining({ id: 'view-called-ledger', passed: true }),
+      expect.objectContaining({ id: 'workspace-open-called-ledger', passed: true }),
     ]));
   });
 
@@ -1142,17 +1296,26 @@ describe('Obsidian workflow probes', () => {
   });
 
   it('keeps probe history across manager restarts and summarizes latest results by workflow', async () => {
+    writeCalendarFixture();
     writePlugin('calendar', `
-      const { Plugin } = require('obsidian');
+      const { ItemView, Plugin } = require('obsidian');
+      class CalendarView extends ItemView {
+        getViewType() {
+          return 'calendar';
+        }
+        getDisplayText() {
+          return 'Calendar';
+        }
+        async onOpen() {
+          this.contentEl.setText('Calendar ready');
+        }
+        async openOrCreatePeriodicNote(_granularity, _date, existingFile) {
+          await this.leaf.openFile(existingFile);
+        }
+      }
       module.exports = class CalendarPlugin extends Plugin {
         onload() {
-          this.addCommand({
-            id: 'open-today',
-            name: 'Open today',
-            callback: async () => {
-              await this.app.workspace.openLinkText('missing-note', '');
-            }
-          });
+          this.registerView('calendar', (leaf) => new CalendarView(leaf));
         }
       };
     `);

@@ -1,5 +1,5 @@
 import { Events } from './events';
-import type { CodeBlockProcessor, MarkdownPostProcessor, ViewCreator, WorkspaceLeaf } from './types';
+import type { CodeBlockProcessor, MarkdownPostProcessor, TFile, ViewCreator, WorkspaceLeaf } from './types';
 import { createObsidianElement } from './shims/dom';
 import {
   collectElementText,
@@ -7,6 +7,7 @@ import {
   getElementChildren,
   seedMarkdownPreviewElement,
 } from './shims/markdown-renderer';
+import { moment } from './shims/moment';
 import { ErrorCodes, MindOSError } from '@/lib/errors';
 import { getObsidianCapability } from './capability-matrix';
 import type { ObsidianRuntimeCapabilityLedgerEntry, ObsidianRuntimeCapabilityLedgerPhase } from './compatibility-preview';
@@ -231,6 +232,15 @@ export interface PluginViewSnapshot {
     basename: string;
     extension: string;
   };
+}
+
+export interface CalendarDateOpenOptions {
+  viewType: string;
+  targetDate: string;
+  existingFile: TFile;
+  granularity?: string;
+  inNewSplit?: boolean;
+  leaf?: WorkspaceLeaf;
 }
 
 export interface PluginMarkdownCodeBlockSnapshot {
@@ -692,6 +702,57 @@ export class ObsidianRuntimeHost extends Events {
       displayText: callStringMethod(viewRecord, 'getDisplayText') || viewType,
       className: viewRecord?.constructor?.name ?? 'PluginView',
       text: collectElementText(viewRecord?.contentEl) || collectElementText(viewRecord?.containerEl),
+    };
+  }
+
+  async invokeCalendarDateOpen(pluginId: string, options: CalendarDateOpenOptions): Promise<PluginViewSnapshot> {
+    const registration = this.views.find((item) => item.pluginId === pluginId && item.type === options.viewType);
+    if (!registration) {
+      throw new Error(`Unknown plugin view: ${pluginId}/${options.viewType}`);
+    }
+
+    const view = await registration.creator(options.leaf);
+    const viewRecord = asCalendarViewRecord(view);
+
+    if (!viewRecord) {
+      throw new Error(`Calendar view "${options.viewType}" did not create an object view.`);
+    }
+    if (options.leaf && !viewRecord.leaf) {
+      viewRecord.leaf = options.leaf;
+    }
+    const hasPeriodicHandler = typeof viewRecord.openOrCreatePeriodicNote === 'function';
+    const hasDailyHandler = typeof viewRecord.openOrCreateDailyNote === 'function';
+    const hasWeeklyHandler = typeof viewRecord.openOrCreateWeeklyNote === 'function';
+    if (!hasPeriodicHandler && !hasDailyHandler && !hasWeeklyHandler) {
+      throw new Error(`Calendar view "${options.viewType}" does not expose a supported date navigation handler.`);
+    }
+
+    await this.runWithPluginContext(pluginId, async () => {
+      if (typeof viewRecord.onOpen === 'function') {
+        await viewRecord.onOpen();
+      }
+      this.recordCapability(pluginId, 'registerView', 'called', `Plugin view "${options.viewType}" rendered for Calendar date navigation.`);
+      const date = moment(options.targetDate);
+      const inNewSplit = options.inNewSplit === true;
+      const granularity = options.granularity ?? 'day';
+      if (typeof viewRecord.openOrCreatePeriodicNote === 'function') {
+        await viewRecord.openOrCreatePeriodicNote(granularity, date, options.existingFile, inNewSplit);
+      } else if (granularity === 'day' && typeof viewRecord.openOrCreateDailyNote === 'function') {
+        await viewRecord.openOrCreateDailyNote(date, inNewSplit);
+      } else if (granularity === 'week' && typeof viewRecord.openOrCreateWeeklyNote === 'function') {
+        await viewRecord.openOrCreateWeeklyNote(date, inNewSplit);
+      } else {
+        throw new Error(`Calendar view "${options.viewType}" cannot open ${granularity} notes through a supported handler.`);
+      }
+    });
+
+    return {
+      pluginId,
+      viewType: options.viewType,
+      resolvedViewType: callStringMethod(viewRecord, 'getViewType') || options.viewType,
+      displayText: callStringMethod(viewRecord, 'getDisplayText') || options.viewType,
+      className: viewRecord.constructor?.name ?? 'CalendarView',
+      text: collectElementText(viewRecord.contentEl) || collectElementText(viewRecord.containerEl),
     };
   }
 
@@ -1302,8 +1363,29 @@ type ViewRecord = {
   constructor?: { name?: string };
 };
 
+type CalendarViewRecord = ViewRecord & {
+  openOrCreatePeriodicNote?: (
+    granularity: string,
+    date: unknown,
+    existingFile: TFile,
+    inNewSplit: boolean,
+  ) => Promise<void> | void;
+  openOrCreateDailyNote?: (
+    date: unknown,
+    inNewSplit: boolean,
+  ) => Promise<void> | void;
+  openOrCreateWeeklyNote?: (
+    date: unknown,
+    inNewSplit: boolean,
+  ) => Promise<void> | void;
+};
+
 function asViewRecord(value: unknown): ViewRecord | null {
   return value && typeof value === 'object' ? value as ViewRecord : null;
+}
+
+function asCalendarViewRecord(value: unknown): CalendarViewRecord | null {
+  return value && typeof value === 'object' ? value as CalendarViewRecord : null;
 }
 
 function callStringMethod(view: ViewRecord | null, method: 'getViewType' | 'getDisplayText'): string {

@@ -193,6 +193,14 @@ export interface PluginViewContext {
   sourcePath?: string;
 }
 
+export interface PluginCalendarDateContext extends PluginViewContext {
+  viewType: string;
+  targetDate: string;
+  targetPath: string;
+  granularity?: string;
+  inNewSplit?: boolean;
+}
+
 interface EditorExecutionSession {
   file: TFile;
   initialContent: string;
@@ -648,6 +656,49 @@ export class PluginManager {
         file: this.serializableFile(activeFile),
       } : {}),
     };
+  }
+
+  async openCalendarDate(pluginId: string, context: PluginCalendarDateContext): Promise<PluginActionResult> {
+    await this.loadEnabledPlugins();
+    this.requirePlugin(pluginId);
+    const app = this.loader.getApp();
+    const host = app.getRuntimeHost();
+    const requestOffset = host.getWorkspaceOpenRequests().length;
+    const modalOffset = host.getModalSnapshotCount();
+    const menuOffset = host.getMenuSnapshotCount();
+    const noticeOffset = host.getNoticeSnapshotCount();
+    const leaf = app.workspace.getLeaf(true);
+    const activeFile = this.activeFileForSourcePath(context.sourcePath);
+    const existingFile = app.vault.getFileByPath(context.targetPath);
+
+    if (!existingFile) {
+      throw new MindOSError(ErrorCodes.FILE_NOT_FOUND, `Calendar workflow fixture note not found: ${context.targetPath}`);
+    }
+
+    await leaf.setViewState({
+      type: context.viewType,
+      state: {
+        pluginId,
+        targetPath: existingFile.path,
+        targetDate: context.targetDate,
+        granularity: context.granularity ?? 'day',
+        ...(activeFile ? {
+          sourcePath: activeFile.path,
+          file: this.serializableFile(activeFile),
+        } : {}),
+      },
+    });
+
+    await app.withActiveFile(activeFile, () => host.invokeCalendarDateOpen(pluginId, {
+      viewType: context.viewType,
+      targetDate: context.targetDate,
+      existingFile,
+      granularity: context.granularity,
+      inNewSplit: context.inNewSplit,
+      leaf,
+    }));
+
+    return this.actionResultSince(requestOffset, modalOffset, menuOffset, noticeOffset);
   }
 
   readScopedStyleSheet(pluginId: string): PluginStylesheetSnapshot {

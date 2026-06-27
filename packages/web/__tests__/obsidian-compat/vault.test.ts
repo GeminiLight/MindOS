@@ -139,6 +139,25 @@ describe('Vault', () => {
     });
   });
 
+  it('treats the empty folder path as vault root with recursive public children', async () => {
+    await vault.create('2026-06-26.md', 'daily');
+    await vault.create('notes/nested.md', 'nested');
+    fs.mkdirSync(path.join(mindRoot, '.mindos', 'plugins'), { recursive: true });
+    fs.writeFileSync(path.join(mindRoot, '.mindos', 'plugins', 'private.md'), 'private', 'utf-8');
+
+    const root = vault.getAbstractFileByPath('');
+    const paths: string[] = [];
+
+    expect(root).toMatchObject({ path: '', name: '' });
+    Vault.recurseChildren(root as ReturnType<Vault['getRoot']>, (file) => {
+      paths.push(file.path);
+    });
+
+    expect(paths).toEqual(expect.arrayContaining(['2026-06-26.md', 'notes', 'notes/nested.md']));
+    expect(paths).not.toContain('.mindos');
+    expect(paths).not.toContain('.mindos/plugins/private.md');
+  });
+
   it('renames and copies files', async () => {
     const created = await vault.create('notes/source.md', 'copy me');
     const onRename = vi.fn();

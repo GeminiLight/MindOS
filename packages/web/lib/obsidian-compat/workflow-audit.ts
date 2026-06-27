@@ -164,7 +164,7 @@ function buildCalendarAudit(input: BuildObsidianWorkflowAuditsInput): ObsidianWo
   }
   if (input.capabilityGate.blocked) return blockedAudit(input, 'calendar-open-periodic-note', 'Open calendar views and notes');
   if (registered.length > 0) {
-    return partialAudit('calendar-open-periodic-note', 'Open calendar views and notes', 'runtime-ledger', registered, 'Render the view or execute the open-note command to confirm navigation behavior.');
+    return partialAudit('calendar-open-periodic-note', 'Open calendar views and notes', 'runtime-ledger', registered, 'Run the Calendar date-navigation probe against an existing daily note fixture before calling this workflow observed.');
   }
   return staticAudit(input, 'calendar-open-periodic-note', 'Open calendar views and notes', ['views', 'workspace'], 'Catalog the view first, then map date navigation to a MindOS native periodic-note route.');
 }
