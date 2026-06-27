@@ -292,6 +292,105 @@ describe('ObsidianPluginHostSection', () => {
     await cleanup(root, host);
   });
 
+  it('previews Dataview-style native query coverage from expanded plugin details', async () => {
+    mocks.apiFetch.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url === '/api/obsidian-plugins' && !init?.method) {
+        return {
+          ok: true,
+          plugins: [plugin({
+            id: 'dataview',
+            name: 'Dataview',
+            enabled: true,
+            workflowAudits: [{
+              id: 'dataview-native-query',
+              label: 'Query notes and metadata',
+              status: 'native-replacement',
+              source: 'native-replacement',
+              evidence: ['MindOS native query index can read public Markdown notes.'],
+              nextStep: 'Route Dataview-style tables, lists, and task views to MindOS native query and retrieval surfaces.',
+            }],
+          })],
+        };
+      }
+      if (url === '/api/obsidian-plugins/native-query?pluginId=dataview' && !init?.method) {
+        return {
+          ok: true,
+          pluginId: 'dataview',
+          proof: {
+            status: 'native-replacement',
+            summary: 'MindOS native query index can read public Markdown notes.',
+            supportedSubset: ['List Markdown notes by path, tag, and exact frontmatter values.'],
+            limitations: ['Does not execute official Dataview or Tasks plugin runtime code.'],
+          },
+          stats: {
+            noteCount: 2,
+            taskCount: 2,
+            completedTaskCount: 1,
+            incompleteTaskCount: 1,
+          },
+          sampleLimits: {
+            notes: 5,
+            tasks: 8,
+          },
+          notes: [{
+            path: 'Alpha.md',
+            basename: 'Alpha',
+            tags: ['#project'],
+            frontmatter: { title: 'Alpha', status: 'active' },
+            taskCount: 2,
+            incompleteTaskCount: 1,
+            linkCount: 1,
+            headingCount: 1,
+          }],
+          tasks: [{
+            path: 'Alpha.md',
+            basename: 'Alpha',
+            line: 7,
+            status: ' ',
+            completed: false,
+            text: 'Ship native preview #next',
+            tags: ['#next'],
+            noteTags: ['#project'],
+            effectiveTags: ['#project', '#next'],
+          }],
+        };
+      }
+      throw new Error(`Unexpected apiFetch call: ${url}`);
+    });
+
+    const { host, root } = await renderSection();
+    const row = host.querySelector('[data-obsidian-plugin-row="dataview"]') as HTMLElement;
+    const expandButton = row.querySelector('button') as HTMLButtonElement;
+
+    await act(async () => {
+      expandButton.click();
+      await Promise.resolve();
+    });
+
+    expect(host.textContent).toContain('Native query preview');
+    expect(host.textContent).toContain('read-only');
+    expect(host.textContent).toContain('MindOS native index, not official plugin runtime.');
+
+    const previewButton = Array.from(host.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('Preview')) as HTMLButtonElement;
+    await act(async () => {
+      previewButton.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mocks.apiFetch).toHaveBeenCalledWith('/api/obsidian-plugins/native-query?pluginId=dataview', { cache: 'no-store' });
+    expect(host.textContent).toContain('2');
+    expect(host.textContent).toContain('notes');
+    expect(host.textContent).toContain('tasks');
+    expect(host.textContent).toContain('Alpha.md');
+    expect(host.textContent).toContain('title:Alpha status:active');
+    expect(host.textContent).toContain('Ship native preview #next');
+    expect(host.textContent).toContain('Does not execute official Dataview or Tasks plugin runtime code.');
+
+    await cleanup(root, host);
+  });
+
   it('asks for capability confirmation before enabling gated plugins', async () => {
     const gatedPlugin = plugin({
       compatibility: {

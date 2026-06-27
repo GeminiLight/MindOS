@@ -1,11 +1,15 @@
 import {
   AlertTriangle,
   ExternalLink,
+  FileText,
+  ListChecks,
   Loader2,
   Play,
+  Search,
   SlidersHorizontal,
 } from 'lucide-react';
 import type { ObsidianCapabilitySupport } from '@/lib/obsidian-compat/capability-matrix';
+import { hasObsidianNativeQueryPreview } from '@/lib/obsidian-compat/native-query-preview';
 import type { PluginEditorCommandContext } from '@/lib/plugins/client';
 import {
   ObsidianCapabilityGatePanel,
@@ -23,6 +27,7 @@ import {
   workflowAuditStatusClass,
   workflowAuditStatusLabel,
   workflowAuditProbeSummary,
+  type ObsidianNativeQueryPreviewResponse,
   type ObsidianPluginSettings,
   type ObsidianPluginStatus,
   type PluginLifecycleAction,
@@ -69,6 +74,9 @@ interface ObsidianPluginHostDetailsProps {
   settingsErrors: Record<string, string>;
   settingsByPlugin: Record<string, ObsidianPluginSettings>;
   declarativePreviews: Record<string, ObsidianDeclarativeSettingPreview>;
+  nativeQueryPreview?: ObsidianNativeQueryPreviewResponse;
+  nativeQueryBusyKey: string | null;
+  nativeQueryErrors: Record<string, string>;
   pluginEditorContext: PluginEditorCommandContext | null;
   surfaceRoutes: SurfaceRoute[];
   surfaceLedgerChecks: SurfaceLedgerProjectionView[];
@@ -101,6 +109,7 @@ interface ObsidianPluginHostDetailsProps {
   onRunDeclarativeAction: (target: DeclarativeActionTarget) => void;
   onRunDeclarativeListMutation: (target: DeclarativeListMutationTarget) => void;
   onPreviewDeclarative: (target: DeclarativePreviewTarget) => void;
+  onLoadNativeQueryPreview: (pluginId: string) => void;
 }
 
 export function ObsidianPluginHostDetails({
@@ -111,6 +120,9 @@ export function ObsidianPluginHostDetails({
   settingsErrors,
   settingsByPlugin,
   declarativePreviews,
+  nativeQueryPreview,
+  nativeQueryBusyKey,
+  nativeQueryErrors,
   pluginEditorContext,
   surfaceRoutes,
   surfaceLedgerChecks,
@@ -123,10 +135,14 @@ export function ObsidianPluginHostDetails({
   onRunDeclarativeAction,
   onRunDeclarativeListMutation,
   onPreviewDeclarative,
+  onLoadNativeQueryPreview,
 }: ObsidianPluginHostDetailsProps) {
   const settings = settingsByPlugin[plugin.id];
   const policyAudit = surfacePolicyAudit(plugin, { excludeSurfaces: ['core'] });
   const policyAuditItems = policyAudit.items;
+  const nativeQueryAvailable = hasObsidianNativeQueryPreview(plugin);
+  const nativeQueryBusy = nativeQueryBusyKey === `native-query:${plugin.id}`;
+  const nativeQueryError = nativeQueryErrors[plugin.id];
 
   return (
     <div className="mt-3 ml-6 space-y-3 rounded-lg border border-border/60 bg-background/60 p-3">
@@ -269,6 +285,99 @@ export function ObsidianPluginHostDetails({
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {nativeQueryAvailable && (
+        <div
+          className="rounded-lg border border-border/50 bg-card/60 px-3 py-2.5"
+          data-obsidian-native-query-preview={plugin.id}
+        >
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <p className="text-2xs font-medium uppercase tracking-wider text-muted-foreground">Native query preview</p>
+                <span className="rounded border border-border bg-background px-1.5 py-0.5 font-mono text-2xs text-muted-foreground">
+                  read-only
+                </span>
+              </div>
+              <p className="mt-1 line-clamp-1 text-2xs text-muted-foreground/70">
+                MindOS native index, not official plugin runtime.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => onLoadNativeQueryPreview(plugin.id)}
+              disabled={nativeQueryBusyKey !== null}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs text-foreground transition-colors hover:bg-muted/60 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              title="Preview MindOS native query index"
+            >
+              {nativeQueryBusy ? <Loader2 size={11} className="animate-spin" /> : <Search size={11} />}
+              Preview
+            </button>
+          </div>
+
+          {nativeQueryError && (
+            <div className="mt-2 flex items-start gap-2 rounded-lg border border-error/30 bg-[color-mix(in_srgb,var(--error)_10%,transparent)] px-3 py-2 text-xs text-error">
+              <AlertTriangle size={12} className="mt-0.5 shrink-0" />
+              <span>{nativeQueryError}</span>
+            </div>
+          )}
+
+          {nativeQueryPreview && (
+            <div className="mt-2 space-y-2">
+              <div className="grid gap-1.5 sm:grid-cols-4">
+                <NativeQueryStat label="notes" value={nativeQueryPreview.stats.noteCount} />
+                <NativeQueryStat label="tasks" value={nativeQueryPreview.stats.taskCount} />
+                <NativeQueryStat label="open" value={nativeQueryPreview.stats.incompleteTaskCount} />
+                <NativeQueryStat label="done" value={nativeQueryPreview.stats.completedTaskCount} />
+              </div>
+
+              <div className="grid gap-2 lg:grid-cols-2">
+                <div className="min-w-0 rounded-md border border-border bg-background px-2.5 py-2">
+                  <div className="flex items-center gap-1.5 text-2xs font-medium uppercase tracking-wider text-muted-foreground">
+                    <FileText size={11} />
+                    Notes
+                  </div>
+                  <div className="mt-1.5 space-y-1.5">
+                    {nativeQueryPreview.notes.length > 0 ? nativeQueryPreview.notes.map((note) => (
+                      <div key={note.path} className="min-w-0">
+                        <p className="truncate font-mono text-2xs text-foreground">{note.path}</p>
+                        <p className="mt-0.5 truncate text-2xs text-muted-foreground">
+                          {nativeQueryNoteSummary(note)}
+                        </p>
+                      </div>
+                    )) : (
+                      <p className="text-2xs text-muted-foreground">No public Markdown notes indexed.</p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="min-w-0 rounded-md border border-border bg-background px-2.5 py-2">
+                  <div className="flex items-center gap-1.5 text-2xs font-medium uppercase tracking-wider text-muted-foreground">
+                    <ListChecks size={11} />
+                    Open tasks
+                  </div>
+                  <div className="mt-1.5 space-y-1.5">
+                    {nativeQueryPreview.tasks.length > 0 ? nativeQueryPreview.tasks.map((task) => (
+                      <div key={`${task.path}:${task.line}`} className="min-w-0">
+                        <p className="line-clamp-1 text-2xs text-foreground">{task.text}</p>
+                        <p className="mt-0.5 truncate font-mono text-2xs text-muted-foreground">
+                          {task.path}:{task.line + 1}{task.effectiveTags.length > 0 ? ` · ${task.effectiveTags.join(' ')}` : ''}
+                        </p>
+                      </div>
+                    )) : (
+                      <p className="text-2xs text-muted-foreground">No open task sample.</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <p className="line-clamp-2 text-2xs text-muted-foreground/70">
+                {nativeQueryPreview.proof.limitations[0]}
+              </p>
+            </div>
+          )}
         </div>
       )}
 
@@ -487,6 +596,24 @@ export function ObsidianPluginHostDetails({
       </div>
     </div>
   );
+}
+
+function NativeQueryStat({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-md border border-border bg-background px-2.5 py-1.5">
+      <p className="font-mono text-xs text-foreground">{value}</p>
+      <p className="text-2xs text-muted-foreground">{label}</p>
+    </div>
+  );
+}
+
+function nativeQueryNoteSummary(note: ObsidianNativeQueryPreviewResponse['notes'][number]): string {
+  const frontmatter = Object.entries(note.frontmatter)
+    .map(([key, value]) => `${key}:${String(value)}`)
+    .join(' ');
+  const tags = note.tags.join(' ');
+  const counts = `${note.taskCount} tasks · ${note.linkCount} links · ${note.headingCount} headings`;
+  return [frontmatter, tags, counts].filter(Boolean).join(' · ');
 }
 
 function SurfacePolicyAuditCard({ item }: { item: SurfacePolicyAuditItem }) {

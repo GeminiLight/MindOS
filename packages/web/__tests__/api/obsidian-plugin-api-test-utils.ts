@@ -61,6 +61,10 @@ export async function importMarkdownPostProcessorsRoute() {
   return import('../../app/api/obsidian-plugins/markdown-post-processors/route');
 }
 
+export async function importNativeQueryRoute() {
+  return import('../../app/api/obsidian-plugins/native-query/route');
+}
+
 export function postRequest(body: unknown) {
   return new NextRequest('http://localhost/api/obsidian-plugins', {
     method: 'POST',
@@ -107,4 +111,12 @@ export function markdownPostProcessorsPostRequest(body: unknown) {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(body),
   });
+}
+
+export function nativeQueryGetRequest(params: Record<string, string>) {
+  const url = new URL('http://localhost/api/obsidian-plugins/native-query');
+  for (const [key, value] of Object.entries(params)) {
+    url.searchParams.set(key, value);
+  }
+  return new NextRequest(url);
 }

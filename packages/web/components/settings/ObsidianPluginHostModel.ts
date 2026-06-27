@@ -40,6 +40,7 @@ import type {
 } from '@/lib/obsidian-compat/workflow-probes';
 import { getObsidianImportSupport } from '@/lib/obsidian-compat/import-policy';
 import type { PluginActionResult } from '@/lib/plugins/client';
+export type { ObsidianNativeQueryPreviewResponse } from '@/lib/obsidian-compat/native-query-preview';
 
 export type CompatibilityLevel = 'compatible' | 'partial' | 'blocked';
 

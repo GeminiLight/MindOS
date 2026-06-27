@@ -24,6 +24,7 @@ import {
   firstPluginActionMenuSnapshot,
   firstPluginActionModalSnapshot,
   firstPluginActionTargetPath,
+  fetchObsidianNativeQueryPreview,
   pluginEditorCommandContextForPathname,
   submitPluginModalText,
   toastPluginActionNotices,
@@ -55,6 +56,7 @@ import {
   surfaceLedgerProjections,
   surfaceRouting,
   type ObsidianPluginLoadResult,
+  type ObsidianNativeQueryPreviewResponse,
   type ObsidianPluginSettings,
   type ObsidianPluginSettingsResponse,
   type ObsidianPluginStatus,
@@ -132,6 +134,9 @@ export function ObsidianPluginHostSection({
   const [settingsByPlugin, setSettingsByPlugin] = useState<Record<string, ObsidianPluginSettings>>({});
   const [settingsBusyKey, setSettingsBusyKey] = useState<string | null>(null);
   const [settingsErrors, setSettingsErrors] = useState<Record<string, string>>({});
+  const [nativeQueryPreviews, setNativeQueryPreviews] = useState<Record<string, ObsidianNativeQueryPreviewResponse>>({});
+  const [nativeQueryBusyKey, setNativeQueryBusyKey] = useState<string | null>(null);
+  const [nativeQueryErrors, setNativeQueryErrors] = useState<Record<string, string>>({});
   const [pluginModal, setPluginModal] = useState<PluginModalSnapshot | null>(null);
   const [pluginMenu, setPluginMenu] = useState<PluginMenuSnapshot | null>(null);
   const [enableTarget, setEnableTarget] = useState<ObsidianPluginStatus | null>(null);
@@ -345,6 +350,16 @@ export function ObsidianPluginHostSection({
           next.delete(pluginId);
           return next;
         });
+        setNativeQueryPreviews((prev) => {
+          const next = { ...prev };
+          delete next[pluginId];
+          return next;
+        });
+        setNativeQueryErrors((prev) => {
+          const next = { ...prev };
+          delete next[pluginId];
+          return next;
+        });
         setSettingsErrors((prev) => {
           const next = { ...prev };
           delete next[pluginId];
@@ -432,6 +447,23 @@ export function ObsidianPluginHostSection({
       setSettingsBusyKey(null);
     }
   }, [applySettingsResponse]);
+
+  const loadNativeQueryPreview = useCallback(async (pluginId: string) => {
+    const key = `native-query:${pluginId}`;
+    setNativeQueryBusyKey(key);
+    setNativeQueryErrors((prev) => ({ ...prev, [pluginId]: '' }));
+    try {
+      const data = await fetchObsidianNativeQueryPreview(pluginId);
+      setNativeQueryPreviews((prev) => ({ ...prev, [pluginId]: data }));
+    } catch (err) {
+      setNativeQueryErrors((prev) => ({
+        ...prev,
+        [pluginId]: err instanceof Error ? err.message : 'Failed to load native query preview.',
+      }));
+    } finally {
+      setNativeQueryBusyKey(null);
+    }
+  }, []);
 
   const runSettingAction = useCallback(async (
     pluginId: string,
@@ -835,6 +867,9 @@ export function ObsidianPluginHostSection({
                       settingsErrors={settingsErrors}
                       settingsByPlugin={settingsByPlugin}
                       declarativePreviews={declarativePreviews}
+                      nativeQueryPreview={nativeQueryPreviews[plugin.id]}
+                      nativeQueryBusyKey={nativeQueryBusyKey}
+                      nativeQueryErrors={nativeQueryErrors}
                       pluginEditorContext={pluginEditorContext ?? null}
                       surfaceRoutes={surfaceRoutes}
                       surfaceLedgerChecks={surfaceLedgerChecks}
@@ -851,6 +886,7 @@ export function ObsidianPluginHostSection({
                       onRunDeclarativeAction={setDeclarativeActionTarget}
                       onRunDeclarativeListMutation={setDeclarativeListMutationTarget}
                       onPreviewDeclarative={setDeclarativePreviewTarget}
+                      onLoadNativeQueryPreview={(pluginId) => { void loadNativeQueryPreview(pluginId); }}
                     />
                   )}
                 </div>

@@ -1,6 +1,7 @@
 import { apiFetch } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import type { PluginSurface } from './surfaces';
+import type { ObsidianNativeQueryPreviewResponse } from '@/lib/obsidian-compat/native-query-preview';
 
 interface PluginSurfacesResponse {
   ok: boolean;
@@ -705,6 +706,13 @@ export async function fetchPluginView(pluginId: string, viewType: string, source
     cache: 'no-store',
   });
   return data.view;
+}
+
+export async function fetchObsidianNativeQueryPreview(pluginId: string): Promise<ObsidianNativeQueryPreviewResponse> {
+  const params = new URLSearchParams({ pluginId });
+  return apiFetch<ObsidianNativeQueryPreviewResponse>(`/api/obsidian-plugins/native-query?${params.toString()}`, {
+    cache: 'no-store',
+  });
 }
 
 export async function fetchPluginStylesheet(pluginId: string): Promise<PluginStylesheetSnapshot> {
