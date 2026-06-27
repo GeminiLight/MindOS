@@ -9,6 +9,7 @@ import { useLocale } from '@/lib/stores/locale-store';
 import type { AgentRuntimeDescriptor, AgentRuntimeIdentity, AgentRuntimeStatus } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { AgentSectionHeading } from './AgentsPrimitives';
+import RuntimeDiagnosticsPanel from './RuntimeDiagnosticsPanel';
 
 type NativeRuntimeKind = 'codex' | 'claude';
 type EndpointStatus = AgentRuntimeStatus | 'checking';
@@ -268,6 +269,8 @@ export default function AgentsRuntimeSection({
           ))}
         </div>
       </section>
+
+      <RuntimeDiagnosticsPanel onRefreshNative={native.refresh} />
 
       {showContracts && <AgentsRuntimeContractsSection />}
     </div>

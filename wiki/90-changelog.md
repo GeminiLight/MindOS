@@ -6,6 +6,7 @@
 
 ### Runtime / Agents
 
+- **Runtime 诊断面板可视化**：Agents / Agent 页新增 Runtime Diagnostics，直接展示 catalog、readiness、命令解析、能力矩阵与诊断缺口，方便排查 Codex、Claude Code、MindOS 与 ACP runtime 的兼容状态。
 - **Agent runtime 基础能力收口**：新增 runtime catalog 与 readiness/capability matrix，统一展示本机 Codex、Claude Code、ACP 等 runtime 的安装、可用性和能力状态。
 - **ACP 命令入口更完整**：ACP runtime 暴露的 `available_commands` 会进入 Ask SendBox 与命令面板，支持从 UI 直接触发 agent 提供的命令能力。
 - **ACP 会话继承 MCP 上下文**：ACP session 现在会继承 MindOS MCP session 信息，减少跨 runtime 对话时上下文丢失和工具态不一致。

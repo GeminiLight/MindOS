@@ -26,6 +26,81 @@ const runtimeCapabilities = vi.hoisted(() => ({
   supportsMcpConfig: false,
 }));
 
+const runtimeCatalogEntries = vi.hoisted(() => [
+  {
+    schemaVersion: 1,
+    id: 'mindos',
+    runtimeId: 'mindos',
+    name: 'MindOS Agent',
+    kind: 'mindos',
+    category: 'mindos',
+    status: 'available',
+    adapter: 'mindos',
+    aliases: [],
+    owners: { model: 'mindos', auth: 'mindos', permission: 'mindos', session: 'mindos' },
+    capabilitySummary: {
+      session: 'local-id',
+      commandDiscovery: 'mindos-skills',
+      modelSelection: 'mindos-settings',
+      mcpConfig: { supportsDescriptorConfig: true },
+      output: ['text', 'artifact'],
+      eventStream: ['text', 'tool-events'],
+      remoteMode: 'server-runnable',
+      unattended: 'supported',
+      coordinationRole: 'primary',
+    },
+    diagnostics: {
+      schemaVersion: 1,
+      checkedAt: '2026-06-27T00:00:00.000Z',
+      status: 'available',
+      sources: ['runtime-catalog'],
+      summary: 'MindOS Agent is available.',
+      hints: [],
+      selectedCommand: { cmd: 'mindos', args: ['agent'], source: 'registry' },
+      checks: [
+        { id: 'availability', label: 'Availability', status: 'passed', severity: 'info', source: 'runtime-catalog', summary: 'MindOS Agent is available.' },
+      ],
+    },
+  },
+  {
+    schemaVersion: 1,
+    id: 'codex',
+    runtimeId: 'codex',
+    name: 'Codex',
+    kind: 'codex',
+    category: 'native',
+    status: 'available',
+    adapter: 'codex-app-server',
+    aliases: ['openai-codex'],
+    owners: { model: 'external', auth: 'external', permission: 'external', session: 'external' },
+    capabilitySummary: {
+      session: 'native-thread',
+      commandDiscovery: 'runtime-event',
+      modelSelection: 'runtime-native',
+      mcpConfig: { supportsDescriptorConfig: false },
+      output: ['text', 'diff', 'branch', 'pr'],
+      eventStream: ['text', 'tool-events', 'runtime-status'],
+      remoteMode: 'local-only',
+      unattended: 'limited',
+      coordinationRole: 'external-worker',
+    },
+    binaryPath: '/usr/local/bin/codex',
+    diagnostics: {
+      schemaVersion: 1,
+      checkedAt: '2026-06-27T00:00:00.000Z',
+      status: 'available',
+      sources: ['runtime-catalog', 'native-health'],
+      summary: 'Codex is available.',
+      hints: [],
+      binaryPath: '/usr/local/bin/codex',
+      checks: [
+        { id: 'availability', label: 'Availability', status: 'passed', severity: 'info', source: 'runtime-catalog', summary: 'Codex is available.' },
+        { id: 'mcp', label: 'MCP', status: 'warning', severity: 'warning', source: 'runtime-catalog', summary: 'MCP config is runtime-owned.' },
+      ],
+    },
+  },
+]);
+
 const baseMcpState = {
   status: {
     running: true,
@@ -183,6 +258,71 @@ vi.mock('@/hooks/useNativeRuntimeDetection', () => ({
   }),
 }));
 
+vi.mock('@/hooks/useRuntimeCatalog', () => ({
+  useRuntimeCatalog: () => ({
+    catalog: {
+      schemaVersion: 1,
+      generatedAt: '2026-06-27T00:00:00.000Z',
+      summary: {
+        total: runtimeCatalogEntries.length,
+        available: runtimeCatalogEntries.length,
+        missing: 0,
+        signedOut: 0,
+        error: 0,
+        categories: { mindos: 1, native: 1, acp: 0, cloud: 0 },
+      },
+      entries: runtimeCatalogEntries,
+    },
+    entries: runtimeCatalogEntries,
+    runtimes: [],
+    loading: false,
+    error: null,
+    refresh: vi.fn(),
+  }),
+}));
+
+vi.mock('@/hooks/useRuntimeReadiness', () => ({
+  useRuntimeReadiness: () => ({
+    readinessByRuntimeId: {
+      mindos: {
+        schemaVersion: 1,
+        runtimeId: 'mindos',
+        runtimeName: 'MindOS Agent',
+        runtimeKind: 'mindos',
+        runtimeStatus: 'available',
+        overallStatus: 'ready',
+        summary: 'MindOS is ready.',
+        recommendations: [],
+        useCases: [],
+        gaps: [],
+      },
+      codex: {
+        schemaVersion: 1,
+        runtimeId: 'codex',
+        runtimeName: 'Codex',
+        runtimeKind: 'codex',
+        runtimeStatus: 'available',
+        overallStatus: 'limited',
+        summary: 'Codex can run with native-owned MCP configuration.',
+        recommendations: [],
+        useCases: [],
+        gaps: [
+          {
+            id: 'codex-mcp-runtime-owned',
+            category: 'runtime-native',
+            severity: 'warning',
+            summary: 'Codex MCP config remains owned by the Codex runtime.',
+            useCases: ['mcp-tooling'],
+          },
+        ],
+      },
+    },
+    loading: false,
+    error: null,
+    refresh: vi.fn(),
+  }),
+}));
+
 describe('Agents content dashboard', () => {
   it('renders overview with four onward IA targets and clickable system model', () => {
     const html = renderToStaticMarkup(<AgentsContentPage tab="overview" />);
@@ -240,6 +380,12 @@ describe('Agents content dashboard', () => {
     expect(html).toContain('Codex');
     expect(html).toContain('Claude Code');
     expect(html).toContain(a.runtime.openChatWith('Codex'));
+    expect(html).toContain(a.runtime.diagnosticsTitle);
+    expect(html).toContain(a.runtime.diagnosticsSummary(2, 1, 1));
+    expect(html).toContain(a.runtime.diagnosticsCapabilities);
+    expect(html).toContain(a.runtime.diagnosticsCapabilitySession);
+    expect(html).toContain('/usr/local/bin/codex');
+    expect(html).toContain('Codex MCP config remains owned by the Codex runtime.');
     expect(html).toContain(a.agentOverview.title);
     expect(html).toContain('href="#agent-local-runtime"');
     expect(html).toContain('href="#agent-local-clients"');
