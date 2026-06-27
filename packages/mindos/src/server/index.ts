@@ -172,6 +172,35 @@ export {
 } from './handlers/runtime-automation-projections.js';
 
 export {
+  MINDOS_RUNTIME_CONTROL_PLANE_FILE,
+  applyRuntimeControlPlaneMutation,
+  handleRuntimeControlPlaneGet,
+  handleRuntimeControlPlanePost,
+  readRuntimeControlPlane,
+  type RuntimeControlPlaneApprovalRequest,
+  type RuntimeControlPlaneApprovalStatus,
+  type RuntimeControlPlaneFailureAudit,
+  type RuntimeControlPlaneFailureKind,
+  type RuntimeControlPlaneMailboxMessage,
+  type RuntimeControlPlaneMailboxStatus,
+  type RuntimeControlPlaneMutationPayload,
+  type RuntimeControlPlaneMutationResult,
+  type RuntimeControlPlaneOverlapPolicy,
+  type RuntimeControlPlanePermissionMode,
+  type RuntimeControlPlaneSchedule,
+  type RuntimeControlPlaneScheduleStatus,
+  type RuntimeControlPlaneServices,
+  type RuntimeControlPlaneSnapshot,
+  type RuntimeControlPlaneTask,
+  type RuntimeControlPlaneTaskPriority,
+  type RuntimeControlPlaneTaskStatus,
+  type RuntimeControlPlaneTrigger,
+  type RuntimeControlPlaneTriggerType,
+  type RuntimeControlPlaneWakeEvent,
+  type RuntimeControlPlaneWakeStatus,
+} from './handlers/runtime-control-plane.js';
+
+export {
   buildAgentRuntimeReadinessPayload,
   handleAgentRuntimeReadinessGet,
   type AgentRuntimeReadinessGap,

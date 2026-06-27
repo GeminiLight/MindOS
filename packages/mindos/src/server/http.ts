@@ -48,6 +48,7 @@ import { handleAgentRuntimePermissionProjectionsGet } from './handlers/runtime-p
 import { handleRuntimeSessionProjectionsGet } from './handlers/runtime-session-projections.js';
 import { handleAgentRuntimeArtifactProjectionsGet } from './handlers/runtime-artifact-projections.js';
 import { handleAgentRuntimeAutomationProjectionsGet } from './handlers/runtime-automation-projections.js';
+import { handleRuntimeControlPlaneGet, handleRuntimeControlPlanePost } from './handlers/runtime-control-plane.js';
 import { handleAgentRuntimeReadinessGet } from './handlers/runtime-readiness.js';
 import {
   handleAgentRuntimeExtensionInstallPost,
@@ -431,6 +432,14 @@ async function handleRequest(
     }
     if (route === 'GET /api/agent-runtimes/automation-projections') {
       writeResponse(res, await handleAgentRuntimeAutomationProjectionsGet(url.searchParams, createHttpRuntimeProjectionServices(services, url.searchParams)));
+      return;
+    }
+    if (route === 'GET /api/agent-runtimes/control-plane') {
+      writeResponse(res, await handleRuntimeControlPlaneGet(url.searchParams, { mindRoot: services.mindRoot }));
+      return;
+    }
+    if (route === 'POST /api/agent-runtimes/control-plane') {
+      writeResponse(res, handleRuntimeControlPlanePost(await readJsonBody(req), { mindRoot: services.mindRoot }));
       return;
     }
     if (route === 'GET /api/agent-runtimes/readiness') {

@@ -251,6 +251,45 @@ projection 输出：
 - Native runtime 的 permission bridge 是交互式能力，不自动升级成后台任务审批；automation projection 会继续把它标成 `limited`，直到 durable approval queue 落地。
 - Generic ACP 需要 adapter-specific health / permission / artifact contract 才能进一步从 `limited` 或 `unknown` 提升。
 
+### Runtime Control Plane Primitives
+
+Runtime control plane 是 remote / cron / team 的第一层可写后端 substrate，位于 `packages/mindos/src/server/handlers/runtime-control-plane.ts`，通过 `/api/agent-runtimes/control-plane` 暴露。它只保存安全的状态、摘要和指针，不启动 runtime、不执行 cron、不自动批准权限，也不把后台任务升级成 ready。
+
+当前持久化文件：
+
+```text
+<mindRoot>/.mindos/runtime-control-plane.json
+```
+
+control plane 覆盖六类 primitive：
+
+| Primitive | 语义 |
+|---|---|
+| `schedules` | cron / interval / event / manual schedule registry；保存 trigger、runtimeId、target pointer、policy 和摘要 |
+| `approvalQueue` | durable unattended approval queue substrate；保存 pending / resolved 状态与最小安全摘要 |
+| `wakeEvents` | wake / missed trigger reconciliation ledger；记录 pending / claimed / completed / missed |
+| `failureAudits` | background run failure audit substrate；记录 timeout、permission、tool、runtime 等失败摘要 |
+| `mailbox` | Team Mode mailbox substrate；保存 runtime-to-runtime message pointer 和摘要 |
+| `tasks` | Team Mode task-board substrate；保存 assignee runtime、状态和优先级 |
+
+POST mutation 使用 `action` 分发：
+
+| Action | 作用 |
+|---|---|
+| `create-schedule` / `update-schedule` | 创建或更新 schedule registry entry |
+| `enqueue-approval` / `resolve-approval` | 写入或关闭 approval queue item |
+| `record-wake` | 记录 wake / missed trigger event |
+| `record-failure` | 记录失败审计 |
+| `send-message` | 写入 mailbox message |
+| `upsert-task` | 写入或更新 team task |
+
+边界：
+
+- 只接受声明式 metadata，不保存 env、headers、token、api key、secret 或 artifact/blob 内容；文本摘要会做 secret redaction。
+- schedule 默认 `disabled`，即使 status 设为 `enabled`，当前也只是 registry 状态，不会启动真实 runner。
+- cron 只做基础格式校验，不计算 next fire、不创建后台 timer。
+- automation projection 仍然保守：有 control-plane substrate 不等于 24/7 fully ready；runner、approval routing policy、missed-trigger executor 和通知/UI 仍要后续实现。
+
 ### Permission Runtime Projection
 
 Permission runtime projection 是 `permission-governance` compatibility 的只读诊断契约，位于 `packages/mindos/src/server/handlers/runtime-permission-projections.ts`，通过 `/api/agent-runtimes/permission-projections?permissionMode=<read|ask|auto|full>` 暴露。它只解释当前 runtime 在某个 MindOS permission mode 下的权限治理状态，不直接批准、拒绝或重放任何运行时请求。

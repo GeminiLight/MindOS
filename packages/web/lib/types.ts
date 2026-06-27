@@ -759,6 +759,122 @@ export interface AgentRuntimeAdapterProjectionsPayload {
   projections: AgentRuntimeAdapterProjection[];
 }
 
+export type RuntimeControlPlaneTriggerType = 'manual' | 'cron' | 'interval' | 'event';
+export type RuntimeControlPlaneScheduleStatus = 'disabled' | 'enabled' | 'paused' | 'archived';
+export type RuntimeControlPlaneApprovalStatus = 'pending' | 'approved' | 'rejected' | 'cancelled';
+export type RuntimeControlPlaneWakeStatus = 'pending' | 'claimed' | 'completed' | 'missed';
+export type RuntimeControlPlaneMailboxStatus = 'queued' | 'delivered' | 'archived';
+export type RuntimeControlPlaneTaskStatus = 'todo' | 'doing' | 'blocked' | 'done' | 'cancelled';
+
+export interface RuntimeControlPlaneSchedule {
+  id: string;
+  title: string;
+  runtimeId: string;
+  status: RuntimeControlPlaneScheduleStatus;
+  trigger: {
+    type: RuntimeControlPlaneTriggerType;
+    cron?: string;
+    intervalMs?: number;
+    event?: string;
+    timezone?: string;
+  };
+  target: {
+    assistantId?: string;
+    command?: string;
+    skillId?: string;
+    cwdHint?: string;
+  };
+  policy: {
+    permissionMode: 'read' | 'ask' | 'auto';
+    overlap: 'skip' | 'enqueue' | 'cancel-previous';
+    retry: 'never' | 'once';
+    timeoutMs: number;
+  };
+  inputSummary?: string;
+  nextRunAt?: string;
+  lastRunId?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RuntimeControlPlaneApprovalRequest {
+  id: string;
+  runtimeId: string;
+  runId?: string;
+  scheduleId?: string;
+  status: RuntimeControlPlaneApprovalStatus;
+  scope: 'read' | 'write' | 'shell' | 'network' | 'mcp' | 'schedule' | 'user-extension' | 'unknown';
+  summary: string;
+  requestedAt: string;
+  resolvedAt?: string;
+  decision?: 'approve' | 'reject' | 'cancel';
+}
+
+export interface RuntimeControlPlaneWakeEvent {
+  id: string;
+  runtimeId?: string;
+  scheduleId?: string;
+  runId?: string;
+  status: RuntimeControlPlaneWakeStatus;
+  triggerAt: string;
+  claimedAt?: string;
+  completedAt?: string;
+  summary?: string;
+}
+
+export interface RuntimeControlPlaneFailureAudit {
+  id: string;
+  runtimeId?: string;
+  scheduleId?: string;
+  runId?: string;
+  kind: 'runtime' | 'permission' | 'tool' | 'timeout' | 'conflict' | 'unknown';
+  summary: string;
+  recoverable: boolean;
+  createdAt: string;
+}
+
+export interface RuntimeControlPlaneMailboxMessage {
+  id: string;
+  fromRuntimeId?: string;
+  toRuntimeId?: string;
+  threadId?: string;
+  status: RuntimeControlPlaneMailboxStatus;
+  subject: string;
+  summary: string;
+  createdAt: string;
+  deliveredAt?: string;
+}
+
+export interface RuntimeControlPlaneTask {
+  id: string;
+  title: string;
+  status: RuntimeControlPlaneTaskStatus;
+  priority: 'low' | 'normal' | 'high';
+  assigneeRuntimeId?: string;
+  sourceMessageId?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RuntimeControlPlaneSnapshot {
+  schemaVersion: 1;
+  updatedAt: string;
+  schedules: RuntimeControlPlaneSchedule[];
+  approvalQueue: RuntimeControlPlaneApprovalRequest[];
+  wakeEvents: RuntimeControlPlaneWakeEvent[];
+  failureAudits: RuntimeControlPlaneFailureAudit[];
+  mailbox: RuntimeControlPlaneMailboxMessage[];
+  tasks: RuntimeControlPlaneTask[];
+  summary: {
+    scheduleCount: number;
+    enabledScheduleCount: number;
+    pendingApprovalCount: number;
+    pendingWakeCount: number;
+    openTaskCount: number;
+    queuedMessageCount: number;
+  };
+}
+
 export type AgentRuntimeArtifactProjectionStatus = 'ready' | 'limited' | 'blocked' | 'unknown';
 export type AgentRuntimeArtifactOutputKind = AgentRuntimeHarnessCapabilities['output'][number];
 export type AgentRuntimeArtifactHandoffTarget =
