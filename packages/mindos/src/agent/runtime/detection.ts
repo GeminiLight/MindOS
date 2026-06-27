@@ -113,6 +113,56 @@ function normalizeConnectionType(value: unknown): AgentRuntimeAdapterMetadata['c
   return value === 'stdio' || value === 'cli' || value === 'http' || value === 'sse' ? value : undefined;
 }
 
+function normalizeAdapterOutputKind(value: unknown): NonNullable<AgentRuntimeAdapterMetadata['output']>['kinds'][number] | undefined {
+  return value === 'text'
+    || value === 'diff'
+    || value === 'checkpoint'
+    || value === 'artifact'
+    || value === 'branch'
+    || value === 'pr'
+    ? value
+    : undefined;
+}
+
+function normalizeAdapterOutputKinds(value: unknown): NonNullable<AgentRuntimeAdapterMetadata['output']>['kinds'] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const kinds = value
+    .map(normalizeAdapterOutputKind)
+    .filter((kind): kind is NonNullable<AgentRuntimeAdapterMetadata['output']>['kinds'][number] => !!kind);
+  return kinds.length > 0 ? Array.from(new Set(kinds)).sort() : undefined;
+}
+
+function normalizeAdapterOutputCapabilities(value: unknown): AgentRuntimeAdapterMetadata['output'] | undefined {
+  const entry = isRecord(value) ? value : { kinds: value };
+  const kinds = new Set<NonNullable<AgentRuntimeAdapterMetadata['output']>['kinds'][number]>();
+  for (const kind of normalizeAdapterOutputKinds(entry.kinds) ?? []) kinds.add(kind);
+  for (const kind of normalizeAdapterOutputKinds(entry.outputKinds) ?? []) kinds.add(kind);
+  for (const kind of normalizeAdapterOutputKinds(entry.reviewableOutputKinds) ?? []) kinds.add(kind);
+
+  const fileChanges = normalizeBoolean(entry.fileChanges);
+  const artifacts = normalizeBoolean(entry.artifacts);
+  const checkpoints = normalizeBoolean(entry.checkpoints);
+  const branches = normalizeBoolean(entry.branches);
+  const pullRequests = normalizeBoolean(entry.pullRequests);
+
+  if (fileChanges) kinds.add('diff');
+  if (artifacts) kinds.add('artifact');
+  if (checkpoints) kinds.add('checkpoint');
+  if (branches) kinds.add('branch');
+  if (pullRequests) kinds.add('pr');
+  if (kinds.size === 0) return undefined;
+  kinds.add('text');
+
+  return {
+    kinds: [...kinds].sort(),
+    ...(fileChanges !== undefined ? { fileChanges } : {}),
+    ...(artifacts !== undefined ? { artifacts } : {}),
+    ...(checkpoints !== undefined ? { checkpoints } : {}),
+    ...(branches !== undefined ? { branches } : {}),
+    ...(pullRequests !== undefined ? { pullRequests } : {}),
+  };
+}
+
 function normalizeCapabilityFlags<T>(
   value: unknown,
   keys: Array<keyof T & string>,
@@ -175,6 +225,8 @@ function normalizeAdapterMetadata(value: unknown): AgentRuntimeAdapterMetadata |
     ['loadSession', 'list', 'resume', 'fork', 'close'],
   );
   if (sessionCapabilities) metadata.sessionCapabilities = sessionCapabilities;
+  const output = normalizeAdapterOutputCapabilities(value.output ?? value.outputCapabilities ?? value);
+  if (output) metadata.output = output;
   if (isRecord(value.healthCheck)) {
     const command = sanitizeOptionalString(value.healthCheck.command ?? value.healthCheck.versionCommand, 240);
     const summary = sanitizeOptionalString(value.healthCheck.summary, 300);

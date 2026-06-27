@@ -353,6 +353,12 @@ export type AgentRuntimeAdapterCommandDiscovery =
   | 'unsupported'
   | 'unknown';
 
+export type AgentRuntimeAdapterOutputDiscovery =
+  | 'mindos-default'
+  | 'runtime-native'
+  | 'adapter-declared'
+  | 'unknown';
+
 export type AgentRuntimeAdapterCommandSource =
   | 'mindos'
   | 'runtime-native'
@@ -542,6 +548,17 @@ export interface AgentRuntimeAdapterContract {
     commands: AgentRuntimeAdapterDeclaredCommand[];
     summary: string;
   };
+  output: {
+    discovery: AgentRuntimeAdapterOutputDiscovery;
+    outputKinds: AgentRuntimeHarnessCapabilities['output'];
+    reviewableOutputKinds: AgentRuntimeHarnessCapabilities['output'];
+    supportsFileChanges: boolean;
+    supportsArtifacts: boolean;
+    supportsCheckpoints: boolean;
+    supportsBranches: boolean;
+    supportsPullRequests: boolean;
+    summary: string;
+  };
   protocol: {
     declaredConnectionType?: AcpAdapterConnectionType;
     supportsStreaming: boolean | null;
@@ -605,6 +622,17 @@ export interface AgentRuntimeAdapterCommandsProjection extends AgentRuntimeAdapt
   commands: AgentRuntimeAdapterDeclaredCommand[];
 }
 
+export interface AgentRuntimeAdapterOutputProjection extends AgentRuntimeAdapterProjectionFacetBase {
+  discovery: AgentRuntimeAdapterOutputDiscovery;
+  outputKinds: AgentRuntimeHarnessCapabilities['output'];
+  reviewableOutputKinds: AgentRuntimeHarnessCapabilities['output'];
+  supportsFileChanges: boolean;
+  supportsArtifacts: boolean;
+  supportsCheckpoints: boolean;
+  supportsBranches: boolean;
+  supportsPullRequests: boolean;
+}
+
 export interface AgentRuntimeAdapterProtocolProjection extends AgentRuntimeAdapterProjectionFacetBase {
   declaredConnectionType?: AcpAdapterConnectionType;
   supportsStreaming: boolean | null;
@@ -633,6 +661,7 @@ export interface AgentRuntimeAdapterProjection {
   configuration: AgentRuntimeAdapterConfigurationProjection;
   health: AgentRuntimeAdapterHealthProjection;
   commands: AgentRuntimeAdapterCommandsProjection;
+  output: AgentRuntimeAdapterOutputProjection;
   protocol: AgentRuntimeAdapterProtocolProjection;
   reasons: AgentRuntimeAdapterProjectionReason[];
   blockers?: string[];

@@ -14,6 +14,7 @@
 - **Artifact ledger 改为指针式记录**：runtime artifact 只记录 archive pointer 与 run 索引，不代存完整历史，为后续预览、文件变更面板和跨 runtime artifact 工作流打基础。
 - **Extension manifest v0 解析**：新增 AionUI 风格 manifest/parser 基础，后续可把 `contributes` 转成真实扩展入口与安装前检查。
 - **Runtime extension 预检与安装**：新增 product-owned `agent-runtimes/extensions` API，支持只读 preflight、显式确认安装、ACP adapter 安全写入与 catalog/surfaces 展示；manifest 中的 lifecycle、skill、assistant、MCP 等贡献仍只登记不执行、不复制。
+- **ACP adapter output contract**：ACP adapter metadata 与 AionUI-style extension manifest 可声明 `outputKinds` / `outputCapabilities`，runtime catalog、adapter projection、artifact/readiness projection 会据此识别 diff、artifact、checkpoint、branch、PR 等可审阅输出；未声明的通用 ACP adapter 仍保持 text-only 并显示兼容缺口。
 
 ### UI
 

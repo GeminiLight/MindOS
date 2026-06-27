@@ -1,7 +1,9 @@
 import type {
+  AgentRuntimeAdapterMetadata,
   AgentRuntimeCapabilities,
   AgentRuntimeHarnessCapabilities,
 } from './registry.js';
+import { normalizeRuntimeOutputKinds } from './adapter-output.js';
 
 export const mindosCapabilities: AgentRuntimeCapabilities = {
   ownsModelSelection: true,
@@ -110,3 +112,12 @@ export const acpHarnessCapabilities: AgentRuntimeHarnessCapabilities = {
   tools: ['shell', 'file'],
   output: ['text'],
 };
+
+export function acpHarnessCapabilitiesForAdapter(
+  metadata?: AgentRuntimeAdapterMetadata,
+): AgentRuntimeHarnessCapabilities {
+  return {
+    ...acpHarnessCapabilities,
+    output: normalizeRuntimeOutputKinds(metadata, acpHarnessCapabilities.output),
+  };
+}

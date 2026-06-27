@@ -135,6 +135,12 @@ describe('parseAcpAgentOverrides', () => {
             { name: '', description: 'ignored' },
             { name: 42 },
           ],
+          output: {
+            kinds: ['diff', 'artifact', 'token'],
+            fileChanges: true,
+            artifacts: true,
+            env: { SECRET_TOKEN: 'must-not-pass' },
+          },
           env: { API_KEY: 'must-not-pass' },
         },
       },
@@ -158,6 +164,11 @@ describe('parseAcpAgentOverrides', () => {
             { name: 'review', description: 'Review the active workspace.' },
             { name: 'review', description: 'duplicate is allowed by adapter order' },
           ],
+          output: {
+            kinds: ['artifact', 'diff', 'text'],
+            fileChanges: true,
+            artifacts: true,
+          },
         },
       },
     });
@@ -181,6 +192,9 @@ describe('parseAcpAgentOverrides', () => {
         promptCapabilities: { image: true, audio: false, embeddedContext: true, ignored: true },
         mcpCapabilities: { stdio: true, http: true, sse: false, headers: true },
         sessionCapabilities: { loadSession: true, list: true, resume: false, fork: true, close: true },
+        outputKinds: ['text', 'diff', 'artifact', 'token'],
+        fileChanges: true,
+        artifacts: true,
         healthCheck: {
           versionCommand: 'adapter-pack-agent --version',
           timeout: 3000,
@@ -214,6 +228,11 @@ describe('parseAcpAgentOverrides', () => {
           promptCapabilities: { image: true, audio: false, embeddedContext: true },
           mcpCapabilities: { stdio: true, http: true, sse: false },
           sessionCapabilities: { loadSession: true, list: true, resume: false, fork: true, close: true },
+          output: {
+            kinds: ['artifact', 'diff', 'text'],
+            fileChanges: true,
+            artifacts: true,
+          },
           healthCheck: {
             command: 'adapter-pack-agent --version',
             timeoutMs: 3000,
@@ -245,6 +264,12 @@ describe('parseAcpAgentOverrides', () => {
             authRequired: true,
             supportsStreaming: false,
             models: ['demo-model'],
+            outputCapabilities: {
+              kinds: ['artifact'],
+              fileChanges: true,
+              branches: true,
+              env: { SECRET_TOKEN: 'must-not-pass' },
+            },
             healthCheck: {
               versionCommand: 'codebuddy --version',
               timeout: 3000,
@@ -271,6 +296,11 @@ describe('parseAcpAgentOverrides', () => {
           authRequired: true,
           supportsStreaming: false,
           models: [{ id: 'demo-model', label: 'demo-model' }],
+          output: {
+            kinds: ['artifact', 'branch', 'diff', 'text'],
+            fileChanges: true,
+            branches: true,
+          },
           healthCheck: {
             command: 'codebuddy --version',
             timeoutMs: 3000,

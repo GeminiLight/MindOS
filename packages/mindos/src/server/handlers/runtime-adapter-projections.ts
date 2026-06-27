@@ -3,9 +3,11 @@ import type {
   AgentRuntimeAdapterConfigurationOwner,
   AgentRuntimeAdapterConnectionKind,
   AgentRuntimeAdapterHealthMode,
+  AgentRuntimeAdapterOutputDiscovery,
   AgentRuntimeCompatibilityOwner,
   AgentRuntimeCompatibilityRequirementStatus,
   AgentRuntimeDescriptor,
+  AgentRuntimeHarnessCapabilities,
   AgentRuntimeKind,
   AgentRuntimeOwner,
   AgentRuntimeResolvedCommandSource,
@@ -76,6 +78,17 @@ export type AgentRuntimeAdapterCommandsProjection = AdapterFacetBase & {
   }>;
 };
 
+export type AgentRuntimeAdapterOutputProjection = AdapterFacetBase & {
+  discovery: AgentRuntimeAdapterOutputDiscovery;
+  outputKinds: AgentRuntimeHarnessCapabilities['output'];
+  reviewableOutputKinds: AgentRuntimeHarnessCapabilities['output'];
+  supportsFileChanges: boolean;
+  supportsArtifacts: boolean;
+  supportsCheckpoints: boolean;
+  supportsBranches: boolean;
+  supportsPullRequests: boolean;
+};
+
 export type AgentRuntimeAdapterProtocolProjection = AdapterFacetBase & {
   declaredConnectionType?: AcpAdapterConnectionType;
   supportsStreaming: boolean | null;
@@ -104,6 +117,7 @@ export type AgentRuntimeAdapterProjection = {
   configuration: AgentRuntimeAdapterConfigurationProjection;
   health: AgentRuntimeAdapterHealthProjection;
   commands: AgentRuntimeAdapterCommandsProjection;
+  output: AgentRuntimeAdapterOutputProjection;
   protocol: AgentRuntimeAdapterProtocolProjection;
   reasons: AgentRuntimeAdapterProjectionReason[];
   blockers?: string[];
@@ -152,8 +166,9 @@ function buildRuntimeAdapterProjection(runtime: AgentRuntimeDescriptor): AgentRu
   const configuration = buildConfigurationProjection(runtime);
   const health = buildHealthProjection(runtime);
   const commands = buildCommandsProjection(runtime);
+  const output = buildOutputProjection(runtime);
   const protocol = buildProtocolProjection(runtime);
-  const facets = [connection, configuration, health, commands, protocol];
+  const facets = [connection, configuration, health, commands, output, protocol];
   const blockers = uniqSorted(facets.flatMap((facet) => facet.blockers ?? []));
 
   return {
@@ -167,18 +182,62 @@ function buildRuntimeAdapterProjection(runtime: AgentRuntimeDescriptor): AgentRu
       configuration,
       health,
       commands,
+      output,
       protocol,
     }),
     connection,
     configuration,
     health,
     commands,
+    output,
     protocol,
     reasons: [
       runtimeAvailableReason(runtime),
       ...facets.flatMap((facet) => facet.reasons),
     ],
     ...(blockers.length > 0 ? { blockers } : {}),
+  };
+}
+
+function buildOutputProjection(runtime: AgentRuntimeDescriptor): AgentRuntimeAdapterOutputProjection {
+  const contract = runtime.adapterContract.output;
+  const hasReviewableOutput = contract.reviewableOutputKinds.length > 0;
+  const missingOutputContract = contract.discovery === 'unknown' && !hasReviewableOutput;
+  const blockers: string[] = [];
+
+  if (runtime.status !== 'available') blockers.push('runtime-available');
+  if (missingOutputContract) blockers.push('adapter-output-contract');
+
+  const status = runtime.status !== 'available'
+    ? 'blocked'
+    : missingOutputContract
+      ? 'unknown'
+      : 'ready';
+
+  return {
+    status,
+    discovery: contract.discovery,
+    outputKinds: contract.outputKinds,
+    reviewableOutputKinds: contract.reviewableOutputKinds,
+    supportsFileChanges: contract.supportsFileChanges,
+    supportsArtifacts: contract.supportsArtifacts,
+    supportsCheckpoints: contract.supportsCheckpoints,
+    supportsBranches: contract.supportsBranches,
+    supportsPullRequests: contract.supportsPullRequests,
+    summary: contract.summary,
+    reasons: [
+      reason(
+        'adapter-output-contract',
+        hasReviewableOutput ? 'satisfied' : missingOutputContract ? 'unknown' : 'not-applicable',
+        outputOwner(contract.discovery),
+        hasReviewableOutput
+          ? `${runtime.name} declares reviewable output kinds: ${contract.reviewableOutputKinds.join(', ')}.`
+          : missingOutputContract
+            ? `${runtime.name} does not declare durable diff, artifact, checkpoint, branch, or PR output.`
+            : `${runtime.name} declares text-only output; artifact governance will rely on other runtime capabilities.`,
+      ),
+    ],
+    ...(blockers.length > 0 ? { blockers: uniqSorted(blockers) } : {}),
   };
 }
 
@@ -417,6 +476,7 @@ function resolveAdapterProjectionStatus(
     configuration: AdapterFacetBase;
     health: AdapterFacetBase;
     commands: AdapterFacetBase;
+    output: AdapterFacetBase;
     protocol: AdapterFacetBase;
   },
 ): AgentRuntimeAdapterProjectionStatus {
@@ -425,8 +485,21 @@ function resolveAdapterProjectionStatus(
     return 'blocked';
   }
   if (facets.connection.status === 'unknown' || facets.configuration.status === 'unknown') return 'unknown';
-  if (facets.health.status !== 'ready' || facets.commands.status !== 'ready' || facets.protocol.status !== 'ready') return 'limited';
+  if (
+    facets.health.status !== 'ready'
+    || facets.commands.status !== 'ready'
+    || facets.output.status !== 'ready'
+    || facets.protocol.status !== 'ready'
+  ) {
+    return 'limited';
+  }
   return 'ready';
+}
+
+function outputOwner(discovery: AgentRuntimeAdapterOutputDiscovery): AgentRuntimeCompatibilityOwner {
+  if (discovery === 'mindos-default') return 'mindos';
+  if (discovery === 'runtime-native' || discovery === 'adapter-declared') return 'external';
+  return 'shared';
 }
 
 function protocolOwner(runtime: AgentRuntimeDescriptor): AgentRuntimeCompatibilityOwner {

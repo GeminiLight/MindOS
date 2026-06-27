@@ -13,6 +13,19 @@ export type AcpTransportType = 'stdio' | 'npx' | 'uvx' | 'binary';
 /** ACP adapter connection surface declared by an adapter manifest. */
 export type AcpAdapterConnectionType = 'stdio' | 'cli' | 'http' | 'sse';
 
+/** Durable output kinds an ACP adapter can declare for MindOS artifact/readiness projections. */
+export type AcpAdapterOutputKind = 'text' | 'diff' | 'checkpoint' | 'artifact' | 'branch' | 'pr';
+
+/** Non-secret output contract metadata declared by an ACP adapter manifest or user config. */
+export interface AcpAdapterOutputCapabilities {
+  kinds: AcpAdapterOutputKind[];
+  fileChanges?: boolean;
+  artifacts?: boolean;
+  checkpoints?: boolean;
+  branches?: boolean;
+  pullRequests?: boolean;
+}
+
 /* ── ContentBlock (ACP prompt format) ─────────────────────────────────── */
 
 export type AcpContentBlock =

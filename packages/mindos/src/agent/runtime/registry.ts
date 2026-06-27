@@ -1,6 +1,7 @@
 import type {
   AcpAdapterConnectionType,
   AcpMcpCapabilities,
+  AcpAdapterOutputCapabilities,
   AcpPromptCapabilities,
   AcpSessionCapabilities,
   AcpAgentOverride,
@@ -223,6 +224,12 @@ export type AgentRuntimeAdapterCommandDiscovery =
   | 'unsupported'
   | 'unknown';
 
+export type AgentRuntimeAdapterOutputDiscovery =
+  | 'mindos-default'
+  | 'runtime-native'
+  | 'adapter-declared'
+  | 'unknown';
+
 export type AgentRuntimeAdapterCommandSource =
   | 'mindos'
   | 'runtime-native'
@@ -259,6 +266,7 @@ export type AgentRuntimeAdapterMetadata = {
     name: string;
     description?: string;
   }>;
+  output?: AcpAdapterOutputCapabilities;
 };
 
 export type AgentRuntimeAdapterContract = {
@@ -286,6 +294,17 @@ export type AgentRuntimeAdapterContract = {
   commands: {
     discovery: AgentRuntimeAdapterCommandDiscovery;
     commands: AgentRuntimeAdapterDeclaredCommand[];
+    summary: string;
+  };
+  output: {
+    discovery: AgentRuntimeAdapterOutputDiscovery;
+    outputKinds: AgentRuntimeHarnessCapabilities['output'];
+    reviewableOutputKinds: AgentRuntimeHarnessCapabilities['output'];
+    supportsFileChanges: boolean;
+    supportsArtifacts: boolean;
+    supportsCheckpoints: boolean;
+    supportsBranches: boolean;
+    supportsPullRequests: boolean;
     summary: string;
   };
   protocol: {

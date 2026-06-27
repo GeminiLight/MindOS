@@ -91,6 +91,8 @@ export type {
 } from './detect-local.js';
 export type {
   AcpAdapterConnectionType,
+  AcpAdapterOutputCapabilities,
+  AcpAdapterOutputKind,
   AcpAgentCapabilities,
   AcpAuthMethod,
   AcpAvailableCommand,

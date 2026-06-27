@@ -49,6 +49,11 @@ function aionStyleManifest() {
           acpArgs: ['--acp'],
           supportsStreaming: true,
           models: ['demo-model'],
+          outputCapabilities: {
+            kinds: ['artifact', 'diff', 'secret-output'],
+            fileChanges: true,
+            artifacts: true,
+          },
           env: { BUDDY_TOKEN: 'must-not-leak' },
           apiKeyFields: [{ key: 'BUDDY_TOKEN', type: 'password' }],
         },
@@ -180,6 +185,11 @@ describe('runtime extension install/preflight handlers', () => {
       adapterMetadata: expect.objectContaining({
         connectionType: 'cli',
         supportsStreaming: true,
+        output: {
+          kinds: ['artifact', 'diff', 'text'],
+          fileChanges: true,
+          artifacts: true,
+        },
       }),
     });
 

@@ -5,7 +5,7 @@ import {
 } from './adapter-contracts.js';
 import {
   acpCapabilities,
-  acpHarnessCapabilities,
+  acpHarnessCapabilitiesForAdapter,
   claudeCapabilities,
   claudeHarnessCapabilities,
   codexCapabilities,
@@ -201,6 +201,7 @@ export function mindosRuntimeDescriptor(checkedAt: string): AgentRuntimeDescript
 export function acpRuntimeDescriptor(agent: DetectedRuntimeAgent, checkedAt: string): AgentRuntimeDescriptor {
   const status = agent.status ?? 'available';
   const lifecycle = acpRuntimeLifecycle(acpCapabilities);
+  const harnessCapabilities = acpHarnessCapabilitiesForAdapter(agent.adapterMetadata);
   return {
     id: agent.id,
     runtimeId: agent.id,
@@ -214,11 +215,11 @@ export function acpRuntimeDescriptor(agent: DetectedRuntimeAgent, checkedAt: str
     sessionOwner: 'external',
     status,
     capabilities: acpCapabilities,
-    harnessCapabilities: acpHarnessCapabilities,
+    harnessCapabilities,
     lifecycle,
     compatibility: acpRuntimeCompatibilityProfile({
       capabilities: acpCapabilities,
-      harnessCapabilities: acpHarnessCapabilities,
+      harnessCapabilities,
       lifecycle,
       status,
     }),

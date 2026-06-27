@@ -2,10 +2,16 @@ import type {
   AgentRuntimeAdapterContract,
   AgentRuntimeAdapterDeclaredCommand,
   AgentRuntimeAdapterMetadata,
+  AgentRuntimeHarnessCapabilities,
   AgentRuntimeResolvedCommandSource,
   DetectedRuntimeAgent,
   NativeRuntimeId,
 } from './registry.js';
+import {
+  hasDeclaredRuntimeOutputContract,
+  normalizeRuntimeOutputKinds,
+  reviewableRuntimeOutputKinds,
+} from './adapter-output.js';
 
 function declaredCommands(
   metadata: AgentRuntimeAdapterMetadata | undefined,
@@ -38,6 +44,27 @@ function protocolContract(input: {
   };
 }
 
+function outputContract(input: {
+  summary: string;
+  discovery: AgentRuntimeAdapterContract['output']['discovery'];
+  metadata?: AgentRuntimeAdapterMetadata;
+  fallback?: readonly AgentRuntimeHarnessCapabilities['output'][number][];
+}): AgentRuntimeAdapterContract['output'] {
+  const outputKinds = normalizeRuntimeOutputKinds(input.metadata, input.fallback ?? ['text']);
+  const reviewableOutputKinds = reviewableRuntimeOutputKinds(outputKinds);
+  return {
+    discovery: input.discovery,
+    outputKinds,
+    reviewableOutputKinds,
+    supportsFileChanges: outputKinds.includes('diff'),
+    supportsArtifacts: outputKinds.includes('artifact'),
+    supportsCheckpoints: outputKinds.includes('checkpoint'),
+    supportsBranches: outputKinds.includes('branch'),
+    supportsPullRequests: outputKinds.includes('pr'),
+    summary: input.summary,
+  };
+}
+
 export function mindosAdapterContract(): AgentRuntimeAdapterContract {
   return {
     schemaVersion: 1,
@@ -62,6 +89,11 @@ export function mindosAdapterContract(): AgentRuntimeAdapterContract {
       commands: [],
       summary: 'MindOS slash commands are assembled from enabled MindOS skills; runtime-native command discovery is not needed.',
     },
+    output: outputContract({
+      discovery: 'mindos-default',
+      fallback: ['text', 'artifact'],
+      summary: 'MindOS emits text and pointer-backed artifacts through its internal runtime ledger.',
+    }),
     protocol: protocolContract({
       supportsStreaming: true,
       authRequired: false,
@@ -113,6 +145,15 @@ export function nativeAdapterContract(input: {
       commands: [],
       summary: 'Runtime-native command discovery is delegated to the external coding runtime when it exposes command events.',
     },
+    output: outputContract({
+      discovery: 'runtime-native',
+      fallback: isCodex
+        ? ['text', 'diff', 'checkpoint', 'artifact', 'branch', 'pr']
+        : ['text', 'diff', 'artifact'],
+      summary: isCodex
+        ? 'Codex owns reviewable runtime output including diffs, checkpoints, artifacts, branches, and PR references.'
+        : 'Claude Code owns reviewable runtime output including text, diffs, and artifacts.',
+    }),
     protocol: protocolContract({
       supportsStreaming: true,
       authRequired: true,
@@ -128,6 +169,7 @@ export function acpAdapterContract(agent: DetectedRuntimeAgent): AgentRuntimeAda
   const commands = declaredCommands(metadata);
   const resolvedCommand = agent.resolvedCommand?.cmd;
   const healthCommand = metadata?.healthCheck?.command;
+  const declaredOutput = hasDeclaredRuntimeOutputContract(metadata);
   return {
     schemaVersion: 1,
     connection: {
@@ -158,6 +200,13 @@ export function acpAdapterContract(agent: DetectedRuntimeAgent): AgentRuntimeAda
         ? 'This ACP adapter declares static slash commands for MindOS to surface in command-aware UI.'
         : 'MindOS has no adapter-specific command declaration yet; runtime command discovery remains unknown.',
     },
+    output: outputContract({
+      discovery: declaredOutput ? 'adapter-declared' : 'unknown',
+      metadata,
+      summary: declaredOutput
+        ? 'This ACP adapter declares durable output kinds that MindOS can project into artifact and file-change workflows.'
+        : 'MindOS only knows this ACP adapter can return text; durable artifacts, file changes, checkpoints, branches, and PR outputs are not declared.',
+    }),
     protocol: protocolContract({
       metadata,
       summary: metadata

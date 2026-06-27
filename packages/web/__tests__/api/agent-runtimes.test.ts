@@ -502,6 +502,12 @@ describe('/api/agent-runtimes', () => {
             promptCapabilities: { image: true },
             mcpCapabilities: { stdio: true },
             sessionCapabilities: { loadSession: true, list: true, resume: true },
+            output: {
+              kinds: ['text', 'diff', 'artifact', 'secret-output'],
+              fileChanges: true,
+              artifacts: true,
+              env: { TOKEN: 'secret' },
+            },
             healthCheck: {
               command: 'custom-acp doctor',
               timeoutMs: 4000,
@@ -548,6 +554,13 @@ describe('/api/agent-runtimes', () => {
             commands: [
               { name: 'review', description: 'Review the active workspace.', source: 'adapter-declared' },
             ],
+          }),
+          output: expect.objectContaining({
+            discovery: 'adapter-declared',
+            outputKinds: ['artifact', 'diff', 'text'],
+            reviewableOutputKinds: ['artifact', 'diff'],
+            supportsFileChanges: true,
+            supportsArtifacts: true,
           }),
           protocol: expect.objectContaining({
             declaredConnectionType: 'cli',

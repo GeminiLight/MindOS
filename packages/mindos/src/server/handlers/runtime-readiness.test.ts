@@ -85,6 +85,29 @@ function runtimes() {
       binaryPath: '/usr/local/bin/opaque',
       status: 'available',
     }, CHECKED_AT),
+    acpRuntimeDescriptor({
+      id: 'declared-acp',
+      name: 'Declared ACP',
+      binaryPath: '/usr/local/bin/declared',
+      status: 'available',
+      adapterMetadata: {
+        connectionType: 'cli',
+        authRequired: true,
+        supportsStreaming: true,
+        output: {
+          kinds: ['text', 'diff', 'artifact'],
+          fileChanges: true,
+          artifacts: true,
+        },
+        healthCheck: {
+          command: 'declared health',
+          timeoutMs: 5_000,
+        },
+        commands: [
+          { name: 'plan', description: 'Create a plan.' },
+        ],
+      },
+    }, CHECKED_AT),
   ];
 }
 
@@ -131,6 +154,7 @@ describe('runtime readiness projections', () => {
     const codex = payload.projections.find((projection) => projection.runtimeId === 'codex');
     const claude = payload.projections.find((projection) => projection.runtimeId === 'claude');
     const acp = payload.projections.find((projection) => projection.runtimeId === 'opaque-acp');
+    const declared = payload.projections.find((projection) => projection.runtimeId === 'declared-acp');
 
     expect(mindos).toMatchObject({
       overallStatus: 'usable',
@@ -198,6 +222,7 @@ describe('runtime readiness projections', () => {
       gaps: expect.arrayContaining([
         expect.objectContaining({ id: 'adapter-health-contract', category: 'adapter-contract' }),
         expect.objectContaining({ id: 'adapter-command-discovery', category: 'adapter-contract' }),
+        expect.objectContaining({ id: 'adapter-output-contract', category: 'adapter-contract' }),
         expect.objectContaining({ id: 'adapter-approval-contract', category: 'adapter-contract' }),
         expect.objectContaining({ id: 'adapter-artifact-contract', category: 'adapter-contract' }),
       ]),
@@ -211,6 +236,28 @@ describe('runtime readiness projections', () => {
       source: 'artifact-projection',
       sourceStatus: 'unknown',
       status: 'unknown',
+    });
+
+    expect(declared?.gaps.map((gap) => gap.id)).not.toContain('adapter-artifact-contract');
+    expect(declared?.gaps.map((gap) => gap.id)).not.toContain('adapter-output-contract');
+    expect(declared?.useCases.find((entry) => entry.id === 'adapter-contract')).toMatchObject({
+      source: 'adapter-projection',
+      sourceStatus: 'ready',
+      details: expect.objectContaining({
+        output: expect.objectContaining({
+          status: 'ready',
+          discovery: 'adapter-declared',
+          reviewableOutputKinds: ['artifact', 'diff'],
+        }),
+      }),
+    });
+    expect(declared?.useCases.find((entry) => entry.id === 'artifact-governance')).toMatchObject({
+      source: 'artifact-projection',
+      sourceStatus: 'ready',
+      status: 'ready',
+      details: expect.objectContaining({
+        reviewableOutputKinds: ['artifact', 'diff'],
+      }),
     });
   });
 

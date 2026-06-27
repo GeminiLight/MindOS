@@ -38,6 +38,19 @@ beforeEach(() => {
     installed: [
       { id: 'codex-acp', name: 'Codex', binaryPath: '/usr/local/bin/codex', status: 'available' },
       { id: 'opaque-acp', name: 'Opaque ACP', binaryPath: '/usr/local/bin/opaque', status: 'available' },
+      {
+        id: 'declared-acp',
+        name: 'Declared ACP',
+        binaryPath: '/usr/local/bin/declared',
+        status: 'available',
+        adapterMetadata: {
+          output: {
+            kinds: ['text', 'diff', 'artifact'],
+            fileChanges: true,
+            artifacts: true,
+          },
+        },
+      },
     ],
     notInstalled: [],
   });
@@ -58,6 +71,7 @@ describe('GET /api/agent-runtimes/artifact-projections', () => {
     const mindos = body.projections.find((projection: { runtimeId: string }) => projection.runtimeId === 'mindos');
     const codex = body.projections.find((projection: { runtimeId: string }) => projection.runtimeId === 'codex');
     const acp = body.projections.find((projection: { runtimeId: string }) => projection.runtimeId === 'opaque-acp');
+    const declared = body.projections.find((projection: { runtimeId: string }) => projection.runtimeId === 'declared-acp');
 
     expect(mindos).toMatchObject({
       status: 'ready',
@@ -81,6 +95,14 @@ describe('GET /api/agent-runtimes/artifact-projections', () => {
       artifactIndex: { status: 'ready' },
       blockers: ['adapter-artifact-contract'],
     });
+    expect(declared).toMatchObject({
+      status: 'ready',
+      outputKinds: ['artifact', 'diff', 'text'],
+      reviewableOutputKinds: ['artifact', 'diff'],
+      nativeReview: { supported: true },
+      artifactIndex: { status: 'ready' },
+    });
+    expect(declared.blockers ?? []).not.toContain('adapter-artifact-contract');
   });
 
   it('honors runtime filters', async () => {

@@ -6,6 +6,8 @@
 import type {
   AcpAdapterConnectionType,
   AcpMcpCapabilities,
+  AcpAdapterOutputCapabilities,
+  AcpAdapterOutputKind,
   AcpPromptCapabilities,
   AcpRegistryEntry,
   AcpSessionCapabilities,
@@ -59,6 +61,7 @@ export interface AcpAgentAdapterMetadata {
   promptCapabilities?: AcpPromptCapabilities;
   mcpCapabilities?: AcpMcpCapabilities;
   sessionCapabilities?: AcpAgentAdapterSessionCapabilities;
+  output?: AcpAdapterOutputCapabilities;
   healthCheck?: {
     command?: string;
     timeoutMs?: number;
@@ -498,6 +501,14 @@ function mergeAdapterMetadataInput(entry: Record<string, unknown>): unknown {
     promptCapabilities: nested.promptCapabilities ?? entry.promptCapabilities,
     mcpCapabilities: nested.mcpCapabilities ?? entry.mcpCapabilities,
     sessionCapabilities: nested.sessionCapabilities ?? entry.sessionCapabilities,
+    output: nested.output ?? nested.outputCapabilities ?? entry.output ?? entry.outputCapabilities,
+    outputKinds: nested.outputKinds ?? entry.outputKinds,
+    reviewableOutputKinds: nested.reviewableOutputKinds ?? entry.reviewableOutputKinds,
+    fileChanges: nested.fileChanges ?? entry.fileChanges,
+    artifacts: nested.artifacts ?? entry.artifacts,
+    checkpoints: nested.checkpoints ?? entry.checkpoints,
+    branches: nested.branches ?? entry.branches,
+    pullRequests: nested.pullRequests ?? entry.pullRequests,
     healthCheck: nested.healthCheck ?? entry.healthCheck,
     commands: nested.commands ?? entry.commands,
   };
@@ -520,6 +531,26 @@ function sanitizeBoolean(value: unknown): boolean | undefined {
 
 function sanitizeConnectionType(value: unknown): AcpAdapterConnectionType | undefined {
   return value === 'stdio' || value === 'cli' || value === 'http' || value === 'sse' ? value : undefined;
+}
+
+function sanitizeOutputKind(value: unknown): AcpAdapterOutputKind | undefined {
+  return value === 'text'
+    || value === 'diff'
+    || value === 'checkpoint'
+    || value === 'artifact'
+    || value === 'branch'
+    || value === 'pr'
+    ? value
+    : undefined;
+}
+
+function sanitizeOutputKinds(value: unknown): AcpAdapterOutputKind[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const result = Array.from(new Set(value
+    .map(sanitizeOutputKind)
+    .filter((kind): kind is AcpAdapterOutputKind => !!kind)))
+    .slice(0, 20);
+  return result.length > 0 ? result : undefined;
 }
 
 function sanitizeCapabilityFlags<T>(
@@ -556,6 +587,37 @@ function sanitizeModels(value: unknown): AcpAgentAdapterModelDeclaration[] | und
     .filter((model): model is AcpAgentAdapterModelDeclaration => model !== null)
     .slice(0, 100);
   return result.length > 0 ? result : undefined;
+}
+
+function sanitizeOutputCapabilities(value: unknown): AcpAdapterOutputCapabilities | undefined {
+  const entry = isRecord(value) ? value : { kinds: value };
+  const kinds = new Set<AcpAdapterOutputKind>();
+  for (const kind of sanitizeOutputKinds(entry.kinds) ?? []) kinds.add(kind);
+  for (const kind of sanitizeOutputKinds(entry.outputKinds) ?? []) kinds.add(kind);
+  for (const kind of sanitizeOutputKinds(entry.reviewableOutputKinds) ?? []) kinds.add(kind);
+
+  const fileChanges = sanitizeBoolean(entry.fileChanges);
+  const artifacts = sanitizeBoolean(entry.artifacts);
+  const checkpoints = sanitizeBoolean(entry.checkpoints);
+  const branches = sanitizeBoolean(entry.branches);
+  const pullRequests = sanitizeBoolean(entry.pullRequests);
+
+  if (fileChanges) kinds.add('diff');
+  if (artifacts) kinds.add('artifact');
+  if (checkpoints) kinds.add('checkpoint');
+  if (branches) kinds.add('branch');
+  if (pullRequests) kinds.add('pr');
+  if (kinds.size === 0) return undefined;
+  kinds.add('text');
+
+  return {
+    kinds: Array.from(kinds).sort(),
+    ...(fileChanges !== undefined ? { fileChanges } : {}),
+    ...(artifacts !== undefined ? { artifacts } : {}),
+    ...(checkpoints !== undefined ? { checkpoints } : {}),
+    ...(branches !== undefined ? { branches } : {}),
+    ...(pullRequests !== undefined ? { pullRequests } : {}),
+  };
 }
 
 function isCustomAcpAgentOverride(
@@ -621,6 +683,24 @@ function sanitizeAdapterMetadata(value: unknown): AcpAgentAdapterMetadata | unde
     ['loadSession', 'list', 'resume', 'fork', 'close'],
   );
   if (sessionCapabilities) metadata.sessionCapabilities = sessionCapabilities;
+  const outputObject: Record<string, unknown> = {
+    ...(isRecord(entry.output) ? entry.output : {}),
+    ...(isRecord(entry.outputCapabilities) ? entry.outputCapabilities : {}),
+  };
+  const output = sanitizeOutputCapabilities({
+    ...outputObject,
+    kinds: outputObject.kinds ?? (isRecord(entry.output) || isRecord(entry.outputCapabilities)
+      ? entry.outputKinds
+      : entry.output ?? entry.outputCapabilities ?? entry.outputKinds),
+    outputKinds: outputObject.outputKinds ?? entry.outputKinds,
+    reviewableOutputKinds: outputObject.reviewableOutputKinds ?? entry.reviewableOutputKinds,
+    fileChanges: outputObject.fileChanges ?? entry.fileChanges,
+    artifacts: outputObject.artifacts ?? entry.artifacts,
+    checkpoints: outputObject.checkpoints ?? entry.checkpoints,
+    branches: outputObject.branches ?? entry.branches,
+    pullRequests: outputObject.pullRequests ?? entry.pullRequests,
+  });
+  if (output) metadata.output = output;
   if (entry.healthCheck && typeof entry.healthCheck === 'object' && !Array.isArray(entry.healthCheck)) {
     const health = entry.healthCheck as Record<string, unknown>;
     const command = sanitizeOptionalString(health.command ?? health.versionCommand, 240);

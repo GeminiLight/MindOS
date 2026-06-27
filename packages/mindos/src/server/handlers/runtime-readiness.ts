@@ -323,6 +323,7 @@ function adapterUseCase(
       configuration: projection.configuration,
       health: projection.health,
       commands: projection.commands,
+      output: projection.output,
       protocol: projection.protocol,
     },
   });

@@ -41,6 +41,19 @@ function runtimes() {
       binaryPath: '/usr/local/bin/opaque',
       status: 'available',
     }, CHECKED_AT),
+    acpRuntimeDescriptor({
+      id: 'declared-acp',
+      name: 'Declared ACP',
+      binaryPath: '/usr/local/bin/declared',
+      status: 'available',
+      adapterMetadata: {
+        output: {
+          kinds: ['text', 'diff', 'artifact'],
+          fileChanges: true,
+          artifacts: true,
+        },
+      },
+    }, CHECKED_AT),
   ];
 }
 
@@ -53,6 +66,7 @@ describe('runtime artifact projections', () => {
     const codex = payload.projections.find((projection) => projection.runtimeId === 'codex');
     const claude = payload.projections.find((projection) => projection.runtimeId === 'claude');
     const acp = payload.projections.find((projection) => projection.runtimeId === 'opaque-acp');
+    const declared = payload.projections.find((projection) => projection.runtimeId === 'declared-acp');
 
     expect(mindos).toMatchObject({
       status: 'ready',
@@ -89,6 +103,17 @@ describe('runtime artifact projections', () => {
         expect.objectContaining({ id: 'artifact-index', status: 'satisfied' }),
       ]),
     });
+    expect(declared).toMatchObject({
+      status: 'ready',
+      outputKinds: ['artifact', 'diff', 'text'],
+      reviewableOutputKinds: ['artifact', 'diff'],
+      nativeReview: { supported: true },
+      nativeHandoffTargets: expect.arrayContaining(['artifact', 'diff', 'message']),
+      artifactIndex: { supported: true, status: 'ready' },
+      rollback: { supported: false, source: 'none' },
+      branchPr: { supported: false },
+    });
+    expect(declared?.blockers ?? []).not.toContain('adapter-artifact-contract');
   });
 
   it('includes safe artifact pointer metadata for preview workflows', () => {

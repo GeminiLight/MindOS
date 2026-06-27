@@ -216,6 +216,11 @@ beforeEach(() => {
           models: [{ id: 'cheap', label: 'Cheap' }],
           supportsStreaming: true,
           authRequired: false,
+          output: {
+            kinds: ['text', 'diff', 'artifact'],
+            fileChanges: true,
+            artifacts: true,
+          },
         },
       },
     ],
@@ -313,6 +318,25 @@ describe('GET /api/agent-runtimes/readiness', () => {
           servers: [{ name: 'filesystem', type: 'stdio' }],
           summary: 'Declared ACP inherited 1 MCP server(s) into the active ACP session.',
         },
+      }),
+    });
+    expect(declaredAcp.gaps.map((gap: { id: string }) => gap.id)).not.toContain('adapter-output-contract');
+    expect(declaredAcp.gaps.map((gap: { id: string }) => gap.id)).not.toContain('adapter-artifact-contract');
+    expect(declaredAcp.useCases.find((entry: { id: string }) => entry.id === 'adapter-contract')).toMatchObject({
+      source: 'adapter-projection',
+      details: expect.objectContaining({
+        output: expect.objectContaining({
+          discovery: 'adapter-declared',
+          reviewableOutputKinds: ['artifact', 'diff'],
+        }),
+      }),
+    });
+    expect(declaredAcp.useCases.find((entry: { id: string }) => entry.id === 'artifact-governance')).toMatchObject({
+      source: 'artifact-projection',
+      sourceStatus: 'ready',
+      status: 'ready',
+      details: expect.objectContaining({
+        reviewableOutputKinds: ['artifact', 'diff'],
       }),
     });
     expect(JSON.stringify(body)).not.toContain('must-not-leak');

@@ -62,6 +62,11 @@ function runtimeFixtures() {
         promptCapabilities: { image: true, embeddedContext: true },
         mcpCapabilities: { stdio: true, http: false, sse: false },
         sessionCapabilities: { loadSession: true, list: true, resume: true, fork: false, close: true },
+        output: {
+          kinds: ['text', 'diff', 'artifact'],
+          fileChanges: true,
+          artifacts: true,
+        },
         healthCheck: {
           command: 'TOKEN=must-not-leak declared health',
           timeoutMs: 5_000,
@@ -102,6 +107,13 @@ describe('runtime adapter projections', () => {
       },
       health: { status: 'ready', mode: 'mindos-native', owner: 'mindos' },
       commands: { status: 'ready', discovery: 'mindos-skills', commandCount: 0 },
+      output: {
+        status: 'ready',
+        discovery: 'mindos-default',
+        outputKinds: ['artifact', 'text'],
+        reviewableOutputKinds: ['artifact'],
+        supportsArtifacts: true,
+      },
       protocol: { status: 'ready', supportsStreaming: true, authRequired: false, modelCount: 0 },
     });
 
@@ -116,6 +128,14 @@ describe('runtime adapter projections', () => {
       },
       health: { status: 'ready', mode: 'mindos-native' },
       commands: { status: 'ready', discovery: 'runtime-event' },
+      output: {
+        status: 'ready',
+        discovery: 'runtime-native',
+        outputKinds: ['artifact', 'branch', 'checkpoint', 'diff', 'pr', 'text'],
+        reviewableOutputKinds: ['artifact', 'branch', 'checkpoint', 'diff', 'pr'],
+        supportsFileChanges: true,
+        supportsPullRequests: true,
+      },
       protocol: { status: 'ready', supportsStreaming: true, authRequired: true, modelCount: 0 },
     });
 
@@ -126,6 +146,7 @@ describe('runtime adapter projections', () => {
       connection: { status: 'blocked' },
       health: { status: 'blocked' },
       commands: { status: 'blocked' },
+      output: { status: 'blocked' },
       protocol: { status: 'blocked' },
     });
 
@@ -134,10 +155,12 @@ describe('runtime adapter projections', () => {
       connection: { status: 'ready', kind: 'stdio' },
       health: { status: 'unknown', mode: 'unknown' },
       commands: { status: 'unknown', discovery: 'unknown' },
+      output: { status: 'unknown', discovery: 'unknown', outputKinds: ['text'], reviewableOutputKinds: [] },
       protocol: { status: 'limited', supportsStreaming: null, authRequired: null },
       blockers: [
         'adapter-command-discovery',
         'adapter-health-contract',
+        'adapter-output-contract',
         'adapter-protocol-auth',
         'adapter-protocol-streaming',
       ],
@@ -167,6 +190,14 @@ describe('runtime adapter projections', () => {
         discovery: 'adapter-declared',
         commandCount: 2,
         commandNames: ['commit', 'plan'],
+      },
+      output: {
+        status: 'ready',
+        discovery: 'adapter-declared',
+        outputKinds: ['artifact', 'diff', 'text'],
+        reviewableOutputKinds: ['artifact', 'diff'],
+        supportsFileChanges: true,
+        supportsArtifacts: true,
       },
       protocol: {
         status: 'ready',
@@ -200,6 +231,7 @@ describe('runtime adapter projections', () => {
           blockers: [
             'adapter-command-discovery',
             'adapter-health-contract',
+            'adapter-output-contract',
             'adapter-protocol-auth',
             'adapter-protocol-streaming',
           ],
@@ -236,7 +268,7 @@ describe('runtime adapter projections', () => {
         supportsStreaming: true,
         authRequired: true,
       },
-      blockers: ['adapter-command-discovery', 'adapter-health-contract', 'adapter-protocol-connection'],
+      blockers: ['adapter-command-discovery', 'adapter-health-contract', 'adapter-output-contract', 'adapter-protocol-connection'],
     });
   });
 });

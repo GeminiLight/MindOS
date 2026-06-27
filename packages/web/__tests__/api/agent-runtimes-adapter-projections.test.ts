@@ -50,6 +50,11 @@ beforeEach(() => {
           promptCapabilities: { image: true },
           mcpCapabilities: { stdio: true, http: false },
           sessionCapabilities: { loadSession: true, list: true, resume: true },
+          output: {
+            kinds: ['text', 'diff', 'artifact'],
+            fileChanges: true,
+            artifacts: true,
+          },
           healthCheck: {
             command: 'TOKEN=must-not-leak declared health',
             timeoutMs: 5_000,
@@ -92,6 +97,12 @@ describe('GET /api/agent-runtimes/adapter-projections', () => {
       configuration: { modelSelection: 'mindos-session' },
       health: { mode: 'mindos-native' },
       commands: { discovery: 'mindos-skills' },
+      output: {
+        status: 'ready',
+        discovery: 'mindos-default',
+        outputKinds: ['artifact', 'text'],
+        reviewableOutputKinds: ['artifact'],
+      },
       protocol: { status: 'ready', supportsStreaming: true, authRequired: false },
     });
     expect(codex).toMatchObject({
@@ -100,6 +111,12 @@ describe('GET /api/agent-runtimes/adapter-projections', () => {
       configuration: { modelSelection: 'runtime-native' },
       health: { mode: 'mindos-native' },
       commands: { discovery: 'runtime-event' },
+      output: {
+        status: 'ready',
+        discovery: 'runtime-native',
+        outputKinds: ['artifact', 'branch', 'checkpoint', 'diff', 'pr', 'text'],
+        reviewableOutputKinds: ['artifact', 'branch', 'checkpoint', 'diff', 'pr'],
+      },
       protocol: { status: 'ready', supportsStreaming: true, authRequired: true },
     });
     expect(declared).toMatchObject({
@@ -107,6 +124,14 @@ describe('GET /api/agent-runtimes/adapter-projections', () => {
       connection: { kind: 'stdio' },
       health: { mode: 'adapter-declared', hasCommand: true, timeoutMs: 5_000 },
       commands: { discovery: 'adapter-declared', commandNames: ['commit', 'plan'] },
+      output: {
+        status: 'ready',
+        discovery: 'adapter-declared',
+        outputKinds: ['artifact', 'diff', 'text'],
+        reviewableOutputKinds: ['artifact', 'diff'],
+        supportsFileChanges: true,
+        supportsArtifacts: true,
+      },
       protocol: {
         status: 'ready',
         declaredConnectionType: 'cli',
@@ -124,6 +149,7 @@ describe('GET /api/agent-runtimes/adapter-projections', () => {
       blockers: [
         'adapter-command-discovery',
         'adapter-health-contract',
+        'adapter-output-contract',
         'adapter-protocol-auth',
         'adapter-protocol-streaming',
       ],
