@@ -47,6 +47,9 @@ interface AskHeaderProps {
   agentErrorByKind?: Partial<Record<'codex' | 'claude', string | null>>;
   runtimeReadinessByRuntimeId?: Record<string, AgentRuntimeReadinessProjection>;
   runtimeReadinessLoading?: boolean;
+  acpRuntimes?: Array<AgentRuntimeIdentity & Partial<Pick<AgentRuntimeDescriptor, 'status' | 'availability' | 'description' | 'binaryPath' | 'resolvedCommand'>>>;
+  acpLoading?: boolean;
+  acpError?: string | null;
   onRefreshNativeRuntimes?: () => void;
 }
 
@@ -63,7 +66,7 @@ export default memo(function AskHeader({
   sessions, activeSessionId, onLoadSession, onDeleteSession, onRenameSession, onTogglePinSession,
   messages, selectedAgentRuntime, onSelectAgentRuntime, runtimeSessionBinding,
   nativeRuntimes = [], notInstalledAgents = [], agentLoading, agentLoadingByKind, agentErrorByKind,
-  runtimeReadinessByRuntimeId, runtimeReadinessLoading, onRefreshNativeRuntimes,
+  runtimeReadinessByRuntimeId, runtimeReadinessLoading, acpRuntimes = [], acpLoading, acpError, onRefreshNativeRuntimes,
 }: AskHeaderProps) {
   const { t } = useLocale();
   const [isPending, startTransition] = useTransition();
@@ -294,6 +297,9 @@ export default memo(function AskHeader({
               errorByKind={agentErrorByKind}
               runtimeReadinessByRuntimeId={runtimeReadinessByRuntimeId}
               runtimeReadinessLoading={runtimeReadinessLoading}
+              acpRuntimes={acpRuntimes}
+              acpLoading={acpLoading}
+              acpError={acpError}
               onRefreshNativeRuntimes={onRefreshNativeRuntimes}
               disabled={isLoading}
             />

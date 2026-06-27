@@ -281,6 +281,57 @@ describe('/api/agent/sessions/:sessionId/turns native runtime routing', () => {
     expect(mockCreateMindosAgentRuntime).not.toHaveBeenCalled();
   });
 
+  it('preserves legacy selectedAcpAgent on simplified session turn requests', async () => {
+    const res = await POST(agentTurnRequest({
+      message: { text: 'Use the legacy ACP agent' },
+      selectedAcpAgent: { id: 'legacy-acp', name: 'Legacy ACP' },
+    }));
+    const text = await res.text();
+
+    expect(res.status).toBe(200);
+    expect(text).toContain('acp ok');
+    expect(capturedAcpOptions?.agentId).toBe('legacy-acp');
+    expect(capturedNativeOptions).toBeNull();
+    expect(mockCreateMindosAgentRuntime).not.toHaveBeenCalled();
+  });
+
+  it('honors explicit null runtime over legacy ACP on simplified session turn requests', async () => {
+    mockCreateMindosAgentRuntime.mockImplementation(async (options: Record<string, any>) => {
+      capturedMindosRuntimeOptions = options;
+      return {
+        systemPrompt: options.systemPrompt,
+        session: {
+          subscribe: vi.fn(),
+          prompt: vi.fn(),
+          steer: vi.fn(),
+          abort: vi.fn(),
+        },
+        agentRunContextResource: {},
+        llmHistoryMessages: [],
+        lastUserContent: 'Use MindOS instead',
+        lastUserImages: undefined,
+        fallbackTools: [],
+        apiKey: 'test-key',
+        modelName: 'claude-sonnet-4-20250514',
+        provider: 'anthropic',
+        baseUrl: '',
+      };
+    });
+
+    const res = await POST(agentTurnRequest({
+      message: { text: 'Use MindOS instead' },
+      selectedRuntime: null,
+      selectedAcpAgent: { id: 'legacy-acp', name: 'Legacy ACP' },
+    }));
+    const text = await res.text();
+
+    expect(res.status).toBe(200);
+    expect(text).toContain('mindos ok');
+    expect(capturedMindosRuntimeOptions?.turnPrompt).toContain('Use MindOS instead');
+    expect(mockRunMindosAcpAgentTurn).not.toHaveBeenCalled();
+    expect(capturedNativeOptions).toBeNull();
+  }, 15_000);
+
   it('blocks an explicitly selected skill when the current runtime match is blocked', async () => {
     seedFile('.skills/codex-only/SKILL.md', [
       '---',

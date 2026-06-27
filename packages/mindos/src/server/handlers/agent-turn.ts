@@ -272,6 +272,8 @@ function normalizeAgentSessionTurnBody(sessionId: string, body: unknown):
 
   const runtimeOptions = objectField(record, 'runtimeOptions');
   const acpRuntimeOptions = normalizeAcpRuntimeOptions(record.acpRuntimeOptions);
+  const selectedRuntime = selectedRuntimeField(record);
+  const selectedAcpAgent = selectedAcpAgentField(record);
   return {
     ok: true,
     body: {
@@ -301,9 +303,8 @@ function normalizeAgentSessionTurnBody(sessionId: string, body: unknown):
       ...(objectField(context, 'contextSelection') ?? objectField(record, 'contextSelection')
         ? { contextSelection: objectField(context, 'contextSelection') ?? objectField(record, 'contextSelection') }
         : {}),
-      ...(objectField(record, 'selectedRuntime')
-        ? { selectedRuntime: objectField(record, 'selectedRuntime') }
-        : {}),
+      ...(selectedRuntime !== undefined ? { selectedRuntime } : {}),
+      ...(selectedAcpAgent !== undefined ? { selectedAcpAgent } : {}),
       ...(objectField(record, 'runtimeBinding') ? { runtimeBinding: objectField(record, 'runtimeBinding') } : {}),
       ...(runtimeOptions ? { runtimeOptions } : {}),
       ...(acpRuntimeOptions ? { acpRuntimeOptions } : {}),
@@ -332,6 +333,18 @@ function stringField(record: Record<string, unknown> | undefined, key: string): 
 function arrayField(record: Record<string, unknown> | undefined, key: string): unknown[] | undefined {
   const value = record?.[key];
   return Array.isArray(value) ? value : undefined;
+}
+
+function selectedRuntimeField(record: Record<string, unknown>): MindosAgentTurnRequest['selectedRuntime'] | undefined {
+  if (!Object.prototype.hasOwnProperty.call(record, 'selectedRuntime')) return undefined;
+  if (record.selectedRuntime === null) return null;
+  return objectField(record, 'selectedRuntime') as MindosAgentTurnRequest['selectedRuntime'] | undefined;
+}
+
+function selectedAcpAgentField(record: Record<string, unknown>): MindosAgentTurnRequest['selectedAcpAgent'] | undefined {
+  if (!Object.prototype.hasOwnProperty.call(record, 'selectedAcpAgent')) return undefined;
+  if (record.selectedAcpAgent === null) return null;
+  return objectField(record, 'selectedAcpAgent') as MindosAgentTurnRequest['selectedAcpAgent'] | undefined;
 }
 
 function stringArrayField(record: Record<string, unknown> | undefined, key: string): string[] | undefined {

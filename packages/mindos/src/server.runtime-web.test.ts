@@ -1249,6 +1249,52 @@ describe('MindOS server contract: runtime, agent turn stream, static web', () =>
     ]);
   });
 
+  it('normalizes legacy ACP selection on simplified agent session turn requests', async () => {
+    const valid = handleAgentSessionTurnStream('session-from-path', {
+      message: { text: 'hello from ACP' },
+      selectedAcpAgent: { id: 'claude', name: 'Claude Code' },
+    }, {
+      agentTurnStream: async function* (input) {
+        yield { type: 'status', message: `${input.selectedRuntime?.kind}:${input.selectedRuntime?.id}` };
+        yield { type: 'done' };
+      },
+    });
+
+    expect(valid.ok).toBe(true);
+    if (!valid.ok) throw new Error('expected agent session turn stream');
+    const events = [];
+    for await (const event of valid.body) events.push(event);
+    expect(events).toEqual([
+      { type: 'status', message: 'acp:claude' },
+      { type: 'done' },
+    ]);
+  });
+
+  it('keeps explicit null runtime on simplified agent session turn requests', async () => {
+    const valid = handleAgentSessionTurnStream('session-from-path', {
+      message: { text: 'hello from MindOS' },
+      selectedRuntime: null,
+      selectedAcpAgent: { id: 'claude', name: 'Claude Code' },
+    }, {
+      agentTurnStream: async function* (input) {
+        yield {
+          type: 'status',
+          message: input.selectedRuntime === null ? 'runtime:none' : `${input.selectedRuntime?.kind}:${input.selectedRuntime?.id}`,
+        };
+        yield { type: 'done' };
+      },
+    });
+
+    expect(valid.ok).toBe(true);
+    if (!valid.ok) throw new Error('expected agent session turn stream');
+    const events = [];
+    for await (const event of valid.body) events.push(event);
+    expect(events).toEqual([
+      { type: 'status', message: 'runtime:none' },
+      { type: 'done' },
+    ]);
+  });
+
   it('preserves context Space paths for the trusted Web resolver instead of rewriting them', async () => {
     const valid = handleAgentTurnStream({
       messages: [{ role: 'user', content: 'hello' }],

@@ -351,11 +351,12 @@ describe('RuntimeIconSwitcher', () => {
       trigger.click();
     });
 
-    const mindosButton = Array.from(document.body.querySelectorAll('button'))
-      .find((button) => button.textContent?.includes('Use MindOS')) as HTMLButtonElement;
-    expect(mindosButton.disabled).toBe(false);
-    expect(mindosButton.textContent).toContain('Limited');
-    expect(mindosButton.textContent).toContain('MindOS: MindOS needs scheduler and wake-resume support before 24/7 automation is ready.');
+    expect(document.body.textContent).toContain('Use MindOS');
+    expect(document.body.textContent).toContain('Limited');
+    expect(document.body.textContent).toContain('MindOS: MindOS needs scheduler and wake-resume support before 24/7 automation is ready.');
+    const mindosSwitchButton = Array.from(document.body.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('Use MindOS'));
+    expect(mindosSwitchButton).toBeUndefined();
 
     await act(async () => {
       root.unmount();
@@ -410,6 +411,8 @@ describe('RuntimeIconSwitcher', () => {
     const codexButton = Array.from(document.body.querySelectorAll('button'))
       .find((button) => button.textContent?.includes('Run codex login first.')) as HTMLButtonElement;
     expect(codexButton.disabled).toBe(true);
+    expect(codexButton.children[1]?.textContent).toBe('Codex');
+    expect(codexButton.children[2]?.textContent).toBe('Sign in');
     await act(async () => {
       codexButton.click();
     });
@@ -469,11 +472,9 @@ describe('RuntimeIconSwitcher', () => {
     expect(document.body.textContent).not.toContain('node:internal');
     expect(document.body.textContent).not.toContain('Node.js v22.16.0');
 
-    const mindosButton = Array.from(document.body.querySelectorAll('button'))
-      .find((button) => button.textContent?.includes('Use MindOS')) as HTMLButtonElement;
     const codexButton = Array.from(document.body.querySelectorAll('button'))
       .find((button) => button.textContent?.includes('Codex is installed but incomplete.')) as HTMLButtonElement;
-    expect(mindosButton.disabled).toBe(false);
+    expect(document.body.textContent).toContain('Use MindOS');
     expect(codexButton.disabled).toBe(true);
     await act(async () => {
       codexButton.click();
@@ -583,6 +584,9 @@ describe('RuntimeIconSwitcher', () => {
 
     const refreshButton = document.body.querySelector('button[aria-label="Refresh local runtime status"]') as HTMLButtonElement;
     expect(refreshButton).toBeTruthy();
+    const configLink = document.body.querySelector('a[aria-label="Configure agents"]') as HTMLAnchorElement;
+    expect(configLink).toBeTruthy();
+    expect(configLink.getAttribute('href')).toBe('/agents?tab=agent');
     await act(async () => {
       refreshButton.click();
     });
@@ -647,16 +651,19 @@ describe('RuntimeIconSwitcher', () => {
     expect(document.body.textContent).not.toContain('Codex and Claude Code cold starts can take up to 20 seconds.');
 
     const codexButton = Array.from(document.body.querySelectorAll('button'))
-      .find((button) => button.textContent?.includes('Codex')) as HTMLButtonElement;
+      .find((button) => button.textContent?.includes('Codex')) as HTMLButtonElement | undefined;
+    const mindosButton = Array.from(document.body.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('Use MindOS')) as HTMLButtonElement;
     const claudeButton = Array.from(document.body.querySelectorAll('button'))
       .find((button) => button.textContent?.includes('Claude Code')) as HTMLButtonElement;
-    expect(codexButton.disabled).toBe(true);
+    expect(codexButton).toBeUndefined();
+    expect(mindosButton.disabled).toBe(false);
     expect(claudeButton.disabled).toBe(true);
     await act(async () => {
-      codexButton.click();
+      mindosButton.click();
       claudeButton.click();
     });
-    expect(onSelect).not.toHaveBeenCalled();
+    expect(onSelect).toHaveBeenCalledWith(null);
 
     await act(async () => {
       root.unmount();
@@ -689,13 +696,13 @@ describe('RuntimeIconSwitcher', () => {
     });
 
     const mindosButton = Array.from(document.body.querySelectorAll('button'))
-      .find((button) => button.textContent?.includes('Use MindOS')) as HTMLButtonElement;
+      .find((button) => button.textContent?.includes('Use MindOS')) as HTMLButtonElement | undefined;
     const codexButton = Array.from(document.body.querySelectorAll('button'))
       .find((button) => button.textContent?.includes('Codex')) as HTMLButtonElement;
     const claudeButton = Array.from(document.body.querySelectorAll('button'))
       .find((button) => button.textContent?.includes('Claude Code')) as HTMLButtonElement;
 
-    expect(mindosButton.disabled).toBe(false);
+    expect(mindosButton).toBeUndefined();
     expect(codexButton.disabled).toBe(true);
     expect(codexButton.textContent).toContain('Checking...');
     expect(codexButton.querySelector('img[src="/agent-icons/openai.svg"]')).toBeTruthy();
@@ -895,6 +902,147 @@ describe('RuntimeIconSwitcher', () => {
       .find((button) => button.textContent?.includes('Codex')) as HTMLButtonElement;
     expect(codexButton.disabled).toBe(true);
     expect(codexButton.textContent).toContain('Checking...');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('uses the ACP descriptor for the current runtime without repeating it as a switch target', async () => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(
+        <RuntimeIconSwitcher
+          selectedRuntime={{ id: 'opencode', name: 'OpenCode', kind: 'acp' }}
+          onSelect={vi.fn()}
+          nativeRuntimes={[]}
+          acpRuntimes={[
+            {
+              id: 'opencode',
+              name: 'OpenCode',
+              kind: 'acp',
+              status: 'available',
+              description: 'ACP coding agent.',
+              binaryPath: '/usr/local/bin/opencode',
+            },
+            {
+              id: 'aider',
+              name: 'Aider',
+              kind: 'acp',
+              status: 'available',
+              description: 'ACP-compatible pair programming agent.',
+              binaryPath: '/usr/local/bin/aider',
+            },
+          ]}
+        />,
+      );
+    });
+
+    const trigger = host.querySelector('button[aria-haspopup="listbox"]') as HTMLButtonElement;
+    expect(trigger.title).toBe('OpenCode');
+    expect(trigger.querySelector('img[src="/agent-icons/opencode.svg"]')).toBeTruthy();
+
+    await act(async () => {
+      trigger.click();
+    });
+
+    expect(document.body.textContent).toContain('OpenCode');
+    expect(document.body.textContent).toContain('ACP coding agent.');
+    expect(Array.from(document.body.querySelectorAll('button'))
+      .filter((button) => button.textContent?.includes('OpenCode'))).toHaveLength(0);
+
+    expect(Array.from(document.body.querySelectorAll('button'))
+      .some((button) => button.textContent?.includes('More agents'))).toBe(false);
+    expect(document.body.textContent).toContain('Aider');
+    expect(document.body.textContent).toContain('Collapse');
+    expect(Array.from(document.body.querySelectorAll('button'))
+      .filter((button) => button.textContent?.includes('OpenCode'))).toHaveLength(0);
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('expands More agents to select available ACP runtimes', async () => {
+    const onSelect = vi.fn();
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(
+        <RuntimeIconSwitcher
+          selectedRuntime={null}
+          onSelect={onSelect}
+          nativeRuntimes={[]}
+          acpRuntimes={[
+            {
+              id: 'opencode',
+              name: 'OpenCode',
+              kind: 'acp',
+              status: 'available',
+              description: 'ACP coding agent.',
+              binaryPath: '/usr/local/bin/opencode',
+            },
+            {
+              id: 'cursor-agent',
+              name: 'Cursor Agent',
+              kind: 'acp',
+              status: 'signed-out',
+              availability: {
+                checkedAt: '2026-06-09T00:00:00.000Z',
+                sources: ['acp-detect'],
+                reason: 'Cursor Agent needs sign-in.',
+              },
+            },
+          ]}
+        />,
+      );
+    });
+
+    const trigger = host.querySelector('button[aria-haspopup="listbox"]') as HTMLButtonElement;
+    await act(async () => {
+      trigger.click();
+    });
+
+    expect(document.body.textContent).toContain('More agents');
+    expect(document.body.textContent).not.toContain('OpenCode');
+
+    const moreButton = Array.from(document.body.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('More agents')) as HTMLButtonElement;
+    await act(async () => {
+      moreButton.click();
+    });
+
+    expect(document.body.textContent).not.toContain('More agents');
+    expect(document.body.textContent).toContain('Collapse');
+
+    const openCodeButton = Array.from(document.body.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('OpenCode')) as HTMLButtonElement;
+    const cursorButton = Array.from(document.body.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('Cursor Agent')) as HTMLButtonElement;
+
+    expect(openCodeButton.disabled).toBe(false);
+    expect(openCodeButton.children[0]?.querySelector('img[src="/agent-icons/opencode.svg"]')).toBeTruthy();
+    expect(cursorButton.disabled).toBe(true);
+    expect(cursorButton.textContent).toContain('Sign in');
+    expect(cursorButton.children[0]?.querySelector('img[src="/agent-icons/cursor.svg"]')).toBeTruthy();
+
+    await act(async () => {
+      cursorButton.click();
+      openCodeButton.click();
+    });
+
+    expect(onSelect).toHaveBeenCalledWith({
+      id: 'opencode',
+      name: 'OpenCode',
+      kind: 'acp',
+      binaryPath: '/usr/local/bin/opencode',
+      status: 'available',
+    });
 
     await act(async () => {
       root.unmount();

@@ -281,6 +281,7 @@ vi.mock('@/components/ask/AskHeader', () => ({
     selectedAgentRuntime,
     onSelectAgentRuntime,
     nativeRuntimes,
+    acpRuntimes,
     agentLoading,
     agentLoadingByKind,
   }: {
@@ -289,9 +290,10 @@ vi.mock('@/components/ask/AskHeader', () => ({
     onToggleHistory?: () => void;
     onReset?: () => void;
     onDeleteSession?: (id: string) => void;
-    selectedAgentRuntime: { id: string; name: string; kind: 'acp' | 'codex' | 'claude'; binaryPath?: string } | null;
-    onSelectAgentRuntime: (agent: { id: string; name: string; kind: 'acp' | 'codex' | 'claude'; binaryPath?: string } | null) => void;
+    selectedAgentRuntime: { id: string; name: string; kind: 'acp' | 'codex' | 'claude'; binaryPath?: string; status?: string; description?: string } | null;
+    onSelectAgentRuntime: (agent: { id: string; name: string; kind: 'acp' | 'codex' | 'claude'; binaryPath?: string; status?: string; description?: string } | null) => void;
     nativeRuntimes?: unknown[];
+    acpRuntimes?: unknown[];
     agentLoading?: boolean;
     agentLoadingByKind?: Partial<Record<'codex' | 'claude', boolean>>;
   }) => (
@@ -303,7 +305,16 @@ vi.mock('@/components/ask/AskHeader', () => ({
         && typeof (runtime as { id?: unknown }).id === 'string'
         && typeof (runtime as { name?: unknown }).name === 'string'
       ));
-      mockAskHeaderProps({ sessions, activeSessionId, selectedAgentRuntime, nativeRuntimes, agentLoading, agentLoadingByKind });
+      const findAcpRuntime = (id: string) => acpRuntimes?.find((runtime): runtime is { id: string; name: string; kind: 'acp'; binaryPath?: string; status?: string; description?: string } => (
+        !!runtime
+        && typeof runtime === 'object'
+        && (runtime as { kind?: unknown }).kind === 'acp'
+        && (runtime as { id?: unknown }).id === id
+        && typeof (runtime as { name?: unknown }).name === 'string'
+      ));
+      const openCodeRuntime = findAcpRuntime('opencode') ?? { id: 'opencode', name: 'OpenCode', kind: 'acp' as const };
+      const cursorRuntime = findAcpRuntime('cursor-agent') ?? { id: 'cursor-agent', name: 'Cursor Agent', kind: 'acp' as const };
+      mockAskHeaderProps({ sessions, activeSessionId, selectedAgentRuntime, nativeRuntimes, acpRuntimes, agentLoading, agentLoadingByKind });
       return (
         <div>
           <div data-testid="runtime-switcher">{selectedAgentRuntime?.name ?? 'MindOS'}</div>
@@ -318,6 +329,8 @@ vi.mock('@/components/ask/AskHeader', () => ({
           <button type="button" onClick={() => onSelectAgentRuntime({ id: 'claude-code', name: 'Claude Code', kind: 'acp' })}>Select Claude</button>
           <button type="button" onClick={() => onSelectAgentRuntime({ id: 'claude', name: 'Claude Code', kind: 'claude' })}>Select Claude Native</button>
           <button type="button" onClick={() => onSelectAgentRuntime(codexRuntime ?? { id: 'codex', name: 'Codex', kind: 'codex' })}>Select Codex</button>
+          <button type="button" onClick={() => onSelectAgentRuntime(openCodeRuntime)}>Select OpenCode</button>
+          <button type="button" onClick={() => onSelectAgentRuntime(cursorRuntime)}>Select Cursor Agent</button>
         </div>
       );
     })()
@@ -1523,6 +1536,157 @@ describe('ChatContent ACP session binding', () => {
     expect(fetchMock.mock.calls.some(([url]) => isAgentTurnUrl(url))).toBe(false);
     expect(host.querySelector('[data-testid="history-session-list"]')).toBeNull();
     expect(host.querySelector('[data-testid="runtime-switcher"]')?.textContent).toBe('Codex');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('passes detected ACP runtimes to the header agent switcher', async () => {
+    mockRuntimeDescriptors = [
+      {
+        id: 'opencode',
+        name: 'OpenCode',
+        kind: 'acp',
+        status: 'available',
+        description: 'ACP coding agent.',
+        binaryPath: '/tmp/opencode',
+      },
+      {
+        id: 'cursor-agent',
+        name: 'Cursor Agent',
+        kind: 'acp',
+        status: 'signed-out',
+        availability: {
+          checkedAt: '2026-06-09T00:00:00.000Z',
+          sources: ['acp-detect'],
+          reason: 'Cursor Agent needs sign-in.',
+        },
+      },
+    ];
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<ChatContent visible variant="panel" />);
+    });
+
+    expect(mockAskHeaderProps).toHaveBeenLastCalledWith(expect.objectContaining({
+      acpRuntimes: expect.arrayContaining([
+        expect.objectContaining({ id: 'opencode', name: 'OpenCode', kind: 'acp', status: 'available' }),
+        expect.objectContaining({ id: 'cursor-agent', name: 'Cursor Agent', kind: 'acp', status: 'signed-out' }),
+      ]),
+    }));
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('selects an available ACP runtime from the header and submits through the runtime lane', async () => {
+    mockPersistedProviderModel = { provider: 'openai', model: 'gpt-test' };
+    mockRuntimeDescriptors = [
+      {
+        id: 'opencode',
+        name: 'OpenCode',
+        kind: 'acp',
+        status: 'available',
+        description: 'ACP coding agent.',
+        binaryPath: '/tmp/opencode',
+      },
+    ];
+    mockActiveSession = emptySession;
+    mockSessions = [emptySession];
+    mockActiveSessionId = emptySession.id;
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<ChatContent visible variant="panel" initialMessage="use opencode" />);
+    });
+
+    const selectOpenCode = Array.from(host.querySelectorAll('button')).find((button) => button.textContent === 'Select OpenCode') as HTMLButtonElement;
+    await act(async () => {
+      selectOpenCode.click();
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(host.querySelector('[data-testid="runtime-switcher"]')?.textContent).toBe('OpenCode');
+
+    const form = host.querySelector('form') as HTMLFormElement;
+    await act(async () => {
+      if (typeof form.requestSubmit === 'function') {
+        form.requestSubmit();
+      } else {
+        form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      }
+    });
+
+    const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
+    const agentTurnCall = fetchMock.mock.calls.find(([url]) => isAgentTurnUrl(url));
+    expect(agentTurnCall).toBeTruthy();
+    const requestBody = JSON.parse(String((agentTurnCall?.[1] as RequestInit | undefined)?.body));
+    expect(requestBody.selectedAcpAgent).toEqual({ id: 'opencode', name: 'OpenCode' });
+    expect(requestBody.selectedRuntime).toEqual({ id: 'opencode', name: 'OpenCode', kind: 'acp', binaryPath: '/tmp/opencode' });
+    expect(requestBody).not.toHaveProperty('providerOverride');
+    expect(requestBody).not.toHaveProperty('modelOverride');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('blocks sending when the selected ACP runtime is explicitly unavailable', async () => {
+    mockRuntimeDescriptors = [
+      {
+        id: 'cursor-agent',
+        name: 'Cursor Agent',
+        kind: 'acp',
+        status: 'signed-out',
+        description: 'ACP coding agent.',
+        availability: {
+          checkedAt: '2026-06-09T00:00:00.000Z',
+          sources: ['acp-detect'],
+          reason: 'Cursor Agent needs sign-in.',
+        },
+      },
+    ];
+    mockActiveSession = emptySession;
+    mockSessions = [emptySession];
+    mockActiveSessionId = emptySession.id;
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<ChatContent visible variant="panel" initialMessage="use cursor" />);
+    });
+
+    const selectCursor = Array.from(host.querySelectorAll('button')).find((button) => button.textContent === 'Select Cursor Agent') as HTMLButtonElement;
+    await act(async () => {
+      selectCursor.click();
+    });
+
+    expect(host.querySelector('[data-testid="runtime-switcher"]')?.textContent).toBe('Cursor Agent');
+    expect(host.textContent).toContain('Cursor Agent is signed out. Cursor Agent needs sign-in.');
+
+    const form = host.querySelector('form') as HTMLFormElement;
+    await act(async () => {
+      if (typeof form.requestSubmit === 'function') {
+        form.requestSubmit();
+      } else {
+        form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      }
+    });
+
+    expect(vi.mocked(globalThis.fetch).mock.calls.some(([url]) => isAgentTurnUrl(url))).toBe(false);
 
     await act(async () => {
       root.unmount();

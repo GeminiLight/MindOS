@@ -50,6 +50,7 @@ import {
   resetSession as resetStoredSession,
 } from '@/lib/agent-session-store';
 import { cn } from '@/lib/utils';
+import { useAcpDetection } from '@/hooks/useAcpDetection';
 import { useNativeRuntimeDetection } from '@/hooks/useNativeRuntimeDetection';
 import { useRuntimeReadiness } from '@/hooks/useRuntimeReadiness';
 import type { AcpAgentSelection } from '@/hooks/useAskModal';
@@ -281,6 +282,7 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
   const mention = useMention();
   const slash = useSlashCommand({ runtimeCommands: acpRuntimeCommands });
   const nativeDetection = useNativeRuntimeDetection();
+  const acpDetection = useAcpDetection();
   const runtimeReadiness = useRuntimeReadiness({ visible, permissionMode });
   const nativeRuntimes = useMemo<Array<AgentRuntimeIdentity & Partial<Pick<AgentRuntimeDescriptor, 'status' | 'availability' | 'installCmd' | 'packageName' | 'binaryPath' | 'runtimeBridge'>>>>(() => {
     return nativeDetection.runtimes
@@ -297,6 +299,39 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
         ...(runtime.packageName ? { packageName: runtime.packageName } : {}),
       }));
   }, [nativeDetection.runtimes]);
+  const acpRuntimes = useMemo<Array<AgentRuntimeIdentity & Partial<Pick<AgentRuntimeDescriptor, 'status' | 'availability' | 'description' | 'binaryPath' | 'resolvedCommand'>>>>(() => {
+    const descriptors = acpDetection.runtimes
+      .filter((runtime) => runtime.kind === 'acp')
+      .map((runtime) => ({
+        id: runtime.id,
+        name: runtime.name,
+        kind: runtime.kind,
+        status: runtime.status,
+        availability: runtime.availability,
+        ...(runtime.description ? { description: runtime.description } : {}),
+        ...(runtime.binaryPath ? { binaryPath: runtime.binaryPath } : {}),
+        ...(runtime.resolvedCommand ? { resolvedCommand: runtime.resolvedCommand } : {}),
+      }));
+    const descriptorIds = new Set(descriptors.map((runtime) => runtime.id));
+    const detectedOnly = acpDetection.installedAgents
+      .filter((agent) => !descriptorIds.has(agent.id))
+      .map((agent) => ({
+        id: agent.id,
+        name: agent.name,
+        kind: 'acp' as const,
+        status: agent.status ?? 'available',
+        ...(agent.binaryPath ? { binaryPath: agent.binaryPath } : {}),
+        ...(agent.reason ? {
+          availability: {
+            checkedAt: new Date().toISOString(),
+            sources: ['acp-detect' as const],
+            reason: agent.reason,
+          },
+        } : {}),
+        ...(agent.resolvedCommand ? { resolvedCommand: agent.resolvedCommand } : {}),
+      }));
+    return [...descriptors, ...detectedOnly];
+  }, [acpDetection.installedAgents, acpDetection.runtimes]);
   const selectedRuntimeChecking = useMemo(() => {
     if (!selectedAgentRuntime || selectedAgentRuntime.kind === 'mindos') return false;
     const nativeKind = selectedAgentRuntime.kind;
@@ -305,6 +340,14 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
   }, [nativeDetection.loadingByKind, selectedAgentRuntime]);
   const selectedRuntimeUnavailable = useMemo(() => {
     if (!selectedAgentRuntime || selectedAgentRuntime.kind === 'mindos') return null;
+    if (selectedAgentRuntime.kind === 'acp') {
+      const descriptor = acpRuntimes.find((runtime) => runtime.kind === 'acp' && runtime.id === selectedAgentRuntime.id);
+      if (!descriptor?.status || descriptor.status === 'available') return null;
+      return {
+        status: descriptor.status,
+        reason: descriptor.availability?.reason ?? descriptor.description,
+      };
+    }
     const nativeKind = selectedAgentRuntime.kind;
     if (nativeKind !== 'codex' && nativeKind !== 'claude') return null;
     const detectionError = nativeDetection.errorByKind[nativeKind];
@@ -329,7 +372,7 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
       status: descriptor.status,
       reason: descriptor.availability?.reason,
     };
-  }, [nativeDetection.errorByKind, nativeDetection.loadingByKind, nativeDetection.runtimes, selectedAgentRuntime]);
+  }, [acpRuntimes, nativeDetection.errorByKind, nativeDetection.loadingByKind, nativeDetection.runtimes, selectedAgentRuntime]);
   const [aiConfigStatus, setAiConfigStatus] = useState<'unknown' | 'configured' | 'not-configured'>('unknown');
 
   useEffect(() => {
@@ -1258,9 +1301,10 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
   }, []);
   const handleRefreshRuntimeState = useCallback(() => {
     nativeDetection.refresh();
+    acpDetection.refresh();
     runtimeReadiness.refresh();
     void runtimeSessionProjection.refresh();
-  }, [nativeDetection.refresh, runtimeReadiness.refresh, runtimeSessionProjection.refresh]);
+  }, [acpDetection.refresh, nativeDetection.refresh, runtimeReadiness.refresh, runtimeSessionProjection.refresh]);
 
   return (
     <div className="flex min-h-0 w-full flex-col h-full">
@@ -1292,6 +1336,9 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
         agentErrorByKind={nativeDetection.errorByKind}
         runtimeReadinessByRuntimeId={runtimeReadiness.readinessByRuntimeId}
         runtimeReadinessLoading={runtimeReadiness.loading}
+        acpRuntimes={acpRuntimes}
+        acpLoading={acpDetection.loading}
+        acpError={acpDetection.error}
         onRefreshNativeRuntimes={handleRefreshRuntimeState}
       />
 

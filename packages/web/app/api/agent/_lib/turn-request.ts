@@ -260,6 +260,8 @@ export function normalizeAgentSessionTurnBody(
 
   const runtimeOptions = record.runtimeOptions;
   const acpRuntimeOptions = normalizeAcpRuntimeOptions(record.acpRuntimeOptions);
+  const selectedRuntime = selectedRuntimeField(record);
+  const selectedAcpAgent = selectedAcpAgentField(record);
   const message: FrontendMessage = {
     role: 'user',
     content: text ?? '',
@@ -291,9 +293,8 @@ export function normalizeAgentSessionTurnBody(
       ...(objectField(context, 'contextSelection') ?? objectField(record, 'contextSelection')
         ? { contextSelection: (objectField(context, 'contextSelection') ?? objectField(record, 'contextSelection')) as AgentTurnRequestBody['contextSelection'] }
         : {}),
-      ...(objectField(record, 'selectedRuntime')
-        ? { selectedRuntime: objectField(record, 'selectedRuntime') as AgentTurnRequestBody['selectedRuntime'] }
-        : {}),
+      ...(selectedRuntime !== undefined ? { selectedRuntime } : {}),
+      ...(selectedAcpAgent !== undefined ? { selectedAcpAgent } : {}),
       ...(objectField(record, 'runtimeBinding')
         ? { runtimeBinding: objectField(record, 'runtimeBinding') as AgentTurnRequestBody['runtimeBinding'] }
         : {}),
@@ -358,6 +359,18 @@ function stringField(record: Record<string, unknown> | undefined, key: string): 
 function arrayField(record: Record<string, unknown> | undefined, key: string): unknown[] | undefined {
   const value = record?.[key];
   return Array.isArray(value) ? value : undefined;
+}
+
+function selectedRuntimeField(record: Record<string, unknown>): AgentTurnRequestBody['selectedRuntime'] | undefined {
+  if (!Object.prototype.hasOwnProperty.call(record, 'selectedRuntime')) return undefined;
+  if (record.selectedRuntime === null) return null;
+  return objectField(record, 'selectedRuntime') as AgentTurnRequestBody['selectedRuntime'] | undefined;
+}
+
+function selectedAcpAgentField(record: Record<string, unknown>): AgentTurnRequestBody['selectedAcpAgent'] | undefined {
+  if (!Object.prototype.hasOwnProperty.call(record, 'selectedAcpAgent')) return undefined;
+  if (record.selectedAcpAgent === null) return null;
+  return objectField(record, 'selectedAcpAgent') as AgentTurnRequestBody['selectedAcpAgent'] | undefined;
 }
 
 function stringArrayField(record: Record<string, unknown> | undefined, key: string): string[] | undefined {

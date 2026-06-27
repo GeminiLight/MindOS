@@ -143,6 +143,8 @@ vi.mock('@/lib/settings', () => ({
     mindRoot: '',
   }),
   writeSettings: vi.fn(),
+  readBaseUrlCompat: vi.fn(() => ({})),
+  writeBaseUrlCompat: vi.fn(),
   readInstalledSkillAgents: vi.fn(() => []),
   clearInstalledSkillAgents: vi.fn(),
   effectiveSopRoot: () => state.root,
