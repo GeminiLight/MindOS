@@ -772,9 +772,16 @@ export interface AgentRuntimeArtifactProjection {
       kind: 'file' | 'image' | 'diff' | 'patch' | 'checkpoint' | 'branch' | 'pr' | 'uri' | 'unknown';
       source: 'acp-tool-call' | 'runtime-output' | 'manual';
       status: 'pending' | 'in_progress' | 'completed' | 'failed' | 'unknown';
+      runId?: string;
+      toolCallId?: string;
+      toolName?: string;
       path?: string;
+      line?: number;
       uri?: string;
       title?: string;
+      summary?: string;
+      mimeType?: string;
+      size?: number;
       updatedAt: number;
     }>;
   };

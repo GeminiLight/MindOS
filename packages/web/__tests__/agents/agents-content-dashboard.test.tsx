@@ -101,6 +101,90 @@ const runtimeCatalogEntries = vi.hoisted(() => [
   },
 ]);
 
+const runtimeArtifactProjections = vi.hoisted(() => [
+  {
+    schemaVersion: 1,
+    runtimeId: 'mindos',
+    runtimeName: 'MindOS Agent',
+    runtimeKind: 'mindos',
+    runtimeStatus: 'available',
+    status: 'ready',
+    outputKinds: ['text', 'artifact'],
+    reviewableOutputKinds: ['artifact'],
+    nativeHandoffTargets: ['message', 'artifact'],
+    nativeReview: {
+      supported: true,
+      summary: 'MindOS exposes artifact output.',
+    },
+    artifactIndex: {
+      supported: true,
+      status: 'ready',
+      owner: 'mindos',
+      summary: 'MindOS has a unified artifact pointer ledger for this runtime (1 record(s)).',
+      recordCount: 1,
+      recentArtifacts: [
+        {
+          id: 'artifact-1',
+          kind: 'file',
+          source: 'runtime-output',
+          status: 'completed',
+          runId: 'run-1',
+          toolName: 'write_file',
+          path: 'Notes/runtime-report.md',
+          line: 12,
+          title: 'Runtime report',
+          summary: 'Generated runtime report.',
+          mimeType: 'text/markdown',
+          updatedAt: Date.UTC(2026, 5, 27, 0, 0, 0),
+        },
+      ],
+    },
+    rollback: {
+      supported: false,
+      source: 'none',
+      summary: 'MindOS does not declare checkpoint output through the current runtime descriptor.',
+    },
+    branchPr: {
+      supported: false,
+      summary: 'MindOS does not declare branch or PR handoff output.',
+    },
+    reasons: [],
+  },
+  {
+    schemaVersion: 1,
+    runtimeId: 'codex',
+    runtimeName: 'Codex',
+    runtimeKind: 'codex',
+    runtimeStatus: 'available',
+    status: 'ready',
+    outputKinds: ['text', 'diff', 'branch', 'pr'],
+    reviewableOutputKinds: ['diff', 'branch', 'pr'],
+    nativeHandoffTargets: ['message', 'diff', 'branch', 'pull-request'],
+    nativeReview: {
+      supported: true,
+      summary: 'Codex exposes reviewable output.',
+    },
+    artifactIndex: {
+      supported: true,
+      status: 'ready',
+      owner: 'mindos',
+      summary: 'MindOS has a unified artifact pointer ledger for this runtime (0 record(s)).',
+      recordCount: 0,
+      recentArtifacts: [],
+    },
+    rollback: {
+      supported: false,
+      source: 'none',
+      summary: 'Codex does not declare checkpoint output through the current runtime descriptor.',
+    },
+    branchPr: {
+      supported: true,
+      summary: 'Codex declares branch or PR handoff output.',
+    },
+    reasons: [],
+  },
+]);
+
 const baseMcpState = {
   status: {
     running: true,
@@ -323,6 +407,50 @@ vi.mock('@/hooks/useRuntimeReadiness', () => ({
   }),
 }));
 
+vi.mock('@/hooks/useRuntimeArtifactProjections', () => ({
+  useRuntimeArtifactProjections: () => ({
+    payload: { schemaVersion: 1, projections: runtimeArtifactProjections },
+    projections: runtimeArtifactProjections,
+    loading: false,
+    error: null,
+    refresh: vi.fn(),
+  }),
+}));
+
+vi.mock('@/hooks/useAgentChangeReview', () => ({
+  useAgentChangeReview: () => ({
+    loading: false,
+    unreadCount: 1,
+    unreadAgentCount: 1,
+    unreviewedPathCount: 1,
+    unreviewedPaths: new Set(['Notes/runtime-report.md']),
+    events: [
+      {
+        id: 'change-1',
+        ts: '2026-06-27T00:00:00.000Z',
+        op: 'write_file',
+        path: 'Notes/runtime-report.md',
+        source: 'agent',
+        summary: 'Agent updated runtime report.',
+      },
+    ],
+    unreviewedEvents: [
+      {
+        id: 'change-1',
+        ts: '2026-06-27T00:00:00.000Z',
+        op: 'write_file',
+        path: 'Notes/runtime-report.md',
+        source: 'agent',
+        summary: 'Agent updated runtime report.',
+      },
+    ],
+    lastSeenAt: null,
+    refresh: vi.fn(),
+    hasUnreviewedAgentChange: vi.fn(() => true),
+    latestForPath: vi.fn(() => null),
+  }),
+}));
+
 describe('Agents content dashboard', () => {
   it('renders overview with four onward IA targets and clickable system model', () => {
     const html = renderToStaticMarkup(<AgentsContentPage tab="overview" />);
@@ -388,9 +516,20 @@ describe('Agents content dashboard', () => {
     expect(html).toContain('Codex MCP config remains owned by the Codex runtime.');
     expect(html).toContain(a.agentOverview.title);
     expect(html).toContain('href="#agent-local-runtime"');
+    expect(html).toContain('href="#agent-artifacts"');
     expect(html).toContain('href="#agent-local-clients"');
     expect(html).toContain('href="#agent-remote-acp"');
     expect(html).toContain('href="#agent-remote-a2a"');
+    expect(html).toContain(a.artifacts.title);
+    expect(html).toContain(a.artifacts.summary(2, 2, 0));
+    expect(html).toContain(a.artifacts.indexedArtifacts(1));
+    expect(html).toContain(a.artifacts.fileChanges(1, 1));
+    expect(html).toContain(a.artifacts.runtimeReadiness);
+    expect(html).toContain('Runtime report');
+    expect(html).toContain('Generated runtime report.');
+    expect(html).toContain('Agent updated runtime report.');
+    expect(html).toContain('href="/view/Notes/runtime-report.md"');
+    expect(html).toContain('href="/changelog?source=agent&amp;path=Notes%2Fruntime-report.md"');
     expect(html).toContain(a.localClients.title);
     expect(html).toContain(a.localClients.statusConnected);
     expect(html).toContain(a.localClients.statusDetected);
@@ -407,8 +546,9 @@ describe('Agents content dashboard', () => {
     expect(html).toContain('Cursor');
     expect(html).toContain('/agent-icons/openai.svg');
     expect(html).toContain('/agent-icons/claude.svg');
-    expect(html).toContain('sm:grid-cols-2 xl:grid-cols-4');
+    expect(html).toContain('sm:grid-cols-2 xl:grid-cols-5');
     expect(html).toContain('grid gap-3 xl:grid-cols-3');
+    expect(html).not.toContain('sm:grid-cols-2 xl:grid-cols-4');
     expect(html).not.toContain('sm:grid-cols-2 lg:grid-cols-4');
     expect(html).not.toContain('grid gap-3 md:grid-cols-3');
     expect(html).not.toContain(a.localClients.skillCount(3));

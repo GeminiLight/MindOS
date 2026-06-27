@@ -60,9 +60,16 @@ export type AgentRuntimeArtifactProjection = {
       kind: AgentArtifactLedgerRecord['kind'];
       source: AgentArtifactLedgerRecord['source'];
       status: AgentArtifactLedgerRecord['status'];
+      runId?: string;
+      toolCallId?: string;
+      toolName?: string;
       path?: string;
+      line?: number;
       uri?: string;
       title?: string;
+      summary?: string;
+      mimeType?: string;
+      size?: number;
       updatedAt: number;
     }>;
   };
@@ -179,9 +186,16 @@ function buildRuntimeArtifactProjection(
         kind: record.kind,
         source: record.source,
         status: record.status,
+        ...(record.runId ? { runId: record.runId } : {}),
+        ...(record.toolCallId ? { toolCallId: record.toolCallId } : {}),
+        ...(record.toolName ? { toolName: record.toolName } : {}),
         ...(record.path ? { path: record.path } : {}),
+        ...(Number.isFinite(record.line) ? { line: record.line } : {}),
         ...(record.uri ? { uri: record.uri } : {}),
         ...(record.title ? { title: record.title } : {}),
+        ...(record.summary ? { summary: record.summary } : {}),
+        ...(record.mimeType ? { mimeType: record.mimeType } : {}),
+        ...(Number.isFinite(record.size) ? { size: record.size } : {}),
         updatedAt: record.updatedAt,
       })),
     },

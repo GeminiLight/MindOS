@@ -91,6 +91,57 @@ describe('runtime artifact projections', () => {
     });
   });
 
+  it('includes safe artifact pointer metadata for preview workflows', () => {
+    const payload = buildAgentRuntimeArtifactProjectionsPayload({
+      runtimes: runtimes(),
+      artifacts: [
+        {
+          schemaVersion: 1,
+          id: 'artifact-1',
+          runtimeId: 'codex',
+          agentKind: 'native-runtime',
+          source: 'runtime-output',
+          kind: 'file',
+          status: 'completed',
+          createdAt: 1,
+          updatedAt: 2,
+          runId: 'run-1',
+          toolCallId: 'tool-1',
+          toolName: 'write_file',
+          path: 'Notes/runtime-report.md',
+          line: 12,
+          title: 'Runtime report',
+          summary: 'Generated runtime report.',
+          mimeType: 'text/markdown',
+          size: 42,
+        },
+      ],
+    });
+
+    const codex = payload.projections.find((projection) => projection.runtimeId === 'codex');
+    expect(codex?.artifactIndex).toMatchObject({
+      recordCount: 1,
+      recentArtifacts: [
+        {
+          id: 'artifact-1',
+          kind: 'file',
+          source: 'runtime-output',
+          status: 'completed',
+          runId: 'run-1',
+          toolCallId: 'tool-1',
+          toolName: 'write_file',
+          path: 'Notes/runtime-report.md',
+          line: 12,
+          title: 'Runtime report',
+          summary: 'Generated runtime report.',
+          mimeType: 'text/markdown',
+          size: 42,
+          updatedAt: 2,
+        },
+      ],
+    });
+  });
+
   it('supports GET filtering by runtime id', async () => {
     const response = await handleAgentRuntimeArtifactProjectionsGet(
       new URLSearchParams('runtime=codex'),

@@ -35,6 +35,7 @@ interface AgentChangeReviewState {
   unreadAgentCount: number;
   unreviewedPathCount: number;
   unreviewedPaths: ReadonlySet<string>;
+  events: AgentReviewChangeEvent[];
   unreviewedEvents: AgentReviewChangeEvent[];
   lastSeenAt: string | null;
 }
@@ -53,6 +54,7 @@ const EMPTY_REVIEW_STATE: AgentChangeReviewState = {
   unreadAgentCount: 0,
   unreviewedPathCount: 0,
   unreviewedPaths: EMPTY_PATHS,
+  events: [],
   unreviewedEvents: [],
   lastSeenAt: null,
 };
@@ -119,6 +121,7 @@ export function useAgentChangeReview({
         unreadAgentCount: unreviewedEvents.length,
         unreviewedPathCount: unreviewedPaths.size,
         unreviewedPaths,
+        events,
         unreviewedEvents,
         lastSeenAt: summary.lastSeenAt,
       });
