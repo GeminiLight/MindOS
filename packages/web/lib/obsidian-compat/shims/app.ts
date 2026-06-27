@@ -216,6 +216,14 @@ class WorkspaceShim extends Events implements Workspace {
     return this.activeLeaf;
   }
 
+  getUnpinnedLeaf(): WorkspaceLeaf {
+    return this.getLeaf();
+  }
+
+  splitActiveLeaf(): WorkspaceLeaf {
+    return this.getLeaf(true);
+  }
+
   getLeftLeaf(split?: boolean): WorkspaceLeaf | null {
     return this.getSidebarLeaf(this.leftLeaves, split);
   }

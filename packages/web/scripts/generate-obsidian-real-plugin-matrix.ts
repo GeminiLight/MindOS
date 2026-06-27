@@ -36,6 +36,10 @@ import {
   RECENT_FILES_WORKFLOW_PROBE_FIXTURE,
   buildRecentFilesWorkflowProbeDataJson,
 } from '@/lib/obsidian-compat/recent-files-workflow-fixture';
+import {
+  PERIODIC_NOTES_WORKFLOW_PROBE_FIXTURE,
+  buildPeriodicNotesWorkflowProbeDataJson,
+} from '@/lib/obsidian-compat/periodic-notes-workflow-fixture';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const webRoot = path.resolve(__dirname, '..');
@@ -482,6 +486,18 @@ function writeWorkflowProbeFixture(
       fs.mkdirSync(path.dirname(notePath), { recursive: true });
       fs.writeFileSync(notePath, row.content, 'utf-8');
     }
+    return;
+  }
+  if (pluginId === 'periodic-notes') {
+    fs.writeFileSync(
+      path.join(pluginDir, 'data.json'),
+      `${JSON.stringify(buildPeriodicNotesWorkflowProbeDataJson(), null, 2)}\n`,
+      'utf-8',
+    );
+    fs.mkdirSync(path.join(mindRoot, PERIODIC_NOTES_WORKFLOW_PROBE_FIXTURE.folder), { recursive: true });
+    const templatePath = path.join(mindRoot, PERIODIC_NOTES_WORKFLOW_PROBE_FIXTURE.templatePath);
+    fs.mkdirSync(path.dirname(templatePath), { recursive: true });
+    fs.writeFileSync(templatePath, PERIODIC_NOTES_WORKFLOW_PROBE_FIXTURE.templateContent, 'utf-8');
     return;
   }
   if (pluginId !== 'quickadd') return;

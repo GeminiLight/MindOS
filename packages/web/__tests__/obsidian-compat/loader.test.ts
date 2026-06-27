@@ -170,6 +170,7 @@ describe('PluginLoader', () => {
           .add(1, 'day')
           .set({ hour: 8, minute: 5, second: 3 });
         const weekdayDate = moment('2026-06-15').weekday(2);
+        const literalDate = moment('2026-06-15').format('[mindos-periodic-daily]-YYYY-MM-DD');
         class GlobalView extends View {}
         module.exports = class GlobalPlugin extends Plugin {
           onload() {
@@ -202,6 +203,9 @@ describe('PluginLoader', () => {
             }
             if (moment('2026-06-21').isoWeekday() !== 7) {
               throw new Error('missing moment isoWeekday helper');
+            }
+            if (literalDate !== 'mindos-periodic-daily-2026-06-15') {
+              throw new Error('missing moment literal format helper');
             }
             if (document.getElementById('calendar-root').textContent !== 'lookup-ready') {
               throw new Error('missing document.getElementById helper');

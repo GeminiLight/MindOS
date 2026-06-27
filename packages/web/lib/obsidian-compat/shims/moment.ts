@@ -29,7 +29,28 @@ function formatDate(date: Date, format: string): string {
     ss: pad(date.getSeconds()),
     s: String(date.getSeconds()),
   };
-  return format.replace(/YYYY|YY|MMMM|MMM|MM|M|DD|D|dddd|ddd|dd|d|HH|H|mm|m|ss|s/g, (token) => tokens[token] ?? token);
+  let output = '';
+  let cursor = 0;
+  while (cursor < format.length) {
+    const literalStart = format.indexOf('[', cursor);
+    const segmentEnd = literalStart === -1 ? format.length : literalStart;
+    const segment = format.slice(cursor, segmentEnd);
+    output += segment.replace(/YYYY|YY|MMMM|MMM|MM|M|DD|D|dddd|ddd|dd|d|HH|H|mm|m|ss|s/g, (token) => tokens[token] ?? token);
+
+    if (literalStart === -1) {
+      break;
+    }
+
+    const literalEnd = format.indexOf(']', literalStart + 1);
+    if (literalEnd === -1) {
+      output += format.slice(literalStart);
+      break;
+    }
+
+    output += format.slice(literalStart + 1, literalEnd);
+    cursor = literalEnd + 1;
+  }
+  return output;
 }
 
 let currentMomentLocale = 'en';

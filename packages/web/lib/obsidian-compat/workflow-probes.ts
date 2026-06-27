@@ -9,6 +9,7 @@ import {
   QUICKADD_TEMPLATE_WORKFLOW_PROBE_FIXTURE,
   QUICKADD_WORKFLOW_PROBE_FIXTURE,
 } from './quickadd-workflow-fixture';
+import { PERIODIC_NOTES_WORKFLOW_PROBE_FIXTURE } from './periodic-notes-workflow-fixture';
 
 export const OBSIDIAN_WORKFLOW_PROBE_SCHEMA_VERSION = 1;
 export const DEFAULT_OBSIDIAN_WORKFLOW_PROBE_MAX_ENTRIES = 100;
@@ -18,6 +19,7 @@ export type ObsidianWorkflowProbeId =
   | 'quickadd-capture-macro'
   | 'quickadd-template-note'
   | 'calendar-open-periodic-note'
+  | 'periodic-notes-open-daily-note'
   | 'tag-wrangler-rename'
   | 'linter-review-apply'
   | 'admonition-render-markdown'
@@ -354,6 +356,12 @@ const PROBE_DEFINITIONS: WorkflowProbeDefinition[] = [
     run: runCalendarProbe,
   },
   {
+    id: 'periodic-notes-open-daily-note',
+    label: 'Create and open daily note',
+    pluginIds: new Set(['periodic-notes']),
+    run: runPeriodicNotesProbe,
+  },
+  {
     id: 'tag-wrangler-rename',
     label: 'Rename or organize tags',
     pluginIds: new Set(['tag-wrangler']),
@@ -512,6 +520,81 @@ async function runCalendarViewProbe(input: WorkflowProbeRuntimeInput, viewType: 
       { id: 'runtime-called-ledger', label: 'Recorded called runtime ledger evidence', passed: called },
     ],
     ...(!text || !called ? { failureReason: 'Calendar probe rendered a view but did not produce visible output with called ledger evidence.' } : {}),
+  };
+}
+
+async function runPeriodicNotesProbe(input: WorkflowProbeRuntimeInput): Promise<WorkflowProbeDraft> {
+  const command = selectPeriodicNotesDailyCommand(input.plugin);
+  if (!command) {
+    return skippedDraft('No executable Periodic Notes daily command was registered; seed data.json daily.enabled before marking this workflow observed.');
+  }
+  if (!hasPeriodicNotesDailyFixtureSettings(input.mindRoot, input.plugin.id)) {
+    return skippedDraft('No controlled data.json-backed Periodic Notes daily fixture was available; seed daily settings and template before marking this workflow observed.');
+  }
+
+  const targetPath = PERIODIC_NOTES_WORKFLOW_PROBE_FIXTURE.targetPath;
+  const before = snapshotVault(input.mindRoot);
+  const action = await input.host.executeCommand(command.fullId);
+  const after = snapshotVault(input.mindRoot);
+  const changes = diffVaultSnapshots(before, after);
+  const changedPaths = changedVaultPaths(changes);
+  const targetChanged = changedPaths.has(targetPath);
+  const targetExists = fs.existsSync(path.join(input.mindRoot, targetPath));
+  const targetContent = targetExists ? readVaultFile(input.mindRoot, targetPath) : '';
+  const targetContentMatches = targetContent.includes(PERIODIC_NOTES_WORKFLOW_PROBE_FIXTURE.expectedContent)
+    && targetContent.includes('mindos-periodic-daily');
+  const workspaceOpened = action.workspaceOpenRequests.some((request) => (
+    normalizeWorkflowPath(request.targetPath ?? request.linktext) === targetPath
+  ));
+  const commandCalled = hasCalledLedger(input.host, input.plugin.id, ['addCommand']);
+  const vaultCreateCalled = hasCalledLedger(input.host, input.plugin.id, ['Vault.create']);
+  const workspaceCalled = hasCalledLedger(input.host, input.plugin.id, ['Workspace.openLinkText']);
+  const passed = commandCalled
+    && vaultCreateCalled
+    && workspaceCalled
+    && targetChanged
+    && targetExists
+    && targetContentMatches
+    && workspaceOpened;
+  const observable = observableEvidence(action, changes);
+
+  return {
+    status: passed ? 'passed' : 'failed',
+    evidence: [
+      `Executed Periodic Notes daily command "${command.name}" (${command.fullId}).`,
+      targetChanged
+        ? `Observed Periodic Notes daily fixture note change: ${targetPath}.`
+        : `Expected Periodic Notes daily fixture note to change: ${targetPath}.`,
+      targetContentMatches
+        ? `Verified Periodic Notes daily fixture note "${targetPath}" contains the expected template content.`
+        : `Expected Periodic Notes daily fixture note "${targetPath}" to contain "${PERIODIC_NOTES_WORKFLOW_PROBE_FIXTURE.expectedContent}".`,
+      workspaceOpened
+        ? `Observed workspace open request for Periodic Notes daily fixture: ${targetPath}.`
+        : `Expected workspace open request for Periodic Notes daily fixture: ${targetPath}.`,
+      ...observable,
+      ...(!targetContentMatches ? [`Observed Periodic Notes fixture note content: ${targetContent.slice(0, 160) || '(missing)'}`] : []),
+    ],
+    assertions: [
+      { id: 'execute-command', label: 'Executed the selected Periodic Notes daily command', passed: true, detail: command.fullId },
+      { id: 'data-json-daily-settings', label: 'Selected controlled data.json-backed daily settings', passed: true, detail: PERIODIC_NOTES_WORKFLOW_PROBE_FIXTURE.format },
+      { id: 'fixture-note-written', label: 'Created or changed the Periodic Notes daily fixture note', passed: targetChanged, detail: targetPath },
+      { id: 'fixture-note-content', label: 'Wrote the expected Periodic Notes template content', passed: targetContentMatches, detail: PERIODIC_NOTES_WORKFLOW_PROBE_FIXTURE.expectedContent },
+      { id: 'workspace-open', label: 'Requested workspace opening for the Periodic Notes daily note', passed: workspaceOpened, detail: targetPath },
+      { id: 'vault-create-called-ledger', label: 'Recorded vault create evidence for the Periodic Notes daily note', passed: vaultCreateCalled },
+      { id: 'workspace-open-called-ledger', label: 'Recorded workspace open evidence for the Periodic Notes daily note', passed: workspaceCalled },
+      { id: 'runtime-called-ledger', label: 'Recorded command execution evidence', passed: commandCalled },
+    ],
+    ...(!passed ? {
+      failureReason: periodicNotesFailureReason({
+        commandCalled,
+        vaultCreateCalled,
+        workspaceCalled,
+        targetChanged,
+        targetExists,
+        targetContentMatches,
+        workspaceOpened,
+      }),
+    } : {}),
   };
 }
 
@@ -839,6 +922,15 @@ function selectCommand(plugin: ObsidianWorkflowProbePlugin, patterns: RegExp[]):
   return commands[0];
 }
 
+function selectPeriodicNotesDailyCommand(plugin: ObsidianWorkflowProbePlugin): ObsidianWorkflowProbeCommand | undefined {
+  const commands = plugin.runtime.commandList.filter((command) => command.executable !== false);
+  return commands.find((command) => (
+    command.id === PERIODIC_NOTES_WORKFLOW_PROBE_FIXTURE.commandId
+    || command.fullId.endsWith(`:${PERIODIC_NOTES_WORKFLOW_PROBE_FIXTURE.commandId}`)
+    || command.name === PERIODIC_NOTES_WORKFLOW_PROBE_FIXTURE.commandName
+  ));
+}
+
 function selectQuickAddChoiceCommand(plugin: ObsidianWorkflowProbePlugin): ObsidianWorkflowProbeCommand | undefined {
   const commands = plugin.runtime.commandList.filter((command) => command.executable !== false);
   return commands.find((command) => isQuickAddFixtureCommand(command, QUICKADD_WORKFLOW_PROBE_FIXTURE))
@@ -1095,6 +1187,26 @@ function admonitionFailureReason(input: { visible: boolean; called: boolean; ali
   ].filter(Boolean).join('; ');
 }
 
+function periodicNotesFailureReason(input: {
+  commandCalled: boolean;
+  vaultCreateCalled: boolean;
+  workspaceCalled: boolean;
+  targetChanged: boolean;
+  targetExists: boolean;
+  targetContentMatches: boolean;
+  workspaceOpened: boolean;
+}): string {
+  return [
+    !input.commandCalled ? 'runtime ledger did not record Periodic Notes command execution' : '',
+    !input.vaultCreateCalled ? 'runtime ledger did not record Periodic Notes vault create evidence' : '',
+    !input.workspaceCalled ? 'runtime ledger did not record Periodic Notes workspace open evidence' : '',
+    !input.targetChanged ? 'Periodic Notes daily fixture note was not created or changed' : '',
+    !input.targetExists ? 'Periodic Notes daily fixture note does not exist' : '',
+    !input.targetContentMatches ? 'Periodic Notes daily fixture note did not contain expected template content' : '',
+    !input.workspaceOpened ? 'Periodic Notes did not request opening the daily fixture note' : '',
+  ].filter(Boolean).join('; ');
+}
+
 function recentFilesFailureReason(input: { commandCalled: boolean; viewCalled: boolean; visible: boolean; rowRendered: boolean }): string {
   return [
     !input.commandCalled ? 'runtime ledger did not record Recent Files command execution' : '',
@@ -1102,6 +1214,24 @@ function recentFilesFailureReason(input: { commandCalled: boolean; viewCalled: b
     !input.visible ? 'Recent Files view rendered without visible snapshot text' : '',
     !input.rowRendered ? 'Recent Files view did not render any data.json-backed recent file row' : '',
   ].filter(Boolean).join('; ');
+}
+
+function hasPeriodicNotesDailyFixtureSettings(mindRoot: string, pluginId: string): boolean {
+  const location = resolveInstalledObsidianPluginDir(mindRoot, pluginId);
+  if (!location) return false;
+  const dataPath = path.join(location.pluginDir, 'data.json');
+  if (!fs.existsSync(dataPath)) return false;
+  try {
+    const parsed = JSON.parse(fs.readFileSync(dataPath, 'utf-8')) as { daily?: unknown };
+    if (!parsed.daily || typeof parsed.daily !== 'object') return false;
+    const daily = parsed.daily as { enabled?: unknown; format?: unknown; folder?: unknown; template?: unknown };
+    return daily.enabled === true
+      && String(daily.format ?? '').trim() === PERIODIC_NOTES_WORKFLOW_PROBE_FIXTURE.format
+      && normalizeWorkflowPath(String(daily.folder ?? '')) === PERIODIC_NOTES_WORKFLOW_PROBE_FIXTURE.folder
+      && normalizeWorkflowPath(String(daily.template ?? '')) === PERIODIC_NOTES_WORKFLOW_PROBE_FIXTURE.templatePath;
+  } catch {
+    return false;
+  }
 }
 
 function readRecentFilesDataRows(mindRoot: string, pluginId: string): Array<{ basename: string; path: string }> {
@@ -1129,6 +1259,15 @@ function readRecentFilesDataRows(mindRoot: string, pluginId: string): Array<{ ba
 
 function normalizeSnapshotText(value: string): string {
   return value.replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
+function normalizeWorkflowPath(value: string): string {
+  return value
+    .replace(/\\/g, '/')
+    .replace(/\/+/g, '/')
+    .replace(/^\.\//, '')
+    .replace(/^\/+/, '')
+    .replace(/\/$/, '');
 }
 
 function snapshotVault(mindRoot: string): VaultSnapshot {
@@ -1246,6 +1385,7 @@ const PROBE_IDS = new Set<ObsidianWorkflowProbeId>([
   'quickadd-capture-macro',
   'quickadd-template-note',
   'calendar-open-periodic-note',
+  'periodic-notes-open-daily-note',
   'tag-wrangler-rename',
   'linter-review-apply',
   'admonition-render-markdown',

@@ -16,6 +16,10 @@ import {
   RECENT_FILES_WORKFLOW_PROBE_FIXTURE,
   buildRecentFilesWorkflowProbeDataJson,
 } from '@/lib/obsidian-compat/recent-files-workflow-fixture';
+import {
+  PERIODIC_NOTES_WORKFLOW_PROBE_FIXTURE,
+  buildPeriodicNotesWorkflowProbeDataJson,
+} from '@/lib/obsidian-compat/periodic-notes-workflow-fixture';
 
 let mindRoot: string;
 
@@ -49,6 +53,14 @@ const writeRecentFilesFixture = () => {
     fs.mkdirSync(path.dirname(notePath), { recursive: true });
     fs.writeFileSync(notePath, row.content, 'utf-8');
   }
+};
+
+const writePeriodicNotesFixture = () => {
+  writePluginData('periodic-notes', buildPeriodicNotesWorkflowProbeDataJson());
+  fs.mkdirSync(path.join(mindRoot, PERIODIC_NOTES_WORKFLOW_PROBE_FIXTURE.folder), { recursive: true });
+  const templatePath = path.join(mindRoot, PERIODIC_NOTES_WORKFLOW_PROBE_FIXTURE.templatePath);
+  fs.mkdirSync(path.dirname(templatePath), { recursive: true });
+  fs.writeFileSync(templatePath, PERIODIC_NOTES_WORKFLOW_PROBE_FIXTURE.templateContent, 'utf-8');
 };
 
 describe('Obsidian workflow probes', () => {
@@ -337,6 +349,143 @@ describe('Obsidian workflow probes', () => {
     expect(result.assertions).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: 'workspace-open', passed: true }),
       expect.objectContaining({ id: 'runtime-called-ledger', passed: true }),
+    ]));
+  });
+
+  it('passes the Periodic Notes daily probe only after a data.json-backed command creates and opens the fixture note', async () => {
+    writePlugin('periodic-notes', `
+      const { Plugin } = require('obsidian');
+      module.exports = class PeriodicNotesPlugin extends Plugin {
+        async onload() {
+          this.settings = await this.loadData();
+          this.app.workspace.onLayoutReady(() => this.configureCommands());
+        }
+        configureCommands() {
+          if (!this.settings.daily || !this.settings.daily.enabled) return;
+          this.addCommand({
+            id: 'open-daily-note',
+            name: 'Open daily note',
+            callback: async () => this.openDailyNote()
+          });
+        }
+        async openDailyNote() {
+          const daily = this.settings.daily;
+          if (!this.app.vault.getAbstractFileByPath(daily.folder)) {
+            throw new Error('Missing daily folder: ' + daily.folder);
+          }
+          const templateFile = this.app.metadataCache.getFirstLinkpathDest(daily.template, '');
+          const template = templateFile ? await this.app.vault.cachedRead(templateFile) : '';
+          const targetPath = '${PERIODIC_NOTES_WORKFLOW_PROBE_FIXTURE.targetPath}';
+          const title = 'mindos-periodic-daily';
+          const file = await this.app.vault.create(
+            targetPath,
+            template
+              .replace(/{{\\s*title\\s*}}/gi, title)
+              .replace(/{{\\s*date\\s*}}/gi, title)
+              .replace(/{{\\s*tomorrow\\s*}}/gi, title)
+          );
+          await this.app.workspace.getUnpinnedLeaf().openFile(file, { active: true });
+        }
+      };
+    `);
+    writePeriodicNotesFixture();
+
+    const manager = new PluginManager(mindRoot);
+    await manager.discover();
+    await manager.enable('periodic-notes', { confirmCapabilityGate: true });
+
+    const result = await manager.runWorkflowProbe('periodic-notes', 'periodic-notes-open-daily-note');
+
+    expect(result).toMatchObject({
+      pluginId: 'periodic-notes',
+      id: 'periodic-notes-open-daily-note',
+      status: 'passed',
+      source: 'workflow-probe',
+    });
+    expect(result.evidence).toEqual(expect.arrayContaining([
+      expect.stringContaining('Executed Periodic Notes daily command "Open daily note"'),
+      expect.stringContaining(PERIODIC_NOTES_WORKFLOW_PROBE_FIXTURE.targetPath),
+      expect.stringContaining('contains the expected template content'),
+      expect.stringContaining('workspace open request'),
+    ]));
+    expect(result.assertions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'execute-command', passed: true }),
+      expect.objectContaining({ id: 'data-json-daily-settings', passed: true }),
+      expect.objectContaining({ id: 'fixture-note-written', passed: true }),
+      expect.objectContaining({ id: 'fixture-note-content', passed: true }),
+      expect.objectContaining({ id: 'workspace-open', passed: true }),
+      expect.objectContaining({ id: 'vault-create-called-ledger', passed: true }),
+      expect.objectContaining({ id: 'workspace-open-called-ledger', passed: true }),
+      expect.objectContaining({ id: 'runtime-called-ledger', passed: true }),
+    ]));
+    const created = fs.readFileSync(path.join(mindRoot, PERIODIC_NOTES_WORKFLOW_PROBE_FIXTURE.targetPath), 'utf-8');
+    expect(created).toContain(PERIODIC_NOTES_WORKFLOW_PROBE_FIXTURE.expectedContent);
+    expect(created).toContain('# mindos-periodic-daily');
+  });
+
+  it('skips the Periodic Notes daily probe when no data-backed daily command is registered', async () => {
+    writePlugin('periodic-notes', `
+      const { Plugin } = require('obsidian');
+      module.exports = class PeriodicNotesPlugin extends Plugin {
+        async onload() {
+          this.settings = await this.loadData();
+          if (this.settings.daily && this.settings.daily.enabled) {
+            this.addCommand({ id: 'open-daily-note', name: 'Open daily note', callback: () => {} });
+          }
+        }
+      };
+    `);
+
+    const manager = new PluginManager(mindRoot);
+    await manager.discover();
+    await manager.enable('periodic-notes', { confirmCapabilityGate: true });
+
+    const result = await manager.runWorkflowProbe('periodic-notes', 'periodic-notes-open-daily-note');
+
+    expect(result).toMatchObject({
+      pluginId: 'periodic-notes',
+      id: 'periodic-notes-open-daily-note',
+      status: 'skipped',
+      failureReason: expect.stringContaining('data.json daily.enabled'),
+    });
+  });
+
+  it('fails the Periodic Notes daily probe when the command writes the wrong note', async () => {
+    writePlugin('periodic-notes', `
+      const { Plugin } = require('obsidian');
+      module.exports = class PeriodicNotesPlugin extends Plugin {
+        async onload() {
+          this.settings = await this.loadData();
+          this.addCommand({
+            id: 'open-daily-note',
+            name: 'Open daily note',
+            callback: async () => {
+              const file = await this.app.vault.create('Journal/Daily/wrong-daily.md', 'wrong content');
+              await this.app.workspace.getUnpinnedLeaf().openFile(file, { active: true });
+            }
+          });
+        }
+      };
+    `);
+    writePeriodicNotesFixture();
+
+    const manager = new PluginManager(mindRoot);
+    await manager.discover();
+    await manager.enable('periodic-notes', { confirmCapabilityGate: true });
+
+    const result = await manager.runWorkflowProbe('periodic-notes', 'periodic-notes-open-daily-note');
+
+    expect(result).toMatchObject({
+      pluginId: 'periodic-notes',
+      id: 'periodic-notes-open-daily-note',
+      status: 'failed',
+      failureReason: expect.stringContaining('daily fixture note was not created or changed'),
+    });
+    expect(result.assertions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'fixture-note-written', passed: false }),
+      expect.objectContaining({ id: 'fixture-note-content', passed: false }),
+      expect.objectContaining({ id: 'workspace-open', passed: false }),
+      expect.objectContaining({ id: 'vault-create-called-ledger', passed: true }),
     ]));
   });
 
