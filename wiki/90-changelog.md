@@ -4,6 +4,14 @@
 
 ## Unreleased
 
+### Runtime / Agents
+
+- **Agent runtime 基础能力收口**：新增 runtime catalog 与 readiness/capability matrix，统一展示本机 Codex、Claude Code、ACP 等 runtime 的安装、可用性和能力状态。
+- **ACP 命令入口更完整**：ACP runtime 暴露的 `available_commands` 会进入 Ask SendBox 与命令面板，支持从 UI 直接触发 agent 提供的命令能力。
+- **ACP 会话继承 MCP 上下文**：ACP session 现在会继承 MindOS MCP session 信息，减少跨 runtime 对话时上下文丢失和工具态不一致。
+- **Artifact ledger 改为指针式记录**：runtime artifact 只记录 archive pointer 与 run 索引，不代存完整历史，为后续预览、文件变更面板和跨 runtime artifact 工作流打基础。
+- **Extension manifest v0 解析**：新增 AionUI 风格 manifest/parser 基础，后续可把 `contributes` 转成真实扩展入口与安装前检查。
+
 ### UI
 
 - **标签栏微调**：相邻标签之间加入细分隔线（贴近激活标签一侧自动隐藏，由其自身边框分界）；新建（＋）与溢出（⌄N）按钮从整行垂直居中改为对齐标签中线，不再悬浮在标签上方。
