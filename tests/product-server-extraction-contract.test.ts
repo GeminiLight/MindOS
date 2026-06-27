@@ -51,6 +51,9 @@ describe('Product server extraction contract', () => {
     expect(http).toContain('/api/graph');
     expect(http).toContain('/api/agent-activity');
     expect(http).toContain('/api/agent-runtimes');
+    expect(http).toContain('/api/agent-runtimes/extensions');
+    expect(http).toContain('/api/agent-runtimes/extensions/preflight');
+    expect(http).toContain('/api/agent-runtimes/extensions/install');
     expect(http).toContain('/api/agent-runtimes/codex/threads');
     expect(http).toContain('/api/agent/sessions');
     expect(http).toContain('/api/space-overview');
@@ -127,6 +130,12 @@ describe('Product server extraction contract', () => {
     expect(contract).toContain("path: '/api/agent-activity'");
     expect(contract).toContain("id: 'agent-runtimes'");
     expect(contract).toContain("path: '/api/agent-runtimes'");
+    expect(contract).toContain("id: 'agent-runtimes.extensions'");
+    expect(contract).toContain("path: '/api/agent-runtimes/extensions'");
+    expect(contract).toContain("id: 'agent-runtimes.extensions.preflight'");
+    expect(contract).toContain("path: '/api/agent-runtimes/extensions/preflight'");
+    expect(contract).toContain("id: 'agent-runtimes.extensions.install'");
+    expect(contract).toContain("path: '/api/agent-runtimes/extensions/install'");
     expect(contract).toContain("id: 'agent-runtimes.codex.threads'");
     expect(contract).toContain("path: '/api/agent-runtimes/codex/threads'");
     expect(contract).toContain("id: 'agent-runtimes.codex.thread'");
@@ -247,6 +256,9 @@ describe('Product server extraction contract', () => {
       'packages/web/app/api/agent-activity/route.ts',
       'packages/web/app/api/agent-capabilities/route.ts',
       'packages/web/app/api/agent-runtimes/route.ts',
+      'packages/web/app/api/agent-runtimes/extensions/route.ts',
+      'packages/web/app/api/agent-runtimes/extensions/preflight/route.ts',
+      'packages/web/app/api/agent-runtimes/extensions/install/route.ts',
       'packages/web/app/api/agent-runtimes/codex/threads/route.ts',
       'packages/web/app/api/agent-runtimes/codex/threads/[threadId]/route.ts',
       'packages/web/app/api/agent-runtimes/codex/threads/[threadId]/archive/route.ts',

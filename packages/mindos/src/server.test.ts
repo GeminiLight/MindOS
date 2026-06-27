@@ -330,6 +330,24 @@ describe('MindOS server contract: core, files, HTTP', () => {
       auth: 'required',
     });
     expect(contract.routes).toContainEqual({
+      id: 'agent-runtimes.extensions',
+      method: 'GET',
+      path: '/api/agent-runtimes/extensions',
+      auth: 'required',
+    });
+    expect(contract.routes).toContainEqual({
+      id: 'agent-runtimes.extensions.preflight',
+      method: 'POST',
+      path: '/api/agent-runtimes/extensions/preflight',
+      auth: 'required',
+    });
+    expect(contract.routes).toContainEqual({
+      id: 'agent-runtimes.extensions.install',
+      method: 'POST',
+      path: '/api/agent-runtimes/extensions/install',
+      auth: 'required',
+    });
+    expect(contract.routes).toContainEqual({
       id: 'agent-runtimes.mcp-projections',
       method: 'GET',
       path: '/api/agent-runtimes/mcp-projections',

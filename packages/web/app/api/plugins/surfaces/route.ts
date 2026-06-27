@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import '@/lib/renderers/index';
+import { listInstalledAgentRuntimeExtensions } from '@geminilight/mindos/server';
 import { handleRouteErrorSimple } from '@/lib/errors';
 import { readSettings } from '@/lib/settings';
 import { withObsidianPluginRuntime } from '@/lib/obsidian-compat/runtime-service';
@@ -9,6 +10,7 @@ import { getPluginRenderers, isRendererEnabled, toRendererPluginManifest } from 
 import {
   buildObsidianPluginSurfaces,
   buildRendererPluginSurfaces,
+  buildRuntimeExtensionPluginSurfaces,
   filterPluginSurfaces,
   type PluginSurfaceKind,
   type PluginSurfaceSource,
@@ -30,6 +32,7 @@ const SURFACE_SOURCES = new Set<PluginSurfaceSource>([
   'obsidian',
   'mindos-renderer',
   'mindos-native',
+  'runtime-extension',
 ]);
 
 function parseKind(value: string | null): PluginSurfaceKind | undefined {
@@ -68,10 +71,13 @@ export async function GET(req: NextRequest) {
           enabled: isRendererEnabled(renderer.id),
         })),
       );
+      const runtimeExtensions = listInstalledAgentRuntimeExtensions(settings.mindRoot);
+      const runtimeExtensionSurfaces = buildRuntimeExtensionPluginSurfaces(runtimeExtensions);
       const surfaces = filterPluginSurfaces(
         [
           ...buildObsidianPluginSurfaces(plugins),
           ...rendererSurfaces,
+          ...runtimeExtensionSurfaces,
         ],
         { kind, source },
       );
@@ -85,6 +91,7 @@ export async function GET(req: NextRequest) {
           surfaces: surfaces.length,
           plugins: plugins.length,
           rendererPlugins: rendererSurfaces.length,
+          runtimeExtensions: runtimeExtensions.length,
         },
       });
     });

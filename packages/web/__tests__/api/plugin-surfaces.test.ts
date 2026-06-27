@@ -43,6 +43,76 @@ function enablePlugin(...pluginIds: string[]) {
   );
 }
 
+function writeRuntimeExtension(extensionId = 'aion-style-pack') {
+  const extensionDir = path.join(mindRoot, '.mindos', 'runtime-extensions', extensionId);
+  fs.mkdirSync(extensionDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(extensionDir, 'manifest.json'),
+    JSON.stringify({
+      id: extensionId,
+      name: 'Aion Style Pack',
+      version: '0.1.0',
+      contributes: {
+        acpAdapters: [
+          {
+            id: 'ext-buddy',
+            name: 'External Buddy',
+            description: 'Extension-provided ACP adapter.',
+            cliCommand: 'codebuddy',
+            acpArgs: ['--acp'],
+            supportsStreaming: true,
+          },
+        ],
+        commands: [
+          { id: 'explain', title: 'Explain Selection', slash: '/explain', runtimeId: 'ext-buddy' },
+        ],
+        mcpServers: [
+          { id: 'docs', name: 'Docs MCP', type: 'stdio', command: 'mcp-docs' },
+        ],
+        assistants: [
+          { id: 'reviewer', name: 'Reviewer', prompt: '$file:prompts/reviewer.md' },
+        ],
+        agents: [
+          { id: 'planner', name: 'Planner', command: 'planner-agent', args: ['--json'] },
+        ],
+        skills: [
+          { id: 'review', name: 'Review Skill', entry: '$file:skills/review/SKILL.md' },
+        ],
+        themes: [
+          { name: 'Warm Runtime' },
+        ],
+        settingsTabs: [
+          { title: 'Runtime Settings' },
+        ],
+      },
+    }, null, 2),
+    'utf-8',
+  );
+  fs.writeFileSync(
+    path.join(extensionDir, 'mindos-runtime-extension.json'),
+    JSON.stringify({
+      schemaVersion: 1,
+      source: 'agent-runtime-extension',
+      extensionId,
+      version: '0.1.0',
+      installedAt: '2026-06-27T00:00:00.000Z',
+      contributionCounts: {
+        acpAdapters: 1,
+        mcpServers: 1,
+        assistants: 1,
+        agents: 1,
+        skills: 1,
+        commands: 1,
+        themes: 1,
+        settingsTabs: 1,
+      },
+      appliedAcpAgents: ['ext-buddy'],
+      lifecycleScriptsDeclared: 0,
+    }, null, 2),
+    'utf-8',
+  );
+}
+
 async function importRoute() {
   return import('../../app/api/plugins/surfaces/route');
 }
@@ -607,5 +677,86 @@ describe('/api/plugins/surfaces', () => {
       }),
     ]));
     expect(json.counts.rendererPlugins).toBeGreaterThan(0);
+  });
+
+  it('maps installed runtime extension contributions to declarative plugin surfaces', async () => {
+    writeRuntimeExtension();
+
+    const { GET } = await importRoute();
+    const res = await GET(new NextRequest('http://localhost/api/plugins/surfaces?source=runtime-extension'));
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json.ok).toBe(true);
+    expect(json.counts).toMatchObject({
+      runtimeExtensions: 1,
+      surfaces: 8,
+    });
+    expect(json.surfaces).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: 'runtime-extension:acp-adapter:aion-style-pack:ext-buddy',
+        source: 'runtime-extension',
+        kind: 'command',
+        location: 'command-center',
+        availability: 'available',
+        title: 'External Buddy',
+        host: expect.objectContaining({ state: 'mounted', label: 'ACP Registry' }),
+        metadata: expect.objectContaining({
+          contribution: 'acpAdapter',
+          adapterId: 'ext-buddy',
+          command: 'codebuddy',
+          args: ['--acp'],
+        }),
+      }),
+      expect.objectContaining({
+        id: 'runtime-extension:command:aion-style-pack:explain',
+        kind: 'command',
+        availability: 'recorded',
+        title: 'Explain Selection',
+        host: expect.objectContaining({ state: 'catalog', label: 'Runtime command catalog' }),
+      }),
+      expect.objectContaining({
+        id: 'runtime-extension:mcp-server:aion-style-pack:docs',
+        kind: 'settings',
+        availability: 'recorded',
+        title: 'Docs MCP',
+        host: expect.objectContaining({ state: 'catalog', label: 'MCP declaration catalog' }),
+      }),
+      expect.objectContaining({
+        id: 'runtime-extension:assistant:aion-style-pack:reviewer',
+        kind: 'settings',
+        availability: 'recorded',
+        title: 'Reviewer',
+        host: expect.objectContaining({ state: 'catalog', label: 'Assistant declaration catalog' }),
+      }),
+      expect.objectContaining({
+        id: 'runtime-extension:agent:aion-style-pack:planner',
+        kind: 'settings',
+        availability: 'recorded',
+        title: 'Planner',
+        host: expect.objectContaining({ state: 'catalog', label: 'Agent declaration catalog' }),
+      }),
+      expect.objectContaining({
+        id: 'runtime-extension:skill:aion-style-pack:review',
+        kind: 'settings',
+        availability: 'recorded',
+        title: 'Review Skill',
+        host: expect.objectContaining({ state: 'catalog', label: 'Skill declaration catalog' }),
+      }),
+      expect.objectContaining({
+        id: 'runtime-extension:theme:aion-style-pack:0',
+        kind: 'style',
+        availability: 'recorded',
+        title: 'Warm Runtime',
+        host: expect.objectContaining({ state: 'catalog', label: 'Theme declaration catalog' }),
+      }),
+      expect.objectContaining({
+        id: 'runtime-extension:settings:aion-style-pack:0',
+        kind: 'settings',
+        availability: 'recorded',
+        title: 'Runtime Settings',
+        host: expect.objectContaining({ state: 'catalog', label: 'Settings declaration catalog' }),
+      }),
+    ]));
   });
 });

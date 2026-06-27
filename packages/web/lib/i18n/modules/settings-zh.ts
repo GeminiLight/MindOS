@@ -384,6 +384,7 @@ export const settingsZh = {
       catalogFilteredDesc: '符合当前筛选的本机插件和状态。',
       catalogNoMatches: '没有插件符合当前清单筛选。',
       catalogSourceMindos: '内置扩展',
+      catalogSourceRuntimeExtension: 'Runtime 扩展',
       catalogSourceObsidian: 'Obsidian',
       catalogStatus: (status: string) => ({
         core: '核心',

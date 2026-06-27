@@ -384,6 +384,7 @@ export const settingsEn = {
       catalogFilteredDesc: 'Matching local packages and their current state.',
       catalogNoMatches: 'No plugins match this inventory filter.',
       catalogSourceMindos: 'Built-in extension',
+      catalogSourceRuntimeExtension: 'Runtime extension',
       catalogSourceObsidian: 'Obsidian',
       catalogStatus: (status: string) => ({
         core: 'Core',

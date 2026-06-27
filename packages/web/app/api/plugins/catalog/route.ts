@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import '@/lib/renderers/index';
+import { listInstalledAgentRuntimeExtensions } from '@geminilight/mindos/server';
 import { handleRouteErrorSimple } from '@/lib/errors';
 import { readSettings } from '@/lib/settings';
 import { withObsidianPluginRuntime } from '@/lib/obsidian-compat/runtime-service';
@@ -9,6 +10,7 @@ import { getPluginRenderers, isRendererEnabled, toRendererPluginManifest } from 
 import {
   buildObsidianPluginSurfaces,
   buildRendererPluginSurfaces,
+  buildRuntimeExtensionPluginSurfaces,
 } from '@/lib/plugins/surfaces';
 import {
   PLUGIN_CATALOG_BUCKETS,
@@ -62,13 +64,17 @@ export async function GET(req: NextRequest) {
         enabled: isRendererEnabled(renderer.id),
       }));
       const rendererSurfaces = buildRendererPluginSurfaces(renderers);
+      const runtimeExtensions = listInstalledAgentRuntimeExtensions(settings.mindRoot);
+      const runtimeExtensionSurfaces = buildRuntimeExtensionPluginSurfaces(runtimeExtensions);
       const surfaces = [
         ...buildObsidianPluginSurfaces(obsidianPlugins),
         ...rendererSurfaces,
+        ...runtimeExtensionSurfaces,
       ];
       const allPlugins = buildPluginCatalog({
         obsidianPlugins,
         renderers,
+        runtimeExtensions,
         surfaces,
       });
       const plugins = filterPluginCatalog(allPlugins, { source, status, bucket });

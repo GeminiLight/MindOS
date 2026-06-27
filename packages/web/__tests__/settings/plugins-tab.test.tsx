@@ -79,6 +79,7 @@ const t = {
       catalogFilteredDesc: 'Filtered inventory',
       catalogNoMatches: 'No matches',
       catalogSourceMindos: 'Built-in extension',
+      catalogSourceRuntimeExtension: 'Runtime extension',
       catalogSourceObsidian: 'Obsidian',
       catalogStatus: (status: string) => status,
       mindosRenderersTitle: 'Built-in extensions',
@@ -903,6 +904,7 @@ describe('PluginsTab', () => {
           bySource: {
             obsidian: 1,
             'mindos-renderer': 2,
+            'runtime-extension': 0,
           },
           surfaces: {
             total: 5,
@@ -951,7 +953,7 @@ describe('PluginsTab', () => {
           loaded: 0,
           blocked: 0,
           errors: 0,
-          bySource: { obsidian: 0, 'mindos-renderer': 2 },
+          bySource: { obsidian: 0, 'mindos-renderer': 2, 'runtime-extension': 0 },
           surfaces: { total: 2, available: 2, recorded: 0, blocked: 0, disabled: 0, byKind: {} },
         },
       })
@@ -978,7 +980,7 @@ describe('PluginsTab', () => {
           loaded: 1,
           blocked: 0,
           errors: 0,
-          bySource: { obsidian: 2, 'mindos-renderer': 2 },
+          bySource: { obsidian: 2, 'mindos-renderer': 2, 'runtime-extension': 0 },
           surfaces: { total: 7, available: 6, recorded: 1, blocked: 0, disabled: 0, byKind: {} },
         },
       });
@@ -1293,7 +1295,7 @@ describe('PluginsTab', () => {
         loaded: 1,
         blocked: 1,
         errors: 0,
-        bySource: { obsidian: 2, 'mindos-renderer': 2 },
+        bySource: { obsidian: 2, 'mindos-renderer': 2, 'runtime-extension': 0 },
         surfaces: { total: 4, available: 2, recorded: 1, blocked: 0, disabled: 1, byKind: {} },
       },
     });

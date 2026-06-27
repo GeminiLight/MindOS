@@ -31,6 +31,63 @@ function enablePlugin(...pluginIds: string[]) {
   );
 }
 
+function writeRuntimeExtension(extensionId = 'aion-style-pack') {
+  const extensionDir = path.join(mindRoot, '.mindos', 'runtime-extensions', extensionId);
+  fs.mkdirSync(extensionDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(extensionDir, 'manifest.json'),
+    JSON.stringify({
+      id: extensionId,
+      name: 'Aion Style Pack',
+      version: '0.1.0',
+      description: 'Runtime extension catalog fixture.',
+      author: 'MindOS',
+      contributes: {
+        acpAdapters: [
+          {
+            id: 'ext-buddy',
+            name: 'External Buddy',
+            description: 'Extension-provided ACP adapter.',
+            cliCommand: 'codebuddy',
+            acpArgs: ['--acp'],
+            supportsStreaming: true,
+          },
+        ],
+        commands: [
+          { id: 'explain', title: 'Explain Selection', slash: '/explain', runtimeId: 'ext-buddy' },
+        ],
+        skills: [
+          { id: 'review', name: 'Review Skill', entry: '$file:skills/review/SKILL.md' },
+        ],
+      },
+    }, null, 2),
+    'utf-8',
+  );
+  fs.writeFileSync(
+    path.join(extensionDir, 'mindos-runtime-extension.json'),
+    JSON.stringify({
+      schemaVersion: 1,
+      source: 'agent-runtime-extension',
+      extensionId,
+      version: '0.1.0',
+      installedAt: '2026-06-27T00:00:00.000Z',
+      contributionCounts: {
+        acpAdapters: 1,
+        mcpServers: 0,
+        assistants: 0,
+        agents: 0,
+        skills: 1,
+        commands: 1,
+        themes: 0,
+        settingsTabs: 0,
+      },
+      appliedAcpAgents: ['ext-buddy'],
+      lifecycleScriptsDeclared: 0,
+    }, null, 2),
+    'utf-8',
+  );
+}
+
 async function importRoute() {
   return import('../../app/api/plugins/catalog/route');
 }
@@ -268,7 +325,7 @@ describe('/api/plugins/catalog', () => {
       source: 'obsidian',
       status: 'blocked',
     });
-    expect(obsidianJson.counts.bySource).toEqual({ obsidian: 1, 'mindos-renderer': 0 });
+    expect(obsidianJson.counts.bySource).toEqual({ obsidian: 1, 'mindos-renderer': 0, 'runtime-extension': 0 });
 
     expect(blockedRes.status).toBe(200);
     expect(blockedJson.plugins).toHaveLength(1);
@@ -280,7 +337,7 @@ describe('/api/plugins/catalog', () => {
     expect(blockedJson.counts).toMatchObject({
       total: 1,
       blocked: 1,
-      bySource: { obsidian: 1, 'mindos-renderer': 0 },
+      bySource: { obsidian: 1, 'mindos-renderer': 0, 'runtime-extension': 0 },
       buckets: expect.objectContaining({
         all: 1,
         obsidian: 1,
@@ -298,10 +355,68 @@ describe('/api/plugins/catalog', () => {
     expect(problemJson.counts).toMatchObject({
       total: 1,
       blocked: 1,
-      bySource: { obsidian: 1, 'mindos-renderer': 0 },
+      bySource: { obsidian: 1, 'mindos-renderer': 0, 'runtime-extension': 0 },
       buckets: expect.objectContaining({
         all: 1,
         problem: 1,
+      }),
+    });
+  });
+
+  it('includes installed runtime extensions in the catalog and source filter', async () => {
+    writeRuntimeExtension();
+
+    const { GET } = await importRoute();
+    const res = await GET(new NextRequest('http://localhost/api/plugins/catalog?source=runtime-extension'));
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json.ok).toBe(true);
+    expect(json.plugins).toEqual([
+      expect.objectContaining({
+        id: 'aion-style-pack',
+        source: 'runtime-extension',
+        name: 'Aion Style Pack',
+        description: 'Runtime extension catalog fixture.',
+        version: '0.1.0',
+        author: 'MindOS',
+        status: 'enabled',
+        enabled: true,
+        loaded: false,
+        surfaces: expect.objectContaining({
+          total: 3,
+          available: 1,
+          recorded: 2,
+          byKind: expect.objectContaining({
+            command: 2,
+            settings: 1,
+          }),
+        }),
+        metadata: expect.objectContaining({
+          contributionCounts: expect.objectContaining({
+            acpAdapters: 1,
+            commands: 1,
+            skills: 1,
+          }),
+          manifestPath: '.mindos/runtime-extensions/aion-style-pack/manifest.json',
+        }),
+      }),
+    ]);
+    expect(json.counts).toMatchObject({
+      total: 1,
+      enabled: 1,
+      loaded: 0,
+      bySource: { obsidian: 0, 'mindos-renderer': 0, 'runtime-extension': 1 },
+      buckets: expect.objectContaining({
+        all: 1,
+        mindos: 1,
+        obsidian: 0,
+        problem: 0,
+      }),
+      surfaces: expect.objectContaining({
+        total: 3,
+        available: 1,
+        recorded: 2,
       }),
     });
   });

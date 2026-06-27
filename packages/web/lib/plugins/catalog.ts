@@ -4,8 +4,9 @@ import type { PluginCommunityOriginSummary, PluginDataFileSummary } from '@/lib/
 import type { PluginManifest } from '@/lib/obsidian-compat/types';
 import type { RendererPluginManifest } from '@/lib/renderers/registry';
 import type { PluginSurface, PluginSurfaceAvailability, PluginSurfaceKind, PluginSurfaceSource } from './surfaces';
+import type { InstalledAgentRuntimeExtension } from '@geminilight/mindos/server';
 
-export type PluginCatalogSource = Extract<PluginSurfaceSource, 'obsidian' | 'mindos-renderer'>;
+export type PluginCatalogSource = Extract<PluginSurfaceSource, 'obsidian' | 'mindos-renderer' | 'runtime-extension'>;
 
 export type PluginCatalogStatus =
   | 'core'
@@ -15,7 +16,7 @@ export type PluginCatalogStatus =
   | 'blocked'
   | 'error';
 
-export const PLUGIN_CATALOG_SOURCES = ['obsidian', 'mindos-renderer'] as const satisfies readonly PluginCatalogSource[];
+export const PLUGIN_CATALOG_SOURCES = ['obsidian', 'mindos-renderer', 'runtime-extension'] as const satisfies readonly PluginCatalogSource[];
 export const PLUGIN_CATALOG_STATUSES = [
   'core',
   'enabled',
@@ -108,9 +109,12 @@ export interface RendererPluginForCatalog {
   enabled?: boolean;
 }
 
+export type RuntimeExtensionPluginForCatalog = InstalledAgentRuntimeExtension;
+
 export interface BuildPluginCatalogInput {
   obsidianPlugins: ObsidianPluginForCatalog[];
   renderers: RendererPluginForCatalog[];
+  runtimeExtensions?: RuntimeExtensionPluginForCatalog[];
   surfaces: PluginSurface[];
 }
 
@@ -132,6 +136,7 @@ const EMPTY_SURFACE_SUMMARY: PluginCatalogSurfaceSummary = {
 export function buildPluginCatalog(input: BuildPluginCatalogInput): PluginCatalogItem[] {
   const items = [
     ...input.renderers.map((renderer) => rendererCatalogItem(renderer, input.surfaces)),
+    ...(input.runtimeExtensions ?? []).map((extension) => runtimeExtensionCatalogItem(extension, input.surfaces)),
     ...input.obsidianPlugins.map((plugin) => obsidianCatalogItem(plugin, input.surfaces)),
   ];
 
@@ -154,6 +159,7 @@ export function summarizePluginCatalog(items: PluginCatalogItem[]): PluginCatalo
     bySource: {
       obsidian: items.filter((item) => item.source === 'obsidian').length,
       'mindos-renderer': items.filter((item) => item.source === 'mindos-renderer').length,
+      'runtime-extension': items.filter((item) => item.source === 'runtime-extension').length,
     },
     buckets: {
       all: items.length,
@@ -175,7 +181,7 @@ export function filterPluginCatalog(items: PluginCatalogItem[], filter: PluginCa
 }
 
 export function pluginCatalogBucketMatches(bucket: PluginCatalogBucket, item: PluginCatalogItem): boolean {
-  if (bucket === 'mindos') return item.source === 'mindos-renderer';
+  if (bucket === 'mindos') return item.source === 'mindos-renderer' || item.source === 'runtime-extension';
   if (bucket === 'obsidian') return item.source === 'obsidian';
   if (bucket === 'disabled') return item.status === 'disabled';
   if (bucket === 'problem') return item.status === 'blocked' || item.status === 'error';
@@ -246,6 +252,36 @@ function obsidianCatalogItem(plugin: ObsidianPluginForCatalog, surfaces: PluginS
       ...(plugin.manifest ? { manifest: plugin.manifest } : {}),
       dataFile: plugin.runtime?.dataFile ?? { exists: false, bytes: 0 },
       ...(plugin.runtime?.communityOrigin ? { communityOrigin: plugin.runtime.communityOrigin } : {}),
+    },
+  };
+}
+
+function runtimeExtensionCatalogItem(extension: RuntimeExtensionPluginForCatalog, surfaces: PluginSurface[]): PluginCatalogItem {
+  const hasErrors = extension.diagnostics.some((diagnostic) => diagnostic.severity === 'error');
+
+  return {
+    id: extension.id,
+    source: 'runtime-extension',
+    name: extension.name,
+    description: extension.description,
+    version: extension.version,
+    author: extension.manifest.author,
+    icon: 'Rt',
+    tags: ['runtime', 'extension'],
+    builtin: false,
+    core: false,
+    enabled: !hasErrors,
+    loaded: false,
+    status: hasErrors ? 'error' : 'enabled',
+    surfaces: summarizePluginSurfaces(surfaces, 'runtime-extension', extension.id),
+    metadata: {
+      manifest: extension.manifest,
+      metadata: extension.metadata,
+      diagnostics: extension.diagnostics,
+      contributionCounts: extension.metadata.contributionCounts,
+      targetDir: extension.targetDir,
+      manifestPath: extension.manifestPath,
+      metadataPath: extension.metadataPath,
     },
   };
 }

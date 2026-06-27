@@ -30,6 +30,7 @@ import {
   type PluginCatalogBucket,
   type PluginCatalogCounts,
   type PluginCatalogItem,
+  type PluginCatalogSource,
 } from '@/lib/plugins/catalog';
 import {
   notifyObsidianPluginPackagesChanged,
@@ -66,6 +67,18 @@ import {
   type PluginSurfacesResponse,
 } from './PluginsTabModel';
 import type { PluginPanel, PluginsTabProps } from './types';
+
+function pluginSourceBadge(source: PluginCatalogSource, copy: PluginsTabProps['t']['settings']['plugins']): string {
+  if (source === 'obsidian') return copy.catalogSourceObsidian;
+  if (source === 'runtime-extension') return copy.catalogSourceRuntimeExtension;
+  return copy.catalogSourceMindos;
+}
+
+function pluginSourceIcon(plugin: PluginCatalogItem): string {
+  if (plugin.source === 'obsidian') return 'Ob';
+  if (plugin.source === 'runtime-extension') return 'Rt';
+  return plugin.icon ?? 'M';
+}
 
 export function PluginsTab({
   pluginStates,
@@ -442,7 +455,8 @@ export function PluginsTab({
   };
   const catalogBucketCounts = {
     all: catalogCounts?.buckets?.all ?? managerStats.total,
-    mindos: catalogCounts?.buckets?.mindos ?? catalogCounts?.bySource['mindos-renderer'] ?? rendererStats.total,
+    mindos: catalogCounts?.buckets?.mindos
+      ?? ((catalogCounts?.bySource['mindos-renderer'] ?? rendererStats.total) + (catalogCounts?.bySource['runtime-extension'] ?? 0)),
     obsidian: catalogCounts?.buckets?.obsidian ?? catalogCounts?.bySource.obsidian ?? 0,
     disabled: catalogCounts?.buckets?.disabled ?? catalogCounts?.disabled ?? 0,
     problem: catalogCounts?.buckets?.problem ?? (catalogCounts?.blocked ?? 0) + (catalogCounts?.errors ?? 0),
@@ -596,13 +610,13 @@ export function PluginsTab({
                       >
                         <div className="flex min-w-0 items-start gap-3">
                           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border bg-background text-xs font-semibold text-muted-foreground">
-                            {plugin.source === 'obsidian' ? 'Ob' : (plugin.icon ?? 'M')}
+                            {pluginSourceIcon(plugin)}
                           </span>
                           <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-2">
                               <span className="text-sm font-medium text-foreground">{plugin.name}</span>
                               <span className="rounded bg-muted px-1.5 py-0.5 text-2xs text-muted-foreground">
-                                {plugin.source === 'obsidian' ? copy.catalogSourceObsidian : copy.catalogSourceMindos}
+                                {pluginSourceBadge(plugin.source, copy)}
                               </span>
                               <span className={`rounded border px-1.5 py-0.5 font-mono text-2xs ${catalogStatusClass(plugin.status)}`}>
                                 {copy.catalogStatus(plugin.status)}

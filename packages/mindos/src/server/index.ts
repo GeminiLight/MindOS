@@ -188,6 +188,22 @@ export {
 } from './handlers/runtime-readiness.js';
 
 export {
+  MINDOS_RUNTIME_EXTENSIONS_ROOT,
+  buildAgentRuntimeExtensionPreflight,
+  handleAgentRuntimeExtensionInstallPost,
+  handleAgentRuntimeExtensionPreflightPost,
+  handleAgentRuntimeExtensionsGet,
+  listInstalledAgentRuntimeExtensions,
+  type AgentRuntimeExtensionContributionCounts,
+  type AgentRuntimeExtensionInstallPayload,
+  type AgentRuntimeExtensionPreflightPayload,
+  type InstalledAgentRuntimeExtension,
+  type InstalledAgentRuntimeExtensionMetadata,
+  type RuntimeExtensionServices,
+  type RuntimeExtensionSettings,
+} from './handlers/runtime-extensions.js';
+
+export {
   evaluateSkillRuntimeMatch,
   type MindosSkillRuntimeMatch,
   type MindosSkillRuntimeMatchInput,

@@ -1,8 +1,9 @@
 import { getObsidianImportSupport, type ObsidianImportSupport } from '@/lib/obsidian-compat/import-policy';
 import type { PluginManifest } from '@/lib/obsidian-compat/types';
 import type { RendererPluginManifest } from '@/lib/renderers/registry';
+import type { InstalledAgentRuntimeExtension } from '@geminilight/mindos/server';
 
-export type PluginSurfaceSource = 'obsidian' | 'mindos-renderer' | 'mindos-native';
+export type PluginSurfaceSource = 'obsidian' | 'mindos-renderer' | 'mindos-native' | 'runtime-extension';
 
 export type PluginSurfaceKind =
   | 'command'
@@ -191,6 +192,8 @@ export interface RendererPluginForSurfaces {
   entryPath?: string;
   enabled?: boolean;
 }
+
+export type RuntimeExtensionForSurfaces = InstalledAgentRuntimeExtension;
 
 export interface PluginSurfaceFilter {
   kind?: PluginSurfaceKind;
@@ -586,6 +589,231 @@ export function buildRendererPluginSurfaces(renderers: RendererPluginForSurfaces
       manifest: renderer.manifest,
     },
   }));
+}
+
+export function buildRuntimeExtensionPluginSurfaces(extensions: RuntimeExtensionForSurfaces[]): PluginSurface[] {
+  const surfaces: PluginSurface[] = [];
+
+  for (const extension of extensions) {
+    const base = {
+      source: 'runtime-extension' as const,
+      pluginId: extension.id,
+      pluginName: extension.name,
+    };
+    const manifest = extension.manifest;
+
+    for (const adapter of manifest.contributes.acpAdapters) {
+      surfaces.push({
+        ...base,
+        id: `runtime-extension:acp-adapter:${extension.id}:${slugifySurfacePart(adapter.id)}`,
+        kind: 'command',
+        location: 'command-center',
+        availability: 'available',
+        title: adapter.name ?? adapter.id,
+        description: adapter.description ?? 'ACP adapter installed from a runtime extension manifest.',
+        icon: 'network',
+        host: {
+          state: 'mounted',
+          label: 'ACP Registry',
+          description: 'Installed through MindOS ACP config and available to runtime detection and readiness checks.',
+        },
+        metadata: {
+          contribution: 'acpAdapter',
+          adapterId: adapter.id,
+          command: adapter.command,
+          args: adapter.args,
+          detectCommands: adapter.detectCommands,
+          installCmd: adapter.installCmd,
+          adapterMetadata: adapter.adapterMetadata,
+          extensionId: extension.id,
+          extensionVersion: extension.version,
+        },
+      });
+    }
+
+    for (const command of manifest.contributes.commands) {
+      surfaces.push({
+        ...base,
+        id: `runtime-extension:command:${extension.id}:${slugifySurfacePart(command.id)}`,
+        kind: 'command',
+        location: 'command-center',
+        availability: 'recorded',
+        title: command.title,
+        description: command.description ?? 'Runtime extension command declaration.',
+        icon: 'terminal',
+        host: {
+          state: 'catalog',
+          label: 'Runtime command catalog',
+          description: 'Declared by the extension manifest. Execution waits for a runtime command output contract.',
+        },
+        metadata: {
+          contribution: 'command',
+          commandId: command.id,
+          slash: command.slash,
+          runtimeId: command.runtimeId,
+          command: command.command,
+          category: command.category,
+          extensionId: extension.id,
+        },
+      });
+    }
+
+    for (const server of manifest.contributes.mcpServers) {
+      surfaces.push({
+        ...base,
+        id: `runtime-extension:mcp-server:${extension.id}:${slugifySurfacePart(server.id)}`,
+        kind: 'settings',
+        location: 'settings',
+        availability: 'recorded',
+        title: server.name ?? server.id,
+        description: server.description ?? 'MCP server declaration recorded from a runtime extension manifest.',
+        icon: 'server',
+        host: {
+          state: 'catalog',
+          label: 'MCP declaration catalog',
+          description: 'Recorded for audit and future install flows; MindOS does not auto-write MCP server configs from extension manifests.',
+        },
+        metadata: {
+          contribution: 'mcpServer',
+          serverId: server.id,
+          type: server.type,
+          command: server.command,
+          args: server.args,
+          url: server.url,
+          extensionId: extension.id,
+        },
+      });
+    }
+
+    for (const assistant of manifest.contributes.assistants) {
+      surfaces.push({
+        ...base,
+        id: `runtime-extension:assistant:${extension.id}:${slugifySurfacePart(assistant.id)}`,
+        kind: 'settings',
+        location: 'settings',
+        availability: 'recorded',
+        title: assistant.name,
+        description: assistant.description ?? 'Assistant declaration recorded from a runtime extension manifest.',
+        icon: 'bot',
+        host: {
+          state: 'catalog',
+          label: 'Assistant declaration catalog',
+          description: 'Recorded as a declarative extension entry; no assistant profile is written until an explicit install path exists.',
+        },
+        metadata: {
+          contribution: 'assistant',
+          assistantId: assistant.id,
+          runtimeId: assistant.runtimeId,
+          model: assistant.model,
+          prompt: assistant.prompt,
+          extensionId: extension.id,
+        },
+      });
+    }
+
+    for (const agent of manifest.contributes.agents) {
+      surfaces.push({
+        ...base,
+        id: `runtime-extension:agent:${extension.id}:${slugifySurfacePart(agent.id)}`,
+        kind: 'settings',
+        location: 'settings',
+        availability: 'recorded',
+        title: agent.name,
+        description: agent.description ?? 'Agent declaration recorded from a runtime extension manifest.',
+        icon: 'bot',
+        host: {
+          state: 'catalog',
+          label: 'Agent declaration catalog',
+          description: 'Recorded as a declarative extension entry; launching waits for a runtime adapter contract.',
+        },
+        metadata: {
+          contribution: 'agent',
+          agentId: agent.id,
+          runtimeId: agent.runtimeId,
+          command: agent.command,
+          args: agent.args,
+          manifest: agent.manifest,
+          extensionId: extension.id,
+        },
+      });
+    }
+
+    for (const skill of manifest.contributes.skills) {
+      surfaces.push({
+        ...base,
+        id: `runtime-extension:skill:${extension.id}:${slugifySurfacePart(skill.id)}`,
+        kind: 'settings',
+        location: 'settings',
+        availability: 'recorded',
+        title: skill.name,
+        description: skill.description ?? 'Skill declaration recorded from a runtime extension manifest.',
+        icon: 'sparkles',
+        host: {
+          state: 'catalog',
+          label: 'Skill declaration catalog',
+          description: 'Recorded for audit; MindOS does not copy arbitrary skill directories from extension manifests.',
+        },
+        metadata: {
+          contribution: 'skill',
+          skillId: skill.id,
+          path: skill.path,
+          entry: skill.entry,
+          runtimeId: skill.runtimeId,
+          extensionId: extension.id,
+        },
+      });
+    }
+
+    for (const [index, theme] of manifest.contributes.themes.entries()) {
+      surfaces.push({
+        ...base,
+        id: `runtime-extension:theme:${extension.id}:${index}`,
+        kind: 'style',
+        location: 'plugin-assets',
+        availability: 'recorded',
+        title: typeof theme.name === 'string' ? theme.name : `${extension.name} theme`,
+        description: 'Theme declaration recorded from a runtime extension manifest.',
+        icon: 'palette',
+        host: {
+          state: 'catalog',
+          label: 'Theme declaration catalog',
+          description: 'Recorded for audit; theme assets are not mounted automatically.',
+        },
+        metadata: {
+          contribution: 'theme',
+          index,
+          theme,
+          extensionId: extension.id,
+        },
+      });
+    }
+
+    for (const [index, tab] of manifest.contributes.settingsTabs.entries()) {
+      surfaces.push({
+        ...base,
+        id: `runtime-extension:settings:${extension.id}:${index}`,
+        kind: 'settings',
+        location: 'settings',
+        availability: 'recorded',
+        title: typeof tab.title === 'string' ? tab.title : `${extension.name} settings`,
+        description: 'Settings tab declaration recorded from a runtime extension manifest.',
+        icon: 'sliders',
+        host: {
+          state: 'catalog',
+          label: 'Settings declaration catalog',
+          description: 'Recorded for audit; settings UI is not mounted automatically.',
+        },
+        metadata: {
+          contribution: 'settingsTab',
+          index,
+          tab,
+          extensionId: extension.id,
+        },
+      });
+    }
+  }
+
+  return surfaces;
 }
 
 export function filterPluginSurfaces(surfaces: PluginSurface[], filter: PluginSurfaceFilter): PluginSurface[] {

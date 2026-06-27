@@ -50,6 +50,11 @@ import { handleAgentRuntimeArtifactProjectionsGet } from './handlers/runtime-art
 import { handleAgentRuntimeAutomationProjectionsGet } from './handlers/runtime-automation-projections.js';
 import { handleAgentRuntimeReadinessGet } from './handlers/runtime-readiness.js';
 import {
+  handleAgentRuntimeExtensionInstallPost,
+  handleAgentRuntimeExtensionPreflightPost,
+  handleAgentRuntimeExtensionsGet,
+} from './handlers/runtime-extensions.js';
+import {
   handleAgentCopySkillPost,
   handleCustomAgentDetectPost,
   handleCustomAgentsDelete,
@@ -433,6 +438,18 @@ async function handleRequest(
         ...createHttpMcpProjectionServices(services, url.searchParams),
         getAcpSessionSnapshots: () => getAcpSessionSnapshots(services),
       }));
+      return;
+    }
+    if (route === 'GET /api/agent-runtimes/extensions') {
+      writeResponse(res, handleAgentRuntimeExtensionsGet(services));
+      return;
+    }
+    if (route === 'POST /api/agent-runtimes/extensions/preflight') {
+      writeResponse(res, handleAgentRuntimeExtensionPreflightPost(await readJsonBody(req), services));
+      return;
+    }
+    if (route === 'POST /api/agent-runtimes/extensions/install') {
+      writeResponse(res, handleAgentRuntimeExtensionInstallPost(await readJsonBody(req), services));
       return;
     }
     if (route === 'GET /api/agent-runtimes/codex/threads') {
