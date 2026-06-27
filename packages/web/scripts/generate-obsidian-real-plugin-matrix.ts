@@ -40,6 +40,10 @@ import {
   PERIODIC_NOTES_WORKFLOW_PROBE_FIXTURE,
   buildPeriodicNotesWorkflowProbeDataJson,
 } from '@/lib/obsidian-compat/periodic-notes-workflow-fixture';
+import {
+  HOMEPAGE_WORKFLOW_PROBE_FIXTURE,
+  buildHomepageWorkflowProbeDataJson,
+} from '@/lib/obsidian-compat/homepage-workflow-fixture';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const webRoot = path.resolve(__dirname, '..');
@@ -498,6 +502,17 @@ function writeWorkflowProbeFixture(
     const templatePath = path.join(mindRoot, PERIODIC_NOTES_WORKFLOW_PROBE_FIXTURE.templatePath);
     fs.mkdirSync(path.dirname(templatePath), { recursive: true });
     fs.writeFileSync(templatePath, PERIODIC_NOTES_WORKFLOW_PROBE_FIXTURE.templateContent, 'utf-8');
+    return;
+  }
+  if (pluginId === 'homepage') {
+    fs.writeFileSync(
+      path.join(pluginDir, 'data.json'),
+      `${JSON.stringify(buildHomepageWorkflowProbeDataJson(), null, 2)}\n`,
+      'utf-8',
+    );
+    const homepagePath = path.join(mindRoot, HOMEPAGE_WORKFLOW_PROBE_FIXTURE.targetPath);
+    fs.mkdirSync(path.dirname(homepagePath), { recursive: true });
+    fs.writeFileSync(homepagePath, HOMEPAGE_WORKFLOW_PROBE_FIXTURE.content, 'utf-8');
     return;
   }
   if (pluginId !== 'quickadd') return;

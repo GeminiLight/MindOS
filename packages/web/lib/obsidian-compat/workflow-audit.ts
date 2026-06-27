@@ -58,6 +58,7 @@ const TAG_WRANGLER_PLUGIN_IDS = new Set(['tag-wrangler']);
 const CALENDAR_PLUGIN_IDS = new Set(['calendar', 'obsidian-calendar-plugin']);
 const ADMONITION_PLUGIN_IDS = new Set(['obsidian-admonition', 'admonition']);
 const RECENT_FILES_PLUGIN_IDS = new Set(['recent-files-obsidian']);
+const HOMEPAGE_PLUGIN_IDS = new Set(['homepage']);
 
 export function buildObsidianWorkflowAudits(input: BuildObsidianWorkflowAuditsInput): ObsidianWorkflowAudit[] {
   const pluginId = input.pluginId.toLowerCase();
@@ -69,6 +70,7 @@ export function buildObsidianWorkflowAudits(input: BuildObsidianWorkflowAuditsIn
   if (CALENDAR_PLUGIN_IDS.has(pluginId)) audits.push(buildCalendarAudit(input));
   if (ADMONITION_PLUGIN_IDS.has(pluginId)) audits.push(buildAdmonitionAudit(input));
   if (RECENT_FILES_PLUGIN_IDS.has(pluginId)) audits.push(buildRecentFilesAudit(input));
+  if (HOMEPAGE_PLUGIN_IDS.has(pluginId)) audits.push(buildHomepageAudit(input));
   if (DATAVIEW_PLUGIN_IDS.has(pluginId)) audits.push(buildNativeReplacementAudit(
     input,
     'dataview-native-query',
@@ -202,6 +204,21 @@ function buildRecentFilesAudit(input: BuildObsidianWorkflowAuditsInput): Obsidia
     return partialAudit('recent-files-open-view', 'Open recent files view', 'runtime-ledger', registered, 'Execute the recent-files command and render the registered view through the snapshot host.');
   }
   return staticAudit(input, 'recent-files-open-view', 'Open recent files view', ['commands', 'views', 'workspace'], 'Load the plugin, execute the recent-files command, then verify the view snapshot output.');
+}
+
+function buildHomepageAudit(input: BuildObsidianWorkflowAuditsInput): ObsidianWorkflowAudit {
+  const probed = probedAudit(input, 'homepage-open-note');
+  if (probed) return probed;
+  const called = latestEntries(input, { capabilities: ['addCommand', 'Workspace.openLinkText'], phases: ['called'] });
+  const registered = latestEntries(input, { capabilities: ['addCommand'], phases: ['registered'] });
+  if (called.length > 0) {
+    return partialAudit('homepage-open-note', 'Open configured homepage note', 'runtime-ledger', called, 'Run the Homepage workflow probe and verify a data.json-backed File homepage opens the configured MindOS note before marking the workflow observed.');
+  }
+  if (input.capabilityGate.blocked) return blockedAudit(input, 'homepage-open-note', 'Open configured homepage note');
+  if (registered.length > 0) {
+    return partialAudit('homepage-open-note', 'Open configured homepage note', 'runtime-ledger', registered, 'Execute the open-homepage command against a controlled Homepage data.json File fixture.');
+  }
+  return staticAudit(input, 'homepage-open-note', 'Open configured homepage note', ['commands', 'settings', 'workspace'], 'Load the plugin, seed a File homepage data.json fixture, then verify the command produces a workspace open request.');
 }
 
 function buildNativeReplacementAudit(

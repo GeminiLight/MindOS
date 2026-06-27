@@ -391,6 +391,7 @@ export interface Workspace {
   onLayoutReady(callback: () => void): void;
   openLinkText(linktext: string, sourcePath: string, openState?: unknown): Promise<void>;
   getLeaf(newLeaf?: boolean | 'split' | 'tab' | 'window'): WorkspaceLeaf;
+  setActiveLeaf(leaf: WorkspaceLeaf): void;
   getUnpinnedLeaf(): WorkspaceLeaf;
   splitActiveLeaf(): WorkspaceLeaf;
   getLeftLeaf(split?: boolean): WorkspaceLeaf | null;

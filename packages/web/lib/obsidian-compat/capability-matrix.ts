@@ -1043,6 +1043,14 @@ export const OBSIDIAN_CAPABILITY_MATRIX: ObsidianCapabilityRow[] = [
     notes: 'Leaves are compatibility hosts for snapshots and text output.',
   },
   {
+    api: 'Workspace.setActiveLeaf',
+    surface: 'workspace',
+    support: 'limited',
+    host: 'Workspace shim',
+    tests: ['obsidian-compat/workspace.test.ts'],
+    notes: 'Records the active compatibility leaf and emits bounded workspace events; it is not a full native focus or pane graph.',
+  },
+  {
     api: 'Workspace.getUnpinnedLeaf',
     surface: 'views',
     support: 'limited',

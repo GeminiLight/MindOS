@@ -20,6 +20,10 @@ import {
   PERIODIC_NOTES_WORKFLOW_PROBE_FIXTURE,
   buildPeriodicNotesWorkflowProbeDataJson,
 } from '@/lib/obsidian-compat/periodic-notes-workflow-fixture';
+import {
+  HOMEPAGE_WORKFLOW_PROBE_FIXTURE,
+  buildHomepageWorkflowProbeDataJson,
+} from '@/lib/obsidian-compat/homepage-workflow-fixture';
 
 let mindRoot: string;
 
@@ -61,6 +65,13 @@ const writePeriodicNotesFixture = () => {
   const templatePath = path.join(mindRoot, PERIODIC_NOTES_WORKFLOW_PROBE_FIXTURE.templatePath);
   fs.mkdirSync(path.dirname(templatePath), { recursive: true });
   fs.writeFileSync(templatePath, PERIODIC_NOTES_WORKFLOW_PROBE_FIXTURE.templateContent, 'utf-8');
+};
+
+const writeHomepageFixture = () => {
+  writePluginData('homepage', buildHomepageWorkflowProbeDataJson());
+  const homepagePath = path.join(mindRoot, HOMEPAGE_WORKFLOW_PROBE_FIXTURE.targetPath);
+  fs.mkdirSync(path.dirname(homepagePath), { recursive: true });
+  fs.writeFileSync(homepagePath, HOMEPAGE_WORKFLOW_PROBE_FIXTURE.content, 'utf-8');
 };
 
 describe('Obsidian workflow probes', () => {
@@ -486,6 +497,138 @@ describe('Obsidian workflow probes', () => {
       expect.objectContaining({ id: 'fixture-note-content', passed: false }),
       expect.objectContaining({ id: 'workspace-open', passed: false }),
       expect.objectContaining({ id: 'vault-create-called-ledger', passed: true }),
+    ]));
+  });
+
+  it('passes the Homepage probe only after a data.json-backed File homepage opens the fixture note', async () => {
+    writePlugin('homepage', `
+      const { Plugin } = require('obsidian');
+      module.exports = class HomepagePlugin extends Plugin {
+        async onload() {
+          this.settings = await this.loadData();
+          this.addCommand({
+            id: 'open-homepage',
+            name: 'Open homepage',
+            callback: async () => this.openHomepage()
+          });
+        }
+        async openHomepage() {
+          const homepage = this.settings.homepages['${HOMEPAGE_WORKFLOW_PROBE_FIXTURE.homepageName}'];
+          const file = this.app.metadataCache.getFirstLinkpathDest(homepage.value, '/');
+          if (!file) throw new Error('Missing homepage file: ' + homepage.value);
+          await this.app.vault.cachedRead(file);
+          const leaf = this.app.workspace.getLeaf(homepage.manualOpenMode === 'Keep open notes');
+          await leaf.openFile(file);
+          this.app.workspace.setActiveLeaf(leaf);
+        }
+      };
+    `);
+    writeHomepageFixture();
+
+    const manager = new PluginManager(mindRoot);
+    await manager.discover();
+    await manager.enable('homepage', { confirmCapabilityGate: true });
+
+    const result = await manager.runWorkflowProbe('homepage', 'homepage-open-note');
+
+    expect(result).toMatchObject({
+      pluginId: 'homepage',
+      id: 'homepage-open-note',
+      status: 'passed',
+      source: 'workflow-probe',
+    });
+    expect(result.evidence).toEqual(expect.arrayContaining([
+      expect.stringContaining('Executed Homepage command "Open homepage"'),
+      expect.stringContaining(HOMEPAGE_WORKFLOW_PROBE_FIXTURE.targetPath),
+      expect.stringContaining('workspace open request'),
+    ]));
+    expect(result.assertions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'execute-command', passed: true }),
+      expect.objectContaining({ id: 'data-json-homepage-settings', passed: true }),
+      expect.objectContaining({ id: 'homepage-note-content', passed: true }),
+      expect.objectContaining({ id: 'workspace-open', passed: true }),
+      expect.objectContaining({ id: 'workspace-open-called-ledger', passed: true }),
+      expect.objectContaining({ id: 'runtime-called-ledger', passed: true }),
+    ]));
+
+    const plugin = manager.list().find((item) => item.id === 'homepage');
+    expect(plugin?.runtime.capabilityLedger).toEqual(expect.arrayContaining([
+      expect.objectContaining({ capability: 'Workspace.openLinkText', phase: 'called' }),
+      expect.objectContaining({ capability: 'Workspace.setActiveLeaf', phase: 'called' }),
+    ]));
+    expect(plugin?.workflowAudits).toEqual([
+      expect.objectContaining({
+        id: 'homepage-open-note',
+        status: 'observed',
+        source: 'workflow-probe',
+        lastProbeStatus: 'passed',
+      }),
+    ]);
+  });
+
+  it('skips the Homepage probe when no controlled data-backed File homepage is available', async () => {
+    writePlugin('homepage', `
+      const { Plugin } = require('obsidian');
+      module.exports = class HomepagePlugin extends Plugin {
+        onload() {
+          this.addCommand({ id: 'open-homepage', name: 'Open homepage', callback: () => {} });
+        }
+      };
+    `);
+
+    const manager = new PluginManager(mindRoot);
+    await manager.discover();
+    await manager.enable('homepage', { confirmCapabilityGate: true });
+
+    const result = await manager.runWorkflowProbe('homepage', 'homepage-open-note');
+
+    expect(result).toMatchObject({
+      pluginId: 'homepage',
+      id: 'homepage-open-note',
+      status: 'skipped',
+      failureReason: expect.stringContaining('data.json-backed Homepage File fixture'),
+    });
+    expect(result.assertions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'probe-available', passed: false }),
+    ]));
+  });
+
+  it('fails the Homepage probe when the command opens a note other than the configured fixture', async () => {
+    writePlugin('homepage', `
+      const { Plugin } = require('obsidian');
+      module.exports = class HomepagePlugin extends Plugin {
+        onload() {
+          this.addCommand({
+            id: 'open-homepage',
+            name: 'Open homepage',
+            callback: async () => {
+              const wrong = await this.app.vault.create('Home/wrong-homepage.md', 'wrong content');
+              const leaf = this.app.workspace.getLeaf(true);
+              await leaf.openFile(wrong);
+              this.app.workspace.setActiveLeaf(leaf);
+            }
+          });
+        }
+      };
+    `);
+    writeHomepageFixture();
+
+    const manager = new PluginManager(mindRoot);
+    await manager.discover();
+    await manager.enable('homepage', { confirmCapabilityGate: true });
+
+    const result = await manager.runWorkflowProbe('homepage', 'homepage-open-note');
+
+    expect(result).toMatchObject({
+      pluginId: 'homepage',
+      id: 'homepage-open-note',
+      status: 'failed',
+      failureReason: expect.stringContaining('configured fixture note'),
+    });
+    expect(result.assertions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'homepage-note-content', passed: true }),
+      expect.objectContaining({ id: 'workspace-open', passed: false }),
+      expect.objectContaining({ id: 'workspace-open-called-ledger', passed: true }),
     ]));
   });
 

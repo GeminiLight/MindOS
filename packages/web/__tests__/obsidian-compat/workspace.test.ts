@@ -110,6 +110,34 @@ describe('Workspace shim', () => {
     ]));
   });
 
+  it('records active compatibility leaf changes without mounting native panes', async () => {
+    const leaf = app.workspace.getLeaf(true);
+    await leaf.setViewState({ type: 'markdown', state: { file: { path: 'Home/mindos-homepage.md' } } });
+    const onActiveLeafChange = vi.fn();
+    const onLayoutChange = vi.fn();
+
+    app.workspace.on('active-leaf-change', onActiveLeafChange);
+    app.workspace.on('layout-change', onLayoutChange);
+
+    await app.getRuntimeHost().runWithPluginContext('homepage', async () => {
+      app.workspace.setActiveLeaf(leaf);
+    });
+
+    expect(app.workspace.activeLeaf).toBe(leaf);
+    expect(app.workspace.getLeavesOfType('markdown')).toContain(leaf);
+    expect(onActiveLeafChange).toHaveBeenCalledWith(leaf);
+    expect(onLayoutChange).toHaveBeenCalled();
+    expect(app.getRuntimeHost().getRuntimeCapabilityLedger('homepage')).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        capability: 'Workspace.setActiveLeaf',
+        surface: 'workspace',
+        support: 'limited',
+        phase: 'called',
+        evidence: expect.stringContaining('markdown'),
+      }),
+    ]));
+  });
+
   it('keeps the active MarkdownView editor read-only outside editor command execution', async () => {
     const file = await app.vault.create('notes/today.md', '# Today\nBody');
 

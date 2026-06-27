@@ -163,6 +163,80 @@ describe('buildObsidianWorkflowAudits', () => {
     ]);
   });
 
+  it('keeps Homepage runtime navigation partial until the configured-note probe passes', () => {
+    const audits = buildObsidianWorkflowAudits({
+      pluginId: 'homepage',
+      pluginName: 'Homepage',
+      coverage: [],
+      capabilityGate: readyGate,
+      runtimeEntries: [],
+      history: history([
+        runtimeEntry({
+          pluginId: 'homepage',
+          capability: 'Workspace.openLinkText',
+          surface: 'workspace',
+          support: 'request-only',
+          recordedAt: '2026-06-27T09:00:00.000Z',
+          evidence: 'Plugin requested workspace navigation.',
+        }),
+      ]),
+    });
+
+    expect(audits).toEqual([
+      expect.objectContaining({
+        id: 'homepage-open-note',
+        status: 'partial',
+        source: 'runtime-ledger',
+        lastObservedAt: '2026-06-27T09:00:00.000Z',
+      }),
+    ]);
+  });
+
+  it('marks the Homepage configured-note workflow observed when its probe passes', () => {
+    const homepageResult = {
+      schemaVersion: 1 as const,
+      pluginId: 'homepage',
+      id: 'homepage-open-note' as const,
+      label: 'Open configured homepage note',
+      status: 'passed' as const,
+      source: 'workflow-probe' as const,
+      startedAt: '2026-06-27T09:00:00.000Z',
+      completedAt: '2026-06-27T09:00:01.000Z',
+      evidence: ['Homepage probe opened Home/mindos-homepage.md.'],
+      assertions: [
+        { id: 'workspace-open', label: 'Requested workspace opening', passed: true },
+      ],
+    };
+
+    const audits = buildObsidianWorkflowAudits({
+      pluginId: 'homepage',
+      pluginName: 'Homepage',
+      coverage: [],
+      capabilityGate: readyGate,
+      runtimeEntries: [],
+      history: history(),
+      workflowProbeHistory: {
+        total: 1,
+        entries: [homepageResult],
+        latestById: {
+          'homepage-open-note': homepageResult,
+        },
+        skippedCorruptLines: 0,
+        updatedAt: '2026-06-27T09:00:01.000Z',
+      },
+    });
+
+    expect(audits).toEqual([
+      expect.objectContaining({
+        id: 'homepage-open-note',
+        status: 'observed',
+        source: 'workflow-probe',
+        lastObservedAt: '2026-06-27T09:00:01.000Z',
+        lastProbeStatus: 'passed',
+      }),
+    ]);
+  });
+
   it('adds the QuickAdd template workflow audit when a template probe has run', () => {
     const captureResult = {
       schemaVersion: 1 as const,

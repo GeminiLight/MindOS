@@ -216,6 +216,21 @@ class WorkspaceShim extends Events implements Workspace {
     return this.activeLeaf;
   }
 
+  setActiveLeaf(leaf: WorkspaceLeaf): void {
+    this.activeLeaf = leaf;
+    if (!this.leaves.includes(leaf)) {
+      this.leaves.push(leaf);
+    }
+    this.host.recordRuntimeCapability(
+      this.host.getCurrentPluginId(),
+      'Workspace.setActiveLeaf',
+      'called',
+      `Plugin requested active workspace leaf "${leaf.getViewState().type}".`,
+    );
+    this.trigger('active-leaf-change', leaf);
+    this.trigger('layout-change');
+  }
+
   getUnpinnedLeaf(): WorkspaceLeaf {
     return this.getLeaf();
   }
