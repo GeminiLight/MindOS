@@ -20,6 +20,8 @@ export type ObsidianElement = HTMLElement & {
   setText(text: string): ObsidianElement;
   appendText(text: string): ObsidianElement;
   setChildrenInPlace(children: Iterable<HTMLElement | Text | string>): ObsidianElement;
+  setAttr(key: string, value: string | number | boolean): ObsidianElement;
+  getAttr(key: string): string | null;
   addClass(cls: string | string[]): ObsidianElement;
   removeClass(cls: string | string[]): ObsidianElement;
   toggleClass(cls: string, value?: boolean): ObsidianElement;
@@ -115,6 +117,15 @@ function attachHelpers(el: HTMLElement): ObsidianElement {
       }
     }
     return this;
+  };
+
+  target.setAttr ??= function setAttr(key, value) {
+    this.setAttribute(key, String(value));
+    return this;
+  };
+
+  target.getAttr ??= function getAttr(key) {
+    return this.getAttribute(key);
   };
 
   target.addClass ??= function addClass(cls) {

@@ -12,6 +12,10 @@ import {
   QUICKADD_WORKFLOW_PROBE_FIXTURE,
   buildQuickAddWorkflowProbeDataJson,
 } from '@/lib/obsidian-compat/quickadd-workflow-fixture';
+import {
+  RECENT_FILES_WORKFLOW_PROBE_FIXTURE,
+  buildRecentFilesWorkflowProbeDataJson,
+} from '@/lib/obsidian-compat/recent-files-workflow-fixture';
 
 let mindRoot: string;
 
@@ -36,6 +40,15 @@ const writeQuickAddTemplateFixture = () => {
   const templatePath = path.join(mindRoot, QUICKADD_TEMPLATE_WORKFLOW_PROBE_FIXTURE.templatePath);
   fs.mkdirSync(path.dirname(templatePath), { recursive: true });
   fs.writeFileSync(templatePath, QUICKADD_TEMPLATE_WORKFLOW_PROBE_FIXTURE.templateContent, 'utf-8');
+};
+
+const writeRecentFilesFixture = () => {
+  writePluginData('recent-files-obsidian', buildRecentFilesWorkflowProbeDataJson());
+  for (const row of RECENT_FILES_WORKFLOW_PROBE_FIXTURE.rows) {
+    const notePath = path.join(mindRoot, row.path);
+    fs.mkdirSync(path.dirname(notePath), { recursive: true });
+    fs.writeFileSync(notePath, row.content, 'utf-8');
+  }
 };
 
 describe('Obsidian workflow probes', () => {
@@ -331,6 +344,10 @@ describe('Obsidian workflow probes', () => {
     writePlugin('recent-files-obsidian', `
       const { ItemView, Plugin } = require('obsidian');
       class RecentFilesView extends ItemView {
+        constructor(leaf, data) {
+          super(leaf);
+          this.data = data;
+        }
         getViewType() {
           return 'recent-files';
         }
@@ -342,14 +359,16 @@ describe('Obsidian workflow probes', () => {
           if ([].contains('explorer')) {
             root.createDiv({ text: 'Explorer aliases enabled' });
           }
-          root.createDiv({ text: 'Alpha.md' });
-          root.createDiv({ text: 'Beta.md' });
+          for (const file of this.data.recentFiles) {
+            root.createDiv({ text: file.basename }).setAttr('draggable', 'true');
+          }
           this.contentEl.setChildrenInPlace([root]);
         }
       }
       module.exports = class RecentFilesPlugin extends Plugin {
-        onload() {
-          this.registerView('recent-files', (leaf) => new RecentFilesView(leaf));
+        async onload() {
+          this.data = await this.loadData();
+          this.registerView('recent-files', (leaf) => new RecentFilesView(leaf, this.data));
           this.addCommand({
             id: 'open-recent-files',
             name: 'Open recent files',
@@ -365,6 +384,7 @@ describe('Obsidian workflow probes', () => {
         }
       };
     `);
+    writeRecentFilesFixture();
 
     const manager = new PluginManager(mindRoot);
     await manager.discover();
@@ -381,10 +401,12 @@ describe('Obsidian workflow probes', () => {
     expect(result.evidence).toEqual(expect.arrayContaining([
       expect.stringContaining('Executed Recent Files command "Open recent files"'),
       expect.stringContaining('Rendered Recent Files view "recent-files"'),
+      expect.stringContaining('Observed Recent Files data row "MindOS Recent Alpha"'),
     ]));
     expect(result.assertions).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: 'execute-command', passed: true }),
       expect.objectContaining({ id: 'render-view', passed: true }),
+      expect.objectContaining({ id: 'recent-file-row', passed: true }),
       expect.objectContaining({ id: 'command-called-ledger', passed: true }),
       expect.objectContaining({ id: 'view-called-ledger', passed: true }),
     ]));
@@ -396,6 +418,98 @@ describe('Obsidian workflow probes', () => {
         lastProbeStatus: 'passed',
       }),
     ]);
+  });
+
+  it('skips the Recent Files probe when no data-backed recent rows are available', async () => {
+    writePlugin('recent-files-obsidian', `
+      const { ItemView, Plugin } = require('obsidian');
+      class RecentFilesView extends ItemView {
+        getViewType() {
+          return 'recent-files';
+        }
+        getDisplayText() {
+          return 'Recent Files';
+        }
+        onOpen() {
+          this.contentEl.createDiv({ text: 'Recent Files' });
+        }
+      }
+      module.exports = class RecentFilesPlugin extends Plugin {
+        onload() {
+          this.registerView('recent-files', (leaf) => new RecentFilesView(leaf));
+          this.addCommand({
+            id: 'open-recent-files',
+            name: 'Open recent files',
+            callback: async () => {
+              const leaf = this.app.workspace.getRightLeaf(false);
+              await leaf.setViewState({ type: 'recent-files' });
+              await this.app.workspace.revealLeaf(leaf);
+            }
+          });
+        }
+      };
+    `);
+
+    const manager = new PluginManager(mindRoot);
+    await manager.discover();
+    await manager.enable('recent-files-obsidian', { confirmCapabilityGate: true });
+
+    const result = await manager.runWorkflowProbe('recent-files-obsidian', 'recent-files-open-view');
+
+    expect(result).toMatchObject({
+      pluginId: 'recent-files-obsidian',
+      id: 'recent-files-open-view',
+      status: 'skipped',
+      failureReason: expect.stringContaining('data.json-backed Recent Files rows'),
+    });
+  });
+
+  it('fails the Recent Files probe when fixture rows are not visible in the snapshot', async () => {
+    writePlugin('recent-files-obsidian', `
+      const { ItemView, Plugin } = require('obsidian');
+      class RecentFilesView extends ItemView {
+        getViewType() {
+          return 'recent-files';
+        }
+        getDisplayText() {
+          return 'Recent Files';
+        }
+        onOpen() {
+          this.contentEl.createDiv({ text: 'Recent Files' });
+        }
+      }
+      module.exports = class RecentFilesPlugin extends Plugin {
+        onload() {
+          this.registerView('recent-files', (leaf) => new RecentFilesView(leaf));
+          this.addCommand({
+            id: 'open-recent-files',
+            name: 'Open recent files',
+            callback: async () => {
+              const leaf = this.app.workspace.getRightLeaf(false);
+              await leaf.setViewState({ type: 'recent-files' });
+              await this.app.workspace.revealLeaf(leaf);
+            }
+          });
+        }
+      };
+    `);
+    writeRecentFilesFixture();
+
+    const manager = new PluginManager(mindRoot);
+    await manager.discover();
+    await manager.enable('recent-files-obsidian', { confirmCapabilityGate: true });
+
+    const result = await manager.runWorkflowProbe('recent-files-obsidian', 'recent-files-open-view');
+
+    expect(result).toMatchObject({
+      pluginId: 'recent-files-obsidian',
+      id: 'recent-files-open-view',
+      status: 'failed',
+      failureReason: expect.stringContaining('data.json-backed recent file row'),
+    });
+    expect(result.assertions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'recent-file-row', passed: false }),
+    ]));
   });
 
   it('skips the Recent Files probe when no view snapshot target is registered', async () => {

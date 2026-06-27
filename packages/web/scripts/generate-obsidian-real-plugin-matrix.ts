@@ -32,6 +32,10 @@ import {
   QUICKADD_TEMPLATE_WORKFLOW_PROBE_FIXTURE,
   buildQuickAddWorkflowProbeDataJson,
 } from '@/lib/obsidian-compat/quickadd-workflow-fixture';
+import {
+  RECENT_FILES_WORKFLOW_PROBE_FIXTURE,
+  buildRecentFilesWorkflowProbeDataJson,
+} from '@/lib/obsidian-compat/recent-files-workflow-fixture';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const webRoot = path.resolve(__dirname, '..');
@@ -466,8 +470,21 @@ function writeWorkflowProbeFixture(
   pluginId: string,
   files: { manifestJson: string },
 ): void {
-  if (pluginId !== 'quickadd') return;
   const pluginDir = path.join(mindRoot, '.mindos', 'plugins', pluginId);
+  if (pluginId === 'recent-files-obsidian') {
+    fs.writeFileSync(
+      path.join(pluginDir, 'data.json'),
+      `${JSON.stringify(buildRecentFilesWorkflowProbeDataJson(), null, 2)}\n`,
+      'utf-8',
+    );
+    for (const row of RECENT_FILES_WORKFLOW_PROBE_FIXTURE.rows) {
+      const notePath = path.join(mindRoot, row.path);
+      fs.mkdirSync(path.dirname(notePath), { recursive: true });
+      fs.writeFileSync(notePath, row.content, 'utf-8');
+    }
+    return;
+  }
+  if (pluginId !== 'quickadd') return;
   const manifest = parseJsonObject(files.manifestJson);
   const version = typeof manifest?.version === 'string' ? manifest.version : undefined;
   fs.writeFileSync(

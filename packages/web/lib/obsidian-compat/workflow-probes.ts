@@ -4,7 +4,7 @@ import type { PluginActionResult, PluginEditorMenuContext, PluginRuntimeContext,
 import type { ManagedPluginMarkdownPostProcessorSnapshot } from './plugin-manager';
 import type { ObsidianWorkflowAudit } from './workflow-audit';
 import { redactRuntimeCapabilityEvidence } from './runtime-capability-ledger-store';
-import { resolveCanonicalPluginWorkflowProbePath } from './plugin-paths';
+import { resolveCanonicalPluginWorkflowProbePath, resolveInstalledObsidianPluginDir } from './plugin-paths';
 import {
   QUICKADD_TEMPLATE_WORKFLOW_PROBE_FIXTURE,
   QUICKADD_WORKFLOW_PROBE_FIXTURE,
@@ -745,14 +745,23 @@ async function runRecentFilesProbe(input: WorkflowProbeRuntimeInput): Promise<Wo
   if (!command || !view) {
     return skippedDraft('No executable Recent Files command and registered view were available to probe.');
   }
+  const expectedRows = readRecentFilesDataRows(input.mindRoot, input.plugin.id);
+  if (expectedRows.length === 0) {
+    return skippedDraft('No data.json-backed Recent Files rows were available; seed recentFiles data before marking this workflow observed.');
+  }
 
   const action = await input.host.executeCommand(command.fullId);
   const snapshot = await input.host.renderView(input.plugin.id, view.type);
   const text = [snapshot.displayText, snapshot.text].filter(Boolean).join(' ').trim();
+  const normalizedText = normalizeSnapshotText(text);
+  const renderedRow = expectedRows.find((row) => (
+    normalizeSnapshotText(row.basename) && normalizedText.includes(normalizeSnapshotText(row.basename))
+  ));
   const commandCalled = hasCalledLedger(input.host, input.plugin.id, ['addCommand']);
   const viewCalled = hasCalledLedger(input.host, input.plugin.id, ['registerView']);
   const visible = Boolean(text);
-  const passed = commandCalled && viewCalled && visible;
+  const rowRendered = Boolean(renderedRow);
+  const passed = commandCalled && viewCalled && visible && rowRendered;
   const observable = observableEvidence(action, []);
 
   return {
@@ -760,15 +769,19 @@ async function runRecentFilesProbe(input: WorkflowProbeRuntimeInput): Promise<Wo
     evidence: [
       `Executed Recent Files command "${command.name}" (${command.fullId}).`,
       `Rendered Recent Files view "${view.type}": ${text.slice(0, 160) || '(empty)'}.`,
+      renderedRow
+        ? `Observed Recent Files data row "${renderedRow.basename}" (${renderedRow.path}).`
+        : `Expected Recent Files data rows were not visible: ${expectedRows.map((row) => row.basename).join(', ')}.`,
       ...observable,
     ],
     assertions: [
       { id: 'execute-command', label: 'Executed the selected Recent Files command', passed: true, detail: command.fullId },
       { id: 'render-view', label: 'Rendered the Recent Files view snapshot', passed: visible, detail: view.type },
+      { id: 'recent-file-row', label: 'Rendered a data.json-backed recent file row', passed: rowRendered, detail: renderedRow?.basename ?? expectedRows.map((row) => row.basename).join(', ') },
       { id: 'command-called-ledger', label: 'Recorded command execution evidence', passed: commandCalled },
       { id: 'view-called-ledger', label: 'Recorded view snapshot evidence', passed: viewCalled },
     ],
-    ...(!passed ? { failureReason: recentFilesFailureReason({ commandCalled, viewCalled, visible }) } : {}),
+    ...(!passed ? { failureReason: recentFilesFailureReason({ commandCalled, viewCalled, visible, rowRendered }) } : {}),
   };
 }
 
@@ -1082,12 +1095,36 @@ function admonitionFailureReason(input: { visible: boolean; called: boolean; ali
   ].filter(Boolean).join('; ');
 }
 
-function recentFilesFailureReason(input: { commandCalled: boolean; viewCalled: boolean; visible: boolean }): string {
+function recentFilesFailureReason(input: { commandCalled: boolean; viewCalled: boolean; visible: boolean; rowRendered: boolean }): string {
   return [
     !input.commandCalled ? 'runtime ledger did not record Recent Files command execution' : '',
     !input.viewCalled ? 'runtime ledger did not record Recent Files view rendering' : '',
     !input.visible ? 'Recent Files view rendered without visible snapshot text' : '',
+    !input.rowRendered ? 'Recent Files view did not render any data.json-backed recent file row' : '',
   ].filter(Boolean).join('; ');
+}
+
+function readRecentFilesDataRows(mindRoot: string, pluginId: string): Array<{ basename: string; path: string }> {
+  const location = resolveInstalledObsidianPluginDir(mindRoot, pluginId);
+  if (!location) return [];
+  const dataPath = path.join(location.pluginDir, 'data.json');
+  if (!fs.existsSync(dataPath)) return [];
+  try {
+    const parsed = JSON.parse(fs.readFileSync(dataPath, 'utf-8')) as { recentFiles?: unknown };
+    if (!Array.isArray(parsed.recentFiles)) return [];
+    const rows: Array<{ basename: string; path: string }> = [];
+    for (const item of parsed.recentFiles) {
+      if (!item || typeof item !== 'object') continue;
+      const record = item as { basename?: unknown; path?: unknown };
+      const pathValue = typeof record.path === 'string' ? record.path.trim() : '';
+      const basenameValue = typeof record.basename === 'string' ? record.basename.trim() : path.basename(pathValue, path.extname(pathValue));
+      if (!pathValue || !basenameValue) continue;
+      rows.push({ basename: basenameValue, path: pathValue });
+    }
+    return rows;
+  } catch {
+    return [];
+  }
 }
 
 function normalizeSnapshotText(value: string): string {
