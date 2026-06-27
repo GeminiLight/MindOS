@@ -219,11 +219,11 @@ describe('RuntimeIconSwitcher', () => {
               overallStatus: 'limited',
               gaps: [
                 {
-                  id: 'artifact-index',
+                  id: 'durable-approval-queue',
                   category: 'mindos-product',
                   severity: 'warning',
-                  summary: 'MindOS needs a unified artifact index before Codex outputs are fully governed.',
-                  useCases: ['artifact-governance'],
+                  summary: 'MindOS still keeps Codex approval prompts interactive-only.',
+                  useCases: ['permission-governance'],
                 },
               ],
             }),
@@ -238,7 +238,7 @@ describe('RuntimeIconSwitcher', () => {
     });
 
     expect(document.body.textContent).toContain('Limited');
-    expect(document.body.textContent).toContain('MindOS: MindOS needs a unified artifact index before Codex outputs are fully governed.');
+    expect(document.body.textContent).toContain('MindOS: MindOS still keeps Codex approval prompts interactive-only.');
     const codexButton = Array.from(document.body.querySelectorAll('button'))
       .find((button) => button.textContent?.includes('Use local Codex.')) as HTMLButtonElement;
     expect(codexButton.disabled).toBe(false);

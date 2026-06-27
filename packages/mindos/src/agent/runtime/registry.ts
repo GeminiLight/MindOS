@@ -6,6 +6,18 @@ import type {
   AcpAgentOverride,
 } from '../../protocols/acp/index.js';
 import {
+  attachRuntimeDiagnostics,
+  buildAgentRuntimeCatalogPayload,
+  type AgentRuntimeCatalogPayload,
+  type AgentRuntimeDiagnostics,
+  type AgentRuntimeDiagnosticSource,
+  type AgentRuntimeDiagnosticCheck,
+  type AgentRuntimeDiagnosticCheckStatus,
+  type AgentRuntimeDiagnosticSeverity,
+  type AgentRuntimeCatalogEntry,
+  type AgentRuntimeCatalogSummary,
+} from './catalog.js';
+import {
   acpRuntimeDescriptor,
   mindosRuntimeDescriptor,
   nativeDescriptor,
@@ -81,9 +93,13 @@ export type AgentRuntimeLifecycleSupport = 'owned' | 'delegated' | 'unsupported'
 export type AgentRuntimeLifecycleSource =
   | 'settings'
   | 'runtime-registry'
+  | 'runtime-catalog'
   | 'native-health'
   | 'acp-detect'
   | 'acp-registry'
+  | 'env-path'
+  | 'user-override'
+  | 'extension-manifest'
   | 'turn-runner'
   | 'runtime-bridge'
   | 'codex-app-server'
@@ -324,11 +340,12 @@ export type AgentRuntimeDescriptor = {
   packageName?: string;
   availability?: {
     checkedAt: string;
-    sources: Array<'acp-detect' | 'acp-registry' | 'mcp-agents' | 'native-health' | 'settings'>;
+    sources: AgentRuntimeDiagnosticSource[];
     reason?: string;
     diagnosticHints?: string[];
     stale?: boolean;
   };
+  diagnostics?: AgentRuntimeDiagnostics;
 };
 
 export type DetectedRuntimeAgent = {
@@ -357,10 +374,23 @@ export type AgentRuntimesPayload = {
   runtimes: AgentRuntimeDescriptor[];
   installed: DetectedRuntimeAgent[];
   notInstalled: MissingRuntimeAgent[];
+  catalog: AgentRuntimeCatalogPayload;
 };
 
 export type AgentRuntimePayload = {
   runtime: AgentRuntimeDescriptor;
+  catalog: AgentRuntimeCatalogPayload;
+};
+
+export type {
+  AgentRuntimeCatalogEntry,
+  AgentRuntimeCatalogPayload,
+  AgentRuntimeCatalogSummary,
+  AgentRuntimeDiagnosticCheck,
+  AgentRuntimeDiagnosticCheckStatus,
+  AgentRuntimeDiagnosticSeverity,
+  AgentRuntimeDiagnostics,
+  AgentRuntimeDiagnosticSource,
 };
 
 export type AgentRuntimesSettings = {
@@ -420,7 +450,7 @@ export function buildAgentRuntimesPayload(input: {
   const codexMissing = notInstalled.find(isCodexAgent);
   const claudeMissing = notInstalled.find(isClaudeAgent);
 
-  const runtimes: AgentRuntimeDescriptor[] = [
+  const runtimes = attachRuntimeDiagnostics([
     mindosRuntimeDescriptor(input.checkedAt),
     nativeDescriptor({
       id: 'codex',
@@ -439,9 +469,14 @@ export function buildAgentRuntimesPayload(input: {
     ...installed
       .filter((agent) => !isCodexAgent(agent) && !isClaudeAgent(agent))
       .map((agent): AgentRuntimeDescriptor => acpRuntimeDescriptor(agent, input.checkedAt)),
-  ];
+  ]);
 
-  return { runtimes, installed, notInstalled };
+  return {
+    runtimes,
+    installed,
+    notInstalled,
+    catalog: buildAgentRuntimeCatalogPayload({ runtimes, generatedAt: input.checkedAt }),
+  };
 }
 
 export function buildAcpScopedPayload(input: {
@@ -455,9 +490,16 @@ export function buildAcpScopedPayload(input: {
   const notInstalled = input.notInstalled
     .map(normalizeMissing)
     .filter((agent): agent is MissingRuntimeAgent => !!agent && !isCodexAgent(agent) && !isClaudeAgent(agent));
-  const runtimes = installed.map((agent): AgentRuntimeDescriptor => acpRuntimeDescriptor(agent, input.checkedAt));
+  const runtimes = attachRuntimeDiagnostics(
+    installed.map((agent): AgentRuntimeDescriptor => acpRuntimeDescriptor(agent, input.checkedAt)),
+  );
 
-  return { runtimes, installed, notInstalled };
+  return {
+    runtimes,
+    installed,
+    notInstalled,
+    catalog: buildAgentRuntimeCatalogPayload({ runtimes, generatedAt: input.checkedAt }),
+  };
 }
 
 export async function applyNativeRuntimeHealth(

@@ -243,6 +243,7 @@ export type AgentRuntimeReadinessStatus = 'ready' | 'usable' | 'limited' | 'bloc
 export type AgentRuntimeReadinessSource =
   | 'compatibility-profile'
   | 'adapter-projection'
+  | 'session-projection'
   | 'permission-projection'
   | 'mcp-projection'
   | 'artifact-projection'
@@ -265,7 +266,8 @@ export interface AgentRuntimeReadinessRequirement {
 
 export type AgentRuntimeReadinessUseCaseId =
   | AgentRuntimeCompatibilityScenario
-  | 'adapter-contract';
+  | 'adapter-contract'
+  | 'session-controls';
 
 export interface AgentRuntimeReadinessUseCase {
   id: AgentRuntimeReadinessUseCaseId;
@@ -357,6 +359,26 @@ export type AgentRuntimeAdapterCommandSource =
   | 'adapter-declared';
 
 export type AgentRuntimeResolvedCommandSource = 'user-override' | 'descriptor' | 'registry';
+export type AgentRuntimeDiagnosticSource =
+  | 'settings'
+  | 'runtime-registry'
+  | 'runtime-catalog'
+  | 'native-health'
+  | 'acp-detect'
+  | 'acp-registry'
+  | 'mcp-agents'
+  | 'env-path'
+  | 'user-override'
+  | 'extension-manifest'
+  | 'turn-runner'
+  | 'runtime-bridge'
+  | 'codex-app-server'
+  | 'claude-bridge'
+  | 'acp-session'
+  | 'mindos-pi-session'
+  | 'run-ledger';
+export type AgentRuntimeDiagnosticSeverity = 'info' | 'warning' | 'error';
+export type AgentRuntimeDiagnosticCheckStatus = 'passed' | 'warning' | 'failed' | 'skipped' | 'unknown';
 export type AcpAdapterConnectionType = 'stdio' | 'cli' | 'http' | 'sse';
 
 export interface AcpPromptCapabilities {
@@ -378,9 +400,25 @@ export interface AcpSessionCapabilities {
   close?: boolean;
 }
 
+export interface AcpAgentCapabilities {
+  loadSession?: boolean;
+  mcpCapabilities?: AcpMcpCapabilities;
+  promptCapabilities?: AcpPromptCapabilities;
+  sessionCapabilities?: AcpSessionCapabilities;
+}
+
 export interface AcpConfigOptionEntry {
   id: string;
   label: string;
+}
+
+export interface AcpConfigOption {
+  type: 'select';
+  configId: string;
+  category: 'mode' | 'model' | 'thought_level' | 'other' | string;
+  label?: string;
+  currentValue: string;
+  options: AcpConfigOptionEntry[];
 }
 
 export interface AcpAvailableCommand {
@@ -398,6 +436,8 @@ export interface AcpToolCallFull {
   status: AcpToolCallStatus;
   rawInput?: string;
   rawOutput?: string;
+  content?: unknown[];
+  locations?: { path: string; line?: number }[];
 }
 
 export type AcpPermissionEventStatus = 'pending' | 'resolved';
@@ -420,6 +460,53 @@ export interface AcpPermissionEvent {
   outcome?: AcpPermissionOutcome | 'cancelled';
   requestedAt: string;
   resolvedAt?: string;
+}
+
+export interface AcpSessionMcpServerSummary {
+  name: string;
+  type: 'stdio' | 'http' | 'sse';
+}
+
+export interface AcpSessionControlSnapshot {
+  status: 'available' | 'unavailable';
+  source: 'declared' | 'observed' | 'inferred' | 'unavailable';
+  configId?: string;
+  currentValue?: string;
+  options: AcpConfigOptionEntry[];
+}
+
+export interface AcpSessionSnapshot {
+  schemaVersion: 1;
+  sessionId: string;
+  agentId: string;
+  agentSessionId?: string;
+  state: 'idle' | 'active' | 'error';
+  cwd?: string;
+  createdAt: string;
+  lastActivityAt: string;
+  agentCapabilities?: AcpAgentCapabilities;
+  authMethods: Array<{ id: string; name: string; description?: string }>;
+  modes: Array<{ id: string; name: string; description?: string }>;
+  currentModeId?: string;
+  configOptions: AcpConfigOption[];
+  controls: {
+    model: AcpSessionControlSnapshot;
+    mode: AcpSessionControlSnapshot;
+    thoughtLevel: AcpSessionControlSnapshot;
+  };
+  availableCommands: AcpAvailableCommand[];
+  toolCalls: AcpToolCallFull[];
+  toolSummary: {
+    total: number;
+    pending: number;
+    inProgress: number;
+    completed: number;
+    failed: number;
+  };
+  permissionEvents: AcpPermissionEvent[];
+  pendingPermissions: AcpPermissionEvent[];
+  sessionInfo?: { title?: string; updatedAt?: string };
+  mcpServers: AcpSessionMcpServerSummary[];
 }
 
 export interface AgentRuntimeAdapterDeclaredCommand {
@@ -551,9 +638,162 @@ export interface AgentRuntimeAdapterProjection {
   blockers?: string[];
 }
 
+export interface AgentRuntimeDiagnosticCheck {
+  id: string;
+  label: string;
+  status: AgentRuntimeDiagnosticCheckStatus;
+  severity: AgentRuntimeDiagnosticSeverity;
+  source: AgentRuntimeDiagnosticSource;
+  summary: string;
+  remediation?: string;
+  details?: Record<string, unknown>;
+}
+
+export interface AgentRuntimeDiagnostics {
+  schemaVersion: 1;
+  checkedAt: string;
+  status: AgentRuntimeStatus;
+  sources: AgentRuntimeDiagnosticSource[];
+  summary: string;
+  reason?: string;
+  hints: string[];
+  selectedCommand?: {
+    cmd: string;
+    args: string[];
+    source: AgentRuntimeResolvedCommandSource;
+  };
+  binaryPath?: string;
+  checks: AgentRuntimeDiagnosticCheck[];
+  stale?: boolean;
+}
+
+export interface AgentRuntimeCatalogEntry {
+  schemaVersion: 1;
+  id: string;
+  runtimeId: string;
+  name: string;
+  kind: AgentRuntimeKind;
+  category: AgentRuntimeCategory;
+  status: AgentRuntimeStatus;
+  adapter: AgentRuntimeAdapter;
+  sourceAgentId?: string;
+  canonicalAgentId?: string;
+  aliases: string[];
+  owners: {
+    model: AgentRuntimeOwner;
+    auth: AgentRuntimeOwner;
+    permission: AgentRuntimeOwner;
+    session: AgentRuntimeOwner;
+  };
+  capabilitySummary: {
+    session: AgentRuntimeHarnessCapabilities['session'] | 'unknown';
+    commandDiscovery: AgentRuntimeAdapterCommandDiscovery;
+    modelSelection: AgentRuntimeAdapterConfigurationOwner;
+    mcpConfig: {
+      supportsDescriptorConfig: boolean;
+      declaredCapabilities?: AcpMcpCapabilities;
+    };
+    output: AgentRuntimeHarnessCapabilities['output'];
+    eventStream: AgentRuntimeHarnessCapabilities['eventStream'];
+    remoteMode: AgentRuntimeRemoteMode;
+    unattended: AgentRuntimeUnattendedSupport;
+    coordinationRole: AgentRuntimeCoordinationRole;
+  };
+  install?: {
+    command: string;
+    packageName?: string;
+  };
+  mcpAgentKey?: string;
+  binaryPath?: string;
+  resolvedCommand?: AgentRuntimeDescriptor['resolvedCommand'];
+  diagnostics: AgentRuntimeDiagnostics;
+}
+
+export interface AgentRuntimeCatalogSummary {
+  total: number;
+  available: number;
+  missing: number;
+  signedOut: number;
+  error: number;
+  categories: Record<AgentRuntimeCategory, number>;
+}
+
+export interface AgentRuntimeCatalogPayload {
+  schemaVersion: 1;
+  generatedAt: string;
+  summary: AgentRuntimeCatalogSummary;
+  entries: AgentRuntimeCatalogEntry[];
+}
+
 export interface AgentRuntimeAdapterProjectionsPayload {
   schemaVersion: 1;
   projections: AgentRuntimeAdapterProjection[];
+}
+
+export type AgentRuntimeArtifactProjectionStatus = 'ready' | 'limited' | 'blocked' | 'unknown';
+export type AgentRuntimeArtifactOutputKind = AgentRuntimeHarnessCapabilities['output'][number];
+export type AgentRuntimeArtifactHandoffTarget =
+  | 'message'
+  | 'diff'
+  | 'checkpoint'
+  | 'artifact'
+  | 'branch'
+  | 'pull-request';
+
+export interface AgentRuntimeArtifactProjectionReason {
+  id: string;
+  status: AgentRuntimeCompatibilityRequirementStatus;
+  owner: AgentRuntimeCompatibilityOwner;
+  summary: string;
+}
+
+export interface AgentRuntimeArtifactProjection {
+  schemaVersion: 1;
+  runtimeId: string;
+  runtimeName: string;
+  runtimeKind: AgentRuntimeKind;
+  runtimeStatus: AgentRuntimeStatus;
+  status: AgentRuntimeArtifactProjectionStatus;
+  outputKinds: AgentRuntimeArtifactOutputKind[];
+  reviewableOutputKinds: AgentRuntimeArtifactOutputKind[];
+  nativeHandoffTargets: AgentRuntimeArtifactHandoffTarget[];
+  nativeReview: {
+    supported: boolean;
+    summary: string;
+  };
+  artifactIndex: {
+    supported: boolean;
+    status: 'ready' | 'missing' | 'unknown';
+    owner: 'mindos';
+    summary: string;
+    recordCount: number;
+    recentArtifacts: Array<{
+      id: string;
+      kind: 'file' | 'image' | 'diff' | 'patch' | 'checkpoint' | 'branch' | 'pr' | 'uri' | 'unknown';
+      source: 'acp-tool-call' | 'runtime-output' | 'manual';
+      status: 'pending' | 'in_progress' | 'completed' | 'failed' | 'unknown';
+      path?: string;
+      uri?: string;
+      title?: string;
+      updatedAt: number;
+    }>;
+  };
+  rollback: {
+    supported: boolean;
+    source: 'runtime-checkpoint' | 'none' | 'unknown';
+    summary: string;
+  };
+  branchPr: {
+    supported: boolean;
+    summary: string;
+  };
+  reasons: AgentRuntimeArtifactProjectionReason[];
+  blockers?: string[];
+}
+
+export interface AgentRuntimeArtifactProjectionsPayload {
+  schemaVersion: 1;
+  projections: AgentRuntimeArtifactProjection[];
 }
 
 export type AgentRuntimeSessionProjectionStatus = 'ready' | 'active' | 'idle' | 'limited' | 'blocked' | 'unknown';
@@ -601,6 +841,12 @@ export interface RuntimeSessionProjectionPermissionEvents {
   summary: string;
 }
 
+export interface RuntimeSessionProjectionMcpServers {
+  status: 'available' | 'unavailable';
+  servers: AcpSessionMcpServerSummary[];
+  summary: string;
+}
+
 export interface RuntimeSessionProjection {
   schemaVersion: 1;
   runtimeId: string;
@@ -627,6 +873,7 @@ export interface RuntimeSessionProjection {
   slashCommands: RuntimeSessionProjectionCommands;
   toolEvents: RuntimeSessionProjectionToolEvents;
   permissionEvents: RuntimeSessionProjectionPermissionEvents;
+  mcpServers: RuntimeSessionProjectionMcpServers;
   reasons: AgentRuntimeSessionProjectionReason[];
   blockers?: string[];
 }
@@ -666,11 +913,12 @@ export interface AgentRuntimeDescriptor extends AgentRuntimeIdentity {
   packageName?: string;
   availability?: {
     checkedAt: string;
-    sources: Array<'acp-detect' | 'acp-registry' | 'mcp-agents' | 'native-health' | 'settings'>;
+    sources: AgentRuntimeDiagnosticSource[];
     reason?: string;
     diagnosticHints?: string[];
     stale?: boolean;
   };
+  diagnostics?: AgentRuntimeDiagnostics;
 }
 
 export interface ExternalAgentBinding {

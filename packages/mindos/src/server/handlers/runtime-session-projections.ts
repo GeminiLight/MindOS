@@ -10,6 +10,7 @@ import type {
   AcpAvailableCommand,
   AcpConfigOptionEntry,
   AcpPermissionEvent,
+  AcpSessionMcpServerSummary,
   AcpSessionSnapshot,
   AcpToolCallFull,
 } from '../../protocols/acp/index.js';
@@ -60,6 +61,12 @@ export type RuntimeSessionProjectionPermissionEvents = {
   summary: string;
 };
 
+export type RuntimeSessionProjectionMcpServers = {
+  status: 'available' | 'unavailable';
+  servers: AcpSessionMcpServerSummary[];
+  summary: string;
+};
+
 export type RuntimeSessionProjection = {
   schemaVersion: 1;
   runtimeId: string;
@@ -86,6 +93,7 @@ export type RuntimeSessionProjection = {
   slashCommands: RuntimeSessionProjectionCommands;
   toolEvents: RuntimeSessionProjectionToolEvents;
   permissionEvents: RuntimeSessionProjectionPermissionEvents;
+  mcpServers: RuntimeSessionProjectionMcpServers;
   reasons: AgentRuntimeSessionProjectionReason[];
   blockers?: string[];
 };
@@ -146,6 +154,7 @@ function buildRuntimeSessionProjection(
   const slashCommands = buildSlashCommands(runtime, acpSession);
   const toolEvents = buildToolEvents(acpSession);
   const permissionEvents = buildPermissionEvents(runtime, acpSession);
+  const mcpServers = buildMcpServers(runtime, acpSession);
 
   if (runtime.kind === 'acp' && !acpSession) blockers.push('runtime-session-snapshot');
   const status = resolveStatus(runtime, acpSession, blockers);
@@ -173,6 +182,7 @@ function buildRuntimeSessionProjection(
     slashCommands,
     toolEvents,
     permissionEvents,
+    mcpServers,
     reasons: [
       runtimeAvailableReason(runtime),
       sessionSnapshotReason(runtime, acpSession),
@@ -182,6 +192,7 @@ function buildRuntimeSessionProjection(
       slashCommandsReason(runtime, slashCommands),
       toolEventsReason(runtime, toolEvents),
       permissionEventsReason(runtime, permissionEvents),
+      mcpServersReason(runtime, mcpServers),
     ],
     ...(blockers.length > 0 ? { blockers: uniqSorted(blockers) } : {}),
   };
@@ -337,6 +348,25 @@ function buildPermissionEvents(
   };
 }
 
+function buildMcpServers(
+  runtime: AgentRuntimeDescriptor,
+  acpSession: AcpSessionSnapshot | undefined,
+): RuntimeSessionProjectionMcpServers {
+  const servers = acpSession?.mcpServers ?? [];
+  if (servers.length > 0) {
+    return {
+      status: 'available',
+      servers,
+      summary: `${runtime.name} inherited ${servers.length} MCP server(s) into the active ACP session.`,
+    };
+  }
+  return {
+    status: 'unavailable',
+    servers: [],
+    summary: `${runtime.name} has no inherited MCP servers in the current session snapshot.`,
+  };
+}
+
 function latestAcpSessionForRuntime(
   runtime: AgentRuntimeDescriptor,
   sessions: AcpSessionSnapshot[],
@@ -438,6 +468,20 @@ function permissionEventsReason(
     permissionEvents.status === 'available' ? 'satisfied' : runtime.kind === 'acp' ? 'unknown' : 'not-applicable',
     runtime.kind === 'acp' ? 'mindos' : 'external',
     permissionEvents.summary,
+  );
+}
+
+function mcpServersReason(
+  runtime: AgentRuntimeDescriptor,
+  mcpServers: RuntimeSessionProjectionMcpServers,
+): AgentRuntimeSessionProjectionReason {
+  return reason(
+    'mcp-session-inheritance',
+    mcpServers.status === 'available'
+      ? 'satisfied'
+      : runtime.kind === 'acp' ? 'unknown' : 'not-applicable',
+    runtime.kind === 'acp' ? 'mindos' : runtime.sessionOwner,
+    mcpServers.summary,
   );
 }
 

@@ -6,6 +6,10 @@ import type {
   AgentRuntimeKind,
   AgentRuntimeStatus,
 } from '../../agent/runtime/registry.js';
+import {
+  listAgentArtifacts,
+  type AgentArtifactLedgerRecord,
+} from '../../agent/ledger/artifact-ledger.js';
 import { errorResponse, json, type MindosServerResponse } from '../response.js';
 
 export type AgentRuntimeArtifactProjectionStatus =
@@ -50,6 +54,17 @@ export type AgentRuntimeArtifactProjection = {
     status: 'ready' | 'missing' | 'unknown';
     owner: 'mindos';
     summary: string;
+    recordCount: number;
+    recentArtifacts: Array<{
+      id: string;
+      kind: AgentArtifactLedgerRecord['kind'];
+      source: AgentArtifactLedgerRecord['source'];
+      status: AgentArtifactLedgerRecord['status'];
+      path?: string;
+      uri?: string;
+      title?: string;
+      updatedAt: number;
+    }>;
   };
   rollback: {
     supported: boolean;
@@ -71,6 +86,7 @@ export type AgentRuntimeArtifactProjectionsPayload = {
 
 export type AgentRuntimeArtifactProjectionServices = {
   listRuntimes(): AgentRuntimeDescriptor[] | Promise<AgentRuntimeDescriptor[]>;
+  listArtifacts?(): AgentArtifactLedgerRecord[] | Promise<AgentArtifactLedgerRecord[]>;
 };
 
 export async function handleAgentRuntimeArtifactProjectionsGet(
@@ -78,8 +94,11 @@ export async function handleAgentRuntimeArtifactProjectionsGet(
   services: AgentRuntimeArtifactProjectionServices,
 ): Promise<MindosServerResponse<AgentRuntimeArtifactProjectionsPayload | { error: string }>> {
   try {
-    const runtimes = await services.listRuntimes();
-    const payload = buildAgentRuntimeArtifactProjectionsPayload({ runtimes });
+    const [runtimes, artifacts] = await Promise.all([
+      services.listRuntimes(),
+      services.listArtifacts?.() ?? listAgentArtifacts(),
+    ]);
+    const payload = buildAgentRuntimeArtifactProjectionsPayload({ runtimes, artifacts });
     const runtimeFilter = searchParams.get('runtime')?.trim();
     const projections = runtimeFilter
       ? payload.projections.filter((projection) => projection.runtimeId === runtimeFilter || projection.runtimeKind === runtimeFilter)
@@ -95,21 +114,24 @@ export async function handleAgentRuntimeArtifactProjectionsGet(
 
 export function buildAgentRuntimeArtifactProjectionsPayload(input: {
   runtimes: AgentRuntimeDescriptor[];
+  artifacts?: AgentArtifactLedgerRecord[];
 }): AgentRuntimeArtifactProjectionsPayload {
+  const artifacts = input.artifacts ?? listAgentArtifacts();
   return {
     schemaVersion: 1,
-    projections: input.runtimes.map((runtime) => buildRuntimeArtifactProjection(runtime)),
+    projections: input.runtimes.map((runtime) => buildRuntimeArtifactProjection(runtime, artifacts)),
   };
 }
 
-function buildRuntimeArtifactProjection(runtime: AgentRuntimeDescriptor): AgentRuntimeArtifactProjection {
+function buildRuntimeArtifactProjection(
+  runtime: AgentRuntimeDescriptor,
+  artifacts: AgentArtifactLedgerRecord[],
+): AgentRuntimeArtifactProjection {
   const outputKinds = uniqSorted(runtime.harnessCapabilities?.output ?? []);
   const reviewableOutputKinds = outputKinds.filter(isReviewableOutputKind);
   const nativeHandoffTargets = outputKinds.map(outputKindToHandoffTarget);
-  const artifactAssessment = runtime.compatibility.scenarios['artifact-governance'];
-  const artifactIndexReady = artifactAssessment.requirements.some((entry) =>
-    entry.id === 'artifact-index' && entry.status === 'satisfied'
-  );
+  const runtimeArtifacts = artifactsForRuntime(runtime, artifacts);
+  const artifactIndexReady = true;
   const hasDeclaredOutputContract = !!runtime.harnessCapabilities;
   const hasReviewableOutput = reviewableOutputKinds.length > 0;
   const blockers = new Set<string>();
@@ -149,8 +171,19 @@ function buildRuntimeArtifactProjection(runtime: AgentRuntimeDescriptor): AgentR
       status: artifactIndexReady ? 'ready' : 'missing',
       owner: 'mindos',
       summary: artifactIndexReady
-        ? 'MindOS has a unified artifact index for this runtime.'
+        ? `MindOS has a unified artifact pointer ledger for this runtime (${runtimeArtifacts.length} record(s)).`
         : 'MindOS still needs a cross-runtime artifact index before outputs can be durably reviewed and compared.',
+      recordCount: runtimeArtifacts.length,
+      recentArtifacts: runtimeArtifacts.slice(0, 10).map((record) => ({
+        id: record.id,
+        kind: record.kind,
+        source: record.source,
+        status: record.status,
+        ...(record.path ? { path: record.path } : {}),
+        ...(record.uri ? { uri: record.uri } : {}),
+        ...(record.title ? { title: record.title } : {}),
+        updatedAt: record.updatedAt,
+      })),
     },
     rollback: {
       supported: outputKinds.includes('checkpoint'),
@@ -210,6 +243,19 @@ function buildRuntimeArtifactProjection(runtime: AgentRuntimeDescriptor): AgentR
     ],
     ...(blockers.size > 0 ? { blockers: uniqSorted([...blockers]) } : {}),
   };
+}
+
+function artifactsForRuntime(
+  runtime: AgentRuntimeDescriptor,
+  artifacts: AgentArtifactLedgerRecord[],
+): AgentArtifactLedgerRecord[] {
+  const ids = new Set(
+    [runtime.runtimeId, runtime.id, runtime.sourceAgentId, runtime.canonicalAgentId, runtime.kind]
+      .filter((id): id is string => typeof id === 'string' && id.trim().length > 0),
+  );
+  return artifacts
+    .filter((artifact) => ids.has(artifact.runtimeId))
+    .sort((left, right) => right.updatedAt - left.updatedAt);
 }
 
 function resolveArtifactProjectionStatus(input: {

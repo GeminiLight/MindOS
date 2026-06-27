@@ -37,6 +37,10 @@ import {
   type NativeRuntimeId,
 } from '../../agent/runtime/registry.js';
 import {
+  attachRuntimeDiagnostics,
+  buildSingleRuntimeCatalogPayload,
+} from '../../agent/runtime/catalog.js';
+import {
   classifyRuntimeFailure,
   isClaudeAgent,
   isCodexAgent,
@@ -642,9 +646,13 @@ export async function handleAgentRuntimesGet(
       if (!isNativeRuntimeId(runtime)) {
         return json({ error: `Unsupported runtime: ${runtime}` }, { status: 400 });
       }
-      const descriptor = await detectSingleNativeRuntime(runtime, services);
+      const rawDescriptor = await detectSingleNativeRuntime(runtime, services);
+      const descriptor = attachRuntimeDiagnostics([rawDescriptor])[0];
+      if (!descriptor) {
+        return json({ error: `Runtime descriptor unavailable: ${runtime}` }, { status: 500 });
+      }
       return json(
-        { runtime: descriptor },
+        { runtime: descriptor, catalog: buildSingleRuntimeCatalogPayload({ runtime: descriptor }) },
         { headers: { 'Cache-Control': 'no-store' } },
       );
     }

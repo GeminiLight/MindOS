@@ -61,6 +61,21 @@ export const AGENT_RUN_LEDGER_SUBSCRIBERS_KEY = Symbol.for('mindos.agentRunLedge
 export const AGENT_RUN_LEDGER_SHARD_KEY = Symbol.for('mindos.agentRunLedger.shard');
 
 /**
+ * In-memory artifact pointer ledger store (artifact-ledger.ts). Runtime
+ * archives, generated files, diffs, branches, PRs, and preview artifacts are
+ * represented as pointer records only; sharing the store prevents the UI and
+ * runtime module graphs from seeing different artifact indexes.
+ */
+export const AGENT_ARTIFACT_LEDGER_STORE_KEY = Symbol.for('mindos.agentArtifactLedger');
+
+/**
+ * Per-process artifact ledger shard identity (artifact-ledger.ts). Mirrors
+ * the run ledger's single-writer shard model so every module copy in one
+ * process appends to the same `agent-artifact-ledger.<pid>-<startTs>.jsonl`.
+ */
+export const AGENT_ARTIFACT_LEDGER_SHARD_KEY = Symbol.for('mindos.agentArtifactLedger.shard');
+
+/**
  * Request-scoped AgentRunContext by pi runtime resource
  * (agent-run-context.ts). The pi SDK can execute extension tools from a
  * callback chain that no longer carries AsyncLocalStorage. The extension

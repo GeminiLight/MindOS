@@ -67,6 +67,10 @@ import {
   getAskPanelSessionActivationDetail,
   type AskPanelNewSessionDetail,
 } from '@/lib/ask-panel-session-activation';
+import {
+  RUNTIME_COMMAND_INSERT_EVENT,
+  normalizeRuntimeCommandInsertDetail,
+} from '@/lib/runtime-command-events';
 
 /** Stable empty array — a fresh [] literal per render would bust MessageList's memo */
 const EMPTY_SUGGESTIONS: ReadonlyArray<{ label: string; prompt: string }> = [];
@@ -599,6 +603,24 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
     }
     void handleSubmit(event);
   }, [handleSubmit, providerNotConfigured, selectedRuntimeChecking, selectedRuntimeUnavailable]);
+
+  useEffect(() => {
+    const handler = (event: Event) => {
+      if (chat.isLoadingRef.current) return;
+      const detail = normalizeRuntimeCommandInsertDetail((event as CustomEvent).detail);
+      if (!detail) return;
+      if (detail.runtime) {
+        handleSelectAgentRuntime(detail.runtime);
+      }
+      slashRef.current.resetSlash();
+      setSelectedSkill(null);
+      setShowHistory(false);
+      setComposerValue(detail.text);
+      setTimeout(() => inputRef.current?.focus(), 50);
+    };
+    window.addEventListener(RUNTIME_COMMAND_INSERT_EVENT, handler);
+    return () => window.removeEventListener(RUNTIME_COMMAND_INSERT_EVENT, handler);
+  }, [chat.isLoadingRef, handleSelectAgentRuntime, setComposerValue]);
 
   useEffect(() => {
     const handler = (e: Event) => {

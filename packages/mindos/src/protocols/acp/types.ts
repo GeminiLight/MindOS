@@ -128,6 +128,8 @@ export interface AcpSession {
   permissionEvents?: AcpPermissionEvent[];
   /** Auth methods from initialize response */
   authMethods?: AcpAuthMethod[];
+  /** MCP servers inherited into this ACP session; secrets are intentionally not retained. */
+  mcpServers?: AcpSessionMcpServerSummary[];
 }
 
 /** Lightweight session info returned by session/list. */
@@ -314,6 +316,12 @@ export interface AcpSessionSnapshot {
   permissionEvents: AcpPermissionEvent[];
   pendingPermissions: AcpPermissionEvent[];
   sessionInfo?: { title?: string; updatedAt?: string };
+  mcpServers: AcpSessionMcpServerSummary[];
+}
+
+export interface AcpSessionMcpServerSummary {
+  name: string;
+  type: 'stdio' | 'http' | 'sse';
 }
 
 /* ── Registry ─────────────────────────────────────────────────────────── */

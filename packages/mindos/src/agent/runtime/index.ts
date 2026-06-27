@@ -1,6 +1,7 @@
 export * from './adapters/index.js';
 export * from './attachments.js';
 export * from './capabilities.js';
+export * from './catalog.js';
 export * from './child-process.js';
 export * from './claude-code-cli.js';
 export * from './claude-code-sdk.js';
@@ -9,6 +10,7 @@ export * from './codex-app-server.js';
 export * from './codex-env.js';
 export * from './descriptors.js';
 export * from './detection.js';
+export * from './extension-manifest.js';
 export * from './lifecycle.js';
 export * from './registry.js';
 export * from './runtime-env.js';

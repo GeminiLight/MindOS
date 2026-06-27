@@ -4,6 +4,7 @@ import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import SearchModal from '@/components/SearchModal';
 import SearchPanel from '@/components/panels/SearchPanel';
+import { RUNTIME_COMMAND_INSERT_EVENT, type RuntimeCommandInsertDetail } from '@/lib/runtime-command-events';
 
 const mocks = vi.hoisted(() => ({
   apiFetch: vi.fn(),
@@ -117,6 +118,9 @@ function setupApiFetch() {
   mocks.apiFetch.mockImplementation(async (url: string, init?: RequestInit) => {
     if (url === '/api/plugins/surfaces?loadEnabled=1&kind=command') {
       return { ok: true, surfaces: [commandSurface] };
+    }
+    if (url === '/api/agent-runtimes/session-projections') {
+      return { schemaVersion: 1, projections: [] };
     }
     if (url.startsWith('/api/search')) {
       return [];
@@ -433,6 +437,87 @@ describe('plugin command surfaces', () => {
 
     expect(host.textContent).not.toContain('Plugin commands');
     expect(host.textContent).not.toContain('QuickAdd Like');
+  });
+
+  it('projects active ACP runtime commands into the desktop command center', async () => {
+    const onClose = vi.fn();
+    const inserted: RuntimeCommandInsertDetail[] = [];
+    const onInsert = (event: Event) => {
+      inserted.push((event as CustomEvent<RuntimeCommandInsertDetail>).detail);
+    };
+    window.addEventListener(RUNTIME_COMMAND_INSERT_EVENT, onInsert);
+    mocks.apiFetch.mockImplementation(async (url: string) => {
+      if (url === '/api/plugins/surfaces?loadEnabled=1&kind=command') {
+        return { ok: true, surfaces: [commandSurface] };
+      }
+      if (url === '/api/agent-runtimes/session-projections') {
+        return {
+          schemaVersion: 1,
+          projections: [{
+            schemaVersion: 1,
+            runtimeId: 'declared-acp',
+            runtimeName: 'Declared ACP',
+            runtimeKind: 'acp',
+            runtimeStatus: 'available',
+            sessionOwner: 'external',
+            permissionOwner: 'external',
+            status: 'idle',
+            source: 'acp-session-snapshot',
+            slashCommands: {
+              status: 'available',
+              source: 'session-observed',
+              commands: [{ id: 'plan', name: 'plan', description: 'Plan the work' }],
+              summary: 'Declared ACP reported 1 slash command(s).',
+            },
+            controls: {},
+            toolEvents: { status: 'unavailable', calls: [], summary: { total: 0, pending: 0, inProgress: 0, completed: 0, failed: 0 } },
+            permissionEvents: { status: 'unavailable', events: [], pending: [], summary: 'No permission events.' },
+            reasons: [],
+          }],
+        };
+      }
+      if (url.startsWith('/api/search')) {
+        return [];
+      }
+      throw new Error(`Unexpected apiFetch call: ${url}`);
+    });
+
+    try {
+      await act(async () => {
+        root.render(<SearchPanel active onClose={onClose} />);
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      const input = host.querySelector('input[type="text"]') as HTMLInputElement;
+      await act(async () => {
+        setInputValue(input, '/pl');
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(host.textContent).toContain('Runtime commands');
+      expect(host.textContent).toContain('/plan');
+      expect(host.textContent).toContain('Declared ACP');
+
+      const commandButton = Array.from(host.querySelectorAll('button'))
+        .find((button) => button.textContent?.includes('/plan')) as HTMLButtonElement;
+
+      await act(async () => {
+        commandButton.click();
+        await new Promise((resolve) => window.setTimeout(resolve, 0));
+      });
+
+      expect(onClose).toHaveBeenCalledTimes(1);
+      expect(mocks.toastSuccess).toHaveBeenCalledWith('Inserted /plan');
+      expect(inserted).toEqual([{
+        text: '/plan ',
+        commandName: 'plan',
+        runtime: { id: 'declared-acp', name: 'Declared ACP', kind: 'acp' },
+      }]);
+    } finally {
+      window.removeEventListener(RUNTIME_COMMAND_INSERT_EVENT, onInsert);
+    }
   });
 
   it('shows plugin Notice feedback instead of a generic desktop command toast', async () => {

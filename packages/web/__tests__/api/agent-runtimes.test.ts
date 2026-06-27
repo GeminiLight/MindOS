@@ -236,6 +236,33 @@ describe('/api/agent-runtimes', () => {
     );
     expect(body.installed).toHaveLength(2);
     expect(body.notInstalled).toHaveLength(1);
+    expect(body.catalog).toMatchObject({
+      schemaVersion: 1,
+      summary: expect.objectContaining({
+        total: body.runtimes.length,
+        available: expect.any(Number),
+        categories: expect.objectContaining({ mindos: 1, native: 2 }),
+      }),
+      entries: expect.arrayContaining([
+        expect.objectContaining({
+          id: 'codex',
+          kind: 'codex',
+          category: 'native',
+          owners: expect.objectContaining({
+            model: 'external',
+            session: 'external',
+          }),
+          diagnostics: expect.objectContaining({
+            schemaVersion: 1,
+            status: 'available',
+            checks: expect.arrayContaining([
+              expect.objectContaining({ id: 'availability', status: 'passed' }),
+              expect.objectContaining({ id: 'session-ownership', status: 'passed' }),
+            ]),
+          }),
+        }),
+      ]),
+    });
   });
 
   it('preserves signed-out and error statuses for runtime menu display', async () => {
@@ -343,7 +370,7 @@ describe('/api/agent-runtimes', () => {
       agent: expect.objectContaining({ id: 'claude', binaryPath: '/usr/local/bin/claude' }),
       timeoutMs: 20000,
     });
-    expect(body).toEqual({
+    expect(body).toMatchObject({
       runtime: expect.objectContaining({
         id: 'claude',
         kind: 'claude',
@@ -358,6 +385,30 @@ describe('/api/agent-runtimes', () => {
           supportsToolEvents: true,
           supportsCheckpoints: false,
         }),
+      }),
+      catalog: expect.objectContaining({
+        schemaVersion: 1,
+        summary: expect.objectContaining({
+          total: 1,
+          available: 1,
+          categories: expect.objectContaining({ native: 1 }),
+        }),
+        entries: [
+          expect.objectContaining({
+            id: 'claude',
+            runtimeId: 'claude',
+            category: 'native',
+            diagnostics: expect.objectContaining({
+              schemaVersion: 1,
+              status: 'available',
+              selectedCommand: { cmd: 'claude', args: [], source: 'descriptor' },
+              checks: expect.arrayContaining([
+                expect.objectContaining({ id: 'command-resolution', status: 'passed' }),
+                expect.objectContaining({ id: 'mcp-capability', status: 'passed' }),
+              ]),
+            }),
+          }),
+        ],
       }),
     });
   });

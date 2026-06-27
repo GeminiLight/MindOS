@@ -429,7 +429,10 @@ async function handleRequest(
       return;
     }
     if (route === 'GET /api/agent-runtimes/readiness') {
-      writeResponse(res, await handleAgentRuntimeReadinessGet(url.searchParams, createHttpMcpProjectionServices(services, url.searchParams)));
+      writeResponse(res, await handleAgentRuntimeReadinessGet(url.searchParams, {
+        ...createHttpMcpProjectionServices(services, url.searchParams),
+        getAcpSessionSnapshots: () => getAcpSessionSnapshots(services),
+      }));
       return;
     }
     if (route === 'GET /api/agent-runtimes/codex/threads') {

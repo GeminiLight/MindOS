@@ -3,11 +3,12 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { Search, X, FileText, Table, ChevronRight, Eye, GripVertical, Terminal } from 'lucide-react';
-import { SearchResult } from '@/lib/types';
+import { SearchResult, type AcpAvailableCommand, type AgentRuntimeIdentity, type RuntimeSessionProjectionsPayload } from '@/lib/types';
 import { encodePath } from '@/lib/utils';
 import { apiFetch } from '@/lib/api';
 import { useLocale } from '@/lib/stores/locale-store';
 import { toast } from '@/lib/toast';
+import { openAskModal } from '@/hooks/useAskModal';
 import PanelHeader from './PanelHeader';
 import { Virtuoso } from 'react-virtuoso';
 import { getSearchWarmHint, shouldStartSearchPrewarm, useSearchPrewarm } from '@/hooks/useSearchPrewarm';
@@ -38,6 +39,7 @@ import { createSearchResultDragPreview, scheduleSearchResultDragPreviewCleanup }
 import { isPathAffected, notifyFilesChanged, subscribeFilesChanged } from '@/lib/files-changed';
 import { useSmoothRouterPush } from '@/hooks/useSmoothRouterPush';
 import { highlightSearchSnippet } from '@/lib/search-highlight';
+import { requestRuntimeCommandInsert } from '@/lib/runtime-command-events';
 
 /** Format file path as breadcrumb for cleaner display */
 function formatPath(fullPath: string): { name: string; breadcrumb: string[] } {
@@ -49,12 +51,76 @@ function formatPath(fullPath: string): { name: string; breadcrumb: string[] } {
 
 const SEARCH_PREVIEW_CACHE_LIMIT = 25;
 
+type RuntimeCommandPaletteItem = {
+  id: string;
+  commandName: string;
+  description: string;
+  command: AcpAvailableCommand;
+  runtime: AgentRuntimeIdentity;
+};
+
 function rememberPreview(cache: Map<string, string | null>, path: string, content: string | null): void {
   if (cache.has(path)) cache.delete(path);
   cache.set(path, content);
   if (cache.size <= SEARCH_PREVIEW_CACHE_LIMIT) return;
   const oldest = cache.keys().next().value;
   if (oldest !== undefined) cache.delete(oldest);
+}
+
+function runtimeCommandText(commandName: string): string {
+  const normalized = commandName.trim().replace(/^\//, '');
+  return normalized ? `/${normalized} ` : '/';
+}
+
+function runtimeCommandItemsFromPayload(payload: Partial<RuntimeSessionProjectionsPayload>): RuntimeCommandPaletteItem[] {
+  const projections = Array.isArray(payload.projections) ? payload.projections : [];
+  const items: RuntimeCommandPaletteItem[] = [];
+  const seen = new Set<string>();
+  for (const projection of projections) {
+    const commands = projection.slashCommands?.status === 'available'
+      ? projection.slashCommands.commands
+      : [];
+    if (!Array.isArray(commands) || commands.length === 0) continue;
+    const runtime: AgentRuntimeIdentity = {
+      id: projection.runtimeId,
+      name: projection.runtimeName,
+      kind: projection.runtimeKind,
+    };
+    for (const command of commands) {
+      const commandName = command.name?.trim().replace(/^\//, '');
+      if (!commandName) continue;
+      const key = `${runtime.id}:${commandName}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      items.push({
+        id: command.id?.trim() ? `${runtime.id}:${command.id}` : key,
+        commandName,
+        description: command.description?.trim() || 'Runtime command',
+        command,
+        runtime,
+      });
+    }
+  }
+  return items.sort((left, right) => (
+    left.runtime.name.localeCompare(right.runtime.name)
+    || left.commandName.localeCompare(right.commandName)
+  ));
+}
+
+function matchesRuntimeCommandQuery(item: RuntimeCommandPaletteItem, query: string): boolean {
+  const raw = query.trim();
+  if (!raw) return false;
+  const normalized = raw.startsWith('/') ? raw.slice(1).trim() : raw;
+  if (!raw.startsWith('/') && normalized.length < 2) return false;
+  if (!normalized) return raw.startsWith('/');
+  const haystack = [
+    item.commandName,
+    `/${item.commandName}`,
+    item.description,
+    item.runtime.name,
+    item.runtime.id,
+  ].join(' ').toLowerCase();
+  return normalized.toLowerCase().split(/\s+/).every((part) => haystack.includes(part));
 }
 
 interface SearchPanelProps {
@@ -75,6 +141,7 @@ export default function SearchPanel({ active, focusRequest = 0, onNavigate, onCl
   const [loading, setLoading] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [runtimeCommands, setRuntimeCommands] = useState<RuntimeCommandPaletteItem[]>([]);
   const [pluginCommands, setPluginCommands] = useState<PluginSurface[]>([]);
   const [pluginModal, setPluginModal] = useState<PluginModalSnapshot | null>(null);
   const [pluginMenu, setPluginMenu] = useState<PluginMenuSnapshot | null>(null);
@@ -106,8 +173,12 @@ export default function SearchPanel({ active, focusRequest = 0, onNavigate, onCl
     () => pluginCommands.filter((surface) => matchesPluginCommandQuery(surface, query)),
     [pluginCommands, query],
   );
-  const selectedFileIndex = selectedIndex - visiblePluginCommands.length;
-  const selectableCount = visiblePluginCommands.length + results.length;
+  const visibleRuntimeCommands = useMemo(
+    () => runtimeCommands.filter((item) => matchesRuntimeCommandQuery(item, query)).slice(0, 20),
+    [runtimeCommands, query],
+  );
+  const selectedFileIndex = selectedIndex - visibleRuntimeCommands.length - visiblePluginCommands.length;
+  const selectableCount = visibleRuntimeCommands.length + visiblePluginCommands.length + results.length;
 
   // ── Preview state ──
   const [previewContent, setPreviewContent] = useState<string | null>(null);
@@ -403,6 +474,20 @@ export default function SearchPanel({ active, focusRequest = 0, onNavigate, onCl
     }
   }, [pluginEditorContext, router, smoothPush, onNavigate]);
 
+  const runRuntimeCommand = useCallback((item: RuntimeCommandPaletteItem) => {
+    const text = runtimeCommandText(item.commandName);
+    openAskModal(text, 'user', item.runtime);
+    window.setTimeout(() => {
+      requestRuntimeCommandInsert({
+        text,
+        commandName: item.commandName,
+        runtime: item.runtime,
+      });
+    }, 0);
+    onClose?.();
+    toast.success(`Inserted /${item.commandName}`);
+  }, [onClose]);
+
   useEffect(() => {
     if (!active) return;
     let cancelled = false;
@@ -417,6 +502,26 @@ export default function SearchPanel({ active, focusRequest = 0, onNavigate, onCl
       cancelled = true;
     };
   }, [active, pluginEditorContext]);
+
+  useEffect(() => {
+    if (!active) {
+      setRuntimeCommands([]);
+      return;
+    }
+    let cancelled = false;
+    void apiFetch<RuntimeSessionProjectionsPayload>('/api/agent-runtimes/session-projections', {
+      cache: 'no-store',
+    })
+      .then((payload) => {
+        if (!cancelled) setRuntimeCommands(runtimeCommandItemsFromPayload(payload));
+      })
+      .catch(() => {
+        if (!cancelled) setRuntimeCommands([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [active]);
 
   useEffect(() => {
     if (selectableCount === 0) {
@@ -435,14 +540,20 @@ export default function SearchPanel({ active, focusRequest = 0, onNavigate, onCl
       e.preventDefault();
       setSelectedIndex(i => Math.max(i - 1, 0));
     } else if (e.key === 'Enter') {
-      if (selectedIndex < visiblePluginCommands.length) {
-        const command = visiblePluginCommands[selectedIndex];
+      if (selectedIndex < visibleRuntimeCommands.length) {
+        const command = visibleRuntimeCommands[selectedIndex];
+        if (command) runRuntimeCommand(command);
+        return;
+      }
+      const pluginIndex = selectedIndex - visibleRuntimeCommands.length;
+      if (pluginIndex >= 0 && pluginIndex < visiblePluginCommands.length) {
+        const command = visiblePluginCommands[pluginIndex];
         if (command) void runPluginCommand(command);
         return;
       }
       if (results[selectedFileIndex]) navigate(results[selectedFileIndex]);
     }
-  }, [results, selectedIndex, selectedFileIndex, selectableCount, navigate, visiblePluginCommands, runPluginCommand]);
+  }, [results, selectedIndex, selectedFileIndex, selectableCount, navigate, visibleRuntimeCommands, runRuntimeCommand, visiblePluginCommands, runPluginCommand]);
 
   // Drag and drop handlers
   const handleDragStart = useCallback((e: React.DragEvent<HTMLButtonElement>, result: SearchResult, index: number) => {
@@ -521,7 +632,7 @@ export default function SearchPanel({ active, focusRequest = 0, onNavigate, onCl
       {/* Results */}
       <div className="sidebar-scroll-area min-h-0 flex-1 overflow-y-auto px-2 py-2" role="listbox" aria-label="Search results">
         {/* Empty state with prompt */}
-        {results.length === 0 && visiblePluginCommands.length === 0 && !query && !loading && (
+        {results.length === 0 && visibleRuntimeCommands.length === 0 && visiblePluginCommands.length === 0 && !query && !loading && (
           <div className="flex h-full flex-col items-center justify-center px-5 py-10 text-center">
             <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-md border border-border/60 bg-muted/45">
               <Search size={18} className="text-muted-foreground/60" />
@@ -534,7 +645,7 @@ export default function SearchPanel({ active, focusRequest = 0, onNavigate, onCl
         )}
 
         {/* No results state */}
-        {results.length === 0 && visiblePluginCommands.length === 0 && query && !loading && (
+        {results.length === 0 && visibleRuntimeCommands.length === 0 && visiblePluginCommands.length === 0 && query && !loading && (
           <div className="flex h-full flex-col items-center justify-center px-5 py-10 text-center">
             <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-md border border-border/60 bg-muted/45">
               <Search size={18} className="text-muted-foreground/60" />
@@ -559,13 +670,52 @@ export default function SearchPanel({ active, focusRequest = 0, onNavigate, onCl
           </div>
         )}
 
+        {visibleRuntimeCommands.length > 0 && (
+          <div className="mb-2 py-1">
+            <div className="px-2 py-1.5 text-2xs font-semibold uppercase tracking-wider text-muted-foreground/80">
+              Runtime commands
+            </div>
+            {visibleRuntimeCommands.map((item, i) => {
+              const isSelected = i === selectedIndex;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  role="option"
+                  aria-selected={isSelected}
+                  onClick={() => runRuntimeCommand(item)}
+                  onMouseEnter={() => setSelectedIndex(i)}
+                  className={`
+                    group flex w-full items-center gap-3 rounded-md border px-2.5 py-2.5 text-left transition-[background-color,border-color,box-shadow] duration-100
+                    ${isSelected ? 'border-[var(--amber)]/25 bg-[var(--amber-subtle)]' : 'border-transparent hover:bg-muted/45'}
+                  `}
+                >
+                  <span className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${
+                    isSelected ? 'bg-[var(--amber-subtle)] text-[var(--amber)]' : 'bg-muted/55 text-muted-foreground'
+                  }`}>
+                    <Terminal size={13} />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold text-foreground">/{item.commandName}</span>
+                    <span className="block truncate text-xs text-muted-foreground">{item.runtime.name} · {item.description}</span>
+                  </span>
+                  <kbd className="ml-auto shrink-0 rounded border border-border bg-background/70 px-1.5 py-0.5 font-mono text-2xs text-muted-foreground">
+                    /
+                  </kbd>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         {visiblePluginCommands.length > 0 && (
           <div className="mb-2 py-1">
             <div className="px-2 py-1.5 text-2xs font-semibold uppercase tracking-wider text-muted-foreground/80">
               Plugin commands
             </div>
             {visiblePluginCommands.map((surface, i) => {
-              const isSelected = i === selectedIndex;
+              const absoluteIndex = visibleRuntimeCommands.length + i;
+              const isSelected = absoluteIndex === selectedIndex;
               const shortcut = pluginCommandHotkeyLabel(surface);
               const shortcutPolicy = pluginCommandHotkeyPolicyLabel(surface);
               const shortcutTitle = pluginCommandHotkeyConflictSummary(surface) ?? undefined;
@@ -576,7 +726,7 @@ export default function SearchPanel({ active, focusRequest = 0, onNavigate, onCl
                   role="option"
                   aria-selected={isSelected}
                   onClick={() => void runPluginCommand(surface)}
-                  onMouseEnter={() => setSelectedIndex(i)}
+                  onMouseEnter={() => setSelectedIndex(absoluteIndex)}
                   className={`
                     group flex w-full items-center gap-3 rounded-md border px-2.5 py-2.5 text-left transition-[background-color,border-color,box-shadow] duration-100
                     ${isSelected ? 'border-[var(--amber)]/25 bg-[var(--amber-subtle)]' : 'border-transparent hover:bg-muted/45'}
@@ -612,12 +762,13 @@ export default function SearchPanel({ active, focusRequest = 0, onNavigate, onCl
           <Virtuoso
             totalCount={results.length}
             overscan={100}
-            itemContent={(i) => {
-              const result = results[i];
-              const ext = result.path.endsWith('.csv') ? '.csv' : '.md';
-              const { name, breadcrumb } = formatPath(result.path);
-              const isSelected = visiblePluginCommands.length + i === selectedIndex;
-              const isDragging = i === draggedIndex;
+	            itemContent={(i) => {
+	              const result = results[i];
+	              const ext = result.path.endsWith('.csv') ? '.csv' : '.md';
+	              const { name, breadcrumb } = formatPath(result.path);
+	              const fileIndex = visibleRuntimeCommands.length + visiblePluginCommands.length + i;
+	              const isSelected = fileIndex === selectedIndex;
+	              const isDragging = i === draggedIndex;
 
               return (
                 <button
@@ -629,7 +780,7 @@ export default function SearchPanel({ active, focusRequest = 0, onNavigate, onCl
                   onDragEnter={() => setDraggedIndex(i)}
                   onDragLeave={() => setDraggedIndex(null)}
                   onClick={() => navigate(result)}
-                  onMouseEnter={() => setSelectedIndex(visiblePluginCommands.length + i)}
+	                  onMouseEnter={() => setSelectedIndex(fileIndex)}
                   className={`
                     mb-1 flex w-full items-start gap-3 rounded-md border px-2.5 py-2.5 text-left transition-[background-color,border-color,box-shadow] duration-100
                     ${isSelected ? 'border-[var(--amber)]/25 bg-[var(--amber-subtle)]' : 'border-transparent'}
@@ -717,8 +868,12 @@ export default function SearchPanel({ active, focusRequest = 0, onNavigate, onCl
         <div className="flex shrink-0 items-center gap-2 border-t border-border/50 px-3 py-2 text-xs text-muted-foreground/60">
           <span><kbd className="rounded border border-border/50 bg-muted/35 px-1 py-0.5 font-mono text-[10px]">↑↓</kbd> {t.search.navigate}</span>
           <span><kbd className="rounded border border-border/50 bg-muted/35 px-1 py-0.5 font-mono text-[10px]">↵</kbd> {t.search.open}</span>
-          <span className="text-muted-foreground/40 mx-0.5">•</span>
-          <span><kbd className="rounded border border-border/50 bg-muted/35 px-1 py-0.5 font-mono text-[10px]">Drag</kbd> {t.search.dragToChat}</span>
+          {results.length > 0 && (
+            <>
+              <span className="text-muted-foreground/40 mx-0.5">•</span>
+              <span><kbd className="rounded border border-border/50 bg-muted/35 px-1 py-0.5 font-mono text-[10px]">Drag</kbd> {t.search.dragToChat}</span>
+            </>
+          )}
         </div>
       )}
 

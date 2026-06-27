@@ -97,6 +97,7 @@ function activeAcpSnapshot(): AcpSessionSnapshot {
       },
     ],
     pendingPermissions: [],
+    mcpServers: [{ name: 'filesystem', type: 'stdio' }],
   };
 }
 
@@ -176,6 +177,10 @@ describe('GET /api/agent-runtimes/session-projections', () => {
       permissionEvents: {
         status: 'available',
         pending: [],
+      },
+      mcpServers: {
+        status: 'available',
+        servers: [{ name: 'filesystem', type: 'stdio' }],
       },
     });
   });

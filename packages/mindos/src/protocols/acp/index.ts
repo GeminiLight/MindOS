@@ -38,6 +38,10 @@ export {
   spawnAndConnect,
 } from './subprocess.js';
 export {
+  buildAcpSessionMcpInheritancePlan,
+  resolveAcpSessionMcpServers,
+} from './mcp-session-inheritance.js';
+export {
   cancelPrompt,
   closeAllSessions,
   closeSession,
@@ -65,6 +69,12 @@ export type {
   DetectableAgent,
   ResolvedAgentCommand,
 } from './agent-descriptors.js';
+export type {
+  AcpSessionMcpAccess,
+  AcpSessionMcpConfigEntry,
+  AcpSessionMcpConfigLike,
+  AcpSessionMcpInheritancePlan,
+} from './mcp-session-inheritance.js';
 export type {
   AcpSessionOptions,
 } from './session.js';
@@ -106,6 +116,7 @@ export type {
   AcpSessionCapabilities,
   AcpSessionControlSnapshot,
   AcpSessionInfo,
+  AcpSessionMcpServerSummary,
   AcpSessionSnapshot,
   AcpSessionSnapshotFactSource,
   AcpSessionState,

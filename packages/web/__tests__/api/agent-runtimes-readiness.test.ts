@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import type { AcpSessionSnapshot } from '@/lib/types';
 
 const mocks = vi.hoisted(() => ({
   settings: { mindRoot: '', projectRoot: '' },
@@ -9,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   resolveCommandPath: vi.fn(),
   resolveCommandPathCandidates: vi.fn(),
   checkNativeRuntimeHealth: vi.fn(),
+  getActiveSessionSnapshots: vi.fn(),
 }));
 
 vi.mock('@geminilight/mindos/server', async () => {
@@ -37,6 +39,10 @@ vi.mock('@/lib/acp/detect-local', () => ({
   resolveCommandPath: mocks.resolveCommandPath,
   resolveCommandPathCandidates: mocks.resolveCommandPathCandidates,
   checkNativeRuntimeHealth: mocks.checkNativeRuntimeHealth,
+}));
+
+vi.mock('@/lib/acp/session', () => ({
+  getActiveSessionSnapshots: mocks.getActiveSessionSnapshots,
 }));
 
 vi.mock('@/lib/custom-agents', () => ({
@@ -91,6 +97,75 @@ function mcpAgentDef(
   };
 }
 
+function activeAcpSnapshot(): AcpSessionSnapshot {
+  const now = '2026-06-26T00:00:00.000Z';
+  return {
+    schemaVersion: 1,
+    sessionId: 'ses-declared-1',
+    agentId: 'declared-acp',
+    agentSessionId: 'agent-ses-1',
+    state: 'idle',
+    cwd: projectRoot,
+    createdAt: now,
+    lastActivityAt: now,
+    authMethods: [],
+    modes: [{ id: 'default', name: 'Default' }, { id: 'code', name: 'Code' }],
+    currentModeId: 'code',
+    configOptions: [],
+    controls: {
+      model: {
+        status: 'available',
+        source: 'observed',
+        configId: 'model',
+        currentValue: 'smart',
+        options: [{ id: 'cheap', label: 'Cheap' }, { id: 'smart', label: 'Smart' }],
+      },
+      mode: {
+        status: 'available',
+        source: 'observed',
+        currentValue: 'code',
+        options: [{ id: 'default', label: 'Default' }, { id: 'code', label: 'Code' }],
+      },
+      thoughtLevel: {
+        status: 'available',
+        source: 'observed',
+        configId: 'reasoning_effort',
+        currentValue: 'high',
+        options: [{ id: 'low', label: 'Low' }, { id: 'high', label: 'High' }],
+      },
+    },
+    availableCommands: [
+      { id: 'plan', name: 'plan', description: 'Plan the work' },
+    ],
+    toolCalls: [
+      { toolCallId: 'tool-1', title: 'Read file', status: 'completed' },
+    ],
+    toolSummary: {
+      total: 1,
+      pending: 0,
+      inProgress: 0,
+      completed: 1,
+      failed: 0,
+    },
+    permissionEvents: [
+      {
+        requestId: 'perm-1',
+        sessionId: 'ses-declared-1',
+        toolCallId: 'tool-1',
+        toolName: 'Read file',
+        status: 'resolved',
+        options: [{ id: 'allow', label: 'Allow', kind: 'allow_once' }],
+        selectedOptionId: 'allow',
+        outcome: 'allow_once',
+        requestedAt: now,
+        resolvedAt: now,
+      },
+    ],
+    pendingPermissions: [],
+    mcpServers: [{ name: 'filesystem', type: 'stdio' }],
+  };
+}
+
 let tempHome: string;
 let mindRoot: string;
 let projectRoot: string;
@@ -129,9 +204,24 @@ beforeEach(() => {
   mocks.resolveCommandPathCandidates.mockReset().mockResolvedValue([]);
   mocks.checkNativeRuntimeHealth.mockReset().mockResolvedValue({ status: 'available' });
   mocks.detectLocalAcpAgents.mockReset().mockResolvedValue({
-    installed: [{ id: 'codex-acp', name: 'Codex', binaryPath: '/usr/local/bin/codex', status: 'available' }],
+    installed: [
+      { id: 'codex-acp', name: 'Codex', binaryPath: '/usr/local/bin/codex', status: 'available' },
+      {
+        id: 'declared-acp',
+        name: 'Declared ACP',
+        binaryPath: '/usr/local/bin/declared',
+        status: 'available',
+        adapterMetadata: {
+          commands: [{ name: 'fallback', description: 'Fallback command' }],
+          models: [{ id: 'cheap', label: 'Cheap' }],
+          supportsStreaming: true,
+          authRequired: false,
+        },
+      },
+    ],
     notInstalled: [{ id: 'claude', name: 'Claude Code', installCmd: 'npm install -g @anthropic-ai/claude-code' }],
   });
+  mocks.getActiveSessionSnapshots.mockReset().mockReturnValue([activeAcpSnapshot()]);
 });
 
 afterEach(() => {
@@ -156,6 +246,7 @@ describe('GET /api/agent-runtimes/readiness', () => {
     expect(res.status, JSON.stringify(body)).toBe(200);
     const mindos = body.projections.find((projection: { runtimeId: string }) => projection.runtimeId === 'mindos');
     const codex = body.projections.find((projection: { runtimeId: string }) => projection.runtimeId === 'codex');
+    const declaredAcp = body.projections.find((projection: { runtimeId: string }) => projection.runtimeId === 'declared-acp');
 
     expect(mindos).toMatchObject({
       overallStatus: 'usable',
@@ -165,9 +256,9 @@ describe('GET /api/agent-runtimes/readiness', () => {
       ]),
       gaps: expect.arrayContaining([
         expect.objectContaining({ id: 'scheduler', category: 'mindos-product' }),
-        expect.objectContaining({ id: 'artifact-index', category: 'mindos-product' }),
       ]),
     });
+    expect(mindos.gaps.map((gap: { id: string }) => gap.id)).not.toContain('artifact-index');
     expect(mindos.useCases.find((entry: { id: string }) => entry.id === 'adapter-contract')).toMatchObject({
       source: 'adapter-projection',
       sourceStatus: 'ready',
@@ -183,6 +274,46 @@ describe('GET /api/agent-runtimes/readiness', () => {
       source: 'permission-projection',
       sourceStatus: 'interactive-only',
       status: 'usable',
+    });
+    expect(declaredAcp.useCases.find((entry: { id: string }) => entry.id === 'session-controls')).toMatchObject({
+      source: 'session-projection',
+      sourceStatus: 'idle',
+      status: 'usable',
+      details: expect.objectContaining({
+        source: 'acp-session-snapshot',
+        session: expect.objectContaining({
+          kind: 'acp-session',
+          sessionId: 'ses-declared-1',
+          externalSessionId: 'agent-ses-1',
+        }),
+        controls: expect.objectContaining({
+          model: expect.objectContaining({
+            status: 'available',
+            source: 'session-observed',
+            currentValue: 'smart',
+          }),
+        }),
+        slashCommands: expect.objectContaining({
+          status: 'available',
+          source: 'session-observed',
+          commands: [{ id: 'plan', name: 'plan', description: 'Plan the work' }],
+        }),
+        toolEvents: expect.objectContaining({
+          status: 'available',
+          summary: expect.objectContaining({ total: 1, completed: 1 }),
+        }),
+        permissionEvents: {
+          status: 'available',
+          pendingCount: 0,
+          eventCount: 1,
+          summary: 'Declared ACP has 0 pending ACP permission request(s).',
+        },
+        mcpServers: {
+          status: 'available',
+          servers: [{ name: 'filesystem', type: 'stdio' }],
+          summary: 'Declared ACP inherited 1 MCP server(s) into the active ACP session.',
+        },
+      }),
     });
     expect(JSON.stringify(body)).not.toContain('must-not-leak');
     expect(JSON.stringify(body)).not.toContain('secret-wrapper');

@@ -30,6 +30,11 @@ import {
   type AgentRuntimePermissionProjection,
 } from './runtime-permission-projections.js';
 import {
+  buildRuntimeSessionProjectionsPayload,
+  type RuntimeSessionProjection,
+  type RuntimeSessionProjectionServices,
+} from './runtime-session-projections.js';
+import {
   buildAgentRuntimeMcpProjectionsPayload,
   type AgentRuntimeMcpProjection,
   type AgentRuntimeMcpProjectionServices,
@@ -45,6 +50,7 @@ export type AgentRuntimeReadinessStatus =
 export type AgentRuntimeReadinessSource =
   | 'compatibility-profile'
   | 'adapter-projection'
+  | 'session-projection'
   | 'permission-projection'
   | 'mcp-projection'
   | 'artifact-projection'
@@ -72,7 +78,8 @@ export type AgentRuntimeReadinessRequirement = {
 
 export type AgentRuntimeReadinessUseCaseId =
   | AgentRuntimeCompatibilityScenario
-  | 'adapter-contract';
+  | 'adapter-contract'
+  | 'session-controls';
 
 export type AgentRuntimeReadinessUseCase = {
   id: AgentRuntimeReadinessUseCaseId;
@@ -121,10 +128,12 @@ export type AgentRuntimeReadinessPayload = {
   projections: AgentRuntimeReadinessProjection[];
 };
 
-export type AgentRuntimeReadinessServices = AgentRuntimeMcpProjectionServices;
+export type AgentRuntimeReadinessServices = AgentRuntimeMcpProjectionServices
+  & Pick<RuntimeSessionProjectionServices, 'getAcpSessionSnapshots'>;
 
 type RuntimeProjectionContext = {
   adapterByRuntime: Map<string, AgentRuntimeAdapterProjection>;
+  sessionByRuntime: Map<string, RuntimeSessionProjection>;
   permissionByRuntime: Map<string, AgentRuntimePermissionProjection>;
   mcpByRuntime: Map<string, AgentRuntimeMcpProjection>;
   artifactByRuntime: Map<string, AgentRuntimeArtifactProjection>;
@@ -133,6 +142,7 @@ type RuntimeProjectionContext = {
 
 const USE_CASE_LABELS: Record<AgentRuntimeReadinessUseCaseId, string> = {
   'adapter-contract': 'Adapter contract',
+  'session-controls': 'Session controls',
   'interactive-turn': 'Interactive turn',
   'coding-workflow': 'Coding workflow',
   'session-continuity': 'Session continuity',
@@ -163,13 +173,15 @@ export async function handleAgentRuntimeReadinessGet(
   if ('error' in permissionModeResult) return json({ error: permissionModeResult.error }, { status: 400 });
 
   try {
-    const [runtimes, mcpAgents] = await Promise.all([
+    const [runtimes, mcpAgents, acpSessions] = await Promise.all([
       services.listRuntimes(),
       services.listMcpAgents(),
+      services.getAcpSessionSnapshots?.() ?? [],
     ]);
     const payload = buildAgentRuntimeReadinessPayload({
       runtimes,
       mcpAgents,
+      acpSessions,
       mindosMcpConfig: services.readMcpConfig?.(),
       permissionMode: permissionModeResult.permissionMode,
     });
@@ -189,6 +201,7 @@ export async function handleAgentRuntimeReadinessGet(
 export function buildAgentRuntimeReadinessPayload(input: {
   runtimes: AgentRuntimeDescriptor[];
   mcpAgents: Parameters<typeof buildAgentRuntimeMcpProjectionsPayload>[0]['mcpAgents'];
+  acpSessions?: Parameters<typeof buildRuntimeSessionProjectionsPayload>[0]['acpSessions'];
   mindosMcpConfig?: Parameters<typeof buildAgentRuntimeMcpProjectionsPayload>[0]['mindosMcpConfig'];
   permissionMode?: MindosPermissionMode;
 }): AgentRuntimeReadinessPayload {
@@ -202,11 +215,16 @@ export function buildAgentRuntimeReadinessPayload(input: {
     mcpAgents: input.mcpAgents,
     mindosMcpConfig: input.mindosMcpConfig,
   });
+  const sessionPayload = buildRuntimeSessionProjectionsPayload({
+    runtimes: input.runtimes,
+    acpSessions: input.acpSessions,
+  });
   const artifactPayload = buildAgentRuntimeArtifactProjectionsPayload({ runtimes: input.runtimes });
   const automationPayload = buildAgentRuntimeAutomationProjectionsPayload({ runtimes: input.runtimes });
   const adapterPayload = buildAgentRuntimeAdapterProjectionsPayload({ runtimes: input.runtimes });
   const context: RuntimeProjectionContext = {
     adapterByRuntime: byRuntime(adapterPayload.projections),
+    sessionByRuntime: byRuntime(sessionPayload.projections),
     permissionByRuntime: byRuntime(permissionPayload.projections),
     mcpByRuntime: byRuntime(mcpPayload.projections),
     artifactByRuntime: byRuntime(artifactPayload.projections),
@@ -226,6 +244,7 @@ function buildRuntimeReadinessProjection(
 ): AgentRuntimeReadinessProjection {
   const useCases = [
     adapterUseCase(runtime, context.adapterByRuntime.get(runtimeKey(runtime))),
+    sessionUseCase(runtime, context.sessionByRuntime.get(runtimeKey(runtime))),
     ...BASE_COMPATIBILITY_USE_CASES.map((scenario) => compatibilityUseCase(runtime, scenario)),
     permissionUseCase(runtime, context.permissionByRuntime.get(runtimeKey(runtime))),
     mcpUseCase(runtime, context.mcpByRuntime.get(runtimeKey(runtime))),
@@ -250,6 +269,38 @@ function buildRuntimeReadinessProjection(
     gaps,
     ...(blockers.length > 0 ? { blockers } : {}),
   };
+}
+
+function sessionUseCase(
+  runtime: AgentRuntimeDescriptor,
+  projection: RuntimeSessionProjection | undefined,
+): AgentRuntimeReadinessUseCase {
+  if (!projection) return missingProjectionUseCase(runtime, 'session-controls', 'session-projection');
+  return runtimeGate(runtime, {
+    id: 'session-controls',
+    label: USE_CASE_LABELS['session-controls'],
+    status: sessionStatusToReadiness(projection.status),
+    source: 'session-projection',
+    sourceStatus: projection.status,
+    owner: runtime.sessionOwner === 'mindos' ? 'mindos' : 'shared',
+    summary: sessionSummary(projection),
+    requirements: projection.reasons.map(requirementFromReason),
+    ...(projection.blockers?.length ? { blockers: uniqSorted(projection.blockers) } : {}),
+    details: {
+      source: projection.source,
+      session: projection.session,
+      controls: projection.controls,
+      slashCommands: projection.slashCommands,
+      toolEvents: projection.toolEvents,
+      permissionEvents: {
+        status: projection.permissionEvents.status,
+        pendingCount: projection.permissionEvents.pending.length,
+        eventCount: projection.permissionEvents.events.length,
+        summary: projection.permissionEvents.summary,
+      },
+      mcpServers: projection.mcpServers,
+    },
+  });
 }
 
 function adapterUseCase(
@@ -597,6 +648,12 @@ function adapterStatusToReadiness(status: AgentRuntimeAdapterProjection['status'
   return status;
 }
 
+function sessionStatusToReadiness(status: RuntimeSessionProjection['status']): AgentRuntimeReadinessStatus {
+  if (status === 'ready' || status === 'active') return 'ready';
+  if (status === 'idle') return 'usable';
+  return status;
+}
+
 function adapterSummary(projection: AgentRuntimeAdapterProjection): string {
   if (projection.status === 'ready') {
     return `${projection.runtimeName} adapter contract is ready across connection, configuration, health, commands, and protocol metadata.`;
@@ -608,6 +665,22 @@ function adapterSummary(projection: AgentRuntimeAdapterProjection): string {
     return `${projection.runtimeName} adapter contract is blocked.`;
   }
   return `${projection.runtimeName} adapter contract readiness is unknown.`;
+}
+
+function sessionSummary(projection: RuntimeSessionProjection): string {
+  if (projection.status === 'active' || projection.status === 'ready') {
+    return `${projection.runtimeName} has an active session projection for controls, commands, tools, and permissions.`;
+  }
+  if (projection.status === 'idle') {
+    return `${projection.runtimeName} has an idle session projection with ${projection.slashCommands.commands.length} runtime command(s).`;
+  }
+  if (projection.status === 'limited') {
+    return `${projection.runtimeName} session controls are partially observable.`;
+  }
+  if (projection.status === 'blocked') {
+    return `${projection.runtimeName} session controls are blocked.`;
+  }
+  return `${projection.runtimeName} session control readiness is unknown until a runtime session is observed or declared.`;
 }
 
 function mcpSummary(projection: AgentRuntimeMcpProjection): string {
@@ -652,7 +725,7 @@ function runtimeKey(runtime: AgentRuntimeDescriptor): string {
 }
 
 function isCompatibilityScenario(id: AgentRuntimeReadinessUseCaseId): id is AgentRuntimeCompatibilityScenario {
-  return id !== 'adapter-contract';
+  return id !== 'adapter-contract' && id !== 'session-controls';
 }
 
 function parsePermissionMode(value: string | null):

@@ -90,6 +90,64 @@ describe('ACP Session (SDK-based)', () => {
       expect(mockNewSession).toHaveBeenCalledOnce();
     });
 
+    it('injects allowlisted MCP servers into new ACP sessions after initialize', async () => {
+      mockInitialize.mockResolvedValueOnce({
+        agentCapabilities: { mcpCapabilities: { http: true } },
+      });
+
+      const session = await createSessionFromEntry(MOCK_ENTRY, {
+        mcpConfig: {
+          mcpServers: {
+            filesystem: {
+              command: 'mcp-filesystem',
+              args: ['--root', '/tmp/project'],
+              env: { FILESYSTEM_TOKEN: 'secret-value' },
+              agentSessions: true,
+            },
+            remoteDocs: {
+              type: 'http',
+              url: 'https://mcp.example.com',
+              headers: { Authorization: 'Bearer secret' },
+              agentSessions: true,
+            },
+            github: {
+              command: 'mcp-github',
+              env: { GITHUB_TOKEN: 'must-not-inherit' },
+              agentSessions: ['search_repositories'],
+            },
+          },
+        },
+      });
+
+      expect(mockNewSession).toHaveBeenCalledWith({
+        cwd: process.cwd(),
+        mcpServers: [
+          {
+            name: 'filesystem',
+            command: 'mcp-filesystem',
+            args: ['--root', '/tmp/project'],
+            env: [{ name: 'FILESYSTEM_TOKEN', value: 'secret-value' }],
+          },
+          {
+            type: 'http',
+            name: 'remoteDocs',
+            url: 'https://mcp.example.com',
+            headers: [{ name: 'Authorization', value: 'Bearer secret' }],
+          },
+        ],
+      });
+      expect(session.mcpServers).toEqual([
+        { name: 'filesystem', type: 'stdio' },
+        { name: 'remoteDocs', type: 'http' },
+      ]);
+      expect(getSessionSnapshot(session.id)?.mcpServers).toEqual([
+        { name: 'filesystem', type: 'stdio' },
+        { name: 'remoteDocs', type: 'http' },
+      ]);
+      expect(JSON.stringify(getSessionSnapshot(session.id))).not.toContain('secret');
+      expect(JSON.stringify(getSessionSnapshot(session.id))).not.toContain('must-not-inherit');
+    });
+
     it('extracts agentSessionId from SDK newSession response', async () => {
       mockNewSession.mockResolvedValueOnce({ sessionId: 'agent-assigned-id-123' });
 
@@ -577,6 +635,39 @@ describe('ACP Session (SDK-based)', () => {
       mockLoadSession.mockResolvedValueOnce({ sessionId: 'ses-loaded', modes: [] });
       const session = await loadSession('test-agent', 'ses-loaded');
       expect(session.agentSessionId).toBe('ses-loaded');
+    });
+
+    it('injects allowlisted MCP servers when loading ACP sessions', async () => {
+      (findAcpAgent as ReturnType<typeof vi.fn>).mockResolvedValueOnce(MOCK_ENTRY);
+      mockInitialize.mockResolvedValueOnce({
+        agentCapabilities: { loadSession: true, mcpCapabilities: { sse: true } },
+      });
+      mockLoadSession.mockResolvedValueOnce({ sessionId: 'ses-loaded', modes: [] });
+
+      const session = await loadSession('test-agent', 'ses-loaded', {
+        cwd: '/tmp/project',
+        mcpConfig: {
+          mcpServers: {
+            events: {
+              type: 'sse',
+              url: 'https://mcp.example.com/events',
+              agentSessions: true,
+            },
+          },
+        },
+      });
+
+      expect(mockLoadSession).toHaveBeenCalledWith({
+        sessionId: 'ses-loaded',
+        cwd: '/tmp/project',
+        mcpServers: [{
+          type: 'sse',
+          name: 'events',
+          url: 'https://mcp.example.com/events',
+          headers: [],
+        }],
+      });
+      expect(session.mcpServers).toEqual([{ name: 'events', type: 'sse' }]);
     });
   });
 

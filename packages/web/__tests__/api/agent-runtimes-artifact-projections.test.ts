@@ -60,24 +60,26 @@ describe('GET /api/agent-runtimes/artifact-projections', () => {
     const acp = body.projections.find((projection: { runtimeId: string }) => projection.runtimeId === 'opaque-acp');
 
     expect(mindos).toMatchObject({
-      status: 'limited',
+      status: 'ready',
       reviewableOutputKinds: ['artifact'],
-      artifactIndex: { status: 'missing' },
-      blockers: ['artifact-index'],
+      artifactIndex: { status: 'ready' },
     });
+    expect(mindos.blockers ?? []).not.toContain('artifact-index');
     expect(codex).toMatchObject({
-      status: 'limited',
+      status: 'ready',
       reviewableOutputKinds: ['artifact', 'branch', 'checkpoint', 'diff', 'pr'],
       nativeHandoffTargets: expect.arrayContaining(['branch', 'pull-request']),
       rollback: { supported: true },
       branchPr: { supported: true },
-      blockers: ['artifact-index'],
+      artifactIndex: { status: 'ready' },
     });
+    expect(codex.blockers ?? []).not.toContain('artifact-index');
     expect(acp).toMatchObject({
       status: 'unknown',
       reviewableOutputKinds: [],
       nativeReview: { supported: false },
-      blockers: ['adapter-artifact-contract', 'artifact-index'],
+      artifactIndex: { status: 'ready' },
+      blockers: ['adapter-artifact-contract'],
     });
   });
 
@@ -90,7 +92,7 @@ describe('GET /api/agent-runtimes/artifact-projections', () => {
     expect(body.projections).toEqual([
       expect.objectContaining({
         runtimeId: 'codex',
-        status: 'limited',
+        status: 'ready',
       }),
     ]);
   });

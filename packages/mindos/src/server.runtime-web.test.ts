@@ -497,7 +497,7 @@ describe('MindOS server contract: runtime, agent turn stream, static web', () =>
             }),
             'artifact-governance': expect.objectContaining({
               level: 'blocked',
-              blockers: expect.arrayContaining(['artifact-output-contract', 'artifact-index']),
+              blockers: expect.arrayContaining(['artifact-output-contract']),
             }),
           }),
         }),

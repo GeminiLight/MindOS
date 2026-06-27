@@ -11,6 +11,7 @@ import {
   type MindosMcpAgentRegistryDef,
 } from '@geminilight/mindos/server';
 import { checkNativeRuntimeHealth, detectLocalAcpAgents, resolveCommandPath, resolveCommandPathCandidates } from '@/lib/acp/detect-local';
+import { getActiveSessionSnapshots } from '@/lib/acp/session';
 import { getAllAgents, loadCustomAgents, scanCustomAgentSkills } from '@/lib/custom-agents';
 import { getMindRoot } from '@/lib/fs';
 import {
@@ -70,5 +71,6 @@ export async function GET(req: Request) {
       throw new Error('Failed to build MCP agent profiles for runtime readiness.');
     },
     readMcpConfig,
+    getAcpSessionSnapshots: getActiveSessionSnapshots,
   }));
 }

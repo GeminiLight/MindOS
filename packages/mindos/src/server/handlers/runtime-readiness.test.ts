@@ -141,10 +141,10 @@ describe('runtime readiness projections', () => {
       ]),
       gaps: expect.arrayContaining([
         expect.objectContaining({ id: 'scheduler', category: 'mindos-product', severity: 'warning' }),
-        expect.objectContaining({ id: 'artifact-index', category: 'mindos-product', severity: 'warning' }),
         expect.objectContaining({ id: 'mailbox', category: 'mindos-product', severity: 'warning' }),
       ]),
     });
+    expect(mindos?.gaps.map((gap) => gap.id)).not.toContain('artifact-index');
     expect(mindos?.useCases.find((entry) => entry.id === 'adapter-contract')).toMatchObject({
       source: 'adapter-projection',
       sourceStatus: 'ready',
@@ -171,13 +171,13 @@ describe('runtime readiness projections', () => {
       overallStatus: 'usable',
       recommendations: expect.arrayContaining([
         expect.objectContaining({ useCase: 'coding-workflow', confidence: 'strong' }),
-        expect.objectContaining({ useCase: 'artifact-governance', confidence: 'conditional' }),
+        expect.objectContaining({ useCase: 'artifact-governance', confidence: 'strong' }),
       ]),
       gaps: expect.arrayContaining([
         expect.objectContaining({ id: 'durable-approval-queue', category: 'mindos-product', severity: 'warning' }),
-        expect.objectContaining({ id: 'artifact-index', category: 'mindos-product', severity: 'warning' }),
       ]),
     });
+    expect(codex?.gaps.map((gap) => gap.id)).not.toContain('artifact-index');
     expect(codex?.useCases.find((entry) => entry.id === 'permission-governance')).toMatchObject({
       sourceStatus: 'interactive-only',
       status: 'usable',

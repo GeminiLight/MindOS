@@ -55,37 +55,38 @@ describe('runtime artifact projections', () => {
     const acp = payload.projections.find((projection) => projection.runtimeId === 'opaque-acp');
 
     expect(mindos).toMatchObject({
-      status: 'limited',
+      status: 'ready',
       outputKinds: ['artifact', 'text'],
       reviewableOutputKinds: ['artifact'],
-      artifactIndex: { supported: false, status: 'missing' },
+      artifactIndex: { supported: true, status: 'ready', recordCount: 0 },
       rollback: { supported: false, source: 'none' },
       branchPr: { supported: false },
-      blockers: ['artifact-index'],
     });
     expect(codex).toMatchObject({
-      status: 'limited',
+      status: 'ready',
       outputKinds: ['artifact', 'branch', 'checkpoint', 'diff', 'pr', 'text'],
       reviewableOutputKinds: ['artifact', 'branch', 'checkpoint', 'diff', 'pr'],
       nativeHandoffTargets: expect.arrayContaining(['checkpoint', 'pull-request']),
       rollback: { supported: true, source: 'runtime-checkpoint' },
       branchPr: { supported: true },
-      blockers: ['artifact-index'],
     });
     expect(claude).toMatchObject({
       status: 'blocked',
       runtimeStatus: 'missing',
-      blockers: expect.arrayContaining(['runtime-available', 'artifact-index']),
+      artifactIndex: { supported: true, status: 'ready' },
+      blockers: expect.arrayContaining(['runtime-available']),
     });
     expect(acp).toMatchObject({
       status: 'unknown',
       outputKinds: ['text'],
       reviewableOutputKinds: [],
       nativeReview: { supported: false },
-      blockers: ['adapter-artifact-contract', 'artifact-index'],
+      artifactIndex: { supported: true, status: 'ready' },
+      blockers: ['adapter-artifact-contract'],
       reasons: expect.arrayContaining([
         expect.objectContaining({ id: 'runtime-output-contract', status: 'unknown' }),
         expect.objectContaining({ id: 'artifact-projection-contract', status: 'satisfied' }),
+        expect.objectContaining({ id: 'artifact-index', status: 'satisfied' }),
       ]),
     });
   });
@@ -100,7 +101,7 @@ describe('runtime artifact projections', () => {
       status: 200,
       body: {
         projections: [
-          expect.objectContaining({ runtimeId: 'codex', status: 'limited' }),
+          expect.objectContaining({ runtimeId: 'codex', status: 'ready' }),
         ],
       },
       headers: { 'Cache-Control': 'no-store' },

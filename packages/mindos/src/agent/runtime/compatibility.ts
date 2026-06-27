@@ -192,15 +192,15 @@ export function mindosRuntimeCompatibilityProfile(input: RuntimeCompatibilityInp
         blockers: ['skill-runtime-routing'],
       }),
       'artifact-governance': assessment({
-        level: 'limited',
+        level: input.harnessCapabilities.output.includes('artifact') ? 'ready' : 'blocked',
         owner: 'mindos',
-        summary: 'MindOS can emit text/artifact output, but a unified artifact index for cross-runtime comparison and review is not first-class yet.',
+        summary: 'MindOS can emit artifact output and persist artifact pointers in a unified cross-runtime index for review.',
         requirements: [
           requirement('artifact-output', input.harnessCapabilities.output.includes('artifact') ? 'satisfied' : 'missing', 'mindos', 'Runtime can emit artifacts.'),
           requirement('artifact-projection-contract', 'satisfied', 'mindos', 'MindOS exposes read-only artifact readiness diagnostics for runtime outputs and handoff shapes.'),
-          requirement('artifact-index', 'missing', 'mindos', 'MindOS needs a cross-runtime artifact index for durable review.'),
+          requirement('artifact-index', 'satisfied', 'mindos', 'MindOS has a cross-runtime artifact pointer index for durable review.'),
         ],
-        blockers: ['artifact-index'],
+        blockers: input.harnessCapabilities.output.includes('artifact') ? [] : ['artifact-output'],
       }),
       'remote-control': blocked ?? assessment({
         level: input.lifecycle.remote.supported ? 'limited' : 'blocked',
@@ -314,16 +314,18 @@ export function nativeRuntimeCompatibilityProfile(
       }),
       'artifact-governance': assessment({
         level: input.harnessCapabilities.output.some((kind) => kind === 'diff' || kind === 'artifact' || kind === 'branch' || kind === 'pr')
-          ? 'limited'
+          ? 'ready'
           : 'blocked',
         owner: 'shared',
-        summary: `${name} can produce reviewable coding output, but MindOS does not yet have a unified artifact index across runtimes.`,
+        summary: `${name} can produce reviewable coding output, and MindOS can persist safe artifact pointers across runtimes.`,
         requirements: [
           requirement('runtime-review-output', 'satisfied', 'external', `${name} can emit text, diffs, artifacts, branches, or PR references through its native workflow.`),
           requirement('artifact-projection-contract', 'satisfied', 'mindos', 'MindOS exposes read-only artifact readiness diagnostics for native runtime outputs.'),
-          requirement('artifact-index', 'missing', 'mindos', 'MindOS needs a cross-runtime artifact index for durable review and comparison.'),
+          requirement('artifact-index', 'satisfied', 'mindos', 'MindOS has a cross-runtime artifact pointer index for durable review and comparison.'),
         ],
-        blockers: ['artifact-index'],
+        blockers: input.harnessCapabilities.output.some((kind) => kind === 'diff' || kind === 'artifact' || kind === 'branch' || kind === 'pr')
+          ? []
+          : ['runtime-review-output'],
       }),
       'remote-control': blocked ?? assessment({
         level: input.lifecycle.remote.supported ? 'limited' : 'blocked',
@@ -418,13 +420,13 @@ export function acpRuntimeCompatibilityProfile(input: RuntimeCompatibilityInput)
       'artifact-governance': assessment({
         level: 'blocked',
         owner: 'shared',
-        summary: 'Generic ACP descriptors only prove text/tool-event streaming; durable artifact, diff, branch, or PR outputs are not declared.',
+        summary: 'Generic ACP descriptors only prove text/tool-event streaming; durable artifact, diff, branch, or PR outputs still need adapter-specific declarations.',
         requirements: [
           requirement('artifact-projection-contract', 'satisfied', 'mindos', 'MindOS exposes read-only artifact readiness diagnostics for runtime descriptors.'),
           requirement('artifact-output-contract', 'missing', 'external', 'ACP adapters must declare artifact/diff/output capabilities.'),
-          requirement('artifact-index', 'missing', 'mindos', 'MindOS needs a cross-runtime artifact index for durable review.'),
+          requirement('artifact-index', 'satisfied', 'mindos', 'MindOS has a cross-runtime artifact pointer index for durable review.'),
         ],
-        blockers: ['artifact-output-contract', 'artifact-index'],
+        blockers: ['artifact-output-contract'],
       }),
       'remote-control': blocked ?? assessment({
         level: input.lifecycle.remote.supported ? 'limited' : 'blocked',

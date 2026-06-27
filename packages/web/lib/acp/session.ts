@@ -28,6 +28,7 @@ import {
 } from '@geminilight/mindos/protocols/acp';
 import { resolveAgentRuntimeEnvOverlay } from '@geminilight/mindos/agent/runtime/runtime-env';
 import { readSettings } from '@/lib/settings';
+import { readMcpConfig } from '@/lib/pi-integration/mcp-config';
 
 function withAcpOverrides(agentId: string, options?: AcpSessionOptions): AcpSessionOptions {
   const settings = readSettings();
@@ -40,6 +41,8 @@ function withAcpOverrides(agentId: string, options?: AcpSessionOptions): AcpSess
     ...options,
     env: { ...runtimeEnvOverlay, ...(options?.env ?? {}) },
     overrides: options?.overrides ?? settings.acpAgents,
+    mcpConfig: options?.mcpConfig ?? readMcpConfig(),
+    inheritMcpServers: options?.inheritMcpServers ?? true,
   };
 }
 

@@ -6,6 +6,7 @@
 
 import type {
   ClientSideConnection,
+  McpServer,
   SessionNotification,
   SessionUpdate,
 } from '@agentclientprotocol/sdk';
@@ -26,6 +27,7 @@ import type {
   AcpPermissionEvent,
   AcpSessionSnapshot,
   AcpToolCallFull,
+  AcpSessionMcpServerSummary,
 } from './types.js';
 import {
   spawnAndConnect,
@@ -37,9 +39,18 @@ import {
 } from './subprocess.js';
 import { findAcpAgent } from './registry.js';
 import { resolveConfiguredAcpAgentEntry } from './agent-descriptors.js';
+import {
+  buildAcpSessionMcpInheritancePlan,
+  type AcpSessionMcpConfigLike,
+} from './mcp-session-inheritance.js';
+import { recordArtifactsFromAcpToolCall } from '../../agent/ledger/artifact-ledger.js';
+import { redactSensitiveText } from '../../agent/redaction.js';
 
 export interface AcpSessionOptions extends AcpLaunchOptions {
   clientVersion?: string;
+  inheritMcpServers?: boolean;
+  mcpConfig?: AcpSessionMcpConfigLike | null;
+  mcpServers?: McpServer[];
 }
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
@@ -100,6 +111,36 @@ function clientCapabilitiesForPermissionMode(mode: AcpPermissionMode | undefined
   return {
     fs: { readTextFile: true, writeTextFile: !readonly },
     terminal: !readonly,
+  };
+}
+
+function resolveSessionMcpInheritance(
+  options: AcpSessionOptions | undefined,
+  agentCapabilities: AcpAgentCapabilities | undefined,
+): { servers: McpServer[]; summaries: AcpSessionMcpServerSummary[] } {
+  if (options?.mcpServers) {
+    return {
+      servers: options.mcpServers,
+      summaries: options.mcpServers.map((server) => ({
+        name: server.name,
+        type: 'type' in server && server.type === 'http'
+          ? 'http'
+          : 'type' in server && server.type === 'sse'
+            ? 'sse'
+            : 'stdio',
+      })),
+    };
+  }
+  if (options?.inheritMcpServers === false || !options?.mcpConfig) {
+    return { servers: [], summaries: [] };
+  }
+  const plan = buildAcpSessionMcpInheritancePlan({
+    config: options.mcpConfig,
+    agentCapabilities,
+  });
+  return {
+    servers: plan.servers,
+    summaries: plan.summaries,
   };
 }
 
@@ -176,11 +217,12 @@ export async function createSessionFromEntry(
   let configOptions: AcpConfigOption[] | undefined;
   let currentModeId: string | undefined;
   let agentSessionId: string | undefined;
+  const mcpInheritance = resolveSessionMcpInheritance(options, agentCapabilities);
 
   try {
     const newResult = await conn.connection.newSession({
       cwd: sessionCwd,
-      mcpServers: [],
+      mcpServers: mcpInheritance.servers,
     });
 
     if (typeof newResult.sessionId === 'string') {
@@ -212,6 +254,7 @@ export async function createSessionFromEntry(
     configOptions,
     currentModeId,
     authMethods,
+    mcpServers: mcpInheritance.summaries,
   };
 
   sessions.set(sessionId, session);
@@ -260,12 +303,13 @@ export async function loadSession(
   let modes: AcpMode[] | undefined;
   let configOptions: AcpConfigOption[] | undefined;
   let currentModeId: string | undefined;
+  const mcpInheritance = resolveSessionMcpInheritance(options, agentCapabilities);
 
   try {
     const loadResult = await conn.connection.loadSession({
       sessionId: existingSessionId,
       cwd: loadCwd,
-      mcpServers: [],
+      mcpServers: mcpInheritance.servers,
     });
     modes = parseModes(loadResult.modes);
     currentModeId = parseCurrentModeId(loadResult.modes);
@@ -288,6 +332,7 @@ export async function loadSession(
     modes,
     configOptions,
     currentModeId,
+    mcpServers: mcpInheritance.summaries,
   };
 
   sessions.set(existingSessionId, session);
@@ -327,6 +372,9 @@ export async function listSessions(
 /* ── Public API — Prompt ──────────────────────────────────────────────── */
 
 const PROMPT_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+const TOOL_RAW_TEXT_LIMIT = 4000;
+const INLINE_IMAGE_RESULT_LIMIT = 64 * 1024;
+const INLINE_IMAGE_PREFIX_RE = /^(?:data:image\/|iVBORw0KGgo|\/9j\/|UklGR)/;
 
 /**
  * Send a prompt and collect the full response.
@@ -593,6 +641,7 @@ export function buildAcpSessionSnapshot(session: AcpSession): AcpSessionSnapshot
     permissionEvents,
     pendingPermissions: permissionEvents.filter((event) => event.status === 'pending'),
     ...(session.sessionInfo ? { sessionInfo: session.sessionInfo } : {}),
+    mcpServers: session.mcpServers ?? [],
   };
 }
 
@@ -613,6 +662,13 @@ function applySessionUpdate(session: AcpSession, update: AcpSessionUpdate): void
   }
   if ((update.type === 'tool_call' || update.type === 'tool_call_update') && update.toolCall) {
     session.toolCalls = upsertToolCall(session.toolCalls, update.toolCall);
+    recordArtifactsFromAcpToolCall({
+      runtimeId: session.agentId,
+      sessionId: session.id,
+      ...(session.agentSessionId ? { externalSessionId: session.agentSessionId } : {}),
+      ...(session.cwd ? { cwd: session.cwd } : {}),
+      toolCall: update.toolCall,
+    });
     return;
   }
   if (update.type === 'session_info_update' && update.sessionInfo) {
@@ -658,13 +714,20 @@ function sdkNotificationToUpdate(
     case 'tool_call':
     case 'tool_call_update': {
       const tc = update as Record<string, unknown>;
+      const rawOutputPointers = extractRawOutputPointers(tc.rawOutput ?? tc.raw_output);
+      const locations = [
+        ...parseToolCallLocations(tc.locations),
+        ...rawOutputPointers.locations,
+      ];
       base.toolCall = {
         toolCallId: String(tc.toolCallId ?? ''),
         title: typeof tc.title === 'string' ? tc.title : undefined,
         status: (tc.status as 'pending' | 'in_progress' | 'completed' | 'failed') ?? 'pending',
         kind: tc.kind as AcpSessionUpdate['toolCall'] extends { kind: infer K } ? K : undefined,
-        rawInput: typeof tc.rawInput === 'string' ? tc.rawInput : undefined,
-        rawOutput: typeof tc.rawOutput === 'string' ? tc.rawOutput : undefined,
+        rawInput: safeToolRawText(tc.rawInput),
+        rawOutput: safeToolRawText(tc.rawOutput ?? tc.raw_output),
+        content: parseToolCallContent(tc.content),
+        ...(locations.length > 0 ? { locations } : {}),
       };
       break;
     }
@@ -704,6 +767,107 @@ function sdkNotificationToUpdate(
   }
 
   return base;
+}
+
+function safeToolRawText(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  if (
+    trimmed.length > INLINE_IMAGE_RESULT_LIMIT
+    && INLINE_IMAGE_PREFIX_RE.test(trimmed)
+  ) {
+    return undefined;
+  }
+  const redacted = redactSensitiveText(trimmed);
+  return redacted.length > TOOL_RAW_TEXT_LIMIT
+    ? `${redacted.slice(0, TOOL_RAW_TEXT_LIMIT)}...`
+    : redacted;
+}
+
+function parseToolCallLocations(value: unknown): NonNullable<AcpToolCallFull['locations']> {
+  if (!Array.isArray(value)) return [];
+  const locations: NonNullable<AcpToolCallFull['locations']> = [];
+  const seen = new Set<string>();
+  for (const item of value) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
+    const record = item as Record<string, unknown>;
+    const rawPath = typeof record.path === 'string'
+      ? record.path
+      : typeof record.uri === 'string' && record.uri.startsWith('file://')
+        ? record.uri.slice('file://'.length)
+        : '';
+    const path = rawPath.trim();
+    if (!path) continue;
+    const line = typeof record.line === 'number' && Number.isFinite(record.line)
+      ? Math.max(1, Math.floor(record.line))
+      : undefined;
+    const key = `${path}:${line ?? ''}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    locations.push({ path, ...(line ? { line } : {}) });
+    if (locations.length >= 50) break;
+  }
+  return locations;
+}
+
+function parseToolCallContent(value: unknown): AcpContentBlock[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const blocks: AcpContentBlock[] = [];
+  for (const item of value) {
+    const block = parseToolCallContentBlock(item);
+    if (block) blocks.push(block);
+    if (blocks.length >= 50) break;
+  }
+  return blocks.length > 0 ? blocks : undefined;
+}
+
+function parseToolCallContentBlock(value: unknown): AcpContentBlock | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  if (record.type === 'resource_link' && typeof record.uri === 'string') {
+    return {
+      type: 'resource_link',
+      uri: record.uri,
+      name: typeof record.name === 'string' && record.name.trim() ? record.name : 'resource',
+    };
+  }
+  if (record.type === 'resource') {
+    const resource = record.resource;
+    if (!resource || typeof resource !== 'object' || Array.isArray(resource)) return null;
+    const resourceRecord = resource as Record<string, unknown>;
+    if (typeof resourceRecord.uri !== 'string') return null;
+    return {
+      type: 'resource',
+      resource: {
+        uri: resourceRecord.uri,
+        ...(typeof resourceRecord.text === 'string' ? { text: safeToolRawText(resourceRecord.text) ?? '' } : {}),
+      },
+    };
+  }
+  return null;
+}
+
+function extractRawOutputPointers(value: unknown): {
+  locations: NonNullable<AcpToolCallFull['locations']>;
+} {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return { locations: [] };
+  const record = value as Record<string, unknown>;
+  const candidates = [
+    record.saved_path,
+    record.savedPath,
+    readNestedString(record.image, 'path'),
+    readNestedString(record.artifact, 'path'),
+  ];
+  const locations = candidates
+    .filter((candidate): candidate is string => typeof candidate === 'string' && candidate.trim().length > 0)
+    .map((candidate) => ({ path: candidate.trim() }));
+  return { locations };
+}
+
+function readNestedString(value: unknown, key: string): string | undefined {
+  return value && typeof value === 'object' && !Array.isArray(value) && typeof (value as Record<string, unknown>)[key] === 'string'
+    ? (value as Record<string, string>)[key]
+    : undefined;
 }
 
 /* ── Internal — Parsers ───────────────────────────────────────────────── */
