@@ -254,17 +254,33 @@ describe('StudioContent', () => {
     expect(launchProject?.getAttribute('aria-current')).toBeNull();
   });
 
-  it('renders Studio Apps as a scene-app surface', async () => {
+  it('renders Studio Apps as a Studio subpage with an Overview return link', async () => {
     await renderStudioApps();
 
     expect(host.querySelector('[data-content-page-shell="studio"]')).not.toBeNull();
+    const backLink = host.querySelector('header a[data-studio-back-overview]');
+    expect(backLink).not.toBeNull();
+    expect(backLink?.getAttribute('href')).toBe('/studio');
+    expect(backLink?.textContent).toContain('Overview');
     expect(host.textContent).toContain('Apps');
+    expect(host.textContent).not.toContain('Scene apps');
+    expect(host.textContent).not.toContain('First scene');
     expect(host.textContent).toContain('Relationships');
     expect(host.textContent).toContain('Relationship Memory');
     expect(host.textContent).toContain('Learning Practice');
     expect(host.textContent).toContain('Record touchpoint');
     expect(host.querySelector('a[href="/capture"]')).not.toBeNull();
     expect(host.querySelector('a[href="/echo/growth"]')).not.toBeNull();
+  });
+
+  it('renders Studio Automation as a Studio subpage with an Overview return link', async () => {
+    await renderStudioAutomation();
+
+    const backLink = host.querySelector('header a[data-studio-back-overview]');
+    expect(backLink).not.toBeNull();
+    expect(backLink?.getAttribute('href')).toBe('/studio');
+    expect(backLink?.textContent).toContain('Overview');
+    expect(host.textContent).toContain('Automation');
   });
 
   it('keeps Studio panel Project rows flat without expandable Sessions', async () => {

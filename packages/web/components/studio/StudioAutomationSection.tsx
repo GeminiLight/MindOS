@@ -645,10 +645,12 @@ export default function StudioAutomationSection({
   projects,
   locale,
   titleLevel = 2,
+  beforeTitle,
 }: {
   projects: StudioProject[];
   locale: string;
   titleLevel?: 1 | 2;
+  beforeTitle?: ReactNode;
 }) {
   const copy = locale === 'zh' ? COPY.zh : COPY.en;
   const TitleTag = titleLevel === 1 ? 'h1' : 'h2';
@@ -774,6 +776,7 @@ export default function StudioAutomationSection({
       className="scroll-mt-[calc(var(--app-titlebar-h)+0.75rem)] space-y-6"
     >
       <header className="border-b border-border/60 pb-6">
+        {beforeTitle ? <div className="mb-3">{beforeTitle}</div> : null}
         <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
           <div className="min-w-0">
             <TitleTag id="studio-automation-title" className={titleClassName}>{copy.title}</TitleTag>

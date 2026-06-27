@@ -6,7 +6,6 @@ import {
   BookOpenCheck,
   CheckCircle2,
   GraduationCap,
-  LayoutGrid,
   MessageSquareText,
   NotebookTabs,
   Sparkles,
@@ -16,6 +15,7 @@ import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { useLocale } from '@/lib/stores/locale-store';
 import { StudioShell } from './StudioShell';
+import { StudioOverviewLink } from './StudioOverviewLink';
 
 type StudioAppStatus = 'ready' | 'draft';
 
@@ -33,7 +33,7 @@ const COPY = {
   en: {
     title: 'Apps',
     subtitle: 'Context surfaces for real work.',
-    featuredLabel: 'First scene',
+    featuredLabel: 'Focus',
     featuredTitle: 'Relationships',
     featuredBody: 'People context, recent touchpoints, commitments, and the next follow-up.',
     today: 'Today',
@@ -41,7 +41,6 @@ const COPY = {
     nextTime: 'Next time',
     nextTimeItems: ['Recall the person context', 'Check open promises', 'Keep one communication rule'],
     openCapture: 'Record touchpoint',
-    appsTitle: 'Scene apps',
     statusReady: 'Ready',
     statusDraft: 'Draft',
     openApp: 'Open',
@@ -77,8 +76,8 @@ const COPY = {
   },
   zh: {
     title: '应用',
-    subtitle: '把真实场景变成可直接进入的 context 工作面。',
-    featuredLabel: '第一个场景',
+    subtitle: '把真实工作流变成可直接进入的 context 工作面。',
+    featuredLabel: '焦点',
     featuredTitle: '关系记忆',
     featuredBody: '人物语境、最近互动、承诺和下一步跟进。',
     today: '今天',
@@ -86,7 +85,6 @@ const COPY = {
     nextTime: '下一次',
     nextTimeItems: ['回看人物语境', '检查未完成承诺', '保留一条沟通规则'],
     openCapture: '记录互动',
-    appsTitle: '场景应用',
     statusReady: '可起步',
     statusDraft: '草稿',
     openApp: '打开',
@@ -229,11 +227,8 @@ export default function StudioAppsContent() {
     <StudioShell>
       <div className="mx-auto flex w-full max-w-6xl min-w-0 flex-col gap-6">
         <header className="border-b border-border/60 pb-6">
-          <div className="inline-flex items-center gap-2 rounded-full border border-border/60 bg-background/65 px-2.5 py-1 text-xs font-medium text-muted-foreground">
-            <LayoutGrid size={13} aria-hidden="true" />
-            {copy.appsTitle}
-          </div>
-          <h1 className="mt-4 text-2xl font-semibold text-foreground">{copy.title}</h1>
+          <StudioOverviewLink locale={locale} />
+          <h1 className="mt-3 text-2xl font-semibold text-foreground">{copy.title}</h1>
           <p className="mt-1 max-w-2xl text-sm leading-relaxed text-muted-foreground">{copy.subtitle}</p>
         </header>
 
@@ -275,10 +270,7 @@ export default function StudioAppsContent() {
           </div>
         </section>
 
-        <section className="space-y-3" aria-labelledby="studio-scene-apps">
-          <div>
-            <h2 id="studio-scene-apps" className="text-sm font-semibold text-foreground">{copy.appsTitle}</h2>
-          </div>
+        <section aria-label={copy.title}>
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {apps.map((app) => (
               <AppCard key={app.id} app={app} copy={copy} />

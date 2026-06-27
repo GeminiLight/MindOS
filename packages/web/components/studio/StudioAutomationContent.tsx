@@ -9,6 +9,7 @@ import {
 } from '@/lib/studio-projects';
 import { StudioShell } from './StudioShell';
 import StudioAutomationSection from './StudioAutomationSection';
+import { StudioOverviewLink } from './StudioOverviewLink';
 
 export default function StudioAutomationContent() {
   const { locale } = useLocale();
@@ -27,7 +28,12 @@ export default function StudioAutomationContent() {
   return (
     <StudioShell>
       <div data-studio-automation-content className="mx-auto flex w-full max-w-6xl min-w-0 flex-col gap-6">
-        <StudioAutomationSection projects={projects} locale={locale} titleLevel={1} />
+        <StudioAutomationSection
+          projects={projects}
+          locale={locale}
+          titleLevel={1}
+          beforeTitle={<StudioOverviewLink locale={locale} />}
+        />
       </div>
     </StudioShell>
   );

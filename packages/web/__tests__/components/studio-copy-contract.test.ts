@@ -6,8 +6,10 @@ describe('Studio Chinese copy contract', () => {
   it('uses 工作台 / 项目 / 对话 for the Studio product vocabulary', () => {
     const files = [
       'components/studio/StudioContent.tsx',
+      'components/studio/StudioAppsContent.tsx',
       'components/studio/StudioAutomationSection.tsx',
       'components/studio/StudioProjectContent.tsx',
+      'components/studio/StudioOverviewLink.tsx',
       'components/panels/StudioPanel.tsx',
       'lib/i18n/modules/ai-chat-zh.ts',
       'lib/i18n/modules/knowledge-zh.ts',
@@ -29,11 +31,14 @@ describe('Studio Chinese copy contract', () => {
     };
     const studioZhCopy = [
       'components/studio/StudioContent.tsx',
+      'components/studio/StudioAppsContent.tsx',
       'components/studio/StudioAutomationSection.tsx',
       'components/studio/StudioProjectContent.tsx',
+      'components/studio/StudioOverviewLink.tsx',
       'components/panels/StudioPanel.tsx',
     ].map(extractZhCopy).join('\n');
     const studioPanelSource = fs.readFileSync(path.resolve(process.cwd(), 'components/panels/StudioPanel.tsx'), 'utf8');
+    const studioAppsSource = fs.readFileSync(path.resolve(process.cwd(), 'components/studio/StudioAppsContent.tsx'), 'utf8');
 
     expect(source).toContain("title: '工作台'");
     expect(source).toContain("studio: '工作台'");
@@ -41,6 +46,7 @@ describe('Studio Chinese copy contract', () => {
     expect(studioPanelSource).toContain("apps: '应用'");
     expect(studioPanelSource).toContain("automation: '自动化'");
     expect(source).toContain("returnStudio: '返回工作台'");
+    expect(source).toContain("ariaLabel: '返回总览'");
     expect(source).toContain("newProject: '新建项目'");
     expect(source).toContain("createTitle: '新建项目'");
     expect(source).toContain("createTitle: '创建自动化'");
@@ -68,6 +74,11 @@ describe('Studio Chinese copy contract', () => {
 
     expect(source).not.toContain('用四个内置空间整理你的知识。');
     expect(source).not.toContain("title: 'Studio',\n    overview: 'Overview',\n    newProject: '新建 Project'");
+    expect(source).not.toContain("appsTitle: 'Scene apps'");
+    expect(source).not.toContain("appsTitle: '场景应用'");
+    expect(source).not.toContain("featuredLabel: 'First scene'");
+    expect(source).not.toContain("featuredLabel: '第一个场景'");
+    expect(studioAppsSource).not.toContain('真实场景');
     expect(studioPanelSource).not.toContain("overview: '概览'");
     expect(source).not.toContain("returnStudio: '返回 Studio'");
     expect(source).not.toContain("newSession: '新建 Session'");
