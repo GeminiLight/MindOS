@@ -340,6 +340,31 @@ describe('buildObsidianWorkflowAudits', () => {
         id: 'dataview-native-query',
         status: 'native-replacement',
         source: 'native-replacement',
+        evidence: expect.arrayContaining([
+          expect.stringContaining('MindOS native query index can read public Markdown notes'),
+        ]),
+      }),
+    ]);
+  });
+
+  it('routes Tasks to a native replacement audit without claiming runtime observation', () => {
+    const audits = buildObsidianWorkflowAudits({
+      pluginId: 'obsidian-tasks-plugin',
+      pluginName: 'Tasks',
+      coverage: [],
+      capabilityGate: readyGate,
+      runtimeEntries: [],
+      history: history(),
+    });
+
+    expect(audits).toEqual([
+      expect.objectContaining({
+        id: 'tasks-native-query',
+        status: 'native-replacement',
+        source: 'native-replacement',
+        evidence: expect.arrayContaining([
+          expect.stringContaining('read-only task records'),
+        ]),
       }),
     ]);
   });

@@ -44,6 +44,12 @@ export {
   previewObsidianLinterFixes,
 } from './linter-adapter';
 export {
+  buildObsidianNativeQueryIndex,
+  OBSIDIAN_NATIVE_QUERY_INDEX_PROOF_SUMMARY,
+  queryObsidianNativeNotes,
+  queryObsidianNativeTasks,
+} from './native-query-index';
+export {
   buildImportedObsidianLinterProfile,
   OBSIDIAN_LINTER_DATA_JSON_RULE_MAPPINGS,
   OBSIDIAN_LINTER_PLUGIN_ID,
@@ -133,6 +139,16 @@ export type {
   ImportedObsidianLinterProfile,
   ObsidianLinterDataJsonRuleMapping,
 } from './linter-settings-profile';
+export type {
+  BuildObsidianNativeQueryIndexInput,
+  ObsidianNativeQueryHeadingRecord,
+  ObsidianNativeQueryIndex,
+  ObsidianNativeQueryLinkRecord,
+  ObsidianNativeQueryNoteFilter,
+  ObsidianNativeQueryNoteRecord,
+  ObsidianNativeQueryTaskFilter,
+  ObsidianNativeQueryTaskRecord,
+} from './native-query-index';
 export type {
   ObsidianRuntimeCapabilityLedgerHistory,
   ObsidianRuntimeCapabilityLedgerStoreOptions,

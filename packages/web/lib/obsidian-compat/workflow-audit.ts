@@ -11,6 +11,7 @@ import {
   type ObsidianWorkflowProbeId,
   type ObsidianWorkflowProbeStatus,
 } from './workflow-probes';
+import { OBSIDIAN_NATIVE_QUERY_INDEX_PROOF_SUMMARY } from './native-query-index';
 
 export type ObsidianWorkflowAuditStatus =
   | 'observed'
@@ -234,6 +235,7 @@ function buildNativeReplacementAudit(
     source: 'native-replacement',
     evidence: [
       `${input.pluginName} is better matched by a MindOS-owned query/index workflow than by broad Obsidian runtime parity.`,
+      OBSIDIAN_NATIVE_QUERY_INDEX_PROOF_SUMMARY,
     ],
     nextStep,
   };

@@ -29,6 +29,7 @@ import {
 } from './quickadd-choice-inventory';
 import type { ScannedObsidianPlugin } from './obsidian-import';
 import type { ObsidianCapabilityGateReport } from './capability-gate';
+import { OBSIDIAN_NATIVE_QUERY_INDEX_PROOF_SUMMARY } from './native-query-index';
 
 export type ObsidianCompatibilityPreviewSource =
   | 'static-analysis'
@@ -741,8 +742,11 @@ function buildNativeReplacementOutcomes(
       id: 'native-query-index-replacement',
       label: 'Use MindOS native query and index workflows',
       status: 'native-replacement',
-      evidence: ['Query/task plugins depend on deep index semantics that should be productized in MindOS instead of shimmed as arbitrary runtime code.'],
-      nextStep: 'Route Dataview/Tasks-style workflows to MindOS native query, retrieval, and task surfaces.',
+      evidence: [
+        'Query/task plugins depend on deep index semantics that should be productized in MindOS instead of shimmed as arbitrary runtime code.',
+        OBSIDIAN_NATIVE_QUERY_INDEX_PROOF_SUMMARY,
+      ],
+      nextStep: 'Route Dataview/Tasks-style read-only workflows to MindOS native query, retrieval, and task surfaces.',
     });
   }
 
