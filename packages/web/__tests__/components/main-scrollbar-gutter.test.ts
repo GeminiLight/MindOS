@@ -18,6 +18,8 @@ describe('main content scrollport gutter stability', () => {
     const mainOpeningTag = source.match(/<main[\s\S]*?id="main-content"[\s\S]*?>/)?.[0] ?? '';
 
     expect(cssBlock(css, '.app-main-scrollport')).toContain('scrollbar-gutter: stable;');
+    expect(cssBlock(css, '.app-main-scrollport')).toContain('background-color: var(--background);');
+    expect(cssBlock(css, '.app-main-scrollport')).toContain('scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);');
     expect(mainOpeningTag).toContain('id="main-content"');
     expect(mainOpeningTag).toContain('tabIndex={-1}');
     expect(mainOpeningTag).toContain('app-main-scrollport');
@@ -37,5 +39,18 @@ describe('main content scrollport gutter stability', () => {
     expect(source).toContain("getMainScrollContainer()?.scrollTo({ left: 0, top: 0, behavior: 'auto' });");
     expect(source).not.toContain('padding-top: var(--app-titlebar-h);');
     expect(source).toContain('min-h-full bg-background');
+  });
+
+  it('keeps the reserved scrollbar lane theme-aware without showing an empty track', () => {
+    const css = read('app/globals.css');
+
+    expect(cssBlock(css, ':root')).toContain('color-scheme: light;');
+    expect(cssBlock(css, ':root')).toContain('--scrollbar-track: transparent;');
+    expect(cssBlock(css, ':root')).toContain('--scrollbar-thumb:');
+    expect(cssBlock(css, '.dark')).toContain('color-scheme: dark;');
+    expect(cssBlock(css, '.dark')).toContain('--scrollbar-thumb:');
+    expect(cssBlock(css, '::-webkit-scrollbar-track')).toContain('background: var(--scrollbar-track);');
+    expect(cssBlock(css, '::-webkit-scrollbar-thumb')).toContain('background: var(--scrollbar-thumb);');
+    expect(cssBlock(css, '::-webkit-scrollbar-thumb:hover')).toContain('background: var(--scrollbar-thumb-hover);');
   });
 });

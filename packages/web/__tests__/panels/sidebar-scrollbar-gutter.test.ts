@@ -6,12 +6,18 @@ function read(relativePath: string): string {
   return fs.readFileSync(path.resolve(process.cwd(), relativePath), 'utf8');
 }
 
+function cssBlock(source: string, selector: string): string {
+  const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return source.match(new RegExp(`${escapedSelector}\\s*\\{[^}]*\\}`))?.[0] ?? '';
+}
+
 describe('sidebar scroll gutter stability', () => {
   it('defines a shared sidebar scroll area gutter rule', () => {
     const css = read('app/globals.css');
 
     expect(css).toContain('.sidebar-scroll-area {');
     expect(css).toContain('scrollbar-gutter: stable;');
+    expect(cssBlock(css, '.sidebar-scroll-area')).toContain('scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);');
   });
 
   it('uses the shared gutter on primary left sidebar scroll containers', () => {
