@@ -16,6 +16,7 @@ vi.mock('@/lib/stores/locale-store', () => ({
         help: 'Help',
         settingsTitle: 'Settings',
         syncLabel: 'Sync',
+        userLabel: 'User',
       },
     },
   }),

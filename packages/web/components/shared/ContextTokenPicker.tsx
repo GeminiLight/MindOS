@@ -50,6 +50,7 @@ export function ContextSelectionRow({
   icon,
   label,
   addTitle,
+  emptyLabel = 'None',
   searchLabel,
   noMatchesLabel,
   query,
@@ -66,6 +67,7 @@ export function ContextSelectionRow({
   icon: ReactNode;
   label: string;
   addTitle: string;
+  emptyLabel?: string;
   searchLabel: string;
   noMatchesLabel: string;
   query: string;
@@ -109,41 +111,34 @@ export function ContextSelectionRow({
   }, [onOpenChange, open]);
 
   return (
-    <div ref={rowRef} className="grid gap-1.5 sm:grid-cols-[76px_minmax(0,1fr)] sm:items-start">
-      <div className="flex min-h-6 items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+    <div ref={rowRef} className="grid grid-cols-[5.5rem_minmax(0,1fr)_2rem] items-center gap-2 py-1">
+      <div className="flex min-h-7 items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
         {icon}
         <span>{label}</span>
       </div>
-      <div className="relative flex min-w-0 flex-wrap items-center gap-1.5">
-        {chips.map((chip) => (
-          <span
-            key={chip.id}
-            title={chip.title}
-            className="group inline-flex h-6 max-w-[180px] items-center gap-1 rounded-md bg-muted/45 px-1.5 text-[11px] text-foreground transition-colors hover:bg-muted/65"
-          >
-            <ContextTokenIcon value={chip.icon} label={chip.label} />
-            <span className="truncate">{chip.label}</span>
-            <button
-              type="button"
-              onClick={chip.onRemove}
-              className="rounded text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover:opacity-100"
-              aria-label={chip.removeLabel}
+      <div className="relative min-w-0">
+        <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+          {chips.length === 0 ? (
+            <span className="min-w-0 truncate font-sans text-xs text-muted-foreground/80">{emptyLabel}</span>
+          ) : chips.map((chip) => (
+            <span
+              key={chip.id}
+              title={chip.title}
+              className="group inline-flex h-6 max-w-[180px] items-center gap-1 rounded-md bg-muted/45 px-1.5 text-[11px] text-foreground transition-colors hover:bg-muted/65"
             >
-              <X size={12} />
-            </button>
-          </span>
-        ))}
-        <button
-          type="button"
-          onClick={() => onOpenChange(!open)}
-          className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-dashed border-border/55 text-muted-foreground transition-colors hover:border-border hover:bg-muted/45 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          title={addTitle}
-          aria-label={addTitle}
-          aria-expanded={open}
-        >
-          <Plus size={12} />
-        </button>
-
+              <ContextTokenIcon value={chip.icon} label={chip.label} />
+              <span className="truncate">{chip.label}</span>
+              <button
+                type="button"
+                onClick={chip.onRemove}
+                className="rounded text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover:opacity-100"
+                aria-label={chip.removeLabel}
+              >
+                <X size={12} />
+              </button>
+            </span>
+          ))}
+        </div>
         {open ? (
           <ContextPickerPopover
             kind={kind}
@@ -158,6 +153,16 @@ export function ContextSelectionRow({
           />
         ) : null}
       </div>
+      <button
+        type="button"
+        onClick={() => onOpenChange(!open)}
+        className="inline-flex h-7 w-7 shrink-0 items-center justify-center justify-self-end rounded-md border border-border/45 bg-background/55 text-muted-foreground transition-colors hover:border-[var(--amber)]/45 hover:bg-muted/45 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        title={addTitle}
+        aria-label={addTitle}
+        aria-expanded={open}
+      >
+        <Plus size={13} />
+      </button>
     </div>
   );
 }

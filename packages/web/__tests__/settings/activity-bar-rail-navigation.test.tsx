@@ -24,6 +24,7 @@ vi.mock('@/lib/stores/locale-store', () => ({
         help: 'Help',
         settingsTitle: 'Settings',
         syncLabel: 'Sync',
+        userLabel: 'User',
       },
     },
   }),
@@ -532,7 +533,7 @@ describe('ActivityBar rail navigation', () => {
     host.remove();
   });
 
-  it('keeps Settings shortcut out of the expanded rail row', async () => {
+  it('renders the expanded user footer with compact sync and settings actions', async () => {
     const ActivityBar = (await import('@/components/ActivityBar')).default;
 
     const host = document.createElement('div');
@@ -553,10 +554,78 @@ describe('ActivityBar rail navigation', () => {
       );
     });
 
-    const settingsButton = host.querySelector<HTMLButtonElement>('button[aria-label="Settings"]');
+    const footer = host.querySelector<HTMLElement>('[data-rail-user-footer]');
+    expect(footer).not.toBeNull();
+
+    const userButton = footer?.querySelector<HTMLButtonElement>('button[aria-label="User"]');
+    const syncButton = footer?.querySelector<HTMLButtonElement>('button[aria-label="Sync"]');
+    const settingsButton = footer?.querySelector<HTMLButtonElement>('button[aria-label="Settings"]');
+    expect(userButton).not.toBeNull();
+    expect(syncButton).not.toBeNull();
     expect(settingsButton).not.toBeNull();
-    expect(settingsButton?.textContent).toContain('Settings');
+    expect(footer?.textContent).toContain('User');
+    expect(footer?.textContent).not.toContain('Sync');
+    expect(footer?.textContent).not.toContain('Settings');
+    expect(footer?.textContent).not.toContain('Synced');
     expect(settingsButton?.textContent).not.toContain('⌘,');
+
+    await act(async () => {
+      root.unmount();
+    });
+    host.remove();
+  });
+
+  it('collapses the rail user footer to a round avatar and opens sync/settings from the avatar menu', async () => {
+    const ActivityBar = (await import('@/components/ActivityBar')).default;
+    const onSyncClick = vi.fn();
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(
+        <ActivityBar
+          activePanel={null}
+          onPanelChange={vi.fn()}
+          syncStatus={{ enabled: false, configured: true, remote: 'origin' } as any}
+          expanded={false}
+          onExpandedChange={vi.fn()}
+          onSettingsClick={vi.fn()}
+          onSyncClick={onSyncClick}
+        />,
+      );
+    });
+
+    const footer = host.querySelector<HTMLElement>('[data-rail-user-footer]');
+    expect(footer).not.toBeNull();
+    expect(footer?.querySelector('[data-rail-user-avatar]')).not.toBeNull();
+    expect(footer?.textContent).not.toContain('User');
+    expect(host.querySelector('button[aria-label="Sync"]')).toBeNull();
+    expect(host.querySelector('button[aria-label="Settings"]')).toBeNull();
+
+    const userButton = footer?.querySelector<HTMLButtonElement>('button[aria-label="User"]');
+    await act(async () => {
+      userButton?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+      await Promise.resolve();
+    });
+
+    const menu = document.body.querySelector<HTMLElement>('[data-rail-user-menu]');
+    expect(menu).not.toBeNull();
+    expect(menu?.textContent).toContain('User');
+    expect(menu?.textContent).toContain('Sync');
+    expect(menu?.textContent).toContain('Settings');
+
+    const syncMenuItem = Array.from(menu!.querySelectorAll<HTMLButtonElement>('button[role="menuitem"]'))
+      .find((button) => button.textContent?.includes('Sync'));
+    expect(syncMenuItem).not.toBeNull();
+
+    await act(async () => {
+      syncMenuItem?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+      await Promise.resolve();
+    });
+
+    expect(onSyncClick).toHaveBeenCalledOnce();
 
     await act(async () => {
       root.unmount();

@@ -204,6 +204,14 @@ export function useSyncStatus() {
   return { status, loaded, error, stale, fetchStatus };
 }
 
+export function useSharedSyncing() {
+  return useSyncExternalStore(
+    subscribeSyncAction,
+    getSharedSyncingSnapshot,
+    getSharedSyncingSnapshot,
+  );
+}
+
 export function useSyncAction(refreshFn: (opts?: { throwOnError?: boolean }) => Promise<void>, syncT?: Record<string, unknown>) {
   const syncing = useSyncExternalStore(
     subscribeSyncAction,

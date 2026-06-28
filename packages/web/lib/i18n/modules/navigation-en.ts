@@ -38,6 +38,7 @@ export const navigationEn = {
     workflows: 'Flows',
     history: 'History',
     help: 'Help',
+    userLabel: 'User',
     syncLabel: 'Sync',
     collapseTitle: 'Collapse sidebar',
     expandTitle: 'Expand sidebar',

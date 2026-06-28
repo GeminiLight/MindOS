@@ -49,7 +49,6 @@ type SessionContextLabels = {
   workDirBrowseUnavailable: string;
   addSpace: string;
   addAssistant: string;
-  newSession: string;
   searchSpaces: string;
   searchAssistants: string;
   noMatches: string;
@@ -68,27 +67,25 @@ type SessionContextDockProps = {
   compact?: boolean;
   onSetWorkDir: (workDir: SessionWorkDir) => boolean;
   onSetContextSelection: (selection: SessionContextSelection) => boolean;
-  onNewSession: () => void;
 };
 
 const DEFAULT_LABELS: SessionContextLabels = {
   title: 'Context',
-  workDir: 'WorkDir',
+  workDir: 'Root',
   spaces: 'Spaces',
   assistants: 'Assistants',
   mindRoot: 'Mind',
   none: 'None',
   locked: 'Locked after first message',
-  editWorkDir: 'Set work directory',
-  workDirPlaceholder: '/path/to/project',
-  workDirBrowse: 'Choose work directory',
+  editWorkDir: 'Set root',
+  workDirPlaceholder: '/path/to/root',
+  workDirBrowse: 'Choose root',
   workDirBrowseUnavailable: 'Folder picker is available in the desktop app',
   addSpace: 'Add Space',
   addAssistant: 'Add Assistant',
   searchSpaces: 'Search spaces',
   searchAssistants: 'Search assistants',
   noMatches: 'No matches',
-  newSession: 'New',
   removeItem: (label) => `Remove ${label}`,
   spacePlaceholder: 'Space path',
   assistantPlaceholder: 'assistant-id',
@@ -216,7 +213,6 @@ export default function SessionContextDock({
   compact = false,
   onSetWorkDir,
   onSetContextSelection,
-  onNewSession,
 }: SessionContextDockProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const trayRef = useRef<HTMLDivElement>(null);
@@ -246,6 +242,12 @@ export default function SessionContextDock({
     : resolvedLabels.workDirPlaceholder;
   const spaceCandidates = useMemo(() => buildSpaceCandidates(workspaceSpaces), [workspaceSpaces]);
   const assistantCandidates = useMemo(() => buildAssistantCandidates(selection), [selection]);
+  const spacesSummary = selection.spaces.length > 0
+    ? selection.spaces.map((space) => contextChipLabel(space)).join(', ')
+    : resolvedLabels.none;
+  const assistantsSummary = selection.assistants.length > 0
+    ? selection.assistants.map((assistant) => contextChipLabel(assistant)).join(', ')
+    : resolvedLabels.none;
 
   useEffect(() => {
     let cancelled = false;
@@ -277,10 +279,10 @@ export default function SessionContextDock({
 
       const viewportPadding = 8;
       const gap = 8;
-      const width = Math.min(rect.width, window.innerWidth - viewportPadding * 2);
+      const width = Math.min(rect.width, 720, window.innerWidth - viewportPadding * 2);
       const left = Math.max(
         viewportPadding,
-        Math.min(rect.left, window.innerWidth - viewportPadding - width),
+        Math.min(rect.left + (rect.width - width) / 2, window.innerWidth - viewportPadding - width),
       );
       const bottom = Math.max(viewportPadding, window.innerHeight - rect.top + gap);
       const maxHeight = Math.max(120, rect.top - viewportPadding - gap);
@@ -385,8 +387,8 @@ export default function SessionContextDock({
         <div
           ref={trayRef}
           className={cn(
-            'fixed z-50 overflow-visible rounded-xl border border-border/50 bg-card/95 px-3 py-3 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-card/90',
-            compact && 'px-2.5',
+            'fixed z-50 overflow-visible rounded-xl border border-border/45 bg-popover/95 p-2.5 text-popover-foreground shadow-lg backdrop-blur supports-[backdrop-filter]:bg-popover/90',
+            compact && 'p-2',
           )}
           style={trayStyle}
           onKeyDownCapture={(event) => {
@@ -396,12 +398,24 @@ export default function SessionContextDock({
             event.stopPropagation();
           }}
         >
-          <div className="grid gap-2 sm:grid-cols-[88px_minmax(0,1fr)] sm:items-center">
-            <div className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+          <div className="mb-1 flex items-center justify-between gap-3 px-1">
+            <div className="font-sans text-[11px] font-medium text-muted-foreground">{resolvedLabels.title}</div>
+            <span
+              role="img"
+              aria-label={resolvedLabels.applyNextTurn}
+              title={resolvedLabels.applyNextTurn}
+              className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground/75"
+            >
+              <CircleHelp size={13} />
+            </span>
+          </div>
+
+          <div className="grid grid-cols-[5.5rem_minmax(0,1fr)_2rem] items-center gap-2 py-1">
+            <div className="flex min-h-7 items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
               <BriefcaseBusiness size={13} />
               <span>{resolvedLabels.workDir}</span>
             </div>
-            <div className="min-w-0 flex items-center gap-1.5">
+            <div className="min-w-0">
               {workDirEditable ? (
                 <PathAutocompleteField
                   value={workDirDraft}
@@ -412,35 +426,30 @@ export default function SessionContextDock({
                   ariaLabel={resolvedLabels.editWorkDir}
                   browseLabel={resolvedLabels.workDirBrowse}
                   browseUnavailableLabel={resolvedLabels.workDirBrowseUnavailable}
-                  wrapperClassName="min-w-0 flex-1"
-                  inputClassName="h-8 rounded-lg border-border/45 bg-background/70 px-2.5 py-1 pr-9 text-xs"
+                  wrapperClassName="min-w-0"
+                  inputClassName="h-7 rounded-lg border-border/45 bg-background/70 px-2.5 py-1 pr-9 text-xs"
                   browseButtonClassName="right-1 h-6 w-6 rounded-md"
                   suggestionsClassName="text-xs"
                   suggestionClassName="py-1.5 text-xs"
                 />
               ) : (
-                <div className="min-w-0 flex-1 flex items-center justify-between gap-2 rounded-lg bg-muted/35 px-2 py-1.5">
+                <div className="flex min-h-7 min-w-0 items-center gap-2 rounded-lg bg-muted/35 px-2 py-1">
                   <span className="truncate text-xs text-foreground" title={workDir?.path || workDirDisplay}>{workDirDisplay}</span>
-                  <span
-                    role="img"
-                    aria-label={resolvedLabels.locked}
-                    title={resolvedLabels.locked}
-                    className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-muted-foreground"
-                  >
-                    <Lock size={12} />
-                  </span>
                 </div>
               )}
-              {!workDirEditable && (
-                <button
-                  type="button"
-                  onClick={onNewSession}
-                  className="shrink-0 rounded-lg px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted/60 hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  {resolvedLabels.newSession}
-                </button>
-              )}
             </div>
+            {workDirEditable ? (
+              <span aria-hidden="true" className="h-7 w-7 justify-self-end" />
+            ) : (
+              <span
+                role="img"
+                aria-label={resolvedLabels.locked}
+                title={resolvedLabels.locked}
+                className="inline-flex h-7 w-7 items-center justify-center justify-self-end rounded-md text-muted-foreground/80"
+              >
+                <Lock size={13} />
+              </span>
+            )}
           </div>
 
           <ContextSelectionRow
@@ -448,6 +457,7 @@ export default function SessionContextDock({
             icon={<Layers3 size={13} />}
             label={resolvedLabels.spaces}
             addTitle={resolvedLabels.addSpace}
+            emptyLabel={resolvedLabels.none}
             searchLabel={resolvedLabels.searchSpaces}
             noMatchesLabel={resolvedLabels.noMatches}
             query={spaceQuery}
@@ -472,6 +482,7 @@ export default function SessionContextDock({
             icon={<Bot size={13} />}
             label={resolvedLabels.assistants}
             addTitle={resolvedLabels.addAssistant}
+            emptyLabel={resolvedLabels.none}
             searchLabel={resolvedLabels.searchAssistants}
             noMatchesLabel={resolvedLabels.noMatches}
             query={assistantQuery}
@@ -490,17 +501,6 @@ export default function SessionContextDock({
               onRemove: () => removeAssistant(assistant.id),
             }))}
           />
-
-          <div className="pl-0 sm:pl-[88px]">
-            <span
-              role="img"
-              aria-label={resolvedLabels.applyNextTurn}
-              title={resolvedLabels.applyNextTurn}
-              className="inline-flex h-5 w-5 items-center justify-center rounded-md text-muted-foreground/75"
-            >
-              <CircleHelp size={13} />
-            </span>
-          </div>
         </div>,
         document.body,
       )}
@@ -514,7 +514,7 @@ export default function SessionContextDock({
         aria-label={resolvedLabels.title}
         aria-expanded={expanded}
         className={cn(
-          'group w-full flex items-center gap-2 px-3 py-1.5 text-left text-xs text-muted-foreground hover:bg-muted/35 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+          'group flex min-h-9 w-full items-center gap-1.5 px-3 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
           compact && 'px-2',
         )}
       >
@@ -523,19 +523,21 @@ export default function SessionContextDock({
           title={resolvedLabels.workDir}
           value={workDirDisplay}
           detail={workDir?.path}
-          className="max-w-[44%] sm:max-w-[40%]"
+          locked={!workDirEditable}
+          lockedLabel={resolvedLabels.locked}
+          className="max-w-[46%] sm:max-w-[42%]"
         />
         <SummaryItem
           icon={<Layers3 size={13} />}
           title={resolvedLabels.spaces}
-          value={resolvedLabels.spacesCount(selection.spaces.length)}
-          compactValue={String(selection.spaces.length)}
+          value={String(selection.spaces.length)}
+          detail={spacesSummary}
         />
         <SummaryItem
           icon={<Bot size={13} />}
           title={resolvedLabels.assistants}
-          value={resolvedLabels.assistantsCount(selection.assistants.length)}
-          compactValue={String(selection.assistants.length)}
+          value={String(selection.assistants.length)}
+          detail={assistantsSummary}
         />
         <span className="ml-auto flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors group-hover:text-foreground">
           {expanded ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
@@ -549,27 +551,42 @@ function SummaryItem({
   icon,
   title,
   value,
-  compactValue,
   detail,
+  locked = false,
+  lockedLabel,
   className,
 }: {
   icon: ReactNode;
   title: string;
   value: string;
-  compactValue?: string;
   detail?: string;
+  locked?: boolean;
+  lockedLabel?: string;
   className?: string;
 }) {
   return (
     <span
-      className={cn('inline-flex min-w-0 items-center gap-1.5 rounded-md px-1.5 py-0.5 text-muted-foreground', className)}
+      className={cn(
+        'inline-flex min-w-0 items-center gap-1.5 rounded-md border border-transparent px-1.5 py-0.5 text-muted-foreground transition-colors group-hover:border-border/35 group-hover:bg-background/35',
+        className,
+      )}
       title={detail || `${title}: ${value}`}
     >
       {icon}
-      <span className="min-w-0 truncate font-normal text-muted-foreground">
-        <span className="hidden sm:inline">{value}</span>
-        <span className="sm:hidden">{compactValue ?? value}</span>
+      <span className="hidden shrink-0 font-medium text-muted-foreground sm:inline">{title}</span>
+      <span className="min-w-0 truncate font-normal text-foreground/90">
+        {value}
       </span>
+      {locked ? (
+        <span
+          role="img"
+          aria-label={lockedLabel}
+          title={lockedLabel}
+          className="hidden shrink-0 text-muted-foreground/80 sm:inline-flex"
+        >
+          <Lock size={12} />
+        </span>
+      ) : null}
     </span>
   );
 }

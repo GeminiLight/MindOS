@@ -38,6 +38,7 @@ export const navigationZh = {
     workflows: '流程',
     history: '历史',
     help: '帮助',
+    userLabel: 'User',
     syncLabel: '同步',
     collapseTitle: '收起侧栏',
     expandTitle: '展开侧栏',

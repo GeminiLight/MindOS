@@ -285,7 +285,7 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
   const acpDetection = useAcpDetection();
   const runtimeReadiness = useRuntimeReadiness({ visible, permissionMode });
   const nativeRuntimes = useMemo<Array<AgentRuntimeIdentity & Partial<Pick<AgentRuntimeDescriptor, 'status' | 'availability' | 'installCmd' | 'packageName' | 'binaryPath' | 'runtimeBridge'>>>>(() => {
-    return nativeDetection.runtimes
+    return (nativeDetection.runtimes ?? [])
       .filter((runtime) => runtime.kind === 'codex' || runtime.kind === 'claude')
       .map((runtime) => ({
         id: runtime.id,
@@ -300,7 +300,7 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
       }));
   }, [nativeDetection.runtimes]);
   const acpRuntimes = useMemo<Array<AgentRuntimeIdentity & Partial<Pick<AgentRuntimeDescriptor, 'status' | 'availability' | 'description' | 'binaryPath' | 'resolvedCommand'>>>>(() => {
-    const descriptors = acpDetection.runtimes
+    const descriptors = (acpDetection.runtimes ?? [])
       .filter((runtime) => runtime.kind === 'acp')
       .map((runtime) => ({
         id: runtime.id,
@@ -313,7 +313,7 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
         ...(runtime.resolvedCommand ? { resolvedCommand: runtime.resolvedCommand } : {}),
       }));
     const descriptorIds = new Set(descriptors.map((runtime) => runtime.id));
-    const detectedOnly = acpDetection.installedAgents
+    const detectedOnly = (acpDetection.installedAgents ?? [])
       .filter((agent) => !descriptorIds.has(agent.id))
       .map((agent) => ({
         id: agent.id,
@@ -1440,7 +1440,6 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
             compact={isPanel || isHome}
             onSetWorkDir={session.setSessionWorkDir}
             onSetContextSelection={session.setSessionContextSelection}
-            onNewSession={handleResetSession}
           />
 
           {/* Unified context chip flow */}

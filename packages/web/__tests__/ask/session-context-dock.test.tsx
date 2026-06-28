@@ -9,22 +9,21 @@ import type { ChatSession, SessionContextSelection, SessionWorkDir } from '@/lib
 
 const labels = {
   title: 'Context',
-  workDir: 'WorkDir',
+  workDir: 'Root',
   spaces: 'Spaces',
   assistants: 'Assistants',
   mindRoot: 'Mind',
   none: 'None',
   locked: 'Locked after first message',
-  editWorkDir: 'Set work directory',
-  workDirPlaceholder: '/path/to/project',
-  workDirBrowse: 'Choose work directory',
+  editWorkDir: 'Set root',
+  workDirPlaceholder: '/path/to/root',
+  workDirBrowse: 'Choose root',
   workDirBrowseUnavailable: 'Folder picker is available in the desktop app',
   addSpace: 'Add Space',
   addAssistant: 'Add Assistant',
   searchSpaces: 'Search spaces',
   searchAssistants: 'Search assistants',
   noMatches: 'No matches',
-  newSession: 'New',
   removeItem: (label: string) => `Remove ${label}`,
   spacePlaceholder: 'Space path',
   assistantPlaceholder: 'assistant-id',
@@ -75,7 +74,6 @@ function mountDock({
         workDirEditable={workDirEditable}
         onSetWorkDir={onSetWorkDir}
         onSetContextSelection={onSetContextSelection}
-        onNewSession={vi.fn()}
       />,
     );
   });
@@ -97,11 +95,11 @@ describe('SessionContextDock', () => {
     const { host, root } = mountDock();
 
     expect(host.textContent).toContain('Mind');
-    expect(host.textContent).toContain('1 space');
-    expect(host.textContent).toContain('1 assistant');
+    expect(host.textContent).toContain('Spaces');
+    expect(host.textContent).toContain('Assistants');
+    expect(host.textContent).toContain('1');
     expect(host.textContent).not.toContain('Context');
     expect(host.textContent).not.toContain('None');
-    expect(host.textContent).not.toContain('WorkDir');
 
     act(() => root.unmount());
   });

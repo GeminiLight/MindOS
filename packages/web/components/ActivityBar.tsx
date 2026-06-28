@@ -1,13 +1,16 @@
 'use client';
 
 import { useRef, useCallback, useState, useEffect, useTransition, type CSSProperties } from 'react';
+import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { Brain, Settings, RefreshCw, Bot, Compass, ChevronLeft, ChevronRight, Radio, Zap, Inbox, Puzzle, DraftingCompass } from 'lucide-react';
 import { useLocale } from '@/lib/stores/locale-store';
 import { DOT_COLORS, getStatusLevel } from './SyncStatusBar';
 import type { SyncStatus } from './settings/types';
+import { useSharedSyncing } from '@/lib/sync-status-store';
 import Logo from './Logo';
+import { FLOATING_SURFACE_CLASS, useDismissableFloatingLayer } from '@/components/shared/FloatingSurface';
 import {
   ROUTE_PANEL_HREF,
   getRailActivePanel,
@@ -155,6 +158,23 @@ function RailButton({
   );
 }
 
+function UserAvatar({ badgeLevel }: { badgeLevel?: keyof typeof DOT_COLORS | null }) {
+  return (
+    <span
+      className="relative inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[var(--amber)]/30 bg-[var(--amber)]/10 text-xs font-semibold text-[var(--amber)]"
+      aria-hidden="true"
+      data-rail-user-avatar
+    >
+      U
+      {badgeLevel ? (
+        <span
+          className={`absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-background ${DOT_COLORS[badgeLevel]} ${badgeLevel === 'error' || badgeLevel === 'conflicts' ? 'animate-pulse' : ''}`}
+        />
+      ) : null}
+    </span>
+  );
+}
+
 export default function ActivityBar({
   activePanel,
   suppressRouteActive = false,
@@ -180,6 +200,8 @@ export default function ActivityBar({
 }: ActivityBarProps) {
   const lastClickRef = useRef<{ key: string; at: number }>({ key: '', at: 0 });
   const syncBtnRef = useRef<HTMLButtonElement>(null);
+  const userBtnRef = useRef<HTMLButtonElement>(null);
+  const userMenuRef = useRef<HTMLDivElement>(null);
   const { t } = useLocale();
   const pathname = usePathname();
   const [, startTransition] = useTransition();
@@ -187,6 +209,10 @@ export default function ActivityBar({
   const smoothPush = useSmoothRouterPush();
   const isHome = pathname === '/';
   const railPreferences = useRailPreferences();
+  const syncing = useSharedSyncing();
+  const userLabel = t.sidebar?.userLabel ?? 'User';
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [userAnchorRect, setUserAnchorRect] = useState<DOMRect | null>(null);
   const activeDestination = suppressRouteActive ? activePanel : getRailActivePanel(pathname, activePanel);
   const isCurrentRouteForPanel = useCallback((panel: RoutePanelId) => (
     !suppressRouteActive && isContentRouteForPanel(pathname, panel)
@@ -276,6 +302,15 @@ export default function ActivityBar({
     debounced(`panel:${id}`, () => onPanelChange(activePanel === id ? null : id));
   }, [activePanel, onPanelChange, debounced]);
 
+  const closeUserMenu = useCallback(() => setUserMenuOpen(false), []);
+
+  useDismissableFloatingLayer({
+    enabled: userMenuOpen,
+    refs: [userMenuRef, userBtnRef],
+    onClose: closeUserMenu,
+    delayMouseDown: true,
+  });
+
   const handleRouteRailClick = useCallback((
     event: React.MouseEvent<HTMLAnchorElement | HTMLButtonElement>,
     targetPanel: RoutePanelId,
@@ -292,15 +327,93 @@ export default function ActivityBar({
     });
   }, [activePanel, debouncedRailClick, onPanelChange, pathname]);
 
-  const syncLevel = syncStale && syncStatus ? 'error' : getStatusLevel(syncStatus, false);
+  useEffect(() => {
+    if (syncPopoverOpen) setUserMenuOpen(false);
+  }, [syncPopoverOpen]);
+
+  const syncLevel = syncStale && syncStatus ? 'error' : getStatusLevel(syncStatus, syncing);
   const showSyncDot = syncLevel !== 'off' && syncLevel !== 'synced';
 
   const railWidth = expanded ? RAIL_WIDTH_EXPANDED : RAIL_WIDTH_COLLAPSED;
 
-  // Sync dot badge — positioned differently in collapsed vs expanded
+  // Sync dot badge — attached to the icon instead of rendering status text.
   const syncBadge = showSyncDot ? (
-    <span className={`absolute ${expanded ? 'left-[26px] top-1.5' : 'top-1.5 right-1.5'} w-2 h-2 rounded-full ${DOT_COLORS[syncLevel]} ${syncLevel === 'error' || syncLevel === 'conflicts' ? 'animate-pulse' : ''}`} />
+    <span className={`absolute right-1.5 top-1.5 h-2 w-2 rounded-full ${DOT_COLORS[syncLevel]} ${syncLevel === 'error' || syncLevel === 'conflicts' ? 'animate-pulse' : ''}`} />
   ) : undefined;
+
+  const collapsedUserBadgeLevel = !expanded
+    ? hasUpdate ? 'error' : showSyncDot ? syncLevel : null
+    : null;
+  const userMenuPosition = userAnchorRect
+    ? (() => {
+      const viewportWidth = typeof window === 'undefined' ? railWidth + 260 : window.innerWidth;
+      const viewportHeight = typeof window === 'undefined' ? 720 : window.innerHeight;
+      const width = 220;
+      const height = 144;
+      return {
+        left: Math.min(Math.max(8, railWidth + 8), viewportWidth - width - 8),
+        top: Math.max(8, Math.min(userAnchorRect.bottom - height, viewportHeight - height - 8)),
+      };
+    })()
+    : null;
+
+  const toggleUserMenu = useCallback(() => {
+    const rect = userBtnRef.current?.getBoundingClientRect();
+    if (rect) setUserAnchorRect(rect);
+    setUserMenuOpen((open) => !open);
+  }, []);
+
+  const openSyncFromUser = useCallback(() => {
+    const rect = (syncBtnRef.current ?? userBtnRef.current)?.getBoundingClientRect();
+    setUserMenuOpen(false);
+    if (rect) onSyncClick(rect);
+  }, [onSyncClick]);
+
+  const openSettingsFromUser = useCallback(() => {
+    setUserMenuOpen(false);
+    debounced('action:settings', onSettingsClick);
+  }, [debounced, onSettingsClick]);
+
+  const userMenu = userMenuOpen && userMenuPosition && typeof document !== 'undefined'
+    ? createPortal(
+      <div
+        ref={userMenuRef}
+        role="menu"
+        aria-label={userLabel}
+        data-rail-user-menu
+        className={`${FLOATING_SURFACE_CLASS} w-[220px] p-1.5 shadow-xl shadow-foreground/10 animate-in fade-in slide-in-from-left-2 duration-150`}
+        style={userMenuPosition}
+      >
+        <div className="flex items-center gap-2 border-b border-border px-2 py-2">
+          <UserAvatar badgeLevel={collapsedUserBadgeLevel} />
+          <div className="min-w-0">
+            <div className="truncate text-sm font-medium text-foreground">{userLabel}</div>
+          </div>
+        </div>
+        <button
+          type="button"
+          role="menuitem"
+          onClick={openSyncFromUser}
+          className="hit-target-box relative mt-1 flex min-h-9 w-full items-center gap-2 px-2 text-left text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-md)]"
+        >
+          <RefreshCw size={14} className={syncing ? 'animate-spin text-[var(--amber)]' : ''} />
+          <span className="truncate">{t.sidebar.syncLabel}</span>
+          {syncBadge}
+        </button>
+        <button
+          type="button"
+          role="menuitem"
+          onClick={openSettingsFromUser}
+          className="hit-target-box relative flex min-h-9 w-full items-center gap-2 px-2 text-left text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-md)]"
+        >
+          <Settings size={14} />
+          <span className="truncate">{t.sidebar.settingsTitle}</span>
+          {hasUpdate ? <span className="ml-auto h-2 w-2 rounded-full bg-error" aria-hidden="true" /> : null}
+        </button>
+      </div>,
+      document.body,
+    )
+    : null;
 
   return (
     <aside
@@ -429,9 +542,9 @@ export default function ActivityBar({
           />
         </div>
 
-        {/* ── Bottom: Action buttons (not panel toggles) ── */}
+        {/* ── Bottom: user area + compact actions ── */}
         <div className={`${expanded ? 'mx-3' : 'mx-2'} border-t border-border`} />
-        <div className={`flex flex-col ${expanded ? 'px-1.5' : 'items-center'} gap-1 py-2`}>
+        <div className={`flex flex-col ${expanded ? 'px-2' : 'items-center'} gap-1 py-2`}>
           {pluginEntriesAvailable && onPluginEntriesClick && (
             <RailButton
               icon={<Puzzle size={18} />}
@@ -443,31 +556,70 @@ export default function ActivityBar({
               )}
             />
           )}
-          <RailButton
-            icon={<Settings size={18} />}
-            label={t.sidebar.settingsTitle}
-            expanded={expanded}
-            onClick={() => debounced('action:settings', onSettingsClick)}
-            badge={hasUpdate ? (
-              <span className={`absolute ${expanded ? 'left-[26px] top-1.5' : 'top-1.5 right-1.5'} w-2 h-2 rounded-full bg-error`} />
-            ) : undefined}
-          />
-          <RailButton
-            icon={<RefreshCw size={18} />}
-            label={t.sidebar.syncLabel}
-            expanded={expanded}
-            buttonRef={syncBtnRef}
-            badge={syncBadge}
-            ariaHaspopup="dialog"
-            ariaExpanded={syncPopoverOpen}
-            ariaControls={syncPopoverOpen ? syncPopoverId : undefined}
-            onClick={() => debounced('action:sync', () => {
-              const rect = syncBtnRef.current?.getBoundingClientRect();
-              if (rect) onSyncClick(rect);
-            })}
-          />
+          <div
+            className={`
+              ${expanded
+                ? 'flex h-11 w-full items-center gap-1 rounded-lg border border-transparent px-1 transition-colors hover:border-border/60 hover:bg-muted/25'
+                : 'flex w-10 justify-center'
+              }
+            `}
+            data-rail-user-footer
+          >
+            <button
+              type="button"
+              ref={userBtnRef}
+              onClick={toggleUserMenu}
+              aria-label={userLabel}
+              aria-haspopup="menu"
+              aria-expanded={userMenuOpen}
+              className={`
+                hit-target-box relative flex min-w-0 items-center text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-md)]
+                ${expanded ? 'h-9 flex-1 gap-2 px-1.5' : 'h-10 w-10 justify-center'}
+              `}
+              title={expanded ? undefined : userLabel}
+            >
+              <UserAvatar badgeLevel={collapsedUserBadgeLevel} />
+              {expanded ? (
+                <span className="min-w-0 truncate text-sm font-medium text-foreground/90">{userLabel}</span>
+              ) : null}
+            </button>
+            {expanded ? (
+              <div className="flex shrink-0 items-center gap-0.5">
+                <button
+                  type="button"
+                  ref={syncBtnRef}
+                  onClick={() => debounced('action:sync', () => {
+                    setUserMenuOpen(false);
+                    const rect = syncBtnRef.current?.getBoundingClientRect();
+                    if (rect) onSyncClick(rect);
+                  })}
+                  aria-label={t.sidebar.syncLabel}
+                  aria-haspopup="dialog"
+                  aria-expanded={syncPopoverOpen}
+                  aria-controls={syncPopoverOpen ? syncPopoverId : undefined}
+                  title={t.sidebar.syncLabel}
+                  className="hit-target-box relative inline-flex h-8 w-8 items-center justify-center text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-md)]"
+                >
+                  <RefreshCw size={15} className={syncing ? 'animate-spin text-[var(--amber)]' : ''} />
+                  {syncBadge}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => debounced('action:settings', onSettingsClick)}
+                  aria-label={t.sidebar.settingsTitle}
+                  title={t.sidebar.settingsTitle}
+                  className="hit-target-box relative inline-flex h-8 w-8 items-center justify-center text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-md)]"
+                >
+                  <Settings size={15} />
+                  {hasUpdate ? <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-error" aria-hidden="true" /> : null}
+                </button>
+              </div>
+            ) : null}
+          </div>
         </div>
       </div>
+
+      {userMenu}
 
       {/* ── Hover expand/collapse button — vertically centered on right edge ── */}
       {/* Paints above Panel (z-30). Shows on Rail hover OR self-hover. */}
