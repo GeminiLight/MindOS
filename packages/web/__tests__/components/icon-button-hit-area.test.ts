@@ -166,9 +166,10 @@ describe('icon button hit areas', () => {
     const providerSource = readSource('components/ask/ProviderModelCapsule.tsx');
 
     expect(headerSource).toContain('const headerButtonClass = \'hit-target-box');
+    expect(headerSource).toContain('const titleTriggerClass = \'hit-target-box');
     expect(headerSource).toContain('data-hit-active={showHistory ? \'true\' : undefined}');
-    expect(headerSource).toContain('hit-target-box inline-flex items-center gap-1 border border-transparent');
-    expect(headerSource).toContain('hit-target-box inline-flex h-7 w-7 items-center justify-center');
+    expect(headerSource).toContain('hit-target-box inline-flex min-h-6 shrink-0 items-center gap-1');
+    expect(headerSource).toContain('min-h-9 items-center px-2');
     expect(headerSource).not.toContain('rounded-md transition-colors duration-75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${s.pinned');
     expect(runtimeSource).toContain('hit-target-box group/runtime');
     expect(runtimeSource).toContain('data-hit-active={open ? \'true\' : undefined}');
@@ -214,7 +215,9 @@ describe('icon button hit areas', () => {
     const saveSource = readSource('components/ask/SaveSessionInline.tsx');
     const historyPanelSource = readSource('components/ask/SessionHistoryPanel.tsx');
     const historySource = readSource('components/ask/SessionHistory.tsx');
+    const historyRowSource = readSource('components/ask/SessionHistoryRow.tsx');
     const stableRowChromeSource = readSource('components/shared/StableRowChrome.tsx');
+    const sessionRowActionsSource = readSource('components/shared/SessionRowActions.tsx');
     const saveInsightSource = readSource('components/ask/SaveInsightInline.tsx');
     const providerCapsuleSource = readSource('components/ask/ProviderModelCapsule.tsx');
 
@@ -230,10 +233,20 @@ describe('icon button hit areas', () => {
     }
     expect(stableRowChromeSource).toContain("'h-6 w-6' : 'h-7 w-7'");
     expect(stableRowChromeSource).toContain('focus-visible:ring-2 focus-visible:ring-ring');
-    expect(historyPanelSource).toContain('StableRowTrailingSlot');
-    expect(historyPanelSource).toContain('StableRowActionButton');
-    expect(historySource).toContain('StableRowTrailingSlot');
-    expect(historySource).toContain('StableRowActionButton');
+    expect(sessionRowActionsSource).toContain('StableRowActionButton');
+    expect(sessionRowActionsSource).toContain('onFork');
+    expect(sessionRowActionsSource).toContain('onArchive');
+    expect(historyPanelSource).not.toContain('StableRowTrailingSlot');
+    expect(historyPanelSource).not.toContain('reserveClassName="w-[6.5rem]"');
+    expect(historyPanelSource).toContain('data-session-row-time');
+    expect(historyPanelSource).toContain('data-session-row-actions');
+    expect(historyRowSource).not.toContain('trailingReserveClassName');
+    expect(historyRowSource).toContain('data-session-row-time');
+    expect(historyRowSource).toContain('data-session-row-actions');
+    expect(historyRowSource).toContain('group-hover:pointer-events-auto group-hover:opacity-100');
+    expect(historyPanelSource).toContain('SessionRowActions');
+    expect(historySource).not.toContain('StableRowTrailingSlot');
+    expect(historySource).toContain('SessionHistoryRow');
     expect(historyPanelSource).not.toContain('opacity-0 transition-opacity duration-75 group-hover:opacity-100');
     expect(historySource).not.toContain('group-hover:opacity-100 focus-visible:opacity-100');
     expect(actionsSource).toContain('const btnBase = \'hit-target-box');

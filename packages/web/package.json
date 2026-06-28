@@ -19,7 +19,7 @@
     "postinstall": "node ../../scripts/fix-postcss-deps.cjs"
   },
   "dependencies": {
-    "@agentclientprotocol/sdk": "^0.18.2",
+    "@agentclientprotocol/sdk": "^1.0.0",
     "@anthropic-ai/sdk": "^0.73.0",
     "@base-ui/react": "^1.2.0",
     "@codemirror/lang-markdown": "^6.5.0",

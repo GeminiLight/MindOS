@@ -29,6 +29,7 @@ import type {
   AcpToolCallFull,
   AcpSessionMcpServerSummary,
 } from './types.js';
+import { isAcpCapabilitySupported } from './types.js';
 import {
   spawnAndConnect,
   killAgent,
@@ -128,7 +129,9 @@ function resolveSessionMcpInheritance(
           ? 'http'
           : 'type' in server && server.type === 'sse'
             ? 'sse'
-            : 'stdio',
+            : 'type' in server && server.type === 'acp'
+              ? 'acp'
+              : 'stdio',
       })),
     };
   }
@@ -406,7 +409,7 @@ export async function listSessions(
 ): Promise<{ sessions: AcpSessionInfo[]; nextCursor?: string }> {
   const { session, conn } = getSessionAndConn(sessionId);
 
-  if (!session.agentCapabilities?.sessionCapabilities?.list) {
+  if (!isAcpCapabilitySupported(session.agentCapabilities?.sessionCapabilities?.list)) {
     throw new Error('Agent does not support session/list');
   }
 
@@ -615,7 +618,7 @@ export async function closeSession(
     const wireSessionId = session?.agentSessionId ?? sessionId;
     if (options.closeAgentSession !== false) {
       try {
-        await conn.connection.unstable_closeSession({ sessionId: wireSessionId });
+        await closeAgentSession(conn.connection, wireSessionId);
       } catch {
         // Best-effort — many agents don't support session/close
       }
@@ -939,10 +942,57 @@ function parseAgentCapabilities(raw: unknown): AcpAgentCapabilities | undefined 
   const obj = raw as Record<string, unknown>;
   return {
     loadSession: obj.loadSession === true,
-    mcpCapabilities: typeof obj.mcpCapabilities === 'object' ? obj.mcpCapabilities as AcpAgentCapabilities['mcpCapabilities'] : undefined,
+    mcpCapabilities: parseMcpCapabilities(obj.mcpCapabilities),
     promptCapabilities: typeof obj.promptCapabilities === 'object' ? obj.promptCapabilities as AcpAgentCapabilities['promptCapabilities'] : undefined,
-    sessionCapabilities: typeof obj.sessionCapabilities === 'object' ? obj.sessionCapabilities as AcpAgentCapabilities['sessionCapabilities'] : undefined,
+    sessionCapabilities: parseSessionCapabilities(obj.sessionCapabilities),
   };
+}
+
+type SessionCloseConnection = ClientSideConnection & {
+  closeSession?: (params: { sessionId: string }) => Promise<unknown>;
+  unstable_closeSession?: (params: { sessionId: string }) => Promise<unknown>;
+};
+
+function closeAgentSession(connection: ClientSideConnection, sessionId: string): Promise<unknown> {
+  const closable = connection as SessionCloseConnection;
+  const close = typeof closable.closeSession === 'function'
+    ? closable.closeSession
+    : closable.unstable_closeSession;
+  return close ? close.call(closable, { sessionId }) : Promise.resolve();
+}
+
+function parseMcpCapabilities(raw: unknown): AcpAgentCapabilities['mcpCapabilities'] {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const obj = raw as Record<string, unknown>;
+  return compactBooleans({
+    stdio: capabilityFlag(obj.stdio),
+    http: capabilityFlag(obj.http),
+    sse: capabilityFlag(obj.sse),
+    acp: capabilityFlag(obj.acp),
+  });
+}
+
+function parseSessionCapabilities(raw: unknown): AcpAgentCapabilities['sessionCapabilities'] {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const obj = raw as Record<string, unknown>;
+  return compactBooleans({
+    list: capabilityFlag(obj.list),
+    delete: capabilityFlag(obj.delete),
+    resume: capabilityFlag(obj.resume),
+    fork: capabilityFlag(obj.fork),
+    close: capabilityFlag(obj.close),
+  });
+}
+
+function capabilityFlag(value: unknown): boolean | undefined {
+  if (value === true || isAcpCapabilitySupported(value)) return true;
+  if (value === false) return false;
+  return undefined;
+}
+
+function compactBooleans<T extends Record<string, boolean | undefined>>(value: T): { [K in keyof T]?: boolean } | undefined {
+  const entries = Object.entries(value).filter((entry): entry is [keyof T & string, boolean] => typeof entry[1] === 'boolean');
+  return entries.length > 0 ? Object.fromEntries(entries) as { [K in keyof T]?: boolean } : undefined;
 }
 
 function parseAuthMethods(raw: unknown): AcpAuthMethod[] | undefined {

@@ -6,6 +6,7 @@ import {
   annotateMessageWithAgentRuntime,
   bindSessionAgent,
   bindSessionAgentRuntime,
+  compactRuntimeSessionPathLabel,
   filterSessionsByRuntimeLane,
   getRuntimeSessionSummary,
   getMatchingRuntimeSessionBinding,
@@ -15,6 +16,8 @@ import {
   isRuntimeSessionBindingResumable,
   resolveComposerAgent,
   resolveMessageAgent,
+  runtimeSessionCompactLabel,
+  runtimeSessionTooltip,
 } from '@/lib/ask-agent';
 
 describe('ask agent helpers', () => {
@@ -498,6 +501,30 @@ describe('ask agent helpers', () => {
       cwd: '/tmp/mind',
     });
     expect(getRuntimeSessionSummary({ id: 'mindos', createdAt: 1, updatedAt: 1, messages: [] })).toBeNull();
+  });
+
+  it('builds compact runtime session display labels without losing full tooltip metadata', () => {
+    const session: ChatSession = {
+      id: 'claude',
+      createdAt: 1,
+      updatedAt: 1,
+      messages: [],
+      runtimeSessionBinding: {
+        kind: 'claude-session',
+        runtime: 'claude',
+        runtimeId: 'claude',
+        externalSessionId: 'session_1234567890abcdef',
+        cwd: '/tmp/mind',
+        status: 'active',
+        updatedAt: 1,
+      },
+    };
+    const summary = getRuntimeSessionSummary(session);
+
+    expect(runtimeSessionCompactLabel(summary)).toBe('Claude');
+    expect(compactRuntimeSessionPathLabel(summary?.cwd)).toBe('/mind');
+    expect(runtimeSessionTooltip(summary)).toContain('Claude Code session session_1234567890abcdef');
+    expect(runtimeSessionTooltip(summary)).toContain('/tmp/mind');
   });
 
   it('only treats active runtime session bindings with external ids as resumable', () => {

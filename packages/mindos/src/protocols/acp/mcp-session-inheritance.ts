@@ -15,6 +15,7 @@ export type AcpSessionMcpConfigEntry = {
   args?: unknown;
   env?: unknown;
   url?: unknown;
+  id?: unknown;
   headers?: unknown;
   type?: unknown;
   transport?: unknown;
@@ -138,14 +139,21 @@ function toAcpMcpServer(
   entry: AcpSessionMcpConfigEntry,
   capabilities: McpCapabilities | undefined,
 ): McpServer | null {
+  const transport = normalizeTransport(entry.type) ?? normalizeTransport(entry.transport);
+  if (transport === 'acp') {
+    const id = typeof entry.id === 'string' ? entry.id.trim() : '';
+    if (capabilities?.acp !== true || !id) return null;
+    return { type: 'acp', name, id };
+  }
+
   const url = typeof entry.url === 'string' ? entry.url.trim() : '';
   if (url) {
-    const transport = normalizeTransport(entry.type) ?? normalizeTransport(entry.transport) ?? 'http';
-    if (transport === 'sse') {
+    const urlTransport = transport ?? 'http';
+    if (urlTransport === 'sse') {
       if (capabilities?.sse !== true) return null;
       return { type: 'sse', name, url, headers: normalizeHeaders(entry.headers) };
     }
-    if (transport === 'http') {
+    if (urlTransport === 'http') {
       if (capabilities?.http !== true) return null;
       return { type: 'http', name, url, headers: normalizeHeaders(entry.headers) };
     }
@@ -162,12 +170,13 @@ function toAcpMcpServer(
   };
 }
 
-function normalizeTransport(value: unknown): 'http' | 'sse' | 'stdio' | null {
+function normalizeTransport(value: unknown): 'http' | 'sse' | 'stdio' | 'acp' | null {
   if (typeof value !== 'string') return null;
   const normalized = value.trim().toLowerCase();
   if (normalized === 'http' || normalized === 'streamable-http') return 'http';
   if (normalized === 'sse') return 'sse';
   if (normalized === 'stdio') return 'stdio';
+  if (normalized === 'acp') return 'acp';
   return null;
 }
 
@@ -205,6 +214,7 @@ function normalizeStringArray(value: unknown): string[] {
 function mcpServerType(server: McpServer): AcpSessionMcpServerSummary['type'] {
   if ('type' in server && server.type === 'http') return 'http';
   if ('type' in server && server.type === 'sse') return 'sse';
+  if ('type' in server && server.type === 'acp') return 'acp';
   return 'stdio';
 }
 

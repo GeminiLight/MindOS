@@ -919,7 +919,7 @@ export type MindosAcpAgentTurnSession = {
 
 export type MindosAcpAgentTurnSessionOptions = {
   cwd: string;
-  permissionMode?: 'agent' | 'readonly';
+  permissionMode?: 'readonly' | 'ask' | 'auto' | 'full';
 };
 
 export type MindosAcpAgentTurnCloseOptions = {

@@ -13,10 +13,11 @@ import {
   startRun,
   endRun,
 } from '@/lib/agent-run-store';
-import type { AgentRuntimeIdentity, ChatSession } from '@/lib/types';
+import type { AgentRuntimeIdentity, ChatSession, Message } from '@/lib/types';
 
 const codexRuntime: AgentRuntimeIdentity = { id: 'codex', name: 'Codex', kind: 'codex' };
 const claudeRuntime: AgentRuntimeIdentity = { id: 'claude', name: 'Claude Code', kind: 'claude' };
+const kimiRuntime: AgentRuntimeIdentity = { id: 'kimi', name: 'Kimi', kind: 'acp' };
 
 type AskSessionState = ReturnType<typeof useAskSession>;
 
@@ -380,6 +381,124 @@ describe('useAskSession native runtime lane', () => {
         runtimeId: 'codex',
         externalSessionId: 'thread_attached',
       },
+    });
+
+    act(() => {
+      root.unmount();
+    });
+  });
+
+  it('seeds imported Codex thread messages when attaching an existing runtime session', async () => {
+    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => [] }));
+    vi.stubGlobal('fetch', fetchMock);
+    const { getLatest, root } = renderUseAskSession();
+    const importedMessages: Message[] = [
+      {
+        role: 'user',
+        content: 'what was the previous task?',
+        timestamp: 123,
+        agentId: 'codex',
+        agentName: 'Codex',
+        agentKind: 'codex',
+      },
+      {
+        role: 'assistant',
+        content: 'we were fixing runtime history loading',
+        timestamp: 124,
+        agentId: 'codex',
+        agentName: 'Codex',
+        agentKind: 'codex',
+      },
+    ];
+
+    act(() => {
+      getLatest().attachRuntimeSession(codexRuntime, {
+        externalSessionId: 'thread_with_history',
+        cwd: '/tmp/repo',
+        status: 'active',
+        updatedAt: 456,
+      }, {
+        title: 'Runtime history thread',
+        messages: importedMessages,
+      });
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    });
+
+    const active = getLatest().activeSession;
+    expect(active?.title).toBe('Runtime history thread');
+    expect(active?.messages).toEqual(importedMessages);
+    expect(getMessages(active!.id)).toEqual(importedMessages);
+
+    const postCall = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST');
+    expect(postCall).toBeTruthy();
+    const body = JSON.parse(String(postCall?.[1]?.body));
+    expect(body.session.messages).toEqual(importedMessages);
+    expect(body.session.runtimeSessionBinding).toMatchObject({
+      kind: 'codex-thread',
+      runtime: 'codex',
+      runtimeId: 'codex',
+      externalSessionId: 'thread_with_history',
+    });
+
+    act(() => {
+      root.unmount();
+    });
+  });
+
+  it('attaches an existing ACP runtime session as a typed durable binding', async () => {
+    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => [] }));
+    vi.stubGlobal('fetch', fetchMock);
+    const { getLatest, root } = renderUseAskSession();
+
+    act(() => {
+      getLatest().attachRuntimeSession(kimiRuntime, {
+        externalSessionId: 'kimi-session-existing',
+        cwd: '/tmp/kimi-project',
+        status: 'active',
+        updatedAt: 789,
+      }, {
+        title: 'Kimi ACP session',
+        messages: [
+          {
+            role: 'assistant',
+            content: 'kimi previous answer',
+            agentId: 'kimi',
+            agentName: 'Kimi',
+            agentKind: 'acp',
+          },
+        ],
+      });
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    });
+
+    const active = getLatest().activeSession;
+    expect(active?.title).toBe('Kimi ACP session');
+    expect(active?.defaultAgentRuntime).toEqual(kimiRuntime);
+    expect(active?.defaultAcpAgent).toEqual({ id: 'kimi', name: 'Kimi' });
+    expect(active?.runtimeSessionBinding).toMatchObject({
+      kind: 'acp-session',
+      runtime: 'acp',
+      runtimeId: 'kimi',
+      externalSessionId: 'kimi-session-existing',
+      cwd: '/tmp/kimi-project',
+      status: 'active',
+      updatedAt: 789,
+    });
+    expect(isSessionInRuntimeLane(active!, kimiRuntime)).toBe(true);
+    expect(getMessages(active!.id)).toHaveLength(1);
+
+    const postCall = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST');
+    expect(postCall).toBeTruthy();
+    const body = JSON.parse(String(postCall?.[1]?.body));
+    expect(body.session.runtimeSessionBinding).toMatchObject({
+      kind: 'acp-session',
+      runtime: 'acp',
+      runtimeId: 'kimi',
+      externalSessionId: 'kimi-session-existing',
     });
 
     act(() => {

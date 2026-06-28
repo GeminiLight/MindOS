@@ -32,12 +32,13 @@ export type RuntimePermissionBridgeContext = {
 type PendingRuntimePermission = {
   runId: string;
   requestId: string;
-  runtime: 'codex' | 'claude';
+  runtime: MindosRuntimePermissionRequest['runtime'];
   toolCallId: string;
   options: Map<string, MindosRuntimePermissionOption>;
   send: (event: MindOSSSEvent) => void;
   resolve: (result: MindosRuntimePermissionResult) => void;
   timeout: ReturnType<typeof setTimeout>;
+  emitResolved: boolean;
 };
 
 type RuntimePermissionBridgeGlobalState = {
@@ -53,6 +54,13 @@ export type RuntimePermissionApproval = {
   resource?: string;
   risk: MindosRuntimePermissionRisk;
   options: MindosRuntimePermissionOption[];
+};
+
+type RuntimePermissionRequestOptions = {
+  signal?: AbortSignal;
+  requestId?: string;
+  emitRequest?: boolean;
+  emitResolved?: boolean;
 };
 
 function bridgeState(): RuntimePermissionBridgeGlobalState {
@@ -220,7 +228,7 @@ export function runWithRuntimePermissionBridge<T>(
 
 export async function requestRuntimePermissionViaBridge(
   request: MindosRuntimePermissionRequest,
-  options: { signal?: AbortSignal } = {},
+  options: RuntimePermissionRequestOptions = {},
 ): Promise<MindosRuntimePermissionResult> {
   const context = state.context.getStore();
   if (!context) return { decision: 'cancel', cancelled: true };
@@ -230,7 +238,7 @@ export async function requestRuntimePermissionViaBridge(
 export async function requestRuntimePermissionForRun(
   runId: string,
   request: MindosRuntimePermissionRequest,
-  options: { signal?: AbortSignal } = {},
+  options: RuntimePermissionRequestOptions = {},
 ): Promise<MindosRuntimePermissionResult> {
   const context = state.runs.get(runId);
   if (!context) return { decision: 'cancel', cancelled: true };
@@ -240,10 +248,12 @@ export async function requestRuntimePermissionForRun(
 function enqueueRuntimePermission(
   context: RuntimePermissionBridgeContext,
   request: MindosRuntimePermissionRequest,
-  options: { signal?: AbortSignal } = {},
+  options: RuntimePermissionRequestOptions = {},
 ): Promise<MindosRuntimePermissionResult> {
-  const requestId = `${request.runtime}-${request.toolCallId}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  const requestId = options.requestId?.trim() ||
+    `${request.runtime}-${request.toolCallId}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
   const key = pendingKey(context.runId, requestId);
+  const emitResolved = options.emitResolved !== false;
 
   return new Promise<MindosRuntimePermissionResult>((resolve) => {
     let abort: (() => void) | undefined;
@@ -259,16 +269,18 @@ function enqueueRuntimePermission(
 
     const timeout = setTimeout(() => {
       const result = cancelResult();
-      sendResolved({
-        pending: {
-          runId: context.runId,
-          requestId,
-          runtime: request.runtime,
-          toolCallId: request.toolCallId,
-          send: context.send,
-        },
-        result,
-      });
+      if (emitResolved) {
+        sendResolved({
+          pending: {
+            runId: context.runId,
+            requestId,
+            runtime: request.runtime,
+            toolCallId: request.toolCallId,
+            send: context.send,
+          },
+          result,
+        });
+      }
       finish(result);
     }, context.timeoutMs ?? DEFAULT_TIMEOUT_MS);
 
@@ -281,20 +293,23 @@ function enqueueRuntimePermission(
       send: context.send,
       resolve: finish,
       timeout,
+      emitResolved,
     });
 
     abort = () => {
       const result = cancelResult();
-      sendResolved({
-        pending: {
-          runId: context.runId,
-          requestId,
-          runtime: request.runtime,
-          toolCallId: request.toolCallId,
-          send: context.send,
-        },
-        result,
-      });
+      if (emitResolved) {
+        sendResolved({
+          pending: {
+            runId: context.runId,
+            requestId,
+            runtime: request.runtime,
+            toolCallId: request.toolCallId,
+            send: context.send,
+          },
+          result,
+        });
+      }
       finish(result);
     };
 
@@ -304,20 +319,22 @@ function enqueueRuntimePermission(
     }
     options.signal?.addEventListener('abort', abort, { once: true });
 
-    context.send({
-      type: 'runtime_permission_request',
-      runId: context.runId,
-      requestId,
-      runtime: request.runtime,
-      toolCallId: request.toolCallId,
-      toolName: request.toolName,
-      input: request.input,
-      options: request.options,
-      ...(request.reason ? { reason: request.reason } : {}),
-      action: approval.action,
-      ...(approval.resource ? { resource: approval.resource } : {}),
-      risk: approval.risk,
-    });
+    if (options.emitRequest !== false) {
+      context.send({
+        type: 'runtime_permission_request',
+        runId: context.runId,
+        requestId,
+        runtime: request.runtime,
+        toolCallId: request.toolCallId,
+        toolName: request.toolName,
+        input: request.input,
+        options: request.options,
+        ...(request.reason ? { reason: request.reason } : {}),
+        action: approval.action,
+        ...(approval.resource ? { resource: approval.resource } : {}),
+        risk: approval.risk,
+      });
+    }
   });
 }
 
@@ -325,7 +342,7 @@ function cancelRuntimePermissionsForRun(runId: string): void {
   for (const pending of Array.from(state.pending.values())) {
     if (pending.runId !== runId) continue;
     const result = cancelResult();
-    sendResolved({ pending, result });
+    if (pending.emitResolved) sendResolved({ pending, result });
     pending.resolve(result);
   }
 }
@@ -351,7 +368,7 @@ export function resolveRuntimePermission(input: {
     ...(selectedOption?.intent ? { decisionIntent: selectedOption.intent } : decision === 'cancel' ? { decisionIntent: 'cancel' as const } : {}),
     ...(selectedOption?.scope ? { decisionScope: selectedOption.scope } : {}),
   };
-  sendResolved({ pending, result });
+  if (pending.emitResolved) sendResolved({ pending, result });
   pending.resolve(result);
   return { ok: true };
 }

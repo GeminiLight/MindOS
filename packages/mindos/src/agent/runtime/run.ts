@@ -79,7 +79,7 @@ export type MindosRuntimePermissionRisk = {
 };
 
 export type MindosRuntimePermissionRequest = {
-  runtime: 'codex' | 'claude';
+  runtime: 'acp' | 'codex' | 'claude';
   toolCallId: string;
   toolName: string;
   input: unknown;

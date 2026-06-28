@@ -9,7 +9,7 @@ let mockPrompt: ReturnType<typeof vi.fn>;
 let mockCancel: ReturnType<typeof vi.fn>;
 let mockSetSessionMode: ReturnType<typeof vi.fn>;
 let mockSetSessionConfigOption: ReturnType<typeof vi.fn>;
-let mockUnstableCloseSession: ReturnType<typeof vi.fn>;
+let mockCloseSession: ReturnType<typeof vi.fn>;
 let mockLoadSession: ReturnType<typeof vi.fn>;
 let mockListSessions: ReturnType<typeof vi.fn>;
 let capturedCallbacks: { onSessionUpdate?: (params: unknown) => void } = {};
@@ -30,7 +30,7 @@ vi.mock('../../../../packages/mindos/src/protocols/acp/subprocess.js', () => ({
         cancel: mockCancel,
         setSessionMode: mockSetSessionMode,
         setSessionConfigOption: mockSetSessionConfigOption,
-        unstable_closeSession: mockUnstableCloseSession,
+        closeSession: mockCloseSession,
         loadSession: mockLoadSession,
         listSessions: mockListSessions,
         signal: new AbortController().signal,
@@ -66,7 +66,7 @@ describe('ACP Session (SDK-based)', () => {
     mockCancel = vi.fn().mockResolvedValue(undefined);
     mockSetSessionMode = vi.fn().mockResolvedValue({});
     mockSetSessionConfigOption = vi.fn().mockResolvedValue({ configOptions: [] });
-    mockUnstableCloseSession = vi.fn().mockResolvedValue({});
+    mockCloseSession = vi.fn().mockResolvedValue({});
     mockLoadSession = vi.fn().mockResolvedValue({ sessionId: 'loaded-ses-1' });
     mockListSessions = vi.fn().mockResolvedValue({ sessions: [] });
 
@@ -307,12 +307,12 @@ describe('ACP Session (SDK-based)', () => {
       await closeSession('nonexistent');
     });
 
-    it('calls unstable_closeSession on SDK connection', async () => {
+    it('calls closeSession on SDK connection', async () => {
       mockNewSession.mockResolvedValueOnce({ sessionId: 'agent-ses-close' });
       const session = await createSessionFromEntry(MOCK_ENTRY);
       await closeSession(session.id);
 
-      expect(mockUnstableCloseSession).toHaveBeenCalledWith({
+      expect(mockCloseSession).toHaveBeenCalledWith({
         sessionId: 'agent-ses-close',
       });
     });
@@ -429,6 +429,18 @@ describe('ACP Session (SDK-based)', () => {
       expect(result.sessions).toHaveLength(1);
       expect(result.sessions[0].sessionId).toBe('ses-1');
       expect(result.nextCursor).toBe('abc');
+    });
+
+    it('accepts ACP 1.0 object-shaped session/list capabilities', async () => {
+      mockInitialize.mockResolvedValueOnce({
+        agentCapabilities: { sessionCapabilities: { list: {} } },
+      });
+      mockListSessions.mockResolvedValueOnce({
+        sessions: [{ sessionId: 'ses-object-cap', title: 'Object Cap' }],
+      });
+      const session = await createSessionFromEntry(MOCK_ENTRY);
+      const result = await listSessions(session.id);
+      expect(result.sessions[0].sessionId).toBe('ses-object-cap');
     });
   });
 

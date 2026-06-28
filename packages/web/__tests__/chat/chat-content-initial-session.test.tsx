@@ -113,6 +113,7 @@ vi.mock('@/hooks/useAskSession', () => ({
     resetSession: mockResetSession,
     loadSession: mockLoadSession,
     deleteSession: vi.fn(),
+    forkSession: vi.fn(),
     renameSession: vi.fn(),
     togglePinSession: vi.fn(),
     clearSessions: vi.fn(),

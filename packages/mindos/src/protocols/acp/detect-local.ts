@@ -371,8 +371,10 @@ export async function detectLocalAcpAgents(
     return { agent, resolved, directOverridePath, presenceCommands };
   });
 
-  const presenceLookup = await lookupCommandPaths(plans.flatMap((plan) => plan.presenceCommands));
-  const launchLookup = await lookupCommandPaths(plans.map((plan) => plan.resolved.cmd));
+  const commandLookup = await lookupCommandPaths([
+    ...plans.flatMap((plan) => plan.presenceCommands),
+    ...plans.map((plan) => plan.resolved.cmd),
+  ]);
 
   const installed: InstalledAgent[] = [];
   const notInstalled: NotInstalledAgent[] = [];
@@ -380,12 +382,12 @@ export async function detectLocalAcpAgents(
   for (const { agent, resolved, directOverridePath, presenceCommands } of plans) {
     if (!resolved.enabled) continue;
 
-    const detectedCommandPath = presenceCommands.map((command) => presenceLookup.get(command) ?? null).find(Boolean);
+    const detectedCommandPath = presenceCommands.map((command) => commandLookup.get(command) ?? null).find(Boolean);
     const presencePath = directOverridePath
       ?? detectedCommandPath
       ?? resolveExistingPresenceDir(agent.presenceDirs);
     const launchPath = directOverridePath
-      ?? launchLookup.get(resolved.cmd)
+      ?? commandLookup.get(resolved.cmd)
       ?? (presenceCommands.includes(resolved.cmd) ? detectedCommandPath : null)
       ?? null;
 

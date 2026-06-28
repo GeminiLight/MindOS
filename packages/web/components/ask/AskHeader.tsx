@@ -1,8 +1,9 @@
 import { memo, useState, useRef, useEffect, useCallback, useTransition } from 'react';
 import { createPortal } from 'react-dom';
-import { SquarePen, History, X, Maximize2, Minimize2, PanelRight, ChevronDown, Check, Trash2, Pencil, Pin, PinOff } from 'lucide-react';
+import { SquarePen, History, X, Maximize2, Minimize2, PanelRight, ChevronDown } from 'lucide-react';
 import { SaveSessionButton } from './SaveSessionInline';
 import RuntimeIconSwitcher from './RuntimeIconSwitcher';
+import { SessionHistoryRow } from './SessionHistoryRow';
 import { useLocale } from '@/lib/stores/locale-store';
 import type {
   AgentRuntimeDescriptor,
@@ -11,7 +12,6 @@ import type {
   ChatSession,
   RuntimeSessionBinding,
 } from '@/lib/types';
-import { getRuntimeSessionSummary } from '@/lib/ask-agent';
 import { sessionTitle } from '@/hooks/useAskSession';
 import type { NotInstalledAgent } from '@/hooks/useAcpDetection';
 
@@ -32,6 +32,7 @@ interface AskHeaderProps {
   activeSessionId?: string | null;
   onLoadSession?: (id: string) => void;
   onDeleteSession?: (id: string) => void;
+  onForkSession?: (id: string) => void;
   onRenameSession?: (id: string, name: string) => void;
   onTogglePinSession?: (id: string) => void;
   /** Current session messages — used by Save Session button */
@@ -63,7 +64,7 @@ function nativeSavedSessionLabel(runtime: AgentRuntimeIdentity | null | undefine
 export default memo(function AskHeader({
   isPanel, showHistory, onToggleHistory, onReset, isLoading,
   maximized, onMaximize, onClose, onDockToPanel, hideTitle,
-  sessions, activeSessionId, onLoadSession, onDeleteSession, onRenameSession, onTogglePinSession,
+  sessions, activeSessionId, onLoadSession, onDeleteSession, onForkSession, onRenameSession, onTogglePinSession,
   messages, selectedAgentRuntime, onSelectAgentRuntime, runtimeSessionBinding,
   nativeRuntimes = [], notInstalledAgents = [], agentLoading, agentLoadingByKind, agentErrorByKind,
   runtimeReadinessByRuntimeId, runtimeReadinessLoading, acpRuntimes = [], acpLoading, acpError, onRefreshNativeRuntimes,
@@ -153,13 +154,13 @@ export default memo(function AskHeader({
   const switcherDropdown = switcherOpen && dropPos && sessions ? createPortal(
     <div
       ref={dropdownRef}
-      className="fixed z-[60] pointer-events-auto rounded-xl border border-border/50 bg-card shadow-lg py-1 animate-in fade-in-0 slide-in-from-top-1 duration-100 max-h-[60vh] overflow-y-auto"
+      className="fixed z-[60] pointer-events-auto max-h-[60vh] overflow-y-auto rounded-xl border border-border/50 bg-card py-1.5 shadow-lg animate-in fade-in-0 slide-in-from-top-1 duration-100"
       style={{ top: dropPos.top, left: dropPos.left, minWidth: Math.max(dropPos.width, 280), maxWidth: 340 }}
       role="listbox"
     >
       {isNativeRuntime && (
-        <div className="flex items-center justify-between gap-2 border-b border-border/40 px-3 py-2">
-          <span className="truncate text-2xs font-medium uppercase tracking-wide text-muted-foreground/70">
+        <div className="flex items-center justify-between gap-2 px-3 pb-1.5 pt-1">
+          <span className="min-w-0 truncate text-2xs text-muted-foreground/60">
             {nativeSavedSessionLabel(selectedAgentRuntime)}
           </span>
           <button
@@ -171,7 +172,7 @@ export default memo(function AskHeader({
               });
             }}
             disabled={isLoading}
-            className="hit-target-box inline-flex items-center gap-1 border border-transparent px-2 py-1 text-2xs font-medium text-muted-foreground transition-colors duration-75 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [--hit-target-bg:var(--card)] [--hit-target-hover-bg:color-mix(in_srgb,var(--muted)_60%,transparent)] [--hit-target-border-width:1px] [--hit-target-border:color-mix(in_srgb,var(--border)_60%,transparent)] [--hit-target-hover-border:color-mix(in_srgb,var(--border)_70%,transparent)] [--hit-target-radius:var(--radius-md)]"
+            className="hit-target-box inline-flex min-h-6 shrink-0 items-center gap-1 rounded-md px-1.5 text-2xs text-[var(--amber)] transition-colors hover:text-[var(--amber)]/80 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <SquarePen size={10} />
             New chat
@@ -185,95 +186,38 @@ export default memo(function AskHeader({
             : (t.ask?.noSessions ?? 'No saved sessions.')}
         </div>
       )}
-      {sessions.map((s) => {
-        const isActive = s.id === activeSessionId;
-        const title = sessionTitle(s);
-        const displayTitle = title === '(empty session)' ? (t.hints?.newChat ?? 'New chat') : title;
-        const runtimeSummary = getRuntimeSessionSummary(s);
-
-        if (renamingId === s.id) {
+      <div className="flex flex-col gap-0.5 px-1">
+        {sessions.map((s) => {
+          const title = sessionTitle(s);
+          const displayTitle = title === '(empty session)' ? (t.hints?.newChat ?? 'New chat') : title;
           return (
-            <div key={s.id} className="flex items-center gap-1 px-2 py-1.5">
-              <input
-                ref={renameInputRef}
-                type="text"
-                value={renameValue}
-                onChange={(e) => setRenameValue(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleCommitRename();
-                  if (e.key === 'Escape') setRenamingId(null);
-                }}
-                onBlur={handleCommitRename}
-                className="flex-1 min-w-0 px-2 py-1 text-xs rounded-md border border-border bg-background text-foreground outline-none focus-visible:border-[var(--amber)]/50"
-                placeholder="Session name..."
-              />
-            </div>
-          );
-        }
-
-        return (
-          <div key={s.id} className="group/item flex items-center">
-            <button
-              type="button"
+            <SessionHistoryRow
+              key={s.id}
               role="option"
-              aria-selected={isActive}
-              onClick={() => handleSelectSession(s.id)}
-              className={`flex-1 min-w-0 flex items-center gap-2 px-3 py-2.5 text-xs text-left transition-colors ${
-                isActive ? 'text-foreground font-medium' : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
-              }`}
-            >
-              {s.pinned && <Pin size={10} className="shrink-0 text-[var(--amber)]/60 -rotate-45" />}
-              {isActive && !s.pinned && <Check size={11} className="shrink-0 text-[var(--amber)]" />}
-              <span className="min-w-0 flex-1">
-                <span className="block truncate">{displayTitle}</span>
-                {runtimeSummary && (
-                  <span className="mt-0.5 block truncate text-2xs font-normal text-muted-foreground/60">
-                    {runtimeSummary.idLabel}
-                    {runtimeSummary.status ? ` · ${runtimeSummary.status}` : ''}
-                  </span>
-                )}
-                {runtimeSummary?.cwd && (
-                  <span className="mt-0.5 block truncate font-mono text-[10px] font-normal text-muted-foreground/50">
-                    {runtimeSummary.cwd}
-                  </span>
-                )}
-              </span>
-            </button>
-            <div className="shrink-0 flex items-center gap-0.5 mr-1 opacity-0 group-hover/item:opacity-100 transition-opacity">
-              {onTogglePinSession && (
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); onTogglePinSession(s.id); }}
-                  className={`hit-target-box inline-flex h-7 w-7 items-center justify-center transition-colors duration-75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [--hit-target-radius:var(--radius-md)] ${s.pinned ? 'text-[var(--amber)] hover:text-muted-foreground [--hit-target-hover-bg:color-mix(in_srgb,var(--muted)_60%,transparent)]' : 'text-muted-foreground/40 hover:text-[var(--amber)] [--hit-target-hover-bg:color-mix(in_srgb,var(--amber)_5%,transparent)]'}`}
-                  aria-label={s.pinned ? 'Unpin' : 'Pin'}
-                >
-                  {s.pinned ? <PinOff size={10} /> : <Pin size={10} />}
-                </button>
-              )}
-              {onRenameSession && (
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); handleStartRename(s.id, title); }}
-                  className="hit-target-box inline-flex h-7 w-7 items-center justify-center text-muted-foreground/40 transition-colors duration-75 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [--hit-target-hover-bg:color-mix(in_srgb,var(--muted)_60%,transparent)] [--hit-target-radius:var(--radius-md)]"
-                  aria-label={`Rename: ${displayTitle}`}
-                >
-                  <Pencil size={10} />
-                </button>
-              )}
-              {sessions.length > 1 && onDeleteSession && (
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); onDeleteSession(s.id); }}
-                  className="hit-target-box inline-flex h-7 w-7 items-center justify-center text-muted-foreground/40 transition-colors duration-75 hover:text-error focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [--hit-target-hover-bg:color-mix(in_srgb,var(--error)_5%,transparent)] [--hit-target-radius:var(--radius-md)]"
-                  aria-label={`Delete: ${displayTitle}`}
-                >
-                  <Trash2 size={10} />
-                </button>
-              )}
-            </div>
-          </div>
-        );
-      })}
+              aria-selected={s.id === activeSessionId}
+              session={s}
+              title={displayTitle}
+              isActive={s.id === activeSessionId}
+              editing={renamingId === s.id}
+              editValue={renameValue}
+              onEditValueChange={setRenameValue}
+              inputRef={renameInputRef}
+              onLoad={() => handleSelectSession(s.id)}
+              onStartRename={onRenameSession ? () => handleStartRename(s.id, title) : undefined}
+              onCommitRename={handleCommitRename}
+              onCancelRename={() => setRenamingId(null)}
+              onArchive={onDeleteSession ? () => onDeleteSession(s.id) : undefined}
+              onFork={onForkSession ? () => {
+                onForkSession(s.id);
+                setSwitcherOpen(false);
+              } : undefined}
+              onTogglePin={onTogglePinSession ? () => onTogglePinSession(s.id) : undefined}
+              ask={t.ask}
+              canDelete={Boolean(onDeleteSession)}
+            />
+          );
+        })}
+      </div>
     </div>,
     document.body,
   ) : null;
@@ -347,15 +291,15 @@ export default memo(function AskHeader({
       )}
       {hideTitle && <div />}
       <div data-ask-header-actions className="relative z-10 flex items-center gap-1 shrink-0 pointer-events-auto">
+        <button type="button" onClick={(e) => { e.stopPropagation(); startTransition(() => onReset()); }} disabled={isLoading} className={`${headerButtonClass} text-muted-foreground hover:text-foreground disabled:pointer-events-none disabled:opacity-40`} title={t.hints.newSession}>
+          <SquarePen size={iconSize} />
+        </button>
         <button type="button" onClick={(e) => { e.stopPropagation(); startTransition(() => onToggleHistory()); }} aria-pressed={showHistory} data-hit-active={showHistory ? 'true' : undefined} className={`${headerButtonClass} ${showHistory ? 'text-[var(--amber)]' : 'text-muted-foreground hover:text-foreground'}`} title={t.hints.sessionHistory}>
           <History size={iconSize} />
         </button>
         {messages && messages.length > 0 && (
           <SaveSessionButton messages={messages} disabled={isLoading} />
         )}
-        <button type="button" onClick={(e) => { e.stopPropagation(); startTransition(() => onReset()); }} disabled={isLoading} className={`${headerButtonClass} text-muted-foreground hover:text-foreground disabled:pointer-events-none disabled:opacity-40`} title={t.hints.newSession}>
-          <SquarePen size={iconSize} />
-        </button>
         {onMaximize && (
           <button type="button" onClick={(e) => { e.stopPropagation(); startTransition(() => onMaximize()); }} className={`${headerButtonClass} text-muted-foreground hover:text-foreground`} title={maximized ? t.hints.restorePanel : t.hints.maximizePanel}>
             {maximized ? <Minimize2 size={iconSize} /> : <Maximize2 size={iconSize} />}

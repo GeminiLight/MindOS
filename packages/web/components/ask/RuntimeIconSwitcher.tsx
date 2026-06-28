@@ -192,10 +192,6 @@ function RuntimeStatusIcon({
     return <TriangleAlert className={`${iconClass} text-[var(--error)]`} aria-hidden="true" />;
   }
 
-  if (option.readiness?.overallStatus === 'limited') {
-    return <TriangleAlert className={`${iconClass} text-[var(--amber)]`} aria-hidden="true" />;
-  }
-
   return null;
 }
 
@@ -205,7 +201,6 @@ function runtimeStatusPill(option: Pick<RuntimeOption, 'status' | 'runtime' | 'r
   if (option.status === 'missing') return { label: 'Set up', tone: 'neutral' };
   if (option.status === 'error') return { label: 'Fix', tone: 'error' };
   if (option.readiness?.overallStatus === 'blocked') return { label: 'Fix', tone: 'error' };
-  if (option.readiness?.overallStatus === 'limited') return { label: 'Limited', tone: 'amber' };
   return null;
 }
 
@@ -226,7 +221,7 @@ function RuntimeStatusBadge({
   return (
     <span className={`inline-flex h-5 shrink-0 items-center gap-1 rounded-md border px-1.5 text-[10px] font-medium leading-none ${toneClass}`}>
       {option.status === 'checking' && <Loader2 size={10} className="animate-spin" aria-hidden="true" />}
-      {(option.status === 'error' || option.readiness?.overallStatus === 'blocked' || option.readiness?.overallStatus === 'limited') && option.status !== 'checking' && (
+      {(option.status === 'error' || option.readiness?.overallStatus === 'blocked') && option.status !== 'checking' && (
         <TriangleAlert size={10} aria-hidden="true" />
       )}
       <span>{pill.label}</span>
@@ -271,7 +266,6 @@ function nativeRuntimeAvailableDescription(kind: 'codex' | 'claude', runtime: Na
 function RuntimeMark({ option, small = false }: { option: Pick<RuntimeOption, 'icon' | 'label' | 'iconSrc'>; small?: boolean }) {
   const size = small ? 'h-5 w-5' : 'h-6 w-6';
   const iconSize = 'h-4 w-4';
-  const productIconSize = small ? 'h-[18px] w-[18px]' : 'h-5 w-5';
 
   if (option.icon === 'mindos') {
     return (
@@ -299,8 +293,8 @@ function RuntimeMark({ option, small = false }: { option: Pick<RuntimeOption, 'i
 
   if (option.iconSrc) {
     return (
-      <span className={`${size} inline-flex items-center justify-center rounded-md bg-background border border-border/50`}>
-        <img src={option.iconSrc} alt="" aria-hidden="true" className={`${productIconSize} scale-125 object-contain`} />
+      <span className={`${size} inline-flex items-center justify-center overflow-hidden rounded-md bg-background border border-border/50`}>
+        <img src={option.iconSrc} alt="" aria-hidden="true" className={`${iconSize} object-contain`} />
       </span>
     );
   }

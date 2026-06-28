@@ -1429,7 +1429,7 @@ describe('/api/agent/sessions/:sessionId/turns native runtime routing', () => {
     expect(mockLoadAcpSession).toHaveBeenCalledWith(
       'gemini',
       'agent-session-existing',
-      expect.objectContaining({ permissionMode: 'agent' }),
+      expect.objectContaining({ permissionMode: 'ask' }),
     );
     expect(listAgentRuns({ kind: 'acp' })[0]).toEqual(
       expect.objectContaining({
@@ -1470,7 +1470,7 @@ describe('/api/agent/sessions/:sessionId/turns native runtime routing', () => {
     expect(capturedAcpOptions?.cwd).toBe(realpathSync(workDir));
     expect(mockCreateAcpSession).toHaveBeenCalledWith('gemini', expect.objectContaining({
       cwd: '/tmp/mindos-test',
-      permissionMode: 'agent',
+      permissionMode: 'ask',
     }));
     const acpRuns = listAgentRuns({ kind: 'acp' });
     expect(acpRuns).toEqual([

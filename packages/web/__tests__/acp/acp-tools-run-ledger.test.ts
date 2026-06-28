@@ -62,7 +62,7 @@ describe('call_acp_agent run ledger integration', () => {
     expect(result.content[0]?.text).toContain('**Gemini CLI** responded');
     expect(mockCreateSessionFromEntry).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'gemini' }),
-      expect.objectContaining({ permissionMode: 'agent' }),
+      expect.objectContaining({ permissionMode: 'ask' }),
     );
     expect(mockCloseSession).toHaveBeenCalledWith('session-1');
     expect(listAgentRuns({ kind: 'acp' })).toEqual([

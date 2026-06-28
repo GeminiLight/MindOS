@@ -145,12 +145,12 @@ describe('ACP hook storage caches', () => {
     }));
 
     await act(async () => {
-      vi.advanceTimersByTime(30000);
+      vi.advanceTimersByTime(45000);
       await Promise.resolve();
     });
 
     expect(states.at(-1)?.loading).toBe(false);
-    expect(states.at(-1)?.error).toBe('Agent runtime detection timed out after 30000ms.');
+    expect(states.at(-1)?.error).toBe('Agent runtime detection timed out after 45000ms.');
 
     await act(async () => {
       root.unmount();

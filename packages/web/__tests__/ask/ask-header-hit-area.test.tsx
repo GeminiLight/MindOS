@@ -67,7 +67,11 @@ describe('AskHeader panel hit area', () => {
 
     expect(html).toContain('title="Session history"');
     expect(html).toContain('title="New session"');
+    expect(html).toContain('title="Save Session"');
     expect(html).toContain('title="Focus mode"');
+    expect(html.indexOf('title="New session"')).toBeLessThan(html.indexOf('title="Session history"'));
+    expect(html.indexOf('title="New session"')).toBeLessThan(html.indexOf('title="Save Session"'));
+    expect(html.indexOf('title="Session history"')).toBeLessThan(html.indexOf('title="Save Session"'));
     expect(html).not.toContain('title="Open as popup"');
     expect(html).not.toContain('title="Dock to side panel"');
     expect(html).toContain('h-9 w-9');
@@ -154,8 +158,14 @@ describe('AskHeader panel hit area', () => {
 
     expect(document.body.textContent).toContain('MindOS-linked Claude Code chats');
     expect(document.body.textContent).toContain('Claude review');
-    expect(document.body.textContent).toContain('Claude Code session session_...abcdef');
-    expect(document.body.textContent).toContain('/tmp/mind');
+    expect(document.body.textContent).toContain('Claude');
+    expect(document.body.textContent).toContain('/mind');
+    expect(document.body.textContent).toContain('session_...abcdef');
+    expect(document.body.textContent).toContain('1 msgs');
+    expect(document.body.textContent).not.toContain('Claude Code session session_...abcdef');
+    expect(document.body.textContent).not.toContain('/tmp/mind');
+    expect(document.body.querySelector('[title*="session_1234567890abcdef"]')).toBeTruthy();
+    expect(document.body.querySelector('[title*="/tmp/mind"]')).toBeTruthy();
     expect(document.body.textContent).toContain('New chat');
 
     await act(async () => {

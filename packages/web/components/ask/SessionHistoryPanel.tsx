@@ -1,149 +1,56 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback, useMemo, useTransition, useDeferredValue, memo } from 'react';
-import { AlertCircle, Archive, GitFork, Loader2, RefreshCw, Search, Trash2, Pencil, Pin, PinOff, Link2, MessageSquare, SquarePen, X } from 'lucide-react';
-import type { AgentRuntimeIdentity, ChatSession, CodexThreadSummary } from '@/lib/types';
+import { useState, useRef, useEffect, useCallback, useMemo, useTransition, useDeferredValue, memo, type ReactNode } from 'react';
+import { AlertCircle, Loader2, RefreshCw, Search, Link2, MessageSquare, SquarePen, X } from 'lucide-react';
+import type { AgentRuntimeIdentity, ChatSession } from '@/lib/types';
 import { sessionTitle } from '@/hooks/useAskSession';
 import { useRunSummary } from '@/lib/agent-run-store';
-import { getRuntimeSessionSummary, shortRuntimeSessionId } from '@/lib/ask-agent';
 import { useLocale } from '@/lib/stores/locale-store';
-import { StableRowActionButton, StableRowTrailingSlot } from '@/components/shared/StableRowChrome';
+import { SessionRowActions } from '@/components/shared/SessionRowActions';
+import {
+  type RuntimeSessionEntry,
+} from '@/lib/runtime-session-entry';
+import {
+  buildChatSessionListEntry,
+  buildRuntimeSessionListEntry,
+  pluralizeSessionListCount,
+  sessionListEntryMatchesSearch,
+  type ChatSessionListEntry,
+  type RuntimeSessionListEntry,
+} from '@/lib/session-list-entry';
+import { SessionHistoryRow } from './SessionHistoryRow';
 
 interface SessionHistoryPanelProps {
   sessions: ChatSession[];
   activeSessionId: string | null;
   selectedAgentRuntime?: AgentRuntimeIdentity | null;
-  codexThreads?: CodexThreadSummary[];
-  codexThreadsLoading?: boolean;
-  codexThreadsError?: string | null;
-  codexThreadActionId?: string | null;
+  runtimeSessions?: RuntimeSessionEntry[];
+  runtimeSessionsLoading?: boolean;
+  runtimeSessionsError?: string | null;
+  runtimeSessionActionId?: string | null;
+  runtimeSessionsSupported?: boolean;
   onLoad: (id: string) => void;
   onDelete: (id: string) => void;
+  onForkSession?: (id: string) => void;
   onRename: (id: string, title: string) => void;
   onTogglePin: (id: string) => void;
   onClearAll: () => void;
   onClose: () => void;
   onNewChat: () => void;
-  onRefreshCodexThreads?: () => void;
-  onAttachCodexThread?: (thread: CodexThreadSummary) => void;
-  onForkCodexThread?: (thread: CodexThreadSummary) => void;
-  onArchiveCodexThread?: (thread: CodexThreadSummary) => void;
+  onRefreshRuntimeSessions?: () => void;
+  onAttachRuntimeSession?: (entry: RuntimeSessionEntry) => void;
+  onForkRuntimeSession?: (entry: RuntimeSessionEntry) => void;
+  onArchiveRuntimeSession?: (entry: RuntimeSessionEntry) => void;
 }
 
-// ── Helpers ──
+type HistoryRow =
+  | { kind: 'session'; id: string; session: ChatSession; listEntry: ChatSessionListEntry; updatedAt: number; pinned: boolean }
+  | { kind: 'runtime-session'; id: string; entry: RuntimeSessionEntry; listEntry: RuntimeSessionListEntry; updatedAt: number; pinned: false };
 
-function formatRelativeTime(date: Date): string {
-  const now = Date.now();
-  const diff = now - date.getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  if (days < 7) return `${days}d ago`;
-  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-}
-
-function getTimeGroup(ts: number): 'pinned' | 'today' | 'yesterday' | 'week' | 'older' {
-  const now = new Date();
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-  const startOfYesterday = startOfToday - 86400000;
-  const startOfWeek = startOfToday - now.getDay() * 86400000;
-  if (ts >= startOfToday) return 'today';
-  if (ts >= startOfYesterday) return 'yesterday';
-  if (ts >= startOfWeek) return 'week';
-  return 'older';
-}
-
-function sessionPreview(s: ChatSession): string {
-  const firstUser = s.messages.find(m => m.role === 'user');
-  if (!firstUser) return '';
-  const text = firstUser.content.replace(/\s+/g, ' ').trim();
-  return text.length > 60 ? `${text.slice(0, 60)}...` : text;
-}
-
-type RuntimeSessionSummary = ReturnType<typeof getRuntimeSessionSummary>;
-
-interface SessionHistoryMeta {
-  title: string;
-  preview: string;
-  runtimeSummary: RuntimeSessionSummary;
-  searchText: string;
-  hasListContent: boolean;
-}
-
-function normalizeSearchPart(value: unknown): string {
-  if (value === null || value === undefined) return '';
-  return String(value).trim().toLowerCase();
-}
-
-function buildSessionHistoryMeta(session: ChatSession): SessionHistoryMeta {
-  const title = sessionTitle(session);
-  const preview = sessionPreview(session);
-  const runtimeSummary = getRuntimeSessionSummary(session);
-  const searchParts = [
-    title,
-    preview,
-    runtimeSummary?.idLabel,
-    runtimeSummary?.cwd,
-    runtimeSummary?.status,
-    runtimeSummary?.binding.externalSessionId,
-  ];
-
-  for (const message of session.messages) {
-    searchParts.push(message.content);
-  }
-
-  return {
-    title,
-    preview,
-    runtimeSummary,
-    searchText: searchParts.map(normalizeSearchPart).filter(Boolean).join('\n'),
-    hasListContent: session.messages.length > 0 || Boolean(runtimeSummary),
-  };
-}
-
-function buildCodexThreadSearchText(thread: CodexThreadSummary): string {
-  return [
-    thread.id,
-    thread.name,
-    thread.preview,
-    thread.cwd,
-    codexThreadStatus(thread),
-  ].map(normalizeSearchPart).filter(Boolean).join('\n');
-}
-
-function timestampMs(value: CodexThreadSummary['updatedAt'] | CodexThreadSummary['createdAt']): number | null {
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    return value < 10_000_000_000 ? value * 1000 : value;
-  }
-  if (typeof value === 'string') {
-    const parsed = Date.parse(value);
-    if (Number.isFinite(parsed)) return parsed;
-  }
-  return null;
-}
-
-function codexThreadTitle(thread: CodexThreadSummary): string {
-  const title = thread.name?.trim() || thread.preview?.trim();
-  if (title) return title.length > 56 ? `${title.slice(0, 56)}...` : title;
-  return `Thread ${shortRuntimeSessionId(thread.id)}`;
-}
-
-function codexThreadPreview(thread: CodexThreadSummary): string {
-  const preview = thread.preview?.trim();
-  if (!preview || preview === thread.name?.trim()) return '';
-  return preview.length > 72 ? `${preview.slice(0, 72)}...` : preview;
-}
-
-function codexThreadStatus(thread: CodexThreadSummary): string | null {
-  if (thread.archived) return 'archived';
-  return typeof thread.status === 'string' && thread.status.trim() ? thread.status : null;
-}
-
-function pluralize(count: number, singular: string, plural: string): string {
-  return `${count} ${count === 1 ? singular : plural}`;
+function compareHistoryRows(a: HistoryRow, b: HistoryRow): number {
+  if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+  if (a.updatedAt !== b.updatedAt) return b.updatedAt - a.updatedAt;
+  return a.id.localeCompare(b.id);
 }
 
 // ── Main Component ──
@@ -151,13 +58,15 @@ function pluralize(count: number, singular: string, plural: string): string {
 function SessionHistoryPanel({
   sessions, activeSessionId,
   selectedAgentRuntime,
-  codexThreads = [],
-  codexThreadsLoading = false,
-  codexThreadsError = null,
-  codexThreadActionId = null,
-  onLoad, onDelete, onRename, onTogglePin, onClearAll,
+  runtimeSessions = [],
+  runtimeSessionsLoading = false,
+  runtimeSessionsError = null,
+  runtimeSessionActionId = null,
+  runtimeSessionsSupported = false,
+  onLoad, onDelete, onRename, onTogglePin,
+  onForkSession,
   onClose, onNewChat,
-  onRefreshCodexThreads, onAttachCodexThread, onForkCodexThread, onArchiveCodexThread,
+  onRefreshRuntimeSessions, onAttachRuntimeSession, onForkRuntimeSession, onArchiveRuntimeSession,
 }: SessionHistoryPanelProps) {
   const { t } = useLocale();
   const [, startTransition] = useTransition();
@@ -169,8 +78,6 @@ function SessionHistoryPanel({
   const [query, setQuery] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
-  const [confirmClearAll, setConfirmClearAll] = useState(false);
-  const clearTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const searchRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const normalizedQuery = query.trim().toLowerCase();
@@ -183,64 +90,80 @@ function SessionHistoryPanel({
   // Focus rename input
   useEffect(() => { if (editingId) setTimeout(() => inputRef.current?.focus(), 0); }, [editingId]);
 
-  // Clear timer cleanup
-  useEffect(() => () => { if (clearTimer.current) clearTimeout(clearTimer.current); }, []);
-
-  const sessionMetaById = useMemo(() => {
-    const index = new Map<string, SessionHistoryMeta>();
+  const sessionEntryById = useMemo(() => {
+    const index = new Map<string, ChatSessionListEntry>();
     for (const session of sessions) {
-      index.set(session.id, buildSessionHistoryMeta(session));
+      index.set(session.id, buildChatSessionListEntry(session));
     }
     return index;
   }, [sessions]);
 
-  const codexThreadSearchTextById = useMemo(() => {
-    const index = new Map<string, string>();
-    for (const thread of codexThreads) {
-      index.set(thread.id, buildCodexThreadSearchText(thread));
+  const runtimeSessionEntryById = useMemo(() => {
+    const index = new Map<string, RuntimeSessionListEntry>();
+    for (const entry of runtimeSessions) {
+      index.set(entry.id, buildRuntimeSessionListEntry(entry));
     }
     return index;
-  }, [codexThreads]);
+  }, [runtimeSessions]);
 
   // Filter sessions by search query
   const filtered = useMemo(() => {
     if (!searchQuery) return sessions;
-    return sessions.filter(s => sessionMetaById.get(s.id)?.searchText.includes(searchQuery));
-  }, [sessions, searchQuery, sessionMetaById]);
+    return sessions.filter((session) => {
+      const entry = sessionEntryById.get(session.id);
+      return entry ? sessionListEntryMatchesSearch(entry, searchQuery) : false;
+    });
+  }, [sessions, searchQuery, sessionEntryById]);
 
-  const filteredCodexThreads = useMemo(() => {
-    if (selectedAgentRuntime?.kind !== 'codex') return [];
-    if (!searchQuery) return codexThreads;
-    return codexThreads.filter((thread) => codexThreadSearchTextById.get(thread.id)?.includes(searchQuery));
-  }, [codexThreads, codexThreadSearchTextById, searchQuery, selectedAgentRuntime?.kind]);
-
-  // Group sessions by time
-  const groups = useMemo(() => {
-    const pinned: ChatSession[] = [];
-    const today: ChatSession[] = [];
-    const yesterday: ChatSession[] = [];
-    const week: ChatSession[] = [];
-    const older: ChatSession[] = [];
-
-    for (const s of filtered) {
-      if (s.pinned) { pinned.push(s); continue; }
-      const group = getTimeGroup(s.updatedAt);
-      if (group === 'today') today.push(s);
-      else if (group === 'yesterday') yesterday.push(s);
-      else if (group === 'week') week.push(s);
-      else older.push(s);
-    }
-    return { pinned, today, yesterday, week, older };
-  }, [filtered]);
+  const filteredRuntimeSessions = useMemo(() => {
+    if (!runtimeSessionsSupported) return [];
+    if (!searchQuery) return runtimeSessions;
+    return runtimeSessions.filter((entry) => {
+      const listEntry = runtimeSessionEntryById.get(entry.id);
+      return listEntry ? sessionListEntryMatchesSearch(listEntry, searchQuery) : false;
+    });
+  }, [runtimeSessionEntryById, runtimeSessions, runtimeSessionsSupported, searchQuery]);
 
   const pinnedCount = useMemo(() => sessions.filter(s => s.pinned).length, [sessions]);
   const totalCount = useMemo(() => {
     let count = 0;
     for (const session of sessions) {
-      if (sessionMetaById.get(session.id)?.hasListContent) count += 1;
+      if (sessionEntryById.get(session.id)?.hasListContent) count += 1;
     }
     return count;
-  }, [sessions, sessionMetaById]);
+  }, [sessions, sessionEntryById]);
+  const showRuntimeSessions = Boolean(selectedAgentRuntime && runtimeSessionsSupported);
+  const historyRows = useMemo<HistoryRow[]>(() => {
+    const rows: HistoryRow[] = filtered.map((session) => {
+      const listEntry = sessionEntryById.get(session.id) ?? buildChatSessionListEntry(session);
+      return {
+        kind: 'session',
+        id: session.id,
+        session,
+        listEntry,
+        updatedAt: listEntry.updatedAtMs ?? 0,
+        pinned: listEntry.pinned,
+      };
+    });
+
+    if (showRuntimeSessions) {
+      for (const entry of filteredRuntimeSessions) {
+        const listEntry = runtimeSessionEntryById.get(entry.id) ?? buildRuntimeSessionListEntry(entry);
+        rows.push({
+          kind: 'runtime-session',
+          id: entry.id,
+          entry,
+          listEntry,
+          updatedAt: listEntry.updatedAtMs ?? 0,
+          pinned: false,
+        });
+      }
+    }
+
+    rows.sort(compareHistoryRows);
+    return rows;
+  }, [filtered, filteredRuntimeSessions, runtimeSessionEntryById, sessionEntryById, showRuntimeSessions]);
+  const totalHistoryCount = totalCount + (showRuntimeSessions ? runtimeSessions.length : 0);
 
   const handleLoad = useCallback((id: string) => {
     startTransition(() => {
@@ -270,20 +193,6 @@ function SessionHistoryPanel({
     });
   }, [editingId, editValue, onRename]);
 
-  const handleClearAll = useCallback(() => {
-    if (!confirmClearAll) {
-      setConfirmClearAll(true);
-      if (clearTimer.current) clearTimeout(clearTimer.current);
-      clearTimer.current = setTimeout(() => setConfirmClearAll(false), 3000);
-      return;
-    }
-    startTransition(() => {
-      if (clearTimer.current) clearTimeout(clearTimer.current);
-      onClearAll();
-      setConfirmClearAll(false);
-    });
-  }, [confirmClearAll, onClearAll]);
-
   // Keyboard: Esc to close
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -293,54 +202,15 @@ function SessionHistoryPanel({
     return () => document.removeEventListener('keydown', handler);
   }, [onClose, editingId]);
 
-  const renderGroup = (label: string, items: ChatSession[]) => {
-    if (items.length === 0) return null;
-    return (
-      <div key={label}>
-        <div className="text-2xs font-medium text-muted-foreground/50 uppercase tracking-wider px-1 py-2">
-          {label}
-        </div>
-        <div className="flex flex-col gap-1">
-          {items.map(s => (
-            <SessionCard
-              key={s.id}
-              session={s}
-              meta={sessionMetaById.get(s.id)}
-              isActive={s.id === activeSessionId}
-              isRunning={runSummary.running.has(s.id)}
-              isUnread={!runSummary.running.has(s.id) && runSummary.unread.has(s.id)}
-              editing={editingId === s.id}
-              editValue={editValue}
-              onEditValueChange={setEditValue}
-              inputRef={inputRef}
-              onLoad={() => handleLoad(s.id)}
-              onStartRename={() => startRename(s)}
-              onCommitRename={commitRename}
-              onCancelRename={() => setEditingId(null)}
-              onDelete={() => onDelete(s.id)}
-              onTogglePin={() => onTogglePin(s.id)}
-              ask={ask}
-            />
-          ))}
-        </div>
-      </div>
-    );
-  };
-
-  const hasResults = filtered.length > 0;
-  const showCodexThreads = selectedAgentRuntime?.kind === 'codex';
-  const isNativeRuntimeHistory = selectedAgentRuntime?.kind === 'codex' || selectedAgentRuntime?.kind === 'claude';
-  const hasAnyResults = hasResults || filteredCodexThreads.length > 0 || (showCodexThreads && codexThreadsLoading);
-  const statsLabel = showCodexThreads
-    ? `${pluralize(totalCount, 'saved chat', 'saved chats')} · ${pluralize(codexThreads.length, 'Codex thread', 'Codex threads')}`
+  const hasAnyResults = historyRows.length > 0 || (showRuntimeSessions && (runtimeSessionsLoading || Boolean(runtimeSessionsError)));
+  const statsLabel = showRuntimeSessions
+    ? pluralizeSessionListCount(totalHistoryCount, 'session', 'sessions')
     : (ask?.historyStats?.(totalCount) ?? `${totalCount} conversations`);
-  const clearLabel = isNativeRuntimeHistory ? 'Clear saved chats' : (ask?.clearAll ?? 'Clear all');
-  const confirmClearLabel = isNativeRuntimeHistory ? 'Confirm clear saved chats?' : (ask?.confirmClear ?? 'Confirm clear?');
 
   return (
     <div className="flex flex-col flex-1 min-h-0 animate-in fade-in-0 duration-150">
       {/* Search bar */}
-      <div className="px-4 pt-3 pb-2 shrink-0">
+      <div className="px-4 pt-2.5 pb-1.5 shrink-0">
         <div className="relative">
           <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/50" />
           <input
@@ -349,13 +219,14 @@ function SessionHistoryPanel({
             value={query}
             onChange={e => setQuery(e.target.value)}
             placeholder={ask?.historySearch ?? 'Search conversations...'}
-            className="w-full pl-8 pr-8 py-2 text-xs rounded-lg border border-border bg-background text-foreground placeholder:text-muted-foreground/40 outline-none focus-visible:border-[var(--amber)]/40 transition-colors"
+            className="h-8 w-full rounded-md border border-border bg-background pl-8 pr-8 text-xs text-foreground outline-none transition-colors placeholder:text-muted-foreground/40 focus-visible:border-[var(--amber)]/40 focus-visible:ring-2 focus-visible:ring-ring/20"
           />
           {query && (
             <button
               type="button"
               onClick={() => setQuery('')}
-              className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded text-muted-foreground/40 hover:text-foreground"
+              aria-label="Clear search"
+              className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground/40 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <X size={12} />
             </button>
@@ -364,15 +235,29 @@ function SessionHistoryPanel({
       </div>
 
       {/* Stats bar */}
-      <div className="flex items-center justify-between px-4 pb-2 shrink-0">
-        <span className="text-2xs text-muted-foreground/60">
-          {statsLabel}
-          {pinnedCount > 0 && <> &middot; {pinnedCount} {ask?.historyPinned ?? 'pinned'}</>}
+      <div className="flex items-center justify-between px-4 pb-1.5 shrink-0">
+        <span className="flex min-w-0 items-center gap-1.5 text-2xs text-muted-foreground/60">
+          <span className="min-w-0 truncate">
+            {statsLabel}
+            {pinnedCount > 0 && <> &middot; {pinnedCount} {ask?.historyPinned ?? 'pinned'}</>}
+          </span>
+          {showRuntimeSessions && onRefreshRuntimeSessions && (
+            <button
+              type="button"
+              onClick={onRefreshRuntimeSessions}
+              disabled={runtimeSessionsLoading}
+              className="hit-target-box inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground/45 transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [--hit-target-radius:var(--radius-md)]"
+              title="Refresh runtime sessions"
+              aria-label="Refresh runtime sessions"
+            >
+              {runtimeSessionsLoading ? <Loader2 size={11} className="animate-spin" /> : <RefreshCw size={11} />}
+            </button>
+          )}
         </span>
         <button
           type="button"
           onClick={handleNewChat}
-          className="flex items-center gap-1 text-2xs text-[var(--amber)] hover:text-[var(--amber)]/80 transition-colors"
+          className="hit-target-box inline-flex min-h-6 items-center gap-1 rounded-md px-1.5 text-2xs text-[var(--amber)] transition-colors hover:text-[var(--amber)]/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <SquarePen size={11} />
           <span>{t.hints?.newChat ?? 'New chat'}</span>
@@ -382,24 +267,59 @@ function SessionHistoryPanel({
       {/* Scrollable list */}
       <div className="flex-1 overflow-y-auto min-h-0 px-3 pb-3">
         {hasAnyResults ? (
-          <div className="flex flex-col gap-1">
-            {showCodexThreads && (
-              <CodexThreadSection
-                threads={filteredCodexThreads}
-                loading={codexThreadsLoading}
-                error={codexThreadsError}
-                actionId={codexThreadActionId}
-                onRefresh={onRefreshCodexThreads}
-                onAttach={onAttachCodexThread}
-                onFork={onForkCodexThread}
-                onArchive={onArchiveCodexThread}
+          <div className="flex flex-col gap-0.5">
+            {showRuntimeSessions && runtimeSessionsError && (
+              <RuntimeHistoryNotice
+                tone="error"
+                icon={<AlertCircle size={12} className="mt-0.5 shrink-0 text-error" />}
+                text={runtimeSessionsError}
               />
             )}
-            {renderGroup(ask?.historyPinned ?? 'Pinned', groups.pinned)}
-            {renderGroup(ask?.historyToday ?? 'Today', groups.today)}
-            {renderGroup(ask?.historyYesterday ?? 'Yesterday', groups.yesterday)}
-            {renderGroup(ask?.historyThisWeek ?? 'This week', groups.week)}
-            {renderGroup(ask?.historyOlder ?? 'Older', groups.older)}
+            {showRuntimeSessions && runtimeSessionsLoading && filteredRuntimeSessions.length === 0 && (
+              <RuntimeHistoryNotice
+                icon={<Loader2 size={12} className="animate-spin text-muted-foreground/50" />}
+                text="Loading runtime sessions..."
+              />
+            )}
+            {historyRows.map((row) => (
+              row.kind === 'session' ? (
+                <SessionHistoryRow
+                  key={`session:${row.id}`}
+                  session={row.session}
+                  title={row.listEntry.title}
+                  preview={row.listEntry.preview}
+                  runtimeSummary={row.listEntry.runtimeSummary}
+                  isActive={row.id === activeSessionId}
+                  isRunning={runSummary.running.has(row.id)}
+                  isUnread={!runSummary.running.has(row.id) && runSummary.unread.has(row.id)}
+                  editing={editingId === row.id}
+                  editValue={editValue}
+                  onEditValueChange={setEditValue}
+                  inputRef={inputRef}
+                  onLoad={() => handleLoad(row.id)}
+                  onStartRename={() => startRename(row.session)}
+                  onCommitRename={commitRename}
+                  onCancelRename={() => setEditingId(null)}
+                  onArchive={() => onDelete(row.id)}
+                  onFork={onForkSession ? () => {
+                    onForkSession(row.id);
+                    onClose();
+                  } : undefined}
+                  onTogglePin={() => onTogglePin(row.id)}
+                  ask={ask}
+                />
+              ) : (
+                <RuntimeSessionRow
+                  key={`runtime-session:${row.id}`}
+                  entry={row.entry}
+                  listEntry={row.listEntry}
+                  busy={runtimeSessionActionId === row.id}
+                  onAttach={onAttachRuntimeSession}
+                  onFork={onForkRuntimeSession}
+                  onArchive={onArchiveRuntimeSession}
+                />
+              )
+            ))}
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center py-12 text-center">
@@ -416,30 +336,6 @@ function SessionHistoryPanel({
         )}
       </div>
 
-      {/* Footer */}
-      {totalCount > 0 && (
-        <div className="flex items-center justify-between px-4 py-2.5 border-t border-border/40 shrink-0">
-          <button
-            type="button"
-            onClick={handleClearAll}
-            className={`text-2xs px-2 py-0.5 rounded-md transition-colors ${
-              confirmClearAll
-                ? 'bg-error/10 text-error font-medium'
-                : 'text-muted-foreground/50 hover:text-error hover:bg-muted'
-            }`}
-          >
-            <span className="flex items-center gap-1">
-              <Trash2 size={10} />
-              {confirmClearAll ? confirmClearLabel : clearLabel}
-            </span>
-          </button>
-          <span className="text-2xs text-muted-foreground/40 tabular-nums">
-            {showCodexThreads
-              ? pluralize(totalCount, 'saved', 'saved')
-              : (ask?.historyCapacity?.(totalCount) ?? `${totalCount} of 30`)}
-          </span>
-        </div>
-      )}
     </div>
   );
 }
@@ -449,328 +345,144 @@ function SessionHistoryPanel({
 // a stream, so memo keeps the open history panel from reconciling per chunk.
 export default memo(SessionHistoryPanel);
 
-function CodexThreadSection({
-  threads,
-  loading,
-  error,
-  actionId,
-  onRefresh,
-  onAttach,
-  onFork,
-  onArchive,
+function RuntimeHistoryNotice({
+  icon,
+  text,
+  tone = 'muted',
 }: {
-  threads: CodexThreadSummary[];
-  loading: boolean;
-  error: string | null;
-  actionId: string | null;
-  onRefresh?: () => void;
-  onAttach?: (thread: CodexThreadSummary) => void;
-  onFork?: (thread: CodexThreadSummary) => void;
-  onArchive?: (thread: CodexThreadSummary) => void;
+  icon: ReactNode;
+  text: string;
+  tone?: 'muted' | 'error';
 }) {
   return (
-    <div>
-      <div className="flex items-center justify-between px-1 py-2">
-        <div className="text-2xs font-medium text-muted-foreground/50 uppercase tracking-wider">
-          Codex local threads
-        </div>
-        {onRefresh && (
-          <button
-            type="button"
-            onClick={onRefresh}
-            disabled={loading}
-            className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground/45 transition-colors hover:bg-muted/60 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            title="Refresh Codex threads"
-          >
-            {loading ? <Loader2 size={11} className="animate-spin" /> : <RefreshCw size={11} />}
-          </button>
-        )}
-      </div>
-
-      {error && (
-        <div className="mb-1 flex items-start gap-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-2xs text-muted-foreground">
-          <AlertCircle size={12} className="mt-0.5 shrink-0 text-error" />
-          <span className="min-w-0">{error}</span>
-        </div>
-      )}
-
-      {loading && threads.length === 0 && (
-        <div className="flex items-center gap-2 rounded-lg border border-border/50 px-3 py-2 text-2xs text-muted-foreground/60">
-          <Loader2 size={12} className="animate-spin" />
-          <span>Loading Codex threads...</span>
-        </div>
-      )}
-
-      {!loading && !error && threads.length === 0 && (
-        <div className="rounded-lg border border-border/50 px-3 py-2 text-2xs text-muted-foreground/50">
-          No Codex threads found.
-        </div>
-      )}
-
-      {threads.length > 0 && (
-        <div className="flex flex-col gap-1">
-          {threads.map((thread) => (
-            <CodexThreadRow
-              key={thread.id}
-              thread={thread}
-              busy={actionId === thread.id}
-              onAttach={onAttach}
-              onFork={onFork}
-              onArchive={onArchive}
-            />
-          ))}
-        </div>
-      )}
+    <div
+      className={`mb-0.5 flex items-start gap-2 rounded-md border px-3 py-2 text-2xs ${
+        tone === 'error'
+          ? 'border-border/60 bg-muted/30 text-muted-foreground'
+          : 'border-border/50 text-muted-foreground/60'
+      }`}
+    >
+      {icon}
+      <span className="min-w-0">{text}</span>
     </div>
   );
 }
 
-function CodexThreadRow({
-  thread,
+function RuntimeSessionRow({
+  entry,
+  listEntry,
   busy,
   onAttach,
   onFork,
   onArchive,
 }: {
-  thread: CodexThreadSummary;
+  entry: RuntimeSessionEntry;
+  listEntry: RuntimeSessionListEntry;
   busy: boolean;
-  onAttach?: (thread: CodexThreadSummary) => void;
-  onFork?: (thread: CodexThreadSummary) => void;
-  onArchive?: (thread: CodexThreadSummary) => void;
+  onAttach?: (entry: RuntimeSessionEntry) => void;
+  onFork?: (entry: RuntimeSessionEntry) => void;
+  onArchive?: (entry: RuntimeSessionEntry) => void;
 }) {
-  const title = codexThreadTitle(thread);
-  const preview = codexThreadPreview(thread);
-  const status = codexThreadStatus(thread);
-  const updatedAt = timestampMs(thread.updatedAt ?? thread.createdAt);
-
-  return (
-    <div className="group rounded-lg border border-transparent px-3 py-2.5 transition-colors hover:bg-muted/60">
-      <div className="flex items-start gap-2">
-        <button
-          type="button"
-          onClick={() => onAttach?.(thread)}
-          disabled={busy || !onAttach}
-          className="mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[var(--amber)] transition-colors hover:bg-[var(--amber)]/10 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          title="Open this Codex thread"
-        >
-          {busy ? <Loader2 size={12} className="animate-spin" /> : <Link2 size={12} />}
-        </button>
-        <div className="min-w-0 flex-1">
-          <div className="flex min-w-0 items-center gap-1.5">
-            <span className="truncate text-xs font-medium text-foreground">{title}</span>
-            {status && (
-              <span className="shrink-0 rounded-full border border-border/50 px-1 py-0 text-[9px] text-muted-foreground/60">
-                {status}
-              </span>
-            )}
-            {updatedAt && (
-              <span className="shrink-0 text-2xs tabular-nums text-muted-foreground/40">
-                {formatRelativeTime(new Date(updatedAt))}
-              </span>
-            )}
-          </div>
-          {preview && (
-            <div className="mt-0.5 truncate text-2xs text-muted-foreground/50">{preview}</div>
-          )}
-          <div className="mt-1 flex min-w-0 items-center gap-1 text-[10px] text-muted-foreground/40">
-            <span className="shrink-0 font-mono">{shortRuntimeSessionId(thread.id)}</span>
-            {thread.cwd && (
-              <>
-                <span className="shrink-0">·</span>
-                <span className="truncate font-mono">{thread.cwd}</span>
-              </>
-            )}
-          </div>
-        </div>
-        <StableRowTrailingSlot
-          reserveClassName="w-16"
-          actions={(
-            <>
-              <StableRowActionButton
-                onClick={() => onFork?.(thread)}
-                disabled={busy || !onFork}
-                title="Fork Codex thread"
-              >
-                <GitFork size={11} />
-              </StableRowActionButton>
-              <StableRowActionButton
-                tone="danger"
-                onClick={() => onArchive?.(thread)}
-                disabled={busy || !onArchive}
-                title="Archive Codex thread"
-              >
-                <Archive size={11} />
-              </StableRowActionButton>
-            </>
-          )}
-        />
-      </div>
-    </div>
-  );
-}
-
-// ── Session Card ──
-
-function SessionCard({
-  session: s, meta, isActive, isRunning, isUnread, editing, editValue, onEditValueChange, inputRef,
-  onLoad, onStartRename, onCommitRename, onCancelRename, onDelete, onTogglePin,
-  ask,
-}: {
-  session: ChatSession;
-  meta?: SessionHistoryMeta;
-  isActive: boolean;
-  isRunning: boolean;
-  isUnread: boolean;
-  editing: boolean;
-  editValue: string;
-  onEditValueChange: (v: string) => void;
-  inputRef: React.RefObject<HTMLInputElement | null>;
-  onLoad: () => void;
-  onStartRename: () => void;
-  onCommitRename: () => void;
-  onCancelRename: () => void;
-  onDelete: () => void;
-  onTogglePin: () => void;
-  ask: Record<string, any>;
-}) {
-  const title = meta?.title ?? sessionTitle(s);
-  const preview = meta?.preview ?? sessionPreview(s);
-  const msgCount = s.messages.length;
-  const runtimeSummary = meta?.runtimeSummary ?? getRuntimeSessionSummary(s);
-  const statusIndicator = !editing && isRunning ? (
-    <span
-      data-testid="session-running-indicator"
-      title={ask?.sessionRunningIndicator}
-      aria-label={ask?.sessionRunningIndicator}
-      className="inline-flex text-[var(--amber)]"
-    >
-      <Loader2 size={11} className="animate-spin" />
-    </span>
-  ) : !editing && isUnread ? (
-    <span
-      data-testid="session-unread-indicator"
-      title={ask?.sessionUnreadIndicator}
-      aria-label={ask?.sessionUnreadIndicator}
-      className="h-1.5 w-1.5 rounded-full bg-[var(--amber)]"
-    />
-  ) : !editing && s.pinned ? (
-    <Pin size={10} className="-rotate-45 text-[var(--amber)]/70" />
-  ) : null;
+  const title = listEntry.title;
+  const noun = listEntry.noun;
+  const updatedAtLabel = listEntry.updatedAtLabel;
+  const disabled = busy || !onAttach;
+  const hasActions = Boolean(onFork || onArchive);
+  const titleTrailingInsetClass = updatedAtLabel
+    ? busy
+      ? 'pr-16'
+      : 'pr-14'
+    : busy
+      ? 'pr-6'
+      : undefined;
 
   return (
     <div
-      className={`group relative rounded-lg transition-colors cursor-pointer ${
-        isActive
-          ? 'bg-[var(--amber)]/8 border border-[var(--amber)]/15'
-          : 'hover:bg-muted/60 border border-transparent'
+      data-runtime-session-row
+      role="button"
+      tabIndex={disabled ? -1 : 0}
+      aria-disabled={disabled}
+      aria-label={`Open ${noun}: ${title}`}
+      title={`Open this ${noun}`}
+      onClick={() => {
+        if (!disabled) onAttach?.(entry);
+      }}
+      onKeyDown={(event) => {
+        if (disabled) return;
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onAttach?.(entry);
+        }
+      }}
+      className={`group cursor-pointer rounded-md border border-transparent px-3 py-1.5 transition-colors hover:bg-muted/55 focus-within:bg-muted/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+        disabled ? 'cursor-not-allowed opacity-50' : ''
       }`}
-      onClick={onLoad}
     >
-      {/* Active indicator */}
-      {isActive && (
-        <span className="absolute left-0 top-3 bottom-3 w-[2px] rounded-r-full bg-[var(--amber)]" />
-      )}
-
-      <div className="px-3 py-2.5">
-        {/* Title row */}
-        <div className="flex items-center gap-1.5 mb-0.5">
-          {editing ? (
-            <input
-              ref={inputRef}
-              type="text"
-              value={editValue}
-              onChange={e => onEditValueChange(e.target.value)}
-              onBlur={onCommitRename}
-              onKeyDown={e => {
-                if (e.key === 'Enter') { e.preventDefault(); onCommitRename(); }
-                if (e.key === 'Escape') { e.preventDefault(); onCancelRename(); }
-              }}
-              onClick={e => e.stopPropagation()}
-              className="flex-1 min-w-0 bg-transparent border-b border-[var(--amber)] outline-none text-xs font-medium text-foreground"
-            />
-          ) : (
-            <span className="flex-1 min-w-0 text-xs font-medium text-foreground truncate">
-              {title}
-            </span>
-          )}
-          <span className="text-2xs text-muted-foreground/40 shrink-0 tabular-nums">
-            {formatRelativeTime(new Date(s.updatedAt))}
+      <div className="relative flex min-w-0 items-center gap-1.5">
+        <span className={`min-w-0 flex-1 truncate text-xs font-medium text-foreground ${titleTrailingInsetClass ?? ''}`}>
+          {title}
+        </span>
+        {(updatedAtLabel || busy) && (
+          <span
+            data-session-row-time
+            className={`pointer-events-none absolute right-0 top-1/2 inline-flex -translate-y-1/2 items-center gap-1.5 text-2xs tabular-nums text-muted-foreground/40 transition-opacity duration-100 ${
+              hasActions ? 'group-hover:opacity-0 group-focus-within:opacity-0' : ''
+            }`}
+          >
+            {busy && (
+              <Loader2 size={11} className="shrink-0 animate-spin text-[var(--amber)]" />
+            )}
+            {updatedAtLabel && (
+              <span className="shrink-0">
+                {updatedAtLabel}
+              </span>
+            )}
           </span>
-          <StableRowTrailingSlot
-            reserveClassName="w-[5.75rem]"
-            status={statusIndicator}
-            actions={(
-              <>
-                <StableRowActionButton
-                  tone="amber"
-                  active={s.pinned}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onTogglePin();
-                  }}
-                  title={s.pinned ? 'Unpin' : 'Pin'}
-                >
-                  {s.pinned ? <PinOff size={11} /> : <Pin size={11} />}
-                </StableRowActionButton>
-                <StableRowActionButton
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onStartRename();
-                  }}
-                  title={ask?.renameSession ?? 'Rename'}
-                >
-                  <Pencil size={11} />
-                </StableRowActionButton>
-                <StableRowActionButton
-                  tone="danger"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDelete();
-                  }}
-                  title="Delete"
-                >
-                  <Trash2 size={11} />
-                </StableRowActionButton>
-              </>
-            )}
-          />
-        </div>
-
-        {/* Preview */}
-        {!editing && preview && (
-          <p className="text-2xs text-muted-foreground/50 truncate mt-0.5 pl-0.5">
-            {preview}
-          </p>
         )}
-
-        {!editing && runtimeSummary && (
-          <div className="mt-1.5 space-y-0.5 pl-0.5">
-            <div className="flex min-w-0 items-center gap-1 text-2xs text-muted-foreground/50">
-              <Link2 size={9} className="shrink-0 text-[var(--amber)]/70" />
-              <span className="truncate">{runtimeSummary.idLabel}</span>
-              {runtimeSummary.status && (
-                <span className="shrink-0 rounded-full border border-border/50 px-1 py-0 text-[9px] text-muted-foreground/60">
-                  {runtimeSummary.status}
-                </span>
-              )}
-            </div>
-            {runtimeSummary.cwd && (
-              <div className="truncate font-mono text-[10px] text-muted-foreground/40">
-                {runtimeSummary.cwd}
-              </div>
-            )}
-          </div>
+        {hasActions && (
+          <span
+            data-session-row-actions
+            className="pointer-events-none absolute right-0 top-1/2 z-10 inline-flex -translate-y-1/2 items-center justify-end rounded-md bg-background/90 pl-1 opacity-0 backdrop-blur-sm transition-opacity duration-100 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100"
+          >
+            <SessionRowActions
+              disabled={busy}
+              onFork={onFork ? () => onFork(entry) : undefined}
+              onArchive={onArchive ? () => onArchive(entry) : undefined}
+              labels={{
+                fork: `Fork ${noun}`,
+                archive: `Archive ${noun}`,
+              }}
+            />
+          </span>
         )}
-
-        {/* Meta row */}
-        {!editing && (
-          <div className="flex items-center mt-1.5">
-            <span className="text-2xs text-muted-foreground/40 flex items-center gap-1">
-              <MessageSquare size={9} />
-              {ask?.historyMsgs?.(msgCount) ?? `${msgCount} msgs`}
-            </span>
-          </div>
+      </div>
+      <div
+        className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[10px] text-muted-foreground/45"
+        title={listEntry.metadataTitle}
+      >
+        <span className="inline-flex shrink-0 items-center gap-1">
+          <Link2 size={9} className="text-[var(--amber)]/70" />
+          {listEntry.runtimeLabel}
+        </span>
+        {listEntry.status && (
+          <>
+            <span className="shrink-0 text-muted-foreground/25">·</span>
+            <span className="shrink-0">{listEntry.status}</span>
+          </>
         )}
+        {listEntry.compactRuntimePath && (
+          <>
+            <span className="shrink-0 text-muted-foreground/25">·</span>
+            <span className="truncate font-mono">{listEntry.compactRuntimePath}</span>
+          </>
+        )}
+        <span className="shrink-0 text-muted-foreground/25">·</span>
+        <span className="min-w-0 max-w-[8.5rem] truncate font-mono">{listEntry.compactSessionId}</span>
+        <span className="shrink-0 text-muted-foreground/25">·</span>
+        <span className="inline-flex shrink-0 items-center gap-1">
+          <MessageSquare size={9} />
+          {typeof listEntry.messageCount === 'number' ? pluralizeSessionListCount(listEntry.messageCount, 'msg', 'msgs') : '? msgs'}
+        </span>
       </div>
     </div>
   );

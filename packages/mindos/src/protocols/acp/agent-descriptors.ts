@@ -121,7 +121,6 @@ export const AGENT_ALIASES: Record<string, string> = {
   'claude-acp':  'claude',
   'codebuddy':   'codebuddy-code',
   'codex':       'codex-acp',
-  'pi-acp':      'pi',
 };
 
 /** Resolve an agent ID to its canonical form (idempotent for canonical IDs). */
@@ -136,7 +135,7 @@ export function resolveAlias(agentId: string): string {
  * Only canonical entries — aliases are handled by AGENT_ALIASES above.
  */
 export const AGENT_DESCRIPTORS: Record<string, AcpAgentDescriptor> = {
-  'gemini':          { binary: 'gemini',          detectCommands: ['gemini'],      presenceDirs: ['~/.gemini/'], cmd: 'gemini',    args: ['--experimental-acp'], installCmd: 'npm install -g @google/gemini-cli',
+  'gemini':          { binary: 'gemini',          detectCommands: ['gemini'],      presenceDirs: ['~/.gemini/'], cmd: 'gemini',    args: ['--acp'], installCmd: 'npm install -g @google/gemini-cli',
     displayName: 'Gemini CLI',
     description: 'Google Gemini 驱动的编程智能体。支持多文件编辑、代码审查、调试和项目级重构，原生集成 Google 搜索实时查询技术文档。' },
   'claude':          { binary: 'claude',          detectCommands: ['claude'],      presenceDirs: ['~/.claude/'], cmd: 'npx',       args: ['--yes', '@agentclientprotocol/claude-agent-acp'], installCmd: 'npm install -g @anthropic-ai/claude-code',
@@ -145,7 +144,7 @@ export const AGENT_DESCRIPTORS: Record<string, AcpAgentDescriptor> = {
   'codebuddy-code':  { binary: 'codebuddy',       detectCommands: ['codebuddy'],   presenceDirs: ['~/.codebuddy/'], cmd: 'codebuddy', args: ['--acp'], installCmd: 'npm install -g @tencent-ai/codebuddy-code',
     displayName: 'CodeBuddy Code',
     description: '腾讯云智能编程助手。基于混元大模型，支持代码补全、生成、审查和多文件重构，深度理解中文语境，适配国内开发生态。' },
-  'codex-acp':       { binary: 'codex',           detectCommands: ['codex'],       presenceDirs: ['~/.codex/'], cmd: 'codex',     args: [],        installCmd: 'npm install -g @openai/codex',
+  'codex-acp':       { binary: 'codex',           detectCommands: ['codex'],       presenceDirs: ['~/.codex/'], cmd: 'npx',       args: ['--yes', '@agentclientprotocol/codex-acp'], installCmd: 'npm install -g @openai/codex',
     displayName: 'Codex',
     description: 'OpenAI Codex 编程智能体。基于 GPT 系列模型，擅长代码生成、自动化任务和多语言编程支持。' },
   'cursor':          { binary: 'cursor',          detectCommands: ['cursor'],      presenceDirs: ['~/.cursor/extensions/'], cmd: 'cursor',    args: [],
@@ -160,7 +159,7 @@ export const AGENT_DESCRIPTORS: Record<string, AcpAgentDescriptor> = {
   'goose':           { binary: 'goose',           cmd: 'goose',     args: [],        installCmd: 'pip install goose-ai',
     displayName: 'Goose',
     description: 'Block 开源自主编程智能体。支持多模型后端，可扩展插件架构，擅长复杂任务自动化。' },
-  'opencode':        { binary: 'opencode',        cmd: 'opencode',  args: [],        installCmd: 'go install github.com/opencode-ai/opencode@latest',
+  'opencode':        { binary: 'opencode',        cmd: 'opencode',  args: ['acp'],   installCmd: 'go install github.com/opencode-ai/opencode@latest',
     displayName: 'OpenCode',
     description: '开源终端编程智能体。Go 实现，轻量快速，支持多模型后端和丰富的代码编辑工具。' },
   'kilo':            { binary: 'kilo',            cmd: 'kilo',      args: [],        installCmd: 'npm install -g @kilocode/cli',
@@ -169,16 +168,13 @@ export const AGENT_DESCRIPTORS: Record<string, AcpAgentDescriptor> = {
   'openclaw':        { binary: 'openclaw',        detectCommands: ['openclaw'],    presenceDirs: ['~/.openclaw/'], cmd: 'openclaw',  args: [],
     displayName: 'OpenClaw',
     description: 'OpenClaw 编程智能体。开源 Claude Code 替代方案，支持多模型后端和完整的 agentic 工作流。' },
-  'pi':              { binary: 'pi',              detectCommands: ['pi'],          presenceDirs: ['~/.pi/'], cmd: 'pi',        args: [],
-    displayName: 'Pi Agent',
-    description: 'Pi Agent 编程智能体。轻量级终端编程助手。' },
   'auggie':          { binary: 'auggie',          detectCommands: ['auggie'],      presenceDirs: ['~/.augment/'], cmd: 'auggie',    args: [],
     displayName: 'Auggie',
     description: 'Augment Code 编程智能体。支持代码理解、生成和全仓库上下文感知。' },
-  'kimi':            { binary: 'kimi',            detectCommands: ['kimi'],        presenceDirs: ['~/.kimi/'], cmd: 'kimi',      args: [],
+  'kimi':            { binary: 'kimi',            detectCommands: ['kimi'],        presenceDirs: ['~/.kimi/'], cmd: 'kimi',      args: ['acp'],
     displayName: 'Kimi',
     description: 'Moonshot AI Kimi 编程智能体。擅长超长上下文理解，支持中文语境下的代码生成与分析。' },
-  'qwen-code':       { binary: 'qwen-code',       detectCommands: ['qwen-code', 'qwen'], presenceDirs: ['~/.qwen/'], cmd: 'qwen-code', args: [], installCmd: 'npm install -g @qwen-code/qwen-code',
+  'qwen-code':       { binary: 'qwen',            detectCommands: ['qwen', 'qwen-code'], presenceDirs: ['~/.qwen/'], cmd: 'qwen',      args: ['--acp'], installCmd: 'npm install -g @qwen-code/qwen-code',
     displayName: 'Qwen Code',
     description: '阿里通义千问 Qwen 编程智能体。基于 Qwen 大模型，支持代码生成、审查和多语言编程，深度适配中文开发场景。' },
   'lingma':          { binary: 'lingma',           detectCommands: ['lingma'],      presenceDirs: ['~/.lingma/'], cmd: 'lingma',    args: [],
@@ -675,12 +671,12 @@ function sanitizeAdapterMetadata(value: unknown): AcpAgentAdapterMetadata | unde
   if (promptCapabilities) metadata.promptCapabilities = promptCapabilities;
   const mcpCapabilities = sanitizeCapabilityFlags<AcpMcpCapabilities>(
     entry.mcpCapabilities,
-    ['stdio', 'http', 'sse'],
+    ['stdio', 'http', 'sse', 'acp'],
   );
   if (mcpCapabilities) metadata.mcpCapabilities = mcpCapabilities;
   const sessionCapabilities = sanitizeCapabilityFlags<AcpAgentAdapterSessionCapabilities>(
     entry.sessionCapabilities,
-    ['loadSession', 'list', 'resume', 'fork', 'close'],
+    ['loadSession', 'list', 'delete', 'resume', 'fork', 'close'],
   );
   if (sessionCapabilities) metadata.sessionCapabilities = sessionCapabilities;
   const outputObject: Record<string, unknown> = {

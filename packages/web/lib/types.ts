@@ -397,10 +397,12 @@ export interface AcpMcpCapabilities {
   stdio?: boolean;
   http?: boolean;
   sse?: boolean;
+  acp?: boolean;
 }
 
 export interface AcpSessionCapabilities {
   list?: boolean;
+  delete?: boolean;
   resume?: boolean;
   fork?: boolean;
   close?: boolean;
@@ -470,7 +472,7 @@ export interface AcpPermissionEvent {
 
 export interface AcpSessionMcpServerSummary {
   name: string;
-  type: 'stdio' | 'http' | 'sse';
+  type: 'stdio' | 'http' | 'sse' | 'acp';
 }
 
 export interface AcpSessionControlSnapshot {
@@ -1116,6 +1118,9 @@ export interface CodexThreadSummary {
   updatedAt?: number | string;
   status?: unknown;
   archived?: boolean;
+  messageCount?: number;
+  turnCount?: number;
+  turns?: unknown[];
 }
 
 export interface CodexThreadListResponse {

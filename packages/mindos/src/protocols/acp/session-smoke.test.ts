@@ -28,7 +28,7 @@ describe('ACP stdio smoke', () => {
   it('projects real ACP session controls, commands, tools, and permission events', async () => {
     const session = await createSessionFromEntry(fakeAgentEntry(), {
       cwd: process.cwd(),
-      permissionMode: 'agent',
+      permissionMode: 'auto',
     });
     try {
       let snapshot = getSessionSnapshot(session.id);

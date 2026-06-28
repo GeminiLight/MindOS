@@ -36,7 +36,7 @@ const STORAGE_KEY = 'mindos:acp-detection:v5';
 const LEGACY_STORAGE_KEYS = ['mindos:acp-detection:v4', 'mindos:acp-detection:v3', 'mindos:acp-detection:v2', 'mindos:acp-detection'];
 const STALE_TTL_MS = 30 * 60 * 1000;
 const REVALIDATE_TTL_MS = 30 * 60 * 1000;
-const DETECTION_TIMEOUT_MS = 30000;
+const DETECTION_TIMEOUT_MS = 45000;
 
 export interface DetectionCache {
   installed: DetectedAgent[];
@@ -138,7 +138,7 @@ export function useAcpDetection(): AcpDetectionState {
     if (inflight.current) return;
     inflight.current = true;
 
-    const hasCachedData = installedAgents.length > 0 || notInstalledAgents.length > 0;
+    const hasCachedData = installedAgents.length > 0 || notInstalledAgents.length > 0 || runtimes.length > 0;
     if (!hasCachedData) setLoading(true);
     setError(null);
 

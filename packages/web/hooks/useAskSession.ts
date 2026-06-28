@@ -22,11 +22,13 @@ import type {
   SessionModelSelection,
   SessionWorkDir,
 } from '@/lib/types';
+import { chatSessionTitle } from '@/lib/session-list-entry';
 import { setMessages as storeSetMessages, useSessionMessages } from '@/lib/agent-run-store';
 import {
   attachRuntimeSession as storeAttachRuntimeSession,
   clearSessions as storeClearSessions,
   deleteSession as storeDeleteSession,
+  forkSession as storeForkSession,
   getActiveSessionId,
   initSessions as storeInitSessions,
   loadSession as storeLoadSession,
@@ -44,14 +46,7 @@ import {
 } from '@/lib/agent-session-store';
 
 export function sessionTitle(s: ChatSession): string {
-  if (s.title) return s.title;
-  const firstUser = s.messages.find((m) => m.role === 'user');
-  if (!firstUser) return '(empty session)';
-  const line = firstUser.content.replace(/\s+/g, ' ').trim();
-  if (!line && firstUser.images && firstUser.images.length > 0) {
-    return `[${firstUser.images.length} image${firstUser.images.length > 1 ? 's' : ''}]`;
-  }
-  return line.length > 42 ? `${line.slice(0, 42)}...` : line || '(empty session)';
+  return chatSessionTitle(s);
 }
 
 export function useAskSession(currentFile?: string, projectId?: string) {
@@ -89,6 +84,11 @@ export function useAskSession(currentFile?: string, projectId?: string) {
 
   const renameSession = useCallback((id: string, newTitle: string) => storeRenameSession(id, newTitle), []);
 
+  const forkSession = useCallback(
+    (id: string) => storeForkSession(id, { currentFile, projectId }),
+    [currentFile, projectId],
+  );
+
   const togglePinSession = useCallback((id: string) => storeTogglePinSession(id), []);
 
   const setSessionDefaultAcpAgent = useCallback(
@@ -124,7 +124,7 @@ export function useAskSession(currentFile?: string, projectId?: string) {
       status?: RuntimeSessionBinding['status'];
       updatedAt?: number | string;
     },
-    metadata?: { title?: string },
+    metadata?: { title?: string; messages?: Message[] },
   ): boolean => storeAttachRuntimeSession(runtime, binding, metadata, currentFile, projectId), [currentFile, projectId]);
 
   const clearSessions = useCallback(
@@ -161,6 +161,7 @@ export function useAskSession(currentFile?: string, projectId?: string) {
     loadSession,
     deleteSession,
     renameSession,
+    forkSession,
     togglePinSession,
     setSessionDefaultAcpAgent,
     setSessionAgentRuntimeBinding,

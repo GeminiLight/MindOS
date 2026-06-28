@@ -57,7 +57,7 @@ describe('spawnAcpAgent', () => {
 
     expect(mockSpawn).toHaveBeenCalledWith(
       '/Users/test/bin/gemini',
-      ['--experimental-acp'],
+      ['--acp'],
       expect.objectContaining({ shell: false }),
     );
   });
@@ -217,6 +217,81 @@ describe('createMindosClient permission policy', () => {
     });
   });
 
+  it('delegates ask-mode permission requests to the MindOS resolver', async () => {
+    const onPermissionRequest = vi.fn();
+    const onPermissionResolved = vi.fn();
+    const resolvePermissionRequest = vi.fn().mockResolvedValue({
+      outcome: { outcome: 'selected', optionId: 'allow' },
+    });
+    const client = createMindosClient(
+      makeAcpProcess(),
+      '/tmp/mind',
+      { onPermissionRequest, onPermissionResolved, resolvePermissionRequest },
+      'ask',
+    );
+
+    await expect(client.requestPermission({
+      sessionId: 'ses-1',
+      toolCall: { toolCallId: 'tc-1', status: 'pending' },
+      options: [
+        { optionId: 'allow', kind: 'allow_once', name: 'Allow' },
+        { optionId: 'reject', kind: 'reject_once', name: 'Reject' },
+      ],
+    })).resolves.toEqual({
+      outcome: { outcome: 'selected', optionId: 'allow' },
+    });
+
+    expect(resolvePermissionRequest).toHaveBeenCalledWith(expect.objectContaining({
+      event: expect.objectContaining({ status: 'pending', toolCallId: 'tc-1' }),
+      mode: 'ask',
+    }));
+    expect(onPermissionRequest).toHaveBeenCalledWith(expect.objectContaining({ status: 'pending' }));
+    expect(onPermissionResolved).toHaveBeenCalledWith(expect.objectContaining({
+      status: 'resolved',
+      selectedOptionId: 'allow',
+      outcome: 'allow_once',
+    }));
+  });
+
+  it('does not silently approve ask-mode permissions without a resolver', async () => {
+    const client = createMindosClient(makeAcpProcess(), '/tmp/mind', {}, 'ask');
+
+    await expect(client.requestPermission({
+      sessionId: 'ses-1',
+      toolCall: { toolCallId: 'tc-1', status: 'pending' },
+      options: [
+        { optionId: 'allow', kind: 'allow_once', name: 'Allow' },
+        { optionId: 'reject', kind: 'reject_once', name: 'Reject' },
+      ],
+    })).resolves.toEqual({
+      outcome: { outcome: 'selected', optionId: 'reject' },
+    });
+  });
+
+  it('uses allow-once for auto permission and allow-always for full permission', async () => {
+    const options = [
+      { optionId: 'allow-once', kind: 'allow_once' as const, name: 'Allow once' },
+      { optionId: 'allow-always', kind: 'allow_always' as const, name: 'Allow always' },
+      { optionId: 'reject', kind: 'reject_once' as const, name: 'Reject' },
+    ];
+
+    await expect(createMindosClient(makeAcpProcess(), '/tmp/mind', {}, 'auto').requestPermission({
+      sessionId: 'ses-1',
+      toolCall: { toolCallId: 'tc-auto', status: 'pending' },
+      options,
+    })).resolves.toEqual({
+      outcome: { outcome: 'selected', optionId: 'allow-once' },
+    });
+
+    await expect(createMindosClient(makeAcpProcess(), '/tmp/mind', {}, 'full').requestPermission({
+      sessionId: 'ses-1',
+      toolCall: { toolCallId: 'tc-full', status: 'pending' },
+      options,
+    })).resolves.toEqual({
+      outcome: { outcome: 'selected', optionId: 'allow-always' },
+    });
+  });
+
   it('rejects readonly writes and terminal creation', async () => {
     const root = mkdtempSync(join(tmpdir(), 'mindos-acp-readonly-'));
     const client = createMindosClient(makeAcpProcess(), root, {}, 'readonly');
@@ -226,6 +301,27 @@ describe('createMindosClient permission policy', () => {
     await expect(client.createTerminal({ command: 'node' }))
       .rejects.toThrow('readonly mode');
     expect(mockSpawn).not.toHaveBeenCalled();
+  });
+
+  it('asks before host-side writes in ask mode', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'mindos-acp-ask-write-'));
+    const resolvePermissionRequest = vi.fn().mockResolvedValue({
+      outcome: { outcome: 'selected', optionId: 'allow_once' },
+    });
+    const client = createMindosClient(makeAcpProcess(), root, { resolvePermissionRequest }, 'ask');
+
+    await client.writeTextFile({ path: 'note.md', content: 'written' });
+
+    expect(resolvePermissionRequest).toHaveBeenCalledWith(expect.objectContaining({
+      event: expect.objectContaining({
+        toolName: 'Write file',
+        options: expect.arrayContaining([
+          expect.objectContaining({ id: 'allow_once', kind: 'allow_once' }),
+        ]),
+      }),
+      mode: 'ask',
+    }));
+    expect(readFileSync(join(root, 'note.md'), 'utf-8')).toBe('written');
   });
 
   it('passes runtime env to ACP terminal subprocesses without overriding request env', async () => {

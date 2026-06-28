@@ -4,7 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState, useCallback, useMemo } fr
 import { createPortal } from 'react-dom';
 import { Plus, FileText, ImageIcon } from 'lucide-react';
 import { useLocale } from '@/lib/stores/locale-store';
-import type { AcpRuntimeOptions, AgentPermissionMode, AgentRuntimeDescriptor, AgentRuntimeIdentity, Message, NativeRuntimeOptions } from '@/lib/types';
+import type { AcpRuntimeOptions, AgentPermissionMode, AgentRuntimeDescriptor, AgentRuntimeIdentity, ChatSession, Message, NativeRuntimeOptions } from '@/lib/types';
 import ModeCapsule, {
   getPersistedPermissionMode,
 } from '@/components/ask/ModeCapsule';
@@ -25,7 +25,7 @@ import ContextStatusButton from '@/components/ask/ContextStatusButton';
 import SessionContextDock from '@/components/ask/SessionContextDock';
 import ProviderModelCapsule, { getPersistedProviderModel } from '@/components/ask/ProviderModelCapsule';
 import NativeRuntimeOptionsCapsule, { getPersistedNativeRuntimeOptions, persistNativeRuntimeOptions } from '@/components/ask/NativeRuntimeOptionsCapsule';
-import AcpRuntimeOptionsCapsule from '@/components/ask/AcpRuntimeOptionsCapsule';
+import AcpRuntimeOptionsCapsule, { getPersistedAcpRuntimeOptions, persistAcpRuntimeOptions } from '@/components/ask/AcpRuntimeOptionsCapsule';
 import { useAgentChat } from '@/hooks/useAgentChat';
 import { useAgentRunTimeline } from '@/hooks/useAgentRunTimeline';
 import { useRuntimeSessionProjection } from '@/hooks/useRuntimeSessionProjection';
@@ -55,7 +55,6 @@ import { useNativeRuntimeDetection } from '@/hooks/useNativeRuntimeDetection';
 import { useRuntimeReadiness } from '@/hooks/useRuntimeReadiness';
 import type { AcpAgentSelection } from '@/hooks/useAskModal';
 import { compactRuntimeDisplayReason } from '@/lib/agent/runtime-error-display';
-import type { CodexThreadListResponse, CodexThreadSummary, RuntimeSessionBinding } from '@/lib/types';
 import type { AskContextRequest } from '@/lib/ask-context-events';
 import {
   getProviderModelFromSessionSelection,
@@ -72,6 +71,19 @@ import {
   RUNTIME_COMMAND_INSERT_EVENT,
   normalizeRuntimeCommandInsertDetail,
 } from '@/lib/runtime-command-events';
+import {
+  archiveRuntimeSession,
+  forkRuntimeSession,
+  getRuntimeSessionAdapterCapabilities,
+  importBoundRuntimeSessionHistory,
+  listRuntimeSessions,
+  readRuntimeSessionHistory,
+} from '@/lib/runtime-session-history';
+import {
+  runtimeSessionEntryAttachBinding,
+  runtimeSessionEntryTitle,
+  type RuntimeSessionEntry,
+} from '@/lib/runtime-session-entry';
 
 /** Stable empty array — a fresh [] literal per render would bust MessageList's memo */
 const EMPTY_SUGGESTIONS: ReadonlyArray<{ label: string; prompt: string }> = [];
@@ -94,39 +106,6 @@ function normalizeSelectedAgentRuntime(runtime: AgentRuntimeIdentity | null | un
     kind: runtime.kind,
     ...(typeof record.binaryPath === 'string' && record.binaryPath.trim() ? { binaryPath: record.binaryPath } : {}),
   };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === 'object' && !Array.isArray(value);
-}
-
-function normalizeCodexThread(value: unknown): CodexThreadSummary | null {
-  if (!isRecord(value) || typeof value.id !== 'string' || !value.id.trim()) return null;
-  return {
-    id: value.id,
-    ...(typeof value.name === 'string' || value.name === null ? { name: value.name } : {}),
-    ...(typeof value.preview === 'string' ? { preview: value.preview } : {}),
-    ...(typeof value.cwd === 'string' ? { cwd: value.cwd } : {}),
-    ...(typeof value.createdAt === 'number' || typeof value.createdAt === 'string' ? { createdAt: value.createdAt } : {}),
-    ...(typeof value.updatedAt === 'number' || typeof value.updatedAt === 'string' ? { updatedAt: value.updatedAt } : {}),
-    ...('status' in value ? { status: value.status } : {}),
-    ...(typeof value.archived === 'boolean' ? { archived: value.archived } : {}),
-  };
-}
-
-function codexThreadTitle(thread: CodexThreadSummary): string {
-  const title = thread.name?.trim() || thread.preview?.trim();
-  if (title) return title.length > 42 ? `${title.slice(0, 42)}...` : title;
-  return `Codex thread ${thread.id.slice(0, 8)}`;
-}
-
-function codexThreadBindingStatus(thread: CodexThreadSummary): RuntimeSessionBinding['status'] {
-  if (thread.archived) return 'archived';
-  return typeof thread.status === 'string' && thread.status === 'archived' ? 'archived' : 'active';
-}
-
-function codexThreadUpdatedAt(thread: CodexThreadSummary): number | string | undefined {
-  return thread.updatedAt ?? thread.createdAt;
 }
 
 interface ChatContentProps {
@@ -180,15 +159,15 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
   const [showHistory, setShowHistory] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const [showAttachMenu, setShowAttachMenu] = useState(false);
-  const [codexThreads, setCodexThreads] = useState<CodexThreadSummary[]>([]);
-  const [codexThreadsLoading, setCodexThreadsLoading] = useState(false);
-  const [codexThreadsError, setCodexThreadsError] = useState<string | null>(null);
-  const [codexThreadActionId, setCodexThreadActionId] = useState<string | null>(null);
+  const [runtimeSessions, setRuntimeSessions] = useState<RuntimeSessionEntry[]>([]);
+  const [runtimeSessionsLoading, setRuntimeSessionsLoading] = useState(false);
+  const [runtimeSessionsError, setRuntimeSessionsError] = useState<string | null>(null);
+  const [runtimeSessionActionId, setRuntimeSessionActionId] = useState<string | null>(null);
   const attachButtonRef = useRef<HTMLButtonElement>(null);
   const attachMenuRef = useRef<HTMLDivElement>(null);
   const [attachMenuPos, setAttachMenuPos] = useState<{ top: number; left: number } | null>(null);
   const [dropError, setDropError] = useState('');
-  const codexThreadsRequestSeqRef = useRef(0);
+  const runtimeSessionsRequestSeqRef = useRef(0);
 
   const [selectedSkill, setSelectedSkill] = useState<SkillSlashItem | null>(null);
   const selectedSkillRef = useRef(selectedSkill);
@@ -211,7 +190,11 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
     } else {
       setNativeRuntimeOptions({});
     }
-    setAcpRuntimeOptions({});
+    if (normalized?.kind === 'acp') {
+      setAcpRuntimeOptions(getPersistedAcpRuntimeOptions(normalized.id));
+    } else {
+      setAcpRuntimeOptions({});
+    }
   }, []);
 
   const session = useAskSession(currentFile, projectId);
@@ -336,7 +319,7 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
     if (!selectedAgentRuntime || selectedAgentRuntime.kind === 'mindos') return false;
     const nativeKind = selectedAgentRuntime.kind;
     if (nativeKind !== 'codex' && nativeKind !== 'claude') return false;
-    return nativeDetection.loadingByKind[nativeKind] === true;
+    return nativeDetection.loadingByKind?.[nativeKind] === true;
   }, [nativeDetection.loadingByKind, selectedAgentRuntime]);
   const selectedRuntimeUnavailable = useMemo(() => {
     if (!selectedAgentRuntime || selectedAgentRuntime.kind === 'mindos') return null;
@@ -350,18 +333,18 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
     }
     const nativeKind = selectedAgentRuntime.kind;
     if (nativeKind !== 'codex' && nativeKind !== 'claude') return null;
-    const detectionError = nativeDetection.errorByKind[nativeKind];
-    if (detectionError && !nativeDetection.loadingByKind[nativeKind]) {
+    const detectionError = nativeDetection.errorByKind?.[nativeKind];
+    if (detectionError && !nativeDetection.loadingByKind?.[nativeKind]) {
       return {
         status: 'error' as const,
         reason: detectionError,
       };
     }
-    const descriptor = nativeDetection.runtimes.find((runtime) => (
+    const descriptor = (nativeDetection.runtimes ?? []).find((runtime) => (
       runtime.kind === nativeKind && runtime.id === selectedAgentRuntime.id
     ));
     if (!descriptor) {
-      if (nativeDetection.loadingByKind[nativeKind]) return null;
+      if (nativeDetection.loadingByKind?.[nativeKind]) return null;
       return {
         status: 'missing' as const,
         reason: 'Local runtime was not detected.',
@@ -430,44 +413,41 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
       : null,
     [runtimeScopedSessions, session.activeSessionId],
   );
-  const loadCodexThreads = useCallback(async () => {
-    if (selectedAgentRuntimeRef.current?.kind !== 'codex') return;
-    const seq = codexThreadsRequestSeqRef.current + 1;
-    codexThreadsRequestSeqRef.current = seq;
-    setCodexThreadsLoading(true);
-    setCodexThreadsError(null);
+  const runtimeSessionCapabilities = useMemo(
+    () => getRuntimeSessionAdapterCapabilities(selectedAgentRuntime),
+    [selectedAgentRuntime?.id, selectedAgentRuntime?.kind, selectedAgentRuntime?.name],
+  );
+  const loadRuntimeSessions = useCallback(async () => {
+    const runtime = selectedAgentRuntimeRef.current;
+    const capabilities = getRuntimeSessionAdapterCapabilities(runtime);
+    if (!runtime || !capabilities.supportsList) {
+      setRuntimeSessions([]);
+      setRuntimeSessionsError(null);
+      setRuntimeSessionsLoading(false);
+      setRuntimeSessionActionId(null);
+      return;
+    }
+
+    const seq = runtimeSessionsRequestSeqRef.current + 1;
+    runtimeSessionsRequestSeqRef.current = seq;
+    setRuntimeSessionsLoading(true);
+    setRuntimeSessionsError(null);
 
     try {
-      const res = await fetch('/api/agent-runtimes/codex/threads?limit=30&useStateDbOnly=1', {
-        cache: 'no-store',
-      });
-      if (!res.ok) {
-        let message = `Failed to load Codex threads (${res.status}).`;
-        try {
-          const body = await res.json() as { error?: string; message?: string };
-          message = body.error || body.message || message;
-        } catch {
-          // keep status-derived message
-        }
-        throw new Error(message);
-      }
-      const body = await res.json() as Partial<CodexThreadListResponse>;
-      const threads = Array.isArray(body.data)
-        ? body.data.map(normalizeCodexThread).filter((thread): thread is CodexThreadSummary => Boolean(thread))
-        : [];
-      if (codexThreadsRequestSeqRef.current === seq) {
-        setCodexThreads(threads);
+      const entries = await listRuntimeSessions(runtime);
+      if (runtimeSessionsRequestSeqRef.current === seq) {
+        setRuntimeSessions(entries);
       }
     } catch (error) {
-      if (codexThreadsRequestSeqRef.current === seq) {
+      if (runtimeSessionsRequestSeqRef.current === seq) {
         const message = error instanceof Error && error.message
           ? error.message
-          : 'Failed to load Codex threads.';
-        setCodexThreadsError(message);
+          : 'Failed to load runtime sessions.';
+        setRuntimeSessionsError(message);
       }
     } finally {
-      if (codexThreadsRequestSeqRef.current === seq) {
-        setCodexThreadsLoading(false);
+      if (runtimeSessionsRequestSeqRef.current === seq) {
+        setRuntimeSessionsLoading(false);
       }
     }
   }, []);
@@ -488,15 +468,15 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
 
   useEffect(() => {
     if (!visible || !showHistory) return;
-    if (selectedAgentRuntime?.kind === 'codex') {
-      void loadCodexThreads();
+    if (runtimeSessionCapabilities.supportsList) {
+      void loadRuntimeSessions();
       return;
     }
-    setCodexThreads([]);
-    setCodexThreadsError(null);
-    setCodexThreadsLoading(false);
-    setCodexThreadActionId(null);
-  }, [loadCodexThreads, selectedAgentRuntime?.kind, showHistory, visible]);
+    setRuntimeSessions([]);
+    setRuntimeSessionsError(null);
+    setRuntimeSessionsLoading(false);
+    setRuntimeSessionActionId(null);
+  }, [loadRuntimeSessions, runtimeSessionCapabilities.supportsList, selectedAgentRuntime?.id, selectedAgentRuntime?.kind, showHistory, visible]);
 
   const resetInputState = useCallback(() => {
     setComposerValue('');
@@ -1060,6 +1040,24 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
     }
   }, []);
 
+  const importBoundRuntimeSessionHistoryIfNeeded = useCallback((targetSession: ChatSession, targetRuntime: AgentRuntimeIdentity | null) => {
+    void (async () => {
+      try {
+        const result = await importBoundRuntimeSessionHistory(
+          targetSession,
+          targetRuntime,
+          sessionRef.current.attachRuntimeSession,
+        );
+        if (result.status === 'refused') setDropError(t.ask.sessionRunningRetry);
+      } catch (error) {
+        const message = error instanceof Error && error.message
+          ? error.message
+          : 'Failed to load runtime session history.';
+        setDropError(message);
+      }
+    })();
+  }, [t.ask.sessionRunningRetry]);
+
   const handleLoadSession = useCallback((id: string): boolean => {
     // Concurrency: switching away from a streaming session is allowed — its
     // run keeps writing to the store and the list shows a running indicator.
@@ -1077,9 +1075,10 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
     const targetRuntime = getSessionAgentRuntime(targetSession);
     updateSelectedAgentRuntime(targetRuntime);
     persistLastSelectedAgentRuntime(targetRuntime);
+    importBoundRuntimeSessionHistoryIfNeeded(targetSession, targetRuntime);
     setTimeout(() => inputRef.current?.focus(), 0);
     return true;
-  }, [chat.isLoadingRef, currentFile, session.sessions, updateSelectedAgentRuntime]);
+  }, [chat.isLoadingRef, currentFile, importBoundRuntimeSessionHistoryIfNeeded, session.sessions, updateSelectedAgentRuntime]);
 
   useEffect(() => {
     if (!visible || maximized || (variant !== 'panel' && variant !== 'modal')) return;
@@ -1110,6 +1109,16 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
     }
   }, [clearTransientComposerState, updateSelectedAgentRuntime]);
 
+  const handleForkSession = useCallback((id: string) => {
+    const targetSession = sessionRef.current.sessions.find((item) => item.id === id) ?? null;
+    const forkedId = sessionRef.current.forkSession(id);
+    if (!forkedId) return;
+    const targetRuntime = getSessionAgentRuntime(targetSession);
+    updateSelectedAgentRuntime(targetRuntime);
+    persistLastSelectedAgentRuntime(targetRuntime);
+    clearTransientComposerState();
+  }, [clearTransientComposerState, updateSelectedAgentRuntime]);
+
   const handleClearRuntimeHistory = useCallback(() => {
     if (chat.isLoadingRef.current) return;
     const runtime = selectedAgentRuntimeRef.current;
@@ -1124,103 +1133,83 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
     clearTransientComposerState();
   }, [chat.isLoadingRef, clearTransientComposerState, projectId, updateSelectedAgentRuntime]);
 
-  const handleAttachCodexThread = useCallback((thread: CodexThreadSummary) => {
-    if (chat.isLoadingRef.current) return;
+  const handleAttachRuntimeSession = useCallback(async (entry: RuntimeSessionEntry) => {
+    if (chat.isLoadingRef.current || runtimeSessionActionId) return;
     const runtime = selectedAgentRuntimeRef.current;
-    if (!runtime || runtime.kind !== 'codex') return;
-    const attached = sessionRef.current.attachRuntimeSession(compactAgentRuntimeIdentity(runtime) ?? runtime, {
-      externalSessionId: thread.id,
-      cwd: thread.cwd,
-      status: codexThreadBindingStatus(thread),
-      updatedAt: codexThreadUpdatedAt(thread),
-    }, {
-      title: codexThreadTitle(thread),
-    });
-    if (!attached) {
-      // The matched local session has a live run — rebinding mid-run is refused.
-      setCodexThreadsError(t.ask.sessionRunningRetry);
-      return;
-    }
-    updateSelectedAgentRuntime(runtime);
-    clearTransientComposerState();
-  }, [chat.isLoadingRef, clearTransientComposerState, t.ask.sessionRunningRetry, updateSelectedAgentRuntime]);
+    if (!runtime || runtime.kind !== entry.runtime.kind || runtime.id !== entry.runtime.id) return;
 
-  const handleForkCodexThread = useCallback(async (thread: CodexThreadSummary) => {
-    if (chat.isLoadingRef.current || codexThreadActionId) return;
-    const runtime = selectedAgentRuntimeRef.current;
-    if (!runtime || runtime.kind !== 'codex') return;
-    setCodexThreadActionId(thread.id);
-    setCodexThreadsError(null);
+    setRuntimeSessionActionId(entry.id);
+    setRuntimeSessionsError(null);
     try {
-      const res = await fetch(`/api/agent-runtimes/codex/threads/${encodeURIComponent(thread.id)}/fork`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(thread.cwd ? { cwd: thread.cwd } : {}),
+      const { entry: readEntry, messages: importedMessages } = await readRuntimeSessionHistory(entry);
+      const attachRuntime = compactAgentRuntimeIdentity(readEntry.runtime) ?? readEntry.runtime;
+      const attached = sessionRef.current.attachRuntimeSession(attachRuntime, runtimeSessionEntryAttachBinding(readEntry), {
+        title: runtimeSessionEntryTitle(readEntry, 42),
+        ...(importedMessages.length > 0 ? { messages: importedMessages } : {}),
       });
-      if (!res.ok) {
-        let message = `Failed to fork Codex thread (${res.status}).`;
-        try {
-          const body = await res.json() as { error?: string; message?: string };
-          message = body.error || body.message || message;
-        } catch {
-          // keep status-derived message
-        }
-        throw new Error(message);
+      if (!attached) {
+        // The matched local session has a live run — rebinding mid-run is refused.
+        setRuntimeSessionsError(t.ask.sessionRunningRetry);
+        return;
       }
-      const body = await res.json() as { thread?: unknown };
-      const forked = normalizeCodexThread(body.thread);
-      if (forked) {
-        setCodexThreads((prev) => [forked, ...prev.filter((item) => item.id !== forked.id)]);
-        sessionRef.current.attachRuntimeSession(compactAgentRuntimeIdentity(runtime) ?? runtime, {
-          externalSessionId: forked.id,
-          cwd: forked.cwd,
-          status: codexThreadBindingStatus(forked),
-          updatedAt: codexThreadUpdatedAt(forked),
-        }, {
-          title: codexThreadTitle(forked),
-        });
-        updateSelectedAgentRuntime(runtime);
-        clearTransientComposerState();
-      } else {
-        await loadCodexThreads();
-      }
+
+      setRuntimeSessions((prev) => [readEntry, ...prev.filter((item) => item.id !== readEntry.id)]);
+      updateSelectedAgentRuntime(attachRuntime);
+      clearTransientComposerState();
     } catch (error) {
       const message = error instanceof Error && error.message
         ? error.message
-        : 'Failed to fork Codex thread.';
-      setCodexThreadsError(message);
+        : 'Failed to load runtime session history.';
+      setRuntimeSessionsError(message);
     } finally {
-      setCodexThreadActionId(null);
+      setRuntimeSessionActionId(null);
     }
-  }, [chat.isLoadingRef, clearTransientComposerState, codexThreadActionId, loadCodexThreads, updateSelectedAgentRuntime]);
+  }, [chat.isLoadingRef, clearTransientComposerState, runtimeSessionActionId, t.ask.sessionRunningRetry, updateSelectedAgentRuntime]);
 
-  const handleArchiveCodexThread = useCallback(async (thread: CodexThreadSummary) => {
-    if (chat.isLoadingRef.current || codexThreadActionId) return;
+  const handleForkRuntimeSession = useCallback(async (entry: RuntimeSessionEntry) => {
+    if (chat.isLoadingRef.current || runtimeSessionActionId) return;
     const runtime = selectedAgentRuntimeRef.current;
-    if (!runtime || runtime.kind !== 'codex') return;
-    setCodexThreadActionId(thread.id);
-    setCodexThreadsError(null);
+    if (!runtime || runtime.kind !== entry.runtime.kind || runtime.id !== entry.runtime.id) return;
+    setRuntimeSessionActionId(entry.id);
+    setRuntimeSessionsError(null);
     try {
-      const res = await fetch(`/api/agent-runtimes/codex/threads/${encodeURIComponent(thread.id)}/archive`, {
-        method: 'POST',
+      const forked = await forkRuntimeSession(entry);
+      setRuntimeSessions((prev) => [forked, ...prev.filter((item) => item.id !== forked.id)]);
+      const attachRuntime = compactAgentRuntimeIdentity(forked.runtime) ?? forked.runtime;
+      const attached = sessionRef.current.attachRuntimeSession(attachRuntime, runtimeSessionEntryAttachBinding(forked), {
+        title: runtimeSessionEntryTitle(forked, 42),
       });
-      if (!res.ok) {
-        let message = `Failed to archive Codex thread (${res.status}).`;
-        try {
-          const body = await res.json() as { error?: string; message?: string };
-          message = body.error || body.message || message;
-        } catch {
-          // keep status-derived message
-        }
-        throw new Error(message);
+      if (!attached) {
+        setRuntimeSessionsError(t.ask.sessionRunningRetry);
+        return;
       }
+      updateSelectedAgentRuntime(attachRuntime);
+      clearTransientComposerState();
+    } catch (error) {
+      const message = error instanceof Error && error.message
+        ? error.message
+        : 'Failed to fork runtime session.';
+      setRuntimeSessionsError(message);
+    } finally {
+      setRuntimeSessionActionId(null);
+    }
+  }, [chat.isLoadingRef, clearTransientComposerState, runtimeSessionActionId, t.ask.sessionRunningRetry, updateSelectedAgentRuntime]);
 
-      setCodexThreads((prev) => prev.filter((item) => item.id !== thread.id));
+  const handleArchiveRuntimeSession = useCallback(async (entry: RuntimeSessionEntry) => {
+    if (chat.isLoadingRef.current || runtimeSessionActionId) return;
+    const runtime = selectedAgentRuntimeRef.current;
+    if (!runtime || runtime.kind !== entry.runtime.kind || runtime.id !== entry.runtime.id) return;
+    setRuntimeSessionActionId(entry.id);
+    setRuntimeSessionsError(null);
+    try {
+      await archiveRuntimeSession(entry);
+      setRuntimeSessions((prev) => prev.filter((item) => item.id !== entry.id));
       const activeBinding = getMatchingRuntimeSessionBinding(sessionRef.current.activeSession, runtime);
-      if (activeBinding?.externalSessionId === thread.id) {
+      if (activeBinding?.externalSessionId === entry.id) {
+        const binding = runtimeSessionEntryAttachBinding(entry);
         sessionRef.current.setSessionAgentRuntimeBinding(compactAgentRuntimeIdentity(runtime) ?? runtime, {
-          externalSessionId: thread.id,
-          cwd: thread.cwd,
+          externalSessionId: binding.externalSessionId,
+          ...(binding.cwd ? { cwd: binding.cwd } : {}),
           status: 'archived',
           updatedAt: Date.now(),
         });
@@ -1228,12 +1217,12 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
     } catch (error) {
       const message = error instanceof Error && error.message
         ? error.message
-        : 'Failed to archive Codex thread.';
-      setCodexThreadsError(message);
+        : 'Failed to archive runtime session.';
+      setRuntimeSessionsError(message);
     } finally {
-      setCodexThreadActionId(null);
+      setRuntimeSessionActionId(null);
     }
-  }, [chat.isLoadingRef, codexThreadActionId]);
+  }, [chat.isLoadingRef, runtimeSessionActionId]);
 
   const toggleHistory = useCallback(() => setShowHistory(v => !v), []);
   // Stable identity so the memoized SessionHistoryPanel skips chunk-driven re-renders.
@@ -1298,6 +1287,10 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
   }, []);
   const handleAcpRuntimeOptionsChange = useCallback((next: AcpRuntimeOptions) => {
     setAcpRuntimeOptions(next);
+    const runtime = selectedAgentRuntimeRef.current;
+    if (runtime?.kind === 'acp') {
+      persistAcpRuntimeOptions(runtime.id, next);
+    }
   }, []);
   const handleRefreshRuntimeState = useCallback(() => {
     nativeDetection.refresh();
@@ -1323,6 +1316,7 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
         activeSessionId={runtimeScopedActiveSessionId}
         onLoadSession={handleLoadSession}
         onDeleteSession={handleDeleteSession}
+        onForkSession={handleForkSession}
         onRenameSession={session.renameSession}
         onTogglePinSession={session.togglePinSession}
         messages={session.messages}
@@ -1347,21 +1341,23 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
           sessions={runtimeScopedSessions}
           activeSessionId={runtimeScopedActiveSessionId}
           selectedAgentRuntime={selectedAgentRuntime}
-          codexThreads={codexThreads}
-          codexThreadsLoading={codexThreadsLoading}
-          codexThreadsError={codexThreadsError}
-          codexThreadActionId={codexThreadActionId}
+          runtimeSessions={runtimeSessions}
+          runtimeSessionsLoading={runtimeSessionsLoading}
+          runtimeSessionsError={runtimeSessionsError}
+          runtimeSessionActionId={runtimeSessionActionId}
+          runtimeSessionsSupported={runtimeSessionCapabilities.supportsList}
           onLoad={handleLoadSession}
           onDelete={handleDeleteSession}
+          onForkSession={handleForkSession}
           onRename={session.renameSession}
           onTogglePin={session.togglePinSession}
           onClearAll={handleClearRuntimeHistory}
           onClose={closeHistory}
           onNewChat={handleResetSession}
-          onRefreshCodexThreads={loadCodexThreads}
-          onAttachCodexThread={handleAttachCodexThread}
-          onForkCodexThread={handleForkCodexThread}
-          onArchiveCodexThread={handleArchiveCodexThread}
+          onRefreshRuntimeSessions={loadRuntimeSessions}
+          onAttachRuntimeSession={handleAttachRuntimeSession}
+          onForkRuntimeSession={handleForkRuntimeSession}
+          onArchiveRuntimeSession={handleArchiveRuntimeSession}
         />
       )}
 
@@ -1589,7 +1585,27 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
           {/* Mode + provider selector row + keyboard hint */}
           <div className={cn('relative z-20 flex items-center justify-between border-t border-border/10', isPanel ? 'px-2 pb-1.5 pt-1 gap-1' : 'px-3 pb-2 pt-1.5')}>
             <div className={cn('flex items-center flex-wrap', isPanel ? 'gap-1' : 'gap-2')}>
+              {mounted && isAcpRuntime && (
+                <AcpRuntimeOptionsCapsule
+                  projection={runtimeSessionProjection.selectedProjection}
+                  runtime={selectedAgentRuntime}
+                  value={acpRuntimeOptions}
+                  onChange={handleAcpRuntimeOptionsChange}
+                  controlKeys={['mode']}
+                  disabled={isLoading}
+                />
+              )}
               <ModeCapsule mode={permissionMode} onChange={setPermissionMode} disabled={isLoading} />
+              {mounted && isAcpRuntime && (
+                <AcpRuntimeOptionsCapsule
+                  projection={runtimeSessionProjection.selectedProjection}
+                  runtime={selectedAgentRuntime}
+                  value={acpRuntimeOptions}
+                  onChange={handleAcpRuntimeOptionsChange}
+                  controlKeys={['model', 'thoughtLevel']}
+                  disabled={isLoading}
+                />
+              )}
               {mounted && isMindosRuntime && (
                 <ProviderModelCapsule
                   providerValue={providerOverride}
@@ -1605,14 +1621,6 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
                   runtimeKind={selectedNativeRuntimeKind}
                   value={nativeRuntimeOptions}
                   onChange={handleNativeRuntimeOptionsChange}
-                  disabled={isLoading}
-                />
-              )}
-              {mounted && isAcpRuntime && runtimeSessionProjection.selectedProjection && (
-                <AcpRuntimeOptionsCapsule
-                  projection={runtimeSessionProjection.selectedProjection}
-                  value={acpRuntimeOptions}
-                  onChange={handleAcpRuntimeOptionsChange}
                   disabled={isLoading}
                 />
               )}

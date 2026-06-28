@@ -201,7 +201,7 @@ describe('RuntimeIconSwitcher', () => {
     });
   });
 
-  it('surfaces runtime readiness gaps without disabling an available native runtime', async () => {
+  it('keeps non-blocking runtime readiness gaps out of the visible status badge', async () => {
     const onSelect = vi.fn();
     const host = document.createElement('div');
     document.body.appendChild(host);
@@ -237,10 +237,11 @@ describe('RuntimeIconSwitcher', () => {
       trigger.click();
     });
 
-    expect(document.body.textContent).toContain('Limited');
     expect(document.body.textContent).toContain('MindOS: MindOS still keeps Codex approval prompts interactive-only.');
     const codexButton = Array.from(document.body.querySelectorAll('button'))
       .find((button) => button.textContent?.includes('Use local Codex.')) as HTMLButtonElement;
+    expect(codexButton.title).toContain('Readiness: Limited');
+    expect(codexButton.children[2]?.textContent).toBe('');
     expect(codexButton.disabled).toBe(false);
 
     await act(async () => {
@@ -352,8 +353,10 @@ describe('RuntimeIconSwitcher', () => {
     });
 
     expect(document.body.textContent).toContain('Use MindOS');
-    expect(document.body.textContent).toContain('Limited');
     expect(document.body.textContent).toContain('MindOS: MindOS needs scheduler and wake-resume support before 24/7 automation is ready.');
+    const visibleLimitedBadge = Array.from(document.body.querySelectorAll('span'))
+      .some((span) => !span.classList.contains('sr-only') && span.textContent === 'Limited');
+    expect(visibleLimitedBadge).toBe(false);
     const mindosSwitchButton = Array.from(document.body.querySelectorAll('button'))
       .find((button) => button.textContent?.includes('Use MindOS'));
     expect(mindosSwitchButton).toBeUndefined();
@@ -999,6 +1002,20 @@ describe('RuntimeIconSwitcher', () => {
               },
             },
           ]}
+          runtimeReadinessByRuntimeId={{
+            opencode: readinessProjection('opencode', 'OpenCode', 'acp', {
+              overallStatus: 'limited',
+              gaps: [
+                {
+                  id: 'adapter-artifact-contract',
+                  category: 'adapter-contract',
+                  severity: 'warning',
+                  summary: 'OpenCode can chat through ACP, but artifact output needs an adapter declaration.',
+                  useCases: ['artifact-governance'],
+                },
+              ],
+            }),
+          }}
         />,
       );
     });
@@ -1026,7 +1043,16 @@ describe('RuntimeIconSwitcher', () => {
       .find((button) => button.textContent?.includes('Cursor Agent')) as HTMLButtonElement;
 
     expect(openCodeButton.disabled).toBe(false);
-    expect(openCodeButton.children[0]?.querySelector('img[src="/agent-icons/opencode.svg"]')).toBeTruthy();
+    const openCodeMark = openCodeButton.children[0] as HTMLElement;
+    const openCodeImg = openCodeMark?.querySelector('img[src="/agent-icons/opencode.svg"]') as HTMLImageElement;
+    expect(openCodeImg).toBeTruthy();
+    expect(openCodeMark.classList.contains('overflow-hidden')).toBe(true);
+    expect(openCodeImg.classList.contains('h-4')).toBe(true);
+    expect(openCodeImg.classList.contains('w-4')).toBe(true);
+    expect(openCodeImg.classList.contains('object-contain')).toBe(true);
+    expect(openCodeImg.classList.contains('scale-125')).toBe(false);
+    expect(openCodeButton.title).toContain('Readiness: Limited');
+    expect(openCodeButton.children[2]?.textContent).toBe('');
     expect(cursorButton.disabled).toBe(true);
     expect(cursorButton.textContent).toContain('Sign in');
     expect(cursorButton.children[0]?.querySelector('img[src="/agent-icons/cursor.svg"]')).toBeTruthy();

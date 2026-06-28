@@ -100,4 +100,34 @@ describe('ACP MCP session inheritance', () => {
       { name: 'sseTools', type: 'sse' },
     ]);
   });
+
+  it('inherits ACP-transport MCP servers only when declared by the agent', () => {
+    const config = {
+      mcpServers: {
+        componentTools: {
+          type: 'acp',
+          id: 'component-tools-1',
+          agentSessions: true,
+        },
+      },
+    };
+
+    const unsupported = buildAcpSessionMcpInheritancePlan({
+      config,
+      agentCapabilities: { mcpCapabilities: { http: true } },
+    });
+    expect(unsupported.servers).toEqual([]);
+    expect(unsupported.skipped).toEqual([{ name: 'componentTools', reason: 'unsupported-transport' }]);
+
+    const supported = buildAcpSessionMcpInheritancePlan({
+      config,
+      agentCapabilities: { mcpCapabilities: { acp: true } },
+    });
+    expect(supported.servers).toEqual([{
+      type: 'acp',
+      name: 'componentTools',
+      id: 'component-tools-1',
+    }]);
+    expect(supported.summaries).toEqual([{ name: 'componentTools', type: 'acp' }]);
+  });
 });

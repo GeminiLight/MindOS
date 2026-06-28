@@ -23,6 +23,7 @@ import type {
   AgentIdentity,
   AgentRuntimeIdentity,
   ChatSession,
+  Message,
   RuntimeSessionBinding,
   SessionContextSelection,
   SessionModelSelection,
@@ -617,6 +618,40 @@ export function renameSession(id: string, newTitle: string) {
   void upsertSession(withStoreMessages(updated));
 }
 
+/** Duplicate a local MindOS session snapshot without sharing an external runtime binding. */
+export function forkSession(id: string, ctx: SessionLaneContext = {}): string | null {
+  const source = sessions.find((s) => s.id === id);
+  if (!source) return null;
+
+  const now = Date.now();
+  const fullSource = normalizeSessionContextMetadata(withStoreMessages(source));
+  const forkProjectId = (fullSource.projectId ?? ctx.projectId?.trim()) || undefined;
+  const firstUserText = fullSource.messages.find((message) => message.role === 'user')?.content.replace(/\s+/g, ' ').trim();
+  const baseTitle = fullSource.title?.trim() || (firstUserText ? (firstUserText.length > 42 ? `${firstUserText.slice(0, 42)}...` : firstUserText) : undefined);
+  const forked: ChatSession = {
+    ...fullSource,
+    id: `${now}-${Math.random().toString(36).slice(2, 8)}`,
+    title: baseTitle ? `${baseTitle} copy` : undefined,
+    createdAt: now,
+    updatedAt: now,
+    currentFile: fullSource.currentFile ?? ctx.currentFile,
+    projectId: forkProjectId,
+    source: forkProjectId ? 'project' : fullSource.source,
+    pinned: false,
+    messages: [...fullSource.messages],
+  };
+
+  delete forked.runtimeSessionBinding;
+  delete forked.externalAgentBinding;
+
+  storeSetMessages(forked.id, forked.messages, { skipPersist: true });
+  setActiveSessionId(forked.id);
+  clearUnread(forked.id);
+  emitSessions(sortAndCap([forked, ...sessions]));
+  if (shouldPersistSession(forked)) void upsertSession(forked);
+  return forked.id;
+}
+
 /** Toggle pin/unpin a session. Pinned sessions sort to top (in the hook's memo). */
 export function togglePinSession(id: string) {
   const idx = sessions.findIndex((s) => s.id === id);
@@ -659,7 +694,7 @@ export function setSessionAgentRuntimeBinding(
 }
 
 /**
- * Attach an external runtime session (Codex thread / Claude session).
+ * Attach an external runtime session (Codex thread / Claude session / ACP session).
  * Returns false when refused — e.g. the matched local session is running.
  */
 export function attachRuntimeSession(
@@ -670,11 +705,11 @@ export function attachRuntimeSession(
     status?: RuntimeSessionBinding['status'];
     updatedAt?: number | string;
   },
-  metadata?: { title?: string },
+  metadata?: { title?: string; messages?: Message[] },
   currentFile?: string,
   projectId?: string,
 ): boolean {
-  if (runtime.kind !== 'codex' && runtime.kind !== 'claude') return false;
+  if (runtime.kind !== 'codex' && runtime.kind !== 'claude' && runtime.kind !== 'acp') return false;
   const externalSessionId = binding.externalSessionId.trim();
   if (!externalSessionId) return false;
 
@@ -690,8 +725,11 @@ export function attachRuntimeSession(
   if (existing && getRun(existing.id)) return false;
 
   const base = existing ?? createSessionEntry(currentFile, runtime, trimmedProjectId);
+  const importedMessages = metadata?.messages;
+  const baseMessages = importedMessages ?? (storeHasMessages(base.id) ? storeGetMessages(base.id) : base.messages);
   const bound = bindSessionAgentRuntime({
     ...base,
+    messages: baseMessages,
     source: base.projectId || trimmedProjectId ? 'project' : base.source,
     projectId: base.projectId ?? trimmedProjectId,
     currentFile: base.currentFile ?? currentFile,
@@ -716,7 +754,9 @@ export function attachRuntimeSession(
     }
     : normalizeSessionContextMetadata(bound);
 
-  if (!storeHasMessages(updated.id)) {
+  if (importedMessages) {
+    storeSetMessages(updated.id, importedMessages, { skipPersist: true });
+  } else if (!storeHasMessages(updated.id)) {
     storeSetMessages(updated.id, updated.messages, { skipPersist: true });
   }
   setActiveSessionId(updated.id);

@@ -84,6 +84,7 @@ vi.mock('@/hooks/useAskSession', () => ({
     resetSession: vi.fn(),
     loadSession: vi.fn(),
     deleteSession: vi.fn(),
+    forkSession: vi.fn(),
     clearAllSessions: vi.fn(),
   }),
 }));

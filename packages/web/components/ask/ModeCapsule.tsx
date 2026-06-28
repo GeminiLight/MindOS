@@ -13,15 +13,15 @@ interface ModeCapsuleProps {
   disabled?: boolean;
 }
 
-function isPermissionMode(value: unknown): value is AgentPermissionMode {
-  return value === 'read' || value === 'ask' || value === 'auto' || value === 'full';
+function isPersistedPermissionMode(value: unknown): value is Exclude<AgentPermissionMode, 'read'> {
+  return value === 'ask' || value === 'auto' || value === 'full';
 }
 
 export function getPersistedPermissionMode(): AgentPermissionMode {
   if (typeof window === 'undefined') return 'ask';
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
-    if (isPermissionMode(stored)) return stored;
+    if (isPersistedPermissionMode(stored)) return stored;
   } catch {
     // localStorage unavailable; keep the in-memory default.
   }
@@ -30,7 +30,7 @@ export function getPersistedPermissionMode(): AgentPermissionMode {
 
 export function persistPermissionMode(mode: AgentPermissionMode): void {
   try {
-    localStorage.setItem(STORAGE_KEY, mode);
+    localStorage.setItem(STORAGE_KEY, mode === 'read' ? 'ask' : mode);
   } catch {
     // localStorage unavailable; the current render still uses the selected value.
   }
@@ -51,22 +51,21 @@ export default function ModeCapsule({ mode, onChange, disabled }: ModeCapsulePro
     title: zh ? '权限' : 'Permission',
     read: zh ? '只读' : 'Read only',
     readDesc: zh ? '只读文件和知识库，不执行修改。' : 'Read files and knowledge without making edits.',
-    ask: zh ? '先询问' : 'Ask first',
+    ask: zh ? '询问' : 'Ask',
     askDesc: zh ? '编辑、联网和有副作用操作前先询问。' : 'Ask before edits, internet access, or side-effect tools.',
-    auto: zh ? '自动批准' : 'Auto approve',
+    auto: zh ? '自动' : 'Auto',
     autoDesc: zh ? '低风险操作自动执行，敏感操作再询问。' : 'Run low-risk actions automatically; ask for risky actions.',
-    full: zh ? '完全访问' : 'Full access',
+    full: zh ? '完全' : 'Full',
     fullDesc: zh ? '本地工具完全开放；仅在可信任务中使用。' : 'Unrestricted local tools. Use with care.',
   };
 
   const options: Array<AskOptionCapsuleOption<AgentPermissionMode>> = [
-    { value: 'read', label: copy.read, description: copy.readDesc, icon: permissionIcon('read', 13) },
     { value: 'ask', label: copy.ask, description: copy.askDesc, icon: permissionIcon('ask', 13) },
     { value: 'auto', label: copy.auto, description: copy.autoDesc, icon: permissionIcon('auto', 13) },
     { value: 'full', label: copy.full, description: copy.fullDesc, icon: permissionIcon('full', 13) },
   ];
 
-  const selected = options.find((option) => option.value === mode) ?? options[1]!;
+  const selected = options.find((option) => option.value === mode) ?? options[0]!;
 
   return (
     <AskOptionCapsule

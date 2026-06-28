@@ -1,5 +1,5 @@
 import { redactSensitiveText } from '../../agent/redaction.js';
-import type { AcpAgentCapabilities, AcpSession } from './types.js';
+import { isAcpCapabilitySupported, type AcpAgentCapabilities, type AcpSession } from './types.js';
 
 export type AcpHandshakeHealthStatus = 'ready' | 'failed';
 
@@ -35,7 +35,7 @@ export type AcpHandshakeHealthResult = {
 };
 
 export type AcpHandshakeHealthSessionServices = {
-  createSession(agentId: string, options: { cwd: string; permissionMode?: 'agent' | 'readonly' }): Promise<AcpSession>;
+  createSession(agentId: string, options: { cwd: string; permissionMode?: 'readonly' | 'ask' | 'auto' | 'full' }): Promise<AcpSession>;
   closeSession(sessionId: string): Promise<void>;
 };
 
@@ -164,8 +164,8 @@ function sessionHealth(session: AcpSession): AcpHandshakeSessionHealth {
     sessionId: session.id,
     ...(session.agentSessionId ? { externalSessionId: session.agentSessionId } : {}),
     supportsLoadSession: session.agentCapabilities?.loadSession === true,
-    supportsListSessions: session.agentCapabilities?.sessionCapabilities?.list === true,
-    supportsClose: session.agentCapabilities?.sessionCapabilities?.close === true,
+    supportsListSessions: isAcpCapabilitySupported(session.agentCapabilities?.sessionCapabilities?.list),
+    supportsClose: isAcpCapabilitySupported(session.agentCapabilities?.sessionCapabilities?.close),
     modeCount: session.modes?.length ?? 0,
     configOptionCount: session.configOptions?.length ?? 0,
     mcpServerCount: session.mcpServers?.length ?? 0,

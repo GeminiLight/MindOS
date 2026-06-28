@@ -14,6 +14,7 @@ import {
   clearSessions,
   createSessionEntry,
   deleteSession,
+  forkSession,
   getActiveSessionId,
   getSessionModelSelection,
   getSessions,
@@ -264,6 +265,55 @@ describe('agent-session-store', () => {
       expect(getSessions().find((s) => s.id === 's1')?.pinned).toBe(true);
       togglePinSession('s1');
       expect(getSessions().find((s) => s.id === 's1')?.pinned).toBe(false);
+    });
+
+    it('forkSession clones a local snapshot without sharing external runtime bindings', async () => {
+      const { byMethod } = installFetchMock([
+        serverSession({
+          id: 's1',
+          title: 'Runtime chat',
+          pinned: true,
+          defaultAgentRuntime: codexRuntime,
+          runtimeSessionBinding: {
+            kind: 'codex-thread',
+            runtime: 'codex',
+            runtimeId: 'codex',
+            externalSessionId: 'thread-original',
+            status: 'active',
+            updatedAt: 1_000,
+          },
+          externalAgentBinding: {
+            runtime: 'codex',
+            externalSessionId: 'thread-original',
+            updatedAt: 1_000,
+          },
+        }),
+      ]);
+      await initSessions({});
+      storeSetMessages('s1', [
+        userMsg('fork me'),
+        { role: 'assistant', content: 'forked answer' } as Message,
+      ], { skipPersist: true });
+
+      const forkedId = forkSession('s1', {});
+
+      expect(forkedId).toBeTruthy();
+      expect(forkedId).not.toBe('s1');
+      expect(getActiveSessionId()).toBe(forkedId);
+      const forked = getSessions().find((s) => s.id === forkedId);
+      expect(forked).toBeTruthy();
+      expect(forked?.title).toBe('Runtime chat copy');
+      expect(forked?.pinned).toBe(false);
+      expect(forked?.defaultAgentRuntime).toEqual(codexRuntime);
+      expect(forked?.runtimeSessionBinding).toBeUndefined();
+      expect(forked?.externalAgentBinding).toBeUndefined();
+      expect(getMessages(forkedId!).map((m) => m.content)).toEqual(['fork me', 'forked answer']);
+
+      const payload = lastPostPayload(byMethod);
+      expect(payload.id).toBe(forkedId);
+      expect(payload.runtimeSessionBinding).toBeUndefined();
+      expect(payload.externalAgentBinding).toBeUndefined();
+      expect(payload.messages.map((m) => m.content)).toEqual(['fork me', 'forked answer']);
     });
 
     it('noteCurrentFile lands in the next persist payload without reordering or bumping updatedAt', async () => {

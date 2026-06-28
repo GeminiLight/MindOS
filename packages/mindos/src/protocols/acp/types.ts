@@ -87,13 +87,19 @@ export interface AcpMcpCapabilities {
   stdio?: boolean;
   http?: boolean;
   sse?: boolean;
+  acp?: boolean;
 }
 
 export interface AcpSessionCapabilities {
   list?: boolean;
+  delete?: boolean;
   resume?: boolean;
   fork?: boolean;
   close?: boolean;
+}
+
+export function isAcpCapabilitySupported(value: unknown): boolean {
+  return value === true || (!!value && typeof value === 'object' && !Array.isArray(value));
 }
 
 /** What the agent declares it supports (from initialize response). */
@@ -334,7 +340,7 @@ export interface AcpSessionSnapshot {
 
 export interface AcpSessionMcpServerSummary {
   name: string;
-  type: 'stdio' | 'http' | 'sse';
+  type: 'stdio' | 'http' | 'sse' | 'acp';
 }
 
 /* ── Registry ─────────────────────────────────────────────────────────── */

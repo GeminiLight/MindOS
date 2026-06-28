@@ -45,7 +45,7 @@ describe('resolveAgentCommand', () => {
     const result = resolveAgentCommand('gemini', fakeRegistry);
     expect(result.source).toBe('descriptor');
     expect(result.cmd).toBe('gemini');
-    expect(result.args).toEqual(['--experimental-acp']);
+    expect(result.args).toEqual(['--acp']);
   });
 
   it('falls back to registry for unknown agent', () => {
@@ -84,6 +84,34 @@ describe('resolveAgentCommand', () => {
     expect(result.source).toBe('descriptor');
     expect(result.cmd).toBe('npx');
     expect(result.args).toContain('@agentclientprotocol/claude-agent-acp');
+  });
+
+  it('resolves Codex ACP through the ACP adapter wrapper', () => {
+    const result = resolveAgentCommand('codex-acp');
+    expect(result.source).toBe('descriptor');
+    expect(result.cmd).toBe('npx');
+    expect(result.args).toContain('@agentclientprotocol/codex-acp');
+  });
+
+  it('resolves Kimi through its ACP stdio subcommand', () => {
+    const result = resolveAgentCommand('kimi');
+    expect(result.source).toBe('descriptor');
+    expect(result.cmd).toBe('kimi');
+    expect(result.args).toEqual(['acp']);
+  });
+
+  it('resolves OpenCode through its ACP stdio subcommand', () => {
+    const result = resolveAgentCommand('opencode');
+    expect(result.source).toBe('descriptor');
+    expect(result.cmd).toBe('opencode');
+    expect(result.args).toEqual(['acp']);
+  });
+
+  it('resolves Qwen Code through its ACP flag', () => {
+    const result = resolveAgentCommand('qwen-code');
+    expect(result.source).toBe('descriptor');
+    expect(result.cmd).toBe('qwen');
+    expect(result.args).toEqual(['--acp']);
   });
 });
 
@@ -450,6 +478,10 @@ describe('AGENT_DESCRIPTORS', () => {
     expect(binaries.length).toBe(uniqueBinaries.size);
   });
 
+  it('does not advertise the Pi CLI as a built-in ACP adapter', () => {
+    expect(AGENT_DESCRIPTORS.pi).toBeUndefined();
+  });
+
   it('includes Windows APPDATA presence directories for VS Code-family agents', () => {
     expect(AGENT_DESCRIPTORS['cline'].presenceDirs).toContain('%APPDATA%/Code/User/globalStorage/saoudrizwan.claude-dev/');
   });
@@ -464,7 +496,6 @@ describe('resolveAlias', () => {
     expect(resolveAlias('claude-acp')).toBe('claude');
     expect(resolveAlias('codebuddy')).toBe('codebuddy-code');
     expect(resolveAlias('codex')).toBe('codex-acp');
-    expect(resolveAlias('pi-acp')).toBe('pi');
   });
 
   it('returns canonical IDs unchanged', () => {

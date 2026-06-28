@@ -5,6 +5,7 @@ import { createRoot } from 'react-dom/client';
 import ChatContent from '@/components/chat/ChatContent';
 import { LAST_AGENT_RUNTIME_STORAGE_KEY } from '@/lib/ask-runtime-preference';
 import type { ChatSession } from '@/lib/types';
+import type { RuntimeSessionEntry } from '@/lib/runtime-session-entry';
 
 const mockSetMessages = vi.fn();
 const mockPersistSession = vi.fn();
@@ -136,6 +137,7 @@ vi.mock('@/hooks/useAskSession', () => ({
     resetSession: mockResetSession,
     loadSession: mockLoadSession,
     deleteSession: mockDeleteSession,
+    forkSession: vi.fn(),
     renameSession: vi.fn(),
     togglePinSession: vi.fn(),
     clearSessions: mockClearSessions,
@@ -227,38 +229,38 @@ vi.mock('@/components/ask/SessionHistoryPanel', () => ({
     onClose?: () => void;
     onNewChat?: () => void;
     onDelete?: (id: string) => void;
-    codexThreads?: Array<{ id: string; name?: string; preview?: string; cwd?: string; updatedAt?: number }>;
-    codexThreadsLoading?: boolean;
-    codexThreadsError?: string | null;
-    onAttachCodexThread?: (thread: { id: string; name?: string; preview?: string; cwd?: string; updatedAt?: number }) => void;
-    onForkCodexThread?: (thread: { id: string; name?: string; preview?: string; cwd?: string; updatedAt?: number }) => void;
-    onArchiveCodexThread?: (thread: { id: string; name?: string; preview?: string; cwd?: string; updatedAt?: number }) => void;
+    runtimeSessions?: RuntimeSessionEntry[];
+    runtimeSessionsLoading?: boolean;
+    runtimeSessionsError?: string | null;
+    onAttachRuntimeSession?: (entry: RuntimeSessionEntry) => void;
+    onForkRuntimeSession?: (entry: RuntimeSessionEntry) => void;
+    onArchiveRuntimeSession?: (entry: RuntimeSessionEntry) => void;
   }) => {
     mockSessionHistoryPanelProps(props);
     return (
       <div data-testid="history-session-list">
         {props.sessions?.map((session) => <span key={session.id}>{session.title ?? session.id}</span>)}
-        {props.codexThreadsLoading && <span>Loading Codex threads...</span>}
-        {props.codexThreadsError && <span>{props.codexThreadsError}</span>}
-        {props.codexThreads?.map((thread) => <span key={thread.id}>{thread.name ?? thread.id}</span>)}
+        {props.runtimeSessionsLoading && <span>Loading runtime sessions...</span>}
+        {props.runtimeSessionsError && <span>{props.runtimeSessionsError}</span>}
+        {props.runtimeSessions?.map((entry) => <span key={entry.id}>{entry.title ?? entry.id}</span>)}
         {props.sessions?.map((session) => (
           <button key={`load-${session.id}`} type="button" onClick={() => props.onLoad?.(session.id)}>
             Load {session.title ?? session.id}
           </button>
         ))}
-        {props.codexThreads?.map((thread) => (
-          <button key={`attach-${thread.id}`} type="button" onClick={() => props.onAttachCodexThread?.(thread)}>
-            Attach {thread.name ?? thread.id}
+        {props.runtimeSessions?.map((entry) => (
+          <button key={`attach-${entry.id}`} type="button" onClick={() => props.onAttachRuntimeSession?.(entry)}>
+            Attach {entry.title ?? entry.id}
           </button>
         ))}
-        {props.codexThreads?.map((thread) => (
-          <button key={`fork-${thread.id}`} type="button" onClick={() => props.onForkCodexThread?.(thread)}>
-            Fork {thread.name ?? thread.id}
+        {props.runtimeSessions?.map((entry) => (
+          <button key={`fork-${entry.id}`} type="button" onClick={() => props.onForkRuntimeSession?.(entry)}>
+            Fork {entry.title ?? entry.id}
           </button>
         ))}
-        {props.codexThreads?.map((thread) => (
-          <button key={`archive-${thread.id}`} type="button" onClick={() => props.onArchiveCodexThread?.(thread)}>
-            Archive {thread.name ?? thread.id}
+        {props.runtimeSessions?.map((entry) => (
+          <button key={`archive-${entry.id}`} type="button" onClick={() => props.onArchiveRuntimeSession?.(entry)}>
+            Archive {entry.title ?? entry.id}
           </button>
         ))}
         <button type="button" onClick={() => props.onNewChat?.()}>History New Chat</button>
@@ -1358,7 +1360,7 @@ describe('ChatContent ACP session binding', () => {
     });
   });
 
-  it('loads Codex local threads in runtime history and attaches without starting a turn', async () => {
+  it('loads Codex runtime sessions in history and attaches without starting a turn', async () => {
     mockNativeRuntimeDescriptors = [{
       id: 'codex',
       name: 'Codex',
@@ -1382,11 +1384,31 @@ describe('ChatContent ACP session binding', () => {
       cwd: '/tmp/repo',
       updatedAt: 123,
     };
+    const turnTimestamp = '2026-06-29T00:00:00.000Z';
     const fetchMock = vi.fn(async (url: RequestInfo | URL) => {
       if (String(url).startsWith('/api/agent-runtimes/codex/threads?')) {
         return {
           ok: true,
           json: async () => ({ data: [codexThread], nextCursor: null, backwardsCursor: null }),
+        };
+      }
+      if (String(url) === '/api/agent-runtimes/codex/threads/thread_existing?includeTurns=1') {
+        return {
+          ok: true,
+          json: async () => ({
+            thread: {
+              ...codexThread,
+              turns: [{
+                timestamp: turnTimestamp,
+                input: [{ type: 'text', text: 'previous user prompt' }],
+                output: [{
+                  type: 'message',
+                  role: 'assistant',
+                  content: [{ type: 'output_text', text: 'previous assistant answer' }],
+                }],
+              }],
+            },
+          }),
         };
       }
       return {
@@ -1425,7 +1447,13 @@ describe('ChatContent ACP session binding', () => {
     await act(async () => {
       attach.click();
     });
+    await act(async () => {
+      await Promise.resolve();
+    });
 
+    expect(fetchMock.mock.calls.some(([url]) => (
+      String(url) === '/api/agent-runtimes/codex/threads/thread_existing?includeTurns=1'
+    ))).toBe(true);
     expect(mockAttachRuntimeSession).toHaveBeenCalledWith(
       { id: 'codex', name: 'Codex', kind: 'codex' },
       {
@@ -1434,11 +1462,163 @@ describe('ChatContent ACP session binding', () => {
         status: 'active',
         updatedAt: 123,
       },
-      { title: 'Runtime fix thread' },
+      {
+        title: 'Runtime fix thread',
+        messages: [
+          {
+            role: 'user',
+            content: 'previous user prompt',
+            timestamp: Date.parse(turnTimestamp),
+            agentId: 'codex',
+            agentName: 'Codex',
+            agentKind: 'codex',
+          },
+          {
+            role: 'assistant',
+            content: 'previous assistant answer',
+            timestamp: Date.parse(turnTimestamp),
+            agentId: 'codex',
+            agentName: 'Codex',
+            agentKind: 'codex',
+          },
+        ],
+      },
     );
     expect(fetchMock.mock.calls.some(([url]) => isAgentTurnUrl(url))).toBe(false);
     expect(host.querySelector('[data-testid="history-session-list"]')).toBeNull();
     expect(host.querySelector('[data-testid="runtime-switcher"]')?.textContent).toBe('Codex');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('loads history for an already bound empty Codex session row', async () => {
+    mockNativeRuntimeDescriptors = [{
+      id: 'codex',
+      name: 'Codex',
+      kind: 'codex',
+      status: 'available',
+      capabilities: {},
+    }];
+    const turnTimestamp = '2026-06-29T01:00:00.000Z';
+    const boundCodexSession: ChatSession = {
+      id: 's-codex-empty',
+      title: 'Scanned Codex thread',
+      createdAt: 1,
+      updatedAt: 1,
+      messages: [],
+      defaultAgentRuntime: { id: 'codex', name: 'Codex', kind: 'codex' },
+      runtimeSessionBinding: {
+        kind: 'codex-thread',
+        runtime: 'codex',
+        runtimeId: 'codex',
+        externalSessionId: 'thread_scanned',
+        cwd: '/tmp/repo',
+        status: 'active',
+        updatedAt: 123,
+      },
+    };
+    mockSessions = [boundCodexSession];
+    mockActiveSession = boundCodexSession;
+    mockActiveSessionId = boundCodexSession.id;
+
+    const fetchMock = vi.fn(async (url: RequestInfo | URL) => {
+      if (String(url).startsWith('/api/agent-runtimes/codex/threads?')) {
+        return {
+          ok: true,
+          json: async () => ({ data: [], nextCursor: null, backwardsCursor: null }),
+        };
+      }
+      if (String(url) === '/api/agent-runtimes/codex/threads/thread_scanned?includeTurns=1') {
+        return {
+          ok: true,
+          json: async () => ({
+            thread: {
+              id: 'thread_scanned',
+              name: 'Scanned Codex thread',
+              cwd: '/tmp/repo',
+              updatedAt: 123,
+              turns: [{
+                timestamp: turnTimestamp,
+                input: [{ type: 'text', text: 'scanned user prompt' }],
+                output: [{
+                  type: 'message',
+                  role: 'assistant',
+                  content: [{ type: 'output_text', text: 'scanned assistant answer' }],
+                }],
+              }],
+            },
+          }),
+        };
+      }
+      return {
+        ok: true,
+        body: new ReadableStream(),
+        json: async () => ({}),
+      };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<ChatContent visible variant="panel" />);
+    });
+
+    const toggleHistoryButton = Array.from(host.querySelectorAll('button')).find((button) => button.textContent === 'Toggle History') as HTMLButtonElement;
+    await act(async () => {
+      toggleHistoryButton.click();
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const load = Array.from(host.querySelectorAll('button')).find((button) => button.textContent === 'Load Scanned Codex thread') as HTMLButtonElement;
+    await act(async () => {
+      load.click();
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(mockLoadSession).toHaveBeenCalledWith('s-codex-empty');
+    expect(fetchMock.mock.calls.some(([url]) => (
+      String(url) === '/api/agent-runtimes/codex/threads/thread_scanned?includeTurns=1'
+    ))).toBe(true);
+    expect(mockAttachRuntimeSession).toHaveBeenCalledWith(
+      { id: 'codex', name: 'Codex', kind: 'codex' },
+      {
+        externalSessionId: 'thread_scanned',
+        cwd: '/tmp/repo',
+        status: 'active',
+        updatedAt: 123,
+      },
+      {
+        title: 'Scanned Codex thread',
+        messages: [
+          {
+            role: 'user',
+            content: 'scanned user prompt',
+            timestamp: Date.parse(turnTimestamp),
+            agentId: 'codex',
+            agentName: 'Codex',
+            agentKind: 'codex',
+          },
+          {
+            role: 'assistant',
+            content: 'scanned assistant answer',
+            timestamp: Date.parse(turnTimestamp),
+            agentId: 'codex',
+            agentName: 'Codex',
+            agentKind: 'codex',
+          },
+        ],
+      },
+    );
+    expect(fetchMock.mock.calls.some(([url]) => isAgentTurnUrl(url))).toBe(false);
 
     await act(async () => {
       root.unmount();

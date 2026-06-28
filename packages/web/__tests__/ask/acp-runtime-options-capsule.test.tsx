@@ -2,8 +2,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
-import AcpRuntimeOptionsCapsule from '@/components/ask/AcpRuntimeOptionsCapsule';
-import type { RuntimeSessionProjection } from '@/lib/types';
+import AcpRuntimeOptionsCapsule, {
+  getPersistedAcpRuntimeOptions,
+  persistAcpRuntimeOptions,
+} from '@/components/ask/AcpRuntimeOptionsCapsule';
+import type { AcpRuntimeOptions, RuntimeSessionProjection } from '@/lib/types';
 
 const baseProjection: RuntimeSessionProjection = {
   schemaVersion: 1,
@@ -80,8 +83,9 @@ const baseProjection: RuntimeSessionProjection = {
 };
 
 function renderCapsule(
-  projection: RuntimeSessionProjection,
+  projection: RuntimeSessionProjection | null,
   onChange = vi.fn(),
+  value: AcpRuntimeOptions = {},
 ) {
   const host = document.createElement('div');
   document.body.appendChild(host);
@@ -91,7 +95,8 @@ function renderCapsule(
     root.render(
       <AcpRuntimeOptionsCapsule
         projection={projection}
-        value={{}}
+        runtime={{ kind: 'acp', id: 'fake-acp', name: 'Fake ACP' }}
+        value={value}
         onChange={onChange}
       />,
     );
@@ -121,13 +126,41 @@ function clickButtonContaining(text: string) {
 describe('AcpRuntimeOptionsCapsule', () => {
   beforeEach(() => {
     document.body.innerHTML = '';
+    localStorage.clear();
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+  });
+
+  it('writes model selection as ACP configValues', () => {
+    const view = renderCapsule(baseProjection);
+
+    clickButtonContaining('Cheap');
+    clickButtonContaining('Smart');
+
+    expect(view.onChange).toHaveBeenLastCalledWith({
+      configValues: { model: 'smart' },
+    });
+
+    view.cleanup();
+  });
+
+  it('writes effort selection as ACP reasoning configValues', () => {
+    const view = renderCapsule(baseProjection);
+
+    clickButtonContaining('Low');
+    expect(document.body.textContent).toContain('Effort');
+    clickButtonContaining('High');
+
+    expect(view.onChange).toHaveBeenLastCalledWith({
+      configValues: { reasoning_effort: 'high' },
+    });
+
+    view.cleanup();
   });
 
   it('writes config-backed mode selection as configValues instead of modeId', () => {
     const view = renderCapsule(baseProjection);
 
-    clickButtonContaining('Default');
+    clickButtonContaining('Build');
     clickButtonContaining('Code');
 
     expect(view.onChange).toHaveBeenLastCalledWith({
@@ -148,10 +181,96 @@ describe('AcpRuntimeOptionsCapsule', () => {
     };
     const view = renderCapsule(projection);
 
-    clickButtonContaining('Default');
+    clickButtonContaining('Build');
     clickButtonContaining('Code');
 
     expect(view.onChange).toHaveBeenLastCalledWith({ modeId: 'code' });
+
+    view.cleanup();
+  });
+
+  it('shows a default Build/Plan agent mode control before ACP projection is available', () => {
+    const view = renderCapsule(null);
+
+    expect(view.host.textContent).toContain('Default');
+    expect(view.host.textContent).toContain('Medium');
+
+    clickButtonContaining('Build');
+    clickButtonContaining('Plan');
+
+    expect(view.onChange).toHaveBeenLastCalledWith({ modeId: 'plan' });
+
+    view.cleanup();
+  });
+
+  it('shows fallback ACP model and effort controls before projection is available', () => {
+    const view = renderCapsule(null);
+
+    clickButtonContaining('Medium');
+    clickButtonContaining('High');
+    expect(view.onChange).toHaveBeenLastCalledWith({
+      configValues: { reasoning_effort: 'high' },
+    });
+
+    clickButtonContaining('Default');
+    const input = document.body.querySelector('input[placeholder="model id"]') as HTMLInputElement;
+    expect(input).toBeTruthy();
+
+    act(() => {
+      const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+      valueSetter?.call(input, 'gpt-acp-test');
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+
+    const applyButton = Array.from(document.body.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('Apply')) as HTMLButtonElement;
+    act(() => {
+      applyButton.click();
+    });
+
+    expect(view.onChange).toHaveBeenLastCalledWith({
+      configValues: { model: 'gpt-acp-test' },
+    });
+
+    view.cleanup();
+  });
+
+  it('persists compact ACP runtime options per runtime id', () => {
+    persistAcpRuntimeOptions(' fake-acp ', {
+      modeId: ' plan ',
+      configValues: {
+        model: ' smart ',
+        empty: '',
+        ' reasoning_effort ': ' high ',
+      },
+    });
+
+    expect(getPersistedAcpRuntimeOptions('fake-acp')).toEqual({
+      modeId: 'plan',
+      configValues: {
+        model: 'smart',
+        reasoning_effort: 'high',
+      },
+    });
+
+    expect(getPersistedAcpRuntimeOptions('other-acp')).toEqual({});
+
+    persistAcpRuntimeOptions('fake-acp', {});
+    expect(getPersistedAcpRuntimeOptions('fake-acp')).toEqual({});
+  });
+
+  it('uses persisted ACP values as the selected capsule labels', () => {
+    const view = renderCapsule(baseProjection, vi.fn(), {
+      modeId: 'plan',
+      configValues: {
+        model: 'smart',
+        reasoning_effort: 'high',
+      },
+    });
+
+    expect(view.host.textContent).toContain('Smart');
+    expect(view.host.textContent).toContain('High');
 
     view.cleanup();
   });

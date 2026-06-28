@@ -93,6 +93,13 @@ export function getSessionAgentRuntime(
   if (binding?.runtime === 'claude') {
     return { id: binding.runtimeId, name: 'Claude Code', kind: 'claude' };
   }
+  if (binding?.runtime === 'acp') {
+    return {
+      id: binding.runtimeId,
+      name: session?.defaultAgentRuntime?.name ?? session?.defaultAcpAgent?.name ?? binding.runtimeId,
+      kind: 'acp',
+    };
+  }
   return null;
 }
 
@@ -181,10 +188,11 @@ export function getDisplayRuntimeSessionBinding(
 }
 
 export function getRuntimeSessionSummary(
-  session: Pick<ChatSession, 'runtimeSessionBinding' | 'externalAgentBinding'> | null | undefined,
+  session: Pick<ChatSession, 'runtimeSessionBinding' | 'externalAgentBinding' | 'defaultAgentRuntime' | 'defaultAcpAgent'> | null | undefined,
 ): {
   binding: RuntimeSessionBinding;
   label: string;
+  runtimeLabel: string;
   idLabel: string;
   cwd?: string;
   status?: NonNullable<RuntimeSessionBinding['status']>;
@@ -193,15 +201,55 @@ export function getRuntimeSessionSummary(
   if (!binding) return null;
 
   const label = runtimeSessionKindLabel(binding.kind);
+  const runtimeLabel = binding.runtime === 'acp'
+    ? (session?.defaultAgentRuntime?.name ?? session?.defaultAcpAgent?.name ?? 'ACP')
+    : binding.runtime === 'claude'
+      ? 'Claude'
+      : binding.runtime === 'codex'
+        ? 'Codex'
+        : 'Pi';
   return {
     binding,
     label,
+    runtimeLabel,
     idLabel: binding.externalSessionId
       ? `${label} ${shortRuntimeSessionId(binding.externalSessionId)}`
       : `Unlinked ${label}`,
     ...(binding.cwd ? { cwd: binding.cwd } : {}),
     ...(binding.status && binding.status !== 'active' ? { status: binding.status } : {}),
   };
+}
+
+export type RuntimeSessionSummary = ReturnType<typeof getRuntimeSessionSummary>;
+
+export function compactRuntimeSessionPathLabel(value: string | null | undefined): string | null {
+  const trimmed = value?.trim();
+  if (!trimmed) return null;
+  const normalized = trimmed.replace(/[\\/]+$/, '');
+  const parts = normalized.split(/[\\/]+/).filter(Boolean);
+  const leaf = parts[parts.length - 1];
+  return leaf ? `/${leaf}` : trimmed;
+}
+
+export function runtimeSessionCompactLabel(summary: RuntimeSessionSummary): string | null {
+  if (!summary) return null;
+  if (summary.binding.kind === 'mindos-pi-session') return 'Pi';
+  if (summary.binding.runtime === 'codex' || summary.binding.kind === 'codex-thread') return 'Codex';
+  if (summary.binding.runtime === 'claude' || summary.binding.kind === 'claude-session') return 'Claude';
+  return summary.runtimeLabel || 'ACP';
+}
+
+export function runtimeSessionTooltip(summary: RuntimeSessionSummary): string | undefined {
+  if (!summary) return undefined;
+  const fullExternalId = summary.binding.externalSessionId
+    ? `${summary.label} ${summary.binding.externalSessionId}`
+    : null;
+  const parts = [
+    fullExternalId ?? summary.idLabel,
+    summary.cwd,
+    summary.status ? `Status: ${summary.status}` : null,
+  ].filter(Boolean);
+  return parts.length > 0 ? parts.join(' · ') : undefined;
 }
 
 export function bindSessionAgent(session: ChatSession, agent: AgentIdentity | null): ChatSession {
@@ -218,6 +266,7 @@ function runtimeSessionKind(runtime: AgentRuntimeIdentity): RuntimeSessionKind |
   if (runtime.kind === 'mindos') return 'mindos-pi-session';
   if (runtime.kind === 'codex') return 'codex-thread';
   if (runtime.kind === 'claude') return 'claude-session';
+  if (runtime.kind === 'acp') return 'acp-session';
   return null;
 }
 

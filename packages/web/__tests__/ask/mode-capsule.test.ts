@@ -27,9 +27,15 @@ describe('Permission capsule persistence', () => {
   });
 
   it('returns stored permission mode values', async () => {
+    store[STORAGE_KEY] = 'auto';
+    const { getPersistedPermissionMode } = await import('@/components/ask/ModeCapsule');
+    expect(getPersistedPermissionMode()).toBe('auto');
+  });
+
+  it('does not restore the legacy read-only composer permission', async () => {
     store[STORAGE_KEY] = 'read';
     const { getPersistedPermissionMode } = await import('@/components/ask/ModeCapsule');
-    expect(getPersistedPermissionMode()).toBe('read');
+    expect(getPersistedPermissionMode()).toBe('ask');
   });
 
   it('falls back to ask permission for invalid stored values', async () => {
@@ -41,7 +47,7 @@ describe('Permission capsule persistence', () => {
   it('persists permission mode without writing legacy ask-mode storage', async () => {
     const { persistPermissionMode } = await import('@/components/ask/ModeCapsule');
     persistPermissionMode('read');
-    expect(store[STORAGE_KEY]).toBe('read');
+    expect(store[STORAGE_KEY]).toBe('ask');
 
     persistPermissionMode('full');
     expect(store[STORAGE_KEY]).toBe('full');

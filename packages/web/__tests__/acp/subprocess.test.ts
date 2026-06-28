@@ -52,7 +52,7 @@ describe('spawnAcpAgent', () => {
 
     expect(mockSpawn).toHaveBeenCalledWith(
       '/Users/test/bin/gemini',
-      ['--experimental-acp'],
+      ['--acp'],
       expect.objectContaining({ shell: false }),
     );
   });

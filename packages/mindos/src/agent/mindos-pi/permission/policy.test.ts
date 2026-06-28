@@ -49,7 +49,7 @@ describe('MindOS Pi permission policy', () => {
       mode: 'ask',
       permissionMode: 'ask',
       runtimePermissionMode: 'agent',
-      acpPermissionMode: 'agent',
+      acpPermissionMode: 'ask',
       toolScope: {
         kbRead: true,
         kbWrite: 'bounded',
@@ -84,7 +84,7 @@ describe('MindOS Pi permission policy', () => {
       mode: 'auto',
       permissionMode: 'auto',
       runtimePermissionMode: 'agent',
-      acpPermissionMode: 'agent',
+      acpPermissionMode: 'auto',
       toolScope: {
         kbRead: true,
         kbWrite: 'all',
@@ -115,7 +115,7 @@ describe('MindOS Pi permission policy', () => {
       mode: 'full',
       permissionMode: 'full',
       runtimePermissionMode: 'agent',
-      acpPermissionMode: 'agent',
+      acpPermissionMode: 'full',
       toolScope: {
         kbRead: true,
         kbWrite: 'all',
@@ -185,7 +185,9 @@ describe('MindOS Pi permission policy', () => {
     expect(createMindosAgentPermissionPolicy('full').runtimePermissionMode).toBe('agent');
 
     expect(createMindosAgentPermissionPolicy('read').acpPermissionMode).toBe('readonly');
-    expect(createMindosAgentPermissionPolicy('ask').acpPermissionMode).toBe('agent');
+    expect(createMindosAgentPermissionPolicy('ask').acpPermissionMode).toBe('ask');
+    expect(createMindosAgentPermissionPolicy('auto').acpPermissionMode).toBe('auto');
+    expect(createMindosAgentPermissionPolicy('full').acpPermissionMode).toBe('full');
   });
 
   it('maps runtime contexts into the same product-mode policy contract', () => {

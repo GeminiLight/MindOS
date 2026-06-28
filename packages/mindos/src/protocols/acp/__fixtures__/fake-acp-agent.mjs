@@ -16,7 +16,7 @@ class FakeAcpAgent {
       agentCapabilities: {
         loadSession: false,
         sessionCapabilities: {
-          close: true,
+          close: {},
         },
       },
     };
@@ -149,7 +149,7 @@ class FakeAcpAgent {
     this.sessions.get(params.sessionId)?.pendingPrompt?.abort();
   }
 
-  async unstable_closeSession(params) {
+  async closeSession(params) {
     this.sessions.delete(params.sessionId);
     return {};
   }

@@ -637,7 +637,7 @@ describe('MindOS server contract: settings, embedding, protocols', () => {
 
   it('handles ACP control-plane routes through injected protocol services', async () => {
     let settings: { acpAgents?: Record<string, any> } = {
-      acpAgents: { gemini: { command: 'gemini', args: ['--experimental-acp'] } },
+      acpAgents: { gemini: { command: 'gemini', args: ['--acp'] } },
     };
     let detectCalls = 0;
     const createSessionCalls: Array<{ agentId: string; options?: any }> = [];

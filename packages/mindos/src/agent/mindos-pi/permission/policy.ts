@@ -5,6 +5,7 @@ import {
 } from '../../permission/index.js';
 
 export type MindosHarnessPermissionMode = 'readonly' | 'agent';
+export type MindosAcpPermissionMode = 'readonly' | 'ask' | 'auto' | 'full';
 export type MindosKbWriteScope = 'none' | 'bounded' | 'all';
 
 export type MindosExtensionScope =
@@ -36,7 +37,7 @@ export interface MindosAgentPermissionPolicy {
   mode: MindosPermissionMode;
   permissionMode: MindosPermissionMode;
   runtimePermissionMode: MindosHarnessPermissionMode;
-  acpPermissionMode: MindosHarnessPermissionMode;
+  acpPermissionMode: MindosAcpPermissionMode;
   toolScope: MindosAgentToolScope;
   kbToolNames: readonly string[];
   writeToolNames: readonly string[];
@@ -208,7 +209,7 @@ function askPolicy(): MindosAgentPermissionPolicy {
     mode: 'ask',
     permissionMode: 'ask',
     runtimePermissionMode: 'agent',
-    acpPermissionMode: 'agent',
+    acpPermissionMode: 'ask',
     toolScope: askToolScope(),
     kbToolNames: [...MINDOS_ASK_KB_TOOL_NAMES],
     writeToolNames: [...MINDOS_WRITE_TOOL_NAMES],
@@ -221,7 +222,7 @@ function autoPolicy(): MindosAgentPermissionPolicy {
     mode: 'auto',
     permissionMode: 'auto',
     runtimePermissionMode: 'agent',
-    acpPermissionMode: 'agent',
+    acpPermissionMode: 'auto',
     toolScope: autoToolScope(),
     kbToolNames: [],
     writeToolNames: [...MINDOS_WRITE_TOOL_NAMES],
@@ -234,7 +235,7 @@ function fullPolicy(): MindosAgentPermissionPolicy {
     mode: 'full',
     permissionMode: 'full',
     runtimePermissionMode: 'agent',
-    acpPermissionMode: 'agent',
+    acpPermissionMode: 'full',
     toolScope: fullToolScope(),
     kbToolNames: [],
     writeToolNames: [...MINDOS_WRITE_TOOL_NAMES],
