@@ -22,6 +22,7 @@ const mockRunMindosNativeAgentTurn = vi.fn();
 const mockRunMindosAcpAgentTurn = vi.fn();
 const mockRunMindosPiAgentTurnSession = vi.fn();
 const mockCreateAcpSession = vi.fn();
+const mockLoadAcpSession = vi.fn();
 const mockSetAcpMode = vi.fn();
 const mockSetAcpConfigOption = vi.fn();
 const mockCreateMindosAgentRuntime = vi.fn();
@@ -168,6 +169,7 @@ vi.mock('@geminilight/mindos/agent/mindos-pi', async (importOriginal) => {
 
 vi.mock('@/lib/acp/session', () => ({
   createSession: mockCreateAcpSession,
+  loadSession: mockLoadAcpSession,
   setMode: mockSetAcpMode,
   setConfigOption: mockSetAcpConfigOption,
   promptStream: vi.fn(),
@@ -221,6 +223,8 @@ describe('/api/agent/sessions/:sessionId/turns native runtime routing', () => {
     mockRunMindosPiAgentTurnSession.mockReset();
     mockCreateAcpSession.mockReset();
     mockCreateAcpSession.mockResolvedValue({ id: 'acp-session-1' });
+    mockLoadAcpSession.mockReset();
+    mockLoadAcpSession.mockResolvedValue({ id: 'acp-loaded-session', agentSessionId: 'agent-session-existing', agentCapabilities: { loadSession: true } });
     mockSetAcpMode.mockReset();
     mockSetAcpMode.mockResolvedValue(undefined);
     mockSetAcpConfigOption.mockReset();
@@ -1367,6 +1371,78 @@ describe('/api/agent/sessions/:sessionId/turns native runtime routing', () => {
         }),
       }),
     ]);
+  });
+
+  it('passes ACP runtime bindings through to the ACP lane for session resume', async () => {
+    startAgentRun({
+      agentKind: 'acp',
+      runtimeId: 'gemini',
+      displayName: 'Gemini ACP',
+      chatSessionId: 'chat-acp-resume',
+      cwd: getTestMindRoot(),
+      permissionMode: 'ask',
+      inputSummary: 'existing ACP run',
+      archive: { sessionId: 'agent-session-existing' },
+      metadata: { externalSessionId: 'agent-session-existing' },
+      status: 'completed',
+    });
+
+    mockRunMindosAcpAgentTurn.mockImplementationOnce(async (options: Record<string, any>) => {
+      capturedAcpOptions = options;
+      const session = await options.loadSession(options.agentId, options.externalSessionId, { cwd: options.cwd });
+      await options.onSessionReady?.(session, {
+        resumed: true,
+        externalSessionId: session.agentSessionId,
+      });
+      options.send({
+        type: 'runtime_binding',
+        runtime: 'acp',
+        externalSessionId: session.agentSessionId,
+        cwd: options.cwd,
+        status: 'active',
+      });
+      options.send({ type: 'text_delta', delta: 'acp resumed' });
+      options.send({ type: 'done' });
+      return {};
+    });
+
+    const res = await POST(agentTurnRequest({
+      messages: [{ role: 'user', content: 'Continue through ACP' }],
+      selectedRuntime: { id: 'gemini', name: 'Gemini ACP', kind: 'acp' },
+      runtimeBinding: {
+        kind: 'acp-session',
+        runtime: 'acp',
+        runtimeId: 'gemini',
+        externalSessionId: 'agent-session-existing',
+        status: 'active',
+        updatedAt: 1,
+      },
+      chatSessionId: 'chat-acp-resume',
+    }));
+    const text = await res.text();
+
+    expect(res.status).toBe(200);
+    expect(text).toContain('acp resumed');
+    expect(text).toContain('"type":"runtime_binding"');
+    expect(capturedAcpOptions?.agentId).toBe('gemini');
+    expect(capturedAcpOptions?.externalSessionId).toBe('agent-session-existing');
+    expect(mockLoadAcpSession).toHaveBeenCalledWith(
+      'gemini',
+      'agent-session-existing',
+      expect.objectContaining({ permissionMode: 'agent' }),
+    );
+    expect(listAgentRuns({ kind: 'acp' })[0]).toEqual(
+      expect.objectContaining({
+        agentKind: 'acp',
+        runtimeId: 'gemini',
+        status: 'completed',
+        archive: { sessionId: 'agent-session-existing' },
+        metadata: expect.objectContaining({
+          externalSessionId: 'agent-session-existing',
+          resumed: true,
+        }),
+      }),
+    );
   });
 
   it('maps selected ACP runtime in Inbox Organizer assistant runs to agent session permission', async () => {

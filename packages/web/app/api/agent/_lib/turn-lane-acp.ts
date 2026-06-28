@@ -17,6 +17,7 @@ import {
 } from '@geminilight/mindos/agent/ledger/run-ledger';
 import {
   createSession,
+  loadSession,
   promptStream,
   cancelPrompt,
   closeSession,
@@ -90,22 +91,26 @@ async function runAcpRuntimeTurn(
       signal: input.requestSignal,
       permissionRunId: acpRun.id,
       createSession: async (agentId, options) => {
-        const optionEnv = compactStringEnv((options as { env?: Record<string, string | undefined> } | undefined)?.env);
-        const mergedEnv = compactStringEnv({ ...(input.acpRuntimeEnvOverlay ?? {}), ...(optionEnv ?? {}) });
-        const session = await createSession(agentId, {
-          ...options,
-          ...(mergedEnv ? { env: mergedEnv } : {}),
-          permissionMode: input.permissionPolicy.acpPermissionMode,
-        });
+        const session = await createSession(agentId, acpSessionOptions(input, options));
         await applyAcpRuntimeOptions(session.id, input.acpRuntimeOptions);
+        return session;
+      },
+      loadSession: async (agentId, existingSessionId, options) => {
+        const session = await loadSession(agentId, existingSessionId, acpSessionOptions(input, options));
+        await applyAcpRuntimeOptions(session.id, input.acpRuntimeOptions);
+        return session;
+      },
+      externalSessionId: resumableAcpBindingExternalSessionId(input.runtimeBinding),
+      onSessionReady: (session, details) => {
         updateAgentRun(acpRun.id, {
-          archive: { sessionId: session.id },
+          archive: { sessionId: details.externalSessionId ?? session.id },
           metadata: {
             phase: 'prompt',
             sessionId: session.id,
+            resumed: details.resumed,
+            ...(details.externalSessionId ? { externalSessionId: details.externalSessionId } : {}),
           },
         });
-        return session;
       },
       timeoutMs: resolveMindosAgentTimeoutMs(process.env.MINDOS_AGENT_TIMEOUT_MS),
       hasContent: () => hasContent,
@@ -145,6 +150,26 @@ async function runAcpRuntimeTurn(
   } else {
     completeAgentRun(acpRun.id, { outputSummary });
   }
+}
+
+function acpSessionOptions(
+  input: RunAcpRuntimeLaneTurnInput,
+  options: { cwd: string; permissionMode?: 'agent' | 'readonly'; env?: Record<string, string | undefined> },
+) {
+  const { env: optionRawEnv, ...baseOptions } = options;
+  const optionEnv = compactStringEnv(optionRawEnv);
+  const mergedEnv = compactStringEnv({ ...(input.acpRuntimeEnvOverlay ?? {}), ...(optionEnv ?? {}) });
+  return {
+    ...baseOptions,
+    ...(mergedEnv ? { env: mergedEnv } : {}),
+    permissionMode: input.permissionPolicy.acpPermissionMode,
+  };
+}
+
+function resumableAcpBindingExternalSessionId(binding: RunAcpRuntimeLaneTurnInput['runtimeBinding']): string | undefined {
+  if (binding?.runtime !== 'acp' || binding.kind !== 'acp-session') return undefined;
+  if (binding.status && binding.status !== 'active') return undefined;
+  return binding.externalSessionId?.trim() || undefined;
 }
 
 async function applyAcpRuntimeOptions(sessionId: string, options: RunAcpRuntimeLaneTurnInput['acpRuntimeOptions']): Promise<void> {

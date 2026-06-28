@@ -519,6 +519,15 @@ describe('ACP Session (SDK-based)', () => {
         sessionId: 'agent-ses-close',
       });
     });
+
+    it('can release the local process without closing a resumable agent session', async () => {
+      mockNewSession.mockResolvedValueOnce({ sessionId: 'agent-ses-preserve' });
+      const session = await createSessionFromEntry(MOCK_ENTRY);
+      await closeSession(session.id, { closeAgentSession: false });
+
+      expect(mockUnstableCloseSession).not.toHaveBeenCalled();
+      expect(getSession(session.id)).toBeUndefined();
+    });
   });
 
   describe('getActiveSessions', () => {

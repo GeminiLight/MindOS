@@ -911,8 +911,28 @@ function planEntryIcon(status: string | undefined): string {
   return '\u23f3';
 }
 
+export type MindosAcpAgentTurnSession = {
+  id: string;
+  agentSessionId?: string;
+  agentCapabilities?: { loadSession?: boolean };
+};
+
+export type MindosAcpAgentTurnSessionOptions = {
+  cwd: string;
+  permissionMode?: 'agent' | 'readonly';
+};
+
+export type MindosAcpAgentTurnCloseOptions = {
+  closeAgentSession?: boolean;
+};
+
 export type MindosAcpAgentTurnServices = {
-  createSession(agentId: string, options: { cwd: string; permissionMode?: 'agent' | 'readonly' }): Promise<{ id: string }>;
+  createSession(agentId: string, options: MindosAcpAgentTurnSessionOptions): Promise<MindosAcpAgentTurnSession>;
+  loadSession?(
+    agentId: string,
+    existingSessionId: string,
+    options: MindosAcpAgentTurnSessionOptions,
+  ): Promise<MindosAcpAgentTurnSession>;
   promptStream(
     sessionId: string,
     prompt: string,
@@ -920,7 +940,7 @@ export type MindosAcpAgentTurnServices = {
     signal?: AbortSignal,
   ): Promise<void>;
   cancelPrompt?(sessionId: string): Promise<void>;
-  closeSession(sessionId: string): Promise<void>;
+  closeSession(sessionId: string, options?: MindosAcpAgentTurnCloseOptions): Promise<void>;
 };
 
 export type MindosAcpAgentTurnOptions = MindosAcpAgentTurnServices & {
@@ -938,6 +958,11 @@ export type MindosAcpAgentTurnOptions = MindosAcpAgentTurnServices & {
   retryDelay?: (attempt: number) => number;
   timeoutMessage?: (timeoutMs: number) => string;
   errorMessage?: (error: Error) => string;
+  externalSessionId?: string;
+  onSessionReady?(
+    session: MindosAcpAgentTurnSession,
+    details: { resumed: boolean; externalSessionId?: string },
+  ): void | Promise<void>;
 };
 
 export type MindosAcpAgentTurnResult = {
@@ -946,12 +971,15 @@ export type MindosAcpAgentTurnResult = {
 
 export async function runMindosAcpAgentTurn(options: MindosAcpAgentTurnOptions): Promise<MindosAcpAgentTurnResult> {
   let sessionId: string | undefined;
+  let closeAgentSessionOnCleanup = true;
 
   const closeCurrentSession = async () => {
     if (!sessionId) return;
     const id = sessionId;
+    const closeAgentSession = closeAgentSessionOnCleanup;
     sessionId = undefined;
-    await options.closeSession(id).catch(() => {});
+    closeAgentSessionOnCleanup = true;
+    await options.closeSession(id, { closeAgentSession }).catch(() => {});
   };
 
   try {
@@ -966,8 +994,28 @@ export async function runMindosAcpAgentTurn(options: MindosAcpAgentTurnOptions):
       onAttemptError: closeCurrentSession,
       execute: async () => {
         await closeCurrentSession();
-        const session = await options.createSession(options.agentId, { cwd: options.cwd });
+        const sessionOpen = await openAcpTurnSession(options);
+        const session = sessionOpen.session;
         sessionId = session.id;
+        closeAgentSessionOnCleanup = true;
+        const externalSessionId = resumableAcpSessionId(
+          session,
+          sessionOpen.resumed ? options.externalSessionId : undefined,
+        );
+        closeAgentSessionOnCleanup = !externalSessionId;
+        await options.onSessionReady?.(session, {
+          resumed: sessionOpen.resumed,
+          ...(externalSessionId ? { externalSessionId } : {}),
+        });
+        if (externalSessionId) {
+          options.send({
+            type: 'runtime_binding',
+            runtime: 'acp',
+            externalSessionId,
+            cwd: options.cwd,
+            status: 'active',
+          });
+        }
         let removeAbortListener: (() => void) | undefined;
         const abortPrompt = new Promise<never>((_resolve, reject) => {
           if (!options.signal) return;
@@ -1012,6 +1060,41 @@ export async function runMindosAcpAgentTurn(options: MindosAcpAgentTurnOptions):
   } finally {
     await closeCurrentSession();
   }
+}
+
+async function openAcpTurnSession(
+  options: MindosAcpAgentTurnOptions,
+): Promise<{ session: MindosAcpAgentTurnSession; resumed: boolean }> {
+  const externalSessionId = options.externalSessionId?.trim();
+  if (externalSessionId && options.loadSession) {
+    try {
+      return {
+        session: await options.loadSession(options.agentId, externalSessionId, { cwd: options.cwd }),
+        resumed: true,
+      };
+    } catch {
+      options.send({
+        type: 'status',
+        runtime: 'acp',
+        visible: true,
+        message: 'Could not resume the previous ACP session, so MindOS started a fresh ACP session.',
+      });
+    }
+  }
+
+  return {
+    session: await options.createSession(options.agentId, { cwd: options.cwd }),
+    resumed: false,
+  };
+}
+
+function resumableAcpSessionId(
+  session: MindosAcpAgentTurnSession,
+  fallbackExternalSessionId?: string,
+): string | undefined {
+  const externalSessionId = session.agentSessionId?.trim() || fallbackExternalSessionId?.trim();
+  if (!externalSessionId) return undefined;
+  return session.agentCapabilities?.loadSession ? externalSessionId : undefined;
 }
 
 export async function runMindosWithTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {

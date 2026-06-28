@@ -7,6 +7,7 @@ import {
   type AgentRuntimesServices,
 } from '@geminilight/mindos/server';
 import { checkNativeRuntimeHealth, detectLocalAcpAgents, resolveCommandPath, resolveCommandPathCandidates } from '@/lib/acp/detect-local';
+import { getAcpHandshakeHealthForRuntimes } from '@/lib/acp/handshake-health';
 import { readSettings } from '@/lib/settings';
 import { toNextResponse } from '../../_mindos-adapter';
 
@@ -28,5 +29,6 @@ export async function GET(req: Request) {
       if (response.status === 200 && response.body && 'runtimes' in response.body) return response.body.runtimes;
       throw new Error('Failed to build runtime descriptors for adapter projections.');
     },
+    listAcpHandshakeHealth: ({ runtimes, probe, force }) => getAcpHandshakeHealthForRuntimes(runtimes, { probe, force }),
   }));
 }

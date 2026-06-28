@@ -15,6 +15,7 @@ import type {
 } from '../../agent/runtime/registry.js';
 import type {
   AcpAdapterConnectionType,
+  AcpHandshakeHealthResult,
   AcpMcpCapabilities,
   AcpPromptCapabilities,
   AcpSessionCapabilities,
@@ -65,6 +66,20 @@ export type AgentRuntimeAdapterHealthProjection = AdapterFacetBase & {
   owner: AgentRuntimeOwner;
   hasCommand: boolean;
   timeoutMs?: number;
+  handshake?: {
+    status: AcpHandshakeHealthResult['status'] | 'unknown';
+    stage?: AcpHandshakeHealthResult['stage'];
+    checkedAt?: string;
+    expiresAt?: string;
+    cached?: boolean;
+    message?: string;
+    supportsLoadSession?: boolean;
+    supportsListSessions?: boolean;
+    supportsClose?: boolean;
+    modeCount?: number;
+    configOptionCount?: number;
+    mcpServerCount?: number;
+  };
 };
 
 export type AgentRuntimeAdapterCommandsProjection = AdapterFacetBase & {
@@ -130,6 +145,11 @@ export type AgentRuntimeAdapterProjectionsPayload = {
 
 export type AgentRuntimeAdapterProjectionServices = {
   listRuntimes(): AgentRuntimeDescriptor[] | Promise<AgentRuntimeDescriptor[]>;
+  listAcpHandshakeHealth?(input: {
+    runtimes: AgentRuntimeDescriptor[];
+    probe: boolean;
+    force: boolean;
+  }): Promise<AcpHandshakeHealthResult[]> | AcpHandshakeHealthResult[];
 };
 
 export async function handleAgentRuntimeAdapterProjectionsGet(
@@ -138,7 +158,12 @@ export async function handleAgentRuntimeAdapterProjectionsGet(
 ): Promise<MindosServerResponse<AgentRuntimeAdapterProjectionsPayload | { error: string }>> {
   try {
     const runtimes = await services.listRuntimes();
-    const payload = buildAgentRuntimeAdapterProjectionsPayload({ runtimes });
+    const acpHandshakeHealth = await services.listAcpHandshakeHealth?.({
+      runtimes,
+      probe: searchParams.get('handshake') === '1',
+      force: searchParams.get('force') === '1',
+    }) ?? [];
+    const payload = buildAgentRuntimeAdapterProjectionsPayload({ runtimes, acpHandshakeHealth });
     const runtimeFilter = searchParams.get('runtime')?.trim();
     const projections = runtimeFilter
       ? payload.projections.filter((projection) => projection.runtimeId === runtimeFilter || projection.runtimeKind === runtimeFilter)
@@ -154,17 +179,22 @@ export async function handleAgentRuntimeAdapterProjectionsGet(
 
 export function buildAgentRuntimeAdapterProjectionsPayload(input: {
   runtimes: AgentRuntimeDescriptor[];
+  acpHandshakeHealth?: AcpHandshakeHealthResult[];
 }): AgentRuntimeAdapterProjectionsPayload {
+  const handshakeByRuntime = byAcpHandshake(input.acpHandshakeHealth ?? []);
   return {
     schemaVersion: 1,
-    projections: input.runtimes.map((runtime) => buildRuntimeAdapterProjection(runtime)),
+    projections: input.runtimes.map((runtime) => buildRuntimeAdapterProjection(runtime, handshakeByRuntime.get(runtimeKey(runtime)))),
   };
 }
 
-function buildRuntimeAdapterProjection(runtime: AgentRuntimeDescriptor): AgentRuntimeAdapterProjection {
+function buildRuntimeAdapterProjection(
+  runtime: AgentRuntimeDescriptor,
+  handshake: AcpHandshakeHealthResult | undefined,
+): AgentRuntimeAdapterProjection {
   const connection = buildConnectionProjection(runtime);
   const configuration = buildConfigurationProjection(runtime);
-  const health = buildHealthProjection(runtime);
+  const health = buildHealthProjection(runtime, handshake);
   const commands = buildCommandsProjection(runtime);
   const output = buildOutputProjection(runtime);
   const protocol = buildProtocolProjection(runtime);
@@ -400,14 +430,24 @@ function buildConfigurationProjection(runtime: AgentRuntimeDescriptor): AgentRun
   };
 }
 
-function buildHealthProjection(runtime: AgentRuntimeDescriptor): AgentRuntimeAdapterHealthProjection {
+function buildHealthProjection(
+  runtime: AgentRuntimeDescriptor,
+  handshake: AcpHandshakeHealthResult | undefined,
+): AgentRuntimeAdapterHealthProjection {
   const contract = runtime.adapterContract.health;
   const blockers: string[] = [];
+  const handshakeFailed = runtime.kind === 'acp' && handshake?.status === 'failed';
+  const handshakeReady = runtime.kind === 'acp' && handshake?.status === 'ready';
   if (runtime.status !== 'available') blockers.push('runtime-available');
-  if (contract.mode === 'unknown' || contract.mode === 'unsupported') blockers.push('adapter-health-contract');
+  if (handshakeFailed) blockers.push('acp-handshake');
+  if (!handshakeReady && (contract.mode === 'unknown' || contract.mode === 'unsupported')) blockers.push('adapter-health-contract');
   const status = runtime.status !== 'available'
     ? 'blocked'
-    : contract.mode === 'unsupported' ? 'blocked' : contract.mode === 'unknown' ? 'unknown' : 'ready';
+    : handshakeFailed
+      ? 'blocked'
+      : handshakeReady
+        ? 'ready'
+        : contract.mode === 'unsupported' ? 'blocked' : contract.mode === 'unknown' ? 'unknown' : 'ready';
 
   return {
     status,
@@ -415,21 +455,63 @@ function buildHealthProjection(runtime: AgentRuntimeDescriptor): AgentRuntimeAda
     owner: contract.owner,
     hasCommand: !!contract.command,
     ...(contract.timeoutMs !== undefined ? { timeoutMs: contract.timeoutMs } : {}),
-    summary: contract.summary,
+    ...(runtime.kind === 'acp' ? { handshake: handshakeProjection(handshake) } : {}),
+    summary: handshake
+      ? acpHandshakeSummary(runtime.name, handshake)
+      : contract.summary,
     reasons: [
       reason(
         'adapter-health-contract',
-        healthModeStatus(contract.mode),
+        handshakeReady ? 'satisfied' : healthModeStatus(contract.mode),
         contract.owner,
-        contract.mode === 'unknown'
+        handshakeReady
+          ? `${runtime.name} has a cached successful ACP initialize and session handshake.`
+          : contract.mode === 'unknown'
           ? `${runtime.name} does not declare adapter-specific health semantics yet.`
           : contract.mode === 'unsupported'
             ? `${runtime.name} declares that adapter health checks are unsupported.`
             : `${runtime.name} health is covered by ${contract.mode}.`,
       ),
+      ...(runtime.kind === 'acp' ? [reason(
+        'acp-handshake',
+        !handshake ? 'unknown' : handshake.status === 'ready' ? 'satisfied' : 'missing',
+        'shared',
+        !handshake
+          ? `${runtime.name} has not completed an ACP initialize/session handshake in this MindOS process yet.`
+          : handshake.status === 'ready'
+            ? `${runtime.name} completed ACP handshake stage ${handshake.stage}.`
+            : `${runtime.name} failed ACP handshake stage ${handshake.stage}${handshake.message ? `: ${handshake.message}` : '.'}`,
+      )] : []),
     ],
     ...(blockers.length > 0 ? { blockers: uniqSorted(blockers) } : {}),
   };
+}
+
+function handshakeProjection(handshake: AcpHandshakeHealthResult | undefined): NonNullable<AgentRuntimeAdapterHealthProjection['handshake']> {
+  if (!handshake) return { status: 'unknown' };
+  return {
+    status: handshake.status,
+    stage: handshake.stage,
+    checkedAt: handshake.checkedAt,
+    expiresAt: handshake.expiresAt,
+    ...(handshake.cached !== undefined ? { cached: handshake.cached } : {}),
+    ...(handshake.message ? { message: handshake.message } : {}),
+    ...(handshake.session ? {
+      supportsLoadSession: handshake.session.supportsLoadSession,
+      supportsListSessions: handshake.session.supportsListSessions,
+      supportsClose: handshake.session.supportsClose,
+      modeCount: handshake.session.modeCount,
+      configOptionCount: handshake.session.configOptionCount,
+      mcpServerCount: handshake.session.mcpServerCount,
+    } : {}),
+  };
+}
+
+function acpHandshakeSummary(runtimeName: string, handshake: AcpHandshakeHealthResult): string {
+  if (handshake.status === 'ready') {
+    return `${runtimeName} completed a cached ACP ${handshake.stage} handshake.`;
+  }
+  return `${runtimeName} failed a cached ACP ${handshake.stage} handshake.`;
 }
 
 function buildCommandsProjection(runtime: AgentRuntimeDescriptor): AgentRuntimeAdapterCommandsProjection {
@@ -604,6 +686,10 @@ function reason(
 
 function runtimeKey(runtime: AgentRuntimeDescriptor): string {
   return runtime.runtimeId ?? runtime.id;
+}
+
+function byAcpHandshake(results: AcpHandshakeHealthResult[]): Map<string, AcpHandshakeHealthResult> {
+  return new Map(results.map((result) => [result.agentId, result]));
 }
 
 function uniqSorted<T extends string>(values: T[]): T[] {

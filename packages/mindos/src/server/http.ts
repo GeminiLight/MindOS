@@ -19,6 +19,7 @@ import {
 import { createMindRootTreeCache } from './tree-cache.js';
 import { MINDOS_SERVER_ROUTES } from './contract.js';
 import { createDefaultMcpAgents, createDefaultSkillAgentRegistry } from './mcp-agent-registry.js';
+import { listCachedAcpHandshakeHealth } from '../protocols/acp/index.js';
 import { handleA2aAgentsGet, handleA2aDelegationsGet, handleA2aDiscoverPost, handleA2aOptions, handleA2aPost } from './handlers/a2a.js';
 import {
   handleAcpConfigDelete,
@@ -1295,12 +1296,18 @@ function createHttpMcpProjectionServices(services: MindosHttpServices, searchPar
       throw new Error('Failed to build MCP agent profiles for runtime projections.');
     },
     readMcpConfig: () => services.mcpTools?.readMcpConfig() ?? { mcpServers: {} },
+    listAcpHandshakeHealth: ({ runtimes }: { runtimes: Awaited<ReturnType<typeof listHttpRuntimeDescriptors>> }) => (
+      listCachedAcpHandshakeHealth(runtimes.filter((runtime) => runtime.kind === 'acp').map((runtime) => runtime.id))
+    ),
   };
 }
 
 function createHttpRuntimeProjectionServices(services: MindosHttpServices, searchParams: URLSearchParams) {
   return {
     listRuntimes: () => listHttpRuntimeDescriptors(services, searchParams),
+    listAcpHandshakeHealth: ({ runtimes }: { runtimes: Awaited<ReturnType<typeof listHttpRuntimeDescriptors>> }) => (
+      listCachedAcpHandshakeHealth(runtimes.filter((runtime) => runtime.kind === 'acp').map((runtime) => runtime.id))
+    ),
   };
 }
 

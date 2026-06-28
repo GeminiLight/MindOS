@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   resolveCommandPath: vi.fn(),
   resolveCommandPathCandidates: vi.fn(),
   checkNativeRuntimeHealth: vi.fn(),
+  getAcpHandshakeHealthForRuntimes: vi.fn(),
 }));
 
 vi.mock('@geminilight/mindos/server', async () => {
@@ -26,6 +27,10 @@ vi.mock('@/lib/acp/detect-local', () => ({
   checkNativeRuntimeHealth: mocks.checkNativeRuntimeHealth,
 }));
 
+vi.mock('@/lib/acp/handshake-health', () => ({
+  getAcpHandshakeHealthForRuntimes: mocks.getAcpHandshakeHealthForRuntimes,
+}));
+
 beforeEach(() => {
   mocks.resolveCommandPath.mockReset().mockImplementation(async (command: string) => {
     if (command === 'codex') return '/usr/local/bin/codex';
@@ -34,6 +39,7 @@ beforeEach(() => {
   });
   mocks.resolveCommandPathCandidates.mockReset().mockResolvedValue([]);
   mocks.checkNativeRuntimeHealth.mockReset().mockResolvedValue({ status: 'available' });
+  mocks.getAcpHandshakeHealthForRuntimes.mockReset().mockResolvedValue([]);
   mocks.detectLocalAcpAgents.mockReset().mockResolvedValue({
     installed: [
       { id: 'codex-acp', name: 'Codex', binaryPath: '/usr/local/bin/codex', status: 'available' },
@@ -167,6 +173,52 @@ describe('GET /api/agent-runtimes/adapter-projections', () => {
       expect.objectContaining({
         runtimeId: 'opaque-acp',
         status: 'limited',
+      }),
+    ]);
+  });
+
+  it('passes explicit handshake probes through to ACP health diagnostics', async () => {
+    mocks.getAcpHandshakeHealthForRuntimes.mockResolvedValueOnce([{
+      schemaVersion: 1,
+      agentId: 'opaque-acp',
+      status: 'ready',
+      stage: 'session-new',
+      checkedAt: '2026-06-28T00:00:00.000Z',
+      expiresAt: '2026-06-28T00:05:00.000Z',
+      session: {
+        sessionId: 'ses-local',
+        externalSessionId: 'agent-session-1',
+        supportsLoadSession: true,
+        supportsListSessions: true,
+        supportsClose: true,
+        modeCount: 0,
+        configOptionCount: 0,
+        mcpServerCount: 0,
+        authMethodCount: 0,
+      },
+    }]);
+
+    const { GET } = await importRoute();
+    const res = await GET(new Request('http://localhost/api/agent-runtimes/adapter-projections?handshake=1&force=1&runtime=opaque-acp'));
+    const body = await res.json();
+
+    expect(res.status, JSON.stringify(body)).toBe(200);
+    expect(mocks.getAcpHandshakeHealthForRuntimes).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'opaque-acp', kind: 'acp' }),
+      ]),
+      { probe: true, force: true },
+    );
+    expect(body.projections).toEqual([
+      expect.objectContaining({
+        runtimeId: 'opaque-acp',
+        health: expect.objectContaining({
+          status: 'ready',
+          handshake: expect.objectContaining({
+            status: 'ready',
+            supportsLoadSession: true,
+          }),
+        }),
       }),
     ]);
   });

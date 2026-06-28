@@ -9,6 +9,7 @@ import {
   buildAgentRuntimeReadinessPayload,
   handleAgentRuntimeReadinessGet,
 } from './runtime-readiness.js';
+import type { AcpHandshakeHealthResult } from '../../protocols/acp/index.js';
 
 const CHECKED_AT = '2026-06-25T00:00:00.000Z';
 
@@ -295,6 +296,54 @@ describe('runtime readiness projections', () => {
     expect(response).toMatchObject({
       status: 400,
       body: { error: 'Unsupported permissionMode: magic' },
+    });
+  });
+
+  it('surfaces ACP handshake failures as blocking readiness gaps', () => {
+    const handshake: AcpHandshakeHealthResult = {
+      schemaVersion: 1,
+      agentId: 'declared-acp',
+      status: 'failed',
+      stage: 'session-new',
+      checkedAt: '2026-06-28T00:00:00.000Z',
+      expiresAt: '2026-06-28T00:05:00.000Z',
+      message: 'session/new failed',
+    };
+
+    const payload = buildAgentRuntimeReadinessPayload({
+      runtimes: runtimes(),
+      mcpAgents: mcpAgents(),
+      acpHandshakeHealth: [handshake],
+      permissionMode: 'ask',
+    });
+    const declared = payload.projections.find((projection) => projection.runtimeId === 'declared-acp');
+
+    expect(declared).toMatchObject({
+      runtimeId: 'declared-acp',
+      overallStatus: 'blocked',
+      blockers: expect.arrayContaining(['acp-handshake']),
+      gaps: expect.arrayContaining([
+        expect.objectContaining({
+          id: 'acp-handshake',
+          category: 'shared',
+          severity: 'blocking',
+        }),
+      ]),
+    });
+    expect(declared?.useCases.find((entry) => entry.id === 'adapter-contract')).toMatchObject({
+      source: 'adapter-projection',
+      sourceStatus: 'blocked',
+      status: 'blocked',
+      blockers: expect.arrayContaining(['acp-handshake']),
+      details: expect.objectContaining({
+        health: expect.objectContaining({
+          status: 'blocked',
+          handshake: expect.objectContaining({
+            status: 'failed',
+            stage: 'session-new',
+          }),
+        }),
+      }),
     });
   });
 });

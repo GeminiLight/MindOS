@@ -8,6 +8,7 @@ import {
   buildAgentRuntimeAdapterProjectionsPayload,
   handleAgentRuntimeAdapterProjectionsGet,
 } from './runtime-adapter-projections.js';
+import type { AcpHandshakeHealthResult } from '../../protocols/acp/index.js';
 
 const CHECKED_AT = '2026-06-25T00:00:00.000Z';
 
@@ -269,6 +270,88 @@ describe('runtime adapter projections', () => {
         authRequired: true,
       },
       blockers: ['adapter-command-discovery', 'adapter-health-contract', 'adapter-output-contract', 'adapter-protocol-connection'],
+    });
+  });
+
+  it('uses cached ACP handshake success as concrete adapter health evidence', () => {
+    const handshake: AcpHandshakeHealthResult = {
+      schemaVersion: 1,
+      agentId: 'opaque-acp',
+      status: 'ready',
+      stage: 'session-new',
+      checkedAt: '2026-06-28T00:00:00.000Z',
+      expiresAt: '2026-06-28T00:05:00.000Z',
+      cached: true,
+      session: {
+        sessionId: 'ses-local',
+        externalSessionId: 'agent-session-1',
+        supportsLoadSession: true,
+        supportsListSessions: true,
+        supportsClose: true,
+        modeCount: 2,
+        configOptionCount: 1,
+        mcpServerCount: 1,
+        authMethodCount: 0,
+      },
+    };
+
+    const payload = buildAgentRuntimeAdapterProjectionsPayload({
+      runtimes: runtimeFixtures(),
+      acpHandshakeHealth: [handshake],
+    });
+    const opaque = payload.projections.find((projection) => projection.runtimeId === 'opaque-acp');
+
+    expect(opaque).toMatchObject({
+      runtimeId: 'opaque-acp',
+      health: {
+        status: 'ready',
+        handshake: {
+          status: 'ready',
+          stage: 'session-new',
+          cached: true,
+          supportsLoadSession: true,
+          supportsListSessions: true,
+          supportsClose: true,
+          modeCount: 2,
+          configOptionCount: 1,
+          mcpServerCount: 1,
+        },
+      },
+    });
+    expect(opaque?.health.blockers ?? []).not.toContain('adapter-health-contract');
+    expect(opaque?.blockers ?? []).not.toContain('adapter-health-contract');
+  });
+
+  it('treats cached ACP handshake failure as an adapter blocker', () => {
+    const handshake: AcpHandshakeHealthResult = {
+      schemaVersion: 1,
+      agentId: 'declared-acp',
+      status: 'failed',
+      stage: 'initialize',
+      checkedAt: '2026-06-28T00:00:00.000Z',
+      expiresAt: '2026-06-28T00:05:00.000Z',
+      message: 'Command not found',
+    };
+
+    const payload = buildAgentRuntimeAdapterProjectionsPayload({
+      runtimes: runtimeFixtures(),
+      acpHandshakeHealth: [handshake],
+    });
+    const declared = payload.projections.find((projection) => projection.runtimeId === 'declared-acp');
+
+    expect(declared).toMatchObject({
+      runtimeId: 'declared-acp',
+      status: 'blocked',
+      blockers: expect.arrayContaining(['acp-handshake']),
+      health: {
+        status: 'blocked',
+        blockers: ['acp-handshake'],
+        handshake: {
+          status: 'failed',
+          stage: 'initialize',
+          message: 'Command not found',
+        },
+      },
     });
   });
 });

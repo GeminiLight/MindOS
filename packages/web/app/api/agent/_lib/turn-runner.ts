@@ -380,6 +380,7 @@ export async function runAgentTurnRequestBody(
       ...externalTurnBase,
       acpRuntimeOptions,
       acpRuntimeEnvOverlay,
+      runtimeBinding: selectedAcpAgent ? body.runtimeBinding ?? null : null,
     });
   }
 

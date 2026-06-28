@@ -1227,6 +1227,99 @@ describe('MindOS session event contract', () => {
     expect(closed).toEqual(['agent-1:/mind']);
   });
 
+  it('resumes ACP turns from an external session binding when the adapter supports loadSession', async () => {
+    const events: Array<{ type: string; delta?: string; runtime?: string; externalSessionId?: string; cwd?: string; status?: string }> = [];
+    const closed: Array<{ sessionId: string; closeAgentSession?: boolean }> = [];
+    let created = 0;
+    const loaded: string[] = [];
+
+    const result = await runMindosAcpAgentTurn({
+      agentId: 'agent-1',
+      cwd: '/mind',
+      prompt: 'continue',
+      externalSessionId: 'agent-ses-1',
+      hasContent: () => events.some((event) => event.type === 'text_delta'),
+      send: (event) => events.push(event),
+      createSession: async () => {
+        created += 1;
+        return { id: 'fresh-session' };
+      },
+      loadSession: async (_agentId, existingSessionId, options) => {
+        loaded.push(`${existingSessionId}:${options.cwd}`);
+        return {
+          id: 'loaded-session',
+          agentSessionId: existingSessionId,
+          agentCapabilities: { loadSession: true },
+        };
+      },
+      promptStream: async (_sessionId, _prompt, onUpdate) => {
+        onUpdate({ type: 'text', text: 'resumed' });
+      },
+      closeSession: async (sessionId, options) => {
+        closed.push({ sessionId, closeAgentSession: options?.closeAgentSession });
+      },
+      sleep: async () => {},
+    });
+
+    expect(result.error).toBeUndefined();
+    expect(created).toBe(0);
+    expect(loaded).toEqual(['agent-ses-1:/mind']);
+    expect(events).toEqual([
+      { type: 'runtime_binding', runtime: 'acp', externalSessionId: 'agent-ses-1', cwd: '/mind', status: 'active' },
+      { type: 'text_delta', delta: 'resumed' },
+      { type: 'done' },
+    ]);
+    expect(closed).toEqual([{ sessionId: 'loaded-session', closeAgentSession: false }]);
+  });
+
+  it('starts a fresh ACP session when external session resume fails', async () => {
+    const events: Array<{ type: string; message?: string; visible?: boolean; runtime?: string; delta?: string; externalSessionId?: string; cwd?: string; status?: string }> = [];
+    const ready: Array<{ id: string; resumed: boolean; externalSessionId?: string }> = [];
+    const closed: Array<{ sessionId: string; closeAgentSession?: boolean }> = [];
+
+    const result = await runMindosAcpAgentTurn({
+      agentId: 'agent-1',
+      cwd: '/mind',
+      prompt: 'continue',
+      externalSessionId: 'missing-agent-session',
+      hasContent: () => events.some((event) => event.type === 'text_delta'),
+      send: (event) => events.push(event),
+      loadSession: async () => {
+        throw new Error('session/load failed');
+      },
+      createSession: async () => ({
+        id: 'fresh-session',
+        agentSessionId: 'fresh-agent-session',
+        agentCapabilities: { loadSession: true },
+      }),
+      onSessionReady: async (session, details) => {
+        ready.push({ id: session.id, resumed: details.resumed, externalSessionId: details.externalSessionId });
+      },
+      promptStream: async (_sessionId, _prompt, onUpdate) => {
+        onUpdate({ type: 'text', text: 'fresh' });
+      },
+      closeSession: async (sessionId, options) => {
+        closed.push({ sessionId, closeAgentSession: options?.closeAgentSession });
+      },
+      sleep: async () => {},
+    });
+
+    expect(result.error).toBeUndefined();
+    expect(ready).toEqual([{ id: 'fresh-session', resumed: false, externalSessionId: 'fresh-agent-session' }]);
+    expect(events).toEqual([
+      {
+        type: 'status',
+        runtime: 'acp',
+        visible: true,
+        message: 'Could not resume the previous ACP session, so MindOS started a fresh ACP session.',
+      },
+      { type: 'runtime_binding', runtime: 'acp', externalSessionId: 'fresh-agent-session', cwd: '/mind', status: 'active' },
+      { type: 'text_delta', delta: 'fresh' },
+      { type: 'done' },
+    ]);
+    expect(closed).toEqual([{ sessionId: 'fresh-session', closeAgentSession: false }]);
+  });
+
   it('retries ACP sessions before content and always closes failed sessions', async () => {
     const events: Array<{ type: string; message?: string; delta?: string }> = [];
     const closed: string[] = [];

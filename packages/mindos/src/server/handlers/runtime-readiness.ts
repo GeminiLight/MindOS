@@ -12,6 +12,7 @@ import type {
   AgentRuntimeKind,
   AgentRuntimeStatus,
 } from '../../agent/runtime/registry.js';
+import type { AcpHandshakeHealthResult } from '../../protocols/acp/index.js';
 import { errorResponse, json, type MindosServerResponse } from '../response.js';
 import {
   buildAgentRuntimeArtifactProjectionsPayload,
@@ -129,7 +130,14 @@ export type AgentRuntimeReadinessPayload = {
 };
 
 export type AgentRuntimeReadinessServices = AgentRuntimeMcpProjectionServices
-  & Pick<RuntimeSessionProjectionServices, 'getAcpSessionSnapshots'>;
+  & Pick<RuntimeSessionProjectionServices, 'getAcpSessionSnapshots'>
+  & {
+    listAcpHandshakeHealth?(input: {
+      runtimes: AgentRuntimeDescriptor[];
+      probe: boolean;
+      force: boolean;
+    }): Promise<AcpHandshakeHealthResult[]> | AcpHandshakeHealthResult[];
+  };
 
 type RuntimeProjectionContext = {
   adapterByRuntime: Map<string, AgentRuntimeAdapterProjection>;
@@ -178,10 +186,16 @@ export async function handleAgentRuntimeReadinessGet(
       services.listMcpAgents(),
       services.getAcpSessionSnapshots?.() ?? [],
     ]);
+    const acpHandshakeHealth = await services.listAcpHandshakeHealth?.({
+      runtimes,
+      probe: searchParams.get('handshake') === '1',
+      force: searchParams.get('force') === '1',
+    }) ?? [];
     const payload = buildAgentRuntimeReadinessPayload({
       runtimes,
       mcpAgents,
       acpSessions,
+      acpHandshakeHealth,
       mindosMcpConfig: services.readMcpConfig?.(),
       permissionMode: permissionModeResult.permissionMode,
     });
@@ -202,6 +216,7 @@ export function buildAgentRuntimeReadinessPayload(input: {
   runtimes: AgentRuntimeDescriptor[];
   mcpAgents: Parameters<typeof buildAgentRuntimeMcpProjectionsPayload>[0]['mcpAgents'];
   acpSessions?: Parameters<typeof buildRuntimeSessionProjectionsPayload>[0]['acpSessions'];
+  acpHandshakeHealth?: AcpHandshakeHealthResult[];
   mindosMcpConfig?: Parameters<typeof buildAgentRuntimeMcpProjectionsPayload>[0]['mindosMcpConfig'];
   permissionMode?: MindosPermissionMode;
 }): AgentRuntimeReadinessPayload {
@@ -221,7 +236,10 @@ export function buildAgentRuntimeReadinessPayload(input: {
   });
   const artifactPayload = buildAgentRuntimeArtifactProjectionsPayload({ runtimes: input.runtimes });
   const automationPayload = buildAgentRuntimeAutomationProjectionsPayload({ runtimes: input.runtimes });
-  const adapterPayload = buildAgentRuntimeAdapterProjectionsPayload({ runtimes: input.runtimes });
+  const adapterPayload = buildAgentRuntimeAdapterProjectionsPayload({
+    runtimes: input.runtimes,
+    acpHandshakeHealth: input.acpHandshakeHealth,
+  });
   const context: RuntimeProjectionContext = {
     adapterByRuntime: byRuntime(adapterPayload.projections),
     sessionByRuntime: byRuntime(sessionPayload.projections),

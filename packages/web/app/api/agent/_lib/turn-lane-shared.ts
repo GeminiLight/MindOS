@@ -8,6 +8,7 @@ import type {
   AcpRuntimeOptions,
   AgentPermissionMode,
   NativeRuntimeOptions,
+  RuntimeSessionBinding,
   SessionContextSelection,
   SessionWorkDir,
 } from '@/lib/types';
@@ -44,6 +45,7 @@ export type NativeRuntimeLaneTurnInput = RuntimeLaneBaseInput & {
 export type AcpRuntimeLaneTurnInput = RuntimeLaneBaseInput & {
   acpRuntimeOptions: AcpRuntimeOptions;
   acpRuntimeEnvOverlay?: Record<string, string | undefined>;
+  runtimeBinding?: RuntimeSessionBinding | null;
 };
 
 export type RunNativeRuntimeLaneTurnInput = NativeRuntimeLaneTurnInput & {

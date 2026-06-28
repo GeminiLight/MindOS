@@ -613,6 +613,20 @@ export interface AgentRuntimeAdapterHealthProjection extends AgentRuntimeAdapter
   owner: AgentRuntimeOwner;
   hasCommand: boolean;
   timeoutMs?: number;
+  handshake?: {
+    status: 'ready' | 'failed' | 'unknown';
+    stage?: 'initialize' | 'session-new' | 'session-load';
+    checkedAt?: string;
+    expiresAt?: string;
+    cached?: boolean;
+    message?: string;
+    supportsLoadSession?: boolean;
+    supportsListSessions?: boolean;
+    supportsClose?: boolean;
+    modeCount?: number;
+    configOptionCount?: number;
+    mcpServerCount?: number;
+  };
 }
 
 export interface AgentRuntimeAdapterCommandsProjection extends AgentRuntimeAdapterProjectionFacetBase {

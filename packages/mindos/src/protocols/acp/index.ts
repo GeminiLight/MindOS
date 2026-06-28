@@ -42,6 +42,13 @@ export {
   resolveAcpSessionMcpServers,
 } from './mcp-session-inheritance.js';
 export {
+  checkAcpHandshakeHealth,
+  getCachedAcpHandshakeHealth,
+  listCachedAcpHandshakeHealth,
+  rememberAcpHandshakeHealth,
+  resetAcpHandshakeHealthCacheForTest,
+} from './handshake-health.js';
+export {
   cancelPrompt,
   closeAllSessions,
   closeSession,
@@ -78,6 +85,14 @@ export type {
 export type {
   AcpSessionOptions,
 } from './session.js';
+export type {
+  AcpHandshakeHealthResult,
+  AcpHandshakeHealthSessionServices,
+  AcpHandshakeHealthStage,
+  AcpHandshakeHealthStatus,
+  AcpHandshakeSessionHealth,
+  CheckAcpHandshakeHealthOptions,
+} from './handshake-health.js';
 export type {
   AcpConnection,
   AcpClientCallbacks,

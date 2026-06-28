@@ -43,6 +43,7 @@ import {
   buildAcpSessionMcpInheritancePlan,
   type AcpSessionMcpConfigLike,
 } from './mcp-session-inheritance.js';
+import { rememberAcpHandshakeHealth } from './handshake-health.js';
 import { recordArtifactsFromAcpToolCall } from '../../agent/ledger/artifact-ledger.js';
 import { redactSensitiveText } from '../../agent/redaction.js';
 
@@ -178,6 +179,7 @@ export async function createSessionFromEntry(
 ): Promise<AcpSession> {
   checkSessionLimits(entry.id);
 
+  const startedAt = Date.now();
   const sessionCwd = options?.cwd ?? process.cwd();
   const conn = spawnAndConnect(entry, options);
 
@@ -198,6 +200,13 @@ export async function createSessionFromEntry(
     // Wait briefly for stderr/exit info before diagnosing
     await new Promise(r => setTimeout(r, 200));
     const message = diagnoseInitFailure(conn.process, err as Error);
+    rememberAcpHandshakeHealth({
+      agentId: entry.id,
+      status: 'failed',
+      stage: 'initialize',
+      startedAt,
+      message,
+    });
     killAgent(conn.process);
     throw new Error(message);
   }
@@ -234,6 +243,14 @@ export async function createSessionFromEntry(
     currentModeId ??= currentModeFromConfig(configOptions);
   } catch (sessionErr) {
     const msg = (sessionErr as Error).message ?? '';
+    rememberAcpHandshakeHealth({
+      agentId: entry.id,
+      status: 'failed',
+      stage: 'session-new',
+      startedAt,
+      message: msg,
+      capabilities: agentCapabilities,
+    });
     killAgent(conn.process);
     throw new Error(`${entry.id}: session/new failed: ${msg}`);
   }
@@ -259,6 +276,14 @@ export async function createSessionFromEntry(
 
   sessions.set(sessionId, session);
   sessionConnections.set(sessionId, conn);
+  rememberAcpHandshakeHealth({
+    agentId: entry.id,
+    status: 'ready',
+    stage: 'session-new',
+    startedAt,
+    capabilities: agentCapabilities,
+    session,
+  });
   return session;
 }
 
@@ -270,6 +295,7 @@ export async function loadSession(
   existingSessionId: string,
   options?: AcpSessionOptions,
 ): Promise<AcpSession> {
+  const startedAt = Date.now();
   const entry = resolveConfiguredAcpAgentEntry(agentId, options?.overrides)
     ?? await findAcpAgent(agentId);
   if (!entry) {
@@ -291,11 +317,26 @@ export async function loadSession(
   } catch (err) {
     await new Promise(r => setTimeout(r, 200));
     const message = diagnoseInitFailure(conn.process, err as Error);
+    rememberAcpHandshakeHealth({
+      agentId: entry.id,
+      status: 'failed',
+      stage: 'initialize',
+      startedAt,
+      message,
+    });
     killAgent(conn.process);
     throw new Error(message);
   }
 
   if (!agentCapabilities?.loadSession) {
+    rememberAcpHandshakeHealth({
+      agentId: entry.id,
+      status: 'failed',
+      stage: 'session-load',
+      startedAt,
+      message: `Agent ${agentId} does not support session/load`,
+      capabilities: agentCapabilities,
+    });
     killAgent(conn.process);
     throw new Error(`Agent ${agentId} does not support session/load`);
   }
@@ -316,6 +357,14 @@ export async function loadSession(
     configOptions = parseConfigOptions(loadResult.configOptions);
     currentModeId ??= currentModeFromConfig(configOptions);
   } catch (err) {
+    rememberAcpHandshakeHealth({
+      agentId: entry.id,
+      status: 'failed',
+      stage: 'session-load',
+      startedAt,
+      message: (err as Error).message,
+      capabilities: agentCapabilities,
+    });
     killAgent(conn.process);
     throw new Error(`session/load failed: ${(err as Error).message}`);
   }
@@ -337,6 +386,14 @@ export async function loadSession(
 
   sessions.set(existingSessionId, session);
   sessionConnections.set(existingSessionId, conn);
+  rememberAcpHandshakeHealth({
+    agentId: entry.id,
+    status: 'ready',
+    stage: 'session-load',
+    startedAt,
+    capabilities: agentCapabilities,
+    session,
+  });
   return session;
 }
 
@@ -547,16 +604,21 @@ export async function setConfigOption(
   return session.configOptions ?? [];
 }
 
-export async function closeSession(sessionId: string): Promise<void> {
+export async function closeSession(
+  sessionId: string,
+  options: { closeAgentSession?: boolean } = {},
+): Promise<void> {
   const session = sessions.get(sessionId);
   const conn = sessionConnections.get(sessionId);
 
   if (conn?.process.alive) {
     const wireSessionId = session?.agentSessionId ?? sessionId;
-    try {
-      await conn.connection.unstable_closeSession({ sessionId: wireSessionId });
-    } catch {
-      // Best-effort — many agents don't support session/close
+    if (options.closeAgentSession !== false) {
+      try {
+        await conn.connection.unstable_closeSession({ sessionId: wireSessionId });
+      } catch {
+        // Best-effort — many agents don't support session/close
+      }
     }
     killAgent(conn.process);
   }

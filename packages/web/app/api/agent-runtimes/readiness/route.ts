@@ -11,6 +11,7 @@ import {
   type MindosMcpAgentRegistryDef,
 } from '@geminilight/mindos/server';
 import { checkNativeRuntimeHealth, detectLocalAcpAgents, resolveCommandPath, resolveCommandPathCandidates } from '@/lib/acp/detect-local';
+import { getAcpHandshakeHealthForRuntimes } from '@/lib/acp/handshake-health';
 import { getActiveSessionSnapshots } from '@/lib/acp/session';
 import { getAllAgents, loadCustomAgents, scanCustomAgentSkills } from '@/lib/custom-agents';
 import { getMindRoot } from '@/lib/fs';
@@ -72,5 +73,6 @@ export async function GET(req: Request) {
     },
     readMcpConfig,
     getAcpSessionSnapshots: getActiveSessionSnapshots,
+    listAcpHandshakeHealth: ({ runtimes, probe, force }) => getAcpHandshakeHealthForRuntimes(runtimes, { probe, force }),
   }));
 }

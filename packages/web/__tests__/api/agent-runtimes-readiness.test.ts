@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   resolveCommandPathCandidates: vi.fn(),
   checkNativeRuntimeHealth: vi.fn(),
   getActiveSessionSnapshots: vi.fn(),
+  getAcpHandshakeHealthForRuntimes: vi.fn(),
 }));
 
 vi.mock('@geminilight/mindos/server', async () => {
@@ -43,6 +44,10 @@ vi.mock('@/lib/acp/detect-local', () => ({
 
 vi.mock('@/lib/acp/session', () => ({
   getActiveSessionSnapshots: mocks.getActiveSessionSnapshots,
+}));
+
+vi.mock('@/lib/acp/handshake-health', () => ({
+  getAcpHandshakeHealthForRuntimes: mocks.getAcpHandshakeHealthForRuntimes,
 }));
 
 vi.mock('@/lib/custom-agents', () => ({
@@ -227,6 +232,7 @@ beforeEach(() => {
     notInstalled: [{ id: 'claude', name: 'Claude Code', installCmd: 'npm install -g @anthropic-ai/claude-code' }],
   });
   mocks.getActiveSessionSnapshots.mockReset().mockReturnValue([activeAcpSnapshot()]);
+  mocks.getAcpHandshakeHealthForRuntimes.mockReset().mockResolvedValue([]);
 });
 
 afterEach(() => {
@@ -354,6 +360,43 @@ describe('GET /api/agent-runtimes/readiness', () => {
       expect.objectContaining({
         runtimeId: 'codex',
         overallStatus: 'usable',
+      }),
+    ]);
+  });
+
+  it('passes handshake probe flags into readiness and surfaces failed ACP handshakes', async () => {
+    mocks.getAcpHandshakeHealthForRuntimes.mockResolvedValueOnce([{
+      schemaVersion: 1,
+      agentId: 'declared-acp',
+      status: 'failed',
+      stage: 'initialize',
+      checkedAt: '2026-06-28T00:00:00.000Z',
+      expiresAt: '2026-06-28T00:05:00.000Z',
+      message: 'initialize failed',
+    }]);
+
+    const { GET } = await importRoute();
+    const res = await GET(new Request('http://localhost/api/agent-runtimes/readiness?handshake=1&force=1&runtime=declared-acp'));
+    const body = await res.json();
+
+    expect(res.status, JSON.stringify(body)).toBe(200);
+    expect(mocks.getAcpHandshakeHealthForRuntimes).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'declared-acp', kind: 'acp' }),
+      ]),
+      { probe: true, force: true },
+    );
+    expect(body.projections).toEqual([
+      expect.objectContaining({
+        runtimeId: 'declared-acp',
+        overallStatus: 'blocked',
+        blockers: expect.arrayContaining(['acp-handshake']),
+        gaps: expect.arrayContaining([
+          expect.objectContaining({
+            id: 'acp-handshake',
+            severity: 'blocking',
+          }),
+        ]),
       }),
     ]);
   });
