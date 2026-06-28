@@ -460,6 +460,9 @@ function DetailLoadingState({ label }: { label: string }) {
 export default function EchoMemoryReaderPanel({
   segment,
   listTitle,
+  listSubtitle,
+  emptyLabel,
+  detailEmptyLabel,
   items,
   selectedPath,
   onSelect,
@@ -472,6 +475,9 @@ export default function EchoMemoryReaderPanel({
 }: {
   segment: EchoStoredSegment;
   listTitle: string;
+  listSubtitle?: string;
+  emptyLabel?: string;
+  detailEmptyLabel?: string;
   items: EchoSavedItem[];
   selectedPath: string | null;
   onSelect: (path: string) => void;
@@ -535,9 +541,19 @@ export default function EchoMemoryReaderPanel({
     >
       <section className={cn(echoSurfaceClass, 'flex flex-col overflow-hidden lg:min-h-0')}>
         <div className="shrink-0 border-b border-border/45 px-5 py-4">
-          <h2 id="echo-memory-reader-title" className="font-sans text-base font-medium leading-tight text-foreground">
-            {listTitle}
-          </h2>
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <h2 id="echo-memory-reader-title" className="font-sans text-base font-medium leading-tight text-foreground">
+                {listTitle}
+              </h2>
+              {listSubtitle ? (
+                <p className="mt-1 font-sans text-xs leading-5 text-muted-foreground">{listSubtitle}</p>
+              ) : null}
+            </div>
+            <span className="shrink-0 rounded-full border border-border/60 bg-background/70 px-2.5 py-1 font-mono text-[0.68rem] text-muted-foreground">
+              {items.length}
+            </span>
+          </div>
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto p-3">
@@ -583,7 +599,7 @@ export default function EchoMemoryReaderPanel({
             </div>
           ) : (
             <div className="flex min-h-52 items-center justify-center px-6 py-10 text-center">
-              <p className="max-w-xs font-sans text-sm leading-6 text-muted-foreground">{p.echoReaderEmptyLabel}</p>
+              <p className="max-w-xs font-sans text-sm leading-6 text-muted-foreground">{emptyLabel ?? p.echoReaderEmptyLabel}</p>
             </div>
           )}
         </div>
@@ -641,7 +657,7 @@ export default function EchoMemoryReaderPanel({
             </article>
           ) : (
             <div className="flex min-h-80 flex-1 items-center justify-center px-8 py-10 text-center">
-              <p className="max-w-sm font-sans text-sm leading-6 text-muted-foreground">{p.echoReaderDetailEmptyLabel}</p>
+              <p className="max-w-sm font-sans text-sm leading-6 text-muted-foreground">{detailEmptyLabel ?? p.echoReaderDetailEmptyLabel}</p>
             </div>
           )}
         </section>

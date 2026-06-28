@@ -5,10 +5,14 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
   ArrowUpRight,
+  Archive,
+  Bot,
+  FolderOpen,
   FlaskConical,
   Leaf,
   MessageSquareText,
   NotebookText,
+  Route,
   SunMedium,
 } from 'lucide-react';
 import { ECHO_SEGMENT_HREF, type EchoSegment } from '@/lib/echo-segments';
@@ -102,6 +106,135 @@ function echoReaderListTitle(segment: EchoStoredSegment, title: string, p: EchoC
   if (segment === 'imprint') return p.imprintEventBookTitle;
   if (segment === 'threads') return p.threadsListTitle;
   return title;
+}
+
+function echoReaderSubtitle(segment: EchoStoredSegment, p: EchoCopy): string {
+  switch (segment) {
+    case 'imprint':
+      return p.imprintEventBookSubtitle;
+    case 'threads':
+      return p.threadsReaderSubtitle;
+    case 'growth':
+      return p.growthReaderSubtitle;
+    case 'practice':
+      return p.practiceReaderSubtitle;
+  }
+}
+
+function echoReaderEmptyLabel(segment: EchoStoredSegment, p: EchoCopy): string {
+  switch (segment) {
+    case 'imprint':
+      return p.imprintReaderEmptyLabel;
+    case 'threads':
+      return p.threadsReaderEmptyLabel;
+    case 'growth':
+      return p.growthReaderEmptyLabel;
+    case 'practice':
+      return p.practiceReaderEmptyLabel;
+  }
+}
+
+function echoReaderDetailEmptyLabel(segment: EchoStoredSegment, p: EchoCopy): string {
+  switch (segment) {
+    case 'imprint':
+      return p.imprintReaderDetailEmptyLabel;
+    case 'threads':
+      return p.threadsReaderDetailEmptyLabel;
+    case 'growth':
+      return p.growthReaderDetailEmptyLabel;
+    case 'practice':
+      return p.practiceReaderDetailEmptyLabel;
+  }
+}
+
+function echoFlowCopy(segment: EchoStoredSegment, p: EchoCopy) {
+  switch (segment) {
+    case 'imprint':
+      return {
+        source: p.imprintFlowSource,
+        generate: p.imprintFlowGenerate,
+        save: p.imprintFlowSave,
+        consume: p.imprintFlowConsume,
+      };
+    case 'threads':
+      return {
+        source: p.threadsFlowSource,
+        generate: p.threadsFlowGenerate,
+        save: p.threadsFlowSave,
+        consume: p.threadsFlowConsume,
+      };
+    case 'growth':
+      return {
+        source: p.growthFlowSource,
+        generate: p.growthFlowGenerate,
+        save: p.growthFlowSave,
+        consume: p.growthFlowConsume,
+      };
+    case 'practice':
+      return {
+        source: p.practiceFlowSource,
+        generate: p.practiceFlowGenerate,
+        save: p.practiceFlowSave,
+        consume: p.practiceFlowConsume,
+      };
+  }
+}
+
+function EchoSegmentFlowPanel({
+  segment,
+  selectedItem,
+  p,
+}: {
+  segment: EchoStoredSegment;
+  selectedItem: EchoSavedItem | null;
+  p: EchoCopy;
+}) {
+  const flow = echoFlowCopy(segment, p);
+  const steps = [
+    { label: p.echoFlowSourceLabel, body: flow.source, icon: <FolderOpen size={16} aria-hidden /> },
+    { label: p.echoFlowGenerateLabel, body: flow.generate, icon: <Bot size={16} aria-hidden /> },
+    { label: p.echoFlowSaveLabel, body: flow.save, icon: <Archive size={16} aria-hidden /> },
+    { label: p.echoFlowConsumeLabel, body: flow.consume, icon: <Route size={16} aria-hidden /> },
+  ];
+
+  return (
+    <section
+      className={cn(echoSurfaceClass, 'overflow-hidden')}
+      aria-labelledby="echo-flow-title"
+      data-testid="echo-page-contract"
+    >
+      <div className="border-b border-border/45 px-5 py-4 md:px-6">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0">
+            <h2 id="echo-flow-title" className="font-sans text-base font-medium text-foreground">
+              {p.echoFlowTitle}
+            </h2>
+            <p className="mt-1 max-w-3xl font-sans text-sm leading-6 text-muted-foreground">
+              {p.echoFlowSubtitle}
+            </p>
+          </div>
+          <p className="rounded-md border border-border/55 bg-background/65 px-3 py-2 font-sans text-xs leading-5 text-muted-foreground lg:max-w-sm">
+            {selectedItem
+              ? p.echoFlowSelectedItem(selectedItem.title, selectedItem.path)
+              : p.echoFlowNoSelection}
+          </p>
+        </div>
+      </div>
+      <div className="grid divide-y divide-border/45 md:grid-cols-2 md:divide-x md:divide-y-0 xl:grid-cols-4">
+        {steps.map((step) => (
+          <div key={step.label} className="min-w-0 p-5">
+            <div className="flex items-center gap-2">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted/45 text-muted-foreground">
+                {step.icon}
+              </span>
+              <h3 className="font-sans text-sm font-medium text-foreground">{step.label}</h3>
+            </div>
+            <p className="mt-3 font-sans text-sm leading-6 text-muted-foreground">{step.body}</p>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
 }
 
 function OverviewPanel({
@@ -306,6 +439,9 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
   const echoAssistantMaxSteps = echoAssistantId ? getEchoAssistantMaxSteps(echoAssistantId) : undefined;
   const activeEchoSegment: EchoStoredSegment | null = segment === 'overview' ? null : segment;
   const recentSessions = useMemo(() => buildEchoRecentSessionSummaries(sessions), [sessions]);
+  const selectedEchoItem = activeEchoSegment
+    ? (savedEchoDetail ?? savedEchoItems.find((item) => item.path === selectedEchoPath) ?? null)
+    : null;
 
   useEffect(() => {
     if (!activeEchoSegment) {
@@ -533,19 +669,29 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
         )}
 
         {activeEchoSegment && (
-          <EchoMemoryReaderPanel
-            segment={activeEchoSegment}
-            listTitle={echoReaderListTitle(activeEchoSegment, title, p)}
-            items={savedEchoItems}
-            selectedPath={selectedEchoPath}
-            onSelect={setSelectedEchoPath}
-            detail={savedEchoDetail}
-            loading={savedEchoLoading}
-            error={savedEchoError}
-            detailLoading={savedEchoDetailLoading}
-            detailError={savedEchoDetailError}
-            p={p}
-          />
+          <>
+            <EchoSegmentFlowPanel
+              segment={activeEchoSegment}
+              selectedItem={selectedEchoItem}
+              p={p}
+            />
+            <EchoMemoryReaderPanel
+              segment={activeEchoSegment}
+              listTitle={echoReaderListTitle(activeEchoSegment, title, p)}
+              listSubtitle={echoReaderSubtitle(activeEchoSegment, p)}
+              emptyLabel={echoReaderEmptyLabel(activeEchoSegment, p)}
+              detailEmptyLabel={echoReaderDetailEmptyLabel(activeEchoSegment, p)}
+              items={savedEchoItems}
+              selectedPath={selectedEchoPath}
+              onSelect={setSelectedEchoPath}
+              detail={savedEchoDetail}
+              loading={savedEchoLoading}
+              error={savedEchoError}
+              detailLoading={savedEchoDetailLoading}
+              detailError={savedEchoDetailError}
+              p={p}
+            />
+          </>
         )}
 
         {echoAssistantId && segment !== 'overview' && (

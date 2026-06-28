@@ -234,8 +234,34 @@ describe('Echo segment page actions', () => {
       await Promise.resolve();
     });
 
-    expect(host.textContent).toContain(messages.zh.echoPages.echoReaderEmptyLabel);
+    expect(host.textContent).toContain(messages.zh.echoPages.growthReaderEmptyLabel);
+    expect(host.textContent).toContain(messages.zh.echoPages.growthReaderSubtitle);
     expect(host.textContent).not.toContain(messages.zh.echoPages.echoReaderDetailEmptyLabel);
+    expect(host.textContent).not.toContain(messages.zh.echoPages.growthReaderDetailEmptyLabel);
+  });
+
+  it('explains each Echo segment as a read-generate-save-consume flow', async () => {
+    await act(async () => {
+      root.render(<EchoSegmentPageClient segment="growth" />);
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const contract = host.querySelector('[data-testid="echo-page-contract"]');
+    expect(contract).not.toBeNull();
+    expect(contract?.textContent).toContain(messages.zh.echoPages.echoFlowTitle);
+    expect(contract?.textContent).toContain(messages.zh.echoPages.echoFlowSourceLabel);
+    expect(contract?.textContent).toContain(messages.zh.echoPages.echoFlowGenerateLabel);
+    expect(contract?.textContent).toContain(messages.zh.echoPages.echoFlowSaveLabel);
+    expect(contract?.textContent).toContain(messages.zh.echoPages.echoFlowConsumeLabel);
+    expect(contract?.textContent).toContain(messages.zh.echoPages.growthFlowSource);
+    expect(contract?.textContent).toContain(messages.zh.echoPages.growthFlowGenerate);
+    expect(contract?.textContent).toContain(messages.zh.echoPages.growthFlowSave);
+    expect(contract?.textContent).toContain(messages.zh.echoPages.growthFlowConsume);
+    expect(contract?.textContent).toContain(messages.zh.echoPages.echoFlowNoSelection);
   });
 
   it('saves generated Echo markdown and displays the saved item on the page', async () => {
@@ -270,6 +296,8 @@ describe('Echo segment page actions', () => {
       await Promise.resolve();
     });
 
+    const contract = host.querySelector('[data-testid="echo-page-contract"]');
+    expect(contract?.textContent).toContain(messages.zh.echoPages.echoFlowSelectedItem('洞察', 'Echo/Insights/洞察.md'));
     expect(fetchMock).toHaveBeenCalledWith('/api/echo?segment=growth&path=Echo%2FInsights%2F%E6%B4%9E%E5%AF%9F.md', expect.any(Object));
     expect(host.querySelector('#echo-memory-reader-title')?.textContent).toBe(messages.zh.panels.echo.growthTitle);
     expect(host.textContent).toContain('Generated insight.');
