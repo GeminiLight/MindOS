@@ -31,10 +31,22 @@ describe('Content page shell contract', () => {
 
   it('keeps Echo hero as a plain workbench header instead of a nested card', () => {
     const source = readSource('components/echo/EchoHero.tsx');
+    const cssSource = readSource('app/globals.css');
 
-    expect(source).toContain('<header className="mb-6">');
+    expect(source).toContain('<header className="echo-page-hero mb-6 min-w-0">');
+    expect(source).toContain('className="echo-page-hero__row"');
+    expect(source).toContain('className="echo-page-hero__copy"');
+    expect(source).toContain('className="echo-page-hero__actions" data-echo-page-actions');
     expect(source).toContain('text-2xl font-semibold tracking-tight text-foreground');
     expect(source).toContain('mt-1 max-w-2xl text-sm leading-6 text-muted-foreground');
+    expect(source).not.toContain('flex w-full shrink-0');
+    expect(cssSource).toContain('.echo-content-page {');
+    expect(cssSource).toContain('--main-body-content-max-width: min(1180px, 100%);');
+    expect(cssSource).toContain('.echo-page-hero__actions');
+    expect(cssSource).toContain('@container (min-width: 760px)');
+    expect(cssSource).toContain('.echo-memory-reader-container');
+    expect(cssSource).toContain('.echo-memory-reader-grid--with-detail');
+    expect(cssSource).toContain('@container (min-width: 860px)');
     expect(source).not.toContain('rounded-xl border border-border bg-card');
     expect(source).not.toContain('shadow-sm');
     expect(source).not.toContain('absolute left-0');

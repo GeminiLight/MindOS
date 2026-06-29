@@ -139,16 +139,16 @@ function ImprintReaderPanel({
   const showDetailPanel = loading || detailError || detailLoading || selectedItem || hasItems;
 
   return (
-    <div
-      className={cn(
-        'grid gap-5',
-        showDetailPanel
-          ? 'lg:h-[calc(100vh-13rem)] lg:min-h-[34rem] lg:max-h-[46rem] lg:grid-cols-[minmax(16rem,22rem)_minmax(0,1fr)]'
-          : 'lg:max-w-[36rem]',
-      )}
-      aria-labelledby="echo-memory-reader-title"
-      data-testid="echo-memory-reader-layout"
-    >
+    <div className="echo-memory-reader-container" aria-labelledby="echo-memory-reader-title">
+      <div
+        className={cn(
+          'echo-memory-reader-grid grid gap-5',
+          showDetailPanel
+            ? 'echo-memory-reader-grid--with-detail'
+            : 'echo-memory-reader-grid--empty',
+        )}
+        data-testid="echo-memory-reader-layout"
+      >
       <section className={cn(echoSurfaceClass, 'flex flex-col overflow-hidden lg:min-h-0')}>
         <div className="shrink-0 border-b border-border/45 px-5 py-4">
           <div className="flex items-center justify-between gap-3">
@@ -213,6 +213,7 @@ function ImprintReaderPanel({
           )}
         </section>
       ) : null}
+      </div>
     </div>
   );
 }
@@ -329,7 +330,7 @@ function ImprintEventDetail({
         <div className="space-y-4">
           <section className="rounded-lg border border-border/55 bg-background/60 p-4 md:p-5" data-testid="echo-imprint-evidence-card">
             <SectionLabel icon={<Target size={15} aria-hidden />} title={p.imprintDetailEvidenceTitle} compact />
-            <dl className="mt-4 grid gap-3 sm:grid-cols-3">
+            <dl className="mt-4 grid gap-3 lg:grid-cols-3">
               {evidence.map((entry) => (
                 <div key={entry.label} className="min-w-0 rounded-md bg-muted/25 px-3 py-2.5">
                   <dt className="font-sans text-[0.7rem] text-muted-foreground">{entry.label}</dt>
@@ -367,7 +368,7 @@ function ImprintEventDetail({
 
           <section className="rounded-lg border border-border/55 bg-background/60 p-5">
             <SectionLabel icon={<Scale size={16} aria-hidden />} title={p.imprintDetailQuestionsTitle} />
-            <ul className="mt-4 grid gap-2 font-sans text-sm leading-6 text-muted-foreground md:grid-cols-3">
+            <ul className="mt-4 grid gap-2 font-sans text-sm leading-6 text-muted-foreground lg:grid-cols-3">
               {p.imprintDetailQuestions.map((question) => (
                 <li key={question} className="flex gap-2 rounded-md bg-muted/20 px-3 py-2.5">
                   <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--amber)]/70" aria-hidden />
@@ -529,16 +530,16 @@ export default function EchoMemoryReaderPanel({
   }
 
   return (
-    <div
-      className={cn(
-        'grid gap-5',
-        showDetailPanel
-          ? 'lg:h-[calc(100vh-13rem)] lg:min-h-[34rem] lg:max-h-[46rem] lg:grid-cols-[minmax(16rem,22rem)_minmax(0,1fr)]'
-          : 'lg:max-w-[36rem]',
-      )}
-      aria-labelledby="echo-memory-reader-title"
-      data-testid="echo-memory-reader-layout"
-    >
+    <div className="echo-memory-reader-container" aria-labelledby="echo-memory-reader-title">
+      <div
+        className={cn(
+          'echo-memory-reader-grid grid gap-5',
+          showDetailPanel
+            ? 'echo-memory-reader-grid--with-detail'
+            : 'echo-memory-reader-grid--empty',
+        )}
+        data-testid="echo-memory-reader-layout"
+      >
       <section className={cn(echoSurfaceClass, 'flex flex-col overflow-hidden lg:min-h-0')}>
         <div className="shrink-0 border-b border-border/45 px-5 py-4">
           <div className="flex items-center justify-between gap-3">
@@ -662,6 +663,7 @@ export default function EchoMemoryReaderPanel({
           )}
         </section>
       ) : null}
+      </div>
     </div>
   );
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
   ArrowUpRight,
@@ -10,10 +10,14 @@ import {
   FolderOpen,
   FlaskConical,
   Leaf,
+  Loader2,
   MessageSquareText,
+  MoreHorizontal,
   NotebookText,
+  PencilLine,
   Route,
   SunMedium,
+  Zap,
 } from 'lucide-react';
 import { ECHO_SEGMENT_HREF, type EchoSegment } from '@/lib/echo-segments';
 import {
@@ -34,7 +38,6 @@ import { Button } from '@/components/ui/button';
 import { EchoAssistantGenerateButton, EchoPageHeader } from './EchoSegmentPageHeader';
 import { EchoInsightCollapsible } from './EchoInsightCollapsible';
 import EchoMemoryReaderPanel from './EchoMemoryReaderPanel';
-import DailyEchoReportButton from './DailyEcho/DailyEchoReportButton';
 import DailyEchoReportDrawer from './DailyEcho/DailyEchoReportDrawer';
 import type { DailyEchoReport } from '@/lib/daily-echo/types';
 import { generateDailyEchoReport } from '@/lib/daily-echo/generator';
@@ -361,6 +364,122 @@ function OverviewStatCard({
   );
 }
 
+function EchoImprintHeaderActions({
+  primaryAction,
+  p,
+  onRecord,
+  onGenerateReport,
+  isGeneratingReport,
+  reportError,
+}: {
+  primaryAction: ReactNode;
+  p: EchoCopy;
+  onRecord: () => void;
+  onGenerateReport: () => Promise<boolean>;
+  isGeneratingReport: boolean;
+  reportError: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const closeFromPointer = (event: PointerEvent) => {
+      if (menuRef.current?.contains(event.target as Node)) return;
+      setOpen(false);
+    };
+    const closeFromEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      setOpen(false);
+    };
+
+    document.addEventListener('pointerdown', closeFromPointer);
+    document.addEventListener('keydown', closeFromEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeFromPointer);
+      document.removeEventListener('keydown', closeFromEscape);
+    };
+  }, [open]);
+
+  const handleRecord = useCallback(() => {
+    setOpen(false);
+    onRecord();
+  }, [onRecord]);
+
+  const handleGenerateReport = useCallback(() => {
+    void onGenerateReport().then((ok) => {
+      if (ok) setOpen(false);
+    });
+  }, [onGenerateReport]);
+
+  return (
+    <div className="echo-imprint-header-actions">
+      <div className="echo-imprint-header-actions__primary">
+        {primaryAction}
+      </div>
+      <div className="echo-page-hero__action-menu relative shrink-0" ref={menuRef}>
+        <Button
+          type="button"
+          variant="outline"
+          size="icon-lg"
+          aria-label={p.echoMoreActionsAriaLabel}
+          aria-haspopup="menu"
+          aria-expanded={open}
+          aria-controls="echo-imprint-actions-menu"
+          data-echo-imprint-actions-menu-trigger
+          onClick={() => setOpen((value) => !value)}
+          className="shadow-sm"
+        >
+          {isGeneratingReport ? (
+            <Loader2 size={16} className="animate-spin" aria-hidden />
+          ) : (
+            <MoreHorizontal size={17} aria-hidden />
+          )}
+        </Button>
+        {open ? (
+          <div
+            id="echo-imprint-actions-menu"
+            role="menu"
+            data-echo-imprint-actions-menu
+            className="absolute right-0 top-full z-50 mt-2 w-56 overflow-hidden rounded-xl border border-border/70 bg-popover p-1.5 text-popover-foreground shadow-lg"
+          >
+            <button
+              type="button"
+              role="menuitem"
+              className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left font-sans text-sm text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              onClick={handleRecord}
+            >
+              <PencilLine size={15} className="text-muted-foreground" aria-hidden />
+              <span>{p.continueRecordLabel}</span>
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left font-sans text-sm text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-60"
+              disabled={isGeneratingReport}
+              aria-busy={isGeneratingReport}
+              onClick={handleGenerateReport}
+            >
+              {isGeneratingReport ? (
+                <Loader2 size={15} className="animate-spin text-muted-foreground" aria-hidden />
+              ) : (
+                <Zap size={15} className="text-muted-foreground" aria-hidden />
+              )}
+              <span>{isGeneratingReport ? p.dailyReportGenerating : p.dailyReportGenerate}</span>
+            </button>
+            {reportError ? (
+              <p role="alert" className="px-2.5 pb-2 pt-1 font-sans text-xs leading-5 text-destructive">
+                {reportError}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 export default function EchoSegmentPageClient({ segment }: { segment: EchoSegment }) {
   const { t, locale } = useLocale();
   const p = t.echoPages;
@@ -375,6 +494,7 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
   const [dailyEchoReport, setDailyEchoReport] = useState<DailyEchoReport | null>(null);
   const [isDailyEchoOpen, setIsDailyEchoOpen] = useState(false);
   const [isDailyEchoGenerating, setIsDailyEchoGenerating] = useState(false);
+  const [dailyEchoError, setDailyEchoError] = useState('');
   const [assistantGenerateSignal, setAssistantGenerateSignal] = useState(0);
   const [savedEchoItems, setSavedEchoItems] = useState<EchoSavedItem[]>([]);
   const [selectedEchoPath, setSelectedEchoPath] = useState<string | null>(null);
@@ -410,14 +530,28 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
     openAskModal(p.dailyAskPrefill(dailyLine), 'user');
   }, [dailyLine, p, persistDaily]);
 
-  const handleDailyEchoGenerated = useCallback((report: DailyEchoReport) => {
-    setDailyEchoReport(report);
-    setIsDailyEchoOpen(true);
-    setIsDailyEchoGenerating(false);
+  const handleDailyEchoGenerate = useCallback(async () => {
+    setDailyEchoError('');
+    setIsDailyEchoGenerating(true);
+    try {
+      const config = loadDailyEchoConfig();
+      const report = await generateDailyEchoReport(new Date(), config);
+      setDailyEchoReport(report);
+      setIsDailyEchoOpen(true);
+      return true;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setDailyEchoError(message);
+      console.error('[EchoImprint] Generate failed:', err);
+      return false;
+    } finally {
+      setIsDailyEchoGenerating(false);
+    }
   }, []);
 
   const handleDailyEchoRegenerate = useCallback(async () => {
     setDailyEchoReport(null);
+    setDailyEchoError('');
     setIsDailyEchoGenerating(true);
     try {
       const config = loadDailyEchoConfig();
@@ -620,26 +754,20 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
         p={p}
         segment={activeEchoSegment}
         onGenerate={triggerEchoAssistantGenerate}
-        className={segment === 'imprint' ? 'max-sm:flex-1' : undefined}
+        className={segment === 'imprint' ? 'w-full' : undefined}
       />
     )
     : undefined;
   const headerActions = segment === 'imprint'
     ? (
-      <>
-        {assistantHeaderAction}
-        <Button type="button" variant="outline" size="xl" onClick={openImprintAsk} className="max-sm:flex-1">
-          {p.continueRecordLabel}
-        </Button>
-        <DailyEchoReportButton
-          onGenerated={handleDailyEchoGenerated}
-          onError={(err) => console.error('[EchoImprint]', err)}
-          locale={{ t: p }}
-          variant="outline"
-          size="xl"
-          className="max-sm:flex-1"
-        />
-      </>
+      <EchoImprintHeaderActions
+        primaryAction={assistantHeaderAction}
+        p={p}
+        onRecord={openImprintAsk}
+        onGenerateReport={handleDailyEchoGenerate}
+        isGeneratingReport={isDailyEchoGenerating}
+        reportError={dailyEchoError}
+      />
     )
     : assistantHeaderAction;
 

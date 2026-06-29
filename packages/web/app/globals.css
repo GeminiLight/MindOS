@@ -212,6 +212,85 @@ body {
   --z-app-critical-overlay: 99999;
 }
 .content-width { max-width: var(--main-body-content-max-width, var(--content-width-override, var(--content-width))); margin-left: auto; margin-right: auto; padding-left: 0.75rem; padding-right: 0.75rem; }
+.echo-content-page {
+  --main-body-content-max-width: min(1180px, 100%);
+}
+.echo-page-hero {
+  container-type: inline-size;
+}
+.echo-page-hero__row {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 1rem;
+}
+.echo-page-hero__copy {
+  min-width: 0;
+}
+.echo-page-hero__actions {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.echo-page-hero__actions > * {
+  max-width: 100%;
+}
+.echo-imprint-header-actions {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  gap: 0.5rem;
+}
+.echo-imprint-header-actions__primary {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+@container (max-width: 519px) {
+  .echo-page-hero__actions > * {
+    flex: 1 1 100%;
+  }
+}
+@container (min-width: 760px) {
+  .echo-page-hero__row {
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: space-between;
+  }
+  .echo-page-hero__copy {
+    flex: 1 1 0;
+    padding-right: 1rem;
+  }
+  .echo-page-hero__actions {
+    width: auto;
+    max-width: min(42rem, 58%);
+    justify-content: flex-end;
+  }
+  .echo-imprint-header-actions {
+    width: auto;
+    justify-content: flex-end;
+  }
+  .echo-imprint-header-actions__primary {
+    flex: 0 1 auto;
+  }
+}
+.echo-memory-reader-container {
+  container-type: inline-size;
+}
+.echo-memory-reader-grid--empty {
+  max-width: 36rem;
+}
+@container (min-width: 860px) {
+  .echo-memory-reader-grid--with-detail {
+    height: calc(100vh - 13rem);
+    min-height: 34rem;
+    max-height: 46rem;
+    grid-template-columns: minmax(16rem, 22rem) minmax(0, 1fr);
+  }
+}
 @media (max-width: 639px) {
   .content-width.workbench-content-page { max-width: 100%; }
   .content-width.agents-content-page { max-width: 100%; }

@@ -5,6 +5,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import EchoSegmentPageClient from '@/components/echo/EchoSegmentPageClient';
+import { openAskModal } from '@/hooks/useAskModal';
 import { messages } from '@/lib/i18n';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -140,6 +141,7 @@ describe('Echo segment page actions', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
     consumeUIMessageStreamMock.mockClear();
+    vi.mocked(openAskModal).mockClear();
   });
 
   afterEach(() => {
@@ -195,6 +197,41 @@ describe('Echo segment page actions', () => {
 
     const backLink = host.querySelector('a[href="/echo/overview"]');
     expect(backLink?.parentElement?.textContent).not.toContain(messages.zh.echoPages.assistantGenerateImprint);
+
+    const pageShell = host.querySelector('[data-content-page-shell="echo"]');
+    expect(pageShell?.className).toContain('echo-content-page');
+
+    const headerActions = host.querySelector('[data-echo-page-actions]');
+    expect(headerActions?.className).toContain('echo-page-hero__actions');
+    expect(headerActions?.textContent).toContain(messages.zh.echoPages.assistantGenerateImprint);
+    expect(headerActions?.textContent).not.toContain(messages.zh.echoPages.continueRecordLabel);
+    expect(headerActions?.textContent).not.toContain(messages.zh.echoPages.dailyReportGenerate);
+
+    const moreActionsButton = host.querySelector('[data-echo-imprint-actions-menu-trigger]') as HTMLButtonElement | null;
+    expect(moreActionsButton).toBeTruthy();
+    expect(moreActionsButton?.getAttribute('aria-label')).toBe(messages.zh.echoPages.echoMoreActionsAriaLabel);
+
+    await act(async () => {
+      moreActionsButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    const actionsMenu = host.querySelector('[data-echo-imprint-actions-menu]');
+    expect(actionsMenu?.textContent).toContain(messages.zh.echoPages.continueRecordLabel);
+    expect(actionsMenu?.textContent).toContain(messages.zh.echoPages.dailyReportGenerate);
+
+    const recordAction = Array.from(actionsMenu?.querySelectorAll('button') ?? []).find((button) =>
+      button.textContent?.includes(messages.zh.echoPages.continueRecordLabel),
+    );
+    expect(recordAction).toBeTruthy();
+
+    await act(async () => {
+      recordAction?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(openAskModal).toHaveBeenCalledWith(expect.any(String), 'user');
+    expect(host.querySelector('[data-echo-imprint-actions-menu]')).toBeNull();
 
     const assistantButton = Array.from(host.querySelectorAll('button')).find((button) =>
       button.textContent?.includes(messages.zh.echoPages.assistantGenerateImprint),
@@ -330,7 +367,9 @@ describe('Echo segment page actions', () => {
     expect(host.querySelector('a[href="/echo/practice"]')).not.toBeNull();
 
     const layout = host.querySelector('[data-testid="echo-memory-reader-layout"]');
-    expect(layout?.className).toContain('lg:grid-cols-[minmax(16rem,22rem)_minmax(0,1fr)]');
+    expect(layout?.className).toContain('echo-memory-reader-grid');
+    expect(layout?.className).toContain('echo-memory-reader-grid--with-detail');
+    expect(layout?.className).not.toContain('lg:grid-cols-[minmax(16rem,22rem)_minmax(0,1fr)]');
 
     const detailBody = host.querySelector('[data-testid="echo-imprint-detail-body"]');
     expect(detailBody?.className).not.toContain('grid-cols');

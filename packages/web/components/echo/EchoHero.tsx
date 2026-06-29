@@ -18,16 +18,20 @@ export function EchoHero({
   children?: ReactNode;
 }) {
   return (
-    <header className="mb-6">
+    <header className="echo-page-hero mb-6 min-w-0">
       {beforeTitle ? <div className="mb-3">{beforeTitle}</div> : null}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
+      <div className="echo-page-hero__row">
+        <div className="echo-page-hero__copy">
           <h1 id={titleId} className="text-2xl font-semibold tracking-tight text-foreground">
             {pageTitle}
           </h1>
           <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">{lead}</p>
         </div>
-        {actions ? <div className="flex w-full shrink-0 flex-wrap items-center gap-2 sm:w-auto sm:justify-end">{actions}</div> : null}
+        {actions ? (
+          <div className="echo-page-hero__actions" data-echo-page-actions>
+            {actions}
+          </div>
+        ) : null}
       </div>
       {children}
     </header>
