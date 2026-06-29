@@ -70,7 +70,7 @@ import { handleAgentSessionsDelete, handleAgentSessionsGet, handleAgentSessionsP
 import { handleAssistantsDelete, handleAssistantsGet, handleAssistantsPost } from './handlers/assistants.js';
 import { handleBootstrapGet } from './handlers/bootstrap.js';
 import { handleChannelsVerifyPost, type ChannelsVerifyServices } from './handlers/channels-verify.js';
-import { handleFileGet, handleFilePost } from './handlers/file.js';
+import { handleFileGet, handleFilePost, handleOpenInFileManagerGet } from './handlers/file.js';
 import { handleChangesGet, handleChangesPost } from './handlers/changes.js';
 import { handleConnectGet } from './handlers/connect.js';
 import { handleEmbeddingGet, handleEmbeddingPost } from './handlers/embedding.js';
@@ -910,6 +910,10 @@ async function handleRequest(
       return;
     }
     if (route === 'GET /api/file') {
+      if (url.searchParams.get('op') === 'open_in_file_manager') {
+        writeResponse(res, await handleOpenInFileManagerGet(url.searchParams, services));
+        return;
+      }
       writeResponse(res, handleFileGet(url.searchParams, services));
       return;
     }

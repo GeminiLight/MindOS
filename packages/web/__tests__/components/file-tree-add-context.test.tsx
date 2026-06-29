@@ -78,6 +78,8 @@ vi.mock('@/lib/stores/locale-store', () => ({
         importFile: 'Import File',
         addAsContext: 'Add as Context',
         addedAsContext: 'Added to context',
+        openInFileManager: 'Open in File Manager',
+        openInFileManagerFailed: 'Could not open in file manager',
         removeFromFavorites: 'Remove from Favorites',
         pinToFavorites: 'Pin to Favorites',
         convertToSpace: 'Convert to Space',
@@ -189,6 +191,32 @@ describe('File tree Add as Context menu actions', () => {
     expect(mockToastSuccess).toHaveBeenCalledWith('Added to context', 1600);
   });
 
+  it('opens a file in the native file manager from the file menu', async () => {
+    const { default: FileTree } = await import('@/components/FileTree');
+    const nodes: FileNode[] = [{ type: 'file', name: 'notes.md', path: 'Research/notes.md', extension: '.md' }];
+
+    await act(async () => {
+      root.render(<FileTree nodes={nodes} />);
+    });
+
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('button[title="More"]')?.click();
+    });
+
+    const openButton = [...document.body.querySelectorAll('button')]
+      .find(button => button.textContent?.includes('Open in File Manager'));
+    expect(openButton).toBeTruthy();
+
+    await act(async () => {
+      openButton?.click();
+    });
+
+    expect(apiFetchMock).toHaveBeenCalledWith(
+      '/api/file?op=open_in_file_manager&path=Research%2Fnotes.md',
+      expect.objectContaining({ method: 'GET', cache: 'no-store', timeout: 10_000 }),
+    );
+  });
+
   it('marks files with pending agent changes and opens scoped review from the menu', async () => {
     const { default: FileTree } = await import('@/components/FileTree');
     const nodes: FileNode[] = [{ type: 'file', name: 'notes.md', path: 'Research/notes.md', extension: '.md' }];
@@ -225,6 +253,8 @@ describe('File tree Add as Context menu actions', () => {
     const { FolderContextMenu, SpaceContextMenu } = await import('@/components/file-tree/FileTreeContextMenus');
     const folder: FileNode = { type: 'directory', name: 'Research', path: 'Research', children: [] };
     const space: FileNode = { ...folder, isSpace: true };
+    const closeFolderMenu = vi.fn();
+    const closeSpaceMenu = vi.fn();
 
     await act(async () => {
       root.render(
@@ -233,7 +263,7 @@ describe('File tree Add as Context menu actions', () => {
             x={20}
             y={20}
             node={folder}
-            onClose={vi.fn()}
+            onClose={closeFolderMenu}
             onRename={vi.fn()}
             onNewFile={vi.fn()}
             onDelete={vi.fn()}
@@ -242,7 +272,7 @@ describe('File tree Add as Context menu actions', () => {
             x={260}
             y={20}
             node={space}
-            onClose={vi.fn()}
+            onClose={closeSpaceMenu}
             onRename={vi.fn()}
             onNewFile={vi.fn()}
             onImport={vi.fn()}
@@ -253,8 +283,29 @@ describe('File tree Add as Context menu actions', () => {
     });
 
     const labels = buttonLabels();
-    expect(labels.slice(0, 4)).toEqual(['New File', 'Add as Context', 'Pin to Favorites', 'Convert to Space']);
-    expect(labels.slice(7, 12)).toEqual(['New File', 'View Rules', 'Import File', 'Add as Context', 'Pin to Favorites']);
+    expect(labels.slice(0, 5)).toEqual(['New File', 'Add as Context', 'Open in File Manager', 'Pin to Favorites', 'Convert to Space']);
+    expect(labels.slice(8, 14)).toEqual(['New File', 'View Rules', 'Import File', 'Add as Context', 'Open in File Manager', 'Pin to Favorites']);
+
+    const openButtons = [...document.body.querySelectorAll('button')]
+      .filter(button => button.textContent?.includes('Open in File Manager'));
+
+    await act(async () => {
+      openButtons[0]?.click();
+    });
+    expect(closeFolderMenu).toHaveBeenCalledTimes(1);
+    expect(apiFetchMock).toHaveBeenLastCalledWith(
+      '/api/file?op=open_in_file_manager&path=Research',
+      expect.objectContaining({ method: 'GET', cache: 'no-store', timeout: 10_000 }),
+    );
+
+    await act(async () => {
+      openButtons[1]?.click();
+    });
+    expect(closeSpaceMenu).toHaveBeenCalledTimes(1);
+    expect(apiFetchMock).toHaveBeenLastCalledWith(
+      '/api/file?op=open_in_file_manager&path=Research',
+      expect.objectContaining({ method: 'GET', cache: 'no-store', timeout: 10_000 }),
+    );
   });
 
   it('lets the mounted ask panel state receive file tree context requests', async () => {

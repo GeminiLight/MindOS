@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { CSSProperties, ReactNode } from 'react';
+import type { CSSProperties, MouseEvent, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Bot,
@@ -9,8 +9,9 @@ import {
   ChevronDown,
   ChevronUp,
   CircleHelp,
+  FolderOpen,
   Layers3,
-  Lock,
+  Loader2,
 } from 'lucide-react';
 import PathAutocompleteField from '@/components/shared/PathAutocompleteField';
 import {
@@ -33,6 +34,8 @@ import {
   getEffectiveSessionWorkDir,
   normalizeSessionContextSelectionForClient,
 } from '@/lib/session-context';
+import { openMindPathInFileManager } from '@/lib/open-in-file-manager';
+import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
 
 type SessionContextLabels = {
@@ -43,6 +46,8 @@ type SessionContextLabels = {
   mindRoot: string;
   none: string;
   locked: string;
+  openRootInFileManager: string;
+  openRootInFileManagerFailed: string;
   editWorkDir: string;
   workDirPlaceholder: string;
   workDirBrowse: string;
@@ -77,6 +82,8 @@ const DEFAULT_LABELS: SessionContextLabels = {
   mindRoot: 'Mind',
   none: 'None',
   locked: 'Locked after first message',
+  openRootInFileManager: 'Open root in file manager',
+  openRootInFileManagerFailed: 'Could not open root folder',
   editWorkDir: 'Set root',
   workDirPlaceholder: '/path/to/root',
   workDirBrowse: 'Choose root',
@@ -223,6 +230,7 @@ export default function SessionContextDock({
   const [spaceQuery, setSpaceQuery] = useState('');
   const [assistantQuery, setAssistantQuery] = useState('');
   const [workspaceSpaces, setWorkspaceSpaces] = useState<WorkspaceSpaceRecord[]>([]);
+  const [isOpeningWorkDir, setIsOpeningWorkDir] = useState(false);
   const resolvedLabels = useMemo<SessionContextLabels>(() => ({
     ...DEFAULT_LABELS,
     ...labels,
@@ -342,6 +350,21 @@ export default function SessionContextDock({
       });
   };
 
+  const openCurrentWorkDir = async (event: MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (isOpeningWorkDir) return;
+
+    setIsOpeningWorkDir(true);
+    try {
+      await openMindPathInFileManager(workDir?.source === 'manual' ? workDir.path : undefined);
+    } catch {
+      toast.error(resolvedLabels.openRootInFileManagerFailed, 4000);
+    } finally {
+      setIsOpeningWorkDir(false);
+    }
+  };
+
   const selectSpace = (candidate: ContextSelectableItem) => {
     const next = addSpace(selection, candidate);
     if (next !== selection && onSetContextSelection(next)) {
@@ -441,14 +464,16 @@ export default function SessionContextDock({
             {workDirEditable ? (
               <span aria-hidden="true" className="h-7 w-7 justify-self-end" />
             ) : (
-              <span
-                role="img"
-                aria-label={resolvedLabels.locked}
-                title={resolvedLabels.locked}
-                className="inline-flex h-7 w-7 items-center justify-center justify-self-end rounded-md text-muted-foreground/80"
+              <button
+                type="button"
+                aria-label={resolvedLabels.openRootInFileManager}
+                title={resolvedLabels.openRootInFileManager}
+                disabled={isOpeningWorkDir}
+                onClick={openCurrentWorkDir}
+                className="inline-flex h-7 w-7 items-center justify-center justify-self-end rounded-md text-muted-foreground/80 transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-60"
               >
-                <Lock size={13} />
-              </span>
+                {isOpeningWorkDir ? <Loader2 size={13} className="animate-spin" /> : <FolderOpen size={13} />}
+              </button>
             )}
           </div>
 
@@ -523,8 +548,6 @@ export default function SessionContextDock({
           title={resolvedLabels.workDir}
           value={workDirDisplay}
           detail={workDir?.path}
-          locked={!workDirEditable}
-          lockedLabel={resolvedLabels.locked}
           className="max-w-[46%] sm:max-w-[42%]"
         />
         <SummaryItem
@@ -552,16 +575,12 @@ function SummaryItem({
   title,
   value,
   detail,
-  locked = false,
-  lockedLabel,
   className,
 }: {
   icon: ReactNode;
   title: string;
   value: string;
   detail?: string;
-  locked?: boolean;
-  lockedLabel?: string;
   className?: string;
 }) {
   return (
@@ -577,16 +596,6 @@ function SummaryItem({
       <span className="min-w-0 truncate font-normal text-foreground/90">
         {value}
       </span>
-      {locked ? (
-        <span
-          role="img"
-          aria-label={lockedLabel}
-          title={lockedLabel}
-          className="hidden shrink-0 text-muted-foreground/80 sm:inline-flex"
-        >
-          <Lock size={12} />
-        </span>
-      ) : null}
     </span>
   );
 }

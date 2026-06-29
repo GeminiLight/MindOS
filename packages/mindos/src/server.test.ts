@@ -11,6 +11,7 @@ import {
   createMindosHttpServer,
   handleFiles,
   handleFileGet,
+  handleOpenInFileManagerGet,
   handleFilePost,
   handleCodexThreadsGet,
   handleGit,
@@ -1053,6 +1054,55 @@ hidden: true
       status: 403,
       body: { error: 'Access denied' },
     });
+  });
+
+  it('opens Mind paths in the native file manager without allowing path escapes', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'mindos-open-file-manager-'));
+    mkdirSync(join(root, 'Space'), { recursive: true });
+    writeFileSync(join(root, 'Space', 'note.md'), 'hello', 'utf-8');
+
+    const execFileMock = vi.fn((command, args, _options, callback) => {
+      void command;
+      void args;
+      callback(null);
+    });
+
+    const rootResult = await handleOpenInFileManagerGet(new URLSearchParams('op=open_in_file_manager'), {
+      mindRoot: root,
+      platform: 'darwin',
+      osRelease: 'Darwin',
+      execFile: execFileMock,
+    });
+    expect(rootResult).toMatchObject({ status: 200, body: { ok: true } });
+    expect(execFileMock).toHaveBeenLastCalledWith(
+      'open',
+      [root],
+      expect.objectContaining({ timeout: 5000, windowsHide: true }),
+      expect.any(Function),
+    );
+
+    const fileResult = await handleOpenInFileManagerGet(new URLSearchParams('op=open_in_file_manager&path=Space/note.md'), {
+      mindRoot: root,
+      platform: 'darwin',
+      osRelease: 'Darwin',
+      execFile: execFileMock,
+    });
+    expect(fileResult).toMatchObject({ status: 200, body: { ok: true } });
+    expect(execFileMock).toHaveBeenLastCalledWith(
+      'open',
+      ['-R', join(root, 'Space', 'note.md')],
+      expect.objectContaining({ timeout: 5000, windowsHide: true }),
+      expect.any(Function),
+    );
+
+    const denied = await handleOpenInFileManagerGet(new URLSearchParams('op=open_in_file_manager&path=../secret.md'), {
+      mindRoot: root,
+      platform: 'darwin',
+      osRelease: 'Darwin',
+      execFile: execFileMock,
+    });
+    expect(denied).toMatchObject({ status: 403, body: { error: 'Access denied' } });
+    expect(execFileMock).toHaveBeenCalledTimes(2);
   });
 
   it('serves detailed spaces from the Product Server file handler when mindRoot is available', () => {

@@ -36,6 +36,10 @@ vi.mock('@/lib/stores/locale-store', () => ({
     t: {
       fileTree: {
         newFile: 'New File',
+        addAsContext: 'Add as Context',
+        addedAsContext: 'Added to context',
+        openInFileManager: 'Open in File Manager',
+        openInFileManagerFailed: 'Could not open in file manager',
         removeFromFavorites: 'Remove from Favorites',
         pinToFavorites: 'Pin to Favorites',
         convertToSpace: 'Convert to Space',

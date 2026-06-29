@@ -165,6 +165,8 @@ export const aiChatEn = {
       mindRoot: 'Mind',
       none: 'None',
       locked: 'Locked after first message',
+      openRootInFileManager: 'Open root in file manager',
+      openRootInFileManagerFailed: 'Could not open root folder',
       editWorkDir: 'Set root',
       workDirPlaceholder: '/path/to/root',
       workDirBrowse: 'Choose root',

@@ -453,6 +453,8 @@ export const knowledgeZh = {
     convertToSpaceAiRequired: '请先配置 AI API 密钥再将文件夹转为空间。MindOS 不会在没有 AI 生成时创建占位 Space 文件。',
     addAsContext: '添加为 Context',
     addedAsContext: '已添加到 Context',
+    openInFileManager: '在文件管理器中打开',
+    openInFileManagerFailed: '无法在文件管理器中打开',
     copyPath: '复制路径',
     pathCopied: '路径已复制',
     reviewAgentChanges: '审阅变更',

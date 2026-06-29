@@ -453,6 +453,8 @@ Read the assistant prompt at ${promptPath} first, then read this space's INSTRUC
     convertToSpaceAiRequired: 'Configure an AI API key before converting a folder into a Space. MindOS will not create placeholder Space files without AI generation.',
     addAsContext: 'Add as Context',
     addedAsContext: 'Added to context',
+    openInFileManager: 'Open in File Manager',
+    openInFileManagerFailed: 'Could not open in file manager',
     copyPath: 'Copy Path',
     pathCopied: 'Path copied',
     reviewAgentChanges: 'Review changes',

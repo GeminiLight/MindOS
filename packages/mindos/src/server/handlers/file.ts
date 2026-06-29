@@ -14,6 +14,8 @@ import {
   unlinkSync,
   writeFileSync,
 } from 'node:fs';
+import { execFile } from 'node:child_process';
+import { release as osRelease } from 'node:os';
 import { basename, dirname, extname, join, posix, relative, resolve } from 'node:path';
 import { resolveExistingSafe, resolveSafe } from '../../foundation/security/index.js';
 import { parsePermissionRules, type PermissionRule } from '../../foundation/permissions/index.js';
@@ -46,6 +48,20 @@ export type FilePostHandlerOptions = {
   agentHeader?: string | null;
   permissionRules?: PermissionRule[];
   protectedRootFiles?: Iterable<string>;
+};
+
+export type OpenInFileManagerExecFile = (
+  command: string,
+  args: string[],
+  options: { timeout: number; windowsHide: boolean },
+  callback: (error: Error | null) => void,
+) => unknown;
+
+export type OpenInFileManagerServices = {
+  mindRoot?: string;
+  execFile?: OpenInFileManagerExecFile;
+  platform?: NodeJS.Platform;
+  osRelease?: string;
 };
 
 export type FilePostResponse = MindosServerResponse<Record<string, unknown> | { error: string; requestId?: string; message?: string }> & {
@@ -85,6 +101,81 @@ export function handleFileGet(
     if (/access denied|outside root|absolute paths/i.test(message)) return json({ error: 'Access denied' }, { status: 403 });
     return json({ error: message }, { status: 500 });
   }
+}
+
+export async function handleOpenInFileManagerGet(
+  query: MindosRequestQuery | undefined,
+  services: OpenInFileManagerServices,
+): Promise<MindosServerResponse<unknown>> {
+  const mindRoot = services.mindRoot?.trim();
+  if (!mindRoot) return json({ error: 'Mind root is not configured' }, { status: 500 });
+
+  const filePath = queryValue(query, 'path') ?? '';
+  try {
+    const invocation = buildOpenInFileManagerInvocation(mindRoot, filePath, {
+      platform: services.platform ?? process.platform,
+      osRelease: services.osRelease ?? osRelease(),
+    });
+    await execOpenInFileManager(services.execFile ?? defaultOpenInFileManagerExecFile, invocation.command, invocation.args);
+    return json({ ok: true });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (/not found|ENOENT/i.test(message)) return json({ error: 'File not found' }, { status: 404 });
+    if (/access denied|outside root|absolute paths|symlink|invalid file name/i.test(message)) {
+      return json({ error: 'Access denied' }, { status: 403 });
+    }
+    return json({ error: message }, { status: 500 });
+  }
+}
+
+function defaultOpenInFileManagerExecFile(
+  command: string,
+  args: string[],
+  options: { timeout: number; windowsHide: boolean },
+  callback: (error: Error | null) => void,
+): unknown {
+  return execFile(command, args, options, (error) => callback(error));
+}
+
+function execOpenInFileManager(execFileImpl: OpenInFileManagerExecFile, command: string, args: string[]): Promise<void> {
+  return new Promise((resolve, reject) => {
+    execFileImpl(command, args, { timeout: 5000, windowsHide: true }, (error) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+      resolve();
+    });
+  });
+}
+
+function buildOpenInFileManagerInvocation(
+  mindRoot: string,
+  filePath: string,
+  environment: { platform: NodeJS.Platform; osRelease: string },
+): { command: string; args: string[] } {
+  const resolved = resolveExistingSafe(mindRoot, filePath || '.');
+  const stat = statSync(resolved);
+  const isDirectory = stat.isDirectory();
+
+  if (environment.platform === 'darwin') {
+    return isDirectory
+      ? { command: 'open', args: [resolved] }
+      : { command: 'open', args: ['-R', resolved] };
+  }
+
+  if (environment.platform === 'win32') {
+    return isDirectory
+      ? { command: 'explorer.exe', args: [resolved] }
+      : { command: 'explorer.exe', args: [`/select,${resolved}`] };
+  }
+
+  if (environment.platform === 'linux') {
+    const command = environment.osRelease.toLowerCase().includes('microsoft') ? 'wslview' : 'xdg-open';
+    return { command, args: [isDirectory ? resolved : dirname(resolved)] };
+  }
+
+  throw new Error(`Opening file manager is not supported on ${environment.platform}`);
 }
 
 export async function handleFilePost(

@@ -577,9 +577,12 @@ export {
 
 export {
   handleFileGet,
+  handleOpenInFileManagerGet,
   handleFilePost,
   type FileGetHandlerServices,
   type FilePostHandlerServices,
+  type OpenInFileManagerExecFile,
+  type OpenInFileManagerServices,
 } from './handlers/file.js';
 
 export {

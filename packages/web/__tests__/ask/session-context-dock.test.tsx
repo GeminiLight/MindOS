@@ -15,6 +15,8 @@ const labels = {
   mindRoot: 'Mind',
   none: 'None',
   locked: 'Locked after first message',
+  openRootInFileManager: 'Open root in file manager',
+  openRootInFileManagerFailed: 'Could not open root folder',
   editWorkDir: 'Set root',
   workDirPlaceholder: '/path/to/root',
   workDirBrowse: 'Choose root',
@@ -260,7 +262,7 @@ describe('SessionContextDock', () => {
     act(() => root.unmount());
   });
 
-  it('uses icon-only hints for locked WorkDir and next-message apply details', () => {
+  it('uses icon-only controls for the locked WorkDir and next-message apply details', () => {
     const { host, root } = mountDock({ workDirEditable: false });
 
     const toggle = host.querySelector('button[aria-label="Context"]') as HTMLButtonElement;
@@ -269,9 +271,51 @@ describe('SessionContextDock', () => {
     });
 
     expect(document.body.textContent).not.toContain('Locked after first message');
+    expect(document.body.textContent).not.toContain('Open root in file manager');
     expect(document.body.textContent).not.toContain('Changes apply to the next message.');
-    expect(document.body.querySelector('[aria-label="Locked after first message"]')).not.toBeNull();
+    expect(document.body.querySelector('[aria-label="Locked after first message"]')).toBeNull();
+    expect(document.body.querySelector('[aria-label="Open root in file manager"]')).not.toBeNull();
     expect(document.body.querySelector('[aria-label="Changes apply to the next message."]')).not.toBeNull();
+
+    act(() => root.unmount());
+  });
+
+  it('opens the locked WorkDir in the native file manager from the tray action', async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url === '/api/file?op=list_spaces') {
+        return {
+          ok: true,
+          json: vi.fn().mockResolvedValue({ spaces: [] }),
+        };
+      }
+      return {
+        ok: true,
+        json: vi.fn().mockResolvedValue({ ok: true }),
+      };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { host, root } = mountDock({ workDirEditable: false });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const toggle = host.querySelector('button[aria-label="Context"]') as HTMLButtonElement;
+    act(() => {
+      toggle.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    const openRoot = document.body.querySelector('button[aria-label="Open root in file manager"]') as HTMLButtonElement;
+    await act(async () => {
+      openRoot.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/file?op=open_in_file_manager',
+      expect.objectContaining({ method: 'GET', cache: 'no-store', signal: expect.any(AbortSignal) }),
+    );
 
     act(() => root.unmount());
   });

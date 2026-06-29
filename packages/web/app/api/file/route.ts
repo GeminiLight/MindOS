@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { revalidatePath } from 'next/cache';
 import { NextRequest } from 'next/server';
-import { handleFileGet, handleFilePost, json } from '@geminilight/mindos/server';
+import { handleFileGet, handleFilePost, handleOpenInFileManagerGet, json } from '@geminilight/mindos/server';
 import { appendContentChange, getFileContent, readLines } from '@/lib/fs';
 import { handleRouteErrorSimple } from '@/lib/errors';
 import { effectiveSopRoot } from '@/lib/settings';
@@ -20,6 +20,10 @@ function normalizeAgentHeader(value: string | null): string | undefined {
 
 export async function GET(req: NextRequest) {
   try {
+    if (req.nextUrl.searchParams.get('op') === 'open_in_file_manager') {
+      return toNextResponse(await handleOpenInFileManagerGet(req.nextUrl.searchParams, { mindRoot: mindRoot() }));
+    }
+
     return toNextResponse(handleFileGet(req.nextUrl.searchParams, {
       mindRoot: mindRoot(),
       readTextFile: getFileContent,

@@ -164,6 +164,8 @@ export const aiChatZh = {
       mindRoot: '心智',
       none: '无',
       locked: '首条消息后锁定',
+      openRootInFileManager: '在文件管理器中打开 Root',
+      openRootInFileManagerFailed: '无法打开 Root 文件夹',
       editWorkDir: '设置 Root',
       workDirPlaceholder: '/path/to/root',
       workDirBrowse: '选择 Root',

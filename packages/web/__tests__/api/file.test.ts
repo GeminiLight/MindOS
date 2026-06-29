@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { beforeEach, describe, it, expect, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { seedFile, testMindRoot } from '../setup';
 import { GET, POST } from '../../app/api/file/route';
@@ -6,10 +6,29 @@ import { invalidateCache } from '../../lib/fs';
 import fs from 'fs';
 import path from 'path';
 
+const execFileMock = vi.hoisted(() => vi.fn());
+
+vi.mock('node:child_process', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:child_process')>();
+  return {
+    ...actual,
+    execFile: (...args: unknown[]) => execFileMock(...args),
+  };
+});
+
 // Helper to get testMindRoot at call time (not import time)
 function root() {
   return testMindRoot;
 }
+
+beforeEach(() => {
+  execFileMock.mockReset();
+  execFileMock.mockImplementation((...args: unknown[]) => {
+    const callback = args[args.length - 1];
+    if (typeof callback === 'function') callback(null, '', '');
+    return {};
+  });
+});
 
 describe('GET /api/file', () => {
   it('returns error when path is missing', async () => {
@@ -58,6 +77,23 @@ describe('GET /api/file', () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.lines).toEqual(['line0', 'line1', 'line2']);
+  });
+
+  it('opens the mind root in the native file manager', async () => {
+    const req = new NextRequest('http://localhost/api/file?op=open_in_file_manager');
+    const res = await GET(req);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+    expect(execFileMock).toHaveBeenCalledTimes(1);
+    expect(execFileMock.mock.calls[0]?.[1]).toContain(root());
+  });
+
+  it('rejects file-manager opens outside the mind root', async () => {
+    const req = new NextRequest('http://localhost/api/file?op=open_in_file_manager&path=..%2Fsecret.md');
+    const res = await GET(req);
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ error: 'Access denied' });
+    expect(execFileMock).not.toHaveBeenCalled();
   });
 
   it('returns 404 for non-existent file', async () => {

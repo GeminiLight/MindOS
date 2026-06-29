@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import type { FileNode } from '@/lib/types';
 import { encodePath } from '@/lib/utils';
 import {
-  Plus, Trash2, Pencil, Layers, ScrollText, FolderInput, Copy, Star, MessageSquarePlus,
+  Plus, Trash2, Pencil, Layers, ScrollText, FolderInput, Copy, Star, MessageSquarePlus, FolderOpen,
 } from 'lucide-react';
 import { convertToSpaceAction } from '@/lib/actions';
 import { useLocale } from '@/lib/stores/locale-store';
@@ -16,10 +16,20 @@ import { toast } from '@/lib/toast';
 import { notifyFilesChanged } from '@/lib/files-changed';
 import { useSmoothRouterPush } from '@/hooks/useSmoothRouterPush';
 import { requestAddAskContext } from '@/lib/ask-context-events';
+import { openMindPathInFileManager } from '@/lib/open-in-file-manager';
 import { FLOATING_CARD_SURFACE_CLASS, useDismissableFloatingLayer } from '@/components/shared/FloatingSurface';
 
 async function copyPathToClipboard(path: string) {
   try { await navigator.clipboard.writeText(path); } catch { /* noop */ }
+}
+
+async function openPathInFileManager(path: string, onClose: () => void, errorLabel: string) {
+  onClose();
+  try {
+    await openMindPathInFileManager(path);
+  } catch {
+    toast.error(errorLabel, 4000);
+  }
 }
 
 // ─── Menu primitives ─────────────────────────────────────────────────────────
@@ -89,7 +99,7 @@ export function SpaceContextMenu({ x, y, align, node, onClose, onRename, onNewFi
   const mutable = !node.isMindSystem;
 
   return (
-    <ContextMenuShell x={x} y={y} align={align} onClose={onClose} menuHeight={300}>
+    <ContextMenuShell x={x} y={y} align={align} onClose={onClose} menuHeight={340}>
       <button className={MENU_ITEM} onClick={() => { onNewFile(); onClose(); }}>
         <Plus size={14} className="shrink-0" /> {t.fileTree.newFile}
       </button>
@@ -104,6 +114,9 @@ export function SpaceContextMenu({ x, y, align, node, onClose, onRename, onNewFi
       <div className={MENU_DIVIDER} />
       <button className={MENU_ITEM} onClick={() => { requestAddAskContext({ path: node.path, type: 'space', label: node.name }); toast.success(t.fileTree.addedAsContext, 1600); onClose(); }}>
         <MessageSquarePlus size={14} className="shrink-0" /> {t.fileTree.addAsContext}
+      </button>
+      <button className={MENU_ITEM} onClick={() => { void openPathInFileManager(node.path, onClose, t.fileTree.openInFileManagerFailed); }}>
+        <FolderOpen size={14} className="shrink-0" /> {t.fileTree.openInFileManager}
       </button>
       <button className={MENU_ITEM} onClick={() => { togglePin(node.path); onClose(); }}>
         <Star size={14} className={`shrink-0 ${pinned ? 'fill-[var(--amber)] text-[var(--amber)]' : ''}`} />
@@ -140,13 +153,16 @@ export function FolderContextMenu({ x, y, align, node, onClose, onRename, onNewF
   const pinned = isPinned(node.path);
 
   return (
-    <ContextMenuShell x={x} y={y} align={align} onClose={onClose} menuHeight={260}>
+    <ContextMenuShell x={x} y={y} align={align} onClose={onClose} menuHeight={300}>
       <button className={MENU_ITEM} onClick={() => { onNewFile(); onClose(); }}>
         <Plus size={14} className="shrink-0" /> {t.fileTree.newFile}
       </button>
       <div className={MENU_DIVIDER} />
       <button className={MENU_ITEM} onClick={() => { requestAddAskContext({ path: node.path, type: 'folder', label: node.name }); toast.success(t.fileTree.addedAsContext, 1600); onClose(); }}>
         <MessageSquarePlus size={14} className="shrink-0" /> {t.fileTree.addAsContext}
+      </button>
+      <button className={MENU_ITEM} onClick={() => { void openPathInFileManager(node.path, onClose, t.fileTree.openInFileManagerFailed); }}>
+        <FolderOpen size={14} className="shrink-0" /> {t.fileTree.openInFileManager}
       </button>
       <button className={MENU_ITEM} onClick={() => { togglePin(node.path); onClose(); }}>
         <Star size={14} className={`shrink-0 ${pinned ? 'fill-[var(--amber)] text-[var(--amber)]' : ''}`} />

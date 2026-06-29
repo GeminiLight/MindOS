@@ -25,6 +25,7 @@ import { useShowHiddenFiles, setShowHiddenFiles, filterHiddenNodes } from '@/lib
 import { notifyFilesChanged } from '@/lib/files-changed';
 import { useSmoothRouterPush } from '@/hooks/useSmoothRouterPush';
 import { requestAddAskContext } from '@/lib/ask-context-events';
+import { openMindPathInFileManager } from '@/lib/open-in-file-manager';
 import { ContextMenuShell, SpaceContextMenu, FolderContextMenu, MENU_ITEM, MENU_DANGER, MENU_DIVIDER, type ContextMenuAlign } from '@/components/file-tree/FileTreeContextMenus';
 import { useDirectoryDragDrop } from '@/lib/hooks/useDirectoryDragDrop';
 import { ActivePathContext, createActivePathStore, useIsActiveFile, useIsOnActivePath, type ActivePathStore } from '@/components/file-tree/active-path';
@@ -640,6 +641,13 @@ const FileNodeItem = memo(function FileNodeItem({ node, depth, onNavigate }: {
     setContextMenu({ x: e.clientX, y: e.clientY });
   }, []);
 
+  const handleOpenInFileManager = useCallback(() => {
+    setContextMenu(null);
+    void openMindPathInFileManager(node.path).catch(() => {
+      toast.error(t.fileTree.openInFileManagerFailed, 4000);
+    });
+  }, [node.path, t.fileTree.openInFileManagerFailed]);
+
   if (renaming) {
     return (
       <div className="relative px-2 py-0.5" style={{ paddingLeft: `${depth * 12 + 8}px` }}>
@@ -743,10 +751,13 @@ const FileNodeItem = memo(function FileNodeItem({ node, depth, onNavigate }: {
           y={contextMenu.y}
           align={contextMenu.align}
           onClose={() => setContextMenu(null)}
-          menuHeight={180}
+          menuHeight={220}
         >
           <button className={MENU_ITEM} onClick={() => { requestAddAskContext({ path: node.path, type: 'file', label: node.name }); toast.success(t.fileTree.addedAsContext, 1600); setContextMenu(null); }}>
             <MessageSquarePlus size={14} className="shrink-0" /> {t.fileTree.addAsContext}
+          </button>
+          <button className={MENU_ITEM} onClick={handleOpenInFileManager}>
+            <FolderOpen size={14} className="shrink-0" /> {t.fileTree.openInFileManager}
           </button>
           {hasPendingAgentReview && (
             <button className={MENU_ITEM} onClick={() => { setContextMenu(null); smoothPush(agentReviewHref(node.path)); }}>
