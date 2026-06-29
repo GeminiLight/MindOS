@@ -228,6 +228,7 @@ export function appendSseEventToAgentRun(runId: string, event: MindOSSSEvent): v
     return;
   }
   if (event.type === 'status') {
+    if (event.visible === false) return;
     append(runId, {
       type: 'runtime_status',
       category: 'status',

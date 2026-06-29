@@ -11,6 +11,23 @@ describe('appendSseEventToAgentRun', () => {
     resetAgentRunsForTest();
   });
 
+  it('ignores hidden status events so transport heartbeats do not pollute the run timeline', () => {
+    const run = startAgentRun({
+      id: 'run-hidden-status',
+      agentKind: 'mindos-main',
+      runtimeId: 'mindos',
+      displayName: 'MindOS Agent',
+      permissionMode: 'ask',
+      inputSummary: 'Quiet turn',
+    });
+
+    appendSseEventToAgentRun(run.id, { type: 'status', visible: false, message: 'keep-alive' });
+
+    const events = listAgentEvents({ runId: run.id });
+    expect(events.map((event) => event.type)).toEqual(['run_started']);
+    expect(events.some((event) => event.type === 'runtime_status' && event.message === 'keep-alive')).toBe(false);
+  });
+
   it('keeps native runtime text out of the ledger while preserving actionable status and tool events', () => {
     const run = startAgentRun({
       id: 'run-native',
