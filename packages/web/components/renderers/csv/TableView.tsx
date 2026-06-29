@@ -1,17 +1,18 @@
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { ChevronUp, ChevronDown, Plus, Trash2 } from 'lucide-react';
+import { ChevronUp, ChevronDown, ChevronsUpDown, Plus, Trash2 } from 'lucide-react';
 import type { TableConfig } from './types';
 import { serializeCSV } from './types';
 import { EditableCell, AddRowTr } from './EditableCell';
 import { cn } from '@/lib/utils';
 
-export function TableView({ headers, rows, cfg, saveAction }: {
+export function TableView({ headers, rows, cfg, saveAction, onSortChange }: {
   headers: string[];
   rows: string[][];
   cfg: TableConfig;
   saveAction: (content: string) => Promise<void>;
+  onSortChange?: (field: string, dir: TableConfig['sortDir']) => void;
 }) {
   const [localRows, setLocalRows] = useState(rows);
   const [showAdd, setShowAdd] = useState(false);
@@ -52,22 +53,53 @@ export function TableView({ headers, rows, cfg, saveAction }: {
   }, [processedRows, groupIdx]);
 
   async function commitCell(origRow: string[], colIdx: number, val: string) {
+    const previous = localRows;
     const updated = localRows.map(r => r === origRow ? r.map((c, ci) => ci === colIdx ? val : c) : r);
     setLocalRows(updated);
-    await saveAction(serializeCSV(headers, updated));
+    try {
+      await saveAction(serializeCSV(headers, updated));
+    } catch (err) {
+      setLocalRows(previous);
+      throw err;
+    }
   }
 
   async function deleteRow(origRow: string[]) {
+    const previous = localRows;
     const updated = localRows.filter(r => r !== origRow);
     setLocalRows(updated);
-    await saveAction(serializeCSV(headers, updated));
+    try {
+      await saveAction(serializeCSV(headers, updated));
+    } catch (err) {
+      setLocalRows(previous);
+      throw err;
+    }
   }
 
   async function addRow(newRow: string[]) {
+    const previous = localRows;
     const updated = [...localRows, newRow];
     setLocalRows(updated);
-    setShowAdd(false);
-    await saveAction(serializeCSV(headers, updated));
+    try {
+      await saveAction(serializeCSV(headers, updated));
+      setShowAdd(false);
+    } catch (err) {
+      setLocalRows(previous);
+      throw err;
+    }
+  }
+
+  function toggleColumnSort(field: string) {
+    if (!onSortChange) return;
+    if (cfg.sortField !== field) {
+      onSortChange(field, 'asc');
+      return;
+    }
+    if (cfg.sortDir === 'asc') {
+      onSortChange(field, 'desc');
+      return;
+    }
+    onSortChange('', 'asc');
   }
 
   let rowCounter = 0;
@@ -78,18 +110,40 @@ export function TableView({ headers, rows, cfg, saveAction }: {
         <table className="min-w-full text-sm border-collapse">
           <thead>
             <tr className="bg-muted">
-              {visibleIndices.map(ci => (
-                <th key={ci} className="border-b border-border px-4 py-2.5 text-left text-[0.72rem] font-semibold uppercase tracking-[0.05em] text-muted-foreground whitespace-nowrap">
-                  <div className="flex items-center gap-1">
-                    {headers[ci]}
-                    {cfg.sortField === headers[ci] && (
-                      cfg.sortDir === 'asc'
-                        ? <ChevronUp size={10} className="text-[var(--amber)]" />
-                        : <ChevronDown size={10} className="text-[var(--amber)]" />
-                    )}
-                  </div>
-                </th>
-              ))}
+              {visibleIndices.map(ci => {
+                const header = headers[ci];
+                const isSorted = cfg.sortField === header;
+                const ariaSort = isSorted
+                  ? cfg.sortDir === 'asc' ? 'ascending' : 'descending'
+                  : 'none';
+                const nextSortLabel = !isSorted
+                  ? `Sort by ${header} ascending`
+                  : cfg.sortDir === 'asc'
+                    ? `Sort by ${header} descending`
+                    : `Clear sorting for ${header}`;
+                return (
+                  <th key={ci} aria-sort={ariaSort} className="border-b border-border px-0 py-0 text-left text-[0.72rem] font-semibold uppercase tracking-[0.05em] text-muted-foreground whitespace-nowrap">
+                    <button
+                      type="button"
+                      onClick={() => toggleColumnSort(header)}
+                      aria-label={nextSortLabel}
+                      title={nextSortLabel}
+                      className={cn(
+                        'group flex w-full items-center gap-1 px-4 py-2.5 text-left transition-colors hover:bg-accent/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+                        isSorted && 'text-foreground',
+                      )}
+                    >
+                      <span>{header}</span>
+                      {isSorted
+                        ? cfg.sortDir === 'asc'
+                          ? <ChevronUp size={10} className="text-[var(--amber)]" />
+                          : <ChevronDown size={10} className="text-[var(--amber)]" />
+                        : <ChevronsUpDown size={10} className="text-muted-foreground/35 transition-colors group-hover:text-muted-foreground/70" />
+                      }
+                    </button>
+                  </th>
+                );
+              })}
               <th className="w-8 border-b border-border bg-muted" />
             </tr>
           </thead>
@@ -117,6 +171,8 @@ export function TableView({ headers, rows, cfg, saveAction }: {
                       <td className="border-b border-border px-2 py-2">
                         <button onClick={() => deleteRow(orig)}
                           className="rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/10 hover:text-error group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          aria-label="Delete row"
+                          title="Delete row"
                         ><Trash2 size={12} /></button>
                       </td>
                     </tr>

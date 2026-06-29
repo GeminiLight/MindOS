@@ -34,6 +34,7 @@ export function BoardView({ headers, rows, cfg, saveAction }: {
   }, [localRows, groupIdx]);
 
   async function moveCard(origIdx: number, newGroup: string) {
+    const previous = localRows;
     const updated = localRows.map((r, i) => {
       if (i !== origIdx) return r;
       const next = [...r];
@@ -41,7 +42,12 @@ export function BoardView({ headers, rows, cfg, saveAction }: {
       return next;
     });
     setLocalRows(updated);
-    await saveAction(serializeCSV(headers, updated));
+    try {
+      await saveAction(serializeCSV(headers, updated));
+    } catch (err) {
+      setLocalRows(previous);
+      throw err;
+    }
   }
 
   function Column({ group }: { group: string }) {
@@ -65,7 +71,7 @@ export function BoardView({ headers, rows, cfg, saveAction }: {
           onDrop={e => {
             setDragOver(null);
             const idx = parseInt(e.dataTransfer.getData('origIdx'), 10);
-            if (!isNaN(idx)) moveCard(idx, group);
+            if (!isNaN(idx)) void moveCard(idx, group).catch(() => {});
           }}
         >
           {cards.map(({ row, origIdx }) => {

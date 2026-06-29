@@ -113,6 +113,20 @@ function FileBodyWarmup({ isMarkdown, editing }: { isMarkdown: boolean; editing:
   );
 }
 
+function CsvRawSource({ content }: { content: string }) {
+  return (
+    <div data-testid="csv-raw-source" className="rounded-lg border border-border bg-card">
+      <div className="flex h-9 items-center justify-between border-b border-border px-3">
+        <span className="text-xs font-medium text-muted-foreground">CSV source</span>
+        <span className="text-2xs font-mono uppercase tracking-[0.08em] text-muted-foreground/60">raw</span>
+      </div>
+      <pre className="max-h-[70vh] overflow-auto px-4 py-3 text-xs leading-relaxed text-foreground">
+        <code className="font-mono whitespace-pre">{content || ''}</code>
+      </pre>
+    </div>
+  );
+}
+
 const MARKDOWN_VIEW_MODE_STORAGE_KEY = 'md-view-mode';
 
 function normalizeMarkdownModePreference(value: string | null): MdViewMode {
@@ -202,8 +216,11 @@ export default function ViewPageClient({
     'mp4', 'webm', 'mov', 'mkv',
   ].includes(extension);
   const isMarkdown = extension === 'md';
+  const isCsv = extension === 'csv';
+  const isCsvLiveSurface = isCsv && !isDraft;
   const fileBodyReady = useDeferredFileBodyReady(filePath);
   const [editing, setEditing] = useState(() => {
+    if (isCsvLiveSurface) return false;
     return resolveMarkdownStartState(isBinaryFile, isMarkdown, initialEditing, content).editing;
   });
   const [editContent, setEditContent] = useState(content);
@@ -320,8 +337,8 @@ export default function ViewPageClient({
     setLinterFixReviewOpen(false);
     const nextMarkdownState = resolveMarkdownStartState(isBinaryFile, isMarkdown, initialEditing, content);
     setMdViewModeState(nextMarkdownState.mode);
-    setEditing(nextMarkdownState.editing);
-  }, [content, filePath, initialEditing, isBinaryFile, isMarkdown]);
+    setEditing(isCsvLiveSurface ? false : nextMarkdownState.editing);
+  }, [content, filePath, initialEditing, isBinaryFile, isCsvLiveSurface, isMarkdown]);
   const [findOpen, setFindOpen] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
   const [moreOpen, setMoreOpen] = useState(false);
@@ -437,9 +454,9 @@ export default function ViewPageClient({
     ? resolveRenderer(filePath, extension, 'graph')
     : undefined;
   const renderer = graphRenderer || registryRenderer;
-  const isCsv = extension === 'csv';
   // Graph mode overrides Raw — when graph is active, always show the renderer
   const showRenderer = !editing && !!renderer && (!effectiveUseRaw || !!graphRenderer);
+  const showCsvRawSource = isCsvLiveSurface && effectiveUseRaw && !editing;
   const [pluginViewSurfaces, setPluginViewSurfaces] = useState<PluginSurface[]>([]);
   const shouldShowPluginViewEntry = !editing && !isDraft && pluginViewSurfaces.length > 0;
   const fileExtensionLabel = extension ? `.${extension.trim().replace(/^\.+/, '').toLowerCase()}` : 'this file';
@@ -538,7 +555,7 @@ export default function ViewPageClient({
   }, [saveName, createDraftAction, saveDir, editContent, filePath, router, retargetKeptDocTab, refreshCurrentView]);
 
   const handleSave = useCallback(() => {
-    if (isCsv) {
+    if (isCsvLiveSurface) {
       setEditing(false);
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 2500);
@@ -568,14 +585,22 @@ export default function ViewPageClient({
         setSaveError(err instanceof Error ? err.message : 'Failed to save');
       }
     });
-  }, [isCsv, isDraft, isMarkdown, saveAction, editContent, keepCurrentTab, notifySelfSavedFile]);
+  }, [isCsvLiveSurface, isDraft, isMarkdown, saveAction, editContent, keepCurrentTab, notifySelfSavedFile]);
 
   // Renderer's inline save — updates local savedContent without entering edit mode
   const handleRendererSave = useCallback(async (newContent: string) => {
-    keepCurrentTab();
-    await saveAction(newContent);
-    setSavedContent(newContent);
-    notifySelfSavedFile();
+    setSaveError(null);
+    try {
+      keepCurrentTab();
+      await saveAction(newContent);
+      setSavedContent(newContent);
+      notifySelfSavedFile();
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 2500);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Failed to save');
+      throw err;
+    }
   }, [saveAction, keepCurrentTab, notifySelfSavedFile]);
 
   const handleMarkdownModeSelect = useCallback((mode: 'wysiwyg' | 'preview' | 'source') => {
@@ -706,14 +731,14 @@ export default function ViewPageClient({
         e.preventDefault();
         setFindOpen(true);
       }
-      if (key === 'e' && !editing && !isBinaryFile && document.activeElement?.tagName === 'BODY') {
+      if (key === 'e' && !editing && !isBinaryFile && !isCsvLiveSurface && document.activeElement?.tagName === 'BODY') {
         handleEdit();
       }
       if (e.key === 'Escape' && editing && !isMarkdown) handleCancel();
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [editing, handleSave, handleEdit, handleCancel]);
+  }, [editing, handleSave, handleEdit, handleCancel, isCsvLiveSurface, isBinaryFile, isMarkdown]);
 
   // Auto-refresh when AI agent modifies files + compute changed lines for highlight
   const [fileUpdated, setFileUpdated] = useState(false);
@@ -838,10 +863,10 @@ export default function ViewPageClient({
                     background: effectiveUseRaw ? `${'var(--amber)'}22` : 'var(--muted)',
                     color: effectiveUseRaw ? 'var(--amber)' : 'var(--muted-foreground)',
                   }}
-                  title={effectiveUseRaw ? `Switch to ${registryRenderer?.name}` : 'View raw'}
+                  title={effectiveUseRaw ? `Switch to ${registryRenderer?.name}` : (isCsv ? 'View CSV source' : 'View raw')}
                 >
                   {effectiveUseRaw ? <LayoutTemplate size={13} /> : <Code size={13} />}
-                  <span className="hidden sm:inline">{effectiveUseRaw ? registryRenderer.name : 'Raw'}</span>
+                  <span className="hidden sm:inline">{effectiveUseRaw ? registryRenderer.name : (isCsv ? 'Source' : 'Raw')}</span>
                 </button>
               )}
 
@@ -940,7 +965,7 @@ export default function ViewPageClient({
               {/* Editor theme picker — hidden for now, may move to Settings later */}
 
               {/* Edit button — shown in view mode for non-markdown editable file types */}
-              {!editing && !showRenderer && !isDraft && !isBinaryFile && !isMarkdown && (
+              {!editing && !showRenderer && !showCsvRawSource && !isDraft && !isBinaryFile && !isMarkdown && !isCsvLiveSurface && (
                 <button
                   onClick={handleEdit}
                   className="inline-flex h-8 min-w-8 items-center gap-1.5 rounded-md px-3 text-xs font-medium transition-colors duration-75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring touch-manipulation"
@@ -1179,6 +1204,12 @@ export default function ViewPageClient({
                 saveAction={handleRendererSave}
               />
             </Suspense>
+            <Backlinks filePath={filePath} />
+          </div>
+        ) : showCsvRawSource ? (
+          <div ref={contentRef} className="content-width">
+            {findOpen && <FindInPage containerRef={contentRef} onClose={() => setFindOpen(false)} />}
+            <CsvRawSource content={savedContent} />
             <Backlinks filePath={filePath} />
           </div>
         ) : editing ? (
