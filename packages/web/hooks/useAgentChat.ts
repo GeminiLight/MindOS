@@ -101,6 +101,18 @@ interface UseAgentChatOpts {
   onTransientError?: (message: string) => void;
 }
 
+interface TurnSubmitSnapshot {
+  sessionId: string;
+  text: string;
+  skill: { name: string } | null;
+  images: ImagePart[];
+  explicitAttachedFiles: string[];
+  requestAttachedFiles: string[];
+  uploadAttachments: LocalAttachment[];
+  onSubmitStarted: () => void;
+  restoreInputOnContextError: boolean;
+}
+
 const SESSION_CONTEXT_ERROR_CODES = new Set([
   'workdir_missing',
   'workdir_not_directory',
@@ -187,29 +199,18 @@ export function useAgentChat({
     }
   }, [refs, onRestoreInput]);
 
-  const submit = useCallback(async (e: React.FormEvent) => {
-    e.preventDefault();
-    // ---- Sync phase: the component is mounted, refs are valid. Everything
-    // the run needs is snapshotted into plain values here; the async phase
-    // below must never read a ref again.
-    const m = refs.mentionRef.current;
-    const s = refs.slashRef.current;
-    const img = refs.imageUploadRef.current;
+  const submitTurnSnapshot = useCallback(async (snapshot: TurnSubmitSnapshot): Promise<boolean> => {
     const sess = refs.sessionRef.current;
-    const upl = refs.uploadRef.current;
-    if (!m || !s || !img || !sess || !upl) return;
-    if (m.mentionQuery !== null || s.slashQuery !== null) return;
+    if (!sess) return false;
+    const sessionId = snapshot.sessionId;
+    if (!sessionId) return false;
+    if (isInSubmitCooldown(sessionId)) return false; // ignore accidental re-submit after stop
+    if (getRun(sessionId)) return false; // per-session mutex: this session is already running
 
-    const sessionId = sess.activeSessionId ?? null;
-    if (!sessionId) return;
-    if (isInSubmitCooldown(sessionId)) return; // ignore accidental re-submit after stop
-    if (getRun(sessionId)) return; // per-session mutex: this session is already running
+    const text = snapshot.text.trim();
+    if (!text && snapshot.images.length === 0) return false;
 
-    const text = refs.inputValueRef.current?.trim() ?? '';
-    const hasLoadingUploads = upl.localAttachments.some(f => f.status === 'loading');
-    if (hasLoadingUploads || (!text && img.images.length === 0)) return;
-
-    const skill = refs.selectedSkillRef.current;
+    const skill = snapshot.skill;
     const selectedRuntimeBase = compactAgentRuntimeIdentity(refs.selectedAgentRuntimeRef.current);
     const requestRuntimeBase = selectedRuntimeBase?.kind === 'mindos' ? null : selectedRuntimeBase;
     const runtimeSnapshot = selectedRuntimeBase ?? MINDOS_RUNTIME;
@@ -221,11 +222,9 @@ export function useAgentChat({
       : null;
     const selectedRuntime = runtimeForAgentRequest(requestRuntimeBase);
     const runtimeForMessage = requestRuntimeBase;
-    const pendingImages = img.images.length > 0 ? [...img.images] : undefined;
-    // Only store explicitly user-chosen files (filter out auto-included currentFile)
-    const explicitAttached = refs.attachedFilesRef.current.filter(f => f !== currentFile);
-    const pendingAttachedFiles = explicitAttached.length > 0 ? explicitAttached : undefined;
-    const pendingUploadedNames = upl.localAttachments
+    const pendingImages = snapshot.images.length > 0 ? [...snapshot.images] : undefined;
+    const pendingAttachedFiles = snapshot.explicitAttachedFiles.length > 0 ? snapshot.explicitAttachedFiles : undefined;
+    const pendingUploadedNames = snapshot.uploadAttachments
       .filter(f => f.status !== 'loading')
       .map(f => f.name);
     const userMsg: Message = annotateMessageWithAgentRuntime({
@@ -252,12 +251,11 @@ export function useAgentChat({
           runtimeForMessage,
         ),
       ]);
-      resetInputState();
-      img.clearImages();
-      return;
+      snapshot.onSubmitStarted();
+      return true;
     }
 
-    img.clearImages();
+    snapshot.onSubmitStarted();
     const previousMessages = [...storeGetMessages(sessionId)];
     const requestMessages = [...previousMessages, userMsg];
 
@@ -265,8 +263,6 @@ export function useAgentChat({
       userMsg,
       annotateMessageWithAgentRuntime({ role: 'assistant', content: '', timestamp: Date.now() }, runtimeForMessage),
     ]);
-
-    resetInputState();
 
     if (onFirstMessage && !firstMessageFired.current) {
       firstMessageFired.current = true;
@@ -319,8 +315,8 @@ export function useAgentChat({
       agentMode: 'default',
       permissionMode,
       currentFile,
-      attachedFiles: refs.attachedFilesRef.current,
-      uploadedFiles: upl.localAttachments
+      attachedFiles: snapshot.requestAttachedFiles,
+      uploadedFiles: snapshot.uploadAttachments
         .filter(f => f.status !== 'loading')
         .map(f => ({
           name: f.name,
@@ -454,7 +450,7 @@ export function useAgentChat({
           }
           // Successfully received response — no longer retractable.
           updateRun(sessionId, { pendingUserMessage: null });
-          return;
+          return true;
         } catch (err) {
           lastError = err instanceof Error ? err : new Error(String(err));
           const httpStatus = (err as Error & { httpStatus?: number }).httpStatus;
@@ -485,9 +481,9 @@ export function useAgentChat({
         if (err instanceof Error && isWorkDirContextError(err)) {
           updateRun(sessionId, { pendingUserMessage: null });
           storeSetMessages(sessionId, previousMessages, { requireRun: true });
-          onRestoreInput?.(userMsg);
+          if (snapshot.restoreInputOnContextError) onRestoreInput?.(userMsg);
           onTransientError?.(errMsg);
-          return;
+          return true;
         }
         storeSetMessages(sessionId, (prev) => {
           const updated = [...prev];
@@ -507,7 +503,64 @@ export function useAgentChat({
       endRun(sessionId);
       if (abortRef.current === controller) abortRef.current = null;
     }
-  }, [currentFile, providerOverride, modelOverride, permissionMode, nativeRuntimeOptions, acpRuntimeOptions, errorLabels.noResponse, errorLabels.stopped, errorLabels.concurrentLimit, errorLabels.tabLimitReached, onFirstMessage, refs, resetInputState, onRestoreInput, onTransientError]);
+    return true;
+  }, [currentFile, providerOverride, modelOverride, permissionMode, nativeRuntimeOptions, acpRuntimeOptions, errorLabels.noResponse, errorLabels.stopped, errorLabels.concurrentLimit, errorLabels.tabLimitReached, onFirstMessage, refs, onRestoreInput, onTransientError]);
+
+  const submit = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
+    // ---- Sync phase: the component is mounted, refs are valid. Everything
+    // the run needs is snapshotted into plain values here; the async phase
+    // below must never read a ref again.
+    const m = refs.mentionRef.current;
+    const s = refs.slashRef.current;
+    const img = refs.imageUploadRef.current;
+    const sess = refs.sessionRef.current;
+    const upl = refs.uploadRef.current;
+    if (!m || !s || !img || !sess || !upl) return;
+    if (m.mentionQuery !== null || s.slashQuery !== null) return;
+
+    const sessionId = sess.activeSessionId ?? null;
+    if (!sessionId) return;
+
+    const text = refs.inputValueRef.current?.trim() ?? '';
+    const hasLoadingUploads = upl.localAttachments.some(f => f.status === 'loading');
+    if (hasLoadingUploads || (!text && img.images.length === 0)) return;
+
+    // Only store explicitly user-chosen files (filter out auto-included currentFile)
+    const attachedFiles = [...refs.attachedFilesRef.current];
+    const explicitAttached = attachedFiles.filter(f => f !== currentFile);
+    await submitTurnSnapshot({
+      sessionId,
+      text,
+      skill: refs.selectedSkillRef.current,
+      images: [...img.images],
+      explicitAttachedFiles: explicitAttached,
+      requestAttachedFiles: attachedFiles,
+      uploadAttachments: [...upl.localAttachments],
+      onSubmitStarted: () => {
+        img.clearImages();
+        resetInputState();
+      },
+      restoreInputOnContextError: true,
+    });
+  }, [currentFile, refs, resetInputState, submitTurnSnapshot]);
+
+  const submitTextOnly = useCallback(async (text: string): Promise<boolean> => {
+    const sess = refs.sessionRef.current;
+    const sessionId = sess?.activeSessionId ?? null;
+    if (!sessionId) return false;
+    return submitTurnSnapshot({
+      sessionId,
+      text,
+      skill: null,
+      images: [],
+      explicitAttachedFiles: [],
+      requestAttachedFiles: currentFile ? [currentFile] : [],
+      uploadAttachments: [],
+      onSubmitStarted: () => {},
+      restoreInputOnContextError: false,
+    });
+  }, [currentFile, refs, submitTurnSnapshot]);
 
   return {
     isLoading,
@@ -521,6 +574,7 @@ export function useAgentChat({
     abortRef,
     firstMessageFired,
     submit,
+    submitTextOnly,
     stop,
   };
 }

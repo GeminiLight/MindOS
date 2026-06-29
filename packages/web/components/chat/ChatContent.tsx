@@ -2,7 +2,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { Plus, FileText, ImageIcon } from 'lucide-react';
+import { CornerDownRight, FileText, ImageIcon, Plus, Trash2 } from 'lucide-react';
 import { useLocale } from '@/lib/stores/locale-store';
 import type { AcpRuntimeOptions, AgentPermissionMode, AgentRuntimeDescriptor, AgentRuntimeIdentity, ChatSession, Message, NativeRuntimeOptions } from '@/lib/types';
 import ModeCapsule, {
@@ -98,6 +98,19 @@ function runtimeStatusLabel(status: AgentRuntimeDescriptor['status']): string {
 
 type SelectedAgentRuntime = AgentRuntimeIdentity & { binaryPath?: string };
 
+interface QueuedFollowUp {
+  id: string;
+  sessionId: string;
+  content: string;
+}
+
+function createQueuedFollowUpId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `queued-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
 function normalizeSelectedAgentRuntime(runtime: AgentRuntimeIdentity | null | undefined): SelectedAgentRuntime | null {
   if (!runtime) return null;
   const record = runtime as AgentRuntimeIdentity & { binaryPath?: unknown };
@@ -173,6 +186,10 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
   const attachMenuRef = useRef<HTMLDivElement>(null);
   const [attachMenuPos, setAttachMenuPos] = useState<{ top: number; left: number } | null>(null);
   const [dropError, setDropError] = useState('');
+  const [queuedFollowUps, setQueuedFollowUps] = useState<QueuedFollowUp[]>([]);
+  const [queueDrainSignal, setQueueDrainSignal] = useState(0);
+  const queuedFollowUpsRef = useRef<QueuedFollowUp[]>([]);
+  const drainingQueuedFollowUpRef = useRef(false);
   const runtimeSessionsRequestSeqRef = useRef(0);
 
   const [selectedSkill, setSelectedSkill] = useState<SkillSlashItem | null>(null);
@@ -472,6 +489,10 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
     slashRef.current = slash;
   }, [attachedFiles, imageUploadRuntime, mention, selectedAgentRuntime, selectedSkill, session, slash, uploadRuntime]);
 
+  useLayoutEffect(() => {
+    queuedFollowUpsRef.current = queuedFollowUps;
+  }, [queuedFollowUps]);
+
   useEffect(() => {
     if (!visible || !showHistory) return;
     if (runtimeSessionCapabilities.supportsList) {
@@ -549,6 +570,7 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
     setMessages: session.setMessages,
   });
   const handleSubmit = chat.submit;
+  const handleQueuedTextSubmit = chat.submitTextOnly;
   const handleStop = chat.stop;
 
   const clearTransientComposerState = useCallback(() => {
@@ -620,18 +642,101 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
   const providerNotConfigured = isMindosRuntime && aiConfigStatus === 'not-configured';
   const providerNotConfiguredMessage = providerNotConfigured ? t.ask.providerNotConfigured : '';
   const composerStatusMessage = uploadError || imageError || dropError || runtimeCheckingMessage || runtimeUnavailableMessage || providerNotConfiguredMessage;
+  const queueFollowUpTitle = t.ask.queueFollowUpTitle ?? 'Queue follow-up';
+  const queuedFollowUpState = t.ask.queuedFollowUpState ?? 'Queued';
+  const followUpPlaceholder = t.ask.followUpPlaceholder ?? 'Ask for follow-up changes';
+  const queuedFollowUpTextOnly = t.ask.queuedFollowUpTextOnly ?? 'Finish the current run before sending files, images, or skills.';
+  const removeQueuedFollowUp = t.ask.removeQueuedFollowUp ?? 'Remove queued follow-up';
+  const activeQueuedFollowUps = useMemo(() => {
+    const activeSessionId = session.activeSessionId;
+    if (!activeSessionId) return [];
+    return queuedFollowUps.filter((item) => item.sessionId === activeSessionId);
+  }, [queuedFollowUps, session.activeSessionId]);
 
   const openAiSettings = useCallback(() => {
     window.dispatchEvent(new CustomEvent('mindos:open-settings', { detail: { tab: 'ai' } }));
   }, []);
+
+  const enqueueFollowUp = useCallback(() => {
+    const sessionId = sessionRef.current.activeSessionId ?? null;
+    if (!sessionId) return false;
+    const content = inputValueRef.current.trim();
+    if (!content) return false;
+    const uploads = uploadRef.current.localAttachments;
+    if (uploads.some((file) => file.status === 'loading')) {
+      setDropError(t.ask.uploadsProcessing ?? 'Wait for uploaded files to finish processing before sending.');
+      return false;
+    }
+    const hasQueuedPayload = imageUploadRef.current.images.length > 0
+      || uploads.length > 0
+      || selectedSkillRef.current !== null
+      || attachedFilesRef.current.some((file) => file !== currentFile);
+    if (hasQueuedPayload) {
+      setDropError(queuedFollowUpTextOnly);
+      return false;
+    }
+    setQueuedFollowUps((prev) => ([
+      ...prev,
+      {
+        id: createQueuedFollowUpId(),
+        sessionId,
+        content,
+      },
+    ]));
+    setDropError('');
+    setComposerValue('');
+    mentionRef.current.resetMention();
+    slashRef.current.resetSlash();
+    setSelectedSkill(null);
+    setTimeout(() => inputRef.current?.focus(), 0);
+    return true;
+  }, [currentFile, queuedFollowUpTextOnly, setComposerValue, t.ask.uploadsProcessing]);
 
   const handleSubmitWithRuntimeGuard = useCallback((event: React.FormEvent) => {
     if (selectedRuntimeChecking || selectedRuntimeUnavailable || providerNotConfigured) {
       event.preventDefault();
       return;
     }
+    if (chat.isLoadingRef.current) {
+      event.preventDefault();
+      enqueueFollowUp();
+      return;
+    }
     void handleSubmit(event);
-  }, [handleSubmit, providerNotConfigured, selectedRuntimeChecking, selectedRuntimeUnavailable]);
+  }, [chat.isLoadingRef, enqueueFollowUp, handleSubmit, providerNotConfigured, selectedRuntimeChecking, selectedRuntimeUnavailable]);
+
+  const removeQueuedFollowUpById = useCallback((id: string) => {
+    setQueuedFollowUps((prev) => prev.filter((item) => item.id !== id));
+  }, []);
+
+  const drainQueuedFollowUps = useCallback(() => {
+    if (!visible || showHistory || isLoading || drainingQueuedFollowUpRef.current) return;
+    if (selectedRuntimeChecking || selectedRuntimeUnavailable || providerNotConfigured) return;
+    const sessionId = sessionRef.current.activeSessionId ?? null;
+    if (!sessionId) return;
+    const next = queuedFollowUpsRef.current.find((item) => item.sessionId === sessionId);
+    if (!next) return;
+
+    drainingQueuedFollowUpRef.current = true;
+    setQueuedFollowUps((prev) => prev.filter((item) => item.id !== next.id));
+    let startedTurn = false;
+    void handleQueuedTextSubmit(next.content)
+      .then((started) => {
+        startedTurn = started;
+        if (started) return;
+        setQueuedFollowUps((prev) => (
+          prev.some((item) => item.id === next.id) ? prev : [next, ...prev]
+        ));
+      })
+      .finally(() => {
+        drainingQueuedFollowUpRef.current = false;
+        if (startedTurn) setQueueDrainSignal((value) => value + 1);
+      });
+  }, [handleQueuedTextSubmit, isLoading, providerNotConfigured, selectedRuntimeChecking, selectedRuntimeUnavailable, showHistory, visible]);
+
+  useEffect(() => {
+    drainQueuedFollowUps();
+  }, [drainQueuedFollowUps, queueDrainSignal, queuedFollowUps, session.activeSessionId]);
 
   useEffect(() => {
     const handler = (event: Event) => {
@@ -945,7 +1050,7 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
         }
         return;
       }
-      if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && !chat.isLoadingRef.current && (inputValueRef.current.trim() || imageUploadRef.current.images.length > 0)) {
+      if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && (inputValueRef.current.trim() || imageUploadRef.current.images.length > 0)) {
         e.preventDefault();
         (e.currentTarget as HTMLTextAreaElement).form?.requestSubmit();
       }
@@ -1109,6 +1214,7 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
     // clears timers/messages before the metadata goes (no zombie writes).
     const runtime = selectedAgentRuntimeRef.current;
     sessionRef.current.deleteSession(id, runtime);
+    setQueuedFollowUps((prev) => prev.filter((item) => item.sessionId !== id));
     if (sessionRef.current.activeSessionId === id) {
       updateSelectedAgentRuntime(runtime);
       clearTransientComposerState();
@@ -1444,6 +1550,29 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
             onSetContextSelection={session.setSessionContextSelection}
           />
 
+          {activeQueuedFollowUps.length > 0 && (
+            <div className="border-b border-border/25 bg-background/30 px-3 py-1.5" data-follow-up-queue>
+              <div className="space-y-0.5">
+                {activeQueuedFollowUps.map((item) => (
+                  <div key={item.id} className="flex min-h-7 items-center gap-2 text-sm text-foreground/70">
+                    <CornerDownRight size={13} className="shrink-0 text-muted-foreground/60" />
+                    <span className="min-w-0 flex-1 truncate" title={item.content}>{item.content}</span>
+                    <span className="shrink-0 text-2xs font-medium text-muted-foreground/60">{queuedFollowUpState}</span>
+                    <button
+                      type="button"
+                      className="hit-target-box shrink-0 p-1 text-muted-foreground/70 transition-colors hover:text-foreground [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-md)]"
+                      title={removeQueuedFollowUp}
+                      aria-label={removeQueuedFollowUp}
+                      onClick={() => removeQueuedFollowUpById(item.id)}
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Unified context chip flow */}
           {(attachedFiles.length > 0 || localAttachments.length > 0 || images.length > 0 || selectedSkill || composerStatusMessage) && (
             <div className={cn('px-3 pt-2.5 pb-2 border-b border-border/30', isPanel ? 'max-h-24 overflow-y-auto' : 'max-h-28 overflow-y-auto')}>
@@ -1570,11 +1699,11 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
               isHome={isHome}
               isLoading={isLoading}
               reconnecting={loadingPhase === 'reconnecting'}
-              placeholder={t.ask.placeholder}
-              sendTitle={hasLoadingAttachments ? (t.ask.uploadsProcessing ?? 'Wait for uploaded files to finish processing before sending.') : runtimeCheckingMessage || runtimeUnavailableMessage || providerNotConfiguredMessage || t.ask.send}
+              placeholder={isLoading ? followUpPlaceholder : t.ask.placeholder}
+              sendTitle={hasLoadingAttachments ? (t.ask.uploadsProcessing ?? 'Wait for uploaded files to finish processing before sending.') : runtimeCheckingMessage || runtimeUnavailableMessage || providerNotConfiguredMessage || (isLoading ? queueFollowUpTitle : t.ask.send)}
               stopTitle={loadingPhase === 'reconnecting' ? t.ask.cancelReconnect : t.ask.stopTitle}
               sendDisabledExternal={hasLoadingAttachments || selectedRuntimeChecking || !!selectedRuntimeUnavailable || providerNotConfigured}
-              allowEmptySend={images.length > 0}
+              allowEmptySend={!isLoading && images.length > 0}
               iconSize={inputIconSize}
               inputRef={inputRef}
               formRef={formRef}

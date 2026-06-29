@@ -4,6 +4,10 @@ import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import ChatContent from '@/components/chat/ChatContent';
 
+const streamMockState = vi.hoisted(() => ({
+  resolvers: [] as Array<(message: { role: 'assistant'; content: string; timestamp: number }) => void>,
+}));
+
 const mockSetMessages = vi.fn();
 const mockPersistSession = vi.fn();
 const mockClearPersistTimer = vi.fn();
@@ -24,6 +28,11 @@ vi.mock('@/lib/stores/locale-store', () => ({
         panelComposerKeyboard: 'Arrow keys',
         attachFile: 'attach file',
         uploadsProcessing: 'Wait for uploaded files to finish processing before sending.',
+        queueFollowUpTitle: 'Queue follow-up',
+        queuedFollowUpState: 'Queued',
+        followUpPlaceholder: 'Ask for follow-up changes',
+        queuedFollowUpTextOnly: 'Finish the current run before sending files, images, or skills.',
+        removeQueuedFollowUp: 'Remove queued follow-up',
         stopTitle: 'Stop',
         cancelReconnect: 'Cancel reconnect',
         connecting: 'connecting',
@@ -155,12 +164,60 @@ vi.mock('@/components/ask/FileChip', () => ({
 }));
 
 vi.mock('@/lib/agent/stream-consumer', () => ({
-  consumeUIMessageStream: () => new Promise(() => {}),
+  consumeUIMessageStream: vi.fn(() => new Promise((resolve) => {
+    streamMockState.resolvers.push(resolve);
+  })),
 }));
+
+function isAgentTurnUrl(url: RequestInfo | URL): boolean {
+  const href = typeof url === 'string' ? url : url.toString();
+  return /^\/api\/agent\/sessions\/[^/]+\/turns$/.test(href);
+}
+
+function agentTurnCalls(fetchMock: ReturnType<typeof vi.fn>) {
+  return fetchMock.mock.calls.filter(([url]) => isAgentTurnUrl(url as RequestInfo | URL));
+}
+
+async function requestSubmit(form: HTMLFormElement) {
+  await act(async () => {
+    if (typeof form.requestSubmit === 'function') {
+      form.requestSubmit();
+    } else {
+      form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    }
+  });
+}
+
+async function setTextareaValue(textarea: HTMLTextAreaElement, value: string) {
+  const prototype = Object.getPrototypeOf(textarea) as HTMLTextAreaElement;
+  const descriptor = Object.getOwnPropertyDescriptor(prototype, 'value');
+  await act(async () => {
+    descriptor?.set?.call(textarea, value);
+    textarea.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+}
+
+async function waitForAgentTurnCallCount(fetchMock: ReturnType<typeof vi.fn>, expected: number) {
+  for (let i = 0; i < 20; i += 1) {
+    if (agentTurnCalls(fetchMock).length >= expected) return;
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+  }
+}
+
+async function resolveNextStream(content: string) {
+  const resolve = streamMockState.resolvers.shift();
+  expect(resolve).toBeTruthy();
+  await act(async () => {
+    resolve?.({ role: 'assistant', content, timestamp: Date.now() });
+  });
+}
 
 describe('ChatContent input behavior while running', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    streamMockState.resolvers = [];
     mockLocalAttachments = [];
     mockUploadError = '';
     (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
@@ -183,13 +240,7 @@ describe('ChatContent input behavior while running', () => {
     expect(textarea).toBeTruthy();
 
     const form = host.querySelector('form') as HTMLFormElement;
-    await act(async () => {
-      if (typeof form.requestSubmit === 'function') {
-        form.requestSubmit();
-      } else {
-        form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-      }
-    });
+    await requestSubmit(form);
 
     const textareaAfterSubmit = host.querySelector('textarea') as HTMLTextAreaElement;
     const stopButton = host.querySelector('button[title="Stop"]');
@@ -226,18 +277,9 @@ describe('ChatContent input behavior while running', () => {
     expect(host.textContent).not.toContain('Wait for uploaded files to finish processing before sending.');
 
     const form = host.querySelector('form') as HTMLFormElement;
-    await act(async () => {
-      if (typeof form.requestSubmit === 'function') {
-        form.requestSubmit();
-      } else {
-        form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-      }
-    });
+    await requestSubmit(form);
 
-    expect(fetchMock.mock.calls.some(([url]) => {
-      const href = typeof url === 'string' ? url : url.toString();
-      return /^\/api\/agent\/sessions\/[^/]+\/turns$/.test(href);
-    })).toBe(false);
+    expect(agentTurnCalls(fetchMock)).toHaveLength(0);
 
     await act(async () => {
       root.unmount();
@@ -258,16 +300,111 @@ describe('ChatContent input behavior while running', () => {
     expect(textarea.value).toBe('hello world');
 
     const form = host.querySelector('form') as HTMLFormElement;
-    await act(async () => {
-      if (typeof form.requestSubmit === 'function') {
-        form.requestSubmit();
-      } else {
-        form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-      }
-    });
+    await requestSubmit(form);
 
     const textareaAfterSubmit = host.querySelector('textarea') as HTMLTextAreaElement;
     expect(textareaAfterSubmit.value).toBe('');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('queues follow-up text while a run is active without sending a concurrent turn', async () => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
+
+    await act(async () => {
+      root.render(<ChatContent visible variant="panel" initialMessage="run a task" />);
+    });
+
+    const form = host.querySelector('form') as HTMLFormElement;
+    await requestSubmit(form);
+    expect(agentTurnCalls(fetchMock)).toHaveLength(1);
+
+    const textarea = host.querySelector('textarea') as HTMLTextAreaElement;
+    await setTextareaValue(textarea, 'second');
+    await requestSubmit(form);
+
+    expect(agentTurnCalls(fetchMock)).toHaveLength(1);
+    expect(host.textContent).toContain('second');
+    expect(host.textContent).toContain('Queued');
+    expect((host.querySelector('textarea') as HTMLTextAreaElement).value).toBe('');
+    expect(host.querySelector('button[title="Stop"]')).toBeTruthy();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('removes a queued follow-up before it runs', async () => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<ChatContent visible variant="panel" initialMessage="run a task" />);
+    });
+
+    const form = host.querySelector('form') as HTMLFormElement;
+    await requestSubmit(form);
+    await setTextareaValue(host.querySelector('textarea') as HTMLTextAreaElement, 'remove me');
+    await requestSubmit(form);
+
+    expect(host.textContent).toContain('remove me');
+
+    const removeButton = host.querySelector('button[title="Remove queued follow-up"]') as HTMLButtonElement;
+    await act(async () => {
+      removeButton.click();
+    });
+
+    expect(host.textContent).not.toContain('remove me');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('runs queued follow-ups in FIFO order after each active turn finishes', async () => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
+
+    await act(async () => {
+      root.render(<ChatContent visible variant="panel" initialMessage="first" />);
+    });
+
+    const form = host.querySelector('form') as HTMLFormElement;
+    const textarea = host.querySelector('textarea') as HTMLTextAreaElement;
+    await requestSubmit(form);
+    expect(agentTurnCalls(fetchMock)).toHaveLength(1);
+
+    await setTextareaValue(textarea, 'second');
+    await requestSubmit(form);
+    await setTextareaValue(textarea, 'third');
+    await requestSubmit(form);
+    expect(agentTurnCalls(fetchMock)).toHaveLength(1);
+    expect(host.textContent).toContain('second');
+    expect(host.textContent).toContain('third');
+
+    await resolveNextStream('first done');
+    await waitForAgentTurnCallCount(fetchMock, 2);
+    expect(agentTurnCalls(fetchMock)).toHaveLength(2);
+    const secondBody = JSON.parse(String(agentTurnCalls(fetchMock)[1][1]?.body));
+    const secondLastUser = secondBody.messages.filter((message: { role: string }) => message.role === 'user').at(-1);
+    expect(secondLastUser.content).toBe('second');
+    expect(host.textContent).not.toContain('second');
+    expect(host.textContent).toContain('third');
+
+    await resolveNextStream('second done');
+    await waitForAgentTurnCallCount(fetchMock, 3);
+    expect(agentTurnCalls(fetchMock)).toHaveLength(3);
+    const thirdBody = JSON.parse(String(agentTurnCalls(fetchMock)[2][1]?.body));
+    const thirdLastUser = thirdBody.messages.filter((message: { role: string }) => message.role === 'user').at(-1);
+    expect(thirdLastUser.content).toBe('third');
 
     await act(async () => {
       root.unmount();

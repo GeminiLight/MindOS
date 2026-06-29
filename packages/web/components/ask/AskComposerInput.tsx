@@ -23,7 +23,7 @@ import {
   type MutableRefObject,
   type RefObject,
 } from 'react';
-import { Send, StopCircle, X } from 'lucide-react';
+import { CornerDownRight, Send, StopCircle, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 /** Textarea auto-grows with content up to this many visible lines, then scrolls */
@@ -163,9 +163,16 @@ const AskComposerInput = memo(function AskComposerInput({
       />
 
       {isLoading ? (
-        <button type="button" onClick={onStop} className="hit-target-box p-2 transition-colors shrink-0 text-foreground [--hit-target-bg:var(--muted)] [--hit-target-hover-bg:color-mix(in_srgb,var(--muted)_80%,transparent)] [--hit-target-radius:var(--radius-xl)]" title={stopTitle} aria-label={stopTitle}>
-          {reconnecting ? <X size={iconSize} /> : <StopCircle size={iconSize} />}
-        </button>
+        <>
+          {(value.trim() || allowEmptySend) && (
+            <button type="submit" title={sendTitle} aria-label={sendTitle} disabled={sendDisabledExternal || (!value.trim() && !allowEmptySend)} className="hit-target-box p-2 disabled:opacity-20 disabled:scale-95 disabled:cursor-not-allowed transition-all duration-150 shrink-0 text-[var(--amber)] active:scale-95 [--hit-target-bg:color-mix(in_srgb,var(--amber)_10%,transparent)] [--hit-target-hover-bg:color-mix(in_srgb,var(--amber)_16%,transparent)] [--hit-target-radius:var(--radius-xl)]">
+              <CornerDownRight size={14} />
+            </button>
+          )}
+          <button type="button" onClick={onStop} className="hit-target-box p-2 transition-colors shrink-0 text-foreground [--hit-target-bg:var(--muted)] [--hit-target-hover-bg:color-mix(in_srgb,var(--muted)_80%,transparent)] [--hit-target-radius:var(--radius-xl)]" title={stopTitle} aria-label={stopTitle}>
+            {reconnecting ? <X size={iconSize} /> : <StopCircle size={iconSize} />}
+          </button>
+        </>
       ) : (
         <button type="submit" title={sendTitle} aria-label={sendTitle} disabled={sendDisabledExternal || (!value.trim() && !allowEmptySend)} className="hit-target-box p-2 disabled:opacity-20 disabled:scale-95 disabled:cursor-not-allowed transition-all duration-150 shrink-0 text-[var(--amber-foreground)] active:scale-95 [--hit-target-bg:var(--amber)] [--hit-target-hover-bg:var(--amber)] [--hit-target-radius:var(--radius-xl)] [--hit-target-shadow:0_1px_2px_0_color-mix(in_srgb,var(--amber)_15%,transparent)] [--hit-target-hover-shadow:0_4px_6px_-1px_color-mix(in_srgb,var(--amber)_20%,transparent)]">
           <Send size={14} />
