@@ -8,6 +8,13 @@ import type { AgentRunRecord } from '@geminilight/mindos/agent/ledger/run-ledger
 import { isAbortLikeError } from '@geminilight/mindos/agent/ledger/run-cancellation';
 import { metrics } from '@/lib/metrics';
 
+const AGENT_TURN_SSE_HEARTBEAT_MS = 15_000;
+const AGENT_TURN_SSE_HEARTBEAT_EVENT: MindOSSSEvent = {
+  type: 'status',
+  visible: false,
+  message: 'keep-alive',
+};
+
 export function agentRunErrorStatus(error: unknown, signal?: AbortSignal): 'failed' | 'canceled' | 'timed_out' {
   if (signal?.aborted || isAbortLikeError(error)) return 'canceled';
   return (error as { code?: unknown })?.code === 'TIMEOUT' ? 'timed_out' : 'failed';
@@ -65,20 +72,37 @@ export function createAgentTurnSseResponse(
 ): Response {
   const encoder = new TextEncoder();
   const requestStartTime = Date.now();
+  let streamClosed = false;
+  let heartbeatTimer: ReturnType<typeof setInterval> | undefined;
+  function markStreamClosed() {
+    streamClosed = true;
+    if (heartbeatTimer) {
+      clearInterval(heartbeatTimer);
+      heartbeatTimer = undefined;
+    }
+  }
   const stream = new ReadableStream({
     start(controller) {
-      let streamClosed = false;
+      heartbeatTimer = setInterval(() => {
+        if (streamClosed) return;
+        try {
+          controller.enqueue(encoder.encode(encodeMindosSseEvent(AGENT_TURN_SSE_HEARTBEAT_EVENT)));
+        } catch {
+          markStreamClosed();
+        }
+      }, AGENT_TURN_SSE_HEARTBEAT_MS);
+
       function send(event: MindOSSSEvent) {
         if (streamClosed) return;
         try {
           controller.enqueue(encoder.encode(encodeMindosSseEvent(event)));
         } catch {
-          streamClosed = true;
+          markStreamClosed();
         }
       }
       function safeClose() {
         if (streamClosed) return;
-        streamClosed = true;
+        markStreamClosed();
         try { controller.close(); } catch { /* already closed */ }
       }
 
@@ -91,6 +115,9 @@ export function createAgentTurnSseResponse(
         send({ type: 'error', message: fallbackErrorMessage(err) });
         safeClose();
       });
+    },
+    cancel() {
+      markStreamClosed();
     },
   });
 
