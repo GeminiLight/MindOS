@@ -1,7 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
   ArrowUpRight,
@@ -10,14 +10,10 @@ import {
   FolderOpen,
   FlaskConical,
   Leaf,
-  Loader2,
   MessageSquareText,
-  MoreHorizontal,
   NotebookText,
-  PencilLine,
   Route,
   SunMedium,
-  Zap,
 } from 'lucide-react';
 import { ECHO_SEGMENT_HREF, type EchoSegment } from '@/lib/echo-segments';
 import {
@@ -36,12 +32,9 @@ import { useSessions } from '@/lib/agent-session-store';
 import { ContentPageShell } from '@/components/shared/ContentPageShell';
 import { Button } from '@/components/ui/button';
 import { EchoAssistantGenerateButton, EchoPageHeader } from './EchoSegmentPageHeader';
+import EchoImprintCardsReview from './EchoImprintCardsReview';
 import { EchoInsightCollapsible } from './EchoInsightCollapsible';
 import EchoMemoryReaderPanel from './EchoMemoryReaderPanel';
-import DailyEchoReportDrawer from './DailyEcho/DailyEchoReportDrawer';
-import type { DailyEchoReport } from '@/lib/daily-echo/types';
-import { generateDailyEchoReport } from '@/lib/daily-echo/generator';
-import { loadDailyEchoConfig } from '@/lib/daily-echo/config';
 
 const STORAGE_DAILY = 'mindos-echo-daily-line';
 const STORAGE_GROWTH = 'mindos-echo-growth-intent';
@@ -183,14 +176,20 @@ function echoFlowCopy(segment: EchoStoredSegment, p: EchoCopy) {
   }
 }
 
-function EchoSegmentFlowPanel({
+function EchoWorktablePanel({
   segment,
   selectedItem,
+  savedCount,
+  recentSessionCount,
   p,
+  onGenerate,
 }: {
   segment: EchoStoredSegment;
   selectedItem: EchoSavedItem | null;
+  savedCount: number;
+  recentSessionCount: number;
   p: EchoCopy;
+  onGenerate: () => void;
 }) {
   const flow = echoFlowCopy(segment, p);
   const steps = [
@@ -199,15 +198,18 @@ function EchoSegmentFlowPanel({
     { label: p.echoFlowSaveLabel, body: flow.save, icon: <Archive size={16} aria-hidden /> },
     { label: p.echoFlowConsumeLabel, body: flow.consume, icon: <Route size={16} aria-hidden /> },
   ];
+  const contextLabel = selectedItem
+    ? p.echoFlowSelectedItem(selectedItem.title, selectedItem.path)
+    : p.echoFlowNoSelection;
 
   return (
     <section
       className={cn(echoSurfaceClass, 'overflow-hidden')}
       aria-labelledby="echo-flow-title"
-      data-testid="echo-page-contract"
+      data-testid="echo-worktable"
     >
-      <div className="border-b border-border/45 px-5 py-4 md:px-6">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+      <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_18rem]">
+        <div className="min-w-0 border-b border-border/45 px-5 py-4 md:px-6 lg:border-b-0 lg:border-r">
           <div className="min-w-0">
             <h2 id="echo-flow-title" className="font-sans text-base font-medium text-foreground">
               {p.echoFlowTitle}
@@ -216,25 +218,54 @@ function EchoSegmentFlowPanel({
               {p.echoFlowSubtitle}
             </p>
           </div>
-          <p className="rounded-md border border-border/55 bg-background/65 px-3 py-2 font-sans text-xs leading-5 text-muted-foreground lg:max-w-sm">
-            {selectedItem
-              ? p.echoFlowSelectedItem(selectedItem.title, selectedItem.path)
-              : p.echoFlowNoSelection}
-          </p>
-        </div>
-      </div>
-      <div className="grid divide-y divide-border/45 md:grid-cols-2 md:divide-x md:divide-y-0 xl:grid-cols-4">
-        {steps.map((step) => (
-          <div key={step.label} className="min-w-0 p-5">
-            <div className="flex items-center gap-2">
-              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted/45 text-muted-foreground">
-                {step.icon}
-              </span>
-              <h3 className="font-sans text-sm font-medium text-foreground">{step.label}</h3>
-            </div>
-            <p className="mt-3 font-sans text-sm leading-6 text-muted-foreground">{step.body}</p>
+
+          <div className="mt-4 flex min-w-0 flex-wrap gap-2">
+            <span className="inline-flex max-w-full items-center gap-2 rounded-md border border-border/50 bg-background/55 px-2.5 py-1.5 font-sans text-xs text-muted-foreground">
+              <MessageSquareText size={13} className="shrink-0 text-[var(--amber)]" aria-hidden />
+              <span className="truncate">{contextLabel}</span>
+            </span>
+            <span className="inline-flex items-center gap-2 rounded-md border border-border/50 bg-background/55 px-2.5 py-1.5 font-sans text-xs text-muted-foreground">
+              <Archive size={13} className="text-muted-foreground" aria-hidden />
+              {p.echoWorktableSavedCount(savedCount)}
+            </span>
+            <span className="inline-flex items-center gap-2 rounded-md border border-border/50 bg-background/55 px-2.5 py-1.5 font-sans text-xs text-muted-foreground">
+              <Bot size={13} className="text-muted-foreground" aria-hidden />
+              {p.echoWorktableRecentCount(recentSessionCount)}
+            </span>
           </div>
-        ))}
+
+          <div className="mt-5 grid gap-px overflow-hidden rounded-lg border border-border/45 bg-border/45 md:grid-cols-2 xl:grid-cols-4">
+            {steps.map((step) => (
+              <div key={step.label} className="min-w-0 bg-card/80 p-4">
+                <div className="flex items-center gap-2">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted/45 text-muted-foreground">
+                    {step.icon}
+                  </span>
+                  <h3 className="font-sans text-sm font-medium text-foreground">{step.label}</h3>
+                </div>
+                <p className="mt-3 font-sans text-sm leading-6 text-muted-foreground">{step.body}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <aside className="flex min-w-0 flex-col justify-between gap-4 px-5 py-4 md:px-6">
+          <div className="min-w-0">
+            <p className="font-mono text-[0.68rem] uppercase tracking-[0.08em] text-muted-foreground">
+              {p.echoWorktableAiLabel}
+            </p>
+            <p className="mt-2 font-sans text-sm leading-6 text-muted-foreground">
+              {p.echoWorktableAiBoundary}
+            </p>
+          </div>
+          <EchoAssistantGenerateButton
+            p={p}
+            segment={segment}
+            onGenerate={onGenerate}
+            size="sm"
+            className="w-full justify-center"
+          />
+        </aside>
       </div>
     </section>
   );
@@ -364,122 +395,6 @@ function OverviewStatCard({
   );
 }
 
-function EchoImprintHeaderActions({
-  primaryAction,
-  p,
-  onRecord,
-  onGenerateReport,
-  isGeneratingReport,
-  reportError,
-}: {
-  primaryAction: ReactNode;
-  p: EchoCopy;
-  onRecord: () => void;
-  onGenerateReport: () => Promise<boolean>;
-  isGeneratingReport: boolean;
-  reportError: string;
-}) {
-  const [open, setOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    if (!open) return;
-
-    const closeFromPointer = (event: PointerEvent) => {
-      if (menuRef.current?.contains(event.target as Node)) return;
-      setOpen(false);
-    };
-    const closeFromEscape = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
-      setOpen(false);
-    };
-
-    document.addEventListener('pointerdown', closeFromPointer);
-    document.addEventListener('keydown', closeFromEscape);
-    return () => {
-      document.removeEventListener('pointerdown', closeFromPointer);
-      document.removeEventListener('keydown', closeFromEscape);
-    };
-  }, [open]);
-
-  const handleRecord = useCallback(() => {
-    setOpen(false);
-    onRecord();
-  }, [onRecord]);
-
-  const handleGenerateReport = useCallback(() => {
-    void onGenerateReport().then((ok) => {
-      if (ok) setOpen(false);
-    });
-  }, [onGenerateReport]);
-
-  return (
-    <div className="echo-imprint-header-actions">
-      <div className="echo-imprint-header-actions__primary">
-        {primaryAction}
-      </div>
-      <div className="echo-page-hero__action-menu relative shrink-0" ref={menuRef}>
-        <Button
-          type="button"
-          variant="outline"
-          size="icon-lg"
-          aria-label={p.echoMoreActionsAriaLabel}
-          aria-haspopup="menu"
-          aria-expanded={open}
-          aria-controls="echo-imprint-actions-menu"
-          data-echo-imprint-actions-menu-trigger
-          onClick={() => setOpen((value) => !value)}
-          className="shadow-sm"
-        >
-          {isGeneratingReport ? (
-            <Loader2 size={16} className="animate-spin" aria-hidden />
-          ) : (
-            <MoreHorizontal size={17} aria-hidden />
-          )}
-        </Button>
-        {open ? (
-          <div
-            id="echo-imprint-actions-menu"
-            role="menu"
-            data-echo-imprint-actions-menu
-            className="absolute right-0 top-full z-50 mt-2 w-56 overflow-hidden rounded-xl border border-border/70 bg-popover p-1.5 text-popover-foreground shadow-lg"
-          >
-            <button
-              type="button"
-              role="menuitem"
-              className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left font-sans text-sm text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              onClick={handleRecord}
-            >
-              <PencilLine size={15} className="text-muted-foreground" aria-hidden />
-              <span>{p.continueRecordLabel}</span>
-            </button>
-            <button
-              type="button"
-              role="menuitem"
-              className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left font-sans text-sm text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-60"
-              disabled={isGeneratingReport}
-              aria-busy={isGeneratingReport}
-              onClick={handleGenerateReport}
-            >
-              {isGeneratingReport ? (
-                <Loader2 size={15} className="animate-spin text-muted-foreground" aria-hidden />
-              ) : (
-                <Zap size={15} className="text-muted-foreground" aria-hidden />
-              )}
-              <span>{isGeneratingReport ? p.dailyReportGenerating : p.dailyReportGenerate}</span>
-            </button>
-            {reportError ? (
-              <p role="alert" className="px-2.5 pb-2 pt-1 font-sans text-xs leading-5 text-destructive">
-                {reportError}
-              </p>
-            ) : null}
-          </div>
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
 export default function EchoSegmentPageClient({ segment }: { segment: EchoSegment }) {
   const { t, locale } = useLocale();
   const p = t.echoPages;
@@ -491,10 +406,6 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
 
   const [dailyLine, setDailyLine] = useState('');
   const [growthIntent, setGrowthIntent] = useState('');
-  const [dailyEchoReport, setDailyEchoReport] = useState<DailyEchoReport | null>(null);
-  const [isDailyEchoOpen, setIsDailyEchoOpen] = useState(false);
-  const [isDailyEchoGenerating, setIsDailyEchoGenerating] = useState(false);
-  const [dailyEchoError, setDailyEchoError] = useState('');
   const [assistantGenerateSignal, setAssistantGenerateSignal] = useState(0);
   const [savedEchoItems, setSavedEchoItems] = useState<EchoSavedItem[]>([]);
   const [selectedEchoPath, setSelectedEchoPath] = useState<string | null>(null);
@@ -530,55 +441,18 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
     openAskModal(p.dailyAskPrefill(dailyLine), 'user');
   }, [dailyLine, p, persistDaily]);
 
-  const handleDailyEchoGenerate = useCallback(async () => {
-    setDailyEchoError('');
-    setIsDailyEchoGenerating(true);
-    try {
-      const config = loadDailyEchoConfig();
-      const report = await generateDailyEchoReport(new Date(), config);
-      setDailyEchoReport(report);
-      setIsDailyEchoOpen(true);
-      return true;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      setDailyEchoError(message);
-      console.error('[EchoImprint] Generate failed:', err);
-      return false;
-    } finally {
-      setIsDailyEchoGenerating(false);
-    }
-  }, []);
-
-  const handleDailyEchoRegenerate = useCallback(async () => {
-    setDailyEchoReport(null);
-    setDailyEchoError('');
-    setIsDailyEchoGenerating(true);
-    try {
-      const config = loadDailyEchoConfig();
-      const report = await generateDailyEchoReport(new Date(), config, true);
-      setDailyEchoReport(report);
-    } catch (err) {
-      console.error('[EchoImprint] Regenerate failed:', err);
-    } finally {
-      setIsDailyEchoGenerating(false);
-    }
-  }, []);
-
-  const handleDailyEchoContinueAgent = useCallback((content: string) => {
-    setIsDailyEchoOpen(false);
-    openAskModal(content, 'user');
-  }, []);
-
   const echoAssistantId = getEchoAssistantIdForSegment(segment);
   const echoAssistantMaxSteps = echoAssistantId ? getEchoAssistantMaxSteps(echoAssistantId) : undefined;
   const activeEchoSegment: EchoStoredSegment | null = segment === 'overview' ? null : segment;
+  const readerEchoSegment: EchoStoredSegment | null =
+    segment === 'threads' || segment === 'growth' || segment === 'practice' ? segment : null;
   const recentSessions = useMemo(() => buildEchoRecentSessionSummaries(sessions), [sessions]);
-  const selectedEchoItem = activeEchoSegment
+  const selectedEchoItem = readerEchoSegment
     ? (savedEchoDetail ?? savedEchoItems.find((item) => item.path === selectedEchoPath) ?? null)
     : null;
 
   useEffect(() => {
-    if (!activeEchoSegment) {
+    if (!readerEchoSegment) {
       setSavedEchoItems([]);
       setSelectedEchoPath(null);
       setSavedEchoDetail(null);
@@ -593,7 +467,7 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
     setSavedEchoLoading(true);
     setSavedEchoError('');
 
-    fetch(`/api/echo?segment=${activeEchoSegment}`, { signal: ctrl.signal })
+    fetch(`/api/echo?segment=${readerEchoSegment}`, { signal: ctrl.signal })
       .then(async (res) => {
         const body = await res.json().catch(() => ({})) as { items?: EchoSavedItem[]; error?: string };
         if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
@@ -608,10 +482,10 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
       });
 
     return () => ctrl.abort();
-  }, [activeEchoSegment]);
+  }, [readerEchoSegment]);
 
   useEffect(() => {
-    if (!activeEchoSegment || savedEchoItems.length === 0) {
+    if (!readerEchoSegment || savedEchoItems.length === 0) {
       setSelectedEchoPath(null);
       return;
     }
@@ -620,10 +494,10 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
       if (current && savedEchoItems.some((item) => item.path === current)) return current;
       return savedEchoItems[0]?.path ?? null;
     });
-  }, [activeEchoSegment, savedEchoItems]);
+  }, [readerEchoSegment, savedEchoItems]);
 
   useEffect(() => {
-    if (!activeEchoSegment || !selectedEchoPath) {
+    if (!readerEchoSegment || !selectedEchoPath) {
       setSavedEchoDetail(null);
       setSavedEchoDetailLoading(false);
       setSavedEchoDetailError('');
@@ -634,7 +508,7 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
     setSavedEchoDetailLoading(true);
     setSavedEchoDetailError('');
 
-    fetch(`/api/echo?segment=${activeEchoSegment}&path=${encodeURIComponent(selectedEchoPath)}`, { signal: ctrl.signal })
+    fetch(`/api/echo?segment=${readerEchoSegment}&path=${encodeURIComponent(selectedEchoPath)}`, { signal: ctrl.signal })
       .then(async (res) => {
         const body = await res.json().catch(() => ({})) as { item?: EchoSavedItemDetail; error?: string };
         if (!res.ok || !body.item) throw new Error(body.error || `HTTP ${res.status}`);
@@ -650,7 +524,7 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
       });
 
     return () => ctrl.abort();
-  }, [activeEchoSegment, selectedEchoPath]);
+  }, [readerEchoSegment, selectedEchoPath]);
 
   const handleEchoSaved = useCallback((item: EchoSavedItem) => {
     setSavedEchoItems((current) => [
@@ -683,13 +557,6 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
           value: p.imprintLogEntries.map((entry) => `${entry.time} ${entry.title} - ${entry.body}`).join(' | '),
         },
       );
-      if (dailyEchoReport) {
-        facts.push(
-          { label: p.dailyReportTitle, value: dailyEchoReport.rawMarkdown },
-          { label: p.reportThemesTitle, value: dailyEchoReport.themes.map((theme) => theme.name).join(', ') },
-          { label: p.reportAlignmentTitle, value: dailyEchoReport.alignment.analysis },
-        );
-      }
     }
 
     if (segment === 'threads' && !savedEchoDetail) {
@@ -729,7 +596,6 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
       recentSessions,
     });
   }, [
-    dailyEchoReport,
     dailyLine,
     echoAssistantId,
     growthIntent,
@@ -748,29 +614,6 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
     setAssistantGenerateSignal((value) => value + 1);
   }, []);
 
-  const assistantHeaderAction = activeEchoSegment
-    ? (
-      <EchoAssistantGenerateButton
-        p={p}
-        segment={activeEchoSegment}
-        onGenerate={triggerEchoAssistantGenerate}
-        className={segment === 'imprint' ? 'w-full' : undefined}
-      />
-    )
-    : undefined;
-  const headerActions = segment === 'imprint'
-    ? (
-      <EchoImprintHeaderActions
-        primaryAction={assistantHeaderAction}
-        p={p}
-        onRecord={openImprintAsk}
-        onGenerateReport={handleDailyEchoGenerate}
-        isGeneratingReport={isDailyEchoGenerating}
-        reportError={dailyEchoError}
-      />
-    )
-    : assistantHeaderAction;
-
   return (
     <ContentPageShell
       as="article"
@@ -785,7 +628,6 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
           title={title}
           lead={lead}
           titleId={pageTitleId}
-          actions={headerActions}
         />
 
         {segment === 'overview' && (
@@ -796,19 +638,26 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
           />
         )}
 
-        {activeEchoSegment && (
+        {activeEchoSegment === 'imprint' && (
+          <EchoImprintCardsReview p={p} />
+        )}
+
+        {readerEchoSegment && (
           <>
-            <EchoSegmentFlowPanel
-              segment={activeEchoSegment}
+            <EchoWorktablePanel
+              segment={readerEchoSegment}
               selectedItem={selectedEchoItem}
+              savedCount={savedEchoItems.length}
+              recentSessionCount={recentSessions.length}
               p={p}
+              onGenerate={triggerEchoAssistantGenerate}
             />
             <EchoMemoryReaderPanel
-              segment={activeEchoSegment}
-              listTitle={echoReaderListTitle(activeEchoSegment, title, p)}
-              listSubtitle={echoReaderSubtitle(activeEchoSegment, p)}
-              emptyLabel={echoReaderEmptyLabel(activeEchoSegment, p)}
-              detailEmptyLabel={echoReaderDetailEmptyLabel(activeEchoSegment, p)}
+              segment={readerEchoSegment}
+              listTitle={echoReaderListTitle(readerEchoSegment, title, p)}
+              listSubtitle={echoReaderSubtitle(readerEchoSegment, p)}
+              emptyLabel={echoReaderEmptyLabel(readerEchoSegment, p)}
+              detailEmptyLabel={echoReaderDetailEmptyLabel(readerEchoSegment, p)}
               items={savedEchoItems}
               selectedPath={selectedEchoPath}
               onSelect={setSelectedEchoPath}
@@ -822,7 +671,7 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
           </>
         )}
 
-        {echoAssistantId && segment !== 'overview' && (
+        {readerEchoSegment && echoAssistantId && segment !== 'overview' && (
           <EchoInsightCollapsible
             noAiHint={p.generateInsightNoAi}
             generatingLabel={p.insightGenerating}
@@ -841,18 +690,6 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
           />
         )}
       </div>
-
-      {segment === 'imprint' && (
-        <DailyEchoReportDrawer
-          isOpen={isDailyEchoOpen}
-          report={dailyEchoReport}
-          isGenerating={isDailyEchoGenerating}
-          onClose={() => setIsDailyEchoOpen(false)}
-          onRegenerate={handleDailyEchoRegenerate}
-          onContinueAgent={handleDailyEchoContinueAgent}
-          locale={{ t: p }}
-        />
-      )}
     </ContentPageShell>
   );
 }
