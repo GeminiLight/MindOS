@@ -674,15 +674,19 @@ export function appendContentChange(input: ContentChangeInput): ContentChangeEve
 /**
  * Lists content change events with optional filtering.
  * @param options.path   Filter by file path (prefix match)
+ * @param options.space  Filter by top-level space
  * @param options.limit  Max events to return (default: unlimited)
  * @param options.source Filter by source: 'user' | 'agent' | 'system'
+ * @param options.agent  Filter by concrete agent name when available
  * @param options.op     Filter by operation type (e.g. 'create', 'update', 'delete')
  * @param options.q      Free-text search within change descriptions
  */
 export function listContentChanges(options: {
   path?: string;
+  space?: string;
   limit?: number;
   source?: 'user' | 'agent' | 'system';
+  agent?: string;
   op?: string;
   q?: string;
 } = {}): ContentChangeEvent[] {

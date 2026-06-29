@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  getContentChangeFacetsFromLog,
   getContentChangeSummaryFromLog,
   listContentChangesFromLog,
   markContentChangesSeenInLog,
@@ -28,7 +29,7 @@ describe('handlers/change-log store', () => {
     const root = makeRoot();
     seedJsonlEvents(root, [
       { id: '1', ts: '2026-01-01T00:00:00.000Z', op: 'save_file', path: 'a.md', source: 'user', summary: 'a changed' },
-      { id: '2', ts: '2026-01-02T00:00:00.000Z', op: 'save_file', path: 'b.md', source: 'agent', summary: 'b changed' },
+      { id: '2', ts: '2026-01-02T00:00:00.000Z', op: 'save_file', path: 'Research/b.md', source: 'agent', agentName: 'codex', summary: 'b changed' },
     ]);
 
     const all = listContentChangesFromLog(root, {});
@@ -36,8 +37,39 @@ describe('handlers/change-log store', () => {
 
     expect(listContentChangesFromLog(root, { path: 'a.md' }).map((event) => event.id)).toEqual(['1']);
     expect(listContentChangesFromLog(root, { source: 'agent' }).map((event) => event.id)).toEqual(['2']);
+    expect(listContentChangesFromLog(root, { space: 'Research' }).map((event) => event.id)).toEqual(['2']);
+    expect(listContentChangesFromLog(root, { agent: 'codex' }).map((event) => event.id)).toEqual(['2']);
+    expect(listContentChangesFromLog(root, { q: 'codex' }).map((event) => event.id)).toEqual(['2']);
     expect(listContentChangesFromLog(root, { q: 'b changed' }).map((event) => event.id)).toEqual(['2']);
     expect(listContentChangesFromLog(root, { limit: 1 }).map((event) => event.id)).toEqual(['2']);
+  });
+
+  it('builds compact facets for spaces, agents, operations and sources', () => {
+    const root = makeRoot();
+    seedJsonlEvents(root, [
+      { id: '1', ts: '2026-01-01T00:00:00.000Z', op: 'save_file', path: 'root.md', source: 'user', summary: 'root changed' },
+      { id: '2', ts: '2026-01-02T00:00:00.000Z', op: 'save_file', path: 'Research/b.md', source: 'agent', agentName: 'codex', summary: 'b changed' },
+      { id: '3', ts: '2026-01-03T00:00:00.000Z', op: 'create_file', path: 'Research/c.md', source: 'agent', summary: 'c changed' },
+    ]);
+
+    const facets = getContentChangeFacetsFromLog(root);
+
+    expect(facets.spaces).toEqual(expect.arrayContaining([
+      expect.objectContaining({ value: 'Research', count: 2 }),
+      expect.objectContaining({ value: '__root__', count: 1 }),
+    ]));
+    expect(facets.agents).toEqual(expect.arrayContaining([
+      expect.objectContaining({ value: 'codex', count: 1 }),
+      expect.objectContaining({ value: '__agent_unknown__', count: 1 }),
+    ]));
+    expect(facets.operations).toEqual(expect.arrayContaining([
+      expect.objectContaining({ value: 'save_file', count: 2 }),
+      expect.objectContaining({ value: 'create_file', count: 1 }),
+    ]));
+    expect(facets.sources).toEqual(expect.arrayContaining([
+      expect.objectContaining({ value: 'agent', count: 2 }),
+      expect.objectContaining({ value: 'user', count: 1 }),
+    ]));
   });
 
   it('migrates a legacy pretty-printed change log on first read, carrying lastSeenAt', () => {

@@ -20,7 +20,9 @@ import {
   Pencil,
   RefreshCw,
   Search,
+  SlidersHorizontal,
   User,
+  X,
   Zap,
 } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
@@ -41,6 +43,7 @@ interface ChangeEvent {
   path: string;
   source: 'user' | 'agent' | 'system';
   summary: string;
+  agentName?: string;
   before?: string;
   after?: string;
   beforePath?: string;
@@ -57,13 +60,32 @@ interface ListPayload {
   events: ChangeEvent[];
 }
 
+interface FacetItem {
+  value: string;
+  count: number;
+}
+
+interface FacetsPayload {
+  spaces: FacetItem[];
+  agents: FacetItem[];
+  operations: FacetItem[];
+  sources: FacetItem[];
+}
+
 interface ChangesSurfaceProps {
   initialPath?: string;
   initialSource?: SourceFilter;
+  initialSpace?: string;
+  initialAgent?: string;
+  initialOp?: string;
+  initialQuery?: string;
   variant?: SurfaceVariant;
 }
 
 const SOURCE_FILTERS: SourceFilter[] = ['all', 'agent', 'user', 'system'];
+const ALL_FILTER_VALUE = 'all';
+const ROOT_SPACE_VALUE = '__root__';
+const UNKNOWN_AGENT_VALUE = '__agent_unknown__';
 
 function getOpIcon(op: string): ReactNode {
   if (op === 'create_file' || op === 'create_space') return <FileUp size={14} aria-hidden="true" />;
@@ -150,6 +172,29 @@ function sourceLabel(source: ChangeEvent['source'], t: ReturnType<typeof useLoca
 
 function operationLabel(op: string, t: ReturnType<typeof useLocale>['t']) {
   return (t.changes.operations as Record<string, string>)?.[op] ?? op;
+}
+
+function optionLabel(label: string, count?: number): string {
+  return typeof count === 'number' ? `${label} · ${count}` : label;
+}
+
+function spaceLabel(value: string, t: ReturnType<typeof useLocale>['t']): string {
+  if (value === ROOT_SPACE_VALUE) return t.changes.filters.rootSpace;
+  return value;
+}
+
+function agentLabel(value: string, t: ReturnType<typeof useLocale>['t']): string {
+  if (value === UNKNOWN_AGENT_VALUE) return t.changes.filters.agentUnknown;
+  return value;
+}
+
+function selectedFacetLabel(
+  value: string,
+  fallback: (value: string) => string,
+  facets: FacetItem[],
+): string {
+  const facet = facets.find((item) => item.value === value);
+  return optionLabel(fallback(value), facet?.count);
 }
 
 function ChangeCardSkeleton() {
@@ -279,6 +324,9 @@ function ChangeEventRow({
 }) {
   const translatedSummary = translateSummary(event.summary, t);
   const openHref = `/view/${encodePath(event.afterPath || event.path)}`;
+  const sourceText = event.source === 'agent' && event.agentName?.trim()
+    ? event.agentName.trim()
+    : sourceLabel(event.source, t);
 
   return (
     <article
@@ -322,7 +370,7 @@ function ChangeEventRow({
             </span>
             <span className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-medium ${getSourceClassName(event.source)}`}>
               {getSourceIcon(event.source)}
-              {sourceLabel(event.source, t)}
+              <span className="max-w-[8rem] truncate" title={sourceText}>{sourceText}</span>
             </span>
             <span className="text-xs text-muted-foreground/70">
               {relativeTime(event.ts, t)}
@@ -367,15 +415,22 @@ function EmptyState({
 export function ChangesSurface({
   initialPath = '',
   initialSource = 'all',
+  initialSpace = ALL_FILTER_VALUE,
+  initialAgent = ALL_FILTER_VALUE,
+  initialOp = ALL_FILTER_VALUE,
+  initialQuery = '',
   variant = 'page',
 }: ChangesSurfaceProps) {
   const { t } = useLocale();
   const [pathFilter, setPathFilter] = useState(initialPath);
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>(initialSource);
-  const [opFilter, setOpFilter] = useState<string>('all');
-  const [queryFilter, setQueryFilter] = useState('');
+  const [spaceFilter, setSpaceFilter] = useState(initialSpace || ALL_FILTER_VALUE);
+  const [agentFilter, setAgentFilter] = useState(initialAgent || ALL_FILTER_VALUE);
+  const [opFilter, setOpFilter] = useState<string>(initialOp || ALL_FILTER_VALUE);
+  const [queryFilter, setQueryFilter] = useState(initialQuery);
   const [viewMode, setViewMode] = useState<ViewMode>(initialSource === 'agent' ? 'review' : 'activity');
   const [events, setEvents] = useState<ChangeEvent[]>([]);
+  const [facets, setFacets] = useState<FacetsPayload>({ spaces: [], agents: [], operations: [], sources: [] });
   const [summary, setSummary] = useState<SummaryPayload>({ unreadCount: 0, totalCount: 0, lastSeenAt: null });
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
@@ -390,13 +445,63 @@ export function ChangesSurface({
     if (initialSource === 'agent') setViewMode('review');
   }, [initialSource]);
 
+  useEffect(() => {
+    setSpaceFilter(initialSpace || ALL_FILTER_VALUE);
+  }, [initialSpace]);
+
+  useEffect(() => {
+    const nextAgent = initialAgent || ALL_FILTER_VALUE;
+    setAgentFilter(nextAgent);
+    if (nextAgent !== ALL_FILTER_VALUE) setSourceFilter('agent');
+  }, [initialAgent]);
+
+  useEffect(() => {
+    setOpFilter(initialOp || ALL_FILTER_VALUE);
+  }, [initialOp]);
+
+  useEffect(() => {
+    setQueryFilter(initialQuery);
+  }, [initialQuery]);
+
+  useEffect(() => {
+    if (variant !== 'page' || typeof window === 'undefined') return;
+    if (window.location.protocol === 'about:') return;
+
+    const params = new URLSearchParams(window.location.search);
+    const setOrDelete = (key: string, value: string, isDefault: boolean) => {
+      if (isDefault) params.delete(key);
+      else params.set(key, value);
+    };
+
+    const normalizedPath = pathFilter.trim();
+    const normalizedQuery = queryFilter.trim();
+    const effectiveSource: SourceFilter =
+      viewMode === 'review' || agentFilter !== ALL_FILTER_VALUE ? 'agent' : sourceFilter;
+
+    setOrDelete('path', normalizedPath, normalizedPath.length === 0);
+    setOrDelete('source', effectiveSource, effectiveSource === 'all');
+    setOrDelete('space', spaceFilter, spaceFilter === ALL_FILTER_VALUE);
+    setOrDelete('agent', agentFilter, agentFilter === ALL_FILTER_VALUE);
+    setOrDelete('event_op', opFilter, opFilter === ALL_FILTER_VALUE);
+    setOrDelete('q', normalizedQuery, normalizedQuery.length === 0);
+
+    const nextSearch = params.toString();
+    const nextUrl = `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ''}${window.location.hash}`;
+    const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    if (nextUrl !== currentUrl) {
+      window.history.replaceState(window.history.state, '', nextUrl);
+    }
+  }, [agentFilter, opFilter, pathFilter, queryFilter, sourceFilter, spaceFilter, variant, viewMode]);
+
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const params = new URLSearchParams({ op: 'list', limit: '120' });
       if (pathFilter.trim()) params.set('path', pathFilter.trim());
-      if (viewMode === 'review') {
+      if (spaceFilter !== ALL_FILTER_VALUE) params.set('space', spaceFilter);
+      if (agentFilter !== ALL_FILTER_VALUE) params.set('agent', agentFilter);
+      if (viewMode === 'review' || agentFilter !== ALL_FILTER_VALUE) {
         params.set('source', 'agent');
       } else if (sourceFilter !== 'all') {
         params.set('source', sourceFilter);
@@ -404,11 +509,18 @@ export function ChangesSurface({
       if (opFilter !== 'all') params.set('event_op', opFilter);
       if (queryFilter.trim()) params.set('q', queryFilter.trim());
 
-      const [list, summaryData] = await Promise.all([
+      const [list, summaryData, facetsData] = await Promise.all([
         apiFetch<ListPayload>(`/api/changes?${params.toString()}`),
         apiFetch<SummaryPayload>('/api/changes?op=summary'),
+        apiFetch<FacetsPayload>('/api/changes?op=facets'),
       ]);
       setEvents(list.events);
+      setFacets({
+        spaces: Array.isArray(facetsData.spaces) ? facetsData.spaces : [],
+        agents: Array.isArray(facetsData.agents) ? facetsData.agents : [],
+        operations: Array.isArray(facetsData.operations) ? facetsData.operations : [],
+        sources: Array.isArray(facetsData.sources) ? facetsData.sources : [],
+      });
       setSummary({
         unreadCount: summaryData.unreadCount ?? 0,
         totalCount: summaryData.totalCount ?? list.events.length,
@@ -419,7 +531,7 @@ export function ChangesSurface({
     } finally {
       setLoading(false);
     }
-  }, [opFilter, pathFilter, queryFilter, sourceFilter, viewMode]);
+  }, [agentFilter, opFilter, pathFilter, queryFilter, sourceFilter, spaceFilter, viewMode]);
 
   useEffect(() => {
     void fetchData();
@@ -452,32 +564,103 @@ export function ChangesSurface({
     [visibleEvents],
   );
 
-  const opOptions = useMemo(() => {
-    const ops = Array.from(new Set(events.map((event) => event.op))).sort((a, b) => a.localeCompare(b));
-    if (opFilter !== 'all' && !ops.includes(opFilter)) ops.unshift(opFilter);
-    return ['all', ...ops];
-  }, [events, opFilter]);
+  const sourceCounts = useMemo(
+    () => new Map(facets.sources.map((item) => [item.value, item.count])),
+    [facets.sources],
+  );
 
   const sourceSelectOptions = useMemo(
     () => SOURCE_FILTERS.map(source => ({
       value: source,
-      label: source === 'all' ? t.changes.filters.all : sourceLabel(source, t),
+      label: source === 'all'
+        ? t.changes.filters.all
+        : optionLabel(sourceLabel(source, t), sourceCounts.get(source)),
     })),
-    [t],
+    [sourceCounts, t],
   );
 
+  const spaceSelectOptions = useMemo(() => {
+    const options = [
+      { value: ALL_FILTER_VALUE, label: t.changes.filters.spaceAll },
+      ...facets.spaces.map((item) => ({
+        value: item.value,
+        label: optionLabel(spaceLabel(item.value, t), item.count),
+      })),
+    ];
+    if (spaceFilter !== ALL_FILTER_VALUE && !options.some((option) => option.value === spaceFilter)) {
+      options.push({
+        value: spaceFilter,
+        label: selectedFacetLabel(spaceFilter, (value) => spaceLabel(value, t), facets.spaces),
+      });
+    }
+    return options;
+  }, [facets.spaces, spaceFilter, t]);
+
+  const agentSelectOptions = useMemo(() => {
+    const options = [
+      { value: ALL_FILTER_VALUE, label: t.changes.filters.agentAll },
+      ...facets.agents.map((item) => ({
+        value: item.value,
+        label: optionLabel(agentLabel(item.value, t), item.count),
+      })),
+    ];
+    if (agentFilter !== ALL_FILTER_VALUE && !options.some((option) => option.value === agentFilter)) {
+      options.push({
+        value: agentFilter,
+        label: selectedFacetLabel(agentFilter, (value) => agentLabel(value, t), facets.agents),
+      });
+    }
+    return options;
+  }, [agentFilter, facets.agents, t]);
+
   const opSelectOptions = useMemo(
-    () => opOptions.map((op) => ({
-      value: op,
-      label: op === 'all' ? t.changes.filters.operationAll : operationLabel(op, t),
-    })),
-    [opOptions, t],
+    () => [
+      { value: ALL_FILTER_VALUE, label: t.changes.filters.operationAll },
+      ...facets.operations.map((item) => ({
+        value: item.value,
+        label: optionLabel(operationLabel(item.value, t), item.count),
+      })),
+      ...(opFilter !== ALL_FILTER_VALUE && !facets.operations.some((item) => item.value === opFilter)
+        ? [{
+          value: opFilter,
+          label: selectedFacetLabel(opFilter, (value) => operationLabel(value, t), facets.operations),
+        }]
+        : []),
+    ],
+    [facets.operations, opFilter, t],
   );
 
   const scopedLabel = pathFilter.trim() ? t.changes.scopedToPath(pathFilter.trim()) : null;
+  const spaceScopedLabel = spaceFilter !== ALL_FILTER_VALUE ? t.changes.scopedToSpace(spaceLabel(spaceFilter, t)) : null;
+  const agentScopedLabel = agentFilter !== ALL_FILTER_VALUE ? t.changes.scopedToAgent(agentLabel(agentFilter, t)) : null;
   const isEmbedded = variant === 'embedded';
   const reviewActionLabel = viewMode === 'review' ? t.changes.markReviewed : t.changes.markAllRead;
   const reviewActionDisabled = viewMode === 'review' ? reviewCount <= 0 : summary.unreadCount <= 0;
+  const hasActiveFilters = Boolean(
+    pathFilter.trim()
+    || queryFilter.trim()
+    || spaceFilter !== ALL_FILTER_VALUE
+    || agentFilter !== ALL_FILTER_VALUE
+    || opFilter !== ALL_FILTER_VALUE
+    || (viewMode === 'activity' && sourceFilter !== 'all')
+  );
+  const clearFilters = useCallback(() => {
+    setPathFilter('');
+    setQueryFilter('');
+    setSpaceFilter(ALL_FILTER_VALUE);
+    setAgentFilter(ALL_FILTER_VALUE);
+    setOpFilter(ALL_FILTER_VALUE);
+    if (viewMode === 'activity') setSourceFilter('all');
+  }, [viewMode]);
+  const handleSourceFilterChange = useCallback((value: string) => {
+    const next = value as SourceFilter;
+    setSourceFilter(next);
+    if (next !== 'agent') setAgentFilter(ALL_FILTER_VALUE);
+  }, []);
+  const handleAgentFilterChange = useCallback((value: string) => {
+    setAgentFilter(value);
+    if (value !== ALL_FILTER_VALUE) setSourceFilter('agent');
+  }, []);
 
   const content = (
     <div
@@ -534,6 +717,8 @@ export function ChangesSurface({
           <StatusPill>{t.changes.pathsChanged(touchedPathCount)}</StatusPill>
           {summary.unreadCount > 0 && <StatusPill tone="accent">{t.changes.unreadCount(summary.unreadCount)}</StatusPill>}
           {scopedLabel && <StatusPill>{scopedLabel}</StatusPill>}
+          {spaceScopedLabel && <StatusPill>{spaceScopedLabel}</StatusPill>}
+          {agentScopedLabel && <StatusPill>{agentScopedLabel}</StatusPill>}
         </div>
       </header>
 
@@ -595,6 +780,14 @@ export function ChangesSurface({
         </div>
 
         <div className="mt-3 flex flex-wrap items-center gap-2">
+          <CustomSelect
+            ariaLabel={t.changes.filters.space}
+            value={spaceFilter}
+            onChange={setSpaceFilter}
+            options={spaceSelectOptions}
+            size="sm"
+            className="min-w-[8.5rem]"
+          />
           {viewMode === 'review' ? (
             <div className="inline-flex min-h-7 w-fit max-w-full justify-self-start items-center gap-1.5 rounded-md border border-[var(--amber)]/25 bg-[var(--amber-subtle)] px-2 text-2xs font-medium text-[var(--amber-text)]">
               <Bot size={12} aria-hidden="true" />
@@ -602,18 +795,44 @@ export function ChangesSurface({
             </div>
           ) : (
             <CustomSelect
+              ariaLabel={t.changes.filters.source}
               value={sourceFilter}
-              onChange={(v) => setSourceFilter(v as SourceFilter)}
+              onChange={handleSourceFilterChange}
               options={sourceSelectOptions}
               size="sm"
             />
           )}
           <CustomSelect
+            ariaLabel={t.changes.filters.agent}
+            value={agentFilter}
+            onChange={handleAgentFilterChange}
+            options={agentSelectOptions}
+            size="sm"
+            className="min-w-[8.5rem]"
+          />
+          <CustomSelect
+            ariaLabel={t.changes.filters.operation}
             value={opFilter}
             onChange={setOpFilter}
             options={opSelectOptions}
             size="sm"
+            className="min-w-[9rem]"
           />
+          {hasActiveFilters && (
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="inline-flex min-h-7 items-center gap-1.5 rounded-md px-2 text-2xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              title={t.changes.filters.clear}
+            >
+              <X size={12} aria-hidden="true" />
+              {t.changes.filters.clear}
+            </button>
+          )}
+          <span className="ml-auto hidden items-center gap-1.5 text-2xs font-medium text-muted-foreground/70 lg:inline-flex">
+            <SlidersHorizontal size={12} aria-hidden="true" />
+            {t.changes.filters.facets}
+          </span>
         </div>
       </section>
 
@@ -686,14 +905,26 @@ export function ChangesSurface({
 export default function ChangesContentPage({
   initialPath = '',
   initialSource = 'all',
+  initialSpace = ALL_FILTER_VALUE,
+  initialAgent = ALL_FILTER_VALUE,
+  initialOp = ALL_FILTER_VALUE,
+  initialQuery = '',
 }: {
   initialPath?: string;
   initialSource?: SourceFilter;
+  initialSpace?: string;
+  initialAgent?: string;
+  initialOp?: string;
+  initialQuery?: string;
 }) {
   return (
     <ChangesSurface
       initialPath={initialPath}
       initialSource={initialSource}
+      initialSpace={initialSpace}
+      initialAgent={initialAgent}
+      initialOp={initialOp}
+      initialQuery={initialQuery}
       variant="page"
     />
   );

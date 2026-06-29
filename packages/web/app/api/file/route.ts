@@ -13,6 +13,11 @@ function mindRoot() {
   return effectiveSopRoot().trim();
 }
 
+function normalizeAgentHeader(value: string | null): string | undefined {
+  const normalized = value?.replace(/[\x00-\x1f]/g, '').trim().slice(0, 100);
+  return normalized || undefined;
+}
+
 export async function GET(req: NextRequest) {
   try {
     return toNextResponse(handleFileGet(req.nextUrl.searchParams, {
@@ -36,9 +41,10 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    const agentName = normalizeAgentHeader(req.headers.get('x-mindos-agent'));
     const response = await handleFilePost(body, { mindRoot: mindRoot() }, {
       sourceHeader: req.headers.get('x-mindos-source'),
-      agentHeader: req.headers.get('x-mindos-agent'),
+      agentHeader: agentName,
       protectedRootFiles: SYSTEM_FILES,
     });
 
@@ -48,7 +54,11 @@ export async function POST(req: NextRequest) {
 
     if (response.changeEvent) {
       try {
-        appendContentChange({ ...response.changeEvent, source: response.source ?? 'user' });
+        appendContentChange({
+          ...response.changeEvent,
+          source: response.source ?? 'user',
+          agentName: response.source === 'agent' ? agentName : undefined,
+        });
       } catch (logError) {
         console.warn('[file.route] failed to append content change log:', (logError as Error).message);
       }

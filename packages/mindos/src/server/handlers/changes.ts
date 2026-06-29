@@ -2,9 +2,11 @@ import type { ContentChangeEvent, ContentChangeSummary } from '../../knowledge/a
 import { queryValue, type MindosRequestQuery } from '../context.js';
 import { json, type MindosServerResponse } from '../response.js';
 import {
+  getContentChangeFacetsFromLog,
   getContentChangeSummaryFromLog,
   listContentChangesFromLog,
   markContentChangesSeenInLog,
+  type ContentChangeFacets,
 } from './change-log-store.js';
 
 export type ChangesHandlerServices = {
@@ -22,12 +24,20 @@ export type ChangesMarkSeenPayload = {
 export async function handleChangesGet(
   query: MindosRequestQuery | undefined,
   services: ChangesHandlerServices,
-): Promise<MindosServerResponse<ContentChangeSummary | ChangesListPayload | { error: string }>> {
+): Promise<MindosServerResponse<ContentChangeSummary | ChangesListPayload | ContentChangeFacets | { error: string }>> {
   const op = queryValue(query, 'op') ?? 'summary';
 
   if (op === 'summary') {
     try {
       return json(getContentChangeSummaryFromLog(services.mindRoot));
+    } catch (error) {
+      return json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 });
+    }
+  }
+
+  if (op === 'facets') {
+    try {
+      return json(getContentChangeFacetsFromLog(services.mindRoot));
     } catch (error) {
       return json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 });
     }
@@ -44,7 +54,9 @@ export async function handleChangesGet(
     try {
       const events = listContentChangesFromLog(services.mindRoot, {
         path: queryValue(query, 'path'),
+        space: queryValue(query, 'space'),
         source,
+        agent: queryValue(query, 'agent'),
         op: queryValue(query, 'event_op'),
         q: queryValue(query, 'q'),
         limit,

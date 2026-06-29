@@ -32,9 +32,17 @@ const agentEvent = {
   op: 'update_lines',
   path: 'Research/notes.md',
   source: 'agent',
+  agentName: 'codex',
   summary: 'Updated lines 1-2',
   before: 'before',
   after: 'after',
+};
+
+const facetsPayload = {
+  spaces: [{ value: 'Research', count: 1 }],
+  agents: [{ value: 'codex', count: 1 }],
+  operations: [{ value: 'update_lines', count: 1 }],
+  sources: [{ value: 'agent', count: 1 }],
 };
 
 describe('ChangesContentPage', () => {
@@ -44,12 +52,16 @@ describe('ChangesContentPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     buildLineDiffMock.mockClear();
+    window.history.replaceState({}, '', '/changelog');
     root = null;
     host = document.createElement('div');
     document.body.appendChild(host);
     apiFetchMock.mockImplementation(async (url: string) => {
       if (url === '/api/changes?op=summary') {
         return { unreadCount: 1, totalCount: 1, lastSeenAt: '2026-06-22T00:00:00.000Z' };
+      }
+      if (url === '/api/changes?op=facets') {
+        return facetsPayload;
       }
       if (url.startsWith('/api/changes?')) {
         return { events: [agentEvent] };
@@ -116,6 +128,9 @@ describe('ChangesContentPage', () => {
       if (url === '/api/changes?op=summary') {
         return { unreadCount: 2, totalCount: 2, lastSeenAt: '2026-06-22T00:02:00.000Z' };
       }
+      if (url === '/api/changes?op=facets') {
+        return facetsPayload;
+      }
       if (url.startsWith('/api/changes?')) {
         return { events: [agentEvent] };
       }
@@ -128,5 +143,40 @@ describe('ChangesContentPage', () => {
     expect(reviewAction).not.toBeNull();
     expect(reviewAction?.disabled).toBe(true);
     expect(host.textContent).toContain('All reviewed');
+  });
+
+  it('adds space and concrete agent filters to the changes request', async () => {
+    await renderPage(<ChangesContentPage />);
+
+    const clickButtonContaining = async (label: string) => {
+      const button = Array.from(document.body.querySelectorAll<HTMLButtonElement>('button'))
+        .find((node) => node.textContent?.includes(label));
+      expect(button, `button containing "${label}"`).toBeTruthy();
+      await act(async () => {
+        button!.click();
+        await Promise.resolve();
+      });
+    };
+
+    await clickButtonContaining('All spaces');
+    await clickButtonContaining('Research · 1');
+    await clickButtonContaining('All agents');
+    await clickButtonContaining('codex · 1');
+
+    const listUrl = apiFetchMock.mock.calls
+      .map(([url]) => String(url))
+      .filter(url => url.startsWith('/api/changes?op=list'))
+      .at(-1);
+    expect(listUrl).toBeTruthy();
+
+    const params = new URL(`http://localhost${listUrl}`).searchParams;
+    expect(params.get('space')).toBe('Research');
+    expect(params.get('agent')).toBe('codex');
+    expect(params.get('source')).toBe('agent');
+
+    const pageParams = new URLSearchParams(window.location.search);
+    expect(pageParams.get('space')).toBe('Research');
+    expect(pageParams.get('agent')).toBe('codex');
+    expect(pageParams.get('source')).toBe('agent');
   });
 });

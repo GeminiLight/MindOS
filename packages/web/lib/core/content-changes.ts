@@ -29,6 +29,7 @@ export interface ContentChangeEvent {
   path: string;
   source: ContentChangeSource;
   summary: string;
+  agentName?: string;
   before?: string;
   after?: string;
   beforePath?: string;
@@ -41,6 +42,7 @@ export interface ContentChangeInput {
   path: string;
   source: ContentChangeSource;
   summary: string;
+  agentName?: string;
   before?: string;
   after?: string;
   beforePath?: string;
@@ -49,8 +51,10 @@ export interface ContentChangeInput {
 
 interface ListOptions {
   path?: string;
+  space?: string;
   limit?: number;
   source?: ContentChangeSource;
+  agent?: string;
   op?: string;
   q?: string;
 }
@@ -73,6 +77,8 @@ const COMPACTION: JsonlCompactionConfig = {
   maxBytes: 12_000_000,
   targetBytes: 6_000_000,
 };
+const ROOT_SPACE_VALUE = '__root__';
+const UNKNOWN_AGENT_VALUE = '__agent_unknown__';
 
 function nowIso() {
   return new Date().toISOString();
@@ -93,6 +99,33 @@ function normalizeText(value: string | undefined): { value: string | undefined; 
     value: value.slice(0, MAX_TEXT_CHARS),
     truncated: true,
   };
+}
+
+function normalizeEventPath(value: string | undefined): string {
+  return typeof value === 'string' ? value.split('\\').join('/').replace(/^\/+/, '').replace(/\/+$/, '') : '';
+}
+
+function pathSpaceValue(value: string | undefined, op?: string): string {
+  const normalized = normalizeEventPath(value);
+  if (!normalized) return ROOT_SPACE_VALUE;
+  const [first, ...rest] = normalized.split('/');
+  if (rest.length > 0) return first || ROOT_SPACE_VALUE;
+  if (op === 'create_space' || op === 'rename_space') return first || ROOT_SPACE_VALUE;
+  return ROOT_SPACE_VALUE;
+}
+
+function eventSpaceValue(event: ContentChangeEvent): string {
+  const candidates = [event.afterPath, event.path, event.beforePath];
+  for (const candidate of candidates) {
+    const value = pathSpaceValue(candidate, event.op);
+    if (value !== ROOT_SPACE_VALUE) return value;
+  }
+  return ROOT_SPACE_VALUE;
+}
+
+function eventAgentValue(event: ContentChangeEvent): string | null {
+  if (event.source !== 'agent') return null;
+  return event.agentName?.trim() || UNKNOWN_AGENT_VALUE;
 }
 
 function readChangeEvents(mindRoot: string): { events: ContentChangeEvent[]; lastSeenAt: string | null } {
@@ -118,6 +151,7 @@ export function appendContentChange(mindRoot: string, input: ContentChangeInput)
     path: input.path,
     source: input.source,
     summary: input.summary,
+    agentName: input.source === 'agent' && input.agentName?.trim() ? input.agentName.trim() : undefined,
     before: before.value,
     after: after.value,
     beforePath: input.beforePath,
@@ -133,17 +167,21 @@ export function listContentChanges(mindRoot: string, options: ListOptions = {}):
     const { events } = readChangeEvents(mindRoot);
     const limit = Math.max(1, Math.min(options.limit ?? 50, 200));
     const pathFilter = options.path?.trim();
+    const spaceFilter = options.space?.trim();
     const sourceFilter = options.source;
+    const agentFilter = options.agent?.trim();
     const opFilter = options.op?.trim();
     const q = options.q?.trim().toLowerCase();
     return events.filter((event) => {
       if (pathFilter && event.path !== pathFilter && event.beforePath !== pathFilter && event.afterPath !== pathFilter) {
         return false;
       }
+      if (spaceFilter && eventSpaceValue(event) !== spaceFilter) return false;
       if (sourceFilter && event.source !== sourceFilter) return false;
+      if (agentFilter && eventAgentValue(event) !== agentFilter) return false;
       if (opFilter && event.op !== opFilter) return false;
       if (q) {
-        const haystack = `${event.path} ${event.beforePath ?? ''} ${event.afterPath ?? ''} ${event.summary} ${event.op} ${event.source}`.toLowerCase();
+        const haystack = `${event.path} ${event.beforePath ?? ''} ${event.afterPath ?? ''} ${event.summary} ${event.op} ${event.source} ${event.agentName ?? ''}`.toLowerCase();
         if (!haystack.includes(q)) return false;
       }
       return true;

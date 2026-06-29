@@ -79,6 +79,39 @@ describe('GET/POST /api/changes', () => {
     expect(queryBody.events.some((e: { path: string }) => e.path === 'agent-filter.md')).toBe(true);
   });
 
+  it('list supports space and concrete agent filters and exposes facets', async () => {
+    await FilePOST(new NextRequest('http://localhost/api/file', {
+      method: 'POST',
+      body: JSON.stringify({
+        op: 'save_file',
+        path: 'Research/agent-note.md',
+        content: 'agent note',
+      }),
+      headers: { 'content-type': 'application/json', 'x-mindos-agent': 'codex' },
+    }));
+    await FilePOST(postJson('http://localhost/api/file', {
+      op: 'save_file',
+      path: 'Personal/user-note.md',
+      content: 'user note',
+    }));
+
+    const spaceFiltered = await GET(new NextRequest('http://localhost/api/changes?op=list&space=Research&limit=50'));
+    const spaceBody = await spaceFiltered.json();
+    expect(spaceBody.events.length).toBeGreaterThan(0);
+    expect(spaceBody.events.every((e: { path: string }) => e.path.startsWith('Research/'))).toBe(true);
+
+    const agentFiltered = await GET(new NextRequest('http://localhost/api/changes?op=list&source=agent&agent=codex&limit=50'));
+    const agentBody = await agentFiltered.json();
+    expect(agentBody.events.some((e: { path: string; agentName?: string }) => e.path === 'Research/agent-note.md' && e.agentName === 'codex')).toBe(true);
+    expect(agentBody.events.every((e: { source: string; agentName?: string }) => e.source === 'agent' && e.agentName === 'codex')).toBe(true);
+
+    const facets = await GET(new NextRequest('http://localhost/api/changes?op=facets'));
+    const facetsBody = await facets.json();
+    expect(facetsBody.spaces).toEqual(expect.arrayContaining([expect.objectContaining({ value: 'Research' })]));
+    expect(facetsBody.agents).toEqual(expect.arrayContaining([expect.objectContaining({ value: 'codex' })]));
+    expect(facetsBody.operations).toEqual(expect.arrayContaining([expect.objectContaining({ value: 'save_file' })]));
+  });
+
   it('mark_seen clears unread count', async () => {
     await FilePOST(postJson('http://localhost/api/file', {
       op: 'save_file',

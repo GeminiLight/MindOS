@@ -214,6 +214,21 @@ describe('POST /api/file', () => {
     expect(latest.after).toContain('v1');
   });
 
+  it('records the agent header on agent-authored content changes', async () => {
+    const res = await POST(post(
+      { op: 'save_file', path: 'agent-logged.md', content: 'v1' },
+      { 'x-mindos-agent': 'codex' },
+    ));
+    expect(res.status).toBe(200);
+
+    const logPath = path.join(root(), '.mindos', 'change-log.json');
+    const lines = fs.readFileSync(logPath, 'utf-8').trim().split('\n');
+    const latest = JSON.parse(lines[lines.length - 1]) as { source: string; agentName?: string; path: string };
+    expect(latest.path).toBe('agent-logged.md');
+    expect(latest.source).toBe('agent');
+    expect(latest.agentName).toBe('codex');
+  });
+
   it('save_file returns error if content missing', async () => {
     const res = await POST(post({ op: 'save_file', path: 'x.md' }));
     expect(res.status).toBe(400);

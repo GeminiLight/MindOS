@@ -33,6 +33,7 @@ function flatOptions(items: SelectItem[]): SelectOption[] {
 
 interface CustomSelectProps {
   id?: string;
+  ariaLabel?: string;
   value: string;
   onChange: (value: string) => void;
   options: SelectItem[];
@@ -44,6 +45,7 @@ interface CustomSelectProps {
 
 export default function CustomSelect({
   id,
+  ariaLabel,
   value,
   onChange,
   options,
@@ -239,6 +241,7 @@ export default function CustomSelect({
         ref={btnRef}
         type="button"
         onClick={() => setOpen(v => !v)}
+        aria-label={ariaLabel}
         aria-haspopup="listbox"
         aria-expanded={open}
         className={triggerCls}

@@ -35,10 +35,24 @@ const LEGACY_AGENT_DIFF_FILE = 'Agent-Diff.md';
 
 export interface ContentChangeListOptions {
   path?: string;
+  space?: string;
   limit?: number;
   source?: ContentChangeSource;
+  agent?: string;
   op?: string;
   q?: string;
+}
+
+export interface ContentChangeFacetItem {
+  value: string;
+  count: number;
+}
+
+export interface ContentChangeFacets {
+  spaces: ContentChangeFacetItem[];
+  agents: ContentChangeFacetItem[];
+  operations: ContentChangeFacetItem[];
+  sources: ContentChangeFacetItem[];
 }
 
 function nowIso(): string {
@@ -69,6 +83,47 @@ function readChangeEvents(mindRoot: string): { events: ContentChangeEvent[]; las
   };
 }
 
+const ROOT_SPACE_VALUE = '__root__';
+const UNKNOWN_AGENT_VALUE = '__agent_unknown__';
+
+function normalizeEventPath(value: string | undefined): string {
+  return typeof value === 'string' ? value.split('\\').join('/').replace(/^\/+/, '').replace(/\/+$/, '') : '';
+}
+
+function pathSpaceValue(value: string | undefined, op?: string): string {
+  const normalized = normalizeEventPath(value);
+  if (!normalized) return ROOT_SPACE_VALUE;
+  const [first, ...rest] = normalized.split('/');
+  if (rest.length > 0) return first || ROOT_SPACE_VALUE;
+  if (op === 'create_space' || op === 'rename_space') return first || ROOT_SPACE_VALUE;
+  return ROOT_SPACE_VALUE;
+}
+
+function eventSpaceValue(event: ContentChangeEvent): string {
+  const candidates = [event.afterPath, event.path, event.beforePath];
+  for (const candidate of candidates) {
+    const value = pathSpaceValue(candidate, event.op);
+    if (value !== ROOT_SPACE_VALUE) return value;
+  }
+  return ROOT_SPACE_VALUE;
+}
+
+function eventAgentValue(event: ContentChangeEvent): string | null {
+  if (event.source !== 'agent') return null;
+  return event.agentName?.trim() || UNKNOWN_AGENT_VALUE;
+}
+
+function countValues(values: Array<string | null | undefined>): ContentChangeFacetItem[] {
+  const counts = new Map<string, number>();
+  for (const value of values) {
+    if (!value) continue;
+    counts.set(value, (counts.get(value) ?? 0) + 1);
+  }
+  return Array.from(counts.entries())
+    .map(([value, count]) => ({ value, count }))
+    .sort((a, b) => b.count - a.count || a.value.localeCompare(b.value));
+}
+
 export function listContentChangesFromLog(
   mindRoot: string,
   options: ContentChangeListOptions = {},
@@ -77,23 +132,41 @@ export function listContentChangesFromLog(
     const { events } = readChangeEvents(mindRoot);
     const limit = Math.max(1, Math.min(options.limit ?? 50, 200));
     const pathFilter = options.path?.trim();
+    const spaceFilter = options.space?.trim();
     const sourceFilter = options.source;
+    const agentFilter = options.agent?.trim();
     const opFilter = options.op?.trim();
     const q = options.q?.trim().toLowerCase();
     return events.filter((event) => {
       if (pathFilter && event.path !== pathFilter && event.beforePath !== pathFilter && event.afterPath !== pathFilter) {
         return false;
       }
+      if (spaceFilter && eventSpaceValue(event) !== spaceFilter) return false;
       if (sourceFilter && event.source !== sourceFilter) return false;
+      if (agentFilter && eventAgentValue(event) !== agentFilter) return false;
       if (opFilter && event.op !== opFilter) return false;
       if (q) {
-        const haystack = `${event.path} ${event.beforePath ?? ''} ${event.afterPath ?? ''} ${event.summary} ${event.op} ${event.source}`.toLowerCase();
+        const haystack = `${event.path} ${event.beforePath ?? ''} ${event.afterPath ?? ''} ${event.summary} ${event.op} ${event.source} ${event.agentName ?? ''}`.toLowerCase();
         if (!haystack.includes(q)) return false;
       }
       return true;
     }).slice(0, limit);
   } catch {
     return [];
+  }
+}
+
+export function getContentChangeFacetsFromLog(mindRoot: string): ContentChangeFacets {
+  try {
+    const { events } = readChangeEvents(mindRoot);
+    return {
+      spaces: countValues(events.map(eventSpaceValue)),
+      agents: countValues(events.map(eventAgentValue)),
+      operations: countValues(events.map((event) => event.op)),
+      sources: countValues(events.map((event) => event.source)),
+    };
+  } catch {
+    return { spaces: [], agents: [], operations: [], sources: [] };
   }
 }
 

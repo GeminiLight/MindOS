@@ -59,6 +59,31 @@ describe('core/content-changes', () => {
     expect(onlyA.every((e) => e.path === 'a.md')).toBe(true);
   });
 
+  it('supports space and concrete agent filters', () => {
+    appendContentChange(testMindRoot, {
+      op: 'save_file',
+      path: 'Research/a.md',
+      source: 'agent',
+      agentName: 'codex',
+      before: '',
+      after: 'agent',
+      summary: 'agent changed',
+    });
+    appendContentChange(testMindRoot, {
+      op: 'save_file',
+      path: 'Personal/b.md',
+      source: 'agent',
+      agentName: 'claude-code',
+      before: '',
+      after: 'agent',
+      summary: 'agent changed',
+    });
+
+    expect(listContentChanges(testMindRoot, { space: 'Research', limit: 10 }).every((e) => e.path.startsWith('Research/'))).toBe(true);
+    expect(listContentChanges(testMindRoot, { agent: 'codex', limit: 10 }).every((e) => e.agentName === 'codex')).toBe(true);
+    expect(listContentChanges(testMindRoot, { q: 'codex', limit: 10 }).some((e) => e.agentName === 'codex')).toBe(true);
+  });
+
   it('computes unread summary and mark seen resets unread', () => {
     appendContentChange(testMindRoot, {
       op: 'save_file',
