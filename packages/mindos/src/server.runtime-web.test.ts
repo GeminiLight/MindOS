@@ -35,6 +35,7 @@ import {
   handleWorkflowsPost,
   handleTreeVersion
 } from './server.js';
+import { MINDOS_AGENT_TURN_SSE_HEARTBEAT_MS } from './agent/turn/index.js';
 
 function throwingAsyncIterable<T>(error: Error): AsyncIterable<T> {
   return {
@@ -1459,6 +1460,55 @@ describe('MindOS server contract: runtime, agent turn stream, static web', () =>
       expect(turnResponse.headers.get('content-type')).toContain('text/event-stream');
       expect(await turnResponse.text()).toContain('data:{"type":"text_delta","delta":"turn hello"}');
     } finally {
+      await new Promise<void>((resolve, reject) => app.server.close((error) => error ? reject(error) : resolve()));
+    }
+  });
+
+  it('keeps quiet product HTTP agent turn SSE streams alive with a hidden heartbeat', async () => {
+    vi.useFakeTimers();
+    let markStreamStarted: () => void = () => {};
+    const streamStarted = new Promise<void>((resolve) => {
+      markStreamStarted = resolve;
+    });
+    const app = createMindosHttpServer({
+      hostname: '127.0.0.1',
+      port: 0,
+      services: {
+        ...createDefaultMindosHttpServices({
+          readSettings: () => ({ mindRoot: mkdtempSync(join(tmpdir(), 'mindos-http-quiet-')) }),
+        }),
+        agentTurnStream: async function* () {
+          markStreamStarted();
+          await new Promise(() => {});
+        },
+      },
+    });
+    await new Promise<void>((resolve) => app.server.listen(0, '127.0.0.1', resolve));
+    const address = app.server.address();
+    if (!address || typeof address === 'string') throw new Error('expected TCP server address');
+    const base = `http://127.0.0.1:${address.port}`;
+    let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+    try {
+      const responsePromise = fetch(`${base}/api/agent/sessions/test-session/turns`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ messages: [{ role: 'user', content: 'quiet' }] }),
+      });
+      await streamStarted;
+      await vi.advanceTimersByTimeAsync(MINDOS_AGENT_TURN_SSE_HEARTBEAT_MS);
+      const response = await responsePromise;
+      expect(response.status).toBe(200);
+      expect(response.headers.get('content-type')).toContain('text/event-stream');
+      if (!response.body) throw new Error('expected SSE response body');
+      reader = response.body.getReader();
+
+      const chunk = await reader.read();
+
+      expect(chunk.done).toBe(false);
+      expect(new TextDecoder().decode(chunk.value)).toBe('data:{"type":"status","visible":false,"message":"keep-alive"}\n\n');
+    } finally {
+      await reader?.cancel().catch(() => undefined);
+      vi.useRealTimers();
       await new Promise<void>((resolve, reject) => app.server.close((error) => error ? reject(error) : resolve()));
     }
   });

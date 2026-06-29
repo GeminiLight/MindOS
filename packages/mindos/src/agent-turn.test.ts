@@ -1,5 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  MINDOS_AGENT_TURN_SSE_HEARTBEAT_EVENT,
+  MINDOS_AGENT_TURN_SSE_HEARTBEAT_MS,
   MINDOS_AGENT_TURN_STREAM_EVENT_TYPES,
   MINDOS_SSE_HEADERS,
   MINDOS_SESSION_STREAM_SCHEMA,
@@ -14,6 +16,7 @@ import {
   getToolExecutionEnd,
   getToolExecutionStart,
   isTextDeltaEvent,
+  isHiddenMindosSseStatusEvent,
   isToolExecutionEndEvent,
   isToolExecutionStartEvent,
   isMindosRetryableError,
@@ -37,6 +40,7 @@ import {
   sanitizeToolArgs,
   sanitizeToolOutput,
   sleepMindos,
+  startMindosAgentTurnSseHeartbeat,
   toMindosAgentMessages,
 } from './agent/turn/index.js';
 import {
@@ -44,6 +48,10 @@ import {
   runMindosPiAgentTurnProxyFallback,
   runMindosPiAgentTurnSession,
 } from './agent/mindos-pi/index.js';
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 describe('MindOS session event contract', () => {
   it('defines a versioned event stream schema', () => {
@@ -202,6 +210,30 @@ describe('MindOS session event contract', () => {
       output: 'ok',
       isError: false,
     });
+  });
+
+  it('defines a shared hidden heartbeat event for all agent turn SSE transports', async () => {
+    expect(MINDOS_AGENT_TURN_SSE_HEARTBEAT_MS).toBe(15_000);
+    expect(MINDOS_AGENT_TURN_SSE_HEARTBEAT_EVENT).toEqual({
+      type: 'status',
+      visible: false,
+      message: 'keep-alive',
+    });
+    expect(isHiddenMindosSseStatusEvent(MINDOS_AGENT_TURN_SSE_HEARTBEAT_EVENT)).toBe(true);
+    expect(isHiddenMindosSseStatusEvent({ type: 'status', visible: true, message: 'visible' })).toBe(false);
+
+    vi.useFakeTimers();
+    const events: unknown[] = [];
+    const stop = startMindosAgentTurnSseHeartbeat((event) => {
+      events.push(event);
+    });
+
+    await vi.advanceTimersByTimeAsync(MINDOS_AGENT_TURN_SSE_HEARTBEAT_MS);
+    expect(events).toEqual([MINDOS_AGENT_TURN_SSE_HEARTBEAT_EVENT]);
+
+    stop();
+    await vi.advanceTimersByTimeAsync(MINDOS_AGENT_TURN_SSE_HEARTBEAT_MS);
+    expect(events).toEqual([MINDOS_AGENT_TURN_SSE_HEARTBEAT_EVENT]);
   });
 
   it('reduces pi-agent events into SSE events and execution effects', () => {

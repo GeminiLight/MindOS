@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { MINDOS_AGENT_TURN_SSE_HEARTBEAT_MS } from '@geminilight/mindos/agent/turn';
 import { createAgentTurnSseResponse } from '@/app/api/agent/_lib/turn-sse';
 
 describe('agent turn SSE response', () => {
@@ -14,7 +15,7 @@ describe('agent turn SSE response', () => {
     const reader = response.body!.getReader();
 
     const read = reader.read();
-    await vi.advanceTimersByTimeAsync(15_000);
+    await vi.advanceTimersByTimeAsync(MINDOS_AGENT_TURN_SSE_HEARTBEAT_MS);
     const chunk = await read;
 
     expect(chunk.done).toBe(false);

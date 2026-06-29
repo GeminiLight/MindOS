@@ -1,4 +1,7 @@
-import type { MindOSSSEvent } from '../turn/index.js';
+import {
+  isHiddenMindosSseStatusEvent,
+  type MindOSSSEvent,
+} from '../turn/index.js';
 import {
   appendAgentRunEvent,
   getAgentRun,
@@ -228,7 +231,7 @@ export function appendSseEventToAgentRun(runId: string, event: MindOSSSEvent): v
     return;
   }
   if (event.type === 'status') {
-    if (event.visible === false) return;
+    if (isHiddenMindosSseStatusEvent(event)) return;
     append(runId, {
       type: 'runtime_status',
       category: 'status',

@@ -156,7 +156,11 @@ import { handleTreeVersion } from './handlers/tree-version.js';
 import { handleRestartPost, handleUpdateCheckGet, handleUpdatePost, handleUpdateStatusGet } from './handlers/update.js';
 import { handleWorkflowsGet, handleWorkflowsPost } from './handlers/workflows.js';
 import { CORS_HEADERS, json, type MindosServerResponse } from './response.js';
-import { encodeMindosSseEvent, type MindOSSSEvent } from '../agent/turn/index.js';
+import {
+  encodeMindosSseEvent,
+  startMindosAgentTurnSseHeartbeat,
+  type MindOSSSEvent,
+} from '../agent/turn/index.js';
 import { getLocalIPv4 } from './handlers/connect.js';
 
 export type MindosChannelServices =
@@ -1375,12 +1379,19 @@ async function writeSseResponse(
     ...CORS_HEADERS,
     ...response.headers,
   });
+  const stopHeartbeat = startMindosAgentTurnSseHeartbeat((event) => {
+    if (res.destroyed || res.writableEnded) throw new Error('SSE response is closed');
+    res.write(encodeMindosSseEvent(event));
+  });
+  res.once('close', stopHeartbeat);
   try {
     for await (const event of response.body) {
       res.write(encodeMindosSseEvent(event));
     }
   } finally {
-    res.end();
+    stopHeartbeat();
+    res.off('close', stopHeartbeat);
+    if (!res.writableEnded) res.end();
   }
 }
 

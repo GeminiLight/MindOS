@@ -2,18 +2,12 @@ import path from 'path';
 import {
   MINDOS_SSE_HEADERS,
   encodeMindosSseEvent,
+  startMindosAgentTurnSseHeartbeat,
   type MindOSSSEvent,
 } from '@geminilight/mindos/agent/turn';
 import type { AgentRunRecord } from '@geminilight/mindos/agent/ledger/run-ledger';
 import { isAbortLikeError } from '@geminilight/mindos/agent/ledger/run-cancellation';
 import { metrics } from '@/lib/metrics';
-
-const AGENT_TURN_SSE_HEARTBEAT_MS = 15_000;
-const AGENT_TURN_SSE_HEARTBEAT_EVENT: MindOSSSEvent = {
-  type: 'status',
-  visible: false,
-  message: 'keep-alive',
-};
 
 export function agentRunErrorStatus(error: unknown, signal?: AbortSignal): 'failed' | 'canceled' | 'timed_out' {
   if (signal?.aborted || isAbortLikeError(error)) return 'canceled';
@@ -73,26 +67,20 @@ export function createAgentTurnSseResponse(
   const encoder = new TextEncoder();
   const requestStartTime = Date.now();
   let streamClosed = false;
-  let heartbeatTimer: ReturnType<typeof setInterval> | undefined;
+  let stopHeartbeat: (() => void) | undefined;
 
   function markStreamClosed() {
     streamClosed = true;
-    if (heartbeatTimer) {
-      clearInterval(heartbeatTimer);
-      heartbeatTimer = undefined;
-    }
+    stopHeartbeat?.();
+    stopHeartbeat = undefined;
   }
 
   const stream = new ReadableStream({
     start(controller) {
-      heartbeatTimer = setInterval(() => {
+      stopHeartbeat = startMindosAgentTurnSseHeartbeat((event) => {
         if (streamClosed) return;
-        try {
-          controller.enqueue(encoder.encode(encodeMindosSseEvent(AGENT_TURN_SSE_HEARTBEAT_EVENT)));
-        } catch {
-          markStreamClosed();
-        }
-      }, AGENT_TURN_SSE_HEARTBEAT_MS);
+        controller.enqueue(encoder.encode(encodeMindosSseEvent(event)));
+      }, { onError: markStreamClosed });
 
       function send(event: MindOSSSEvent) {
         if (streamClosed) return;

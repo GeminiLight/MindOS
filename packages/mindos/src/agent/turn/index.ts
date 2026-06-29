@@ -189,6 +189,46 @@ export const MINDOS_SSE_HEADERS: Record<string, string> = {
   'X-Accel-Buffering': 'no',
 };
 
+export const MINDOS_AGENT_TURN_SSE_HEARTBEAT_MS = 15_000;
+export const MINDOS_AGENT_TURN_SSE_HEARTBEAT_EVENT: MindOSSSEvent = {
+  type: 'status',
+  visible: false,
+  message: 'keep-alive',
+};
+
+export function isHiddenMindosSseStatusEvent(event: MindOSSSEvent): boolean {
+  return event.type === 'status' && event.visible === false;
+}
+
+export function startMindosAgentTurnSseHeartbeat(
+  write: (event: MindOSSSEvent) => void,
+  options: { intervalMs?: number; onError?: (error: unknown) => void } = {},
+): () => void {
+  const requestedIntervalMs = options.intervalMs;
+  const hasCustomInterval = typeof requestedIntervalMs === 'number'
+    && Number.isFinite(requestedIntervalMs)
+    && requestedIntervalMs > 0;
+  const intervalMs = hasCustomInterval ? requestedIntervalMs : MINDOS_AGENT_TURN_SSE_HEARTBEAT_MS;
+  let stopped = false;
+  const timer = setInterval(() => {
+    if (stopped) return;
+    try {
+      write(MINDOS_AGENT_TURN_SSE_HEARTBEAT_EVENT);
+    } catch (error) {
+      stop();
+      options.onError?.(error);
+    }
+  }, intervalMs);
+
+  function stop() {
+    if (stopped) return;
+    stopped = true;
+    clearInterval(timer);
+  }
+
+  return stop;
+}
+
 export type MessageUpdateEvent = {
   type: 'message_update';
   assistantMessageEvent?: { type: string; delta?: string };
