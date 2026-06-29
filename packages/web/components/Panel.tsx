@@ -412,7 +412,7 @@ export default function Panel({
                     className="hit-target-box w-full flex items-center gap-2 px-3 py-1.5 text-sm text-foreground transition-colors text-left [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:0px]"
                     onClick={() => {
                       setMorePopover(false);
-                      smoothPush('/view/.mindos/change-log.json');
+                      smoothPush('/changelog');
                     }}
                   >
                     <History size={14} className="shrink-0 text-[var(--amber)]" />
