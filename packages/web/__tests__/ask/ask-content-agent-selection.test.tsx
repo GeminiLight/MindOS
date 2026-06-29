@@ -1625,6 +1625,133 @@ describe('ChatContent ACP session binding', () => {
     });
   });
 
+  it('loads ACP runtime sessions for the active cwd and attaches exposed message history without starting a turn', async () => {
+    mockRuntimeDescriptors = [{
+      id: 'opencode',
+      name: 'OpenCode',
+      kind: 'acp',
+      status: 'available',
+      capabilities: {},
+      lifecycle: {},
+      compatibility: {},
+    }];
+    const activeSession: ChatSession = {
+      id: 's-open',
+      createdAt: 1,
+      updatedAt: 1,
+      messages: [],
+      workDir: {
+        source: 'manual',
+        path: '/tmp/repo',
+        label: 'repo',
+      },
+    };
+    mockSessions = [activeSession];
+    mockActiveSession = activeSession;
+    mockActiveSessionId = activeSession.id;
+    const updatedAt = '2026-06-29T03:00:00.000Z';
+    const fetchMock = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
+      if (String(url) === '/api/acp/session') {
+        return {
+          ok: true,
+          json: async () => ({
+            sessions: [{
+              sessionId: 'opencode-session-1',
+              title: 'OpenCode session',
+              cwd: '/tmp/repo',
+              updatedAt,
+              messages: [
+                { role: 'user', content: 'previous acp prompt' },
+                { role: 'assistant', content: 'previous acp answer' },
+              ],
+            }],
+          }),
+        };
+      }
+      return {
+        ok: true,
+        body: new ReadableStream(),
+        json: async () => ({}),
+        init,
+      };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<ChatContent visible variant="panel" />);
+    });
+
+    const selectOpenCode = Array.from(host.querySelectorAll('button')).find((button) => button.textContent === 'Select OpenCode') as HTMLButtonElement;
+    await act(async () => {
+      selectOpenCode.click();
+    });
+
+    const toggleHistoryButton = Array.from(host.querySelectorAll('button')).find((button) => button.textContent === 'Toggle History') as HTMLButtonElement;
+    await act(async () => {
+      toggleHistoryButton.click();
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const acpSessionCall = fetchMock.mock.calls.find(([url]) => String(url) === '/api/acp/session');
+    expect(acpSessionCall).toBeTruthy();
+    expect(JSON.parse(String(acpSessionCall?.[1]?.body))).toMatchObject({
+      action: 'list_sessions',
+      agentId: 'opencode',
+      cwd: '/tmp/repo',
+    });
+    expect(host.querySelector('[data-testid="history-session-list"]')?.textContent).toContain('OpenCode session');
+
+    const attach = Array.from(host.querySelectorAll('button')).find((button) => button.textContent === 'Attach OpenCode session') as HTMLButtonElement;
+    await act(async () => {
+      attach.click();
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(mockAttachRuntimeSession).toHaveBeenCalledWith(
+      { id: 'opencode', name: 'OpenCode', kind: 'acp' },
+      {
+        externalSessionId: 'opencode-session-1',
+        cwd: '/tmp/repo',
+        status: 'active',
+        updatedAt,
+      },
+      {
+        title: 'OpenCode session',
+        messages: [
+          {
+            role: 'user',
+            content: 'previous acp prompt',
+            timestamp: Date.parse(updatedAt),
+            agentId: 'opencode',
+            agentName: 'OpenCode',
+            agentKind: 'acp',
+          },
+          {
+            role: 'assistant',
+            content: 'previous acp answer',
+            timestamp: Date.parse(updatedAt),
+            agentId: 'opencode',
+            agentName: 'OpenCode',
+            agentKind: 'acp',
+          },
+        ],
+      },
+    );
+    expect(fetchMock.mock.calls.some(([url]) => isAgentTurnUrl(url))).toBe(false);
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it('forks a Codex local thread and attaches the returned thread without starting a turn', async () => {
     mockNativeRuntimeDescriptors = [{
       id: 'codex',

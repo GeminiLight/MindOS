@@ -59,6 +59,7 @@ export {
   getSession,
   getSessionSnapshot,
   listSessions,
+  listSessionsForAgent,
   loadSession,
   prompt,
   promptStream,

@@ -71,6 +71,10 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string)
   });
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
 /* ── Error diagnosis ───────────────────────────────────────────────────── */
 
 function diagnoseInitFailure(proc: AcpProcess, rawError: Error): string {
@@ -156,6 +160,58 @@ const sessionConnections = new Map<string, AcpConnection>();
 const MAX_SESSIONS_PER_AGENT = 3;
 const MAX_TOTAL_SESSIONS = 10;
 
+type InitializedAcpConnection = {
+  conn: AcpConnection;
+  agentCapabilities?: AcpAgentCapabilities;
+  authMethods?: AcpAuthMethod[];
+};
+
+async function initializeAcpConnection(
+  entry: AcpRegistryEntry,
+  options: AcpSessionOptions | undefined,
+  startedAt: number,
+): Promise<InitializedAcpConnection> {
+  const conn = spawnAndConnect(entry, options);
+
+  let agentCapabilities: AcpAgentCapabilities | undefined;
+  let authMethods: AcpAuthMethod[] | undefined;
+
+  try {
+    const initResult = await conn.connection.initialize({
+      protocolVersion: 1,
+      clientCapabilities: clientCapabilitiesForPermissionMode(options?.permissionMode),
+      clientInfo: { name: 'mindos', version: getMindosVersion(options) },
+    });
+
+    agentCapabilities = parseAgentCapabilities(initResult.agentCapabilities);
+    authMethods = parseAuthMethods(initResult.authMethods);
+  } catch (err) {
+    // Wait briefly for stderr/exit info before diagnosing.
+    await new Promise(r => setTimeout(r, 200));
+    const message = diagnoseInitFailure(conn.process, err as Error);
+    rememberAcpHandshakeHealth({
+      agentId: entry.id,
+      status: 'failed',
+      stage: 'initialize',
+      startedAt,
+      message,
+    });
+    killAgent(conn.process);
+    throw new Error(message);
+  }
+
+  const firstAuthMethod = authMethods?.[0];
+  if (firstAuthMethod) {
+    try {
+      await conn.connection.authenticate({ methodId: firstAuthMethod.id });
+    } catch {
+      // Best-effort auth.
+    }
+  }
+
+  return { conn, agentCapabilities, authMethods };
+}
+
 /* ── Public API — Session Lifecycle ───────────────────────────────────── */
 
 /**
@@ -184,45 +240,7 @@ export async function createSessionFromEntry(
 
   const startedAt = Date.now();
   const sessionCwd = options?.cwd ?? process.cwd();
-  const conn = spawnAndConnect(entry, options);
-
-  let agentCapabilities: AcpAgentCapabilities | undefined;
-  let authMethods: AcpAuthMethod[] | undefined;
-
-  // Phase 1: Initialize
-  try {
-    const initResult = await conn.connection.initialize({
-      protocolVersion: 1,
-      clientCapabilities: clientCapabilitiesForPermissionMode(options?.permissionMode),
-      clientInfo: { name: 'mindos', version: getMindosVersion(options) },
-    });
-
-    agentCapabilities = parseAgentCapabilities(initResult.agentCapabilities);
-    authMethods = parseAuthMethods(initResult.authMethods);
-  } catch (err) {
-    // Wait briefly for stderr/exit info before diagnosing
-    await new Promise(r => setTimeout(r, 200));
-    const message = diagnoseInitFailure(conn.process, err as Error);
-    rememberAcpHandshakeHealth({
-      agentId: entry.id,
-      status: 'failed',
-      stage: 'initialize',
-      startedAt,
-      message,
-    });
-    killAgent(conn.process);
-    throw new Error(message);
-  }
-
-  // Phase 2: Authenticate (if agent declares auth methods)
-  const firstAuthMethod = authMethods?.[0];
-  if (firstAuthMethod) {
-    try {
-      await conn.connection.authenticate({ methodId: firstAuthMethod.id });
-    } catch {
-      // Best-effort auth
-    }
-  }
+  const { conn, agentCapabilities, authMethods } = await initializeAcpConnection(entry, options, startedAt);
 
   // Phase 3: session/new
   let modes: AcpMode[] | undefined;
@@ -306,30 +324,7 @@ export async function loadSession(
   }
 
   const loadCwd = options?.cwd ?? process.cwd();
-  const conn = spawnAndConnect(entry, options);
-
-  let agentCapabilities: AcpAgentCapabilities | undefined;
-
-  try {
-    const initResult = await conn.connection.initialize({
-      protocolVersion: 1,
-      clientCapabilities: clientCapabilitiesForPermissionMode(options?.permissionMode),
-      clientInfo: { name: 'mindos', version: getMindosVersion(options) },
-    });
-    agentCapabilities = parseAgentCapabilities(initResult.agentCapabilities);
-  } catch (err) {
-    await new Promise(r => setTimeout(r, 200));
-    const message = diagnoseInitFailure(conn.process, err as Error);
-    rememberAcpHandshakeHealth({
-      agentId: entry.id,
-      status: 'failed',
-      stage: 'initialize',
-      startedAt,
-      message,
-    });
-    killAgent(conn.process);
-    throw new Error(message);
-  }
+  const { conn, agentCapabilities } = await initializeAcpConnection(entry, options, startedAt);
 
   if (!agentCapabilities?.loadSession) {
     rememberAcpHandshakeHealth({
@@ -348,6 +343,7 @@ export async function loadSession(
   let configOptions: AcpConfigOption[] | undefined;
   let currentModeId: string | undefined;
   const mcpInheritance = resolveSessionMcpInheritance(options, agentCapabilities);
+  let loadedInfo: AcpSessionInfo = { sessionId: existingSessionId };
 
   try {
     const loadResult = await conn.connection.loadSession({
@@ -359,6 +355,7 @@ export async function loadSession(
     currentModeId = parseCurrentModeId(loadResult.modes);
     configOptions = parseConfigOptions(loadResult.configOptions);
     currentModeId ??= currentModeFromConfig(configOptions);
+    loadedInfo = normalizeAcpSessionInfo(loadResult, existingSessionId);
   } catch (err) {
     rememberAcpHandshakeHealth({
       agentId: entry.id,
@@ -385,6 +382,18 @@ export async function loadSession(
     configOptions,
     currentModeId,
     mcpServers: mcpInheritance.summaries,
+    ...(loadedInfo.title ? { title: loadedInfo.title } : {}),
+    ...(loadedInfo.preview ? { preview: loadedInfo.preview } : {}),
+    ...(loadedInfo.messageCount !== undefined ? { messageCount: loadedInfo.messageCount } : {}),
+    ...(loadedInfo.turnCount !== undefined ? { turnCount: loadedInfo.turnCount } : {}),
+    ...(loadedInfo.messages ? { messages: loadedInfo.messages } : {}),
+    ...(loadedInfo.turns ? { turns: loadedInfo.turns } : {}),
+    ...(loadedInfo.title || loadedInfo.updatedAt ? {
+      sessionInfo: {
+        ...(loadedInfo.title ? { title: loadedInfo.title } : {}),
+        ...(loadedInfo.updatedAt ? { updatedAt: loadedInfo.updatedAt } : {}),
+      },
+    } : {}),
   };
 
   sessions.set(existingSessionId, session);
@@ -419,14 +428,66 @@ export async function listSessions(
   });
 
   return {
-    sessions: (result.sessions ?? []).map(s => ({
-      sessionId: s.sessionId ?? '',
-      title: s.title ?? undefined,
-      cwd: s.cwd ?? undefined,
-      updatedAt: s.updatedAt ?? undefined,
-    })),
+    sessions: (result.sessions ?? []).map(s => normalizeAcpSessionInfo(s)),
     nextCursor: result.nextCursor ?? undefined,
   };
+}
+
+export async function listSessionsForAgent(
+  agentId: string,
+  options?: AcpSessionOptions & { cursor?: string; cwd?: string },
+): Promise<{ sessions: AcpSessionInfo[]; nextCursor?: string }> {
+  const startedAt = Date.now();
+  const entry = resolveConfiguredAcpAgentEntry(agentId, options?.overrides)
+    ?? await findAcpAgent(agentId);
+  if (!entry) {
+    throw new Error(`ACP agent not found in registry: ${agentId}`);
+  }
+
+  const { conn, agentCapabilities } = await initializeAcpConnection(entry, options, startedAt);
+
+  if (!isAcpCapabilitySupported(agentCapabilities?.sessionCapabilities?.list)) {
+    rememberAcpHandshakeHealth({
+      agentId: entry.id,
+      status: 'failed',
+      stage: 'session-list',
+      startedAt,
+      message: 'Agent does not support session/list',
+      capabilities: agentCapabilities,
+    });
+    killAgent(conn.process);
+    throw new Error('Agent does not support session/list');
+  }
+
+  try {
+    const result = await conn.connection.listSessions({
+      ...(options?.cursor ? { cursor: options.cursor } : {}),
+      ...(options?.cwd ? { cwd: options.cwd } : {}),
+    });
+    rememberAcpHandshakeHealth({
+      agentId: entry.id,
+      status: 'ready',
+      stage: 'session-list',
+      startedAt,
+      capabilities: agentCapabilities,
+    });
+    return {
+      sessions: (result.sessions ?? []).map(s => normalizeAcpSessionInfo(s)),
+      nextCursor: result.nextCursor ?? undefined,
+    };
+  } catch (err) {
+    rememberAcpHandshakeHealth({
+      agentId: entry.id,
+      status: 'failed',
+      stage: 'session-list',
+      startedAt,
+      message: (err as Error).message,
+      capabilities: agentCapabilities,
+    });
+    throw new Error(`session/list failed: ${(err as Error).message}`);
+  } finally {
+    killAgent(conn.process);
+  }
 }
 
 /* ── Public API — Prompt ──────────────────────────────────────────────── */
@@ -933,6 +994,52 @@ function readNestedString(value: unknown, key: string): string | undefined {
   return value && typeof value === 'object' && !Array.isArray(value) && typeof (value as Record<string, unknown>)[key] === 'string'
     ? (value as Record<string, string>)[key]
     : undefined;
+}
+
+function stringField(record: Record<string, unknown>, keys: readonly string[]): string | undefined {
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === 'string' && value.trim()) return value;
+  }
+  return undefined;
+}
+
+function numberField(record: Record<string, unknown>, keys: readonly string[]): number | undefined {
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === 'number' && Number.isFinite(value) && value >= 0) return Math.floor(value);
+  }
+  return undefined;
+}
+
+function normalizeAcpSessionInfo(value: unknown, fallbackSessionId?: string): AcpSessionInfo {
+  const record = isRecord(value) ? value : {};
+  const sessionId = stringField(record, ['sessionId', 'session_id', 'id', 'externalSessionId'])
+    ?? fallbackSessionId
+    ?? '';
+  const info: AcpSessionInfo = { sessionId };
+
+  const title = stringField(record, ['title', 'name', 'summary']);
+  if (title) info.title = title;
+  const preview = stringField(record, ['preview', 'description', 'subtitle']);
+  if (preview) info.preview = preview;
+  const cwd = stringField(record, ['cwd', 'workDir', 'workingDirectory']);
+  if (cwd) info.cwd = cwd;
+  const createdAt = stringField(record, ['createdAt', 'created_at']);
+  if (createdAt) info.createdAt = createdAt;
+  const updatedAt = stringField(record, ['updatedAt', 'updated_at', 'lastActivityAt']);
+  if (updatedAt) info.updatedAt = updatedAt;
+  const status = stringField(record, ['status', 'state']);
+  if (status) info.status = status;
+
+  const messageCount = numberField(record, ['messageCount', 'messagesCount', 'message_count']);
+  if (messageCount !== undefined) info.messageCount = messageCount;
+  const turnCount = numberField(record, ['turnCount', 'turnsCount', 'turn_count']);
+  if (turnCount !== undefined) info.turnCount = turnCount;
+
+  if (Array.isArray(record.messages)) info.messages = record.messages;
+  if (Array.isArray(record.turns)) info.turns = record.turns;
+  return info;
 }
 
 /* ── Internal — Parsers ───────────────────────────────────────────────── */

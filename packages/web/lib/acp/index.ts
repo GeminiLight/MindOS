@@ -34,6 +34,7 @@ export {
   createSessionFromEntry,
   getSession,
   listSessions,
+  listSessionsForAgent,
   loadSession,
   prompt,
   promptStream,

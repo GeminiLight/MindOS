@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
-import { Brain, Link2, Loader2, MessageSquare, Network, Plus, RefreshCw, Search, X } from 'lucide-react';
+import { Brain, Loader2, MessageSquare, Network, Plus, RefreshCw, Search, X } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import Logo from '@/components/Logo';
 import MindFileTreeSections from '@/components/file-tree/MindFileTreeSections';
@@ -483,25 +483,18 @@ function HomeSessionRow({
           className="mt-0.5 flex min-w-0 items-center gap-1.5 pl-7 text-[10px] text-muted-foreground/45"
           title={listEntry.metadataTitle}
         >
-          <span className="inline-flex shrink-0 items-center gap-1">
-            <Link2 size={9} className="text-[var(--amber)]/70" aria-hidden="true" />
-            {listEntry.runtimeLabel}
-          </span>
           {listEntry.status && listEntry.status !== 'active' && (
             <>
-              <span className="shrink-0 text-muted-foreground/25">·</span>
               <span className="shrink-0">{listEntry.status}</span>
+              <span className="shrink-0 text-muted-foreground/25">·</span>
             </>
           )}
           {listEntry.compactRuntimePath && (
             <>
-              <span className="shrink-0 text-muted-foreground/25">·</span>
               <span className="truncate font-mono">{listEntry.compactRuntimePath}</span>
+              <span className="shrink-0 text-muted-foreground/25">·</span>
             </>
           )}
-          <span className="shrink-0 text-muted-foreground/25">·</span>
-          <span className="min-w-0 max-w-[8.5rem] truncate font-mono">{listEntry.compactSessionId}</span>
-          <span className="shrink-0 text-muted-foreground/25">·</span>
           <span className="inline-flex shrink-0 items-center gap-1">
             <MessageSquare size={9} aria-hidden="true" />
             {t.ask.historyMsgs?.(msgCount) ?? `${msgCount} msgs`}

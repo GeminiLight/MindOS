@@ -117,9 +117,8 @@ describe('HomePanel', () => {
 
     expect(host.querySelector('[data-home-session-list]')).not.toBeNull();
     expect(host.textContent).toContain('Investigate file tree open latency');
-    expect(host.textContent).toContain('Codex');
-    expect(host.textContent).toContain('thread_1...abcdef');
     expect(host.textContent).toContain('1 msg');
+    expect(host.textContent).not.toContain('thread_1...abcdef');
     expect(host.textContent).not.toContain('Running');
     const codexMark = host.querySelector('[data-home-session-row="s-codex"] [data-home-session-agent="codex"]') as HTMLElement | null;
     expectThemeAwareAgentShell(codexMark);
@@ -133,8 +132,8 @@ describe('HomePanel', () => {
     expect(title?.className).toContain('font-medium');
     expect(host.querySelector('[data-home-session-row="s-codex"] [data-home-session-time]')).not.toBeNull();
     const meta = host.querySelector('[data-home-session-row="s-codex"] [data-home-session-meta]') as HTMLElement | null;
-    expect(meta?.textContent).toContain('Codex');
-    expect(meta?.textContent).toContain('thread_1...abcdef');
+    expect(meta?.textContent).not.toContain('Codex');
+    expect(meta?.textContent).not.toContain('thread_1...abcdef');
     expect(meta?.textContent).toContain('1 msg');
     expect(meta?.getAttribute('title')).toContain('Session ID: thread_1234567890abcdef');
     expect(host.querySelector('button[aria-label="Pin session"]')).not.toBeNull();

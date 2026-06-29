@@ -8,6 +8,7 @@ import {
   createSession as defaultCreateSession,
   loadSession as defaultLoadSession,
   listSessions as defaultListSessions,
+  listSessionsForAgent as defaultListSessionsForAgent,
   closeSession as defaultCloseSession,
   prompt as defaultPrompt,
   cancelPrompt as defaultCancelPrompt,
@@ -66,6 +67,7 @@ export type AcpSessionServices = {
   createSession?(agentId: string, options?: AcpSessionLaunchOptions): Promise<unknown>;
   loadSession?(agentId: string, sessionId: string, options?: AcpSessionLaunchOptions): Promise<unknown>;
   listSessions?(sessionId: string, options?: { cursor?: string; cwd?: string }): Promise<unknown>;
+  listSessionsForAgent?(agentId: string, options?: AcpSessionLaunchOptions & { cursor?: string }): Promise<unknown>;
   closeSession?(sessionId: string): Promise<unknown>;
   prompt?(sessionId: string, text: string): Promise<unknown>;
   cancelPrompt?(sessionId: string): Promise<unknown>;
@@ -467,10 +469,20 @@ async function handleAcpSessionSetConfig(payload: Record<string, unknown>, servi
 
 async function handleAcpSessionList(payload: Record<string, unknown>, services: AcpSessionServices) {
   const sessionId = readString(payload, 'sessionId');
-  if (!sessionId) return json({ error: 'sessionId is required' }, { status: 400 });
-  const result = await (services.listSessions ?? defaultListSessions)(sessionId, {
+  const agentId = readAcpAgentId(payload);
+  const options = {
     cursor: typeof payload.cursor === 'string' ? payload.cursor : undefined,
     cwd: typeof payload.cwd === 'string' ? payload.cwd : undefined,
+  };
+  if (sessionId) {
+    const result = await (services.listSessions ?? defaultListSessions)(sessionId, options);
+    return json(result as Record<string, unknown>);
+  }
+  if (!agentId) return json({ error: 'sessionId or agentId is required' }, { status: 400 });
+  const result = await (services.listSessionsForAgent ?? defaultListSessionsForAgent)(agentId, {
+    ...options,
+    env: readStringRecord(payload.env),
+    overrides: readAcpAgentOverrides(services),
   });
   return json(result as Record<string, unknown>);
 }

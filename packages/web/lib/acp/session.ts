@@ -21,6 +21,7 @@ export type {
 import {
   createSession as createSessionCore,
   createSessionFromEntry as createSessionFromEntryCore,
+  listSessionsForAgent as listSessionsForAgentCore,
   loadSession as loadSessionCore,
   findUserOverride,
   type AcpRegistryEntry,
@@ -56,6 +57,13 @@ export function createSessionFromEntry(entry: AcpRegistryEntry, options?: AcpSes
 
 export function loadSession(agentId: string, existingSessionId: string, options?: AcpSessionOptions) {
   return loadSessionCore(agentId, existingSessionId, withAcpOverrides(agentId, options));
+}
+
+export function listSessionsForAgent(
+  agentId: string,
+  options?: AcpSessionOptions & { cursor?: string; cwd?: string },
+) {
+  return listSessionsForAgentCore(agentId, withAcpOverrides(agentId, options));
 }
 
 function omitEnvKeys(

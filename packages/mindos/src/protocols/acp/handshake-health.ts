@@ -6,7 +6,8 @@ export type AcpHandshakeHealthStatus = 'ready' | 'failed';
 export type AcpHandshakeHealthStage =
   | 'initialize'
   | 'session-new'
-  | 'session-load';
+  | 'session-load'
+  | 'session-list';
 
 export type AcpHandshakeSessionHealth = {
   sessionId?: string;

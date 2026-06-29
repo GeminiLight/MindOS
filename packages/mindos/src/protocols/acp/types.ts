@@ -143,6 +143,13 @@ export interface AcpSession {
   toolCalls?: AcpToolCallFull[];
   /** Last session title/timestamp update observed from the agent */
   sessionInfo?: { title?: string; updatedAt?: string };
+  /** Optional transcript/history fields when an ACP adapter exposes them. */
+  title?: string;
+  preview?: string;
+  messages?: unknown[];
+  turns?: unknown[];
+  messageCount?: number;
+  turnCount?: number;
   /** Permission requests observed through the ACP client bridge */
   permissionEvents?: AcpPermissionEvent[];
   /** Auth methods from initialize response */
@@ -155,8 +162,16 @@ export interface AcpSession {
 export interface AcpSessionInfo {
   sessionId: string;
   title?: string;
+  preview?: string;
   cwd?: string;
+  createdAt?: string;
   updatedAt?: string;
+  status?: string;
+  messages?: unknown[];
+  turns?: unknown[];
+  messageCount?: number;
+  turnCount?: number;
+  [key: string]: unknown;
 }
 
 /* ── Prompt ────────────────────────────────────────────────────────────── */

@@ -62,6 +62,7 @@ import {
   type ProviderSelection,
 } from '@/lib/session-model-selection';
 import { isAiConfiguredForAgentTurn, type SettingsJsonForAi } from '@/lib/settings-ai-client';
+import { getEffectiveSessionWorkDir } from '@/lib/session-context';
 import {
   ASK_PANEL_SESSION_ACTIVATE_EVENT,
   getAskPanelSessionActivationDetail,
@@ -106,6 +107,11 @@ function normalizeSelectedAgentRuntime(runtime: AgentRuntimeIdentity | null | un
     kind: runtime.kind,
     ...(typeof record.binaryPath === 'string' && record.binaryPath.trim() ? { binaryPath: record.binaryPath } : {}),
   };
+}
+
+function runtimeSessionListCwd(session: ChatSession | null | undefined): string | undefined {
+  const cwd = session ? getEffectiveSessionWorkDir(session).path?.trim() : undefined;
+  return cwd || undefined;
 }
 
 interface ChatContentProps {
@@ -434,7 +440,7 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
     setRuntimeSessionsError(null);
 
     try {
-      const entries = await listRuntimeSessions(runtime);
+      const entries = await listRuntimeSessions(runtime, { cwd: runtimeSessionListCwd(sessionRef.current.activeSession) });
       if (runtimeSessionsRequestSeqRef.current === seq) {
         setRuntimeSessions(entries);
       }

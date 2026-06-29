@@ -47,7 +47,7 @@ vi.mock('./subprocess.js', () => ({
   killAgent: vi.fn((p: { alive: boolean }) => { p.alive = false; }),
 }));
 
-import { createSession, createSessionFromEntry, loadSession, listSessions, prompt, promptStream, cancelPrompt, closeSession, setMode, setConfigOption, getSession, getActiveSessions, getSessionSnapshot, getActiveSessionSnapshots } from './session';
+import { createSession, createSessionFromEntry, loadSession, listSessions, listSessionsForAgent, prompt, promptStream, cancelPrompt, closeSession, setMode, setConfigOption, getSession, getActiveSessions, getSessionSnapshot, getActiveSessionSnapshots } from './session';
 import { findAcpAgent } from './registry.js';
 import { spawnAndConnect } from './subprocess.js';
 
@@ -691,14 +691,42 @@ describe('ACP Session (SDK-based)', () => {
         agentCapabilities: { sessionCapabilities: { list: true } },
       });
       mockListSessions.mockResolvedValueOnce({
-        sessions: [{ sessionId: 'ses-1', cwd: '/home', title: 'My Session' }],
+        sessions: [{
+          sessionId: 'ses-1',
+          cwd: '/home',
+          title: 'My Session',
+          messages: [{ role: 'user', content: 'hello' }],
+          messageCount: 1,
+        }],
         nextCursor: 'abc',
       });
       const session = await createSessionFromEntry(MOCK_ENTRY);
       const result = await listSessions(session.id);
       expect(result.sessions).toHaveLength(1);
       expect(result.sessions[0].sessionId).toBe('ses-1');
+      expect(result.sessions[0].messages).toEqual([{ role: 'user', content: 'hello' }]);
+      expect(result.sessions[0].messageCount).toBe(1);
       expect(result.nextCursor).toBe('abc');
+    });
+
+    it('lists sessions by agent without creating a new session', async () => {
+      (findAcpAgent as ReturnType<typeof vi.fn>).mockResolvedValueOnce(MOCK_ENTRY);
+      mockInitialize.mockResolvedValueOnce({
+        agentCapabilities: { sessionCapabilities: { list: true } },
+      });
+      mockListSessions.mockResolvedValueOnce({
+        sessions: [{ sessionId: 'ses-agent-1', title: 'Agent Session', turns: [{ input: 'hi', output: 'there' }] }],
+      });
+
+      const result = await listSessionsForAgent('test-agent', { cwd: '/tmp/project' });
+
+      expect(mockNewSession).not.toHaveBeenCalled();
+      expect(mockListSessions).toHaveBeenCalledWith({ cwd: '/tmp/project' });
+      expect(result.sessions[0]).toMatchObject({
+        sessionId: 'ses-agent-1',
+        title: 'Agent Session',
+        turns: [{ input: 'hi', output: 'there' }],
+      });
     });
 
     it('accepts ACP 1.0 object-shaped session/list capabilities', async () => {

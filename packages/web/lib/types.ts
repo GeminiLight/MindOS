@@ -617,7 +617,7 @@ export interface AgentRuntimeAdapterHealthProjection extends AgentRuntimeAdapter
   timeoutMs?: number;
   handshake?: {
     status: 'ready' | 'failed' | 'unknown';
-    stage?: 'initialize' | 'session-new' | 'session-load';
+    stage?: 'initialize' | 'session-new' | 'session-load' | 'session-list';
     checkedAt?: string;
     expiresAt?: string;
     cached?: boolean;

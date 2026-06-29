@@ -11,6 +11,7 @@ import {
 import {
   normalizeRuntimeSessionEntry,
   runtimeSessionEntryAttachBinding,
+  runtimeSessionEntryTurnsToMessages,
   runtimeSessionEntryTitle,
   type RuntimeSessionEntry,
 } from '@/lib/runtime-session-entry';
@@ -25,6 +26,12 @@ type AttachRuntimeSession = (
   },
   metadata?: { title?: string; messages?: Message[] },
 ) => boolean;
+
+export interface RuntimeSessionListOptions {
+  cwd?: string;
+  sessionId?: string;
+  limit?: number;
+}
 
 export type RuntimeSessionHistoryImportResult =
   | { status: 'skipped'; reason: 'unsupported-runtime' | 'has-local-messages' | 'missing-binding' | 'missing-history' }
@@ -41,7 +48,7 @@ export interface RuntimeSessionAdapterCapabilities {
 
 interface RuntimeSessionHistoryAdapter {
   capabilities: RuntimeSessionAdapterCapabilities;
-  list?: (runtime: AgentRuntimeIdentity) => Promise<RuntimeSessionEntry[]>;
+  list?: (runtime: AgentRuntimeIdentity, options?: RuntimeSessionListOptions) => Promise<RuntimeSessionEntry[]>;
   readHistory?: (entry: RuntimeSessionEntry, runtime: AgentRuntimeIdentity) => Promise<{
     entry: RuntimeSessionEntry;
     messages: Message[];
@@ -66,8 +73,10 @@ const CODEX_RUNTIME_SESSION_ADAPTER: RuntimeSessionHistoryAdapter = {
     supportsFork: true,
     supportsArchive: true,
   },
-  async list(runtime) {
-    const res = await fetch('/api/agent-runtimes/codex/threads?limit=30&useStateDbOnly=1', {
+  async list(runtime, options) {
+    const params = new URLSearchParams({ limit: '30', useStateDbOnly: '1' });
+    if (options?.cwd?.trim()) params.set('cwd', options.cwd.trim());
+    const res = await fetch(`/api/agent-runtimes/codex/threads?${params.toString()}`, {
       cache: 'no-store',
     });
     if (!res.ok) {
@@ -136,6 +145,178 @@ const CODEX_RUNTIME_SESSION_ADAPTER: RuntimeSessionHistoryAdapter = {
   },
 };
 
+function runtimeSessionFetchError(
+  response: Response,
+  fallback: string,
+): Promise<Error> {
+  return response.json()
+    .then((body: { error?: string; message?: string }) => new Error(body.error || body.message || fallback))
+    .catch(() => new Error(fallback));
+}
+
+function entryHasTranscript(entry: RuntimeSessionEntry): boolean {
+  return Array.isArray(entry.turns) && entry.turns.length > 0;
+}
+
+function newerTimestamp(
+  left: RuntimeSessionEntry['updatedAt'],
+  right: RuntimeSessionEntry['updatedAt'],
+): RuntimeSessionEntry['updatedAt'] {
+  if (left === undefined) return right;
+  if (right === undefined) return left;
+  const leftMs = typeof left === 'number' ? left : Date.parse(left);
+  const rightMs = typeof right === 'number' ? right : Date.parse(right);
+  if (!Number.isFinite(leftMs)) return right;
+  if (!Number.isFinite(rightMs)) return left;
+  return rightMs > leftMs ? right : left;
+}
+
+function mergeRuntimeSessionEntry(
+  primary: RuntimeSessionEntry,
+  secondary: RuntimeSessionEntry,
+): RuntimeSessionEntry {
+  const primaryHasTranscript = entryHasTranscript(primary);
+  const secondaryHasTranscript = entryHasTranscript(secondary);
+  const transcriptEntry = secondaryHasTranscript
+    ? secondary
+    : primaryHasTranscript
+      ? primary
+      : null;
+
+  return {
+    ...primary,
+    title: primary.title ?? secondary.title,
+    preview: primary.preview ?? secondary.preview,
+    cwd: primary.cwd ?? secondary.cwd,
+    createdAt: primary.createdAt ?? secondary.createdAt,
+    updatedAt: newerTimestamp(primary.updatedAt, secondary.updatedAt),
+    status: primary.status ?? secondary.status,
+    archived: primary.archived ?? secondary.archived,
+    messageCount: transcriptEntry?.messageCount ?? primary.messageCount ?? secondary.messageCount,
+    turnCount: transcriptEntry?.turnCount ?? primary.turnCount ?? secondary.turnCount,
+    ...(Array.isArray(transcriptEntry?.turns) ? { turns: transcriptEntry.turns } : {}),
+    raw: primary.raw ?? secondary.raw,
+  };
+}
+
+function mergeRuntimeSessionEntries(
+  primary: RuntimeSessionEntry[],
+  secondary: RuntimeSessionEntry[],
+): RuntimeSessionEntry[] {
+  const byId = new Map<string, RuntimeSessionEntry>();
+  for (const entry of primary) byId.set(entry.id, entry);
+  for (const entry of secondary) {
+    const existing = byId.get(entry.id);
+    byId.set(entry.id, existing ? mergeRuntimeSessionEntry(existing, entry) : entry);
+  }
+  return Array.from(byId.values());
+}
+
+async function fetchExternalRuntimeSessions(
+  runtime: AgentRuntimeIdentity,
+  options?: RuntimeSessionListOptions,
+): Promise<RuntimeSessionEntry[]> {
+  const params = new URLSearchParams({
+    runtimeId: runtime.id,
+    limit: String(options?.limit ?? 30),
+  });
+  if (options?.cwd?.trim()) params.set('cwd', options.cwd.trim());
+  if (options?.sessionId?.trim()) params.set('sessionId', options.sessionId.trim());
+
+  const res = await fetch(`/api/agent-runtimes/external-sessions?${params.toString()}`, {
+    cache: 'no-store',
+  });
+  if (!res.ok) {
+    throw await runtimeSessionFetchError(
+      res,
+      `Failed to load native ${runtime.name} session transcripts (${res.status}).`,
+    );
+  }
+
+  const body = await res.json() as { sessions?: unknown[] };
+  return Array.isArray(body.sessions)
+    ? body.sessions
+      .map((session) => normalizeRuntimeSessionEntry(session, runtime))
+      .filter((entry): entry is RuntimeSessionEntry => Boolean(entry))
+    : [];
+}
+
+async function listAcpRuntimeSessions(
+  runtime: AgentRuntimeIdentity,
+  options?: RuntimeSessionListOptions,
+): Promise<RuntimeSessionEntry[]> {
+  const res = await fetch('/api/acp/session', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      action: 'list_sessions',
+      agentId: runtime.id,
+      ...(options?.cwd?.trim() ? { cwd: options.cwd.trim() } : {}),
+    }),
+  });
+  if (!res.ok) {
+    throw await runtimeSessionFetchError(
+      res,
+      `Failed to load ${runtime.name} sessions (${res.status}).`,
+    );
+  }
+
+  const body = await res.json() as { sessions?: unknown[] };
+  return Array.isArray(body.sessions)
+    ? body.sessions
+      .map((session) => normalizeRuntimeSessionEntry(session, runtime))
+      .filter((entry): entry is RuntimeSessionEntry => Boolean(entry))
+    : [];
+}
+
+const ACP_RUNTIME_SESSION_ADAPTER: RuntimeSessionHistoryAdapter = {
+  capabilities: {
+    supportsList: true,
+    supportsReadHistory: true,
+    supportsAttachExisting: true,
+    supportsFork: false,
+    supportsArchive: false,
+  },
+  async list(runtime, options) {
+    const [acpResult, externalResult] = await Promise.allSettled([
+      listAcpRuntimeSessions(runtime, options),
+      fetchExternalRuntimeSessions(runtime, options),
+    ]);
+
+    const externalEntries = externalResult.status === 'fulfilled' ? externalResult.value : [];
+    if (acpResult.status === 'rejected') {
+      if (externalEntries.length > 0) return externalEntries;
+      throw acpResult.reason instanceof Error ? acpResult.reason : new Error(String(acpResult.reason));
+    }
+
+    return mergeRuntimeSessionEntries(acpResult.value, externalEntries);
+  },
+  async readHistory(entry, runtime) {
+    let normalizedEntry = normalizeRuntimeSessionEntry(entry, runtime)
+      ?? normalizeRuntimeSessionEntry(entry.raw ?? entry, runtime)
+      ?? { ...entry, runtime };
+    let messages = runtimeSessionEntryTurnsToMessages(normalizedEntry, runtime);
+
+    if (messages.length === 0) {
+      const externalEntries = await fetchExternalRuntimeSessions(runtime, {
+        cwd: normalizedEntry.cwd,
+        sessionId: normalizedEntry.id,
+        limit: 1,
+      }).catch(() => []);
+      const externalEntry = externalEntries.find((item) => item.id === normalizedEntry.id) ?? externalEntries[0];
+      if (externalEntry) {
+        normalizedEntry = mergeRuntimeSessionEntry(normalizedEntry, externalEntry);
+        messages = runtimeSessionEntryTurnsToMessages(normalizedEntry, runtime);
+      }
+    }
+
+    return {
+      entry: normalizedEntry,
+      messages,
+    };
+  },
+};
+
 function normalizedRuntime(runtime: AgentRuntimeIdentity): AgentRuntimeIdentity {
   return compactAgentRuntimeIdentity(runtime) ?? runtime;
 }
@@ -144,6 +325,7 @@ function getRuntimeSessionHistoryAdapter(
   runtime: AgentRuntimeIdentity | null | undefined,
 ): RuntimeSessionHistoryAdapter | null {
   if (runtime?.kind === 'codex') return CODEX_RUNTIME_SESSION_ADAPTER;
+  if (runtime?.kind === 'acp') return ACP_RUNTIME_SESSION_ADAPTER;
   return null;
 }
 
@@ -155,10 +337,11 @@ export function getRuntimeSessionAdapterCapabilities(
 
 export async function listRuntimeSessions(
   runtime: AgentRuntimeIdentity,
+  options?: RuntimeSessionListOptions,
 ): Promise<RuntimeSessionEntry[]> {
   const adapter = getRuntimeSessionHistoryAdapter(runtime);
   if (!adapter?.list) return [];
-  return adapter.list(normalizedRuntime(runtime));
+  return adapter.list(normalizedRuntime(runtime), options);
 }
 
 export async function readRuntimeSessionHistory(
