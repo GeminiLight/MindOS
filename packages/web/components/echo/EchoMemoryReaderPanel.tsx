@@ -89,6 +89,10 @@ function imprintSourceLabel(item: EchoSavedItem, p: EchoSavedItemsCopy): string 
   return p.imprintSourceMarkdown;
 }
 
+function savedItemSourceLabel(item: EchoSavedItem, p: EchoSavedItemsCopy): string {
+  return item.assistantId ? p.imprintSourceAssistant : p.imprintSourceMarkdown;
+}
+
 function markdownSection(markdown: string, headings: string[]): string {
   const normalizedHeadings = new Set(headings.map((heading) => heading.trim().toLowerCase()));
   const lines = markdown.split(/\r?\n/);
@@ -106,6 +110,26 @@ function markdownSection(markdown: string, headings: string[]): string {
   }
 
   return selected.join('\n').trim();
+}
+
+function markdownSections(markdown: string): Array<{ title: string; body: string }> {
+  const sections: Array<{ title: string; body: string[] }> = [];
+  let current: { title: string; body: string[] } | null = null;
+
+  for (const line of markdown.split(/\r?\n/)) {
+    const heading = line.trim().match(/^##\s+(.+)$/)?.[1]?.trim();
+    if (heading) {
+      current = { title: heading, body: [] };
+      sections.push(current);
+      continue;
+    }
+    if (current && !/^#\s+/.test(line.trim())) current.body.push(line);
+  }
+
+  return sections
+    .map((section) => ({ title: section.title, body: section.body.join('\n').trim() }))
+    .filter((section) => section.body.length > 0)
+    .slice(0, 6);
 }
 
 function ImprintReaderPanel({
@@ -244,15 +268,15 @@ function ImprintEventListItem({
           : 'border border-transparent hover:bg-muted/30',
       )}
     >
-      <span
-        className={cn(
-          'mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-md border transition-colors duration-150',
-          active
-            ? 'border-[var(--amber)]/30 bg-[var(--amber)]/10 text-[var(--amber)]'
-            : 'border-border/60 bg-background/65 text-muted-foreground group-hover:text-foreground',
-        )}
-        aria-hidden
-      >
+                      <span
+                        className={cn(
+                          'mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-md border transition-colors duration-150',
+                          active
+                            ? 'border-[var(--amber)]/30 bg-[var(--amber)]/10 text-[var(--amber)]'
+                            : 'border-border/60 bg-background/65 text-muted-foreground group-hover:text-foreground',
+                        )}
+                        aria-hidden
+                      >
         {segmentIcon('imprint', index)}
       </span>
       <span className="min-w-0 flex-1">
@@ -494,6 +518,7 @@ export default function EchoMemoryReaderPanel({
   const readableMarkdown = detail?.markdown && selectedItem
     ? stripDuplicateTitleHeading(detail.markdown, selectedItem.title)
     : detail?.markdown ?? '';
+  const readableSections = readableMarkdown ? markdownSections(readableMarkdown) : [];
   const hasItems = items.length > 0;
   const showDetailPanel = loading || detailError || detailLoading || selectedItem || hasItems;
 
@@ -566,22 +591,23 @@ export default function EchoMemoryReaderPanel({
             <div className="space-y-2">
               {items.map((item, index) => {
                 const active = item.path === selectedPath;
+                const source = savedItemSourceLabel(item, p);
                 return (
                   <button
                     key={item.path}
                     type="button"
                     onClick={() => onSelect(item.path)}
                     className={cn(
-                      'group flex w-full items-center gap-3 rounded-lg border px-3.5 py-3.5 text-left transition-[background-color,border-color,box-shadow] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                      'group flex w-full items-start gap-3 rounded-lg border px-3.5 py-3.5 text-left transition-[background-color,border-color,box-shadow] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                       active
                         ? 'border-[var(--amber)]/35 bg-[var(--amber)]/10 shadow-sm'
                         : 'border-transparent hover:bg-muted/30',
                     )}
                     data-testid="echo-memory-list-item"
-                  >
-                    <span
-                      className={cn(
-                        'flex h-9 w-9 shrink-0 items-center justify-center rounded-md border transition-colors duration-150',
+                    >
+                      <span
+                        className={cn(
+                        'mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-md border transition-colors duration-150',
                         active
                           ? 'border-[var(--amber)]/30 bg-[var(--amber)]/10 text-[var(--amber)]'
                           : 'border-border/60 bg-background/65 text-muted-foreground group-hover:text-foreground',
@@ -592,7 +618,14 @@ export default function EchoMemoryReaderPanel({
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="block truncate font-sans text-sm font-medium leading-5 text-foreground">{item.title}</span>
-                      <span className="mt-1.5 block truncate font-sans text-xs text-muted-foreground">{item.date}</span>
+                      <span className="mt-1.5 flex flex-wrap items-center gap-1.5 font-sans text-[0.72rem] text-muted-foreground">
+                        <span>{source}</span>
+                        <span aria-hidden>·</span>
+                        <span>{item.date}</span>
+                      </span>
+                      {item.excerpt ? (
+                        <span className="mt-2 line-clamp-2 font-sans text-xs leading-5 text-muted-foreground">{item.excerpt}</span>
+                      ) : null}
                     </span>
                   </button>
                 );
@@ -623,6 +656,14 @@ export default function EchoMemoryReaderPanel({
                       {segmentIcon(segment, items.findIndex((item) => item.path === selectedItem.path))}
                     </span>
                     <div className="min-w-0">
+                      <div className="mb-2 flex flex-wrap items-center gap-2">
+                        <span className="rounded-full border border-border/55 bg-muted/35 px-2.5 py-1 font-sans text-xs text-muted-foreground">
+                          {savedItemSourceLabel(selectedItem, p)}
+                        </span>
+                        <span className="rounded-full bg-[var(--amber)]/10 px-2.5 py-1 font-sans text-xs text-[var(--amber)]">
+                          {selectedItem.date}
+                        </span>
+                      </div>
                       <h3 id="echo-memory-detail-title" className="font-sans text-xl font-semibold leading-tight text-foreground md:text-2xl">
                         {selectedItem.title}
                       </h3>
@@ -643,8 +684,23 @@ export default function EchoMemoryReaderPanel({
               </header>
 
               <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6 md:px-8 md:py-7">
-                {readableMarkdown ? (
-                  <div className={cn(echoDetailProseClass, 'max-w-3xl')}>
+                {readableMarkdown && readableSections.length >= 2 ? (
+                  <div className="grid gap-4 xl:grid-cols-2" data-testid="echo-memory-section-cards">
+                    {readableSections.map((section) => (
+                      <section key={section.title} className="min-w-0 rounded-lg border border-border/55 bg-background/55 p-5">
+                        <SectionLabel icon={<BookOpen size={16} aria-hidden />} title={section.title} />
+                        <div className={cn(echoDetailProseClass, 'mt-4')}>
+                          {EchoMarkdown ? (
+                            <EchoMarkdown markdown={section.body} />
+                          ) : (
+                            <p className="whitespace-pre-wrap font-sans text-sm leading-7 text-muted-foreground">{section.body}</p>
+                          )}
+                        </div>
+                      </section>
+                    ))}
+                  </div>
+                ) : readableMarkdown ? (
+                  <div className={cn(echoDetailProseClass, 'max-w-4xl')}>
                     {EchoMarkdown ? (
                       <EchoMarkdown markdown={readableMarkdown} />
                     ) : (

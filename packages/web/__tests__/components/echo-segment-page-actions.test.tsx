@@ -482,11 +482,17 @@ describe('Echo segment page actions', () => {
     expect(panel?.textContent).toContain(messages.zh.echoPages.imprintScheduleDailyLabel);
     expect(panel?.textContent).toContain(messages.zh.echoPages.imprintScheduleManualLabel);
 
-    const modeSelect = host.querySelector<HTMLSelectElement>('[data-testid="echo-imprint-schedule-mode"]');
-    expect(modeSelect).not.toBeNull();
+    const modeGroup = host.querySelector('[data-testid="echo-imprint-schedule-mode"]');
+    expect(modeGroup).not.toBeNull();
+    const dailyMode = host.querySelector<HTMLButtonElement>('[data-testid="echo-imprint-schedule-mode-daily"]');
+    const intervalMode = host.querySelector<HTMLButtonElement>('[data-testid="echo-imprint-schedule-mode-interval"]');
+    const manualMode = host.querySelector<HTMLButtonElement>('[data-testid="echo-imprint-schedule-mode-manual"]');
+    expect(dailyMode?.getAttribute('aria-pressed')).toBe('true');
+    expect(intervalMode).not.toBeNull();
+    expect(manualMode).not.toBeNull();
+
     await act(async () => {
-      if (modeSelect) modeSelect.value = 'interval';
-      modeSelect?.dispatchEvent(new Event('change', { bubbles: true }));
+      intervalMode?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       await Promise.resolve();
     });
 
@@ -496,6 +502,7 @@ describe('Echo segment page actions', () => {
       && String(init.body).includes('"mode":"interval"')
     ));
     expect(modePatchCall).toBeTruthy();
+    expect(intervalMode?.getAttribute('aria-pressed')).toBe('true');
     expect(host.querySelector('[data-testid="echo-imprint-schedule-status"]')?.textContent)
       .toContain(messages.zh.echoPages.imprintScheduleIntervalHours(24));
 
@@ -517,8 +524,7 @@ describe('Echo segment page actions', () => {
       .toContain(messages.zh.echoPages.imprintScheduleIntervalHours(6));
 
     await act(async () => {
-      if (modeSelect) modeSelect.value = 'manual';
-      modeSelect?.dispatchEvent(new Event('change', { bubbles: true }));
+      manualMode?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       await Promise.resolve();
     });
     const manualPatchCall = fetchMock.mock.calls.find(([url, init]) => (
@@ -527,6 +533,7 @@ describe('Echo segment page actions', () => {
       && String(init.body).includes('"mode":"manual"')
     ));
     expect(manualPatchCall).toBeTruthy();
+    expect(manualMode?.getAttribute('aria-pressed')).toBe('true');
     expect(host.querySelector('[data-testid="echo-imprint-schedule-status"]')?.textContent)
       .toContain(messages.zh.echoPages.imprintScheduleManualOnly);
   });

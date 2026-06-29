@@ -1,7 +1,7 @@
 'use client';
 
 import { type ComponentType, useCallback, useEffect, useId, useRef, useState } from 'react';
-import { Check, Loader2, Save } from 'lucide-react';
+import { Check, FileText, Loader2, Save } from 'lucide-react';
 import { consumeUIMessageStream } from '@/lib/agent/stream-consumer';
 import type { EchoAssistantId } from '@/lib/echo-assistants';
 import type { EchoSavedItem, EchoStoredSegment } from '@/lib/echo-store';
@@ -31,6 +31,10 @@ export function EchoInsightCollapsible({
   savingLabel,
   savedLabel,
   saveErrorPrefix,
+  draftTitle,
+  draftIdleLabel,
+  draftOutputLabel,
+  draftSavedHint,
   segment,
   assistantId,
   userPrompt,
@@ -46,6 +50,10 @@ export function EchoInsightCollapsible({
   savingLabel: string;
   savedLabel: string;
   saveErrorPrefix: string;
+  draftTitle: string;
+  draftIdleLabel: string;
+  draftOutputLabel: string;
+  draftSavedHint: string;
   segment: EchoStoredSegment;
   assistantId: EchoAssistantId;
   userPrompt: string;
@@ -197,21 +205,58 @@ export function EchoInsightCollapsible({
     void runGenerate();
   }, [generateSignal, runGenerate]);
 
-  if (!requested && !streaming && !insightMd && !err) {
-    return null;
-  }
+  const statusLabel = streaming
+    ? generatingLabel
+    : saveState === 'saved'
+      ? savedLabel
+      : insightMd
+        ? draftOutputLabel
+        : requested && !aiLoading && !aiReady
+          ? noAiHint
+          : draftIdleLabel;
 
   return (
     <section
       id={panelId}
       aria-live="polite"
-      className="mt-6 rounded-xl border border-border/55 bg-card/45 p-5 shadow-sm"
+      className="flex min-h-[18rem] min-w-0 flex-col rounded-xl border border-border/60 bg-card/45 shadow-sm"
+      data-testid="echo-ai-draft-panel"
     >
+      <header className="flex shrink-0 items-start justify-between gap-4 border-b border-border/45 px-5 py-4">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted/45 text-muted-foreground" aria-hidden>
+              <FileText size={16} />
+            </span>
+            <h2 className="font-sans text-base font-medium leading-tight text-foreground">{draftTitle}</h2>
+          </div>
+          <p className="mt-2 line-clamp-2 font-sans text-xs leading-5 text-muted-foreground">{statusLabel}</p>
+        </div>
+        {saveState === 'saved' ? (
+          <span className="shrink-0 rounded-full border border-[var(--success)]/30 bg-[var(--success)]/10 px-2.5 py-1 font-sans text-xs text-success">
+            {draftSavedHint}
+          </span>
+        ) : insightMd && !streaming ? (
+          <span className="shrink-0 rounded-full border border-[var(--amber)]/30 bg-[var(--amber)]/10 px-2.5 py-1 font-sans text-xs text-[var(--amber)]">
+            {draftOutputLabel}
+          </span>
+        ) : null}
+      </header>
+
+      <div className="min-h-0 flex-1 px-5 py-5">
       {streaming && !insightMd ? (
-        <p className="flex items-center gap-2 font-sans text-sm text-muted-foreground">
-          <Loader2 size={15} className="animate-spin shrink-0" aria-hidden />
-          {generatingLabel}
-        </p>
+        <div className="space-y-4" role="status" aria-label={generatingLabel}>
+          <p className="flex items-center gap-2 font-sans text-sm text-muted-foreground">
+            <Loader2 size={15} className="animate-spin shrink-0" aria-hidden />
+            {generatingLabel}
+          </p>
+          <div className="space-y-3" aria-hidden>
+            <div className="h-4 w-2/3 rounded-full bg-muted/55" />
+            <div className="h-3.5 w-full rounded-full bg-muted/45" />
+            <div className="h-3.5 w-5/6 rounded-full bg-muted/35" />
+            <div className="h-20 rounded-lg border border-border/35 bg-background/35" />
+          </div>
+        </div>
       ) : null}
       {!aiLoading && !aiReady ? (
         <p className="font-sans text-sm text-muted-foreground">{noAiHint}</p>
@@ -232,6 +277,11 @@ export function EchoInsightCollapsible({
           >
             {retryLabel}
           </Button>
+        </div>
+      ) : null}
+      {!streaming && !insightMd && !err && (aiLoading || aiReady) ? (
+        <div className="flex min-h-40 items-center justify-center rounded-lg border border-dashed border-border/55 bg-background/35 px-6 text-center">
+          <p className="max-w-sm font-sans text-sm leading-6 text-muted-foreground">{draftIdleLabel}</p>
         </div>
       ) : null}
       {insightMd ? (
@@ -273,11 +323,14 @@ export function EchoInsightCollapsible({
                 <p className="font-sans text-xs text-error" role="alert">
                   {saveErrorPrefix} {saveErr}
                 </p>
+              ) : saveState === 'saved' ? (
+                <p className="font-sans text-xs text-muted-foreground">{draftSavedHint}</p>
               ) : null}
             </div>
           ) : null}
         </>
       ) : null}
+      </div>
     </section>
   );
 }

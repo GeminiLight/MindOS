@@ -522,23 +522,37 @@ export default function EchoImprintCardsReview({ p }: { p: EchoCopy }) {
 
           {isSchedulePanelOpen ? (
             <div
-              className="grid gap-3 rounded-lg border border-border/45 bg-background/70 p-3 md:grid-cols-[minmax(0,1fr)_auto_auto]"
+              className="grid gap-3 rounded-lg border border-border/45 bg-background/70 p-3 md:grid-cols-[minmax(13rem,1fr)_minmax(8rem,0.45fr)_auto]"
               data-testid="echo-imprint-schedule-panel"
             >
-              <label className="grid min-w-0 gap-1 font-sans text-[0.7rem] font-medium text-muted-foreground">
-                <span>{p.imprintScheduleModeLabel}</span>
-                <select
-                  className="h-8 rounded-md border border-border bg-background px-2 font-sans text-xs text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring"
-                  value={schedule.mode}
-                  onChange={(event) => updateScheduleMode(event.currentTarget.value)}
-                  disabled={isUpdatingSchedule}
-                  data-testid="echo-imprint-schedule-mode"
-                >
-                  <option value="daily">{p.imprintScheduleDailyLabel}</option>
-                  <option value="interval">{p.imprintScheduleIntervalLabel}</option>
-                  <option value="manual">{p.imprintScheduleManualLabel}</option>
-                </select>
-              </label>
+              <fieldset className="min-w-0 space-y-1.5" data-testid="echo-imprint-schedule-mode">
+                <legend className="font-sans text-[0.7rem] font-medium text-muted-foreground">
+                  {p.imprintScheduleModeLabel}
+                </legend>
+                <div className="grid grid-cols-3 gap-1 rounded-lg border border-border/45 bg-muted/20 p-1">
+                  <ScheduleModeButton
+                    mode="daily"
+                    active={schedule.mode === 'daily'}
+                    label={p.imprintScheduleDailyLabel}
+                    disabled={isUpdatingSchedule}
+                    onClick={() => updateScheduleMode('daily')}
+                  />
+                  <ScheduleModeButton
+                    mode="interval"
+                    active={schedule.mode === 'interval'}
+                    label={p.imprintScheduleIntervalLabel}
+                    disabled={isUpdatingSchedule}
+                    onClick={() => updateScheduleMode('interval')}
+                  />
+                  <ScheduleModeButton
+                    mode="manual"
+                    active={schedule.mode === 'manual'}
+                    label={p.imprintScheduleManualLabel}
+                    disabled={isUpdatingSchedule}
+                    onClick={() => updateScheduleMode('manual')}
+                  />
+                </div>
+              </fieldset>
               {schedule.mode === 'daily' ? (
                 <label className="grid min-w-[8rem] gap-1 font-sans text-[0.7rem] font-medium text-muted-foreground">
                   <span>{p.imprintScheduleTimeLabel}</span>
@@ -571,7 +585,10 @@ export default function EchoImprintCardsReview({ p }: { p: EchoCopy }) {
                 </label>
               ) : null}
               <div className="flex min-w-0 items-end font-mono text-[0.68rem] leading-5 text-muted-foreground md:justify-end">
-                <span data-testid="echo-imprint-schedule-save-state">
+                <span
+                  className="inline-flex h-8 min-w-0 items-center rounded-md border border-border/45 bg-muted/15 px-2"
+                  data-testid="echo-imprint-schedule-save-state"
+                >
                   {isUpdatingSchedule ? p.imprintScheduleUpdatingLabel : scheduleLabel}
                 </span>
               </div>
@@ -759,6 +776,39 @@ function FoldedField({
         <p className="break-words font-sans text-xs leading-5 text-muted-foreground">{value}</p>
       </div>
     </details>
+  );
+}
+
+function ScheduleModeButton({
+  mode,
+  active,
+  label,
+  disabled,
+  onClick,
+}: {
+  mode: ImprintScheduleMode;
+  active: boolean;
+  label: string;
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className={cn(
+        'h-7 min-w-0 rounded-md px-2 font-sans text-xs font-medium transition-[background-color,color,box-shadow,opacity] duration-150',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60',
+        active
+          ? 'bg-background text-foreground shadow-sm'
+          : 'text-muted-foreground hover:bg-background/50 hover:text-foreground',
+      )}
+      aria-pressed={active}
+      disabled={disabled}
+      data-testid={`echo-imprint-schedule-mode-${mode}`}
+      onClick={onClick}
+    >
+      <span className="block truncate">{label}</span>
+    </button>
   );
 }
 

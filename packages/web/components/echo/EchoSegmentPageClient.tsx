@@ -192,80 +192,104 @@ function EchoWorktablePanel({
   onGenerate: () => void;
 }) {
   const flow = echoFlowCopy(segment, p);
-  const steps = [
-    { label: p.echoFlowSourceLabel, body: flow.source, icon: <FolderOpen size={16} aria-hidden /> },
-    { label: p.echoFlowGenerateLabel, body: flow.generate, icon: <Bot size={16} aria-hidden /> },
-    { label: p.echoFlowSaveLabel, body: flow.save, icon: <Archive size={16} aria-hidden /> },
-    { label: p.echoFlowConsumeLabel, body: flow.consume, icon: <Route size={16} aria-hidden /> },
+  const routeSteps = [
+    { label: p.echoFlowSourceLabel, body: flow.source },
+    { label: p.echoFlowGenerateLabel, body: flow.generate },
+    { label: p.echoFlowSaveLabel, body: flow.save },
+    { label: p.echoFlowConsumeLabel, body: flow.consume },
   ];
   const contextLabel = selectedItem
     ? p.echoFlowSelectedItem(selectedItem.title, selectedItem.path)
     : p.echoFlowNoSelection;
+  const contextRows = [
+    {
+      label: p.echoStudioSelectedLabel,
+      value: contextLabel,
+      icon: <MessageSquareText size={15} aria-hidden />,
+    },
+    {
+      label: p.echoStudioRecentLabel,
+      value: p.echoWorktableRecentCount(recentSessionCount),
+      icon: <Bot size={15} aria-hidden />,
+    },
+    {
+      label: p.echoStudioSavedLabel,
+      value: p.echoWorktableSavedCount(savedCount),
+      icon: <Archive size={15} aria-hidden />,
+    },
+  ];
 
   return (
     <section
-      className={cn(echoSurfaceClass, 'overflow-hidden')}
+      className={cn(echoSurfaceClass, 'flex min-h-[18rem] min-w-0 flex-col overflow-hidden')}
       aria-labelledby="echo-flow-title"
       data-testid="echo-worktable"
     >
-      <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_18rem]">
-        <div className="min-w-0 border-b border-border/45 px-5 py-4 md:px-6 lg:border-b-0 lg:border-r">
+      <header className="border-b border-border/45 px-5 py-4">
+        <div className="flex items-center gap-2">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted/45 text-muted-foreground" aria-hidden>
+            <FolderOpen size={16} />
+          </span>
           <div className="min-w-0">
-            <h2 id="echo-flow-title" className="font-sans text-base font-medium text-foreground">
+            <h2 id="echo-flow-title" className="font-sans text-base font-medium leading-tight text-foreground">
               {p.echoFlowTitle}
             </h2>
-            <p className="mt-1 max-w-3xl font-sans text-sm leading-6 text-muted-foreground">
+            <p className="mt-1 line-clamp-2 font-sans text-xs leading-5 text-muted-foreground">
               {p.echoFlowSubtitle}
             </p>
           </div>
+        </div>
+      </header>
 
-          <div className="mt-4 flex min-w-0 flex-wrap gap-2">
-            <span className="inline-flex max-w-full items-center gap-2 rounded-md border border-border/50 bg-background/55 px-2.5 py-1.5 font-sans text-xs text-muted-foreground">
-              <MessageSquareText size={13} className="shrink-0 text-[var(--amber)]" aria-hidden />
-              <span className="truncate">{contextLabel}</span>
-            </span>
-            <span className="inline-flex items-center gap-2 rounded-md border border-border/50 bg-background/55 px-2.5 py-1.5 font-sans text-xs text-muted-foreground">
-              <Archive size={13} className="text-muted-foreground" aria-hidden />
-              {p.echoWorktableSavedCount(savedCount)}
-            </span>
-            <span className="inline-flex items-center gap-2 rounded-md border border-border/50 bg-background/55 px-2.5 py-1.5 font-sans text-xs text-muted-foreground">
-              <Bot size={13} className="text-muted-foreground" aria-hidden />
-              {p.echoWorktableRecentCount(recentSessionCount)}
-            </span>
-          </div>
-
-          <div className="mt-5 grid gap-px overflow-hidden rounded-lg border border-border/45 bg-border/45 md:grid-cols-2 xl:grid-cols-4">
-            {steps.map((step) => (
-              <div key={step.label} className="min-w-0 bg-card/80 p-4">
-                <div className="flex items-center gap-2">
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted/45 text-muted-foreground">
-                    {step.icon}
-                  </span>
-                  <h3 className="font-sans text-sm font-medium text-foreground">{step.label}</h3>
-                </div>
-                <p className="mt-3 font-sans text-sm leading-6 text-muted-foreground">{step.body}</p>
+      <div className="flex min-h-0 flex-1 flex-col gap-5 px-5 py-5">
+        <div className="space-y-3">
+          {contextRows.map((row) => (
+            <div key={row.label} className="flex min-w-0 gap-3 rounded-lg border border-border/45 bg-background/45 px-3.5 py-3">
+              <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted/45 text-muted-foreground">
+                {row.icon}
+              </span>
+              <div className="min-w-0">
+                <p className="font-mono text-[0.68rem] uppercase tracking-[0.08em] text-muted-foreground">{row.label}</p>
+                <p className="mt-1 line-clamp-2 break-words font-sans text-sm leading-5 text-foreground">{row.value}</p>
               </div>
-            ))}
-          </div>
+            </div>
+          ))}
         </div>
 
-        <aside className="flex min-w-0 flex-col justify-between gap-4 px-5 py-4 md:px-6">
-          <div className="min-w-0">
-            <p className="font-mono text-[0.68rem] uppercase tracking-[0.08em] text-muted-foreground">
-              {p.echoWorktableAiLabel}
-            </p>
-            <p className="mt-2 font-sans text-sm leading-6 text-muted-foreground">
-              {p.echoWorktableAiBoundary}
-            </p>
+        <ol className="grid gap-2 md:grid-cols-4" aria-label={p.echoStudioRouteLabel}>
+          {routeSteps.map((step, index) => (
+            <li key={step.label} className="min-w-0 rounded-lg border border-border/40 bg-muted/20 px-3 py-3">
+              <div className="flex items-center gap-2">
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-background/80 font-mono text-[0.65rem] text-muted-foreground">
+                  {index + 1}
+                </span>
+                <span className="font-sans text-xs font-medium text-foreground">{step.label}</span>
+              </div>
+              <p className="mt-2 line-clamp-3 font-sans text-xs leading-5 text-muted-foreground">{step.body}</p>
+            </li>
+          ))}
+        </ol>
+
+        <div className="mt-auto flex flex-col gap-3 border-t border-border/45 pt-4">
+          <p className="font-sans text-xs leading-5 text-muted-foreground">
+            <span className="font-medium text-foreground">{p.echoWorktableAiLabel}</span>
+            {' · '}
+            {p.echoWorktableAiBoundary}
+          </p>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <EchoAssistantGenerateButton
+              p={p}
+              segment={segment}
+              onGenerate={onGenerate}
+              size="sm"
+              className="w-full justify-center sm:w-fit"
+            />
+            <span className="inline-flex items-center gap-2 rounded-full border border-border/50 bg-background/55 px-2.5 py-1 font-sans text-xs text-muted-foreground">
+              <Route size={12} aria-hidden />
+              {p.echoStudioRouteHint}
+            </span>
           </div>
-          <EchoAssistantGenerateButton
-            p={p}
-            segment={segment}
-            onGenerate={onGenerate}
-            size="sm"
-            className="w-full justify-center"
-          />
-        </aside>
+        </div>
       </div>
     </section>
   );
@@ -280,22 +304,41 @@ function OverviewPanel({
   dailyLine: string;
   onContinue: () => void;
 }) {
+  const loop = [
+    { title: p.overviewTodayTitle, body: p.overviewTodayBody, href: ECHO_SEGMENT_HREF.imprint },
+    { title: p.overviewThreadTitle, body: p.overviewThreadBody, href: ECHO_SEGMENT_HREF.threads },
+    { title: p.overviewGrowthTitle, body: p.overviewGrowthBody, href: ECHO_SEGMENT_HREF.growth },
+    { title: p.overviewPracticeTitle, body: p.overviewPracticeBody, href: ECHO_SEGMENT_HREF.practice },
+  ];
+
   return (
     <>
-      <section className={cn(echoSurfaceClass, 'relative isolate overflow-hidden p-6 md:p-8')} aria-labelledby="echo-overview-rhythm-title">
-        <div className="pointer-events-none absolute inset-0 -z-10">
-          <div className="absolute right-10 top-10 h-16 w-16 rounded-full border border-[var(--amber)]/20 bg-[var(--amber)]/10" />
-          <div className="absolute -bottom-10 right-[-4%] h-40 w-[76%] rounded-t-full border-t border-muted-foreground/15" />
-          <div className="absolute -bottom-5 right-8 h-32 w-[62%] rounded-t-full border-t border-muted-foreground/20" />
-          <div className="absolute bottom-3 right-24 h-24 w-[48%] rounded-t-full border-t border-[var(--amber)]/20" />
-        </div>
+      <section className={cn(echoSurfaceClass, 'overflow-hidden p-6 md:p-8')} aria-labelledby="echo-overview-rhythm-title">
         <span className="mb-3 inline-flex rounded-full bg-muted/45 px-3 py-1 font-sans text-xs font-medium text-muted-foreground">
           {p.todayLabel}
         </span>
-        <h2 id="echo-overview-rhythm-title" className="max-w-2xl font-sans text-xl font-semibold leading-tight text-foreground md:text-2xl">
-          {p.overviewHeroTitle}
-        </h2>
-        <p className="mt-3 max-w-2xl font-sans text-sm leading-6 text-muted-foreground">{p.overviewHeroSubtitle}</p>
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,0.9fr)_minmax(28rem,1.1fr)] xl:items-end">
+          <div className="min-w-0">
+            <h2 id="echo-overview-rhythm-title" className="max-w-2xl font-sans text-xl font-semibold leading-tight text-foreground md:text-2xl">
+              {p.overviewHeroTitle}
+            </h2>
+            <p className="mt-3 max-w-2xl font-sans text-sm leading-6 text-muted-foreground">{p.overviewHeroSubtitle}</p>
+          </div>
+          <ol className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4" aria-label={p.overviewHeroSubtitle}>
+            {loop.map((item, index) => (
+              <li key={item.href} className="min-w-0">
+                <Link
+                  href={item.href}
+                  className="group block h-full rounded-lg border border-border/45 bg-background/45 px-3.5 py-3 transition-[background-color,border-color] duration-150 hover:border-[var(--amber)]/35 hover:bg-muted/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <span className="font-mono text-[0.68rem] text-muted-foreground">{String(index + 1).padStart(2, '0')}</span>
+                  <span className="mt-2 block font-sans text-sm font-medium text-foreground">{item.title}</span>
+                  <span className="mt-1 line-clamp-2 font-sans text-xs leading-5 text-muted-foreground">{item.body}</span>
+                </Link>
+              </li>
+            ))}
+          </ol>
+        </div>
       </section>
 
       <section className={cn(echoSurfaceClass, 'p-6 md:p-7')}>
@@ -644,14 +687,38 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
 
         {readerEchoSegment && (
           <>
-            <EchoWorktablePanel
-              segment={readerEchoSegment}
-              selectedItem={selectedEchoItem}
-              savedCount={savedEchoItems.length}
-              recentSessionCount={recentSessions.length}
-              p={p}
-              onGenerate={triggerEchoAssistantGenerate}
-            />
+            <div className="grid gap-5 xl:grid-cols-[minmax(0,1.05fr)_minmax(22rem,0.95fr)]" data-testid="echo-studio">
+              <EchoWorktablePanel
+                segment={readerEchoSegment}
+                selectedItem={selectedEchoItem}
+                savedCount={savedEchoItems.length}
+                recentSessionCount={recentSessions.length}
+                p={p}
+                onGenerate={triggerEchoAssistantGenerate}
+              />
+              {echoAssistantId ? (
+                <EchoInsightCollapsible
+                  noAiHint={p.generateInsightNoAi}
+                  generatingLabel={p.insightGenerating}
+                  errorPrefix={p.insightErrorPrefix}
+                  retryLabel={p.insightRetry}
+                  saveLabel={p.echoSaveLabel}
+                  savingLabel={p.echoSavingLabel}
+                  savedLabel={p.echoSavedLabel}
+                  saveErrorPrefix={p.echoSaveErrorPrefix}
+                  draftTitle={p.echoDraftTitle}
+                  draftIdleLabel={p.echoDraftIdleLabel}
+                  draftOutputLabel={p.echoDraftOutputLabel}
+                  draftSavedHint={p.echoDraftSavedHint}
+                  segment={readerEchoSegment}
+                  assistantId={echoAssistantId}
+                  userPrompt={echoAssistantPrompt}
+                  generateSignal={assistantGenerateSignal}
+                  maxSteps={echoAssistantMaxSteps}
+                  onSaved={handleEchoSaved}
+                />
+              ) : null}
+            </div>
             <EchoMemoryReaderPanel
               segment={readerEchoSegment}
               listTitle={echoReaderListTitle(readerEchoSegment, title, p)}
@@ -669,25 +736,6 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
               p={p}
             />
           </>
-        )}
-
-        {readerEchoSegment && echoAssistantId && segment !== 'overview' && (
-          <EchoInsightCollapsible
-            noAiHint={p.generateInsightNoAi}
-            generatingLabel={p.insightGenerating}
-            errorPrefix={p.insightErrorPrefix}
-            retryLabel={p.insightRetry}
-            saveLabel={p.echoSaveLabel}
-            savingLabel={p.echoSavingLabel}
-            savedLabel={p.echoSavedLabel}
-            saveErrorPrefix={p.echoSaveErrorPrefix}
-            segment={segment}
-            assistantId={echoAssistantId}
-            userPrompt={echoAssistantPrompt}
-            generateSignal={assistantGenerateSignal}
-            maxSteps={echoAssistantMaxSteps}
-            onSaved={handleEchoSaved}
-          />
         )}
       </div>
     </ContentPageShell>
