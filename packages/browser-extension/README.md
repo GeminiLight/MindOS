@@ -39,6 +39,12 @@ Choose a folder, edit the title if needed, and hit **Save to MindOS**. On suppor
 
 If the page changes while the popup is open, use the refresh icon to read the current tab again. If the folder list cannot load, saving to Inbox still works.
 
+### Browser Bridge
+
+When the extension is installed, local MindOS pages can detect it through a small local-only bridge. If you paste a logged-in source such as ChatGPT, Claude, Gemini, Kimi, or Xiaohongshu into Inbox, MindOS can open that URL in your browser so you can sign in if needed, wait for the page to load, and then use the extension to save the rendered page or conversation.
+
+The bridge does **not** read or export browser cookies. It only accepts requests from local MindOS pages and only opens `http://` or `https://` URLs for user-driven capture.
+
 ### AI chat capture
 
 The clipper recognizes active conversations on:
@@ -117,6 +123,12 @@ Clean markdown content...
 选择目标文件夹，可编辑标题，然后点 **Save to MindOS**。在已支持的 AI 对话页里，插件会优先保存当前会话转写，而不是把页面当普通文章抽取。
 
 如果页面内容在弹窗打开后发生变化，可以点刷新图标重新读取当前页。若文件夹列表加载失败，仍可先保存到 Inbox。
+
+### 浏览器桥接
+
+安装扩展后，本地 MindOS 页面可以通过一个仅限本地页面的轻量 bridge 检测到扩展。你在收集箱粘贴 ChatGPT、Claude、Gemini、Kimi、小红书等需要登录态的来源时，MindOS 可以把这个网址打开到你的真实浏览器里；你按需登录、等待页面加载后，再点击扩展保存渲染后的网页或对话。
+
+这个 bridge **不会**读取或导出浏览器 cookie。它只接受本地 MindOS 页面的请求，并且只会打开 `http://` / `https://` 网址供用户主动捕获。
 
 ### AI 对话捕获
 

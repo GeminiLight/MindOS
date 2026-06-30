@@ -20,6 +20,7 @@ import {
   Paperclip,
   Eye,
   RotateCcw,
+  ExternalLink,
 } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import { useLocale } from '@/lib/stores/locale-store';
@@ -31,6 +32,7 @@ import ProviderModelCapsule, { getPersistedProviderModel, type ProviderSelection
 import { useInboxOrganize } from '@/components/inbox/InboxOrganizeContext';
 import { SourceIcon, getInboxSourceLabel } from '@/components/inbox/SourceIcon';
 import { archiveInboxFiles, fetchInboxFiles, saveInboxFiles } from '@/lib/inbox-client';
+import { openUrlWithBrowserBridge, requiresBrowserBridgeCapture } from '@/lib/browser-bridge';
 import { isAnyPathUnder, subscribeFilesChanged } from '@/lib/files-changed';
 import {
   INBOX_SHELVED_STORAGE_KEY,
@@ -286,6 +288,15 @@ export default function InboxView() {
     return true;
   }, []);
 
+  const openPendingUrlInBrowser = useCallback(async (url: string) => {
+    try {
+      await openUrlWithBrowserBridge(url);
+      toast.success(t.inbox.browserBridgeOpened, 5000);
+    } catch {
+      toast.error(t.inbox.browserBridgeUnavailable, 6000);
+    }
+  }, [t]);
+
   const stageCurrentNote = useCallback(() => {
     const content = draftText.trim();
     if (!content || savingText || savingToMind) return false;
@@ -362,6 +373,8 @@ export default function InboxView() {
       if (result.ok) {
         savedAny = true;
         savedCount += 1;
+      } else if (result.browserBridgeOpened) {
+        failedUrls.push(url);
       } else {
         failedCount += 1;
         failedUrls.push(url);
@@ -873,15 +886,20 @@ export default function InboxView() {
                                 onRemove={() => setStagedNotes(prev => prev.filter(item => item.id !== note.id))}
                               />
                             ))}
-                            {pendingUrls.map(url => (
-                              <PendingCaptureRow
-                                key={url}
-                                icon={<SourceIcon url={url} size="xs" className="border-0 shadow-none" />}
-                                label={t.inbox.pendingUrl}
-                                detail={shortenUrl(url)}
-                                onRemove={() => setPendingUrls(prev => prev.filter(item => item !== url))}
-                              />
-                            ))}
+                            {pendingUrls.map(url => {
+                              const needsBrowserSession = requiresBrowserBridgeCapture(url);
+                              return (
+                                <PendingCaptureRow
+                                  key={url}
+                                  icon={<SourceIcon url={url} size="xs" className="border-0 shadow-none" />}
+                                  label={needsBrowserSession ? t.inbox.browserBridgePrivateSource : t.inbox.pendingUrl}
+                                  detail={shortenUrl(url)}
+                                  actionLabel={needsBrowserSession ? t.inbox.browserBridgeOpenAction : undefined}
+                                  onAction={needsBrowserSession ? () => void openPendingUrlInBrowser(url) : undefined}
+                                  onRemove={() => setPendingUrls(prev => prev.filter(item => item !== url))}
+                                />
+                              );
+                            })}
                             {pendingFiles.map(file => (
                               <PendingCaptureRow
                                 key={`${file.name}:${file.size}:${file.lastModified}`}
@@ -1250,11 +1268,15 @@ function PendingCaptureRow({
   icon,
   label,
   detail,
+  actionLabel,
+  onAction,
   onRemove,
 }: {
   icon: React.ReactNode;
   label: string;
   detail: string;
+  actionLabel?: string;
+  onAction?: () => void;
   onRemove: () => void;
 }) {
   const { t } = useLocale();
@@ -1270,6 +1292,16 @@ function PendingCaptureRow({
           <span className="min-w-0 truncate text-2xs text-muted-foreground/58">{detail}</span>
         </div>
       </div>
+      {actionLabel && onAction && (
+        <button
+          type="button"
+          onClick={onAction}
+          className="inline-flex h-6 shrink-0 items-center gap-1 rounded-md border border-border/55 bg-background/70 px-2 text-2xs font-medium text-muted-foreground transition-colors hover:border-[var(--amber)]/45 hover:bg-[var(--amber-subtle)] hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <ExternalLink size={10} />
+          {actionLabel}
+        </button>
+      )}
       <button
         type="button"
         onClick={onRemove}

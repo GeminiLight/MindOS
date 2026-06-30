@@ -5,6 +5,18 @@ import { createRoot } from 'react-dom/client';
 
 import { messages } from '@/lib/i18n';
 
+const browserBridgeMock = vi.hoisted(() => ({
+  openUrlWithBrowserBridge: vi.fn(),
+}));
+
+vi.mock('@/lib/browser-bridge', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/browser-bridge')>('@/lib/browser-bridge');
+  return {
+    ...actual,
+    openUrlWithBrowserBridge: browserBridgeMock.openUrlWithBrowserBridge,
+  };
+});
+
 vi.mock('@/lib/stores/locale-store', () => ({
   useLocale: () => ({
     locale: 'en' as const,
@@ -29,6 +41,10 @@ vi.mock('next/navigation', () => ({
 describe('InboxView product shape', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    browserBridgeMock.openUrlWithBrowserBridge.mockResolvedValue({
+      opened: true,
+      url: 'https://chatgpt.com/share/mock',
+    });
     localStorage.clear();
     window.history.replaceState(null, '', '/capture');
     (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -1136,6 +1152,67 @@ describe('InboxView product shape', () => {
       method: 'POST',
       body: expect.stringContaining('https://example.com/article'),
     }));
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('opens browser-session URLs through the bridge without marking them as failed saves', async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url === '/api/settings') {
+        return { ok: true, json: async () => ({ ai: { activeProvider: '', providers: [] } }) };
+      }
+      return { ok: true, json: async () => ({ files: [] }) };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const InboxView = (await import('@/components/InboxView')).default;
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<InboxView />);
+      await new Promise(r => setTimeout(r, 0));
+    });
+
+    const textarea = host.querySelector('textarea');
+    expect(textarea).not.toBeNull();
+    const url = 'https://chatgpt.com/share/6a4403f0-62f8-83ea-95fb-926fb268f639';
+
+    await act(async () => {
+      const pasteEvent = new Event('paste', { bubbles: true });
+      Object.defineProperty(pasteEvent, 'clipboardData', {
+        value: {
+          getData: (type: string) => type === 'text/plain' ? url : '',
+          files: [],
+        },
+      });
+      textarea!.dispatchEvent(pasteEvent);
+      await new Promise(r => setTimeout(r, 0));
+    });
+
+    expect(host.textContent).toContain('Needs browser session');
+    expect(host.textContent).toContain('Open in browser');
+    expect(host.textContent).toContain('chatgpt.com/share');
+
+    const captureButton = Array.from(host.querySelectorAll('button'))
+      .find(button => button.textContent?.includes('Save to Inbox'));
+    expect(captureButton).not.toBeNull();
+
+    await act(async () => {
+      captureButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await new Promise(r => setTimeout(r, 0));
+    });
+
+    expect(browserBridgeMock.openUrlWithBrowserBridge).toHaveBeenCalledWith(url);
+    expect(fetchMock).not.toHaveBeenCalledWith('/api/inbox/clip', expect.anything());
+    expect(host.textContent).toContain('Needs browser session');
+    expect(host.textContent).toContain('chatgpt.com/share');
+    expect(host.textContent).not.toContain('need retry');
+    expect(host.textContent).not.toContain('Unfinished items stayed in the composer');
 
     await act(async () => {
       root.unmount();

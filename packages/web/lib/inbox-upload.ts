@@ -3,6 +3,7 @@ import type { useLocale } from '@/lib/stores/locale-store';
 import { isBinaryCaptureName } from '@/lib/capture-formats';
 import { saveInboxFiles, type InboxSaveInput, type InboxSaveResult } from '@/lib/inbox-client';
 import { notifyFilesChanged } from '@/lib/files-changed';
+import { openUrlWithBrowserBridge, requiresBrowserBridgeCapture } from '@/lib/browser-bridge';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB per file
 
@@ -172,7 +173,18 @@ export async function quickDropToInbox(
 export async function clipUrlToInbox(
   url: string,
   t: ReturnType<typeof useLocale>['t'],
-): Promise<{ ok: boolean; title?: string }> {
+): Promise<{ ok: boolean; title?: string; browserBridgeOpened?: boolean }> {
+  if (requiresBrowserBridgeCapture(url)) {
+    try {
+      await openUrlWithBrowserBridge(url);
+      toast.success(t.inbox.browserBridgeOpened, 5000);
+      return { ok: false, browserBridgeOpened: true };
+    } catch {
+      toast.error(t.inbox.browserBridgeUnavailable, 6000);
+      return { ok: false };
+    }
+  }
+
   try {
     const res = await fetch('/api/inbox/clip', {
       method: 'POST',

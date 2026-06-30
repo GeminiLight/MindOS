@@ -48,17 +48,26 @@ async function run() {
     outfile: resolve(ROOT, OUT, 'content/extractor.js'),
   };
 
+  const bridgeOptions = {
+    ...shared,
+    format: 'iife',
+    entryPoints: [resolve(ROOT, 'src/content/mindos-bridge.ts')],
+    outfile: resolve(ROOT, OUT, 'content/mindos-bridge.js'),
+  };
+
   if (isWatch) {
-    const [ctx1, ctx2] = await Promise.all([
+    const [ctx1, ctx2, ctx3] = await Promise.all([
       context(esmOptions),
       context(contentOptions),
+      context(bridgeOptions),
     ]);
-    await Promise.all([ctx1.watch(), ctx2.watch()]);
+    await Promise.all([ctx1.watch(), ctx2.watch(), ctx3.watch()]);
     console.log('[watch] Watching for changes...');
   } else {
     await Promise.all([
       build(esmOptions),
       build(contentOptions),
+      build(bridgeOptions),
     ]);
     console.log('[build] Done.');
   }

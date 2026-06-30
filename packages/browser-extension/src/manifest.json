@@ -21,6 +21,19 @@
     "service_worker": "background/service-worker.js",
     "type": "module"
   },
+  "content_scripts": [
+    {
+      "matches": [
+        "http://localhost/*",
+        "http://127.0.0.1/*",
+        "http://[::1]/*"
+      ],
+      "js": [
+        "content/mindos-bridge.js"
+      ],
+      "run_at": "document_start"
+    }
+  ],
   "permissions": [
     "storage",
     "activeTab",
@@ -43,5 +56,12 @@
       },
       "description": "Clip current page to MindOS"
     }
+  },
+  "externally_connectable": {
+    "matches": [
+      "http://localhost/*",
+      "http://127.0.0.1/*",
+      "http://[::1]/*"
+    ]
   }
 }
