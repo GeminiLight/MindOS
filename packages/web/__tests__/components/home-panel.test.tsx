@@ -78,6 +78,7 @@ describe('HomePanel', () => {
   beforeEach(() => {
     resetAgentRunStoreForTests();
     resetAgentSessionStoreForTests();
+    window.localStorage.clear();
     push.mockClear();
   });
 
@@ -411,6 +412,91 @@ describe('HomePanel', () => {
     expect(host.querySelector('[data-home-session-row="s-claude"]')).not.toBeNull();
     expect(host.textContent).toContain('Review the prompt runtime plan');
     expect(host.textContent).not.toContain('Investigate file tree open latency');
+  });
+
+  it('groups Home sessions by project by default and keeps Recent as a flat view', async () => {
+    const sessions = [
+      session({
+        id: 's-api-manual',
+        updatedAt: 4_000,
+        messages: [userMsg('Fix the API sidebar grouping')],
+        workDir: { source: 'manual', path: '/Users/moonshot/projects/api', label: 'API' },
+      }),
+      session({
+        id: 's-api-runtime',
+        updatedAt: 3_000,
+        messages: [userMsg('Review API runtime handoff')],
+        runtimeSessionBinding: {
+          kind: 'codex-thread',
+          runtime: 'codex',
+          runtimeId: 'codex',
+          externalSessionId: 'thread_api',
+          cwd: '/Users/moonshot/projects/api',
+          status: 'active',
+          updatedAt: 3_000,
+        },
+      }),
+      session({
+        id: 's-mind',
+        updatedAt: 2_000,
+        messages: [userMsg('Capture the daily note')],
+      }),
+    ];
+    installFetchMock(sessions);
+    await initSessions({});
+
+    await renderHomePanel();
+
+    const toolbar = host.querySelector('[data-home-session-toolbar]') as HTMLElement | null;
+    expect(toolbar).not.toBeNull();
+    expect(toolbar?.querySelector('button[aria-label="New session"]')).not.toBeNull();
+    expect(toolbar?.querySelector('button[aria-label="Search sessions"]')).not.toBeNull();
+    expect(toolbar?.querySelector('button[aria-label="Refresh sessions"]')).not.toBeNull();
+    expect(host.querySelector('[data-home-session-project-view]')).not.toBeNull();
+    expect(host.querySelector('[data-home-session-view-trigger]')?.textContent).toContain('Project');
+
+    const apiGroup = host.querySelector('[data-home-session-project-group="project:/Users/moonshot/projects/api"]') as HTMLElement | null;
+    expect(apiGroup).not.toBeNull();
+    expect(apiGroup?.querySelector('[data-home-session-project-group-header]')?.textContent).toContain('API');
+    expect(apiGroup?.querySelector('[data-home-session-project-group-count]')?.textContent).toBe('2');
+    expect(apiGroup?.textContent).toContain('Fix the API sidebar grouping');
+    expect(apiGroup?.textContent).toContain('Review API runtime handoff');
+
+    const runtimeMeta = host.querySelector('[data-home-session-row="s-api-runtime"] [data-home-session-meta]') as HTMLElement | null;
+    expect(runtimeMeta?.textContent).toContain('1 msg');
+    expect(runtimeMeta?.textContent).not.toContain('/api');
+    expect(host.querySelector('[data-home-session-project-group="mind-root"]')?.textContent).toContain('Mind');
+
+    const apiHeader = apiGroup!.querySelector('[data-home-session-project-group-header]') as HTMLButtonElement | null;
+    await act(async () => {
+      apiHeader!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(host.querySelector('[data-home-session-row="s-api-runtime"]')).toBeNull();
+
+    const searchButton = toolbar!.querySelector('button[aria-label="Search sessions"]') as HTMLButtonElement | null;
+    await act(async () => {
+      searchButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    const searchInput = host.querySelector('[data-home-session-search-input]') as HTMLInputElement | null;
+    await act(async () => {
+      searchInput!.value = 'handoff';
+      searchInput!.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: 'handoff' }));
+    });
+    expect(host.querySelector('[data-home-session-row="s-api-runtime"]')).not.toBeNull();
+
+    const viewTrigger = host.querySelector('[data-home-session-view-trigger]') as HTMLButtonElement | null;
+    await act(async () => {
+      viewTrigger!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    const recentOption = host.querySelector('[data-home-session-view-option="recent"]') as HTMLButtonElement | null;
+    await act(async () => {
+      recentOption!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(host.querySelector('[data-home-session-recent-view]')).not.toBeNull();
+    expect(host.querySelector('[data-home-session-project-view]')).toBeNull();
+    expect(host.querySelector('[data-home-session-view-trigger]')?.textContent).toContain('Recent');
+    expect(host.querySelector('[data-home-session-row="s-api-runtime"] [data-home-session-meta]')?.textContent).toContain('/api');
   });
 
   it('uses the local Claude Code logo for Claude sessions', async () => {

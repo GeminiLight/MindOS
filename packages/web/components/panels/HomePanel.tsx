@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
-import { Brain, Loader2, MessageSquare, Network, Plus, RefreshCw, Search, X } from 'lucide-react';
+import { Brain, ChevronDown, ChevronRight, Loader2, MessageSquare, Network, Plus, RefreshCw, Search, X } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import Logo from '@/components/Logo';
 import MindFileTreeSections from '@/components/file-tree/MindFileTreeSections';
@@ -17,6 +17,14 @@ import {
   type SessionListAgentFilter,
   type SessionListAgentKind,
 } from '@/lib/session-list-entry';
+import { groupChatSessionEntriesByProject, type SessionProjectGroup } from '@/lib/session-project-groups';
+import {
+  loadCollapsedSessionProjectGroups,
+  loadHomeSessionViewMode,
+  persistCollapsedSessionProjectGroups,
+  persistHomeSessionViewMode,
+  type HomeSessionViewMode,
+} from '@/lib/home-session-view-preferences';
 import { agentIconFile } from '@/lib/agent-icons';
 import { attachRuntimeSession, deleteSession, forkSession, loadSession, refreshSessions, renameSession, resetSession, togglePinSession, useActiveSessionId, useSessions } from '@/lib/agent-session-store';
 import { useRunSummary } from '@/lib/agent-run-store';
@@ -331,6 +339,152 @@ function HomeAgentFilter({
   );
 }
 
+function HomeSessionViewToolbar({
+  viewMode,
+  onViewModeChange,
+  onNewSession,
+  onSearchSessions,
+  onRefreshSessions,
+  refreshingSessions,
+  searchActive,
+}: {
+  viewMode: HomeSessionViewMode;
+  onViewModeChange: (value: HomeSessionViewMode) => void;
+  onNewSession: () => void;
+  onSearchSessions: () => void;
+  onRefreshSessions: () => void;
+  refreshingSessions: boolean;
+  searchActive: boolean;
+}) {
+  const { t } = useLocale();
+  const [open, setOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const options: Array<{ id: HomeSessionViewMode; label: string }> = [
+    { id: 'project', label: t.sidebar.homeSessionViewProject },
+    { id: 'recent', label: t.sidebar.homeSessionViewRecent },
+  ];
+  const activeLabel = options.find((option) => option.id === viewMode)?.label ?? options[0].label;
+
+  useEffect(() => {
+    if (!open) return;
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!menuRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [open]);
+
+  return (
+    <div className="flex shrink-0 items-center justify-between gap-2 px-2 pb-1.5" data-home-session-toolbar>
+      <div ref={menuRef} className="relative min-w-0">
+        <button
+          type="button"
+          data-home-session-view-trigger
+          aria-label={t.sidebar.homeSessionViewMenu}
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          onClick={() => setOpen((value) => !value)}
+          className="hit-target-box inline-flex h-7 min-w-0 max-w-[9rem] items-center gap-1.5 px-2 text-[11px] font-medium text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [--hit-target-border-width:1px] [--hit-target-border:color-mix(in_srgb,var(--border)_72%,transparent)] [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-md)]"
+          title={t.sidebar.homeSessionViewMenu}
+        >
+          <span className="truncate">{activeLabel}</span>
+          <ChevronDown size={11} aria-hidden="true" className={`shrink-0 text-muted-foreground transition-transform duration-150 ${open ? 'rotate-180' : ''}`} />
+        </button>
+        {open ? (
+          <div
+            role="listbox"
+            aria-label={t.sidebar.homeSessionViewMenu}
+            className="absolute left-0 top-full z-20 mt-1 w-32 overflow-hidden rounded-lg border border-border/70 bg-background p-1 shadow-lg shadow-foreground/10"
+            data-home-session-view-menu
+          >
+            {options.map((option) => {
+              const selected = option.id === viewMode;
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  role="option"
+                  aria-selected={selected}
+                  data-home-session-view-option={option.id}
+                  data-hit-active={selected ? 'true' : undefined}
+                  onClick={() => {
+                    onViewModeChange(option.id);
+                    setOpen(false);
+                  }}
+                  className={`hit-target-box flex min-h-7 w-full items-center justify-between gap-2 px-2 text-left text-[11px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-md)] ${
+                    selected ? 'text-foreground [--hit-target-active-bg:var(--amber-subtle)]' : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <span className="truncate">{option.label}</span>
+                  {selected ? <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--amber)]" aria-hidden="true" /> : null}
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
+      </div>
+
+      <div className="flex shrink-0 items-center gap-0.5">
+        <HomeHeaderIconButton label={t.sidebar.homeNewSession} onClick={onNewSession}>
+          <Plus size={13} aria-hidden="true" />
+        </HomeHeaderIconButton>
+        <HomeHeaderIconButton
+          label={t.sidebar.homeSearchSessions}
+          onClick={onSearchSessions}
+          active={searchActive}
+        >
+          <Search size={13} aria-hidden="true" />
+        </HomeHeaderIconButton>
+        <HomeHeaderIconButton label={t.sidebar.homeRefreshSessions} onClick={onRefreshSessions} disabled={refreshingSessions}>
+          {refreshingSessions ? <Loader2 size={13} className="motion-safe:animate-spin" aria-hidden="true" /> : <RefreshCw size={13} aria-hidden="true" />}
+        </HomeHeaderIconButton>
+      </div>
+    </div>
+  );
+}
+
+function HomeSessionProjectGroupHeader({
+  group,
+  collapsed,
+  onToggle,
+}: {
+  group: SessionProjectGroup;
+  collapsed: boolean;
+  onToggle: () => void;
+}) {
+  const { t } = useLocale();
+  const title = group.kind === 'mind-root'
+    ? t.sidebar.homeSessionGroupMind
+    : group.kind === 'no-project'
+      ? t.sidebar.homeSessionGroupNoProject
+      : group.title;
+  const tooltip = group.pathLabel ? `${title} · ${group.pathLabel}` : title;
+
+  return (
+    <button
+      type="button"
+      data-home-session-project-group-header={group.id}
+      aria-expanded={!collapsed}
+      onClick={onToggle}
+      title={tooltip}
+      className="hit-target-box flex h-7 w-full min-w-0 items-center gap-1.5 px-1.5 text-left text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-md)]"
+    >
+      {collapsed ? <ChevronRight size={12} aria-hidden="true" className="shrink-0" /> : <ChevronDown size={12} aria-hidden="true" className="shrink-0" />}
+      <span className="min-w-0 flex-1 truncate">{title}</span>
+      <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-normal leading-none text-muted-foreground/70" data-home-session-project-group-count>
+        {group.entries.length}
+      </span>
+    </button>
+  );
+}
+
 function HomeSessionRow({
   session,
   listEntry,
@@ -347,6 +501,7 @@ function HomeSessionRow({
   onTogglePin,
   onFork,
   onArchive,
+  showProjectPath = true,
 }: {
   session: ChatSession;
   listEntry: ChatSessionListEntry;
@@ -363,6 +518,7 @@ function HomeSessionRow({
   onTogglePin: () => void;
   onFork: () => void;
   onArchive: () => void;
+  showProjectPath?: boolean;
 }) {
   const { t } = useLocale();
   const sessionRuntime = listEntry.runtime;
@@ -489,7 +645,7 @@ function HomeSessionRow({
               <span className="shrink-0 text-muted-foreground/25">·</span>
             </>
           )}
-          {listEntry.compactRuntimePath && (
+          {showProjectPath && listEntry.compactRuntimePath && (
             <>
               <span className="truncate font-mono">{listEntry.compactRuntimePath}</span>
               <span className="shrink-0 text-muted-foreground/25">·</span>
@@ -530,6 +686,8 @@ export default function HomePanel({
   const [editSessionTitle, setEditSessionTitle] = useState('');
   const [sessionSearchOpen, setSessionSearchOpen] = useState(false);
   const [sessionSearchQuery, setSessionSearchQuery] = useState('');
+  const [sessionViewMode, setSessionViewModeState] = useState<HomeSessionViewMode>(loadHomeSessionViewMode);
+  const [collapsedProjectGroupIds, setCollapsedProjectGroupIds] = useState<Set<string>>(loadCollapsedSessionProjectGroups);
   const renameInputRef = useRef<HTMLInputElement>(null);
   const sessionSearchInputRef = useRef<HTMLInputElement>(null);
 
@@ -599,6 +757,26 @@ export default function HomePanel({
     if (!query) return agentFilteredEntries;
     return agentFilteredEntries.filter((entry) => sessionListEntryMatchesSearch(entry, query));
   }, [agentFilteredEntries, sessionSearchQuery]);
+  const groupedEntries = useMemo(() => groupChatSessionEntriesByProject(filteredEntries), [filteredEntries]);
+  const sessionSearchActive = sessionSearchOpen || Boolean(sessionSearchQuery.trim());
+
+  const setSessionViewMode = useCallback((value: HomeSessionViewMode) => {
+    setSessionViewModeState(value);
+    persistHomeSessionViewMode(value);
+  }, []);
+
+  const toggleProjectGroup = useCallback((groupId: string) => {
+    setCollapsedProjectGroupIds((current) => {
+      const next = new Set(current);
+      if (next.has(groupId)) {
+        next.delete(groupId);
+      } else {
+        next.add(groupId);
+      }
+      persistCollapsedSessionProjectGroups(next);
+      return next;
+    });
+  }, []);
 
   const handleSearchSessions = useCallback(() => {
     setSessionSearchOpen(true);
@@ -659,33 +837,47 @@ export default function HomePanel({
     if (pathname !== '/') smoothPush('/');
   }, [pathname, sessions, smoothPush]);
 
+  const renderSessionRow = (entry: ChatSessionListEntry, showProjectPath = true) => (
+    <HomeSessionRow
+      key={entry.id}
+      session={entry.session}
+      listEntry={entry}
+      active={entry.id === activeSessionId}
+      running={runSummary.running.has(entry.id)}
+      editing={editingSessionId === entry.id}
+      editValue={editSessionTitle}
+      inputRef={renameInputRef}
+      onEditValueChange={setEditSessionTitle}
+      onOpen={() => openSession(entry.id)}
+      onStartRename={() => startRenameSession(entry.session)}
+      onCommitRename={commitRenameSession}
+      onCancelRename={() => setEditingSessionId(null)}
+      onTogglePin={() => togglePinSession(entry.id)}
+      onFork={() => forkHomeSession(entry.id)}
+      onArchive={() => archiveHomeSession(entry.session)}
+      showProjectPath={showProjectPath}
+    />
+  );
+
   return (
     <div className="flex h-full flex-col" data-home-sidebar-panel>
       <PanelHeader title={t.sidebar.home}>
-        {mode === 'sessions' ? (
-          <>
-            <HomeHeaderIconButton label={t.sidebar.homeNewSession} onClick={handleNewSession}>
-              <Plus size={13} aria-hidden="true" />
-            </HomeHeaderIconButton>
-            <HomeHeaderIconButton
-              label={t.sidebar.homeSearchSessions}
-              onClick={handleSearchSessions}
-              active={sessionSearchOpen || Boolean(sessionSearchQuery.trim())}
-            >
-              <Search size={13} aria-hidden="true" />
-            </HomeHeaderIconButton>
-            <HomeHeaderIconButton label={t.sidebar.homeRefreshSessions} onClick={handleRefreshSessions} disabled={refreshingSessions}>
-              {refreshingSessions ? <Loader2 size={13} className="motion-safe:animate-spin" aria-hidden="true" /> : <RefreshCw size={13} aria-hidden="true" />}
-            </HomeHeaderIconButton>
-          </>
-        ) : null}
         <HomeModeSwitch mode={mode} onModeChange={setMode} />
       </PanelHeader>
 
       {mode === 'sessions' ? (
         <>
           <HomeAgentFilter value={agentFilter} onChange={setAgentFilter} counts={agentCounts} acpFilters={acpFilters} />
-          {sessionSearchOpen || sessionSearchQuery.trim() ? (
+          <HomeSessionViewToolbar
+            viewMode={sessionViewMode}
+            onViewModeChange={setSessionViewMode}
+            onNewSession={handleNewSession}
+            onSearchSessions={handleSearchSessions}
+            onRefreshSessions={handleRefreshSessions}
+            refreshingSessions={refreshingSessions}
+            searchActive={sessionSearchActive}
+          />
+          {sessionSearchActive ? (
             <HomeSessionSearchField
               value={sessionSearchQuery}
               onChange={setSessionSearchQuery}
@@ -728,28 +920,29 @@ export default function HomePanel({
               <p className="text-sm text-foreground">{t.sidebar.homeNoSessionSearchResults}</p>
               <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{t.sidebar.homeNoSessionSearchResultsHint}</p>
             </div>
+          ) : sessionViewMode === 'project' ? (
+            <div className="space-y-2" data-home-session-project-view>
+              {groupedEntries.map((group) => {
+                const collapsed = collapsedProjectGroupIds.has(group.id) && !sessionSearchQuery.trim();
+                return (
+                  <section key={group.id} className="min-w-0" data-home-session-project-group={group.id}>
+                    <HomeSessionProjectGroupHeader
+                      group={group}
+                      collapsed={collapsed}
+                      onToggle={() => toggleProjectGroup(group.id)}
+                    />
+                    {!collapsed ? (
+                      <div className="mt-1 space-y-1" data-home-session-project-group-entries={group.id}>
+                        {group.entries.map((entry) => renderSessionRow(entry, false))}
+                      </div>
+                    ) : null}
+                  </section>
+                );
+              })}
+            </div>
           ) : (
-            <div className="space-y-1">
-              {filteredEntries.map((entry) => (
-                <HomeSessionRow
-                  key={entry.id}
-                  session={entry.session}
-                  listEntry={entry}
-                  active={entry.id === activeSessionId}
-                  running={runSummary.running.has(entry.id)}
-                  editing={editingSessionId === entry.id}
-                  editValue={editSessionTitle}
-                  inputRef={renameInputRef}
-                  onEditValueChange={setEditSessionTitle}
-                  onOpen={() => openSession(entry.id)}
-                  onStartRename={() => startRenameSession(entry.session)}
-                  onCommitRename={commitRenameSession}
-                  onCancelRename={() => setEditingSessionId(null)}
-                  onTogglePin={() => togglePinSession(entry.id)}
-                  onFork={() => forkHomeSession(entry.id)}
-                  onArchive={() => archiveHomeSession(entry.session)}
-                />
-              ))}
+            <div className="space-y-1" data-home-session-recent-view>
+              {filteredEntries.map((entry) => renderSessionRow(entry))}
             </div>
           )}
           </div>
