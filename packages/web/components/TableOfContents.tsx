@@ -156,6 +156,28 @@ function findHeadingElementById(heading: TableOfContentsHeading | undefined): HT
   return document.getElementById(heading.id);
 }
 
+export function scrollTocLinkIntoNavView(link: HTMLElement, nav: HTMLElement): void {
+  if (!link.isConnected) return;
+
+  const navRect = nav.getBoundingClientRect();
+  const linkRect = link.getBoundingClientRect();
+  if (navRect.height <= 0 || linkRect.height <= 0) return;
+
+  const topInset = 40;
+  const bottomInset = 40;
+  const isAbove = linkRect.top < navRect.top + topInset;
+  const isBelow = linkRect.bottom > navRect.bottom - bottomInset;
+  if (!isAbove && !isBelow) return;
+
+  const centeredDelta = linkRect.top - navRect.top - (navRect.height - linkRect.height) / 2;
+  const nextTop = Math.max(0, nav.scrollTop + centeredDelta);
+  if (typeof nav.scrollTo === 'function') {
+    nav.scrollTo({ top: nextTop, behavior: 'auto' });
+  } else {
+    nav.scrollTop = nextTop;
+  }
+}
+
 interface TableOfContentsProps {
   content?: string;
   headings?: TableOfContentsHeading[];
@@ -183,14 +205,8 @@ export default function TableOfContents({ content = '', headings: providedHeadin
   const scrollActiveIntoView = useCallback((idx: number) => {
     const link = linkRefs.current.get(idx);
     const nav = navRef.current;
-    if (!link || !nav || !link.isConnected) return;
-    const navRect = nav.getBoundingClientRect();
-    const linkRect = link.getBoundingClientRect();
-    const isAbove = linkRect.top < navRect.top + 40;
-    const isBelow = linkRect.bottom > navRect.bottom - 40;
-    if (isAbove || isBelow) {
-      link.scrollIntoView({ block: 'center', behavior: 'auto' });
-    }
+    if (!link || !nav) return;
+    scrollTocLinkIntoNavView(link, nav);
   }, []);
 
   const handleCollapsedToggle = useCallback(() => {

@@ -75,4 +75,13 @@ describe('TableOfContents header layout', () => {
     expect(source).toContain('if (!el) {\n      setActiveIdx(idx);\n      return;\n    }\n    e.preventDefault();');
     expect(source).not.toContain('const handleClick = (e: React.MouseEvent, idx: number) => {\n    e.preventDefault();');
   });
+
+  it('keeps automatic TOC active-link tracking confined to the TOC nav', () => {
+    const filePath = path.resolve(process.cwd(), 'components/TableOfContents.tsx');
+    const source = fs.readFileSync(filePath, 'utf8');
+
+    expect(source).toContain('scrollTocLinkIntoNavView(link, nav)');
+    expect(source).toContain("nav.scrollTo({ top: nextTop, behavior: 'auto' });");
+    expect(source).not.toContain('link.scrollIntoView');
+  });
 });
