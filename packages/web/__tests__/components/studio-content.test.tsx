@@ -468,11 +468,19 @@ describe('StudioContent', () => {
     expect(studioShell?.className).not.toContain('[--main-body-content-max-width:100%]');
     expect(summaryRail).toBeNull();
     expect(toolbar).not.toBeNull();
-    expect(toolbar?.textContent).toContain('Total');
+    expect(toolbar?.textContent).toContain('All');
     expect(toolbar?.textContent).toContain('3');
     expect(toolbar?.textContent).toContain('Enabled');
     expect(toolbar?.textContent).toContain('2');
+    expect(toolbar?.textContent).toContain('Paused');
+    expect(toolbar?.textContent).toContain('1');
     expect(host.querySelector('input[aria-label="Search automations"]')).not.toBeNull();
+    const allFilter = Array.from(host.querySelectorAll('button')).find((button) => button.textContent?.includes('All'));
+    const enabledFilter = Array.from(host.querySelectorAll('button')).find((button) => button.textContent?.includes('Enabled'));
+    const pausedFilter = Array.from(host.querySelectorAll('button')).find((button) => button.textContent?.includes('Paused'));
+    expect(allFilter?.getAttribute('aria-pressed')).toBe('true');
+    expect(enabledFilter?.getAttribute('aria-pressed')).toBe('false');
+    expect(pausedFilter?.getAttribute('aria-pressed')).toBe('false');
     expect(createButton).not.toBeNull();
     expect(document.body.querySelector('[data-studio-automation-drawer]')).toBeNull();
     expect(document.body.querySelector('[data-studio-automation-composer]')).toBeNull();
@@ -484,10 +492,44 @@ describe('StudioContent', () => {
     expect(seededCard?.className).not.toContain('bg-card/45');
     expect(seededCard?.textContent).toContain('Local plan');
 
-    await setInputValue('input[aria-label="Search automations"]', 'inbox');
+    await act(async () => {
+      enabledFilter!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(enabledFilter?.getAttribute('aria-pressed')).toBe('true');
+    expect(host.textContent).toContain('Daily research radar');
+    expect(host.textContent).not.toContain('Inbox cleanup review');
+    expect(host.textContent).toContain('Release note sweep');
+
+    await act(async () => {
+      pausedFilter!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(pausedFilter?.getAttribute('aria-pressed')).toBe('true');
     expect(host.textContent).not.toContain('Daily research radar');
     expect(host.textContent).toContain('Inbox cleanup review');
     expect(host.textContent).not.toContain('Release note sweep');
+
+    await act(async () => {
+      allFilter!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(allFilter?.getAttribute('aria-pressed')).toBe('true');
+
+    await setInputValue('input[aria-label="Search automations"]', 'inbox');
+    expect(toolbar?.textContent).toContain('All1');
+    expect(toolbar?.textContent).toContain('Enabled0');
+    expect(toolbar?.textContent).toContain('Paused1');
+    expect(host.textContent).not.toContain('Daily research radar');
+    expect(host.textContent).toContain('Inbox cleanup review');
+    expect(host.textContent).not.toContain('Release note sweep');
+
+    await act(async () => {
+      enabledFilter!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(host.textContent).toContain('No enabled automations match this search.');
+    expect(host.querySelector('[data-studio-automation-card]')).toBeNull();
+
+    await act(async () => {
+      allFilter!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
 
     await setInputValue('input[aria-label="Search automations"]', 'claude');
     expect(host.textContent).not.toContain('Daily research radar');

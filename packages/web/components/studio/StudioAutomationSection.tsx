@@ -43,8 +43,10 @@ const COPY = {
   en: {
     title: 'Automation',
     subtitle: 'Turn recurring agent work into calm, reviewable routines.',
-    totalLabel: 'Total',
+    allLabel: 'All',
     enabledLabel: 'Enabled',
+    pausedLabel: 'Paused',
+    statusFilterLabel: 'Automation status filter',
     searchLabel: 'Search automations',
     searchPlaceholder: 'Search automations...',
     createKicker: 'Create',
@@ -85,6 +87,10 @@ const COPY = {
     advanced: 'Advanced settings',
     empty: 'No automations match this workspace yet.',
     emptySearch: 'No automations match this search.',
+    emptyEnabled: 'No enabled automations yet.',
+    emptyEnabledSearch: 'No enabled automations match this search.',
+    emptyPaused: 'No paused automations yet.',
+    emptyPausedSearch: 'No paused automations match this search.',
     worktree: 'Worktree',
     project: 'Project',
     mind: 'Mind',
@@ -130,8 +136,10 @@ const COPY = {
   zh: {
     title: '自动化',
     subtitle: '把重复 Agent 工作整理成清晰、可审核的节奏。',
-    totalLabel: '总数',
+    allLabel: '全部',
     enabledLabel: '启用',
+    pausedLabel: '暂停',
+    statusFilterLabel: '自动化状态筛选',
     searchLabel: '搜索自动化',
     searchPlaceholder: '搜索自动化...',
     createKicker: '创建',
@@ -172,6 +180,10 @@ const COPY = {
     advanced: '高级设置',
     empty: '这个工作区还没有自动化。',
     emptySearch: '没有匹配的自动化。',
+    emptyEnabled: '还没有启用的自动化。',
+    emptyEnabledSearch: '没有匹配的启用自动化。',
+    emptyPaused: '还没有暂停的自动化。',
+    emptyPausedSearch: '没有匹配的暂停自动化。',
     worktree: '工作树',
     project: '项目',
     mind: '心智',
@@ -217,6 +229,7 @@ const COPY = {
 } as const;
 
 type StudioAutomationCopy = (typeof COPY)[keyof typeof COPY];
+type AutomationStatusFilter = 'all' | 'enabled' | 'paused';
 
 const SCOPE_OPTIONS: StudioAutomationScope[] = ['worktree', 'project', 'mind'];
 const MODEL_OPTIONS: StudioAutomationModel[] = ['mindos-auto', 'gpt-5.5', 'claude-code', 'local-agent'];
@@ -331,18 +344,31 @@ function MetaText({ label }: { label: string }) {
   );
 }
 
-function ToolbarMetric({
+function FilterChip({
   label,
   value,
+  selected,
+  onClick,
 }: {
   label: string;
   value: number;
+  selected: boolean;
+  onClick: () => void;
 }) {
   return (
-    <span className="inline-flex items-baseline gap-1.5 whitespace-nowrap text-xs text-muted-foreground">
-      <span className="font-medium">{label}</span>
-      <span className="text-sm font-semibold text-foreground [font-variant-numeric:tabular-nums]">{value}</span>
-    </span>
+    <button
+      type="button"
+      aria-pressed={selected}
+      onClick={onClick}
+      className={`inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-md border px-2.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+        selected
+          ? 'border-[var(--amber)]/35 bg-[var(--amber-subtle)] text-[var(--amber-text)]'
+          : 'border-transparent text-muted-foreground hover:border-border/65 hover:bg-muted/35 hover:text-foreground'
+      }`}
+    >
+      <span>{label}</span>
+      <span className={`[font-variant-numeric:tabular-nums] ${selected ? 'text-foreground' : 'text-foreground/85'}`}>{value}</span>
+    </button>
   );
 }
 
@@ -374,27 +400,59 @@ function automationSearchText(
   ].filter(Boolean).join(' '));
 }
 
+function automationMatchesStatusFilter(automation: StudioAutomation, filter: AutomationStatusFilter): boolean {
+  if (filter === 'all') return true;
+  if (filter === 'enabled') return automation.status === 'active';
+  return automation.status === 'paused';
+}
+
+function automationEmptyMessage(
+  copy: StudioAutomationCopy,
+  filter: AutomationStatusFilter,
+  hasSearch: boolean,
+  hasAutomations: boolean,
+): string {
+  if (!hasAutomations) return copy.empty;
+  if (filter === 'enabled') return hasSearch ? copy.emptyEnabledSearch : copy.emptyEnabled;
+  if (filter === 'paused') return hasSearch ? copy.emptyPausedSearch : copy.emptyPaused;
+  return copy.emptySearch;
+}
+
 function AutomationToolbar({
   copy,
-  total,
-  active,
+  counts,
+  filter,
+  onFilterChange,
   searchQuery,
   onSearchQueryChange,
 }: {
   copy: StudioAutomationCopy;
-  total: number;
-  active: number;
+  counts: Record<AutomationStatusFilter, number>;
+  filter: AutomationStatusFilter;
+  onFilterChange: (filter: AutomationStatusFilter) => void;
   searchQuery: string;
   onSearchQueryChange: (value: string) => void;
 }) {
+  const filters: Array<{ value: AutomationStatusFilter; label: string; count: number }> = [
+    { value: 'all', label: copy.allLabel, count: counts.all },
+    { value: 'enabled', label: copy.enabledLabel, count: counts.enabled },
+    { value: 'paused', label: copy.pausedLabel, count: counts.paused },
+  ];
   return (
     <div
       data-studio-automation-toolbar
       className="flex flex-col gap-3 border-b border-border/60 pb-3 sm:flex-row sm:items-center sm:justify-between"
     >
-      <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1">
-        <ToolbarMetric label={copy.totalLabel} value={total} />
-        <ToolbarMetric label={copy.enabledLabel} value={active} />
+      <div className="flex min-w-0 flex-wrap items-center gap-1" aria-label={copy.statusFilterLabel}>
+        {filters.map((item) => (
+          <FilterChip
+            key={item.value}
+            label={item.label}
+            value={item.count}
+            selected={filter === item.value}
+            onClick={() => onFilterChange(item.value)}
+          />
+        ))}
       </div>
       <label className="relative min-w-0 sm:w-72">
         <Search
@@ -728,6 +786,7 @@ export default function StudioAutomationSection({
   const [error, setError] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<AutomationStatusFilter>('all');
 
   useEffect(() => {
     const syncAutomations = () => setAutomations(readStudioAutomations());
@@ -747,15 +806,26 @@ export default function StudioAutomationSection({
   }, [projects]);
 
   const projectOptions = useMemo(() => projects.map((project) => project.id), [projects]);
-  const activeCount = automations.filter((automation) => automation.status === 'active').length;
   const editing = editingId ? automations.find((automation) => automation.id === editingId) : null;
   const normalizedSearchQuery = normalizeSearchValue(searchQuery);
-  const filteredAutomations = useMemo(() => {
+  const searchMatchedAutomations = useMemo(() => {
     if (!normalizedSearchQuery) return automations;
     return automations.filter((automation) => (
       automationSearchText(automation, projects, locale, copy).includes(normalizedSearchQuery)
     ));
   }, [automations, copy, locale, normalizedSearchQuery, projects]);
+  const statusCounts = useMemo(() => {
+    const enabled = searchMatchedAutomations.filter((automation) => automation.status === 'active').length;
+    return {
+      all: searchMatchedAutomations.length,
+      enabled,
+      paused: searchMatchedAutomations.length - enabled,
+    };
+  }, [searchMatchedAutomations]);
+  const filteredAutomations = useMemo(() => (
+    searchMatchedAutomations.filter((automation) => automationMatchesStatusFilter(automation, statusFilter))
+  ), [searchMatchedAutomations, statusFilter]);
+  const emptyMessage = automationEmptyMessage(copy, statusFilter, Boolean(normalizedSearchQuery), automations.length > 0);
 
   const resetForm = useCallback(() => {
     setEditingId(null);
@@ -873,8 +943,9 @@ export default function StudioAutomationSection({
       <section className="space-y-3">
         <AutomationToolbar
           copy={copy}
-          total={automations.length}
-          active={activeCount}
+          counts={statusCounts}
+          filter={statusFilter}
+          onFilterChange={setStatusFilter}
           searchQuery={searchQuery}
           onSearchQueryChange={setSearchQuery}
         />
@@ -899,7 +970,7 @@ export default function StudioAutomationSection({
             </div>
           ) : (
             <div className="rounded-lg border border-dashed border-border/70 bg-background/35 px-4 py-8 text-center text-sm text-muted-foreground">
-              {automations.length ? copy.emptySearch : copy.empty}
+              {emptyMessage}
             </div>
           )}
         </section>
