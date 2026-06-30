@@ -384,6 +384,8 @@ Join our WeChat group for early access, feedback, and AI workflow discussions:
 
 This project has been published on the [LINUX DO community](https://linux.do), and we deeply appreciate the community's support and feedback.
 
+Special thanks to [Zeno Zhang](https://github.com/zenozhg) for the original SSE keep-alive contribution that led to the unified agent-turn heartbeat.
+
 ---
 
 ## 📄 License

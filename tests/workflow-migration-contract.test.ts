@@ -188,6 +188,19 @@ describe('GitHub workflow migration contract', () => {
     expect(sync).toContain('public repo tag push will trigger publish-npm.yml and publish-runtime.yml');
   });
 
+  it('preserves co-author trailers when syncing commits to the public repo', () => {
+    const sync = workflow('sync-to-mindos.yml');
+
+    expect(sync).toContain("DEV_SUBJECT=$(git -C \"$GITHUB_WORKSPACE\" log -1 --format='%s')");
+    expect(sync).toContain("DEV_MSG=$(git -C \"$GITHUB_WORKSPACE\" log -1 --format='%B')");
+    expect(sync).toContain('COAUTHOR_TRAILERS=$(');
+    expect(sync).toContain("grep -E '^Co-authored-by:'");
+    expect(sync).toContain('git -C "$GITHUB_WORKSPACE" log --format=\'%B\' "${FIRST_PARENT}..${HEAD_SHA}"');
+    expect(sync).toContain('git commit -F "$COMMIT_MSG_FILE"');
+    expect(sync).toContain('git commit -m "deploy: ${DEV_SUBJECT}"');
+    expect(sync).not.toContain('git commit -m "${DEV_MSG}"');
+  });
+
   it('builds mobile from packages/mobile', () => {
     const yml = workflow('build-mobile.yml');
     const mobilePkg = readJson<{
