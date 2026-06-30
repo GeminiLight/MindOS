@@ -12,6 +12,7 @@ import {
   Plus,
   Search,
   Sparkles,
+  Trash2,
   WandSparkles,
   X,
 } from 'lucide-react';
@@ -24,14 +25,16 @@ import {
 } from '@/components/studio/StudioAutomationSchedulePicker';
 import {
   createStudioAutomation,
-  readStudioAutomations,
+  deleteStudioAutomation,
+  fetchStudioAutomations,
+  setStudioAutomationStatus,
   STUDIO_AUTOMATIONS_UPDATED_EVENT,
-  toggleStudioAutomationStatus,
   updateStudioAutomation,
   type StudioAutomation,
   type StudioAutomationDraft,
   type StudioAutomationEffort,
   type StudioAutomationModel,
+  type StudioAutomationPayload,
   type StudioAutomationScope,
 } from '@/lib/studio-automations';
 import {
@@ -77,13 +80,22 @@ const COPY = {
     create: 'Create automation',
     save: 'Save changes',
     required: 'Add a prompt before creating an automation.',
+    loading: 'Loading automations...',
+    loadError: 'Automation runtime is unavailable. Check the schedule store and try again.',
     active: 'Active',
     paused: 'Paused',
     pause: 'Pause',
     resume: 'Resume',
     edit: 'Edit',
+    delete: 'Delete',
+    deleteConfirm: 'Delete this automation? It will be removed from the Pi schedule store.',
     nextRun: 'Next',
-    localPlan: 'Local plan',
+    runtimeSchedule: 'Pi schedule',
+    runtimeNote: 'Runs while MindOS Pi is running',
+    runStatePending: 'Pending',
+    runStateRunning: 'Running',
+    runStateSuccess: 'Last run succeeded',
+    runStateError: 'Last run failed',
     advanced: 'Advanced settings',
     empty: 'No automations match this workspace yet.',
     emptySearch: 'No automations match this search.',
@@ -130,7 +142,6 @@ const COPY = {
     highEffort: 'High',
     extraHighEffort: 'Extra High',
     noProject: 'No Project',
-    localNote: 'Local Studio plan',
     close: 'Close drawer',
   },
   zh: {
@@ -170,13 +181,22 @@ const COPY = {
     create: '创建自动化',
     save: '保存更改',
     required: '创建自动化前需要先写提示词。',
+    loading: '正在加载自动化...',
+    loadError: '自动化运行时暂时不可用。请检查调度存储后重试。',
     active: '启用',
     paused: '暂停',
     pause: '暂停',
     resume: '恢复',
     edit: '编辑',
+    delete: '删除',
+    deleteConfirm: '要删除这个自动化吗？它会从 Pi 调度存储中移除。',
     nextRun: '下次',
-    localPlan: '本地计划',
+    runtimeSchedule: 'Pi 调度',
+    runtimeNote: 'MindOS Pi 运行时会按计划执行',
+    runStatePending: '等待运行',
+    runStateRunning: '运行中',
+    runStateSuccess: '上次运行成功',
+    runStateError: '上次运行失败',
     advanced: '高级设置',
     empty: '这个工作区还没有自动化。',
     emptySearch: '没有匹配的自动化。',
@@ -223,7 +243,6 @@ const COPY = {
     highEffort: '高',
     extraHighEffort: '极高',
     noProject: '无项目',
-    localNote: '工作台本地计划',
     close: '关闭抽屉',
   },
 } as const;
@@ -396,8 +415,16 @@ function automationSearchText(
     modelLabel(automation.model, copy),
     effortLabel(automation.effort, copy),
     automation.nextRun,
-    copy.localPlan,
+    copy.runtimeSchedule,
+    runStateLabel(automation, copy),
   ].filter(Boolean).join(' '));
+}
+
+function runStateLabel(automation: StudioAutomation, copy: StudioAutomationCopy): string {
+  if (automation.lastStatus === 'running') return copy.runStateRunning;
+  if (automation.lastStatus === 'success') return copy.runStateSuccess;
+  if (automation.lastStatus === 'error') return copy.runStateError;
+  return copy.runStatePending;
 }
 
 function automationMatchesStatusFilter(automation: StudioAutomation, filter: AutomationStatusFilter): boolean {
@@ -506,6 +533,8 @@ function AutomationCard({
   copy,
   onEdit,
   onToggle,
+  onDelete,
+  busy,
 }: {
   automation: StudioAutomation;
   projects: StudioProject[];
@@ -513,6 +542,8 @@ function AutomationCard({
   copy: StudioAutomationCopy;
   onEdit: (automation: StudioAutomation) => void;
   onToggle: (automation: StudioAutomation) => void;
+  onDelete: (automation: StudioAutomation) => void;
+  busy?: boolean;
 }) {
   const title = automationTitle(automation, locale);
   const prompt = automationPrompt(automation, locale);
@@ -537,23 +568,27 @@ function AutomationCard({
         <div className="mt-2 flex min-w-0 flex-wrap gap-x-3 gap-y-1">
           <MetaText label={scopeText} />
           <MetaText label={scheduleLabel(automation.schedule, copy)} />
-          <MetaText label={copy.localPlan} />
+          <MetaText label={copy.runtimeSchedule} />
+          <MetaText label={runStateLabel(automation, copy)} />
           <MetaText label={`${modelLabel(automation.model, copy)} / ${effortLabel(automation.effort, copy)}`} />
         </div>
       </div>
 
       <div className="flex min-w-0 items-center justify-between gap-3 pl-2 lg:justify-end lg:pl-0">
         <span className="min-w-0 truncate text-[11px] text-muted-foreground [font-variant-numeric:tabular-nums]">
-          {copy.nextRun}: {automation.nextRun ?? copy.localNote}
+          {copy.nextRun}: {automation.nextRun ?? copy.runtimeNote}
         </span>
         <div className="flex shrink-0 items-center gap-1.5">
-          <Button type="button" variant="outline" size="sm" onClick={() => onEdit(automation)}>
+          <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => onEdit(automation)}>
             <Edit3 size={13} aria-hidden="true" />
             {copy.edit}
           </Button>
-          <Button type="button" variant="ghost" size="sm" onClick={() => onToggle(automation)}>
+          <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => onToggle(automation)}>
             {automation.status === 'active' ? <Pause size={13} aria-hidden="true" /> : <Play size={13} aria-hidden="true" />}
             {automation.status === 'active' ? copy.pause : copy.resume}
+          </Button>
+          <Button type="button" variant="destructive" size="icon-sm" aria-label={copy.delete} disabled={busy} onClick={() => onDelete(automation)}>
+            <Trash2 size={13} aria-hidden="true" />
           </Button>
         </div>
       </div>
@@ -571,6 +606,7 @@ function AutomationDrawer({
   projectOptions,
   templates,
   error,
+  saving,
   onClose,
   onSubmit,
   onDraftChange,
@@ -585,6 +621,7 @@ function AutomationDrawer({
   projectOptions: string[];
   templates: Array<Pick<StudioAutomationDraft, 'title' | 'prompt' | 'scope' | 'schedule' | 'effort'>>;
   error: string | null;
+  saving: boolean;
   onClose: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onDraftChange: (updater: (current: StudioAutomationDraft) => StudioAutomationDraft) => void;
@@ -750,10 +787,10 @@ function AutomationDrawer({
 
         <div className="shrink-0 border-t border-border/60 bg-background px-5 py-4 sm:px-6 md:pr-20">
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-            <Button type="button" variant="outline" size="lg" onClick={onClose} className="justify-center">
+            <Button type="button" variant="outline" size="lg" disabled={saving} onClick={onClose} className="justify-center">
               {copy.cancel}
             </Button>
-            <Button type="submit" variant="amber" size="lg" className="justify-center">
+            <Button type="submit" variant="amber" size="lg" disabled={saving} className="justify-center">
               <Plus size={14} aria-hidden="true" />
               {editing ? copy.save : copy.create}
             </Button>
@@ -780,23 +817,45 @@ export default function StudioAutomationSection({
   const copy = locale === 'zh' ? COPY.zh : COPY.en;
   const TitleTag = titleLevel === 1 ? 'h1' : 'h2';
   const titleClassName = titleLevel === 1 ? 'text-2xl font-semibold text-foreground' : 'text-sm font-semibold text-foreground';
-  const [automations, setAutomations] = useState<StudioAutomation[]>(() => readStudioAutomations());
+  const [payload, setPayload] = useState<StudioAutomationPayload | null>(null);
+  const [automations, setAutomations] = useState<StudioAutomation[]>([]);
   const [draft, setDraft] = useState<StudioAutomationDraft>(() => defaultDraft(projects));
   const [editingId, setEditingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [busyId, setBusyId] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<AutomationStatusFilter>('all');
 
+  const applyPayload = useCallback((nextPayload: StudioAutomationPayload) => {
+    setPayload(nextPayload);
+    setAutomations(nextPayload.automations);
+    setLoadError(null);
+  }, []);
+
+  const loadAutomations = useCallback(async () => {
+    try {
+      applyPayload(await fetchStudioAutomations());
+    } catch (nextError) {
+      setLoadError(nextError instanceof Error ? nextError.message : copy.loadError);
+    }
+  }, [applyPayload, copy.loadError]);
+
   useEffect(() => {
-    const syncAutomations = () => setAutomations(readStudioAutomations());
+    void loadAutomations();
+  }, [loadAutomations]);
+
+  useEffect(() => {
+    const syncAutomations = () => { void loadAutomations(); };
     window.addEventListener(STUDIO_AUTOMATIONS_UPDATED_EVENT, syncAutomations);
-    window.addEventListener('storage', syncAutomations);
+    window.addEventListener('focus', syncAutomations);
     return () => {
       window.removeEventListener(STUDIO_AUTOMATIONS_UPDATED_EVENT, syncAutomations);
-      window.removeEventListener('storage', syncAutomations);
+      window.removeEventListener('focus', syncAutomations);
     };
-  }, []);
+  }, [loadAutomations]);
 
   useEffect(() => {
     setDraft((current) => {
@@ -856,7 +915,7 @@ export default function StudioAutomationSection({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [closeDrawer, drawerOpen]);
 
-  const submit = (event: FormEvent<HTMLFormElement>) => {
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!draft.prompt.trim()) {
       setError(copy.required);
@@ -867,13 +926,19 @@ export default function StudioAutomationSection({
       ...draft,
       projectId: draft.scope === 'project' ? draft.projectId || projects[0]?.id : undefined,
     };
-    if (editingId) {
-      updateStudioAutomation(editingId, safeDraft);
-    } else {
-      createStudioAutomation(safeDraft);
+    setSaving(true);
+    try {
+      const nextPayload = editingId
+        ? await updateStudioAutomation(editingId, safeDraft)
+        : await createStudioAutomation(safeDraft);
+      applyPayload(nextPayload);
+      setDrawerOpen(false);
+      resetForm();
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : copy.loadError);
+    } finally {
+      setSaving(false);
     }
-    setDrawerOpen(false);
-    resetForm();
   };
 
   const beginEdit = (automation: StudioAutomation) => {
@@ -890,6 +955,30 @@ export default function StudioAutomationSection({
       projectId: template.scope === 'project' ? current.projectId || projects[0]?.id : current.projectId,
     }));
     setError(null);
+  };
+
+  const toggleAutomation = async (automation: StudioAutomation) => {
+    setBusyId(automation.id);
+    try {
+      const nextStatus = automation.status === 'active' ? 'paused' : 'active';
+      applyPayload(await setStudioAutomationStatus(automation.id, nextStatus));
+    } catch (nextError) {
+      setLoadError(nextError instanceof Error ? nextError.message : copy.loadError);
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const removeAutomation = async (automation: StudioAutomation) => {
+    if (typeof window !== 'undefined' && !window.confirm(copy.deleteConfirm)) return;
+    setBusyId(automation.id);
+    try {
+      applyPayload(await deleteStudioAutomation(automation.id));
+    } catch (nextError) {
+      setLoadError(nextError instanceof Error ? nextError.message : copy.loadError);
+    } finally {
+      setBusyId(null);
+    }
   };
 
   const templates = [
@@ -950,8 +1039,18 @@ export default function StudioAutomationSection({
           onSearchQueryChange={setSearchQuery}
         />
 
+        {loadError ? (
+          <div className="rounded-lg border border-error/25 bg-error/10 px-3 py-2 text-xs font-medium text-error">
+            {loadError}
+          </div>
+        ) : null}
+
         <section data-studio-automation-list className="min-w-0" aria-label={copy.searchLabel}>
-          {filteredAutomations.length ? (
+          {!payload && !loadError ? (
+            <div className="rounded-lg border border-dashed border-border/70 bg-background/35 px-4 py-8 text-center text-sm text-muted-foreground">
+              {copy.loading}
+            </div>
+          ) : filteredAutomations.length ? (
             <div className="overflow-hidden rounded-lg border border-border/60 bg-background/35">
               {filteredAutomations.map((automation) => (
                 <AutomationCard
@@ -961,10 +1060,9 @@ export default function StudioAutomationSection({
                   locale={locale}
                   copy={copy}
                   onEdit={beginEdit}
-                  onToggle={(item) => {
-                    toggleStudioAutomationStatus(item.id);
-                    setAutomations(readStudioAutomations());
-                  }}
+                  onToggle={toggleAutomation}
+                  onDelete={removeAutomation}
+                  busy={busyId === automation.id}
                 />
               ))}
             </div>
@@ -986,6 +1084,7 @@ export default function StudioAutomationSection({
         projectOptions={projectOptions}
         templates={templates}
         error={error}
+        saving={saving}
         onClose={closeDrawer}
         onSubmit={submit}
         onDraftChange={setDraft}

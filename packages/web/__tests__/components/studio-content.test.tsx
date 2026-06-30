@@ -35,6 +35,167 @@ vi.mock('next/navigation', () => ({
 let host: HTMLDivElement;
 let root: Root | null = null;
 
+type TestAutomation = {
+  id: string;
+  title: string;
+  prompt: string;
+  scope: 'worktree' | 'project' | 'mind';
+  projectId?: string;
+  schedule: 'daily-0900' | 'every-4-hours' | 'weekdays-0900' | 'weekly-review';
+  model: 'mindos-auto' | 'claude-code';
+  effort: 'normal' | 'high';
+  status: 'active' | 'paused';
+  updated: string;
+  lastRun?: string;
+  nextRun?: string;
+  runCount: number;
+  lastStatus: 'pending' | 'running' | 'success' | 'error';
+  runtime: 'mindos-pi';
+  source: 'schedule-prompt';
+  controlPlaneScheduleId: string;
+};
+
+const seedAutomations = (): TestAutomation[] => [
+  {
+    id: 'daily-research-radar',
+    title: 'Daily research radar',
+    prompt: 'Scan tracked research directions, select the strongest papers, and write the daily Chinese radar reports.',
+    scope: 'mind',
+    schedule: 'daily-0900',
+    model: 'mindos-auto',
+    effort: 'high',
+    status: 'active',
+    updated: '2026-06-30T09:04:00.000Z',
+    lastRun: '2026-06-30T09:04:00.000Z',
+    nextRun: '2026-07-01T09:00:00.000Z',
+    runCount: 18,
+    lastStatus: 'success',
+    runtime: 'mindos-pi',
+    source: 'schedule-prompt',
+    controlPlaneScheduleId: 'studio-daily-research-radar',
+  },
+  {
+    id: 'inbox-cleanup-review',
+    title: 'Inbox cleanup review',
+    prompt: 'Group new captures, flag duplicates, and propose the safest promotion target before writing anything.',
+    scope: 'project',
+    projectId: 'inbox-practice',
+    schedule: 'weekdays-0900',
+    model: 'mindos-auto',
+    effort: 'normal',
+    status: 'paused',
+    updated: '2026-06-29T09:12:00.000Z',
+    lastRun: '2026-06-29T09:12:00.000Z',
+    nextRun: 'Paused',
+    runCount: 7,
+    lastStatus: 'success',
+    runtime: 'mindos-pi',
+    source: 'schedule-prompt',
+    controlPlaneScheduleId: 'studio-inbox-cleanup-review',
+  },
+  {
+    id: 'release-note-sweep',
+    title: 'Release note sweep',
+    prompt: 'Check completed work, collect user-facing changes, and draft a compact release note.',
+    scope: 'worktree',
+    schedule: 'weekly-review',
+    model: 'claude-code',
+    effort: 'high',
+    status: 'active',
+    updated: '2026-06-28T17:30:00.000Z',
+    lastRun: '2026-06-26T17:30:00.000Z',
+    nextRun: '2026-07-03T17:30:00.000Z',
+    runCount: 4,
+    lastStatus: 'pending',
+    runtime: 'mindos-pi',
+    source: 'schedule-prompt',
+    controlPlaneScheduleId: 'studio-release-note-sweep',
+  },
+];
+
+function automationPayload(automations: TestAutomation[]) {
+  const enabled = automations.filter((automation) => automation.status === 'active').length;
+  return {
+    schemaVersion: 1,
+    generatedAt: '2026-06-30T12:00:00.000Z',
+    automations,
+    summary: {
+      total: automations.length,
+      enabled,
+      paused: automations.length - enabled,
+      externalSchedulePromptJobs: 0,
+      scheduleStorePath: '/tmp/.mindos/schedule-prompts.json',
+      controlPlaneScheduleCount: automations.length,
+    },
+  };
+}
+
+function setupAutomationFetch(initial: TestAutomation[] = seedAutomations()) {
+  let automations = initial.map((automation) => ({ ...automation }));
+  const fetchMock = vi.fn(async (href: string | URL | Request, init?: RequestInit) => {
+    const url = typeof href === 'string' ? href : href instanceof Request ? href.url : href.toString();
+    if (!url.endsWith('/api/studio/automations')) {
+      return Response.json({ error: `Unexpected request: ${url}` }, { status: 404 });
+    }
+    if (!init || init.method === 'GET') {
+      return Response.json(automationPayload(automations));
+    }
+    const body = JSON.parse(String(init.body ?? '{}')) as {
+      action?: string;
+      id?: string;
+      status?: 'active' | 'paused';
+      draft?: Partial<TestAutomation>;
+    };
+    if (body.action === 'create' && body.draft) {
+      const id = `studio-${String(body.draft.title || 'automation').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}`;
+      automations = [{
+        id,
+        title: body.draft.title || 'Untitled automation',
+        prompt: body.draft.prompt || '',
+        scope: body.draft.scope || 'worktree',
+        projectId: body.draft.projectId,
+        schedule: body.draft.schedule || 'daily-0900',
+        model: body.draft.model || 'mindos-auto',
+        effort: body.draft.effort || 'high',
+        status: 'active',
+        updated: '2026-06-30T12:01:00.000Z',
+        runCount: 0,
+        lastStatus: 'pending',
+        runtime: 'mindos-pi',
+        source: 'schedule-prompt',
+        controlPlaneScheduleId: `studio-${id}`,
+      }, ...automations];
+      return Response.json(automationPayload(automations), { status: 201 });
+    }
+    if (body.action === 'update' && body.id && body.draft) {
+      automations = automations.map((automation) => automation.id === body.id
+        ? { ...automation, ...body.draft, updated: '2026-06-30T12:02:00.000Z' }
+        : automation);
+      return Response.json(automationPayload(automations));
+    }
+    if (body.action === 'set-status' && body.id && body.status) {
+      automations = automations.map((automation) => automation.id === body.id
+        ? { ...automation, status: body.status!, nextRun: body.status === 'paused' ? 'Paused' : automation.nextRun }
+        : automation);
+      return Response.json(automationPayload(automations));
+    }
+    if (body.action === 'delete' && body.id) {
+      automations = automations.filter((automation) => automation.id !== body.id);
+      return Response.json(automationPayload(automations));
+    }
+    return Response.json({ error: 'Unsupported action' }, { status: 400 });
+  });
+  vi.stubGlobal('fetch', fetchMock);
+  return fetchMock;
+}
+
+async function flushAsync() {
+  await act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+}
+
 async function renderStudio() {
   host = document.createElement('div');
   document.body.appendChild(host);
@@ -53,6 +214,7 @@ async function renderStudioAutomation() {
   await act(async () => {
     root!.render(<StudioAutomationContent />);
   });
+  await flushAsync();
 }
 
 async function renderStudioApps() {
@@ -81,6 +243,7 @@ describe('StudioContent', () => {
     localStorage.clear();
     push.mockClear();
     mockPathname = '/studio';
+    setupAutomationFetch();
   });
 
   afterEach(async () => {
@@ -92,6 +255,7 @@ describe('StudioContent', () => {
       });
     }
     host?.remove();
+    vi.unstubAllGlobals();
   });
 
   it('renders Studio as a Project-first surface', async () => {
@@ -490,7 +654,8 @@ describe('StudioContent', () => {
     expect(seededCard?.className).toContain('lg:grid-cols-');
     expect(seededCard?.className).not.toContain('rounded-xl');
     expect(seededCard?.className).not.toContain('bg-card/45');
-    expect(seededCard?.textContent).toContain('Local plan');
+    expect(seededCard?.textContent).toContain('Pi schedule');
+    expect(seededCard?.textContent).not.toContain('Local plan');
 
     await act(async () => {
       enabledFilter!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -592,6 +757,7 @@ describe('StudioContent', () => {
     await act(async () => {
       createAutomationButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
+    await flushAsync();
 
     expect(host.textContent).toContain('Release readiness sweep');
     expect(host.textContent).toContain('Every morning, review open release notes and summarize blockers.');
@@ -623,6 +789,7 @@ describe('StudioContent', () => {
     await act(async () => {
       saveButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
+    await flushAsync();
 
     expect(host.textContent).toContain('Release signal sweep');
     expect(host.textContent).not.toContain('Release readiness sweep');
@@ -641,6 +808,7 @@ describe('StudioContent', () => {
     await act(async () => {
       pauseButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
+    await flushAsync();
 
     expect(updatedCard!.textContent).toContain('Paused');
     expect(Array.from(updatedCard!.querySelectorAll('button')).some((button) => button.textContent?.includes('Resume'))).toBe(true);

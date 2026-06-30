@@ -7,6 +7,7 @@
 
 import os from 'os';
 import path from 'path';
+import { mkdirSync, watch, type FSWatcher } from 'node:fs';
 import { createJiti } from 'jiti/static';
 import {
   resolveBuiltinWebRuntimePackagePath,
@@ -18,8 +19,14 @@ type ExtensionAPI = {
   on(event: string, handler: () => Promise<void> | void): void;
 };
 
+type SchedulePromptJobLike = {
+  id: string;
+  enabled: boolean;
+  mindos?: unknown;
+};
+
 type CronStorageLike = {
-  getAllJobs(): Array<{ id: string; enabled: boolean }>;
+  getAllJobs(): SchedulePromptJobLike[];
   removeJob(id: string): void;
   piDir?: string;
   storePath?: string;
@@ -68,10 +75,21 @@ function createMindOSStorage(CronStorage: SchedulePromptModules['CronStorage']):
   return storage;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isMindosStudioAutomationJob(job: SchedulePromptJobLike): boolean {
+  const metadata = isRecord(job.mindos) ? job.mindos : null;
+  return metadata?.schemaVersion === 1 && metadata.source === 'mindos-studio-automation';
+}
+
 export default async function mindosSchedulePrompt(pi: ExtensionAPI) {
   const { CronStorage, CronScheduler, createCronTool } = await loadSchedulePromptModules();
   let storage: CronStorageLike;
   let scheduler: CronSchedulerLike;
+  let storeWatcher: FSWatcher | null = null;
+  let reloadTimer: ReturnType<typeof setTimeout> | null = null;
 
   // Register the tool once with getter functions
   const tool = createCronTool(
@@ -82,19 +100,67 @@ export default async function mindosSchedulePrompt(pi: ExtensionAPI) {
 
   // --- Session initialization ---
 
-  const initializeSession = () => {
-    storage = createMindOSStorage(CronStorage);
+  const stopStoreWatcher = () => {
+    if (reloadTimer) {
+      clearTimeout(reloadTimer);
+      reloadTimer = null;
+    }
+    if (storeWatcher) {
+      storeWatcher.close();
+      storeWatcher = null;
+    }
+  };
+
+  const reloadSchedulerFromStore = () => {
+    if (!storage || !scheduler) return;
+    scheduler.stop();
     scheduler = new CronScheduler(storage, pi);
     scheduler.start();
   };
 
+  const scheduleStoreReload = () => {
+    if (reloadTimer) clearTimeout(reloadTimer);
+    reloadTimer = setTimeout(() => {
+      reloadTimer = null;
+      reloadSchedulerFromStore();
+    }, 250);
+  };
+
+  const watchScheduleStore = () => {
+    stopStoreWatcher();
+    const storePath = storage.storePath ?? path.join(os.homedir(), '.mindos', 'schedule-prompts.json');
+    const storeDir = path.dirname(storePath);
+    try {
+      mkdirSync(storeDir, { recursive: true });
+      storeWatcher = watch(storeDir, (eventType, filename) => {
+        if (eventType !== 'change' && eventType !== 'rename') return;
+        const changed = filename ? String(filename) : undefined;
+        if (changed && changed !== path.basename(storePath)) return;
+        scheduleStoreReload();
+      });
+      storeWatcher.on('error', () => {
+        stopStoreWatcher();
+      });
+    } catch {
+      stopStoreWatcher();
+    }
+  };
+
+  const initializeSession = () => {
+    storage = createMindOSStorage(CronStorage);
+    scheduler = new CronScheduler(storage, pi);
+    scheduler.start();
+    watchScheduleStore();
+  };
+
   const cleanupSession = () => {
+    stopStoreWatcher();
     if (scheduler) {
       scheduler.stop();
     }
     if (storage) {
       const jobs = storage.getAllJobs();
-      const disabledJobs = jobs.filter((j) => !j.enabled);
+      const disabledJobs = jobs.filter((j) => !j.enabled && !isMindosStudioAutomationJob(j));
       for (const job of disabledJobs) {
         storage.removeJob(job.id);
       }
