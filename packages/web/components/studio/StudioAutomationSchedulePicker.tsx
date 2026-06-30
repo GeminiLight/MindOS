@@ -127,7 +127,7 @@ export function StudioAutomationSchedulePicker({
   return (
     <section
       data-studio-automation-repeat-picker
-      className="grid gap-3 rounded-lg border border-border/60 bg-muted/20 p-3"
+      className="grid gap-2.5 rounded-lg border border-border/60 bg-background/40 p-3"
       aria-label={copy.scheduleLabel}
     >
       <div className="flex min-w-0 items-center justify-between gap-3">
@@ -141,7 +141,7 @@ export function StudioAutomationSchedulePicker({
       </div>
 
       <div className="overflow-x-auto">
-        <div className="inline-flex min-w-full rounded-lg border border-border/60 bg-background/65 p-0.5">
+        <div className="inline-flex min-w-full rounded-md border border-border/60 bg-muted/25 p-0.5">
           {SCHEDULE_GROUPS.map((group) => {
             const selected = activeGroup === group;
             return (
@@ -150,7 +150,7 @@ export function StudioAutomationSchedulePicker({
                 type="button"
                 aria-pressed={selected}
                 onClick={() => selectGroup(group)}
-                className={`h-8 flex-1 whitespace-nowrap rounded-md px-2.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                className={`h-7 flex-1 whitespace-nowrap rounded px-2.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                   selected
                     ? 'bg-[var(--amber-subtle)] text-[var(--amber-text)]'
                     : 'text-muted-foreground hover:bg-muted/70 hover:text-foreground'
@@ -163,7 +163,7 @@ export function StudioAutomationSchedulePicker({
         </div>
       </div>
 
-      <div className="grid gap-2 sm:grid-cols-2">
+      <div className="grid gap-1.5">
         {SCHEDULE_OPTIONS_BY_GROUP[activeGroup].map((schedule) => {
           const selected = value === schedule;
           return (
@@ -173,13 +173,13 @@ export function StudioAutomationSchedulePicker({
               type="button"
               aria-pressed={selected}
               onClick={() => onChange(schedule)}
-              className={`grid min-h-16 grid-cols-[auto_minmax(0,1fr)] items-start gap-2 rounded-lg border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+              className={`grid min-h-11 grid-cols-[auto_minmax(0,1fr)] items-center gap-2 rounded-md border px-2.5 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                 selected
-                  ? 'border-[var(--amber)]/45 bg-[var(--amber-subtle)] text-foreground shadow-sm'
+                  ? 'border-[var(--amber)]/40 bg-[var(--amber-subtle)] text-foreground'
                   : 'border-border/60 bg-background/65 text-muted-foreground hover:border-[var(--amber)]/35 hover:bg-background hover:text-foreground'
               }`}
             >
-              <span className={`mt-0.5 flex h-5 w-5 items-center justify-center rounded-md border transition-colors ${
+              <span className={`flex h-5 w-5 items-center justify-center rounded border transition-colors ${
                 selected
                   ? 'border-[var(--amber)] bg-[var(--amber)] text-[var(--amber-foreground)]'
                   : 'border-border/70 bg-muted/35 text-transparent'
@@ -188,7 +188,7 @@ export function StudioAutomationSchedulePicker({
               </span>
               <span className="min-w-0">
                 <span className="block truncate text-xs font-semibold">{scheduleLabel(schedule, copy)}</span>
-                <span className="mt-1 block text-[11px] leading-relaxed text-muted-foreground">
+                <span className="block truncate text-[11px] leading-relaxed text-muted-foreground">
                   {scheduleDescription(schedule, copy)}
                 </span>
               </span>

@@ -450,7 +450,9 @@ describe('StudioContent', () => {
 
     expect(host.textContent).toContain('Automation');
     expect(host.textContent).toContain('Create automation');
-    expect(host.textContent).toContain('Existing automations');
+    expect(host.textContent).toContain('Local plans');
+    expect(host.textContent).toContain('Runtime execution is not connected yet.');
+    expect(host.textContent).toContain('Plans');
     expect(host.textContent).toContain('Daily research radar');
 
     const automationSection = host.querySelector('[data-studio-automation-section]');
@@ -463,16 +465,20 @@ describe('StudioContent', () => {
     expect(automationSection).not.toBeNull();
     expect(automationContent?.className).toContain('max-w-6xl');
     expect(studioShell?.className).not.toContain('[--main-body-content-max-width:100%]');
-    expect(summaryRail?.className).toContain('overflow-hidden rounded-lg');
+    expect(summaryRail?.className).toContain('rounded-lg');
+    expect(summaryRail?.textContent).toContain('3 plans');
+    expect(summaryRail?.textContent).toContain('2 enabled');
+    expect(summaryRail?.textContent).toContain('1 paused');
     expect(createButton).not.toBeNull();
     expect(document.body.querySelector('[data-studio-automation-drawer]')).toBeNull();
     expect(document.body.querySelector('[data-studio-automation-composer]')).toBeNull();
     expect(automationList).not.toBeNull();
     expect(seededCard?.className).toContain('group relative grid');
     expect(seededCard?.className).toContain('border-t');
-    expect(seededCard?.className).toContain('xl:grid-cols-');
+    expect(seededCard?.className).toContain('lg:grid-cols-');
     expect(seededCard?.className).not.toContain('rounded-xl');
     expect(seededCard?.className).not.toContain('bg-card/45');
+    expect(seededCard?.textContent).toContain('Local plan');
 
     await act(async () => {
       createButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -487,6 +493,8 @@ describe('StudioContent', () => {
     expect(composer?.textContent).toContain('Repeats');
     expect(composer?.textContent).toContain('Every day 9:00 AM');
     expect(composer?.textContent).toContain('Interval');
+    expect(composer?.textContent).toContain('Advanced settings');
+    expect(document.body.querySelector('[data-studio-automation-advanced]')).not.toBeNull();
 
     const everyFourHours = composer!.querySelector('[data-studio-automation-repeat-option="every-4-hours"]');
     expect(everyFourHours).toBeNull();

@@ -4,7 +4,6 @@ import {
   Bot,
   CalendarClock,
   ChevronDown,
-  Clock3,
   Edit3,
   FolderGit2,
   Info,
@@ -43,19 +42,25 @@ import {
 const COPY = {
   en: {
     title: 'Automation',
-    subtitle: 'Repeatable agent work with explicit scope, schedule, and review.',
+    subtitle: 'Turn recurring agent work into calm, reviewable local plans.',
+    localModeTitle: 'Local plans',
+    localModeDesc: 'Studio keeps these plans editable. Runtime execution is not connected yet.',
+    plansSummary: 'plans',
+    enabledSummary: 'enabled',
+    pausedSummary: 'paused',
     createKicker: 'Create',
     editKicker: 'Editing',
     createTitle: 'Create automation',
     editTitle: 'Edit automation',
-    createHint: 'Describe a recurring outcome. Studio keeps the automation editable before runtime execution is connected.',
-    titleLabel: 'Title',
+    createHint: 'Describe the outcome, choose a cadence, and keep the plan reviewable before runtime handoff.',
+    titleLabel: 'Name',
     titleAria: 'Automation title',
     titlePlaceholder: 'Daily release sweep',
-    promptLabel: 'Prompt',
+    optional: 'Optional',
+    promptLabel: 'Outcome',
     promptAria: 'Automation prompt',
     promptPlaceholder: 'Ask MindOS to review open release notes, check blockers, and summarize the next move.',
-    templates: 'Templates',
+    templates: 'Start from',
     useTemplate: 'Use template',
     scopeLabel: 'Scope',
     projectLabel: 'Project',
@@ -71,17 +76,16 @@ const COPY = {
     create: 'Create automation',
     save: 'Save changes',
     required: 'Add a prompt before creating an automation.',
-    existingTitle: 'Existing automations',
-    existingHint: 'Created automations stay editable; pause them when they should stop appearing as active work.',
-    total: 'Total',
+    existingTitle: 'Plans',
+    existingHint: 'Keep the recurring work visible without pretending it is already running.',
     active: 'Active',
     paused: 'Paused',
     pause: 'Pause',
     resume: 'Resume',
     edit: 'Edit',
-    lastRun: 'Last',
     nextRun: 'Next',
-    runs: 'runs',
+    localPlan: 'Local plan',
+    advanced: 'Advanced settings',
     empty: 'No automations match this workspace yet.',
     worktree: 'Worktree',
     project: 'Project',
@@ -127,19 +131,25 @@ const COPY = {
   },
   zh: {
     title: '自动化',
-    subtitle: '把重复 Agent 工作固定成明确的作用域、调度和复盘入口。',
+    subtitle: '把重复 Agent 工作整理成清晰、可审核的本地计划。',
+    localModeTitle: '本地计划',
+    localModeDesc: '工作台先保存和审核这些计划；运行时执行还没有接入。',
+    plansSummary: '项计划',
+    enabledSummary: '启用',
+    pausedSummary: '暂停',
     createKicker: '创建',
     editKicker: '编辑中',
     createTitle: '创建自动化',
     editTitle: '编辑自动化',
-    createHint: '描述一个会反复发生的结果。工作台会先把它保存为可编辑的自动化，再接入运行时执行。',
-    titleLabel: '标题',
+    createHint: '描述结果、选择节奏，并在接入运行时前保持可审核。',
+    titleLabel: '名称',
     titleAria: '自动化标题',
     titlePlaceholder: '每日发布巡检',
-    promptLabel: '提示词',
+    optional: '可选',
+    promptLabel: '目标',
     promptAria: '自动化提示词',
     promptPlaceholder: '让 MindOS 检查发布记录、风险阻塞和下一步动作。',
-    templates: '模板',
+    templates: '从模板开始',
     useTemplate: '套用模板',
     scopeLabel: '范围',
     projectLabel: '项目',
@@ -155,17 +165,16 @@ const COPY = {
     create: '创建自动化',
     save: '保存更改',
     required: '创建自动化前需要先写提示词。',
-    existingTitle: '已有自动化',
-    existingHint: '已创建的自动化可以随时编辑；暂时不用时可以暂停。',
-    total: '总数',
+    existingTitle: '计划',
+    existingHint: '把重复工作保持可见，但不伪装成已经在后台运行。',
     active: '启用',
     paused: '暂停',
     pause: '暂停',
     resume: '恢复',
     edit: '编辑',
-    lastRun: '上次',
     nextRun: '下次',
-    runs: '次运行',
+    localPlan: '本地计划',
+    advanced: '高级设置',
     empty: '这个工作区还没有自动化。',
     worktree: '工作树',
     project: '项目',
@@ -317,35 +326,44 @@ function ControlSelect<T extends string>({
   );
 }
 
-function TextPill({ icon, label }: { icon: ReactNode; label: string }) {
+function MetaText({ label }: { label: string }) {
   return (
-    <span className="inline-flex min-w-0 items-center gap-1.5 rounded-md bg-muted/35 px-2 py-1 text-[11px] font-medium text-muted-foreground">
-      <span className="shrink-0 text-[var(--amber)]" aria-hidden="true">{icon}</span>
+    <span className="inline-flex min-w-0 items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+      <span className="h-1 w-1 shrink-0 rounded-full bg-muted-foreground/35" aria-hidden="true" />
       <span className="min-w-0 truncate">{label}</span>
     </span>
   );
 }
 
-function AutomationMetric({
-  icon,
-  label,
-  value,
+function PlanModeStrip({
+  copy,
+  total,
+  active,
 }: {
-  icon: ReactNode;
-  label: string;
-  value: string | number;
+  copy: StudioAutomationCopy;
+  total: number;
+  active: number;
 }) {
+  const paused = Math.max(0, total - active);
   return (
-    <div className="flex min-w-0 items-center gap-2 border-t border-border/60 p-3 first:border-t-0 sm:border-l sm:border-t-0 sm:first:border-l-0">
-      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[var(--amber-subtle)] text-[var(--amber)]">
-        {icon}
-      </span>
-      <span className="min-w-0">
-        <span className="block text-[11px] text-muted-foreground">{label}</span>
-        <span className="block truncate text-sm font-semibold text-foreground [font-variant-numeric:tabular-nums]">
-          {value}
+    <div
+      data-studio-automation-summary
+      className="flex flex-col gap-2 rounded-lg border border-border/60 bg-background/40 px-3.5 py-3 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between"
+    >
+      <div className="flex min-w-0 items-center gap-2">
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[var(--amber-subtle)] text-[var(--amber)]">
+          <CalendarClock size={13} aria-hidden="true" />
         </span>
-      </span>
+        <div className="min-w-0">
+          <span className="block text-sm font-semibold text-foreground">{copy.localModeTitle}</span>
+          <span className="block truncate">{copy.localModeDesc}</span>
+        </div>
+      </div>
+      <div className="flex shrink-0 flex-wrap gap-x-3 gap-y-1 [font-variant-numeric:tabular-nums]">
+        <span>{total} {copy.plansSummary}</span>
+        <span>{active} {copy.enabledSummary}</span>
+        <span>{paused} {copy.pausedSummary}</span>
+      </div>
     </div>
   );
 }
@@ -366,7 +384,7 @@ function TemplateButton({
       type="button"
       title={prompt}
       onClick={onUse}
-      className="inline-flex max-w-full items-center gap-1.5 rounded-md bg-muted/35 px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-[var(--amber-subtle)] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="inline-flex max-w-full items-center gap-1.5 rounded-md border border-border/55 bg-background/55 px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-[var(--amber)]/35 hover:bg-[var(--amber-subtle)] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       <WandSparkles size={12} className="shrink-0 text-[var(--amber)]" aria-hidden="true" />
       <span className="truncate">{title}</span>
@@ -394,49 +412,35 @@ function AutomationCard({
   const prompt = automationPrompt(automation, locale);
   const statusLabel = automation.status === 'active' ? copy.active : copy.paused;
   const isActive = automation.status === 'active';
-  const statusClass = automation.status === 'active'
-    ? 'border-success/30 bg-success/10 text-success'
-    : 'border-border/60 bg-muted/45 text-muted-foreground';
   const scopeText = automation.scope === 'project'
     ? `${scopeLabel(automation.scope, copy)} / ${projectLabel(projects, automation.projectId, locale, copy.noProject)}`
     : scopeLabel(automation.scope, copy);
 
   return (
-    <article data-studio-automation-card className="group relative grid min-w-0 gap-3 border-t border-border/55 px-4 py-4 transition-colors first:border-t-0 hover:bg-muted/25 xl:grid-cols-[minmax(0,1fr)_minmax(220px,auto)] xl:items-center">
-      <span className={`pointer-events-none absolute bottom-3 left-0 top-3 w-px rounded-r-full transition-colors group-hover:bg-[var(--amber)] ${
-        isActive ? 'bg-[var(--amber)]' : 'bg-transparent'
+    <article data-studio-automation-card className="group relative grid min-w-0 gap-3 border-t border-border/55 px-4 py-3.5 transition-colors first:border-t-0 hover:bg-muted/20 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+      <span className={`pointer-events-none absolute bottom-3 left-0 top-3 w-px rounded-r-full transition-colors ${
+        isActive ? 'bg-[var(--amber)]' : 'bg-border'
       }`} />
-      <div className="flex min-w-0 gap-3 pr-0">
-        <span className={`mt-0.5 hidden h-9 w-9 shrink-0 items-center justify-center rounded-md transition-colors sm:inline-flex ${
-          isActive
-            ? 'bg-[var(--amber-subtle)] text-[var(--amber)] group-hover:bg-[var(--amber-dim)]'
-            : 'bg-muted/45 text-muted-foreground'
-        }`}>
-          {isActive ? <Play size={15} aria-hidden="true" /> : <Pause size={15} aria-hidden="true" />}
-        </span>
-        <div className="min-w-0">
-          <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <h3 className="min-w-0 text-[15px] font-semibold text-foreground">{title}</h3>
-            <span className={`inline-flex h-6 shrink-0 items-center rounded-md border px-2 text-[11px] font-medium ${statusClass}`}>
-              {statusLabel}
-            </span>
-          </div>
-          <p className="mt-1 line-clamp-2 max-w-[64ch] text-xs leading-relaxed text-muted-foreground">{prompt}</p>
-          <div className="mt-3 flex flex-wrap gap-1.5">
-            <TextPill icon={<FolderGit2 size={12} />} label={scopeText} />
-            <TextPill icon={<CalendarClock size={12} />} label={scheduleLabel(automation.schedule, copy)} />
-            <TextPill icon={<Bot size={12} />} label={`${modelLabel(automation.model, copy)} / ${effortLabel(automation.effort, copy)}`} />
-          </div>
+      <div className="min-w-0 pl-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className={`h-2 w-2 shrink-0 rounded-full ${isActive ? 'bg-[var(--amber)]' : 'bg-muted-foreground/35'}`} aria-hidden="true" />
+          <h3 className="min-w-0 truncate text-[15px] font-semibold text-foreground">{title}</h3>
+          <span className="shrink-0 text-[11px] font-medium text-muted-foreground">{statusLabel}</span>
+        </div>
+        <p className="mt-1 line-clamp-1 max-w-[72ch] text-xs leading-relaxed text-muted-foreground">{prompt}</p>
+        <div className="mt-2 flex min-w-0 flex-wrap gap-x-3 gap-y-1">
+          <MetaText label={scopeText} />
+          <MetaText label={scheduleLabel(automation.schedule, copy)} />
+          <MetaText label={copy.localPlan} />
+          <MetaText label={`${modelLabel(automation.model, copy)} / ${effortLabel(automation.effort, copy)}`} />
         </div>
       </div>
 
-      <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between xl:block xl:text-right">
-        <div className="flex min-w-0 flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground xl:block xl:space-y-1">
-          <span className="block">{copy.nextRun}: {automation.nextRun ?? copy.localNote}</span>
-          <span className="block">{copy.lastRun}: {automation.lastRun ?? copy.localNote}</span>
-          <span className="block [font-variant-numeric:tabular-nums]">{automation.runCount} {copy.runs}</span>
-        </div>
-        <div className="flex shrink-0 items-center gap-2 xl:mt-3 xl:justify-end">
+      <div className="flex min-w-0 items-center justify-between gap-3 pl-2 lg:justify-end lg:pl-0">
+        <span className="min-w-0 truncate text-[11px] text-muted-foreground [font-variant-numeric:tabular-nums]">
+          {copy.nextRun}: {automation.nextRun ?? copy.localNote}
+        </span>
+        <div className="flex shrink-0 items-center gap-1.5">
           <Button type="button" variant="outline" size="sm" onClick={() => onEdit(automation)}>
             <Edit3 size={13} aria-hidden="true" />
             {copy.edit}
@@ -532,11 +536,14 @@ function AutomationDrawer({
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-5 py-5 sm:px-6">
+        <div className="flex-1 overflow-y-auto px-5 pb-28 pt-5 sm:px-6">
           <div className="grid gap-5">
             <div className="grid gap-3">
               <label className="grid gap-1.5">
-                <span className="text-xs font-medium text-muted-foreground">{copy.titleLabel}</span>
+                <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                  {copy.titleLabel}
+                  <span className="text-[11px] font-normal text-muted-foreground/70">{copy.optional}</span>
+                </span>
                 <input
                   aria-label={copy.titleAria}
                   autoFocus
@@ -553,8 +560,8 @@ function AutomationDrawer({
                   value={draft.prompt}
                   onChange={(event) => onDraftChange((current) => ({ ...current, prompt: event.target.value }))}
                   placeholder={copy.promptPlaceholder}
-                  rows={8}
-                  className="min-h-48 resize-none rounded-lg border border-border/70 bg-background/75 px-3 py-3 text-sm leading-relaxed text-foreground outline-none transition-colors placeholder:text-muted-foreground/55 focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/35"
+                  rows={6}
+                  className="min-h-36 resize-none rounded-lg border border-border/70 bg-background/75 px-3 py-3 text-sm leading-relaxed text-foreground outline-none transition-colors placeholder:text-muted-foreground/55 focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/35"
                 />
               </label>
             </div>
@@ -592,32 +599,44 @@ function AutomationDrawer({
                 onChange={(scope) => onDraftChange((current) => ({ ...current, scope }))}
                 renderLabel={(scope) => scopeLabel(scope, copy)}
               />
-              <ControlSelect
-                icon={<Layers3 size={13} />}
-                label={copy.projectLabel}
-                value={draft.projectId ?? ''}
-                values={projectOptions.length ? projectOptions : ['']}
-                disabled={draft.scope !== 'project' || projectOptions.length === 0}
-                onChange={(projectId) => onDraftChange((current) => ({ ...current, projectId }))}
-                renderLabel={(projectId) => projectLabel(projects, projectId, locale, copy.noProject)}
-              />
-              <ControlSelect
-                icon={<Bot size={13} />}
-                label={copy.modelLabel}
-                value={draft.model}
-                values={MODEL_OPTIONS}
-                onChange={(model) => onDraftChange((current) => ({ ...current, model }))}
-                renderLabel={(model) => modelLabel(model, copy)}
-              />
-              <ControlSelect
-                icon={<Sparkles size={13} />}
-                label={copy.effortLabel}
-                value={draft.effort}
-                values={EFFORT_OPTIONS}
-                onChange={(effort) => onDraftChange((current) => ({ ...current, effort }))}
-                renderLabel={(effort) => effortLabel(effort, copy)}
-              />
+              {draft.scope === 'project' ? (
+                <ControlSelect
+                  icon={<Layers3 size={13} />}
+                  label={copy.projectLabel}
+                  value={draft.projectId ?? ''}
+                  values={projectOptions.length ? projectOptions : ['']}
+                  disabled={projectOptions.length === 0}
+                  onChange={(projectId) => onDraftChange((current) => ({ ...current, projectId }))}
+                  renderLabel={(projectId) => projectLabel(projects, projectId, locale, copy.noProject)}
+                />
+              ) : null}
             </div>
+
+            <details data-studio-automation-advanced className="group rounded-lg border border-border/60 bg-background/40">
+              <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                <Sparkles size={13} className="text-[var(--amber)]" aria-hidden="true" />
+                {copy.advanced}
+                <ChevronDown size={13} className="ml-auto transition-transform group-open:rotate-180" aria-hidden="true" />
+              </summary>
+              <div className="grid gap-3 border-t border-border/55 p-3 sm:grid-cols-2">
+                <ControlSelect
+                  icon={<Bot size={13} />}
+                  label={copy.modelLabel}
+                  value={draft.model}
+                  values={MODEL_OPTIONS}
+                  onChange={(model) => onDraftChange((current) => ({ ...current, model }))}
+                  renderLabel={(model) => modelLabel(model, copy)}
+                />
+                <ControlSelect
+                  icon={<Sparkles size={13} />}
+                  label={copy.effortLabel}
+                  value={draft.effort}
+                  values={EFFORT_OPTIONS}
+                  onChange={(effort) => onDraftChange((current) => ({ ...current, effort }))}
+                  renderLabel={(effort) => effortLabel(effort, copy)}
+                />
+              </div>
+            </details>
 
             {error ? <p className="text-xs font-medium text-error">{error}</p> : null}
           </div>
@@ -680,7 +699,6 @@ export default function StudioAutomationSection({
 
   const projectOptions = useMemo(() => projects.map((project) => project.id), [projects]);
   const activeCount = automations.filter((automation) => automation.status === 'active').length;
-  const nextAutomation = automations.find((automation) => automation.status === 'active' && automation.nextRun && automation.nextRun !== 'Manual');
   const editing = editingId ? automations.find((automation) => automation.id === editingId) : null;
 
   const resetForm = useCallback(() => {
@@ -796,12 +814,8 @@ export default function StudioAutomationSection({
         </div>
       </header>
 
-      <section className="space-y-6">
-        <div data-studio-automation-summary className="grid overflow-hidden rounded-lg border border-border/60 bg-background/35 sm:grid-cols-3">
-          <AutomationMetric icon={<Play size={13} aria-hidden="true" />} label={copy.active} value={activeCount} />
-          <AutomationMetric icon={<Clock3 size={13} aria-hidden="true" />} label={copy.nextRun} value={nextAutomation?.nextRun ?? copy.manual} />
-          <AutomationMetric icon={<Layers3 size={13} aria-hidden="true" />} label={copy.total} value={automations.length} />
-        </div>
+      <section className="space-y-5">
+        <PlanModeStrip copy={copy} total={automations.length} active={activeCount} />
 
         <section data-studio-automation-list className="min-w-0 space-y-3" aria-labelledby="studio-automation-existing">
           <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
