@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, resolve } from 'node:path';
 import { json, type MindosServerResponse } from '../response.js';
+import { readMindosProductVersion, type VersionResolutionOptions } from './health.js';
 
 export const IDLE_UPDATE_STATUS = {
   stage: 'idle',
@@ -23,7 +24,7 @@ export type UpdateStatusOptions = {
   statusPath?: string;
 };
 
-export type UpdateCheckOptions = {
+export type UpdateCheckOptions = VersionResolutionOptions & {
   currentVersion?: string;
   packageJsonPaths?: string[];
   registries?: string[];
@@ -70,9 +71,10 @@ export function handleUpdateStatusGet(
 export async function handleUpdateCheckGet(
   options: UpdateCheckOptions = {},
 ): Promise<MindosServerResponse<UpdateCheckPayload>> {
-  const current = options.currentVersion ?? readCurrentVersion(options.packageJsonPaths);
+  const current = options.currentVersion ?? readCurrentVersion(options);
   let latest = current;
   const fetcher = options.fetcher ?? defaultFetchLatest;
+  const discoveredVersions: string[] = [];
 
   for (const registry of options.registries ?? DEFAULT_REGISTRIES) {
     try {
@@ -84,8 +86,7 @@ export async function handleUpdateCheckGet(
         const data = await response.json();
         const version = data && typeof data === 'object' ? (data as { version?: unknown }).version : undefined;
         if (typeof version === 'string' && version) {
-          latest = version;
-          break;
+          discoveredVersions.push(version);
         }
       } finally {
         clearTimeout(timer);
@@ -93,6 +94,10 @@ export async function handleUpdateCheckGet(
     } catch {
       continue;
     }
+  }
+
+  for (const version of discoveredVersions) {
+    if (compareSemver(version, latest) > 0) latest = version;
   }
 
   return json({
@@ -126,11 +131,20 @@ export function handleUpdatePost(options: ProcessControlOptions = {}): MindosSer
   }
 }
 
-function readCurrentVersion(packageJsonPaths?: string[]): string {
-  const candidates = packageJsonPaths ?? [
-    ...(process.env.MINDOS_PROJECT_ROOT ? [resolve(process.env.MINDOS_PROJECT_ROOT, 'package.json')] : []),
-    resolve(process.cwd(), '..', 'package.json'),
-  ];
+function readCurrentVersion(options: UpdateCheckOptions): string {
+  const pathVersion = options.packageJsonPaths ? readVersionFromPackageJsonPaths(options.packageJsonPaths) : undefined;
+  if (pathVersion) return pathVersion;
+
+  const env = options.env ?? process.env;
+  const cwd = options.cwd ?? process.cwd();
+  return readMindosProductVersion({
+    cwd,
+    env,
+    projectRoot: options.projectRoot ?? env.MINDOS_PROJECT_ROOT ?? findWorkspaceRoot(cwd),
+  });
+}
+
+function readVersionFromPackageJsonPaths(candidates: string[]): string | undefined {
   for (const candidate of candidates) {
     try {
       const parsed = JSON.parse(readFileSync(candidate, 'utf-8')) as { version?: unknown };
@@ -139,7 +153,7 @@ function readCurrentVersion(packageJsonPaths?: string[]): string {
       // Try next candidate.
     }
   }
-  return '0.0.0';
+  return undefined;
 }
 
 function spawnCli(command: 'restart' | 'update', childEnv: NodeJS.ProcessEnv, options: ProcessControlOptions): void {

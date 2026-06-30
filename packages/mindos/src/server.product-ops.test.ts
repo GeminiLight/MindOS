@@ -583,6 +583,39 @@ describe('MindOS server contract: product operations', () => {
       status: 200,
       body: { current: '1.0.0', latest: '1.0.1', hasUpdate: true },
     });
+
+    const projectRoot = mkdtempSync(join(tmpdir(), 'mindos-update-version-'));
+    mkdirSync(join(projectRoot, 'packages', 'mindos'), { recursive: true });
+    writeFileSync(join(projectRoot, 'packages', 'mindos', 'package.json'), JSON.stringify({
+      name: '@geminilight/mindos',
+      version: '1.1.53',
+    }));
+
+    await expect(handleUpdateCheckGet({
+      projectRoot,
+      env: {},
+      registries: [],
+    })).resolves.toMatchObject({
+      status: 200,
+      body: { current: '1.1.53', latest: '1.1.53', hasUpdate: false },
+    });
+
+    await expect(handleUpdateCheckGet({
+      currentVersion: '1.1.53',
+      registries: [
+        'https://registry.npmmirror.example/@geminilight/mindos/latest',
+        'https://registry.npmjs.example/@geminilight/mindos/latest',
+      ],
+      fetcher: async (url) => ({
+        ok: true,
+        json: async () => ({
+          version: url.includes('npmmirror') ? '0.6.33' : '1.1.55',
+        }),
+      }),
+    })).resolves.toMatchObject({
+      status: 200,
+      body: { current: '1.1.53', latest: '1.1.55', hasUpdate: true },
+    });
   });
 
   it('runs restart and update process controls with sanitized child environments', () => {
