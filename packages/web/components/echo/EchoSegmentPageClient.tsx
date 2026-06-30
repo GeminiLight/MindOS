@@ -17,7 +17,6 @@ import {
   NotebookText,
   Pencil,
   RefreshCw,
-  Route,
   SunMedium,
   Trash2,
 } from 'lucide-react';
@@ -41,9 +40,17 @@ import { EchoAssistantGenerateButton, EchoPageHeader } from './EchoSegmentPageHe
 import EchoImprintCardsReview from './EchoImprintCardsReview';
 import { EchoInsightCollapsible } from './EchoInsightCollapsible';
 import EchoMemoryReaderPanel from './EchoMemoryReaderPanel';
+import {
+  buildEchoCardChatPrompt,
+  EchoCardActionBar,
+  EchoCardBody,
+  EchoCardDetailFields,
+  EchoCardFrame,
+  EchoCardHeader,
+  EchoCardTitle,
+} from './EchoSemanticCard';
 
 const STORAGE_DAILY = 'mindos-echo-daily-line';
-const STORAGE_GROWTH = 'mindos-echo-growth-intent';
 
 type EchoCopy = Messages['echoPages'];
 
@@ -292,7 +299,6 @@ function EchoWorktablePanel({
               className="w-full justify-center sm:w-fit"
             />
             <span className="inline-flex items-center gap-2 rounded-full border border-border/50 bg-background/55 px-2.5 py-1 font-sans text-xs text-muted-foreground">
-              <Route size={12} aria-hidden />
               {p.echoStudioRouteHint}
             </span>
           </div>
@@ -373,6 +379,36 @@ function insightTargetLabel(target: InsightTarget, p: EchoCopy): string {
 
 function normalizeInsightTarget(target: string): InsightTarget {
   return target === 'judgment' ? 'judgment' : 'pattern';
+}
+
+function buildCardChatPrompt({
+  p,
+  kindLabel,
+  title,
+  content,
+  source,
+  evidence,
+}: {
+  p: EchoCopy;
+  kindLabel: string;
+  title: string;
+  content: string;
+  source: string;
+  evidence: string;
+}) {
+  return buildEchoCardChatPrompt({
+    prompt: p.echoCardChatPrompt,
+    kindPromptLabel: p.echoCardKindPromptLabel,
+    titlePromptLabel: p.echoCardTitlePromptLabel,
+    contentPromptLabel: p.echoCardContentPromptLabel,
+    sourceLabel: p.echoCardSourceLabel,
+    evidenceLabel: p.echoCardEvidenceLabel,
+    kindLabel,
+    title,
+    content,
+    source,
+    evidence,
+  });
 }
 
 function InsightPanel({
@@ -508,39 +544,43 @@ function InsightPanel({
       <div className="pt-5">
         <div className="space-y-3">
           {visibleInsights.map((candidate) => (
-            <article
+            <EchoCardFrame
               key={candidate.title}
-              className="min-w-0 rounded-xl border border-border/45 bg-background/55 p-5 transition-[border-color,background-color,box-shadow] duration-150 hover:border-[var(--amber)]/30 hover:bg-background/75 hover:shadow-sm"
-              data-testid="echo-insight-candidate"
+              kind={candidate.target}
+              testId="echo-insight-candidate"
             >
               <div className="min-w-0">
-                <span className="inline-flex rounded-md bg-muted/45 px-2 py-1 font-sans text-xs text-muted-foreground">
-                  {insightTargetLabel(candidate.target, p)}
-                </span>
-                <h4 className="mt-3 max-w-3xl font-sans text-base font-semibold leading-6 text-foreground">{candidate.title}</h4>
-                <p className="mt-2 max-w-3xl font-sans text-sm leading-6 text-muted-foreground">{candidate.summary}</p>
+                <EchoCardHeader
+                  kind={candidate.target}
+                  label={insightTargetLabel(candidate.target, p)}
+                  source={candidate.source}
+                />
+                <EchoCardTitle>{candidate.title}</EchoCardTitle>
+                <EchoCardBody>{candidate.content}</EchoCardBody>
               </div>
-              <InsightSourceDetails p={p} source={candidate.source} boundary={candidate.boundary} />
-              <PromotionCardActions p={p} />
-            </article>
+              <EchoCardDetailFields
+                sourceLabel={p.echoCardSourceLabel}
+                source={candidate.source}
+                evidenceLabel={p.echoCardEvidenceLabel}
+                evidence={candidate.evidence}
+              />
+              <EchoCardActions
+                p={p}
+                title={candidate.title}
+                onChat={() => openAskModal(buildCardChatPrompt({
+                  p,
+                  kindLabel: insightTargetLabel(candidate.target, p),
+                  title: candidate.title,
+                  content: candidate.content,
+                  source: candidate.source,
+                  evidence: candidate.evidence,
+                }), 'user', null, { newSession: true })}
+              />
+            </EchoCardFrame>
           ))}
         </div>
       </div>
     </section>
-  );
-}
-
-function InsightSourceDetails({ p, source, boundary }: { p: EchoCopy; source: string; boundary: string }) {
-  return (
-    <details className="mt-4 rounded-lg border border-border/35 bg-muted/10 px-3 py-2.5">
-      <summary className="cursor-pointer font-sans text-xs font-medium text-muted-foreground marker:text-muted-foreground">
-        {p.insightCandidateSourceLabel} / {p.insightCandidateBoundaryLabel}
-      </summary>
-      <div className="mt-3 grid gap-3 border-t border-border/30 pt-3">
-        <PromotionField label={p.insightCandidateSourceLabel} value={source} />
-        <PromotionField label={p.insightCandidateBoundaryLabel} value={boundary} />
-      </div>
-    </details>
   );
 }
 
@@ -559,7 +599,7 @@ function PromotionPanel({
   const [schedule, setSchedule] = useState<EchoSchedule>({ ...DEFAULT_ECHO_SCHEDULE });
   const recentPromotions = p.promotionCandidates.map((candidate) => ({
     ...candidate,
-    target: normalizePromotionTarget(candidate.suggestedTarget),
+    target: normalizePromotionTarget(candidate.kind),
   }));
   const filters: Array<{ id: PromotionTarget; label: string; icon: ReactNode }> = [
     {
@@ -676,21 +716,39 @@ function PromotionPanel({
       <div className="pt-5">
         <div className="space-y-3">
           {visiblePromotions.map((candidate) => (
-            <article
+            <EchoCardFrame
               key={candidate.title}
-              className="min-w-0 rounded-xl border border-border/45 bg-background/55 p-5 transition-[border-color,background-color,box-shadow] duration-150 hover:border-[var(--amber)]/30 hover:bg-background/75 hover:shadow-sm"
-              data-testid="echo-promotion-candidate"
+              kind={candidate.target}
+              testId="echo-promotion-candidate"
             >
               <div className="min-w-0">
-                <span className="inline-flex rounded-md bg-muted/45 px-2 py-1 font-sans text-xs text-muted-foreground">
-                  {promotionTargetLabel(candidate.target, p)}
-                </span>
-                <h4 className="mt-3 max-w-3xl font-sans text-base font-semibold leading-6 text-foreground">{candidate.title}</h4>
-                <p className="mt-2 max-w-3xl font-sans text-sm leading-6 text-muted-foreground">{candidate.summary}</p>
+                <EchoCardHeader
+                  kind={candidate.target}
+                  label={promotionTargetLabel(candidate.target, p)}
+                  source={candidate.source}
+                />
+                <EchoCardTitle>{candidate.title}</EchoCardTitle>
+                <EchoCardBody>{candidate.content}</EchoCardBody>
               </div>
-              <PromotionSourceDetails p={p} source={candidate.source} why={candidate.whyPromote} />
-              <PromotionCardActions p={p} />
-            </article>
+              <EchoCardDetailFields
+                sourceLabel={p.echoCardSourceLabel}
+                source={candidate.source}
+                evidenceLabel={p.echoCardEvidenceLabel}
+                evidence={candidate.evidence}
+              />
+              <EchoCardActions
+                p={p}
+                title={candidate.title}
+                onChat={() => openAskModal(buildCardChatPrompt({
+                  p,
+                  kindLabel: promotionTargetLabel(candidate.target, p),
+                  title: candidate.title,
+                  content: candidate.content,
+                  source: candidate.source,
+                  evidence: candidate.evidence,
+                }), 'user', null, { newSession: true })}
+              />
+            </EchoCardFrame>
           ))}
         </div>
       </div>
@@ -817,43 +875,44 @@ function EchoScheduleModeButton({
   );
 }
 
-function PromotionSourceDetails({ p, source, why }: { p: EchoCopy; source: string; why?: string }) {
+function EchoCardActions({
+  p,
+  title,
+  onChat,
+}: {
+  p: EchoCopy;
+  title: string;
+  onChat: () => void;
+}) {
   return (
-    <details className="mt-4 rounded-lg border border-border/35 bg-muted/10 px-3 py-2.5">
-      <summary className="cursor-pointer font-sans text-xs font-medium text-muted-foreground marker:text-muted-foreground">
-        {why ? `${p.promotionCandidateSourceLabel} / ${p.promotionCandidateWhyLabel}` : p.promotionCandidateSourceLabel}
-      </summary>
-      <div className="mt-3 grid gap-3 border-t border-border/30 pt-3">
-        <PromotionField label={p.promotionCandidateSourceLabel} value={source} />
-        {why ? <PromotionField label={p.promotionCandidateWhyLabel} value={why} /> : null}
-      </div>
-    </details>
-  );
-}
-
-function PromotionCardActions({ p }: { p: EchoCopy }) {
-  return (
-    <div className="mt-4 flex items-center justify-end gap-1 border-t border-border/35 pt-3">
-      <Button type="button" variant="ghost" size="sm">
-        <Pencil size={13} aria-hidden />
-        {p.promotionEditLabel}
-      </Button>
-      <Button type="button" variant="ghost" size="sm" className="text-muted-foreground hover:text-destructive">
-        <Trash2 size={13} aria-hidden />
-        {p.promotionDeleteLabel}
-      </Button>
-    </div>
-  );
-}
-
-function PromotionField({ label, value, strong = false }: { label: string; value: string; strong?: boolean }) {
-  return (
-    <div className="min-w-0">
-      <p className="font-mono text-[0.68rem] uppercase tracking-[0.08em] text-muted-foreground">{label}</p>
-      <p className={cn('mt-1 font-sans text-xs leading-5', strong ? 'text-foreground' : 'text-muted-foreground')}>
-        {value}
-      </p>
-    </div>
+    <EchoCardActionBar
+      left={(
+        <>
+          <Button type="button" variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
+            <Pencil size={13} aria-hidden />
+            {p.promotionEditLabel}
+          </Button>
+          <Button type="button" variant="ghost" size="sm" className="text-muted-foreground hover:text-destructive">
+            <Trash2 size={13} aria-hidden />
+            {p.promotionDeleteLabel}
+          </Button>
+        </>
+      )}
+      right={(
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="border-[var(--amber)]/25 bg-[var(--amber)]/10 text-[var(--amber)] hover:bg-[var(--amber)]/15 hover:text-[var(--amber)]"
+          aria-label={p.echoCardChatAria(title)}
+          data-testid="echo-card-chat-button"
+          onClick={onChat}
+        >
+          <MessageSquareText size={13} aria-hidden />
+          {p.echoCardChatLabel}
+        </Button>
+      )}
+    />
   );
 }
 
@@ -1001,7 +1060,6 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
   const sessions = useSessions();
 
   const [dailyLine, setDailyLine] = useState('');
-  const [growthIntent, setGrowthIntent] = useState('');
   const [assistantGenerateSignal, setAssistantGenerateSignal] = useState(0);
   const [savedEchoItems, setSavedEchoItems] = useState<EchoSavedItem[]>([]);
   const [selectedEchoPath, setSelectedEchoPath] = useState<string | null>(null);
@@ -1017,8 +1075,6 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
     try {
       const d = localStorage.getItem(STORAGE_DAILY);
       if (d) setDailyLine(d);
-      const g = localStorage.getItem(STORAGE_GROWTH);
-      if (g) setGrowthIntent(g);
     } catch {
       /* local storage can be unavailable in restricted browser contexts */
     }
@@ -1166,9 +1222,15 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
 
     if (segment === 'growth' && !savedEchoDetail) {
       facts.push(
-        { label: p.growthIntentLabel, value: growthIntent.trim() || p.growthIntentPlaceholder },
-        { label: p.growthMilestonesTitle, value: p.growthMilestones.map((item) => `${item.date} ${item.title}`).join(' | ') },
-        { label: p.growthHabitsTitle, value: p.growthHabits.map((habit) => `${habit.title} ${habit.value}/${habit.total}`).join(' | ') },
+        {
+          label: p.insightSurfaceTitle,
+          value: p.insightCandidates.map((candidate) => [
+            `${candidate.title} -> ${insightTargetLabel(candidate.kind as InsightTarget, p)}`,
+            `${p.echoCardSourceLabel} ${candidate.source}`,
+            candidate.content,
+            `${p.echoCardEvidenceLabel} ${candidate.evidence}`,
+          ].join(' / ')).join(' | '),
+        },
       );
     }
 
@@ -1177,27 +1239,10 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
         {
           label: p.promotionPendingTitle,
           value: p.promotionCandidates.map((candidate) => [
-            `${candidate.title} -> ${promotionTargetLabel(candidate.suggestedTarget as PromotionTarget, p)}`,
-            `${p.promotionCandidateSourceLabel} ${candidate.source}`,
-            `${p.promotionCandidateWhyLabel} ${candidate.whyPromote}`,
-          ].join(' / ')).join(' | '),
-        },
-        {
-          label: p.promotionPlaybookLabel,
-          value: p.playbookCards.map((card) => [
-            card.title,
-            `${p.playbookMoveLabel} ${card.move}`,
-            `${p.playbookAvoidLabel} ${card.avoid}`,
-          ].join(' / ')).join(' | '),
-        },
-        {
-          label: p.promotionPracticeLabel,
-          value: p.practiceExperiments.map((experiment) => [
-            `${experiment.title} (${experiment.window})`,
-            `${p.promotionCandidateSourceLabel} ${experiment.source}`,
-            `${p.practiceHypothesisLabel} ${experiment.hypothesis}`,
-            `${p.practiceActionLabel} ${experiment.action}`,
-            `${p.practiceCheckLabel} ${experiment.check}`,
+            `${candidate.title} -> ${promotionTargetLabel(candidate.kind as PromotionTarget, p)}`,
+            `${p.echoCardSourceLabel} ${candidate.source}`,
+            candidate.content,
+            `${p.echoCardEvidenceLabel} ${candidate.evidence}`,
           ].join(' / ')).join(' | '),
         },
       );
@@ -1216,7 +1261,6 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
   }, [
     dailyLine,
     echoAssistantId,
-    growthIntent,
     lead,
     locale,
     p,

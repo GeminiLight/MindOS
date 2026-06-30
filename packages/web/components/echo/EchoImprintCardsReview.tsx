@@ -2,9 +2,7 @@
 
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ArrowRight,
   Check,
-  ChevronDown,
   Clock3,
   MessageSquareText,
   Pencil,
@@ -14,8 +12,18 @@ import {
 } from 'lucide-react';
 import type { Messages } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
+import { openAskModal } from '@/hooks/useAskModal';
 import { Button } from '@/components/ui/button';
 import { useVisiblePolling } from '@/lib/use-visible-polling';
+import {
+  buildEchoCardChatPrompt,
+  EchoCardActionBar,
+  EchoCardBody,
+  EchoCardDetailFields,
+  EchoCardFrame,
+  EchoCardHeader,
+  EchoCardTitle,
+} from './EchoSemanticCard';
 
 type EchoCopy = Messages['echoPages'];
 type ImprintGenerationTrigger = 'auto' | 'manual';
@@ -38,12 +46,16 @@ type ImprintGenerationState = {
 
 type ImprintCardCandidate = {
   id: string;
+  kind: 'digest' | 'moment';
   title: string;
-  summary: string;
+  content: string;
   createdAt: string;
-  source: string;
-  whyItMatters: string;
-  route: string;
+  source: {
+    label: string;
+  };
+  evidence: {
+    label: string;
+  };
 };
 
 type RemoteImprintCard = Partial<ImprintCardCandidate> & {
@@ -81,25 +93,31 @@ function formatGenerationTime(date = new Date()) {
 function normalizeCandidate(candidate: EchoCopy['imprintCardCandidates'][number], index: number): ImprintCardCandidate {
   return {
     id: `imprint-${index}`,
+    kind: candidate.kind,
     title: candidate.title,
-    summary: candidate.summary,
+    content: candidate.content,
     createdAt: candidate.createdAt,
-    source: candidate.source,
-    whyItMatters: candidate.whyItMatters,
-    route: candidate.route,
+    source: { label: candidate.source },
+    evidence: { label: candidate.evidence },
   };
 }
 
 function normalizeRemoteCandidate(candidate: RemoteImprintCard, index: number): ImprintCardCandidate | null {
-  if (typeof candidate.title !== 'string' || typeof candidate.summary !== 'string') return null;
+  if (typeof candidate.title !== 'string' || typeof candidate.content !== 'string') return null;
+  const evidenceRecord = candidate.evidence && typeof candidate.evidence === 'object' && !Array.isArray(candidate.evidence)
+    ? candidate.evidence as { label?: unknown }
+    : {};
+  const sourceRecord = candidate.source && typeof candidate.source === 'object' && !Array.isArray(candidate.source)
+    ? candidate.source as { label?: unknown }
+    : {};
   return {
     id: typeof candidate.id === 'string' && candidate.id.trim() ? candidate.id.trim() : `imprint-remote-${index}`,
+    kind: candidate.kind === 'digest' ? 'digest' : 'moment',
     title: candidate.title,
-    summary: candidate.summary,
+    content: candidate.content,
     createdAt: typeof candidate.createdAt === 'string' ? candidate.createdAt : '',
-    source: typeof candidate.source === 'string' ? candidate.source : '',
-    whyItMatters: typeof candidate.whyItMatters === 'string' ? candidate.whyItMatters : '',
-    route: typeof candidate.route === 'string' ? candidate.route : '',
+    source: { label: typeof sourceRecord.label === 'string' ? sourceRecord.label : '' },
+    evidence: { label: typeof evidenceRecord.label === 'string' ? evidenceRecord.label : '' },
   };
 }
 
@@ -158,10 +176,27 @@ function scheduleStatusLabel(schedule: ImprintSchedule, p: EchoCopy) {
   return next ? p.imprintScheduleNextRun(next) : scheduleModeLabel(schedule, p);
 }
 
-function digestBodyFor(candidates: ImprintCardCandidate[], p: EchoCopy) {
-  const anchor = candidates[0]?.title;
-  if (!anchor) return p.imprintDigestEmptyBody;
-  return p.imprintDigestBody(anchor, Math.max(0, candidates.length - 1));
+function imprintKindLabel(kind: ImprintCardCandidate['kind'], p: EchoCopy) {
+  return kind === 'digest' ? p.imprintDigestTitle : p.imprintMomentLabel;
+}
+
+function buildImprintCardChatPrompt(card: ImprintCardCandidate, p: EchoCopy) {
+  return buildEchoCardChatPrompt({
+    prompt: p.echoCardChatPrompt,
+    kindPromptLabel: p.echoCardKindPromptLabel,
+    titlePromptLabel: p.echoCardTitlePromptLabel,
+    contentPromptLabel: p.echoCardContentPromptLabel,
+    sourceLabel: p.echoCardSourceLabel,
+    evidenceLabel: p.echoCardEvidenceLabel,
+    kindLabel: imprintKindLabel(card.kind, p),
+    title: card.title,
+    content: [
+      card.content,
+      `${p.imprintCardCreatedLabel}: ${card.createdAt}`,
+    ].join('\n'),
+    source: card.source.label,
+    evidence: card.evidence.label,
+  });
 }
 
 export default function EchoImprintCardsReview({ p }: { p: EchoCopy }) {
@@ -171,7 +206,7 @@ export default function EchoImprintCardsReview({ p }: { p: EchoCopy }) {
   );
   const [candidates, setCandidates] = useState<ImprintCardCandidate[]>(initialCandidates);
   const [deletedIds, setDeletedIds] = useState<Set<string>>(() => new Set());
-  const [draftSummaries, setDraftSummaries] = useState<Record<string, string>>({});
+  const [draftContent, setDraftContent] = useState<Record<string, string>>({});
   const [editingId, setEditingId] = useState<string | null>(null);
   const [activeViews, setActiveViews] = useState<Record<ImprintView, boolean>>({
     digest: true,
@@ -200,6 +235,20 @@ export default function EchoImprintCardsReview({ p }: { p: EchoCopy }) {
     () => candidates.filter((card) => !deletedIds.has(card.id)),
     [candidates, deletedIds],
   );
+  const visibleMoments = useMemo(
+    () => visibleCandidates.filter((card) => card.kind === 'moment'),
+    [visibleCandidates],
+  );
+  const visibleDigest = useMemo(
+    () => visibleCandidates.find((card) => card.kind === 'digest') ?? null,
+    [visibleCandidates],
+  );
+  const hasVisibleCards = visibleCandidates.length > 0;
+  const availableViews = useMemo(() => ({
+    digest: Boolean(visibleDigest),
+    moments: visibleMoments.length > 0,
+  }), [visibleDigest, visibleMoments.length]);
+  const availableViewCount = Number(availableViews.digest) + Number(availableViews.moments);
 
   async function loadImprints({ runIfDue }: { runIfDue: boolean }) {
     try {
@@ -253,7 +302,7 @@ export default function EchoImprintCardsReview({ p }: { p: EchoCopy }) {
     if (remoteCards && (remoteCards.length > 0 || (body.state?.runCount ?? 0) > 0)) {
       setCandidates(remoteCards);
       setDeletedIds(new Set());
-      setDraftSummaries({});
+      setDraftContent({});
     }
     if (body.state) {
       const state = body.state;
@@ -293,8 +342,8 @@ export default function EchoImprintCardsReview({ p }: { p: EchoCopy }) {
     }
   }
 
-  function updateDraftSummary(cardId: string, value: string) {
-    setDraftSummaries((current) => ({ ...current, [cardId]: value }));
+  function updateDraftContent(cardId: string, value: string) {
+    setDraftContent((current) => ({ ...current, [cardId]: value }));
   }
 
   function toggleEditing(cardId: string) {
@@ -307,16 +356,16 @@ export default function EchoImprintCardsReview({ p }: { p: EchoCopy }) {
   }
 
   async function persistCardDraft(cardId: string) {
-    const currentSummary = draftSummaries[cardId];
-    if (currentSummary === undefined) return;
+    const currentContent = draftContent[cardId];
+    if (currentContent === undefined) return;
     setCandidates((current) => current.map((card) => (
-      card.id === cardId ? { ...card, summary: currentSummary } : card
+      card.id === cardId ? { ...card, content: currentContent } : card
     )));
     try {
       const response = await fetch('/api/echo/imprints', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: cardId, summary: currentSummary }),
+        body: JSON.stringify({ id: cardId, content: currentContent }),
       });
       if (!response.ok) return;
       applyImprintResponse(await response.json() as ImprintCardsApiResponse);
@@ -372,8 +421,12 @@ export default function EchoImprintCardsReview({ p }: { p: EchoCopy }) {
   }
 
   function toggleView(view: ImprintView) {
+    if (!availableViews[view]) return;
     setActiveViews((current) => {
-      if (current[view] && Object.values(current).filter(Boolean).length === 1) return current;
+      const activeAvailableCount = (Object.entries(current) as Array<[ImprintView, boolean]>)
+        .filter(([candidateView, active]) => availableViews[candidateView] && active)
+        .length;
+      if (current[view] && activeAvailableCount <= 1) return current;
       return { ...current, [view]: !current[view] };
     });
   }
@@ -401,27 +454,35 @@ export default function EchoImprintCardsReview({ p }: { p: EchoCopy }) {
           className="mt-4 flex min-w-0 flex-wrap items-center justify-between gap-3"
           data-testid="echo-imprint-control-row"
         >
-          <div
-            className="inline-flex max-w-full items-center gap-1 overflow-x-auto rounded-lg border border-border/35 bg-muted/15 p-1"
-            role="group"
-            aria-label={p.imprintCardsEyebrow}
-            data-testid="echo-imprint-tabs"
-          >
-            <ImprintViewTab
-              view="digest"
-              active={activeViews.digest}
-              label={p.imprintDigestTitle}
-              icon={<ShieldCheck size={14} aria-hidden />}
-              onClick={() => toggleView('digest')}
-            />
-            <ImprintViewTab
-              view="moments"
-              active={activeViews.moments}
-              label={p.imprintMomentsTitle}
-              icon={<MessageSquareText size={14} aria-hidden />}
-              onClick={() => toggleView('moments')}
-            />
-          </div>
+          {availableViewCount > 1 ? (
+            <div
+              className="inline-flex max-w-full items-center gap-1 overflow-x-auto rounded-lg border border-border/35 bg-muted/15 p-1"
+              role="group"
+              aria-label={p.imprintCardsEyebrow}
+              data-testid="echo-imprint-tabs"
+            >
+              {availableViews.digest ? (
+                <ImprintViewTab
+                  view="digest"
+                  active={activeViews.digest}
+                  label={p.imprintDigestTitle}
+                  icon={<ShieldCheck size={14} aria-hidden />}
+                  onClick={() => toggleView('digest')}
+                />
+              ) : null}
+              {availableViews.moments ? (
+                <ImprintViewTab
+                  view="moments"
+                  active={activeViews.moments}
+                  label={p.imprintMomentsTitle}
+                  icon={<MessageSquareText size={14} aria-hidden />}
+                  onClick={() => toggleView('moments')}
+                />
+              ) : null}
+            </div>
+          ) : (
+            <div aria-hidden />
+          )}
 
           <div className="flex items-center gap-1 rounded-lg border border-border/20 bg-muted/10 p-1" data-testid="echo-imprint-actions">
             <Button
@@ -536,25 +597,50 @@ export default function EchoImprintCardsReview({ p }: { p: EchoCopy }) {
       </header>
 
       <div className="pt-5">
-        {activeViews.digest ? (
-          <ImprintDigest
+        {!hasVisibleCards ? (
+          <ImprintEmptyState p={p} />
+        ) : activeViews.digest && visibleDigest ? (
+          <ReviewCard
+            card={visibleDigest}
+            draftContent={draftContent[visibleDigest.id] ?? visibleDigest.content}
+            isEditing={editingId === visibleDigest.id}
             p={p}
-            body={digestBodyFor(visibleCandidates, p)}
-            momentCount={visibleCandidates.length}
+            testId="echo-imprint-digest"
+            onEdit={() => toggleEditing(visibleDigest.id)}
+            onUpdateContent={(value) => updateDraftContent(visibleDigest.id, value)}
+            onDelete={() => deleteCard(visibleDigest.id)}
           />
         ) : null}
 
-        {activeViews.moments ? (
+        {activeViews.moments && visibleMoments.length > 0 ? (
           <ImprintMoments
-            candidates={visibleCandidates}
-            draftSummaries={draftSummaries}
+            candidates={visibleMoments}
+            draftContent={draftContent}
             editingId={editingId}
             p={p}
             onEdit={toggleEditing}
-            onUpdateSummary={updateDraftSummary}
+            onUpdateContent={updateDraftContent}
             onDelete={deleteCard}
           />
         ) : null}
+      </div>
+    </section>
+  );
+}
+
+function ImprintEmptyState({ p }: { p: EchoCopy }) {
+  return (
+    <section
+      className="rounded-xl border border-border/45 bg-background/55 px-5 py-8"
+      data-testid="echo-imprint-empty"
+    >
+      <div className="flex min-w-0 items-center gap-3">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted/35 text-[var(--amber)]" aria-hidden>
+          <RefreshCw size={14} strokeWidth={1.8} />
+        </span>
+        <p className="font-sans text-base leading-7 text-muted-foreground">
+          {p.imprintCardsEmptyLabel}
+        </p>
       </div>
     </section>
   );
@@ -591,56 +677,21 @@ function ImprintViewTab({
   );
 }
 
-function ImprintDigest({
-  p,
-  body,
-  momentCount,
-}: {
-  p: EchoCopy;
-  body: string;
-  momentCount: number;
-}) {
-  return (
-    <section
-      className="rounded-xl border border-border/45 bg-background/55 p-5"
-      id="echo-imprint-digest-panel"
-      data-testid="echo-imprint-digest"
-    >
-      <div className="flex min-w-0 flex-col gap-3 md:flex-row md:items-start md:justify-between">
-        <div className="min-w-0">
-          <div className="flex min-w-0 items-center gap-2 font-sans text-sm font-medium text-foreground">
-            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted/35 text-[var(--amber)]" aria-hidden>
-              <ShieldCheck size={14} strokeWidth={1.8} />
-            </span>
-            <h3 className="min-w-0 truncate">{p.imprintDigestTitle}</h3>
-          </div>
-          <p className="mt-3 max-w-3xl font-sans text-base leading-7 text-foreground">
-            {body}
-          </p>
-        </div>
-        <span className="w-fit whitespace-nowrap rounded-md border border-border/45 bg-background/65 px-2 py-1 font-mono text-[0.68rem] text-muted-foreground">
-          {p.imprintMomentsCount(momentCount)}
-        </span>
-      </div>
-    </section>
-  );
-}
-
 function ImprintMoments({
   candidates,
-  draftSummaries,
+  draftContent,
   editingId,
   p,
   onEdit,
-  onUpdateSummary,
+  onUpdateContent,
   onDelete,
 }: {
   candidates: ImprintCardCandidate[];
-  draftSummaries: Record<string, string>;
+  draftContent: Record<string, string>;
   editingId: string | null;
   p: EchoCopy;
   onEdit: (cardId: string) => void;
-  onUpdateSummary: (cardId: string, value: string) => void;
+  onUpdateContent: (cardId: string, value: string) => void;
   onDelete: (cardId: string) => void;
 }) {
   return (
@@ -654,11 +705,11 @@ function ImprintMoments({
           <ReviewCard
             key={card.id}
             card={card}
-            draftSummary={draftSummaries[card.id] ?? card.summary}
+            draftContent={draftContent[card.id] ?? card.content}
             isEditing={editingId === card.id}
             p={p}
             onEdit={() => onEdit(card.id)}
-            onUpdateSummary={(value) => onUpdateSummary(card.id, value)}
+            onUpdateContent={(value) => onUpdateContent(card.id, value)}
             onDelete={() => onDelete(card.id)}
           />
         )) : (
@@ -666,7 +717,7 @@ function ImprintMoments({
             className="rounded-lg border border-border/45 bg-muted/10 px-4 py-5 font-sans text-sm leading-6 text-muted-foreground"
             data-testid="echo-imprint-moments-empty"
           >
-            {p.imprintMomentsEmptyLabel}
+            {p.imprintCardsEmptyLabel}
           </p>
         )}
       </div>
@@ -676,135 +727,110 @@ function ImprintMoments({
 
 function ReviewCard({
   card,
-  draftSummary,
+  draftContent,
   isEditing,
   p,
+  testId = 'echo-imprint-card',
   onEdit,
-  onUpdateSummary,
+  onUpdateContent,
   onDelete,
 }: {
   card: ImprintCardCandidate;
-  draftSummary: string;
+  draftContent: string;
   isEditing: boolean;
   p: EchoCopy;
+  testId?: string;
   onEdit: () => void;
-  onUpdateSummary: (value: string) => void;
+  onUpdateContent: (value: string) => void;
   onDelete: () => void;
 }) {
+  const kindLabel = imprintKindLabel(card.kind, p);
   return (
-    <article
-      className={cn(
-        'group relative overflow-hidden rounded-lg border bg-background/70 transition-[background-color,border-color,box-shadow,opacity] duration-150',
-        'border-border/55 hover:border-[var(--amber)]/30 hover:shadow-sm',
-      )}
-      data-testid="echo-imprint-card"
-    >
-      <div className="absolute bottom-0 left-0 top-0 w-1 bg-[var(--amber)]/70" aria-hidden />
-      <div className="px-4 py-4 pl-5 md:px-5">
-        <div className="flex min-w-0 items-start justify-between gap-3">
-          <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[0.68rem] leading-5 text-muted-foreground">
+    <EchoCardFrame kind={card.kind} testId={testId}>
+        <EchoCardHeader
+          kind={card.kind}
+          label={kindLabel}
+          source={card.source.label}
+          meta={(
             <span
-              className="inline-flex items-center gap-1.5"
+              className="inline-flex min-w-0 items-center gap-1.5"
               data-testid="echo-imprint-created-at"
             >
               <Clock3 size={12} aria-hidden />
-              <span>
+              <span className="min-w-0 truncate">
                 {p.imprintCardCreatedLabel} <time>{card.createdAt}</time>
               </span>
             </span>
-          </div>
-          <div className="flex shrink-0 items-center gap-1 -mr-1 -mt-1">
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-xs"
-              className="text-muted-foreground hover:text-foreground"
-              title={isEditing ? p.imprintCardDoneLabel : p.imprintCardEditLabel}
-              aria-label={isEditing ? p.imprintCardDoneLabel : p.imprintCardEditLabel}
-              onClick={onEdit}
-            >
-              {isEditing ? <Check size={13} aria-hidden /> : <Pencil size={13} aria-hidden />}
-              <span className="sr-only">{isEditing ? p.imprintCardDoneLabel : p.imprintCardEditLabel}</span>
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-xs"
-              className="text-muted-foreground hover:text-[var(--error)]"
-              title={p.imprintCardDeleteLabel}
-              aria-label={p.imprintCardDeleteLabel}
-              onClick={onDelete}
-            >
-              <Trash2 size={13} aria-hidden />
-              <span className="sr-only">{p.imprintCardDeleteLabel}</span>
-            </Button>
-          </div>
-        </div>
+          )}
+        />
 
-        <h4 className="mt-4 max-w-3xl font-sans text-base font-semibold leading-6 text-foreground">
-          {card.title}
-        </h4>
+        <EchoCardTitle>{card.title}</EchoCardTitle>
 
         <div className="mt-3 min-w-0">
           {isEditing ? (
             <textarea
               className="min-h-28 w-full resize-y rounded-lg border border-border bg-background px-3 py-2 font-sans text-sm leading-6 text-foreground outline-none transition focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40"
               aria-label={p.imprintCardEditAria(card.title)}
-              value={draftSummary}
-              onChange={(event) => onUpdateSummary(event.target.value)}
+              value={draftContent}
+              onChange={(event) => onUpdateContent(event.target.value)}
             />
           ) : (
-            <p className="max-w-3xl font-sans text-sm leading-7 text-muted-foreground">{draftSummary}</p>
+            <EchoCardBody className="mt-0">{draftContent}</EchoCardBody>
           )}
         </div>
 
-        <div className="mt-4 overflow-hidden rounded-lg border border-border/45 bg-muted/15">
-          <FoldedField
-            icon={<MessageSquareText size={13} aria-hidden />}
-            label={p.imprintCardSourceLabel}
-            value={card.source}
-          />
-          <FoldedField
-            icon={<ShieldCheck size={13} aria-hidden />}
-            label={p.imprintCardWhyLabel}
-            value={card.whyItMatters}
-          />
-          <FoldedField
-            icon={<ArrowRight size={13} aria-hidden />}
-            label={p.imprintCardRouteLabel}
-            value={card.route}
-          />
-        </div>
+        <EchoCardDetailFields
+          sourceLabel={p.echoCardSourceLabel}
+          source={card.source.label}
+          evidenceLabel={p.echoCardEvidenceLabel}
+          evidence={card.evidence.label}
+        />
 
-      </div>
-    </article>
-  );
-}
-
-function FoldedField({
-  icon,
-  label,
-  value,
-}: {
-  icon: ReactNode;
-  label: string;
-  value: string;
-}) {
-  return (
-    <details className="group border-t border-border/45 first:border-t-0">
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2.5 font-sans text-xs font-medium text-foreground transition hover:bg-background/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 [&::-webkit-details-marker]:hidden">
-        <span className="flex min-w-0 items-center gap-2">
-          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-background/75 text-muted-foreground">
-            {icon}
-          </span>
-          <span className="truncate">{label}</span>
-        </span>
-        <ChevronDown size={13} className="shrink-0 text-muted-foreground transition-transform duration-150 group-open:rotate-180" aria-hidden />
-      </summary>
-      <div className="border-t border-border/35 bg-background/45 px-3 py-3">
-        <p className="break-words font-sans text-xs leading-5 text-muted-foreground">{value}</p>
-      </div>
-    </details>
+        <EchoCardActionBar
+          left={(
+            <>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="text-muted-foreground hover:text-foreground"
+                title={isEditing ? p.imprintCardDoneLabel : p.imprintCardEditLabel}
+                aria-label={isEditing ? p.imprintCardDoneLabel : p.imprintCardEditLabel}
+                onClick={onEdit}
+              >
+                {isEditing ? <Check size={13} aria-hidden /> : <Pencil size={13} aria-hidden />}
+                {isEditing ? p.imprintCardDoneLabel : p.imprintCardEditLabel}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="text-muted-foreground hover:text-[var(--error)]"
+                title={p.imprintCardDeleteLabel}
+                aria-label={p.imprintCardDeleteLabel}
+                onClick={onDelete}
+              >
+                <Trash2 size={13} aria-hidden />
+                {p.imprintCardDeleteLabel}
+              </Button>
+            </>
+          )}
+          right={(
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="border-[var(--amber)]/25 bg-[var(--amber)]/10 text-[var(--amber)] hover:bg-[var(--amber)]/15 hover:text-[var(--amber)]"
+              aria-label={p.echoCardChatAria(card.title)}
+              data-testid="echo-card-chat-button"
+              onClick={() => openAskModal(buildImprintCardChatPrompt(card, p), 'user', null, { newSession: true })}
+            >
+              <MessageSquareText size={13} aria-hidden />
+              {p.echoCardChatLabel}
+            </Button>
+          )}
+        />
+    </EchoCardFrame>
   );
 }
 

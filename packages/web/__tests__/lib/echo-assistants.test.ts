@@ -79,13 +79,13 @@ describe('echo assistants', () => {
 
     expect(prompt).toContain('Write in Chinese');
     expect(prompt).toContain('# 承接');
-    expect(prompt).toContain('## 去向');
-    expect(prompt).toContain('## 承接候选');
-    expect(prompt).toContain('## 为什么承接');
+    expect(prompt).toContain('kind: playbook | practice');
+    expect(prompt).toContain('## 内容');
+    expect(prompt).toContain('## 证据');
     expect(prompt).toContain('## 人工确认');
-    expect(prompt).not.toContain('## 方法卡草稿');
-    expect(prompt).not.toContain('## 实践草稿');
-    expect(prompt).not.toContain('## 审阅边界');
+    expect(prompt).not.toContain('## 去向');
+    expect(prompt).not.toContain('## 为什么承接');
+    expect(prompt).not.toContain('## 边界');
     expect(prompt).toContain('待承接: 先写验收标准，再动代码。');
     expect(prompt).toContain('修复 Echo 页面');
     expect(prompt).toContain('Do not use tools unless the user explicitly asks');
@@ -105,11 +105,10 @@ describe('echo assistants', () => {
     });
 
     expect(prompt).toContain('# 印迹');
-    expect(prompt).toContain('## 现场');
-    expect(prompt).toContain('## 结果');
-    expect(prompt).toContain('## 关键片段');
-    expect(prompt).toContain('## 待梳理');
-    expect(prompt).toContain('## 下一步');
+    expect(prompt).toContain('kind: digest | moment');
+    expect(prompt).toContain('## 内容');
+    expect(prompt).toContain('## 证据');
+    expect(prompt).not.toContain('## 下一步');
     expect(prompt).toContain('当前会话: 用户指出 sidebar 激活态抖动');
   });
 

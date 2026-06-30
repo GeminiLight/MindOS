@@ -48,7 +48,7 @@ describe('Echo segment page actions', () => {
     fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       if (url === '/api/echo/imprints') {
         const method = init?.method ?? 'GET';
-        const body = init?.body ? JSON.parse(String(init.body)) as { schedule?: unknown } : {};
+        const body = init?.body ? JSON.parse(String(init.body)) as { id?: unknown; schedule?: unknown } : {};
         if (method === 'PATCH' && body.schedule) {
           return jsonResponse({
             ok: true,
@@ -60,7 +60,9 @@ describe('Echo segment page actions', () => {
           return jsonResponse({
             ok: true,
             state: imprintApiState(method === 'DELETE' ? 'manual' : 'auto', 2),
-            cards: imprintApiCards().slice(method === 'DELETE' ? 1 : 0),
+            cards: method === 'DELETE'
+              ? imprintApiCards().filter((card) => card.id !== body.id)
+              : imprintApiCards(),
           });
         }
         return jsonResponse({
@@ -275,12 +277,26 @@ describe('Echo segment page actions', () => {
     expect(host.querySelector('[data-testid="echo-promotion-tab-recent"]')).toBeNull();
     expect(host.querySelector('[data-testid="echo-promotion-tabs"]')).toBeNull();
     expect(host.querySelectorAll('[data-testid="echo-promotion-candidate"]')).toHaveLength(2);
+    expect(host.querySelectorAll('[data-testid="echo-card-chat-button"]')).toHaveLength(2);
     expect(host.querySelectorAll('[data-testid="echo-playbook-card"]')).toHaveLength(0);
     expect(host.querySelectorAll('[data-testid="echo-promotion-practice-card"]')).toHaveLength(0);
     expect(host.querySelector('[data-testid="echo-ai-draft-panel"]')).toBeNull();
     expect(host.querySelector('[data-testid="echo-memory-reader-layout"]')).toBeNull();
     expect(host.textContent).not.toContain(messages.zh.echoPages.practiceReaderSubtitle);
     expect(promotion?.textContent).not.toContain('去向');
+
+    const firstPromotionChat = host.querySelector<HTMLButtonElement>('[data-testid="echo-card-chat-button"]');
+    expect(firstPromotionChat).not.toBeNull();
+    await act(async () => {
+      firstPromotionChat?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(openAskModal).toHaveBeenCalledWith(
+      expect.stringContaining(messages.zh.echoPages.promotionCandidates[0]?.title ?? ''),
+      'user',
+      null,
+      { newSession: true },
+    );
+    vi.mocked(openAskModal).mockClear();
 
     const scheduleButton = host.querySelector<HTMLButtonElement>('[data-testid="echo-promotion-schedule-button"]');
     expect(scheduleButton).not.toBeNull();
@@ -454,10 +470,24 @@ describe('Echo segment page actions', () => {
     expect(patternFilter?.getAttribute('aria-pressed')).toBe('true');
     expect(judgmentFilter?.getAttribute('aria-pressed')).toBe('true');
     expect(host.querySelectorAll('[data-testid="echo-insight-candidate"]')).toHaveLength(4);
+    expect(host.querySelectorAll('[data-testid="echo-card-chat-button"]')).toHaveLength(4);
     expect(insight?.textContent).toContain(messages.zh.echoPages.insightPatternLabel);
     expect(insight?.textContent).toContain(messages.zh.echoPages.insightJudgmentLabel);
     expect(insight?.textContent).toContain(messages.zh.echoPages.insightCandidates[0]?.title);
     expect(insight?.textContent).toContain(messages.zh.echoPages.insightCandidates[1]?.title);
+
+    const firstInsightChat = host.querySelector<HTMLButtonElement>('[data-testid="echo-card-chat-button"]');
+    expect(firstInsightChat).not.toBeNull();
+    await act(async () => {
+      firstInsightChat?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(openAskModal).toHaveBeenCalledWith(
+      expect.stringContaining(messages.zh.echoPages.insightCandidates[0]?.title ?? ''),
+      'user',
+      null,
+      { newSession: true },
+    );
+    vi.mocked(openAskModal).mockClear();
 
     await act(async () => {
       judgmentFilter?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -555,21 +585,16 @@ describe('Echo segment page actions', () => {
 
     const surface = host.querySelector('[data-testid="echo-imprint-generated-list"]');
     expect(surface).not.toBeNull();
-    expect(surface?.textContent).toContain(messages.zh.echoPages.imprintCardsWindow);
     expect(surface?.textContent).toContain(messages.zh.echoPages.echoGeneratedStatusLine(
       messages.zh.echoPages.imprintCardsCheckpointLabel,
       messages.zh.echoPages.imprintScheduleDailyAt('20:00'),
     ));
     expect(surface?.textContent).not.toContain(`${messages.zh.echoPages.imprintCardsInitialUpdatedAt} 生成`);
-    expect(surface?.textContent).not.toContain(messages.zh.echoPages.imprintCardsAutoLabel);
-    expect(surface?.textContent).not.toContain(messages.zh.echoPages.imprintCardsUpdatedAt(messages.zh.echoPages.imprintCardsInitialUpdatedAt));
     expect(surface?.textContent).toContain(messages.zh.echoPages.imprintCardsUpdateAction);
     expect(surface?.textContent).not.toContain(messages.zh.echoPages.imprintScheduleNextRun('20:00'));
-    expect(surface?.textContent).toContain(messages.zh.echoPages.imprintDigestTitle);
-    expect(surface?.textContent).toContain(messages.zh.echoPages.imprintDigestBody('Imprint 不再做分类系统', 4));
-    expect(surface?.textContent).toContain(messages.zh.echoPages.imprintMomentsTitle);
-    expect(surface?.textContent).toContain(messages.zh.echoPages.imprintMomentsCount(5));
-    expect(surface?.textContent).not.toContain(messages.zh.echoPages.imprintMomentsBody);
+    expect(surface?.textContent).not.toContain(messages.zh.echoPages.imprintDigestTitle);
+    expect(surface?.textContent).not.toContain('最近协作已生成');
+    expect(surface?.textContent).not.toContain(messages.zh.echoPages.imprintMomentsTitle);
     expect(surface?.textContent).toContain('Imprint 不再做分类系统');
     expect(surface?.textContent).toContain(messages.zh.echoPages.imprintCardCreatedLabel);
     expect(surface?.textContent).toContain('14:12');
@@ -587,13 +612,14 @@ describe('Echo segment page actions', () => {
     expect(host.querySelector('[data-testid="echo-imprint-card-lane-event"]')).toBeNull();
     expect(host.querySelector('[data-testid="echo-imprint-card-lane-signal"]')).toBeNull();
     expect(host.querySelector('[data-testid="echo-imprint-card-lane-next"]')).toBeNull();
-    expect(host.querySelector('[data-testid="echo-imprint-tabs"]')).not.toBeNull();
-    expect(host.querySelector('[data-testid="echo-imprint-tab-digest"]')?.getAttribute('aria-pressed')).toBe('true');
-    expect(host.querySelector('[data-testid="echo-imprint-tab-moments"]')?.getAttribute('aria-pressed')).toBe('true');
-    expect(host.querySelector('[data-testid="echo-imprint-digest"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="echo-imprint-tabs"]')).toBeNull();
+    expect(host.querySelector('[data-testid="echo-imprint-tab-digest"]')).toBeNull();
+    expect(host.querySelector('[data-testid="echo-imprint-tab-moments"]')).toBeNull();
+    expect(host.querySelector('[data-testid="echo-imprint-digest"]')).toBeNull();
     expect(host.querySelector('[data-testid="echo-imprint-moments"]')).not.toBeNull();
     expect(host.querySelectorAll('[data-testid="echo-imprint-card"]')).toHaveLength(5);
     expect(host.querySelectorAll('[data-testid="echo-imprint-created-at"]')).toHaveLength(5);
+    expect(host.querySelectorAll('[data-testid="echo-card-chat-button"]')).toHaveLength(5);
     expect(host.querySelector('[data-testid="echo-imprint-generation-status"]')).not.toBeNull();
 
     const updateButton = host.querySelector<HTMLButtonElement>('[data-testid="echo-imprint-update-button"]');
@@ -601,42 +627,8 @@ describe('Echo segment page actions', () => {
     await act(async () => {
       updateButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
-    expect(surface?.textContent).not.toContain(messages.zh.echoPages.imprintCardsManualLabel);
     expect(fetchMock.mock.calls.some(([url]) => String(url).startsWith('/api/echo?segment=imprint'))).toBe(false);
 
-    const digestTab = host.querySelector<HTMLButtonElement>('[data-testid="echo-imprint-tab-digest"]');
-    expect(digestTab).not.toBeNull();
-    await act(async () => {
-      digestTab?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
-    expect(host.querySelector('[data-testid="echo-imprint-tab-digest"]')?.getAttribute('aria-pressed')).toBe('false');
-    expect(host.querySelector('[data-testid="echo-imprint-tab-moments"]')?.getAttribute('aria-pressed')).toBe('true');
-    expect(host.querySelector('[data-testid="echo-imprint-digest"]')).toBeNull();
-    expect(host.querySelector('[data-testid="echo-imprint-moments"]')).not.toBeNull();
-
-    await act(async () => {
-      digestTab?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
-    expect(host.querySelector('[data-testid="echo-imprint-tab-digest"]')?.getAttribute('aria-pressed')).toBe('true');
-    expect(host.querySelector('[data-testid="echo-imprint-tab-moments"]')?.getAttribute('aria-pressed')).toBe('true');
-    expect(host.querySelector('[data-testid="echo-imprint-digest"]')).not.toBeNull();
-    expect(host.querySelector('[data-testid="echo-imprint-moments"]')).not.toBeNull();
-
-    const momentsTab = host.querySelector<HTMLButtonElement>('[data-testid="echo-imprint-tab-moments"]');
-    expect(momentsTab).not.toBeNull();
-    await act(async () => {
-      momentsTab?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
-    expect(host.querySelector('[data-testid="echo-imprint-tab-digest"]')?.getAttribute('aria-pressed')).toBe('true');
-    expect(host.querySelector('[data-testid="echo-imprint-tab-moments"]')?.getAttribute('aria-pressed')).toBe('false');
-    expect(host.querySelector('[data-testid="echo-imprint-digest"]')).not.toBeNull();
-    expect(host.querySelector('[data-testid="echo-imprint-moments"]')).toBeNull();
-
-    await act(async () => {
-      momentsTab?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
-    expect(host.querySelector('[data-testid="echo-imprint-tab-digest"]')?.getAttribute('aria-pressed')).toBe('true');
-    expect(host.querySelector('[data-testid="echo-imprint-tab-moments"]')?.getAttribute('aria-pressed')).toBe('true');
     expect(host.querySelector('[data-testid="echo-imprint-moments"]')).not.toBeNull();
     expect(surface?.textContent).toContain(messages.zh.echoPages.imprintCardCreatedLabel);
     expect(surface?.textContent).toContain('14:12');
@@ -646,6 +638,22 @@ describe('Echo segment page actions', () => {
     expect(host.querySelectorAll('[data-testid="echo-imprint-created-at"]')).toHaveLength(5);
 
     const surfaceButtons = () => Array.from(surface?.querySelectorAll('button') ?? []);
+    const chatButton = surfaceButtons().find((button) =>
+      button.textContent?.includes(messages.zh.echoPages.echoCardChatLabel),
+    );
+    expect(chatButton).toBeTruthy();
+
+    await act(async () => {
+      chatButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(openAskModal).toHaveBeenCalledWith(
+      expect.stringContaining('Imprint 不再做分类系统'),
+      'user',
+      null,
+      { newSession: true },
+    );
+    vi.mocked(openAskModal).mockClear();
+
     const editButton = surfaceButtons().find((button) =>
       button.textContent?.includes(messages.zh.echoPages.imprintCardEditLabel),
     );
@@ -666,9 +674,42 @@ describe('Echo segment page actions', () => {
       deleteButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     expect(surface?.textContent).not.toContain('Imprint 不再做分类系统');
-    expect(surface?.textContent).toContain(messages.zh.echoPages.imprintMomentsCount(4));
-    expect(host.querySelector('[data-testid="echo-imprint-digest"]')).not.toBeNull();
-    expect(surface?.textContent).toContain(messages.zh.echoPages.imprintDigestBody('AI 反哺成为产品面', 3));
+    expect(host.querySelector('[data-testid="echo-imprint-digest"]')).toBeNull();
+    expect(surface?.textContent).not.toContain('最近协作已生成');
+    expect(host.querySelectorAll('[data-testid="echo-imprint-card"]')).toHaveLength(4);
+  });
+
+  it('shows one unified empty state when no imprint cards are available', async () => {
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url === '/api/echo/imprints') {
+        const method = init?.method ?? 'GET';
+        return jsonResponse({
+          state: imprintApiState(method === 'POST' ? 'manual' : 'auto', 1),
+          cards: [],
+        });
+      }
+      if (url.startsWith('/api/echo') && (!init || init.method !== 'POST')) {
+        return jsonResponse({ updatedAt: '2026-06-22T00:00:00.000Z', items: [] });
+      }
+      return jsonResponse({ ok: true });
+    });
+
+    await act(async () => {
+      root.render(<EchoSegmentPageClient segment="imprint" />);
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const surface = host.querySelector('[data-testid="echo-imprint-generated-list"]');
+    expect(surface).not.toBeNull();
+    expect(surface?.textContent).toContain(messages.zh.echoPages.imprintCardsEmptyLabel);
+    expect(host.querySelectorAll('[data-testid="echo-imprint-empty"]')).toHaveLength(1);
+    expect(host.querySelector('[data-testid="echo-imprint-digest"]')).toBeNull();
+    expect(host.querySelector('[data-testid="echo-imprint-moments-empty"]')).toBeNull();
+    expect(host.querySelectorAll('[data-testid="echo-imprint-card"]')).toHaveLength(0);
   });
 
   it('lets the user configure the Imprint generation schedule without auto-generating every minute', async () => {
@@ -784,7 +825,13 @@ function imprintApiCards() {
     ...card,
     id: `imprint-api-${index}`,
     confidence: 0.72,
-    sourceSessionIds: [`session-${index}`],
+    source: {
+      label: card.source,
+      sessionIds: [`session-${index}`],
+    },
+    evidence: {
+      label: card.evidence,
+    },
     status: 'active',
     generatedAt: '2026-06-29T06:36:00.000Z',
     updatedAt: '2026-06-29T06:36:00.000Z',

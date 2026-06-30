@@ -24,7 +24,7 @@ type ImprintsPostBody = {
 type ImprintsPatchBody = {
   id?: unknown;
   title?: unknown;
-  summary?: unknown;
+  content?: unknown;
   schedule?: unknown;
 };
 
@@ -103,9 +103,12 @@ export async function PATCH(req: NextRequest) {
 
     const id = typeof body.id === 'string' ? body.id.trim() : '';
     if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 });
+    if (typeof body.title !== 'string' && typeof body.content !== 'string') {
+      return NextResponse.json({ error: 'title or content is required' }, { status: 400 });
+    }
     const card = updateImprintCard(getMindRoot(), id, {
       title: body.title,
-      summary: body.summary,
+      content: body.content,
     });
     if (!card) return NextResponse.json({ error: 'Imprint card not found' }, { status: 404 });
     const state = readImprintGenerationState(getMindRoot());

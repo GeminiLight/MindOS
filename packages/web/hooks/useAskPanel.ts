@@ -21,6 +21,8 @@ export interface AskPanelState {
   askOpenSource: 'user' | 'guide' | 'guide-next';
   askAcpAgent: AcpAgentSelection | null;
   askAgentRuntime: AskAgentRuntimeSelection | null;
+  askNewSession: boolean;
+  askOpenRequestId: number;
   askContextRequest: AskContextRequest | null;
   toggleAskPanel: () => void;
   closeAskPanel: () => void;
@@ -51,6 +53,8 @@ export function useAskPanel(): AskPanelState {
   const [askOpenSource, setAskOpenSource] = useState<'user' | 'guide' | 'guide-next'>('user');
   const [askAcpAgent, setAskAcpAgent] = useState<AcpAgentSelection | null>(null);
   const [askAgentRuntime, setAskAgentRuntime] = useState<AskAgentRuntimeSelection | null>(null);
+  const [askNewSession, setAskNewSession] = useState(false);
+  const [askOpenRequestId, setAskOpenRequestId] = useState(0);
   const [askContextRequest, setAskContextRequest] = useState<AskContextRequest | null>(null);
   const lastNonFocusWidthRef = useRef(RIGHT_ASK_DEFAULT_WIDTH);
   const askModeRef = useRef(askMode);
@@ -82,6 +86,8 @@ export function useAskPanel(): AskPanelState {
       setAskOpenSource('user');
       setAskAcpAgent(null);
       setAskAgentRuntime(null);
+      setAskNewSession(false);
+      setAskOpenRequestId((value) => value + 1);
       setAskContextRequest({
         id: ++contextRequestIdRef.current,
         ...normalized,
@@ -158,6 +164,8 @@ export function useAskPanel(): AskPanelState {
       setAskOpenSource(askModal.source);
       setAskAcpAgent(askModal.acpAgent);
       setAskAgentRuntime(askModal.agentRuntime);
+      setAskNewSession(askModal.newSession);
+      setAskOpenRequestId(askModal.requestId);
       if (askMode === 'popup') {
         setDesktopAskPopupOpen(true);
       } else {
@@ -165,18 +173,32 @@ export function useAskPanel(): AskPanelState {
       }
       askModal.close();
     }
-  }, [askModal.open, askModal.initialMessage, askModal.source, askModal.acpAgent, askModal.agentRuntime, askModal.close, askMode, fullPageChat]);
+  }, [askModal.open, askModal.initialMessage, askModal.source, askModal.acpAgent, askModal.agentRuntime, askModal.newSession, askModal.requestId, askModal.close, askMode, fullPageChat]);
 
   const toggleAskPanel = useCallback(() => {
     if (fullPageChat) return;
     if (askMode === 'popup') {
       setDesktopAskPopupOpen(v => {
-        if (!v) { setAskInitialMessage(''); setAskOpenSource('user'); setAskAcpAgent(null); setAskAgentRuntime(null); }
+        if (!v) {
+          setAskInitialMessage('');
+          setAskOpenSource('user');
+          setAskAcpAgent(null);
+          setAskAgentRuntime(null);
+          setAskNewSession(false);
+          setAskOpenRequestId((value) => value + 1);
+        }
         return !v;
       });
     } else {
       setAskPanelOpen(v => {
-        if (!v) { setAskInitialMessage(''); setAskOpenSource('user'); setAskAcpAgent(null); setAskAgentRuntime(null); }
+        if (!v) {
+          setAskInitialMessage('');
+          setAskOpenSource('user');
+          setAskAcpAgent(null);
+          setAskAgentRuntime(null);
+          setAskNewSession(false);
+          setAskOpenRequestId((value) => value + 1);
+        }
         return !v;
       });
     }
@@ -237,7 +259,7 @@ export function useAskPanel(): AskPanelState {
 
   return {
     askPanelOpen, askPanelWidth, askMaximized, askMode, desktopAskPopupOpen,
-    askInitialMessage, askOpenSource, askAcpAgent, askAgentRuntime, askContextRequest,
+    askInitialMessage, askOpenSource, askAcpAgent, askAgentRuntime, askNewSession, askOpenRequestId, askContextRequest,
     toggleAskPanel, closeAskPanel, closeDesktopAskPopup,
     handleAskWidthChange, handleAskWidthCommit, handleAskModeSwitch, toggleAskMaximized,
   };

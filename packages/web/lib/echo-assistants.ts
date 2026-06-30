@@ -56,14 +56,14 @@ const ECHO_ASSISTANT_DEFINITIONS: Record<EchoAssistantId, EchoAssistantDefinitio
   [ECHO_IMPRINT_ASSISTANT_ID]: {
     id: ECHO_IMPRINT_ASSISTANT_ID,
     name: 'Echo Imprint',
-    description: 'Turn one concrete AI-coding practice scene into a concise Markdown imprint without inventing facts.',
+    description: 'Turn recent AI-coding context into a concise Digest or Moment imprint without inventing facts.',
     color: 'amber',
     steps: 10,
     body: `# Echo Imprint
 
 ## Role
 
-Turn one concrete AI-coding practice scene into a concise, reviewable imprint.
+Turn recent AI-coding context into a concise, reviewable imprint card.
 
 ## Inputs
 
@@ -73,7 +73,7 @@ Turn one concrete AI-coding practice scene into a concise, reviewable imprint.
 
 ## Output
 
-Return Markdown only. Preserve the original scene before reflection: what happened, what changed, which fragment matters, what still needs clarification, and what the user may do next.
+Return Markdown only. Choose kind: Digest when summarizing the whole provided window, or Moment when capturing one concrete collaboration trace. Keep the card body in Content and keep provenance in Evidence.
 
 ## Boundaries
 
@@ -115,7 +115,7 @@ Return Markdown only. Explain what the thread is, why it keeps returning, and wh
   [ECHO_INSIGHT_ASSISTANT_ID]: {
     id: ECHO_INSIGHT_ASSISTANT_ID,
     name: 'Echo Insight',
-    description: 'Distill visible Echo context into reusable Markdown insight and judgment rules.',
+    description: 'Distill visible Echo context into a reusable Pattern or Judgment insight.',
     color: 'sage',
     steps: 12,
     body: `# Echo Insight
@@ -132,7 +132,7 @@ Distill recurring patterns into reusable insight the user can apply next time.
 
 ## Output
 
-Return Markdown only. Focus on one pattern or one reusable judgment. Add evidence and boundary only when the visible context supports them.
+Return Markdown only. Choose kind: Pattern for a recurring shape, or Judgment for a decision rule. Keep interpretation in Content and provenance in Evidence.
 
 ## Boundaries
 
@@ -145,25 +145,25 @@ Return Markdown only. Focus on one pattern or one reusable judgment. Add evidenc
   [ECHO_PROMOTION_ASSISTANT_ID]: {
     id: ECHO_PROMOTION_ASSISTANT_ID,
     name: 'Echo Promotion',
-    description: 'Turn useful agent work traces into a Promotion candidate with a Playbook or Practice target.',
+    description: 'Turn useful agent work traces into a Promotion card: Playbook or Practice.',
     color: 'amber',
     steps: 12,
     body: `# Echo Promotion
 
 ## Role
 
-Turn useful traces of agent work into one Promotion candidate with an explicit target.
+Turn useful traces of agent work into one Promotion card.
 
 ## Inputs
 
 - The current Echo Promotion page context
-- Promotion candidates
-- Visible playbooks and practices
+- Visible Promotion candidates
+- The current insight or saved Echo item when provided
 - Recent session summaries when the app provides them
 
 ## Output
 
-Return Markdown only. Produce a Promotion note. Choose Target: Playbook if the trace should become a reusable method, or Practice if it should become a small action to verify.
+Return Markdown only. Choose kind: Playbook if the trace should become a reusable method, or Practice if it should become a small action to verify. Keep the reusable method or action in Content and keep provenance in Evidence.
 
 ## Boundaries
 
@@ -295,25 +295,25 @@ function outputContractForSegment(segment: EchoAssistantSegment, locale: EchoPro
   if (locale === 'zh') {
     switch (segment) {
       case 'imprint':
-        return '- `# 印迹`\n- `## 现场`\n- `## 结果`\n- `## 关键片段`\n- `## 待梳理`\n- `## 下一步`';
+        return '- `# 印迹`\n- `kind: digest | moment`\n- `## 内容`\n- `## 证据`';
       case 'threads':
         return '- `# 脉络`\n- `## 现象`\n- `## 为什么会反复出现`\n- `## 可能的形成过程`\n- `## 仍不确定`';
       case 'growth':
-        return '- `# 洞察`\n- `## 模式`\n- `## 判断`\n- `## 证据`\n- `## 边界`';
+        return '- `# 洞察`\n- `kind: pattern | judgment`\n- `## 内容`\n- `## 证据`';
       case 'practice':
-        return '- `# 承接`\n- `## 去向`\n- `## 承接候选`\n- `## 来源轨迹`\n- `## 为什么承接`\n- `## 人工确认`';
+        return '- `# 承接`\n- `kind: playbook | practice`\n- `## 内容`\n- `## 证据`\n- `## 人工确认`';
     }
   }
 
   switch (segment) {
     case 'imprint':
-      return '- `# Imprint`\n- `## Scene`\n- `## Result`\n- `## Key Fragment`\n- `## To Clarify`\n- `## Next Step`';
+      return '- `# Imprint`\n- `kind: digest | moment`\n- `## Content`\n- `## Evidence`';
     case 'threads':
       return '- `# Thread`\n- `## Pattern`\n- `## Why It Returns`\n- `## How It May Have Formed`\n- `## Still Uncertain`';
     case 'growth':
-      return '- `# Insight`\n- `## Pattern`\n- `## Judgment`\n- `## Evidence`\n- `## Boundary`';
+      return '- `# Insight`\n- `kind: pattern | judgment`\n- `## Content`\n- `## Evidence`';
     case 'practice':
-      return '- `# Promotion`\n- `## Target`\n- `## Promotion Candidate`\n- `## Source Trace`\n- `## Why Promote`\n- `## Human Check`';
+      return '- `# Promotion`\n- `kind: playbook | practice`\n- `## Content`\n- `## Evidence`\n- `## Human Check`';
   }
 }
 

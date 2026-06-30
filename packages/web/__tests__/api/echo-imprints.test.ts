@@ -54,10 +54,16 @@ describe('/api/echo/imprints', () => {
     expect(loaded.state).toMatchObject({ lastTrigger: 'manual', runCount: 1 });
     expect(loaded.cards.map((card: { id: string }) => card.id)).toContain(targetId);
 
-    const editedRes = await PATCH(request({ id: targetId, summary: '用户确认后的摘要' }, 'PATCH'));
+    const editedRes = await PATCH(request({ id: targetId, content: '用户确认后的正文' }, 'PATCH'));
     const edited = await editedRes.json();
     expect(editedRes.status, JSON.stringify(edited)).toBe(200);
-    expect(edited.card).toMatchObject({ id: targetId, summary: '用户确认后的摘要', userEdited: true });
+    expect(edited.card).toMatchObject({ id: targetId, content: '用户确认后的正文', userEdited: true });
+
+    const oldSummaryPatchRes = await PATCH(request({ id: targetId, summary: '旧字段不再更新正文' }, 'PATCH'));
+    expect(oldSummaryPatchRes.status).toBe(400);
+
+    const emptyPatchRes = await PATCH(request({ id: targetId }, 'PATCH'));
+    expect(emptyPatchRes.status).toBe(400);
 
     const deletedRes = await DELETE(request({ id: targetId }, 'DELETE'));
     const deleted = await deletedRes.json();
@@ -156,7 +162,7 @@ describe('/api/echo/imprints', () => {
   });
 
   it('validates required card ids for mutations', async () => {
-    const editedRes = await PATCH(request({ summary: 'missing id' }, 'PATCH'));
+    const editedRes = await PATCH(request({ content: 'missing id' }, 'PATCH'));
     expect(editedRes.status).toBe(400);
 
     const deletedRes = await DELETE(request({}, 'DELETE'));

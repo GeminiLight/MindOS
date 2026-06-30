@@ -136,6 +136,10 @@ interface ChatContentProps {
   initialAcpAgent?: AcpAgentSelection | null;
   /** Runtime pre-selected by an opener; supersedes initialAcpAgent when present. */
   initialAgentRuntime?: AgentRuntimeIdentity | null;
+  /** Start a fresh MindOS chat session for this opener request. */
+  initialNewSession?: boolean;
+  /** Monotonic opener request id, used when the panel is already visible. */
+  openRequestId?: number;
   /** Route-driven session selection (/chat/[sessionId]): the route already
    * called loadSession, so init skips initSessions' selection phase (which
    * would clobber it) and only refreshes session metadata. */
@@ -154,7 +158,7 @@ interface ChatContentProps {
   onDockToPanel?: () => void;
 }
 
-export default function ChatContent({ visible, currentFile, initialMessage, initialAcpAgent, initialAgentRuntime, initialSessionId, projectId, contextRequest, onFirstMessage, variant, onClose, maximized, onMaximize, onDockToPanel }: ChatContentProps) {
+export default function ChatContent({ visible, currentFile, initialMessage, initialAcpAgent, initialAgentRuntime, initialNewSession, openRequestId, initialSessionId, projectId, contextRequest, onFirstMessage, variant, onClose, maximized, onMaximize, onDockToPanel }: ChatContentProps) {
   const isPanel = variant === 'panel';
   const isHome = variant === 'home';
 
@@ -811,21 +815,25 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
   // Focus and init session when becoming visible (edge-triggered for panel, level-triggered for modal)
   const prevVisibleRef = useRef(false);
   const prevFileRef = useRef(currentFile);
+  const prevOpenRequestIdRef = useRef(openRequestId);
   useEffect(() => {
     const justOpened = variant === 'panel' || variant === 'home'
       ? (visible && !prevVisibleRef.current)  // panel/home: edge detection
       : visible;                               // modal: level detection (reset every open)
+    const requestChanged = visible && openRequestId !== undefined && openRequestId !== prevOpenRequestIdRef.current;
 
     // Detect file change while panel is already open
     const fileChanged = visible && prevVisibleRef.current && currentFile !== prevFileRef.current;
 
-    if (justOpened) {
+    if (justOpened || requestChanged) {
       const openerRuntime = initialAgentRuntime ?? toAgentRuntime(initialAcpAgent);
       const preferredRuntime = openerRuntime ?? loadLastSelectedAgentRuntime();
       pendingOpenAgentRef.current = preferredRuntime;
       if (openerRuntime) persistLastSelectedAgentRuntime(openerRuntime);
       setTimeout(() => inputRef.current?.focus(), 50);
-      if (initialSessionId) {
+      if (initialNewSession) {
+        session.resetSession(preferredRuntime ?? undefined);
+      } else if (initialSessionId) {
         // Route owns selection — initSessions' selection phase would move the
         // active session away from the route's loadSession. Metadata only.
         void refreshSessions();
@@ -855,8 +863,9 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
     }
     prevVisibleRef.current = visible;
     prevFileRef.current = currentFile;
+    prevOpenRequestIdRef.current = openRequestId;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible, currentFile]);
+  }, [visible, currentFile, openRequestId]);
 
   useEffect(() => {
     if (!visible || !contextRequest) return;

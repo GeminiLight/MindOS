@@ -137,6 +137,25 @@ describe('useAskPanel full-page chat guard', () => {
     act(() => root.unmount());
   });
 
+  it('opens the Ask panel from a bridge request on regular content routes', async () => {
+    const { host, root } = renderProbe();
+    const probe = host.querySelector('div');
+
+    await act(async () => {
+      openAskModal('continue from this Echo card', 'user', null, { newSession: true });
+      await Promise.resolve();
+    });
+
+    expect(probe?.getAttribute('data-ask-open')).toBe('true');
+    expect(probe?.getAttribute('data-popup-open')).toBe('false');
+    expect(probe?.getAttribute('data-modal-store-open')).toBe('false');
+    expect(latestState.current?.askInitialMessage).toBe('continue from this Echo card');
+    expect(latestState.current?.askNewSession).toBe(true);
+    expect(latestState.current?.askOpenRequestId).toBeGreaterThan(0);
+
+    act(() => root.unmount());
+  });
+
   it('keeps SidebarLayout render output gated on full-page chat before effects close stale state', () => {
     const source = fs.readFileSync(path.resolve(process.cwd(), 'components/SidebarLayout.tsx'), 'utf-8');
 

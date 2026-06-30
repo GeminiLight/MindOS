@@ -18,9 +18,20 @@ interface AskModalState {
   source: 'user' | 'guide' | 'guide-next';  // who triggered the open
   acpAgent: AcpAgentSelection | null;
   agentRuntime: AskAgentRuntimeSelection | null;
+  newSession: boolean;
+  requestId: number;
 }
 
-let state: AskModalState = { open: false, initialMessage: '', source: 'user', acpAgent: null, agentRuntime: null };
+let requestId = 0;
+let state: AskModalState = {
+  open: false,
+  initialMessage: '',
+  source: 'user',
+  acpAgent: null,
+  agentRuntime: null,
+  newSession: false,
+  requestId,
+};
 const listeners = new Set<() => void>();
 
 function emit() { listeners.forEach(l => l()); }
@@ -39,17 +50,34 @@ export function openAskModal(
   message = '',
   source: AskModalState['source'] = 'user',
   agent: AcpAgentSelection | AskAgentRuntimeSelection | null = null,
+  options: { newSession?: boolean } = {},
 ) {
   const agentRuntime = toRuntimeSelection(agent);
   const acpAgent = agentRuntime?.kind === 'acp'
     ? { id: agentRuntime.id, name: agentRuntime.name }
     : null;
-  state = { open: true, initialMessage: message, source, acpAgent, agentRuntime };
+  state = {
+    open: true,
+    initialMessage: message,
+    source,
+    acpAgent,
+    agentRuntime,
+    newSession: Boolean(options.newSession),
+    requestId: ++requestId,
+  };
   emit();
 }
 
 export function closeAskModal() {
-  state = { open: false, initialMessage: '', source: 'user', acpAgent: null, agentRuntime: null };
+  state = {
+    open: false,
+    initialMessage: '',
+    source: 'user',
+    acpAgent: null,
+    agentRuntime: null,
+    newSession: false,
+    requestId,
+  };
   emit();
 }
 
@@ -61,11 +89,14 @@ export function useAskModal() {
     source: snap.source,
     acpAgent: snap.acpAgent,
     agentRuntime: snap.agentRuntime,
+    newSession: snap.newSession,
+    requestId: snap.requestId,
     openWith: useCallback((
       message: string,
       source: AskModalState['source'] = 'user',
       agent: AcpAgentSelection | AskAgentRuntimeSelection | null = null,
-    ) => openAskModal(message, source, agent), []),
+      options: { newSession?: boolean } = {},
+    ) => openAskModal(message, source, agent, options), []),
     close: useCallback(() => closeAskModal(), []),
   };
 }

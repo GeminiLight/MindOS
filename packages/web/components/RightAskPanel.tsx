@@ -24,6 +24,8 @@ interface RightAskPanelProps {
   initialMessage?: string;
   initialAcpAgent?: AcpAgentSelection | null;
   initialAgentRuntime?: AskAgentRuntimeSelection | null;
+  initialNewSession?: boolean;
+  openRequestId?: number;
   contextRequest?: AskContextRequest | null;
   onFirstMessage?: () => void;
   width: number;
@@ -37,7 +39,7 @@ interface RightAskPanelProps {
 }
 
 export default function RightAskPanel({
-  open, onClose, currentFile, initialMessage, initialAcpAgent, initialAgentRuntime, contextRequest, onFirstMessage,
+  open, onClose, currentFile, initialMessage, initialAcpAgent, initialAgentRuntime, initialNewSession, openRequestId, contextRequest, onFirstMessage,
   width, onWidthChange, onWidthCommit,
   maximized = false, onMaximize, sidebarOffset = 0,
   layoutMode = maximized ? 'focus' : 'docked',
@@ -138,6 +140,8 @@ export default function RightAskPanel({
             initialMessage={initialMessage}
             initialAcpAgent={initialAcpAgent}
             initialAgentRuntime={initialAgentRuntime}
+            initialNewSession={initialNewSession}
+            openRequestId={openRequestId}
             contextRequest={contextRequest}
             onFirstMessage={onFirstMessage}
             onClose={onClose}

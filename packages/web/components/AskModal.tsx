@@ -12,11 +12,13 @@ interface AskModalProps {
   initialMessage?: string;
   initialAcpAgent?: AcpAgentSelection | null;
   initialAgentRuntime?: AskAgentRuntimeSelection | null;
+  initialNewSession?: boolean;
+  openRequestId?: number;
   contextRequest?: AskContextRequest | null;
   onFirstMessage?: () => void;
 }
 
-export default function AskModal({ open, onClose, currentFile, initialMessage, initialAcpAgent, initialAgentRuntime, contextRequest, onFirstMessage }: AskModalProps) {
+export default function AskModal({ open, onClose, currentFile, initialMessage, initialAcpAgent, initialAgentRuntime, initialNewSession, openRequestId, contextRequest, onFirstMessage }: AskModalProps) {
   const { t } = useLocale();
 
   if (!open) return null;
@@ -40,6 +42,8 @@ export default function AskModal({ open, onClose, currentFile, initialMessage, i
           initialMessage={initialMessage}
           initialAcpAgent={initialAcpAgent}
           initialAgentRuntime={initialAgentRuntime}
+          initialNewSession={initialNewSession}
+          openRequestId={openRequestId}
           contextRequest={contextRequest}
           onFirstMessage={onFirstMessage}
         />

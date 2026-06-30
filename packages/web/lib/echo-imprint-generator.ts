@@ -37,17 +37,27 @@ export type ImprintSourceSession = {
   runtime?: string;
 };
 
+export type ImprintCardKind = 'digest' | 'moment';
+
+export type ImprintCardSource = {
+  label: string;
+  sessionIds: string[];
+  messageRefs?: ImprintExtractionMessageRef[];
+};
+
+export type ImprintEvidence = {
+  label: string;
+};
+
 export type ImprintCard = {
   id: string;
+  kind: ImprintCardKind;
   title: string;
-  summary: string;
+  content: string;
   createdAt: string;
-  source: string;
-  whyItMatters: string;
-  route: string;
+  source: ImprintCardSource;
+  evidence: ImprintEvidence;
   confidence: number;
-  sourceSessionIds: string[];
-  sourceMessageRefs?: ImprintExtractionMessageRef[];
   status: 'active' | 'deleted';
   generatedAt: string;
   updatedAt: string;
@@ -109,7 +119,7 @@ const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 const MIN_INTERVAL_HOURS = 1;
 const MAX_INTERVAL_HOURS = 24;
 const MAX_ACTIVE_CARDS = 5;
-const MAX_SUMMARY_CHARS = 280;
+const MAX_CONTENT_CHARS = 280;
 
 export function readImprintGenerationState(mindRoot: string): ImprintGenerationState {
   try {
@@ -310,7 +320,7 @@ export function getImprintScheduleStatus(
 export function updateImprintCard(
   mindRoot: string,
   cardId: string,
-  patch: { title?: unknown; summary?: unknown },
+  patch: { title?: unknown; content?: unknown },
   now = new Date(),
 ): ImprintCard | null {
   const state = readImprintGenerationState(mindRoot);
@@ -319,11 +329,11 @@ export function updateImprintCard(
 
   const current = state.cards[index];
   const title = typeof patch.title === 'string' ? normalizeText(patch.title, 120) : current.title;
-  const summary = typeof patch.summary === 'string' ? normalizeText(patch.summary, MAX_SUMMARY_CHARS) : current.summary;
+  const content = typeof patch.content === 'string' ? normalizeText(patch.content, MAX_CONTENT_CHARS) : current.content;
   const next: ImprintCard = {
     ...current,
     title: title || current.title,
-    summary: summary || current.summary,
+    content: content || current.content,
     updatedAt: now.toISOString(),
     userEdited: true,
   };
@@ -441,27 +451,70 @@ function normalizeCard(value: unknown): ImprintCard | null {
   const id = typeof record.id === 'string' ? record.id.trim() : '';
   if (!id) return null;
   const now = new Date().toISOString();
+  const content = normalizeText(record.content, MAX_CONTENT_CHARS) || normalizeText(record.summary, MAX_CONTENT_CHARS);
+  if (!content) return null;
+  const source = normalizeCardSource(record.source, record);
+  if (!source) return null;
   return {
     id,
+    kind: record.kind === 'digest' ? 'digest' : 'moment',
     title: normalizeText(record.title, 120) || 'Untitled imprint',
-    summary: normalizeText(record.summary, MAX_SUMMARY_CHARS),
+    content,
     createdAt: normalizeText(record.createdAt, 32) || formatTime(new Date()),
-    source: normalizeText(record.source, 220),
-    whyItMatters: normalizeText(record.whyItMatters, 220),
-    route: normalizeText(record.route, 220),
+    source,
+    evidence: normalizeEvidence(record.evidence, record),
     confidence: typeof record.confidence === 'number' && Number.isFinite(record.confidence)
       ? Math.max(0, Math.min(1, record.confidence))
       : 0.5,
-    sourceSessionIds: Array.isArray(record.sourceSessionIds)
-      ? record.sourceSessionIds.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
-      : [],
-    ...(normalizeSourceMessageRefs(record.sourceMessageRefs).length > 0 ? { sourceMessageRefs: normalizeSourceMessageRefs(record.sourceMessageRefs) } : {}),
     status: record.status === 'deleted' ? 'deleted' : 'active',
     generatedAt: typeof record.generatedAt === 'string' && isValidDate(record.generatedAt) ? record.generatedAt : now,
     updatedAt: typeof record.updatedAt === 'string' && isValidDate(record.updatedAt) ? record.updatedAt : now,
     ...(record.generationMethod === 'lm' || record.generationMethod === 'deterministic' ? { generationMethod: record.generationMethod } : {}),
     ...(typeof record.promptVersion === 'string' && record.promptVersion.trim() ? { promptVersion: normalizeText(record.promptVersion, 80) } : {}),
     ...(record.userEdited === true ? { userEdited: true } : {}),
+  };
+}
+
+function normalizeCardSource(value: unknown, legacyRecord: Record<string, unknown> = {}): ImprintCardSource | null {
+  const record = value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+  const legacyEvidence = legacyRecord.evidence && typeof legacyRecord.evidence === 'object' && !Array.isArray(legacyRecord.evidence)
+    ? legacyRecord.evidence as Record<string, unknown>
+    : {};
+  const sessionIdsInput = Array.isArray(record.sessionIds)
+    ? record.sessionIds
+    : Array.isArray(legacyRecord.sourceSessionIds)
+      ? legacyRecord.sourceSessionIds
+      : Array.isArray(legacyEvidence.sourceSessionIds)
+        ? legacyEvidence.sourceSessionIds
+        : [];
+  const sessionIds = sessionIdsInput
+    .filter((item): item is string => typeof item === 'string' && item.trim().length > 0);
+  const messageRefsInput = Array.isArray(record.messageRefs)
+    ? record.messageRefs
+    : Array.isArray(legacyRecord.sourceMessageRefs)
+      ? legacyRecord.sourceMessageRefs
+      : legacyEvidence.sourceMessageRefs;
+  const messageRefs = normalizeSourceMessageRefs(messageRefsInput);
+  const label = normalizeText(record.label, 220) || normalizeText(value, 220) || normalizeText(legacyRecord.source, 220);
+  return sessionIds.length > 0
+    ? {
+      label,
+      sessionIds,
+      ...(messageRefs.length > 0 ? { messageRefs } : {}),
+    }
+    : null;
+}
+
+function normalizeEvidence(value: unknown, legacyRecord: Record<string, unknown> = {}): ImprintEvidence {
+  const record = value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+  return {
+    label: normalizeText(record.label, 220)
+      || normalizeText(legacyRecord.whyItMatters, 220)
+      || normalizeText(legacyRecord.route, 220),
   };
 }
 
@@ -589,31 +642,54 @@ function cardsFromLmCandidates(
   const sessionById = new Map(sessions.map((session) => [session.id, session]));
   return candidates
     .map((candidate) => {
-      const sessionIds = uniqueStrings([
+      const requestedSessionIds = uniqueStrings([
         ...candidate.source.sessionIds,
         ...candidate.source.messageRefs.map((ref) => ref.sessionId),
       ]);
-      const sourceSessions = sessionIds
+      const sourceSessions = requestedSessionIds
         .map((id) => sessionById.get(id))
         .filter((session): session is ImprintSourceSession => Boolean(session));
-      const route = routeLabel(candidate.route);
+      if (sourceSessions.length === 0) return null;
+      const messageRefs = verifiedCandidateMessageRefs(candidate.source.messageRefs, sessionById);
+      const sessionIds = uniqueStrings([
+        ...sourceSessions.map((session) => session.id),
+        ...messageRefs.map((ref) => ref.sessionId),
+      ]);
       return createCard({
         idSeed: lmCandidateIdSeed(candidate),
+        kind: candidate.kind,
         title: candidate.title,
-        summary: candidate.summary,
+        content: candidate.content,
         createdAt: formatTime(latestSessionDate(sourceSessions, now)),
-        source: sourceLabel(candidate, sourceSessions),
-        whyItMatters: candidate.whyItMatters,
-        route,
+        source: {
+          label: sourceLabel(sourceSessions, messageRefs),
+          sessionIds,
+          messageRefs,
+        },
+        evidence: {
+          label: candidate.agencyTags.length > 0
+            ? `Grounded in selected session messages · ${candidate.agencyTags.join(', ')}`
+            : 'Grounded in selected session messages.',
+        },
         confidence: candidate.confidence,
-        sourceSessionIds: sessionIds,
-        sourceMessageRefs: candidate.source.messageRefs,
         generationMethod: 'lm',
         promptVersion,
         now,
       });
     })
+    .filter((card): card is ImprintCard => card !== null)
     .slice(0, MAX_ACTIVE_CARDS);
+}
+
+function verifiedCandidateMessageRefs(
+  refs: ImprintExtractionMessageRef[],
+  sessionById: Map<string, ImprintSourceSession>,
+): ImprintExtractionMessageRef[] {
+  return refs.filter((ref) => {
+    const session = sessionById.get(ref.sessionId);
+    const message = session?.messages[ref.messageIndex];
+    return Boolean(message && message.role === ref.role);
+  });
 }
 
 function buildSessionCard(session: ImprintSourceSession, now: Date): ImprintCard {
@@ -621,17 +697,21 @@ function buildSessionCard(session: ImprintSourceSession, now: Date): ImprintCard
   const lastUser = lastMessage(session, 'user');
   const lastAssistant = lastMessage(session, 'assistant');
   const title = sessionTitle(session);
-  const summarySeed = lastAssistant || lastUser || firstUser || title;
+  const contentSeed = lastAssistant || lastUser || firstUser || title;
   return createCard({
     idSeed: `${session.id}:imprint`,
+    kind: 'moment',
     title,
-    summary: normalizeText(summarySeed, MAX_SUMMARY_CHARS),
+    content: normalizeText(contentSeed, MAX_CONTENT_CHARS),
     createdAt: formatTime(new Date(session.updatedAt ?? session.createdAt ?? now.getTime())),
-    source: session.runtime ? `${session.runtime} session · ${title}` : `Session · ${title}`,
-    whyItMatters: 'This session contains a concrete interaction that can be reviewed, edited, or discarded before it affects memory.',
-    route: 'Can support a thread, insight, or practice only after the user keeps or edits it.',
+    source: {
+      label: session.runtime ? `${session.runtime} session · ${title}` : `Session · ${title}`,
+      sessionIds: [session.id],
+    },
+    evidence: {
+      label: 'Generated from this session window.',
+    },
     confidence: 0.72,
-    sourceSessionIds: [session.id],
     generationMethod: 'deterministic',
     now,
   });
@@ -639,15 +719,13 @@ function buildSessionCard(session: ImprintSourceSession, now: Date): ImprintCard
 
 function createCard(input: {
   idSeed: string;
+  kind: ImprintCardKind;
   title: string;
-  summary: string;
+  content: string;
   createdAt: string;
-  source: string;
-  whyItMatters: string;
-  route: string;
+  source: ImprintCardSource;
+  evidence: ImprintEvidence;
   confidence: number;
-  sourceSessionIds: string[];
-  sourceMessageRefs?: ImprintExtractionMessageRef[];
   generationMethod?: 'deterministic' | 'lm';
   promptVersion?: string;
   now: Date;
@@ -655,15 +733,21 @@ function createCard(input: {
   const timestamp = input.now.toISOString();
   return {
     id: `imprint-${stableHash(input.idSeed).slice(0, 12)}`,
+    kind: input.kind,
     title: normalizeText(input.title, 120) || 'Untitled imprint',
-    summary: normalizeText(input.summary, MAX_SUMMARY_CHARS),
+    content: normalizeText(input.content, MAX_CONTENT_CHARS),
     createdAt: input.createdAt,
-    source: normalizeText(input.source, 220),
-    whyItMatters: normalizeText(input.whyItMatters, 220),
-    route: normalizeText(input.route, 220),
+    source: {
+      label: normalizeText(input.source.label, 220),
+      sessionIds: input.source.sessionIds,
+      ...(input.source.messageRefs && input.source.messageRefs.length > 0
+        ? { messageRefs: input.source.messageRefs }
+        : {}),
+    },
+    evidence: {
+      label: normalizeText(input.evidence.label, 220),
+    },
     confidence: input.confidence,
-    sourceSessionIds: input.sourceSessionIds,
-    ...(input.sourceMessageRefs && input.sourceMessageRefs.length > 0 ? { sourceMessageRefs: input.sourceMessageRefs } : {}),
     status: 'active',
     generatedAt: timestamp,
     updatedAt: timestamp,
@@ -681,7 +765,7 @@ function mergeGeneratedCards(existing: ImprintCard[], generated: ImprintCard[]):
       ? {
         ...card,
         title: previous.title,
-        summary: previous.summary,
+        content: previous.content,
         status: previous.status,
         generatedAt: previous.generatedAt,
         updatedAt: previous.updatedAt,
@@ -708,30 +792,14 @@ function latestSessionDate(sessions: ImprintSourceSession[], fallback: Date): Da
   return latest > 0 ? new Date(latest) : fallback;
 }
 
-function sourceLabel(
-  candidate: ImprintExtractionCardCandidate,
-  sessions: ImprintSourceSession[],
-): string {
+function sourceLabel(sessions: ImprintSourceSession[], refs: ImprintExtractionMessageRef[]): string {
   const titles = sessions.map(sessionTitle).slice(0, 2);
-  const messageRefs = candidate.source.messageRefs
+  const messageRefs = refs
     .map((ref) => `#${ref.messageIndex + 1}`)
     .slice(0, 4)
     .join(', ');
-  const sessionPart = titles.length > 0 ? titles.join(' / ') : `${candidate.source.sessionIds.length} session window`;
+  const sessionPart = titles.length > 0 ? titles.join(' / ') : `${sessions.length} session window`;
   return messageRefs ? `${sessionPart} · messages ${messageRefs}` : sessionPart;
-}
-
-function routeLabel(route: ImprintExtractionCardCandidate['route']): string {
-  switch (route) {
-    case 'thread':
-      return 'Candidate for Echo Thread after the user keeps or edits it.';
-    case 'insight':
-      return 'Candidate for Echo Insight if the user confirms this pattern matters.';
-    case 'practice':
-      return 'Candidate for Echo Promotion: either a playbook or a future practice, not inherited automatically.';
-    case 'archive':
-      return 'Keep as an editable imprint or delete if it is not useful.';
-  }
 }
 
 function lmCandidateIdSeed(candidate: ImprintExtractionCardCandidate): string {

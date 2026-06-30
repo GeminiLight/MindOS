@@ -26,8 +26,9 @@ describe('echo imprint extraction task', () => {
     const output = echoImprintExtractionTask.validateOutput({
       cards: [
         {
+          kind: 'moment',
           title: 'Imprint extraction became a structured task',
-          summary: 'The conversation established a tool-free AI task boundary.',
+          content: 'The conversation established a tool-free AI task boundary.',
           source: {
             sessionIds: ['s-1'],
             messageRefs: [
@@ -39,14 +40,13 @@ describe('echo imprint extraction task', () => {
               },
             ],
           },
-          whyItMatters: 'The user keeps control because LM output remains editable.',
-          route: 'insight',
           confidence: 0.9,
           agencyTags: ['user_decision'],
         },
         {
+          kind: 'moment',
           title: 'Invalid source should not pass',
-          summary: 'This references a message that does not exist.',
+          content: 'This references a message that does not exist.',
           source: {
             sessionIds: ['s-1'],
             messageRefs: [
@@ -58,8 +58,6 @@ describe('echo imprint extraction task', () => {
               },
             ],
           },
-          whyItMatters: 'Invalid provenance is unsafe.',
-          route: 'archive',
           confidence: 0.2,
           agencyTags: [],
         },

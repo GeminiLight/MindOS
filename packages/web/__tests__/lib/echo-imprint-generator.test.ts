@@ -41,8 +41,11 @@ describe('echo imprint generator', () => {
     expect(result.sourceWindow.sessionCount).toBe(1);
     expect(result.state.checkpointAt).toBe(baseTime.toISOString());
     expect(result.cards[0]).toMatchObject({
+      kind: 'moment',
       status: 'active',
-      sourceSessionIds: ['s-1'],
+      source: {
+        sessionIds: ['s-1'],
+      },
     });
     expect(result.cards[0]).not.toHaveProperty('type');
 
@@ -124,7 +127,7 @@ describe('echo imprint generator', () => {
     expect(persisted.cards.find((card) => card.id === deletedId)?.status).toBe('deleted');
   });
 
-  it('preserves user-edited card summaries across regeneration', () => {
+  it('preserves user-edited card content across regeneration', () => {
     const root = getTestMindRoot();
     const first = generateImprints({
       mindRoot: root,
@@ -134,7 +137,7 @@ describe('echo imprint generator', () => {
     });
     const target = first.cards[0];
 
-    updateImprintCard(root, target.id, { summary: '用户改过的摘要' }, baseTime);
+    updateImprintCard(root, target.id, { content: '用户改过的正文' }, baseTime);
     const second = generateImprints({
       mindRoot: root,
       sessions: [session({ updatedAt: baseTime.getTime() + 1 })],
@@ -142,8 +145,106 @@ describe('echo imprint generator', () => {
       now: new Date(baseTime.getTime() + 60_000),
     });
 
-    expect(second.cards.find((card) => card.id === target.id)?.summary).toBe('用户改过的摘要');
+    expect(second.cards.find((card) => card.id === target.id)?.content).toBe('用户改过的正文');
     expect(readImprintGenerationState(root).cards.find((card) => card.id === target.id)?.userEdited).toBe(true);
+  });
+
+  it('migrates legacy summary cards with provenance into structured source and evidence fields', () => {
+    const root = getTestMindRoot();
+    const statePath = path.join(root, '.mindos', 'echo', 'imprints', 'state.json');
+    fs.mkdirSync(path.dirname(statePath), { recursive: true });
+    fs.writeFileSync(statePath, JSON.stringify({
+      schemaVersion: 1,
+      runCount: 1,
+      schedule: { mode: 'daily', dailyTime: '20:00', intervalHours: 24 },
+      cards: [
+        {
+          id: 'old-summary-card',
+          kind: 'moment',
+          title: 'Old card',
+          summary: '旧 summary 字段可以迁移为 content',
+          createdAt: '12:00',
+          source: '旧 source 字段迁移为来源',
+          whyItMatters: '旧 whyItMatters 字段迁移为证据',
+          sourceSessionIds: ['legacy-session'],
+          sourceMessageRefs: [
+            {
+              sessionId: 'legacy-session',
+              messageIndex: 1,
+              role: 'assistant',
+              quote: '旧卡片也应该保留可核对来源。',
+            },
+          ],
+          confidence: 0.8,
+          status: 'active',
+          generatedAt: baseTime.toISOString(),
+          updatedAt: baseTime.toISOString(),
+        },
+        {
+          id: 'summary-without-source',
+          kind: 'moment',
+          title: 'No source card',
+          summary: '没有 provenance 的旧草稿应该丢弃',
+          createdAt: '12:00',
+          source: '不可核对来源',
+          confidence: 0.7,
+          status: 'active',
+          generatedAt: baseTime.toISOString(),
+          updatedAt: baseTime.toISOString(),
+        },
+        {
+          id: 'new-content-card',
+          kind: 'digest',
+          title: 'New card',
+          content: '新结构只认 content 字段。',
+          createdAt: '12:01',
+          source: {
+            label: 'Structured source',
+            sessionIds: ['s-1'],
+          },
+          evidence: {
+            label: 'Structured evidence',
+          },
+          confidence: 0.9,
+          status: 'active',
+          generatedAt: baseTime.toISOString(),
+          updatedAt: baseTime.toISOString(),
+        },
+      ],
+    }));
+
+    const state = readImprintGenerationState(root);
+    expect(state.cards).toHaveLength(2);
+    expect(state.cards.find((card) => card.id === 'old-summary-card')).toMatchObject({
+      id: 'old-summary-card',
+      content: '旧 summary 字段可以迁移为 content',
+      source: {
+        label: '旧 source 字段迁移为来源',
+        sessionIds: ['legacy-session'],
+        messageRefs: [
+          expect.objectContaining({
+            sessionId: 'legacy-session',
+            messageIndex: 1,
+            role: 'assistant',
+          }),
+        ],
+      },
+      evidence: {
+        label: '旧 whyItMatters 字段迁移为证据',
+      },
+    });
+    expect(state.cards.some((card) => card.id === 'summary-without-source')).toBe(false);
+    expect(state.cards.find((card) => card.id === 'new-content-card')).toMatchObject({
+      id: 'new-content-card',
+      content: '新结构只认 content 字段。',
+      source: {
+        label: 'Structured source',
+        sessionIds: ['s-1'],
+      },
+      evidence: {
+        label: 'Structured evidence',
+      },
+    });
   });
 
   it('uses a structured AI task runner when available', async () => {
@@ -163,8 +264,9 @@ describe('echo imprint generator', () => {
       output: {
         cards: [
           {
+            kind: 'moment' as const,
             title: 'Backend generator became an AI task',
-            summary: 'The imprint generator now calls a structured AI task before merging cards.',
+            content: 'The imprint generator now calls a structured AI task before merging cards.',
             source: {
               sessionIds: ['s-1'],
               messageRefs: [
@@ -176,8 +278,6 @@ describe('echo imprint generator', () => {
                 },
               ],
             },
-            whyItMatters: 'This proves the LM path is isolated from state writes.',
-            route: 'insight' as const,
             confidence: 0.86,
             agencyTags: ['implementation_result'],
           },
@@ -203,10 +303,12 @@ describe('echo imprint generator', () => {
     expect(result.cards[0]).toMatchObject({
       generationMethod: 'lm',
       promptVersion: 'echo-imprint-extract-v2',
-      sourceSessionIds: ['s-1'],
-      sourceMessageRefs: [
-        expect.objectContaining({ sessionId: 's-1', messageIndex: 0, role: 'user' }),
-      ],
+      source: {
+        sessionIds: ['s-1'],
+        messageRefs: [
+          expect.objectContaining({ sessionId: 's-1', messageIndex: 0, role: 'user' }),
+        ],
+      },
     });
     expect(readImprintGenerationState(root).lastGenerationMode).toBe('lm');
   });
