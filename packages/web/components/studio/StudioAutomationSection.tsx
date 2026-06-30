@@ -2,7 +2,6 @@
 
 import {
   Bot,
-  CalendarClock,
   ChevronDown,
   Edit3,
   FolderGit2,
@@ -11,6 +10,7 @@ import {
   Pause,
   Play,
   Plus,
+  Search,
   Sparkles,
   WandSparkles,
   X,
@@ -42,12 +42,11 @@ import {
 const COPY = {
   en: {
     title: 'Automation',
-    subtitle: 'Turn recurring agent work into calm, reviewable local plans.',
-    localModeTitle: 'Local plans',
-    localModeDesc: 'Studio keeps these plans editable. Runtime execution is not connected yet.',
-    plansSummary: 'plans',
-    enabledSummary: 'enabled',
-    pausedSummary: 'paused',
+    subtitle: 'Turn recurring agent work into calm, reviewable routines.',
+    totalLabel: 'Total',
+    enabledLabel: 'Enabled',
+    searchLabel: 'Search automations',
+    searchPlaceholder: 'Search automations...',
     createKicker: 'Create',
     editKicker: 'Editing',
     createTitle: 'Create automation',
@@ -76,8 +75,6 @@ const COPY = {
     create: 'Create automation',
     save: 'Save changes',
     required: 'Add a prompt before creating an automation.',
-    existingTitle: 'Plans',
-    existingHint: 'Keep the recurring work visible without pretending it is already running.',
     active: 'Active',
     paused: 'Paused',
     pause: 'Pause',
@@ -87,6 +84,7 @@ const COPY = {
     localPlan: 'Local plan',
     advanced: 'Advanced settings',
     empty: 'No automations match this workspace yet.',
+    emptySearch: 'No automations match this search.',
     worktree: 'Worktree',
     project: 'Project',
     mind: 'Mind',
@@ -131,12 +129,11 @@ const COPY = {
   },
   zh: {
     title: '自动化',
-    subtitle: '把重复 Agent 工作整理成清晰、可审核的本地计划。',
-    localModeTitle: '本地计划',
-    localModeDesc: '工作台先保存和审核这些计划；运行时执行还没有接入。',
-    plansSummary: '项计划',
-    enabledSummary: '启用',
-    pausedSummary: '暂停',
+    subtitle: '把重复 Agent 工作整理成清晰、可审核的节奏。',
+    totalLabel: '总数',
+    enabledLabel: '启用',
+    searchLabel: '搜索自动化',
+    searchPlaceholder: '搜索自动化...',
     createKicker: '创建',
     editKicker: '编辑中',
     createTitle: '创建自动化',
@@ -165,8 +162,6 @@ const COPY = {
     create: '创建自动化',
     save: '保存更改',
     required: '创建自动化前需要先写提示词。',
-    existingTitle: '计划',
-    existingHint: '把重复工作保持可见，但不伪装成已经在后台运行。',
     active: '启用',
     paused: '暂停',
     pause: '暂停',
@@ -176,6 +171,7 @@ const COPY = {
     localPlan: '本地计划',
     advanced: '高级设置',
     empty: '这个工作区还没有自动化。',
+    emptySearch: '没有匹配的自动化。',
     worktree: '工作树',
     project: '项目',
     mind: '心智',
@@ -335,35 +331,87 @@ function MetaText({ label }: { label: string }) {
   );
 }
 
-function PlanModeStrip({
+function ToolbarMetric({
+  label,
+  value,
+}: {
+  label: string;
+  value: number;
+}) {
+  return (
+    <span className="inline-flex items-baseline gap-1.5 whitespace-nowrap text-xs text-muted-foreground">
+      <span className="font-medium">{label}</span>
+      <span className="text-sm font-semibold text-foreground [font-variant-numeric:tabular-nums]">{value}</span>
+    </span>
+  );
+}
+
+function normalizeSearchValue(value: string): string {
+  return value.trim().toLocaleLowerCase();
+}
+
+function automationSearchText(
+  automation: StudioAutomation,
+  projects: StudioProject[],
+  locale: string,
+  copy: StudioAutomationCopy,
+): string {
+  const scopeText = automation.scope === 'project'
+    ? `${scopeLabel(automation.scope, copy)} ${projectLabel(projects, automation.projectId, locale, copy.noProject)}`
+    : scopeLabel(automation.scope, copy);
+  return normalizeSearchValue([
+    automation.title,
+    automation.titleZh,
+    automation.prompt,
+    automation.promptZh,
+    automation.status === 'active' ? copy.active : copy.paused,
+    scopeText,
+    scheduleLabel(automation.schedule, copy),
+    modelLabel(automation.model, copy),
+    effortLabel(automation.effort, copy),
+    automation.nextRun,
+    copy.localPlan,
+  ].filter(Boolean).join(' '));
+}
+
+function AutomationToolbar({
   copy,
   total,
   active,
+  searchQuery,
+  onSearchQueryChange,
 }: {
   copy: StudioAutomationCopy;
   total: number;
   active: number;
+  searchQuery: string;
+  onSearchQueryChange: (value: string) => void;
 }) {
-  const paused = Math.max(0, total - active);
   return (
     <div
-      data-studio-automation-summary
-      className="flex flex-col gap-2 rounded-lg border border-border/60 bg-background/40 px-3.5 py-3 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between"
+      data-studio-automation-toolbar
+      className="flex flex-col gap-3 border-b border-border/60 pb-3 sm:flex-row sm:items-center sm:justify-between"
     >
-      <div className="flex min-w-0 items-center gap-2">
-        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[var(--amber-subtle)] text-[var(--amber)]">
-          <CalendarClock size={13} aria-hidden="true" />
-        </span>
-        <div className="min-w-0">
-          <span className="block text-sm font-semibold text-foreground">{copy.localModeTitle}</span>
-          <span className="block truncate">{copy.localModeDesc}</span>
-        </div>
+      <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1">
+        <ToolbarMetric label={copy.totalLabel} value={total} />
+        <ToolbarMetric label={copy.enabledLabel} value={active} />
       </div>
-      <div className="flex shrink-0 flex-wrap gap-x-3 gap-y-1 [font-variant-numeric:tabular-nums]">
-        <span>{total} {copy.plansSummary}</span>
-        <span>{active} {copy.enabledSummary}</span>
-        <span>{paused} {copy.pausedSummary}</span>
-      </div>
+      <label className="relative min-w-0 sm:w-72">
+        <Search
+          size={14}
+          className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/70"
+          aria-hidden="true"
+        />
+        <input
+          data-studio-automation-search
+          type="search"
+          aria-label={copy.searchLabel}
+          value={searchQuery}
+          onChange={(event) => onSearchQueryChange(event.target.value)}
+          placeholder={copy.searchPlaceholder}
+          className="h-9 w-full rounded-lg border border-border/65 bg-background/65 pl-8 pr-3 text-xs text-foreground outline-none transition-colors placeholder:text-muted-foreground/55 hover:border-[var(--amber)]/35 focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
+        />
+      </label>
     </div>
   );
 }
@@ -679,6 +727,7 @@ export default function StudioAutomationSection({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     const syncAutomations = () => setAutomations(readStudioAutomations());
@@ -700,6 +749,13 @@ export default function StudioAutomationSection({
   const projectOptions = useMemo(() => projects.map((project) => project.id), [projects]);
   const activeCount = automations.filter((automation) => automation.status === 'active').length;
   const editing = editingId ? automations.find((automation) => automation.id === editingId) : null;
+  const normalizedSearchQuery = normalizeSearchValue(searchQuery);
+  const filteredAutomations = useMemo(() => {
+    if (!normalizedSearchQuery) return automations;
+    return automations.filter((automation) => (
+      automationSearchText(automation, projects, locale, copy).includes(normalizedSearchQuery)
+    ));
+  }, [automations, copy, locale, normalizedSearchQuery, projects]);
 
   const resetForm = useCallback(() => {
     setEditingId(null);
@@ -814,24 +870,19 @@ export default function StudioAutomationSection({
         </div>
       </header>
 
-      <section className="space-y-5">
-        <PlanModeStrip copy={copy} total={automations.length} active={activeCount} />
+      <section className="space-y-3">
+        <AutomationToolbar
+          copy={copy}
+          total={automations.length}
+          active={activeCount}
+          searchQuery={searchQuery}
+          onSearchQueryChange={setSearchQuery}
+        />
 
-        <section data-studio-automation-list className="min-w-0 space-y-3" aria-labelledby="studio-automation-existing">
-          <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 id="studio-automation-existing" className="text-sm font-semibold text-foreground">{copy.existingTitle}</h3>
-                <span className="rounded-md bg-muted/55 px-2 py-0.5 text-[11px] font-medium text-muted-foreground [font-variant-numeric:tabular-nums]">
-                  {automations.length}
-                </span>
-              </div>
-              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{copy.existingHint}</p>
-            </div>
-          </div>
-          {automations.length ? (
+        <section data-studio-automation-list className="min-w-0" aria-label={copy.searchLabel}>
+          {filteredAutomations.length ? (
             <div className="overflow-hidden rounded-lg border border-border/60 bg-background/35">
-              {automations.map((automation) => (
+              {filteredAutomations.map((automation) => (
                 <AutomationCard
                   key={automation.id}
                   automation={automation}
@@ -848,7 +899,7 @@ export default function StudioAutomationSection({
             </div>
           ) : (
             <div className="rounded-lg border border-dashed border-border/70 bg-background/35 px-4 py-8 text-center text-sm text-muted-foreground">
-              {copy.empty}
+              {automations.length ? copy.emptySearch : copy.empty}
             </div>
           )}
         </section>

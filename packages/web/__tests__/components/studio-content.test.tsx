@@ -450,14 +450,15 @@ describe('StudioContent', () => {
 
     expect(host.textContent).toContain('Automation');
     expect(host.textContent).toContain('Create automation');
-    expect(host.textContent).toContain('Local plans');
-    expect(host.textContent).toContain('Runtime execution is not connected yet.');
-    expect(host.textContent).toContain('Plans');
+    expect(host.textContent).not.toContain('Local plans');
+    expect(host.textContent).not.toContain('Runtime execution is not connected yet.');
+    expect(host.textContent).not.toContain('Plans');
     expect(host.textContent).toContain('Daily research radar');
 
     const automationSection = host.querySelector('[data-studio-automation-section]');
     const automationContent = host.querySelector('[data-studio-automation-content]');
     const studioShell = host.querySelector('[data-content-page-shell="studio"]');
+    const toolbar = host.querySelector('[data-studio-automation-toolbar]');
     const summaryRail = host.querySelector('[data-studio-automation-summary]');
     const createButton = host.querySelector('[data-studio-automation-create]');
     const automationList = host.querySelector('[data-studio-automation-list]');
@@ -465,10 +466,13 @@ describe('StudioContent', () => {
     expect(automationSection).not.toBeNull();
     expect(automationContent?.className).toContain('max-w-6xl');
     expect(studioShell?.className).not.toContain('[--main-body-content-max-width:100%]');
-    expect(summaryRail?.className).toContain('rounded-lg');
-    expect(summaryRail?.textContent).toContain('3 plans');
-    expect(summaryRail?.textContent).toContain('2 enabled');
-    expect(summaryRail?.textContent).toContain('1 paused');
+    expect(summaryRail).toBeNull();
+    expect(toolbar).not.toBeNull();
+    expect(toolbar?.textContent).toContain('Total');
+    expect(toolbar?.textContent).toContain('3');
+    expect(toolbar?.textContent).toContain('Enabled');
+    expect(toolbar?.textContent).toContain('2');
+    expect(host.querySelector('input[aria-label="Search automations"]')).not.toBeNull();
     expect(createButton).not.toBeNull();
     expect(document.body.querySelector('[data-studio-automation-drawer]')).toBeNull();
     expect(document.body.querySelector('[data-studio-automation-composer]')).toBeNull();
@@ -479,6 +483,25 @@ describe('StudioContent', () => {
     expect(seededCard?.className).not.toContain('rounded-xl');
     expect(seededCard?.className).not.toContain('bg-card/45');
     expect(seededCard?.textContent).toContain('Local plan');
+
+    await setInputValue('input[aria-label="Search automations"]', 'inbox');
+    expect(host.textContent).not.toContain('Daily research radar');
+    expect(host.textContent).toContain('Inbox cleanup review');
+    expect(host.textContent).not.toContain('Release note sweep');
+
+    await setInputValue('input[aria-label="Search automations"]', 'claude');
+    expect(host.textContent).not.toContain('Daily research radar');
+    expect(host.textContent).not.toContain('Inbox cleanup review');
+    expect(host.textContent).toContain('Release note sweep');
+
+    await setInputValue('input[aria-label="Search automations"]', 'no matching automation');
+    expect(host.textContent).toContain('No automations match this search.');
+    expect(host.querySelector('[data-studio-automation-card]')).toBeNull();
+
+    await setInputValue('input[aria-label="Search automations"]', '');
+    expect(host.textContent).toContain('Daily research radar');
+    expect(host.textContent).toContain('Inbox cleanup review');
+    expect(host.textContent).toContain('Release note sweep');
 
     await act(async () => {
       createButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
