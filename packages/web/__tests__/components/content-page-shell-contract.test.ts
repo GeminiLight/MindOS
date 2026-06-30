@@ -17,6 +17,7 @@ describe('Content page shell contract', () => {
     expect(source).toContain('const echoPageClass =');
     expect(source).toContain("'echo-content-page");
     expect(source).toContain('className={echoPageClass}');
+    expect(source).not.toContain("'echo-content-page min-h-full bg-background'");
     expect(source).toContain('const echoBodyClass =');
     expect(source).toContain("'flex w-full flex-col gap-6'");
     expect(source).not.toContain('max-w-5xl');
@@ -40,8 +41,8 @@ describe('Content page shell contract', () => {
     expect(source).toContain('text-2xl font-semibold tracking-tight text-foreground');
     expect(source).toContain('mt-1 max-w-2xl text-sm leading-6 text-muted-foreground');
     expect(source).not.toContain('flex w-full shrink-0');
-    expect(cssSource).toContain('.echo-content-page {');
-    expect(cssSource).toContain('--main-body-content-max-width: min(1180px, 100%);');
+    expect(cssSource).not.toContain('.echo-content-page {');
+    expect(cssSource).not.toContain('--main-body-content-max-width: min(1180px, 100%);');
     expect(cssSource).toContain('.echo-page-hero__actions');
     expect(cssSource).toContain('@container (min-width: 760px)');
     expect(cssSource).toContain('.echo-memory-reader-container');

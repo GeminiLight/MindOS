@@ -1,5 +1,14 @@
 import { describe, it, expect } from 'vitest';
-import { consumeOrganizeStream, stripThinkingTags, deriveStageHint, CLIENT_TRUNCATE_CHARS, type OrganizeStageHint } from '@/hooks/useAiOrganize';
+import {
+  consumeOrganizeStream,
+  stripThinkingTags,
+  deriveStageHint,
+  CLIENT_ATTACHMENT_MAX_CHARS,
+  CLIENT_TRUNCATE_CHARS,
+  describeOversizedOrganizeAttachments,
+  getOversizedOrganizeAttachments,
+  type OrganizeStageHint,
+} from '@/hooks/useAiOrganize';
 
 /**
  * Unit tests for the AI Organize SSE stream parser, helper functions,
@@ -464,47 +473,47 @@ describe('deriveStageHint', () => {
 });
 
 // ---------------------------------------------------------------------------
-// CLIENT_TRUNCATE_CHARS & truncation behavior
+// CLIENT_ATTACHMENT_MAX_CHARS & attachment limit behavior
 // ---------------------------------------------------------------------------
 
-describe('CLIENT_TRUNCATE_CHARS', () => {
+describe('CLIENT_ATTACHMENT_MAX_CHARS', () => {
   it('is 20000', () => {
+    expect(CLIENT_ATTACHMENT_MAX_CHARS).toBe(20_000);
     expect(CLIENT_TRUNCATE_CHARS).toBe(20_000);
   });
 
-  it('short content is not truncated', () => {
-    const content = 'Hello world';
-    const truncated = content.length > CLIENT_TRUNCATE_CHARS
-      ? content.slice(0, CLIENT_TRUNCATE_CHARS) + '\n\n[...truncated to first ~20000 chars]'
-      : content;
-    expect(truncated).toBe('Hello world');
+  it('does not report short content as oversized', () => {
+    expect(getOversizedOrganizeAttachments([
+      { name: 'short.md', content: 'Hello world' },
+    ])).toEqual([]);
   });
 
-  it('content exactly at limit is not truncated', () => {
-    const content = 'a'.repeat(CLIENT_TRUNCATE_CHARS);
-    const truncated = content.length > CLIENT_TRUNCATE_CHARS
-      ? content.slice(0, CLIENT_TRUNCATE_CHARS) + '\n\n[...truncated to first ~20000 chars]'
-      : content;
-    expect(truncated).toBe(content);
-    expect(truncated.length).toBe(CLIENT_TRUNCATE_CHARS);
+  it('allows content exactly at the limit', () => {
+    expect(getOversizedOrganizeAttachments([
+      { name: 'limit.md', content: 'a'.repeat(CLIENT_ATTACHMENT_MAX_CHARS) },
+    ])).toEqual([]);
   });
 
-  it('content exceeding limit is truncated with marker', () => {
-    const content = 'x'.repeat(CLIENT_TRUNCATE_CHARS + 5000);
-    const truncated = content.length > CLIENT_TRUNCATE_CHARS
-      ? content.slice(0, CLIENT_TRUNCATE_CHARS) + '\n\n[...truncated to first ~20000 chars]'
-      : content;
-    expect(truncated.length).toBeLessThan(content.length);
-    expect(truncated).toContain('[...truncated');
-    expect(truncated.startsWith('x'.repeat(100))).toBe(true);
+  it('reports content exceeding the limit instead of truncating it', () => {
+    const oversized = getOversizedOrganizeAttachments([
+      { name: 'large.md', content: 'x'.repeat(CLIENT_ATTACHMENT_MAX_CHARS + 5000) },
+    ]);
+
+    expect(oversized).toEqual([{
+      name: 'large.md',
+      chars: CLIENT_ATTACHMENT_MAX_CHARS + 5000,
+      maxChars: CLIENT_ATTACHMENT_MAX_CHARS,
+    }]);
   });
 
-  it('5MB content is truncated to manageable size', () => {
-    const content = 'y'.repeat(5 * 1024 * 1024);
-    const truncated = content.length > CLIENT_TRUNCATE_CHARS
-      ? content.slice(0, CLIENT_TRUNCATE_CHARS) + '\n\n[...truncated to first ~20000 chars]'
-      : content;
-    expect(truncated.length).toBeLessThan(25_000);
+  it('builds a user-facing message for oversized files', () => {
+    const message = describeOversizedOrganizeAttachments([
+      { name: 'large.md', chars: 25_000, maxChars: CLIENT_ATTACHMENT_MAX_CHARS },
+    ]);
+
+    expect(message).toContain('large.md (25,000 chars)');
+    expect(message).toContain('20,000 char limit');
+    expect(message).toContain('Split or shorten');
   });
 });
 

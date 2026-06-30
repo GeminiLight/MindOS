@@ -37,19 +37,23 @@ describe('EchoPanel sidebar navigation', () => {
     expect(html).not.toContain('py-1.5');
   });
 
-  it('renders Overview first and omits sidebar subtitles', () => {
+  it('renders Overview, Imprint, Insight, and Promotion as primary Echo destinations and omits sidebar subtitles', () => {
     routeState.pathname = '/echo/overview';
 
     const html = renderToStaticMarkup(<EchoPanel active maximized={false} />);
     const overviewIndex = html.indexOf(messages.en.panels.echo.overviewTitle);
     const imprintIndex = html.indexOf(messages.en.panels.echo.imprintTitle);
+    const insightIndex = html.indexOf(messages.en.panels.echo.growthTitle);
+    const practiceIndex = html.indexOf(messages.en.panels.echo.practiceTitle);
 
     expect(overviewIndex).toBeGreaterThanOrEqual(0);
     expect(imprintIndex).toBeGreaterThan(overviewIndex);
+    expect(insightIndex).toBeGreaterThan(imprintIndex);
+    expect(practiceIndex).toBeGreaterThan(insightIndex);
     expect(html).toContain(messages.en.panels.echo.imprintTitle);
-    expect(html).toContain(messages.en.panels.echo.threadsTitle);
     expect(html).toContain(messages.en.panels.echo.growthTitle);
     expect(html).toContain(messages.en.panels.echo.practiceTitle);
+    expect(html).not.toContain(messages.en.panels.echo.threadsTitle);
     expect(html).not.toContain(messages.en.panels.echo.overviewDesc);
     expect(html).not.toContain(messages.en.panels.echo.imprintDesc);
     expect(html).not.toContain(messages.en.panels.echo.threadsDesc);
@@ -65,8 +69,8 @@ describe('EchoPanel sidebar navigation', () => {
     expect(html).toMatch(/<a[^>]*aria-current="page"[^>]*href="\/echo\/growth"/);
     expect(html).toMatch(/<a(?![^>]*aria-current="page")[^>]*href="\/echo\/overview"/);
     expect(html).toMatch(/<a(?![^>]*aria-current="page")[^>]*href="\/echo\/imprint"/);
-    expect(html).toMatch(/<a(?![^>]*aria-current="page")[^>]*href="\/echo\/threads"/);
     expect(html).toMatch(/<a(?![^>]*aria-current="page")[^>]*href="\/echo\/practice"/);
+    expect(html).not.toContain('href="/echo/threads"');
   });
 
   it('does not expose a fullscreen control in the Echo sidebar header', () => {

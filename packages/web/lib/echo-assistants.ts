@@ -5,13 +5,13 @@ import { getAssistantMarkdownPath } from './mind-system-assistant-paths';
 export const ECHO_IMPRINT_ASSISTANT_ID = 'echo-imprint';
 export const ECHO_THREADER_ASSISTANT_ID = 'echo-threader';
 export const ECHO_INSIGHT_ASSISTANT_ID = 'echo-insight';
-export const ECHO_PRACTICE_ASSISTANT_ID = 'echo-practice';
+export const ECHO_PROMOTION_ASSISTANT_ID = 'echo-promotion';
 
 export const ECHO_ASSISTANT_IDS = [
   ECHO_IMPRINT_ASSISTANT_ID,
   ECHO_THREADER_ASSISTANT_ID,
   ECHO_INSIGHT_ASSISTANT_ID,
-  ECHO_PRACTICE_ASSISTANT_ID,
+  ECHO_PROMOTION_ASSISTANT_ID,
 ] as const;
 
 export type EchoAssistantId = (typeof ECHO_ASSISTANT_IDS)[number];
@@ -132,7 +132,7 @@ Distill recurring patterns into reusable insight the user can apply next time.
 
 ## Output
 
-Return Markdown only. Focus on pattern, principle, risk, and a reusable judgment.
+Return Markdown only. Focus on one pattern or one reusable judgment. Add evidence and boundary only when the visible context supports them.
 
 ## Boundaries
 
@@ -142,34 +142,36 @@ Return Markdown only. Focus on pattern, principle, risk, and a reusable judgment
 - Avoid motivational filler.
 - Do not write, rename, delete, or reorganize knowledge-base files.`,
   },
-  [ECHO_PRACTICE_ASSISTANT_ID]: {
-    id: ECHO_PRACTICE_ASSISTANT_ID,
-    name: 'Echo Practice',
-    description: 'Convert insight into one small Markdown practice with hypothesis, action, check, and review.',
+  [ECHO_PROMOTION_ASSISTANT_ID]: {
+    id: ECHO_PROMOTION_ASSISTANT_ID,
+    name: 'Echo Promotion',
+    description: 'Turn useful agent work traces into a Promotion candidate with a Playbook or Practice target.',
     color: 'amber',
     steps: 12,
-    body: `# Echo Practice
+    body: `# Echo Promotion
 
 ## Role
 
-Turn an insight into one small action the user can try and verify.
+Turn useful traces of agent work into one Promotion candidate with an explicit target.
 
 ## Inputs
 
-- The current Echo Practice page context
-- Visible practice experiments
+- The current Echo Promotion page context
+- Promotion candidates
+- Visible playbooks and practices
 - Recent session summaries when the app provides them
 
 ## Output
 
-Return Markdown only. Make the practice concrete: hypothesis, action, check, and review question.
+Return Markdown only. Produce a Promotion note. Choose Target: Playbook if the trace should become a reusable method, or Practice if it should become a small action to verify.
 
 ## Boundaries
 
 - Do not invent facts, files, sessions, outcomes, or hidden activity.
-- Keep the practice small enough to run in a real day.
-- Do not create a broad todo list.
-- Do not pretend the action already succeeded.
+- Do not expose private chain-of-thought. Summarize the observable work trace and user-facing method.
+- Keep practices small enough to run in a real day.
+- Keep playbooks concrete enough to reuse on a similar task.
+- Do not pretend a promotion has already been accepted or inherited by the user.
 - Do not write, rename, delete, or reorganize knowledge-base files.`,
   },
 };
@@ -178,7 +180,7 @@ export const ECHO_ASSISTANT_BY_SEGMENT: Record<EchoAssistantSegment, EchoAssista
   imprint: ECHO_IMPRINT_ASSISTANT_ID,
   threads: ECHO_THREADER_ASSISTANT_ID,
   growth: ECHO_INSIGHT_ASSISTANT_ID,
-  practice: ECHO_PRACTICE_ASSISTANT_ID,
+  practice: ECHO_PROMOTION_ASSISTANT_ID,
 };
 
 export const ECHO_ASSISTANT_DEFAULT_PROMPTS: Record<EchoAssistantId, string> = Object.fromEntries(
@@ -297,9 +299,9 @@ function outputContractForSegment(segment: EchoAssistantSegment, locale: EchoPro
       case 'threads':
         return '- `# 脉络`\n- `## 现象`\n- `## 为什么会反复出现`\n- `## 可能的形成过程`\n- `## 仍不确定`';
       case 'growth':
-        return '- `# 洞察`\n- `## 模式`\n- `## 可复用判断`\n- `## 风险信号`\n- `## 下次提醒自己`';
+        return '- `# 洞察`\n- `## 模式`\n- `## 判断`\n- `## 证据`\n- `## 边界`';
       case 'practice':
-        return '- `# 实践`\n- `## 假设`\n- `## 行动`\n- `## 验证`\n- `## 复盘问题`';
+        return '- `# 承接`\n- `## 去向`\n- `## 承接候选`\n- `## 来源轨迹`\n- `## 为什么承接`\n- `## 人工确认`';
     }
   }
 
@@ -309,9 +311,9 @@ function outputContractForSegment(segment: EchoAssistantSegment, locale: EchoPro
     case 'threads':
       return '- `# Thread`\n- `## Pattern`\n- `## Why It Returns`\n- `## How It May Have Formed`\n- `## Still Uncertain`';
     case 'growth':
-      return '- `# Insight`\n- `## Pattern`\n- `## Reusable Judgment`\n- `## Risk Signal`\n- `## Reminder for Next Time`';
+      return '- `# Insight`\n- `## Pattern`\n- `## Judgment`\n- `## Evidence`\n- `## Boundary`';
     case 'practice':
-      return '- `# Practice`\n- `## Hypothesis`\n- `## Action`\n- `## Check`\n- `## Review Question`';
+      return '- `# Promotion`\n- `## Target`\n- `## Promotion Candidate`\n- `## Source Trace`\n- `## Why Promote`\n- `## Human Check`';
   }
 }
 

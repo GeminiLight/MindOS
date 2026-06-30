@@ -212,9 +212,6 @@ body {
   --z-app-critical-overlay: 99999;
 }
 .content-width { max-width: var(--main-body-content-max-width, var(--content-width-override, var(--content-width))); margin-left: auto; margin-right: auto; padding-left: 0.75rem; padding-right: 0.75rem; }
-.echo-content-page {
-  --main-body-content-max-width: min(1180px, 100%);
-}
 .echo-page-hero {
   container-type: inline-size;
 }

@@ -12,6 +12,7 @@ import { type Provider, parseProviders, findProvider, migrateProviders, isProvid
 import { effectiveMindRoot } from './mind-root';
 
 const SETTINGS_PATH = path.join(os.homedir(), '.mindos', 'config.json');
+export const DEFAULT_AGENT_MAX_STEPS = 100;
 
 function createWebSessionSecret(): string {
   return randomBytes(32).toString('base64url');
@@ -31,7 +32,7 @@ export interface AiConfig {
 }
 
 export interface AgentConfig {
-  maxSteps?: number;          // default 20, range 1-999 (999 = unlimited)
+  maxSteps?: number;          // default 100, range 1-999 (999 = unlimited)
   enableThinking?: boolean;   // default false, Anthropic only
   thinkingBudget?: number;    // default 5000
   contextStrategy?: 'auto' | 'off'; // default 'auto'
@@ -155,6 +156,9 @@ const DEFAULTS: ServerSettings = {
   ai: {
     activeProvider: '',
     providers: [],
+  },
+  agent: {
+    maxSteps: DEFAULT_AGENT_MAX_STEPS,
   },
   mindRoot: '',
 };
@@ -280,7 +284,7 @@ export function readSettings(): ServerSettings {
 
     const settings: ServerSettings = {
       ai: migrateAi(parsed),
-      agent: parseAgent(parsed.agent),
+      agent: { ...DEFAULTS.agent, ...(parseAgent(parsed.agent) ?? {}) },
       embedding: parseEmbedding(parsed.embedding),
       acpAgents: parseAcpAgentsField(parsed.acpAgents),
       agentRuntimeEnv: parseAgentRuntimeEnvironmentSettings(parsed.agentRuntimeEnv),

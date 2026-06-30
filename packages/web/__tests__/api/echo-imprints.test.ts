@@ -45,7 +45,7 @@ describe('/api/echo/imprints', () => {
     expect(generated.state).toMatchObject({ lastTrigger: 'manual', runCount: 1, activeCount: expect.any(Number) });
     expect(generated.state.schedule).toMatchObject({ mode: 'daily', dailyTime: '20:00', due: false });
     expect(generated.cards.length).toBeGreaterThan(0);
-    expect(generated.cards.some((card: { type: string }) => card.type === 'event')).toBe(true);
+    expect(generated.cards[0]).not.toHaveProperty('type');
     const targetId = generated.cards[0].id;
 
     const loadedRes = GET();

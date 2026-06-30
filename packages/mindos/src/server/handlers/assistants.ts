@@ -24,7 +24,7 @@ const BUILTIN_ASSISTANT_IDS = new Set([
   'echo-imprint',
   'echo-threader',
   'echo-insight',
-  'echo-practice',
+  'echo-promotion',
 ]);
 
 const DEFAULT_ASSISTANT_PROFILE = {

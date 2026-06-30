@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   defaultEchoSegment,
+  ECHO_PRIMARY_SEGMENT_ORDER,
   ECHO_SEGMENT_HREF,
   ECHO_SEGMENT_IDS,
   ECHO_SEGMENT_ORDER,
@@ -11,6 +12,7 @@ describe('echo-segments', () => {
   it('lists overview plus the four Echo modules', () => {
     expect(ECHO_SEGMENT_IDS).toEqual(['overview', 'imprint', 'threads', 'growth', 'practice']);
     expect(ECHO_SEGMENT_ORDER).toEqual(['overview', 'imprint', 'threads', 'growth', 'practice']);
+    expect(ECHO_PRIMARY_SEGMENT_ORDER).toEqual(['overview', 'imprint', 'growth', 'practice']);
   });
 
   it('accepts valid segment slugs', () => {

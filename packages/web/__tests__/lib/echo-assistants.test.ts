@@ -4,7 +4,7 @@ import {
   ECHO_ASSISTANT_IDS,
   ECHO_IMPRINT_ASSISTANT_ID,
   ECHO_INSIGHT_ASSISTANT_ID,
-  ECHO_PRACTICE_ASSISTANT_ID,
+  ECHO_PROMOTION_ASSISTANT_ID,
   ECHO_THREADER_ASSISTANT_ID,
   buildEchoAssistantRunPrompt,
   buildEchoRecentSessionSummaries,
@@ -20,18 +20,19 @@ describe('echo assistants', () => {
       ECHO_IMPRINT_ASSISTANT_ID,
       ECHO_THREADER_ASSISTANT_ID,
       ECHO_INSIGHT_ASSISTANT_ID,
-      ECHO_PRACTICE_ASSISTANT_ID,
+      ECHO_PROMOTION_ASSISTANT_ID,
     ]);
 
     expect(getEchoAssistantIdForSegment('overview')).toBeUndefined();
     expect(getEchoAssistantIdForSegment('imprint')).toBe('echo-imprint');
     expect(getEchoAssistantIdForSegment('threads')).toBe('echo-threader');
     expect(getEchoAssistantIdForSegment('growth')).toBe('echo-insight');
-    expect(getEchoAssistantIdForSegment('practice')).toBe('echo-practice');
+    expect(getEchoAssistantIdForSegment('practice')).toBe('echo-promotion');
+    expect(ECHO_ASSISTANT_IDS).not.toContain('echo-practice');
     expect(getEchoAssistantMaxSteps(ECHO_IMPRINT_ASSISTANT_ID)).toBe(10);
     expect(getEchoAssistantMaxSteps(ECHO_THREADER_ASSISTANT_ID)).toBe(12);
     expect(getEchoAssistantMaxSteps(ECHO_INSIGHT_ASSISTANT_ID)).toBe(12);
-    expect(getEchoAssistantMaxSteps(ECHO_PRACTICE_ASSISTANT_ID)).toBe(12);
+    expect(getEchoAssistantMaxSteps(ECHO_PROMOTION_ASSISTANT_ID)).toBe(12);
 
     for (const assistantId of ECHO_ASSISTANT_IDS) {
       const prompt = ECHO_ASSISTANT_DEFAULT_PROMPTS[assistantId];
@@ -50,20 +51,21 @@ describe('echo assistants', () => {
       '.mindos/assistants/echo-imprint.md',
       '.mindos/assistants/echo-threader.md',
       '.mindos/assistants/echo-insight.md',
-      '.mindos/assistants/echo-practice.md',
+      '.mindos/assistants/echo-promotion.md',
     ]);
+    expect(getBuiltinEchoAssistantMarkdownFiles().map((item) => item.path)).not.toContain('.mindos/assistants/echo-practice.md');
   });
 
   it('builds localized Markdown output contracts from visible Echo context', () => {
     const prompt = buildEchoAssistantRunPrompt({
       locale: 'zh',
       segment: 'practice',
-      segmentTitle: '实践',
-      lead: '把洞察变成下一轮可验证的小行动。',
-      snapshotTitle: '把洞察放到下一次',
-      snapshotBody: '知道要试什么，也知道怎么看结果。',
+      segmentTitle: '承接',
+      lead: '把 Agent 工作中的有效思路承接成方法卡或可验证实践。',
+      snapshotTitle: '把值得延续的东西承接下来',
+      snapshotBody: '把有效思路提升为方法或实践。',
       facts: [
-        { label: '实验', value: '先写验收标准，再动代码。' },
+        { label: '待承接', value: '先写验收标准，再动代码。' },
       ],
       recentSessions: [
         {
@@ -76,9 +78,15 @@ describe('echo assistants', () => {
     });
 
     expect(prompt).toContain('Write in Chinese');
-    expect(prompt).toContain('# 实践');
-    expect(prompt).toContain('## 假设');
-    expect(prompt).toContain('实验: 先写验收标准，再动代码。');
+    expect(prompt).toContain('# 承接');
+    expect(prompt).toContain('## 去向');
+    expect(prompt).toContain('## 承接候选');
+    expect(prompt).toContain('## 为什么承接');
+    expect(prompt).toContain('## 人工确认');
+    expect(prompt).not.toContain('## 方法卡草稿');
+    expect(prompt).not.toContain('## 实践草稿');
+    expect(prompt).not.toContain('## 审阅边界');
+    expect(prompt).toContain('待承接: 先写验收标准，再动代码。');
     expect(prompt).toContain('修复 Echo 页面');
     expect(prompt).toContain('Do not use tools unless the user explicitly asks');
   });

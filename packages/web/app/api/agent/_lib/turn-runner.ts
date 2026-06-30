@@ -9,6 +9,7 @@ import { apiError, ErrorCodes } from '@/lib/errors';
 import { getProjectRoot } from '@/lib/project-root';
 import {
   createMindosUploadedFileParts,
+  MINDOS_AGENT_ATTACHMENT_MAX_CHARS,
   normalizeMindosAgentStepLimit,
 } from '@geminilight/mindos/agent/turn';
 import {
@@ -110,6 +111,33 @@ function permissionModeForRequest(
 // ---------------------------------------------------------------------------
 // POST /api/agent/sessions/:sessionId/turns
 // ---------------------------------------------------------------------------
+
+function formatChars(value: number): string {
+  return Number.isFinite(value) ? value.toLocaleString('en-US') : String(value);
+}
+
+function oversizedUploadedFiles(uploadedFiles: unknown): Array<{ name: string; chars: number }> {
+  if (!Array.isArray(uploadedFiles)) return [];
+  const oversized: Array<{ name: string; chars: number }> = [];
+  for (const file of uploadedFiles) {
+    if (!file || typeof file !== 'object') continue;
+    const record = file as Record<string, unknown>;
+    if (typeof record.name !== 'string' || typeof record.content !== 'string') continue;
+    if (record.content.length > MINDOS_AGENT_ATTACHMENT_MAX_CHARS) {
+      oversized.push({ name: record.name, chars: record.content.length });
+    }
+  }
+  return oversized;
+}
+
+function describeAttachmentLimitError(files: Array<{ name: string; chars: number }>): string {
+  const shown = files
+    .slice(0, 3)
+    .map(file => `${file.name} (${formatChars(file.chars)} chars)`)
+    .join(', ');
+  const extra = files.length > 3 ? ` and ${files.length - 3} more` : '';
+  return `AI attachments are too large to run safely. ${shown}${extra} exceed the ${formatChars(MINDOS_AGENT_ATTACHMENT_MAX_CHARS)} char limit. Split or shorten the files, then run again.`;
+}
 
 export async function handleAgentTurnRouteRequest(req: Request) {
   let body: AgentTurnRequestBody;
@@ -298,8 +326,16 @@ export async function runAgentTurnRequestBody(
   const thinkingBudget = mindosAgentOptions.thinkingBudget ?? agentConfig.thinkingBudget ?? 5000;
   const contextStrategy = agentConfig.contextStrategy ?? 'auto';
 
-  // Uploaded files are already truncated client-side (80K limit), so only
-  // apply a generous server-side cap to guard against malformed requests.
+  const oversizedUploads = oversizedUploadedFiles(uploadedFiles);
+  if (oversizedUploads.length > 0) {
+    return apiError(
+      ErrorCodes.INVALID_REQUEST,
+      describeAttachmentLimitError(oversizedUploads),
+      413,
+      { issueCode: 'AI_ATTACHMENT_TOO_LARGE' },
+    );
+  }
+
   const uploadedParts = createMindosUploadedFileParts(uploadedFiles);
   const runtimeAttachments = [
     ...createMindosRuntimeUploadedFileAttachments(uploadedFiles),
@@ -316,6 +352,15 @@ export async function runAgentTurnRequestBody(
   });
   if (skillRuntimeEnforcementError) return skillRuntimeEnforcementError;
   const loadedFileContext = loadAttachedFileContext(attachedFiles, currentFile);
+  const oversizedFileContextIssue = loadedFileContext.fileIssues?.find(issue => issue.code === 'content_too_large');
+  if (oversizedFileContextIssue) {
+    return apiError(
+      ErrorCodes.INVALID_REQUEST,
+      `${oversizedFileContextIssue.message} Split or shorten the file, then run again.`,
+      413,
+      { issueCode: 'AI_ATTACHMENT_TOO_LARGE' },
+    );
+  }
   const fileContextSignature = createMindosFileContextSignature(loadedFileContext);
   const includeFileContext = shouldInjectFileContext({
     chatSessionId,

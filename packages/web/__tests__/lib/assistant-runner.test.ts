@@ -73,8 +73,11 @@ describe('assistant runner utilities', () => {
     expect(assistantPermissionLevelToPolicyMode('trusted-write')).toBe('ask');
     expect(getAssistantPermissionLevel('dreaming')).toBe('trusted-write');
     expect(getAssistantPermissionMode('dreaming')).toBe('ask');
-    expect(getAssistantPermissionLevel('echo-practice')).toBe('read-only');
-    expect(getAssistantPermissionMode('echo-practice')).toBe('read');
+    expect(getAssistantPermissionLevel('echo-promotion')).toBe('read-only');
+    expect(getAssistantPermissionMode('echo-promotion')).toBe('read');
+    expect(getAssistantPermissionLevel('echo-practice')).toBeUndefined();
+    expect(getAssistantPermissionMode('echo-practice')).toBeUndefined();
+    expect(isRegisteredAssistantRun('echo-practice')).toBe(false);
     expect(getAssistantPermissionLevel('unknown-assistant')).toBeUndefined();
   });
 

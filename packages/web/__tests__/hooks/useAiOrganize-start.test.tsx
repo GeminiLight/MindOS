@@ -26,6 +26,25 @@ function OrganizeHarness() {
   return null;
 }
 
+function OversizedOrganizeHarness({ onState }: { onState: (state: { phase: string; error: string | null }) => void }) {
+  const aiOrganize = useAiOrganize();
+
+  useEffect(() => {
+    void aiOrganize.start(
+      [{ name: 'large.md', content: 'x'.repeat(20_001) }],
+      'Organize this',
+      'inbox-organize',
+      { assistantId: 'inbox-organizer' },
+    );
+  }, [aiOrganize.start]);
+
+  useEffect(() => {
+    onState({ phase: aiOrganize.phase, error: aiOrganize.error });
+  }, [aiOrganize.error, aiOrganize.phase, onState]);
+
+  return null;
+}
+
 describe('useAiOrganize start request', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -56,7 +75,28 @@ describe('useAiOrganize start request', () => {
       assistantId: 'inbox-organizer',
       providerOverride: 'p_capture',
       modelOverride: 'capture-model',
+      uploadedFiles: [{ name: 'capture.md', content: 'source text' }],
     });
+    expect(request).not.toHaveProperty('maxSteps');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('rejects oversized organizer attachments before starting a request', async () => {
+    const states: Array<{ phase: string; error: string | null }> = [];
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<OversizedOrganizeHarness onState={state => states.push(state)} />);
+      await new Promise(r => setTimeout(r, 0));
+    });
+
+    expect(fetch).not.toHaveBeenCalled();
+    expect(states.some(state => state.phase === 'error' && state.error?.includes('large.md'))).toBe(true);
 
     await act(async () => {
       root.unmount();

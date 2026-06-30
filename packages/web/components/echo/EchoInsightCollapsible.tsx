@@ -41,6 +41,7 @@ export function EchoInsightCollapsible({
   generateSignal = 0,
   maxSteps = 12,
   onSaved,
+  hideUntilRequested = false,
 }: {
   noAiHint: string;
   generatingLabel: string;
@@ -60,6 +61,7 @@ export function EchoInsightCollapsible({
   generateSignal?: number;
   maxSteps?: number;
   onSaved?: (item: EchoSavedItem) => void;
+  hideUntilRequested?: boolean;
 }) {
   const [requested, setRequested] = useState(false);
   const [streaming, setStreaming] = useState(false);
@@ -214,6 +216,10 @@ export function EchoInsightCollapsible({
         : requested && !aiLoading && !aiReady
           ? noAiHint
           : draftIdleLabel;
+
+  if (hideUntilRequested && !requested && !streaming && !insightMd && !err) {
+    return null;
+  }
 
   return (
     <section

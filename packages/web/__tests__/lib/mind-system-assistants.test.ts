@@ -37,7 +37,9 @@ describe('mind-system assistants', () => {
     expect(getDefaultAssistantPrompt('inbox-organizer')).not.toContain('assistantId:');
     expect(getDefaultAssistantPrompt('echo-imprint')).toContain('permissionMode: read');
     expect(getDefaultAssistantPrompt('echo-imprint')).toContain('# Echo Imprint');
+    expect(getDefaultAssistantPrompt('echo-promotion')).toContain('# Echo Promotion');
     expect(getDefaultAssistantPrompt('echo-practice')).toContain('# Echo Practice');
+    expect(getDefaultAssistantPrompt('echo-practice')).not.toContain('# Echo Promotion');
     expect(getDefaultAssistantPrompt('custom-helper')).toContain('version: 1');
     expect(getDefaultAssistantPrompt('custom-helper')).toContain('# Custom Helper');
   });
@@ -49,7 +51,8 @@ describe('mind-system assistants', () => {
       'echo-imprint',
       'echo-threader',
       'echo-insight',
-      'echo-practice',
+      'echo-promotion',
     ]);
+    expect(getBuiltinAssistantMarkdownFiles().map((item) => item.assistantId)).not.toContain('echo-practice');
   });
 });

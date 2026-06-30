@@ -2,11 +2,11 @@
 
 import type { ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
-import { FlaskConical, Footprints, GitBranch, LayoutDashboard, Sprout } from 'lucide-react';
+import { Footprints, GitBranch, LayoutDashboard, Sprout } from 'lucide-react';
 import PanelHeader from './PanelHeader';
 import { PanelPrimaryNav, PanelNavRow } from './PanelNavRow';
 import { useLocale } from '@/lib/stores/locale-store';
-import { ECHO_SEGMENT_HREF, ECHO_SEGMENT_ORDER, type EchoSegment } from '@/lib/echo-segments';
+import { ECHO_PRIMARY_SEGMENT_ORDER, ECHO_SEGMENT_HREF, type EchoSegment } from '@/lib/echo-segments';
 
 interface EchoPanelProps {
   active: boolean;
@@ -19,20 +19,20 @@ export default function EchoPanel({ active }: EchoPanelProps) {
   const e = t.panels.echo;
   const pathname = usePathname() ?? '';
 
-  const rowBySegment: Record<EchoSegment, { icon: ReactNode; title: string }> = {
+  const rowBySegment: Partial<Record<EchoSegment, { icon: ReactNode; title: string }>> = {
     overview: { icon: <LayoutDashboard size={14} />, title: e.overviewTitle },
     imprint: { icon: <Footprints size={14} />, title: e.imprintTitle },
-    threads: { icon: <GitBranch size={14} />, title: e.threadsTitle },
     growth: { icon: <Sprout size={14} />, title: e.growthTitle },
-    practice: { icon: <FlaskConical size={14} />, title: e.practiceTitle },
+    practice: { icon: <GitBranch size={14} />, title: e.practiceTitle },
   };
 
   return (
     <div className={`flex flex-col h-full ${active ? '' : 'hidden'}`}>
       <PanelHeader title={e.title} />
       <PanelPrimaryNav aria-label={e.title}>
-        {ECHO_SEGMENT_ORDER.map((segment) => {
+        {ECHO_PRIMARY_SEGMENT_ORDER.map((segment) => {
           const row = rowBySegment[segment];
+          if (!row) return null;
           const href = ECHO_SEGMENT_HREF[segment];
           const isActive = pathname === href || pathname.startsWith(`${href}/`);
           return (

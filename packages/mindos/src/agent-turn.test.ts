@@ -373,7 +373,7 @@ describe('MindOS session event contract', () => {
   });
 
   it('normalizes ask step limits without Web dependencies', () => {
-    expect(normalizeMindosAgentStepLimit({})).toBe(20);
+    expect(normalizeMindosAgentStepLimit({})).toBe(100);
     expect(normalizeMindosAgentStepLimit({ agentMaxSteps: 50 })).toBe(50);
     expect(normalizeMindosAgentStepLimit({ requestedMaxSteps: -1 })).toBe(1);
     expect(normalizeMindosAgentStepLimit({ requestedMaxSteps: 5000 })).toBe(999);
@@ -415,6 +415,28 @@ describe('MindOS session event contract', () => {
       expect.objectContaining({ path: 'a.md', label: 'attached', contentHash: expect.any(String), size: 'content:a.md'.length }),
       { path: 'too-big.md', label: 'attached' },
       expect.objectContaining({ path: 'current.md', label: 'current', contentHash: expect.any(String), size: 'content:current.md'.length }),
+    ]);
+  });
+
+  it('marks oversized attached file content as a blocking context issue instead of truncating it', () => {
+    const loaded = loadMindosAgentFileContext(['large.md'], undefined, {
+      readFile: () => 'x'.repeat(21),
+      truncate: (content) => content.slice(0, 20),
+      maxContentChars: 20,
+    });
+
+    expect(loaded.contextParts).toEqual([]);
+    expect(loaded.failedFiles).toEqual(['large.md']);
+    expect(loaded.fileIssues).toEqual([
+      expect.objectContaining({
+        path: 'large.md',
+        code: 'content_too_large',
+        chars: 21,
+        maxChars: 20,
+      }),
+    ]);
+    expect(loaded.fileReferences).toEqual([
+      expect.objectContaining({ path: 'large.md', label: 'attached', size: 21 }),
     ]);
   });
 

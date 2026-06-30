@@ -95,6 +95,7 @@ describe('concurrent chat sessions (useAgentChat × agent-run-store)', () => {
   let chat: ChatApi;
   let refs: AgentChatRefs;
   let restoredInputs: Message[];
+  let transientErrors: string[];
 
   function Harness({ activeSessionId }: { activeSessionId: string | null }) {
     chat = useAgentChat({
@@ -110,6 +111,7 @@ describe('concurrent chat sessions (useAgentChat × agent-run-store)', () => {
       },
       resetInputState: () => { refs.inputValueRef.current = ''; },
       onRestoreInput: (msg) => restoredInputs.push(msg),
+      onTransientError: (message) => transientErrors.push(message),
     });
     return null;
   }
@@ -145,6 +147,7 @@ describe('concurrent chat sessions (useAgentChat × agent-run-store)', () => {
     resetWorkspaceTabsForTests();
     harness.captured.length = 0;
     restoredInputs = [];
+    transientErrors = [];
     refs = makeRefs('a');
     vi.stubGlobal('fetch', vi.fn(async (_url: string, init?: RequestInit) => {
       if (typeof init?.body === 'string') harness.lastRequestBody = init.body;
@@ -211,6 +214,23 @@ describe('concurrent chat sessions (useAgentChat × agent-run-store)', () => {
     expect(getRun('b')).toBeNull();
     expect(getUnread().has('b')).toBe(false);
     expect(chat.isLoading).toBe(false);
+  });
+
+  it('rejects oversized uploaded attachments before opening a run', async () => {
+    await activate('a');
+    refs.inputValueRef.current = 'Please use this upload';
+    refs.uploadRef.current!.localAttachments = [
+      { name: 'large.md', content: 'x'.repeat(20_001), status: 'success' },
+    ];
+
+    await act(async () => {
+      await chat.submit({ preventDefault: () => {} } as unknown as React.FormEvent);
+    });
+
+    expect(fetch).not.toHaveBeenCalled();
+    expect(getRun('a')).toBeNull();
+    expect(getMessages('a')).toEqual([]);
+    expect(transientErrors).toEqual([expect.stringContaining('large.md')]);
   });
 
   it('keeps a run streaming into its own session after the component unmounts', async () => {

@@ -16,6 +16,8 @@ export interface AgentSettings {
   reconnectRetries?: number;
 }
 
+export const DEFAULT_AGENT_MAX_STEPS = 100;
+
 export interface SettingsData {
   ai: AiSettings;
   agent?: AgentSettings;

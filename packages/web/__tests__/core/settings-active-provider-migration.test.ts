@@ -82,6 +82,49 @@ describe('readSettings activeProvider normalization', () => {
     });
   });
 
+  it('defaults agent maxSteps to 100 when old configs omit it', async () => {
+    fs.writeFileSync(configPath, JSON.stringify({
+      ai: {
+        activeProvider: 'p_openai01',
+        providers: [
+          { id: 'p_openai01', name: 'OpenAI', protocol: 'openai', apiKey: '', model: 'gpt-5.4', baseUrl: '' },
+        ],
+      },
+      mindRoot: '/tmp/mind',
+      agent: {
+        contextStrategy: 'off',
+      },
+    }), 'utf-8');
+
+    const { readSettings } = await import('@/lib/settings');
+    const settings = readSettings();
+
+    expect(settings.agent).toEqual({
+      maxSteps: 100,
+      contextStrategy: 'off',
+    });
+  });
+
+  it('preserves an explicit agent maxSteps value when reading config', async () => {
+    fs.writeFileSync(configPath, JSON.stringify({
+      ai: {
+        activeProvider: 'p_openai01',
+        providers: [
+          { id: 'p_openai01', name: 'OpenAI', protocol: 'openai', apiKey: '', model: 'gpt-5.4', baseUrl: '' },
+        ],
+      },
+      mindRoot: '/tmp/mind',
+      agent: {
+        maxSteps: 42,
+      },
+    }), 'utf-8');
+
+    const { readSettings } = await import('@/lib/settings');
+    const settings = readSettings();
+
+    expect(settings.agent?.maxSteps).toBe(42);
+  });
+
   it('normalizes search ignored paths when reading config', async () => {
     fs.writeFileSync(configPath, JSON.stringify({
       ai: {

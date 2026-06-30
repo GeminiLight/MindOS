@@ -26,7 +26,6 @@ describe('echo imprint extraction task', () => {
     const output = echoImprintExtractionTask.validateOutput({
       cards: [
         {
-          type: 'event',
           title: 'Imprint extraction became a structured task',
           summary: 'The conversation established a tool-free AI task boundary.',
           source: {
@@ -46,7 +45,6 @@ describe('echo imprint extraction task', () => {
           agencyTags: ['user_decision'],
         },
         {
-          type: 'signal',
           title: 'Invalid source should not pass',
           summary: 'This references a message that does not exist.',
           source: {

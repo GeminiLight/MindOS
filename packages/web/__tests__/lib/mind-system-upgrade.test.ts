@@ -18,7 +18,7 @@ const DEFAULT_ASSISTANT_PROMPTS = [
   '.mindos/assistants/echo-imprint.md',
   '.mindos/assistants/echo-threader.md',
   '.mindos/assistants/echo-insight.md',
-  '.mindos/assistants/echo-practice.md',
+  '.mindos/assistants/echo-promotion.md',
 ] as const;
 
 describe('default mind-system upgrade', () => {
@@ -46,6 +46,7 @@ describe('default mind-system upgrade', () => {
         expect(prompt).not.toContain('surface:');
       }
       expect(fs.existsSync(path.join(mindRoot, '.mindos/assistants/dreaming/profile.json'))).toBe(false);
+      expect(fs.existsSync(path.join(mindRoot, '.mindos/assistants/echo-practice.md'))).toBe(false);
       expect(fs.readFileSync(path.join(mindRoot, '.mindos/assistants/echo-imprint.md'), 'utf-8'))
         .toContain('permissionMode: read');
 
@@ -226,7 +227,8 @@ describe('default mind-system upgrade', () => {
       expect(fs.existsSync(path.join(outside, 'Drafts'))).toBe(false);
       expect(fs.existsSync(path.join(mindRoot, '.mindos/assistants/inbox-organizer.md'))).toBe(true);
       expect(fs.existsSync(path.join(mindRoot, '.mindos/assistants/dreaming.md'))).toBe(true);
-      expect(fs.existsSync(path.join(mindRoot, '.mindos/assistants/echo-practice.md'))).toBe(true);
+      expect(fs.existsSync(path.join(mindRoot, '.mindos/assistants/echo-promotion.md'))).toBe(true);
+      expect(fs.existsSync(path.join(mindRoot, '.mindos/assistants/echo-practice.md'))).toBe(false);
       expect(fs.existsSync(path.join(mindRoot, '.mindos/assistants/daily-signal/prompt.md'))).toBe(false);
     } finally {
       cleanupMindRoot(mindRoot);

@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Select } from '../Primitives';
 
-const MAX_STEPS_PRESETS = [10, 20, 30, 40, 50, 999] as const;
+const MAX_STEPS_PRESETS = [10, 20, 50, 100, 200, 500, 999] as const;
 
 export function MaxStepsSelect({ value, onChange }: { value: number; onChange: (v: number) => void }) {
   const isPreset = MAX_STEPS_PRESETS.includes(value as typeof MAX_STEPS_PRESETS[number]);
@@ -26,9 +26,10 @@ export function MaxStepsSelect({ value, onChange }: { value: number; onChange: (
       >
         <option value="10">10</option>
         <option value="20">20</option>
-        <option value="30">30</option>
-        <option value="40">40</option>
         <option value="50">50</option>
+        <option value="100">100</option>
+        <option value="200">200</option>
+        <option value="500">500</option>
         <option value="999">Unlimited</option>
         <option value="custom">Custom</option>
       </Select>

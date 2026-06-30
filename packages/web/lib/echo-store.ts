@@ -82,7 +82,7 @@ const DEFAULT_TITLE: Record<EchoStoredSegment, string> = {
   imprint: 'Echo Imprint',
   threads: 'Echo Thread',
   growth: 'Echo Insight',
-  practice: 'Echo Practice',
+  practice: 'Echo Promotion',
 };
 
 export function normalizeEchoStoredSegment(value: unknown): EchoStoredSegment | null {

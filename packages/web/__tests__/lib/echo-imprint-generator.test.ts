@@ -40,12 +40,11 @@ describe('echo imprint generator', () => {
 
     expect(result.sourceWindow.sessionCount).toBe(1);
     expect(result.state.checkpointAt).toBe(baseTime.toISOString());
-    expect(result.cards.some((card) => card.type === 'event')).toBe(true);
-    expect(result.cards.some((card) => card.type === 'next')).toBe(true);
     expect(result.cards[0]).toMatchObject({
       status: 'active',
       sourceSessionIds: ['s-1'],
     });
+    expect(result.cards[0]).not.toHaveProperty('type');
 
     const statePath = path.join(root, '.mindos', 'echo', 'imprints', 'state.json');
     expect(fs.existsSync(statePath)).toBe(true);
@@ -109,7 +108,7 @@ describe('echo imprint generator', () => {
       trigger: 'manual',
       now: baseTime,
     });
-    const deletedId = first.cards.find((card) => card.type === 'event')?.id;
+    const deletedId = first.cards[0]?.id;
     expect(deletedId).toBeTruthy();
 
     deleteImprintCard(root, deletedId!, baseTime);
@@ -151,7 +150,7 @@ describe('echo imprint generator', () => {
     const root = getTestMindRoot();
     const run = vi.fn(async () => ({
       taskId: 'echo.imprint.extract',
-      promptVersion: 'echo-imprint-extract-v1',
+      promptVersion: 'echo-imprint-extract-v2',
       modelProfile: 'fast-structured' as const,
       mode: 'structured' as const,
       model: { provider: 'test', name: 'test-model' },
@@ -164,7 +163,6 @@ describe('echo imprint generator', () => {
       output: {
         cards: [
           {
-            type: 'event' as const,
             title: 'Backend generator became an AI task',
             summary: 'The imprint generator now calls a structured AI task before merging cards.',
             source: {
@@ -200,12 +198,11 @@ describe('echo imprint generator', () => {
     expect(result.extraction).toMatchObject({
       mode: 'lm',
       taskId: 'echo.imprint.extract',
-      promptVersion: 'echo-imprint-extract-v1',
+      promptVersion: 'echo-imprint-extract-v2',
     });
     expect(result.cards[0]).toMatchObject({
-      type: 'event',
       generationMethod: 'lm',
-      promptVersion: 'echo-imprint-extract-v1',
+      promptVersion: 'echo-imprint-extract-v2',
       sourceSessionIds: ['s-1'],
       sourceMessageRefs: [
         expect.objectContaining({ sessionId: 's-1', messageIndex: 0, role: 'user' }),

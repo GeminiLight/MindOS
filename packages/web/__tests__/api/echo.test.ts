@@ -81,7 +81,7 @@ describe('/api/echo', () => {
     await POST(post({
       op: 'save',
       segment: 'practice',
-      assistantId: 'echo-practice',
+      assistantId: 'echo-promotion',
       markdown: '# 每次修复后复盘\n\n## 行动\n\n记录根因和验证。',
     }));
 

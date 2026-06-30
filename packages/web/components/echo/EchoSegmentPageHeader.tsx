@@ -25,10 +25,10 @@ function echoAssistantActionLabel(segment: Exclude<EchoSegment, 'overview'>, p: 
   }
 }
 
-function BackToOverviewLink({ label, ariaLabel }: { label: string; ariaLabel: string }) {
+function BackToEchoLink({ href, label, ariaLabel }: { href: string; label: string; ariaLabel: string }) {
   return (
     <Link
-      href={ECHO_SEGMENT_HREF.overview}
+      href={href}
       aria-label={ariaLabel}
       className={cn(
         buttonVariants({ variant: 'ghost', size: 'sm' }),
@@ -39,6 +39,14 @@ function BackToOverviewLink({ label, ariaLabel }: { label: string; ariaLabel: st
       {label}
     </Link>
   );
+}
+
+function headerBackLink(segment: EchoSegment, p: EchoCopy): ReactNode {
+  if (segment === 'overview') return undefined;
+  if (segment === 'threads') {
+    return <BackToEchoLink href={ECHO_SEGMENT_HREF.growth} label={p.backToInsightsLabel} ariaLabel={p.backToInsightsAriaLabel} />;
+  }
+  return <BackToEchoLink href={ECHO_SEGMENT_HREF.overview} label={p.backToOverviewLabel} ariaLabel={p.backToOverviewAriaLabel} />;
 }
 
 export function EchoPageHeader({
@@ -56,16 +64,17 @@ export function EchoPageHeader({
   titleId: string;
   actions?: ReactNode;
 }) {
+  const backLink = headerBackLink(segment, p);
   return (
     <EchoHero
       pageTitle={title}
       lead={lead}
       titleId={titleId}
-      beforeTitle={segment === 'overview' ? undefined : (
+      beforeTitle={backLink ? (
         <div className="flex flex-wrap items-center gap-2">
-          <BackToOverviewLink label={p.backToOverviewLabel} ariaLabel={p.backToOverviewAriaLabel} />
+          {backLink}
         </div>
-      )}
+      ) : undefined}
       actions={actions}
     />
   );

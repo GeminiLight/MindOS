@@ -487,9 +487,26 @@ export type MindosAgentFileValidationResult = {
   error?: string;
 };
 
+export const MINDOS_AGENT_DEFAULT_MAX_STEPS = 100;
+export const MINDOS_AGENT_ATTACHMENT_MAX_CHARS = 20_000;
+
+export type MindosAgentFileContextIssueCode =
+  | 'content_too_large'
+  | 'validation_failed'
+  | 'read_failed';
+
+export type MindosAgentFileContextIssue = {
+  path: string;
+  code: MindosAgentFileContextIssueCode;
+  message: string;
+  chars?: number;
+  maxChars?: number;
+};
+
 export type MindosAgentFileContextServices = {
   readFile(filePath: string): string;
   truncate?: (content: string) => string;
+  maxContentChars?: number;
   validateFileSize?: (filePath: string, cumulativeSize: number) => MindosAgentFileValidationResult;
   warn?: (message: string, error?: unknown) => void;
 };
@@ -504,6 +521,7 @@ export type MindosAgentFileContextReference = {
 export type MindosAgentFileContext = {
   contextParts: string[];
   failedFiles: string[];
+  fileIssues?: MindosAgentFileContextIssue[];
   fileReferences?: MindosAgentFileContextReference[];
   mode?: 'full' | 'reference';
 };
@@ -512,7 +530,7 @@ export function normalizeMindosAgentStepLimit(options: {
   requestedMaxSteps?: unknown;
   agentMaxSteps?: number;
 }): number {
-  const defaultMaxSteps = options.agentMaxSteps ?? 20;
+  const defaultMaxSteps = options.agentMaxSteps ?? MINDOS_AGENT_DEFAULT_MAX_STEPS;
   const raw = typeof options.requestedMaxSteps === 'number' && Number.isFinite(options.requestedMaxSteps)
     ? options.requestedMaxSteps
     : defaultMaxSteps;
@@ -554,6 +572,7 @@ export function loadMindosAgentFileContext(
 ): MindosAgentFileContext {
   const contextParts: string[] = [];
   const failedFiles: string[] = [];
+  const fileIssues: MindosAgentFileContextIssue[] = [];
   const fileReferences: MindosAgentFileContextReference[] = [];
   const seen = new Set<string>();
   let cumulativeSize = 0;
@@ -572,13 +591,30 @@ export function loadMindosAgentFileContext(
       newCumulativeSize: cumulativeSize,
     };
     if (!validation.valid) {
-      services.warn?.(`[agent] file size validation failed for "${filePath}": ${validation.error ?? 'invalid'}`);
+      const message = validation.error ?? 'File could not be validated for AI context.';
+      services.warn?.(`[agent] file size validation failed for "${filePath}": ${message}`);
       failedFiles.push(filePath);
+      fileIssues.push({ path: filePath, code: 'validation_failed', message });
       return;
     }
 
     try {
       const raw = services.readFile(filePath);
+      const maxContentChars = services.maxContentChars;
+      if (typeof maxContentChars === 'number' && maxContentChars > 0 && raw.length > maxContentChars) {
+        const message = `File "${filePath}" is too large for AI context: ${raw.length} chars (limit: ${maxContentChars}).`;
+        reference.size = raw.length;
+        services.warn?.(`[agent] attached file content too large for "${filePath}": ${raw.length} chars`);
+        failedFiles.push(filePath);
+        fileIssues.push({
+          path: filePath,
+          code: 'content_too_large',
+          message,
+          chars: raw.length,
+          maxChars: maxContentChars,
+        });
+        return;
+      }
       const content = services.truncate ? services.truncate(raw) : raw;
       reference.contentHash = stableMindosFileContextHash(raw);
       reference.size = raw.length;
@@ -587,13 +623,24 @@ export function loadMindosAgentFileContext(
     } catch (error) {
       services.warn?.(`[agent] failed to read ${label.startsWith('Attached') ? 'attached file' : 'currentFile'} "${filePath}":`, error);
       failedFiles.push(filePath);
+      fileIssues.push({
+        path: filePath,
+        code: 'read_failed',
+        message: error instanceof Error ? error.message : String(error),
+      });
     }
   }
 
   for (const filePath of attachedFiles ?? []) appendFile(filePath, 'Attached file from the MindOS knowledge base');
   if (currentFile) appendFile(currentFile, 'Current file from the MindOS knowledge base');
 
-  return { contextParts, failedFiles, fileReferences, mode: 'full' };
+  return {
+    contextParts,
+    failedFiles,
+    ...(fileIssues.length > 0 ? { fileIssues } : {}),
+    fileReferences,
+    mode: 'full',
+  };
 }
 
 function stableMindosFileContextHash(content: string): string {

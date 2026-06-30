@@ -7,6 +7,7 @@ import {
   dirnameOfMindosPath,
   expandMindosAgentAttachedFiles,
   loadMindosAgentFileContext,
+  MINDOS_AGENT_ATTACHMENT_MAX_CHARS,
   type MindosAgentFileContext,
 } from '@geminilight/mindos/agent/turn';
 import type { AgentRunRecord } from '@geminilight/mindos/agent/ledger/run-ledger';
@@ -19,6 +20,7 @@ export function loadAttachedFileContext(
   return loadMindosAgentFileContext(attachedFiles, currentFile, {
     readFile: getFileContent,
     truncate,
+    maxContentChars: MINDOS_AGENT_ATTACHMENT_MAX_CHARS,
     validateFileSize: (filePath, cumulativeSize) => validateFileSize(path.join(getMindRoot(), filePath), cumulativeSize),
     warn: (message: string, error?: unknown) => console.warn(message, error instanceof Error ? error.message : error),
   });

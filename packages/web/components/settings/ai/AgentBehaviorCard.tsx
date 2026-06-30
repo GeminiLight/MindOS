@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { Bot } from 'lucide-react';
-import type { AiTabProps, AgentSettings } from '../types';
+import { DEFAULT_AGENT_MAX_STEPS, type AiTabProps, type AgentSettings } from '../types';
 import { Field, Input, Select, SettingCard, SettingRow, Toggle } from '../Primitives';
 import { MaxStepsSelect } from './MaxStepsSelect';
 
@@ -33,7 +33,7 @@ export function AgentBehaviorCard({
       description={t.settings.agent.subtitle ?? 'Configure how the AI agent operates'}
     >
       <SettingRow label={t.settings.agent.maxSteps} hint={t.settings.agent.maxStepsHint}>
-        <MaxStepsSelect value={agent?.maxSteps ?? 20} onChange={value => updateAgent({ maxSteps: value })} />
+        <MaxStepsSelect value={agent?.maxSteps ?? DEFAULT_AGENT_MAX_STEPS} onChange={value => updateAgent({ maxSteps: value })} />
       </SettingRow>
 
       <SettingRow label={t.settings.agent.contextStrategy} hint={t.settings.agent.contextStrategyHint}>

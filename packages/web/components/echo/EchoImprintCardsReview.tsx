@@ -6,13 +6,10 @@ import {
   Check,
   ChevronDown,
   Clock3,
-  ListFilter,
   MessageSquareText,
-  NotebookText,
   Pencil,
   RefreshCw,
   ShieldCheck,
-  Target,
   Trash2,
 } from 'lucide-react';
 import type { Messages } from '@/lib/i18n';
@@ -21,9 +18,9 @@ import { Button } from '@/components/ui/button';
 import { useVisiblePolling } from '@/lib/use-visible-polling';
 
 type EchoCopy = Messages['echoPages'];
-type ImprintCardType = 'event' | 'signal' | 'next';
 type ImprintGenerationTrigger = 'auto' | 'manual';
 type ImprintScheduleMode = 'manual' | 'daily' | 'interval';
+type ImprintView = 'digest' | 'moments';
 
 type ImprintSchedule = {
   mode: ImprintScheduleMode;
@@ -41,7 +38,6 @@ type ImprintGenerationState = {
 
 type ImprintCardCandidate = {
   id: string;
-  type: ImprintCardType;
   title: string;
   summary: string;
   createdAt: string;
@@ -52,7 +48,6 @@ type ImprintCardCandidate = {
 
 type RemoteImprintCard = Partial<ImprintCardCandidate> & {
   id?: string;
-  type?: string;
 };
 
 type ImprintCardsApiResponse = {
@@ -66,7 +61,6 @@ type ImprintCardsApiResponse = {
   skipped?: boolean;
 };
 
-const laneOrder: ImprintCardType[] = ['event', 'signal', 'next'];
 const IMPRINT_STATUS_REFRESH_MS = 60_000;
 const DEFAULT_IMPRINT_SCHEDULE: ImprintSchedule = {
   mode: 'daily',
@@ -84,15 +78,9 @@ function formatGenerationTime(date = new Date()) {
   });
 }
 
-function isImprintCardType(type: string): type is ImprintCardType {
-  return type === 'event' || type === 'signal' || type === 'next';
-}
-
 function normalizeCandidate(candidate: EchoCopy['imprintCardCandidates'][number], index: number): ImprintCardCandidate {
-  const type = isImprintCardType(candidate.type) ? candidate.type : 'event';
   return {
-    id: `${type}-${index}`,
-    type,
+    id: `imprint-${index}`,
     title: candidate.title,
     summary: candidate.summary,
     createdAt: candidate.createdAt,
@@ -103,11 +91,9 @@ function normalizeCandidate(candidate: EchoCopy['imprintCardCandidates'][number]
 }
 
 function normalizeRemoteCandidate(candidate: RemoteImprintCard, index: number): ImprintCardCandidate | null {
-  const type = typeof candidate.type === 'string' && isImprintCardType(candidate.type) ? candidate.type : null;
-  if (!type || typeof candidate.title !== 'string' || typeof candidate.summary !== 'string') return null;
+  if (typeof candidate.title !== 'string' || typeof candidate.summary !== 'string') return null;
   return {
-    id: typeof candidate.id === 'string' && candidate.id.trim() ? candidate.id.trim() : `${type}-remote-${index}`,
-    type,
+    id: typeof candidate.id === 'string' && candidate.id.trim() ? candidate.id.trim() : `imprint-remote-${index}`,
     title: candidate.title,
     summary: candidate.summary,
     createdAt: typeof candidate.createdAt === 'string' ? candidate.createdAt : '',
@@ -172,50 +158,10 @@ function scheduleStatusLabel(schedule: ImprintSchedule, p: EchoCopy) {
   return next ? p.imprintScheduleNextRun(next) : scheduleModeLabel(schedule, p);
 }
 
-function typeMeta(type: ImprintCardType, p: EchoCopy) {
-  switch (type) {
-    case 'event':
-      return {
-        label: p.imprintCardTypeEventLabel,
-        icon: <NotebookText size={13} aria-hidden />,
-      };
-    case 'signal':
-      return {
-        label: p.imprintCardTypeSignalLabel,
-        icon: <Target size={13} aria-hidden />,
-      };
-    case 'next':
-      return {
-        label: p.imprintCardTypeNextLabel,
-        icon: <ArrowRight size={13} aria-hidden />,
-      };
-  }
-}
-
-function toneForType(type: ImprintCardType) {
-  switch (type) {
-    case 'event':
-      return {
-        text: 'text-[var(--amber)]',
-        border: 'border-[var(--amber)]/35',
-        bg: 'bg-[var(--amber-subtle)]',
-        rail: 'bg-[var(--amber)]',
-      };
-    case 'signal':
-      return {
-        text: 'text-[var(--success)]',
-        border: 'border-[var(--success)]/30',
-        bg: 'bg-[var(--success)]/5',
-        rail: 'bg-[var(--success)]',
-      };
-    case 'next':
-      return {
-        text: 'text-foreground',
-        border: 'border-border/70',
-        bg: 'bg-muted/35',
-        rail: 'bg-foreground/55',
-      };
-  }
+function digestBodyFor(candidates: ImprintCardCandidate[], p: EchoCopy) {
+  const anchor = candidates[0]?.title;
+  if (!anchor) return p.imprintDigestEmptyBody;
+  return p.imprintDigestBody(anchor, Math.max(0, candidates.length - 1));
 }
 
 export default function EchoImprintCardsReview({ p }: { p: EchoCopy }) {
@@ -227,7 +173,10 @@ export default function EchoImprintCardsReview({ p }: { p: EchoCopy }) {
   const [deletedIds, setDeletedIds] = useState<Set<string>>(() => new Set());
   const [draftSummaries, setDraftSummaries] = useState<Record<string, string>>({});
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [selectedTypes, setSelectedTypes] = useState<Set<ImprintCardType>>(() => new Set(laneOrder));
+  const [activeViews, setActiveViews] = useState<Record<ImprintView, boolean>>({
+    digest: true,
+    moments: true,
+  });
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSchedulePanelOpen, setIsSchedulePanelOpen] = useState(false);
   const [isUpdatingSchedule, setIsUpdatingSchedule] = useState(false);
@@ -250,17 +199,6 @@ export default function EchoImprintCardsReview({ p }: { p: EchoCopy }) {
   const visibleCandidates = useMemo(
     () => candidates.filter((card) => !deletedIds.has(card.id)),
     [candidates, deletedIds],
-  );
-  const filteredCandidates = useMemo(
-    () => visibleCandidates.filter((card) => selectedTypes.has(card.type)),
-    [selectedTypes, visibleCandidates],
-  );
-
-  const typeCounts = useMemo(
-    () => Object.fromEntries(
-      laneOrder.map((type) => [type, visibleCandidates.filter((card) => card.type === type).length]),
-    ) as Record<ImprintCardType, number>,
-    [visibleCandidates],
   );
 
   async function loadImprints({ runIfDue }: { runIfDue: boolean }) {
@@ -387,24 +325,6 @@ export default function EchoImprintCardsReview({ p }: { p: EchoCopy }) {
     }
   }
 
-  function toggleTypeFilter(type: ImprintCardType) {
-    setSelectedTypes((current) => {
-      const next = new Set(current);
-      if (next.has(type)) {
-        next.delete(type);
-      } else {
-        next.add(type);
-      }
-      return next;
-    });
-  }
-
-  const allSelected = selectedTypes.size === laneOrder.length && laneOrder.every((type) => selectedTypes.has(type));
-
-  function toggleAllFilters() {
-    setSelectedTypes(allSelected ? new Set() : new Set(laneOrder));
-  }
-
   function updateImprints() {
     void requestGeneratedImprints('manual');
   }
@@ -451,187 +371,304 @@ export default function EchoImprintCardsReview({ p }: { p: EchoCopy }) {
     });
   }
 
-  const generationModeLabel = generation.trigger === 'manual'
-    ? p.imprintCardsManualLabel
-    : p.imprintCardsAutoLabel;
+  function toggleView(view: ImprintView) {
+    setActiveViews((current) => {
+      if (current[view] && Object.values(current).filter(Boolean).length === 1) return current;
+      return { ...current, [view]: !current[view] };
+    });
+  }
+
   const scheduleLabel = scheduleStatusLabel(schedule, p);
+  const headerScheduleLabel = scheduleModeLabel(schedule, p);
 
   return (
     <section
-      className="overflow-hidden rounded-xl border border-border/55 bg-card/50 shadow-sm"
+      className="min-w-0"
       aria-label={p.imprintCardsEyebrow}
       data-testid="echo-imprint-generated-list"
       aria-busy={isGenerating}
     >
-      <div className="px-5 py-5 md:px-6">
-        <div className="flex flex-col gap-4">
-          <div className="flex min-w-0 flex-col gap-3 md:flex-row md:items-start md:justify-between">
-            <div className="min-w-0 space-y-1">
-              <div className="flex min-w-0 items-center gap-2 font-sans text-xs font-medium text-foreground">
-                <MessageSquareText size={13} className="text-[var(--amber)]" aria-hidden />
-                <span className="truncate">{p.imprintCardsEyebrow}</span>
-              </div>
-              <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[0.68rem] leading-5 text-muted-foreground">
-                <span data-testid="echo-imprint-checkpoint">{p.imprintCardsCheckpointLabel}</span>
-                <span aria-hidden>·</span>
-                <span>{p.imprintCardsWindow}</span>
-                <span aria-hidden>·</span>
-                <span data-testid="echo-imprint-generation-status">
-                  {generationModeLabel} · {p.imprintCardsUpdatedAt(generation.updatedAt)}
-                </span>
-                <span aria-hidden>·</span>
-                <span data-testid="echo-imprint-schedule-status">
-                  {scheduleLabel}
-                </span>
-              </div>
-            </div>
-            <div className="flex items-center gap-1 self-start md:self-auto">
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                className={cn(
-                  'text-muted-foreground hover:text-foreground',
-                  isSchedulePanelOpen && 'bg-muted text-foreground',
-                )}
-                title={p.imprintScheduleAction}
-                aria-label={p.imprintScheduleAction}
-                aria-expanded={isSchedulePanelOpen}
-                data-testid="echo-imprint-schedule-button"
-                onClick={() => setIsSchedulePanelOpen((open) => !open)}
-              >
-                <Clock3 size={13} aria-hidden />
-                <span className="sr-only">{p.imprintScheduleAction}</span>
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                className="text-muted-foreground hover:text-foreground"
-                title={p.imprintCardsUpdateAction}
-                aria-label={p.imprintCardsUpdateAction}
-                data-testid="echo-imprint-update-button"
-                onClick={updateImprints}
-                disabled={isGenerating}
-              >
-                <RefreshCw size={13} className={cn(isGenerating && 'animate-spin')} aria-hidden />
-                <span className="sr-only">{p.imprintCardsUpdateAction}</span>
-              </Button>
-            </div>
-          </div>
+      <header>
+        <p
+          className="font-mono text-[0.68rem] leading-5 text-muted-foreground"
+          data-testid="echo-imprint-generation-status"
+          title={p.echoGeneratedStatusTitle(generation.updatedAt)}
+        >
+          {p.echoGeneratedStatusLine(p.imprintCardsCheckpointLabel, headerScheduleLabel)}
+        </p>
 
-          {isSchedulePanelOpen ? (
-            <div
-              className="grid gap-3 rounded-lg border border-border/45 bg-background/70 p-3 md:grid-cols-[minmax(13rem,1fr)_minmax(8rem,0.45fr)_auto]"
-              data-testid="echo-imprint-schedule-panel"
-            >
-              <fieldset className="min-w-0 space-y-1.5" data-testid="echo-imprint-schedule-mode">
-                <legend className="font-sans text-[0.7rem] font-medium text-muted-foreground">
-                  {p.imprintScheduleModeLabel}
-                </legend>
-                <div className="grid grid-cols-3 gap-1 rounded-lg border border-border/45 bg-muted/20 p-1">
-                  <ScheduleModeButton
-                    mode="daily"
-                    active={schedule.mode === 'daily'}
-                    label={p.imprintScheduleDailyLabel}
-                    disabled={isUpdatingSchedule}
-                    onClick={() => updateScheduleMode('daily')}
-                  />
-                  <ScheduleModeButton
-                    mode="interval"
-                    active={schedule.mode === 'interval'}
-                    label={p.imprintScheduleIntervalLabel}
-                    disabled={isUpdatingSchedule}
-                    onClick={() => updateScheduleMode('interval')}
-                  />
-                  <ScheduleModeButton
-                    mode="manual"
-                    active={schedule.mode === 'manual'}
-                    label={p.imprintScheduleManualLabel}
-                    disabled={isUpdatingSchedule}
-                    onClick={() => updateScheduleMode('manual')}
-                  />
-                </div>
-              </fieldset>
-              {schedule.mode === 'daily' ? (
-                <label className="grid min-w-[8rem] gap-1 font-sans text-[0.7rem] font-medium text-muted-foreground">
-                  <span>{p.imprintScheduleTimeLabel}</span>
-                  <input
-                    type="time"
-                    className="h-8 rounded-md border border-border bg-background px-2 font-sans text-xs text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring"
-                    value={schedule.dailyTime}
-                    onChange={(event) => updateScheduleDailyTime(event.currentTarget.value)}
-                    disabled={isUpdatingSchedule}
-                    data-testid="echo-imprint-schedule-time"
-                  />
-                </label>
-              ) : null}
-              {schedule.mode === 'interval' ? (
-                <label className="grid min-w-[8rem] gap-1 font-sans text-[0.7rem] font-medium text-muted-foreground">
-                  <span>{p.imprintScheduleEveryLabel}</span>
-                  <select
-                    className="h-8 rounded-md border border-border bg-background px-2 font-sans text-xs text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring"
-                    value={String(schedule.intervalHours)}
-                    onChange={(event) => updateScheduleIntervalHours(event.currentTarget.value)}
-                    disabled={isUpdatingSchedule}
-                    data-testid="echo-imprint-schedule-interval"
-                  >
-                    {INTERVAL_HOUR_OPTIONS.map((hours) => (
-                      <option key={hours} value={hours}>
-                        {p.imprintScheduleIntervalHours(hours)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              ) : null}
-              <div className="flex min-w-0 items-end font-mono text-[0.68rem] leading-5 text-muted-foreground md:justify-end">
-                <span
-                  className="inline-flex h-8 min-w-0 items-center rounded-md border border-border/45 bg-muted/15 px-2"
-                  data-testid="echo-imprint-schedule-save-state"
-                >
-                  {isUpdatingSchedule ? p.imprintScheduleUpdatingLabel : scheduleLabel}
-                </span>
-              </div>
-            </div>
-          ) : null}
-
-          <div className="flex min-w-0 items-center gap-2 border-t border-border/35 pt-3">
-            <ListFilter size={13} className="shrink-0 text-muted-foreground" aria-hidden />
-            <div className="flex min-w-0 flex-wrap items-center gap-x-1 gap-y-1" role="group" aria-label={p.imprintCardFilterAllLabel}>
-              <AllFilterButton
-                count={visibleCandidates.length}
-                active={allSelected}
-                p={p}
-                onClick={toggleAllFilters}
-              />
-              {laneOrder.map((type) => (
-                <TypeFilterButton
-                  key={type}
-                  type={type}
-                  count={typeCounts[type]}
-                  active={selectedTypes.has(type)}
-                  p={p}
-                  onClick={() => toggleTypeFilter(type)}
-                />
-              ))}
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-4 space-y-3">
-          {filteredCandidates.map((card) => (
-            <ReviewCard
-              key={card.id}
-              card={card}
-              draftSummary={draftSummaries[card.id] ?? card.summary}
-              isEditing={editingId === card.id}
-              p={p}
-              onEdit={() => toggleEditing(card.id)}
-              onUpdateSummary={(value) => updateDraftSummary(card.id, value)}
-              onDelete={() => deleteCard(card.id)}
+        <div
+          className="mt-4 flex min-w-0 flex-wrap items-center justify-between gap-3"
+          data-testid="echo-imprint-control-row"
+        >
+          <div
+            className="inline-flex max-w-full items-center gap-1 overflow-x-auto rounded-lg border border-border/35 bg-muted/15 p-1"
+            role="group"
+            aria-label={p.imprintCardsEyebrow}
+            data-testid="echo-imprint-tabs"
+          >
+            <ImprintViewTab
+              view="digest"
+              active={activeViews.digest}
+              label={p.imprintDigestTitle}
+              icon={<ShieldCheck size={14} aria-hidden />}
+              onClick={() => toggleView('digest')}
             />
-          ))}
+            <ImprintViewTab
+              view="moments"
+              active={activeViews.moments}
+              label={p.imprintMomentsTitle}
+              icon={<MessageSquareText size={14} aria-hidden />}
+              onClick={() => toggleView('moments')}
+            />
+          </div>
+
+          <div className="flex items-center gap-1 rounded-lg border border-border/20 bg-muted/10 p-1" data-testid="echo-imprint-actions">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className={cn(
+                'text-muted-foreground hover:text-foreground',
+                isSchedulePanelOpen && 'bg-muted text-foreground',
+              )}
+              title={p.imprintScheduleAction}
+              aria-label={p.imprintScheduleAction}
+              aria-expanded={isSchedulePanelOpen}
+              data-testid="echo-imprint-schedule-button"
+              onClick={() => setIsSchedulePanelOpen((open) => !open)}
+            >
+              <Clock3 size={13} aria-hidden />
+              <span className="sr-only">{p.imprintScheduleAction}</span>
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className="text-muted-foreground hover:text-foreground"
+              title={p.imprintCardsUpdateAction}
+              aria-label={p.imprintCardsUpdateAction}
+              data-testid="echo-imprint-update-button"
+              onClick={updateImprints}
+              disabled={isGenerating}
+            >
+              <RefreshCw size={13} className={cn(isGenerating && 'animate-spin')} aria-hidden />
+              <span className="sr-only">{p.imprintCardsUpdateAction}</span>
+            </Button>
+          </div>
         </div>
+
+        {isSchedulePanelOpen ? (
+          <div
+            className="mt-3 grid gap-3 rounded-lg border border-border/45 bg-background/70 p-3 md:grid-cols-[minmax(13rem,1fr)_minmax(8rem,0.45fr)_auto]"
+            data-testid="echo-imprint-schedule-panel"
+          >
+            <fieldset className="min-w-0 space-y-1.5" data-testid="echo-imprint-schedule-mode">
+              <legend className="font-sans text-[0.7rem] font-medium text-muted-foreground">
+                {p.imprintScheduleModeLabel}
+              </legend>
+              <div className="grid grid-cols-3 gap-1 rounded-lg border border-border/45 bg-muted/20 p-1">
+                <ScheduleModeButton
+                  mode="daily"
+                  active={schedule.mode === 'daily'}
+                  label={p.imprintScheduleDailyLabel}
+                  disabled={isUpdatingSchedule}
+                  onClick={() => updateScheduleMode('daily')}
+                />
+                <ScheduleModeButton
+                  mode="interval"
+                  active={schedule.mode === 'interval'}
+                  label={p.imprintScheduleIntervalLabel}
+                  disabled={isUpdatingSchedule}
+                  onClick={() => updateScheduleMode('interval')}
+                />
+                <ScheduleModeButton
+                  mode="manual"
+                  active={schedule.mode === 'manual'}
+                  label={p.imprintScheduleManualLabel}
+                  disabled={isUpdatingSchedule}
+                  onClick={() => updateScheduleMode('manual')}
+                />
+              </div>
+            </fieldset>
+            {schedule.mode === 'daily' ? (
+              <label className="grid min-w-[8rem] gap-1 font-sans text-[0.7rem] font-medium text-muted-foreground">
+                <span>{p.imprintScheduleTimeLabel}</span>
+                <input
+                  type="time"
+                  className="h-8 rounded-md border border-border bg-background px-2 font-sans text-xs text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring"
+                  value={schedule.dailyTime}
+                  onChange={(event) => updateScheduleDailyTime(event.currentTarget.value)}
+                  disabled={isUpdatingSchedule}
+                  data-testid="echo-imprint-schedule-time"
+                />
+              </label>
+            ) : null}
+            {schedule.mode === 'interval' ? (
+              <label className="grid min-w-[8rem] gap-1 font-sans text-[0.7rem] font-medium text-muted-foreground">
+                <span>{p.imprintScheduleEveryLabel}</span>
+                <select
+                  className="h-8 rounded-md border border-border bg-background px-2 font-sans text-xs text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring"
+                  value={String(schedule.intervalHours)}
+                  onChange={(event) => updateScheduleIntervalHours(event.currentTarget.value)}
+                  disabled={isUpdatingSchedule}
+                  data-testid="echo-imprint-schedule-interval"
+                >
+                  {INTERVAL_HOUR_OPTIONS.map((hours) => (
+                    <option key={hours} value={hours}>
+                      {p.imprintScheduleIntervalHours(hours)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+            <div className="flex min-w-0 items-end font-mono text-[0.68rem] leading-5 text-muted-foreground md:justify-end">
+              <span
+                className="inline-flex h-8 min-w-0 items-center rounded-md border border-border/45 bg-muted/15 px-2"
+                data-testid="echo-imprint-schedule-save-state"
+              >
+                {isUpdatingSchedule ? p.imprintScheduleUpdatingLabel : scheduleLabel}
+              </span>
+            </div>
+          </div>
+        ) : null}
+
+      </header>
+
+      <div className="pt-5">
+        {activeViews.digest ? (
+          <ImprintDigest
+            p={p}
+            body={digestBodyFor(visibleCandidates, p)}
+            momentCount={visibleCandidates.length}
+          />
+        ) : null}
+
+        {activeViews.moments ? (
+          <ImprintMoments
+            candidates={visibleCandidates}
+            draftSummaries={draftSummaries}
+            editingId={editingId}
+            p={p}
+            onEdit={toggleEditing}
+            onUpdateSummary={updateDraftSummary}
+            onDelete={deleteCard}
+          />
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+function ImprintViewTab({
+  view,
+  active,
+  label,
+  icon,
+  onClick,
+}: {
+  view: ImprintView;
+  active: boolean;
+  label: string;
+  icon: ReactNode;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      aria-controls={`echo-imprint-${view}-panel`}
+      data-testid={`echo-imprint-tab-${view}`}
+      className={cn(
+        'flex min-h-9 min-w-0 items-center gap-2 rounded-md px-3 py-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        active ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:bg-background/60 hover:text-foreground',
+      )}
+      onClick={onClick}
+    >
+      <span className={cn('shrink-0', active ? 'text-[var(--amber)]' : 'text-muted-foreground')}>{icon}</span>
+      <span className="whitespace-nowrap font-sans text-xs font-medium sm:text-sm">{label}</span>
+    </button>
+  );
+}
+
+function ImprintDigest({
+  p,
+  body,
+  momentCount,
+}: {
+  p: EchoCopy;
+  body: string;
+  momentCount: number;
+}) {
+  return (
+    <section
+      className="rounded-xl border border-border/45 bg-background/55 p-5"
+      id="echo-imprint-digest-panel"
+      data-testid="echo-imprint-digest"
+    >
+      <div className="flex min-w-0 flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div className="min-w-0">
+          <div className="flex min-w-0 items-center gap-2 font-sans text-sm font-medium text-foreground">
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted/35 text-[var(--amber)]" aria-hidden>
+              <ShieldCheck size={14} strokeWidth={1.8} />
+            </span>
+            <h3 className="min-w-0 truncate">{p.imprintDigestTitle}</h3>
+          </div>
+          <p className="mt-3 max-w-3xl font-sans text-base leading-7 text-foreground">
+            {body}
+          </p>
+        </div>
+        <span className="w-fit whitespace-nowrap rounded-md border border-border/45 bg-background/65 px-2 py-1 font-mono text-[0.68rem] text-muted-foreground">
+          {p.imprintMomentsCount(momentCount)}
+        </span>
+      </div>
+    </section>
+  );
+}
+
+function ImprintMoments({
+  candidates,
+  draftSummaries,
+  editingId,
+  p,
+  onEdit,
+  onUpdateSummary,
+  onDelete,
+}: {
+  candidates: ImprintCardCandidate[];
+  draftSummaries: Record<string, string>;
+  editingId: string | null;
+  p: EchoCopy;
+  onEdit: (cardId: string) => void;
+  onUpdateSummary: (cardId: string, value: string) => void;
+  onDelete: (cardId: string) => void;
+}) {
+  return (
+    <section
+      id="echo-imprint-moments-panel"
+      className="mt-3"
+      data-testid="echo-imprint-moments"
+    >
+      <div className="space-y-3">
+        {candidates.length > 0 ? candidates.map((card) => (
+          <ReviewCard
+            key={card.id}
+            card={card}
+            draftSummary={draftSummaries[card.id] ?? card.summary}
+            isEditing={editingId === card.id}
+            p={p}
+            onEdit={() => onEdit(card.id)}
+            onUpdateSummary={(value) => onUpdateSummary(card.id, value)}
+            onDelete={() => onDelete(card.id)}
+          />
+        )) : (
+          <p
+            className="rounded-lg border border-border/45 bg-muted/10 px-4 py-5 font-sans text-sm leading-6 text-muted-foreground"
+            data-testid="echo-imprint-moments-empty"
+          >
+            {p.imprintMomentsEmptyLabel}
+          </p>
+        )}
       </div>
     </section>
   );
@@ -654,26 +691,18 @@ function ReviewCard({
   onUpdateSummary: (value: string) => void;
   onDelete: () => void;
 }) {
-  const meta = typeMeta(card.type, p);
-  const tone = toneForType(card.type);
-
   return (
     <article
       className={cn(
         'group relative overflow-hidden rounded-lg border bg-background/70 transition-[background-color,border-color,box-shadow,opacity] duration-150',
         'border-border/55 hover:border-[var(--amber)]/30 hover:shadow-sm',
       )}
-      data-testid={`echo-imprint-card-${card.type}`}
+      data-testid="echo-imprint-card"
     >
-      <div className={cn('absolute bottom-0 left-0 top-0 w-1 opacity-80', tone.rail)} aria-hidden />
+      <div className="absolute bottom-0 left-0 top-0 w-1 bg-[var(--amber)]/70" aria-hidden />
       <div className="px-4 py-4 pl-5 md:px-5">
         <div className="flex min-w-0 items-start justify-between gap-3">
           <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[0.68rem] leading-5 text-muted-foreground">
-            <span className={cn('inline-flex items-center gap-1.5 font-sans font-medium', tone.text)}>
-              {meta.icon}
-              {meta.label}
-            </span>
-            <span aria-hidden>·</span>
             <span
               className="inline-flex items-center gap-1.5"
               data-testid="echo-imprint-created-at"
@@ -808,71 +837,6 @@ function ScheduleModeButton({
       onClick={onClick}
     >
       <span className="block truncate">{label}</span>
-    </button>
-  );
-}
-
-function AllFilterButton({
-  count,
-  active,
-  p,
-  onClick,
-}: {
-  count: number;
-  active: boolean;
-  p: EchoCopy;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      className={cn(
-        'relative inline-flex h-6 items-center gap-1.5 rounded-md px-2 font-sans text-xs transition-[background-color,color] duration-150',
-        'hover:bg-muted/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-        active ? 'bg-background/75 text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
-      )}
-      aria-pressed={active}
-      aria-label={`${p.imprintCardFilterAllLabel} ${count}`}
-      data-testid="echo-imprint-card-lane-all"
-      onClick={onClick}
-    >
-      <span className="font-medium">{p.imprintCardFilterAllLabel}</span>
-      <span className="font-mono text-[0.68rem] text-muted-foreground">{count}</span>
-    </button>
-  );
-}
-
-function TypeFilterButton({
-  type,
-  count,
-  active,
-  p,
-  onClick,
-}: {
-  type: ImprintCardType;
-  count: number;
-  active: boolean;
-  p: EchoCopy;
-  onClick: () => void;
-}) {
-  const meta = typeMeta(type, p);
-  const tone = toneForType(type);
-  return (
-    <button
-      type="button"
-      className={cn(
-        'relative inline-flex h-6 items-center gap-1.5 rounded-md px-2 font-sans text-xs transition-[background-color,color,opacity] duration-150',
-        'hover:bg-muted/25 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-        active ? 'text-foreground' : 'text-muted-foreground/60',
-      )}
-      aria-pressed={active}
-      aria-label={`${meta.label} ${count}`}
-      data-testid={`echo-imprint-card-lane-${type}`}
-      onClick={onClick}
-    >
-      <span className={cn('absolute inset-x-2 bottom-0 h-px rounded-full opacity-0', active && tone.rail, active && 'opacity-75')} aria-hidden />
-      <span className="font-medium">{meta.label}</span>
-      <span className="font-mono text-[0.68rem] text-muted-foreground">{count}</span>
     </button>
   );
 }

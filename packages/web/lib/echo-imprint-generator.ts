@@ -9,7 +9,6 @@ import {
   type ImprintExtractionMessageRef,
 } from './ai/tasks/echo-imprint-extract';
 
-export type ImprintCardType = 'event' | 'signal' | 'next';
 export type ImprintGenerationTrigger = 'auto' | 'manual';
 export type ImprintScheduleMode = 'manual' | 'daily' | 'interval';
 
@@ -40,7 +39,6 @@ export type ImprintSourceSession = {
 
 export type ImprintCard = {
   id: string;
-  type: ImprintCardType;
   title: string;
   summary: string;
   createdAt: string;
@@ -112,11 +110,6 @@ const MIN_INTERVAL_HOURS = 1;
 const MAX_INTERVAL_HOURS = 24;
 const MAX_ACTIVE_CARDS = 5;
 const MAX_SUMMARY_CHARS = 280;
-
-const STOPWORDS = new Set([
-  'the', 'and', 'for', 'with', 'that', 'this', 'from', 'into', 'have', 'what',
-  '怎么', '这个', '那个', '现在', '然后', '我们', '就是', '可以', '需要', '应该',
-]);
 
 export function readImprintGenerationState(mindRoot: string): ImprintGenerationState {
   try {
@@ -446,12 +439,10 @@ function normalizeCard(value: unknown): ImprintCard | null {
     ? value as Record<string, unknown>
     : {};
   const id = typeof record.id === 'string' ? record.id.trim() : '';
-  const type = record.type === 'signal' || record.type === 'next' || record.type === 'event' ? record.type : null;
-  if (!id || !type) return null;
+  if (!id) return null;
   const now = new Date().toISOString();
   return {
     id,
-    type,
     title: normalizeText(record.title, 120) || 'Untitled imprint',
     summary: normalizeText(record.summary, MAX_SUMMARY_CHARS),
     createdAt: normalizeText(record.createdAt, 32) || formatTime(new Date()),
@@ -534,19 +525,7 @@ function normalizeSession(value: unknown): ImprintSourceSession | null {
 
 function buildCardsFromSessions(sessions: ImprintSourceSession[], now: Date): ImprintCard[] {
   if (sessions.length === 0) return [];
-  const cards: ImprintCard[] = [];
-  for (const session of sessions.slice(0, 2)) {
-    cards.push(buildEventCard(session, now));
-  }
-  const signal = buildSignalCard(sessions, now);
-  if (signal) cards.push(signal);
-  const next = buildNextCard(sessions, now);
-  if (next) cards.push(next);
-  for (const session of sessions.slice(2)) {
-    if (cards.length >= MAX_ACTIVE_CARDS) break;
-    cards.push(buildEventCard(session, now));
-  }
-  return cards.slice(0, MAX_ACTIVE_CARDS);
+  return sessions.slice(0, MAX_ACTIVE_CARDS).map((session) => buildSessionCard(session, now));
 }
 
 async function buildCardsWithAi({
@@ -620,7 +599,6 @@ function cardsFromLmCandidates(
       const route = routeLabel(candidate.route);
       return createCard({
         idSeed: lmCandidateIdSeed(candidate),
-        type: candidate.type,
         title: candidate.title,
         summary: candidate.summary,
         createdAt: formatTime(latestSessionDate(sourceSessions, now)),
@@ -638,21 +616,20 @@ function cardsFromLmCandidates(
     .slice(0, MAX_ACTIVE_CARDS);
 }
 
-function buildEventCard(session: ImprintSourceSession, now: Date): ImprintCard {
+function buildSessionCard(session: ImprintSourceSession, now: Date): ImprintCard {
   const firstUser = firstMessage(session, 'user');
   const lastUser = lastMessage(session, 'user');
   const lastAssistant = lastMessage(session, 'assistant');
   const title = sessionTitle(session);
   const summarySeed = lastAssistant || lastUser || firstUser || title;
   return createCard({
-    idSeed: `${session.id}:event`,
-    type: 'event',
+    idSeed: `${session.id}:imprint`,
     title,
     summary: normalizeText(summarySeed, MAX_SUMMARY_CHARS),
     createdAt: formatTime(new Date(session.updatedAt ?? session.createdAt ?? now.getTime())),
     source: session.runtime ? `${session.runtime} session · ${title}` : `Session · ${title}`,
     whyItMatters: 'This session contains a concrete interaction that can be reviewed, edited, or discarded before it affects memory.',
-    route: 'Can become a thread, insight, or practice only after the user keeps refining it.',
+    route: 'Can support a thread, insight, or practice only after the user keeps or edits it.',
     confidence: 0.72,
     sourceSessionIds: [session.id],
     generationMethod: 'deterministic',
@@ -660,52 +637,8 @@ function buildEventCard(session: ImprintSourceSession, now: Date): ImprintCard {
   });
 }
 
-function buildSignalCard(sessions: ImprintSourceSession[], now: Date): ImprintCard | null {
-  const keywords = topKeywords(sessions);
-  if (keywords.length === 0) return null;
-  const sourceIds = sessions.slice(0, 4).map((session) => session.id);
-  return createCard({
-    idSeed: `${sourceIds.join(',')}:signal:${keywords.join(',')}`,
-    type: 'signal',
-    title: `Repeated focus on ${keywords.slice(0, 2).join(' / ')}`,
-    summary: `Across the selected session window, the recurring terms are ${keywords.slice(0, 4).join(', ')}.`,
-    createdAt: formatTime(now),
-    source: `${sessions.length} session${sessions.length === 1 ? '' : 's'} since checkpoint`,
-    whyItMatters: 'A repeated signal is useful only if the user can inspect the source window and decide whether it is meaningful or incidental.',
-    route: 'Candidate for Echo Insight if it keeps recurring across later windows.',
-    confidence: sessions.length >= 2 ? 0.68 : 0.52,
-    sourceSessionIds: sourceIds,
-    generationMethod: 'deterministic',
-    now,
-  });
-}
-
-function buildNextCard(sessions: ImprintSourceSession[], now: Date): ImprintCard | null {
-  const candidate = sessions
-    .flatMap((session) => session.messages.map((message) => ({ session, message })))
-    .reverse()
-    .find(({ message }) => /下一步|继续|后面|需要|应该|可以|todo|next|should|need/i.test(message.content));
-  if (!candidate) return null;
-  const title = `Possible next step from ${sessionTitle(candidate.session)}`;
-  return createCard({
-    idSeed: `${candidate.session.id}:next:${candidate.message.content}`,
-    type: 'next',
-    title,
-    summary: normalizeText(candidate.message.content, MAX_SUMMARY_CHARS),
-    createdAt: formatTime(new Date(candidate.session.updatedAt ?? candidate.session.createdAt ?? now.getTime())),
-    source: `Last actionable phrase in ${sessionTitle(candidate.session)}`,
-    whyItMatters: 'Next-step cards separate useful continuation cues from durable memory, so the user can delete weak recommendations.',
-    route: 'Candidate for Echo Practice or a future task, not inherited automatically.',
-    confidence: 0.58,
-    sourceSessionIds: [candidate.session.id],
-    generationMethod: 'deterministic',
-    now,
-  });
-}
-
 function createCard(input: {
   idSeed: string;
-  type: ImprintCardType;
   title: string;
   summary: string;
   createdAt: string;
@@ -721,8 +654,7 @@ function createCard(input: {
 }): ImprintCard {
   const timestamp = input.now.toISOString();
   return {
-    id: `imprint-${input.type}-${stableHash(input.idSeed).slice(0, 12)}`,
-    type: input.type,
+    id: `imprint-${stableHash(input.idSeed).slice(0, 12)}`,
     title: normalizeText(input.title, 120) || 'Untitled imprint',
     summary: normalizeText(input.summary, MAX_SUMMARY_CHARS),
     createdAt: input.createdAt,
@@ -796,7 +728,7 @@ function routeLabel(route: ImprintExtractionCardCandidate['route']): string {
     case 'insight':
       return 'Candidate for Echo Insight if the user confirms this pattern matters.';
     case 'practice':
-      return 'Candidate for Echo Practice or future action, not inherited automatically.';
+      return 'Candidate for Echo Promotion: either a playbook or a future practice, not inherited automatically.';
     case 'archive':
       return 'Keep as an editable imprint or delete if it is not useful.';
   }
@@ -807,7 +739,7 @@ function lmCandidateIdSeed(candidate: ImprintExtractionCardCandidate): string {
     .map((ref) => `${ref.sessionId}:${ref.messageIndex}:${ref.role}`)
     .sort()
     .join('|');
-  return `${candidate.type}:${refs || candidate.source.sessionIds.sort().join('|')}:${candidate.title}`;
+  return `${refs || candidate.source.sessionIds.sort().join('|')}:${candidate.title}`;
 }
 
 function uniqueStrings(values: string[]): string[] {
@@ -828,25 +760,6 @@ function firstMessage(session: ImprintSourceSession, role: string): string | und
 
 function lastMessage(session: ImprintSourceSession, role: string): string | undefined {
   return [...session.messages].reverse().find((message) => message.role === role)?.content;
-}
-
-function topKeywords(sessions: ImprintSourceSession[]): string[] {
-  const counts = new Map<string, number>();
-  const text = sessions
-    .flatMap((session) => session.messages.filter((message) => message.role === 'user').map((message) => message.content))
-    .join(' ')
-    .normalize('NFKC')
-    .toLowerCase();
-  const tokens = text.match(/[\p{L}\p{N}][\p{L}\p{N}-]{1,24}/gu) ?? [];
-  for (const token of tokens) {
-    if (STOPWORDS.has(token)) continue;
-    counts.set(token, (counts.get(token) ?? 0) + 1);
-  }
-  return [...counts.entries()]
-    .filter(([, count]) => count >= 2 || sessions.length === 1)
-    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-    .slice(0, 4)
-    .map(([token]) => token);
 }
 
 function sessionRuntimeLabel(record: Record<string, unknown>): string | undefined {

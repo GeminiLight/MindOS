@@ -7,7 +7,7 @@ export const ASSISTANT_RUN_REGISTRY = {
   'echo-imprint': 'read-only',
   'echo-threader': 'read-only',
   'echo-insight': 'read-only',
-  'echo-practice': 'read-only',
+  'echo-promotion': 'read-only',
 } as const satisfies Record<string, AssistantPermissionLevel>;
 
 export function assistantPermissionLevelToPolicyMode(permission: AssistantPermissionLevel): AssistantPermissionPolicyMode {

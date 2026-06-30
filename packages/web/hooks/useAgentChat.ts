@@ -28,6 +28,7 @@ import {
 import { getSessionSubmitContextSnapshot } from '@/lib/agent-session-store';
 import { openTab } from '@/lib/workspace-tabs';
 import { toast } from '@/lib/toast';
+import { describeOversizedAiAttachments, getOversizedAiAttachments } from '@/lib/agent/attachment-limits';
 
 export type LoadingPhase = 'connecting' | 'thinking' | 'streaming' | 'reconnecting';
 
@@ -209,6 +210,12 @@ export function useAgentChat({
 
     const text = snapshot.text.trim();
     if (!text && snapshot.images.length === 0) return false;
+    const readyUploads = snapshot.uploadAttachments.filter(f => f.status !== 'loading');
+    const oversizedUploads = getOversizedAiAttachments(readyUploads);
+    if (oversizedUploads.length > 0) {
+      onTransientError?.(describeOversizedAiAttachments(oversizedUploads));
+      return false;
+    }
 
     const skill = snapshot.skill;
     const selectedRuntimeBase = compactAgentRuntimeIdentity(refs.selectedAgentRuntimeRef.current);
@@ -224,9 +231,7 @@ export function useAgentChat({
     const runtimeForMessage = requestRuntimeBase;
     const pendingImages = snapshot.images.length > 0 ? [...snapshot.images] : undefined;
     const pendingAttachedFiles = snapshot.explicitAttachedFiles.length > 0 ? snapshot.explicitAttachedFiles : undefined;
-    const pendingUploadedNames = snapshot.uploadAttachments
-      .filter(f => f.status !== 'loading')
-      .map(f => f.name);
+    const pendingUploadedNames = readyUploads.map(f => f.name);
     const userMsg: Message = annotateMessageWithAgentRuntime({
       role: 'user',
       content: text,
@@ -316,17 +321,14 @@ export function useAgentChat({
       permissionMode,
       currentFile,
       attachedFiles: snapshot.requestAttachedFiles,
-      uploadedFiles: snapshot.uploadAttachments
-        .filter(f => f.status !== 'loading')
+      uploadedFiles: readyUploads
         .map(f => ({
           name: f.name,
           ...(f.mimeType ? { mimeType: f.mimeType } : {}),
           ...(typeof f.size === 'number' ? { size: f.size } : {}),
           ...(f.dataBase64 ? { dataBase64: f.dataBase64 } : {}),
-          content: f.content.length > 80_000
-            ? f.content.slice(0, 80_000) + '\n\n[...truncated to first ~80000 chars]'
-            : f.content,
-      })),
+          content: f.content,
+        })),
       selectedAcpAgent: acpAgent,
       selectedRuntime,
       runtimeBinding: matchingRuntimeBinding ?? null,

@@ -1,19 +1,25 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import type { Dispatch, ReactNode, SetStateAction } from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
   ArrowUpRight,
   Archive,
+  BookOpen,
   Bot,
+  ClipboardCheck,
+  Clock3,
   FolderOpen,
-  FlaskConical,
+  GitBranch,
   Leaf,
   MessageSquareText,
   NotebookText,
+  Pencil,
+  RefreshCw,
   Route,
   SunMedium,
+  Trash2,
 } from 'lucide-react';
 import { ECHO_SEGMENT_HREF, type EchoSegment } from '@/lib/echo-segments';
 import {
@@ -87,7 +93,7 @@ function echoSnapshotCopy(segment: EchoSegment, p: EchoCopy): { title: string; b
 }
 
 const echoPageClass =
-  'echo-content-page min-h-full bg-background';
+  'echo-content-page';
 
 const echoBodyClass =
   'flex w-full flex-col gap-6';
@@ -101,6 +107,7 @@ const echoPanelClass =
 function echoReaderListTitle(segment: EchoStoredSegment, title: string, p: EchoCopy): string {
   if (segment === 'imprint') return p.imprintEventBookTitle;
   if (segment === 'threads') return p.threadsListTitle;
+  if (segment === 'growth') return p.echoSavedListTitle;
   return title;
 }
 
@@ -111,7 +118,7 @@ function echoReaderSubtitle(segment: EchoStoredSegment, p: EchoCopy): string {
     case 'threads':
       return p.threadsReaderSubtitle;
     case 'growth':
-      return p.growthReaderSubtitle;
+      return '';
     case 'practice':
       return p.practiceReaderSubtitle;
   }
@@ -295,6 +302,561 @@ function EchoWorktablePanel({
   );
 }
 
+type PromotionTarget = 'playbook' | 'practice';
+type EchoScheduleMode = 'manual' | 'daily' | 'interval';
+
+type EchoSchedule = {
+  mode: EchoScheduleMode;
+  dailyTime: string;
+  intervalHours: number;
+};
+
+const DEFAULT_ECHO_SCHEDULE: EchoSchedule = {
+  mode: 'daily',
+  dailyTime: '20:00',
+  intervalHours: 24,
+};
+const ECHO_INTERVAL_HOUR_OPTIONS = [1, 2, 3, 4, 6, 8, 12, 24];
+const ECHO_TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+function promotionTargetLabel(target: PromotionTarget, p: EchoCopy): string {
+  return target === 'playbook' ? p.promotionPlaybookLabel : p.promotionPracticeLabel;
+}
+
+function normalizePromotionTarget(target: string): PromotionTarget {
+  return target === 'practice' ? 'practice' : 'playbook';
+}
+
+function isEchoScheduleMode(value: string): value is EchoScheduleMode {
+  return value === 'manual' || value === 'daily' || value === 'interval';
+}
+
+function echoScheduleStatusLabel(schedule: EchoSchedule, p: EchoCopy) {
+  if (schedule.mode === 'manual') return p.imprintScheduleManualOnly;
+  if (schedule.mode === 'interval') return p.imprintScheduleIntervalHours(schedule.intervalHours);
+  return p.imprintScheduleDailyAt(schedule.dailyTime);
+}
+
+function updateEchoScheduleMode(
+  setSchedule: Dispatch<SetStateAction<EchoSchedule>>,
+  value: string,
+) {
+  if (!isEchoScheduleMode(value)) return;
+  setSchedule((current) => ({ ...current, mode: value }));
+}
+
+function updateEchoScheduleDailyTime(
+  setSchedule: Dispatch<SetStateAction<EchoSchedule>>,
+  value: string,
+) {
+  if (!ECHO_TIME_RE.test(value)) return;
+  setSchedule((current) => ({ ...current, dailyTime: value }));
+}
+
+function updateEchoScheduleIntervalHours(
+  setSchedule: Dispatch<SetStateAction<EchoSchedule>>,
+  value: string,
+) {
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed)) return;
+  setSchedule((current) => ({
+    ...current,
+    intervalHours: Math.max(1, Math.min(24, parsed)),
+  }));
+}
+
+type InsightTarget = 'pattern' | 'judgment';
+
+function insightTargetLabel(target: InsightTarget, p: EchoCopy): string {
+  return target === 'pattern' ? p.insightPatternLabel : p.insightJudgmentLabel;
+}
+
+function normalizeInsightTarget(target: string): InsightTarget {
+  return target === 'judgment' ? 'judgment' : 'pattern';
+}
+
+function InsightPanel({
+  p,
+  onGenerate,
+}: {
+  p: EchoCopy;
+  onGenerate: () => void;
+}) {
+  const [activeFilters, setActiveFilters] = useState<Record<InsightTarget, boolean>>({
+    pattern: true,
+    judgment: true,
+  });
+  const [isSchedulePanelOpen, setIsSchedulePanelOpen] = useState(false);
+  const [schedule, setSchedule] = useState<EchoSchedule>({ ...DEFAULT_ECHO_SCHEDULE });
+  const insightCandidates = p.insightCandidates.map((candidate) => ({
+    ...candidate,
+    target: normalizeInsightTarget(candidate.kind),
+  }));
+  const filters: Array<{ id: InsightTarget; label: string; icon: ReactNode }> = [
+    {
+      id: 'pattern',
+      label: p.insightPatternsLabel,
+      icon: <BookOpen size={15} aria-hidden />,
+    },
+    {
+      id: 'judgment',
+      label: p.insightJudgmentsLabel,
+      icon: <ClipboardCheck size={15} aria-hidden />,
+    },
+  ];
+  const visibleInsights = insightCandidates.filter((candidate) => activeFilters[candidate.target]);
+  const scheduleStatusLabel = echoScheduleStatusLabel(schedule, p);
+
+  function toggleFilter(filter: InsightTarget) {
+    setActiveFilters((current) => {
+      const next = { ...current, [filter]: !current[filter] };
+      return next.pattern || next.judgment ? next : current;
+    });
+  }
+
+  return (
+    <section
+      className="min-w-0"
+      aria-label={p.insightSurfaceTitle}
+      data-testid="echo-insight"
+    >
+      <header>
+        <p
+          className="font-mono text-[0.68rem] leading-5 text-muted-foreground"
+          data-testid="echo-insight-generation-status"
+          title={p.growthReaderSubtitle}
+        >
+          {p.echoGeneratedStatusLine(p.insightStatusSourceLabel, scheduleStatusLabel)}
+        </p>
+
+        <div
+          className="mt-4 flex min-w-0 flex-wrap items-center justify-between gap-3"
+          data-testid="echo-insight-control-row"
+        >
+          <div
+            className="inline-flex max-w-full items-center gap-1 overflow-x-auto rounded-lg border border-border/35 bg-muted/15 p-1"
+            role="group"
+            aria-label={p.insightFiltersAriaLabel}
+            data-testid="echo-insight-filters"
+          >
+            {filters.map((filter) => {
+              const active = activeFilters[filter.id];
+              return (
+                <button
+                  key={filter.id}
+                  type="button"
+                  aria-pressed={active}
+                  data-testid={`echo-insight-filter-${filter.id}`}
+                  className={cn(
+                    'flex min-h-9 min-w-0 items-center gap-2 rounded-md px-3 py-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                    active ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:bg-background/60 hover:text-foreground',
+                  )}
+                  onClick={() => toggleFilter(filter.id)}
+                >
+                  <span className={cn('shrink-0', active ? 'text-[var(--amber)]' : 'text-muted-foreground')}>{filter.icon}</span>
+                  <span className="whitespace-nowrap font-sans text-xs font-medium sm:text-sm">{filter.label}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="flex items-center gap-1 rounded-lg border border-border/20 bg-muted/10 p-1" data-testid="echo-insight-actions">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className={cn(
+                'text-muted-foreground hover:text-foreground',
+                isSchedulePanelOpen && 'bg-muted text-foreground',
+              )}
+              onClick={() => setIsSchedulePanelOpen((open) => !open)}
+              aria-label={p.insightScheduleAction}
+              aria-expanded={isSchedulePanelOpen}
+              title={p.insightScheduleAction}
+              data-testid="echo-insight-schedule-button"
+            >
+              <Clock3 size={13} aria-hidden />
+              <span className="sr-only">{p.insightScheduleAction}</span>
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className="text-muted-foreground hover:text-foreground"
+              onClick={onGenerate}
+              aria-label={p.insightGenerateAriaLabel}
+              title={p.insightGenerateAriaLabel}
+              data-testid="echo-insight-generate-button"
+            >
+              <RefreshCw size={14} aria-hidden />
+              <span className="sr-only">{p.insightGenerateAriaLabel}</span>
+            </Button>
+          </div>
+        </div>
+
+        {isSchedulePanelOpen ? (
+          <EchoSchedulePanel
+            p={p}
+            schedule={schedule}
+            setSchedule={setSchedule}
+            statusLabel={scheduleStatusLabel}
+            testIdPrefix="echo-insight"
+          />
+        ) : null}
+      </header>
+
+      <div className="pt-5">
+        <div className="space-y-3">
+          {visibleInsights.map((candidate) => (
+            <article
+              key={candidate.title}
+              className="min-w-0 rounded-xl border border-border/45 bg-background/55 p-5 transition-[border-color,background-color,box-shadow] duration-150 hover:border-[var(--amber)]/30 hover:bg-background/75 hover:shadow-sm"
+              data-testid="echo-insight-candidate"
+            >
+              <div className="min-w-0">
+                <span className="inline-flex rounded-md bg-muted/45 px-2 py-1 font-sans text-xs text-muted-foreground">
+                  {insightTargetLabel(candidate.target, p)}
+                </span>
+                <h4 className="mt-3 max-w-3xl font-sans text-base font-semibold leading-6 text-foreground">{candidate.title}</h4>
+                <p className="mt-2 max-w-3xl font-sans text-sm leading-6 text-muted-foreground">{candidate.summary}</p>
+              </div>
+              <InsightSourceDetails p={p} source={candidate.source} boundary={candidate.boundary} />
+              <PromotionCardActions p={p} />
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function InsightSourceDetails({ p, source, boundary }: { p: EchoCopy; source: string; boundary: string }) {
+  return (
+    <details className="mt-4 rounded-lg border border-border/35 bg-muted/10 px-3 py-2.5">
+      <summary className="cursor-pointer font-sans text-xs font-medium text-muted-foreground marker:text-muted-foreground">
+        {p.insightCandidateSourceLabel} / {p.insightCandidateBoundaryLabel}
+      </summary>
+      <div className="mt-3 grid gap-3 border-t border-border/30 pt-3">
+        <PromotionField label={p.insightCandidateSourceLabel} value={source} />
+        <PromotionField label={p.insightCandidateBoundaryLabel} value={boundary} />
+      </div>
+    </details>
+  );
+}
+
+function PromotionPanel({
+  p,
+  onGenerate,
+}: {
+  p: EchoCopy;
+  onGenerate: () => void;
+}) {
+  const [activeFilters, setActiveFilters] = useState<Record<PromotionTarget, boolean>>({
+    playbook: true,
+    practice: true,
+  });
+  const [isSchedulePanelOpen, setIsSchedulePanelOpen] = useState(false);
+  const [schedule, setSchedule] = useState<EchoSchedule>({ ...DEFAULT_ECHO_SCHEDULE });
+  const recentPromotions = p.promotionCandidates.map((candidate) => ({
+    ...candidate,
+    target: normalizePromotionTarget(candidate.suggestedTarget),
+  }));
+  const filters: Array<{ id: PromotionTarget; label: string; icon: ReactNode }> = [
+    {
+      id: 'playbook',
+      label: p.promotionPlaybooksLabel,
+      icon: <BookOpen size={15} aria-hidden />,
+    },
+    {
+      id: 'practice',
+      label: p.promotionPracticesLabel,
+      icon: <ClipboardCheck size={15} aria-hidden />,
+    },
+  ];
+  const visiblePromotions = recentPromotions.filter((candidate) => activeFilters[candidate.target]);
+  const scheduleStatusLabel = echoScheduleStatusLabel(schedule, p);
+
+  function toggleFilter(filter: PromotionTarget) {
+    setActiveFilters((current) => {
+      const next = { ...current, [filter]: !current[filter] };
+      return next.playbook || next.practice ? next : current;
+    });
+  }
+
+  return (
+    <section
+      className="min-w-0"
+      aria-label={p.promotionReviewTitle}
+      data-testid="echo-promotion"
+    >
+      <header>
+        <p
+          className="font-mono text-[0.68rem] leading-5 text-muted-foreground"
+          data-testid="echo-promotion-generation-status"
+          title={p.echoGeneratedStatusTitle(p.imprintCardsInitialUpdatedAt)}
+        >
+          {p.echoGeneratedStatusLine(p.imprintCardsCheckpointLabel, scheduleStatusLabel)}
+        </p>
+
+        <div
+          className="mt-4 flex min-w-0 flex-wrap items-center justify-between gap-3"
+          data-testid="echo-promotion-control-row"
+        >
+          <div
+            className="inline-flex max-w-full items-center gap-1 overflow-x-auto rounded-lg border border-border/35 bg-muted/15 p-1"
+            role="group"
+            aria-label={p.promotionFiltersAriaLabel}
+            data-testid="echo-promotion-filters"
+          >
+            {filters.map((filter) => {
+              const active = activeFilters[filter.id];
+              return (
+                <button
+                  key={filter.id}
+                  type="button"
+                  aria-pressed={active}
+                  data-testid={`echo-promotion-filter-${filter.id}`}
+                  className={cn(
+                    'flex min-h-9 min-w-0 items-center gap-2 rounded-md px-3 py-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                    active ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:bg-background/60 hover:text-foreground',
+                  )}
+                  onClick={() => toggleFilter(filter.id)}
+                >
+                  <span className={cn('shrink-0', active ? 'text-[var(--amber)]' : 'text-muted-foreground')}>{filter.icon}</span>
+                  <span className="whitespace-nowrap font-sans text-xs font-medium sm:text-sm">{filter.label}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="flex items-center gap-1 rounded-lg border border-border/20 bg-muted/10 p-1" data-testid="echo-promotion-actions">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className={cn(
+                'text-muted-foreground hover:text-foreground',
+                isSchedulePanelOpen && 'bg-muted text-foreground',
+              )}
+              onClick={() => setIsSchedulePanelOpen((open) => !open)}
+              aria-label={p.promotionScheduleAction}
+              aria-expanded={isSchedulePanelOpen}
+              title={p.promotionScheduleAction}
+              data-testid="echo-promotion-schedule-button"
+            >
+              <Clock3 size={13} aria-hidden />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className="text-muted-foreground hover:text-foreground"
+              onClick={onGenerate}
+              aria-label={p.promotionGenerateAriaLabel}
+              title={p.promotionGenerateAriaLabel}
+              data-testid="echo-promotion-generate-button"
+            >
+              <RefreshCw size={14} aria-hidden />
+            </Button>
+          </div>
+        </div>
+
+        {isSchedulePanelOpen ? (
+          <EchoSchedulePanel
+            p={p}
+            schedule={schedule}
+            setSchedule={setSchedule}
+            statusLabel={scheduleStatusLabel}
+            testIdPrefix="echo-promotion"
+          />
+        ) : null}
+
+      </header>
+
+      <div className="pt-5">
+        <div className="space-y-3">
+          {visiblePromotions.map((candidate) => (
+            <article
+              key={candidate.title}
+              className="min-w-0 rounded-xl border border-border/45 bg-background/55 p-5 transition-[border-color,background-color,box-shadow] duration-150 hover:border-[var(--amber)]/30 hover:bg-background/75 hover:shadow-sm"
+              data-testid="echo-promotion-candidate"
+            >
+              <div className="min-w-0">
+                <span className="inline-flex rounded-md bg-muted/45 px-2 py-1 font-sans text-xs text-muted-foreground">
+                  {promotionTargetLabel(candidate.target, p)}
+                </span>
+                <h4 className="mt-3 max-w-3xl font-sans text-base font-semibold leading-6 text-foreground">{candidate.title}</h4>
+                <p className="mt-2 max-w-3xl font-sans text-sm leading-6 text-muted-foreground">{candidate.summary}</p>
+              </div>
+              <PromotionSourceDetails p={p} source={candidate.source} why={candidate.whyPromote} />
+              <PromotionCardActions p={p} />
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function EchoSchedulePanel({
+  p,
+  schedule,
+  setSchedule,
+  statusLabel,
+  testIdPrefix,
+}: {
+  p: EchoCopy;
+  schedule: EchoSchedule;
+  setSchedule: Dispatch<SetStateAction<EchoSchedule>>;
+  statusLabel: string;
+  testIdPrefix: string;
+}) {
+  return (
+    <div
+      className="mt-3 grid gap-3 rounded-lg border border-border/45 bg-background/70 p-3 sm:grid-cols-[minmax(13rem,1fr)_minmax(8rem,0.45fr)] xl:grid-cols-[minmax(13rem,1fr)_minmax(8rem,0.45fr)_auto]"
+      data-testid={`${testIdPrefix}-schedule-panel`}
+    >
+      <fieldset className="min-w-0 space-y-1.5" data-testid={`${testIdPrefix}-schedule-mode`}>
+        <legend className="font-sans text-[0.7rem] font-medium text-muted-foreground">
+          {p.imprintScheduleModeLabel}
+        </legend>
+        <div className="grid grid-cols-3 gap-1 rounded-lg border border-border/45 bg-muted/20 p-1">
+          <EchoScheduleModeButton
+            mode="daily"
+            active={schedule.mode === 'daily'}
+            label={p.imprintScheduleDailyLabel}
+            testIdPrefix={testIdPrefix}
+            onClick={() => updateEchoScheduleMode(setSchedule, 'daily')}
+          />
+          <EchoScheduleModeButton
+            mode="interval"
+            active={schedule.mode === 'interval'}
+            label={p.imprintScheduleIntervalLabel}
+            testIdPrefix={testIdPrefix}
+            onClick={() => updateEchoScheduleMode(setSchedule, 'interval')}
+          />
+          <EchoScheduleModeButton
+            mode="manual"
+            active={schedule.mode === 'manual'}
+            label={p.imprintScheduleManualLabel}
+            testIdPrefix={testIdPrefix}
+            onClick={() => updateEchoScheduleMode(setSchedule, 'manual')}
+          />
+        </div>
+      </fieldset>
+      {schedule.mode === 'daily' ? (
+        <label className="grid min-w-[8rem] gap-1 font-sans text-[0.7rem] font-medium text-muted-foreground">
+          <span>{p.imprintScheduleTimeLabel}</span>
+          <input
+            type="time"
+            className="h-8 rounded-md border border-border bg-background px-2 font-sans text-xs text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring"
+            value={schedule.dailyTime}
+            onChange={(event) => updateEchoScheduleDailyTime(setSchedule, event.currentTarget.value)}
+            data-testid={`${testIdPrefix}-schedule-time`}
+          />
+        </label>
+      ) : null}
+      {schedule.mode === 'interval' ? (
+        <label className="grid min-w-[8rem] gap-1 font-sans text-[0.7rem] font-medium text-muted-foreground">
+          <span>{p.imprintScheduleEveryLabel}</span>
+          <select
+            className="h-8 rounded-md border border-border bg-background px-2 font-sans text-xs text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring"
+            value={String(schedule.intervalHours)}
+            onChange={(event) => updateEchoScheduleIntervalHours(setSchedule, event.currentTarget.value)}
+            data-testid={`${testIdPrefix}-schedule-interval`}
+          >
+            {ECHO_INTERVAL_HOUR_OPTIONS.map((hours) => (
+              <option key={hours} value={hours}>
+                {p.imprintScheduleIntervalHours(hours)}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
+      <div className="flex min-w-0 items-end font-mono text-[0.68rem] leading-5 text-muted-foreground sm:col-span-2 sm:justify-end xl:col-span-1">
+        <span
+          className="inline-flex h-8 min-w-0 items-center whitespace-nowrap rounded-md border border-border/45 bg-muted/15 px-2"
+          data-testid={`${testIdPrefix}-schedule-status`}
+        >
+          {statusLabel}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function EchoScheduleModeButton({
+  mode,
+  active,
+  label,
+  testIdPrefix,
+  onClick,
+}: {
+  mode: EchoScheduleMode;
+  active: boolean;
+  label: string;
+  testIdPrefix: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className={cn(
+        'h-7 min-w-0 rounded-md px-2 font-sans text-xs font-medium transition-[background-color,color,box-shadow,opacity] duration-150',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        active
+          ? 'bg-background text-foreground shadow-sm'
+          : 'text-muted-foreground hover:bg-background/50 hover:text-foreground',
+      )}
+      aria-pressed={active}
+      data-testid={`${testIdPrefix}-schedule-mode-${mode}`}
+      onClick={onClick}
+    >
+      <span className="block truncate">{label}</span>
+    </button>
+  );
+}
+
+function PromotionSourceDetails({ p, source, why }: { p: EchoCopy; source: string; why?: string }) {
+  return (
+    <details className="mt-4 rounded-lg border border-border/35 bg-muted/10 px-3 py-2.5">
+      <summary className="cursor-pointer font-sans text-xs font-medium text-muted-foreground marker:text-muted-foreground">
+        {why ? `${p.promotionCandidateSourceLabel} / ${p.promotionCandidateWhyLabel}` : p.promotionCandidateSourceLabel}
+      </summary>
+      <div className="mt-3 grid gap-3 border-t border-border/30 pt-3">
+        <PromotionField label={p.promotionCandidateSourceLabel} value={source} />
+        {why ? <PromotionField label={p.promotionCandidateWhyLabel} value={why} /> : null}
+      </div>
+    </details>
+  );
+}
+
+function PromotionCardActions({ p }: { p: EchoCopy }) {
+  return (
+    <div className="mt-4 flex items-center justify-end gap-1 border-t border-border/35 pt-3">
+      <Button type="button" variant="ghost" size="sm">
+        <Pencil size={13} aria-hidden />
+        {p.promotionEditLabel}
+      </Button>
+      <Button type="button" variant="ghost" size="sm" className="text-muted-foreground hover:text-destructive">
+        <Trash2 size={13} aria-hidden />
+        {p.promotionDeleteLabel}
+      </Button>
+    </div>
+  );
+}
+
+function PromotionField({ label, value, strong = false }: { label: string; value: string; strong?: boolean }) {
+  return (
+    <div className="min-w-0">
+      <p className="font-mono text-[0.68rem] uppercase tracking-[0.08em] text-muted-foreground">{label}</p>
+      <p className={cn('mt-1 font-sans text-xs leading-5', strong ? 'text-foreground' : 'text-muted-foreground')}>
+        {value}
+      </p>
+    </div>
+  );
+}
+
 function OverviewPanel({
   p,
   dailyLine,
@@ -306,7 +868,6 @@ function OverviewPanel({
 }) {
   const loop = [
     { title: p.overviewTodayTitle, body: p.overviewTodayBody, href: ECHO_SEGMENT_HREF.imprint },
-    { title: p.overviewThreadTitle, body: p.overviewThreadBody, href: ECHO_SEGMENT_HREF.threads },
     { title: p.overviewGrowthTitle, body: p.overviewGrowthBody, href: ECHO_SEGMENT_HREF.growth },
     { title: p.overviewPracticeTitle, body: p.overviewPracticeBody, href: ECHO_SEGMENT_HREF.practice },
   ];
@@ -324,7 +885,7 @@ function OverviewPanel({
             </h2>
             <p className="mt-3 max-w-2xl font-sans text-sm leading-6 text-muted-foreground">{p.overviewHeroSubtitle}</p>
           </div>
-          <ol className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4" aria-label={p.overviewHeroSubtitle}>
+          <ol className="grid gap-2 sm:grid-cols-3" aria-label={p.overviewHeroSubtitle}>
             {loop.map((item, index) => (
               <li key={item.href} className="min-w-0">
                 <Link
@@ -358,7 +919,7 @@ function OverviewPanel({
         </div>
       </section>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-3">
         <OverviewStatCard
           href={ECHO_SEGMENT_HREF.imprint}
           icon={<NotebookText size={25} strokeWidth={1.65} />}
@@ -368,26 +929,18 @@ function OverviewPanel({
           tone="amber"
         />
         <OverviewStatCard
-          href={ECHO_SEGMENT_HREF.threads}
-          icon={<MessageSquareText size={25} strokeWidth={1.65} />}
-          title={p.overviewThreadTitle}
-          value={p.overviewMetrics[1]?.value ?? ''}
-          body={p.overviewThreadBody}
-          tone="graphite"
-        />
-        <OverviewStatCard
           href={ECHO_SEGMENT_HREF.growth}
           icon={<Leaf size={25} strokeWidth={1.65} />}
           title={p.overviewGrowthTitle}
-          value={p.overviewMetrics[2]?.value ?? ''}
+          value={p.overviewMetrics[1]?.value ?? ''}
           body={p.overviewGrowthBody}
           tone="sage"
         />
         <OverviewStatCard
           href={ECHO_SEGMENT_HREF.practice}
-          icon={<FlaskConical size={25} strokeWidth={1.65} />}
+          icon={<GitBranch size={25} strokeWidth={1.65} />}
           title={p.overviewPracticeTitle}
-          value={p.overviewMetrics[3]?.value ?? ''}
+          value={p.overviewMetrics[2]?.value ?? ''}
           body={p.overviewPracticeBody}
           tone="graphite"
         />
@@ -489,13 +1042,15 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
   const activeEchoSegment: EchoStoredSegment | null = segment === 'overview' ? null : segment;
   const readerEchoSegment: EchoStoredSegment | null =
     segment === 'threads' || segment === 'growth' || segment === 'practice' ? segment : null;
+  const savedEchoReaderSegment: EchoStoredSegment | null =
+    readerEchoSegment === 'threads' ? readerEchoSegment : null;
   const recentSessions = useMemo(() => buildEchoRecentSessionSummaries(sessions), [sessions]);
-  const selectedEchoItem = readerEchoSegment
+  const selectedEchoItem = savedEchoReaderSegment
     ? (savedEchoDetail ?? savedEchoItems.find((item) => item.path === selectedEchoPath) ?? null)
     : null;
 
   useEffect(() => {
-    if (!readerEchoSegment) {
+    if (!savedEchoReaderSegment) {
       setSavedEchoItems([]);
       setSelectedEchoPath(null);
       setSavedEchoDetail(null);
@@ -510,7 +1065,7 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
     setSavedEchoLoading(true);
     setSavedEchoError('');
 
-    fetch(`/api/echo?segment=${readerEchoSegment}`, { signal: ctrl.signal })
+    fetch(`/api/echo?segment=${savedEchoReaderSegment}`, { signal: ctrl.signal })
       .then(async (res) => {
         const body = await res.json().catch(() => ({})) as { items?: EchoSavedItem[]; error?: string };
         if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
@@ -525,10 +1080,10 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
       });
 
     return () => ctrl.abort();
-  }, [readerEchoSegment]);
+  }, [savedEchoReaderSegment]);
 
   useEffect(() => {
-    if (!readerEchoSegment || savedEchoItems.length === 0) {
+    if (!savedEchoReaderSegment || savedEchoItems.length === 0) {
       setSelectedEchoPath(null);
       return;
     }
@@ -537,10 +1092,10 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
       if (current && savedEchoItems.some((item) => item.path === current)) return current;
       return savedEchoItems[0]?.path ?? null;
     });
-  }, [readerEchoSegment, savedEchoItems]);
+  }, [savedEchoReaderSegment, savedEchoItems]);
 
   useEffect(() => {
-    if (!readerEchoSegment || !selectedEchoPath) {
+    if (!savedEchoReaderSegment || !selectedEchoPath) {
       setSavedEchoDetail(null);
       setSavedEchoDetailLoading(false);
       setSavedEchoDetailError('');
@@ -551,7 +1106,7 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
     setSavedEchoDetailLoading(true);
     setSavedEchoDetailError('');
 
-    fetch(`/api/echo?segment=${readerEchoSegment}&path=${encodeURIComponent(selectedEchoPath)}`, { signal: ctrl.signal })
+    fetch(`/api/echo?segment=${savedEchoReaderSegment}&path=${encodeURIComponent(selectedEchoPath)}`, { signal: ctrl.signal })
       .then(async (res) => {
         const body = await res.json().catch(() => ({})) as { item?: EchoSavedItemDetail; error?: string };
         if (!res.ok || !body.item) throw new Error(body.error || `HTTP ${res.status}`);
@@ -567,15 +1122,16 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
       });
 
     return () => ctrl.abort();
-  }, [readerEchoSegment, selectedEchoPath]);
+  }, [savedEchoReaderSegment, selectedEchoPath]);
 
   const handleEchoSaved = useCallback((item: EchoSavedItem) => {
+    if (!savedEchoReaderSegment || item.segment !== savedEchoReaderSegment) return;
     setSavedEchoItems((current) => [
       item,
       ...current.filter((entry) => entry.path !== item.path),
     ]);
     setSelectedEchoPath(item.path);
-  }, []);
+  }, [savedEchoReaderSegment]);
 
   const echoAssistantPrompt = useMemo(() => {
     if (!echoAssistantId || segment === 'overview') return '';
@@ -617,15 +1173,34 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
     }
 
     if (segment === 'practice' && !savedEchoDetail) {
-      facts.push({
-        label: p.practiceExperimentsTitle,
-        value: p.practiceExperiments.map((experiment) => [
-          `${experiment.title} (${experiment.status})`,
-          `${p.practiceHypothesisLabel} ${experiment.hypothesis}`,
-          `${p.practiceActionLabel} ${experiment.action}`,
-          `${p.practiceCheckLabel} ${experiment.check}`,
-        ].join(' / ')).join(' | '),
-      });
+      facts.push(
+        {
+          label: p.promotionPendingTitle,
+          value: p.promotionCandidates.map((candidate) => [
+            `${candidate.title} -> ${promotionTargetLabel(candidate.suggestedTarget as PromotionTarget, p)}`,
+            `${p.promotionCandidateSourceLabel} ${candidate.source}`,
+            `${p.promotionCandidateWhyLabel} ${candidate.whyPromote}`,
+          ].join(' / ')).join(' | '),
+        },
+        {
+          label: p.promotionPlaybookLabel,
+          value: p.playbookCards.map((card) => [
+            card.title,
+            `${p.playbookMoveLabel} ${card.move}`,
+            `${p.playbookAvoidLabel} ${card.avoid}`,
+          ].join(' / ')).join(' | '),
+        },
+        {
+          label: p.promotionPracticeLabel,
+          value: p.practiceExperiments.map((experiment) => [
+            `${experiment.title} (${experiment.window})`,
+            `${p.promotionCandidateSourceLabel} ${experiment.source}`,
+            `${p.practiceHypothesisLabel} ${experiment.hypothesis}`,
+            `${p.practiceActionLabel} ${experiment.action}`,
+            `${p.practiceCheckLabel} ${experiment.check}`,
+          ].join(' / ')).join(' | '),
+        },
+      );
     }
 
     return buildEchoAssistantRunPrompt({
@@ -687,54 +1262,118 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
 
         {readerEchoSegment && (
           <>
-            <div className="grid gap-5 xl:grid-cols-[minmax(0,1.05fr)_minmax(22rem,0.95fr)]" data-testid="echo-studio">
-              <EchoWorktablePanel
-                segment={readerEchoSegment}
-                selectedItem={selectedEchoItem}
-                savedCount={savedEchoItems.length}
-                recentSessionCount={recentSessions.length}
-                p={p}
-                onGenerate={triggerEchoAssistantGenerate}
-              />
-              {echoAssistantId ? (
-                <EchoInsightCollapsible
-                  noAiHint={p.generateInsightNoAi}
-                  generatingLabel={p.insightGenerating}
-                  errorPrefix={p.insightErrorPrefix}
-                  retryLabel={p.insightRetry}
-                  saveLabel={p.echoSaveLabel}
-                  savingLabel={p.echoSavingLabel}
-                  savedLabel={p.echoSavedLabel}
-                  saveErrorPrefix={p.echoSaveErrorPrefix}
-                  draftTitle={p.echoDraftTitle}
-                  draftIdleLabel={p.echoDraftIdleLabel}
-                  draftOutputLabel={p.echoDraftOutputLabel}
-                  draftSavedHint={p.echoDraftSavedHint}
-                  segment={readerEchoSegment}
-                  assistantId={echoAssistantId}
-                  userPrompt={echoAssistantPrompt}
-                  generateSignal={assistantGenerateSignal}
-                  maxSteps={echoAssistantMaxSteps}
-                  onSaved={handleEchoSaved}
+            {readerEchoSegment === 'practice' ? (
+              <>
+                <PromotionPanel
+                  p={p}
+                  onGenerate={triggerEchoAssistantGenerate}
                 />
-              ) : null}
-            </div>
-            <EchoMemoryReaderPanel
-              segment={readerEchoSegment}
-              listTitle={echoReaderListTitle(readerEchoSegment, title, p)}
-              listSubtitle={echoReaderSubtitle(readerEchoSegment, p)}
-              emptyLabel={echoReaderEmptyLabel(readerEchoSegment, p)}
-              detailEmptyLabel={echoReaderDetailEmptyLabel(readerEchoSegment, p)}
-              items={savedEchoItems}
-              selectedPath={selectedEchoPath}
-              onSelect={setSelectedEchoPath}
-              detail={savedEchoDetail}
-              loading={savedEchoLoading}
-              error={savedEchoError}
-              detailLoading={savedEchoDetailLoading}
-              detailError={savedEchoDetailError}
-              p={p}
-            />
+                {echoAssistantId ? (
+                  <EchoInsightCollapsible
+                    noAiHint={p.generateInsightNoAi}
+                    generatingLabel={p.insightGenerating}
+                    errorPrefix={p.insightErrorPrefix}
+                    retryLabel={p.insightRetry}
+                    saveLabel={p.echoSaveLabel}
+                    savingLabel={p.echoSavingLabel}
+                    savedLabel={p.echoSavedLabel}
+                    saveErrorPrefix={p.echoSaveErrorPrefix}
+                    draftTitle={p.promotionDraftTitle}
+                    draftIdleLabel={p.promotionDraftIdleLabel}
+                    draftOutputLabel={p.promotionDraftOutputLabel}
+                    draftSavedHint={p.echoDraftSavedHint}
+                    segment={readerEchoSegment}
+                    assistantId={echoAssistantId}
+                    userPrompt={echoAssistantPrompt}
+                    generateSignal={assistantGenerateSignal}
+                    maxSteps={echoAssistantMaxSteps}
+                    onSaved={handleEchoSaved}
+                    hideUntilRequested
+                  />
+                ) : null}
+              </>
+            ) : readerEchoSegment === 'growth' ? (
+              <>
+                <InsightPanel
+                  p={p}
+                  onGenerate={triggerEchoAssistantGenerate}
+                />
+                {echoAssistantId ? (
+                  <EchoInsightCollapsible
+                    noAiHint={p.generateInsightNoAi}
+                    generatingLabel={p.insightGenerating}
+                    errorPrefix={p.insightErrorPrefix}
+                    retryLabel={p.insightRetry}
+                    saveLabel={p.echoSaveLabel}
+                    savingLabel={p.echoSavingLabel}
+                    savedLabel={p.echoSavedLabel}
+                    saveErrorPrefix={p.echoSaveErrorPrefix}
+                    draftTitle={p.echoDraftTitle}
+                    draftIdleLabel={p.echoDraftIdleLabel}
+                    draftOutputLabel={p.echoDraftOutputLabel}
+                    draftSavedHint={p.echoDraftSavedHint}
+                    segment={readerEchoSegment}
+                    assistantId={echoAssistantId}
+                    userPrompt={echoAssistantPrompt}
+                    generateSignal={assistantGenerateSignal}
+                    maxSteps={echoAssistantMaxSteps}
+                    onSaved={handleEchoSaved}
+                    hideUntilRequested
+                  />
+                ) : null}
+              </>
+            ) : (
+              <div className="grid gap-5 xl:grid-cols-[minmax(0,1.05fr)_minmax(22rem,0.95fr)]" data-testid="echo-studio">
+                <EchoWorktablePanel
+                  segment={readerEchoSegment}
+                  selectedItem={selectedEchoItem}
+                  savedCount={savedEchoItems.length}
+                  recentSessionCount={recentSessions.length}
+                  p={p}
+                  onGenerate={triggerEchoAssistantGenerate}
+                />
+                {echoAssistantId ? (
+                  <EchoInsightCollapsible
+                    noAiHint={p.generateInsightNoAi}
+                    generatingLabel={p.insightGenerating}
+                    errorPrefix={p.insightErrorPrefix}
+                    retryLabel={p.insightRetry}
+                    saveLabel={p.echoSaveLabel}
+                    savingLabel={p.echoSavingLabel}
+                    savedLabel={p.echoSavedLabel}
+                    saveErrorPrefix={p.echoSaveErrorPrefix}
+                    draftTitle={p.echoDraftTitle}
+                    draftIdleLabel={p.echoDraftIdleLabel}
+                    draftOutputLabel={p.echoDraftOutputLabel}
+                    draftSavedHint={p.echoDraftSavedHint}
+                    segment={readerEchoSegment}
+                    assistantId={echoAssistantId}
+                    userPrompt={echoAssistantPrompt}
+                    generateSignal={assistantGenerateSignal}
+                    maxSteps={echoAssistantMaxSteps}
+                    onSaved={handleEchoSaved}
+                  />
+                ) : null}
+              </div>
+            )}
+            {savedEchoReaderSegment ? (
+              <EchoMemoryReaderPanel
+                segment={savedEchoReaderSegment}
+                listTitle={echoReaderListTitle(savedEchoReaderSegment, title, p)}
+                listSubtitle={echoReaderSubtitle(savedEchoReaderSegment, p)}
+                emptyLabel={echoReaderEmptyLabel(savedEchoReaderSegment, p)}
+                detailEmptyLabel={echoReaderDetailEmptyLabel(savedEchoReaderSegment, p)}
+                items={savedEchoItems}
+                selectedPath={selectedEchoPath}
+                onSelect={setSelectedEchoPath}
+                detail={savedEchoDetail}
+                loading={savedEchoLoading}
+                error={savedEchoError}
+                detailLoading={savedEchoDetailLoading}
+                detailError={savedEchoDetailError}
+                p={p}
+              />
+            ) : null}
           </>
         )}
       </div>

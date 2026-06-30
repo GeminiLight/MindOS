@@ -285,6 +285,45 @@ describe('/api/agent/sessions/:sessionId/turns native runtime routing', () => {
     expect(mockCreateMindosAgentRuntime).not.toHaveBeenCalled();
   });
 
+  it('rejects oversized uploaded attachments before runtime routing', async () => {
+    const res = await POST(agentTurnRequest({
+      messages: [{ role: 'user', content: 'Organize these captures' }],
+      uploadedFiles: [{ name: 'large.md', content: 'x'.repeat(20_001) }],
+    }));
+
+    expect(res.status).toBe(413);
+    await expect(res.json()).resolves.toMatchObject({
+      error: expect.objectContaining({
+        issueCode: 'AI_ATTACHMENT_TOO_LARGE',
+        message: expect.stringContaining('large.md'),
+      }),
+    });
+    expect(mockRunMindosNativeAgentTurn).not.toHaveBeenCalled();
+    expect(mockRunMindosAcpAgentTurn).not.toHaveBeenCalled();
+    expect(mockCreateMindosAgentRuntime).not.toHaveBeenCalled();
+  });
+
+  it('rejects oversized MindOS attached files before runtime routing', async () => {
+    seedFile('large.md', 'x'.repeat(20_001));
+    invalidateCache();
+
+    const res = await POST(agentTurnRequest({
+      messages: [{ role: 'user', content: 'Use this attached file' }],
+      attachedFiles: ['large.md'],
+    }));
+
+    expect(res.status).toBe(413);
+    await expect(res.json()).resolves.toMatchObject({
+      error: expect.objectContaining({
+        issueCode: 'AI_ATTACHMENT_TOO_LARGE',
+        message: expect.stringContaining('large.md'),
+      }),
+    });
+    expect(mockRunMindosNativeAgentTurn).not.toHaveBeenCalled();
+    expect(mockRunMindosAcpAgentTurn).not.toHaveBeenCalled();
+    expect(mockCreateMindosAgentRuntime).not.toHaveBeenCalled();
+  });
+
   it('preserves legacy selectedAcpAgent on simplified session turn requests', async () => {
     const res = await POST(agentTurnRequest({
       message: { text: 'Use the legacy ACP agent' },
