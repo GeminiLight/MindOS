@@ -92,7 +92,7 @@ export function pluralizeSessionListCount(count: number, singular: string, plura
 
 export function chatSessionTitle(session: ChatSession): string {
   if (session.title) return session.title;
-  const firstUser = session.messages.find((message) => message.role === 'user');
+  const firstUser = chatSessionMessages(session).find((message) => message.role === 'user');
   if (!firstUser) return '(empty session)';
   const line = firstUser.content.replace(/\s+/g, ' ').trim();
   if (!line && firstUser.images && firstUser.images.length > 0) {
@@ -107,7 +107,7 @@ export function chatSessionDisplayTitle(session: ChatSession, emptyTitleFallback
 }
 
 export function chatSessionPreview(session: ChatSession, maxLength = 60): string {
-  const firstUser = session.messages.find((message) => message.role === 'user');
+  const firstUser = chatSessionMessages(session).find((message) => message.role === 'user');
   if (!firstUser) return '';
   const text = firstUser.content.replace(/\s+/g, ' ').trim();
   return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text;
@@ -128,6 +128,10 @@ function messageSearchText(message: Message): string {
     message.agentName,
     message.agentKind,
   ].filter(Boolean).join(' ');
+}
+
+function chatSessionMessages(session: ChatSession): Message[] {
+  return Array.isArray(session.messages) ? session.messages : [];
 }
 
 function normalizePreviewText(value: string): string {
@@ -170,6 +174,7 @@ function buildSearchText(parts: unknown[]): string {
 export function chatSessionSearchText(session: ChatSession, entry?: Pick<ChatSessionListEntry, 'title' | 'preview' | 'runtime' | 'runtimeSummary' | 'messageCount'>): string {
   const runtime = entry?.runtime ?? getSessionAgentRuntime(session);
   const runtimeSummary = entry?.runtimeSummary ?? getRuntimeSessionSummary(session);
+  const messages = chatSessionMessages(session);
   return buildSearchText([
     entry?.title ?? chatSessionTitle(session),
     entry?.preview ?? chatSessionPreview(session),
@@ -193,7 +198,7 @@ export function chatSessionSearchText(session: ChatSession, entry?: Pick<ChatSes
     entry?.messageCount,
     ...(session.contextSelection?.spaces ?? []).flatMap((space) => [space.path, space.label, space.source]),
     ...(session.contextSelection?.assistants ?? []).flatMap((assistant) => [assistant.id, assistant.name, assistant.kind, assistant.source]),
-    ...session.messages.map(messageSearchText),
+    ...messages.map(messageSearchText),
   ]);
 }
 
@@ -207,6 +212,7 @@ export function buildChatSessionListEntry(
   session: ChatSession,
   options: ChatSessionListEntryOptions = {},
 ): ChatSessionListEntry {
+  const messages = chatSessionMessages(session);
   const runtime = getSessionAgentRuntime(session);
   const runtimeSummary = options.runtimeSummary ?? getRuntimeSessionSummary(session);
   const title = options.title ?? chatSessionDisplayTitle(session, options.emptyTitleFallback);
@@ -234,10 +240,10 @@ export function buildChatSessionListEntry(
     status: runtimeSummary?.status ?? null,
     updatedAtMs: typeof session.updatedAt === 'number' && Number.isFinite(session.updatedAt) ? session.updatedAt : null,
     updatedAtLabel: formatSessionListRelativeTime(session.updatedAt),
-    messageCount: session.messages.length,
+    messageCount: messages.length,
     metadataTitle,
     searchText: '',
-    hasListContent: session.messages.length > 0 || Boolean(runtimeSummary),
+    hasListContent: messages.length > 0 || Boolean(runtimeSummary),
     pinned: Boolean(session.pinned),
     runtimeSummary,
   };

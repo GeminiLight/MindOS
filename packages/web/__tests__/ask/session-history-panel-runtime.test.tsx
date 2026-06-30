@@ -140,6 +140,10 @@ describe('SessionHistoryPanel runtime session metadata', () => {
     const visibleText = view.host.textContent ?? '';
     expect(visibleText.match(/tiny hello/g) ?? []).toHaveLength(1);
     expect(visibleText).toContain('1 msgs');
+    const meta = view.host.querySelector('[data-session-row-meta]') as HTMLElement | null;
+    expect(meta?.className).toContain('opacity-0');
+    expect(meta?.className).toContain('group-hover:opacity-100');
+    expect(meta?.className).toContain('group-focus-within:opacity-100');
 
     view.cleanup();
   });
@@ -288,6 +292,9 @@ describe('SessionHistoryPanel runtime session metadata', () => {
     expect(runtimeRow?.querySelector('[data-session-row-time]')?.textContent).toContain('just now');
     expect(runtimeRow?.querySelector('[data-session-row-actions]')).toBeTruthy();
     expect(runtimeRow?.querySelector('[data-stable-row-trailing]')).toBeNull();
+    const meta = runtimeRow?.querySelector('[data-session-row-meta]') as HTMLElement | null;
+    expect(meta?.className).toContain('opacity-0');
+    expect(meta?.className).toContain('group-hover:opacity-100');
 
     const openRow = view.host.querySelector('[role="button"][title="Open this Claude Code session"]') as HTMLElement;
     await act(async () => {

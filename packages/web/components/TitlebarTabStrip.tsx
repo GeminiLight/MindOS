@@ -376,7 +376,7 @@ export default function TitlebarTabStrip() {
           setMenuOpen(false);
           setContextMenu({ tabId: tab.id, x: e.clientX, y: e.clientY });
         }}
-        className={`group relative flex h-[34px] min-w-[76px] max-w-[184px] flex-1 shrink cursor-pointer select-none items-center gap-1.5 self-end rounded-t-lg border-x border-t px-2.5 text-xs transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${
+        className={`group relative flex h-[34px] min-w-[76px] max-w-[184px] shrink-0 cursor-pointer select-none items-center gap-1.5 self-end rounded-t-lg border-x border-t px-2.5 text-xs transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${
           showLeadingSeparator
             ? "before:pointer-events-none before:absolute before:-left-0.5 before:top-1/2 before:h-4 before:w-px before:-translate-y-1/2 before:rounded-full before:bg-border/60 before:content-['']"
             : ''
@@ -452,7 +452,7 @@ export default function TitlebarTabStrip() {
         <HomeIcon size={15} aria-hidden="true" />
       </button>
 
-      <div role="tablist" className="flex min-w-0 flex-1 items-end gap-1">
+      <div role="tablist" data-titlebar-tablist className="flex min-w-0 max-w-full shrink items-end gap-1 overflow-hidden">
         {visibleTabs.map(renderTab)}
       </div>
 

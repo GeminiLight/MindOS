@@ -2,7 +2,7 @@
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import HomePanel from '@/components/panels/HomePanel';
+import HomePanel, { computeHomeAgentFilterLayout } from '@/components/panels/HomePanel';
 import type { ChatSession, Message } from '@/lib/types';
 import {
   getActiveSessionId,
@@ -137,6 +137,9 @@ describe('HomePanel', () => {
     expect(meta?.textContent).not.toContain('thread_1...abcdef');
     expect(meta?.textContent).toContain('1 msg');
     expect(meta?.getAttribute('title')).toContain('Session ID: thread_1234567890abcdef');
+    expect(meta?.className).toContain('opacity-0');
+    expect(meta?.className).toContain('group-hover:opacity-100');
+    expect(meta?.className).toContain('group-focus-within:opacity-100');
     expect(host.querySelector('button[aria-label="Pin session"]')).not.toBeNull();
     expect(host.querySelector('button[aria-label="Rename session"]')).not.toBeNull();
     expect(host.querySelector('button[aria-label="Fork session"]')).not.toBeNull();
@@ -162,6 +165,26 @@ describe('HomePanel', () => {
     expect(visibleLabel?.closest('.pointer-events-none')).not.toBeNull();
     expect(actions?.className).toContain('pointer-events-none');
     expect(actions?.className).toContain('z-20');
+  });
+
+  it('keeps the selected Home agent filter visible when the rail overflows', () => {
+    const layout = computeHomeAgentFilterLayout(
+      160,
+      ['all', 'mindos', 'codex', 'claude', 'acp:kimi', 'acp:gemini-cli'],
+      'acp:gemini-cli',
+    );
+
+    expect(layout.visibleIds).toContain('acp:gemini-cli');
+    expect(layout.hiddenIds).toContain('claude');
+    expect(layout.hiddenIds).not.toContain('acp:gemini-cli');
+
+    const tinyLayout = computeHomeAgentFilterLayout(
+      56,
+      ['all', 'mindos', 'codex'],
+      'codex',
+    );
+    expect(tinyLayout.visibleIds).toEqual([]);
+    expect(tinyLayout.hiddenIds).toEqual(['all', 'mindos', 'codex']);
   });
 
   it('opens Home sessions from the full-row layer without action buttons stealing selection', async () => {
@@ -348,12 +371,26 @@ describe('HomePanel', () => {
     expect(host.textContent).toContain('Investigate file tree open latency');
     expect(host.textContent).toContain('Review the prompt runtime plan');
 
+    const allFilter = host.querySelector('[data-home-agent-filter="all"]') as HTMLButtonElement | null;
+    expect(allFilter).not.toBeNull();
+    expect(allFilter?.className).toContain('h-8');
+    expect(allFilter?.className).toContain('w-8');
+    expect(allFilter?.className).toContain('text-[var(--amber)]');
+    expect(allFilter?.className).toContain('[--hit-target-active-bg:var(--amber-subtle)]');
+    expect(allFilter?.querySelector('svg')?.getAttribute('width')).toBe('14');
     const codexFilter = host.querySelector('[data-home-agent-filter="codex"]') as HTMLButtonElement | null;
     expect(codexFilter).not.toBeNull();
+    expect(codexFilter?.className).toContain('h-8');
+    expect(codexFilter?.className).toContain('w-8');
+    const codexFilterMark = codexFilter?.querySelector('[data-home-session-agent="codex"]') as HTMLElement | null;
+    expect(codexFilterMark?.className).toContain('h-6');
+    expect(codexFilterMark?.className).toContain('w-6');
     await act(async () => {
       codexFilter!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
+    expect(codexFilter?.className).toContain('text-[var(--amber)]');
+    expect(codexFilter?.className).toContain('[--hit-target-active-bg:var(--amber-subtle)]');
     expect(host.textContent).toContain('Investigate file tree open latency');
     expect(host.textContent).not.toContain('Review the prompt runtime plan');
   });
@@ -398,6 +435,7 @@ describe('HomePanel', () => {
     });
 
     expect(openFileSearch).not.toHaveBeenCalled();
+    expect(searchButton?.getAttribute('aria-pressed')).toBe('true');
     const searchInput = host.querySelector('[data-home-session-search-input]') as HTMLInputElement | null;
     expect(searchInput).not.toBeNull();
     expect(searchInput?.getAttribute('placeholder')).toBe('Search sessions...');
@@ -412,10 +450,26 @@ describe('HomePanel', () => {
     expect(host.querySelector('[data-home-session-row="s-claude"]')).not.toBeNull();
     expect(host.textContent).toContain('Review the prompt runtime plan');
     expect(host.textContent).not.toContain('Investigate file tree open latency');
+
+    await act(async () => {
+      searchButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(host.querySelector('[data-home-session-search-input]')).toBeNull();
+    expect(searchButton?.getAttribute('aria-pressed')).toBe('false');
+    expect(host.querySelector('[data-home-session-row="s-codex"]')).not.toBeNull();
+    expect(host.querySelector('[data-home-session-row="s-claude"]')).not.toBeNull();
   });
 
-  it('groups Home sessions by project by default and keeps Recent as a flat view', async () => {
+  it('groups Home sessions by project by default and toggles back to recent chats', async () => {
     const sessions = [
+      session({
+        id: 's-api-pinned',
+        pinned: true,
+        updatedAt: 5_000,
+        messages: [userMsg('Keep the pinned API launch thread')],
+        workDir: { source: 'manual', path: '/Users/moonshot/projects/api', label: 'API' },
+      }),
       session({
         id: 's-api-manual',
         updatedAt: 4_000,
@@ -441,19 +495,55 @@ describe('HomePanel', () => {
         updatedAt: 2_000,
         messages: [userMsg('Capture the daily note')],
       }),
+      session({
+        id: 's-loose-chat',
+        updatedAt: 1_000,
+        messages: [userMsg('Quick question without project')],
+        workDir: { source: 'manual', label: 'Chat' },
+      }),
     ];
     installFetchMock(sessions);
     await initSessions({});
 
     await renderHomePanel();
 
+    const sessionsModeButton = host.querySelector('[data-home-sidebar-mode="sessions"]') as HTMLButtonElement | null;
+    expect(sessionsModeButton).not.toBeNull();
+    expect(sessionsModeButton?.className).toContain('text-[var(--amber)]');
+    expect(sessionsModeButton?.className).toContain('[--hit-target-active-bg:var(--amber-subtle)]');
     const toolbar = host.querySelector('[data-home-session-toolbar]') as HTMLElement | null;
     expect(toolbar).not.toBeNull();
     expect(toolbar?.querySelector('button[aria-label="New session"]')).not.toBeNull();
     expect(toolbar?.querySelector('button[aria-label="Search sessions"]')).not.toBeNull();
     expect(toolbar?.querySelector('button[aria-label="Refresh sessions"]')).not.toBeNull();
+    const groupToggle = host.querySelector('[data-home-session-project-toggle]') as HTMLButtonElement | null;
+    expect(groupToggle).not.toBeNull();
+    expect(groupToggle?.getAttribute('aria-label')).toBe('Group by project');
+    expect(groupToggle?.getAttribute('aria-pressed')).toBe('true');
+    expect(groupToggle?.className).toContain('text-[var(--amber)]');
+    expect(groupToggle?.className).toContain('[--hit-target-active-bg:var(--amber-subtle)]');
     expect(host.querySelector('[data-home-session-project-view]')).not.toBeNull();
-    expect(host.querySelector('[data-home-session-view-trigger]')?.textContent).toContain('Project');
+    expect(host.querySelector('[data-home-session-recent-view]')).toBeNull();
+    const pinnedSection = host.querySelector('[data-home-session-section="pinned"]') as HTMLElement | null;
+    const projectsSection = host.querySelector('[data-home-session-section="projects"]') as HTMLElement | null;
+    const chatsSection = host.querySelector('[data-home-session-section="chats"]') as HTMLElement | null;
+    expect(pinnedSection?.textContent).toContain('Pinned');
+    expect(pinnedSection?.textContent).toContain('Keep the pinned API launch thread');
+    expect(projectsSection?.textContent).toContain('Projects');
+    expect(projectsSection?.textContent).toContain('Fix the API sidebar grouping');
+    expect(projectsSection?.textContent).toContain('Capture the daily note');
+    expect(chatsSection?.textContent).toContain('Chats');
+    expect(chatsSection?.textContent).toContain('Quick question without project');
+    expect(projectsSection?.textContent).not.toContain('Quick question without project');
+    expect(projectsSection?.textContent).not.toContain('Keep the pinned API launch thread');
+    expect(host.querySelectorAll('[data-home-session-row="s-api-pinned"]')).toHaveLength(1);
+    const chatsHeader = host.querySelector('[data-home-session-section-header="chats"]') as HTMLButtonElement | null;
+    expect(chatsHeader?.getAttribute('aria-expanded')).toBe('true');
+    await act(async () => {
+      chatsHeader!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(chatsHeader?.getAttribute('aria-expanded')).toBe('false');
+    expect(host.querySelector('[data-home-session-section-entries="chats"]')).toBeNull();
 
     const apiGroup = host.querySelector('[data-home-session-project-group="project:/Users/moonshot/projects/api"]') as HTMLElement | null;
     expect(apiGroup).not.toBeNull();
@@ -461,10 +551,13 @@ describe('HomePanel', () => {
     expect(apiGroup?.querySelector('[data-home-session-project-group-count]')?.textContent).toBe('2');
     expect(apiGroup?.textContent).toContain('Fix the API sidebar grouping');
     expect(apiGroup?.textContent).toContain('Review API runtime handoff');
+    expect(apiGroup?.textContent).not.toContain('Keep the pinned API launch thread');
 
     const runtimeMeta = host.querySelector('[data-home-session-row="s-api-runtime"] [data-home-session-meta]') as HTMLElement | null;
     expect(runtimeMeta?.textContent).toContain('1 msg');
     expect(runtimeMeta?.textContent).not.toContain('/api');
+    expect(runtimeMeta?.className).toContain('opacity-0');
+    expect(runtimeMeta?.className).toContain('group-hover:opacity-100');
     expect(host.querySelector('[data-home-session-project-group="mind-root"]')?.textContent).toContain('Mind');
 
     const apiHeader = apiGroup!.querySelector('[data-home-session-project-group-header]') as HTMLButtonElement | null;
@@ -484,19 +577,34 @@ describe('HomePanel', () => {
     });
     expect(host.querySelector('[data-home-session-row="s-api-runtime"]')).not.toBeNull();
 
-    const viewTrigger = host.querySelector('[data-home-session-view-trigger]') as HTMLButtonElement | null;
     await act(async () => {
-      viewTrigger!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
-    const recentOption = host.querySelector('[data-home-session-view-option="recent"]') as HTMLButtonElement | null;
-    await act(async () => {
-      recentOption!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      groupToggle!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
     expect(host.querySelector('[data-home-session-recent-view]')).not.toBeNull();
     expect(host.querySelector('[data-home-session-project-view]')).toBeNull();
-    expect(host.querySelector('[data-home-session-view-trigger]')?.textContent).toContain('Recent');
+    expect(groupToggle?.getAttribute('aria-pressed')).toBe('false');
     expect(host.querySelector('[data-home-session-row="s-api-runtime"] [data-home-session-meta]')?.textContent).toContain('/api');
+
+    await act(async () => {
+      searchInput!.value = '';
+      searchInput!.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'deleteContentBackward', data: null }));
+    });
+
+    const recentPinnedSection = host.querySelector('[data-home-session-section="pinned"]') as HTMLElement | null;
+    expect(recentPinnedSection?.textContent).toContain('Pinned');
+    expect(recentPinnedSection?.textContent).toContain('Keep the pinned API launch thread');
+    const recentChatsHeader = host.querySelector('[data-home-session-section-header="chats"]') as HTMLButtonElement | null;
+    if (recentChatsHeader?.getAttribute('aria-expanded') === 'false') {
+      await act(async () => {
+        recentChatsHeader.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      });
+    }
+    const recentChatsSection = host.querySelector('[data-home-session-section="chats"]') as HTMLElement | null;
+    expect(recentChatsSection?.textContent).toContain('Chats');
+    expect(recentChatsSection?.textContent).toContain('Fix the API sidebar grouping');
+    expect(recentChatsSection?.textContent).toContain('Quick question without project');
+    expect(recentChatsSection?.textContent).not.toContain('Keep the pinned API launch thread');
   });
 
   it('uses the local Claude Code logo for Claude sessions', async () => {
@@ -591,6 +699,78 @@ describe('HomePanel', () => {
     expect(host.textContent).not.toContain('Run OpenCode ACP');
   });
 
+  it('collapses overflowing Home agent filters into a +N picker', async () => {
+    class NarrowResizeObserver {
+      private callback: ResizeObserverCallback;
+
+      constructor(callback: ResizeObserverCallback) {
+        this.callback = callback;
+      }
+
+      observe() {
+        this.callback([{ contentRect: { width: 160 } } as ResizeObserverEntry], this as unknown as ResizeObserver);
+      }
+
+      unobserve() {}
+
+      disconnect() {}
+    }
+    vi.stubGlobal('ResizeObserver', NarrowResizeObserver);
+
+    const sessions = [
+      session({
+        id: 's-kimi',
+        updatedAt: 3_000,
+        messages: [userMsg('Run Kimi ACP')],
+        defaultAgentRuntime: { id: 'kimi', name: 'Kimi CLI', kind: 'acp' },
+      }),
+      session({
+        id: 's-gemini',
+        updatedAt: 2_800,
+        messages: [userMsg('Run Gemini ACP')],
+        defaultAgentRuntime: { id: 'gemini-cli', name: 'Gemini CLI', kind: 'acp' },
+      }),
+      session({
+        id: 's-opencode',
+        updatedAt: 2_500,
+        messages: [userMsg('Run OpenCode ACP')],
+        defaultAcpAgent: { id: 'opencode', name: 'OpenCode' },
+      }),
+    ];
+    installFetchMock(sessions);
+    await initSessions({});
+
+    await renderHomePanel();
+
+    const overflowTrigger = host.querySelector('[data-home-agent-filter-overflow-trigger]') as HTMLButtonElement | null;
+    expect(overflowTrigger).not.toBeNull();
+    expect(overflowTrigger?.textContent).toBe('+4');
+    expect(overflowTrigger?.getAttribute('aria-label')).toBe('More agents (4)');
+    expect(host.querySelector('[data-home-agent-filter="acp:opencode"]')).toBeNull();
+
+    await act(async () => {
+      overflowTrigger!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    const overflowMenu = host.querySelector('[data-home-agent-filter-overflow-menu]') as HTMLElement | null;
+    expect(overflowMenu).not.toBeNull();
+    const opencodeOption = overflowMenu?.querySelector('[data-home-agent-filter-option="acp:opencode"]') as HTMLButtonElement | null;
+    expect(opencodeOption).not.toBeNull();
+    expect(opencodeOption?.textContent).toContain('OpenCode');
+
+    await act(async () => {
+      opencodeOption!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(host.querySelector('[data-home-agent-filter-overflow-menu]')).toBeNull();
+    const visibleOpencodeFilter = host.querySelector('[data-home-agent-filter="acp:opencode"]') as HTMLButtonElement | null;
+    expect(visibleOpencodeFilter).not.toBeNull();
+    expect(visibleOpencodeFilter?.className).toContain('text-[var(--amber)]');
+    expect(host.textContent).toContain('Run OpenCode ACP');
+    expect(host.textContent).not.toContain('Run Kimi ACP');
+    expect(host.textContent).not.toContain('Run Gemini ACP');
+  });
+
   it('uses a theme-aware logo shell for MindOS sessions', async () => {
     const sessions = [
       session({
@@ -659,6 +839,8 @@ describe('HomePanel', () => {
       filesButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
+    expect(filesButton?.className).toContain('text-[var(--amber)]');
+    expect(filesButton?.className).toContain('[--hit-target-active-bg:var(--amber-subtle)]');
     expect(host.querySelector('[data-home-mind-files]')).not.toBeNull();
     expect(host.textContent).toContain('Notes');
   });

@@ -2,7 +2,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { CornerDownRight, FileText, ImageIcon, Plus, Trash2 } from 'lucide-react';
+import { Check, CornerDownRight, FileText, GripVertical, ImageIcon, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { useLocale } from '@/lib/stores/locale-store';
 import type { AcpRuntimeOptions, AgentPermissionMode, AgentRuntimeDescriptor, AgentRuntimeIdentity, ChatSession, Message, NativeRuntimeOptions } from '@/lib/types';
 import ModeCapsule, {
@@ -104,6 +104,8 @@ interface QueuedFollowUp {
   content: string;
 }
 
+type QueuedFollowUpDropPlacement = 'before' | 'after';
+
 function createQueuedFollowUpId(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID();
@@ -191,10 +193,16 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
   const [attachMenuPos, setAttachMenuPos] = useState<{ top: number; left: number } | null>(null);
   const [dropError, setDropError] = useState('');
   const [queuedFollowUps, setQueuedFollowUps] = useState<QueuedFollowUp[]>([]);
+  const [editingQueuedFollowUpId, setEditingQueuedFollowUpId] = useState<string | null>(null);
+  const [editingQueuedFollowUpText, setEditingQueuedFollowUpText] = useState('');
+  const [draggedQueuedFollowUpId, setDraggedQueuedFollowUpId] = useState<string | null>(null);
+  const [queuedFollowUpDropTarget, setQueuedFollowUpDropTarget] = useState<{ id: string; placement: QueuedFollowUpDropPlacement } | null>(null);
   const [queueDrainSignal, setQueueDrainSignal] = useState(0);
   const queuedFollowUpsRef = useRef<QueuedFollowUp[]>([]);
   const drainingQueuedFollowUpRef = useRef(false);
   const runtimeSessionsRequestSeqRef = useRef(0);
+  const chatContentRootRef = useRef<HTMLDivElement>(null);
+  const [homeHistoryMinHeight, setHomeHistoryMinHeight] = useState<number | null>(null);
 
   const [selectedSkill, setSelectedSkill] = useState<SkillSlashItem | null>(null);
   const selectedSkillRef = useRef(selectedSkill);
@@ -650,6 +658,10 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
   const queuedFollowUpState = t.ask.queuedFollowUpState ?? 'Queued';
   const followUpPlaceholder = t.ask.followUpPlaceholder ?? 'Ask for follow-up changes';
   const queuedFollowUpTextOnly = t.ask.queuedFollowUpTextOnly ?? 'Finish the current run before sending files, images, or skills.';
+  const dragQueuedFollowUp = t.ask.dragQueuedFollowUp ?? 'Drag to reorder';
+  const editQueuedFollowUp = t.ask.editQueuedFollowUp ?? 'Edit queued follow-up';
+  const saveQueuedFollowUp = t.ask.saveQueuedFollowUp ?? 'Save queued follow-up';
+  const cancelQueuedFollowUp = t.ask.cancelQueuedFollowUp ?? 'Cancel editing queued follow-up';
   const removeQueuedFollowUp = t.ask.removeQueuedFollowUp ?? 'Remove queued follow-up';
   const activeQueuedFollowUps = useMemo(() => {
     const activeSessionId = session.activeSessionId;
@@ -711,6 +723,88 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
 
   const removeQueuedFollowUpById = useCallback((id: string) => {
     setQueuedFollowUps((prev) => prev.filter((item) => item.id !== id));
+    if (editingQueuedFollowUpId === id) {
+      setEditingQueuedFollowUpId(null);
+      setEditingQueuedFollowUpText('');
+    }
+  }, [editingQueuedFollowUpId]);
+
+  const startEditingQueuedFollowUp = useCallback((item: QueuedFollowUp) => {
+    setEditingQueuedFollowUpId(item.id);
+    setEditingQueuedFollowUpText(item.content);
+  }, []);
+
+  const cancelEditingQueuedFollowUp = useCallback(() => {
+    setEditingQueuedFollowUpId(null);
+    setEditingQueuedFollowUpText('');
+  }, []);
+
+  const saveEditingQueuedFollowUp = useCallback(() => {
+    const nextContent = editingQueuedFollowUpText.trim();
+    if (!editingQueuedFollowUpId || !nextContent) return;
+    setQueuedFollowUps((prev) => prev.map((item) => (
+      item.id === editingQueuedFollowUpId ? { ...item, content: nextContent } : item
+    )));
+    setEditingQueuedFollowUpId(null);
+    setEditingQueuedFollowUpText('');
+  }, [editingQueuedFollowUpId, editingQueuedFollowUpText]);
+
+  const reorderQueuedFollowUps = useCallback((sessionId: string, draggedId: string, targetId: string, placement: QueuedFollowUpDropPlacement) => {
+    if (draggedId === targetId) return;
+    setQueuedFollowUps((prev) => {
+      const sessionItems = prev.filter((item) => item.sessionId === sessionId);
+      const dragged = sessionItems.find((item) => item.id === draggedId);
+      if (!dragged || !sessionItems.some((item) => item.id === targetId)) return prev;
+
+      const reordered = sessionItems.filter((item) => item.id !== draggedId);
+      const targetIndex = reordered.findIndex((item) => item.id === targetId);
+      if (targetIndex < 0) return prev;
+      reordered.splice(placement === 'after' ? targetIndex + 1 : targetIndex, 0, dragged);
+
+      let cursor = 0;
+      return prev.map((item) => (
+        item.sessionId === sessionId ? reordered[cursor++] : item
+      ));
+    });
+  }, []);
+
+  const handleQueuedFollowUpDragStart = useCallback((event: React.DragEvent<HTMLDivElement>, item: QueuedFollowUp) => {
+    if (editingQueuedFollowUpId) {
+      event.preventDefault();
+      return;
+    }
+    setDraggedQueuedFollowUpId(item.id);
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/mindos-follow-up-id', item.id);
+  }, [editingQueuedFollowUpId]);
+
+  const handleQueuedFollowUpDragOver = useCallback((event: React.DragEvent<HTMLDivElement>, item: QueuedFollowUp) => {
+    const draggedId = draggedQueuedFollowUpId || event.dataTransfer.getData('text/mindos-follow-up-id');
+    if (!draggedId || draggedId === item.id || item.id === editingQueuedFollowUpId) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+    const rect = event.currentTarget.getBoundingClientRect();
+    const placement: QueuedFollowUpDropPlacement = event.clientY > rect.top + (rect.height / 2) ? 'after' : 'before';
+    setQueuedFollowUpDropTarget((current) => (
+      current?.id === item.id && current.placement === placement ? current : { id: item.id, placement }
+    ));
+  }, [draggedQueuedFollowUpId, editingQueuedFollowUpId]);
+
+  const handleQueuedFollowUpDrop = useCallback((event: React.DragEvent<HTMLDivElement>, item: QueuedFollowUp) => {
+    const draggedId = draggedQueuedFollowUpId || event.dataTransfer.getData('text/mindos-follow-up-id');
+    setDraggedQueuedFollowUpId(null);
+    setQueuedFollowUpDropTarget(null);
+    if (!draggedId || draggedId === item.id || item.id === editingQueuedFollowUpId) return;
+    event.preventDefault();
+    const sessionId = sessionRef.current.activeSessionId ?? item.sessionId;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const placement: QueuedFollowUpDropPlacement = event.clientY > rect.top + (rect.height / 2) ? 'after' : 'before';
+    reorderQueuedFollowUps(sessionId, draggedId, item.id, placement);
+  }, [draggedQueuedFollowUpId, editingQueuedFollowUpId, reorderQueuedFollowUps]);
+
+  const handleQueuedFollowUpDragEnd = useCallback(() => {
+    setDraggedQueuedFollowUpId(null);
+    setQueuedFollowUpDropTarget(null);
   }, []);
 
   const drainQueuedFollowUps = useCallback(() => {
@@ -720,6 +814,7 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
     if (!sessionId) return;
     const next = queuedFollowUpsRef.current.find((item) => item.sessionId === sessionId);
     if (!next) return;
+    if (next.id === editingQueuedFollowUpId) return;
 
     drainingQueuedFollowUpRef.current = true;
     setQueuedFollowUps((prev) => prev.filter((item) => item.id !== next.id));
@@ -736,7 +831,7 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
         drainingQueuedFollowUpRef.current = false;
         if (startedTurn) setQueueDrainSignal((value) => value + 1);
       });
-  }, [handleQueuedTextSubmit, isLoading, providerNotConfigured, selectedRuntimeChecking, selectedRuntimeUnavailable, showHistory, visible]);
+  }, [editingQueuedFollowUpId, handleQueuedTextSubmit, isLoading, providerNotConfigured, selectedRuntimeChecking, selectedRuntimeUnavailable, showHistory, visible]);
 
   useEffect(() => {
     drainQueuedFollowUps();
@@ -1345,7 +1440,21 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
     }
   }, [chat.isLoadingRef, runtimeSessionActionId]);
 
-  const toggleHistory = useCallback(() => setShowHistory(v => !v), []);
+  const captureHomeHistoryHeight = useCallback(() => {
+    if (!isHome || maximized) return;
+    if (sessionRef.current.messages.length === 0) {
+      setHomeHistoryMinHeight(null);
+      return;
+    }
+    const height = chatContentRootRef.current?.getBoundingClientRect().height ?? 0;
+    if (height <= 0) return;
+    setHomeHistoryMinHeight((current) => Math.max(current ?? 0, Math.ceil(height)));
+  }, [isHome, maximized]);
+
+  const toggleHistory = useCallback(() => {
+    if (!showHistory) captureHomeHistoryHeight();
+    setShowHistory(v => !v);
+  }, [captureHomeHistoryHeight, showHistory]);
   // Stable identity so the memoized SessionHistoryPanel skips chunk-driven re-renders.
   const closeHistory = useCallback(() => setShowHistory(false), []);
   const inputIconSize = 15;
@@ -1354,6 +1463,14 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
     thinking: t.ask.thinking,
     generating: t.ask.generating,
     reconnecting: reconnectAttempt > 0 ? t.ask.reconnecting(reconnectAttempt, reconnectMax) : undefined,
+    runThinking: t.ask.runThinking,
+    awaitingFirstOutput: t.ask.awaitingFirstOutput,
+    toolRunningProgress: t.ask.toolRunningProgress,
+    permissionWaiting: t.ask.permissionWaiting,
+    questionWaiting: t.ask.questionWaiting,
+    contextCompacting: t.ask.contextCompacting,
+    elapsedSeconds: t.ask.elapsedSeconds,
+    reconnectingDetail: t.ask.reconnectingDetail,
     copyMessage: t.ask.copyMessage,
     editMessage: t.ask.editMessage,
     regenerateMessage: t.ask.regenerateMessage,
@@ -1420,8 +1537,18 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
     void runtimeSessionProjection.refresh();
   }, [acpDetection.refresh, nativeDetection.refresh, runtimeReadiness.refresh, runtimeSessionProjection.refresh]);
 
+  const homeHistoryMinHeightStyle = isHome && showHistory && !maximized && homeHistoryMinHeight
+    ? { minHeight: `${homeHistoryMinHeight}px` }
+    : undefined;
+
   return (
-    <div className="flex min-h-0 w-full flex-col h-full">
+    <div
+      ref={chatContentRootRef}
+      data-chat-content-root
+      data-chat-content-variant={variant}
+      style={homeHistoryMinHeightStyle}
+      className="flex min-h-0 w-full flex-col h-full"
+    >
       {/* Header — home variant shows session switcher + new/history/fullscreen buttons */}
       <AskHeader
         isPanel={isPanel || isHome}
@@ -1433,7 +1560,7 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
         onMaximize={isHome ? onMaximize : onMaximize}
         onClose={isHome ? undefined : onClose}
         onDockToPanel={maximized ? onDockToPanel : undefined}
-        sessions={runtimeScopedSessions}
+        sessions={projectScopedSessions}
         activeSessionId={runtimeScopedActiveSessionId}
         onLoadSession={handleLoadSession}
         onDeleteSession={handleDeleteSession}
@@ -1491,6 +1618,8 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
             messages={session.messages}
             isLoading={isLoading}
             loadingPhase={loadingPhase}
+            reconnectAttempt={reconnectAttempt}
+            reconnectMax={reconnectMax}
             emptyPrompt={t.ask.emptyPrompt}
             emptyHint={t.ask.emptyHint}
             suggestions={t.ask.suggestions}
@@ -1505,6 +1634,8 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
             messages={session.messages}
             isLoading={isLoading}
             loadingPhase={loadingPhase}
+            reconnectAttempt={reconnectAttempt}
+            reconnectMax={reconnectMax}
             emptyPrompt={t.ask.emptyPrompt}
             emptyHint={t.ask.emptyHint}
             suggestions={maximized && session.messages.length === 0 ? t.ask.suggestions : EMPTY_SUGGESTIONS}
@@ -1562,22 +1693,98 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
           {activeQueuedFollowUps.length > 0 && (
             <div className="border-b border-border/25 bg-background/30 px-3 py-1.5" data-follow-up-queue>
               <div className="space-y-0.5">
-                {activeQueuedFollowUps.map((item) => (
-                  <div key={item.id} className="flex min-h-7 items-center gap-2 text-sm text-foreground/70">
-                    <CornerDownRight size={13} className="shrink-0 text-muted-foreground/60" />
-                    <span className="min-w-0 flex-1 truncate" title={item.content}>{item.content}</span>
-                    <span className="shrink-0 text-2xs font-medium text-muted-foreground/60">{queuedFollowUpState}</span>
-                    <button
-                      type="button"
-                      className="hit-target-box shrink-0 p-1 text-muted-foreground/70 transition-colors hover:text-foreground [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-md)]"
-                      title={removeQueuedFollowUp}
-                      aria-label={removeQueuedFollowUp}
-                      onClick={() => removeQueuedFollowUpById(item.id)}
+                {activeQueuedFollowUps.map((item) => {
+                  const isEditing = editingQueuedFollowUpId === item.id;
+                  const isDragged = draggedQueuedFollowUpId === item.id;
+                  const isDropTarget = queuedFollowUpDropTarget?.id === item.id;
+                  return (
+                    <div
+                      key={item.id}
+                      data-follow-up-item={item.id}
+                      draggable={!isEditing}
+                      onDragStart={(event) => handleQueuedFollowUpDragStart(event, item)}
+                      onDragOver={(event) => handleQueuedFollowUpDragOver(event, item)}
+                      onDrop={(event) => handleQueuedFollowUpDrop(event, item)}
+                      onDragEnd={handleQueuedFollowUpDragEnd}
+                      className={cn(
+                        'flex min-h-7 items-center gap-1.5 rounded-md px-0.5 text-sm text-foreground/70 transition-[background-color,box-shadow,opacity]',
+                        !isEditing && 'cursor-grab active:cursor-grabbing',
+                        isDragged && 'opacity-45',
+                        isDropTarget && 'bg-[var(--amber-subtle)]/50',
+                        isDropTarget && queuedFollowUpDropTarget?.placement === 'before' && 'shadow-[inset_0_1px_0_var(--amber)]',
+                        isDropTarget && queuedFollowUpDropTarget?.placement === 'after' && 'shadow-[inset_0_-1px_0_var(--amber)]',
+                      )}
                     >
-                      <Trash2 size={13} />
-                    </button>
-                  </div>
-                ))}
+                      <span className="inline-flex h-6 w-4 shrink-0 items-center justify-center text-muted-foreground/45" title={dragQueuedFollowUp} aria-label={dragQueuedFollowUp}>
+                        <GripVertical size={13} aria-hidden="true" />
+                      </span>
+                      <CornerDownRight size={13} className="shrink-0 text-muted-foreground/60" />
+                      {isEditing ? (
+                        <>
+                          <input
+                            value={editingQueuedFollowUpText}
+                            onChange={(event) => setEditingQueuedFollowUpText(event.currentTarget.value)}
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
+                                event.preventDefault();
+                                saveEditingQueuedFollowUp();
+                              }
+                              if (event.key === 'Escape') {
+                                event.preventDefault();
+                                cancelEditingQueuedFollowUp();
+                              }
+                            }}
+                            className="min-w-0 flex-1 rounded-md border border-border/35 bg-background/70 px-2 py-1 text-sm text-foreground outline-none transition-colors focus-visible:border-[var(--amber)]/45 focus-visible:ring-2 focus-visible:ring-ring/25"
+                            aria-label={editQueuedFollowUp}
+                            autoFocus
+                          />
+                          <button
+                            type="button"
+                            className="hit-target-box shrink-0 p-1 text-muted-foreground/70 transition-colors hover:text-foreground disabled:pointer-events-none disabled:opacity-35 [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-md)]"
+                            title={saveQueuedFollowUp}
+                            aria-label={saveQueuedFollowUp}
+                            disabled={!editingQueuedFollowUpText.trim()}
+                            onClick={saveEditingQueuedFollowUp}
+                          >
+                            <Check size={13} />
+                          </button>
+                          <button
+                            type="button"
+                            className="hit-target-box shrink-0 p-1 text-muted-foreground/70 transition-colors hover:text-foreground [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-md)]"
+                            title={cancelQueuedFollowUp}
+                            aria-label={cancelQueuedFollowUp}
+                            onClick={cancelEditingQueuedFollowUp}
+                          >
+                            <X size={13} />
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <span className="min-w-0 flex-1 truncate" title={item.content}>{item.content}</span>
+                          <span className="shrink-0 text-2xs font-medium text-muted-foreground/60">{queuedFollowUpState}</span>
+                          <button
+                            type="button"
+                            className="hit-target-box shrink-0 p-1 text-muted-foreground/70 transition-colors hover:text-foreground [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-md)]"
+                            title={editQueuedFollowUp}
+                            aria-label={editQueuedFollowUp}
+                            onClick={() => startEditingQueuedFollowUp(item)}
+                          >
+                            <Pencil size={13} />
+                          </button>
+                        </>
+                      )}
+                      <button
+                        type="button"
+                        className="hit-target-box shrink-0 p-1 text-muted-foreground/70 transition-colors hover:text-foreground [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-md)]"
+                        title={removeQueuedFollowUp}
+                        aria-label={removeQueuedFollowUp}
+                        onClick={() => removeQueuedFollowUpById(item.id)}
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -1713,7 +1920,6 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
               stopTitle={loadingPhase === 'reconnecting' ? t.ask.cancelReconnect : t.ask.stopTitle}
               sendDisabledExternal={hasLoadingAttachments || selectedRuntimeChecking || !!selectedRuntimeUnavailable || providerNotConfigured}
               allowEmptySend={!isLoading && images.length > 0}
-              iconSize={inputIconSize}
               inputRef={inputRef}
               formRef={formRef}
               valueRef={inputValueRef}

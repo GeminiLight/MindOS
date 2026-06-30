@@ -35,6 +35,17 @@ vi.mock('@/components/ask/SaveSessionInline', () => ({
   SaveSessionButton: () => <button type="button" title="Save Session" className="save-session-stub h-9 w-9">save</button>,
 }));
 
+function setInputValue(input: HTMLInputElement, value: string) {
+  const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+  nativeSetter?.call(input, value);
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  input.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
+function sessionSwitcherText(): string {
+  return document.body.querySelector('[role="listbox"]')?.textContent ?? '';
+}
+
 describe('AskHeader panel hit area', () => {
   beforeEach(() => {
     document.body.innerHTML = '';
@@ -167,6 +178,97 @@ describe('AskHeader panel hit area', () => {
     expect(document.body.querySelector('[title*="session_1234567890abcdef"]')).toBeTruthy();
     expect(document.body.querySelector('[title*="/tmp/mind"]')).toBeTruthy();
     expect(document.body.textContent).toContain('New chat');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('filters the title session dropdown by current agent and search query', async () => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    const sessions = [
+      {
+        id: 'mindos-session',
+        title: 'MindOS plan',
+        createdAt: 1,
+        updatedAt: 1,
+        messages: [{ role: 'user', content: 'plan the wiki' }],
+      },
+      {
+        id: 'codex-session',
+        title: 'Codex debug',
+        createdAt: 2,
+        updatedAt: 2,
+        messages: [{ role: 'user', content: 'fix renderer bug' }],
+        defaultAgentRuntime: { id: 'codex', name: 'Codex', kind: 'codex' },
+      },
+      {
+        id: 'claude-session',
+        title: 'Claude review',
+        createdAt: 3,
+        updatedAt: 3,
+        messages: [{ role: 'user', content: 'review product copy' }],
+        defaultAgentRuntime: { id: 'claude', name: 'Claude Code', kind: 'claude' },
+      },
+    ] as any[];
+
+    await act(async () => {
+      root.render(
+        <AskHeader
+          isPanel
+          showHistory={false}
+          onToggleHistory={vi.fn()}
+          onReset={vi.fn()}
+          isLoading={false}
+          sessions={sessions}
+          activeSessionId="codex-session"
+          onLoadSession={vi.fn()}
+          onDeleteSession={vi.fn()}
+          onRenameSession={vi.fn()}
+          onTogglePinSession={vi.fn()}
+          selectedAgentRuntime={{ id: 'codex', name: 'Codex', kind: 'codex' }}
+          onSelectAgentRuntime={vi.fn()}
+          nativeRuntimes={[{ id: 'codex', name: 'Codex', kind: 'codex' }]}
+          messages={[]}
+        />,
+      );
+    });
+
+    const titleButton = Array.from(host.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('Codex debug')) as HTMLButtonElement;
+    expect(titleButton).toBeTruthy();
+
+    await act(async () => {
+      titleButton.click();
+    });
+
+    const codexFilter = document.body.querySelector('[data-session-switcher-agent-filter="codex"]') as HTMLButtonElement;
+    const allFilter = document.body.querySelector('[data-session-switcher-agent-filter="all"]') as HTMLButtonElement;
+    const searchInput = document.body.querySelector('[data-session-switcher-search-input]') as HTMLInputElement;
+    expect(codexFilter?.getAttribute('aria-pressed')).toBe('true');
+    expect(searchInput).toBeTruthy();
+    expect(sessionSwitcherText()).toContain('Codex debug');
+    expect(sessionSwitcherText()).not.toContain('Claude review');
+    expect(sessionSwitcherText()).not.toContain('MindOS plan');
+
+    await act(async () => {
+      allFilter.click();
+    });
+
+    expect(sessionSwitcherText()).toContain('Codex debug');
+    expect(sessionSwitcherText()).toContain('Claude review');
+    expect(sessionSwitcherText()).toContain('MindOS plan');
+
+    await act(async () => {
+      setInputValue(searchInput, 'product copy');
+    });
+
+    expect(sessionSwitcherText()).not.toContain('Codex debug');
+    expect(sessionSwitcherText()).toContain('Claude review');
+    expect(sessionSwitcherText()).not.toContain('MindOS plan');
 
     await act(async () => {
       root.unmount();

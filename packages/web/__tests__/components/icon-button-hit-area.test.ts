@@ -175,7 +175,8 @@ describe('icon button hit areas', () => {
     expect(runtimeSource).toContain('data-hit-active={open ? \'true\' : undefined}');
     expect(saveSource).toContain('hit-target-box relative z-10 h-9 w-9');
     expect(contentSource).toContain('hit-target-box p-2 text-muted-foreground');
-    expect(composerSource).toContain('hit-target-box p-2 disabled:opacity-20');
+    expect(composerSource).toContain('hit-target-box inline-flex h-8 w-8');
+    expect(composerSource).toContain('hit-target-box relative inline-flex h-8 w-8');
     expect(contentSource).toContain('hit-target-box flex w-full items-center gap-2.5 px-3 py-2');
     expect(modeSource).toContain('AskOptionCapsule');
     expect(optionCapsuleSource).toContain('hit-target-box relative z-10 inline-flex min-h-6');
@@ -252,10 +253,14 @@ describe('icon button hit areas', () => {
     expect(actionsSource).toContain('const btnBase = \'hit-target-box');
     expect(actionsSource).toContain('[--hit-target-hover-bg:var(--muted)]');
     expect(actionsSource).toContain('[--hit-target-hover-bg:color-mix(in_srgb,var(--amber)_10%,transparent)]');
-    expect(messageListSource).toContain('function MessageActionDock');
-    expect(messageListSource).toContain('absolute right-3 top-full');
+    expect(messageListSource).toContain('function MessageMetaRow');
+    expect(messageListSource).toContain('data-message-meta');
+    expect(messageListSource).toContain('data-message-actions');
+    expect(messageListSource).toContain('data-message-timestamp');
+    expect(messageListSource).not.toContain('absolute right-3 top-full');
+    expect(messageListSource).toContain('hover:z-30 focus-within:z-30');
     expect(messageListSource).toContain('md:group-hover/message:opacity-100');
-    expect(messageListSource).toContain('md:focus-within:opacity-100');
+    expect(messageListSource).toContain('focus-within:opacity-100');
     expect(messageListSource).not.toContain('mt-2 flex justify-start');
     expect(messageListSource).not.toContain('mt-2 flex justify-end');
     expect(messageListSource).toContain('hit-target-box group/sug');

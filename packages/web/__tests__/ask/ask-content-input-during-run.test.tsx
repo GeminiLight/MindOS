@@ -32,12 +32,19 @@ vi.mock('@/lib/stores/locale-store', () => ({
         queuedFollowUpState: 'Queued',
         followUpPlaceholder: 'Ask for follow-up changes',
         queuedFollowUpTextOnly: 'Finish the current run before sending files, images, or skills.',
+        dragQueuedFollowUp: 'Drag to reorder',
+        editQueuedFollowUp: 'Edit queued follow-up',
+        saveQueuedFollowUp: 'Save queued follow-up',
+        cancelQueuedFollowUp: 'Cancel editing queued follow-up',
         removeQueuedFollowUp: 'Remove queued follow-up',
         stopTitle: 'Stop',
         cancelReconnect: 'Cancel reconnect',
         connecting: 'connecting',
         thinking: 'thinking',
         generating: 'generating',
+        reconnecting: (attempt: number, max: number) => `reconnecting ${attempt}/${max}`,
+        runThinking: (runtime: string) => `${runtime} is thinking with you`,
+        elapsedSeconds: (seconds: number) => `${seconds}s`,
         stopped: 'stopped',
         errorNoResponse: 'no response',
         concurrentLimit: 'too many conversations are running',
@@ -197,6 +204,15 @@ async function setTextareaValue(textarea: HTMLTextAreaElement, value: string) {
   });
 }
 
+async function setTextInputValue(input: HTMLInputElement, value: string) {
+  const prototype = Object.getPrototypeOf(input) as HTMLInputElement;
+  const descriptor = Object.getOwnPropertyDescriptor(prototype, 'value');
+  await act(async () => {
+    descriptor?.set?.call(input, value);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+}
+
 async function waitForAgentTurnCallCount(fetchMock: ReturnType<typeof vi.fn>, expected: number) {
   for (let i = 0; i < 20; i += 1) {
     if (agentTurnCalls(fetchMock).length >= expected) return;
@@ -212,6 +228,16 @@ async function resolveNextStream(content: string) {
   await act(async () => {
     resolve?.({ role: 'assistant', content, timestamp: Date.now() });
   });
+}
+
+function queuedFollowUpRows(host: HTMLElement): HTMLDivElement[] {
+  return Array.from(host.querySelectorAll('[data-follow-up-item]')) as HTMLDivElement[];
+}
+
+function queuedFollowUpRowByText(host: HTMLElement, text: string): HTMLDivElement {
+  const row = queuedFollowUpRows(host).find((item) => item.textContent?.includes(text));
+  expect(row).toBeTruthy();
+  return row as HTMLDivElement;
 }
 
 describe('ChatContent input behavior while running', () => {
@@ -245,8 +271,16 @@ describe('ChatContent input behavior while running', () => {
     const textareaAfterSubmit = host.querySelector('textarea') as HTMLTextAreaElement;
     const stopButton = host.querySelector('button[title="Stop"]');
     expect(stopButton).toBeTruthy();
+    expect(stopButton?.className).toContain('h-8');
+    expect(stopButton?.className).toContain('w-8');
+    expect(stopButton?.className).not.toContain('--hit-target-border');
     expect(textareaAfterSubmit.disabled).toBe(false);
     expect(textareaAfterSubmit.value).toBe('');
+
+    await setTextareaValue(textareaAfterSubmit, 'follow up');
+    const runningSubmitButton = host.querySelector('button[type="submit"]') as HTMLButtonElement;
+    expect(runningSubmitButton.className).toContain('h-8');
+    expect(runningSubmitButton.className).toContain('w-8');
 
     await act(async () => {
       root.unmount();
@@ -361,6 +395,98 @@ describe('ChatContent input behavior while running', () => {
     });
 
     expect(host.textContent).not.toContain('remove me');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('edits a queued follow-up in place before it runs', async () => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
+
+    await act(async () => {
+      root.render(<ChatContent visible variant="panel" initialMessage="first" />);
+    });
+
+    const form = host.querySelector('form') as HTMLFormElement;
+    await requestSubmit(form);
+    await setTextareaValue(host.querySelector('textarea') as HTMLTextAreaElement, 'before edit');
+    await requestSubmit(form);
+
+    const editButton = host.querySelector('button[title="Edit queued follow-up"]') as HTMLButtonElement;
+    await act(async () => {
+      editButton.click();
+    });
+
+    const editInput = host.querySelector('input[aria-label="Edit queued follow-up"]') as HTMLInputElement;
+    expect(editInput.value).toBe('before edit');
+    await setTextInputValue(editInput, 'after edit');
+
+    const saveButton = host.querySelector('button[title="Save queued follow-up"]') as HTMLButtonElement;
+    await act(async () => {
+      saveButton.click();
+    });
+
+    expect(host.textContent).not.toContain('before edit');
+    expect(host.textContent).toContain('after edit');
+
+    await resolveNextStream('first done');
+    await waitForAgentTurnCallCount(fetchMock, 2);
+    const editedBody = JSON.parse(String(agentTurnCalls(fetchMock)[1][1]?.body));
+    const editedLastUser = editedBody.messages.filter((message: { role: string }) => message.role === 'user').at(-1);
+    expect(editedLastUser.content).toBe('after edit');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('reorders queued follow-ups by drag before they run', async () => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
+
+    await act(async () => {
+      root.render(<ChatContent visible variant="panel" initialMessage="first" />);
+    });
+
+    const form = host.querySelector('form') as HTMLFormElement;
+    const textarea = host.querySelector('textarea') as HTMLTextAreaElement;
+    await requestSubmit(form);
+    await setTextareaValue(textarea, 'second');
+    await requestSubmit(form);
+    await setTextareaValue(textarea, 'third');
+    await requestSubmit(form);
+
+    const secondRow = queuedFollowUpRowByText(host, 'second');
+    const thirdRow = queuedFollowUpRowByText(host, 'third');
+    const dataTransfer = new DataTransfer();
+
+    await act(async () => {
+      thirdRow.dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer }));
+      secondRow.dispatchEvent(new DragEvent('dragover', { bubbles: true, clientY: 0, dataTransfer }));
+      secondRow.dispatchEvent(new DragEvent('drop', { bubbles: true, clientY: 0, dataTransfer }));
+    });
+
+    const rowsAfterDrop = queuedFollowUpRows(host);
+    expect(rowsAfterDrop[0].textContent).toContain('third');
+    expect(rowsAfterDrop[1].textContent).toContain('second');
+
+    await resolveNextStream('first done');
+    await waitForAgentTurnCallCount(fetchMock, 2);
+    const reorderedBody = JSON.parse(String(agentTurnCalls(fetchMock)[1][1]?.body));
+    const reorderedLastUser = reorderedBody.messages.filter((message: { role: string }) => message.role === 'user').at(-1);
+    expect(reorderedLastUser.content).toBe('third');
+
+    await resolveNextStream('third done');
+    await waitForAgentTurnCallCount(fetchMock, 3);
+    const remainingBody = JSON.parse(String(agentTurnCalls(fetchMock)[2][1]?.body));
+    const remainingLastUser = remainingBody.messages.filter((message: { role: string }) => message.role === 'user').at(-1);
+    expect(remainingLastUser.content).toBe('second');
 
     await act(async () => {
       root.unmount();

@@ -451,7 +451,7 @@ describe('ChatContent ACP session binding', () => {
     });
   });
 
-  it('scopes the header switcher and history panel to the selected native runtime lane', async () => {
+  it('keeps the header switcher project-scoped while scoping the history panel to the selected native runtime lane', async () => {
     const mindosSession: ChatSession = {
       id: 's-mindos',
       title: 'MindOS planning',
@@ -496,8 +496,8 @@ describe('ChatContent ACP session binding', () => {
     });
 
     expect(host.querySelector('[data-testid="header-session-list"]')?.textContent).toContain('MindOS planning');
-    expect(host.querySelector('[data-testid="header-session-list"]')?.textContent).not.toContain('Codex repo thread');
-    expect(host.querySelector('[data-testid="header-session-list"]')?.textContent).not.toContain('Claude review');
+    expect(host.querySelector('[data-testid="header-session-list"]')?.textContent).toContain('Codex repo thread');
+    expect(host.querySelector('[data-testid="header-session-list"]')?.textContent).toContain('Claude review');
 
     const selectButton = Array.from(host.querySelectorAll('button')).find((button) => button.textContent === 'Select Codex') as HTMLButtonElement;
     await act(async () => {
@@ -507,8 +507,8 @@ describe('ChatContent ACP session binding', () => {
     expect(mockLoadSession).toHaveBeenCalledWith('s-codex');
     expect(host.querySelector('[data-testid="runtime-switcher"]')?.textContent).toBe('Codex');
     expect(host.querySelector('[data-testid="header-session-list"]')?.textContent).toContain('Codex repo thread');
-    expect(host.querySelector('[data-testid="header-session-list"]')?.textContent).not.toContain('MindOS planning');
-    expect(host.querySelector('[data-testid="header-session-list"]')?.textContent).not.toContain('Claude review');
+    expect(host.querySelector('[data-testid="header-session-list"]')?.textContent).toContain('MindOS planning');
+    expect(host.querySelector('[data-testid="header-session-list"]')?.textContent).toContain('Claude review');
     expect(host.querySelector('[data-testid="header-active-session"]')?.textContent).toBe('none');
 
     const toggleHistoryButton = Array.from(host.querySelectorAll('button')).find((button) => button.textContent === 'Toggle History') as HTMLButtonElement;
@@ -1344,7 +1344,7 @@ describe('ChatContent ACP session binding', () => {
 
     expect(mockLoadSession).toHaveBeenCalledWith('s-claude-linked');
     expect(host.querySelector('[data-testid="header-session-list"]')?.textContent).toContain('Linked Claude review');
-    expect(host.querySelector('[data-testid="header-session-list"]')?.textContent).not.toContain('MindOS planning');
+    expect(host.querySelector('[data-testid="header-session-list"]')?.textContent).toContain('MindOS planning');
 
     const toggleHistoryButton = Array.from(host.querySelectorAll('button')).find((button) => button.textContent === 'Toggle History') as HTMLButtonElement;
     await act(async () => {

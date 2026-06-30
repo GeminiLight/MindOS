@@ -457,7 +457,8 @@ function RuntimeSessionRow({
         )}
       </div>
       <div
-        className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[10px] text-muted-foreground/45"
+        data-session-row-meta
+        className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[10px] text-muted-foreground/45 opacity-0 transition-opacity duration-100 group-hover:opacity-100 group-focus-within:opacity-100"
         title={listEntry.metadataTitle}
       >
         <span className="inline-flex shrink-0 items-center gap-1">

@@ -672,6 +672,25 @@ describe('TitlebarTabStrip (spec-titlebar-row Phase 2)', () => {
     expect(newChatButton!.className).toContain('h-7 w-7');
   });
 
+  it('keeps the new-chat button adjacent to the last visible tab instead of after stretched tab space', async () => {
+    seedKeptDocTabs(['d1.md', 'd2.md']);
+    await navigateTo('/view/d2.md');
+
+    const tablist = document.querySelector<HTMLElement>('[data-titlebar-tablist]');
+    const tabs = tabEls();
+    const newChatButton = document.querySelector<HTMLButtonElement>('button[aria-label="New chat"]');
+
+    expect(tablist).not.toBeNull();
+    expect(newChatButton).not.toBeNull();
+    expect(tablist!.className).toContain('shrink');
+    expect(tablist!.className).not.toContain('flex-1');
+    for (const tab of tabs) {
+      expect(tab.className).toContain('shrink-0');
+      expect(tab.className).not.toContain('flex-1');
+    }
+    expect(newChatButton!.className).toContain('ml-1');
+  });
+
   it('tabHref round-trips with parseActiveTab', () => {
     const docKey = '笔记/日记😀.md';
     expect(parseActiveTab(tabHref({ kind: 'home', key: 'root' }))).toBeNull();

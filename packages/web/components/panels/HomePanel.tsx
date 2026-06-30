@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
-import { Brain, ChevronDown, ChevronRight, Loader2, MessageSquare, Network, Plus, RefreshCw, Search, X } from 'lucide-react';
+import { Brain, ChevronDown, ChevronRight, FolderTree, Loader2, MessageSquare, Network, Plus, RefreshCw, Search, X } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import Logo from '@/components/Logo';
 import MindFileTreeSections from '@/components/file-tree/MindFileTreeSections';
@@ -20,9 +20,12 @@ import {
 import { groupChatSessionEntriesByProject, type SessionProjectGroup } from '@/lib/session-project-groups';
 import {
   loadCollapsedSessionProjectGroups,
+  loadCollapsedHomeSessionSections,
   loadHomeSessionViewMode,
+  persistCollapsedHomeSessionSections,
   persistCollapsedSessionProjectGroups,
   persistHomeSessionViewMode,
+  type HomeSessionSectionId,
   type HomeSessionViewMode,
 } from '@/lib/home-session-view-preferences';
 import { agentIconFile } from '@/lib/agent-icons';
@@ -38,6 +41,56 @@ type HomeSidebarMode = 'sessions' | 'files';
 type CoreSessionAgentFilter = Extract<SessionListAgentFilter, 'all' | 'mindos' | 'codex' | 'claude'>;
 type AcpSessionAgentFilter = Extract<SessionListAgentFilter, `acp:${string}`>;
 type SessionAgentFilter = SessionListAgentFilter;
+
+const HOME_AGENT_FILTER_BUTTON_PX = 32;
+const HOME_AGENT_FILTER_GAP_PX = 4;
+const HOME_AGENT_FILTER_MORE_PX = 40;
+
+export interface HomeAgentFilterLayout {
+  visibleIds: SessionAgentFilter[];
+  hiddenIds: SessionAgentFilter[];
+}
+
+interface HomeAgentFilterItem {
+  id: SessionAgentFilter;
+  label: string;
+  count: number;
+  icon: ReactNode;
+}
+
+export function computeHomeAgentFilterLayout(
+  containerWidth: number | null,
+  filterIds: SessionAgentFilter[],
+  activeId: SessionAgentFilter,
+): HomeAgentFilterLayout {
+  if (containerWidth === null || filterIds.length === 0) {
+    return { visibleIds: filterIds, hiddenIds: [] };
+  }
+
+  const maxWithoutOverflow = Math.floor((containerWidth + HOME_AGENT_FILTER_GAP_PX) / (HOME_AGENT_FILTER_BUTTON_PX + HOME_AGENT_FILTER_GAP_PX));
+  if (filterIds.length <= maxWithoutOverflow) {
+    return { visibleIds: filterIds, hiddenIds: [] };
+  }
+
+  const availableForItems = Math.max(0, containerWidth - HOME_AGENT_FILTER_MORE_PX - HOME_AGENT_FILTER_GAP_PX);
+  const canFitItemWithOverflow = containerWidth >= HOME_AGENT_FILTER_MORE_PX + HOME_AGENT_FILTER_GAP_PX + HOME_AGENT_FILTER_BUTTON_PX;
+  const visibleCapacity = canFitItemWithOverflow
+    ? Math.max(1, Math.floor((availableForItems + HOME_AGENT_FILTER_GAP_PX) / (HOME_AGENT_FILTER_BUTTON_PX + HOME_AGENT_FILTER_GAP_PX)))
+    : 0;
+  let visibleIds = filterIds.slice(0, Math.min(filterIds.length, visibleCapacity));
+
+  if (visibleCapacity > 0 && filterIds.includes(activeId) && !visibleIds.includes(activeId)) {
+    visibleIds = visibleIds.length <= 1
+      ? [activeId]
+      : [...visibleIds.slice(0, -1), activeId];
+  }
+
+  const visibleSet = new Set(visibleIds);
+  return {
+    visibleIds,
+    hiddenIds: filterIds.filter((id) => !visibleSet.has(id)),
+  };
+}
 
 function acpAgentIconSrc(runtime: AgentRuntimeIdentity | null | undefined): string | null {
   if (!runtime || runtime.kind !== 'acp') return null;
@@ -77,8 +130,8 @@ function HomeModeSwitch({
 }) {
   const { t } = useLocale();
   const options: Array<{ id: HomeSidebarMode; label: string; icon: ReactNode }> = [
-    { id: 'sessions', label: t.sidebar.homeAgentSessions, icon: <MessageSquare size={13} aria-hidden="true" /> },
-    { id: 'files', label: t.sidebar.homeMindFiles, icon: <Brain size={13} aria-hidden="true" /> },
+    { id: 'sessions', label: t.sidebar.homeAgentSessions, icon: <MessageSquare size={14} aria-hidden="true" /> },
+    { id: 'files', label: t.sidebar.homeMindFiles, icon: <Brain size={14} aria-hidden="true" /> },
   ];
 
   return (
@@ -97,8 +150,8 @@ function HomeModeSwitch({
             onClick={() => onModeChange(option.id)}
             className={`hit-target-box inline-flex h-7 w-7 items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [--hit-target-radius:var(--radius-md)] ${
               active
-                ? 'bg-[var(--amber-subtle)] text-foreground'
-                : 'text-muted-foreground hover:text-foreground'
+                ? 'text-[var(--amber)] [--hit-target-active-bg:var(--amber-subtle)] [--hit-target-border-width:1px] [--hit-target-active-border:color-mix(in_srgb,var(--amber)_26%,transparent)]'
+                : 'text-muted-foreground/55 [--hit-target-hover-bg:var(--muted)] hover:text-foreground'
             }`}
           >
             {option.icon}
@@ -298,22 +351,78 @@ function HomeAgentFilter({
   acpFilters: Array<{ id: AcpSessionAgentFilter; runtime: AgentRuntimeIdentity; count: number }>;
 }) {
   const { t } = useLocale();
-  const filters: Array<{ id: SessionAgentFilter; label: string; count: number; icon: ReactNode }> = [
-    { id: 'all', label: t.sidebar.homeFilterAll, count: counts.all, icon: <MessageSquare size={13} aria-hidden="true" /> },
-    { id: 'mindos', label: t.sidebar.homeFilterMindOS, count: counts.mindos, icon: <AgentMark kind="mindos" id="filter-mindos" size="sm" /> },
-    { id: 'codex', label: t.sidebar.homeFilterCodex, count: counts.codex, icon: <AgentMark kind="codex" id="filter-codex" size="sm" /> },
-    { id: 'claude', label: t.sidebar.homeFilterClaude, count: counts.claude, icon: <AgentMark kind="claude" id="filter-claude" size="sm" /> },
+  const filterRailRef = useRef<HTMLDivElement>(null);
+  const [filterRailWidth, setFilterRailWidth] = useState<number | null>(null);
+  const [overflowOpen, setOverflowOpen] = useState(false);
+  const filters: HomeAgentFilterItem[] = [
+    { id: 'all', label: t.sidebar.homeFilterAll, count: counts.all, icon: <MessageSquare size={14} aria-hidden="true" /> },
+    { id: 'mindos', label: t.sidebar.homeFilterMindOS, count: counts.mindos, icon: <AgentMark kind="mindos" id="filter-mindos" size="md" /> },
+    { id: 'codex', label: t.sidebar.homeFilterCodex, count: counts.codex, icon: <AgentMark kind="codex" id="filter-codex" size="md" /> },
+    { id: 'claude', label: t.sidebar.homeFilterClaude, count: counts.claude, icon: <AgentMark kind="claude" id="filter-claude" size="md" /> },
     ...acpFilters.map((filter) => ({
       id: filter.id,
       label: `${t.sidebar.homeFilterAcp}: ${filter.runtime.name}`,
       count: filter.count,
-      icon: <AgentMark kind="acp" id={`filter-${filter.runtime.id}`} size="sm" runtime={filter.runtime} />,
+      icon: <AgentMark kind="acp" id={`filter-${filter.runtime.id}`} size="md" runtime={filter.runtime} />,
     })),
   ];
+  const filterIds = useMemo(() => filters.map((filter) => filter.id), [filters]);
+  const filterById = useMemo(() => new Map(filters.map((filter) => [filter.id, filter])), [filters]);
+  const filterLayout = useMemo(
+    () => computeHomeAgentFilterLayout(filterRailWidth, filterIds, value),
+    [filterIds, filterRailWidth, value],
+  );
+  const visibleFilters = filterLayout.visibleIds
+    .map((id) => filterById.get(id))
+    .filter((filter): filter is HomeAgentFilterItem => Boolean(filter));
+  const hiddenFilters = filterLayout.hiddenIds
+    .map((id) => filterById.get(id))
+    .filter((filter): filter is HomeAgentFilterItem => Boolean(filter));
+  const moreLabel = t.sidebar.homeFilterMore ?? 'More agents';
+
+  useEffect(() => {
+    const node = filterRailRef.current;
+    if (!node) return;
+    const updateWidth = (width: number) => {
+      const next = Math.floor(width);
+      if (next > 0) setFilterRailWidth((current) => (current === next ? current : next));
+    };
+    updateWidth(node.getBoundingClientRect().width);
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      updateWidth(entry?.contentRect.width ?? node.getBoundingClientRect().width);
+    });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (hiddenFilters.length === 0) setOverflowOpen(false);
+  }, [hiddenFilters.length]);
+
+  useEffect(() => {
+    if (!overflowOpen) return;
+    const handleMouseDown = (event: MouseEvent) => {
+      if (!filterRailRef.current?.contains(event.target as Node)) setOverflowOpen(false);
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setOverflowOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleMouseDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleMouseDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [overflowOpen]);
 
   return (
-    <div className="flex shrink-0 items-center gap-1 px-2 pb-1.5 pt-2" role="group" aria-label={t.sidebar.homeAgentFilter}>
-      {filters.map((filter) => {
+    <div ref={filterRailRef} className="relative flex min-w-0 shrink-0 items-center gap-1 px-2 pb-1.5 pt-2" role="group" aria-label={t.sidebar.homeAgentFilter} data-home-agent-filter-rail>
+      {visibleFilters.map((filter) => {
         const active = value === filter.id;
         return (
           <button
@@ -325,16 +434,72 @@ function HomeAgentFilter({
             aria-pressed={active}
             title={`${filter.label} (${filter.count})`}
             onClick={() => onChange(filter.id)}
-            className={`hit-target-box inline-flex h-6 min-w-6 items-center justify-center px-0.5 text-muted-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [--hit-target-radius:var(--radius-md)] [--hit-target-hover-bg:var(--muted)] ${
+            className={`hit-target-box inline-flex h-8 w-8 shrink-0 items-center justify-center text-muted-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [--hit-target-radius:var(--radius-md)] [--hit-target-hover-bg:var(--muted)] ${
               active
-                ? 'text-foreground [--hit-target-border-width:1px] [--hit-target-active-bg:var(--amber-subtle)] [--hit-target-active-border:color-mix(in_srgb,var(--amber)_24%,transparent)]'
-                : 'hover:text-foreground'
+                ? 'text-[var(--amber)] [--hit-target-border-width:1px] [--hit-target-active-bg:var(--amber-subtle)] [--hit-target-active-border:color-mix(in_srgb,var(--amber)_26%,transparent)]'
+                : 'text-muted-foreground/55 hover:text-foreground'
             }`}
           >
             {filter.icon}
           </button>
         );
       })}
+      {hiddenFilters.length > 0 ? (
+        <>
+          <button
+            type="button"
+            data-home-agent-filter-overflow-trigger
+            data-hit-active={overflowOpen ? 'true' : undefined}
+            aria-label={`${moreLabel} (${hiddenFilters.length})`}
+            aria-haspopup="menu"
+            aria-expanded={overflowOpen}
+            title={`${moreLabel} (${hiddenFilters.length})`}
+            onClick={() => setOverflowOpen((open) => !open)}
+            className={`hit-target-box inline-flex h-8 min-w-10 shrink-0 items-center justify-center px-2 text-[11px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [--hit-target-radius:var(--radius-md)] [--hit-target-hover-bg:var(--muted)] ${
+              overflowOpen
+                ? 'text-[var(--amber)] [--hit-target-active-bg:var(--amber-subtle)] [--hit-target-border-width:1px] [--hit-target-active-border:color-mix(in_srgb,var(--amber)_26%,transparent)]'
+                : 'text-muted-foreground/55 hover:text-foreground'
+            }`}
+          >
+            +{hiddenFilters.length}
+          </button>
+          {overflowOpen ? (
+            <div
+              role="menu"
+              data-home-agent-filter-overflow-menu
+              aria-label={moreLabel}
+              className="absolute right-2 top-full z-20 mt-1 w-48 overflow-hidden rounded-lg border border-border/70 bg-background p-1 shadow-lg shadow-foreground/10"
+            >
+              {hiddenFilters.map((filter) => {
+                const active = value === filter.id;
+                return (
+                  <button
+                    key={filter.id}
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={active}
+                    data-home-agent-filter-option={filter.id}
+                    data-hit-active={active ? 'true' : undefined}
+                    onClick={() => {
+                      onChange(filter.id);
+                      setOverflowOpen(false);
+                    }}
+                    className={`hit-target-box flex h-8 w-full min-w-0 items-center gap-2 px-2 text-left text-[11px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-md)] ${
+                      active
+                        ? 'text-[var(--amber)] [--hit-target-active-bg:var(--amber-subtle)]'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    <span className="shrink-0">{filter.icon}</span>
+                    <span className="min-w-0 flex-1 truncate">{filter.label}</span>
+                    <span className="shrink-0 text-2xs text-muted-foreground/45">{filter.count}</span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
+        </>
+      ) : null}
     </div>
   );
 }
@@ -357,78 +522,28 @@ function HomeSessionViewToolbar({
   searchActive: boolean;
 }) {
   const { t } = useLocale();
-  const [open, setOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
-  const options: Array<{ id: HomeSessionViewMode; label: string }> = [
-    { id: 'project', label: t.sidebar.homeSessionViewProject },
-    { id: 'recent', label: t.sidebar.homeSessionViewRecent },
-  ];
-  const activeLabel = options.find((option) => option.id === viewMode)?.label ?? options[0].label;
-
-  useEffect(() => {
-    if (!open) return;
-    const handlePointerDown = (event: MouseEvent) => {
-      if (!menuRef.current?.contains(event.target as Node)) setOpen(false);
-    };
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setOpen(false);
-    };
-    document.addEventListener('mousedown', handlePointerDown);
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('mousedown', handlePointerDown);
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [open]);
+  const groupByProject = viewMode === 'project';
+  const groupByProjectLabel = t.sidebar.homeGroupByProject ?? 'Group by project';
 
   return (
     <div className="flex shrink-0 items-center justify-between gap-2 px-2 pb-1.5" data-home-session-toolbar>
-      <div ref={menuRef} className="relative min-w-0">
+      <div className="flex min-w-0 items-center">
         <button
           type="button"
-          data-home-session-view-trigger
-          aria-label={t.sidebar.homeSessionViewMenu}
-          aria-haspopup="listbox"
-          aria-expanded={open}
-          onClick={() => setOpen((value) => !value)}
-          className="hit-target-box inline-flex h-7 min-w-0 max-w-[9rem] items-center gap-1.5 px-2 text-[11px] font-medium text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [--hit-target-border-width:1px] [--hit-target-border:color-mix(in_srgb,var(--border)_72%,transparent)] [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-md)]"
-          title={t.sidebar.homeSessionViewMenu}
+          data-home-session-project-toggle
+          data-hit-active={groupByProject ? 'true' : undefined}
+          aria-label={groupByProjectLabel}
+          aria-pressed={groupByProject}
+          onClick={() => onViewModeChange(groupByProject ? 'recent' : 'project')}
+          className={`hit-target-box inline-flex h-8 w-8 items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [--hit-target-radius:var(--radius-md)] ${
+            groupByProject
+              ? 'text-[var(--amber)] [--hit-target-active-bg:var(--amber-subtle)] [--hit-target-border-width:1px] [--hit-target-active-border:color-mix(in_srgb,var(--amber)_26%,transparent)]'
+              : 'text-muted-foreground/55 [--hit-target-hover-bg:var(--muted)] hover:text-foreground'
+          }`}
+          title={groupByProjectLabel}
         >
-          <span className="truncate">{activeLabel}</span>
-          <ChevronDown size={11} aria-hidden="true" className={`shrink-0 text-muted-foreground transition-transform duration-150 ${open ? 'rotate-180' : ''}`} />
+          <FolderTree size={14} aria-hidden="true" />
         </button>
-        {open ? (
-          <div
-            role="listbox"
-            aria-label={t.sidebar.homeSessionViewMenu}
-            className="absolute left-0 top-full z-20 mt-1 w-32 overflow-hidden rounded-lg border border-border/70 bg-background p-1 shadow-lg shadow-foreground/10"
-            data-home-session-view-menu
-          >
-            {options.map((option) => {
-              const selected = option.id === viewMode;
-              return (
-                <button
-                  key={option.id}
-                  type="button"
-                  role="option"
-                  aria-selected={selected}
-                  data-home-session-view-option={option.id}
-                  data-hit-active={selected ? 'true' : undefined}
-                  onClick={() => {
-                    onViewModeChange(option.id);
-                    setOpen(false);
-                  }}
-                  className={`hit-target-box flex min-h-7 w-full items-center justify-between gap-2 px-2 text-left text-[11px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-md)] ${
-                    selected ? 'text-foreground [--hit-target-active-bg:var(--amber-subtle)]' : 'text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  <span className="truncate">{option.label}</span>
-                  {selected ? <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--amber)]" aria-hidden="true" /> : null}
-                </button>
-              );
-            })}
-          </div>
-        ) : null}
       </div>
 
       <div className="flex shrink-0 items-center gap-0.5">
@@ -447,6 +562,40 @@ function HomeSessionViewToolbar({
         </HomeHeaderIconButton>
       </div>
     </div>
+  );
+}
+
+function HomeSessionSection({
+  id,
+  title,
+  collapsed,
+  onToggle,
+  children,
+}: {
+  id: HomeSessionSectionId;
+  title: string;
+  collapsed: boolean;
+  onToggle: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <section className="min-w-0" data-home-session-section={id}>
+      <button
+        type="button"
+        data-home-session-section-header={id}
+        aria-expanded={!collapsed}
+        onClick={onToggle}
+        className="hit-target-box flex h-7 w-full min-w-0 items-center gap-1.5 px-1.5 text-left text-[11px] font-medium text-muted-foreground/60 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-md)]"
+      >
+        <span className="min-w-0 truncate">{title}</span>
+        {collapsed ? <ChevronRight size={12} aria-hidden="true" className="shrink-0" /> : <ChevronDown size={12} aria-hidden="true" className="shrink-0" />}
+      </button>
+      {!collapsed ? (
+        <div className="mt-1 space-y-1" data-home-session-section-entries={id}>
+          {children}
+        </div>
+      ) : null}
+    </section>
   );
 }
 
@@ -636,7 +785,7 @@ function HomeSessionRow({
         </div>
         <div
           data-home-session-meta
-          className="mt-0.5 flex min-w-0 items-center gap-1.5 pl-7 text-[10px] text-muted-foreground/45"
+          className="mt-0.5 flex min-w-0 items-center gap-1.5 pl-7 text-[10px] text-muted-foreground/45 opacity-0 transition-opacity duration-100 group-hover:opacity-100 group-focus-within:opacity-100"
           title={listEntry.metadataTitle}
         >
           {listEntry.status && listEntry.status !== 'active' && (
@@ -687,6 +836,7 @@ export default function HomePanel({
   const [sessionSearchOpen, setSessionSearchOpen] = useState(false);
   const [sessionSearchQuery, setSessionSearchQuery] = useState('');
   const [sessionViewMode, setSessionViewModeState] = useState<HomeSessionViewMode>(loadHomeSessionViewMode);
+  const [collapsedSessionSectionIds, setCollapsedSessionSectionIds] = useState<Set<HomeSessionSectionId>>(loadCollapsedHomeSessionSections);
   const [collapsedProjectGroupIds, setCollapsedProjectGroupIds] = useState<Set<string>>(loadCollapsedSessionProjectGroups);
   const renameInputRef = useRef<HTMLInputElement>(null);
   const sessionSearchInputRef = useRef<HTMLInputElement>(null);
@@ -757,8 +907,17 @@ export default function HomePanel({
     if (!query) return agentFilteredEntries;
     return agentFilteredEntries.filter((entry) => sessionListEntryMatchesSearch(entry, query));
   }, [agentFilteredEntries, sessionSearchQuery]);
-  const groupedEntries = useMemo(() => groupChatSessionEntriesByProject(filteredEntries), [filteredEntries]);
-  const sessionSearchActive = sessionSearchOpen || Boolean(sessionSearchQuery.trim());
+  const pinnedEntries = useMemo(() => filteredEntries.filter((entry) => entry.pinned), [filteredEntries]);
+  const unpinnedEntries = useMemo(() => filteredEntries.filter((entry) => !entry.pinned), [filteredEntries]);
+  const projectGroups = useMemo(() => (
+    groupChatSessionEntriesByProject(unpinnedEntries).filter((group) => group.kind !== 'no-project')
+  ), [unpinnedEntries]);
+  const projectEntryIds = useMemo(() => new Set(projectGroups.flatMap((group) => group.entries.map((entry) => entry.id))), [projectGroups]);
+  const chatEntries = useMemo(() => (
+    unpinnedEntries.filter((entry) => !projectEntryIds.has(entry.id))
+  ), [projectEntryIds, unpinnedEntries]);
+  const normalizedSessionSearchQuery = sessionSearchQuery.trim();
+  const sessionSearchActive = sessionSearchOpen || Boolean(normalizedSessionSearchQuery);
 
   const setSessionViewMode = useCallback((value: HomeSessionViewMode) => {
     setSessionViewModeState(value);
@@ -778,10 +937,28 @@ export default function HomePanel({
     });
   }, []);
 
+  const toggleSessionSection = useCallback((sectionId: HomeSessionSectionId) => {
+    setCollapsedSessionSectionIds((current) => {
+      const next = new Set(current);
+      if (next.has(sectionId)) {
+        next.delete(sectionId);
+      } else {
+        next.add(sectionId);
+      }
+      persistCollapsedHomeSessionSections(next);
+      return next;
+    });
+  }, []);
+
   const handleSearchSessions = useCallback(() => {
+    if (sessionSearchActive) {
+      setSessionSearchQuery('');
+      setSessionSearchOpen(false);
+      return;
+    }
     setSessionSearchOpen(true);
     setTimeout(() => sessionSearchInputRef.current?.focus(), 0);
-  }, []);
+  }, [sessionSearchActive]);
 
   const clearSessionSearch = useCallback(() => {
     setSessionSearchQuery('');
@@ -922,27 +1099,75 @@ export default function HomePanel({
             </div>
           ) : sessionViewMode === 'project' ? (
             <div className="space-y-2" data-home-session-project-view>
-              {groupedEntries.map((group) => {
-                const collapsed = collapsedProjectGroupIds.has(group.id) && !sessionSearchQuery.trim();
-                return (
-                  <section key={group.id} className="min-w-0" data-home-session-project-group={group.id}>
-                    <HomeSessionProjectGroupHeader
-                      group={group}
-                      collapsed={collapsed}
-                      onToggle={() => toggleProjectGroup(group.id)}
-                    />
-                    {!collapsed ? (
-                      <div className="mt-1 space-y-1" data-home-session-project-group-entries={group.id}>
-                        {group.entries.map((entry) => renderSessionRow(entry, false))}
-                      </div>
-                    ) : null}
-                  </section>
-                );
-              })}
+              {pinnedEntries.length > 0 ? (
+                <HomeSessionSection
+                  id="pinned"
+                  title={t.sidebar.homeSessionSectionPinned ?? 'Pinned'}
+                  collapsed={collapsedSessionSectionIds.has('pinned') && !normalizedSessionSearchQuery}
+                  onToggle={() => toggleSessionSection('pinned')}
+                >
+                  {pinnedEntries.map((entry) => renderSessionRow(entry))}
+                </HomeSessionSection>
+              ) : null}
+              {projectGroups.length > 0 ? (
+                <HomeSessionSection
+                  id="projects"
+                  title={t.sidebar.homeSessionSectionProjects ?? 'Projects'}
+                  collapsed={collapsedSessionSectionIds.has('projects') && !normalizedSessionSearchQuery}
+                  onToggle={() => toggleSessionSection('projects')}
+                >
+                  {projectGroups.map((group) => {
+                    const collapsed = collapsedProjectGroupIds.has(group.id) && !normalizedSessionSearchQuery;
+                    return (
+                      <section key={group.id} className="min-w-0" data-home-session-project-group={group.id}>
+                        <HomeSessionProjectGroupHeader
+                          group={group}
+                          collapsed={collapsed}
+                          onToggle={() => toggleProjectGroup(group.id)}
+                        />
+                        {!collapsed ? (
+                          <div className="mt-1 space-y-1" data-home-session-project-group-entries={group.id}>
+                            {group.entries.map((entry) => renderSessionRow(entry, false))}
+                          </div>
+                        ) : null}
+                      </section>
+                    );
+                  })}
+                </HomeSessionSection>
+              ) : null}
+              {chatEntries.length > 0 ? (
+                <HomeSessionSection
+                  id="chats"
+                  title={t.sidebar.homeSessionSectionChats ?? 'Chats'}
+                  collapsed={collapsedSessionSectionIds.has('chats') && !normalizedSessionSearchQuery}
+                  onToggle={() => toggleSessionSection('chats')}
+                >
+                  {chatEntries.map((entry) => renderSessionRow(entry))}
+                </HomeSessionSection>
+              ) : null}
             </div>
           ) : (
             <div className="space-y-1" data-home-session-recent-view>
-              {filteredEntries.map((entry) => renderSessionRow(entry))}
+              {pinnedEntries.length > 0 ? (
+                <HomeSessionSection
+                  id="pinned"
+                  title={t.sidebar.homeSessionSectionPinned ?? 'Pinned'}
+                  collapsed={collapsedSessionSectionIds.has('pinned') && !normalizedSessionSearchQuery}
+                  onToggle={() => toggleSessionSection('pinned')}
+                >
+                  {pinnedEntries.map((entry) => renderSessionRow(entry))}
+                </HomeSessionSection>
+              ) : null}
+              {unpinnedEntries.length > 0 ? (
+                <HomeSessionSection
+                  id="chats"
+                  title={t.sidebar.homeSessionSectionChats ?? 'Chats'}
+                  collapsed={collapsedSessionSectionIds.has('chats') && !normalizedSessionSearchQuery}
+                  onToggle={() => toggleSessionSection('chats')}
+                >
+                  {unpinnedEntries.map((entry) => renderSessionRow(entry))}
+                </HomeSessionSection>
+              ) : null}
             </div>
           )}
           </div>

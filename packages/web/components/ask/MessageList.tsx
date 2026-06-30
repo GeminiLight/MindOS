@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useEffect, memo, useState, useCallback, useMemo, useDeferredValue, type CSSProperties, type ReactNode } from 'react';
-import { Loader2, AlertCircle, Wrench, WifiOff, Zap, Copy, Check, ArrowDown, FolderInput, Search, PenLine, Lightbulb, FileText, Paperclip, Bot, Sparkles } from 'lucide-react';
+import { Loader2, AlertCircle, Wrench, Zap, Copy, Check, ArrowDown, FolderInput, Search, PenLine, Lightbulb, FileText, Paperclip, Bot, Sparkles } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { Message, ImagePart, RuntimeStatusPart } from '@/lib/types';
@@ -47,10 +47,53 @@ function CopyMessageButton({ text, label, variant = 'default' }: { text: string;
   );
 }
 
-function MessageActionDock({ children }: { children: ReactNode }) {
+function formatMessageTimestamp(timestamp: number | undefined): { label: string; title: string; dateTime: string } | null {
+  if (typeof timestamp !== 'number' || !Number.isFinite(timestamp)) return null;
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) return null;
+  return {
+    label: date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
+    title: date.toLocaleString([], {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    }),
+    dateTime: date.toISOString(),
+  };
+}
+
+function MessageMetaRow({ timestamp, align, children }: { timestamp?: number; align: 'start' | 'end'; children?: ReactNode }) {
+  const time = formatMessageTimestamp(timestamp);
+  if (!time && !children) return null;
+  const alignClass = align === 'end' ? 'right-1 justify-end' : 'left-1 justify-start';
   return (
-    <div data-message-action-dock className="absolute right-3 top-full z-20 -mt-2 flex items-center gap-0.5 rounded-lg border border-border/50 bg-background/95 p-0.5 shadow-sm backdrop-blur-sm opacity-100 transition-[opacity,transform] duration-100 pointer-events-auto md:pointer-events-none md:opacity-0 md:translate-y-0.5 md:group-hover/message:pointer-events-auto md:group-hover/message:opacity-100 md:group-hover/message:translate-y-0 md:focus-within:pointer-events-auto md:focus-within:opacity-100 md:focus-within:translate-y-0">
-      {children}
+    <div
+      data-message-meta
+      className={`pointer-events-none absolute top-full z-20 flex pt-1 opacity-0 transition-[opacity,transform] duration-100 focus-within:pointer-events-auto focus-within:translate-y-0 focus-within:opacity-100 md:translate-y-0.5 md:group-hover/message:pointer-events-auto md:group-hover/message:translate-y-0 md:group-hover/message:opacity-100 ${alignClass}`}
+    >
+      <div
+        data-message-meta-card
+        className="inline-flex min-h-7 items-center gap-1.5 rounded-md border border-border/40 bg-background/95 px-1.5 py-0.5 shadow-sm backdrop-blur-sm"
+      >
+        {time && (
+          <time
+            suppressHydrationWarning
+            data-message-timestamp={time.dateTime}
+            dateTime={time.dateTime}
+            title={time.title}
+            className="shrink-0 text-[11px] font-medium leading-none text-muted-foreground/70 tabular-nums"
+          >
+            {time.label}
+          </time>
+        )}
+        {children && (
+          <div data-message-actions className="flex items-center gap-0.5 text-muted-foreground">
+            {children}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -158,16 +201,17 @@ const AssistantMessage = memo(function AssistantMessage({ content, isStreaming }
   const renderedContent = isStreaming ? deferredCleaned : cleaned;
   if (!renderedContent && !isStreaming) return null;
   return (
-    <div className="prose prose-sm prose-panel dark:prose-invert max-w-none text-foreground
+    <div className="prose prose-sm prose-panel dark:prose-invert max-w-full min-w-0 text-foreground [overflow-wrap:anywhere]
       prose-p:my-2 prose-p:leading-relaxed
       prose-headings:font-semibold prose-headings:my-3
       prose-h1:text-base prose-h2:text-[15px] prose-h3:text-sm
       prose-ul:my-1.5 prose-li:my-0.5
       prose-ol:my-1.5
-      prose-code:text-[0.8em] prose-code:bg-muted/80 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded-md prose-code:before:content-none prose-code:after:content-none prose-code:font-mono
-      prose-pre:bg-muted/60 prose-pre:text-foreground prose-pre:text-xs prose-pre:rounded-lg
+      prose-li:[overflow-wrap:anywhere]
+      prose-code:text-[0.8em] prose-code:bg-muted/80 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded-md prose-code:before:content-none prose-code:after:content-none prose-code:font-mono prose-code:break-words prose-code:[overflow-wrap:anywhere]
+      prose-pre:bg-muted/60 prose-pre:text-foreground prose-pre:text-xs prose-pre:rounded-lg prose-pre:max-w-full prose-pre:overflow-x-auto
       prose-blockquote:border-l-[var(--amber)] prose-blockquote:text-muted-foreground prose-blockquote:not-italic
-      prose-a:text-[var(--amber)] prose-a:no-underline hover:prose-a:underline
+      prose-a:text-[var(--amber)] prose-a:no-underline prose-a:break-words hover:prose-a:underline
       prose-strong:text-foreground prose-strong:font-semibold
       prose-table:text-xs prose-th:py-1.5 prose-td:py-1
     ">
@@ -193,8 +237,11 @@ function isRoutineRuntimeStatusPart(part: RuntimeStatusPart): boolean {
   return /^Starting (Claude Code|Codex) locally\.$/.test(normalized)
     || /^Resuming (Claude Code|Codex) locally\.$/.test(normalized)
     || /^(Claude Code|Codex) is connected and working in this chat\.$/.test(normalized)
-    || normalized === 'Claude Code is compacting context.'
     || normalized === 'Claude Code is contacting Claude.';
+}
+
+function isCompactingRuntimeStatusPart(part: RuntimeStatusPart): boolean {
+  return part.runtime === 'claude' && part.message.trim() === 'Claude Code is compacting context.';
 }
 
 function RuntimeMark({
@@ -238,7 +285,10 @@ function RuntimeMark({
   );
 }
 
-const RuntimeStatusBlock = memo(function RuntimeStatusBlock({ part, active }: { part: RuntimeStatusPart; active: boolean }) {
+const RuntimeStatusBlock = memo(function RuntimeStatusBlock({ part, active, labels }: { part: RuntimeStatusPart; active: boolean; labels: MessageListProps['labels'] }) {
+  const message = isCompactingRuntimeStatusPart(part)
+    ? (labels.contextCompacting ?? part.message)
+    : part.message;
   return (
     <div
       role="status"
@@ -249,13 +299,13 @@ const RuntimeStatusBlock = memo(function RuntimeStatusBlock({ part, active }: { 
         <div className="text-2xs font-medium uppercase tracking-wide text-muted-foreground/60">
           {runtimeLabel(part.runtime)}
         </div>
-        <div className="[overflow-wrap:anywhere]">{part.message}</div>
+        <div className="[overflow-wrap:anywhere]">{message}</div>
       </div>
     </div>
   );
 });
 
-const AssistantMessageWithParts = memo(function AssistantMessageWithParts({ message, isStreaming }: { message: Message; isStreaming: boolean }) {
+const AssistantMessageWithParts = memo(function AssistantMessageWithParts({ message, isStreaming, labels }: { message: Message; isStreaming: boolean; labels: MessageListProps['labels'] }) {
   const parts = message.parts;
   if (!parts || parts.length === 0) {
     // Fallback to plain text rendering
@@ -291,6 +341,7 @@ const AssistantMessageWithParts = memo(function AssistantMessageWithParts({ mess
               key={`runtime-status-${idx}`}
               part={part}
               active={isStreaming && idx === parts.length - 1}
+              labels={labels}
             />
           );
         }
@@ -323,9 +374,91 @@ const StepCounter = memo(function StepCounter({ parts }: { parts: Message['parts
   );
 });
 
-function isNativeRuntimeMessage(message: Message): boolean {
-  return message.agentKind === 'codex' || message.agentKind === 'claude';
+function runtimeDisplayName(message: Message): string {
+  if (message.agentName?.trim()) return message.agentName.trim();
+  const kind = message.agentKind;
+  if (kind === 'codex') return 'Codex';
+  if (kind === 'claude') return 'Claude Code';
+  if (kind === 'acp') return 'ACP';
+  return 'MindOS';
 }
+
+function latestRunAnchor(messages: Message[]): Message | undefined {
+  return messages[messages.length - 1];
+}
+
+function useElapsedSeconds(startedAt: number | undefined, active: boolean): number | null {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!active || typeof startedAt !== 'number' || !Number.isFinite(startedAt)) return undefined;
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [active, startedAt]);
+  if (!active || typeof startedAt !== 'number' || !Number.isFinite(startedAt)) return null;
+  return Math.max(0, Math.floor((now - startedAt) / 1000));
+}
+
+const AssistantRunProgress = memo(function AssistantRunProgress({
+  message,
+  labels,
+  active,
+}: {
+  message?: Message;
+  labels: MessageListProps['labels'];
+  active: boolean;
+}) {
+  const runtimeName = message?.role === 'assistant' ? runtimeDisplayName(message) : 'MindOS';
+  const title = labels.runThinking?.(runtimeName) ?? 'Thinking with you';
+  const elapsed = useElapsedSeconds(message?.timestamp, active);
+  const showElapsed = elapsed !== null && elapsed >= 1;
+  return (
+    <div data-run-progress role="status" className="flex min-w-0 items-center gap-2 py-1 text-sm text-muted-foreground">
+      <span className="min-w-0 truncate">{title}</span>
+      {showElapsed && (
+        <span suppressHydrationWarning className="shrink-0 text-[11px] font-normal text-muted-foreground/70">
+          {labels.elapsedSeconds?.(elapsed) ?? `${elapsed}s`}
+        </span>
+      )}
+      <Loader2 size={14} className="shrink-0 animate-spin text-[var(--amber)]" />
+    </div>
+  );
+});
+
+function RunProgressAgentMark({ message }: { message?: Message }) {
+  const runtime = message?.role === 'assistant'
+    ? message.agentKind ?? 'mindos'
+    : 'mindos';
+  const label = message?.role === 'assistant' ? runtimeDisplayName(message) : 'MindOS';
+  return (
+    <span data-run-progress-agent-logo={runtime} className="inline-flex shrink-0">
+      <RuntimeMark runtime={runtime} label={label} />
+    </span>
+  );
+}
+
+const RunProgressFooter = memo(function RunProgressFooter({
+  message,
+  labels,
+}: {
+  message?: Message;
+  labels: MessageListProps['labels'];
+}) {
+  const showAgentMark = !hasAssistantRenderableBody(message)
+    && (message?.role !== 'assistant' || shouldShowAssistantSideMark(message.agentKind));
+  const alignWithAssistantBubble = !showAgentMark
+    && message?.role === 'assistant'
+    && shouldShowAssistantSideMark(message.agentKind);
+  return (
+    <div data-run-progress-footer className={`group/message relative !mt-2 flex items-center justify-start animate-[fadeSlideUp_0.22s_ease_both] ${showAgentMark ? 'gap-3' : alignWithAssistantBubble ? 'ml-10' : ''}`}>
+      {showAgentMark && (
+        <div className="shrink-0">
+          <RunProgressAgentMark message={message} />
+        </div>
+      )}
+      <AssistantRunProgress message={message} labels={labels} active />
+    </div>
+  );
+});
 
 function hasVisiblePart(part: NonNullable<Message['parts']>[number]): boolean {
   if (part.type === 'text') return part.text.trim().length > 0;
@@ -334,10 +467,18 @@ function hasVisiblePart(part: NonNullable<Message['parts']>[number]): boolean {
   return true;
 }
 
+function hasAssistantRenderableBody(message: Message | undefined): boolean {
+  if (!message || message.role !== 'assistant') return false;
+  return stripThinkingTags(message.content).trim().length > 0
+    || Boolean(message.parts?.some(hasVisiblePart));
+}
+
 interface MessageListProps {
   messages: Message[];
   isLoading: boolean;
   loadingPhase: 'connecting' | 'thinking' | 'streaming' | 'reconnecting';
+  reconnectAttempt?: number;
+  reconnectMax?: number;
   emptyPrompt: string;
   emptyHint?: string;
   suggestions: readonly { label: string; prompt: string }[];
@@ -349,6 +490,14 @@ interface MessageListProps {
     thinking: string;
     generating: string;
     reconnecting?: string;
+    runThinking?: (runtime: string) => string;
+    awaitingFirstOutput?: string;
+    toolRunningProgress?: (toolName: string) => string;
+    permissionWaiting?: string;
+    questionWaiting?: string;
+    contextCompacting?: string;
+    elapsedSeconds?: (seconds: number) => string;
+    reconnectingDetail?: (attempt: number, max: number) => string;
     copyMessage?: string;
     editMessage?: string;
     regenerateMessage?: string;
@@ -360,7 +509,6 @@ const MessageRow = memo(function MessageRow({
   index,
   messageCount,
   isLoading,
-  loadingPhase,
   lastUserMessageIndex,
   onEditMessage,
   onResendMessage,
@@ -370,7 +518,6 @@ const MessageRow = memo(function MessageRow({
   index: number;
   messageCount: number;
   isLoading: boolean;
-  loadingPhase: MessageListProps['loadingPhase'];
   lastUserMessageIndex: number;
   onEditMessage?: (index: number) => void;
   onResendMessage?: (index: number) => void;
@@ -391,87 +538,80 @@ const MessageRow = memo(function MessageRow({
     && !isErrorMessage
     && !assistantHasRenderableBody
     && !isStreamingLast;
+  const suppressStreamingPlaceholder = message.role === 'assistant'
+    && !isErrorMessage
+    && !assistantHasRenderableBody
+    && isStreamingLast;
   const hasFloatingDock = message.role === 'user'
     || (message.role === 'assistant' && !isStreamingLast && !isErrorMessage && cleanedAssistantContent.trim().length > 0);
+  const userActions = (
+    <UserMessageActions
+      content={message.content}
+      isLastUserMessage={index === lastUserMessageIndex}
+      isLoading={isLoading}
+      onEdit={onEditMessage ? () => onEditMessage(index) : undefined}
+      onResend={onResendMessage ? () => onResendMessage(index) : undefined}
+      labels={{
+        copy: labels.copyMessage ?? 'Copy',
+        edit: labels.editMessage ?? 'Edit',
+        regenerate: labels.regenerateMessage ?? 'Regenerate',
+      }}
+    />
+  );
+  const assistantActions = !isStreamingLast && cleanedAssistantContent ? (
+    <>
+      <SaveMessageButton text={message.content} variant="dock" />
+      <CopyMessageButton text={cleanedAssistantContent} label={labels.copyMessage} variant="dock" />
+    </>
+  ) : null;
 
-  if (suppressEmptyCompletedPlaceholder) return null;
+  if (suppressEmptyCompletedPlaceholder || suppressStreamingPlaceholder) return null;
 
   return (
-    <div style={hasFloatingDock ? undefined : MESSAGE_ROW_STYLE} className={`group/message flex gap-3 animate-[fadeSlideUp_0.22s_ease_both] ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+    <div style={hasFloatingDock ? undefined : MESSAGE_ROW_STYLE} className={`group/message relative flex w-full min-w-0 gap-3 animate-[fadeSlideUp_0.22s_ease_both] hover:z-30 focus-within:z-30 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
       {message.role === 'assistant' && shouldShowAssistantSideMark(message.agentKind) && (
         <div className="mt-0.5 shrink-0">
           <RuntimeMark runtime={message.agentKind ?? 'mindos'} label={message.agentName} />
         </div>
       )}
       {message.role === 'user' ? (
-        <div
-          className="group relative max-w-[85%] px-3.5 py-2.5 rounded-2xl rounded-br-lg text-sm leading-relaxed whitespace-pre-wrap bg-[var(--amber)] text-[var(--amber-foreground)] shadow-sm shadow-[var(--amber)]/10"
-        >
-          <UserMessageContent content={message.content} skillName={message.skillName} images={message.images} attachedFiles={message.attachedFiles} uploadedFileNames={message.uploadedFileNames} />
-          <MessageActionDock>
-            <UserMessageActions
-              content={message.content}
-              isLastUserMessage={index === lastUserMessageIndex}
-              isLoading={isLoading}
-              onEdit={onEditMessage ? () => onEditMessage(index) : undefined}
-              onResend={onResendMessage ? () => onResendMessage(index) : undefined}
-              labels={{
-                copy: labels.copyMessage ?? 'Copy',
-                edit: labels.editMessage ?? 'Edit',
-                regenerate: labels.regenerateMessage ?? 'Regenerate',
-              }}
-            />
-          </MessageActionDock>
+        <div className="relative flex max-w-[85%] min-w-0 flex-col items-end">
+          <div
+            className="relative px-3.5 py-2.5 rounded-2xl rounded-br-lg text-sm leading-relaxed whitespace-pre-wrap bg-[var(--amber)] text-[var(--amber-foreground)] shadow-sm shadow-[var(--amber)]/10"
+          >
+            <UserMessageContent content={message.content} skillName={message.skillName} images={message.images} attachedFiles={message.attachedFiles} uploadedFileNames={message.uploadedFileNames} />
+          </div>
+          <MessageMetaRow timestamp={message.timestamp} align="end">
+            {userActions}
+          </MessageMetaRow>
         </div>
       ) : isErrorMessage ? (
-        <div className="max-w-[85%] px-3.5 py-3 rounded-2xl rounded-bl-md border border-error/30 bg-error/10 text-sm shadow-sm">
-          <AssistantAgentBadge agentName={message.agentName} agentKind={message.agentKind} />
-          <div className="flex items-start gap-2.5 text-error">
-            <AlertCircle size={15} className="shrink-0 mt-0.5" />
-            <span className="leading-relaxed font-medium">{message.content.slice(9)}</span>
+        <div className="relative flex max-w-[calc(100%_-_2.5rem)] min-w-0 flex-col items-start">
+          <div className="max-w-full min-w-0 px-3.5 py-3 rounded-2xl rounded-bl-md border border-error/30 bg-error/10 text-sm shadow-sm [overflow-wrap:anywhere]">
+            <AssistantAgentBadge agentName={message.agentName} agentKind={message.agentKind} />
+            <div className="flex items-start gap-2.5 text-error">
+              <AlertCircle size={15} className="shrink-0 mt-0.5" />
+              <span className="leading-relaxed font-medium">{message.content.slice(9)}</span>
+            </div>
           </div>
+          <MessageMetaRow timestamp={message.timestamp} align="start" />
         </div>
       ) : (
-        <div className="group relative max-w-[85%] px-3.5 py-2.5 rounded-2xl rounded-bl-lg bg-card border border-border/30 shadow-sm text-foreground text-sm">
-          <AssistantAgentBadge agentName={message.agentName} agentKind={message.agentKind} />
-          {assistantHasRenderableBody ? (
-            <>
-              <AssistantMessageWithParts message={message} isStreaming={isStreamingLast} />
-              {isStreamingLast && (
-                <StepCounter parts={message.parts} />
-              )}
-              {!isStreamingLast && cleanedAssistantContent && (
-                <MessageActionDock>
-                  <SaveMessageButton text={message.content} variant="dock" />
-                  <CopyMessageButton text={cleanedAssistantContent} label={labels.copyMessage} variant="dock" />
-                </MessageActionDock>
-              )}
-            </>
-          ) : isStreamingLast ? (
-            <div className="flex items-center gap-2.5 py-1">
-              {loadingPhase === 'reconnecting' ? (
-                <WifiOff size={14} className="text-[var(--amber)] animate-pulse" />
-              ) : (
-                <Loader2 size={14} className="animate-spin text-[var(--amber)]" />
-              )}
-              <span className="text-xs text-muted-foreground">
-                <span className="inline-flex items-center gap-1">
-                {loadingPhase === 'reconnecting'
-                  ? (labels.reconnecting ?? 'Reconnecting...')
-                  : loadingPhase === 'connecting'
-                    ? labels.connecting
-                    : loadingPhase === 'thinking'
-                      ? labels.thinking
-                      : labels.generating}
-                <span className="inline-flex gap-0.5">
-                  <span className="w-1 h-1 rounded-full bg-[var(--amber)] animate-bounce [animation-delay:0ms]"></span>
-                  <span className="w-1 h-1 rounded-full bg-[var(--amber)] animate-bounce [animation-delay:150ms]"></span>
-                  <span className="w-1 h-1 rounded-full bg-[var(--amber)] animate-bounce [animation-delay:300ms]"></span>
-                </span>
-                </span>
-              </span>
-            </div>
-          ) : null}
+        <div className="relative flex max-w-[calc(100%_-_2.5rem)] min-w-0 flex-col items-start">
+          <div className="relative max-w-full min-w-0 px-3.5 py-2.5 rounded-2xl rounded-bl-lg bg-card border border-border/30 shadow-sm text-foreground text-sm">
+            <AssistantAgentBadge agentName={message.agentName} agentKind={message.agentKind} />
+            {assistantHasRenderableBody ? (
+              <>
+                <AssistantMessageWithParts message={message} isStreaming={isStreamingLast} labels={labels} />
+                {isStreamingLast && (
+                  <StepCounter parts={message.parts} />
+                )}
+              </>
+            ) : null}
+          </div>
+          <MessageMetaRow timestamp={message.timestamp} align="start">
+            {assistantActions}
+          </MessageMetaRow>
         </div>
       )}
     </div>
@@ -481,7 +621,6 @@ const MessageRow = memo(function MessageRow({
 export default memo(function MessageList({
   messages,
   isLoading,
-  loadingPhase,
   emptyPrompt,
   emptyHint,
   suggestions,
@@ -508,6 +647,7 @@ export default memo(function MessageList({
     }
     return -1;
   }, [messages]);
+  const activeRunMessage = useMemo(() => latestRunAnchor(messages), [messages]);
 
   const performScrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
     const container = scrollContainerRef.current;
@@ -680,13 +820,15 @@ export default memo(function MessageList({
           index={i}
           messageCount={messages.length}
           isLoading={isLoading}
-          loadingPhase={loadingPhase}
           lastUserMessageIndex={lastUserMessageIndex}
           onEditMessage={onEditMessage}
           onResendMessage={onResendMessage}
           labels={labels}
         />
       ))}
+      {isLoading && (
+        <RunProgressFooter message={activeRunMessage} labels={labels} />
+      )}
       <div ref={endRef} />
 
       {/* Scroll-to-bottom FAB */}

@@ -1,6 +1,6 @@
-import { memo, useState, useRef, useEffect, useCallback, useTransition } from 'react';
+import { memo, useState, useRef, useEffect, useCallback, useMemo, useTransition } from 'react';
 import { createPortal } from 'react-dom';
-import { SquarePen, History, X, Maximize2, Minimize2, PanelRight, ChevronDown } from 'lucide-react';
+import { SquarePen, History, X, Maximize2, Minimize2, PanelRight, ChevronDown, Search, MessageSquare } from 'lucide-react';
 import { SaveSessionButton } from './SaveSessionInline';
 import RuntimeIconSwitcher from './RuntimeIconSwitcher';
 import { SessionHistoryRow } from './SessionHistoryRow';
@@ -14,6 +14,14 @@ import type {
 } from '@/lib/types';
 import { sessionTitle } from '@/hooks/useAskSession';
 import type { NotInstalledAgent } from '@/hooks/useAcpDetection';
+import { agentIconFile } from '@/lib/agent-icons';
+import {
+  buildChatSessionListEntry,
+  sessionListAgentFilterId,
+  sessionListEntryMatchesSearch,
+  type ChatSessionListEntry,
+  type SessionListAgentFilter,
+} from '@/lib/session-list-entry';
 
 interface AskHeaderProps {
   isPanel: boolean;
@@ -61,6 +69,42 @@ function nativeSavedSessionLabel(runtime: AgentRuntimeIdentity | null | undefine
   return 'Saved chats';
 }
 
+function filterIdForRuntime(runtime: AgentRuntimeIdentity | null | undefined): SessionListAgentFilter {
+  if (!runtime || runtime.kind === 'mindos') return 'mindos';
+  if (runtime.kind === 'codex' || runtime.kind === 'claude') return runtime.kind;
+  return `acp:${runtime.id}`;
+}
+
+function acpAgentIconSrc(runtime: AgentRuntimeIdentity | null | undefined): string | null {
+  if (!runtime || runtime.kind !== 'acp') return null;
+  const iconFile = agentIconFile(runtime.id) ?? agentIconFile(runtime.name) ?? agentIconFile(`${runtime.id} ${runtime.name}`);
+  return iconFile ? `/agent-icons/${iconFile}` : null;
+}
+
+function SessionSwitcherAgentMark({
+  filterId,
+  runtime,
+}: {
+  filterId: SessionListAgentFilter;
+  runtime?: AgentRuntimeIdentity | null;
+}) {
+  if (filterId === 'all') return <MessageSquare size={13} aria-hidden="true" />;
+  if (filterId === 'mindos') {
+    return <img src="/logo-square.svg" alt="" aria-hidden="true" className="h-3.5 w-3.5 object-contain" />;
+  }
+  if (filterId === 'codex') {
+    return <img src="/agent-icons/openai.svg" alt="" aria-hidden="true" className="h-3.5 w-3.5 object-contain" />;
+  }
+  if (filterId === 'claude') {
+    return <img src="/agent-icons/claude.svg" alt="" aria-hidden="true" className="h-3.5 w-3.5 object-contain" />;
+  }
+  const iconSrc = acpAgentIconSrc(runtime);
+  if (iconSrc) {
+    return <img src={iconSrc} alt="" aria-hidden="true" className="h-3.5 w-3.5 object-contain" />;
+  }
+  return <span className="text-[10px] font-semibold leading-none">{runtime?.name?.slice(0, 1) ?? 'A'}</span>;
+}
+
 export default memo(function AskHeader({
   isPanel, showHistory, onToggleHistory, onReset, isLoading,
   maximized, onMaximize, onClose, onDockToPanel, hideTitle,
@@ -81,8 +125,11 @@ export default memo(function AskHeader({
 
   // Session switcher dropdown state
   const [switcherOpen, setSwitcherOpen] = useState(false);
+  const [switcherQuery, setSwitcherQuery] = useState('');
+  const [switcherAgentFilter, setSwitcherAgentFilter] = useState<SessionListAgentFilter>(() => filterIdForRuntime(selectedAgentRuntime));
   const switcherRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const switcherSearchRef = useRef<HTMLInputElement>(null);
 
   // Inline rename state
   const [renamingId, setRenamingId] = useState<string | null>(null);
@@ -122,6 +169,56 @@ export default memo(function AskHeader({
     if (renamingId) setTimeout(() => renameInputRef.current?.focus(), 0);
   }, [renamingId]);
 
+  useEffect(() => {
+    if (switcherOpen) setTimeout(() => switcherSearchRef.current?.focus(), 0);
+  }, [switcherOpen]);
+
+  const sessionEntries = useMemo<ChatSessionListEntry[]>(() => (
+    (sessions ?? []).map((session) => buildChatSessionListEntry(session, { emptyTitleFallback: t.hints?.newChat ?? t.ask?.historyEmptyHint }))
+  ), [sessions, t.ask?.historyEmptyHint, t.hints?.newChat]);
+
+  const agentFilterItems = useMemo(() => {
+    const acpByFilter = new Map<SessionListAgentFilter, AgentRuntimeIdentity>();
+    for (const entry of sessionEntries) {
+      const filterId = sessionListAgentFilterId(entry);
+      if (filterId.startsWith('acp:') && entry.runtime) acpByFilter.set(filterId, entry.runtime);
+    }
+    if (selectedAgentRuntime?.kind === 'acp') {
+      acpByFilter.set(`acp:${selectedAgentRuntime.id}`, selectedAgentRuntime);
+    }
+    return [
+      { id: 'all' as const, label: t.sidebar?.homeFilterAll ?? 'All agents', runtime: null },
+      { id: 'mindos' as const, label: t.sidebar?.homeFilterMindOS ?? 'MindOS', runtime: null },
+      { id: 'codex' as const, label: t.sidebar?.homeFilterCodex ?? 'Codex', runtime: null },
+      { id: 'claude' as const, label: t.sidebar?.homeFilterClaude ?? 'Claude Code', runtime: null },
+      ...Array.from(acpByFilter.entries()).map(([id, runtime]) => ({
+        id,
+        label: runtime.name,
+        runtime,
+      })),
+    ];
+  }, [sessionEntries, selectedAgentRuntime, t.sidebar?.homeFilterAll, t.sidebar?.homeFilterClaude, t.sidebar?.homeFilterCodex, t.sidebar?.homeFilterMindOS]);
+
+  const availableAgentFilterIds = useMemo(
+    () => new Set<SessionListAgentFilter>(agentFilterItems.map((item) => item.id)),
+    [agentFilterItems],
+  );
+
+  useEffect(() => {
+    if (!availableAgentFilterIds.has(switcherAgentFilter)) {
+      setSwitcherAgentFilter(filterIdForRuntime(selectedAgentRuntime));
+    }
+  }, [availableAgentFilterIds, selectedAgentRuntime, switcherAgentFilter]);
+
+  const switcherFilteredEntries = useMemo(() => {
+    const agentFilteredEntries = switcherAgentFilter === 'all'
+      ? sessionEntries
+      : sessionEntries.filter((entry) => sessionListAgentFilterId(entry) === switcherAgentFilter);
+    const query = switcherQuery.trim();
+    if (!query) return agentFilteredEntries;
+    return agentFilteredEntries.filter((entry) => sessionListEntryMatchesSearch(entry, query));
+  }, [sessionEntries, switcherAgentFilter, switcherQuery]);
+
   const handleSelectSession = useCallback((id: string) => {
     startTransition(() => {
       onLoadSession?.(id);
@@ -148,18 +245,18 @@ export default memo(function AskHeader({
   useEffect(() => {
     if (!switcherOpen || !switcherRef.current) return;
     const rect = switcherRef.current.getBoundingClientRect();
-    setDropPos({ top: rect.bottom + 4, left: rect.left, width: Math.max(rect.width, 280) });
+    setDropPos({ top: rect.bottom + 4, left: rect.left, width: Math.max(rect.width, 340) });
   }, [switcherOpen]);
 
   const switcherDropdown = switcherOpen && dropPos && sessions ? createPortal(
     <div
       ref={dropdownRef}
-      className="fixed z-[60] pointer-events-auto max-h-[60vh] overflow-y-auto rounded-xl border border-border/50 bg-card py-1.5 shadow-lg animate-in fade-in-0 slide-in-from-top-1 duration-100"
-      style={{ top: dropPos.top, left: dropPos.left, minWidth: Math.max(dropPos.width, 280), maxWidth: 340 }}
+      className="fixed z-[60] flex max-h-[64vh] flex-col overflow-hidden rounded-xl border border-border/50 bg-card shadow-lg animate-in fade-in-0 slide-in-from-top-1 duration-100"
+      style={{ top: dropPos.top, left: dropPos.left, minWidth: Math.max(dropPos.width, 340), maxWidth: 380 }}
       role="listbox"
     >
       {isNativeRuntime && (
-        <div className="flex items-center justify-between gap-2 px-3 pb-1.5 pt-1">
+        <div className="flex items-center justify-between gap-2 px-3 pb-1.5 pt-2.5">
           <span className="min-w-0 truncate text-2xs text-muted-foreground/60">
             {nativeSavedSessionLabel(selectedAgentRuntime)}
           </span>
@@ -179,6 +276,55 @@ export default memo(function AskHeader({
           </button>
         </div>
       )}
+      <div className="flex shrink-0 items-center gap-1 px-2 pb-1.5" role="group" aria-label={t.sidebar?.homeAgentFilter ?? 'Filter sessions by agent'} data-session-switcher-agent-filter-rail>
+        {agentFilterItems.map((item) => {
+          const active = switcherAgentFilter === item.id;
+          return (
+            <button
+              key={item.id}
+              type="button"
+              data-session-switcher-agent-filter={item.id}
+              data-hit-active={active ? 'true' : undefined}
+              aria-label={item.label}
+              aria-pressed={active}
+              title={item.label}
+              onClick={() => setSwitcherAgentFilter(item.id)}
+              className={`hit-target-box inline-flex h-7 w-7 shrink-0 items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [--hit-target-radius:var(--radius-md)] ${
+                active
+                  ? 'text-[var(--amber)] [--hit-target-active-bg:var(--amber-subtle)] [--hit-target-border-width:1px] [--hit-target-active-border:color-mix(in_srgb,var(--amber)_26%,transparent)]'
+                  : 'text-muted-foreground/55 [--hit-target-hover-bg:var(--muted)] hover:text-foreground'
+              }`}
+            >
+              <SessionSwitcherAgentMark filterId={item.id} runtime={item.runtime} />
+            </button>
+          );
+        })}
+      </div>
+      <div className="shrink-0 px-2 pb-2">
+        <div className="relative">
+          <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/50" />
+          <input
+            ref={switcherSearchRef}
+            type="text"
+            value={switcherQuery}
+            onChange={(event) => setSwitcherQuery(event.currentTarget.value)}
+            placeholder={t.ask?.historySearch ?? 'Search conversations...'}
+            aria-label={t.ask?.historySearch ?? 'Search conversations'}
+            data-session-switcher-search-input
+            className="h-8 w-full rounded-md border border-border bg-background pl-8 pr-8 text-xs text-foreground outline-none transition-colors placeholder:text-muted-foreground/40 focus-visible:border-[var(--amber)]/40 focus-visible:ring-2 focus-visible:ring-ring/20"
+          />
+          {switcherQuery && (
+            <button
+              type="button"
+              onClick={() => setSwitcherQuery('')}
+              aria-label="Clear search"
+              className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground/40 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <X size={12} />
+            </button>
+          )}
+        </div>
+      </div>
       {sessions.length === 0 && (
         <div className="px-3 py-3 text-xs text-muted-foreground/60">
           {isNativeRuntime
@@ -186,9 +332,15 @@ export default memo(function AskHeader({
             : (t.ask?.noSessions ?? 'No saved sessions.')}
         </div>
       )}
-      <div className="flex flex-col gap-0.5 px-1">
-        {sessions.map((s) => {
-          const title = sessionTitle(s);
+      {sessions.length > 0 && switcherFilteredEntries.length === 0 && (
+        <div className="px-3 py-3 text-xs text-muted-foreground/60">
+          {switcherQuery ? (t.ask?.historyNoMatches ?? 'No matching conversations') : (t.ask?.historyEmpty ?? 'No conversations yet')}
+        </div>
+      )}
+      <div className="flex min-h-0 flex-col gap-0.5 overflow-y-auto px-1 pb-1.5">
+        {switcherFilteredEntries.map((entry) => {
+          const s = entry.session;
+          const title = entry.title;
           const displayTitle = title === '(empty session)' ? (t.hints?.newChat ?? 'New chat') : title;
           return (
             <SessionHistoryRow
@@ -197,6 +349,8 @@ export default memo(function AskHeader({
               aria-selected={s.id === activeSessionId}
               session={s}
               title={displayTitle}
+              preview={entry.preview}
+              runtimeSummary={entry.runtimeSummary}
               isActive={s.id === activeSessionId}
               editing={renamingId === s.id}
               editValue={renameValue}
@@ -262,7 +416,13 @@ export default memo(function AskHeader({
               type="button"
               onClick={() => {
                 startTransition(() => {
-                  setSwitcherOpen(v => !v);
+                  setSwitcherOpen((open) => {
+                    if (!open) {
+                      setSwitcherAgentFilter(filterIdForRuntime(selectedAgentRuntime));
+                      setSwitcherQuery('');
+                    }
+                    return !open;
+                  });
                 });
               }}
               className={`min-w-0 gap-1 text-sm font-medium text-[var(--amber)] hover:text-[var(--amber)]/80 ${titleTriggerClass}`}

@@ -23,7 +23,7 @@ import {
   type MutableRefObject,
   type RefObject,
 } from 'react';
-import { CornerDownRight, Send, StopCircle, X } from 'lucide-react';
+import { CornerDownRight, Send, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 /** Textarea auto-grows with content up to this many visible lines, then scrolls */
@@ -70,7 +70,6 @@ export interface AskComposerInputProps {
   sendDisabledExternal: boolean;
   /** Allow sending with empty text (e.g. images attached). */
   allowEmptySend: boolean;
-  iconSize: number;
   inputRef: MutableRefObject<HTMLTextAreaElement | null>;
   formRef: RefObject<HTMLFormElement | null>;
   /** Backing store for the input text — always kept in sync with local state. */
@@ -95,7 +94,6 @@ const AskComposerInput = memo(function AskComposerInput({
   stopTitle,
   sendDisabledExternal,
   allowEmptySend,
-  iconSize,
   inputRef,
   formRef,
   valueRef,
@@ -165,16 +163,21 @@ const AskComposerInput = memo(function AskComposerInput({
       {isLoading ? (
         <>
           {(value.trim() || allowEmptySend) && (
-            <button type="submit" title={sendTitle} aria-label={sendTitle} disabled={sendDisabledExternal || (!value.trim() && !allowEmptySend)} className="hit-target-box p-2 disabled:opacity-20 disabled:scale-95 disabled:cursor-not-allowed transition-all duration-150 shrink-0 text-[var(--amber)] active:scale-95 [--hit-target-bg:color-mix(in_srgb,var(--amber)_10%,transparent)] [--hit-target-hover-bg:color-mix(in_srgb,var(--amber)_16%,transparent)] [--hit-target-radius:var(--radius-xl)]">
+            <button type="submit" title={sendTitle} aria-label={sendTitle} disabled={sendDisabledExternal || (!value.trim() && !allowEmptySend)} className="hit-target-box inline-flex h-8 w-8 shrink-0 items-center justify-center disabled:cursor-not-allowed disabled:opacity-20 disabled:scale-95 transition-all duration-150 text-[var(--amber)] active:scale-95 [--hit-target-bg:color-mix(in_srgb,var(--amber)_10%,transparent)] [--hit-target-hover-bg:color-mix(in_srgb,var(--amber)_16%,transparent)] [--hit-target-radius:var(--radius-lg)]">
               <CornerDownRight size={14} />
             </button>
           )}
-          <button type="button" onClick={onStop} className="hit-target-box p-2 transition-colors shrink-0 text-foreground [--hit-target-bg:var(--muted)] [--hit-target-hover-bg:color-mix(in_srgb,var(--muted)_80%,transparent)] [--hit-target-radius:var(--radius-xl)]" title={stopTitle} aria-label={stopTitle}>
-            {reconnecting ? <X size={iconSize} /> : <StopCircle size={iconSize} />}
+          <button type="button" onClick={onStop} className="hit-target-box relative inline-flex h-8 w-8 shrink-0 items-center justify-center text-[var(--amber)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [--hit-target-bg:transparent] [--hit-target-hover-bg:color-mix(in_srgb,var(--amber)_8%,transparent)] [--hit-target-radius:var(--radius-lg)]" title={stopTitle} aria-label={stopTitle}>
+            <span aria-hidden="true" className="absolute inset-[3px] rounded-full border border-[var(--amber)]/20 bg-[var(--amber)]/8" />
+            <span data-stop-ring-track aria-hidden="true" className="absolute inset-[3px] rounded-full border border-[var(--amber)]/15" />
+            <span data-stop-ring aria-hidden="true" className="absolute inset-[3px] rounded-full border border-transparent border-r-[var(--amber)]/55 border-t-[var(--amber)] motion-safe:animate-spin" />
+            <span className="relative z-10 inline-flex h-3.5 w-3.5 items-center justify-center">
+              {reconnecting ? <X size={13} strokeWidth={2.25} /> : <span aria-hidden="true" className="h-2 w-2 rounded-[2px] bg-[var(--amber)] shadow-[0_0_0_1px_color-mix(in_srgb,var(--amber)_16%,transparent)]" />}
+            </span>
           </button>
         </>
       ) : (
-        <button type="submit" title={sendTitle} aria-label={sendTitle} disabled={sendDisabledExternal || (!value.trim() && !allowEmptySend)} className="hit-target-box p-2 disabled:opacity-20 disabled:scale-95 disabled:cursor-not-allowed transition-all duration-150 shrink-0 text-[var(--amber-foreground)] active:scale-95 [--hit-target-bg:var(--amber)] [--hit-target-hover-bg:var(--amber)] [--hit-target-radius:var(--radius-xl)] [--hit-target-shadow:0_1px_2px_0_color-mix(in_srgb,var(--amber)_15%,transparent)] [--hit-target-hover-shadow:0_4px_6px_-1px_color-mix(in_srgb,var(--amber)_20%,transparent)]">
+        <button type="submit" title={sendTitle} aria-label={sendTitle} disabled={sendDisabledExternal || (!value.trim() && !allowEmptySend)} className="hit-target-box inline-flex h-8 w-8 shrink-0 items-center justify-center disabled:cursor-not-allowed disabled:opacity-20 disabled:scale-95 transition-all duration-150 text-[var(--amber-foreground)] active:scale-95 [--hit-target-bg:var(--amber)] [--hit-target-hover-bg:var(--amber)] [--hit-target-radius:var(--radius-lg)] [--hit-target-shadow:0_1px_2px_0_color-mix(in_srgb,var(--amber)_15%,transparent)] [--hit-target-hover-shadow:0_4px_6px_-1px_color-mix(in_srgb,var(--amber)_20%,transparent)]">
           <Send size={14} />
         </button>
       )}

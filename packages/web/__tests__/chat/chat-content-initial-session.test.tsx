@@ -25,6 +25,7 @@ const {
   mockStoreGetActiveSessionId,
   mockStoreRenameSession,
   mockStoreResetSession,
+  mockActiveSessionRef,
 } = vi.hoisted(() => ({
   mockInitSessions: vi.fn(),
   mockRefreshSessions: vi.fn(() => Promise.resolve()),
@@ -33,6 +34,14 @@ const {
   mockStoreGetActiveSessionId: vi.fn(() => 'fresh-project-session'),
   mockStoreRenameSession: vi.fn(),
   mockStoreResetSession: vi.fn(),
+  mockActiveSessionRef: {
+    current: {
+      id: 's1',
+      createdAt: 1,
+      updatedAt: 1,
+      messages: [],
+    } as ChatSession,
+  },
 }));
 
 const { mockSubmit, mockStop, mockFirstMessageFired, mockIsLoadingRef, mockAbortRef } = vi.hoisted(() => ({
@@ -98,10 +107,12 @@ vi.mock('@/lib/stores/locale-store', () => ({
 }));
 
 vi.mock('@/hooks/useAskSession', () => ({
-  useAskSession: () => ({
-    messages: [],
-    sessions: [emptySession],
-    activeSession: emptySession,
+  useAskSession: () => {
+    const activeSession = mockActiveSessionRef.current;
+    return ({
+    messages: activeSession.messages,
+    sessions: [activeSession],
+    activeSession,
     activeSessionId: 's1',
     initSessions: mockInitSessions,
     persistSession: vi.fn(),
@@ -118,7 +129,8 @@ vi.mock('@/hooks/useAskSession', () => ({
     togglePinSession: vi.fn(),
     clearSessions: vi.fn(),
     clearAllSessions: vi.fn(),
-  }),
+  });
+  },
 }));
 
 vi.mock('@/hooks/useFileUpload', () => ({
@@ -199,8 +211,14 @@ vi.mock('@/hooks/useAgentRunTimeline', () => ({
 vi.mock('@/components/ask/MessageList', () => ({ default: () => <div data-testid="message-list" /> }));
 vi.mock('@/components/ask/MentionPopover', () => ({ default: () => null }));
 vi.mock('@/components/ask/SlashCommandPopover', () => ({ default: () => null }));
-vi.mock('@/components/ask/SessionHistoryPanel', () => ({ default: () => null }));
-vi.mock('@/components/ask/AskHeader', () => ({ default: () => null }));
+vi.mock('@/components/ask/SessionHistoryPanel', () => ({ default: () => <div data-testid="session-history-panel" /> }));
+vi.mock('@/components/ask/AskHeader', () => ({
+  default: (props: { onToggleHistory: () => void }) => (
+    <button type="button" data-testid="toggle-history" onClick={props.onToggleHistory}>
+      History
+    </button>
+  ),
+}));
 vi.mock('@/components/ask/FileChip', () => ({ default: () => null }));
 vi.mock('@/components/ask/AskComposerInput', async () => {
   const React = await import('react');
@@ -279,6 +297,7 @@ beforeEach(() => {
   mockFirstMessageFired.current = false;
   mockIsLoadingRef.current = false;
   mockAbortRef.current = null;
+  mockActiveSessionRef.current = { ...emptySession, messages: [] };
   localStorage.clear();
   document.body.innerHTML = '';
   (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = false;
@@ -319,6 +338,38 @@ describe('ChatContent initialSessionId', () => {
 
     const textarea = host.querySelector('textarea');
     expect(textarea?.value).toBe('hello from route');
+  });
+
+  it('keeps the compact home chat height stable when opening history after messages expand it', async () => {
+    mockActiveSessionRef.current = {
+      ...emptySession,
+      messages: [{ role: 'user', content: 'This message expanded the home chat.' }],
+    };
+    const { host } = await renderChatContent({ variant: 'home' });
+    const rootEl = host.querySelector('[data-chat-content-root]') as HTMLDivElement;
+    expect(rootEl).toBeTruthy();
+
+    Object.defineProperty(rootEl, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({
+        x: 0,
+        y: 0,
+        width: 760,
+        height: 420,
+        top: 0,
+        right: 760,
+        bottom: 420,
+        left: 0,
+        toJSON: () => ({}),
+      }),
+    });
+
+    flushSync(() => {
+      host.querySelector<HTMLButtonElement>('[data-testid="toggle-history"]')!.click();
+    });
+
+    expect(host.querySelector('[data-testid="session-history-panel"]')).not.toBeNull();
+    expect(rootEl.style.minHeight).toBe('420px');
   });
 
   it('consumes titlebar session activation when rendered as a visible side panel', async () => {
