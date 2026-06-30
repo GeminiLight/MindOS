@@ -244,11 +244,6 @@ export default function EchoImprintCardsReview({ p }: { p: EchoCopy }) {
     [visibleCandidates],
   );
   const hasVisibleCards = visibleCandidates.length > 0;
-  const availableViews = useMemo(() => ({
-    digest: Boolean(visibleDigest),
-    moments: visibleMoments.length > 0,
-  }), [visibleDigest, visibleMoments.length]);
-  const availableViewCount = Number(availableViews.digest) + Number(availableViews.moments);
 
   async function loadImprints({ runIfDue }: { runIfDue: boolean }) {
     try {
@@ -421,12 +416,9 @@ export default function EchoImprintCardsReview({ p }: { p: EchoCopy }) {
   }
 
   function toggleView(view: ImprintView) {
-    if (!availableViews[view]) return;
     setActiveViews((current) => {
-      const activeAvailableCount = (Object.entries(current) as Array<[ImprintView, boolean]>)
-        .filter(([candidateView, active]) => availableViews[candidateView] && active)
-        .length;
-      if (current[view] && activeAvailableCount <= 1) return current;
+      const activeCount = (current.digest ? 1 : 0) + (current.moments ? 1 : 0);
+      if (current[view] && activeCount <= 1) return current;
       return { ...current, [view]: !current[view] };
     });
   }
@@ -454,35 +446,27 @@ export default function EchoImprintCardsReview({ p }: { p: EchoCopy }) {
           className="mt-4 flex min-w-0 flex-wrap items-center justify-between gap-3"
           data-testid="echo-imprint-control-row"
         >
-          {availableViewCount > 1 ? (
-            <div
-              className="inline-flex max-w-full items-center gap-1 overflow-x-auto rounded-lg border border-border/35 bg-muted/15 p-1"
-              role="group"
-              aria-label={p.imprintCardsEyebrow}
-              data-testid="echo-imprint-tabs"
-            >
-              {availableViews.digest ? (
-                <ImprintViewTab
-                  view="digest"
-                  active={activeViews.digest}
-                  label={p.imprintDigestTitle}
-                  icon={<ShieldCheck size={14} aria-hidden />}
-                  onClick={() => toggleView('digest')}
-                />
-              ) : null}
-              {availableViews.moments ? (
-                <ImprintViewTab
-                  view="moments"
-                  active={activeViews.moments}
-                  label={p.imprintMomentsTitle}
-                  icon={<MessageSquareText size={14} aria-hidden />}
-                  onClick={() => toggleView('moments')}
-                />
-              ) : null}
-            </div>
-          ) : (
-            <div aria-hidden />
-          )}
+          <div
+            className="inline-flex max-w-full items-center gap-1 overflow-x-auto rounded-lg border border-border/35 bg-muted/15 p-1"
+            role="group"
+            aria-label={p.imprintCardsEyebrow}
+            data-testid="echo-imprint-tabs"
+          >
+            <ImprintViewTab
+              view="digest"
+              active={activeViews.digest}
+              label={p.imprintDigestTitle}
+              icon={<ShieldCheck size={14} aria-hidden />}
+              onClick={() => toggleView('digest')}
+            />
+            <ImprintViewTab
+              view="moments"
+              active={activeViews.moments}
+              label={p.imprintMomentsTitle}
+              icon={<MessageSquareText size={14} aria-hidden />}
+              onClick={() => toggleView('moments')}
+            />
+          </div>
 
           <div className="flex items-center gap-1 rounded-lg border border-border/20 bg-muted/10 p-1" data-testid="echo-imprint-actions">
             <Button
@@ -663,7 +647,6 @@ function ImprintViewTab({
     <button
       type="button"
       aria-pressed={active}
-      aria-controls={`echo-imprint-${view}-panel`}
       data-testid={`echo-imprint-tab-${view}`}
       className={cn(
         'flex min-h-9 min-w-0 items-center gap-2 rounded-md px-3 py-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
@@ -750,18 +733,7 @@ function ReviewCard({
         <EchoCardHeader
           kind={card.kind}
           label={kindLabel}
-          source={card.source.label}
-          meta={(
-            <span
-              className="inline-flex min-w-0 items-center gap-1.5"
-              data-testid="echo-imprint-created-at"
-            >
-              <Clock3 size={12} aria-hidden />
-              <span className="min-w-0 truncate">
-                {p.imprintCardCreatedLabel} <time>{card.createdAt}</time>
-              </span>
-            </span>
-          )}
+          timestamp={card.createdAt}
         />
 
         <EchoCardTitle>{card.title}</EchoCardTitle>

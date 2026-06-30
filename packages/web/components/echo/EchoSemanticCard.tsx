@@ -68,6 +68,38 @@ const CARD_TONES: Record<EchoSemanticCardKind, EchoCardTone> = {
   },
 };
 
+const TIME_ONLY_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+function padTimePart(value: number): string {
+  return String(value).padStart(2, '0');
+}
+
+function formatClock(date: Date): string {
+  return `${padTimePart(date.getHours())}:${padTimePart(date.getMinutes())}`;
+}
+
+function sameLocalDate(a: Date, b: Date): boolean {
+  return a.getFullYear() === b.getFullYear()
+    && a.getMonth() === b.getMonth()
+    && a.getDate() === b.getDate();
+}
+
+export function formatEchoCardTimestamp(value: string | undefined, now = new Date()): string {
+  const raw = value?.trim();
+  if (!raw) return '';
+  if (TIME_ONLY_RE.test(raw)) return raw;
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return raw;
+  if (sameLocalDate(parsed, now)) return formatClock(parsed);
+
+  const month = padTimePart(parsed.getMonth() + 1);
+  const day = padTimePart(parsed.getDate());
+  const date = parsed.getFullYear() === now.getFullYear()
+    ? `${month}/${day}`
+    : `${parsed.getFullYear()}/${month}/${day}`;
+  return `${date} ${formatClock(parsed)}`;
+}
+
 export function EchoCardFrame({
   kind,
   children,
@@ -124,22 +156,23 @@ export function EchoKindBadge({
 export function EchoCardHeader({
   kind,
   label,
-  source,
+  timestamp,
   meta,
 }: {
   kind: EchoSemanticCardKind;
   label: string;
-  source?: string;
+  timestamp?: string;
   meta?: ReactNode;
 }) {
   const tone = CARD_TONES[kind];
+  const displayTimestamp = formatEchoCardTimestamp(timestamp);
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1.5">
       <EchoKindBadge kind={kind} label={label} />
-      {source ? (
+      {displayTimestamp ? (
         <span className="inline-flex max-w-full items-center gap-2 rounded-md bg-muted/20 px-2 py-1 font-sans text-xs leading-5 text-muted-foreground">
           <span className={cn('h-1.5 w-1.5 shrink-0 rounded-full', tone.dot)} aria-hidden />
-          <span className="min-w-0 truncate">{source}</span>
+          <time className="min-w-0 truncate" data-testid="echo-card-timestamp">{displayTimestamp}</time>
         </span>
       ) : null}
       {meta ? (

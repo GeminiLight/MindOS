@@ -553,7 +553,7 @@ function InsightPanel({
                 <EchoCardHeader
                   kind={candidate.target}
                   label={insightTargetLabel(candidate.target, p)}
-                  source={candidate.source}
+                  timestamp={p.imprintCardsInitialUpdatedAt}
                 />
                 <EchoCardTitle>{candidate.title}</EchoCardTitle>
                 <EchoCardBody>{candidate.content}</EchoCardBody>
@@ -725,7 +725,7 @@ function PromotionPanel({
                 <EchoCardHeader
                   kind={candidate.target}
                   label={promotionTargetLabel(candidate.target, p)}
-                  source={candidate.source}
+                  timestamp={p.imprintCardsInitialUpdatedAt}
                 />
                 <EchoCardTitle>{candidate.title}</EchoCardTitle>
                 <EchoCardBody>{candidate.content}</EchoCardBody>

@@ -444,13 +444,24 @@ function addDays(date: Date, days: number): Date {
   return next;
 }
 
+function normalizeCreatedAt(value: unknown, fallback: Date): string {
+  if (typeof value !== 'string') return fallback.toISOString();
+  const trimmed = normalizeText(value, 32);
+  if (!trimmed) return fallback.toISOString();
+  if (TIME_RE.test(trimmed)) return trimmed;
+  const parsed = new Date(trimmed);
+  if (Number.isNaN(parsed.getTime())) return trimmed;
+  return parsed.toISOString();
+}
+
 function normalizeCard(value: unknown): ImprintCard | null {
   const record = value && typeof value === 'object' && !Array.isArray(value)
     ? value as Record<string, unknown>
     : {};
   const id = typeof record.id === 'string' ? record.id.trim() : '';
   if (!id) return null;
-  const now = new Date().toISOString();
+  const nowDate = new Date();
+  const now = nowDate.toISOString();
   const content = normalizeText(record.content, MAX_CONTENT_CHARS) || normalizeText(record.summary, MAX_CONTENT_CHARS);
   if (!content) return null;
   const source = normalizeCardSource(record.source, record);
@@ -460,7 +471,7 @@ function normalizeCard(value: unknown): ImprintCard | null {
     kind: record.kind === 'digest' ? 'digest' : 'moment',
     title: normalizeText(record.title, 120) || 'Untitled imprint',
     content,
-    createdAt: normalizeText(record.createdAt, 32) || formatTime(new Date()),
+    createdAt: normalizeCreatedAt(record.createdAt, nowDate),
     source,
     evidence: normalizeEvidence(record.evidence, record),
     confidence: typeof record.confidence === 'number' && Number.isFinite(record.confidence)
@@ -660,7 +671,7 @@ function cardsFromLmCandidates(
         kind: candidate.kind,
         title: candidate.title,
         content: candidate.content,
-        createdAt: formatTime(latestSessionDate(sourceSessions, now)),
+        createdAt: latestSessionDate(sourceSessions, now).toISOString(),
         source: {
           label: sourceLabel(sourceSessions, messageRefs),
           sessionIds,
@@ -703,7 +714,7 @@ function buildSessionCard(session: ImprintSourceSession, now: Date): ImprintCard
     kind: 'moment',
     title,
     content: normalizeText(contentSeed, MAX_CONTENT_CHARS),
-    createdAt: formatTime(new Date(session.updatedAt ?? session.createdAt ?? now.getTime())),
+    createdAt: new Date(session.updatedAt ?? session.createdAt ?? now.getTime()).toISOString(),
     source: {
       label: session.runtime ? `${session.runtime} session · ${title}` : `Session · ${title}`,
       sessionIds: [session.id],

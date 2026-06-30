@@ -42,6 +42,7 @@ describe('echo imprint generator', () => {
     expect(result.state.checkpointAt).toBe(baseTime.toISOString());
     expect(result.cards[0]).toMatchObject({
       kind: 'moment',
+      createdAt: new Date(baseTime.getTime() - 5 * 60_000).toISOString(),
       status: 'active',
       source: {
         sessionIds: ['s-1'],
