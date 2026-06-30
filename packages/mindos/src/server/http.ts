@@ -625,7 +625,9 @@ async function handleRequest(
       return;
     }
     if (route === 'GET /api/update-check') {
-      writeResponse(res, await handleUpdateCheckGet());
+      writeResponse(res, await handleUpdateCheckGet({
+        projectRoot: services.runtimeRoot ?? runtimeRoot ?? process.cwd(),
+      }));
       return;
     }
     if (route === 'POST /api/restart') {

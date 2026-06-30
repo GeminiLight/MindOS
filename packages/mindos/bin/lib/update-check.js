@@ -9,15 +9,25 @@ const REGISTRIES = [
   'https://registry.npmjs.org/@geminilight/mindos/latest',
 ];
 
-/** Simple semver "a > b" comparison (major.minor.patch only). */
-function semverGt(a, b) {
-  const pa = a.split('.').map(Number);
-  const pb = b.split('.').map(Number);
+/** Simple semver comparison (major.minor.patch only). */
+function compareSemver(a, b) {
+  const pa = parseSemver(a);
+  const pb = parseSemver(b);
+  if (!pa || !pb) return 0;
   for (let i = 0; i < 3; i++) {
-    if ((pa[i] || 0) > (pb[i] || 0)) return true;
-    if ((pa[i] || 0) < (pb[i] || 0)) return false;
+    if (pa[i] !== pb[i]) return pa[i] - pb[i];
   }
-  return false;
+  return 0;
+}
+
+function semverGt(a, b) {
+  return compareSemver(a, b) > 0;
+}
+
+function parseSemver(version) {
+  const match = String(version).trim().match(/^v?(\d+)\.(\d+)\.(\d+)/);
+  if (!match) return null;
+  return [Number(match[1]), Number(match[2]), Number(match[3])];
 }
 
 function getCurrentVersion() {
@@ -46,18 +56,24 @@ function writeCache(latestVersion) {
 }
 
 async function fetchLatest() {
+  const versions = [];
   for (const url of REGISTRIES) {
     try {
       const res = await fetch(url, { signal: AbortSignal.timeout(3000) });
       if (res.ok) {
         const data = await res.json();
-        return data.version;
+        if (typeof data.version === 'string' && data.version) versions.push(data.version);
       }
     } catch {
       continue;
     }
   }
-  return null;
+
+  let latest = null;
+  for (const version of versions) {
+    if (!latest || compareSemver(version, latest) > 0) latest = version;
+  }
+  return latest;
 }
 
 /**
@@ -74,9 +90,8 @@ export async function checkForUpdate() {
   if (cache?.lastCheck) {
     const age = Date.now() - new Date(cache.lastCheck).getTime();
     if (age < TTL_MS) {
-      return (cache.latestVersion && semverGt(cache.latestVersion, current))
-        ? cache.latestVersion
-        : null;
+      if (cache.latestVersion && semverGt(cache.latestVersion, current)) return cache.latestVersion;
+      if (cache.latestVersion && compareSemver(cache.latestVersion, current) === 0) return null;
     }
   }
 
