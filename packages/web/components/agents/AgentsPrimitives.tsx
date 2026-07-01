@@ -1,6 +1,6 @@
 'use client';
 
-import { HelpCircle, Loader2, Plus, X } from 'lucide-react';
+import { HelpCircle, Loader2, Plus, X, type LucideIcon } from 'lucide-react';
 import { useEffect, useId, useRef } from 'react';
 import { agentIconFile } from '@/lib/agent-icons';
 import { useFocusTrap } from '@/lib/hooks/useFocusTrap';
@@ -128,7 +128,7 @@ export function SearchInput({
   onChange: (v: string) => void;
   placeholder: string;
   ariaLabel: string;
-  icon: React.ComponentType<{ size?: number; className?: string }>;
+  icon: LucideIcon;
 }) {
   return (
     <label className="relative block group/search">

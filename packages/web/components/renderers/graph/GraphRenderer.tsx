@@ -7,6 +7,7 @@ import {
   BackgroundVariant,
   Controls,
   MiniMap,
+  type NodeTypes,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import type { RendererContext } from '@/lib/renderers/registry';
@@ -163,7 +164,7 @@ export function GraphRenderer({ filePath }: RendererContext) {
     return { rfNodes, rfEdges };
   }, [activeNodeIds, direction, filePath, graphData, hoveredNodeId, matchedNodeIds, scope, selectedNodeId]);
 
-  const nodeTypes = useMemo(() => ({ wiki: WikiGraphNode }), []);
+  const nodeTypes = useMemo<NodeTypes>(() => ({ wiki: WikiGraphNode as NodeTypes[string] }), []);
 
   const openNode = useCallback((node: GraphNode) => {
     if (node.isMissing) return;

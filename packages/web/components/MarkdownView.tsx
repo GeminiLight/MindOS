@@ -4,7 +4,16 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import rehypeSlug from 'rehype-slug';
-import { useState, useCallback, useEffect, useId, useMemo, type MouseEvent as ReactMouseEvent } from 'react';
+import {
+  useState,
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  type MouseEvent as ReactMouseEvent,
+  type ReactElement,
+  type ReactNode,
+} from 'react';
 import { Copy, Check, X, ChevronDown } from 'lucide-react';
 import { copyToClipboard } from '@/lib/clipboard';
 import { toast } from '@/lib/toast';
@@ -92,9 +101,9 @@ type MarkdownHookMap = Map<string, PluginSurface[]>;
 type MarkdownRenderMap = Map<string, PluginMarkdownCodeBlockRender[]>;
 type MarkdownCodeBlockRenderState = PluginMarkdownCodeBlockRender & { blockId: string };
 
-function getCodeLanguage(children: React.ReactNode): string {
+function getCodeLanguage(children: ReactNode): string {
   if (!children || typeof children !== 'object' || !('props' in children)) return '';
-  const codeEl = children as React.ReactElement<{ className?: string }>;
+  const codeEl = children as ReactElement<{ className?: string }>;
   const className = codeEl.props?.className ?? '';
   const match = className.match(/(?:^|\s)language-([^\s]+)/);
   return match?.[1]?.toLowerCase() ?? '';
@@ -238,7 +247,7 @@ function createMarkdownComponents(
       const language = getCodeLanguage(children);
       const hookSurfaces = language ? (markdownHooks.get(language) ?? []) : [];
       if (children && typeof children === 'object' && 'props' in children) {
-        const codeEl = children as React.ReactElement<{ children?: React.ReactNode }>;
+        const codeEl = children as ReactElement<{ children?: ReactNode }>;
         codeString = extractText(codeEl.props?.children);
       }
       const normalizedCodeString = normalizeCodeBlockSource(codeString);
@@ -368,11 +377,11 @@ function createMarkdownComponents(
   };
 }
 
-function extractText(node: React.ReactNode): string {
+function extractText(node: ReactNode): string {
   if (typeof node === 'string') return node;
   if (Array.isArray(node)) return node.map(extractText).join('');
   if (node && typeof node === 'object' && 'props' in node) {
-    return extractText((node as React.ReactElement<{ children?: React.ReactNode }>).props?.children);
+    return extractText((node as ReactElement<{ children?: ReactNode }>).props?.children);
   }
   return '';
 }
@@ -384,7 +393,7 @@ function formatPrimitiveValue(value: string | number | boolean | null | Date): s
   return String(value);
 }
 
-function renderFrontmatterValue(value: FrontmatterValue): React.ReactNode {
+function renderFrontmatterValue(value: FrontmatterValue): ReactNode {
   if (Array.isArray(value)) {
     if (value.length === 0) {
       return <span className="markdown-frontmatter__empty">empty list</span>;

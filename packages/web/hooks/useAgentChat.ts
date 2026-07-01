@@ -529,7 +529,7 @@ export function useAgentChat({
     if (hasLoadingUploads || (!text && img.images.length === 0)) return;
 
     // Only store explicitly user-chosen files (filter out auto-included currentFile)
-    const attachedFiles = [...refs.attachedFilesRef.current];
+    const attachedFiles = [...(refs.attachedFilesRef.current ?? [])];
     const explicitAttached = attachedFiles.filter(f => f !== currentFile);
     await submitTurnSnapshot({
       sessionId,

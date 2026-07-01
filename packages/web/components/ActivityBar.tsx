@@ -1,6 +1,17 @@
 'use client';
 
-import { useRef, useCallback, useState, useEffect, useTransition, type CSSProperties } from 'react';
+import {
+  useRef,
+  useCallback,
+  useState,
+  useEffect,
+  useTransition,
+  type CSSProperties,
+  type MouseEvent,
+  type MouseEventHandler,
+  type ReactNode,
+  type Ref,
+} from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -30,14 +41,14 @@ interface ActivityBarProps {
   activePanel: PanelId | null;
   suppressRouteActive?: boolean;
   onPanelChange: (id: PanelId | null) => void;
-  onCaptureClick?: React.MouseEventHandler<HTMLAnchorElement | HTMLButtonElement>;
-  onEchoClick?: React.MouseEventHandler<HTMLAnchorElement | HTMLButtonElement>;
-  onAgentsClick?: React.MouseEventHandler<HTMLAnchorElement | HTMLButtonElement>;
-  onDiscoverClick?: React.MouseEventHandler<HTMLAnchorElement | HTMLButtonElement>;
-  onStudioClick?: React.MouseEventHandler<HTMLAnchorElement | HTMLButtonElement>;
-  onWorkflowsClick?: React.MouseEventHandler<HTMLAnchorElement | HTMLButtonElement>;
-  onSpacesClick?: React.MouseEventHandler<HTMLAnchorElement | HTMLButtonElement>;
-  onHomeClick?: React.MouseEventHandler<HTMLAnchorElement>;
+  onCaptureClick?: MouseEventHandler<HTMLAnchorElement | HTMLButtonElement>;
+  onEchoClick?: MouseEventHandler<HTMLAnchorElement | HTMLButtonElement>;
+  onAgentsClick?: MouseEventHandler<HTMLAnchorElement | HTMLButtonElement>;
+  onDiscoverClick?: MouseEventHandler<HTMLAnchorElement | HTMLButtonElement>;
+  onStudioClick?: MouseEventHandler<HTMLAnchorElement | HTMLButtonElement>;
+  onWorkflowsClick?: MouseEventHandler<HTMLAnchorElement | HTMLButtonElement>;
+  onSpacesClick?: MouseEventHandler<HTMLAnchorElement | HTMLButtonElement>;
+  onHomeClick?: MouseEventHandler<HTMLAnchorElement>;
   syncStatus: SyncStatus | null;
   syncStale?: boolean;
   expanded: boolean;
@@ -51,22 +62,22 @@ interface ActivityBarProps {
 }
 
 interface RailButtonProps {
-  icon: React.ReactNode;
+  icon: ReactNode;
   label: string;
   shortcut?: string;
   active?: boolean;
   current?: boolean;
   expanded: boolean;
   href?: string;
-  onClick: React.MouseEventHandler<HTMLAnchorElement | HTMLButtonElement>;
+  onClick: MouseEventHandler<HTMLAnchorElement | HTMLButtonElement>;
   onNavigate?: (event: { preventDefault: () => void }) => void;
-  buttonRef?: React.Ref<HTMLButtonElement>;
+  buttonRef?: Ref<HTMLButtonElement>;
   pressed?: boolean;
   ariaControls?: string;
   ariaExpanded?: boolean;
   ariaHaspopup?: 'dialog' | 'menu';
   /** Optional overlay badge (e.g. status dot) rendered inside the button */
-  badge?: React.ReactNode;
+  badge?: ReactNode;
   /** Optional data-walkthrough attribute for interactive walkthrough targeting */
   walkthroughId?: string;
 }
@@ -116,7 +127,7 @@ function RailButton({
     </>
   );
 
-  const handleLinkClick: React.MouseEventHandler<HTMLAnchorElement> = (event) => {
+  const handleLinkClick: MouseEventHandler<HTMLAnchorElement> = (event) => {
     onClick(event);
   };
 
@@ -291,7 +302,7 @@ export default function ActivityBar({
   }, []);
 
   const debouncedRailClick = useCallback((
-    event: React.MouseEvent<HTMLAnchorElement | HTMLButtonElement>,
+    event: MouseEvent<HTMLAnchorElement | HTMLButtonElement>,
     key: string,
     fn: () => void,
   ) => {
@@ -312,9 +323,9 @@ export default function ActivityBar({
   });
 
   const handleRouteRailClick = useCallback((
-    event: React.MouseEvent<HTMLAnchorElement | HTMLButtonElement>,
+    event: MouseEvent<HTMLAnchorElement | HTMLButtonElement>,
     targetPanel: RoutePanelId,
-    onRouteClick?: React.MouseEventHandler<HTMLAnchorElement | HTMLButtonElement>,
+    onRouteClick?: MouseEventHandler<HTMLAnchorElement | HTMLButtonElement>,
   ) => {
     debouncedRailClick(event, `panel:${targetPanel}`, () => {
       if (onRouteClick) {

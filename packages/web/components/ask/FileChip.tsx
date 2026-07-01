@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, FileText, Table, Paperclip, ImageIcon, Zap, Bot, Folder, Loader2, CheckCircle2, AlertCircle, AlertTriangle } from 'lucide-react';
+import { X, FileText, Table, Paperclip, ImageIcon, Zap, Bot, Folder, Loader2, CheckCircle2, AlertCircle, AlertTriangle, type LucideIcon } from 'lucide-react';
 
 interface FileChipProps {
   path: string;
@@ -64,7 +64,7 @@ export default function FileChip({ path, onRemove, variant = 'kb', imageData, im
 
   // Determine status trailing indicator
   const isTruncated = !!truncatedInfo;
-  let StatusIndicator: React.ComponentType<{ size: number; className?: string }> | null = null;
+  let StatusIndicator: LucideIcon | null = null;
   let statusIndicatorCls = '';
   if (status === 'loading') {
     StatusIndicator = Loader2;

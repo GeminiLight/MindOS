@@ -1,6 +1,14 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef, useMemo, startTransition } from 'react';
+import {
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+  useMemo,
+  startTransition,
+  type ComponentType,
+} from 'react';
 import { flushSync } from 'react-dom';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
@@ -31,7 +39,17 @@ import dynamic from 'next/dynamic';
 const SearchModal = dynamic(() => import('./SearchModal'), { ssr: false });
 const AskModal = dynamic(() => import('./AskModal'), { ssr: false });
 const SettingsModal = dynamic(() => import('./SettingsModal'), { ssr: false });
-const CreateSpaceModal = dynamic(() => import('./CreateSpaceModal'), { ssr: false });
+type CreateSpaceModalProps = {
+  t: ReturnType<typeof useLocale>['t'];
+  dirPaths: string[];
+  openRequestId?: number;
+};
+
+const CreateSpaceModal = dynamic(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  () => import('./CreateSpaceModal').then((mod) => mod.default as any),
+  { ssr: false },
+) as unknown as ComponentType<CreateSpaceModalProps>;
 const ImportModal = dynamic(() => import('./ImportModal'), { ssr: false });
 import McpStoreInit from '@/lib/stores/McpStoreInit';
 import WalkthroughInit from '@/lib/stores/WalkthroughInit';

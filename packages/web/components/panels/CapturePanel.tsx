@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Archive, ChevronRight, FileText, History, ListChecks, Plus } from 'lucide-react';
+import { Archive, ChevronRight, FileText, History, ListChecks, Plus, type LucideIcon } from 'lucide-react';
 import PanelHeader from './PanelHeader';
 import { useLocale } from '@/lib/stores/locale-store';
 import { loadHistory, type OrganizeHistoryEntry } from '@/lib/organize-history';
@@ -271,7 +271,7 @@ function CapturePanelLink({
   emphasized,
   onSelect,
 }: {
-  icon: React.ComponentType<{ size?: number; className?: string }>;
+  icon: LucideIcon;
   title: string;
   active?: boolean;
   count?: number;

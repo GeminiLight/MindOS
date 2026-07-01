@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef, type KeyboardEvent, type ReactElement } from 'react';
 import { createPortal } from 'react-dom';
 import { Folder, Loader2, X, Sparkles, AlertTriangle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -22,7 +22,7 @@ export default function CreateSpaceModal({
   t: ReturnType<typeof useLocale>['t'];
   dirPaths: string[];
   openRequestId?: number;
-}) {
+}): ReactElement | null {
   const router = useRouter();
   const smoothPush = useSmoothRouterPush();
   const [open, setOpen] = useState(false);
@@ -116,7 +116,7 @@ export default function CreateSpaceModal({
     setLoading(false);
   }, [name, description, parent, loading, close, router, smoothPush, t, validateName, useAi, aiAvailable]);
 
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (e.key === 'Escape') close();
     if (e.key === 'Enter' && !e.shiftKey && e.target instanceof HTMLInputElement) { e.preventDefault(); handleCreate(); }
   }, [close, handleCreate]);
@@ -249,5 +249,5 @@ export default function CreateSpaceModal({
       </div>
     </div>,
     document.body,
-  );
+  ) as unknown as ReactElement;
 }

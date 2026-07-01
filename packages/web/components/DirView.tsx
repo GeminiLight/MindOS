@@ -4,7 +4,7 @@ import { forwardRef, useSyncExternalStore, useMemo, useState, useCallback, useRe
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { FileText, Table, Folder, FolderOpen, LayoutGrid, List, FilePlus, ScrollText, BookOpen, Copy, AlertTriangle, Sparkles, Loader2, Check } from 'lucide-react';
-import { Virtuoso, VirtuosoGrid } from 'react-virtuoso';
+import { Virtuoso, VirtuosoGrid, type Components as VirtuosoComponents, type GridComponents } from 'react-virtuoso';
 import Breadcrumb from '@/components/Breadcrumb';
 import { encodePath, relativeTime } from '@/lib/utils';
 import { FileNode, SYSTEM_FILES } from '@/lib/types';
@@ -553,11 +553,11 @@ const VirtualDirList = forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivEl
 const VIRTUAL_GRID_COMPONENTS = {
   List: VirtualDirGridList,
   Item: VirtualDirGridItem,
-};
+} as unknown as GridComponents;
 
 const VIRTUAL_LIST_COMPONENTS = {
   List: VirtualDirList,
-};
+} as unknown as VirtuosoComponents;
 
 // ─── DirView ──────────────────────────────────────────────────────────────────
 

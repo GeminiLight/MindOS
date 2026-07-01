@@ -1,4 +1,5 @@
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 import path from 'node:path';
 import { handleUpdateCheckGet } from '@geminilight/mindos/server';

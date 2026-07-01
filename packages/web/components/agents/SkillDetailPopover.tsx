@@ -15,6 +15,7 @@ import {
   Trash2,
   X,
   ChevronDown,
+  type LucideIcon,
 } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
 import { copyToClipboard } from '@/lib/clipboard';
@@ -74,7 +75,7 @@ interface SkillDetailPopoverProps {
 
 /* ────────── Capability Icon ────────── */
 
-const CAPABILITY_ICONS: Record<SkillCapability, React.ComponentType<{ size?: number; className?: string }>> = {
+const CAPABILITY_ICONS: Record<SkillCapability, LucideIcon> = {
   research: Search,
   coding: Code2,
   docs: FileText,
