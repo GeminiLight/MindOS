@@ -35,6 +35,7 @@ describe('echo imprint generator', () => {
       mindRoot: root,
       sessions: [session()],
       trigger: 'manual',
+      locale: 'zh',
       now: baseTime,
     });
 
@@ -45,12 +46,22 @@ describe('echo imprint generator', () => {
       createdAt: new Date(baseTime.getTime() - 5 * 60_000).toISOString(),
       status: 'active',
       source: {
-        sessionIds: ['s-1'],
+        label: '会话 · Imprint backend design',
+        sessions: [
+          expect.objectContaining({
+            id: 's-1',
+            title: 'Imprint backend design',
+            messageRefs: [
+              expect.objectContaining({ messageIndex: 1, role: 'assistant' }),
+            ],
+          }),
+        ],
       },
     });
+    expect(result.cards[0]).not.toHaveProperty('evidence');
     expect(result.cards[0]).not.toHaveProperty('type');
 
-    const statePath = path.join(root, '.mindos', 'echo', 'imprints', 'state.json');
+    const statePath = path.join(root, '.mindos', 'echo', 'cards', 'state.json');
     expect(fs.existsSync(statePath)).toBe(true);
     const persisted = readImprintGenerationState(root);
     expect(persisted.schedule).toMatchObject({ mode: 'daily', dailyTime: '20:00' });
@@ -150,109 +161,110 @@ describe('echo imprint generator', () => {
     expect(readImprintGenerationState(root).cards.find((card) => card.id === target.id)?.userEdited).toBe(true);
   });
 
-  it('migrates legacy summary cards with provenance into structured source and evidence fields', () => {
+  it('loads only cards with the nested source session structure', () => {
     const root = getTestMindRoot();
-    const statePath = path.join(root, '.mindos', 'echo', 'imprints', 'state.json');
+    const statePath = path.join(root, '.mindos', 'echo', 'cards', 'state.json');
     fs.mkdirSync(path.dirname(statePath), { recursive: true });
     fs.writeFileSync(statePath, JSON.stringify({
       schemaVersion: 1,
-      runCount: 1,
-      schedule: { mode: 'daily', dailyTime: '20:00', intervalHours: 24 },
+      segments: {
+        imprint: {
+          runCount: 1,
+          schedule: { mode: 'daily', dailyTime: '20:00', intervalHours: 24 },
+          windowMinutes: 1440,
+        },
+        insight: {
+          runCount: 0,
+          schedule: { mode: 'daily', dailyTime: '20:00', intervalHours: 24 },
+          windowMinutes: 1440,
+        },
+        promotion: {
+          runCount: 0,
+          schedule: { mode: 'daily', dailyTime: '20:00', intervalHours: 24 },
+          windowMinutes: 1440,
+        },
+      },
       cards: [
         {
-          id: 'old-summary-card',
-          kind: 'moment',
-          title: 'Old card',
-          summary: '旧 summary 字段可以迁移为 content',
-          createdAt: '12:00',
-          source: '旧 source 字段迁移为来源',
-          whyItMatters: '旧 whyItMatters 字段迁移为证据',
-          sourceSessionIds: ['legacy-session'],
-          sourceMessageRefs: [
-            {
-              sessionId: 'legacy-session',
-              messageIndex: 1,
-              role: 'assistant',
-              quote: '旧卡片也应该保留可核对来源。',
-            },
-          ],
-          confidence: 0.8,
-          status: 'active',
-          generatedAt: baseTime.toISOString(),
-          updatedAt: baseTime.toISOString(),
-        },
-        {
-          id: 'summary-without-source',
+          id: 'flat-source-card',
+          segment: 'imprint',
           kind: 'moment',
           title: 'No source card',
-          summary: '没有 provenance 的旧草稿应该丢弃',
+          content: '扁平 source 不再是合法结构。',
           createdAt: '12:00',
-          source: '不可核对来源',
+          source: {
+            label: 'Flat source',
+            sessionIds: ['legacy-session'],
+          },
           confidence: 0.7,
           status: 'active',
           generatedAt: baseTime.toISOString(),
           updatedAt: baseTime.toISOString(),
+          generation: { method: 'deterministic', trigger: 'manual', locale: 'zh' },
         },
         {
           id: 'new-content-card',
+          segment: 'imprint',
           kind: 'digest',
           title: 'New card',
           content: '新结构只认 content 字段。',
           createdAt: '12:01',
           source: {
             label: 'Structured source',
-            sessionIds: ['s-1'],
-          },
-          evidence: {
-            label: 'Structured evidence',
+            sessions: [
+              {
+                id: 's-1',
+                title: 'Imprint backend design',
+                runtime: 'Codex',
+                createdAt: baseTime.getTime() - 30 * 60_000,
+                updatedAt: baseTime.getTime() - 5 * 60_000,
+                messageRefs: [
+                  {
+                    messageIndex: 0,
+                    role: 'user',
+                    quote: '我们需要实现 Imprint Generator 后端',
+                  },
+                ],
+              },
+            ],
           },
           confidence: 0.9,
           status: 'active',
           generatedAt: baseTime.toISOString(),
           updatedAt: baseTime.toISOString(),
+          generation: { method: 'deterministic', trigger: 'manual', locale: 'zh' },
         },
       ],
     }));
 
     const state = readImprintGenerationState(root);
-    expect(state.cards).toHaveLength(2);
-    expect(state.cards.find((card) => card.id === 'old-summary-card')).toMatchObject({
-      id: 'old-summary-card',
-      content: '旧 summary 字段可以迁移为 content',
-      source: {
-        label: '旧 source 字段迁移为来源',
-        sessionIds: ['legacy-session'],
-        messageRefs: [
-          expect.objectContaining({
-            sessionId: 'legacy-session',
-            messageIndex: 1,
-            role: 'assistant',
-          }),
-        ],
-      },
-      evidence: {
-        label: '旧 whyItMatters 字段迁移为证据',
-      },
-    });
-    expect(state.cards.some((card) => card.id === 'summary-without-source')).toBe(false);
+    expect(state.cards).toHaveLength(1);
+    expect(state.cards.some((card) => card.id === 'flat-source-card')).toBe(false);
     expect(state.cards.find((card) => card.id === 'new-content-card')).toMatchObject({
       id: 'new-content-card',
       content: '新结构只认 content 字段。',
       source: {
         label: 'Structured source',
-        sessionIds: ['s-1'],
-      },
-      evidence: {
-        label: 'Structured evidence',
+        sessions: [
+          expect.objectContaining({
+            id: 's-1',
+            title: 'Imprint backend design',
+            runtime: 'Codex',
+            messageRefs: [
+              expect.objectContaining({ messageIndex: 0, role: 'user' }),
+            ],
+          }),
+        ],
       },
     });
+    expect(state.cards.find((card) => card.id === 'new-content-card')).not.toHaveProperty('evidence');
   });
 
   it('uses a structured AI task runner when available', async () => {
     const root = getTestMindRoot();
     const run = vi.fn(async () => ({
-      taskId: 'echo.imprint.extract',
-      promptVersion: 'echo-imprint-extract-v2',
+      taskId: 'echo.cards.extract',
+      promptVersion: 'echo-card-extract-v1',
       modelProfile: 'fast-structured' as const,
       mode: 'structured' as const,
       model: { provider: 'test', name: 'test-model' },
@@ -269,18 +281,26 @@ describe('echo imprint generator', () => {
             title: 'Backend generator became an AI task',
             content: 'The imprint generator now calls a structured AI task before merging cards.',
             source: {
-              sessionIds: ['s-1'],
-              messageRefs: [
+              sessions: [
                 {
                   sessionId: 's-1',
-                  messageIndex: 0,
-                  role: 'user',
-                  quote: '我们需要实现 Imprint Generator 后端',
+                  messageRefs: [
+                    {
+                      messageIndex: 0,
+                      role: 'user',
+                      quote: '我们需要实现 Imprint Generator 后端',
+                    },
+                    {
+                      messageIndex: 1,
+                      role: 'assistant',
+                      quote: '结构化卡片和 soft delete',
+                    },
+                  ],
                 },
               ],
             },
             confidence: 0.86,
-            agencyTags: ['implementation_result'],
+            tags: ['implementation_result'],
           },
         ],
         rejected: [],
@@ -291,23 +311,36 @@ describe('echo imprint generator', () => {
       mindRoot: root,
       sessions: [session()],
       trigger: 'manual',
+      locale: 'zh',
       now: baseTime,
       aiTaskRunner: { run },
     });
 
     expect(run).toHaveBeenCalledTimes(1);
+    expect(run.mock.calls[0]?.[1]).toMatchObject({
+      locale: 'zh',
+    });
     expect(result.extraction).toMatchObject({
       mode: 'lm',
-      taskId: 'echo.imprint.extract',
-      promptVersion: 'echo-imprint-extract-v2',
+      taskId: 'echo.cards.extract',
+      promptVersion: 'echo-card-extract-v1',
     });
     expect(result.cards[0]).toMatchObject({
-      generationMethod: 'lm',
-      promptVersion: 'echo-imprint-extract-v2',
+      generation: {
+        method: 'lm',
+        taskId: 'echo.cards.extract',
+        promptVersion: 'echo-card-extract-v1',
+      },
       source: {
-        sessionIds: ['s-1'],
-        messageRefs: [
-          expect.objectContaining({ sessionId: 's-1', messageIndex: 0, role: 'user' }),
+        sessions: [
+          expect.objectContaining({
+            id: 's-1',
+            title: 'Imprint backend design',
+            messageRefs: [
+              expect.objectContaining({ messageIndex: 0, role: 'user' }),
+              expect.objectContaining({ messageIndex: 1, role: 'assistant' }),
+            ],
+          }),
         ],
       },
     });
@@ -320,6 +353,7 @@ describe('echo imprint generator', () => {
       mindRoot: root,
       sessions: [session()],
       trigger: 'auto',
+      locale: 'zh',
       now: baseTime,
       aiTaskRunner: {
         run: vi.fn(async () => {
@@ -330,10 +364,18 @@ describe('echo imprint generator', () => {
 
     expect(result.extraction).toMatchObject({
       mode: 'deterministic',
-      taskId: 'echo.imprint.extract',
+      taskId: 'echo.cards.extract',
     });
     expect(result.extraction.error).toContain('model unavailable');
-    expect(result.cards.some((card) => card.generationMethod === 'deterministic')).toBe(true);
+    expect(result.cards.some((card) => card.generation.method === 'deterministic')).toBe(true);
+    expect(result.cards[0]).toMatchObject({
+      source: {
+        label: '会话 · Imprint backend design',
+      },
+      generation: {
+        method: 'deterministic',
+      },
+    });
     expect(readImprintGenerationState(root)).toMatchObject({
       lastGenerationMode: 'deterministic',
       lastGenerationError: expect.stringContaining('model unavailable'),

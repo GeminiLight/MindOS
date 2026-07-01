@@ -213,13 +213,9 @@ export function EchoCardBody({
 export function EchoCardDetailFields({
   sourceLabel,
   source,
-  evidenceLabel,
-  evidence,
 }: {
   sourceLabel: string;
   source: string;
-  evidenceLabel: string;
-  evidence: string;
 }) {
   return (
     <details className="group mt-4 overflow-hidden rounded-lg border border-border/35 bg-muted/10">
@@ -228,13 +224,12 @@ export function EchoCardDetailFields({
           <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-border/35 bg-background/70 text-muted-foreground">
             <MessageSquareText size={13} aria-hidden />
           </span>
-          <span className="truncate">{sourceLabel} / {evidenceLabel}</span>
+          <span className="truncate">{sourceLabel}</span>
         </span>
         <ChevronDown size={13} className="shrink-0 text-muted-foreground transition-transform duration-150 group-open:rotate-180" aria-hidden />
       </summary>
-      <div className="grid gap-3 border-t border-border/35 bg-background/45 px-3 py-3 sm:grid-cols-2">
+      <div className="border-t border-border/35 bg-background/45 px-3 py-3">
         <EchoCardDetailField label={sourceLabel} value={source} />
-        <EchoCardDetailField label={evidenceLabel} value={evidence} />
       </div>
     </details>
   );
@@ -274,24 +269,20 @@ export function buildEchoCardChatPrompt({
   titlePromptLabel,
   contentPromptLabel,
   sourceLabel,
-  evidenceLabel,
   kindLabel,
   title,
   content,
   source,
-  evidence,
 }: {
   prompt: (kind: string, title: string) => string;
   kindPromptLabel: string;
   titlePromptLabel: string;
   contentPromptLabel: string;
   sourceLabel: string;
-  evidenceLabel: string;
   kindLabel: string;
   title: string;
   content: string;
   source: string;
-  evidence: string;
 }) {
   return [
     prompt(kindLabel, title),
@@ -300,6 +291,5 @@ export function buildEchoCardChatPrompt({
     `${titlePromptLabel}: ${title}`,
     `${contentPromptLabel}: ${content}`,
     `${sourceLabel}: ${source}`,
-    `${evidenceLabel}: ${evidence}`,
   ].join('\n');
 }

@@ -11,6 +11,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import type { Messages } from '@/lib/i18n';
+import type { Locale } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { openAskModal } from '@/hooks/useAskModal';
 import { Button } from '@/components/ui/button';
@@ -44,6 +45,21 @@ type ImprintGenerationState = {
   runCount: number;
 };
 
+type ImprintCardMessageRef = {
+  messageIndex: number;
+  role: string;
+  quote: string;
+};
+
+type ImprintCardSourceSession = {
+  id: string;
+  title?: string;
+  runtime?: string;
+  createdAt?: number;
+  updatedAt?: number;
+  messageRefs?: ImprintCardMessageRef[];
+};
+
 type ImprintCardCandidate = {
   id: string;
   kind: 'digest' | 'moment';
@@ -52,9 +68,7 @@ type ImprintCardCandidate = {
   createdAt: string;
   source: {
     label: string;
-  };
-  evidence: {
-    label: string;
+    sessions: ImprintCardSourceSession[];
   };
 };
 
@@ -97,18 +111,14 @@ function normalizeCandidate(candidate: EchoCopy['imprintCardCandidates'][number]
     title: candidate.title,
     content: candidate.content,
     createdAt: candidate.createdAt,
-    source: { label: candidate.source },
-    evidence: { label: candidate.evidence },
+    source: { label: candidate.source, sessions: [] },
   };
 }
 
 function normalizeRemoteCandidate(candidate: RemoteImprintCard, index: number): ImprintCardCandidate | null {
   if (typeof candidate.title !== 'string' || typeof candidate.content !== 'string') return null;
-  const evidenceRecord = candidate.evidence && typeof candidate.evidence === 'object' && !Array.isArray(candidate.evidence)
-    ? candidate.evidence as { label?: unknown }
-    : {};
   const sourceRecord = candidate.source && typeof candidate.source === 'object' && !Array.isArray(candidate.source)
-    ? candidate.source as { label?: unknown }
+    ? candidate.source as { label?: unknown; sessions?: unknown }
     : {};
   return {
     id: typeof candidate.id === 'string' && candidate.id.trim() ? candidate.id.trim() : `imprint-remote-${index}`,
@@ -116,9 +126,51 @@ function normalizeRemoteCandidate(candidate: RemoteImprintCard, index: number): 
     title: candidate.title,
     content: candidate.content,
     createdAt: typeof candidate.createdAt === 'string' ? candidate.createdAt : '',
-    source: { label: typeof sourceRecord.label === 'string' ? sourceRecord.label : '' },
-    evidence: { label: typeof evidenceRecord.label === 'string' ? evidenceRecord.label : '' },
+    source: {
+      label: typeof sourceRecord.label === 'string' ? sourceRecord.label : '',
+      sessions: normalizeRemoteSourceSessions(sourceRecord.sessions),
+    },
   };
+}
+
+function normalizeRemoteSourceSessions(value: unknown): ImprintCardSourceSession[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => {
+      const record = item && typeof item === 'object' && !Array.isArray(item)
+        ? item as Record<string, unknown>
+        : {};
+      const id = typeof record.id === 'string' ? record.id.trim() : '';
+      if (!id) return null;
+      const messageRefs = normalizeRemoteMessageRefs(record.messageRefs);
+      return {
+        id,
+        ...(typeof record.title === 'string' && record.title.trim() ? { title: record.title.trim() } : {}),
+        ...(typeof record.runtime === 'string' && record.runtime.trim() ? { runtime: record.runtime.trim() } : {}),
+        ...(typeof record.createdAt === 'number' && Number.isFinite(record.createdAt) ? { createdAt: record.createdAt } : {}),
+        ...(typeof record.updatedAt === 'number' && Number.isFinite(record.updatedAt) ? { updatedAt: record.updatedAt } : {}),
+        ...(messageRefs.length > 0 ? { messageRefs } : {}),
+      };
+    })
+    .filter((session): session is ImprintCardSourceSession => session !== null);
+}
+
+function normalizeRemoteMessageRefs(value: unknown): ImprintCardMessageRef[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => {
+      const record = item && typeof item === 'object' && !Array.isArray(item)
+        ? item as Record<string, unknown>
+        : {};
+      const messageIndex = typeof record.messageIndex === 'number' && Number.isFinite(record.messageIndex)
+        ? Math.max(0, Math.floor(record.messageIndex))
+        : -1;
+      const role = typeof record.role === 'string' ? record.role.trim() : '';
+      const quote = typeof record.quote === 'string' ? record.quote.trim() : '';
+      if (messageIndex < 0 || !role || !quote) return null;
+      return { messageIndex, role, quote };
+    })
+    .filter((ref): ref is ImprintCardMessageRef => ref !== null);
 }
 
 function formatApiTime(value: string | undefined, fallback: string) {
@@ -187,19 +239,31 @@ function buildImprintCardChatPrompt(card: ImprintCardCandidate, p: EchoCopy) {
     titlePromptLabel: p.echoCardTitlePromptLabel,
     contentPromptLabel: p.echoCardContentPromptLabel,
     sourceLabel: p.echoCardSourceLabel,
-    evidenceLabel: p.echoCardEvidenceLabel,
     kindLabel: imprintKindLabel(card.kind, p),
     title: card.title,
     content: [
       card.content,
       `${p.imprintCardCreatedLabel}: ${card.createdAt}`,
     ].join('\n'),
-    source: card.source.label,
-    evidence: card.evidence.label,
+    source: formatSourceForPrompt(card.source),
   });
 }
 
-export default function EchoImprintCardsReview({ p }: { p: EchoCopy }) {
+function formatSourceForPrompt(source: ImprintCardCandidate['source']): string {
+  const sessionLines = source.sessions.flatMap((session) => {
+    const heading = [
+      session.runtime,
+      session.title || session.id,
+    ].filter(Boolean).join(' · ');
+    const refs = (session.messageRefs ?? []).map((ref) => (
+      `  - #${ref.messageIndex + 1} ${ref.role}: ${ref.quote}`
+    ));
+    return [heading ? `- ${heading}` : `- ${session.id}`, ...refs];
+  });
+  return [source.label, ...sessionLines].filter(Boolean).join('\n');
+}
+
+export default function EchoImprintCardsReview({ p, locale }: { p: EchoCopy; locale: Locale }) {
   const initialCandidates = useMemo(
     () => p.imprintCardCandidates.map((candidate, index) => normalizeCandidate(candidate, index)),
     [p],
@@ -267,7 +331,7 @@ export default function EchoImprintCardsReview({ p }: { p: EchoCopy }) {
       const response = await fetch('/api/echo/imprints', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ trigger }),
+        body: JSON.stringify({ trigger, locale }),
       });
       if (!response.ok) throw new Error('failed to generate imprints');
       const body = await response.json() as ImprintCardsApiResponse;
@@ -753,9 +817,7 @@ function ReviewCard({
 
         <EchoCardDetailFields
           sourceLabel={p.echoCardSourceLabel}
-          source={card.source.label}
-          evidenceLabel={p.echoCardEvidenceLabel}
-          evidence={card.evidence.label}
+          source={formatSourceForPrompt(card.source) || card.source.label}
         />
 
         <EchoCardActionBar

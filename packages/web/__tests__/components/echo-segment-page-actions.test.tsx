@@ -70,6 +70,32 @@ describe('Echo segment page actions', () => {
           cards: imprintApiCards(),
         });
       }
+      if (typeof url === 'string' && (url === '/api/echo/cards' || url.startsWith('/api/echo/cards?'))) {
+        const method = init?.method ?? 'GET';
+        const body = init?.body ? JSON.parse(String(init.body)) as { id?: unknown; segment?: unknown; schedule?: unknown } : {};
+        const segment = method === 'GET'
+          ? new URL(url, 'http://localhost').searchParams.get('segment')
+          : String(body.segment ?? '');
+        const cards = echoCardsApiCards(segment);
+        if (method === 'DELETE') {
+          return jsonResponse({
+            ok: true,
+            state: echoCardsApiState(segment, 'manual', 2),
+            cards: cards.filter((card) => card.id !== body.id),
+          });
+        }
+        if (method === 'PATCH') {
+          return jsonResponse({
+            ok: true,
+            state: echoCardsApiState(segment, 'manual', 2, body.schedule),
+            cards,
+          });
+        }
+        return jsonResponse({
+          state: echoCardsApiState(segment, method === 'POST' ? 'manual' : 'auto', method === 'POST' ? 2 : 1),
+          cards,
+        });
+      }
       if (url.startsWith('/api/echo?segment=imprint&path=')) {
         return jsonResponse({
           item: {
@@ -195,23 +221,18 @@ describe('Echo segment page actions', () => {
       await Promise.resolve();
     });
 
-    expect(fetchMock).toHaveBeenCalledWith('/api/assistant-runs', expect.objectContaining({
+    expect(fetchMock).toHaveBeenCalledWith('/api/echo/cards', expect.objectContaining({
       method: 'POST',
     }));
-    const assistantCall = fetchMock.mock.calls.find(([url]) => url === '/api/assistant-runs');
-    expect(assistantCall).toBeTruthy();
-    const [, init] = assistantCall!;
+    const cardsCall = fetchMock.mock.calls.find(([url, init]) => url === '/api/echo/cards' && init?.method === 'POST');
+    expect(cardsCall).toBeTruthy();
+    const [, init] = cardsCall!;
     expect(JSON.parse(String(init.body))).toMatchObject({
-      assistantId: 'echo-insight',
-      permissionMode: 'read',
-      messages: [
-        {
-          role: 'user',
-          content: expect.stringContaining('You are running the Echo Insight assistant inside MindOS Echo.'),
-        },
-      ],
+      segment: 'insight',
+      trigger: 'manual',
+      locale: 'zh',
     });
-    expect(host.textContent).toContain('Generated insight.');
+    expect(fetchMock.mock.calls.some(([url]) => url === '/api/assistant-runs')).toBe(false);
   });
 
   it('shows secondary Echo pages as support routes back to Insight', async () => {
@@ -358,19 +379,15 @@ describe('Echo segment page actions', () => {
       await Promise.resolve();
     });
 
-    const assistantCall = fetchMock.mock.calls.find(([url]) => url === '/api/assistant-runs');
-    expect(assistantCall).toBeTruthy();
-    const [, init] = assistantCall!;
+    const cardsCall = fetchMock.mock.calls.find(([url, init]) => url === '/api/echo/cards' && init?.method === 'POST');
+    expect(cardsCall).toBeTruthy();
+    const [, init] = cardsCall!;
     expect(JSON.parse(String(init.body))).toMatchObject({
-      assistantId: 'echo-promotion',
-      permissionMode: 'read',
-      messages: [
-        {
-          role: 'user',
-          content: expect.stringContaining('You are running the Echo Promotion assistant inside MindOS Echo.'),
-        },
-      ],
+      segment: 'promotion',
+      trigger: 'manual',
+      locale: 'zh',
     });
+    expect(fetchMock.mock.calls.some(([url]) => url === '/api/assistant-runs')).toBe(false);
   });
 
   it('keeps the Imprint header free of ambiguous generation actions', async () => {
@@ -520,7 +537,7 @@ describe('Echo segment page actions', () => {
     expect(host.textContent).not.toContain('Evidence and promotion');
   });
 
-  it('saves generated Echo markdown and displays the saved item on the page', async () => {
+  it('generates structured Insight cards without opening the legacy saved draft flow', async () => {
     await act(async () => {
       root.render(<EchoSegmentPageClient segment="growth" />);
     });
@@ -531,19 +548,12 @@ describe('Echo segment page actions', () => {
       await Promise.resolve();
     });
 
-    const saveButton = Array.from(host.querySelectorAll('button')).find((button) =>
-      button.textContent?.includes(messages.zh.echoPages.echoSaveLabel),
-    );
-    expect(saveButton).toBeTruthy();
-
-    await act(async () => {
-      saveButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-      await Promise.resolve();
-    });
-
-    const saveCall = fetchMock.mock.calls.find(([url, init]) => url === '/api/echo' && init?.method === 'POST' && String(init.body).includes('"op":"save"'));
-    expect(saveCall).toBeTruthy();
-    expect(host.textContent).toContain(messages.zh.echoPages.echoSavedLabel);
+    const generationCall = fetchMock.mock.calls.find(([url, init]) => (
+      url === '/api/echo/cards'
+      && init?.method === 'POST'
+      && String(init.body).includes('"segment":"insight"')
+    ));
+    expect(generationCall).toBeTruthy();
 
     await act(async () => {
       await Promise.resolve();
@@ -553,10 +563,57 @@ describe('Echo segment page actions', () => {
     expect(host.querySelector('[data-testid="echo-worktable"]')).toBeNull();
     expect(host.querySelector('[data-testid="echo-memory-reader-layout"]')).toBeNull();
     expect(host.querySelector('#echo-memory-reader-title')).toBeNull();
+    expect(host.querySelector('[data-testid="echo-ai-draft-panel"]')).toBeNull();
+    expect(fetchMock.mock.calls.some(([url]) => url === '/api/assistant-runs')).toBe(false);
+    expect(fetchMock.mock.calls.some(([url, init]) => url === '/api/echo' && init?.method === 'POST')).toBe(false);
     expect(fetchMock.mock.calls.some(([url]) => String(url).startsWith('/api/echo?segment=growth&path='))).toBe(false);
-    expect(host.textContent).toContain('Generated insight.');
+    expect(host.textContent).toContain(messages.zh.echoPages.insightCandidates[0]?.title);
     expect(host.textContent).not.toContain('Echo/Insights/洞察.md');
     expect(host.querySelector('a[href="/view/Echo/Insights/%E6%B4%9E%E5%AF%9F.md"]')).toBeNull();
+  });
+
+  it('shows structured empty states when Insight and Promotion have no generated cards', async () => {
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (typeof url === 'string' && (url === '/api/echo/cards' || url.startsWith('/api/echo/cards?'))) {
+        const method = init?.method ?? 'GET';
+        const body = init?.body ? JSON.parse(String(init.body)) as { segment?: unknown } : {};
+        const segment = method === 'GET'
+          ? new URL(url, 'http://localhost').searchParams.get('segment')
+          : String(body.segment ?? '');
+        return jsonResponse({
+          state: echoCardsApiState(segment, method === 'POST' ? 'manual' : 'auto', 1),
+          cards: [],
+        });
+      }
+      if (typeof url === 'string' && url.startsWith('/api/echo?')) {
+        return jsonResponse({ updatedAt: '2026-06-22T00:00:00.000Z', items: [] });
+      }
+      return jsonResponse({ ok: true });
+    });
+
+    await act(async () => {
+      root.render(<EchoSegmentPageClient segment="growth" />);
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(host.querySelector('[data-testid="echo-insight-empty"]')?.textContent)
+      .toContain(messages.zh.echoPages.insightCardsEmptyLabel);
+    expect(host.querySelectorAll('[data-testid="echo-insight-candidate"]')).toHaveLength(0);
+
+    await act(async () => {
+      root.render(<EchoSegmentPageClient segment="practice" />);
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(host.querySelector('[data-testid="echo-promotion-empty"]')?.textContent)
+      .toContain(messages.zh.echoPages.promotionCardsEmptyLabel);
+    expect(host.querySelectorAll('[data-testid="echo-promotion-candidate"]')).toHaveLength(0);
   });
 
   it('keeps the Imprint page focused on generated imprints without the legacy contract or event reader', async () => {
@@ -660,6 +717,14 @@ describe('Echo segment page actions', () => {
       updateButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     expect(fetchMock.mock.calls.some(([url]) => String(url).startsWith('/api/echo?segment=imprint'))).toBe(false);
+    const imprintGenerationCall = fetchMock.mock.calls.find(([url, init]) => (
+      url === '/api/echo/imprints' && init?.method === 'POST'
+    ));
+    expect(imprintGenerationCall).toBeTruthy();
+    expect(JSON.parse(String(imprintGenerationCall?.[1]?.body ?? '{}'))).toMatchObject({
+      trigger: 'manual',
+      locale: 'zh',
+    });
 
     expect(host.querySelector('[data-testid="echo-imprint-moments"]')).not.toBeNull();
     expect(surface?.textContent).toContain('14:12');
@@ -858,10 +923,74 @@ function imprintApiCards() {
     confidence: 0.72,
     source: {
       label: card.source,
-      sessionIds: [`session-${index}`],
+      sessions: [
+        {
+          id: `session-${index}`,
+          title: `Echo session ${index + 1}`,
+          runtime: 'Codex',
+          updatedAt: Date.parse('2026-06-29T06:36:00.000Z'),
+          messageRefs: [
+            {
+              messageIndex: 0,
+              role: 'user',
+              quote: card.content,
+            },
+          ],
+        },
+      ],
     },
-    evidence: {
-      label: card.evidence,
+    status: 'active',
+    generatedAt: '2026-06-29T06:36:00.000Z',
+    updatedAt: '2026-06-29T06:36:00.000Z',
+  }));
+}
+
+function echoCardsApiState(segment: string | null, trigger: 'auto' | 'manual', runCount: number, schedule?: unknown) {
+  return {
+    schemaVersion: 1,
+    segment,
+    checkpointAt: '2026-06-29T06:36:00.000Z',
+    lastGeneratedAt: '2026-06-29T06:36:00.000Z',
+    lastTrigger: trigger,
+    runCount,
+    windowMinutes: 90,
+    activeCount: echoCardsApiCards(segment).length,
+    schedule: schedule ?? {
+      mode: 'daily',
+      dailyTime: '20:00',
+      intervalHours: 24,
+      due: false,
+      nextRunAt: '2026-06-29T12:00:00.000Z',
+    },
+  };
+}
+
+function echoCardsApiCards(segment: string | null) {
+  const candidates = segment === 'promotion'
+    ? messages.zh.echoPages.promotionCandidates
+    : messages.zh.echoPages.insightCandidates;
+  return candidates.map((card, index) => ({
+    ...card,
+    id: `${segment ?? 'insight'}-api-${index}`,
+    confidence: 0.78,
+    createdAt: messages.zh.echoPages.imprintCardsInitialUpdatedAt,
+    source: {
+      label: card.source,
+      sessions: [
+        {
+          id: `${segment ?? 'insight'}-session-${index}`,
+          title: card.source,
+          runtime: 'Codex',
+          updatedAt: Date.parse('2026-06-29T06:36:00.000Z'),
+          messageRefs: [
+            {
+              messageIndex: 0,
+              role: 'assistant',
+              quote: card.content,
+            },
+          ],
+        },
+      ],
     },
     status: 'active',
     generatedAt: '2026-06-29T06:36:00.000Z',

@@ -10,15 +10,18 @@ import {
   deleteImprintCard,
   generateImprintsWithAi,
   getImprintScheduleStatus,
+  normalizeImprintLocale,
   readImprintGenerationState,
   updateImprintSchedule,
   updateImprintCard,
+  type ImprintOutputLocale,
   type ImprintGenerationTrigger,
 } from '@/lib/echo-imprint-generator';
 import { createDefaultAiTaskRunner } from '@/lib/ai/model-client';
 
 type ImprintsPostBody = {
   trigger?: unknown;
+  locale?: unknown;
 };
 
 type ImprintsPatchBody = {
@@ -54,6 +57,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const trigger = normalizeTrigger(body.trigger);
+    const locale = normalizeRequestLocale(body.locale, req);
     const mindRoot = getMindRoot();
     const now = new Date();
     const currentState = readImprintGenerationState(mindRoot);
@@ -68,6 +72,7 @@ export async function POST(req: NextRequest) {
       mindRoot,
       sessions: readAgentSessions(),
       trigger,
+      locale,
       now,
       aiTaskRunner: createDefaultAiTaskRunner(),
       signal: req.signal,
@@ -149,6 +154,17 @@ export async function DELETE(req: NextRequest) {
 
 function normalizeTrigger(value: unknown): ImprintGenerationTrigger {
   return value === 'manual' ? 'manual' : 'auto';
+}
+
+function normalizeRequestLocale(value: unknown, req: NextRequest): ImprintOutputLocale {
+  const explicit = normalizeImprintLocale(value);
+  if (explicit === 'zh' || value === 'en') return explicit;
+
+  const cookieLocale = req.cookies.get('locale')?.value;
+  if (cookieLocale === 'zh' || cookieLocale === 'en') return cookieLocale;
+
+  const acceptLanguage = req.headers.get('accept-language') ?? '';
+  return acceptLanguage.toLowerCase().includes('zh') ? 'zh' : 'en';
 }
 
 function readAgentSessions(): unknown[] {

@@ -39,13 +39,26 @@ describe('/api/echo/imprints', () => {
       ],
     });
 
-    const generatedRes = await POST(request({ trigger: 'manual' }));
+    const generatedRes = await POST(request({ trigger: 'manual', locale: 'zh' }));
     const generated = await generatedRes.json();
     expect(generatedRes.status, JSON.stringify(generated)).toBe(200);
     expect(generated.state).toMatchObject({ lastTrigger: 'manual', runCount: 1, activeCount: expect.any(Number) });
     expect(generated.state.schedule).toMatchObject({ mode: 'daily', dailyTime: '20:00', due: false });
     expect(generated.cards.length).toBeGreaterThan(0);
     expect(generated.cards[0]).not.toHaveProperty('type');
+    expect(generated.cards[0]).not.toHaveProperty('evidence');
+    expect(generated.cards[0].source).toMatchObject({
+      sessions: [
+        expect.objectContaining({
+          id: 'api-session-1',
+          messageRefs: [
+            expect.objectContaining({ messageIndex: expect.any(Number), role: expect.any(String) }),
+          ],
+        }),
+      ],
+    });
+    expect(generated.cards[0].source).not.toHaveProperty('sessionIds');
+    expect(JSON.stringify(generated.cards[0])).not.toContain('Generated from this session window');
     const targetId = generated.cards[0].id;
 
     const loadedRes = GET();

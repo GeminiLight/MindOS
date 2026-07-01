@@ -1,12 +1,13 @@
 'use client';
 
 import type { Dispatch, ReactNode, SetStateAction } from 'react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
   ArrowUpRight,
   Archive,
   BookOpen,
+  Check,
   Bot,
   ClipboardCheck,
   Clock3,
@@ -310,11 +311,59 @@ function EchoWorktablePanel({
 
 type PromotionTarget = 'playbook' | 'practice';
 type EchoScheduleMode = 'manual' | 'daily' | 'interval';
+type EchoCardApiSegment = 'insight' | 'promotion';
 
 type EchoSchedule = {
   mode: EchoScheduleMode;
   dailyTime: string;
   intervalHours: number;
+};
+
+type EchoCardMessageRef = {
+  messageIndex: number;
+  role: string;
+  quote: string;
+};
+
+type EchoCardSourceSession = {
+  id: string;
+  title?: string;
+  runtime?: string;
+  createdAt?: number;
+  updatedAt?: number;
+  messageRefs?: EchoCardMessageRef[];
+};
+
+type EchoStructuredSource = {
+  label: string;
+  sessions: EchoCardSourceSession[];
+};
+
+type EchoStructuredCard<TKind extends string> = {
+  id: string;
+  kind: TKind;
+  title: string;
+  content: string;
+  createdAt: string;
+  source: EchoStructuredSource;
+};
+
+type RemoteEchoStructuredCard = Partial<Omit<EchoStructuredCard<string>, 'source'>> & {
+  source?: unknown;
+};
+
+type EchoCardsApiResponse = {
+  state?: {
+    lastGeneratedAt?: string;
+    lastTrigger?: 'auto' | 'manual';
+    runCount?: number;
+    schedule?: Partial<EchoSchedule> & {
+      due?: boolean;
+      nextRunAt?: string;
+    };
+  };
+  cards?: RemoteEchoStructuredCard[];
+  skipped?: boolean;
 };
 
 const DEFAULT_ECHO_SCHEDULE: EchoSchedule = {
@@ -371,6 +420,260 @@ function updateEchoScheduleIntervalHours(
   }));
 }
 
+function normalizeRemoteEchoSchedule(value: Partial<EchoSchedule> | undefined, fallback: EchoSchedule): EchoSchedule {
+  const mode = value?.mode === 'manual' || value?.mode === 'daily' || value?.mode === 'interval'
+    ? value.mode
+    : fallback.mode;
+  const dailyTime = typeof value?.dailyTime === 'string' && ECHO_TIME_RE.test(value.dailyTime)
+    ? value.dailyTime
+    : fallback.dailyTime;
+  const intervalHours = typeof value?.intervalHours === 'number' && Number.isFinite(value.intervalHours)
+    ? Math.max(1, Math.min(24, Math.round(value.intervalHours)))
+    : fallback.intervalHours;
+  return { mode, dailyTime, intervalHours };
+}
+
+function normalizeRemoteStructuredCard<TKind extends string>(
+  candidate: RemoteEchoStructuredCard,
+  index: number,
+  normalizeKind: (kind: string) => TKind,
+): EchoStructuredCard<TKind> | null {
+  if (typeof candidate.title !== 'string' || typeof candidate.content !== 'string') return null;
+  const sourceRecord = candidate.source && typeof candidate.source === 'object' && !Array.isArray(candidate.source)
+    ? candidate.source as { label?: unknown; sessions?: unknown }
+    : {};
+  return {
+    id: typeof candidate.id === 'string' && candidate.id.trim() ? candidate.id.trim() : `echo-card-${index}`,
+    kind: normalizeKind(typeof candidate.kind === 'string' ? candidate.kind : ''),
+    title: candidate.title,
+    content: candidate.content,
+    createdAt: typeof candidate.createdAt === 'string' ? candidate.createdAt : '',
+    source: {
+      label: typeof sourceRecord.label === 'string' ? sourceRecord.label : '',
+      sessions: normalizeRemoteEchoSourceSessions(sourceRecord.sessions),
+    },
+  };
+}
+
+function normalizeRemoteEchoSourceSessions(value: unknown): EchoCardSourceSession[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => {
+      const record = item && typeof item === 'object' && !Array.isArray(item)
+        ? item as Record<string, unknown>
+        : {};
+      const id = typeof record.id === 'string' ? record.id.trim() : '';
+      if (!id) return null;
+      const messageRefs = normalizeRemoteEchoMessageRefs(record.messageRefs);
+      return {
+        id,
+        ...(typeof record.title === 'string' && record.title.trim() ? { title: record.title.trim() } : {}),
+        ...(typeof record.runtime === 'string' && record.runtime.trim() ? { runtime: record.runtime.trim() } : {}),
+        ...(typeof record.createdAt === 'number' && Number.isFinite(record.createdAt) ? { createdAt: record.createdAt } : {}),
+        ...(typeof record.updatedAt === 'number' && Number.isFinite(record.updatedAt) ? { updatedAt: record.updatedAt } : {}),
+        ...(messageRefs.length > 0 ? { messageRefs } : {}),
+      };
+    })
+    .filter((session): session is EchoCardSourceSession => session !== null);
+}
+
+function normalizeRemoteEchoMessageRefs(value: unknown): EchoCardMessageRef[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => {
+      const record = item && typeof item === 'object' && !Array.isArray(item)
+        ? item as Record<string, unknown>
+        : {};
+      const messageIndex = typeof record.messageIndex === 'number' && Number.isFinite(record.messageIndex)
+        ? Math.max(0, Math.floor(record.messageIndex))
+        : -1;
+      const role = typeof record.role === 'string' ? record.role.trim() : '';
+      const quote = typeof record.quote === 'string' ? record.quote.trim() : '';
+      if (messageIndex < 0 || !role || !quote) return null;
+      return { messageIndex, role, quote };
+    })
+    .filter((ref): ref is EchoCardMessageRef => ref !== null);
+}
+
+function formatStructuredSourceForPrompt(source: EchoStructuredSource): string {
+  const sessionLines = source.sessions.flatMap((session) => {
+    const heading = [
+      session.runtime,
+      session.title || session.id,
+    ].filter(Boolean).join(' · ');
+    const refs = (session.messageRefs ?? []).map((ref) => (
+      `  - #${ref.messageIndex + 1} ${ref.role}: ${ref.quote}`
+    ));
+    return [heading ? `- ${heading}` : `- ${session.id}`, ...refs];
+  });
+  return [source.label, ...sessionLines].filter(Boolean).join('\n');
+}
+
+function useEchoStructuredCards<TKind extends string>({
+  apiSegment,
+  initialCards,
+  normalizeKind,
+  locale,
+}: {
+  apiSegment: EchoCardApiSegment;
+  initialCards: EchoStructuredCard<TKind>[];
+  normalizeKind: (kind: string) => TKind;
+  locale: Locale;
+}) {
+  const [cards, setCards] = useState<EchoStructuredCard<TKind>[]>(initialCards);
+  const [schedule, setSchedule] = useState<EchoSchedule>({ ...DEFAULT_ECHO_SCHEDULE });
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draftContent, setDraftContent] = useState<Record<string, string>>({});
+  const generationInFlightRef = useRef(false);
+
+  useEffect(() => {
+    setCards(initialCards);
+  }, [initialCards]);
+
+  useEffect(() => {
+    void loadCards({ runIfDue: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [apiSegment]);
+
+  async function loadCards({ runIfDue }: { runIfDue: boolean }) {
+    try {
+      const response = await fetch(`/api/echo/cards?segment=${apiSegment}`, { cache: 'no-store' });
+      if (!response.ok) return;
+      const body = await response.json() as EchoCardsApiResponse;
+      applyCardsResponse(body);
+      if (runIfDue && body.state?.schedule?.due) {
+        await requestGeneratedCards('auto');
+      }
+    } catch {
+      // Keep bundled fallback cards when the backend is unavailable.
+    }
+  }
+
+  async function requestGeneratedCards(trigger: 'auto' | 'manual') {
+    if (generationInFlightRef.current) return;
+    generationInFlightRef.current = true;
+    setIsGenerating(true);
+    try {
+      const response = await fetch('/api/echo/cards', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ segment: apiSegment, trigger, locale }),
+      });
+      if (!response.ok) throw new Error('failed to generate Echo cards');
+      applyCardsResponse(await response.json() as EchoCardsApiResponse);
+    } catch {
+      // The fallback candidates remain visible if generation fails.
+    } finally {
+      generationInFlightRef.current = false;
+      setIsGenerating(false);
+    }
+  }
+
+  function applyCardsResponse(body: EchoCardsApiResponse): boolean {
+    const remoteCards = Array.isArray(body.cards)
+      ? body.cards.map((card, index) => normalizeRemoteStructuredCard(card, index, normalizeKind)).filter((card): card is EchoStructuredCard<TKind> => Boolean(card))
+      : null;
+    if (remoteCards && (remoteCards.length > 0 || (body.state?.runCount ?? 0) > 0)) {
+      setCards(remoteCards);
+      setDraftContent({});
+      setEditingId(null);
+    }
+    if (body.state?.schedule) {
+      setSchedule((current) => normalizeRemoteEchoSchedule(body.state?.schedule, current));
+    }
+    return Boolean(remoteCards && (remoteCards.length > 0 || (body.state?.runCount ?? 0) > 0));
+  }
+
+  const setScheduleAndPersist = useCallback<Dispatch<SetStateAction<EchoSchedule>>>((action) => {
+    setSchedule((current) => {
+      const next = typeof action === 'function'
+        ? (action as (value: EchoSchedule) => EchoSchedule)(current)
+        : action;
+      void persistSchedule(next, current);
+      return next;
+    });
+  }, [apiSegment]);
+
+  async function persistSchedule(nextSchedule: EchoSchedule, previousSchedule: EchoSchedule) {
+    try {
+      const response = await fetch('/api/echo/cards', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ segment: apiSegment, schedule: nextSchedule }),
+      });
+      if (!response.ok) {
+        setSchedule(previousSchedule);
+        return;
+      }
+      applyCardsResponse(await response.json() as EchoCardsApiResponse);
+    } catch {
+      setSchedule(previousSchedule);
+    }
+  }
+
+  function updateDraftContent(cardId: string, value: string) {
+    setDraftContent((current) => ({ ...current, [cardId]: value }));
+  }
+
+  function toggleEditing(cardId: string) {
+    if (editingId === cardId) {
+      setEditingId(null);
+      void persistCardDraft(cardId);
+      return;
+    }
+    setEditingId(cardId);
+  }
+
+  async function persistCardDraft(cardId: string) {
+    const currentContent = draftContent[cardId];
+    if (currentContent === undefined) return;
+    setCards((current) => current.map((card) => (
+      card.id === cardId ? { ...card, content: currentContent } : card
+    )));
+    try {
+      const response = await fetch('/api/echo/cards', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ segment: apiSegment, id: cardId, content: currentContent }),
+      });
+      if (!response.ok) return;
+      applyCardsResponse(await response.json() as EchoCardsApiResponse);
+    } catch {
+      // Local edit stays visible until the next successful sync.
+    }
+  }
+
+  async function deleteCard(cardId: string) {
+    setCards((current) => current.filter((card) => card.id !== cardId));
+    if (editingId === cardId) setEditingId(null);
+    try {
+      const response = await fetch('/api/echo/cards', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ segment: apiSegment, id: cardId }),
+      });
+      if (!response.ok) return;
+      applyCardsResponse(await response.json() as EchoCardsApiResponse);
+    } catch {
+      // Optimistic local delete remains in place.
+    }
+  }
+
+  return {
+    cards,
+    schedule,
+    setSchedule: setScheduleAndPersist,
+    isGenerating,
+    editingId,
+    draftContent,
+    requestGeneratedCards,
+    updateDraftContent,
+    toggleEditing,
+    deleteCard,
+  };
+}
+
 type InsightTarget = 'pattern' | 'judgment';
 
 function insightTargetLabel(target: InsightTarget, p: EchoCopy): string {
@@ -387,14 +690,12 @@ function buildCardChatPrompt({
   title,
   content,
   source,
-  evidence,
 }: {
   p: EchoCopy;
   kindLabel: string;
   title: string;
   content: string;
   source: string;
-  evidence: string;
 }) {
   return buildEchoCardChatPrompt({
     prompt: p.echoCardChatPrompt,
@@ -402,32 +703,50 @@ function buildCardChatPrompt({
     titlePromptLabel: p.echoCardTitlePromptLabel,
     contentPromptLabel: p.echoCardContentPromptLabel,
     sourceLabel: p.echoCardSourceLabel,
-    evidenceLabel: p.echoCardEvidenceLabel,
     kindLabel,
     title,
     content,
     source,
-    evidence,
   });
 }
 
 function InsightPanel({
   p,
-  onGenerate,
+  locale,
 }: {
   p: EchoCopy;
-  onGenerate: () => void;
+  locale: Locale;
 }) {
   const [activeFilters, setActiveFilters] = useState<Record<InsightTarget, boolean>>({
     pattern: true,
     judgment: true,
   });
   const [isSchedulePanelOpen, setIsSchedulePanelOpen] = useState(false);
-  const [schedule, setSchedule] = useState<EchoSchedule>({ ...DEFAULT_ECHO_SCHEDULE });
-  const insightCandidates = p.insightCandidates.map((candidate) => ({
-    ...candidate,
-    target: normalizeInsightTarget(candidate.kind),
-  }));
+  const initialCards = useMemo(() => p.insightCandidates.map((candidate, index): EchoStructuredCard<InsightTarget> => ({
+    id: `insight-fallback-${index}`,
+    kind: normalizeInsightTarget(candidate.kind),
+    title: candidate.title,
+    content: candidate.content,
+    createdAt: p.imprintCardsInitialUpdatedAt,
+    source: { label: candidate.source, sessions: [] },
+  })), [p]);
+  const {
+    cards,
+    schedule,
+    setSchedule,
+    isGenerating,
+    editingId,
+    draftContent,
+    requestGeneratedCards,
+    updateDraftContent,
+    toggleEditing,
+    deleteCard,
+  } = useEchoStructuredCards({
+    apiSegment: 'insight',
+    initialCards,
+    normalizeKind: normalizeInsightTarget,
+    locale,
+  });
   const filters: Array<{ id: InsightTarget; label: string; icon: ReactNode }> = [
     {
       id: 'pattern',
@@ -440,7 +759,7 @@ function InsightPanel({
       icon: <ClipboardCheck size={15} aria-hidden />,
     },
   ];
-  const visibleInsights = insightCandidates.filter((candidate) => activeFilters[candidate.target]);
+  const visibleInsights = cards.filter((candidate) => activeFilters[candidate.kind]);
   const scheduleStatusLabel = echoScheduleStatusLabel(schedule, p);
 
   function toggleFilter(filter: InsightTarget) {
@@ -519,12 +838,13 @@ function InsightPanel({
               variant="ghost"
               size="icon-sm"
               className="text-muted-foreground hover:text-foreground"
-              onClick={onGenerate}
+              onClick={() => void requestGeneratedCards('manual')}
               aria-label={p.insightGenerateAriaLabel}
               title={p.insightGenerateAriaLabel}
               data-testid="echo-insight-generate-button"
+              disabled={isGenerating}
             >
-              <RefreshCw size={14} aria-hidden />
+              <RefreshCw size={14} className={cn(isGenerating && 'animate-spin')} aria-hidden />
               <span className="sr-only">{p.insightGenerateAriaLabel}</span>
             </Button>
           </div>
@@ -543,41 +863,60 @@ function InsightPanel({
 
       <div className="pt-5">
         <div className="space-y-3">
-          {visibleInsights.map((candidate) => (
-            <EchoCardFrame
-              key={candidate.title}
-              kind={candidate.target}
-              testId="echo-insight-candidate"
-            >
-              <div className="min-w-0">
-                <EchoCardHeader
-                  kind={candidate.target}
-                  label={insightTargetLabel(candidate.target, p)}
-                  timestamp={p.imprintCardsInitialUpdatedAt}
+          {visibleInsights.length > 0 ? visibleInsights.map((candidate) => {
+            const content = draftContent[candidate.id] ?? candidate.content;
+            const source = formatStructuredSourceForPrompt(candidate.source) || candidate.source.label;
+            const isEditing = editingId === candidate.id;
+            return (
+              <EchoCardFrame
+                key={candidate.id}
+                kind={candidate.kind}
+                testId="echo-insight-candidate"
+              >
+                <div className="min-w-0">
+                  <EchoCardHeader
+                    kind={candidate.kind}
+                    label={insightTargetLabel(candidate.kind, p)}
+                    timestamp={candidate.createdAt}
+                  />
+                  <EchoCardTitle>{candidate.title}</EchoCardTitle>
+                  {isEditing ? (
+                    <textarea
+                      className="mt-3 min-h-28 w-full resize-y rounded-lg border border-border bg-background px-3 py-2 font-sans text-sm leading-6 text-foreground outline-none transition focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40"
+                      aria-label={p.imprintCardEditAria(candidate.title)}
+                      value={content}
+                      onChange={(event) => updateDraftContent(candidate.id, event.currentTarget.value)}
+                    />
+                  ) : (
+                    <EchoCardBody>{content}</EchoCardBody>
+                  )}
+                </div>
+                <EchoCardDetailFields
+                  sourceLabel={p.echoCardSourceLabel}
+                  source={source}
                 />
-                <EchoCardTitle>{candidate.title}</EchoCardTitle>
-                <EchoCardBody>{candidate.content}</EchoCardBody>
-              </div>
-              <EchoCardDetailFields
-                sourceLabel={p.echoCardSourceLabel}
-                source={candidate.source}
-                evidenceLabel={p.echoCardEvidenceLabel}
-                evidence={candidate.evidence}
-              />
-              <EchoCardActions
-                p={p}
-                title={candidate.title}
-                onChat={() => openAskModal(buildCardChatPrompt({
-                  p,
-                  kindLabel: insightTargetLabel(candidate.target, p),
-                  title: candidate.title,
-                  content: candidate.content,
-                  source: candidate.source,
-                  evidence: candidate.evidence,
-                }), 'user', null, { newSession: true })}
-              />
-            </EchoCardFrame>
-          ))}
+                <EchoCardActions
+                  p={p}
+                  title={candidate.title}
+                  isEditing={isEditing}
+                  onEdit={() => toggleEditing(candidate.id)}
+                  onDelete={() => void deleteCard(candidate.id)}
+                  onChat={() => openAskModal(buildCardChatPrompt({
+                    p,
+                    kindLabel: insightTargetLabel(candidate.kind, p),
+                    title: candidate.title,
+                    content,
+                    source,
+                  }), 'user', null, { newSession: true })}
+                />
+              </EchoCardFrame>
+            );
+          }) : (
+            <EchoStructuredEmptyState
+              label={p.insightCardsEmptyLabel}
+              testId="echo-insight-empty"
+            />
+          )}
         </div>
       </div>
     </section>
@@ -586,21 +925,41 @@ function InsightPanel({
 
 function PromotionPanel({
   p,
-  onGenerate,
+  locale,
 }: {
   p: EchoCopy;
-  onGenerate: () => void;
+  locale: Locale;
 }) {
   const [activeFilters, setActiveFilters] = useState<Record<PromotionTarget, boolean>>({
     playbook: true,
     practice: true,
   });
   const [isSchedulePanelOpen, setIsSchedulePanelOpen] = useState(false);
-  const [schedule, setSchedule] = useState<EchoSchedule>({ ...DEFAULT_ECHO_SCHEDULE });
-  const recentPromotions = p.promotionCandidates.map((candidate) => ({
-    ...candidate,
-    target: normalizePromotionTarget(candidate.kind),
-  }));
+  const initialCards = useMemo(() => p.promotionCandidates.map((candidate, index): EchoStructuredCard<PromotionTarget> => ({
+    id: `promotion-fallback-${index}`,
+    kind: normalizePromotionTarget(candidate.kind),
+    title: candidate.title,
+    content: candidate.content,
+    createdAt: p.imprintCardsInitialUpdatedAt,
+    source: { label: candidate.source, sessions: [] },
+  })), [p]);
+  const {
+    cards,
+    schedule,
+    setSchedule,
+    isGenerating,
+    editingId,
+    draftContent,
+    requestGeneratedCards,
+    updateDraftContent,
+    toggleEditing,
+    deleteCard,
+  } = useEchoStructuredCards({
+    apiSegment: 'promotion',
+    initialCards,
+    normalizeKind: normalizePromotionTarget,
+    locale,
+  });
   const filters: Array<{ id: PromotionTarget; label: string; icon: ReactNode }> = [
     {
       id: 'playbook',
@@ -613,7 +972,7 @@ function PromotionPanel({
       icon: <ClipboardCheck size={15} aria-hidden />,
     },
   ];
-  const visiblePromotions = recentPromotions.filter((candidate) => activeFilters[candidate.target]);
+  const visiblePromotions = cards.filter((candidate) => activeFilters[candidate.kind]);
   const scheduleStatusLabel = echoScheduleStatusLabel(schedule, p);
 
   function toggleFilter(filter: PromotionTarget) {
@@ -691,12 +1050,13 @@ function PromotionPanel({
               variant="ghost"
               size="icon-sm"
               className="text-muted-foreground hover:text-foreground"
-              onClick={onGenerate}
+              onClick={() => void requestGeneratedCards('manual')}
               aria-label={p.promotionGenerateAriaLabel}
               title={p.promotionGenerateAriaLabel}
               data-testid="echo-promotion-generate-button"
+              disabled={isGenerating}
             >
-              <RefreshCw size={14} aria-hidden />
+              <RefreshCw size={14} className={cn(isGenerating && 'animate-spin')} aria-hidden />
             </Button>
           </div>
         </div>
@@ -715,41 +1075,60 @@ function PromotionPanel({
 
       <div className="pt-5">
         <div className="space-y-3">
-          {visiblePromotions.map((candidate) => (
-            <EchoCardFrame
-              key={candidate.title}
-              kind={candidate.target}
-              testId="echo-promotion-candidate"
-            >
-              <div className="min-w-0">
-                <EchoCardHeader
-                  kind={candidate.target}
-                  label={promotionTargetLabel(candidate.target, p)}
-                  timestamp={p.imprintCardsInitialUpdatedAt}
+          {visiblePromotions.length > 0 ? visiblePromotions.map((candidate) => {
+            const content = draftContent[candidate.id] ?? candidate.content;
+            const source = formatStructuredSourceForPrompt(candidate.source) || candidate.source.label;
+            const isEditing = editingId === candidate.id;
+            return (
+              <EchoCardFrame
+                key={candidate.id}
+                kind={candidate.kind}
+                testId="echo-promotion-candidate"
+              >
+                <div className="min-w-0">
+                  <EchoCardHeader
+                    kind={candidate.kind}
+                    label={promotionTargetLabel(candidate.kind, p)}
+                    timestamp={candidate.createdAt}
+                  />
+                  <EchoCardTitle>{candidate.title}</EchoCardTitle>
+                  {isEditing ? (
+                    <textarea
+                      className="mt-3 min-h-28 w-full resize-y rounded-lg border border-border bg-background px-3 py-2 font-sans text-sm leading-6 text-foreground outline-none transition focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40"
+                      aria-label={p.imprintCardEditAria(candidate.title)}
+                      value={content}
+                      onChange={(event) => updateDraftContent(candidate.id, event.currentTarget.value)}
+                    />
+                  ) : (
+                    <EchoCardBody>{content}</EchoCardBody>
+                  )}
+                </div>
+                <EchoCardDetailFields
+                  sourceLabel={p.echoCardSourceLabel}
+                  source={source}
                 />
-                <EchoCardTitle>{candidate.title}</EchoCardTitle>
-                <EchoCardBody>{candidate.content}</EchoCardBody>
-              </div>
-              <EchoCardDetailFields
-                sourceLabel={p.echoCardSourceLabel}
-                source={candidate.source}
-                evidenceLabel={p.echoCardEvidenceLabel}
-                evidence={candidate.evidence}
-              />
-              <EchoCardActions
-                p={p}
-                title={candidate.title}
-                onChat={() => openAskModal(buildCardChatPrompt({
-                  p,
-                  kindLabel: promotionTargetLabel(candidate.target, p),
-                  title: candidate.title,
-                  content: candidate.content,
-                  source: candidate.source,
-                  evidence: candidate.evidence,
-                }), 'user', null, { newSession: true })}
-              />
-            </EchoCardFrame>
-          ))}
+                <EchoCardActions
+                  p={p}
+                  title={candidate.title}
+                  isEditing={isEditing}
+                  onEdit={() => toggleEditing(candidate.id)}
+                  onDelete={() => void deleteCard(candidate.id)}
+                  onChat={() => openAskModal(buildCardChatPrompt({
+                    p,
+                    kindLabel: promotionTargetLabel(candidate.kind, p),
+                    title: candidate.title,
+                    content,
+                    source,
+                  }), 'user', null, { newSession: true })}
+                />
+              </EchoCardFrame>
+            );
+          }) : (
+            <EchoStructuredEmptyState
+              label={p.promotionCardsEmptyLabel}
+              testId="echo-promotion-empty"
+            />
+          )}
         </div>
       </div>
     </section>
@@ -878,21 +1257,43 @@ function EchoScheduleModeButton({
 function EchoCardActions({
   p,
   title,
+  isEditing,
+  onEdit,
+  onDelete,
   onChat,
 }: {
   p: EchoCopy;
   title: string;
+  isEditing: boolean;
+  onEdit: () => void;
+  onDelete: () => void;
   onChat: () => void;
 }) {
   return (
     <EchoCardActionBar
       left={(
         <>
-          <Button type="button" variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
-            <Pencil size={13} aria-hidden />
-            {p.promotionEditLabel}
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="text-muted-foreground hover:text-foreground"
+            title={isEditing ? p.imprintCardDoneLabel : p.promotionEditLabel}
+            aria-label={isEditing ? p.imprintCardDoneLabel : p.promotionEditLabel}
+            onClick={onEdit}
+          >
+            {isEditing ? <Check size={13} aria-hidden /> : <Pencil size={13} aria-hidden />}
+            {isEditing ? p.imprintCardDoneLabel : p.promotionEditLabel}
           </Button>
-          <Button type="button" variant="ghost" size="sm" className="text-muted-foreground hover:text-destructive">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="text-muted-foreground hover:text-[var(--error)]"
+            title={p.promotionDeleteLabel}
+            aria-label={p.promotionDeleteLabel}
+            onClick={onDelete}
+          >
             <Trash2 size={13} aria-hidden />
             {p.promotionDeleteLabel}
           </Button>
@@ -913,6 +1314,23 @@ function EchoCardActions({
         </Button>
       )}
     />
+  );
+}
+
+function EchoStructuredEmptyState({
+  label,
+  testId,
+}: {
+  label: string;
+  testId: string;
+}) {
+  return (
+    <p
+      className="rounded-lg border border-border/45 bg-muted/10 px-4 py-5 font-sans text-sm leading-6 text-muted-foreground"
+      data-testid={testId}
+    >
+      {label}
+    </p>
   );
 }
 
@@ -1228,7 +1646,6 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
             `${candidate.title} -> ${insightTargetLabel(candidate.kind as InsightTarget, p)}`,
             `${p.echoCardSourceLabel} ${candidate.source}`,
             candidate.content,
-            `${p.echoCardEvidenceLabel} ${candidate.evidence}`,
           ].join(' / ')).join(' | '),
         },
       );
@@ -1242,7 +1659,6 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
             `${candidate.title} -> ${promotionTargetLabel(candidate.kind as PromotionTarget, p)}`,
             `${p.echoCardSourceLabel} ${candidate.source}`,
             candidate.content,
-            `${p.echoCardEvidenceLabel} ${candidate.evidence}`,
           ].join(' / ')).join(' | '),
         },
       );
@@ -1301,7 +1717,7 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
         )}
 
         {activeEchoSegment === 'imprint' && (
-          <EchoImprintCardsReview p={p} />
+          <EchoImprintCardsReview p={p} locale={locale as Locale} />
         )}
 
         {readerEchoSegment && (
@@ -1310,7 +1726,7 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
               <>
                 <PromotionPanel
                   p={p}
-                  onGenerate={triggerEchoAssistantGenerate}
+                  locale={locale as Locale}
                 />
                 {echoAssistantId ? (
                   <EchoInsightCollapsible
@@ -1340,7 +1756,7 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
               <>
                 <InsightPanel
                   p={p}
-                  onGenerate={triggerEchoAssistantGenerate}
+                  locale={locale as Locale}
                 />
                 {echoAssistantId ? (
                   <EchoInsightCollapsible

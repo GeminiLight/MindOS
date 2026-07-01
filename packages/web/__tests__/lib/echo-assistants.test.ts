@@ -77,11 +77,11 @@ describe('echo assistants', () => {
       ],
     });
 
-    expect(prompt).toContain('Write in Chinese');
+    expect(prompt).toContain('Write in Simplified Chinese');
     expect(prompt).toContain('# 承接');
     expect(prompt).toContain('kind: playbook | practice');
     expect(prompt).toContain('## 内容');
-    expect(prompt).toContain('## 证据');
+    expect(prompt).toContain('## 来源');
     expect(prompt).toContain('## 人工确认');
     expect(prompt).not.toContain('## 去向');
     expect(prompt).not.toContain('## 为什么承接');
@@ -107,7 +107,7 @@ describe('echo assistants', () => {
     expect(prompt).toContain('# 印迹');
     expect(prompt).toContain('kind: digest | moment');
     expect(prompt).toContain('## 内容');
-    expect(prompt).toContain('## 证据');
+    expect(prompt).toContain('## 来源');
     expect(prompt).not.toContain('## 下一步');
     expect(prompt).toContain('当前会话: 用户指出 sidebar 激活态抖动');
   });

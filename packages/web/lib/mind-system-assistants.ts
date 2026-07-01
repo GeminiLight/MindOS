@@ -32,11 +32,16 @@ const DEFAULT_ASSISTANT_PROMPTS: Record<string, string> = {
   ...ECHO_ASSISTANT_DEFAULT_PROMPTS,
 };
 
+const REMOVED_BUILTIN_ASSISTANT_IDS = new Set(['echo-practice']);
+
 export function getMindosContextAssistants(): MindosContextAssistantTemplate[] {
   return [];
 }
 
 export function getDefaultAssistantPrompt(assistantId: string): string {
+  if (REMOVED_BUILTIN_ASSISTANT_IDS.has(assistantId)) {
+    throw new Error(`Built-in assistant "${assistantId}" has been removed.`);
+  }
   return DEFAULT_ASSISTANT_PROMPTS[assistantId] ?? `---
 name: ${titleizeAssistantId(assistantId)}
 description: Describe what this assistant should help with.

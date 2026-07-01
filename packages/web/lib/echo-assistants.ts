@@ -73,7 +73,7 @@ Turn recent AI-coding context into a concise, reviewable imprint card.
 
 ## Output
 
-Return Markdown only. Choose kind: Digest when summarizing the whole provided window, or Moment when capturing one concrete collaboration trace. Keep the card body in Content and keep provenance in Evidence.
+Return Markdown only. Choose kind: Digest when summarizing the whole provided window, or Moment when capturing one concrete collaboration trace. Keep the card body in Content and keep provenance in Source.
 
 ## Boundaries
 
@@ -109,7 +109,7 @@ Return Markdown only. Explain what the thread is, why it keeps returning, and wh
 - Do not invent facts, files, sessions, outcomes, or hidden activity.
 - Do not expose private chain-of-thought. Summarize observable context and user-facing rationale.
 - Do not claim to have read the whole knowledge base unless the context explicitly says so.
-- Separate evidence from interpretation.
+- Separate source from interpretation.
 - Do not write, rename, delete, or reorganize knowledge-base files.`,
   },
   [ECHO_INSIGHT_ASSISTANT_ID]: {
@@ -132,13 +132,13 @@ Distill recurring patterns into reusable insight the user can apply next time.
 
 ## Output
 
-Return Markdown only. Choose kind: Pattern for a recurring shape, or Judgment for a decision rule. Keep interpretation in Content and provenance in Evidence.
+Return Markdown only. Choose kind: Pattern for a recurring shape, or Judgment for a decision rule. Keep interpretation in Content and keep provenance in Source.
 
 ## Boundaries
 
 - Do not invent facts, files, sessions, outcomes, or hidden activity.
 - Do not turn a weak signal into a certainty.
-- Preserve uncertainty and name missing evidence.
+- Preserve uncertainty and name missing source.
 - Avoid motivational filler.
 - Do not write, rename, delete, or reorganize knowledge-base files.`,
   },
@@ -163,7 +163,7 @@ Turn useful traces of agent work into one Promotion card.
 
 ## Output
 
-Return Markdown only. Choose kind: Playbook if the trace should become a reusable method, or Practice if it should become a small action to verify. Keep the reusable method or action in Content and keep provenance in Evidence.
+Return Markdown only. Choose kind: Playbook if the trace should become a reusable method, or Practice if it should become a small action to verify. Keep the reusable method or action in Content and keep provenance in Source.
 
 ## Boundaries
 
@@ -216,7 +216,7 @@ export function buildEchoAssistantRunPrompt({
   facts = [],
   recentSessions = [],
 }: EchoAssistantRunPromptOptions): string {
-  const lang = locale === 'zh' ? 'Chinese' : 'English';
+  const lang = locale === 'zh' ? 'Simplified Chinese' : 'English';
   const output = outputContractForSegment(segment, locale);
   const visibleFacts = [
     { label: 'Section', value: segmentTitle },
@@ -295,25 +295,25 @@ function outputContractForSegment(segment: EchoAssistantSegment, locale: EchoPro
   if (locale === 'zh') {
     switch (segment) {
       case 'imprint':
-        return '- `# 印迹`\n- `kind: digest | moment`\n- `## 内容`\n- `## 证据`';
+        return '- `# 印迹`\n- `kind: digest | moment`\n- `## 内容`\n- `## 来源`';
       case 'threads':
         return '- `# 脉络`\n- `## 现象`\n- `## 为什么会反复出现`\n- `## 可能的形成过程`\n- `## 仍不确定`';
       case 'growth':
-        return '- `# 洞察`\n- `kind: pattern | judgment`\n- `## 内容`\n- `## 证据`';
+        return '- `# 洞察`\n- `kind: pattern | judgment`\n- `## 内容`\n- `## 来源`';
       case 'practice':
-        return '- `# 承接`\n- `kind: playbook | practice`\n- `## 内容`\n- `## 证据`\n- `## 人工确认`';
+        return '- `# 承接`\n- `kind: playbook | practice`\n- `## 内容`\n- `## 来源`\n- `## 人工确认`';
     }
   }
 
   switch (segment) {
     case 'imprint':
-      return '- `# Imprint`\n- `kind: digest | moment`\n- `## Content`\n- `## Evidence`';
+      return '- `# Imprint`\n- `kind: digest | moment`\n- `## Content`\n- `## Source`';
     case 'threads':
       return '- `# Thread`\n- `## Pattern`\n- `## Why It Returns`\n- `## How It May Have Formed`\n- `## Still Uncertain`';
     case 'growth':
-      return '- `# Insight`\n- `kind: pattern | judgment`\n- `## Content`\n- `## Evidence`';
+      return '- `# Insight`\n- `kind: pattern | judgment`\n- `## Content`\n- `## Source`';
     case 'practice':
-      return '- `# Promotion`\n- `kind: playbook | practice`\n- `## Content`\n- `## Evidence`\n- `## Human Check`';
+      return '- `# Promotion`\n- `kind: playbook | practice`\n- `## Content`\n- `## Source`\n- `## Human Check`';
   }
 }
 
