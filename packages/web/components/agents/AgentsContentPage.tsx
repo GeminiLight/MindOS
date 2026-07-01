@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Archive, ArrowLeft, Bot, Cable, Globe, MessageSquare, Server, Sparkles } from 'lucide-react';
+import { ArrowLeft, Bot, Cable, Globe, MessageSquare, Server, Sparkles } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import { useLocale } from '@/lib/stores/locale-store';
 import { useMcpData } from '@/lib/stores/mcp-store';
@@ -20,7 +20,6 @@ import {
 import AgentsOverviewSection from './AgentsOverviewSection';
 import AgentsMcpSection from './AgentsMcpSection';
 import AgentsRuntimeSection from './AgentsRuntimeSection';
-import RuntimeArtifactsPanel from './RuntimeArtifactsPanel';
 import AgentsLocalClientsSection from './AgentsLocalClientsSection';
 import AgentsA2aSection from './AgentsA2aSection';
 import AgentsSkillsSection from './AgentsSkillsSection';
@@ -267,9 +266,6 @@ export default function AgentsContentPage({ tab }: { tab: AgentsDashboardTab }) 
               showContracts={false}
             />
           </div>
-          <div id="agent-artifacts" className="scroll-mt-24">
-            <RuntimeArtifactsPanel />
-          </div>
           <div id="agent-local-clients" className="scroll-mt-24">
             <AgentsLocalClientsSection
               buckets={buckets}
@@ -384,13 +380,6 @@ function AgentModeOverview({
       tone: 'runtime',
     },
     {
-      href: '#agent-artifacts',
-      title: copy.artifacts.title,
-      metric: overview.artifactsMetric,
-      icon: <Archive size={14} aria-hidden="true" />,
-      tone: 'artifact',
-    },
-    {
       href: '#agent-local-clients',
       title: copy.localClients.title,
       metric: overview.localClientsMetric(localClientCount),
@@ -419,7 +408,7 @@ function AgentModeOverview({
       aria-label={overview.title}
     >
       <div className="min-w-0 p-3.5">
-        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
+        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
           {items.map((item) => (
             <Link
               key={item.href}
@@ -441,9 +430,8 @@ function AgentModeOverview({
   );
 }
 
-function agentOverviewToneClass(tone: 'runtime' | 'artifact' | 'client' | 'acp' | 'a2a'): string {
+function agentOverviewToneClass(tone: 'runtime' | 'client' | 'acp' | 'a2a'): string {
   if (tone === 'runtime') return 'border-[var(--amber)]/25 bg-[var(--amber-subtle)] text-[var(--amber)]';
-  if (tone === 'artifact') return 'border-success/20 bg-success/10 text-success';
   if (tone === 'client') return 'border-[var(--amber)]/20 bg-[var(--amber)]/10 text-[var(--amber-text)]';
   if (tone === 'acp') return 'border-[var(--tool-search)]/20 bg-[var(--tool-search)]/10 text-[var(--tool-search)]';
   return 'border-[var(--tool-read)]/20 bg-[var(--tool-read)]/10 text-[var(--tool-read)]';
