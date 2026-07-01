@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import type { Messages } from '@/lib/i18n';
 import type { Locale } from '@/lib/i18n';
+import { ECHO_CARDS_UPDATED_EVENT } from '@/lib/echo-card-events';
 import { cn } from '@/lib/utils';
 import { openAskModal } from '@/hooks/useAskModal';
 import { Button } from '@/components/ui/button';
@@ -294,6 +295,17 @@ export default function EchoImprintCardsReview({ p, locale }: { p: EchoCopy; loc
   useVisiblePolling(() => {
     void loadImprints({ runIfDue: true });
   }, IMPRINT_STATUS_REFRESH_MS);
+
+  useEffect(() => {
+    const onEchoCardsUpdated = (event: Event) => {
+      const detail = (event as CustomEvent<{ segment?: string }>).detail;
+      if (detail?.segment && detail.segment !== 'imprint') return;
+      void loadImprints({ runIfDue: false });
+    };
+    window.addEventListener(ECHO_CARDS_UPDATED_EVENT, onEchoCardsUpdated);
+    return () => window.removeEventListener(ECHO_CARDS_UPDATED_EVENT, onEchoCardsUpdated);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const visibleCandidates = useMemo(
     () => candidates.filter((card) => !deletedIds.has(card.id)),

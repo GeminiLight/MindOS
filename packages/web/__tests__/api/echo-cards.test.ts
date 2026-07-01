@@ -122,4 +122,47 @@ describe('/api/echo/cards', () => {
       schedule: { mode: 'daily', dailyTime: '20:00', intervalHours: 24 },
     });
   });
+
+  it('keeps auto generation incremental while manual generation can refresh recent history', async () => {
+    const now = Date.now();
+    const sourceSession = {
+      id: 'insight-refresh-session',
+      title: 'Insight refresh source',
+      createdAt: now - 30 * 60_000,
+      updatedAt: now - 5 * 60_000,
+      messages: [
+        { role: 'user', content: '用户点击刷新时，应该重新读取最近历史。' },
+        { role: 'assistant', content: 'Manual refresh should reuse recent session history even after checkpoint.' },
+      ],
+    };
+    agentSessionsMock.mockReturnValue({
+      status: 200,
+      body: [sourceSession],
+    });
+
+    const firstRes = await POST(bodyRequest({ segment: 'insight', trigger: 'manual', locale: 'zh' }));
+    const first = await firstRes.json();
+    expect(firstRes.status, JSON.stringify(first)).toBe(200);
+    expect(first.sourceWindow).toMatchObject({ sessionCount: 1 });
+    expect(first.state).toMatchObject({ runCount: 1, lastTrigger: 'manual' });
+
+    const autoRes = await POST(bodyRequest({ segment: 'insight', trigger: 'auto', locale: 'zh' }));
+    const auto = await autoRes.json();
+    expect(autoRes.status, JSON.stringify(auto)).toBe(200);
+    expect(auto).toMatchObject({ skipped: true });
+    expect(auto.state).toMatchObject({ runCount: 1, lastTrigger: 'manual' });
+
+    const manualRes = await POST(bodyRequest({ segment: 'insight', trigger: 'manual', locale: 'zh' }));
+    const manual = await manualRes.json();
+    expect(manualRes.status, JSON.stringify(manual)).toBe(200);
+    expect(manual.sourceWindow).toMatchObject({ sessionCount: 1 });
+    expect(manual.state).toMatchObject({ runCount: 2, lastTrigger: 'manual' });
+    expect(manual.cards[0]).toMatchObject({
+      source: {
+        sessions: [
+          expect.objectContaining({ id: 'insight-refresh-session' }),
+        ],
+      },
+    });
+  });
 });

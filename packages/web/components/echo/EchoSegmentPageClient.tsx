@@ -29,6 +29,7 @@ import {
   getEchoAssistantIdForSegment,
   type EchoPromptFact,
 } from '@/lib/echo-assistants';
+import { ECHO_CARDS_UPDATED_EVENT } from '@/lib/echo-card-events';
 import type { EchoSavedItem, EchoSavedItemDetail, EchoStoredSegment } from '@/lib/echo-store';
 import type { Locale, Messages } from '@/lib/i18n';
 import { useLocale } from '@/lib/stores/locale-store';
@@ -533,6 +534,17 @@ function useEchoStructuredCards<TKind extends string>({
 
   useEffect(() => {
     void loadCards({ runIfDue: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [apiSegment]);
+
+  useEffect(() => {
+    const onEchoCardsUpdated = (event: Event) => {
+      const detail = (event as CustomEvent<{ segment?: string }>).detail;
+      if (detail?.segment && detail.segment !== apiSegment) return;
+      void loadCards({ runIfDue: false });
+    };
+    window.addEventListener(ECHO_CARDS_UPDATED_EVENT, onEchoCardsUpdated);
+    return () => window.removeEventListener(ECHO_CARDS_UPDATED_EVENT, onEchoCardsUpdated);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apiSegment]);
 

@@ -27,6 +27,7 @@ import ChangesBanner from './changes/ChangesBanner';
 import SpaceInitToast from './SpaceInitToast';
 import OrganizeToast from './OrganizeToast';
 import PanelLoadingFallback from './panels/PanelLoadingFallback';
+import EchoCardSchedulerInit from './echo/EchoCardSchedulerInit';
 import { getMobileSyncLabel, MobileSyncDot, useSyncStatus } from './SyncStatusBar';
 import { FileNode } from '@/lib/types';
 import type { MindSystemSlot } from '@/lib/mind-system';
@@ -936,6 +937,7 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
     <InboxOrganizeProvider value={inboxOrganize}>
       <McpStoreInit />
       <WalkthroughInit />
+      <EchoCardSchedulerInit />
       {/* Skip link */}
       <a
         href="#main-content"

@@ -133,8 +133,17 @@ export function generateEchoCards({
   now = new Date(),
   windowMinutes,
 }: GenerateEchoCardsInput): EchoCardGenerationResult {
-  const source = prepareGenerationSource({ mindRoot, segment, sessions, now, windowMinutes });
+  const source = prepareGenerationSource({ mindRoot, segment, sessions, trigger, now, windowMinutes });
   const outputLocale = normalizeEchoCardLocale(locale);
+  if (source.sourceSessions.length === 0) {
+    return emptyGenerationResult({
+      previous: source.previous,
+      segment,
+      now,
+      sourceWindow: source.sourceWindow,
+      extraction: { mode: 'deterministic' },
+    });
+  }
   const generatedCards = buildCardsFromSessions(source.sourceSessions, segment, trigger, now, outputLocale);
   return completeGeneration({
     mindRoot,
@@ -161,8 +170,17 @@ export async function generateEchoCardsWithAi({
   aiTaskRunner,
   signal,
 }: GenerateEchoCardsWithAiInput): Promise<EchoCardGenerationResult> {
-  const source = prepareGenerationSource({ mindRoot, segment, sessions, now, windowMinutes });
+  const source = prepareGenerationSource({ mindRoot, segment, sessions, trigger, now, windowMinutes });
   const outputLocale = normalizeEchoCardLocale(locale);
+  if (source.sourceSessions.length === 0) {
+    return emptyGenerationResult({
+      previous: source.previous,
+      segment,
+      now,
+      sourceWindow: source.sourceWindow,
+      extraction: { mode: 'deterministic' },
+    });
+  }
   const lmAttempt = aiTaskRunner
     ? await buildCardsWithAi({
       aiTaskRunner,
@@ -275,17 +293,19 @@ function prepareGenerationSource({
   mindRoot,
   segment,
   sessions,
+  trigger,
   now,
   windowMinutes,
-}: Pick<GenerateEchoCardsInput, 'mindRoot' | 'segment' | 'sessions' | 'now' | 'windowMinutes'> & {
+}: Pick<GenerateEchoCardsInput, 'mindRoot' | 'segment' | 'sessions' | 'trigger' | 'now' | 'windowMinutes'> & {
   now: Date;
+  trigger: EchoGenerationTrigger;
   windowMinutes?: number;
 }) {
   const previous = readEchoCardsState(mindRoot);
   const segmentState = previous.segments[segment];
   const effectiveWindowMinutes = normalizeEchoCardWindowMinutes(windowMinutes, segmentState.schedule);
   const until = now.toISOString();
-  const since = segmentState.checkpointAt && isValidDate(segmentState.checkpointAt)
+  const since = trigger === 'auto' && segmentState.checkpointAt && isValidDate(segmentState.checkpointAt)
     ? segmentState.checkpointAt
     : new Date(now.getTime() - effectiveWindowMinutes * 60_000).toISOString();
   const sourceSessions = selectSourceSessions(sessions, since, until);
@@ -298,6 +318,29 @@ function prepareGenerationSource({
       until,
       sessionCount: sourceSessions.length,
     },
+  };
+}
+
+function emptyGenerationResult({
+  previous,
+  segment,
+  now,
+  sourceWindow,
+  extraction,
+}: {
+  previous: EchoCardsState;
+  segment: EchoCardSegment;
+  now: Date;
+  sourceWindow: EchoCardGenerationResult['sourceWindow'];
+  extraction: EchoCardGenerationResult['extraction'];
+}): EchoCardGenerationResult {
+  return {
+    state: previous,
+    segmentState: previous.segments[segment],
+    cards: activeEchoCards(previous, segment),
+    sourceWindow,
+    extraction,
+    schedule: getEchoCardScheduleStatus(previous.segments[segment], now),
   };
 }
 

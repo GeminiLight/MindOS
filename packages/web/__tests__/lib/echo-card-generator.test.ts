@@ -97,4 +97,62 @@ describe('echo card generator', () => {
       dailyTime: '20:00',
     });
   });
+
+  it('lets manual generation reread recent history while auto generation stays checkpoint-based', () => {
+    const root = getTestMindRoot();
+    const sourceSession = session('repeat-source', 5);
+    const first = generateEchoCards({
+      mindRoot: root,
+      segment: 'insight',
+      sessions: [sourceSession],
+      trigger: 'manual',
+      locale: 'zh',
+      now,
+    });
+
+    expect(first.sourceWindow.sessionCount).toBe(1);
+    expect(first.state.segments.insight.runCount).toBe(1);
+
+    const auto = generateEchoCards({
+      mindRoot: root,
+      segment: 'insight',
+      sessions: [sourceSession],
+      trigger: 'auto',
+      locale: 'zh',
+      now: new Date(now.getTime() + 60_000),
+    });
+
+    expect(auto.sourceWindow.sessionCount).toBe(0);
+    expect(auto.state.segments.insight.runCount).toBe(1);
+
+    const manual = generateEchoCards({
+      mindRoot: root,
+      segment: 'insight',
+      sessions: [sourceSession],
+      trigger: 'manual',
+      locale: 'zh',
+      now: new Date(now.getTime() + 120_000),
+    });
+
+    expect(manual.sourceWindow.sessionCount).toBe(1);
+    expect(manual.state.segments.insight.runCount).toBe(2);
+    expect(manual.cards[0]?.source.sessions[0]?.id).toBe('repeat-source');
+  });
+
+  it('does not advance checkpoint or run count when no historical sessions are available', () => {
+    const root = getTestMindRoot();
+    const result = generateEchoCards({
+      mindRoot: root,
+      segment: 'promotion',
+      sessions: [],
+      trigger: 'auto',
+      locale: 'zh',
+      now,
+    });
+
+    expect(result.sourceWindow.sessionCount).toBe(0);
+    expect(result.state.segments.promotion.runCount).toBe(0);
+    expect(result.state.segments.promotion.checkpointAt).toBeUndefined();
+    expect(readEchoCardsState(root).segments.promotion.checkpointAt).toBeUndefined();
+  });
 });
