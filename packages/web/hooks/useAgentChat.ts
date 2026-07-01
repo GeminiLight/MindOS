@@ -84,6 +84,7 @@ export interface AgentChatRefs {
   selectedSkillRef: React.RefObject<{ name: string } | null>;
   selectedAgentRuntimeRef: React.RefObject<(AgentRuntimeIdentity & { binaryPath?: string }) | null>;
   attachedFilesRef: React.RefObject<string[]>;
+  permissionModeRef?: React.RefObject<AgentPermissionMode>;
 }
 
 interface UseAgentChatOpts {
@@ -218,6 +219,7 @@ export function useAgentChat({
     }
 
     const skill = snapshot.skill;
+    const permissionModeSnapshot = refs.permissionModeRef?.current ?? permissionMode;
     const selectedRuntimeBase = compactAgentRuntimeIdentity(refs.selectedAgentRuntimeRef.current);
     const requestRuntimeBase = selectedRuntimeBase?.kind === 'mindos' ? null : selectedRuntimeBase;
     const runtimeSnapshot = selectedRuntimeBase ?? MINDOS_RUNTIME;
@@ -318,7 +320,7 @@ export function useAgentChat({
     const requestBody = JSON.stringify({
       messages: requestMessages,
       agentMode: 'default',
-      permissionMode,
+      permissionMode: permissionModeSnapshot,
       currentFile,
       attachedFiles: snapshot.requestAttachedFiles,
       uploadedFiles: readyUploads

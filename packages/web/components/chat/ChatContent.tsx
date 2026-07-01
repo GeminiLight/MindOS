@@ -210,6 +210,7 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
   const selectedAgentRuntimeRef = useRef(selectedAgentRuntime);
   const pendingOpenAgentRef = useRef<SelectedAgentRuntime | null>(null);
   const [permissionMode, setPermissionMode] = useState<AgentPermissionMode>('ask');
+  const permissionModeRef = useRef<AgentPermissionMode>('ask');
   const [providerOverride, setProviderOverride] = useState<ProviderSelection>(null);
   const providerOverrideRef = useRef<ProviderSelection>(null);
   const [modelOverride, setModelOverride] = useState<string | null>(null);
@@ -235,7 +236,9 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
   const session = useAskSession(currentFile, projectId);
 
   useEffect(() => {
-    setPermissionMode(getPersistedPermissionMode());
+    const persistedPermissionMode = getPersistedPermissionMode();
+    permissionModeRef.current = persistedPermissionMode;
+    setPermissionMode(persistedPermissionMode);
   }, []);
 
   useEffect(() => {
@@ -494,12 +497,13 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
     attachedFilesRef.current = attachedFiles;
     selectedSkillRef.current = selectedSkill;
     selectedAgentRuntimeRef.current = selectedAgentRuntime;
+    permissionModeRef.current = permissionMode;
     sessionRef.current = session;
     uploadRef.current = uploadRuntime;
     imageUploadRef.current = imageUploadRuntime;
     mentionRef.current = mention;
     slashRef.current = slash;
-  }, [attachedFiles, imageUploadRuntime, mention, selectedAgentRuntime, selectedSkill, session, slash, uploadRuntime]);
+  }, [attachedFiles, imageUploadRuntime, mention, permissionMode, selectedAgentRuntime, selectedSkill, session, slash, uploadRuntime]);
 
   useLayoutEffect(() => {
     queuedFollowUpsRef.current = queuedFollowUps;
@@ -549,6 +553,7 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
     selectedSkillRef,
     selectedAgentRuntimeRef,
     attachedFilesRef,
+    permissionModeRef,
   }), []);
   const chat = useAgentChat({
     currentFile,
@@ -1516,6 +1521,11 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
     commitSessionModelSelection(provider, model);
   }, [commitSessionModelSelection]);
 
+  const handlePermissionModeChange = useCallback((next: AgentPermissionMode) => {
+    permissionModeRef.current = next;
+    setPermissionMode(next);
+  }, []);
+
   const handleNativeRuntimeOptionsChange = useCallback((next: NativeRuntimeOptions) => {
     setNativeRuntimeOptions(next);
     const runtime = selectedAgentRuntimeRef.current;
@@ -1945,7 +1955,7 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
                   disabled={isLoading}
                 />
               )}
-              <ModeCapsule mode={permissionMode} onChange={setPermissionMode} disabled={isLoading} />
+              <ModeCapsule mode={permissionMode} onChange={handlePermissionModeChange} disabled={isLoading} />
               {mounted && isAcpRuntime && (
                 <AcpRuntimeOptionsCapsule
                   projection={runtimeSessionProjection.selectedProjection}

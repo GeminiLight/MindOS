@@ -4,7 +4,7 @@ import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import ChatContent from '@/components/chat/ChatContent';
 import { LAST_AGENT_RUNTIME_STORAGE_KEY } from '@/lib/ask-runtime-preference';
-import type { ChatSession } from '@/lib/types';
+import type { AgentPermissionMode, ChatSession } from '@/lib/types';
 import type { RuntimeSessionEntry } from '@/lib/runtime-session-entry';
 
 const mockSetMessages = vi.fn();
@@ -29,6 +29,7 @@ let mockDetectionLoading = false;
 let mockNativeRuntimeDescriptors: unknown[] = [];
 let mockNativeLoadingByKind: Partial<Record<'codex' | 'claude', boolean>> = {};
 let mockNativeErrorByKind: Partial<Record<'codex' | 'claude', string | null>> = {};
+let mockPersistedPermissionMode: AgentPermissionMode = 'ask';
 
 function isAgentTurnUrl(url: RequestInfo | URL): boolean {
   return String(url).startsWith('/api/agent/sessions/') && String(url).endsWith('/turns');
@@ -395,8 +396,19 @@ vi.mock('@/components/ask/ProviderModelCapsule', () => ({
   getPersistedProviderModel: () => mockPersistedProviderModel,
 }));
 vi.mock('@/components/ask/ModeCapsule', () => ({
-  default: () => null,
-  getPersistedPermissionMode: () => 'ask',
+  default: ({
+    mode,
+    onChange,
+  }: {
+    mode: AgentPermissionMode;
+    onChange: (mode: AgentPermissionMode) => void;
+  }) => (
+    <div data-testid="permission-capsule" data-mode={mode}>
+      <button type="button" onClick={() => onChange('ask')}>Set Ask Permission</button>
+      <button type="button" onClick={() => onChange('full')}>Set Full Permission</button>
+    </div>
+  ),
+  getPersistedPermissionMode: () => mockPersistedPermissionMode,
 }));
 vi.mock('@/lib/utils', () => ({ cn: (...parts: Array<string | false | null | undefined>) => parts.filter(Boolean).join(' ') }));
 vi.mock('@/lib/agent/reconnect', () => ({
@@ -419,6 +431,7 @@ describe('ChatContent ACP session binding', () => {
     mockNativeRuntimeDescriptors = [];
     mockNativeLoadingByKind = {};
     mockNativeErrorByKind = {};
+    mockPersistedPermissionMode = 'ask';
     mockSessions = [sessionWithClaude];
     mockActiveSession = sessionWithClaude;
     mockActiveSessionId = 's1';
@@ -1029,6 +1042,55 @@ describe('ChatContent ACP session binding', () => {
       reasoningEffort: 'high',
     });
     expect(mockSetSessionAgentRuntimeBinding).toHaveBeenCalledWith({ id: 'codex', name: 'Codex', kind: 'codex', binaryPath: '/usr/local/bin/codex' });
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('submits the latest full permission mode for a native Codex turn', async () => {
+    mockNativeRuntimeDescriptors = [{
+      id: 'codex',
+      name: 'Codex',
+      kind: 'codex',
+      binaryPath: '/usr/local/bin/codex',
+      status: 'available',
+      capabilities: {},
+    }];
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<ChatContent visible variant="panel" initialMessage="write project notes" />);
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const selectButton = Array.from(host.querySelectorAll('button')).find((button) => button.textContent === 'Select Codex') as HTMLButtonElement;
+    await act(async () => {
+      selectButton.click();
+    });
+
+    const form = host.querySelector('form') as HTMLFormElement;
+    const fullPermissionButton = Array.from(host.querySelectorAll('button')).find((button) => button.textContent === 'Set Full Permission') as HTMLButtonElement;
+    await act(async () => {
+      fullPermissionButton.click();
+      if (typeof form.requestSubmit === 'function') {
+        form.requestSubmit();
+      } else {
+        form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      }
+    });
+
+    const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
+    const agentTurnCall = fetchMock.mock.calls.find(([url]) => isAgentTurnUrl(url));
+    expect(agentTurnCall).toBeTruthy();
+    const requestBody = JSON.parse(String((agentTurnCall?.[1] as RequestInit | undefined)?.body));
+    expect(requestBody.selectedRuntime).toEqual({ id: 'codex', name: 'Codex', kind: 'codex', binaryPath: '/usr/local/bin/codex' });
+    expect(requestBody.permissionMode).toBe('full');
 
     await act(async () => {
       root.unmount();
