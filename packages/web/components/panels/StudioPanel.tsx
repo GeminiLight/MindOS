@@ -2,8 +2,17 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { CalendarClock, FolderOpen, LayoutDashboard, LayoutGrid, Plus } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import {
+  CalendarClock,
+  FolderOpen,
+  GraduationCap,
+  LayoutDashboard,
+  LayoutGrid,
+  NotebookTabs,
+  Plus,
+  Sparkles,
+} from 'lucide-react';
+import { type ReactNode, useEffect, useState } from 'react';
 import PanelHeader from './PanelHeader';
 import { PanelPrimaryNav, PanelNavRow } from './PanelNavRow';
 import { useLocale } from '@/lib/stores/locale-store';
@@ -30,6 +39,10 @@ const COPY = {
     automation: 'Automation',
     newProject: 'New Project',
     recentProjects: 'Recent Projects',
+    allAutomations: 'All automations',
+    appRelationships: 'Relationship Memory',
+    appLearning: 'Learning Practice',
+    appLaunch: 'Launch Practice',
   },
   zh: {
     title: '工作台',
@@ -39,8 +52,33 @@ const COPY = {
     automation: '自动化',
     newProject: '新建项目',
     recentProjects: '近期项目',
+    allAutomations: '全部自动化',
+    appRelationships: '关系记忆',
+    appLearning: '学习练习',
+    appLaunch: '发布实践',
   },
 } as const;
+
+const STUDIO_PANEL_APP_ROWS = [
+  {
+    id: 'relationships',
+    href: '/capture',
+    icon: <NotebookTabs size={14} aria-hidden="true" />,
+    titleKey: 'appRelationships',
+  },
+  {
+    id: 'learning',
+    href: '/echo/growth',
+    icon: <GraduationCap size={14} aria-hidden="true" />,
+    titleKey: 'appLearning',
+  },
+  {
+    id: 'launch',
+    href: '/studio/projects',
+    icon: <Sparkles size={14} aria-hidden="true" />,
+    titleKey: 'appLaunch',
+  },
+] as const;
 
 function isStudioOverviewPath(pathname: string): boolean {
   return pathname === '/studio' || pathname === '/studio/';
@@ -82,8 +120,29 @@ function StudioProjectRow({
   const title = localize(project.title, project.titleZh, locale);
 
   return (
-    <Link
+    <StudioPanelObjectRow
       href={getStudioProjectHref(project.id)}
+      icon={<FolderOpen size={14} aria-hidden="true" />}
+      title={title}
+      selected={selected}
+    />
+  );
+}
+
+function StudioPanelObjectRow({
+  href,
+  icon,
+  title,
+  selected = false,
+}: {
+  href: string;
+  icon: ReactNode;
+  title: string;
+  selected?: boolean;
+}) {
+  return (
+    <Link
+      href={href}
       className={cn(
         'group relative flex min-w-0 items-center gap-3 px-4 py-2.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         selected ? 'bg-[var(--amber-subtle)] text-foreground' : 'text-muted-foreground hover:bg-muted/35 hover:text-foreground',
@@ -99,7 +158,7 @@ function StudioProjectRow({
           selected ? 'text-[var(--amber)]' : 'text-muted-foreground group-hover:text-foreground',
         )}
       >
-        <FolderOpen size={14} aria-hidden="true" />
+        {icon}
       </span>
       <span className="block min-w-0 flex-1 truncate text-left text-sm font-medium text-foreground" title={title}>
         {title}
@@ -174,24 +233,56 @@ export default function StudioPanel({ active }: StudioPanelProps) {
       </PanelPrimaryNav>
 
       <div className="sidebar-scroll-area min-h-0 flex-1 overflow-y-auto">
-        <nav className="px-3 py-3" aria-label={copy.recentProjects}>
-          <p className="mb-1.5 px-1 text-2xs font-medium uppercase text-muted-foreground/50">
-            {copy.recentProjects}
-          </p>
-          <div className="space-y-1">
-            {projects.slice(0, 8).map((project) => {
-              const selected = currentProjectId === project.id;
-              return (
-                <StudioProjectRow
-                  key={project.id}
-                  project={project}
-                  locale={locale}
-                  selected={selected}
+        {appsActive ? (
+          <nav className="px-3 py-3" aria-label={copy.apps}>
+            <p className="mb-1.5 px-1 text-2xs font-medium uppercase text-muted-foreground/50">
+              {copy.apps}
+            </p>
+            <div className="space-y-1">
+              {STUDIO_PANEL_APP_ROWS.map((app) => (
+                <StudioPanelObjectRow
+                  key={app.id}
+                  href={app.href}
+                  icon={app.icon}
+                  title={copy[app.titleKey]}
                 />
-              );
-            })}
-          </div>
-        </nav>
+              ))}
+            </div>
+          </nav>
+        ) : automationActive ? (
+          <nav className="px-3 py-3" aria-label={copy.automation}>
+            <p className="mb-1.5 px-1 text-2xs font-medium uppercase text-muted-foreground/50">
+              {copy.automation}
+            </p>
+            <div className="space-y-1">
+              <StudioPanelObjectRow
+                href="/studio/automation"
+                icon={<CalendarClock size={14} aria-hidden="true" />}
+                title={copy.allAutomations}
+                selected
+              />
+            </div>
+          </nav>
+        ) : (
+          <nav className="px-3 py-3" aria-label={copy.recentProjects}>
+            <p className="mb-1.5 px-1 text-2xs font-medium uppercase text-muted-foreground/50">
+              {copy.recentProjects}
+            </p>
+            <div className="space-y-1">
+              {projects.slice(0, 8).map((project) => {
+                const selected = currentProjectId === project.id;
+                return (
+                  <StudioProjectRow
+                    key={project.id}
+                    project={project}
+                    locale={locale}
+                    selected={selected}
+                  />
+                );
+              })}
+            </div>
+          </nav>
+        )}
       </div>
     </div>
   );

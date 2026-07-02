@@ -66,7 +66,7 @@ const COPY = {
       {
         id: 'launch',
         status: 'draft',
-        href: '/studio',
+        href: '/studio/projects',
         title: 'Launch Practice',
         eyebrow: 'Product',
         description: 'Launch state, evidence, risks, changelog, and copy drafts.',
@@ -110,7 +110,7 @@ const COPY = {
       {
         id: 'launch',
         status: 'draft',
-        href: '/studio',
+        href: '/studio/projects',
         title: '发布实践',
         eyebrow: '产品',
         description: '发布状态、证据、风险、changelog 和文案草稿。',

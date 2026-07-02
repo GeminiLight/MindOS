@@ -426,11 +426,19 @@ describe('StudioContent', () => {
     const apps = host.querySelector('a[href="/studio/apps"]');
     const automation = host.querySelector('a[href="/studio/automation"]');
     const launchProject = host.querySelector('a[href="/studio/launch-practice"]');
+    const appsSection = host.querySelector('nav[aria-label="Apps"]');
     expect(overview?.getAttribute('aria-current')).toBeNull();
     expect(projects?.getAttribute('aria-current')).toBeNull();
     expect(apps?.getAttribute('aria-current')).toBe('page');
     expect(automation?.getAttribute('aria-current')).toBeNull();
-    expect(launchProject?.getAttribute('aria-current')).toBeNull();
+    expect(appsSection).not.toBeNull();
+    expect(appsSection?.textContent).toContain('Relationship Memory');
+    expect(appsSection?.textContent).toContain('Learning Practice');
+    expect(appsSection?.textContent).toContain('Launch Practice');
+    expect(appsSection?.querySelector('a[href="/capture"]')).not.toBeNull();
+    expect(appsSection?.querySelector('a[href="/echo/growth"]')).not.toBeNull();
+    expect(launchProject).toBeNull();
+    expect(host.textContent).not.toContain('Recent Projects');
   });
 
   it('selects the Automation sidebar route without treating it as a Project', async () => {
@@ -447,10 +455,14 @@ describe('StudioContent', () => {
     const projects = host.querySelector('a[href="/studio/projects"]');
     const automation = host.querySelector('a[href="/studio/automation"]');
     const launchProject = host.querySelector('a[href="/studio/launch-practice"]');
+    const automationSection = host.querySelector('nav[aria-label="Automation"]');
     expect(overview?.getAttribute('aria-current')).toBeNull();
     expect(projects?.getAttribute('aria-current')).toBeNull();
     expect(automation?.getAttribute('aria-current')).toBe('page');
-    expect(launchProject?.getAttribute('aria-current')).toBeNull();
+    expect(automationSection).not.toBeNull();
+    expect(automationSection?.textContent).toContain('All automations');
+    expect(launchProject).toBeNull();
+    expect(host.textContent).not.toContain('Recent Projects');
   });
 
   it('selects the Projects sidebar route below Studio overview', async () => {
@@ -488,6 +500,7 @@ describe('StudioContent', () => {
     expect(host.textContent).toContain('Record touchpoint');
     expect(host.querySelector('a[href="/capture"]')).not.toBeNull();
     expect(host.querySelector('a[href="/echo/growth"]')).not.toBeNull();
+    expect(host.querySelector('a[href="/studio/projects"]')).not.toBeNull();
   });
 
   it('renders Studio Automation as a Studio subpage with an Overview return link', async () => {
