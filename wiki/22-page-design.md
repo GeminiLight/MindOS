@@ -107,7 +107,8 @@ Drawer (triggered by ☰):
 | `/echo/[segment]` | 回响内容页 | `app/echo/[segment]/page.tsx` | 与你有关 / 未完待续 / 每日回响 / 历史的你 / 心向生长；见 `spec-echo-content-pages.md` |
 | `/agents` | 智能体总览 | `app/agents/page.tsx` | 总览 / Assistant / Agent / Skills & MCP / 频道五组 IA；旧 MCP / Skills / Network / Sessions / Activity query 仍作为兼容入口 |
 | `/agents/[agentKey]` | 智能体详情 | `app/agents/[agentKey]/page.tsx` | Skill 管理 + MCP 状态 + Runtime 诊断 |
-| `/studio` | Studio / 工作台 | `app/studio/page.tsx` | 项目工作台；承载 Project、Session、上下文与复盘 |
+| `/studio` | Studio / 工作台总览 | `app/studio/page.tsx` | 工作台总览；汇总 Project、Apps、Automation 三个工作面 |
+| `/studio/projects` | Studio 项目 | `app/studio/projects/page.tsx` | 项目工作台；承载 Project、Session、上下文与复盘 |
 | `/studio/apps` | Studio 应用 | `app/studio/apps/page.tsx` | 场景应用入口；关系记忆、学习练习等 context 工作面 |
 | `/studio/automation` | Studio 自动化 | `app/studio/automation/page.tsx` | 本地自动化计划/编辑器，后端执行待接入 |
 | `/studio/[projectId]` | Studio 项目详情 | `app/studio/[projectId]/page.tsx` | 单个 Project 的上下文、对话、复盘与运行记录 |

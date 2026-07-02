@@ -120,6 +120,7 @@ describe('studio projects', () => {
 
   it('keeps the Next app route at /studio/[projectId]', () => {
     expect(fs.existsSync(path.join(process.cwd(), 'app/studio/[projectId]/page.tsx'))).toBe(true);
+    expect(fs.existsSync(path.join(process.cwd(), 'app/studio/projects/page.tsx'))).toBe(true);
     expect(fs.existsSync(path.join(process.cwd(), 'app/studio/projects/[projectId]/page.tsx'))).toBe(false);
   });
 

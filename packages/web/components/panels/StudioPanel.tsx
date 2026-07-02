@@ -25,23 +25,29 @@ const COPY = {
   en: {
     title: 'Studio',
     overview: 'Overview',
+    projects: 'Projects',
     apps: 'Apps',
     automation: 'Automation',
     newProject: 'New Project',
-    recentProjects: 'Projects',
+    recentProjects: 'Recent Projects',
   },
   zh: {
     title: '工作台',
     overview: '总览',
+    projects: '项目',
     apps: '应用',
     automation: '自动化',
     newProject: '新建项目',
-    recentProjects: '项目',
+    recentProjects: '近期项目',
   },
 } as const;
 
 function isStudioOverviewPath(pathname: string): boolean {
   return pathname === '/studio' || pathname === '/studio/';
+}
+
+function isStudioProjectsPath(pathname: string): boolean {
+  return pathname === '/studio/projects' || pathname.startsWith('/studio/projects/');
 }
 
 function isStudioAutomationPath(pathname: string): boolean {
@@ -53,7 +59,7 @@ function isStudioAppsPath(pathname: string): boolean {
 }
 
 function getProjectIdFromPath(pathname: string): string | null {
-  if (isStudioOverviewPath(pathname) || isStudioAutomationPath(pathname) || isStudioAppsPath(pathname)) return null;
+  if (isStudioOverviewPath(pathname) || isStudioProjectsPath(pathname) || isStudioAutomationPath(pathname) || isStudioAppsPath(pathname)) return null;
   if (!pathname.startsWith('/studio/')) return null;
   const raw = pathname.slice('/studio/'.length).split('/', 1)[0];
   if (!raw) return null;
@@ -110,6 +116,7 @@ export default function StudioPanel({ active }: StudioPanelProps) {
   const appsActive = isStudioAppsPath(pathname);
   const automationActive = isStudioAutomationPath(pathname);
   const currentProjectId = getProjectIdFromPath(pathname);
+  const projectsActive = isStudioProjectsPath(pathname) || currentProjectId !== null;
   const [projects, setProjects] = useState<StudioProject[]>(() => readStudioProjects());
 
   useEffect(() => {
@@ -141,6 +148,13 @@ export default function StudioPanel({ active }: StudioPanelProps) {
           icon={<LayoutDashboard size={14} aria-hidden="true" />}
           title={copy.overview}
           active={overviewActive}
+          activeVariant="rail"
+        />
+        <PanelNavRow
+          href="/studio/projects"
+          icon={<FolderOpen size={14} aria-hidden="true" />}
+          title={copy.projects}
+          active={projectsActive}
           activeVariant="rail"
         />
         <PanelNavRow

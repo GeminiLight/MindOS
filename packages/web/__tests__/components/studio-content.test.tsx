@@ -3,6 +3,7 @@ import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import StudioContent from '@/components/studio/StudioContent';
+import StudioOverviewContent from '@/components/studio/StudioOverviewContent';
 import StudioAppsContent from '@/components/studio/StudioAppsContent';
 import StudioAutomationContent from '@/components/studio/StudioAutomationContent';
 import StudioPanel from '@/components/panels/StudioPanel';
@@ -206,6 +207,16 @@ async function renderStudio() {
   });
 }
 
+async function renderStudioOverview() {
+  host = document.createElement('div');
+  document.body.appendChild(host);
+  root = createRoot(host);
+
+  await act(async () => {
+    root!.render(<StudioOverviewContent />);
+  });
+}
+
 async function renderStudioAutomation() {
   host = document.createElement('div');
   document.body.appendChild(host);
@@ -258,7 +269,24 @@ describe('StudioContent', () => {
     vi.unstubAllGlobals();
   });
 
-  it('renders Studio as a Project-first surface', async () => {
+  it('renders Studio overview as the parent surface for Projects, Apps, and Automation', async () => {
+    await renderStudioOverview();
+
+    expect(host.querySelector('[data-studio-overview]')).not.toBeNull();
+    expect(host.textContent).toContain('Studio');
+    expect(host.textContent).toContain('Overview for projects, apps, and automations.');
+    expect(host.querySelector('a[href="/studio/projects"]')).not.toBeNull();
+    expect(host.querySelector('a[href="/studio/apps"]')).not.toBeNull();
+    expect(host.querySelector('a[href="/studio/automation"]')).not.toBeNull();
+    expect(host.textContent).toContain('Projects');
+    expect(host.textContent).toContain('Apps');
+    expect(host.textContent).toContain('Automation');
+    expect(host.textContent).toContain('Continue');
+    expect(host.querySelector('[data-studio-projects-surface]')).toBeNull();
+    expect(host.querySelector('input[placeholder="Search projects..."]')).toBeNull();
+  });
+
+  it('renders Studio Projects as a Project-first surface', async () => {
     await renderStudio();
 
     expect(host.textContent).toContain('New Project');
@@ -272,6 +300,7 @@ describe('StudioContent', () => {
     expect(host.querySelector('a[href="/studio/launch-practice"]')).not.toBeNull();
     expect(host.querySelector('[data-content-page-shell="studio"]')?.className).toContain('workbench-content-page');
     expect(host.querySelector('aside[aria-label="Studio"]')).toBeNull();
+    expect(host.querySelector('header a[data-studio-back-overview]')?.getAttribute('href')).toBe('/studio');
 
     const projectsSurface = host.querySelector('[data-studio-projects-surface]');
     expect(projectsSurface).not.toBeNull();
@@ -321,7 +350,7 @@ describe('StudioContent', () => {
     expect(items[0].textContent).not.toContain('Draft launch brief from accepted evidence.');
   });
 
-  it('switches Studio overview between grouped and stats views', async () => {
+  it('switches Studio Projects between grouped and stats views', async () => {
     await renderStudio();
 
     const groupedTab = Array.from(host.querySelectorAll('button')).find((button) => (
@@ -353,7 +382,7 @@ describe('StudioContent', () => {
     expect(host.querySelectorAll('[data-studio-project-item="compact"]').length).toBeGreaterThan(0);
   });
 
-  it('renders the unified Studio panel with Overview, Apps, Automation and Projects', async () => {
+  it('renders the unified Studio panel with Overview, Projects, Apps, and Automation', async () => {
     host = document.createElement('div');
     document.body.appendChild(host);
     root = createRoot(host);
@@ -363,13 +392,15 @@ describe('StudioContent', () => {
     });
 
     expect(host.textContent).toContain('Overview');
+    expect(host.textContent).toContain('Projects');
     expect(host.textContent).toContain('Apps');
     expect(host.textContent).toContain('Automation');
-    expect(host.textContent).toContain('Projects');
     const overview = host.querySelector('a[href="/studio"]');
+    const projects = host.querySelector('a[href="/studio/projects"]');
     const apps = host.querySelector('a[href="/studio/apps"]');
     const automation = host.querySelector('a[href="/studio/automation"]');
     expect(overview).not.toBeNull();
+    expect(projects).not.toBeNull();
     expect(apps).not.toBeNull();
     expect(automation).not.toBeNull();
     expect(overview?.className).toContain('gap-3');
@@ -391,10 +422,12 @@ describe('StudioContent', () => {
     });
 
     const overview = host.querySelector('a[href="/studio"]');
+    const projects = host.querySelector('a[href="/studio/projects"]');
     const apps = host.querySelector('a[href="/studio/apps"]');
     const automation = host.querySelector('a[href="/studio/automation"]');
     const launchProject = host.querySelector('a[href="/studio/launch-practice"]');
     expect(overview?.getAttribute('aria-current')).toBeNull();
+    expect(projects?.getAttribute('aria-current')).toBeNull();
     expect(apps?.getAttribute('aria-current')).toBe('page');
     expect(automation?.getAttribute('aria-current')).toBeNull();
     expect(launchProject?.getAttribute('aria-current')).toBeNull();
@@ -411,10 +444,30 @@ describe('StudioContent', () => {
     });
 
     const overview = host.querySelector('a[href="/studio"]');
+    const projects = host.querySelector('a[href="/studio/projects"]');
     const automation = host.querySelector('a[href="/studio/automation"]');
     const launchProject = host.querySelector('a[href="/studio/launch-practice"]');
     expect(overview?.getAttribute('aria-current')).toBeNull();
+    expect(projects?.getAttribute('aria-current')).toBeNull();
     expect(automation?.getAttribute('aria-current')).toBe('page');
+    expect(launchProject?.getAttribute('aria-current')).toBeNull();
+  });
+
+  it('selects the Projects sidebar route below Studio overview', async () => {
+    mockPathname = '/studio/projects';
+    host = document.createElement('div');
+    document.body.appendChild(host);
+    root = createRoot(host);
+
+    await act(async () => {
+      root!.render(<StudioPanel active />);
+    });
+
+    const overview = host.querySelector('a[href="/studio"]');
+    const projects = host.querySelector('a[href="/studio/projects"]');
+    const launchProject = host.querySelector('a[href="/studio/launch-practice"]');
+    expect(overview?.getAttribute('aria-current')).toBeNull();
+    expect(projects?.getAttribute('aria-current')).toBe('page');
     expect(launchProject?.getAttribute('aria-current')).toBeNull();
   });
 
@@ -458,7 +511,9 @@ describe('StudioContent', () => {
     });
 
     const sidebarSessions = host.querySelector('[aria-label="Launch Practice Sessions"]');
+    const projects = host.querySelector('a[href="/studio/projects"]');
     expect(sidebarSessions).toBeNull();
+    expect(projects?.getAttribute('aria-current')).toBe('page');
     expect(host.textContent).toContain('Launch Practice');
     expect(host.textContent).not.toContain('Launch brief review');
     expect(host.querySelector('button[aria-expanded]')).toBeNull();

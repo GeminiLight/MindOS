@@ -34,6 +34,7 @@ import {
 import { getChatSessionTitle } from './studio-session-summaries';
 import { StudioShell } from './StudioShell';
 import StudioNewProjectDialog from './StudioNewProjectDialog';
+import { StudioOverviewLink } from './StudioOverviewLink';
 import {
   StudioAttentionItem,
   StudioContextBraid,
@@ -44,7 +45,7 @@ import type { StudioWorkspaceSpace } from './studioContextOptions';
 
 const COPY = {
   en: {
-    title: 'Studio',
+    title: 'Projects',
     subtitle: 'Projects carry context, sessions, and review.',
     continueTitle: 'Continue',
     continueHint: 'Best next move',
@@ -118,7 +119,7 @@ const COPY = {
     fromRecentProject: 'Recent Project',
   },
   zh: {
-    title: '工作台',
+    title: '项目',
     subtitle: '项目承载上下文、对话和复盘。',
     continueTitle: '继续推进',
     continueHint: '最值得做的下一步',
@@ -750,6 +751,7 @@ export default function StudioContent({
         <header className="border-b border-border/60 pb-6">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
             <div className="min-w-0">
+              <StudioOverviewLink locale={locale} />
               <h1 className="text-2xl font-semibold text-foreground">
                 {copy.title}
               </h1>

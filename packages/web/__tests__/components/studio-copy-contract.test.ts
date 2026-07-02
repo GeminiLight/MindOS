@@ -5,6 +5,7 @@ import path from 'node:path';
 describe('Studio Chinese copy contract', () => {
   it('uses 工作台 / 项目 / 对话 for the Studio product vocabulary', () => {
     const files = [
+      'components/studio/StudioOverviewContent.tsx',
       'components/studio/StudioContent.tsx',
       'components/studio/StudioAppsContent.tsx',
       'components/studio/StudioAutomationSection.tsx',
@@ -30,6 +31,7 @@ describe('Studio Chinese copy contract', () => {
       return fileSource.slice(start, end);
     };
     const studioZhCopy = [
+      'components/studio/StudioOverviewContent.tsx',
       'components/studio/StudioContent.tsx',
       'components/studio/StudioAppsContent.tsx',
       'components/studio/StudioAutomationSection.tsx',
@@ -43,6 +45,7 @@ describe('Studio Chinese copy contract', () => {
     expect(source).toContain("title: '工作台'");
     expect(source).toContain("studio: '工作台'");
     expect(studioPanelSource).toContain("overview: '总览'");
+    expect(studioPanelSource).toContain("projects: '项目'");
     expect(studioPanelSource).toContain("apps: '应用'");
     expect(studioPanelSource).toContain("automation: '自动化'");
     expect(source).toContain("returnStudio: '返回工作台'");

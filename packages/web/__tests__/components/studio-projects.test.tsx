@@ -59,7 +59,7 @@ describe('Studio Project UI', () => {
     mockPush.mockClear();
   });
 
-  it('renders the Studio page as a Project-first surface', async () => {
+  it('renders the Studio Projects page as a Project-first surface', async () => {
     const StudioContent = (await import('@/components/studio/StudioContent')).default;
     const view = await render(<StudioContent />);
 
