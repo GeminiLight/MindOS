@@ -636,7 +636,7 @@ describe('Echo segment page actions', () => {
     expect(fetchMock.mock.calls.some(([url]) => String(url).startsWith('/api/echo?segment=imprint'))).toBe(false);
   });
 
-  it('renders generated imprints with stable Digest and Moments filters on the Imprint page', async () => {
+  it('renders generated imprints with stable localized filters on the Imprint page', async () => {
     await act(async () => {
       root.render(<EchoSegmentPageClient segment="imprint" />);
     });
@@ -679,6 +679,10 @@ describe('Echo segment page actions', () => {
     const momentsTab = host.querySelector<HTMLButtonElement>('[data-testid="echo-imprint-tab-moments"]');
     expect(digestTab).not.toBeNull();
     expect(momentsTab).not.toBeNull();
+    expect(digestTab?.textContent).toContain('摘要');
+    expect(digestTab?.textContent).not.toContain('Digest');
+    expect(momentsTab?.textContent).toContain('片段');
+    expect(momentsTab?.textContent).not.toContain('Moments');
     expect(digestTab?.getAttribute('aria-pressed')).toBe('true');
     expect(momentsTab?.getAttribute('aria-pressed')).toBe('true');
     expect(host.querySelector('[data-testid="echo-imprint-digest"]')).toBeNull();

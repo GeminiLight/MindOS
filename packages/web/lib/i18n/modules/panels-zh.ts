@@ -519,7 +519,7 @@ export const panelsZh = {
     imprintFlowGenerate: '生成一次真实协作现场：现场、结果、关键片段和仍需澄清的地方。',
     imprintFlowSave: '保存到 Echo/Daily，成为之后梳理脉络、洞察和承接的原始事件。',
     imprintFlowConsume: '在事件详情里复看证据，再进入脉络、洞察或承接页面继续提炼。',
-    imprintCardsEyebrow: 'Digest / Moments',
+    imprintCardsEyebrow: '摘要 / 片段',
     imprintCardsCheckpointLabel: '最近协作',
     imprintCardsInitialUpdatedAt: '14:36',
     imprintCardsUpdateAction: '更新印迹',
@@ -541,10 +541,10 @@ export const panelsZh = {
     imprintCardDoneLabel: '完成',
     imprintCardDeleteLabel: '删除',
     imprintCardEditAria: (title: string) => `编辑「${title}」的正文`,
-    imprintDigestTitle: 'Digest',
-    imprintMomentLabel: 'Moment',
+    imprintDigestTitle: '摘要',
+    imprintMomentLabel: '片段',
     imprintCardsEmptyLabel: '暂无印迹，刷新生成。',
-    imprintMomentsTitle: 'Moments',
+    imprintMomentsTitle: '片段',
     imprintCardCandidates: [
       {
         kind: 'moment',
