@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 import { describe, expect, it } from 'vitest';
 import { getTestMindRoot } from '../setup';
 import {
@@ -74,6 +76,8 @@ describe('echo card generator', () => {
     const state = readEchoCardsState(root);
     expect(state.cards.some((card) => card.segment === 'insight')).toBe(true);
     expect(state.cards.some((card) => card.segment === 'promotion')).toBe(true);
+    expect(fs.existsSync(path.join(root, '.mindos', 'echo', 'cards.json'))).toBe(true);
+    expect(fs.existsSync(path.join(root, '.mindos', 'echo', 'cards', 'state.json'))).toBe(false);
   });
 
   it('keeps schedule state isolated per Echo card segment', () => {

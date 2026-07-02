@@ -4,11 +4,11 @@ import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Check,
   Clock3,
+  ListFilter,
   MessageSquareText,
   Pencil,
   RefreshCw,
   ShieldCheck,
-  Trash2,
 } from 'lucide-react';
 import type { Messages } from '@/lib/i18n';
 import type { Locale } from '@/lib/i18n';
@@ -21,6 +21,7 @@ import {
   buildEchoCardChatPrompt,
   EchoCardActionBar,
   EchoCardBody,
+  EchoCardDeleteButton,
   EchoCardDetailFields,
   EchoCardFrame,
   EchoCardHeader,
@@ -499,8 +500,19 @@ export default function EchoImprintCardsReview({ p, locale }: { p: EchoCopy; loc
     });
   }
 
+  function toggleAllViews() {
+    setActiveViews((current) => {
+      const allActive = current.digest && current.moments;
+      return {
+        digest: !allActive,
+        moments: !allActive,
+      };
+    });
+  }
+
   const scheduleLabel = scheduleStatusLabel(schedule, p);
   const headerScheduleLabel = scheduleModeLabel(schedule, p);
+  const allViewsActive = activeViews.digest && activeViews.moments;
 
   return (
     <section
@@ -528,6 +540,21 @@ export default function EchoImprintCardsReview({ p, locale }: { p: EchoCopy; loc
             aria-label={p.imprintCardsEyebrow}
             data-testid="echo-imprint-tabs"
           >
+            <button
+              type="button"
+              aria-pressed={allViewsActive}
+              data-testid="echo-imprint-tab-all"
+              className={cn(
+                'flex min-h-9 min-w-0 items-center gap-2 rounded-md px-3 py-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                allViewsActive ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:bg-background/60 hover:text-foreground',
+              )}
+              onClick={toggleAllViews}
+            >
+              <span className={cn('shrink-0', allViewsActive ? 'text-[var(--amber)]' : 'text-muted-foreground')}>
+                <ListFilter size={14} aria-hidden />
+              </span>
+              <span className="whitespace-nowrap font-sans text-xs font-medium sm:text-sm">{p.echoCardAllFilterLabel}</span>
+            </button>
             <ImprintViewTab
               view="digest"
               active={activeViews.digest}
@@ -847,18 +874,12 @@ function ReviewCard({
                 {isEditing ? <Check size={13} aria-hidden /> : <Pencil size={13} aria-hidden />}
                 {isEditing ? p.imprintCardDoneLabel : p.imprintCardEditLabel}
               </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="text-muted-foreground hover:text-[var(--error)]"
-                title={p.imprintCardDeleteLabel}
-                aria-label={p.imprintCardDeleteLabel}
-                onClick={onDelete}
-              >
-                <Trash2 size={13} aria-hidden />
-                {p.imprintCardDeleteLabel}
-              </Button>
+              <EchoCardDeleteButton
+                label={p.imprintCardDeleteLabel}
+                confirmLabel={p.echoCardConfirmDeleteLabel}
+                cancelLabel={p.echoCardCancelDeleteLabel}
+                onDelete={onDelete}
+              />
             </>
           )}
           right={(

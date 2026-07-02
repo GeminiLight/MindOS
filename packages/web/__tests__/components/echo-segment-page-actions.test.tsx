@@ -349,16 +349,37 @@ describe('Echo segment page actions', () => {
       messages.zh.echoPages.imprintScheduleIntervalHours(24),
     ));
 
+    const allPromotionFilter = host.querySelector<HTMLButtonElement>('[data-testid="echo-promotion-filter-all"]');
     const playbooksFilter = host.querySelector<HTMLButtonElement>('[data-testid="echo-promotion-filter-playbook"]');
     const practicesFilter = host.querySelector<HTMLButtonElement>('[data-testid="echo-promotion-filter-practice"]');
+    expect(allPromotionFilter).not.toBeNull();
     expect(playbooksFilter).not.toBeNull();
     expect(practicesFilter).not.toBeNull();
+    expect(allPromotionFilter?.textContent).toContain(messages.zh.echoPages.echoCardAllFilterLabel);
+    expect(allPromotionFilter?.getAttribute('aria-pressed')).toBe('true');
     expect(playbooksFilter?.getAttribute('aria-pressed')).toBe('true');
     expect(practicesFilter?.getAttribute('aria-pressed')).toBe('true');
 
     await act(async () => {
+      allPromotionFilter?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(allPromotionFilter?.getAttribute('aria-pressed')).toBe('false');
+    expect(playbooksFilter?.getAttribute('aria-pressed')).toBe('false');
+    expect(practicesFilter?.getAttribute('aria-pressed')).toBe('false');
+    expect(host.querySelectorAll('[data-testid="echo-promotion-candidate"]')).toHaveLength(0);
+
+    await act(async () => {
+      allPromotionFilter?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(allPromotionFilter?.getAttribute('aria-pressed')).toBe('true');
+    expect(playbooksFilter?.getAttribute('aria-pressed')).toBe('true');
+    expect(practicesFilter?.getAttribute('aria-pressed')).toBe('true');
+    expect(host.querySelectorAll('[data-testid="echo-promotion-candidate"]')).toHaveLength(2);
+
+    await act(async () => {
       practicesFilter?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
+    expect(allPromotionFilter?.getAttribute('aria-pressed')).toBe('false');
     expect(practicesFilter?.getAttribute('aria-pressed')).toBe('false');
     expect(host.querySelectorAll('[data-testid="echo-promotion-candidate"]')).toHaveLength(1);
     expect(promotion?.textContent).toContain(messages.zh.echoPages.promotionCandidates[0]?.title);
@@ -367,6 +388,7 @@ describe('Echo segment page actions', () => {
     await act(async () => {
       practicesFilter?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
+    expect(allPromotionFilter?.getAttribute('aria-pressed')).toBe('true');
     expect(practicesFilter?.getAttribute('aria-pressed')).toBe('true');
     expect(host.querySelectorAll('[data-testid="echo-promotion-candidate"]')).toHaveLength(2);
 
@@ -388,6 +410,47 @@ describe('Echo segment page actions', () => {
       locale: 'zh',
     });
     expect(fetchMock.mock.calls.some(([url]) => url === '/api/assistant-runs')).toBe(false);
+  });
+
+  it('requires confirmation before deleting structured Echo cards', async () => {
+    await act(async () => {
+      root.render(<EchoSegmentPageClient segment="practice" />);
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const firstCard = host.querySelector('[data-testid="echo-promotion-candidate"]');
+    expect(firstCard).not.toBeNull();
+    const deleteCalls = () => fetchMock.mock.calls.filter(([url, init]) => (
+      url === '/api/echo/cards' && init?.method === 'DELETE'
+    ));
+
+    const deleteButton = firstCard?.querySelector<HTMLButtonElement>('[data-testid="echo-card-delete-button"]');
+    expect(deleteButton).not.toBeNull();
+
+    await act(async () => {
+      deleteButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(deleteCalls()).toHaveLength(0);
+    expect(host.querySelectorAll('[data-testid="echo-promotion-candidate"]')).toHaveLength(2);
+    expect(firstCard?.textContent).toContain(messages.zh.echoPages.echoCardConfirmDeleteLabel);
+    expect(firstCard?.textContent).toContain(messages.zh.echoPages.echoCardCancelDeleteLabel);
+
+    const confirmButton = firstCard?.querySelector<HTMLButtonElement>('[data-testid="echo-card-delete-confirm-button"]');
+    expect(confirmButton).not.toBeNull();
+
+    await act(async () => {
+      confirmButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(deleteCalls()).toHaveLength(1);
+    expect(host.querySelectorAll('[data-testid="echo-promotion-candidate"]')).toHaveLength(1);
   });
 
   it('keeps the Imprint header free of ambiguous generation actions', async () => {
@@ -483,10 +546,14 @@ describe('Echo segment page actions', () => {
       messages.zh.echoPages.imprintScheduleIntervalHours(24),
     ));
 
+    const allInsightFilter = host.querySelector<HTMLButtonElement>('[data-testid="echo-insight-filter-all"]');
     const patternFilter = host.querySelector<HTMLButtonElement>('[data-testid="echo-insight-filter-pattern"]');
     const judgmentFilter = host.querySelector<HTMLButtonElement>('[data-testid="echo-insight-filter-judgment"]');
+    expect(allInsightFilter).not.toBeNull();
     expect(patternFilter).not.toBeNull();
     expect(judgmentFilter).not.toBeNull();
+    expect(allInsightFilter?.textContent).toContain(messages.zh.echoPages.echoCardAllFilterLabel);
+    expect(allInsightFilter?.getAttribute('aria-pressed')).toBe('true');
     expect(patternFilter?.getAttribute('aria-pressed')).toBe('true');
     expect(judgmentFilter?.getAttribute('aria-pressed')).toBe('true');
     expect(host.querySelectorAll('[data-testid="echo-insight-candidate"]')).toHaveLength(4);
@@ -513,8 +580,25 @@ describe('Echo segment page actions', () => {
     vi.mocked(openAskModal).mockClear();
 
     await act(async () => {
+      allInsightFilter?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(allInsightFilter?.getAttribute('aria-pressed')).toBe('false');
+    expect(patternFilter?.getAttribute('aria-pressed')).toBe('false');
+    expect(judgmentFilter?.getAttribute('aria-pressed')).toBe('false');
+    expect(host.querySelectorAll('[data-testid="echo-insight-candidate"]')).toHaveLength(0);
+
+    await act(async () => {
+      allInsightFilter?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(allInsightFilter?.getAttribute('aria-pressed')).toBe('true');
+    expect(patternFilter?.getAttribute('aria-pressed')).toBe('true');
+    expect(judgmentFilter?.getAttribute('aria-pressed')).toBe('true');
+    expect(host.querySelectorAll('[data-testid="echo-insight-candidate"]')).toHaveLength(4);
+
+    await act(async () => {
       judgmentFilter?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
+    expect(allInsightFilter?.getAttribute('aria-pressed')).toBe('false');
     expect(judgmentFilter?.getAttribute('aria-pressed')).toBe('false');
     expect(host.querySelectorAll('[data-testid="echo-insight-candidate"]')).toHaveLength(2);
     expect(insight?.textContent).toContain(messages.zh.echoPages.insightCandidates[0]?.title);
@@ -529,6 +613,7 @@ describe('Echo segment page actions', () => {
     await act(async () => {
       judgmentFilter?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
+    expect(allInsightFilter?.getAttribute('aria-pressed')).toBe('true');
     expect(judgmentFilter?.getAttribute('aria-pressed')).toBe('true');
     expect(host.querySelectorAll('[data-testid="echo-insight-candidate"]')).toHaveLength(4);
 
@@ -675,14 +760,18 @@ describe('Echo segment page actions', () => {
     expect(host.querySelector('[data-testid="echo-imprint-card-lane-signal"]')).toBeNull();
     expect(host.querySelector('[data-testid="echo-imprint-card-lane-next"]')).toBeNull();
     expect(host.querySelector('[data-testid="echo-imprint-tabs"]')).not.toBeNull();
+    const allTab = host.querySelector<HTMLButtonElement>('[data-testid="echo-imprint-tab-all"]');
     const digestTab = host.querySelector<HTMLButtonElement>('[data-testid="echo-imprint-tab-digest"]');
     const momentsTab = host.querySelector<HTMLButtonElement>('[data-testid="echo-imprint-tab-moments"]');
+    expect(allTab).not.toBeNull();
     expect(digestTab).not.toBeNull();
     expect(momentsTab).not.toBeNull();
+    expect(allTab?.textContent).toContain(messages.zh.echoPages.echoCardAllFilterLabel);
     expect(digestTab?.textContent).toContain('摘要');
     expect(digestTab?.textContent).not.toContain('Digest');
     expect(momentsTab?.textContent).toContain('片段');
     expect(momentsTab?.textContent).not.toContain('Moments');
+    expect(allTab?.getAttribute('aria-pressed')).toBe('true');
     expect(digestTab?.getAttribute('aria-pressed')).toBe('true');
     expect(momentsTab?.getAttribute('aria-pressed')).toBe('true');
     expect(host.querySelector('[data-testid="echo-imprint-digest"]')).toBeNull();
@@ -693,8 +782,27 @@ describe('Echo segment page actions', () => {
     expect(host.querySelector('[data-testid="echo-imprint-generation-status"]')).not.toBeNull();
 
     await act(async () => {
+      allTab?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(allTab?.getAttribute('aria-pressed')).toBe('false');
+    expect(digestTab?.getAttribute('aria-pressed')).toBe('false');
+    expect(momentsTab?.getAttribute('aria-pressed')).toBe('false');
+    expect(host.querySelector('[data-testid="echo-imprint-digest"]')).toBeNull();
+    expect(host.querySelector('[data-testid="echo-imprint-moments"]')).toBeNull();
+    expect(host.querySelectorAll('[data-testid="echo-imprint-card"]')).toHaveLength(0);
+
+    await act(async () => {
+      allTab?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(allTab?.getAttribute('aria-pressed')).toBe('true');
+    expect(digestTab?.getAttribute('aria-pressed')).toBe('true');
+    expect(momentsTab?.getAttribute('aria-pressed')).toBe('true');
+    expect(host.querySelectorAll('[data-testid="echo-imprint-card"]')).toHaveLength(5);
+
+    await act(async () => {
       momentsTab?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
+    expect(allTab?.getAttribute('aria-pressed')).toBe('false');
     expect(digestTab?.getAttribute('aria-pressed')).toBe('true');
     expect(momentsTab?.getAttribute('aria-pressed')).toBe('false');
     expect(host.querySelector('[data-testid="echo-imprint-digest"]')).toBeNull();
@@ -710,6 +818,7 @@ describe('Echo segment page actions', () => {
     await act(async () => {
       momentsTab?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
+    expect(allTab?.getAttribute('aria-pressed')).toBe('true');
     expect(digestTab?.getAttribute('aria-pressed')).toBe('true');
     expect(momentsTab?.getAttribute('aria-pressed')).toBe('true');
     expect(host.querySelector('[data-testid="echo-imprint-moments"]')).not.toBeNull();
@@ -765,14 +874,49 @@ describe('Echo segment page actions', () => {
     expect(surface?.querySelector('textarea')).not.toBeNull();
     expect(surface?.textContent).toContain(messages.zh.echoPages.imprintCardDoneLabel);
 
-    const deleteButton = surfaceButtons().find((button) =>
-      button.textContent?.includes(messages.zh.echoPages.imprintCardDeleteLabel),
-    );
+    const deleteCalls = () => fetchMock.mock.calls.filter(([url, init]) => (
+      url === '/api/echo/imprints' && init?.method === 'DELETE'
+    ));
+    const firstImprintCard = host.querySelector('[data-testid="echo-imprint-card"]');
+    expect(firstImprintCard).not.toBeNull();
+
+    const deleteButton = firstImprintCard?.querySelector<HTMLButtonElement>('[data-testid="echo-card-delete-button"]');
     expect(deleteButton).toBeTruthy();
 
     await act(async () => {
       deleteButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
     });
+    expect(deleteCalls()).toHaveLength(0);
+    expect(surface?.textContent).toContain('Imprint 不再做分类系统');
+    expect(host.querySelectorAll('[data-testid="echo-imprint-card"]')).toHaveLength(5);
+    expect(firstImprintCard?.textContent).toContain(messages.zh.echoPages.echoCardConfirmDeleteLabel);
+    expect(firstImprintCard?.textContent).toContain(messages.zh.echoPages.echoCardCancelDeleteLabel);
+
+    const cancelButton = firstImprintCard?.querySelector<HTMLButtonElement>('[data-testid="echo-card-delete-cancel-button"]');
+    expect(cancelButton).not.toBeNull();
+
+    await act(async () => {
+      cancelButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+    });
+    expect(deleteCalls()).toHaveLength(0);
+    expect(firstImprintCard?.querySelector('[data-testid="echo-card-delete-confirmation"]')).toBeNull();
+
+    const deleteAgainButton = firstImprintCard?.querySelector<HTMLButtonElement>('[data-testid="echo-card-delete-button"]');
+    await act(async () => {
+      deleteAgainButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    const confirmButton = firstImprintCard?.querySelector<HTMLButtonElement>('[data-testid="echo-card-delete-confirm-button"]');
+    expect(confirmButton).not.toBeNull();
+
+    await act(async () => {
+      confirmButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+    });
+    expect(deleteCalls()).toHaveLength(1);
     expect(surface?.textContent).not.toContain('Imprint 不再做分类系统');
     expect(host.querySelector('[data-testid="echo-imprint-digest"]')).toBeNull();
     expect(surface?.textContent).not.toContain('最近协作已生成');

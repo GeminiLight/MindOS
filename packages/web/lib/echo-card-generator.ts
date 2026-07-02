@@ -68,7 +68,7 @@ export type GenerateEchoCardsWithAiInput = GenerateEchoCardsInput & {
   signal?: AbortSignal;
 };
 
-const ECHO_CARDS_STATE_PATH = '.mindos/echo/cards/state.json';
+const ECHO_CARDS_STATE_PATH = '.mindos/echo/cards.json';
 const MAX_ACTIVE_CARDS = 5;
 const MAX_STORED_CARDS = 80;
 const MAX_CONTENT_CHARS = 420;

@@ -1,6 +1,8 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import {
   BookOpen,
   ChevronDown,
@@ -10,7 +12,10 @@ import {
   MessageSquareText,
   NotebookText,
   ShieldCheck,
+  Trash2,
+  X,
 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 export type EchoSemanticCardKind = 'digest' | 'moment' | 'pattern' | 'judgment' | 'playbook' | 'practice';
@@ -69,6 +74,25 @@ const CARD_TONES: Record<EchoSemanticCardKind, EchoCardTone> = {
 };
 
 const TIME_ONLY_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+const echoCardMarkdownClass =
+  'prose prose-sm prose-panel dark:prose-invert max-w-3xl break-words text-muted-foreground ' +
+  'prose-p:my-2 prose-p:leading-7 prose-p:text-muted-foreground ' +
+  'prose-headings:my-2 prose-headings:font-semibold prose-headings:text-foreground prose-h1:text-lg prose-h2:text-base prose-h3:text-sm ' +
+  'prose-ul:my-2 prose-ol:my-2 prose-li:my-1 ' +
+  'prose-code:rounded prose-code:bg-muted/65 prose-code:px-1 prose-code:py-0.5 prose-code:text-[0.85em] prose-code:text-foreground prose-code:before:content-none prose-code:after:content-none ' +
+  'prose-pre:my-3 prose-pre:bg-muted prose-pre:text-foreground prose-pre:text-xs ' +
+  'prose-blockquote:border-l-[var(--amber)] prose-blockquote:text-muted-foreground ' +
+  'prose-a:text-[var(--amber)] prose-a:no-underline hover:prose-a:underline ' +
+  'prose-strong:text-foreground prose-strong:font-semibold';
+
+const echoCardDetailMarkdownClass =
+  'prose prose-sm prose-panel dark:prose-invert max-w-none break-words text-muted-foreground ' +
+  'prose-p:my-1 prose-p:leading-5 prose-p:text-muted-foreground ' +
+  'prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 ' +
+  'prose-code:rounded prose-code:bg-muted/65 prose-code:px-1 prose-code:py-0.5 prose-code:text-[0.85em] prose-code:text-foreground prose-code:before:content-none prose-code:after:content-none ' +
+  'prose-pre:my-2 prose-pre:bg-muted prose-pre:text-foreground prose-pre:text-[0.7rem] ' +
+  'prose-strong:text-foreground prose-strong:font-semibold prose-a:text-[var(--amber)]';
 
 function padTimePart(value: number): string {
   return String(value).padStart(2, '0');
@@ -200,13 +224,15 @@ export function EchoCardBody({
   children,
   className,
 }: {
-  children: ReactNode;
+  children: string;
   className?: string;
 }) {
   return (
-    <p className={cn('mt-2 max-w-3xl text-wrap font-sans text-sm leading-7 text-muted-foreground', className)}>
-      {children}
-    </p>
+    <EchoCardMarkdown
+      markdown={children}
+      className={cn('mt-2 font-sans text-sm leading-7', className)}
+      data-testid="echo-card-markdown"
+    />
   );
 }
 
@@ -239,7 +265,29 @@ function EchoCardDetailField({ label, value }: { label: string; value: string })
   return (
     <div className="min-w-0">
       <p className="font-mono text-[0.68rem] text-muted-foreground">{label}</p>
-      <p className="mt-1 break-words font-sans text-xs leading-5 text-muted-foreground">{value}</p>
+      <EchoCardMarkdown
+        markdown={value}
+        className={cn('mt-1 font-sans text-xs leading-5', echoCardDetailMarkdownClass)}
+        data-testid="echo-card-detail-markdown"
+      />
+    </div>
+  );
+}
+
+function EchoCardMarkdown({
+  markdown,
+  className,
+  'data-testid': testId,
+}: {
+  markdown: string;
+  className?: string;
+  'data-testid'?: string;
+}) {
+  return (
+    <div className={cn(echoCardMarkdownClass, className)} data-testid={testId}>
+      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+        {markdown}
+      </ReactMarkdown>
     </div>
   );
 }
@@ -260,6 +308,71 @@ export function EchoCardActionBar({
         {right}
       </div>
     </footer>
+  );
+}
+
+export function EchoCardDeleteButton({
+  label,
+  confirmLabel,
+  cancelLabel,
+  onDelete,
+}: {
+  label: string;
+  confirmLabel: string;
+  cancelLabel: string;
+  onDelete: () => void;
+}) {
+  const [isConfirming, setIsConfirming] = useState(false);
+
+  if (isConfirming) {
+    return (
+      <span
+        className="inline-flex min-w-0 flex-wrap items-center gap-1"
+        data-testid="echo-card-delete-confirmation"
+      >
+        <Button
+          type="button"
+          variant="destructive"
+          size="sm"
+          title={confirmLabel}
+          aria-label={confirmLabel}
+          data-testid="echo-card-delete-confirm-button"
+          onClick={onDelete}
+        >
+          <Trash2 size={13} aria-hidden />
+          {confirmLabel}
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="text-muted-foreground hover:text-foreground"
+          title={cancelLabel}
+          aria-label={cancelLabel}
+          data-testid="echo-card-delete-cancel-button"
+          onClick={() => setIsConfirming(false)}
+        >
+          <X size={13} aria-hidden />
+          {cancelLabel}
+        </Button>
+      </span>
+    );
+  }
+
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="sm"
+      className="text-muted-foreground hover:text-[var(--error)]"
+      title={label}
+      aria-label={label}
+      data-testid="echo-card-delete-button"
+      onClick={() => setIsConfirming(true)}
+    >
+      <Trash2 size={13} aria-hidden />
+      {label}
+    </Button>
   );
 }
 

@@ -14,12 +14,12 @@ import {
   FolderOpen,
   GitBranch,
   Leaf,
+  ListFilter,
   MessageSquareText,
   NotebookText,
   Pencil,
   RefreshCw,
   SunMedium,
-  Trash2,
 } from 'lucide-react';
 import { ECHO_SEGMENT_HREF, type EchoSegment } from '@/lib/echo-segments';
 import {
@@ -46,6 +46,7 @@ import {
   buildEchoCardChatPrompt,
   EchoCardActionBar,
   EchoCardBody,
+  EchoCardDeleteButton,
   EchoCardDetailFields,
   EchoCardFrame,
   EchoCardHeader,
@@ -773,6 +774,17 @@ function InsightPanel({
   ];
   const visibleInsights = cards.filter((candidate) => activeFilters[candidate.kind]);
   const scheduleStatusLabel = echoScheduleStatusLabel(schedule, p);
+  const allFiltersActive = activeFilters.pattern && activeFilters.judgment;
+
+  function toggleAllFilters() {
+    setActiveFilters((current) => {
+      const allActive = current.pattern && current.judgment;
+      return {
+        pattern: !allActive,
+        judgment: !allActive,
+      };
+    });
+  }
 
   function toggleFilter(filter: InsightTarget) {
     setActiveFilters((current) => {
@@ -806,6 +818,21 @@ function InsightPanel({
             aria-label={p.insightFiltersAriaLabel}
             data-testid="echo-insight-filters"
           >
+            <button
+              type="button"
+              aria-pressed={allFiltersActive}
+              data-testid="echo-insight-filter-all"
+              className={cn(
+                'flex min-h-9 min-w-0 items-center gap-2 rounded-md px-3 py-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                allFiltersActive ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:bg-background/60 hover:text-foreground',
+              )}
+              onClick={toggleAllFilters}
+            >
+              <span className={cn('shrink-0', allFiltersActive ? 'text-[var(--amber)]' : 'text-muted-foreground')}>
+                <ListFilter size={15} aria-hidden />
+              </span>
+              <span className="whitespace-nowrap font-sans text-xs font-medium sm:text-sm">{p.echoCardAllFilterLabel}</span>
+            </button>
             {filters.map((filter) => {
               const active = activeFilters[filter.id];
               return (
@@ -986,6 +1013,17 @@ function PromotionPanel({
   ];
   const visiblePromotions = cards.filter((candidate) => activeFilters[candidate.kind]);
   const scheduleStatusLabel = echoScheduleStatusLabel(schedule, p);
+  const allFiltersActive = activeFilters.playbook && activeFilters.practice;
+
+  function toggleAllFilters() {
+    setActiveFilters((current) => {
+      const allActive = current.playbook && current.practice;
+      return {
+        playbook: !allActive,
+        practice: !allActive,
+      };
+    });
+  }
 
   function toggleFilter(filter: PromotionTarget) {
     setActiveFilters((current) => {
@@ -1019,6 +1057,21 @@ function PromotionPanel({
             aria-label={p.promotionFiltersAriaLabel}
             data-testid="echo-promotion-filters"
           >
+            <button
+              type="button"
+              aria-pressed={allFiltersActive}
+              data-testid="echo-promotion-filter-all"
+              className={cn(
+                'flex min-h-9 min-w-0 items-center gap-2 rounded-md px-3 py-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                allFiltersActive ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:bg-background/60 hover:text-foreground',
+              )}
+              onClick={toggleAllFilters}
+            >
+              <span className={cn('shrink-0', allFiltersActive ? 'text-[var(--amber)]' : 'text-muted-foreground')}>
+                <ListFilter size={15} aria-hidden />
+              </span>
+              <span className="whitespace-nowrap font-sans text-xs font-medium sm:text-sm">{p.echoCardAllFilterLabel}</span>
+            </button>
             {filters.map((filter) => {
               const active = activeFilters[filter.id];
               return (
@@ -1297,18 +1350,12 @@ function EchoCardActions({
             {isEditing ? <Check size={13} aria-hidden /> : <Pencil size={13} aria-hidden />}
             {isEditing ? p.imprintCardDoneLabel : p.promotionEditLabel}
           </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="text-muted-foreground hover:text-[var(--error)]"
-            title={p.promotionDeleteLabel}
-            aria-label={p.promotionDeleteLabel}
-            onClick={onDelete}
-          >
-            <Trash2 size={13} aria-hidden />
-            {p.promotionDeleteLabel}
-          </Button>
+          <EchoCardDeleteButton
+            label={p.promotionDeleteLabel}
+            confirmLabel={p.echoCardConfirmDeleteLabel}
+            cancelLabel={p.echoCardCancelDeleteLabel}
+            onDelete={onDelete}
+          />
         </>
       )}
       right={(

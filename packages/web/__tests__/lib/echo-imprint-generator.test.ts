@@ -61,7 +61,7 @@ describe('echo imprint generator', () => {
     expect(result.cards[0]).not.toHaveProperty('evidence');
     expect(result.cards[0]).not.toHaveProperty('type');
 
-    const statePath = path.join(root, '.mindos', 'echo', 'cards', 'state.json');
+    const statePath = path.join(root, '.mindos', 'echo', 'cards.json');
     expect(fs.existsSync(statePath)).toBe(true);
     const persisted = readImprintGenerationState(root);
     expect(persisted.schedule).toMatchObject({ mode: 'daily', dailyTime: '20:00' });
@@ -163,7 +163,7 @@ describe('echo imprint generator', () => {
 
   it('loads only cards with the nested source session structure', () => {
     const root = getTestMindRoot();
-    const statePath = path.join(root, '.mindos', 'echo', 'cards', 'state.json');
+    const statePath = path.join(root, '.mindos', 'echo', 'cards.json');
     fs.mkdirSync(path.dirname(statePath), { recursive: true });
     fs.writeFileSync(statePath, JSON.stringify({
       schemaVersion: 1,
