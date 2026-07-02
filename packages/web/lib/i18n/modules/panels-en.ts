@@ -173,7 +173,7 @@ export const panelsEn = {
     },
     discover: {
       title: 'Discover',
-      capabilityMarketplace: 'Capability Marketplace',
+      capabilityMarketplace: 'Overview',
       capabilityMarketplaceDesc: 'Browse MindOS capabilities across skills, MCP servers, plugins, and workflow examples.',
       useCases: 'Use Cases',
       useCasesDesc: 'Try MindOS scenarios hands-on',

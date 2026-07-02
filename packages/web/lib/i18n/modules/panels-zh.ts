@@ -173,7 +173,7 @@ export const panelsZh = {
     },
     discover: {
       title: '探索',
-      capabilityMarketplace: '能力市场',
+      capabilityMarketplace: '总览',
       capabilityMarketplaceDesc: '按技能、MCP 服务器、插件和工作流案例浏览 MindOS 能力。',
       useCases: '使用案例',
       useCasesDesc: '动手体验 MindOS 的典型场景',

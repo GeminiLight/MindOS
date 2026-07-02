@@ -15,11 +15,12 @@ vi.mock('next/link', () => ({
 }));
 
 describe('CapabilityMarketplaceContent', () => {
-  it('renders the total capability market as an Explore-family hub', () => {
+  it('renders the Discover overview as an Explore-family hub', () => {
     const html = renderToStaticMarkup(<CapabilityMarketplaceContent />);
 
     expect(html).toContain('data-capability-market-grid="true"');
-    expect(html).toContain('Capability Marketplace');
+    expect(html).toContain('Overview');
+    expect(html).not.toContain('Capability Marketplace');
     expect(html).toContain('Skill Market');
     expect(html).toContain('MCP Servers');
     expect(html).toContain('Plugin Market');
