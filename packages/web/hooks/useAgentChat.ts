@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useCallback, useLayoutEffect } from 'react';
-import type { AcpRuntimeOptions, AgentIdentity, AgentPermissionMode, AgentRuntimeIdentity, Message, ImagePart, LocalAttachment, RuntimeSessionBinding, NativeRuntimeOptions } from '@/lib/types';
+import type { AcpRuntimeOptions, AgentIdentity, AgentPermissionMode, AgentRuntimeIdentity, Message, MessagePart, ImagePart, LocalAttachment, RuntimeSessionBinding, NativeRuntimeOptions } from '@/lib/types';
 import type { ProviderId } from '@/lib/agent/providers';
 import { consumeUIMessageStream } from '@/lib/agent/stream-consumer';
 import { MINDOS_AGENT, annotateMessageWithAgentRuntime, compactAgentRuntimeIdentity, getMatchingRuntimeSessionBinding } from '@/lib/ask-agent';
@@ -137,6 +137,77 @@ function buildAgentRunReattachEndpoint(chatSessionId: string, rootRunId: string)
     rootRunId,
   });
   return `/api/agent-runs/reattach?${params.toString()}`;
+}
+
+function mergeTextByOverlap(existing: string, incoming: string): string {
+  if (!existing) return incoming;
+  if (!incoming) return existing;
+  if (incoming.startsWith(existing)) return incoming;
+  if (existing.startsWith(incoming)) return existing;
+
+  const max = Math.min(existing.length, incoming.length);
+  for (let size = max; size > 0; size--) {
+    if (existing.endsWith(incoming.slice(0, size))) {
+      return existing + incoming.slice(size);
+    }
+  }
+  return existing + incoming;
+}
+
+function nonTextPartKey(part: MessagePart): string {
+  if (part.type === 'tool-call') return `tool:${part.toolCallId}`;
+  if (part.type === 'runtime-status') return `runtime-status:${part.runtime ?? ''}:${part.message}`;
+  if (part.type === 'agent-run-timeline') return `timeline:${part.chatSessionId}:${part.rootRunId ?? ''}:${part.startedAfter ?? ''}`;
+  if (part.type === 'reasoning') return `reasoning:${part.text}`;
+  if (part.type === 'image') return `image:${part.fileName ?? ''}:${part.path ?? ''}`;
+  return `part:${JSON.stringify(part)}`;
+}
+
+function mergeNonTextParts(existingParts?: MessagePart[], incomingParts?: MessagePart[]): MessagePart[] {
+  const merged: MessagePart[] = [];
+  const indexByKey = new Map<string, number>();
+  const add = (part: MessagePart) => {
+    if (part.type === 'text') return;
+    const key = nonTextPartKey(part);
+    const existingIndex = indexByKey.get(key);
+    if (existingIndex !== undefined) {
+      merged[existingIndex] = part;
+      return;
+    }
+    indexByKey.set(key, merged.length);
+    merged.push(part);
+  };
+  existingParts?.forEach(add);
+  incomingParts?.forEach(add);
+  return merged;
+}
+
+function mergeReattachedAssistantMessage(existing: Message | null | undefined, incoming: Message): Message {
+  if (!existing || existing.role !== 'assistant' || incoming.role !== 'assistant') return incoming;
+  const existingContent = existing.content ?? '';
+  const incomingContent = incoming.content ?? '';
+  if (!existingContent) return incoming;
+
+  const mergedContent = mergeTextByOverlap(existingContent, incomingContent);
+  if (mergedContent === incomingContent) return incoming;
+
+  const nonTextParts = mergeNonTextParts(existing.parts, incoming.parts);
+  const parts: MessagePart[] = [
+    { type: 'text', text: mergedContent },
+    ...nonTextParts,
+  ];
+  return {
+    ...incoming,
+    content: mergedContent,
+    timestamp: existing.timestamp ?? incoming.timestamp,
+    parts,
+  };
+}
+
+function lastAssistantMessage(sessionId: string): Message | null {
+  const messages = storeGetMessages(sessionId);
+  const last = messages[messages.length - 1];
+  return last?.role === 'assistant' ? last : null;
 }
 
 async function cancelAgentRunForSession(chatSessionId: string, rootRunId: string): Promise<void> {
@@ -377,14 +448,21 @@ export function useAgentChat({
       if (run && run.phase !== phase) updateRun(sessionId, { phase });
     };
 
-    const consumeAgentTurnBody = async (body: ReadableStream<Uint8Array>): Promise<{ finalMessage: Message }> => {
+    const consumeAgentTurnBody = async (
+      body: ReadableStream<Uint8Array>,
+      opts: { mergeReattachReplay?: boolean } = {},
+    ): Promise<{ finalMessage: Message }> => {
       setPhase('thinking');
 
       const finalMessage = await consumeUIMessageStream(
         body,
         (msg) => {
           setPhase('streaming');
-          replaceLastMessage(sessionId, annotateMessageWithAgentRuntime(msg, runtimeForMessage), { requireRun: true });
+          const annotated = annotateMessageWithAgentRuntime(msg, runtimeForMessage);
+          const next = opts.mergeReattachReplay
+            ? mergeReattachedAssistantMessage(lastAssistantMessage(sessionId), annotated)
+            : annotated;
+          replaceLastMessage(sessionId, next, { requireRun: true });
         },
         controller.signal,
         {
@@ -411,7 +489,11 @@ export function useAgentChat({
           },
         },
       );
-      return { finalMessage };
+      if (!opts.mergeReattachReplay) return { finalMessage };
+      const annotatedFinal = annotateMessageWithAgentRuntime(finalMessage, runtimeForMessage);
+      const mergedFinal = mergeReattachedAssistantMessage(lastAssistantMessage(sessionId), annotatedFinal);
+      replaceLastMessage(sessionId, mergedFinal, { requireRun: true });
+      return { finalMessage: mergedFinal };
     };
 
     const doFetch = async (): Promise<{ finalMessage: Message }> => {
@@ -463,7 +545,7 @@ export function useAgentChat({
       }
       if (!res.body) throw new Error('No response body');
 
-      return consumeAgentTurnBody(res.body);
+      return consumeAgentTurnBody(res.body, { mergeReattachReplay: true });
     };
 
     try {

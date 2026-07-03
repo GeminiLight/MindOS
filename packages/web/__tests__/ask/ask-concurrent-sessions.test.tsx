@@ -19,12 +19,12 @@ import type { RuntimeBindingMetadata, AgentRunContextMetadata } from '@/lib/agen
 
 const harness = vi.hoisted(() => {
   interface CapturedRun {
-    onMessage: (msg: { role: 'user' | 'assistant'; content: string; timestamp?: number }) => void;
+    onMessage: (msg: Message) => void;
     hooks: {
       onRuntimeBinding?: (binding: unknown) => void;
       onAgentRunContext?: (context: unknown) => void;
     };
-    resolve: (msg: { role: 'assistant'; content: string; timestamp?: number }) => void;
+    resolve: (msg: Message) => void;
     reject: (err: Error) => void;
     signal: AbortSignal;
     body: string;
@@ -364,6 +364,68 @@ describe('concurrent chat sessions (useAgentChat × agent-run-store)', () => {
 
     expect(getRun('a')).toBeNull();
     expect(getMessages('a')[1].content).toBe('recovered answer');
+  });
+
+  it('preserves visible assistant text while replaying a reattach stream', async () => {
+    localStorage.setItem('mindos-reconnect-retries', '1');
+    await submitText('a', 'recover partial output');
+    expect(harness.captured).toHaveLength(1);
+
+    await act(async () => {
+      harness.captured[0].onMessage({
+        role: 'assistant',
+        content: 'partial answer',
+        parts: [{ type: 'text', text: 'partial answer' }],
+        timestamp: 1,
+      });
+    });
+    expect(getMessages('a')[1].content).toBe('partial answer');
+
+    vi.useFakeTimers();
+    await act(async () => {
+      harness.captured[0].hooks.onAgentRunContext?.({
+        rootRunId: 'run-root-1',
+        chatSessionId: 'a',
+        startedAt: 123,
+      });
+      harness.captured[0].reject(new TypeError('Failed to fetch'));
+    });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000);
+    });
+
+    expect(harness.captured).toHaveLength(2);
+
+    await act(async () => {
+      harness.captured[1].onMessage({
+        role: 'assistant',
+        content: '',
+        parts: [{ type: 'reasoning', text: 'still thinking' }],
+        timestamp: 2,
+      });
+    });
+    expect(getMessages('a')[1].content).toBe('partial answer');
+    expect(getMessages('a')[1].parts?.some((part) => part.type === 'text' && part.text === 'partial answer')).toBe(true);
+
+    await act(async () => {
+      harness.captured[1].onMessage({
+        role: 'assistant',
+        content: 'answer plus more',
+        parts: [{ type: 'text', text: 'answer plus more' }],
+        timestamp: 2,
+      });
+      harness.captured[1].resolve({
+        role: 'assistant',
+        content: 'answer plus more',
+        parts: [{ type: 'text', text: 'answer plus more' }],
+        timestamp: 2,
+      });
+    });
+    vi.useRealTimers();
+
+    expect(getRun('a')).toBeNull();
+    expect(getMessages('a')[1].content).toBe('partial answer plus more');
   });
 
   it('stop() retracts the pending exchange, restores input, and starts a cooldown', async () => {
