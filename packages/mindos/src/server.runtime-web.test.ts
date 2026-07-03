@@ -232,6 +232,11 @@ describe('MindOS server contract: runtime, agent turn stream, static web', () =>
       now: () => Date.parse('2026-06-09T00:00:00.000Z'),
       readSettings: () => ({ acpAgents: {} }),
       checkNativeRuntimeHealth: async () => ({ status: 'available' }),
+      resolveRuntimeCommand: async (command) => {
+        if (command === 'codex') return '/usr/local/bin/codex';
+        if (command === 'claude') return '/usr/local/bin/claude';
+        return null;
+      },
       detectLocalAcpAgents: async () => ({
         installed: [
           { id: 'codex-acp', name: 'Codex', binaryPath: '/usr/local/bin/codex' },
