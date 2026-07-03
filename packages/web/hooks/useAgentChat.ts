@@ -131,6 +131,22 @@ function isWorkDirContextError(error: Error & { httpStatus?: number; issueCode?:
   );
 }
 
+function buildAgentRunReattachEndpoint(chatSessionId: string, rootRunId: string): string {
+  const params = new URLSearchParams({
+    chatSessionId,
+    rootRunId,
+  });
+  return `/api/agent-runs/reattach?${params.toString()}`;
+}
+
+async function cancelAgentRunForSession(chatSessionId: string, rootRunId: string): Promise<void> {
+  await fetch('/api/agent-runs/cancel', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chatSessionId, rootRunId }),
+  });
+}
+
 export function useAgentChat({
   currentFile,
   providerOverride,
@@ -176,6 +192,12 @@ export function useAgentChat({
     // Mark retracted before aborting so the AbortError handler in the run
     // closure (which fires on a later microtask) skips its own cleanup.
     if (pending) updateRun(sessionId, { retracted: true, pendingUserMessage: null });
+    const rootRunId = run.agentRunContext?.rootRunId;
+    if (rootRunId) {
+      void cancelAgentRunForSession(sessionId, rootRunId).catch((err) => {
+        console.warn('[useAgentChat] failed to cancel agent run:', err);
+      });
+    }
     run.controller.abort();
 
     if (pending) {
@@ -355,6 +377,43 @@ export function useAgentChat({
       if (run && run.phase !== phase) updateRun(sessionId, { phase });
     };
 
+    const consumeAgentTurnBody = async (body: ReadableStream<Uint8Array>): Promise<{ finalMessage: Message }> => {
+      setPhase('thinking');
+
+      const finalMessage = await consumeUIMessageStream(
+        body,
+        (msg) => {
+          setPhase('streaming');
+          replaceLastMessage(sessionId, annotateMessageWithAgentRuntime(msg, runtimeForMessage), { requireRun: true });
+        },
+        controller.signal,
+        {
+          onRuntimeBinding: (binding) => {
+            // Late events after the run ended are dropped; the lane is judged
+            // from the submit-time snapshot, NOT the currently selected
+            // runtime — the user may have switched runtimes mid-stream.
+            const run = getRun(sessionId);
+            if (!run) return;
+            const runtime = run.runtimeSnapshot;
+            if (!runtime || runtime.kind !== binding.runtime) return;
+            writeRuntimeBinding(sessionId, runtime, {
+              externalSessionId: binding.externalSessionId,
+              cwd: binding.cwd,
+              status: binding.status,
+              updatedAt: Date.now(),
+            });
+          },
+          onAgentRunContext: (context) => {
+            updateRun(sessionId, { agentRunContext: context });
+          },
+          onContextUsage: (usage) => {
+            writeContextUsage(sessionId, usage);
+          },
+        },
+      );
+      return { finalMessage };
+    };
+
     const doFetch = async (): Promise<{ finalMessage: Message }> => {
       const res = await fetch(buildAgentTurnEndpoint(sessionId), {
         method: 'POST',
@@ -390,40 +449,21 @@ export function useAgentChat({
 
       if (!res.body) throw new Error('No response body');
 
-      setPhase('thinking');
+      return consumeAgentTurnBody(res.body);
+    };
 
-      const finalMessage = await consumeUIMessageStream(
-        res.body,
-        (msg) => {
-          setPhase('streaming');
-          replaceLastMessage(sessionId, annotateMessageWithAgentRuntime(msg, runtimeForMessage), { requireRun: true });
-        },
-        controller.signal,
-        {
-          onRuntimeBinding: (binding) => {
-            // Late events after the run ended are dropped; the lane is judged
-            // from the submit-time snapshot, NOT the currently selected
-            // runtime — the user may have switched runtimes mid-stream.
-            const run = getRun(sessionId);
-            if (!run) return;
-            const runtime = run.runtimeSnapshot;
-            if (!runtime || runtime.kind !== binding.runtime) return;
-            writeRuntimeBinding(sessionId, runtime, {
-              externalSessionId: binding.externalSessionId,
-              cwd: binding.cwd,
-              status: binding.status,
-              updatedAt: Date.now(),
-            });
-          },
-          onAgentRunContext: (context) => {
-            updateRun(sessionId, { agentRunContext: context });
-          },
-          onContextUsage: (usage) => {
-            writeContextUsage(sessionId, usage);
-          },
-        },
-      );
-      return { finalMessage };
+    const doReattach = async (rootRunId: string): Promise<{ finalMessage: Message }> => {
+      const res = await fetch(buildAgentRunReattachEndpoint(sessionId, rootRunId), {
+        method: 'GET',
+        signal: controller.signal,
+      });
+
+      if (!res.ok) {
+        throw new Error(`Reconnect failed (${res.status})`);
+      }
+      if (!res.body) throw new Error('No response body');
+
+      return consumeAgentTurnBody(res.body);
     };
 
     try {
@@ -434,17 +474,22 @@ export function useAgentChat({
 
         if (attempt > 0) {
           updateRun(sessionId, { reconnectAttempt: attempt, phase: 'reconnecting' });
-          replaceLastMessage(
-            sessionId,
-            annotateMessageWithAgentRuntime({ role: 'assistant', content: '', timestamp: Date.now() }, runtimeForMessage),
-            { requireRun: true },
-          );
+          if (!getRun(sessionId)?.agentRunContext?.rootRunId) {
+            replaceLastMessage(
+              sessionId,
+              annotateMessageWithAgentRuntime({ role: 'assistant', content: '', timestamp: Date.now() }, runtimeForMessage),
+              { requireRun: true },
+            );
+          }
           await sleep(retryDelay(attempt - 1), controller.signal);
           setPhase('connecting');
         }
 
         try {
-          const { finalMessage } = await doFetch();
+          const rootRunId = attempt > 0 ? getRun(sessionId)?.agentRunContext?.rootRunId : undefined;
+          const { finalMessage } = rootRunId
+            ? await doReattach(rootRunId)
+            : await doFetch();
           if (!finalMessage.content.trim() && (!finalMessage.parts || finalMessage.parts.length === 0)) {
             replaceLastMessage(
               sessionId,

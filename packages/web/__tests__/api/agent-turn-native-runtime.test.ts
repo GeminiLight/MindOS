@@ -194,6 +194,15 @@ async function POST(req: NextRequest): Promise<Response> {
   return route.POST(req, { params: Promise.resolve({ sessionId: sessionIdFromRequest(req) }) });
 }
 
+async function POST_CANCEL(body: unknown): Promise<Response> {
+  const route = await import('../../app/api/agent-runs/cancel/route');
+  return route.POST(new Request('http://localhost/api/agent-runs/cancel', {
+    method: 'POST',
+    body: JSON.stringify(body),
+    headers: { 'content-type': 'application/json' },
+  }));
+}
+
 function sessionIdFromBody(body: unknown): string {
   if (body && typeof body === 'object' && !Array.isArray(body)) {
     const sessionId = (body as { chatSessionId?: unknown }).chatSessionId;
@@ -854,9 +863,19 @@ describe('/api/agent/sessions/:sessionId/turns native runtime routing', () => {
     }));
 
     expect(res.status).toBe(200);
+    await res.text();
     const run = listAgentRuns({ kind: 'native-runtime' })[0]!;
     const events = listAgentEvents({ runId: run.id });
-    expect(events.filter((event) => event.category === 'text')).toEqual([]);
+    expect(events.filter((event) => event.category === 'text')).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        data: expect.objectContaining({
+          kind: 'text',
+          channel: 'assistant',
+        }),
+        visibility: 'debug',
+      }),
+    ]));
+    expect(events.filter((event) => event.category === 'text').every((event) => event.visibility === 'debug')).toBe(true);
     expect(events).toEqual(expect.arrayContaining([
       expect.objectContaining({
         type: 'runtime_status',
@@ -879,6 +898,86 @@ describe('/api/agent/sessions/:sessionId/turns native runtime routing', () => {
       category: 'tool',
     }));
     expect(toolEvent).not.toHaveProperty('visibility');
+  });
+
+  it('does not abort the native runtime when the HTTP request signal aborts', async () => {
+    mockResolveCommandPath.mockImplementation(async (command: string) => command === 'codex' ? '/usr/local/bin/codex' : null);
+    mockCheckNativeRuntimeHealth.mockResolvedValue({ status: 'available' });
+    mockDetectLocalAcpAgents.mockResolvedValue({ installed: [], notInstalled: [] });
+    let finishRuntime: (() => void) | undefined;
+    mockRunMindosNativeAgentTurn.mockImplementationOnce(async (options: MindosNativeAgentTurnOptions) => {
+      capturedNativeOptions = options;
+      options.send({ type: 'text_delta', delta: 'still running' });
+      return await new Promise((resolve) => {
+        finishRuntime = () => {
+          options.send({ type: 'done' });
+          resolve({ externalSessionId: 'thr-http-abort' });
+        };
+      });
+    });
+
+    const requestAbort = new AbortController();
+    const body = {
+      messages: [{ role: 'user', content: 'survive a dropped browser stream' }],
+      selectedRuntime: { id: 'codex', name: 'Codex', kind: 'codex' },
+      chatSessionId: 'chat-http-abort',
+    };
+    const res = await POST(new NextRequest('http://localhost/api/agent/sessions/chat-http-abort/turns', {
+      method: 'POST',
+      body: JSON.stringify(body),
+      headers: { 'content-type': 'application/json' },
+      signal: requestAbort.signal,
+    }));
+
+    expect(res.status).toBe(200);
+    expect(capturedNativeOptions?.signal?.aborted).toBe(false);
+    requestAbort.abort();
+    expect(capturedNativeOptions?.signal?.aborted).toBe(false);
+
+    finishRuntime?.();
+    await res.text();
+
+    expect(listAgentRuns({ kind: 'native-runtime' })[0]).toEqual(expect.objectContaining({
+      status: 'completed',
+      outputSummary: 'still running',
+      chatSessionId: 'chat-http-abort',
+    }));
+  });
+
+  it('aborts the native runtime through the explicit agent-run cancel API', async () => {
+    mockResolveCommandPath.mockImplementation(async (command: string) => command === 'codex' ? '/usr/local/bin/codex' : null);
+    mockCheckNativeRuntimeHealth.mockResolvedValue({ status: 'available' });
+    mockDetectLocalAcpAgents.mockResolvedValue({ installed: [], notInstalled: [] });
+    mockRunMindosNativeAgentTurn.mockImplementationOnce(async (options: MindosNativeAgentTurnOptions) => {
+      capturedNativeOptions = options;
+      return await new Promise((resolve) => {
+        options.signal?.addEventListener('abort', () => {
+          resolve({ error: options.signal?.reason instanceof Error ? options.signal.reason : new Error('aborted') });
+        }, { once: true });
+      });
+    });
+
+    const res = await POST(agentTurnRequest({
+      messages: [{ role: 'user', content: 'cancel the backend run' }],
+      selectedRuntime: { id: 'codex', name: 'Codex', kind: 'codex' },
+      chatSessionId: 'chat-explicit-cancel',
+    }));
+    expect(res.status).toBe(200);
+    const run = listAgentRuns({ kind: 'native-runtime' })[0]!;
+
+    const cancelRes = await POST_CANCEL({
+      rootRunId: run.id,
+      chatSessionId: 'chat-explicit-cancel',
+    });
+    expect(cancelRes.status).toBe(200);
+    expect(capturedNativeOptions?.signal?.aborted).toBe(true);
+
+    await res.text();
+    expect(listAgentRuns({ kind: 'native-runtime' })[0]).toEqual(expect.objectContaining({
+      id: run.id,
+      status: 'canceled',
+      error: 'Agent run was stopped by the user.',
+    }));
   });
 
   it('maps readonly permission requests to readonly native runtime mode', async () => {

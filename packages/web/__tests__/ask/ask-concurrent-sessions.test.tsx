@@ -161,6 +161,8 @@ describe('concurrent chat sessions (useAgentChat × agent-run-store)', () => {
   afterEach(async () => {
     await act(async () => { root.unmount(); });
     host.remove();
+    vi.useRealTimers();
+    localStorage.clear();
     resetWorkspaceTabsForTests();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
@@ -327,6 +329,43 @@ describe('concurrent chat sessions (useAgentChat × agent-run-store)', () => {
     expect(bindingWriter).toHaveBeenCalledTimes(1);
   });
 
+  it('reattaches to an existing agent run on retry instead of posting a duplicate turn', async () => {
+    localStorage.setItem('mindos-reconnect-retries', '1');
+    await submitText('a', 'recover this run');
+    expect(harness.captured).toHaveLength(1);
+
+    vi.useFakeTimers();
+    await act(async () => {
+      harness.captured[0].hooks.onAgentRunContext?.({
+        rootRunId: 'run-root-1',
+        chatSessionId: 'a',
+        startedAt: 123,
+      });
+      harness.captured[0].reject(new TypeError('Failed to fetch'));
+    });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000);
+    });
+
+    expect(harness.captured).toHaveLength(2);
+    const fetchMock = vi.mocked(fetch);
+    expect(fetchMock.mock.calls).toHaveLength(2);
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/agent/sessions/a/turns');
+    expect(fetchMock.mock.calls[0][1]).toMatchObject({ method: 'POST' });
+    expect(fetchMock.mock.calls[1][0]).toBe('/api/agent-runs/reattach?chatSessionId=a&rootRunId=run-root-1');
+    expect(fetchMock.mock.calls[1][1]).toMatchObject({ method: 'GET' });
+
+    await act(async () => {
+      harness.captured[1].onMessage({ role: 'assistant', content: 'recovered answer', timestamp: 1 });
+      harness.captured[1].resolve({ role: 'assistant', content: 'recovered answer', timestamp: 1 });
+    });
+    vi.useRealTimers();
+
+    expect(getRun('a')).toBeNull();
+    expect(getMessages('a')[1].content).toBe('recovered answer');
+  });
+
   it('stop() retracts the pending exchange, restores input, and starts a cooldown', async () => {
     await submitText('a', 'cancel me');
     expect(getMessages('a')).toHaveLength(2);
@@ -349,6 +388,32 @@ describe('concurrent chat sessions (useAgentChat × agent-run-store)', () => {
     expect(getMessages('a')).toHaveLength(0);
     expect(getRun('a')).toBeNull();
     expect(getUnread().has('a')).toBe(false);
+  });
+
+  it('stop() sends an explicit cancel request once an agent run context exists', async () => {
+    await submitText('a', 'cancel backend too');
+    await act(async () => {
+      harness.captured[0].hooks.onAgentRunContext?.({
+        rootRunId: 'run-stop-1',
+        chatSessionId: 'a',
+        startedAt: 123,
+      });
+      chat.stop();
+    });
+
+    const fetchMock = vi.mocked(fetch);
+    expect(fetchMock.mock.calls[1][0]).toBe('/api/agent-runs/cancel');
+    expect(fetchMock.mock.calls[1][1]).toMatchObject({
+      method: 'POST',
+      body: JSON.stringify({ chatSessionId: 'a', rootRunId: 'run-stop-1' }),
+    });
+
+    const abortErr = new Error('aborted');
+    abortErr.name = 'AbortError';
+    await act(async () => {
+      harness.captured[0].reject(abortErr);
+    });
+    expect(getRun('a')).toBeNull();
   });
 
   it('stopping one session leaves the other run streaming to completion', async () => {
