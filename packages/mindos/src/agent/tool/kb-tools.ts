@@ -21,6 +21,7 @@ import { getCurrentAgentRunContext } from '../agent-run-context.js';
 import { appendAgentRunEvent } from '../run-ledger.js';
 import { buildLineDiff, collapseDiffContext, type DiffLine } from './line-diff.js';
 import { extractRelevantContent } from './paragraph-extract.js';
+import { assertSafeAgentWriteContent } from '../../knowledge/content-integrity.js';
 
 // Max chars per file to avoid token overflow (~100k chars ≈ ~25k tokens)
 const MAX_FILE_CHARS = 20_000;
@@ -226,35 +227,44 @@ const LimitParam = Type.Object({
 const WriteFileParams = Type.Object({
   path: Type.String({ description: 'Relative file path' }),
   content: Type.String({ description: 'New full content' }),
+  allow_shrink: Type.Optional(Type.Boolean({ description: 'Set true only after verifying this full replacement intentionally shrinks a large file.' })),
+  allow_truncated_content: Type.Optional(Type.Boolean({ description: 'Set true only when MindOS truncation marker text is intentional prose.' })),
 });
 
 const CreateFileParams = Type.Object({
   path: Type.String({ description: 'Relative file path (must end in .md or .csv)' }),
   content: Type.Optional(Type.String({ description: 'Initial file content' })),
+  allow_empty: Type.Optional(Type.Boolean({ description: 'Set true only when intentionally creating an empty file.' })),
+  allow_truncated_content: Type.Optional(Type.Boolean({ description: 'Set true only when MindOS truncation marker text is intentional prose.' })),
 });
 
 const BatchCreateFileParams = Type.Object({
   files: Type.Array(Type.Object({
     path: Type.String({ description: 'Relative file path (must end in .md or .csv)' }),
     content: Type.String({ description: 'Initial file content' }),
+    allow_empty: Type.Optional(Type.Boolean({ description: 'Set true only when intentionally creating an empty file.' })),
+    allow_truncated_content: Type.Optional(Type.Boolean({ description: 'Set true only when MindOS truncation marker text is intentional prose.' })),
   }), { description: 'List of files to create' }),
 });
 
 const AppendParams = Type.Object({
   path: Type.String({ description: 'Relative file path' }),
   content: Type.String({ description: 'Content to append' }),
+  allow_truncated_content: Type.Optional(Type.Boolean({ description: 'Set true only when MindOS truncation marker text is intentional prose.' })),
 });
 
 const InsertHeadingParams = Type.Object({
   path: Type.String({ description: 'Relative file path' }),
   heading: Type.String({ description: 'Heading text to find (e.g. "## Tasks" or just "Tasks")' }),
   content: Type.String({ description: 'Content to insert after the heading' }),
+  allow_truncated_content: Type.Optional(Type.Boolean({ description: 'Set true only when MindOS truncation marker text is intentional prose.' })),
 });
 
 const UpdateSectionParams = Type.Object({
   path: Type.String({ description: 'Relative file path' }),
   heading: Type.String({ description: 'Heading text to find (e.g. "## Status")' }),
   content: Type.String({ description: 'New content for the section' }),
+  allow_truncated_content: Type.Optional(Type.Boolean({ description: 'Set true only when MindOS truncation marker text is intentional prose.' })),
 });
 
 const EditLinesParams = Type.Object({
@@ -262,6 +272,7 @@ const EditLinesParams = Type.Object({
   start_line: Type.Number({ description: '1-indexed line number to start replacing' }),
   end_line: Type.Number({ description: '1-indexed line number to stop replacing (inclusive)' }),
   content: Type.String({ description: 'New content to insert in place of those lines' }),
+  allow_truncated_content: Type.Optional(Type.Boolean({ description: 'Set true only when MindOS truncation marker text is intentional prose.' })),
 });
 
 const RenameParams = Type.Object({
@@ -512,11 +523,20 @@ export function buildMindosKnowledgeBaseTools(host: MindosKbToolsHost): MindosAg
     {
       name: 'write_file',
       label: 'Write File',
-      description: 'Overwrite the entire content of an existing file. Use read_file first to see current content. Prefer update_section or insert_after_heading for partial edits.',
+      description: 'Overwrite the entire content of an existing file. Use read_file first to see current content. Prefer update_section, edit_lines, insert_after_heading, or append_to_file for partial edits. Large shrink writes are refused unless allow_shrink=true after verifying the full replacement content.',
       parameters: WriteFileParams,
       execute: safeExecute(async (_id, params: Static<typeof WriteFileParams>) => {
         return writeLock('write_file', params.path, async () => {
           const before = safeReadContent(params.path);
+          assertSafeAgentWriteContent({
+            operation: 'write_file',
+            path: params.path,
+            content: params.content,
+            beforeContent: before,
+            isAgentWrite: true,
+            allowShrink: params.allow_shrink === true,
+            allowTruncatedContent: params.allow_truncated_content === true,
+          });
           files.saveFileContent(params.path, params.content);
           const diff = await buildDiffSummaryAsync(before, params.content);
           appendFileChangedEvent({
@@ -532,11 +552,19 @@ export function buildMindosKnowledgeBaseTools(host: MindosKbToolsHost): MindosAg
     {
       name: 'create_file',
       label: 'Create File',
-      description: 'Create a new file. Only .md and .csv files are allowed. Parent directories are created automatically. Does NOT create Space scaffolding (INSTRUCTION.md/README.md). Use create_space to create a Space.',
+      description: 'Create a new file. Only .md and .csv files are allowed. Parent directories are created automatically. Does NOT create Space scaffolding (INSTRUCTION.md/README.md). Use create_space to create a Space. Empty files are refused unless allow_empty=true.',
       parameters: CreateFileParams,
       execute: safeExecute(async (_id, params: Static<typeof CreateFileParams>) => {
         return writeLock('create_file', params.path, () => {
           const content = params.content ?? '';
+          assertSafeAgentWriteContent({
+            operation: 'create_file',
+            path: params.path,
+            content,
+            isAgentWrite: true,
+            allowEmpty: params.allow_empty === true,
+            allowTruncatedContent: params.allow_truncated_content === true,
+          });
           files.createFile(params.path, content);
           appendFileChangedEvent({
             path: params.path,
@@ -562,6 +590,14 @@ export function buildMindosKnowledgeBaseTools(host: MindosKbToolsHost): MindosAg
             const errors: string[] = [];
             for (const file of params.files) {
               try {
+                assertSafeAgentWriteContent({
+                  operation: 'batch_create_files',
+                  path: file.path,
+                  content: file.content,
+                  isAgentWrite: true,
+                  allowEmpty: file.allow_empty === true,
+                  allowTruncatedContent: file.allow_truncated_content === true,
+                });
                 files.createFile(file.path, file.content);
                 created.push(file.path);
                 appendFileChangedEvent({
@@ -589,6 +625,13 @@ export function buildMindosKnowledgeBaseTools(host: MindosKbToolsHost): MindosAg
       execute: safeExecute(async (_id, params: Static<typeof AppendParams>) => {
         return writeLock('append_to_file', params.path, async () => {
           const before = safeReadContent(params.path);
+          assertSafeAgentWriteContent({
+            operation: 'append_to_file',
+            path: params.path,
+            content: params.content,
+            isAgentWrite: true,
+            allowTruncatedContent: params.allow_truncated_content === true,
+          });
           files.appendToFile(params.path, params.content);
           const after = safeReadContent(params.path);
           const diff = await buildDiffSummaryAsync(before, after);
@@ -610,6 +653,13 @@ export function buildMindosKnowledgeBaseTools(host: MindosKbToolsHost): MindosAg
       execute: safeExecute(async (_id, params: Static<typeof InsertHeadingParams>) => {
         return writeLock('insert_after_heading', params.path, async () => {
           const before = safeReadContent(params.path);
+          assertSafeAgentWriteContent({
+            operation: 'insert_after_heading',
+            path: params.path,
+            content: params.content,
+            isAgentWrite: true,
+            allowTruncatedContent: params.allow_truncated_content === true,
+          });
           files.insertAfterHeading(params.path, params.heading, params.content);
           const after = safeReadContent(params.path);
           const diff = await buildDiffSummaryAsync(before, after);
@@ -631,6 +681,13 @@ export function buildMindosKnowledgeBaseTools(host: MindosKbToolsHost): MindosAg
       execute: safeExecute(async (_id, params: Static<typeof UpdateSectionParams>) => {
         return writeLock('update_section', params.path, async () => {
           const before = safeReadContent(params.path);
+          assertSafeAgentWriteContent({
+            operation: 'update_section',
+            path: params.path,
+            content: params.content,
+            isAgentWrite: true,
+            allowTruncatedContent: params.allow_truncated_content === true,
+          });
           files.updateSection(params.path, params.heading, params.content);
           const after = safeReadContent(params.path);
           const diff = await buildDiffSummaryAsync(before, after);
@@ -655,6 +712,13 @@ export function buildMindosKnowledgeBaseTools(host: MindosKbToolsHost): MindosAg
         const end = Math.max(0, end_line - 1);
         return writeLock('edit_lines', fp, async () => {
           const before = safeReadContent(fp);
+          assertSafeAgentWriteContent({
+            operation: 'edit_lines',
+            path: fp,
+            content,
+            isAgentWrite: true,
+            allowTruncatedContent: params.allow_truncated_content === true,
+          });
           const mindRoot = files.getMindRoot();
           await files.updateLines(mindRoot, fp, start, end, content.split('\n'));
           const after = safeReadContent(fp);

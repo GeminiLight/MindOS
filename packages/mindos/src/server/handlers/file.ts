@@ -27,6 +27,7 @@ import {
   type KnowledgeChangeEvent,
   type KnowledgeOperationHandler,
 } from '../../knowledge/knowledge-ops/index.js';
+import { assertSafeAgentWriteContent, readBooleanFlag } from '../../knowledge/content-integrity.js';
 import { queryValue, type MindosRequestQuery } from '../context.js';
 import { json, type MindosServerResponse } from '../response.js';
 import { isMindosBuiltinAssistantId } from './assistants.js';
@@ -197,7 +198,7 @@ export async function handleFilePost(
       body: payload,
       source,
       actor: createKnowledgeOperationActor(source, options.agentHeader),
-      handlers: createFileOperationHandlers(services.mindRoot),
+      handlers: createFileOperationHandlers(services.mindRoot, source),
       permissionRules: options.permissionRules ?? parsePermissionRules(process.env.MINDOS_PERMISSION_RULES),
       protectedRootFiles: options.protectedRootFiles,
       responses: {
@@ -217,15 +218,18 @@ export async function handleFilePost(
   }
 }
 
-function createFileOperationHandlers(mindRoot: string): Record<string, KnowledgeOperationHandler<MindosServerResponse> | undefined> {
+function createFileOperationHandlers(
+  mindRoot: string,
+  source: ContentChangeSource,
+): Record<string, KnowledgeOperationHandler<MindosServerResponse> | undefined> {
   return {
-    save_file: (filePath, params) => saveFile(mindRoot, filePath, params),
-    create_file: (filePath, params) => createFile(mindRoot, filePath, params),
-    append_to_file: (filePath, params) => appendToFile(mindRoot, filePath, params),
-    insert_lines: (filePath, params) => insertLinesOperation(mindRoot, filePath, params),
-    update_lines: (filePath, params) => updateLinesOperation(mindRoot, filePath, params),
-    insert_after_heading: (filePath, params) => insertAfterHeadingOperation(mindRoot, filePath, params),
-    update_section: (filePath, params) => updateSectionOperation(mindRoot, filePath, params),
+    save_file: (filePath, params) => saveFile(mindRoot, filePath, params, source),
+    create_file: (filePath, params) => createFile(mindRoot, filePath, params, source),
+    append_to_file: (filePath, params) => appendToFile(mindRoot, filePath, params, source),
+    insert_lines: (filePath, params) => insertLinesOperation(mindRoot, filePath, params, source),
+    update_lines: (filePath, params) => updateLinesOperation(mindRoot, filePath, params, source),
+    insert_after_heading: (filePath, params) => insertAfterHeadingOperation(mindRoot, filePath, params, source),
+    update_section: (filePath, params) => updateSectionOperation(mindRoot, filePath, params, source),
     delete_file: (filePath) => deleteFile(mindRoot, filePath),
     rename_file: (filePath, params) => renameFile(mindRoot, filePath, params),
     move_file: (filePath, params) => moveFile(mindRoot, filePath, params),
@@ -373,7 +377,12 @@ function assertNotBuiltinAssistantDestructivePath(filePath: string, operation: s
   throw new Error(`Access denied: built-in Assistant "${filePath}" cannot be ${operation}`);
 }
 
-function saveFile(mindRoot: string, filePath: string, params: Record<string, unknown>) {
+function saveFile(
+  mindRoot: string,
+  filePath: string,
+  params: Record<string, unknown>,
+  source: ContentChangeSource,
+) {
   const content = requireString(params.content, 'content');
   const abs = resolveExistingSafe(mindRoot, filePath);
   const normalizedPath = relativeKnowledgePath(mindRoot, abs);
@@ -384,6 +393,15 @@ function saveFile(mindRoot: string, filePath: string, params: Record<string, unk
     };
   }
   const before = safeRead(mindRoot, filePath);
+  assertSafeAgentWriteContent({
+    operation: 'save_file',
+    path: normalizedPath,
+    content,
+    beforeContent: before,
+    isAgentWrite: source === 'agent',
+    allowShrink: readBooleanFlag(params, 'allow_shrink'),
+    allowTruncatedContent: readBooleanFlag(params, 'allow_truncated_content'),
+  });
   atomicWriteFile(abs, content);
   return {
     response: json({ ok: true, path: normalizedPath, mtime: statSync(abs).mtimeMs }),
@@ -391,10 +409,23 @@ function saveFile(mindRoot: string, filePath: string, params: Record<string, unk
   };
 }
 
-function createFile(mindRoot: string, filePath: string, params: Record<string, unknown>) {
+function createFile(
+  mindRoot: string,
+  filePath: string,
+  params: Record<string, unknown>,
+  source: ContentChangeSource,
+) {
   const content = readString(params.content, '');
   const abs = resolveExistingSafe(mindRoot, filePath);
   const normalizedPath = relativeKnowledgePath(mindRoot, abs);
+  assertSafeAgentWriteContent({
+    operation: 'create_file',
+    path: normalizedPath,
+    content,
+    isAgentWrite: source === 'agent',
+    allowEmpty: readBooleanFlag(params, 'allow_empty'),
+    allowTruncatedContent: readBooleanFlag(params, 'allow_truncated_content'),
+  });
   mkdirSync(dirname(abs), { recursive: true });
   writeFileSync(abs, content, { encoding: 'utf-8', flag: 'wx' });
   return {
@@ -403,11 +434,23 @@ function createFile(mindRoot: string, filePath: string, params: Record<string, u
   };
 }
 
-function appendToFile(mindRoot: string, filePath: string, params: Record<string, unknown>) {
+function appendToFile(
+  mindRoot: string,
+  filePath: string,
+  params: Record<string, unknown>,
+  source: ContentChangeSource,
+) {
   const content = requireString(params.content, 'content');
   const before = safeRead(mindRoot, filePath);
   const abs = resolveExistingSafe(mindRoot, filePath);
   const normalizedPath = relativeKnowledgePath(mindRoot, abs);
+  assertSafeAgentWriteContent({
+    operation: 'append_to_file',
+    path: normalizedPath,
+    content,
+    isAgentWrite: source === 'agent',
+    allowTruncatedContent: readBooleanFlag(params, 'allow_truncated_content'),
+  });
   mkdirSync(dirname(abs), { recursive: true });
   appendFileSync(abs, appendSeparator(abs) + content, 'utf-8');
   return {
@@ -416,13 +459,25 @@ function appendToFile(mindRoot: string, filePath: string, params: Record<string,
   };
 }
 
-function insertLinesOperation(mindRoot: string, filePath: string, params: Record<string, unknown>) {
+function insertLinesOperation(
+  mindRoot: string,
+  filePath: string,
+  params: Record<string, unknown>,
+  source: ContentChangeSource,
+) {
   const afterIndex = requireNumber(params.after_index, 'after_index');
   const lines = requireStringArray(params.lines, 'lines');
   const before = safeRead(mindRoot, filePath);
   const existing = readLines(mindRoot, filePath);
   const normalizedPath = existingKnowledgePath(mindRoot, filePath);
   if (afterIndex >= existing.length) throw new Error(`Invalid after_index: ${afterIndex} >= total lines (${existing.length})`);
+  assertSafeAgentWriteContent({
+    operation: 'insert_lines',
+    path: normalizedPath,
+    content: lines.join('\n'),
+    isAgentWrite: source === 'agent',
+    allowTruncatedContent: readBooleanFlag(params, 'allow_truncated_content'),
+  });
   existing.splice(afterIndex < 0 ? 0 : afterIndex + 1, 0, ...lines);
   writeText(mindRoot, normalizedPath, existing.join('\n'));
   return {
@@ -431,7 +486,12 @@ function insertLinesOperation(mindRoot: string, filePath: string, params: Record
   };
 }
 
-function updateLinesOperation(mindRoot: string, filePath: string, params: Record<string, unknown>) {
+function updateLinesOperation(
+  mindRoot: string,
+  filePath: string,
+  params: Record<string, unknown>,
+  source: ContentChangeSource,
+) {
   const start = requireNumber(params.start, 'start');
   const end = requireNumber(params.end, 'end');
   const lines = requireStringArray(params.lines, 'lines');
@@ -441,6 +501,13 @@ function updateLinesOperation(mindRoot: string, filePath: string, params: Record
   const existing = readLines(mindRoot, filePath);
   const normalizedPath = existingKnowledgePath(mindRoot, filePath);
   if (start >= existing.length) throw new Error(`Invalid line index: start (${start}) >= total lines (${existing.length})`);
+  assertSafeAgentWriteContent({
+    operation: 'update_lines',
+    path: normalizedPath,
+    content: lines.join('\n'),
+    isAgentWrite: source === 'agent',
+    allowTruncatedContent: readBooleanFlag(params, 'allow_truncated_content'),
+  });
   existing.splice(start, end - start + 1, ...lines);
   writeText(mindRoot, normalizedPath, existing.join('\n'));
   return {
@@ -449,7 +516,12 @@ function updateLinesOperation(mindRoot: string, filePath: string, params: Record
   };
 }
 
-function insertAfterHeadingOperation(mindRoot: string, filePath: string, params: Record<string, unknown>) {
+function insertAfterHeadingOperation(
+  mindRoot: string,
+  filePath: string,
+  params: Record<string, unknown>,
+  source: ContentChangeSource,
+) {
   const heading = requireString(params.heading, 'heading');
   const content = requireString(params.content, 'content');
   const before = safeRead(mindRoot, filePath);
@@ -457,6 +529,13 @@ function insertAfterHeadingOperation(mindRoot: string, filePath: string, params:
   const normalizedPath = existingKnowledgePath(mindRoot, filePath);
   const idx = findHeading(lines, heading);
   if (idx === -1) throw new Error(`Heading not found: "${heading}"`);
+  assertSafeAgentWriteContent({
+    operation: 'insert_after_heading',
+    path: normalizedPath,
+    content,
+    isAgentWrite: source === 'agent',
+    allowTruncatedContent: readBooleanFlag(params, 'allow_truncated_content'),
+  });
   let insertAt = idx + 1;
   while (insertAt < lines.length && (lines[insertAt] ?? '').trim() === '') insertAt++;
   lines.splice(insertAt, 0, '', content);
@@ -467,7 +546,12 @@ function insertAfterHeadingOperation(mindRoot: string, filePath: string, params:
   };
 }
 
-function updateSectionOperation(mindRoot: string, filePath: string, params: Record<string, unknown>) {
+function updateSectionOperation(
+  mindRoot: string,
+  filePath: string,
+  params: Record<string, unknown>,
+  source: ContentChangeSource,
+) {
   const heading = requireString(params.heading, 'heading');
   const content = requireString(params.content, 'content');
   const before = safeRead(mindRoot, filePath);
@@ -475,6 +559,13 @@ function updateSectionOperation(mindRoot: string, filePath: string, params: Reco
   const normalizedPath = existingKnowledgePath(mindRoot, filePath);
   const idx = findHeading(lines, heading);
   if (idx === -1) throw new Error(`Heading not found: "${heading}"`);
+  assertSafeAgentWriteContent({
+    operation: 'update_section',
+    path: normalizedPath,
+    content,
+    isAgentWrite: source === 'agent',
+    allowTruncatedContent: readBooleanFlag(params, 'allow_truncated_content'),
+  });
   const headingLine = lines[idx] ?? '';
   const headingLevel = (headingLine.match(/^#+/) ?? [''])[0].length;
   let sectionEnd = lines.length - 1;
@@ -734,7 +825,7 @@ function requireStringArray(value: unknown, field: string): string[] {
 
 function mapFilePostError(error: unknown): MindosServerResponse<{ error: string }> {
   const message = error instanceof Error ? error.message : String(error);
-  if (/missing |must be|Invalid |Heading not found|row must|Only \.csv|start|after_index|line index|not a directory/i.test(message)) return json({ error: message }, { status: 400 });
+  if (/missing |must be|Invalid |Heading not found|row must|Only \.csv|start|after_index|line index|not a directory|refusing to/i.test(message)) return json({ error: message }, { status: 400 });
   if (/EEXIST|already exists/i.test(message)) return json({ error: 'File already exists' }, { status: 409 });
   if (/ENOENT|not found/i.test(message)) return json({ error: 'File not found' }, { status: 404 });
   if (/access denied|outside root|absolute paths/i.test(message)) return json({ error: 'Access denied' }, { status: 403 });

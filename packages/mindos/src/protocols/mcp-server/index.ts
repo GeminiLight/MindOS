@@ -200,14 +200,16 @@ server.registerTool("mindos_read_file", {
 
 server.registerTool("mindos_write_file", {
   title: "Write File Content",
-  description: "Overwrite the entire content of an existing file.",
+  description: "Overwrite the entire content of an existing file. Prefer line/section/append tools for partial edits. Large agent shrink writes are refused unless allow_shrink=true after verifying the complete replacement content.",
   inputSchema: z.object({
     path: z.string().min(1),
     content: z.string(),
+    allow_shrink: z.boolean().optional().default(false).describe("Set true only after verifying this full replacement intentionally shrinks a large file."),
+    allow_truncated_content: z.boolean().optional().default(false).describe("Set true only when MindOS truncation marker text is intentional prose."),
   }),
-}, async ({ path, content }) => {
+}, async ({ path, content, allow_shrink, allow_truncated_content }) => {
   try {
-    await _post("/api/file", { op: "save_file", path, content });
+    await _post("/api/file", { op: "save_file", path, content, allow_shrink, allow_truncated_content });
     _logOp("mindos_write_file", { path }, "ok", `Wrote ${content.length} chars`);
     return ok(`Successfully wrote ${content.length} characters to "${path}"`);
   } catch (e) { _logOp("mindos_write_file", { path }, "error", String(e)); return error(String(e)); }
@@ -217,14 +219,16 @@ server.registerTool("mindos_write_file", {
 
 server.registerTool("mindos_create_file", {
   title: "Create New File",
-  description: "Create a new file in the knowledge base. Only .md and .csv files allowed. Creates parent directories but does NOT create Space scaffolding. Use mindos_create_space to create a Space.",
+  description: "Create a new file in the knowledge base. Only .md and .csv files allowed. Creates parent directories but does NOT create Space scaffolding. Use mindos_create_space to create a Space. Empty agent-created files are refused unless allow_empty=true.",
   inputSchema: z.object({
     path: z.string().min(1).regex(/\.(md|csv)$/),
     content: z.string().default(""),
+    allow_empty: z.boolean().optional().default(false).describe("Set true only when intentionally creating an empty file."),
+    allow_truncated_content: z.boolean().optional().default(false).describe("Set true only when MindOS truncation marker text is intentional prose."),
   }),
-}, async ({ path, content }) => {
+}, async ({ path, content, allow_empty, allow_truncated_content }) => {
   try {
-    await _post("/api/file", { op: "create_file", path, content });
+    await _post("/api/file", { op: "create_file", path, content, allow_empty, allow_truncated_content });
     _logOp("mindos_create_file", { path }, "ok", `Created ${content.length} chars`);
     return ok(`Created "${path}" (${content.length} characters)`);
   } catch (e) { _logOp("mindos_create_file", { path }, "error", String(e)); return error(String(e)); }
@@ -240,6 +244,8 @@ server.registerTool("mindos_batch_create_files", {
     files: z.array(z.object({
       path: z.string().min(1).regex(/\.(md|csv)$/).describe("Relative file path (must end in .md or .csv)"),
       content: z.string().default("").describe("Initial file content"),
+      allow_empty: z.boolean().optional().default(false).describe("Set true only when intentionally creating an empty file."),
+      allow_truncated_content: z.boolean().optional().default(false).describe("Set true only when MindOS truncation marker text is intentional prose."),
     })).min(1).max(50).describe("List of files to create (max 50 per call)"),
   }),
 }, async ({ files }) => {
@@ -247,7 +253,13 @@ server.registerTool("mindos_batch_create_files", {
   const errors: string[] = [];
   for (const file of files) {
     try {
-      await _post("/api/file", { op: "create_file", path: file.path, content: file.content });
+      await _post("/api/file", {
+        op: "create_file",
+        path: file.path,
+        content: file.content,
+        allow_empty: file.allow_empty,
+        allow_truncated_content: file.allow_truncated_content,
+      });
       created.push(file.path);
     } catch (e) {
       errors.push(`${file.path}: ${String(e)}`);
@@ -436,10 +448,11 @@ server.registerTool("mindos_insert_lines", {
     path: z.string().min(1),
     after_index: z.number().int(),
     lines: z.array(z.string()).min(1),
+    allow_truncated_content: z.boolean().optional().default(false).describe("Set true only when MindOS truncation marker text is intentional prose."),
   }),
-}, async ({ path, after_index, lines }) => {
+}, async ({ path, after_index, lines, allow_truncated_content }) => {
   try {
-    await _post("/api/file", { op: "insert_lines", path, after_index, lines });
+    await _post("/api/file", { op: "insert_lines", path, after_index, lines, allow_truncated_content });
     return ok(`Inserted ${lines.length} line(s) after index ${after_index} in "${path}"`);
   } catch (e) { return error(String(e)); }
 });
@@ -454,10 +467,11 @@ server.registerTool("mindos_update_lines", {
     start: z.number().int().min(0),
     end: z.number().int().min(0),
     lines: z.array(z.string()).min(1),
+    allow_truncated_content: z.boolean().optional().default(false).describe("Set true only when MindOS truncation marker text is intentional prose."),
   }),
-}, async ({ path, start, end, lines }) => {
+}, async ({ path, start, end, lines, allow_truncated_content }) => {
   try {
-    await _post("/api/file", { op: "update_lines", path, start, end, lines });
+    await _post("/api/file", { op: "update_lines", path, start, end, lines, allow_truncated_content });
     return ok(`Replaced lines ${start}–${end} in "${path}" with ${lines.length} new line(s)`);
   } catch (e) { return error(String(e)); }
 });
@@ -470,10 +484,11 @@ server.registerTool("mindos_append_to_file", {
   inputSchema: z.object({
     path: z.string().min(1),
     content: z.string().min(1),
+    allow_truncated_content: z.boolean().optional().default(false).describe("Set true only when MindOS truncation marker text is intentional prose."),
   }),
-}, async ({ path, content }) => {
+}, async ({ path, content, allow_truncated_content }) => {
   try {
-    await _post("/api/file", { op: "append_to_file", path, content });
+    await _post("/api/file", { op: "append_to_file", path, content, allow_truncated_content });
     _logOp("mindos_append_to_file", { path }, "ok", `Appended ${content.length} chars`);
     return ok(`Appended ${content.length} character(s) to "${path}"`);
   } catch (e) { _logOp("mindos_append_to_file", { path }, "error", String(e)); return error(String(e)); }
@@ -488,10 +503,11 @@ server.registerTool("mindos_insert_after_heading", {
     path: z.string().min(1),
     heading: z.string().min(1),
     content: z.string().min(1),
+    allow_truncated_content: z.boolean().optional().default(false).describe("Set true only when MindOS truncation marker text is intentional prose."),
   }),
-}, async ({ path, heading, content }) => {
+}, async ({ path, heading, content, allow_truncated_content }) => {
   try {
-    await _post("/api/file", { op: "insert_after_heading", path, heading, content });
+    await _post("/api/file", { op: "insert_after_heading", path, heading, content, allow_truncated_content });
     _logOp("mindos_insert_after_heading", { path, heading }, "ok", `Inserted after "${heading}"`);
     return ok(`Inserted content after heading "${heading}" in "${path}"`);
   } catch (e) { _logOp("mindos_insert_after_heading", { path, heading }, "error", String(e)); return error(String(e)); }
@@ -506,10 +522,11 @@ server.registerTool("mindos_update_section", {
     path: z.string().min(1),
     heading: z.string().min(1),
     content: z.string(),
+    allow_truncated_content: z.boolean().optional().default(false).describe("Set true only when MindOS truncation marker text is intentional prose."),
   }),
-}, async ({ path, heading, content }) => {
+}, async ({ path, heading, content, allow_truncated_content }) => {
   try {
-    await _post("/api/file", { op: "update_section", path, heading, content });
+    await _post("/api/file", { op: "update_section", path, heading, content, allow_truncated_content });
     _logOp("mindos_update_section", { path, heading }, "ok", `Updated section "${heading}"`);
     return ok(`Updated section "${heading}" in "${path}"`);
   } catch (e) { _logOp("mindos_update_section", { path, heading }, "error", String(e)); return error(String(e)); }

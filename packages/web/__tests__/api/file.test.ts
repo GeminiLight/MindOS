@@ -271,6 +271,69 @@ describe('POST /api/file', () => {
     expect((await res.json()).error).toBe('missing content');
   });
 
+  it('rejects agent save_file content that contains truncation markers', async () => {
+    seedFile('large-agent.md', `# Large\n\n${'important\n'.repeat(2_000)}`);
+    invalidateCache();
+    const original = fs.readFileSync(path.join(root(), 'large-agent.md'), 'utf-8');
+
+    const res = await POST(post(
+      {
+        op: 'save_file',
+        path: 'large-agent.md',
+        content: '# Large\n\npartial\n\n[...truncated — file is 20000 chars]',
+      },
+      { 'x-mindos-agent': 'codex' },
+    ));
+
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toContain('refusing to write potentially truncated content');
+    expect(fs.readFileSync(path.join(root(), 'large-agent.md'), 'utf-8')).toBe(original);
+  });
+
+  it('rejects suspicious agent save_file shrink writes unless explicitly allowed', async () => {
+    seedFile('large-shrink.md', `# Large\n\n${'evidence\n'.repeat(1_200)}`);
+    invalidateCache();
+    const original = fs.readFileSync(path.join(root(), 'large-shrink.md'), 'utf-8');
+
+    const blocked = await POST(post(
+      { op: 'save_file', path: 'large-shrink.md', content: '# Short\n' },
+      { 'x-mindos-agent': 'codex' },
+    ));
+
+    expect(blocked.status).toBe(400);
+    expect((await blocked.json()).error).toContain('refusing to shrink large-shrink.md');
+    expect(fs.readFileSync(path.join(root(), 'large-shrink.md'), 'utf-8')).toBe(original);
+
+    const allowed = await POST(post(
+      { op: 'save_file', path: 'large-shrink.md', content: '# Short\n', allow_shrink: true },
+      { 'x-mindos-agent': 'codex' },
+    ));
+
+    expect(allowed.status).toBe(200);
+    expect(fs.readFileSync(path.join(root(), 'large-shrink.md'), 'utf-8')).toBe('# Short\n');
+  });
+
+  it('rejects empty agent save_file writes unless explicitly allowed', async () => {
+    seedFile('agent-empty-write.md', 'keep me');
+    invalidateCache();
+
+    const blocked = await POST(post(
+      { op: 'save_file', path: 'agent-empty-write.md', content: '' },
+      { 'x-mindos-agent': 'codex' },
+    ));
+
+    expect(blocked.status).toBe(400);
+    expect((await blocked.json()).error).toContain('refusing to write empty content');
+    expect(fs.readFileSync(path.join(root(), 'agent-empty-write.md'), 'utf-8')).toBe('keep me');
+
+    const allowed = await POST(post(
+      { op: 'save_file', path: 'agent-empty-write.md', content: '', allow_shrink: true },
+      { 'x-mindos-agent': 'codex' },
+    ));
+    expect(allowed.status).toBe(200);
+    expect(fs.readFileSync(path.join(root(), 'agent-empty-write.md'), 'utf-8')).toBe('');
+  });
+
   it('delete_file moves file to trash instead of permanent delete', async () => {
     seedFile('to-delete.md', 'bye');
     invalidateCache();
@@ -441,6 +504,26 @@ describe('POST /api/file', () => {
     expect(res.status).toBe(200);
     const content = fs.readFileSync(path.join(root(), 'empty.md'), 'utf-8');
     expect(content).toBe('');
+  });
+
+  it('rejects empty files from agent create_file unless explicitly allowed', async () => {
+    invalidateCache();
+
+    const blocked = await POST(post(
+      { op: 'create_file', path: 'agent-empty.md' },
+      { 'x-mindos-agent': 'codex' },
+    ));
+
+    expect(blocked.status).toBe(400);
+    expect((await blocked.json()).error).toContain('refusing to create empty file');
+    expect(fs.existsSync(path.join(root(), 'agent-empty.md'))).toBe(false);
+
+    const allowed = await POST(post(
+      { op: 'create_file', path: 'agent-empty-ok.md', allow_empty: true },
+      { 'x-mindos-agent': 'codex' },
+    ));
+    expect(allowed.status).toBe(200);
+    expect(fs.readFileSync(path.join(root(), 'agent-empty-ok.md'), 'utf-8')).toBe('');
   });
 
   it('move_file moves a file and returns affected files', async () => {

@@ -229,6 +229,79 @@ describe('createMindosKbToolkit', () => {
     });
   });
 
+  it('refuses to overwrite a file with content copied from a truncated read_file result', async () => {
+    const { host, store } = createFakeHost();
+    const original = `# Large note\n\n${'important context\n'.repeat(2_000)}`;
+    store.set('Large.md', original);
+    const toolkit = createMindosKbToolkit(host);
+    const readFile = toolkit.knowledgeBaseTools.find((tool) => tool.name === 'read_file');
+    const writeFile = toolkit.knowledgeBaseTools.find((tool) => tool.name === 'write_file');
+
+    const truncatedRead = await callTool(readFile, { path: 'Large.md' });
+    expect(truncatedRead).toContain('[...truncated');
+
+    const output = await callTool(writeFile, { path: 'Large.md', content: truncatedRead });
+
+    expect(output).toContain('Error: refusing to write potentially truncated content');
+    expect(store.get('Large.md')).toBe(original);
+  });
+
+  it('refuses suspicious large-file shrink writes unless explicitly allowed', async () => {
+    const { host, store } = createFakeHost();
+    const original = `# Long report\n\n${'evidence row\n'.repeat(1_000)}`;
+    store.set('Report.md', original);
+    const toolkit = createMindosKbToolkit(host);
+    const writeFile = toolkit.knowledgeBaseTools.find((tool) => tool.name === 'write_file');
+
+    const blocked = await callTool(writeFile, { path: 'Report.md', content: '# Short\n' });
+
+    expect(blocked).toContain('Error: refusing to shrink Report.md');
+    expect(store.get('Report.md')).toBe(original);
+
+    const allowed = await callTool(writeFile, {
+      path: 'Report.md',
+      content: '# Short\n',
+      allow_shrink: true,
+    });
+    expect(allowed).toContain('File written: Report.md');
+    expect(store.get('Report.md')).toBe('# Short\n');
+  });
+
+  it('refuses empty full-file writes unless explicitly allowed', async () => {
+    const { host, store } = createFakeHost();
+    store.set('Note.md', 'keep me');
+    const toolkit = createMindosKbToolkit(host);
+    const writeFile = toolkit.knowledgeBaseTools.find((tool) => tool.name === 'write_file');
+
+    const blocked = await callTool(writeFile, { path: 'Note.md', content: '' });
+
+    expect(blocked).toContain('Error: refusing to write empty content to Note.md');
+    expect(store.get('Note.md')).toBe('keep me');
+
+    const allowed = await callTool(writeFile, { path: 'Note.md', content: '', allow_shrink: true });
+    expect(allowed).toContain('File written: Note.md');
+    expect(store.get('Note.md')).toBe('');
+  });
+
+  it('refuses accidental empty agent-created files unless explicitly allowed', async () => {
+    const { host, store } = createFakeHost();
+    const toolkit = createMindosKbToolkit(host);
+    const createFile = toolkit.knowledgeBaseTools.find((tool) => tool.name === 'create_file');
+
+    const blocked = await callTool(createFile, { path: 'Empty.md' });
+
+    expect(blocked).toContain('Error: refusing to create empty file');
+    expect(store.has('Empty.md')).toBe(false);
+
+    const allowed = await callTool(createFile, {
+      path: 'IntentionalEmpty.md',
+      content: '',
+      allow_empty: true,
+    });
+    expect(allowed).toContain('File created: IntentionalEmpty.md');
+    expect(store.get('IntentionalEmpty.md')).toBe('');
+  });
+
   it('reports lint, dreaming, and compile as unavailable when the host omits those backends', async () => {
     const { host } = createFakeHost();
     const toolkit = createMindosKbToolkit(host);
