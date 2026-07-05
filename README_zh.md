@@ -379,6 +379,7 @@ MindOS/
 <a href="https://github.com/zjpyb"><img src="https://github.com/zjpyb.png" width="60" style="border-radius:50%" alt="zjpyb" /></a>
 <a href="https://github.com/huzhangyi"><img src="https://github.com/huzhangyi.png" width="60" style="border-radius:50%" alt="huzhangyi" /></a>
 <a href="https://github.com/zenozhg"><img src="https://github.com/zenozhg.png" width="60" style="border-radius:50%" alt="Zeno Zhang" /></a>
+<a href="https://github.com/octo-patch"><img src="https://github.com/octo-patch.png" width="60" style="border-radius:50%" alt="Octopus" /></a>
 
 ### 🙏 致谢
 
