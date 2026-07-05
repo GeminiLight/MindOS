@@ -19,12 +19,12 @@ import type { RuntimeBindingMetadata, AgentRunContextMetadata } from '@/lib/agen
 
 const harness = vi.hoisted(() => {
   interface CapturedRun {
-    onMessage: (msg: { role: 'user' | 'assistant'; content: string; timestamp?: number }) => void;
+    onMessage: (msg: Message) => void;
     hooks: {
       onRuntimeBinding?: (binding: unknown) => void;
       onAgentRunContext?: (context: unknown) => void;
     };
-    resolve: (msg: { role: 'assistant'; content: string; timestamp?: number }) => void;
+    resolve: (msg: Message) => void;
     reject: (err: Error) => void;
     signal: AbortSignal;
     body: string;
@@ -161,6 +161,8 @@ describe('concurrent chat sessions (useAgentChat × agent-run-store)', () => {
   afterEach(async () => {
     await act(async () => { root.unmount(); });
     host.remove();
+    vi.useRealTimers();
+    localStorage.clear();
     resetWorkspaceTabsForTests();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
@@ -327,6 +329,105 @@ describe('concurrent chat sessions (useAgentChat × agent-run-store)', () => {
     expect(bindingWriter).toHaveBeenCalledTimes(1);
   });
 
+  it('reattaches to an existing agent run on retry instead of posting a duplicate turn', async () => {
+    localStorage.setItem('mindos-reconnect-retries', '1');
+    await submitText('a', 'recover this run');
+    expect(harness.captured).toHaveLength(1);
+
+    vi.useFakeTimers();
+    await act(async () => {
+      harness.captured[0].hooks.onAgentRunContext?.({
+        rootRunId: 'run-root-1',
+        chatSessionId: 'a',
+        startedAt: 123,
+      });
+      harness.captured[0].reject(new TypeError('Failed to fetch'));
+    });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000);
+    });
+
+    expect(harness.captured).toHaveLength(2);
+    const fetchMock = vi.mocked(fetch);
+    expect(fetchMock.mock.calls).toHaveLength(2);
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/agent/sessions/a/turns');
+    expect(fetchMock.mock.calls[0][1]).toMatchObject({ method: 'POST' });
+    expect(fetchMock.mock.calls[1][0]).toBe('/api/agent-runs/reattach?chatSessionId=a&rootRunId=run-root-1');
+    expect(fetchMock.mock.calls[1][1]).toMatchObject({ method: 'GET' });
+
+    await act(async () => {
+      harness.captured[1].onMessage({ role: 'assistant', content: 'recovered answer', timestamp: 1 });
+      harness.captured[1].resolve({ role: 'assistant', content: 'recovered answer', timestamp: 1 });
+    });
+    vi.useRealTimers();
+
+    expect(getRun('a')).toBeNull();
+    expect(getMessages('a')[1].content).toBe('recovered answer');
+  });
+
+  it('preserves visible assistant text while replaying a reattach stream', async () => {
+    localStorage.setItem('mindos-reconnect-retries', '1');
+    await submitText('a', 'recover partial output');
+    expect(harness.captured).toHaveLength(1);
+
+    await act(async () => {
+      harness.captured[0].onMessage({
+        role: 'assistant',
+        content: 'partial answer',
+        parts: [{ type: 'text', text: 'partial answer' }],
+        timestamp: 1,
+      });
+    });
+    expect(getMessages('a')[1].content).toBe('partial answer');
+
+    vi.useFakeTimers();
+    await act(async () => {
+      harness.captured[0].hooks.onAgentRunContext?.({
+        rootRunId: 'run-root-1',
+        chatSessionId: 'a',
+        startedAt: 123,
+      });
+      harness.captured[0].reject(new TypeError('Failed to fetch'));
+    });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000);
+    });
+
+    expect(harness.captured).toHaveLength(2);
+
+    await act(async () => {
+      harness.captured[1].onMessage({
+        role: 'assistant',
+        content: '',
+        parts: [{ type: 'reasoning', text: 'still thinking' }],
+        timestamp: 2,
+      });
+    });
+    expect(getMessages('a')[1].content).toBe('partial answer');
+    expect(getMessages('a')[1].parts?.some((part) => part.type === 'text' && part.text === 'partial answer')).toBe(true);
+
+    await act(async () => {
+      harness.captured[1].onMessage({
+        role: 'assistant',
+        content: 'answer plus more',
+        parts: [{ type: 'text', text: 'answer plus more' }],
+        timestamp: 2,
+      });
+      harness.captured[1].resolve({
+        role: 'assistant',
+        content: 'answer plus more',
+        parts: [{ type: 'text', text: 'answer plus more' }],
+        timestamp: 2,
+      });
+    });
+    vi.useRealTimers();
+
+    expect(getRun('a')).toBeNull();
+    expect(getMessages('a')[1].content).toBe('partial answer plus more');
+  });
+
   it('stop() retracts the pending exchange, restores input, and starts a cooldown', async () => {
     await submitText('a', 'cancel me');
     expect(getMessages('a')).toHaveLength(2);
@@ -349,6 +450,32 @@ describe('concurrent chat sessions (useAgentChat × agent-run-store)', () => {
     expect(getMessages('a')).toHaveLength(0);
     expect(getRun('a')).toBeNull();
     expect(getUnread().has('a')).toBe(false);
+  });
+
+  it('stop() sends an explicit cancel request once an agent run context exists', async () => {
+    await submitText('a', 'cancel backend too');
+    await act(async () => {
+      harness.captured[0].hooks.onAgentRunContext?.({
+        rootRunId: 'run-stop-1',
+        chatSessionId: 'a',
+        startedAt: 123,
+      });
+      chat.stop();
+    });
+
+    const fetchMock = vi.mocked(fetch);
+    expect(fetchMock.mock.calls[1][0]).toBe('/api/agent-runs/cancel');
+    expect(fetchMock.mock.calls[1][1]).toMatchObject({
+      method: 'POST',
+      body: JSON.stringify({ chatSessionId: 'a', rootRunId: 'run-stop-1' }),
+    });
+
+    const abortErr = new Error('aborted');
+    abortErr.name = 'AbortError';
+    await act(async () => {
+      harness.captured[0].reject(abortErr);
+    });
+    expect(getRun('a')).toBeNull();
   });
 
   it('stopping one session leaves the other run streaming to completion', async () => {

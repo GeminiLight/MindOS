@@ -28,7 +28,7 @@ describe('appendSseEventToAgentRun', () => {
     expect(events.some((event) => event.type === 'runtime_status' && event.message === 'keep-alive')).toBe(false);
   });
 
-  it('keeps native runtime text out of the ledger while preserving actionable status and tool events', () => {
+  it('stores native runtime text as debug replay data while preserving actionable status and tool events', () => {
     const run = startAgentRun({
       id: 'run-native',
       agentKind: 'native-runtime',
@@ -44,7 +44,18 @@ describe('appendSseEventToAgentRun', () => {
     appendSseEventToAgentRun(run.id, { type: 'tool_start', runtime: 'claude', toolCallId: 'tool-1', toolName: 'Bash', args: { command: 'npm test' } });
 
     const events = listAgentEvents({ runId: run.id });
-    expect(events.filter((event) => event.category === 'text')).toEqual([]);
+    expect(events.filter((event) => event.category === 'text')).toEqual([
+      expect.objectContaining({
+        type: 'text',
+        message: 'native text',
+        visibility: 'debug',
+        data: expect.objectContaining({
+          kind: 'text',
+          channel: 'assistant',
+          text: 'native text',
+        }),
+      }),
+    ]);
     expect(events).toEqual(expect.arrayContaining([
       expect.objectContaining({
         type: 'runtime_status',
@@ -121,7 +132,7 @@ describe('appendSseEventToAgentRun', () => {
         type: 'permission_requested',
         runtime: 'codex',
         toolCallId: 'tool-1',
-        metadata: { requestId: 'perm-1' },
+        metadata: expect.objectContaining({ requestId: 'perm-1', bridgeRunId: 'run-permission' }),
         data: expect.objectContaining({
           kind: 'permission',
           action: 'command',
@@ -137,7 +148,7 @@ describe('appendSseEventToAgentRun', () => {
       }),
       expect.objectContaining({
         type: 'permission_resolved',
-        metadata: { requestId: 'perm-1' },
+        metadata: expect.objectContaining({ requestId: 'perm-1', bridgeRunId: 'run-permission' }),
         data: expect.objectContaining({
           kind: 'permission',
           status: 'approved',

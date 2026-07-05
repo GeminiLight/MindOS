@@ -4,7 +4,6 @@ import {
 } from '../turn/index.js';
 import {
   appendAgentRunEvent,
-  getAgentRun,
 } from './run-ledger.js';
 import type {
   AgentEventData,
@@ -30,10 +29,6 @@ function safeAuditString(value: unknown): string {
   } catch {
     return redactSensitiveText(String(value));
   }
-}
-
-function isNativeRuntimeRun(runId: string): boolean {
-  return getAgentRun(runId)?.agentKind === 'native-runtime';
 }
 
 function isNativeRuntimeStatus(event: Extract<MindOSSSEvent, { type: 'status' }>): boolean {
@@ -79,7 +74,6 @@ function append(runId: string, input: AppendAgentEventInput): void {
 export function appendSseEventToAgentRun(runId: string, event: MindOSSSEvent): void {
   if (event.type === 'text_delta') {
     if (!event.delta.trim()) return;
-    if (isNativeRuntimeRun(runId)) return;
     append(runId, {
       type: 'text',
       category: 'text',
@@ -91,7 +85,6 @@ export function appendSseEventToAgentRun(runId: string, event: MindOSSSEvent): v
   }
   if (event.type === 'thinking_delta') {
     if (!event.delta.trim()) return;
-    if (isNativeRuntimeRun(runId)) return;
     append(runId, {
       type: 'text',
       category: 'text',
@@ -163,6 +156,7 @@ export function appendSseEventToAgentRun(runId: string, event: MindOSSSEvent): v
       toolName: event.toolName,
       runtime: event.runtime,
       metadata: {
+        bridgeRunId: event.runId,
         requestId: event.requestId,
       },
       data: {
@@ -187,6 +181,7 @@ export function appendSseEventToAgentRun(runId: string, event: MindOSSSEvent): v
       toolCallId: event.toolCallId,
       runtime: event.runtime,
       metadata: {
+        bridgeRunId: event.runId,
         requestId: event.requestId,
       },
       data: {
@@ -208,6 +203,10 @@ export function appendSseEventToAgentRun(runId: string, event: MindOSSSEvent): v
       category: 'question',
       message: 'User question requested',
       toolCallId: event.toolCallId,
+      metadata: {
+        bridgeRunId: event.runId,
+        questions: redactSensitiveObject(event.questions),
+      },
       data: {
         kind: 'question',
         status: 'requested',
@@ -217,11 +216,20 @@ export function appendSseEventToAgentRun(runId: string, event: MindOSSSEvent): v
     return;
   }
   if (event.type === 'user_question_answered' || event.type === 'user_question_cancelled') {
+    const metadata = event.type === 'user_question_answered'
+      ? {
+          bridgeRunId: event.runId,
+          answers: redactSensitiveObject(event.answers ?? []),
+        }
+      : {
+          bridgeRunId: event.runId,
+        };
     append(runId, {
       type: 'user_question_resolved',
       category: 'question',
       message: event.type === 'user_question_cancelled' ? event.reason : 'User answered',
       toolCallId: event.toolCallId,
+      metadata,
       data: {
         kind: 'question',
         status: event.type === 'user_question_cancelled' ? 'cancelled' : 'answered',

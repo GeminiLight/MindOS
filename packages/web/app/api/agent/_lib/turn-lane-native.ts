@@ -21,6 +21,9 @@ import {
   startAgentRun,
 } from '@geminilight/mindos/agent/ledger/run-ledger';
 import {
+  registerAgentRunCancelHandler,
+} from '@geminilight/mindos/agent/ledger/run-cancellation';
+import {
   createClaudePermissionPromptConfig,
   resolveRuntimePermissionBaseUrl,
 } from '@/lib/agent/claude-permission-prompt';
@@ -72,6 +75,12 @@ async function runNativeRuntimeTurn(
       ...(input.assistantId ? { assistantId: input.assistantId } : {}),
     },
   });
+  const nativeRunAbort = new AbortController();
+  const nativeRunSignal = nativeRunAbort.signal;
+  const unregisterCancelHandler = registerAgentRunCancelHandler(nativeRun.id, ({ reason }) => {
+    if (nativeRunSignal.aborted) return;
+    nativeRunAbort.abort(cancelReasonToAbortError(reason));
+  });
   const sendWithLedger = (event: MindOSSSEvent) => {
     if (event.type === 'text_delta') outputSummary += event.delta;
     appendSseEventToAgentRun(nativeRun.id, event);
@@ -101,7 +110,7 @@ async function runNativeRuntimeTurn(
         ...(input.nativeRuntimeOptions.reasoningEffort ? { reasoningEffort: input.nativeRuntimeOptions.reasoningEffort } : {}),
         timeoutMs: resolveMindosAgentTimeoutMs(process.env.MINDOS_AGENT_TIMEOUT_MS),
         ...(input.nativeRuntimeEnv ? { runtimeEnv: input.nativeRuntimeEnv } : {}),
-        signal: input.requestSignal,
+        signal: nativeRunSignal,
         send: sendWithLedger,
         services: {
           ...(nativeRuntime.kind === 'claude' ? {
@@ -121,7 +130,7 @@ async function runNativeRuntimeTurn(
     )));
     if (result.error) {
       failAgentRun(nativeRun.id, {
-        status: agentRunErrorStatus(result.error, input.requestSignal),
+        status: agentRunErrorStatus(result.error, nativeRunSignal),
         error: result.error,
         outputSummary,
         ...(result.externalSessionId ? { archive: { sessionId: result.externalSessionId } } : {}),
@@ -149,12 +158,24 @@ async function runNativeRuntimeTurn(
     });
   } catch (error) {
     failAgentRun(nativeRun.id, {
-      status: agentRunErrorStatus(error, input.requestSignal),
+      status: agentRunErrorStatus(error, nativeRunSignal),
       error,
       outputSummary,
     });
     throw error;
+  } finally {
+    unregisterCancelHandler();
   }
+}
+
+function cancelReasonToAbortError(reason: unknown): Error {
+  if (reason instanceof Error) return reason;
+  const message = typeof reason === 'string' && reason.trim()
+    ? reason
+    : 'Agent run was canceled.';
+  const error = new Error(message);
+  error.name = 'AbortError';
+  return error;
 }
 
 function resolveRuntimePermissionBaseUrlForAgentTurnContext(context: AgentTurnRequestContext): string {
