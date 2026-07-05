@@ -161,6 +161,28 @@ describe('CLI smoke tests', () => {
     expect(doctor.getShimExecutablePath('darwin', '/Users/ada')).toMatch(/\/mindos$/);
   });
 
+  it('mindos doctor agents verifies Codex MCP and Skill readiness without full onboard config', () => {
+    fs.mkdirSync(path.join(tempHome, '.codex'), { recursive: true });
+    fs.writeFileSync(path.join(tempHome, '.codex', 'config.toml'), `
+[mcp_servers.mindos]
+type = "stdio"
+command = "mindos"
+args = ["mcp"]
+`, 'utf-8');
+    fs.mkdirSync(path.join(tempHome, '.agents', 'skills', 'mindos'), { recursive: true });
+    fs.writeFileSync(path.join(tempHome, '.agents', 'skills', 'mindos', 'SKILL.md'), '# mindos\n', 'utf-8');
+    fs.mkdirSync(path.join(tempHome, '.mindos', 'bin'), { recursive: true });
+    fs.writeFileSync(path.join(tempHome, '.mindos', 'bin', process.platform === 'win32' ? 'mindos.cmd' : 'mindos'), '', 'utf-8');
+
+    const { stdout, exitCode } = run(['doctor', 'agents', 'codex', '--json']);
+
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.ok).toBe(true);
+    expect(parsed.agents[0].ready).toBe(true);
+    expect(parsed.agents[0].skill.installed).toBe(true);
+  });
+
   it('mindos config show without config exits 1', () => {
     const { exitCode } = run(['config', 'show']);
     expect(exitCode).toBe(1);

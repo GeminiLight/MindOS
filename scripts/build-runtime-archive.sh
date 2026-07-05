@@ -151,6 +151,13 @@ if [ ! -e "$VERIFY/runtime-manifest.json" ]; then
   ERRORS=$((ERRORS + 1))
 fi
 
+for f in skills/mindos/SKILL.md skills/mindos-zh/SKILL.md packages/web/data/skills/mindos/SKILL.md packages/web/data/skills/mindos-zh/SKILL.md; do
+  if [ ! -e "$VERIFY/$f" ]; then
+    echo "  ❌ MISSING: $f"
+    ERRORS=$((ERRORS + 1))
+  fi
+done
+
 # Verify version in package.json matches
 PKG_VER=$(node -p "require('$VERIFY/package.json').version" 2>/dev/null || echo "")
 if [ "$PKG_VER" != "$VERSION" ]; then

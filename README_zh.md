@@ -186,18 +186,18 @@ mindos open
 
 ### 4. 让任意 Agent 可用（MCP + Skills）
 
-**MCP**（连接能力）— 一条命令自动安装：
+**MCP + Skills**（连接能力 + 工作流能力）— 一条命令同时安装或修复：
 
 ```bash
 mindos mcp install        # 交互式
 mindos mcp install -g -y  # 一键全局安装
 ```
 
-**Skills**（工作流能力）— 根据语言偏好选择其一：
+验证 Agent 实际可用状态：
 
 ```bash
-npx skills add https://github.com/GeminiLight/MindOS --skill mindos -g -y      # 英文
-npx skills add https://github.com/GeminiLight/MindOS --skill mindos-zh -g -y   # 中文
+mindos doctor agents
+mindos doctor agents codex --json
 ```
 
 > 远程配置、手动 JSON 片段、常见误区等详见 **[docs/zh/supported-agents.md](docs/zh/supported-agents.md)**。

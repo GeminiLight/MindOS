@@ -49,8 +49,9 @@
 | Command | Description |
 | :--- | :--- |
 | `mindos mcp` | Start MCP server only |
-| `mindos mcp install` | Auto-install MCP config into your Agent (interactive) |
-| `mindos mcp install -g -y` | One-shot global install with defaults |
+| `mindos mcp install` | Auto-install or repair MCP config and MindOS Skill for your Agent (interactive) |
+| `mindos mcp install -g -y` | One-shot global MCP + Skill install with defaults |
+| `mindos doctor agents [name]` | Verify agent-facing MCP, command, and Skill readiness |
 | `mindos token` | Show auth token and per-agent MCP config snippets |
 
 The MCP server source of truth is `packages/mindos/src/protocols/mcp-server`; packaged installs use the prebuilt `dist/protocols/mcp-server/index.cjs` bundle inside the MindOS runtime package.

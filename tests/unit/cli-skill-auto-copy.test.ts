@@ -235,7 +235,7 @@ describe('Node.js cpSync vs copyDirSync equivalence', () => {
     const dst1 = path.join(tempDir, 'dst-cpsync');
     const dst2 = path.join(tempDir, 'dst-manual');
 
-    // cpSync (used in setup.js)
+    // Node's native recursive copy.
     fs.cpSync(src, dst1, { recursive: true });
     // copyDirSync (used in mcp-install.js)
     copyDirSync(src, dst2);

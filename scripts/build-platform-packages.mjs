@@ -125,6 +125,8 @@ function assertProductRuntimeReady() {
     'dist/index.js',
     'src/cli-runtime.js',
     'dist/protocols/mcp-server/index.cjs',
+    'skills/mindos/SKILL.md',
+    'skills/mindos-zh/SKILL.md',
   ];
 
   for (const rel of required) {

@@ -790,6 +790,10 @@ async function handleRequest(
     }
     if (route === 'POST /api/mcp/install-skill') {
       writeResponse(res, handleMcpInstallSkillPost(await readJsonBody(req) as MindosMcpInstallSkillRequest, {
+        agents: (services.mcpAgents ?? {}) as Record<string, MindosMcpAgentRegistryDef>,
+        skillAgentRegistry: createDefaultSkillAgentRegistry(),
+        projectRoot: services.runtimeRoot ?? runtimeRoot ?? process.cwd(),
+        cwd: services.runtimeRoot ?? runtimeRoot ?? process.cwd(),
         env: process.env,
       }));
       return;

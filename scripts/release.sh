@@ -98,6 +98,29 @@ if ! echo "$HELP_OUTPUT" | grep -qi "mindos"; then
 fi
 echo "   ✅ mindos --help works"
 
+AGENT_HOME=$(mktemp -d)
+if PATH="$SMOKE_DIR/node_modules/.bin:$PATH" HOME="$AGENT_HOME" NODE_ENV=test "$SMOKE_DIR/node_modules/.bin/mindos" mcp install codex -g -y >/tmp/mindos-release-agent-install.log 2>&1; then
+  AGENT_DOCTOR=$(PATH="$SMOKE_DIR/node_modules/.bin:$PATH" HOME="$AGENT_HOME" NODE_ENV=test "$SMOKE_DIR/node_modules/.bin/mindos" doctor agents codex --json 2>&1 || true)
+  if ! echo "$AGENT_DOCTOR" | grep -q '"ready":true'; then
+    echo "❌ 'mindos doctor agents codex --json' did not report ready after install"
+    echo "$AGENT_DOCTOR"
+    rm -rf "$AGENT_HOME" "$SMOKE_DIR"
+    exit 1
+  fi
+  if [ ! -f "$AGENT_HOME/.agents/skills/mindos/SKILL.md" ]; then
+    echo "❌ Codex Skill was not installed from packaged runtime"
+    rm -rf "$AGENT_HOME" "$SMOKE_DIR"
+    exit 1
+  fi
+else
+  echo "❌ 'mindos mcp install codex -g -y' failed in release smoke"
+  cat /tmp/mindos-release-agent-install.log
+  rm -rf "$AGENT_HOME" "$SMOKE_DIR"
+  exit 1
+fi
+rm -rf "$AGENT_HOME" /tmp/mindos-release-agent-install.log
+echo "   ✅ agent install + doctor readiness works"
+
 # Verify key files are present in the installed main package
 for f in bin/mindos-shim.cjs dist/index.js dist/protocols/acp/index.js dist/protocols/mcp-server/index.cjs; do
   if [ ! -f "$SMOKE_DIR/node_modules/@geminilight/mindos/$f" ]; then

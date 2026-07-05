@@ -17,7 +17,8 @@ describe('setup.js subprocess contract', () => {
     expect(source).toContain("execFileSync('open', [url]");
     expect(source).toContain("execFileSync('cmd.exe', ['/c', 'start', '', url]");
     expect(source).toContain("execFileSync(process.execPath, [cliPath, 'restart']");
-    expect(source).toContain("resolveNpxInvocation(args)");
+    expect(source).toContain("installMindosSkillsForAgents(selectedAgents, { skillName })");
+    expect(source).toContain("[cliPath, 'mcp', 'install', agentKey, '-g', '-y']");
     expect(source).toContain("function supportsDaemonService(platform = process.platform)");
     expect(source).toContain("resolveNpmInvocation(['link', '--global'])");
     expect(source).toContain("cwd: resolve(ROOT, 'packages', 'mindos')");

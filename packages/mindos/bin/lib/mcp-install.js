@@ -1,12 +1,15 @@
-import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, copyFileSync } from 'node:fs';
-import { resolve, join } from 'node:path';
-import { CONFIG_PATH, ROOT, WEB_APP_DIR } from './constants.js';
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { CONFIG_PATH } from './constants.js';
 import { bold, dim, cyan, green, red, yellow } from './colors.js';
 import { expandHome } from './path-expand.js';
 import { parseJsonc } from './jsonc.js';
-import { MCP_AGENTS, SKILL_AGENT_REGISTRY, detectAgentPresence } from './mcp-agents.js';
+import { MCP_AGENTS, detectAgentPresence } from './mcp-agents.js';
 import { mergeTomlEntry } from './toml.js';
 import { mergeYamlEntry } from './yaml.js';
+import { EXIT } from './command.js';
+import { getActiveSkillName } from './agent-readiness.js';
+import { installMindosSkillsForAgents } from './skill-install.js';
 
 /**
  * Walk a dot-separated path inside an object, creating intermediate {} as needed.
@@ -43,76 +46,6 @@ function configPathCandidates(agent, scope) {
   const primary = scope === 'global' ? agent.global : agent.project;
   const readAlso = scope === 'global' ? agent.globalReadAlso : agent.projectReadAlso;
   return [primary, ...(readAlso ?? [])].filter(Boolean);
-}
-
-/**
- * Recursively copy a directory using pure Node.js (cross-platform).
- * Uses cpSync on Node >=16.7, falls back to manual walk otherwise.
- */
-function copyDirSync(src, dst) {
-  mkdirSync(dst, { recursive: true });
-  for (const entry of readdirSync(src, { withFileTypes: true })) {
-    const s = join(src, entry.name);
-    const d = join(dst, entry.name);
-    if (entry.isDirectory()) {
-      copyDirSync(s, d);
-    } else {
-      copyFileSync(s, d);
-    }
-  }
-}
-
-/**
- * Determine active skill variant based on user's locale setting.
- * Respects disabledSkills to detect if user prefers Chinese (mindos-zh).
- */
-function getActiveSkillName() {
-  try {
-    const content = readFileSync(CONFIG_PATH, 'utf-8');
-    const config = parseJsonc(content);
-    // If 'mindos' is disabled, user prefers Chinese (mindos-zh)
-    if (config.disabledSkills?.includes('mindos')) {
-      return 'mindos-zh';
-    }
-  } catch {
-    // Fall back to English if settings can't be read
-  }
-  return 'mindos';
-}
-
-/**
- * Auto-copy skill folder for agents with mode 'unsupported'.
- * Called after MCP config is written. Best-effort, never throws.
- * Respects user's locale setting (English mindos / Chinese mindos-zh).
- */
-function autoInstallSkillForAgent(agentKey, skillName) {
-  const reg = SKILL_AGENT_REGISTRY[agentKey];
-  if (!reg || reg.mode !== 'unsupported') return null;
-
-  const agent = MCP_AGENTS[agentKey];
-  if (!agent) return null;
-
-  // Resolve skill source: project skills/ or packages/web/data/skills/
-  const candidates = [
-    join(ROOT, 'skills', skillName),
-    join(WEB_APP_DIR, 'data', 'skills', skillName),
-  ];
-  const skillSrc = candidates.find(p => existsSync(p));
-  if (!skillSrc) return null;
-
-  // Resolve target: agent's presenceDirs[0]/skills/<skillName>
-  const agentRoot = (agent.presenceDirs ?? []).map(d => expandHome(d)).find(d => existsSync(d))
-    || resolve(expandHome(agent.global), '..');
-  const targetDir = join(agentRoot, 'skills', skillName);
-
-  if (existsSync(targetDir)) return 'exists';
-
-  try {
-    copyDirSync(skillSrc, targetDir);
-    return 'copied';
-  } catch {
-    return null;
-  }
 }
 
 export { MCP_AGENTS };
@@ -427,6 +360,9 @@ export async function mcpInstall() {
   }
 
   // ── 4. install for each selected agent ─────────────────────────────────────
+  const configuredAgentKeys = [];
+  const mcpFailures = [];
+
   for (const agentKey of agentKeys) {
     const agent = MCP_AGENTS[agentKey];
     const entry = buildMcpEntry(agent, transport, url, token);
@@ -451,7 +387,9 @@ export async function mcpInstall() {
 
     const configPath = isGlobal ? agent.global : agent.project;
     if (!configPath) {
-      console.error(red(`  ${agent.name} does not support ${isGlobal ? 'global' : 'project'} scope — skipping.`));
+      const error = `${agent.name} does not support ${isGlobal ? 'global' : 'project'} scope`;
+      console.error(red(`  ${error} — skipping.`));
+      mcpFailures.push({ agentKey, name: agent.name, error });
       continue;
     }
 
@@ -480,7 +418,9 @@ export async function mcpInstall() {
       let config = {};
       if (existsSync(absPath)) {
         try { config = parseJsonc(readFileSync(absPath, 'utf-8')); } catch {
-          console.error(red(`  Failed to parse existing config: ${absPath} — skipping.`));
+          const error = `Failed to parse existing config: ${absPath}`;
+          console.error(red(`  ${error} — skipping.`));
+          mcpFailures.push({ agentKey, name: agent.name, error });
           continue;
         }
       }
@@ -497,22 +437,47 @@ export async function mcpInstall() {
     }
 
     console.log(`${green('✔')} ${existed ? 'Updated' : 'Installed'} MindOS MCP for ${bold(agent.name)} ${dim(`→ ${absPath}`)}`);
+    configuredAgentKeys.push(agentKey);
+  }
 
-    // Auto-copy skill for unsupported agents, respecting user's locale setting
-    const activeSkill = getActiveSkillName();
-    const skillResult = autoInstallSkillForAgent(agentKey, activeSkill);
-    if (skillResult === 'copied') {
-      console.log(`${green('✔')} Copied MindOS Skill (${activeSkill}) for ${bold(agent.name)}`);
+  const activeSkill = getActiveSkillName();
+  const skillSummary = installMindosSkillsForAgents(configuredAgentKeys, { skillName: activeSkill });
+  const copiedCount = skillSummary.results.filter((result) => result.status === 'copied').length;
+  const repairedCount = skillSummary.results.filter((result) => result.status === 'repaired').length;
+  const existingCount = skillSummary.results.filter((result) => result.status === 'exists').length;
+
+  if (configuredAgentKeys.length > 0) {
+    if (skillSummary.ok) {
+      const detail = [
+        copiedCount ? `${copiedCount} copied` : null,
+        repairedCount ? `${repairedCount} repaired` : null,
+        existingCount ? `${existingCount} already installed` : null,
+      ].filter(Boolean).join(', ');
+      console.log(`${green('✔')} MindOS Skill (${activeSkill}) ready for ${bold(String(skillSummary.results.length))} agent(s)${detail ? dim(` — ${detail}`) : ''}`);
+    } else {
+      console.log(`${yellow('!')} MindOS Skill (${activeSkill}) could not be installed for every selected agent:`);
+      for (const result of skillSummary.results.filter((item) => !['exists', 'copied', 'repaired'].includes(item.status))) {
+        console.log(`  ${yellow('!')} ${result.name || result.agentKey}: ${result.error || result.status}`);
+      }
+      console.log(dim(`  Re-run after fixing permissions, then verify with: mindos doctor agents --json`));
     }
   }
 
-  console.log(`\n${green('Done!')} ${agentKeys.length} agent(s) configured.`);
+  if (mcpFailures.length > 0) {
+    console.log(`${yellow('!')} MindOS MCP could not be installed for every selected agent:`);
+    for (const failure of mcpFailures) {
+      console.log(`  ${yellow('!')} ${failure.name}: ${failure.error}`);
+    }
+  }
+
+  console.log(`\n${green('Done!')} ${configuredAgentKeys.length}/${agentKeys.length} agent(s) configured.`);
 
   // Agents that require manual restart to pick up config changes
-  const needsRestart = new Set(['cursor', 'windsurf', 'trae', 'cline', 'roo-code']);
+  const needsRestart = new Set(['cursor', 'windsurf', 'trae', 'cline', 'roo']);
   const restartAgents = agentKeys.filter(k => needsRestart.has(k)).map(k => MCP_AGENTS[k].name);
   if (restartAgents.length > 0) {
     console.log(`\n${yellow('Tip:')} ${restartAgents.join(', ')} must be restarted to load the new MCP config.`);
   }
   console.log();
+  if (mcpFailures.length > 0 || !skillSummary.ok) process.exit(EXIT.ERROR);
 }

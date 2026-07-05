@@ -1,48 +1,47 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { NextRequest } from 'next/server';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+
+const mockState = vi.hoisted(() => ({
+  homeDir: '',
+  execFileSyncMock: vi.fn(),
+}));
 
 /* ── Mock child_process.execFileSync ───────────────────────────────
  * We mock execFileSync so tests don't actually run npx.
  * Each test can configure the mock to succeed or throw.
  */
-let execFileSyncMock: ReturnType<typeof vi.fn>;
 vi.mock('child_process', async (importOriginal) => {
   const actual = await importOriginal<typeof import('child_process')>();
   return {
     ...actual,
-    execFileSync: (...args: unknown[]) => execFileSyncMock(...args),
+    execFileSync: (...args: unknown[]) => mockState.execFileSyncMock(...args),
   };
 });
 
-/* Mock fs — only override existsSync, keep the rest real */
-let mockExistsSync: ((p: string) => boolean) | null = null;
-vi.mock('fs', async (importOriginal) => {
-  const actual = await importOriginal() as typeof import('fs');
+vi.mock('os', async (importOriginal) => {
+  const actual = await importOriginal() as typeof import('os');
   return {
     ...actual,
     default: {
       ...actual,
-      existsSync: (p: string) => {
-        if (mockExistsSync) return mockExistsSync(p);
-        return actual.existsSync(p);
-      },
+      homedir: () => mockState.homeDir || actual.homedir(),
     },
-    existsSync: (p: string) => {
-      if (mockExistsSync) return mockExistsSync(p);
-      return actual.existsSync(p);
-    },
+    homedir: () => mockState.homeDir || actual.homedir(),
   };
 });
 
 beforeEach(() => {
-  execFileSyncMock = vi.fn().mockReturnValue('Done!\n');
-  mockExistsSync = null;
+  mockState.execFileSyncMock = vi.fn().mockReturnValue('Done!\n');
+  mockState.homeDir = mkdtempSync(path.join(tmpdir(), 'mindos-web-install-skill-home-'));
 });
 
-function calledCommand(index = 0): string {
-  const [command, args] = execFileSyncMock.mock.calls[index] as [string, string[]];
-  return [command, ...args].join(' ');
-}
+afterEach(() => {
+  if (mockState.homeDir) rmSync(mockState.homeDir, { recursive: true, force: true });
+  mockState.homeDir = '';
+});
 
 async function importRoute() {
   return await import('../../app/api/mcp/install-skill/route');
@@ -90,203 +89,69 @@ describe('POST /api/mcp/install-skill — validation', () => {
   });
 });
 
-/* ── Agent filtering logic ───────────────────────────────────────── */
+/* ── Local install ───────────────────────────────────────────────── */
 
-describe('POST /api/mcp/install-skill — agent filtering', () => {
-  it('filters universal agents out of -a flags', async () => {
-    const { POST } = await importRoute();
-    await POST(makeReq({ skill: 'mindos', agents: ['cursor', 'cline', 'gemini-cli'] }));
-
-    const cmd = calledCommand();
-    expect(cmd).toContain('-a universal');
-    expect(cmd).not.toContain('-a cursor');
-    expect(cmd).not.toContain('-a cline');
-  });
-
-  it('passes non-universal agents as separate -a flags', async () => {
-    const { POST } = await importRoute();
-    await POST(makeReq({ skill: 'mindos', agents: ['claude-code', 'windsurf'] }));
-
-    const cmd = calledCommand();
-    expect(cmd).toContain('-a claude-code');
-    expect(cmd).toContain('-a windsurf');
-    expect(cmd).not.toContain('-a universal');
-  });
-
-  it('uses separate -a flags, not comma-separated', async () => {
-    const { POST } = await importRoute();
-    await POST(makeReq({ skill: 'mindos', agents: ['claude-code', 'windsurf', 'trae'] }));
-
-    const cmd = calledCommand();
-    expect(cmd).not.toMatch(/-a \S+,\S+/);
-    expect(cmd).toContain('-a claude-code');
-    expect(cmd).toContain('-a windsurf');
-    expect(cmd).toContain('-a trae');
-  });
-
-  it('filters out unknown agents that are not in AGENT_NAME_MAP', async () => {
-    const { POST } = await importRoute();
-    await POST(makeReq({ skill: 'mindos', agents: ['some-unknown-agent', 'claude-code'] }));
-
-    const cmd = calledCommand();
-    expect(cmd).toContain('-a claude-code');
-    // unknown agents pass through as-is (not filtered)
-    expect(cmd).toContain('-a some-unknown-agent');
-  });
-
-  it('falls back to -a universal when only universal agents selected', async () => {
-    const { POST } = await importRoute();
-    await POST(makeReq({ skill: 'mindos', agents: ['cursor'] }));
-
-    const cmd = calledCommand();
-    expect(cmd).toContain('-a universal');
-  });
-
-  it('treats github-copilot as universal in skill install', async () => {
-    const { POST } = await importRoute();
-    await POST(makeReq({ skill: 'mindos', agents: ['github-copilot'] }));
-
-    const cmd = calledCommand();
-    expect(cmd).toContain('-a universal');
-    expect(cmd).not.toContain('-a vscode');
-  });
-
-  it('falls back to -a universal for empty agents array', async () => {
-    const { POST } = await importRoute();
-    await POST(makeReq({ skill: 'mindos', agents: [] }));
-
-    const cmd = calledCommand();
-    expect(cmd).toContain('-a universal');
-  });
-
-  it('handles mixed universal + non-universal agents', async () => {
-    const { POST } = await importRoute();
-    await POST(makeReq({ skill: 'mindos-zh', agents: ['cursor', 'claude-code', 'cline', 'windsurf'] }));
-
-    const cmd = calledCommand();
-    expect(cmd).toContain('-a claude-code');
-    expect(cmd).toContain('-a windsurf');
-    expect(cmd).not.toContain('-a cursor');
-    expect(cmd).not.toContain('-a cline');
-    expect(cmd).not.toContain('-a universal');
-  });
-
-  it('handles null agents gracefully', async () => {
-    const { POST } = await importRoute();
-    const res = await POST(makeReq({ skill: 'mindos', agents: null as unknown as string[] }));
-    expect(res.status).toBe(200);
-    const cmd = calledCommand();
-    expect(cmd).toContain('-a universal');
-  });
-});
-
-/* ── Source selection (GitHub first, local fallback) ──────────────── */
-
-describe('POST /api/mcp/install-skill — source fallback', () => {
-  it('uses GitHub source first', async () => {
-    const { POST } = await importRoute();
-    await POST(makeReq({ skill: 'mindos', agents: [] }));
-
-    const cmd = calledCommand();
-    expect(cmd).toContain('GeminiLight/MindOS');
-  });
-
-  it('returns ok=false when all sources fail', async () => {
-    execFileSyncMock.mockImplementation(() => {
-      const err = new Error('fail') as Error & { stderr: string; stdout: string };
-      err.stderr = 'some error';
-      err.stdout = '';
-      throw err;
-    });
-
+describe('POST /api/mcp/install-skill — local install', () => {
+  it('installs the default skill to the universal shared workspace without npx', async () => {
     const { POST } = await importRoute();
     const res = await POST(makeReq({ skill: 'mindos', agents: [] }));
     const body = await res.json();
-    expect(body.ok).toBe(false);
-    expect(body.stderr).toBeTruthy();
+
+    expect(res.status).toBe(200);
+    expect(body).toMatchObject({
+      ok: true,
+      method: 'local-copy',
+      agents: [],
+      results: [{ agent: 'universal', status: 'copied' }],
+    });
+    expect(mockState.execFileSyncMock).not.toHaveBeenCalled();
+    expect(existsSync(path.join(mockState.homeDir, '.agents', 'skills', 'mindos', 'SKILL.md'))).toBe(true);
+  });
+
+  it('installs mixed universal and private skill-dir agents locally', async () => {
+    const { POST } = await importRoute();
+    const res = await POST(makeReq({ skill: 'mindos-zh', agents: ['codex', 'claude-code'] }));
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body).toMatchObject({
+      ok: true,
+      method: 'local-copy',
+      agents: ['codex', 'claude-code'],
+      results: [
+        { agent: 'codex', mode: 'universal' },
+        { agent: 'claude-code', mode: 'additional' },
+      ],
+    });
+    expect(mockState.execFileSyncMock).not.toHaveBeenCalled();
+    expect(readFileSync(path.join(mockState.homeDir, '.agents', 'skills', 'mindos-zh', 'SKILL.md'), 'utf-8')).toContain('name: mindos-zh');
+    expect(readFileSync(path.join(mockState.homeDir, '.claude', 'skills', 'mindos-zh', 'SKILL.md'), 'utf-8')).toContain('name: mindos-zh');
+  });
+
+  it('handles null agents as universal local install', async () => {
+    const { POST } = await importRoute();
+    const res = await POST(makeReq({ skill: 'mindos', agents: null as unknown as string[] }));
+    const body = await res.json();
+    expect(res.status).toBe(200);
+    expect(body.results).toEqual([expect.objectContaining({ agent: 'universal', status: 'copied' })]);
   });
 });
 
-/* ── Command format ──────────────────────────────────────────────── */
-
-describe('POST /api/mcp/install-skill — command format', () => {
-  it('uses --skill flag (not -s)', async () => {
-    const { POST } = await importRoute();
-    await POST(makeReq({ skill: 'mindos', agents: [] }));
-
-    const cmd = calledCommand();
-    expect(cmd).toContain('--skill mindos');
-  });
-
-  it('includes -g and -y flags', async () => {
-    const { POST } = await importRoute();
-    await POST(makeReq({ skill: 'mindos-zh', agents: [] }));
-
-    const cmd = calledCommand();
-    expect(cmd).toContain('-g');
-    expect(cmd).toContain('-y');
-  });
-
-  it('returns the executed command in response', async () => {
-    const { POST } = await importRoute();
-    const res = await POST(makeReq({ skill: 'mindos', agents: ['claude-code'] }));
-    const body = await res.json();
-    expect(body.cmd).toContain('npx skills add');
-    expect(body.cmd).toContain('--skill mindos');
-    expect(body.cmd).toContain('-a claude-code');
-  });
-
-  it('returns filtered agent list in response', async () => {
-    const { POST } = await importRoute();
-    const res = await POST(makeReq({ skill: 'mindos', agents: ['cursor', 'claude-code'] }));
-    const body = await res.json();
-    expect(body.agents).toEqual(['claude-code']);
-  });
-
-  it('passes new agents (augment, roo, trae-cn, qoder) as -a flags', async () => {
-    const { POST } = await importRoute();
-    await POST(makeReq({ skill: 'mindos', agents: ['augment', 'roo', 'trae-cn', 'qoder'] }));
-
-    const cmd = calledCommand();
-    expect(cmd).toContain('-a augment');
-    expect(cmd).toContain('-a roo');
-    expect(cmd).toContain('-a trae-cn');
-    expect(cmd).toContain('-a qoder');
-    expect(cmd).not.toContain('-a universal');
-  });
-
-  it('treats kimi-cli and opencode as universal (filtered out)', async () => {
-    const { POST } = await importRoute();
-    await POST(makeReq({ skill: 'mindos', agents: ['kimi-cli', 'opencode'] }));
-
-    const cmd = calledCommand();
-    expect(cmd).toContain('-a universal');
-    expect(cmd).not.toContain('-a kimi-cli');
-    expect(cmd).not.toContain('-a opencode');
-  });
-});
-
-/* ── AGENT_NAME_MAP completeness ─────────────────────────────────── */
+/* ── Registry completeness ───────────────────────────────────────── */
 
 describe('AGENT_NAME_MAP completeness', () => {
-  it('every MCP agent key follows SKILL_AGENT_REGISTRY mode', async () => {
-    // Import source-of-truth registries
-    const { MCP_AGENTS } = await import('../../lib/mcp-agents');
-    const { SKILL_AGENT_REGISTRY } = await import('../../lib/mcp-agents');
+  it('every MCP agent key follows SKILL_AGENT_REGISTRY mode in local results', async () => {
+    const { MCP_AGENTS, SKILL_AGENT_REGISTRY } = await import('../../lib/mcp-agents');
     const { POST } = await importRoute();
 
     for (const key of Object.keys(MCP_AGENTS)) {
-      execFileSyncMock.mockClear();
-      await POST(makeReq({ skill: 'mindos', agents: [key] }));
-      const cmd = execFileSyncMock.mock.calls[0] ? calledCommand() : '';
+      const res = await POST(makeReq({ skill: 'mindos', agents: [key] }));
+      const body = await res.json();
       const reg = SKILL_AGENT_REGISTRY[key];
-      if (!reg || reg.mode === 'additional') {
-        expect(cmd, `Agent '${key}' should produce an explicit -a flag`).toContain(`-a ${key}`);
-      } else if (reg.mode === 'universal') {
-        expect(cmd, `Agent '${key}' should use universal fallback`).toContain('-a universal');
-      } else {
-        expect(cmd, `Unsupported agent '${key}' should not produce explicit -a flag`).toContain('-a universal');
-      }
+      expect(body.results?.[0], `Agent '${key}' should return a local install result`).toMatchObject({
+        agent: key,
+        mode: reg?.mode ?? 'unsupported',
+      });
     }
   });
 });

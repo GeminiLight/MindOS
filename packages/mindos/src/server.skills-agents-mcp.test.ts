@@ -43,7 +43,8 @@ import {
   type CustomAgentSettings,
   type MindosCustomMcpAgentDef,
   type MindosMcpAgentDef,
-  type MindosMcpAgentRegistryDef
+  type MindosMcpAgentRegistryDef,
+  type MindosSkillAgentRegistration
 } from './server.js';
 
 describe('MindOS server contract: skills, custom agents, MCP management', () => {
@@ -1039,11 +1040,41 @@ describe('MindOS server contract: skills, custom agents, MCP management', () => 
     });
   });
 
-  it('installs MindOS skills through the product runtime installer handler', () => {
+  it('installs MindOS skills locally through the product runtime installer handler', () => {
     const root = mkdtempSync(join(tmpdir(), 'mindos-install-skill-'));
+    const home = join(root, 'home');
     const localSkills = join(root, 'skills');
-    mkdirSync(localSkills, { recursive: true });
-    const commands: Array<{ command: string; args: string[] }> = [];
+    mkdirSync(join(localSkills, 'mindos'), { recursive: true });
+    mkdirSync(join(localSkills, 'mindos-zh'), { recursive: true });
+    writeFileSync(join(localSkills, 'mindos', 'SKILL.md'), '---\nname: mindos\n---\nEnglish');
+    writeFileSync(join(localSkills, 'mindos-zh', 'SKILL.md'), '---\nname: mindos-zh\n---\nChinese');
+    mkdirSync(join(home, '.claude', 'skills', 'mindos'), { recursive: true });
+    writeFileSync(join(home, '.claude', 'skills', 'mindos', 'README.md'), 'partial');
+    mkdirSync(join(home, '.agents', 'skills', 'mindos-zh'), { recursive: true });
+    writeFileSync(join(home, '.agents', 'skills', 'mindos-zh', 'SKILL.md'), 'custom skill');
+
+    const agents: Record<string, MindosMcpAgentRegistryDef> = {
+      cursor: {
+        name: 'Cursor',
+        project: '.cursor/mcp.json',
+        global: '~/.cursor/mcp.json',
+        key: 'mcpServers',
+        preferredTransport: 'stdio',
+        presenceDirs: ['~/.cursor/'],
+      },
+      'claude-code': {
+        name: 'Claude Code',
+        project: '.mcp.json',
+        global: '~/.claude.json',
+        key: 'mcpServers',
+        preferredTransport: 'stdio',
+        presenceDirs: ['~/.claude/'],
+      },
+    };
+    const skillAgentRegistry: Record<string, MindosSkillAgentRegistration> = {
+      cursor: { mode: 'universal' },
+      'claude-code': { mode: 'additional', skillAgentName: 'claude-code' },
+    };
 
     expect(handleMcpInstallSkillPost({ agents: [] }, {
       runCommand: () => {
@@ -1070,59 +1101,83 @@ describe('MindOS server contract: skills, custom agents, MCP management', () => 
       body: { error: 'Invalid agent name' },
     });
 
+    const mixed = handleMcpInstallSkillPost({ skill: 'mindos-zh', agents: ['cursor', 'claude-code'] }, {
+      projectRoot: root,
+      homeDir: home,
+      agents,
+      skillAgentRegistry,
+      runCommand: () => {
+        throw new Error('local install should not run npx when packaged skills are available');
+      },
+    });
+    expect(mixed).toMatchObject({
+      status: 200,
+      body: {
+        ok: true,
+        method: 'local-copy',
+        skill: 'mindos-zh',
+        agents: ['cursor', 'claude-code'],
+        results: [
+          { agent: 'cursor', status: 'exists', workspacePath: join(home, '.agents', 'skills') },
+          { agent: 'claude-code', status: 'copied', workspacePath: join(home, '.claude', 'skills') },
+        ],
+      },
+    });
+    expect(readFileSync(join(home, '.agents', 'skills', 'mindos-zh', 'SKILL.md'), 'utf-8')).toBe('custom skill');
+    expect(readFileSync(join(home, '.claude', 'skills', 'mindos-zh', 'SKILL.md'), 'utf-8')).toContain('name: mindos-zh');
+
+    const repaired = handleMcpInstallSkillPost({ skill: 'mindos', agents: ['claude-code'] }, {
+      projectRoot: root,
+      homeDir: home,
+      agents,
+      skillAgentRegistry,
+      runCommand: () => {
+        throw new Error('local repair should not run npx');
+      },
+    });
+    expect(repaired).toMatchObject({
+      status: 200,
+      body: {
+        ok: true,
+        method: 'local-copy',
+        results: [{ agent: 'claude-code', status: 'repaired' }],
+      },
+    });
+    expect(readFileSync(join(home, '.claude', 'skills', 'mindos', 'SKILL.md'), 'utf-8')).toContain('name: mindos');
+  });
+
+  it('falls back to argv-safe npx skill installation when no local skill source exists', () => {
+    const root = mkdtempSync(join(tmpdir(), 'mindos-install-skill-fallback-'));
+    const commands: Array<{ command: string; args: string[] }> = [];
+
     expect(handleMcpInstallSkillPost({
       skill: 'mindos-zh',
       agents: ['cursor', 'claude-code', 'unknown-agent'],
     }, {
       projectRoot: root,
-      pathExists: (path) => path === localSkills,
       skillAgentRegistry: {
         cursor: { mode: 'universal' },
         'claude-code': { mode: 'additional', skillAgentName: 'claude-code' },
       },
       runCommand: (command, args) => {
         commands.push({ command, args });
-        if (commands.length === 1) {
-          const error = new Error('network down') as Error & { stdout: string; stderr: string };
-          error.stdout = '';
-          error.stderr = 'network down';
-          throw error;
-        }
         return 'Done!\n';
       },
     })).toMatchObject({
       status: 200,
       body: {
         ok: true,
+        method: 'npx',
         skill: 'mindos-zh',
         agents: ['claude-code', 'unknown-agent'],
         stdout: 'Done!',
       },
     });
 
-    expect(commands).toEqual([
-      {
-        command: 'npx',
-        args: ['skills', 'add', 'GeminiLight/MindOS', '--skill', 'mindos-zh', '-a', 'claude-code', '-a', 'unknown-agent', '-g', '-y'],
-      },
-      {
-        command: 'npx',
-        args: ['skills', 'add', localSkills, '--skill', 'mindos-zh', '-a', 'claude-code', '-a', 'unknown-agent', '-g', '-y'],
-      },
-    ]);
-
-    expect(handleMcpInstallSkillPost({ skill: 'mindos', agents: ['cursor'] }, {
-      skillAgentRegistry: { cursor: { mode: 'universal' } },
-      pathExists: () => false,
-      runCommand: () => 'Done!\n',
-    })).toMatchObject({
-      status: 200,
-      body: {
-        ok: true,
-        agents: [],
-        cmd: 'npx skills add "GeminiLight/MindOS" --skill mindos -a universal -g -y',
-      },
-    });
+    expect(commands).toEqual([{
+      command: 'npx',
+      args: ['skills', 'add', 'GeminiLight/MindOS', '--skill', 'mindos-zh', '-a', 'claude-code', '-a', 'unknown-agent', '-g', '-y'],
+    }]);
   });
 
   it('runs MindOS skill installation through argv-safe subprocess args', () => {

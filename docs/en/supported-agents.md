@@ -61,13 +61,16 @@
 mindos mcp install -g
 ```
 
-Interactively selects agent, transport (stdio/http), and token. Installs to global scope.
+Interactively selects agent, transport (stdio/http), and token. Installs MCP config to global scope and copies the packaged MindOS Skill into the agent's skill workspace.
 
 ### One-shot
 
 ```bash
 # Local, global scope
 mindos mcp install -g -y
+
+# Verify MCP + command + Skill readiness
+mindos doctor agents codex
 
 # Remote
 mindos mcp install --transport http --url http://<server-ip>:8781/mcp --token your-token -g

@@ -177,10 +177,6 @@
       "types": "./dist/knowledge.d.ts",
       "import": "./dist/knowledge.js"
     },
-    "./intelligence": {
-      "types": "./dist/intelligence.d.ts",
-      "import": "./dist/intelligence.js"
-    },
     "./retrieval": {
       "types": "./dist/retrieval.d.ts",
       "import": "./dist/retrieval.js"

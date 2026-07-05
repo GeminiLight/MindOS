@@ -238,11 +238,16 @@ describe('Flow 2: CLI — mindos mcp install codex (TOML)', () => {
     expect(final).toContain('[mcp_servers.mindos]');
   });
 
-  it('does NOT auto-copy skill (codex is universal, not unsupported)', () => {
-    // codex has mode: 'universal', so autoInstallSkillForAgent should return null
+  it('installs universal skill into ~/.agents/skills/mindos', () => {
     const agent = AGENTS['codex'];
     expect(agent.skillMode).toBe('universal');
-    // The check: reg.mode !== 'unsupported' → return null
+
+    const skillSrc = createSkillSource('mindos');
+    const targetDir = path.join(tempDir, '.agents', 'skills', 'mindos');
+    copyDirSync(skillSrc, targetDir);
+
+    expect(fs.existsSync(path.join(targetDir, 'SKILL.md'))).toBe(true);
+    expect(fs.readFileSync(path.join(targetDir, 'SKILL.md'), 'utf-8')).toContain('mindos Skill');
   });
 });
 
@@ -359,11 +364,11 @@ describe('Flow 4: Frontend — config snippet generation', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Flow 5: setup.js wizard — cpSync skill copy
+// Flow 5: setup.js wizard — local Skill copy
 // ═══════════════════════════════════════════════════════════════════════════
 
-describe('Flow 5: Setup wizard — cpSync skill install', () => {
-  it('copies skill via cpSync for unsupported agents', () => {
+describe('Flow 5: Setup wizard — local Skill install', () => {
+  it('copies skill locally for unsupported agents', () => {
     const skillSrc = createSkillSource('mindos');
 
     for (const agent of ['.workbuddy', '.qclaw', '.lingma']) {
@@ -371,7 +376,7 @@ describe('Flow 5: Setup wizard — cpSync skill install', () => {
       fs.mkdirSync(agentDir, { recursive: true });
       const targetSkillDir = path.join(agentDir, 'skills', 'mindos');
 
-      // Simulate setup.js: cpSync(skillSourceDir, targetSkillDir, { recursive: true })
+      // Simulate setup.js local Skill copy.
       fs.cpSync(skillSrc, targetSkillDir, { recursive: true });
 
       expect(fs.existsSync(path.join(targetSkillDir, 'SKILL.md'))).toBe(true);
@@ -385,7 +390,7 @@ describe('Flow 5: Setup wizard — cpSync skill install', () => {
     fs.mkdirSync(targetSkillDir, { recursive: true });
     fs.writeFileSync(path.join(targetSkillDir, 'SKILL.md'), 'custom');
 
-    // Guard check (setup.js): if (!existsSync(targetSkillDir))
+    // Guard check: existing SKILL.md should not be overwritten.
     if (!fs.existsSync(targetSkillDir)) {
       fs.cpSync(skillSrc, targetSkillDir, { recursive: true });
     }

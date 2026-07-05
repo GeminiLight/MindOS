@@ -98,6 +98,10 @@ describe('OpenCode-style platform runtime packages', () => {
     expect(script).toContain('runtime-manifest.json');
     expect(readText('scripts/runtime-manifest.mjs')).toContain("route: '/api/health'");
     expect(script).toContain('dist/protocols/mcp-server/index.cjs');
+    expect(script).toContain('skills/mindos/SKILL.md');
+    expect(script).toContain('skills/mindos-zh/SKILL.md');
+    expect(script).toContain("'skills'");
+    expect(script).toContain("'skills/'");
     expect(script).toContain('os: [target.os]');
     expect(script).toContain('cpu: [target.cpu]');
     expect(script).toContain("key: 'windows-arm64'");
@@ -122,6 +126,9 @@ describe('OpenCode-style platform runtime packages', () => {
     expect(release).not.toContain('dist/foundation.js dist/protocols/acp/index.js');
     expect(release).toContain('--omit=optional');
     expect(release).toContain('npm rebuild --bin-links');
+    expect(release).toContain('mcp install codex -g -y');
+    expect(release).toContain('doctor agents codex --json');
+    expect(release).toContain('.agents/skills/mindos/SKILL.md');
   });
 
   it('documents the migration plan and acceptance criteria', () => {

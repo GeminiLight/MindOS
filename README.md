@@ -186,18 +186,18 @@ mindos open
 
 ### 4. Make Any Agent Ready (MCP + Skills)
 
-**MCP** (connection) — one command to auto-install:
+**MCP + Skills** (connection + workflow) — one command to install or repair both:
 
 ```bash
 mindos mcp install        # interactive
 mindos mcp install -g -y  # one-shot, global scope
 ```
 
-**Skills** (workflow) — install one based on your language:
+Verify the actual agent-facing state:
 
 ```bash
-npx skills add https://github.com/GeminiLight/MindOS --skill mindos -g -y      # English
-npx skills add https://github.com/GeminiLight/MindOS --skill mindos-zh -g -y   # Chinese
+mindos doctor agents
+mindos doctor agents codex --json
 ```
 
 > For remote access, manual JSON config, and common pitfalls, see **[docs/en/supported-agents.md](docs/en/supported-agents.md)**.

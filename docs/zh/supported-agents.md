@@ -61,13 +61,16 @@
 mindos mcp install -g
 ```
 
-交互式引导选择 agent、transport（stdio/http）和 token。安装到全局。
+交互式引导选择 agent、transport（stdio/http）和 token。会把 MCP 配置写入全局，并将随包发布的 MindOS Skill 复制到对应 Agent 的 Skill 工作区。
 
 ### 一键安装
 
 ```bash
 # 本机，全局
 mindos mcp install -g -y
+
+# 验证 MCP + 命令 + Skill 是否可用
+mindos doctor agents codex
 
 # 远程
 mindos mcp install --transport http --url http://<服务器IP>:8781/mcp --token your-token -g

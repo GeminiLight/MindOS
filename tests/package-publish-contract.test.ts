@@ -253,11 +253,16 @@ describe('product npm publish contract', () => {
   it('keeps generated dependency directories out of source package entries', () => {
     const appNpmignore = readText('packages/web/.npmignore');
     const stageScript = readText('scripts/stage-product-package.mjs');
+    const setupScript = readText('scripts/setup.js');
 
     expect(appNpmignore).toMatch(/^node_modules\/$/m);
     expect(appNpmignore).toMatch(/^\.next\/$/m);
     expect(appNpmignore).toMatch(/^__tests__\/$/m);
     expect(appNpmignore).toMatch(/^vitest\.config\.ts$/m);
+    expect(stageScript).toContain("copyIfExists('skills', 'skills')");
+    expect(stageScript).toContain(".replaceAll('../packages/mindos/bin/', '../bin/')");
+    expect(setupScript).toContain("../packages/mindos/bin/lib/skill-install.js");
+    expect(setupScript).not.toContain('npx skills add');
     expect(appNpmignore).toMatch(/^eslint\.config\.mjs$/m);
     expect(appNpmignore).toMatch(/^tsconfig\.tsbuildinfo$/m);
     expect(stageScript).not.toContain("copyTree('packages/web', 'packages/web')");

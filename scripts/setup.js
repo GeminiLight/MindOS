@@ -31,8 +31,9 @@ import { randomBytes, createHash } from 'node:crypto';
 import { createConnection } from 'node:net';
 import http from 'node:http';
 import { gunzipSync } from 'node:zlib';
-import { MCP_AGENTS, SKILL_AGENT_REGISTRY, detectAgentPresence } from '../packages/mindos/bin/lib/mcp-agents.js';
-import { resolveNpmInvocation, resolveNpxInvocation } from '../packages/mindos/bin/lib/npm-invocation.js';
+import { MCP_AGENTS, detectAgentPresence } from '../packages/mindos/bin/lib/mcp-agents.js';
+import { resolveNpmInvocation } from '../packages/mindos/bin/lib/npm-invocation.js';
+import { installMindosSkillsForAgents } from '../packages/mindos/bin/lib/skill-install.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
@@ -887,101 +888,39 @@ async function runAgentSelect() {
   return selected;
 }
 
-/**
- * Write MCP config into selected agents' config files.
- * Agent selection is handled separately by runAgentSelect().
- */
-function installMcpConfig(selected, mcpPort, authToken) {
-  const entry = { type: 'stdio', command: 'mindos', args: ['mcp'], env: { MCP_TRANSPORT: 'stdio' } };
+/* ── Agent auto-install ────────────────────────────────────────────────────── */
+
+function installMcpConfig(selected) {
+  if (!selected || selected.length === 0) return true;
+  const cliPath = resolve(__dirname, '../packages/mindos/bin/cli.js');
+  let ok = true;
 
   for (const agentKey of selected) {
-    const agent = MCP_AGENTS[agentKey];
-    const cfgPath = agent.global || agent.project;
-    if (!cfgPath) continue;
-    const abs = expandHomePath(cfgPath);
     try {
-      let config = {};
-      if (existsSync(abs)) config = parseJsonc(readFileSync(abs, 'utf-8'));
-      if (!config[agent.key]) config[agent.key] = {};
-      config[agent.key].mindos = entry;
-      const dir = resolve(abs, '..');
-      if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-      writeFileSync(abs, JSON.stringify(config, null, 2) + '\n', 'utf-8');
-    } catch { /* logged by caller via agent count */ }
+      execFileSync(process.execPath, [cliPath, 'mcp', 'install', agentKey, '-g', '-y'], {
+        encoding: 'utf-8',
+        env: { ...process.env, NODE_ENV: 'production' },
+        stdio: 'pipe',
+      });
+    } catch {
+      ok = false;
+    }
   }
+
+  return ok;
 }
 
-/* ── Skill auto-install ────────────────────────────────────────────────────── */
-
-const UNIVERSAL_AGENTS = new Set([
-  'cline', 'codex', 'cursor', 'gemini-cli',
-  'github-copilot', 'kimi-cli', 'opencode', 'warp',
-]);
-const SKILL_UNSUPPORTED = new Set([]);
-
 /**
- * Install the appropriate MindOS Skill to selected agents via `npx skills add`.
+ * Install the appropriate MindOS Skill to selected agents from the packaged
+ * local skills directory. This is intentionally offline-first; `mindos mcp
+ * install` uses the same local installer when MCP mode is enabled.
  * @param {string} template - 'en' | 'zh' | 'empty' | 'custom'
  * @param {string[]} selectedAgents - MCP agent keys from the multi-select step
  */
 function runSkillInstallStep(template, selectedAgents) {
   if (!selectedAgents || selectedAgents.length === 0) return true;
-
   const skillName = template === 'zh' ? 'mindos-zh' : 'mindos';
-  const localSource = resolve(ROOT, 'skills');
-  const githubSource = 'GeminiLight/MindOS';
-
-  const additionalAgents = selectedAgents
-    .flatMap((key) => {
-      if (SKILL_UNSUPPORTED.has(key)) return [];
-      if (UNIVERSAL_AGENTS.has(key)) return [];
-      const reg = SKILL_AGENT_REGISTRY[key];
-      if (!reg) return [key];
-      if (reg.mode === 'unsupported') return [];
-      if (reg.mode === 'universal') return [];
-      return [reg.skillAgentName || key];
-    });
-
-  // Direct-copy skill for 'unsupported' agents (e.g., QClaw, WorkBuddy, Lingma)
-  const unsupportedAgents = selectedAgents.filter((key) => {
-    const reg = SKILL_AGENT_REGISTRY[key];
-    return reg?.mode === 'unsupported';
-  });
-  for (const key of unsupportedAgents) {
-    const agent = MCP_AGENTS[key];
-    if (!agent) continue;
-    const skillSourceDir = resolve(ROOT, 'skills', skillName);
-    if (!existsSync(skillSourceDir)) continue;
-    const targetDir = expandHomePath(agent.presenceDirs?.[0] ?? agent.global.replace(/\/[^/]+$/, '/'));
-    const targetSkillDir = resolve(targetDir, 'skills', skillName);
-    try {
-      if (!existsSync(targetSkillDir)) {
-        cpSync(skillSourceDir, targetSkillDir, { recursive: true });
-      }
-    } catch { /* best-effort copy for unsupported agents */ }
-  }
-
-  const agentArgs = additionalAgents.length > 0
-    ? additionalAgents.flatMap(a => ['-a', a])
-    : ['-a', 'universal'];
-
-  const sources = [githubSource, localSource];
-
-  for (const source of sources) {
-    const args = ['skills', 'add', source, '--skill', skillName, ...agentArgs, '-g', '-y'];
-    try {
-      const invocation = resolveNpxInvocation(args);
-      execFileSync(invocation.command, invocation.args, {
-        encoding: 'utf-8',
-        timeout: 30_000,
-        env: { ...process.env, NODE_ENV: 'production' },
-        stdio: 'pipe',
-      });
-      return true;
-    } catch { /* try next source */ }
-  }
-
-  return false;
+  return installMindosSkillsForAgents(selectedAgents, { skillName }).ok;
 }
 
 // ── GUI Setup ─────────────────────────────────────────────────────────────────
@@ -1425,12 +1364,11 @@ async function main() {
       ? `  正在为 ${agentCount} 个 Agent 配置连接…`
       : `  Configuring connection for ${agentCount} agent${agentCount > 1 ? 's' : ''}…`) + '\n');
 
-    if (modes.mcp) {
-      installMcpConfig(selectedAgents, mcpPort, authToken);
-    }
-    const skillOk = runSkillInstallStep(selectedTemplate, selectedAgents);
+    const installOk = modes.mcp
+      ? installMcpConfig(selectedAgents)
+      : runSkillInstallStep(selectedTemplate, selectedAgents);
 
-    if (skillOk) {
+    if (installOk) {
       write(c.green(uiLang === 'zh'
         ? `  ✔ ${agentCount} 个 Agent 已配置完成\n`
         : `  ✔ ${agentCount} agent${agentCount > 1 ? 's' : ''} configured\n`));

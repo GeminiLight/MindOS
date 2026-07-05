@@ -49,8 +49,9 @@
 | 命令 | 说明 |
 | :--- | :--- |
 | `mindos mcp` | 仅启动 MCP 服务 |
-| `mindos mcp install` | 自动将 MCP 配置写入 Agent（交互式） |
-| `mindos mcp install -g -y` | 一键全局安装 |
+| `mindos mcp install` | 自动安装或修复 Agent 的 MCP 配置和 MindOS Skill（交互式） |
+| `mindos mcp install -g -y` | 一键全局安装 MCP + Skill |
+| `mindos doctor agents [name]` | 验证 Agent 侧 MCP、命令和 Skill 是否可用 |
 | `mindos token` | 查看当前 Auth token 及 MCP 配置片段 |
 
 MCP Server 的源码入口是 `packages/mindos/src/protocols/mcp-server`；npm/桌面运行时使用 MindOS runtime package 内预构建的 `dist/protocols/mcp-server/index.cjs`。

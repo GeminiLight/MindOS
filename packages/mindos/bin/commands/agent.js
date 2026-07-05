@@ -9,13 +9,13 @@
 
 import { bold, dim, cyan, green, red, yellow } from '../lib/colors.js';
 import { MCP_AGENTS, detectAgentPresence } from '../lib/mcp-agents.js';
-import { existsSync, readFileSync } from 'node:fs';
 import { loadConfig } from '../lib/config.js';
 import { output, isJsonMode, EXIT } from '../lib/command.js';
 import { startRepl } from '../lib/repl.js';
 import { executeOneShot } from '../lib/one-shot.js';
 import { expandHome } from '../lib/path-expand.js';
 import { prepareAgentInvocation } from '../lib/agent-options.js';
+import { inspectAgentReadiness } from '../lib/agent-readiness.js';
 
 const MANAGEMENT_SUBCOMMANDS = new Set(['list', 'ls', 'info', 'stats', 'help']);
 
@@ -141,27 +141,20 @@ async function agentExecute(invocation, flags) {
 // Agent Management — List / Info / Stats
 // ---------------------------------------------------------------------------
 
-function hasMindosConfig(agent) {
-  const paths = [agent.global, agent.project].filter(Boolean).map(expandHome);
-  for (const p of paths) {
-    try {
-      if (!existsSync(p)) continue;
-      const raw = readFileSync(p, 'utf-8')
-        .replace(/\/\/.*$/gm, '')
-        .replace(/\/\*[\s\S]*?\*\//g, '');
-      const data = JSON.parse(raw);
-      const servers = data[agent.key] || {};
-      if (Object.keys(servers).some(k => k.toLowerCase().includes('mindos'))) return true;
-    } catch { /* skip */ }
-  }
-  return false;
-}
-
 function agentList(flags) {
   const agents = [];
   for (const [key, agent] of Object.entries(MCP_AGENTS)) {
     if (!detectAgentPresence(key)) continue;
-    agents.push({ key, name: agent.name, installed: true, mindosConnected: hasMindosConfig(agent) });
+    const readiness = inspectAgentReadiness(key);
+    agents.push({
+      key,
+      name: agent.name,
+      installed: true,
+      mindosConnected: readiness.mcp.configured,
+      skillInstalled: readiness.skill.installed,
+      ready: readiness.ready,
+      status: readiness.status,
+    });
   }
 
   if (isJsonMode(flags)) {
@@ -176,10 +169,15 @@ function agentList(flags) {
 
   console.log('\n' + bold('Detected Agents (' + agents.length + '):') + '\n');
   for (const a of agents) {
-    const st = a.mindosConnected ? green('● connected') : dim('○ not connected');
+    const st = a.ready
+      ? green('● ready')
+      : a.mindosConnected
+        ? yellow('● needs repair')
+        : dim('○ not connected');
     console.log('  ' + a.name.padEnd(20) + ' ' + st);
   }
-  console.log('\n' + dim('Connect: mindos mcp install <agent-key>') + '\n');
+  console.log('\n' + dim('Connect/repair: mindos mcp install <agent-key> -g -y'));
+  console.log(dim('Verify:         mindos doctor agents <agent-key>') + '\n');
 }
 
 function agentInfo(key, flags) {
@@ -194,13 +192,20 @@ function agentInfo(key, flags) {
     process.exit(EXIT.NOT_FOUND);
   }
 
-  const installed = detectAgentPresence(key);
-  const connected = installed ? hasMindosConfig(agent) : false;
+  const readiness = inspectAgentReadiness(key);
+  const installed = readiness.present;
+  const connected = readiness.mcp.configured;
   const info = {
     key,
     name: agent.name,
     installed,
     mindosConnected: connected,
+    skillInstalled: readiness.skill.installed,
+    ready: readiness.ready,
+    status: readiness.status,
+    mcp: readiness.mcp,
+    skill: readiness.skill,
+    command: readiness.command,
     transport: agent.preferredTransport,
   };
 
@@ -212,10 +217,13 @@ function agentInfo(key, flags) {
   console.log('\n' + bold(agent.name));
   console.log('  Key:       ' + key);
   console.log('  Installed: ' + (installed ? green('yes') : red('no')));
-  console.log('  MindOS:    ' + (connected ? green('connected') : yellow('not connected')));
+  console.log('  MindOS:    ' + (readiness.ready ? green('ready') : connected ? yellow('needs repair') : yellow('not connected')));
+  console.log('  MCP:       ' + (connected ? green(`${readiness.mcp.transport || 'configured'}`) : yellow('missing')));
+  console.log('  Skill:     ' + (readiness.skill.installed ? green(readiness.skill.skillName) : red(`missing ${readiness.skill.skillName}`)));
   console.log('  Transport: ' + agent.preferredTransport);
   if (agent.global) console.log('  Config:    ' + expandHome(agent.global));
-  if (!connected && installed) console.log('\n  Connect: mindos mcp install ' + key);
+  console.log('  Doctor:    mindos doctor agents ' + key);
+  if (!readiness.ready) console.log('\n  Repair: mindos mcp install ' + key + ' -g -y');
   console.log('');
 }
 
