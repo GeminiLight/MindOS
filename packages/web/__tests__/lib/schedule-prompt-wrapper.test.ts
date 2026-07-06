@@ -145,7 +145,7 @@ describe('MindOS schedule-prompt wrapper', () => {
     writeStore(tempHome, [{
       id: 'external-file-job',
       name: 'External file job',
-      schedule: new Date(Date.now() + 1_500).toISOString(),
+      schedule: new Date(Date.now() + 3_000).toISOString(),
       prompt: 'Run the externally written prompt.',
       enabled: true,
       type: 'once',
@@ -158,7 +158,7 @@ describe('MindOS schedule-prompt wrapper', () => {
         'Run the externally written prompt.',
         { deliverAs: 'followUp' },
       );
-    }, 5_000);
+    }, 8_000);
 
     await shutdown(harness.handlers);
   });

@@ -7,7 +7,7 @@
 
 import os from 'os';
 import path from 'path';
-import { mkdirSync, watch, type FSWatcher } from 'node:fs';
+import { mkdirSync, statSync, watch, type FSWatcher } from 'node:fs';
 import { createJiti } from 'jiti/static';
 import {
   resolveBuiltinWebRuntimePackagePath,
@@ -89,7 +89,9 @@ export default async function mindosSchedulePrompt(pi: ExtensionAPI) {
   let storage: CronStorageLike;
   let scheduler: CronSchedulerLike;
   let storeWatcher: FSWatcher | null = null;
+  let storePollTimer: ReturnType<typeof setInterval> | null = null;
   let reloadTimer: ReturnType<typeof setTimeout> | null = null;
+  let lastStoreMtimeMs: number | null = null;
 
   // Register the tool once with getter functions
   const tool = createCronTool(
@@ -105,10 +107,15 @@ export default async function mindosSchedulePrompt(pi: ExtensionAPI) {
       clearTimeout(reloadTimer);
       reloadTimer = null;
     }
+    if (storePollTimer) {
+      clearInterval(storePollTimer);
+      storePollTimer = null;
+    }
     if (storeWatcher) {
       storeWatcher.close();
       storeWatcher = null;
     }
+    lastStoreMtimeMs = null;
   };
 
   const reloadSchedulerFromStore = () => {
@@ -130,14 +137,29 @@ export default async function mindosSchedulePrompt(pi: ExtensionAPI) {
     stopStoreWatcher();
     const storePath = storage.storePath ?? path.join(os.homedir(), '.mindos', 'schedule-prompts.json');
     const storeDir = path.dirname(storePath);
+    const readStoreMtimeMs = () => {
+      try {
+        return statSync(storePath).mtimeMs;
+      } catch {
+        return null;
+      }
+    };
+    const reloadIfStoreChanged = () => {
+      const nextMtimeMs = readStoreMtimeMs();
+      if (nextMtimeMs === lastStoreMtimeMs) return;
+      lastStoreMtimeMs = nextMtimeMs;
+      scheduleStoreReload();
+    };
     try {
       mkdirSync(storeDir, { recursive: true });
+      lastStoreMtimeMs = readStoreMtimeMs();
       storeWatcher = watch(storeDir, (eventType, filename) => {
         if (eventType !== 'change' && eventType !== 'rename') return;
         const changed = filename ? String(filename) : undefined;
         if (changed && changed !== path.basename(storePath)) return;
-        scheduleStoreReload();
+        reloadIfStoreChanged();
       });
+      storePollTimer = setInterval(reloadIfStoreChanged, 1_000);
       storeWatcher.on('error', () => {
         stopStoreWatcher();
       });
