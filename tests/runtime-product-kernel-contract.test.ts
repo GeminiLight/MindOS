@@ -88,6 +88,8 @@ describe('MindOS runtime product kernel contract', () => {
       './agent/runtime/*',
       './agent/runtime/adapters',
       './agent/runtime/adapters/*',
+      './agent/runtime/adapters/session-transcripts',
+      './agent/runtime/adapters/session-transcripts/*',
       './agent/stream',
       './agent/stream/*',
       './agent/subagent',
