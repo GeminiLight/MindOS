@@ -25,7 +25,7 @@ export type ExternalRuntimeSessionRecord = {
   turnCount?: number;
   turns?: ImportedRuntimeSessionMessage[];
   source: 'native-transcript';
-  transcriptSource: 'kimi-code' | 'gemini-cli' | 'opencode';
+  transcriptSource: 'kimi-code' | 'gemini-cli' | 'opencode' | 'claude-code';
 };
 
 export type ExternalRuntimeSessionListOptions = {
@@ -130,6 +130,17 @@ function projectBaseFromCwd(cwd?: string): string | null {
   if (!cwd?.trim()) return null;
   const base = basename(resolve(cwd.trim()));
   return base || null;
+}
+
+function claudeProjectDirNameFromCwd(cwd: string): string {
+  return resolve(cwd.trim()).replace(/[^A-Za-z0-9_-]/g, '-');
+}
+
+function claudeSessionJsonlFileName(sessionId?: string): string | null {
+  const trimmed = sessionId?.trim();
+  if (!trimmed) return null;
+  if (trimmed === '.' || trimmed === '..' || trimmed.includes('/') || trimmed.includes('\\')) return null;
+  return `${trimmed}.jsonl`;
 }
 
 function kimiProjectDirMatches(projectDirName: string, cwd?: string): boolean {
@@ -290,6 +301,55 @@ export function parseOpenCodeTextRows(rows: OpenCodeTextRow[]): ImportedRuntimeS
     pushMessage(messages, message.role, message.chunks.join('\n'), message.timestamp);
   }
   return messages;
+}
+
+export function parseClaudeMessagesFromRecords(records: MaybeRecord[]): ImportedRuntimeSessionMessage[] {
+  const messages: ImportedRuntimeSessionMessage[] = [];
+  for (const record of records) {
+    if (record.isSidechain === true) continue;
+    const message = isRecord(record.message) ? record.message : record;
+    const role = message.role === 'user' || message.role === 'assistant'
+      ? message.role
+      : record.type === 'user' || record.type === 'assistant'
+        ? record.type
+        : null;
+    if (!role) continue;
+    pushMessage(messages, role, textFromClaudeContent(message.content), timestampMs(record.timestamp));
+  }
+  return messages;
+}
+
+function textFromClaudeContent(value: unknown): string {
+  if (typeof value === 'string') return value.trim();
+  if (!Array.isArray(value)) return textFromContent(value);
+  return value.flatMap((item) => {
+    if (typeof item === 'string') return [item];
+    if (!isRecord(item)) return [];
+    if (item.type !== undefined && item.type !== 'text') return [];
+    return textFromPart(item);
+  }).join('\n').trim();
+}
+
+function firstStringField(records: MaybeRecord[], key: string): string | undefined {
+  for (const record of records) {
+    const value = record[key];
+    if (typeof value === 'string' && value.trim()) return value.trim();
+  }
+  return undefined;
+}
+
+function newestTimestampField(records: MaybeRecord[], key: string): string | number | undefined {
+  let bestValue: string | number | undefined;
+  let bestMs = -Infinity;
+  for (const record of records) {
+    const value = timestampField(record[key]);
+    const ms = timestampMs(value);
+    if (value !== undefined && ms !== undefined && ms >= bestMs) {
+      bestValue = value;
+      bestMs = ms;
+    }
+  }
+  return bestValue;
 }
 
 function toExternalRecord(input: {
@@ -473,6 +533,70 @@ async function listOpenCodeSessions(options: ExternalRuntimeSessionListOptions):
   return sortAndLimit(records, options.limit);
 }
 
+async function listClaudeSessions(options: ExternalRuntimeSessionListOptions): Promise<ExternalRuntimeSessionRecord[]> {
+  const home = options.homeDir ?? homedir();
+  const root = join(home, '.claude', 'projects');
+  if (!existsSync(root)) return [];
+  const requestedFileName = claudeSessionJsonlFileName(options.sessionId);
+  if (options.sessionId && !requestedFileName) return [];
+
+  const projectDirs = await readdir(root, { withFileTypes: true }).catch(() => []);
+  const expectedProjectDir = options.cwd?.trim() ? claudeProjectDirNameFromCwd(options.cwd) : null;
+  const orderedProjectDirs = projectDirs
+    .filter((entry) => entry.isDirectory())
+    .sort((a, b) => {
+      if (!expectedProjectDir) return a.name.localeCompare(b.name);
+      if (a.name === expectedProjectDir) return -1;
+      if (b.name === expectedProjectDir) return 1;
+      return a.name.localeCompare(b.name);
+    });
+
+  const records: ExternalRuntimeSessionRecord[] = [];
+  for (const projectDir of orderedProjectDirs) {
+    if (!options.sessionId && expectedProjectDir && projectDir.name !== expectedProjectDir) continue;
+    const projectPath = join(root, projectDir.name);
+    const files = requestedFileName
+      ? existsSync(join(projectPath, requestedFileName))
+        ? [{ name: requestedFileName, isFile: () => true }]
+        : []
+      : await readdir(projectPath, { withFileTypes: true }).catch(() => []);
+
+    for (const file of files) {
+      if (!file.isFile() || !file.name.endsWith('.jsonl')) continue;
+      const filePath = join(projectPath, file.name);
+      const recordsFromFile = await readJsonl(filePath);
+      const fileSessionId = file.name.replace(/\.jsonl$/, '');
+      const sessionId = firstStringField(recordsFromFile, 'sessionId')
+        ?? firstStringField(recordsFromFile, 'session_id')
+        ?? fileSessionId;
+      if (options.sessionId && sessionId !== options.sessionId && fileSessionId !== options.sessionId) continue;
+
+      const cwd = firstStringField(recordsFromFile, 'cwd') ?? options.cwd;
+      if (!options.sessionId && options.cwd?.trim() && cwd && resolve(cwd) !== resolve(options.cwd.trim())) continue;
+
+      const fileStat = await stat(filePath).catch(() => null);
+      const messages = parseClaudeMessagesFromRecords(recordsFromFile);
+      if (messages.length === 0 && recordsFromFile.length === 0) continue;
+      const firstUserMessage = messages.find((message) => message.role === 'user');
+      const userMessages = messages.filter((message) => message.role === 'user');
+      const lastUserMessage = userMessages[userMessages.length - 1];
+      const firstTimestamp = timestampField(recordsFromFile.find((record) => timestampField(record.timestamp))?.timestamp);
+
+      records.push(toExternalRecord({
+        id: sessionId,
+        title: firstUserMessage?.content ? firstUserMessage.content.slice(0, 80) : sessionId,
+        preview: lastUserMessage && lastUserMessage !== firstUserMessage ? lastUserMessage.content.slice(0, 120) : undefined,
+        cwd,
+        createdAt: firstTimestamp ?? fileStat?.birthtimeMs,
+        updatedAt: newestTimestampField(recordsFromFile, 'timestamp') ?? fileStat?.mtimeMs,
+        messages,
+        transcriptSource: 'claude-code',
+      }));
+    }
+  }
+  return sortAndLimit(records, options.limit);
+}
+
 function sortAndLimit(
   records: ExternalRuntimeSessionRecord[],
   limit = DEFAULT_LIMIT,
@@ -495,6 +619,9 @@ export async function listExternalRuntimeSessions(
   }
   if (runtimeId === 'opencode') {
     return listOpenCodeSessions(options);
+  }
+  if (runtimeId === 'claude' || runtimeId === 'claude-code') {
+    return listClaudeSessions(options);
   }
   return [];
 }

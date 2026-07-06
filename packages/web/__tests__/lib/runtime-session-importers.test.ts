@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   listExternalRuntimeSessions,
+  parseClaudeMessagesFromRecords,
   parseGeminiMessagesFromRecords,
   parseKimiWireMessages,
   parseOpenCodeTextRows,
@@ -220,6 +221,106 @@ describe('runtime session native importers', () => {
 
     await expect(listExternalRuntimeSessions({
       runtimeId: 'opencode',
+      cwd: '/workspace/repo',
+      homeDir,
+    })).resolves.toEqual([]);
+  });
+
+  it('parses visible Claude Code transcript text while ignoring tools and sidechains', () => {
+    expect(parseClaudeMessagesFromRecords([
+      {
+        type: 'user',
+        sessionId: 'claude-session-1',
+        timestamp: '2026-07-06T06:00:01.000Z',
+        message: { role: 'user', content: 'inspect the repo' },
+      },
+      {
+        type: 'assistant',
+        sessionId: 'claude-session-1',
+        timestamp: '2026-07-06T06:00:02.000Z',
+        message: {
+          role: 'assistant',
+          content: [
+            { type: 'text', text: 'repo inspected' },
+            { type: 'tool_use', name: 'Bash', input: { command: 'pnpm test' } },
+            { type: 'thinking', thinking: 'hidden reasoning' },
+          ],
+        },
+      },
+      {
+        type: 'user',
+        isSidechain: true,
+        sessionId: 'claude-session-1',
+        timestamp: '2026-07-06T06:00:03.000Z',
+        message: { role: 'user', content: 'sidechain task' },
+      },
+    ])).toEqual([
+      { role: 'user', content: 'inspect the repo', timestamp: Date.parse('2026-07-06T06:00:01.000Z') },
+      { role: 'assistant', content: 'repo inspected', timestamp: Date.parse('2026-07-06T06:00:02.000Z') },
+    ]);
+  });
+
+  it('imports Claude Code project transcript files by session id', async () => {
+    const homeDir = await makeTempHome();
+    const projectDir = join(homeDir, '.claude', 'projects', '-workspace-repo');
+    await mkdir(projectDir, { recursive: true });
+    await writeFile(join(projectDir, 'claude-session-1.jsonl'), [
+      JSON.stringify({
+        type: 'user',
+        sessionId: 'claude-session-1',
+        timestamp: '2026-07-06T06:00:01.000Z',
+        cwd: '/workspace/repo',
+        message: { role: 'user', content: 'load claude transcript' },
+      }),
+      JSON.stringify({
+        type: 'assistant',
+        sessionId: 'claude-session-1',
+        timestamp: '2026-07-06T06:00:02.000Z',
+        cwd: '/workspace/repo',
+        message: {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'claude transcript loaded' }],
+        },
+      }),
+    ].join('\n'));
+
+    const sessions = await listExternalRuntimeSessions({
+      runtimeId: 'claude',
+      sessionId: 'claude-session-1',
+      cwd: '/workspace/repo',
+      homeDir,
+    });
+
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0]).toMatchObject({
+      id: 'claude-session-1',
+      title: 'load claude transcript',
+      cwd: '/workspace/repo',
+      messageCount: 2,
+      transcriptSource: 'claude-code',
+    });
+    expect(sessions[0]?.turns?.map((message) => [message.role, message.content])).toEqual([
+      ['user', 'load claude transcript'],
+      ['assistant', 'claude transcript loaded'],
+    ]);
+  });
+
+  it('rejects Claude Code session ids with path separators', async () => {
+    const homeDir = await makeTempHome();
+    await mkdir(join(homeDir, '.claude', 'projects', '-workspace-repo'), { recursive: true });
+    await writeFile(join(homeDir, '.claude', 'projects', 'escape.jsonl'), [
+      JSON.stringify({
+        type: 'user',
+        sessionId: 'escape',
+        timestamp: '2026-07-06T06:00:01.000Z',
+        cwd: '/workspace/repo',
+        message: { role: 'user', content: 'should not load' },
+      }),
+    ].join('\n'));
+
+    await expect(listExternalRuntimeSessions({
+      runtimeId: 'claude',
+      sessionId: '../escape',
       cwd: '/workspace/repo',
       homeDir,
     })).resolves.toEqual([]);
