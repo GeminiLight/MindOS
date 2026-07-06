@@ -3,15 +3,18 @@ import {
   type CodexThreadManagerServices,
 } from '@geminilight/mindos/server';
 import {
+  listRuntimeSessionTranscripts,
+  normalizeRuntimeSessionTranscriptId,
+  resolveRuntimeSessionTranscriptTarget,
+  type ExternalRuntimeSessionRecord,
+  type RuntimeSessionTranscriptTarget,
+} from '@geminilight/mindos/agent/runtime/adapters';
+import {
   normalizeRuntimeSessionEntry,
   runtimeSessionEntryTurnsToMessages,
   type RuntimeSessionEntry,
 } from '@/lib/runtime-session-entry';
 import type { AgentRuntimeIdentity, Message } from '@/lib/types';
-import {
-  listExternalRuntimeSessions,
-  type ExternalRuntimeSessionRecord,
-} from '@/lib/server/runtime-session-importers';
 
 export type RuntimeSessionMessageCli =
   | 'codex'
@@ -32,7 +35,11 @@ export type RuntimeSessionMessageCli =
   | 'qwen-cli'
   | 'codebuddy'
   | 'codebuddy-code'
-  | 'openclaw';
+  | 'openclaw'
+  | 'cursor'
+  | 'cursor-agent'
+  | 'hermes'
+  | 'hermes-code';
 
 export type RuntimeSessionMessageLoadStatus =
   | 'loaded'
@@ -97,21 +104,15 @@ type RuntimeSessionMessageTarget =
     }
   | {
       kind: 'native';
-      cli: 'kimi' | 'gemini' | 'opencode' | 'claude' | 'qwen-code' | 'codebuddy' | 'openclaw';
+      cli: string;
       runtime: AgentRuntimeIdentity;
-    }
+      transcriptTarget: RuntimeSessionTranscriptTarget;
+    };
 
 const CODEX_RUNTIME: AgentRuntimeIdentity = { id: 'codex', name: 'Codex', kind: 'codex' };
-const KIMI_RUNTIME: AgentRuntimeIdentity = { id: 'kimi', name: 'Kimi', kind: 'acp' };
-const GEMINI_RUNTIME: AgentRuntimeIdentity = { id: 'gemini', name: 'Gemini', kind: 'acp' };
-const OPENCODE_RUNTIME: AgentRuntimeIdentity = { id: 'opencode', name: 'OpenCode', kind: 'acp' };
-const CLAUDE_RUNTIME: AgentRuntimeIdentity = { id: 'claude', name: 'Claude Code', kind: 'claude' };
-const QWEN_RUNTIME: AgentRuntimeIdentity = { id: 'qwen-code', name: 'Qwen Code', kind: 'acp' };
-const CODEBUDDY_RUNTIME: AgentRuntimeIdentity = { id: 'codebuddy', name: 'CodeBuddy', kind: 'acp' };
-const OPENCLAW_RUNTIME: AgentRuntimeIdentity = { id: 'openclaw', name: 'OpenClaw', kind: 'acp' };
 
 function normalizeCli(value: string): string {
-  return value.trim().toLowerCase().replace(/[_\s]+/g, '-');
+  return normalizeRuntimeSessionTranscriptId(value);
 }
 
 export function resolveRuntimeSessionMessageTarget(
@@ -122,32 +123,17 @@ export function resolveRuntimeSessionMessageTarget(
     case 'codex-cli':
     case 'codex-app-server':
       return { kind: 'codex', cli: 'codex', runtime: CODEX_RUNTIME };
-    case 'kimi':
-    case 'kimi-cli':
-    case 'kimi-code':
-      return { kind: 'native', cli: 'kimi', runtime: KIMI_RUNTIME };
-    case 'gemini':
-    case 'gemini-cli':
-      return { kind: 'native', cli: 'gemini', runtime: GEMINI_RUNTIME };
-    case 'opencode':
-    case 'open-code':
-    case 'opencode-cli':
-      return { kind: 'native', cli: 'opencode', runtime: OPENCODE_RUNTIME };
-    case 'claude':
-    case 'claude-code':
-      return { kind: 'native', cli: 'claude', runtime: CLAUDE_RUNTIME };
-    case 'qwen':
-    case 'qwen-code':
-    case 'qwen-cli':
-      return { kind: 'native', cli: 'qwen-code', runtime: QWEN_RUNTIME };
-    case 'codebuddy':
-    case 'codebuddy-code':
-      return { kind: 'native', cli: 'codebuddy', runtime: CODEBUDDY_RUNTIME };
-    case 'openclaw':
-      return { kind: 'native', cli: 'openclaw', runtime: OPENCLAW_RUNTIME };
     default:
-      return null;
+      break;
   }
+  const transcriptTarget = resolveRuntimeSessionTranscriptTarget(cli);
+  if (!transcriptTarget) return null;
+  return {
+    kind: 'native',
+    cli: transcriptTarget.cli,
+    runtime: transcriptTarget.runtime,
+    transcriptTarget,
+  };
 }
 
 function sourceConfidence(
@@ -241,7 +227,22 @@ async function loadNativeSessionMessages(
   target: Extract<RuntimeSessionMessageTarget, { kind: 'native' }>,
   input: Pick<LoadRuntimeSessionMessagesInput, 'cwd' | 'homeDir'> & { sessionId: string },
 ): Promise<LoadRuntimeSessionMessagesResult> {
-  const sessions = await listExternalRuntimeSessions({
+  if (target.transcriptTarget.adapter.status !== 'supported') {
+    return emptyResult({
+      cli: target.cli,
+      sessionId: input.sessionId,
+      runtime: target.runtime,
+      status: 'unsupported',
+      source: {
+        kind: 'unsupported',
+        durable: false,
+        confidence: 'missing',
+        reason: target.transcriptTarget.adapter.summary,
+      },
+    });
+  }
+
+  const sessions = await listRuntimeSessionTranscripts({
     runtimeId: target.runtime.id,
     sessionId: input.sessionId,
     cwd: input.cwd,

@@ -93,6 +93,14 @@
       "types": "./dist/agent/runtime/adapters/index.d.ts",
       "import": "./dist/agent/runtime/adapters/index.js"
     },
+    "./agent/runtime/adapters/session-transcripts": {
+      "types": "./dist/agent/runtime/adapters/session-transcripts/index.d.ts",
+      "import": "./dist/agent/runtime/adapters/session-transcripts/index.js"
+    },
+    "./agent/runtime/adapters/session-transcripts/*": {
+      "types": "./dist/agent/runtime/adapters/session-transcripts/*.d.ts",
+      "import": "./dist/agent/runtime/adapters/session-transcripts/*.js"
+    },
     "./agent/runtime/adapters/*": {
       "types": "./dist/agent/runtime/adapters/*.d.ts",
       "import": "./dist/agent/runtime/adapters/*.js"

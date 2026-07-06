@@ -106,6 +106,22 @@ describe('runtime session message loader', () => {
       cli: 'openclaw',
       runtime: { id: 'openclaw', kind: 'acp' },
     });
+    expect(resolveRuntimeSessionMessageTarget('cursor')).toMatchObject({
+      kind: 'native',
+      cli: 'cursor',
+      runtime: { id: 'cursor', kind: 'acp' },
+      transcriptTarget: {
+        adapter: { status: 'unverified', durable: false },
+      },
+    });
+    expect(resolveRuntimeSessionMessageTarget('hermes-code')).toMatchObject({
+      kind: 'native',
+      cli: 'hermes',
+      runtime: { id: 'hermes', kind: 'acp' },
+      transcriptTarget: {
+        adapter: { status: 'unverified', durable: false },
+      },
+    });
   });
 
   it('loads Codex thread turns through the durable Codex thread reader', async () => {
@@ -331,5 +347,21 @@ describe('runtime session message loader', () => {
       durable: false,
       confidence: 'missing',
     });
+  });
+
+  it('marks recognized but unverified native transcript stores as unsupported', async () => {
+    const result = await loadRuntimeSessionMessages({
+      cli: 'cursor',
+      sessionId: 'cursor-session-1',
+    });
+
+    expect(result.status).toBe('unsupported');
+    expect(result.runtime).toMatchObject({ id: 'cursor', kind: 'acp' });
+    expect(result.source).toMatchObject({
+      kind: 'unsupported',
+      durable: false,
+      confidence: 'missing',
+    });
+    expect(result.source.kind === 'unsupported' ? result.source.reason : '').toContain('Cursor');
   });
 });
