@@ -1,4 +1,4 @@
-export type MindosCapabilityDomain = 'foundation' | 'knowledge' | 'retrieval' | 'protocols';
+export type MindosCapabilityDomain = 'foundation' | 'knowledge' | 'intelligence' | 'retrieval' | 'protocols';
 
 export type MindosCapabilityLoadMode = 'core' | 'facade' | 'optional' | 'host';
 
@@ -56,6 +56,14 @@ export const mindosCapabilityContracts: readonly MindosCapabilityContract[] = [
     loadMode: 'core',
     role: 'Local knowledge storage, spaces, graph, audit history, git history, and write operations.',
     implementation: ['storage', 'spaces', 'graph', 'audit', 'git', 'knowledge-ops'],
+  },
+  {
+    domain: 'intelligence',
+    owner: '@geminilight/mindos',
+    publicEntry: '@geminilight/mindos/intelligence',
+    loadMode: 'core',
+    role: 'Pure product algorithms for cognition and human modeling; storage remains owned by knowledge.',
+    implementation: ['cognition'],
   },
   {
     domain: 'retrieval',

@@ -100,6 +100,7 @@ describe('MindOS runtime product kernel contract', () => {
       './cli',
       './client',
       './foundation',
+      './intelligence',
       './knowledge',
       './plugin',
       './protocols',
@@ -173,6 +174,7 @@ describe('MindOS runtime product kernel contract', () => {
 
   it('owns foundation and knowledge capabilities behind product subpath exports', () => {
     const foundation = read('packages/mindos/src/foundation.ts');
+    const intelligence = read('packages/mindos/src/intelligence.ts');
     const knowledge = read('packages/mindos/src/knowledge.ts');
     const capabilities = read('packages/mindos/src/capabilities.ts');
 
@@ -191,8 +193,12 @@ describe('MindOS runtime product kernel contract', () => {
     expect(knowledge).toContain("from './knowledge/git/index.js'");
     expect(knowledge).toContain("from './knowledge/knowledge-ops/index.js'");
 
+    expect(intelligence).toContain("from './intelligence/index.js'");
+    expect(intelligence).toContain("storage and audit stay in knowledge");
+
     expect(capabilities).toContain("domain: 'foundation'");
     expect(capabilities).toContain("domain: 'knowledge'");
+    expect(capabilities).toContain("domain: 'intelligence'");
     expect(capabilities).toContain("domain: 'retrieval'");
     expect(capabilities).toContain("domain: 'protocols'");
     expect(capabilities).toContain("owner: '@geminilight/mindos'");
