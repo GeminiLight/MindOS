@@ -24,7 +24,7 @@
   <a href="https://github.com/GeminiLight/MindOS/releases?q=clipper"><img src="https://img.shields.io/badge/Web_Clipper-Install-c8873a.svg?style=for-the-badge" alt="Web Clipper"></a>
 </p>
 
-MindOS is where you think, and where your AI agents act — a local-first knowledge base shared between you and every AI you use. **Share your brain with every AI — every thought grows.**
+MindOS is a local-first knowledge base for sharing durable context between you and the AI agents you use. **Think in one place. Let agents work from shared context.**
 
 ---
 
@@ -78,7 +78,7 @@ MindOS is where you think, and where your AI agents act — a local-first knowle
 </table>
 
 > [!IMPORTANT]
-> **⭐ One-click install:** Send this to your Agent (Claude Code, Cursor, etc.) to set up everything automatically:
+> **⭐ Agent-assisted install:** Send this to your Agent (Claude Code, Cursor, etc.) to set up MindOS, MCP, and Skills:
 > ```
 > Help me install MindOS from https://github.com/GeminiLight/MindOS with MCP and Skills. Use English template.
 > ```
@@ -96,14 +96,15 @@ MindOS is where you think, and where your AI agents act — a local-first knowle
 
 ## 📢 What's New
 
-| Date | Update |
-|------|--------|
-| 2026-04 | **Protocol runtimes internalized** — ACP and MCP source now live under `packages/mindos/src/protocols/*`; the published package ships self-contained `dist/protocols/*` bundles instead of nested protocol packages. |
-| 2026-04 | **Product main package** — MindOS now follows an OpenCode-style core package: `packages/mindos` (`@geminilight/mindos`) is the product runtime facade and CLI kernel boundary; Web/CLI adapt around it. |
-| 2026-04 | **OpenCode-style workspace flattening** — all source workspaces now live under `packages/`: `packages/web`, `packages/desktop`, `packages/mobile`, `packages/mindos`, and optional `packages/retrieval/*` adapters. npm tarball, CLI, MCP, Web standalone, Desktop, and Mobile checks have passed. |
-| 2026-04 | **Clean publish package** — legacy top-level `app/`, `mcp/`, `desktop/`, and `mobile/` source roots are removed; publish entries exclude tests, caches, and nested `node_modules`. |
-| 2026-04 | **Web Clipper** — Browser extension to clip any web page to your MindOS Inbox with one click. [Get it →](packages/browser-extension/) |
-| 2026-04 | **PDF & Image Import** — Drag PDFs and images into MindOS, auto-converted to searchable Markdown. |
+MindOS is now organized around a few stable product modules instead of one-off setup scripts:
+
+| Module | What is live |
+|------|------|
+| **Local Knowledge Workbench** | A desktop/web/CLI workspace for browsing, editing, importing, searching, and organizing a local Markdown knowledge base. |
+| **MCP + Skills Bridge** | One command installs or repairs both MCP config and the packaged MindOS Skill, then `mindos doctor agents` verifies real agent readiness. |
+| **Native Agent Runtime** | Run agents with resumable sessions, cancellation, reconnect/reattach support, and reviewable output history where the runtime exposes it. |
+| **Workflow & Audit Surfaces** | YAML workflows, Agent Inspector, run ledgers, backlinks, graph views, and importer progress help keep human review in the loop. |
+| **Cross-platform Delivery** | Install through Desktop releases or `npm install -g @geminilight/mindos@latest`; the npm package includes the CLI and prebuilt local Web runtime. |
 
 ## 🧠 Human-AI Shared Mind
 
@@ -111,24 +112,24 @@ MindOS is where you think, and where your AI agents act — a local-first knowle
 
 **1. Global Sync — Breaking Memory Silos**
 
-Switch tools or start a new chat and you're re-transporting context, scattering knowledge. **With a built-in MCP server, MindOS connects all Agents to your core knowledge base with zero config. Record profile and project memory once to empower all AI tools.**
+Switch tools or start a new chat and you're re-transporting context, scattering knowledge. **With a built-in MCP server and packaged Skills, MindOS gives supported Agents a shared path into your core knowledge base. Record profile and project memory once, then reuse it across your AI tools.**
 
 **2. Transparent & Controllable — No Black Boxes**
 
-Agent memory locked in black boxes makes reasoning unauditable, erasing trust as hallucinations compound. **MindOS saves every retrieval, reflection & action as local plain text. You hold absolute mind-correction rights with a full GUI to recalibrate Agents anytime.**
+Agent memory locked in black boxes makes reasoning hard to audit and correct. **MindOS keeps your knowledge base as local plain text and exposes review surfaces for agent runs, file changes, and important tool activity, so you can inspect and adjust the context agents rely on.**
 
 **3. Symbiotic Evolution — Experience Flows Back As Instructions**
 
-You express preferences but the next chat starts from zero, leaving your thinking useless for AI. **MindOS auto-distills every thought into your knowledge base. Clarify your standards through interaction and sharpen your cognition with each iteration — AI will never repeat the same mistake.**
+You express preferences but the next chat often starts from zero, leaving useful judgment behind. **MindOS helps turn reviewed conversations, corrections, and project standards into reusable notes, Skills, and SOPs, so future agent work can start from a better baseline.**
 
-> **Foundation:** Local-first by default — all data stays in local plain text for privacy, ownership, and speed.
+> **Foundation:** Local-first by default — your knowledge base stays in local plain text for privacy, ownership, and speed.
 
 ---
 
 ## 🚀 Getting Started
 
 > [!IMPORTANT]
-> **Quick Start with Agent:** Paste this prompt into any MCP-capable Agent (Claude Code, Cursor, etc.) to install automatically, then skip to [Step 3](#3-inject-your-personal-mind-with-mindos-agent):
+> **Quick Start with Agent:** Paste this prompt into any MCP-capable Agent (Claude Code, Cursor, etc.) to install MindOS, MCP, and Skills, then skip to [Step 3](#3-inject-your-personal-mind-with-mindos-agent):
 > ```
 > Help me install MindOS from https://github.com/GeminiLight/MindOS with MCP and Skills. Use English template.
 > ```
@@ -223,28 +224,28 @@ MindOS knowledge doesn't have to start from scratch — bring in what you alread
 
 **For Agents**
 
-- **MCP Server + Skills**: stdio + HTTP dual transport, full-lineup Agent compatible (Claude Code, Cursor, Gemini CLI, etc.). Zero-config access.
-- **ACP / A2A Protocols**: Agent communication protocols for discovery, delegation, and orchestration. Phase 1 is live with Agent Card discovery + JSON-RPC messaging.
-- **Workflow Orchestration**: YAML-based workflow editor with step execution engine — define, edit, and run multi-step agent workflows visually.
+- **MCP Server + Skills**: stdio + HTTP transports for supported Agents (Claude Code, Cursor, Gemini CLI, Codex, and more), with installer/doctor commands for setup and repair.
+- **ACP / A2A Foundations**: early protocol surfaces for agent discovery, registry, session detection, and JSON-RPC messaging. Deeper coordination such as durable mailbox/task-board workflows is still experimental.
+- **Workflow Orchestration**: YAML-based workflow editor with a step execution engine to define, edit, and run repeatable agent workflows.
 - **Structured Templates**: pre-set directory structures for Profiles, Workflows, Configurations, etc., to jumpstart personal context.
-- **Agent-Ready Docs**: everyday notes naturally double as high-quality executable Agent commands — no format conversion needed, write and dispatch.
+- **Agent-Ready Docs**: everyday notes can become reusable Agent instructions — write context once, then dispatch or refine it.
 
 **Infrastructure**
 
 - **Security**: Bearer Token auth, path sandboxing, INSTRUCTION.md write-protection, atomic writes.
 - **Knowledge Graph**: dynamically parses and visualizes inter-file references and dependencies.
 - **Backlinks View**: displays all files that reference the current file, helping you understand how a note fits into the knowledge network.
-- **Agent Inspector**: renders Agent operation logs as a filterable timeline to audit every tool call in detail.
-- **Git Time Machine**: Git auto-sync (commit/push/pull), records every edit by both humans and Agents. One-click rollback, cross-device sync.
+- **Agent Inspector**: renders Agent operation logs as a filterable timeline for reviewing tool calls in detail.
+- **Git Time Machine**: Git auto-sync (commit/push/pull) keeps human and Agent edits reviewable, with rollback and cross-device sync.
 - **Desktop App**: native macOS/Windows/Linux app with system tray, auto-start, and local process management.
 
 <details>
-<summary><strong>Coming Soon</strong></summary>
+<summary><strong>Roadmap / Experimental</strong></summary>
 
-- [ ] Deep RAG integration: retrieval-augmented generation grounded in your knowledge base for more accurate, context-aware AI responses
-- [ ] ACP / A2A Phase 2: deep multi-agent collaboration with task delegation, shared context, and workflow chaining
-- [ ] Experience Compiler: auto-extract corrections and preferences from agent interactions into reusable Skills/SOPs
-- [ ] Knowledge Health Dashboard: visualize cognitive compound metrics — rules accumulated, agent reuse count, knowledge freshness
+- **Retrieval depth**: richer knowledge retrieval and ranking on top of the current local knowledge base and search surfaces.
+- **Agent coordination**: deeper ACP/A2A collaboration once durable mailbox, task-board, permission, and artifact contracts are ready.
+- **Experience capture**: more guided ways to turn reviewed conversations, corrections, and preferences into reusable Skills/SOPs.
+- **Knowledge health**: lightweight signals for stale notes, reused rules, and knowledge that deserves review.
 
 </details>
 
@@ -255,7 +256,7 @@ graph LR
     H["👤 Human<br/><sub>thinks · reviews · evolves</sub>"]
     M[("📚 MindOS")]
     A["🤖 Agent<br/><sub>executes · retrospects · extracts SOPs</sub>"]
-    EXT["🌐 All Agents"]
+    EXT["🌐 Connected Agents"]
 
     H -- "ideas & feedback" --> M
     M -- "context & insights" --> H
@@ -269,13 +270,15 @@ graph LR
     style EXT fill:#64748b,stroke:#475569,color:#fff,stroke-dasharray:5 5
 ```
 
-> **Both sides evolve.** Humans gain new insights from accumulated knowledge; Agents extract SOPs and get smarter. MindOS sits at the center — the shared second brain that grows with every interaction.
+> **Both sides evolve.** Humans gain new insights from accumulated knowledge; Agents reuse reviewed context and SOPs. MindOS sits at the center — the shared second brain that improves as knowledge accumulates.
 
 ---
 
 ## 🤝 Supported Agents
 
-> The current registry supports 26 Agents. Full list with MCP config paths and manual setup: **[docs/en/supported-agents.md](docs/en/supported-agents.md)**
+MindOS supports the built-in MindOS Agent plus a growing set of CLI, IDE, and extension-based agents. Full list with MCP config paths, Skill paths, and troubleshooting notes: **[docs/en/supported-agents.md](docs/en/supported-agents.md)**
+
+Common examples:
 
 | Agent | MCP | Skills |
 |:------|:---:|:------:|
@@ -298,25 +301,21 @@ graph LR
 
 ```bash
 MindOS/
-├── packages/web/         # Next.js 16 frontend — browse, edit, and interact with AI
-├── packages/desktop/     # Electron desktop client
-├── packages/mobile/      # Expo mobile app
+├── packages/mindos/      # Published runtime package, CLI, server, protocols, and core product logic
+├── packages/web/         # Next.js frontend for the local knowledge workbench
+├── packages/desktop/     # Electron desktop client and local process management
 ├── packages/browser-extension/ # Web Clipper browser extension
-├── packages/desktop-tauri/     # Tauri desktop spike
-├── packages/mindos/      # Published product package: runtime facade, protocols, foundation/knowledge internals, CLI kernel
-├── packages/retrieval/   # Optional retrieval stack: search, vector, indexer, API
-├── skills/           # MindOS Skills (`mindos`, `mindos-zh`) — workflow guides for Agents
-├── templates/        # Preset templates (`en/`, `zh/`, `empty/`) — copied to knowledge base on onboard
-├── scripts/          # Setup wizard and helper scripts
+├── packages/retrieval/   # Optional retrieval/search/vector adapters
+├── packages/mobile/      # Expo mobile app
+├── skills/               # Packaged MindOS Skills for agents
+├── templates/            # Starter knowledge-base templates
+├── docs/                 # Public user and contributor docs
 └── README.md
 
 ~/.mindos/            # User data directory (outside project, never committed)
 ├── config.json       # All configuration (AI keys, port, auth token, sync settings)
-├── sync-state.json   # Sync state (last sync time, conflicts)
 └── mind/             # Your private knowledge base (default path, customizable on onboard)
 ```
-
-> In v1, top-level `app/`, `apps/`, `mcp/`, `desktop/`, `mobile/`, `browser-extension/`, `desktop-tauri/`, and root `bin/` are no longer source roots. The repo root is a private monorepo orchestrator. `packages/mindos` is the OpenCode-style published product package (`@geminilight/mindos`): its repo CLI entry is `packages/mindos/bin/cli.js`, installed npm users still receive the package-relative `bin/cli.js`, and the prebuilt local Web runtime is published as `_standalone/`. `packages/web` remains the only Web source tree and is not copied into the npm tarball. During `npm pack` / publish, `packages/mindos/_standalone`, `packages/mindos/packages`, `packages/mindos/scripts`, `packages/mindos/assets`, `packages/mindos/skills`, and `packages/mindos/templates` may be generated as staging output; they are ignored, excluded from pnpm workspace discovery, and cleaned by `pnpm run clean:product-stage` or product `postpack`.
 
 ## ⌨️ CLI Commands
 
@@ -325,31 +324,29 @@ MindOS/
 | Command | Description |
 | :--- | :--- |
 | **Core** | |
-| `mindos onboard` | Interactive setup (config, template, start mode) |
-| `mindos start` | Start Web + MCP services |
-| `mindos start --daemon` | Start as background OS service (macOS/Linux only) |
-| `mindos stop` / `restart` | Stop or restart running processes |
-| `mindos dev` | Start in dev mode |
-| `mindos build` | Build for production |
-| `mindos status` | Show service status overview |
+| `mindos` | Open the MindOS AI Agent REPL |
+| `mindos onboard` / `mindos init` | Interactive setup (config, template, start mode) |
+| `mindos onboard --install-daemon` | Onboard and install the background service on macOS/Linux |
+| `mindos start` / `mindos start --daemon` | Start Web + MCP services in foreground or as a background service |
+| `mindos stop` / `mindos restart` | Stop or restart running processes |
+| `mindos status` | Show service status overview (`--json` supported) |
 | `mindos open` | Open Web UI in browser |
 | **Knowledge** | |
-| `mindos file <sub>` | File operations (list, read, create, delete, search) |
-| `mindos space <sub>` | Space management (list, create, info) |
-| `mindos search "<query>"` | Search knowledge base |
-| `mindos` | Open the MindOS AI Agent REPL |
+| `mindos file <sub>` / `mindos space <sub>` | File and space operations for the local knowledge base |
+| `mindos search "<query>"` | Search the knowledge base |
 | `mindos "<task>"` / `mindos -p "<task>"` | Run the MindOS AI Agent with your knowledge base |
-| `mindos agent <sub>` | Explicit agent command and management (list, info) |
-| `mindos channel` / `mindos feishu-ws` | IM channel config and Feishu long connection |
+| `mindos agent <sub>` | Agent command and management helpers (`list`, `info`, scripted runs) |
 | `mindos api <METHOD> <path>` | Raw API passthrough for developers/agents |
 | **MCP & Config** | |
-| `mindos mcp install` | Auto-install MCP config into your Agent |
-| `mindos token` | Show auth token and MCP config |
-| `mindos config <sub>` | View/update config (show, set, validate) |
+| `mindos mcp` | Start the MCP server only |
+| `mindos mcp install` | Install or repair MCP config and the MindOS Skill for your Agent |
+| `mindos doctor agents [name]` | Verify agent-facing MCP, command, and Skill readiness |
+| `mindos token` | Show auth token and per-agent MCP config snippets |
+| `mindos config <sub>` | View/update config (`show`, `set`, `validate`) |
 | `mindos sync` | Show sync status (init, now, conflicts, on/off) |
-| `mindos gateway <sub>` | Manage background service on macOS/Linux (install, start, stop) |
-| `mindos doctor` | Health check |
-| `mindos update` | Update to latest version |
+| `mindos gateway <sub>` | Manage background service on macOS/Linux (`install`, `start`, `stop`, `logs`) |
+| `mindos doctor` / `mindos logs` | Health check and local service logs |
+| `mindos update` / `mindos uninstall` | Update or remove MindOS |
 
 **Main keyboard shortcuts:** `⌘K` Search · `⌘/` AI Assistant · `E` Edit · `⌘S` Save · `Esc` Close.
 

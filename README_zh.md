@@ -24,7 +24,7 @@
   <a href="https://github.com/GeminiLight/MindOS/releases?q=clipper"><img src="https://img.shields.io/badge/网页剪藏-安装-c8873a.svg?style=for-the-badge" alt="网页剪藏"></a>
 </p>
 
-MindOS 是你思考的地方，也是 AI Agent 行动的起点——一个你和所有 AI 共享的本地知识库。**每次思考，都在生长。**
+MindOS 是一个本地优先的知识库，用来在你和常用 AI Agent 之间共享长期上下文。**在一处思考，让 Agent 带着共同上下文行动。**
 
 ---
 
@@ -78,7 +78,7 @@ MindOS 是你思考的地方，也是 AI Agent 行动的起点——一个你和
 </table>
 
 > [!IMPORTANT]
-> **⭐ 一键安装：** 把这句话发给你的 Agent（Claude Code、Cursor 等），自动完成全部安装：
+> **⭐ Agent 辅助安装：** 把这句话发给你的 Agent（Claude Code、Cursor 等），安装 MindOS、MCP 和 Skills：
 > ```
 > 帮我从 https://github.com/GeminiLight/MindOS 安装 MindOS，包含 MCP 和 Skills，使用中文模板。
 > ```
@@ -96,14 +96,15 @@ MindOS 是你思考的地方，也是 AI Agent 行动的起点——一个你和
 
 ## 📢 最新动态
 
-| 日期 | 更新 |
+MindOS 现在围绕几个稳定的产品模块展开，而不是一组零散安装脚本：
+
+| 模块 | 当前已上线 |
 |------|------|
-| 2026-04 | **协议 runtime 内聚** — ACP 与 MCP 源码已迁入 `packages/mindos/src/protocols/*`；发布包只带自包含的 `dist/protocols/*` bundle，不再嵌套协议 workspace package。 |
-| 2026-04 | **产品主包落地** — MindOS 采用 OpenCode 式核心包：`packages/mindos`（`@geminilight/mindos`）承载产品 runtime facade 与 CLI kernel 边界；Web/CLI 围绕它做适配。 |
-| 2026-04 | **OpenCode 式 workspace 扁平化** — 所有源码 workspace 已统一到 `packages/`：`packages/web`、`packages/desktop`、`packages/mobile`、`packages/mindos`，以及可选 `packages/retrieval/*` adapters。npm tarball / CLI / MCP / Web standalone / Desktop / Mobile 均已验证。 |
-| 2026-04 | **发布包清理** — 旧顶层 `app/`、`mcp/`、`desktop/`、`mobile/` 源码根已移除，发布清单精确排除测试、缓存与 nested `node_modules`。 |
-| 2026-04 | **网页剪藏插件** — 浏览器扩展，一键剪藏任意网页到 MindOS 收集箱。[安装 →](packages/browser-extension/) |
-| 2026-04 | **PDF & 图片导入** — 拖拽 PDF 和图片到 MindOS，自动转换为可搜索的 Markdown。 |
+| **本地知识工作台** | 桌面端 / Web / CLI 共同管理本地 Markdown 知识库，支持浏览、编辑、导入、搜索与整理。 |
+| **MCP + Skills 桥接** | 一条命令安装或修复 MCP 配置与随包发布的 MindOS Skill，再用 `mindos doctor agents` 验证 Agent 实际可用状态。 |
+| **原生 Agent Runtime** | 支持可恢复会话、取消、重连/重新附着，以及在 runtime 暴露能力时记录可审查的输出历史。 |
+| **工作流与审计面** | YAML 工作流、Agent Inspector、run ledger、反向链接、知识图谱与导入进度，让人类审查保留在流程里。 |
+| **跨平台交付** | 可通过桌面端 Release 或 `npm install -g @geminilight/mindos@latest` 安装；npm 包内置 CLI 与预构建本地 Web runtime。 |
 
 ## 🧠 人机共享心智
 
@@ -111,24 +112,24 @@ MindOS 是你思考的地方，也是 AI Agent 行动的起点——一个你和
 
 **1. 全局同步 — 打破记忆割裂**
 
-切换工具带来上下文割裂，个人深度背景散落各处，导致知识无法复用。**MindOS 内置 MCP Server，所有 Agent 零配置直连核心知识库。项目记忆与 SOP 仅需一处记录，全局赋能所有 AI 工具。**
+切换工具带来上下文割裂，个人深度背景散落各处，导致知识无法复用。**MindOS 内置 MCP Server，并随包提供 Skills，让受支持的 Agent 能共享访问核心知识库。项目记忆与 SOP 只需记录一次，就能在多个 AI 工具里复用。**
 
 **2. 透明可控 — 消除记忆黑箱**
 
-Agent 记忆锁在黑箱中，推理无法审查，错误极难纠正且幻觉持续累积。**MindOS 将每次检索与执行沉淀为本地纯文本，提供完整的审查干预界面，人类拥有绝对的心智纠偏权，随时校准 Agent 行为。**
+Agent 记忆锁在黑箱中，推理难以审查，错误也难以纠正。**MindOS 以本地纯文本保存知识库，并提供 Agent 运行、文件变更和关键工具活动的审查入口，让你能看见并调整 Agent 所依赖的上下文。**
 
 **3. 共生演进 — 经验回流为指令**
 
-反复表达偏好但新对话又从零开始，思考未变成 AI 的能力与自身的方法论。**MindOS 将每次思考自动沉淀为知识库。在交互中厘清想法与标准，下次应对更默契拒绝重复犯错，认知随每次沉淀变得锐利。**
+反复表达偏好但新对话又从零开始，思考没有变成可复用的方法论。**MindOS 帮你把经过审查的对话、纠正和项目标准沉淀为笔记、Skills 与 SOP，让后续 Agent 工作从更好的上下文起步。**
 
-> **底层原则：** 默认本地优先，全部数据以本地纯文本保存，兼顾隐私、主权与性能。
+> **底层原则：** 默认本地优先，知识库内容以本地纯文本保存，兼顾隐私、主权与性能。
 
 ---
 
 ## 🚀 快速开始
 
 > [!IMPORTANT]
-> **用 Agent 一键安装：** 将以下指令粘贴到任意支持 MCP 的 Agent（Claude Code、Cursor 等），即可自动完成安装，然后跳到[第 3 步](#3-通过-mindos-agent-注入你的个人心智)：
+> **用 Agent 辅助安装：** 将以下指令粘贴到任意支持 MCP 的 Agent（Claude Code、Cursor 等），安装 MindOS、MCP 和 Skills，然后跳到[第 3 步](#3-通过-mindos-agent-注入你的个人心智)：
 > ```
 > 帮我从 https://github.com/GeminiLight/MindOS 安装 MindOS，包含 MCP 和 Skills，使用中文模板。
 > ```
@@ -223,28 +224,28 @@ MindOS 的知识不必从零开始——把你已有的信息导入进来：
 
 **Agent 侧**
 
-- **MCP Server + Skills**：stdio + HTTP 双传输，全阵容 Agent 兼容（Claude Code, Cursor, Gemini CLI 等），零配置接入。
-- **ACP / A2A 协议**：Agent 间通信协议，支持 Agent 发现、任务委派与编排。Phase 1 已上线：Agent Card 发现 + JSON-RPC 消息通信。
-- **Workflow 编排**：基于 YAML 的可视化工作流编辑器 + 步骤执行引擎，定义、编辑、运行多步 Agent 工作流。
+- **MCP Server + Skills**：为受支持的 Agent（Claude Code、Cursor、Gemini CLI、Codex 等）提供 stdio + HTTP 传输，并通过 installer/doctor 命令完成安装与修复。
+- **ACP / A2A 基础能力**：提供 Agent 发现、注册表、会话检测与 JSON-RPC 消息等早期协议面；持久 mailbox/task-board 等深层协作仍处于实验阶段。
+- **Workflow 编排**：基于 YAML 的可视化工作流编辑器 + 步骤执行引擎，用于定义、编辑和运行可复用的 Agent 工作流。
 - **结构化模板**：预置 Profile、Workflows、Configurations 等目录骨架，快速冷启动个人 Context。
-- **笔记即指令**：日常笔记天然就是 Agent 可直接执行的高质量指令——无需额外格式转换，写下即可调度。
+- **笔记即指令**：日常笔记可以沉淀为 Agent 可复用、可执行的指令，写下上下文后再调度或持续修订。
 
 **基础设施**
 
 - **安全防线**：Bearer Token 认证、路径沙箱、INSTRUCTION.md 写保护、原子写入。
 - **知识图谱**：动态解析并可视化文件间的引用与依赖关系。
 - **反向链接视图**：展示所有引用当前文件的反向链接，理解笔记在知识网络中的位置。
-- **Agent 审计面板**：将 Agent 操作日志渲染为可筛选的时间线，审查每次工具调用的详情。
-- **Git 时光机**：Git 自动同步（commit/push/pull），记录人类与 Agent 的每次编辑历史，一键回滚，跨设备同步。
+- **Agent 审计面板**：将 Agent 操作日志渲染为可筛选的时间线，用于审查工具调用详情。
+- **Git 时光机**：Git 自动同步（commit/push/pull），让人类与 Agent 的编辑保留可审查历史，支持回滚与跨设备同步。
 - **桌面客户端**：原生 macOS/Windows/Linux 应用，系统托盘、开机自启、本地进程管理。
 
 <details>
-<summary><strong>即将到来</strong></summary>
+<summary><strong>路线图 / 实验能力</strong></summary>
 
-- [ ] RAG 深度集成：基于知识库内容的检索增强生成，让 AI 回答更精准、更有上下文
-- [ ] ACP / A2A Phase 2：深度多 Agent 协作，支持任务委派、共享上下文、工作流链式执行
-- [ ] 经验编译器：从 Agent 交互中自动提取纠正和偏好，沉淀为可复用的 Skills/SOP
-- [ ] 知识库健康度仪表盘：可视化认知复利指标——已积累规则数、Agent 复用次数、知识新鲜度
+- **检索深度**：在现有本地知识库和搜索能力之上，继续增强检索与排序质量。
+- **Agent 协作**：等 mailbox、task-board、权限和 artifact contract 更稳定后，再推进更深层 ACP/A2A 协作。
+- **经验沉淀**：提供更顺手的方式，把审查后的对话、纠正和偏好转为可复用的 Skills/SOP。
+- **知识健康度**：为过期笔记、被复用的规则和需要复查的知识提供轻量信号。
 
 </details>
 
@@ -255,7 +256,7 @@ graph LR
     H["👤 人类<br/><sub>思考 · 审查 · 进化</sub>"]
     M[("📚 MindOS")]
     A["🤖 Agent<br/><sub>执行 · 复盘 · 提炼 SOP</sub>"]
-    EXT["🌐 所有 Agent"]
+    EXT["🌐 已连接 Agent"]
 
     H -- "想法 & 反馈" --> M
     M -- "上下文 & 洞察" --> H
@@ -269,13 +270,15 @@ graph LR
     style EXT fill:#64748b,stroke:#475569,color:#fff,stroke-dasharray:5 5
 ```
 
-> **双向进化。** 人类从积累的知识中获得新洞察；Agent 提炼 SOP 变得更强。MindOS 居中——随每次交互持续成长的共享第二大脑。
+> **双向进化。** 人类从积累的知识中获得新洞察；Agent 复用经过审查的上下文与 SOP。MindOS 居中——随着知识积累不断改进的共享第二大脑。
 
 ---
 
 ## 🤝 支持的 Agent
 
-> 当前注册表支持 26 个 Agent。完整列表及 MCP 配置路径、手动配置方法：**[docs/zh/supported-agents.md](docs/zh/supported-agents.md)**
+MindOS 支持内置 MindOS Agent，也支持一批 CLI、IDE 和扩展类 Agent。完整列表、MCP 配置路径、Skill 路径与常见问题见：**[docs/zh/supported-agents.md](docs/zh/supported-agents.md)**
+
+常见示例：
 
 | Agent | MCP | Skills |
 |:------|:---:|:------:|
@@ -298,25 +301,21 @@ graph LR
 
 ```bash
 MindOS/
-├── packages/web/         # Next.js 16 前端 — 浏览、编辑、与 AI 交互
-├── packages/desktop/     # Electron 桌面客户端
-├── packages/mobile/      # Expo 移动端
+├── packages/mindos/      # 发布 runtime 包、CLI、server、protocols 与核心产品逻辑
+├── packages/web/         # 本地知识工作台的 Next.js 前端
+├── packages/desktop/     # Electron 桌面端与本地进程管理
 ├── packages/browser-extension/ # Web Clipper 浏览器扩展
-├── packages/desktop-tauri/     # Tauri 桌面 spike
-├── packages/mindos/      # 已发布产品包：runtime facade、protocols、foundation/knowledge 内部模块、CLI kernel
-├── packages/retrieval/   # 可选检索栈：search/vector/indexer/API
-├── skills/           # MindOS Skills（`mindos`、`mindos-zh`）— Agent 工作流指南
-├── templates/        # 预设模板（`en/`、`zh/`、`empty/`）— onboard 时复制到知识库目录
-├── scripts/          # 配置向导与辅助脚本
+├── packages/retrieval/   # 可选检索 / 搜索 / 向量适配器
+├── packages/mobile/      # Expo 移动端
+├── skills/               # 随包发布的 MindOS Skills
+├── templates/            # 知识库初始化模板
+├── docs/                 # 公开用户文档与贡献者文档
 └── README.md
 
 ~/.mindos/            # 用户数据目录（项目外，不会被提交）
 ├── config.json       # 所有配置（AI 密钥、端口、Auth token、同步设置）
-├── sync-state.json   # 同步状态（最后同步时间、冲突文件）
 └── mind/             # 你的私有知识库（默认路径，onboard 时可自定义）
 ```
-
-> v1 之后，顶层 `app/`、`apps/`、`mcp/`、`desktop/`、`mobile/`、`browser-extension/`、`desktop-tauri/` 和根目录 `bin/` 不再是源码入口。仓库根目录是 private monorepo 编排层。`packages/mindos` 是 OpenCode 式发布产品包（`@geminilight/mindos`）：仓库内 CLI 入口是 `packages/mindos/bin/cli.js`，npm 安装后用户仍获得包内相对路径 `bin/cli.js`，预构建本地 Web runtime 以 `_standalone/` 发布。`packages/web` 是唯一 Web 源码，不会复制进 npm tarball。`npm pack` / publish 期间可能生成 `packages/mindos/_standalone`、`packages/mindos/packages`、`packages/mindos/scripts`、`packages/mindos/assets`、`packages/mindos/skills`、`packages/mindos/templates` 等 staging 输出；这些不是源码，已被 git 和 pnpm workspace 排除，可用 `pnpm run clean:product-stage` 或 product `postpack` 清理。
 
 ## ⌨️ CLI 命令
 
@@ -325,31 +324,29 @@ MindOS/
 | 命令 | 说明 |
 | :--- | :--- |
 | **核心** | |
-| `mindos onboard` | 交互式初始化（生成配置、选择模板） |
-| `mindos start` | 前台启动 app + MCP 服务 |
-| `mindos start --daemon` | 以后台 OS 服务方式启动（仅 macOS/Linux） |
-| `mindos stop` / `restart` | 停止或重启服务 |
-| `mindos dev` | 开发模式启动 |
-| `mindos build` | 构建生产版本 |
-| `mindos status` | 查看服务状态概览 |
+| `mindos` | 进入 MindOS AI Agent 交互模式 |
+| `mindos onboard` / `mindos init` | 交互式初始化（配置、模板、启动模式） |
+| `mindos onboard --install-daemon` | 初始化并安装 macOS/Linux 后台服务 |
+| `mindos start` / `mindos start --daemon` | 前台或后台启动 Web + MCP 服务 |
+| `mindos stop` / `mindos restart` | 停止或重启服务 |
+| `mindos status` | 查看服务状态概览（支持 `--json`） |
 | `mindos open` | 在浏览器中打开 Web UI |
 | **知识库** | |
-| `mindos file <sub>` | 文件操作（list, read, create, delete, search） |
-| `mindos space <sub>` | 空间管理（list, create, info） |
+| `mindos file <sub>` / `mindos space <sub>` | 本地知识库文件与空间操作 |
 | `mindos search "<query>"` | 搜索知识库 |
-| `mindos` | 进入 MindOS AI Agent 交互模式 |
 | `mindos "<task>"` / `mindos -p "<task>"` | 基于知识库运行 MindOS AI Agent |
-| `mindos agent <sub>` | 显式 agent 命令与管理（list, info） |
-| `mindos channel` / `mindos feishu-ws` | IM 渠道配置与飞书长连接 |
+| `mindos agent <sub>` | Agent 命令与管理辅助（`list`、`info`、脚本化运行） |
 | `mindos api <METHOD> <path>` | API 透传（开发者/Agent 用） |
 | **MCP 与配置** | |
-| `mindos mcp install` | 自动将 MCP 配置写入 Agent |
-| `mindos token` | 查看认证令牌和 MCP 配置 |
-| `mindos config <sub>` | 查看/修改配置（show, set, validate） |
+| `mindos mcp` | 仅启动 MCP server |
+| `mindos mcp install` | 为 Agent 安装或修复 MCP 配置与 MindOS Skill |
+| `mindos doctor agents [name]` | 验证 Agent 侧 MCP、命令与 Skill 可用状态 |
+| `mindos token` | 查看认证令牌与各 Agent MCP 配置片段 |
+| `mindos config <sub>` | 查看/修改配置（`show`、`set`、`validate`） |
 | `mindos sync` | 同步状态（init, now, conflicts, on/off） |
-| `mindos gateway <sub>` | 管理 macOS/Linux 后台服务（install, start, stop） |
-| `mindos doctor` | 健康检查 |
-| `mindos update` | 更新到最新版本 |
+| `mindos gateway <sub>` | 管理 macOS/Linux 后台服务（`install`、`start`、`stop`、`logs`） |
+| `mindos doctor` / `mindos logs` | 健康检查与本地服务日志 |
+| `mindos update` / `mindos uninstall` | 更新或卸载 MindOS |
 
 **主要快捷键：** `⌘K` 搜索 · `⌘/` AI 助手 · `E` 编辑 · `⌘S` 保存 · `Esc` 关闭。
 
