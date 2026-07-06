@@ -101,7 +101,7 @@ echo "   ✅ mindos --help works"
 AGENT_HOME=$(mktemp -d)
 if PATH="$SMOKE_DIR/node_modules/.bin:$PATH" HOME="$AGENT_HOME" NODE_ENV=test "$SMOKE_DIR/node_modules/.bin/mindos" mcp install codex -g -y >/tmp/mindos-release-agent-install.log 2>&1; then
   AGENT_DOCTOR=$(PATH="$SMOKE_DIR/node_modules/.bin:$PATH" HOME="$AGENT_HOME" NODE_ENV=test "$SMOKE_DIR/node_modules/.bin/mindos" doctor agents codex --json 2>&1 || true)
-  if ! echo "$AGENT_DOCTOR" | grep -q '"ready":true'; then
+  if ! echo "$AGENT_DOCTOR" | grep -Eq '"ready"[[:space:]]*:[[:space:]]*true'; then
     echo "❌ 'mindos doctor agents codex --json' did not report ready after install"
     echo "$AGENT_DOCTOR"
     rm -rf "$AGENT_HOME" "$SMOKE_DIR"

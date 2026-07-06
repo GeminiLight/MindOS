@@ -128,6 +128,7 @@ describe('OpenCode-style platform runtime packages', () => {
     expect(release).toContain('npm rebuild --bin-links');
     expect(release).toContain('mcp install codex -g -y');
     expect(release).toContain('doctor agents codex --json');
+    expect(release).toContain('"ready"[[:space:]]*:[[:space:]]*true');
     expect(release).toContain('.agents/skills/mindos/SKILL.md');
   });
 
