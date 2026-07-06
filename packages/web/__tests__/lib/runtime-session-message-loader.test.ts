@@ -91,6 +91,21 @@ describe('runtime session message loader', () => {
       cli: 'claude',
       runtime: { id: 'claude', kind: 'claude' },
     });
+    expect(resolveRuntimeSessionMessageTarget('qwen')).toMatchObject({
+      kind: 'native',
+      cli: 'qwen-code',
+      runtime: { id: 'qwen-code', kind: 'acp' },
+    });
+    expect(resolveRuntimeSessionMessageTarget('codebuddy-code')).toMatchObject({
+      kind: 'native',
+      cli: 'codebuddy',
+      runtime: { id: 'codebuddy', kind: 'acp' },
+    });
+    expect(resolveRuntimeSessionMessageTarget('openclaw')).toMatchObject({
+      kind: 'native',
+      cli: 'openclaw',
+      runtime: { id: 'openclaw', kind: 'acp' },
+    });
   });
 
   it('loads Codex thread turns through the durable Codex thread reader', async () => {
@@ -250,6 +265,57 @@ describe('runtime session message loader', () => {
     expect(result.messages.map((message) => [message.role, message.content, message.agentKind])).toEqual([
       ['user', 'inspect with claude', 'claude'],
       ['assistant', 'claude inspected it', 'claude'],
+    ]);
+  });
+
+  it('loads Qwen Code session messages from its native transcript archive', async () => {
+    const homeDir = await makeTempHome();
+    const chatsDir = join(homeDir, '.qwen', 'projects', '-workspace-repo', 'chats');
+    await mkdir(chatsDir, { recursive: true });
+    await writeFile(join(chatsDir, 'qwen-session-1.jsonl'), [
+      JSON.stringify({
+        type: 'user',
+        session_id: 'qwen-session-1',
+        timestamp: '2026-07-06T07:00:01.000Z',
+        cwd: '/workspace/repo',
+        message: {
+          role: 'user',
+          content: [{ type: 'text', text: 'ask qwen' }],
+        },
+      }),
+      JSON.stringify({
+        type: 'assistant',
+        session_id: 'qwen-session-1',
+        timestamp: '2026-07-06T07:00:02.000Z',
+        cwd: '/workspace/repo',
+        message: {
+          role: 'assistant',
+          content: [
+            { type: 'thinking', text: 'hidden reasoning' },
+            { type: 'text', text: 'qwen answered' },
+          ],
+        },
+      }),
+    ].join('\n'));
+
+    const result = await loadRuntimeSessionMessages({
+      cli: 'qwen',
+      sessionId: 'qwen-session-1',
+      cwd: '/workspace/repo',
+      homeDir,
+    });
+
+    expect(result.status).toBe('loaded');
+    expect(result.runtime).toMatchObject({ id: 'qwen-code', kind: 'acp' });
+    expect(result.source).toEqual({
+      kind: 'native-transcript',
+      transcriptSource: 'qwen-code',
+      durable: true,
+      confidence: 'full',
+    });
+    expect(result.messages.map((message) => [message.role, message.content, message.agentKind])).toEqual([
+      ['user', 'ask qwen', 'acp'],
+      ['assistant', 'qwen answered', 'acp'],
     ]);
   });
 

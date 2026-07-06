@@ -8,6 +8,7 @@ import {
   parseGeminiMessagesFromRecords,
   parseKimiWireMessages,
   parseOpenCodeTextRows,
+  parseVisibleMessagesFromRecords,
 } from '@/lib/server/runtime-session-importers';
 
 const tempHomes: string[] = [];
@@ -260,6 +261,43 @@ describe('runtime session native importers', () => {
     ]);
   });
 
+  it('parses visible JSONL message records shared by Qwen, CodeBuddy, and OpenClaw', () => {
+    expect(parseVisibleMessagesFromRecords([
+      {
+        type: 'user',
+        session_id: 'shared-session-1',
+        timestamp: '2026-07-06T07:00:01.000Z',
+        message: {
+          role: 'user',
+          content: [{ type: 'text', text: 'load shared transcript' }],
+        },
+      },
+      {
+        type: 'assistant',
+        session_id: 'shared-session-1',
+        timestamp: '2026-07-06T07:00:02.000Z',
+        message: {
+          role: 'assistant',
+          content: [
+            { type: 'thinking', text: 'hidden chain of thought' },
+            { type: 'text', text: 'shared transcript loaded' },
+            { type: 'tool_use', name: 'Bash', input: { command: 'pnpm test' } },
+          ],
+        },
+      },
+      {
+        type: 'user',
+        isSidechain: true,
+        session_id: 'shared-session-1',
+        timestamp: '2026-07-06T07:00:03.000Z',
+        message: { role: 'user', content: 'hidden sidechain' },
+      },
+    ])).toEqual([
+      { role: 'user', content: 'load shared transcript', timestamp: Date.parse('2026-07-06T07:00:01.000Z') },
+      { role: 'assistant', content: 'shared transcript loaded', timestamp: Date.parse('2026-07-06T07:00:02.000Z') },
+    ]);
+  });
+
   it('imports Claude Code project transcript files by session id', async () => {
     const homeDir = await makeTempHome();
     const projectDir = join(homeDir, '.claude', 'projects', '-workspace-repo');
@@ -324,5 +362,168 @@ describe('runtime session native importers', () => {
       cwd: '/workspace/repo',
       homeDir,
     })).resolves.toEqual([]);
+  });
+
+  it('imports Qwen Code chat transcript files by session id', async () => {
+    const homeDir = await makeTempHome();
+    const chatsDir = join(homeDir, '.qwen', 'projects', '-workspace-repo', 'chats');
+    await mkdir(chatsDir, { recursive: true });
+    await writeFile(join(chatsDir, 'qwen-session-1.jsonl'), [
+      JSON.stringify({
+        type: 'user',
+        session_id: 'qwen-session-1',
+        timestamp: '2026-07-06T07:00:01.000Z',
+        cwd: '/workspace/repo',
+        message: {
+          role: 'user',
+          content: [{ type: 'text', text: 'ask qwen' }],
+        },
+      }),
+      JSON.stringify({
+        type: 'assistant',
+        session_id: 'qwen-session-1',
+        timestamp: '2026-07-06T07:00:02.000Z',
+        cwd: '/workspace/repo',
+        message: {
+          role: 'assistant',
+          content: [
+            { type: 'thinking', text: 'hidden reasoning' },
+            { type: 'text', text: 'qwen answered' },
+            { type: 'tool_use', name: 'read_file' },
+          ],
+        },
+      }),
+    ].join('\n'));
+
+    const sessions = await listExternalRuntimeSessions({
+      runtimeId: 'qwen-code',
+      sessionId: 'qwen-session-1',
+      cwd: '/workspace/repo',
+      homeDir,
+    });
+
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0]).toMatchObject({
+      id: 'qwen-session-1',
+      title: 'ask qwen',
+      cwd: '/workspace/repo',
+      messageCount: 2,
+      transcriptSource: 'qwen-code',
+    });
+    expect(sessions[0]?.turns?.map((message) => [message.role, message.content])).toEqual([
+      ['user', 'ask qwen'],
+      ['assistant', 'qwen answered'],
+    ]);
+  });
+
+  it('imports CodeBuddy Code project transcript files by session id', async () => {
+    const homeDir = await makeTempHome();
+    const projectDir = join(homeDir, '.codebuddy', 'projects', 'repo-hash');
+    await mkdir(projectDir, { recursive: true });
+    await writeFile(join(projectDir, 'codebuddy-session-1.jsonl'), [
+      JSON.stringify({
+        type: 'user',
+        sessionId: 'codebuddy-session-1',
+        timestamp: '2026-07-06T07:10:01.000Z',
+        cwd: '/workspace/repo',
+        message: {
+          role: 'user',
+          content: [{ type: 'text', text: 'ask codebuddy' }],
+        },
+      }),
+      JSON.stringify({
+        type: 'assistant',
+        sessionId: 'codebuddy-session-1',
+        timestamp: '2026-07-06T07:10:02.000Z',
+        cwd: '/workspace/repo',
+        message: {
+          role: 'assistant',
+          content: [
+            { type: 'text', text: 'codebuddy answered' },
+            { type: 'tool_result', content: 'hidden tool output' },
+          ],
+        },
+      }),
+    ].join('\n'));
+
+    const sessions = await listExternalRuntimeSessions({
+      runtimeId: 'codebuddy',
+      sessionId: 'codebuddy-session-1',
+      cwd: '/workspace/repo',
+      homeDir,
+    });
+
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0]).toMatchObject({
+      id: 'codebuddy-session-1',
+      title: 'ask codebuddy',
+      cwd: '/workspace/repo',
+      messageCount: 2,
+      transcriptSource: 'codebuddy-code',
+    });
+    expect(sessions[0]?.turns?.map((message) => [message.role, message.content])).toEqual([
+      ['user', 'ask codebuddy'],
+      ['assistant', 'codebuddy answered'],
+    ]);
+  });
+
+  it('imports OpenClaw session transcripts from agent session roots', async () => {
+    const homeDir = await makeTempHome();
+    const sessionsDir = join(homeDir, '.kimi_openclaw', 'agents', 'main', 'sessions');
+    await mkdir(sessionsDir, { recursive: true });
+    await writeFile(join(sessionsDir, 'sessions.json'), JSON.stringify({
+      'agent:main:main': {
+        sessionId: 'openclaw-session-1',
+        sessionFile: 'openclaw-session-1.jsonl',
+        updatedAt: '2026-07-06T07:20:03.000Z',
+      },
+    }));
+    await writeFile(join(sessionsDir, 'openclaw-session-1.jsonl'), [
+      JSON.stringify({
+        type: 'session',
+        id: 'openclaw-session-1',
+        cwd: '/workspace/repo',
+        timestamp: '2026-07-06T07:20:00.000Z',
+      }),
+      JSON.stringify({
+        type: 'message',
+        timestamp: '2026-07-06T07:20:01.000Z',
+        message: {
+          role: 'user',
+          content: [{ type: 'text', text: 'ask openclaw' }],
+        },
+      }),
+      JSON.stringify({
+        type: 'message',
+        timestamp: '2026-07-06T07:20:02.000Z',
+        message: {
+          role: 'assistant',
+          content: [
+            { type: 'reasoning', text: 'hidden reasoning' },
+            { type: 'text', text: 'openclaw answered' },
+          ],
+        },
+      }),
+    ].join('\n'));
+
+    const sessions = await listExternalRuntimeSessions({
+      runtimeId: 'openclaw',
+      sessionId: 'openclaw-session-1',
+      cwd: '/workspace/repo',
+      homeDir,
+    });
+
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0]).toMatchObject({
+      id: 'openclaw-session-1',
+      title: 'ask openclaw',
+      cwd: '/workspace/repo',
+      messageCount: 2,
+      transcriptSource: 'openclaw',
+    });
+    expect(sessions[0]?.turns?.map((message) => [message.role, message.content])).toEqual([
+      ['user', 'ask openclaw'],
+      ['assistant', 'openclaw answered'],
+    ]);
   });
 });

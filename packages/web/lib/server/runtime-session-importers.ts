@@ -25,7 +25,14 @@ export type ExternalRuntimeSessionRecord = {
   turnCount?: number;
   turns?: ImportedRuntimeSessionMessage[];
   source: 'native-transcript';
-  transcriptSource: 'kimi-code' | 'gemini-cli' | 'opencode' | 'claude-code';
+  transcriptSource:
+    | 'kimi-code'
+    | 'gemini-cli'
+    | 'opencode'
+    | 'claude-code'
+    | 'qwen-code'
+    | 'codebuddy-code'
+    | 'openclaw';
 };
 
 export type ExternalRuntimeSessionListOptions = {
@@ -42,7 +49,11 @@ const execFileAsync = promisify(execFile);
 const DEFAULT_LIMIT = 30;
 const MAX_TEXT_LENGTH = 80_000;
 const MAX_JSONL_LINES = 20_000;
+const MAX_DISCOVERED_TRANSCRIPTS = 500;
 const KIMI_PROJECT_PREFIX = 'wd_';
+const VISIBLE_TEXT_PART_TYPES = new Set(['text', 'output_text', 'markdown']);
+const CODEBUDDY_SKIPPED_DIRS = new Set(['blobs', 'subagents', 'tool-results']);
+const OPENCLAW_STATE_DIRS = ['.openclaw', '.kimi_openclaw', '.clawdbot'];
 
 function isRecord(value: unknown): value is MaybeRecord {
   return !!value && typeof value === 'object' && !Array.isArray(value);
@@ -81,6 +92,30 @@ function textFromContent(value: unknown): string {
   if (typeof value === 'string') return value.trim();
   if (Array.isArray(value)) return value.flatMap(textFromPart).join('\n').trim();
   if (isRecord(value)) return textFromPart(value).join('\n').trim();
+  return '';
+}
+
+function textFromVisiblePart(value: unknown): string[] {
+  if (typeof value === 'string') return [value];
+  if (!isRecord(value)) return [];
+  const partType = typeof value.type === 'string' ? value.type : undefined;
+  if (partType && !VISIBLE_TEXT_PART_TYPES.has(partType)) return [];
+
+  const directText = [value.text, value.value, value.markdown]
+    .filter((item): item is string => typeof item === 'string' && item.trim().length > 0);
+  if (directText.length > 0) return directText;
+
+  if (value.content !== undefined && value.content !== null) {
+    const nested = textFromVisibleContent(value.content);
+    return nested ? [nested] : [];
+  }
+  return [];
+}
+
+function textFromVisibleContent(value: unknown): string {
+  if (typeof value === 'string') return value.trim();
+  if (Array.isArray(value)) return value.flatMap(textFromVisiblePart).join('\n').trim();
+  if (isRecord(value)) return textFromVisiblePart(value).join('\n').trim();
   return '';
 }
 
@@ -136,11 +171,15 @@ function claudeProjectDirNameFromCwd(cwd: string): string {
   return resolve(cwd.trim()).replace(/[^A-Za-z0-9_-]/g, '-');
 }
 
-function claudeSessionJsonlFileName(sessionId?: string): string | null {
+function jsonlFileNameFromSessionId(sessionId?: string): string | null {
   const trimmed = sessionId?.trim();
   if (!trimmed) return null;
   if (trimmed === '.' || trimmed === '..' || trimmed.includes('/') || trimmed.includes('\\')) return null;
   return `${trimmed}.jsonl`;
+}
+
+function sanitizedProjectDirNameFromCwd(cwd: string): string {
+  return resolve(cwd.trim()).replace(/[^A-Za-z0-9_-]/g, '-');
 }
 
 function kimiProjectDirMatches(projectDirName: string, cwd?: string): boolean {
@@ -149,6 +188,42 @@ function kimiProjectDirMatches(projectDirName: string, cwd?: string): boolean {
   return projectDirName.startsWith(`${KIMI_PROJECT_PREFIX}${base}_`)
     || projectDirName.startsWith(`${KIMI_PROJECT_PREFIX}.${base}_`)
     || projectDirName.includes(`_${base}_`);
+}
+
+function qwenProjectDirMatches(projectDirName: string, cwd?: string): boolean {
+  const base = projectBaseFromCwd(cwd);
+  if (!base) return true;
+  const sanitized = cwd?.trim() ? sanitizedProjectDirNameFromCwd(cwd).toLowerCase() : '';
+  const normalizedName = projectDirName.toLowerCase();
+  return normalizedName === base.toLowerCase()
+    || normalizedName.includes(base.toLowerCase())
+    || Boolean(sanitized && normalizedName === sanitized);
+}
+
+function sameResolvedPath(a: string, b: string): boolean {
+  try {
+    return resolve(a.trim()) === resolve(b.trim());
+  } catch {
+    return a.trim() === b.trim();
+  }
+}
+
+function shouldSkipForRequestedCwd(input: {
+  requestedCwd?: string;
+  transcriptCwd?: string;
+  sessionId?: string;
+}): boolean {
+  const requested = input.requestedCwd?.trim();
+  if (!requested) return false;
+  const transcriptCwd = input.transcriptCwd?.trim();
+  if (!transcriptCwd) return !input.sessionId?.trim();
+  return !sameResolvedPath(transcriptCwd, requested);
+}
+
+function pathInside(parent: string, child: string): boolean {
+  const parentPath = resolve(parent);
+  const childPath = resolve(child);
+  return childPath === parentPath || childPath.startsWith(`${parentPath}/`);
 }
 
 function roleFromGeminiType(type: unknown): ImportedRole | null {
@@ -303,31 +378,64 @@ export function parseOpenCodeTextRows(rows: OpenCodeTextRow[]): ImportedRuntimeS
   return messages;
 }
 
-export function parseClaudeMessagesFromRecords(records: MaybeRecord[]): ImportedRuntimeSessionMessage[] {
+function roleFromVisibleRecord(record: MaybeRecord, message: MaybeRecord): ImportedRole | null {
+  const candidates = [
+    message.role,
+    record.role,
+    message.author,
+    record.author,
+    message.sender,
+    record.sender,
+    message.type,
+    record.type,
+  ];
+  for (const candidate of candidates) {
+    if (typeof candidate !== 'string') continue;
+    const normalized = candidate.toLowerCase().replace(/[-_\s]+/g, '');
+    if (normalized === 'user' || normalized === 'human' || normalized === 'usermessage') return 'user';
+    if (
+      normalized === 'assistant'
+      || normalized === 'model'
+      || normalized === 'agent'
+      || normalized === 'assistantmessage'
+      || normalized === 'aimessage'
+    ) {
+      return 'assistant';
+    }
+  }
+  return null;
+}
+
+function timestampFromVisibleRecord(record: MaybeRecord, message: MaybeRecord): number | undefined {
+  return timestampMs(record.timestamp)
+    ?? timestampMs(message.timestamp)
+    ?? timestampMs(record.createdAt)
+    ?? timestampMs(message.createdAt)
+    ?? timestampMs(record.created_at)
+    ?? timestampMs(message.created_at)
+    ?? timestampMs(record.time)
+    ?? timestampMs(message.time);
+}
+
+export function parseVisibleMessagesFromRecords(records: MaybeRecord[]): ImportedRuntimeSessionMessage[] {
   const messages: ImportedRuntimeSessionMessage[] = [];
   for (const record of records) {
     if (record.isSidechain === true) continue;
     const message = isRecord(record.message) ? record.message : record;
-    const role = message.role === 'user' || message.role === 'assistant'
-      ? message.role
-      : record.type === 'user' || record.type === 'assistant'
-        ? record.type
-        : null;
+    const role = roleFromVisibleRecord(record, message);
     if (!role) continue;
-    pushMessage(messages, role, textFromClaudeContent(message.content), timestampMs(record.timestamp));
+    pushMessage(
+      messages,
+      role,
+      textFromVisibleContent(message.content ?? record.content ?? message.text ?? record.text),
+      timestampFromVisibleRecord(record, message),
+    );
   }
   return messages;
 }
 
-function textFromClaudeContent(value: unknown): string {
-  if (typeof value === 'string') return value.trim();
-  if (!Array.isArray(value)) return textFromContent(value);
-  return value.flatMap((item) => {
-    if (typeof item === 'string') return [item];
-    if (!isRecord(item)) return [];
-    if (item.type !== undefined && item.type !== 'text') return [];
-    return textFromPart(item);
-  }).join('\n').trim();
+export function parseClaudeMessagesFromRecords(records: MaybeRecord[]): ImportedRuntimeSessionMessage[] {
+  return parseVisibleMessagesFromRecords(records);
 }
 
 function firstStringField(records: MaybeRecord[], key: string): string | undefined {
@@ -350,6 +458,89 @@ function newestTimestampField(records: MaybeRecord[], key: string): string | num
     }
   }
   return bestValue;
+}
+
+function firstStringFromRecords(records: MaybeRecord[], keys: string[]): string | undefined {
+  for (const key of keys) {
+    const value = firstStringField(records, key);
+    if (value) return value;
+  }
+  return undefined;
+}
+
+function firstTimestampFromRecords(records: MaybeRecord[], keys: string[]): string | number | undefined {
+  for (const key of keys) {
+    const record = records.find((item) => timestampField(item[key]) !== undefined);
+    const value = record ? timestampField(record[key]) : undefined;
+    if (value !== undefined) return value;
+  }
+  return undefined;
+}
+
+function sessionHeaderRecord(records: MaybeRecord[]): MaybeRecord | undefined {
+  return records.find((record) => record.type === 'session' || record.type === 'session_start');
+}
+
+function sessionIdFromRecords(records: MaybeRecord[], fallback: string): string {
+  const header = sessionHeaderRecord(records);
+  const headerId = isRecord(header) && typeof header.id === 'string' ? header.id.trim() : '';
+  return firstStringFromRecords(records, ['sessionId', 'session_id', 'conversationId', 'conversation_id'])
+    ?? (headerId || fallback);
+}
+
+function firstUserMessage(messages: ImportedRuntimeSessionMessage[]): ImportedRuntimeSessionMessage | undefined {
+  return messages.find((message) => message.role === 'user');
+}
+
+function lastUserMessage(messages: ImportedRuntimeSessionMessage[]): ImportedRuntimeSessionMessage | undefined {
+  const userMessages = messages.filter((message) => message.role === 'user');
+  return userMessages[userMessages.length - 1];
+}
+
+async function directJsonlFiles(dir: string, sessionId?: string): Promise<string[]> {
+  if (!existsSync(dir)) return [];
+  if (sessionId?.trim()) {
+    const fileName = jsonlFileNameFromSessionId(sessionId);
+    if (!fileName) return [];
+    const filePath = join(dir, fileName);
+    return existsSync(filePath) ? [filePath] : [];
+  }
+  const entries = await readdir(dir, { withFileTypes: true }).catch(() => []);
+  return entries
+    .filter((entry) => entry.isFile() && entry.name.endsWith('.jsonl'))
+    .map((entry) => join(dir, entry.name));
+}
+
+async function discoverJsonlFiles(input: {
+  root: string;
+  sessionId?: string;
+  maxDepth: number;
+  skipDir?: (name: string) => boolean;
+}): Promise<string[]> {
+  if (!existsSync(input.root)) return [];
+  const result: string[] = [];
+  const wantedName = input.sessionId?.trim() ? jsonlFileNameFromSessionId(input.sessionId) : null;
+  if (input.sessionId?.trim() && !wantedName) return [];
+
+  async function visit(dir: string, depth: number): Promise<void> {
+    if (result.length >= MAX_DISCOVERED_TRANSCRIPTS) return;
+    const entries = await readdir(dir, { withFileTypes: true }).catch(() => []);
+    for (const entry of entries) {
+      if (result.length >= MAX_DISCOVERED_TRANSCRIPTS) return;
+      const path = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (depth >= input.maxDepth || input.skipDir?.(entry.name)) continue;
+        await visit(path, depth + 1);
+        continue;
+      }
+      if (!entry.isFile() || !entry.name.endsWith('.jsonl')) continue;
+      if (wantedName && entry.name !== wantedName) continue;
+      result.push(path);
+    }
+  }
+
+  await visit(input.root, 0);
+  return result;
 }
 
 function toExternalRecord(input: {
@@ -537,7 +728,7 @@ async function listClaudeSessions(options: ExternalRuntimeSessionListOptions): P
   const home = options.homeDir ?? homedir();
   const root = join(home, '.claude', 'projects');
   if (!existsSync(root)) return [];
-  const requestedFileName = claudeSessionJsonlFileName(options.sessionId);
+  const requestedFileName = jsonlFileNameFromSessionId(options.sessionId);
   if (options.sessionId && !requestedFileName) return [];
 
   const projectDirs = await readdir(root, { withFileTypes: true }).catch(() => []);
@@ -597,6 +788,279 @@ async function listClaudeSessions(options: ExternalRuntimeSessionListOptions): P
   return sortAndLimit(records, options.limit);
 }
 
+async function listQwenSessions(options: ExternalRuntimeSessionListOptions): Promise<ExternalRuntimeSessionRecord[]> {
+  const home = options.homeDir ?? homedir();
+  const root = join(home, '.qwen', 'projects');
+  if (!existsSync(root)) return [];
+
+  const projectDirs = await readdir(root, { withFileTypes: true }).catch(() => []);
+  const records: ExternalRuntimeSessionRecord[] = [];
+  for (const projectDir of projectDirs) {
+    if (!projectDir.isDirectory()) continue;
+    if (!options.sessionId && options.cwd?.trim() && !qwenProjectDirMatches(projectDir.name, options.cwd)) continue;
+    const chatsDir = join(root, projectDir.name, 'chats');
+    const files = await directJsonlFiles(chatsDir, options.sessionId);
+    for (const filePath of files) {
+      const recordsFromFile = await readJsonl(filePath);
+      const fallbackSessionId = basename(filePath).replace(/\.jsonl$/, '');
+      const sessionId = sessionIdFromRecords(recordsFromFile, fallbackSessionId);
+      if (options.sessionId && sessionId !== options.sessionId && fallbackSessionId !== options.sessionId) continue;
+
+      const cwd = firstStringFromRecords(recordsFromFile, [
+        'cwd',
+        'projectRoot',
+        'project_root',
+        'workingDirectory',
+        'working_directory',
+      ]) ?? options.cwd;
+      if (shouldSkipForRequestedCwd({
+        requestedCwd: options.cwd,
+        transcriptCwd: cwd,
+        sessionId: options.sessionId,
+      })) {
+        continue;
+      }
+
+      const fileStat = await stat(filePath).catch(() => null);
+      const messages = parseVisibleMessagesFromRecords(recordsFromFile);
+      if (messages.length === 0 && recordsFromFile.length === 0) continue;
+      const firstUser = firstUserMessage(messages);
+      const lastUser = lastUserMessage(messages);
+      const title = firstStringFromRecords(recordsFromFile, ['customTitle', 'title', 'prompt'])
+        ?? (firstUser?.content ? firstUser.content.slice(0, 80) : sessionId);
+
+      records.push(toExternalRecord({
+        id: sessionId,
+        title,
+        preview: lastUser && lastUser !== firstUser ? lastUser.content.slice(0, 120) : undefined,
+        cwd,
+        createdAt: firstTimestampFromRecords(recordsFromFile, ['startTime', 'createdAt', 'created_at', 'timestamp'])
+          ?? fileStat?.birthtimeMs,
+        updatedAt: newestTimestampField(recordsFromFile, 'mtime')
+          ?? newestTimestampField(recordsFromFile, 'updatedAt')
+          ?? newestTimestampField(recordsFromFile, 'timestamp')
+          ?? fileStat?.mtimeMs,
+        messages,
+        transcriptSource: 'qwen-code',
+      }));
+    }
+  }
+  return sortAndLimit(records, options.limit);
+}
+
+async function listCodeBuddySessions(options: ExternalRuntimeSessionListOptions): Promise<ExternalRuntimeSessionRecord[]> {
+  const home = options.homeDir ?? homedir();
+  const root = join(home, '.codebuddy', 'projects');
+  if (!existsSync(root)) return [];
+
+  const files = await discoverJsonlFiles({
+    root,
+    sessionId: options.sessionId,
+    maxDepth: 4,
+    skipDir: (name) => CODEBUDDY_SKIPPED_DIRS.has(name),
+  });
+
+  const records: ExternalRuntimeSessionRecord[] = [];
+  for (const filePath of files) {
+    const recordsFromFile = await readJsonl(filePath);
+    const fallbackSessionId = basename(filePath).replace(/\.jsonl$/, '');
+    const sessionId = sessionIdFromRecords(recordsFromFile, fallbackSessionId);
+    if (options.sessionId && sessionId !== options.sessionId && fallbackSessionId !== options.sessionId) continue;
+
+    const cwd = firstStringFromRecords(recordsFromFile, [
+      'cwd',
+      'projectRoot',
+      'project_root',
+      'workingDirectory',
+      'working_directory',
+    ]) ?? options.cwd;
+    if (shouldSkipForRequestedCwd({
+      requestedCwd: options.cwd,
+      transcriptCwd: cwd,
+      sessionId: options.sessionId,
+    })) {
+      continue;
+    }
+
+    const fileStat = await stat(filePath).catch(() => null);
+    const messages = parseVisibleMessagesFromRecords(recordsFromFile);
+    if (messages.length === 0 && recordsFromFile.length === 0) continue;
+    const firstUser = firstUserMessage(messages);
+    const lastUser = lastUserMessage(messages);
+    const title = firstStringFromRecords(recordsFromFile, ['customTitle', 'title', 'prompt'])
+      ?? (firstUser?.content ? firstUser.content.slice(0, 80) : sessionId);
+
+    records.push(toExternalRecord({
+      id: sessionId,
+      title,
+      preview: lastUser && lastUser !== firstUser ? lastUser.content.slice(0, 120) : undefined,
+      cwd,
+      createdAt: firstTimestampFromRecords(recordsFromFile, ['startTime', 'createdAt', 'created_at', 'timestamp'])
+        ?? fileStat?.birthtimeMs,
+      updatedAt: newestTimestampField(recordsFromFile, 'updatedAt')
+        ?? newestTimestampField(recordsFromFile, 'updated_at')
+        ?? newestTimestampField(recordsFromFile, 'timestamp')
+        ?? fileStat?.mtimeMs,
+      messages,
+      transcriptSource: 'codebuddy-code',
+    }));
+  }
+
+  return sortAndLimit(records, options.limit);
+}
+
+function openClawTranscriptPathFromMetadata(
+  sessionsDir: string,
+  metadata: MaybeRecord,
+  sessionId?: string,
+): string | null {
+  const rawPath = typeof metadata.sessionFile === 'string'
+    ? metadata.sessionFile
+    : typeof metadata.filePath === 'string'
+      ? metadata.filePath
+      : typeof metadata.transcriptPath === 'string'
+        ? metadata.transcriptPath
+        : undefined;
+  if (rawPath?.trim()) {
+    const resolved = resolve(sessionsDir, rawPath.trim());
+    if (pathInside(sessionsDir, resolved) && existsSync(resolved)) return resolved;
+  }
+
+  const id = typeof metadata.sessionId === 'string'
+    ? metadata.sessionId
+    : typeof metadata.id === 'string'
+      ? metadata.id
+      : sessionId;
+  if (!id?.trim()) return null;
+  const fileName = jsonlFileNameFromSessionId(id);
+  if (!fileName) return null;
+  const fallback = join(sessionsDir, fileName);
+  return existsSync(fallback) ? fallback : null;
+}
+
+function isPrimaryOpenClawTranscriptFile(name: string): boolean {
+  const lower = name.toLowerCase();
+  return lower.endsWith('.jsonl')
+    && !lower.endsWith('.trajectory.jsonl')
+    && !lower.includes('.checkpoint.')
+    && !lower.includes('.reset.')
+    && !lower.includes('.deleted.')
+    && !lower.includes('.bak.');
+}
+
+type OpenClawSessionCandidate = {
+  filePath: string;
+  metadata?: MaybeRecord;
+  agentId: string;
+};
+
+async function openClawSessionCandidates(
+  sessionsDir: string,
+  agentId: string,
+  options: ExternalRuntimeSessionListOptions,
+): Promise<OpenClawSessionCandidate[]> {
+  const candidates: OpenClawSessionCandidate[] = [];
+  const seen = new Set<string>();
+  const index = await readJsonFile(join(sessionsDir, 'sessions.json'));
+
+  if (index) {
+    for (const value of Object.values(index)) {
+      if (!isRecord(value)) continue;
+      const metadataSessionId = typeof value.sessionId === 'string'
+        ? value.sessionId
+        : typeof value.id === 'string'
+          ? value.id
+          : undefined;
+      if (options.sessionId && metadataSessionId && metadataSessionId !== options.sessionId) continue;
+      const filePath = openClawTranscriptPathFromMetadata(sessionsDir, value, options.sessionId);
+      if (!filePath || seen.has(filePath)) continue;
+      seen.add(filePath);
+      candidates.push({ filePath, metadata: value, agentId });
+    }
+  }
+
+  const files = await readdir(sessionsDir, { withFileTypes: true }).catch(() => []);
+  for (const file of files) {
+    if (!file.isFile() || !isPrimaryOpenClawTranscriptFile(file.name)) continue;
+    const fallbackSessionId = file.name.replace(/\.jsonl$/, '');
+    if (options.sessionId && fallbackSessionId !== options.sessionId) continue;
+    const filePath = join(sessionsDir, file.name);
+    if (seen.has(filePath)) continue;
+    seen.add(filePath);
+    candidates.push({ filePath, agentId });
+  }
+
+  return candidates;
+}
+
+async function listOpenClawSessions(options: ExternalRuntimeSessionListOptions): Promise<ExternalRuntimeSessionRecord[]> {
+  const home = options.homeDir ?? homedir();
+  const records: ExternalRuntimeSessionRecord[] = [];
+
+  for (const stateDir of OPENCLAW_STATE_DIRS) {
+    const agentsRoot = join(home, stateDir, 'agents');
+    const agents = await readdir(agentsRoot, { withFileTypes: true }).catch(() => []);
+    for (const agent of agents) {
+      if (!agent.isDirectory()) continue;
+      const sessionsDir = join(agentsRoot, agent.name, 'sessions');
+      if (!existsSync(sessionsDir)) continue;
+      const candidates = await openClawSessionCandidates(sessionsDir, agent.name, options);
+      for (const candidate of candidates) {
+        const recordsFromFile = await readJsonl(candidate.filePath);
+        const fallbackSessionId = basename(candidate.filePath).replace(/\.jsonl$/, '');
+        const metadataSessionId = typeof candidate.metadata?.sessionId === 'string'
+          ? candidate.metadata.sessionId
+          : typeof candidate.metadata?.id === 'string'
+            ? candidate.metadata.id
+            : undefined;
+        const sessionId = metadataSessionId ?? sessionIdFromRecords(recordsFromFile, fallbackSessionId);
+        if (options.sessionId && sessionId !== options.sessionId && fallbackSessionId !== options.sessionId) continue;
+
+        const header = sessionHeaderRecord(recordsFromFile);
+        const headerCwd = isRecord(header) && typeof header.cwd === 'string' ? header.cwd : undefined;
+        const cwd = (typeof candidate.metadata?.cwd === 'string' ? candidate.metadata.cwd : undefined)
+          ?? headerCwd
+          ?? firstStringFromRecords(recordsFromFile, ['cwd', 'projectRoot', 'project_root'])
+          ?? options.cwd;
+        if (shouldSkipForRequestedCwd({
+          requestedCwd: options.cwd,
+          transcriptCwd: cwd,
+          sessionId: options.sessionId,
+        })) {
+          continue;
+        }
+
+        const fileStat = await stat(candidate.filePath).catch(() => null);
+        const messages = parseVisibleMessagesFromRecords(recordsFromFile);
+        if (messages.length === 0 && recordsFromFile.length === 0 && !candidate.metadata) continue;
+        const firstUser = firstUserMessage(messages);
+        const lastUser = lastUserMessage(messages);
+        const title = (typeof candidate.metadata?.title === 'string' ? candidate.metadata.title : undefined)
+          ?? (firstUser?.content ? firstUser.content.slice(0, 80) : sessionId);
+
+        records.push(toExternalRecord({
+          id: sessionId,
+          title,
+          preview: lastUser && lastUser !== firstUser ? lastUser.content.slice(0, 120) : undefined,
+          cwd,
+          createdAt: timestampField(candidate.metadata?.createdAt)
+            ?? timestampField(candidate.metadata?.startTime)
+            ?? firstTimestampFromRecords(recordsFromFile, ['timestamp', 'createdAt', 'created_at'])
+            ?? fileStat?.birthtimeMs,
+          updatedAt: timestampField(candidate.metadata?.updatedAt)
+            ?? timestampField(candidate.metadata?.mtime)
+            ?? newestTimestampField(recordsFromFile, 'timestamp')
+            ?? fileStat?.mtimeMs,
+          messages,
+          transcriptSource: 'openclaw',
+        }));
+      }
+    }
+  }
+
+  return sortAndLimit(records, options.limit);
+}
+
 function sortAndLimit(
   records: ExternalRuntimeSessionRecord[],
   limit = DEFAULT_LIMIT,
@@ -622,6 +1086,18 @@ export async function listExternalRuntimeSessions(
   }
   if (runtimeId === 'claude' || runtimeId === 'claude-code') {
     return listClaudeSessions(options);
+  }
+  if (runtimeId === 'qwen' || runtimeId === 'qwen-code') {
+    return listQwenSessions(options);
+  }
+  if (runtimeId === 'codebuddy' || runtimeId === 'codebuddy-code') {
+    return listCodeBuddySessions(options);
+  }
+  if (runtimeId === 'openclaw') {
+    return listOpenClawSessions(options);
+  }
+  if (runtimeId === 'cursor' || runtimeId === 'hermes') {
+    return [];
   }
   return [];
 }

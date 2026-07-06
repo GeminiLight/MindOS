@@ -26,7 +26,13 @@ export type RuntimeSessionMessageCli =
   | 'open-code'
   | 'opencode-cli'
   | 'claude'
-  | 'claude-code';
+  | 'claude-code'
+  | 'qwen'
+  | 'qwen-code'
+  | 'qwen-cli'
+  | 'codebuddy'
+  | 'codebuddy-code'
+  | 'openclaw';
 
 export type RuntimeSessionMessageLoadStatus =
   | 'loaded'
@@ -91,7 +97,7 @@ type RuntimeSessionMessageTarget =
     }
   | {
       kind: 'native';
-      cli: 'kimi' | 'gemini' | 'opencode' | 'claude';
+      cli: 'kimi' | 'gemini' | 'opencode' | 'claude' | 'qwen-code' | 'codebuddy' | 'openclaw';
       runtime: AgentRuntimeIdentity;
     }
 
@@ -100,6 +106,9 @@ const KIMI_RUNTIME: AgentRuntimeIdentity = { id: 'kimi', name: 'Kimi', kind: 'ac
 const GEMINI_RUNTIME: AgentRuntimeIdentity = { id: 'gemini', name: 'Gemini', kind: 'acp' };
 const OPENCODE_RUNTIME: AgentRuntimeIdentity = { id: 'opencode', name: 'OpenCode', kind: 'acp' };
 const CLAUDE_RUNTIME: AgentRuntimeIdentity = { id: 'claude', name: 'Claude Code', kind: 'claude' };
+const QWEN_RUNTIME: AgentRuntimeIdentity = { id: 'qwen-code', name: 'Qwen Code', kind: 'acp' };
+const CODEBUDDY_RUNTIME: AgentRuntimeIdentity = { id: 'codebuddy', name: 'CodeBuddy', kind: 'acp' };
+const OPENCLAW_RUNTIME: AgentRuntimeIdentity = { id: 'openclaw', name: 'OpenClaw', kind: 'acp' };
 
 function normalizeCli(value: string): string {
   return value.trim().toLowerCase().replace(/[_\s]+/g, '-');
@@ -127,6 +136,15 @@ export function resolveRuntimeSessionMessageTarget(
     case 'claude':
     case 'claude-code':
       return { kind: 'native', cli: 'claude', runtime: CLAUDE_RUNTIME };
+    case 'qwen':
+    case 'qwen-code':
+    case 'qwen-cli':
+      return { kind: 'native', cli: 'qwen-code', runtime: QWEN_RUNTIME };
+    case 'codebuddy':
+    case 'codebuddy-code':
+      return { kind: 'native', cli: 'codebuddy', runtime: CODEBUDDY_RUNTIME };
+    case 'openclaw':
+      return { kind: 'native', cli: 'openclaw', runtime: OPENCLAW_RUNTIME };
     default:
       return null;
   }
