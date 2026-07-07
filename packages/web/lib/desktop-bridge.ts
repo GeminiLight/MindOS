@@ -14,8 +14,15 @@ export interface MindosDesktopBridge {
   selectDirectory?: () => Promise<string | null>;
 
   /* Desktop shell: electron-updater */
-  checkUpdate: () => Promise<{ available: boolean; version?: string }>;
-  installUpdate: () => Promise<void>;
+  checkUpdate: () => Promise<{
+    available: boolean;
+    version?: string;
+    canInstall?: boolean;
+    unsupportedReason?: string;
+    manualUrl?: string;
+    error?: string;
+  }>;
+  installUpdate: () => Promise<{ ok?: boolean; phase?: 'installing'; error?: string; manualUrl?: string } | void>;
   getAppInfo?: () => Promise<{ version?: string; mode?: string }>;
 
   /* MindOS Core runtime: independent hot update */
@@ -35,9 +42,15 @@ export interface MindosDesktopBridge {
   getCoreUpdatePending?: () => Promise<{ version: string | null }>;
 
   /* Event listeners: each returns an unsubscribe fn */
-  onUpdateAvailable?: (cb: (info: { version?: string }) => void) => () => void;
+  onUpdateAvailable?: (cb: (info: {
+    version?: string;
+    canInstall?: boolean;
+    unsupportedReason?: string;
+    manualUrl?: string;
+  }) => void) => () => void;
   onUpdateProgress?: (cb: (progress: { percent: number }) => void) => () => void;
   onUpdateReady?: (cb: () => void) => () => void;
+  onUpdateInstalling?: (cb: () => void) => () => void;
   onUpdateError?: (cb: (info: { message?: string }) => void) => () => void;
   onCoreUpdateProgress?: (cb: (progress: { percent: number; transferred: number; total: number }) => void) => () => void;
   onCoreUpdateAvailable?: (cb: (info: { current: string; latest: string; ready?: boolean }) => void) => () => void;

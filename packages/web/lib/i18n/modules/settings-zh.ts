@@ -847,6 +847,7 @@ export const settingsZh = {
       inTerminal: '。',
       desktopDownloading: '正在下载更新...',
       desktopReady: '更新已下载，重启后生效。',
+      desktopInstalling: '正在重启以应用更新...',
       desktopRestart: '立即重启',
       desktopHint: '更新通过桌面端自动更新推送。',
       // Core Hot Update
@@ -878,8 +879,11 @@ export const settingsZh = {
       shellLatest: '最新',
       shellCheck: '检查',
       shellBannerTitle: (version: string) => `应用新版本 v${version} 可用`,
+      shellErrorTitle: '桌面端更新失败',
       shellBannerDesc: '需下载安装包并重启应用',
       shellBannerAction: '下载并重启',
+      shellManualDesc: '请从 Release 页面下载最新桌面端安装包。',
+      shellManualAction: '打开下载页',
       // Update Toast Notification
       updateToast: {
         titleSingle: (type: string, version: string) => `${type} v${version} 可用`,

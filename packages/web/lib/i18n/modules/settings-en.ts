@@ -847,6 +847,7 @@ export const settingsEn = {
       inTerminal: 'in your terminal.',
       desktopDownloading: 'Downloading update...',
       desktopReady: 'Update downloaded. Restart to apply.',
+      desktopInstalling: 'Restarting to apply update...',
       desktopRestart: 'Restart Now',
       desktopHint: 'Updates are delivered through the Desktop app auto-updater.',
       // Core Hot Update (Desktop only)
@@ -878,8 +879,11 @@ export const settingsEn = {
       shellLatest: 'Latest',
       shellCheck: 'Check',
       shellBannerTitle: (version: string) => `New app version v${version} available`,
+      shellErrorTitle: 'Desktop update failed',
       shellBannerDesc: 'Requires downloading and restarting the app.',
       shellBannerAction: 'Download & Restart',
+      shellManualDesc: 'Download the latest Desktop installer from the release page.',
+      shellManualAction: 'Open downloads',
       // Update Toast Notification
       updateToast: {
         titleSingle: (type: string, version: string) => `${type} v${version} available`,

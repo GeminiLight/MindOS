@@ -15,18 +15,21 @@ import {
 
 /** Router: Desktop uses electron-updater IPC; browser/CLI uses npm API */
 export function UpdateTab() {
-  const [isDesktop, setIsDesktop] = useState(false);
+  const [surface, setSurface] = useState<'unknown' | 'desktop' | 'browser'>('unknown');
   const [isLocal, setIsLocal] = useState(true);
   useEffect(() => {
     const bridge = getDesktopBridge();
-    setIsDesktop(!!bridge);
+    setSurface(bridge ? 'desktop' : 'browser');
     if (bridge?.getAppInfo) {
       bridge.getAppInfo().then((info) => {
         if (info && 'mode' in info) setIsLocal((info as { mode?: string }).mode !== 'remote');
       }).catch(() => {});
     }
   }, []);
-  if (isDesktop) {
+  if (surface === 'unknown') {
+    return null;
+  }
+  if (surface === 'desktop') {
     return <DesktopUpdatePanel isLocal={isLocal} />;
   }
   return <BrowserUpdateTab />;
@@ -35,17 +38,18 @@ export function UpdateTab() {
 /**
  * One unified surface: the MindOS (Core) product version is the headline, the
  * shell is demoted to a secondary row, and the only "loud" element is the
- * banner that appears when the shell, the rare app-restart update, has one.
+ * banner that appears when the shell, the rare app-restart update, has one or
+ * needs user-visible recovery.
  */
 function DesktopUpdatePanel({ isLocal }: { isLocal: boolean }) {
   const { t } = useLocale();
   const u = t.settings.update;
   const shell = useShellUpdate();
-  const shellHasUpdate = shell.available || shell.phase === 'ready';
+  const shellNeedsAttention = shell.available || shell.phase === 'ready' || shell.phase === 'error';
 
   return (
     <div className="space-y-4">
-      {shellHasUpdate && <ShellUpdateBanner shell={shell} />}
+      {shellNeedsAttention && <ShellUpdateBanner shell={shell} />}
       {isLocal && <ProductVersionCard />}
       <ShellVersionRow shell={shell} />
       {isLocal && (

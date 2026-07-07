@@ -73,6 +73,7 @@ contextBridge.exposeInMainWorld('mindos', {
   onUpdateAvailable: (cb: (info: unknown) => void): CleanupFn => onChannel('update-available', cb),
   onUpdateProgress: (cb: (progress: unknown) => void): CleanupFn => onChannel('update-progress', cb),
   onUpdateReady: (cb: () => void): CleanupFn => onChannel('update-ready', cb),
+  onUpdateInstalling: (cb: () => void): CleanupFn => onChannel('update-installing', cb),
   onUpdateError: (cb: (info: unknown) => void): CleanupFn => onChannel('update-error', cb),
   onCoreUpdateProgress: (cb: (progress: unknown) => void): CleanupFn => onChannel('core-update-progress', cb),
   onCoreUpdateAvailable: (cb: (info: unknown) => void): CleanupFn => onChannel('core-update-available', cb),

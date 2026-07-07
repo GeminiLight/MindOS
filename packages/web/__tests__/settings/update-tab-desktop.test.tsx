@@ -2,6 +2,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import React, { act } from 'react';
 import { createRoot, Root } from 'react-dom/client';
+import { apiFetch } from '@/lib/api';
 import { __resetCoreUpdateStoreForTests } from '@/lib/stores/core-update-store';
 
 const mockBridge = {
@@ -19,7 +20,15 @@ const mockBridge = {
   getCoreUpdatePending: vi.fn(),
   onCoreUpdateProgress: vi.fn(),
   onCoreUpdateAvailable: vi.fn(),
+  onUpdateInstalling: vi.fn(),
 };
+
+let updateAvailableHandler: ((info: {
+  version?: string;
+  canInstall?: boolean;
+  unsupportedReason?: string;
+  manualUrl?: string;
+}) => void) | null = null;
 
 vi.mock('@/lib/api', () => ({
   apiFetch: vi.fn(),
@@ -39,6 +48,7 @@ vi.mock('@/lib/stores/locale-store', () => ({
           releaseNotes: 'View release notes',
           desktopReady: 'Update downloaded. Restart to apply.',
           desktopRestart: 'Restart Now',
+          retryButton: 'Retry Update',
           coreFetching: (v: string) => `Fetching v${v} in the background`,
           coreReadyAuto: (v: string) => `v${v} ready - applies on next restart`,
           coreApplyNow: 'Apply now',
@@ -53,6 +63,7 @@ vi.mock('@/lib/stores/locale-store', () => ({
           shellLatest: 'Latest',
           shellCheck: 'Check',
           shellBannerTitle: (v: string) => `New app version v${v} available`,
+          shellErrorTitle: 'Desktop update failed',
           shellBannerDesc: 'Requires downloading and restarting the app.',
           shellBannerAction: 'Download & Restart',
         },
@@ -72,12 +83,17 @@ describe('Desktop UpdateTab: redesigned panel', () => {
     localStorage.clear();
     __resetCoreUpdateStoreForTests();
     (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
+    updateAvailableHandler = null;
 
     mockBridge.getAppInfo.mockResolvedValue({ version: '0.4.0', mode: 'local' });
     mockBridge.checkUpdate.mockResolvedValue({ available: false });
-    mockBridge.onUpdateAvailable.mockImplementation(NOOP);
+    mockBridge.onUpdateAvailable.mockImplementation((cb: NonNullable<typeof updateAvailableHandler>) => {
+      updateAvailableHandler = cb;
+      return () => {};
+    });
     mockBridge.onUpdateProgress.mockImplementation(NOOP);
     mockBridge.onUpdateReady.mockImplementation(NOOP);
+    mockBridge.onUpdateInstalling.mockImplementation(NOOP);
     mockBridge.onUpdateError.mockImplementation(NOOP);
     mockBridge.onCoreUpdateProgress.mockImplementation(NOOP);
     mockBridge.onCoreUpdateAvailable.mockImplementation(NOOP);
@@ -114,6 +130,12 @@ describe('Desktop UpdateTab: redesigned panel', () => {
     expect(host.textContent).toContain('Desktop shell'); // demoted secondary row
     expect(host.textContent).toContain('v0.4.0');         // shell version on the row
     expect(host.textContent).toContain("You're up to date");
+  });
+
+  it('does not run the browser update check when the Desktop bridge is present', async () => {
+    await renderTab();
+
+    expect(apiFetch).not.toHaveBeenCalled();
   });
 
   it('silently downloads an available Core update and offers Apply now', async () => {
@@ -157,6 +179,36 @@ describe('Desktop UpdateTab: redesigned panel', () => {
     await act(async () => { dlBtn!.click(); });
     await act(async () => { await Promise.resolve(); });
     expect(mockBridge.installUpdate).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows shell check failures instead of hiding them behind the compact row', async () => {
+    mockBridge.checkUpdate.mockResolvedValue({ available: false, error: 'GitHub Releases unavailable' });
+    await renderTab();
+
+    expect(host.textContent).toContain('Desktop update failed');
+    expect(host.textContent).toContain('GitHub Releases unavailable');
+    const retryBtn = Array.from(host.querySelectorAll('button')).find(b => b.textContent?.includes('Retry Update'));
+    expect(retryBtn).toBeTruthy();
+
+    mockBridge.checkUpdate.mockClear();
+    await act(async () => { retryBtn!.click(); });
+    await act(async () => { await Promise.resolve(); });
+    expect(mockBridge.checkUpdate).toHaveBeenCalledTimes(1);
+    expect(mockBridge.installUpdate).not.toHaveBeenCalled();
+  });
+
+  it('recovers a stale shell error when an update-available event arrives later', async () => {
+    mockBridge.checkUpdate.mockResolvedValue({ available: false, error: 'GitHub Releases unavailable' });
+    await renderTab();
+    expect(host.textContent).toContain('Desktop update failed');
+
+    await act(async () => {
+      updateAvailableHandler?.({ version: '0.5.0' });
+    });
+
+    expect(host.textContent).not.toContain('Desktop update failed');
+    expect(host.textContent).toContain('New app version v0.5.0 available');
+    expect(host.textContent).toContain('Download & Restart');
   });
 
   it('lets the user manually re-check Core via the card button', async () => {

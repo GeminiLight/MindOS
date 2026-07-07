@@ -2087,6 +2087,7 @@ async function bootApp(): Promise<void> {
     registerShortcuts(mainWindow);
     cleanupUpdater = setupUpdater({
       onBeforeQuitAndInstall: () => { isUpdating = true; },
+      onInstallFailed: () => { isUpdating = false; },
       assertTrustedLocalRenderer,
     });
 

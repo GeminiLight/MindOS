@@ -190,7 +190,7 @@ export function ProductVersionCard() {
  * app restart). One hook drives both the escalated banner and the compact
  * secondary row so they never diverge.
  */
-export type ShellPhase = 'idle' | 'checking' | 'downloading' | 'ready' | 'error';
+export type ShellPhase = 'idle' | 'checking' | 'downloading' | 'ready' | 'installing' | 'error';
 
 export interface ShellUpdate {
   appVersion: string;
@@ -199,6 +199,9 @@ export interface ShellUpdate {
   phase: ShellPhase;
   progress: number;
   errorMsg: string;
+  canInstall: boolean;
+  unsupportedReason: string;
+  manualUrl: string;
   check: () => Promise<void>;
   install: () => Promise<void>;
 }
@@ -213,6 +216,9 @@ export function useShellUpdate(): ShellUpdate {
   const [appVersion, setAppVersion] = useState('');
   const [progress, setProgress] = useState(0);
   const [errorMsg, setErrorMsg] = useState('');
+  const [canInstall, setCanInstall] = useState(true);
+  const [unsupportedReason, setUnsupportedReason] = useState('');
+  const [manualUrl, setManualUrl] = useState(CHANGELOG_URL);
 
   const check = useCallback(async () => {
     if (!bridge) return;
@@ -220,26 +226,46 @@ export function useShellUpdate(): ShellUpdate {
     setErrorMsg('');
     try {
       const r = await bridge.checkUpdate();
+      if (r.error) {
+        setAvailable(false);
+        setVersion(null);
+        setPhase('error');
+        setErrorMsg(r.error);
+        return;
+      }
       setAvailable(r.available);
-      if (r.version) setVersion(r.version);
+      setVersion(r.version ?? null);
+      setCanInstall(r.canInstall !== false);
+      setUnsupportedReason(r.unsupportedReason ?? '');
+      setManualUrl(r.manualUrl ?? CHANGELOG_URL);
       setPhase('idle');
-    } catch {
+    } catch (err) {
       setPhase('error');
-      setErrorMsg(u?.error ?? 'Failed to check for updates.');
+      setErrorMsg(err instanceof Error ? err.message : (u?.error ?? 'Failed to check for updates.'));
     }
   }, [bridge, u]);
 
   const install = useCallback(async () => {
     if (!bridge) return;
-    setPhase('downloading');
+    if (!canInstall) {
+      setPhase('error');
+      setErrorMsg(unsupportedReason || (u?.shellManualDesc ?? 'Download the latest Desktop installer from the release page.'));
+      return;
+    }
+    setPhase((prev) => (prev === 'ready' ? 'installing' : 'downloading'));
     setProgress(0);
     try {
-      await bridge.installUpdate();
-    } catch {
+      const result = await bridge.installUpdate();
+      if (result && result.ok === false) {
+        if (result.manualUrl) setManualUrl(result.manualUrl);
+        throw new Error(result.error || (u?.error ?? 'Update failed. Please try again.'));
+      }
+      if (result?.phase === 'installing') setPhase('installing');
+    } catch (err) {
       setPhase('error');
-      setErrorMsg(u?.error ?? 'Update failed. Please try again.');
+      setErrorMsg(err instanceof Error ? err.message : (u?.error ?? 'Update failed. Please try again.'));
     }
-  }, [bridge, u]);
+  }, [bridge, canInstall, unsupportedReason, u]);
 
   useEffect(() => {
     if (!bridge) return;
@@ -255,7 +281,11 @@ export function useShellUpdate(): ShellUpdate {
       cleanups.push(bridge.onUpdateAvailable((info) => {
         setAvailable(true);
         if (info?.version) setVersion(info.version);
-        setPhase((prev) => (prev === 'checking' ? 'idle' : prev));
+        setCanInstall(info?.canInstall !== false);
+        setUnsupportedReason(info?.unsupportedReason ?? '');
+        setManualUrl(info?.manualUrl ?? CHANGELOG_URL);
+        setErrorMsg('');
+        setPhase((prev) => (prev === 'checking' || prev === 'error' ? 'idle' : prev));
       }));
     }
     if (bridge.onUpdateProgress) {
@@ -263,6 +293,9 @@ export function useShellUpdate(): ShellUpdate {
     }
     if (bridge.onUpdateReady) {
       cleanups.push(bridge.onUpdateReady(() => setPhase('ready')));
+    }
+    if (bridge.onUpdateInstalling) {
+      cleanups.push(bridge.onUpdateInstalling(() => setPhase('installing')));
     }
     if (bridge.onUpdateError) {
       cleanups.push(bridge.onUpdateError((info) => {
@@ -274,7 +307,19 @@ export function useShellUpdate(): ShellUpdate {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return { appVersion, available, version, phase, progress, errorMsg, check, install };
+  return {
+    appVersion,
+    available,
+    version,
+    phase,
+    progress,
+    errorMsg,
+    canInstall,
+    unsupportedReason,
+    manualUrl,
+    check,
+    install,
+  };
 }
 
 /** Escalated banner: the only "loud" element, shown only when the shell has an update. */
@@ -283,20 +328,39 @@ export function ShellUpdateBanner({ shell }: { shell: ShellUpdate }) {
   const u = t.settings.update;
   const isReady = shell.phase === 'ready';
   const isDownloading = shell.phase === 'downloading';
+  const isInstalling = shell.phase === 'installing';
+  const isError = shell.phase === 'error';
+  const requiresManualInstall = !shell.canInstall;
+  const errorBeforeKnownUpdate = isError && !shell.available && !shell.version;
+  const title = isError
+    ? (u?.shellErrorTitle ?? 'Desktop update failed')
+    : (u?.shellBannerTitle ? u.shellBannerTitle(shell.version ?? '') : `New app version v${shell.version} available`);
+  const description = isError
+    ? (shell.errorMsg || (u?.error ?? 'Update failed. Please try again.'))
+    : requiresManualInstall
+      ? (shell.unsupportedReason || (u?.shellManualDesc ?? 'Download the latest Desktop installer from the release page.'))
+      : isInstalling
+        ? (u?.desktopInstalling ?? 'Restarting to apply update...')
+        : isReady
+          ? (u?.desktopReady ?? 'Update downloaded. Restart to apply.')
+          : (u?.shellBannerDesc ?? 'Requires downloading and restarting the app.');
+  const actionLabel = isError
+    ? (u?.retryButton ?? 'Retry Update')
+    : isReady
+      ? (u?.desktopRestart ?? 'Restart Now')
+      : (u?.shellBannerAction ?? 'Download & Restart');
 
   return (
     <div className="rounded-xl border border-[var(--amber)]/30 bg-gradient-to-b from-[var(--amber)]/10 to-[var(--amber)]/[0.06] p-3.5 flex items-center gap-3">
       <span className="w-[30px] h-[30px] rounded-lg bg-[var(--amber)] text-[var(--amber-foreground)] flex items-center justify-center shrink-0">
-        <ArrowUp size={16} />
+        {isError ? <AlertCircle size={16} /> : isInstalling ? <Loader2 size={16} className="animate-spin" /> : <ArrowUp size={16} />}
       </span>
       <div className="flex-1 min-w-0">
         <p className="text-[13.5px] font-semibold text-foreground leading-snug">
-          {u?.shellBannerTitle ? u.shellBannerTitle(shell.version ?? '') : `New app version v${shell.version} available`}
+          {title}
         </p>
         <p className="text-xs text-[var(--amber-text)] mt-0.5">
-          {isReady
-            ? (u?.desktopReady ?? 'Update downloaded. Restart to apply.')
-            : (u?.shellBannerDesc ?? 'Requires downloading and restarting the app.')}
+          {description}
         </p>
         {isDownloading && (
           <div className="h-1 rounded-full bg-muted overflow-hidden mt-2">
@@ -305,9 +369,14 @@ export function ShellUpdateBanner({ shell }: { shell: ShellUpdate }) {
           </div>
         )}
       </div>
-      {!isDownloading && (
-        <button onClick={() => void shell.install()} className={`${PRIMARY_BTN} shrink-0`}>
-          {isReady ? (u?.desktopRestart ?? 'Restart Now') : (u?.shellBannerAction ?? 'Download & Restart')}
+      {requiresManualInstall ? (
+        <a href={shell.manualUrl || CHANGELOG_URL} target="_blank" rel="noopener noreferrer" className={`${PRIMARY_BTN} shrink-0`}>
+          <ExternalLink size={14} />
+          {u?.shellManualAction ?? 'Open downloads'}
+        </a>
+      ) : (!isDownloading && !isInstalling) && (
+        <button onClick={() => void (errorBeforeKnownUpdate ? shell.check() : shell.install())} className={`${PRIMARY_BTN} shrink-0`}>
+          {actionLabel}
         </button>
       )}
     </div>
@@ -338,7 +407,7 @@ export function ShellVersionRow({ shell }: { shell: ShellUpdate }) {
       <span className="flex-1" />
       <button
         onClick={() => void shell.check()}
-        disabled={shell.phase === 'checking' || shell.phase === 'downloading'}
+        disabled={shell.phase === 'checking' || shell.phase === 'downloading' || shell.phase === 'ready' || shell.phase === 'installing'}
         className="inline-flex items-center gap-1 hover:text-foreground disabled:opacity-40 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring rounded px-1 py-0.5"
       >
         <RefreshCw size={12} className={shell.phase === 'checking' ? 'animate-spin' : ''} />
