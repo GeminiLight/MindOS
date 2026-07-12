@@ -1231,7 +1231,7 @@ describe('MindOS server contract: runtime, agent turn stream, static web', () =>
       },
       permissionMode: 'read',
       runtimeOptions: {
-        reasoningEffort: 'high',
+        reasoningEffort: 'ultra',
         modelOverride: 'gpt-test',
       },
     }, {
@@ -1250,7 +1250,7 @@ describe('MindOS server contract: runtime, agent turn stream, static web', () =>
     expect(events).toEqual([
       { type: 'status', message: 'context=session-from-path;message=hello from turn;skill=research' },
       { type: 'status', message: 'runtime=codex:codex;cwd=/repo/app;space=Research' },
-      { type: 'status', message: 'permission=read;effort=high;model=gpt-test' },
+      { type: 'status', message: 'permission=read;effort=ultra;model=gpt-test' },
       { type: 'done' },
     ]);
   });

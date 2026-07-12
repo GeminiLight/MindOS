@@ -71,10 +71,8 @@ export type AgentTurnRequestContext = {
 export function normalizeNativeRuntimeOptions(value: unknown): NativeRuntimeOptions {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
   const record = value as Record<string, unknown>;
-  const reasoningEffort = record.reasoningEffort === 'low'
-    || record.reasoningEffort === 'medium'
-    || record.reasoningEffort === 'high'
-    || record.reasoningEffort === 'xhigh'
+  const reasoningEffort = typeof record.reasoningEffort === 'string'
+    && /^[a-z][a-z0-9_-]{0,31}$/.test(record.reasoningEffort)
     ? record.reasoningEffort as NativeRuntimeEffort
     : undefined;
   const modelOverride = typeof record.modelOverride === 'string' && record.modelOverride.trim()

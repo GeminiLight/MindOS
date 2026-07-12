@@ -94,7 +94,7 @@ export type MindosAgentTurnRequest = {
   runtimeBinding?: MindosRuntimeSessionBinding | null;
   selectedAcpAgent?: { id: string; name: string } | null;
   runtimeOptions?: {
-    reasoningEffort?: 'low' | 'medium' | 'high' | 'xhigh';
+    reasoningEffort?: string;
     modelOverride?: string;
   };
   providerOverride?: string;

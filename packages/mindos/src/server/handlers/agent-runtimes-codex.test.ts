@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  handleCodexModelsGet,
   handleCodexThreadArchivePost,
   handleCodexThreadForkPost,
   handleCodexThreadGet,
@@ -15,6 +16,25 @@ function createFakeServices(): CodexThreadManagerServices & { calls: Array<{ met
     createCodexClient: async () => ({
       initialize: async () => {
         calls.push({ method: 'initialize' });
+      },
+      listModels: async (input) => {
+        calls.push({ method: 'model/list', input });
+        return {
+          data: [{
+            id: 'gpt-5.6-sol',
+            model: 'gpt-5.6-sol',
+            displayName: 'GPT-5.6 Sol',
+            description: 'Fast coding model',
+            hidden: false,
+            isDefault: true,
+            supportedReasoningEfforts: [
+              { reasoningEffort: 'low', description: 'Fastest' },
+              { reasoningEffort: 'ultra', description: 'Maximum reasoning with delegation' },
+            ],
+            defaultReasoningEffort: 'low',
+          }],
+          nextCursor: null,
+        };
       },
       listThreads: async (input) => {
         calls.push({ method: 'thread/list', input });
@@ -84,6 +104,29 @@ function createFakeServices(): CodexThreadManagerServices & { calls: Array<{ met
 }
 
 describe('Codex thread manager product handlers', () => {
+  it('lists Codex model capabilities without starting a thread or turn', async () => {
+    const services = createFakeServices();
+    const res = await handleCodexModelsGet(services);
+
+    expect(res.status).toBe(200);
+    expect(res.headers?.['Cache-Control']).toBe('no-store');
+    expect(res.body).toEqual({
+      data: [expect.objectContaining({
+        id: 'gpt-5.6-sol',
+        defaultReasoningEffort: 'low',
+        supportedReasoningEfforts: expect.arrayContaining([
+          expect.objectContaining({ reasoningEffort: 'ultra' }),
+        ]),
+      })],
+      nextCursor: null,
+    });
+    expect(services.calls).toEqual([
+      { method: 'initialize' },
+      { method: 'model/list', input: { includeHidden: true, limit: 100 } },
+      { method: 'close' },
+    ]);
+  });
+
   it('lists Codex threads without starting a turn', async () => {
     const services = createFakeServices();
     const res = await handleCodexThreadsGet(

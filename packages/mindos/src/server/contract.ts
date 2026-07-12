@@ -58,6 +58,7 @@ export const MINDOS_SERVER_ROUTES: MindosServerRouteContract[] = [
   { id: 'agent-runtimes.extensions', method: 'GET', path: '/api/agent-runtimes/extensions', auth: 'required' },
   { id: 'agent-runtimes.extensions.preflight', method: 'POST', path: '/api/agent-runtimes/extensions/preflight', auth: 'required' },
   { id: 'agent-runtimes.extensions.install', method: 'POST', path: '/api/agent-runtimes/extensions/install', auth: 'required' },
+  { id: 'agent-runtimes.codex.models', method: 'GET', path: '/api/agent-runtimes/codex/models', auth: 'required' },
   { id: 'agent-runtimes.codex.threads', method: 'GET', path: '/api/agent-runtimes/codex/threads', auth: 'required' },
   { id: 'agent-runtimes.codex.thread', method: 'GET', path: '/api/agent-runtimes/codex/threads/[threadId]', auth: 'required' },
   { id: 'agent-runtimes.codex.thread.fork', method: 'POST', path: '/api/agent-runtimes/codex/threads/[threadId]/fork', auth: 'required' },
