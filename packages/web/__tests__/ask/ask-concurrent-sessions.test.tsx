@@ -366,6 +366,45 @@ describe('concurrent chat sessions (useAgentChat × agent-run-store)', () => {
     expect(getMessages('a')[1].content).toBe('recovered answer');
   });
 
+  it('keeps reattaching established runs after the short reconnect limit is exhausted', async () => {
+    localStorage.setItem('mindos-reconnect-retries', '1');
+    await submitText('a', 'keep this long task alive');
+
+    vi.useFakeTimers();
+    await act(async () => {
+      harness.captured[0].hooks.onAgentRunContext?.({
+        rootRunId: 'run-root-durable',
+        chatSessionId: 'a',
+        startedAt: 123,
+      });
+      harness.captured[0].reject(new TypeError('Failed to fetch'));
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000);
+    });
+    expect(harness.captured).toHaveLength(2);
+
+    await act(async () => {
+      harness.captured[1].reject(new TypeError('Failed to fetch'));
+      await vi.advanceTimersByTimeAsync(2000);
+    });
+
+    expect(harness.captured).toHaveLength(3);
+    expect(getRun('a')).not.toBeNull();
+    expect(vi.mocked(fetch).mock.calls[2][0]).toBe(
+      '/api/agent-runs/reattach?chatSessionId=a&rootRunId=run-root-durable',
+    );
+
+    await act(async () => {
+      harness.captured[2].onMessage({ role: 'assistant', content: 'durable result', timestamp: 1 });
+      harness.captured[2].resolve({ role: 'assistant', content: 'durable result', timestamp: 1 });
+    });
+    vi.useRealTimers();
+
+    expect(getRun('a')).toBeNull();
+    expect(getMessages('a')[1].content).toBe('durable result');
+  });
+
   it('preserves visible assistant text while replaying a reattach stream', async () => {
     localStorage.setItem('mindos-reconnect-retries', '1');
     await submitText('a', 'recover partial output');

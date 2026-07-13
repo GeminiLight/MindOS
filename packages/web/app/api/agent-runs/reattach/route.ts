@@ -83,6 +83,13 @@ function terminalEventForRuns(runs: AgentRunRecord[]): MindOSSSEvent | null {
   };
 }
 
+function terminalOutputSummaryForRuns(runs: AgentRunRecord[], rootRunId: string): string | null {
+  if (runs.length === 0 || runs.some((run) => !isTerminalStatus(run.status))) return null;
+  const rootRun = runs.find((run) => run.id === rootRunId)
+    ?? runs.find((run) => run.rootRunId === rootRunId && run.outputSummary);
+  return rootRun?.outputSummary?.trim() ? rootRun.outputSummary : null;
+}
+
 function textEventToMindos(event: AgentEvent): MindOSSSEvent | null {
   if (event.data?.kind !== 'text') return null;
   if (!event.data.text) return null;
@@ -259,6 +266,7 @@ export async function GET(req: Request) {
       let replaying = true;
       const queuedLiveEvents: AgentEvent[] = [];
       const sentEventIds = new Set<string>();
+      let sentAssistantText = false;
       let stopHeartbeat: (() => void) | undefined;
 
       const close = () => {
@@ -288,12 +296,23 @@ export async function GET(req: Request) {
         if (sentEventIds.has(event.id)) return;
         sentEventIds.add(event.id);
         const mindosEvent = eventToMindos(event);
-        if (mindosEvent) send(mindosEvent);
+        if (mindosEvent) {
+          if (mindosEvent.type === 'text_delta') sentAssistantText = true;
+          send(mindosEvent);
+        }
       };
 
       const sendTerminalIfReady = () => {
-        const terminal = terminalEventForRuns(listFilteredRuns(filter));
+        const runs = listFilteredRuns(filter);
+        const terminal = terminalEventForRuns(runs);
         if (!terminal) return false;
+        if (!sentAssistantText) {
+          const outputSummary = terminalOutputSummaryForRuns(runs, rootRunId);
+          if (outputSummary) {
+            send({ type: 'text_delta', delta: outputSummary });
+            sentAssistantText = true;
+          }
+        }
         send(terminal);
         close();
         return true;

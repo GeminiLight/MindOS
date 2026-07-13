@@ -116,6 +116,27 @@ describe('/api/agent-runs/reattach', () => {
     ]);
   });
 
+  it('replays the terminal output summary when no text events survived', async () => {
+    const run = startAgentRun({
+      agentKind: 'native-runtime',
+      runtimeId: 'codex',
+      displayName: 'Codex',
+      chatSessionId: 'chat-summary-reattach',
+      permissionMode: 'full',
+      inputSummary: 'Long running task',
+    });
+    completeAgentRun(run.id, { outputSummary: 'The background task completed successfully.' });
+
+    const response = await GET(new Request(`http://localhost/api/agent-runs/reattach?chatSessionId=chat-summary-reattach&rootRunId=${run.id}`));
+    const events = await new MindosSseReader(response).readAll();
+
+    expect(events).toEqual([
+      expect.objectContaining({ type: 'agent_run_context', rootRunId: run.id }),
+      { type: 'text_delta', delta: 'The background task completed successfully.' },
+      { type: 'done' },
+    ]);
+  });
+
   it('streams live ledger events for a running run until it reaches a terminal state', async () => {
     const abort = new AbortController();
     const run = startAgentRun({
