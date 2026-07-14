@@ -64,7 +64,7 @@ export type MindosSessionContextSelection = {
 };
 
 export type MindosNativeRuntimeOptions = {
-  reasoningEffort?: 'low' | 'medium' | 'high' | 'xhigh';
+  reasoningEffort?: string;
   modelOverride?: string;
 };
 
@@ -627,5 +627,5 @@ function isContextAssistantSource(value: unknown): value is NonNullable<MindosCo
 }
 
 function isNativeReasoningEffort(value: unknown): value is NonNullable<MindosNativeRuntimeOptions['reasoningEffort']> {
-  return value === 'low' || value === 'medium' || value === 'high' || value === 'xhigh';
+  return typeof value === 'string' && /^[a-z][a-z0-9_-]{0,31}$/.test(value);
 }

@@ -2,6 +2,7 @@ import {
   createCodexAppServerClient,
   createCodexAppServerStdioTransport,
   type CodexAppServerClient,
+  type CodexModelListResult,
   type CodexThreadForkInput,
   type CodexThreadListInput,
   type CodexThreadListResult,
@@ -29,9 +30,25 @@ export type CodexThreadManagerServices = {
 export type CodexThreadListPayload = CodexThreadListResult;
 export type CodexThreadReadPayload = CodexThreadReadResult;
 export type CodexThreadForkPayload = CodexThreadForkResult;
+export type CodexModelListPayload = CodexModelListResult;
 
 const NO_STORE_HEADERS = { 'Cache-Control': 'no-store' };
 const MAX_THREAD_LIST_LIMIT = 100;
+
+export async function handleCodexModelsGet(
+  services: CodexThreadManagerServices = {},
+): Promise<MindosServerResponse<CodexModelListPayload | { error: string }>> {
+  try {
+    return json(await withCodexClient(services, (client) => client.listModels({
+      includeHidden: true,
+      limit: 100,
+    })), {
+      headers: NO_STORE_HEADERS,
+    });
+  } catch (error) {
+    return codexThreadErrorResponse(error);
+  }
+}
 
 export async function handleCodexThreadsGet(
   searchParams: URLSearchParams,

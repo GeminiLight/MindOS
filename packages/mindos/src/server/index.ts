@@ -251,11 +251,13 @@ export {
 } from '../agent/runtime/skill-runtime-requirements.js';
 
 export {
+  handleCodexModelsGet,
   handleCodexThreadArchivePost,
   handleCodexThreadForkPost,
   handleCodexThreadGet,
   handleCodexThreadUnarchivePost,
   handleCodexThreadsGet,
+  type CodexModelListPayload,
   type CodexThreadForkPayload,
   type CodexThreadListPayload,
   type CodexThreadManagerServices,

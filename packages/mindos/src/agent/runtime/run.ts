@@ -141,7 +141,7 @@ export type MindosNativeAgentTurnOptions = {
   selectedSkills?: MindosSelectedSkill[];
   permissionMode?: MindosPermissionMode;
   modelOverride?: string;
-  reasoningEffort?: 'low' | 'medium' | 'high' | 'xhigh';
+  reasoningEffort?: string;
   timeoutMs?: number;
   runtimeEnv?: NodeJS.ProcessEnv;
   signal?: AbortSignal;
@@ -412,6 +412,9 @@ async function runClaudeTurnWithClient(
       materialized.attachments,
       { includeImages: true },
     );
+    const reasoningEffort = isClaudeReasoningEffort(options.reasoningEffort)
+      ? options.reasoningEffort
+      : undefined;
     const turnEvents = resolvedClient.client.startTurn({
       prompt,
       cwd: options.cwd,
@@ -419,7 +422,7 @@ async function runClaudeTurnWithClient(
       selectedSkills: options.selectedSkills,
       ...(sessionId ? { sessionId } : {}),
       ...(options.modelOverride ? { model: options.modelOverride } : {}),
-      ...(options.reasoningEffort ? { effort: options.reasoningEffort } : {}),
+      ...(reasoningEffort ? { effort: reasoningEffort } : {}),
       permissionMode: claudeCliPermissionModeForMindosMode(options.permissionMode),
       ...(permissionPrompt ? { permissionPrompt } : {}),
       signal: options.signal,
@@ -443,6 +446,10 @@ async function runClaudeTurnWithClient(
   } finally {
     await materialized.cleanup();
   }
+}
+
+function isClaudeReasoningEffort(value: string | undefined): value is 'low' | 'medium' | 'high' | 'xhigh' {
+  return value === 'low' || value === 'medium' || value === 'high' || value === 'xhigh';
 }
 
 function shouldFallbackFromClaudeSdkTurnError(error: Error, signal?: AbortSignal): boolean {

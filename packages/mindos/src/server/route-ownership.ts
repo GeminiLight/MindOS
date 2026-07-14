@@ -90,6 +90,7 @@ export const MINDOS_WEB_API_ROUTE_OWNERSHIP: MindosWebApiRouteOwnership[] = [
   migrated('/api/agent-runtimes/extensions', 'high'),
   migrated('/api/agent-runtimes/extensions/preflight', 'high'),
   migrated('/api/agent-runtimes/extensions/install', 'high'),
+  migrated('/api/agent-runtimes/codex/models', 'medium'),
   migrated('/api/agent-runtimes/codex/threads', 'medium'),
   migrated('/api/agent-runtimes/codex/threads/[threadId]', 'medium'),
   migrated('/api/agent-runtimes/codex/threads/[threadId]/archive', 'medium'),

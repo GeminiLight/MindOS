@@ -35,6 +35,7 @@ import {
 } from './handlers/acp.js';
 import { handleAgentActivity, handleAgentActivityPost } from './handlers/agent-activity.js';
 import {
+  handleCodexModelsGet,
   handleCodexThreadArchivePost,
   handleCodexThreadForkPost,
   handleCodexThreadGet,
@@ -468,6 +469,10 @@ async function handleRequest(
     }
     if (route === 'GET /api/agent-runtimes/codex/threads') {
       writeResponse(res, await handleCodexThreadsGet(url.searchParams, services));
+      return;
+    }
+    if (route === 'GET /api/agent-runtimes/codex/models') {
+      writeResponse(res, await handleCodexModelsGet(services));
       return;
     }
     const codexThreadRoute = parseCodexThreadRoute(method, url.pathname);

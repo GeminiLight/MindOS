@@ -1154,7 +1154,7 @@ export type AgentMode = 'default' | 'plan' | 'goal';
 
 /** Per-turn permission preset shown in the composer controls. */
 export type AgentPermissionMode = 'read' | 'ask' | 'auto' | 'full';
-export type NativeRuntimeEffort = 'low' | 'medium' | 'high' | 'xhigh';
+export type NativeRuntimeEffort = string;
 
 export interface NativeRuntimeOptions {
   modelOverride?: string;

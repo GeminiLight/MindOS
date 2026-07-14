@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
 const mockHandleCodexThreadsGet = vi.fn();
+const mockHandleCodexModelsGet = vi.fn();
 const mockHandleCodexThreadGet = vi.fn();
 const mockHandleCodexThreadForkPost = vi.fn();
 const mockHandleCodexThreadArchivePost = vi.fn();
@@ -10,6 +11,7 @@ const mockHandleCodexThreadUnarchivePost = vi.fn();
 const mockGetMindRoot = vi.fn(() => '/tmp/mindos-root');
 
 vi.mock('@geminilight/mindos/server', () => ({
+  handleCodexModelsGet: mockHandleCodexModelsGet,
   handleCodexThreadsGet: mockHandleCodexThreadsGet,
   handleCodexThreadGet: mockHandleCodexThreadGet,
   handleCodexThreadForkPost: mockHandleCodexThreadForkPost,
@@ -23,6 +25,7 @@ vi.mock('@/lib/fs', () => ({
 
 describe('/api/agent-runtimes/codex/threads', () => {
   beforeEach(() => {
+    mockHandleCodexModelsGet.mockReset();
     mockHandleCodexThreadsGet.mockReset();
     mockHandleCodexThreadGet.mockReset();
     mockHandleCodexThreadForkPost.mockReset();
@@ -30,6 +33,28 @@ describe('/api/agent-runtimes/codex/threads', () => {
     mockHandleCodexThreadUnarchivePost.mockReset();
     mockGetMindRoot.mockReset();
     mockGetMindRoot.mockReturnValue('/tmp/mindos-root');
+  });
+
+  it('keeps the Codex model capability route as a thin Product Server adapter', async () => {
+    mockHandleCodexModelsGet.mockResolvedValue({
+      status: 200,
+      body: {
+        data: [{ id: 'gpt-5.6-sol', defaultReasoningEffort: 'low' }],
+        nextCursor: null,
+      },
+      headers: { 'Cache-Control': 'no-store' },
+    });
+
+    const route = await import('../../app/api/agent-runtimes/codex/models/route');
+    const response = await route.GET();
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('Cache-Control')).toBe('no-store');
+    expect(await response.json()).toEqual({
+      data: [{ id: 'gpt-5.6-sol', defaultReasoningEffort: 'low' }],
+      nextCursor: null,
+    });
+    expect(mockHandleCodexModelsGet).toHaveBeenCalledWith(expect.any(Object));
   });
 
   it('keeps Codex thread list and read routes as thin Product Server adapters', async () => {
@@ -148,6 +173,7 @@ describe('/api/agent-runtimes/codex/threads', () => {
   it('does not put native process or filesystem ownership in Codex thread Next routes', () => {
     const root = resolve(__dirname, '../..');
     const routes = [
+      'app/api/agent-runtimes/codex/models/route.ts',
       'app/api/agent-runtimes/codex/threads/route.ts',
       'app/api/agent-runtimes/codex/threads/[threadId]/route.ts',
       'app/api/agent-runtimes/codex/threads/[threadId]/fork/route.ts',

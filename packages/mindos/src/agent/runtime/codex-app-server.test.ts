@@ -96,6 +96,27 @@ function createFakeCodexTransport(): CodexAppServerTransport & { sent: unknown[]
       if (record.method === 'thread/resume') {
         queue.push({ id: record.id!, result: { thread: { id: record.params?.threadId } } });
       }
+      if (record.method === 'model/list') {
+        queue.push({
+          id: record.id!,
+          result: {
+            data: [{
+              id: 'gpt-5.6-sol',
+              model: 'gpt-5.6-sol',
+              displayName: 'GPT-5.6 Sol',
+              description: 'Fast coding model',
+              hidden: false,
+              isDefault: true,
+              supportedReasoningEfforts: [
+                { reasoningEffort: 'low', description: 'Fastest' },
+                { reasoningEffort: 'ultra', description: 'Maximum reasoning with delegation' },
+              ],
+              defaultReasoningEffort: 'low',
+            }],
+            nextCursor: null,
+          },
+        });
+      }
       if (record.method === 'thread/list') {
         queue.push({
           id: record.id!,
@@ -273,6 +294,36 @@ describe('agent runtime adapters: Codex app-server', () => {
         clientInfo: { name: 'codex-mindos', title: 'Codex MindOS', version: '0.1.0' },
         capabilities: { experimentalApi: true },
       },
+    });
+  });
+
+  it('lists model-advertised reasoning efforts without reducing them to a fixed enum', async () => {
+    const transport = createFakeCodexTransport();
+    const client = createCodexAppServerClient(transport);
+
+    await client.initialize();
+    const result = await client.listModels({ includeHidden: true, limit: 100 });
+
+    expect(result).toEqual({
+      data: [{
+        id: 'gpt-5.6-sol',
+        model: 'gpt-5.6-sol',
+        displayName: 'GPT-5.6 Sol',
+        description: 'Fast coding model',
+        hidden: false,
+        isDefault: true,
+        supportedReasoningEfforts: [
+          { reasoningEffort: 'low', description: 'Fastest' },
+          { reasoningEffort: 'ultra', description: 'Maximum reasoning with delegation' },
+        ],
+        defaultReasoningEffort: 'low',
+      }],
+      nextCursor: null,
+    });
+    expect(transport.sent).toContainEqual({
+      method: 'model/list',
+      id: 2,
+      params: { includeHidden: true, limit: 100 },
     });
   });
 

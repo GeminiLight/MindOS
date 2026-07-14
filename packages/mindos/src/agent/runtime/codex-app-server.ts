@@ -135,6 +135,33 @@ export type CodexThreadForkResult = Record<string, unknown> & {
   thread: CodexThread;
 };
 
+export type CodexReasoningEffortOption = {
+  reasoningEffort: string;
+  description: string;
+};
+
+export type CodexModel = {
+  id: string;
+  model: string;
+  displayName: string;
+  description: string;
+  hidden: boolean;
+  isDefault: boolean;
+  supportedReasoningEfforts: CodexReasoningEffortOption[];
+  defaultReasoningEffort: string;
+};
+
+export type CodexModelListInput = {
+  cursor?: string | null;
+  limit?: number | null;
+  includeHidden?: boolean | null;
+};
+
+export type CodexModelListResult = {
+  data: CodexModel[];
+  nextCursor: string | null;
+};
+
 export type CodexAppServerRequestOptions = {
   signal?: AbortSignal;
 };
@@ -143,6 +170,7 @@ export type CodexAppServerClient = {
   initialize(options?: CodexAppServerRequestOptions): Promise<void>;
   startThread(input?: { model?: string; cwd?: string }, options?: CodexAppServerRequestOptions): Promise<{ threadId: string }>;
   resumeThread(input: { threadId: string }, options?: CodexAppServerRequestOptions): Promise<{ threadId: string }>;
+  listModels(input?: CodexModelListInput): Promise<CodexModelListResult>;
   listThreads(input?: CodexThreadListInput): Promise<CodexThreadListResult>;
   readThread(input: { threadId: string; includeTurns?: boolean }): Promise<CodexThreadReadResult>;
   forkThread(input: CodexThreadForkInput): Promise<CodexThreadForkResult>;
@@ -390,6 +418,10 @@ export function createCodexAppServerClient(
     async resumeThread(input, options = {}) {
       const result = await request('thread/resume', { threadId: input.threadId }, options.signal);
       return { threadId: getThreadId(result, 'thread/resume') ?? input.threadId };
+    },
+    async listModels(input = {}) {
+      const result = await request('model/list', pruneUndefined(input as Record<string, unknown>));
+      return getModelListResult(result, 'model/list');
     },
     async listThreads(input = {}) {
       const result = await request('thread/list', pruneUndefined(input as Record<string, unknown>));
@@ -740,6 +772,68 @@ function getThread(result: unknown, method: string): CodexThread {
     throw new Error(`Codex app-server ${method} did not return a thread id`);
   }
   return { ...thread, id } as CodexThread;
+}
+
+function getModelListResult(result: unknown, method: string): CodexModelListResult {
+  const record = asRecord(result);
+  if (!record || !Array.isArray(record.data)) {
+    throw new Error(`Codex app-server ${method} did not return a model list`);
+  }
+  return {
+    data: record.data.map((item, index) => getModel(item, method, index)),
+    nextCursor: typeof record.nextCursor === 'string' ? record.nextCursor : null,
+  };
+}
+
+function getModel(value: unknown, method: string, index: number): CodexModel {
+  const model = asRecord(value);
+  if (!model || Array.isArray(value)) {
+    throw new Error(`Codex app-server ${method} returned an invalid model at index ${index}`);
+  }
+  const supportedReasoningEfforts = model.supportedReasoningEfforts;
+  if (!Array.isArray(supportedReasoningEfforts)) {
+    throw new Error(`Codex app-server ${method} returned a model without supported reasoning efforts`);
+  }
+  return {
+    id: requiredModelString(model, 'id', method),
+    model: requiredModelString(model, 'model', method),
+    displayName: requiredModelString(model, 'displayName', method),
+    description: requiredModelString(model, 'description', method, true),
+    hidden: requiredModelBoolean(model, 'hidden', method),
+    isDefault: requiredModelBoolean(model, 'isDefault', method),
+    supportedReasoningEfforts: supportedReasoningEfforts.map((option) => {
+      const effort = asRecord(option);
+      if (!effort || Array.isArray(option)) {
+        throw new Error(`Codex app-server ${method} returned an invalid reasoning effort option`);
+      }
+      return {
+        reasoningEffort: requiredModelString(effort, 'reasoningEffort', method),
+        description: requiredModelString(effort, 'description', method, true),
+      };
+    }),
+    defaultReasoningEffort: requiredModelString(model, 'defaultReasoningEffort', method),
+  };
+}
+
+function requiredModelString(
+  record: Record<string, unknown>,
+  key: string,
+  method: string,
+  allowEmpty = false,
+): string {
+  const value = record[key];
+  if (typeof value !== 'string' || (!allowEmpty && !value.trim())) {
+    throw new Error(`Codex app-server ${method} returned a model with an invalid ${key}`);
+  }
+  return value;
+}
+
+function requiredModelBoolean(record: Record<string, unknown>, key: string, method: string): boolean {
+  const value = record[key];
+  if (typeof value !== 'boolean') {
+    throw new Error(`Codex app-server ${method} returned a model with an invalid ${key}`);
+  }
+  return value;
 }
 
 function getThreadListResult(result: unknown, method: string): CodexThreadListResult {

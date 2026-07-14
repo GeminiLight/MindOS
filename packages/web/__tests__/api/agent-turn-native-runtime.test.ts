@@ -1046,7 +1046,7 @@ describe('/api/agent/sessions/:sessionId/turns native runtime routing', () => {
       messages: [{ role: 'user', content: 'Organize safely' }],
       selectedRuntime: { id: 'codex', name: 'Codex', kind: 'codex' },
       permissionMode: 'ask',
-      runtimeOptions: { modelOverride: 'gpt-5.4-codex', reasoningEffort: 'xhigh' },
+      runtimeOptions: { modelOverride: 'gpt-5.6-sol', reasoningEffort: 'ultra' },
       assistantId: 'inbox-organizer',
     }));
 
@@ -1054,8 +1054,8 @@ describe('/api/agent/sessions/:sessionId/turns native runtime routing', () => {
     await res.text();
 
     expect(capturedNativeOptions?.permissionMode).toBe('ask');
-    expect(capturedNativeOptions?.modelOverride).toBe('gpt-5.4-codex');
-    expect(capturedNativeOptions?.reasoningEffort).toBe('xhigh');
+    expect(capturedNativeOptions?.modelOverride).toBe('gpt-5.6-sol');
+    expect(capturedNativeOptions?.reasoningEffort).toBe('ultra');
   });
 
   it('honors explicit readonly permission for registered assistant preview runs', async () => {

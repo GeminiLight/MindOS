@@ -379,6 +379,12 @@ describe('MindOS server contract: core, files, HTTP', () => {
       auth: 'required',
     });
     expect(contract.routes).toContainEqual({
+      id: 'agent-runtimes.codex.models',
+      method: 'GET',
+      path: '/api/agent-runtimes/codex/models',
+      auth: 'required',
+    });
+    expect(contract.routes).toContainEqual({
       id: 'agent-runtimes.codex.threads',
       method: 'GET',
       path: '/api/agent-runtimes/codex/threads',
@@ -1766,6 +1772,7 @@ hidden: true
         headers: { 'sec-fetch-site': 'same-origin' },
       })).status).toBe(200);
       const protectedCodexRoutes: Array<{ path: string; init?: RequestInit }> = [
+        { path: '/api/agent-runtimes/codex/models' },
         { path: '/api/agent-runtimes/codex/threads' },
         { path: '/api/agent-runtimes/codex/threads/thr-existing' },
         { path: '/api/agent-runtimes/codex/threads/thr-existing/fork', init: { method: 'POST', body: '{}' } },
@@ -1811,7 +1818,7 @@ hidden: true
     }
   });
 
-  it('dispatches Codex thread manager routes through the Product HTTP server without starting turns', async () => {
+  it('dispatches Codex model and thread manager routes through the Product HTTP server without starting turns', async () => {
     const root = mkdtempSync(join(tmpdir(), 'mindos-http-codex-threads-'));
     const calls: string[] = [];
     const app = createMindosHttpServer({
@@ -1824,6 +1831,25 @@ hidden: true
         createCodexClient: async () => ({
           initialize: async () => {
             calls.push('initialize');
+          },
+          listModels: async () => {
+            calls.push('model/list');
+            return {
+              data: [{
+                id: 'gpt-5.6-sol',
+                model: 'gpt-5.6-sol',
+                displayName: 'GPT-5.6 Sol',
+                description: 'Fast coding model',
+                hidden: false,
+                isDefault: true,
+                supportedReasoningEfforts: [
+                  { reasoningEffort: 'low', description: 'Fastest' },
+                  { reasoningEffort: 'ultra', description: 'Maximum reasoning with delegation' },
+                ],
+                defaultReasoningEffort: 'low',
+              }],
+              nextCursor: null,
+            };
           },
           listThreads: async () => {
             calls.push('thread/list');
@@ -1875,6 +1901,7 @@ hidden: true
     const auth = { authorization: 'Bearer secret-token' };
 
     try {
+      const models = await fetch(`${base}/api/agent-runtimes/codex/models`, { headers: auth });
       const list = await fetch(`${base}/api/agent-runtimes/codex/threads?limit=10`, { headers: auth });
       const read = await fetch(`${base}/api/agent-runtimes/codex/threads/thr-existing?includeTurns=1`, { headers: auth });
       const fork = await fetch(`${base}/api/agent-runtimes/codex/threads/thr-existing/fork`, {
@@ -1891,6 +1918,14 @@ hidden: true
         headers: auth,
       });
 
+      expect(models.status).toBe(200);
+      expect(await models.json()).toEqual({
+        data: [expect.objectContaining({
+          id: 'gpt-5.6-sol',
+          defaultReasoningEffort: 'low',
+        })],
+        nextCursor: null,
+      });
       expect(list.status).toBe(200);
       expect(await list.json()).toEqual({
         data: [expect.objectContaining({ id: 'thr-existing' })],
@@ -1908,6 +1943,9 @@ hidden: true
       expect(archive.status).toBe(200);
       expect(unarchive.status).toBe(200);
       expect(calls).toEqual([
+        'initialize',
+        'model/list',
+        'close',
         'initialize',
         'thread/list',
         'close',
