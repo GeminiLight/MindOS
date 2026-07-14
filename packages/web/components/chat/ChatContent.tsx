@@ -339,6 +339,7 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
     ? selectedAgentRuntime.kind
     : null;
   const isNativeRuntime = selectedNativeRuntimeKind !== null;
+  const supportsAgentMode = isMindosRuntime || isNativeRuntime;
   const runtimeSessionProjection = useRuntimeSessionProjection({ visible, runtime: selectedAgentRuntime });
   const acpRuntimeCommands = useMemo(() => (
     isAcpRuntime
@@ -2008,7 +2009,7 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
                   disabled={isLoading}
                 />
               )}
-              {mounted && isMindosRuntime && (
+              {mounted && supportsAgentMode && (
                 <AgentModeCapsule mode={agentMode} onChange={handleAgentModeChange} disabled={isLoading} />
               )}
               <ModeCapsule mode={permissionMode} onChange={handlePermissionModeChange} disabled={isLoading} />

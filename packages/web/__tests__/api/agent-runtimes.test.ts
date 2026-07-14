@@ -72,6 +72,10 @@ describe('/api/agent-runtimes', () => {
         sessionOwner: 'mindos',
         status: 'available',
         capabilities: expect.objectContaining({
+          agentModes: {
+            plan: 'mindos-managed',
+            goal: 'mindos-managed',
+          },
           ownsModelSelection: true,
           supportsListSessions: true,
           supportsUserInput: true,
@@ -118,6 +122,10 @@ describe('/api/agent-runtimes', () => {
         binaryPath: '/usr/local/bin/codex',
         availability: expect.objectContaining({ sources: ['native-health'] }),
         capabilities: expect.objectContaining({
+          agentModes: {
+            plan: 'runtime-native',
+            goal: 'runtime-native',
+          },
           supportsResume: true,
           supportsFreshSession: true,
           supportsListSessions: true,
@@ -202,6 +210,10 @@ describe('/api/agent-runtimes', () => {
         sessionOwner: 'external',
         status: 'available',
         capabilities: expect.objectContaining({
+          agentModes: {
+            plan: 'unsupported',
+            goal: 'unsupported',
+          },
           supportsResume: false,
           supportsToolEvents: true,
           supportsApprovals: false,

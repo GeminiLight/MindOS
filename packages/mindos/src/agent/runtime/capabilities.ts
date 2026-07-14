@@ -6,6 +6,10 @@ import type {
 import { normalizeRuntimeOutputKinds } from './adapter-output.js';
 
 export const mindosCapabilities: AgentRuntimeCapabilities = {
+  agentModes: {
+    plan: 'mindos-managed',
+    goal: 'mindos-managed',
+  },
   ownsModelSelection: true,
   supportsResume: true,
   supportsFreshSession: true,
@@ -26,6 +30,10 @@ export const mindosCapabilities: AgentRuntimeCapabilities = {
 };
 
 const nativeBaseCapabilities: AgentRuntimeCapabilities = {
+  agentModes: {
+    plan: 'runtime-native',
+    goal: 'runtime-native',
+  },
   ownsModelSelection: true,
   supportsResume: true,
   supportsFreshSession: true,
@@ -58,6 +66,10 @@ export const claudeCapabilities: AgentRuntimeCapabilities = {
 };
 
 export const acpCapabilities: AgentRuntimeCapabilities = {
+  agentModes: {
+    plan: 'unsupported',
+    goal: 'unsupported',
+  },
   ownsModelSelection: true,
   supportsResume: false,
   supportsFreshSession: false,

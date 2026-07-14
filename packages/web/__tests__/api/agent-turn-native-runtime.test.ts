@@ -87,6 +87,10 @@ function availableNativeDescriptor(
     status: 'available',
     binaryPath: input.binaryPath,
     capabilities: {
+      agentModes: {
+        plan: 'runtime-native',
+        goal: 'runtime-native',
+      },
       ownsModelSelection: true,
       supportsResume: true,
       supportsFreshSession: true,

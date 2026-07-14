@@ -95,6 +95,10 @@ export interface AgentRuntimeIdentity extends AgentIdentity {
 export type AgentRuntimeStatus = 'available' | 'missing' | 'signed-out' | 'error';
 
 export interface AgentRuntimeCapabilities {
+  agentModes?: {
+    plan: 'unsupported' | 'mindos-managed' | 'runtime-native';
+    goal: 'unsupported' | 'mindos-managed' | 'runtime-native';
+  };
   ownsModelSelection: boolean;
   supportsResume: boolean;
   supportsFreshSession: boolean;

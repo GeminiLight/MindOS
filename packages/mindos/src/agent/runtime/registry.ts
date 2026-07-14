@@ -36,8 +36,15 @@ export type AgentRuntimeKind = 'mindos' | 'acp' | 'codex' | 'claude';
 export type AgentRuntimeCategory = 'mindos' | 'native' | 'acp' | 'cloud';
 export type NativeRuntimeId = 'codex' | 'claude';
 export type AgentRuntimeStatus = 'available' | 'missing' | 'signed-out' | 'error';
+export type AgentRuntimeAgentModeSupport = 'unsupported' | 'mindos-managed' | 'runtime-native';
+
+export type AgentRuntimeAgentModeCapabilities = {
+  plan: AgentRuntimeAgentModeSupport;
+  goal: AgentRuntimeAgentModeSupport;
+};
 
 export type AgentRuntimeCapabilities = {
+  agentModes: AgentRuntimeAgentModeCapabilities;
   ownsModelSelection: boolean;
   supportsResume: boolean;
   supportsFreshSession: boolean;

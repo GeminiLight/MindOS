@@ -1015,6 +1015,181 @@ describe('ChatContent ACP session binding', () => {
     });
   });
 
+  it('keeps Plan mode available and submits it for a native Codex turn', async () => {
+    mockNativeRuntimeDescriptors = [{
+      id: 'codex',
+      name: 'Codex',
+      kind: 'codex',
+      binaryPath: '/usr/local/bin/codex',
+      status: 'available',
+      capabilities: {},
+    }];
+    mockActiveSession = emptySession;
+    mockSessions = [emptySession];
+    mockActiveSessionId = emptySession.id;
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<ChatContent visible variant="panel" initialMessage="inspect before editing" />);
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const selectCodex = Array.from(host.querySelectorAll('button')).find((button) => button.textContent === 'Select Codex') as HTMLButtonElement;
+    await act(async () => {
+      selectCodex.click();
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const capsule = host.querySelector('[data-testid="agent-mode-capsule"]') as HTMLElement;
+    expect(capsule).toBeTruthy();
+    expect(capsule.getAttribute('data-mode')).toBe('default');
+
+    const planMode = Array.from(host.querySelectorAll('button')).find((button) => button.textContent === 'Set Plan Mode') as HTMLButtonElement;
+    await act(async () => {
+      planMode.click();
+    });
+    expect(capsule.getAttribute('data-mode')).toBe('plan');
+
+    const form = host.querySelector('form') as HTMLFormElement;
+    await act(async () => {
+      if (typeof form.requestSubmit === 'function') {
+        form.requestSubmit();
+      } else {
+        form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      }
+    });
+
+    const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
+    const agentTurnCall = fetchMock.mock.calls.find(([url]) => isAgentTurnUrl(url));
+    expect(agentTurnCall).toBeTruthy();
+    const requestBody = JSON.parse(String((agentTurnCall?.[1] as RequestInit | undefined)?.body));
+    expect(requestBody.selectedAcpAgent).toBeNull();
+    expect(requestBody.selectedRuntime).toEqual({ id: 'codex', name: 'Codex', kind: 'codex', binaryPath: '/usr/local/bin/codex' });
+    expect(requestBody.agentMode).toBe('plan');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('keeps Goal mode available and submits it for a native Claude Code turn', async () => {
+    mockNativeRuntimeDescriptors = [{
+      id: 'claude',
+      name: 'Claude Code',
+      kind: 'claude',
+      status: 'available',
+      capabilities: {},
+    }];
+    mockActiveSession = emptySession;
+    mockSessions = [emptySession];
+    mockActiveSessionId = emptySession.id;
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<ChatContent visible variant="panel" initialMessage="finish the implementation" />);
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const selectClaudeNative = Array.from(host.querySelectorAll('button')).find((button) => button.textContent === 'Select Claude Native') as HTMLButtonElement;
+    await act(async () => {
+      selectClaudeNative.click();
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const capsule = host.querySelector('[data-testid="agent-mode-capsule"]') as HTMLElement;
+    expect(capsule).toBeTruthy();
+
+    const goalMode = Array.from(host.querySelectorAll('button')).find((button) => button.textContent === 'Set Goal Mode') as HTMLButtonElement;
+    await act(async () => {
+      goalMode.click();
+    });
+    expect(capsule.getAttribute('data-mode')).toBe('goal');
+
+    const form = host.querySelector('form') as HTMLFormElement;
+    await act(async () => {
+      if (typeof form.requestSubmit === 'function') {
+        form.requestSubmit();
+      } else {
+        form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      }
+    });
+
+    const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
+    const agentTurnCall = fetchMock.mock.calls.find(([url]) => isAgentTurnUrl(url));
+    expect(agentTurnCall).toBeTruthy();
+    const requestBody = JSON.parse(String((agentTurnCall?.[1] as RequestInit | undefined)?.body));
+    expect(requestBody.selectedAcpAgent).toBeNull();
+    expect(requestBody.selectedRuntime).toEqual({ id: 'claude', name: 'Claude Code', kind: 'claude' });
+    expect(requestBody.agentMode).toBe('goal');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('does not expose MindOS agent modes for ACP runtimes', async () => {
+    mockActiveSession = emptySession;
+    mockSessions = [emptySession];
+    mockActiveSessionId = emptySession.id;
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<ChatContent visible variant="panel" initialMessage="run through acp" />);
+    });
+
+    const planMode = Array.from(host.querySelectorAll('button')).find((button) => button.textContent === 'Set Plan Mode') as HTMLButtonElement;
+    await act(async () => {
+      planMode.click();
+    });
+    expect(host.querySelector('[data-testid="agent-mode-capsule"]')?.getAttribute('data-mode')).toBe('plan');
+
+    const selectOpenCode = Array.from(host.querySelectorAll('button')).find((button) => button.textContent === 'Select OpenCode') as HTMLButtonElement;
+    await act(async () => {
+      selectOpenCode.click();
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(host.querySelector('[data-testid="agent-mode-capsule"]')).toBeNull();
+
+    const form = host.querySelector('form') as HTMLFormElement;
+    await act(async () => {
+      if (typeof form.requestSubmit === 'function') {
+        form.requestSubmit();
+      } else {
+        form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      }
+    });
+
+    const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
+    const agentTurnCall = fetchMock.mock.calls.find(([url]) => isAgentTurnUrl(url));
+    expect(agentTurnCall).toBeTruthy();
+    const requestBody = JSON.parse(String((agentTurnCall?.[1] as RequestInit | undefined)?.body));
+    expect(requestBody.selectedRuntime).toEqual({ id: 'opencode', name: 'OpenCode', kind: 'acp' });
+    expect(requestBody.agentMode).toBe('default');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it('keeps provider and model selection scoped to the active MindOS chat session', async () => {
     mockPersistedProviderModel = { provider: 'p_global', model: 'global-model' };
     const cheapSession: ChatSession = {

@@ -49,6 +49,10 @@ function runtimeForAgentRequest(runtime: AgentRequestRuntime | null | undefined)
   };
 }
 
+function supportsMindosAgentModeForRequest(runtime: AgentRequestRuntime | null): boolean {
+  return !runtime || runtime.kind === 'codex' || runtime.kind === 'claude';
+}
+
 function chatTabTitleFromDraft(text: string, fallback = 'Chat session'): string {
   const line = text.replace(/\s+/g, ' ').trim();
   if (!line) return fallback;
@@ -317,7 +321,9 @@ export function useAgentChat({
     const permissionModeSnapshot = refs.permissionModeRef?.current ?? permissionMode;
     const selectedRuntimeBase = compactAgentRuntimeIdentity(refs.selectedAgentRuntimeRef.current);
     const requestRuntimeBase = selectedRuntimeBase?.kind === 'mindos' ? null : selectedRuntimeBase;
-    const agentModeSnapshot = requestRuntimeBase ? 'default' : refs.agentModeRef?.current ?? 'default';
+    const agentModeSnapshot = supportsMindosAgentModeForRequest(requestRuntimeBase)
+      ? refs.agentModeRef?.current ?? 'default'
+      : 'default';
     const runtimeSnapshot = selectedRuntimeBase ?? MINDOS_RUNTIME;
     const acpAgent: AgentIdentity | null = requestRuntimeBase?.kind === 'acp'
       ? { id: requestRuntimeBase.id, name: requestRuntimeBase.name }
