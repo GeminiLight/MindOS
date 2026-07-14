@@ -4,7 +4,8 @@ import { useEffect, useLayoutEffect, useRef, useState, useCallback, useMemo } fr
 import { createPortal } from 'react-dom';
 import { Check, CornerDownRight, FileText, GripVertical, ImageIcon, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { useLocale } from '@/lib/stores/locale-store';
-import type { AcpRuntimeOptions, AgentPermissionMode, AgentRuntimeDescriptor, AgentRuntimeIdentity, ChatSession, Message, NativeRuntimeOptions } from '@/lib/types';
+import type { AcpRuntimeOptions, AgentMode, AgentPermissionMode, AgentRuntimeDescriptor, AgentRuntimeIdentity, ChatSession, Message, NativeRuntimeOptions } from '@/lib/types';
+import AgentModeCapsule from '@/components/ask/AgentModeCapsule';
 import ModeCapsule, {
   getPersistedPermissionMode,
 } from '@/components/ask/ModeCapsule';
@@ -105,6 +106,15 @@ interface QueuedFollowUp {
 }
 
 type QueuedFollowUpDropPlacement = 'before' | 'after';
+type ComposerDirectiveAgentMode = Exclude<AgentMode, 'default'>;
+
+const COMPOSER_AGENT_MODE_DIRECTIVE_RE = /^\/(plan|goal)(?:\s+|$)/i;
+
+function agentModeDirectiveFromComposerValue(value: string): ComposerDirectiveAgentMode | null {
+  const match = COMPOSER_AGENT_MODE_DIRECTIVE_RE.exec(value.trimStart());
+  if (!match) return null;
+  return match[1]!.toLowerCase() === 'goal' ? 'goal' : 'plan';
+}
 
 function createQueuedFollowUpId(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -209,6 +219,8 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
   const [selectedAgentRuntime, setSelectedAgentRuntime] = useState<SelectedAgentRuntime | null>(null);
   const selectedAgentRuntimeRef = useRef(selectedAgentRuntime);
   const pendingOpenAgentRef = useRef<SelectedAgentRuntime | null>(null);
+  const [agentMode, setAgentMode] = useState<AgentMode>('default');
+  const agentModeRef = useRef<AgentMode>('default');
   const [permissionMode, setPermissionMode] = useState<AgentPermissionMode>('ask');
   const permissionModeRef = useRef<AgentPermissionMode>('ask');
   const [providerOverride, setProviderOverride] = useState<ProviderSelection>(null);
@@ -216,6 +228,39 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
   const [modelOverride, setModelOverride] = useState<string | null>(null);
   const [nativeRuntimeOptions, setNativeRuntimeOptions] = useState<NativeRuntimeOptions>({});
   const [acpRuntimeOptions, setAcpRuntimeOptions] = useState<AcpRuntimeOptions>({});
+  const inputDirectiveAgentModeRef = useRef<ComposerDirectiveAgentMode | null>(null);
+  const agentModeBeforeInputDirectiveRef = useRef<AgentMode>('default');
+
+  const setAgentModeSelection = useCallback((next: AgentMode) => {
+    agentModeRef.current = next;
+    setAgentMode(next);
+  }, []);
+
+  const syncAgentModeFromComposerValue = useCallback((value: string) => {
+    const directiveMode = agentModeDirectiveFromComposerValue(value);
+    if (directiveMode) {
+      if (!inputDirectiveAgentModeRef.current) {
+        agentModeBeforeInputDirectiveRef.current = agentModeRef.current;
+      }
+      inputDirectiveAgentModeRef.current = directiveMode;
+      if (agentModeRef.current !== directiveMode) {
+        setAgentModeSelection(directiveMode);
+      }
+      return;
+    }
+
+    if (!inputDirectiveAgentModeRef.current) return;
+    inputDirectiveAgentModeRef.current = null;
+    const restoredMode = agentModeBeforeInputDirectiveRef.current;
+    if (agentModeRef.current !== restoredMode) {
+      setAgentModeSelection(restoredMode);
+    }
+  }, [setAgentModeSelection]);
+
+  const setComposerValueWithAgentModeSync = useCallback((value: string) => {
+    setComposerValue(value);
+    syncAgentModeFromComposerValue(value);
+  }, [setComposerValue, syncAgentModeFromComposerValue]);
 
   const updateSelectedAgentRuntime = useCallback((runtime: AgentRuntimeIdentity | null) => {
     const normalized = normalizeSelectedAgentRuntime(runtime);
@@ -497,13 +542,14 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
     attachedFilesRef.current = attachedFiles;
     selectedSkillRef.current = selectedSkill;
     selectedAgentRuntimeRef.current = selectedAgentRuntime;
+    agentModeRef.current = agentMode;
     permissionModeRef.current = permissionMode;
     sessionRef.current = session;
     uploadRef.current = uploadRuntime;
     imageUploadRef.current = imageUploadRuntime;
     mentionRef.current = mention;
     slashRef.current = slash;
-  }, [attachedFiles, imageUploadRuntime, mention, permissionMode, selectedAgentRuntime, selectedSkill, session, slash, uploadRuntime]);
+  }, [agentMode, attachedFiles, imageUploadRuntime, mention, permissionMode, selectedAgentRuntime, selectedSkill, session, slash, uploadRuntime]);
 
   useLayoutEffect(() => {
     queuedFollowUpsRef.current = queuedFollowUps;
@@ -522,16 +568,16 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
   }, [loadRuntimeSessions, runtimeSessionCapabilities.supportsList, selectedAgentRuntime?.id, selectedAgentRuntime?.kind, showHistory, visible]);
 
   const resetInputState = useCallback(() => {
-    setComposerValue('');
+    setComposerValueWithAgentModeSync('');
     setSelectedSkill(null);
     setAttachedFiles(currentFile ? [currentFile] : []);
     setDropError('');
     uploadRef.current.clearAttachments();
-  }, [currentFile]);
+  }, [currentFile, setComposerValueWithAgentModeSync]);
 
 
   const handleRestoreInput = useCallback((userMessage: Message) => {
-    setComposerValue(userMessage.content);
+    setComposerValueWithAgentModeSync(userMessage.content);
     if (userMessage.images && userMessage.images.length > 0) {
       imageUploadRef.current.clearImages();
     }
@@ -541,7 +587,7 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
     }
     updateSelectedAgentRuntime(getMessageAgentRuntime(userMessage));
     setTimeout(() => inputRef.current?.focus(), 50);
-  }, [updateSelectedAgentRuntime]);
+  }, [setComposerValueWithAgentModeSync, updateSelectedAgentRuntime]);
 
   const chatRefs = useMemo(() => ({
     inputValueRef,
@@ -553,6 +599,7 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
     selectedSkillRef,
     selectedAgentRuntimeRef,
     attachedFilesRef,
+    agentModeRef,
     permissionModeRef,
   }), []);
   const chat = useAgentChat({
@@ -591,7 +638,7 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
   const handleStop = chat.stop;
 
   const clearTransientComposerState = useCallback(() => {
-    setComposerValue('');
+    setComposerValueWithAgentModeSync('');
     setAttachedFiles(currentFile ? [currentFile] : []);
     uploadRef.current.clearAttachments();
     imageUploadRef.current.clearImages();
@@ -602,7 +649,7 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
     setShowHistory(false);
     chat.firstMessageFired.current = false;
     setTimeout(() => inputRef.current?.focus(), 0);
-  }, [chat.firstMessageFired, currentFile]);
+  }, [chat.firstMessageFired, currentFile, setComposerValueWithAgentModeSync]);
 
   const bindActiveSessionToRuntime = useCallback((agent: AgentRuntimeIdentity | null) => {
     if (!agent || agent.kind === 'mindos') {
@@ -705,13 +752,13 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
       },
     ]));
     setDropError('');
-    setComposerValue('');
+    setComposerValueWithAgentModeSync('');
     mentionRef.current.resetMention();
     slashRef.current.resetSlash();
     setSelectedSkill(null);
     setTimeout(() => inputRef.current?.focus(), 0);
     return true;
-  }, [currentFile, queuedFollowUpTextOnly, setComposerValue, t.ask.uploadsProcessing]);
+  }, [currentFile, queuedFollowUpTextOnly, setComposerValueWithAgentModeSync, t.ask.uploadsProcessing]);
 
   const handleSubmitWithRuntimeGuard = useCallback((event: React.FormEvent) => {
     if (selectedRuntimeChecking || selectedRuntimeUnavailable || providerNotConfigured) {
@@ -853,12 +900,12 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
       slashRef.current.resetSlash();
       setSelectedSkill(null);
       setShowHistory(false);
-      setComposerValue(detail.text);
+      setComposerValueWithAgentModeSync(detail.text);
       setTimeout(() => inputRef.current?.focus(), 50);
     };
     window.addEventListener(RUNTIME_COMMAND_INSERT_EVENT, handler);
     return () => window.removeEventListener(RUNTIME_COMMAND_INSERT_EVENT, handler);
-  }, [chat.isLoadingRef, handleSelectAgentRuntime, setComposerValue]);
+  }, [chat.isLoadingRef, handleSelectAgentRuntime, setComposerValueWithAgentModeSync]);
 
   useEffect(() => {
     const handler = (e: Event) => {
@@ -904,13 +951,13 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
     const handler = (e: Event) => {
       const text = (e as CustomEvent).detail?.text;
       if (typeof text === 'string') {
-        setComposerValue(text);
+        setComposerValueWithAgentModeSync(text);
         setTimeout(() => inputRef.current?.focus(), 50);
       }
     };
     window.addEventListener('mindos:home-suggestion', handler);
     return () => window.removeEventListener('mindos:home-suggestion', handler);
-  }, [isHome]);
+  }, [isHome, setComposerValueWithAgentModeSync]);
 
   // Focus and init session when becoming visible (edge-triggered for panel, level-triggered for modal)
   const prevVisibleRef = useRef(false);
@@ -940,7 +987,7 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
       } else {
         void session.initSessions(preferredRuntime ?? undefined);
       }
-      setComposerValue(initialMessage || '');
+      setComposerValueWithAgentModeSync(initialMessage || '');
       chat.firstMessageFired.current = false;
       setAttachedFiles(currentFile ? [currentFile] : []);
       clearAttachments();
@@ -1037,6 +1084,7 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
 
   const handleInputChange = useCallback((val: string, cursorPos?: number) => {
     // Local input state already updated inside AskComposerInput.
+    syncAgentModeFromComposerValue(val);
     const pos = cursorPos ?? val.length;
     if (mentionTimerRef.current) clearTimeout(mentionTimerRef.current);
     if (slashTimerRef.current) clearTimeout(slashTimerRef.current);
@@ -1048,7 +1096,7 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
       if (!isMountedRef.current) return;
       slashRef.current.updateSlashFromInput(val, pos);
     }, 80);
-  }, []);
+  }, [syncAgentModeFromComposerValue]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -1066,7 +1114,7 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
     const before = val.slice(0, cursorPos);
     const atIdx = before.lastIndexOf('@');
     const newVal = val.slice(0, atIdx) + val.slice(cursorPos);
-    setComposerValue(newVal);
+    setComposerValueWithAgentModeSync(newVal);
     mentionRef.current.resetMention();
     if (!attachedFilesRef.current.includes(filePath)) {
       setAttachedFiles(prev => [...prev, filePath]);
@@ -1075,7 +1123,7 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
       inputRef.current?.focus();
       inputRef.current?.setSelectionRange(atIdx, atIdx);
     }, 0);
-  }, []);
+  }, [setComposerValueWithAgentModeSync]);
 
   const selectSlashCommand = useCallback((item: SlashItem) => {
     const el = inputRef.current;
@@ -1087,7 +1135,7 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
       const command = `/${item.name} `;
       const nextCursor = slashIdx + command.length;
       const newVal = val.slice(0, slashIdx) + command + val.slice(cursorPos);
-      setComposerValue(newVal);
+      setComposerValueWithAgentModeSync(newVal);
       setSelectedSkill(null);
       slashRef.current.resetSlash();
       setTimeout(() => {
@@ -1097,14 +1145,14 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
       return;
     }
     const newVal = val.slice(0, slashIdx) + val.slice(cursorPos);
-    setComposerValue(newVal);
+    setComposerValueWithAgentModeSync(newVal);
     setSelectedSkill(item);
     slashRef.current.resetSlash();
     setTimeout(() => {
       inputRef.current?.focus();
       inputRef.current?.setSelectionRange(slashIdx, slashIdx);
     }, 0);
-  }, []);
+  }, [setComposerValueWithAgentModeSync]);
 
   const selectMentionRef = useRef(selectMention);
   const selectSlashRef = useRef(selectSlashCommand);
@@ -1285,7 +1333,7 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
     if (!targetSession) return false;
     sessionRef.current.loadSession(id);
     setShowHistory(false);
-    setComposerValue('');
+    setComposerValueWithAgentModeSync('');
     setAttachedFiles(currentFile ? [currentFile] : []);
     uploadRef.current.clearAttachments();
     imageUploadRef.current.clearImages();
@@ -1298,7 +1346,7 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
     importBoundRuntimeSessionHistoryIfNeeded(targetSession, targetRuntime);
     setTimeout(() => inputRef.current?.focus(), 0);
     return true;
-  }, [chat.isLoadingRef, currentFile, importBoundRuntimeSessionHistoryIfNeeded, session.sessions, updateSelectedAgentRuntime]);
+  }, [chat.isLoadingRef, currentFile, importBoundRuntimeSessionHistoryIfNeeded, session.sessions, setComposerValueWithAgentModeSync, updateSelectedAgentRuntime]);
 
   useEffect(() => {
     if (!visible || maximized || (variant !== 'panel' && variant !== 'modal')) return;
@@ -1488,9 +1536,9 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
     if (!msg || msg.role !== 'user') return;
     // Truncate: keep messages up to (not including) the edited message
     currentSession.setMessages(currentSession.messages.slice(0, index));
-    setComposerValue(msg.content);
+    setComposerValueWithAgentModeSync(msg.content);
     setTimeout(() => inputRef.current?.focus(), 50);
-  }, []);
+  }, [setComposerValueWithAgentModeSync]);
 
   /** Resend / Regenerate: truncate after user message, auto-submit same content */
   const handleResendMessage = useCallback((index: number) => {
@@ -1499,9 +1547,9 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
     if (!msg || msg.role !== 'user') return;
     // Truncate: keep messages up to (not including) the user message
     currentSession.setMessages(currentSession.messages.slice(0, index));
-    setComposerValue(msg.content);
+    setComposerValueWithAgentModeSync(msg.content);
     pendingAutoSubmitRef.current = true;
-  }, []);
+  }, [setComposerValueWithAgentModeSync]);
 
   const commitSessionModelSelection = useCallback((provider: ProviderSelection, model: string | null) => {
     session.setSessionModelSelection(toSessionModelSelection(provider, model));
@@ -1525,6 +1573,11 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
     permissionModeRef.current = next;
     setPermissionMode(next);
   }, []);
+  const handleAgentModeChange = useCallback((next: AgentMode) => {
+    inputDirectiveAgentModeRef.current = null;
+    agentModeBeforeInputDirectiveRef.current = next;
+    setAgentModeSelection(next);
+  }, [setAgentModeSelection]);
 
   const handleNativeRuntimeOptionsChange = useCallback((next: NativeRuntimeOptions) => {
     setNativeRuntimeOptions(next);
@@ -1954,6 +2007,9 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
                   controlKeys={['mode']}
                   disabled={isLoading}
                 />
+              )}
+              {mounted && isMindosRuntime && (
+                <AgentModeCapsule mode={agentMode} onChange={handleAgentModeChange} disabled={isLoading} />
               )}
               <ModeCapsule mode={permissionMode} onChange={handlePermissionModeChange} disabled={isLoading} />
               {mounted && isAcpRuntime && (

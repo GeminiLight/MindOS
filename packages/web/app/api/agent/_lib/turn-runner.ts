@@ -26,6 +26,12 @@ import {
   prependMindosActiveAssistantPrompt,
   type MindosAgentInitializationContext,
 } from '@geminilight/mindos/agent';
+import {
+  createMindosAgentModeContract,
+  prependMindosAgentModePrompt,
+  resolveMindosAgentModePermissionMode,
+  resolveMindosAgentModeRequest,
+} from '@geminilight/mindos/agent/mode';
 import { renderMindosPiSelectedSkillPrompt } from '@geminilight/mindos/agent/mindos-pi';
 import {
   resolveSkillFile,
@@ -202,7 +208,7 @@ export async function runAgentTurnRequestBody(
   const permissionModeError = validateAgentPermissionMode(body.permissionMode);
   if (permissionModeError) return permissionModeError;
   const activeAssistant = requestContext.activeAssistant;
-  const agentMode = normalizeAgentMode(body.agentMode) ?? 'default';
+  const requestedAgentMode = normalizeAgentMode(body.agentMode) ?? 'default';
   const requestPermissionModeInput = normalizeAgentPermissionMode(body.permissionMode);
   const mindosUiMessages = toMindosUiAgentMessages(messages);
   const runtimeBindingError = validateRuntimeBindingMatchesSelection(body.selectedRuntime, body.runtimeBinding);
@@ -222,8 +228,22 @@ export async function runAgentTurnRequestBody(
   const acpRuntimeOptions = normalizeAcpRuntimeOptions(body.acpRuntimeOptions);
   const mindosAgentOptions = normalizeMindosAgentOptions(body.agentOptions);
   const requestPermissionMode = permissionModeForRequest(assistantId, requestPermissionModeInput);
-  const permissionPolicy = createMindosAgentPermissionPolicy(requestPermissionMode);
-  const nativePermissionMode = requestPermissionMode;
+  const lastUserContent = getLastUserContent(messages);
+  const resolvedAgentMode = resolveMindosAgentModeRequest({
+    requestedMode: requestedAgentMode,
+    prompt: lastUserContent,
+  });
+  const agentMode = resolvedAgentMode.mode;
+  const effectivePermissionMode = resolveMindosAgentModePermissionMode(agentMode, requestPermissionMode);
+  const permissionPolicy = createMindosAgentPermissionPolicy(effectivePermissionMode);
+  const nativePermissionMode = effectivePermissionMode;
+  const agentModeContract = createMindosAgentModeContract({
+    mode: agentMode,
+    prompt: resolvedAgentMode.prompt,
+    ...(resolvedAgentMode.directive ? { directive: resolvedAgentMode.directive } : {}),
+    requestedPermissionMode: requestPermissionMode,
+    effectivePermissionMode,
+  });
   const chatSessionId = typeof body.chatSessionId === 'string' && body.chatSessionId.trim()
     ? body.chatSessionId.trim()
     : undefined;
@@ -371,17 +391,16 @@ export async function runAgentTurnRequestBody(
   const fileContextMetadata = fileContextRunMetadata(fileContextSignature, includeFileContext, loadedFileContext);
 
   if (runtimeLane.kind !== 'mindos-pi') {
-    const lastUserContent = getLastUserContent(messages);
     const recalledKnowledge = await recallMindosTurnKnowledge({
       mindRoot,
-      lastUserContent,
+      lastUserContent: resolvedAgentMode.prompt,
       currentFile,
       attachedFiles,
       sessionSpaces: sessionContext.resolvedSelection.spaces,
       activeRecall: agentConfig.activeRecall,
     });
     const externalPromptBase = await buildMindosContextPrompt({
-      prompt: lastUserContent,
+      prompt: resolvedAgentMode.prompt,
       mindRoot,
       fileContext: promptFileContext,
       uploadedParts,
@@ -392,7 +411,10 @@ export async function runAgentTurnRequestBody(
       sessionContextSelection: sessionContext.resolvedSelection,
       sessionContextIssues: sessionContext.issues,
     });
-    const externalPrompt = prependMindosActiveAssistantPrompt(externalPromptBase, activeAssistant);
+    const externalPrompt = prependMindosAgentModePrompt(
+      prependMindosActiveAssistantPrompt(externalPromptBase, activeAssistant),
+      agentModeContract,
+    );
     const sessionContextMetadata = sessionContextRunMetadata(sessionContextSignature, includeSessionContext);
     const externalTurnBase = {
       externalPrompt,
@@ -400,6 +422,7 @@ export async function runAgentTurnRequestBody(
       executionCwd,
       permissionPolicy,
       agentMode,
+      agentModeContract,
       sessionContextMetadata,
       fileContextMetadata,
       sessionWorkDir: sessionContext.resolvedWorkDir,
@@ -530,10 +553,9 @@ export async function runAgentTurnRequestBody(
     };
   }
 
-  const lastUserContent = getLastUserContent(messages);
   const recalledKnowledge = await recallMindosTurnKnowledge({
     mindRoot,
-    lastUserContent,
+    lastUserContent: resolvedAgentMode.prompt,
     currentFile,
     attachedFiles,
     sessionSpaces: sessionContext.resolvedSelection.spaces,
@@ -548,7 +570,7 @@ export async function runAgentTurnRequestBody(
     },
   });
   const commonTurnPrompt = await buildMindosContextPrompt({
-    prompt: lastUserContent,
+    prompt: resolvedAgentMode.prompt,
     mindRoot,
     fileContext: promptFileContext,
     uploadedParts,
@@ -560,8 +582,11 @@ export async function runAgentTurnRequestBody(
     sessionContextSelection: sessionContext.resolvedSelection,
     sessionContextIssues: sessionContext.issues,
   });
-  const turnPrompt = renderMindosPiSelectedSkillPrompt(commonTurnPrompt, selectedSkills);
-  let systemPrompt = systemPromptBase;
+  const turnPrompt = prependMindosAgentModePrompt(
+    renderMindosPiSelectedSkillPrompt(commonTurnPrompt, selectedSkills),
+    agentModeContract,
+  );
+  const systemPrompt = systemPromptBase;
 
   // Log system prompt size for diagnosing context truncation issues (e.g. Ollama)
   console.log(`[agent-turn] systemPrompt=${systemPrompt.length} chars (~${Math.ceil(systemPrompt.length / 4)} tokens)`);
@@ -585,6 +610,7 @@ export async function runAgentTurnRequestBody(
     permissionPolicy,
     chatSessionId,
     agentMode,
+    agentModeContract,
     sessionContextMetadata,
     fileContextMetadata,
     sessionWorkDirPath: sessionContext.resolvedWorkDir.path,

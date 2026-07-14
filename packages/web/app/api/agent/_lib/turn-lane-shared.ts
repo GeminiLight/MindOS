@@ -3,6 +3,7 @@ import type {
   MindosRuntimeAttachment,
 } from '@geminilight/mindos/agent/runtime';
 import type { MindosSelectedSkill } from '@geminilight/mindos/agent';
+import type { MindosAgentModeContract } from '@geminilight/mindos/agent/mode';
 import type { createMindosAgentPermissionPolicy } from '@geminilight/mindos/agent/mindos-pi/permission';
 import type {
   AcpRuntimeOptions,
@@ -24,6 +25,7 @@ export type RuntimeLaneBaseInput = {
   executionCwd: string;
   permissionPolicy: RuntimeLanePermissionPolicy;
   agentMode: string;
+  agentModeContract: MindosAgentModeContract;
   sessionContextMetadata: Record<string, unknown>;
   fileContextMetadata: Record<string, unknown>;
   sessionWorkDir: SessionWorkDir & { path: string };

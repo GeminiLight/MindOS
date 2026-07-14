@@ -78,6 +78,8 @@ export type AgentEventType =
   | 'permission_resolved'
   | 'user_question_started'
   | 'user_question_resolved'
+  | 'plan_artifact'
+  | 'goal_evaluation'
   | 'runtime_status'
   | 'error';
 
@@ -90,6 +92,8 @@ export type AgentEventCategory =
   | 'file'
   | 'permission'
   | 'question'
+  | 'plan'
+  | 'goal'
   | 'error';
 
 export type AgentEventData =
@@ -147,6 +151,32 @@ export type AgentEventData =
       status: 'requested' | 'answered' | 'cancelled';
       prompt?: string;
       summary?: string;
+    }
+  | {
+      kind: 'plan';
+      schemaVersion: 1;
+      mode: 'plan';
+      objective?: string;
+      summary: string;
+      steps: Array<{
+        title: string;
+        status: 'pending' | 'in_progress' | 'completed' | 'blocked';
+      }>;
+      risks: string[];
+      source: 'assistant' | 'fallback';
+      generatedAt: number;
+    }
+  | {
+      kind: 'goal';
+      schemaVersion: 1;
+      mode: 'goal';
+      objective: string;
+      status: 'completed' | 'blocked' | 'needs_user';
+      confidence: 'low' | 'medium' | 'high';
+      summary: string;
+      evidence: string[];
+      nextAction?: string;
+      evaluatedAt: number;
     }
   | {
       kind: 'error';

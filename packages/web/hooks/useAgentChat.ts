@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useCallback, useLayoutEffect } from 'react';
-import type { AcpRuntimeOptions, AgentIdentity, AgentPermissionMode, AgentRuntimeIdentity, Message, MessagePart, ImagePart, LocalAttachment, RuntimeSessionBinding, NativeRuntimeOptions } from '@/lib/types';
+import type { AcpRuntimeOptions, AgentIdentity, AgentMode, AgentPermissionMode, AgentRuntimeIdentity, Message, MessagePart, ImagePart, LocalAttachment, RuntimeSessionBinding, NativeRuntimeOptions } from '@/lib/types';
 import type { ProviderId } from '@/lib/agent/providers';
 import { consumeUIMessageStream } from '@/lib/agent/stream-consumer';
 import { MINDOS_AGENT, annotateMessageWithAgentRuntime, compactAgentRuntimeIdentity, getMatchingRuntimeSessionBinding } from '@/lib/ask-agent';
@@ -85,6 +85,7 @@ export interface AgentChatRefs {
   selectedSkillRef: React.RefObject<{ name: string } | null>;
   selectedAgentRuntimeRef: React.RefObject<(AgentRuntimeIdentity & { binaryPath?: string }) | null>;
   attachedFilesRef: React.RefObject<string[]>;
+  agentModeRef?: React.RefObject<AgentMode>;
   permissionModeRef?: React.RefObject<AgentPermissionMode>;
 }
 
@@ -316,6 +317,7 @@ export function useAgentChat({
     const permissionModeSnapshot = refs.permissionModeRef?.current ?? permissionMode;
     const selectedRuntimeBase = compactAgentRuntimeIdentity(refs.selectedAgentRuntimeRef.current);
     const requestRuntimeBase = selectedRuntimeBase?.kind === 'mindos' ? null : selectedRuntimeBase;
+    const agentModeSnapshot = requestRuntimeBase ? 'default' : refs.agentModeRef?.current ?? 'default';
     const runtimeSnapshot = selectedRuntimeBase ?? MINDOS_RUNTIME;
     const acpAgent: AgentIdentity | null = requestRuntimeBase?.kind === 'acp'
       ? { id: requestRuntimeBase.id, name: requestRuntimeBase.name }
@@ -413,7 +415,7 @@ export function useAgentChat({
     const sessionContextSnapshot = getSessionSubmitContextSnapshot(sessionId);
     const requestBody = JSON.stringify({
       messages: requestMessages,
-      agentMode: 'default',
+      agentMode: agentModeSnapshot,
       permissionMode: permissionModeSnapshot,
       currentFile,
       attachedFiles: snapshot.requestAttachedFiles,

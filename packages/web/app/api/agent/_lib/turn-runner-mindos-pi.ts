@@ -6,6 +6,13 @@ import { resolveAgentTurnCompatMode } from '@/lib/agent/agent-turn-compat';
 import {
   appendSseEventToAgentRun,
 } from '@geminilight/mindos/agent';
+import type { MindosAgentModeContract } from '@geminilight/mindos/agent/mode';
+import type { AgentRunStatus } from '@geminilight/mindos/agent/ledger/run-ledger-types';
+import {
+  appendMindosAgentModeRunEvents,
+  createMindosAgentModeRunArtifacts,
+  mindosAgentModeArtifactsMetadata,
+} from '@geminilight/mindos/agent/mode-run-events';
 import {
   runMindosNonStreamingFallback,
   resolveMindosAgentTimeoutMs,
@@ -62,6 +69,7 @@ export type RunMindosPiTurnInput = {
   permissionPolicy: PermissionPolicy;
   chatSessionId?: string;
   agentMode: string;
+  agentModeContract: MindosAgentModeContract;
   sessionContextMetadata: Record<string, unknown>;
   fileContextMetadata: Record<string, unknown>;
   sessionWorkDirPath: string;
@@ -138,9 +146,10 @@ export async function runMindosPiTurn(input: RunMindosPiTurnInput): Promise<Resp
         inputSummary: typeof lastUserContent === 'string' ? lastUserContent : JSON.stringify(lastUserContent),
         metadata: {
           agentMode: input.agentMode,
+          agentModeContract: input.agentModeContract,
           sessionWorkDir: input.sessionWorkDirPath,
           permissionCompilation: {
-            requested: input.permissionPolicy.permissionMode,
+            requested: input.agentModeContract.requestedPermissionMode ?? input.permissionPolicy.permissionMode,
             applied: input.permissionPolicy.runtimePermissionMode,
             target: 'mindos-pi',
           },
@@ -255,6 +264,12 @@ export async function runMindosPiTurn(input: RunMindosPiTurnInput): Promise<Resp
         } finally {
           restoreAgentRunResourceContext();
         }
+        const modeArtifacts = recordModeArtifacts(
+          mainRun.id,
+          input.agentModeContract,
+          outputSummary,
+          'completed',
+        );
         completeAgentRun(mainRun.id, {
           outputSummary,
           ...(runtimeSession ? {
@@ -262,16 +277,26 @@ export async function runMindosPiTurn(input: RunMindosPiTurnInput): Promise<Resp
               sessionId: runtimeSession.externalSessionId,
               path: runtimeSession.sessionFile,
             },
-            metadata: {
+          } : {}),
+          metadata: {
+            ...mindosAgentModeArtifactsMetadata(modeArtifacts),
+            ...(runtimeSession ? {
               externalSessionId: runtimeSession.externalSessionId,
               runtimeSessionDir: runtimeSession.sessionDir,
               runtimeSessionResumed: runtimeSession.resumed,
-            },
-          } : {}),
+            } : {}),
+          },
         });
       } catch (error) {
+        const terminalStatus = agentRunErrorStatus(error, input.requestSignal);
+        const modeArtifacts = recordModeArtifacts(
+          mainRun.id,
+          input.agentModeContract,
+          outputSummary,
+          terminalStatus,
+        );
         failAgentRun(mainRun.id, {
-          status: agentRunErrorStatus(error, input.requestSignal),
+          status: terminalStatus,
           error,
           outputSummary,
           ...(runtimeSession ? {
@@ -280,11 +305,14 @@ export async function runMindosPiTurn(input: RunMindosPiTurnInput): Promise<Resp
               path: runtimeSession.sessionFile,
             },
             metadata: {
+              ...mindosAgentModeArtifactsMetadata(modeArtifacts),
               externalSessionId: runtimeSession.externalSessionId,
               runtimeSessionDir: runtimeSession.sessionDir,
               runtimeSessionResumed: runtimeSession.resumed,
             },
-          } : {}),
+          } : {
+            metadata: mindosAgentModeArtifactsMetadata(modeArtifacts),
+          }),
         });
         throw error;
       }
@@ -302,4 +330,19 @@ export async function runMindosPiTurn(input: RunMindosPiTurnInput): Promise<Resp
     }
     return apiError(ErrorCodes.MODEL_INIT_FAILED, err instanceof Error ? err.message : 'Failed to initialize AI model', 500);
   }
+}
+
+function recordModeArtifacts(
+  runId: string,
+  contract: MindosAgentModeContract,
+  outputSummary: string,
+  runStatus: AgentRunStatus,
+) {
+  const artifacts = createMindosAgentModeRunArtifacts({
+    contract,
+    outputSummary,
+    runStatus,
+  });
+  appendMindosAgentModeRunEvents(runId, artifacts);
+  return artifacts;
 }

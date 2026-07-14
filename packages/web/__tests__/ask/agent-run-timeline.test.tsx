@@ -351,4 +351,71 @@ describe('AgentRunTimeline', () => {
       root.unmount();
     });
   });
+
+  it('renders plan artifacts and goal evaluations as first-class timeline events', async () => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    const part = timelinePart();
+    const run = part.runs[0]!;
+    part.events = [
+      {
+        id: 'event-plan',
+        runId: run.id,
+        type: 'plan_artifact',
+        category: 'plan',
+        status: 'completed',
+        ts: 8,
+        record: run,
+        data: {
+          kind: 'plan',
+          schemaVersion: 1,
+          mode: 'plan',
+          objective: 'Integrate Plan mode',
+          summary: 'Read-only implementation plan is ready.',
+          steps: [
+            { title: 'Inspect the runtime path', status: 'completed' },
+            { title: 'Add ledger artifact', status: 'pending' },
+          ],
+          risks: ['Permission policy drift'],
+          source: 'assistant',
+          generatedAt: 8,
+        },
+      },
+      {
+        id: 'event-goal',
+        runId: run.id,
+        type: 'goal_evaluation',
+        category: 'goal',
+        status: 'failed',
+        ts: 9,
+        record: run,
+        data: {
+          kind: 'goal',
+          schemaVersion: 1,
+          mode: 'goal',
+          objective: 'Ship Goal mode',
+          status: 'blocked',
+          confidence: 'high',
+          summary: 'Goal stopped on a missing approval.',
+          evidence: ['Approval was required for a write action.'],
+          nextAction: 'Switch to Build mode after approval.',
+          evaluatedAt: 9,
+        },
+      },
+    ];
+
+    await act(async () => {
+      root.render(<AgentRunTimeline part={part} />);
+    });
+
+    expect(host.textContent).toContain('plan artifact · 2 steps');
+    expect(host.textContent).toContain('Read-only implementation plan is ready.');
+    expect(host.textContent).toContain('goal blocked');
+    expect(host.textContent).toContain('Goal stopped on a missing approval.');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
 });

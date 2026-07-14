@@ -29,6 +29,13 @@ import {
   updateAgentRun,
 } from '@geminilight/mindos/agent/ledger/run-ledger';
 import {
+  appendMindosAgentModeRunEvents,
+  createMindosAgentModeRunArtifacts,
+  mindosAgentModeArtifactsMetadata,
+} from '@geminilight/mindos/agent/mode-run-events';
+import type { AgentRunStatus } from '@geminilight/mindos/agent/ledger/run-ledger-types';
+import type { MindosAgentModeContract } from '@geminilight/mindos/agent/mode';
+import {
   createSession,
   loadSession,
   promptStream,
@@ -76,10 +83,11 @@ async function runAcpRuntimeTurn(
     inputSummary: input.externalPrompt,
     metadata: {
       agentMode: input.agentMode,
+      agentModeContract: input.agentModeContract,
       source: 'selected-acp-runtime',
       phase: 'create_session',
       permissionCompilation: {
-        requested: input.permissionPolicy.permissionMode,
+        requested: input.agentModeContract.requestedPermissionMode ?? input.permissionPolicy.permissionMode,
         applied: input.permissionPolicy.acpPermissionMode,
         target: 'acp',
       },
@@ -161,10 +169,21 @@ async function runAcpRuntimeTurn(
     ),
   )
     .catch((error) => {
+      const terminalStatus = agentRunErrorStatus(error, input.requestSignal);
+      const modeArtifacts = recordModeArtifacts(
+        acpRun.id,
+        input.agentModeContract,
+        outputSummary,
+        terminalStatus,
+      );
       failAgentRun(acpRun.id, {
-        status: agentRunErrorStatus(error, input.requestSignal),
+        status: terminalStatus,
         error,
         outputSummary,
+        metadata: {
+          ...mindosAgentModeArtifactsMetadata(modeArtifacts),
+          source: 'selected-acp-runtime',
+        },
       });
       throw error;
     })
@@ -172,14 +191,59 @@ async function runAcpRuntimeTurn(
       await materializedAttachments.cleanup();
     });
   if (acpResult.error) {
+    const terminalStatus = agentRunErrorStatus(acpResult.error, input.requestSignal);
+    const modeArtifacts = recordModeArtifacts(
+      acpRun.id,
+      input.agentModeContract,
+      outputSummary,
+      terminalStatus,
+    );
     failAgentRun(acpRun.id, {
-      status: agentRunErrorStatus(acpResult.error, input.requestSignal),
+      status: terminalStatus,
       error: acpResult.error,
       outputSummary,
+      metadata: {
+        ...mindosAgentModeArtifactsMetadata(modeArtifacts),
+        source: 'selected-acp-runtime',
+      },
     });
   } else {
-    completeAgentRun(acpRun.id, { outputSummary });
+    const modeArtifacts = recordModeArtifacts(
+      acpRun.id,
+      input.agentModeContract,
+      outputSummary,
+      'completed',
+    );
+    completeAgentRun(acpRun.id, {
+      outputSummary,
+      metadata: {
+        ...mindosAgentModeArtifactsMetadata(modeArtifacts),
+        source: 'selected-acp-runtime',
+        permissionCompilation: {
+          requested: input.agentModeContract.requestedPermissionMode ?? input.permissionPolicy.permissionMode,
+          applied: input.permissionPolicy.acpPermissionMode,
+          target: 'acp',
+        },
+        ...input.sessionContextMetadata,
+        ...input.fileContextMetadata,
+      },
+    });
   }
+}
+
+function recordModeArtifacts(
+  runId: string,
+  contract: MindosAgentModeContract,
+  outputSummary: string,
+  runStatus: AgentRunStatus,
+) {
+  const artifacts = createMindosAgentModeRunArtifacts({
+    contract,
+    outputSummary,
+    runStatus,
+  });
+  appendMindosAgentModeRunEvents(runId, artifacts);
+  return artifacts;
 }
 
 function acpSessionOptions(

@@ -774,6 +774,54 @@ describe('agent runtime adapters: Claude Code', () => {
     ]);
   });
 
+  it('maps MindOS Plan agent mode to Claude Code native plan permission mode', async () => {
+    const transport = createFakeClaudeTransport([
+      JSON.stringify({ type: 'result', subtype: 'success', session_id: 'claude-session-plan' }),
+    ]);
+
+    await runMindosNativeAgentTurn({
+      runtime: { kind: 'claude', id: 'claude', name: 'Claude Code', binaryPath: '/usr/local/bin/claude' },
+      cwd: '/tmp/mind',
+      prompt: 'Plan the migration.',
+      permissionMode: 'read',
+      agentMode: 'plan',
+      send: () => {},
+      services: {
+        createClaudeClient: () => createClaudeCodeCliClient(transport),
+      },
+    });
+
+    const argv = transport.argv ?? [];
+    expect(argv.slice(0, 7)).toEqual([
+      '--print',
+      '--output-format',
+      'stream-json',
+      '--verbose',
+      '--permission-mode',
+      'plan',
+      '--',
+    ]);
+    expect(argv.at(-1)).toBe('Plan the migration.');
+
+    const sdk = createFakeClaudeSdk([
+      { type: 'result', subtype: 'success', session_id: 'claude-sdk-plan', is_error: false, result: '' },
+    ]);
+
+    await runMindosNativeAgentTurn({
+      runtime: { kind: 'claude', id: 'claude', name: 'Claude Code', binaryPath: '/usr/local/bin/claude' },
+      cwd: '/tmp/mind',
+      prompt: 'Plan SDK migration.',
+      permissionMode: 'read',
+      agentMode: 'plan',
+      send: () => {},
+      services: {
+        loadClaudeSdk: () => sdk,
+      },
+    });
+
+    expect(sdk.params?.options?.permissionMode).toBe('plan');
+  });
+
   it('maps interactive MindOS modes to Claude Code CLI permission modes', async () => {
     const cases = [
       { permissionMode: 'ask', expected: 'default' },

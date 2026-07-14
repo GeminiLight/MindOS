@@ -171,7 +171,7 @@ function normalizeEvent(value: unknown): AgentEvent | null {
 }
 
 function normalizeEventCategory(value: unknown, type: AgentEventType): AgentEventCategory {
-  if (value === 'status' || value === 'text' || value === 'tool' || value === 'file' || value === 'permission' || value === 'question' || value === 'error') {
+  if (value === 'status' || value === 'text' || value === 'tool' || value === 'file' || value === 'permission' || value === 'question' || value === 'plan' || value === 'goal' || value === 'error') {
     return value;
   }
   if (type === 'text') return 'text';
@@ -179,6 +179,8 @@ function normalizeEventCategory(value: unknown, type: AgentEventType): AgentEven
   if (type === 'file_changed') return 'file';
   if (type === 'permission_requested' || type === 'permission_resolved') return 'permission';
   if (type === 'user_question_started' || type === 'user_question_resolved') return 'question';
+  if (type === 'plan_artifact') return 'plan';
+  if (type === 'goal_evaluation') return 'goal';
   if (type === 'run_failed' || type === 'error') return 'error';
   if (type === 'tool') return 'tool';
   if (type === 'file') return 'file';
@@ -266,6 +268,31 @@ function defaultEventData(
       kind: 'question',
       status: type === 'user_question_resolved' ? 'answered' : 'requested',
       ...(summary ? { prompt: summary } : {}),
+    };
+  }
+  if (category === 'plan') {
+    return {
+      kind: 'plan',
+      schemaVersion: 1,
+      mode: 'plan',
+      summary: summary || 'Plan artifact recorded.',
+      steps: [],
+      risks: [],
+      source: 'fallback',
+      generatedAt: nowMs(),
+    };
+  }
+  if (category === 'goal') {
+    return {
+      kind: 'goal',
+      schemaVersion: 1,
+      mode: 'goal',
+      objective: 'Complete the requested goal.',
+      status: type === 'run_failed' ? 'blocked' : 'completed',
+      confidence: 'low',
+      summary: summary || 'Goal evaluation recorded.',
+      evidence: [],
+      evaluatedAt: nowMs(),
     };
   }
   return {

@@ -21,6 +21,13 @@ import {
   startAgentRun,
 } from '@geminilight/mindos/agent/ledger/run-ledger';
 import {
+  appendMindosAgentModeRunEvents,
+  createMindosAgentModeRunArtifacts,
+  mindosAgentModeArtifactsMetadata,
+} from '@geminilight/mindos/agent/mode-run-events';
+import type { AgentRunStatus } from '@geminilight/mindos/agent/ledger/run-ledger-types';
+import type { MindosAgentModeContract } from '@geminilight/mindos/agent/mode';
+import {
   registerAgentRunCancelHandler,
 } from '@geminilight/mindos/agent/ledger/run-cancellation';
 import {
@@ -60,10 +67,11 @@ async function runNativeRuntimeTurn(
     inputSummary: input.externalPrompt,
     metadata: {
       agentMode: input.agentMode,
+      agentModeContract: input.agentModeContract,
       runtimeKind: nativeRuntime.kind,
       source: 'selected-native-runtime',
       permissionCompilation: {
-        requested: input.nativePermissionMode,
+        requested: input.agentModeContract.requestedPermissionMode ?? input.nativePermissionMode,
         applied: input.permissionPolicy.runtimePermissionMode,
         target: nativeRuntime.kind,
       },
@@ -106,6 +114,7 @@ async function runNativeRuntimeTurn(
         attachments: input.runtimeAttachments,
         selectedSkills: input.selectedSkills,
         permissionMode: input.nativePermissionMode,
+        agentMode: input.agentModeContract.mode,
         ...(input.nativeRuntimeOptions.modelOverride ? { modelOverride: input.nativeRuntimeOptions.modelOverride } : {}),
         ...(input.nativeRuntimeOptions.reasoningEffort ? { reasoningEffort: input.nativeRuntimeOptions.reasoningEffort } : {}),
         timeoutMs: resolveMindosAgentTimeoutMs(process.env.MINDOS_AGENT_TIMEOUT_MS),
@@ -129,25 +138,40 @@ async function runNativeRuntimeTurn(
       }))
     )));
     if (result.error) {
+      const terminalStatus = agentRunErrorStatus(result.error, nativeRunSignal);
+      const modeArtifacts = recordModeArtifacts(
+        nativeRun.id,
+        input.agentModeContract,
+        outputSummary,
+        terminalStatus,
+      );
       failAgentRun(nativeRun.id, {
-        status: agentRunErrorStatus(result.error, nativeRunSignal),
+        status: terminalStatus,
         error: result.error,
         outputSummary,
         ...(result.externalSessionId ? { archive: { sessionId: result.externalSessionId } } : {}),
         metadata: {
+          ...mindosAgentModeArtifactsMetadata(modeArtifacts),
           runtimeKind: nativeRuntime.kind,
           ...(result.externalSessionId ? { externalSessionId: result.externalSessionId } : {}),
         },
       });
       return;
     }
+    const modeArtifacts = recordModeArtifacts(
+      nativeRun.id,
+      input.agentModeContract,
+      outputSummary,
+      'completed',
+    );
     completeAgentRun(nativeRun.id, {
       outputSummary,
       ...(result.externalSessionId ? { archive: { sessionId: result.externalSessionId } } : {}),
       metadata: {
+        ...mindosAgentModeArtifactsMetadata(modeArtifacts),
         runtimeKind: nativeRuntime.kind,
         permissionCompilation: {
-          requested: input.nativePermissionMode,
+          requested: input.agentModeContract.requestedPermissionMode ?? input.nativePermissionMode,
           applied: input.permissionPolicy.runtimePermissionMode,
           target: nativeRuntime.kind,
         },
@@ -157,15 +181,41 @@ async function runNativeRuntimeTurn(
       },
     });
   } catch (error) {
+    const terminalStatus = agentRunErrorStatus(error, nativeRunSignal);
+    const modeArtifacts = recordModeArtifacts(
+      nativeRun.id,
+      input.agentModeContract,
+      outputSummary,
+      terminalStatus,
+    );
     failAgentRun(nativeRun.id, {
-      status: agentRunErrorStatus(error, nativeRunSignal),
+      status: terminalStatus,
       error,
       outputSummary,
+      metadata: {
+        ...mindosAgentModeArtifactsMetadata(modeArtifacts),
+        runtimeKind: nativeRuntime.kind,
+      },
     });
     throw error;
   } finally {
     unregisterCancelHandler();
   }
+}
+
+function recordModeArtifacts(
+  runId: string,
+  contract: MindosAgentModeContract,
+  outputSummary: string,
+  runStatus: AgentRunStatus,
+) {
+  const artifacts = createMindosAgentModeRunArtifacts({
+    contract,
+    outputSummary,
+    runStatus,
+  });
+  appendMindosAgentModeRunEvents(runId, artifacts);
+  return artifacts;
 }
 
 function cancelReasonToAbortError(reason: unknown): Error {

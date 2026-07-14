@@ -1076,6 +1076,103 @@ describe('/api/agent/sessions/:sessionId/turns native runtime routing', () => {
     expect(capturedNativeOptions?.permissionMode).toBe('read');
   });
 
+  it('compiles Plan mode to readonly permissions before calling native runtimes', async () => {
+    mockResolveCommandPath.mockImplementation(async (command: string) => command === 'codex' ? '/usr/local/bin/codex' : null);
+    mockCheckNativeRuntimeHealth.mockResolvedValue({ status: 'available' });
+    mockDetectLocalAcpAgents.mockResolvedValue({ installed: [], notInstalled: [] });
+
+    const res = await POST(agentTurnRequest({
+      messages: [{ role: 'user', content: 'Inspect this repository and plan the fix' }],
+      selectedRuntime: { id: 'codex', name: 'Codex', kind: 'codex' },
+      agentMode: 'plan',
+      permissionMode: 'full',
+      chatSessionId: 'chat-native-plan-mode',
+    }));
+
+    expect(res.status).toBe(200);
+    await res.text();
+
+    expect(capturedNativeOptions?.permissionMode).toBe('read');
+    expect(capturedNativeOptions?.agentMode).toBe('plan');
+    expect(capturedNativeOptions?.prompt).toContain('## Agent Mode: Plan');
+    expect(capturedNativeOptions?.prompt).toContain('do not write files');
+    const nativeRun = listAgentRuns({ kind: 'native-runtime' })[0]!;
+    expect(nativeRun.permissionMode).toBe('read');
+    expect(nativeRun.metadata).toMatchObject({
+      agentMode: 'plan',
+      agentModeContract: {
+        mode: 'plan',
+        requestedPermissionMode: 'full',
+        effectivePermissionMode: 'read',
+        behavior: 'read_only_plan',
+      },
+      permissionCompilation: {
+        requested: 'full',
+        applied: 'readonly',
+        target: 'codex',
+      },
+    });
+    expect(listAgentEvents({ runId: nativeRun.id }).some((event) => event.type === 'plan_artifact')).toBe(true);
+  });
+
+  it('honors /goal directives, preserves permissions, and records goal evaluations', async () => {
+    mockResolveCommandPath.mockImplementation(async (command: string) => command === 'codex' ? '/usr/local/bin/codex' : null);
+    mockCheckNativeRuntimeHealth.mockResolvedValue({ status: 'available' });
+    mockDetectLocalAcpAgents.mockResolvedValue({ installed: [], notInstalled: [] });
+    mockRunMindosNativeAgentTurn.mockImplementationOnce(async (options: MindosNativeAgentTurnOptions) => {
+      capturedNativeOptions = options;
+      options.send({ type: 'text_delta', delta: 'Goal status: complete\nVerified with Goal mode smoke.' });
+      options.send({ type: 'done' });
+      return { externalSessionId: 'thr_goal' };
+    });
+
+    const res = await POST(agentTurnRequest({
+      messages: [{ role: 'user', content: '/goal Finish the migration smoke' }],
+      selectedRuntime: { id: 'codex', name: 'Codex', kind: 'codex' },
+      agentMode: 'default',
+      permissionMode: 'auto',
+      chatSessionId: 'chat-native-goal-mode',
+    }));
+
+    expect(res.status).toBe(200);
+    await res.text();
+
+    expect(capturedNativeOptions?.permissionMode).toBe('auto');
+    expect(capturedNativeOptions?.agentMode).toBe('goal');
+    expect(capturedNativeOptions?.prompt).toContain('## Agent Mode: Goal');
+    expect(capturedNativeOptions?.prompt).toContain('Objective: Finish the migration smoke');
+    expect(capturedNativeOptions?.prompt).not.toContain('/goal');
+    const nativeRun = listAgentRuns({ kind: 'native-runtime' })[0]!;
+    expect(nativeRun.permissionMode).toBe('auto');
+    expect(nativeRun.metadata).toMatchObject({
+      agentMode: 'goal',
+      agentModeContract: {
+        mode: 'goal',
+        directive: '/goal',
+        requestedPermissionMode: 'auto',
+        effectivePermissionMode: 'auto',
+        behavior: 'goal_until_done_blocked_or_needs_user',
+      },
+      permissionCompilation: {
+        requested: 'auto',
+        applied: 'agent',
+        target: 'codex',
+      },
+    });
+    expect(listAgentEvents({ runId: nativeRun.id })).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'goal_evaluation',
+          data: expect.objectContaining({
+            kind: 'goal',
+            status: 'completed',
+            confidence: 'high',
+          }),
+        }),
+      ]),
+    );
+  });
+
   it('rejects nested runtime permission options', async () => {
     mockResolveCommandPath.mockImplementation(async (command: string) => command === 'claude' ? '/usr/local/bin/claude' : null);
     mockCheckNativeRuntimeHealth.mockResolvedValue({ status: 'available' });

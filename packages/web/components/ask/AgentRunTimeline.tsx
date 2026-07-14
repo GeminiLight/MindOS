@@ -1,7 +1,7 @@
 'use client';
 
 import { Fragment, memo, useMemo, useState } from 'react';
-import { AlertTriangle, Bot, CheckCircle2, ChevronDown, ChevronRight, CircleStop, Clock3, FileText, Loader2, MessageSquareMore, ShieldCheck, Terminal, TextCursorInput } from 'lucide-react';
+import { AlertTriangle, Bot, CheckCircle2, ChevronDown, ChevronRight, CircleStop, Clock3, FileText, ListChecks, Loader2, MessageSquareMore, ShieldCheck, Target, Terminal, TextCursorInput } from 'lucide-react';
 import type { AgentRunTimelineEvent, AgentRunTimelinePart, AgentRunTimelineRecord } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
@@ -56,6 +56,8 @@ function eventIcon(event: AgentRunTimelineEvent) {
   if (event.category === 'file') return <FileText size={11} />;
   if (event.category === 'permission') return <ShieldCheck size={11} />;
   if (event.category === 'question') return <MessageSquareMore size={11} />;
+  if (event.category === 'plan') return <ListChecks size={11} />;
+  if (event.category === 'goal') return <Target size={11} />;
   if (event.category === 'text') return <TextCursorInput size={11} />;
   if (event.category === 'error') return <AlertTriangle size={11} />;
   return <Clock3 size={11} />;
@@ -67,6 +69,8 @@ function eventTone(event: AgentRunTimelineEvent): 'error' | 'active' | 'muted' {
   if (event.data?.kind === 'tool' && (event.data.status === 'started' || event.data.status === 'running')) return 'active';
   if (event.data?.kind === 'permission' && event.data.status === 'requested') return 'active';
   if (event.data?.kind === 'question' && event.data.status === 'requested') return 'active';
+  if (event.data?.kind === 'goal' && event.data.status !== 'completed') return event.data.status === 'blocked' ? 'error' : 'active';
+  if (event.data?.kind === 'plan') return 'active';
   return 'muted';
 }
 
@@ -82,6 +86,12 @@ function eventTitle(event: AgentRunTimelineEvent): string {
   }
   if (event.data?.kind === 'question') {
     return `user question ${event.data.status}`;
+  }
+  if (event.data?.kind === 'plan') {
+    return `plan artifact · ${event.data.steps.length} step${event.data.steps.length === 1 ? '' : 's'}`;
+  }
+  if (event.data?.kind === 'goal') {
+    return `goal ${event.data.status.replace(/_/g, ' ')}`;
   }
   if (event.data?.kind === 'error') {
     return event.data.message;
@@ -107,6 +117,12 @@ function eventSummary(event: AgentRunTimelineEvent): string | null {
   }
   if (event.data?.kind === 'question') {
     return event.data.summary || event.data.prompt || event.message || null;
+  }
+  if (event.data?.kind === 'plan') {
+    return event.data.summary || event.message || null;
+  }
+  if (event.data?.kind === 'goal') {
+    return event.data.summary || event.data.nextAction || event.message || null;
   }
   if (event.data?.kind === 'text') {
     return event.data.text || event.message || null;

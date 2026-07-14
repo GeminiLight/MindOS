@@ -1,6 +1,7 @@
 import type { MindOSSSEvent } from '../turn/index.js';
 import { redactSensitiveText } from '../turn/index.js';
 import type { MindosPermissionMode } from '../permission/index.js';
+import type { MindosAgentMode } from '../mode.js';
 import {
   createClaudeCodeCliClient,
   createClaudeCodeCliStdioTransport,
@@ -140,6 +141,7 @@ export type MindosNativeAgentTurnOptions = {
   attachments?: MindosRuntimeAttachment[];
   selectedSkills?: MindosSelectedSkill[];
   permissionMode?: MindosPermissionMode;
+  agentMode?: MindosAgentMode;
   modelOverride?: string;
   reasoningEffort?: string;
   timeoutMs?: number;
@@ -423,7 +425,7 @@ async function runClaudeTurnWithClient(
       ...(sessionId ? { sessionId } : {}),
       ...(options.modelOverride ? { model: options.modelOverride } : {}),
       ...(reasoningEffort ? { effort: reasoningEffort } : {}),
-      permissionMode: claudeCliPermissionModeForMindosMode(options.permissionMode),
+      permissionMode: claudeCliPermissionModeForMindosMode(options.permissionMode, options.agentMode),
       ...(permissionPrompt ? { permissionPrompt } : {}),
       signal: options.signal,
     });
@@ -459,7 +461,9 @@ function shouldFallbackFromClaudeSdkTurnError(error: Error, signal?: AbortSignal
 
 function claudeCliPermissionModeForMindosMode(
   mode: MindosNativeAgentTurnOptions['permissionMode'],
+  agentMode?: MindosNativeAgentTurnOptions['agentMode'],
 ): ClaudeCodeCliPermissionMode {
+  if (agentMode === 'plan') return 'plan';
   switch (mode ?? 'ask') {
     case 'read':
       return 'dontAsk';

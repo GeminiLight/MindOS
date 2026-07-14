@@ -4,7 +4,7 @@ import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import ChatContent from '@/components/chat/ChatContent';
 import { LAST_AGENT_RUNTIME_STORAGE_KEY } from '@/lib/ask-runtime-preference';
-import type { AgentPermissionMode, ChatSession } from '@/lib/types';
+import type { AgentMode, AgentPermissionMode, ChatSession } from '@/lib/types';
 import type { RuntimeSessionEntry } from '@/lib/runtime-session-entry';
 
 const mockSetMessages = vi.fn();
@@ -395,6 +395,20 @@ vi.mock('@/components/ask/ProviderModelCapsule', () => ({
   ),
   getPersistedProviderModel: () => mockPersistedProviderModel,
 }));
+vi.mock('@/components/ask/AgentModeCapsule', () => ({
+  default: ({
+    mode,
+    onChange,
+  }: {
+    mode: AgentMode;
+    onChange: (mode: AgentMode) => void;
+  }) => (
+    <div data-testid="agent-mode-capsule" data-mode={mode}>
+      <button type="button" onClick={() => onChange('plan')}>Set Plan Mode</button>
+      <button type="button" onClick={() => onChange('goal')}>Set Goal Mode</button>
+    </div>
+  ),
+}));
 vi.mock('@/components/ask/ModeCapsule', () => ({
   default: ({
     mode,
@@ -420,6 +434,13 @@ vi.mock('@/lib/agent/reconnect', () => ({
 vi.mock('@/lib/agent/stream-consumer', () => ({
   consumeUIMessageStream: () => new Promise(() => {}),
 }));
+
+function setTextareaValue(textarea: HTMLTextAreaElement, value: string): void {
+  const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
+  if (!setter) throw new Error('HTMLTextAreaElement value setter is unavailable');
+  setter.call(textarea, value);
+  textarea.dispatchEvent(new Event('input', { bubbles: true }));
+}
 
 describe('ChatContent ACP session binding', () => {
   beforeEach(() => {
@@ -892,6 +913,102 @@ describe('ChatContent ACP session binding', () => {
     expect(requestBody.providerOverride).toBe('openai');
     expect(requestBody.modelOverride).toBe('gpt-test');
     expect(mockSetSessionDefaultAcpAgent).toHaveBeenLastCalledWith(null);
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('sends the selected MindOS agent mode with the turn request', async () => {
+    mockPersistedProviderModel = { provider: 'openai', model: 'gpt-test' };
+    mockActiveSession = emptySession;
+    mockSessions = [emptySession];
+    mockActiveSessionId = emptySession.id;
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<ChatContent visible variant="panel" initialMessage="finish this feature" />);
+    });
+
+    const goalMode = Array.from(host.querySelectorAll('button')).find((button) => button.textContent === 'Set Goal Mode') as HTMLButtonElement;
+    expect(goalMode).toBeTruthy();
+    await act(async () => {
+      goalMode.click();
+    });
+
+    const form = host.querySelector('form') as HTMLFormElement;
+    await act(async () => {
+      if (typeof form.requestSubmit === 'function') {
+        form.requestSubmit();
+      } else {
+        form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      }
+    });
+
+    const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
+    const agentTurnCall = fetchMock.mock.calls.find(([url]) => isAgentTurnUrl(url));
+    expect(agentTurnCall).toBeTruthy();
+    const requestBody = JSON.parse(String((agentTurnCall?.[1] as RequestInit | undefined)?.body));
+    expect(requestBody.selectedAcpAgent).toBeNull();
+    expect(requestBody.selectedRuntime).toBeNull();
+    expect(requestBody.agentMode).toBe('goal');
+    expect(requestBody.permissionMode).toBe('ask');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('syncs the MindOS agent mode capsule from /plan and /goal composer directives', async () => {
+    mockActiveSession = emptySession;
+    mockSessions = [emptySession];
+    mockActiveSessionId = emptySession.id;
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<ChatContent visible variant="panel" />);
+    });
+
+    const capsule = () => host.querySelector('[data-testid="agent-mode-capsule"]') as HTMLElement;
+    const textarea = host.querySelector('textarea') as HTMLTextAreaElement;
+    expect(capsule().getAttribute('data-mode')).toBe('default');
+
+    await act(async () => {
+      setTextareaValue(textarea, '/plan inspect before editing');
+    });
+    expect(capsule().getAttribute('data-mode')).toBe('plan');
+
+    await act(async () => {
+      setTextareaValue(textarea, '/goal finish the task');
+    });
+    expect(capsule().getAttribute('data-mode')).toBe('goal');
+
+    await act(async () => {
+      setTextareaValue(textarea, 'finish the task normally');
+    });
+    expect(capsule().getAttribute('data-mode')).toBe('default');
+
+    const planMode = Array.from(host.querySelectorAll('button')).find((button) => button.textContent === 'Set Plan Mode') as HTMLButtonElement;
+    await act(async () => {
+      planMode.click();
+    });
+    expect(capsule().getAttribute('data-mode')).toBe('plan');
+
+    await act(async () => {
+      setTextareaValue(textarea, '  /goal finish the task');
+    });
+    expect(capsule().getAttribute('data-mode')).toBe('goal');
+
+    await act(async () => {
+      setTextareaValue(textarea, '/planner is ordinary text');
+    });
+    expect(capsule().getAttribute('data-mode')).toBe('plan');
 
     await act(async () => {
       root.unmount();
