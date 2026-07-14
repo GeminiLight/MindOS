@@ -37,6 +37,7 @@ type AgentRequestRuntime = AgentRuntimeIdentity & {
 };
 
 const MINDOS_RUNTIME: AgentRuntimeIdentity = { ...MINDOS_AGENT, kind: 'mindos' };
+const ESTABLISHED_RUN_REATTACH_ATTEMPTS = 180;
 
 function runtimeForAgentRequest(runtime: AgentRequestRuntime | null | undefined): AgentRequestRuntime | null {
   if (!runtime) return null;
@@ -541,7 +542,9 @@ export function useAgentChat({
       });
 
       if (!res.ok) {
-        throw new Error(`Reconnect failed (${res.status})`);
+        const error = new Error(`Reconnect failed (${res.status})`);
+        (error as Error & { httpStatus?: number }).httpStatus = res.status;
+        throw error;
       }
       if (!res.body) throw new Error('No response body');
 
@@ -551,11 +554,16 @@ export function useAgentChat({
     try {
       let lastError: Error | null = null;
 
-      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      for (let attempt = 0; ; attempt++) {
         if (controller.signal.aborted) break;
 
         if (attempt > 0) {
-          updateRun(sessionId, { reconnectAttempt: attempt, phase: 'reconnecting' });
+          const displayMax = Math.max(1, maxRetries);
+          updateRun(sessionId, {
+            reconnectAttempt: Math.min(attempt, displayMax),
+            reconnectMax: displayMax,
+            phase: 'reconnecting',
+          });
           if (!getRun(sessionId)?.agentRunContext?.rootRunId) {
             replaceLastMessage(
               sessionId,
@@ -585,7 +593,12 @@ export function useAgentChat({
         } catch (err) {
           lastError = err instanceof Error ? err : new Error(String(err));
           const httpStatus = (err as Error & { httpStatus?: number }).httpStatus;
-          if (!isRetryableError(err, httpStatus) || attempt >= maxRetries) break;
+          if (httpStatus === 400 || httpStatus === 404 || !isRetryableError(err, httpStatus)) break;
+          const hasEstablishedRun = Boolean(getRun(sessionId)?.agentRunContext?.rootRunId);
+          const retryLimit = hasEstablishedRun
+            ? Math.max(maxRetries, ESTABLISHED_RUN_REATTACH_ATTEMPTS)
+            : maxRetries;
+          if (attempt >= retryLimit) break;
         }
       }
 
