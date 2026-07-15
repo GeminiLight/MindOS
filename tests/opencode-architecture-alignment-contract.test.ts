@@ -305,9 +305,11 @@ describe('OpenCode architecture alignment', () => {
     expect(mindosPiTurnRunner).toContain("await import('@geminilight/mindos/agent/runtime/adapters/mindos')");
     expect(mindosPiTurnRunner).toContain('createMindosAgentRuntime');
     expect(agentTurnRunner).toContain('const externalPromptBase = await buildMindosContextPrompt');
-    expect(agentTurnRunner).toContain('const externalPrompt = prependMindosActiveAssistantPrompt(externalPromptBase, activeAssistant)');
+    expect(agentTurnRunner).toContain('const externalPrompt = prependMindosAgentModePrompt');
+    expect(agentTurnRunner).toContain('prependMindosActiveAssistantPrompt(externalPromptBase, activeAssistant)');
     expect(agentTurnRunner).toContain('const commonTurnPrompt = await buildMindosContextPrompt');
-    expect(agentTurnRunner).toContain('const turnPrompt = renderMindosPiSelectedSkillPrompt(commonTurnPrompt, selectedSkills)');
+    expect(agentTurnRunner).toContain('const turnPrompt = prependMindosAgentModePrompt');
+    expect(agentTurnRunner).toContain('renderMindosPiSelectedSkillPrompt(commonTurnPrompt, selectedSkills)');
     expect(nativeTurnLane).toContain('prompt: input.externalPrompt');
     expect(acpTurnLane).toContain('input.externalPrompt');
     expect(mindosPiTurnRunner).toContain('prompt: turnPrompt');
