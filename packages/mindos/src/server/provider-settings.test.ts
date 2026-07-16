@@ -1,8 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import {
+  MINDOS_PROVIDER_PRESETS,
   normalizeMindosProvider,
   parseMindosProviders,
 } from './provider-settings.js';
+
+describe('MindOS provider registry', () => {
+  it('lists MiniMax-M2.7 for both regional presets', () => {
+    const expectedModels = ['MiniMax-M3', 'MiniMax-M2.7', 'MiniMax-M2.5'];
+
+    expect(MINDOS_PROVIDER_PRESETS.minimax.registryModels).toEqual(expectedModels);
+    expect(MINDOS_PROVIDER_PRESETS['minimax-cn'].registryModels).toEqual(expectedModels);
+  });
+});
 
 describe('MindOS provider settings capability metadata', () => {
   it('preserves validated provider and per-model caps for new-format provider entries', () => {
