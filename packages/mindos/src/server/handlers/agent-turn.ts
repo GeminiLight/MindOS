@@ -3,6 +3,10 @@ import {
   type MindOSSSEvent,
 } from '../../agent/turn/index.js';
 import type { MindosPermissionMode } from '../../agent/permission/index.js';
+import {
+  isMindosThinkingLevel,
+  type MindosThinkingLevel,
+} from '../../agent/mindos-pi/thinking.js';
 
 export type MindosAgentTurnMessage = Record<string, unknown>;
 
@@ -73,6 +77,12 @@ export type MindosAcpRuntimeOptions = {
   configValues?: Record<string, string>;
 };
 
+export type MindosAgentOptions = {
+  enableThinking?: boolean;
+  thinkingLevel?: MindosThinkingLevel;
+  thinkingBudget?: number;
+};
+
 export type MindosAgentTurnRequest = {
   messages: MindosAgentTurnMessage[];
   agentMode?: MindosAgentMode;
@@ -89,6 +99,7 @@ export type MindosAgentTurnRequest = {
   contextSelection?: MindosSessionContextSelection;
   runtimeOptions?: MindosNativeRuntimeOptions;
   acpRuntimeOptions?: MindosAcpRuntimeOptions;
+  agentOptions?: MindosAgentOptions;
   chatSessionId?: string;
   providerOverride?: string;
   modelOverride?: string;
@@ -181,8 +192,13 @@ function parseAgentTurnRequest(body: unknown):
   const agentOptionsRecord = record.agentOptions && typeof record.agentOptions === 'object' && !Array.isArray(record.agentOptions)
     ? record.agentOptions as Record<string, unknown>
     : undefined;
+  if (record.agentOptions !== undefined && !agentOptionsRecord) {
+    return { ok: false, status: 400, body: { error: 'agentOptions must be an object' } };
+  }
   const unknownAgentOptions = agentOptionsRecord ? firstUnknownField(agentOptionsRecord, MINDOS_AGENT_OPTION_FIELDS, 'agentOptions') : null;
   if (unknownAgentOptions) return { ok: false, status: 400, body: { error: unknownAgentOptions } };
+  const agentOptionsError = validateMindosAgentOptions(agentOptionsRecord);
+  if (agentOptionsError) return { ok: false, status: 400, body: { error: agentOptionsError } };
   const selectedRuntimeRecord = record.selectedRuntime && typeof record.selectedRuntime === 'object' && !Array.isArray(record.selectedRuntime)
     ? record.selectedRuntime as Record<string, unknown>
     : undefined;
@@ -195,6 +211,7 @@ function parseAgentTurnRequest(body: unknown):
   if (unknownRuntimeBinding) return { ok: false, status: 400, body: { error: unknownRuntimeBinding } };
   const runtimeOptions = normalizeNativeRuntimeOptions(record.runtimeOptions);
   const acpRuntimeOptions = normalizeAcpRuntimeOptions(record.acpRuntimeOptions);
+  const agentOptions = normalizeMindosAgentOptions(agentOptionsRecord);
 
   return {
     ok: true,
@@ -214,6 +231,7 @@ function parseAgentTurnRequest(body: unknown):
       ...(contextSelection !== undefined ? { contextSelection } : {}),
       ...(runtimeOptions !== undefined ? { runtimeOptions } : {}),
       ...(acpRuntimeOptions !== undefined ? { acpRuntimeOptions } : {}),
+      ...(agentOptions !== undefined ? { agentOptions } : {}),
       ...(typeof record.chatSessionId === 'string' && record.chatSessionId.trim() ? { chatSessionId: record.chatSessionId.trim() } : {}),
       ...(typeof record.providerOverride === 'string' ? { providerOverride: record.providerOverride } : {}),
       ...(typeof record.modelOverride === 'string' ? { modelOverride: record.modelOverride } : {}),
@@ -388,7 +406,7 @@ const AGENT_TURN_CONTEXT_FIELDS = new Set(['currentFile', 'attachedFiles', 'uplo
 const AGENT_TURN_MESSAGE_FIELDS = new Set(['text', 'content', 'images', 'skillName']);
 const NATIVE_RUNTIME_OPTION_FIELDS = new Set(['reasoningEffort', 'modelOverride']);
 const ACP_RUNTIME_OPTION_FIELDS = new Set(['modeId', 'configValues']);
-const MINDOS_AGENT_OPTION_FIELDS = new Set(['enableThinking', 'thinkingBudget']);
+const MINDOS_AGENT_OPTION_FIELDS = new Set(['enableThinking', 'thinkingLevel', 'thinkingBudget']);
 const SELECTED_RUNTIME_FIELDS = new Set(['id', 'name', 'kind', 'binaryPath']);
 const RUNTIME_BINDING_FIELDS = new Set(['kind', 'runtime', 'runtimeId', 'externalSessionId', 'cwd', 'status', 'updatedAt']);
 
@@ -498,6 +516,47 @@ function normalizeAcpRuntimeOptions(value: unknown): MindosAcpRuntimeOptions | u
   return {
     ...(modeId ? { modeId } : {}),
     ...(configValues ? { configValues } : {}),
+  };
+}
+
+function validateMindosAgentOptions(record: Record<string, unknown> | undefined): string | undefined {
+  if (!record) return undefined;
+  if (record.enableThinking !== undefined && typeof record.enableThinking !== 'boolean') {
+    return 'agentOptions.enableThinking must be a boolean';
+  }
+  if (record.thinkingLevel !== undefined && !isMindosThinkingLevel(record.thinkingLevel)) {
+    return 'agentOptions.thinkingLevel must be off, minimal, low, medium, high, xhigh, or max';
+  }
+  if (
+    record.thinkingBudget !== undefined
+    && (typeof record.thinkingBudget !== 'number' || !Number.isFinite(record.thinkingBudget))
+  ) {
+    return 'agentOptions.thinkingBudget must be a finite number';
+  }
+  return undefined;
+}
+
+function normalizeMindosAgentOptions(
+  record: Record<string, unknown> | undefined,
+): MindosAgentOptions | undefined {
+  if (!record) return undefined;
+  const enableThinking = typeof record.enableThinking === 'boolean'
+    ? record.enableThinking
+    : undefined;
+  const thinkingLevel = isMindosThinkingLevel(record.thinkingLevel)
+    ? record.thinkingLevel
+    : undefined;
+  const thinkingBudget = typeof record.thinkingBudget === 'number'
+    && Number.isFinite(record.thinkingBudget)
+    ? Math.min(50_000, Math.max(1_000, Math.floor(record.thinkingBudget)))
+    : undefined;
+  if (enableThinking === undefined && thinkingLevel === undefined && thinkingBudget === undefined) {
+    return undefined;
+  }
+  return {
+    ...(enableThinking !== undefined ? { enableThinking } : {}),
+    ...(thinkingLevel !== undefined ? { thinkingLevel } : {}),
+    ...(thinkingBudget !== undefined ? { thinkingBudget } : {}),
   };
 }
 

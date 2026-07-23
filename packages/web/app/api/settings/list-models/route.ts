@@ -20,8 +20,8 @@ import { toNextResponse } from '../../_mindos-adapter';
 
 async function getRegistryModels(provider: string): Promise<string[]> {
   try {
-    const { getModels: piGetModels } = await import('@earendil-works/pi-ai');
-    const models = piGetModels(toPiProvider(provider as ProviderId) as any);
+    const { listPiBuiltinModels } = await import('@/lib/agent/pi-models');
+    const models = await listPiBuiltinModels(toPiProvider(provider as ProviderId));
     return models.map((model: any) => model.id as string).filter(Boolean).sort();
   } catch {
     return [];

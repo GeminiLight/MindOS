@@ -158,14 +158,17 @@ describe('next config warning hygiene', () => {
       "await import('@earendil-works/pi-coding-agent')",
     );
     expect(readFileSync(resolve(appRoot, 'app/api/settings/list-models/route.ts'), 'utf-8')).toContain(
-      "await import('@earendil-works/pi-ai')",
+      "await import('@/lib/agent/pi-models')",
     );
     expect(readFileSync(resolve(appRoot, 'app/api/settings/test-key/route.ts'), 'utf-8')).toContain(
-      "await import('@earendil-works/pi-ai')",
+      "await import('@/lib/agent/pi-models')",
     );
     expect(readFileSync(resolve(appRoot, 'lib/compile.ts'), 'utf-8')).toContain(
-      "await import('@earendil-works/pi-ai')",
+      "await import('@/lib/agent/pi-models')",
     );
+    const piModelsSource = readFileSync(resolve(appRoot, 'lib/agent/pi-models.ts'), 'utf-8');
+    expect(piModelsSource).toContain("import('@earendil-works/pi-ai')");
+    expect(piModelsSource).toContain("import('@earendil-works/pi-ai/providers/all')");
     expect(mindosPiRunnerSource).toContain(
       "await import('@/lib/agent/mindos-pi-runtime-host')",
     );

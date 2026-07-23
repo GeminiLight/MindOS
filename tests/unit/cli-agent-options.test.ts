@@ -40,6 +40,7 @@ describe('CLI agent option normalization', () => {
       },
       agentOptions: {
         enableThinking: true,
+        thinkingLevel: 'medium',
         thinkingBudget: 8000,
       },
       workDir: {
@@ -52,13 +53,28 @@ describe('CLI agent option normalization', () => {
 
   it('supports disabling thinking for one request even when settings enable it', () => {
     expect(normalizeAgentInvocation(['answer'], { 'no-thinking': true })).toMatchObject({
-      agentOptions: { enableThinking: false },
+      agentOptions: { enableThinking: false, thinkingLevel: 'off' },
     });
 
     expect(normalizeAgentInvocation(['answer'], { thinking: 'off' })).toMatchObject({
-      agentOptions: { enableThinking: false },
+      agentOptions: { enableThinking: false, thinkingLevel: 'off' },
     });
   });
+
+  it.each(['minimal', 'low', 'medium', 'high', 'xhigh', 'max'])(
+    'preserves --thinking %s for both the MindOS Pi and native runtime lanes',
+    (thinkingLevel) => {
+      expect(normalizeAgentInvocation(['answer'], { thinking: thinkingLevel })).toMatchObject({
+        agentOptions: {
+          enableThinking: true,
+          thinkingLevel,
+        },
+        runtimeOptions: {
+          reasoningEffort: thinkingLevel,
+        },
+      });
+    },
+  );
 
   it('combines explicit task text and piped stdin without losing either side', async () => {
     expect(combineTaskAndStdin(['summarize'], 'line one\nline two')).toBe(

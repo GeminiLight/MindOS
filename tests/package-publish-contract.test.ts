@@ -13,6 +13,25 @@ function readText(relativePath: string): string {
 }
 
 describe('product npm publish contract', () => {
+  it('keeps every direct Pi runtime dependency on the same upgraded release', () => {
+    const product = readJson<{
+      devDependencies?: Record<string, string>;
+    }>('packages/mindos/package.json');
+    const web = readJson<{
+      dependencies?: Record<string, string>;
+    }>('packages/web/package.json');
+
+    for (const name of [
+      '@earendil-works/pi-agent-core',
+      '@earendil-works/pi-ai',
+      '@earendil-works/pi-coding-agent',
+    ]) {
+      expect(product.devDependencies?.[name], name).toBe('0.81.1');
+      expect(web.dependencies?.[name], name).toBe('0.81.1');
+    }
+    expect(web.dependencies?.['@earendil-works/pi-ai']).toBe('0.81.1');
+  });
+
   it('keeps the repository root as a private monorepo package', () => {
     const rootPkg = readJson<{
       private?: boolean;

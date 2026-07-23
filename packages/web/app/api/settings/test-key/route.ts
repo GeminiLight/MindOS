@@ -35,14 +35,14 @@ function clearCompatCacheForBaseUrl(baseUrl?: string) {
 
 async function testModel({ provider, apiKey, model, baseUrl, signal }: SettingsTestKeyModelInput) {
   const { getModelConfig } = await import('@/lib/agent/model');
-  const { model: piModel } = getModelConfig({
+  const { model: piModel } = await getModelConfig({
     provider: provider as ProviderId,
     apiKey,
     model,
     baseUrl: baseUrl || undefined,
   });
-  const { complete } = await import('@earendil-works/pi-ai');
-  await complete(piModel, {
+  const { completeWithPiModels } = await import('@/lib/agent/pi-models');
+  await completeWithPiModels(piModel, {
     messages: [{ role: 'user', content: 'hi', timestamp: Date.now() }],
   }, {
     apiKey,

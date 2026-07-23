@@ -372,7 +372,6 @@ export function AiTab({ data, setData, updateAi, updateAgent, t }: AiTabProps) {
       {/* ── Card 4: Agent Behavior ── */}
       <AgentBehaviorCard
         agent={data.agent}
-        supportsThinking={!!preset?.supportsThinking}
         updateAgent={updateAgent}
         t={t}
       />

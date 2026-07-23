@@ -118,6 +118,7 @@ mindos/
 | `GET /api/workflows` | 工作流定义 CRUD |
 | `POST /api/mcp/restart` | MCP Server 重启 |
 | `GET /api/settings/list-models` | 可用模型列表 |
+| `POST /api/settings/model-thinking` | 具体模型支持的 thinking effort |
 | `GET /api/update-status` | 更新进度 |
 | `POST /api/uninstall` | 卸载清理 |
 | `GET /api/inbox` | Inbox 收件箱 |

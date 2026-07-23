@@ -1,10 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
-// Mock pi-ai complete
-vi.mock('@earendil-works/pi-ai', () => ({
-  complete: vi.fn(),
-  getModel: vi.fn(),
+vi.mock('@/lib/agent/pi-models', () => ({
+  completeWithPiModels: vi.fn(),
 }));
 
 // Mock getModelConfig to avoid loading the real pi-ai registry
@@ -18,7 +16,7 @@ vi.mock('@/lib/agent/model', () => ({
 }));
 
 import { POST } from '../../app/api/settings/test-key/route';
-import { complete } from '@earendil-works/pi-ai';
+import { completeWithPiModels } from '@/lib/agent/pi-models';
 import { getModelConfig } from '@/lib/agent/model';
 
 function makeReq(body: Record<string, unknown>) {
@@ -52,7 +50,7 @@ describe('POST /api/settings/test-key', () => {
   });
 
   it('returns ok when pi-ai complete() succeeds', async () => {
-    (complete as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ text: 'hello' });
+    (completeWithPiModels as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ text: 'hello' });
 
     const res = await POST(makeReq({ provider: 'anthropic', apiKey: 'sk-ant-test', model: 'claude-sonnet-4-6' }));
     const body = await res.json();
@@ -66,11 +64,11 @@ describe('POST /api/settings/test-key', () => {
       model: 'claude-sonnet-4-6',
     }));
 
-    expect(complete).toHaveBeenCalledOnce();
+    expect(completeWithPiModels).toHaveBeenCalledOnce();
   });
 
   it('passes overrides to getModelConfig for unsaved values', async () => {
-    (complete as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ text: 'ok' });
+    (completeWithPiModels as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ text: 'ok' });
 
     await POST(makeReq({
       provider: 'openai',
@@ -88,7 +86,7 @@ describe('POST /api/settings/test-key', () => {
   });
 
   it('classifies auth errors from pi-ai', async () => {
-    (complete as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+    (completeWithPiModels as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
       new Error('401 Unauthorized: Invalid API key'),
     );
 
@@ -100,7 +98,7 @@ describe('POST /api/settings/test-key', () => {
   });
 
   it('classifies endpoint mismatch errors separately from missing models', async () => {
-    (complete as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+    (completeWithPiModels as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
       new Error('404 page not found'),
     );
 
@@ -112,7 +110,7 @@ describe('POST /api/settings/test-key', () => {
   });
 
   it('classifies rate limit errors', async () => {
-    (complete as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+    (completeWithPiModels as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
       new Error('429 Rate limit exceeded'),
     );
 
@@ -124,7 +122,7 @@ describe('POST /api/settings/test-key', () => {
   });
 
   it('classifies network errors', async () => {
-    (complete as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+    (completeWithPiModels as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
       new Error('ECONNREFUSED'),
     );
 
@@ -138,7 +136,7 @@ describe('POST /api/settings/test-key', () => {
   it('classifies abort as network_error with timeout message', async () => {
     const abortErr = new Error('The operation was aborted');
     abortErr.name = 'AbortError';
-    (complete as ReturnType<typeof vi.fn>).mockRejectedValueOnce(abortErr);
+    (completeWithPiModels as ReturnType<typeof vi.fn>).mockRejectedValueOnce(abortErr);
 
     const res = await POST(makeReq({ provider: 'google', apiKey: 'sk-test' }));
     const body = await res.json();
@@ -149,7 +147,7 @@ describe('POST /api/settings/test-key', () => {
   });
 
   it('accepts new providers like google and deepseek', async () => {
-    (complete as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ text: 'ok' });
+    (completeWithPiModels as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ text: 'ok' });
 
     const res = await POST(makeReq({ provider: 'google', apiKey: 'AI-key-test' }));
     const body = await res.json();
@@ -162,7 +160,7 @@ describe('POST /api/settings/test-key', () => {
   });
 
   it('classifies explicit model missing errors as model_not_found', async () => {
-    (complete as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+    (completeWithPiModels as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
       new Error('Model not found: nonexistent-model does not exist'),
     );
 
@@ -174,7 +172,7 @@ describe('POST /api/settings/test-key', () => {
   });
 
   it('prioritizes model_not_found over generic 404 classification when the message is model-specific', async () => {
-    (complete as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+    (completeWithPiModels as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
       new Error('404 Model not found: nonexistent-model does not exist'),
     );
 

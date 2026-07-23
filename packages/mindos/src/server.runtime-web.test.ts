@@ -1255,6 +1255,43 @@ describe('MindOS server contract: runtime, agent turn stream, static web', () =>
     ]);
   });
 
+  it('preserves valid Pi thinking levels and rejects invalid values at the product boundary', async () => {
+    const valid = handleAgentSessionTurnStream('session-from-path', {
+      message: { text: 'reason carefully' },
+      agentOptions: { thinkingLevel: 'max' },
+    }, {
+      agentTurnStream: async function* (input) {
+        yield {
+          type: 'status',
+          message: `thinking=${input.agentOptions?.thinkingLevel}`,
+        };
+        yield { type: 'done' };
+      },
+    });
+
+    expect(valid.ok).toBe(true);
+    if (!valid.ok) throw new Error('expected agent session turn stream');
+    const events = [];
+    for await (const event of valid.body) events.push(event);
+    expect(events).toEqual([
+      { type: 'status', message: 'thinking=max' },
+      { type: 'done' },
+    ]);
+
+    expect(handleAgentSessionTurnStream('session-from-path', {
+      message: { text: 'invalid effort' },
+      agentOptions: { thinkingLevel: 'ultra' },
+    }, {
+      agentTurnStream: async function* () {
+        yield { type: 'done' };
+      },
+    })).toEqual({
+      ok: false,
+      status: 400,
+      body: { error: 'agentOptions.thinkingLevel must be off, minimal, low, medium, high, xhigh, or max' },
+    });
+  });
+
   it('normalizes legacy ACP selection on simplified agent session turn requests', async () => {
     const valid = handleAgentSessionTurnStream('session-from-path', {
       message: { text: 'hello from ACP' },

@@ -64,6 +64,7 @@ import {
   validateAgentMode,
   validateAgentPermissionMode,
   validateAcpRuntimeOptions,
+  validateMindosAgentOptions,
   validateNativeRuntimeOptions,
   type AgentSessionTurnRouteContext,
   type AgentTurnRequestBody,
@@ -224,6 +225,8 @@ export async function runAgentTurnRequestBody(
   if (nativeRuntimeOptionsError) return nativeRuntimeOptionsError;
   const acpRuntimeOptionsError = validateAcpRuntimeOptions(body.acpRuntimeOptions);
   if (acpRuntimeOptionsError) return acpRuntimeOptionsError;
+  const mindosAgentOptionsError = validateMindosAgentOptions(body.agentOptions);
+  if (mindosAgentOptionsError) return mindosAgentOptionsError;
   const nativeRuntimeOptions = normalizeNativeRuntimeOptions(body.runtimeOptions);
   const acpRuntimeOptions = normalizeAcpRuntimeOptions(body.acpRuntimeOptions);
   const mindosAgentOptions = normalizeMindosAgentOptions(body.agentOptions);
@@ -343,6 +346,9 @@ export async function runAgentTurnRequestBody(
     agentMaxSteps: agentConfig.maxSteps,
   });
   const enableThinking = mindosAgentOptions.enableThinking ?? agentConfig.enableThinking ?? false;
+  const thinkingLevel = mindosAgentOptions.thinkingLevel
+    ?? agentConfig.thinkingLevel
+    ?? (enableThinking ? 'medium' : 'off');
   const thinkingBudget = mindosAgentOptions.thinkingBudget ?? agentConfig.thinkingBudget ?? 5000;
   const contextStrategy = agentConfig.contextStrategy ?? 'auto';
 
@@ -603,6 +609,7 @@ export async function runAgentTurnRequestBody(
     executionCwd,
     agentConfig: {
       enableThinking,
+      thinkingLevel,
       thinkingBudget,
       contextStrategy,
     },

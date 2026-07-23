@@ -4,7 +4,7 @@
  * All operations are request-scoped (no persistence to frontend session).
  * Uses pi-ai types (AgentMessage from pi-agent-core, complete from pi-ai).
  */
-import { complete, type Model } from '@earendil-works/pi-ai';
+import type { Model } from '@earendil-works/pi-ai';
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import type { ToolResultMessage, AssistantMessage, UserMessage } from '@earendil-works/pi-ai';
 import { countCjkChars } from '@/lib/core/cjk';
@@ -294,7 +294,8 @@ export async function compactMessages(
   }
 
   try {
-    const summaryMessage = await complete(model, {
+    const { completeWithPiModels } = await import('./pi-models');
+    const summaryMessage = await completeWithPiModels(model, {
       messages: [{
         role: 'user',
         content: `${COMPACT_PROMPT}\n\n---\n\nConversation to summarize:\n\n${earlyText}`,

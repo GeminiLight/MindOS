@@ -73,6 +73,7 @@
 |------|------|------|
 | `/api/settings` | GET/PUT/PATCH | 应用设置读写 |
 | `/api/settings/list-models` | GET | 可用 AI 模型列表 |
+| `/api/settings/model-thinking` | POST | 查询具体 provider/model 支持的 thinking effort |
 | `/api/settings/test-key` | POST | API Key 连通性测试 |
 | `/api/settings/reset-token` | POST | 重置 Auth Token |
 | `/api/monitoring` | GET | 性能监控数据（系统/应用/知识库/MCP 指标） |

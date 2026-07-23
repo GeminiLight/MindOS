@@ -201,6 +201,9 @@ vi.mock('@/components/ask/ProviderModelCapsule', () => ({
   default: () => <div data-testid="provider-capsule">provider</div>,
   getPersistedProviderModel: () => ({ provider: null, model: null }),
 }));
+vi.mock('@/components/ask/PiThinkingLevelCapsule', () => ({
+  default: () => <div data-testid="pi-thinking-capsule">thinking</div>,
+}));
 vi.mock('@/components/ask/AgentSelectorCapsule', () => ({
   default: ({ selectedAgent }: { selectedAgent: { id: string; name: string } | null }) => (
     <div data-testid="agent-selector">{selectedAgent?.name ?? 'MindOS'}</div>

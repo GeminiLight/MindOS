@@ -395,6 +395,13 @@ vi.mock('@/components/ask/ProviderModelCapsule', () => ({
   ),
   getPersistedProviderModel: () => mockPersistedProviderModel,
 }));
+vi.mock('@/components/ask/PiThinkingLevelCapsule', () => ({
+  default: ({ onChange }: { onChange: (level: 'max') => void }) => (
+    <button type="button" data-testid="pi-thinking-level-capsule" onClick={() => onChange('max')}>
+      Pick Max Thinking
+    </button>
+  ),
+}));
 vi.mock('@/components/ask/AgentModeCapsule', () => ({
   default: ({
     mode,
@@ -1253,6 +1260,12 @@ describe('ChatContent ACP session binding', () => {
       updatedAt: expect.any(Number),
     });
 
+    const pickMaxThinking = Array.from(host.querySelectorAll('button'))
+      .find((button) => button.textContent === 'Pick Max Thinking') as HTMLButtonElement;
+    await act(async () => {
+      pickMaxThinking.click();
+    });
+
     const form = host.querySelector('form') as HTMLFormElement;
     await act(async () => {
       if (typeof form.requestSubmit === 'function') {
@@ -1269,6 +1282,7 @@ describe('ChatContent ACP session binding', () => {
     expect(requestBody.chatSessionId).toBe('s-default');
     expect(requestBody.providerOverride).toBe('p_session');
     expect(requestBody.modelOverride).toBe('session-model');
+    expect(requestBody.agentOptions).toEqual({ thinkingLevel: 'max' });
 
     await act(async () => {
       root.unmount();

@@ -40,7 +40,7 @@ describe('provider override resolution', () => {
     }), 'utf-8');
 
     const { getModelConfig } = await import('@/lib/agent/model');
-    const result = getModelConfig({
+    const result = await getModelConfig({
       provider: 'openai',
       apiKey: 'venus-key',
       model: 'venus-model',
@@ -74,7 +74,7 @@ describe('provider override resolution', () => {
     }), 'utf-8');
 
     const { getModelConfig } = await import('@/lib/agent/model');
-    const result = getModelConfig({
+    const result = await getModelConfig({
       provider: 'openai',
       apiKey: 'venus-key',
       model: 'venus-model',
@@ -95,7 +95,7 @@ describe('provider override resolution', () => {
     }), 'utf-8');
 
     const { getModelConfig } = await import('@/lib/agent/model');
-    const result = getModelConfig({
+    const result = await getModelConfig({
       provider: 'openai',
       apiKey: 'test-key',
       model: 'unknown-local-model',
@@ -122,7 +122,7 @@ describe('provider override resolution', () => {
     }), 'utf-8');
 
     const { getModelConfig } = await import('@/lib/agent/model');
-    const result = getModelConfig({
+    const result = await getModelConfig({
       provider: 'openai',
       apiKey: 'test-key',
       model: 'step-3.7-flash',
@@ -171,7 +171,7 @@ describe('provider override resolution', () => {
     }), 'utf-8');
 
     const { getModelConfig } = await import('@/lib/agent/model');
-    const result = getModelConfig({
+    const result = await getModelConfig({
       provider: 'openai',
       apiKey: 'override-key',
       model: 'unknown-proxy-model',
@@ -193,7 +193,7 @@ describe('provider override resolution', () => {
     }), 'utf-8');
 
     const { getModelConfig } = await import('@/lib/agent/model');
-    const result = getModelConfig({
+    const result = await getModelConfig({
       provider: 'openai',
       apiKey: 'test-key',
       model: 'step-3.7-flash',
@@ -207,6 +207,42 @@ describe('provider override resolution', () => {
       isFallback: false,
       contextWindow: 256_000,
       effectiveContextWindow: 256_000,
+    });
+  });
+
+  it('writes resolved reasoning capability back to a custom model without disabling effort compatibility', async () => {
+    fs.writeFileSync(configPath, JSON.stringify({
+      mindRoot: '/tmp/mind',
+      ai: { activeProvider: '', providers: [] },
+    }), 'utf-8');
+
+    const { getModelConfig } = await import('@/lib/agent/model');
+    const result = await getModelConfig({
+      provider: 'openai',
+      apiKey: 'test-key',
+      model: 'reasoning-proxy-model',
+      baseUrl: 'https://proxy.example.com/v1',
+      providerEntry: {
+        id: 'p_reasoning',
+        name: 'Reasoning proxy',
+        protocol: 'openai',
+        apiKey: 'test-key',
+        model: 'reasoning-proxy-model',
+        baseUrl: 'https://proxy.example.com/v1',
+        models: [
+          {
+            id: 'reasoning-proxy-model',
+            reasoning: true,
+            contextWindow: 256_000,
+          },
+        ],
+      },
+    });
+
+    expect(result.model.reasoning).toBe(true);
+    expect(result.resolvedCaps.reasoning).toBe(true);
+    expect(result.model.compat).not.toMatchObject({
+      supportsReasoningEffort: false,
     });
   });
 });

@@ -14,6 +14,10 @@ import type {
   Message as FrontendMessage,
 } from '@/lib/types';
 import { apiError, ErrorCodes } from '@/lib/errors';
+import {
+  isMindosThinkingLevel,
+  type MindosAgentOptions,
+} from '@/lib/agent/thinking';
 
 export type AgentTurnRequestBody = {
   messages: FrontendMessage[];
@@ -52,7 +56,7 @@ export type AgentTurnRequestBody = {
   /** Per-request ACP runtime controls projected from the active ACP session. */
   acpRuntimeOptions?: AcpRuntimeOptions;
   /** Per-request MindOS PI agent controls. */
-  agentOptions?: { enableThinking?: boolean; thinkingBudget?: number };
+  agentOptions?: MindosAgentOptions;
   /** MindOS Chat Panel session id for run ledger correlation. */
   chatSessionId?: string;
 };
@@ -155,13 +159,43 @@ export function validateAgentPermissionMode(value: unknown) {
   );
 }
 
-export function normalizeMindosAgentOptions(value: unknown): { enableThinking?: boolean; thinkingBudget?: number } {
+export function validateMindosAgentOptions(value: unknown) {
+  if (value === undefined) return null;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return apiError(ErrorCodes.INVALID_REQUEST, 'agentOptions must be an object', 400);
+  }
+  const record = value as Record<string, unknown>;
+  const unknown = firstUnknownField(record, MINDOS_AGENT_OPTION_FIELDS, 'agentOptions');
+  if (unknown) return apiError(ErrorCodes.INVALID_REQUEST, unknown, 400);
+  if (record.enableThinking !== undefined && typeof record.enableThinking !== 'boolean') {
+    return apiError(ErrorCodes.INVALID_REQUEST, 'agentOptions.enableThinking must be a boolean', 400);
+  }
+  if (record.thinkingLevel !== undefined && !isMindosThinkingLevel(record.thinkingLevel)) {
+    return apiError(
+      ErrorCodes.INVALID_REQUEST,
+      'agentOptions.thinkingLevel must be off, minimal, low, medium, high, xhigh, or max',
+      400,
+    );
+  }
+  if (
+    record.thinkingBudget !== undefined
+    && (typeof record.thinkingBudget !== 'number' || !Number.isFinite(record.thinkingBudget))
+  ) {
+    return apiError(ErrorCodes.INVALID_REQUEST, 'agentOptions.thinkingBudget must be a finite number', 400);
+  }
+  return null;
+}
+
+export function normalizeMindosAgentOptions(value: unknown): MindosAgentOptions {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
   const record = value as Record<string, unknown>;
-  const options: { enableThinking?: boolean; thinkingBudget?: number } = {};
+  const options: MindosAgentOptions = {};
 
   if (typeof record.enableThinking === 'boolean') {
     options.enableThinking = record.enableThinking;
+  }
+  if (isMindosThinkingLevel(record.thinkingLevel)) {
+    options.thinkingLevel = record.thinkingLevel;
   }
 
   if (typeof record.thinkingBudget === 'number' && Number.isFinite(record.thinkingBudget)) {
@@ -424,6 +458,6 @@ const AGENT_TURN_CONTEXT_FIELDS = new Set(['currentFile', 'attachedFiles', 'uplo
 const AGENT_TURN_MESSAGE_FIELDS = new Set(['text', 'content', 'images', 'skillName']);
 const NATIVE_RUNTIME_OPTION_FIELDS = new Set(['reasoningEffort', 'modelOverride']);
 const ACP_RUNTIME_OPTION_FIELDS = new Set(['modeId', 'configValues']);
-const MINDOS_AGENT_OPTION_FIELDS = new Set(['enableThinking', 'thinkingBudget']);
+const MINDOS_AGENT_OPTION_FIELDS = new Set(['enableThinking', 'thinkingLevel', 'thinkingBudget']);
 const SELECTED_RUNTIME_FIELDS = new Set(['id', 'name', 'kind', 'binaryPath']);
 const RUNTIME_BINDING_FIELDS = new Set(['kind', 'runtime', 'runtimeId', 'externalSessionId', 'cwd', 'status', 'updatedAt']);

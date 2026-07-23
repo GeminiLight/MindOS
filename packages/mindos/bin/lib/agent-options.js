@@ -1,6 +1,6 @@
 import path from 'node:path';
 
-const NATIVE_REASONING_EFFORTS = new Set(['low', 'medium', 'high', 'xhigh']);
+const REASONING_EFFORTS = new Set(['minimal', 'low', 'medium', 'high', 'xhigh', 'max']);
 
 function nonEmptyString(value) {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
@@ -42,7 +42,7 @@ function normalizeFlagFiles(flags = {}) {
 
 function normalizeThinking(flags = {}) {
   if (flags['no-thinking'] === true) {
-    return { agentOptions: { enableThinking: false } };
+    return { agentOptions: { enableThinking: false, thinkingLevel: 'off' } };
   }
 
   const raw = flags.thinking;
@@ -50,7 +50,7 @@ function normalizeThinking(flags = {}) {
 
   if (raw === true) {
     return {
-      agentOptions: { enableThinking: true },
+      agentOptions: { enableThinking: true, thinkingLevel: 'medium' },
       runtimeOptions: { reasoningEffort: 'medium' },
     };
   }
@@ -58,12 +58,12 @@ function normalizeThinking(flags = {}) {
   const value = String(raw).trim().toLowerCase();
   if (!value || value === 'true' || value === 'on' || value === 'yes') {
     return {
-      agentOptions: { enableThinking: true },
+      agentOptions: { enableThinking: true, thinkingLevel: 'medium' },
       runtimeOptions: { reasoningEffort: 'medium' },
     };
   }
   if (value === 'false' || value === 'off' || value === 'no' || value === 'none') {
-    return { agentOptions: { enableThinking: false } };
+    return { agentOptions: { enableThinking: false, thinkingLevel: 'off' } };
   }
 
   const budget = parsePositiveInt(value);
@@ -71,21 +71,22 @@ function normalizeThinking(flags = {}) {
     return {
       agentOptions: {
         enableThinking: true,
+        thinkingLevel: 'medium',
         thinkingBudget: Math.min(50000, Math.max(1000, budget)),
       },
       runtimeOptions: { reasoningEffort: 'medium' },
     };
   }
 
-  if (NATIVE_REASONING_EFFORTS.has(value)) {
+  if (REASONING_EFFORTS.has(value)) {
     return {
-      agentOptions: { enableThinking: true },
+      agentOptions: { enableThinking: true, thinkingLevel: value },
       runtimeOptions: { reasoningEffort: value },
     };
   }
 
   return {
-    agentOptions: { enableThinking: true },
+    agentOptions: { enableThinking: true, thinkingLevel: 'medium' },
     runtimeOptions: { reasoningEffort: 'medium' },
   };
 }

@@ -519,7 +519,7 @@ describe('/api/agent/sessions/:sessionId/turns native runtime routing', () => {
       providerOverride: 'anthropic',
       modelOverride: 'claude-sonnet-4-20250514',
       permissionMode: 'read',
-      agentOptions: { enableThinking: true, thinkingBudget: 8000 },
+      agentOptions: { enableThinking: true, thinkingLevel: 'xhigh', thinkingBudget: 8000 },
     }));
 
     expect(res.status).toBe(200);
@@ -528,12 +528,30 @@ describe('/api/agent/sessions/:sessionId/turns native runtime routing', () => {
       modelOverride: 'claude-sonnet-4-20250514',
       agentConfig: {
         enableThinking: true,
+        thinkingLevel: 'xhigh',
         thinkingBudget: 8000,
         contextStrategy: 'auto',
       },
       allowProjectBash: false,
     });
   }, 15_000);
+
+  it('rejects an invalid Pi thinking level before runtime initialization', async () => {
+    const res = await POST(agentTurnRequest({
+      messages: [{ role: 'user', content: 'Review the note' }],
+      agentOptions: { thinkingLevel: 'ultra' },
+    }));
+
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toMatchObject({
+      ok: false,
+      error: {
+        code: 'INVALID_REQUEST',
+        message: 'agentOptions.thinkingLevel must be off, minimal, low, medium, high, xhigh, or max',
+      },
+    });
+    expect(mockCreateMindosAgentRuntime).not.toHaveBeenCalled();
+  });
 
   it('routes Codex before MindOS pi runtime initialization and bridges MindOS context', async () => {
     mockResolveCommandPath.mockImplementation(async (command: string) => command === 'codex' ? '/usr/local/bin/codex' : null);

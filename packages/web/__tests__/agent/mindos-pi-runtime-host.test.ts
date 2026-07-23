@@ -42,7 +42,7 @@ describe('createWebMindosPiRuntimeHostServices model config resolution', () => {
       },
     });
 
-    const config = services.resolveModelConfig({
+    const config = await services.resolveModelConfig({
       providerOverride: 'p_stepfun',
       messages: [{ role: 'user', content: 'hello' }],
     });

@@ -268,7 +268,7 @@ ${bold('Options:')}
   ${dim('@<path>')}              Attach file as context
   ${dim('--provider <id>')}      Provider override for this request
   ${dim('--model <model>')}      Model override for this request
-  ${dim('--thinking <value>')}   Thinking override: on, off, low, medium, high, xhigh, or token budget
+  ${dim('--thinking <value>')}   Thinking override: off, minimal, low, medium, high, xhigh, max, or token budget
   ${dim('--no-thinking')}        Disable thinking for this request
   ${dim('--readonly')}           Read-only tool permissions
   ${dim('--agent')}              Full local agent permissions (default)

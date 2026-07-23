@@ -62,6 +62,7 @@ export type RunMindosPiTurnInput = {
   executionCwd: string;
   agentConfig: {
     enableThinking: boolean;
+    thinkingLevel: 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
     thinkingBudget: number;
     contextStrategy: 'auto' | 'off';
   };

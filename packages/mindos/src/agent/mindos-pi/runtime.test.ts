@@ -13,6 +13,9 @@ const piState = vi.hoisted(() => ({
   }>,
   continueRecentCalls: [] as Array<{ cwd: string; sessionDir?: string }>,
   inMemoryCalls: [] as Array<{ cwd?: string }>,
+  modelRuntimeCreateOptions: [] as unknown[],
+  runtimeApiKeys: [] as Array<{ provider: string; apiKey: string }>,
+  sessionConfigs: [] as Array<Record<string, unknown>>,
 }));
 
 vi.mock('../../foundation/native-import.js', () => ({
@@ -21,11 +24,18 @@ vi.mock('../../foundation/native-import.js', () => ({
       piState.bashRoot = root;
       return { name: 'bash' };
     },
-    AuthStorage: {
-      create: () => ({ setRuntimeApiKey: () => {} }),
+    ModelRuntime: {
+      create: async (options: unknown) => {
+        piState.modelRuntimeCreateOptions.push(options);
+        return {
+          setRuntimeApiKey: async (provider: string, apiKey: string) => {
+            piState.runtimeApiKeys.push({ provider, apiKey });
+          },
+        };
+      },
     },
-    ModelRegistry: {
-      create: () => ({ registry: true }),
+    ModelRegistry: class {
+      constructor(readonly runtime: unknown) {}
     },
     SettingsManager: {
       inMemory: (settings: unknown) => ({ settings }),
@@ -74,15 +84,19 @@ vi.mock('../../foundation/native-import.js', () => ({
       getSkills() { return { skills: [] }; }
       getExtensions() { return { extensions: [], errors: [] }; }
     },
-    createAgentSession: async () => ({
-      session: {
-        subscribe: () => {},
-        prompt: async () => {},
-        steer: async () => {},
-        abort: async () => {},
-      },
-    }),
+    createAgentSession: async (config: Record<string, unknown>) => {
+      piState.sessionConfigs.push(config);
+      return {
+        session: {
+          subscribe: () => {},
+          prompt: async () => {},
+          steer: async () => {},
+          abort: async () => {},
+        },
+      };
+    },
     convertToLlm: (messages: unknown[]) => messages,
+    clampThinkingLevel: (model: { reasoning?: boolean }, level: string) => model.reasoning === false ? 'off' : level,
   }),
 }));
 
@@ -97,9 +111,12 @@ describe('MindOS Pi coding agent runtime', () => {
     piState.managers = [];
     piState.continueRecentCalls = [];
     piState.inMemoryCalls = [];
+    piState.modelRuntimeCreateOptions = [];
+    piState.runtimeApiKeys = [];
+    piState.sessionConfigs = [];
   });
 
-  it('creates the bash tool against the session workDir', async () => {
+  it('creates the bash tool and canonical in-memory ModelRuntime for the session', async () => {
     await createMindosPiCodingAgentRuntime({
       messages: [{ role: 'user', content: 'hello', timestamp: 1 }],
       systemPrompt: 'prompt',
@@ -112,7 +129,7 @@ describe('MindOS Pi coding agent runtime', () => {
       allowProjectBash: true,
       hostServices: {
         resolveModelConfig: () => ({
-          model: { id: 'model-object' },
+          model: { id: 'model-object', reasoning: true },
           modelName: 'gpt-test',
           apiKey: 'key',
           provider: 'openai',
@@ -122,6 +139,24 @@ describe('MindOS Pi coding agent runtime', () => {
     });
 
     expect(piState.bashRoot).toBe('/repo/app');
+    expect(piState.modelRuntimeCreateOptions).toHaveLength(1);
+    expect(piState.modelRuntimeCreateOptions[0]).toMatchObject({
+      modelsPath: null,
+      allowModelNetwork: false,
+      credentials: expect.objectContaining({
+        read: expect.any(Function),
+        list: expect.any(Function),
+        modify: expect.any(Function),
+        delete: expect.any(Function),
+      }),
+    });
+    expect(piState.runtimeApiKeys).toEqual([{ provider: 'openai', apiKey: 'key' }]);
+    expect(piState.sessionConfigs[0]).toMatchObject({
+      modelRuntime: expect.any(Object),
+      thinkingLevel: 'off',
+    });
+    expect(piState.sessionConfigs[0]).not.toHaveProperty('authStorage');
+    expect(piState.sessionConfigs[0]).not.toHaveProperty('modelRegistry');
   });
 
   it('resumes a persisted Pi session without replaying UI transcript history', async () => {

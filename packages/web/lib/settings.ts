@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { isMindosThinkingLevel, type MindosThinkingLevel } from './agent/thinking';
 import os from 'os';
 import { randomBytes } from 'crypto';
 import { parseAcpAgentOverrides } from './acp/agent-descriptors';
@@ -33,8 +34,9 @@ export interface AiConfig {
 
 export interface AgentConfig {
   maxSteps?: number;          // default 100, range 1-999 (999 = unlimited)
-  enableThinking?: boolean;   // default false, Anthropic only
-  thinkingBudget?: number;    // default 5000
+  enableThinking?: boolean;   // legacy compatibility
+  thinkingLevel?: MindosThinkingLevel; // default off
+  thinkingBudget?: number;    // legacy provider-specific token budget
   contextStrategy?: 'auto' | 'off'; // default 'auto'
   reconnectRetries?: number;  // default 3, range 0-10 (0 = disabled)
   activeRecall?: ActiveRecallConfig;  // auto knowledge recall before agent reply
@@ -207,6 +209,7 @@ function parseAgent(raw: unknown): AgentConfig | undefined {
   const result: AgentConfig = {};
   if (typeof obj.maxSteps === 'number') result.maxSteps = Math.min(999, Math.max(1, obj.maxSteps));
   if (typeof obj.enableThinking === 'boolean') result.enableThinking = obj.enableThinking;
+  if (isMindosThinkingLevel(obj.thinkingLevel)) result.thinkingLevel = obj.thinkingLevel;
   if (typeof obj.thinkingBudget === 'number') result.thinkingBudget = Math.min(50000, Math.max(1000, obj.thinkingBudget));
   if (obj.contextStrategy === 'auto' || obj.contextStrategy === 'off') result.contextStrategy = obj.contextStrategy;
   if (typeof obj.reconnectRetries === 'number') result.reconnectRetries = Math.min(10, Math.max(0, obj.reconnectRetries));

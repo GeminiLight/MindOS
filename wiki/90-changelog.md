@@ -6,6 +6,7 @@
 
 ### Runtime / Agents
 
+- **Pi thinking effort 与运行时升级**：Pi 依赖升级到 `0.81.1` 并迁移到 `ModelRuntime` / `Models` API；MindOS runtime 现在按具体模型暴露并执行 `off`、`minimal`、`low`、`medium`、`high`、`xhigh`、`max`，Chat composer 会按 provider/model 记忆选择并在模型能力变化时安全夹取。
 - **Runtime 诊断面板可视化**：Agents / Agent 页新增 Runtime Diagnostics，直接展示 catalog、readiness、命令解析、能力矩阵与诊断缺口，方便排查 Codex、Claude Code、MindOS 与 ACP runtime 的兼容状态。
 - **Artifacts / Preview 工作流可视化**：Agents / Agent 页新增 Artifacts / Preview 面板，统一展示 runtime artifact readiness、指针式 artifact 预览和 Agent 文件变更入口，方便从 ledger 跳到文件或变更审阅。
 - **Agent runtime 基础能力收口**：新增 runtime catalog 与 readiness/capability matrix，统一展示本机 Codex、Claude Code、ACP 等 runtime 的安装、可用性和能力状态。

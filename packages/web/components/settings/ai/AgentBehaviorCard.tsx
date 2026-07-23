@@ -3,17 +3,15 @@
 import { useEffect } from 'react';
 import { Bot } from 'lucide-react';
 import { DEFAULT_AGENT_MAX_STEPS, type AiTabProps, type AgentSettings } from '../types';
-import { Field, Input, Select, SettingCard, SettingRow, Toggle } from '../Primitives';
+import { Select, SettingCard, SettingRow } from '../Primitives';
 import { MaxStepsSelect } from './MaxStepsSelect';
 
 export function AgentBehaviorCard({
   agent,
-  supportsThinking,
   updateAgent,
   t,
 }: {
   agent: AgentSettings | undefined;
-  supportsThinking: boolean;
   updateAgent: (patch: Partial<AgentSettings>) => void;
   t: AiTabProps['t'];
 }) {
@@ -70,29 +68,27 @@ export function AgentBehaviorCard({
         </Select>
       </SettingRow>
 
-      {supportsThinking && (
-        <>
-          <SettingRow label={t.settings.agent.thinking} hint={t.settings.agent.thinkingHint}>
-            <Toggle checked={agent?.enableThinking ?? false} onChange={() => updateAgent({ enableThinking: !(agent?.enableThinking ?? false) })} />
-          </SettingRow>
-
-          {agent?.enableThinking && (
-            <Field label={t.settings.agent.thinkingBudget} hint={t.settings.agent.thinkingBudgetHint}>
-              <Input
-                type="number"
-                value={String(agent?.thinkingBudget ?? 5000)}
-                onChange={event => {
-                  const nextValue = parseInt(event.target.value, 10);
-                  if (!isNaN(nextValue)) updateAgent({ thinkingBudget: Math.max(1000, Math.min(50000, nextValue)) });
-                }}
-                min={1000}
-                max={50000}
-                step={1000}
-              />
-            </Field>
-          )}
-        </>
-      )}
+      <SettingRow label={t.settings.agent.thinking} hint={t.settings.agent.thinkingHint}>
+        <Select
+          value={agent?.thinkingLevel ?? (agent?.enableThinking ? 'medium' : 'off')}
+          onChange={event => {
+            const thinkingLevel = event.target.value as NonNullable<AgentSettings['thinkingLevel']>;
+            updateAgent({
+              thinkingLevel,
+              enableThinking: thinkingLevel !== 'off',
+            });
+          }}
+          className="w-32"
+        >
+          <option value="off">{t.settings.agent.thinkingOff}</option>
+          <option value="minimal">{t.settings.agent.thinkingMinimal}</option>
+          <option value="low">{t.settings.agent.thinkingLow}</option>
+          <option value="medium">{t.settings.agent.thinkingMedium}</option>
+          <option value="high">{t.settings.agent.thinkingHigh}</option>
+          <option value="xhigh">{t.settings.agent.thinkingExtraHigh}</option>
+          <option value="max">{t.settings.agent.thinkingMax}</option>
+        </Select>
+      </SettingRow>
     </SettingCard>
   );
 }

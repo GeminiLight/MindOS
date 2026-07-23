@@ -29,6 +29,7 @@ import { getSessionSubmitContextSnapshot } from '@/lib/agent-session-store';
 import { openTab } from '@/lib/workspace-tabs';
 import { toast } from '@/lib/toast';
 import { describeOversizedAiAttachments, getOversizedAiAttachments } from '@/lib/agent/attachment-limits';
+import type { MindosThinkingLevel } from '@/lib/agent/thinking';
 
 export type LoadingPhase = 'connecting' | 'thinking' | 'streaming' | 'reconnecting';
 
@@ -97,6 +98,7 @@ interface UseAgentChatOpts {
   currentFile?: string;
   providerOverride: ProviderId | `p_${string}` | null;
   modelOverride: string | null;
+  mindosThinkingLevel?: MindosThinkingLevel;
   permissionMode?: AgentPermissionMode;
   nativeRuntimeOptions?: NativeRuntimeOptions;
   acpRuntimeOptions?: AcpRuntimeOptions;
@@ -228,6 +230,7 @@ export function useAgentChat({
   currentFile,
   providerOverride,
   modelOverride,
+  mindosThinkingLevel,
   permissionMode = 'ask',
   nativeRuntimeOptions = {},
   acpRuntimeOptions = {},
@@ -441,6 +444,9 @@ export function useAgentChat({
       chatSessionId: sessionId,
       providerOverride: requestRuntimeBase ? undefined : providerOverride ?? undefined,
       modelOverride: requestRuntimeBase ? undefined : modelOverride ?? undefined,
+      agentOptions: !requestRuntimeBase && mindosThinkingLevel
+        ? { thinkingLevel: mindosThinkingLevel }
+        : undefined,
       runtimeOptions: Object.keys(compactRuntimeOptions).length > 0
         ? compactRuntimeOptions
         : undefined,
@@ -656,7 +662,7 @@ export function useAgentChat({
       if (abortRef.current === controller) abortRef.current = null;
     }
     return true;
-  }, [currentFile, providerOverride, modelOverride, permissionMode, nativeRuntimeOptions, acpRuntimeOptions, errorLabels.noResponse, errorLabels.stopped, errorLabels.concurrentLimit, errorLabels.tabLimitReached, onFirstMessage, refs, onRestoreInput, onTransientError]);
+  }, [currentFile, providerOverride, modelOverride, mindosThinkingLevel, permissionMode, nativeRuntimeOptions, acpRuntimeOptions, errorLabels.noResponse, errorLabels.stopped, errorLabels.concurrentLimit, errorLabels.tabLimitReached, onFirstMessage, refs, onRestoreInput, onTransientError]);
 
   const submit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();

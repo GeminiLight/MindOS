@@ -16,6 +16,11 @@ import {
   type MindosPiContextUsageEvent,
 } from './context-budget.js';
 import {
+  resolveMindosThinkingLevel,
+  type MindosThinkingConfig,
+  type MindosThinkingLevel,
+} from './thinking.js';
+import {
   createMindosAgentEventReducer,
   resolveMindosAgentTimeoutMs,
   runMindosAgentTurnWithRetry,
@@ -197,9 +202,8 @@ export type MindosPiRuntimeResourceLoaderConfig = {
 export type MindosPiRuntimeCreateAgentSessionConfig = {
   cwd: string;
   model: unknown;
-  thinkingLevel: 'medium' | 'off';
-  authStorage: unknown;
-  modelRegistry: unknown;
+  thinkingLevel: MindosThinkingLevel;
+  modelRuntime: unknown;
   resourceLoader: MindosPiResourceLoaderAdapter;
   sessionManager: unknown;
   settingsManager: unknown;
@@ -246,10 +250,13 @@ export type MindosPiAgentRuntimeServices = {
     modelOverride?: string;
     messages: MindosUiAgentMessage[];
     hasImages: boolean;
-  }): MindosResolvedModelConfig;
+  }): MindosResolvedModelConfig | Promise<MindosResolvedModelConfig>;
   toRuntimeProvider(provider: string): string;
-  createAuthStorage(): { setRuntimeApiKey(provider: string, apiKey: string): void };
-  createModelRegistry(authStorage: unknown): unknown;
+  createModelRuntime(): Promise<{
+    setRuntimeApiKey(provider: string, apiKey: string): Promise<void>;
+  }>;
+  createExtensionModelRegistry(modelRuntime: unknown): unknown;
+  clampThinkingLevel(model: unknown, level: MindosThinkingLevel): MindosThinkingLevel;
   createSettingsManager(settings: Record<string, unknown>): unknown;
   createSessionManager(input: MindosPiSessionManagerFactoryInput): MindosPiSessionManagerAdapter | MindosPiSessionManagerHandle;
   createResourceLoader(config: MindosPiRuntimeResourceLoaderConfig): MindosPiResourceLoaderAdapter;
@@ -324,9 +331,7 @@ export type MindosPiAgentRuntimeOptions = {
   agentDir: string;
   mindRoot: string;
   workDir?: string;
-  agentConfig?: {
-    enableThinking?: boolean;
-    thinkingBudget?: number;
+  agentConfig?: MindosThinkingConfig & {
     contextStrategy?: string;
   };
   serverSettings?: {
@@ -411,7 +416,7 @@ export async function createMindosPiAgentRuntime(options: MindosPiAgentRuntimeOp
     : undefined;
   const lastUserImages = extractMindosUserImages(lastMessage);
 
-  const modelConfig = options.services.resolveModelConfig({
+  const modelConfig = await options.services.resolveModelConfig({
     providerOverride: options.providerOverride,
     modelOverride: options.modelOverride,
     messages: options.messages,
@@ -453,9 +458,12 @@ export async function createMindosPiAgentRuntime(options: MindosPiAgentRuntimeOp
   let turnPrompt = options.turnPrompt ?? lastUserContent;
   let contextUsage: MindosPiContextUsageEvent | undefined;
 
-  const authStorage = options.services.createAuthStorage();
-  authStorage.setRuntimeApiKey(options.services.toRuntimeProvider(modelConfig.provider), modelConfig.apiKey);
-  const modelRegistry = options.services.createModelRegistry(authStorage);
+  const modelRuntime = await options.services.createModelRuntime();
+  await modelRuntime.setRuntimeApiKey(
+    options.services.toRuntimeProvider(modelConfig.provider),
+    modelConfig.apiKey,
+  );
+  const extensionModelRegistry = options.services.createExtensionModelRegistry(modelRuntime);
   const settingsManager = options.services.createSettingsManager(createMindosPiSettingsConfig(options.agentConfig, modelConfig.provider));
   const coreSkillNames = new Set(['mindos', 'mindos-zh', 'mindos-max', 'mindos-max-zh']);
   // Runtime prompt additions are discovered only after the first reload(), but
@@ -564,13 +572,17 @@ export async function createMindosPiAgentRuntime(options: MindosPiAgentRuntimeOp
     llmHistoryMessages = mindosPiSessionContextMessages(sessionManager) ?? llmHistoryMessages;
   }
   const runtimeSession = mindosPiRuntimeSessionInfo(sessionManagerHandle);
+  const thinkingLevel = resolveMindosThinkingLevel(
+    options.agentConfig,
+    modelConfig.model,
+    options.services.clampThinkingLevel,
+  );
 
   const { session } = await options.services.createAgentSession({
     cwd: workDir,
     model: modelConfig.model,
-    thinkingLevel: options.agentConfig?.enableThinking && modelConfig.provider === 'anthropic' ? 'medium' : 'off',
-    authStorage,
-    modelRegistry,
+    thinkingLevel,
+    modelRuntime,
     resourceLoader,
     sessionManager,
     settingsManager,
@@ -589,7 +601,7 @@ export async function createMindosPiAgentRuntime(options: MindosPiAgentRuntimeOp
     extensionContext: createMindosHeadlessExtensionContext({
       cwd: workDir,
       model: modelConfig.model,
-      modelRegistry,
+      modelRegistry: extensionModelRegistry,
       sessionManager,
       settingsManager,
       resourceLoader,

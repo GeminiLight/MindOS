@@ -1,6 +1,7 @@
 import type { Locale, Messages } from '@/lib/i18n';
 import type React from 'react';
 import type { Provider } from '@/lib/custom-endpoints';
+import type { MindosThinkingLevel } from '@/lib/agent/thinking';
 import type { AgentRuntimeEnvironmentSettings } from '@geminilight/mindos/agent/runtime/runtime-env';
 
 export interface AiSettings {
@@ -11,6 +12,7 @@ export interface AiSettings {
 export interface AgentSettings {
   maxSteps?: number;
   enableThinking?: boolean;
+  thinkingLevel?: MindosThinkingLevel;
   thinkingBudget?: number;
   contextStrategy?: 'auto' | 'off';
   reconnectRetries?: number;

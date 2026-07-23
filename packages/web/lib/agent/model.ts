@@ -2,6 +2,7 @@ import { effectiveAiConfig } from '@/lib/settings';
 import type { Provider } from '@/lib/custom-endpoints';
 import { resolveModelCapabilities, type ResolvedModelCapabilities } from './model-capabilities';
 import { type ProviderId, getPreset, toPiProvider, getDefaultApi, getDefaultBaseUrl } from './providers';
+import { getPiBuiltinModel } from './pi-models';
 
 type Model<T = unknown> = {
   id: string;
@@ -17,19 +18,6 @@ type Model<T = unknown> = {
   compat?: Record<string, unknown>;
   mindosCaps?: ResolvedModelCapabilities;
 } & T & Record<string, unknown>;
-
-type PiAiRuntime = {
-  getModel?: (provider: string, model: string) => Model<any> | undefined;
-};
-
-function loadPiAiRuntime(): PiAiRuntime | null {
-  try {
-    const requireFn = (0, eval)('require') as NodeRequire;
-    return requireFn('@earendil-works/pi-ai') as PiAiRuntime;
-  } catch {
-    return null;
-  }
-}
 
 /** Check if any message in the conversation contains images */
 export function hasImages(messages: Array<{ images?: unknown[] }>): boolean {
@@ -69,14 +57,14 @@ export interface ModelConfigOverrides {
  * Accepts optional overrides — used by test-key and list-models
  * to construct models from unsaved UI values.
  */
-export function getModelConfig(options?: ModelConfigOverrides): {
+export async function getModelConfig(options?: ModelConfigOverrides): Promise<{
   model: Model<any>;
   modelName: string;
   apiKey: string;
   provider: ProviderId;
   baseUrl: string;
   resolvedCaps: ResolvedModelCapabilities;
-} {
+}> {
   const saved = effectiveAiConfig(options?.provider);
   const provider = options?.provider ?? saved.provider;
   const hasExplicitConnectionOverride = options?.apiKey !== undefined
@@ -94,7 +82,7 @@ export function getModelConfig(options?: ModelConfigOverrides): {
 
   const modelName = cfg.model;
   const normalizedBaseUrl = normalizeBaseUrl(cfg.baseUrl);
-  const resolved = resolveModel(cfg.provider, modelName, normalizedBaseUrl);
+  const resolved = await resolveModel(cfg.provider, modelName, normalizedBaseUrl);
   const resolvedCaps = resolveModelCapabilities({
     providerEntry,
     protocol: cfg.provider,
@@ -106,6 +94,7 @@ export function getModelConfig(options?: ModelConfigOverrides): {
     ...resolved.model,
     contextWindow: resolvedCaps.effectiveContextWindow,
     maxTokens: resolvedCaps.maxTokens ?? resolved.model.maxTokens,
+    reasoning: resolvedCaps.reasoning ?? resolved.model.reasoning,
     mindosCaps: resolvedCaps,
   };
 
@@ -120,14 +109,14 @@ export function getModelConfig(options?: ModelConfigOverrides): {
  * Try pi-ai registry first, then fall back to a manually constructed Model.
  * Applies baseUrl overrides and compat flags for custom endpoints.
  */
-function resolveModel(providerId: ProviderId, modelName: string, baseUrl: string): { model: Model<any>; registryModel?: Model<any> } {
+async function resolveModel(providerId: ProviderId, modelName: string, baseUrl: string): Promise<{ model: Model<any>; registryModel?: Model<any> }> {
   const piProvider = toPiProvider(providerId);
   const preset = getPreset(providerId);
   let model: Model<any>;
 
   // 1. Try pi-ai registry lookup
   try {
-    const resolved = loadPiAiRuntime()?.getModel?.(piProvider, modelName);
+    const resolved = await getPiBuiltinModel(piProvider, modelName) as Model<any> | undefined;
     if (!resolved) throw new Error('Model not in registry');
     model = resolved;
     return { model: applyEndpointOverrides(model, providerId, baseUrl), registryModel: resolved };
@@ -178,7 +167,6 @@ function applyEndpointOverrides(model: Model<any>, providerId: ProviderId, baseU
         ...(model as any).compat,
         supportsStore: false,
         supportsDeveloperRole: false,
-        supportsReasoningEffort: false,
         supportsUsageInStreaming: false,
         supportsStrictMode: false,
       },

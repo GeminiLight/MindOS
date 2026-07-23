@@ -25,6 +25,7 @@ import AskComposerInput from '@/components/ask/AskComposerInput';
 import ContextStatusButton from '@/components/ask/ContextStatusButton';
 import SessionContextDock from '@/components/ask/SessionContextDock';
 import ProviderModelCapsule, { getPersistedProviderModel } from '@/components/ask/ProviderModelCapsule';
+import PiThinkingLevelCapsule from '@/components/ask/PiThinkingLevelCapsule';
 import NativeRuntimeOptionsCapsule, { getPersistedNativeRuntimeOptions, persistNativeRuntimeOptions } from '@/components/ask/NativeRuntimeOptionsCapsule';
 import AcpRuntimeOptionsCapsule, { getPersistedAcpRuntimeOptions, persistAcpRuntimeOptions } from '@/components/ask/AcpRuntimeOptionsCapsule';
 import { useAgentChat } from '@/hooks/useAgentChat';
@@ -57,6 +58,7 @@ import { useRuntimeReadiness } from '@/hooks/useRuntimeReadiness';
 import type { AcpAgentSelection } from '@/hooks/useAskModal';
 import { compactRuntimeDisplayReason } from '@/lib/agent/runtime-error-display';
 import type { AskContextRequest } from '@/lib/ask-context-events';
+import type { MindosThinkingLevel } from '@/lib/agent/thinking';
 import {
   getProviderModelFromSessionSelection,
   toSessionModelSelection,
@@ -226,6 +228,7 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
   const [providerOverride, setProviderOverride] = useState<ProviderSelection>(null);
   const providerOverrideRef = useRef<ProviderSelection>(null);
   const [modelOverride, setModelOverride] = useState<string | null>(null);
+  const [piThinkingLevel, setPiThinkingLevel] = useState<MindosThinkingLevel | undefined>(undefined);
   const [nativeRuntimeOptions, setNativeRuntimeOptions] = useState<NativeRuntimeOptions>({});
   const [acpRuntimeOptions, setAcpRuntimeOptions] = useState<AcpRuntimeOptions>({});
   const inputDirectiveAgentModeRef = useRef<ComposerDirectiveAgentMode | null>(null);
@@ -607,6 +610,7 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
     currentFile,
     providerOverride,
     modelOverride,
+    mindosThinkingLevel: piThinkingLevel,
     permissionMode,
     nativeRuntimeOptions,
     acpRuntimeOptions,
@@ -1570,6 +1574,10 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
     commitSessionModelSelection(provider, model);
   }, [commitSessionModelSelection]);
 
+  const handlePiThinkingLevelChange = useCallback((level: MindosThinkingLevel) => {
+    setPiThinkingLevel(level);
+  }, []);
+
   const handlePermissionModeChange = useCallback((next: AgentPermissionMode) => {
     permissionModeRef.current = next;
     setPermissionMode(next);
@@ -2024,14 +2032,23 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
                 />
               )}
               {mounted && isMindosRuntime && (
-                <ProviderModelCapsule
-                  providerValue={providerOverride}
-                  onProviderChange={handleProviderChange}
-                  modelValue={modelOverride}
-                  onModelChange={handleModelChange}
-                  disabled={isLoading}
-                  persistSelection={false}
-                />
+                <>
+                  <ProviderModelCapsule
+                    providerValue={providerOverride}
+                    onProviderChange={handleProviderChange}
+                    modelValue={modelOverride}
+                    onModelChange={handleModelChange}
+                    disabled={isLoading}
+                    persistSelection={false}
+                  />
+                  <PiThinkingLevelCapsule
+                    providerValue={providerOverride}
+                    modelValue={modelOverride}
+                    value={piThinkingLevel}
+                    onChange={handlePiThinkingLevelChange}
+                    disabled={isLoading}
+                  />
+                </>
               )}
               {mounted && isNativeRuntime && selectedNativeRuntimeKind && (
                 <NativeRuntimeOptionsCapsule

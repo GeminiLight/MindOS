@@ -269,6 +269,9 @@ vi.mock('@/components/ask/ProviderModelCapsule', () => ({
   default: () => null,
   getPersistedProviderModel: () => ({ provider: null, model: null }),
 }));
+vi.mock('@/components/ask/PiThinkingLevelCapsule', () => ({
+  default: () => null,
+}));
 vi.mock('@/components/ask/ModeCapsule', () => ({
   default: () => null,
   getPersistedPermissionMode: () => 'ask',

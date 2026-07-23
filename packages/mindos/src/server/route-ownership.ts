@@ -173,6 +173,7 @@ export const MINDOS_WEB_API_ROUTE_OWNERSHIP: MindosWebApiRouteOwnership[] = [
   migrated('/api/search/prewarm'),
   migrated('/api/search'),
   migrated('/api/settings/list-models', 'medium'),
+  host('/api/settings/model-thinking', 'Concrete model thinking capability resolution depends on the Web host Pi model catalog and active provider settings until Product Server owns the shared Models runtime boundary.', 'medium'),
   migrated('/api/settings/reset-token', 'high'),
   migrated('/api/settings', 'medium'),
   migrated('/api/settings/test-key', 'medium'),

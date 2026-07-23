@@ -40,8 +40,8 @@ async function completeWithPiAi(
   apiKey: string,
   signal?: AbortSignal,
 ) {
-  const { complete } = await import('@earendil-works/pi-ai');
-  return complete(model, {
+  const { completeWithPiModels } = await import('@/lib/agent/pi-models');
+  return completeWithPiModels(model, {
     messages: [{ role: 'user', content: prompt, timestamp: Date.now() }],
   }, { apiKey, signal });
 }
@@ -303,7 +303,7 @@ export async function compileSpaceOverview(
 
       try {
         const { getModelConfig } = await import('@/lib/agent/model');
-        const { model, apiKey } = getModelConfig();
+        const { model, apiKey } = await getModelConfig();
         const result = await completeWithPiAi(model, prompt, apiKey, signal);
 
         const content = result.content
@@ -350,7 +350,7 @@ export async function compileSpaceOverview(
 
   try {
     const { getModelConfig } = await import('@/lib/agent/model');
-    const { model, apiKey } = getModelConfig();
+    const { model, apiKey } = await getModelConfig();
     const result = await completeWithPiAi(model, prompt, apiKey, signal);
 
     const content = result.content

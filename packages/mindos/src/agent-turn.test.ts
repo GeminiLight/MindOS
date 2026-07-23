@@ -1075,8 +1075,9 @@ describe('MindOS session event contract', () => {
           provider: 'openai',
         }),
         toRuntimeProvider: (provider) => provider,
-        createAuthStorage: () => ({ setRuntimeApiKey: () => {} }),
-        createModelRegistry: () => ({ registry: true }),
+        createModelRuntime: async () => ({ setRuntimeApiKey: async () => {} }),
+        createExtensionModelRegistry: () => ({ registry: true }),
+        clampThinkingLevel: (_model, level) => level,
         createSettingsManager: (settings) => {
           captured.settings = settings;
           return { settings };
@@ -1176,8 +1177,9 @@ describe('MindOS session event contract', () => {
           provider: 'openai',
         }),
         toRuntimeProvider: (provider) => provider,
-        createAuthStorage: () => ({ setRuntimeApiKey: () => {} }),
-        createModelRegistry: () => ({ registry: true }),
+        createModelRuntime: async () => ({ setRuntimeApiKey: async () => {} }),
+        createExtensionModelRegistry: () => ({ registry: true }),
+        clampThinkingLevel: (_model, level) => level,
         createSettingsManager: (settings) => ({ settings }),
         createSessionManager: () => ({ appendMessage: () => {} }),
         createResourceLoader: () => resourceLoader,
@@ -1634,10 +1636,11 @@ describe('MindOS session event contract', () => {
           };
         },
         toRuntimeProvider: (provider) => `runtime:${provider}`,
-        createAuthStorage: () => ({
-          setRuntimeApiKey: (provider, apiKey) => calls.push(`auth:${provider}:${apiKey}`),
+        createModelRuntime: async () => ({
+          setRuntimeApiKey: async (provider, apiKey) => { calls.push(`auth:${provider}:${apiKey}`); },
         }),
-        createModelRegistry: () => ({ registry: true }),
+        createExtensionModelRegistry: () => ({ registry: true }),
+        clampThinkingLevel: (_model, level) => level,
         createSettingsManager: (settings) => {
           calls.push(`settings:${JSON.stringify(settings)}`);
           return { settings };
@@ -1758,8 +1761,9 @@ describe('MindOS session event contract', () => {
           provider: 'openai',
         }),
         toRuntimeProvider: (provider) => provider,
-        createAuthStorage: () => ({ setRuntimeApiKey: () => {} }),
-        createModelRegistry: () => ({}),
+        createModelRuntime: async () => ({ setRuntimeApiKey: async () => {} }),
+        createExtensionModelRegistry: () => ({}),
+        clampThinkingLevel: (_model, level) => level,
         createSettingsManager: (settings) => ({ settings }),
         createSessionManager: () => ({ appendMessage: () => {} }),
         createResourceLoader: () => ({
@@ -1804,8 +1808,9 @@ describe('MindOS session event contract', () => {
           provider: 'openai',
         }),
         toRuntimeProvider: (provider) => provider,
-        createAuthStorage: () => ({ setRuntimeApiKey: () => {} }),
-        createModelRegistry: () => ({}),
+        createModelRuntime: async () => ({ setRuntimeApiKey: async () => {} }),
+        createExtensionModelRegistry: () => ({}),
+        clampThinkingLevel: (_model, level) => level,
         createSettingsManager: (settings) => ({ settings }),
         createSessionManager: () => ({ appendMessage: () => {} }),
         createResourceLoader: () => ({
@@ -1865,8 +1870,9 @@ describe('MindOS session event contract', () => {
           provider: 'openai',
         }),
         toRuntimeProvider: (provider) => provider,
-        createAuthStorage: () => ({ setRuntimeApiKey: () => {} }),
-        createModelRegistry: () => ({}),
+        createModelRuntime: async () => ({ setRuntimeApiKey: async () => {} }),
+        createExtensionModelRegistry: () => ({}),
+        clampThinkingLevel: (_model, level) => level,
         createSettingsManager: (settings) => ({ settings }),
         createSessionManager: () => ({ appendMessage: () => {} }),
         createResourceLoader: () => ({
@@ -1918,8 +1924,9 @@ describe('MindOS session event contract', () => {
           provider: 'openai',
         }),
         toRuntimeProvider: (provider) => provider,
-        createAuthStorage: () => ({ setRuntimeApiKey: () => {} }),
-        createModelRegistry: () => ({}),
+        createModelRuntime: async () => ({ setRuntimeApiKey: async () => {} }),
+        createExtensionModelRegistry: () => ({}),
+        clampThinkingLevel: (_model, level) => level,
         createSettingsManager: (settings) => ({ settings }),
         createSessionManager: () => ({ appendMessage: () => {} }),
         createResourceLoader: () => ({

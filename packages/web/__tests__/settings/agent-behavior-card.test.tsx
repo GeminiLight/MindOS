@@ -21,6 +21,13 @@ const labels = {
       reconnectRetriesHint: 'Reconnect retry count',
       thinking: 'Thinking',
       thinkingHint: 'Enable thinking',
+      thinkingOff: 'Off',
+      thinkingMinimal: 'Minimal',
+      thinkingLow: 'Low',
+      thinkingMedium: 'Medium',
+      thinkingHigh: 'High',
+      thinkingExtraHigh: 'Extra High',
+      thinkingMax: 'Max',
       thinkingBudget: 'Thinking budget',
       thinkingBudgetHint: 'Thinking budget tokens',
     },
@@ -37,7 +44,6 @@ describe('AgentBehaviorCard', () => {
       root.render(
         <AgentBehaviorCard
           agent={undefined}
-          supportsThinking={false}
           updateAgent={vi.fn()}
           t={labels as Parameters<typeof AgentBehaviorCard>[0]['t']}
         />,
