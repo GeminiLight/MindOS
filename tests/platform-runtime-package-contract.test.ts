@@ -111,6 +111,17 @@ describe('OpenCode-style platform runtime packages', () => {
     expect(script).not.toContain('mindos: targetBuildBinary');
   });
 
+  it('embeds root CLI dependency closure for sync daemon runtime imports', () => {
+    const script = readText('scripts/build-platform-packages.mjs');
+
+    expect(script).toMatch(/CLI_RUNTIME_ROOT_DEPENDENCIES\s*=\s*\[\s*'chokidar'\s*\]/);
+    expect(script).toContain('copyCliRuntimeNodeModules(packageDir)');
+    expect(script).toContain('copyDependencyClosure(CLI_RUNTIME_ROOT_DEPENDENCIES');
+    expect(script).toContain("resolve(packageDir, 'node_modules')");
+    expect(script).toContain('dependencies: platformRuntimeDependencies()');
+    expect(script).toContain("'node_modules'");
+  });
+
   it('verifies npm release tarballs include runtime-critical assets', () => {
     const workflow = readText('.github/workflows/publish-npm.yml');
     const release = readText('scripts/release.sh');

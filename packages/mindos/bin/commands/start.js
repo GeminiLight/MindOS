@@ -42,6 +42,7 @@ import { printStartupInfo } from '../lib/startup.js';
 import { spawnMcp } from '../lib/mcp-spawn.js';
 import { EXIT } from '../lib/command.js';
 import { execInheritedFile } from '../lib/shell.js';
+import { startSyncDaemonBestEffort } from '../lib/sync-daemon.js';
 
 /** Local Next.js binary (avoids a mismatched global `next`). */
 const NEXT_CLI = resolve(WEB_APP_DIR, 'node_modules', 'next', 'dist', 'bin', 'next');
@@ -354,7 +355,7 @@ export const run = async (args, flags) => {
 
   const mindRoot = process.env.MIND_ROOT;
   if (mindRoot) {
-    startSyncDaemon(mindRoot).catch(() => {});
+    startSyncDaemonBestEffort(startSyncDaemon, mindRoot);
   }
 
   await printStartupInfo(webPort, mcpPort);
@@ -367,12 +368,12 @@ export const run = async (args, flags) => {
       runtimeRoot: PACKAGE_ROOT,
       staticRoot: STATIC_WEB_ROOT,
       syncDaemon: {
-        start: (root) => { void startSyncDaemon(root).catch(() => {}); },
+        start: (root) => { startSyncDaemonBestEffort(startSyncDaemon, root); },
         stop: () => { try { stopSyncDaemon(); } catch {} },
-        reconfigure: (root) => { void startSyncDaemon(root).catch(() => {}); },
+        reconfigure: (root) => { startSyncDaemonBestEffort(startSyncDaemon, root, 'reconfigure'); },
         restart: (root) => {
           try { stopSyncDaemon(); } catch {}
-          void startSyncDaemon(root).catch(() => {});
+          startSyncDaemonBestEffort(startSyncDaemon, root, 'restart');
         },
       },
     });

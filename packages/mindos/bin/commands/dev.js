@@ -14,6 +14,7 @@ import { savePids, clearPids } from '../lib/pid.js';
 import { printStartupInfo } from '../lib/startup.js';
 import { spawnMcp } from '../lib/mcp-spawn.js';
 import { execInheritedFile } from '../lib/shell.js';
+import { startSyncDaemonBestEffort } from '../lib/sync-daemon.js';
 
 export const meta = {
   name: 'dev',
@@ -61,7 +62,7 @@ export const run = async (args, flags) => {
   });
   const devMindRoot = process.env.MIND_ROOT;
   if (devMindRoot) {
-    startSyncDaemon(devMindRoot).catch(() => {});
+    startSyncDaemonBestEffort(startSyncDaemon, devMindRoot);
   }
   await printStartupInfo(webPort, mcpPort);
   execInheritedFile(process.execPath, [NEXT_CLI, 'dev', '--webpack', '-p', webPort, ...args], WEB_APP_DIR);

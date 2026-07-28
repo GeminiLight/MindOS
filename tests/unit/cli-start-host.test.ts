@@ -34,6 +34,23 @@ describe('mindos start host binding', () => {
     expect(source).toContain("execFileSync('notify-send', ['MindOS Ready', `http://localhost:${webPort}`]");
   });
 
+  it('reports sync daemon startup failures instead of swallowing them', async () => {
+    const start = fs.readFileSync(path.join(ROOT, 'packages', 'mindos', 'bin', 'commands', 'start.js'), 'utf-8');
+    const dev = fs.readFileSync(path.join(ROOT, 'packages', 'mindos', 'bin', 'commands', 'dev.js'), 'utf-8');
+    const helper = fs.readFileSync(path.join(ROOT, 'packages', 'mindos', 'bin', 'lib', 'sync-daemon.js'), 'utf-8');
+
+    expect(start).toContain('startSyncDaemonBestEffort');
+    expect(dev).toContain('startSyncDaemonBestEffort');
+    expect(start).not.toContain('catch(() => {})');
+    expect(dev).not.toContain('catch(() => {})');
+    expect(helper).toContain('Auto-sync will not run');
+
+    const { formatSyncDaemonStartupError } = await import('../../packages/mindos/bin/lib/sync-daemon.js');
+    expect(formatSyncDaemonStartupError(new Error('Cannot find package chokidar'))).toBe(
+      'Warning: sync daemon failed to start: Cannot find package chokidar. Auto-sync will not run; manual "mindos sync now" still works.',
+    );
+  });
+
   it('skips user preference migration when .mindos is a symlink outside the knowledge base', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mindos-start-migrate-'));
     const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'mindos-start-outside-'));

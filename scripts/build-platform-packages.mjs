@@ -6,7 +6,8 @@
  * and either static-web/ or a pruned _standalone/ fallback runtime.
  */
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { createRequire } from 'node:module';
+import { basename, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { binaryName, buildBunBinary } from './build-bun-binary.mjs';
 import { assertExtractionRuntime, bundleDocxExtractor, pruneStandaloneToExtractionRuntime } from './prune-standalone-extraction.mjs';
@@ -16,6 +17,7 @@ import { pruneClaudeAgentSdkNativePackages } from '../packages/desktop/scripts/p
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, '..');
 const productRoot = resolve(root, 'packages', 'mindos');
+const CLI_RUNTIME_ROOT_DEPENDENCIES = ['chokidar'];
 
 const platforms = [
   { key: 'darwin-arm64', os: 'darwin', cpu: 'arm64', koffi: ['darwin_arm64'], clipboard: ['clipboard', 'clipboard-darwin-arm64', 'clipboard-darwin-universal'] },
@@ -45,6 +47,7 @@ for (const target of selected) {
   mkdirSync(packageDir, { recursive: true });
 
   copyRuntimeRoot(packageDir);
+  copyCliRuntimeNodeModules(packageDir);
   writePlatformPackageJson(packageDir, target, targetBuildBinary);
   writePlatformRuntimeManifest(packageDir, target, targetBuildBinary);
   pruneKoffi(packageDir, target);
@@ -182,6 +185,7 @@ function writePlatformPackageJson(packageDir, target, targetBuildBinary = buildB
     license: productPkg.license ?? 'MIT',
     os: [target.os],
     cpu: [target.cpu],
+    dependencies: platformRuntimeDependencies(),
     files: fallbackRuntime || !targetBuildBinary
       ? [
         'bin/',
@@ -214,6 +218,116 @@ function writePlatformPackageJson(packageDir, target, targetBuildBinary = buildB
   writeFileSync(resolve(packageDir, 'package.json'), `${JSON.stringify(manifest, null, 2)}\n`, 'utf-8');
 }
 
+function platformRuntimeDependencies() {
+  const dependencies = {};
+  for (const name of CLI_RUNTIME_ROOT_DEPENDENCIES) {
+    const version = productPkg.dependencies?.[name];
+    if (!version) {
+      throw new Error(`[build-platform-packages] packages/mindos/package.json must declare runtime dependency: ${name}`);
+    }
+    dependencies[name] = version;
+  }
+  return dependencies;
+}
+
+function copyCliRuntimeNodeModules(packageDir) {
+  const targetNodeModules = resolve(packageDir, 'node_modules');
+  mkdirSync(targetNodeModules, { recursive: true });
+
+  // bin/lib/sync.js dynamically imports chokidar after the Bun binary extracts
+  // this runtime into ~/.mindos/runtime-cache; dependencies installed beside
+  // the npm platform package are not visible from that extracted cache root.
+  copyDependencyClosure(CLI_RUNTIME_ROOT_DEPENDENCIES, {
+    targetNodeModules,
+    resolveFromDir: productRoot,
+  });
+}
+
+function copyDependencyClosure(rootPackages, options) {
+  const copied = new Set();
+  const queue = rootPackages.map((name) => ({ name, resolveFromDir: options.resolveFromDir }));
+
+  while (queue.length > 0) {
+    const item = queue.shift();
+    if (!item || copied.has(item.name)) continue;
+
+    const sourceDir = resolvePackageDir(item.resolveFromDir, item.name);
+    const pkg = readRuntimeDependencyManifest(sourceDir, item.name);
+    const destDir = resolvePackageName(options.targetNodeModules, item.name);
+
+    rmSync(destDir, { recursive: true, force: true });
+    mkdirSync(dirname(destDir), { recursive: true });
+    cpSync(sourceDir, destDir, {
+      recursive: true,
+      dereference: true,
+      filter: shouldCopyRuntimeDependency,
+    });
+    copied.add(item.name);
+
+    for (const dependency of Object.keys(pkg.dependencies ?? {})) {
+      queue.push({ name: dependency, resolveFromDir: sourceDir });
+    }
+  }
+
+  return copied;
+}
+
+function resolvePackageDir(resolveFromDir, packageName) {
+  const requireFromDir = createRequire(resolve(resolveFromDir, 'package.json'));
+  try {
+    return dirname(requireFromDir.resolve(`${packageName}/package.json`));
+  } catch (packageJsonErr) {
+    try {
+      return findPackageRoot(requireFromDir.resolve(packageName), packageName);
+    } catch (entryErr) {
+      throw new Error(
+        `[build-platform-packages] Missing installed runtime dependency ${packageName}; run pnpm install before building platform packages.`
+        + `\n  resolved from: ${resolveFromDir}`
+        + `\n  package.json cause: ${packageJsonErr instanceof Error ? packageJsonErr.message : String(packageJsonErr)}`
+        + `\n  entrypoint cause: ${entryErr instanceof Error ? entryErr.message : String(entryErr)}`,
+      );
+    }
+  }
+}
+
+function findPackageRoot(entryPath, packageName) {
+  let current = dirname(entryPath);
+  for (;;) {
+    const manifestPath = resolve(current, 'package.json');
+    if (existsSync(manifestPath)) {
+      const manifest = JSON.parse(readFileSync(manifestPath, 'utf-8'));
+      if (!manifest.name || manifest.name === packageName) return current;
+    }
+
+    const parent = dirname(current);
+    if (parent === current) {
+      throw new Error(`Could not find package root for ${packageName} from ${entryPath}`);
+    }
+    current = parent;
+  }
+}
+
+function readRuntimeDependencyManifest(packageDir, packageName) {
+  const manifestPath = resolve(packageDir, 'package.json');
+  if (!existsSync(manifestPath)) {
+    throw new Error(
+      `[build-platform-packages] Runtime dependency ${packageName} resolved to ${packageDir}, but package.json was not found.`,
+    );
+  }
+  return JSON.parse(readFileSync(manifestPath, 'utf-8'));
+}
+
+function resolvePackageName(nodeModules, packageName) {
+  return resolve(nodeModules, ...packageName.split('/'));
+}
+
+function shouldCopyRuntimeDependency(src) {
+  const name = basename(src);
+  if (name === 'node_modules' || name === '.bin' || name === '.cache') return false;
+  if (name === '.git' || name === '.github') return false;
+  return true;
+}
+
 function writePlatformRuntimeManifest(packageDir, target, targetBuildBinary = buildBinary) {
   writeSharedRuntimeManifest(packageDir, {
     productPkg,
@@ -236,6 +350,7 @@ function pruneBinaryPackageRoot(packageDir, target) {
     'assets',
     'skills',
     'templates',
+    'node_modules',
     '.mindos-binary-build',
   ];
 
