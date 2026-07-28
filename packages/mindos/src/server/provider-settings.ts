@@ -148,7 +148,7 @@ export const MINDOS_PROVIDER_PRESETS: Record<string, MindosProviderPreset> = {
     supportsListModels: false,
     apiType: 'anthropic-messages',
     envKeys: ['MINIMAX_API_KEY'],
-    registryModels: ['MiniMax-M3', 'MiniMax-M2.5'],
+    registryModels: ['MiniMax-M3', 'MiniMax-M2.7', 'MiniMax-M2.5'],
   },
   'minimax-cn': {
     name: 'MiniMax (China)',
@@ -156,7 +156,7 @@ export const MINDOS_PROVIDER_PRESETS: Record<string, MindosProviderPreset> = {
     supportsListModels: false,
     apiType: 'anthropic-messages',
     envKeys: ['MINIMAX_API_KEY'],
-    registryModels: ['MiniMax-M3', 'MiniMax-M2.5'],
+    registryModels: ['MiniMax-M3', 'MiniMax-M2.7', 'MiniMax-M2.5'],
   },
   huggingface: {
     name: 'Hugging Face',
