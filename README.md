@@ -1,3 +1,5 @@
+[![MCP Toplist](https://mcptoplist.com/badge/glama%2FGeminiLight%2Fmindos.svg)](https://mcptoplist.com/server/glama%2FGeminiLight%2Fmindos)
+
 <p align="center">
   <img src="assets/logo-square.svg" alt="MindOS" width="100" />
 </p>
