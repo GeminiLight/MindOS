@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
- * Prune a staged Next standalone dir (_standalone) down to the document
- * extraction runtime.
+ * Prune a staged Next standalone dir (_standalone) down to the static product
+ * runtime: document extraction plus dynamically loaded built-in agent
+ * extensions.
  *
  * Binary platform packages serve the prebuilt static web (static-web/) and
  * never run the standalone Next server, but the product server's PDF/DOCX
@@ -17,6 +18,16 @@ import { spawnSync } from 'node:child_process';
 
 /** Packages whose require() closure the extractor scripts need at runtime. */
 const EXTRACTION_ROOT_PACKAGES = ['pdfjs-dist', 'mammoth', 'word-extractor'];
+
+const STATIC_PRODUCT_RUNTIME_ROOT_PACKAGES = [
+  ...EXTRACTION_ROOT_PACKAGES,
+  // pi-subagents is loaded from TypeScript source through jiti. Keeping only
+  // it and its runtime-required peer host avoids pulling unrelated built-in
+  // extensions into each platform binary. Although pi-coding-agent is declared
+  // as an optional peer, pi-subagents imports runtime values from it.
+  'pi-subagents',
+  '@earendil-works/pi-coding-agent',
+];
 
 const EXTRACTION_SCRIPTS = ['extract-pdf.cjs', 'extract-docx.cjs'];
 
@@ -98,19 +109,39 @@ export function pruneStandaloneToExtractionRuntime(standaloneDir) {
   const nodeModules = ensureLiveNodeModules(standaloneDir);
   if (!nodeModules) return { pruned: false };
 
-  const keep = collectDependencyClosure(nodeModules, EXTRACTION_ROOT_PACKAGES);
+  const keep = collectDependencyClosure(nodeModules, STATIC_PRODUCT_RUNTIME_ROOT_PACKAGES);
   prunePackages(nodeModules, keep);
   trimPdfjsDist(nodeModules);
 
-  // Drop everything else (Next server payload) — only the extractor scripts
-  // and their node_modules closure stay.
+  // Drop the Next server payload. The static product server still loads the
+  // MindOS-owned extension wrappers from lib/ and upstream extensions from
+  // node_modules at runtime, so both must survive alongside extractor scripts.
   for (const entry of readdirSync(standaloneDir)) {
-    if (entry !== 'scripts' && entry !== 'node_modules') {
+    if (entry !== 'scripts' && entry !== 'lib' && entry !== 'node_modules') {
       rmSync(resolve(standaloneDir, entry), { recursive: true, force: true });
     }
   }
 
   return { pruned: true, kept: [...keep].sort() };
+}
+
+export function assertBuiltinAgentExtensionRuntime(standaloneDir) {
+  const nodeModules = nodeModulesDir(standaloneDir) ?? resolve(standaloneDir, '__node_modules');
+  const required = [
+    resolve(nodeModules, 'pi-subagents', 'src', 'extension', 'index.ts'),
+    resolve(nodeModules, 'pi-subagents', 'agents'),
+    resolve(nodeModules, '@earendil-works', 'pi-coding-agent', 'dist', 'index.js'),
+    resolve(nodeModules, '@earendil-works', 'pi-coding-agent', 'dist', 'utils', 'changelog.js'),
+    resolve(standaloneDir, 'lib', 'agent', 'subagent-ledger-extension.ts'),
+    resolve(standaloneDir, 'lib', 'agent', 'builtin-extension-runtime.ts'),
+  ];
+  const missing = required.filter((file) => !existsSync(file));
+  if (missing.length > 0) {
+    throw new Error(
+      'Built-in agent extension runtime is incomplete in the staged platform package:\n'
+      + missing.map((file) => `  missing ${file}`).join('\n'),
+    );
+  }
 }
 
 /**

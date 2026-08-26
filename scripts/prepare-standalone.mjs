@@ -19,6 +19,7 @@ import {
   pruneClaudeAgentSdkNativePackages,
   pruneRuntimePackageAssets,
 } from '../packages/desktop/scripts/prepare-mindos-bundle.mjs';
+import { isRuntimeDocumentationFileName } from './runtime-package-pruning.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, '..');
@@ -215,7 +216,7 @@ function pruneRuntimeNodeModules(dir) {
     if (entry.name.endsWith('.map')) return true;
     if (entry.name.endsWith('.d.ts') || entry.name.endsWith('.d.cts') || entry.name.endsWith('.d.mts')) return true;
     if (entry.name.endsWith('.tsbuildinfo')) return true;
-    if (/^(readme|changelog|history|contributing|security)(\..*)?$/i.test(entry.name)) return true;
+    if (isRuntimeDocumentationFileName(entry.name)) return true;
     return false;
   });
 }

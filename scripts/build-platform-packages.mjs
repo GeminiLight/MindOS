@@ -10,7 +10,12 @@ import { createRequire } from 'node:module';
 import { basename, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { binaryName, buildBunBinary } from './build-bun-binary.mjs';
-import { assertExtractionRuntime, bundleDocxExtractor, pruneStandaloneToExtractionRuntime } from './prune-standalone-extraction.mjs';
+import {
+  assertBuiltinAgentExtensionRuntime,
+  assertExtractionRuntime,
+  bundleDocxExtractor,
+  pruneStandaloneToExtractionRuntime,
+} from './prune-standalone-extraction.mjs';
 import { writeRuntimeManifest as writeSharedRuntimeManifest } from './runtime-manifest.mjs';
 import { pruneClaudeAgentSdkNativePackages } from '../packages/desktop/scripts/prepare-mindos-bundle.mjs';
 
@@ -69,6 +74,7 @@ for (const target of selected) {
       bundleDocxExtractor(standaloneDir);
       pruneStandaloneToExtractionRuntime(standaloneDir);
       assertExtractionRuntime(standaloneDir);
+      assertBuiltinAgentExtensionRuntime(standaloneDir);
     }
     buildBunBinary({
       runtimeRoot: packageDir,

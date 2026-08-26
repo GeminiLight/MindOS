@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
+  assertBuiltinAgentExtensionRuntime,
   assertExtractionRuntime,
   bundleDocxExtractor,
   pruneStandaloneToExtractionRuntime,
@@ -61,6 +62,28 @@ function buildFixture({ nodeModulesName = '__node_modules' } = {}) {
   writePkg(nm, 'saxes');
   // left-pad is declared but not installed — closure walk must tolerate it
 
+  // Built-in agent extension runtime that must survive platform pruning.
+  writePkg(nm, 'pi-subagents', { jiti: '^2.0.0' });
+  mkdirSync(resolve(nm, 'pi-subagents', 'src', 'extension'), { recursive: true });
+  writeFileSync(resolve(nm, 'pi-subagents', 'src', 'extension', 'index.ts'), 'export default () => {};');
+  mkdirSync(resolve(nm, 'pi-subagents', 'agents'), { recursive: true });
+  writeFileSync(resolve(nm, 'pi-subagents', 'agents', 'explorer.md'), '# Explorer');
+  writePkg(nm, 'jiti');
+  writePkg(nm, '@earendil-works/pi-coding-agent', { '@earendil-works/pi-ai': '^1.0.0' });
+  mkdirSync(resolve(nm, '@earendil-works', 'pi-coding-agent', 'dist', 'utils'), { recursive: true });
+  writeFileSync(resolve(nm, '@earendil-works', 'pi-coding-agent', 'dist', 'index.js'), 'export {};');
+  writeFileSync(resolve(nm, '@earendil-works', 'pi-coding-agent', 'dist', 'utils', 'changelog.js'), 'export {};');
+  writePkg(nm, '@earendil-works/pi-ai');
+  mkdirSync(resolve(standaloneDir, 'lib', 'agent'), { recursive: true });
+  writeFileSync(
+    resolve(standaloneDir, 'lib', 'agent', 'subagent-ledger-extension.ts'),
+    '// MindOS subagent wrapper',
+  );
+  writeFileSync(
+    resolve(standaloneDir, 'lib', 'agent', 'builtin-extension-runtime.ts'),
+    '// MindOS built-in extension resolver',
+  );
+
   // Server-only packages that must NOT survive
   writePkg(nm, 'next');
   writePkg(nm, 'react');
@@ -79,7 +102,7 @@ afterEach(() => {
 });
 
 describe('pruneStandaloneToExtractionRuntime', () => {
-  it('keeps only the extraction scripts and the dependency closure of the extractor packages', () => {
+  it('removes the Next server payload while keeping the extraction runtime closure', () => {
     buildFixture();
 
     const result = pruneStandaloneToExtractionRuntime(standaloneDir);
@@ -115,6 +138,22 @@ describe('pruneStandaloneToExtractionRuntime', () => {
     for (const removed of ['next', 'react', 'koffi', '@mariozechner/clipboard', '@mariozechner']) {
       expect(existsSync(resolve(nm, removed)), `${removed} must be removed`).toBe(false);
     }
+  });
+
+  it('keeps built-in subagent packages, definitions, wrapper sources, and dependency closure', () => {
+    buildFixture();
+
+    pruneStandaloneToExtractionRuntime(standaloneDir);
+
+    const nm = resolve(standaloneDir, 'node_modules');
+    expect(existsSync(resolve(nm, 'pi-subagents', 'src', 'extension', 'index.ts'))).toBe(true);
+    expect(existsSync(resolve(nm, 'pi-subagents', 'agents', 'explorer.md'))).toBe(true);
+    expect(existsSync(resolve(nm, 'jiti', 'package.json'))).toBe(true);
+    expect(existsSync(resolve(nm, '@earendil-works', 'pi-coding-agent', 'package.json'))).toBe(true);
+    expect(existsSync(resolve(nm, '@earendil-works', 'pi-coding-agent', 'dist', 'index.js'))).toBe(true);
+    expect(existsSync(resolve(nm, '@earendil-works', 'pi-coding-agent', 'dist', 'utils', 'changelog.js'))).toBe(true);
+    expect(existsSync(resolve(nm, '@earendil-works', 'pi-ai', 'package.json'))).toBe(true);
+    expect(existsSync(resolve(standaloneDir, 'lib', 'agent', 'subagent-ledger-extension.ts'))).toBe(true);
   });
 
   it('trims pdfjs-dist to its legacy build (the only part extract-pdf.cjs loads)', () => {
@@ -195,5 +234,35 @@ describe('assertExtractionRuntime', () => {
 
   it('throws when _standalone is missing entirely (the v1.1.7 regression shape)', () => {
     expect(() => assertExtractionRuntime(resolve(fixtureRoot, 'missing'))).toThrow(/document extraction/i);
+  });
+});
+
+describe('assertBuiltinAgentExtensionRuntime', () => {
+  it('passes when the pruned runtime keeps subagent assets and wrappers', () => {
+    buildFixture();
+    pruneStandaloneToExtractionRuntime(standaloneDir);
+    expect(() => assertBuiltinAgentExtensionRuntime(standaloneDir)).not.toThrow();
+  });
+
+  it('throws and names a missing subagent runtime entrypoint', () => {
+    buildFixture();
+    pruneStandaloneToExtractionRuntime(standaloneDir);
+    rmSync(resolve(standaloneDir, 'node_modules', 'pi-subagents', 'src', 'extension', 'index.ts'));
+    expect(() => assertBuiltinAgentExtensionRuntime(standaloneDir)).toThrow(/pi-subagents.*index\.ts/);
+  });
+
+  it('throws when the coding-agent peer runtime was damaged during staging', () => {
+    buildFixture();
+    pruneStandaloneToExtractionRuntime(standaloneDir);
+    rmSync(resolve(
+      standaloneDir,
+      'node_modules',
+      '@earendil-works',
+      'pi-coding-agent',
+      'dist',
+      'utils',
+      'changelog.js',
+    ));
+    expect(() => assertBuiltinAgentExtensionRuntime(standaloneDir)).toThrow(/changelog\.js/);
   });
 });
