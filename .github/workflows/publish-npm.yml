@@ -100,10 +100,12 @@ jobs:
           for pkg in packages/mindos-platforms/*; do
             NAME=$(node -p "require('./${pkg}/package.json').name")
             FOUND=""
-            for attempt in 1 2 3 4 5 6; do
+            # npm can acknowledge a large tarball before it becomes queryable.
+            # Allow up to three minutes for registry processing before failing.
+            for attempt in $(seq 1 18); do
               FOUND=$(npm view "${NAME}@${VERSION}" version 2>/dev/null || true)
               [ "$FOUND" = "$VERSION" ] && break
-              sleep 5
+              sleep 10
             done
             if [ "$FOUND" != "$VERSION" ]; then
               echo "Missing published platform package: ${NAME}@${VERSION}"

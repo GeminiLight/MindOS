@@ -134,6 +134,8 @@ describe('OpenCode-style platform runtime packages', () => {
     expect(workflow).toContain('Publish platform packages to npm');
     expect(workflow).toContain('Preflight platform package tarballs');
     expect(workflow).toContain('Verify all platform packages are published');
+    expect(workflow).toContain('for attempt in $(seq 1 18); do');
+    expect(workflow).toContain('sleep 10');
     expect(workflow).not.toContain('continue-on-error: true');
     expect(workflow.indexOf('Publish platform packages to npm')).toBeLessThan(
       workflow.indexOf('Publish main package to npm'),
