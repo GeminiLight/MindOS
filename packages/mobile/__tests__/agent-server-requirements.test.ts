@@ -19,11 +19,18 @@ describe('agent server requirements contract', () => {
     expect(AGENT_SERVER_REQUIREMENTS.find((requirement) => requirement.id === 'runtime-permissions'))
       .toMatchObject({
         title: 'Runtime permission queue',
+        status: 'available',
+        requiredEndpoints: [
+          'GET /api/agent/pending-actions',
+          'POST /api/agent/runtime-permission',
+        ],
         requiredCapabilities: expect.arrayContaining([
           'runtimePermissions.pending',
           'runtimePermissions.resolve',
         ]),
       });
+    expect(AGENT_SERVER_REQUIREMENTS.find((requirement) => requirement.id === 'user-questions'))
+      .toMatchObject({ status: 'available' });
   });
 
   it('builds a copyable contract without pretending mobile can submit server work', () => {
@@ -42,8 +49,10 @@ describe('agent server requirements contract', () => {
   it('summarizes unique endpoints and capabilities for compact mobile UI', () => {
     expect(summarizeAgentServerRequirements()).toEqual({
       requirementCount: 5,
-      endpointCount: 13,
-      capabilityCount: 16,
+      availableCount: 2,
+      gapCount: 3,
+      endpointCount: 10,
+      capabilityCount: 14,
     });
   });
 

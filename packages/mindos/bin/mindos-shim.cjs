@@ -182,6 +182,9 @@ function runtimeEntrypoint(packageDir) {
   const binary = path.join(packageDir, 'bin', process.platform === 'win32' ? 'mindos.exe' : 'mindos');
   if (fs.existsSync(binary)) return { type: 'binary', path: binary };
 
+  const commonJsCli = path.join(packageDir, 'bin', 'cli.cjs');
+  if (fs.existsSync(commonJsCli)) return { type: 'node', path: commonJsCli };
+
   const cli = path.join(packageDir, 'bin', 'cli.js');
   if (fs.existsSync(cli)) return { type: 'node', path: cli };
 

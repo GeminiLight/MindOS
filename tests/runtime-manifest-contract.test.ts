@@ -52,6 +52,23 @@ describe('runtime artifact manifest contract', () => {
       platform: 'darwin-arm64',
       layout: 'desktop-bundled',
     }).artifacts).toContain('node/');
+
+    expect(createRuntimeManifest({
+      productPkg,
+      packageName: '@geminilight/mindos-windows-arm64',
+      platform: 'windows-arm64',
+      os: 'win32',
+      cpu: 'arm64',
+      layout: 'runtime-bootstrap',
+    })).toMatchObject({
+      package: { layout: 'runtime-bootstrap' },
+      entrypoints: {
+        cli: 'bin/cli.cjs',
+        web: 'runtime-archive',
+        mcp: 'runtime-archive',
+      },
+      artifacts: ['bin/cli.cjs', 'bin/mindos-shim.cjs', 'package.json', 'runtime-manifest.json'],
+    });
   });
 
   it('writes runtime-manifest.json at the runtime root', () => {

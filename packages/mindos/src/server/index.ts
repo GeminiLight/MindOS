@@ -53,6 +53,12 @@ export {
 } from './handlers/agent-activity.js';
 
 export {
+  handlePendingAgentActionsGet,
+  handleRuntimePermissionDecisionPost,
+  handleUserQuestionDecisionPost,
+} from './handlers/pending-agent-actions.js';
+
+export {
   buildAgentRuntimesPayload,
   checkCodexProviderEnvironment,
   checkClaudeRuntimeHealth,

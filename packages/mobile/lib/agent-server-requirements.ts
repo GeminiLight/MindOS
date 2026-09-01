@@ -12,6 +12,7 @@ export interface AgentServerRequirement {
   unlocks: string;
   requiredEndpoints: string[];
   requiredCapabilities: string[];
+  status: 'available' | 'required';
 }
 
 export interface AgentServerRequirementsContract {
@@ -39,38 +40,31 @@ export const AGENT_SERVER_REQUIREMENTS: AgentServerRequirement[] = [
       'agentTasks.subscribe',
       'agentTasks.reviewLinks',
     ],
+    status: 'required',
   },
   {
     id: 'runtime-permissions',
     title: 'Runtime permission queue',
     summary: 'Expose pending Allow/Deny requests from host runtimes.',
     unlocks: 'Mobile approval sheets for Codex, Claude Code, and MindOS tool gates.',
-    requiredEndpoints: [
-      'GET /api/runtime-permissions/pending',
-      'POST /api/runtime-permissions/resolve',
-      'GET/SSE /api/runtime-permissions/stream',
-    ],
+    requiredEndpoints: ['GET /api/agent/pending-actions', 'POST /api/agent/runtime-permission'],
     requiredCapabilities: [
       'runtimePermissions.pending',
       'runtimePermissions.resolve',
-      'runtimePermissions.subscribe',
     ],
+    status: 'available',
   },
   {
     id: 'user-questions',
     title: 'Ask-user question queue',
     summary: 'Expose pending user questions and resolve answers across clients.',
     unlocks: 'Mobile answer sheets for MindOS, Codex, Claude Code, Pi, ACP, and A2A runs.',
-    requiredEndpoints: [
-      'GET /api/user-questions/pending',
-      'POST /api/user-questions/resolve',
-      'GET/SSE /api/user-questions/stream',
-    ],
+    requiredEndpoints: ['GET /api/agent/pending-actions', 'POST /api/agent/user-question'],
     requiredCapabilities: [
       'userQuestions.pending',
       'userQuestions.resolve',
-      'userQuestions.subscribe',
     ],
+    status: 'available',
   },
   {
     id: 'native-sessions',
@@ -86,6 +80,7 @@ export const AGENT_SERVER_REQUIREMENTS: AgentServerRequirement[] = [
       'nativeSessions.resume',
       'nativeSessions.ownerScoped',
     ],
+    status: 'required',
   },
   {
     id: 'run-tree',
@@ -101,6 +96,7 @@ export const AGENT_SERVER_REQUIREMENTS: AgentServerRequirement[] = [
       'agentRuns.subscribe',
       'agentRuns.backgroundStatus',
     ],
+    status: 'required',
   },
 ];
 
@@ -114,7 +110,7 @@ export function buildAgentServerRequirementsContract(): AgentServerRequirementsC
       requiredEndpoints: [...requirement.requiredEndpoints],
       requiredCapabilities: [...requirement.requiredCapabilities],
     })),
-    note: 'MindOS Mobile can observe, route, and draft today. These Product Server contracts unlock real mobile control without moving runtime ownership onto the phone.',
+    note: 'MindOS Mobile can observe runs and resolve permission or question actions today. The remaining Product Server contracts unlock cloud tasks, native sessions, and structured run trees without moving runtime ownership onto the phone.',
   };
 }
 
@@ -124,6 +120,8 @@ export function formatAgentServerRequirementsContract(): string {
 
 export function summarizeAgentServerRequirements(): {
   requirementCount: number;
+  availableCount: number;
+  gapCount: number;
   endpointCount: number;
   capabilityCount: number;
 } {
@@ -137,6 +135,8 @@ export function summarizeAgentServerRequirements(): {
 
   return {
     requirementCount: AGENT_SERVER_REQUIREMENTS.length,
+    availableCount: AGENT_SERVER_REQUIREMENTS.filter((requirement) => requirement.status === 'available').length,
+    gapCount: AGENT_SERVER_REQUIREMENTS.filter((requirement) => requirement.status === 'required').length,
     endpointCount: endpoints.size,
     capabilityCount: capabilities.size,
   };

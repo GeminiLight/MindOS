@@ -73,7 +73,8 @@ describe('Bun single-binary runtime contract', () => {
     expect(script).toContain('buildBunBinary');
     expect(script).toContain('bun-single-binary');
     expect(script).toContain("'bin/cli.js'");
-    expect(script).toContain('binary: false');
+    expect(script).toContain('runtimeBootstrap: true');
+    expect(script).toContain("'runtime-bootstrap'");
     expect(script).toContain('fallbackRuntime');
     expect(script).not.toContain('mindos: targetBuildBinary');
   });

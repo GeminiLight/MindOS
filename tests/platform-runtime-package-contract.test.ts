@@ -105,8 +105,11 @@ describe('OpenCode-style platform runtime packages', () => {
     expect(script).toContain('os: [target.os]');
     expect(script).toContain('cpu: [target.cpu]');
     expect(script).toContain("key: 'windows-arm64'");
-    expect(script).toContain('binary: false');
-    expect(script).toContain("'bin/cli.js'");
+    expect(script).toContain('runtimeBootstrap: true');
+    expect(script).toContain('writeRuntimeBootstrap');
+    expect(script).toContain('pruneRuntimeBootstrapPackageRoot');
+    expect(script).toContain("'runtime-bootstrap'");
+    expect(script).toContain("'bin/cli.cjs'");
     expect(script).not.toContain('bin: {');
     expect(script).not.toContain('mindos: targetBuildBinary');
   });
@@ -118,7 +121,7 @@ describe('OpenCode-style platform runtime packages', () => {
     expect(script).toContain('copyCliRuntimeNodeModules(packageDir)');
     expect(script).toContain('copyDependencyClosure(CLI_RUNTIME_ROOT_DEPENDENCIES');
     expect(script).toContain("resolve(packageDir, 'node_modules')");
-    expect(script).toContain('dependencies: platformRuntimeDependencies()');
+    expect(script).toContain('dependencies: targetRuntimeBootstrap ? {} : platformRuntimeDependencies()');
     expect(script).toContain("'node_modules'");
   });
 
@@ -129,8 +132,12 @@ describe('OpenCode-style platform runtime packages', () => {
     expect(workflow).toContain('"dist/protocols/mcp-server/index.cjs"');
     expect(workflow).toContain('Publish main package to npm');
     expect(workflow).toContain('Publish platform packages to npm');
-    expect(workflow).toContain('continue-on-error: true');
-    expect(workflow).toContain('platform packages are optional accelerators');
+    expect(workflow).toContain('Preflight platform package tarballs');
+    expect(workflow).toContain('Verify all platform packages are published');
+    expect(workflow).not.toContain('continue-on-error: true');
+    expect(workflow.indexOf('Publish platform packages to npm')).toBeLessThan(
+      workflow.indexOf('Publish main package to npm'),
+    );
     expect(workflow).toContain('Published CLI shim is missing runtime archive fallback');
     expect(workflow).toContain('Published package missing $f');
     expect(release).toContain('dist/index.js dist/protocols/acp/index.js dist/protocols/mcp-server/index.cjs');

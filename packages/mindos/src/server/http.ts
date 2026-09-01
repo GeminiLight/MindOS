@@ -35,6 +35,11 @@ import {
 } from './handlers/acp.js';
 import { handleAgentActivity, handleAgentActivityPost } from './handlers/agent-activity.js';
 import {
+  handlePendingAgentActionsGet,
+  handleRuntimePermissionDecisionPost,
+  handleUserQuestionDecisionPost,
+} from './handlers/pending-agent-actions.js';
+import {
   handleCodexModelsGet,
   handleCodexThreadArchivePost,
   handleCodexThreadForkPost,
@@ -395,6 +400,18 @@ async function handleRequest(
     }
     if (route === 'POST /api/agent-activity') {
       writeResponse(res, handleAgentActivityPost(await readJsonBody(req), services));
+      return;
+    }
+    if (route === 'GET /api/agent/pending-actions') {
+      writeResponse(res, handlePendingAgentActionsGet());
+      return;
+    }
+    if (route === 'POST /api/agent/runtime-permission') {
+      writeResponse(res, handleRuntimePermissionDecisionPost(await readJsonBody(req)));
+      return;
+    }
+    if (route === 'POST /api/agent/user-question') {
+      writeResponse(res, handleUserQuestionDecisionPost(await readJsonBody(req)));
       return;
     }
     if (route === 'GET /api/assistants') {

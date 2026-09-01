@@ -110,6 +110,11 @@ function formatSubagentSummary(input: unknown): string {
     return target ? `${formatSubagentAction(action)} · ${target}` : formatSubagentAction(action);
   }
 
+  const workflow = getString(input.workflow);
+  if (workflow) return `Workflow · ${workflow}`;
+  if (getString(input.workflowScriptPath)) return 'Workflow · Script file';
+  if (getString(input.workflowScript)) return 'Workflow · Inline script';
+
   if (Array.isArray(input.tasks)) {
     const runCount = countRequestedRuns(input.tasks);
     const firstAgents = input.tasks
@@ -230,6 +235,8 @@ function isDestructiveToolCall(part: ToolCallPart): boolean {
 
 function formatSubagentMode(input: Record<string, unknown>): string {
   if (getString(input.action)) return 'Control';
+  if (getString(input.workflow) || getString(input.workflowScript)
+    || getString(input.workflowScriptPath)) return 'Workflow';
   if (Array.isArray(input.tasks)) return 'Parallel';
   if (Array.isArray(input.chain)) return 'Chain';
   return 'Single';
@@ -292,6 +299,9 @@ function SubagentToolDetails({ input, output, running }: { input: unknown; outpu
   }
 
   const action = getString(input.action);
+  const workflow = getString(input.workflow);
+  const workflowScriptPath = getString(input.workflowScriptPath);
+  const workflowScript = getString(input.workflowScript);
   const tasks = Array.isArray(input.tasks) ? input.tasks : [];
   const chain = Array.isArray(input.chain) ? input.chain : [];
   const outputPreview = formatSubagentOutput(output);
@@ -309,12 +319,17 @@ function SubagentToolDetails({ input, output, running }: { input: unknown; outpu
         {action && <SubagentDetailRow label="Action" value={formatSubagentAction(action)} />}
         <SubagentDetailRow label="Agent" value={input.agent} />
         <SubagentDetailRow label="Task" value={input.task} />
+        <SubagentDetailRow label="Workflow" value={workflow} />
+        <SubagentDetailRow
+          label="Source"
+          value={workflowScriptPath ? 'Script file' : workflowScript ? 'Inline script' : undefined}
+        />
         <SubagentDetailRow label="Run" value={getString(input.id) ?? getString(input.runId)} />
         <SubagentDetailRow label="Cwd" value={input.cwd} />
         <SubagentDetailRow label="Context" value={input.context} />
         <SubagentDetailRow label="Async" value={input.async} />
         <SubagentDetailRow label="Worktree" value={input.worktree} />
-        <SubagentDetailRow label="Concurrency" value={input.concurrency} />
+        <SubagentDetailRow label="Concurrency" value={input.globalConcurrencyLimit ?? input.concurrency} />
       </div>
 
       {tasks.length > 0 && (

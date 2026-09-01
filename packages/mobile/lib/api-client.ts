@@ -13,6 +13,8 @@ import type {
   FileRenameResponse,
   AgentRuntimesResponse,
   AgentRunsResponse,
+  AskUserQuestionAnswer,
+  PendingAgentActionsResponse,
 } from './types';
 import { normalizeFilesResponseToTree } from './file-tree';
 import type { ConnectionIssueReason } from './connection-diagnostics';
@@ -351,6 +353,46 @@ class MindOSClient {
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       throw new ApiError(res.status, readErrorMessage(data, 'Permission request could not be resolved'));
+    }
+    return { ok: true };
+  }
+
+  async getPendingAgentActions(input: { signal?: AbortSignal } = {}): Promise<PendingAgentActionsResponse> {
+    const res = await this.fetchWithTimeout('/api/agent/pending-actions', {
+      timeout: 10_000,
+      signal: input.signal,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new ApiError(res.status, readErrorMessage(data, 'Failed to load pending agent actions'));
+    }
+    const permissions = Array.isArray(data.permissions) ? data.permissions : [];
+    const questions = Array.isArray(data.questions) ? data.questions : [];
+    return {
+      permissions,
+      questions,
+      pendingCount: typeof data.pendingCount === 'number'
+        ? data.pendingCount
+        : permissions.length + questions.length,
+      generatedAt: typeof data.generatedAt === 'number' ? data.generatedAt : Date.now(),
+    };
+  }
+
+  async resolveUserQuestion(input: {
+    runId: string;
+    toolCallId: string;
+    action?: 'answer' | 'cancel';
+    answers?: AskUserQuestionAnswer[];
+    reason?: string;
+  }): Promise<{ ok: true }> {
+    const res = await this.fetchWithTimeout('/api/agent/user-question', {
+      method: 'POST',
+      body: JSON.stringify(input),
+      timeout: 15_000,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new ApiError(res.status, readErrorMessage(data, 'Question could not be resolved'));
     }
     return { ok: true };
   }

@@ -76,8 +76,51 @@ jobs:
           echo "=== Checking main tarball size ==="
           cd packages/mindos && npm pack --dry-run --ignore-scripts 2>&1 | tail -5
 
+      - name: Preflight platform package tarballs
+        run: node scripts/verify-platform-package-tarballs.mjs
+
+      - name: Publish platform packages to npm
+        run: |
+          VERSION=$(node -p "require('./packages/mindos/package.json').version")
+          for pkg in packages/mindos-platforms/*; do
+            NAME=$(node -p "require('./${pkg}/package.json').name")
+            if [ "$(npm view "${NAME}@${VERSION}" version 2>/dev/null || true)" = "$VERSION" ]; then
+              echo "${NAME}@${VERSION} is already published; skipping"
+            else
+              echo "Publishing ${NAME}@${VERSION}"
+              (cd "$pkg" && npm publish --access public --ignore-scripts)
+            fi
+          done
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Verify all platform packages are published
+        run: |
+          VERSION=$(node -p "require('./packages/mindos/package.json').version")
+          for pkg in packages/mindos-platforms/*; do
+            NAME=$(node -p "require('./${pkg}/package.json').name")
+            FOUND=""
+            for attempt in 1 2 3 4 5 6; do
+              FOUND=$(npm view "${NAME}@${VERSION}" version 2>/dev/null || true)
+              [ "$FOUND" = "$VERSION" ] && break
+              sleep 5
+            done
+            if [ "$FOUND" != "$VERSION" ]; then
+              echo "Missing published platform package: ${NAME}@${VERSION}"
+              exit 1
+            fi
+          done
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
       - name: Publish main package to npm
-        run: cd packages/mindos && npm publish --access public --ignore-scripts
+        run: |
+          VERSION=$(node -p "require('./packages/mindos/package.json').version")
+          if [ "$(npm view "@geminilight/mindos@${VERSION}" version 2>/dev/null || true)" = "$VERSION" ]; then
+            echo "@geminilight/mindos@${VERSION} is already published; skipping"
+          else
+            cd packages/mindos && npm publish --access public --ignore-scripts
+          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
@@ -86,18 +129,6 @@ jobs:
           VERSION=$(node -p "require('./packages/mindos/package.json').version")
           echo "Setting latest dist-tag to ${VERSION}..."
           npm dist-tag add "@geminilight/mindos@${VERSION}" latest
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-      - name: Publish platform packages to npm
-        continue-on-error: true
-        run: |
-          for pkg in packages/mindos-platforms/*; do
-            echo "Publishing $pkg"
-            if ! (cd "$pkg" && npm publish --access public --ignore-scripts); then
-              echo "::warning::Failed to publish $pkg. The main package can still run through the runtime archive fallback; check NPM_TOKEN package-creation permissions before relying on optional platform packages."
-            fi
-          done
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
@@ -128,4 +159,4 @@ jobs:
             exit 1
           fi
 
-          echo "✅ Main package integrity verified; platform packages are optional accelerators"
+          echo "✅ Main package and all platform packages are published and verified"

@@ -31,24 +31,12 @@ const subagentExamples: ToolCallPart[] = [
     toolName: 'subagent',
     state: 'running',
     input: {
-      tasks: [
-        {
-          agent: 'reviewer',
-          task: 'Review Chat Panel UI state and wording for subagent tool calls. Report only blocking UX issues and concrete fixes.',
-          cwd: '/Users/moonshot/projects/product/mindos-dev',
-        },
-        {
-          agent: 'researcher',
-          task: 'Check whether pi-subagents, ACP, A2A, Codex, and Claude Code boundaries are mixed in prompt/spec/UI wording.',
-          cwd: '/Users/moonshot/projects/product/mindos-dev',
-        },
-        {
-          agent: 'tester',
-          task: 'Run focused tests for prompt contracts, pi-subagents loading, and ToolCallBlock subagent rendering.',
-          cwd: '/Users/moonshot/projects/product/mindos-dev',
-        },
-      ],
-      concurrency: 3,
+      workflowScript: `return runs.all([
+  { key: 'ui-review', agent: 'reviewer', task: 'Review Chat Panel UI state and wording for subagent tool calls. Report only blocking UX issues and concrete fixes.', cwd: '/Users/moonshot/projects/product/mindos-dev' },
+  { key: 'boundary-review', agent: 'researcher', task: 'Check whether pi-subagents, ACP, A2A, Codex, and Claude Code boundaries are mixed in prompt/spec/UI wording.', cwd: '/Users/moonshot/projects/product/mindos-dev' },
+  { key: 'focused-tests', agent: 'tester', task: 'Run focused tests for prompt contracts, pi-subagents loading, and ToolCallBlock subagent rendering.', cwd: '/Users/moonshot/projects/product/mindos-dev' },
+]);`,
+      globalConcurrencyLimit: 3,
       context: 'fresh',
       worktree: false,
       timeoutMs: 120000,

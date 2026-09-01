@@ -494,6 +494,48 @@ describe('MindOS subagent ledger extension', () => {
     expect(upstream.execute.mock.calls[0]![1]).toBe(params);
   });
 
+  it('records workflowScript delegation as a workflow ledger run', async () => {
+    const upstream = {
+      name: 'subagent',
+      parameters: {} as any,
+      execute: vi.fn(async () => ({ content: [{ type: 'text', text: 'Workflow done.' }], details: {} })),
+    };
+    const wrapped = wrapSubagentToolForLedger(upstream as any);
+
+    await wrapped.execute('tool-call-workflow-ledger', {
+      workflowScript: 'return runs.run("review", { agent: "reviewer", task: "Review." });',
+    });
+
+    expect(listAgentRuns({ kind: 'pi-subagent' })).toEqual([
+      expect.objectContaining({
+        runtimeId: 'subagent:workflow',
+        displayName: 'Subagent workflow',
+        status: 'completed',
+      }),
+    ]);
+  });
+
+  it('records named delegation workflows without changing their upstream input', async () => {
+    const upstream = {
+      name: 'subagent',
+      parameters: {} as any,
+      execute: vi.fn(async () => ({ content: [{ type: 'text', text: 'Named workflow done.' }], details: {} })),
+    };
+    const wrapped = wrapSubagentToolForLedger(upstream as any);
+    const params = { workflow: 'release-review', workflowArgs: { scope: 'runtime' } };
+
+    await wrapped.execute('tool-call-named-workflow-ledger', params);
+
+    expect(upstream.execute.mock.calls[0]![1]).toBe(params);
+    expect(listAgentRuns({ kind: 'pi-subagent' })).toEqual([
+      expect.objectContaining({
+        runtimeId: 'subagent:workflow:release-review',
+        displayName: 'Workflow release-review',
+        status: 'completed',
+      }),
+    ]);
+  });
+
   it('forwards single subagent progress updates into the run timeline without swallowing upstream onUpdate', async () => {
     const forwardedUpdates: unknown[] = [];
     const progressUpdate = {

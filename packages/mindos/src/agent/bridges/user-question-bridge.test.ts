@@ -10,6 +10,7 @@ import {
   askUserQuestionViaBridge,
   cancelAskUserQuestion,
   getPendingAskUserQuestionCount,
+  listPendingAskUserQuestions,
   runWithAskUserQuestionBridge,
 } from './user-question-bridge.js';
 
@@ -36,6 +37,40 @@ afterEach(() => {
 });
 
 describe('ask user question bridge', () => {
+  it('exposes pending question snapshots for remote control surfaces', async () => {
+    const send = vi.fn();
+    const promise = runWithAskUserQuestionBridge(
+      { runId: 'run-mobile-question', send, timeoutMs: 60_000 },
+      async () => {
+        const questionPromise = askUserQuestionViaBridge({ toolCallId: 'tool-mobile-question', params });
+        expect(listPendingAskUserQuestions()).toEqual([
+          expect.objectContaining({
+            kind: 'user-question',
+            runId: 'run-mobile-question',
+            toolCallId: 'tool-mobile-question',
+            questions: normalizedQuestions,
+            createdAt: expect.any(Number),
+            expiresAt: expect.any(Number),
+          }),
+        ]);
+        expect(answerAskUserQuestion({
+          runId: 'run-mobile-question',
+          toolCallId: 'tool-mobile-question',
+          answers: [{
+            questionIndex: 0,
+            question: params.questions[0].question,
+            kind: 'option',
+            answer: 'Bridge',
+          }],
+        })).toEqual({ ok: true });
+        return questionPromise;
+      },
+    );
+
+    await expect(promise).resolves.toMatchObject({ cancelled: false });
+    expect(listPendingAskUserQuestions()).toEqual([]);
+  });
+
   it('emits a start event and resolves the pending tool call with answers', async () => {
     const send = vi.fn();
     const promise = runWithAskUserQuestionBridge(

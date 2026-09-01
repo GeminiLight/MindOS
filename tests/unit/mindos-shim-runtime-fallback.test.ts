@@ -20,6 +20,48 @@ afterEach(() => {
 });
 
 describe('mindos npm shim runtime fallback', () => {
+  it('dispatches to a CommonJS runtime bootstrap from a platform package', () => {
+    const packageRoot = path.join(tempDir, 'node_modules', '@geminilight', 'mindos');
+    const packageBinDir = path.join(packageRoot, 'bin');
+    fs.mkdirSync(packageBinDir, { recursive: true });
+    const shimPath = path.join(packageBinDir, 'mindos-shim.cjs');
+    fs.copyFileSync(sourceShimPath, shimPath);
+    fs.writeFileSync(path.join(packageRoot, 'package.json'), JSON.stringify({
+      name: '@geminilight/mindos',
+      version: '0.0.0-test',
+    }), 'utf-8');
+
+    const platform = process.platform === 'win32' ? 'windows' : process.platform;
+    const platformPackageRoot = path.join(
+      tempDir,
+      'node_modules',
+      '@geminilight',
+      `mindos-${platform}-${process.arch}`,
+    );
+    fs.mkdirSync(path.join(platformPackageRoot, 'bin'), { recursive: true });
+    fs.writeFileSync(path.join(platformPackageRoot, 'package.json'), JSON.stringify({
+      name: `@geminilight/mindos-${platform}-${process.arch}`,
+      version: '0.0.0-test',
+    }), 'utf-8');
+    fs.writeFileSync(
+      path.join(platformPackageRoot, 'bin', 'cli.cjs'),
+      "console.log('platform-bootstrap ' + process.argv.slice(2).join(' '));\n",
+      'utf-8',
+    );
+
+    const result = spawnSync(process.execPath, [shimPath, 'bootstrap-check'], {
+      cwd: tempDir,
+      encoding: 'utf-8',
+      env: {
+        ...process.env,
+        MINDOS_DISABLE_RUNTIME_DOWNLOAD: '1',
+      },
+    });
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout.trim()).toBe('platform-bootstrap bootstrap-check');
+  });
+
   it('downloads and reuses the runtime archive when no platform package is installed', async () => {
     const runtimeRoot = path.join(tempDir, 'runtime-root');
     const binDir = path.join(runtimeRoot, 'bin');

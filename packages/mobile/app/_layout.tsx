@@ -8,6 +8,7 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useConnectionStore } from '@/lib/connection-store';
 import { colors } from '@/lib/theme';
+import PendingAgentActionSheet from '@/components/agent/PendingAgentActionSheet';
 
 export default function RootLayout() {
   const init = useConnectionStore((s) => s.init);
@@ -45,6 +46,7 @@ export default function RootLayout() {
         <Stack.Screen name="agent-runs" options={{ title: 'Agent Runs' }} />
         <Stack.Screen name="view/[...path]" />
       </Stack>
+      <PendingAgentActionSheet />
     </SafeAreaProvider>
   );
 }

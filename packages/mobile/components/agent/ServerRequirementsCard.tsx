@@ -53,10 +53,10 @@ export default function ServerRequirementsCard() {
         <View style={styles.headerCopy}>
           <Text style={styles.title}>Server Requirements</Text>
           <Text style={styles.subtitle}>
-            Contracts needed before mobile can approve, answer, resume, or launch agent work.
+            Product Server coverage for mobile approvals, sessions, run trees, and cloud tasks.
           </Text>
         </View>
-        <StatusPill label={`${summary.requirementCount} gaps`} tone="warning" />
+        <StatusPill label={`${summary.gapCount} gaps`} tone="warning" />
       </View>
 
       <View style={styles.metricRow}>
@@ -78,6 +78,10 @@ export default function ServerRequirementsCard() {
               <Text style={styles.rowSummary}>{requirement.summary}</Text>
               <Text style={styles.rowUnlocks}>{requirement.unlocks}</Text>
             </View>
+            <StatusPill
+              label={requirement.status === 'available' ? 'Ready' : 'Needed'}
+              tone={requirement.status === 'available' ? 'success' : 'muted'}
+            />
           </View>
         ))}
       </View>
@@ -88,7 +92,7 @@ export default function ServerRequirementsCard() {
             ? 'Requirements copied'
             : copyState === 'error'
               ? 'Clipboard unavailable. Try again from a supported device.'
-              : 'Mobile stays a control surface until these server contracts exist.'}
+            : `${summary.availableCount} control contracts are ready; ${summary.gapCount} remain.`}
         </Text>
         <MindButton
           label={copyState === 'copied' ? 'Copied' : 'Copy contract'}

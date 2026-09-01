@@ -39,6 +39,24 @@ type PendingRuntimePermission = {
   resolve: (result: MindosRuntimePermissionResult) => void;
   timeout: ReturnType<typeof setTimeout>;
   emitResolved: boolean;
+  snapshot: PendingRuntimePermissionSnapshot;
+};
+
+export type PendingRuntimePermissionSnapshot = {
+  kind: 'runtime-permission';
+  runId: string;
+  requestId: string;
+  runtime: MindosRuntimePermissionRequest['runtime'];
+  toolCallId: string;
+  toolName: string;
+  input?: unknown;
+  options: MindosRuntimePermissionOption[];
+  reason?: string;
+  action: string;
+  resource?: string;
+  risk: MindosRuntimePermissionRisk;
+  createdAt: number;
+  expiresAt: number;
 };
 
 type RuntimePermissionBridgeGlobalState = {
@@ -254,6 +272,8 @@ function enqueueRuntimePermission(
     `${request.runtime}-${request.toolCallId}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
   const key = pendingKey(context.runId, requestId);
   const emitResolved = options.emitResolved !== false;
+  const createdAt = Date.now();
+  const timeoutMs = context.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
   return new Promise<MindosRuntimePermissionResult>((resolve) => {
     let abort: (() => void) | undefined;
@@ -282,7 +302,24 @@ function enqueueRuntimePermission(
         });
       }
       finish(result);
-    }, context.timeoutMs ?? DEFAULT_TIMEOUT_MS);
+    }, timeoutMs);
+
+    const snapshot: PendingRuntimePermissionSnapshot = {
+      kind: 'runtime-permission',
+      runId: context.runId,
+      requestId,
+      runtime: request.runtime,
+      toolCallId: request.toolCallId,
+      toolName: redactSensitiveText(request.toolName),
+      input: redactSensitiveObject(request.input),
+      options: redactSensitiveObject(request.options),
+      ...(request.reason ? { reason: redactSensitiveText(request.reason) } : {}),
+      action: approval.action,
+      ...(approval.resource ? { resource: approval.resource } : {}),
+      risk: redactSensitiveObject(approval.risk),
+      createdAt,
+      expiresAt: createdAt + timeoutMs,
+    };
 
     state.pending.set(key, {
       runId: context.runId,
@@ -294,6 +331,7 @@ function enqueueRuntimePermission(
       resolve: finish,
       timeout,
       emitResolved,
+      snapshot,
     });
 
     abort = () => {
@@ -375,4 +413,10 @@ export function resolveRuntimePermission(input: {
 
 export function getPendingRuntimePermissionCount(): number {
   return state.pending.size;
+}
+
+export function listPendingRuntimePermissions(): PendingRuntimePermissionSnapshot[] {
+  return Array.from(state.pending.values())
+    .map((pending) => redactSensitiveObject(pending.snapshot))
+    .sort((left, right) => left.createdAt - right.createdAt);
 }

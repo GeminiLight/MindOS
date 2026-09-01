@@ -249,6 +249,56 @@ describe('mindosClient auth', () => {
     );
   });
 
+  it('loads pending agent actions and normalizes missing collections', async () => {
+    mindosClient.setBaseUrl('http://127.0.0.1:4567');
+    mindosClient.setAuthToken('secret-token');
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify({
+      permissions: [{ kind: 'runtime-permission', requestId: 'req-1' }],
+      questions: null,
+      pendingCount: 1,
+      generatedAt: 123,
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+
+    await expect(mindosClient.getPendingAgentActions()).resolves.toEqual({
+      permissions: [{ kind: 'runtime-permission', requestId: 'req-1' }],
+      questions: [],
+      pendingCount: 1,
+      generatedAt: 123,
+    });
+    expect(fetch).toHaveBeenCalledWith(
+      'http://127.0.0.1:4567/api/agent/pending-actions',
+      expect.objectContaining({ headers: expect.objectContaining({ Authorization: 'Bearer secret-token' }) }),
+    );
+  });
+
+  it('answers and cancels AskUserQuestion requests through the MindOS server', async () => {
+    mindosClient.setBaseUrl('http://127.0.0.1:4567');
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+
+    const answer = {
+      runId: 'run-1',
+      toolCallId: 'tool-1',
+      answers: [{ questionIndex: 0, question: 'Ship?', kind: 'option' as const, answer: 'Yes' }],
+    };
+    await expect(mindosClient.resolveUserQuestion(answer)).resolves.toEqual({ ok: true });
+    await expect(mindosClient.resolveUserQuestion({
+      runId: 'run-2', toolCallId: 'tool-2', action: 'cancel', reason: 'user_cancelled',
+    })).resolves.toEqual({ ok: true });
+
+    expect(fetch).toHaveBeenNthCalledWith(1,
+      'http://127.0.0.1:4567/api/agent/user-question',
+      expect.objectContaining({ method: 'POST', body: JSON.stringify(answer) }),
+    );
+    expect(fetch).toHaveBeenNthCalledWith(2,
+      'http://127.0.0.1:4567/api/agent/user-question',
+      expect.objectContaining({ method: 'POST', body: JSON.stringify({
+        runId: 'run-2', toolCallId: 'tool-2', action: 'cancel', reason: 'user_cancelled',
+      }) }),
+    );
+  });
+
   it('loads agent run activity for the active mobile chat session', async () => {
     mindosClient.setBaseUrl('http://127.0.0.1:4567');
     mindosClient.setAuthToken('secret-token');

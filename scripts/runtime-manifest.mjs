@@ -14,6 +14,11 @@ const defaultEntrypointsByLayout = {
     web: 'bin/mindos',
     mcp: 'bin/mindos',
   },
+  'runtime-bootstrap': {
+    cli: 'bin/cli.cjs',
+    web: 'runtime-archive',
+    mcp: 'runtime-archive',
+  },
   'runtime-archive': {
     cli: 'bin/cli.js',
     web: 'packages/web/.next/standalone/server.js',
@@ -43,6 +48,12 @@ const defaultArtifactsByLayout = {
   'bun-single-binary': [
     'bin/mindos',
     'static-web/',
+    'package.json',
+    'runtime-manifest.json',
+  ],
+  'runtime-bootstrap': [
+    'bin/cli.cjs',
+    'bin/mindos-shim.cjs',
     'package.json',
     'runtime-manifest.json',
   ],

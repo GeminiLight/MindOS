@@ -83,6 +83,17 @@ type PendingQuestion = {
   resolve: (result: AskUserQuestionResult) => void;
   reject: (error: Error) => void;
   timeout: ReturnType<typeof setTimeout>;
+  createdAt: number;
+  expiresAt: number;
+};
+
+export type PendingAskUserQuestionSnapshot = {
+  kind: 'user-question';
+  runId: string;
+  toolCallId: string;
+  questions: AskUserQuestionQuestion[];
+  createdAt: number;
+  expiresAt: number;
 };
 
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
@@ -194,6 +205,8 @@ function enqueueAskUserQuestion(
   const key = pendingKey(context.runId, input.toolCallId);
 
   if (pendingQuestions.has(key)) return Promise.resolve(cancelled('duplicate_question'));
+  const createdAt = Date.now();
+  const timeoutMs = context.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
   return new Promise<AskUserQuestionResult>((resolve, reject) => {
     let abort: (() => void) | undefined;
@@ -214,7 +227,7 @@ function enqueueAskUserQuestion(
         reason: 'timeout',
       });
       finish(cancelled('timeout'));
-    }, context.timeoutMs ?? DEFAULT_TIMEOUT_MS);
+    }, timeoutMs);
 
     pendingQuestions.set(key, {
       runId: context.runId,
@@ -225,6 +238,8 @@ function enqueueAskUserQuestion(
       resolve: finish,
       reject,
       timeout,
+      createdAt,
+      expiresAt: createdAt + timeoutMs,
     });
 
     abort = () => {
@@ -390,4 +405,20 @@ export function cancelAskUserQuestion(input: {
 
 export function getPendingAskUserQuestionCount(): number {
   return pendingQuestions.size;
+}
+
+export function listPendingAskUserQuestions(): PendingAskUserQuestionSnapshot[] {
+  return Array.from(pendingQuestions.values())
+    .map((pending) => ({
+      kind: 'user-question' as const,
+      runId: pending.runId,
+      toolCallId: pending.toolCallId,
+      questions: pending.params.questions.map((question) => ({
+        ...question,
+        options: question.options.map((option) => ({ ...option })),
+      })),
+      createdAt: pending.createdAt,
+      expiresAt: pending.expiresAt,
+    }))
+    .sort((left, right) => left.createdAt - right.createdAt);
 }

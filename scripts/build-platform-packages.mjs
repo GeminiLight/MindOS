@@ -5,7 +5,7 @@
  * Input: packages/mindos must already contain built dist/, staged runtime assets,
  * and either static-web/ or a pruned _standalone/ fallback runtime.
  */
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { basename, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -34,7 +34,7 @@ const platforms = [
   { key: 'linux-arm64-musl', os: 'linux', cpu: 'arm64', libc: 'musl', koffi: ['musl_arm64'], clipboard: ['clipboard', 'clipboard-linux-arm64-musl'] },
   { key: 'linux-x64', os: 'linux', cpu: 'x64', libc: 'glibc', koffi: ['linux_x64'], clipboard: ['clipboard', 'clipboard-linux-x64-gnu'] },
   { key: 'linux-x64-musl', os: 'linux', cpu: 'x64', libc: 'musl', koffi: ['musl_x64'], clipboard: ['clipboard', 'clipboard-linux-x64-musl'] },
-  { key: 'windows-arm64', os: 'win32', cpu: 'arm64', koffi: ['win32_arm64'], clipboard: ['clipboard', 'clipboard-win32-arm64-msvc'], binary: false },
+  { key: 'windows-arm64', os: 'win32', cpu: 'arm64', koffi: ['win32_arm64'], clipboard: ['clipboard', 'clipboard-win32-arm64-msvc'], binary: false, runtimeBootstrap: true },
   { key: 'windows-x64', os: 'win32', cpu: 'x64', koffi: ['win32_x64'], clipboard: ['clipboard', 'clipboard-win32-x64-msvc'] },
 ];
 
@@ -50,14 +50,15 @@ mkdirSync(outDir, { recursive: true });
 
 for (const target of selected) {
   const targetBuildBinary = buildBinary && target.binary !== false;
+  const targetRuntimeBootstrap = target.runtimeBootstrap === true && !fallbackRuntime;
   const packageDir = resolve(outDir, target.key);
   rmSync(packageDir, { recursive: true, force: true });
   mkdirSync(packageDir, { recursive: true });
 
   copyRuntimeRoot(packageDir);
   copyCliRuntimeNodeModules(packageDir);
-  writePlatformPackageJson(packageDir, target, targetBuildBinary);
-  writePlatformRuntimeManifest(packageDir, target, targetBuildBinary);
+  writePlatformPackageJson(packageDir, target, targetBuildBinary, targetRuntimeBootstrap);
+  writePlatformRuntimeManifest(packageDir, target, targetBuildBinary, targetRuntimeBootstrap);
   pruneKoffi(packageDir, target);
   pruneMarioClipboardPackages(packageDir, target);
   pruneKeyringNativePackages(packageDir, {
@@ -69,7 +70,10 @@ for (const target of selected) {
   if (removedClaudeNativePackages > 0) {
     console.log(`[build-platform-packages] Removed ${removedClaudeNativePackages} Claude Agent SDK native package(s) from ${target.key}`);
   }
-  if (targetBuildBinary) {
+  if (targetRuntimeBootstrap) {
+    writeRuntimeBootstrap(packageDir);
+    pruneRuntimeBootstrapPackageRoot(packageDir);
+  } else if (targetBuildBinary) {
     // Binary targets serve static-web; the standalone Next server is dead
     // weight in the embedded archive, but the document extraction runtime
     // under _standalone must survive — excluding it wholesale shipped a
@@ -190,7 +194,12 @@ function copyRuntimeRoot(packageDir) {
   rmSync(resolve(packageDir, 'bin', 'mindos-shim.cjs'), { force: true });
 }
 
-function writePlatformPackageJson(packageDir, target, targetBuildBinary = buildBinary) {
+function writePlatformPackageJson(
+  packageDir,
+  target,
+  targetBuildBinary = buildBinary,
+  targetRuntimeBootstrap = false,
+) {
   const manifest = {
     name: `@geminilight/mindos-${target.key}`,
     version: productPkg.version,
@@ -199,8 +208,18 @@ function writePlatformPackageJson(packageDir, target, targetBuildBinary = buildB
     license: productPkg.license ?? 'MIT',
     os: [target.os],
     cpu: [target.cpu],
-    dependencies: platformRuntimeDependencies(),
-    files: fallbackRuntime || !targetBuildBinary
+    dependencies: targetRuntimeBootstrap ? {} : platformRuntimeDependencies(),
+    files: targetRuntimeBootstrap
+      ? [
+        'bin/cli.cjs',
+        'bin/mindos-shim.cjs',
+        'package.json',
+        'runtime-manifest.json',
+        'README.md',
+        'README_zh.md',
+        'LICENSE',
+      ]
+      : fallbackRuntime || !targetBuildBinary
       ? [
         'bin/',
         'dist/',
@@ -342,15 +361,62 @@ function shouldCopyRuntimeDependency(src) {
   return true;
 }
 
-function writePlatformRuntimeManifest(packageDir, target, targetBuildBinary = buildBinary) {
+function writePlatformRuntimeManifest(
+  packageDir,
+  target,
+  targetBuildBinary = buildBinary,
+  targetRuntimeBootstrap = false,
+) {
+  const layout = targetRuntimeBootstrap
+    ? 'runtime-bootstrap'
+    : targetBuildBinary
+      ? 'bun-single-binary'
+      : 'platform';
   writeSharedRuntimeManifest(packageDir, {
     productPkg,
     packageName: `@geminilight/mindos-${target.key}`,
     platform: target.key,
     os: target.os,
     cpu: target.cpu,
-    layout: targetBuildBinary ? 'bun-single-binary' : 'platform',
+    layout,
   });
+}
+
+function writeRuntimeBootstrap(packageDir) {
+  const binDir = resolve(packageDir, 'bin');
+  mkdirSync(binDir, { recursive: true });
+  cpSync(
+    resolve(productRoot, 'bin', 'mindos-shim.cjs'),
+    resolve(binDir, 'mindos-shim.cjs'),
+  );
+  const bootstrapPath = resolve(binDir, 'cli.cjs');
+  writeFileSync(bootstrapPath, `#!/usr/bin/env node
+process.env.MINDOS_DISABLE_PLATFORM_PACKAGE_LOOKUP = '1';
+require('./mindos-shim.cjs');
+`, 'utf-8');
+  chmodSync(bootstrapPath, 0o755);
+}
+
+function pruneRuntimeBootstrapPackageRoot(packageDir) {
+  const keep = new Set([
+    'bin',
+    'package.json',
+    'runtime-manifest.json',
+    'README.md',
+    'README_zh.md',
+    'LICENSE',
+  ]);
+  for (const entry of readdirSync(packageDir, { withFileTypes: true })) {
+    if (!keep.has(entry.name)) {
+      rmSync(resolve(packageDir, entry.name), { recursive: true, force: true });
+    }
+  }
+  const binDir = resolve(packageDir, 'bin');
+  for (const entry of readdirSync(binDir, { withFileTypes: true })) {
+    if (entry.name !== 'cli.cjs' && entry.name !== 'mindos-shim.cjs') {
+      rmSync(resolve(binDir, entry.name), { recursive: true, force: true });
+    }
+  }
 }
 
 function pruneBinaryPackageRoot(packageDir, target) {

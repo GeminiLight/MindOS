@@ -6,6 +6,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   getPendingRuntimePermissionCount,
+  listPendingRuntimePermissions,
   requestRuntimePermissionForRun,
   resolveRuntimePermission,
   runWithRuntimePermissionBridge,
@@ -16,6 +17,53 @@ afterEach(() => {
 });
 
 describe('runtime permission bridge', () => {
+  it('exposes pending permission snapshots for remote control surfaces', async () => {
+    const send = vi.fn();
+    const promise = runWithRuntimePermissionBridge({ runId: 'run-mobile', send, timeoutMs: 60_000 }, async () => {
+      const requestPromise = requestRuntimePermissionForRun('run-mobile', {
+        runtime: 'codex',
+        toolCallId: 'tool-mobile',
+        toolName: 'Bash',
+        input: { command: 'npm test', token: 'secret-value' },
+        options: [
+          { id: 'allow-once', label: 'Allow once', intent: 'allow', scope: 'once' },
+          { id: 'allow-session', label: 'Allow this session', intent: 'allow', scope: 'session' },
+          { id: 'deny', label: 'Deny', intent: 'deny', scope: 'once' },
+        ],
+        reason: 'Run focused tests',
+      }, { requestId: 'permission-mobile' });
+
+      expect(listPendingRuntimePermissions()).toEqual([
+        expect.objectContaining({
+          kind: 'runtime-permission',
+          runId: 'run-mobile',
+          requestId: 'permission-mobile',
+          runtime: 'codex',
+          toolCallId: 'tool-mobile',
+          toolName: 'Bash',
+          input: { command: 'npm test', token: '[redacted]' },
+          action: 'command',
+          resource: 'npm test',
+          options: expect.arrayContaining([
+            expect.objectContaining({ id: 'allow-session', scope: 'session' }),
+          ]),
+          createdAt: expect.any(Number),
+          expiresAt: expect.any(Number),
+        }),
+      ]);
+
+      expect(resolveRuntimePermission({
+        runId: 'run-mobile',
+        requestId: 'permission-mobile',
+        decision: 'deny',
+      })).toEqual({ ok: true });
+      return requestPromise;
+    });
+
+    await expect(promise).resolves.toMatchObject({ decision: 'deny' });
+    expect(listPendingRuntimePermissions()).toEqual([]);
+  });
+
   it('lets an external runtime request wait on the current Chat Panel run', async () => {
     const send = vi.fn();
     const promise = runWithRuntimePermissionBridge({ runId: 'run-claude', send }, async () => {

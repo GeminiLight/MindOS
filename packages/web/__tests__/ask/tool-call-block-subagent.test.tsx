@@ -99,6 +99,57 @@ describe('ToolCallBlock subagent rendering', () => {
     view.cleanup();
   });
 
+  it('presents an inline workflowScript as a workflow without parsing executable source', () => {
+    const view = renderToolCall({
+      type: 'tool-call',
+      toolCallId: 'tool-workflow-inline',
+      toolName: 'subagent',
+      state: 'running',
+      input: {
+        workflowScript: 'return runs.all([{ key: "review", agent: "reviewer", task: "Review." }]);',
+        globalConcurrencyLimit: 3,
+        async: false,
+      },
+    });
+
+    expect(view.host.textContent).toContain('Workflow · Inline script');
+    expect(view.host.textContent).not.toContain('return runs.all');
+
+    view.expand();
+
+    expect(view.host.textContent).toContain('Workflow');
+    expect(view.host.textContent).toContain('Inline script');
+    expect(view.host.textContent).toContain('Concurrency');
+    expect(view.host.textContent).toContain('3');
+    expect(view.host.textContent).toContain('Raw input');
+
+    view.cleanup();
+  });
+
+  it('presents named workflows as first-class delegation requests', () => {
+    const view = renderToolCall({
+      type: 'tool-call',
+      toolCallId: 'tool-workflow-named',
+      toolName: 'subagent',
+      state: 'done',
+      input: {
+        workflow: 'release-review',
+        workflowArgs: { scope: 'runtime' },
+      },
+      output: JSON.stringify({ status: 'completed', runId: 'workflow-1' }),
+    });
+
+    expect(view.host.textContent).toContain('Workflow · release-review');
+
+    view.expand();
+
+    expect(view.host.textContent).toContain('Mode');
+    expect(view.host.textContent).toContain('Workflow');
+    expect(view.host.textContent).toContain('release-review');
+
+    view.cleanup();
+  });
+
   it('renders subagent control actions without treating them as ACP or A2A sessions', () => {
     const view = renderToolCall({
       type: 'tool-call',

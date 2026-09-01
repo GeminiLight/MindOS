@@ -322,6 +322,57 @@ export interface RuntimePermissionState extends RuntimePermissionRequest {
   decisionScope?: 'once' | 'session' | 'always' | 'turn';
 }
 
+export interface PendingRuntimePermission extends Omit<RuntimePermissionRequest, 'type'> {
+  kind: 'runtime-permission';
+  action: string;
+  risk: {
+    level: 'low' | 'medium' | 'high';
+    summary: string;
+    reasons?: string[];
+  };
+  createdAt: number;
+  expiresAt: number;
+}
+
+export interface AskUserQuestionOption {
+  label: string;
+  description: string;
+  preview?: string;
+}
+
+export interface AskUserQuestionQuestion {
+  question: string;
+  header: string;
+  options: AskUserQuestionOption[];
+  multiSelect?: boolean;
+}
+
+export interface AskUserQuestionAnswer {
+  questionIndex: number;
+  question: string;
+  kind: 'option' | 'custom' | 'chat' | 'multi';
+  answer: string | null;
+  selected?: string[];
+  notes?: string;
+  preview?: string;
+}
+
+export interface PendingAskUserQuestion {
+  kind: 'user-question';
+  runId: string;
+  toolCallId: string;
+  questions: AskUserQuestionQuestion[];
+  createdAt: number;
+  expiresAt: number;
+}
+
+export interface PendingAgentActionsResponse {
+  permissions: PendingRuntimePermission[];
+  questions: PendingAskUserQuestion[];
+  pendingCount: number;
+  generatedAt: number;
+}
+
 export interface ChatSession {
   id: string;
   title?: string;
