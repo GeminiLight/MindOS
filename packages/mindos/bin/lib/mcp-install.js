@@ -231,10 +231,6 @@ export async function mcpInstall() {
   const flagsWithValue = new Set(['--transport', '--url', '--token']);
   const agentArg = args.find((a, i) => !a.startsWith('-') && (i === 0 || !flagsWithValue.has(args[i - 1]))) ?? null;
 
-  const readline = await import('node:readline');
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-  const ask = (q) => new Promise(r => rl.question(q, r));
-
   console.log(`\n${bold('🔌 MindOS MCP Install')}\n`);
 
   // ── 1. agent(s) ──────────────────────────────────────────────────────────────
@@ -246,8 +242,6 @@ export async function mcpInstall() {
       // -y mode: install all
       agentKeys = keys;
     } else {
-      rl.close(); // close readline so raw mode works
-
       // Build options with detected status and preselect
       const agentOptions = keys.map(k => {
         const agent = MCP_AGENTS[k];
@@ -334,6 +328,7 @@ export async function mcpInstall() {
 
   if (transport === 'http') {
     // Re-open readline for text input
+    const readline = await import('node:readline');
     const rl2 = readline.createInterface({ input: process.stdin, output: process.stdout });
     const ask2 = (q) => new Promise(r => rl2.question(q, r));
 

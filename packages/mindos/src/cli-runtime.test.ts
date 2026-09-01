@@ -13,12 +13,16 @@ import path from 'node:path';
 const CLI = path.resolve(__dirname, '..', 'bin', 'cli.js');
 const RUNTIME_SOURCE = readFileSync(path.resolve(__dirname, 'cli-runtime.js'), 'utf-8');
 
-function runCli(args: string[], env: NodeJS.ProcessEnv = {}): Promise<{ stdout: string; stderr: string; code: number }> {
+function runCli(
+  args: string[],
+  env: NodeJS.ProcessEnv = {},
+  timeout = 20000,
+): Promise<{ stdout: string; stderr: string; code: number }> {
   return new Promise((resolvePromise) => {
     execFile(
       process.execPath,
       [CLI, ...args],
-      { encoding: 'utf-8', timeout: 20000, env: { ...process.env, ...env } },
+      { encoding: 'utf-8', timeout, env: { ...process.env, ...env } },
       (err, stdout, stderr) => {
         const anyErr = err as (Error & { code?: number }) | null;
         const code = anyErr ? (typeof anyErr.code === 'number' ? anyErr.code : 1) : 0;
@@ -81,6 +85,21 @@ describe('cli-runtime lazy command loading', () => {
     expect(code).toBe(0);
     expect(stdout).toContain('USAGE');
     expect(stdout).toContain('mindos mcp');
+  });
+
+  it('exits after a non-interactive MCP install completes', async () => {
+    const home = mkdtempSync(path.join(tmpdir(), 'mindos-runtime-mcp-install-'));
+    try {
+      const { stdout, code } = await runCli(
+        ['mcp', 'install', 'codex', '-g', '-y'],
+        { HOME: home, NODE_ENV: 'test' },
+        1500,
+      );
+      expect(code).toBe(0);
+      expect(stdout).toContain('Done! 1/1 agent(s) configured.');
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
   });
 
   it('resolves the serve display alias to the start command', async () => {
