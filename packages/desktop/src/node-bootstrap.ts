@@ -16,17 +16,12 @@ import type { ClientRequest, IncomingMessage } from 'http';
 import { gunzipSync } from 'zlib';
 import { createHash } from 'crypto';
 import { getDesktopConfigDir } from './desktop-home';
+import { isNodeVersionAcceptable } from './node-version';
+import nodeRuntimeManifest from '../node-runtime-manifest.json';
 
 // Node.js LTS version to download (also used by prepare-mindos-runtime to bundle Node)
-export const NODE_VERSION = '22.16.0';
-const NODE_DOWNLOAD_SHA256: Record<string, string> = {
-  [`node-v${NODE_VERSION}-darwin-arm64.tar.gz`]: '1d7f34ec4c03e12d8b33481e5c4560432d7dc31a0ef3ff5a4d9a8ada7cf6ecc9',
-  [`node-v${NODE_VERSION}-darwin-x64.tar.gz`]: '838d400f7e66c804e5d11e2ecb61d6e9e878611146baff69d6a2def3cc23f4ac',
-  [`node-v${NODE_VERSION}-linux-arm64.tar.gz`]: '1725602e9fb150eb8b8220a899085190e1c04d1a5f3862b01c3dc1dfce0157f9',
-  [`node-v${NODE_VERSION}-linux-x64.tar.gz`]: 'fb870226119d47378fa9c92c4535389c72dae14fcc7b47e6fdcc82c43de5a547',
-  [`node-v${NODE_VERSION}-win-arm64.zip`]: '31e885dcd06355f67b4be8cca86464270d83d0f5b8d4e3d4369c16ed22a5f4fa',
-  [`node-v${NODE_VERSION}-win-x64.zip`]: '21c2d9735c80b8f86dab19305aa6a9f6f59bbc808f68de3eef09d5832e3bfbbd',
-};
+export const NODE_VERSION = nodeRuntimeManifest.version;
+const NODE_DOWNLOAD_SHA256: Record<string, string> = nodeRuntimeManifest.sha256;
 
 const IS_WIN = process.platform === 'win32';
 const PATH_SEP = IS_WIN ? ';' : ':';
@@ -86,6 +81,18 @@ export function isPrivateNodeInstalled(): boolean {
   return existsSync(getPrivateNodePath());
 }
 
+/** Check that an existing private runtime satisfies the current Pi baseline. */
+export function isPrivateNodeCompatible(): boolean {
+  const nodePath = getPrivateNodePath();
+  if (!existsSync(nodePath)) return false;
+  try {
+    const version = execFileSync(nodePath, ['--version'], { encoding: 'utf-8', timeout: 3000 }).trim();
+    return isNodeVersionAcceptable(version);
+  } catch {
+    return false;
+  }
+}
+
 /** Resolve the download URL for the current platform */
 function getDownloadUrl(): { url: string; mirrorUrl: string; file: string; format: 'tar.gz' | 'zip' } {
   const plat = process.platform;
@@ -115,7 +122,7 @@ function getDownloadUrl(): { url: string; mirrorUrl: string; file: string; forma
 export async function downloadNode(
   onProgress?: (percent: number, status: string) => void,
 ): Promise<string> {
-  if (isPrivateNodeInstalled()) {
+  if (isPrivateNodeCompatible()) {
     return getPrivateNodePath();
   }
 
@@ -124,7 +131,6 @@ export async function downloadNode(
   const nodeDir = getNodeDir();
   const tmpDir = path.join(mindosDir, 'tmp');
   mkdirSync(tmpDir, { recursive: true });
-  mkdirSync(nodeDir, { recursive: true });
 
   const tmpFile = path.join(tmpDir, `node.${format}`);
 
@@ -147,6 +153,10 @@ export async function downloadNode(
 
   // 2. Extract (using spawn with argument arrays — no shell injection)
   onProgress?.(80, 'extracting');
+  // Keep an old private runtime available while downloading. Replace it only
+  // after a verified archive is ready, and remove all stale files before extraction.
+  await rm(nodeDir, { recursive: true, force: true });
+  mkdirSync(nodeDir, { recursive: true });
   if (format === 'tar.gz') {
     extractTarGzSafe(tmpFile, nodeDir, 1);
   } else {
@@ -172,8 +182,8 @@ export async function downloadNode(
 
   // 3. Verify
   const nodeBin = getPrivateNodePath();
-  if (!existsSync(nodeBin)) {
-    throw new Error(`Node.js extraction failed — ${nodeBin} not found`);
+  if (!existsSync(nodeBin) || !isPrivateNodeCompatible()) {
+    throw new Error(`Node.js extraction failed — ${nodeBin} is missing or below the required version`);
   }
 
   // Ensure executable permission (macOS/Linux)

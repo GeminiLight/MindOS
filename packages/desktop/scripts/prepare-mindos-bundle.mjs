@@ -26,12 +26,6 @@ export const BUILTIN_AGENT_EXTENSION_RUNTIME_DEPENDENCY_SEEDS = [
   'pi-web-access',
 ];
 
-export const PI_SCHEDULE_PROMPT_STALE_RUNTIME_DEPENDENCIES = [
-  // pi-schedule-prompt@0.1.2 still declares this pre-rename package, but the
-  // MindOS wrapper only loads source files where it is a type-only import.
-  '@mariozechner/pi-coding-agent',
-];
-
 export const IM_RUNTIME_DEPENDENCY_SEEDS = [
   '@larksuiteoapi/node-sdk',
   '@slack/web-api',
@@ -73,6 +67,17 @@ export const RUNTIME_PACKAGE_ASSET_PRUNE_PATHS = [
   path.join('pi-web-access', 'banner.png'),
 ];
 
+const KEYRING_NATIVE_PACKAGE_BY_TARGET = new Map([
+  ['darwin-arm64', '@napi-rs/keyring-darwin-arm64'],
+  ['darwin-x64', '@napi-rs/keyring-darwin-x64'],
+  ['linux-arm64-glibc', '@napi-rs/keyring-linux-arm64-gnu'],
+  ['linux-arm64-musl', '@napi-rs/keyring-linux-arm64-musl'],
+  ['linux-x64-glibc', '@napi-rs/keyring-linux-x64-gnu'],
+  ['linux-x64-musl', '@napi-rs/keyring-linux-x64-musl'],
+  ['win32-arm64', '@napi-rs/keyring-win32-arm64-msvc'],
+  ['win32-x64', '@napi-rs/keyring-win32-x64-msvc'],
+]);
+
 export function materializeStandaloneAssets(appDir, options = {}) {
   const standaloneDir = path.join(appDir, '.next', 'standalone');
   const serverJs = path.join(standaloneDir, 'server.js');
@@ -102,7 +107,12 @@ export function materializeStandaloneAssets(appDir, options = {}) {
   materializeRuntimeDependencySeeds(appDir, standaloneDir, options.runtimeDependencySeeds ?? []);
   materializeMindosWebRuntimeExtensionSources(appDir, standaloneDir);
   pruneDirectDevelopmentPackages(standaloneDir);
-  materializeStandalonePackageDependencies(appDir, standaloneDir);
+  const hasExplicitNativeTarget = options.targetPlatform !== undefined || options.targetArch !== undefined;
+  materializeStandalonePackageDependencies(appDir, standaloneDir, {
+    targetPlatform: hasExplicitNativeTarget ? options.targetPlatform : undefined,
+    targetArch: hasExplicitNativeTarget ? options.targetArch : undefined,
+    targetLibc: options.targetLibc,
+  });
   prunePnpmVirtualStores(standaloneDir);
   pruneNextProductionServerPayload(standaloneDir);
   pruneRedundantNestedPackages(standaloneDir);
@@ -110,10 +120,16 @@ export function materializeStandaloneAssets(appDir, options = {}) {
     targetPlatform: options.targetPlatform ?? process.platform,
     targetArch: options.targetArch ?? process.arch,
   });
+  if (hasExplicitNativeTarget) {
+    pruneKeyringNativePackages(standaloneDir, {
+      targetPlatform: options.targetPlatform ?? process.platform,
+      targetArch: options.targetArch ?? process.arch,
+      targetLibc: options.targetLibc,
+    });
+  }
   pruneClaudeAgentSdkNativePackages(standaloneDir);
   prunePackageDevelopmentPayload(standaloneDir);
   pruneRuntimePackageAssets(standaloneDir);
-  prunePiSchedulePromptStaleDependencies(standaloneDir);
   pruneOptionalLocalEmbeddingRuntime(standaloneDir, {
     bundleLocalEmbeddingRuntime: options.bundleLocalEmbeddingRuntime === true
       || process.env.MINDOS_BUNDLE_LOCAL_EMBEDDING_RUNTIME === '1',
@@ -179,7 +195,7 @@ function materializeStandaloneNodeModules(appDir, standaloneDir) {
   replaceSymlinksWithCopies(nodeModulesDir, nodeModulesDir, path.join(appDir, 'node_modules'));
 }
 
-function materializeStandalonePackageDependencies(appDir, standaloneDir) {
+function materializeStandalonePackageDependencies(appDir, standaloneDir, nativeTarget) {
   const nodeModulesDir = path.join(standaloneDir, 'node_modules');
   if (!existsSync(nodeModulesDir)) return;
 
@@ -189,11 +205,29 @@ function materializeStandalonePackageDependencies(appDir, standaloneDir) {
     const packageDir = path.join(nodeModulesDir, packageName);
     const sourcePackage = resolvePackageDir(appDir, packageName);
     if (existsSync(sourcePackage)) sourceByPackageName.set(packageName, sourcePackage);
-    materializePackageDependencies(appDir, standaloneDir, packageName, packageDir, sourcePackage, visited, sourceByPackageName);
+    materializePackageDependencies(
+      appDir,
+      standaloneDir,
+      packageName,
+      packageDir,
+      sourcePackage,
+      visited,
+      sourceByPackageName,
+      nativeTarget,
+    );
   }
 }
 
-function materializePackageDependencies(appDir, standaloneDir, packageName, packageDir, sourcePackage, visited, sourceByPackageName) {
+function materializePackageDependencies(
+  appDir,
+  standaloneDir,
+  packageName,
+  packageDir,
+  sourcePackage,
+  visited,
+  sourceByPackageName,
+  nativeTarget,
+) {
   const visitKey = path.resolve(packageDir);
   if (visited.has(visitKey)) return;
   visited.add(visitKey);
@@ -210,8 +244,26 @@ function materializePackageDependencies(appDir, standaloneDir, packageName, pack
     return;
   }
 
-  for (const [dependencyName, dependencyRange] of Object.entries(pkg.dependencies ?? {})) {
+  const dependencies = Object.entries(pkg.dependencies ?? {});
+  if (pkg.name === '@napi-rs/keyring') {
+    const optionalDependencies = pkg.optionalDependencies ?? {};
+    const wanted = nativeTarget.targetPlatform && nativeTarget.targetArch
+      ? [keyringNativePackageName(nativeTarget)]
+      : [...KEYRING_NATIVE_PACKAGE_BY_TARGET.values()];
+    for (const dependencyName of wanted) {
+      const dependencyRange = optionalDependencies[dependencyName];
+      if (dependencyRange) dependencies.push([dependencyName, dependencyRange]);
+    }
+  }
+
+  for (const [dependencyName, dependencyRange] of dependencies) {
     const dependencySource = materializePackage(appDir, standaloneDir, dependencyName, sourcePackage, packageDir, dependencyRange);
+    if (pkg.name === '@napi-rs/keyring' && !dependencySource) {
+      throw new Error(
+        `[prepare-mindos-bundle] Missing native keyring binding ${dependencyName}. `
+        + 'Run pnpm install with the repository supportedArchitectures configuration.'
+      );
+    }
     if (dependencySource) sourceByPackageName.set(dependencyName, dependencySource);
     const nestedDependencyDir = path.join(packageDir, 'node_modules', dependencyName);
     const topLevelDependencyDir = path.join(standaloneDir, 'node_modules', dependencyName);
@@ -226,6 +278,7 @@ function materializePackageDependencies(appDir, standaloneDir, packageName, pack
       dependencySource,
       visited,
       sourceByPackageName,
+      nativeTarget,
     );
   }
 }
@@ -538,6 +591,50 @@ function pruneTargetNativeBinaries(standaloneDir, { targetPlatform, targetArch }
   }
 }
 
+function keyringNativePackageName({ targetPlatform, targetArch, targetLibc }) {
+  const platform = normalizeNodePlatform(targetPlatform);
+  const arch = normalizeNodeArch(targetArch);
+  const libc = platform === 'linux' ? (targetLibc === 'musl' ? 'musl' : 'glibc') : '';
+  const key = [platform, arch, libc].filter(Boolean).join('-');
+  const packageName = KEYRING_NATIVE_PACKAGE_BY_TARGET.get(key);
+  if (!packageName) {
+    throw new Error(`[prepare-mindos-bundle] Unsupported keyring target: ${key}`);
+  }
+  return packageName;
+}
+
+/** Keep and validate the one native keyring binding required by a release target. */
+export function pruneKeyringNativePackages(rootDir, target) {
+  if (!existsSync(rootDir)) return 0;
+  const wantedPackage = keyringNativePackageName(target);
+  const wantedName = wantedPackage.slice('@napi-rs/'.length);
+  let removed = 0;
+
+  for (const scopeDir of findDirsNamed(rootDir, '@napi-rs')) {
+    const loaderDir = path.join(scopeDir, 'keyring');
+    if (!existsSync(path.join(loaderDir, 'package.json'))) continue;
+
+    for (const entry of readdirSync(scopeDir, { withFileTypes: true })) {
+      if (!entry.isDirectory() || !entry.name.startsWith('keyring-') || entry.name === wantedName) continue;
+      rmSync(path.join(scopeDir, entry.name), { recursive: true, force: true });
+      removed += 1;
+    }
+
+    const bindingDir = path.join(scopeDir, wantedName);
+    const bindingManifest = readPackageJson(bindingDir);
+    const nativeEntry = typeof bindingManifest?.main === 'string'
+      ? path.join(bindingDir, bindingManifest.main)
+      : null;
+    if (!bindingManifest || !nativeEntry || !existsSync(nativeEntry)) {
+      throw new Error(
+        `[prepare-mindos-bundle] Missing native keyring binding ${wantedPackage} for `
+        + `${normalizeNodePlatform(target.targetPlatform)}-${normalizeNodeArch(target.targetArch)}.`
+      );
+    }
+  }
+  return removed;
+}
+
 function findDirsNamed(rootDir, dirName) {
   const found = [];
   for (const entry of readdirSync(rootDir, { withFileTypes: true })) {
@@ -751,30 +848,6 @@ export function pruneRuntimePackageAssets(standaloneDir) {
     if (!existsSync(target)) continue;
     rmSync(target, { recursive: true, force: true });
     removed += 1;
-  }
-  return removed;
-}
-
-export function prunePiSchedulePromptStaleDependencies(standaloneDir) {
-  const packageJsonPath = path.join(standaloneDir, 'node_modules', 'pi-schedule-prompt', 'package.json');
-  if (!existsSync(packageJsonPath)) return 0;
-
-  let pkg;
-  try {
-    pkg = JSON.parse(readFileSync(packageJsonPath, 'utf-8'));
-  } catch {
-    return 0;
-  }
-
-  let removed = 0;
-  for (const dependencyName of PI_SCHEDULE_PROMPT_STALE_RUNTIME_DEPENDENCIES) {
-    if (!pkg.dependencies || !Object.hasOwn(pkg.dependencies, dependencyName)) continue;
-    delete pkg.dependencies[dependencyName];
-    removed += 1;
-  }
-
-  if (removed > 0) {
-    writeFileSync(packageJsonPath, `${JSON.stringify(pkg, null, 2)}\n`, 'utf-8');
   }
   return removed;
 }

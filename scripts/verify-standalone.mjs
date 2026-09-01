@@ -15,6 +15,7 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { createRequire } from 'node:module';
 import {
   RUNTIME_DEPENDENCY_SEEDS,
   materializeStandaloneAssets,
@@ -34,6 +35,8 @@ if (!existsSync(serverJs)) {
 
 try {
   materializeStandaloneAssets(appDir, { runtimeDependencySeeds: RUNTIME_DEPENDENCY_SEEDS });
+  const requireFromStandalone = createRequire(serverJs);
+  requireFromStandalone('@napi-rs/keyring');
 } catch (e) {
   console.error(e instanceof Error ? e.message : String(e));
   process.exit(1);

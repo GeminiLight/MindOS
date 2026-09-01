@@ -26,6 +26,11 @@ import { isBundledNodeCurrent, writeNodeBundleMarker } from './node-bundle-marke
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const desktopRoot = path.join(__dirname, '..');
+const nodeRuntimeManifest = JSON.parse(
+  readFileSync(path.join(desktopRoot, 'node-runtime-manifest.json'), 'utf-8'),
+);
+const NODE_VERSION = nodeRuntimeManifest.version;
+const NODE_DOWNLOAD_SHA256 = nodeRuntimeManifest.sha256;
 const dest = path.join(desktopRoot, 'resources', 'mindos-runtime');
 const defaultSource = path.resolve(desktopRoot, '..', '..');
 const source = process.env.MINDOS_BUNDLE_SOURCE
@@ -56,14 +61,6 @@ const productPkg = path.join(source, 'packages', 'mindos', 'package.json');
 const targetNodePlatform = process.env.MINDOS_BUNDLE_NODE_PLATFORM || process.platform;
 const targetNodeArch = process.env.MINDOS_BUNDLE_NODE_ARCH || process.arch;
 const NODE_ZIP_EXTRACT_TIMEOUT_MS = 300000;
-const NODE_DOWNLOAD_SHA256 = {
-  'node-v22.16.0-darwin-arm64.tar.gz': '1d7f34ec4c03e12d8b33481e5c4560432d7dc31a0ef3ff5a4d9a8ada7cf6ecc9',
-  'node-v22.16.0-darwin-x64.tar.gz': '838d400f7e66c804e5d11e2ecb61d6e9e878611146baff69d6a2def3cc23f4ac',
-  'node-v22.16.0-linux-arm64.tar.gz': '1725602e9fb150eb8b8220a899085190e1c04d1a5f3862b01c3dc1dfce0157f9',
-  'node-v22.16.0-linux-x64.tar.gz': 'fb870226119d47378fa9c92c4535389c72dae14fcc7b47e6fdcc82c43de5a547',
-  'node-v22.16.0-win-arm64.zip': '31e885dcd06355f67b4be8cca86464270d83d0f5b8d4e3d4369c16ed22a5f4fa',
-  'node-v22.16.0-win-x64.zip': '21c2d9735c80b8f86dab19305aa6a9f6f59bbc808f68de3eef09d5832e3bfbbd',
-};
 
 if (!existsSync(rootPkg)) fail(`Not a MindOS repo root (no package.json): ${source}`);
 if (!existsSync(productPkg)) fail(`Missing packages/mindos/package.json under ${source}`);
@@ -177,8 +174,6 @@ if (existsSync(productSrcFrom) && statSync(productSrcFrom).isDirectory()) {
 // so Desktop can launch without any system Node.js installed.
 // Skip with MINDOS_SKIP_BUNDLE_NODE=1 (e.g. local dev builds where size matters).
 if (!process.env.MINDOS_SKIP_BUNDLE_NODE) {
-  // IMPORTANT: Keep in sync with desktop/src/node-bootstrap.ts NODE_VERSION
-  const NODE_VERSION = '22.16.0';
   const plat = targetNodePlatform;
   const arch = targetNodeArch;
 

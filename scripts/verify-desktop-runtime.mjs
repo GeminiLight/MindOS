@@ -113,6 +113,7 @@ for (const { rel, pattern, message } of fatalRuntimeSourcePatterns) {
 const standaloneNodeModules = join(runtimeRoot, 'packages/web/.next/standalone/node_modules');
 if (existsSync(standaloneNodeModules)) {
   failures.push(...findMissingDependencyClosure(standaloneNodeModules));
+  failures.push(...findMissingTargetKeyringBinding(runtimeRoot, standaloneNodeModules));
 }
 
 if (failures.length > 0) {
@@ -124,6 +125,33 @@ if (failures.length > 0) {
 const size = existsSync(runtimeRoot) ? formatBytes(dirSize(runtimeRoot)) : 'missing';
 console.log(`[verify-desktop-runtime] OK ${runtimeRoot} (${size})`);
 console.log(`[verify-desktop-runtime] fatal log patterns guarded: ${fatalLogPatterns.join(', ')}`);
+
+function findMissingTargetKeyringBinding(runtimeRoot, nodeModulesDir) {
+  const loader = join(nodeModulesDir, '@napi-rs/keyring/package.json');
+  if (!existsSync(loader)) return [];
+  const manifestPath = join(runtimeRoot, 'runtime-manifest.json');
+  if (!existsSync(manifestPath)) return ['cannot validate keyring binding without runtime-manifest.json'];
+  const runtimeManifest = JSON.parse(readFileSync(manifestPath, 'utf-8'));
+  const os = runtimeManifest.package?.os;
+  const cpu = runtimeManifest.package?.cpu;
+  const suffix = os === 'darwin'
+    ? `darwin-${cpu}`
+    : os === 'win32'
+      ? `win32-${cpu}-msvc`
+      : os === 'linux'
+        ? `linux-${cpu}-gnu`
+        : null;
+  if (!suffix) return [`unsupported keyring runtime target: ${String(os)}-${String(cpu)}`];
+  const bindingDir = join(nodeModulesDir, '@napi-rs', `keyring-${suffix}`);
+  if (!existsSync(join(bindingDir, 'package.json'))) {
+    return [`missing native keyring binding for ${os}-${cpu}: @napi-rs/keyring-${suffix}`];
+  }
+  const bindingManifest = JSON.parse(readFileSync(join(bindingDir, 'package.json'), 'utf-8'));
+  if (typeof bindingManifest.main !== 'string' || !existsSync(join(bindingDir, bindingManifest.main))) {
+    return [`native keyring entry is missing for ${os}-${cpu}: @napi-rs/keyring-${suffix}`];
+  }
+  return [];
+}
 
 function findMissingDependencyClosure(nodeModulesDir) {
   const missing = [];

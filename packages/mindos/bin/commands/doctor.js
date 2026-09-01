@@ -16,6 +16,24 @@ import { hasProviderEnvKey, isProviderMissingRequiredKey, providerEnvKeys, resol
 import { MCP_AGENTS } from '../lib/mcp-agents.js';
 import { inspectAgentReadiness, inspectAllAgentReadiness } from '../lib/agent-readiness.js';
 
+export const MIN_NODE_VERSION = '22.19.0';
+
+function parseStableNodeVersion(value) {
+  const match = String(value).trim().match(/^v?(\d+)\.(\d+)\.(\d+)$/);
+  return match ? match.slice(1).map(Number) : null;
+}
+
+export function isNodeVersionSupported(value) {
+  const actual = parseStableNodeVersion(value);
+  const minimum = parseStableNodeVersion(MIN_NODE_VERSION);
+  if (!actual || !minimum) return false;
+  for (let index = 0; index < actual.length; index += 1) {
+    if (actual[index] > minimum[index]) return true;
+    if (actual[index] < minimum[index]) return false;
+  }
+  return true;
+}
+
 export const meta = {
   name: 'doctor',
   group: 'Config',
@@ -173,9 +191,8 @@ export const run = async (args, flags) => {
 
   // 4. Node version
   const nodeVersion = process.versions.node;
-  const [nodeMajor] = nodeVersion.split('.').map(Number);
-  if (nodeMajor < 18) {
-    err(`Node.js ${nodeVersion} is below minimum required (18+)`);
+  if (!isNodeVersionSupported(nodeVersion)) {
+    err(`Node.js ${nodeVersion} is below minimum required (${MIN_NODE_VERSION}+)`);
     hasError = true;
   } else {
     ok(`Node.js ${nodeVersion}`);

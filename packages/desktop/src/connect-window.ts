@@ -698,7 +698,7 @@ function detectLang(): 'zh' | 'en' {
 const i18n = {
   zh: {
     nodeRequiredTitle: '需要 Node.js',
-    nodeRequiredMessage: 'Node.js ≥18 是运行本地模式的必需依赖。',
+    nodeRequiredMessage: 'Node.js ≥22.19 是运行本地模式的必需依赖。',
     nodeRequiredOptions: '您可以：\n• 从 nodejs.org 安装（推荐）\n• 切换到远程模式',
     downloadNode: '下载 Node.js',
     switchRemoteBtn: '切换到远程模式',
@@ -706,7 +706,7 @@ const i18n = {
   },
   en: {
     nodeRequiredTitle: 'Node.js Required',
-    nodeRequiredMessage: 'Node.js ≥18 is required to run MindOS locally.',
+    nodeRequiredMessage: 'Node.js ≥22.19 is required to run MindOS locally.',
     nodeRequiredOptions: 'You can:\n• Install Node.js from nodejs.org (recommended)\n• Switch to Remote mode',
     downloadNode: 'Download Node.js',
     switchRemoteBtn: 'Switch to Remote Mode',

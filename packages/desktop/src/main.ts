@@ -33,6 +33,7 @@ import { testConnection } from './connection-sdk';
 import { getNodePath, getNpxPath, getNpmPath, getLocalBinPath, getEnrichedEnv } from './node-detect';
 import { resolveExecTarget } from './exec-target';
 import { downloadNode, getPrivateNodePath, installMindosWithPrivateNode } from './node-bootstrap';
+import { isNodeVersionAcceptable, MIN_NODE_VERSION } from './node-version';
 import { buildWebCrashDiagnostic, type WebCrashDiagnostic } from './desktop-crash-diagnostics';
 import { resolveLocalMindOsProjectRoot, type ResolveMindOsErr, type ResolveMindOsOk } from './mindos-runtime-resolve';
 import { isNextBuildCurrent, BUILD_VERSION_FILE, analyzeMindOsLayout, resolveWebAppDir } from './mindos-runtime-layout';
@@ -1166,7 +1167,7 @@ async function healPreviousInstallation(): Promise<void> {
   }
 }
 
-/** Remove private Node.js if it can't run or version is too low (< 18). */
+/** Remove private Node.js if it cannot run or is below the Pi runtime baseline. */
 async function validatePrivateNode(): Promise<'missing' | 'ok' | 'removed'> {
   const stop = desktopTelemetry.startTimer('desktop.boot.validate_node');
   const nodeBin = path.join(
@@ -1195,12 +1196,11 @@ async function validatePrivateNode(): Promise<'missing' | 'ok' | 'removed'> {
       timeout: 5000,
     });
     const version = (stdout as string).trim();
-    const match = version.match(/^v(\d+)/);
-    if (match && parseInt(match[1], 10) >= 18) {
+    if (isNodeVersionAcceptable(version)) {
       stop({ result: 'ok' });
       return 'ok';
     }
-    console.warn(`[MindOS:heal] Private Node.js ${version} is below v18 — removing`);
+    console.warn(`[MindOS:heal] Private Node.js ${version} is below v${MIN_NODE_VERSION} — removing`);
   } catch {
     console.warn('[MindOS:heal] Private Node.js failed version check — removing');
   }

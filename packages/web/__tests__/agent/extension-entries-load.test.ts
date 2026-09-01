@@ -77,7 +77,7 @@ describe('pi extension entries load in the production jiti module graph', () => 
     const toolNames = [...webAccess!.tools.keys()];
     expect(toolNames).toEqual(expect.arrayContaining([
       'web_search',
-      'code_search',
+      'source_check',
       'fetch_content',
       'get_search_content',
     ]));

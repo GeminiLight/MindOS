@@ -142,6 +142,20 @@ describe('CLI smoke tests', () => {
     expect(source).toContain("execFileSync('launchctl', ['print', `gui/${uid}/com.mindos.app`]");
   });
 
+  it('mindos doctor enforces the Pi runtime Node.js baseline', async () => {
+    const doctor = await import('../../packages/mindos/bin/commands/doctor.js') as {
+      MIN_NODE_VERSION: string;
+      isNodeVersionSupported: (version: string) => boolean;
+    };
+
+    expect(doctor.MIN_NODE_VERSION).toBe('22.19.0');
+    expect(doctor.isNodeVersionSupported('22.19.0')).toBe(true);
+    expect(doctor.isNodeVersionSupported('24.0.0')).toBe(true);
+    expect(doctor.isNodeVersionSupported('22.18.0')).toBe(false);
+    expect(doctor.isNodeVersionSupported('20.20.0')).toBe(false);
+    expect(doctor.isNodeVersionSupported('22.23.2-rc.1')).toBe(false);
+  });
+
   it('mindos doctor uses Windows PATH registry wording after shim injection', async () => {
     const doctor = await import('../../packages/mindos/bin/commands/doctor.js') as {
       formatShimActivationWarning: (platform: NodeJS.Platform) => string;

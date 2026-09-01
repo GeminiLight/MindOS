@@ -50,7 +50,7 @@
   },
   "packageManager": "pnpm@10.18.3",
   "engines": {
-    "node": ">=18"
+    "node": ">=22.19.0"
   },
   "dependencies": {
     "chokidar": "^5.0.0"

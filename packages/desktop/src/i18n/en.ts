@@ -33,7 +33,7 @@ export const en: Record<I18nKeys, string> = {
   connected: 'Connected!',
   // Setup / CLI missing
   missingCli: '📦 MindOS CLI Not Found',
-  missingCliDesc: 'Install MindOS CLI with one click to use local mode (requires Node.js ≥18).',
+  missingCliDesc: 'Install MindOS CLI with one click to use local mode (requires Node.js ≥22.19).',
   installBtn: 'Install MindOS CLI',
   retryLocal: 'Start Local Mode',
   // Bundled runtime incomplete (packaged Desktop)

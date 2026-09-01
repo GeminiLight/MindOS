@@ -31,7 +31,7 @@ export const zh = {
   connected: '已连接！',
   // Setup / CLI missing
   missingCli: '📦 缺少 MindOS CLI',
-  missingCliDesc: '一键安装 MindOS CLI 即可使用本地模式（需要 Node.js ≥18）',
+  missingCliDesc: '一键安装 MindOS CLI 即可使用本地模式（需要 Node.js ≥22.19）',
   installBtn: '自动安装 MindOS CLI',
   retryLocal: '启动本地模式',
   // Bundled runtime incomplete (packaged Desktop)

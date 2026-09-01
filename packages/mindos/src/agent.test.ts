@@ -56,6 +56,7 @@ describe('MindOS agent product contract', () => {
     expect(MINDOS_SYSTEM_PROMPT).toContain('do not stop after listing directories');
     expect(MINDOS_SYSTEM_PROMPT).toContain('Available skills may be listed');
     expect(MINDOS_SYSTEM_PROMPT).toContain('Use subagents only when the work is complex and separable');
+    expect(MINDOS_SYSTEM_PROMPT).toContain('Use workflowScript for parallel or sequential orchestration');
     expect(MINDOS_SYSTEM_PROMPT).toContain('Do not expose hidden reasoning');
     expect(MINDOS_SYSTEM_PROMPT).not.toContain('Mode: Chat');
     expect(MINDOS_SYSTEM_PROMPT).not.toContain('Agent mode');

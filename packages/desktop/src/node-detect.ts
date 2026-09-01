@@ -15,40 +15,30 @@ import { getPrivateNodePath, isPrivateNodeInstalled, getBundledNodePath, isBundl
 import { getAppConfigStore } from './app-config-store';
 import { getDesktopHome } from './desktop-home';
 import { resolveExecTarget } from './exec-target';
+import { isNodeVersionAcceptable, MIN_NODE_VERSION } from './node-version';
 
 const IS_WIN = process.platform === 'win32';
 
 const execFileAsync = promisify(execFile);
 
-const MIN_NODE_MAJOR = 18;
-
 /**
- * Check if a node binary meets the minimum version requirement (>= 18).
+ * Check if a node binary meets the Pi runtime's minimum Node.js version.
  * Returns true if version is OK, false if too old or check fails.
  */
 function checkNodeVersion(nodePath: string): boolean {
   try {
     const ver = execFileSync(nodePath, ['--version'], { encoding: 'utf-8', timeout: 3000 }).trim();
-    // ver looks like "v22.16.0"
-    const match = ver.match(/^v(\d+)\./);
-    if (!match) return false;
-    return parseInt(match[1], 10) >= MIN_NODE_MAJOR;
+    return isNodeVersionAcceptable(ver);
   } catch {
     return false;
   }
 }
 
 /**
- * Check if a version directory name (e.g. "v22.16.0") meets requirements.
- * Rejects versions below MIN_NODE_MAJOR and pre-release versions (nightly/rc/alpha/beta).
+ * Check if a version directory name (e.g. "v22.23.2") meets requirements.
  */
 function isVersionDirAcceptable(ver: string): boolean {
-  const match = ver.match(/^v(\d+)\./);
-  if (!match) return false;
-  if (parseInt(match[1], 10) < MIN_NODE_MAJOR) return false;
-  // Reject pre-release: v23.0.0-nightly, v22.0.0-rc.1, etc.
-  if (ver.includes('-')) return false;
-  return true;
+  return isNodeVersionAcceptable(ver);
 }
 
 /** Build an enriched PATH that includes common Node.js bin directories */
@@ -89,12 +79,14 @@ export async function getNodePath(): Promise<string | null> {
 
   // 0a. Bundled Node.js shipped with the Desktop app (highest priority — zero download)
   if (isBundledNodeInstalled()) {
-    return getBundledNodePath();
+    const bundledNode = getBundledNodePath();
+    if (checkNodeVersion(bundledNode)) return bundledNode;
   }
 
   // 0b. MindOS private Node.js (~/.mindos/node/) — downloaded on first run of older versions
   if (isPrivateNodeInstalled()) {
-    return getPrivateNodePath();
+    const privateNode = getPrivateNodePath();
+    if (checkNodeVersion(privateNode)) return privateNode;
   }
 
   // 0c. Cached path from previous startup — avoids expensive shell detection on every launch
@@ -108,7 +100,7 @@ export async function getNodePath(): Promise<string | null> {
   // 1. Explicit env var (instant)
   if (process.env.MINDOS_NODE_BIN && existsSync(process.env.MINDOS_NODE_BIN)) {
     if (checkNodeVersion(process.env.MINDOS_NODE_BIN)) return process.env.MINDOS_NODE_BIN;
-    console.warn(`[MindOS] MINDOS_NODE_BIN (${process.env.MINDOS_NODE_BIN}) is below Node ${MIN_NODE_MAJOR}, skipping`);
+    console.warn(`[MindOS] MINDOS_NODE_BIN (${process.env.MINDOS_NODE_BIN}) is below Node ${MIN_NODE_VERSION}, skipping`);
   }
 
   // 2. NVM: symlink (instant + version check)

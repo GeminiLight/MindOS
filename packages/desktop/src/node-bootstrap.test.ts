@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, readlinkSync, rmSync, statSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, rmSync, statSync, writeFileSync } from 'fs';
 import path from 'path';
 import { EventEmitter } from 'events';
 import os from 'os';
@@ -8,6 +8,8 @@ import {
   _downloadFile_forTest,
   _extractTarGzSafe_forTest,
   _verifyNodeArchiveSha256_forTest,
+  isPrivateNodeCompatible,
+  NODE_VERSION,
   removeMacQuarantineAttribute,
 } from './node-bootstrap';
 
@@ -61,6 +63,40 @@ function paddedData(data: Buffer): Buffer {
 describe('node-bootstrap', () => {
   beforeEach(() => {
     httpsGetMock.mockReset();
+  });
+
+  it('bundles the current patched Node.js 22 LTS runtime', () => {
+    expect(NODE_VERSION).toBe('22.23.2');
+
+    const manifest = JSON.parse(readFileSync(path.join(__dirname, '../node-runtime-manifest.json'), 'utf-8'));
+    const source = readFileSync(path.join(__dirname, '../scripts/prepare-mindos-runtime.mjs'), 'utf-8');
+    expect(manifest.version).toBe('22.23.2');
+    expect(manifest.sha256).toMatchObject({
+      'node-v22.23.2-darwin-arm64.tar.gz': expect.stringMatching(/^[a-f0-9]{64}$/),
+      'node-v22.23.2-win-x64.zip': expect.stringMatching(/^[a-f0-9]{64}$/),
+    });
+    expect(source).toContain("path.join(desktopRoot, 'node-runtime-manifest.json')");
+  });
+
+  it('rejects a stale private Node runtime left by an older Desktop release', () => {
+    if (process.platform === 'win32') return;
+    const tempHome = mkdtempSync(path.join(os.tmpdir(), 'mindos-private-node-version-'));
+    const previousHome = process.env.MINDOS_DESKTOP_HOME_DIR;
+    const privateNode = path.join(tempHome, '.mindos', 'node', 'bin', 'node');
+    try {
+      process.env.MINDOS_DESKTOP_HOME_DIR = tempHome;
+      mkdirSync(path.dirname(privateNode), { recursive: true });
+      writeFileSync(privateNode, '#!/bin/sh\necho v22.16.0\n', { mode: 0o755 });
+
+      expect(isPrivateNodeCompatible()).toBe(false);
+
+      writeFileSync(privateNode, '#!/bin/sh\necho v22.23.2\n', { mode: 0o755 });
+      expect(isPrivateNodeCompatible()).toBe(true);
+    } finally {
+      if (previousHome === undefined) delete process.env.MINDOS_DESKTOP_HOME_DIR;
+      else process.env.MINDOS_DESKTOP_HOME_DIR = previousHome;
+      rmSync(tempHome, { recursive: true, force: true });
+    }
   });
 
   it('removes macOS quarantine with argv so quoted paths are safe', () => {
@@ -271,7 +307,7 @@ describe('node-bootstrap', () => {
     try {
       writeFileSync(archive, 'not the official Node.js archive', 'utf-8');
       expect(() => {
-        _verifyNodeArchiveSha256_forTest(archive, 'node-v22.16.0-linux-x64.tar.gz');
+        _verifyNodeArchiveSha256_forTest(archive, 'node-v22.23.2-linux-x64.tar.gz');
       }).toThrow('Node.js archive checksum mismatch');
     } finally {
       rmSync(tmpDir, { recursive: true, force: true });

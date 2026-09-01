@@ -33,7 +33,7 @@ A minimal Tauri-based desktop application spike for MindOS, designed to evaluate
    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
    ```
 
-2. **Node.js** 18+ (for frontend build)
+2. **Node.js** 22.19+ (for frontend build)
 
 3. **System dependencies** (see [SETUP.md](./SETUP.md) for details)
 

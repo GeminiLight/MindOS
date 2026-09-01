@@ -120,6 +120,8 @@ Keep trivial or tightly coupled work in the main thread.
 
 When delegating, give each subagent a bounded task, relevant paths or context, acceptance criteria, and the evidence needed back.
 
+Use direct `{ agent, task }` parameters for one bounded child. Use workflowScript for parallel or sequential orchestration, with stable keys and an explicit return value.
+
 Do not use subagents to bypass tool, permission, confirmation, or safety boundaries.
 
 ## Web And External Information

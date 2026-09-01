@@ -271,6 +271,229 @@ describe('MindOS subagent ledger extension', () => {
     expect(upstream.execute).toHaveBeenCalledTimes(1);
   });
 
+  it('translates legacy parallel tasks into a pi-subagents workflow script', async () => {
+    const upstream = {
+      name: 'subagent',
+      parameters: {} as any,
+      execute: vi.fn(async () => ({
+        content: [{ type: 'text', text: 'Parallel review completed.' }],
+        details: {},
+      })),
+    };
+    const wrapped = wrapSubagentToolForLedger(upstream as any);
+
+    await wrapped.execute('tool-call-legacy-parallel', {
+      tasks: [
+        { id: 'scan', agent: 'scout', task: 'Scan files.' },
+        { id: 'review', agent: 'reviewer', task: 'Review files.', model: 'openai/gpt-5.6' },
+      ],
+      concurrency: 2,
+      async: false,
+      cwd: '/tmp/mindos',
+    });
+
+    expect(upstream.execute).toHaveBeenCalledWith(
+      'tool-call-legacy-parallel',
+      expect.objectContaining({
+        workflowScript: expect.stringContaining('return runs.all('),
+        globalConcurrencyLimit: 2,
+        async: false,
+        cwd: '/tmp/mindos',
+      }),
+      expect.any(AbortSignal),
+      expect.any(Function),
+      undefined,
+    );
+    const forwarded = upstream.execute.mock.calls[0]![1] as Record<string, unknown>;
+    expect(forwarded).not.toHaveProperty('tasks');
+    expect(forwarded).not.toHaveProperty('concurrency');
+    expect(forwarded.workflowScript).toContain('"key":"scan"');
+    expect(forwarded.workflowScript).toContain('"agent":"reviewer"');
+    expect(forwarded.workflowScript).toContain('"model":"openai/gpt-5.6"');
+  });
+
+  it('preserves legacy foreground and concurrency defaults when they are omitted', async () => {
+    const upstream = {
+      name: 'subagent',
+      parameters: {} as any,
+      execute: vi.fn(async () => ({ content: [{ type: 'text', text: 'Done.' }], details: {} })),
+    };
+    const wrapped = wrapSubagentToolForLedger(upstream as any);
+
+    await wrapped.execute('tool-call-legacy-defaults', {
+      tasks: [{ agent: 'reviewer', task: 'Review.' }],
+      clarify: false,
+    });
+
+    const forwarded = upstream.execute.mock.calls[0]![1] as Record<string, unknown>;
+    expect(forwarded).toEqual(expect.objectContaining({
+      async: false,
+      globalConcurrencyLimit: 4,
+      workflowScript: expect.stringContaining('return runs.all('),
+    }));
+    expect(forwarded).not.toHaveProperty('clarify');
+  });
+
+  it('does not silently discard a legacy clarify UI request', async () => {
+    const upstream = {
+      name: 'subagent',
+      parameters: {} as any,
+      execute: vi.fn(async () => ({ content: [{ type: 'text', text: 'Unsupported.' }], isError: true, details: {} })),
+    };
+    const wrapped = wrapSubagentToolForLedger(upstream as any);
+    const params = {
+      tasks: [{ agent: 'reviewer', task: 'Review.' }],
+      clarify: true,
+    };
+
+    await wrapped.execute('tool-call-legacy-clarify', params);
+
+    expect(upstream.execute.mock.calls[0]![1]).toBe(params);
+  });
+
+  it('creates bounded unique workflow keys for repeated legacy tasks', async () => {
+    const upstream = {
+      name: 'subagent',
+      parameters: {} as any,
+      execute: vi.fn(async () => ({ content: [{ type: 'text', text: 'Done.' }], details: {} })),
+    };
+    const wrapped = wrapSubagentToolForLedger(upstream as any);
+
+    await wrapped.execute('tool-call-repeated', {
+      tasks: [{ id: ' repeated key! ', agent: 'reviewer', task: 'Review.', count: 2 }],
+    });
+
+    const forwarded = upstream.execute.mock.calls[0]![1] as Record<string, unknown>;
+    expect(forwarded.workflowScript).toContain('"key":"repeated-key"');
+    expect(forwarded.workflowScript).toContain('"key":"repeated-key-2"');
+    expect(forwarded.workflowScript).not.toContain('"count"');
+  });
+
+  it('does not let legacy child keys override sanitized unique workflow keys', async () => {
+    const upstream = {
+      name: 'subagent',
+      parameters: {} as any,
+      execute: vi.fn(async () => ({ content: [{ type: 'text', text: 'Done.' }], details: {} })),
+    };
+    const wrapped = wrapSubagentToolForLedger(upstream as any);
+
+    await wrapped.execute('tool-call-child-keys', {
+      tasks: [
+        { id: 'safe', key: 'bad key!', agent: 'reviewer', task: 'Review one.' },
+        { id: 'safe', key: 'bad key!', agent: 'reviewer', task: 'Review two.' },
+      ],
+    });
+
+    const forwarded = upstream.execute.mock.calls[0]![1] as Record<string, unknown>;
+    expect(forwarded.workflowScript).toContain('"key":"safe"');
+    expect(forwarded.workflowScript).toContain('"key":"safe-2"');
+    expect(forwarded.workflowScript).not.toContain('bad key!');
+  });
+
+  it('leaves invalid legacy fanout counts untouched for upstream validation', async () => {
+    const upstream = {
+      name: 'subagent',
+      parameters: {} as any,
+      execute: vi.fn(async () => ({ content: [{ type: 'text', text: 'Invalid.' }], isError: true, details: {} })),
+    };
+    const wrapped = wrapSubagentToolForLedger(upstream as any);
+    const params = { tasks: [{ agent: 'reviewer', task: 'Review.', count: 1.5 }] };
+
+    await wrapped.execute('tool-call-invalid-count', params);
+
+    expect(upstream.execute.mock.calls[0]![1]).toBe(params);
+  });
+
+  it.each([0, 1.5, Number.NaN, Number.MAX_SAFE_INTEGER + 1])(
+    'leaves invalid legacy concurrency %s untouched for upstream validation',
+    async (concurrency) => {
+      const upstream = {
+        name: 'subagent',
+        parameters: {} as any,
+        execute: vi.fn(async () => ({ content: [{ type: 'text', text: 'Invalid.' }], isError: true, details: {} })),
+      };
+      const wrapped = wrapSubagentToolForLedger(upstream as any);
+      const params = { tasks: [{ agent: 'reviewer', task: 'Review.' }], concurrency };
+
+      await wrapped.execute('tool-call-invalid-concurrency', params);
+
+      expect(upstream.execute.mock.calls[0]![1]).toBe(params);
+    },
+  );
+
+  it('bounds aggregate legacy workflow fanout at 64 children', async () => {
+    const upstream = {
+      name: 'subagent',
+      parameters: {} as any,
+      execute: vi.fn(async () => ({ content: [{ type: 'text', text: 'Done.' }], details: {} })),
+    };
+    const wrapped = wrapSubagentToolForLedger(upstream as any);
+    const accepted = {
+      tasks: Array.from({ length: 64 }, (_, index) => ({
+        id: `task-${index + 1}`,
+        agent: 'reviewer',
+        task: `Review ${index + 1}.`,
+      })),
+    };
+    const rejected = {
+      tasks: [
+        { id: 'first', agent: 'reviewer', task: 'Review first.', count: 32 },
+        { id: 'second', agent: 'reviewer', task: 'Review second.', count: 33 },
+      ],
+    };
+
+    await wrapped.execute('tool-call-max-fanout', accepted);
+    await wrapped.execute('tool-call-over-fanout', rejected);
+
+    expect(upstream.execute.mock.calls[0]![1]).not.toBe(accepted);
+    expect((upstream.execute.mock.calls[0]![1] as Record<string, unknown>).workflowScript).toContain('return runs.all(');
+    expect(upstream.execute.mock.calls[1]![1]).toBe(rejected);
+  });
+
+  it('translates a legacy chain into sequential workflowScript runs', async () => {
+    const upstream = {
+      name: 'subagent',
+      parameters: {} as any,
+      execute: vi.fn(async () => ({
+        content: [{ type: 'text', text: 'Chain completed.' }],
+        details: {},
+      })),
+    };
+    const wrapped = wrapSubagentToolForLedger(upstream as any);
+
+    await wrapped.execute('tool-call-legacy-chain', {
+      chain: [
+        { agent: 'scout', task: 'Draft a plan.' },
+        { agent: 'reviewer', task: 'Review {previous}' },
+      ],
+      async: false,
+    });
+
+    const forwarded = upstream.execute.mock.calls[0]![1] as Record<string, unknown>;
+    expect(forwarded).not.toHaveProperty('chain');
+    expect(forwarded.workflowScript).toContain('await runs.run("step-1"');
+    expect(forwarded.workflowScript).toContain('await runs.run("step-2"');
+    expect(forwarded.workflowScript).toContain('.replaceAll("{previous}", previous)');
+    expect(forwarded.workflowScript).toContain('return step2;');
+  });
+
+  it('passes current workflowScript requests through unchanged', async () => {
+    const upstream = {
+      name: 'subagent',
+      parameters: {} as any,
+      execute: vi.fn(async () => ({ content: [{ type: 'text', text: 'Done.' }], details: {} })),
+    };
+    const wrapped = wrapSubagentToolForLedger(upstream as any);
+    const params = {
+      workflowScript: 'return runs.run("review", { agent: "reviewer", task: "Review." });',
+      async: false,
+    };
+
+    await wrapped.execute('tool-call-workflow', params);
+
+    expect(upstream.execute.mock.calls[0]![1]).toBe(params);
+  });
+
   it('forwards single subagent progress updates into the run timeline without swallowing upstream onUpdate', async () => {
     const forwardedUpdates: unknown[] = [];
     const progressUpdate = {
@@ -384,6 +607,50 @@ describe('MindOS subagent ledger extension', () => {
       'reviewer:completed',
       'scout:completed',
     ]);
+  });
+
+  it('strips orchestration-only fields before calling direct child subagents', async () => {
+    const upstream = {
+      name: 'subagent',
+      parameters: {} as any,
+      execute: vi.fn(async () => ({ content: [{ type: 'text', text: 'Done.' }], details: {} })),
+    };
+    const wrapped = wrapSubagentToolForLedger(upstream as any);
+
+    await wrapped.execute('tool-call-orchestrated-fields', {
+      mindosOrchestration: true,
+      concurrency: 3,
+      parallel: true,
+      chainDir: '/tmp/chain',
+      globalConcurrencyLimit: 7,
+      maxSubagentSpawnsPerRun: 9,
+      workflowScriptPath: '/tmp/workflow.js',
+      clarify: false,
+      tasks: [{ id: 'scan', agent: 'scout', task: 'Scan files.' }],
+    });
+
+    const forwarded = upstream.execute.mock.calls[0]![1] as Record<string, unknown>;
+    expect(forwarded).toEqual(expect.objectContaining({
+      agent: 'scout',
+      task: 'Scan files.',
+      async: false,
+    }));
+    for (const field of [
+      'tasks',
+      'subtasks',
+      'chain',
+      'mindosOrchestration',
+      'orchestrator',
+      'concurrency',
+      'parallel',
+      'chainDir',
+      'globalConcurrencyLimit',
+      'maxSubagentSpawnsPerRun',
+      'workflowScriptPath',
+      'clarify',
+    ]) {
+      expect(forwarded).not.toHaveProperty(field);
+    }
   });
 
   it('records orchestration child progress on the matching child run', async () => {

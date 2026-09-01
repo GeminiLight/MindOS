@@ -51,6 +51,43 @@ describe('install-cli-shim', () => {
     // errorlevel must be read on its own line (parse-time expansion after the command line completes)
     expect(script).toContain('exit /b %errorlevel%');
     expect(script).toContain('\r\n'); // .cmd needs CRLF
+    const versionChecks = script.split('\r\n').filter((line) => line.includes('process.versions.node'));
+    expect(versionChecks).toHaveLength(2);
+    for (const line of versionChecks) {
+      expect(line).not.toContain('^>');
+      expect(line).not.toContain('^|');
+      expect(line).not.toContain('^&');
+    }
+  });
+
+  it('falls back to a compatible PATH node when the private runtime is stale', async () => {
+    if (process.platform === 'win32') return;
+    const { buildUnixShimScript } = await import('./install-cli-shim');
+    const fs = await import('fs');
+    const os = await import('os');
+    const { spawnSync } = await import('child_process');
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'mindos-cli-node-fallback-'));
+    const pathBin = path.join(home, 'path-bin');
+    const privateBin = path.join(home, '.mindos', 'node', 'bin');
+    const cli = path.join(home, 'cli.js');
+    const shim = path.join(home, 'mindos');
+    fs.mkdirSync(pathBin, { recursive: true });
+    fs.mkdirSync(privateBin, { recursive: true });
+    fs.writeFileSync(cli, '// test cli');
+    fs.writeFileSync(path.join(privateBin, 'node'), '#!/bin/sh\nif [ "$1" = "-e" ]; then exit 1; fi\necho private\n', { mode: 0o755 });
+    fs.writeFileSync(path.join(pathBin, 'node'), '#!/bin/sh\nif [ "$1" = "-e" ]; then exit 0; fi\necho path\n', { mode: 0o755 });
+    fs.writeFileSync(shim, buildUnixShimScript(cli), { mode: 0o755 });
+
+    try {
+      const result = spawnSync('sh', [shim], {
+        encoding: 'utf-8',
+        env: { ...process.env, HOME: home, PATH: `${pathBin}:/usr/bin:/bin` },
+      });
+      expect(result.status, result.stderr).toBe(0);
+      expect(result.stdout.trim()).toBe('path');
+    } finally {
+      fs.rmSync(home, { recursive: true, force: true });
+    }
   });
 
   it('writes a Git Bash sh entry point alongside mindos.cmd', async () => {
@@ -60,7 +97,7 @@ describe('install-cli-shim', () => {
     expect(script.startsWith('#!/bin/sh')).toBe(true);
     expect(script).not.toContain('\r\n'); // LF only — CRLF breaks sh in Git Bash
     expect(script).toContain(`"$HOME"'/.mindos/runtime/bin/cli.js'`);
-    expect(script).toContain('exec node "$CLI" "$@"');
+    expect(script).toContain('exec "$PATH_NODE" "$CLI" "$@"');
   });
 
   it('updates Windows PATH via raw registry values preserving REG_EXPAND_SZ entries', async () => {

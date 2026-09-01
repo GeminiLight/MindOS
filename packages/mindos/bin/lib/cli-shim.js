@@ -61,6 +61,10 @@ cd "$HOME" 2>/dev/null || true
 
 CLI=${cliLit}
 
+node_is_compatible() {
+  "$1" -e 'const m=/^(\\d+)\\.(\\d+)\\.(\\d+)$/.exec(process.versions.node);process.exit(m&&(Number(m[1])>22||(Number(m[1])===22&&Number(m[2])>=19))?0:1)' >/dev/null 2>&1
+}
+
 if [ ! -f "$CLI" ]; then
   NPM_ROOT=$(npm root -g 2>/dev/null)
   NPM_CLI="\${NPM_ROOT}/@geminilight/mindos/bin/cli.js"
@@ -72,13 +76,14 @@ if [ ! -f "$CLI" ]; then
   fi
 fi
 
-if [ -x "$HOME/.mindos/node/bin/node" ]; then
+if [ -x "$HOME/.mindos/node/bin/node" ] && node_is_compatible "$HOME/.mindos/node/bin/node"; then
   exec "$HOME/.mindos/node/bin/node" "$CLI" "$@"
 fi
-if command -v node >/dev/null 2>&1; then
-  exec node "$CLI" "$@"
+PATH_NODE=$(command -v node 2>/dev/null || true)
+if [ -n "$PATH_NODE" ] && node_is_compatible "$PATH_NODE"; then
+  exec "$PATH_NODE" "$CLI" "$@"
 fi
-echo "mindos: Node.js not found. Install Node 18+ or run MindOS Desktop (it installs Node under ~/.mindos/node)." >&2
+echo "mindos: compatible Node.js not found. Install Node 22.19+ or run MindOS Desktop (it installs Node under ~/.mindos/node)." >&2
 exit 127
 `;
   mkdirSync(shimDir(), { recursive: true });
@@ -101,16 +106,21 @@ if not exist "%CLI%" (\r
   exit /b 127\r
 )\r
 set "MINDOS_NODE=%USERPROFILE%\\.mindos\\node\\node.exe"\r
-if exist "%MINDOS_NODE%" (\r
-  "%MINDOS_NODE%" "%CLI%" %*\r
-  exit /b %ERRORLEVEL%\r
-)\r
-where node >nul 2>nul\r
-if %ERRORLEVEL% equ 0 (\r
-  node "%CLI%" %*\r
-  exit /b %ERRORLEVEL%\r
-)\r
-echo mindos: Node.js not found. Install Node 18+ or run MindOS Desktop. >&2\r
+if not exist "%MINDOS_NODE%" goto use_path_node\r
+"%MINDOS_NODE%" -e "const m=/^(\\d+)\\.(\\d+)\\.(\\d+)$/.exec(process.versions.node);process.exit(m&&(Number(m[1])>22||(Number(m[1])===22&&Number(m[2])>=19))?0:1)" >nul 2>&1\r
+if errorlevel 1 goto use_path_node\r
+set "NODE=%MINDOS_NODE%"\r
+goto run_node\r
+:use_path_node\r
+where node >nul 2>&1 || goto no_node\r
+node -e "const m=/^(\\d+)\\.(\\d+)\\.(\\d+)$/.exec(process.versions.node);process.exit(m&&(Number(m[1])>22||(Number(m[1])===22&&Number(m[2])>=19))?0:1)" >nul 2>&1\r
+if errorlevel 1 goto no_node\r
+set "NODE=node"\r
+:run_node\r
+"%NODE%" "%CLI%" %*\r
+exit /b %ERRORLEVEL%\r
+:no_node\r
+echo mindos: compatible Node.js not found. Install Node 22.19+ or run MindOS Desktop. >&2\r
 exit /b 127\r
 `;
   mkdirSync(shimDir(), { recursive: true });

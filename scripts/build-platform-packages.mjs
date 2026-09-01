@@ -17,7 +17,10 @@ import {
   pruneStandaloneToExtractionRuntime,
 } from './prune-standalone-extraction.mjs';
 import { writeRuntimeManifest as writeSharedRuntimeManifest } from './runtime-manifest.mjs';
-import { pruneClaudeAgentSdkNativePackages } from '../packages/desktop/scripts/prepare-mindos-bundle.mjs';
+import {
+  pruneClaudeAgentSdkNativePackages,
+  pruneKeyringNativePackages,
+} from '../packages/desktop/scripts/prepare-mindos-bundle.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, '..');
@@ -27,10 +30,10 @@ const CLI_RUNTIME_ROOT_DEPENDENCIES = ['chokidar'];
 const platforms = [
   { key: 'darwin-arm64', os: 'darwin', cpu: 'arm64', koffi: ['darwin_arm64'], clipboard: ['clipboard', 'clipboard-darwin-arm64', 'clipboard-darwin-universal'] },
   { key: 'darwin-x64', os: 'darwin', cpu: 'x64', koffi: ['darwin_x64'], clipboard: ['clipboard', 'clipboard-darwin-x64', 'clipboard-darwin-universal'] },
-  { key: 'linux-arm64', os: 'linux', cpu: 'arm64', koffi: ['linux_arm64'], clipboard: ['clipboard', 'clipboard-linux-arm64-gnu'] },
-  { key: 'linux-arm64-musl', os: 'linux', cpu: 'arm64', koffi: ['musl_arm64'], clipboard: ['clipboard', 'clipboard-linux-arm64-musl'] },
-  { key: 'linux-x64', os: 'linux', cpu: 'x64', koffi: ['linux_x64'], clipboard: ['clipboard', 'clipboard-linux-x64-gnu'] },
-  { key: 'linux-x64-musl', os: 'linux', cpu: 'x64', koffi: ['musl_x64'], clipboard: ['clipboard', 'clipboard-linux-x64-musl'] },
+  { key: 'linux-arm64', os: 'linux', cpu: 'arm64', libc: 'glibc', koffi: ['linux_arm64'], clipboard: ['clipboard', 'clipboard-linux-arm64-gnu'] },
+  { key: 'linux-arm64-musl', os: 'linux', cpu: 'arm64', libc: 'musl', koffi: ['musl_arm64'], clipboard: ['clipboard', 'clipboard-linux-arm64-musl'] },
+  { key: 'linux-x64', os: 'linux', cpu: 'x64', libc: 'glibc', koffi: ['linux_x64'], clipboard: ['clipboard', 'clipboard-linux-x64-gnu'] },
+  { key: 'linux-x64-musl', os: 'linux', cpu: 'x64', libc: 'musl', koffi: ['musl_x64'], clipboard: ['clipboard', 'clipboard-linux-x64-musl'] },
   { key: 'windows-arm64', os: 'win32', cpu: 'arm64', koffi: ['win32_arm64'], clipboard: ['clipboard', 'clipboard-win32-arm64-msvc'], binary: false },
   { key: 'windows-x64', os: 'win32', cpu: 'x64', koffi: ['win32_x64'], clipboard: ['clipboard', 'clipboard-win32-x64-msvc'] },
 ];
@@ -57,6 +60,11 @@ for (const target of selected) {
   writePlatformRuntimeManifest(packageDir, target, targetBuildBinary);
   pruneKoffi(packageDir, target);
   pruneMarioClipboardPackages(packageDir, target);
+  pruneKeyringNativePackages(packageDir, {
+    targetPlatform: target.os,
+    targetArch: target.cpu,
+    targetLibc: target.libc,
+  });
   const removedClaudeNativePackages = pruneClaudeAgentSdkNativePackages(packageDir);
   if (removedClaudeNativePackages > 0) {
     console.log(`[build-platform-packages] Removed ${removedClaudeNativePackages} Claude Agent SDK native package(s) from ${target.key}`);

@@ -19,7 +19,7 @@
 
 ```
 目标用户想使用 MindOS：
-  1. 安装 Node.js 18+（不知道 Node 是什么）
+  1. 安装 Node.js 22.19+（不知道 Node 是什么）
   2. 打开终端（不知道终端在哪）
   3. npm install -g @geminilight/mindos（npm 是什么？）
   4. mindos onboard（配置 API key、端口、模板）

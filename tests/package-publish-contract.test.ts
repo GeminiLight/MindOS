@@ -26,10 +26,26 @@ describe('product npm publish contract', () => {
       '@earendil-works/pi-ai',
       '@earendil-works/pi-coding-agent',
     ]) {
-      expect(product.devDependencies?.[name], name).toBe('0.81.1');
-      expect(web.dependencies?.[name], name).toBe('0.81.1');
+      expect(product.devDependencies?.[name], name).toBe('0.84.4');
+      expect(web.dependencies?.[name], name).toBe('0.84.4');
     }
-    expect(web.dependencies?.['@earendil-works/pi-ai']).toBe('0.81.1');
+    expect(web.dependencies?.['@earendil-works/pi-ai']).toBe('0.84.4');
+    expect(web.dependencies).toEqual(expect.objectContaining({
+      'pi-mcp-adapter': '2.31.0',
+      'pi-schedule-prompt': '0.4.1',
+      'pi-subagents': '0.62.0',
+      'pi-web-access': '0.27.0',
+    }));
+  });
+
+  it('declares the minimum Node.js version required by the Pi runtime', () => {
+    const rootPkg = readJson<{ engines?: { node?: string } }>('package.json');
+    const productPkg = readJson<{ engines?: { node?: string } }>('packages/mindos/package.json');
+    const webPkg = readJson<{ engines?: { node?: string } }>('packages/web/package.json');
+
+    expect(rootPkg.engines?.node).toBe('>=22.19.0');
+    expect(productPkg.engines?.node).toBe('>=22.19.0');
+    expect(webPkg.engines?.node).toBe('>=22.19.0');
   });
 
   it('keeps the repository root as a private monorepo package', () => {

@@ -100,6 +100,10 @@ if ! pwd >/dev/null 2>&1; then cd "$HOME" 2>/dev/null || true; fi
 
 CLI=${cliLit}
 
+node_is_compatible() {
+  "$1" -e 'const m=/^(\\d+)\\.(\\d+)\\.(\\d+)$/.exec(process.versions.node);process.exit(m&&(Number(m[1])>22||(Number(m[1])===22&&Number(m[2])>=19))?0:1)' >/dev/null 2>&1
+}
+
 # If target CLI is missing (e.g. Desktop .app deleted), try npm global fallback
 if [ ! -f "$CLI" ]; then
   NPM_ROOT=\$(npm root -g 2>/dev/null)
@@ -116,13 +120,14 @@ if [ ! -f "$CLI" ]; then
   fi
 fi
 
-if [ -x "$HOME/.mindos/node/bin/node" ]; then
+if [ -x "$HOME/.mindos/node/bin/node" ] && node_is_compatible "$HOME/.mindos/node/bin/node"; then
   exec "$HOME/.mindos/node/bin/node" "$CLI" "$@"
 fi
-if command -v node >/dev/null 2>&1; then
-  exec node "$CLI" "$@"
+PATH_NODE=$(command -v node 2>/dev/null || true)
+if [ -n "$PATH_NODE" ] && node_is_compatible "$PATH_NODE"; then
+  exec "$PATH_NODE" "$CLI" "$@"
 fi
-echo "mindos: Node.js not found. Open MindOS Desktop once (it installs Node under ~/.mindos/node), or install Node 18+." >&2
+echo "mindos: compatible Node.js not found. Open MindOS Desktop once (it installs Node under ~/.mindos/node), or install Node 22.19+." >&2
 exit 127
 `;
 }
@@ -192,13 +197,24 @@ export function buildWindowsCmdShimScript(cliJs: string, home: string): string {
     '',
     ':have_cli',
     'if not exist "%NODE_PRIV%" goto use_path_node',
-    '"%NODE_PRIV%" "%CLI%" %*',
-    'exit /b %errorlevel%',
+    '"%NODE_PRIV%" -e "const m=/^(\\d+)\\.(\\d+)\\.(\\d+)$/.exec(process.versions.node);process.exit(m&&(Number(m[1])>22||(Number(m[1])===22&&Number(m[2])>=19))?0:1)" >nul 2>&1',
+    'if errorlevel 1 goto use_path_node',
+    'set "NODE=%NODE_PRIV%"',
+    'goto run_node',
     '',
     ':use_path_node',
-    'where node >nul 2>&1 || (echo mindos: Node.js not found. Open MindOS Desktop or install Node 18+. >&2 & exit /b 127)',
-    'node "%CLI%" %*',
+    'where node >nul 2>&1 || goto no_node',
+    'node -e "const m=/^(\\d+)\\.(\\d+)\\.(\\d+)$/.exec(process.versions.node);process.exit(m&&(Number(m[1])>22||(Number(m[1])===22&&Number(m[2])>=19))?0:1)" >nul 2>&1',
+    'if errorlevel 1 goto no_node',
+    'set "NODE=node"',
+    '',
+    ':run_node',
+    '"%NODE%" "%CLI%" %*',
     'exit /b %errorlevel%',
+    '',
+    ':no_node',
+    'echo mindos: compatible Node.js not found. Open MindOS Desktop or install Node 22.19+. >&2',
+    'exit /b 127',
     '',
   ].join('\r\n');
 }
@@ -215,6 +231,10 @@ if ! pwd >/dev/null 2>&1; then cd "$HOME" 2>/dev/null || true; fi
 CLI=${cliRef}
 NODE_PRIV=${nodeRef}
 
+node_is_compatible() {
+  "$1" -e 'const m=/^(\\d+)\\.(\\d+)\\.(\\d+)$/.exec(process.versions.node);process.exit(m&&(Number(m[1])>22||(Number(m[1])===22&&Number(m[2])>=19))?0:1)' >/dev/null 2>&1
+}
+
 if [ ! -f "$CLI" ]; then
   NPM_ROOT=$(npm root -g 2>/dev/null)
   NPM_CLI="\${NPM_ROOT}/@geminilight/mindos/bin/cli.js"
@@ -227,13 +247,14 @@ if [ ! -f "$CLI" ]; then
   fi
 fi
 
-if [ -x "$NODE_PRIV" ]; then
+if [ -x "$NODE_PRIV" ] && node_is_compatible "$NODE_PRIV"; then
   exec "$NODE_PRIV" "$CLI" "$@"
 fi
-if command -v node >/dev/null 2>&1; then
-  exec node "$CLI" "$@"
+PATH_NODE=$(command -v node 2>/dev/null || true)
+if [ -n "$PATH_NODE" ] && node_is_compatible "$PATH_NODE"; then
+  exec "$PATH_NODE" "$CLI" "$@"
 fi
-echo "mindos: Node.js not found. Open MindOS Desktop once, or install Node 18+." >&2
+echo "mindos: compatible Node.js not found. Open MindOS Desktop once, or install Node 22.19+." >&2
 exit 127
 `;
 }

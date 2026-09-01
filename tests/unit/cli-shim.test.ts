@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 
 let tempDir: string;
 
@@ -42,6 +43,32 @@ describe('CLI shim generation', () => {
 
     const cmd = fs.readFileSync(path.join(tempDir, '.mindos', 'bin', 'mindos.cmd'), 'utf-8');
     expect(cmd).toContain('set "CLI=C:\\MindOS%%TEMP%%^^A^^!B\\bin\\cli.js"');
+  });
+
+  it('falls back to a compatible PATH node when the private runtime is stale', async () => {
+    vi.doMock('node:os', () => ({
+      homedir: () => tempDir,
+      platform: () => 'linux',
+    }));
+    const cli = path.join(tempDir, 'cli.js');
+    const pathBin = path.join(tempDir, 'path-bin');
+    const privateBin = path.join(tempDir, '.mindos', 'node', 'bin');
+    fs.mkdirSync(pathBin, { recursive: true });
+    fs.mkdirSync(privateBin, { recursive: true });
+    fs.writeFileSync(cli, '// test cli');
+    fs.writeFileSync(path.join(privateBin, 'node'), '#!/bin/sh\nif [ "$1" = "-e" ]; then exit 1; fi\necho private\n', { mode: 0o755 });
+    fs.writeFileSync(path.join(pathBin, 'node'), '#!/bin/sh\nif [ "$1" = "-e" ]; then exit 0; fi\necho path\n', { mode: 0o755 });
+    vi.doMock('../../packages/mindos/bin/lib/constants.js', () => ({ CLI_PATH: cli }));
+
+    const shim = await import('../../packages/mindos/bin/lib/cli-shim.js') as { ensureCliShim: () => boolean };
+    shim.ensureCliShim();
+
+    const result = spawnSync('sh', [path.join(tempDir, '.mindos', 'bin', 'mindos')], {
+      encoding: 'utf-8',
+      env: { ...process.env, HOME: tempDir, PATH: `${pathBin}:/usr/bin:/bin` },
+    });
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout.trim()).toBe('path');
   });
 
   it('adds the Windows shim directory to the user PATH registry, not only a PowerShell profile', async () => {

@@ -6,7 +6,6 @@ import {
   BUILTIN_AGENT_EXTENSION_RUNTIME_DEPENDENCY_SEEDS,
   IM_RUNTIME_DEPENDENCY_SEEDS,
   MINDOS_WEB_RUNTIME_EXTENSION_SOURCE_ENTRIES,
-  PI_SCHEDULE_PROMPT_STALE_RUNTIME_DEPENDENCIES,
   copyAppForBundledRuntime,
   materializeStandaloneAssets,
   pruneClaudeAgentSdkNativePackages,
@@ -174,6 +173,60 @@ describe('materializeStandaloneAssets', () => {
     expect(readFileSync(path.join(materializedDependency, 'build', 'index.mjs'), 'utf-8')).toBe('export const Type = {};');
   });
 
+  it('materializes and keeps only the target native keyring binding', () => {
+    const appDir = makeTemp('mindos-app-keyring-binding-');
+    writeStandaloneApp(appDir);
+
+    const keyring = path.join(appDir, '.next', 'standalone', 'node_modules', '@napi-rs', 'keyring');
+    mkdirSync(keyring, { recursive: true });
+    writeFileSync(path.join(keyring, 'package.json'), JSON.stringify({
+      name: '@napi-rs/keyring',
+      version: '1.3.0',
+      optionalDependencies: {
+        '@napi-rs/keyring-darwin-arm64': '1.3.0',
+        '@napi-rs/keyring-darwin-x64': '1.3.0',
+      },
+    }));
+
+    for (const [name, nativeFile] of [
+      ['keyring-darwin-arm64', 'keyring.darwin-arm64.node'],
+      ['keyring-darwin-x64', 'keyring.darwin-x64.node'],
+    ] as const) {
+      const binding = path.join(appDir, 'node_modules', '@napi-rs', name);
+      mkdirSync(binding, { recursive: true });
+      writeFileSync(path.join(binding, 'package.json'), JSON.stringify({
+        name: `@napi-rs/${name}`,
+        version: '1.3.0',
+        main: nativeFile,
+      }));
+      writeFileSync(path.join(binding, nativeFile), name);
+    }
+
+    materializeStandaloneAssets(appDir, { targetPlatform: 'darwin', targetArch: 'arm64' });
+
+    const scope = path.join(appDir, '.next', 'standalone', 'node_modules', '@napi-rs');
+    expect(readFileSync(path.join(scope, 'keyring-darwin-arm64', 'keyring.darwin-arm64.node'), 'utf-8'))
+      .toBe('keyring-darwin-arm64');
+    expect(existsSync(path.join(scope, 'keyring-darwin-x64'))).toBe(false);
+  });
+
+  it('fails fast when the target native keyring binding is unavailable', () => {
+    const appDir = makeTemp('mindos-app-missing-keyring-binding-');
+    writeStandaloneApp(appDir);
+    const keyring = path.join(appDir, '.next', 'standalone', 'node_modules', '@napi-rs', 'keyring');
+    mkdirSync(keyring, { recursive: true });
+    writeFileSync(path.join(keyring, 'package.json'), JSON.stringify({
+      name: '@napi-rs/keyring',
+      version: '1.3.0',
+      optionalDependencies: { '@napi-rs/keyring-darwin-x64': '9.9.9' },
+    }));
+
+    expect(() => materializeStandaloneAssets(appDir, {
+      targetPlatform: 'darwin',
+      targetArch: 'x64',
+    })).toThrow(/Missing native keyring binding @napi-rs\/keyring-darwin-x64/);
+  });
+
   it('materializes missing parent package dependencies at the top level by default', () => {
     const appDir = makeTemp('mindos-app-standalone-top-level-deps-');
     writeStandaloneApp(appDir);
@@ -261,35 +314,6 @@ describe('materializeStandaloneAssets', () => {
     expect(RUNTIME_DEPENDENCY_SEEDS).toContain('@earendil-works/pi-coding-agent');
     expect(RUNTIME_DEPENDENCY_SEEDS).not.toContain('@mariozechner/pi-coding-agent');
     expect(BUILTIN_AGENT_EXTENSION_RUNTIME_DEPENDENCY_SEEDS).not.toContain('@mariozechner/pi-coding-agent');
-  });
-
-  it('tracks stale pi-schedule-prompt runtime dependencies without seeding them', () => {
-    expect(PI_SCHEDULE_PROMPT_STALE_RUNTIME_DEPENDENCIES).toEqual([
-      '@mariozechner/pi-coding-agent',
-    ]);
-    expect(RUNTIME_DEPENDENCY_SEEDS).not.toEqual(
-      expect.arrayContaining(PI_SCHEDULE_PROMPT_STALE_RUNTIME_DEPENDENCIES),
-    );
-  });
-
-  it('prunes stale pi-schedule-prompt dependencies from the standalone package metadata', () => {
-    const appDir = makeTemp('mindos-app-stale-schedule-prompt-deps-');
-    writeStandaloneApp(appDir);
-
-    const schedulePromptPackage = path.join(appDir, '.next', 'standalone', 'node_modules', 'pi-schedule-prompt');
-    mkdirSync(schedulePromptPackage, { recursive: true });
-    writeFileSync(path.join(schedulePromptPackage, 'package.json'), JSON.stringify({
-      name: 'pi-schedule-prompt',
-      version: '0.1.2',
-      dependencies: {
-        '@mariozechner/pi-coding-agent': 'latest',
-      },
-    }));
-
-    materializeStandaloneAssets(appDir);
-
-    const pkg = JSON.parse(readFileSync(path.join(schedulePromptPackage, 'package.json'), 'utf-8'));
-    expect(pkg.dependencies).not.toHaveProperty('@mariozechner/pi-coding-agent');
   });
 
   it('materializes MindOS-owned runtime extension sources into standalone bundles', () => {
