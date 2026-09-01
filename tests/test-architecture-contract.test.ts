@@ -127,4 +127,18 @@ describe('test architecture contract', () => {
 
     expect(generatedTestCopies).toEqual([]);
   });
+
+  it('keeps real browser launches out of the default root contract suite', () => {
+    const browserDrivenContractTests = listFiles(resolve(root, 'tests'))
+      .filter((file) => !file.includes('/'))
+      .filter((file) => /\.test\.[jt]sx?$/.test(file))
+      .filter((file) => file !== 'test-architecture-contract.test.ts')
+      .filter((file) => {
+        const source = readFileSync(resolve(root, 'tests', file), 'utf-8');
+        return source.includes("from '@playwright/test'")
+          || /\b(?:chromium|firefox|webkit)\.launch\s*\(/.test(source);
+      });
+
+    expect(browserDrivenContractTests).toEqual([]);
+  });
 });

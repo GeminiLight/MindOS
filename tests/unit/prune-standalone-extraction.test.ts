@@ -216,6 +216,19 @@ describe('bundleDocxExtractor', () => {
     const result = bundleDocxExtractor(resolve(fixtureRoot, 'missing'));
     expect(result.bundled).toBe(false);
   });
+
+  it('reports esbuild failures without replacing the original extractor', () => {
+    buildFixture();
+    const script = resolve(standaloneDir, 'scripts', 'extract-docx.cjs');
+    const invalidSource = 'const broken = ;\n';
+    writeFileSync(script, invalidSource);
+
+    expect(() => bundleDocxExtractor(standaloneDir)).toThrow(
+      /esbuild failed for extract-docx\.cjs/i,
+    );
+    expect(readFileSync(script, 'utf-8')).toBe(invalidSource);
+    expect(existsSync(resolve(standaloneDir, 'scripts', '.extract-docx.bundled.cjs'))).toBe(false);
+  });
 });
 
 describe('assertExtractionRuntime', () => {

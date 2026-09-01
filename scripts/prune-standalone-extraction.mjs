@@ -13,8 +13,13 @@
  * source-build path and crashed every fresh `mindos start`.
  */
 import { existsSync, readdirSync, readFileSync, renameSync, rmSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
-import { spawnSync } from 'node:child_process';
+
+const requireFromProduct = createRequire(
+  new URL('../packages/mindos/package.json', import.meta.url),
+);
+const { buildSync } = requireFromProduct('esbuild');
 
 /** Packages whose require() closure the extractor scripts need at runtime. */
 const EXTRACTION_ROOT_PACKAGES = ['pdfjs-dist', 'mammoth', 'word-extractor'];
@@ -161,13 +166,23 @@ export function bundleDocxExtractor(standaloneDir) {
   if (!existsSync(script)) return { bundled: false };
   if (!ensureLiveNodeModules(standaloneDir)) return { bundled: false };
   const outFile = resolve(standaloneDir, 'scripts', '.extract-docx.bundled.cjs');
-  const result = spawnSync(
-    'bun',
-    ['build', '--target=node', '--format=cjs', script, '--outfile', outFile],
-    { encoding: 'utf-8' },
-  );
-  if (result.status !== 0 || !existsSync(outFile)) {
-    throw new Error(`bun build failed for extract-docx.cjs:\n${result.stderr || result.stdout || result.error}`);
+  try {
+    buildSync({
+      entryPoints: [script],
+      outfile: outFile,
+      bundle: true,
+      platform: 'node',
+      target: 'node18',
+      format: 'cjs',
+      logLevel: 'silent',
+    });
+  } catch (error) {
+    rmSync(outFile, { force: true });
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`esbuild failed for extract-docx.cjs:\n${message}`);
+  }
+  if (!existsSync(outFile)) {
+    throw new Error('esbuild failed for extract-docx.cjs: output file was not created');
   }
   renameSync(outFile, script);
   return { bundled: true };
