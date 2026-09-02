@@ -1,8 +1,8 @@
-<!-- Last verified: 2026-09-03 | Current version: v1.1.65 -->
+<!-- Last verified: 2026-09-03 | Current version: v1.1.66 -->
 
 # 变更日志 (CHANGELOG)
 
-## Unreleased
+## v1.1.66 (2026-09-03)
 
 ### Runtime / Agents
 
