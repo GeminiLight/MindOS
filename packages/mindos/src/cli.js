@@ -23,6 +23,7 @@ export const MINDOS_ADDITIONAL_COMMANDS = [
   'restart',
   'sync',
   'gateway',
+  'automation',
   'token',
   'logs',
   'api',

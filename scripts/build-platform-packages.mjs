@@ -5,7 +5,7 @@
  * Input: packages/mindos must already contain built dist/, staged runtime assets,
  * and either static-web/ or a pruned _standalone/ fallback runtime.
  */
-import { chmodSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { basename, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -25,7 +25,22 @@ import {
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, '..');
 const productRoot = resolve(root, 'packages', 'mindos');
-const CLI_RUNTIME_ROOT_DEPENDENCIES = ['chokidar'];
+// The compiled binary extracts plain ESM files into ~/.mindos/runtime-cache.
+// Every external imported by that tree must therefore live inside the archive;
+// packages installed next to the npm platform package are not visible there.
+const CLI_RUNTIME_ROOT_DEPENDENCIES = [
+  '@anthropic-ai/claude-agent-sdk',
+  '@anthropic-ai/sdk',
+  '@earendil-works/pi-agent-core',
+  '@earendil-works/pi-ai',
+  '@earendil-works/pi-coding-agent',
+  '@modelcontextprotocol/sdk',
+  '@sinclair/typebox',
+  'chokidar',
+  'pino',
+  'pino-pretty',
+  'zod',
+];
 
 const platforms = [
   { key: 'darwin-arm64', os: 'darwin', cpu: 'arm64', koffi: ['darwin_arm64'], clipboard: ['clipboard', 'clipboard-darwin-arm64', 'clipboard-darwin-universal'] },
@@ -56,7 +71,13 @@ for (const target of selected) {
   mkdirSync(packageDir, { recursive: true });
 
   copyRuntimeRoot(packageDir);
-  copyCliRuntimeNodeModules(packageDir);
+  // The staged Web runtime may contain every Claude native package. Remove
+  // those first, then embed only the binary matching this platform target.
+  const removedClaudeNativePackages = pruneClaudeAgentSdkNativePackages(packageDir);
+  if (removedClaudeNativePackages > 0) {
+    console.log(`[build-platform-packages] Removed ${removedClaudeNativePackages} non-target Claude Agent SDK native package(s) from ${target.key}`);
+  }
+  copyCliRuntimeNodeModules(packageDir, target);
   writePlatformPackageJson(packageDir, target, targetBuildBinary, targetRuntimeBootstrap);
   writePlatformRuntimeManifest(packageDir, target, targetBuildBinary, targetRuntimeBootstrap);
   pruneKoffi(packageDir, target);
@@ -66,10 +87,6 @@ for (const target of selected) {
     targetArch: target.cpu,
     targetLibc: target.libc,
   });
-  const removedClaudeNativePackages = pruneClaudeAgentSdkNativePackages(packageDir);
-  if (removedClaudeNativePackages > 0) {
-    console.log(`[build-platform-packages] Removed ${removedClaudeNativePackages} Claude Agent SDK native package(s) from ${target.key}`);
-  }
   if (targetRuntimeBootstrap) {
     writeRuntimeBootstrap(packageDir);
     pruneRuntimeBootstrapPackageRoot(packageDir);
@@ -263,16 +280,14 @@ function platformRuntimeDependencies() {
   return dependencies;
 }
 
-function copyCliRuntimeNodeModules(packageDir) {
+function copyCliRuntimeNodeModules(packageDir, target) {
   const targetNodeModules = resolve(packageDir, 'node_modules');
   mkdirSync(targetNodeModules, { recursive: true });
 
-  // bin/lib/sync.js dynamically imports chokidar after the Bun binary extracts
-  // this runtime into ~/.mindos/runtime-cache; dependencies installed beside
-  // the npm platform package are not visible from that extracted cache root.
   copyDependencyClosure(CLI_RUNTIME_ROOT_DEPENDENCIES, {
     targetNodeModules,
     resolveFromDir: productRoot,
+    optionalDependencies: new Set([claudeSdkNativePackageName(target)]),
   });
 }
 
@@ -300,12 +315,19 @@ function copyDependencyClosure(rootPackages, options) {
     for (const dependency of Object.keys(pkg.dependencies ?? {})) {
       queue.push({ name: dependency, resolveFromDir: sourceDir });
     }
+    for (const dependency of Object.keys(pkg.optionalDependencies ?? {})) {
+      if (options.optionalDependencies?.has(dependency)) {
+        queue.push({ name: dependency, resolveFromDir: sourceDir });
+      }
+    }
   }
 
   return copied;
 }
 
 function resolvePackageDir(resolveFromDir, packageName) {
+  const installedDir = findInstalledPackageDir(resolveFromDir, packageName);
+  if (installedDir) return installedDir;
   const requireFromDir = createRequire(resolve(resolveFromDir, 'package.json'));
   try {
     return dirname(requireFromDir.resolve(`${packageName}/package.json`));
@@ -321,6 +343,28 @@ function resolvePackageDir(resolveFromDir, packageName) {
       );
     }
   }
+}
+
+function findInstalledPackageDir(resolveFromDir, packageName) {
+  // pnpm exposes package roots through symlinks. Resolve them before walking
+  // ancestors so a package's peer/optional dependency links remain visible.
+  let current = realpathSync(resolve(resolveFromDir));
+  for (;;) {
+    const nodeModules = basename(current) === 'node_modules'
+      ? current
+      : resolve(current, 'node_modules');
+    const candidate = resolvePackageName(nodeModules, packageName);
+    if (existsSync(resolve(candidate, 'package.json'))) return candidate;
+    const parent = dirname(current);
+    if (parent === current) return null;
+    current = parent;
+  }
+}
+
+function claudeSdkNativePackageName(target) {
+  const osName = target.os === 'win32' ? 'win32' : target.os;
+  const musl = target.libc === 'musl' ? '-musl' : '';
+  return `@anthropic-ai/claude-agent-sdk-${osName}-${target.cpu}${musl}`;
 }
 
 function findPackageRoot(entryPath, packageName) {

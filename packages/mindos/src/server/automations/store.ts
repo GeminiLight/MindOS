@@ -14,9 +14,11 @@ import { resolveExistingSafe } from '../../foundation/security/index.js';
 import { redactSensitiveText } from '../../agent/redaction.js';
 import {
   STUDIO_AUTOMATION_SCHEDULES,
+  type StudioAutomationApproval,
   type StudioAutomationJob,
   type StudioAutomationLease,
   type StudioAutomationMigration,
+  type StudioAutomationNotification,
   type StudioAutomationRun,
   type StudioAutomationState,
   type StudioAutomationStatus,
@@ -28,6 +30,8 @@ const STORE_DIR = '.mindos/automations';
 const STORE_LOCK = `${STORE_DIR}/state.lock`;
 const MAX_AUTOMATIONS = 200;
 const MAX_HISTORY = 50;
+const MAX_APPROVALS = 500;
+const MAX_NOTIFICATIONS = 500;
 const LOCK_ATTEMPTS = 100;
 const LOCK_WAIT_MS = 10;
 const STALE_LOCK_MS = 30_000;
@@ -61,6 +65,8 @@ export function emptyStudioAutomationState(): StudioAutomationState {
     updatedAt: new Date(0).toISOString(),
     migration: { importedCount: 0, externalSchedulePromptJobs: 0 },
     automations: [],
+    approvals: [],
+    notifications: [],
   };
 }
 
@@ -80,6 +86,8 @@ function writeStateUnlocked(mindRoot: string, state: StudioAutomationState): voi
     ...job,
     history: job.history.slice(0, MAX_HISTORY),
   }));
+  state.approvals = state.approvals.slice(0, MAX_APPROVALS);
+  state.notifications = state.notifications.slice(0, MAX_NOTIFICATIONS);
   const file = resolveExistingSafe(mindRoot, STUDIO_AUTOMATION_STATE_FILE);
   mkdirSync(path.dirname(file), { recursive: true });
   const temp = `${file}.${process.pid}.${crypto.randomUUID()}.tmp`;
@@ -139,6 +147,12 @@ function normalizeState(value: unknown): StudioAutomationState {
     automations: Array.isArray(record.automations)
       ? record.automations.map(normalizeJob).filter((job): job is StudioAutomationJob => job !== null).slice(0, MAX_AUTOMATIONS)
       : [],
+    approvals: Array.isArray(record.approvals)
+      ? record.approvals.map(normalizeApproval).filter((approval): approval is StudioAutomationApproval => approval !== null).slice(0, MAX_APPROVALS)
+      : [],
+    notifications: Array.isArray(record.notifications)
+      ? record.notifications.map(normalizeNotification).filter((notification): notification is StudioAutomationNotification => notification !== null).slice(0, MAX_NOTIFICATIONS)
+      : [],
   };
 }
 
@@ -179,6 +193,17 @@ function normalizeJob(value: unknown): StudioAutomationJob | null {
   const history = Array.isArray(value.history)
     ? value.history.map(normalizeRun).filter((run): run is StudioAutomationRun => run !== null).slice(0, MAX_HISTORY)
     : [];
+  const model = value.model === 'gpt-5.5' || value.model === 'claude-code' || value.model === 'codex'
+    ? value.model
+    : value.model === 'local-agent'
+      ? 'codex'
+      : 'mindos-auto';
+  const runtime = model === 'codex' ? 'codex' : model === 'claude-code' ? 'claude' : 'mindos-pi';
+  const permissionMode = value.permissionMode === 'auto'
+    ? 'auto'
+    : value.permissionMode === 'ask' && runtime !== 'mindos-pi'
+      ? 'ask'
+      : 'read';
   return {
     id,
     title,
@@ -187,14 +212,14 @@ function normalizeJob(value: unknown): StudioAutomationJob | null {
     ...(text(value.projectId, 120) ? { projectId: text(value.projectId, 120) } : {}),
     schedule,
     timezone: safeTimezone(value.timezone),
-    model: value.model === 'gpt-5.5' || value.model === 'claude-code' || value.model === 'local-agent' ? value.model : 'mindos-auto',
+    model,
     effort: value.effort === 'normal' || value.effort === 'extra-high' ? value.effort : 'high',
-    permissionMode: value.permissionMode === 'auto' ? 'auto' : 'read',
+    permissionMode,
     status,
     retry: value.retry === 'never' ? 'never' : 'once',
     timeoutMs: clampInteger(value.timeoutMs, 1_000, 3_600_000, 600_000),
     overlap: 'skip',
-    runtime: 'mindos-pi',
+    runtime,
     source: 'mindos-durable',
     controlPlaneScheduleId: safeId(value.controlPlaneScheduleId) ?? `studio-automation-${id.replace(/^studio-/, '')}`,
     createdAt,
@@ -241,7 +266,69 @@ function normalizeLease(value: unknown): StudioAutomationLease | null {
 }
 
 function isRunStatus(value: unknown): value is StudioAutomationRun['status'] {
-  return value === 'running' || value === 'success' || value === 'error' || value === 'timed_out' || value === 'interrupted';
+  return value === 'running' || value === 'waiting_approval' || value === 'success' || value === 'error' || value === 'timed_out' || value === 'interrupted';
+}
+
+function normalizeApproval(value: unknown): StudioAutomationApproval | null {
+  if (!isRecord(value)) return null;
+  const id = safeId(value.id);
+  const jobId = safeId(value.jobId);
+  const fingerprint = text(value.fingerprint, 128);
+  const toolName = text(value.toolName, 160);
+  const createdAt = iso(value.createdAt);
+  const runtime = value.runtime === 'codex' || value.runtime === 'claude' ? value.runtime : null;
+  const status = value.status === 'pending' || value.status === 'approved' || value.status === 'denied' || value.status === 'consumed'
+    ? value.status
+    : null;
+  const allowDecision = text(value.allowDecision, 160);
+  const denyDecision = text(value.denyDecision, 160);
+  if (!id || !jobId || !fingerprint || !toolName || !createdAt || !runtime || !status || !allowDecision || !denyDecision) return null;
+  const riskRecord = isRecord(value.risk) ? value.risk : {};
+  const riskLevel = riskRecord.level === 'low' || riskRecord.level === 'medium' || riskRecord.level === 'high'
+    ? riskRecord.level
+    : null;
+  const riskSummary = text(riskRecord.summary, 500);
+  return {
+    id,
+    jobId,
+    fingerprint,
+    runtime,
+    status,
+    toolName,
+    ...(text(value.action, 300) ? { action: text(value.action, 300) } : {}),
+    ...(text(value.resource, 500) ? { resource: text(value.resource, 500) } : {}),
+    ...(text(value.inputPreview, 1_000) ? { inputPreview: redactSensitiveText(text(value.inputPreview, 1_000)!) } : {}),
+    ...(riskLevel && riskSummary ? { risk: { level: riskLevel, summary: redactSensitiveText(riskSummary) } } : {}),
+    allowDecision,
+    denyDecision,
+    ...(value.decision === 'allow' || value.decision === 'deny' ? { decision: value.decision } : {}),
+    createdAt,
+    ...(iso(value.resolvedAt) ? { resolvedAt: iso(value.resolvedAt) } : {}),
+    ...(iso(value.consumedAt) ? { consumedAt: iso(value.consumedAt) } : {}),
+  };
+}
+
+function normalizeNotification(value: unknown): StudioAutomationNotification | null {
+  if (!isRecord(value)) return null;
+  const id = safeId(value.id);
+  const jobId = safeId(value.jobId);
+  const title = text(value.title, 200);
+  const body = text(value.body, 1_000);
+  const createdAt = iso(value.createdAt);
+  const kind = value.kind === 'failure' || value.kind === 'timeout' || value.kind === 'interrupted' || value.kind === 'approval_required'
+    ? value.kind
+    : null;
+  if (!id || !jobId || !title || !body || !createdAt || !kind) return null;
+  return {
+    id,
+    jobId,
+    ...(safeId(value.runId) ? { runId: safeId(value.runId) } : {}),
+    kind,
+    title: redactSensitiveText(title),
+    body: redactSensitiveText(body),
+    createdAt,
+    ...(iso(value.readAt) ? { readAt: iso(value.readAt) } : {}),
+  };
 }
 
 function safeId(value: unknown): string | undefined {

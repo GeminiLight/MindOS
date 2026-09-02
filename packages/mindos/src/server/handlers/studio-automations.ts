@@ -14,6 +14,12 @@ import {
   readStudioAutomationState,
 } from '../automations/store.js';
 import {
+  acknowledgeAllStudioAutomationNotifications,
+  acknowledgeStudioAutomationNotification,
+  resolveStudioAutomationApproval,
+} from '../automations/approvals.js';
+import { readStudioAutomationWorkerHeartbeat } from '../automations/service.js';
+import {
   STUDIO_AUTOMATION_SCHEDULES,
   type StudioAutomationDraft,
   type StudioAutomationJob,
@@ -27,6 +33,22 @@ export {
   tickStudioAutomationWorker,
 } from '../automations/worker.js';
 export { readStudioAutomationState } from '../automations/store.js';
+export {
+  acknowledgeAllStudioAutomationNotifications,
+  acknowledgeStudioAutomationNotification,
+  appendStudioAutomationNotification,
+  requestStudioAutomationPermission,
+  resolveStudioAutomationApproval,
+  StudioAutomationApprovalRequiredError,
+} from '../automations/approvals.js';
+export {
+  DEFAULT_STUDIO_AUTOMATION_TICK_INTERVAL_MS,
+  STUDIO_AUTOMATION_WORKER_HEARTBEAT_FILE,
+  readStudioAutomationWorkerHeartbeat,
+  runStudioAutomationWorkerOnce,
+  runStudioAutomationWorkerService,
+} from '../automations/service.js';
+export { createStudioAutomationExecutor } from '../automations/executor.js';
 export type * from '../automations/types.js';
 
 export type StudioAutomationServices = {
@@ -59,6 +81,30 @@ export function handleStudioAutomationsPost(
     const action = typeof body.action === 'string' ? body.action : '';
     const now = services.now?.() ?? new Date();
     migrateLegacyStudioAutomations(services.mindRoot, services.homeDir, now);
+
+    if (action === 'acknowledge-all-notifications') {
+      acknowledgeAllStudioAutomationNotifications(services.mindRoot, now);
+      return json(buildPayload(services.mindRoot, now), { headers: { 'Cache-Control': 'no-store' } });
+    }
+
+    if (action === 'acknowledge-notification') {
+      const notificationId = safeId(body.notificationId);
+      if (!notificationId) return json({ error: 'acknowledge-notification requires notificationId.' }, { status: 400 });
+      const result = acknowledgeStudioAutomationNotification(services.mindRoot, notificationId, now);
+      if (result === 'missing') return json({ error: `Automation notification not found: ${notificationId}` }, { status: 404 });
+      return json(buildPayload(services.mindRoot, now), { headers: { 'Cache-Control': 'no-store' } });
+    }
+
+    if (action === 'resolve-approval') {
+      const approvalId = safeId(body.approvalId);
+      const decision = body.decision === 'allow' || body.decision === 'deny' ? body.decision : null;
+      if (!approvalId || !decision) return json({ error: 'resolve-approval requires approvalId and allow or deny decision.' }, { status: 400 });
+      const result = resolveStudioAutomationApproval(services.mindRoot, approvalId, decision, now);
+      if (result.kind === 'missing') return json({ error: `Automation approval not found: ${approvalId}` }, { status: 404 });
+      if (result.kind === 'job-missing') return json({ error: 'The automation for this approval no longer exists.' }, { status: 409 });
+      if (result.kind === 'conflict') return json({ error: 'This approval was already resolved or consumed with a different decision.' }, { status: 409 });
+      return json(buildPayload(services.mindRoot, now), { headers: { 'Cache-Control': 'no-store' } });
+    }
 
     if (action === 'create') {
       const parsed = parseDraft(body.draft ?? body);
@@ -189,6 +235,9 @@ function buildPayload(mindRoot: string, now: Date): StudioAutomationPayload {
     schemaVersion: 1,
     generatedAt: now.toISOString(),
     automations,
+    approvals: state.approvals.map((approval) => structuredClone(approval)),
+    notifications: state.notifications.map((notification) => structuredClone(notification)),
+    worker: readStudioAutomationWorkerHeartbeat(mindRoot),
     summary: {
       total: automations.length,
       enabled: automations.filter((job) => job.status === 'active').length,
@@ -200,6 +249,8 @@ function buildPayload(mindRoot: string, now: Date): StudioAutomationPayload {
       ...(state.migration.warning ? { migrationWarning: state.migration.warning } : {}),
       scheduleStorePath: path.join(mindRoot, '.mindos/automations/state.json'),
       controlPlaneScheduleCount: controlPlane.summary.scheduleCount,
+      pendingApprovals: state.approvals.filter((approval) => approval.status === 'pending').length,
+      unreadNotifications: state.notifications.filter((notification) => !notification.readAt).length,
     },
   };
 }
@@ -216,13 +267,13 @@ function createJob(draft: StudioAutomationDraft, existing: StudioAutomationJob[]
     schedule: draft.schedule,
     timezone: draft.timezone,
     model: draft.model,
+    runtime: runtimeForModel(draft.model),
     effort: draft.effort,
     permissionMode: draft.permissionMode,
     status: 'active',
     retry: draft.retry,
     timeoutMs: draft.timeoutMs,
     overlap: 'skip',
-    runtime: 'mindos-pi',
     source: 'mindos-durable',
     controlPlaneScheduleId: `studio-automation-${id.replace(/^studio-/, '')}`,
     createdAt: now.toISOString(),
@@ -245,6 +296,7 @@ function updateJob(current: StudioAutomationJob, draft: StudioAutomationDraft, n
     schedule: draft.schedule,
     timezone: draft.timezone,
     model: draft.model,
+    runtime: runtimeForModel(draft.model),
     effort: draft.effort,
     permissionMode: draft.permissionMode,
     retry: draft.retry,
@@ -274,22 +326,29 @@ function parseDraft(value: unknown): { value: StudioAutomationDraft } | { error:
     ? value.schedule as StudioAutomationDraft['schedule']
     : 'daily-0900';
   if (value.model !== undefined && value.model !== 'mindos-auto' && value.model !== 'gpt-5.5'
-    && value.model !== 'claude-code' && value.model !== 'local-agent') {
+    && value.model !== 'codex' && value.model !== 'claude-code' && value.model !== 'local-agent') {
     return { error: 'Automation model is invalid.' };
   }
-  const model = value.model === 'gpt-5.5' || value.model === 'claude-code' || value.model === 'local-agent'
+  const model: StudioAutomationDraft['model'] = value.model === 'gpt-5.5' || value.model === 'claude-code' || value.model === 'codex'
     ? value.model
-    : 'mindos-auto';
+    : value.model === 'local-agent'
+      ? 'codex'
+      : 'mindos-auto';
   if (value.effort !== undefined && value.effort !== 'normal' && value.effort !== 'high' && value.effort !== 'extra-high') {
     return { error: 'Automation effort is invalid.' };
   }
   const effort = value.effort === 'normal' || value.effort === 'extra-high' ? value.effort : 'high';
   const permissionMode = value.permissionMode === undefined || value.permissionMode === 'read'
     ? 'read'
-    : value.permissionMode === 'auto'
-      ? 'auto'
-      : null;
-  if (!permissionMode) return { error: 'Unattended automations only support read or explicit auto permission.' };
+    : value.permissionMode === 'ask'
+      ? 'ask'
+      : value.permissionMode === 'auto'
+        ? 'auto'
+        : null;
+  if (!permissionMode) return { error: 'Automations only support read, ask, or explicit auto permission.' };
+  if (permissionMode === 'ask' && runtimeForModel(model) === 'mindos-pi') {
+    return { error: 'Ask permission is supported by Codex or Claude Code automations; MindOS Pi requires read or explicit auto.' };
+  }
   const timezone = text(value.timezone, 100) ?? DEFAULT_AUTOMATION_TIMEZONE;
   try { assertValidTimezone(timezone); } catch (error) { return { error: error instanceof Error ? error.message : String(error) }; }
   return {
@@ -318,11 +377,11 @@ export function syncControlPlaneSchedule(mindRoot: string, job: StudioAutomation
   const schedule = {
     id: job.controlPlaneScheduleId,
     title: job.title,
-    runtimeId: 'mindos',
+    runtimeId: job.runtime === 'mindos-pi' ? 'mindos' : job.runtime,
     status: job.status === 'paused' ? 'paused' : 'enabled',
     trigger: automationTrigger(job.schedule, job.timezone),
     target: {
-      assistantId: 'mindos-pi',
+      assistantId: job.runtime,
       command: job.prompt.slice(0, 160),
       ...(job.projectId ? { cwdHint: job.projectId } : {}),
     },
@@ -339,6 +398,12 @@ export function syncControlPlaneSchedule(mindRoot: string, job: StudioAutomation
   applyRuntimeControlPlaneMutation(mindRoot, existing
     ? { action: 'update-schedule', scheduleId: job.controlPlaneScheduleId, patch: schedule }
     : { action: 'create-schedule', schedule }, now);
+}
+
+function runtimeForModel(model: StudioAutomationDraft['model']): StudioAutomationJob['runtime'] {
+  if (model === 'codex') return 'codex';
+  if (model === 'claude-code') return 'claude';
+  return 'mindos-pi';
 }
 
 function archiveControlPlaneSchedule(mindRoot: string, job: StudioAutomationJob, now: Date): void {

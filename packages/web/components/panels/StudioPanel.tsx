@@ -10,6 +10,7 @@ import {
   LayoutGrid,
   NotebookTabs,
   Plus,
+  ScanSearch,
   Sparkles,
 } from 'lucide-react';
 import { type ReactNode, useEffect, useState } from 'react';
@@ -37,9 +38,11 @@ const COPY = {
     projects: 'Projects',
     apps: 'Apps',
     automation: 'Automation',
+    context: 'Context',
     newProject: 'New Project',
     recentProjects: 'Recent Projects',
     allAutomations: 'All automations',
+    contextInspector: 'Context Inspector',
     appRelationships: 'Relationship Memory',
     appLearning: 'Learning Practice',
     appLaunch: 'Launch Practice',
@@ -50,9 +53,11 @@ const COPY = {
     projects: '项目',
     apps: '应用',
     automation: '自动化',
+    context: '上下文',
     newProject: '新建项目',
     recentProjects: '近期项目',
     allAutomations: '全部自动化',
+    contextInspector: '上下文检查器',
     appRelationships: '关系记忆',
     appLearning: '学习练习',
     appLaunch: '发布实践',
@@ -96,8 +101,12 @@ function isStudioAppsPath(pathname: string): boolean {
   return pathname === '/studio/apps' || pathname.startsWith('/studio/apps/');
 }
 
+function isStudioContextPath(pathname: string): boolean {
+  return pathname === '/studio/context' || pathname.startsWith('/studio/context/');
+}
+
 function getProjectIdFromPath(pathname: string): string | null {
-  if (isStudioOverviewPath(pathname) || isStudioProjectsPath(pathname) || isStudioAutomationPath(pathname) || isStudioAppsPath(pathname)) return null;
+  if (isStudioOverviewPath(pathname) || isStudioProjectsPath(pathname) || isStudioAutomationPath(pathname) || isStudioAppsPath(pathname) || isStudioContextPath(pathname)) return null;
   if (!pathname.startsWith('/studio/')) return null;
   const raw = pathname.slice('/studio/'.length).split('/', 1)[0];
   if (!raw) return null;
@@ -174,6 +183,7 @@ export default function StudioPanel({ active }: StudioPanelProps) {
   const overviewActive = isStudioOverviewPath(pathname);
   const appsActive = isStudioAppsPath(pathname);
   const automationActive = isStudioAutomationPath(pathname);
+  const contextActive = isStudioContextPath(pathname);
   const currentProjectId = getProjectIdFromPath(pathname);
   const projectsActive = isStudioProjectsPath(pathname) || currentProjectId !== null;
   const [projects, setProjects] = useState<StudioProject[]>(() => readStudioProjects());
@@ -230,6 +240,13 @@ export default function StudioPanel({ active }: StudioPanelProps) {
           active={automationActive}
           activeVariant="rail"
         />
+        <PanelNavRow
+          href="/studio/context"
+          icon={<ScanSearch size={14} aria-hidden="true" />}
+          title={copy.context}
+          active={contextActive}
+          activeVariant="rail"
+        />
       </PanelPrimaryNav>
 
       <div className="sidebar-scroll-area min-h-0 flex-1 overflow-y-auto">
@@ -261,6 +278,13 @@ export default function StudioPanel({ active }: StudioPanelProps) {
                 title={copy.allAutomations}
                 selected
               />
+            </div>
+          </nav>
+        ) : contextActive ? (
+          <nav className="px-3 py-3" aria-label={copy.context}>
+            <p className="mb-1.5 px-1 text-2xs font-medium uppercase text-muted-foreground/50">{copy.context}</p>
+            <div className="space-y-1">
+              <StudioPanelObjectRow href="/studio/context" icon={<ScanSearch size={14} aria-hidden="true" />} title={copy.contextInspector} selected />
             </div>
           </nav>
         ) : (

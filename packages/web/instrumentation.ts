@@ -33,15 +33,6 @@ export async function register() {
         // mindRoot not configured yet — skip prewarming
       }
     });
-    process.nextTick(async () => {
-      try {
-        const { startStudioAutomationWorker } = await import('@/lib/studio-automation-worker');
-        startStudioAutomationWorker();
-      } catch {
-        // mindRoot or the agent runtime may not be configured yet; a later server restart will retry.
-      }
-    });
-
     // Skill auto-update: check if bundled skills are newer than installed
     // ones (covers both CLI startup and Desktop hot-update restarts).
     process.nextTick(async () => {

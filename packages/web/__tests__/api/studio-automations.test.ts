@@ -5,7 +5,6 @@ import path from 'path';
 
 const mocks = vi.hoisted(() => ({
   mindRoot: '',
-  workerTick: vi.fn(async () => ({ claimed: 1, completed: 1, succeeded: 1 })),
 }));
 
 vi.mock('@geminilight/mindos/server', async () => {
@@ -15,10 +14,6 @@ vi.mock('@geminilight/mindos/server', async () => {
 
 vi.mock('@/lib/fs', () => ({
   getMindRoot: () => mocks.mindRoot,
-}));
-
-vi.mock('@/lib/studio-automation-worker', () => ({
-  runStudioAutomationWorkerTick: mocks.workerTick,
 }));
 
 async function importRoute() {
@@ -66,7 +61,6 @@ beforeEach(() => {
   previousHome = process.env.MINDOS_STUDIO_AUTOMATION_HOME;
   process.env.MINDOS_STUDIO_AUTOMATION_HOME = tempHome;
   mocks.mindRoot = tempMindRoot;
-  mocks.workerTick.mockClear();
 });
 
 afterEach(() => {
@@ -108,6 +102,7 @@ describe('GET/POST /api/studio/automations', () => {
         paused: 0,
         externalSchedulePromptJobs: 0,
       },
+      worker: null,
     });
 
     const store = readJson(storePath(tempMindRoot));
@@ -261,7 +256,7 @@ describe('GET/POST /api/studio/automations', () => {
     expect(readJson(controlPlanePath(tempMindRoot)).schedules[0]).toMatchObject({ id: scheduleId, status: 'archived' });
   });
 
-  it('runs a queued automation through the host executor bridge and returns refreshed state', async () => {
+  it('queues run-now for the independent executor without running work inside the request', async () => {
     const { POST } = await importRoute();
     const create = await POST(new Request('http://localhost/api/studio/automations', {
       method: 'POST',
@@ -275,9 +270,10 @@ describe('GET/POST /api/studio/automations', () => {
       body: JSON.stringify({ action: 'run-now', id }),
     }));
     const body = await run.json();
-    expect(run.status, JSON.stringify(body)).toBe(200);
-    expect(mocks.workerTick).toHaveBeenCalledWith({ mindRoot: tempMindRoot });
-    expect(body).toMatchObject({ automations: [expect.objectContaining({ id })] });
+    expect(run.status, JSON.stringify(body)).toBe(202);
+    expect(body).toMatchObject({
+      automations: [expect.objectContaining({ id, lastStatus: 'pending' })],
+    });
   });
 
   it('returns run-now without waiting for the durable worker to finish', async () => {
@@ -287,8 +283,6 @@ describe('GET/POST /api/studio/automations', () => {
       body: JSON.stringify({ action: 'create', draft: { ...draft, schedule: 'manual' } }),
     }));
     const created = await create.json();
-    mocks.workerTick.mockImplementationOnce(() => new Promise(() => {}));
-
     const responsePromise = POST(new Request('http://localhost/api/studio/automations', {
       method: 'POST',
       body: JSON.stringify({ action: 'run-now', id: created.automations[0].id }),
@@ -299,6 +293,6 @@ describe('GET/POST /api/studio/automations', () => {
     ]);
 
     expect(outcome.kind).toBe('response');
-    if (outcome.kind === 'response') expect(outcome.response.status).toBe(200);
+    if (outcome.kind === 'response') expect(outcome.response.status).toBe(202);
   });
 });

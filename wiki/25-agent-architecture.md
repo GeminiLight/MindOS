@@ -288,26 +288,28 @@ POST mutation 使用 `action` 分发：
 - 只接受声明式 metadata，不保存 env、headers、token、api key、secret 或 artifact/blob 内容；文本摘要会做 secret redaction。
 - schedule 默认 `disabled`，即使 status 设为 `enabled`，当前也只是 registry 状态，不会启动真实 runner。
 - cron 只做基础格式校验，不计算 next fire、不创建后台 timer。
-- automation projection 仍然按 runtime 保守判断：control-plane substrate 本身不执行任务。Studio durable worker 是独立的 Product-owned scheduler，由 Web Node host 提供 MindOS Pi executor；native/ACP runtime 仍需各自的无人值守权限、恢复与 artifact contract。
+- automation projection 仍然按 runtime 保守判断：control-plane substrate 本身不执行任务。Studio durable worker 是独立的 Product-owned scheduler；MindOS Pi、Codex、Claude 由常驻 executor 显式路由，ACP runtime 仍需自己的无人值守权限、恢复与 artifact contract。
 
 ### Studio Durable Automation
 
-Studio Automation 的产品状态和调度规则由 `@geminilight/mindos` 持有，Web 只提供 MindOS Pi headless executor 与界面适配。
+Studio Automation 的产品状态、调度规则和 executor 都由 `@geminilight/mindos` 持有；Web 只负责队列 mutation、健康状态、通知与审批界面。
 
 ```text
 Studio UI / Product HTTP
   -> .mindos/automations/state.json
   -> atomic claim + expiring lease
-  -> Web Node instrumentation worker
-  -> headless MindOS Pi (AbortSignal + explicit permission mode)
+  -> OS user service: mindos automation worker
+  -> runtime router: MindOS Pi / Codex / Claude
   -> .mindos/automations/runs/YYYY/MM/<run-id>.md
   -> Context Asset Registry + runtime control-plane wake/failure audit
 ```
 
 - schedule 使用明确时区计算 `nextRunAt`；默认 `Asia/Shanghai`，覆盖 DST、工作日、月末等边界。
 - 每个 occurrence 只能被一个进程 lease；lease 长度至少覆盖任务 timeout，重启后过期 lease 会记为 `interrupted`，并按策略最多重试一次。
-- 无人值守权限默认 `read`，只有用户显式选择 `auto` 才允许写知识库；`ask/full` 和当前不支持的 model 会 fail closed。
+- 无人值守权限默认 `read`；MindOS Pi 接受 `read/auto`，Codex 与 Claude 接受 `read/ask/auto`。`ask` 会把稳定 fingerprint 的请求持久化，用户决定后安全重放；非法 runtime/model/permission 组合 fail closed。
 - `Run now` 只入队并立即返回，实际执行由 worker 完成；页面在存在 running job 时短轮询，而不是让 HTTP 请求一直挂住。
+- `mindos automation service install` 安装 launchd/systemd user service；Windows 首版使用 `mindos automation worker` 前台模式。heartbeat 写入 `.mindos/automations/worker.json`，关闭 Web 或 Desktop 不影响执行。
+- failure、timeout、interrupted 与 approval-required 都写入有界、脱敏、幂等通知；Studio 可逐条或批量确认通知，并对 pending approval 执行 Allow once / Deny。
 - 旧 `schedule-prompts.json` 只迁移 `source=mindos-studio-automation` 的 job。迁移采用两阶段状态，先把新 job 置为 paused，再禁用旧 job，最后恢复目标状态，因此中途崩溃不会造成双跑。
 
 ### Permission Runtime Projection
@@ -469,6 +471,8 @@ Turn context 包括：
 
 Active Recall 不再只返回一段不可解释的 prompt 文本。被实际选中的知识文件会按需登记到 `<mindRoot>/.mindos/context-assets/registry.json`；每次 recall（包括 empty、timeout、error、skipped）都会写入不可变的 `<mindRoot>/.mindos/retrieval-receipts/YYYY/MM/*.json`。
 
+Studio 的 `/studio/context` 是这两类对象的只读检查器：Assets 视图用于查看版本、来源、状态和关联回执，Receipts 视图用于查看 query preview、预算、候选/入选数量、选择理由和失败信息。页面不读取完整检索正文，也不修改 registry 或 receipt。
+
 - Registry 是治理索引，不复制 Markdown 正文。asset 保存稳定 id、类型、相对路径、source ref、内容哈希、版本和状态；同 source + 同 hash 幂等，内容变化才增版本。
 - Receipt 只保存脱敏 query preview/hash、候选与选择分数、heading/行号、token budget 和裁剪原因，不保存召回正文。
 - `AgentRun.metadata` 保存 `retrievalReceiptId` 与 `retrievalSelectedAssetIds`，可从一次运行反查当时使用的依据；自动化 receipt 还保存 automation/run id。
@@ -575,7 +579,8 @@ MindOS Pi 的 persisted session 由 Pi `SessionManager` 自己持有完整 JSONL
 | `packages/mindos/src/server/handlers/runtime-readiness.ts` | Runtime Doctor 聚合契约，把 compatibility profile 与 permission/MCP/artifact/automation projection 合并成用例级 readiness / gaps / recommendations |
 | `packages/mindos/src/knowledge/context-assets/*` | Context Asset Registry 与 Echo 审核式晋升 |
 | `packages/mindos/src/retrieval/receipt.ts` | 不可变 Retrieval Receipt 的写入、读取与过滤 |
-| `packages/web/lib/studio-automation-worker.ts` | Web Node host 的 MindOS Pi executor bridge；Product core 不依赖 Next.js |
+| `packages/mindos/src/server/automations/service.ts` | 独立 Automation executor service、heartbeat 与无重叠 resident loop；不依赖 Web 生命周期 |
+| `packages/mindos/src/server/automations/executor.ts` | MindOS Pi / Codex / Claude unattended runtime 路由与 durable permission bridge |
 | `packages/mindos/src/agent/prompt/agent-prompt.txt` | MindOS 默认 base prompt |
 | `packages/mindos/src/agent/prompt/assistant-prompt.ts` | Active Assistant overlay 解析与渲染 |
 | `packages/mindos/src/agent/prompt/context-prompt.ts` | context prompt 渲染 |

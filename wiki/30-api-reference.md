@@ -44,16 +44,18 @@
 
 | 端点 | 方法 | 说明 |
 |------|------|------|
-| `/api/studio/automations` | GET | 读取 Product-owned durable jobs、迁移摘要、真实 last/next run 和最近运行历史 |
-| `/api/studio/automations` | POST | 自动化 mutation。Body action：`create`、`update`、`delete`、`pause`、`resume`、`run-now` |
+| `/api/studio/automations` | GET | 读取 durable jobs、worker heartbeat、pending approvals、notifications、真实 last/next run 和最近运行历史 |
+| `/api/studio/automations` | POST | 自动化 mutation。Body action：`create`、`update`、`delete`、`set-status`、`run-now`、`resolve-approval`、`acknowledge-notification`、`acknowledge-all-notifications` |
 
-Automation mutation 由 Product Server 校验。无人值守权限只接受 `read` 或显式 `auto`；任务状态持久化在 `<mindRoot>/.mindos/automations/state.json`。`run-now` 是非阻塞入队，响应不等待 Agent 执行完成。
+Automation mutation 由 Product Server 校验。MindOS Pi 只接受 `read/auto`，Codex 与 Claude 接受 `read/ask/auto`；任务状态、审批和通知持久化在 `<mindRoot>/.mindos/automations/state.json`。`run-now` 是非阻塞入队，响应不等待 Agent 执行完成。独立执行器用 `mindos automation service install` 安装，也可用 `mindos automation once|worker` 前台运行。
 
 ## Context Governance
 
 `GET /api/context-assets` 返回资产索引，不返回文件正文。首批 `kind` 包括 `knowledge`、`echo-playbook`、`echo-practice`、`skill`、`workflow`、`automation-run`。
 
 `GET /api/retrieval-receipts?id=<id>` 返回指定不可变回执；无 `id` 时按时间倒序返回。回执包含 query hash/脱敏 preview、预算、候选、入选片段 provenance 和 outcome，不包含完整检索正文。
+
+`/studio/context` 提供上述两个接口的只读检查器，支持 Assets / Receipts 搜索、状态筛选、关联回执与安全文件入口。
 
 ## A2A Protocol (Agent-to-Agent 通信)
 

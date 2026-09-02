@@ -114,15 +114,33 @@ describe('OpenCode-style platform runtime packages', () => {
     expect(script).not.toContain('mindos: targetBuildBinary');
   });
 
-  it('embeds root CLI dependency closure for sync daemon runtime imports', () => {
+  it('embeds the complete root CLI dependency closure for resident runtime imports', () => {
     const script = readText('scripts/build-platform-packages.mjs');
 
-    expect(script).toMatch(/CLI_RUNTIME_ROOT_DEPENDENCIES\s*=\s*\[\s*'chokidar'\s*\]/);
-    expect(script).toContain('copyCliRuntimeNodeModules(packageDir)');
+    for (const dependency of [
+      '@anthropic-ai/claude-agent-sdk',
+      '@anthropic-ai/sdk',
+      '@earendil-works/pi-agent-core',
+      '@earendil-works/pi-ai',
+      '@earendil-works/pi-coding-agent',
+      '@modelcontextprotocol/sdk',
+      '@sinclair/typebox',
+      'chokidar',
+      'pino',
+      'pino-pretty',
+      'zod',
+    ]) {
+      expect(script).toContain(`'${dependency}'`);
+    }
+    expect(script).toContain('copyCliRuntimeNodeModules(packageDir, target)');
     expect(script).toContain('copyDependencyClosure(CLI_RUNTIME_ROOT_DEPENDENCIES');
+    expect(script).toContain('optionalDependencies: new Set([claudeSdkNativePackageName(target)])');
     expect(script).toContain("resolve(packageDir, 'node_modules')");
     expect(script).toContain('dependencies: targetRuntimeBootstrap ? {} : platformRuntimeDependencies()');
     expect(script).toContain("'node_modules'");
+    expect(script.indexOf('pruneClaudeAgentSdkNativePackages(packageDir)')).toBeLessThan(
+      script.indexOf('copyCliRuntimeNodeModules(packageDir, target)'),
+    );
   });
 
   it('verifies npm release tarballs include runtime-critical assets', () => {

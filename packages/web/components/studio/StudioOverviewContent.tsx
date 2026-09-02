@@ -6,6 +6,7 @@ import {
   Blocks,
   CalendarClock,
   FolderOpen,
+  ScanSearch,
   Sparkles,
 } from 'lucide-react';
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
@@ -28,19 +29,22 @@ import { StudioContextBraid, StudioProjectStage } from './StudioProjectItem';
 const COPY = {
   en: {
     title: 'Studio',
-    subtitle: 'Overview for projects, apps, and automations.',
+    subtitle: 'Overview for projects, apps, automations, and inspectable context.',
     projectsTitle: 'Projects',
     projectsDesc: 'Context, Sessions, and review in one durable project lane.',
     appsTitle: 'Apps',
     appsDesc: 'Focused work surfaces for recurring personal workflows.',
     automationTitle: 'Automation',
     automationDesc: 'Scheduled plans and repeatable agent work.',
+    contextTitle: 'Context',
+    contextDesc: 'Inspect recall assets and the receipts behind retrieval decisions.',
     continueTitle: 'Continue',
     continueHint: 'Best next move',
     openProject: 'Open Project',
     viewProjects: 'View Projects',
     openApps: 'Open Apps',
     openAutomation: 'Open Automation',
+    openContext: 'Inspect Context',
     noProject: 'No projects yet.',
     sessions: 'sessions',
     reviewItems: 'review',
@@ -49,22 +53,26 @@ const COPY = {
     activeProjects: 'active',
     appCount: '2 apps',
     automationHint: 'plans',
+    contextHint: 'assets & receipts',
   },
   zh: {
     title: '工作台',
-    subtitle: '项目、应用和自动化的总览。',
+    subtitle: '项目、应用、自动化与可检查上下文的总览。',
     projectsTitle: '项目',
     projectsDesc: '把上下文、对话和复盘放进稳定的项目工作流。',
     appsTitle: '应用',
     appsDesc: '面向高频个人工作流的专用工作面。',
     automationTitle: '自动化',
     automationDesc: '定时计划和可重复的 Agent 工作。',
+    contextTitle: '上下文',
+    contextDesc: '检查可回忆资产，以及检索决策背后的回执。',
     continueTitle: '继续推进',
     continueHint: '最值得做的下一步',
     openProject: '打开项目',
     viewProjects: '查看项目',
     openApps: '打开应用',
     openAutomation: '打开自动化',
+    openContext: '检查上下文',
     noProject: '还没有项目。',
     sessions: '对话',
     reviewItems: '待复盘',
@@ -73,6 +81,7 @@ const COPY = {
     activeProjects: '推进中',
     appCount: '2 个应用',
     automationHint: '计划',
+    contextHint: '资产与回执',
   },
 } as const;
 
@@ -262,7 +271,7 @@ export default function StudioOverviewContent() {
           sessionCount={continueSessionCount}
         />
 
-        <section className="grid gap-4 lg:grid-cols-3" aria-label={copy.title}>
+        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4" aria-label={copy.title}>
           <OverviewCard
             href="/studio/projects"
             icon={<FolderOpen size={17} aria-hidden="true" />}
@@ -286,6 +295,14 @@ export default function StudioOverviewContent() {
             description={copy.automationDesc}
             meta={copy.automationHint}
             action={copy.openAutomation}
+          />
+          <OverviewCard
+            href="/studio/context"
+            icon={<ScanSearch size={17} aria-hidden="true" />}
+            title={copy.contextTitle}
+            description={copy.contextDesc}
+            meta={copy.contextHint}
+            action={copy.openContext}
           />
         </section>
       </div>

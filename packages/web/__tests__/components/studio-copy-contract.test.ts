@@ -8,7 +8,8 @@ describe('Studio Chinese copy contract', () => {
       'components/studio/StudioOverviewContent.tsx',
       'components/studio/StudioContent.tsx',
       'components/studio/StudioAppsContent.tsx',
-      'components/studio/StudioAutomationSection.tsx',
+      'components/studio/StudioAutomationView.tsx',
+      'components/studio/ContextInspectorContent.tsx',
       'components/studio/StudioProjectContent.tsx',
       'components/studio/StudioOverviewLink.tsx',
       'components/panels/StudioPanel.tsx',
@@ -34,7 +35,8 @@ describe('Studio Chinese copy contract', () => {
       'components/studio/StudioOverviewContent.tsx',
       'components/studio/StudioContent.tsx',
       'components/studio/StudioAppsContent.tsx',
-      'components/studio/StudioAutomationSection.tsx',
+      'components/studio/StudioAutomationView.tsx',
+      'components/studio/ContextInspectorContent.tsx',
       'components/studio/StudioProjectContent.tsx',
       'components/studio/StudioOverviewLink.tsx',
       'components/panels/StudioPanel.tsx',
@@ -48,6 +50,7 @@ describe('Studio Chinese copy contract', () => {
     expect(studioPanelSource).toContain("projects: '项目'");
     expect(studioPanelSource).toContain("apps: '应用'");
     expect(studioPanelSource).toContain("automation: '自动化'");
+    expect(studioPanelSource).toContain("context: '上下文'");
     expect(source).toContain("returnStudio: '返回工作台'");
     expect(source).toContain("ariaLabel: '返回总览'");
     expect(source).toContain("newProject: '新建项目'");

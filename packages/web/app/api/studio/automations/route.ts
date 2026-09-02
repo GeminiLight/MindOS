@@ -7,7 +7,6 @@ import {
   handleStudioAutomationsPost,
   json,
 } from '@geminilight/mindos/server';
-import { runStudioAutomationWorkerTick } from '@/lib/studio-automation-worker';
 import { handleRouteErrorSimple } from '@/lib/errors';
 import { toNextResponse } from '../../_mindos-adapter';
 
@@ -31,20 +30,8 @@ export async function POST(req: Request) {
       return toNextResponse(json({ error: 'invalid JSON' }, { status: 400 }));
     }
 
-    let result = handleStudioAutomationsPost(body, services());
-    if (isRunNow(body) && result.status === 202) {
-      void runStudioAutomationWorkerTick({ mindRoot: getMindRoot() }).catch(() => {
-        console.warn('[studio-automation] Run-now worker tick failed; the durable queue will retry.');
-      });
-      result = handleStudioAutomationsGet(services());
-    }
-    return toNextResponse(result);
+    return toNextResponse(handleStudioAutomationsPost(body, services()));
   } catch (error) {
     return handleRouteErrorSimple(error);
   }
-}
-
-function isRunNow(body: unknown): boolean {
-  return !!body && typeof body === 'object' && !Array.isArray(body)
-    && (body as { action?: unknown }).action === 'run-now';
 }

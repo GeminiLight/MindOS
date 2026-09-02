@@ -17,12 +17,48 @@ export const STUDIO_AUTOMATION_SCHEDULES = [
 
 export type StudioAutomationSchedule = (typeof STUDIO_AUTOMATION_SCHEDULES)[number];
 export type StudioAutomationScope = 'worktree' | 'project' | 'mind';
-export type StudioAutomationModel = 'mindos-auto' | 'gpt-5.5' | 'claude-code' | 'local-agent';
+export type StudioAutomationModel = 'mindos-auto' | 'gpt-5.5' | 'codex' | 'claude-code';
+export type StudioAutomationRuntime = 'mindos-pi' | 'codex' | 'claude';
 export type StudioAutomationEffort = 'normal' | 'high' | 'extra-high';
-export type StudioAutomationPermissionMode = 'read' | 'auto';
+export type StudioAutomationPermissionMode = 'read' | 'ask' | 'auto';
 export type StudioAutomationStatus = 'active' | 'paused';
 export type StudioAutomationRetryPolicy = 'never' | 'once';
-export type StudioAutomationRunStatus = 'running' | 'success' | 'error' | 'timed_out' | 'interrupted';
+export type StudioAutomationRunStatus = 'running' | 'waiting_approval' | 'success' | 'error' | 'timed_out' | 'interrupted';
+
+export type StudioAutomationNotificationKind = 'failure' | 'timeout' | 'interrupted' | 'approval_required';
+
+export type StudioAutomationNotification = {
+  id: string;
+  jobId: string;
+  runId?: string;
+  kind: StudioAutomationNotificationKind;
+  title: string;
+  body: string;
+  createdAt: string;
+  readAt?: string;
+};
+
+export type StudioAutomationApprovalDecision = 'allow' | 'deny';
+export type StudioAutomationApprovalStatus = 'pending' | 'approved' | 'denied' | 'consumed';
+
+export type StudioAutomationApproval = {
+  id: string;
+  jobId: string;
+  fingerprint: string;
+  runtime: 'codex' | 'claude';
+  status: StudioAutomationApprovalStatus;
+  toolName: string;
+  action?: string;
+  resource?: string;
+  inputPreview?: string;
+  risk?: { level: 'low' | 'medium' | 'high'; summary: string };
+  allowDecision: string;
+  denyDecision: string;
+  decision?: StudioAutomationApprovalDecision;
+  createdAt: string;
+  resolvedAt?: string;
+  consumedAt?: string;
+};
 
 export type StudioAutomationLease = {
   runId: string;
@@ -61,7 +97,7 @@ export type StudioAutomationJob = {
   retry: StudioAutomationRetryPolicy;
   timeoutMs: number;
   overlap: 'skip';
-  runtime: 'mindos-pi';
+  runtime: StudioAutomationRuntime;
   source: 'mindos-durable';
   controlPlaneScheduleId: string;
   createdAt: string;
@@ -93,6 +129,8 @@ export type StudioAutomationState = {
   updatedAt: string;
   migration: StudioAutomationMigration;
   automations: StudioAutomationJob[];
+  approvals: StudioAutomationApproval[];
+  notifications: StudioAutomationNotification[];
 };
 
 export type StudioAutomationDraft = {
@@ -133,10 +171,22 @@ export type StudioAutomationPayload = {
     lastStatus: 'pending' | StudioAutomationRunStatus;
     lastError?: string;
     recentRuns: StudioAutomationRun[];
-    runtime: 'mindos-pi';
+    runtime: StudioAutomationRuntime;
     source: 'mindos-durable';
     controlPlaneScheduleId: string;
   }>;
+  approvals: StudioAutomationApproval[];
+  notifications: StudioAutomationNotification[];
+  worker: {
+    schemaVersion: 1;
+    ownerId: string;
+    pid: number;
+    status: 'running' | 'idle' | 'error' | 'stopped';
+    updatedAt: string;
+    lastTickStartedAt?: string;
+    lastTickFinishedAt?: string;
+    lastError?: string;
+  } | null;
   summary: {
     total: number;
     enabled: number;
@@ -148,6 +198,8 @@ export type StudioAutomationPayload = {
     migrationWarning?: string;
     scheduleStorePath: string;
     controlPlaneScheduleCount: number;
+    pendingApprovals: number;
+    unreadNotifications: number;
   };
 };
 

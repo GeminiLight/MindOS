@@ -201,7 +201,7 @@ function legacyJobToDurable(job: LegacyJob, now: Date): StudioAutomationJob {
     retry: 'once',
     timeoutMs: 600_000,
     overlap: 'skip',
-    runtime: 'mindos-pi',
+    runtime: job.mindos.model === 'codex' ? 'codex' : job.mindos.model === 'claude-code' ? 'claude' : 'mindos-pi',
     source: 'mindos-durable',
     controlPlaneScheduleId: job.mindos.controlPlaneScheduleId,
     createdAt,
@@ -234,9 +234,11 @@ function normalizeLegacyJob(value: unknown): LegacyJob | null {
     : null;
   if (!id || !name || !prompt || !schedule || metadata.source !== LEGACY_SOURCE || metadata.schemaVersion !== 1) return null;
   const scope = metadata.scope === 'project' || metadata.scope === 'mind' ? metadata.scope : 'worktree';
-  const model = metadata.model === 'gpt-5.5' || metadata.model === 'claude-code' || metadata.model === 'local-agent'
+  const model: StudioAutomationModel = metadata.model === 'gpt-5.5' || metadata.model === 'claude-code' || metadata.model === 'codex'
     ? metadata.model
-    : 'mindos-auto';
+    : metadata.model === 'local-agent'
+      ? 'codex'
+      : 'mindos-auto';
   const effort = metadata.effort === 'normal' || metadata.effort === 'extra-high' ? metadata.effort : 'high';
   return {
     id,

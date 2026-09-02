@@ -56,7 +56,11 @@ describe('MindOS runtime product kernel contract', () => {
     expect(manifest.scripts?.build).toBe('tsc && node ../../scripts/copy-mindos-agent-assets.mjs && pnpm run build:protocols');
     expect(manifest.scripts?.['build:protocols']).toBe('node ../../scripts/build-product-protocols.mjs');
     expect(Object.keys(manifest.dependencies ?? {}).sort()).toEqual([
+      '@anthropic-ai/claude-agent-sdk',
       '@anthropic-ai/sdk',
+      '@earendil-works/pi-agent-core',
+      '@earendil-works/pi-ai',
+      '@earendil-works/pi-coding-agent',
       '@modelcontextprotocol/sdk',
       // kb-tools value-imports TypeBox at runtime (Wave 3, agent-core consolidation)
       '@sinclair/typebox',
@@ -65,7 +69,8 @@ describe('MindOS runtime product kernel contract', () => {
       'pino-pretty',
       'zod',
     ]);
-    expect(manifest.devDependencies).toHaveProperty('@anthropic-ai/claude-agent-sdk');
+    expect(manifest.dependencies).toHaveProperty('@anthropic-ai/claude-agent-sdk', '0.3.170');
+    expect(manifest.devDependencies).not.toHaveProperty('@anthropic-ai/claude-agent-sdk');
     expect(Object.keys(manifest.exports ?? {}).sort()).toEqual([
       '.',
       './agent',

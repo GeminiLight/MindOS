@@ -296,7 +296,7 @@ describe('Studio durable automations', () => {
     expect(job.history.map((run) => run.status)).toEqual(['success', 'error']);
   });
 
-  it('recovers stale leases, times out hung runs, and refuses unsupported unattended models', async () => {
+  it('recovers stale leases, times out hung runs, and migrates the legacy local-agent model to Codex', async () => {
     const created = handleStudioAutomationsPost({
       action: 'create',
       draft: { ...draft, schedule: 'manual', retry: 'never', timeoutMs: 1_000 },
@@ -322,6 +322,9 @@ describe('Studio durable automations', () => {
       expect.objectContaining({ path: recoveredJob.history[0]!.artifactPath }),
     ]);
     expect(readRuntimeControlPlane(mindRoot).failureAudits[0]).toMatchObject({ kind: 'runtime', recoverable: false });
+    expect(readStudioAutomationState(mindRoot).notifications).toEqual(expect.arrayContaining([
+      expect.objectContaining({ jobId: id, kind: 'interrupted' }),
+    ]));
 
     handleStudioAutomationsPost({ action: 'run-now', id }, { mindRoot, now: () => recoveredAt });
     await tickStudioAutomationWorker({
@@ -333,6 +336,9 @@ describe('Studio durable automations', () => {
       }),
     });
     expect(readStudioAutomationState(mindRoot).automations[0]).toMatchObject({ lastStatus: 'timed_out' });
+    expect(readStudioAutomationState(mindRoot).notifications).toEqual(expect.arrayContaining([
+      expect.objectContaining({ jobId: id, kind: 'timeout' }),
+    ]));
 
     const unsupported = handleStudioAutomationsPost({
       action: 'create',
@@ -340,12 +346,15 @@ describe('Studio durable automations', () => {
     }, { mindRoot, now: () => recoveredAt });
     const unsupportedId = 'automations' in unsupported.body ? unsupported.body.automations[0]!.id : '';
     handleStudioAutomationsPost({ action: 'run-now', id: unsupportedId }, { mindRoot, now: () => recoveredAt });
-    const executor = vi.fn();
+    const executor = vi.fn(async () => { throw new Error('Codex runtime is unavailable.'); });
     await tickStudioAutomationWorker({ mindRoot, now: () => recoveredAt, ownerId: 'safe-worker', executor });
-    expect(executor).not.toHaveBeenCalled();
+    expect(executor).toHaveBeenCalledWith(
+      expect.objectContaining({ model: 'codex', runtime: 'codex', permissionMode: 'read' }),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
     const unsupportedJob = readStudioAutomationState(mindRoot).automations.find((job) => job.id === unsupportedId)!;
     expect(unsupportedJob.lastStatus).toBe('error');
-    expect(unsupportedJob.lastError).toMatch(/not supported/i);
+    expect(unsupportedJob.lastError).toMatch(/unavailable/i);
   });
 
   it('does not start queued work after it is paused', async () => {

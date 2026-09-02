@@ -29,6 +29,7 @@ const mcpCmd = () => import('../bin/commands/mcp-cmd.js');
 const tokenCmd = () => import('../bin/commands/token.js');
 const syncCmd = () => import('../bin/commands/sync-cmd.js');
 const gatewayCmd = () => import('../bin/commands/gateway.js');
+const automationCmd = () => import('../bin/commands/automation.js');
 const onboardCmd = () => import('../bin/commands/onboard.js');
 const configCmd = () => import('../bin/commands/config.js');
 const authCmd = () => import('../bin/commands/auth.js');
@@ -58,6 +59,7 @@ const commandLoaders = [
   tokenCmd,
   syncCmd,
   gatewayCmd,
+  automationCmd,
   onboardCmd,
   configCmd,
   authCmd,
@@ -96,6 +98,7 @@ const loaderByDisplayName = {
   restart: restartCmd,
   sync: syncCmd,
   gateway: gatewayCmd,
+  automation: automationCmd,
   token: tokenCmd,
   logs: logsCmd,
   api: apiCmd,

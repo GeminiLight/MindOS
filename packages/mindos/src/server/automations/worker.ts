@@ -13,6 +13,10 @@ import { resolveExistingSafe } from '../../foundation/security/index.js';
 import { registerContextAsset } from '../../knowledge/context-assets/index.js';
 import { applyRuntimeControlPlaneMutation } from '../handlers/runtime-control-plane.js';
 import { nextAutomationRunAt } from './schedule.js';
+import {
+  appendStudioAutomationNotification,
+  StudioAutomationApprovalRequiredError,
+} from './approvals.js';
 import { mutateStudioAutomationState, readStudioAutomationState } from './store.js';
 import type {
   StudioAutomationExecutor,
@@ -53,6 +57,7 @@ export type TickStudioAutomationWorkerResult = {
   failed: number;
   timedOut: number;
   retried: number;
+  waitingApproval: number;
 };
 
 export function claimNextDueStudioAutomation(
@@ -143,6 +148,15 @@ export function recoverStaleStudioAutomationLeases(
     }
     recordWake(mindRoot, job, run, 'missed', now, run.error);
     recordFailure(mindRoot, job, run, 'runtime', job.retry === 'once' && run.attempt === 1, run.error!, now);
+    appendStudioAutomationNotification(mindRoot, {
+      id: `notify-interrupted-${run.id}`,
+      jobId: job.id,
+      runId: run.id,
+      kind: 'interrupted',
+      title: `${job.title} was interrupted`,
+      body: run.error ?? 'The automation worker stopped before the run completed.',
+      createdAt: now.toISOString(),
+    });
     updateControlPlaneAfterRun(mindRoot, job, run.id, now);
   }
   return runs;
@@ -179,6 +193,7 @@ export async function tickStudioAutomationWorker(
     succeeded: 0,
     failed: 0,
     timedOut: 0,
+    waitingApproval: 0,
     retried: recovered.filter((run) => {
       const job = readStudioAutomationState(options.mindRoot).automations.find((item) => item.history.some((itemRun) => itemRun.id === run.id));
       return job?.retryAttempt === 2;
@@ -208,8 +223,12 @@ export async function tickStudioAutomationWorker(
       assertExecutable(job);
       execution = await executeWithTimeout(job, lease.runId, lease.attempt, options.executor);
     } catch (caught) {
-      status = caught instanceof AutomationTimeoutError ? 'timed_out' : 'error';
-      error = redactError(caught);
+      status = caught instanceof StudioAutomationApprovalRequiredError
+        ? 'waiting_approval'
+        : caught instanceof AutomationTimeoutError
+          ? 'timed_out'
+          : 'error';
+      error = status === 'waiting_approval' ? undefined : redactError(caught);
     }
 
     const finishedAt = now();
@@ -243,7 +262,9 @@ export async function tickStudioAutomationWorker(
     if (!completion) continue;
     result.completed += 1;
     if (status === 'success') result.succeeded += 1;
-    else {
+    else if (status === 'waiting_approval') {
+      result.waitingApproval += 1;
+    } else {
       result.failed += 1;
       if (status === 'timed_out') result.timedOut += 1;
       if (completion.retryAttempt === 2) result.retried += 1;
@@ -256,6 +277,15 @@ export async function tickStudioAutomationWorker(
         error ?? 'Automation run failed.',
         finishedAt,
       );
+      appendStudioAutomationNotification(options.mindRoot, {
+        id: `notify-${status === 'timed_out' ? 'timeout' : 'failure'}-${lease.runId}`,
+        jobId: completion.id,
+        runId: lease.runId,
+        kind: status === 'timed_out' ? 'timeout' : 'failure',
+        title: status === 'timed_out' ? `${completion.title} timed out` : `${completion.title} failed`,
+        body: error ?? 'Automation run failed.',
+        createdAt: finishedAt.toISOString(),
+      });
     }
     recordWake(options.mindRoot, completion, completion.history[0]!, 'completed', finishedAt, error);
     updateControlPlaneAfterRun(options.mindRoot, completion, lease.runId, finishedAt);
@@ -300,7 +330,10 @@ function completeClaim(
     else delete job.lastError;
     delete job.lease;
     if (input.status === 'success') scheduleAfterSuccess(job, input.finishedAt);
-    else scheduleAfterFailure(job, lease.attempt, input.finishedAt);
+    else if (input.status === 'waiting_approval') {
+      delete job.nextRunAt;
+      job.retryAttempt = lease.attempt;
+    } else scheduleAfterFailure(job, lease.attempt, input.finishedAt);
     job.updatedAt = input.finishedAt.toISOString();
     state.updatedAt = input.finishedAt.toISOString();
     return structuredClone(job);
@@ -351,11 +384,20 @@ async function executeWithTimeout(
 }
 
 function assertExecutable(job: StudioAutomationJob): void {
-  if (job.permissionMode !== 'read' && job.permissionMode !== 'auto') {
-    throw new Error('Automation permission mode is not supported for unattended execution.');
+  if (job.runtime === 'mindos-pi') {
+    if (job.permissionMode !== 'read' && job.permissionMode !== 'auto') {
+      throw new Error('MindOS Pi automations only support read or explicit auto permission.');
+    }
+    if (job.model !== 'mindos-auto' && job.model !== 'gpt-5.5') {
+      throw new Error(`Automation model ${job.model} does not match the MindOS Pi runtime.`);
+    }
+    return;
   }
-  if (job.model !== 'mindos-auto' && job.model !== 'gpt-5.5') {
-    throw new Error(`Automation model ${job.model} is not supported by the durable MindOS worker.`);
+  if (job.permissionMode !== 'read' && job.permissionMode !== 'ask' && job.permissionMode !== 'auto') {
+    throw new Error('Native automation permission mode is not supported.');
+  }
+  if ((job.runtime === 'codex' && job.model !== 'codex') || (job.runtime === 'claude' && job.model !== 'claude-code')) {
+    throw new Error(`Automation model ${job.model} does not match runtime ${job.runtime}.`);
   }
 }
 
