@@ -204,6 +204,13 @@ pnpm test                         # 手动跑测试，不杀 dev server
 pnpm run test:release             # release 前全量 build + test + typecheck
 ```
 
+## 飞书 CLI / 应用复用
+
+- 本机已有 `lark-cli` profile 或飞书应用时，先用 `lark-cli config show` 与 `lark-cli auth status --json --verify` 核对现有 app、bot/user 身份和 scope，默认复用；禁止因为 user token 缺失就把已就绪的 bot 误判为不可用。
+- 未经用户明确要求，不运行 `lark-cli config init --new`，不新建飞书应用/机器人，也不为了测试方便重复申请 OAuth。只有确认现有应用不兼容或缺失后，才说明原因并请求用户决定。
+- 用户 OAuth 只在功能确实需要“代表用户操作”时按最小 scope 增量申请；能由现有 bot 完成或由用户在飞书内直接回复的审批 canary，不应额外申请 `send_as_user`。
+- MindOS 飞书渠道优先绑定并持久复用现有应用与 owner；除非应用发生变更、授权被撤销或新增功能需要新 scope，否则不重复走配置和授权流程。
+
 ## Git 提交流程
 
 ### Worktree / 分支协作公约
