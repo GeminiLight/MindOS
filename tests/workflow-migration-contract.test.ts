@@ -188,6 +188,13 @@ describe('GitHub workflow migration contract', () => {
     expect(sync).toContain('public repo tag push will trigger publish-npm.yml and publish-runtime.yml');
   });
 
+  it('serializes public repository syncs so branch and tag pushes cannot race', () => {
+    const sync = workflow('sync-to-mindos.yml');
+
+    expect(sync).toContain('concurrency:\n  group: sync-to-mindos');
+    expect(sync).toContain('cancel-in-progress: false');
+  });
+
   it('preserves co-author trailers when syncing commits to the public repo', () => {
     const sync = workflow('sync-to-mindos.yml');
 
