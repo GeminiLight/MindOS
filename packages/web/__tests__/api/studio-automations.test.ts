@@ -5,6 +5,7 @@ import path from 'path';
 
 const mocks = vi.hoisted(() => ({
   mindRoot: '',
+  workerTick: vi.fn(async () => ({ claimed: 1, completed: 1, succeeded: 1 })),
 }));
 
 vi.mock('@geminilight/mindos/server', async () => {
@@ -16,13 +17,21 @@ vi.mock('@/lib/fs', () => ({
   getMindRoot: () => mocks.mindRoot,
 }));
 
+vi.mock('@/lib/studio-automation-worker', () => ({
+  runStudioAutomationWorkerTick: mocks.workerTick,
+}));
+
 async function importRoute() {
   vi.resetModules();
   return await import('../../app/api/studio/automations/route');
 }
 
-function storePath(home: string) {
+function legacyStorePath(home: string) {
   return path.join(home, '.mindos', 'schedule-prompts.json');
+}
+
+function storePath(mindRoot: string) {
+  return path.join(mindRoot, '.mindos', 'automations', 'state.json');
 }
 
 function controlPlanePath(mindRoot: string) {
@@ -34,8 +43,8 @@ function readJson(file: string) {
 }
 
 function writeScheduleStore(home: string, jobs: any[]) {
-  fs.mkdirSync(path.dirname(storePath(home)), { recursive: true });
-  fs.writeFileSync(storePath(home), JSON.stringify({ jobs, version: 1 }, null, 2), 'utf-8');
+  fs.mkdirSync(path.dirname(legacyStorePath(home)), { recursive: true });
+  fs.writeFileSync(legacyStorePath(home), JSON.stringify({ jobs, version: 1 }, null, 2), 'utf-8');
 }
 
 const draft = {
@@ -57,6 +66,7 @@ beforeEach(() => {
   previousHome = process.env.MINDOS_STUDIO_AUTOMATION_HOME;
   process.env.MINDOS_STUDIO_AUTOMATION_HOME = tempHome;
   mocks.mindRoot = tempMindRoot;
+  mocks.workerTick.mockClear();
 });
 
 afterEach(() => {
@@ -70,7 +80,7 @@ afterEach(() => {
 });
 
 describe('GET/POST /api/studio/automations', () => {
-  it('creates Studio automations in the real Pi schedule store and control plane', async () => {
+  it('creates Studio automations in the product-owned durable store and control plane', async () => {
     const { GET, POST } = await importRoute();
     const response = await POST(new Request('http://localhost/api/studio/automations', {
       method: 'POST',
@@ -85,9 +95,10 @@ describe('GET/POST /api/studio/automations', () => {
         expect.objectContaining({
           title: 'Daily research radar',
           runtime: 'mindos-pi',
-          source: 'schedule-prompt',
+          source: 'mindos-durable',
           status: 'active',
           schedule: 'daily-0900',
+          permissionMode: 'read',
           lastStatus: 'pending',
         }),
       ],
@@ -99,44 +110,38 @@ describe('GET/POST /api/studio/automations', () => {
       },
     });
 
-    const store = readJson(storePath(tempHome));
-    expect(store.jobs).toHaveLength(1);
-    expect(store.jobs[0]).toMatchObject({
-      name: 'Daily research radar',
-      schedule: '0 0 9 * * *',
+    const store = readJson(storePath(tempMindRoot));
+    expect(store.automations).toHaveLength(1);
+    expect(store.automations[0]).toMatchObject({
+      title: 'Daily research radar',
+      schedule: 'daily-0900',
       prompt: draft.prompt,
-      enabled: true,
-      type: 'cron',
-      mindos: {
-        schemaVersion: 1,
-        source: 'mindos-studio-automation',
-        scope: 'mind',
-        studioSchedule: 'daily-0900',
-        model: 'mindos-auto',
-        effort: 'high',
-      },
+      status: 'active',
+      source: 'mindos-durable',
+      permissionMode: 'read',
     });
+    expect(fs.existsSync(legacyStorePath(tempHome))).toBe(false);
 
     const controlPlane = readJson(controlPlanePath(tempMindRoot));
     expect(controlPlane.schedules[0]).toMatchObject({
-      id: store.jobs[0].mindos.controlPlaneScheduleId,
+      id: store.automations[0].controlPlaneScheduleId,
       title: 'Daily research radar',
       runtimeId: 'mindos',
       status: 'enabled',
       trigger: { type: 'cron', cron: '0 0 9 * * *', timezone: 'Asia/Shanghai' },
       target: { assistantId: 'mindos-pi', command: draft.prompt },
-      policy: { permissionMode: 'auto', overlap: 'skip', retry: 'once' },
+      policy: { permissionMode: 'read', overlap: 'skip', retry: 'once' },
     });
 
     const get = await GET();
     expect(get.status).toBe(200);
     await expect(get.json()).resolves.toMatchObject({
-      automations: [expect.objectContaining({ id: store.jobs[0].id })],
-      summary: { scheduleStorePath: storePath(tempHome), controlPlaneScheduleCount: 1 },
+      automations: [expect.objectContaining({ id: store.automations[0].id })],
+      summary: { scheduleStorePath: storePath(tempMindRoot), controlPlaneScheduleCount: 1 },
     });
   });
 
-  it('preserves non-Studio schedule_prompt jobs while managing only Studio-owned jobs', async () => {
+  it('migrates Studio legacy jobs once and preserves unrelated schedule_prompt jobs', async () => {
     const externalJob = {
       id: 'upstream-job',
       name: 'Upstream job',
@@ -147,14 +152,43 @@ describe('GET/POST /api/studio/automations', () => {
       createdAt: '2026-06-30T00:00:00.000Z',
       runCount: 0,
     };
-    writeScheduleStore(tempHome, [externalJob]);
+    writeScheduleStore(tempHome, [
+      externalJob,
+      {
+        id: 'studio-legacy-radar',
+        name: 'Legacy radar',
+        schedule: '0 0 9 * * *',
+        prompt: 'Legacy Studio job',
+        enabled: true,
+        type: 'cron',
+        createdAt: '2026-06-30T00:00:00.000Z',
+        runCount: 2,
+        mindos: {
+          schemaVersion: 1,
+          source: 'mindos-studio-automation',
+          scope: 'mind',
+          studioSchedule: 'daily-0900',
+          model: 'mindos-auto',
+          effort: 'high',
+          controlPlaneScheduleId: 'studio-automation-legacy-radar',
+        },
+      },
+    ]);
 
     const { GET, POST } = await importRoute();
     const initial = await GET();
     await expect(initial.json()).resolves.toMatchObject({
-      automations: [],
-      summary: { externalSchedulePromptJobs: 1 },
+      automations: [expect.objectContaining({
+        id: 'studio-legacy-radar',
+        source: 'mindos-durable',
+        runCount: 2,
+      })],
+      summary: { migratedLegacyJobs: 1, externalSchedulePromptJobs: 1 },
     });
+    expect(readJson(legacyStorePath(tempHome)).jobs).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'upstream-job', enabled: true }),
+      expect.objectContaining({ id: 'studio-legacy-radar', enabled: false }),
+    ]));
 
     const create = await POST(new Request('http://localhost/api/studio/automations', {
       method: 'POST',
@@ -164,11 +198,12 @@ describe('GET/POST /api/studio/automations', () => {
     expect(create.status, JSON.stringify(created)).toBe(201);
     expect(created.summary.externalSchedulePromptJobs).toBe(1);
 
-    const store = readJson(storePath(tempHome));
-    expect(store.jobs).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: 'upstream-job', prompt: 'Keep this external job' }),
-      expect.objectContaining({ name: 'Release sweep', schedule: '0 30 17 * * 5' }),
+    const store = readJson(storePath(tempMindRoot));
+    expect(store.automations).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'studio-legacy-radar', title: 'Legacy radar' }),
+      expect.objectContaining({ title: 'Release sweep', schedule: 'weekly-review' }),
     ]));
+    expect(readJson(legacyStorePath(tempHome)).jobs).toHaveLength(2);
   });
 
   it('updates, pauses, and deletes Studio jobs without losing paused state before deletion', async () => {
@@ -188,7 +223,7 @@ describe('GET/POST /api/studio/automations', () => {
     const paused = await pause.json();
     expect(pause.status, JSON.stringify(paused)).toBe(200);
     expect(paused.automations[0]).toMatchObject({ id, status: 'paused', nextRun: 'Paused' });
-    expect(readJson(storePath(tempHome)).jobs[0]).toMatchObject({ id, enabled: false });
+    expect(readJson(storePath(tempMindRoot)).automations[0]).toMatchObject({ id, status: 'paused' });
     expect(readJson(controlPlanePath(tempMindRoot)).schedules[0]).toMatchObject({ id: scheduleId, status: 'paused' });
 
     const update = await POST(new Request('http://localhost/api/studio/automations', {
@@ -208,11 +243,11 @@ describe('GET/POST /api/studio/automations', () => {
       schedule: 'every-4-hours',
       model: 'claude-code',
     });
-    expect(readJson(storePath(tempHome)).jobs[0]).toMatchObject({
+    expect(readJson(storePath(tempMindRoot)).automations[0]).toMatchObject({
       id,
-      name: 'Release signal sweep',
-      schedule: '0 0 */4 * * *',
-      enabled: false,
+      title: 'Release signal sweep',
+      schedule: 'every-4-hours',
+      status: 'paused',
     });
 
     const remove = await POST(new Request('http://localhost/api/studio/automations', {
@@ -222,7 +257,48 @@ describe('GET/POST /api/studio/automations', () => {
     const removed = await remove.json();
     expect(remove.status, JSON.stringify(removed)).toBe(200);
     expect(removed.automations).toEqual([]);
-    expect(readJson(storePath(tempHome)).jobs).toEqual([]);
+    expect(readJson(storePath(tempMindRoot)).automations).toEqual([]);
     expect(readJson(controlPlanePath(tempMindRoot)).schedules[0]).toMatchObject({ id: scheduleId, status: 'archived' });
+  });
+
+  it('runs a queued automation through the host executor bridge and returns refreshed state', async () => {
+    const { POST } = await importRoute();
+    const create = await POST(new Request('http://localhost/api/studio/automations', {
+      method: 'POST',
+      body: JSON.stringify({ action: 'create', draft: { ...draft, schedule: 'manual' } }),
+    }));
+    const created = await create.json();
+    const id = created.automations[0].id;
+
+    const run = await POST(new Request('http://localhost/api/studio/automations', {
+      method: 'POST',
+      body: JSON.stringify({ action: 'run-now', id }),
+    }));
+    const body = await run.json();
+    expect(run.status, JSON.stringify(body)).toBe(200);
+    expect(mocks.workerTick).toHaveBeenCalledWith({ mindRoot: tempMindRoot });
+    expect(body).toMatchObject({ automations: [expect.objectContaining({ id })] });
+  });
+
+  it('returns run-now without waiting for the durable worker to finish', async () => {
+    const { POST } = await importRoute();
+    const create = await POST(new Request('http://localhost/api/studio/automations', {
+      method: 'POST',
+      body: JSON.stringify({ action: 'create', draft: { ...draft, schedule: 'manual' } }),
+    }));
+    const created = await create.json();
+    mocks.workerTick.mockImplementationOnce(() => new Promise(() => {}));
+
+    const responsePromise = POST(new Request('http://localhost/api/studio/automations', {
+      method: 'POST',
+      body: JSON.stringify({ action: 'run-now', id: created.automations[0].id }),
+    })).then((response) => ({ kind: 'response' as const, response }));
+    const outcome = await Promise.race([
+      responsePromise,
+      new Promise<{ kind: 'timeout' }>((resolve) => setTimeout(() => resolve({ kind: 'timeout' }), 50)),
+    ]);
+
+    expect(outcome.kind).toBe('response');
+    if (outcome.kind === 'response') expect(outcome.response.status).toBe(200);
   });
 });

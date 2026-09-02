@@ -47,6 +47,14 @@ export type EchoCardGeneration = {
   promptVersion?: string;
 };
 
+export type EchoCardReview = {
+  status: 'pending' | 'approved' | 'rejected';
+  reviewedAt?: string;
+  note?: string;
+  assetId?: string;
+  targetPath?: string;
+};
+
 export type EchoCard = {
   id: string;
   segment: EchoCardSegment;
@@ -61,6 +69,7 @@ export type EchoCard = {
   generatedAt: string;
   generation: EchoCardGeneration;
   userEdited?: boolean;
+  review?: EchoCardReview;
 };
 
 export type EchoSegmentGenerationState = {

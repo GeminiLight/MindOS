@@ -12,11 +12,20 @@
  * - Token budget is greedy-fill: highest score first, truncate last entry if needed.
  */
 
+import crypto from 'node:crypto';
 import path from 'path';
 import { hybridSearch } from '@/lib/core/hybrid-search';
 import type { SearchResult } from '@/lib/core/types';
 import { estimateStringTokens } from './context';
 import { getFileContent } from '@/lib/fs';
+import { registerContextFileAsset } from '@geminilight/mindos/knowledge';
+import {
+  writeRetrievalReceipt,
+  type RetrievalReceipt,
+  type RetrievalReceiptCandidate,
+  type RetrievalReceiptOutcome,
+  type RetrievalReceiptSelection,
+} from '@geminilight/mindos/retrieval';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -87,6 +96,32 @@ type RecallCandidate = {
   sourceHitScore: number;
 };
 
+type ActiveRecallTrace = {
+  candidates: RecallCandidate[];
+  outcome: RetrievalReceiptOutcome;
+  error?: string;
+};
+
+export type ActiveRecallReceiptContext = {
+  receiptId?: string;
+  chatSessionId?: string;
+  runId?: string;
+  automationId?: string;
+  trigger?: string;
+  /** Record an explicit skip without invoking the search backend. */
+  skip?: boolean;
+};
+
+export type ActiveRecallWithReceiptResult = {
+  items: RecallResult[];
+  receipt: RetrievalReceipt | null;
+  metadata: {
+    retrievalReceiptId?: string;
+    retrievalSelectedAssetIds: string[];
+    retrievalOutcome: RetrievalReceiptOutcome;
+  };
+};
+
 // ── Public API ───────────────────────────────────────────────────────────────
 
 /**
@@ -99,13 +134,99 @@ export async function performActiveRecall(
   userQuery: string,
   options?: Partial<RecallOptions>,
 ): Promise<RecallResult[]> {
+  return (await executeActiveRecall(mindRoot, userQuery, options)).items;
+}
+
+export async function performActiveRecallWithReceipt(
+  mindRoot: string,
+  userQuery: string,
+  options?: Partial<RecallOptions>,
+  context: ActiveRecallReceiptContext = {},
+): Promise<ActiveRecallWithReceiptResult> {
+  const startedAt = new Date();
+  const execution = context.skip
+    ? { items: [], trace: { candidates: [], outcome: 'skipped' as const } }
+    : await executeActiveRecall(mindRoot, userQuery, options);
+  const completedAt = new Date();
+  const resolvedOptions = resolveRecallOptions(options);
+  const assetIdsByPath = new Map<string, string>();
+
+  for (const item of execution.items) {
+    if (assetIdsByPath.has(item.path)) continue;
+    try {
+      const asset = registerContextFileAsset(mindRoot, {
+        path: item.path,
+        kind: 'knowledge',
+        status: 'active',
+        source: { kind: 'file', ref: `file:${item.path}` },
+        metadata: { registeredBy: 'active-recall' },
+      }, completedAt);
+      assetIdsByPath.set(item.path, asset.id);
+    } catch {
+      // Observability must never make the retrieval path unavailable.
+    }
+  }
+
+  const receiptCandidates = receiptCandidatesFromTrace(execution.trace.candidates, execution.items, assetIdsByPath);
+  const selections = receiptSelections(execution.items, execution.trace.candidates, assetIdsByPath);
+  const receiptId = context.receiptId ?? `retrieval-${completedAt.getTime().toString(36)}-${crypto.randomUUID().slice(0, 8)}`;
+  let receipt: RetrievalReceipt | null = null;
+  try {
+    receipt = writeRetrievalReceipt(mindRoot, {
+      id: receiptId,
+      query: userQuery,
+      strategy: 'hybrid-heading-rerank-v1',
+      outcome: execution.trace.outcome,
+      startedAt: startedAt.toISOString(),
+      completedAt: completedAt.toISOString(),
+      budget: {
+        maxTokens: resolvedOptions.maxTokens,
+        maxFiles: resolvedOptions.maxFiles,
+        minScore: resolvedOptions.minScore,
+        timeoutMs: resolvedOptions.timeoutMs,
+      },
+      scope: {
+        preferredPaths: resolvedOptions.preferredPaths,
+        excludePaths: resolvedOptions.excludePaths,
+      },
+      candidates: receiptCandidates,
+      selections,
+      totals: {
+        candidateCount: execution.trace.candidates.length,
+        selectedCount: execution.items.length,
+        usedTokens: execution.items.reduce((total, item) => total + estimateStringTokens(item.content), 0),
+      },
+      ...(execution.trace.error ? { error: execution.trace.error } : {}),
+      metadata: context,
+    });
+  } catch {
+    // A read-only answer is more important than its optional audit artifact.
+  }
+
+  const selectedAssetIds = [...new Set(selections.map((selection) => selection.assetId))];
+  return {
+    items: execution.items,
+    receipt,
+    metadata: {
+      ...(receipt ? { retrievalReceiptId: receipt.id } : {}),
+      retrievalSelectedAssetIds: selectedAssetIds,
+      retrievalOutcome: execution.trace.outcome,
+    },
+  };
+}
+
+async function executeActiveRecall(
+  mindRoot: string,
+  userQuery: string,
+  options?: Partial<RecallOptions>,
+): Promise<{ items: RecallResult[]; trace: ActiveRecallTrace }> {
   const opts = resolveRecallOptions(options);
   const excludeSet = new Set(opts.excludePaths);
   const preferredPaths = normalizePathPrefixes(opts.preferredPaths);
 
   // Skip queries that are too short to be meaningful
   const query = userQuery.length > MAX_QUERY_CHARS ? userQuery.slice(0, MAX_QUERY_CHARS) : userQuery;
-  if (query.trim().length < 2) return [];
+  if (query.trim().length < 2) return { items: [], trace: { candidates: [], outcome: 'skipped' } };
 
   // Search with timeout
   let searchResults: SearchResult[];
@@ -114,8 +235,16 @@ export async function performActiveRecall(
       hybridSearch(mindRoot, query, { limit: opts.maxFiles * SEARCH_CANDIDATE_MULTIPLIER }),
       rejectAfter(opts.timeoutMs),
     ]);
-  } catch {
-    return []; // timeout or error → silent fallback
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      items: [],
+      trace: {
+        candidates: [],
+        outcome: /timeout/i.test(message) ? 'timeout' : 'error',
+        error: message,
+      },
+    };
   }
 
   // Filter: score threshold + exclude attached files + exclude meta-files
@@ -126,15 +255,68 @@ export async function performActiveRecall(
     return true;
   });
 
-  if (filtered.length === 0) return [];
+  if (filtered.length === 0) return { items: [], trace: { candidates: [], outcome: 'empty' } };
 
   const queryTokens = tokenizeRecallText(query);
   const candidates = filtered.flatMap((hit) => buildChunkCandidates(hit, query, queryTokens, preferredPaths));
-  if (candidates.length === 0) return [];
+  if (candidates.length === 0) return { items: [], trace: { candidates: [], outcome: 'empty' } };
 
   candidates.sort((a, b) => (b.score - a.score) || (b.sourceHitScore - a.sourceHitScore));
   const diversified = diversifyCandidates(candidates, opts.maxFiles);
-  return fitTokenBudget(diversified, opts.maxTokens);
+  const items = fitTokenBudget(diversified, opts.maxTokens);
+  return {
+    items,
+    trace: {
+      candidates,
+      outcome: items.length > 0 ? 'selected' : 'empty',
+    },
+  };
+}
+
+function receiptCandidatesFromTrace(
+  candidates: RecallCandidate[],
+  selected: RecallResult[],
+  assetIdsByPath: Map<string, string>,
+): RetrievalReceiptCandidate[] {
+  const selectedKeys = new Set(selected.map(recallResultKey));
+  return candidates.slice(0, 100).map((candidate) => {
+    const isSelected = selectedKeys.has(recallResultKey(candidate.result));
+    return {
+      ...(assetIdsByPath.get(candidate.result.path) ? { assetId: assetIdsByPath.get(candidate.result.path) } : {}),
+      path: candidate.result.path,
+      score: candidate.score,
+      selected: isSelected,
+      reason: isSelected ? 'highest reranked chunk within budget' : 'not selected by diversity or token budget',
+    };
+  });
+}
+
+function receiptSelections(
+  items: RecallResult[],
+  candidates: RecallCandidate[],
+  assetIdsByPath: Map<string, string>,
+): RetrievalReceiptSelection[] {
+  const candidatesByKey = new Map(candidates.map((candidate) => [recallResultKey(candidate.result), candidate]));
+  return items.flatMap((item) => {
+    const assetId = assetIdsByPath.get(item.path);
+    if (!assetId) return [];
+    const candidate = candidatesByKey.get(recallResultKey(item));
+    return [{
+      assetId,
+      path: item.path,
+      score: item.score,
+      ...(item.startLine ? { startLine: item.startLine } : {}),
+      ...(item.endLine ? { endLine: item.endLine } : {}),
+      ...(item.headingPath?.length ? { headingPath: item.headingPath } : {}),
+      estimatedTokens: estimateStringTokens(item.content),
+      truncated: Boolean(candidate && candidate.result.content.length > item.content.length),
+      reason: 'highest reranked chunk within budget',
+    }];
+  });
+}
+
+function recallResultKey(result: RecallResult): string {
+  return `${result.path}:${result.startLine ?? 0}:${result.endLine ?? 0}`;
 }
 
 // ── Internal helpers ─────────────────────────────────────────────────────────

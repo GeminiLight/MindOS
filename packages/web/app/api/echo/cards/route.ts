@@ -12,6 +12,7 @@ import {
   generateEchoCardsWithAi,
   getEchoCardScheduleStatus,
   readEchoCardsState,
+  reviewEchoPromotionCard,
   updateEchoCard,
   updateEchoCardSchedule,
 } from '@/lib/echo-card-generator';
@@ -32,6 +33,8 @@ type CardsPostBody = {
 type CardsPatchBody = {
   segment?: unknown;
   id?: unknown;
+  action?: unknown;
+  note?: unknown;
   title?: unknown;
   content?: unknown;
   schedule?: unknown;
@@ -122,6 +125,20 @@ export async function PATCH(req: NextRequest) {
 
     const id = typeof body.id === 'string' ? body.id.trim() : '';
     if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 });
+    if (body.action === 'approve' || body.action === 'reject') {
+      if (segment !== 'promotion') {
+        return NextResponse.json({ error: 'Only promotion cards can be reviewed' }, { status: 400 });
+      }
+      const reviewed = reviewEchoPromotionCard(getMindRoot(), id, body.action, body.note);
+      if (!reviewed) return NextResponse.json({ error: 'Echo card not found' }, { status: 404 });
+      const state = readEchoCardsState(getMindRoot());
+      return NextResponse.json({
+        ok: true,
+        ...reviewed,
+        state: summarizeSegmentState(state, segment),
+        cards: activeEchoCards(state, segment),
+      });
+    }
     if (typeof body.title !== 'string' && typeof body.content !== 'string') {
       return NextResponse.json({ error: 'title or content is required' }, { status: 400 });
     }

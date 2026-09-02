@@ -1,8 +1,8 @@
-<!-- Last verified: 2026-04-04 | Current version: v0.6 -->
+<!-- Last verified: 2026-09-02 -->
 
 # API Reference
 
-> MindOS 提供 51 个 API 端点，覆盖文件操作、AI 对话、Agent 协作、系统管理等。
+> MindOS API 覆盖文件、上下文治理、AI 对话、Agent 协作、自动化和系统管理。
 > 所有端点要求 Bearer Token 认证（浏览器同源请求免认证）。
 
 ---
@@ -21,6 +21,8 @@
 | `/api/tree-version` | GET | 文件树版本号（用于客户端缓存失效） |
 | `/api/backlinks` | GET | 反向链接查询。参数：`?path=` |
 | `/api/search` | GET | 全文搜索。参数：`?q=` |
+| `/api/context-assets` | GET | Context Asset Registry。可按 `?kind=`、`?status=`、`?sourceRef=` 过滤 |
+| `/api/retrieval-receipts` | GET | Retrieval Receipt 列表或单条查询。参数：`?id=`、`?outcome=`、`?limit=` |
 | `/api/graph` | GET | Wiki 知识图谱数据（nodes + edges） |
 | `/api/export` | POST | 导出文件/目录（MD/HTML/ZIP） |
 | `/api/extract-pdf` | POST | PDF 文本提取 |
@@ -37,6 +39,21 @@
 | `/api/skills` | GET/POST | Skills 列表与 CRUD。POST action 全集：`create`/`update`/`delete`/`toggle`/`read`/`read-native`/`record-install`/`link`/`unlink`/`disable-native`/`enable-native`。`link`/`unlink` 把 skill 链接到/移出下游 agent 的 skill 目录（symlink → Windows junction → copy fallback，副本带 `.mindos-managed` 标记）；`disable-native`/`enable-native` 停用/恢复 agent 自有技能——停用不删除，把技能目录整体移入 `{skillDir}/.mindos-disabled/` 暂存，恢复即原样移回 |
 | `/api/skills/matrix` | GET | 统一 (skill × agent) 启用矩阵：`{ skills, agents, state, cells }`，首列恒为 MindOS 自身（`disabledSkills`），外部 agent 列以链接是否存在为唯一事实源，单元格状态含 `linked`/`copied`/`broken`/`conflict`/`native-disabled`（已停放）/`none`；矩阵会并入仅存在于各 agent `.mindos-disabled` 停放区的技能（保证停放后仍可恢复）；universal agent 具备私房目录感知（如 Codex 的 `~/.codex/skills`），本体在私房目录的技能判定为已启用、对其 link 不会向共享池写入链接；GET 只读，不迁移或清空遗留 `installedSkillAgents[]` 记账 |
 | `/api/agent-activity` | POST | Agent 活动日志记录 |
+
+## Studio Automation
+
+| 端点 | 方法 | 说明 |
+|------|------|------|
+| `/api/studio/automations` | GET | 读取 Product-owned durable jobs、迁移摘要、真实 last/next run 和最近运行历史 |
+| `/api/studio/automations` | POST | 自动化 mutation。Body action：`create`、`update`、`delete`、`pause`、`resume`、`run-now` |
+
+Automation mutation 由 Product Server 校验。无人值守权限只接受 `read` 或显式 `auto`；任务状态持久化在 `<mindRoot>/.mindos/automations/state.json`。`run-now` 是非阻塞入队，响应不等待 Agent 执行完成。
+
+## Context Governance
+
+`GET /api/context-assets` 返回资产索引，不返回文件正文。首批 `kind` 包括 `knowledge`、`echo-playbook`、`echo-practice`、`skill`、`workflow`、`automation-run`。
+
+`GET /api/retrieval-receipts?id=<id>` 返回指定不可变回执；无 `id` 时按时间倒序返回。回执包含 query hash/脱敏 preview、预算、候选、入选片段 provenance 和 outcome，不包含完整检索正文。
 
 ## A2A Protocol (Agent-to-Agent 通信)
 

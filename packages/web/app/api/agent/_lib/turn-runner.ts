@@ -88,7 +88,7 @@ import {
   fileContextRunMetadata,
   loadAttachedFileContext,
   readKnowledgeFile,
-  recallMindosTurnKnowledge,
+  recallMindosTurnKnowledgeWithReceipt,
   sessionContextRunMetadata,
   shouldInjectFileContext,
   shouldInjectSessionContext,
@@ -397,8 +397,9 @@ export async function runAgentTurnRequestBody(
   const fileContextMetadata = fileContextRunMetadata(fileContextSignature, includeFileContext, loadedFileContext);
 
   if (runtimeLane.kind !== 'mindos-pi') {
-    const recalledKnowledge = await recallMindosTurnKnowledge({
+    const recall = await recallMindosTurnKnowledgeWithReceipt({
       mindRoot,
+      chatSessionId,
       lastUserContent: resolvedAgentMode.prompt,
       currentFile,
       attachedFiles,
@@ -410,7 +411,7 @@ export async function runAgentTurnRequestBody(
       mindRoot,
       fileContext: promptFileContext,
       uploadedParts,
-      recalledKnowledge,
+      recalledKnowledge: recall.items,
       selectedSkills,
       includeSessionContext,
       sessionWorkDir: sessionContext.resolvedWorkDir,
@@ -431,6 +432,7 @@ export async function runAgentTurnRequestBody(
       agentModeContract,
       sessionContextMetadata,
       fileContextMetadata,
+      retrievalMetadata: recall.metadata,
       sessionWorkDir: sessionContext.resolvedWorkDir,
       sessionContextSelection: sessionContext.resolvedSelection,
       assistantId,
@@ -559,8 +561,9 @@ export async function runAgentTurnRequestBody(
     };
   }
 
-  const recalledKnowledge = await recallMindosTurnKnowledge({
+  const recall = await recallMindosTurnKnowledgeWithReceipt({
     mindRoot,
+    chatSessionId,
     lastUserContent: resolvedAgentMode.prompt,
     currentFile,
     attachedFiles,
@@ -580,7 +583,7 @@ export async function runAgentTurnRequestBody(
     mindRoot,
     fileContext: promptFileContext,
     uploadedParts,
-    recalledKnowledge,
+    recalledKnowledge: recall.items,
     agentInitialization,
     selectedSkills,
     includeSessionContext,
@@ -620,6 +623,7 @@ export async function runAgentTurnRequestBody(
     agentModeContract,
     sessionContextMetadata,
     fileContextMetadata,
+    retrievalMetadata: recall.metadata,
     sessionWorkDirPath: sessionContext.resolvedWorkDir.path,
     sessionSpaces: sessionContext.resolvedSelection.spaces.map((space) => space.path),
     sessionAssistants: sessionContext.resolvedSelection.assistants.map((assistant) => assistant.id),

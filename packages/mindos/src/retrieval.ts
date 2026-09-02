@@ -24,6 +24,7 @@ export function isRetrievalCapabilityDefaultEnabled(capability: MindosRetrievalC
 }
 
 export { chunkByParagraphs, chunkText } from './retrieval/chunker.js';
+export * from './retrieval/receipt.js';
 export type { ChunkerOptions } from './retrieval/chunker.js';
 export type {
   DocumentChunk,

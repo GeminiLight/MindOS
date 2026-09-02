@@ -6,6 +6,16 @@ export {
 } from './contract.js';
 
 export {
+  handleContextAssetsGet,
+  type ContextAssetsHandlerServices,
+} from './handlers/context-assets.js';
+
+export {
+  handleRetrievalReceiptsGet,
+  type RetrievalReceiptsHandlerServices,
+} from './handlers/retrieval-receipts.js';
+
+export {
   MINDOS_WEB_API_ROUTE_OWNERSHIP,
   getMindosWebApiRouteOwnership,
   type MindosWebApiRouteAdapter,
@@ -205,6 +215,27 @@ export {
   type RuntimeControlPlaneWakeEvent,
   type RuntimeControlPlaneWakeStatus,
 } from './handlers/runtime-control-plane.js';
+
+export {
+  claimNextDueStudioAutomation,
+  handleStudioAutomationsGet,
+  handleStudioAutomationsPost,
+  readStudioAutomationState,
+  recoverStaleStudioAutomationLeases,
+  tickStudioAutomationWorker,
+  type StudioAutomationDraft,
+  type StudioAutomationExecutor,
+  type StudioAutomationExecutorContext,
+  type StudioAutomationExecutorResult,
+  type StudioAutomationJob,
+  type StudioAutomationPayload,
+  type StudioAutomationPermissionMode,
+  type StudioAutomationRun,
+  type StudioAutomationRunStatus,
+  type StudioAutomationSchedule,
+  type StudioAutomationServices,
+  type StudioAutomationState,
+} from './handlers/studio-automations.js';
 
 export {
   buildAgentRuntimeReadinessPayload,

@@ -2,7 +2,7 @@ import { getMindRoot } from '@/lib/fs';
 import { readSettings } from '@/lib/settings';
 import { getProjectRoot } from '@/lib/project-root';
 import type { Message as FrontendMessage } from '@/lib/types';
-import { performActiveRecall } from '@/lib/agent/active-recall';
+import { performActiveRecallWithReceipt } from '@/lib/agent/active-recall';
 import { toMindosUiAgentMessages } from '@/lib/agent/to-agent-messages';
 import {
   getTextDelta,
@@ -27,6 +27,9 @@ export interface HeadlessAgentRunOptions {
   modelOverride?: string;
   workDir?: string;
   entrypoint?: HeadlessAgentEntryPoint;
+  automationId?: string;
+  runId?: string;
+  signal?: AbortSignal;
 }
 
 export interface HeadlessAgentRunResult {
@@ -58,18 +61,21 @@ export async function runHeadlessAgent(options: HeadlessAgentRunOptions): Promis
     },
   });
   const activeRecall = agentConfig.activeRecall ?? {};
-  const recalledKnowledge = activeRecall.enabled === false || options.userMessage.trim().length <= 1
-    ? []
-    : await performActiveRecall(mindRoot, options.userMessage, {
+  const recalledKnowledge = (await performActiveRecallWithReceipt(mindRoot, options.userMessage, {
       maxTokens: activeRecall.maxTokens,
       maxFiles: activeRecall.maxFiles,
       minScore: activeRecall.minScore,
       excludePaths: [],
       preferredPaths: [],
+    }, {
+      trigger: activeRecall.enabled === false ? 'disabled' : options.entrypoint ?? 'headless',
+      ...(options.automationId ? { automationId: options.automationId } : {}),
+      ...(options.runId ? { runId: options.runId } : {}),
+      ...(activeRecall.enabled === false ? { skip: true } : {}),
     }).catch((error) => {
       console.warn('[headless-agent] Active recall failed, continuing without:', error);
-      return [];
-    });
+      return { items: [] };
+    })).items;
   const turnPrompt = await buildMindosContextPrompt({
     prompt: options.userMessage,
     mindRoot,
@@ -133,10 +139,17 @@ export async function runHeadlessAgent(options: HeadlessAgentRunOptions): Promis
     }
   });
 
-  await runtime.session.prompt(
-    turnPrompt,
-    runtime.lastUserImages ? { images: runtime.lastUserImages } : undefined,
-  );
+  if (options.signal?.aborted) throw options.signal.reason ?? new Error('Headless agent run aborted.');
+  const abortRuntime = () => { void runtime.session.abort(); };
+  options.signal?.addEventListener('abort', abortRuntime, { once: true });
+  try {
+    await runtime.session.prompt(
+      turnPrompt,
+      runtime.lastUserImages ? { images: runtime.lastUserImages } : undefined,
+    );
+  } finally {
+    options.signal?.removeEventListener('abort', abortRuntime);
+  }
 
   return {
     text: text.trim(),

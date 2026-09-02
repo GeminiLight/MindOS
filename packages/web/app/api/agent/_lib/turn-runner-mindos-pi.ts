@@ -73,6 +73,7 @@ export type RunMindosPiTurnInput = {
   agentModeContract: MindosAgentModeContract;
   sessionContextMetadata: Record<string, unknown>;
   fileContextMetadata: Record<string, unknown>;
+  retrievalMetadata: Record<string, unknown>;
   sessionWorkDirPath: string;
   sessionSpaces: string[];
   sessionAssistants: string[];
@@ -156,6 +157,7 @@ export async function runMindosPiTurn(input: RunMindosPiTurnInput): Promise<Resp
           },
           ...input.sessionContextMetadata,
           ...input.fileContextMetadata,
+          ...input.retrievalMetadata,
           sessionSpaces: input.sessionSpaces,
           sessionAssistants: input.sessionAssistants,
           ...(input.assistantId ? { assistantId: input.assistantId } : {}),

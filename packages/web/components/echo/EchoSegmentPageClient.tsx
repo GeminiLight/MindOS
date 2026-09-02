@@ -42,6 +42,7 @@ import { EchoAssistantGenerateButton, EchoPageHeader } from './EchoSegmentPageHe
 import EchoImprintCardsReview from './EchoImprintCardsReview';
 import { EchoInsightCollapsible } from './EchoInsightCollapsible';
 import EchoMemoryReaderPanel from './EchoMemoryReaderPanel';
+import EchoPromotionReviewActions from './EchoPromotionReviewActions';
 import {
   buildEchoCardChatPrompt,
   EchoCardActionBar,
@@ -348,10 +349,18 @@ type EchoStructuredCard<TKind extends string> = {
   content: string;
   createdAt: string;
   source: EchoStructuredSource;
+  review?: {
+    status: 'pending' | 'approved' | 'rejected';
+    reviewedAt?: string;
+    note?: string;
+    assetId?: string;
+    targetPath?: string;
+  };
 };
 
 type RemoteEchoStructuredCard = Partial<Omit<EchoStructuredCard<string>, 'source'>> & {
   source?: unknown;
+  review?: unknown;
 };
 
 type EchoCardsApiResponse = {
@@ -444,6 +453,7 @@ function normalizeRemoteStructuredCard<TKind extends string>(
   const sourceRecord = candidate.source && typeof candidate.source === 'object' && !Array.isArray(candidate.source)
     ? candidate.source as { label?: unknown; sessions?: unknown }
     : {};
+  const review = normalizeRemoteEchoReview(candidate.review);
   return {
     id: typeof candidate.id === 'string' && candidate.id.trim() ? candidate.id.trim() : `echo-card-${index}`,
     kind: normalizeKind(typeof candidate.kind === 'string' ? candidate.kind : ''),
@@ -454,6 +464,21 @@ function normalizeRemoteStructuredCard<TKind extends string>(
       label: typeof sourceRecord.label === 'string' ? sourceRecord.label : '',
       sessions: normalizeRemoteEchoSourceSessions(sourceRecord.sessions),
     },
+    ...(review ? { review } : {}),
+  };
+}
+
+function normalizeRemoteEchoReview(value: unknown): EchoStructuredCard<string>['review'] | null {
+  const record = value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+  if (record.status !== 'pending' && record.status !== 'approved' && record.status !== 'rejected') return null;
+  return {
+    status: record.status,
+    ...(typeof record.reviewedAt === 'string' ? { reviewedAt: record.reviewedAt } : {}),
+    ...(typeof record.note === 'string' ? { note: record.note } : {}),
+    ...(typeof record.assetId === 'string' ? { assetId: record.assetId } : {}),
+    ...(typeof record.targetPath === 'string' ? { targetPath: record.targetPath } : {}),
   };
 }
 
@@ -527,6 +552,8 @@ function useEchoStructuredCards<TKind extends string>({
   const [isGenerating, setIsGenerating] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftContent, setDraftContent] = useState<Record<string, string>>({});
+  const [reviewingId, setReviewingId] = useState<string | null>(null);
+  const [reviewErrorById, setReviewErrorById] = useState<Record<string, string>>({});
   const generationInFlightRef = useRef(false);
 
   useEffect(() => {
@@ -673,6 +700,25 @@ function useEchoStructuredCards<TKind extends string>({
     }
   }
 
+  async function reviewCard(cardId: string, action: 'approve' | 'reject') {
+    if (reviewingId) return;
+    setReviewingId(cardId);
+    setReviewErrorById((current) => ({ ...current, [cardId]: '' }));
+    try {
+      const response = await fetch('/api/echo/cards', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ segment: apiSegment, id: cardId, action }),
+      });
+      if (!response.ok) throw new Error('review failed');
+      applyCardsResponse(await response.json() as EchoCardsApiResponse);
+    } catch {
+      setReviewErrorById((current) => ({ ...current, [cardId]: 'review failed' }));
+    } finally {
+      setReviewingId(null);
+    }
+  }
+
   return {
     cards,
     schedule,
@@ -684,6 +730,9 @@ function useEchoStructuredCards<TKind extends string>({
     updateDraftContent,
     toggleEditing,
     deleteCard,
+    reviewCard,
+    reviewingId,
+    reviewErrorById,
   };
 }
 
@@ -993,6 +1042,9 @@ function PromotionPanel({
     updateDraftContent,
     toggleEditing,
     deleteCard,
+    reviewCard,
+    reviewingId,
+    reviewErrorById,
   } = useEchoStructuredCards({
     apiSegment: 'promotion',
     initialCards,
@@ -1172,6 +1224,19 @@ function PromotionPanel({
                   sourceLabel={p.echoCardSourceLabel}
                   source={source}
                 />
+                <EchoPromotionReviewActions
+                  review={candidate.review}
+                  canReview={candidate.source.sessions.some((session) => (session.messageRefs?.length ?? 0) > 0)}
+                  reviewing={reviewingId === candidate.id}
+                  error={reviewErrorById[candidate.id] ? p.promotionReviewFailedLabel : undefined}
+                  approveLabel={p.promotionApproveLabel}
+                  rejectLabel={p.promotionRejectLabel}
+                  approvedLabel={p.promotionApprovedLabel}
+                  rejectedLabel={p.promotionRejectedLabel}
+                  assetPathLabel={p.promotionAssetPathLabel}
+                  onApprove={() => void reviewCard(candidate.id, 'approve')}
+                  onReject={() => void reviewCard(candidate.id, 'reject')}
+                />
                 <EchoCardActions
                   p={p}
                   title={candidate.title}
@@ -1185,6 +1250,7 @@ function PromotionPanel({
                     content,
                     source,
                   }), 'user', null, { newSession: true })}
+                  readOnly={candidate.review?.status === 'approved' || candidate.review?.status === 'rejected'}
                 />
               </EchoCardFrame>
             );
@@ -1326,6 +1392,7 @@ function EchoCardActions({
   onEdit,
   onDelete,
   onChat,
+  readOnly = false,
 }: {
   p: EchoCopy;
   title: string;
@@ -1333,10 +1400,11 @@ function EchoCardActions({
   onEdit: () => void;
   onDelete: () => void;
   onChat: () => void;
+  readOnly?: boolean;
 }) {
   return (
     <EchoCardActionBar
-      left={(
+      left={readOnly ? null : (
         <>
           <Button
             type="button"

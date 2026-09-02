@@ -28,6 +28,7 @@ export type RuntimeLaneBaseInput = {
   agentModeContract: MindosAgentModeContract;
   sessionContextMetadata: Record<string, unknown>;
   fileContextMetadata: Record<string, unknown>;
+  retrievalMetadata: Record<string, unknown>;
   sessionWorkDir: SessionWorkDir & { path: string };
   sessionContextSelection: SessionContextSelection;
   assistantId?: string;

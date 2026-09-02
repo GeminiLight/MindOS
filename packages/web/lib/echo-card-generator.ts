@@ -2,6 +2,10 @@ import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import { resolveSafe } from './core/security';
+import {
+  reviewEchoPromotionCandidate,
+  type EchoPromotionReview,
+} from '@geminilight/mindos/knowledge';
 import type { AiTaskRunnerLike } from './ai/ai-task-runner';
 import {
   echoCardExtractionTask,
@@ -14,6 +18,7 @@ import {
   normalizeEchoCardLocale,
   type EchoCard,
   type EchoCardKind,
+  type EchoCardReview,
   type EchoCardSegment,
   type EchoCardSource,
   type EchoCardSourceMessageRef,
@@ -245,6 +250,9 @@ export function updateEchoCard(
   if (index < 0) return null;
 
   const current = state.cards[index];
+  if (current.review?.status === 'approved' || current.review?.status === 'rejected') {
+    throw new Error('Reviewed Echo promotion cards cannot be edited.');
+  }
   const title = typeof patch.title === 'string' ? normalizeText(patch.title, 120) : current.title;
   const content = typeof patch.content === 'string' ? normalizeText(patch.content, MAX_CONTENT_CHARS) : current.content;
   const next: EchoCard = {
@@ -257,6 +265,51 @@ export function updateEchoCard(
   state.cards[index] = next;
   writeEchoCardsState(mindRoot, state);
   return next;
+}
+
+export function reviewEchoPromotionCard(
+  mindRoot: string,
+  cardId: string,
+  decision: 'approve' | 'reject',
+  note?: unknown,
+  now = new Date(),
+): { card: EchoCard; review: EchoPromotionReview } | null {
+  const state = readEchoCardsState(mindRoot);
+  const index = state.cards.findIndex((card) => (
+    card.segment === 'promotion' && card.id === cardId && card.status === 'active'
+  ));
+  if (index < 0) return null;
+  const current = state.cards[index]!;
+  if (current.kind !== 'playbook' && current.kind !== 'practice') {
+    throw new Error('Only playbook or practice cards can be promoted.');
+  }
+  const normalizedNote = typeof note === 'string' ? normalizeText(note, 1_000) : undefined;
+  const review = reviewEchoPromotionCandidate(mindRoot, {
+    decision,
+    candidate: {
+      id: current.id,
+      kind: current.kind,
+      title: current.title,
+      content: current.content,
+      source: current.source,
+    },
+    ...(normalizedNote ? { note: normalizedNote } : {}),
+  }, now);
+  const cardReview: EchoCardReview = {
+    status: review.decision,
+    reviewedAt: review.reviewedAt,
+    ...(review.note ? { note: review.note } : {}),
+    ...(review.assetId ? { assetId: review.assetId } : {}),
+    ...(review.targetPath ? { targetPath: review.targetPath } : {}),
+  };
+  const card: EchoCard = {
+    ...current,
+    updatedAt: review.reviewedAt,
+    review: cardReview,
+  };
+  state.cards[index] = card;
+  writeEchoCardsState(mindRoot, state);
+  return { card, review };
 }
 
 export function deleteEchoCard(
@@ -482,6 +535,7 @@ function normalizeCard(value: unknown): EchoCard | null {
   const source = normalizeCardSource(record.source);
   if (!source) return null;
   const kind = normalizeKind(record.kind, segment);
+  const review = normalizeCardReview(record.review);
   return {
     id,
     segment,
@@ -498,6 +552,27 @@ function normalizeCard(value: unknown): EchoCard | null {
     generatedAt: typeof record.generatedAt === 'string' && isValidDate(record.generatedAt) ? record.generatedAt : now,
     generation: normalizeGeneration(record.generation, segment),
     ...(record.userEdited === true ? { userEdited: true } : {}),
+    ...(review ? { review } : {}),
+  };
+}
+
+function normalizeCardReview(value: unknown): EchoCardReview | null {
+  const record = value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+  if (record.status !== 'pending' && record.status !== 'approved' && record.status !== 'rejected') return null;
+  const reviewedAt = typeof record.reviewedAt === 'string' && isValidDate(record.reviewedAt)
+    ? record.reviewedAt
+    : undefined;
+  const note = normalizeText(record.note, 1_000);
+  const assetId = normalizeText(record.assetId, 120);
+  const targetPath = normalizeText(record.targetPath, 1_000);
+  return {
+    status: record.status,
+    ...(reviewedAt ? { reviewedAt } : {}),
+    ...(note ? { note } : {}),
+    ...(assetId ? { assetId } : {}),
+    ...(targetPath ? { targetPath } : {}),
   };
 }
 
@@ -887,6 +962,7 @@ function mergeGeneratedCards(
         updatedAt: previous.updatedAt,
         generation: nextGeneration,
         userEdited: true,
+        ...(previous.review ? { review: previous.review } : {}),
       }
       : { ...previous, ...card, status: 'active', generation: nextGeneration });
   }

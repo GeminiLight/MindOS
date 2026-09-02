@@ -35,6 +35,7 @@ vi.mock('next/navigation', () => ({
 
 let host: HTMLDivElement;
 let root: Root | null = null;
+let automationFetchMock: ReturnType<typeof vi.fn>;
 
 type TestAutomation = {
   id: string;
@@ -45,14 +46,19 @@ type TestAutomation = {
   schedule: 'daily-0900' | 'every-4-hours' | 'weekdays-0900' | 'weekly-review';
   model: 'mindos-auto' | 'claude-code';
   effort: 'normal' | 'high';
+  timezone: string;
+  permissionMode: 'read' | 'auto';
+  retry: 'never' | 'once';
+  timeoutMs: number;
   status: 'active' | 'paused';
   updated: string;
   lastRun?: string;
   nextRun?: string;
   runCount: number;
   lastStatus: 'pending' | 'running' | 'success' | 'error';
+  recentRuns?: Array<{ id: string; status: 'success' | 'error'; outputPreview?: string; error?: string }>;
   runtime: 'mindos-pi';
-  source: 'schedule-prompt';
+  source: 'mindos-durable';
   controlPlaneScheduleId: string;
 };
 
@@ -65,14 +71,19 @@ const seedAutomations = (): TestAutomation[] => [
     schedule: 'daily-0900',
     model: 'mindos-auto',
     effort: 'high',
+    timezone: 'Asia/Shanghai',
+    permissionMode: 'read',
+    retry: 'once',
+    timeoutMs: 600000,
     status: 'active',
     updated: '2026-06-30T09:04:00.000Z',
     lastRun: '2026-06-30T09:04:00.000Z',
     nextRun: '2026-07-01T09:00:00.000Z',
     runCount: 18,
     lastStatus: 'success',
+    recentRuns: [{ id: 'run-radar-18', status: 'success', outputPreview: 'Research radar updated with three strong papers.' }],
     runtime: 'mindos-pi',
-    source: 'schedule-prompt',
+    source: 'mindos-durable',
     controlPlaneScheduleId: 'studio-daily-research-radar',
   },
   {
@@ -84,6 +95,10 @@ const seedAutomations = (): TestAutomation[] => [
     schedule: 'weekdays-0900',
     model: 'mindos-auto',
     effort: 'normal',
+    timezone: 'Asia/Shanghai',
+    permissionMode: 'read',
+    retry: 'once',
+    timeoutMs: 600000,
     status: 'paused',
     updated: '2026-06-29T09:12:00.000Z',
     lastRun: '2026-06-29T09:12:00.000Z',
@@ -91,7 +106,7 @@ const seedAutomations = (): TestAutomation[] => [
     runCount: 7,
     lastStatus: 'success',
     runtime: 'mindos-pi',
-    source: 'schedule-prompt',
+    source: 'mindos-durable',
     controlPlaneScheduleId: 'studio-inbox-cleanup-review',
   },
   {
@@ -102,6 +117,10 @@ const seedAutomations = (): TestAutomation[] => [
     schedule: 'weekly-review',
     model: 'claude-code',
     effort: 'high',
+    timezone: 'Asia/Shanghai',
+    permissionMode: 'read',
+    retry: 'once',
+    timeoutMs: 600000,
     status: 'active',
     updated: '2026-06-28T17:30:00.000Z',
     lastRun: '2026-06-26T17:30:00.000Z',
@@ -109,7 +128,7 @@ const seedAutomations = (): TestAutomation[] => [
     runCount: 4,
     lastStatus: 'pending',
     runtime: 'mindos-pi',
-    source: 'schedule-prompt',
+    source: 'mindos-durable',
     controlPlaneScheduleId: 'studio-release-note-sweep',
   },
 ];
@@ -124,6 +143,9 @@ function automationPayload(automations: TestAutomation[]) {
       total: automations.length,
       enabled,
       paused: automations.length - enabled,
+      running: automations.filter((automation) => automation.lastStatus === 'running').length,
+      failed: automations.filter((automation) => automation.lastStatus === 'error').length,
+      migratedLegacyJobs: 0,
       externalSchedulePromptJobs: 0,
       scheduleStorePath: '/tmp/.mindos/schedule-prompts.json',
       controlPlaneScheduleCount: automations.length,
@@ -158,12 +180,16 @@ function setupAutomationFetch(initial: TestAutomation[] = seedAutomations()) {
         schedule: body.draft.schedule || 'daily-0900',
         model: body.draft.model || 'mindos-auto',
         effort: body.draft.effort || 'high',
+        timezone: body.draft.timezone || 'Asia/Shanghai',
+        permissionMode: body.draft.permissionMode || 'read',
+        retry: body.draft.retry || 'once',
+        timeoutMs: body.draft.timeoutMs || 600000,
         status: 'active',
         updated: '2026-06-30T12:01:00.000Z',
         runCount: 0,
         lastStatus: 'pending',
         runtime: 'mindos-pi',
-        source: 'schedule-prompt',
+        source: 'mindos-durable',
         controlPlaneScheduleId: `studio-${id}`,
       }, ...automations];
       return Response.json(automationPayload(automations), { status: 201 });
@@ -177,6 +203,18 @@ function setupAutomationFetch(initial: TestAutomation[] = seedAutomations()) {
     if (body.action === 'set-status' && body.id && body.status) {
       automations = automations.map((automation) => automation.id === body.id
         ? { ...automation, status: body.status!, nextRun: body.status === 'paused' ? 'Paused' : automation.nextRun }
+        : automation);
+      return Response.json(automationPayload(automations));
+    }
+    if (body.action === 'run-now' && body.id) {
+      automations = automations.map((automation) => automation.id === body.id
+        ? {
+          ...automation,
+          lastStatus: 'success',
+          lastRun: '2026-06-30T12:03:00.000Z',
+          runCount: automation.runCount + 1,
+          nextRun: automation.schedule === 'manual' ? 'Manual' : automation.nextRun,
+        }
         : automation);
       return Response.json(automationPayload(automations));
     }
@@ -254,7 +292,7 @@ describe('StudioContent', () => {
     localStorage.clear();
     push.mockClear();
     mockPathname = '/studio';
-    setupAutomationFetch();
+    automationFetchMock = setupAutomationFetch();
   });
 
   afterEach(async () => {
@@ -513,6 +551,25 @@ describe('StudioContent', () => {
     expect(host.textContent).toContain('Automation');
   });
 
+  it('refreshes durable automation state while a run is active', async () => {
+    vi.useFakeTimers();
+    automationFetchMock = setupAutomationFetch([{
+      ...seedAutomations()[0],
+      lastStatus: 'running',
+    }]);
+    try {
+      await renderStudioAutomation();
+      expect(automationFetchMock).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2_100);
+      });
+      expect(automationFetchMock.mock.calls.length).toBeGreaterThanOrEqual(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('keeps Studio panel Project rows flat without expandable Sessions', async () => {
     mockPathname = '/studio/launch-practice';
     host = document.createElement('div');
@@ -722,8 +779,13 @@ describe('StudioContent', () => {
     expect(seededCard?.className).toContain('lg:grid-cols-');
     expect(seededCard?.className).not.toContain('rounded-xl');
     expect(seededCard?.className).not.toContain('bg-card/45');
-    expect(seededCard?.textContent).toContain('Pi schedule');
-    expect(seededCard?.textContent).not.toContain('Local plan');
+    expect(seededCard?.textContent).toContain('Durable worker');
+    expect(seededCard?.textContent).toContain('Research radar updated with three strong papers.');
+    expect(seededCard?.textContent).not.toContain('Pi schedule');
+    expect(seededCard?.textContent).not.toContain('2026-07-01T09:00:00.000Z');
+    expect(seededCard?.querySelector('[data-studio-automation-next-run]')?.getAttribute('title'))
+      .toContain('Jul 1, 2026');
+    expect(seededCard?.querySelector('[data-studio-automation-run-now]')).not.toBeNull();
 
     await act(async () => {
       enabledFilter!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -793,6 +855,16 @@ describe('StudioContent', () => {
     expect(composer?.textContent).toContain('Interval');
     expect(composer?.textContent).toContain('Advanced settings');
     expect(document.body.querySelector('[data-studio-automation-advanced]')).not.toBeNull();
+
+    const advanced = document.body.querySelector<HTMLDetailsElement>('[data-studio-automation-advanced]');
+    advanced!.open = true;
+    expect(document.body.querySelector('select[aria-label="Unattended access"]')).not.toBeNull();
+    expect(document.body.textContent).toContain('Read only');
+    const modelSelect = document.body.querySelector<HTMLSelectElement>('select[aria-label="Model"]');
+    expect(Array.from(modelSelect?.options ?? []).map((option) => option.value)).toEqual([
+      'mindos-auto',
+      'gpt-5.5',
+    ]);
 
     const everyFourHours = composer!.querySelector('[data-studio-automation-repeat-option="every-4-hours"]');
     expect(everyFourHours).toBeNull();
@@ -867,6 +939,19 @@ describe('StudioContent', () => {
       card.textContent?.includes('Release signal sweep')
     ));
     expect(updatedCard).not.toBeNull();
+
+    const runNowButton = updatedCard!.querySelector<HTMLButtonElement>('[data-studio-automation-run-now]');
+    expect(runNowButton?.textContent).toContain('Run now');
+    await act(async () => {
+      runNowButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await flushAsync();
+    const runNowCall = automationFetchMock.mock.calls.find(([, init]) => {
+      if (init?.method !== 'POST') return false;
+      return JSON.parse(String(init.body ?? '{}')).action === 'run-now';
+    });
+    expect(runNowCall).toBeTruthy();
+    expect(updatedCard!.textContent).toContain('Last run succeeded');
 
     const pauseButton = Array.from(updatedCard!.querySelectorAll('button')).find((button) => (
       button.textContent?.includes('Pause')

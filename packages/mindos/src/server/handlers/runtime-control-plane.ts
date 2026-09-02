@@ -444,7 +444,9 @@ function parseSchedulePatch(
       },
       policy: raw.policy === undefined ? current.policy : parsePolicy(raw.policy),
       ...(sanitizeString(raw.inputSummary, 1000) ? { inputSummary: sanitizeString(raw.inputSummary, 1000) } : {}),
-      ...(sanitizeIso(raw.nextRunAt) ? { nextRunAt: sanitizeIso(raw.nextRunAt) } : {}),
+      ...(raw.nextRunAt === null
+        ? { nextRunAt: undefined }
+        : sanitizeIso(raw.nextRunAt) ? { nextRunAt: sanitizeIso(raw.nextRunAt) } : {}),
       ...(sanitizeId(raw.lastRunId) ? { lastRunId: sanitizeId(raw.lastRunId) } : {}),
       updatedAt: nowIso,
     },

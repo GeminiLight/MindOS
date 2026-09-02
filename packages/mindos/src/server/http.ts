@@ -128,6 +128,9 @@ import { handleAgentSessionTurnStream } from './handlers/agent-turn.js';
 import { handleRecentFiles } from './handlers/recent-files.js';
 import { handleSearch, type SearchRequestOptions } from './handlers/search.js';
 import { handleSearchPrewarm } from './handlers/search-prewarm.js';
+import { handleContextAssetsGet } from './handlers/context-assets.js';
+import { handleRetrievalReceiptsGet } from './handlers/retrieval-receipts.js';
+import { handleStudioAutomationsGet, handleStudioAutomationsPost } from './handlers/studio-automations.js';
 import {
   handleSettingsGet,
   handleSettingsPost,
@@ -177,6 +180,7 @@ export type MindosChannelServices =
 
 export type MindosHttpServices = {
   mindRoot: string;
+  homeDir?: string;
   runtimeRoot?: string;
   staticRoot?: string;
   agentSessionsStorePath?: string;
@@ -250,6 +254,7 @@ export function createDefaultMindosHttpServices(options: DefaultMindosHttpServic
   }
   return {
     mindRoot,
+    homeDir: options.homeDir,
     runtimeRoot: options.runtimeRoot,
     staticRoot: options.staticRoot,
     agentSessionsStorePath: options.homeDir ? `${options.homeDir}/.mindos/sessions.json` : undefined,
@@ -386,6 +391,14 @@ async function handleRequest(
       writeResponse(res, handleSearchPrewarm(services));
       return;
     }
+    if (route === 'GET /api/context-assets') {
+      writeResponse(res, await handleContextAssetsGet(url.searchParams, services));
+      return;
+    }
+    if (route === 'GET /api/retrieval-receipts') {
+      writeResponse(res, await handleRetrievalReceiptsGet(url.searchParams, services));
+      return;
+    }
     if (route === 'GET /api/backlinks') {
       writeResponse(res, handleBacklinks(url.searchParams, services));
       return;
@@ -428,6 +441,17 @@ async function handleRequest(
     }
     if (route === 'GET /api/agent-runtimes') {
       writeResponse(res, await handleAgentRuntimesGet(url.searchParams, services));
+      return;
+    }
+    if (route === 'GET /api/studio/automations') {
+      writeResponse(res, handleStudioAutomationsGet({ mindRoot: services.mindRoot, homeDir: services.homeDir }));
+      return;
+    }
+    if (route === 'POST /api/studio/automations') {
+      writeResponse(res, handleStudioAutomationsPost(await readJsonBody(req), {
+        mindRoot: services.mindRoot,
+        homeDir: services.homeDir,
+      }));
       return;
     }
     if (route === 'GET /api/agent-runtimes/mcp-projections') {

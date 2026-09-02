@@ -77,6 +77,7 @@ async function runNativeRuntimeTurn(
       },
       ...input.sessionContextMetadata,
       ...input.fileContextMetadata,
+      ...input.retrievalMetadata,
       sessionWorkDir: input.sessionWorkDir.path,
       sessionSpaces: input.sessionContextSelection.spaces.map((space) => space.path),
       sessionAssistants: input.sessionContextSelection.assistants.map((assistant) => assistant.id),
@@ -177,6 +178,7 @@ async function runNativeRuntimeTurn(
         },
         ...input.sessionContextMetadata,
         ...input.fileContextMetadata,
+        ...input.retrievalMetadata,
         ...(result.externalSessionId ? { externalSessionId: result.externalSessionId } : {}),
       },
     });

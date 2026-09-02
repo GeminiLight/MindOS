@@ -27,6 +27,7 @@ import {
   createStudioAutomation,
   deleteStudioAutomation,
   fetchStudioAutomations,
+  runStudioAutomationNow,
   setStudioAutomationStatus,
   STUDIO_AUTOMATIONS_UPDATED_EVENT,
   updateStudioAutomation,
@@ -35,6 +36,7 @@ import {
   type StudioAutomationEffort,
   type StudioAutomationModel,
   type StudioAutomationPayload,
+  type StudioAutomationPermissionMode,
   type StudioAutomationScope,
 } from '@/lib/studio-automations';
 import {
@@ -89,13 +91,20 @@ const COPY = {
     edit: 'Edit',
     delete: 'Delete',
     deleteConfirm: 'Delete this automation? It will be removed from the Pi schedule store.',
+    runNow: 'Run now',
     nextRun: 'Next',
-    runtimeSchedule: 'Pi schedule',
-    runtimeNote: 'Runs while MindOS Pi is running',
+    runtimeSchedule: 'Durable worker',
+    runtimeNote: 'Runs independently while MindOS is running',
     runStatePending: 'Pending',
     runStateRunning: 'Running',
     runStateSuccess: 'Last run succeeded',
     runStateError: 'Last run failed',
+    runStateTimedOut: 'Last run timed out',
+    runStateInterrupted: 'Last run was interrupted',
+    latestResult: 'Latest result',
+    permissionLabel: 'Unattended access',
+    permissionRead: 'Read only',
+    permissionAuto: 'Allow Mind writes',
     advanced: 'Advanced settings',
     empty: 'No automations match this workspace yet.',
     emptySearch: 'No automations match this search.',
@@ -189,14 +198,21 @@ const COPY = {
     resume: '恢复',
     edit: '编辑',
     delete: '删除',
-    deleteConfirm: '要删除这个自动化吗？它会从 Pi 调度存储中移除。',
+    deleteConfirm: '要删除这个自动化吗？它会从持久自动化存储中移除。',
+    runNow: '立即运行',
     nextRun: '下次',
-    runtimeSchedule: 'Pi 调度',
-    runtimeNote: 'MindOS Pi 运行时会按计划执行',
+    runtimeSchedule: '持久 Worker',
+    runtimeNote: 'MindOS 运行期间独立执行',
     runStatePending: '等待运行',
     runStateRunning: '运行中',
     runStateSuccess: '上次运行成功',
     runStateError: '上次运行失败',
+    runStateTimedOut: '上次运行超时',
+    runStateInterrupted: '上次运行被中断',
+    latestResult: '最近结果',
+    permissionLabel: '无人值守权限',
+    permissionRead: '只读',
+    permissionAuto: '允许写入 Mind',
     advanced: '高级设置',
     empty: '这个工作区还没有自动化。',
     emptySearch: '没有匹配的自动化。',
@@ -251,8 +267,9 @@ type StudioAutomationCopy = (typeof COPY)[keyof typeof COPY];
 type AutomationStatusFilter = 'all' | 'enabled' | 'paused';
 
 const SCOPE_OPTIONS: StudioAutomationScope[] = ['worktree', 'project', 'mind'];
-const MODEL_OPTIONS: StudioAutomationModel[] = ['mindos-auto', 'gpt-5.5', 'claude-code', 'local-agent'];
+const MODEL_OPTIONS: StudioAutomationModel[] = ['mindos-auto', 'gpt-5.5'];
 const EFFORT_OPTIONS: StudioAutomationEffort[] = ['normal', 'high', 'extra-high'];
+const PERMISSION_OPTIONS: StudioAutomationPermissionMode[] = ['read', 'auto'];
 
 function scopeLabel(scope: StudioAutomationScope, copy: StudioAutomationCopy): string {
   if (scope === 'worktree') return copy.worktree;
@@ -273,6 +290,10 @@ function effortLabel(effort: StudioAutomationEffort, copy: StudioAutomationCopy)
   return copy.extraHighEffort;
 }
 
+function permissionLabel(permission: StudioAutomationPermissionMode, copy: StudioAutomationCopy): string {
+  return permission === 'auto' ? copy.permissionAuto : copy.permissionRead;
+}
+
 function defaultDraft(projects: StudioProject[]): StudioAutomationDraft {
   return {
     title: '',
@@ -282,6 +303,10 @@ function defaultDraft(projects: StudioProject[]): StudioAutomationDraft {
     schedule: 'daily-0900',
     model: 'mindos-auto',
     effort: 'high',
+    timezone: 'Asia/Shanghai',
+    permissionMode: 'read',
+    retry: 'once',
+    timeoutMs: 600000,
   };
 }
 
@@ -292,8 +317,12 @@ function automationToDraft(automation: StudioAutomation, projects: StudioProject
     scope: automation.scope,
     projectId: automation.projectId ?? projects[0]?.id,
     schedule: automation.schedule,
-    model: automation.model,
+    model: automation.model === 'claude-code' || automation.model === 'local-agent' ? 'mindos-auto' : automation.model,
     effort: automation.effort,
+    timezone: automation.timezone,
+    permissionMode: automation.permissionMode,
+    retry: automation.retry,
+    timeoutMs: automation.timeoutMs,
   };
 }
 
@@ -423,8 +452,34 @@ function automationSearchText(
 function runStateLabel(automation: StudioAutomation, copy: StudioAutomationCopy): string {
   if (automation.lastStatus === 'running') return copy.runStateRunning;
   if (automation.lastStatus === 'success') return copy.runStateSuccess;
+  if (automation.lastStatus === 'timed_out') return copy.runStateTimedOut;
+  if (automation.lastStatus === 'interrupted') return copy.runStateInterrupted;
   if (automation.lastStatus === 'error') return copy.runStateError;
   return copy.runStatePending;
+}
+
+function nextRunLabel(
+  automation: StudioAutomation,
+  locale: string,
+  copy: StudioAutomationCopy,
+): string {
+  if (automation.status === 'paused') return copy.paused;
+  if (automation.schedule === 'manual' && !automation.nextRun?.includes('T')) return copy.manualHint;
+  if (!automation.nextRun) return copy.runtimeNote;
+  const date = new Date(automation.nextRun);
+  if (Number.isNaN(date.getTime())) return automation.nextRun;
+  try {
+    return new Intl.DateTimeFormat(locale, {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+      timeZone: automation.timezone,
+    }).format(date);
+  } catch {
+    return new Intl.DateTimeFormat(locale, {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    }).format(date);
+  }
 }
 
 function automationMatchesStatusFilter(automation: StudioAutomation, filter: AutomationStatusFilter): boolean {
@@ -534,6 +589,7 @@ function AutomationCard({
   onEdit,
   onToggle,
   onDelete,
+  onRunNow,
   busy,
 }: {
   automation: StudioAutomation;
@@ -543,6 +599,7 @@ function AutomationCard({
   onEdit: (automation: StudioAutomation) => void;
   onToggle: (automation: StudioAutomation) => void;
   onDelete: (automation: StudioAutomation) => void;
+  onRunNow: (automation: StudioAutomation) => void;
   busy?: boolean;
 }) {
   const title = automationTitle(automation, locale);
@@ -552,6 +609,12 @@ function AutomationCard({
   const scopeText = automation.scope === 'project'
     ? `${scopeLabel(automation.scope, copy)} / ${projectLabel(projects, automation.projectId, locale, copy.noProject)}`
     : scopeLabel(automation.scope, copy);
+  const latestRun = automation.recentRuns?.[0];
+  const latestResult = latestRun?.outputPreview || latestRun?.error || automation.lastError;
+  const latestResultIsError = latestRun?.status === 'error'
+    || latestRun?.status === 'timed_out'
+    || latestRun?.status === 'interrupted';
+  const formattedNextRun = nextRunLabel(automation, locale, copy);
 
   return (
     <article data-studio-automation-card className="group relative grid min-w-0 gap-3 border-t border-border/55 px-4 py-3.5 transition-colors first:border-t-0 hover:bg-muted/20 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
@@ -565,6 +628,16 @@ function AutomationCard({
           <span className="shrink-0 text-[11px] font-medium text-muted-foreground">{statusLabel}</span>
         </div>
         <p className="mt-1 line-clamp-1 max-w-[72ch] text-xs leading-relaxed text-muted-foreground">{prompt}</p>
+        {latestResult ? (
+          <p
+            data-studio-automation-latest-result
+            className={`mt-1 line-clamp-1 max-w-[72ch] text-[11px] leading-relaxed ${
+              latestResultIsError ? 'text-error' : 'text-muted-foreground'
+            }`}
+          >
+            <span className="font-medium">{copy.latestResult}:</span> {latestResult}
+          </p>
+        ) : null}
         <div className="mt-2 flex min-w-0 flex-wrap gap-x-3 gap-y-1">
           <MetaText label={scopeText} />
           <MetaText label={scheduleLabel(automation.schedule, copy)} />
@@ -574,11 +647,26 @@ function AutomationCard({
         </div>
       </div>
 
-      <div className="flex min-w-0 items-center justify-between gap-3 pl-2 lg:justify-end lg:pl-0">
-        <span className="min-w-0 truncate text-[11px] text-muted-foreground [font-variant-numeric:tabular-nums]">
-          {copy.nextRun}: {automation.nextRun ?? copy.runtimeNote}
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 pl-2 lg:flex-nowrap lg:justify-end lg:pl-0">
+        <span
+          data-studio-automation-next-run
+          title={`${copy.nextRun}: ${formattedNextRun}`}
+          className="w-full min-w-0 truncate text-[11px] text-muted-foreground [font-variant-numeric:tabular-nums] lg:w-auto"
+        >
+          {copy.nextRun}: {formattedNextRun}
         </span>
         <div className="flex shrink-0 items-center gap-1.5">
+          <Button
+            data-studio-automation-run-now
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={busy || automation.status !== 'active' || automation.lastStatus === 'running'}
+            onClick={() => onRunNow(automation)}
+          >
+            <Play size={13} aria-hidden="true" />
+            {copy.runNow}
+          </Button>
           <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => onEdit(automation)}>
             <Edit3 size={13} aria-hidden="true" />
             {copy.edit}
@@ -778,6 +866,14 @@ function AutomationDrawer({
                   onChange={(effort) => onDraftChange((current) => ({ ...current, effort }))}
                   renderLabel={(effort) => effortLabel(effort, copy)}
                 />
+                <ControlSelect
+                  icon={<Layers3 size={13} />}
+                  label={copy.permissionLabel}
+                  value={draft.permissionMode}
+                  values={PERMISSION_OPTIONS}
+                  onChange={(permissionMode) => onDraftChange((current) => ({ ...current, permissionMode }))}
+                  renderLabel={(permissionMode) => permissionLabel(permissionMode, copy)}
+                />
               </div>
             </details>
 
@@ -856,6 +952,12 @@ export default function StudioAutomationSection({
       window.removeEventListener('focus', syncAutomations);
     };
   }, [loadAutomations]);
+
+  useEffect(() => {
+    if (!automations.some((automation) => automation.lastStatus === 'running')) return undefined;
+    const timer = window.setTimeout(() => { void loadAutomations(); }, 2_000);
+    return () => window.clearTimeout(timer);
+  }, [automations, loadAutomations]);
 
   useEffect(() => {
     setDraft((current) => {
@@ -981,6 +1083,17 @@ export default function StudioAutomationSection({
     }
   };
 
+  const runAutomationNow = async (automation: StudioAutomation) => {
+    setBusyId(automation.id);
+    try {
+      applyPayload(await runStudioAutomationNow(automation.id));
+    } catch (nextError) {
+      setLoadError(nextError instanceof Error ? nextError.message : copy.loadError);
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const templates = [
     {
       title: locale === 'zh' ? '研究雷达' : 'Research radar',
@@ -1062,6 +1175,7 @@ export default function StudioAutomationSection({
                   onEdit={beginEdit}
                   onToggle={toggleAutomation}
                   onDelete={removeAutomation}
+                  onRunNow={runAutomationNow}
                   busy={busyId === automation.id}
                 />
               ))}

@@ -18,3 +18,4 @@ export {
 } from './knowledge/audit/index.js';
 export { gitLog, gitShowFile, isGitRepo, type GitLogEntry } from './knowledge/git/index.js';
 export * from './knowledge/knowledge-ops/index.js';
+export * from './knowledge/context-assets/index.js';

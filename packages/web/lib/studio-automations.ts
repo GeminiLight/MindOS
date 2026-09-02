@@ -16,10 +16,11 @@ export type StudioAutomationSchedule =
   | 'monthly-last-1700';
 export type StudioAutomationModel = 'mindos-auto' | 'gpt-5.5' | 'claude-code' | 'local-agent';
 export type StudioAutomationEffort = 'normal' | 'high' | 'extra-high';
+export type StudioAutomationPermissionMode = 'read' | 'auto';
 export type StudioAutomationStatus = 'active' | 'paused';
-export type StudioAutomationRunStatus = 'pending' | 'running' | 'success' | 'error';
+export type StudioAutomationRunStatus = 'pending' | 'running' | 'success' | 'error' | 'timed_out' | 'interrupted';
 export type StudioAutomationRuntime = 'mindos-pi';
-export type StudioAutomationSource = 'schedule-prompt';
+export type StudioAutomationSource = 'mindos-durable';
 
 export interface StudioAutomation {
   id: string;
@@ -32,12 +33,26 @@ export interface StudioAutomation {
   schedule: StudioAutomationSchedule;
   model: StudioAutomationModel;
   effort: StudioAutomationEffort;
+  timezone: string;
+  permissionMode: StudioAutomationPermissionMode;
+  retry: 'never' | 'once';
+  timeoutMs: number;
   status: StudioAutomationStatus;
   updated: string;
   lastRun?: string;
   nextRun?: string;
   runCount: number;
   lastStatus?: StudioAutomationRunStatus;
+  lastError?: string;
+  recentRuns?: Array<{
+    id: string;
+    status: Exclude<StudioAutomationRunStatus, 'pending'>;
+    startedAt: string;
+    finishedAt?: string;
+    artifactPath?: string;
+    outputPreview?: string;
+    error?: string;
+  }>;
   runtime: StudioAutomationRuntime;
   source: StudioAutomationSource;
   controlPlaneScheduleId: string;
@@ -51,6 +66,10 @@ export interface StudioAutomationDraft {
   schedule: StudioAutomationSchedule;
   model: StudioAutomationModel;
   effort: StudioAutomationEffort;
+  timezone: string;
+  permissionMode: StudioAutomationPermissionMode;
+  retry: 'never' | 'once';
+  timeoutMs: number;
 }
 
 export interface StudioAutomationPayload {
@@ -61,7 +80,11 @@ export interface StudioAutomationPayload {
     total: number;
     enabled: number;
     paused: number;
+    running: number;
+    failed: number;
     externalSchedulePromptJobs: number;
+    migratedLegacyJobs: number;
+    migrationWarning?: string;
     scheduleStorePath: string;
     controlPlaneScheduleCount: number;
   };
@@ -97,6 +120,10 @@ export async function setStudioAutomationStatus(
 
 export async function deleteStudioAutomation(id: string): Promise<StudioAutomationPayload> {
   return mutateStudioAutomation({ action: 'delete', id });
+}
+
+export async function runStudioAutomationNow(id: string): Promise<StudioAutomationPayload> {
+  return mutateStudioAutomation({ action: 'run-now', id });
 }
 
 async function mutateStudioAutomation(body: unknown): Promise<StudioAutomationPayload> {

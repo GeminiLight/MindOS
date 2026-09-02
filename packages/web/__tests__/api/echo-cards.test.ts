@@ -1,5 +1,9 @@
 import { NextRequest } from 'next/server';
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
+import { listContextAssets } from '@geminilight/mindos/knowledge';
+import { testMindRoot } from '../setup';
 import { DELETE, GET, PATCH, POST } from '../../app/api/echo/cards/route';
 
 const agentSessionsMock = vi.hoisted(() => vi.fn());
@@ -120,6 +124,123 @@ describe('/api/echo/cards', () => {
     expect(promotion.state).toMatchObject({
       segment: 'promotion',
       schedule: { mode: 'daily', dailyTime: '20:00', intervalHours: 24 },
+    });
+  });
+
+  it('approves a promotion card into a durable reviewed context asset', async () => {
+    const now = Date.now();
+    agentSessionsMock.mockReturnValue({
+      status: 200,
+      body: [{
+        id: 'promotion-review-session',
+        title: 'Review source session',
+        createdAt: now - 30 * 60_000,
+        updatedAt: now - 5 * 60_000,
+        messages: [
+          { role: 'user', content: '经验进入长期记忆前必须审核。' },
+          { role: 'assistant', content: 'Only reviewed promotion candidates should become durable context.' },
+        ],
+      }],
+    });
+
+    const generatedRes = await POST(bodyRequest({ segment: 'promotion', trigger: 'manual', locale: 'zh' }));
+    const generated = await generatedRes.json();
+    const targetId = generated.cards[0].id as string;
+    const editedContent = '经人工校订：只有审核通过的候选经验才能进入长期上下文。';
+    const editedRes = await PATCH(bodyRequest({
+      segment: 'promotion',
+      id: targetId,
+      content: editedContent,
+    }, 'PATCH'));
+    expect(editedRes.status).toBe(200);
+    const approvedRes = await PATCH(bodyRequest({
+      segment: 'promotion',
+      id: targetId,
+      action: 'approve',
+    }, 'PATCH'));
+    const approved = await approvedRes.json();
+
+    expect(approvedRes.status, JSON.stringify(approved)).toBe(200);
+    expect(approved.review).toMatchObject({ cardId: targetId, decision: 'approved' });
+    expect(approved.card).toMatchObject({
+      id: targetId,
+      review: {
+        status: 'approved',
+        assetId: approved.review.assetId,
+        targetPath: approved.review.targetPath,
+      },
+    });
+    expect(existsSync(join(testMindRoot, approved.review.targetPath))).toBe(true);
+    expect(readFileSync(join(testMindRoot, approved.review.targetPath), 'utf-8')).toContain(editedContent);
+    expect(listContextAssets(testMindRoot, { sourceRef: `echo-card:${targetId}` })).toEqual([
+      expect.objectContaining({ id: approved.review.assetId, status: 'active' }),
+    ]);
+
+    const repeatedRes = await PATCH(bodyRequest({
+      segment: 'promotion',
+      id: targetId,
+      action: 'approve',
+    }, 'PATCH'));
+    const repeated = await repeatedRes.json();
+    expect(repeatedRes.status, JSON.stringify(repeated)).toBe(200);
+    expect(repeated.review).toEqual(approved.review);
+
+    const persistedRes = GET(getRequest('promotion'));
+    const persisted = await persistedRes.json();
+    expect(persisted.cards[0].review).toMatchObject({ status: 'approved', assetId: approved.review.assetId });
+
+    const regeneratedRes = await POST(bodyRequest({ segment: 'promotion', trigger: 'manual', locale: 'zh' }));
+    const regenerated = await regeneratedRes.json();
+    expect(regeneratedRes.status, JSON.stringify(regenerated)).toBe(200);
+    expect(regenerated.cards.find((card: { id: string }) => card.id === targetId)).toMatchObject({
+      content: editedContent,
+      userEdited: true,
+      review: { status: 'approved', assetId: approved.review.assetId },
+    });
+  });
+
+  it('records rejected promotion cards without publishing a durable note', async () => {
+    const now = Date.now();
+    agentSessionsMock.mockReturnValue({
+      status: 200,
+      body: [{
+        id: 'promotion-reject-session',
+        createdAt: now - 20 * 60_000,
+        updatedAt: now - 2 * 60_000,
+        messages: [{ role: 'assistant', content: 'A generated but overly generic practice.' }],
+      }],
+    });
+    const generatedRes = await POST(bodyRequest({ segment: 'promotion', trigger: 'manual' }));
+    const generated = await generatedRes.json();
+    const targetId = generated.cards[0].id as string;
+
+    const rejectedRes = await PATCH(bodyRequest({
+      segment: 'promotion',
+      id: targetId,
+      action: 'reject',
+      note: 'Too generic.',
+    }, 'PATCH'));
+    const rejected = await rejectedRes.json();
+
+    expect(rejectedRes.status, JSON.stringify(rejected)).toBe(200);
+    expect(rejected).toMatchObject({
+      review: { cardId: targetId, decision: 'rejected', note: 'Too generic.' },
+      card: { id: targetId, review: { status: 'rejected', note: 'Too generic.' } },
+    });
+    expect(listContextAssets(testMindRoot)).toEqual([]);
+    expect(existsSync(join(testMindRoot, 'Echo'))).toBe(false);
+
+    const wrongSegmentRes = await PATCH(bodyRequest({
+      segment: 'insight',
+      id: targetId,
+      action: 'approve',
+    }, 'PATCH'));
+    expect(wrongSegmentRes.status).toBe(400);
+
+    const regeneratedRes = await POST(bodyRequest({ segment: 'promotion', trigger: 'manual' }));
+    const regenerated = await regeneratedRes.json();
+    expect(regenerated.cards.find((card: { id: string }) => card.id === targetId)).toMatchObject({
+      review: { status: 'rejected', note: 'Too generic.' },
     });
   });
 

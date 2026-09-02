@@ -2,7 +2,10 @@ import path from 'path';
 import { getFileContent, getMindRoot, collectAllFiles } from '@/lib/fs';
 import { validateFileSize } from '@/lib/api-file-size-validation';
 import { truncate } from '@/lib/agent/tools';
-import { performActiveRecall } from '@/lib/agent/active-recall';
+import {
+  performActiveRecallWithReceipt,
+  type ActiveRecallWithReceiptResult,
+} from '@/lib/agent/active-recall';
 import {
   dirnameOfMindosPath,
   expandMindosAgentAttachedFiles,
@@ -110,11 +113,26 @@ export async function recallMindosTurnKnowledge(input: {
     minScore?: number;
   };
 }): Promise<MindosAgentRecalledKnowledgeItem[]> {
-  const activeRecall = input.activeRecall ?? {};
-  if (activeRecall.enabled === false || input.lastUserContent.trim().length <= 1) return [];
+  return (await recallMindosTurnKnowledgeWithReceipt(input)).items;
+}
 
-  try {
-    return await performActiveRecall(input.mindRoot, input.lastUserContent, {
+export async function recallMindosTurnKnowledgeWithReceipt(input: {
+  mindRoot: string;
+  chatSessionId?: string;
+  lastUserContent: string;
+  currentFile?: string;
+  attachedFiles?: string[];
+  sessionSpaces: Array<{ path: string }>;
+  activeRecall?: {
+    enabled?: boolean;
+    maxTokens?: number;
+    maxFiles?: number;
+    minScore?: number;
+  };
+}): Promise<Pick<ActiveRecallWithReceiptResult, 'items' | 'metadata'>> {
+  const activeRecall = input.activeRecall ?? {};
+  if (activeRecall.enabled === false) {
+    const skipped = await performActiveRecallWithReceipt(input.mindRoot, input.lastUserContent, {
       maxTokens: activeRecall.maxTokens,
       maxFiles: activeRecall.maxFiles,
       minScore: activeRecall.minScore,
@@ -123,10 +141,37 @@ export async function recallMindosTurnKnowledge(input: {
         ...(Array.isArray(input.attachedFiles) ? input.attachedFiles : []),
       ],
       preferredPaths: input.sessionSpaces.map((space) => space.path),
+    }, {
+      ...(input.chatSessionId ? { chatSessionId: input.chatSessionId } : {}),
+      trigger: 'disabled',
+      skip: true,
     });
+    return { items: skipped.items, metadata: skipped.metadata };
+  }
+
+  try {
+    const result = await performActiveRecallWithReceipt(input.mindRoot, input.lastUserContent, {
+      maxTokens: activeRecall.maxTokens,
+      maxFiles: activeRecall.maxFiles,
+      minScore: activeRecall.minScore,
+      excludePaths: [
+        ...(input.currentFile ? [input.currentFile] : []),
+        ...(Array.isArray(input.attachedFiles) ? input.attachedFiles : []),
+      ],
+      preferredPaths: input.sessionSpaces.map((space) => space.path),
+    }, {
+      ...(input.chatSessionId ? { chatSessionId: input.chatSessionId } : {}),
+    });
+    return { items: result.items, metadata: result.metadata };
   } catch (error) {
     console.warn('[agent-turn] Active recall failed, continuing without:', error);
-    return [];
+    return {
+      items: [],
+      metadata: {
+        retrievalSelectedAssetIds: [],
+        retrievalOutcome: 'error',
+      },
+    };
   }
 }
 

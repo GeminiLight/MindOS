@@ -72,7 +72,7 @@ describe('Echo segment page actions', () => {
       }
       if (typeof url === 'string' && (url === '/api/echo/cards' || url.startsWith('/api/echo/cards?'))) {
         const method = init?.method ?? 'GET';
-        const body = init?.body ? JSON.parse(String(init.body)) as { id?: unknown; segment?: unknown; schedule?: unknown } : {};
+        const body = init?.body ? JSON.parse(String(init.body)) as { id?: unknown; segment?: unknown; schedule?: unknown; action?: unknown } : {};
         const segment = method === 'GET'
           ? new URL(url, 'http://localhost').searchParams.get('segment')
           : String(body.segment ?? '');
@@ -85,6 +85,34 @@ describe('Echo segment page actions', () => {
           });
         }
         if (method === 'PATCH') {
+          if (body.action === 'approve' || body.action === 'reject') {
+            const reviewedCards = cards.map((card) => card.id === body.id
+              ? {
+                ...card,
+                review: body.action === 'approve'
+                  ? {
+                    status: 'approved',
+                    reviewedAt: '2026-06-29T07:00:00.000Z',
+                    assetId: 'asset-reviewed-promotion',
+                    targetPath: 'Echo/Playbooks/reviewed-promotion.md',
+                  }
+                  : {
+                    status: 'rejected',
+                    reviewedAt: '2026-06-29T07:00:00.000Z',
+                  },
+              }
+              : card);
+            const reviewedCard = reviewedCards.find((card) => card.id === body.id);
+            return jsonResponse({
+              ok: true,
+              review: body.action === 'approve'
+                ? { decision: 'approved', assetId: 'asset-reviewed-promotion', targetPath: 'Echo/Playbooks/reviewed-promotion.md' }
+                : { decision: 'rejected' },
+              card: reviewedCard,
+              state: echoCardsApiState(segment, 'manual', 2),
+              cards: reviewedCards,
+            });
+          }
           return jsonResponse({
             ok: true,
             state: echoCardsApiState(segment, 'manual', 2, body.schedule),
@@ -298,6 +326,8 @@ describe('Echo segment page actions', () => {
     expect(host.querySelector('[data-testid="echo-promotion-tab-recent"]')).toBeNull();
     expect(host.querySelector('[data-testid="echo-promotion-tabs"]')).toBeNull();
     expect(host.querySelectorAll('[data-testid="echo-promotion-candidate"]')).toHaveLength(2);
+    expect(host.querySelectorAll('[data-testid="echo-promotion-approve-button"]')).toHaveLength(2);
+    expect(host.querySelectorAll('[data-testid="echo-promotion-reject-button"]')).toHaveLength(2);
     expect(host.querySelectorAll('[data-testid="echo-card-chat-button"]')).toHaveLength(2);
     expect(promotion?.querySelectorAll('[data-testid="echo-card-timestamp"]')).toHaveLength(2);
     expect(promotion?.querySelector('[data-testid="echo-card-timestamp"]')?.textContent)
@@ -410,6 +440,51 @@ describe('Echo segment page actions', () => {
       locale: 'zh',
     });
     expect(fetchMock.mock.calls.some(([url]) => url === '/api/assistant-runs')).toBe(false);
+  });
+
+  it('reviews promotion candidates before they become durable context', async () => {
+    await act(async () => {
+      root.render(<EchoSegmentPageClient segment="practice" />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const firstCard = host.querySelectorAll('[data-testid="echo-promotion-candidate"]')[0];
+    const approveButton = firstCard?.querySelector<HTMLButtonElement>('[data-testid="echo-promotion-approve-button"]');
+    expect(approveButton?.textContent).toContain(messages.zh.echoPages.promotionApproveLabel);
+    await act(async () => {
+      approveButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const approveCall = fetchMock.mock.calls.find(([url, init]) => {
+      if (url !== '/api/echo/cards' || init?.method !== 'PATCH') return false;
+      return JSON.parse(String(init.body)).action === 'approve';
+    });
+    expect(approveCall).toBeTruthy();
+    expect(JSON.parse(String(approveCall?.[1]?.body))).toMatchObject({
+      segment: 'promotion',
+      id: 'promotion-api-0',
+      action: 'approve',
+    });
+    const reviewedFirstCard = host.querySelectorAll('[data-testid="echo-promotion-candidate"]')[0];
+    expect(reviewedFirstCard?.textContent).toContain(messages.zh.echoPages.promotionApprovedLabel);
+    expect(reviewedFirstCard?.textContent).toContain('Echo/Playbooks/reviewed-promotion.md');
+    expect(reviewedFirstCard?.querySelector('[data-testid="echo-promotion-approve-button"]')).toBeNull();
+    expect(reviewedFirstCard?.querySelector('[data-testid="echo-promotion-reject-button"]')).toBeNull();
+
+    const secondCard = host.querySelectorAll('[data-testid="echo-promotion-candidate"]')[1];
+    const rejectButton = secondCard?.querySelector<HTMLButtonElement>('[data-testid="echo-promotion-reject-button"]');
+    expect(rejectButton?.textContent).toContain(messages.zh.echoPages.promotionRejectLabel);
+    await act(async () => {
+      rejectButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    const reviewedSecondCard = host.querySelectorAll('[data-testid="echo-promotion-candidate"]')[1];
+    expect(reviewedSecondCard?.textContent).toContain(messages.zh.echoPages.promotionRejectedLabel);
+    expect(reviewedSecondCard?.querySelector('[data-testid="echo-promotion-approve-button"]')).toBeNull();
   });
 
   it('requires confirmation before deleting structured Echo cards', async () => {
