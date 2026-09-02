@@ -17,6 +17,11 @@ import {
   requestStudioAutomationPermission,
   StudioAutomationApprovalRequiredError,
 } from './approvals.js';
+import {
+  notifyStudioAutomationApprovalViaFeishu,
+  type FeishuApprovalDeliveryOptions,
+  type FeishuApprovalDeliveryResult,
+} from './feishu-approval.js';
 import type {
   StudioAutomationExecutor,
   StudioAutomationExecutorContext,
@@ -40,6 +45,8 @@ export type CreateStudioAutomationExecutorOptions = {
   codexCommand?: string;
   claudeCommand?: string;
   now?(): Date;
+  approvalConfigPath?: string;
+  notifyApproval?(options: FeishuApprovalDeliveryOptions): Promise<FeishuApprovalDeliveryResult>;
 };
 
 export function createStudioAutomationExecutor(
@@ -110,7 +117,17 @@ async function executeNativeAutomation(
             options.now?.() ?? new Date(),
           );
         } catch (error) {
-          if (error instanceof StudioAutomationApprovalRequiredError) approvalError = error;
+          if (error instanceof StudioAutomationApprovalRequiredError) {
+            approvalError = error;
+            if (error.created) {
+              await (options.notifyApproval ?? notifyStudioAutomationApprovalViaFeishu)({
+                mindRoot: options.mindRoot,
+                approvalId: error.approvalId,
+                ...(options.approvalConfigPath ? { configPath: options.approvalConfigPath } : {}),
+                ...(options.now ? { now: options.now } : {}),
+              }).catch(() => undefined);
+            }
+          }
           throw error;
         }
       },

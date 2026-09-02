@@ -11,6 +11,20 @@ const NOW = 10_000;
 describe('pending agent action model', () => {
   it('normalizes, orders, and identifies permission and question actions', () => {
     const result = normalizePendingAgentActions({
+      automationApprovals: [{
+        kind: 'automation-approval',
+        approvalId: 'approval-release',
+        jobId: 'automation-release',
+        runId: 'automation-run-1',
+        jobTitle: 'Release observer',
+        runtime: 'codex',
+        toolName: 'apply_patch',
+        action: 'edit release notes',
+        resource: 'wiki/90-changelog.md',
+        inputPreview: '{"path":"wiki/90-changelog.md"}',
+        risk: { level: 'medium', summary: 'Updates release notes.' },
+        createdAt: 9_000,
+      }],
       permissions: [{
         kind: 'runtime-permission',
         runId: 'run-2',
@@ -39,8 +53,9 @@ describe('pending agent action model', () => {
       }],
     }, NOW);
 
-    expect(result.pendingCount).toBe(2);
+    expect(result.pendingCount).toBe(3);
     expect(result.actions.map(pendingAgentActionKey)).toEqual([
+      'automation-approval:approval-release',
       'user-question:run-1:tool-1',
       'runtime-permission:run-2:permission-1',
     ]);
@@ -57,9 +72,15 @@ describe('pending agent action model', () => {
         },
       ],
       questions: [{ kind: 'user-question', runId: '', toolCallId: 'tool', questions: [], createdAt: 1, expiresAt: 20_000 }],
+      automationApprovals: [
+        { kind: 'automation-approval', approvalId: '', jobId: 'job', createdAt: 1 },
+        { kind: 'automation-approval', approvalId: 'approval', jobId: 'job', runtime: 'pi', createdAt: 1 },
+      ],
     }, NOW);
 
-    expect(result).toMatchObject({ permissions: [], questions: [], actions: [], pendingCount: 0 });
+    expect(result).toMatchObject({
+      permissions: [], questions: [], automationApprovals: [], actions: [], pendingCount: 0,
+    });
   });
 
   it('builds single, custom, and multi-select answers for every question', () => {

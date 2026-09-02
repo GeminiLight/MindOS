@@ -11,6 +11,9 @@ import {
   runWithAskUserQuestionBridge,
 } from '../agent/bridges/user-question-bridge.js';
 import { createMindosHttpServer } from './http.js';
+import { handleStudioAutomationsPost } from './handlers/studio-automations.js';
+import { requestStudioAutomationPermission } from './automations/approvals.js';
+import { readStudioAutomationState } from './automations/store.js';
 
 const cleanups: Array<() => void | Promise<void>> = [];
 
@@ -33,14 +36,14 @@ async function startServer() {
   cleanups.push(() => app.close());
   const address = app.server.address();
   if (!address || typeof address === 'string') throw new Error('Expected TCP server address.');
-  return `http://127.0.0.1:${address.port}`;
+  return { base: `http://127.0.0.1:${address.port}`, root };
 }
 
 const auth = { authorization: 'Bearer mobile-token' };
 
 describe('Product Server pending agent action routes', () => {
   it('authenticates, lists, and resolves a runtime permission over HTTP', async () => {
-    const base = await startServer();
+    const { base } = await startServer();
     const result = runWithRuntimePermissionBridge({
       runId: 'http-permission-run',
       send: vi.fn(),
@@ -81,7 +84,7 @@ describe('Product Server pending agent action routes', () => {
   });
 
   it('answers an AskUserQuestion over the authenticated HTTP bridge', async () => {
-    const base = await startServer();
+    const { base } = await startServer();
     const questionText = 'Ship this patch?';
     const result = runWithAskUserQuestionBridge({
       runId: 'http-question-run',
@@ -115,5 +118,41 @@ describe('Product Server pending agent action routes', () => {
       cancelled: false,
       answers: [expect.objectContaining({ answer: 'Yes' })],
     });
+  });
+
+  it('lists and resolves a durable automation approval over the authenticated mobile route', async () => {
+    const { base, root } = await startServer();
+    const now = new Date('2026-09-03T08:00:00.000Z');
+    const created = handleStudioAutomationsPost({
+      action: 'create',
+      draft: {
+        title: 'Mobile release approval', prompt: 'Review release.', scope: 'mind',
+        schedule: 'manual', model: 'codex', effort: 'high', permissionMode: 'ask',
+      },
+    }, { mindRoot: root, now: () => now });
+    const jobId = 'automations' in created.body ? created.body.automations[0]!.id : '';
+    const job = readStudioAutomationState(root).automations.find((item) => item.id === jobId)!;
+    expect(() => requestStudioAutomationPermission(root, job, {
+      runtime: 'codex', toolCallId: 'tool-mobile', toolName: 'apply_patch',
+      options: [
+        { id: 'allow-once', label: 'Allow once', intent: 'allow', scope: 'once' },
+        { id: 'deny', label: 'Deny', intent: 'deny', scope: 'once' },
+      ],
+    }, now)).toThrow(/waiting for approval/i);
+    const approvalId = readStudioAutomationState(root).approvals[0]!.id;
+
+    const listed = await fetch(`${base}/api/agent/pending-actions`, { headers: auth });
+    await expect(listed.json()).resolves.toMatchObject({
+      pendingCount: 1,
+      automationApprovals: [expect.objectContaining({ approvalId, jobTitle: 'Mobile release approval' })],
+    });
+    const resolved = await fetch(`${base}/api/agent/automation-approval`, {
+      method: 'POST',
+      headers: { ...auth, 'content-type': 'application/json' },
+      body: JSON.stringify({ approvalId, decision: 'deny' }),
+    });
+    expect(resolved.status).toBe(200);
+    await expect(resolved.json()).resolves.toMatchObject({ ok: true, result: 'resolved' });
+    expect(readStudioAutomationState(root).approvals[0]).toMatchObject({ status: 'denied' });
   });
 });

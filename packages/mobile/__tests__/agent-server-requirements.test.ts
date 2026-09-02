@@ -10,6 +10,7 @@ describe('agent server requirements contract', () => {
   it('lists the server contracts needed for real mobile agent control', () => {
     expect(AGENT_SERVER_REQUIREMENTS.map((requirement) => requirement.id)).toEqual([
       'agent-tasks',
+      'automation-approvals',
       'runtime-permissions',
       'user-questions',
       'native-sessions',
@@ -31,6 +32,14 @@ describe('agent server requirements contract', () => {
       });
     expect(AGENT_SERVER_REQUIREMENTS.find((requirement) => requirement.id === 'user-questions'))
       .toMatchObject({ status: 'available' });
+    expect(AGENT_SERVER_REQUIREMENTS.find((requirement) => requirement.id === 'automation-approvals'))
+      .toMatchObject({
+        status: 'available',
+        requiredEndpoints: [
+          'GET /api/agent/pending-actions',
+          'POST /api/agent/automation-approval',
+        ],
+      });
   });
 
   it('builds a copyable contract without pretending mobile can submit server work', () => {
@@ -41,18 +50,18 @@ describe('agent server requirements contract', () => {
       mobileSurface: 'agent-runs',
       mobileCanSubmit: false,
     });
-    expect(contract.requirements).toHaveLength(5);
+    expect(contract.requirements).toHaveLength(6);
     expect(contract.requirements[0].requiredEndpoints).toContain('POST /api/agent-tasks');
     expect(contract.note).toContain('runtime ownership');
   });
 
   it('summarizes unique endpoints and capabilities for compact mobile UI', () => {
     expect(summarizeAgentServerRequirements()).toEqual({
-      requirementCount: 5,
-      availableCount: 2,
+      requirementCount: 6,
+      availableCount: 3,
       gapCount: 3,
-      endpointCount: 10,
-      capabilityCount: 14,
+      endpointCount: 11,
+      capabilityCount: 16,
     });
   });
 

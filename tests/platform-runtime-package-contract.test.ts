@@ -132,14 +132,15 @@ describe('OpenCode-style platform runtime packages', () => {
     ]) {
       expect(script).toContain(`'${dependency}'`);
     }
-    expect(script).toContain('copyCliRuntimeNodeModules(packageDir, target)');
+    expect(script).toContain('copyCliRuntimeNodeModules(packageDir)');
     expect(script).toContain('copyDependencyClosure(CLI_RUNTIME_ROOT_DEPENDENCIES');
-    expect(script).toContain('optionalDependencies: new Set([claudeSdkNativePackageName(target)])');
+    expect(script).not.toContain('claudeSdkNativePackageName');
+    expect(script).not.toContain('pkg.optionalDependencies');
     expect(script).toContain("resolve(packageDir, 'node_modules')");
     expect(script).toContain('dependencies: targetRuntimeBootstrap ? {} : platformRuntimeDependencies()');
     expect(script).toContain("'node_modules'");
     expect(script.indexOf('pruneClaudeAgentSdkNativePackages(packageDir)')).toBeLessThan(
-      script.indexOf('copyCliRuntimeNodeModules(packageDir, target)'),
+      script.indexOf('copyCliRuntimeNodeModules(packageDir)'),
     );
   });
 

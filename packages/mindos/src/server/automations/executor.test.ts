@@ -49,7 +49,12 @@ describe('Studio automation runtime executor', () => {
       });
       return { permissionDecision: decision };
     });
-    const executor = createStudioAutomationExecutor({ mindRoot, runNative: runNative as never });
+    const notifyApproval = vi.fn(async () => ({ status: 'sent' as const, messageId: 'om_1' }));
+    const executor = createStudioAutomationExecutor({
+      mindRoot,
+      runNative: runNative as never,
+      notifyApproval,
+    });
 
     await expect(executor(job, {
       runId: 'run-native', attempt: 1, signal: new AbortController().signal,
@@ -65,6 +70,10 @@ describe('Studio automation runtime executor', () => {
     expect(readStudioAutomationState(mindRoot).approvals).toEqual([
       expect.objectContaining({ jobId: job.id, runtime: 'codex', status: 'pending' }),
     ]);
+    expect(notifyApproval).toHaveBeenCalledWith(expect.objectContaining({
+      mindRoot,
+      approvalId: expect.stringMatching(/^approval-/),
+    }));
   });
 
   it('builds a product-owned Pi session with the packaged KB extension and collects output', async () => {

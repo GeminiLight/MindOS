@@ -20,7 +20,11 @@ import {
   pendingAgentActionKey,
   type AskUserQuestionDraft,
 } from '@/lib/pending-agent-actions';
-import type { PendingAskUserQuestion, PendingRuntimePermission } from '@/lib/types';
+import type {
+  PendingAskUserQuestion,
+  PendingAutomationApproval,
+  PendingRuntimePermission,
+} from '@/lib/types';
 import { colors, hairlineWidth, hitSlop, radius, shadows, spacing, typography } from '@/lib/theme';
 
 export default function PendingAgentActionSheet() {
@@ -86,7 +90,7 @@ export default function PendingAgentActionSheet() {
             <View style={styles.header}>
               <View style={styles.headerIcon}>
                 <Ionicons
-                  name={action.kind === 'runtime-permission' ? 'shield-checkmark-outline' : 'chatbubble-ellipses-outline'}
+                  name={action.kind === 'user-question' ? 'chatbubble-ellipses-outline' : 'shield-checkmark-outline'}
                   size={19}
                   color={colors.amber}
                 />
@@ -94,7 +98,11 @@ export default function PendingAgentActionSheet() {
               <View style={styles.headerCopy}>
                 <Text style={styles.eyebrow}>Agent action · 1 of {pending.pendingCount}</Text>
                 <Text style={styles.title}>
-                  {action.kind === 'runtime-permission' ? 'Permission requested' : 'Agent needs your answer'}
+                  {action.kind === 'runtime-permission'
+                    ? 'Permission requested'
+                    : action.kind === 'automation-approval'
+                      ? 'Automation approval'
+                      : 'Agent needs your answer'}
                 </Text>
               </View>
               <Pressable onPress={close} hitSlop={hitSlop} accessibilityRole="button" accessibilityLabel="Close">
@@ -108,6 +116,12 @@ export default function PendingAgentActionSheet() {
                   action={action}
                   disabled={resolving}
                   onDecision={(decision) => void pending.resolvePermission(action, decision)}
+                />
+              ) : action.kind === 'automation-approval' ? (
+                <AutomationApprovalAction
+                  action={action}
+                  disabled={resolving}
+                  onDecision={(decision) => void pending.resolveAutomationApproval(action, decision)}
                 />
               ) : (
                 <QuestionAction
@@ -138,6 +152,52 @@ export default function PendingAgentActionSheet() {
         </KeyboardAvoidingView>
       </Modal>
     </>
+  );
+}
+
+function AutomationApprovalAction({
+  action,
+  disabled,
+  onDecision,
+}: {
+  action: PendingAutomationApproval;
+  disabled: boolean;
+  onDecision(decision: 'allow' | 'deny'): void;
+}) {
+  return (
+    <View style={styles.actionBody}>
+      <View style={styles.metaRow}>
+        <Text style={styles.runtimeLabel}>{action.runtime.toUpperCase()} · AUTOMATION</Text>
+        {action.risk ? (
+          <Text style={[styles.riskLabel, action.risk.level === 'high' && styles.riskHigh]}>
+            {action.risk.level} risk
+          </Text>
+        ) : null}
+      </View>
+      <Text style={styles.prompt}>{action.jobTitle}</Text>
+      {action.risk?.summary ? <Text style={styles.approvalSummary}>{action.risk.summary}</Text> : null}
+      <View style={styles.detailBox}>
+        {action.action ? <Detail label="Action" value={action.action} /> : null}
+        <Detail label="Tool" value={action.toolName} />
+        {action.resource ? <Detail label="Resource" value={action.resource} /> : null}
+        {action.inputPreview ? <Detail label="Input preview" value={action.inputPreview} /> : null}
+        {action.runId ? <Detail label="Run" value={action.runId} /> : null}
+      </View>
+      <View style={styles.buttonStack}>
+        <MindButton
+          label="Approve once"
+          icon="checkmark-outline"
+          loading={disabled}
+          onPress={() => onDecision('allow')}
+        />
+        <MindButton
+          label="Deny automation"
+          variant="danger"
+          disabled={disabled}
+          onPress={() => onDecision('deny')}
+        />
+      </View>
+    </View>
   );
 }
 
@@ -317,6 +377,7 @@ const styles = StyleSheet.create({
   riskLabel: { color: colors.warning, fontSize: typography.caption, fontWeight: '700', textTransform: 'uppercase' },
   riskHigh: { color: colors.errorText },
   prompt: { color: colors.text, fontSize: typography.bodyLarge, lineHeight: 21, fontWeight: '600' },
+  approvalSummary: { color: colors.textMuted, fontSize: typography.body, lineHeight: 20 },
   detailBox: { padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.surfaceMuted, borderWidth: 1, borderColor: colors.borderSubtle, gap: spacing.md },
   detailRow: { gap: spacing.xs },
   detailLabel: { color: colors.textSubtle, fontSize: typography.caption, fontWeight: '700', textTransform: 'uppercase' },

@@ -71,13 +71,14 @@ for (const target of selected) {
   mkdirSync(packageDir, { recursive: true });
 
   copyRuntimeRoot(packageDir);
-  // The staged Web runtime may contain every Claude native package. Remove
-  // those first, then embed only the binary matching this platform target.
+  // The staged Web runtime may contain Claude's 200+ MB native CLI package.
+  // MindOS intentionally requires a separately installed local `claude`, so
+  // no SDK optional native package belongs in the compiled platform runtime.
   const removedClaudeNativePackages = pruneClaudeAgentSdkNativePackages(packageDir);
   if (removedClaudeNativePackages > 0) {
     console.log(`[build-platform-packages] Removed ${removedClaudeNativePackages} non-target Claude Agent SDK native package(s) from ${target.key}`);
   }
-  copyCliRuntimeNodeModules(packageDir, target);
+  copyCliRuntimeNodeModules(packageDir);
   writePlatformPackageJson(packageDir, target, targetBuildBinary, targetRuntimeBootstrap);
   writePlatformRuntimeManifest(packageDir, target, targetBuildBinary, targetRuntimeBootstrap);
   pruneKoffi(packageDir, target);
@@ -280,14 +281,13 @@ function platformRuntimeDependencies() {
   return dependencies;
 }
 
-function copyCliRuntimeNodeModules(packageDir, target) {
+function copyCliRuntimeNodeModules(packageDir) {
   const targetNodeModules = resolve(packageDir, 'node_modules');
   mkdirSync(targetNodeModules, { recursive: true });
 
   copyDependencyClosure(CLI_RUNTIME_ROOT_DEPENDENCIES, {
     targetNodeModules,
     resolveFromDir: productRoot,
-    optionalDependencies: new Set([claudeSdkNativePackageName(target)]),
   });
 }
 
@@ -314,11 +314,6 @@ function copyDependencyClosure(rootPackages, options) {
 
     for (const dependency of Object.keys(pkg.dependencies ?? {})) {
       queue.push({ name: dependency, resolveFromDir: sourceDir });
-    }
-    for (const dependency of Object.keys(pkg.optionalDependencies ?? {})) {
-      if (options.optionalDependencies?.has(dependency)) {
-        queue.push({ name: dependency, resolveFromDir: sourceDir });
-      }
     }
   }
 
@@ -359,12 +354,6 @@ function findInstalledPackageDir(resolveFromDir, packageName) {
     if (parent === current) return null;
     current = parent;
   }
-}
-
-function claudeSdkNativePackageName(target) {
-  const osName = target.os === 'win32' ? 'win32' : target.os;
-  const musl = target.libc === 'musl' ? '-musl' : '';
-  return `@anthropic-ai/claude-agent-sdk-${osName}-${target.cpu}${musl}`;
 }
 
 function findPackageRoot(entryPath, packageName) {

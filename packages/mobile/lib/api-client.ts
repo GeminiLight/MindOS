@@ -368,14 +368,32 @@ class MindOSClient {
     }
     const permissions = Array.isArray(data.permissions) ? data.permissions : [];
     const questions = Array.isArray(data.questions) ? data.questions : [];
+    const automationApprovals = Array.isArray(data.automationApprovals) ? data.automationApprovals : [];
     return {
       permissions,
       questions,
+      automationApprovals,
       pendingCount: typeof data.pendingCount === 'number'
         ? data.pendingCount
-        : permissions.length + questions.length,
+        : permissions.length + questions.length + automationApprovals.length,
       generatedAt: typeof data.generatedAt === 'number' ? data.generatedAt : Date.now(),
     };
+  }
+
+  async resolveAutomationApproval(input: {
+    approvalId: string;
+    decision: 'allow' | 'deny';
+  }): Promise<{ ok: true }> {
+    const res = await this.fetchWithTimeout('/api/agent/automation-approval', {
+      method: 'POST',
+      body: JSON.stringify(input),
+      timeout: 15_000,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new ApiError(res.status, readErrorMessage(data, 'Automation approval could not be resolved'));
+    }
+    return { ok: true };
   }
 
   async resolveUserQuestion(input: {

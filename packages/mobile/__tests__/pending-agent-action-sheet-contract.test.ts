@@ -17,6 +17,7 @@ describe('pending agent action sheet contract', () => {
     expect(hook).toContain('AppState.addEventListener');
     expect(hook).toContain('getPendingAgentActions');
     expect(hook).toContain('resolveRuntimePermission');
+    expect(hook).toContain('resolveAutomationApproval');
     expect(hook).toContain('resolveUserQuestion');
     expect(hook).toContain('pollIntervalMs = 2500');
   });
@@ -28,5 +29,8 @@ describe('pending agent action sheet contract', () => {
     expect(sheet).toContain('buildAskUserQuestionAnswers');
     expect(sheet).toContain('Decision is enforced by the connected runtime host.');
     expect(sheet).toContain('Cancel question');
+    expect(sheet).toContain('Automation approval');
+    expect(sheet).toContain('Approve once');
+    expect(sheet).toContain('Deny automation');
   });
 });

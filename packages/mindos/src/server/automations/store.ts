@@ -288,9 +288,15 @@ function normalizeApproval(value: unknown): StudioAutomationApproval | null {
     ? riskRecord.level
     : null;
   const riskSummary = text(riskRecord.summary, 500);
+  const deliveryRecord = isRecord(value.delivery) ? value.delivery : {};
+  const deliveryStatus = deliveryRecord.status === 'sent' || deliveryRecord.status === 'failed'
+    ? deliveryRecord.status
+    : null;
+  const deliveryAttemptedAt = iso(deliveryRecord.attemptedAt);
   return {
     id,
     jobId,
+    ...(safeId(value.runId) ? { runId: safeId(value.runId) } : {}),
     fingerprint,
     runtime,
     status,
@@ -305,6 +311,17 @@ function normalizeApproval(value: unknown): StudioAutomationApproval | null {
     createdAt,
     ...(iso(value.resolvedAt) ? { resolvedAt: iso(value.resolvedAt) } : {}),
     ...(iso(value.consumedAt) ? { consumedAt: iso(value.consumedAt) } : {}),
+    ...(deliveryRecord.channel === 'feishu' && deliveryStatus && deliveryAttemptedAt ? {
+      delivery: {
+        channel: 'feishu',
+        status: deliveryStatus,
+        attemptedAt: deliveryAttemptedAt,
+        ...(text(deliveryRecord.messageId, 200) ? { messageId: text(deliveryRecord.messageId, 200) } : {}),
+        ...(text(deliveryRecord.error, 500)
+          ? { error: redactSensitiveText(text(deliveryRecord.error, 500)!) }
+          : {}),
+      },
+    } : {}),
   };
 }
 

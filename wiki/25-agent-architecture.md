@@ -310,6 +310,8 @@ Studio UI / Product HTTP
 - `Run now` 只入队并立即返回，实际执行由 worker 完成；页面在存在 running job 时短轮询，而不是让 HTTP 请求一直挂住。
 - `mindos automation service install` 安装 launchd/systemd user service；Windows 首版使用 `mindos automation worker` 前台模式。heartbeat 写入 `.mindos/automations/worker.json`，关闭 Web 或 Desktop 不影响执行。
 - failure、timeout、interrupted 与 approval-required 都写入有界、脱敏、幂等通知；Studio 可逐条或批量确认通知，并对 pending approval 执行 Allow once / Deny。
+- `GET /api/agent-runs` 在 Product 层把 run index card、live events、artifact pointer、Retrieval Receipt、Context Asset、session pointer 与 Automation history 聚合成 Observatory trace；重启后没有 live event 的记录明确标为 `summary-only`，附属 store 读取失败会返回 warning 而不是拖垮 run 列表。
+- durable Automation approval 只有一份事实源：Studio、Mobile `pending-actions` 与飞书 OAuth owner 都调用 `resolveStudioAutomationApproval()`。飞书仅接受绑定 owner 在私聊中完整匹配的 `批准/拒绝 approval-*` 命令；投递失败保持 pending，并把脱敏 delivery error 暴露给 Observatory。
 - 旧 `schedule-prompts.json` 只迁移 `source=mindos-studio-automation` 的 job。迁移采用两阶段状态，先把新 job 置为 paused，再禁用旧 job，最后恢复目标状态，因此中途崩溃不会造成双跑。
 
 ### Permission Runtime Projection

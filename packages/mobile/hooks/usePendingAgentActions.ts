@@ -10,6 +10,7 @@ import {
 import type {
   AskUserQuestionAnswer,
   PendingAskUserQuestion,
+  PendingAutomationApproval,
   PendingRuntimePermission,
 } from '@/lib/types';
 
@@ -23,7 +24,7 @@ export function usePendingAgentActions({
   pollIntervalMs = 2500,
 }: UsePendingAgentActionsOptions = {}) {
   const [snapshot, setSnapshot] = useState<NormalizedPendingAgentActions>(() =>
-    normalizePendingAgentActions({ permissions: [], questions: [] }));
+    normalizePendingAgentActions({ permissions: [], questions: [], automationApprovals: [] }));
   const [loading, setLoading] = useState(enabled);
   const [error, setError] = useState('');
   const [resolvingKey, setResolvingKey] = useState<string | null>(null);
@@ -39,7 +40,7 @@ export function usePendingAgentActions({
       requestController.current?.abort();
       requestController.current = null;
       inFlight.current = false;
-      setSnapshot(normalizePendingAgentActions({ permissions: [], questions: [] }));
+      setSnapshot(normalizePendingAgentActions({ permissions: [], questions: [], automationApprovals: [] }));
       setLoading(false);
       setError('');
       return;
@@ -83,7 +84,9 @@ export function usePendingAgentActions({
       setSnapshot((current) => {
         const permissions = current.permissions.filter((item) => pendingAgentActionKey(item) !== key);
         const questions = current.questions.filter((item) => pendingAgentActionKey(item) !== key);
-        return normalizePendingAgentActions({ permissions, questions });
+        const automationApprovals = current.automationApprovals
+          .filter((item) => pendingAgentActionKey(item) !== key);
+        return normalizePendingAgentActions({ permissions, questions, automationApprovals });
       });
       await refresh({ force: true });
       return true;
@@ -127,6 +130,12 @@ export function usePendingAgentActions({
         reason: 'user_cancelled',
       })), [resolveAction]);
 
+  const resolveAutomationApproval = useCallback((
+    action: PendingAutomationApproval,
+    decision: 'allow' | 'deny',
+  ) => resolveAction(pendingAgentActionKey(action), () =>
+    mindosClient.resolveAutomationApproval({ approvalId: action.approvalId, decision })), [resolveAction]);
+
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state: AppStateStatus) => {
       setAppActive(state === 'active');
@@ -156,6 +165,7 @@ export function usePendingAgentActions({
     resolvingKey,
     refresh,
     resolvePermission,
+    resolveAutomationApproval,
     answerQuestion,
     cancelQuestion,
   };

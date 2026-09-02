@@ -4,11 +4,13 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { registerContextFileAsset } from '../knowledge/context-assets/index.js';
 import { writeRetrievalReceipt } from '../retrieval/receipt.js';
+import { resetAgentRunsForTest, startAgentRun } from '../agent/ledger/run-ledger.js';
 import { createMindosHttpServer } from './http.js';
 
 const cleanups: Array<() => void | Promise<void>> = [];
 
 afterEach(async () => {
+  resetAgentRunsForTest();
   while (cleanups.length) await cleanups.pop()?.();
 });
 
@@ -95,6 +97,28 @@ describe('Product Server context and durable automation routes', () => {
     const listed = await fetch(`${base}/api/studio/automations`, { headers: auth });
     await expect(listed.json()).resolves.toMatchObject({
       automations: [expect.objectContaining({ title: 'HTTP radar', nextRun: 'Manual' })],
+    });
+  });
+
+  it('serves the run observatory through the authenticated Product Server boundary', async () => {
+    const { base } = await startServer();
+    const run = startAgentRun({
+      agentKind: 'native-runtime',
+      runtimeId: 'codex',
+      displayName: 'Codex',
+      permissionMode: 'ask',
+      inputSummary: 'Inspect the release.',
+    });
+
+    expect((await fetch(`${base}/api/agent-runs?includeEvents=1`)).status).toBe(401);
+    const response = await fetch(`${base}/api/agent-runs?includeEvents=1`, { headers: auth });
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      runs: [expect.objectContaining({ id: run.id })],
+      observatory: {
+        schemaVersion: 1,
+        traces: [expect.objectContaining({ id: run.id, source: 'agent', runtimeIds: ['codex'] })],
+      },
     });
   });
 });

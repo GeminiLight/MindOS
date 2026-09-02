@@ -46,6 +46,16 @@ describe('/api/agent-runs', () => {
       'run_completed',
       'run_started',
     ]);
+    expect(body.observatory).toMatchObject({
+      schemaVersion: 1,
+      summary: { totalTraces: 1, agentTraces: 1 },
+      traces: [expect.objectContaining({
+        id: subagentRun.id,
+        source: 'agent',
+        coverage: 'live',
+        runtimeIds: ['reviewer'],
+      })],
+    });
   });
 
   it('filters runs by chat session, start time, and native runtime kind', async () => {
@@ -159,7 +169,7 @@ describe('/api/agent-runs', () => {
       data: { kind: 'file', action: 'updated', path: 'notes/demo.md' },
     });
 
-    const response = await GET(new Request(`http://localhost/api/agent-runs?chatSessionId=chat-events&startedAfter=${target.startedAt}&includeEvents=1&eventCategory=tool`));
+    const response = await GET(new Request(`http://localhost/api/agent-runs?runId=${target.id}&chatSessionId=chat-events&startedAfter=${target.startedAt}&includeEvents=1&eventCategory=tool`));
     const body = await response.json();
 
     expect(response.status).toBe(200);

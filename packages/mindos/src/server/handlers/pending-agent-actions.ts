@@ -9,6 +9,8 @@ import {
   type AskUserQuestionAnswer,
 } from '../../agent/bridges/user-question-bridge.js';
 import { json, type MindosServerResponse } from '../response.js';
+import { resolveStudioAutomationApproval } from '../automations/approvals.js';
+import { readStudioAutomationState } from '../automations/store.js';
 
 type ErrorBody = { error: string };
 
@@ -16,15 +18,57 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
-export function handlePendingAgentActionsGet() {
+export type PendingAutomationApproval = {
+  kind: 'automation-approval';
+  approvalId: string;
+  jobId: string;
+  runId?: string;
+  jobTitle: string;
+  runtime: 'codex' | 'claude';
+  toolName: string;
+  action?: string;
+  resource?: string;
+  inputPreview?: string;
+  risk?: { level: 'low' | 'medium' | 'high'; summary: string };
+  createdAt: number;
+};
+
+export type PendingAgentActionServices = { mindRoot?: string; now?(): Date };
+
+export function handlePendingAgentActionsGet(services: PendingAgentActionServices = {}) {
   const permissions = listPendingRuntimePermissions();
   const questions = listPendingAskUserQuestions();
+  const automationApprovals = projectAutomationApprovals(services.mindRoot);
   return json({
     permissions,
     questions,
-    pendingCount: permissions.length + questions.length,
-    generatedAt: Date.now(),
+    automationApprovals,
+    pendingCount: permissions.length + questions.length + automationApprovals.length,
+    generatedAt: services.now?.().getTime() ?? Date.now(),
   });
+}
+
+export function handleAutomationApprovalDecisionPost(
+  body: unknown,
+  services: Required<Pick<PendingAgentActionServices, 'mindRoot'>> & Pick<PendingAgentActionServices, 'now'>,
+): MindosServerResponse<{ ok: true; result: 'resolved' | 'unchanged'; jobTitle: string } | ErrorBody> {
+  if (!isRecord(body)) return json({ error: 'Invalid request body.' }, { status: 400 });
+  const approvalId = stringField(body, 'approvalId');
+  const decision = body.decision === 'allow' || body.decision === 'deny' ? body.decision : null;
+  if (!approvalId || !decision) {
+    return json({ error: 'approvalId and allow or deny decision are required.' }, { status: 400 });
+  }
+  const result = resolveStudioAutomationApproval(
+    services.mindRoot,
+    approvalId,
+    decision,
+    services.now?.() ?? new Date(),
+  );
+  if (result.kind === 'missing') return json({ error: `Automation approval not found: ${approvalId}` }, { status: 404 });
+  if (result.kind === 'job-missing') return json({ error: 'The automation for this approval no longer exists.' }, { status: 409 });
+  if (result.kind === 'conflict') return json({ error: 'This approval was already resolved or consumed with a different decision.' }, { status: 409 });
+  if (!('approval' in result)) return json({ error: 'Automation approval could not be resolved.' }, { status: 409 });
+  return json({ ok: true, result: result.kind, jobTitle: result.jobTitle ?? 'Automation' });
 }
 
 export function handleRuntimePermissionDecisionPost(
@@ -90,4 +134,31 @@ function normalizeAnswers(value: unknown): AskUserQuestionAnswer[] {
 function stringField(record: Record<string, unknown>, key: string): string | undefined {
   const value = record[key];
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function projectAutomationApprovals(mindRoot: string | undefined): PendingAutomationApproval[] {
+  if (!mindRoot) return [];
+  try {
+    const state = readStudioAutomationState(mindRoot);
+    const jobs = new Map(state.automations.map((job) => [job.id, job]));
+    return state.approvals
+      .filter((approval) => approval.status === 'pending')
+      .map((approval) => ({
+        kind: 'automation-approval' as const,
+        approvalId: approval.id,
+        jobId: approval.jobId,
+        ...(approval.runId ? { runId: approval.runId } : {}),
+        jobTitle: jobs.get(approval.jobId)?.title ?? 'Automation',
+        runtime: approval.runtime,
+        toolName: approval.toolName,
+        ...(approval.action ? { action: approval.action } : {}),
+        ...(approval.resource ? { resource: approval.resource } : {}),
+        ...(approval.inputPreview ? { inputPreview: approval.inputPreview } : {}),
+        ...(approval.risk ? { risk: approval.risk } : {}),
+        createdAt: new Date(approval.createdAt).getTime(),
+      }))
+      .sort((left, right) => left.createdAt - right.createdAt || left.approvalId.localeCompare(right.approvalId));
+  } catch {
+    return [];
+  }
 }

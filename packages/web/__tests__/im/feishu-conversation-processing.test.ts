@@ -5,6 +5,7 @@ const getConversationHistory = vi.fn();
 const appendConversationTurn = vi.fn();
 const recordActivity = vi.fn();
 const sendIMMessage = vi.fn();
+const tryResolveFeishuAutomationApproval = vi.fn();
 
 vi.mock('@/lib/agent/headless', () => ({
   runHeadlessAgent,
@@ -23,6 +24,10 @@ vi.mock('@/lib/im/executor', () => ({
   sendIMMessage,
 }));
 
+vi.mock('@/lib/im/webhook/feishu-automation-approval', () => ({
+  tryResolveFeishuAutomationApproval,
+}));
+
 async function importModule() {
   return await import('@/lib/im/webhook/feishu');
 }
@@ -36,6 +41,7 @@ describe('Feishu conversation processing', () => {
       messages: [{ role: 'assistant', content: 'Previous reply', timestamp: 1 }],
     });
     sendIMMessage.mockResolvedValue({ ok: true, messageId: 'msg_1', timestamp: '2026-04-10T00:00:00.000Z' });
+    tryResolveFeishuAutomationApproval.mockResolvedValue({ handled: false });
   });
 
   it('runs the agent, sends the reply, and appends conversation history', async () => {
@@ -92,5 +98,24 @@ describe('Feishu conversation processing', () => {
     expect(sendIMMessage).toHaveBeenCalledWith(expect.objectContaining({
       text: 'I received your message, but I could not generate a reply just now. Please try again from MindOS or send another message.',
     }), undefined, { activityType: 'conversation_reply' });
+  });
+
+  it('replies to an approval command without running the conversational agent', async () => {
+    tryResolveFeishuAutomationApproval.mockResolvedValue({
+      handled: true,
+      reply: '已批准 Release observer。本次决定只对这一轮 Automation 生效。',
+    });
+    const { processFeishuIncomingMessage } = await importModule();
+
+    await processFeishuIncomingMessage({
+      platform: 'feishu', senderId: 'ou_owner', chatId: 'oc_chat_001', chatType: 'dm',
+      text: '批准 approval-release-1', messageId: 'om_approval', rawEvent: {},
+    });
+
+    expect(runHeadlessAgent).not.toHaveBeenCalled();
+    expect(sendIMMessage).toHaveBeenCalledWith(expect.objectContaining({
+      text: '已批准 Release observer。本次决定只对这一轮 Automation 生效。',
+    }), undefined, { activityType: 'conversation_reply' });
+    expect(appendConversationTurn).toHaveBeenCalled();
   });
 });

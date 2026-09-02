@@ -4,6 +4,7 @@ import { recordActivity } from '@/lib/im/activity';
 import { sendIMMessage } from '@/lib/im/executor';
 import type { Message } from '@/lib/types';
 import type { IncomingIMMessage } from '@/lib/im/types';
+import { tryResolveFeishuAutomationApproval } from './feishu-automation-approval';
 
 function buildFallbackReply(): string {
   return 'I received your message, but I could not generate a reply just now. Please try again from MindOS or send another message.';
@@ -17,6 +18,12 @@ export async function processFeishuIncomingMessage(incoming: IncomingIMMessage):
     recipient: incoming.senderId,
     message: incoming.text,
   });
+
+  const approval = await tryResolveFeishuAutomationApproval(incoming);
+  if (approval.handled) {
+    await sendReplyAndRemember(incoming, approval.reply);
+    return;
+  }
 
   const { messages: historyMessages } = getConversationHistory('feishu', incoming.chatId);
   let replyText = '';
@@ -34,6 +41,10 @@ export async function processFeishuIncomingMessage(incoming: IncomingIMMessage):
     replyText = buildFallbackReply();
   }
 
+  await sendReplyAndRemember(incoming, replyText);
+}
+
+async function sendReplyAndRemember(incoming: IncomingIMMessage, replyText: string): Promise<void> {
   const sendResult = await sendIMMessage({
     platform: 'feishu',
     recipientId: incoming.chatId,

@@ -1,4 +1,4 @@
-<!-- Last verified: 2026-09-02 -->
+<!-- Last verified: 2026-09-03 -->
 
 # API Reference
 
@@ -39,6 +39,11 @@
 | `/api/skills` | GET/POST | Skills 列表与 CRUD。POST action 全集：`create`/`update`/`delete`/`toggle`/`read`/`read-native`/`record-install`/`link`/`unlink`/`disable-native`/`enable-native`。`link`/`unlink` 把 skill 链接到/移出下游 agent 的 skill 目录（symlink → Windows junction → copy fallback，副本带 `.mindos-managed` 标记）；`disable-native`/`enable-native` 停用/恢复 agent 自有技能——停用不删除，把技能目录整体移入 `{skillDir}/.mindos-disabled/` 暂存，恢复即原样移回 |
 | `/api/skills/matrix` | GET | 统一 (skill × agent) 启用矩阵：`{ skills, agents, state, cells }`，首列恒为 MindOS 自身（`disabledSkills`），外部 agent 列以链接是否存在为唯一事实源，单元格状态含 `linked`/`copied`/`broken`/`conflict`/`native-disabled`（已停放）/`none`；矩阵会并入仅存在于各 agent `.mindos-disabled` 停放区的技能（保证停放后仍可恢复）；universal agent 具备私房目录感知（如 Codex 的 `~/.codex/skills`），本体在私房目录的技能判定为已启用、对其 link 不会向共享池写入链接；GET 只读，不迁移或清空遗留 `installedSkillAgents[]` 记账 |
 | `/api/agent-activity` | POST | Agent 活动日志记录 |
+| `/api/agent-runs` | GET | Agent / Automation 运行观测。保留 `runs/events`，并返回按 root run 聚合的 `observatory`（run tree、artifact、receipt、session、approval、coverage 与 delivery 状态）；支持 `runId`、`rootRunId`、`chatSessionId`、`kind`、`status`、`startedAfter`、`includeEvents` 等筛选 |
+| `/api/agent/pending-actions` | GET | 统一待处理动作：runtime permission、AskUserQuestion 与 durable Automation approval |
+| `/api/agent/runtime-permission` | POST | 决议当前进程中的 runtime permission |
+| `/api/agent/user-question` | POST | 回答或取消 AskUserQuestion |
+| `/api/agent/automation-approval` | POST | 幂等决议 durable Automation approval。Body：`{ approvalId, decision: "allow" | "deny" }` |
 
 ## Studio Automation
 
@@ -48,6 +53,8 @@
 | `/api/studio/automations` | POST | 自动化 mutation。Body action：`create`、`update`、`delete`、`set-status`、`run-now`、`resolve-approval`、`acknowledge-notification`、`acknowledge-all-notifications` |
 
 Automation mutation 由 Product Server 校验。MindOS Pi 只接受 `read/auto`，Codex 与 Claude 接受 `read/ask/auto`；任务状态、审批和通知持久化在 `<mindRoot>/.mindos/automations/state.json`。`run-now` 是非阻塞入队，响应不等待 Agent 执行完成。独立执行器用 `mindos automation service install` 安装，也可用 `mindos automation once|worker` 前台运行。
+
+Codex / Claude Automation 新建审批后会尝试向已连接的飞书 OAuth owner 私聊发送脱敏摘要；回复完整的 `批准 approval-*` 或 `拒绝 approval-*` 会调用同一 resolver。发送失败只写入 approval delivery 状态，不改变 pending 权限，也不会自动放行。
 
 ## Context Governance
 

@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { redactSensitiveText } from '../../agent/redaction.js';
+import { redactSensitiveObject, redactSensitiveText } from '../../agent/redaction.js';
 import type {
   MindosRuntimePermissionRequest,
   MindosRuntimePermissionResult,
@@ -18,16 +18,18 @@ const MAX_PREVIEW = 1_000;
 
 export class StudioAutomationApprovalRequiredError extends Error {
   readonly approvalId: string;
+  readonly created: boolean;
 
-  constructor(approvalId: string) {
+  constructor(approvalId: string, created = false) {
     super(`Automation is waiting for approval: ${approvalId}`);
     this.name = 'StudioAutomationApprovalRequiredError';
     this.approvalId = approvalId;
+    this.created = created;
   }
 }
 
 export type ResolveStudioAutomationApprovalResult =
-  | { kind: 'resolved' | 'unchanged'; approval: StudioAutomationApproval }
+  | { kind: 'resolved' | 'unchanged'; approval: StudioAutomationApproval; jobTitle?: string }
   | { kind: 'missing' | 'conflict' | 'job-missing' };
 
 export function requestStudioAutomationPermission(
@@ -57,7 +59,7 @@ export function requestStudioAutomationPermission(
       };
     }
     if (existing?.status === 'pending') {
-      return { kind: 'pending' as const, approvalId: existing.id };
+      return { kind: 'pending' as const, approvalId: existing.id, created: false };
     }
 
     const allowDecision = selectPermissionDecision(request, 'allow');
@@ -66,16 +68,20 @@ export function requestStudioAutomationPermission(
       throw new Error('Runtime approval request did not provide both allow and deny choices.');
     }
     const hash = crypto.createHash('sha256').update(`${job.id}\0${fingerprint}`).digest('hex').slice(0, 20);
+    const action = boundedOptional(request.action, 300);
+    const resource = boundedOptional(request.resource, 500);
+    const preview = inputPreview(request.input);
     const approval: StudioAutomationApproval = {
       id: `approval-${hash}`,
       jobId: job.id,
+      ...(job.lease?.runId ? { runId: job.lease.runId } : {}),
       fingerprint,
       runtime,
       status: 'pending',
       toolName: bounded(request.toolName, 160, 'unknown tool'),
-      ...(boundedOptional(request.action, 300) ? { action: boundedOptional(request.action, 300) } : {}),
-      ...(boundedOptional(request.resource, 500) ? { resource: boundedOptional(request.resource, 500) } : {}),
-      ...(inputPreview(request.input) ? { inputPreview: inputPreview(request.input) } : {}),
+      ...(action ? { action } : {}),
+      ...(resource ? { resource } : {}),
+      ...(preview ? { inputPreview: preview } : {}),
       ...(request.risk ? {
         risk: {
           level: request.risk.level,
@@ -96,11 +102,11 @@ export function requestStudioAutomationPermission(
       createdAt: now.toISOString(),
     });
     state.updatedAt = now.toISOString();
-    return { kind: 'pending' as const, approvalId: approval.id };
+    return { kind: 'pending' as const, approvalId: approval.id, created: true };
   });
 
   if (result.kind === 'decision') return result.result;
-  throw new StudioAutomationApprovalRequiredError(result.approvalId);
+  throw new StudioAutomationApprovalRequiredError(result.approvalId, result.created);
 }
 
 export function resolveStudioAutomationApproval(
@@ -114,8 +120,9 @@ export function resolveStudioAutomationApproval(
     if (!approval) return { kind: 'missing' as const };
     if (approval.status === 'consumed') return { kind: 'conflict' as const };
     if (approval.decision) {
+      const jobTitle = state.automations.find((item) => item.id === approval.jobId)?.title;
       return approval.decision === decision
-        ? { kind: 'unchanged' as const, approval: structuredClone(approval) }
+        ? { kind: 'unchanged' as const, approval: structuredClone(approval), ...(jobTitle ? { jobTitle } : {}) }
         : { kind: 'conflict' as const };
     }
     const job = state.automations.find((item) => item.id === approval.jobId);
@@ -132,7 +139,7 @@ export function resolveStudioAutomationApproval(
       }
     }
     state.updatedAt = now.toISOString();
-    return { kind: 'resolved' as const, approval: structuredClone(approval) };
+    return { kind: 'resolved' as const, approval: structuredClone(approval), jobTitle: job.title };
   });
 }
 
@@ -245,8 +252,9 @@ function approvalSummary(approval: StudioAutomationApproval): string {
 }
 
 function inputPreview(value: unknown): string | undefined {
+  if (value === undefined || value === null) return undefined;
   try {
-    return boundedOptional(stableStringify(value), MAX_PREVIEW);
+    return boundedOptional(stableStringify(redactSensitiveObject(value)), MAX_PREVIEW);
   } catch {
     return undefined;
   }

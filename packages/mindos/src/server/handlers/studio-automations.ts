@@ -49,6 +49,11 @@ export {
   runStudioAutomationWorkerService,
 } from '../automations/service.js';
 export { createStudioAutomationExecutor } from '../automations/executor.js';
+export {
+  notifyStudioAutomationApprovalViaFeishu,
+  type FeishuApprovalDeliveryOptions,
+  type FeishuApprovalDeliveryResult,
+} from '../automations/feishu-approval.js';
 export type * from '../automations/types.js';
 
 export type StudioAutomationServices = {

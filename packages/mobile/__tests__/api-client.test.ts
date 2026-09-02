@@ -255,19 +255,39 @@ describe('mindosClient auth', () => {
     vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify({
       permissions: [{ kind: 'runtime-permission', requestId: 'req-1' }],
       questions: null,
-      pendingCount: 1,
+      automationApprovals: [{ kind: 'automation-approval', approvalId: 'approval-1' }],
+      pendingCount: 2,
       generatedAt: 123,
     }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
 
     await expect(mindosClient.getPendingAgentActions()).resolves.toEqual({
       permissions: [{ kind: 'runtime-permission', requestId: 'req-1' }],
       questions: [],
-      pendingCount: 1,
+      automationApprovals: [{ kind: 'automation-approval', approvalId: 'approval-1' }],
+      pendingCount: 2,
       generatedAt: 123,
     });
     expect(fetch).toHaveBeenCalledWith(
       'http://127.0.0.1:4567/api/agent/pending-actions',
       expect.objectContaining({ headers: expect.objectContaining({ Authorization: 'Bearer secret-token' }) }),
+    );
+  });
+
+  it('resolves a durable automation approval through the MindOS server', async () => {
+    mindosClient.setBaseUrl('http://127.0.0.1:4567');
+    mindosClient.setAuthToken('secret-token');
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+
+    await expect(mindosClient.resolveAutomationApproval({
+      approvalId: 'approval-1',
+      decision: 'allow',
+    })).resolves.toEqual({ ok: true });
+    expect(fetch).toHaveBeenCalledWith(
+      'http://127.0.0.1:4567/api/agent/automation-approval',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ approvalId: 'approval-1', decision: 'allow' }),
+      }),
     );
   });
 

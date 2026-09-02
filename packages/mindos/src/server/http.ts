@@ -34,7 +34,9 @@ import {
   getAcpSessionSnapshots,
 } from './handlers/acp.js';
 import { handleAgentActivity, handleAgentActivityPost } from './handlers/agent-activity.js';
+import { handleAgentRunsGet } from './handlers/agent-runs.js';
 import {
+  handleAutomationApprovalDecisionPost,
   handlePendingAgentActionsGet,
   handleRuntimePermissionDecisionPost,
   handleUserQuestionDecisionPost,
@@ -415,8 +417,19 @@ async function handleRequest(
       writeResponse(res, handleAgentActivityPost(await readJsonBody(req), services));
       return;
     }
+    if (route === 'GET /api/agent-runs') {
+      writeResponse(res, handleAgentRunsGet(url.searchParams, { mindRoot: services.mindRoot }));
+      return;
+    }
     if (route === 'GET /api/agent/pending-actions') {
-      writeResponse(res, handlePendingAgentActionsGet());
+      writeResponse(res, handlePendingAgentActionsGet({ mindRoot: services.mindRoot }));
+      return;
+    }
+    if (route === 'POST /api/agent/automation-approval') {
+      writeResponse(res, handleAutomationApprovalDecisionPost(
+        await readJsonBody(req),
+        { mindRoot: services.mindRoot },
+      ));
       return;
     }
     if (route === 'POST /api/agent/runtime-permission') {

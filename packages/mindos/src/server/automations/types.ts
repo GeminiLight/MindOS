@@ -44,6 +44,7 @@ export type StudioAutomationApprovalStatus = 'pending' | 'approved' | 'denied' |
 export type StudioAutomationApproval = {
   id: string;
   jobId: string;
+  runId?: string;
   fingerprint: string;
   runtime: 'codex' | 'claude';
   status: StudioAutomationApprovalStatus;
@@ -58,6 +59,13 @@ export type StudioAutomationApproval = {
   createdAt: string;
   resolvedAt?: string;
   consumedAt?: string;
+  delivery?: {
+    channel: 'feishu';
+    status: 'sent' | 'failed';
+    attemptedAt: string;
+    messageId?: string;
+    error?: string;
+  };
 };
 
 export type StudioAutomationLease = {

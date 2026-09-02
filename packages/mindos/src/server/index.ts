@@ -63,9 +63,26 @@ export {
 } from './handlers/agent-activity.js';
 
 export {
+  buildAgentRunObservatory,
+  handleAgentRunsGet,
+  type AgentRunObservatory,
+  type AgentRunObservatoryCoverage,
+  type AgentRunObservatoryInput,
+  type AgentRunObservatoryStatus,
+  type AgentRunObservatoryTrace,
+  type AgentRunsHandlerServices,
+  type AgentRunsPayload,
+  type PublicAgentEvent,
+  type PublicAgentRunRecord,
+} from './handlers/agent-runs.js';
+
+export {
+  handleAutomationApprovalDecisionPost,
   handlePendingAgentActionsGet,
   handleRuntimePermissionDecisionPost,
   handleUserQuestionDecisionPost,
+  type PendingAgentActionServices,
+  type PendingAutomationApproval,
 } from './handlers/pending-agent-actions.js';
 
 export {
@@ -235,6 +252,7 @@ export {
   runStudioAutomationWorkerOnce,
   runStudioAutomationWorkerService,
   createStudioAutomationExecutor,
+  notifyStudioAutomationApprovalViaFeishu,
   type StudioAutomationApproval,
   type StudioAutomationApprovalDecision,
   type StudioAutomationDraft,
@@ -251,6 +269,8 @@ export {
   type StudioAutomationRuntime,
   type StudioAutomationSchedule,
   type StudioAutomationServices,
+  type FeishuApprovalDeliveryOptions,
+  type FeishuApprovalDeliveryResult,
   type StudioAutomationState,
 } from './handlers/studio-automations.js';
 

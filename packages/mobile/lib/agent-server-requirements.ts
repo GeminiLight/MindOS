@@ -1,5 +1,6 @@
 export type AgentServerRequirementId =
   | 'agent-tasks'
+  | 'automation-approvals'
   | 'runtime-permissions'
   | 'user-questions'
   | 'native-sessions'
@@ -41,6 +42,18 @@ export const AGENT_SERVER_REQUIREMENTS: AgentServerRequirement[] = [
       'agentTasks.reviewLinks',
     ],
     status: 'required',
+  },
+  {
+    id: 'automation-approvals',
+    title: 'Durable automation approval queue',
+    summary: 'Expose pending Codex and Claude automation approvals from the host ledger.',
+    unlocks: 'Mobile allow-once and deny decisions that safely resume scheduled agent runs.',
+    requiredEndpoints: ['GET /api/agent/pending-actions', 'POST /api/agent/automation-approval'],
+    requiredCapabilities: [
+      'automationApprovals.pending',
+      'automationApprovals.resolve',
+    ],
+    status: 'available',
   },
   {
     id: 'runtime-permissions',

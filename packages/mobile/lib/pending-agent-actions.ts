@@ -3,12 +3,13 @@ import type {
   AskUserQuestionOption,
   AskUserQuestionQuestion,
   PendingAgentActionsResponse,
+  PendingAutomationApproval,
   PendingAskUserQuestion,
   PendingRuntimePermission,
   RuntimePermissionOption,
 } from './types';
 
-export type PendingAgentAction = PendingRuntimePermission | PendingAskUserQuestion;
+export type PendingAgentAction = PendingRuntimePermission | PendingAskUserQuestion | PendingAutomationApproval;
 export type AskUserQuestionDraft = { selected?: string[]; custom?: string };
 
 export type NormalizedPendingAgentActions = PendingAgentActionsResponse & {
@@ -131,6 +132,36 @@ function normalizeQuestionAction(value: unknown, now: number): PendingAskUserQue
   return { kind: 'user-question', runId, toolCallId, questions, createdAt, expiresAt };
 }
 
+function normalizeAutomationApproval(value: unknown): PendingAutomationApproval | null {
+  if (!isRecord(value) || value.kind !== 'automation-approval') return null;
+  const approvalId = stringValue(value, 'approvalId');
+  const jobId = stringValue(value, 'jobId');
+  const jobTitle = stringValue(value, 'jobTitle');
+  const toolName = stringValue(value, 'toolName');
+  const createdAt = finiteNumber(value, 'createdAt');
+  const runtime = value.runtime === 'codex' || value.runtime === 'claude' ? value.runtime : undefined;
+  if (!approvalId || !jobId || !jobTitle || !toolName || !runtime || createdAt === undefined) return null;
+  const riskRecord = isRecord(value.risk) ? value.risk : null;
+  const riskLevel = riskRecord?.level === 'low' || riskRecord?.level === 'medium' || riskRecord?.level === 'high'
+    ? riskRecord.level
+    : undefined;
+  const riskSummary = riskRecord ? stringValue(riskRecord, 'summary') : undefined;
+  return {
+    kind: 'automation-approval',
+    approvalId,
+    jobId,
+    ...(stringValue(value, 'runId') ? { runId: stringValue(value, 'runId') } : {}),
+    jobTitle,
+    runtime,
+    toolName,
+    ...(stringValue(value, 'action') ? { action: stringValue(value, 'action') } : {}),
+    ...(stringValue(value, 'resource') ? { resource: stringValue(value, 'resource') } : {}),
+    ...(stringValue(value, 'inputPreview') ? { inputPreview: stringValue(value, 'inputPreview') } : {}),
+    ...(riskLevel && riskSummary ? { risk: { level: riskLevel, summary: riskSummary } } : {}),
+    createdAt,
+  };
+}
+
 export function normalizePendingAgentActions(
   payload: unknown,
   now = Date.now(),
@@ -142,11 +173,17 @@ export function normalizePendingAgentActions(
   const questions = Array.isArray(record.questions)
     ? record.questions.map((item) => normalizeQuestionAction(item, now)).filter((item): item is PendingAskUserQuestion => item !== null)
     : [];
-  const actions = [...permissions, ...questions].sort((left, right) =>
+  const automationApprovals = Array.isArray(record.automationApprovals)
+    ? record.automationApprovals
+      .map(normalizeAutomationApproval)
+      .filter((item): item is PendingAutomationApproval => item !== null)
+    : [];
+  const actions = [...permissions, ...questions, ...automationApprovals].sort((left, right) =>
     left.createdAt - right.createdAt || pendingAgentActionKey(left).localeCompare(pendingAgentActionKey(right)));
   return {
     permissions,
     questions,
+    automationApprovals,
     actions,
     pendingCount: actions.length,
     generatedAt: finiteNumber(record, 'generatedAt') ?? now,
@@ -154,9 +191,9 @@ export function normalizePendingAgentActions(
 }
 
 export function pendingAgentActionKey(action: PendingAgentAction): string {
-  return action.kind === 'runtime-permission'
-    ? `${action.kind}:${action.runId}:${action.requestId}`
-    : `${action.kind}:${action.runId}:${action.toolCallId}`;
+  if (action.kind === 'runtime-permission') return `${action.kind}:${action.runId}:${action.requestId}`;
+  if (action.kind === 'user-question') return `${action.kind}:${action.runId}:${action.toolCallId}`;
+  return `${action.kind}:${action.approvalId}`;
 }
 
 export function buildAskUserQuestionAnswers(

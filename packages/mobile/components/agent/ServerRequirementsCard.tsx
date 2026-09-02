@@ -18,6 +18,7 @@ type IoniconsName = ComponentProps<typeof Ionicons>['name'];
 
 const REQUIREMENT_ICONS: Record<AgentServerRequirementId, IoniconsName> = {
   'agent-tasks': 'cloud-upload-outline',
+  'automation-approvals': 'timer-outline',
   'runtime-permissions': 'shield-checkmark-outline',
   'user-questions': 'chatbubble-ellipses-outline',
   'native-sessions': 'albums-outline',

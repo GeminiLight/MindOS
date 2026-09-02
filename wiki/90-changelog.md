@@ -1,4 +1,4 @@
-<!-- Last verified: 2026-09-02 | Current version: v1.1.64 -->
+<!-- Last verified: 2026-09-03 | Current version: v1.1.65 -->
 
 # 变更日志 (CHANGELOG)
 
@@ -6,7 +6,11 @@
 
 ### Runtime / Agents
 
-- **Pi thinking effort 与运行时升级**：Pi 依赖升级到 `0.81.1` 并迁移到 `ModelRuntime` / `Models` API；MindOS runtime 现在按具体模型暴露并执行 `off`、`minimal`、`low`、`medium`、`high`、`xhigh`、`max`，Chat composer 会按 provider/model 记忆选择并在模型能力变化时安全夹取。
+- **Agent Run Observatory**：Agents / Runs 现在按一次 root run 聚合 Agent 与 Automation 的运行树、实时事件、artifact、Context receipt、session 与审批，不再只显示文件活动；重启后的历史会明确标为“仅摘要”，附属存储异常会降级并提示。
+- **Automation 跨端审批**：durable Codex / Claude Automation approval 进入 Mobile 全局待办，并可向飞书 OAuth 绑定账号发送脱敏私聊通知；Mobile、Studio 与飞书严格命令共用同一幂等状态机，投递失败不会自动放行。
+- **审批预览脱敏加固**：Automation 结构化 tool input 在生成预览前按敏感键递归脱敏，避免 `token`、`secret`、authorization 等字段以普通 JSON 值泄露。
+- **Pi thinking effort 与运行时升级**：三个 Pi 核心包统一升级到 `0.84.4` 并迁移到 `ModelRuntime` / `Models` API；MindOS runtime 现在按具体模型暴露并执行 `off`、`minimal`、`low`、`medium`、`high`、`xhigh`、`max`，Chat composer 会按 provider/model 记忆选择并在模型能力变化时安全夹取。
+- **平台包体积回归修复**：平台 runtime 闭包不再误内嵌 Claude Agent SDK 的 200+ MB 可选原生 CLI；Claude 继续使用本机检测到的 `claude`，darwin-arm64 平台 tarball 从约 136 MiB 回落到约 73.6 MiB，并保留 100 MiB 发布门禁。
 - **Runtime 诊断面板可视化**：Agents / Agent 页新增 Runtime Diagnostics，直接展示 catalog、readiness、命令解析、能力矩阵与诊断缺口，方便排查 Codex、Claude Code、MindOS 与 ACP runtime 的兼容状态。
 - **Artifacts / Preview 工作流可视化**：Agents / Agent 页新增 Artifacts / Preview 面板，统一展示 runtime artifact readiness、指针式 artifact 预览和 Agent 文件变更入口，方便从 ledger 跳到文件或变更审阅。
 - **Agent runtime 基础能力收口**：新增 runtime catalog 与 readiness/capability matrix，统一展示本机 Codex、Claude Code、ACP 等 runtime 的安装、可用性和能力状态。

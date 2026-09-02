@@ -366,9 +366,28 @@ export interface PendingAskUserQuestion {
   expiresAt: number;
 }
 
+export interface PendingAutomationApproval {
+  kind: 'automation-approval';
+  approvalId: string;
+  jobId: string;
+  runId?: string;
+  jobTitle: string;
+  runtime: 'codex' | 'claude';
+  toolName: string;
+  action?: string;
+  resource?: string;
+  inputPreview?: string;
+  risk?: {
+    level: 'low' | 'medium' | 'high';
+    summary: string;
+  };
+  createdAt: number;
+}
+
 export interface PendingAgentActionsResponse {
   permissions: PendingRuntimePermission[];
   questions: PendingAskUserQuestion[];
+  automationApprovals: PendingAutomationApproval[];
   pendingCount: number;
   generatedAt: number;
 }
