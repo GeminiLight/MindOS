@@ -22,6 +22,7 @@ import {
   agentRunViewHref,
   fetchAgentRunObservatory,
   filterAgentRunTraces,
+  replayAgentRunCapsule,
   type AgentRunObservatoryFilter,
 } from '@/lib/agent-run-observatory';
 
@@ -42,6 +43,8 @@ const COPY = {
     agent: 'Agent', automation: 'Automation', runtime: 'Runtime', model: 'Model', thinking: 'Thinking', permission: 'Permission',
     duration: 'Duration', started: 'Started', runTree: 'Run tree', timeline: 'Timeline', approvals: 'Approvals',
     context: 'Context', artifacts: 'Artifacts', sessions: 'Sessions', input: 'Input', output: 'Output', noDetail: 'Select a run to inspect it.',
+    recovery: 'Recovery', retryRun: 'Retry', forkRun: 'Fork', resumeRun: 'Resume', rollbackRun: 'Rollback',
+    recovering: 'Starting recovery…', recovered: 'Recovery run started.', recoveryFailed: 'Could not start recovery.',
   },
   zh: {
     title: '运行观测台', subtitle: '从上下文、审批到产物，追踪每一次 Agent 与 Automation 运行。',
@@ -51,6 +54,8 @@ const COPY = {
     agent: 'Agent', automation: 'Automation', runtime: '运行时', model: '模型', thinking: '思考', permission: '权限',
     duration: '耗时', started: '开始时间', runTree: '运行树', timeline: '事件流', approvals: '审批',
     context: '上下文', artifacts: '产物', sessions: '会话', input: '输入', output: '输出', noDetail: '请选择一条运行查看详情。',
+    recovery: '接管与恢复', retryRun: '重新执行', forkRun: '分叉运行', resumeRun: '继续会话', rollbackRun: '回滚',
+    recovering: '正在启动恢复运行…', recovered: '恢复运行已启动。', recoveryFailed: '无法启动恢复运行。',
   },
 } as const;
 
@@ -150,7 +155,7 @@ export default function AgentActivitySection() {
               )}
             </div>
             <div className="min-w-0 rounded-lg border border-border/60 bg-background/35 p-5">
-              {!loading && selected ? <TraceDetail trace={selected} copy={copy} locale={locale} /> : !loading ? <EmptyState text={copy.noDetail} /> : null}
+              {!loading && selected ? <TraceDetail trace={selected} copy={copy} locale={locale} onRecovered={() => setReload((value) => value + 1)} /> : !loading ? <EmptyState text={copy.noDetail} /> : null}
             </div>
           </div>
         </>
@@ -184,7 +189,26 @@ function TraceRow({ trace, selected, onClick, locale }: { trace: AgentRunObserva
   );
 }
 
-function TraceDetail({ trace, copy, locale }: { trace: AgentRunObservatoryTrace; copy: (typeof COPY)[keyof typeof COPY]; locale: string }) {
+function TraceDetail({ trace, copy, locale, onRecovered }: { trace: AgentRunObservatoryTrace; copy: (typeof COPY)[keyof typeof COPY]; locale: string; onRecovered(): void }) {
+  const [recovering, setRecovering] = useState<'retry' | 'fork' | 'resume' | null>(null);
+  const [recoveryState, setRecoveryState] = useState<{ tone: 'success' | 'error'; message: string } | null>(null);
+  const recover = async (action: 'retry' | 'fork' | 'resume') => {
+    if (!trace.capsule || recovering) return;
+    setRecovering(action);
+    setRecoveryState(null);
+    try {
+      await replayAgentRunCapsule(trace.capsule.id, action);
+      setRecoveryState({ tone: 'success', message: copy.recovered });
+      onRecovered();
+    } catch (error) {
+      setRecoveryState({
+        tone: 'error',
+        message: `${copy.recoveryFailed} ${error instanceof Error ? error.message : String(error)}`,
+      });
+    } finally {
+      setRecovering(null);
+    }
+  };
   return (
     <div className="space-y-7">
       <div>
@@ -203,6 +227,17 @@ function TraceDetail({ trace, copy, locale }: { trace: AgentRunObservatoryTrace;
           <Detail label={copy.started} value={formatDate(trace.startedAt, locale)} />
         </dl>
       </div>
+
+      {trace.capsule ? <Section title={copy.recovery} icon={<RefreshCw size={14} aria-hidden="true" />}>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" size="sm" aria-label="Retry run" disabled={!!recovering || !trace.capsule.recovery.retry.supported} onClick={() => void recover('retry')}>{copy.retryRun}</Button>
+          <Button variant="outline" size="sm" aria-label="Fork run" disabled={!!recovering || !trace.capsule.recovery.fork.supported} onClick={() => void recover('fork')}>{copy.forkRun}</Button>
+          <Button variant="outline" size="sm" aria-label="Resume run" disabled={!!recovering || !trace.capsule.recovery.resume.supported} onClick={() => void recover('resume')}>{copy.resumeRun}</Button>
+          <Button variant="outline" size="sm" aria-label="Rollback run" disabled title={trace.capsule.recovery.rollback.reason}>{copy.rollbackRun}</Button>
+        </div>
+        {recovering ? <p role="status" className="mt-2 text-xs text-muted-foreground">{copy.recovering}</p> : null}
+        {recoveryState ? <p role={recoveryState.tone === 'error' ? 'alert' : 'status'} className={cn('mt-2 text-xs', recoveryState.tone === 'error' ? 'text-error' : 'text-success')}>{recoveryState.message}</p> : null}
+      </Section> : null}
 
       <Section title={copy.runTree} icon={<Bot size={14} aria-hidden="true" />}>
         <div className="space-y-2">{trace.nodes.map((node) => (

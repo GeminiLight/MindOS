@@ -28,6 +28,18 @@ const agentTrace = {
   artifacts: [{ id: 'artifact-1', kind: 'file', status: 'completed', title: 'Release report', path: 'Reports/release.md' }],
   receipts: [{ id: 'receipt-1', outcome: 'selected', queryPreview: 'release research', durationMs: 45, totals: { candidateCount: 3, selectedCount: 1, usedTokens: 120 }, selections: [] }],
   contextAssets: [{ id: 'asset-1', title: 'Source note', path: 'Notes/source.md', kind: 'knowledge', status: 'active' }],
+  capsule: {
+    schemaVersion: 1, id: 'capsule-root', runId: 'run-root', rootRunId: 'run-root', source: 'interactive', status: 'failed',
+    inputSummary: 'Research the release.', runtime: { kind: 'mindos', id: 'mindos', name: 'MindOS' },
+    context: { attachedFileCount: 0, uploadedFileCount: 0, receiptIds: ['receipt-1'], assetIds: ['asset-1'] },
+    recovery: {
+      retry: { supported: true, mode: 'from-start' },
+      fork: { supported: true, mode: 'new-session' },
+      resume: { supported: true, sessionId: 'session-1' },
+      rollback: { supported: false, reason: 'No checkpoint artifact.' },
+    },
+    createdAt: '2026-09-02T10:00:00.000Z', updatedAt: '2026-09-02T10:02:00.000Z',
+  },
   approvals: [], sessions: [{ runtimeId: 'mindos', sessionId: 'session-1' }],
   counts: { nodes: 2, events: 1, tools: 1, files: 0, approvals: 0, artifacts: 1, receipts: 1 },
 };
@@ -105,6 +117,55 @@ describe('Agent Run Observatory UI', () => {
     expect(host.querySelector('a[href="/view/Reports/release.md"]')).not.toBeNull();
     expect(host.querySelector('a[href="/view/Notes/source.md"]')).not.toBeNull();
     expect(host.textContent).toContain('session-1');
+    expect(host.querySelector<HTMLButtonElement>('button[aria-label="Retry run"]')?.disabled).toBe(false);
+    expect(host.querySelector<HTMLButtonElement>('button[aria-label="Resume run"]')?.disabled).toBe(false);
+    expect(host.querySelector<HTMLButtonElement>('button[aria-label="Rollback run"]')?.disabled).toBe(true);
+  });
+
+  it('creates a recovery plan and replays it through the canonical session endpoint', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === '/api/agent-run-capsules/capsule-root/recovery') {
+        return Response.json({
+          schemaVersion: 1,
+          plan: {
+            id: 'plan-1', sourceCapsuleId: 'capsule-root', action: 'retry', targetChatSessionId: 'chat-1',
+          },
+        }, { status: 201 });
+      }
+      if (url === '/api/agent/sessions/chat-1/turns') {
+        return new Response('data: {"type":"done"}\n\n', { status: 200 });
+      }
+      return Response.json({
+        runs: [], events: [],
+        observatory: {
+          schemaVersion: 1, generatedAt: '2026-09-02T12:00:00.000Z', warnings: [],
+          traces: [agentTrace],
+          summary: { totalTraces: 1, agentTraces: 1, automationTraces: 0, active: 0, waitingApproval: 0, completed: 0, failed: 1 },
+        },
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    await renderSection();
+
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('button[aria-label="Retry run"]')?.click();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/agent-run-capsules/capsule-root/recovery',
+      expect.objectContaining({ method: 'POST' }),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/agent/sessions/chat-1/turns',
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({ 'X-MindOS-Recovery-Plan-Id': 'plan-1' }),
+      }),
+    );
   });
 
   it('filters by waiting state and keeps a useful empty filter state', async () => {

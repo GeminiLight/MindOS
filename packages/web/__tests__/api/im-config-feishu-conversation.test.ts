@@ -7,6 +7,7 @@ const validatePlatformConfig = vi.fn();
 
 vi.mock('@/lib/im/config', () => ({
   readIMConfig,
+  readEffectiveIMConfig: readIMConfig,
   writeIMConfig,
   validatePlatformConfig,
 }));

@@ -40,6 +40,12 @@ import {
   formatMindosPiExtensionLoadStatus,
   sendAgentRunContext,
 } from './turn-sse';
+import type { AgentTurnCapsuleSeed } from './turn-capsule';
+import {
+  capsuleRuntimeBinding,
+  captureAgentTurnCapsule,
+  finalizeAgentTurnCapsule,
+} from './turn-capsule';
 
 type PermissionPolicy = ReturnType<typeof createMindosAgentPermissionPolicy>;
 
@@ -81,6 +87,7 @@ export type RunMindosPiTurnInput = {
   requestSignal: AbortSignal;
   stepLimit: number;
   t: MindosPiTurnLocalization;
+  capsule: AgentTurnCapsuleSeed;
 };
 
 export async function runMindosPiTurn(input: RunMindosPiTurnInput): Promise<Response> {
@@ -139,6 +146,7 @@ export async function runMindosPiTurn(input: RunMindosPiTurnInput): Promise<Resp
     return createAgentTurnSseResponse(async (send) => {
       let outputSummary = '';
       const mainRun = startAgentRun({
+        ...(input.capsule.runId ? { id: input.capsule.runId } : {}),
         agentKind: 'mindos-main',
         runtimeId: 'mindos',
         displayName: 'MindOS Agent',
@@ -162,6 +170,19 @@ export async function runMindosPiTurn(input: RunMindosPiTurnInput): Promise<Resp
           sessionAssistants: input.sessionAssistants,
           ...(input.assistantId ? { assistantId: input.assistantId } : {}),
         },
+      });
+      const embeddedRuntimeBinding = runtimeSession
+        ? capsuleRuntimeBinding({
+          kind: 'mindos',
+          runtimeId: 'mindos',
+          externalSessionId: runtimeSession.externalSessionId,
+          cwd: input.executionCwd,
+        })
+        : undefined;
+      captureAgentTurnCapsule(mainRun, input.capsule, {
+        model: modelName,
+        thinkingEffort: input.agentConfig.thinkingLevel,
+        ...(embeddedRuntimeBinding ? { runtimeBinding: embeddedRuntimeBinding } : {}),
       });
       sendAgentRunContext(send, mainRun);
       const sendWithLedger = (event: MindOSSSEvent) => {
@@ -290,6 +311,13 @@ export async function runMindosPiTurn(input: RunMindosPiTurnInput): Promise<Resp
             } : {}),
           },
         });
+        finalizeAgentTurnCapsule({
+          mindRoot: input.mindRoot,
+          runId: mainRun.id,
+          status: 'completed',
+          outputText: outputSummary,
+          ...(embeddedRuntimeBinding ? { runtimeBinding: embeddedRuntimeBinding } : {}),
+        });
       } catch (error) {
         const terminalStatus = agentRunErrorStatus(error, input.requestSignal);
         const modeArtifacts = recordModeArtifacts(
@@ -316,6 +344,13 @@ export async function runMindosPiTurn(input: RunMindosPiTurnInput): Promise<Resp
           } : {
             metadata: mindosAgentModeArtifactsMetadata(modeArtifacts),
           }),
+        });
+        finalizeAgentTurnCapsule({
+          mindRoot: input.mindRoot,
+          runId: mainRun.id,
+          status: terminalStatus,
+          outputText: outputSummary,
+          ...(embeddedRuntimeBinding ? { runtimeBinding: embeddedRuntimeBinding } : {}),
         });
         throw error;
       }

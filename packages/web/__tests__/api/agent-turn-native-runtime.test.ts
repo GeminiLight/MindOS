@@ -6,6 +6,7 @@ import { realpathSync } from 'node:fs';
 import type { MindosNativeAgentTurnOptions } from '@geminilight/mindos/agent/runtime';
 import type { AgentRuntimeDescriptor } from '@geminilight/mindos/server';
 import { listAgentEvents, listAgentRuns, resetAgentRunsForTest, startAgentRun } from '@geminilight/mindos/agent/ledger/run-ledger';
+import { listAgentRunCapsules } from '@geminilight/mindos/agent/capsules/store';
 import {
   rememberAvailableNativeRuntimeDescriptor,
   resetNativeRuntimeDescriptorCacheForTest,
@@ -14,18 +15,18 @@ import {
 let capturedNativeOptions: MindosNativeAgentTurnOptions | null = null;
 let capturedAcpOptions: Record<string, any> | null = null;
 let capturedMindosRuntimeOptions: Record<string, any> | null = null;
-const mockDetectLocalAcpAgents = vi.fn();
-const mockResolveCommandPath = vi.fn();
-const mockResolveCommandPathCandidates = vi.fn();
-const mockCheckNativeRuntimeHealth = vi.fn();
-const mockRunMindosNativeAgentTurn = vi.fn();
-const mockRunMindosAcpAgentTurn = vi.fn();
-const mockRunMindosPiAgentTurnSession = vi.fn();
-const mockCreateAcpSession = vi.fn();
-const mockLoadAcpSession = vi.fn();
-const mockSetAcpMode = vi.fn();
-const mockSetAcpConfigOption = vi.fn();
-const mockCreateMindosAgentRuntime = vi.fn();
+const mockDetectLocalAcpAgents = vi.hoisted(() => vi.fn());
+const mockResolveCommandPath = vi.hoisted(() => vi.fn());
+const mockResolveCommandPathCandidates = vi.hoisted(() => vi.fn());
+const mockCheckNativeRuntimeHealth = vi.hoisted(() => vi.fn());
+const mockRunMindosNativeAgentTurn = vi.hoisted(() => vi.fn());
+const mockRunMindosAcpAgentTurn = vi.hoisted(() => vi.fn());
+const mockRunMindosPiAgentTurnSession = vi.hoisted(() => vi.fn());
+const mockCreateAcpSession = vi.hoisted(() => vi.fn());
+const mockLoadAcpSession = vi.hoisted(() => vi.fn());
+const mockSetAcpMode = vi.hoisted(() => vi.fn());
+const mockSetAcpConfigOption = vi.hoisted(() => vi.fn());
+const mockCreateMindosAgentRuntime = vi.hoisted(() => vi.fn());
 const originalAgentTimeoutMs = process.env.MINDOS_AGENT_TIMEOUT_MS;
 const TEST_SESSION_ID = 'test-session';
 const RAW_CODEX_OPTIONAL_DEPENDENCY_STACK = [
@@ -205,6 +206,15 @@ async function POST_CANCEL(body: unknown): Promise<Response> {
     body: JSON.stringify(body),
     headers: { 'content-type': 'application/json' },
   }));
+}
+
+async function POST_RECOVERY(capsuleId: string, body: unknown): Promise<Response> {
+  const route = await import('../../app/api/agent-run-capsules/[capsuleId]/recovery/route');
+  return route.POST(new Request(`http://localhost/api/agent-run-capsules/${capsuleId}/recovery`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+    headers: { 'content-type': 'application/json' },
+  }), { params: Promise.resolve({ capsuleId }) });
 }
 
 function sessionIdFromBody(body: unknown): string {
@@ -676,8 +686,100 @@ describe('/api/agent/sessions/:sessionId/turns native runtime routing', () => {
       }),
     ]);
     expect(nativeRuns[0]?.rootRunId).toBe(nativeRuns[0]?.id);
+    expect(listAgentRunCapsules(getTestMindRoot())).toEqual([
+      expect.objectContaining({
+        id: nativeRuns[0]?.id,
+        runId: nativeRuns[0]?.id,
+        rootRunId: nativeRuns[0]?.id,
+        chatSessionId: 'chat-native-1',
+        status: 'completed',
+        result: { outputText: 'native ok' },
+        request: expect.objectContaining({
+          runtime: { id: 'codex', name: 'Codex', kind: 'codex' },
+          runtimeBinding: expect.objectContaining({
+            type: 'codex-thread',
+            externalSessionId: 'thr_123',
+          }),
+          model: 'gpt-5.4-codex',
+          thinkingEffort: 'high',
+          context: expect.objectContaining({
+            currentFile: 'current.md',
+            attachedFiles: ['attached.md'],
+            uploadedFiles: [expect.objectContaining({ name: 'brief.pdf' })],
+          }),
+        }),
+      }),
+    ]);
     expect(text).toContain('"type":"agent_run_context"');
     expect(text).toContain(`"rootRunId":"${nativeRuns[0]?.id}"`);
+  }, 15_000);
+
+  it('replays a server-owned retry plan through the canonical turn endpoint exactly as a recovery run', async () => {
+    mockResolveCommandPath.mockImplementation(async (command: string) => command === 'codex' ? '/usr/local/bin/codex' : null);
+    mockCheckNativeRuntimeHealth.mockResolvedValue({ status: 'available' });
+    mockDetectLocalAcpAgents.mockResolvedValue({ installed: [], notInstalled: [] });
+
+    const first = await POST(agentTurnRequest({
+      messages: [{ role: 'user', content: 'Retry this safely' }],
+      selectedRuntime: { id: 'codex', name: 'Codex', kind: 'codex' },
+      runtimeOptions: { modelOverride: 'gpt-5.4-codex', reasoningEffort: 'high' },
+      permissionMode: 'read',
+      chatSessionId: 'chat-recovery',
+    }));
+    expect(first.status).toBe(200);
+    await first.text();
+    const source = listAgentRunCapsules(getTestMindRoot())[0]!;
+
+    const planResponse = await POST_RECOVERY(source.id, {
+      action: 'retry',
+      idempotencyKey: 'retry-plan-1',
+    });
+    expect(planResponse.status).toBe(201);
+    const payload = await planResponse.json() as { plan: { id: string; targetChatSessionId?: string } };
+
+    const retry = await POST(new NextRequest(
+      `http://localhost/api/agent/sessions/${payload.plan.targetChatSessionId}/turns`,
+      {
+        method: 'POST',
+        body: '{}',
+        headers: {
+          'content-type': 'application/json',
+          'x-mindos-recovery-plan-id': payload.plan.id,
+        },
+      },
+    ));
+    expect(retry.status).toBe(200);
+    await retry.text();
+
+    const capsules = listAgentRunCapsules(getTestMindRoot());
+    expect(capsules).toHaveLength(2);
+    expect(capsules[0]).toMatchObject({
+      source: 'recovery',
+      status: 'completed',
+      result: { outputText: 'native ok' },
+      provenance: {
+        parentCapsuleId: source.id,
+        recoveryAction: 'retry',
+      },
+      request: {
+        runtime: { kind: 'codex', id: 'codex' },
+        runtimeBinding: expect.objectContaining({ externalSessionId: 'thr_123' }),
+      },
+    });
+
+    const duplicate = await POST(new NextRequest(
+      `http://localhost/api/agent/sessions/${payload.plan.targetChatSessionId}/turns`,
+      {
+        method: 'POST',
+        body: '{}',
+        headers: {
+          'content-type': 'application/json',
+          'x-mindos-recovery-plan-id': payload.plan.id,
+        },
+      },
+    ));
+    expect(duplicate.status).toBe(409);
+    expect(listAgentRunCapsules(getTestMindRoot())).toHaveLength(2);
   }, 15_000);
 
   it('omits unchanged session context after its signature has been recorded', async () => {

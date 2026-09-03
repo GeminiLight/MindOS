@@ -17,6 +17,11 @@ import {
   listAgentRuns,
 } from '../../agent/ledger/run-ledger.js';
 import {
+  listAgentRunCapsules,
+  projectAgentRunCapsule,
+} from '../../agent/capsules/store.js';
+import type { AgentRunCapsuleProjection } from '../../agent/capsules/types.js';
+import {
   listContextAssets,
   type ContextAsset,
 } from '../../knowledge/context-assets/index.js';
@@ -80,6 +85,7 @@ export type AgentRunObservatoryTrace = {
   contextAssets: ContextAsset[];
   approvals: StudioAutomationApproval[];
   sessions: Array<{ runtimeId: string; sessionId: string }>;
+  capsule?: AgentRunCapsuleProjection;
   counts: {
     nodes: number;
     events: number;
@@ -121,6 +127,7 @@ export type AgentRunObservatoryInput = {
   contextAssets: ContextAsset[];
   automations: StudioAutomationJob[];
   approvals: StudioAutomationApproval[];
+  capsules?: AgentRunCapsuleProjection[];
   generatedAt?: Date;
   warnings?: string[];
 };
@@ -206,6 +213,12 @@ export function handleAgentRunsGet(
     warnings,
     'Context assets are temporarily unavailable.',
   );
+  const capsules = safeAttachment(
+    () => listAgentRunCapsules(services.mindRoot).map(projectAgentRunCapsule),
+    [],
+    warnings,
+    'Run recovery capsules are temporarily unavailable.',
+  );
   const observatory = buildAgentRunObservatory({
     runs,
     events,
@@ -214,6 +227,7 @@ export function handleAgentRunsGet(
     contextAssets,
     automations: state.automations,
     approvals: state.approvals,
+    capsules,
     generatedAt: services.now?.() ?? new Date(),
     warnings,
   });
@@ -267,6 +281,7 @@ function buildAgentTraces(input: AgentRunObservatoryInput): AgentRunObservatoryT
     const sessions = sorted.flatMap((run) => run.archive?.sessionId
       ? [{ runtimeId: run.runtimeId, sessionId: run.archive.sessionId }]
       : []);
+    const capsule = input.capsules?.find((item) => item.runId === root.id || item.rootRunId === rootId);
     const status = aggregateAgentStatus(sorted, events);
     const completedAt = maxDefined(sorted.map((run) => run.completedAt));
     const startedAt = Math.min(...sorted.map((run) => run.startedAt));
@@ -293,6 +308,7 @@ function buildAgentTraces(input: AgentRunObservatoryInput): AgentRunObservatoryT
       contextAssets,
       approvals: [],
       sessions,
+      ...(capsule ? { capsule } : {}),
       counts: traceCounts(events, artifacts.length, receipts.length, sorted.length, 0),
     };
   });

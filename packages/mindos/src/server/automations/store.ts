@@ -11,10 +11,12 @@ import {
 } from 'node:fs';
 import path from 'node:path';
 import { resolveExistingSafe } from '../../foundation/security/index.js';
-import { redactSensitiveText } from '../../agent/redaction.js';
+import { redactSensitiveObject, redactSensitiveText } from '../../agent/redaction.js';
 import {
   STUDIO_AUTOMATION_SCHEDULES,
   type StudioAutomationApproval,
+  type StudioAutomationEvent,
+  type StudioAutomationEventDelivery,
   type StudioAutomationJob,
   type StudioAutomationLease,
   type StudioAutomationMigration,
@@ -32,6 +34,8 @@ const MAX_AUTOMATIONS = 200;
 const MAX_HISTORY = 50;
 const MAX_APPROVALS = 500;
 const MAX_NOTIFICATIONS = 500;
+export const STUDIO_AUTOMATION_MAX_EVENTS = 500;
+const MAX_EVENT_DELIVERIES = 200;
 const LOCK_ATTEMPTS = 100;
 const LOCK_WAIT_MS = 10;
 const STALE_LOCK_MS = 30_000;
@@ -67,6 +71,7 @@ export function emptyStudioAutomationState(): StudioAutomationState {
     automations: [],
     approvals: [],
     notifications: [],
+    events: [],
   };
 }
 
@@ -88,6 +93,10 @@ function writeStateUnlocked(mindRoot: string, state: StudioAutomationState): voi
   }));
   state.approvals = state.approvals.slice(0, MAX_APPROVALS);
   state.notifications = state.notifications.slice(0, MAX_NOTIFICATIONS);
+  state.events = boundEventsWithoutEvictingActive(state.events).map((event) => ({
+    ...event,
+    deliveries: event.deliveries.slice(0, MAX_EVENT_DELIVERIES),
+  }));
   const file = resolveExistingSafe(mindRoot, STUDIO_AUTOMATION_STATE_FILE);
   mkdirSync(path.dirname(file), { recursive: true });
   const temp = `${file}.${process.pid}.${crypto.randomUUID()}.tmp`;
@@ -152,6 +161,11 @@ function normalizeState(value: unknown): StudioAutomationState {
       : [],
     notifications: Array.isArray(record.notifications)
       ? record.notifications.map(normalizeNotification).filter((notification): notification is StudioAutomationNotification => notification !== null).slice(0, MAX_NOTIFICATIONS)
+      : [],
+    events: Array.isArray(record.events)
+      ? boundEventsWithoutEvictingActive(
+          record.events.map(normalizeEvent).filter((event): event is StudioAutomationEvent => event !== null),
+        )
       : [],
   };
 }
@@ -232,6 +246,7 @@ function normalizeJob(value: unknown): StudioAutomationJob | null {
     ...(text(value.lastError, 1_000) ? { lastError: redactSensitiveText(text(value.lastError, 1_000)!) } : {}),
     ...(normalizeLease(value.lease) ? { lease: normalizeLease(value.lease)! } : {}),
     history,
+    trigger: normalizeTrigger(value.trigger, schedule, safeTimezone(value.timezone)),
   };
 }
 
@@ -251,6 +266,8 @@ function normalizeRun(value: unknown): StudioAutomationRun | null {
     ...(text(value.artifactPath, 1_000) ? { artifactPath: text(value.artifactPath, 1_000) } : {}),
     ...(text(value.outputPreview, 1_000) ? { outputPreview: text(value.outputPreview, 1_000) } : {}),
     ...(text(value.error, 1_000) ? { error: redactSensitiveText(text(value.error, 1_000)!) } : {}),
+    ...(safeId(value.eventId) ? { eventId: safeId(value.eventId) } : {}),
+    ...(safeId(value.eventDeliveryId) ? { eventDeliveryId: safeId(value.eventDeliveryId) } : {}),
   };
 }
 
@@ -262,7 +279,157 @@ function normalizeLease(value: unknown): StudioAutomationLease | null {
   const claimedAt = iso(value.claimedAt);
   const expiresAt = iso(value.expiresAt);
   if (!runId || !ownerId || !occurrenceAt || !claimedAt || !expiresAt) return null;
-  return { runId, ownerId, occurrenceAt, claimedAt, expiresAt, attempt: Math.max(1, finiteInteger(value.attempt, 1)) };
+  return {
+    runId,
+    ownerId,
+    occurrenceAt,
+    claimedAt,
+    expiresAt,
+    attempt: Math.max(1, finiteInteger(value.attempt, 1)),
+    ...(safeId(value.eventId) ? { eventId: safeId(value.eventId) } : {}),
+    ...(safeId(value.eventDeliveryId) ? { eventDeliveryId: safeId(value.eventDeliveryId) } : {}),
+  };
+}
+
+function normalizeTrigger(
+  value: unknown,
+  schedule: StudioAutomationJob['schedule'],
+  timezone: string,
+): StudioAutomationJob['trigger'] {
+  if (!isRecord(value)) {
+    return schedule === 'manual' ? { type: 'manual' } : { type: 'schedule', schedule, timezone };
+  }
+  if (value.type === 'event') {
+    const sources = normalizePatternList(value.sources);
+    const events = normalizePatternList(value.events);
+    if (sources.length > 0 && events.length > 0) {
+      const storm = isRecord(value.storm) ? value.storm : {};
+      const where = normalizeMetadataFilter(value.where);
+      return {
+        type: 'event',
+        sources,
+        events,
+        ...(where ? { where } : {}),
+        debounceMs: clampInteger(value.debounceMs, 0, 60 * 60_000, 0),
+        storm: {
+          windowMs: clampInteger(storm.windowMs, 1_000, 60 * 60_000, 60_000),
+          maxEvents: clampInteger(storm.maxEvents, 1, 10_000, 100),
+        },
+      };
+    }
+  }
+  if (value.type === 'manual') return { type: 'manual' };
+  return schedule === 'manual' ? { type: 'manual' } : { type: 'schedule', schedule, timezone };
+}
+
+export function isTerminalStudioAutomationEvent(event: StudioAutomationEvent): boolean {
+  return event.deliveries.every((delivery) => (
+    delivery.status === 'succeeded'
+    || delivery.status === 'failed'
+    || delivery.status === 'superseded'
+    || delivery.status === 'suppressed'
+  ));
+}
+
+function boundEventsWithoutEvictingActive(events: StudioAutomationEvent[]): StudioAutomationEvent[] {
+  if (events.length <= STUDIO_AUTOMATION_MAX_EVENTS) return events;
+  const active = events.filter((event) => !isTerminalStudioAutomationEvent(event));
+  if (active.length > STUDIO_AUTOMATION_MAX_EVENTS) {
+    throw new Error(
+      `Studio automation state has ${active.length} events with active deliveries; none were evicted.`,
+    );
+  }
+  const activeIds = new Set(active.map((event) => event.id));
+  const keepTerminalIds = new Set(
+    events
+      .filter((event) => isTerminalStudioAutomationEvent(event))
+      .slice(0, STUDIO_AUTOMATION_MAX_EVENTS - active.length)
+      .map((event) => event.id),
+  );
+  return events.filter((event) => activeIds.has(event.id) || keepTerminalIds.has(event.id));
+}
+
+function normalizeMetadataFilter(value: unknown): Record<string, string | number | boolean> | undefined {
+  if (!isRecord(value)) return undefined;
+  const entries = Object.entries(value).flatMap(([key, item]) => (
+    metadataFilterKey(key) && metadataFilterValue(item) ? [[key, item] as const] : []
+  )).slice(0, 20);
+  return entries.length > 0 ? Object.fromEntries(entries) : undefined;
+}
+
+function metadataFilterKey(value: string): boolean {
+  const segments = value.split('.');
+  return segments.length <= 4 && segments.every((segment) => (
+    /^[A-Za-z0-9][A-Za-z0-9_:-]{0,79}$/.test(segment)
+    && segment !== '__proto__'
+    && segment !== 'constructor'
+    && segment !== 'prototype'
+  ));
+}
+
+function metadataFilterValue(value: unknown): value is string | number | boolean {
+  return typeof value === 'boolean'
+    || (typeof value === 'number' && Number.isFinite(value))
+    || (typeof value === 'string' && value.length <= 500);
+}
+
+function normalizeEvent(value: unknown): StudioAutomationEvent | null {
+  if (!isRecord(value) || value.schemaVersion !== 1) return null;
+  const id = safeId(value.id);
+  const source = eventToken(value.source);
+  const key = text(value.key, 500);
+  const type = eventToken(value.type);
+  const occurredAt = iso(value.occurredAt);
+  const receivedAt = iso(value.receivedAt);
+  if (!id || !source || !key || !type || !occurredAt || !receivedAt) return null;
+  const payload = isRecord(value.payload)
+    ? redactSensitiveObject(value.payload) as Record<string, unknown>
+    : {};
+  const deliveries = Array.isArray(value.deliveries)
+    ? value.deliveries.map(normalizeEventDelivery).filter((delivery): delivery is StudioAutomationEventDelivery => delivery !== null).slice(0, MAX_EVENT_DELIVERIES)
+    : [];
+  return { schemaVersion: 1, id, source, key, type, occurredAt, receivedAt, payload, deliveries };
+}
+
+function normalizeEventDelivery(value: unknown): StudioAutomationEventDelivery | null {
+  if (!isRecord(value)) return null;
+  const id = safeId(value.id);
+  const jobId = safeId(value.jobId);
+  const createdAt = iso(value.createdAt);
+  const updatedAt = iso(value.updatedAt);
+  const statuses: StudioAutomationEventDelivery['status'][] = [
+    'pending', 'claimed', 'waiting_approval', 'succeeded', 'failed', 'superseded', 'suppressed',
+  ];
+  if (!id || !jobId || !createdAt || !updatedAt || !statuses.includes(value.status as never)) return null;
+  return {
+    id,
+    jobId,
+    status: value.status as StudioAutomationEventDelivery['status'],
+    attempt: Math.max(1, finiteInteger(value.attempt, 1)),
+    createdAt,
+    updatedAt,
+    ...(iso(value.nextAttemptAt) ? { nextAttemptAt: iso(value.nextAttemptAt) } : {}),
+    ...(safeId(value.runId) ? { runId: safeId(value.runId) } : {}),
+    ...(safeId(value.ownerId) ? { ownerId: safeId(value.ownerId) } : {}),
+    ...(iso(value.leaseExpiresAt) ? { leaseExpiresAt: iso(value.leaseExpiresAt) } : {}),
+    ...(iso(value.finishedAt) ? { finishedAt: iso(value.finishedAt) } : {}),
+    ...(text(value.reason, 1_000) ? { reason: redactSensitiveText(text(value.reason, 1_000)!) } : {}),
+    ...(text(value.error, 1_000) ? { error: redactSensitiveText(text(value.error, 1_000)!) } : {}),
+  };
+}
+
+function normalizePatternList(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value.flatMap((item) => {
+    if (item === '*') return ['*'];
+    const token = eventToken(item);
+    return token ? [token] : [];
+  }))].slice(0, 100);
+}
+
+function eventToken(value: unknown): string | undefined {
+  const token = text(value, 160);
+  return token && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/.test(token) ? token : undefined;
 }
 
 function isRunStatus(value: unknown): value is StudioAutomationRun['status'] {

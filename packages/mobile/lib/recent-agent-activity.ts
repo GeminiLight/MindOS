@@ -5,6 +5,7 @@ import {
 } from './agent-run-timeline';
 import type {
   AgentRunStatus,
+  AgentRunCapsuleProjection,
   AgentRunTimelineEvent,
   AgentRunTimelineEventData,
   AgentRunTimelineRecord,
@@ -27,6 +28,7 @@ export interface RecentAgentActivityItem {
   active: boolean;
   pendingUserAction: boolean;
   eventCount: number;
+  capsule?: AgentRunCapsuleProjection;
 }
 
 export interface RecentAgentActivitySummary {
@@ -61,6 +63,11 @@ export function buildRecentAgentActivity(
   const runs = Array.isArray(payload?.runs) ? payload.runs : [];
   const events = Array.isArray(payload?.events) ? payload.events : [];
   const eventsByRun = groupEventsByRun(events);
+  const capsulesByRootRun = new Map(
+    (payload?.observatory?.traces ?? []).flatMap((trace) => (
+      trace.capsule ? [[trace.rootRunId ?? trace.id, trace.capsule] as const] : []
+    )),
+  );
 
   const visibleRuns = runs
     .filter((run) => isRecentRunVisible(run))
@@ -68,7 +75,11 @@ export function buildRecentAgentActivity(
 
   const items = visibleRuns
     .slice(0, limit)
-    .map((run) => buildRecentAgentActivityItem(run, eventsByRun.get(run.id) ?? []));
+    .map((run) => buildRecentAgentActivityItem(
+      run,
+      eventsByRun.get(run.id) ?? [],
+      capsulesByRootRun.get(run.rootRunId ?? run.id),
+    ));
 
   return {
     items,
@@ -129,6 +140,7 @@ export function compactAgentActivityError(error: unknown): string {
 function buildRecentAgentActivityItem(
   run: AgentRunTimelineRecord,
   events: AgentRunTimelineEvent[],
+  capsule?: AgentRunCapsuleProjection,
 ): RecentAgentActivityItem {
   const visibleEvents = events
     .filter((event) => event.visibility !== 'debug')
@@ -157,6 +169,7 @@ function buildRecentAgentActivityItem(
     active,
     pendingUserAction,
     eventCount: visibleEvents.length,
+    ...(capsule ? { capsule } : {}),
   };
 }
 

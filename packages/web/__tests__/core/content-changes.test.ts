@@ -9,6 +9,7 @@ import {
   getContentChangeSummary,
   markContentChangesSeen,
 } from '../../lib/core/content-changes';
+import { readStudioAutomationState } from '@geminilight/mindos/server';
 
 function changeLogPath(root: string) {
   return path.join(root, '.mindos', 'change-log.json');
@@ -31,6 +32,11 @@ describe('core/content-changes', () => {
     expect(lines.length).toBe(1);
     expect((JSON.parse(lines[0]) as { op: string }).op).toBe('save_file');
     expect(fs.existsSync(path.join(testMindRoot, '.mindos', 'change-log.meta.json'))).toBe(true);
+    expect(readStudioAutomationState(testMindRoot).events[0]).toMatchObject({
+      source: 'knowledge',
+      type: 'knowledge.changed',
+      payload: expect.objectContaining({ path: 'note.md', op: 'save_file', source: 'user' }),
+    });
   });
 
   it('lists latest events first and supports path filter', () => {

@@ -31,6 +31,8 @@ export interface IMMessage {
   /** Thread/Topic ID for threaded replies */
   threadId?: string;
   attachments?: IMAttachment[];
+  /** Stable across retries of one logical delivery. */
+  idempotencyKey?: string;
 }
 
 export interface IMSendResult {
@@ -90,8 +92,14 @@ export interface FeishuOAuthConfig {
 }
 
 export interface FeishuConfig {
-  app_id: string;
-  app_secret: string;
+  app_id?: string;
+  app_secret?: string;
+  credential_source?: 'inline' | 'lark_cli_profile';
+  credential_ref?: {
+    kind: 'lark-cli-profile';
+    executablePath: string;
+    profile: string;
+  };
   conversation?: FeishuConversationConfig;
   oauth?: FeishuOAuthConfig;
 }

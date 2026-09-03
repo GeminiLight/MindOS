@@ -14,6 +14,7 @@ import type {
   SessionWorkDir,
 } from '@/lib/types';
 import type { AgentTurnRequestContext } from './turn-request';
+import type { AgentTurnCapsuleSeed } from './turn-capsule';
 
 export type RuntimeLanePermissionPolicy = ReturnType<typeof createMindosAgentPermissionPolicy>;
 
@@ -36,6 +37,7 @@ export type RuntimeLaneBaseInput = {
   selectedSkills: MindosSelectedSkill[];
   requestSignal: AbortSignal;
   t: RuntimeLaneLocalization;
+  capsule: AgentTurnCapsuleSeed;
 };
 
 export type NativeRuntimeLaneTurnInput = RuntimeLaneBaseInput & {

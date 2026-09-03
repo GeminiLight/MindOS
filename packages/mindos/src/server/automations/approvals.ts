@@ -130,8 +130,21 @@ export function resolveStudioAutomationApproval(
     approval.decision = decision;
     approval.status = decision === 'allow' ? 'approved' : 'denied';
     approval.resolvedAt = now.toISOString();
-    job.nextRunAt = now.toISOString();
-    job.retryAttempt = Math.max(1, job.history[0]?.attempt ?? 1);
+    const eventDelivery = approval.runId
+      ? state.events.flatMap((event) => event.deliveries).find((delivery) => (
+          delivery.runId === approval.runId && delivery.jobId === job.id && delivery.status === 'waiting_approval'
+        ))
+      : undefined;
+    if (eventDelivery) {
+      eventDelivery.status = 'pending';
+      eventDelivery.nextAttemptAt = now.toISOString();
+      eventDelivery.updatedAt = now.toISOString();
+      delete job.nextRunAt;
+      delete job.retryAttempt;
+    } else {
+      job.nextRunAt = now.toISOString();
+      job.retryAttempt = Math.max(1, job.history[0]?.attempt ?? 1);
+    }
     job.updatedAt = now.toISOString();
     for (const notification of state.notifications) {
       if (notification.kind === 'approval_required' && notification.jobId === approval.jobId && !notification.readAt) {

@@ -18,6 +18,10 @@ import {
   isMindosThinkingLevel,
   type MindosAgentOptions,
 } from '@/lib/agent/thinking';
+import type {
+  AgentRunCapsuleRecoveryAction,
+  AgentRunCapsuleRecoveryPlan,
+} from '@geminilight/mindos/agent';
 
 export type AgentTurnRequestBody = {
   messages: FrontendMessage[];
@@ -70,7 +74,71 @@ export type AgentTurnRequestContext = {
   signal?: AbortSignal;
   request?: Request;
   activeAssistant?: MindosActiveAssistantPrompt;
+  capsuleRecovery?: {
+    planId: string;
+    runId: string;
+    sourceCapsuleId: string;
+    action: AgentRunCapsuleRecoveryAction;
+  };
 };
+
+export function agentRunCapsuleRecoveryPlanToTurnBody(
+  plan: AgentRunCapsuleRecoveryPlan,
+  chatSessionId: string,
+): AgentTurnRequestBody {
+  const request = plan.request;
+  const options = request.options ?? {};
+  const storedRuntimeOptions = objectOption(options.runtimeOptions);
+  const storedAcpRuntimeOptions = objectOption(options.acpRuntimeOptions);
+  const storedAgentOptions = objectOption(options.agentOptions);
+  const runtimeBinding = request.runtimeBinding
+    ? {
+      kind: request.runtimeBinding.type,
+      runtime: request.runtimeBinding.runtime,
+      runtimeId: request.runtimeBinding.runtimeId,
+      ...(request.runtimeBinding.externalSessionId ? { externalSessionId: request.runtimeBinding.externalSessionId } : {}),
+      ...(request.runtimeBinding.cwd ? { cwd: request.runtimeBinding.cwd } : {}),
+      ...(request.runtimeBinding.status ? { status: request.runtimeBinding.status } : {}),
+      updatedAt: request.runtimeBinding.updatedAt ?? Date.now(),
+    }
+    : null;
+  const nativeRuntimeOptions = request.runtime.kind === 'codex' || request.runtime.kind === 'claude'
+    ? {
+      ...storedRuntimeOptions,
+      ...(request.model ? { modelOverride: request.model } : {}),
+      ...(request.thinkingEffort ? { reasoningEffort: request.thinkingEffort } : {}),
+    }
+    : undefined;
+  return {
+    messages: structuredClone(request.messages) as unknown as FrontendMessage[],
+    selectedRuntime: { ...request.runtime },
+    ...(request.runtime.kind === 'acp'
+      ? { selectedAcpAgent: { id: request.runtime.id, name: request.runtime.name } }
+      : {}),
+    runtimeBinding: runtimeBinding as RuntimeSessionBinding | null,
+    ...(request.agentMode ? { agentMode: request.agentMode as AgentMode } : {}),
+    ...(request.permissionMode ? { permissionMode: request.permissionMode as AgentPermissionMode } : {}),
+    ...(request.context.currentFile ? { currentFile: request.context.currentFile } : {}),
+    attachedFiles: [...request.context.attachedFiles],
+    uploadedFiles: structuredClone(request.context.uploadedFiles),
+    ...(typeof options.maxSteps === 'number' ? { maxSteps: options.maxSteps } : {}),
+    ...(typeof options.assistantId === 'string' ? { assistantId: options.assistantId } : {}),
+    ...(typeof options.providerOverride === 'string' ? { providerOverride: options.providerOverride } : {}),
+    ...(request.runtime.kind === 'mindos' && request.model ? { modelOverride: request.model } : {}),
+    ...(nativeRuntimeOptions ? { runtimeOptions: nativeRuntimeOptions as NativeRuntimeOptions } : {}),
+    ...(storedAcpRuntimeOptions ? { acpRuntimeOptions: storedAcpRuntimeOptions as AcpRuntimeOptions } : {}),
+    ...(storedAgentOptions ? { agentOptions: storedAgentOptions as MindosAgentOptions } : {}),
+    ...(objectOption(options.workDir) ? { workDir: objectOption(options.workDir) as unknown as SessionWorkDir } : {}),
+    ...(objectOption(options.contextSelection) ? { contextSelection: objectOption(options.contextSelection) as unknown as SessionContextSelection } : {}),
+    chatSessionId,
+  };
+}
+
+function objectOption(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? structuredClone(value as Record<string, unknown>)
+    : undefined;
+}
 
 export function normalizeNativeRuntimeOptions(value: unknown): NativeRuntimeOptions {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};

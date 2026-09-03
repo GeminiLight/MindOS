@@ -10,6 +10,7 @@ import {
 } from './index';
 import { LocalFileSystem } from '../storage/local.js';
 import type { IFileSystem, Result, FileEntry } from '../storage/index.js';
+import { readStudioAutomationState } from '../../server/automations/store.js';
 
 class MockFileSystem implements IFileSystem {
   private files = new Map<string, string>();
@@ -127,6 +128,23 @@ describe('Content Change Log', () => {
     } finally {
       rmSync(root, { recursive: true, force: true });
       rmSync(outside, { recursive: true, force: true });
+    }
+  });
+
+  it('projects a persisted knowledge change into the durable automation event queue', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'mindos-knowledge-event-'));
+    try {
+      const result = await appendContentChange(new LocalFileSystem(), root, {
+        op: 'update', path: 'Notes/roadmap.md', source: 'agent', summary: 'Updated roadmap',
+      });
+      expect(result.ok).toBe(true);
+      expect(readStudioAutomationState(root).events[0]).toMatchObject({
+        source: 'knowledge',
+        type: 'knowledge.changed',
+        payload: expect.objectContaining({ path: 'Notes/roadmap.md', op: 'update', source: 'agent' }),
+      });
+    } finally {
+      rmSync(root, { recursive: true, force: true });
     }
   });
 });

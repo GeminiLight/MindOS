@@ -21,8 +21,8 @@ import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/button';
 import {
   scheduleLabel,
-  StudioAutomationSchedulePicker,
 } from '@/components/studio/StudioAutomationSchedulePicker';
+import { StudioAutomationTriggerPicker } from '@/components/studio/StudioAutomationTriggerPicker';
 import {
   type StudioAutomation,
   type StudioAutomationDraft,
@@ -63,6 +63,21 @@ export const COPY = {
     scopeLabel: 'Scope',
     projectLabel: 'Project',
     scheduleLabel: 'Repeats',
+    triggerLabel: 'Starts when',
+    triggerSchedule: 'Schedule',
+    triggerEvent: 'Event',
+    eventSourceLabel: 'Event source',
+    eventSourcePlaceholder: 'feishu, inbox, agent, knowledge, api',
+    eventTypeLabel: 'Event type',
+    eventTypePlaceholder: 'inbox.created or *',
+    eventDebounceLabel: 'Debounce (seconds)',
+    eventStormLabel: 'Max events / minute',
+    eventFilterLabel: 'Metadata filter (JSON)',
+    eventFilterPlaceholder: '{"message.chat_type":"p2p","mentionsBot":true}',
+    eventFilterHint: 'Optional exact matches. Dot paths can address nested payload fields.',
+    eventFilterError: 'Use a flat JSON object with string, number, or boolean values.',
+    eventHint: 'Sources and event types accept comma-separated values or *. Duplicate source keys run at most once.',
+    eventWaiting: 'Waiting for a matching event',
     repeatGroupManual: 'Manual',
     repeatGroupDaily: 'Daily',
     repeatGroupWeekly: 'Weekly',
@@ -91,6 +106,8 @@ export const COPY = {
     executorOffline: 'Executor not installed',
     executorStopped: 'Executor stopped',
     executorError: 'Executor needs attention',
+    eventQueue: 'Queued event deliveries',
+    recentEvents: 'Recent events',
     notifications: 'Notifications',
     pendingApprovals: 'Pending approvals',
     allowOnce: 'Allow once',
@@ -183,6 +200,21 @@ export const COPY = {
     scopeLabel: '范围',
     projectLabel: '项目',
     scheduleLabel: '重复',
+    triggerLabel: '启动条件',
+    triggerSchedule: '定时',
+    triggerEvent: '事件',
+    eventSourceLabel: '事件来源',
+    eventSourcePlaceholder: 'feishu, inbox, agent, knowledge, api',
+    eventTypeLabel: '事件类型',
+    eventTypePlaceholder: 'inbox.created 或 *',
+    eventDebounceLabel: '防抖（秒）',
+    eventStormLabel: '每分钟最多事件数',
+    eventFilterLabel: '元数据筛选（JSON）',
+    eventFilterPlaceholder: '{"message.chat_type":"p2p","mentionsBot":true}',
+    eventFilterHint: '可选精确匹配；用点路径读取嵌套 payload 字段。',
+    eventFilterError: '请使用只含字符串、数字或布尔值的扁平 JSON 对象。',
+    eventHint: '来源和事件类型可用逗号分隔，或使用 *。相同来源键最多执行一次。',
+    eventWaiting: '等待匹配事件',
     repeatGroupManual: '手动',
     repeatGroupDaily: '每日',
     repeatGroupWeekly: '每周',
@@ -211,6 +243,8 @@ export const COPY = {
     executorOffline: '执行器尚未安装',
     executorStopped: '执行器已停止',
     executorError: '执行器需要处理',
+    eventQueue: '排队中的事件投递',
+    recentEvents: '近期事件',
     notifications: '通知',
     pendingApprovals: '待审批',
     allowOnce: '仅允许一次',
@@ -320,6 +354,7 @@ export function defaultDraft(projects: StudioProject[]): StudioAutomationDraft {
     scope: 'worktree',
     projectId: projects[0]?.id,
     schedule: 'daily-0900',
+    trigger: { type: 'schedule', schedule: 'daily-0900', timezone: 'Asia/Shanghai' },
     model: 'mindos-auto',
     effort: 'high',
     timezone: 'Asia/Shanghai',
@@ -336,6 +371,9 @@ export function automationToDraft(automation: StudioAutomation, projects: Studio
     scope: automation.scope,
     projectId: automation.projectId ?? projects[0]?.id,
     schedule: automation.schedule,
+    trigger: automation.trigger ?? (automation.schedule === 'manual'
+      ? { type: 'manual' }
+      : { type: 'schedule', schedule: automation.schedule, timezone: automation.timezone }),
     model: automation.model,
     effort: automation.effort,
     timezone: automation.timezone,
@@ -459,7 +497,7 @@ export function automationSearchText(
     automation.promptZh,
     automation.status === 'active' ? copy.active : copy.paused,
     scopeText,
-    scheduleLabel(automation.schedule, copy),
+    automation.trigger?.type === 'event' ? automation.trigger.events.join(' ') : scheduleLabel(automation.schedule, copy),
     modelLabel(automation.model, copy),
     effortLabel(automation.effort, copy),
     automation.nextRun,
@@ -484,6 +522,7 @@ function nextRunLabel(
   copy: StudioAutomationCopy,
 ): string {
   if (automation.status === 'paused') return copy.paused;
+  if (automation.trigger?.type === 'event') return copy.eventWaiting;
   if (automation.schedule === 'manual' && !automation.nextRun?.includes('T')) return copy.manualHint;
   if (!automation.nextRun) return copy.runtimeNote;
   const date = new Date(automation.nextRun);
@@ -660,7 +699,7 @@ export function AutomationCard({
         ) : null}
         <div className="mt-2 flex min-w-0 flex-wrap gap-x-3 gap-y-1">
           <MetaText label={scopeText} />
-          <MetaText label={scheduleLabel(automation.schedule, copy)} />
+          <MetaText label={automation.trigger?.type === 'event' ? `${copy.triggerEvent}: ${automation.trigger.events.join(', ')}` : scheduleLabel(automation.schedule, copy)} />
           <MetaText label={copy.runtimeSchedule} />
           <MetaText label={runStateLabel(automation, copy)} />
           <MetaText label={`${modelLabel(automation.model, copy)} / ${effortLabel(automation.effort, copy)}`} />
@@ -835,10 +874,10 @@ export function AutomationDrawer({
               </div>
             </section>
 
-            <StudioAutomationSchedulePicker
+            <StudioAutomationTriggerPicker
               copy={copy}
-              value={draft.schedule}
-              onChange={(schedule) => onDraftChange((current) => ({ ...current, schedule }))}
+              draft={draft}
+              onChange={onDraftChange}
             />
 
             <div className="grid gap-3 border-t border-border/55 pt-4 sm:grid-cols-2">

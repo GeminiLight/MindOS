@@ -192,6 +192,9 @@ export default function StudioAutomationSection({
     setDraft((current) => ({
       ...current,
       ...template,
+      trigger: template.schedule === 'manual'
+        ? { type: 'manual' }
+        : { type: 'schedule', schedule: template.schedule, timezone: current.timezone },
       projectId: template.scope === 'project' ? current.projectId || projects[0]?.id : current.projectId,
     }));
     setError(null);

@@ -41,6 +41,11 @@ import {
 } from './turn-sse';
 import type { AgentTurnRequestContext } from './turn-request';
 import type { RunNativeRuntimeLaneTurnInput } from './turn-lane-shared';
+import {
+  capsuleRuntimeBinding,
+  captureAgentTurnCapsule,
+  finalizeAgentTurnCapsule,
+} from './turn-capsule';
 
 export function runNativeRuntimeLaneTurn(input: RunNativeRuntimeLaneTurnInput): Response {
   return createAgentTurnSseResponse((send) => runWithAgentRunContext({ chatSessionId: input.chatSessionId }, async () => {
@@ -59,6 +64,7 @@ async function runNativeRuntimeTurn(
   const runtimeRunId = randomUUID();
   let outputSummary = '';
   const nativeRun = startAgentRun({
+    ...(input.capsule.runId ? { id: input.capsule.runId } : {}),
     agentKind: 'native-runtime',
     runtimeId: nativeRuntime.id,
     displayName: nativeRuntime.name,
@@ -84,6 +90,7 @@ async function runNativeRuntimeTurn(
       ...(input.assistantId ? { assistantId: input.assistantId } : {}),
     },
   });
+  captureAgentTurnCapsule(nativeRun, input.capsule);
   const nativeRunAbort = new AbortController();
   const nativeRunSignal = nativeRunAbort.signal;
   const unregisterCancelHandler = registerAgentRunCancelHandler(nativeRun.id, ({ reason }) => {
@@ -157,6 +164,20 @@ async function runNativeRuntimeTurn(
           ...(result.externalSessionId ? { externalSessionId: result.externalSessionId } : {}),
         },
       });
+      finalizeAgentTurnCapsule({
+        mindRoot: input.capsule.mindRoot,
+        runId: nativeRun.id,
+        status: terminalStatus,
+        outputText: outputSummary,
+        ...(result.externalSessionId ? {
+          runtimeBinding: capsuleRuntimeBinding({
+            kind: nativeRuntime.kind,
+            runtimeId: nativeRuntime.id,
+            externalSessionId: result.externalSessionId,
+            cwd: input.executionCwd,
+          }),
+        } : {}),
+      });
       return;
     }
     const modeArtifacts = recordModeArtifacts(
@@ -182,6 +203,20 @@ async function runNativeRuntimeTurn(
         ...(result.externalSessionId ? { externalSessionId: result.externalSessionId } : {}),
       },
     });
+    finalizeAgentTurnCapsule({
+      mindRoot: input.capsule.mindRoot,
+      runId: nativeRun.id,
+      status: 'completed',
+      outputText: outputSummary,
+      ...(result.externalSessionId ? {
+        runtimeBinding: capsuleRuntimeBinding({
+          kind: nativeRuntime.kind,
+          runtimeId: nativeRuntime.id,
+          externalSessionId: result.externalSessionId,
+          cwd: input.executionCwd,
+        }),
+      } : {}),
+    });
   } catch (error) {
     const terminalStatus = agentRunErrorStatus(error, nativeRunSignal);
     const modeArtifacts = recordModeArtifacts(
@@ -198,6 +233,12 @@ async function runNativeRuntimeTurn(
         ...mindosAgentModeArtifactsMetadata(modeArtifacts),
         runtimeKind: nativeRuntime.kind,
       },
+    });
+    finalizeAgentTurnCapsule({
+      mindRoot: input.capsule.mindRoot,
+      runId: nativeRun.id,
+      status: terminalStatus,
+      outputText: outputSummary,
     });
     throw error;
   } finally {

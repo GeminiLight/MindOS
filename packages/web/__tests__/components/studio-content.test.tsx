@@ -43,7 +43,10 @@ type TestAutomation = {
   prompt: string;
   scope: 'worktree' | 'project' | 'mind';
   projectId?: string;
-  schedule: 'daily-0900' | 'every-4-hours' | 'weekdays-0900' | 'weekly-review';
+  schedule: 'manual' | 'daily-0900' | 'every-4-hours' | 'weekdays-0900' | 'weekly-review';
+  trigger?: { type: 'manual' } | { type: 'schedule'; schedule: string; timezone: string } | {
+    type: 'event'; sources: string[]; events: string[]; debounceMs: number; storm: { windowMs: number; maxEvents: number };
+  };
   model: 'mindos-auto' | 'gpt-5.5' | 'codex' | 'claude-code';
   effort: 'normal' | 'high';
   timezone: string;
@@ -160,6 +163,8 @@ function automationPayload(automations: TestAutomation[], extras: AutomationExtr
       controlPlaneScheduleCount: automations.length,
       pendingApprovals: (extras.approvals ?? []).filter((approval) => approval.status === 'pending').length,
       unreadNotifications: (extras.notifications ?? []).filter((notification) => !notification.readAt).length,
+      queuedEventDeliveries: 0,
+      recentEventCount: 0,
     },
   };
 }
@@ -192,7 +197,7 @@ function setupAutomationFetch(initial: TestAutomation[] = seedAutomations(), ini
       automations = [{
         id, title: body.draft.title || 'Untitled automation', prompt: body.draft.prompt || '',
         scope: body.draft.scope || 'worktree', projectId: body.draft.projectId,
-        schedule: body.draft.schedule || 'daily-0900', model: body.draft.model || 'mindos-auto',
+        schedule: body.draft.schedule || 'daily-0900', trigger: body.draft.trigger, model: body.draft.model || 'mindos-auto',
         effort: body.draft.effort || 'high', timezone: body.draft.timezone || 'Asia/Shanghai',
         permissionMode: body.draft.permissionMode || 'read', retry: body.draft.retry || 'once',
         timeoutMs: body.draft.timeoutMs || 600000, status: 'active', updated: '2026-06-30T12:01:00.000Z',
@@ -1045,5 +1050,42 @@ describe('StudioContent', () => {
 
     expect(document.body.textContent).toContain('Add a prompt before creating an automation.');
     expect(host.textContent).not.toContain('Empty automationActive');
+  });
+
+  it('creates an event-driven automation with exact metadata, debounce, and storm limits', async () => {
+    await renderStudioAutomation();
+    await act(async () => host.querySelector<HTMLElement>('[data-studio-automation-create]')!.click());
+    const composer = document.body.querySelector('[data-studio-automation-composer]')!;
+    const eventButton = Array.from(composer.querySelectorAll('button')).find((button) => button.textContent?.trim() === 'Event');
+    expect(eventButton).not.toBeNull();
+    await act(async () => eventButton!.dispatchEvent(new MouseEvent('click', { bubbles: true })));
+
+    expect(document.body.querySelector('[data-studio-automation-event-trigger]')).not.toBeNull();
+    await setInputValue('input[aria-label="Event source"]', 'feishu, inbox');
+    await setInputValue('input[aria-label="Event type"]', 'im.message.receive_v1, inbox.created');
+    await setInputValue('input[aria-label="Debounce (seconds)"]', '5');
+    await setInputValue('input[aria-label="Max events / minute"]', '25');
+    await setInputValue('textarea[aria-label="Metadata filter (JSON)"]', '{"message.chat_type":"p2p","mentionsBot":true}');
+    await setInputValue('input[aria-label="Automation title"]', 'Inbox and Feishu triage');
+    await setInputValue('textarea[aria-label="Automation prompt"]', 'Triage the incoming event and record the next action.');
+    const submit = Array.from(composer.querySelectorAll('button')).find((button) => button.textContent?.includes('Create automation'))!;
+    await act(async () => submit.dispatchEvent(new MouseEvent('click', { bubbles: true })));
+    await flushAsync();
+
+    const createCall = automationFetchMock.mock.calls.find(([, init]) => init?.method === 'POST'
+      && JSON.parse(String(init.body ?? '{}')).action === 'create');
+    const body = JSON.parse(String(createCall?.[1]?.body ?? '{}'));
+    expect(body.draft).toMatchObject({
+      schedule: 'manual',
+      trigger: {
+        type: 'event',
+        sources: ['feishu', 'inbox'],
+        events: ['im.message.receive_v1', 'inbox.created'],
+        where: { 'message.chat_type': 'p2p', mentionsBot: true },
+        debounceMs: 5_000,
+        storm: { windowMs: 60_000, maxEvents: 25 },
+      },
+    });
+    expect(host.textContent).toContain('Event: im.message.receive_v1, inbox.created');
   });
 });

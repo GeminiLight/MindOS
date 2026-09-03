@@ -28,7 +28,7 @@ export function buildFeishuWebhookStatus(config?: FeishuConfig): IMWebhookStatus
 
   if (transport === 'long_connection') {
     const wsStatus = getFeishuWSClientStatus();
-    if (!config?.app_id || !config?.app_secret) {
+    if (!hasLongConnectionCredential(config)) {
       return {
         platform: 'feishu',
         state: 'error',
@@ -75,4 +75,12 @@ export function buildFeishuWebhookStatus(config?: FeishuConfig): IMWebhookStatus
     webhookUrl,
     lastError: undefined,
   };
+}
+
+function hasLongConnectionCredential(config?: FeishuConfig): boolean {
+  if (config?.app_id?.trim() && config.app_secret?.trim()) return true;
+  return config?.credential_source === 'lark_cli_profile'
+    && config.credential_ref?.kind === 'lark-cli-profile'
+    && config.credential_ref.executablePath.startsWith('/')
+    && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$/.test(config.credential_ref.profile);
 }

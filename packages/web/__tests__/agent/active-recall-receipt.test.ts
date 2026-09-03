@@ -2,8 +2,13 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { listContextAssets } from '@geminilight/mindos/knowledge';
-import { listRetrievalReceipts } from '@geminilight/mindos/retrieval';
+import { createHash } from 'node:crypto';
+import {
+  listContextAssets,
+  registerContextFileAsset,
+  submitContextFeedback,
+} from '@geminilight/mindos/knowledge';
+import { listRetrievalReceipts, writeRetrievalReceipt } from '@geminilight/mindos/retrieval';
 
 vi.mock('@/lib/core/hybrid-search', () => ({
   hybridSearch: vi.fn(),
@@ -116,5 +121,41 @@ describe('active recall receipt integration', () => {
     expect(result.items).toHaveLength(1);
     expect(result.receipt).toBeNull();
     expect(result.metadata).toMatchObject({ retrievalOutcome: 'selected' });
+  });
+
+  it('uses only eligible bounded feedback hints to rerank current-version assets', async () => {
+    mkdirSync(join(mindRoot, 'notes'), { recursive: true });
+    const content = '# Guide\n\nshared recall phrase';
+    writeFileSync(join(mindRoot, 'notes', 'irrelevant.md'), content, 'utf-8');
+    writeFileSync(join(mindRoot, 'notes', 'helpful.md'), content, 'utf-8');
+    const irrelevant = registerContextFileAsset(mindRoot, { path: 'notes/irrelevant.md' });
+    const helpful = registerContextFileAsset(mindRoot, { path: 'notes/helpful.md' });
+
+    for (let index = 1; index <= 3; index += 1) {
+      const receiptId = `feedback-receipt-${index}`;
+      writeRetrievalReceipt(mindRoot, {
+        id: receiptId, query: 'shared recall phrase', strategy: 'test', outcome: 'selected',
+        startedAt: `2026-09-03T03:00:0${index}.000Z`, completedAt: `2026-09-03T03:00:0${index}.001Z`,
+        budget: { maxTokens: 10, maxFiles: 2, minScore: 0, timeoutMs: 10 }, scope: { preferredPaths: [], excludePaths: [] },
+        candidates: [],
+        selections: [
+          { assetId: irrelevant.id, path: irrelevant.path, score: 1, estimatedTokens: 1, truncated: false, reason: 'test' },
+          { assetId: helpful.id, path: helpful.path, score: 1, estimatedTokens: 1, truncated: false, reason: 'test' },
+        ],
+        totals: { candidateCount: 2, selectedCount: 2, usedTokens: 2 },
+      });
+      submitContextFeedback(mindRoot, { receiptId, assetId: irrelevant.id, signal: 'irrelevant' });
+      submitContextFeedback(mindRoot, { receiptId, assetId: helpful.id, signal: 'helpful' });
+    }
+    mockSearch.mockResolvedValue([
+      { path: irrelevant.path, snippet: 'shared recall phrase', score: 5, occurrences: 1 },
+      { path: helpful.path, snippet: 'shared recall phrase', score: 5, occurrences: 1 },
+    ]);
+
+    const result = await performActiveRecallWithReceipt(mindRoot, 'shared recall phrase', { maxFiles: 1, maxTokens: 100 });
+    expect(result.items[0]?.path).toBe(helpful.path);
+    expect(result.receipt?.candidates.find((item) => item.path === helpful.path)?.reason).toContain('feedback +0.056');
+    expect(result.receipt?.strategy).toBe('hybrid-heading-rerank-feedback-v2');
+    expect(createHash('sha256').update(content).digest('hex')).toBe(helpful.contentHash);
   });
 });

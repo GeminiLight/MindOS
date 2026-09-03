@@ -13,6 +13,7 @@ import { extname, basename, join } from 'node:path';
 import { resolveExistingSafe, resolveSafe } from '../../foundation/security/index.js';
 import { json, type MindosServerResponse } from '../response.js';
 import { extractInboxSourceMetadata, type InboxSourceMetadata } from './inbox-source.js';
+import { emitStudioAutomationEvent, recordStudioAutomationEventSourceFailure } from '../automations/events.js';
 
 export const INBOX_DIR = 'Inbox';
 const PROCESSED_DIR = '.processed';
@@ -246,6 +247,7 @@ export function saveToInbox(mindRoot: string, files: InboxSaveInput[], source?: 
         resolveSafe(mindRoot, targetPath);
         writeFileSync(join(inboxDir, uniqueName), rawBuffer);
         saved.push({ original: file.name, path: targetPath });
+        emitInboxCreatedEvent(mindRoot, targetPath, file.name, source);
         continue;
       }
 
@@ -256,12 +258,27 @@ export function saveToInbox(mindRoot: string, files: InboxSaveInput[], source?: 
       resolveSafe(mindRoot, targetPath);
       writeFileSync(join(inboxDir, uniqueName), converted.content, 'utf-8');
       saved.push({ original: file.name, path: targetPath });
+      emitInboxCreatedEvent(mindRoot, targetPath, file.name, source);
     } catch (error) {
       skipped.push({ name: file.name, reason: error instanceof Error ? error.message : String(error) });
     }
   }
 
   return { saved, skipped, source };
+}
+
+function emitInboxCreatedEvent(mindRoot: string, path: string, originalName: string, source?: string): void {
+  try {
+    emitStudioAutomationEvent(mindRoot, {
+      source: 'inbox',
+      key: path,
+      type: 'inbox.created',
+      payload: { path, originalName, source },
+    });
+  } catch (error) {
+    recordStudioAutomationEventSourceFailure(mindRoot, { source: 'inbox', key: path, error });
+    // Inbox writes remain authoritative if the optional automation projection is unavailable.
+  }
 }
 
 export function archiveFromInbox(mindRoot: string, names: string[]): InboxArchiveResult {

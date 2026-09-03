@@ -18,7 +18,12 @@ import { hybridSearch } from '@/lib/core/hybrid-search';
 import type { SearchResult } from '@/lib/core/types';
 import { estimateStringTokens } from './context';
 import { getFileContent } from '@/lib/fs';
-import { registerContextFileAsset } from '@geminilight/mindos/knowledge';
+import {
+  calculateContextFeedbackProfile,
+  listContextAssets,
+  readContextFeedbackLedger,
+  registerContextFileAsset,
+} from '@geminilight/mindos/knowledge';
 import {
   writeRetrievalReceipt,
   type RetrievalReceipt,
@@ -94,6 +99,7 @@ type RecallCandidate = {
   result: RecallResult;
   score: number;
   sourceHitScore: number;
+  feedbackAdjustment?: number;
 };
 
 type ActiveRecallTrace = {
@@ -175,7 +181,7 @@ export async function performActiveRecallWithReceipt(
     receipt = writeRetrievalReceipt(mindRoot, {
       id: receiptId,
       query: userQuery,
-      strategy: 'hybrid-heading-rerank-v1',
+      strategy: 'hybrid-heading-rerank-feedback-v2',
       outcome: execution.trace.outcome,
       startedAt: startedAt.toISOString(),
       completedAt: completedAt.toISOString(),
@@ -258,7 +264,10 @@ async function executeActiveRecall(
   if (filtered.length === 0) return { items: [], trace: { candidates: [], outcome: 'empty' } };
 
   const queryTokens = tokenizeRecallText(query);
-  const candidates = filtered.flatMap((hit) => buildChunkCandidates(hit, query, queryTokens, preferredPaths));
+  const candidates = applyContextFeedbackHints(
+    mindRoot,
+    filtered.flatMap((hit) => buildChunkCandidates(hit, query, queryTokens, preferredPaths)),
+  );
   if (candidates.length === 0) return { items: [], trace: { candidates: [], outcome: 'empty' } };
 
   candidates.sort((a, b) => (b.score - a.score) || (b.sourceHitScore - a.sourceHitScore));
@@ -286,7 +295,10 @@ function receiptCandidatesFromTrace(
       path: candidate.result.path,
       score: candidate.score,
       selected: isSelected,
-      reason: isSelected ? 'highest reranked chunk within budget' : 'not selected by diversity or token budget',
+      reason: candidateReason(
+        isSelected ? 'highest reranked chunk within budget' : 'not selected by diversity or token budget',
+        candidate.feedbackAdjustment,
+      ),
     };
   });
 }
@@ -310,13 +322,49 @@ function receiptSelections(
       ...(item.headingPath?.length ? { headingPath: item.headingPath } : {}),
       estimatedTokens: estimateStringTokens(item.content),
       truncated: Boolean(candidate && candidate.result.content.length > item.content.length),
-      reason: 'highest reranked chunk within budget',
+      reason: candidateReason('highest reranked chunk within budget', candidate?.feedbackAdjustment),
     }];
   });
 }
 
 function recallResultKey(result: RecallResult): string {
   return `${result.path}:${result.startLine ?? 0}:${result.endLine ?? 0}`;
+}
+
+function applyContextFeedbackHints(mindRoot: string, candidates: RecallCandidate[]): RecallCandidate[] {
+  try {
+    const assets = listContextAssets(mindRoot, { limit: 1_000 });
+    if (assets.length === 0) return candidates;
+    const ledger = readContextFeedbackLedger(mindRoot);
+    const assetsByPath = new Map(assets.map((asset) => [asset.path, asset]));
+    return candidates.flatMap((candidate) => {
+      const asset = assetsByPath.get(candidate.result.path);
+      if (!asset) return [candidate];
+      if (asset.status === 'deprecated') return [];
+      const profile = calculateContextFeedbackProfile(asset.id, asset.version, ledger.feedback);
+      if (!profile.eligible || profile.adjustment === 0) return [candidate];
+      const score = roundScore(candidate.score + profile.adjustment);
+      return [{
+        ...candidate,
+        result: { ...candidate.result, score },
+        score,
+        feedbackAdjustment: profile.adjustment,
+      }];
+    });
+  } catch {
+    // Learning hints are optional; a damaged ledger must never break recall.
+    return candidates;
+  }
+}
+
+function candidateReason(base: string, adjustment?: number): string {
+  return adjustment
+    ? `${base}; bounded context feedback ${adjustment >= 0 ? '+' : ''}${adjustment.toFixed(3)}`
+    : base;
+}
+
+function roundScore(value: number): number {
+  return Math.round(value * 1_000_000) / 1_000_000;
 }
 
 // ── Internal helpers ─────────────────────────────────────────────────────────

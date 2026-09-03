@@ -90,8 +90,8 @@ export function handleImConfigPut(
 
     if (platform === 'feishu' && conversation && typeof conversation === 'object') {
       const merged = config.providers[platform] ?? existing;
-      if (!merged.app_id || !merged.app_secret) {
-        return json({ error: 'Save Feishu App ID and App Secret before enabling conversations' }, { status: 422 });
+      if (!hasFeishuConversationCredential(merged)) {
+        return json({ error: 'Bind an existing Feishu app or save App ID and App Secret before enabling conversations' }, { status: 422 });
       }
       const currentConversation = merged.conversation && typeof merged.conversation === 'object'
         ? merged.conversation
@@ -172,6 +172,19 @@ function writeConfig(config: ImConfig, services: ImConfigServices): void {
 
 function isFeishuConversationTransport(value: unknown): value is NonNullable<ImConfigConversation['transport']> {
   return value === 'webhook' || value === 'long_connection';
+}
+
+function hasFeishuConversationCredential(value: Record<string, any>): boolean {
+  if (typeof value.app_id === 'string' && value.app_id.trim() && typeof value.app_secret === 'string' && value.app_secret.trim()) {
+    return true;
+  }
+  const ref = value.credential_ref;
+  return value.credential_source === 'lark_cli_profile'
+    && ref?.kind === 'lark-cli-profile'
+    && typeof ref.executablePath === 'string'
+    && ref.executablePath.startsWith('/')
+    && typeof ref.profile === 'string'
+    && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$/.test(ref.profile);
 }
 
 function nonEmptyStringOrExisting(value: unknown, existing: unknown): string | undefined {

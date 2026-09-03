@@ -98,6 +98,9 @@ export class FeishuAdapter implements IMAdapter {
 
 async function createFeishuClient(config: FeishuConfig) {
   try {
+    if (!config.app_id || !config.app_secret) {
+      throw new Error('Feishu App ID and App Secret are required for the inline SDK adapter');
+    }
     const lark = await import('@larksuiteoapi/node-sdk');
     return new lark.Client({
       appId: config.app_id,

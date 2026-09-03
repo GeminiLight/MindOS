@@ -134,6 +134,37 @@ describe('recent agent activity mobile summary', () => {
     });
   });
 
+  it('attaches the Product-owned capsule recovery readiness to its root run', () => {
+    const root = run({ id: 'recoverable-run', rootRunId: 'recoverable-run' });
+    const summary = buildRecentAgentActivity({
+      runs: [root],
+      events: [],
+      observatory: {
+        traces: [{
+          id: 'recoverable-run',
+          rootRunId: 'recoverable-run',
+          capsule: {
+            id: 'capsule-1',
+            recovery: {
+              retry: { supported: true, mode: 'from-start' },
+              fork: { supported: true, mode: 'new-session' },
+              resume: { supported: false, reason: 'The runtime session expired.' },
+              rollback: { supported: false, reason: 'No verified rollback executor.' },
+            },
+          },
+        }],
+      },
+    }, { now: 2000 });
+
+    expect(summary.items[0]?.capsule).toEqual(expect.objectContaining({
+      id: 'capsule-1',
+      recovery: expect.objectContaining({
+        retry: { supported: true, mode: 'from-start' },
+        resume: { supported: false, reason: 'The runtime session expired.' },
+      }),
+    }));
+  });
+
   it('marks pending host questions as user-action items', () => {
     const remote = run({
       id: 'remote-run',

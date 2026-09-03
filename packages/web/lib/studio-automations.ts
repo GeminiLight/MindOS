@@ -21,6 +21,17 @@ export type StudioAutomationStatus = 'active' | 'paused';
 export type StudioAutomationRunStatus = 'pending' | 'running' | 'waiting_approval' | 'success' | 'error' | 'timed_out' | 'interrupted';
 export type StudioAutomationRuntime = 'mindos-pi' | 'codex' | 'claude';
 export type StudioAutomationSource = 'mindos-durable';
+export type StudioAutomationTrigger =
+  | { type: 'manual' }
+  | { type: 'schedule'; schedule: StudioAutomationSchedule; timezone: string }
+  | {
+      type: 'event';
+      sources: string[];
+      events: string[];
+      where?: Record<string, string | number | boolean>;
+      debounceMs: number;
+      storm: { windowMs: number; maxEvents: number };
+    };
 
 export interface StudioAutomation {
   id: string;
@@ -31,6 +42,7 @@ export interface StudioAutomation {
   scope: StudioAutomationScope;
   projectId?: string;
   schedule: StudioAutomationSchedule;
+  trigger: StudioAutomationTrigger;
   model: StudioAutomationModel;
   effort: StudioAutomationEffort;
   timezone: string;
@@ -64,6 +76,7 @@ export interface StudioAutomationDraft {
   scope: StudioAutomationScope;
   projectId?: string;
   schedule: StudioAutomationSchedule;
+  trigger: StudioAutomationTrigger;
   model: StudioAutomationModel;
   effort: StudioAutomationEffort;
   timezone: string;
@@ -92,6 +105,8 @@ export interface StudioAutomationPayload {
     controlPlaneScheduleCount: number;
     pendingApprovals: number;
     unreadNotifications: number;
+    queuedEventDeliveries: number;
+    recentEventCount: number;
   };
 }
 

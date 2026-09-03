@@ -8,6 +8,7 @@ import {
   writeJsonlMeta,
   type JsonlCompactionConfig,
 } from './jsonl-log';
+import { emitStudioAutomationEvent, recordStudioAutomationEventSourceFailure } from '@geminilight/mindos/server';
 
 /**
  * Content change log backed by the shared JSONL store.
@@ -159,6 +160,27 @@ export function appendContentChange(mindRoot: string, input: ContentChangeInput)
     truncated: before.truncated || after.truncated || undefined,
   };
   appendJsonlEvents(file, metaFile, [event], COMPACTION);
+  try {
+    emitStudioAutomationEvent(mindRoot, {
+      source: 'knowledge',
+      key: event.id,
+      type: 'knowledge.changed',
+      occurredAt: new Date(event.ts),
+      payload: {
+        changeId: event.id,
+        path: event.path,
+        op: event.op,
+        source: event.source,
+        summary: event.summary,
+        agentName: event.agentName,
+        beforePath: event.beforePath,
+        afterPath: event.afterPath,
+      },
+    });
+  } catch (error) {
+    recordStudioAutomationEventSourceFailure(mindRoot, { source: 'knowledge', key: event.id, error });
+    // Change logging remains authoritative if the automation projection is unavailable.
+  }
   return event;
 }
 

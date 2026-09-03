@@ -403,8 +403,44 @@ describe('MindOS server contract: channels and IM', () => {
     config = { providers: {} };
     await expect(handleImFeishuLongConnectionPost(services)).resolves.toMatchObject({
       status: 422,
-      body: { ok: false, error: 'Feishu is not configured. Save App ID and App Secret first.' },
+      body: { ok: false, error: 'Feishu is not configured. Bind an existing app or save App ID and App Secret first.' },
     });
+  });
+
+  it('enables Feishu conversations through a bound lark-cli profile without copying a secret', async () => {
+    let config: any = {
+      providers: {
+        feishu: {
+          app_id: 'cli_existing',
+          credential_source: 'lark_cli_profile',
+          credential_ref: {
+            kind: 'lark-cli-profile',
+            executablePath: '/opt/lark-cli',
+            profile: 'cli_existing',
+          },
+        },
+      },
+    };
+    const services = {
+      readConfig: () => config,
+      writeConfig: (next: any) => { config = next; },
+      getFeishuWSClientStatus: () => ({ running: true, startedAt: '2026-09-03T00:00:00.000Z' }),
+      startFeishuWSClient: async (feishuConfig: any) => {
+        expect(feishuConfig).not.toHaveProperty('app_secret');
+        expect(feishuConfig.credential_ref.profile).toBe('cli_existing');
+      },
+      stopFeishuWSClient: () => {},
+    };
+
+    expect(handleImConfigPut({
+      platform: 'feishu',
+      conversation: { enabled: true, transport: 'long_connection' },
+    }, services)).toMatchObject({ status: 200, body: { ok: true } });
+    await expect(handleImFeishuLongConnectionPost(services)).resolves.toMatchObject({
+      status: 200,
+      body: { ok: true, running: true },
+    });
+    expect(config.providers.feishu).not.toHaveProperty('app_secret');
   });
 
   it('creates a Feishu OAuth authorization URL only after app credentials are saved', () => {

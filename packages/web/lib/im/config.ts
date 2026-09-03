@@ -5,6 +5,8 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { validateChannelCredentials } from '@geminilight/mindos/server';
+import { listConnectionBindings } from '@geminilight/mindos/server';
+import { effectiveMindRoot } from '../mind-root';
 import type { IMConfig, IMPlatform, TelegramConfig, FeishuConfig, DiscordConfig, SlackConfig, WeComConfig, DingTalkConfig, WeChatConfig, QQConfig } from './types';
 
 const IM_CONFIG_DIR = path.join(os.homedir(), '.mindos');
@@ -57,6 +59,27 @@ export function readIMConfig(): IMConfig {
   }
 }
 
+/** Resolve external credential references without copying provider secrets into MindOS. */
+export function readEffectiveIMConfig(): IMConfig {
+  const stored = structuredClone(readIMConfig());
+  const current = stored.providers.feishu;
+  if (current?.credential_source !== 'lark_cli_profile') {
+    const bound = getBoundLarkCliFeishuConfig();
+    if (!current && bound) stored.providers.feishu = bound;
+    return stored;
+  }
+  const bound = getBoundLarkCliFeishuConfig(current.credential_ref);
+  if (!bound) {
+    delete stored.providers.feishu;
+    return stored;
+  }
+  stored.providers.feishu = {
+    ...bound,
+    ...(current.conversation ? { conversation: structuredClone(current.conversation) } : {}),
+  };
+  return stored;
+}
+
 /** Write IM config atomically. Sets 0o600 on non-Windows. */
 export function writeIMConfig(config: IMConfig): void {
   fs.mkdirSync(IM_CONFIG_DIR, { recursive: true });
@@ -73,8 +96,7 @@ export function writeIMConfig(config: IMConfig): void {
 
 /** Check if any IM platform has credentials configured. */
 export function hasAnyIMConfig(): boolean {
-  const config = readIMConfig();
-  return Object.keys(config.providers).length > 0;
+  return Object.keys(readEffectiveIMConfig().providers).length > 0;
 }
 
 /** Get config mtime for hot-reload detection by executor. */
@@ -85,9 +107,11 @@ export function getIMConfigMtime(): number {
 /** Get list of platforms that have credentials configured. */
 export function getConfiguredPlatforms(): IMPlatform[] {
   const config = readIMConfig();
-  return Object.keys(config.providers).filter(
+  const configured = Object.keys(config.providers).filter(
     (key) => validatePlatformConfig(key as IMPlatform, config.providers[key as keyof typeof config.providers]).valid,
   ) as IMPlatform[];
+  if (!configured.includes('feishu') && getBoundLarkCliFeishuConfig()) configured.push('feishu');
+  return configured;
 }
 
 /** Get config for a specific platform. */
@@ -100,8 +124,33 @@ export function getPlatformConfig(platform: 'dingtalk'): DingTalkConfig | undefi
 export function getPlatformConfig(platform: 'wechat'): WeChatConfig | undefined;
 export function getPlatformConfig(platform: 'qq'): QQConfig | undefined;
 export function getPlatformConfig(platform: IMPlatform): unknown {
-  const config = readIMConfig();
+  const config = platform === 'feishu' ? readEffectiveIMConfig() : readIMConfig();
+  if (platform === 'feishu') return config.providers.feishu;
   return config.providers[platform];
+}
+
+function getBoundLarkCliFeishuConfig(requiredRef?: FeishuConfig['credential_ref']): FeishuConfig | undefined {
+  try {
+    const binding = listConnectionBindings(effectiveMindRoot()).find((entry) => (
+      entry.provider === 'feishu'
+      && entry.adapter === 'lark-cli'
+      && entry.status !== 'unavailable'
+      && entry.identities.bot.available
+      && entry.identities.bot.verified
+      && (!requiredRef || (
+        entry.credentialRef.executablePath === requiredRef.executablePath
+        && entry.credentialRef.profile === requiredRef.profile
+      ))
+    ));
+    if (!binding) return undefined;
+    return {
+      app_id: binding.application.appId,
+      credential_source: 'lark_cli_profile',
+      credential_ref: structuredClone(binding.credentialRef),
+    };
+  } catch {
+    return undefined;
+  }
 }
 
 /** Validate that required fields are present for a platform config. */

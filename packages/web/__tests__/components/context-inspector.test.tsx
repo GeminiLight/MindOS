@@ -45,6 +45,18 @@ const receipts = [
   },
 ];
 
+const feedbackPayload = {
+  schemaVersion: 1,
+  feedback: [],
+  profiles: [{
+    assetId: 'asset-alpha', assetVersion: 2, counts: { helpful: 3, irrelevant: 0, stale: 1 },
+    activeCount: 4, eligible: true, confidence: 0.5, adjustment: 0.03375,
+    staleReviewRecommended: true, explanation: '4 current-version signals produced a bounded +0.034 ranking hint.',
+  }],
+  staleReviews: [],
+  summary: { total: 0, active: 0, missing: 0, pendingStaleReviews: 0 },
+};
+
 let host: HTMLDivElement;
 let root: Root | null;
 
@@ -62,6 +74,7 @@ describe('ContextInspectorContent', () => {
       const url = String(input instanceof Request ? input.url : input);
       if (url.includes('/api/context-assets')) return Response.json({ schemaVersion: 1, assets, summary: { total: 2, active: 1, draft: 1, deprecated: 0 } });
       if (url.includes('/api/retrieval-receipts')) return Response.json({ schemaVersion: 1, receipts, summary: { total: 2, selected: 1, empty: 0, failed: 1 } });
+      if (url.includes('/api/context-feedback')) return Response.json(feedbackPayload);
       return Response.json({ error: 'not found' }, { status: 404 });
     }));
   });
@@ -123,5 +136,36 @@ describe('ContextInspectorContent', () => {
     await renderInspector();
     expect(host.textContent).toContain('Could not load context observability data.');
     expect(host.textContent).toContain('Try again');
+  });
+
+  it('captures four explicit learning decisions and keeps stale deprecation behind review', async () => {
+    const fetchMock = vi.mocked(fetch);
+    await renderInspector();
+    expect(host.textContent).toContain('Ranking hint +0.034');
+    expect(host.textContent).toContain('Review stale signal');
+
+    const linkedReceipt = host.querySelector('button[aria-label="Inspect receipt receipt-selected"]') as HTMLButtonElement;
+    await act(async () => { linkedReceipt.click(); });
+    for (const label of ['Helpful', 'Irrelevant', 'Stale']) {
+      const button = host.querySelector(`button[aria-label="${label} asset-alpha for receipt-selected"]`) as HTMLButtonElement;
+      await act(async () => { button.click(); await Promise.resolve(); });
+    }
+    const missing = host.querySelector('button[aria-label="Missing context for receipt-selected"]') as HTMLButtonElement;
+    await act(async () => { missing.click(); await Promise.resolve(); });
+
+    const posts = fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST');
+    expect(posts.map(([, init]) => JSON.parse(String(init?.body)).signal)).toEqual([
+      'helpful', 'irrelevant', 'stale', 'missing',
+    ]);
+
+    const assetButton = host.querySelector('button[aria-label="Inspect asset asset-alpha"]') as HTMLButtonElement;
+    await act(async () => { assetButton.click(); });
+    const deprecate = host.querySelector('button[aria-label="Deprecate stale asset asset-alpha"]') as HTMLButtonElement;
+    await act(async () => { deprecate.click(); await Promise.resolve(); });
+    const reviewPost = fetchMock.mock.calls.find(([, init]) => {
+      if (init?.method !== 'POST') return false;
+      return JSON.parse(String(init.body)).action === 'review-stale';
+    });
+    expect(JSON.parse(String(reviewPost?.[1]?.body))).toMatchObject({ decision: 'deprecate', assetId: 'asset-alpha' });
   });
 });

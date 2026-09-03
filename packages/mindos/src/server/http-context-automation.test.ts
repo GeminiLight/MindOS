@@ -63,6 +63,7 @@ describe('Product Server context and durable automation routes', () => {
         reason: 'selected',
       }],
       totals: { candidateCount: 1, selectedCount: 1, usedTokens: 3 },
+      metadata: { runId: 'run-http-1' },
     });
 
     expect((await fetch(`${base}/api/context-assets`)).status).toBe(401);
@@ -70,6 +71,15 @@ describe('Product Server context and durable automation routes', () => {
       .resolves.toMatchObject({ assets: [expect.objectContaining({ id: asset.id })] });
     await expect((await fetch(`${base}/api/retrieval-receipts?id=${receipt.id}`, { headers: auth })).json())
       .resolves.toMatchObject({ receipt: { id: receipt.id } });
+    expect((await fetch(`${base}/api/context-feedback`)).status).toBe(401);
+    const feedback = await fetch(`${base}/api/context-feedback`, {
+      method: 'POST',
+      headers: { ...auth, 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'submit', receiptId: receipt.id, assetId: asset.id, signal: 'helpful' }),
+    });
+    expect(feedback.status).toBe(201);
+    await expect((await fetch(`${base}/api/context-feedback?runId=run-http-1`, { headers: auth })).json())
+      .resolves.toMatchObject({ feedback: [expect.objectContaining({ signal: 'helpful' })] });
   });
 
   it('owns durable automation CRUD over the Product Server HTTP boundary', async () => {

@@ -12,6 +12,7 @@ import {
 } from '../global-state.js';
 import { readLegacyMindosPermissionMode } from '../permission/index.js';
 import { redactSensitiveObject, redactSensitiveText } from '../redaction.js';
+import { emitStudioAutomationEvent, recordStudioAutomationEventSourceFailure } from '../../server/automations/events.js';
 
 /**
  * Cross-runtime agent run ledger — an INDEX CARD store, not a transcript
@@ -748,7 +749,35 @@ function finishRun(
       ? 'run_canceled'
       : 'run_failed';
   appendAgentEvent(next, eventType, patch.error);
+  emitTerminalRunAutomationEvent(store.mindRoot, next);
   return next;
+}
+
+function emitTerminalRunAutomationEvent(mindRoot: string | undefined, record: AgentRunRecord): void {
+  if (!mindRoot) return;
+  try {
+    emitStudioAutomationEvent(mindRoot, {
+      source: 'agent',
+      key: record.id,
+      type: `agent.run.${record.status}`,
+      occurredAt: new Date(record.completedAt ?? Date.now()),
+      payload: {
+        runId: record.id,
+        rootRunId: record.rootRunId,
+        parentRunId: record.parentRunId,
+        runtimeId: record.runtimeId,
+        agentKind: record.agentKind,
+        displayName: record.displayName,
+        status: record.status,
+        durationMs: record.durationMs,
+        outputSummary: record.outputSummary,
+        error: record.error,
+      },
+    });
+  } catch (error) {
+    recordStudioAutomationEventSourceFailure(mindRoot, { source: 'agent', key: record.id, error });
+    // Automation projection is best-effort and must never change run completion semantics.
+  }
 }
 
 export function startAgentRun(input: StartAgentRunInput): AgentRunRecord {

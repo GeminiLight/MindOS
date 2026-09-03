@@ -11,6 +11,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { listContextAssets } from '../../knowledge/context-assets/index.js';
+import { emitStudioAutomationEvent } from '../automations/events.js';
 import { readRuntimeControlPlane } from './runtime-control-plane.js';
 import {
   claimNextDueStudioAutomation,
@@ -94,6 +95,59 @@ describe('Studio durable automations', () => {
     const removed = handleStudioAutomationsPost({ action: 'delete', id }, services());
     expect(removed.body).toMatchObject({ automations: [] });
     expect(readRuntimeControlPlane(mindRoot).schedules[0]).toMatchObject({ status: 'archived' });
+  });
+
+  it('validates and preserves exact event metadata filters', () => {
+    const eventDraft = {
+      ...draft,
+      schedule: 'manual',
+      trigger: {
+        type: 'event',
+        sources: ['feishu'],
+        events: ['im.message.receive_v1'],
+        where: { 'message.chat_type': 'p2p', mentionsBot: true },
+        debounceMs: 1_000,
+        storm: { windowMs: 60_000, maxEvents: 100 },
+      },
+    };
+    const created = handleStudioAutomationsPost({ action: 'create', draft: eventDraft }, services());
+    expect(created.status).toBe(201);
+    expect(created.body).toMatchObject({ automations: [{ trigger: { where: eventDraft.trigger.where } }] });
+
+    const nested = handleStudioAutomationsPost({
+      action: 'create', draft: { ...eventDraft, trigger: { ...eventDraft.trigger, where: { chat: { type: 'p2p' } } } },
+    }, services());
+    const unsafe = handleStudioAutomationsPost({
+      action: 'create', draft: { ...eventDraft, trigger: { ...eventDraft.trigger, where: { '__proto__.x': true } } },
+    }, services());
+    expect(nested).toMatchObject({ status: 400, body: { error: expect.stringMatching(/string, finite number, or boolean/i) } });
+    expect(unsafe).toMatchObject({ status: 400, body: { error: expect.stringMatching(/field is invalid/i) } });
+  });
+
+  it('settles queued event deliveries when their automation is deleted', () => {
+    const created = handleStudioAutomationsPost({
+      action: 'create',
+      draft: {
+        ...draft,
+        schedule: 'manual',
+        trigger: {
+          type: 'event', sources: ['api'], events: ['release.ready'], debounceMs: 0,
+          storm: { windowMs: 60_000, maxEvents: 100 },
+        },
+      },
+    }, services());
+    const id = 'automations' in created.body ? created.body.automations[0]!.id : '';
+    emitStudioAutomationEvent(mindRoot, {
+      source: 'api', key: 'release-delete', type: 'release.ready', occurredAt: now, payload: {},
+    });
+
+    expect(readStudioAutomationState(mindRoot).events[0]?.deliveries[0]).toMatchObject({ jobId: id, status: 'pending' });
+    expect(handleStudioAutomationsPost({ action: 'delete', id }, services()).status).toBe(200);
+    expect(readStudioAutomationState(mindRoot).events[0]?.deliveries[0]).toMatchObject({
+      jobId: id,
+      status: 'superseded',
+      reason: expect.stringMatching(/deleted/i),
+    });
   });
 
   it('migrates only Studio-owned legacy jobs once and disables their old executor', async () => {

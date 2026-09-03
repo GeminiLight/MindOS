@@ -66,6 +66,7 @@ export * from './bridges/index.js';
 export * from './stream/index.js';
 export * from './subagent/index.js';
 export * from './agent-run-context.js';
+export * from './capsules/index.js';
 export * from './result-reducer.js';
 export * from './global-state.js';
 export * from './redaction.js';

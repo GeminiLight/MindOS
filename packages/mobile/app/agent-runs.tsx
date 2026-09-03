@@ -18,6 +18,8 @@ import StatusPill from '@/components/ui/StatusPill';
 import { RecentAgentActivityListRow } from '@/components/agent/RecentAgentActivityCard';
 import CloudTaskDraftCard from '@/components/agent/CloudTaskDraftCard';
 import ServerRequirementsCard from '@/components/agent/ServerRequirementsCard';
+import ContextLearningCard from '@/components/agent/ContextLearningCard';
+import RunRecoveryControls from '@/components/agent/RunRecoveryControls';
 import { useConnectionStore } from '@/lib/connection-store';
 import { useRecentAgentActivity } from '@/hooks/useRecentAgentActivity';
 import {
@@ -208,7 +210,12 @@ export default function AgentRunsScreen() {
           ) : visibleItems.length > 0 ? (
             <View style={styles.runList}>
               {visibleItems.map((item) => (
-                <RecentAgentActivityListRow key={item.id} item={item} />
+                <View key={item.id}>
+                  <RecentAgentActivityListRow item={item} />
+                  {item.capsule ? (
+                    <RunRecoveryControls capsule={item.capsule} onStarted={() => void activity.refresh()} />
+                  ) : null}
+                </View>
               ))}
             </View>
           ) : (
@@ -221,6 +228,8 @@ export default function AgentRunsScreen() {
             </View>
           )}
         </MindCard>
+
+        <ContextLearningCard enabled={connected} />
 
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Cloud Task Bridges</Text>

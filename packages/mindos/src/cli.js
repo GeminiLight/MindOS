@@ -24,6 +24,7 @@ export const MINDOS_ADDITIONAL_COMMANDS = [
   'sync',
   'gateway',
   'automation',
+  'context',
   'token',
   'logs',
   'api',

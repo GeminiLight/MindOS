@@ -1,6 +1,7 @@
 // ─── IM Unified Executor ──────────────────────────────────────────────────────
 // Manages adapter lifecycle (lazy-load, singleton cache, hot-reload) and dispatches messages.
 
+import { randomUUID } from 'node:crypto';
 import type { IMAdapter, IMMessage, IMPlatform, IMSendResult, IMActivityType } from './types';
 import { isValidRecipientId, PLATFORM_LIMITS } from './types';
 import { getPlatformConfig, getIMConfigMtime, getConfiguredPlatforms } from './config';
@@ -41,8 +42,13 @@ async function getAdapter(platform: IMPlatform): Promise<IMAdapter> {
     case 'feishu': {
       const fsConfig = getPlatformConfig('feishu');
       if (!fsConfig) throw new Error('Platform "feishu" not configured. Add credentials to ~/.mindos/im.json');
-      const { FeishuAdapter } = await import('./adapters/feishu');
-      adapter = new FeishuAdapter(fsConfig);
+      if (fsConfig.credential_source === 'lark_cli_profile' && fsConfig.credential_ref) {
+        const { LarkCliFeishuAdapter } = await import('./adapters/lark-cli-feishu');
+        adapter = new LarkCliFeishuAdapter(fsConfig);
+      } else {
+        const { FeishuAdapter } = await import('./adapters/feishu');
+        adapter = new FeishuAdapter(fsConfig);
+      }
       break;
     }
     case 'discord': {
@@ -121,7 +127,10 @@ export async function sendIMMessage(
   }
 
   // Preprocess: downgrade format + truncate
-  const processed = preprocessMessage(message);
+  const processed = preprocessMessage({
+    ...message,
+    idempotencyKey: message.idempotencyKey ?? randomUUID(),
+  });
 
   // Get adapter (lazy load)
   let adapter: IMAdapter;

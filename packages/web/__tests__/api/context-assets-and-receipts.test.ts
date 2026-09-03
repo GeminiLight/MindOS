@@ -4,6 +4,7 @@ import { writeRetrievalReceipt } from '@geminilight/mindos/retrieval';
 import { seedFile, testMindRoot } from '../setup';
 import { GET as getContextAssets } from '../../app/api/context-assets/route';
 import { GET as getRetrievalReceipts } from '../../app/api/retrieval-receipts/route';
+import { GET as getContextFeedback, POST as postContextFeedback } from '../../app/api/context-feedback/route';
 
 describe('context provenance Web adapters', () => {
   it('lists registered context assets with server-side filters', async () => {
@@ -78,5 +79,26 @@ describe('context provenance Web adapters', () => {
       'http://localhost/api/retrieval-receipts?id=receipt-missing',
     ));
     expect(missing.status).toBe(404);
+  });
+
+  it('adapts context feedback mutations and profiles through the Product handler', async () => {
+    seedFile('Notes/context.md', '# Context\n');
+    const asset = registerContextFileAsset(testMindRoot, { path: 'Notes/context.md' });
+    const receipt = writeRetrievalReceipt(testMindRoot, {
+      id: 'receipt-feedback-web', query: 'context', strategy: 'test', outcome: 'selected',
+      startedAt: '2026-09-03T03:00:00.000Z', completedAt: '2026-09-03T03:00:00.001Z',
+      budget: { maxTokens: 10, maxFiles: 1, minScore: 0, timeoutMs: 10 }, scope: { preferredPaths: [], excludePaths: [] },
+      candidates: [], selections: [{ assetId: asset.id, path: asset.path, score: 1, estimatedTokens: 1, truncated: false, reason: 'test' }],
+      totals: { candidateCount: 1, selectedCount: 1, usedTokens: 1 }, metadata: { runId: 'run-feedback-web' },
+    });
+    const created = await postContextFeedback(new Request('http://localhost/api/context-feedback', {
+      method: 'POST', body: JSON.stringify({ action: 'submit', receiptId: receipt.id, assetId: asset.id, signal: 'helpful' }),
+    }) as never);
+    expect(created.status).toBe(201);
+    const listed = await getContextFeedback(new Request(`http://localhost/api/context-feedback?assetId=${asset.id}`) as never);
+    await expect(listed.json()).resolves.toMatchObject({
+      feedback: [expect.objectContaining({ signal: 'helpful' })],
+      profiles: [expect.objectContaining({ assetId: asset.id, adjustment: 0 })],
+    });
   });
 });

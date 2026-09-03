@@ -1,5 +1,6 @@
 export { buildFeishuWebhookStatus } from './feishu-status';
 export {
+  handleLarkCliMessageReceiveEvent,
   handleFeishuMessageReceiveEvent,
   normalizeFeishuIncomingMessage,
   shouldProcessFeishuEvent,

@@ -10,6 +10,7 @@ const SENSITIVE_KEY_PATTERN = /(?:^|[_-])(api[_-]?key|authorization|auth[_-]?tok
 
 const SENSITIVE_VALUE_PATTERNS: Array<[RegExp, string]> = [
   [/\b(authorization\s*[:=]\s*bearer\s+)([^\s"',;]+)/gi, `$1${REDACTED}`],
+  [/\b(bearer\s+)([^\s"',;]+)/gi, `$1${REDACTED}`],
   [/\b(api[_-]?key|auth[_-]?token|access[_-]?token|refresh[_-]?token|client[_-]?secret|app[_-]?secret|bot[_-]?token|password|passwd|secret|token)\s*[:=]\s*(['"]?)([^'",\s&}]+)/gi, `$1=$2${REDACTED}`],
   [/([?&](?:access_token|refresh_token|api_key|key|token|auth|signature|sign|secret|client_secret)=)([^&#\s]+)/gi, `$1${REDACTED}`],
   [/\b(sk-ant-[A-Za-z0-9_-]{12,})\b/g, REDACTED],

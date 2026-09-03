@@ -2,6 +2,15 @@
 
 # 变更日志 (CHANGELOG)
 
+## Unreleased
+
+### Agent 控制与学习闭环
+
+- **Run Capsule 与接管/恢复**：canonical Pi、Codex、Claude、ACP turn 现在都会写入私有 0600 Capsule，并在终态保存 bounded 模型输出证据；Web 与 Mobile 共享 capability-aware Retry、Fork、Resume 和明确不可用的 Rollback readiness，恢复 plan 幂等且只能 claim 一次。
+- **Connection & Identity Broker**：飞书 Channel 会优先发现和复用本机现有 `lark-cli` profile，独立判断 Bot/User 身份；Bot 已就绪时不再因为 User OAuth 缺失要求创建新机器人或重新审批。MindOS 只保存外部 credential reference，并在每次执行前验证 CLI 文件可信度。
+- **Event-driven Automation**：Studio job 支持 schedule/manual/event trigger、精确 metadata filter、debounce 和 storm guard；Agent run、飞书消息、Inbox 与知识变更进入 durable event inbox，worker crash/retry/approval 仍绑定同一 delivery，容量上限不会静默淘汰 active 工作。
+- **Context Learning Loop**：Web/Mobile 支持 helpful、irrelevant、stale、missing 和 undo；反馈只绑定 receipt 实际 selection，多个当前版本信号才产生 bounded ranking hint。stale 需显式审核，Capsule request/output 证据可继续进入 Echo immutable review。
+
 ## v1.1.66 (2026-09-03)
 
 ### Runtime / Agents

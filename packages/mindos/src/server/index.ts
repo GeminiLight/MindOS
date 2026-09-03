@@ -16,6 +16,12 @@ export {
 } from './handlers/retrieval-receipts.js';
 
 export {
+  handleContextFeedbackGet,
+  handleContextFeedbackPost,
+  type ContextFeedbackHandlerServices,
+} from './handlers/context-feedback.js';
+
+export {
   MINDOS_WEB_API_ROUTE_OWNERSHIP,
   getMindosWebApiRouteOwnership,
   type MindosWebApiRouteAdapter,
@@ -75,6 +81,12 @@ export {
   type PublicAgentEvent,
   type PublicAgentRunRecord,
 } from './handlers/agent-runs.js';
+
+export {
+  handleAgentRunCapsuleRecoveryPost,
+  handleAgentRunCapsulesGet,
+  type AgentRunCapsuleHandlerServices,
+} from './handlers/agent-run-capsules.js';
 
 export {
   handleAutomationApprovalDecisionPost,
@@ -273,6 +285,18 @@ export {
   type FeishuApprovalDeliveryResult,
   type StudioAutomationState,
 } from './handlers/studio-automations.js';
+
+export {
+  handleAutomationEventsGet,
+  handleAutomationEventsPost,
+  type AutomationEventServices,
+} from './handlers/automation-events.js';
+export {
+  emitStudioAutomationEvent,
+  recordStudioAutomationEventSourceFailure,
+  type EmitStudioAutomationEventInput,
+  type EmitStudioAutomationEventResult,
+} from './automations/events.js';
 
 export {
   buildAgentRuntimeReadinessPayload,
@@ -557,6 +581,39 @@ export {
   type ImConfigPutPayload,
   type ImConfigServices,
 } from './handlers/im-config.js';
+
+export {
+  handleConnectionsGet,
+  handleConnectionsPost,
+  type ConnectionBrokerServices,
+  type ConnectionMutationPayload,
+  type ConnectionsPayload,
+} from './handlers/connections.js';
+
+export {
+  bindConnection,
+  discoverLarkCliConnections,
+  findLarkCliExecutable,
+  getConnectionBinding,
+  listConnectionBindings,
+  parseLarkCliFailure,
+  resolveSafeLarkCliExecutable,
+  refreshConnectionBinding,
+  runLarkCli,
+  unbindConnection,
+  type ConnectionAdapter,
+  type ConnectionBinding,
+  type ConnectionCandidate,
+  type ConnectionCapability,
+  type ConnectionIdentity,
+  type ConnectionIssue,
+  type ConnectionProvider,
+  type ConnectionRegistry,
+  type ConnectionStatus,
+  type ExternalCredentialReference,
+  type LarkCliRunner,
+  type LarkCliRunResult,
+} from './connections/index.js';
 
 export {
   handleImFeishuLongConnectionDelete,

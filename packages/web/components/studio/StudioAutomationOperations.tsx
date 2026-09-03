@@ -48,6 +48,9 @@ export function AutomationOperations({
         <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
           {payload.worker?.lastError || copy.runtimeNote}
         </p>
+        <p data-studio-automation-event-queue className="mt-2 text-[11px] text-muted-foreground">
+          {copy.eventQueue}: {payload.summary.queuedEventDeliveries ?? 0} · {copy.recentEvents}: {payload.summary.recentEventCount ?? 0}
+        </p>
       </section>
 
       <div className="grid gap-3 sm:grid-cols-2">

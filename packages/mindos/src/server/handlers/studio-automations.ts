@@ -25,6 +25,7 @@ import {
   type StudioAutomationJob,
   type StudioAutomationPayload,
   type StudioAutomationStatus,
+  type StudioAutomationTrigger,
 } from '../automations/types.js';
 
 export {
@@ -192,6 +193,7 @@ export function handleStudioAutomationsPost(
         const job = state.automations.find((item) => item.id === id);
         if (!job) return null;
         if (job.lease) return { running: true as const, job };
+        settleDeletedAutomationWork(state, id, now);
         state.automations = state.automations.filter((item) => item.id !== id);
         state.updatedAt = now.toISOString();
         return { running: false as const, job };
@@ -208,6 +210,37 @@ export function handleStudioAutomationsPost(
   }
 }
 
+function settleDeletedAutomationWork(
+  state: ReturnType<typeof readStudioAutomationState>,
+  jobId: string,
+  now: Date,
+): void {
+  const timestamp = now.toISOString();
+  for (const event of state.events) {
+    for (const delivery of event.deliveries) {
+      if (delivery.jobId !== jobId || (delivery.status !== 'pending' && delivery.status !== 'waiting_approval')) continue;
+      delivery.status = 'superseded';
+      delivery.reason = 'Automation was deleted before this event delivery ran.';
+      delivery.updatedAt = timestamp;
+      delivery.finishedAt = timestamp;
+      delete delivery.nextAttemptAt;
+      delete delivery.ownerId;
+      delete delivery.leaseExpiresAt;
+    }
+  }
+  for (const approval of state.approvals) {
+    if (approval.jobId !== jobId || approval.status !== 'pending') continue;
+    approval.status = 'denied';
+    approval.decision = 'deny';
+    approval.resolvedAt = timestamp;
+  }
+  for (const notification of state.notifications) {
+    if (notification.jobId === jobId && notification.kind === 'approval_required' && !notification.readAt) {
+      notification.readAt = timestamp;
+    }
+  }
+}
+
 function buildPayload(mindRoot: string, now: Date): StudioAutomationPayload {
   const state = readStudioAutomationState(mindRoot);
   const controlPlane = readRuntimeControlPlane(mindRoot);
@@ -218,6 +251,9 @@ function buildPayload(mindRoot: string, now: Date): StudioAutomationPayload {
     scope: job.scope,
     ...(job.projectId ? { projectId: job.projectId } : {}),
     schedule: job.schedule,
+    trigger: job.trigger ?? (job.schedule === 'manual'
+      ? { type: 'manual' as const }
+      : { type: 'schedule' as const, schedule: job.schedule, timezone: job.timezone }),
     timezone: job.timezone,
     model: job.model,
     effort: job.effort,
@@ -256,13 +292,15 @@ function buildPayload(mindRoot: string, now: Date): StudioAutomationPayload {
       controlPlaneScheduleCount: controlPlane.summary.scheduleCount,
       pendingApprovals: state.approvals.filter((approval) => approval.status === 'pending').length,
       unreadNotifications: state.notifications.filter((notification) => !notification.readAt).length,
+      queuedEventDeliveries: state.events.flatMap((event) => event.deliveries).filter((delivery) => delivery.status === 'pending' || delivery.status === 'claimed' || delivery.status === 'waiting_approval').length,
+      recentEventCount: state.events.length,
     },
   };
 }
 
 function createJob(draft: StudioAutomationDraft, existing: StudioAutomationJob[], now: Date): StudioAutomationJob {
   const id = nextId(draft.title || titleFromPrompt(draft.prompt), existing.map((job) => job.id));
-  const nextRunAt = nextAutomationRunAt(draft.schedule, now, draft.timezone);
+  const nextRunAt = draft.trigger?.type === 'event' ? undefined : nextAutomationRunAt(draft.schedule, now, draft.timezone);
   return {
     id,
     title: draft.title || titleFromPrompt(draft.prompt),
@@ -270,6 +308,9 @@ function createJob(draft: StudioAutomationDraft, existing: StudioAutomationJob[]
     scope: draft.scope,
     ...(draft.projectId ? { projectId: draft.projectId } : {}),
     schedule: draft.schedule,
+    trigger: draft.trigger ?? (draft.schedule === 'manual'
+      ? { type: 'manual' }
+      : { type: 'schedule', schedule: draft.schedule, timezone: draft.timezone }),
     timezone: draft.timezone,
     model: draft.model,
     runtime: runtimeForModel(draft.model),
@@ -291,7 +332,9 @@ function createJob(draft: StudioAutomationDraft, existing: StudioAutomationJob[]
 }
 
 function updateJob(current: StudioAutomationJob, draft: StudioAutomationDraft, now: Date): StudioAutomationJob {
-  const nextRunAt = current.status === 'active' ? nextAutomationRunAt(draft.schedule, now, draft.timezone) : undefined;
+  const nextRunAt = current.status === 'active' && draft.trigger?.type !== 'event'
+    ? nextAutomationRunAt(draft.schedule, now, draft.timezone)
+    : undefined;
   return {
     ...current,
     title: draft.title || titleFromPrompt(draft.prompt),
@@ -299,6 +342,9 @@ function updateJob(current: StudioAutomationJob, draft: StudioAutomationDraft, n
     scope: draft.scope,
     ...(draft.projectId ? { projectId: draft.projectId } : { projectId: undefined }),
     schedule: draft.schedule,
+    trigger: draft.trigger ?? (draft.schedule === 'manual'
+      ? { type: 'manual' }
+      : { type: 'schedule', schedule: draft.schedule, timezone: draft.timezone }),
     timezone: draft.timezone,
     model: draft.model,
     runtime: runtimeForModel(draft.model),
@@ -327,9 +373,9 @@ function parseDraft(value: unknown): { value: StudioAutomationDraft } | { error:
   )) {
     return { error: 'Automation schedule is invalid.' };
   }
-  const schedule = typeof value.schedule === 'string'
+  let schedule = typeof value.schedule === 'string'
     ? value.schedule as StudioAutomationDraft['schedule']
-    : 'daily-0900';
+    : isRecord(value.trigger) && value.trigger.type === 'event' ? 'manual' : 'daily-0900';
   if (value.model !== undefined && value.model !== 'mindos-auto' && value.model !== 'gpt-5.5'
     && value.model !== 'codex' && value.model !== 'claude-code' && value.model !== 'local-agent') {
     return { error: 'Automation model is invalid.' };
@@ -356,6 +402,9 @@ function parseDraft(value: unknown): { value: StudioAutomationDraft } | { error:
   }
   const timezone = text(value.timezone, 100) ?? DEFAULT_AUTOMATION_TIMEZONE;
   try { assertValidTimezone(timezone); } catch (error) { return { error: error instanceof Error ? error.message : String(error) }; }
+  const trigger = parseAutomationTrigger(value.trigger, schedule, timezone);
+  if ('error' in trigger) return trigger;
+  if (trigger.value.type === 'event') schedule = 'manual';
   return {
     value: {
       title,
@@ -369,8 +418,95 @@ function parseDraft(value: unknown): { value: StudioAutomationDraft } | { error:
       permissionMode,
       retry: value.retry === 'never' ? 'never' : 'once',
       timeoutMs: clampNumber(value.timeoutMs, 1_000, 3_600_000, 600_000),
+      trigger: trigger.value,
     },
   };
+}
+
+function parseAutomationTrigger(
+  value: unknown,
+  schedule: StudioAutomationDraft['schedule'],
+  timezone: string,
+): { value: StudioAutomationTrigger } | { error: string } {
+  if (value === undefined) {
+    return {
+      value: schedule === 'manual'
+        ? { type: 'manual' }
+        : { type: 'schedule', schedule, timezone },
+    };
+  }
+  if (!isRecord(value)) return { error: 'Automation trigger must be an object.' };
+  if (value.type === 'manual') return { value: { type: 'manual' } };
+  if (value.type === 'schedule') return { value: { type: 'schedule', schedule, timezone } };
+  if (value.type !== 'event') return { error: 'Automation trigger type must be manual, schedule, or event.' };
+  const sources = eventPatterns(value.sources);
+  const events = eventPatterns(value.events);
+  if (sources.length === 0 || events.length === 0) {
+    return { error: 'Event triggers require at least one valid source and event type.' };
+  }
+  if (value.debounceMs !== undefined && (typeof value.debounceMs !== 'number' || !Number.isFinite(value.debounceMs) || value.debounceMs < 0)) {
+    return { error: 'Event trigger debounceMs must be a non-negative number.' };
+  }
+  const storm = isRecord(value.storm) ? value.storm : {};
+  if (storm.maxEvents !== undefined && (typeof storm.maxEvents !== 'number' || !Number.isFinite(storm.maxEvents) || storm.maxEvents < 1)) {
+    return { error: 'Event trigger storm.maxEvents must be a positive number.' };
+  }
+  if (storm.windowMs !== undefined && (typeof storm.windowMs !== 'number' || !Number.isFinite(storm.windowMs) || storm.windowMs < 1_000)) {
+    return { error: 'Event trigger storm.windowMs must be at least 1000ms.' };
+  }
+  const where = parseEventMetadataFilter(value.where);
+  if ('error' in where) return where;
+  return {
+    value: {
+      type: 'event',
+      sources,
+      events,
+      ...(where.value ? { where: where.value } : {}),
+      debounceMs: clampNumber(value.debounceMs, 0, 60 * 60_000, 0),
+      storm: {
+        windowMs: clampNumber(storm.windowMs, 1_000, 60 * 60_000, 60_000),
+        maxEvents: clampNumber(storm.maxEvents, 1, 10_000, 100),
+      },
+    },
+  };
+}
+
+function parseEventMetadataFilter(
+  value: unknown,
+): { value?: Record<string, string | number | boolean> } | { error: string } {
+  if (value === undefined) return {};
+  if (!isRecord(value)) return { error: 'Event trigger where must be a JSON object.' };
+  const entries = Object.entries(value);
+  if (entries.length > 20) return { error: 'Event trigger where supports at most 20 fields.' };
+  const filter: Record<string, string | number | boolean> = {};
+  for (const [key, item] of entries) {
+    const segments = key.split('.');
+    const safeKey = segments.length <= 4 && segments.every((segment) => (
+      /^[A-Za-z0-9][A-Za-z0-9_:-]{0,79}$/.test(segment)
+      && segment !== '__proto__'
+      && segment !== 'constructor'
+      && segment !== 'prototype'
+    ));
+    if (!safeKey) return { error: `Event trigger where field is invalid: ${key || '(empty)'}.` };
+    if (
+      typeof item !== 'boolean'
+      && !(typeof item === 'number' && Number.isFinite(item))
+      && !(typeof item === 'string' && item.length <= 500)
+    ) {
+      return { error: `Event trigger where.${key} must be a string, finite number, or boolean.` };
+    }
+    filter[key] = item;
+  }
+  return entries.length > 0 ? { value: filter } : {};
+}
+
+function eventPatterns(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value.flatMap((item) => {
+    if (item === '*') return ['*'];
+    const normalized = text(item, 160);
+    return normalized && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/.test(normalized) ? [normalized] : [];
+  }))].slice(0, 100);
 }
 
 function syncAllControlPlaneSchedules(mindRoot: string, now: Date): void {
@@ -384,7 +520,9 @@ export function syncControlPlaneSchedule(mindRoot: string, job: StudioAutomation
     title: job.title,
     runtimeId: job.runtime === 'mindos-pi' ? 'mindos' : job.runtime,
     status: job.status === 'paused' ? 'paused' : 'enabled',
-    trigger: automationTrigger(job.schedule, job.timezone),
+    trigger: job.trigger?.type === 'event'
+      ? { type: 'event' as const, event: job.trigger.events.join(',').slice(0, 160) }
+      : automationTrigger(job.schedule, job.timezone),
     target: {
       assistantId: job.runtime,
       command: job.prompt.slice(0, 160),

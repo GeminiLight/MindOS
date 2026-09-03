@@ -285,6 +285,28 @@ export interface AgentRuntimesResponse {
 export interface AgentRunsResponse {
   runs: AgentRunTimelineRecord[];
   events: AgentRunTimelineEvent[];
+  observatory?: {
+    traces: Array<{
+      id: string;
+      rootRunId?: string;
+      capsule?: AgentRunCapsuleProjection;
+    }>;
+  };
+}
+
+export type AgentRunCapsuleRecoveryAction = 'retry' | 'fork' | 'resume' | 'rollback';
+
+export interface AgentRunCapsuleRecoveryCapability {
+  supported: boolean;
+  mode?: 'from-start' | 'new-session';
+  sessionId?: string;
+  checkpointArtifactId?: string;
+  reason?: string;
+}
+
+export interface AgentRunCapsuleProjection {
+  id: string;
+  recovery: Record<AgentRunCapsuleRecoveryAction, AgentRunCapsuleRecoveryCapability>;
 }
 
 export interface RuntimePermissionOption {

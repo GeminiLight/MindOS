@@ -25,6 +25,9 @@ import {
   normalizeMindosSelectedSkills,
   prependMindosActiveAssistantPrompt,
   type MindosAgentInitializationContext,
+  type AgentRunCapsuleRequest,
+  claimAgentRunCapsuleRecoveryPlan,
+  getAgentRunCapsuleRecoveryPlan,
 } from '@geminilight/mindos/agent';
 import {
   createMindosAgentModeContract,
@@ -57,6 +60,7 @@ import {
   normalizeAgentMode,
   normalizeAgentPermissionMode,
   normalizeAgentSessionTurnBody,
+  agentRunCapsuleRecoveryPlanToTurnBody,
   normalizeAssistantId,
   normalizeMindosAgentOptions,
   normalizeNativeRuntimeOptions,
@@ -93,6 +97,7 @@ import {
   shouldInjectFileContext,
   shouldInjectSessionContext,
 } from './turn-context';
+import { capsuleRuntimeBinding, type AgentTurnCapsuleSeed } from './turn-capsule';
 
 // generateSkillsXml is in lib/agent/skills-xml.ts (not inline: Next.js route export constraints)
 
@@ -177,13 +182,36 @@ export async function handleAgentSessionTurnRouteRequest(
     return apiError(ErrorCodes.INVALID_REQUEST, 'Invalid JSON body', 400);
   }
 
-  const body = normalizeAgentSessionTurnBody(rawBody, sessionId);
+  const recoveryPlanId = req.headers.get('x-mindos-recovery-plan-id')?.trim();
+  const recoveryPlan = recoveryPlanId
+    ? getAgentRunCapsuleRecoveryPlan(getMindRoot(), recoveryPlanId)
+    : null;
+  if (recoveryPlanId && !recoveryPlan) {
+    return apiError(ErrorCodes.CONFLICT, 'Recovery plan is missing, expired, or corrupt.', 409);
+  }
+  if (recoveryPlan?.action === 'rollback') {
+    return apiError(ErrorCodes.CONFLICT, 'Rollback plans must be applied through the artifact review flow.', 409);
+  }
+  if (recoveryPlan?.targetChatSessionId && recoveryPlan.targetChatSessionId !== sessionId) {
+    return apiError(ErrorCodes.CONFLICT, 'Recovery plan targets a different chat session.', 409);
+  }
+  const body = recoveryPlan
+    ? { ok: true as const, body: agentRunCapsuleRecoveryPlanToTurnBody(recoveryPlan, sessionId) }
+    : normalizeAgentSessionTurnBody(rawBody, sessionId);
   if (!body.ok) return apiError(ErrorCodes.INVALID_REQUEST, body.message, 400);
 
   return runAgentTurnRequestBody(body.body, {
     headers: req.headers,
     signal: req.signal,
     request: req,
+    ...(recoveryPlan ? {
+      capsuleRecovery: {
+        planId: recoveryPlan.id,
+        runId: `recovery-${recoveryPlan.id}`,
+        sourceCapsuleId: recoveryPlan.sourceCapsuleId,
+        action: recoveryPlan.action,
+      },
+    } : {}),
   });
 }
 
@@ -251,6 +279,24 @@ export async function runAgentTurnRequestBody(
     ? body.chatSessionId.trim()
     : undefined;
   const mindRoot = getMindRoot();
+  const claimRecoveryPlan = () => {
+    if (!requestContext.capsuleRecovery) return null;
+    try {
+      claimAgentRunCapsuleRecoveryPlan(
+        mindRoot,
+        requestContext.capsuleRecovery.planId,
+        requestContext.capsuleRecovery.runId,
+      );
+      return null;
+    } catch (error) {
+      return apiError(
+        ErrorCodes.CONFLICT,
+        error instanceof Error ? error.message : 'This recovery plan has already started.',
+        409,
+        { context: { runId: requestContext.capsuleRecovery.runId } },
+      );
+    }
+  };
   const projectRoot = getProjectRoot();
   const priorSession = readPersistedAgentSession(chatSessionId);
   const recentSessionRuns = chatSessionId ? listAgentRuns({ chatSessionId, limit: 20 }) : [];
@@ -337,6 +383,77 @@ export async function runAgentTurnRequestBody(
     verifiedNativeRuntime,
     selectedAcpAgent,
   });
+
+  const capsuleSeed = (retrievalMetadata: Record<string, unknown>): AgentTurnCapsuleSeed => {
+    const runtime = runtimeLane.kind === 'native'
+      ? { kind: runtimeLane.runtimeKind, id: verifiedNativeRuntime!.id, name: verifiedNativeRuntime!.name }
+      : runtimeLane.kind === 'acp'
+        ? { kind: 'acp' as const, id: selectedAcpAgent!.id, name: selectedAcpAgent!.name }
+        : { kind: 'mindos' as const, id: 'mindos', name: 'MindOS' };
+    const receiptId = typeof retrievalMetadata.retrievalReceiptId === 'string'
+      ? retrievalMetadata.retrievalReceiptId
+      : undefined;
+    const assetIds = Array.isArray(retrievalMetadata.retrievalSelectedAssetIds)
+      ? retrievalMetadata.retrievalSelectedAssetIds.filter((value): value is string => typeof value === 'string')
+      : [];
+    const binding = body.runtimeBinding && typeof body.runtimeBinding.externalSessionId === 'string'
+      ? capsuleRuntimeBinding({
+        kind: body.runtimeBinding.runtime,
+        runtimeId: body.runtimeBinding.runtimeId,
+        externalSessionId: body.runtimeBinding.externalSessionId,
+        cwd: body.runtimeBinding.cwd,
+        status: body.runtimeBinding.status,
+        updatedAt: body.runtimeBinding.updatedAt,
+      })
+      : null;
+    const request: AgentRunCapsuleRequest = {
+      messages: structuredClone(messages) as unknown as Array<Record<string, unknown>>,
+      runtime,
+      runtimeBinding: binding,
+      agentMode,
+      permissionMode: effectivePermissionMode,
+      ...(runtimeLane.kind === 'native' && nativeRuntimeOptions.modelOverride
+        ? { model: nativeRuntimeOptions.modelOverride }
+        : typeof body.modelOverride === 'string' && body.modelOverride.trim()
+          ? { model: body.modelOverride.trim() }
+          : {}),
+      ...(runtimeLane.kind === 'native' && nativeRuntimeOptions.reasoningEffort
+        ? { thinkingEffort: nativeRuntimeOptions.reasoningEffort }
+        : runtimeLane.kind === 'mindos-pi'
+          ? { thinkingEffort: thinkingLevel }
+          : {}),
+      context: {
+        ...(currentFile ? { currentFile } : {}),
+        attachedFiles: Array.isArray(attachedFiles) ? [...attachedFiles] : [],
+        uploadedFiles: Array.isArray(uploadedFiles) ? structuredClone(uploadedFiles) : [],
+        receiptIds: receiptId ? [receiptId] : [],
+        assetIds,
+      },
+      options: {
+        ...(body.maxSteps !== undefined ? { maxSteps: body.maxSteps } : {}),
+        ...(assistantId ? { assistantId } : {}),
+        ...(body.providerOverride ? { providerOverride: body.providerOverride } : {}),
+        ...(body.workDir ? { workDir: structuredClone(body.workDir) } : {}),
+        ...(body.contextSelection ? { contextSelection: structuredClone(body.contextSelection) } : {}),
+        ...(Object.keys(nativeRuntimeOptions).length > 0 ? { runtimeOptions: structuredClone(nativeRuntimeOptions) } : {}),
+        ...(Object.keys(acpRuntimeOptions).length > 0 ? { acpRuntimeOptions: structuredClone(acpRuntimeOptions) } : {}),
+        ...(Object.keys(mindosAgentOptions).length > 0 ? { agentOptions: structuredClone(mindosAgentOptions) } : {}),
+      },
+    };
+    return {
+      ...(requestContext.capsuleRecovery ? { runId: requestContext.capsuleRecovery.runId } : {}),
+      mindRoot,
+      source: requestContext.capsuleRecovery ? 'recovery' : 'interactive',
+      request,
+      provenance: {
+        cwd: executionCwd,
+        ...(requestContext.capsuleRecovery ? {
+          parentCapsuleId: requestContext.capsuleRecovery.sourceCapsuleId,
+          recoveryAction: requestContext.capsuleRecovery.action,
+        } : {}),
+      },
+    };
+  };
 
   // Detect locale from Accept-Language header for i18n status messages
   const acceptLang = requestHeaders.get('accept-language') ?? '';
@@ -440,9 +557,12 @@ export async function runAgentTurnRequestBody(
       selectedSkills,
       requestSignal,
       t,
+      capsule: capsuleSeed(recall.metadata),
     };
 
     if (runtimeLane.kind === 'native') {
+      const recoveryConflict = claimRecoveryPlan();
+      if (recoveryConflict) return recoveryConflict;
       return runtimeLane.runTurn({
         ...externalTurnBase,
         nativePermissionMode,
@@ -452,6 +572,8 @@ export async function runAgentTurnRequestBody(
       });
     }
 
+    const recoveryConflict = claimRecoveryPlan();
+    if (recoveryConflict) return recoveryConflict;
     return runtimeLane.runTurn({
       ...externalTurnBase,
       acpRuntimeOptions,
@@ -601,6 +723,8 @@ export async function runAgentTurnRequestBody(
   console.log(`[agent-turn] systemPrompt=${systemPrompt.length} chars (~${Math.ceil(systemPrompt.length / 4)} tokens)`);
 
   const sessionContextMetadata = sessionContextRunMetadata(sessionContextSignature, includeSessionContext);
+  const recoveryConflict = claimRecoveryPlan();
+  if (recoveryConflict) return recoveryConflict;
   return runtimeLane.runTurn({
     mindosUiMessages,
     systemPrompt,
@@ -631,5 +755,6 @@ export async function runAgentTurnRequestBody(
     requestSignal,
     stepLimit,
     t,
+    capsule: capsuleSeed(recall.metadata),
   });
 }

@@ -4,6 +4,7 @@ import { dirname, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { AgentArtifactLedgerRecord } from '../../agent/ledger/artifact-ledger.js';
 import type { AgentEvent, AgentRunRecord } from '../../agent/ledger/run-ledger-types.js';
+import type { AgentRunCapsuleProjection } from '../../agent/capsules/types.js';
 import type { ContextAsset } from '../../knowledge/context-assets/index.js';
 import type { RetrievalReceipt } from '../../retrieval/receipt.js';
 import type {
@@ -119,6 +120,34 @@ const contextAsset: ContextAsset = {
   updatedAt: new Date(900).toISOString(),
 };
 
+const capsule: AgentRunCapsuleProjection = {
+  schemaVersion: 1,
+  id: 'capsule-root',
+  runId: rootRun.id,
+  rootRunId: rootRun.id,
+  chatSessionId: 'chat-1',
+  source: 'interactive',
+  status: 'completed',
+  inputSummary: 'Research the release.',
+  runtime: { kind: 'mindos', id: 'mindos', name: 'MindOS' },
+  model: 'gpt-5.5',
+  thinkingEffort: 'high',
+  context: {
+    attachedFileCount: 0,
+    uploadedFileCount: 0,
+    receiptIds: ['receipt-1'],
+    assetIds: ['asset-1'],
+  },
+  recovery: {
+    retry: { supported: true, mode: 'from-start' },
+    fork: { supported: true, mode: 'new-session' },
+    resume: { supported: true, sessionId: 'session-1' },
+    rollback: { supported: false, reason: 'This run has no checkpoint artifact.' },
+  },
+  createdAt: new Date(1_000).toISOString(),
+  updatedAt: new Date(2_000).toISOString(),
+};
+
 describe('Agent Run Observatory projection', () => {
   it('groups an agent tree and links only visible events, artifacts, receipts, context, and safe session metadata', () => {
     const result = buildAgentRunObservatory({
@@ -129,6 +158,7 @@ describe('Agent Run Observatory projection', () => {
       contextAssets: [contextAsset],
       automations: [],
       approvals: [],
+      capsules: [capsule],
       generatedAt: new Date(3_000),
     });
 
@@ -157,6 +187,7 @@ describe('Agent Run Observatory projection', () => {
         receipts: [receipt],
         contextAssets: [contextAsset],
         sessions: [{ runtimeId: 'mindos', sessionId: 'session-1' }],
+        capsule,
         counts: { nodes: 2, events: 1, tools: 1, files: 0, approvals: 0, artifacts: 1, receipts: 1 },
       }),
     ]);

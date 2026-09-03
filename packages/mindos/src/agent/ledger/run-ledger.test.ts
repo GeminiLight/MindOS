@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { setMindRootResolverForTests } from '../../foundation/mind-root/index.js';
+import { readStudioAutomationState } from '../../server/automations/store.js';
 import { runWithAgentRunContext } from '../agent-run-context.js';
 import {
   appendAgentRunEvent,
@@ -118,6 +119,12 @@ describe('agent run ledger', () => {
       'run_completed',
       'run_started',
     ]);
+    expect(readStudioAutomationState(root).events[0]).toMatchObject({
+      source: 'agent',
+      key: run.id,
+      type: 'agent.run.completed',
+      payload: expect.objectContaining({ runtimeId: 'reviewer', status: 'completed' }),
+    });
   });
 
   it('records failed runs and keeps terminal state stable', () => {

@@ -1,6 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FeishuConfig, FeishuSdkMessageEvent, FeishuWebhookEventEnvelope } from '@/lib/im/types';
 
+const emitStudioAutomationEvent = vi.fn();
+
+vi.mock('@geminilight/mindos/server', () => ({
+  emitStudioAutomationEvent,
+}));
+
+vi.mock('@/lib/fs', () => ({
+  getMindRoot: () => '/mind',
+}));
+
 vi.mock('@/lib/im/executor', () => ({
   sendIMMessage: vi.fn().mockResolvedValue({ ok: true, messageId: 'msg_1', timestamp: '2026-04-10T00:00:00.000Z' }),
 }));
@@ -28,6 +38,7 @@ describe('Feishu webhook helpers', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     const { __resetFeishuMessageDedupeForTests } = await import('@/lib/im/webhook/feishu-event');
     __resetFeishuMessageDedupeForTests();
+    emitStudioAutomationEvent.mockReturnValue({ created: true, event: { id: 'event-1' } });
   });
 
   it('builds pending status when conversation is enabled but public url is missing', async () => {
@@ -71,6 +82,16 @@ describe('Feishu webhook helpers', () => {
       webhookUrl: 'https://mindos.example.com/api/im/webhook/feishu',
       lastError: undefined,
     });
+  });
+
+  it('accepts a bound lark-cli profile as the long-connection credential', async () => {
+    const { buildFeishuWebhookStatus } = await importModule();
+    expect(buildFeishuWebhookStatus({
+      app_id: 'cli_existing',
+      credential_source: 'lark_cli_profile',
+      credential_ref: { kind: 'lark-cli-profile', executablePath: '/opt/lark-cli', profile: 'cli_existing' },
+      conversation: { enabled: true, transport: 'long_connection' },
+    })).toMatchObject({ platform: 'feishu', transport: 'long_connection', state: 'pending' });
   });
 
   it('normalizes a dm text message into the shared incoming message shape', async () => {
@@ -153,6 +174,38 @@ describe('Feishu webhook helpers', () => {
     const result = await handleFeishuMessageReceiveEvent(payload);
 
     expect(result).toEqual(expect.objectContaining({ ok: true, queued: true, reason: 'direct_message' }));
+    expect(emitStudioAutomationEvent).toHaveBeenCalledWith('/mind', expect.objectContaining({
+      source: 'feishu',
+      key: 'om_001',
+      type: 'im.message.receive_v1',
+      payload: expect.objectContaining({ chatId: 'oc_chat_001', senderId: 'ou_sender_1', text: '你好' }),
+    }));
+  });
+
+  it('normalizes and queues an existing lark-cli bot event without requiring inline credentials', async () => {
+    const { handleLarkCliMessageReceiveEvent } = await importModule();
+    const result = await handleLarkCliMessageReceiveEvent({
+      type: 'im.message.receive_v1',
+      event_id: 'evt_1',
+      message_id: 'om_cli_001',
+      chat_id: 'oc_chat_001',
+      chat_type: 'p2p',
+      sender_id: 'ou_sender_1',
+      sender_type: 'user',
+      content: '来自现有机器人的消息',
+      timestamp: '1788410000000',
+    });
+
+    expect(result).toEqual(expect.objectContaining({
+      ok: true,
+      queued: true,
+      reason: 'direct_message',
+      incoming: expect.objectContaining({
+        senderId: 'ou_sender_1',
+        messageId: 'om_cli_001',
+        text: '来自现有机器人的消息',
+      }),
+    }));
   });
 
   it('ignores duplicate sdk events with the same chat and message id', async () => {

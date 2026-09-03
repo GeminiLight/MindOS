@@ -5,6 +5,7 @@ import type { IFileSystem } from '../storage/index.js';
 import { existsSync } from 'node:fs';
 import * as path from 'path';
 import { redactSensitiveObject, redactSensitiveText } from '../../agent/turn/redaction.js';
+import { emitStudioAutomationEvent, recordStudioAutomationEventSourceFailure } from '../../server/automations/events.js';
 
 // Helper functions for Result type
 function ok<T>(value: T): Result<T> {
@@ -348,7 +349,32 @@ export async function appendContentChange(
   if (!writeResult.ok) {
     return err(writeResult.error);
   }
+  emitKnowledgeChangedEvent(mindRoot, event);
   return ok(event);
+}
+
+function emitKnowledgeChangedEvent(mindRoot: string, event: ContentChangeEvent): void {
+  try {
+    emitStudioAutomationEvent(mindRoot, {
+      source: 'knowledge',
+      key: event.id,
+      type: 'knowledge.changed',
+      occurredAt: new Date(event.ts),
+      payload: {
+        changeId: event.id,
+        path: event.path,
+        op: event.op,
+        source: event.source,
+        summary: event.summary,
+        agentName: event.agentName,
+        beforePath: event.beforePath,
+        afterPath: event.afterPath,
+      },
+    });
+  } catch (error) {
+    recordStudioAutomationEventSourceFailure(mindRoot, { source: 'knowledge', key: event.id, error });
+    // The change log remains authoritative if the optional automation projection is unavailable.
+  }
 }
 
 export async function listContentChanges(

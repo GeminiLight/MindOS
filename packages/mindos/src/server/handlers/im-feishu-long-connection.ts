@@ -34,7 +34,7 @@ export async function handleImFeishuLongConnectionPost(
     const config = readConfig(services);
     const feishu = config.providers?.feishu;
     if (!feishu || typeof feishu !== 'object') {
-      return json({ ok: false, error: 'Feishu is not configured. Save App ID and App Secret first.' }, { status: 422 });
+      return json({ ok: false, error: 'Feishu is not configured. Bind an existing app or save App ID and App Secret first.' }, { status: 422 });
     }
 
     feishu.conversation = {

@@ -25,6 +25,20 @@ export type StudioAutomationStatus = 'active' | 'paused';
 export type StudioAutomationRetryPolicy = 'never' | 'once';
 export type StudioAutomationRunStatus = 'running' | 'waiting_approval' | 'success' | 'error' | 'timed_out' | 'interrupted';
 
+export type StudioAutomationEventTrigger = {
+  type: 'event';
+  sources: string[];
+  events: string[];
+  where?: Record<string, string | number | boolean>;
+  debounceMs: number;
+  storm: { windowMs: number; maxEvents: number };
+};
+
+export type StudioAutomationTrigger =
+  | { type: 'schedule'; schedule: StudioAutomationSchedule; timezone: string }
+  | { type: 'manual' }
+  | StudioAutomationEventTrigger;
+
 export type StudioAutomationNotificationKind = 'failure' | 'timeout' | 'interrupted' | 'approval_required';
 
 export type StudioAutomationNotification = {
@@ -75,6 +89,8 @@ export type StudioAutomationLease = {
   claimedAt: string;
   expiresAt: string;
   attempt: number;
+  eventId?: string;
+  eventDeliveryId?: string;
 };
 
 export type StudioAutomationRun = {
@@ -88,6 +104,45 @@ export type StudioAutomationRun = {
   artifactPath?: string;
   outputPreview?: string;
   error?: string;
+  eventId?: string;
+  eventDeliveryId?: string;
+};
+
+export type StudioAutomationEventDeliveryStatus =
+  | 'pending'
+  | 'claimed'
+  | 'waiting_approval'
+  | 'succeeded'
+  | 'failed'
+  | 'superseded'
+  | 'suppressed';
+
+export type StudioAutomationEventDelivery = {
+  id: string;
+  jobId: string;
+  status: StudioAutomationEventDeliveryStatus;
+  attempt: number;
+  createdAt: string;
+  updatedAt: string;
+  nextAttemptAt?: string;
+  runId?: string;
+  ownerId?: string;
+  leaseExpiresAt?: string;
+  finishedAt?: string;
+  reason?: string;
+  error?: string;
+};
+
+export type StudioAutomationEvent = {
+  schemaVersion: 1;
+  id: string;
+  source: string;
+  key: string;
+  type: string;
+  occurredAt: string;
+  receivedAt: string;
+  payload: Record<string, unknown>;
+  deliveries: StudioAutomationEventDelivery[];
 };
 
 export type StudioAutomationJob = {
@@ -118,6 +173,7 @@ export type StudioAutomationJob = {
   lastError?: string;
   lease?: StudioAutomationLease;
   history: StudioAutomationRun[];
+  trigger?: StudioAutomationTrigger;
 };
 
 export type StudioAutomationMigration = {
@@ -139,6 +195,7 @@ export type StudioAutomationState = {
   automations: StudioAutomationJob[];
   approvals: StudioAutomationApproval[];
   notifications: StudioAutomationNotification[];
+  events: StudioAutomationEvent[];
 };
 
 export type StudioAutomationDraft = {
@@ -153,6 +210,7 @@ export type StudioAutomationDraft = {
   permissionMode: StudioAutomationPermissionMode;
   retry: StudioAutomationRetryPolicy;
   timeoutMs: number;
+  trigger?: StudioAutomationTrigger;
 };
 
 export type StudioAutomationPayload = {
@@ -165,6 +223,7 @@ export type StudioAutomationPayload = {
     scope: StudioAutomationScope;
     projectId?: string;
     schedule: StudioAutomationSchedule;
+    trigger: StudioAutomationTrigger;
     timezone: string;
     model: StudioAutomationModel;
     effort: StudioAutomationEffort;
@@ -208,6 +267,8 @@ export type StudioAutomationPayload = {
     controlPlaneScheduleCount: number;
     pendingApprovals: number;
     unreadNotifications: number;
+    queuedEventDeliveries: number;
+    recentEventCount: number;
   };
 };
 
@@ -221,6 +282,14 @@ export type StudioAutomationExecutorContext = {
   runId: string;
   attempt: number;
   signal: AbortSignal;
+  event?: {
+    id: string;
+    source: string;
+    key: string;
+    type: string;
+    occurredAt: string;
+    payload: Record<string, unknown>;
+  };
 };
 
 export type StudioAutomationExecutor = (

@@ -44,6 +44,7 @@ import {
   handleUpdatePost,
   handleUpdateStatusGet
 } from './server.js';
+import { readStudioAutomationState } from './server/automations/store.js';
 
 describe('MindOS server contract: product operations', () => {
   it('handles content changes summary, list, and mark_seen from product runtime', async () => {
@@ -305,6 +306,11 @@ describe('MindOS server contract: product operations', () => {
       source: 'test',
     });
     expect(readFileSync(join(root, 'Inbox', 'todo.md'), 'utf-8')).toContain('# Todo');
+    expect(readStudioAutomationState(root).events[0]).toMatchObject({
+      source: 'inbox',
+      type: 'inbox.created',
+      payload: { path: 'Inbox/todo.md', originalName: 'todo.txt', source: 'test' },
+    });
 
     const invalidBase64 = handleInboxPost({
       files: [{ name: 'broken.txt', content: 'not base64!!!', encoding: 'base64' }],

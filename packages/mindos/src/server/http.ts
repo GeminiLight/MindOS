@@ -35,6 +35,7 @@ import {
 } from './handlers/acp.js';
 import { handleAgentActivity, handleAgentActivityPost } from './handlers/agent-activity.js';
 import { handleAgentRunsGet } from './handlers/agent-runs.js';
+import { handleAgentRunCapsuleRecoveryPost, handleAgentRunCapsulesGet } from './handlers/agent-run-capsules.js';
 import {
   handleAutomationApprovalDecisionPost,
   handlePendingAgentActionsGet,
@@ -78,6 +79,8 @@ import { handleAgentSessionsDelete, handleAgentSessionsGet, handleAgentSessionsP
 import { handleAssistantsDelete, handleAssistantsGet, handleAssistantsPost } from './handlers/assistants.js';
 import { handleBootstrapGet } from './handlers/bootstrap.js';
 import { handleChannelsVerifyPost, type ChannelsVerifyServices } from './handlers/channels-verify.js';
+import { handleConnectionsGet, handleConnectionsPost } from './handlers/connections.js';
+import { handleContextFeedbackGet, handleContextFeedbackPost } from './handlers/context-feedback.js';
 import { handleFileGet, handleFilePost, handleOpenInFileManagerGet } from './handlers/file.js';
 import { handleChangesGet, handleChangesPost } from './handlers/changes.js';
 import { handleConnectGet } from './handlers/connect.js';
@@ -133,6 +136,7 @@ import { handleSearchPrewarm } from './handlers/search-prewarm.js';
 import { handleContextAssetsGet } from './handlers/context-assets.js';
 import { handleRetrievalReceiptsGet } from './handlers/retrieval-receipts.js';
 import { handleStudioAutomationsGet, handleStudioAutomationsPost } from './handlers/studio-automations.js';
+import { handleAutomationEventsGet, handleAutomationEventsPost } from './handlers/automation-events.js';
 import {
   handleSettingsGet,
   handleSettingsPost,
@@ -401,6 +405,14 @@ async function handleRequest(
       writeResponse(res, await handleRetrievalReceiptsGet(url.searchParams, services));
       return;
     }
+    if (route === 'GET /api/context-feedback') {
+      writeResponse(res, await handleContextFeedbackGet(url.searchParams, { mindRoot: services.mindRoot }));
+      return;
+    }
+    if (route === 'POST /api/context-feedback') {
+      writeResponse(res, await handleContextFeedbackPost(await readJsonBody(req), { mindRoot: services.mindRoot }));
+      return;
+    }
     if (route === 'GET /api/backlinks') {
       writeResponse(res, handleBacklinks(url.searchParams, services));
       return;
@@ -419,6 +431,27 @@ async function handleRequest(
     }
     if (route === 'GET /api/agent-runs') {
       writeResponse(res, handleAgentRunsGet(url.searchParams, { mindRoot: services.mindRoot }));
+      return;
+    }
+    if (route === 'GET /api/connections') {
+      writeResponse(res, await handleConnectionsGet(url.searchParams, { mindRoot: services.mindRoot }));
+      return;
+    }
+    if (route === 'POST /api/connections') {
+      writeResponse(res, await handleConnectionsPost(await readJsonBody(req), { mindRoot: services.mindRoot }));
+      return;
+    }
+    if (route === 'GET /api/agent-run-capsules') {
+      writeResponse(res, handleAgentRunCapsulesGet(url.searchParams, { mindRoot: services.mindRoot }));
+      return;
+    }
+    const capsuleRecoveryRoute = parseAgentRunCapsuleRecoveryRoute(method, url.pathname);
+    if (capsuleRecoveryRoute) {
+      writeResponse(res, handleAgentRunCapsuleRecoveryPost(
+        capsuleRecoveryRoute.capsuleId,
+        await readJsonBody(req),
+        { mindRoot: services.mindRoot },
+      ));
       return;
     }
     if (route === 'GET /api/agent/pending-actions') {
@@ -465,6 +498,14 @@ async function handleRequest(
         mindRoot: services.mindRoot,
         homeDir: services.homeDir,
       }));
+      return;
+    }
+    if (route === 'GET /api/studio/automation-events') {
+      writeResponse(res, handleAutomationEventsGet(url.searchParams, { mindRoot: services.mindRoot }));
+      return;
+    }
+    if (route === 'POST /api/studio/automation-events') {
+      writeResponse(res, handleAutomationEventsPost(await readJsonBody(req), { mindRoot: services.mindRoot }));
       return;
     }
     if (route === 'GET /api/agent-runtimes/mcp-projections') {
@@ -1055,6 +1096,9 @@ function resolveAuthRoute(method: string, pathname: string): string {
   if (agentSessionTurnRoute) {
     return 'POST /api/agent/sessions/[sessionId]/turns';
   }
+  if (parseAgentRunCapsuleRecoveryRoute(method, pathname)) {
+    return 'POST /api/agent-run-capsules/[capsuleId]/recovery';
+  }
   const codexThreadRoute = parseCodexThreadRoute(method, pathname);
   if (!codexThreadRoute) {
     if (
@@ -1067,6 +1111,21 @@ function resolveAuthRoute(method: string, pathname: string): string {
   }
   const suffix = codexThreadRoute.action ? `/${codexThreadRoute.action}` : '';
   return `${method} /api/agent-runtimes/codex/threads/[threadId]${suffix}`;
+}
+
+function parseAgentRunCapsuleRecoveryRoute(
+  method: string,
+  pathname: string,
+): { capsuleId: string } | null {
+  if (method !== 'POST') return null;
+  const match = /^\/api\/agent-run-capsules\/([^/]+)\/recovery$/.exec(pathname);
+  if (!match?.[1]) return null;
+  try {
+    const capsuleId = decodeURIComponent(match[1]).trim();
+    return capsuleId ? { capsuleId } : null;
+  } catch {
+    return null;
+  }
 }
 
 function parseAgentSessionTurnRoute(

@@ -20,7 +20,9 @@ import {
 import { mutateStudioAutomationState, readStudioAutomationState } from './store.js';
 import type {
   StudioAutomationExecutor,
+  StudioAutomationExecutorContext,
   StudioAutomationExecutorResult,
+  StudioAutomationEvent,
   StudioAutomationJob,
   StudioAutomationRun,
   StudioAutomationRunStatus,
@@ -67,7 +69,7 @@ export function claimNextDueStudioAutomation(
   const now = options.now ?? new Date();
   const requestedLeaseMs = Math.max(1_000, Math.min(MAX_LEASE_MS, options.leaseMs ?? DEFAULT_LEASE_MS));
   return mutateStudioAutomationState(mindRoot, (state) => {
-    const job = state.automations
+    const scheduled = state.automations
       .filter((item) => (
         item.status === 'active'
         && !item.lease
@@ -75,24 +77,44 @@ export function claimNextDueStudioAutomation(
         && item.nextRunAt
         && Date.parse(item.nextRunAt) <= now.getTime()
       ))
-      .sort((left, right) => Date.parse(left.nextRunAt!) - Date.parse(right.nextRunAt!) || left.id.localeCompare(right.id))[0];
-    if (!job?.nextRunAt) return null;
+      .map((job) => ({ job, occurrenceAt: job.nextRunAt!, event: undefined, delivery: undefined }));
+    const eventDriven = state.events.flatMap((event) => event.deliveries.flatMap((delivery) => {
+      if (delivery.status !== 'pending' || Date.parse(delivery.nextAttemptAt ?? delivery.createdAt) > now.getTime()) return [];
+      const job = state.automations.find((item) => item.id === delivery.jobId);
+      if (!job || job.status !== 'active' || job.lease || options.excludeIds?.has(job.id)) return [];
+      return [{ job, occurrenceAt: event.occurredAt, event, delivery }];
+    }));
+    const candidate = [...scheduled, ...eventDriven]
+      .sort((left, right) => Date.parse(left.occurrenceAt) - Date.parse(right.occurrenceAt) || left.job.id.localeCompare(right.job.id))[0];
+    if (!candidate) return null;
+    const { job, event, delivery } = candidate;
     // A live run must never look stale before its own timeout can fire.
     const leaseMs = Math.max(
       requestedLeaseMs,
       Math.min(MAX_LEASE_MS, job.timeoutMs + LEASE_TIMEOUT_BUFFER_MS),
     );
-    const attempt = Math.max(1, job.retryAttempt ?? 1);
+    const attempt = Math.max(1, delivery?.attempt ?? job.retryAttempt ?? 1);
     const runId = `automation-run-${now.getTime().toString(36)}-${crypto.randomBytes(5).toString('hex')}`;
     job.lease = {
       runId,
       ownerId: normalizeOwnerId(options.ownerId),
-      occurrenceAt: job.nextRunAt,
+      occurrenceAt: candidate.occurrenceAt,
       claimedAt: now.toISOString(),
       expiresAt: new Date(now.getTime() + leaseMs).toISOString(),
       attempt,
+      ...(event ? { eventId: event.id } : {}),
+      ...(delivery ? { eventDeliveryId: delivery.id } : {}),
     };
-    delete job.nextRunAt;
+    if (delivery) {
+      delivery.status = 'claimed';
+      delivery.runId = runId;
+      delivery.ownerId = job.lease.ownerId;
+      delivery.leaseExpiresAt = job.lease.expiresAt;
+      delivery.updatedAt = now.toISOString();
+      delete delivery.nextAttemptAt;
+    } else {
+      delete job.nextRunAt;
+    }
     job.lastStatus = 'running';
     job.updatedAt = now.toISOString();
     state.updatedAt = now.toISOString();
@@ -120,6 +142,8 @@ export function recoverStaleStudioAutomationLeases(
         finishedAt: now.toISOString(),
         durationMs: Math.max(0, now.getTime() - Date.parse(lease.claimedAt)),
         error,
+        ...(lease.eventId ? { eventId: lease.eventId } : {}),
+        ...(lease.eventDeliveryId ? { eventDeliveryId: lease.eventDeliveryId } : {}),
       };
       job.history = [run, ...job.history].slice(0, 50);
       job.runCount += 1;
@@ -127,7 +151,12 @@ export function recoverStaleStudioAutomationLeases(
       job.lastStatus = 'interrupted';
       job.lastError = error;
       delete job.lease;
-      scheduleAfterFailure(job, lease.attempt, now);
+      if (lease.eventDeliveryId) {
+        const delivery = findEventDelivery(state.events, lease.eventId, lease.eventDeliveryId);
+        if (delivery) settleFailedEventDelivery(delivery, job, lease.attempt, now, error);
+      } else {
+        scheduleAfterFailure(job, lease.attempt, now);
+      }
       job.updatedAt = now.toISOString();
       recovered.push(run);
       recoveredJobs.push(structuredClone(job));
@@ -195,7 +224,13 @@ export async function tickStudioAutomationWorker(
     timedOut: 0,
     waitingApproval: 0,
     retried: recovered.filter((run) => {
-      const job = readStudioAutomationState(options.mindRoot).automations.find((item) => item.history.some((itemRun) => itemRun.id === run.id));
+      const state = readStudioAutomationState(options.mindRoot);
+      if (run.eventDeliveryId) {
+        return state.events.some((event) => event.deliveries.some((delivery) => (
+          delivery.id === run.eventDeliveryId && delivery.status === 'pending' && delivery.attempt === 2
+        )));
+      }
+      const job = state.automations.find((item) => item.history.some((itemRun) => itemRun.id === run.id));
       return job?.retryAttempt === 2;
     }).length,
   };
@@ -221,7 +256,13 @@ export async function tickStudioAutomationWorker(
     let error: string | undefined;
     try {
       assertExecutable(job);
-      execution = await executeWithTimeout(job, lease.runId, lease.attempt, options.executor);
+      execution = await executeWithTimeout(
+        job,
+        lease.runId,
+        lease.attempt,
+        options.executor,
+        eventContextForLease(options.mindRoot, lease.eventId),
+      );
     } catch (caught) {
       status = caught instanceof StudioAutomationApprovalRequiredError
         ? 'waiting_approval'
@@ -244,6 +285,8 @@ export async function tickStudioAutomationWorker(
         durationMs: Math.max(0, Date.now() - startedWallClock),
         ...(execution?.text ? { outputPreview: execution.text.slice(0, MAX_PREVIEW_CHARS) } : {}),
         ...(error ? { error } : {}),
+        ...(lease.eventId ? { eventId: lease.eventId } : {}),
+        ...(lease.eventDeliveryId ? { eventDeliveryId: lease.eventDeliveryId } : {}),
       }, execution);
     } catch (artifactError) {
       status = 'error';
@@ -267,13 +310,16 @@ export async function tickStudioAutomationWorker(
     } else {
       result.failed += 1;
       if (status === 'timed_out') result.timedOut += 1;
-      if (completion.retryAttempt === 2) result.retried += 1;
+      const retryScheduled = lease.eventDeliveryId
+        ? isEventDeliveryRetryPending(options.mindRoot, lease.eventDeliveryId)
+        : completion.retryAttempt === 2;
+      if (retryScheduled) result.retried += 1;
       recordFailure(
         options.mindRoot,
         completion,
         completion.history[0]!,
         status === 'timed_out' ? 'timeout' : isPermissionFailure(error) ? 'permission' : 'runtime',
-        completion.retryAttempt === 2,
+        retryScheduled,
         error ?? 'Automation run failed.',
         finishedAt,
       );
@@ -321,6 +367,8 @@ function completeClaim(
       ...(input.artifactPath ? { artifactPath: input.artifactPath } : {}),
       ...(input.outputPreview ? { outputPreview: normalizePreview(input.outputPreview) } : {}),
       ...(input.error ? { error: redactSensitiveText(input.error).slice(0, 1_000) } : {}),
+      ...(lease.eventId ? { eventId: lease.eventId } : {}),
+      ...(lease.eventDeliveryId ? { eventDeliveryId: lease.eventDeliveryId } : {}),
     };
     job.history = [run, ...job.history].slice(0, 50);
     job.runCount += 1;
@@ -329,7 +377,12 @@ function completeClaim(
     if (input.error) job.lastError = redactSensitiveText(input.error).slice(0, 1_000);
     else delete job.lastError;
     delete job.lease;
-    if (input.status === 'success') scheduleAfterSuccess(job, input.finishedAt);
+    if (lease.eventDeliveryId) {
+      const delivery = findEventDelivery(state.events, lease.eventId, lease.eventDeliveryId);
+      if (delivery) settleEventDelivery(delivery, job, lease.attempt, input.status, input.finishedAt, input.error);
+      delete job.nextRunAt;
+      delete job.retryAttempt;
+    } else if (input.status === 'success') scheduleAfterSuccess(job, input.finishedAt);
     else if (input.status === 'waiting_approval') {
       delete job.nextRunAt;
       job.retryAttempt = lease.attempt;
@@ -365,12 +418,13 @@ async function executeWithTimeout(
   runId: string,
   attempt: number,
   executor: StudioAutomationExecutor,
+  event?: StudioAutomationExecutorContext['event'],
 ): Promise<StudioAutomationExecutorResult> {
   const controller = new AbortController();
   let timeout: ReturnType<typeof setTimeout> | undefined;
   try {
     return await Promise.race([
-      executor(job, { runId, attempt, signal: controller.signal }),
+      executor(job, { runId, attempt, signal: controller.signal, ...(event ? { event } : {}) }),
       new Promise<never>((_resolve, reject) => {
         timeout = setTimeout(() => {
           reject(new AutomationTimeoutError(`Automation exceeded its ${job.timeoutMs}ms timeout.`));
@@ -539,7 +593,87 @@ function runFromLease(job: StudioAutomationJob): StudioAutomationRun {
     attempt: lease.attempt,
     occurrenceAt: lease.occurrenceAt,
     startedAt: lease.claimedAt,
+    ...(lease.eventId ? { eventId: lease.eventId } : {}),
+    ...(lease.eventDeliveryId ? { eventDeliveryId: lease.eventDeliveryId } : {}),
   };
+}
+
+function eventContextForLease(
+  mindRoot: string,
+  eventId: string | undefined,
+): StudioAutomationExecutorContext['event'] | undefined {
+  if (!eventId) return undefined;
+  const event = readStudioAutomationState(mindRoot).events.find((item) => item.id === eventId);
+  if (!event) return undefined;
+  return {
+    id: event.id,
+    source: event.source,
+    key: event.key,
+    type: event.type,
+    occurredAt: event.occurredAt,
+    payload: structuredClone(event.payload),
+  };
+}
+
+function findEventDelivery(
+  events: StudioAutomationEvent[],
+  eventId: string | undefined,
+  deliveryId: string,
+) {
+  const event = eventId ? events.find((item) => item.id === eventId) : undefined;
+  return event?.deliveries.find((delivery) => delivery.id === deliveryId);
+}
+
+function settleEventDelivery(
+  delivery: NonNullable<ReturnType<typeof findEventDelivery>>,
+  job: StudioAutomationJob,
+  attempt: number,
+  status: StudioAutomationRunStatus,
+  now: Date,
+  error?: string,
+): void {
+  delivery.updatedAt = now.toISOString();
+  delete delivery.ownerId;
+  delete delivery.leaseExpiresAt;
+  if (status === 'success') {
+    delivery.status = 'succeeded';
+    delivery.finishedAt = now.toISOString();
+    delete delivery.error;
+    return;
+  }
+  if (status === 'waiting_approval') {
+    delivery.status = 'waiting_approval';
+    return;
+  }
+  settleFailedEventDelivery(delivery, job, attempt, now, error ?? 'Automation delivery failed.');
+}
+
+function settleFailedEventDelivery(
+  delivery: NonNullable<ReturnType<typeof findEventDelivery>>,
+  job: StudioAutomationJob,
+  attempt: number,
+  now: Date,
+  error: string,
+): void {
+  delivery.updatedAt = now.toISOString();
+  delivery.error = redactSensitiveText(error).slice(0, 1_000);
+  delete delivery.ownerId;
+  delete delivery.leaseExpiresAt;
+  if (job.status === 'active' && job.retry === 'once' && attempt === 1) {
+    delivery.status = 'pending';
+    delivery.attempt = 2;
+    delivery.nextAttemptAt = now.toISOString();
+    return;
+  }
+  delivery.status = 'failed';
+  delivery.finishedAt = now.toISOString();
+  delete delivery.nextAttemptAt;
+}
+
+function isEventDeliveryRetryPending(mindRoot: string, deliveryId: string): boolean {
+  return readStudioAutomationState(mindRoot).events.some((event) => event.deliveries.some((delivery) => (
+    delivery.id === deliveryId && delivery.status === 'pending' && delivery.attempt === 2
+  )));
 }
 
 function redactError(error: unknown): string {

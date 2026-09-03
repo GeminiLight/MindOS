@@ -36,6 +36,7 @@ import type {
   StudioAutomationExecutorResult,
   StudioAutomationJob,
 } from './types.js';
+import { automationExecutionPrompt } from './event-prompt.js';
 
 type PiProvidersModule = typeof import('@earendil-works/pi-ai/providers/all');
 type CreateRuntime = (options: MindosPiCodingAgentRuntimeOptions) => Promise<MindosPiAgentRuntime>;
@@ -82,8 +83,9 @@ export async function runStandaloneMindosPiAutomation(input: {
     mindRoot: input.mindRoot,
     environment: { projectRoot: runtimeRoot, cwd: input.mindRoot },
   });
+  const executionPrompt = automationExecutionPrompt(input.job, input.context);
   const turnPrompt = await buildMindosContextPrompt({
-    prompt: input.job.prompt,
+    prompt: executionPrompt,
     mindRoot: input.mindRoot,
     recalledKnowledge: [],
     fileContext: { contextParts: [], failedFiles: [] },
@@ -95,7 +97,7 @@ export async function runStandaloneMindosPiAutomation(input: {
   });
   const createRuntime = input.createRuntime ?? createMindosPiCodingAgentRuntime;
   const runtime = await runWithKbPermissionPolicy(policy, () => createRuntime({
-    messages: [{ role: 'user', content: input.job.prompt }],
+    messages: [{ role: 'user', content: executionPrompt }],
     systemPrompt,
     turnPrompt,
     projectRoot: runtimeRoot,

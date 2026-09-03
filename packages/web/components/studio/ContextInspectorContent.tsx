@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { AlertCircle, ArrowUpRight, Boxes, FileSearch, RefreshCw, Search, Waypoints } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import type { ContextAsset } from '@geminilight/mindos/knowledge';
+import type { ContextFeedback, ContextFeedbackProfile, ContextStaleReview } from '@geminilight/mindos/knowledge';
 import type { RetrievalReceipt } from '@geminilight/mindos/retrieval';
 import { Button } from '@/components/ui/button';
 import { useLocale } from '@/lib/stores/locale-store';
@@ -11,6 +12,7 @@ import { cn } from '@/lib/utils';
 import { contextAssetViewHref, fetchContextObservability } from '@/lib/context-observability';
 import { StudioOverviewLink } from './StudioOverviewLink';
 import { StudioShell } from './StudioShell';
+import { MissingContextControl, ReceiptFeedbackControls, StaleReviewControls, type ContextFeedbackLabels } from './ContextFeedbackControls';
 
 const COPY = {
   en: {
@@ -23,6 +25,11 @@ const COPY = {
     noLinkedReceipts: 'No retrieval receipts reference this asset yet.', query: 'Query', strategy: 'Strategy',
     duration: 'Duration', budget: 'Budget', selections: 'Selections', candidates: 'Candidates',
     inspectReceipt: 'Inspect receipt', inspectAsset: 'Inspect asset',
+    rankingHint: 'Ranking hint', noRankingHint: 'No ranking change yet', feedbackBasis: 'Feedback basis',
+    helpful: 'Helpful', irrelevant: 'Irrelevant', stale: 'Stale', missing: 'Missing context', undo: 'Undo',
+    saved: 'Saved', feedbackFailed: 'Could not save feedback.', staleReview: 'Review stale signal',
+    staleReviewDescription: 'A stale signal never changes this asset automatically. Choose whether to keep it active or deprecate it.',
+    keepActive: 'Keep active', deprecate: 'Deprecate',
     tokens: 'tokens', assetsSuffix: 'assets', receiptsSuffix: 'receipts', selectedSuffix: 'selected', failedSuffix: 'failed',
   },
   zh: {
@@ -35,6 +42,11 @@ const COPY = {
     noLinkedReceipts: '暂时没有检索回执引用这项资产。', query: '查询', strategy: '策略',
     duration: '耗时', budget: '预算', selections: '选中内容', candidates: '候选',
     inspectReceipt: '查看回执', inspectAsset: '查看资产',
+    rankingHint: '排序提示', noRankingHint: '尚未改变排序', feedbackBasis: '反馈依据',
+    helpful: '有用', irrelevant: '无关', stale: '过期', missing: '缺少上下文', undo: '撤回',
+    saved: '已保存', feedbackFailed: '反馈保存失败。', staleReview: '审核过期信号',
+    staleReviewDescription: '过期反馈不会自动改变资产。请选择继续启用或弃用。',
+    keepActive: '继续启用', deprecate: '弃用',
     tokens: 'tokens', assetsSuffix: '项资产', receiptsSuffix: '条回执', selectedSuffix: '次命中', failedSuffix: '次失败',
   },
 } as const;
@@ -47,6 +59,9 @@ export default function ContextInspectorContent() {
   const [tab, setTab] = useState<Tab>('assets');
   const [assets, setAssets] = useState<ContextAsset[]>([]);
   const [receipts, setReceipts] = useState<RetrievalReceipt[]>([]);
+  const [feedback, setFeedback] = useState<ContextFeedback[]>([]);
+  const [profiles, setProfiles] = useState<ContextFeedbackProfile[]>([]);
+  const [staleReviews, setStaleReviews] = useState<ContextStaleReview[]>([]);
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('all');
   const [kind, setKind] = useState('all');
@@ -64,6 +79,9 @@ export default function ContextInspectorContent() {
     void fetchContextObservability(controller.signal).then((payload) => {
       setAssets(payload.assets.assets);
       setReceipts(payload.receipts.receipts);
+      setFeedback(payload.feedback.feedback);
+      setProfiles(payload.feedback.profiles);
+      setStaleReviews(payload.feedback.staleReviews);
       setSelectedAssetId((current) => current ?? payload.assets.assets[0]?.id);
       setSelectedReceiptId((current) => current ?? payload.receipts.receipts[0]?.id);
     }).catch((cause) => {
@@ -98,6 +116,14 @@ export default function ContextInspectorContent() {
     setStatus('all');
     setKind('all');
     setSelectedAssetId(assetId);
+  };
+  const updateFeedback = (next: ContextFeedback) => {
+    setFeedback((current) => [next, ...current.filter((item) => item.id !== next.id)]);
+  };
+  const feedbackLabels: ContextFeedbackLabels = {
+    helpful: copy.helpful, irrelevant: copy.irrelevant, stale: copy.stale, missing: copy.missing, undo: copy.undo,
+    saved: copy.saved, failed: copy.feedbackFailed, staleReview: copy.staleReview,
+    staleReviewDescription: copy.staleReviewDescription, keepActive: copy.keepActive, deprecate: copy.deprecate,
   };
 
   return (
@@ -159,8 +185,8 @@ export default function ContextInspectorContent() {
                 )) : <EmptyState icon={<Waypoints size={20} />} text={copy.emptyReceipts} />}
               </div>
               <div className="min-w-0 rounded-lg border border-border/60 bg-background/35 p-5">
-                {!loading && tab === 'assets' && selectedAsset ? <AssetDetail asset={selectedAsset} receipts={receipts} copy={copy} locale={locale} onSelectReceipt={selectReceipt} /> : null}
-                {!loading && tab === 'receipts' && selectedReceipt ? <ReceiptDetail receipt={selectedReceipt} availableAssetIds={new Set(assets.map((asset) => asset.id))} copy={copy} locale={locale} onSelectAsset={selectAsset} /> : null}
+                {!loading && tab === 'assets' && selectedAsset ? <AssetDetail asset={selectedAsset} receipts={receipts} profile={profiles.find((item) => item.assetId === selectedAsset.id)} staleReview={staleReviews.find((item) => item.assetId === selectedAsset.id && item.assetVersion === selectedAsset.version)} feedbackLabels={feedbackLabels} copy={copy} locale={locale} onSelectReceipt={selectReceipt} onReviewed={() => setReload((value) => value + 1)} /> : null}
+                {!loading && tab === 'receipts' && selectedReceipt ? <ReceiptDetail receipt={selectedReceipt} availableAssetIds={new Set(assets.map((asset) => asset.id))} feedback={feedback} feedbackLabels={feedbackLabels} copy={copy} locale={locale} onSelectAsset={selectAsset} onFeedback={updateFeedback} /> : null}
               </div>
             </div>
           </>
@@ -190,13 +216,15 @@ function ReceiptRow({ receipt, selected, onClick }: { receipt: RetrievalReceipt;
   return <button type="button" onClick={onClick} className={cn('block w-full border-b border-border/45 px-4 py-3 text-left last:border-b-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring', selected ? 'bg-[var(--amber-subtle)]' : 'hover:bg-muted/25')}><div className="flex items-center justify-between gap-3"><span className="truncate font-mono text-xs text-foreground">{receipt.id}</span><StatusBadge value={receipt.outcome} /></div><div className="mt-1 truncate text-xs text-muted-foreground">{receipt.queryPreview || '—'}</div><div className="mt-1 text-[11px] text-muted-foreground">{receipt.totals.selectedCount}/{receipt.totals.candidateCount} · {receipt.durationMs}ms</div></button>;
 }
 
-function AssetDetail({ asset, receipts, copy, locale, onSelectReceipt }: { asset: ContextAsset; receipts: RetrievalReceipt[]; copy: (typeof COPY)[keyof typeof COPY]; locale: string; onSelectReceipt(receiptId: string): void }) {
+function AssetDetail({ asset, receipts, profile, staleReview, feedbackLabels, copy, locale, onSelectReceipt, onReviewed }: { asset: ContextAsset; receipts: RetrievalReceipt[]; profile?: ContextFeedbackProfile; staleReview?: ContextStaleReview; feedbackLabels: ContextFeedbackLabels; copy: (typeof COPY)[keyof typeof COPY]; locale: string; onSelectReceipt(receiptId: string): void; onReviewed(): void }) {
   const linked = receipts.filter((receipt) => receipt.selections.some((selection) => selection.assetId === asset.id));
-  return <div><div className="flex items-start justify-between gap-4"><div><div className="flex flex-wrap items-center gap-2"><h2 className="text-lg font-semibold text-foreground">{asset.title}</h2><StatusBadge value={asset.status} /></div><p className="mt-1 font-mono text-xs text-muted-foreground">{asset.id}</p></div><Button render={<Link href={contextAssetViewHref(asset.path)} />} nativeButton={false} variant="outline" size="sm">{copy.openFile}<ArrowUpRight size={13} /></Button></div><dl className="mt-5 grid gap-3 text-sm sm:grid-cols-2"><Detail label={copy.source} value={`${asset.source.kind} · ${asset.source.ref}`} /><Detail label={copy.version} value={String(asset.version)} /><Detail label={copy.updated} value={formatDate(asset.updatedAt, locale)} /><Detail label="Content hash" value={asset.contentHash.slice(0, 12)} mono /></dl><h3 className="mt-7 text-sm font-semibold text-foreground">{copy.linkedReceipts}</h3>{linked.length ? <div className="mt-2 space-y-2">{linked.map((receipt) => { const selection = receipt.selections.find((item) => item.assetId === asset.id); return <button type="button" key={receipt.id} aria-label={`${copy.inspectReceipt} ${receipt.id}`} onClick={() => onSelectReceipt(receipt.id)} className="block w-full rounded-md border border-border/55 p-3 text-left hover:bg-muted/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><div className="flex flex-wrap items-center justify-between gap-2"><span className="font-mono text-xs text-foreground">{receipt.id}</span><StatusBadge value={receipt.outcome} /></div><p className="mt-2 text-xs leading-relaxed text-muted-foreground">{selection?.reason}</p><div className="mt-2 text-[11px] text-muted-foreground">score {selection?.score.toFixed(2)} · {selection?.estimatedTokens} {copy.tokens}</div></button>; })}</div> : <p className="mt-2 text-sm text-muted-foreground">{copy.noLinkedReceipts}</p>}</div>;
+  const adjustment = profile?.adjustment ?? 0;
+  return <div><div className="flex items-start justify-between gap-4"><div><div className="flex flex-wrap items-center gap-2"><h2 className="text-lg font-semibold text-foreground">{asset.title}</h2><StatusBadge value={asset.status} /></div><p className="mt-1 font-mono text-xs text-muted-foreground">{asset.id}</p></div><Button render={<Link href={contextAssetViewHref(asset.path)} />} nativeButton={false} variant="outline" size="sm">{copy.openFile}<ArrowUpRight size={13} /></Button></div><dl className="mt-5 grid gap-3 text-sm sm:grid-cols-2"><Detail label={copy.source} value={`${asset.source.kind} · ${asset.source.ref}`} /><Detail label={copy.version} value={String(asset.version)} /><Detail label={copy.updated} value={formatDate(asset.updatedAt, locale)} /><Detail label="Content hash" value={asset.contentHash.slice(0, 12)} mono /><Detail label={copy.rankingHint} value={profile?.eligible ? `${copy.rankingHint} ${adjustment >= 0 ? '+' : ''}${adjustment.toFixed(3)}` : copy.noRankingHint} /><Detail label={copy.feedbackBasis} value={profile?.explanation ?? copy.noRankingHint} /></dl>{profile?.staleReviewRecommended ? <StaleReviewControls asset={asset} review={staleReview} labels={feedbackLabels} onReviewed={onReviewed} /> : null}<h3 className="mt-7 text-sm font-semibold text-foreground">{copy.linkedReceipts}</h3>{linked.length ? <div className="mt-2 space-y-2">{linked.map((receipt) => { const selection = receipt.selections.find((item) => item.assetId === asset.id); return <button type="button" key={receipt.id} aria-label={`${copy.inspectReceipt} ${receipt.id}`} onClick={() => onSelectReceipt(receipt.id)} className="block w-full rounded-md border border-border/55 p-3 text-left hover:bg-muted/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><div className="flex flex-wrap items-center justify-between gap-2"><span className="font-mono text-xs text-foreground">{receipt.id}</span><StatusBadge value={receipt.outcome} /></div><p className="mt-2 text-xs leading-relaxed text-muted-foreground">{selection?.reason}</p><div className="mt-2 text-[11px] text-muted-foreground">score {selection?.score.toFixed(2)} · {selection?.estimatedTokens} {copy.tokens}</div></button>; })}</div> : <p className="mt-2 text-sm text-muted-foreground">{copy.noLinkedReceipts}</p>}</div>;
 }
 
-function ReceiptDetail({ receipt, availableAssetIds, copy, locale, onSelectAsset }: { receipt: RetrievalReceipt; availableAssetIds: ReadonlySet<string>; copy: (typeof COPY)[keyof typeof COPY]; locale: string; onSelectAsset(assetId: string): void }) {
-  return <div><div className="flex flex-wrap items-center gap-2"><h2 className="font-mono text-sm font-semibold text-foreground">{receipt.id}</h2><StatusBadge value={receipt.outcome} /></div><p className="mt-2 text-sm leading-relaxed text-foreground">{receipt.queryPreview || '—'}</p>{receipt.error ? <div className="mt-4 rounded-md border border-error/30 bg-error/5 p-3 text-sm text-error">{receipt.error}</div> : null}<dl className="mt-5 grid gap-3 text-sm sm:grid-cols-2"><Detail label={copy.strategy} value={receipt.strategy} /><Detail label={copy.duration} value={`${receipt.durationMs}ms`} /><Detail label={copy.candidates} value={String(receipt.totals.candidateCount)} /><Detail label={copy.budget} value={`${receipt.totals.usedTokens}/${receipt.budget.maxTokens} ${copy.tokens}`} /><Detail label={copy.updated} value={formatDate(receipt.startedAt, locale)} /></dl><h3 className="mt-7 text-sm font-semibold text-foreground">{copy.selections}</h3>{receipt.selections.length ? <div className="mt-2 space-y-2">{receipt.selections.map((selection) => <div key={`${selection.assetId}:${selection.path}`} className="rounded-md border border-border/55 p-3"><div className="flex flex-wrap items-center justify-between gap-3"><Link href={contextAssetViewHref(selection.path)} className="min-w-0 truncate text-sm font-medium text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{selection.path}</Link><span className="text-xs text-muted-foreground">{selection.score.toFixed(2)}</span></div><p className="mt-1 text-xs text-muted-foreground">{selection.reason}</p>{availableAssetIds.has(selection.assetId) ? <button type="button" aria-label={`${copy.inspectAsset} ${selection.assetId}`} onClick={() => onSelectAsset(selection.assetId)} className="mt-2 text-xs font-medium text-[var(--amber)] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{copy.inspectAsset}</button> : null}</div>)}</div> : <p className="mt-2 text-sm text-muted-foreground">—</p>}</div>;
+function ReceiptDetail({ receipt, availableAssetIds, feedback, feedbackLabels, copy, locale, onSelectAsset, onFeedback }: { receipt: RetrievalReceipt; availableAssetIds: ReadonlySet<string>; feedback: ContextFeedback[]; feedbackLabels: ContextFeedbackLabels; copy: (typeof COPY)[keyof typeof COPY]; locale: string; onSelectAsset(assetId: string): void; onFeedback(feedback: ContextFeedback): void }) {
+  const missing = feedback.find((item) => item.receiptId === receipt.id && item.signal === 'missing');
+  return <div><div className="flex flex-wrap items-center gap-2"><h2 className="font-mono text-sm font-semibold text-foreground">{receipt.id}</h2><StatusBadge value={receipt.outcome} /></div><p className="mt-2 text-sm leading-relaxed text-foreground">{receipt.queryPreview || '—'}</p>{receipt.error ? <div className="mt-4 rounded-md border border-error/30 bg-error/5 p-3 text-sm text-error">{receipt.error}</div> : null}<dl className="mt-5 grid gap-3 text-sm sm:grid-cols-2"><Detail label={copy.strategy} value={receipt.strategy} /><Detail label={copy.duration} value={`${receipt.durationMs}ms`} /><Detail label={copy.candidates} value={String(receipt.totals.candidateCount)} /><Detail label={copy.budget} value={`${receipt.totals.usedTokens}/${receipt.budget.maxTokens} ${copy.tokens}`} /><Detail label={copy.updated} value={formatDate(receipt.startedAt, locale)} /></dl><h3 className="mt-7 text-sm font-semibold text-foreground">{copy.selections}</h3>{receipt.selections.length ? <div className="mt-2 space-y-2">{receipt.selections.map((selection) => { const current = feedback.find((item) => item.receiptId === receipt.id && item.assetId === selection.assetId); return <div key={`${selection.assetId}:${selection.path}`} className="rounded-md border border-border/55 p-3"><div className="flex flex-wrap items-center justify-between gap-3"><Link href={contextAssetViewHref(selection.path)} className="min-w-0 truncate text-sm font-medium text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{selection.path}</Link><span className="text-xs text-muted-foreground">{selection.score.toFixed(2)}</span></div><p className="mt-1 text-xs text-muted-foreground">{selection.reason}</p>{availableAssetIds.has(selection.assetId) ? <button type="button" aria-label={`${copy.inspectAsset} ${selection.assetId}`} onClick={() => onSelectAsset(selection.assetId)} className="mt-2 text-xs font-medium text-[var(--amber)] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{copy.inspectAsset}</button> : null}<ReceiptFeedbackControls receiptId={receipt.id} assetId={selection.assetId} current={current} labels={feedbackLabels} onFeedback={onFeedback} /></div>; })}</div> : <p className="mt-2 text-sm text-muted-foreground">—</p>}<MissingContextControl receiptId={receipt.id} current={missing} labels={feedbackLabels} onFeedback={onFeedback} /></div>;
 }
 
 function Detail({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) { return <div><dt className="text-xs text-muted-foreground">{label}</dt><dd className={cn('mt-1 break-all text-foreground', mono && 'font-mono text-xs')}>{value}</dd></div>; }

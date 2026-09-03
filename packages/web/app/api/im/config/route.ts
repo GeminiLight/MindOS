@@ -1,10 +1,10 @@
 import { NextRequest } from 'next/server';
 import { handleImConfigDelete, handleImConfigGet, handleImConfigPut } from '@geminilight/mindos/server';
-import { readIMConfig, writeIMConfig } from '@/lib/im/config';
+import { readEffectiveIMConfig, writeIMConfig } from '@/lib/im/config';
 import { toNextResponse } from '../../_mindos-adapter';
 
 const services = {
-  readConfig: readIMConfig,
+  readConfig: readEffectiveIMConfig,
   writeConfig: writeIMConfig,
 };
 

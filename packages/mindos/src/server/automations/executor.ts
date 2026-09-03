@@ -28,6 +28,7 @@ import type {
   StudioAutomationExecutorResult,
   StudioAutomationJob,
 } from './types.js';
+import { automationExecutionPrompt } from './event-prompt.js';
 
 type MindosPiAutomationRunner = (
   job: StudioAutomationJob,
@@ -77,6 +78,7 @@ async function executeNativeAutomation(
   let approvalError: StudioAutomationApprovalRequiredError | undefined;
   const toolCalls: Array<{ toolCallId: string; toolName: string; output: string; isError: boolean }> = [];
   const runtime = job.runtime;
+  const prompt = automationExecutionPrompt(job, context);
   const nativeResult = await options.runNative({
     runtime: {
       id: runtime,
@@ -87,7 +89,7 @@ async function executeNativeAutomation(
         : options.claudeCommand ?? process.env.MINDOS_CLAUDE_COMMAND ?? 'claude',
     },
     cwd: options.mindRoot,
-    prompt: job.prompt,
+    prompt,
     permissionMode: job.permissionMode,
     reasoningEffort: nativeEffort(job.effort),
     timeoutMs: job.timeoutMs,

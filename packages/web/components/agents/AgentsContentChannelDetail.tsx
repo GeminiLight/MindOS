@@ -16,6 +16,7 @@ import { ChannelConversation } from './channel-detail/ChannelConversation';
 import { ChannelActivityFeed } from './channel-detail/ChannelActivityFeed';
 import { ChannelTestSend } from './channel-detail/ChannelTestSend';
 import { ChannelSettings } from './channel-detail/ChannelSettings';
+import { ChannelConnectionBroker } from './channel-detail/ChannelConnectionBroker';
 import { getCachedStatuses, setCachedStatuses, getCachedActivities, setCachedActivities } from './channel-detail/cache';
 
 type DetailLoadState = 'loading' | 'ready' | 'error';
@@ -158,6 +159,10 @@ export default function AgentsContentChannelDetail({ platformId }: { platformId:
             purpose={headerPurpose}
             isConnected={isConnected}
           />
+
+          {isFeishu ? (
+            <ChannelConnectionBroker im={im} onChanged={() => fetchDetail(true)} />
+          ) : null}
 
           {isConnected ? (
             <>
