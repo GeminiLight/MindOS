@@ -96,9 +96,9 @@ describe('agent run capsule store', () => {
         assetIds: ['asset-1'],
       },
       recovery: {
-        retry: { supported: true, mode: 'from-start' },
-        fork: { supported: true, mode: 'new-session' },
-        resume: { supported: true, sessionId: 'thread-1' },
+        retry: { supported: false },
+        fork: { supported: false },
+        resume: { supported: false },
         rollback: { supported: false },
       },
     });
@@ -136,6 +136,35 @@ describe('agent run capsule store', () => {
       checkpointArtifactId: 'artifact-checkpoint-1',
       reason: 'A checkpoint was recorded, but no verified rollback executor is available.',
     });
+  });
+
+  it.each(['queued', 'running', 'streaming'] as const)('rejects recovery while the source is %s', (status) => {
+    const capsule = createAgentRunCapsule(mindRoot, capsuleInput({ status }));
+    for (const action of ['retry', 'fork', 'resume'] as const) {
+      expect(projectAgentRunCapsule(capsule).recovery[action].supported).toBe(false);
+      expect(() => createAgentRunCapsuleRecoveryPlan(mindRoot, capsule.id, { action, idempotencyKey: action }))
+        .toThrow(/still active/i);
+    }
+  });
+
+  it.each(['missing', 'signed-out', 'archived', 'failed'] as const)('does not resume a %s binding', (status) => {
+    const input = capsuleInput();
+    const capsule = createAgentRunCapsule(mindRoot, {
+      ...input, request: { ...input.request, runtimeBinding: { ...input.request.runtimeBinding, status } },
+    });
+    expect(projectAgentRunCapsule(capsule).recovery.resume.supported).toBe(false);
+    expect(projectAgentRunCapsule(capsule).recovery.retry.supported).toBe(true);
+  });
+
+  it('does not infer ACP resume support from an external session id', () => {
+    const input = capsuleInput();
+    const capsule = createAgentRunCapsule(mindRoot, {
+      ...input, request: { ...input.request,
+        runtime: { kind: 'acp', id: 'adapter', name: 'Adapter' },
+        runtimeBinding: { type: 'acp-session', runtime: 'acp', runtimeId: 'adapter', externalSessionId: 'session' },
+      },
+    });
+    expect(projectAgentRunCapsule(capsule).recovery.resume.supported).toBe(false);
   });
 
   it('creates idempotent retry, fork, and resume plans without leaking runtime semantics', () => {
@@ -228,7 +257,12 @@ describe('agent run capsule store', () => {
     malformed.request.context.attachedFiles = 'not-an-array';
     writeFileSync(storedPath, `${JSON.stringify(malformed)}\n`, 'utf-8');
 
-    expect(() => listAgentRunCapsules(mindRoot)).toThrow(/corrupt/i);
+    createAgentRunCapsule(mindRoot, capsuleInput({ id: 'healthy-capsule' }));
+    const warnings: string[] = [];
+    expect(listAgentRunCapsules(mindRoot, { onCorrupt: (warning) => warnings.push(warning) }).map((item) => item.id)).toEqual(['healthy-capsule']);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain('capsule-run-1.json');
+    expect(() => getAgentRunCapsule(mindRoot, 'capsule-run-1')).toThrow(/corrupt/i);
     expect(readFileSync(storedPath, 'utf-8')).toContain('not-an-array');
   });
 
@@ -261,6 +295,7 @@ function capsuleInput(overrides: Record<string, unknown> = {}) {
     rootRunId: 'run-1',
     chatSessionId: 'chat-1',
     source: 'interactive' as const,
+    status: 'completed' as const,
     request: {
       messages: [{ role: 'user', content: 'Review deployment' }],
       runtime: { kind: 'codex' as const, id: 'codex', name: 'Codex' },

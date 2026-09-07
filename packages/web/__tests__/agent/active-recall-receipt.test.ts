@@ -123,6 +123,21 @@ describe('active recall receipt integration', () => {
     expect(result.metadata).toMatchObject({ retrievalOutcome: 'selected' });
   });
 
+  it('excludes deprecated assets older than the first thousand registry entries', async () => {
+    writeFileSync(join(mindRoot, 'old.md'), '# Guide\n\nshared recall phrase');
+    const asset = registerContextFileAsset(mindRoot, { path: 'old.md', status: 'deprecated' }, new Date('2020-01-01'));
+    const file = join(mindRoot, '.mindos/context-assets/registry.json');
+    const registry = JSON.parse(readFileSync(file, 'utf8'));
+    registry.assets = [...Array.from({ length: 1001 }, (_, index) => ({
+      ...asset, id: `asset-new-${index}`, path: `new-${index}.md`, status: 'active',
+      source: { kind: 'file', ref: `file:new-${index}.md` }, updatedAt: '2026-09-07T00:00:00.000Z',
+    })), asset];
+    writeFileSync(file, JSON.stringify(registry));
+    mockSearch.mockResolvedValue([{ path: 'old.md', snippet: 'shared recall phrase', score: 5, occurrences: 1 }]);
+    const result = await performActiveRecallWithReceipt(mindRoot, 'shared recall phrase', { maxFiles: 1, maxTokens: 100 });
+    expect(result.items).toEqual([]);
+  });
+
   it('uses only eligible bounded feedback hints to rerank current-version assets', async () => {
     mkdirSync(join(mindRoot, 'notes'), { recursive: true });
     const content = '# Guide\n\nshared recall phrase';

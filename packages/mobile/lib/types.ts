@@ -438,6 +438,7 @@ export interface ConnectResponse {
   ip: string;
   port: number;
   hostname: string;
+  rootId?: string;
 }
 
 export interface FileSaveResponse {

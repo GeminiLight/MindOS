@@ -20,7 +20,7 @@ import { estimateStringTokens } from './context';
 import { getFileContent } from '@/lib/fs';
 import {
   calculateContextFeedbackProfile,
-  listContextAssets,
+  readContextAssetRegistry,
   readContextFeedbackLedger,
   registerContextFileAsset,
 } from '@geminilight/mindos/knowledge';
@@ -332,15 +332,18 @@ function recallResultKey(result: RecallResult): string {
 }
 
 function applyContextFeedbackHints(mindRoot: string, candidates: RecallCandidate[]): RecallCandidate[] {
+  // Eligibility is independent of optional learning hints and UI pagination.
+  const paths = new Set(candidates.map((candidate) => candidate.result.path));
+  const assets = readContextAssetRegistry(mindRoot).assets.filter((asset) => paths.has(asset.path));
+  const deprecated = new Set(assets.filter((asset) => asset.status === 'deprecated').map((asset) => asset.path));
+  const eligible = candidates.filter((candidate) => !deprecated.has(candidate.result.path));
   try {
-    const assets = listContextAssets(mindRoot, { limit: 1_000 });
-    if (assets.length === 0) return candidates;
+    if (assets.length === 0) return eligible;
     const ledger = readContextFeedbackLedger(mindRoot);
     const assetsByPath = new Map(assets.map((asset) => [asset.path, asset]));
-    return candidates.flatMap((candidate) => {
+    return eligible.flatMap((candidate) => {
       const asset = assetsByPath.get(candidate.result.path);
       if (!asset) return [candidate];
-      if (asset.status === 'deprecated') return [];
       const profile = calculateContextFeedbackProfile(asset.id, asset.version, ledger.feedback);
       if (!profile.eligible || profile.adjustment === 0) return [candidate];
       const score = roundScore(candidate.score + profile.adjustment);
@@ -353,7 +356,7 @@ function applyContextFeedbackHints(mindRoot: string, candidates: RecallCandidate
     });
   } catch {
     // Learning hints are optional; a damaged ledger must never break recall.
-    return candidates;
+    return eligible;
   }
 }
 

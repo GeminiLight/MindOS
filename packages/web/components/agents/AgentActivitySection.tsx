@@ -12,7 +12,8 @@ import {
   Waypoints,
   Workflow,
 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useVisiblePolling } from '@/lib/use-visible-polling';
 import type { AgentRunObservatory, AgentRunObservatoryTrace } from '@geminilight/mindos/server';
 import { Button } from '@/components/ui/button';
 import { useLocale } from '@/lib/stores/locale-store';
@@ -68,19 +69,36 @@ export default function AgentActivitySection() {
   const [reload, setReload] = useState(0);
   const [filter, setFilter] = useState<AgentRunObservatoryFilter>('all');
   const [selectedId, setSelectedId] = useState<string>();
+  const requestRef = useRef<AbortController | null>(null);
+  const [refreshFailed, setRefreshFailed] = useState(false);
 
-  useEffect(() => {
+  const refresh = useCallback((initial = false) => {
+    if (requestRef.current) return;
     const controller = new AbortController();
-    setLoading(true);
-    setError(false);
-    void fetchAgentRunObservatory(controller.signal).then((payload) => {
+    requestRef.current = controller;
+    if (initial) { setLoading(true); setError(false); }
+    const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(15_000)]);
+    void fetchAgentRunObservatory(signal).then((payload) => {
+      if (controller.signal.aborted) return;
+      setRefreshFailed(false);
+      setError(false);
       setObservatory(payload);
       setSelectedId((current) => current && payload.traces.some((trace) => trace.id === current) ? current : payload.traces[0]?.id);
-    }).catch((cause) => {
-      if (!(cause instanceof DOMException && cause.name === 'AbortError')) setError(true);
-    }).finally(() => setLoading(false));
-    return () => controller.abort();
-  }, [reload]);
+    }).catch(() => {
+      if (!controller.signal.aborted) {
+        if (initial) setError(true);
+        else setRefreshFailed(true);
+      }
+    }).finally(() => {
+      if (requestRef.current === controller) requestRef.current = null;
+      if (!controller.signal.aborted) setLoading(false);
+    });
+  }, []);
+  useEffect(() => {
+    refresh(true);
+    return () => { requestRef.current?.abort(); requestRef.current = null; };
+  }, [reload, refresh]);
+  useVisiblePolling(() => refresh(), 5000, { immediate: false });
 
   const visible = useMemo(() => filterAgentRunTraces(observatory.traces, filter), [filter, observatory.traces]);
   const selected = visible.find((trace) => trace.id === selectedId) ?? visible[0];
@@ -111,6 +129,11 @@ export default function AgentActivitySection() {
           ) : null}
         </div>
       </header>
+
+      {!loading && !error ? <p role="status" className="text-xs text-muted-foreground">
+        {refreshFailed ? (locale === 'zh' ? '刷新失败，保留上次数据。' : 'Refresh failed; showing previous data.') : ''}
+        {locale === 'zh' ? ' 最近更新：' : ' Last updated: '}{new Date(observatory.generatedAt).toLocaleTimeString(locale)}
+      </p> : null}
 
       {observatory.warnings?.length ? (
         <div role="status" className="rounded-md border border-[var(--amber)]/25 bg-[var(--amber-subtle)] px-4 py-3 text-xs text-[var(--amber-text)]">

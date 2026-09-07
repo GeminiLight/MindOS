@@ -70,9 +70,17 @@ export function getAgentRunCapsule(mindRoot: string, id: string): AgentRunCapsul
   return file ? readCapsule(file) : null;
 }
 
-export function listAgentRunCapsules(mindRoot: string): AgentRunCapsule[] {
+export function listAgentRunCapsules(
+  mindRoot: string,
+  options: { onCorrupt?(message: string): void } = {},
+): AgentRunCapsule[] {
   return listCapsuleFiles(mindRoot)
-    .map(readCapsule)
+    .flatMap((file) => {
+      try { return [readCapsule(file)]; } catch (error) {
+        options.onCorrupt?.(error instanceof Error ? error.message : 'Unreadable capsule.');
+        return [];
+      }
+    })
     .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
     .slice(0, MAX_CAPSULES);
 }
@@ -198,7 +206,16 @@ export function claimAgentRunCapsuleRecoveryPlan(
 }
 
 export function projectAgentRunCapsule(capsule: AgentRunCapsule): AgentRunCapsuleProjection {
+  const active = ['queued', 'running', 'streaming'].includes(capsule.status);
+  const activeReason = 'The source run is still active; stop it before starting recovery.';
+  const binding = capsule.request.runtimeBinding;
   const resumeSessionId = capsule.request.runtimeBinding?.externalSessionId?.trim();
+  const expectedBinding = { mindos: 'mindos-pi-session', codex: 'codex-thread', claude: 'claude-session', acp: 'acp-session' };
+  const canResume = capsule.request.runtime.kind !== 'acp'
+    && binding?.runtime === capsule.request.runtime.kind
+    && binding.runtimeId === capsule.request.runtime.id
+    && binding.type === expectedBinding[capsule.request.runtime.kind]
+    && (!binding.status || binding.status === 'active');
   const checkpointArtifactId = capsule.provenance.checkpointArtifactId?.trim();
   return {
     schemaVersion: 1,
@@ -222,9 +239,9 @@ export function projectAgentRunCapsule(capsule: AgentRunCapsule): AgentRunCapsul
       assetIds: [...capsule.request.context.assetIds],
     },
     recovery: {
-      retry: { supported: true, mode: 'from-start' },
-      fork: { supported: true, mode: 'new-session' },
-      resume: resumeSessionId
+      retry: { supported: !active, mode: 'from-start', ...(active ? { reason: activeReason } : {}) },
+      fork: { supported: !active, mode: 'new-session', ...(active ? { reason: activeReason } : {}) },
+      resume: active ? { supported: false, reason: activeReason } : resumeSessionId && canResume
         ? { supported: true, sessionId: resumeSessionId }
         : { supported: false, reason: 'This run has no reusable runtime session.' },
       rollback: checkpointArtifactId

@@ -1,10 +1,8 @@
 import crypto from 'node:crypto';
 import {
   chmodSync,
-  closeSync,
   existsSync,
   mkdirSync,
-  openSync,
   readFileSync,
   renameSync,
   unlinkSync,
@@ -12,6 +10,7 @@ import {
 } from 'node:fs';
 import path from 'node:path';
 import { resolveExistingSafe } from '../../foundation/security/index.js';
+import { withConnectionRegistryLock } from './registry-lock.js';
 import type { ConnectionBinding, ConnectionCandidate, ConnectionRegistry } from './types.js';
 
 const REGISTRY_PATH = '.mindos/connections/bindings.json';
@@ -119,22 +118,7 @@ function writeRegistry(mindRoot: string, registry: ConnectionRegistry): void {
 
 function withRegistryLock<T>(mindRoot: string, operation: () => T): T {
   const lock = resolveExistingSafe(mindRoot, LOCK_PATH);
-  mkdirSync(path.dirname(lock), { recursive: true, mode: 0o700 });
-  let descriptor: number;
-  try {
-    descriptor = openSync(lock, 'wx', 0o600);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
-      throw new Error('Connection registry is busy; retry the operation.');
-    }
-    throw error;
-  }
-  try {
-    return operation();
-  } finally {
-    closeSync(descriptor);
-    try { unlinkSync(lock); } catch { /* best-effort cleanup */ }
-  }
+  return withConnectionRegistryLock(lock, operation);
 }
 
 function validateCandidate(candidate: ConnectionCandidate): void {

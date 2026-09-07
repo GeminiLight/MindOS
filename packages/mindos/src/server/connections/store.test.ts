@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync, utimesSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -55,6 +55,39 @@ describe('connection binding registry', () => {
     } as unknown as ConnectionCandidate;
     expect(() => bindConnection(mindRoot, unsafe)).toThrow(/secret-bearing field/i);
     expect(listConnectionBindings(mindRoot)).toEqual([]);
+  });
+
+  it('recovers an old empty lock left by an interrupted process', () => {
+    bindConnection(mindRoot, candidate());
+    const lock = join(mindRoot, '.mindos/connections/bindings.lock');
+    writeFileSync(lock, '');
+    utimesSync(lock, new Date(0), new Date(0));
+    expect(unbindConnection(mindRoot, candidate().id)).toBe(true);
+  });
+
+  it('does not steal a lock owned by a live process even when old', () => {
+    bindConnection(mindRoot, candidate());
+    const lock = join(mindRoot, '.mindos/connections/bindings.lock');
+    writeFileSync(lock, JSON.stringify({ pid: process.pid }));
+    utimesSync(lock, new Date(0), new Date(0));
+    expect(() => unbindConnection(mindRoot, candidate().id)).toThrow(/busy/i);
+    expect(listConnectionBindings(mindRoot)).toHaveLength(1);
+  });
+
+  it.each(['{broken', '{"pid":"123"}', '{"pid":0}'])('preserves a nonempty lock with unverifiable ownership: %s', (owner) => {
+    bindConnection(mindRoot, candidate());
+    const lock = join(mindRoot, '.mindos/connections/bindings.lock');
+    writeFileSync(lock, owner);
+    utimesSync(lock, new Date(0), new Date(0));
+    expect(() => unbindConnection(mindRoot, candidate().id)).toThrow(/busy/i);
+    expect(readFileSync(lock, 'utf8')).toBe(owner);
+  });
+
+  it('preserves a freshly created empty lock while its owner is being written', () => {
+    bindConnection(mindRoot, candidate());
+    const lock = join(mindRoot, '.mindos/connections/bindings.lock');
+    writeFileSync(lock, '');
+    expect(() => unbindConnection(mindRoot, candidate().id)).toThrow(/busy/i);
   });
 });
 

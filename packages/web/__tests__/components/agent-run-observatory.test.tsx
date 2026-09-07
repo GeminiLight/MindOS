@@ -74,6 +74,7 @@ describe('Agent Run Observatory UI', () => {
   });
 
   beforeEach(() => {
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' });
     vi.stubGlobal('fetch', vi.fn(async () => Response.json({
       runs: [], events: [],
       observatory: {
@@ -90,6 +91,43 @@ describe('Agent Run Observatory UI', () => {
     await act(async () => { root?.unmount(); });
     host?.remove();
     vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+
+  it('refreshes visible runs and catches up when returning from a hidden tab', async () => {
+    vi.useFakeTimers();
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' });
+    await renderSection();
+    expect(fetch).toHaveBeenCalledTimes(1);
+    await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+    expect(fetch).toHaveBeenCalledTimes(2);
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' });
+    await act(async () => { document.dispatchEvent(new Event('visibilitychange')); await vi.advanceTimersByTimeAsync(10000); });
+    expect(fetch).toHaveBeenCalledTimes(2);
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' });
+    await act(async () => { document.dispatchEvent(new Event('visibilitychange')); });
+    expect(fetch).toHaveBeenCalledTimes(3);
+  });
+
+  it('preserves the last successful snapshot on refresh failure and recovers automatically', async () => {
+    vi.useFakeTimers();
+    await renderSection();
+    vi.mocked(fetch).mockRejectedValueOnce(new Error('offline'));
+    await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+    expect(host.textContent).toContain('Release research');
+    expect(host.textContent).toContain('Refresh failed; showing previous data.');
+    await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+    expect(host.textContent).not.toContain('Refresh failed; showing previous data.');
+  });
+
+  it('recovers from an initial load failure on the next visible refresh', async () => {
+    vi.useFakeTimers();
+    vi.mocked(fetch).mockRejectedValueOnce(new Error('offline'));
+    await renderSection();
+    expect(host.textContent).toContain('Could not load run observability data.');
+    await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+    expect(host.textContent).toContain('Release research');
+    expect(host.textContent).not.toContain('Could not load run observability data.');
   });
 
   it('shows trace health, selects runs, and explains durable approval and summary-only coverage', async () => {

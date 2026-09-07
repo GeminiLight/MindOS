@@ -24,7 +24,8 @@ export function handleAgentRunCapsulesGet(
     const chatSessionId = boundedText(searchParams.get('chatSessionId'), 160);
     const status = boundedText(searchParams.get('status'), 32);
     const limit = parseLimit(searchParams.get('limit'));
-    const capsules = listAgentRunCapsules(services.mindRoot)
+    const warnings: string[] = [];
+    const capsules = listAgentRunCapsules(services.mindRoot, { onCorrupt: (warning) => warnings.push(warning) })
       .filter((capsule) => !runId || capsule.runId === runId)
       .filter((capsule) => !rootRunId || capsule.rootRunId === rootRunId)
       .filter((capsule) => !chatSessionId || capsule.chatSessionId === chatSessionId)
@@ -33,6 +34,7 @@ export function handleAgentRunCapsulesGet(
       .map(projectAgentRunCapsule);
     return json({
       schemaVersion: 1,
+      warnings,
       capsules,
       summary: {
         total: capsules.length,
@@ -77,7 +79,7 @@ export function handleAgentRunCapsuleRecoveryPost(
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    if (/not supported|no reusable runtime session|no checkpoint artifact|no verified rollback executor|different action/i.test(message)) {
+    if (/still active|not supported|no reusable runtime session|no checkpoint artifact|no verified rollback executor|different action/i.test(message)) {
       return json({ error: message }, { status: 409 });
     }
     return errorResponse(error);

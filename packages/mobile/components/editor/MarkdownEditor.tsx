@@ -28,16 +28,22 @@ import Markdown from 'react-native-markdown-display';
 import MarkdownToolbar from './MarkdownToolbar';
 import { TOOLBAR_ACTIONS } from './markdown-actions';
 import type { ToolbarAction, Selection } from './markdown-actions';
-import { buildConflictCopyPath } from './markdown-editor-state';
+import { buildConflictCopyPath, buildMarkdownDraftKey } from './markdown-editor-state';
+import { createMarkdownDraftQueue } from './markdown-draft-queue';
 import { mindosClient } from '@/lib/api-client';
 import { getMarkdownStyles } from '@/lib/markdown-styles';
 
-const DRAFT_PREFIX = 'mindos_draft_';
 const DRAFT_DEBOUNCE_MS = 3000;
+const draftStorage = createMarkdownDraftQueue(AsyncStorage);
 const MAX_EDITABLE_BYTES = Platform.OS === 'android' ? 20 * 1024 : 100 * 1024;
 
-export function clearMarkdownDraft(filePath: string): Promise<void> {
-  return AsyncStorage.removeItem(DRAFT_PREFIX + filePath);
+export async function clearMarkdownDraft(filePath: string, key?: string): Promise<void> {
+  if (key) { await draftStorage.removeItem(key); return; }
+  const server = mindosClient.baseUrl;
+  const info = await mindosClient.getConnectInfo();
+  if (info?.rootId && server === mindosClient.baseUrl) {
+    await draftStorage.removeItem(buildMarkdownDraftKey(server, info.rootId, filePath));
+  }
 }
 
 interface MarkdownEditorProps {
@@ -65,6 +71,7 @@ export default function MarkdownEditor({
   }, [onDirtyChange]);
   const [lastMtime, setLastMtime] = useState(initialMtime);
   const [saveError, setSaveError] = useState('');
+  const [draftKey, setDraftKey] = useState<string>();
 
   const [selection, setSelection] = useState<Selection>({ start: 0, end: 0 });
   const selectionRef = useRef<Selection>({ start: 0, end: 0 });
@@ -87,10 +94,11 @@ export default function MarkdownEditor({
   // --- Draft auto-save ---
 
   const saveDraft = useCallback(async (text: string) => {
+    if (!draftKey) return;
     try {
-      await AsyncStorage.setItem(DRAFT_PREFIX + filePath, text);
+      await draftStorage.setItem(draftKey, text);
     } catch { /* best-effort */ }
-  }, [filePath]);
+  }, [draftKey]);
 
   const flushDraftNow = useCallback(() => {
     if (!dirtyRef.current) return;
@@ -116,19 +124,37 @@ export default function MarkdownEditor({
 
   // Load draft on mount
   useEffect(() => {
+    let canceled = false;
+    const server = mindosClient.baseUrl;
+    setDraftKey(undefined);
     (async () => {
-      const draft = await AsyncStorage.getItem(DRAFT_PREFIX + filePath);
+      const info = await mindosClient.getConnectInfo();
+      if (canceled || server !== mindosClient.baseUrl) return;
+      if (!info?.rootId) {
+        setSaveError('Local draft recovery requires a server with knowledge-root identification. Use Save to persist your changes.');
+        return;
+      }
+      const key = buildMarkdownDraftKey(server, info.rootId, filePath);
+      setDraftKey(key);
+      const draft = await AsyncStorage.getItem(key);
+      if (canceled || server !== mindosClient.baseUrl || dirtyRef.current) return;
       if (draft && draft !== initialContent) {
         Alert.alert(
           'Unsaved Draft',
           'A local draft was found. Do you want to restore it?',
           [
-            { text: 'Discard', style: 'destructive', onPress: () => { void clearMarkdownDraft(filePath); } },
-            { text: 'Restore', onPress: () => { setContent(draft); setDirty(true); } },
+            { text: 'Discard', style: 'destructive', onPress: () => { void clearMarkdownDraft(filePath, key); } },
+            { text: 'Restore', onPress: () => {
+              if (canceled || server !== mindosClient.baseUrl || dirtyRef.current) return;
+              setContent(draft); setDirty(true);
+            } },
           ],
         );
       }
-    })();
+    })().catch(() => {
+      if (!canceled) setSaveError('Could not read the local draft. Use Save to persist your changes.');
+    });
+    return () => { canceled = true; };
   }, [filePath, initialContent, setDirty]);
 
   // --- Toolbar actions ---
@@ -147,10 +173,13 @@ export default function MarkdownEditor({
 
   const completeSuccessfulSave = useCallback(async (nextMtime?: number) => {
     setLastMtime(nextMtime);
+    // Stop unmount/background flushes and the queued debounce before clearing storage.
+    dirtyRef.current = false;
+    if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
     setDirty(false);
-    await clearMarkdownDraft(filePath);
+    if (draftKey) await clearMarkdownDraft(filePath, draftKey);
     onSaved?.();
-  }, [filePath, onSaved, setDirty]);
+  }, [filePath, draftKey, onSaved, setDirty]);
 
   const runConflictSaveAction = useCallback(async (
     action: () => Promise<{ ok: boolean; mtime?: number; error?: string }>,

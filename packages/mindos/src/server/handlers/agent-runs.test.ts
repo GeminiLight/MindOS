@@ -2,6 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { setMindRootResolverForTests } from '../../foundation/mind-root/index.js';
 import type { AgentArtifactLedgerRecord } from '../../agent/ledger/artifact-ledger.js';
 import type { AgentEvent, AgentRunRecord } from '../../agent/ledger/run-ledger-types.js';
 import type { AgentRunCapsuleProjection } from '../../agent/capsules/types.js';
@@ -263,6 +264,7 @@ describe('Agent Run Observatory projection', () => {
 
   it('degrades a corrupt automation attachment without failing the run endpoint', () => {
     const mindRoot = mkdtempSync(join(tmpdir(), 'mindos-observatory-degraded-'));
+    setMindRootResolverForTests(() => mindRoot);
     try {
       const statePath = join(mindRoot, STUDIO_AUTOMATION_STATE_FILE);
       mkdirSync(dirname(statePath), { recursive: true });
@@ -278,6 +280,7 @@ describe('Agent Run Observatory projection', () => {
         },
       });
     } finally {
+      setMindRootResolverForTests(null);
       rmSync(mindRoot, { recursive: true, force: true });
     }
   });

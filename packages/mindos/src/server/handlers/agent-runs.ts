@@ -214,7 +214,7 @@ export function handleAgentRunsGet(
     'Context assets are temporarily unavailable.',
   );
   const capsules = safeAttachment(
-    () => listAgentRunCapsules(services.mindRoot).map(projectAgentRunCapsule),
+    () => listAgentRunCapsules(services.mindRoot, { onCorrupt: (message) => warnings.push(message) }).map(projectAgentRunCapsule),
     [],
     warnings,
     'Run recovery capsules are temporarily unavailable.',

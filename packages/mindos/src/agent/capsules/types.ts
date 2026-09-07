@@ -134,8 +134,8 @@ export interface AgentRunCapsuleProjection {
     assetIds: string[];
   };
   recovery: {
-    retry: { supported: true; mode: 'from-start' };
-    fork: { supported: true; mode: 'new-session' };
+    retry: { supported: boolean; mode: 'from-start'; reason?: string };
+    fork: { supported: boolean; mode: 'new-session'; reason?: string };
     resume: { supported: boolean; sessionId?: string; reason?: string };
     rollback: { supported: boolean; checkpointArtifactId?: string; reason?: string };
   };

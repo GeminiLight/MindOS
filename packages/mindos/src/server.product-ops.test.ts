@@ -545,6 +545,12 @@ describe('MindOS server contract: product operations', () => {
   });
 
   it('handles local connection metadata without Web dependencies', () => {
+    const first = handleConnectGet({ mindRoot: '/mind/one' }).body!;
+    expect(first.rootId).toMatch(/^[a-f0-9]{24}$/);
+    expect(handleConnectGet({ mindRoot: '/mind/one' }).body!.rootId).toBe(first.rootId);
+    expect(handleConnectGet({ mindRoot: '/mind/one/' }).body!.rootId).toBe(first.rootId);
+    expect(handleConnectGet({ mindRoot: '/mind/two' }).body!.rootId).not.toBe(first.rootId);
+    expect(JSON.stringify(first)).not.toContain('/mind/one');
     expect(handleConnectGet({
       port: '4567',
       hostname: () => 'test-host',

@@ -653,7 +653,7 @@ async function handleRequest(
       return;
     }
     if (route === 'GET /api/connect') {
-      writeResponse(res, handleConnectGet({ port: process.env.MINDOS_WEB_PORT }));
+      writeResponse(res, handleConnectGet({ port: process.env.MINDOS_WEB_PORT, mindRoot: services.mindRoot }));
       return;
     }
     if (route === 'GET /api/embedding') {

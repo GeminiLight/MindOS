@@ -1,7 +1,11 @@
 import os, { type NetworkInterfaceInfo } from 'node:os';
+import { createHash } from 'node:crypto';
+import { resolve } from 'node:path';
+import { effectiveMindRoot } from '../../foundation/mind-root/index.js';
 import { json, type MindosServerResponse } from '../response.js';
 
 export type ConnectHandlerOptions = {
+  mindRoot?: string;
   port?: string | number;
   hostname?: () => string;
   networkInterfaces?: () => NodeJS.Dict<NetworkInterfaceInfo[]>;
@@ -12,6 +16,7 @@ export type ConnectPayload = {
   ip: string;
   port: number;
   hostname: string;
+  rootId: string;
 };
 
 export function handleConnectGet(
@@ -25,6 +30,7 @@ export function handleConnectGet(
     ip,
     port,
     hostname: (options.hostname ?? os.hostname)(),
+    rootId: createHash('sha256').update(resolve(options.mindRoot ?? effectiveMindRoot())).digest('hex').slice(0, 24),
   });
 }
 
