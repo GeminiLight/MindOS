@@ -23,3 +23,14 @@ describe('shell route data boundaries', () => {
     expect(shouldLoadShellData('/view/Notes/A.md')).toBe(true);
   });
 });
+
+it('never loads vault shell data for participant routes, including unavailable invitations', () => {
+  expect(shouldLoadShellData('/study/participate/study-' + 'a'.repeat(24))).toBe(false);
+  expect(shouldRenderShell('/study/participate/not-found')).toBe(false);
+  expect(shouldRenderShell('/study/participate-other')).toBe(true);
+});
+it('keeps reviewer work packets outside the owner shell', () => {
+  expect(shouldRenderShell('/study/review/study-' + 'a'.repeat(24))).toBe(false);
+  expect(shouldLoadShellData('/study/review/invalid')).toBe(false);
+  expect(shouldLoadShellData('/study/reviewer-other')).toBe(true);
+});

@@ -835,11 +835,14 @@ describe('/api/agent/sessions/:sessionId/turns native runtime routing', () => {
     mockDetectLocalAcpAgents.mockResolvedValue({ installed: [], notInstalled: [] });
     seedFile('Research/current.md', 'Stable current file body');
     seedFile('Research/attached.md', 'Stable attached file body');
+    const { reviewEchoPromotionCandidate } = await import('@geminilight/mindos/knowledge');
+    const { getRetrievalReceipt } = await import('@geminilight/mindos/retrieval');
+    const method = reviewEchoPromotionCandidate(getTestMindRoot(), { decision: 'approve', candidate: { id: 'native-method', kind: 'playbook', title: 'Evidence method', content: 'Verify the original research design.', source: { label: 'Correction', sessions: [{ id: 'source', messageRefs: [{ role: 'user', messageIndex: 0, quote: 'Check the design.' }] }] } } });
     invalidateCache();
     const baseBody = {
       selectedRuntime: { id: 'codex', name: 'Codex', kind: 'codex', binaryPath: '/usr/local/bin/codex' },
       currentFile: 'Research/current.md',
-      attachedFiles: ['Research/attached.md'],
+      attachedFiles: ['Research/attached.md', method.targetPath!],
       permissionMode: 'read',
       chatSessionId: 'chat-file-context-signature',
     };
@@ -857,6 +860,11 @@ describe('/api/agent/sessions/:sessionId/turns native runtime routing', () => {
     expect(firstRun.metadata?.fileContextSignature).toEqual(expect.any(String));
     expect(firstRun.metadata?.fileContextInjected).toBe(true);
     const firstSignature = firstRun.metadata?.fileContextSignature;
+    expect(capturedNativeOptions?.prompt).toContain('Verify the original research design.');
+    const methodReceiptId = (firstRun.metadata?.retrievalReceiptIds as string[]).find(id => id.startsWith('method-context-'))!;
+    expect(methodReceiptId).toBeTruthy();
+    expect(getRetrievalReceipt(getTestMindRoot(), methodReceiptId)?.selections).toEqual([expect.objectContaining({ assetId: method.assetId, assetVersion: 1, contentHash: expect.stringMatching(/^[a-f0-9]{64}$/) })]);
+    expect(listAgentRunCapsules(getTestMindRoot()).find(item => item.runId === firstRun.id)?.request.context.receiptIds).toContain(methodReceiptId);
 
     capturedNativeOptions = null;
     const second = await POST(agentTurnRequest({
@@ -874,6 +882,7 @@ describe('/api/agent/sessions/:sessionId/turns native runtime routing', () => {
     const secondRun = listAgentRuns({ kind: 'native-runtime' })[0]!;
     expect(secondRun.metadata?.fileContextSignature).toBe(firstSignature);
     expect(secondRun.metadata?.fileContextInjected).toBe(false);
+    expect(secondRun.metadata?.retrievalReceiptIds).toBeUndefined();
   }, 15_000);
 
   it('rejects crafted WorkDir changes after a prior run for the chat session', async () => {
@@ -1628,6 +1637,21 @@ describe('/api/agent/sessions/:sessionId/turns native runtime routing', () => {
         error: 'native bridge exploded',
       }),
     ]);
+  });
+
+  it('does not label a streamed native connection error as a successful run or capsule', async () => {
+    mockResolveCommandPath.mockImplementation(async (command: string) => command === 'codex' ? '/usr/local/bin/codex' : null);
+    mockCheckNativeRuntimeHealth.mockResolvedValue({ status: 'available' });
+    mockDetectLocalAcpAgents.mockResolvedValue({ installed: [], notInstalled: [] });
+    mockRunMindosNativeAgentTurn.mockImplementationOnce(async (options: MindosNativeAgentTurnOptions) => {
+      options.send({ type: 'error', message: 'Reconnecting... 2/5' });
+      return { externalSessionId: 'stream-error-session' };
+    });
+    const response = await POST(agentTurnRequest({ messages: [{ role: 'user', content: 'Use the attached method' }], selectedRuntime: { id: 'codex', name: 'Codex', kind: 'codex' }, chatSessionId: 'stream-error-trial' }));
+    expect(await response.text()).toContain('Reconnecting... 2/5');
+    const run = listAgentRuns({ kind: 'native-runtime' })[0]!;
+    expect(run).toMatchObject({ status: 'failed', error: 'Reconnecting... 2/5', outputSummary: '' });
+    expect(listAgentRunCapsules(getTestMindRoot()).find(item => item.runId === run.id)?.status).toBe('failed');
   });
 
   it('records returned native runtime errors as failed ledger runs', async () => {

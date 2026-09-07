@@ -1,6 +1,7 @@
 'use client';
 
 import { useSyncExternalStore, useCallback } from 'react';
+import type { AskAddContextDetail } from '@/lib/ask-context-events';
 import type { AgentIdentity, AgentRuntimeIdentity } from '@/lib/types';
 
 /**
@@ -9,8 +10,12 @@ import type { AgentIdentity, AgentRuntimeIdentity } from '@/lib/types';
  * No external dependencies (no zustand needed).
  */
 
+export const ASK_HIDE_PANELS_EVENT = 'mindos:hide-ask-panels';
+
 export type AcpAgentSelection = AgentIdentity;
 export type AskAgentRuntimeSelection = AgentRuntimeIdentity;
+
+export type AskOpenOptions = { newSession?: boolean; context?: AskAddContextDetail };
 
 interface AskModalState {
   open: boolean;
@@ -19,6 +24,7 @@ interface AskModalState {
   acpAgent: AcpAgentSelection | null;
   agentRuntime: AskAgentRuntimeSelection | null;
   newSession: boolean;
+  context: AskAddContextDetail | null;
   requestId: number;
 }
 
@@ -30,6 +36,7 @@ let state: AskModalState = {
   acpAgent: null,
   agentRuntime: null,
   newSession: false,
+    context: null,
   requestId,
 };
 const listeners = new Set<() => void>();
@@ -50,7 +57,7 @@ export function openAskModal(
   message = '',
   source: AskModalState['source'] = 'user',
   agent: AcpAgentSelection | AskAgentRuntimeSelection | null = null,
-  options: { newSession?: boolean } = {},
+  options: AskOpenOptions = {},
 ) {
   const agentRuntime = toRuntimeSelection(agent);
   const acpAgent = agentRuntime?.kind === 'acp'
@@ -63,6 +70,7 @@ export function openAskModal(
     acpAgent,
     agentRuntime,
     newSession: Boolean(options.newSession),
+    context: options.context ?? null,
     requestId: ++requestId,
   };
   emit();
@@ -76,6 +84,7 @@ export function closeAskModal() {
     acpAgent: null,
     agentRuntime: null,
     newSession: false,
+    context: null,
     requestId,
   };
   emit();
@@ -90,12 +99,13 @@ export function useAskModal() {
     acpAgent: snap.acpAgent,
     agentRuntime: snap.agentRuntime,
     newSession: snap.newSession,
+    context: snap.context,
     requestId: snap.requestId,
     openWith: useCallback((
       message: string,
       source: AskModalState['source'] = 'user',
       agent: AcpAgentSelection | AskAgentRuntimeSelection | null = null,
-      options: { newSession?: boolean } = {},
+      options: AskOpenOptions = {},
     ) => openAskModal(message, source, agent, options), []),
     close: useCallback(() => closeAskModal(), []),
   };

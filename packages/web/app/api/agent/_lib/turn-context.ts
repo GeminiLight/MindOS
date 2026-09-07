@@ -1,4 +1,5 @@
 import path from 'path';
+import { recordAttachedMethodReceipt } from '@/lib/agent/attached-method-receipt';
 import { getFileContent, getMindRoot, collectAllFiles } from '@/lib/fs';
 import { validateFileSize } from '@/lib/api-file-size-validation';
 import { truncate } from '@/lib/agent/tools';
@@ -116,7 +117,18 @@ export async function recallMindosTurnKnowledge(input: {
   return (await recallMindosTurnKnowledgeWithReceipt(input)).items;
 }
 
-export async function recallMindosTurnKnowledgeWithReceipt(input: {
+export async function recallMindosTurnKnowledgeWithReceipt(input: Parameters<typeof recallAutomaticKnowledgeWithReceipt>[0] & { fileContext?: MindosAgentFileContext }): Promise<Pick<ActiveRecallWithReceiptResult, 'items' | 'metadata'>> {
+  const recalled = await recallAutomaticKnowledgeWithReceipt(input);
+  const attached = input.fileContext ? recordAttachedMethodReceipt(input.mindRoot, input.lastUserContent, input.fileContext, input.chatSessionId) : null;
+  if (!attached) return recalled;
+  return { items: recalled.items, metadata: {
+    ...recalled.metadata,
+    retrievalReceiptIds: [...(recalled.metadata.retrievalReceiptId ? [recalled.metadata.retrievalReceiptId] : []), attached.id],
+    retrievalSelectedAssetIds: [...new Set([...recalled.metadata.retrievalSelectedAssetIds, ...attached.selections.map(item => item.assetId)])],
+  } };
+}
+
+async function recallAutomaticKnowledgeWithReceipt(input: {
   mindRoot: string;
   chatSessionId?: string;
   lastUserContent: string;

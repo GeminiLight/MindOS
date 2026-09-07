@@ -1,0 +1,26 @@
+export const reviewerInvitationCopy = {
+  en: {
+    stop: 'Stop retrying', stopConfirm: 'Stop retrying this request? An invitation may already exist. Reload the list and revoke any unwanted link before creating another.', title: 'Independent reviewers', note: 'Each invitation contains a fixed packet of submitted answers. New answers require an explicit packet update. Reviewers see the frozen criteria and only their own scores.',
+    privacy: 'Keep this link private. Anyone holding it can act as this reviewer. Confirm the reviewer’s independence separately; answer wording may reveal study conditions.',
+    label: 'Private reviewer note', labelHint: 'For your records only. This note is hidden from the reviewer.', days: 'Invitation lifetime (days)',
+    create: 'Create review invitation', retry: 'Retry this invitation', update: 'Create updated packet', updateHint: 'An update includes all currently submitted answers and preserves this reviewer’s scores. Earlier links remain active until you revoke them.',
+    available: 'Available answers', empty: 'No submitted answers yet. Create a review packet after answers are locked.', noInvitations: 'No reviewer invitations yet.',
+    reload: 'Reload reviewers', busy: 'Working…', protect: 'Protect this instance with a Web password and API access token, and use HTTPS or a local address.',
+    failed: 'The result was not confirmed. Retry the same action or reload the saved invitations.', conflict: 'The protocol or available work changed, or the invitation limit was reached. Reload the saved invitations to check.',
+    invalid: 'Add a reviewer note and choose a lifetime from 1 to 180 days.', revoke: 'Revoke', confirm: 'Revoke this link? Access through it will stop; saved assessments and other links will remain.',
+    active: 'Active', expired: 'Expired', revoked: 'Revoked', accepted: 'Opened', unused: 'Not opened', packet: 'Available work in this packet',
+    link: 'Private reviewer link', copy: 'Copy link', copied: 'Copied', manual: 'Select and copy the link above.', once: 'Copy before leaving. A lost link can be revoked and replaced with an updated packet for the same reviewer.',
+  },
+  zh: {
+    stop: '停止重试', stopConfirm: '停止重试这次请求吗？邀请可能已创建。请先核对列表并撤销不需要的链接，再创建新邀请。', title: '独立评审者', note: '每份邀请包含固定的已提交作品包，新增回答需明确更新工作包。评审者只会看到冻结的标准和自己的评分。',
+    privacy: '请保密这份链接，持有者能以该评审者身份操作。请另行核对评审独立性；回答的措辞本身仍可能透露研究条件。',
+    label: '评审者私人备注', labelHint: '仅供你管理邀请，不会展示给评审者。', days: '邀请有效天数',
+    create: '创建评审邀请', retry: '重试这次邀请', update: '创建更新的工作包', updateHint: '更新会纳入当前所有已提交回答，并保留该评审者的评分。旧链接仍然有效，需要单独撤销。',
+    available: '可评回答', empty: '还没有已提交的回答。回答锁定后，即可创建评审工作包。', noInvitations: '还没有评审邀请。',
+    reload: '重新读取评审邀请', busy: '正在处理…', protect: '请先设置网页访问密码和 API 访问令牌，并使用 HTTPS 或本机地址。',
+    failed: '尚未确认操作结果，请重试同一操作，或重新读取已保存的邀请。', conflict: '协议或可评作品发生变化，或邀请已达上限。请重新读取已保存的邀请后核对。',
+    invalid: '请填写评审者备注，有效期为 1 至 180 天。', revoke: '撤销', confirm: '撤销这份链接吗？之后不能通过它访问，已有评分和其他链接仍保留。',
+    active: '有效', expired: '已过期', revoked: '已撤销', accepted: '已打开', unused: '尚未打开', packet: '包内可评作品',
+    link: '评审私人链接', copy: '复制链接', copied: '已复制', manual: '请选中上方链接并复制。', once: '请在离开前复制链接。若遗失，可撤销原链接，为同一评审者创建更新的工作包。',
+  },
+};

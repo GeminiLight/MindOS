@@ -156,6 +156,29 @@ describe('useAskPanel full-page chat guard', () => {
     act(() => root.unmount());
   });
 
+  it('carries a trial prompt and its attachment atomically, and clears it for the next ordinary request', async () => {
+    const { root } = renderProbe();
+    await act(async () => openAskModal('Compare the new study', 'user', null, { newSession: true, context: { path: 'Echo/Playbooks/method.md', type: 'file' } }));
+    expect(latestState.current?.askInitialMessage).toBe('Compare the new study');
+    expect(latestState.current?.askNewSession).toBe(true);
+    expect(latestState.current?.askContextRequest).toMatchObject({ path: 'Echo/Playbooks/method.md', type: 'file' });
+    await act(async () => openAskModal('Ordinary task'));
+    expect(latestState.current?.askContextRequest).toBeNull();
+    act(() => root.unmount());
+  });
+
+  it('opens a visible popup for a mobile trial while preserving the prepared task', async () => {
+    const width = window.innerWidth;
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 });
+    const { root } = renderProbe();
+    try {
+      await act(async () => openAskModal('Mobile trial', 'user', null, { newSession: true, context: { path: 'method.md' } }));
+      expect(latestState.current?.desktopAskPopupOpen).toBe(true);
+      expect(latestState.current?.askPanelOpen).toBe(false);
+      expect(latestState.current?.askInitialMessage).toBe('Mobile trial');
+    } finally { act(() => root.unmount()); Object.defineProperty(window, 'innerWidth', { configurable: true, value: width }); }
+  });
+
   it('keeps SidebarLayout render output gated on full-page chat before effects close stale state', () => {
     const source = fs.readFileSync(path.resolve(process.cwd(), 'components/SidebarLayout.tsx'), 'utf-8');
 
@@ -180,5 +203,17 @@ describe('useAskPanel full-page chat guard', () => {
     expect(source).toContain('const routePanelSuppressed = shouldSuppressRoutePanel');
     expect(source).toContain('const activeLeftPanel = lp.sidebarExpanded && !routePanelSuppressed ? derivedActiveLeftPanel : null;');
     expect(source).toContain('const railActivePanel = homeNavPending');
+  });
+
+  it('hides help panes for an independent practice without replacing the prepared conversation', () => {
+    navState.pathname = '/echo/growth'; closeAskModal();
+    const { root } = renderProbe();
+    act(() => openAskModal('Existing draft to preserve', 'user', null, { newSession: true }));
+    expect(latestState.current?.askPanelOpen).toBe(true);
+    act(() => window.dispatchEvent(new Event('mindos:hide-ask-panels')));
+    expect(latestState.current?.askPanelOpen).toBe(false);
+    expect(latestState.current?.desktopAskPopupOpen).toBe(false);
+    expect(latestState.current?.askInitialMessage).toBe('Existing draft to preserve');
+    act(() => root.unmount());
   });
 });

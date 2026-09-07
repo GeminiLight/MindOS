@@ -318,6 +318,12 @@ export function AiTab({ data, setData, updateAi, updateAgent, t }: AiTabProps) {
               )}
             </Field>
 
+            <Field htmlFor="study-output-budget" label={locale === 'zh' ? '新比较与多轮研究回复预算' : 'New comparison and multi-round reply budget'} hint={locale === 'zh' ? '包含模型推理消耗，范围 1,024–4,096 token。推理模型可使用 4,096；仅用于新协议，已有协议保持冻结预算。更高上限可能增加费用。' : 'Includes model reasoning, from 1,024 to 4,096 tokens. Reasoning models may need 4,096. New protocols only; existing budgets remain frozen. Higher limits may cost more.'}>
+              <Input id="study-output-budget" className="min-h-11" type="number" min={1024} max={4096} step={1024} value={current.studyMaxOutputTokens ?? 1024} onChange={e => { const value = Number(e.target.value); if (Number.isInteger(value) && value >= 1024 && value <= 4096) patchProvider({ studyMaxOutputTokens: value }); }} />
+            </Field>
+            <Field label={locale === 'zh' ? '隔离研究采样温度' : 'Isolated study temperature'} hint={locale === 'zh' ? '按服务商要求设置；新比较会冻结此值，已有比较保持原值。' : 'Use a value supported by your provider. New comparisons freeze this value; existing ones stay unchanged.'}>
+              <Input type="number" min={0} max={2} step={0.1} value={current.temperature ?? 0} onChange={e => { const value = Number(e.target.value); if (Number.isFinite(value) && value >= 0 && value <= 2) patchProvider({ temperature: value }); }} />
+            </Field>
             {/* Base URL */}
             {(preset?.supportsBaseUrl || current.baseUrl) && (
               <Field label="Base URL">

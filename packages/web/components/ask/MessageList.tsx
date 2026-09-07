@@ -9,6 +9,8 @@ import { stripThinkingTags } from '@/hooks/useAiOrganize';
 import { copyToClipboard } from '@/lib/clipboard';
 import ToolCallBlock from './ToolCallBlock';
 import ThinkingBlock from './ThinkingBlock';
+import EchoCorrectionButton from '@/components/echo/learning/EchoCorrectionButton';
+import InquirySourceButton from '@/components/echo/inquiries/InquirySourceButton';
 import { SaveMessageButton } from './SaveSessionInline';
 import UserMessageActions from './UserMessageActions';
 import AgentRunTimeline from './AgentRunTimeline';
@@ -71,7 +73,7 @@ function MessageMetaRow({ timestamp, align, children }: { timestamp?: number; al
   return (
     <div
       data-message-meta
-      className={`pointer-events-none absolute top-full z-20 flex pt-1 opacity-0 transition-[opacity,transform] duration-100 focus-within:pointer-events-auto focus-within:translate-y-0 focus-within:opacity-100 md:translate-y-0.5 md:group-hover/message:pointer-events-auto md:group-hover/message:translate-y-0 md:group-hover/message:opacity-100 ${alignClass}`}
+      className={`pointer-events-auto relative z-20 flex pt-1 opacity-100 md:absolute md:top-full md:pointer-events-none md:opacity-0 transition-[opacity,transform] duration-100 focus-within:pointer-events-auto focus-within:translate-y-0 focus-within:opacity-100 md:translate-y-0.5 md:group-hover/message:pointer-events-auto md:group-hover/message:translate-y-0 md:group-hover/message:opacity-100 ${alignClass}`}
     >
       <div
         data-message-meta-card
@@ -474,6 +476,7 @@ function hasAssistantRenderableBody(message: Message | undefined): boolean {
 }
 
 interface MessageListProps {
+  sessionId?: string;
   messages: Message[];
   isLoading: boolean;
   loadingPhase: 'connecting' | 'thinking' | 'streaming' | 'reconnecting';
@@ -506,6 +509,7 @@ interface MessageListProps {
 
 const MessageRow = memo(function MessageRow({
   message,
+  sessionId,
   index,
   messageCount,
   isLoading,
@@ -515,6 +519,7 @@ const MessageRow = memo(function MessageRow({
   labels,
 }: {
   message: Message;
+  sessionId?: string;
   index: number;
   messageCount: number;
   isLoading: boolean;
@@ -560,6 +565,7 @@ const MessageRow = memo(function MessageRow({
   );
   const assistantActions = !isStreamingLast && cleanedAssistantContent ? (
     <>
+      {sessionId && !isLoading ? <><EchoCorrectionButton sessionId={sessionId} messageIndex={index} text={message.content} /><InquirySourceButton sessionId={sessionId} messageIndex={index} text={message.content} /></> : null}
       <SaveMessageButton text={message.content} variant="dock" />
       <CopyMessageButton text={cleanedAssistantContent} label={labels.copyMessage} variant="dock" />
     </>
@@ -620,6 +626,7 @@ const MessageRow = memo(function MessageRow({
 
 export default memo(function MessageList({
   messages,
+  sessionId,
   isLoading,
   emptyPrompt,
   emptyHint,
@@ -817,6 +824,7 @@ export default memo(function MessageList({
         <MessageRow
           key={`${m.timestamp ?? i}:${m.role}:${i}`}
           message={m}
+          sessionId={sessionId}
           index={i}
           messageCount={messages.length}
           isLoading={isLoading}

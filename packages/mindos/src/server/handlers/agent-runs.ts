@@ -273,6 +273,7 @@ function buildAgentTraces(input: AgentRunObservatoryInput): AgentRunObservatoryT
     const assetIds = new Set<string>();
     for (const run of sorted) {
       addString(receiptIds, run.metadata?.retrievalReceiptId);
+      addStrings(receiptIds, run.metadata?.retrievalReceiptIds);
       addStrings(assetIds, run.metadata?.retrievalSelectedAssetIds);
     }
     const receipts = input.receipts.filter((item) => receiptIds.has(item.id) || (item.metadata?.runId ? runIds.has(item.metadata.runId) : false));

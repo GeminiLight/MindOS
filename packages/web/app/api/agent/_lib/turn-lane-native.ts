@@ -63,6 +63,7 @@ async function runNativeRuntimeTurn(
 ): Promise<void> {
   const runtimeRunId = randomUUID();
   let outputSummary = '';
+  let streamedError: Error | undefined;
   const nativeRun = startAgentRun({
     ...(input.capsule.runId ? { id: input.capsule.runId } : {}),
     agentKind: 'native-runtime',
@@ -99,6 +100,7 @@ async function runNativeRuntimeTurn(
   });
   const sendWithLedger = (event: MindOSSSEvent) => {
     if (event.type === 'text_delta') outputSummary += event.delta;
+    if (event.type === 'error') streamedError = new Error(event.message);
     appendSseEventToAgentRun(nativeRun.id, event);
     send(event);
   };
@@ -145,8 +147,11 @@ async function runNativeRuntimeTurn(
         },
       }))
     )));
-    if (result.error) {
-      const terminalStatus = agentRunErrorStatus(result.error, nativeRunSignal);
+    // Some adapters emit a terminal error but return a session binding without
+    // an error field. Preserve that failure instead of recording false success.
+    const terminalError = result.error ?? streamedError;
+    if (terminalError) {
+      const terminalStatus = agentRunErrorStatus(terminalError, nativeRunSignal);
       const modeArtifacts = recordModeArtifacts(
         nativeRun.id,
         input.agentModeContract,
@@ -155,7 +160,7 @@ async function runNativeRuntimeTurn(
       );
       failAgentRun(nativeRun.id, {
         status: terminalStatus,
-        error: result.error,
+        error: terminalError,
         outputSummary,
         ...(result.externalSessionId ? { archive: { sessionId: result.externalSessionId } } : {}),
         metadata: {

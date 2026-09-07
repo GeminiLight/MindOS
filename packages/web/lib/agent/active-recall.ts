@@ -23,6 +23,7 @@ import {
   readContextAssetRegistry,
   readContextFeedbackLedger,
   registerContextFileAsset,
+  type ContextAsset,
 } from '@geminilight/mindos/knowledge';
 import {
   writeRetrievalReceipt,
@@ -37,6 +38,7 @@ import {
 export interface RecallResult {
   /** Relative file path within the knowledge base. */
   path: string;
+  sourceContentHash?: string;
   /** Recalled Markdown excerpt. Long files contribute chunks, not whole files. */
   content: string;
   /** Search relevance score. */
@@ -123,6 +125,7 @@ export type ActiveRecallWithReceiptResult = {
   receipt: RetrievalReceipt | null;
   metadata: {
     retrievalReceiptId?: string;
+    retrievalReceiptIds?: string[];
     retrievalSelectedAssetIds: string[];
     retrievalOutcome: RetrievalReceiptOutcome;
   };
@@ -156,11 +159,18 @@ export async function performActiveRecallWithReceipt(
   const completedAt = new Date();
   const resolvedOptions = resolveRecallOptions(options);
   const assetIdsByPath = new Map<string, string>();
+  const selectedAssets = new Map<string, ContextAsset>();
+  const registeredAssets = readContextAssetRegistry(mindRoot).assets;
 
   for (const item of execution.items) {
     if (assetIdsByPath.has(item.path)) continue;
     try {
-      const asset = registerContextFileAsset(mindRoot, {
+      // A promoted method already owns its provenance. Reuse it only when the
+      // file read for this excerpt still matches the approved content exactly.
+      const approved = registeredAssets.find((asset) => asset.path === item.path
+        && asset.status === 'active' && asset.source.kind === 'echo-card'
+        && item.sourceContentHash === asset.contentHash);
+      const asset = approved ?? registerContextFileAsset(mindRoot, {
         path: item.path,
         kind: 'knowledge',
         status: 'active',
@@ -168,13 +178,14 @@ export async function performActiveRecallWithReceipt(
         metadata: { registeredBy: 'active-recall' },
       }, completedAt);
       assetIdsByPath.set(item.path, asset.id);
+      selectedAssets.set(item.path, asset);
     } catch {
       // Observability must never make the retrieval path unavailable.
     }
   }
 
   const receiptCandidates = receiptCandidatesFromTrace(execution.trace.candidates, execution.items, assetIdsByPath);
-  const selections = receiptSelections(execution.items, execution.trace.candidates, assetIdsByPath);
+  const selections = receiptSelections(execution.items, execution.trace.candidates, assetIdsByPath, selectedAssets);
   const receiptId = context.receiptId ?? `retrieval-${completedAt.getTime().toString(36)}-${crypto.randomUUID().slice(0, 8)}`;
   let receipt: RetrievalReceipt | null = null;
   try {
@@ -307,14 +318,19 @@ function receiptSelections(
   items: RecallResult[],
   candidates: RecallCandidate[],
   assetIdsByPath: Map<string, string>,
+  selectedAssets: Map<string, ContextAsset>,
 ): RetrievalReceiptSelection[] {
   const candidatesByKey = new Map(candidates.map((candidate) => [recallResultKey(candidate.result), candidate]));
   return items.flatMap((item) => {
     const assetId = assetIdsByPath.get(item.path);
     if (!assetId) return [];
     const candidate = candidatesByKey.get(recallResultKey(item));
+    const asset = selectedAssets.get(item.path);
     return [{
       assetId,
+      contentHash: crypto.createHash('sha256').update(item.content).digest('hex'),
+      ...(item.sourceContentHash ? { sourceContentHash: item.sourceContentHash } : {}),
+      ...(asset && asset.contentHash === item.sourceContentHash ? { assetVersion: asset.version } : {}),
       path: item.path,
       score: item.score,
       ...(item.startLine ? { startLine: item.startLine } : {}),
@@ -419,6 +435,7 @@ function buildChunkCandidates(
     }];
   }
 
+  const sourceContentHash = crypto.createHash('sha256').update(content).digest('hex');
   const chunks = buildMarkdownRecallChunks(hit.path, content);
   if (chunks.length === 0) return [];
 
@@ -428,6 +445,7 @@ function buildChunkCandidates(
       return {
         result: {
           path: chunk.path,
+          sourceContentHash,
           content: chunk.content,
           score: hit.score + chunkScore,
           startLine: chunk.startLine,

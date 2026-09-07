@@ -33,6 +33,18 @@ export async function proxy(req: NextRequest) {
     return NextResponse.next({ request: { headers: newHeaders } });
   }
 
+  // Participant and reviewer pages contain no vault shell. Their exact API routes authenticate
+  // scoped invitations themselves, never the owner bearer or wildcard CORS.
+  if (/^\/(?:api\/)?study\/longitudinal\/cohort-[a-f0-9]{24}(?:\/session)?\/?$/.test(pathname) || /^\/study\/(?:participate|review)\/study-[a-f0-9]{24}\/?$/.test(pathname)
+    || /^\/api\/study\/(?:participate|review)\/study-[a-f0-9]{24}(?:\/session)?\/?$/.test(pathname)) {
+    const response = next();
+    response.headers.set('Cache-Control', 'no-store');
+    response.headers.set('Referrer-Policy', 'no-referrer');
+    response.headers.set('X-Frame-Options', 'DENY');
+    response.headers.set('X-Robots-Tag', 'noindex, nofollow');
+    return response;
+  }
+
   // --- API protection (AUTH_TOKEN) + CORS ---
   if (pathname.startsWith('/api/')) {
     // Handle preflight (OPTIONS) requests

@@ -110,6 +110,8 @@ export default function RightAskPanel({
 
   return (
     <aside
+      inert={!open}
+      aria-hidden={!open}
       className={`
         hidden md:flex fixed top-[var(--app-titlebar-h)] right-0 h-[calc(100vh-var(--app-titlebar-h))] z-40
         flex-col bg-background border-l ${depthClass}

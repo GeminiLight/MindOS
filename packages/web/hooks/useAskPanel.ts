@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useLayoutEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation';
 import { RIGHT_ASK_DEFAULT_WIDTH, RIGHT_ASK_MIN_WIDTH, RIGHT_ASK_MAX_WIDTH } from '@/components/RightAskPanel';
-import { useAskModal, type AcpAgentSelection, type AskAgentRuntimeSelection } from './useAskModal';
+import { useAskModal, ASK_HIDE_PANELS_EVENT, type AcpAgentSelection, type AskAgentRuntimeSelection } from './useAskModal';
 import {
   ASK_ADD_CONTEXT_EVENT,
   normalizeAskContextDetail,
@@ -160,20 +160,22 @@ export function useAskPanel(): AskPanelState {
         askModal.close();
         return;
       }
+      const context = normalizeAskContextDetail(askModal.context ?? undefined);
+      setAskContextRequest(context ? { id: ++contextRequestIdRef.current, ...context } : null);
       setAskInitialMessage(askModal.initialMessage);
       setAskOpenSource(askModal.source);
       setAskAcpAgent(askModal.acpAgent);
       setAskAgentRuntime(askModal.agentRuntime);
       setAskNewSession(askModal.newSession);
       setAskOpenRequestId(askModal.requestId);
-      if (askMode === 'popup') {
+      if (askMode === 'popup' || window.innerWidth < 768) {
         setDesktopAskPopupOpen(true);
       } else {
         setAskPanelOpen(true);
       }
       askModal.close();
     }
-  }, [askModal.open, askModal.initialMessage, askModal.source, askModal.acpAgent, askModal.agentRuntime, askModal.newSession, askModal.requestId, askModal.close, askMode, fullPageChat]);
+  }, [askModal.open, askModal.context, askModal.initialMessage, askModal.source, askModal.acpAgent, askModal.agentRuntime, askModal.newSession, askModal.requestId, askModal.close, askMode, fullPageChat]);
 
   const toggleAskPanel = useCallback(() => {
     if (fullPageChat) return;
@@ -211,6 +213,12 @@ export function useAskPanel(): AskPanelState {
       setAskMaximized(false);
     }
   }, [askMaximized]);
+
+  useEffect(() => {
+    const hide = () => { closeAskPanel(); setDesktopAskPopupOpen(false); };
+    window.addEventListener(ASK_HIDE_PANELS_EVENT, hide);
+    return () => window.removeEventListener(ASK_HIDE_PANELS_EVENT, hide);
+  }, [closeAskPanel]);
 
   const toggleAskMaximized = useCallback((restoreWidth?: number) => {
     setAskMaximized(prev => {

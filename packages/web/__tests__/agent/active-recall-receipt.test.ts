@@ -5,7 +5,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createHash } from 'node:crypto';
 import {
   listContextAssets,
+  startLearningCorrection,
+  updateLearningLoop,
   registerContextFileAsset,
+  reviewEchoPromotionCandidate,
   submitContextFeedback,
 } from '@geminilight/mindos/knowledge';
 import { listRetrievalReceipts, writeRetrievalReceipt } from '@geminilight/mindos/retrieval';
@@ -93,6 +96,21 @@ describe('active recall receipt integration', () => {
     expect(JSON.stringify(stored)).not.toContain('Use a review gate before durable memory promotion.');
   });
 
+  it('keeps an approved method identity and fingerprints exactly the selected excerpt', async () => {
+    const approved = reviewEchoPromotionCandidate(mindRoot, { decision: 'approve', candidate: {
+      id: 'method-correction', kind: 'playbook', title: 'Evidence method', content: 'Check the study design before causal claims.',
+      source: { sessions: [{ id: 'source-session', messageRefs: [{ messageIndex: 0, role: 'user', quote: 'The study shows correlation only.' }] }] },
+    } });
+    mockSearch.mockResolvedValue([{ path: approved.targetPath!, snippet: 'Check the study design', score: 7, occurrences: 1 }]);
+    const result = await performActiveRecallWithReceipt(mindRoot, 'Check the study design before causal claims', undefined, { chatSessionId: 'next-task' });
+    expect(result.receipt!.selections[0]).toMatchObject({ assetId: approved.assetId, assetVersion: 1,
+      contentHash: createHash('sha256').update(result.items[0].content).digest('hex') });
+    expect(listContextAssets(mindRoot)).toHaveLength(1);
+    writeFileSync(join(mindRoot, approved.targetPath!), '# Changed method\n\nAlways use causal claims.');
+    const changed = await performActiveRecallWithReceipt(mindRoot, 'Check the study design before causal claims');
+    expect(changed.receipt!.selections[0].assetId).not.toBe(approved.assetId);
+  });
+
   it('records timeout and short-query skip outcomes without breaking recall', async () => {
     mockSearch.mockRejectedValue(new Error('timeout'));
     const timeout = await performActiveRecallWithReceipt(mindRoot, 'find timeout case', { timeoutMs: 5 });
@@ -173,4 +191,21 @@ describe('active recall receipt integration', () => {
     expect(result.receipt?.strategy).toBe('hybrid-heading-rerank-feedback-v2');
     expect(createHash('sha256').update(content).digest('hex')).toBe(helpful.contentHash);
   });
+  it('honors a learning method pause and resume in actual recall eligibility', async () => {
+    let loop = startLearningCorrection(mindRoot, {
+      cardId: 'pause-recall', title: 'Check research evidence', content: 'Check the original study design.',
+      sessions: [{ id: 'source', messageRefs: [{ messageIndex: 0, role: 'user', quote: 'This is only correlational.' }] }],
+    }, { behavior: 'Check research evidence and study design', scope: 'Research claims', check: 'Name the study design' });
+    loop = updateLearningLoop(mindRoot, loop.id, { action: 'approve-agent', version: loop.version, attemptIndex: -1 });
+    const methodPath = loop.directMethod!.review!.targetPath!;
+    mockSearch.mockResolvedValue([{ path: methodPath, snippet: 'Check research evidence', score: 6.2, occurrences: 1 }]);
+    const recall = () => performActiveRecallWithReceipt(mindRoot, 'Check research evidence and study design', { maxTokens: 1000, maxFiles: 2 }, { chatSessionId: 'method-task' });
+    expect((await recall()).receipt.selections.map((item) => item.assetId)).toContain(loop.directMethod!.review!.assetId);
+    loop = updateLearningLoop(mindRoot, loop.id, { action: 'pause-agent', version: loop.version, attemptIndex: -1, reason: 'Inspect a counterexample' });
+    expect((await recall()).receipt.selections).toEqual([]);
+    expect(listContextAssets(mindRoot).find((asset) => asset.id === loop.directMethod!.review!.assetId)?.status).toBe('deprecated');
+    loop = updateLearningLoop(mindRoot, loop.id, { action: 'resume-agent', version: loop.version, attemptIndex: -1, reason: 'Scope checked' });
+    expect((await recall()).receipt.selections.map((item) => item.assetId)).toContain(loop.directMethod!.review!.assetId);
+  });
+
 });

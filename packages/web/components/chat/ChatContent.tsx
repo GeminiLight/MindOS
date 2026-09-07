@@ -1687,6 +1687,7 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
       <div className="flex-1 min-h-0 flex flex-col">
         {!isHome && (
           <MessageList
+            sessionId={session.activeSessionId ?? undefined}
             messages={session.messages}
             isLoading={isLoading}
             loadingPhase={loadingPhase}
@@ -1703,6 +1704,7 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
         )}
         {isHome && (session.messages.length > 0 || maximized) && (
           <MessageList
+            sessionId={session.activeSessionId ?? undefined}
             messages={session.messages}
             isLoading={isLoading}
             loadingPhase={loadingPhase}

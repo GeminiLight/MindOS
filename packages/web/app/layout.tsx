@@ -46,6 +46,7 @@ export default async function RootLayout({
   let mindRootId = 'default';
   const headerStore = await headers();
   const pathname = headerStore.get('x-pathname');
+  const studyPage = /^\/study\/(?:participate|review|longitudinal)\//.test(pathname ?? '');
   if (shouldLoadShellData(pathname)) {
     try {
       fileTree = getFileTree();
@@ -110,10 +111,7 @@ export default async function RootLayout({
               </ShellLayout>
             </ErrorBoundary>
           </TooltipProvider>
-        <Toaster />
-        <RegisterSW />
-        <UpdateOverlay />
-        <UpdateToast />
+        {!studyPage ? <><Toaster /><RegisterSW /><UpdateOverlay /><UpdateToast /></> : null}
       </body>
     </html>
   );

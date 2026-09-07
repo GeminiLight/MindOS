@@ -1,6 +1,7 @@
 import type { Widen } from './_core';
 import type { en } from './messages-en';
 import { commonZh } from './modules/common-zh';
+import { echoLearningZh } from './modules/echo-learning-zh';
 import { navigationZh } from './modules/navigation-zh';
 import { aiChatZh } from './modules/ai-chat-zh';
 import { knowledgeZh } from './modules/knowledge-zh';
@@ -21,6 +22,7 @@ import { exploreZh } from './generated/explore-i18n-zh.generated';
  * Server code (route handlers, tests) may import it freely via ./index.
  */
 export const zh: Widen<typeof en> = {
+  echoLearning: echoLearningZh,
   ...commonZh,
   ...navigationZh,
   ...aiChatZh,

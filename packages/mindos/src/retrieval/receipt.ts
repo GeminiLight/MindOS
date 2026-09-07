@@ -32,6 +32,11 @@ export type RetrievalReceiptCandidate = {
 
 export type RetrievalReceiptSelection = {
   assetId: string;
+  /** Fingerprint of the exact selected excerpt; no body content is stored. */
+  contentHash?: string;
+  /** Hash of the source file read during chunking, when available. */
+  sourceContentHash?: string;
+  assetVersion?: number;
   path: string;
   score: number;
   startLine?: number;
@@ -281,6 +286,9 @@ function normalizeSelection(value: unknown): RetrievalReceiptSelection | null {
   return {
     assetId,
     path: filePath,
+    ...(typeof value.contentHash === 'string' && SHA256.test(value.contentHash) ? { contentHash: value.contentHash } : {}),
+    ...(typeof value.sourceContentHash === 'string' && SHA256.test(value.sourceContentHash) ? { sourceContentHash: value.sourceContentHash } : {}),
+    ...(Number.isSafeInteger(value.assetVersion) && Number(value.assetVersion) > 0 ? { assetVersion: Number(value.assetVersion) } : {}),
     score: normalizeScore(value.score),
     ...(startLine ? { startLine } : {}),
     ...(endLine ? { endLine } : {}),

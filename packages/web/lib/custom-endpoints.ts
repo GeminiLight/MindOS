@@ -14,6 +14,8 @@ export interface Provider {
   apiKey: string;
   model: string;
   baseUrl: string;
+  temperature?: number;
+  studyMaxOutputTokens?: number;
   contextWindow?: number;
   contextTokens?: number;
   maxTokens?: number;
@@ -76,6 +78,8 @@ function normalizeProvider(e: unknown): Provider | null {
     apiKey: obj.apiKey as string,
     model: obj.model as string,
     baseUrl: obj.baseUrl as string,
+    ...(typeof obj.temperature === "number" && Number.isFinite(obj.temperature) && obj.temperature >= 0 && obj.temperature <= 2 ? { temperature: obj.temperature } : {}),
+    ...(typeof obj.studyMaxOutputTokens === "number" && Number.isInteger(obj.studyMaxOutputTokens) && obj.studyMaxOutputTokens >= 1024 && obj.studyMaxOutputTokens <= 4096 ? { studyMaxOutputTokens: obj.studyMaxOutputTokens } : {}),
     ...caps,
   };
 }

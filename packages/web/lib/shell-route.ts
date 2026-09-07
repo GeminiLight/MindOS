@@ -1,4 +1,4 @@
-const SHELL_DATA_FREE_ROUTES = ['/login', '/setup'];
+const SHELL_DATA_FREE_ROUTES = ['/login', '/setup', '/study/participate', '/study/review', '/study/longitudinal'];
 
 export function normalizeShellPathname(pathname: string | null | undefined): string {
   const raw = pathname?.trim();

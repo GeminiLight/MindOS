@@ -281,6 +281,12 @@ cd packages/mobile && pnpm exec expo-modules-autolinking react-native-config --j
 
 输出必须是 `import expo.modules.ExpoModulesPackage;`（不是 `expo.core.`）。同一个检查已经写成回归测试 `packages/mobile/__tests__/android-autolinking.test.ts`，跑 `pnpm --filter @mindos/mobile test` 即可，不需要花 ~28 分钟等云构建告诉你答案。
 
+### 构建成功但命令以 `Error: build command failed.` 结束
+
+`eas build` 出包后会问 `Install and run the Android build on an emulator?`。回答 yes 而本机没有 Android Studio 时会报 `spawn adb ENOENT` / `adb executable doesn't seem to work`，CLI 以非零退出，看着像构建失败。
+
+判断方法：往上找 `🤖 Open this link on your Android devices` 和二维码。它们出现了就说明 APK 已经构建并上传成功，报错只发生在之后的本地安装步骤。真机装包直接用那个链接，不需要重跑构建。
+
 ### 构建排队很久
 
 EAS 免费套餐有并发限制。可以：

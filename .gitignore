@@ -42,6 +42,8 @@ packages/web/.mindos-settings.json
 my-mind/
 my-mind-backup/
 review/
+!packages/web/app/study/review/
+!packages/web/app/api/study/review/
 experience/
 activities/
 template/template-generation-skill.md

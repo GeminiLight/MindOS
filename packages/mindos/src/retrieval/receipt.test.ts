@@ -35,6 +35,7 @@ describe('retrieval receipts', () => {
       ],
       selections: [{
         assetId: 'asset-architecture',
+        contentHash: 'a'.repeat(64), sourceContentHash: 'b'.repeat(64), assetVersion: 2,
         path: 'Projects/MindOS/architecture.md',
         score: 8.4,
         startLine: 12,
@@ -52,7 +53,7 @@ describe('retrieval receipts', () => {
       id: 'receipt-selected-1',
       outcome: 'selected',
       queryHash: expect.stringMatching(/^[a-f0-9]{64}$/),
-      selections: [expect.objectContaining({ assetId: 'asset-architecture', startLine: 12, endLine: 31 })],
+      selections: [expect.objectContaining({ assetId: 'asset-architecture', contentHash: 'a'.repeat(64), sourceContentHash: 'b'.repeat(64), assetVersion: 2, startLine: 12, endLine: 31 })],
       durationMs: 42,
     });
     expect(JSON.stringify(receipt)).not.toContain('sk-secret-value');

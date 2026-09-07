@@ -120,7 +120,7 @@ describe('MessageList runtime status rendering', () => {
     }
   });
 
-  it('renders message timestamps with actions in metadata rows outside the bubble flow', () => {
+  it('keeps mobile actions in the message flow and floats the dock on desktop', () => {
     const userTimestamp = Date.parse('2026-06-30T15:41:00.000Z');
     const assistantTimestamp = Date.parse('2026-06-30T15:42:00.000Z');
     const expectedUserTime = new Date(userTimestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
@@ -164,8 +164,9 @@ describe('MessageList runtime status rendering', () => {
     expect(firstCardIndex).toBeGreaterThanOrEqual(0);
     expect(firstTimeIndex).toBeGreaterThan(firstCardIndex);
     expect(firstActionsIndex).toBeGreaterThan(firstTimeIndex);
-    expect(html).toContain('absolute top-full');
-    expect(html).toContain('flex pt-1 opacity-0');
+    expect(html).toContain('md:absolute md:top-full');
+    expect(html).toContain('relative z-20 flex pt-1 opacity-100');
+    expect(html).toContain('md:absolute md:top-full md:pointer-events-none md:opacity-0');
     expect(html).not.toContain('top-full z-20 mt-1');
     expect(html).toContain('opacity-0');
     expect(html).toContain('md:group-hover/message:opacity-100');

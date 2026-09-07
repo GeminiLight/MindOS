@@ -426,7 +426,7 @@ export async function runAgentTurnRequestBody(
         ...(currentFile ? { currentFile } : {}),
         attachedFiles: Array.isArray(attachedFiles) ? [...attachedFiles] : [],
         uploadedFiles: Array.isArray(uploadedFiles) ? structuredClone(uploadedFiles) : [],
-        receiptIds: receiptId ? [receiptId] : [],
+        receiptIds: [...new Set([...(receiptId ? [receiptId] : []), ...(Array.isArray(retrievalMetadata.retrievalReceiptIds) ? retrievalMetadata.retrievalReceiptIds.filter((value): value is string => typeof value === 'string') : [])])],
         assetIds,
       },
       options: {
@@ -522,6 +522,7 @@ export async function runAgentTurnRequestBody(
       attachedFiles,
       sessionSpaces: sessionContext.resolvedSelection.spaces,
       activeRecall: agentConfig.activeRecall,
+      fileContext: promptFileContext,
     });
     const externalPromptBase = await buildMindosContextPrompt({
       prompt: resolvedAgentMode.prompt,
@@ -691,6 +692,7 @@ export async function runAgentTurnRequestBody(
     attachedFiles,
     sessionSpaces: sessionContext.resolvedSelection.spaces,
     activeRecall: agentConfig.activeRecall,
+    fileContext: promptFileContext,
   });
   const systemPromptBase = buildMindosSystemPrompt({
     mindRoot,

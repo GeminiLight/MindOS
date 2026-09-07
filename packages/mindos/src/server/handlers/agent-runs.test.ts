@@ -150,6 +150,15 @@ const capsule: AgentRunCapsuleProjection = {
 };
 
 describe('Agent Run Observatory projection', () => {
+  it('links separately prepared method context alongside ordinary retrieval without cross-run leakage', () => {
+    const result = buildAgentRunObservatory({
+      runs: [{ ...rootRun, metadata: { ...rootRun.metadata, retrievalReceiptIds: ['explicit-method'] } }],
+      events: [], artifacts: [], receipts: [receipt, { ...receipt, id: 'explicit-method' }, { ...receipt, id: 'unrelated' }],
+      contextAssets: [], automations: [], approvals: [],
+    });
+    expect(result.traces[0].receipts.map(item => item.id)).toEqual(['receipt-1', 'explicit-method']);
+  });
+
   it('groups an agent tree and links only visible events, artifacts, receipts, context, and safe session metadata', () => {
     const result = buildAgentRunObservatory({
       runs: [childRun, rootRun],

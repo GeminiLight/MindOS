@@ -1,4 +1,5 @@
 import { commonEn } from './modules/common-en';
+import { echoLearningEn } from './modules/echo-learning-en';
 import { navigationEn } from './modules/navigation-en';
 import { aiChatEn } from './modules/ai-chat-en';
 import { knowledgeEn } from './modules/knowledge-en';
@@ -21,6 +22,7 @@ import { exploreEn } from './generated/explore-i18n-en.generated';
  * guarded by __tests__/lib/first-load-bundle-split.test.ts.
  */
 export const en = {
+  echoLearning: echoLearningEn,
   ...commonEn,
   ...navigationEn,
   ...aiChatEn,

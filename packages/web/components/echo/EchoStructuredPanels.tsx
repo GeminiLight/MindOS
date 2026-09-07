@@ -8,6 +8,7 @@ import type { Locale } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import EchoPromotionReviewActions from './EchoPromotionReviewActions';
+import EchoLearningStartButton from './learning/EchoLearningStartButton';
 import {
   buildEchoCardChatPrompt,
   EchoCardActionBar,
@@ -145,6 +146,7 @@ export function InsightPanel({
     <section
       className="min-w-0"
       aria-label={p.insightSurfaceTitle}
+      id="echo-insight"
       data-testid="echo-insight"
     >
       <header>
@@ -285,6 +287,7 @@ export function InsightPanel({
                 <EchoCardActions
                   p={p}
                   title={candidate.title}
+                  extraAction={<EchoLearningStartButton cardId={candidate.id} enabled={!isEditing && candidate.source.sessions.some((session) => Boolean(session.messageRefs?.length))} />}
                   isEditing={isEditing}
                   onEdit={() => toggleEditing(candidate.id)}
                   onDelete={() => void deleteCard(candidate.id)}
@@ -692,6 +695,7 @@ function EchoCardActions({
   onDelete,
   onChat,
   readOnly = false,
+  extraAction,
 }: {
   p: EchoCopy;
   title: string;
@@ -700,6 +704,7 @@ function EchoCardActions({
   onDelete: () => void;
   onChat: () => void;
   readOnly?: boolean;
+  extraAction?: ReactNode;
 }) {
   return (
     <EchoCardActionBar
@@ -723,6 +728,7 @@ function EchoCardActions({
             cancelLabel={p.echoCardCancelDeleteLabel}
             onDelete={onDelete}
           />
+          {extraAction}
         </>
       )}
       right={(

@@ -156,6 +156,32 @@ export function updateContextAssetStatus(
   });
 }
 
+/** Commit status and a bounded recovery marker in one registry rename.
+ * The owning domain keeps the complete audit history; a marker survives a failed
+ * journal write without storing a growing history in every registry record. */
+export function transitionContextAssetStatus(mindRoot: string, input: {
+  assetId: string; expectedStatus: ContextAssetStatus; status: ContextAssetStatus;
+  sourceRef: string; path: string; contentHash: string; marker: Record<string, unknown>;
+}, now = new Date()): ContextAsset {
+  return withRegistryLock(mindRoot, () => {
+    const registry = readContextAssetRegistryUnlocked(mindRoot);
+    const asset = registry.assets.find((item) => item.id === input.assetId);
+    if (!asset || asset.status !== input.expectedStatus || asset.source.kind !== 'echo-card'
+      || asset.source.ref !== input.sourceRef || asset.path !== input.path || asset.contentHash !== input.contentHash) {
+      throw new Error('Context asset changed before its status could be updated.');
+    }
+    const metadata = { ...asset.metadata, learningTransition: input.marker };
+    // Never silently truncate the recovery marker or alter the reason.
+    if (JSON.stringify(metadata).length > MAX_METADATA_CHARS) throw new Error('Context asset metadata is full.');
+    asset.status = normalizeStatus(input.status);
+    asset.metadata = metadata;
+    asset.updatedAt = now.toISOString();
+    registry.updatedAt = asset.updatedAt;
+    writeRegistryUnlocked(mindRoot, registry);
+    return asset;
+  });
+}
+
 export function removeContextAsset(mindRoot: string, assetId: string, now = new Date()): boolean {
   const id = normalizeId(assetId);
   return withRegistryLock(mindRoot, () => {

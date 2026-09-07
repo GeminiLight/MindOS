@@ -322,6 +322,17 @@ afterEach(() => {
 });
 
 describe('ChatContent initialSessionId', () => {
+  it('opens a handoff draft with the requested Agent in a fresh session without sending it', async () => {
+    const target = { id: 'claude', kind: 'claude' as const, name: 'Claude Code' };
+    const { host } = await renderChatContent({
+      variant: 'panel', initialNewSession: true, initialAgentRuntime: target,
+      initialMessage: 'Check this handoff case.', openRequestId: 1,
+    });
+    expect(mockResetSession).toHaveBeenCalledWith(target);
+    expect(mockInitSessions).not.toHaveBeenCalled();
+    expect(host.querySelector('textarea')?.value).toBe('Check this handoff case.');
+    expect(mockSubmit).not.toHaveBeenCalled();
+  });
   it('skips initSessions and refreshes metadata when initialSessionId is provided', async () => {
     await renderChatContent({ initialSessionId: 's1', maximized: true });
 
