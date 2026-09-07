@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "MindOS",
-    "slug": "mindos-mobile",
+    "slug": "human-ai-collaborative-mind-system",
     "version": "0.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -11,12 +11,15 @@
       "resizeMode": "contain",
       "backgroundColor": "#1a1917"
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.geminilight.mindos",
       "infoPlist": {
-        "NSCameraUsageDescription": "MindOS needs camera access to scan QR codes for connecting to your MindOS server."
+        "NSCameraUsageDescription": "MindOS needs camera access to scan QR codes for connecting to your MindOS server.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -25,7 +28,11 @@
         "backgroundColor": "#1a1917"
       },
       "package": "com.geminilight.mindos",
-      "permissions": ["CAMERA"]
+      "permissions": [
+        "CAMERA",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png",

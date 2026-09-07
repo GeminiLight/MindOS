@@ -7,11 +7,16 @@
 | 项 | 值 |
 |----|-----|
 | 框架 | Expo SDK 52 + React Native 0.76.9 |
-| 源码目录 | `mobile/` |
+| 源码目录 | `packages/mobile/` |
 | iOS Bundle ID | `com.geminilight.mindos` |
 | Android Package | `com.geminilight.mindos` |
 | EAS Project ID | `b24f8ff1-a88d-4501-884d-e15fe60855b0` |
+| EAS Slug | `human-ai-collaborative-mind-system` |
 | GitHub Workflow | `.github/workflows/build-mobile.yml` |
+
+> `app.json` 的 `expo.slug` 必须等于 `expo.extra.eas.projectId` 在 Expo 服务端对应项目的 slug，否则任何 `eas` 命令都会以
+> `Slug for project identified by "extra.eas.projectId" (...) does not match the "slug" field (...)` 直接失败。
+> Expo 项目的 slug 创建后不可修改，所以只能改 `app.json` 对齐，或者新建项目换 `projectId`。
 
 ## 前置条件
 
@@ -256,6 +261,25 @@ npm run build:ios:preview  # 重新构建以包含新设备
 可能原因：
 - 手机未开启"允许安装未知来源应用"
 - APK 架构不匹配（罕见）
+
+### Android 构建在 `:app:compileReleaseJavaWithJavac` 失败：`cannot find symbol import expo.core.ExpoModulesPackage;`
+
+症状：EAS Android 构建 Metro 打包和 native 编译全部通过，最后 gradle 在 `:app:compileReleaseJavaWithJavac` 报
+
+```
+PackageList.java:16: error: cannot find symbol
+import expo.core.ExpoModulesPackage;
+```
+
+根因：pnpm 的软链接布局让 `expo/react-native.config.js` 加载失败，autolinking 静默 fallback 到用 gradle `namespace` 猜 import，猜出了不存在的 `expo.core`。完整分析见 [known-pitfalls/03](../known-pitfalls/03-build-desktop-sync-deps.md#pnpm-symlink-布局让-android-autolinking-生成错误的-import2026-09-08)。
+
+修复已在仓库里：`packages/mobile/react-native.config.js` 显式声明了正确 import。如果这个报错重新出现（通常是升级 Expo SDK 之后），先本地确认生成的配置：
+
+```bash
+cd packages/mobile && pnpm exec expo-modules-autolinking react-native-config --json --platform android | grep -o 'import expo\.[A-Za-z.]*ExpoModulesPackage;'
+```
+
+输出必须是 `import expo.modules.ExpoModulesPackage;`（不是 `expo.core.`）。同一个检查已经写成回归测试 `packages/mobile/__tests__/android-autolinking.test.ts`，跑 `pnpm --filter @mindos/mobile test` 即可，不需要花 ~28 分钟等云构建告诉你答案。
 
 ### 构建排队很久
 
