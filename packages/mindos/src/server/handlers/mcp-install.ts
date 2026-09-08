@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileS
 import { homedir } from 'node:os';
 import { dirname, resolve } from 'node:path';
 import { errorResponse, json, type MindosServerResponse } from '../response.js';
+import type { MindosServerEventEmitter } from '../events/bus.js';
 
 export type MindosMcpAgentDef = {
   name: string;
@@ -81,6 +82,8 @@ export type MindosMcpInstallServices = {
   detectAgentPresence?: (agent: string) => boolean;
   readSettings?: () => { mcpPort?: number; disabledSkills?: string[] };
   fetcher?: typeof fetch;
+  /** Receives `mcp.changed` when at least one agent config was written. */
+  events?: MindosServerEventEmitter;
 };
 
 export type MindosMcpServerCopyServices = MindosMcpInstallServices;
@@ -88,7 +91,14 @@ export type MindosMcpServerCopyServices = MindosMcpInstallServices;
 export type MindosMcpUninstallServices = {
   agents: Record<string, MindosMcpAgentDef>;
   homeDir?: string;
+  /** Receives `mcp.changed` when at least one agent config was written. */
+  events?: MindosServerEventEmitter;
 };
+
+/** Emit `mcp.changed` once when any per-agent result succeeded. */
+function notifyMcpChanged(services: { events?: MindosServerEventEmitter }, results: MindosMcpInstallResult[]): void {
+  if (results.some((result) => result.status === 'ok')) services.events?.emit({ type: 'mcp.changed' });
+}
 
 function parseJsonc(text: string): Record<string, unknown> {
   let stripped = text.replace(/\\"|"(?:\\"|[^"])*"|(\/\/.*$)/gm, (match, comment) => comment ? '' : match);
@@ -888,6 +898,7 @@ export async function handleMcpInstallPost(
       }
     }
 
+    notifyMcpChanged(services, results);
     return json({ results });
   } catch (error) {
     return errorResponse(error);
@@ -958,6 +969,7 @@ export async function handleMcpServerCopyPost(
       }
     }
 
+    notifyMcpChanged(services, results);
     return json({ results });
   } catch (error) {
     return errorResponse(error);
@@ -1034,6 +1046,7 @@ export function handleMcpUninstallPost(
       }
     }
 
+    notifyMcpChanged(services, results);
     return json({ results });
   } catch (error) {
     return errorResponse(error);

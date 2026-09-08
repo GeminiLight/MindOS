@@ -57,6 +57,7 @@ import {
   notifySearchIndexFileChanged,
   notifySearchIndexPathRemoved,
 } from './core/search-index-bridge';
+import { notifyTreeVersionChanged } from './server-events-bridge';
 import {
   DEFAULT_IGNORED_DIRS,
   MINDOS_IGNORE_FILE,
@@ -103,6 +104,15 @@ const WATCHER_MISS_SWEEP_MS = 60_000;
 
 let _treeVersion = 0;
 let _contentVersion = 0;
+
+/**
+ * Every tree-shape change goes through here so the `/api/events` stream can
+ * push the new version instead of clients polling `/api/tree-version`.
+ */
+function bumpTreeVersion(): void {
+  _treeVersion++;
+  notifyTreeVersionChanged(_treeVersion);
+}
 
 // Core-search invalidation goes through `core/search-index-bridge` — a
 // dependency-free module — so this file (imported by app/layout for the
@@ -175,7 +185,7 @@ function refreshExpiredCache(): FileTreeCache {
   if (_cache) {
     const shapeChanged = _cache.shapeSignature !== next.shapeSignature;
     const contentChanged = _cache.fileSignature !== next.fileSignature;
-    if (shapeChanged) _treeVersion++;
+    if (shapeChanged) bumpTreeVersion();
     if (contentChanged) {
       _contentVersion++;
       _searchIndex = null;
@@ -200,7 +210,7 @@ function clearTreeCache(): void {
 }
 
 function markTreeAndContentChanged(): void {
-  _treeVersion++;
+  bumpTreeVersion();
   _contentVersion++;
   _searchIndex = null;
 }
@@ -476,7 +486,7 @@ export function flushWatcherChanges(): void {
   if (!treeChanged && !contentChanged) return;
 
   clearTreeCache();
-  if (treeChanged) _treeVersion++;
+  if (treeChanged) bumpTreeVersion();
   _contentVersion++;
   _searchIndex = null;
 }

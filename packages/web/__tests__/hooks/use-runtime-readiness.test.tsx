@@ -2,7 +2,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import React, { act, useEffect } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { useRuntimeReadiness } from '@/hooks/useRuntimeReadiness';
+import { useRuntimeReadiness, RUNTIME_READINESS_FALLBACK_POLL_MS } from '@/hooks/useRuntimeReadiness';
+import { resetServerEventsForTests } from '@/lib/server-events';
+import { MockEventSource } from '../fixtures/mock-event-source';
 import type {
   AgentPermissionMode,
   AgentRuntimeReadinessProjection,
@@ -123,5 +125,75 @@ describe('useRuntimeReadiness', () => {
     const node = host.querySelector('div') as HTMLDivElement;
     expect(node.dataset.loading).toBe('false');
     expect(node.dataset.runtimes).toBe('');
+  });
+
+  describe('server event refreshes', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+      MockEventSource.reset();
+      resetServerEventsForTests();
+      Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'visible' });
+    });
+
+    afterEach(() => {
+      resetServerEventsForTests();
+      vi.useRealTimers();
+    });
+
+    function readinessResponse() {
+      return new Response(JSON.stringify(payload('ask', [projection('codex-app-server', 'codex')])), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    it('refreshes when the server reports mcp.changed', async () => {
+      vi.stubGlobal('EventSource', MockEventSource);
+      const fetchMock = vi.fn(async () => readinessResponse());
+      vi.stubGlobal('fetch', fetchMock);
+
+      await act(async () => {
+        root.render(<Probe visible permissionMode="ask" onState={vi.fn()} />);
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      const source = MockEventSource.last();
+      source.ready({ lastEventId: 1 });
+
+      await act(async () => {
+        source.emit('mcp.changed', { type: 'mcp.changed' }, 2);
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+
+      // Connected: no periodic refresh.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(RUNTIME_READINESS_FALLBACK_POLL_MS * 2);
+      });
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it('polls every 60s only while the stream is unsupported', async () => {
+      vi.stubGlobal('EventSource', undefined);
+      delete (globalThis as { EventSource?: unknown }).EventSource;
+      const fetchMock = vi.fn(async () => readinessResponse());
+      vi.stubGlobal('fetch', fetchMock);
+
+      await act(async () => {
+        root.render(<Probe visible permissionMode="ask" onState={vi.fn()} />);
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(RUNTIME_READINESS_FALLBACK_POLL_MS).toBe(60_000);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(RUNTIME_READINESS_FALLBACK_POLL_MS - 1);
+      });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1);
+      });
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
   });
 });

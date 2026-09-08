@@ -4,6 +4,7 @@ import { createServer } from 'node:net';
 import { resolve } from 'node:path';
 import { resolveMcpBindHost } from '../../protocols/mcp-server/http-security.js';
 import { errorResponse, json, type MindosServerResponse } from '../response.js';
+import type { MindosServerEventEmitter } from '../events/bus.js';
 
 export type MindosMcpRestartSettings = {
   mcpPort?: number;
@@ -24,6 +25,8 @@ export type MindosMcpRestartServices = {
     stdio: 'ignore';
     env: NodeJS.ProcessEnv;
   }): { pid?: number; unref(): void };
+  /** Receives `mcp.changed` once the restart was issued. */
+  events?: MindosServerEventEmitter;
 };
 
 export type MindosMcpRestartPayload =
@@ -52,6 +55,7 @@ export async function handleMcpRestartPost(
     kill(mcpPort);
 
     if (managed) {
+      services.events?.emit({ type: 'mcp.changed' });
       return json({ ok: true, port: mcpPort, note: 'ProcessManager will respawn' });
     }
 
@@ -86,6 +90,7 @@ export async function handleMcpRestartPost(
     });
     child.unref();
 
+    services.events?.emit({ type: 'mcp.changed' });
     return json({ ok: true, pid: child.pid, port: mcpPort });
   } catch (error) {
     return errorResponse(error);

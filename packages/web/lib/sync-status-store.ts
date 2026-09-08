@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 import { apiFetch } from '@/lib/api';
+import { subscribeServerEvents } from '@/lib/server-events';
 import type { SyncStatus } from '@/components/settings/types';
 import { formatSyncError, hasUnknownUnpushedCount, SYNC_ACTION_TIMEOUT_MS } from '@/lib/sync-ui';
 
@@ -12,12 +13,14 @@ type SyncStatusSnapshot = {
   stale: boolean;
 };
 
-const SYNC_STATUS_POLL_INTERVAL = 30_000;
+/** Safety poll; `/api/events` pushes `sync.changed` for the real-time path. */
+export const SYNC_STATUS_POLL_INTERVAL_MS = 5 * 60_000;
 
 let syncStatusSnapshot: SyncStatusSnapshot = { status: null, loaded: false, error: null, stale: false };
 let syncStatusInFlight: Promise<void> | null = null;
 let syncStatusInFlightToken: symbol | null = null;
 let syncStatusInterval: ReturnType<typeof setInterval> | undefined;
+let syncStatusEventsUnsubscribe: (() => void) | null = null;
 let syncStatusSubscribers = 0;
 const syncStatusListeners = new Set<() => void>();
 const syncActionListeners = new Set<() => void>();
@@ -154,7 +157,26 @@ function startSyncStatusPolling() {
   void fetchSharedSyncStatus();
   syncStatusInterval = setInterval(() => {
     if (document.visibilityState === 'visible') void fetchSharedSyncStatus();
-  }, SYNC_STATUS_POLL_INTERVAL);
+  }, SYNC_STATUS_POLL_INTERVAL_MS);
+}
+
+function startSyncStatusEvents() {
+  if (syncStatusEventsUnsubscribe) return;
+  const refresh = () => void fetchSharedSyncStatus({ force: true });
+  const unsubscribers = [
+    subscribeServerEvents('sync.changed', refresh),
+    subscribeServerEvents('ready', (event) => {
+      if (event.resync) refresh();
+    }),
+  ];
+  syncStatusEventsUnsubscribe = () => {
+    for (const unsubscribe of unsubscribers) unsubscribe();
+  };
+}
+
+function stopSyncStatusEvents() {
+  syncStatusEventsUnsubscribe?.();
+  syncStatusEventsUnsubscribe = null;
 }
 
 function stopSyncStatusPolling() {
@@ -177,6 +199,7 @@ function subscribeSyncStatus(listener: () => void) {
   syncStatusSubscribers += 1;
   if (syncStatusSubscribers === 1) {
     startSyncStatusPolling();
+    startSyncStatusEvents();
     document.addEventListener('visibilitychange', handleSyncVisibilityChange);
   }
 
@@ -185,6 +208,7 @@ function subscribeSyncStatus(listener: () => void) {
     syncStatusSubscribers = Math.max(0, syncStatusSubscribers - 1);
     if (syncStatusSubscribers === 0) {
       stopSyncStatusPolling();
+      stopSyncStatusEvents();
       document.removeEventListener('visibilitychange', handleSyncVisibilityChange);
     }
   };
@@ -268,6 +292,7 @@ export function useSyncAction(refreshFn: (opts?: { throwOnError?: boolean }) => 
 
 export function resetSyncStatusStoreForTests() {
   stopSyncStatusPolling();
+  stopSyncStatusEvents();
   syncStatusSnapshot = { status: null, loaded: false, error: null, stale: false };
   syncStatusInFlight = null;
   syncStatusInFlightToken = null;

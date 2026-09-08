@@ -2,6 +2,7 @@ import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, rmSync, st
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { resolveExistingSafe } from '../../foundation/security/index.js';
 import { json, type MindosServerResponse } from '../response.js';
+import type { MindosServerEventEmitter } from '../events/bus.js';
 import {
   buildSkillMatrix,
   disableNativeSkill,
@@ -85,6 +86,8 @@ export type SkillsPostHandlerServices = {
   writeSettings(settings: MindosSkillsSettings): void;
   /** Downstream agents eligible for skill linking (present, skill-capable). Required for link/unlink. */
   listLinkAgents?(): MindosSkillLinkAgent[];
+  /** Receives `skills.changed` after a successful mutation so connected clients refresh. */
+  events?: MindosServerEventEmitter;
 };
 
 export type SkillsPayload = {
@@ -109,11 +112,24 @@ export function collectSkillInfos(skillRoots: MindosSkillRoot[], disabled: Set<s
   return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
+const READ_ONLY_SKILL_ACTIONS = new Set<string>(['read', 'read-native']);
+
 export function handleSkillsPost(
   body: unknown,
   services: SkillsPostHandlerServices,
 ): MindosServerResponse<{ ok: true } | { content: string; description?: string } | { error: string }> {
   const payload = normalizeSkillsPostPayload(body);
+  const response = dispatchSkillsPost(payload, services);
+  if (response.status < 300 && payload.action && !READ_ONLY_SKILL_ACTIONS.has(payload.action)) {
+    services.events?.emit({ type: 'skills.changed' });
+  }
+  return response;
+}
+
+function dispatchSkillsPost(
+  payload: ReturnType<typeof normalizeSkillsPostPayload>,
+  services: SkillsPostHandlerServices,
+): MindosServerResponse<{ ok: true } | { content: string; description?: string } | { error: string }> {
   const { action, name } = payload;
   const settings = services.readSettings();
 

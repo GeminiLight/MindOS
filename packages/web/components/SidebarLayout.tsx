@@ -6,7 +6,6 @@ import {
   useCallback,
   useRef,
   useMemo,
-  startTransition,
   type ComponentType,
 } from 'react';
 import { flushSync } from 'react-dom';
@@ -33,8 +32,7 @@ import { FileNode } from '@/lib/types';
 import type { MindSystemSlot } from '@/lib/mind-system';
 import { useLocale } from '@/lib/stores/locale-store';
 import { telemetry } from '@/lib/telemetry';
-import { notifyFilesChanged } from '@/lib/files-changed';
-import { refreshPreservingDocumentScroll } from '@/lib/scroll-preservation';
+import { useTreeVersionSync } from '@/hooks/useTreeVersionSync';
 import dynamic from 'next/dynamic';
 
 const SearchModal = dynamic(() => import('./SearchModal'), { ssr: false });
@@ -704,87 +702,9 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
 
   const closeAgentDetailPanel = useCallback(() => setAgentDetailKey(null), []);
 
-  // Refresh file tree when server-side tree version changes.
-  // Polls a lightweight version counter every 5s — only calls router.refresh()
-  // (which rebuilds the full tree) when the version actually changes.
-  // A 2-second cooldown prevents rapid-fire refreshes during bulk file operations.
-  useEffect(() => {
-    let lastVersion = -1;
-    let stopped = false;
-    let lastRefreshTime = 0;
-    let pendingRefreshTimer: ReturnType<typeof setTimeout> | null = null;
-
-    const doRefresh = (version: number, previousVersion: number) => {
-      lastRefreshTime = Date.now();
-      const stopRefresh = telemetry.startTimer('tree.refresh.trigger');
-      startTransition(() => {
-        refreshPreservingDocumentScroll(() => router.refresh());
-      });
-      stopRefresh({ previousVersion, version, reason: 'tree_version_changed' });
-      notifyFilesChanged();
-    };
-
-    const REFRESH_COOLDOWN_MS = 2000;
-    // Idle-polling budget contract (idle-polling-budget.test): own writes
-    // arrive via mindos:files-changed events, so the fallback poll can be slow.
-    const POLL_INTERVAL_MS = 15000;
-
-    const checkVersion = async () => {
-      if (stopped || document.visibilityState === 'hidden') return;
-      const stop = telemetry.startTimer('tree.version.poll');
-      try {
-        const res = await fetch('/api/tree-version');
-        if (!res.ok) {
-          stop({ ok: false, changed: false });
-          return;
-        }
-        const { v } = (await res.json()) as { v: number };
-        if (lastVersion === -1) {
-          lastVersion = v;
-          stop({ ok: true, changed: false, version: v, initial: true });
-          return;
-        }
-        if (v !== lastVersion) {
-          const previousVersion = lastVersion;
-          lastVersion = v;
-
-          // Cooldown: if we refreshed recently, delay this one
-          const elapsed = Date.now() - lastRefreshTime;
-          if (elapsed < REFRESH_COOLDOWN_MS) {
-            if (pendingRefreshTimer) clearTimeout(pendingRefreshTimer);
-            pendingRefreshTimer = setTimeout(() => {
-              pendingRefreshTimer = null;
-              if (!stopped) doRefresh(v, previousVersion);
-            }, REFRESH_COOLDOWN_MS - elapsed);
-            stop({ ok: true, changed: true, previousVersion, version: v, deferred: true });
-          } else {
-            doRefresh(v, previousVersion);
-            stop({ ok: true, changed: true, previousVersion, version: v });
-          }
-          return;
-        }
-        stop({ ok: true, changed: false, version: v });
-      } catch (err) {
-        stop({ ok: false, changed: false });
-        console.debug('[tree-version] poll failed', err);
-      }
-    };
-
-    const onVisible = () => {
-      if (document.visibilityState === 'visible') void checkVersion();
-    };
-
-    void checkVersion();
-    const interval = setInterval(() => void checkVersion(), POLL_INTERVAL_MS);
-    document.addEventListener('visibilitychange', onVisible);
-
-    return () => {
-      stopped = true;
-      clearInterval(interval);
-      if (pendingRefreshTimer) clearTimeout(pendingRefreshTimer);
-      document.removeEventListener('visibilitychange', onVisible);
-    };
-  }, [router]);
+  // Refresh the server-rendered file tree when the mind root changes. Driven
+  // by the /api/events stream; the tree-version endpoint is polled only while disconnected.
+  useTreeVersionSync(router);
 
   // Unified keyboard shortcuts
   useEffect(() => {

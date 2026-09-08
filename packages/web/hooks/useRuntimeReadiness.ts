@@ -1,11 +1,18 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { getServerEventsState, subscribeServerEvents } from '@/lib/server-events';
 import type {
   AgentPermissionMode,
   AgentRuntimeReadinessPayload,
   AgentRuntimeReadinessProjection,
 } from '@/lib/types';
+
+/**
+ * Safety refresh cadence, applied only while the `/api/events` stream is not
+ * connected. While connected, `mcp.changed` frames trigger the refresh.
+ */
+export const RUNTIME_READINESS_FALLBACK_POLL_MS = 60_000;
 
 interface RuntimeReadinessState {
   readinessByRuntimeId: Record<string, AgentRuntimeReadinessProjection>;
@@ -104,6 +111,20 @@ export function useRuntimeReadiness(input: {
       controller.abort();
     };
   }, [permissionMode, refreshSeq, visible]);
+
+  useEffect(() => {
+    if (!visible) return;
+    const unsubscribe = subscribeServerEvents('mcp.changed', () => refresh());
+    const interval = setInterval(() => {
+      if (document.visibilityState !== 'visible') return;
+      if (getServerEventsState() === 'connected') return;
+      refresh();
+    }, RUNTIME_READINESS_FALLBACK_POLL_MS);
+    return () => {
+      unsubscribe();
+      clearInterval(interval);
+    };
+  }, [refresh, visible]);
 
   const readinessByRuntimeId = useMemo(
     () => indexRuntimeReadiness(payload?.projections ?? []),

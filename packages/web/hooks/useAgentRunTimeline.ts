@@ -1,23 +1,23 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react';
+import { useCallback, useEffect, useRef, type Dispatch, type SetStateAction } from 'react';
+import { getServerEventsState, subscribeServerEvents } from '@/lib/server-events';
 import type { AgentRunTimelineEvent, AgentRunTimelinePart, AgentRunTimelineRecord, Message, MessagePart, TextPart } from '@/lib/types';
 
-const TIMELINE_POLL_MS = 900;
-const TURN_SINCE_PADDING_MS = 1000;
-
 /**
- * Backoff schedule for SSE reconnect attempts. After these are exhausted the
- * hook downgrades permanently (for the current turn) to visible-only polling.
+ * Fallback poll cadence, used only while the shared `/api/events` stream is
+ * not connected. While it is connected, `agent-run.event` frames drive refreshes.
  */
-export const AGENT_RUN_STREAM_RECONNECT_DELAYS_MS = [1_000, 5_000, 15_000] as const;
+export const TIMELINE_FALLBACK_POLL_MS = 5_000;
+const TIMELINE_POLL_MS = TIMELINE_FALLBACK_POLL_MS;
+/** Coalesces a burst of ledger events for one chat session into a single fetch. */
+export const TIMELINE_EVENT_DEBOUNCE_MS = 150;
+const TURN_SINCE_PADDING_MS = 1000;
 
 interface AgentRunsResponse {
   runs?: AgentRunTimelineRecord[];
   events?: AgentRunTimelineEvent[];
 }
-
-type AgentRunsStreamPayload = AgentRunsResponse;
 
 export function buildAgentRunsTimelineUrl(input: {
   chatSessionId: string;
@@ -278,7 +278,6 @@ export function useAgentRunTimeline(input: {
   pollMs?: number;
 }): void {
   const pollMs = input.pollMs ?? TIMELINE_POLL_MS;
-  const [streamUnavailable, setStreamUnavailable] = useState(false);
   const turnStartedAfterRef = useRef<number | null>(null);
   const wasLoadingRef = useRef(false);
   const messagesRef = useRef(input.messages);
@@ -322,22 +321,56 @@ export function useAgentRunTimeline(input: {
     applyTimeline(payload, chatSessionId, startedAfter, rootRunId ?? undefined);
   }, [applyTimeline, ensureTurnStartedAfter]);
 
+  // Live path: the shared server stream reports ledger activity; refresh the
+  // timeline for this chat session after a short debounce. One initial fetch
+  // shows the timeline without waiting for the first event.
   useEffect(() => {
     if (!input.visible || !input.chatSessionId || !input.isLoading) return;
 
-    const EventSourceConstructor = globalThis.EventSource;
-    if (typeof EventSourceConstructor !== 'undefined' && !streamUnavailable) return;
+    const chatSessionId = input.chatSessionId;
+    const rootRunId = input.rootRunId;
+    const controller = new AbortController();
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    const scheduleRefresh = () => {
+      if (debounceTimer !== null) return;
+      debounceTimer = setTimeout(() => {
+        debounceTimer = null;
+        void refreshOnce(chatSessionId, rootRunId, controller.signal);
+      }, TIMELINE_EVENT_DEBOUNCE_MS);
+    };
+
+    const unsubscribeEvents = subscribeServerEvents('agent-run.event', (event) => {
+      if (event.chatSessionId !== chatSessionId) return;
+      scheduleRefresh();
+    });
+    const unsubscribeReady = subscribeServerEvents('ready', (event) => {
+      // The stream could not replay everything we missed: catch up once.
+      if (event.resync) scheduleRefresh();
+    });
+    void refreshOnce(chatSessionId, rootRunId, controller.signal);
+
+    return () => {
+      unsubscribeEvents();
+      unsubscribeReady();
+      if (debounceTimer !== null) clearTimeout(debounceTimer);
+      controller.abort();
+    };
+  }, [input.chatSessionId, input.isLoading, input.rootRunId, input.visible, refreshOnce]);
+
+  // Degraded path: poll only while the stream is not connected (unsupported
+  // environment or reconnecting). Background tabs skip the network call; the
+  // visibilitychange handler issues a catch-up refresh when the tab returns.
+  useEffect(() => {
+    if (!input.visible || !input.chatSessionId || !input.isLoading) return;
 
     const chatSessionId = input.chatSessionId;
     const rootRunId = input.rootRunId;
     const controller = new AbortController();
     const tick = () => {
-      // Background tabs skip the network call entirely; the visibilitychange
-      // handler issues a catch-up refresh when the tab returns.
       if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+      if (getServerEventsState() === 'connected') return;
       void refreshOnce(chatSessionId, rootRunId, controller.signal);
     };
-    tick();
     const interval = setInterval(tick, pollMs);
     const onVisibilityChange = () => {
       if (document.visibilityState === 'visible') tick();
@@ -349,70 +382,7 @@ export function useAgentRunTimeline(input: {
       document.removeEventListener('visibilitychange', onVisibilityChange);
       controller.abort();
     };
-  }, [input.chatSessionId, input.isLoading, input.rootRunId, input.visible, pollMs, refreshOnce, streamUnavailable]);
-
-  useEffect(() => {
-    if (!input.visible || !input.chatSessionId || !input.isLoading) return;
-
-    const EventSourceConstructor = globalThis.EventSource;
-    if (typeof EventSourceConstructor === 'undefined') {
-      setStreamUnavailable(true);
-      return;
-    }
-
-    const chatSessionId = input.chatSessionId;
-    const rootRunId = input.rootRunId;
-    const startedAfter = ensureTurnStartedAfter();
-    const streamUrl = buildAgentRunsTimelineStreamUrl({
-      chatSessionId,
-      ...(rootRunId ? { rootRunId } : { startedAfter }),
-    });
-    let closed = false;
-    let attempts = 0;
-    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-    let source: EventSource | null = null;
-    setStreamUnavailable(false);
-
-    const connect = () => {
-      source = new EventSourceConstructor(streamUrl);
-      source.onmessage = (event) => {
-        if (closed) return;
-        // A delivered frame proves the stream works — reset the backoff budget.
-        attempts = 0;
-        try {
-          const payload = JSON.parse(event.data) as AgentRunsStreamPayload;
-          if (!Array.isArray(payload.runs) && !Array.isArray(payload.events)) return;
-          applyTimeline(payload, chatSessionId, startedAfter, rootRunId ?? undefined);
-        } catch {
-          // Ignore malformed stream frames; the polling fallback handles recovery if the stream fails.
-        }
-      };
-      source.onerror = () => {
-        if (closed) return;
-        source?.close();
-        source = null;
-        if (attempts >= AGENT_RUN_STREAM_RECONNECT_DELAYS_MS.length) {
-          // Backoff budget exhausted — downgrade to visible-only polling.
-          closed = true;
-          setStreamUnavailable(true);
-          return;
-        }
-        const delay = AGENT_RUN_STREAM_RECONNECT_DELAYS_MS[attempts];
-        attempts += 1;
-        reconnectTimer = setTimeout(() => {
-          reconnectTimer = null;
-          if (!closed) connect();
-        }, delay);
-      };
-    };
-    connect();
-
-    return () => {
-      closed = true;
-      if (reconnectTimer !== null) clearTimeout(reconnectTimer);
-      source?.close();
-    };
-  }, [applyTimeline, ensureTurnStartedAfter, input.chatSessionId, input.isLoading, input.rootRunId, input.visible]);
+  }, [input.chatSessionId, input.isLoading, input.rootRunId, input.visible, pollMs, refreshOnce]);
 
   useEffect(() => {
     if (wasLoadingRef.current && !input.isLoading && input.visible && input.chatSessionId && turnStartedAfterRef.current !== null) {

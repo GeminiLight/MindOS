@@ -188,3 +188,122 @@ describe('mind root tree cache', () => {
     expect(() => cache.dispose()).not.toThrow();
   });
 });
+
+describe('mind root tree cache push subscriptions', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('notifies a subscriber exactly once after the debounce when invalidate() changed the version', () => {
+    vi.useFakeTimers();
+    const root = makeRoot();
+    writeFileSync(join(root, 'a.md'), 'a');
+    const cache = track(createMindRootTreeCache(root, { watch: false, fallbackTtlMs: 60_000 }));
+    const before = cache.getTreeVersion();
+    const listener = vi.fn();
+    cache.subscribe(listener);
+
+    writeFileSync(join(root, 'b.md'), 'b');
+    cache.invalidate();
+    cache.invalidate(); // bursts coalesce into one rebuild
+
+    vi.advanceTimersByTime(299);
+    expect(listener).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1);
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener.mock.calls[0][0]).toBeGreaterThan(before);
+    expect(cache.collectAllFiles()).toEqual(['a.md', 'b.md']);
+  });
+
+  it('stays silent when the rebuild finds the same version', () => {
+    vi.useFakeTimers();
+    const root = makeRoot();
+    writeFileSync(join(root, 'a.md'), 'a');
+    const cache = track(createMindRootTreeCache(root, { watch: false, fallbackTtlMs: 60_000 }));
+    cache.getTreeVersion();
+    const listener = vi.fn();
+    cache.subscribe(listener);
+
+    cache.invalidate();
+    vi.advanceTimersByTime(1_000);
+    expect(listener).not.toHaveBeenCalled();
+  });
+
+  it('does no background rebuild while nobody subscribes', () => {
+    vi.useFakeTimers();
+    const root = makeRoot();
+    writeFileSync(join(root, 'a.md'), 'a');
+    const cache = track(createMindRootTreeCache(root, { watch: false, fallbackTtlMs: 60_000 }));
+    cache.getTreeVersion();
+
+    writeFileSync(join(root, 'b.md'), 'b');
+    cache.invalidate();
+    vi.advanceTimersByTime(5_000);
+    // If a background ensure() had run at the debounce, it would have cleared
+    // the dirty flag with only b.md visible and c.md would be hidden by the TTL.
+    writeFileSync(join(root, 'c.md'), 'c');
+    expect(cache.collectAllFiles()).toEqual(['a.md', 'b.md', 'c.md']);
+  });
+
+  it('stops notifying after unsubscribe and after dispose', () => {
+    vi.useFakeTimers();
+    const root = makeRoot();
+    writeFileSync(join(root, 'a.md'), 'a');
+    const cache = track(createMindRootTreeCache(root, { watch: false, fallbackTtlMs: 60_000 }));
+    cache.getTreeVersion();
+    const listener = vi.fn();
+    const unsubscribe = cache.subscribe(listener);
+
+    unsubscribe();
+    unsubscribe();
+    writeFileSync(join(root, 'b.md'), 'b');
+    cache.invalidate();
+    vi.advanceTimersByTime(1_000);
+    expect(listener).not.toHaveBeenCalled();
+
+    const second = vi.fn();
+    cache.subscribe(second);
+    writeFileSync(join(root, 'c.md'), 'c');
+    cache.invalidate();
+    cache.dispose();
+    vi.advanceTimersByTime(1_000);
+    expect(second).not.toHaveBeenCalled();
+  });
+
+  it('sweeps for missed external changes while subscribed and no watcher is available', () => {
+    vi.useFakeTimers();
+    const root = makeRoot();
+    writeFileSync(join(root, 'a.md'), 'a');
+    const cache = track(createMindRootTreeCache(root, { watch: false, fallbackTtlMs: 1_000, sweepMs: 10_000 }));
+    const before = cache.getTreeVersion();
+    const listener = vi.fn();
+    cache.subscribe(listener);
+
+    writeFileSync(join(root, 'external.md'), 'written by another process');
+    vi.advanceTimersByTime(9_999);
+    expect(listener).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1);
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener.mock.calls[0][0]).toBeGreaterThan(before);
+
+    // Nothing changed: the next sweep stays quiet.
+    vi.advanceTimersByTime(10_000);
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not sweep once the last subscriber left', () => {
+    vi.useFakeTimers();
+    const root = makeRoot();
+    writeFileSync(join(root, 'a.md'), 'a');
+    const cache = track(createMindRootTreeCache(root, { watch: false, fallbackTtlMs: 1_000, sweepMs: 10_000 }));
+    cache.getTreeVersion();
+    const unsubscribe = cache.subscribe(() => {});
+    unsubscribe();
+
+    writeFileSync(join(root, 'b.md'), 'b');
+    vi.advanceTimersByTime(30_000);
+    // Only a read triggers the rebuild now (TTL expired), proving no sweep ran.
+    writeFileSync(join(root, 'c.md'), 'c');
+    expect(cache.collectAllFiles()).toEqual(['a.md', 'b.md', 'c.md']);
+  });
+});

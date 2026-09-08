@@ -140,6 +140,7 @@ export const MINDOS_WEB_API_ROUTE_OWNERSHIP: MindosWebApiRouteOwnership[] = [
   host('/api/study/review/[id]', 'Scoped study participant / reviewer endpoints authenticate their own invitation tokens outside the owner bearer and are served only by the Next host today; revisit ownership together with the Echo research promotion.', 'high'),
   host('/api/study/review/[id]/session', 'Scoped study participant / reviewer endpoints authenticate their own invitation tokens outside the owner bearer and are served only by the Next host today; revisit ownership together with the Echo research promotion.', 'high'),
   migrated('/api/embedding', 'medium'),
+  route('/api/events', 'product-owned', 'stream', 'Phase 7: server event stream adapter', 'medium', 'Single SSE stream for tree / agent-run / skills / MCP / sync change notifications; the Next route wraps the Product Server frame iterator in a ReadableStream and must stay a thin adapter without host-side event sources.'),
   optional('/api/export', 'Phase 5: content ingestion optional capabilities', 'high', 'Export/archive logic carries heavy dependencies and filesystem writes that need optional capability packaging.'),
   migrated('/api/extract-docx', 'high'),
   migrated('/api/extract-pdf', 'high'),

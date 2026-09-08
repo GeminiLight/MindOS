@@ -5,13 +5,17 @@ import { MINDOS_IGNORE_FILE, createMindosSearchIgnoreMatcher } from './search-ig
 
 /**
  * Cached view over the mind root file tree for the standalone (CLI/Desktop)
- * server. The frontend polls `/api/tree-version` every ~5s; without this cache
- * every poll walked the entire library with a recursive readdir + per-file
- * stat. The cache rebuilds only when:
+ * server. Without this cache every `/api/tree-version` read walked the entire
+ * library with a recursive readdir + per-file stat. The cache rebuilds only when:
  *   - a recursive fs.watch event fires (darwin/win32, Linux on Node >= 20), or
  *   - `invalidate()` is called (internal writes via the HTTP server), or
  *   - a safety TTL expires (short fallback TTL when no watcher is available,
  *     long TTL as a missed-event safety net when the watcher is active).
+ *
+ * Reads stay lazy. Push consumers (`GET /api/events`) call `subscribe()`; only
+ * while at least one subscriber exists does the cache actively detect changes:
+ * watcher events / `invalidate()` schedule a debounced rebuild and a periodic
+ * sweep covers missed events. With zero subscribers no background work runs.
  */
 
 export type MindRootTreeCacheOptions = {
@@ -23,6 +27,14 @@ export type MindRootTreeCacheOptions = {
   watch?: boolean;
   /** Clock injection for deterministic TTL tests. */
   now?: () => number;
+  /** Debounce between a change signal and the push rebuild. Default 300ms. */
+  pushDebounceMs?: number;
+  /**
+   * While subscribers exist, rebuild on this cadence to catch watcher misses
+   * (or the complete absence of a watcher). Default 30s, matching the watched
+   * TTL so push mode costs no more than the polling it replaces.
+   */
+  sweepMs?: number;
 };
 
 export type MindRootTreeCache = {
@@ -33,8 +45,15 @@ export type MindRootTreeCache = {
   getRecentlyModified(limit?: number): Array<{ path: string; mtime: number }>;
   /** Mark the cache dirty; the next read rebuilds. Cheap and synchronous. */
   invalidate(): void;
+  /**
+   * Receive the new tree version whenever a rebuild changes it. Subscribing
+   * turns on active change detection (debounced rebuild + periodic sweep);
+   * the returned function unsubscribes and, for the last subscriber, turns it
+   * off again.
+   */
+  subscribe(listener: (version: number) => void): () => void;
   isWatching(): boolean;
-  /** Stop the watcher. The cache keeps working through the fallback TTL. */
+  /** Stop the watcher and push timers. The cache keeps working through the fallback TTL. */
   dispose(): void;
 };
 
@@ -48,6 +67,8 @@ type TreeCacheState = {
 
 const DEFAULT_FALLBACK_TTL_MS = 2_000;
 const DEFAULT_WATCHED_TTL_MS = 30_000;
+const DEFAULT_PUSH_DEBOUNCE_MS = 300;
+const DEFAULT_SWEEP_MS = 30_000;
 
 export function createMindRootTreeCache(
   mindRoot: string,
@@ -58,16 +79,72 @@ export function createMindRootTreeCache(
   const watchedTtlMs = options.watchedTtlMs ?? DEFAULT_WATCHED_TTL_MS;
   const now = options.now ?? Date.now;
   const watchEnabled = options.watch !== false;
+  const pushDebounceMs = options.pushDebounceMs ?? DEFAULT_PUSH_DEBOUNCE_MS;
+  const sweepMs = options.sweepMs ?? DEFAULT_SWEEP_MS;
 
   let state: TreeCacheState | null = null;
   let dirty = false;
   let watcher: FSWatcher | null = null;
   let watcherBroken = false;
   let disposed = false;
+  const subscribers = new Set<(version: number) => void>();
+  let pushTimer: ReturnType<typeof setTimeout> | null = null;
+  let sweepTimer: ReturnType<typeof setInterval> | null = null;
 
   function onWatchEvent(filename: string | Buffer | null): void {
     if (typeof filename === 'string' && isIgnoredPath(root, filename)) return;
     dirty = true;
+    schedulePush();
+  }
+
+  function notifyIfChanged(): void {
+    if (disposed || subscribers.size === 0) return;
+    const before = state?.version;
+    let version: number;
+    try {
+      version = ensure().version;
+    } catch {
+      // A failing rebuild (root vanished mid-scan) is retried by the next signal.
+      return;
+    }
+    if (version === before) return;
+    for (const listener of Array.from(subscribers)) {
+      try {
+        listener(version);
+      } catch {
+        // Push listeners are observers; a throwing one must not break the cache.
+      }
+    }
+  }
+
+  function schedulePush(): void {
+    if (disposed || subscribers.size === 0 || pushTimer) return;
+    pushTimer = setTimeout(() => {
+      pushTimer = null;
+      notifyIfChanged();
+    }, pushDebounceMs);
+    pushTimer.unref?.();
+  }
+
+  function startSweep(): void {
+    if (sweepTimer || disposed) return;
+    sweepTimer = setInterval(() => {
+      // ensure() decides whether a rescan is due (dirty or TTL expired); the
+      // sweep only guarantees somebody asks while subscribers exist.
+      notifyIfChanged();
+    }, sweepMs);
+    sweepTimer.unref?.();
+  }
+
+  function stopPushTimers(): void {
+    if (pushTimer) {
+      clearTimeout(pushTimer);
+      pushTimer = null;
+    }
+    if (sweepTimer) {
+      clearInterval(sweepTimer);
+      sweepTimer = null;
+    }
   }
 
   function ensureWatcher(): void {
@@ -148,12 +225,26 @@ export function createMindRootTreeCache(
     },
     invalidate() {
       dirty = true;
+      schedulePush();
+    },
+    subscribe(listener) {
+      subscribers.add(listener);
+      startSweep();
+      let active = true;
+      return () => {
+        if (!active) return;
+        active = false;
+        subscribers.delete(listener);
+        if (subscribers.size === 0) stopPushTimers();
+      };
     },
     isWatching() {
       return watcher !== null;
     },
     dispose() {
       disposed = true;
+      stopPushTimers();
+      subscribers.clear();
       closeWatcher();
     },
   };

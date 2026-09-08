@@ -2,6 +2,7 @@
 
 import { create } from 'zustand';
 import { apiFetch } from '@/lib/api';
+import { subscribeServerEvents } from '@/lib/server-events';
 import type { McpStatus, AgentInfo, SkillInfo } from '@/components/settings/types';
 
 /* ── Public interface (unchanged from old Context) ── */
@@ -31,9 +32,20 @@ let inFlight: Promise<void> | null = null;
 let inFlightToken: symbol | null = null;
 let lastFetchedAt = 0;
 
+/** Clears module-level fetch bookkeeping that would otherwise leak between test cases. */
+export function resetMcpStoreForTests(): void {
+  abortCtrl?.abort();
+  abortCtrl = null;
+  inFlight = null;
+  inFlightToken = null;
+  lastFetchedAt = 0;
+  useMcpStore.setState({ status: null, agents: [], skills: [], loading: true });
+}
+
 /* ── Store ── */
 
-const POLL_INTERVAL = 30_000;
+/** Safety poll; `/api/events` pushes `mcp.changed` / `skills.changed` for the real-time path. */
+export const MCP_STORE_POLL_INTERVAL_MS = 5 * 60_000;
 const FRESHNESS_WINDOW_MS = 2_000;
 
 async function fetchAll(set: (partial: Partial<McpStoreState>) => void, opts: { force?: boolean } = {}) {
@@ -146,10 +158,25 @@ export const useMcpStore = create<McpStoreState>((set, get) => ({
     };
     window.addEventListener('mindos:skills-changed', onSkillsChanged);
 
-    // 30s polling when visible
+    // Server push: another tab, the CLI or an agent changed MCP / skill state.
+    // `force` bypasses the freshness window because the server told us the
+    // data is stale, no matter how recently we fetched.
+    const onServerChanged = () => {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => fetchAll(set, { force: true }), 500);
+    };
+    const unsubscribeServerEvents = [
+      subscribeServerEvents('mcp.changed', onServerChanged),
+      subscribeServerEvents('skills.changed', onServerChanged),
+      subscribeServerEvents('ready', (event) => {
+        if (event.resync) onServerChanged();
+      }),
+    ];
+
+    // Slow safety poll when visible; the stream carries the real-time path.
     const pollTimer = setInterval(() => {
       if (document.visibilityState === 'visible') fetchAll(set);
-    }, POLL_INTERVAL);
+    }, MCP_STORE_POLL_INTERVAL_MS);
 
     return () => {
       abortCtrl?.abort();
@@ -159,6 +186,7 @@ export const useMcpStore = create<McpStoreState>((set, get) => ({
       clearTimeout(debounceTimer);
       clearInterval(pollTimer);
       window.removeEventListener('mindos:skills-changed', onSkillsChanged);
+      for (const unsubscribe of unsubscribeServerEvents) unsubscribe();
     };
   },
 }));

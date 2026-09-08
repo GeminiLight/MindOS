@@ -103,7 +103,8 @@ mindos/
 | `GET /api/setup/ls` | 列出目录 |
 | `POST /api/file/import` | 文件导入（支持 AI Organize） |
 | `GET /api/changes` | 变更事件追踪 |
-| `GET /api/tree-version` | 文件树版本号（缓存失效） |
+| `GET /api/tree-version` | 文件树版本号（流断开时的兜底轮询） |
+| `GET /api/events` | 服务端事件流（SSE）：`tree.changed` / `agent-run.event` / `skills.changed` / `mcp.changed` / `sync.changed`，支持 `Last-Event-ID` 重放与 `?types=` 过滤；Web 以它替代固定间隔轮询，见 `specs/spec-sse-event-stream.md` |
 | `POST /api/agent-activity` | Agent 活动日志 |
 | `POST /api/a2a` | A2A JSON-RPC 端点 |
 | `GET /api/a2a/agents` | A2A Agent 列表 |

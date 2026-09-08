@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest } from 'next/server';
 import {
+  getMindosServerEventBus,
   handleMcpInstallPost,
   type MindosMcpAgentDef,
 } from '@geminilight/mindos/server';
@@ -16,5 +17,6 @@ export async function POST(req: NextRequest) {
     detectAgentPresence,
     readSettings,
     env: process.env,
+    events: getMindosServerEventBus(),
   }));
 }

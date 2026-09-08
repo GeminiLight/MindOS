@@ -189,13 +189,24 @@ describe('idle polling budget (35s 空闲请求数 ≤10 的支撑契约)', () =
     expect(host.textContent).not.toContain('3 new changes');
   });
 
-  it('SidebarLayout tree-version poll runs at most every 15s (own writes arrive via events)', () => {
-    const src = readFileSync(
+  it('tree-version safety poll runs at most every 60s and only while the event stream is down', () => {
+    // Real-time updates arrive over /api/events (see useTreeVersionSync and
+    // __tests__/hooks/use-tree-version-sync.test.tsx, which asserts zero
+    // tree-version requests while connected). The poll is the degraded path.
+    const hook = readFileSync(
+      path.resolve(__dirname, '../../hooks/useTreeVersionSync.ts'),
+      'utf-8',
+    );
+    const m = hook.match(/FALLBACK_POLL_INTERVAL_MS = (\d+_?\d*)/);
+    expect(m, 'useTreeVersionSync must define FALLBACK_POLL_INTERVAL_MS').toBeTruthy();
+    expect(Number(m![1].replace('_', ''))).toBeGreaterThanOrEqual(60_000);
+    expect(hook).toContain("getServerEventsState() === 'connected'");
+
+    const sidebar = readFileSync(
       path.resolve(__dirname, '../../components/SidebarLayout.tsx'),
       'utf-8',
     );
-    const m = src.match(/POLL_INTERVAL_MS = (\d+_?\d*)/);
-    expect(m, 'SidebarLayout must define POLL_INTERVAL_MS').toBeTruthy();
-    expect(Number(m![1].replace('_', ''))).toBeGreaterThanOrEqual(15_000);
+    expect(sidebar).not.toContain('/api/tree-version');
+    expect(sidebar).toContain('useTreeVersionSync(router)');
   });
 });

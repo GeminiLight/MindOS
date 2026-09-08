@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-import { handleSyncGet, handleSyncPost } from '@geminilight/mindos/server';
+import { getMindosServerEventBus, handleSyncGet, handleSyncPost } from '@geminilight/mindos/server';
 import { toNextResponse } from '../_mindos-adapter';
 
 export async function GET() {
@@ -10,7 +10,10 @@ export async function GET() {
 
 export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}));
-  return toNextResponse(await handleSyncPost(body, await getSyncRuntimeServices() as any));
+  return toNextResponse(await handleSyncPost(body, {
+    ...(await getSyncRuntimeServices()),
+    events: getMindosServerEventBus(),
+  } as any));
 }
 
 async function getSyncRuntimeServices(): Promise<Record<string, unknown>> {

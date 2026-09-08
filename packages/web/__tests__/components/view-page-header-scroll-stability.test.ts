@@ -54,12 +54,17 @@ describe('ViewPageClient header scroll stability', () => {
   it('preserves reading scroll when a generic files-changed event refreshes the current view', () => {
     const viewPath = path.resolve(process.cwd(), 'app/view/[...path]/ViewPageClient.tsx');
     const sidebarPath = path.resolve(process.cwd(), 'components/SidebarLayout.tsx');
+    // The tree refresh moved out of SidebarLayout into useTreeVersionSync
+    // (driven by /api/events); the scroll-preservation contract travels with it.
+    const treeSyncPath = path.resolve(process.cwd(), 'hooks/useTreeVersionSync.ts');
     const viewSource = fs.readFileSync(viewPath, 'utf8');
     const sidebarSource = fs.readFileSync(sidebarPath, 'utf8');
+    const treeSyncSource = fs.readFileSync(treeSyncPath, 'utf8');
 
     expect(viewSource).toContain("import { refreshPreservingDocumentScroll } from '@/lib/scroll-preservation';");
     expect(viewSource).toContain('refreshCurrentView({ preserveScroll: paths === undefined });');
-    expect(sidebarSource).toContain("import { refreshPreservingDocumentScroll } from '@/lib/scroll-preservation';");
-    expect(sidebarSource).toContain('refreshPreservingDocumentScroll(() => router.refresh());');
+    expect(sidebarSource).toContain('useTreeVersionSync(router)');
+    expect(treeSyncSource).toContain("import { refreshPreservingDocumentScroll } from '@/lib/scroll-preservation';");
+    expect(treeSyncSource).toContain('refreshPreservingDocumentScroll(() => router.refresh());');
   });
 });

@@ -401,6 +401,42 @@ export {
 } from './http.js';
 
 export {
+  MINDOS_SERVER_EVENT_TYPES,
+  createMindosServerEventBus,
+  getMindosServerEventBus,
+  resetMindosServerEventBusForTest,
+  type MindosAgentRunEventSummary,
+  type MindosServerEvent,
+  type MindosServerEventBus,
+  type MindosServerEventBusOptions,
+  type MindosServerEventEmitter,
+  type MindosServerEventEnvelope,
+  type MindosServerEventListener,
+  type MindosServerEventReplay,
+  type MindosServerEventType,
+} from './events/bus.js';
+
+export {
+  installAgentRunLedgerBridge,
+  isAgentRunLedgerBridgeInstalled,
+  summarizeAgentRunEvent,
+} from './events/ledger-bridge.js';
+
+export {
+  MINDOS_SERVER_EVENTS_HEARTBEAT_MS,
+  encodeMindosServerEventFrame,
+  handleEventsStream,
+  parseLastEventId,
+  parseServerEventTypesFilter,
+  type EventsHandlerServices,
+  type EventsStreamOptions,
+  type MindosServerEventFrame,
+  type MindosServerEventStreamResponse,
+  type MindosServerReadyEvent,
+  type MindosServerStreamEvent,
+} from './handlers/events.js';
+
+export {
   MINDOS_ALLOWED_FILE_EXTENSIONS,
   MINDOS_IGNORED_DIRS,
   collectAllFilesFromMindRoot,

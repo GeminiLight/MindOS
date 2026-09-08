@@ -176,6 +176,9 @@ import { handleSpaceOverviewGet } from './handlers/space-overview.js';
 import { handleStaticArtifact } from './handlers/static.js';
 import { handleSyncGet, handleSyncPost } from './handlers/sync.js';
 import { handleTreeVersion } from './handlers/tree-version.js';
+import { handleEventsStream } from './handlers/events.js';
+import { getMindosServerEventBus, type MindosServerEventBus } from './events/bus.js';
+import { installAgentRunLedgerBridge } from './events/ledger-bridge.js';
 import { handleRestartPost, handleUpdateCheckGet, handleUpdatePost, handleUpdateStatusGet } from './handlers/update.js';
 import { handleWorkflowsGet, handleWorkflowsPost } from './handlers/workflows.js';
 import { CORS_HEADERS, json, type MindosServerResponse } from './response.js';
@@ -217,6 +220,12 @@ export type MindosHttpServices = {
   invalidateTreeCache?(): void;
   /** Releases watchers/timers owned by the services (called on server close for default services). */
   dispose?(): void;
+  /**
+   * Process event bus behind `GET /api/events`. Default services wire the tree
+   * cache into it as a lazy source; custom services may omit it, in which case
+   * the stream route answers 503 and clients fall back to polling.
+   */
+  events?: MindosServerEventBus;
   mcpAgents?: Record<string, MindosMcpAgentDef>;
   mcpTools?: {
     readMcpConfig(): MindosMcpConfigFile;
@@ -266,6 +275,12 @@ export function createDefaultMindosHttpServices(options: DefaultMindosHttpServic
   // Watcher-driven cache: avoids walking the whole library on every poll of
   // /api/tree-version (~5s) and on every /api/files request.
   const treeCache = createMindRootTreeCache(mindRoot);
+  // Push path: the tree cache only detects changes actively while the event
+  // stream has subscribers (bus lazy source), so an idle server stays lazy.
+  const events = getMindosServerEventBus();
+  const removeTreeSource = events.addSource(() => treeCache.subscribe((version) => {
+    events.emit({ type: 'tree.changed', version });
+  }));
   const channels: MindosChannelServices = {};
   if (options.homeDir) {
     channels.configPath = `${options.homeDir}/.mindos/im.json`;
@@ -292,7 +307,11 @@ export function createDefaultMindosHttpServices(options: DefaultMindosHttpServic
       };
     },
     invalidateTreeCache: () => treeCache.invalidate(),
-    dispose: () => treeCache.dispose(),
+    dispose: () => {
+      removeTreeSource();
+      treeCache.dispose();
+    },
+    events,
     readTextFile: (filePath) => readTextFileFromMindRoot(mindRoot, filePath),
     readLines: (filePath) => readLinesFromMindRoot(mindRoot, filePath),
     listSpaces: () => listMindSpacesFromMindRoot(mindRoot),
@@ -337,6 +356,7 @@ export function createMindosHttpServer(options: MindosHttpServerOptions = {}): M
     staticRoot: options.staticRoot,
     syncDaemon: options.syncDaemon,
   });
+  if (services.events) installAgentRunLedgerBridge(services.events);
   const server = createServer((req, res) => {
     const method = (req.method ?? 'GET').toUpperCase();
     void handleRequest(req, res, services, options.runtimeRoot).finally(() => {
@@ -415,6 +435,27 @@ async function handleRequest(
     }
     if (route === 'GET /api/tree-version') {
       writeResponse(res, handleTreeVersion(services));
+      return;
+    }
+    if (route === 'GET /api/events') {
+      if (!services.events) {
+        writeResponse(res, json({ error: 'Server events are not configured' }, { status: 503 }));
+        return;
+      }
+      const abort = new AbortController();
+      res.once('close', () => abort.abort());
+      const response = handleEventsStream(url.searchParams, {
+        events: services.events,
+        getTreeVersion: () => services.getTreeVersion(),
+      }, {
+        signal: abort.signal,
+        lastEventId: req.headers['last-event-id'],
+      });
+      if (!response.ok) {
+        writeResponse(res, response);
+        return;
+      }
+      await writeSseFrames(res, response);
       return;
     }
     if (route === 'GET /api/search') {
@@ -789,6 +830,7 @@ async function handleRequest(
       writeResponse(res, await handleSyncPost(await readJsonBody(req), {
         runtimeRoot: services.runtimeRoot,
         syncDaemon: services.syncDaemon,
+        events: services.events,
       }));
       return;
     }
@@ -909,6 +951,7 @@ async function handleRequest(
         agents: services.mcpAgents ?? {},
         readSettings: services.readSettings,
         env: process.env,
+        events: services.events,
       }));
       return;
     }
@@ -917,6 +960,7 @@ async function handleRequest(
         agents: services.mcpAgents ?? {},
         readSettings: services.readSettings,
         env: process.env,
+        events: services.events,
       }));
       return;
     }
@@ -935,12 +979,14 @@ async function handleRequest(
         readSettings: services.readSettings,
         env: process.env,
         projectRoot: services.runtimeRoot ?? process.cwd(),
+        events: services.events,
       }));
       return;
     }
     if (route === 'POST /api/mcp/uninstall') {
       writeResponse(res, handleMcpUninstallPost(await readJsonBody(req) as MindosMcpUninstallRequest, {
         agents: services.mcpAgents ?? {},
+        events: services.events,
       }));
       return;
     }
@@ -951,6 +997,7 @@ async function handleRequest(
         readSettings: services.readSettings,
         writeSettings: services.writeSettings,
         listLinkAgents: createHttpSkillLinkAgents(services),
+        events: services.events,
       }));
       return;
     }
@@ -1546,35 +1593,62 @@ async function writeSseResponse(
   res: ServerResponse,
   response: { status: number; headers: Record<string, string>; body: AsyncIterable<MindOSSSEvent> },
 ) {
-  res.writeHead(response.status, {
-    ...CORS_HEADERS,
-    ...response.headers,
-  });
   const stopHeartbeat = startMindosAgentTurnSseHeartbeat((event) => {
     if (res.destroyed || res.writableEnded) throw new Error('SSE response is closed');
     res.write(encodeMindosSseEvent(event));
   });
   res.once('close', stopHeartbeat);
   try {
-    for await (const event of response.body) {
+    await writeSseFrames(res, {
+      status: response.status,
+      headers: response.headers,
+      body: mapAsyncIterable(response.body, encodeMindosSseEvent),
+    }, {
+      encodeError: (message) => encodeMindosSseEvent({ type: 'error', message }),
+    });
+  } finally {
+    stopHeartbeat();
+    res.off('close', stopHeartbeat);
+  }
+}
+
+/**
+ * Pipes already-encoded SSE frames to the response. Shared by the agent turn
+ * stream (which encodes `MindOSSSEvent`s) and `GET /api/events` (which encodes
+ * its own frames and runs its own heartbeat).
+ */
+async function writeSseFrames(
+  res: ServerResponse,
+  response: { status: number; headers: Record<string, string>; body: AsyncIterable<string> },
+  options: { encodeError?: (message: string) => string } = {},
+) {
+  res.writeHead(response.status, {
+    ...CORS_HEADERS,
+    ...response.headers,
+  });
+  res.flushHeaders?.();
+  try {
+    for await (const frame of response.body) {
       // Client went away: stop pulling from the generator (break runs its
       // finally blocks) instead of writing into a destroyed socket.
       if (res.destroyed || res.writableEnded) break;
-      res.write(encodeMindosSseEvent(event));
+      res.write(frame);
     }
   } catch (error) {
     // Headers are already out, so the only useful thing left is to tell the
     // client what happened and end the stream cleanly. Rethrowing would land
     // in handleRequest's catch after headers were sent.
-    if (!res.destroyed && !res.writableEnded) {
+    if (options.encodeError && !res.destroyed && !res.writableEnded) {
       const message = error instanceof Error ? error.message : String(error);
-      res.write(encodeMindosSseEvent({ type: 'error', message }));
+      res.write(options.encodeError(message));
     }
   } finally {
-    stopHeartbeat();
-    res.off('close', stopHeartbeat);
     if (!res.writableEnded) res.end();
   }
+}
+
+async function* mapAsyncIterable<T, R>(source: AsyncIterable<T>, map: (value: T) => R): AsyncGenerator<R, void, undefined> {
+  for await (const value of source) yield map(value);
 }
 
 /**

@@ -5,6 +5,7 @@ import { NextRequest } from 'next/server';
 import path from 'path';
 import os from 'os';
 import {
+  getMindosServerEventBus,
   getSkillRootsFromRuntime,
   handleSkillsGet,
   handleSkillsPost,
@@ -61,6 +62,7 @@ export async function POST(req: NextRequest) {
       readSettings: () => readSettings() as unknown as MindosSkillsSettings,
       writeSettings: (nextSettings) => writeSettings(nextSettings as unknown as ReturnType<typeof readSettings>),
       listLinkAgents: listSkillLinkAgents,
+      events: getMindosServerEventBus(),
     }));
   } catch (err) {
     return handleRouteErrorSimple(err);
