@@ -169,6 +169,32 @@ export interface EditorPosition {
   ch: number;
 }
 
+export interface EditorSelection {
+  anchor: EditorPosition;
+  head: EditorPosition;
+}
+
+export interface EditorSelectionOrCaret {
+  anchor: EditorPosition;
+  head?: EditorPosition;
+}
+
+export interface EditorRangeOrCaret {
+  from: EditorPosition;
+  to?: EditorPosition;
+}
+
+export interface EditorChange extends EditorRangeOrCaret {
+  text: string;
+}
+
+export interface EditorTransaction {
+  replaceSelection?: string;
+  changes?: EditorChange[];
+  selection?: EditorRangeOrCaret;
+  selections?: EditorRangeOrCaret[];
+}
+
 export interface ClickableToken {
   type: string;
   text: string;
@@ -177,20 +203,30 @@ export interface ClickableToken {
 }
 
 export interface Editor {
+  getDoc(): this;
   getValue(): string;
   setValue(value: string): void;
   getSelection(): string;
-  replaceSelection(replacement: string): void;
+  replaceSelection(replacement: string, origin?: string): void;
+  somethingSelected(): boolean;
+  listSelections(): EditorSelection[];
+  setSelections(ranges: EditorSelectionOrCaret[], main?: number): void;
   getCursor(which?: 'from' | 'to' | 'anchor' | 'head'): EditorPosition;
   getClickableTokenAt?(position: EditorPosition): ClickableToken | null;
   setCursor(pos: EditorPosition): void;
   setCursor(line: number, ch?: number): void;
   setSelection(anchor: EditorPosition, head?: EditorPosition): void;
   lineCount(): number;
+  lastLine(): number;
   getLine(line: number): string;
   setLine(line: number, text: string): void;
   getRange(from: EditorPosition, to: EditorPosition): string;
-  replaceRange(replacement: string, from: EditorPosition, to?: EditorPosition): void;
+  replaceRange(replacement: string, from: EditorPosition, to?: EditorPosition, origin?: string): void;
+  posToOffset(position: EditorPosition): number;
+  offsetToPos(offset: number): EditorPosition;
+  transaction(transaction: EditorTransaction, origin?: string): void;
+  undo(): void;
+  redo(): void;
 }
 
 export interface MarkdownView {

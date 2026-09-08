@@ -36,6 +36,7 @@ asarUnpack:
   - "**/src/connect.html"
   - "**/src/splash.html"
   - "**/dist-electron/preload/**"
+  - "**/dist-electron/obsidian/preload.js"
   - "**/dist-electron/renderer/connect-renderer.js"
 # Bundled MindOS: populate `resources/mindos-runtime` via `npm run prepare-mindos-runtime` before dist.
 

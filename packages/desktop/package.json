@@ -10,8 +10,8 @@
   "private": true,
   "main": "dist-electron/main/main.js",
   "scripts": {
-    "dev": "electron-vite dev",
-    "build": "electron-vite build",
+    "dev": "node ../../scripts/build-obsidian-desktop-runtime.mjs && electron-vite dev",
+    "build": "electron-vite build && node ../../scripts/build-obsidian-desktop-runtime.mjs",
     "preview": "electron-vite preview",
     "pack": "electron-builder --dir",
     "dist": "electron-builder",

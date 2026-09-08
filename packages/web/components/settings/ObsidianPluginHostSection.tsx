@@ -70,6 +70,7 @@ import {
   compatibilityPostureStatusClass,
 } from './ObsidianCompatibilityPostureModel';
 import { ObsidianPluginHostDetails } from './ObsidianPluginHostDetails';
+import { DesktopObsidianEditor } from './DesktopObsidianEditor';
 import {
   buildObsidianPluginInventory,
   type ObsidianPostureFilter,
@@ -898,6 +899,7 @@ export function ObsidianPluginHostSection({
           </div>
         )}
       </div>
+        <DesktopObsidianEditor plugins={plugins} disabled={loading || busyKey !== null} />
       </SettingCard>
       <PluginActionModalDialog
         modal={pluginModal}

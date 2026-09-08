@@ -12,6 +12,7 @@
 export interface MindosDesktopBridge {
   /* Native filesystem dialogs */
   selectDirectory?: () => Promise<string | null>;
+  openObsidianEditor?: (pluginId: string, filePath: string) => Promise<{ opened: boolean }>;
 
   /* Desktop shell: electron-updater */
   checkUpdate: () => Promise<{

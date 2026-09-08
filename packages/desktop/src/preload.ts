@@ -50,6 +50,7 @@ contextBridge.exposeInMainWorld('mindos', {
   // File system
   openMindRoot: () => ipcRenderer.invoke('open-mindroot'),
   selectDirectory: () => ipcRenderer.invoke('select-directory'),
+  openObsidianEditor: (pluginId: string, filePath: string) => ipcRenderer.invoke('obsidian:open-editor', { pluginId, filePath }),
 
   // Mode switching
   switchMode: () => ipcRenderer.invoke('switch-mode'),

@@ -9,7 +9,8 @@ import { FileManagerShim } from './file-manager';
 import { CommandRegistry } from '../command-registry';
 import { Events, type EventCallback, type EventRef } from '../events';
 import { ObsidianRuntimeHost } from '../runtime';
-import type { App, Command, Editor, IFileManager, IMetadataCache, MarkdownView, SecretStorage, TFile, Workspace, WorkspaceLeaf } from '../types';
+import type { App, Command, IFileManager, IMetadataCache, MarkdownView, SecretStorage, TFile, Workspace, WorkspaceLeaf } from '../types';
+import { ReadonlyMarkdownEditorFacade } from '../editor-facade';
 import type { CommandExecutionContext } from '../command-registry';
 import { ObsidianSecretStorage, type ObsidianSecretStorageBackend, type ObsidianSecretStorageSummary } from '../secret-storage';
 import fs from 'fs';
@@ -52,83 +53,6 @@ class WorkspaceLeafShim implements WorkspaceLeaf {
   }
 }
 
-class ReadonlyMarkdownEditorShim implements Editor {
-  constructor(
-    private readonly file: TFile,
-    private readonly content: string,
-  ) {}
-
-  getValue(): string {
-    return this.content;
-  }
-
-  setValue(_value: string): void {
-    this.warnReadonly();
-  }
-
-  getSelection(): string {
-    return '';
-  }
-
-  replaceSelection(_replacement: string): void {
-    this.warnReadonly();
-  }
-
-  getCursor(_which?: 'from' | 'to' | 'anchor' | 'head'): { line: number; ch: number } {
-    return { line: 0, ch: 0 };
-  }
-
-  setCursor(pos: { line: number; ch: number }): void;
-  setCursor(line: number, ch?: number): void;
-  setCursor(_posOrLine: { line: number; ch: number } | number, _ch?: number): void {
-    this.warnReadonly();
-  }
-
-  setSelection(_anchor: { line: number; ch: number }, _head?: { line: number; ch: number }): void {
-    this.warnReadonly();
-  }
-
-  lineCount(): number {
-    return this.lines().length;
-  }
-
-  getLine(line: number): string {
-    return this.lines()[line] ?? '';
-  }
-
-  setLine(_line: number, _text: string): void {
-    this.warnReadonly();
-  }
-
-  getRange(from: { line: number; ch: number }, to: { line: number; ch: number }): string {
-    const start = this.positionToOffset(from);
-    const end = this.positionToOffset(to);
-    return this.content.slice(Math.min(start, end), Math.max(start, end));
-  }
-
-  replaceRange(_replacement: string, _from: { line: number; ch: number }, _to?: { line: number; ch: number }): void {
-    this.warnReadonly();
-  }
-
-  private warnReadonly(): void {
-    throw new Error(`Active MarkdownView editor for "${this.file.path}" is read-only outside editor command execution.`);
-  }
-
-  private lines(): string[] {
-    return this.content.split('\n');
-  }
-
-  private positionToOffset(position: { line: number; ch: number }): number {
-    const lines = this.lines();
-    const line = Math.max(0, Math.min(Math.trunc(position.line), lines.length - 1));
-    let offset = 0;
-    for (let index = 0; index < line; index += 1) {
-      offset += (lines[index]?.length ?? 0) + 1;
-    }
-    const ch = Math.max(0, Math.min(Math.trunc(position.ch), lines[line]?.length ?? 0));
-    return offset + ch;
-  }
-}
 
 /**
  * Minimal Workspace implementation.
@@ -174,7 +98,7 @@ class WorkspaceShim extends Events implements Workspace {
     this.activeFile = file;
     this.activeEditor = file ? {
       file,
-      editor: new ReadonlyMarkdownEditorShim(file, this.app.readFileContentSync(file)),
+      editor: new ReadonlyMarkdownEditorFacade(file, this.app.readFileContentSync(file)),
       getViewType: () => 'markdown',
     } : null;
     this.activeLeaf.setViewState(file

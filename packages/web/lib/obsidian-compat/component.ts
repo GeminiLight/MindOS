@@ -42,10 +42,11 @@ export class Component extends Events {
     }
 
     this.#unloading = true;
+    const errors: unknown[] = [];
     // Clean up all children first
     try {
       for (const child of Array.from(this.#children)) {
-        await child.unload();
+        try { await child.unload(); } catch (error) { errors.push(error); }
       }
       this.#children.clear();
 
@@ -60,12 +61,13 @@ export class Component extends Events {
       this.#unloadCallbacks.clear();
 
       // Call user-defined onunload
-      await this.onunload();
+      try { await this.onunload(); } catch (error) { errors.push(error); }
     } finally {
       this.#loaded = false;
       this.#unloaded = true;
       this.#unloading = false;
     }
+    if (errors.length) throw new AggregateError(errors, 'Component cleanup failed.');
   }
 
   /** Override in subclass */
@@ -75,6 +77,10 @@ export class Component extends Events {
   onunload(): Promise<void> | void {}
 
   addChild<T extends LifecycleChild>(child: T): T {
+    if (this.#unloading || this.#unloaded) {
+      this.#disposeChild(child);
+      return child;
+    }
     this.#children.add(child);
     if (this.#loaded) {
       void child.load().catch((err) => {
@@ -86,15 +92,22 @@ export class Component extends Events {
 
   removeChild<T extends LifecycleChild>(child: T): T {
     if (this.#children.delete(child)) {
-      void child.unload();
+      this.#disposeChild(child);
     }
     return child;
+  }
+
+  #disposeChild(child: LifecycleChild): void {
+    void child.unload().catch(error => console.error('[obsidian-compat] Component child unload error:', error));
   }
 
   /**
    * Register a callback to be invoked when this component unloads.
    */
   register(callback: () => void): void {
+    // Async render work can finish after its parent disappears. Never leave a
+    // listener/timer waiting for an unload that has already happened.
+    if (this.#unloading || this.#unloaded) { callback(); return; }
     this.#unloadCallbacks.add(callback);
   }
 

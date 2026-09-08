@@ -72,11 +72,17 @@ afterEach(() => {
 
 function run(
   args: string[],
-  opts: { input?: string; home?: string } = {},
+  opts: { input?: string; home?: string; imports?: string[]; hostServices?: 'stubbed' | 'real' } = {},
 ): { stdout: string; stderr: string; exitCode: number } {
   const home = opts.home ?? tempHome;
   try {
-    const stdout = execFileSync(process.execPath, [CLI, ...args], {
+    const stdout = execFileSync(process.execPath, [
+      ...(opts.imports ?? []).flatMap(file => ['--import', file]),
+      // 'real' keeps gateway.js so daemon teardown runs through the preload's
+      // launchctl/systemctl interception; the preload still refuses any other host command.
+      ...(opts.hostServices === 'real' ? [] : ['--import', path.join(__dirname, 'fixtures/cli-no-host-services.mjs')]),
+      CLI, ...args,
+    ], {
       encoding: 'utf-8',
       env: {
         ...process.env,
@@ -112,6 +118,17 @@ function writeConfig(
 }
 
 describe('mindos uninstall — smoke', () => {
+  it('uninstalls the fixture package without loading real host-service modules', () => {
+    const result = run(['uninstall'], {
+      input: 'y\nn\n',
+      imports: [path.join(__dirname, 'fixtures/cli-host-service-guard.mjs')],
+    });
+    expect(result.stderr).toBe('');
+    expect(result.exitCode).toBe(0);
+    expect(fs.readFileSync(path.join(tempHome, 'npm-argv.txt'), 'utf8').trim().split(/\r?\n/))
+      .toEqual(['uninstall', '-g', '@geminilight/mindos']);
+  });
+
   it('aborts on empty enter (default N) and exits 0', () => {
     const { stdout, exitCode } = run(['uninstall'], { input: '\n' });
     expect(exitCode).toBe(0);
@@ -187,7 +204,7 @@ describe('mindos uninstall — does not delete on N answers', () => {
     fs.writeFileSync(note, 'irreplaceable');
     writeConfig({ mindRoot: path.join(tempHome, 'separate-notes') });
     fs.writeFileSync(path.join(tempHome, 'config-after-daemon.json'), JSON.stringify({ mindRoot: nested }));
-    const result = run(['uninstall'], { input: 'y\ny\nn\n' });
+    const result = run(['uninstall'], { input: 'y\ny\nn\n', hostServices: 'real' });
     expect(fs.existsSync(path.join(tempHome, 'daemon-called'))).toBe(true);
     expect(fs.readFileSync(note, 'utf8')).toBe('irreplaceable');
     expect(result.stdout + result.stderr).toContain('Refusing configuration cleanup');

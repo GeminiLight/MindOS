@@ -15,6 +15,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { execFile } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { release as osRelease } from 'node:os';
 import { basename, dirname, extname, join, posix, relative, resolve } from 'node:path';
 import { resolveExistingSafe, resolveSafe } from '../../foundation/security/index.js';
@@ -33,6 +34,7 @@ import { createMindosSearchIgnoreMatcher } from '../search-ignore.js';
 import { MINDOS_IGNORED_DIRS } from '../runtime.js';
 import { json, type MindosServerResponse } from '../response.js';
 import { isMindosBuiltinAssistantId } from './assistants.js';
+import { knowledgeRootIdentity } from '../knowledge-root-identity.js';
 
 export type FileGetHandlerServices = {
   mindRoot?: string;
@@ -97,7 +99,10 @@ export function handleFileGet(
       const mtime = services.mindRoot
         ? statSync(resolveExistingSafe(services.mindRoot, filePath)).mtimeMs
         : undefined;
-      return json(mtime === undefined ? { content } : { content, mtime });
+      const revision = contentRevision(content);
+      return json(services.mindRoot === undefined
+        ? { content, revision }
+        : { content, mtime, revision, vaultId: knowledgeRootIdentity(services.mindRoot) });
     }
     return json({ error: `Unknown op: ${op}` }, { status: 400 });
   } catch (error) {
@@ -410,15 +415,43 @@ function saveFile(
   source: ContentChangeSource,
 ) {
   const content = requireString(params.content, 'content');
+  const expectedRevision = params.expectedRevision;
+  if (expectedRevision !== undefined && (typeof expectedRevision !== 'string' || !/^[a-f0-9]{64}$/.test(expectedRevision))) {
+    throw new Error('Invalid expectedRevision: must be a SHA-256 content revision');
+  }
+  const expectedVaultId = params.expectedVaultId;
+  if (expectedVaultId !== undefined) {
+    if (typeof expectedVaultId !== 'string' || !/^[a-f0-9]{64}$/.test(expectedVaultId)) {
+      throw new Error('Invalid expectedVaultId: must be a knowledge root identity');
+    }
+    if (expectedVaultId !== knowledgeRootIdentity(mindRoot)) {
+      return { response: json({ error: 'vault_changed' }, { status: 409 }), changeEvent: null };
+    }
+  }
   const abs = resolveExistingSafe(mindRoot, filePath);
   const normalizedPath = relativeKnowledgePath(mindRoot, abs);
+  // Read strictly for conditional writes: an unreadable file is not an empty file.
+  let before: string | undefined;
+  if (expectedRevision !== undefined) {
+    try {
+      const bytes = readFileSync(abs);
+      before = bytes.toString('utf8');
+      if (!Buffer.from(before, 'utf8').equals(bytes)) throw new Error('Invalid UTF-8 document: refusing to replace undecodable content');
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    }
+    const serverRevision = before === undefined ? null : contentRevision(before);
+    if (serverRevision !== expectedRevision) {
+      return { response: json({ error: 'conflict', serverRevision }, { status: 409 }), changeEvent: null };
+    }
+  }
   if (typeof params.expectedMtime === 'number' && existsSync(abs) && statSync(abs).mtimeMs > params.expectedMtime) {
     return {
       response: json({ error: 'conflict', serverMtime: statSync(abs).mtimeMs } as unknown as { error: string }, { status: 409 }),
       changeEvent: null,
     };
   }
-  const before = safeRead(mindRoot, filePath);
+  before ??= safeRead(mindRoot, filePath);
   assertSafeAgentWriteContent({
     operation: 'save_file',
     path: normalizedPath,
@@ -430,7 +463,7 @@ function saveFile(
   });
   atomicWriteFile(abs, content);
   return {
-    response: json({ ok: true, path: normalizedPath, mtime: statSync(abs).mtimeMs }),
+    response: json({ ok: true, path: normalizedPath, mtime: statSync(abs).mtimeMs, revision: contentRevision(content) }),
     changeEvent: { op: 'save_file', path: normalizedPath, summary: 'Updated file content', before, after: content },
   };
 }
@@ -739,6 +772,10 @@ function atomicWriteFile(absPath: string, content: string): void {
     try { unlinkSync(tmp); } catch { /* ignore cleanup errors */ }
     throw error;
   }
+}
+
+function contentRevision(content: string): string {
+  return createHash('sha256').update(content, 'utf8').digest('hex');
 }
 
 function readLines(mindRoot: string, filePath: string): string[] {

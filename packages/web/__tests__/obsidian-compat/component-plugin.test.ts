@@ -100,6 +100,55 @@ describe('Events', () => {
 });
 
 describe('Component', () => {
+  it('cleans every sibling, callback and parent even when a render child fails to unload', async () => {
+    const calls: string[] = [];
+    const parent = new class extends Component { onunload() { calls.push('parent'); } }();
+    parent.addChild(new class extends Component { onunload() { calls.push('failed'); throw new Error('render child failed'); } }());
+    parent.addChild(new class extends Component { onunload() { calls.push('sibling'); } }());
+    parent.register(() => { calls.push('callback'); });
+    await parent.load();
+    await expect(parent.unload()).rejects.toThrow(/cleanup/i);
+    expect(calls).toEqual(['failed', 'sibling', 'callback', 'parent']);
+    await parent.unload(); expect(calls).toHaveLength(4);
+  });
+
+  it('immediately disposes resources registered by late asynchronous render work after unload', async () => {
+    const parent = new Component(); const target = new EventTarget(); const callback = vi.fn(); const cleanup = vi.fn();
+    await parent.load(); await parent.unload();
+    parent.register(cleanup);
+    parent.registerDomEvent(target, 'late', callback);
+    target.dispatchEvent(new Event('late'));
+    expect(cleanup).toHaveBeenCalledTimes(1);
+    expect(callback).not.toHaveBeenCalled();
+  });
+
+  it('does not lose cleanup registered from the parent onunload callback', async () => {
+    const calls: string[] = [];
+    const parent = new class extends Component { onunload() { this.register(() => calls.push('during')); } }();
+    parent.register(() => calls.push('existing'));
+    await parent.load(); await parent.unload();
+    expect(calls).toEqual(['existing', 'during']);
+  });
+
+  it('disposes late children instead of retaining them in an unloaded parent', async () => {
+    const parent = new Component(); const child = new ChildComponent();
+    await parent.load(); await parent.unload(); parent.addChild(child);
+    await Promise.resolve(); await Promise.resolve();
+    expect(child.unloaded).toBe(true); expect(child.loaded).toBe(false);
+    await parent.load(); expect(child.loaded).toBe(false);
+  });
+
+  it('reports a removed child cleanup failure without producing an unhandled rejection', async () => {
+    const report = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const parent = new Component(); const child = new class extends Component { onunload() { throw new Error('removed child failure'); } }();
+      parent.addChild(child); await parent.load(); parent.removeChild(child);
+      await new Promise(resolve => setTimeout(resolve, 0));
+      expect(report).toHaveBeenCalledWith('[obsidian-compat] Component child unload error:', expect.any(Error));
+      await parent.unload();
+    } finally { report.mockRestore(); }
+  });
+
   it('unloads child components and registered callbacks', async () => {
     const parent = new ParentComponent();
     const child = new ChildComponent();

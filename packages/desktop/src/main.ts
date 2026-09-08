@@ -49,6 +49,7 @@ import { authenticateRemoteWebSession } from './remote-auth';
 import { getAppConfigStore } from './app-config-store';
 import { desktopTelemetry } from './telemetry';
 import { startObsidianSecretStorageBroker, type ObsidianSecretStorageBrokerHandle } from './obsidian-secret-storage-broker';
+import { createObsidianEditorLauncher } from './obsidian-editor-launcher';
 import {
   CONFIG_DIR,
   DEFAULT_MCP_PORT,
@@ -1729,7 +1730,21 @@ function installMainWindowNavigationGuard(win: BrowserWindow): void {
   });
 }
 
+const obsidianEditorLauncher = createObsidianEditorLauncher(() => {
+  const owner = mainWindow;
+  const port = currentWebPort;
+  if (!owner || owner.isDestroyed() || currentMode !== 'local' || !port || isQuitting || isRestarting || isUpdating) return null;
+  const token = loadConfig().authToken;
+  if (typeof token !== 'string' || !token) return null;
+  return {
+    window: owner, baseUrl: new URL(owner.webContents.getURL()).origin, token,
+    isCurrent: () => mainWindow === owner && currentMode === 'local' && currentWebPort === port
+      && !isQuitting && !isRestarting && !isUpdating,
+  };
+}, path.join(__dirname, '../obsidian'), path.join(app.getPath('userData'), 'obsidian-drafts'));
+
 function setupIPC(): void {
+  handleLocalOnly('obsidian:open-editor', (event, request: unknown) => obsidianEditorLauncher.open(event, request));
   handleActiveMainWindowOnly('get-app-info', () => ({
     version: app.getVersion(),
     platform: process.platform,
@@ -2263,6 +2278,7 @@ app.on('before-quit', (e) => {
     // Synchronous save — the debounced saveWindowState timer never fires before app.exit
     if (mainWindow && !mainWindow.isDestroyed()) saveWindowStateNow(mainWindow);
     const cleanup = async () => {
+      await obsidianEditorLauncher.flush().catch(() => console.error('[Obsidian] Could not flush all recovery drafts before quit.'));
       // An in-flight `npm install` / `next build` is not owned by ProcessManager
       // and would otherwise outlive the app.
       if (activeBuildChild) {

@@ -176,6 +176,28 @@ export class ButtonComponent {
   }
 }
 
+/** Icon-only Obsidian control projected onto the explicit settings-action host. */
+export class ExtraButtonComponent extends ButtonComponent {
+  disabled = false;
+
+  then(callback: (component: this) => unknown): this {
+    callback(this);
+    return this;
+  }
+
+  override setDisabled(value: boolean): this {
+    this.disabled = value;
+    return super.setDisabled(value);
+  }
+
+  override setTooltip(tooltip: string, _options?: unknown): this {
+    void _options;
+    // The snapshot host needs a readable action label, not just an icon id.
+    this.setButtonText(tooltip);
+    return super.setTooltip(tooltip);
+  }
+}
+
 function textFromDesc(desc: unknown): string {
   if (typeof desc === 'string') return desc;
   if (desc && typeof desc === 'object' && 'textContent' in desc) {
@@ -321,8 +343,8 @@ export class Setting {
     return this;
   }
 
-  addExtraButton(configure: (component: ButtonComponent) => void): this {
-    configure(new ButtonComponent(this.item));
+  addExtraButton(configure: (component: ExtraButtonComponent) => void): this {
+    configure(new ExtraButtonComponent(this.item));
     return this;
   }
 }

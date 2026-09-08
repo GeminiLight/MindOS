@@ -6,6 +6,17 @@
       "dependsOn": ["^build"],
       "outputs": ["dist/**", ".next/**", "!.next/cache/**"]
     },
+    "@mindos/desktop#build": {
+      "dependsOn": ["^build"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/scripts/build-obsidian-desktop-runtime.mjs",
+        "$TURBO_ROOT$/packages/web/lib/obsidian-compat/**",
+        "$TURBO_ROOT$/packages/web/package.json",
+        "$TURBO_ROOT$/pnpm-lock.yaml"
+      ],
+      "outputs": ["dist-electron/**"]
+    },
     "test": {
       "outputs": []
     },

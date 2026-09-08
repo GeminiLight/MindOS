@@ -190,6 +190,8 @@ export const MINDOS_WEB_API_ROUTE_OWNERSHIP: MindosWebApiRouteOwnership[] = [
   migrated('/api/mcp/uninstall', 'high'),
   migrated('/api/monitoring', 'medium'),
   optional('/api/obsidian-plugins', 'Phase 5: content ingestion optional capabilities', 'medium', 'Obsidian plugin lifecycle state is still Web-owned while the compatibility host remains an optional runtime surface.'),
+  optional('/api/obsidian-plugins/package', 'Phase 5: plugin optional capabilities', 'high', 'Read-only package approval subjects use Product byte snapshots; Web validates existing Obsidian manifests. Fingerprints do not grant runtime authority.'),
+  optional('/api/obsidian-plugins/vault', 'Phase 5: plugin optional capabilities', 'high', 'Product provides bounded visible Vault snapshots pinned to code and Vault identity. Desktop main enforces optional native read consent; API authentication alone does not represent native consent.'),
   optional('/api/obsidian-plugins/markdown-code-blocks', 'Phase 5: plugin optional capabilities', 'medium', 'Obsidian markdown code block snapshots remain Web-owned while document render hooks are still an optional compatibility surface.'),
   optional('/api/obsidian-plugins/markdown-post-processors', 'Phase 5: plugin optional capabilities', 'medium', 'Obsidian markdown post processor snapshots remain Web-owned while document render hooks are still an optional compatibility surface.'),
   optional('/api/obsidian-plugins/native-query', 'Phase 5: plugin optional capabilities', 'medium', 'Obsidian native query previews remain Web-owned because they read vault metadata and should stay behind the optional plugin capability boundary.'),

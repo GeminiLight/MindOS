@@ -190,6 +190,15 @@ export const OBSIDIAN_CAPABILITY_MATRIX: ObsidianCapabilityRow[] = [
     notes: 'Standalone button controls are captured as setting actions.',
   },
   {
+    api: 'ExtraButtonComponent',
+    surface: 'settings',
+    support: 'limited',
+    host: 'Plugin settings host',
+    route: '/api/obsidian-plugins/settings',
+    tests: ['obsidian-compat/extra-button-component.test.ts', 'api/obsidian-plugins.extra-buttons.test.ts'],
+    notes: 'Icon buttons expose explicit settings actions with tooltip labels and disabled guards; arbitrary DOM interactions and tooltip positioning are not mounted.',
+  },
+  {
     api: 'TextComponent',
     surface: 'settings',
     support: 'full',
@@ -345,6 +354,14 @@ export const OBSIDIAN_CAPABILITY_MATRIX: ObsidianCapabilityRow[] = [
     host: 'Obsidian module shim',
     tests: ['obsidian-compat/integration.test.ts'],
     notes: 'Path normalization follows Obsidian-style slash cleanup.',
+  },
+  {
+    api: 'getFrontMatterInfo',
+    surface: 'metadata',
+    support: 'limited',
+    host: 'Obsidian module shim',
+    tests: ['obsidian-compat/frontmatter-info.test.ts'],
+    notes: 'Locates leading YAML fences and original UTF-16 body offsets, including BOM/CRLF; does not parse or reserialize YAML.',
   },
   {
     api: 'parseYaml',

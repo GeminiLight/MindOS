@@ -9,7 +9,7 @@ import { Component } from '../component';
 import { Events } from '../events';
 import { Plugin } from './plugin';
 import { Notice, Modal } from './ui';
-import { ButtonComponent, DropdownComponent, PluginSettingTab, Setting, TextAreaComponent, TextComponent, ToggleComponent } from './settings';
+import { ButtonComponent, DropdownComponent, ExtraButtonComponent, PluginSettingTab, Setting, TextAreaComponent, TextComponent, ToggleComponent } from './settings';
 import { TAbstractFileImpl, TFileImpl, TFolderImpl, Vault } from './vault';
 import { createObsidianElement } from './dom';
 import { MarkdownRenderer } from './markdown-renderer';
@@ -17,6 +17,9 @@ import { getActiveObsidianRuntimeHost } from '../runtime';
 import { normalizeObsidianTag, parseFrontMatterTagValues } from './tags';
 import type { CachedMetadata, RequestUrlParam, RequestUrlResponse, RequestUrlResponsePromise, SecretStorage, TFile, WorkspaceLeaf } from '../types';
 import { moment } from './moment';
+import { getFrontMatterInfo } from './frontmatter';
+import { debounce } from '../debounce';
+export { debounce } from '../debounce';
 
 const REQUEST_URL_TIMEOUT_MS = 15_000;
 const REQUEST_URL_MAX_RESPONSE_BYTES = 5 * 1024 * 1024;
@@ -156,53 +159,6 @@ function htmlToTurndownInput(html: string | HTMLElement | Document | DocumentFra
 
 export function htmlToMarkdown(html: string | HTMLElement | Document | DocumentFragment): string {
   return htmlToMarkdownConverter.turndown(htmlToTurndownInput(html)).trim();
-}
-
-type DebouncedFunction<T extends unknown[]> = ((...args: T) => void) & { cancel: () => void; run: () => void };
-
-export function debounce<T extends unknown[]>(
-  callback: (...args: T) => unknown,
-  timeout = 0,
-  resetTimer = true,
-): DebouncedFunction<T> {
-  let timer: ReturnType<typeof setTimeout> | null = null;
-  let lastArgs: T | null = null;
-
-  const clearPending = () => {
-    if (timer !== null) {
-      clearTimeout(timer);
-      timer = null;
-    }
-  };
-
-  const run = () => {
-    const args = lastArgs;
-    timer = null;
-    lastArgs = null;
-    if (args) {
-      callback(...args);
-    }
-  };
-
-  const debounced = ((...args: T) => {
-    lastArgs = args;
-    if (timer !== null && !resetTimer) {
-      return;
-    }
-    clearPending();
-    timer = setTimeout(run, Math.max(0, timeout));
-  }) as DebouncedFunction<T>;
-
-  debounced.cancel = () => {
-    clearPending();
-    lastArgs = null;
-  };
-  debounced.run = () => {
-    clearPending();
-    run();
-  };
-
-  return debounced;
 }
 
 const coreIconIds = [
@@ -1107,6 +1063,7 @@ export function createObsidianModule() {
     PluginSettingTab,
     Setting,
     ButtonComponent,
+    ExtraButtonComponent,
     TextComponent,
     TextAreaComponent,
     ToggleComponent,
@@ -1117,6 +1074,7 @@ export function createObsidianModule() {
     Vault,
     normalizePath,
     parseYaml,
+    getFrontMatterInfo,
     stringifyYaml,
     parseLinktext,
     getLinkpath,

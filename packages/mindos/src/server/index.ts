@@ -1,3 +1,6 @@
+export { readPluginPackageSnapshot, type PluginPackageSnapshot, type PluginPackageFile } from './plugin-package-snapshot.js';
+export { readPluginVaultSnapshot, type PluginVaultSnapshot, type PluginVaultFile } from './plugin-vault-snapshot.js';
+
 export {
   MINDOS_SERVER_ROUTES,
   getMindosServerContract,
