@@ -1038,6 +1038,9 @@ describe('mindos sync config persistence', () => {
     expect(gitignore).toContain('node_modules/');
     expect(gitignore).toContain('*.sync-conflict');
     expect(gitignore).toContain('INSTRUCTION.md');
+    // Derived-state sqlite databases must never be synced (spec-sqlite-derived-stores).
+    expect(gitignore).toContain('.mindos/db/');
+    expect(execFileSyncMock).toHaveBeenCalledWith('git', ['rm', '-r', '--cached', '--ignore-unmatch', '.mindos/db/'], expect.anything());
   });
 
   it('keeps manual sync failed when pull cannot read the remote and no conflict was produced', async () => {

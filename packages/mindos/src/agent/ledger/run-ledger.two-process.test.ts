@@ -5,18 +5,23 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setMindRootResolverForTests } from '../../foundation/mind-root/index.js';
+import { openMindosDatabase } from '../../foundation/storage/sqlite.js';
+import { LEDGER_DB_RELATIVE_PATH } from './run-ledger-db.js';
 import {
+  completeAgentRun,
+  getAgentRun,
+  listAgentEvents,
   listAgentRuns,
   reloadAgentRunsFromDiskForTest,
   resetAgentRunsForTest,
+  startAgentRun,
 } from './run-ledger.js';
 
 /**
  * True multi-process ledger tests (spec-agent-core-consolidation 验收:
- * 真双进程测试). Children are real `node` processes importing the BUILT
- * dist/ ledger, each writing its own shard, so concurrent appends and
- * compactions hit the actual filesystem with genuinely distinct pids —
- * the strengthened successor of the 977728c6 foreign-append regression test.
+ * 真双进程测试; spec-sqlite-derived-stores cross-process visibility). Children
+ * are real `node` processes importing the BUILT dist/ ledger, all writing the
+ * same WAL-mode sqlite file with genuinely distinct pids.
  */
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -39,7 +44,7 @@ function newestSourceMtime(dir: string): number {
 
 /** The drivers import dist/, so rebuild when src is newer than the build. */
 function ensureFreshDist(): void {
-  const probe = path.join(distDir, 'agent', 'run-ledger.js');
+  const probe = path.join(distDir, 'agent', 'ledger', 'run-ledger.js');
   const distMtime = fs.existsSync(probe) ? fs.statSync(probe).mtimeMs : -1;
   const srcMtime = Math.max(
     newestSourceMtime(path.join(pkgRoot, 'src', 'agent')),
@@ -76,6 +81,12 @@ function runDriver(mindRoot: string, mode: string, ...args: string[]): Promise<{
 
 let root = '';
 
+function rawRunStatus(id: string): string | undefined {
+  const db = openMindosDatabase({ file: path.join(fs.realpathSync(root), ...LEDGER_DB_RELATIVE_PATH.split('/')), migrations: [] });
+  const row = db.prepare('SELECT status FROM agent_runs WHERE id = ?').get(id) as { status: string } | undefined;
+  return row?.status;
+}
+
 describe('agent run ledger across real processes', () => {
   beforeAll(() => {
     ensureFreshDist();
@@ -94,7 +105,7 @@ describe('agent run ledger across real processes', () => {
     fs.rmSync(root, { recursive: true, force: true });
   });
 
-  it('two processes appending and compacting concurrently lose none of each other\'s runs', async () => {
+  it('two processes writing concurrently lose none of each other\'s runs, with no per-process shard files', async () => {
     const COUNT = 140;
     const [a, b] = await Promise.all([
       runDriver(root, 'append-many', 'proc-a', String(COUNT)),
@@ -102,18 +113,11 @@ describe('agent run ledger across real processes', () => {
     ]);
     expect(a.pid).not.toBe(b.pid);
 
-    const shardFiles = fs.readdirSync(path.join(root, '.mindos'))
-      .filter((name) => /^agent-run-ledger\.\d+-\d+\.jsonl$/.test(name));
-    expect(shardFiles).toHaveLength(2);
+    const mindosDir = fs.readdirSync(path.join(root, '.mindos'));
+    expect(mindosDir.filter((name) => name.startsWith('agent-run-ledger.'))).toEqual([]);
+    expect(fs.existsSync(path.join(root, ...LEDGER_DB_RELATIVE_PATH.split('/')))).toBe(true);
 
-    // Both children wrote enough to cross the 1 MiB threshold, so each shard
-    // was compacted at least once while the other process kept appending.
-    for (const name of shardFiles) {
-      const firstLine = fs.readFileSync(path.join(root, '.mindos', name), 'utf-8').split('\n', 1)[0]!;
-      expect(JSON.parse(firstLine)).toMatchObject({ version: 3, type: 'compact' });
-    }
-
-    reloadAgentRunsFromDiskForTest();
+    // No reload: the parent reads the shared database directly.
     const runs = listAgentRuns({ kind: 'pi-subagent', limit: 500 });
     expect(runs).toHaveLength(COUNT * 2);
     const runtimeIds = new Set(runs.map((run) => run.runtimeId));
@@ -124,16 +128,44 @@ describe('agent run ledger across real processes', () => {
     expect(runs.every((run) => run.status === 'completed')).toBe(true);
   }, 60_000);
 
-  it('a run whose owning process exited mid-flight is failed on the next read, shard untouched', async () => {
-    const result = await runDriver(root, 'start-and-exit', 'agent-run-2p-orphan');
-    const shardFiles = fs.readdirSync(path.join(root, '.mindos'))
-      .filter((name) => name.startsWith(`agent-run-ledger.${result.pid}-`));
-    expect(shardFiles).toHaveLength(1);
-    const shardPath = path.join(root, '.mindos', shardFiles[0]!);
-    const rawBefore = fs.readFileSync(shardPath, 'utf-8');
-    expect(rawBefore).toContain('"status":"running"');
+  it('a run created by a child process is visible to the parent without a restart, and vice versa', async () => {
+    // Parent opens its handle first so nothing about the child's write is
+    // observed through a cold open.
+    expect(listAgentRuns()).toEqual([]);
+    const parentRun = startAgentRun({
+      agentKind: 'mindos-main',
+      runtimeId: 'parent',
+      displayName: 'Parent Run',
+      permissionMode: 'ask',
+      inputSummary: 'parent turn',
+    });
 
-    reloadAgentRunsFromDiskForTest();
+    const child = await runDriver(root, 'start-and-complete', 'agent-run-2p-child');
+    expect(child.pid).not.toBe(process.pid);
+    expect(getAgentRun('agent-run-2p-child')).toEqual(expect.objectContaining({
+      id: 'agent-run-2p-child',
+      status: 'completed',
+      outputSummary: 'child done',
+    }));
+    expect(listAgentEvents({ runId: 'agent-run-2p-child' }).map((event) => event.type)).toEqual([
+      'run_completed',
+      'text',
+      'run_started',
+    ]);
+    expect(listAgentRuns().map((run) => run.id)).toEqual(['agent-run-2p-child', parentRun.id]);
+
+    const seenByChild = await runDriver(root, 'get-run', parentRun.id);
+    expect(seenByChild.record).toEqual(expect.objectContaining({ id: parentRun.id, status: 'running' }));
+    expect(seenByChild.events).toEqual(['run_started']);
+    completeAgentRun(parentRun.id, { outputSummary: 'parent done' });
+    const afterComplete = await runDriver(root, 'get-run', parentRun.id);
+    expect(afterComplete.record).toEqual(expect.objectContaining({ status: 'completed', outputSummary: 'parent done' }));
+  }, 60_000);
+
+  it('a run whose owning process exited mid-flight is failed on the next read, row untouched', async () => {
+    const result = await runDriver(root, 'start-and-exit', 'agent-run-2p-orphan');
+    expect(result.pid).not.toBe(process.pid);
+
     expect(listAgentRuns({ runId: 'agent-run-2p-orphan' })).toEqual([
       expect.objectContaining({
         id: 'agent-run-2p-orphan',
@@ -142,7 +174,10 @@ describe('agent run ledger across real processes', () => {
         metadata: expect.objectContaining({ failureReason: 'process-died' }),
       }),
     ]);
-    // The dead process's shard is evidence, not something we rewrite.
-    expect(fs.readFileSync(shardPath, 'utf-8')).toBe(rawBefore);
+    // The dead process's row is evidence, not something we rewrite.
+    expect(rawRunStatus('agent-run-2p-orphan')).toBe('running');
+    reloadAgentRunsFromDiskForTest();
+    expect(listAgentRuns({ runId: 'agent-run-2p-orphan', status: 'failed' })).toHaveLength(1);
+    expect(listAgentRuns({ runId: 'agent-run-2p-orphan', status: 'running' })).toEqual([]);
   }, 60_000);
 });

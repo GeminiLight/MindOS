@@ -3,6 +3,7 @@ import path from 'path';
 import { NextRequest } from 'next/server';
 import { describe, expect, it } from 'vitest';
 import { GET, POST } from '../../app/api/echo/route';
+import { listContentChanges } from '../../lib/fs';
 import { getTestMindRoot } from '../setup';
 
 describe('/api/echo', () => {
@@ -50,8 +51,8 @@ describe('/api/echo', () => {
     const eventText = fs.readFileSync(path.join(eventDir, eventFiles[0]), 'utf-8');
     expect(eventText).toContain('echo.insight.saved');
 
-    const changeLog = fs.readFileSync(path.join(root, '.mindos', 'change-log.json'), 'utf-8');
-    expect(changeLog).toContain(body.item.path);
+    const changeLog = listContentChanges({ limit: 20 });
+    expect(changeLog.some((event) => event.path === body.item.path)).toBe(true);
   });
 
   it('persists generated drafts without creating visible Echo Markdown', async () => {

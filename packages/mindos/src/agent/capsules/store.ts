@@ -4,7 +4,21 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { resolveExistingSafe } from '../../foundation/security/index.js';
+import type { MindosDatabase } from '../../foundation/storage/sqlite.js';
 import { redactSensitiveText } from '../redaction.js';
+import {
+  deleteCapsuleRow,
+  forgetDir,
+  getCapsuleRow,
+  listCapsuleRows,
+  listCapsuleRowsUnder,
+  listIndexedDirs,
+  openCapsuleIndex,
+  readDirMtime,
+  upsertCapsuleRow,
+  writeDirMtime,
+  type CapsuleIndexRow,
+} from './capsule-index.js';
 import type {
   AgentRunCapsule,
   AgentRunCapsuleProjection,
@@ -13,6 +27,8 @@ import type {
   CreateAgentRunCapsuleInput,
   CreateAgentRunCapsuleRecoveryPlanInput,
 } from './types.js';
+
+export { CAPSULES_DB_RELATIVE_PATH } from './capsule-index.js';
 
 const CAPSULES_DIR = '.mindos/agent-run-capsules';
 const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,119}$/;
@@ -32,26 +48,19 @@ type CapsuleFileCacheEntry = {
   corruptMessage?: string;
 };
 
-type CapsuleMonthCacheEntry = {
-  mtimeMs: number;
-  /** Candidate `<id>.json` paths present in this month directory. */
-  files: string[];
-};
-
 type CapsuleStoreCache = {
-  months: Map<string, CapsuleMonthCacheEntry>;
   files: Map<string, CapsuleFileCacheEntry>;
-  /** Capsule id (file basename) -> candidate path, so lookups by id skip the scan. */
-  ids: Map<string, string>;
 };
 
 /**
- * Per-mind-root read cache. `GET /api/agent-runs` is polled roughly every
- * 900ms by the web timeline and used to readdir, realpath twice, read and
- * JSON.parse every capsule on each poll. Month directories are revalidated by
- * mtime (creates, atomic rewrites and deletes all touch it) and individual
- * files by mtime + size, so unchanged capsules are never re-read. Cached
- * capsules are handed out by reference; callers must treat them as immutable.
+ * Per-mind-root parsed-file cache. `GET /api/agent-runs` polls roughly every
+ * 900ms; files are revalidated by mtime + size so unchanged capsules are never
+ * re-read or re-parsed. Cached capsules are handed out by reference; callers
+ * must treat them as immutable.
+ *
+ * Where each capsule lives is remembered in the sqlite index
+ * (`capsule-index.ts`): month directories are re-listed only when their mtime
+ * changed, and lookups by id go straight to the indexed path.
  */
 const capsuleCaches = new Map<string, CapsuleStoreCache>();
 const MAX_CACHED_ROOTS = 16;
@@ -101,9 +110,11 @@ export function listAgentRunCapsules(
   mindRoot: string,
   options: { onCorrupt?(message: string): void } = {},
 ): AgentRunCapsule[] {
+  const db = syncCapsuleIndex(mindRoot);
+  if (!db) return [];
   const capsules: AgentRunCapsule[] = [];
-  for (const candidate of scanCapsuleFiles(mindRoot)) {
-    const entry = readCapsuleEntry(mindRoot, candidate);
+  for (const row of listCapsuleRows(db)) {
+    const entry = readIndexedEntry(mindRoot, db, row);
     if (!entry) continue;
     if (entry.capsule) {
       capsules.push(entry.capsule);
@@ -290,15 +301,20 @@ export function projectAgentRunCapsule(capsule: AgentRunCapsule): AgentRunCapsul
   };
 }
 
-function capsuleFile(mindRoot: string, capsule: AgentRunCapsule): string {
+// --- paths ---
+
+function capsuleRelativePath(capsule: Pick<AgentRunCapsule, 'id' | 'createdAt'>): string {
   const createdAt = new Date(capsule.createdAt);
-  const relative = path.posix.join(
+  return path.posix.join(
     CAPSULES_DIR,
     String(createdAt.getUTCFullYear()),
     String(createdAt.getUTCMonth() + 1).padStart(2, '0'),
     `${capsule.id}.json`,
   );
-  return resolveExistingSafe(mindRoot, relative);
+}
+
+function capsuleFile(mindRoot: string, capsule: AgentRunCapsule): string {
+  return resolveExistingSafe(mindRoot, capsuleRelativePath(capsule));
 }
 
 function recoveryPlanId(idempotencyKey: string): string {
@@ -320,11 +336,26 @@ function recoveryClaimFile(mindRoot: string, planId: string): string {
   );
 }
 
+function capsulesRoot(mindRoot: string): string {
+  return resolveExistingSafe(mindRoot, CAPSULES_DIR);
+}
+
+/** Relative posix path of `absolute` inside `mindRoot`, as stored in the index. */
+function relativeTo(mindRoot: string, absolute: string): string {
+  return path.relative(mindRoot, absolute).split(path.sep).join('/');
+}
+
+function absoluteFrom(mindRoot: string, relative: string): string {
+  return path.join(mindRoot, ...relative.split('/'));
+}
+
+// --- parsed-file cache ---
+
 function cacheFor(mindRoot: string): CapsuleStoreCache {
   const key = path.resolve(mindRoot);
   let cache = capsuleCaches.get(key);
   if (!cache) {
-    cache = { months: new Map(), files: new Map(), ids: new Map() };
+    cache = { files: new Map() };
     capsuleCaches.set(key, cache);
     while (capsuleCaches.size > MAX_CACHED_ROOTS) {
       const oldest = capsuleCaches.keys().next().value;
@@ -333,62 +364,6 @@ function cacheFor(mindRoot: string): CapsuleStoreCache {
     }
   }
   return cache;
-}
-
-function capsulesRoot(mindRoot: string): string {
-  return resolveExistingSafe(mindRoot, CAPSULES_DIR);
-}
-
-/**
- * Candidate capsule files under `<root>/<YYYY>/<MM>/`. Year and month
- * directories are tiny and always re-listed; a month's file list is reused
- * while its directory mtime is unchanged.
- */
-function scanCapsuleFiles(mindRoot: string): string[] {
-  const cache = cacheFor(mindRoot);
-  const root = capsulesRoot(mindRoot);
-  if (!fs.existsSync(root)) {
-    cache.months.clear();
-    cache.files.clear();
-    cache.ids.clear();
-    return [];
-  }
-  const files: string[] = [];
-  const seenMonths = new Set<string>();
-  for (const year of safeDirectories(root)) {
-    for (const month of safeDirectories(year)) {
-      seenMonths.add(month);
-      files.push(...monthCapsuleFiles(cache, month));
-    }
-  }
-  for (const month of [...cache.months.keys()]) {
-    if (!seenMonths.has(month)) cache.months.delete(month);
-  }
-  const listed = new Set(files);
-  for (const file of [...cache.files.keys()]) {
-    if (!listed.has(file)) cache.files.delete(file);
-  }
-  for (const [id, file] of [...cache.ids]) {
-    if (!listed.has(file)) cache.ids.delete(id);
-  }
-  return files;
-}
-
-function monthCapsuleFiles(cache: CapsuleStoreCache, month: string): string[] {
-  let mtimeMs: number;
-  try {
-    mtimeMs = fs.statSync(month).mtimeMs;
-  } catch {
-    cache.months.delete(month);
-    return [];
-  }
-  const cached = cache.months.get(month);
-  if (cached && cached.mtimeMs === mtimeMs) return cached.files;
-  const files = fs.readdirSync(month, { withFileTypes: true })
-    .filter((entry) => entry.isFile() && entry.name.endsWith('.json'))
-    .map((entry) => path.join(month, entry.name));
-  cache.months.set(month, { mtimeMs, files });
-  return files;
 }
 
 /**
@@ -408,8 +383,7 @@ function readCapsuleEntry(mindRoot: string, candidate: string): CapsuleFileCache
   const cached = cache.files.get(candidate);
   if (cached && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size) return cached;
 
-  const relative = path.relative(mindRoot, candidate).split(path.sep).join('/');
-  const safePath = resolveExistingSafe(mindRoot, relative);
+  const safePath = resolveExistingSafe(mindRoot, relativeTo(mindRoot, candidate));
   const entry: CapsuleFileCacheEntry = { safePath, mtimeMs: stat.mtimeMs, size: stat.size, capsule: null };
   try {
     entry.capsule = readCapsule(safePath);
@@ -417,36 +391,194 @@ function readCapsuleEntry(mindRoot: string, candidate: string): CapsuleFileCache
     entry.corruptMessage = error instanceof Error ? error.message : 'Unreadable capsule.';
   }
   cache.files.set(candidate, entry);
-  cache.ids.set(path.basename(candidate, '.json'), candidate);
   return entry;
 }
 
+/** Seed the cache and the index from a write this process just performed, so the next poll does not re-read it. */
+function rememberCapsuleFile(mindRoot: string, file: string, capsule: AgentRunCapsule): void {
+  const cache = cacheFor(mindRoot);
+  let entry: CapsuleFileCacheEntry;
+  try {
+    const stat = fs.statSync(file);
+    entry = { safePath: file, mtimeMs: stat.mtimeMs, size: stat.size, capsule };
+    cache.files.set(file, entry);
+  } catch {
+    cache.files.delete(file);
+    return;
+  }
+  try {
+    const db = openCapsuleIndex(mindRoot, { create: true });
+    if (db) upsertCapsuleRow(db, indexRowFor(mindRoot, file, entry));
+  } catch {
+    // The file is the source of truth; a missing index row is rebuilt on the next scan.
+  }
+}
+
+function requireCachedCapsule(entry: CapsuleFileCacheEntry): AgentRunCapsule {
+  if (entry.capsule) return entry.capsule;
+  throw new Error(
+    entry.corruptMessage
+      ?? `Agent run capsule is corrupt; the original file was preserved: ${path.basename(entry.safePath)}`,
+  );
+}
+
+// --- sqlite index maintenance ---
+
+function indexRowFor(mindRoot: string, file: string, entry: CapsuleFileCacheEntry): CapsuleIndexRow {
+  const capsule = entry.capsule;
+  return {
+    id: path.basename(file, '.json'),
+    run_id: capsule?.runId ?? null,
+    root_run_id: capsule?.rootRunId ?? null,
+    chat_session_id: capsule?.chatSessionId ?? null,
+    status: capsule?.status ?? null,
+    created_at: capsule?.createdAt ?? null,
+    updated_at: capsule?.updatedAt ?? null,
+    path: relativeTo(mindRoot, file),
+    size: entry.size,
+    mtime_ms: entry.mtimeMs,
+    corrupt_message: entry.corruptMessage ?? null,
+  };
+}
+
+/** A row is only trusted when its path is a capsule file for its own id inside the capsules tree. */
+function isPlausibleRow(row: CapsuleIndexRow): boolean {
+  return SAFE_ID.test(row.id)
+    && row.path.startsWith(`${CAPSULES_DIR}/`)
+    && !row.path.includes('..')
+    && path.posix.basename(row.path) === `${row.id}.json`;
+}
+
 /**
- * Find a capsule by id without scanning when possible: first a path remembered
- * from an earlier create/scan, then the current and previous month directories
- * (capsules are filed by createdAt and finalized shortly after), and only then
- * the full cached scan for older capsules.
+ * Reads the capsule an index row points at, refreshing the row when the file
+ * changed underneath it and dropping the row when the file is gone.
+ */
+function readIndexedEntry(mindRoot: string, db: MindosDatabase, row: CapsuleIndexRow): CapsuleFileCacheEntry | null {
+  if (!isPlausibleRow(row)) {
+    deleteCapsuleRow(db, row.id);
+    return null;
+  }
+  const candidate = absoluteFrom(mindRoot, row.path);
+  let entry: CapsuleFileCacheEntry | null;
+  try {
+    entry = readCapsuleEntry(mindRoot, candidate);
+  } catch {
+    entry = null;
+  }
+  if (!entry) {
+    deleteCapsuleRow(db, row.id);
+    return null;
+  }
+  if (entry.mtimeMs !== Number(row.mtime_ms) || entry.size !== Number(row.size)) {
+    upsertCapsuleRow(db, indexRowFor(mindRoot, candidate, entry));
+  }
+  return entry;
+}
+
+function safeDirectories(directory: string): string[] {
+  return fs.readdirSync(directory, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && /^\d{2,4}$/.test(entry.name))
+    .map((entry) => path.join(directory, entry.name));
+}
+
+/**
+ * Re-lists one month directory and reconciles its rows: new or changed files
+ * are (re)indexed, rows for vanished files are dropped.
+ */
+function reindexMonth(mindRoot: string, db: MindosDatabase, month: string, mtimeMs: number): void {
+  const relativeDir = relativeTo(mindRoot, month);
+  const present = new Set<string>();
+  for (const dirent of fs.readdirSync(month, { withFileTypes: true })) {
+    if (!dirent.isFile() || !dirent.name.endsWith('.json')) continue;
+    const id = path.basename(dirent.name, '.json');
+    if (!SAFE_ID.test(id)) continue;
+    const candidate = path.join(month, dirent.name);
+    present.add(id);
+    let entry: CapsuleFileCacheEntry | null;
+    try {
+      entry = readCapsuleEntry(mindRoot, candidate);
+    } catch {
+      continue;
+    }
+    if (entry) upsertCapsuleRow(db, indexRowFor(mindRoot, candidate, entry));
+  }
+  for (const row of listCapsuleRowsUnder(db, relativeDir)) {
+    if (!present.has(row.id)) deleteCapsuleRow(db, row.id);
+  }
+  writeDirMtime(db, relativeDir, mtimeMs);
+}
+
+/**
+ * Brings the index in line with the directory tree. Year and month
+ * directories are tiny and always re-listed; a month's files are re-listed
+ * only when its directory mtime differs from the recorded one (creates,
+ * atomic rewrites and deletes all touch it). Returns null when there are no
+ * capsules at all, without creating a database.
+ */
+function syncCapsuleIndex(mindRoot: string): MindosDatabase | null {
+  const root = capsulesRoot(mindRoot);
+  if (!fs.existsSync(root)) {
+    cacheFor(mindRoot).files.clear();
+    const stale = openCapsuleIndex(mindRoot, { create: false });
+    if (stale) for (const dir of listIndexedDirs(stale)) forgetDir(stale, dir);
+    return stale;
+  }
+  const db = openCapsuleIndex(mindRoot, { create: true });
+  if (!db) return null;
+  const seen = new Set<string>();
+  db.transaction(() => {
+    for (const year of safeDirectories(root)) {
+      for (const month of safeDirectories(year)) {
+        const relativeDir = relativeTo(mindRoot, month);
+        seen.add(relativeDir);
+        let mtimeMs: number;
+        try {
+          mtimeMs = fs.statSync(month).mtimeMs;
+        } catch {
+          continue;
+        }
+        if (readDirMtime(db, relativeDir) !== mtimeMs) reindexMonth(mindRoot, db, month, mtimeMs);
+      }
+    }
+    for (const dir of listIndexedDirs(db)) {
+      if (!seen.has(dir)) forgetDir(db, dir);
+    }
+  });
+  return db;
+}
+
+/**
+ * Find a capsule by id without scanning when possible: the indexed path
+ * first, then the current and previous month directories (capsules are filed
+ * by createdAt and finalized shortly after), and only then a full index sync
+ * for capsules another process filed elsewhere.
  */
 function locateCapsuleEntry(mindRoot: string, id: string): CapsuleFileCacheEntry | null {
-  const cache = cacheFor(mindRoot);
-  const known = cache.ids.get(id);
-  if (known) {
-    const entry = readCapsuleEntry(mindRoot, known);
-    if (entry) return entry;
-    cache.ids.delete(id);
+  const indexed = openCapsuleIndex(mindRoot, { create: false });
+  if (indexed) {
+    const row = getCapsuleRow(indexed, id);
+    if (row) {
+      const entry = readIndexedEntry(mindRoot, indexed, row);
+      if (entry) return entry;
+    }
   }
   for (const candidate of recentMonthCandidates(mindRoot, id)) {
     if (!fs.existsSync(candidate)) continue;
     const entry = readCapsuleEntry(mindRoot, candidate);
-    if (entry) return entry;
+    if (entry) {
+      try {
+        const db = openCapsuleIndex(mindRoot, { create: true });
+        if (db) upsertCapsuleRow(db, indexRowFor(mindRoot, candidate, entry));
+      } catch {
+        // Index is best-effort; the file was found and validated.
+      }
+      return entry;
+    }
   }
-  const fileName = `${id}.json`;
-  for (const candidate of scanCapsuleFiles(mindRoot)) {
-    if (path.basename(candidate) !== fileName) continue;
-    const entry = readCapsuleEntry(mindRoot, candidate);
-    if (entry) return entry;
-  }
-  return null;
+  const db = syncCapsuleIndex(mindRoot);
+  if (!db) return null;
+  const row = getCapsuleRow(db, id);
+  return row ? readIndexedEntry(mindRoot, db, row) : null;
 }
 
 function recentMonthCandidates(mindRoot: string, id: string): string[] {
@@ -463,32 +595,7 @@ function recentMonthCandidates(mindRoot: string, id: string): string[] {
   });
 }
 
-/** Seed the cache from a write this process just performed, so the next poll does not re-read it. */
-function rememberCapsuleFile(mindRoot: string, file: string, capsule: AgentRunCapsule): void {
-  const cache = cacheFor(mindRoot);
-  try {
-    const stat = fs.statSync(file);
-    cache.files.set(file, { safePath: file, mtimeMs: stat.mtimeMs, size: stat.size, capsule });
-    cache.ids.set(capsule.id, file);
-  } catch {
-    cache.files.delete(file);
-    cache.ids.delete(capsule.id);
-  }
-}
-
-function requireCachedCapsule(entry: CapsuleFileCacheEntry): AgentRunCapsule {
-  if (entry.capsule) return entry.capsule;
-  throw new Error(
-    entry.corruptMessage
-      ?? `Agent run capsule is corrupt; the original file was preserved: ${path.basename(entry.safePath)}`,
-  );
-}
-
-function safeDirectories(directory: string): string[] {
-  return fs.readdirSync(directory, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory() && /^\d{2,4}$/.test(entry.name))
-    .map((entry) => path.join(directory, entry.name));
-}
+// --- validation ---
 
 function readCapsule(file: string): AgentRunCapsule {
   try {
@@ -635,6 +742,8 @@ function readRecoveryClaim(file: string): AgentRunCapsuleRecoveryClaim {
     throw new Error(`Agent run recovery claim is corrupt; the original file was preserved: ${path.basename(file)}`);
   }
 }
+
+// --- bounded JSON I/O ---
 
 function readBoundedJson(file: string): unknown {
   if (fs.statSync(file).size > MAX_CAPSULE_BYTES) {

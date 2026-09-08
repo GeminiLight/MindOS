@@ -1,0 +1,1668 @@
+{
+  "list": {
+    "default": [
+      {
+        "id": "evt-033",
+        "ts": "2026-01-01T00:00:33.000Z",
+        "op": "save_file",
+        "path": "Bulk/file-19.md",
+        "source": "user",
+        "summary": "bulk 19"
+      },
+      {
+        "id": "evt-032",
+        "ts": "2026-01-01T00:00:32.000Z",
+        "op": "create_file",
+        "path": "Bulk/file-18.md",
+        "source": "agent",
+        "agentName": "bulk-bot",
+        "summary": "bulk 18"
+      },
+      {
+        "id": "evt-031",
+        "ts": "2026-01-01T00:00:31.000Z",
+        "op": "save_file",
+        "path": "Bulk/file-17.md",
+        "source": "user",
+        "summary": "bulk 17"
+      },
+      {
+        "id": "evt-030",
+        "ts": "2026-01-01T00:00:30.000Z",
+        "op": "create_file",
+        "path": "Bulk/file-16.md",
+        "source": "user",
+        "summary": "bulk 16"
+      },
+      {
+        "id": "evt-029",
+        "ts": "2026-01-01T00:00:29.000Z",
+        "op": "save_file",
+        "path": "Bulk/file-15.md",
+        "source": "agent",
+        "agentName": "bulk-bot",
+        "summary": "bulk 15"
+      },
+      {
+        "id": "evt-028",
+        "ts": "2026-01-01T00:00:28.000Z",
+        "op": "create_file",
+        "path": "Bulk/file-14.md",
+        "source": "user",
+        "summary": "bulk 14"
+      },
+      {
+        "id": "evt-027",
+        "ts": "2026-01-01T00:00:27.000Z",
+        "op": "save_file",
+        "path": "Bulk/file-13.md",
+        "source": "user",
+        "summary": "bulk 13"
+      },
+      {
+        "id": "evt-026",
+        "ts": "2026-01-01T00:00:26.000Z",
+        "op": "create_file",
+        "path": "Bulk/file-12.md",
+        "source": "agent",
+        "agentName": "bulk-bot",
+        "summary": "bulk 12"
+      },
+      {
+        "id": "evt-025",
+        "ts": "2026-01-01T00:00:25.000Z",
+        "op": "save_file",
+        "path": "Bulk/file-11.md",
+        "source": "user",
+        "summary": "bulk 11"
+      },
+      {
+        "id": "evt-024",
+        "ts": "2026-01-01T00:00:24.000Z",
+        "op": "create_file",
+        "path": "Bulk/file-10.md",
+        "source": "user",
+        "summary": "bulk 10"
+      },
+      {
+        "id": "evt-023",
+        "ts": "2026-01-01T00:00:23.000Z",
+        "op": "save_file",
+        "path": "Bulk/file-9.md",
+        "source": "agent",
+        "agentName": "bulk-bot",
+        "summary": "bulk 9"
+      },
+      {
+        "id": "evt-022",
+        "ts": "2026-01-01T00:00:22.000Z",
+        "op": "create_file",
+        "path": "Bulk/file-8.md",
+        "source": "user",
+        "summary": "bulk 8"
+      },
+      {
+        "id": "evt-021",
+        "ts": "2026-01-01T00:00:21.000Z",
+        "op": "save_file",
+        "path": "Bulk/file-7.md",
+        "source": "user",
+        "summary": "bulk 7"
+      },
+      {
+        "id": "evt-020",
+        "ts": "2026-01-01T00:00:20.000Z",
+        "op": "create_file",
+        "path": "Bulk/file-6.md",
+        "source": "agent",
+        "agentName": "bulk-bot",
+        "summary": "bulk 6"
+      },
+      {
+        "id": "evt-019",
+        "ts": "2026-01-01T00:00:19.000Z",
+        "op": "save_file",
+        "path": "Bulk/file-5.md",
+        "source": "user",
+        "summary": "bulk 5"
+      },
+      {
+        "id": "evt-018",
+        "ts": "2026-01-01T00:00:18.000Z",
+        "op": "create_file",
+        "path": "Bulk/file-4.md",
+        "source": "user",
+        "summary": "bulk 4"
+      },
+      {
+        "id": "evt-017",
+        "ts": "2026-01-01T00:00:17.000Z",
+        "op": "save_file",
+        "path": "Bulk/file-3.md",
+        "source": "agent",
+        "agentName": "bulk-bot",
+        "summary": "bulk 3"
+      },
+      {
+        "id": "evt-016",
+        "ts": "2026-01-01T00:00:16.000Z",
+        "op": "create_file",
+        "path": "Bulk/file-2.md",
+        "source": "user",
+        "summary": "bulk 2"
+      },
+      {
+        "id": "evt-015",
+        "ts": "2026-01-01T00:00:15.000Z",
+        "op": "save_file",
+        "path": "Bulk/file-1.md",
+        "source": "user",
+        "summary": "bulk 1"
+      },
+      {
+        "id": "evt-014",
+        "ts": "2026-01-01T00:00:14.000Z",
+        "op": "create_file",
+        "path": "Bulk/file-0.md",
+        "source": "agent",
+        "agentName": "bulk-bot",
+        "summary": "bulk 0"
+      },
+      {
+        "id": "evt-013",
+        "ts": "2026-01-01T00:00:13.000Z",
+        "op": "save_file",
+        "path": "Research/paper.md",
+        "source": "agent",
+        "agentName": "codex",
+        "summary": "CODEX uppercase in summary"
+      },
+      {
+        "id": "evt-012",
+        "ts": "2026-01-01T00:00:12.000Z",
+        "op": "save_file",
+        "path": "Windows\\style\\path.md",
+        "source": "user",
+        "summary": "backslash path"
+      },
+      {
+        "id": "evt-011",
+        "ts": "2026-01-01T00:00:11.000Z",
+        "op": "save_file",
+        "path": "/leading/slash.md",
+        "source": "user",
+        "summary": "leading slash path"
+      },
+      {
+        "id": "evt-010",
+        "ts": "2026-01-01T00:00:10.000Z",
+        "op": "legacy_agent_diff_import",
+        "path": "Agent-Diff.md",
+        "source": "agent",
+        "agentName": "  spaced-agent  ",
+        "summary": "Imported legacy agent diff (write_file)"
+      },
+      {
+        "id": "evt-009",
+        "ts": "2026-01-01T00:00:09.000Z",
+        "op": "save_file",
+        "path": "Research/paper.md",
+        "source": "user",
+        "summary": "user follow-up",
+        "truncated": true,
+        "before": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy",
+        "after": "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"
+      },
+      {
+        "id": "evt-008",
+        "ts": "2026-01-01T00:00:08.000Z",
+        "op": "save_file",
+        "path": "📝 笔记/中文 文件.md",
+        "source": "agent",
+        "agentName": "claude-code",
+        "summary": "中文摘要 emoji 🚀",
+        "before": "之前",
+        "after": "之后"
+      },
+      {
+        "id": "evt-007",
+        "ts": "2026-01-01T00:00:07.000Z",
+        "op": "rename_space",
+        "path": "Archive",
+        "beforePath": "Archive",
+        "afterPath": "Archives",
+        "source": "user",
+        "summary": "space renamed"
+      },
+      {
+        "id": "evt-006",
+        "ts": "2026-01-01T00:00:06.000Z",
+        "op": "create_space",
+        "path": "Archive",
+        "source": "user",
+        "summary": "space created"
+      },
+      {
+        "id": "evt-005",
+        "ts": "2026-01-01T00:00:05.000Z",
+        "op": "rename_file",
+        "path": "Personal/b.md",
+        "beforePath": "Personal/a.md",
+        "afterPath": "Projects/b.md",
+        "source": "user",
+        "summary": "moved across spaces"
+      },
+      {
+        "id": "evt-004",
+        "ts": "2026-01-01T00:00:04.000Z",
+        "op": "delete_file",
+        "path": "Personal/old.md",
+        "source": "system",
+        "summary": "system cleanup"
+      },
+      {
+        "id": "evt-003",
+        "ts": "2026-01-01T00:00:03.000Z",
+        "op": "create_file",
+        "path": "Research/notes/deep.md",
+        "source": "agent",
+        "summary": "agent without name"
+      },
+      {
+        "id": "evt-002",
+        "ts": "2026-01-01T00:00:02.000Z",
+        "op": "save_file",
+        "path": "Research/paper.md",
+        "source": "agent",
+        "agentName": "codex",
+        "summary": "agent edit with % and _ chars",
+        "before": "",
+        "after": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      },
+      {
+        "id": "evt-001",
+        "ts": "2026-01-01T00:00:01.000Z",
+        "op": "save_file",
+        "path": "root-note.md",
+        "source": "user",
+        "summary": "root note saved",
+        "before": "a",
+        "after": "b"
+      }
+    ],
+    "limit3": [
+      {
+        "id": "evt-033",
+        "ts": "2026-01-01T00:00:33.000Z",
+        "op": "save_file",
+        "path": "Bulk/file-19.md",
+        "source": "user",
+        "summary": "bulk 19"
+      },
+      {
+        "id": "evt-032",
+        "ts": "2026-01-01T00:00:32.000Z",
+        "op": "create_file",
+        "path": "Bulk/file-18.md",
+        "source": "agent",
+        "agentName": "bulk-bot",
+        "summary": "bulk 18"
+      },
+      {
+        "id": "evt-031",
+        "ts": "2026-01-01T00:00:31.000Z",
+        "op": "save_file",
+        "path": "Bulk/file-17.md",
+        "source": "user",
+        "summary": "bulk 17"
+      }
+    ],
+    "limitHuge": [
+      {
+        "id": "evt-033",
+        "ts": "2026-01-01T00:00:33.000Z",
+        "op": "save_file",
+        "path": "Bulk/file-19.md",
+        "source": "user",
+        "summary": "bulk 19"
+      },
+      {
+        "id": "evt-032",
+        "ts": "2026-01-01T00:00:32.000Z",
+        "op": "create_file",
+        "path": "Bulk/file-18.md",
+        "source": "agent",
+        "agentName": "bulk-bot",
+        "summary": "bulk 18"
+      },
+      {
+        "id": "evt-031",
+        "ts": "2026-01-01T00:00:31.000Z",
+        "op": "save_file",
+        "path": "Bulk/file-17.md",
+        "source": "user",
+        "summary": "bulk 17"
+      },
+      {
+        "id": "evt-030",
+        "ts": "2026-01-01T00:00:30.000Z",
+        "op": "create_file",
+        "path": "Bulk/file-16.md",
+        "source": "user",
+        "summary": "bulk 16"
+      },
+      {
+        "id": "evt-029",
+        "ts": "2026-01-01T00:00:29.000Z",
+        "op": "save_file",
+        "path": "Bulk/file-15.md",
+        "source": "agent",
+        "agentName": "bulk-bot",
+        "summary": "bulk 15"
+      },
+      {
+        "id": "evt-028",
+        "ts": "2026-01-01T00:00:28.000Z",
+        "op": "create_file",
+        "path": "Bulk/file-14.md",
+        "source": "user",
+        "summary": "bulk 14"
+      },
+      {
+        "id": "evt-027",
+        "ts": "2026-01-01T00:00:27.000Z",
+        "op": "save_file",
+        "path": "Bulk/file-13.md",
+        "source": "user",
+        "summary": "bulk 13"
+      },
+      {
+        "id": "evt-026",
+        "ts": "2026-01-01T00:00:26.000Z",
+        "op": "create_file",
+        "path": "Bulk/file-12.md",
+        "source": "agent",
+        "agentName": "bulk-bot",
+        "summary": "bulk 12"
+      },
+      {
+        "id": "evt-025",
+        "ts": "2026-01-01T00:00:25.000Z",
+        "op": "save_file",
+        "path": "Bulk/file-11.md",
+        "source": "user",
+        "summary": "bulk 11"
+      },
+      {
+        "id": "evt-024",
+        "ts": "2026-01-01T00:00:24.000Z",
+        "op": "create_file",
+        "path": "Bulk/file-10.md",
+        "source": "user",
+        "summary": "bulk 10"
+      },
+      {
+        "id": "evt-023",
+        "ts": "2026-01-01T00:00:23.000Z",
+        "op": "save_file",
+        "path": "Bulk/file-9.md",
+        "source": "agent",
+        "agentName": "bulk-bot",
+        "summary": "bulk 9"
+      },
+      {
+        "id": "evt-022",
+        "ts": "2026-01-01T00:00:22.000Z",
+        "op": "create_file",
+        "path": "Bulk/file-8.md",
+        "source": "user",
+        "summary": "bulk 8"
+      },
+      {
+        "id": "evt-021",
+        "ts": "2026-01-01T00:00:21.000Z",
+        "op": "save_file",
+        "path": "Bulk/file-7.md",
+        "source": "user",
+        "summary": "bulk 7"
+      },
+      {
+        "id": "evt-020",
+        "ts": "2026-01-01T00:00:20.000Z",
+        "op": "create_file",
+        "path": "Bulk/file-6.md",
+        "source": "agent",
+        "agentName": "bulk-bot",
+        "summary": "bulk 6"
+      },
+      {
+        "id": "evt-019",
+        "ts": "2026-01-01T00:00:19.000Z",
+        "op": "save_file",
+        "path": "Bulk/file-5.md",
+        "source": "user",
+        "summary": "bulk 5"
+      },
+      {
+        "id": "evt-018",
+        "ts": "2026-01-01T00:00:18.000Z",
+        "op": "create_file",
+        "path": "Bulk/file-4.md",
+        "source": "user",
+        "summary": "bulk 4"
+      },
+      {
+        "id": "evt-017",
+        "ts": "2026-01-01T00:00:17.000Z",
+        "op": "save_file",
+        "path": "Bulk/file-3.md",
+        "source": "agent",
+        "agentName": "bulk-bot",
+        "summary": "bulk 3"
+      },
+      {
+        "id": "evt-016",
+        "ts": "2026-01-01T00:00:16.000Z",
+        "op": "create_file",
+        "path": "Bulk/file-2.md",
+        "source": "user",
+        "summary": "bulk 2"
+      },
+      {
+        "id": "evt-015",
+        "ts": "2026-01-01T00:00:15.000Z",
+        "op": "save_file",
+        "path": "Bulk/file-1.md",
+        "source": "user",
+        "summary": "bulk 1"
+      },
+      {
+        "id": "evt-014",
+        "ts": "2026-01-01T00:00:14.000Z",
+        "op": "create_file",
+        "path": "Bulk/file-0.md",
+        "source": "agent",
+        "agentName": "bulk-bot",
+        "summary": "bulk 0"
+      },
+      {
+        "id": "evt-013",
+        "ts": "2026-01-01T00:00:13.000Z",
+        "op": "save_file",
+        "path": "Research/paper.md",
+        "source": "agent",
+        "agentName": "codex",
+        "summary": "CODEX uppercase in summary"
+      },
+      {
+        "id": "evt-012",
+        "ts": "2026-01-01T00:00:12.000Z",
+        "op": "save_file",
+        "path": "Windows\\style\\path.md",
+        "source": "user",
+        "summary": "backslash path"
+      },
+      {
+        "id": "evt-011",
+        "ts": "2026-01-01T00:00:11.000Z",
+        "op": "save_file",
+        "path": "/leading/slash.md",
+        "source": "user",
+        "summary": "leading slash path"
+      },
+      {
+        "id": "evt-010",
+        "ts": "2026-01-01T00:00:10.000Z",
+        "op": "legacy_agent_diff_import",
+        "path": "Agent-Diff.md",
+        "source": "agent",
+        "agentName": "  spaced-agent  ",
+        "summary": "Imported legacy agent diff (write_file)"
+      },
+      {
+        "id": "evt-009",
+        "ts": "2026-01-01T00:00:09.000Z",
+        "op": "save_file",
+        "path": "Research/paper.md",
+        "source": "user",
+        "summary": "user follow-up",
+        "truncated": true,
+        "before": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy",
+        "after": "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"
+      },
+      {
+        "id": "evt-008",
+        "ts": "2026-01-01T00:00:08.000Z",
+        "op": "save_file",
+        "path": "📝 笔记/中文 文件.md",
+        "source": "agent",
+        "agentName": "claude-code",
+        "summary": "中文摘要 emoji 🚀",
+        "before": "之前",
+        "after": "之后"
+      },
+      {
+        "id": "evt-007",
+        "ts": "2026-01-01T00:00:07.000Z",
+        "op": "rename_space",
+        "path": "Archive",
+        "beforePath": "Archive",
+        "afterPath": "Archives",
+        "source": "user",
+        "summary": "space renamed"
+      },
+      {
+        "id": "evt-006",
+        "ts": "2026-01-01T00:00:06.000Z",
+        "op": "create_space",
+        "path": "Archive",
+        "source": "user",
+        "summary": "space created"
+      },
+      {
+        "id": "evt-005",
+        "ts": "2026-01-01T00:00:05.000Z",
+        "op": "rename_file",
+        "path": "Personal/b.md",
+        "beforePath": "Personal/a.md",
+        "afterPath": "Projects/b.md",
+        "source": "user",
+        "summary": "moved across spaces"
+      },
+      {
+        "id": "evt-004",
+        "ts": "2026-01-01T00:00:04.000Z",
+        "op": "delete_file",
+        "path": "Personal/old.md",
+        "source": "system",
+        "summary": "system cleanup"
+      },
+      {
+        "id": "evt-003",
+        "ts": "2026-01-01T00:00:03.000Z",
+        "op": "create_file",
+        "path": "Research/notes/deep.md",
+        "source": "agent",
+        "summary": "agent without name"
+      },
+      {
+        "id": "evt-002",
+        "ts": "2026-01-01T00:00:02.000Z",
+        "op": "save_file",
+        "path": "Research/paper.md",
+        "source": "agent",
+        "agentName": "codex",
+        "summary": "agent edit with % and _ chars",
+        "before": "",
+        "after": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      },
+      {
+        "id": "evt-001",
+        "ts": "2026-01-01T00:00:01.000Z",
+        "op": "save_file",
+        "path": "root-note.md",
+        "source": "user",
+        "summary": "root note saved",
+        "before": "a",
+        "after": "b"
+      }
+    ],
+    "limitZero": [
+      {
+        "id": "evt-033",
+        "ts": "2026-01-01T00:00:33.000Z",
+        "op": "save_file",
+        "path": "Bulk/file-19.md",
+        "source": "user",
+        "summary": "bulk 19"
+      }
+    ],
+    "pathPaper": [
+      {
+        "id": "evt-013",
+        "ts": "2026-01-01T00:00:13.000Z",
+        "op": "save_file",
+        "path": "Research/paper.md",
+        "source": "agent",
+        "agentName": "codex",
+        "summary": "CODEX uppercase in summary"
+      },
+      {
+        "id": "evt-009",
+        "ts": "2026-01-01T00:00:09.000Z",
+        "op": "save_file",
+        "path": "Research/paper.md",
+        "source": "user",
+        "summary": "user follow-up",
+        "truncated": true,
+        "before": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy",
+        "after": "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"
+      },
+      {
+        "id": "evt-002",
+        "ts": "2026-01-01T00:00:02.000Z",
+        "op": "save_file",
+        "path": "Research/paper.md",
+        "source": "agent",
+        "agentName": "codex",
+        "summary": "agent edit with % and _ chars",
+        "before": "",
+        "after": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      }
+    ],
+    "pathBeforeAfter": [
+      {
+        "id": "evt-005",
+        "ts": "2026-01-01T00:00:05.000Z",
+        "op": "rename_file",
+        "path": "Personal/b.md",
+        "beforePath": "Personal/a.md",
+        "afterPath": "Projects/b.md",
+        "source": "user",
+        "summary": "moved across spaces"
+      }
+    ],
+    "pathAfter": [
+      {
+        "id": "evt-005",
+        "ts": "2026-01-01T00:00:05.000Z",
+        "op": "rename_file",
+        "path": "Personal/b.md",
+        "beforePath": "Personal/a.md",
+        "afterPath": "Projects/b.md",
+        "source": "user",
+        "summary": "moved across spaces"
+      }
+    ],
+    "spaceResearch": [
+      {
+        "id": "evt-013",
+        "ts": "2026-01-01T00:00:13.000Z",
+        "op": "save_file",
+        "path": "Research/paper.md",
+        "source": "agent",
+        "agentName": "codex",
+        "summary": "CODEX uppercase in summary"
+      },
+      {
+        "id": "evt-009",
+        "ts": "2026-01-01T00:00:09.000Z",
+        "op": "save_file",
+        "path": "Research/paper.md",
+        "source": "user",
+        "summary": "user follow-up",
+        "truncated": true,
+        "before": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy",
+        "after": "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"
+      },
+      {
+        "id": "evt-003",
+        "ts": "2026-01-01T00:00:03.000Z",
+        "op": "create_file",
+        "path": "Research/notes/deep.md",
+        "source": "agent",
+        "summary": "agent without name"
+      },
+      {
+        "id": "evt-002",
+        "ts": "2026-01-01T00:00:02.000Z",
+        "op": "save_file",
+        "path": "Research/paper.md",
+        "source": "agent",
+        "agentName": "codex",
+        "summary": "agent edit with % and _ chars",
+        "before": "",
+        "after": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      }
+    ],
+    "spaceRoot": [
+      {
+        "id": "evt-010",
+        "ts": "2026-01-01T00:00:10.000Z",
+        "op": "legacy_agent_diff_import",
+        "path": "Agent-Diff.md",
+        "source": "agent",
+        "agentName": "  spaced-agent  ",
+        "summary": "Imported legacy agent diff (write_file)"
+      },
+      {
+        "id": "evt-001",
+        "ts": "2026-01-01T00:00:01.000Z",
+        "op": "save_file",
+        "path": "root-note.md",
+        "source": "user",
+        "summary": "root note saved",
+        "before": "a",
+        "after": "b"
+      }
+    ],
+    "spaceArchive": [
+      {
+        "id": "evt-006",
+        "ts": "2026-01-01T00:00:06.000Z",
+        "op": "create_space",
+        "path": "Archive",
+        "source": "user",
+        "summary": "space created"
+      }
+    ],
+    "spaceArchives": [
+      {
+        "id": "evt-007",
+        "ts": "2026-01-01T00:00:07.000Z",
+        "op": "rename_space",
+        "path": "Archive",
+        "beforePath": "Archive",
+        "afterPath": "Archives",
+        "source": "user",
+        "summary": "space renamed"
+      }
+    ],
+    "spaceProjects": [
+      {
+        "id": "evt-005",
+        "ts": "2026-01-01T00:00:05.000Z",
+        "op": "rename_file",
+        "path": "Personal/b.md",
+        "beforePath": "Personal/a.md",
+        "afterPath": "Projects/b.md",
+        "source": "user",
+        "summary": "moved across spaces"
+      }
+    ],
+    "spaceUnicode": [
+      {
+        "id": "evt-008",
+        "ts": "2026-01-01T00:00:08.000Z",
+        "op": "save_file",
+        "path": "📝 笔记/中文 文件.md",
+        "source": "agent",
+        "agentName": "claude-code",
+        "summary": "中文摘要 emoji 🚀",
+        "before": "之前",
+        "after": "之后"
+      }
+    ],
+    "sourceAgent": [
+      {
+        "id": "evt-032",
+        "ts": "2026-01-01T00:00:32.000Z",
+        "op": "create_file",
+        "path": "Bulk/file-18.md",
+        "source": "agent",
+        "agentName": "bulk-bot",
+        "summary": "bulk 18"
+      },
+      {
+        "id": "evt-029",
+        "ts": "2026-01-01T00:00:29.000Z",
+        "op": "save_file",
+        "path": "Bulk/file-15.md",
+        "source": "agent",
+        "agentName": "bulk-bot",
+        "summary": "bulk 15"
+      },
+      {
+        "id": "evt-026",
+        "ts": "2026-01-01T00:00:26.000Z",
+        "op": "create_file",
+        "path": "Bulk/file-12.md",
+        "source": "agent",
+        "agentName": "bulk-bot",
+        "summary": "bulk 12"
+      },
+      {
+        "id": "evt-023",
+        "ts": "2026-01-01T00:00:23.000Z",
+        "op": "save_file",
+        "path": "Bulk/file-9.md",
+        "source": "agent",
+        "agentName": "bulk-bot",
+        "summary": "bulk 9"
+      },
+      {
+        "id": "evt-020",
+        "ts": "2026-01-01T00:00:20.000Z",
+        "op": "create_file",
+        "path": "Bulk/file-6.md",
+        "source": "agent",
+        "agentName": "bulk-bot",
+        "summary": "bulk 6"
+      },
+      {
+        "id": "evt-017",
+        "ts": "2026-01-01T00:00:17.000Z",
+        "op": "save_file",
+        "path": "Bulk/file-3.md",
+        "source": "agent",
+        "agentName": "bulk-bot",
+        "summary": "bulk 3"
+      },
+      {
+        "id": "evt-014",
+        "ts": "2026-01-01T00:00:14.000Z",
+        "op": "create_file",
+        "path": "Bulk/file-0.md",
+        "source": "agent",
+        "agentName": "bulk-bot",
+        "summary": "bulk 0"
+      },
+      {
+        "id": "evt-013",
+        "ts": "2026-01-01T00:00:13.000Z",
+        "op": "save_file",
+        "path": "Research/paper.md",
+        "source": "agent",
+        "agentName": "codex",
+        "summary": "CODEX uppercase in summary"
+      },
+      {
+        "id": "evt-010",
+        "ts": "2026-01-01T00:00:10.000Z",
+        "op": "legacy_agent_diff_import",
+        "path": "Agent-Diff.md",
+        "source": "agent",
+        "agentName": "  spaced-agent  ",
+        "summary": "Imported legacy agent diff (write_file)"
+      },
+      {
+        "id": "evt-008",
+        "ts": "2026-01-01T00:00:08.000Z",
+        "op": "save_file",
+        "path": "📝 笔记/中文 文件.md",
+        "source": "agent",
+        "agentName": "claude-code",
+        "summary": "中文摘要 emoji 🚀",
+        "before": "之前",
+        "after": "之后"
+      },
+      {
+        "id": "evt-003",
+        "ts": "2026-01-01T00:00:03.000Z",
+        "op": "create_file",
+        "path": "Research/notes/deep.md",
+        "source": "agent",
+        "summary": "agent without name"
+      },
+      {
+        "id": "evt-002",
+        "ts": "2026-01-01T00:00:02.000Z",
+        "op": "save_file",
+        "path": "Research/paper.md",
+        "source": "agent",
+        "agentName": "codex",
+        "summary": "agent edit with % and _ chars",
+        "before": "",
+        "after": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      }
+    ],
+    "sourceSystem": [
+      {
+        "id": "evt-004",
+        "ts": "2026-01-01T00:00:04.000Z",
+        "op": "delete_file",
+        "path": "Personal/old.md",
+        "source": "system",
+        "summary": "system cleanup"
+      }
+    ],
+    "agentCodex": [
+      {
+        "id": "evt-013",
+        "ts": "2026-01-01T00:00:13.000Z",
+        "op": "save_file",
+        "path": "Research/paper.md",
+        "source": "agent",
+        "agentName": "codex",
+        "summary": "CODEX uppercase in summary"
+      },
+      {
+        "id": "evt-002",
+        "ts": "2026-01-01T00:00:02.000Z",
+        "op": "save_file",
+        "path": "Research/paper.md",
+        "source": "agent",
+        "agentName": "codex",
+        "summary": "agent edit with % and _ chars",
+        "before": "",
+        "after": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      }
+    ],
+    "agentUnknown": [
+      {
+        "id": "evt-003",
+        "ts": "2026-01-01T00:00:03.000Z",
+        "op": "create_file",
+        "path": "Research/notes/deep.md",
+        "source": "agent",
+        "summary": "agent without name"
+      }
+    ],
+    "agentSpaced": [
+      {
+        "id": "evt-010",
+        "ts": "2026-01-01T00:00:10.000Z",
+        "op": "legacy_agent_diff_import",
+        "path": "Agent-Diff.md",
+        "source": "agent",
+        "agentName": "  spaced-agent  ",
+        "summary": "Imported legacy agent diff (write_file)"
+      }
+    ],
+    "opSave": [
+      {
+        "id": "evt-033",
+        "ts": "2026-01-01T00:00:33.000Z",
+        "op": "save_file",
+        "path": "Bulk/file-19.md",
+        "source": "user",
+        "summary": "bulk 19"
+      },
+      {
+        "id": "evt-031",
+        "ts": "2026-01-01T00:00:31.000Z",
+        "op": "save_file",
+        "path": "Bulk/file-17.md",
+        "source": "user",
+        "summary": "bulk 17"
+      },
+      {
+        "id": "evt-029",
+        "ts": "2026-01-01T00:00:29.000Z",
+        "op": "save_file",
+        "path": "Bulk/file-15.md",
+        "source": "agent",
+        "agentName": "bulk-bot",
+        "summary": "bulk 15"
+      },
+      {
+        "id": "evt-027",
+        "ts": "2026-01-01T00:00:27.000Z",
+        "op": "save_file",
+        "path": "Bulk/file-13.md",
+        "source": "user",
+        "summary": "bulk 13"
+      },
+      {
+        "id": "evt-025",
+        "ts": "2026-01-01T00:00:25.000Z",
+        "op": "save_file",
+        "path": "Bulk/file-11.md",
+        "source": "user",
+        "summary": "bulk 11"
+      },
+      {
+        "id": "evt-023",
+        "ts": "2026-01-01T00:00:23.000Z",
+        "op": "save_file",
+        "path": "Bulk/file-9.md",
+        "source": "agent",
+        "agentName": "bulk-bot",
+        "summary": "bulk 9"
+      },
+      {
+        "id": "evt-021",
+        "ts": "2026-01-01T00:00:21.000Z",
+        "op": "save_file",
+        "path": "Bulk/file-7.md",
+        "source": "user",
+        "summary": "bulk 7"
+      },
+      {
+        "id": "evt-019",
+        "ts": "2026-01-01T00:00:19.000Z",
+        "op": "save_file",
+        "path": "Bulk/file-5.md",
+        "source": "user",
+        "summary": "bulk 5"
+      },
+      {
+        "id": "evt-017",
+        "ts": "2026-01-01T00:00:17.000Z",
+        "op": "save_file",
+        "path": "Bulk/file-3.md",
+        "source": "agent",
+        "agentName": "bulk-bot",
+        "summary": "bulk 3"
+      },
+      {
+        "id": "evt-015",
+        "ts": "2026-01-01T00:00:15.000Z",
+        "op": "save_file",
+        "path": "Bulk/file-1.md",
+        "source": "user",
+        "summary": "bulk 1"
+      },
+      {
+        "id": "evt-013",
+        "ts": "2026-01-01T00:00:13.000Z",
+        "op": "save_file",
+        "path": "Research/paper.md",
+        "source": "agent",
+        "agentName": "codex",
+        "summary": "CODEX uppercase in summary"
+      },
+      {
+        "id": "evt-012",
+        "ts": "2026-01-01T00:00:12.000Z",
+        "op": "save_file",
+        "path": "Windows\\style\\path.md",
+        "source": "user",
+        "summary": "backslash path"
+      },
+      {
+        "id": "evt-011",
+        "ts": "2026-01-01T00:00:11.000Z",
+        "op": "save_file",
+        "path": "/leading/slash.md",
+        "source": "user",
+        "summary": "leading slash path"
+      },
+      {
+        "id": "evt-009",
+        "ts": "2026-01-01T00:00:09.000Z",
+        "op": "save_file",
+        "path": "Research/paper.md",
+        "source": "user",
+        "summary": "user follow-up",
+        "truncated": true,
+        "before": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy",
+        "after": "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"
+      },
+      {
+        "id": "evt-008",
+        "ts": "2026-01-01T00:00:08.000Z",
+        "op": "save_file",
+        "path": "📝 笔记/中文 文件.md",
+        "source": "agent",
+        "agentName": "claude-code",
+        "summary": "中文摘要 emoji 🚀",
+        "before": "之前",
+        "after": "之后"
+      },
+      {
+        "id": "evt-002",
+        "ts": "2026-01-01T00:00:02.000Z",
+        "op": "save_file",
+        "path": "Research/paper.md",
+        "source": "agent",
+        "agentName": "codex",
+        "summary": "agent edit with % and _ chars",
+        "before": "",
+        "after": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      },
+      {
+        "id": "evt-001",
+        "ts": "2026-01-01T00:00:01.000Z",
+        "op": "save_file",
+        "path": "root-note.md",
+        "source": "user",
+        "summary": "root note saved",
+        "before": "a",
+        "after": "b"
+      }
+    ],
+    "qCodex": [
+      {
+        "id": "evt-013",
+        "ts": "2026-01-01T00:00:13.000Z",
+        "op": "save_file",
+        "path": "Research/paper.md",
+        "source": "agent",
+        "agentName": "codex",
+        "summary": "CODEX uppercase in summary"
+      },
+      {
+        "id": "evt-002",
+        "ts": "2026-01-01T00:00:02.000Z",
+        "op": "save_file",
+        "path": "Research/paper.md",
+        "source": "agent",
+        "agentName": "codex",
+        "summary": "agent edit with % and _ chars",
+        "before": "",
+        "after": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      }
+    ],
+    "qPercent": [
+      {
+        "id": "evt-002",
+        "ts": "2026-01-01T00:00:02.000Z",
+        "op": "save_file",
+        "path": "Research/paper.md",
+        "source": "agent",
+        "agentName": "codex",
+        "summary": "agent edit with % and _ chars",
+        "before": "",
+        "after": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      }
+    ],
+    "qUnicode": [
+      {
+        "id": "evt-008",
+        "ts": "2026-01-01T00:00:08.000Z",
+        "op": "save_file",
+        "path": "📝 笔记/中文 文件.md",
+        "source": "agent",
+        "agentName": "claude-code",
+        "summary": "中文摘要 emoji 🚀",
+        "before": "之前",
+        "after": "之后"
+      }
+    ],
+    "qEmoji": [
+      {
+        "id": "evt-008",
+        "ts": "2026-01-01T00:00:08.000Z",
+        "op": "save_file",
+        "path": "📝 笔记/中文 文件.md",
+        "source": "agent",
+        "agentName": "claude-code",
+        "summary": "中文摘要 emoji 🚀",
+        "before": "之前",
+        "after": "之后"
+      }
+    ],
+    "qNoMatch": [],
+    "qWhitespace": [
+      {
+        "id": "evt-033",
+        "ts": "2026-01-01T00:00:33.000Z",
+        "op": "save_file",
+        "path": "Bulk/file-19.md",
+        "source": "user",
+        "summary": "bulk 19"
+      },
+      {
+        "id": "evt-032",
+        "ts": "2026-01-01T00:00:32.000Z",
+        "op": "create_file",
+        "path": "Bulk/file-18.md",
+        "source": "agent",
+        "agentName": "bulk-bot",
+        "summary": "bulk 18"
+      },
+      {
+        "id": "evt-031",
+        "ts": "2026-01-01T00:00:31.000Z",
+        "op": "save_file",
+        "path": "Bulk/file-17.md",
+        "source": "user",
+        "summary": "bulk 17"
+      },
+      {
+        "id": "evt-030",
+        "ts": "2026-01-01T00:00:30.000Z",
+        "op": "create_file",
+        "path": "Bulk/file-16.md",
+        "source": "user",
+        "summary": "bulk 16"
+      },
+      {
+        "id": "evt-029",
+        "ts": "2026-01-01T00:00:29.000Z",
+        "op": "save_file",
+        "path": "Bulk/file-15.md",
+        "source": "agent",
+        "agentName": "bulk-bot",
+        "summary": "bulk 15"
+      },
+      {
+        "id": "evt-028",
+        "ts": "2026-01-01T00:00:28.000Z",
+        "op": "create_file",
+        "path": "Bulk/file-14.md",
+        "source": "user",
+        "summary": "bulk 14"
+      },
+      {
+        "id": "evt-027",
+        "ts": "2026-01-01T00:00:27.000Z",
+        "op": "save_file",
+        "path": "Bulk/file-13.md",
+        "source": "user",
+        "summary": "bulk 13"
+      },
+      {
+        "id": "evt-026",
+        "ts": "2026-01-01T00:00:26.000Z",
+        "op": "create_file",
+        "path": "Bulk/file-12.md",
+        "source": "agent",
+        "agentName": "bulk-bot",
+        "summary": "bulk 12"
+      },
+      {
+        "id": "evt-025",
+        "ts": "2026-01-01T00:00:25.000Z",
+        "op": "save_file",
+        "path": "Bulk/file-11.md",
+        "source": "user",
+        "summary": "bulk 11"
+      },
+      {
+        "id": "evt-024",
+        "ts": "2026-01-01T00:00:24.000Z",
+        "op": "create_file",
+        "path": "Bulk/file-10.md",
+        "source": "user",
+        "summary": "bulk 10"
+      },
+      {
+        "id": "evt-023",
+        "ts": "2026-01-01T00:00:23.000Z",
+        "op": "save_file",
+        "path": "Bulk/file-9.md",
+        "source": "agent",
+        "agentName": "bulk-bot",
+        "summary": "bulk 9"
+      },
+      {
+        "id": "evt-022",
+        "ts": "2026-01-01T00:00:22.000Z",
+        "op": "create_file",
+        "path": "Bulk/file-8.md",
+        "source": "user",
+        "summary": "bulk 8"
+      },
+      {
+        "id": "evt-021",
+        "ts": "2026-01-01T00:00:21.000Z",
+        "op": "save_file",
+        "path": "Bulk/file-7.md",
+        "source": "user",
+        "summary": "bulk 7"
+      },
+      {
+        "id": "evt-020",
+        "ts": "2026-01-01T00:00:20.000Z",
+        "op": "create_file",
+        "path": "Bulk/file-6.md",
+        "source": "agent",
+        "agentName": "bulk-bot",
+        "summary": "bulk 6"
+      },
+      {
+        "id": "evt-019",
+        "ts": "2026-01-01T00:00:19.000Z",
+        "op": "save_file",
+        "path": "Bulk/file-5.md",
+        "source": "user",
+        "summary": "bulk 5"
+      },
+      {
+        "id": "evt-018",
+        "ts": "2026-01-01T00:00:18.000Z",
+        "op": "create_file",
+        "path": "Bulk/file-4.md",
+        "source": "user",
+        "summary": "bulk 4"
+      },
+      {
+        "id": "evt-017",
+        "ts": "2026-01-01T00:00:17.000Z",
+        "op": "save_file",
+        "path": "Bulk/file-3.md",
+        "source": "agent",
+        "agentName": "bulk-bot",
+        "summary": "bulk 3"
+      },
+      {
+        "id": "evt-016",
+        "ts": "2026-01-01T00:00:16.000Z",
+        "op": "create_file",
+        "path": "Bulk/file-2.md",
+        "source": "user",
+        "summary": "bulk 2"
+      },
+      {
+        "id": "evt-015",
+        "ts": "2026-01-01T00:00:15.000Z",
+        "op": "save_file",
+        "path": "Bulk/file-1.md",
+        "source": "user",
+        "summary": "bulk 1"
+      },
+      {
+        "id": "evt-014",
+        "ts": "2026-01-01T00:00:14.000Z",
+        "op": "create_file",
+        "path": "Bulk/file-0.md",
+        "source": "agent",
+        "agentName": "bulk-bot",
+        "summary": "bulk 0"
+      },
+      {
+        "id": "evt-013",
+        "ts": "2026-01-01T00:00:13.000Z",
+        "op": "save_file",
+        "path": "Research/paper.md",
+        "source": "agent",
+        "agentName": "codex",
+        "summary": "CODEX uppercase in summary"
+      },
+      {
+        "id": "evt-012",
+        "ts": "2026-01-01T00:00:12.000Z",
+        "op": "save_file",
+        "path": "Windows\\style\\path.md",
+        "source": "user",
+        "summary": "backslash path"
+      },
+      {
+        "id": "evt-011",
+        "ts": "2026-01-01T00:00:11.000Z",
+        "op": "save_file",
+        "path": "/leading/slash.md",
+        "source": "user",
+        "summary": "leading slash path"
+      },
+      {
+        "id": "evt-010",
+        "ts": "2026-01-01T00:00:10.000Z",
+        "op": "legacy_agent_diff_import",
+        "path": "Agent-Diff.md",
+        "source": "agent",
+        "agentName": "  spaced-agent  ",
+        "summary": "Imported legacy agent diff (write_file)"
+      },
+      {
+        "id": "evt-009",
+        "ts": "2026-01-01T00:00:09.000Z",
+        "op": "save_file",
+        "path": "Research/paper.md",
+        "source": "user",
+        "summary": "user follow-up",
+        "truncated": true,
+        "before": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy",
+        "after": "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"
+      },
+      {
+        "id": "evt-008",
+        "ts": "2026-01-01T00:00:08.000Z",
+        "op": "save_file",
+        "path": "📝 笔记/中文 文件.md",
+        "source": "agent",
+        "agentName": "claude-code",
+        "summary": "中文摘要 emoji 🚀",
+        "before": "之前",
+        "after": "之后"
+      },
+      {
+        "id": "evt-007",
+        "ts": "2026-01-01T00:00:07.000Z",
+        "op": "rename_space",
+        "path": "Archive",
+        "beforePath": "Archive",
+        "afterPath": "Archives",
+        "source": "user",
+        "summary": "space renamed"
+      },
+      {
+        "id": "evt-006",
+        "ts": "2026-01-01T00:00:06.000Z",
+        "op": "create_space",
+        "path": "Archive",
+        "source": "user",
+        "summary": "space created"
+      },
+      {
+        "id": "evt-005",
+        "ts": "2026-01-01T00:00:05.000Z",
+        "op": "rename_file",
+        "path": "Personal/b.md",
+        "beforePath": "Personal/a.md",
+        "afterPath": "Projects/b.md",
+        "source": "user",
+        "summary": "moved across spaces"
+      },
+      {
+        "id": "evt-004",
+        "ts": "2026-01-01T00:00:04.000Z",
+        "op": "delete_file",
+        "path": "Personal/old.md",
+        "source": "system",
+        "summary": "system cleanup"
+      },
+      {
+        "id": "evt-003",
+        "ts": "2026-01-01T00:00:03.000Z",
+        "op": "create_file",
+        "path": "Research/notes/deep.md",
+        "source": "agent",
+        "summary": "agent without name"
+      },
+      {
+        "id": "evt-002",
+        "ts": "2026-01-01T00:00:02.000Z",
+        "op": "save_file",
+        "path": "Research/paper.md",
+        "source": "agent",
+        "agentName": "codex",
+        "summary": "agent edit with % and _ chars",
+        "before": "",
+        "after": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      },
+      {
+        "id": "evt-001",
+        "ts": "2026-01-01T00:00:01.000Z",
+        "op": "save_file",
+        "path": "root-note.md",
+        "source": "user",
+        "summary": "root note saved",
+        "before": "a",
+        "after": "b"
+      }
+    ],
+    "combined": [
+      {
+        "id": "evt-013",
+        "ts": "2026-01-01T00:00:13.000Z",
+        "op": "save_file",
+        "path": "Research/paper.md",
+        "source": "agent",
+        "agentName": "codex",
+        "summary": "CODEX uppercase in summary"
+      },
+      {
+        "id": "evt-002",
+        "ts": "2026-01-01T00:00:02.000Z",
+        "op": "save_file",
+        "path": "Research/paper.md",
+        "source": "agent",
+        "agentName": "codex",
+        "summary": "agent edit with % and _ chars",
+        "before": "",
+        "after": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      }
+    ],
+    "combinedBulk": [
+      {
+        "id": "evt-032",
+        "ts": "2026-01-01T00:00:32.000Z",
+        "op": "create_file",
+        "path": "Bulk/file-18.md",
+        "source": "agent",
+        "agentName": "bulk-bot",
+        "summary": "bulk 18"
+      },
+      {
+        "id": "evt-029",
+        "ts": "2026-01-01T00:00:29.000Z",
+        "op": "save_file",
+        "path": "Bulk/file-15.md",
+        "source": "agent",
+        "agentName": "bulk-bot",
+        "summary": "bulk 15"
+      },
+      {
+        "id": "evt-026",
+        "ts": "2026-01-01T00:00:26.000Z",
+        "op": "create_file",
+        "path": "Bulk/file-12.md",
+        "source": "agent",
+        "agentName": "bulk-bot",
+        "summary": "bulk 12"
+      },
+      {
+        "id": "evt-023",
+        "ts": "2026-01-01T00:00:23.000Z",
+        "op": "save_file",
+        "path": "Bulk/file-9.md",
+        "source": "agent",
+        "agentName": "bulk-bot",
+        "summary": "bulk 9"
+      },
+      {
+        "id": "evt-020",
+        "ts": "2026-01-01T00:00:20.000Z",
+        "op": "create_file",
+        "path": "Bulk/file-6.md",
+        "source": "agent",
+        "agentName": "bulk-bot",
+        "summary": "bulk 6"
+      },
+      {
+        "id": "evt-017",
+        "ts": "2026-01-01T00:00:17.000Z",
+        "op": "save_file",
+        "path": "Bulk/file-3.md",
+        "source": "agent",
+        "agentName": "bulk-bot",
+        "summary": "bulk 3"
+      },
+      {
+        "id": "evt-014",
+        "ts": "2026-01-01T00:00:14.000Z",
+        "op": "create_file",
+        "path": "Bulk/file-0.md",
+        "source": "agent",
+        "agentName": "bulk-bot",
+        "summary": "bulk 0"
+      }
+    ]
+  },
+  "summary": {
+    "unreadCount": 23,
+    "totalCount": 33,
+    "lastSeenAt": "2026-01-01T00:00:10.000Z",
+    "latest": {
+      "id": "evt-033",
+      "ts": "2026-01-01T00:00:33.000Z",
+      "op": "save_file",
+      "path": "Bulk/file-19.md",
+      "source": "user",
+      "summary": "bulk 19"
+    }
+  },
+  "facets": {
+    "spaces": [
+      {
+        "value": "Bulk",
+        "count": 20
+      },
+      {
+        "value": "Research",
+        "count": 4
+      },
+      {
+        "value": "__root__",
+        "count": 2
+      },
+      {
+        "value": "📝 笔记",
+        "count": 1
+      },
+      {
+        "value": "Archive",
+        "count": 1
+      },
+      {
+        "value": "Archives",
+        "count": 1
+      },
+      {
+        "value": "leading",
+        "count": 1
+      },
+      {
+        "value": "Personal",
+        "count": 1
+      },
+      {
+        "value": "Projects",
+        "count": 1
+      },
+      {
+        "value": "Windows",
+        "count": 1
+      }
+    ],
+    "agents": [
+      {
+        "value": "bulk-bot",
+        "count": 7
+      },
+      {
+        "value": "codex",
+        "count": 2
+      },
+      {
+        "value": "__agent_unknown__",
+        "count": 1
+      },
+      {
+        "value": "claude-code",
+        "count": 1
+      },
+      {
+        "value": "spaced-agent",
+        "count": 1
+      }
+    ],
+    "operations": [
+      {
+        "value": "save_file",
+        "count": 17
+      },
+      {
+        "value": "create_file",
+        "count": 11
+      },
+      {
+        "value": "create_space",
+        "count": 1
+      },
+      {
+        "value": "delete_file",
+        "count": 1
+      },
+      {
+        "value": "legacy_agent_diff_import",
+        "count": 1
+      },
+      {
+        "value": "rename_file",
+        "count": 1
+      },
+      {
+        "value": "rename_space",
+        "count": 1
+      }
+    ],
+    "sources": [
+      {
+        "value": "user",
+        "count": 20
+      },
+      {
+        "value": "agent",
+        "count": 12
+      },
+      {
+        "value": "system",
+        "count": 1
+      }
+    ]
+  }
+}

@@ -91,7 +91,12 @@ const activeSyncLockDepth = new Map();
 const SYSTEM_IGNORES = [
   'INSTRUCTION.md',
 ];
-const PROTECTED_SYNC_IGNORES = ['*.sync-conflict', ...SYSTEM_IGNORES];
+// Derived-state sqlite databases (change log, run ledger, capsule index) live
+// under .mindos/db/ (spec-sqlite-derived-stores). They are binary, carry WAL /
+// SHM sidecars and would be corrupted by a pull under an open connection, so
+// they must never enter the synced repository.
+const LOCAL_STATE_IGNORES = ['.mindos/db/'];
+const PROTECTED_SYNC_IGNORES = ['*.sync-conflict', ...SYSTEM_IGNORES, ...LOCAL_STATE_IGNORES];
 
 export class SyncLockedError extends Error {
   constructor(owner) {
@@ -491,6 +496,9 @@ function ensureProtectedSyncGitignore(mindRoot) {
       '# MindOS system files (regenerated on update, not user content)',
       ...SYSTEM_IGNORES,
       '',
+      '# MindOS local state (sqlite databases; never synced)',
+      ...LOCAL_STATE_IGNORES,
+      '',
     ].join('\n'), 'utf-8');
   } else {
     const existing = readFileSync(gitignorePath, 'utf-8');
@@ -503,7 +511,11 @@ function ensureProtectedSyncGitignore(mindRoot) {
   }
 
   for (const file of PROTECTED_SYNC_IGNORES) {
-    try { execFileSync('git', ['rm', '--cached', '--ignore-unmatch', file], { cwd: mindRoot, stdio: 'pipe', timeout: 15000 }); } catch {}
+    // Directory patterns need -r; git rm refuses to untrack a directory otherwise.
+    const args = file.endsWith('/')
+      ? ['rm', '-r', '--cached', '--ignore-unmatch', file]
+      : ['rm', '--cached', '--ignore-unmatch', file];
+    try { execFileSync('git', args, { cwd: mindRoot, stdio: 'pipe', timeout: 15000 }); } catch {}
   }
 }
 
@@ -994,9 +1006,11 @@ async function startSyncDaemonUnlocked(mindRoot) {
 
   const chokidar = await import('chokidar');
 
-  // File watcher → debounced auto-commit + push
+  // File watcher → debounced auto-commit + push. The sqlite WAL under
+  // .mindos/db/ changes on every agent event and is never committed, so it
+  // must not keep re-arming the commit timer.
   const watcher = chokidar.watch(mindRoot, {
-    ignored: [/(^|[/\\])\.git/, /node_modules/, /\.sync-conflict$/],
+    ignored: [/(^|[/\\])\.git/, /node_modules/, /\.sync-conflict$/, /(^|[/\\])\.mindos[/\\]db([/\\]|$)/],
     persistent: true,
     ignoreInitial: true,
   });

@@ -37,10 +37,10 @@ export function deleteProcessGlobal(key: symbol): void {
 export const AGENT_FILE_WRITE_LOCKS_KEY = Symbol.for('mindos.agentFileWriteLocks');
 
 /**
- * In-memory run ledger store (run-ledger.ts). The ledger is hydrated from
- * disk once per process; a forked store would double-hydrate and the two
- * copies would diverge as runs progress (UI reads one, runtime writes the
- * other).
+ * Per-process run ledger state (run-ledger.ts): the open sqlite handle for
+ * the current mind root plus amortized prune counters. A forked copy would
+ * open a second handle and prune on its own schedule; sharing keeps one
+ * handle per process.
  */
 export const AGENT_RUN_LEDGER_STORE_KEY = Symbol.for('mindos.agentRunLedger');
 
@@ -52,11 +52,11 @@ export const AGENT_RUN_LEDGER_STORE_KEY = Symbol.for('mindos.agentRunLedger');
 export const AGENT_RUN_LEDGER_SUBSCRIBERS_KEY = Symbol.for('mindos.agentRunLedger.subscribers');
 
 /**
- * Per-process ledger shard identity (run-ledger.ts). Every module copy must
- * agree on the one `agent-run-ledger.<pid>-<startTs>.jsonl` file this
- * process owns; two copies computing their own start timestamp would write
- * two shards for one process and break the single-writer-per-shard
- * invariant.
+ * Per-process ledger owner identity (run-ledger.ts): `{ pid, startTs }`
+ * stamped on every run row this process writes, and used at read time to
+ * decide whether a non-terminal run's owner is still alive. Every module copy
+ * must agree on one start timestamp, or a process would look like two
+ * writers (and a recycled pid could not be told apart from itself).
  */
 export const AGENT_RUN_LEDGER_SHARD_KEY = Symbol.for('mindos.agentRunLedger.shard');
 

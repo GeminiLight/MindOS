@@ -5,7 +5,12 @@ import type { IFileSystem } from '../storage/index.js';
 import { existsSync } from 'node:fs';
 import * as path from 'path';
 import { redactSensitiveObject, redactSensitiveText } from '../../agent/turn/redaction.js';
-import { emitStudioAutomationEvent, recordStudioAutomationEventSourceFailure } from '../../server/automations/events.js';
+import {
+  appendContentChangeToLog,
+  getContentChangeSummaryFromLog,
+  listContentChangesFromLog,
+  markContentChangesSeenInLog,
+} from '../../server/handlers/change-log-store.js';
 
 // Helper functions for Result type
 function ok<T>(value: T): Result<T> {
@@ -49,16 +54,6 @@ export interface ContentChangeInput {
   afterPath?: string;
 }
 
-interface ChangeLogState {
-  version: 1;
-  lastSeenAt: string | null;
-  events: ContentChangeEvent[];
-  legacy?: {
-    agentDiffImportedCount?: number;
-    lastImportedAt?: string | null;
-  };
-}
-
 interface ListOptions {
   path?: string;
   space?: string;
@@ -77,11 +72,6 @@ export interface ContentChangeSummary {
 }
 
 const LOG_DIR_NAME = '.mindos';
-const CHANGE_LOG_FILE_NAME = 'change-log.json';
-const MAX_EVENTS = 500;
-const MAX_TEXT_CHARS = 12_000;
-const ROOT_SPACE_VALUE = '__root__';
-const UNKNOWN_AGENT_VALUE = '__agent_unknown__';
 
 function nowIso() {
   return new Date().toISOString();
@@ -94,341 +84,66 @@ function resolveKnowledgePath(mindRoot: string, relativePath: string): string {
   return path.join(mindRoot, relativePath);
 }
 
-function changeLogPath(mindRoot: string) {
-  return resolveKnowledgePath(mindRoot, path.posix.join(LOG_DIR_NAME, CHANGE_LOG_FILE_NAME));
-}
-
-function defaultChangeLogState(): ChangeLogState {
-  return {
-    version: 1,
-    lastSeenAt: null,
-    events: [],
-    legacy: {
-      agentDiffImportedCount: 0,
-      lastImportedAt: null,
-    },
-  };
-}
-
-function normalizeText(value: string | undefined): { value: string | undefined; truncated: boolean } {
-  if (typeof value !== 'string') return { value: undefined, truncated: false };
-  if (value.length <= MAX_TEXT_CHARS) return { value, truncated: false };
-  return {
-    value: value.slice(0, MAX_TEXT_CHARS),
-    truncated: true,
-  };
-}
-
-function normalizeEventPath(value: string | undefined): string {
-  return typeof value === 'string' ? value.split('\\').join('/').replace(/^\/+/, '').replace(/\/+$/, '') : '';
-}
-
-function pathSpaceValue(value: string | undefined, op?: string): string {
-  const normalized = normalizeEventPath(value);
-  if (!normalized) return ROOT_SPACE_VALUE;
-  const [first, ...rest] = normalized.split('/');
-  if (rest.length > 0) return first || ROOT_SPACE_VALUE;
-  if (op === 'create_space' || op === 'rename_space') return first || ROOT_SPACE_VALUE;
-  return ROOT_SPACE_VALUE;
-}
-
-function eventSpaceValue(event: ContentChangeEvent): string {
-  const candidates = [event.afterPath, event.path, event.beforePath];
-  for (const candidate of candidates) {
-    const value = pathSpaceValue(candidate, event.op);
-    if (value !== ROOT_SPACE_VALUE) return value;
-  }
-  return ROOT_SPACE_VALUE;
-}
-
-function eventAgentValue(event: ContentChangeEvent): string | null {
-  if (event.source !== 'agent') return null;
-  return event.agentName?.trim() || UNKNOWN_AGENT_VALUE;
-}
-
-async function readChangeLogState(fs: IFileSystem, mindRoot: string): Promise<ChangeLogState> {
-  let file: string;
-  try {
-    file = changeLogPath(mindRoot);
-  } catch {
-    return defaultChangeLogState();
-  }
-  const existsResult = await fs.exists(file);
-  if (!existsResult.ok || !existsResult.value) {
-    return defaultChangeLogState();
-  }
-
-  const readResult = await fs.readFile(file);
-  if (!readResult.ok) {
-    return defaultChangeLogState();
-  }
-
-  try {
-    const parsed = JSON.parse(readResult.value) as Partial<ChangeLogState>;
-    if (!Array.isArray(parsed.events)) return defaultChangeLogState();
-    return {
-      version: 1,
-      lastSeenAt: typeof parsed.lastSeenAt === 'string' ? parsed.lastSeenAt : null,
-      events: parsed.events,
-      legacy: {
-        agentDiffImportedCount:
-          typeof parsed.legacy?.agentDiffImportedCount === 'number'
-            ? parsed.legacy.agentDiffImportedCount
-            : 0,
-        lastImportedAt:
-          typeof parsed.legacy?.lastImportedAt === 'string'
-            ? parsed.legacy.lastImportedAt
-            : null,
-      },
-    };
-  } catch {
-    return defaultChangeLogState();
-  }
-}
-
-async function writeChangeLogState(fs: IFileSystem, mindRoot: string, state: ChangeLogState): Promise<Result<void>> {
-  let file: string;
-  try {
-    file = changeLogPath(mindRoot);
-  } catch (error) {
-    return err(createError('VALIDATION_ERROR', 'Access denied: invalid change log path', {
-      context: { mindRoot },
-      cause: error as Error,
-    }));
-  }
-  const dir = path.dirname(file);
-
-  const mkdirResult = await fs.mkdir(dir, true);
-  if (!mkdirResult.ok) {
-    return err(mkdirResult.error);
-  }
-
-  return await fs.writeFile(file, JSON.stringify(state, null, 2));
-}
-
-interface LegacyAgentDiffEntry {
-  ts?: string;
-  path?: string;
-  tool?: string;
-  before?: string;
-  after?: string;
-}
-
-function parseLegacyAgentDiffBlocks(content: string): LegacyAgentDiffEntry[] {
-  const blocks: LegacyAgentDiffEntry[] = [];
-  const re = /```agent-diff\s*\n([\s\S]*?)```/g;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(content)) !== null) {
-    if (!m[1]) continue;
-    try {
-      const parsed = JSON.parse(m[1].trim()) as LegacyAgentDiffEntry;
-      blocks.push(parsed);
-    } catch {
-      // Skip malformed block
-    }
-  }
-  return blocks;
-}
-
-function toValidIso(ts: string | undefined): string {
-  if (!ts) return nowIso();
-  const ms = new Date(ts).getTime();
-  return Number.isFinite(ms) ? new Date(ms).toISOString() : nowIso();
-}
-
-async function importLegacyAgentDiffIfNeeded(
-  fs: IFileSystem,
-  mindRoot: string,
-  state: ChangeLogState
-): Promise<ChangeLogState> {
-  let legacyPath: string;
-  try {
-    legacyPath = resolveKnowledgePath(mindRoot, 'Agent-Diff.md');
-  } catch {
-    return state;
-  }
-  const existsResult = await fs.exists(legacyPath);
-  if (!existsResult.ok || !existsResult.value) {
-    return state;
-  }
-
-  const readResult = await fs.readFile(legacyPath);
-  if (!readResult.ok) {
-    return state;
-  }
-
-  const blocks = parseLegacyAgentDiffBlocks(readResult.value);
-  const importedCount = state.legacy?.agentDiffImportedCount ?? 0;
-  if (blocks.length <= importedCount) {
-    // Already migrated: remove legacy file
-    if (blocks.length > 0) {
-      await fs.remove(legacyPath);
-    }
-    return state;
-  }
-
-  const incoming = blocks.slice(importedCount);
-  const importedEvents: ContentChangeEvent[] = incoming.map((entry, idx) => {
-    const before = normalizeText(entry.before);
-    const after = normalizeText(entry.after);
-    const toolName = typeof entry.tool === 'string' && entry.tool.trim()
-      ? entry.tool.trim()
-      : 'unknown-tool';
-    const targetPath = typeof entry.path === 'string' && entry.path.trim()
-      ? entry.path
-      : 'Agent-Diff.md';
-    return {
-      id: `legacy-${Date.now().toString(36)}-${idx.toString(36)}`,
-      ts: toValidIso(entry.ts),
-      op: 'legacy_agent_diff_import',
-      path: targetPath,
-      source: 'agent' as ContentChangeSource,
-      summary: `Imported legacy agent diff (${toolName})`,
-      before: before.value,
-      after: after.value,
-      truncated: before.truncated || after.truncated || undefined,
-    };
-  });
-
-  const merged = [...state.events, ...importedEvents].sort(
-    (a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime(),
+function changeLogError(mindRoot: string, error: unknown): Error {
+  const message = error instanceof Error ? error.message : String(error);
+  return createError(
+    /access denied/i.test(message) ? 'VALIDATION_ERROR' : 'INTERNAL_ERROR',
+    `Content change log failed: ${message}`,
+    { context: { mindRoot }, ...(error instanceof Error ? { cause: error } : {}) },
   );
-
-  const nextState = {
-    ...state,
-    events: merged.slice(0, MAX_EVENTS),
-    legacy: {
-      agentDiffImportedCount: blocks.length,
-      lastImportedAt: nowIso(),
-    },
-  };
-
-  await fs.remove(legacyPath);
-  return nextState;
 }
 
-async function loadChangeLogState(fs: IFileSystem, mindRoot: string): Promise<ChangeLogState> {
-  const state = await readChangeLogState(fs, mindRoot);
-  const migrated = await importLegacyAgentDiffIfNeeded(fs, mindRoot, state);
-  const changed =
-    (state.legacy?.agentDiffImportedCount ?? 0) !== (migrated.legacy?.agentDiffImportedCount ?? 0) ||
-    state.events.length !== migrated.events.length;
-  if (changed) {
-    await writeChangeLogState(fs, mindRoot, migrated);
-  }
-  return migrated;
-}
-
+/**
+ * Content change log facade. The store itself is the SQLite-backed
+ * `server/handlers/change-log-store` (spec-sqlite-derived-stores); the
+ * `IFileSystem` parameter is kept for signature compatibility and no longer
+ * used, since SQLite owns its own file I/O.
+ */
 export async function appendContentChange(
-  fs: IFileSystem,
+  _fs: IFileSystem,
   mindRoot: string,
   input: ContentChangeInput
 ): Promise<Result<ContentChangeEvent>> {
-  const state = await loadChangeLogState(fs, mindRoot);
-  const before = normalizeText(input.before);
-  const after = normalizeText(input.after);
-  const event: ContentChangeEvent = {
-    id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
-    ts: nowIso(),
-    op: input.op,
-    path: input.path,
-    source: input.source,
-    summary: input.summary,
-    agentName: input.source === 'agent' && input.agentName?.trim() ? input.agentName.trim() : undefined,
-    before: before.value,
-    after: after.value,
-    beforePath: input.beforePath,
-    afterPath: input.afterPath,
-    truncated: before.truncated || after.truncated || undefined,
-  };
-  state.events.unshift(event);
-  if (state.events.length > MAX_EVENTS) {
-    state.events = state.events.slice(0, MAX_EVENTS);
-  }
-  const writeResult = await writeChangeLogState(fs, mindRoot, state);
-  if (!writeResult.ok) {
-    return err(writeResult.error);
-  }
-  emitKnowledgeChangedEvent(mindRoot, event);
-  return ok(event);
-}
-
-function emitKnowledgeChangedEvent(mindRoot: string, event: ContentChangeEvent): void {
   try {
-    emitStudioAutomationEvent(mindRoot, {
-      source: 'knowledge',
-      key: event.id,
-      type: 'knowledge.changed',
-      occurredAt: new Date(event.ts),
-      payload: {
-        changeId: event.id,
-        path: event.path,
-        op: event.op,
-        source: event.source,
-        summary: event.summary,
-        agentName: event.agentName,
-        beforePath: event.beforePath,
-        afterPath: event.afterPath,
-      },
-    });
+    return ok(appendContentChangeToLog(mindRoot, input));
   } catch (error) {
-    recordStudioAutomationEventSourceFailure(mindRoot, { source: 'knowledge', key: event.id, error });
-    // The change log remains authoritative if the optional automation projection is unavailable.
+    return err(changeLogError(mindRoot, error));
   }
 }
 
 export async function listContentChanges(
-  fs: IFileSystem,
+  _fs: IFileSystem,
   mindRoot: string,
   options: ListOptions = {}
 ): Promise<Result<ContentChangeEvent[]>> {
-  const state = await loadChangeLogState(fs, mindRoot);
-  const limit = Math.max(1, Math.min(options.limit ?? 50, 200));
-  const pathFilter = options.path?.trim();
-  const spaceFilter = options.space?.trim();
-  const sourceFilter = options.source;
-  const agentFilter = options.agent?.trim();
-  const opFilter = options.op?.trim();
-  const q = options.q?.trim().toLowerCase();
-  const events = state.events.filter((event) => {
-    if (pathFilter && event.path !== pathFilter && event.beforePath !== pathFilter && event.afterPath !== pathFilter) {
-      return false;
-    }
-    if (spaceFilter && eventSpaceValue(event) !== spaceFilter) return false;
-    if (sourceFilter && event.source !== sourceFilter) return false;
-    if (agentFilter && eventAgentValue(event) !== agentFilter) return false;
-    if (opFilter && event.op !== opFilter) return false;
-    if (q) {
-      const haystack = `${event.path} ${event.beforePath ?? ''} ${event.afterPath ?? ''} ${event.summary} ${event.op} ${event.source} ${event.agentName ?? ''}`.toLowerCase();
-      if (!haystack.includes(q)) return false;
-    }
-    return true;
-  });
-  return ok(events.slice(0, limit));
+  try {
+    return ok(listContentChangesFromLog(mindRoot, options));
+  } catch (error) {
+    return err(changeLogError(mindRoot, error));
+  }
 }
 
 export async function markContentChangesSeen(
-  fs: IFileSystem,
+  _fs: IFileSystem,
   mindRoot: string
 ): Promise<Result<void>> {
-  const state = await loadChangeLogState(fs, mindRoot);
-  state.lastSeenAt = nowIso();
-  return await writeChangeLogState(fs, mindRoot, state);
+  try {
+    markContentChangesSeenInLog(mindRoot);
+    return ok(undefined);
+  } catch (error) {
+    return err(changeLogError(mindRoot, error));
+  }
 }
 
 export async function getContentChangeSummary(
-  fs: IFileSystem,
+  _fs: IFileSystem,
   mindRoot: string
 ): Promise<Result<ContentChangeSummary>> {
-  const state = await loadChangeLogState(fs, mindRoot);
-  const lastSeenAtMs = state.lastSeenAt ? new Date(state.lastSeenAt).getTime() : 0;
-  const unreadCount = state.events.filter((event) => new Date(event.ts).getTime() > lastSeenAtMs).length;
-  return ok({
-    unreadCount,
-    totalCount: state.events.length,
-    lastSeenAt: state.lastSeenAt,
-    latest: state.events[0] ?? null,
-  });
+  try {
+    return ok(getContentChangeSummaryFromLog(mindRoot));
+  } catch (error) {
+    return err(changeLogError(mindRoot, error));
+  }
 }
 
 // ============================================================================

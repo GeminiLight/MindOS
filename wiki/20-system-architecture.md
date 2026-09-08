@@ -207,6 +207,20 @@ mindos/
 
 这些 adapter 依赖 `@geminilight/mindos/retrieval` 的核心 contracts；`packages/mindos` 不反向 import 它们。
 
+#### 派生状态存储（node:sqlite）
+
+知识内容仍然是 Markdown + Git。三类高频派生状态改用 Node 内建的 `node:sqlite`（`DatabaseSync`，WAL 模式），不新增依赖；spec 见 `wiki/specs/spec-sqlite-derived-stores.md`。
+
+| 数据集 | 数据库 | 模块 | 说明 |
+| --- | --- | --- | --- |
+| 内容变更日志 | `.mindos/db/change_log_1.sqlite` | `server/handlers/change-log-store.ts` | 唯一实现；Web `lib/core/content-changes.ts` 与 `knowledge/audit` 只做委托。list/summary/facets 是 SQL，保留最新 500 条 |
+| Agent run ledger | `.mindos/db/agent_runs_1.sqlite` | `agent/ledger/run-ledger*.ts` | run 行 + timeline/debug 事件同表（`visibility` 列）；每次读库，跨进程即时可见；孤儿 run 由 `owner_pid/owner_start_ts` 在读时投影为 failed，不改写行；每 run 每类事件保留 1000 条，run 保留 500 条 |
+| Run capsule 索引 | `.mindos/db/capsules_1.sqlite` | `agent/capsules/capsule-index.ts` | 0600 JSON 文件仍是事实来源；索引只记 id → 路径 + 少量字段，按月目录 mtime 判断是否重扫，行 stale 时按文件 stat 刷新，删库可重建 |
+
+共用底座 `foundation/storage/sqlite.ts`：`openMindosDatabase({ file, migrations })` 负责 WAL / `synchronous=NORMAL` / `busy_timeout=5000` / `foreign_keys=ON`、`_migrations` 表内的幂等迁移、按解析路径缓存的进程内句柄，以及 `openMindosDatabaseIfExists`（纯读不建库）。`node:sqlite` 通过 `process.getBuiltinModule` 加载，避免 vite / webpack 把 `node:sqlite` 当成普通包解析。文件名带 schema 代际后缀（`_1`），破坏性变更换新文件并从旧文件导入。
+
+旧格式在首次打开时导入并改名为 `*.migrated`：`change-log.json`（JSONL 或 v1 pretty JSON）+ `change-log.meta.json`、`agent-run-ledger.json` / `.jsonl` / `agent-run-ledger.<pid>-<startTs>.jsonl` 分片（存活进程的分片保留到进程退出）。`.mindos/db/` 由 sync daemon 自动写入 mind root `.gitignore` 并从 watcher 中排除；Bun 单二进制运行时下这些 store 会抛出明确错误（follow-up）。
+
 ### 3. packages/mindos/src/knowledge/knowledge-ops — 知识库操作内核
 
 `packages/mindos/src/knowledge/knowledge-ops` 是知识库写操作的纯 TypeScript 编排层，不依赖 Next.js。它通过 `@geminilight/mindos` 对外暴露，负责：
@@ -408,6 +422,7 @@ Agent → stdio: spawn node dist/protocols/mcp-server/index.cjs ← stdin/stdout
 | Agent SDK | pi-agent-core 0.60.0 | Agent 执行循环 + TypeBox 工具定义 |
 | MCP SDK | `@modelcontextprotocol/sdk` | 标准协议，跨 Agent 兼容 |
 | 存储 | 本地纯文本 + Git | 隐私、主权、可审计、零依赖 |
+| 派生状态 | `node:sqlite`（WAL，`.mindos/db/*_N.sqlite`） | change-log / run ledger / capsule 索引按索引查询、单语句多进程安全；不进 Git 同步 |
 | 认证 | Bearer Token (可选) | 简单，兼顾本地开发和网络暴露 |
 | 模块格式 | ESM (`"type": "module"`) | Node.js 原生 ESM，import/export |
 | 原子写入 | temp file + rename | 防写入中断丢数据 |

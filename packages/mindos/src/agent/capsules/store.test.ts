@@ -2,7 +2,9 @@ import fs, { mkdtempSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSy
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { closeAllMindosDatabases, openMindosDatabase } from '../../foundation/storage/sqlite.js';
 import {
+  CAPSULES_DB_RELATIVE_PATH,
   claimAgentRunCapsuleRecoveryPlan,
   createAgentRunCapsule,
   createAgentRunCapsuleRecoveryPlan,
@@ -15,6 +17,15 @@ import {
 
 let mindRoot = '';
 
+function indexDbFile(): string {
+  return join(fs.realpathSync(mindRoot), ...CAPSULES_DB_RELATIVE_PATH.split('/'));
+}
+
+function indexRows(): Array<{ id: string; status: string | null; path: string; corrupt_message: string | null }> {
+  return openMindosDatabase({ file: indexDbFile(), migrations: [] })
+    .prepare('SELECT id, status, path, corrupt_message FROM capsules ORDER BY id').all() as Array<{ id: string; status: string | null; path: string; corrupt_message: string | null }>;
+}
+
 describe('agent run capsule store', () => {
   beforeEach(() => {
     mindRoot = mkdtempSync(join(tmpdir(), 'mindos-run-capsule-'));
@@ -23,6 +34,7 @@ describe('agent run capsule store', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    closeAllMindosDatabases();
     rmSync(mindRoot, { recursive: true, force: true });
   });
 
@@ -352,6 +364,101 @@ describe('agent run capsule store', () => {
 
     expect(() => getAgentRunCapsuleRecoveryPlan(mindRoot, plan.id)).toThrow(/corrupt/i);
     expect(readFileSync(storedPath, 'utf-8')).not.toContain('"context"');
+  });
+
+  it('indexes capsules in sqlite so get and finalize never list directories', () => {
+    createAgentRunCapsule(mindRoot, capsuleInput());
+    createAgentRunCapsule(mindRoot, capsuleInput({ id: 'capsule-old', runId: 'run-old', now: new Date('2024-02-10T10:00:00.000Z') }));
+    expect(indexRows()).toEqual([
+      expect.objectContaining({ id: 'capsule-old', status: 'completed', path: '.mindos/agent-run-capsules/2024/02/capsule-old.json' }),
+      expect.objectContaining({ id: 'capsule-run-1', status: 'completed', path: '.mindos/agent-run-capsules/2026/09/capsule-run-1.json' }),
+    ]);
+
+    // First list records every month directory's mtime in the index.
+    listAgentRunCapsules(mindRoot);
+
+    const readdirSpy = vi.spyOn(fs, 'readdirSync');
+    expect(getAgentRunCapsule(mindRoot, 'capsule-old')?.id).toBe('capsule-old');
+    expect(finalizeAgentRunCapsule(mindRoot, 'capsule-old', { status: 'failed' }).status).toBe('failed');
+    expect(readdirSpy).not.toHaveBeenCalled();
+    expect(indexRows().find((row) => row.id === 'capsule-old')?.status).toBe('failed');
+
+    // Listing re-lists the tiny year directories plus only the month the finalize touched.
+    readdirSpy.mockClear();
+    listAgentRunCapsules(mindRoot);
+    const listedMonths = readdirSpy.mock.calls
+      .map((call) => String(call[0]))
+      .filter((dir) => /agent-run-capsules[\\/]\d{4}[\\/]\d{2}$/.test(dir));
+    expect(listedMonths).toHaveLength(1);
+    expect(listedMonths[0]).toMatch(/2024[\\/]02$/);
+
+    // Nothing changed since: no month directory is listed at all.
+    readdirSpy.mockClear();
+    listAgentRunCapsules(mindRoot);
+    expect(readdirSpy.mock.calls.map((call) => String(call[0])).some((dir) => /agent-run-capsules[\\/]\d{4}[\\/]\d{2}$/.test(dir))).toBe(false);
+  });
+
+  it('discovers a capsule another process filed directly on disk and indexes it', () => {
+    createAgentRunCapsule(mindRoot, capsuleInput());
+    expect(listAgentRunCapsules(mindRoot).map((capsule) => capsule.id)).toEqual(['capsule-run-1']);
+
+    const foreign = { ...createAgentRunCapsule(mkdtempSync(join(tmpdir(), 'mindos-run-capsule-foreign-')), capsuleInput({ id: 'capsule-foreign', runId: 'run-foreign', now: new Date('2026-09-04T10:00:00.000Z') })) };
+    const dir = join(mindRoot, '.mindos', 'agent-run-capsules', '2026', '09');
+    writeFileSync(join(dir, 'capsule-foreign.json'), `${JSON.stringify(foreign, null, 2)}\n`, 'utf-8');
+
+    expect(listAgentRunCapsules(mindRoot).map((capsule) => capsule.id)).toEqual(['capsule-foreign', 'capsule-run-1']);
+    expect(getAgentRunCapsule(mindRoot, 'capsule-foreign')).toEqual(foreign);
+    expect(indexRows().map((row) => row.id)).toEqual(['capsule-foreign', 'capsule-run-1']);
+
+    // A capsule filed in an older month, missed by the recent-month probe, is found through a full sync.
+    const oldDir = join(mindRoot, '.mindos', 'agent-run-capsules', '2023', '05');
+    mkdirSync(oldDir, { recursive: true });
+    writeFileSync(join(oldDir, 'capsule-ancient.json'), `${JSON.stringify({ ...foreign, id: 'capsule-ancient', createdAt: '2023-05-01T00:00:00.000Z', updatedAt: '2023-05-01T00:00:00.000Z' }, null, 2)}\n`, 'utf-8');
+    expect(getAgentRunCapsule(mindRoot, 'capsule-ancient')?.id).toBe('capsule-ancient');
+    expect(indexRows().map((row) => row.id)).toEqual(['capsule-ancient', 'capsule-foreign', 'capsule-run-1']);
+  });
+
+  it('refreshes a stale index row when the file changed underneath it and drops rows for deleted files', () => {
+    createAgentRunCapsule(mindRoot, capsuleInput());
+    const storedPath = join(mindRoot, '.mindos', 'agent-run-capsules', '2026', '09', 'capsule-run-1.json');
+    const rewritten = JSON.parse(readFileSync(storedPath, 'utf-8'));
+    rewritten.status = 'canceled';
+    writeFileSync(storedPath, `${JSON.stringify(rewritten, null, 2)}\n`, 'utf-8');
+
+    // In-place rewrite: the month directory mtime did not change, the row is refreshed from the file stat.
+    expect(getAgentRunCapsule(mindRoot, 'capsule-run-1')?.status).toBe('canceled');
+    expect(indexRows()[0]).toEqual(expect.objectContaining({ id: 'capsule-run-1', status: 'canceled', corrupt_message: null }));
+
+    writeFileSync(storedPath, '{broken', 'utf-8');
+    expect(() => getAgentRunCapsule(mindRoot, 'capsule-run-1')).toThrow(/corrupt/i);
+    expect(indexRows()[0]?.corrupt_message).toMatch(/corrupt/i);
+
+    rmSync(storedPath);
+    expect(getAgentRunCapsule(mindRoot, 'capsule-run-1')).toBeNull();
+    expect(indexRows()).toEqual([]);
+  });
+
+  it('rebuilds the index from the directory when the database is missing', () => {
+    createAgentRunCapsule(mindRoot, capsuleInput());
+    createAgentRunCapsule(mindRoot, capsuleInput({ id: 'capsule-run-2', runId: 'run-2', now: new Date('2026-09-03T11:00:00.000Z') }));
+    closeAllMindosDatabases();
+    for (const suffix of ['', '-wal', '-shm']) rmSync(`${indexDbFile()}${suffix}`, { force: true });
+
+    expect(listAgentRunCapsules(mindRoot).map((capsule) => capsule.id)).toEqual(['capsule-run-2', 'capsule-run-1']);
+    expect(indexRows().map((row) => row.id)).toEqual(['capsule-run-1', 'capsule-run-2']);
+    expect(getAgentRunCapsule(mindRoot, 'capsule-run-2')?.id).toBe('capsule-run-2');
+  });
+
+  it('ignores index rows that point outside the capsules tree', () => {
+    createAgentRunCapsule(mindRoot, capsuleInput());
+    const db = openMindosDatabase({ file: indexDbFile(), migrations: [] });
+    db.prepare(`INSERT INTO capsules(id, path, size, mtime_ms) VALUES ('capsule-evil', '../../etc/passwd', 1, 1)`).run();
+    db.prepare(`INSERT INTO capsules(id, path, size, mtime_ms) VALUES ('capsule-renamed', '.mindos/agent-run-capsules/2026/09/capsule-run-1.json', 1, 1)`).run();
+
+    expect(listAgentRunCapsules(mindRoot).map((capsule) => capsule.id)).toEqual(['capsule-run-1']);
+    expect(getAgentRunCapsule(mindRoot, 'capsule-evil')).toBeNull();
+    expect(getAgentRunCapsule(mindRoot, 'capsule-renamed')).toBeNull();
+    expect(indexRows().map((row) => row.id)).toEqual(['capsule-run-1']);
   });
 });
 

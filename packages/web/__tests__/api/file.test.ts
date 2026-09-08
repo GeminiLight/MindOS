@@ -2,7 +2,7 @@ import { beforeEach, describe, it, expect, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { seedFile, testMindRoot } from '../setup';
 import { GET, POST } from '../../app/api/file/route';
-import { collectAllFiles, invalidateCache, peekContentVersion, peekTreeVersion } from '../../lib/fs';
+import { collectAllFiles, invalidateCache, listContentChanges, peekContentVersion, peekTreeVersion } from '../../lib/fs';
 import fs from 'fs';
 import path from 'path';
 
@@ -284,20 +284,18 @@ describe('POST /api/file', () => {
     expect(fs.existsSync(path.join(root(), 'draft.md'))).toBe(true);
   }));
 
-  it('save_file records a structured change event in JSON log', async () => {
+  it('save_file records a structured change event in the sqlite change log', async () => {
     const res = await POST(post({ op: 'save_file', path: 'logged.md', content: 'v1' }));
     expect(res.status).toBe(200);
 
-    const logPath = path.join(root(), '.mindos', 'change-log.json');
-    expect(fs.existsSync(logPath)).toBe(true);
+    // The legacy JSONL file is gone; the store lives in .mindos/db (spec-sqlite-derived-stores).
+    expect(fs.existsSync(path.join(root(), '.mindos', 'change-log.json'))).toBe(false);
+    expect(fs.existsSync(path.join(root(), '.mindos', 'db', 'change_log_1.sqlite'))).toBe(true);
 
-    // JSONL format: newest event is the last line.
-    const lines = fs.readFileSync(logPath, 'utf-8').trim().split('\n');
-    expect(lines.length).toBeGreaterThan(0);
-    const latest = JSON.parse(lines[lines.length - 1]) as { op: string; path: string; after?: string };
-    expect(latest.op).toBe('save_file');
-    expect(latest.path).toBe('logged.md');
-    expect(latest.after).toContain('v1');
+    const latest = listContentChanges({ limit: 1 })[0];
+    expect(latest?.op).toBe('save_file');
+    expect(latest?.path).toBe('logged.md');
+    expect(latest?.after).toContain('v1');
   });
 
   it('records the agent header on agent-authored content changes', async () => {
@@ -307,12 +305,10 @@ describe('POST /api/file', () => {
     ));
     expect(res.status).toBe(200);
 
-    const logPath = path.join(root(), '.mindos', 'change-log.json');
-    const lines = fs.readFileSync(logPath, 'utf-8').trim().split('\n');
-    const latest = JSON.parse(lines[lines.length - 1]) as { source: string; agentName?: string; path: string };
-    expect(latest.path).toBe('agent-logged.md');
-    expect(latest.source).toBe('agent');
-    expect(latest.agentName).toBe('codex');
+    const latest = listContentChanges({ limit: 1 })[0];
+    expect(latest?.path).toBe('agent-logged.md');
+    expect(latest?.source).toBe('agent');
+    expect(latest?.agentName).toBe('codex');
   });
 
   it('save_file returns error if content missing', async () => {

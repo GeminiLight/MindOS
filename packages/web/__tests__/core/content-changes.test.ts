@@ -9,15 +9,19 @@ import {
   getContentChangeSummary,
   markContentChangesSeen,
 } from '../../lib/core/content-changes';
-import { readStudioAutomationState } from '@geminilight/mindos/server';
+import { CHANGE_LOG_DB_RELATIVE_PATH, readStudioAutomationState } from '@geminilight/mindos/server';
 
 function changeLogPath(root: string) {
   return path.join(root, '.mindos', 'change-log.json');
 }
 
+function databasePath(root: string) {
+  return path.join(root, ...CHANGE_LOG_DB_RELATIVE_PATH.split('/'));
+}
+
 describe('core/content-changes', () => {
-  it('creates .mindos/change-log.json on first append', () => {
-    appendContentChange(testMindRoot, {
+  it('creates the sqlite change log on first append and never writes the legacy JSONL file', () => {
+    const event = appendContentChange(testMindRoot, {
       op: 'save_file',
       path: 'note.md',
       source: 'user',
@@ -26,12 +30,11 @@ describe('core/content-changes', () => {
       summary: 'updated file',
     });
 
-    expect(fs.existsSync(changeLogPath(testMindRoot))).toBe(true);
-    // JSONL format: one event per line, plus a meta sidecar marking the format.
-    const lines = fs.readFileSync(changeLogPath(testMindRoot), 'utf-8').trim().split('\n');
-    expect(lines.length).toBe(1);
-    expect((JSON.parse(lines[0]) as { op: string }).op).toBe('save_file');
-    expect(fs.existsSync(path.join(testMindRoot, '.mindos', 'change-log.meta.json'))).toBe(true);
+    expect(fs.existsSync(databasePath(testMindRoot))).toBe(true);
+    expect(fs.existsSync(changeLogPath(testMindRoot))).toBe(false);
+    expect(fs.existsSync(path.join(testMindRoot, '.mindos', 'change-log.meta.json'))).toBe(false);
+    expect(listContentChanges(testMindRoot, { limit: 10 })).toEqual([event]);
+    expect(event.op).toBe('save_file');
     expect(readStudioAutomationState(testMindRoot).events[0]).toMatchObject({
       source: 'knowledge',
       type: 'knowledge.changed',
@@ -127,12 +130,6 @@ describe('core/content-changes', () => {
     expect(events[0].op).toBe('legacy_agent_diff_import');
     expect(events[0].path).toBe('Profile/Identity.md');
     expect(events[0].source).toBe('agent');
-
-    // Import counters now live in the meta sidecar, not the events file.
-    const meta = JSON.parse(fs.readFileSync(path.join(testMindRoot, '.mindos', 'change-log.meta.json'), 'utf-8')) as {
-      legacy?: { agentDiffImportedCount?: number };
-    };
-    expect(meta.legacy?.agentDiffImportedCount).toBe(1);
     expect(fs.existsSync(legacyPath)).toBe(false);
   });
 
@@ -163,7 +160,7 @@ describe('core/content-changes', () => {
     expect(fs.existsSync(legacyPath)).toBe(false);
   });
 
-  it('migrates a legacy pretty-printed change log to JSONL once, carrying lastSeenAt', () => {
+  it('imports a legacy pretty-printed change log once, carrying lastSeenAt, and renames it to *.migrated', () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mindos-content-log-migrate-'));
     try {
       fs.mkdirSync(path.join(root, '.mindos'), { recursive: true });
@@ -181,24 +178,25 @@ describe('core/content-changes', () => {
       expect(summary.lastSeenAt).toBe('2026-01-01T12:00:00.000Z');
       expect(summary.unreadCount).toBe(1);
 
-      // On disk the file is now JSONL, oldest-first.
-      const lines = fs.readFileSync(changeLogPath(root), 'utf-8').trim().split('\n');
-      expect(lines.map((line) => (JSON.parse(line) as { id: string }).id)).toEqual(['old', 'new']);
+      expect(fs.existsSync(changeLogPath(root))).toBe(false);
+      expect(fs.existsSync(`${changeLogPath(root)}.migrated`)).toBe(true);
+      expect(fs.existsSync(databasePath(root))).toBe(true);
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }
   });
 
-  it('marks changes seen without rewriting the events file', () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mindos-content-log-seen-'));
+  it('imports an existing JSONL change log and keeps appending to sqlite afterwards', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mindos-content-log-jsonl-'));
     try {
-      appendContentChange(root, { op: 'save_file', path: 'a.md', source: 'user', summary: 'changed' });
-      const before = fs.statSync(changeLogPath(root)).mtimeMs;
+      fs.mkdirSync(path.join(root, '.mindos'), { recursive: true });
+      fs.writeFileSync(changeLogPath(root), `${JSON.stringify({ id: 'legacy', ts: '2026-01-01T00:00:00.000Z', op: 'save_file', path: 'a.md', source: 'user', summary: 'legacy' })}\n`, 'utf-8');
+      fs.writeFileSync(path.join(root, '.mindos', 'change-log.meta.json'), JSON.stringify({ version: 2, lastSeenAt: null, legacy: {} }), 'utf-8');
 
-      markContentChangesSeen(root);
-
-      expect(fs.statSync(changeLogPath(root)).mtimeMs).toBe(before);
-      expect(getContentChangeSummary(root).unreadCount).toBe(0);
+      appendContentChange(root, { op: 'save_file', path: 'b.md', source: 'user', summary: 'fresh' });
+      expect(listContentChanges(root, { limit: 10 }).map((e) => e.path)).toEqual(['b.md', 'a.md']);
+      expect(fs.existsSync(changeLogPath(root))).toBe(false);
+      expect(fs.readFileSync(`${changeLogPath(root)}.migrated`, 'utf-8')).toContain('"id":"legacy"');
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }
@@ -217,6 +215,7 @@ describe('core/content-changes', () => {
         summary: 'updated',
       })).toThrow('Access denied');
       expect(fs.existsSync(path.join(outside, 'change-log.json'))).toBe(false);
+      expect(fs.existsSync(path.join(outside, 'db'))).toBe(false);
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
       fs.rmSync(outside, { recursive: true, force: true });

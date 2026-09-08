@@ -542,6 +542,18 @@ export {
 } from './handlers/changes.js';
 
 export {
+  CHANGE_LOG_DB_RELATIVE_PATH,
+  appendContentChangeToLog,
+  getContentChangeFacetsFromLog,
+  getContentChangeSummaryFromLog,
+  listContentChangesFromLog,
+  markContentChangesSeenInLog,
+  type ContentChangeFacetItem,
+  type ContentChangeFacets,
+  type ContentChangeListOptions,
+} from './handlers/change-log-store.js';
+
+export {
   handleAcpConfigDelete,
   handleAcpConfigGet,
   handleAcpConfigPost,

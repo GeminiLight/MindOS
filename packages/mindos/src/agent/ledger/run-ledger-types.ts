@@ -286,5 +286,10 @@ export interface ListAgentEventsOptions {
   type?: AgentEventType;
   category?: AgentEventCategory;
   startedAfter?: number;
+  /**
+   * Restrict to one visibility class. Omitted = every event (reattach replays
+   * debug deltas); `'timeline'` is the projection the observatory shows.
+   */
+  visibility?: AgentEventVisibility;
   limit?: number;
 }

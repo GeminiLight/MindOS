@@ -17,6 +17,8 @@ packages/mindos/skills/
 packages/mindos/templates/
 packages/web/.vscode
 *.tsbuildinfo
+# node:sqlite stores (and WAL/SHM sidecars) created by tests or local runs
+*.sqlite*
 *.pptx
 *.pdf
 *.log

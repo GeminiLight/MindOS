@@ -1,0 +1,88 @@
+{
+  "default": {},
+  "limit3": {
+    "limit": 3
+  },
+  "limitHuge": {
+    "limit": 9999
+  },
+  "limitZero": {
+    "limit": 0
+  },
+  "pathPaper": {
+    "path": "Research/paper.md"
+  },
+  "pathBeforeAfter": {
+    "path": "Personal/a.md"
+  },
+  "pathAfter": {
+    "path": "Projects/b.md"
+  },
+  "spaceResearch": {
+    "space": "Research"
+  },
+  "spaceRoot": {
+    "space": "__root__"
+  },
+  "spaceArchive": {
+    "space": "Archive"
+  },
+  "spaceArchives": {
+    "space": "Archives"
+  },
+  "spaceProjects": {
+    "space": "Projects"
+  },
+  "spaceUnicode": {
+    "space": "📝 笔记"
+  },
+  "sourceAgent": {
+    "source": "agent"
+  },
+  "sourceSystem": {
+    "source": "system"
+  },
+  "agentCodex": {
+    "agent": "codex"
+  },
+  "agentUnknown": {
+    "agent": "__agent_unknown__"
+  },
+  "agentSpaced": {
+    "agent": "spaced-agent"
+  },
+  "opSave": {
+    "op": "save_file"
+  },
+  "qCodex": {
+    "q": "codex"
+  },
+  "qPercent": {
+    "q": "% and _"
+  },
+  "qUnicode": {
+    "q": "中文"
+  },
+  "qEmoji": {
+    "q": "🚀"
+  },
+  "qNoMatch": {
+    "q": "definitely-not-present"
+  },
+  "qWhitespace": {
+    "q": "   "
+  },
+  "combined": {
+    "space": "Research",
+    "source": "agent",
+    "agent": "codex",
+    "op": "save_file",
+    "q": "codex",
+    "limit": 5
+  },
+  "combinedBulk": {
+    "space": "Bulk",
+    "source": "agent",
+    "limit": 100
+  }
+}

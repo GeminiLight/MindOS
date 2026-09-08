@@ -1,7 +1,8 @@
 // Driver for run-ledger.two-process.test.ts. Runs as a REAL child process
 // against the built dist/ output, so the test exercises genuine cross-process
-// behavior instead of vitest module isolation. Not compiled by tsc (plain
-// .mjs) and not collected by vitest (not a *.test.ts).
+// behavior (shared WAL-mode sqlite file, distinct pids) instead of vitest
+// module isolation. Not compiled by tsc (plain .mjs) and not collected by
+// vitest (not a *.test.ts).
 //
 // argv: <distDir> <mindRoot> <mode> [...modeArgs]
 import path from 'node:path';
@@ -27,10 +28,34 @@ if (mode === 'start-and-exit') {
   process.exit(0);
 }
 
+if (mode === 'start-and-complete') {
+  // Start and finish one run so the parent can observe it without restarting.
+  const run = ledger.startAgentRun({
+    ...(rest[0] ? { id: rest[0] } : {}),
+    agentKind: 'acp',
+    runtimeId: 'child-proc',
+    displayName: 'Child Process Run',
+    permissionMode: 'read',
+    inputSummary: 'created by a child process',
+  });
+  ledger.appendAgentRunEvent(run.id, { type: 'text', category: 'text', message: 'child says hello' });
+  ledger.completeAgentRun(run.id, { outputSummary: 'child done' });
+  process.stdout.write(JSON.stringify({ pid: process.pid, runId: run.id }));
+  process.exit(0);
+}
+
+if (mode === 'get-run') {
+  // Read a run the parent created; proves the parent's writes are visible here.
+  const record = ledger.getAgentRun(rest[0]);
+  const events = ledger.listAgentEvents({ runId: rest[0] }).map((event) => event.type);
+  process.stdout.write(JSON.stringify({ pid: process.pid, record: record ?? null, events }));
+  process.exit(0);
+}
+
 if (mode === 'append-many') {
-  // rest: <prefix> <count> — start+complete `count` runs with summaries big
-  // enough that this process's shard crosses the 1 MiB compaction threshold
-  // mid-loop, so appends and own-shard compactions interleave for real.
+  // rest: <prefix> <count> — start+complete `count` runs with large summaries
+  // while a sibling process does the same against the same database file, so
+  // writes from two processes interleave for real.
   const [prefix, countRaw] = rest;
   const count = Number(countRaw);
   const big = 'y'.repeat(4000);
