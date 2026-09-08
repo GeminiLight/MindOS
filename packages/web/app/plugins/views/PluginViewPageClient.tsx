@@ -338,7 +338,7 @@ export default function PluginViewPageClient({ pluginId, viewType, sourcePath = 
           >
             {stylesheet?.scopedCss ? (
               <style data-obsidian-plugin-style={stylesheet.pluginId}>
-                {stylesheet.scopedCss}
+                {stylesheet.themeBridgeCss ? `${stylesheet.themeBridgeCss}\n${stylesheet.scopedCss}` : stylesheet.scopedCss}
               </style>
             ) : null}
             <div className="flex items-center gap-2 border-b border-border/70 px-4 py-3">

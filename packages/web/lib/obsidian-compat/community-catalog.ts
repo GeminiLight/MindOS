@@ -109,6 +109,8 @@ export interface PreflightObsidianCommunityPluginPackageOptions {
   fetchImpl?: typeof fetch;
   timeoutMs?: number;
   mainJsMaxChars?: number;
+  /** Static analysis harnesses may raise this above the install-time stylesheet limit. */
+  stylesCssMaxChars?: number;
 }
 
 export type FetchObsidianCommunityPluginPackageOptions = PreflightObsidianCommunityPluginPackageOptions;
@@ -447,7 +449,7 @@ export async function fetchObsidianCommunityPluginPackage(
     timeoutMs,
     'styles.css',
     'text/css',
-    OBSIDIAN_PLUGIN_STYLESHEET_MAX_BYTES,
+    normalizePackageAssetMaxChars(options.stylesCssMaxChars, OBSIDIAN_PLUGIN_STYLESHEET_MAX_BYTES),
   );
   const digest = buildPackageDigest({ manifestJson, mainJs, stylesCss });
   const githubUrl = githubUrlForRepo(repo);

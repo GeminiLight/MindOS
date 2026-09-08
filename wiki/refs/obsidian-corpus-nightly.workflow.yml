@@ -1,0 +1,77 @@
+# Template: copy to .github/workflows/obsidian-corpus-nightly.yml with a credential that has the `workflow` scope.
+# Kept under wiki/refs because the task branch was pushed with an OAuth token lacking that scope.
+name: Obsidian Corpus Nightly
+
+# Static-only sweep of the top-N Obsidian community plugins by downloads.
+# Produces the API miss histogram that orders runtime-tier work. No plugin
+# code is executed here (--skip-smoke); smoke runs stay on the curated P0 set.
+
+on:
+  schedule:
+    - cron: '23 3 * * *'
+  workflow_dispatch:
+    inputs:
+      top:
+        description: Number of plugins by downloads to analyze
+        default: '200'
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: obsidian-corpus-nightly
+  cancel-in-progress: true
+
+jobs:
+  corpus:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.18.3
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Regenerate API surface snapshot (drift check)
+        run: |
+          pnpm run obsidian:api-surface
+          git diff --stat -- packages/web/lib/obsidian-compat/generated/obsidian-api-surface.json || true
+
+      - name: Analyze top-N corpus
+        env:
+          TOP: ${{ github.event.inputs.top || '200' }}
+        run: |
+          mkdir -p artifacts
+          pnpm run obsidian:corpus -- \
+            --top "$TOP" \
+            --out-json artifacts/obsidian-top-matrix.json \
+            --out-md artifacts/obsidian-top-matrix.md \
+            --out-api-miss-json artifacts/obsidian-api-miss-histogram.json \
+            --out-api-miss-md artifacts/obsidian-api-miss-histogram.md
+
+      - name: Summarize
+        run: |
+          {
+            echo '## Obsidian API miss histogram'
+            sed -n '1,60p' artifacts/obsidian-api-miss-histogram.md
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: obsidian-corpus-${{ github.run_id }}
+          path: |
+            artifacts/
+            packages/web/lib/obsidian-compat/generated/obsidian-api-surface.json
+          retention-days: 30

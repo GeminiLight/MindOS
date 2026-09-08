@@ -130,6 +130,8 @@ export interface PluginStylesheetSnapshot {
   css: string;
   scopedCss: string;
   scopeSelector: string;
+  themeBridgeCss?: string;
+  unmappedThemeVariables?: string[];
 }
 
 interface PluginStylesheetResponse {

@@ -47,6 +47,7 @@ import {
   scopePluginCss,
   type PluginStylesheetSnapshot,
 } from './stylesheet-host';
+import { buildObsidianThemeBridgeCss, findUnmappedObsidianVariables } from './theme-variable-bridge';
 import {
   resolveCanonicalPluginManagerStatePath,
   resolveCanonicalObsidianPluginDir,
@@ -239,6 +240,8 @@ export interface PluginRuntimeSummary {
   styleSheetList: Array<{ path: string; bytes: number }>;
   editorExtensions: number;
   editorExtensionList: Array<{ id: string } & EditorExtensionSummary>;
+  apiSurfaceMisses?: number;
+  apiSurfaceMissList?: Array<{ owner: 'obsidian' | 'app'; api: string; kind: string; declared: boolean; since?: string }>;
   capabilityLedger: ObsidianRuntimeCapabilityLedgerEntry[];
   warnings: string[];
 }
@@ -728,6 +731,8 @@ export class PluginManager {
       css: styleSheet.css,
       scopedCss: scopePluginCss(styleSheet.css, scopeSelector),
       scopeSelector,
+      themeBridgeCss: buildObsidianThemeBridgeCss(scopeSelector),
+      unmappedThemeVariables: findUnmappedObsidianVariables(styleSheet.css),
     };
   }
 
@@ -1051,6 +1056,7 @@ export class PluginManager {
     const statusBarItems = host.getStatusBarItems().filter((item) => item.pluginId === pluginId);
     const styleSheetList = this.styleSheetSummaryFor(pluginId);
     const editorExtensions = host.getEditorExtensions().filter((item) => item.pluginId === pluginId);
+    const apiSurfaceMisses = host.getApiSurfaceMisses(pluginId);
 
     return {
       commands: commands.length,
@@ -1088,6 +1094,14 @@ export class PluginManager {
       editorExtensionList: editorExtensions.map((item) => ({
         id: item.id,
         ...item.summary,
+      })),
+      apiSurfaceMisses: apiSurfaceMisses.length,
+      apiSurfaceMissList: apiSurfaceMisses.map((item) => ({
+        owner: item.owner,
+        api: item.api,
+        kind: item.kind,
+        declared: item.declared,
+        ...(item.since ? { since: item.since } : {}),
       })),
       capabilityLedger: host.getRuntimeCapabilityLedger(pluginId),
       warnings: host.getWarnings().filter((item) => item.pluginId === pluginId).map((item) => item.message),

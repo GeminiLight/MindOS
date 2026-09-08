@@ -12,6 +12,11 @@ import { ErrorCodes, MindOSError } from '@/lib/errors';
 import { getObsidianCapability } from './capability-matrix';
 import type { ObsidianRuntimeCapabilityLedgerEntry, ObsidianRuntimeCapabilityLedgerPhase } from './compatibility-preview';
 import type { ObsidianRuntimeCapabilityLedgerStore } from './runtime-capability-ledger-store';
+import type { ObsidianApiSurfaceMiss } from './api-surface';
+
+export interface RegisteredApiSurfaceMiss extends ObsidianApiSurfaceMiss {
+  pluginId?: string;
+}
 
 export interface RegisteredMarkdownPostProcessor {
   id: string;
@@ -293,6 +298,7 @@ export class ObsidianRuntimeHost extends Events {
   private pluginContextStack: string[] = [];
   private warnings: RuntimeWarning[] = [];
   private capabilityLedger: ObsidianRuntimeCapabilityLedgerEntry[] = [];
+  private apiSurfaceMisses: RegisteredApiSurfaceMiss[] = [];
 
   constructor(private readonly options: ObsidianRuntimeHostOptions = {}) {
     super();
@@ -609,6 +615,7 @@ export class ObsidianRuntimeHost extends Events {
     this.notices = this.notices.filter((item) => item.pluginId !== pluginId);
     this.warnings = this.warnings.filter((item) => item.pluginId !== pluginId);
     this.capabilityLedger = this.capabilityLedger.filter((item) => item.pluginId !== pluginId);
+    this.apiSurfaceMisses = this.apiSurfaceMisses.filter((item) => item.pluginId !== pluginId);
   }
 
   getMarkdownPostProcessors(): RegisteredMarkdownPostProcessor[] {
@@ -955,6 +962,42 @@ export class ObsidianRuntimeHost extends Events {
     return this.capabilityLedger
       .filter((entry) => !pluginId || entry.pluginId === pluginId)
       .map((entry) => ({ ...entry }));
+  }
+
+  /**
+   * Record a plugin touching an Obsidian API the server runtime tier does not
+   * implement. Deduplicated per plugin and API; lands in warnings and the
+   * runtime capability ledger so blocked features are diagnosable after the fact.
+   */
+  recordApiSurfaceMiss(pluginId: string | undefined, miss: ObsidianApiSurfaceMiss): void {
+    const resolvedPluginId = pluginId ?? this.getCurrentPluginId();
+    const duplicate = this.apiSurfaceMisses.some((item) => (
+      item.pluginId === resolvedPluginId && item.owner === miss.owner && item.api === miss.api
+    ));
+    if (duplicate) return;
+    this.apiSurfaceMisses.push({ ...miss, ...(resolvedPluginId ? { pluginId: resolvedPluginId } : {}) });
+    const where = miss.owner === 'obsidian' ? `require('obsidian').${miss.api}` : miss.api;
+    this.warn({
+      ...(resolvedPluginId ? { pluginId: resolvedPluginId } : {}),
+      code: miss.declared ? 'obsidian-api-not-implemented' : 'obsidian-api-undeclared',
+      message: miss.declared
+        ? `${where} is declared by obsidian.d.ts${miss.since ? ` (since ${miss.since})` : ''} but not implemented by the MindOS server runtime tier.`
+        : `${where} is not part of the public Obsidian API and is not provided by the MindOS runtime.`,
+    });
+    this.recordCapability(
+      resolvedPluginId,
+      `api-surface:${miss.owner}.${miss.api}`,
+      'blocked',
+      miss.declared
+        ? `Declared ${miss.kind} not implemented in server tier${miss.since ? ` (since Obsidian ${miss.since})` : ''}.`
+        : 'Undeclared API access (not in obsidian.d.ts).',
+    );
+  }
+
+  getApiSurfaceMisses(pluginId?: string): RegisteredApiSurfaceMiss[] {
+    return this.apiSurfaceMisses
+      .filter((item) => !pluginId || item.pluginId === pluginId)
+      .map((item) => ({ ...item }));
   }
 
   private recordCapability(

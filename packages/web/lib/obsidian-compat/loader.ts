@@ -21,6 +21,8 @@ import { validateManifest, ManifestError } from './manifest';
 import { CompatError, CompatErrorCodes } from './errors';
 import { Plugin } from './shims/plugin';
 import { createObsidianModule, installObsidianArrayPrototypeCompat } from './shims/obsidian';
+import { createDiagnosticAppProxy, createDiagnosticObsidianModule } from './api-surface';
+import { classifyRuntimeModuleTier } from './compatibility-report';
 import { AppShim, type AppShimOptions } from './shims/app';
 import { createObsidianElement } from './shims/dom';
 import { ObsidianRuntimeHost } from './runtime';
@@ -77,6 +79,11 @@ class CompatibilityHTMLElement {}
 export class PluginLoader {
   private plugins: Map<string, LoadedPlugin> = new Map();
   private app: AppShim;
+  /**
+   * The `app` object plugins receive. It is the real AppShim behind a diagnostic
+   * proxy that records access to members Obsidian declares but MindOS lacks.
+   */
+  private pluginApp: AppShim;
 
   constructor(private mindRoot: string, options: PluginLoaderOptions = {}) {
     const { runtimeCapabilityLedgerStore, ...appOptions } = options;
@@ -84,6 +91,9 @@ export class PluginLoader {
     this.app = new AppShim(mindRoot, new ObsidianRuntimeHost({
       capabilityLedgerStore: ledgerStore,
     }), appOptions);
+    this.pluginApp = createDiagnosticAppProxy(this.app, (miss) => {
+      this.app.getRuntimeHost().recordApiSurfaceMiss(undefined, miss);
+    });
   }
 
   private resolvePluginDir(pluginId: string): string {
@@ -252,7 +262,9 @@ export class PluginLoader {
     const exports = module.exports;
 
     installObsidianArrayPrototypeCompat();
-    const obsidianModule = createObsidianModule();
+    const obsidianModule = createDiagnosticObsidianModule(createObsidianModule(), (miss) => {
+      this.app.getRuntimeHost().recordApiSurfaceMiss(manifest.id, miss);
+    });
     const supportedRuntimeModules: Record<string, unknown> = {
       path,
       'node:path': path,
@@ -289,7 +301,15 @@ export class PluginLoader {
       if (Object.prototype.hasOwnProperty.call(supportedRuntimeModules, id)) {
         return supportedRuntimeModules[id];
       }
-      throw new CompatError(`Unsupported module: ${id}`, CompatErrorCodes.MODULE_NOT_SUPPORTED, { moduleId: id });
+      // Name the tier that would satisfy the import so the failure is a routing
+      // signal ("needs browser tier"), not a dead end.
+      const tier = classifyRuntimeModuleTier(id);
+      const hint = tier === 'browser'
+        ? ' (requires the browser runtime tier: real DOM and shared CodeMirror 6)'
+        : tier === 'native'
+          ? ' (requires the Desktop native broker tier)'
+          : '';
+      throw new CompatError(`Unsupported module: ${id}${hint}`, CompatErrorCodes.MODULE_NOT_SUPPORTED, { moduleId: id, tier });
     };
 
     const globals = this.createPluginGlobals(obsidianModule);
@@ -336,7 +356,7 @@ export class PluginLoader {
         globals.window,
         globals.window,
         globals.localStorage,
-        this.app,
+        this.pluginApp,
         globals.createEl,
         globals.createDiv,
         globals.createSpan,
@@ -361,7 +381,7 @@ export class PluginLoader {
       throw new Error('Plugin must export a default Plugin class');
     }
 
-    const instance = new PluginClass(this.app, manifest, pluginDir) as Plugin;
+    const instance = new PluginClass(this.pluginApp, manifest, pluginDir) as Plugin;
     if (!(instance instanceof Plugin)) {
       throw new Error('Plugin instance is not instanceof Plugin');
     }
@@ -429,7 +449,7 @@ export class PluginLoader {
     );
 
     const windowShim = {
-      app: this.app,
+      app: this.pluginApp,
       document: documentShim,
       activeDocument: documentShim,
       CodeMirror: codeMirrorShim,

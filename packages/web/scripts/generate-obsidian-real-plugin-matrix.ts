@@ -45,6 +45,10 @@ import {
   buildHomepageWorkflowProbeDataJson,
 } from '@/lib/obsidian-compat/homepage-workflow-fixture';
 import { CALENDAR_WORKFLOW_PROBE_FIXTURE } from '@/lib/obsidian-compat/calendar-workflow-fixture';
+import {
+  buildObsidianApiMissHistogram,
+  renderObsidianApiMissHistogramMarkdown,
+} from '@/lib/obsidian-compat/api-miss-histogram';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const webRoot = path.resolve(__dirname, '..');
@@ -55,6 +59,8 @@ const DEFAULT_OUT_MD = path.join(repoRoot, 'wiki/reviews/obsidian-p0-plugin-comp
 const OBSIDIAN_COMMUNITY_STATS_URL = 'https://raw.githubusercontent.com/obsidianmd/obsidian-releases/master/community-plugin-stats.json';
 const DEFAULT_TIMEOUT_MS = 20_000;
 const DEFAULT_MAIN_JS_MAX_MB = 12;
+const DEFAULT_CONCURRENCY = 1;
+const MAX_TOP = 2000;
 
 interface TargetConfig {
   targetSet?: string;
@@ -70,12 +76,18 @@ interface CliOptions {
   outPolicyAuditMarkdown?: string;
   outAdapterPriorityJson?: string;
   outAdapterPriorityMarkdown?: string;
+  outApiMissJson?: string;
+  outApiMissMarkdown?: string;
   communityIndexPath?: string;
   communityStatsPath?: string;
+  /** When set, ignore --targets and analyze the top-N community plugins by downloads. */
+  top?: number;
+  concurrency: number;
   skipSmoke: boolean;
   runWorkflowProbes: boolean;
   timeoutMs: number;
   mainJsMaxChars: number;
+  stylesCssMaxChars?: number;
 }
 
 interface CommunityStatsRecord {
@@ -98,6 +110,7 @@ function parseArgs(argv: string[]): CliOptions {
     outMarkdown: DEFAULT_OUT_MD,
     skipSmoke: false,
     runWorkflowProbes: false,
+    concurrency: DEFAULT_CONCURRENCY,
     timeoutMs: DEFAULT_TIMEOUT_MS,
     mainJsMaxChars: DEFAULT_MAIN_JS_MAX_MB * 1024 * 1024,
   };
@@ -108,6 +121,19 @@ function parseArgs(argv: string[]): CliOptions {
       continue;
     } else if (arg === '--targets') {
       options.targetsPath = resolveRequiredValue(argv, index);
+      index += 1;
+    } else if (arg === '--top') {
+      options.top = parsePositiveInteger(resolveRequiredValue(argv, index), '--top');
+      if (options.top > MAX_TOP) throw new Error(`--top must be at most ${MAX_TOP}.`);
+      index += 1;
+    } else if (arg === '--concurrency') {
+      options.concurrency = Math.min(8, parsePositiveInteger(resolveRequiredValue(argv, index), '--concurrency'));
+      index += 1;
+    } else if (arg === '--out-api-miss-json') {
+      options.outApiMissJson = resolveRequiredValue(argv, index);
+      index += 1;
+    } else if (arg === '--out-api-miss-md') {
+      options.outApiMissMarkdown = resolveRequiredValue(argv, index);
       index += 1;
     } else if (arg === '--out-json') {
       options.outJson = resolveRequiredValue(argv, index);
@@ -143,6 +169,9 @@ function parseArgs(argv: string[]): CliOptions {
     } else if (arg === '--main-js-max-mb') {
       options.mainJsMaxChars = parsePositiveInteger(resolveRequiredValue(argv, index), '--main-js-max-mb') * 1024 * 1024;
       index += 1;
+    } else if (arg === '--styles-css-max-kb') {
+      options.stylesCssMaxChars = parsePositiveInteger(resolveRequiredValue(argv, index), '--styles-css-max-kb') * 1024;
+      index += 1;
     } else if (arg === '--help' || arg === '-h') {
       printHelp();
       process.exit(0);
@@ -160,6 +189,8 @@ function parseArgs(argv: string[]): CliOptions {
     ...(options.outPolicyAuditMarkdown ? { outPolicyAuditMarkdown: path.resolve(repoRoot, options.outPolicyAuditMarkdown) } : {}),
     ...(options.outAdapterPriorityJson ? { outAdapterPriorityJson: path.resolve(repoRoot, options.outAdapterPriorityJson) } : {}),
     ...(options.outAdapterPriorityMarkdown ? { outAdapterPriorityMarkdown: path.resolve(repoRoot, options.outAdapterPriorityMarkdown) } : {}),
+    ...(options.outApiMissJson ? { outApiMissJson: path.resolve(repoRoot, options.outApiMissJson) } : {}),
+    ...(options.outApiMissMarkdown ? { outApiMissMarkdown: path.resolve(repoRoot, options.outApiMissMarkdown) } : {}),
     ...(options.communityIndexPath ? { communityIndexPath: path.resolve(repoRoot, options.communityIndexPath) } : {}),
     ...(options.communityStatsPath ? { communityStatsPath: path.resolve(repoRoot, options.communityStatsPath) } : {}),
   };
@@ -196,6 +227,12 @@ Options:
                         Optional adapter priority JSON output path.
   --out-adapter-priority-md <path>
                         Optional adapter priority Markdown output path.
+  --out-api-miss-json <path>
+                        Optional API miss histogram JSON output path (download-weighted gaps by tier).
+  --out-api-miss-md <path>
+                        Optional API miss histogram Markdown output path.
+  --top <n>             Ignore --targets and analyze the top-N community plugins by downloads (max ${MAX_TOP}).
+  --concurrency <n>     Parallel preflight fetches (1-8). Default: ${DEFAULT_CONCURRENCY}. Smoke always runs serially.
   --community-index-file <path>
                         Read community-plugins.json from a local official snapshot.
   --community-stats-file <path>
@@ -204,17 +241,15 @@ Options:
   --run-workflow-probes Run explicit workflow probes after successful load smoke.
   --timeout-ms <ms>     Network asset timeout passed to preflight fetches. Default: ${DEFAULT_TIMEOUT_MS}
   --main-js-max-mb <mb> Max plugin main.js size for this offline matrix harness. Default: ${DEFAULT_MAIN_JS_MAX_MB}
+  --styles-css-max-kb <kb>
+                        Max styles.css size for static analysis. Default: the install-time limit (256 KB).
 `);
 }
 
 async function main(): Promise<void> {
   const options = parseArgs(process.argv.slice(2));
-  const targetConfig = readJson<TargetConfig>(options.targetsPath);
-  const targets = normalizeTargets(targetConfig);
-  const targetSet = targetConfig.targetSet ?? 'obsidian-p0-ecosystem-sample';
-  const sourcePolicy = targetConfig.sourcePolicy ?? 'obsidian-community-index+github-release-assets';
+  warnIfProxyIgnored();
 
-  console.log(`[obsidian-matrix] Targets: ${targets.length}`);
   const catalogRaw = await readJsonOrFetch({
     label: 'community index',
     localPath: options.communityIndexPath,
@@ -231,15 +266,32 @@ async function main(): Promise<void> {
     timeoutMs: options.timeoutMs,
   }) as CommunityStatsById;
 
+  let targets: ObsidianRealPluginTarget[];
+  let targetSet: string;
+  let sourcePolicy: string;
+  if (options.top) {
+    targets = topTargetsByDownloads(statsById, catalogById, options.top);
+    targetSet = `obsidian-community-top-${options.top}`;
+    sourcePolicy = 'obsidian-community-stats-top-downloads+github-release-assets';
+  } else {
+    const targetConfig = readJson<TargetConfig>(options.targetsPath);
+    targets = normalizeTargets(targetConfig);
+    targetSet = targetConfig.targetSet ?? 'obsidian-p0-ecosystem-sample';
+    sourcePolicy = targetConfig.sourcePolicy ?? 'obsidian-community-index+github-release-assets';
+  }
+  console.log(`[obsidian-matrix] Targets: ${targets.length} (${targetSet})`);
+
   const plugins: ObsidianRealPluginMatrixInputItem[] = [];
   const failures: ObsidianRealPluginMatrixFailure[] = [];
 
-  for (const target of targets) {
+  // Preflight fetches are network bound and independent; smoke must stay serial
+  // because it executes plugin code inside one temp Mind root at a time.
+  const analyzeTarget = async (target: ObsidianRealPluginTarget) => {
     const catalog = catalogById.get(target.id);
     if (!catalog) {
       failures.push({ id: target.id, stage: 'catalog', error: 'Plugin id was not found in the Obsidian community index.' });
       console.warn(`[obsidian-matrix] ! ${target.id}: not found in community index`);
-      continue;
+      return;
     }
 
     try {
@@ -249,6 +301,7 @@ async function main(): Promise<void> {
         pluginId: catalog.id,
         timeoutMs: options.timeoutMs,
         mainJsMaxChars: options.mainJsMaxChars,
+        ...(options.stylesCssMaxChars ? { stylesCssMaxChars: options.stylesCssMaxChars } : {}),
       });
       const capabilityGate = buildObsidianCapabilityGateReport({
         manifest: fetched.preflight.package.manifest,
@@ -258,10 +311,10 @@ async function main(): Promise<void> {
       });
       const smoke = options.skipSmoke
         ? notRunSmoke('Smoke harness was skipped by --skip-smoke.')
-        : await runPluginSmoke(catalog.id, fetched.files, capabilityGate.blocked, options.runWorkflowProbes).catch((error) => failedSmoke(
+        : await smokeQueue.run(() => runPluginSmoke(catalog.id, fetched.files, capabilityGate.blocked, options.runWorkflowProbes).catch((error) => failedSmoke(
           'load',
           error instanceof Error ? error.message : String(error),
-        ));
+        )));
       plugins.push({
         target,
         catalog: {
@@ -282,7 +335,14 @@ async function main(): Promise<void> {
       failures.push({ id: target.id, stage: 'preflight', error: message });
       console.warn(`[obsidian-matrix] ! ${target.id}: ${message}`);
     }
-  }
+  };
+
+  const smokeQueue = new SerialQueue();
+  await runWithConcurrency(targets, options.concurrency, analyzeTarget);
+  // Concurrency reorders completion; keep the report in target (download) order.
+  const targetOrder = new Map(targets.map((target, index) => [target.id, index]));
+  plugins.sort((a, b) => (targetOrder.get(a.target.id) ?? 0) - (targetOrder.get(b.target.id) ?? 0));
+  failures.sort((a, b) => (targetOrder.get(a.id) ?? 0) - (targetOrder.get(b.id) ?? 0));
 
   const matrix = buildObsidianRealPluginMatrix({
     generatedAt: new Date().toISOString(),
@@ -302,6 +362,17 @@ async function main(): Promise<void> {
 
   console.log(`[obsidian-matrix] Wrote ${path.relative(repoRoot, options.outJson)}`);
   console.log(`[obsidian-matrix] Wrote ${path.relative(repoRoot, options.outMarkdown)}`);
+  if (options.outApiMissJson || options.outApiMissMarkdown) {
+    const histogram = buildObsidianApiMissHistogram(matrix);
+    if (options.outApiMissJson) {
+      writeText(options.outApiMissJson, `${JSON.stringify(histogram, null, 2)}\n`);
+      console.log(`[obsidian-matrix] Wrote ${path.relative(repoRoot, options.outApiMissJson)}`);
+    }
+    if (options.outApiMissMarkdown) {
+      writeText(options.outApiMissMarkdown, renderObsidianApiMissHistogramMarkdown(histogram));
+      console.log(`[obsidian-matrix] Wrote ${path.relative(repoRoot, options.outApiMissMarkdown)}`);
+    }
+  }
   if (options.outPolicyAuditJson || options.outPolicyAuditMarkdown) {
     const audit = buildObsidianRealPluginPolicyAudit(matrix);
     if (options.outPolicyAuditJson) {
@@ -327,6 +398,58 @@ async function main(): Promise<void> {
   if (failures.length > 0) {
     console.warn(`[obsidian-matrix] Completed with ${failures.length} recorded failure(s). See the report for details.`);
   }
+}
+
+/**
+ * Node's global fetch ignores HTTP(S)_PROXY unless NODE_USE_ENV_PROXY=1 (Node >= 24).
+ * Behind a proxy that means every github.com release download times out while
+ * raw.githubusercontent.com may still work, which looks like random "fetch failed".
+ */
+function warnIfProxyIgnored(): void {
+  const proxy = process.env.HTTPS_PROXY ?? process.env.https_proxy ?? process.env.HTTP_PROXY ?? process.env.http_proxy;
+  if (proxy && !process.env.NODE_USE_ENV_PROXY) {
+    console.warn('[obsidian-matrix] HTTP(S)_PROXY is set but NODE_USE_ENV_PROXY is not; Node fetch will bypass the proxy. Re-run with NODE_USE_ENV_PROXY=1 (pnpm run obsidian:matrix sets it).');
+  }
+}
+
+/** Build a download-ranked target list from the official stats; ids missing from the index are skipped. */
+function topTargetsByDownloads(
+  statsById: CommunityStatsById,
+  catalogById: Map<string, { id: string }>,
+  top: number,
+): ObsidianRealPluginTarget[] {
+  const ranked = Object.entries(statsById)
+    .filter(([id, stats]) => catalogById.has(id) && typeof stats?.downloads === 'number' && stats.downloads > 0)
+    .sort((a, b) => (b[1]?.downloads ?? 0) - (a[1]?.downloads ?? 0) || a[0].localeCompare(b[0], 'en'))
+    .slice(0, top);
+  return ranked.map(([id, stats], index) => ({
+    id,
+    priority: 'P2',
+    category: 'community-top',
+    reason: `Rank #${index + 1} by community downloads (${(stats?.downloads ?? 0).toLocaleString('en-US')}).`,
+  }));
+}
+
+class SerialQueue {
+  private tail: Promise<unknown> = Promise.resolve();
+
+  run<T>(task: () => Promise<T>): Promise<T> {
+    const next = this.tail.then(task, task);
+    this.tail = next.catch(() => undefined);
+    return next;
+  }
+}
+
+async function runWithConcurrency<T>(items: T[], concurrency: number, worker: (item: T) => Promise<void>): Promise<void> {
+  const width = Math.max(1, Math.min(concurrency, items.length));
+  let cursor = 0;
+  await Promise.all(Array.from({ length: width }, async () => {
+    while (cursor < items.length) {
+      const item = items[cursor];
+      cursor += 1;
+      if (item !== undefined) await worker(item);
+    }
+  }));
 }
 
 function normalizeTargets(config: TargetConfig): ObsidianRealPluginTarget[] {
@@ -547,6 +670,7 @@ function runtimeSummary(plugin: RuntimeSummarySource): NonNullable<ObsidianRealP
     statusBarItems: runtime?.statusBarItems ?? 0,
     styleSheets: runtime?.styleSheets ?? 0,
     editorExtensions: runtime?.editorExtensions ?? 0,
+    ...(typeof runtime?.apiSurfaceMisses === 'number' ? { apiSurfaceMisses: runtime.apiSurfaceMisses } : {}),
   };
 }
 

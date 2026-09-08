@@ -1,0 +1,7782 @@
+{
+  "schemaVersion": 1,
+  "source": {
+    "repo": "obsidianmd/obsidian-api",
+    "ref": "master",
+    "commit": "cc1744324150c632416857c98964f87b1574a5fc",
+    "apiVersion": "1.13.2",
+    "file": "obsidian.d.ts",
+    "sha256": "ed358aa05694582597726321352494a9833b77c117991189e55761ced8326027"
+  },
+  "exports": [
+    {
+      "name": "AbstractInputSuggest",
+      "kind": "abstract-class",
+      "extends": [
+        "PopoverSuggest"
+      ],
+      "members": [
+        {
+          "name": "constructor",
+          "kind": "constructor"
+        },
+        {
+          "name": "getSuggestions",
+          "kind": "method",
+          "abstract": true,
+          "since": "1.5.7"
+        },
+        {
+          "name": "getValue",
+          "kind": "method",
+          "since": "1.4.10"
+        },
+        {
+          "name": "limit",
+          "kind": "property",
+          "since": "1.4.10"
+        },
+        {
+          "name": "onSelect",
+          "kind": "method",
+          "since": "1.4.10"
+        },
+        {
+          "name": "selectSuggestion",
+          "kind": "method",
+          "since": "1.6.6"
+        },
+        {
+          "name": "setValue",
+          "kind": "method",
+          "since": "1.4.10"
+        }
+      ],
+      "since": "1.4.10"
+    },
+    {
+      "name": "AbstractTextComponent",
+      "kind": "class",
+      "extends": [
+        "ValueComponent"
+      ],
+      "members": [
+        {
+          "name": "constructor",
+          "kind": "constructor"
+        },
+        {
+          "name": "getValue",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "inputEl",
+          "kind": "property",
+          "since": "0.9.7"
+        },
+        {
+          "name": "onChange",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "onChanged",
+          "kind": "method",
+          "since": "0.9.21"
+        },
+        {
+          "name": "setDisabled",
+          "kind": "method",
+          "since": "1.2.3"
+        },
+        {
+          "name": "setPlaceholder",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "setValue",
+          "kind": "method",
+          "since": "0.9.7"
+        }
+      ],
+      "since": "0.9.21"
+    },
+    {
+      "name": "addIcon",
+      "kind": "function"
+    },
+    {
+      "name": "apiVersion",
+      "kind": "let"
+    },
+    {
+      "name": "App",
+      "kind": "class",
+      "members": [
+        {
+          "name": "fileManager",
+          "kind": "property",
+          "since": "0.11.0"
+        },
+        {
+          "name": "isDarkMode",
+          "kind": "method",
+          "since": "1.10.0"
+        },
+        {
+          "name": "keymap",
+          "kind": "property",
+          "since": "0.9.7"
+        },
+        {
+          "name": "lastEvent",
+          "kind": "property",
+          "since": "0.12.17"
+        },
+        {
+          "name": "loadLocalStorage",
+          "kind": "method",
+          "since": "1.8.7"
+        },
+        {
+          "name": "metadataCache",
+          "kind": "property",
+          "since": "0.9.7"
+        },
+        {
+          "name": "renderContext",
+          "kind": "property",
+          "since": "1.10.0"
+        },
+        {
+          "name": "saveLocalStorage",
+          "kind": "method",
+          "since": "1.8.7"
+        },
+        {
+          "name": "scope",
+          "kind": "property",
+          "since": "0.9.7"
+        },
+        {
+          "name": "secretStorage",
+          "kind": "property",
+          "since": "1.11.4"
+        },
+        {
+          "name": "vault",
+          "kind": "property",
+          "since": "0.9.7"
+        },
+        {
+          "name": "workspace",
+          "kind": "property",
+          "since": "0.9.7"
+        }
+      ],
+      "since": "0.9.7"
+    },
+    {
+      "name": "arrayBufferToBase64",
+      "kind": "function"
+    },
+    {
+      "name": "arrayBufferToHex",
+      "kind": "function"
+    },
+    {
+      "name": "base64ToArrayBuffer",
+      "kind": "function"
+    },
+    {
+      "name": "BaseComponent",
+      "kind": "abstract-class",
+      "members": [
+        {
+          "name": "disabled",
+          "kind": "property",
+          "since": "0.10.3"
+        },
+        {
+          "name": "setDisabled",
+          "kind": "method",
+          "since": "1.2.3"
+        },
+        {
+          "name": "then",
+          "kind": "method",
+          "since": "0.9.7"
+        }
+      ],
+      "since": "0.10.3"
+    },
+    {
+      "name": "BasesAllOptions",
+      "kind": "type",
+      "since": "1.10.0"
+    },
+    {
+      "name": "BasesConfigFile",
+      "kind": "interface",
+      "members": [
+        {
+          "name": "filters",
+          "kind": "property",
+          "optional": true,
+          "since": "1.10.0"
+        },
+        {
+          "name": "formulas",
+          "kind": "property",
+          "optional": true,
+          "since": "1.10.0"
+        },
+        {
+          "name": "properties",
+          "kind": "property",
+          "optional": true,
+          "since": "1.10.0"
+        },
+        {
+          "name": "summaries",
+          "kind": "property",
+          "optional": true,
+          "since": "1.10.0"
+        },
+        {
+          "name": "views",
+          "kind": "property",
+          "optional": true,
+          "since": "1.10.0"
+        }
+      ],
+      "since": "1.10.0"
+    },
+    {
+      "name": "BasesConfigFileFilter",
+      "kind": "type",
+      "since": "1.10.0"
+    },
+    {
+      "name": "BasesConfigFileView",
+      "kind": "interface",
+      "members": [
+        {
+          "name": "filters",
+          "kind": "property",
+          "optional": true,
+          "since": "1.10.0"
+        },
+        {
+          "name": "groupBy",
+          "kind": "property",
+          "optional": true,
+          "since": "1.10.0"
+        },
+        {
+          "name": "name",
+          "kind": "property",
+          "since": "1.10.0"
+        },
+        {
+          "name": "order",
+          "kind": "property",
+          "optional": true,
+          "since": "1.10.0"
+        },
+        {
+          "name": "summaries",
+          "kind": "property",
+          "optional": true,
+          "since": "1.10.0"
+        },
+        {
+          "name": "type",
+          "kind": "property",
+          "since": "1.10.0"
+        }
+      ],
+      "since": "1.10.0"
+    },
+    {
+      "name": "BasesDropdownOption",
+      "kind": "interface",
+      "extends": [
+        "BasesOption"
+      ],
+      "members": [
+        {
+          "name": "default",
+          "kind": "property",
+          "optional": true,
+          "since": "1.10.0"
+        },
+        {
+          "name": "options",
+          "kind": "property",
+          "since": "1.10.0"
+        },
+        {
+          "name": "type",
+          "kind": "property",
+          "since": "1.10.0"
+        }
+      ],
+      "since": "1.10.0"
+    },
+    {
+      "name": "BasesEntry",
+      "kind": "class",
+      "implements": [
+        "FormulaContext"
+      ],
+      "members": [
+        {
+          "name": "file",
+          "kind": "property",
+          "since": "1.10.0"
+        },
+        {
+          "name": "getValue",
+          "kind": "method",
+          "since": "1.10.0"
+        }
+      ],
+      "since": "1.10.0"
+    },
+    {
+      "name": "BasesEntryGroup",
+      "kind": "class",
+      "members": [
+        {
+          "name": "entries",
+          "kind": "property",
+          "since": "1.10.0"
+        },
+        {
+          "name": "hasKey",
+          "kind": "method",
+          "since": "1.10.0"
+        },
+        {
+          "name": "key",
+          "kind": "property",
+          "optional": true,
+          "since": "1.10.0"
+        }
+      ],
+      "since": "1.10.0"
+    },
+    {
+      "name": "BasesFileOption",
+      "kind": "interface",
+      "extends": [
+        "BasesOption"
+      ],
+      "members": [
+        {
+          "name": "default",
+          "kind": "property",
+          "optional": true,
+          "since": "1.10.2"
+        },
+        {
+          "name": "filter",
+          "kind": "property",
+          "optional": true,
+          "since": "1.10.2"
+        },
+        {
+          "name": "placeholder",
+          "kind": "property",
+          "optional": true,
+          "since": "1.10.2"
+        },
+        {
+          "name": "type",
+          "kind": "property",
+          "since": "1.10.2"
+        }
+      ],
+      "since": "1.10.2"
+    },
+    {
+      "name": "BasesFolderOption",
+      "kind": "interface",
+      "extends": [
+        "BasesOption"
+      ],
+      "members": [
+        {
+          "name": "default",
+          "kind": "property",
+          "optional": true,
+          "since": "1.10.2"
+        },
+        {
+          "name": "filter",
+          "kind": "property",
+          "optional": true,
+          "since": "1.10.2"
+        },
+        {
+          "name": "placeholder",
+          "kind": "property",
+          "optional": true,
+          "since": "1.10.2"
+        },
+        {
+          "name": "type",
+          "kind": "property",
+          "since": "1.10.2"
+        }
+      ],
+      "since": "1.10.2"
+    },
+    {
+      "name": "BasesFormulaOption",
+      "kind": "interface",
+      "extends": [
+        "BasesOption"
+      ],
+      "members": [
+        {
+          "name": "default",
+          "kind": "property",
+          "optional": true,
+          "since": "1.10.2"
+        },
+        {
+          "name": "placeholder",
+          "kind": "property",
+          "optional": true,
+          "since": "1.10.2"
+        },
+        {
+          "name": "type",
+          "kind": "property",
+          "since": "1.10.2"
+        }
+      ],
+      "since": "1.10.2"
+    },
+    {
+      "name": "BasesMultitextOption",
+      "kind": "interface",
+      "extends": [
+        "BasesOption"
+      ],
+      "members": [
+        {
+          "name": "default",
+          "kind": "property",
+          "optional": true,
+          "since": "1.10.0"
+        },
+        {
+          "name": "type",
+          "kind": "property",
+          "since": "1.10.0"
+        }
+      ],
+      "since": "1.10.0"
+    },
+    {
+      "name": "BasesOption",
+      "kind": "interface",
+      "members": [
+        {
+          "name": "displayName",
+          "kind": "property",
+          "since": "1.10.0"
+        },
+        {
+          "name": "key",
+          "kind": "property",
+          "since": "1.10.0"
+        },
+        {
+          "name": "shouldHide",
+          "kind": "property",
+          "optional": true,
+          "since": "1.10.2"
+        },
+        {
+          "name": "type",
+          "kind": "property",
+          "since": "1.10.0"
+        }
+      ],
+      "since": "1.10.0"
+    },
+    {
+      "name": "BasesOptionGroup",
+      "kind": "interface",
+      "members": [
+        {
+          "name": "displayName",
+          "kind": "property",
+          "since": "1.10.0"
+        },
+        {
+          "name": "items",
+          "kind": "property",
+          "since": "1.10.0"
+        },
+        {
+          "name": "shouldHide",
+          "kind": "property",
+          "optional": true,
+          "since": "1.10.2"
+        },
+        {
+          "name": "type",
+          "kind": "property",
+          "since": "1.10.0"
+        }
+      ],
+      "since": "1.10.0"
+    },
+    {
+      "name": "BasesOptions",
+      "kind": "type",
+      "since": "1.10.0"
+    },
+    {
+      "name": "BasesProperty",
+      "kind": "interface",
+      "members": [
+        {
+          "name": "name",
+          "kind": "property",
+          "since": "1.10.0"
+        },
+        {
+          "name": "type",
+          "kind": "property",
+          "since": "1.10.0"
+        }
+      ],
+      "since": "1.10.0"
+    },
+    {
+      "name": "BasesPropertyId",
+      "kind": "type",
+      "since": "1.10.0"
+    },
+    {
+      "name": "BasesPropertyOption",
+      "kind": "interface",
+      "extends": [
+        "BasesOption"
+      ],
+      "members": [
+        {
+          "name": "default",
+          "kind": "property",
+          "optional": true,
+          "since": "1.10.0"
+        },
+        {
+          "name": "filter",
+          "kind": "property",
+          "optional": true,
+          "since": "1.10.0"
+        },
+        {
+          "name": "placeholder",
+          "kind": "property",
+          "optional": true,
+          "since": "1.10.0"
+        },
+        {
+          "name": "type",
+          "kind": "property",
+          "since": "1.10.0"
+        }
+      ],
+      "since": "1.10.0"
+    },
+    {
+      "name": "BasesPropertyType",
+      "kind": "type",
+      "since": "1.10.0"
+    },
+    {
+      "name": "BasesQueryResult",
+      "kind": "class",
+      "members": [
+        {
+          "name": "data",
+          "kind": "property",
+          "since": "1.10.0"
+        },
+        {
+          "name": "getSummaryValue",
+          "kind": "method",
+          "since": "1.10.0"
+        },
+        {
+          "name": "groupedData",
+          "kind": "accessor",
+          "since": "1.10.0"
+        },
+        {
+          "name": "properties",
+          "kind": "accessor",
+          "since": "1.10.0"
+        }
+      ],
+      "since": "1.10.0"
+    },
+    {
+      "name": "BasesSliderOption",
+      "kind": "interface",
+      "extends": [
+        "BasesOption"
+      ],
+      "members": [
+        {
+          "name": "default",
+          "kind": "property",
+          "optional": true,
+          "since": "1.10.0"
+        },
+        {
+          "name": "instant",
+          "kind": "property",
+          "optional": true,
+          "since": "1.10.0"
+        },
+        {
+          "name": "max",
+          "kind": "property",
+          "optional": true,
+          "since": "1.10.0"
+        },
+        {
+          "name": "min",
+          "kind": "property",
+          "optional": true,
+          "since": "1.10.0"
+        },
+        {
+          "name": "step",
+          "kind": "property",
+          "optional": true,
+          "since": "1.10.0"
+        },
+        {
+          "name": "type",
+          "kind": "property",
+          "since": "1.10.0"
+        }
+      ],
+      "since": "1.10.0"
+    },
+    {
+      "name": "BasesSortConfig",
+      "kind": "type",
+      "since": "1.10.0"
+    },
+    {
+      "name": "BasesTextOption",
+      "kind": "interface",
+      "extends": [
+        "BasesOption"
+      ],
+      "members": [
+        {
+          "name": "default",
+          "kind": "property",
+          "optional": true,
+          "since": "1.10.0"
+        },
+        {
+          "name": "placeholder",
+          "kind": "property",
+          "optional": true,
+          "since": "1.10.0"
+        },
+        {
+          "name": "type",
+          "kind": "property",
+          "since": "1.10.0"
+        }
+      ],
+      "since": "1.10.0"
+    },
+    {
+      "name": "BasesToggleOption",
+      "kind": "interface",
+      "extends": [
+        "BasesOption"
+      ],
+      "members": [
+        {
+          "name": "default",
+          "kind": "property",
+          "optional": true,
+          "since": "1.10.0"
+        },
+        {
+          "name": "type",
+          "kind": "property",
+          "since": "1.10.0"
+        }
+      ],
+      "since": "1.10.0"
+    },
+    {
+      "name": "BasesView",
+      "kind": "abstract-class",
+      "extends": [
+        "Component"
+      ],
+      "members": [
+        {
+          "name": "allProperties",
+          "kind": "property",
+          "since": "1.10.0"
+        },
+        {
+          "name": "app",
+          "kind": "property",
+          "since": "1.10.0"
+        },
+        {
+          "name": "config",
+          "kind": "property",
+          "since": "1.10.0"
+        },
+        {
+          "name": "constructor",
+          "kind": "constructor",
+          "since": "1.10.0"
+        },
+        {
+          "name": "createFileForView",
+          "kind": "method",
+          "since": "1.10.2"
+        },
+        {
+          "name": "data",
+          "kind": "property",
+          "since": "1.10.0"
+        },
+        {
+          "name": "onDataUpdated",
+          "kind": "method",
+          "abstract": true,
+          "since": "1.10.0"
+        },
+        {
+          "name": "type",
+          "kind": "property",
+          "abstract": true,
+          "since": "1.10.0"
+        }
+      ],
+      "since": "1.10.0"
+    },
+    {
+      "name": "BasesViewConfig",
+      "kind": "class",
+      "members": [
+        {
+          "name": "get",
+          "kind": "method",
+          "since": "1.10.0"
+        },
+        {
+          "name": "getAsPropertyId",
+          "kind": "method",
+          "since": "1.10.0"
+        },
+        {
+          "name": "getDisplayName",
+          "kind": "method",
+          "since": "1.10.0"
+        },
+        {
+          "name": "getEvaluatedFormula",
+          "kind": "method",
+          "since": "1.10.2"
+        },
+        {
+          "name": "getOrder",
+          "kind": "method",
+          "since": "1.10.0"
+        },
+        {
+          "name": "getSort",
+          "kind": "method",
+          "since": "1.10.0"
+        },
+        {
+          "name": "name",
+          "kind": "property",
+          "since": "1.10.0"
+        },
+        {
+          "name": "set",
+          "kind": "method",
+          "since": "1.10.0"
+        }
+      ],
+      "since": "1.10.0"
+    },
+    {
+      "name": "BasesViewFactory",
+      "kind": "type",
+      "since": "1.10.0"
+    },
+    {
+      "name": "BasesViewRegistration",
+      "kind": "interface",
+      "members": [
+        {
+          "name": "factory",
+          "kind": "property",
+          "since": "1.10.0"
+        },
+        {
+          "name": "icon",
+          "kind": "property",
+          "since": "1.10.0"
+        },
+        {
+          "name": "name",
+          "kind": "property",
+          "since": "1.10.0"
+        },
+        {
+          "name": "options",
+          "kind": "property",
+          "optional": true,
+          "since": "1.10.0"
+        }
+      ],
+      "since": "1.10.0"
+    },
+    {
+      "name": "BlockCache",
+      "kind": "interface",
+      "extends": [
+        "CacheItem"
+      ],
+      "members": [
+        {
+          "name": "id",
+          "kind": "property"
+        }
+      ],
+      "since": "0.11.13"
+    },
+    {
+      "name": "BlockSubpathResult",
+      "kind": "interface",
+      "extends": [
+        "SubpathResult"
+      ],
+      "members": [
+        {
+          "name": "block",
+          "kind": "property"
+        },
+        {
+          "name": "list",
+          "kind": "property",
+          "optional": true
+        },
+        {
+          "name": "type",
+          "kind": "property"
+        }
+      ],
+      "since": "0.13.26"
+    },
+    {
+      "name": "BooleanValue",
+      "kind": "class",
+      "extends": [
+        "PrimitiveValue"
+      ],
+      "members": [
+        {
+          "name": "type",
+          "kind": "property",
+          "static": true,
+          "since": "1.10.0"
+        }
+      ],
+      "since": "1.10.0"
+    },
+    {
+      "name": "ButtonComponent",
+      "kind": "class",
+      "extends": [
+        "BaseComponent"
+      ],
+      "members": [
+        {
+          "name": "buttonEl",
+          "kind": "property",
+          "since": "0.9.7"
+        },
+        {
+          "name": "constructor",
+          "kind": "constructor"
+        },
+        {
+          "name": "onClick",
+          "kind": "method",
+          "since": "0.12.16"
+        },
+        {
+          "name": "removeCta",
+          "kind": "method",
+          "since": "0.9.20"
+        },
+        {
+          "name": "removeDestructive",
+          "kind": "method",
+          "since": "1.13.0"
+        },
+        {
+          "name": "setButtonText",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "setClass",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "setCta",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "setDestructive",
+          "kind": "method",
+          "since": "1.13.0"
+        },
+        {
+          "name": "setDisabled",
+          "kind": "method",
+          "since": "1.2.3"
+        },
+        {
+          "name": "setIcon",
+          "kind": "method",
+          "since": "1.1.0"
+        },
+        {
+          "name": "setTooltip",
+          "kind": "method",
+          "since": "1.1.0"
+        },
+        {
+          "name": "setWarning",
+          "kind": "method",
+          "deprecated": true,
+          "since": "0.11.0"
+        }
+      ],
+      "since": "0.9.7"
+    },
+    {
+      "name": "CachedMetadata",
+      "kind": "interface",
+      "members": [
+        {
+          "name": "blocks",
+          "kind": "property",
+          "optional": true
+        },
+        {
+          "name": "embeds",
+          "kind": "property",
+          "optional": true
+        },
+        {
+          "name": "footnoteRefs",
+          "kind": "property",
+          "optional": true,
+          "since": "1.8.7"
+        },
+        {
+          "name": "footnotes",
+          "kind": "property",
+          "optional": true,
+          "since": "1.6.6"
+        },
+        {
+          "name": "frontmatter",
+          "kind": "property",
+          "optional": true
+        },
+        {
+          "name": "frontmatterLinks",
+          "kind": "property",
+          "optional": true,
+          "since": "1.4.0"
+        },
+        {
+          "name": "frontmatterPosition",
+          "kind": "property",
+          "optional": true,
+          "since": "1.4.0"
+        },
+        {
+          "name": "headings",
+          "kind": "property",
+          "optional": true
+        },
+        {
+          "name": "links",
+          "kind": "property",
+          "optional": true
+        },
+        {
+          "name": "listItems",
+          "kind": "property",
+          "optional": true
+        },
+        {
+          "name": "referenceLinks",
+          "kind": "property",
+          "optional": true,
+          "since": "1.8.7"
+        },
+        {
+          "name": "sections",
+          "kind": "property",
+          "optional": true
+        },
+        {
+          "name": "tags",
+          "kind": "property",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "name": "CacheItem",
+      "kind": "interface",
+      "members": [
+        {
+          "name": "position",
+          "kind": "property"
+        }
+      ]
+    },
+    {
+      "name": "CapacitorAdapter",
+      "kind": "class",
+      "implements": [
+        "DataAdapter"
+      ],
+      "members": [
+        {
+          "name": "append",
+          "kind": "method",
+          "since": "1.7.2"
+        },
+        {
+          "name": "appendBinary",
+          "kind": "method",
+          "since": "1.12.3"
+        },
+        {
+          "name": "copy",
+          "kind": "method",
+          "since": "1.7.2"
+        },
+        {
+          "name": "exists",
+          "kind": "method",
+          "since": "1.7.2"
+        },
+        {
+          "name": "getFullPath",
+          "kind": "method",
+          "since": "1.7.2"
+        },
+        {
+          "name": "getName",
+          "kind": "method",
+          "since": "1.7.2"
+        },
+        {
+          "name": "getResourcePath",
+          "kind": "method",
+          "since": "1.7.2"
+        },
+        {
+          "name": "list",
+          "kind": "method",
+          "since": "1.7.2"
+        },
+        {
+          "name": "mkdir",
+          "kind": "method",
+          "since": "1.7.2"
+        },
+        {
+          "name": "process",
+          "kind": "method",
+          "since": "1.7.2"
+        },
+        {
+          "name": "read",
+          "kind": "method",
+          "since": "1.7.2"
+        },
+        {
+          "name": "readBinary",
+          "kind": "method",
+          "since": "1.7.2"
+        },
+        {
+          "name": "remove",
+          "kind": "method",
+          "since": "1.7.2"
+        },
+        {
+          "name": "rename",
+          "kind": "method",
+          "since": "1.7.2"
+        },
+        {
+          "name": "rmdir",
+          "kind": "method",
+          "since": "1.7.2"
+        },
+        {
+          "name": "stat",
+          "kind": "method",
+          "since": "1.7.2"
+        },
+        {
+          "name": "trashLocal",
+          "kind": "method",
+          "since": "1.7.2"
+        },
+        {
+          "name": "trashSystem",
+          "kind": "method",
+          "since": "1.7.2"
+        },
+        {
+          "name": "write",
+          "kind": "method",
+          "since": "1.7.2"
+        },
+        {
+          "name": "writeBinary",
+          "kind": "method",
+          "since": "1.7.2"
+        }
+      ],
+      "since": "1.7.2"
+    },
+    {
+      "name": "CliData",
+      "kind": "interface",
+      "members": [
+        {
+          "name": "[index-signature]",
+          "kind": "index-signature",
+          "since": "1.12.2"
+        }
+      ],
+      "since": "1.12.2"
+    },
+    {
+      "name": "CliFlag",
+      "kind": "interface",
+      "members": [
+        {
+          "name": "description",
+          "kind": "property",
+          "since": "1.12.2"
+        },
+        {
+          "name": "required",
+          "kind": "property",
+          "optional": true,
+          "since": "1.12.2"
+        },
+        {
+          "name": "value",
+          "kind": "property",
+          "optional": true,
+          "since": "1.12.2"
+        }
+      ],
+      "since": "1.12.2"
+    },
+    {
+      "name": "CliFlags",
+      "kind": "type",
+      "since": "1.12.2"
+    },
+    {
+      "name": "CliHandler",
+      "kind": "type",
+      "since": "1.12.2"
+    },
+    {
+      "name": "ColorComponent",
+      "kind": "class",
+      "extends": [
+        "ValueComponent"
+      ],
+      "members": [
+        {
+          "name": "constructor",
+          "kind": "constructor"
+        },
+        {
+          "name": "getValue",
+          "kind": "method",
+          "since": "1.0.0"
+        },
+        {
+          "name": "getValueHsl",
+          "kind": "method",
+          "since": "1.0.0"
+        },
+        {
+          "name": "getValueRgb",
+          "kind": "method",
+          "since": "1.0.0"
+        },
+        {
+          "name": "onChange",
+          "kind": "method",
+          "since": "1.0.0"
+        },
+        {
+          "name": "setDisabled",
+          "kind": "method",
+          "since": "1.2.3"
+        },
+        {
+          "name": "setValue",
+          "kind": "method",
+          "since": "1.0.0"
+        },
+        {
+          "name": "setValueHsl",
+          "kind": "method",
+          "since": "1.0.0"
+        },
+        {
+          "name": "setValueRgb",
+          "kind": "method",
+          "since": "1.0.0"
+        }
+      ],
+      "since": "1.0.0"
+    },
+    {
+      "name": "Command",
+      "kind": "interface",
+      "members": [
+        {
+          "name": "callback",
+          "kind": "property",
+          "optional": true
+        },
+        {
+          "name": "checkCallback",
+          "kind": "property",
+          "optional": true
+        },
+        {
+          "name": "editorCallback",
+          "kind": "property",
+          "optional": true,
+          "since": "0.12.2"
+        },
+        {
+          "name": "editorCheckCallback",
+          "kind": "property",
+          "optional": true,
+          "since": "0.12.2"
+        },
+        {
+          "name": "hotkeys",
+          "kind": "property",
+          "optional": true
+        },
+        {
+          "name": "icon",
+          "kind": "property",
+          "optional": true
+        },
+        {
+          "name": "id",
+          "kind": "property"
+        },
+        {
+          "name": "mobileOnly",
+          "kind": "property",
+          "optional": true
+        },
+        {
+          "name": "name",
+          "kind": "property"
+        },
+        {
+          "name": "repeatable",
+          "kind": "property",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "name": "Component",
+      "kind": "class",
+      "members": [
+        {
+          "name": "addChild",
+          "kind": "method",
+          "since": "0.12.0"
+        },
+        {
+          "name": "load",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "onload",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "onunload",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "register",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "registerDomEvent",
+          "kind": "method",
+          "since": "0.14.8"
+        },
+        {
+          "name": "registerEvent",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "registerInterval",
+          "kind": "method",
+          "since": "0.13.8"
+        },
+        {
+          "name": "removeChild",
+          "kind": "method",
+          "since": "0.12.0"
+        },
+        {
+          "name": "unload",
+          "kind": "method",
+          "since": "0.9.7"
+        }
+      ],
+      "since": "0.9.7"
+    },
+    {
+      "name": "ConfirmationButton",
+      "kind": "class",
+      "extends": [
+        "ButtonComponent"
+      ],
+      "members": [
+        {
+          "name": "onClick",
+          "kind": "method",
+          "since": "1.13.0"
+        },
+        {
+          "name": "setCancel",
+          "kind": "method",
+          "since": "1.13.0"
+        },
+        {
+          "name": "setInitialFocus",
+          "kind": "method",
+          "since": "1.13.0"
+        },
+        {
+          "name": "setSecondary",
+          "kind": "method",
+          "since": "1.13.0"
+        }
+      ],
+      "since": "1.13.0"
+    },
+    {
+      "name": "ConfirmationModal",
+      "kind": "class",
+      "extends": [
+        "Modal"
+      ],
+      "members": [
+        {
+          "name": "addButton",
+          "kind": "method",
+          "since": "1.13.0"
+        },
+        {
+          "name": "addCancelButton",
+          "kind": "method",
+          "since": "1.13.0"
+        },
+        {
+          "name": "addCheckbox",
+          "kind": "method",
+          "since": "1.13.0"
+        },
+        {
+          "name": "addClass",
+          "kind": "method",
+          "since": "1.13.0"
+        },
+        {
+          "name": "buttonContainerEl",
+          "kind": "property",
+          "since": "1.13.0"
+        },
+        {
+          "name": "constructor",
+          "kind": "constructor",
+          "since": "1.13.0"
+        }
+      ],
+      "since": "1.13.0"
+    },
+    {
+      "name": "Constructor",
+      "kind": "type"
+    },
+    {
+      "name": "DataAdapter",
+      "kind": "interface",
+      "members": [
+        {
+          "name": "append",
+          "kind": "method"
+        },
+        {
+          "name": "appendBinary",
+          "kind": "method",
+          "since": "1.12.3"
+        },
+        {
+          "name": "copy",
+          "kind": "method"
+        },
+        {
+          "name": "exists",
+          "kind": "method"
+        },
+        {
+          "name": "getName",
+          "kind": "method"
+        },
+        {
+          "name": "getResourcePath",
+          "kind": "method"
+        },
+        {
+          "name": "list",
+          "kind": "method"
+        },
+        {
+          "name": "mkdir",
+          "kind": "method"
+        },
+        {
+          "name": "process",
+          "kind": "method"
+        },
+        {
+          "name": "read",
+          "kind": "method"
+        },
+        {
+          "name": "readBinary",
+          "kind": "method"
+        },
+        {
+          "name": "remove",
+          "kind": "method"
+        },
+        {
+          "name": "rename",
+          "kind": "method"
+        },
+        {
+          "name": "rmdir",
+          "kind": "method"
+        },
+        {
+          "name": "stat",
+          "kind": "method",
+          "since": "0.12.2"
+        },
+        {
+          "name": "trashLocal",
+          "kind": "method"
+        },
+        {
+          "name": "trashSystem",
+          "kind": "method"
+        },
+        {
+          "name": "write",
+          "kind": "method"
+        },
+        {
+          "name": "writeBinary",
+          "kind": "method"
+        }
+      ]
+    },
+    {
+      "name": "DataWriteOptions",
+      "kind": "interface",
+      "members": [
+        {
+          "name": "ctime",
+          "kind": "property",
+          "optional": true
+        },
+        {
+          "name": "mtime",
+          "kind": "property",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "name": "DateValue",
+      "kind": "class",
+      "extends": [
+        "NotNullValue"
+      ],
+      "members": [
+        {
+          "name": "dateOnly",
+          "kind": "method",
+          "since": "1.10.0"
+        },
+        {
+          "name": "isTruthy",
+          "kind": "method",
+          "since": "1.10.0"
+        },
+        {
+          "name": "relative",
+          "kind": "method",
+          "since": "1.10.0"
+        },
+        {
+          "name": "toString",
+          "kind": "method",
+          "since": "1.10.0"
+        },
+        {
+          "name": "parseFromString",
+          "kind": "method",
+          "static": true,
+          "since": "1.10.0"
+        }
+      ],
+      "since": "1.10.0"
+    },
+    {
+      "name": "debounce",
+      "kind": "function"
+    },
+    {
+      "name": "Debouncer",
+      "kind": "interface",
+      "members": [
+        {
+          "name": "[call-signature]",
+          "kind": "call-signature"
+        },
+        {
+          "name": "cancel",
+          "kind": "method"
+        },
+        {
+          "name": "run",
+          "kind": "method",
+          "since": "1.4.4"
+        }
+      ]
+    },
+    {
+      "name": "displayTooltip",
+      "kind": "function",
+      "since": "1.8.7"
+    },
+    {
+      "name": "DisplayValueComponent",
+      "kind": "class",
+      "members": [
+        {
+          "name": "constructor",
+          "kind": "constructor"
+        },
+        {
+          "name": "setStatus",
+          "kind": "method",
+          "since": "1.13.1"
+        },
+        {
+          "name": "setValue",
+          "kind": "method",
+          "since": "1.13.1"
+        },
+        {
+          "name": "valueEl",
+          "kind": "property",
+          "since": "1.13.1"
+        }
+      ],
+      "since": "1.13.1"
+    },
+    {
+      "name": "DropdownComponent",
+      "kind": "class",
+      "extends": [
+        "ValueComponent"
+      ],
+      "members": [
+        {
+          "name": "addOption",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "addOptions",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "constructor",
+          "kind": "constructor"
+        },
+        {
+          "name": "getValue",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "onChange",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "selectEl",
+          "kind": "property",
+          "since": "0.9.7"
+        },
+        {
+          "name": "setDisabled",
+          "kind": "method",
+          "since": "1.2.3"
+        },
+        {
+          "name": "setValue",
+          "kind": "method",
+          "since": "0.9.7"
+        }
+      ],
+      "since": "0.9.7"
+    },
+    {
+      "name": "DurationValue",
+      "kind": "class",
+      "extends": [
+        "NotNullValue"
+      ],
+      "members": [
+        {
+          "name": "addToDate",
+          "kind": "method",
+          "since": "1.10.0"
+        },
+        {
+          "name": "getMilliseconds",
+          "kind": "method",
+          "since": "1.10.0"
+        },
+        {
+          "name": "isTruthy",
+          "kind": "method",
+          "since": "1.10.0"
+        },
+        {
+          "name": "toString",
+          "kind": "method",
+          "since": "1.10.0"
+        },
+        {
+          "name": "fromMilliseconds",
+          "kind": "method",
+          "static": true,
+          "since": "1.10.0"
+        },
+        {
+          "name": "parseFromString",
+          "kind": "method",
+          "static": true,
+          "since": "1.10.0"
+        }
+      ],
+      "since": "1.10.0"
+    },
+    {
+      "name": "EditableFileView",
+      "kind": "abstract-class",
+      "extends": [
+        "FileView"
+      ],
+      "members": [],
+      "since": "0.9.7"
+    },
+    {
+      "name": "Editor",
+      "kind": "abstract-class",
+      "members": [
+        {
+          "name": "blur",
+          "kind": "method",
+          "abstract": true,
+          "since": "0.11.11"
+        },
+        {
+          "name": "exec",
+          "kind": "method",
+          "abstract": true,
+          "since": "0.12.2"
+        },
+        {
+          "name": "focus",
+          "kind": "method",
+          "abstract": true,
+          "since": "0.11.11"
+        },
+        {
+          "name": "getCursor",
+          "kind": "method",
+          "abstract": true,
+          "since": "0.11.11"
+        },
+        {
+          "name": "getDoc",
+          "kind": "method",
+          "since": "0.11.11"
+        },
+        {
+          "name": "getLine",
+          "kind": "method",
+          "abstract": true,
+          "since": "0.11.11"
+        },
+        {
+          "name": "getRange",
+          "kind": "method",
+          "abstract": true,
+          "since": "0.11.11"
+        },
+        {
+          "name": "getScrollInfo",
+          "kind": "method",
+          "abstract": true,
+          "since": "0.11.11"
+        },
+        {
+          "name": "getSelection",
+          "kind": "method",
+          "abstract": true,
+          "since": "0.11.11"
+        },
+        {
+          "name": "getValue",
+          "kind": "method",
+          "abstract": true,
+          "since": "0.11.11"
+        },
+        {
+          "name": "hasFocus",
+          "kind": "method",
+          "abstract": true,
+          "since": "0.11.11"
+        },
+        {
+          "name": "lastLine",
+          "kind": "method",
+          "abstract": true,
+          "since": "0.11.11"
+        },
+        {
+          "name": "lineCount",
+          "kind": "method",
+          "abstract": true,
+          "since": "0.11.11"
+        },
+        {
+          "name": "listSelections",
+          "kind": "method",
+          "abstract": true,
+          "since": "0.11.11"
+        },
+        {
+          "name": "offsetToPos",
+          "kind": "method",
+          "abstract": true,
+          "since": "0.11.11"
+        },
+        {
+          "name": "posToOffset",
+          "kind": "method",
+          "abstract": true,
+          "since": "0.11.11"
+        },
+        {
+          "name": "processLines",
+          "kind": "method",
+          "since": "0.13.26"
+        },
+        {
+          "name": "redo",
+          "kind": "method",
+          "abstract": true,
+          "since": "0.11.11"
+        },
+        {
+          "name": "refresh",
+          "kind": "method",
+          "abstract": true,
+          "since": "0.11.11"
+        },
+        {
+          "name": "replaceRange",
+          "kind": "method",
+          "abstract": true,
+          "since": "0.11.11"
+        },
+        {
+          "name": "replaceSelection",
+          "kind": "method",
+          "abstract": true,
+          "since": "0.11.11"
+        },
+        {
+          "name": "scrollIntoView",
+          "kind": "method",
+          "abstract": true,
+          "since": "0.13.0"
+        },
+        {
+          "name": "scrollTo",
+          "kind": "method",
+          "abstract": true,
+          "since": "0.11.11"
+        },
+        {
+          "name": "setCursor",
+          "kind": "method",
+          "since": "0.11.11"
+        },
+        {
+          "name": "setLine",
+          "kind": "method",
+          "since": "0.11.11"
+        },
+        {
+          "name": "setSelection",
+          "kind": "method",
+          "abstract": true,
+          "since": "0.11.11"
+        },
+        {
+          "name": "setSelections",
+          "kind": "method",
+          "abstract": true,
+          "since": "0.12.11"
+        },
+        {
+          "name": "setValue",
+          "kind": "method",
+          "abstract": true,
+          "since": "0.11.11"
+        },
+        {
+          "name": "somethingSelected",
+          "kind": "method",
+          "since": "0.11.11"
+        },
+        {
+          "name": "transaction",
+          "kind": "method",
+          "abstract": true,
+          "since": "0.13.0"
+        },
+        {
+          "name": "undo",
+          "kind": "method",
+          "abstract": true,
+          "since": "0.11.11"
+        },
+        {
+          "name": "wordAt",
+          "kind": "method",
+          "abstract": true,
+          "since": "0.11.11"
+        }
+      ],
+      "since": "0.11.11"
+    },
+    {
+      "name": "EditorChange",
+      "kind": "interface",
+      "extends": [
+        "EditorRangeOrCaret"
+      ],
+      "members": [
+        {
+          "name": "text",
+          "kind": "property"
+        }
+      ],
+      "since": "0.12.11"
+    },
+    {
+      "name": "EditorCommandName",
+      "kind": "type"
+    },
+    {
+      "name": "editorEditorField",
+      "kind": "const"
+    },
+    {
+      "name": "editorInfoField",
+      "kind": "const"
+    },
+    {
+      "name": "editorLivePreviewField",
+      "kind": "const"
+    },
+    {
+      "name": "EditorPosition",
+      "kind": "interface",
+      "members": [
+        {
+          "name": "ch",
+          "kind": "property"
+        },
+        {
+          "name": "line",
+          "kind": "property"
+        }
+      ],
+      "since": "0.12.11"
+    },
+    {
+      "name": "EditorRange",
+      "kind": "interface",
+      "members": [
+        {
+          "name": "from",
+          "kind": "property"
+        },
+        {
+          "name": "to",
+          "kind": "property"
+        }
+      ],
+      "since": "0.12.11"
+    },
+    {
+      "name": "EditorRangeOrCaret",
+      "kind": "interface",
+      "members": [
+        {
+          "name": "from",
+          "kind": "property"
+        },
+        {
+          "name": "to",
+          "kind": "property",
+          "optional": true
+        }
+      ],
+      "since": "0.12.11"
+    },
+    {
+      "name": "EditorScrollInfo",
+      "kind": "interface",
+      "members": [
+        {
+          "name": "clientHeight",
+          "kind": "property"
+        },
+        {
+          "name": "clientWidth",
+          "kind": "property"
+        },
+        {
+          "name": "height",
+          "kind": "property"
+        },
+        {
+          "name": "left",
+          "kind": "property"
+        },
+        {
+          "name": "top",
+          "kind": "property"
+        },
+        {
+          "name": "width",
+          "kind": "property"
+        }
+      ],
+      "since": "0.15.0"
+    },
+    {
+      "name": "EditorSelection",
+      "kind": "interface",
+      "members": [
+        {
+          "name": "anchor",
+          "kind": "property"
+        },
+        {
+          "name": "head",
+          "kind": "property"
+        }
+      ],
+      "since": "0.12.11"
+    },
+    {
+      "name": "EditorSelectionOrCaret",
+      "kind": "interface",
+      "members": [
+        {
+          "name": "anchor",
+          "kind": "property"
+        },
+        {
+          "name": "head",
+          "kind": "property",
+          "optional": true
+        }
+      ],
+      "since": "0.12.11"
+    },
+    {
+      "name": "EditorSuggest",
+      "kind": "abstract-class",
+      "extends": [
+        "PopoverSuggest"
+      ],
+      "members": [
+        {
+          "name": "constructor",
+          "kind": "constructor"
+        },
+        {
+          "name": "context",
+          "kind": "property",
+          "since": "0.12.17"
+        },
+        {
+          "name": "getSuggestions",
+          "kind": "method",
+          "abstract": true,
+          "since": "0.12.17"
+        },
+        {
+          "name": "limit",
+          "kind": "property",
+          "since": "0.12.17"
+        },
+        {
+          "name": "onTrigger",
+          "kind": "method",
+          "abstract": true,
+          "since": "1.1.13"
+        },
+        {
+          "name": "setInstructions",
+          "kind": "method",
+          "since": "0.13.0"
+        }
+      ],
+      "since": "0.12.17"
+    },
+    {
+      "name": "EditorSuggestContext",
+      "kind": "interface",
+      "extends": [
+        "EditorSuggestTriggerInfo"
+      ],
+      "members": [
+        {
+          "name": "editor",
+          "kind": "property"
+        },
+        {
+          "name": "file",
+          "kind": "property"
+        }
+      ],
+      "since": "0.12.17"
+    },
+    {
+      "name": "EditorSuggestTriggerInfo",
+      "kind": "interface",
+      "members": [
+        {
+          "name": "end",
+          "kind": "property"
+        },
+        {
+          "name": "query",
+          "kind": "property"
+        },
+        {
+          "name": "start",
+          "kind": "property"
+        }
+      ],
+      "since": "0.12.17"
+    },
+    {
+      "name": "EditorTransaction",
+      "kind": "interface",
+      "members": [
+        {
+          "name": "changes",
+          "kind": "property",
+          "optional": true
+        },
+        {
+          "name": "replaceSelection",
+          "kind": "property",
+          "optional": true
+        },
+        {
+          "name": "selection",
+          "kind": "property",
+          "optional": true
+        },
+        {
+          "name": "selections",
+          "kind": "property",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "name": "editorViewField",
+      "kind": "const",
+      "deprecated": true
+    },
+    {
+      "name": "EmbedCache",
+      "kind": "interface",
+      "extends": [
+        "ReferenceCache"
+      ],
+      "members": [],
+      "since": "0.9.7"
+    },
+    {
+      "name": "EventRef",
+      "kind": "interface",
+      "members": []
+    },
+    {
+      "name": "Events",
+      "kind": "class",
+      "members": [
+        {
+          "name": "off",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "offref",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "on",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "trigger",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "tryTrigger",
+          "kind": "method",
+          "since": "0.9.7"
+        }
+      ],
+      "since": "0.9.7"
+    },
+    {
+      "name": "ExtraButtonComponent",
+      "kind": "class",
+      "extends": [
+        "BaseComponent"
+      ],
+      "members": [
+        {
+          "name": "constructor",
+          "kind": "constructor"
+        },
+        {
+          "name": "extraSettingsEl",
+          "kind": "property",
+          "since": "0.9.7"
+        },
+        {
+          "name": "onClick",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "setDisabled",
+          "kind": "method",
+          "since": "1.2.3"
+        },
+        {
+          "name": "setIcon",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "setTooltip",
+          "kind": "method",
+          "since": "1.1.0"
+        }
+      ],
+      "since": "0.9.7"
+    },
+    {
+      "name": "FileManager",
+      "kind": "class",
+      "members": [
+        {
+          "name": "generateMarkdownLink",
+          "kind": "method",
+          "since": "0.12.0"
+        },
+        {
+          "name": "getAvailablePathForAttachment",
+          "kind": "method",
+          "since": "1.5.7"
+        },
+        {
+          "name": "getNewFileParent",
+          "kind": "method",
+          "since": "1.1.13"
+        },
+        {
+          "name": "processFrontMatter",
+          "kind": "method",
+          "since": "1.4.4"
+        },
+        {
+          "name": "promptForDeletion",
+          "kind": "method",
+          "since": "0.15.0"
+        },
+        {
+          "name": "renameFile",
+          "kind": "method",
+          "since": "0.11.0"
+        },
+        {
+          "name": "trashFile",
+          "kind": "method",
+          "since": "1.6.6"
+        }
+      ],
+      "since": "0.9.7"
+    },
+    {
+      "name": "FileStats",
+      "kind": "interface",
+      "members": [
+        {
+          "name": "ctime",
+          "kind": "property"
+        },
+        {
+          "name": "mtime",
+          "kind": "property"
+        },
+        {
+          "name": "size",
+          "kind": "property"
+        }
+      ]
+    },
+    {
+      "name": "FileSystemAdapter",
+      "kind": "class",
+      "implements": [
+        "DataAdapter"
+      ],
+      "members": [
+        {
+          "name": "append",
+          "kind": "method"
+        },
+        {
+          "name": "appendBinary",
+          "kind": "method",
+          "since": "1.12.3"
+        },
+        {
+          "name": "copy",
+          "kind": "method"
+        },
+        {
+          "name": "exists",
+          "kind": "method"
+        },
+        {
+          "name": "getBasePath",
+          "kind": "method"
+        },
+        {
+          "name": "getFilePath",
+          "kind": "method",
+          "since": "0.14.3"
+        },
+        {
+          "name": "getFullPath",
+          "kind": "method"
+        },
+        {
+          "name": "getName",
+          "kind": "method"
+        },
+        {
+          "name": "getResourcePath",
+          "kind": "method"
+        },
+        {
+          "name": "list",
+          "kind": "method"
+        },
+        {
+          "name": "mkdir",
+          "kind": "method"
+        },
+        {
+          "name": "process",
+          "kind": "method"
+        },
+        {
+          "name": "read",
+          "kind": "method"
+        },
+        {
+          "name": "readBinary",
+          "kind": "method"
+        },
+        {
+          "name": "remove",
+          "kind": "method"
+        },
+        {
+          "name": "rename",
+          "kind": "method"
+        },
+        {
+          "name": "rmdir",
+          "kind": "method"
+        },
+        {
+          "name": "stat",
+          "kind": "method",
+          "since": "0.12.2"
+        },
+        {
+          "name": "trashLocal",
+          "kind": "method"
+        },
+        {
+          "name": "trashSystem",
+          "kind": "method"
+        },
+        {
+          "name": "write",
+          "kind": "method"
+        },
+        {
+          "name": "writeBinary",
+          "kind": "method"
+        },
+        {
+          "name": "mkdir",
+          "kind": "method",
+          "static": true
+        },
+        {
+          "name": "readLocalFile",
+          "kind": "method",
+          "static": true
+        }
+      ]
+    },
+    {
+      "name": "FileValue",
+      "kind": "class",
+      "extends": [
+        "NotNullValue"
+      ],
+      "members": [
+        {
+          "name": "isTruthy",
+          "kind": "method",
+          "since": "1.10.0"
+        },
+        {
+          "name": "toString",
+          "kind": "method",
+          "since": "1.10.0"
+        }
+      ],
+      "since": "1.10.0"
+    },
+    {
+      "name": "FileView",
+      "kind": "abstract-class",
+      "extends": [
+        "ItemView"
+      ],
+      "members": [
+        {
+          "name": "allowNoFile",
+          "kind": "property"
+        },
+        {
+          "name": "canAcceptExtension",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "constructor",
+          "kind": "constructor"
+        },
+        {
+          "name": "file",
+          "kind": "property"
+        },
+        {
+          "name": "getDisplayText",
+          "kind": "method"
+        },
+        {
+          "name": "getState",
+          "kind": "method"
+        },
+        {
+          "name": "navigation",
+          "kind": "property"
+        },
+        {
+          "name": "onload",
+          "kind": "method"
+        },
+        {
+          "name": "onLoadFile",
+          "kind": "method"
+        },
+        {
+          "name": "onRename",
+          "kind": "method"
+        },
+        {
+          "name": "onUnloadFile",
+          "kind": "method"
+        },
+        {
+          "name": "setState",
+          "kind": "method",
+          "since": "0.9.7"
+        }
+      ]
+    },
+    {
+      "name": "finishRenderMath",
+      "kind": "function"
+    },
+    {
+      "name": "FootnoteCache",
+      "kind": "interface",
+      "extends": [
+        "CacheItem"
+      ],
+      "members": [
+        {
+          "name": "id",
+          "kind": "property"
+        }
+      ]
+    },
+    {
+      "name": "FootnoteRefCache",
+      "kind": "interface",
+      "extends": [
+        "CacheItem"
+      ],
+      "members": [
+        {
+          "name": "id",
+          "kind": "property"
+        }
+      ]
+    },
+    {
+      "name": "FootnoteSubpathResult",
+      "kind": "interface",
+      "extends": [
+        "SubpathResult"
+      ],
+      "members": [
+        {
+          "name": "footnote",
+          "kind": "property"
+        },
+        {
+          "name": "type",
+          "kind": "property"
+        }
+      ],
+      "since": "1.7.2"
+    },
+    {
+      "name": "FormulaContext",
+      "kind": "interface",
+      "members": [],
+      "since": "1.10.0"
+    },
+    {
+      "name": "FrontMatterCache",
+      "kind": "interface",
+      "members": [
+        {
+          "name": "[index-signature]",
+          "kind": "index-signature"
+        }
+      ]
+    },
+    {
+      "name": "FrontMatterInfo",
+      "kind": "interface",
+      "members": [
+        {
+          "name": "contentStart",
+          "kind": "property"
+        },
+        {
+          "name": "exists",
+          "kind": "property"
+        },
+        {
+          "name": "from",
+          "kind": "property"
+        },
+        {
+          "name": "frontmatter",
+          "kind": "property"
+        },
+        {
+          "name": "to",
+          "kind": "property"
+        }
+      ]
+    },
+    {
+      "name": "FrontmatterLinkCache",
+      "kind": "interface",
+      "extends": [
+        "Reference"
+      ],
+      "members": [
+        {
+          "name": "key",
+          "kind": "property"
+        }
+      ]
+    },
+    {
+      "name": "FuzzyMatch",
+      "kind": "interface",
+      "members": [
+        {
+          "name": "item",
+          "kind": "property",
+          "since": "0.9.20"
+        },
+        {
+          "name": "match",
+          "kind": "property"
+        }
+      ],
+      "since": "0.9.20"
+    },
+    {
+      "name": "FuzzySuggestModal",
+      "kind": "abstract-class",
+      "extends": [
+        "SuggestModal"
+      ],
+      "members": [
+        {
+          "name": "getItems",
+          "kind": "method",
+          "abstract": true,
+          "since": "0.9.20"
+        },
+        {
+          "name": "getItemText",
+          "kind": "method",
+          "abstract": true,
+          "since": "0.9.20"
+        },
+        {
+          "name": "getSuggestions",
+          "kind": "method",
+          "since": "0.9.20"
+        },
+        {
+          "name": "onChooseItem",
+          "kind": "method",
+          "abstract": true,
+          "since": "0.9.20"
+        },
+        {
+          "name": "onChooseSuggestion",
+          "kind": "method",
+          "since": "0.9.20"
+        },
+        {
+          "name": "renderSuggestion",
+          "kind": "method",
+          "since": "0.9.20"
+        }
+      ],
+      "since": "0.9.20"
+    },
+    {
+      "name": "getAllTags",
+      "kind": "function"
+    },
+    {
+      "name": "getBlobArrayBuffer",
+      "kind": "function"
+    },
+    {
+      "name": "getFrontMatterInfo",
+      "kind": "function",
+      "since": "1.5.7"
+    },
+    {
+      "name": "getIcon",
+      "kind": "function"
+    },
+    {
+      "name": "getIconIds",
+      "kind": "function"
+    },
+    {
+      "name": "getLanguage",
+      "kind": "function",
+      "since": "1.8.7"
+    },
+    {
+      "name": "getLinkpath",
+      "kind": "function"
+    },
+    {
+      "name": "HeadingCache",
+      "kind": "interface",
+      "extends": [
+        "CacheItem"
+      ],
+      "members": [
+        {
+          "name": "heading",
+          "kind": "property"
+        },
+        {
+          "name": "level",
+          "kind": "property"
+        }
+      ]
+    },
+    {
+      "name": "HeadingSubpathResult",
+      "kind": "interface",
+      "extends": [
+        "SubpathResult"
+      ],
+      "members": [
+        {
+          "name": "current",
+          "kind": "property",
+          "since": "0.9.16"
+        },
+        {
+          "name": "next",
+          "kind": "property",
+          "since": "0.9.16"
+        },
+        {
+          "name": "type",
+          "kind": "property",
+          "since": "0.9.16"
+        }
+      ],
+      "since": "0.9.16"
+    },
+    {
+      "name": "HexString",
+      "kind": "type"
+    },
+    {
+      "name": "hexToArrayBuffer",
+      "kind": "function"
+    },
+    {
+      "name": "HistoryHandler",
+      "kind": "interface",
+      "members": [
+        {
+          "name": "onHistoryBack",
+          "kind": "method"
+        },
+        {
+          "name": "onHistoryForward",
+          "kind": "method",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "name": "Hotkey",
+      "kind": "interface",
+      "members": [
+        {
+          "name": "key",
+          "kind": "property"
+        },
+        {
+          "name": "modifiers",
+          "kind": "property"
+        }
+      ]
+    },
+    {
+      "name": "HoverLinkSource",
+      "kind": "interface",
+      "members": [
+        {
+          "name": "defaultMod",
+          "kind": "property"
+        },
+        {
+          "name": "display",
+          "kind": "property"
+        }
+      ]
+    },
+    {
+      "name": "HoverParent",
+      "kind": "interface",
+      "members": [
+        {
+          "name": "hoverPopover",
+          "kind": "property",
+          "since": "0.11.13"
+        }
+      ],
+      "since": "0.11.13"
+    },
+    {
+      "name": "HoverPopover",
+      "kind": "class",
+      "extends": [
+        "Component"
+      ],
+      "members": [
+        {
+          "name": "constructor",
+          "kind": "constructor"
+        },
+        {
+          "name": "hoverEl",
+          "kind": "property"
+        },
+        {
+          "name": "state",
+          "kind": "property"
+        }
+      ],
+      "since": "0.15.0"
+    },
+    {
+      "name": "HSL",
+      "kind": "interface",
+      "members": [
+        {
+          "name": "h",
+          "kind": "property",
+          "since": "0.16.0"
+        },
+        {
+          "name": "l",
+          "kind": "property",
+          "since": "0.16.0"
+        },
+        {
+          "name": "s",
+          "kind": "property",
+          "since": "0.16.0"
+        }
+      ],
+      "since": "0.16.0"
+    },
+    {
+      "name": "htmlToMarkdown",
+      "kind": "function"
+    },
+    {
+      "name": "HTMLValue",
+      "kind": "class",
+      "extends": [
+        "StringValue"
+      ],
+      "members": [],
+      "since": "1.10.0"
+    },
+    {
+      "name": "IconName",
+      "kind": "type"
+    },
+    {
+      "name": "IconValue",
+      "kind": "class",
+      "extends": [
+        "StringValue"
+      ],
+      "members": [],
+      "since": "1.10.0"
+    },
+    {
+      "name": "ImageValue",
+      "kind": "class",
+      "extends": [
+        "StringValue"
+      ],
+      "members": [],
+      "since": "1.10.0"
+    },
+    {
+      "name": "Instruction",
+      "kind": "interface",
+      "members": [
+        {
+          "name": "command",
+          "kind": "property",
+          "since": "0.9.20"
+        },
+        {
+          "name": "purpose",
+          "kind": "property",
+          "since": "0.9.20"
+        }
+      ],
+      "since": "0.9.20"
+    },
+    {
+      "name": "ISuggestOwner",
+      "kind": "interface",
+      "members": [
+        {
+          "name": "renderSuggestion",
+          "kind": "method"
+        },
+        {
+          "name": "selectSuggestion",
+          "kind": "method"
+        }
+      ]
+    },
+    {
+      "name": "ItemView",
+      "kind": "abstract-class",
+      "extends": [
+        "View"
+      ],
+      "members": [
+        {
+          "name": "addAction",
+          "kind": "method",
+          "since": "1.1.0"
+        },
+        {
+          "name": "constructor",
+          "kind": "constructor"
+        },
+        {
+          "name": "contentEl",
+          "kind": "property"
+        }
+      ],
+      "since": "0.9.7"
+    },
+    {
+      "name": "iterateCacheRefs",
+      "kind": "function",
+      "deprecated": true
+    },
+    {
+      "name": "iterateRefs",
+      "kind": "function"
+    },
+    {
+      "name": "Keymap",
+      "kind": "class",
+      "members": [
+        {
+          "name": "popScope",
+          "kind": "method",
+          "since": "0.13.9"
+        },
+        {
+          "name": "pushScope",
+          "kind": "method",
+          "since": "0.13.9"
+        },
+        {
+          "name": "isModEvent",
+          "kind": "method",
+          "static": true,
+          "since": "0.16.0"
+        },
+        {
+          "name": "isModifier",
+          "kind": "method",
+          "static": true,
+          "since": "0.12.17"
+        }
+      ],
+      "since": "0.13.9"
+    },
+    {
+      "name": "KeymapContext",
+      "kind": "interface",
+      "extends": [
+        "KeymapInfo"
+      ],
+      "members": [
+        {
+          "name": "vkey",
+          "kind": "property"
+        }
+      ]
+    },
+    {
+      "name": "KeymapEventHandler",
+      "kind": "interface",
+      "extends": [
+        "KeymapInfo"
+      ],
+      "members": [
+        {
+          "name": "scope",
+          "kind": "property"
+        }
+      ]
+    },
+    {
+      "name": "KeymapEventListener",
+      "kind": "type"
+    },
+    {
+      "name": "KeymapInfo",
+      "kind": "interface",
+      "members": [
+        {
+          "name": "key",
+          "kind": "property",
+          "since": "0.10.4"
+        },
+        {
+          "name": "modifiers",
+          "kind": "property",
+          "since": "0.10.4"
+        }
+      ],
+      "since": "0.10.4"
+    },
+    {
+      "name": "LinkCache",
+      "kind": "interface",
+      "extends": [
+        "ReferenceCache"
+      ],
+      "members": [],
+      "since": "0.9.7"
+    },
+    {
+      "name": "LinkValue",
+      "kind": "class",
+      "extends": [
+        "StringValue"
+      ],
+      "members": [
+        {
+          "name": "parseFromString",
+          "kind": "method",
+          "static": true,
+          "since": "1.10.0"
+        }
+      ],
+      "since": "1.10.0"
+    },
+    {
+      "name": "ListedFiles",
+      "kind": "interface",
+      "members": [
+        {
+          "name": "files",
+          "kind": "property"
+        },
+        {
+          "name": "folders",
+          "kind": "property"
+        }
+      ]
+    },
+    {
+      "name": "ListItemCache",
+      "kind": "interface",
+      "extends": [
+        "CacheItem"
+      ],
+      "members": [
+        {
+          "name": "id",
+          "kind": "property",
+          "optional": true
+        },
+        {
+          "name": "parent",
+          "kind": "property"
+        },
+        {
+          "name": "task",
+          "kind": "property",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "name": "ListValue",
+      "kind": "class",
+      "extends": [
+        "NotNullValue"
+      ],
+      "members": [
+        {
+          "name": "concat",
+          "kind": "method",
+          "since": "1.10.0"
+        },
+        {
+          "name": "constructor",
+          "kind": "constructor",
+          "since": "1.10.0"
+        },
+        {
+          "name": "get",
+          "kind": "method",
+          "since": "1.10.0"
+        },
+        {
+          "name": "includes",
+          "kind": "method",
+          "since": "1.10.0"
+        },
+        {
+          "name": "isTruthy",
+          "kind": "method",
+          "since": "1.10.0"
+        },
+        {
+          "name": "length",
+          "kind": "method",
+          "since": "1.10.0"
+        },
+        {
+          "name": "toString",
+          "kind": "method",
+          "since": "1.10.0"
+        },
+        {
+          "name": "type",
+          "kind": "property",
+          "static": true,
+          "since": "1.10.0"
+        }
+      ],
+      "since": "1.10.0"
+    },
+    {
+      "name": "livePreviewState",
+      "kind": "const"
+    },
+    {
+      "name": "LivePreviewStateType",
+      "kind": "interface",
+      "members": [
+        {
+          "name": "mousedown",
+          "kind": "property"
+        }
+      ]
+    },
+    {
+      "name": "loadMathJax",
+      "kind": "function"
+    },
+    {
+      "name": "loadMermaid",
+      "kind": "function"
+    },
+    {
+      "name": "loadPdfJs",
+      "kind": "function"
+    },
+    {
+      "name": "loadPrism",
+      "kind": "function"
+    },
+    {
+      "name": "Loc",
+      "kind": "interface",
+      "members": [
+        {
+          "name": "col",
+          "kind": "property"
+        },
+        {
+          "name": "line",
+          "kind": "property"
+        },
+        {
+          "name": "offset",
+          "kind": "property"
+        }
+      ]
+    },
+    {
+      "name": "MarkdownEditView",
+      "kind": "class",
+      "implements": [
+        "MarkdownSubView",
+        "HoverParent",
+        "MarkdownFileInfo"
+      ],
+      "members": [
+        {
+          "name": "app",
+          "kind": "property"
+        },
+        {
+          "name": "applyScroll",
+          "kind": "method"
+        },
+        {
+          "name": "clear",
+          "kind": "method"
+        },
+        {
+          "name": "constructor",
+          "kind": "constructor"
+        },
+        {
+          "name": "file",
+          "kind": "accessor"
+        },
+        {
+          "name": "get",
+          "kind": "method"
+        },
+        {
+          "name": "getScroll",
+          "kind": "method"
+        },
+        {
+          "name": "getSelection",
+          "kind": "method"
+        },
+        {
+          "name": "hoverPopover",
+          "kind": "property"
+        },
+        {
+          "name": "set",
+          "kind": "method"
+        }
+      ]
+    },
+    {
+      "name": "MarkdownFileInfo",
+      "kind": "interface",
+      "extends": [
+        "HoverParent"
+      ],
+      "members": [
+        {
+          "name": "app",
+          "kind": "property"
+        },
+        {
+          "name": "editor",
+          "kind": "property",
+          "optional": true
+        },
+        {
+          "name": "file",
+          "kind": "accessor"
+        }
+      ]
+    },
+    {
+      "name": "MarkdownPostProcessor",
+      "kind": "interface",
+      "members": [
+        {
+          "name": "[call-signature]",
+          "kind": "call-signature"
+        },
+        {
+          "name": "sortOrder",
+          "kind": "property",
+          "optional": true
+        }
+      ],
+      "since": "0.10.12"
+    },
+    {
+      "name": "MarkdownPostProcessorContext",
+      "kind": "interface",
+      "members": [
+        {
+          "name": "addChild",
+          "kind": "method"
+        },
+        {
+          "name": "docId",
+          "kind": "property"
+        },
+        {
+          "name": "frontmatter",
+          "kind": "property"
+        },
+        {
+          "name": "getSectionInfo",
+          "kind": "method"
+        },
+        {
+          "name": "sourcePath",
+          "kind": "property"
+        }
+      ]
+    },
+    {
+      "name": "MarkdownPreviewEvents",
+      "kind": "interface",
+      "extends": [
+        "Component"
+      ],
+      "members": []
+    },
+    {
+      "name": "MarkdownPreviewRenderer",
+      "kind": "class",
+      "members": [
+        {
+          "name": "createCodeBlockPostProcessor",
+          "kind": "method",
+          "static": true,
+          "since": "0.12.11"
+        },
+        {
+          "name": "registerPostProcessor",
+          "kind": "method",
+          "static": true,
+          "since": "0.10.12"
+        },
+        {
+          "name": "unregisterPostProcessor",
+          "kind": "method",
+          "static": true,
+          "since": "0.9.7"
+        }
+      ],
+      "since": "0.9.7"
+    },
+    {
+      "name": "MarkdownPreviewView",
+      "kind": "class",
+      "extends": [
+        "MarkdownRenderer"
+      ],
+      "implements": [
+        "MarkdownSubView",
+        "MarkdownPreviewEvents"
+      ],
+      "members": [
+        {
+          "name": "applyScroll",
+          "kind": "method"
+        },
+        {
+          "name": "clear",
+          "kind": "method"
+        },
+        {
+          "name": "containerEl",
+          "kind": "property"
+        },
+        {
+          "name": "file",
+          "kind": "accessor"
+        },
+        {
+          "name": "get",
+          "kind": "method"
+        },
+        {
+          "name": "getScroll",
+          "kind": "method"
+        },
+        {
+          "name": "rerender",
+          "kind": "method"
+        },
+        {
+          "name": "set",
+          "kind": "method"
+        }
+      ]
+    },
+    {
+      "name": "MarkdownRenderChild",
+      "kind": "class",
+      "extends": [
+        "Component"
+      ],
+      "members": [
+        {
+          "name": "constructor",
+          "kind": "constructor"
+        },
+        {
+          "name": "containerEl",
+          "kind": "property"
+        }
+      ]
+    },
+    {
+      "name": "MarkdownRenderer",
+      "kind": "abstract-class",
+      "extends": [
+        "MarkdownRenderChild"
+      ],
+      "implements": [
+        "MarkdownPreviewEvents",
+        "HoverParent"
+      ],
+      "members": [
+        {
+          "name": "app",
+          "kind": "property"
+        },
+        {
+          "name": "file",
+          "kind": "accessor",
+          "abstract": true
+        },
+        {
+          "name": "hoverPopover",
+          "kind": "property"
+        },
+        {
+          "name": "render",
+          "kind": "method",
+          "static": true
+        },
+        {
+          "name": "renderMarkdown",
+          "kind": "method",
+          "static": true,
+          "deprecated": true,
+          "since": "0.10.6"
+        }
+      ],
+      "since": "0.9.7"
+    },
+    {
+      "name": "MarkdownSectionInformation",
+      "kind": "interface",
+      "members": [
+        {
+          "name": "lineEnd",
+          "kind": "property"
+        },
+        {
+          "name": "lineStart",
+          "kind": "property"
+        },
+        {
+          "name": "text",
+          "kind": "property"
+        }
+      ]
+    },
+    {
+      "name": "MarkdownSubView",
+      "kind": "interface",
+      "members": [
+        {
+          "name": "applyScroll",
+          "kind": "method"
+        },
+        {
+          "name": "get",
+          "kind": "method"
+        },
+        {
+          "name": "getScroll",
+          "kind": "method"
+        },
+        {
+          "name": "set",
+          "kind": "method"
+        }
+      ]
+    },
+    {
+      "name": "MarkdownView",
+      "kind": "class",
+      "extends": [
+        "TextFileView"
+      ],
+      "implements": [
+        "MarkdownFileInfo"
+      ],
+      "members": [
+        {
+          "name": "clear",
+          "kind": "method"
+        },
+        {
+          "name": "constructor",
+          "kind": "constructor"
+        },
+        {
+          "name": "currentMode",
+          "kind": "property"
+        },
+        {
+          "name": "editor",
+          "kind": "property"
+        },
+        {
+          "name": "getMode",
+          "kind": "method"
+        },
+        {
+          "name": "getViewData",
+          "kind": "method"
+        },
+        {
+          "name": "getViewType",
+          "kind": "method"
+        },
+        {
+          "name": "hoverPopover",
+          "kind": "property"
+        },
+        {
+          "name": "previewMode",
+          "kind": "property"
+        },
+        {
+          "name": "setViewData",
+          "kind": "method"
+        },
+        {
+          "name": "showSearch",
+          "kind": "method"
+        }
+      ]
+    },
+    {
+      "name": "MarkdownViewModeType",
+      "kind": "type"
+    },
+    {
+      "name": "Menu",
+      "kind": "class",
+      "extends": [
+        "Component"
+      ],
+      "implements": [
+        "HistoryHandler"
+      ],
+      "members": [
+        {
+          "name": "addItem",
+          "kind": "method",
+          "since": "0.15.3"
+        },
+        {
+          "name": "addSeparator",
+          "kind": "method",
+          "since": "0.15.3"
+        },
+        {
+          "name": "close",
+          "kind": "method"
+        },
+        {
+          "name": "constructor",
+          "kind": "constructor"
+        },
+        {
+          "name": "hide",
+          "kind": "method"
+        },
+        {
+          "name": "onHide",
+          "kind": "method"
+        },
+        {
+          "name": "setNoIcon",
+          "kind": "method"
+        },
+        {
+          "name": "setParentElement",
+          "kind": "method",
+          "since": "0.16.0"
+        },
+        {
+          "name": "setUseNativeMenu",
+          "kind": "method",
+          "since": "0.16.0"
+        },
+        {
+          "name": "showAtMouseEvent",
+          "kind": "method",
+          "since": "0.12.6"
+        },
+        {
+          "name": "showAtPosition",
+          "kind": "method",
+          "since": "1.1.0"
+        },
+        {
+          "name": "forEvent",
+          "kind": "method",
+          "static": true,
+          "since": "1.6.0"
+        }
+      ]
+    },
+    {
+      "name": "MenuItem",
+      "kind": "class",
+      "members": [
+        {
+          "name": "onClick",
+          "kind": "method"
+        },
+        {
+          "name": "setChecked",
+          "kind": "method",
+          "since": "0.16.2"
+        },
+        {
+          "name": "setDisabled",
+          "kind": "method",
+          "since": "0.15.0"
+        },
+        {
+          "name": "setIcon",
+          "kind": "method",
+          "since": "0.16.2"
+        },
+        {
+          "name": "setIsLabel",
+          "kind": "method",
+          "since": "0.15.0"
+        },
+        {
+          "name": "setSection",
+          "kind": "method",
+          "since": "0.15.3"
+        },
+        {
+          "name": "setTitle",
+          "kind": "method"
+        },
+        {
+          "name": "setWarning",
+          "kind": "method",
+          "since": "0.15.0"
+        }
+      ]
+    },
+    {
+      "name": "MenuPositionDef",
+      "kind": "interface",
+      "members": [
+        {
+          "name": "left",
+          "kind": "property",
+          "optional": true
+        },
+        {
+          "name": "overlap",
+          "kind": "property",
+          "optional": true
+        },
+        {
+          "name": "width",
+          "kind": "property",
+          "optional": true
+        },
+        {
+          "name": "x",
+          "kind": "property"
+        },
+        {
+          "name": "y",
+          "kind": "property"
+        }
+      ],
+      "since": "1.1.0"
+    },
+    {
+      "name": "MenuSeparator",
+      "kind": "class",
+      "members": [],
+      "since": "0.15.3"
+    },
+    {
+      "name": "MetadataCache",
+      "kind": "class",
+      "extends": [
+        "Events"
+      ],
+      "members": [
+        {
+          "name": "fileToLinktext",
+          "kind": "method"
+        },
+        {
+          "name": "getCache",
+          "kind": "method",
+          "since": "0.14.5"
+        },
+        {
+          "name": "getFileCache",
+          "kind": "method",
+          "since": "0.9.21"
+        },
+        {
+          "name": "getFirstLinkpathDest",
+          "kind": "method",
+          "since": "0.12.5"
+        },
+        {
+          "name": "on",
+          "kind": "method"
+        },
+        {
+          "name": "resolvedLinks",
+          "kind": "property"
+        },
+        {
+          "name": "unresolvedLinks",
+          "kind": "property"
+        }
+      ]
+    },
+    {
+      "name": "Modal",
+      "kind": "class",
+      "implements": [
+        "HistoryHandler"
+      ],
+      "members": [
+        {
+          "name": "app",
+          "kind": "property"
+        },
+        {
+          "name": "close",
+          "kind": "method"
+        },
+        {
+          "name": "constructor",
+          "kind": "constructor"
+        },
+        {
+          "name": "containerEl",
+          "kind": "property"
+        },
+        {
+          "name": "contentEl",
+          "kind": "property"
+        },
+        {
+          "name": "modalEl",
+          "kind": "property"
+        },
+        {
+          "name": "onClose",
+          "kind": "method"
+        },
+        {
+          "name": "onOpen",
+          "kind": "method"
+        },
+        {
+          "name": "open",
+          "kind": "method"
+        },
+        {
+          "name": "scope",
+          "kind": "property"
+        },
+        {
+          "name": "setCloseCallback",
+          "kind": "method",
+          "since": "1.10.0"
+        },
+        {
+          "name": "setContent",
+          "kind": "method"
+        },
+        {
+          "name": "setTitle",
+          "kind": "method"
+        },
+        {
+          "name": "shouldRestoreSelection",
+          "kind": "property",
+          "since": "0.9.16"
+        },
+        {
+          "name": "titleEl",
+          "kind": "property"
+        }
+      ]
+    },
+    {
+      "name": "Modifier",
+      "kind": "type"
+    },
+    {
+      "name": "moment",
+      "kind": "const"
+    },
+    {
+      "name": "MomentFormatComponent",
+      "kind": "class",
+      "extends": [
+        "TextComponent"
+      ],
+      "members": [
+        {
+          "name": "onChanged",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "sampleEl",
+          "kind": "property",
+          "since": "0.9.7"
+        },
+        {
+          "name": "setDefaultFormat",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "setSampleEl",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "setValue",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "updateSample",
+          "kind": "method",
+          "since": "0.9.7"
+        }
+      ],
+      "since": "0.9.7"
+    },
+    {
+      "name": "normalizePath",
+      "kind": "function"
+    },
+    {
+      "name": "Notice",
+      "kind": "class",
+      "members": [
+        {
+          "name": "constructor",
+          "kind": "constructor"
+        },
+        {
+          "name": "containerEl",
+          "kind": "property",
+          "since": "1.8.7"
+        },
+        {
+          "name": "hide",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "messageEl",
+          "kind": "property",
+          "since": "1.8.7"
+        },
+        {
+          "name": "noticeEl",
+          "kind": "property",
+          "deprecated": true,
+          "since": "0.9.7"
+        },
+        {
+          "name": "setMessage",
+          "kind": "method",
+          "since": "0.9.7"
+        }
+      ],
+      "since": "0.9.7"
+    },
+    {
+      "name": "NotNullValue",
+      "kind": "abstract-class",
+      "extends": [
+        "Value"
+      ],
+      "members": [],
+      "since": "1.10.0"
+    },
+    {
+      "name": "NullValue",
+      "kind": "class",
+      "extends": [
+        "Value"
+      ],
+      "members": [
+        {
+          "name": "isTruthy",
+          "kind": "method",
+          "since": "1.10.0"
+        },
+        {
+          "name": "toString",
+          "kind": "method",
+          "since": "1.10.0"
+        },
+        {
+          "name": "value",
+          "kind": "property",
+          "static": true,
+          "since": "1.10.0"
+        }
+      ],
+      "since": "1.10.0"
+    },
+    {
+      "name": "NumberValue",
+      "kind": "class",
+      "extends": [
+        "PrimitiveValue"
+      ],
+      "members": [
+        {
+          "name": "type",
+          "kind": "property",
+          "static": true,
+          "since": "1.10.0"
+        }
+      ],
+      "since": "1.10.0"
+    },
+    {
+      "name": "ObjectValue",
+      "kind": "class",
+      "extends": [
+        "NotNullValue"
+      ],
+      "members": [
+        {
+          "name": "get",
+          "kind": "method",
+          "since": "1.10.0"
+        },
+        {
+          "name": "isEmpty",
+          "kind": "method",
+          "since": "1.10.0"
+        },
+        {
+          "name": "isTruthy",
+          "kind": "method",
+          "since": "1.10.0"
+        },
+        {
+          "name": "toString",
+          "kind": "method",
+          "since": "1.10.0"
+        },
+        {
+          "name": "type",
+          "kind": "property",
+          "static": true,
+          "since": "1.10.0"
+        }
+      ],
+      "since": "1.10.0"
+    },
+    {
+      "name": "ObsidianProtocolData",
+      "kind": "interface",
+      "members": [
+        {
+          "name": "[index-signature]",
+          "kind": "index-signature"
+        },
+        {
+          "name": "action",
+          "kind": "property"
+        }
+      ]
+    },
+    {
+      "name": "ObsidianProtocolHandler",
+      "kind": "type"
+    },
+    {
+      "name": "OpenViewState",
+      "kind": "interface",
+      "members": [
+        {
+          "name": "active",
+          "kind": "property",
+          "optional": true
+        },
+        {
+          "name": "eState",
+          "kind": "property",
+          "optional": true
+        },
+        {
+          "name": "group",
+          "kind": "property",
+          "optional": true
+        },
+        {
+          "name": "state",
+          "kind": "property",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "name": "PaneType",
+      "kind": "type"
+    },
+    {
+      "name": "parseFrontMatterAliases",
+      "kind": "function"
+    },
+    {
+      "name": "parseFrontMatterEntry",
+      "kind": "function"
+    },
+    {
+      "name": "parseFrontMatterStringArray",
+      "kind": "function"
+    },
+    {
+      "name": "parseFrontMatterTags",
+      "kind": "function"
+    },
+    {
+      "name": "parseLinktext",
+      "kind": "function"
+    },
+    {
+      "name": "parsePropertyId",
+      "kind": "function",
+      "since": "1.10.0"
+    },
+    {
+      "name": "parseYaml",
+      "kind": "function"
+    },
+    {
+      "name": "Platform",
+      "kind": "const",
+      "members": [
+        {
+          "name": "isAndroidApp",
+          "kind": "property"
+        },
+        {
+          "name": "isDesktop",
+          "kind": "property"
+        },
+        {
+          "name": "isDesktopApp",
+          "kind": "property"
+        },
+        {
+          "name": "isIosApp",
+          "kind": "property"
+        },
+        {
+          "name": "isLinux",
+          "kind": "property"
+        },
+        {
+          "name": "isMacOS",
+          "kind": "property"
+        },
+        {
+          "name": "isMobile",
+          "kind": "property"
+        },
+        {
+          "name": "isMobileApp",
+          "kind": "property"
+        },
+        {
+          "name": "isPhone",
+          "kind": "property"
+        },
+        {
+          "name": "isSafari",
+          "kind": "property"
+        },
+        {
+          "name": "isTablet",
+          "kind": "property"
+        },
+        {
+          "name": "isWin",
+          "kind": "property"
+        },
+        {
+          "name": "resourcePathPrefix",
+          "kind": "property"
+        }
+      ],
+      "since": "0.12.2"
+    },
+    {
+      "name": "Plugin",
+      "kind": "abstract-class",
+      "extends": [
+        "Component"
+      ],
+      "members": [
+        {
+          "name": "addCommand",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "addRibbonIcon",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "addSettingTab",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "addStatusBarItem",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "app",
+          "kind": "property",
+          "since": "0.9.7"
+        },
+        {
+          "name": "constructor",
+          "kind": "constructor"
+        },
+        {
+          "name": "loadData",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "manifest",
+          "kind": "property",
+          "since": "0.9.7"
+        },
+        {
+          "name": "onExternalSettingsChange",
+          "kind": "method",
+          "optional": true,
+          "since": "1.5.7"
+        },
+        {
+          "name": "onload",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "onUserEnable",
+          "kind": "method",
+          "since": "1.7.2"
+        },
+        {
+          "name": "registerBasesView",
+          "kind": "method",
+          "since": "1.10.0"
+        },
+        {
+          "name": "registerCliHandler",
+          "kind": "method",
+          "since": "1.12.2"
+        },
+        {
+          "name": "registerEditorExtension",
+          "kind": "method",
+          "since": "0.12.8"
+        },
+        {
+          "name": "registerEditorSuggest",
+          "kind": "method",
+          "since": "0.12.7"
+        },
+        {
+          "name": "registerExtensions",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "registerHoverLinkSource",
+          "kind": "method",
+          "since": "1.1.0"
+        },
+        {
+          "name": "registerMarkdownCodeBlockProcessor",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "registerMarkdownPostProcessor",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "registerObsidianProtocolHandler",
+          "kind": "method",
+          "since": "0.11.0"
+        },
+        {
+          "name": "registerView",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "removeCommand",
+          "kind": "method",
+          "since": "1.7.2"
+        },
+        {
+          "name": "saveData",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "settings",
+          "kind": "property",
+          "optional": true,
+          "since": "1.13.0"
+        }
+      ],
+      "since": "0.9.7"
+    },
+    {
+      "name": "PluginManifest",
+      "kind": "interface",
+      "members": [
+        {
+          "name": "author",
+          "kind": "property"
+        },
+        {
+          "name": "authorUrl",
+          "kind": "property",
+          "optional": true
+        },
+        {
+          "name": "description",
+          "kind": "property"
+        },
+        {
+          "name": "dir",
+          "kind": "property",
+          "optional": true
+        },
+        {
+          "name": "id",
+          "kind": "property"
+        },
+        {
+          "name": "isDesktopOnly",
+          "kind": "property",
+          "optional": true
+        },
+        {
+          "name": "minAppVersion",
+          "kind": "property"
+        },
+        {
+          "name": "name",
+          "kind": "property"
+        },
+        {
+          "name": "version",
+          "kind": "property"
+        }
+      ]
+    },
+    {
+      "name": "PluginSettingTab",
+      "kind": "abstract-class",
+      "extends": [
+        "SettingTab"
+      ],
+      "members": [
+        {
+          "name": "constructor",
+          "kind": "constructor"
+        },
+        {
+          "name": "getControlValue",
+          "kind": "method",
+          "since": "1.13.0"
+        },
+        {
+          "name": "getSettingDefinitions",
+          "kind": "method",
+          "since": "1.13.0"
+        },
+        {
+          "name": "setControlValue",
+          "kind": "method",
+          "since": "1.13.0"
+        }
+      ],
+      "since": "0.9.7"
+    },
+    {
+      "name": "Point",
+      "kind": "interface",
+      "members": [
+        {
+          "name": "x",
+          "kind": "property"
+        },
+        {
+          "name": "y",
+          "kind": "property"
+        }
+      ]
+    },
+    {
+      "name": "PopoverState",
+      "kind": "enum",
+      "members": []
+    },
+    {
+      "name": "PopoverSuggest",
+      "kind": "abstract-class",
+      "implements": [
+        "ISuggestOwner",
+        "HistoryHandler"
+      ],
+      "members": [
+        {
+          "name": "app",
+          "kind": "property"
+        },
+        {
+          "name": "close",
+          "kind": "method"
+        },
+        {
+          "name": "constructor",
+          "kind": "constructor"
+        },
+        {
+          "name": "open",
+          "kind": "method"
+        },
+        {
+          "name": "renderSuggestion",
+          "kind": "method",
+          "abstract": true
+        },
+        {
+          "name": "scope",
+          "kind": "property"
+        },
+        {
+          "name": "selectSuggestion",
+          "kind": "method",
+          "abstract": true
+        }
+      ]
+    },
+    {
+      "name": "Pos",
+      "kind": "interface",
+      "members": [
+        {
+          "name": "end",
+          "kind": "property"
+        },
+        {
+          "name": "start",
+          "kind": "property"
+        }
+      ]
+    },
+    {
+      "name": "prepareFuzzySearch",
+      "kind": "function"
+    },
+    {
+      "name": "prepareSimpleSearch",
+      "kind": "function"
+    },
+    {
+      "name": "PrimitiveValue",
+      "kind": "abstract-class",
+      "extends": [
+        "NotNullValue"
+      ],
+      "members": [
+        {
+          "name": "constructor",
+          "kind": "constructor",
+          "since": "1.10.0"
+        },
+        {
+          "name": "isTruthy",
+          "kind": "method",
+          "since": "1.10.0"
+        },
+        {
+          "name": "toString",
+          "kind": "method",
+          "since": "1.10.0"
+        }
+      ],
+      "since": "1.10.0"
+    },
+    {
+      "name": "ProgressBarComponent",
+      "kind": "class",
+      "extends": [
+        "ValueComponent"
+      ],
+      "members": [
+        {
+          "name": "constructor",
+          "kind": "constructor"
+        },
+        {
+          "name": "getValue",
+          "kind": "method"
+        },
+        {
+          "name": "setValue",
+          "kind": "method"
+        }
+      ],
+      "since": "1.4.4"
+    },
+    {
+      "name": "QueryController",
+      "kind": "class",
+      "extends": [
+        "Component"
+      ],
+      "members": [],
+      "since": "1.10.0"
+    },
+    {
+      "name": "Reference",
+      "kind": "interface",
+      "members": [
+        {
+          "name": "displayText",
+          "kind": "property",
+          "optional": true
+        },
+        {
+          "name": "link",
+          "kind": "property"
+        },
+        {
+          "name": "original",
+          "kind": "property"
+        }
+      ]
+    },
+    {
+      "name": "ReferenceCache",
+      "kind": "interface",
+      "extends": [
+        "Reference",
+        "CacheItem"
+      ],
+      "members": []
+    },
+    {
+      "name": "ReferenceLinkCache",
+      "kind": "interface",
+      "extends": [
+        "CacheItem"
+      ],
+      "members": [
+        {
+          "name": "id",
+          "kind": "property"
+        },
+        {
+          "name": "link",
+          "kind": "property"
+        }
+      ],
+      "since": "1.8.7"
+    },
+    {
+      "name": "RegExpValue",
+      "kind": "class",
+      "extends": [
+        "NotNullValue"
+      ],
+      "members": [
+        {
+          "name": "isTruthy",
+          "kind": "method",
+          "since": "1.10.0"
+        },
+        {
+          "name": "toString",
+          "kind": "method",
+          "since": "1.10.0"
+        }
+      ],
+      "since": "1.10.0"
+    },
+    {
+      "name": "RelativeDateValue",
+      "kind": "class",
+      "extends": [
+        "DateValue"
+      ],
+      "members": [],
+      "since": "1.10.0"
+    },
+    {
+      "name": "removeIcon",
+      "kind": "function"
+    },
+    {
+      "name": "RenderContext",
+      "kind": "class",
+      "implements": [
+        "HoverParent"
+      ],
+      "members": [
+        {
+          "name": "hoverPopover",
+          "kind": "property",
+          "since": "1.10.0"
+        }
+      ],
+      "since": "1.10.0"
+    },
+    {
+      "name": "renderMatches",
+      "kind": "function"
+    },
+    {
+      "name": "renderMath",
+      "kind": "function"
+    },
+    {
+      "name": "renderResults",
+      "kind": "function"
+    },
+    {
+      "name": "request",
+      "kind": "function",
+      "since": "0.12.11"
+    },
+    {
+      "name": "requestUrl",
+      "kind": "function"
+    },
+    {
+      "name": "RequestUrlParam",
+      "kind": "interface",
+      "members": [
+        {
+          "name": "body",
+          "kind": "property",
+          "optional": true
+        },
+        {
+          "name": "contentType",
+          "kind": "property",
+          "optional": true
+        },
+        {
+          "name": "headers",
+          "kind": "property",
+          "optional": true
+        },
+        {
+          "name": "method",
+          "kind": "property",
+          "optional": true
+        },
+        {
+          "name": "throw",
+          "kind": "property",
+          "optional": true
+        },
+        {
+          "name": "url",
+          "kind": "property"
+        }
+      ]
+    },
+    {
+      "name": "RequestUrlResponse",
+      "kind": "interface",
+      "members": [
+        {
+          "name": "arrayBuffer",
+          "kind": "property"
+        },
+        {
+          "name": "headers",
+          "kind": "property"
+        },
+        {
+          "name": "json",
+          "kind": "property"
+        },
+        {
+          "name": "status",
+          "kind": "property"
+        },
+        {
+          "name": "text",
+          "kind": "property"
+        }
+      ]
+    },
+    {
+      "name": "RequestUrlResponsePromise",
+      "kind": "interface",
+      "extends": [
+        "Promise"
+      ],
+      "members": [
+        {
+          "name": "arrayBuffer",
+          "kind": "property"
+        },
+        {
+          "name": "json",
+          "kind": "property"
+        },
+        {
+          "name": "text",
+          "kind": "property"
+        }
+      ]
+    },
+    {
+      "name": "requireApiVersion",
+      "kind": "function"
+    },
+    {
+      "name": "resolveSubpath",
+      "kind": "function"
+    },
+    {
+      "name": "RGB",
+      "kind": "interface",
+      "members": [
+        {
+          "name": "b",
+          "kind": "property"
+        },
+        {
+          "name": "g",
+          "kind": "property"
+        },
+        {
+          "name": "r",
+          "kind": "property"
+        }
+      ],
+      "since": "0.16.0"
+    },
+    {
+      "name": "sanitizeHTMLToDom",
+      "kind": "function"
+    },
+    {
+      "name": "Scope",
+      "kind": "class",
+      "members": [
+        {
+          "name": "constructor",
+          "kind": "constructor"
+        },
+        {
+          "name": "register",
+          "kind": "method"
+        },
+        {
+          "name": "unregister",
+          "kind": "method"
+        }
+      ]
+    },
+    {
+      "name": "SearchComponent",
+      "kind": "class",
+      "extends": [
+        "AbstractTextComponent"
+      ],
+      "members": [
+        {
+          "name": "clearButtonEl",
+          "kind": "property",
+          "since": "0.9.21"
+        },
+        {
+          "name": "constructor",
+          "kind": "constructor"
+        },
+        {
+          "name": "onChanged",
+          "kind": "method"
+        }
+      ],
+      "since": "0.9.21"
+    },
+    {
+      "name": "SearchMatches",
+      "kind": "type"
+    },
+    {
+      "name": "SearchMatchPart",
+      "kind": "type"
+    },
+    {
+      "name": "SearchResult",
+      "kind": "interface",
+      "members": [
+        {
+          "name": "matches",
+          "kind": "property"
+        },
+        {
+          "name": "score",
+          "kind": "property"
+        }
+      ],
+      "since": "0.9.21"
+    },
+    {
+      "name": "SearchResultContainer",
+      "kind": "interface",
+      "members": [
+        {
+          "name": "match",
+          "kind": "property"
+        }
+      ],
+      "since": "0.9.21"
+    },
+    {
+      "name": "SecretComponent",
+      "kind": "class",
+      "extends": [
+        "BaseComponent"
+      ],
+      "members": [
+        {
+          "name": "constructor",
+          "kind": "constructor"
+        },
+        {
+          "name": "onChange",
+          "kind": "method",
+          "since": "1.11.4"
+        },
+        {
+          "name": "setValue",
+          "kind": "method",
+          "since": "1.11.4"
+        }
+      ],
+      "since": "1.11.1"
+    },
+    {
+      "name": "SecretStorage",
+      "kind": "class",
+      "extends": [
+        "Events"
+      ],
+      "members": [
+        {
+          "name": "getSecret",
+          "kind": "method",
+          "since": "1.11.4"
+        },
+        {
+          "name": "listSecrets",
+          "kind": "method",
+          "since": "1.11.4"
+        },
+        {
+          "name": "setSecret",
+          "kind": "method",
+          "since": "1.11.4"
+        }
+      ],
+      "since": "1.11.4"
+    },
+    {
+      "name": "SectionCache",
+      "kind": "interface",
+      "extends": [
+        "CacheItem"
+      ],
+      "members": [
+        {
+          "name": "id",
+          "kind": "property",
+          "optional": true
+        },
+        {
+          "name": "type",
+          "kind": "property"
+        }
+      ]
+    },
+    {
+      "name": "setIcon",
+      "kind": "function"
+    },
+    {
+      "name": "Setting",
+      "kind": "class",
+      "members": [
+        {
+          "name": "addButton",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "addColorPicker",
+          "kind": "method"
+        },
+        {
+          "name": "addComponent",
+          "kind": "method",
+          "since": "1.11.0"
+        },
+        {
+          "name": "addDisplayValue",
+          "kind": "method",
+          "since": "1.13.1"
+        },
+        {
+          "name": "addDropdown",
+          "kind": "method"
+        },
+        {
+          "name": "addExtraButton",
+          "kind": "method",
+          "since": "0.9.16"
+        },
+        {
+          "name": "addMomentFormat",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "addProgressBar",
+          "kind": "method"
+        },
+        {
+          "name": "addSearch",
+          "kind": "method",
+          "since": "0.9.21"
+        },
+        {
+          "name": "addSlider",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "addText",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "addTextArea",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "addToggle",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "clear",
+          "kind": "method",
+          "since": "0.13.8"
+        },
+        {
+          "name": "components",
+          "kind": "property",
+          "since": "0.9.7"
+        },
+        {
+          "name": "constructor",
+          "kind": "constructor"
+        },
+        {
+          "name": "controlEl",
+          "kind": "property",
+          "since": "0.9.7"
+        },
+        {
+          "name": "descEl",
+          "kind": "property",
+          "since": "0.9.7"
+        },
+        {
+          "name": "errorEl",
+          "kind": "property",
+          "since": "1.13.0"
+        },
+        {
+          "name": "infoEl",
+          "kind": "property",
+          "since": "0.9.7"
+        },
+        {
+          "name": "nameEl",
+          "kind": "property",
+          "since": "0.9.7"
+        },
+        {
+          "name": "setClass",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "setDesc",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "setDisabled",
+          "kind": "method",
+          "since": "1.2.3"
+        },
+        {
+          "name": "setErrorMessage",
+          "kind": "method",
+          "since": "1.13.0"
+        },
+        {
+          "name": "setHeading",
+          "kind": "method",
+          "since": "0.9.16"
+        },
+        {
+          "name": "setName",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "settingEl",
+          "kind": "property",
+          "since": "0.9.7"
+        },
+        {
+          "name": "setTooltip",
+          "kind": "method",
+          "since": "1.1.0"
+        },
+        {
+          "name": "then",
+          "kind": "method",
+          "since": "0.9.20"
+        }
+      ],
+      "since": "0.9.7"
+    },
+    {
+      "name": "SettingColorControl",
+      "kind": "interface",
+      "extends": [
+        "SettingControlBase"
+      ],
+      "members": [
+        {
+          "name": "type",
+          "kind": "property",
+          "since": "1.13.0"
+        }
+      ],
+      "since": "1.13.0"
+    },
+    {
+      "name": "SettingControl",
+      "kind": "type",
+      "since": "1.13.0"
+    },
+    {
+      "name": "SettingControlBase",
+      "kind": "interface",
+      "members": [
+        {
+          "name": "defaultValue",
+          "kind": "property",
+          "optional": true,
+          "since": "1.13.0"
+        },
+        {
+          "name": "disabled",
+          "kind": "property",
+          "optional": true,
+          "since": "1.13.0"
+        },
+        {
+          "name": "key",
+          "kind": "property",
+          "since": "1.13.0"
+        },
+        {
+          "name": "validate",
+          "kind": "property",
+          "optional": true,
+          "since": "1.13.0"
+        }
+      ],
+      "since": "1.13.0"
+    },
+    {
+      "name": "SettingDefinition",
+      "kind": "type",
+      "since": "1.13.0"
+    },
+    {
+      "name": "SettingDefinitionAction",
+      "kind": "interface",
+      "extends": [
+        "SettingDefinitionBase"
+      ],
+      "members": [
+        {
+          "name": "action",
+          "kind": "property",
+          "since": "1.13.0"
+        },
+        {
+          "name": "control",
+          "kind": "property",
+          "optional": true,
+          "since": "1.13.0"
+        },
+        {
+          "name": "disabled",
+          "kind": "property",
+          "optional": true,
+          "since": "1.13.0"
+        },
+        {
+          "name": "render",
+          "kind": "property",
+          "optional": true,
+          "since": "1.13.0"
+        }
+      ],
+      "since": "1.13.0"
+    },
+    {
+      "name": "SettingDefinitionAddItem",
+      "kind": "interface",
+      "members": [
+        {
+          "name": "action",
+          "kind": "property",
+          "since": "1.13.0"
+        },
+        {
+          "name": "name",
+          "kind": "property",
+          "since": "1.13.0"
+        }
+      ],
+      "since": "1.13.0"
+    },
+    {
+      "name": "SettingDefinitionBase",
+      "kind": "interface",
+      "members": [
+        {
+          "name": "aliases",
+          "kind": "property",
+          "optional": true,
+          "since": "1.13.0"
+        },
+        {
+          "name": "desc",
+          "kind": "property",
+          "optional": true,
+          "since": "1.13.0"
+        },
+        {
+          "name": "name",
+          "kind": "property",
+          "since": "1.13.0"
+        },
+        {
+          "name": "searchable",
+          "kind": "property",
+          "optional": true,
+          "since": "1.13.0"
+        },
+        {
+          "name": "visible",
+          "kind": "property",
+          "optional": true,
+          "since": "1.13.0"
+        }
+      ],
+      "since": "1.13.0"
+    },
+    {
+      "name": "SettingDefinitionControl",
+      "kind": "interface",
+      "extends": [
+        "SettingDefinitionBase"
+      ],
+      "members": [
+        {
+          "name": "action",
+          "kind": "property",
+          "optional": true,
+          "since": "1.13.0"
+        },
+        {
+          "name": "control",
+          "kind": "property",
+          "since": "1.13.0"
+        },
+        {
+          "name": "render",
+          "kind": "property",
+          "optional": true,
+          "since": "1.13.0"
+        }
+      ],
+      "since": "1.13.0"
+    },
+    {
+      "name": "SettingDefinitionEmpty",
+      "kind": "interface",
+      "extends": [
+        "SettingDefinitionBase"
+      ],
+      "members": [
+        {
+          "name": "action",
+          "kind": "property",
+          "optional": true,
+          "since": "1.13.0"
+        },
+        {
+          "name": "control",
+          "kind": "property",
+          "optional": true,
+          "since": "1.13.0"
+        },
+        {
+          "name": "render",
+          "kind": "property",
+          "optional": true,
+          "since": "1.13.0"
+        }
+      ],
+      "since": "1.13.0"
+    },
+    {
+      "name": "SettingDefinitionGroup",
+      "kind": "interface",
+      "members": [
+        {
+          "name": "cls",
+          "kind": "property",
+          "optional": true,
+          "since": "1.13.0"
+        },
+        {
+          "name": "extraButtons",
+          "kind": "property",
+          "optional": true,
+          "since": "1.13.0"
+        },
+        {
+          "name": "heading",
+          "kind": "property",
+          "optional": true,
+          "since": "1.13.0"
+        },
+        {
+          "name": "items",
+          "kind": "property",
+          "optional": true,
+          "since": "1.13.0"
+        },
+        {
+          "name": "search",
+          "kind": "property",
+          "optional": true,
+          "since": "1.13.1"
+        },
+        {
+          "name": "type",
+          "kind": "property",
+          "since": "1.13.0"
+        },
+        {
+          "name": "visible",
+          "kind": "property",
+          "optional": true,
+          "since": "1.13.0"
+        }
+      ],
+      "since": "1.13.0"
+    },
+    {
+      "name": "SettingDefinitionItem",
+      "kind": "type",
+      "since": "1.13.0"
+    },
+    {
+      "name": "SettingDefinitionList",
+      "kind": "interface",
+      "extends": [
+        "SettingDefinitionGroup"
+      ],
+      "members": [
+        {
+          "name": "addItem",
+          "kind": "property",
+          "optional": true,
+          "since": "1.13.0"
+        },
+        {
+          "name": "emptyState",
+          "kind": "property",
+          "optional": true,
+          "since": "1.13.0"
+        },
+        {
+          "name": "onDelete",
+          "kind": "property",
+          "optional": true,
+          "since": "1.13.0"
+        },
+        {
+          "name": "onReorder",
+          "kind": "property",
+          "optional": true,
+          "since": "1.13.0"
+        },
+        {
+          "name": "type",
+          "kind": "property",
+          "since": "1.13.0"
+        }
+      ],
+      "since": "1.13.0"
+    },
+    {
+      "name": "SettingDefinitionPage",
+      "kind": "interface",
+      "members": [
+        {
+          "name": "desc",
+          "kind": "property",
+          "optional": true,
+          "since": "1.13.0"
+        },
+        {
+          "name": "displayValue",
+          "kind": "property",
+          "optional": true,
+          "since": "1.13.1"
+        },
+        {
+          "name": "items",
+          "kind": "property",
+          "optional": true,
+          "since": "1.13.0"
+        },
+        {
+          "name": "name",
+          "kind": "property",
+          "since": "1.13.0"
+        },
+        {
+          "name": "page",
+          "kind": "property",
+          "optional": true,
+          "since": "1.13.0"
+        },
+        {
+          "name": "status",
+          "kind": "property",
+          "optional": true,
+          "since": "1.13.1"
+        },
+        {
+          "name": "type",
+          "kind": "property",
+          "since": "1.13.0"
+        },
+        {
+          "name": "visible",
+          "kind": "property",
+          "optional": true,
+          "since": "1.13.0"
+        }
+      ],
+      "since": "1.13.0"
+    },
+    {
+      "name": "SettingDefinitionRender",
+      "kind": "interface",
+      "extends": [
+        "SettingDefinitionBase"
+      ],
+      "members": [
+        {
+          "name": "action",
+          "kind": "property",
+          "optional": true,
+          "since": "1.13.0"
+        },
+        {
+          "name": "control",
+          "kind": "property",
+          "optional": true,
+          "since": "1.13.0"
+        },
+        {
+          "name": "render",
+          "kind": "property",
+          "since": "1.13.0"
+        }
+      ],
+      "since": "1.13.0"
+    },
+    {
+      "name": "SettingDropdownControl",
+      "kind": "interface",
+      "extends": [
+        "SettingControlBase"
+      ],
+      "members": [
+        {
+          "name": "options",
+          "kind": "property",
+          "since": "1.13.0"
+        },
+        {
+          "name": "type",
+          "kind": "property",
+          "since": "1.13.0"
+        }
+      ],
+      "since": "1.13.0"
+    },
+    {
+      "name": "SettingFileControl",
+      "kind": "interface",
+      "extends": [
+        "SettingControlBase"
+      ],
+      "members": [
+        {
+          "name": "filter",
+          "kind": "property",
+          "optional": true,
+          "since": "1.13.0"
+        },
+        {
+          "name": "placeholder",
+          "kind": "property",
+          "optional": true,
+          "since": "1.13.0"
+        },
+        {
+          "name": "type",
+          "kind": "property",
+          "since": "1.13.0"
+        }
+      ],
+      "since": "1.13.0"
+    },
+    {
+      "name": "SettingFolderControl",
+      "kind": "interface",
+      "extends": [
+        "SettingControlBase"
+      ],
+      "members": [
+        {
+          "name": "filter",
+          "kind": "property",
+          "optional": true,
+          "since": "1.13.0"
+        },
+        {
+          "name": "includeRoot",
+          "kind": "property",
+          "optional": true,
+          "since": "1.13.0"
+        },
+        {
+          "name": "placeholder",
+          "kind": "property",
+          "optional": true,
+          "since": "1.13.0"
+        },
+        {
+          "name": "type",
+          "kind": "property",
+          "since": "1.13.0"
+        }
+      ],
+      "since": "1.13.0"
+    },
+    {
+      "name": "SettingGroup",
+      "kind": "class",
+      "members": [
+        {
+          "name": "addClass",
+          "kind": "method",
+          "since": "1.11.0"
+        },
+        {
+          "name": "addExtraButton",
+          "kind": "method",
+          "since": "1.11.0"
+        },
+        {
+          "name": "addSearch",
+          "kind": "method",
+          "since": "1.11.0"
+        },
+        {
+          "name": "addSetting",
+          "kind": "method",
+          "since": "1.11.0"
+        },
+        {
+          "name": "constructor",
+          "kind": "constructor",
+          "since": "1.11.0"
+        },
+        {
+          "name": "listEl",
+          "kind": "property",
+          "since": "1.11.0"
+        },
+        {
+          "name": "setHeading",
+          "kind": "method",
+          "since": "1.11.0"
+        }
+      ],
+      "since": "1.11.0"
+    },
+    {
+      "name": "SettingGroupItem",
+      "kind": "type",
+      "since": "1.13.0"
+    },
+    {
+      "name": "SettingNumberControl",
+      "kind": "interface",
+      "extends": [
+        "SettingControlBase"
+      ],
+      "members": [
+        {
+          "name": "max",
+          "kind": "property",
+          "optional": true,
+          "since": "1.13.0"
+        },
+        {
+          "name": "min",
+          "kind": "property",
+          "optional": true,
+          "since": "1.13.0"
+        },
+        {
+          "name": "placeholder",
+          "kind": "property",
+          "optional": true,
+          "since": "1.13.0"
+        },
+        {
+          "name": "step",
+          "kind": "property",
+          "optional": true,
+          "since": "1.13.0"
+        },
+        {
+          "name": "type",
+          "kind": "property",
+          "since": "1.13.0"
+        }
+      ],
+      "since": "1.13.0"
+    },
+    {
+      "name": "SettingPage",
+      "kind": "abstract-class",
+      "members": [
+        {
+          "name": "constructor",
+          "kind": "constructor",
+          "since": "1.13.0"
+        },
+        {
+          "name": "containerEl",
+          "kind": "property",
+          "since": "1.13.0"
+        },
+        {
+          "name": "display",
+          "kind": "method",
+          "abstract": true,
+          "since": "1.13.0"
+        },
+        {
+          "name": "hide",
+          "kind": "method",
+          "since": "1.13.0"
+        },
+        {
+          "name": "rootEl",
+          "kind": "property",
+          "since": "1.13.0"
+        },
+        {
+          "name": "title",
+          "kind": "property",
+          "since": "1.13.0"
+        },
+        {
+          "name": "titlebarEl",
+          "kind": "property",
+          "since": "1.13.0"
+        }
+      ],
+      "since": "1.13.0"
+    },
+    {
+      "name": "SettingSecretControl",
+      "kind": "interface",
+      "extends": [
+        "SettingControlBase"
+      ],
+      "members": [
+        {
+          "name": "type",
+          "kind": "property",
+          "since": "1.13.2"
+        }
+      ],
+      "since": "1.13.2"
+    },
+    {
+      "name": "SettingSliderControl",
+      "kind": "interface",
+      "extends": [
+        "SettingControlBase"
+      ],
+      "members": [
+        {
+          "name": "displayFormat",
+          "kind": "property",
+          "optional": true,
+          "since": "1.13.1"
+        },
+        {
+          "name": "max",
+          "kind": "property",
+          "since": "1.13.0"
+        },
+        {
+          "name": "min",
+          "kind": "property",
+          "since": "1.13.0"
+        },
+        {
+          "name": "step",
+          "kind": "property",
+          "since": "1.13.0"
+        },
+        {
+          "name": "type",
+          "kind": "property",
+          "since": "1.13.0"
+        }
+      ],
+      "since": "1.13.0"
+    },
+    {
+      "name": "SettingTab",
+      "kind": "abstract-class",
+      "members": [
+        {
+          "name": "app",
+          "kind": "property"
+        },
+        {
+          "name": "containerEl",
+          "kind": "property"
+        },
+        {
+          "name": "display",
+          "kind": "method",
+          "deprecated": true
+        },
+        {
+          "name": "getControlValue",
+          "kind": "method",
+          "since": "1.13.0"
+        },
+        {
+          "name": "getSettingDefinitions",
+          "kind": "method",
+          "since": "1.13.0"
+        },
+        {
+          "name": "hide",
+          "kind": "method"
+        },
+        {
+          "name": "icon",
+          "kind": "property",
+          "since": "1.11.0"
+        },
+        {
+          "name": "refreshDomState",
+          "kind": "method",
+          "since": "1.13.0"
+        },
+        {
+          "name": "setControlValue",
+          "kind": "method",
+          "since": "1.13.0"
+        },
+        {
+          "name": "settingItems",
+          "kind": "property",
+          "since": "1.13.0"
+        },
+        {
+          "name": "update",
+          "kind": "method",
+          "since": "1.13.0"
+        }
+      ],
+      "since": "0.9.7"
+    },
+    {
+      "name": "SettingTextAreaControl",
+      "kind": "interface",
+      "extends": [
+        "SettingControlBase"
+      ],
+      "members": [
+        {
+          "name": "placeholder",
+          "kind": "property",
+          "optional": true,
+          "since": "1.13.0"
+        },
+        {
+          "name": "rows",
+          "kind": "property",
+          "optional": true,
+          "since": "1.13.0"
+        },
+        {
+          "name": "type",
+          "kind": "property",
+          "since": "1.13.0"
+        }
+      ],
+      "since": "1.13.0"
+    },
+    {
+      "name": "SettingTextControl",
+      "kind": "interface",
+      "extends": [
+        "SettingControlBase"
+      ],
+      "members": [
+        {
+          "name": "placeholder",
+          "kind": "property",
+          "optional": true,
+          "since": "1.13.0"
+        },
+        {
+          "name": "type",
+          "kind": "property",
+          "since": "1.13.0"
+        }
+      ],
+      "since": "1.13.0"
+    },
+    {
+      "name": "SettingToggleControl",
+      "kind": "interface",
+      "extends": [
+        "SettingControlBase"
+      ],
+      "members": [
+        {
+          "name": "type",
+          "kind": "property",
+          "since": "1.13.0"
+        }
+      ],
+      "since": "1.13.0"
+    },
+    {
+      "name": "setTooltip",
+      "kind": "function",
+      "since": "1.4.4"
+    },
+    {
+      "name": "Side",
+      "kind": "type"
+    },
+    {
+      "name": "SliderComponent",
+      "kind": "class",
+      "extends": [
+        "ValueComponent"
+      ],
+      "members": [
+        {
+          "name": "constructor",
+          "kind": "constructor"
+        },
+        {
+          "name": "getValue",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "getValuePretty",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "onChange",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "setDisabled",
+          "kind": "method",
+          "since": "1.2.3"
+        },
+        {
+          "name": "setDisplayFormat",
+          "kind": "method",
+          "since": "1.13.0"
+        },
+        {
+          "name": "setDynamicTooltip",
+          "kind": "method",
+          "deprecated": true,
+          "since": "0.9.7"
+        },
+        {
+          "name": "setInstant",
+          "kind": "method",
+          "since": "1.6.6"
+        },
+        {
+          "name": "setLimits",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "setValue",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "sliderEl",
+          "kind": "property"
+        }
+      ],
+      "since": "0.9.7"
+    },
+    {
+      "name": "sortSearchResults",
+      "kind": "function"
+    },
+    {
+      "name": "SplitDirection",
+      "kind": "type"
+    },
+    {
+      "name": "Stat",
+      "kind": "interface",
+      "members": [
+        {
+          "name": "ctime",
+          "kind": "property"
+        },
+        {
+          "name": "mtime",
+          "kind": "property"
+        },
+        {
+          "name": "size",
+          "kind": "property"
+        },
+        {
+          "name": "type",
+          "kind": "property"
+        }
+      ]
+    },
+    {
+      "name": "stringifyYaml",
+      "kind": "function"
+    },
+    {
+      "name": "StringValue",
+      "kind": "class",
+      "extends": [
+        "PrimitiveValue"
+      ],
+      "members": [
+        {
+          "name": "type",
+          "kind": "property",
+          "static": true,
+          "since": "1.10.0"
+        }
+      ],
+      "since": "1.10.0"
+    },
+    {
+      "name": "stripHeading",
+      "kind": "function"
+    },
+    {
+      "name": "stripHeadingForLink",
+      "kind": "function"
+    },
+    {
+      "name": "SubpathResult",
+      "kind": "interface",
+      "members": [
+        {
+          "name": "end",
+          "kind": "property"
+        },
+        {
+          "name": "start",
+          "kind": "property"
+        }
+      ]
+    },
+    {
+      "name": "SuggestModal",
+      "kind": "abstract-class",
+      "extends": [
+        "Modal"
+      ],
+      "implements": [
+        "ISuggestOwner"
+      ],
+      "members": [
+        {
+          "name": "constructor",
+          "kind": "constructor"
+        },
+        {
+          "name": "emptyStateText",
+          "kind": "property",
+          "since": "0.9.20"
+        },
+        {
+          "name": "getSuggestions",
+          "kind": "method",
+          "abstract": true,
+          "since": "1.5.7"
+        },
+        {
+          "name": "inputEl",
+          "kind": "property"
+        },
+        {
+          "name": "limit",
+          "kind": "property"
+        },
+        {
+          "name": "onChooseSuggestion",
+          "kind": "method",
+          "abstract": true,
+          "since": "1.5.7"
+        },
+        {
+          "name": "onNoSuggestion",
+          "kind": "method",
+          "since": "0.9.20"
+        },
+        {
+          "name": "renderSuggestion",
+          "kind": "method",
+          "abstract": true,
+          "since": "1.5.7"
+        },
+        {
+          "name": "resultContainerEl",
+          "kind": "property",
+          "since": "0.9.20"
+        },
+        {
+          "name": "selectActiveSuggestion",
+          "kind": "method",
+          "since": "1.7.2"
+        },
+        {
+          "name": "selectSuggestion",
+          "kind": "method",
+          "since": "0.9.20"
+        },
+        {
+          "name": "setInstructions",
+          "kind": "method",
+          "since": "0.9.20"
+        },
+        {
+          "name": "setPlaceholder",
+          "kind": "method",
+          "since": "0.9.20"
+        }
+      ]
+    },
+    {
+      "name": "TAbstractFile",
+      "kind": "abstract-class",
+      "members": [
+        {
+          "name": "name",
+          "kind": "property",
+          "since": "0.9.7"
+        },
+        {
+          "name": "parent",
+          "kind": "property",
+          "since": "0.9.7"
+        },
+        {
+          "name": "path",
+          "kind": "property",
+          "since": "0.9.7"
+        },
+        {
+          "name": "vault",
+          "kind": "property",
+          "since": "0.9.7"
+        }
+      ],
+      "since": "0.9.7"
+    },
+    {
+      "name": "TagCache",
+      "kind": "interface",
+      "extends": [
+        "CacheItem"
+      ],
+      "members": [
+        {
+          "name": "tag",
+          "kind": "property"
+        }
+      ],
+      "since": "0.9.7"
+    },
+    {
+      "name": "TagValue",
+      "kind": "class",
+      "extends": [
+        "StringValue"
+      ],
+      "members": [
+        {
+          "name": "constructor",
+          "kind": "constructor",
+          "since": "1.10.0"
+        }
+      ],
+      "since": "1.10.0"
+    },
+    {
+      "name": "Tasks",
+      "kind": "class",
+      "members": [
+        {
+          "name": "add",
+          "kind": "method",
+          "since": "0.10.2"
+        },
+        {
+          "name": "addPromise",
+          "kind": "method",
+          "since": "0.10.2"
+        },
+        {
+          "name": "isEmpty",
+          "kind": "method",
+          "since": "0.10.2"
+        },
+        {
+          "name": "promise",
+          "kind": "method",
+          "since": "0.10.2"
+        }
+      ],
+      "since": "0.10.2"
+    },
+    {
+      "name": "TextAreaComponent",
+      "kind": "class",
+      "extends": [
+        "AbstractTextComponent"
+      ],
+      "members": [
+        {
+          "name": "constructor",
+          "kind": "constructor"
+        }
+      ],
+      "since": "0.9.7"
+    },
+    {
+      "name": "TextComponent",
+      "kind": "class",
+      "extends": [
+        "AbstractTextComponent"
+      ],
+      "members": [
+        {
+          "name": "constructor",
+          "kind": "constructor"
+        }
+      ],
+      "since": "0.9.21"
+    },
+    {
+      "name": "TextFileView",
+      "kind": "abstract-class",
+      "extends": [
+        "EditableFileView"
+      ],
+      "members": [
+        {
+          "name": "clear",
+          "kind": "method",
+          "abstract": true,
+          "since": "0.10.12"
+        },
+        {
+          "name": "constructor",
+          "kind": "constructor"
+        },
+        {
+          "name": "data",
+          "kind": "property",
+          "since": "0.10.12"
+        },
+        {
+          "name": "getViewData",
+          "kind": "method",
+          "abstract": true,
+          "since": "0.10.12"
+        },
+        {
+          "name": "onLoadFile",
+          "kind": "method",
+          "since": "0.10.12"
+        },
+        {
+          "name": "onUnloadFile",
+          "kind": "method",
+          "since": "0.10.12"
+        },
+        {
+          "name": "requestSave",
+          "kind": "property",
+          "since": "0.10.12"
+        },
+        {
+          "name": "save",
+          "kind": "method",
+          "since": "0.10.12"
+        },
+        {
+          "name": "setViewData",
+          "kind": "method",
+          "abstract": true,
+          "since": "0.10.12"
+        }
+      ],
+      "since": "0.10.12"
+    },
+    {
+      "name": "TFile",
+      "kind": "class",
+      "extends": [
+        "TAbstractFile"
+      ],
+      "members": [
+        {
+          "name": "basename",
+          "kind": "property",
+          "since": "0.9.7"
+        },
+        {
+          "name": "extension",
+          "kind": "property",
+          "since": "0.9.7"
+        },
+        {
+          "name": "stat",
+          "kind": "property",
+          "since": "0.9.7"
+        }
+      ],
+      "since": "0.9.7"
+    },
+    {
+      "name": "TFolder",
+      "kind": "class",
+      "extends": [
+        "TAbstractFile"
+      ],
+      "members": [
+        {
+          "name": "children",
+          "kind": "property",
+          "since": "0.9.7"
+        },
+        {
+          "name": "isRoot",
+          "kind": "method",
+          "since": "0.9.7"
+        }
+      ],
+      "since": "0.9.7"
+    },
+    {
+      "name": "ToggleComponent",
+      "kind": "class",
+      "extends": [
+        "ValueComponent"
+      ],
+      "members": [
+        {
+          "name": "constructor",
+          "kind": "constructor",
+          "since": "0.9.7"
+        },
+        {
+          "name": "getValue",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "onChange",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "onClick",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "setDisabled",
+          "kind": "method",
+          "since": "1.2.3"
+        },
+        {
+          "name": "setTooltip",
+          "kind": "method",
+          "since": "1.1.1"
+        },
+        {
+          "name": "setValue",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "toggleEl",
+          "kind": "property",
+          "since": "0.9.7"
+        }
+      ],
+      "since": "0.9.7"
+    },
+    {
+      "name": "TooltipOptions",
+      "kind": "interface",
+      "members": [
+        {
+          "name": "classes",
+          "kind": "property",
+          "optional": true,
+          "since": "1.8.7"
+        },
+        {
+          "name": "delay",
+          "kind": "property",
+          "optional": true,
+          "since": "1.4.11"
+        },
+        {
+          "name": "gap",
+          "kind": "property",
+          "optional": true,
+          "since": "1.8.7"
+        },
+        {
+          "name": "placement",
+          "kind": "property",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "name": "TooltipPlacement",
+      "kind": "type"
+    },
+    {
+      "name": "UrlValue",
+      "kind": "class",
+      "extends": [
+        "StringValue"
+      ],
+      "members": [],
+      "since": "1.10.0"
+    },
+    {
+      "name": "UserEvent",
+      "kind": "type"
+    },
+    {
+      "name": "Value",
+      "kind": "abstract-class",
+      "members": [
+        {
+          "name": "equals",
+          "kind": "method",
+          "since": "1.10.0"
+        },
+        {
+          "name": "isTruthy",
+          "kind": "method",
+          "abstract": true,
+          "since": "1.10.0"
+        },
+        {
+          "name": "looseEquals",
+          "kind": "method",
+          "since": "1.10.0"
+        },
+        {
+          "name": "renderTo",
+          "kind": "method",
+          "since": "1.10.0"
+        },
+        {
+          "name": "toString",
+          "kind": "method",
+          "abstract": true,
+          "since": "1.10.0"
+        },
+        {
+          "name": "equals",
+          "kind": "method",
+          "static": true,
+          "since": "1.10.0"
+        },
+        {
+          "name": "looseEquals",
+          "kind": "method",
+          "static": true,
+          "since": "1.10.0"
+        },
+        {
+          "name": "type",
+          "kind": "property",
+          "static": true,
+          "since": "1.10.0"
+        }
+      ],
+      "since": "1.10.0"
+    },
+    {
+      "name": "ValueComponent",
+      "kind": "abstract-class",
+      "extends": [
+        "BaseComponent"
+      ],
+      "members": [
+        {
+          "name": "getValue",
+          "kind": "method",
+          "abstract": true,
+          "since": "0.9.7"
+        },
+        {
+          "name": "registerOptionListener",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "setValue",
+          "kind": "method",
+          "abstract": true,
+          "since": "0.9.7"
+        }
+      ],
+      "since": "0.9.7"
+    },
+    {
+      "name": "Vault",
+      "kind": "class",
+      "extends": [
+        "Events"
+      ],
+      "members": [
+        {
+          "name": "adapter",
+          "kind": "property",
+          "since": "0.9.7"
+        },
+        {
+          "name": "append",
+          "kind": "method",
+          "since": "0.13.0"
+        },
+        {
+          "name": "appendBinary",
+          "kind": "method",
+          "since": "1.12.3"
+        },
+        {
+          "name": "cachedRead",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "configDir",
+          "kind": "property",
+          "since": "0.11.1"
+        },
+        {
+          "name": "copy",
+          "kind": "method",
+          "since": "1.8.7"
+        },
+        {
+          "name": "create",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "createBinary",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "createFolder",
+          "kind": "method",
+          "since": "1.4.0"
+        },
+        {
+          "name": "delete",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "getAbstractFileByPath",
+          "kind": "method",
+          "since": "0.11.11"
+        },
+        {
+          "name": "getAllFolders",
+          "kind": "method",
+          "since": "1.6.6"
+        },
+        {
+          "name": "getAllLoadedFiles",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "getFileByPath",
+          "kind": "method",
+          "since": "1.5.7"
+        },
+        {
+          "name": "getFiles",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "getFolderByPath",
+          "kind": "method",
+          "since": "1.5.7"
+        },
+        {
+          "name": "getMarkdownFiles",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "getName",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "getResourcePath",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "getRoot",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "modify",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "modifyBinary",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "on",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "process",
+          "kind": "method",
+          "since": "1.1.0"
+        },
+        {
+          "name": "read",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "readBinary",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "rename",
+          "kind": "method",
+          "since": "0.9.11"
+        },
+        {
+          "name": "trash",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "recurseChildren",
+          "kind": "method",
+          "static": true,
+          "since": "0.9.7"
+        }
+      ],
+      "since": "0.9.7"
+    },
+    {
+      "name": "View",
+      "kind": "abstract-class",
+      "extends": [
+        "Component"
+      ],
+      "members": [
+        {
+          "name": "app",
+          "kind": "property",
+          "since": "0.9.7"
+        },
+        {
+          "name": "constructor",
+          "kind": "constructor",
+          "since": "0.9.7"
+        },
+        {
+          "name": "containerEl",
+          "kind": "property",
+          "since": "0.9.7"
+        },
+        {
+          "name": "getDisplayText",
+          "kind": "method",
+          "abstract": true,
+          "since": "0.9.7"
+        },
+        {
+          "name": "getEphemeralState",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "getIcon",
+          "kind": "method",
+          "since": "1.1.0"
+        },
+        {
+          "name": "getState",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "getViewType",
+          "kind": "method",
+          "abstract": true,
+          "since": "0.9.7"
+        },
+        {
+          "name": "icon",
+          "kind": "property",
+          "since": "1.1.0"
+        },
+        {
+          "name": "leaf",
+          "kind": "property",
+          "since": "0.9.7"
+        },
+        {
+          "name": "navigation",
+          "kind": "property",
+          "since": "0.15.1"
+        },
+        {
+          "name": "onClose",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "onOpen",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "onPaneMenu",
+          "kind": "method",
+          "since": "0.15.3"
+        },
+        {
+          "name": "onResize",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "scope",
+          "kind": "property",
+          "since": "1.5.7"
+        },
+        {
+          "name": "setEphemeralState",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "setState",
+          "kind": "method",
+          "since": "0.9.7"
+        }
+      ],
+      "since": "0.9.7"
+    },
+    {
+      "name": "ViewCreator",
+      "kind": "type"
+    },
+    {
+      "name": "ViewState",
+      "kind": "interface",
+      "members": [
+        {
+          "name": "active",
+          "kind": "property",
+          "optional": true
+        },
+        {
+          "name": "group",
+          "kind": "property",
+          "optional": true
+        },
+        {
+          "name": "pinned",
+          "kind": "property",
+          "optional": true
+        },
+        {
+          "name": "state",
+          "kind": "property",
+          "optional": true
+        },
+        {
+          "name": "type",
+          "kind": "property"
+        }
+      ]
+    },
+    {
+      "name": "ViewStateResult",
+      "kind": "interface",
+      "members": [
+        {
+          "name": "history",
+          "kind": "property"
+        }
+      ]
+    },
+    {
+      "name": "Workspace",
+      "kind": "class",
+      "extends": [
+        "Events"
+      ],
+      "members": [
+        {
+          "name": "activeEditor",
+          "kind": "property"
+        },
+        {
+          "name": "activeLeaf",
+          "kind": "property",
+          "deprecated": true,
+          "since": "0.9.7"
+        },
+        {
+          "name": "changeLayout",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "containerEl",
+          "kind": "property",
+          "since": "0.9.7"
+        },
+        {
+          "name": "createLeafBySplit",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "createLeafInParent",
+          "kind": "method",
+          "since": "0.9.11"
+        },
+        {
+          "name": "detachLeavesOfType",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "duplicateLeaf",
+          "kind": "method",
+          "since": "0.13.8",
+          "deprecated": true
+        },
+        {
+          "name": "ensureSideLeaf",
+          "kind": "method",
+          "since": "1.7.2"
+        },
+        {
+          "name": "getActiveFile",
+          "kind": "method"
+        },
+        {
+          "name": "getActiveViewOfType",
+          "kind": "method",
+          "since": "0.9.16"
+        },
+        {
+          "name": "getGroupLeaves",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "getLastOpenFiles",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "getLayout",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "getLeaf",
+          "kind": "method",
+          "since": "0.16.0"
+        },
+        {
+          "name": "getLeafById",
+          "kind": "method",
+          "since": "1.5.1"
+        },
+        {
+          "name": "getLeavesOfType",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "getLeftLeaf",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "getMostRecentLeaf",
+          "kind": "method",
+          "since": "0.15.4"
+        },
+        {
+          "name": "getRightLeaf",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "getUnpinnedLeaf",
+          "kind": "method",
+          "deprecated": true
+        },
+        {
+          "name": "handleLinkContextMenu",
+          "kind": "method",
+          "since": "0.12.10"
+        },
+        {
+          "name": "iterateAllLeaves",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "iterateRootLeaves",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "layoutReady",
+          "kind": "property",
+          "since": "0.9.7"
+        },
+        {
+          "name": "leftRibbon",
+          "kind": "property",
+          "since": "0.9.7"
+        },
+        {
+          "name": "leftSplit",
+          "kind": "property",
+          "since": "0.9.7"
+        },
+        {
+          "name": "moveLeafToPopout",
+          "kind": "method",
+          "since": "0.15.4"
+        },
+        {
+          "name": "on",
+          "kind": "method",
+          "since": "0.9.7"
+        },
+        {
+          "name": "onLayoutReady",
+          "kind": "method",
+          "since": "0.11.0"
+        },
+        {
+          "name": "openLinkText",
+          "kind": "method",
+          "since": "0.16.0"
+        },
+        {
+          "name": "openPopoutLeaf",
+          "kind": "method",
+          "since": "0.15.4"
+        },
+        {
+          "name": "requestSaveLayout",
+          "kind": "property",
+          "since": "0.16.0"
+        },
+        {
+          "name": "revealLeaf",
+          "kind": "method",
+          "since": "1.7.2"
+        },
+        {
+          "name": "rightRibbon",
+          "kind": "property",
+          "deprecated": true
+        },
+        {
+          "name": "rightSplit",
+          "kind": "property",
+          "since": "0.9.7"
+        },
+        {
+          "name": "rootSplit",
+          "kind": "property",
+          "since": "0.9.7"
+        },
+        {
+          "name": "setActiveLeaf",
+          "kind": "method",
+          "deprecated": true,
+          "since": "0.16.3"
+        },
+        {
+          "name": "splitActiveLeaf",
+          "kind": "method",
+          "deprecated": true,
+          "since": "0.9.7"
+        },
+        {
+          "name": "updateOptions",
+          "kind": "method",
+          "since": "0.13.21"
+        }
+      ],
+      "since": "0.9.7"
+    },
+    {
+      "name": "WorkspaceContainer",
+      "kind": "abstract-class",
+      "extends": [
+        "WorkspaceSplit"
+      ],
+      "members": [
+        {
+          "name": "doc",
+          "kind": "property",
+          "abstract": true,
+          "since": "0.15.4"
+        },
+        {
+          "name": "win",
+          "kind": "property",
+          "abstract": true,
+          "since": "0.15.4"
+        }
+      ],
+      "since": "0.15.4"
+    },
+    {
+      "name": "WorkspaceFloating",
+      "kind": "class",
+      "extends": [
+        "WorkspaceParent"
+      ],
+      "members": [
+        {
+          "name": "parent",
+          "kind": "property",
+          "since": "0.15.2"
+        }
+      ],
+      "since": "0.15.2"
+    },
+    {
+      "name": "WorkspaceItem",
+      "kind": "abstract-class",
+      "extends": [
+        "Events"
+      ],
+      "members": [
+        {
+          "name": "getContainer",
+          "kind": "method",
+          "since": "0.15.4"
+        },
+        {
+          "name": "getRoot",
+          "kind": "method",
+          "since": "0.10.2"
+        },
+        {
+          "name": "parent",
+          "kind": "property",
+          "abstract": true,
+          "since": "1.6.6"
+        }
+      ],
+      "since": "0.10.2"
+    },
+    {
+      "name": "WorkspaceLeaf",
+      "kind": "class",
+      "extends": [
+        "WorkspaceItem"
+      ],
+      "implements": [
+        "HoverParent"
+      ],
+      "members": [
+        {
+          "name": "detach",
+          "kind": "method"
+        },
+        {
+          "name": "getDisplayText",
+          "kind": "method"
+        },
+        {
+          "name": "getEphemeralState",
+          "kind": "method"
+        },
+        {
+          "name": "getIcon",
+          "kind": "method"
+        },
+        {
+          "name": "getViewState",
+          "kind": "method"
+        },
+        {
+          "name": "hoverPopover",
+          "kind": "property"
+        },
+        {
+          "name": "isDeferred",
+          "kind": "accessor",
+          "since": "1.7.2"
+        },
+        {
+          "name": "loadIfDeferred",
+          "kind": "method",
+          "since": "1.7.2"
+        },
+        {
+          "name": "on",
+          "kind": "method"
+        },
+        {
+          "name": "onResize",
+          "kind": "method"
+        },
+        {
+          "name": "open",
+          "kind": "method"
+        },
+        {
+          "name": "openFile",
+          "kind": "method"
+        },
+        {
+          "name": "parent",
+          "kind": "property"
+        },
+        {
+          "name": "setEphemeralState",
+          "kind": "method"
+        },
+        {
+          "name": "setGroup",
+          "kind": "method"
+        },
+        {
+          "name": "setGroupMember",
+          "kind": "method"
+        },
+        {
+          "name": "setPinned",
+          "kind": "method"
+        },
+        {
+          "name": "setViewState",
+          "kind": "method"
+        },
+        {
+          "name": "togglePinned",
+          "kind": "method"
+        },
+        {
+          "name": "view",
+          "kind": "property"
+        }
+      ]
+    },
+    {
+      "name": "WorkspaceMobileDrawer",
+      "kind": "class",
+      "extends": [
+        "WorkspaceParent"
+      ],
+      "members": [
+        {
+          "name": "collapse",
+          "kind": "method"
+        },
+        {
+          "name": "collapsed",
+          "kind": "property"
+        },
+        {
+          "name": "expand",
+          "kind": "method"
+        },
+        {
+          "name": "parent",
+          "kind": "property"
+        },
+        {
+          "name": "toggle",
+          "kind": "method"
+        }
+      ],
+      "since": "1.6.6"
+    },
+    {
+      "name": "WorkspaceParent",
+      "kind": "abstract-class",
+      "extends": [
+        "WorkspaceItem"
+      ],
+      "members": [],
+      "since": "0.9.7"
+    },
+    {
+      "name": "WorkspaceRibbon",
+      "kind": "class",
+      "members": []
+    },
+    {
+      "name": "WorkspaceRoot",
+      "kind": "class",
+      "extends": [
+        "WorkspaceContainer"
+      ],
+      "members": [
+        {
+          "name": "doc",
+          "kind": "property"
+        },
+        {
+          "name": "win",
+          "kind": "property"
+        }
+      ],
+      "since": "0.15.2"
+    },
+    {
+      "name": "WorkspaceSidedock",
+      "kind": "class",
+      "extends": [
+        "WorkspaceSplit"
+      ],
+      "members": [
+        {
+          "name": "collapse",
+          "kind": "method",
+          "since": "0.12.11"
+        },
+        {
+          "name": "collapsed",
+          "kind": "property",
+          "since": "0.12.11"
+        },
+        {
+          "name": "expand",
+          "kind": "method",
+          "since": "0.12.11"
+        },
+        {
+          "name": "toggle",
+          "kind": "method",
+          "since": "0.12.11"
+        }
+      ],
+      "since": "0.15.4"
+    },
+    {
+      "name": "WorkspaceSplit",
+      "kind": "class",
+      "extends": [
+        "WorkspaceParent"
+      ],
+      "members": [
+        {
+          "name": "parent",
+          "kind": "property"
+        }
+      ],
+      "since": "0.9.7"
+    },
+    {
+      "name": "WorkspaceTabs",
+      "kind": "class",
+      "extends": [
+        "WorkspaceParent"
+      ],
+      "members": [
+        {
+          "name": "parent",
+          "kind": "property"
+        }
+      ]
+    },
+    {
+      "name": "WorkspaceWindow",
+      "kind": "class",
+      "extends": [
+        "WorkspaceContainer"
+      ],
+      "members": [
+        {
+          "name": "doc",
+          "kind": "property"
+        },
+        {
+          "name": "win",
+          "kind": "property"
+        }
+      ],
+      "since": "0.15.4"
+    },
+    {
+      "name": "WorkspaceWindowInitData",
+      "kind": "interface",
+      "members": [
+        {
+          "name": "size",
+          "kind": "property",
+          "optional": true
+        },
+        {
+          "name": "x",
+          "kind": "property",
+          "optional": true
+        },
+        {
+          "name": "y",
+          "kind": "property",
+          "optional": true
+        }
+      ]
+    }
+  ],
+  "globals": [
+    {
+      "target": "AjaxOptions",
+      "members": [
+        {
+          "name": "data",
+          "kind": "property",
+          "optional": true
+        },
+        {
+          "name": "error",
+          "kind": "property",
+          "optional": true
+        },
+        {
+          "name": "headers",
+          "kind": "property",
+          "optional": true
+        },
+        {
+          "name": "method",
+          "kind": "property",
+          "optional": true
+        },
+        {
+          "name": "req",
+          "kind": "property",
+          "optional": true
+        },
+        {
+          "name": "success",
+          "kind": "property",
+          "optional": true
+        },
+        {
+          "name": "url",
+          "kind": "property"
+        },
+        {
+          "name": "withCredentials",
+          "kind": "property",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "target": "Array",
+      "members": [
+        {
+          "name": "contains",
+          "kind": "method"
+        },
+        {
+          "name": "findLastIndex",
+          "kind": "method",
+          "since": "1.4.4"
+        },
+        {
+          "name": "first",
+          "kind": "method"
+        },
+        {
+          "name": "last",
+          "kind": "method"
+        },
+        {
+          "name": "remove",
+          "kind": "method"
+        },
+        {
+          "name": "shuffle",
+          "kind": "method"
+        },
+        {
+          "name": "unique",
+          "kind": "method"
+        }
+      ]
+    },
+    {
+      "target": "ArrayConstructor",
+      "members": [
+        {
+          "name": "combine",
+          "kind": "method"
+        }
+      ]
+    },
+    {
+      "target": "Document",
+      "members": [
+        {
+          "name": "_EVENTS",
+          "kind": "property",
+          "optional": true
+        },
+        {
+          "name": "off",
+          "kind": "method"
+        },
+        {
+          "name": "on",
+          "kind": "method"
+        }
+      ]
+    },
+    {
+      "target": "DocumentFragment",
+      "members": [
+        {
+          "name": "find",
+          "kind": "method"
+        },
+        {
+          "name": "findAll",
+          "kind": "method"
+        }
+      ]
+    },
+    {
+      "target": "DomElementInfo",
+      "members": [
+        {
+          "name": "attr",
+          "kind": "property",
+          "optional": true
+        },
+        {
+          "name": "cls",
+          "kind": "property",
+          "optional": true
+        },
+        {
+          "name": "href",
+          "kind": "property",
+          "optional": true
+        },
+        {
+          "name": "parent",
+          "kind": "property",
+          "optional": true
+        },
+        {
+          "name": "placeholder",
+          "kind": "property",
+          "optional": true
+        },
+        {
+          "name": "prepend",
+          "kind": "property",
+          "optional": true
+        },
+        {
+          "name": "text",
+          "kind": "property",
+          "optional": true
+        },
+        {
+          "name": "title",
+          "kind": "property",
+          "optional": true
+        },
+        {
+          "name": "type",
+          "kind": "property",
+          "optional": true
+        },
+        {
+          "name": "value",
+          "kind": "property",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "target": "Element",
+      "members": [
+        {
+          "name": "addClass",
+          "kind": "method"
+        },
+        {
+          "name": "addClasses",
+          "kind": "method"
+        },
+        {
+          "name": "getAttr",
+          "kind": "method"
+        },
+        {
+          "name": "getCssPropertyValue",
+          "kind": "method"
+        },
+        {
+          "name": "getText",
+          "kind": "method"
+        },
+        {
+          "name": "hasClass",
+          "kind": "method"
+        },
+        {
+          "name": "isActiveElement",
+          "kind": "method"
+        },
+        {
+          "name": "matchParent",
+          "kind": "method"
+        },
+        {
+          "name": "removeClass",
+          "kind": "method"
+        },
+        {
+          "name": "removeClasses",
+          "kind": "method"
+        },
+        {
+          "name": "setAttr",
+          "kind": "method"
+        },
+        {
+          "name": "setAttrs",
+          "kind": "method"
+        },
+        {
+          "name": "setText",
+          "kind": "method"
+        },
+        {
+          "name": "toggleClass",
+          "kind": "method"
+        }
+      ]
+    },
+    {
+      "target": "Element",
+      "members": [
+        {
+          "name": "find",
+          "kind": "method"
+        },
+        {
+          "name": "findAll",
+          "kind": "method"
+        },
+        {
+          "name": "findAllSelf",
+          "kind": "method"
+        }
+      ]
+    },
+    {
+      "target": "EventListenerInfo",
+      "members": [
+        {
+          "name": "callback",
+          "kind": "property"
+        },
+        {
+          "name": "listener",
+          "kind": "property"
+        },
+        {
+          "name": "options",
+          "kind": "property",
+          "optional": true
+        },
+        {
+          "name": "selector",
+          "kind": "property"
+        }
+      ]
+    },
+    {
+      "target": "HTMLElement",
+      "members": [
+        {
+          "name": "hide",
+          "kind": "method"
+        },
+        {
+          "name": "innerHeight",
+          "kind": "property"
+        },
+        {
+          "name": "innerWidth",
+          "kind": "property"
+        },
+        {
+          "name": "isShown",
+          "kind": "method"
+        },
+        {
+          "name": "setCssProps",
+          "kind": "method"
+        },
+        {
+          "name": "setCssStyles",
+          "kind": "method"
+        },
+        {
+          "name": "show",
+          "kind": "method"
+        },
+        {
+          "name": "toggle",
+          "kind": "method"
+        },
+        {
+          "name": "toggleVisibility",
+          "kind": "method"
+        }
+      ]
+    },
+    {
+      "target": "HTMLElement",
+      "members": [
+        {
+          "name": "find",
+          "kind": "method"
+        },
+        {
+          "name": "findAll",
+          "kind": "method"
+        },
+        {
+          "name": "findAllSelf",
+          "kind": "method"
+        }
+      ]
+    },
+    {
+      "target": "HTMLElement",
+      "members": [
+        {
+          "name": "_EVENTS",
+          "kind": "property",
+          "optional": true
+        },
+        {
+          "name": "off",
+          "kind": "method"
+        },
+        {
+          "name": "on",
+          "kind": "method"
+        },
+        {
+          "name": "onClickEvent",
+          "kind": "method"
+        },
+        {
+          "name": "onNodeInserted",
+          "kind": "method"
+        },
+        {
+          "name": "onWindowMigrated",
+          "kind": "method"
+        },
+        {
+          "name": "trigger",
+          "kind": "method"
+        }
+      ]
+    },
+    {
+      "target": "Math",
+      "members": [
+        {
+          "name": "clamp",
+          "kind": "method"
+        },
+        {
+          "name": "square",
+          "kind": "method"
+        }
+      ]
+    },
+    {
+      "target": "Node",
+      "members": [
+        {
+          "name": "appendText",
+          "kind": "method"
+        },
+        {
+          "name": "constructorWin",
+          "kind": "property"
+        },
+        {
+          "name": "detach",
+          "kind": "method"
+        },
+        {
+          "name": "doc",
+          "kind": "property"
+        },
+        {
+          "name": "empty",
+          "kind": "method"
+        },
+        {
+          "name": "indexOf",
+          "kind": "method"
+        },
+        {
+          "name": "insertAfter",
+          "kind": "method"
+        },
+        {
+          "name": "instanceOf",
+          "kind": "method"
+        },
+        {
+          "name": "setChildrenInPlace",
+          "kind": "method"
+        },
+        {
+          "name": "win",
+          "kind": "property"
+        }
+      ]
+    },
+    {
+      "target": "Node",
+      "members": [
+        {
+          "name": "createDiv",
+          "kind": "method"
+        },
+        {
+          "name": "createEl",
+          "kind": "method"
+        },
+        {
+          "name": "createSpan",
+          "kind": "method"
+        },
+        {
+          "name": "createSvg",
+          "kind": "method"
+        }
+      ]
+    },
+    {
+      "target": "NumberConstructor",
+      "members": [
+        {
+          "name": "isNumber",
+          "kind": "method"
+        }
+      ]
+    },
+    {
+      "target": "ObjectConstructor",
+      "members": [
+        {
+          "name": "each",
+          "kind": "method"
+        },
+        {
+          "name": "isEmpty",
+          "kind": "method"
+        }
+      ]
+    },
+    {
+      "target": "String",
+      "members": [
+        {
+          "name": "contains",
+          "kind": "method"
+        },
+        {
+          "name": "endsWith",
+          "kind": "method"
+        },
+        {
+          "name": "format",
+          "kind": "method"
+        },
+        {
+          "name": "startsWith",
+          "kind": "method"
+        }
+      ]
+    },
+    {
+      "target": "StringConstructor",
+      "members": [
+        {
+          "name": "isString",
+          "kind": "method"
+        }
+      ]
+    },
+    {
+      "target": "SVGElement",
+      "members": [
+        {
+          "name": "setCssProps",
+          "kind": "method"
+        },
+        {
+          "name": "setCssStyles",
+          "kind": "method"
+        }
+      ]
+    },
+    {
+      "target": "SvgElementInfo",
+      "members": [
+        {
+          "name": "attr",
+          "kind": "property",
+          "optional": true
+        },
+        {
+          "name": "cls",
+          "kind": "property",
+          "optional": true
+        },
+        {
+          "name": "parent",
+          "kind": "property",
+          "optional": true
+        },
+        {
+          "name": "prepend",
+          "kind": "property",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "target": "Touch",
+      "members": [
+        {
+          "name": "touchType",
+          "kind": "property"
+        }
+      ]
+    },
+    {
+      "target": "UIEvent",
+      "members": [
+        {
+          "name": "doc",
+          "kind": "property"
+        },
+        {
+          "name": "instanceOf",
+          "kind": "method"
+        },
+        {
+          "name": "targetNode",
+          "kind": "property"
+        },
+        {
+          "name": "win",
+          "kind": "property"
+        }
+      ]
+    },
+    {
+      "target": "Window",
+      "members": [
+        {
+          "name": "activeDocument",
+          "kind": "property"
+        },
+        {
+          "name": "activeWindow",
+          "kind": "property"
+        },
+        {
+          "name": "nextFrame",
+          "kind": "method"
+        },
+        {
+          "name": "sleep",
+          "kind": "method"
+        }
+      ]
+    }
+  ]
+}

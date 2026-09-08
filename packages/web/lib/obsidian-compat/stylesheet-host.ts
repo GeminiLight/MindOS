@@ -9,6 +9,10 @@ export interface PluginStylesheetSnapshot {
   css: string;
   scopedCss: string;
   scopeSelector: string;
+  /** Obsidian CSS variables defined in terms of MindOS tokens, scoped to the same container. */
+  themeBridgeCss: string;
+  /** Obsidian variables the plugin reads that the bridge does not define yet. */
+  unmappedThemeVariables: string[];
 }
 
 export function pluginStyleScopeSelector(pluginId: string): string {
