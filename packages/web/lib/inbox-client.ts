@@ -118,12 +118,30 @@ function normalizeInboxSourceInfo(value: unknown): InboxFileSourceInfo | undefin
 }
 
 export async function fetchInboxFiles(fallbackError: string): Promise<InboxFileInfo[]> {
-  const res = await fetch('/api/inbox');
-  const body = await readJsonBody(res);
-  if (!res.ok) {
-    throw new InboxClientError(errorMessageFromBody(body, fallbackError), res.status);
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let body: Record<string, unknown>;
+  try {
+    // Bound headers AND body reads. A stalled queue must not hold the UI forever.
+    body = await Promise.race([
+      (async () => {
+        const res = await fetch('/api/inbox', { signal: controller.signal });
+        const data = await readJsonBody(res);
+        if (!res.ok) throw new InboxClientError(errorMessageFromBody(data, fallbackError), res.status);
+        if (!Array.isArray(data.files)) throw new InboxClientError(fallbackError);
+        return data;
+      })(),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => {
+          controller.abort();
+          reject(new InboxClientError(fallbackError));
+        }, 15000);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
   }
-  const files = Array.isArray(body.files) ? body.files : [];
+  const files = body.files as unknown[];
   return files.flatMap((item): InboxFileInfo[] => {
     if (
       item === null ||
@@ -168,11 +186,12 @@ export async function saveInboxFiles(
 export async function archiveInboxFiles(
   names: string[],
   fallbackError: string,
+  expectedRootId?: string,
 ): Promise<InboxArchiveResult> {
   const res = await fetch('/api/inbox', {
     method: 'DELETE',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ names }),
+    body: JSON.stringify({ names, ...(expectedRootId ? { expectedRootId } : {}) }),
   });
   const body = await readJsonBody(res);
   if (!res.ok) {

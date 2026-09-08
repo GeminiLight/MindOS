@@ -267,7 +267,7 @@ export function InboxSection({ isOrganizing: externalOrganizing = false }: Inbox
           <AlertCircle size={13} className="mt-0.5 shrink-0" />
           <div className="min-w-0 flex-1">
             <p className="font-medium">{t.inbox.loadFailed}</p>
-            <p className="mt-0.5 truncate text-error/80">{inboxError}</p>
+            <p className="mt-0.5 truncate text-error">{inboxError}</p>
           </div>
           <button
             type="button"

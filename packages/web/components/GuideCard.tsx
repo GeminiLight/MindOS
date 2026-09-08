@@ -9,23 +9,11 @@ import { useLocale } from '@/lib/stores/locale-store';
 import { openAskModal } from '@/hooks/useAskModal';
 import { walkthroughSteps } from './walkthrough/steps';
 import { subscribeFilesChanged } from '@/lib/files-changed';
-import type { GuideState } from '@/lib/settings';
 import { useSmoothRouterPush } from '@/hooks/useSmoothRouterPush';
+import { useGuideState } from './useGuideState';
 
 interface GuideCardProps {
   hasExistingFiles?: boolean;
-}
-
-type SetupGuideResponse = {
-  activeProvider?: string;
-  providerConfigs?: Array<{ id?: string }>;
-  guideState?: GuideState;
-};
-
-function isAiConfigured(data: SetupGuideResponse): boolean {
-  const activeProvider = data.activeProvider;
-  if (!activeProvider || activeProvider === 'skip') return false;
-  return (data.providerConfigs ?? []).some(provider => provider.id === activeProvider);
 }
 
 export default function GuideCard({ hasExistingFiles = false }: GuideCardProps) {
@@ -33,53 +21,12 @@ export default function GuideCard({ hasExistingFiles = false }: GuideCardProps) 
   const smoothPush = useSmoothRouterPush();
   const g = t.guide;
 
-  const [guideState, setGuideState] = useState<GuideState | null>(null);
-  const [aiConfigured, setAiConfigured] = useState(false);
+  const { guideState, aiConfigured, error, saving, patchGuide, retry } = useGuideState();
   const [expanded, setExpanded] = useState<'import' | 'ai' | 'agent' | null>(null);
   const hasAutoExpanded = useRef(false);
 
-  const fetchGuideState = useCallback(() => {
-    fetch('/api/setup')
-      .then(r => r.json())
-      .then((data: SetupGuideResponse) => {
-        const gs = data.guideState;
-        setAiConfigured(isAiConfigured(data));
-        if (gs?.active && !gs.dismissed) {
-          setGuideState(gs);
-        } else {
-          setGuideState(null);
-        }
-      })
-      .catch((err) => {
-        console.warn('[GuideCard] Fetch guide state failed:', err);
-      });
-  }, []);
-
-  useEffect(() => {
-    fetchGuideState();
-    const handleGuideUpdate = () => fetchGuideState();
-    window.addEventListener('focus', handleGuideUpdate);
-    window.addEventListener('guide-state-updated', handleGuideUpdate);
-    return () => {
-      window.removeEventListener('focus', handleGuideUpdate);
-      window.removeEventListener('guide-state-updated', handleGuideUpdate);
-    };
-  }, [fetchGuideState]);
-
-  const patchGuide = useCallback((patch: Partial<GuideState>) => {
-    setGuideState(prev => prev ? { ...prev, ...patch } : prev);
-    fetch('/api/setup', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ guideState: patch }),
-    }).catch((err) => {
-      console.warn('[GuideCard] PATCH guide state failed:', err);
-    });
-  }, []);
-
   const handleDismiss = useCallback(() => {
     patchGuide({ dismissed: true });
-    setGuideState(null);
   }, [patchGuide]);
 
   // ── Step 1: Import ──
@@ -184,7 +131,13 @@ export default function GuideCard({ hasExistingFiles = false }: GuideCardProps) 
   }, [allNextDone, handleDismiss]);
 
   // ── Render guards ──
-  if (!guideState) return null;
+  if (error) return (
+    <div role="alert" className="flex flex-wrap items-center gap-3 rounded-lg border border-border px-4 py-3 text-sm">
+      <span className="flex-1 text-error">{error === 'save' ? g.saveFailed : g.loadFailed}</span>
+      <button type="button" disabled={saving} onClick={() => { void retry(); }} className="min-h-11 px-3 rounded-md text-foreground hover:bg-muted disabled:opacity-50">{g.retry}</button>
+    </div>
+  );
+  if (!guideState || guideState.dismissed) return null;
 
   const walkthroughActive = guideState.walkthroughStep !== undefined
     && guideState.walkthroughStep >= 0
@@ -208,7 +161,7 @@ export default function GuideCard({ hasExistingFiles = false }: GuideCardProps) 
         >
           {t.walkthrough.exploreCta}
         </Link>
-        <button onClick={handleDismiss} className="p-1 rounded hover:bg-muted transition-colors text-muted-foreground">
+        <button onClick={handleDismiss} aria-label={g.dismiss} className="min-h-11 min-w-11 flex items-center justify-center rounded hover:bg-muted transition-colors text-muted-foreground">
           <X size={12} />
         </button>
       </div>
@@ -225,7 +178,7 @@ export default function GuideCard({ hasExistingFiles = false }: GuideCardProps) 
           <span className="text-xs font-medium flex-1 text-foreground">
             {g.done.title}
           </span>
-          <button onClick={handleDismiss} className="p-1 rounded hover:bg-muted transition-colors text-muted-foreground">
+          <button onClick={handleDismiss} aria-label={g.dismiss} className="min-h-11 min-w-11 flex items-center justify-center rounded hover:bg-muted transition-colors text-muted-foreground">
             <X size={12} />
           </button>
         </div>
@@ -290,7 +243,7 @@ export default function GuideCard({ hasExistingFiles = false }: GuideCardProps) 
                   <Check size={11} className="shrink-0" />
                 ) : (
                   <span className={`flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-bold shrink-0 ${
-                    isActive ? 'bg-[var(--amber)] text-[var(--amber-foreground)] animate-pulse' : s.dimmed ? 'bg-muted/50 text-muted-foreground/30' : 'bg-muted text-muted-foreground'
+                    isActive ? 'bg-[var(--amber-action)] text-[var(--amber-foreground)] animate-pulse' : s.dimmed ? 'bg-muted/50 text-muted-foreground/30' : 'bg-muted text-muted-foreground'
                   }`}>
                     {i + 1}
                   </span>
@@ -301,13 +254,13 @@ export default function GuideCard({ hasExistingFiles = false }: GuideCardProps) 
           })}
         </div>
 
-        <button onClick={handleDismiss} className="p-1 rounded hover:bg-muted transition-colors text-muted-foreground shrink-0">
+        <button onClick={handleDismiss} aria-label={g.dismiss} className="min-h-11 min-w-11 flex items-center justify-center rounded hover:bg-muted transition-colors text-muted-foreground shrink-0">
           <X size={12} />
         </button>
       </div>
 
       {/* ── Step 1 panel (Grid transition) ── */}
-      <div className={`grid transition-[grid-template-rows] duration-200 ease-out ${
+      <div inert={expanded !== 'import' || step1Done} aria-hidden={expanded !== 'import' || step1Done} className={`grid transition-[grid-template-rows] duration-200 ease-out ${
         expanded === 'import' && !step1Done ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
       }`}>
         <div className="overflow-hidden">
@@ -316,7 +269,7 @@ export default function GuideCard({ hasExistingFiles = false }: GuideCardProps) 
               <p className="text-xs text-muted-foreground flex-1">{g.import.desc}</p>
               <button
                 onClick={handleImportClick}
-                className="shrink-0 text-xs font-medium px-3 py-1.5 rounded-md bg-[var(--amber)] text-[var(--amber-foreground)] transition-all hover:opacity-90"
+                className="shrink-0 text-xs font-medium px-3 py-1.5 rounded-md bg-[var(--amber-action)] text-[var(--amber-foreground)] transition-all hover:opacity-90"
               >
                 {g.import.button}
               </button>
@@ -332,7 +285,7 @@ export default function GuideCard({ hasExistingFiles = false }: GuideCardProps) 
       </div>
 
       {/* ── Step 2 panel (Grid transition) ── */}
-      <div className={`grid transition-[grid-template-rows] duration-200 ease-out ${
+      <div inert={expanded !== 'ai' || !step1Done || step2Done} aria-hidden={expanded !== 'ai' || !step1Done || step2Done} className={`grid transition-[grid-template-rows] duration-200 ease-out ${
         expanded === 'ai' && step1Done && !step2Done ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
       }`}>
         <div className="overflow-hidden">
@@ -341,7 +294,7 @@ export default function GuideCard({ hasExistingFiles = false }: GuideCardProps) 
               <p className="text-xs text-muted-foreground flex-1">{aiConfigured ? g.ai.desc : g.ai.configureDesc}</p>
               <button
                 onClick={handleStartAI}
-                className="shrink-0 text-xs font-medium px-3 py-1.5 rounded-md bg-[var(--amber)] text-[var(--amber-foreground)] transition-all hover:opacity-90"
+                className="shrink-0 text-xs font-medium px-3 py-1.5 rounded-md bg-[var(--amber-action)] text-[var(--amber-foreground)] transition-all hover:opacity-90"
               >
                 {aiConfigured ? g.ai.cta : g.ai.configureCta}
               </button>
@@ -351,7 +304,7 @@ export default function GuideCard({ hasExistingFiles = false }: GuideCardProps) 
       </div>
 
       {/* ── Step 3 panel (Grid transition) ── */}
-      <div className={`grid transition-[grid-template-rows] duration-200 ease-out ${
+      <div inert={expanded !== 'agent' || !showStep3} aria-hidden={expanded !== 'agent' || !showStep3} className={`grid transition-[grid-template-rows] duration-200 ease-out ${
         expanded === 'agent' && showStep3 ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
       }`}>
         <div className="overflow-hidden">

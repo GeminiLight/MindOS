@@ -2,6 +2,11 @@
 
 export const navigationEn = {
   sidebar: {
+    openMenu: 'Open menu',
+    closeMenu: 'Close menu',
+    mobileMenuTitle: 'MindOS menu',
+    countUnavailable: 'Count could not be updated',
+    countRetry: 'Retry count',
     files: 'Mind',
     home: 'Home',
     homeAgentSessions: 'Agent Sessions',

@@ -7,6 +7,7 @@ import StudioOverviewContent from '@/components/studio/StudioOverviewContent';
 import StudioAppsContent from '@/components/studio/StudioAppsContent';
 import StudioAutomationContent from '@/components/studio/StudioAutomationContent';
 import StudioPanel from '@/components/panels/StudioPanel';
+import { STUDIO_PROJECTS } from '@/lib/studio-projects';
 
 const push = vi.fn();
 let mockPathname = '/studio';
@@ -298,6 +299,7 @@ async function setInputValue(selector: string, value: string) {
 describe('StudioContent', () => {
   beforeEach(() => {
     localStorage.clear();
+    localStorage.setItem('mindos:studio-projects', JSON.stringify(STUDIO_PROJECTS));
     push.mockClear();
     mockPathname = '/studio';
     automationFetchMock = setupAutomationFetch();
@@ -313,6 +315,18 @@ describe('StudioContent', () => {
     }
     host?.remove();
     vi.unstubAllGlobals();
+  });
+
+  it('offers a clear starting point without pretending an empty workspace has activity', async () => {
+    localStorage.clear();
+    await renderStudioOverview();
+    const empty = host.querySelector('[data-studio-overview-continue]')!;
+    expect(empty.textContent).toContain('No projects yet.');
+    expect(empty.textContent).not.toContain('Continue');
+    expect(empty.querySelector('a[href="/studio/projects"]')?.textContent).toContain('Set up your first project');
+    expect(host.querySelectorAll('a[href="/studio/projects"]')).toHaveLength(1);
+    expect(host.textContent).not.toContain('Launch Practice');
+    expect(host.textContent).not.toContain('0 Projects');
   });
 
   it('renders Studio overview as the parent surface for Projects, Apps, and Automation', async () => {

@@ -14,6 +14,7 @@ import { resolveExistingSafe, resolveSafe } from '../../foundation/security/inde
 import { json, type MindosServerResponse } from '../response.js';
 import { extractInboxSourceMetadata, type InboxSourceMetadata } from './inbox-source.js';
 import { emitStudioAutomationEvent, recordStudioAutomationEventSourceFailure } from '../automations/events.js';
+import { mindRootIdentity } from '../root-identity.js';
 
 export const INBOX_DIR = 'Inbox';
 const PROCESSED_DIR = '.processed';
@@ -117,7 +118,11 @@ export function handleInboxPost(
     return json({ error: 'Request body must contain a files array' }, { status: 400 });
   }
 
-  const { files, source } = body as { files: InboxSaveInput[]; source?: string };
+  const { files, source, expectedRootId } = body as { files: InboxSaveInput[]; source?: string; expectedRootId?: unknown };
+  // The selected root is captured once by the host; never write an old draft to a new vault.
+  if ('expectedRootId' in body && expectedRootId !== mindRootIdentity(services.mindRoot)) {
+    return json({ error: 'The knowledge library changed. Your capture has not been saved; reopen the original library to continue.' }, { status: 409 });
+  }
   try {
     return json(saveToInbox(services.mindRoot, files, source));
   } catch (error) {
@@ -133,7 +138,10 @@ export function handleInboxDelete(
     return json({ error: 'MIND_ROOT is not configured' }, { status: 400 });
   }
 
-  const { names } = (body ?? {}) as { names?: unknown };
+  const { names, expectedRootId } = (body ?? {}) as { names?: unknown; expectedRootId?: unknown };
+  if (body && typeof body === 'object' && 'expectedRootId' in body && expectedRootId !== mindRootIdentity(services.mindRoot)) {
+    return json({ error: 'The knowledge library changed. Nothing was archived.' }, { status: 409 });
+  }
   if (!Array.isArray(names) || names.length === 0) {
     return json({ error: 'Request body must contain a non-empty names array' }, { status: 400 });
   }

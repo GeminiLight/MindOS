@@ -2,6 +2,11 @@
 
 export const navigationZh = {
   sidebar: {
+    openMenu: '打开菜单',
+    closeMenu: '关闭菜单',
+    mobileMenuTitle: 'MindOS 菜单',
+    countUnavailable: '数量未能更新',
+    countRetry: '重新获取数量',
     files: '心智',
     home: '首页',
     homeAgentSessions: 'Agent 对话',

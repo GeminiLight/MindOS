@@ -1,4 +1,5 @@
 'use client';
+import { useLocale } from '@/lib/stores/locale-store';
 
 import { useState, useCallback, useMemo, useRef } from 'react';
 import {
@@ -328,6 +329,8 @@ export function ObsidianImportSection({
 }: {
   initialExpanded?: boolean;
 }) {
+  const { locale } = useLocale();
+  const isZh = locale === 'zh';
   const [expanded, setExpanded] = useState(initialExpanded);
   const [vaultPath, setVaultPath] = useState('');
   const [configDir, setConfigDir] = useState('.obsidian');
@@ -456,9 +459,9 @@ export function ObsidianImportSection({
       >
         <FolderOpen size={16} className="shrink-0 text-muted-foreground" />
         <div className="min-w-0 flex-1">
-          <span className="text-sm font-medium text-foreground">Import from Obsidian</span>
+          <span className="text-sm font-medium text-foreground">{isZh ? '从 Obsidian 导入' : 'Import from Obsidian'}</span>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Scan a local vault, review compatibility, then copy selected plugin packages into MindOS.
+            {isZh ? '扫描本地库，检查兼容性，再将选中的插件复制到 MindOS。' : 'Scan a local vault, review compatibility, then copy selected plugin packages into MindOS.'}
           </p>
         </div>
         {expanded ? <ChevronUp size={14} className="text-muted-foreground" /> : <ChevronDown size={14} className="text-muted-foreground" />}
@@ -496,10 +499,10 @@ export function ObsidianImportSection({
             <button
               onClick={() => void handleScan()}
               disabled={!vaultPath.trim() || scanState === 'scanning'}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--amber)] bg-[var(--amber)] px-3 py-2 text-sm font-medium text-[var(--amber-foreground)] transition-colors hover:bg-[var(--amber)]/90 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-[var(--amber-action)] bg-[var(--amber-action)] px-3 py-2 text-sm font-medium text-[var(--amber-foreground)] transition-colors hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               {scanState === 'scanning' ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
-              <span>Scan</span>
+              <span>{isZh ? '扫描' : 'Scan'}</span>
             </button>
           </div>
 
@@ -802,10 +805,10 @@ export function ObsidianImportSection({
                 <button
                   onClick={() => void handleImport()}
                   disabled={selectedImportableCount === 0 || importState === 'importing'}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--amber)] bg-[var(--amber)] px-4 py-2 text-sm font-medium text-[var(--amber-foreground)] transition-colors hover:bg-[var(--amber)]/90 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-[var(--amber-action)] bg-[var(--amber-action)] px-4 py-2 text-sm font-medium text-[var(--amber-foreground)] transition-colors hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   {importState === 'importing' ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
-                  <span>{importState === 'importing' ? 'Importing...' : `Import ${selectedImportableCount} plugin${selectedImportableCount !== 1 ? 's' : ''}`}</span>
+                  <span>{isZh ? (importState === 'importing' ? '正在导入…' : `导入 ${selectedImportableCount} 个插件`) : (importState === 'importing' ? 'Importing...' : `Import ${selectedImportableCount} plugin${selectedImportableCount !== 1 ? 's' : ''}`)}</span>
                 </button>
               )}
 

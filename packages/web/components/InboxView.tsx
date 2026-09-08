@@ -21,11 +21,12 @@ import {
   Eye,
   RotateCcw,
   ExternalLink,
+  ChevronDown,
 } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import { useLocale } from '@/lib/stores/locale-store';
 import { encodePath } from '@/lib/utils';
-import { quickDropToInbox, clipUrlToInbox, looksLikeUrl, extractUrlFromDrop, dragContainsUrl } from '@/lib/inbox-upload';
+import { quickDropToInbox, clipUrlToInbox, looksLikeUrl, extractUrlFromDrop, dragContainsUrl, MAX_FILE_SIZE } from '@/lib/inbox-upload';
 import { loadHistory, type OrganizeHistoryEntry } from '@/lib/organize-history';
 import { CAPTURE_ACCEPT } from '@/lib/capture-formats';
 import ProviderModelCapsule, { getPersistedProviderModel, type ProviderSelection } from '@/components/ask/ProviderModelCapsule';
@@ -68,24 +69,21 @@ import {
 } from '@/components/inbox/InboxViewRouting';
 import {
   buildUnderstanding,
-  getIntentOptions,
   inferInboxFileIntent,
   inferSuggestedIntent,
 } from '@/components/inbox/InboxViewModel';
 import { InboxErrorBanner, InboxItemDetailsPanel, InboxProcessNav, HistoryRow } from '@/components/inbox/InboxViewDetails';
 import { InboxFileRow } from '@/components/inbox/InboxFileRow';
 import { ContentPageShell, LoadingPageShell } from '@/components/shared/ContentPageShell';
+import { useCaptureDraft } from '@/components/inbox/useCaptureDraft';
+import { useCaptureScope } from '@/components/inbox/useCaptureScope';
+import { CaptureDraftStatus } from '@/components/inbox/CaptureDraftStatus';
+import { Button } from '@/components/ui/button';
+import type { CaptureDraft, StagedTextNote } from '@/lib/capture-draft-storage';
 
 const HISTORY_VISIBLE = 5;
 const REVIEW_PREVIEW_VISIBLE = 5;
 const INBOX_PROVIDER_MODEL_STORAGE_KEY = 'mindos-inbox-provider-model';
-
-type StagedTextNote = {
-  id: string;
-  content: string;
-  wordCount: number;
-  createdAt: string;
-};
 
 function shouldCapturePastedUrl({
   currentValue,
@@ -127,18 +125,26 @@ function takeCount(map: Map<string, number>, key: string): boolean {
 }
 
 export default function InboxView() {
+  const identity = useCaptureScope();
+  // A vault change resets the queue, selection, undo and in-flight UI together.
+  // Old requests retain only the old instance and its original draft controller.
+  return <ScopedInboxView key={identity.scope ?? 'checking'} identity={identity} />;
+}
+
+function ScopedInboxView({ identity }: { identity: ReturnType<typeof useCaptureScope> }) {
   const { t } = useLocale();
   const smoothPush = useSmoothRouterPush();
   const [files, setFiles] = useState<InboxFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [dragOver, setDragOver] = useState(false);
   const [history, setHistory] = useState<OrganizeHistoryEntry[]>([]);
-  const [draftText, setDraftText] = useState('');
-  const [stagedNotes, setStagedNotes] = useState<StagedTextNote[]>([]);
-  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
-  const [pendingUrls, setPendingUrls] = useState<string[]>([]);
+  const captureDraft = useCaptureDraft(identity);
+  const { draftText, stagedNotes, pendingFiles, pendingUrls } = captureDraft.value;
+  const { setDraftText, setStagedNotes, setPendingFiles, setPendingUrls } = captureDraft;
+  const [clearedDraft, setClearedDraft] = useState<{ value: CaptureDraft; owner: typeof captureDraft.getSnapshot } | null>(null);
+  useEffect(() => { setClearedDraft(null); }, [captureDraft.getSnapshot]);
   const [savingText, setSavingText] = useState(false);
-  const [savingToMind, setSavingToMind] = useState(false);
+  const captureSaveInFlight = useRef(false);
   const [inboxError, setInboxError] = useState<string | null>(null);
   const [selectedPath, setSelectedPath] = useState<string | null>(() => getInitialSelectedInboxPath());
   const [selectedQueuePaths, setSelectedQueuePaths] = useState<string[]>([]);
@@ -253,7 +259,7 @@ export default function InboxView() {
   const handleDeleteFile = useCallback(async (name: string) => {
     const removedPathSet = new Set(files.filter(file => file.name === name).map(file => file.path));
     try {
-      const result = await archiveInboxFiles([name], t.inbox.fileRemoveFailed);
+      const result = await archiveInboxFiles([name], t.inbox.fileRemoveFailed, captureDraft.scope ?? undefined);
       if (!result.archived.some(item => item.original === name)) {
         throw new Error(t.inbox.fileRemoveFailed);
       }
@@ -265,28 +271,31 @@ export default function InboxView() {
     } catch {
       toast.error(t.inbox.fileRemoveFailed);
     }
-  }, [files, t]);
+  }, [files, t, captureDraft.scope]);
 
   const addPendingFiles = useCallback((selected: FileList | File[] | null) => {
     if (!selected || selected.length === 0) return;
+    const candidates = Array.from(selected);
+    const oversized = candidates.filter(file => file.size > MAX_FILE_SIZE).length;
+    if (oversized) toast.error(t.inbox.tooLarge(oversized), 4000);
     setPendingFiles(prev => {
       const existing = new Set(prev.map(file => `${file.name}:${file.size}:${file.lastModified}`));
       const next = [...prev];
-      for (const file of Array.from(selected)) {
+      for (const file of candidates.filter(file => file.size <= MAX_FILE_SIZE)) {
         const key = `${file.name}:${file.size}:${file.lastModified}`;
-        if (!existing.has(key)) next.push(file);
+        if (!existing.has(key)) { next.push(file); existing.add(key); }
       }
       return next;
     });
     if (fileInputRef.current) fileInputRef.current.value = '';
-  }, []);
+  }, [setPendingFiles, t.inbox]);
 
   const addPendingUrl = useCallback((url: string) => {
     const trimmed = url.trim();
     if (!looksLikeUrl(trimmed)) return false;
     setPendingUrls(prev => prev.includes(trimmed) ? prev : [...prev, trimmed]);
     return true;
-  }, []);
+  }, [setPendingUrls]);
 
   const openPendingUrlInBrowser = useCallback(async (url: string) => {
     try {
@@ -299,12 +308,48 @@ export default function InboxView() {
 
   const stageCurrentNote = useCallback(() => {
     const content = draftText.trim();
-    if (!content || savingText || savingToMind) return false;
+    if (!content || savingText) return false;
     setStagedNotes(prev => [...prev, createStagedTextNote(content)]);
     setDraftText('');
     window.requestAnimationFrame(() => composerInputRef.current?.focus());
     return true;
-  }, [draftText, savingText, savingToMind]);
+  }, [draftText, savingText, setDraftText, setStagedNotes]);
+
+  const editStagedNote = useCallback((note: StagedTextNote) => {
+    if (savingText) return;
+    // Preserve the current composition when bringing an earlier note back to edit.
+    const current = draftText.trim();
+    setStagedNotes(prev => [
+      ...prev.filter(item => item.id !== note.id),
+      ...(current ? [createStagedTextNote(current)] : []),
+    ]);
+    setDraftText(note.content);
+    window.requestAnimationFrame(() => composerInputRef.current?.focus());
+  }, [draftText, savingText, setDraftText, setStagedNotes]);
+
+  const clearCapture = () => {
+    if (captureSaveInFlight.current) return;
+    const value = captureDraft.getSnapshot().value;
+    if (!value.draftText.trim() && !value.stagedNotes.length && !value.pendingUrls.length && !value.pendingFiles.length) return;
+    setClearedDraft({ value, owner: captureDraft.getSnapshot });
+    captureDraft.clear();
+    window.requestAnimationFrame(() => composerInputRef.current?.focus());
+  };
+
+  const undoClearCapture = () => {
+    if (!clearedDraft || clearedDraft.owner !== captureDraft.getSnapshot || captureSaveInFlight.current) return;
+    const previous = clearedDraft.value;
+    const current = captureDraft.getSnapshot().value;
+    // Bring back the original composition; keep anything written since clearing as another note.
+    const newNote = previous.draftText.trim() && current.draftText.trim() && previous.draftText !== current.draftText
+      ? [createStagedTextNote(current.draftText)] : [];
+    setStagedNotes([...new Map([...previous.stagedNotes, ...current.stagedNotes, ...newNote].map(note => [note.id, note])).values()]);
+    setPendingFiles([...new Set([...previous.pendingFiles, ...current.pendingFiles])]);
+    setPendingUrls([...new Set([...previous.pendingUrls, ...current.pendingUrls])]);
+    setDraftText(previous.draftText.trim() ? previous.draftText : current.draftText);
+    setClearedDraft(null);
+    window.requestAnimationFrame(() => composerInputRef.current?.focus());
+  };
 
   const savePendingCaptures = useCallback(async (captureIntent: CaptureIntent): Promise<CaptureSaveOutcome> => {
     const draftContent = draftText.trim();
@@ -329,7 +374,7 @@ export default function InboxView() {
         const result = await saveInboxFiles(
           textCaptures.map(note => ({ name: note.name, content: note.content, encoding: 'text' })),
           t.inbox.saveFailed,
-          { source: 'text', captureIntent },
+          { source: 'text', captureIntent, expectedRootId: captureDraft.scope },
         );
         const savedTextIds = new Set<string>();
         if (result.saved.length === textCaptures.length && result.skipped.length === 0) {
@@ -353,7 +398,9 @@ export default function InboxView() {
           savedAny = true;
           savedCount += savedTextIds.size;
           setStagedNotes(prev => prev.filter(note => !savedTextIds.has(note.id)));
-          if (draftCapture && savedTextIds.has(draftCapture.id)) setDraftText('');
+          if (draftCapture && savedTextIds.has(draftCapture.id)) {
+            setDraftText(current => current === draftText ? '' : current);
+          }
         }
 
         const failedTextCount = textCaptures.length - savedTextIds.size;
@@ -369,7 +416,7 @@ export default function InboxView() {
 
     const failedUrls: string[] = [];
     for (const url of pendingUrls) {
-      const result = await clipUrlToInbox(url, t);
+      const result = await clipUrlToInbox(url, t, captureDraft.scope ?? undefined);
       if (result.ok) {
         savedAny = true;
         savedCount += 1;
@@ -380,14 +427,18 @@ export default function InboxView() {
         failedUrls.push(url);
       }
     }
-    setPendingUrls(failedUrls);
+    const savedUrls = new Set(pendingUrls.filter(url => !failedUrls.includes(url)));
+    // A completed request owns only its snapshot, never captures added meanwhile.
+    setPendingUrls(current => current.filter(url => !savedUrls.has(url)));
 
     if (pendingFiles.length > 0) {
-      const result = await quickDropToInbox(pendingFiles, t);
+      const result = await quickDropToInbox(pendingFiles, t, captureDraft.scope ?? undefined);
       if (result.saved.length > 0) {
         savedAny = true;
         savedCount += result.saved.length;
-        setPendingFiles(prev => removeSavedPendingFiles(prev, result.saved.map(item => item.original)));
+        const unsavedSnapshot = new Set(removeSavedPendingFiles(pendingFiles, result.saved.map(item => item.original)));
+        const savedSnapshot = new Set(pendingFiles.filter(file => !unsavedSnapshot.has(file)));
+        setPendingFiles(current => current.filter(file => !savedSnapshot.has(file)));
       }
       failedCount += result.skipped.length + result.oversized.length + result.unreadable.length;
     }
@@ -399,13 +450,18 @@ export default function InboxView() {
     }
 
     return { savedAny, savedCount, failedCount, textSaveFailed, latestFiles };
-  }, [draftText, fetchInbox, pendingFiles, pendingUrls, stagedNotes, t]);
+  }, [draftText, fetchInbox, pendingFiles, pendingUrls, stagedNotes, t, captureDraft.scope, setStagedNotes, setDraftText, setPendingUrls, setPendingFiles]);
 
   const handleCapture = useCallback(async () => {
     const content = draftText.trim();
-    if ((stagedNotes.length === 0 && !content && pendingFiles.length === 0 && pendingUrls.length === 0) || savingText || savingToMind) return;
+    if ((stagedNotes.length === 0 && !content && pendingFiles.length === 0 && pendingUrls.length === 0) || captureSaveInFlight.current) return;
+    captureSaveInFlight.current = true;
     setSavingText(true);
     try {
+      if (!captureDraft.ready || !await captureDraft.confirmScope()) {
+        toast.error(t.inbox.draftScopeChanged, 5000);
+        return;
+      }
       const captureIntent = inferSuggestedIntent(
         [draftText, ...stagedNotes.map(note => note.content)].filter(Boolean).join('\n\n'),
         pendingUrls,
@@ -421,9 +477,10 @@ export default function InboxView() {
     } catch {
       toast.error(t.inbox.saveFailed, 4000);
     } finally {
+      captureSaveInFlight.current = false;
       setSavingText(false);
     }
-  }, [draftText, pendingFiles, pendingUrls, savePendingCaptures, savingText, savingToMind, stagedNotes, t]);
+  }, [draftText, pendingFiles, pendingUrls, savePendingCaptures, stagedNotes, t, captureDraft.ready, captureDraft.confirmScope]);
 
   const handleComposerPaste = useCallback((e: React.ClipboardEvent<HTMLTextAreaElement>) => {
     const files = e.clipboardData.files;
@@ -499,21 +556,11 @@ export default function InboxView() {
     () => selectedFile ? buildUnderstanding(selectedFile, t.inbox, inferInboxFileIntent(selectedFile)) : null,
     [selectedFile, t],
   );
-  const intentOptions = useMemo(() => getIntentOptions(t.inbox), [t]);
-  const captureTextForIntent = useMemo(
-    () => [draftText.trim(), ...stagedNotes.map(note => note.content)].filter(Boolean).join('\n\n'),
-    [draftText, stagedNotes],
-  );
-  const suggestedIntent = useMemo(
-    () => inferSuggestedIntent(captureTextForIntent, pendingUrls, pendingFiles),
-    [captureTextForIntent, pendingUrls, pendingFiles],
-  );
-  const suggestedIntentOption = intentOptions.find(intent => intent.id === suggestedIntent) ?? intentOptions[0];
   const hasCurrentDraft = draftText.trim().length > 0;
   const stagedCaptureCount = stagedNotes.length + pendingUrls.length + pendingFiles.length;
   const saveCaptureCount = stagedCaptureCount + (hasCurrentDraft ? 1 : 0);
   const hasPendingCapture = hasCurrentDraft || stagedCaptureCount > 0;
-  const canOrganizeToMind = hasPendingCapture || queueFiles.length > 0;
+  const hasSourcePreview = pendingUrls.length > 0 || pendingFiles.length > 0;
   const textWordCount = countWords(draftText);
   const visibleHistory = useMemo(() => history.slice(0, HISTORY_VISIBLE), [history]);
   const [animateList, setAnimateList] = useState(true);
@@ -549,14 +596,6 @@ export default function InboxView() {
     if (path) setSelectedPath(path);
     switchView('queue', path);
   }, [switchView]);
-  const scrollToReviewPreview = useCallback(() => {
-    if (activeView !== 'capture') {
-      switchView('capture');
-    }
-    window.requestAnimationFrame(() => {
-      reviewSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    });
-  }, [activeView, switchView]);
   const pageTitle = activeView === 'capture'
     ? t.inbox.capturePageTitle
     : activeView === 'queue'
@@ -614,66 +653,13 @@ export default function InboxView() {
     shelveFiles(selectedQueueFiles.map(file => file.path));
   }, [selectedQueueFiles, shelveFiles]);
 
-  const handleOrganizeToMind = useCallback(async () => {
-    const hasStagedInput = stagedNotes.length > 0 || draftText.trim().length > 0 || pendingFiles.length > 0 || pendingUrls.length > 0;
-    if ((!hasStagedInput && queueFiles.length === 0) || savingText || savingToMind || organizing) return;
-
-    setSavingToMind(true);
-    try {
-      let filesForRun = queueFiles;
-      let outcome: CaptureSaveOutcome | null = null;
-
-      if (hasStagedInput) {
-        const captureIntent = inferSuggestedIntent(
-          [draftText.trim(), ...stagedNotes.map(note => note.content)].filter(Boolean).join('\n\n'),
-          pendingUrls,
-          pendingFiles,
-        );
-        outcome = await savePendingCaptures(captureIntent);
-        const latestFiles = outcome.latestFiles ?? files;
-        filesForRun = latestFiles.filter(file => !shelvedPathSet.has(file.path));
-      }
-
-      if (outcome?.textSaveFailed) {
-        toast.error(outcome.savedAny ? t.inbox.capturePartialFailed : t.inbox.saveFailed, 4000);
-      }
-
-      if (filesForRun.length === 0) {
-        toast.error(t.inbox.organizeToMindEmpty, 3000);
-        return;
-      }
-
-      setSelectedQueuePaths(filesForRun.map(file => file.path));
-      switchView('queue');
-      await inboxOrganize.requestInboxOrganize(filesForRun, {
-        providerOverride,
-        modelOverride,
-      });
-    } catch {
-      toast.error(t.inbox.saveFailed, 4000);
-    } finally {
-      setSavingToMind(false);
-    }
-  }, [
-    draftText,
-    files,
-    inboxOrganize,
-    modelOverride,
-    organizing,
-    pendingFiles,
-    pendingUrls,
-    providerOverride,
-    queueFiles,
-    savePendingCaptures,
-    savingText,
-    savingToMind,
-    shelvedPathSet,
-    stagedNotes,
-    switchView,
-    t,
-  ]);
-
-  if (loading) {
+  if (captureDraft.scopeError) return (
+    <div className="inbox-content-page py-8" role="alert">
+      <p className="text-sm text-error">{t.inbox.draftScopeFailed}</p>
+      <Button className="mt-3 min-h-11" variant="outline" onClick={() => void captureDraft.retryScope()}>{t.inbox.draftScopeRetry}</Button>
+    </div>
+  );
+  if (!captureDraft.ready || (loading && activeView !== 'capture')) {
     return (
       <div className="flex flex-col min-h-[calc(100vh-var(--app-titlebar-h))]">
         <div className="flex-1">
@@ -743,6 +729,10 @@ export default function InboxView() {
             />
           )}
 
+          {loading && activeView === 'capture' && (
+            <p role="status" className="text-sm text-muted-foreground">{t.inbox.loading}</p>
+          )}
+
           <div
             className={
               activeView === 'queue'
@@ -750,7 +740,7 @@ export default function InboxView() {
                 : activeView === 'shelved'
                   ? 'grid gap-5 xl:grid-cols-[minmax(0,1.08fr)_350px] 2xl:grid-cols-[minmax(0,1.08fr)_380px]'
                   : activeView === 'capture'
-                    ? 'grid gap-5 2xl:grid-cols-[minmax(0,1fr)_minmax(300px,340px)] 2xl:items-stretch'
+                    ? 'grid gap-5'
                     : 'max-w-[760px]'
             }
             data-inbox-main-layout
@@ -792,23 +782,23 @@ export default function InboxView() {
                     onDrop={handleDrop}
                   >
                     <div
-                      className={`flex h-full min-h-[380px] flex-col overflow-hidden rounded-xl border shadow-sm transition-colors ${
+                      className={`flex flex-col rounded-xl border shadow-sm transition-colors ${
                         dragOver
                           ? 'border-[var(--amber)] bg-[var(--amber-subtle)]'
                           : 'border-border/60 bg-card/75'
                       }`}
                       data-inbox-composer-card
                     >
-                      <div className="border-b border-border/45 px-4 py-3.5">
+                      <div className="px-4 pt-4 pb-2">
                         <div className="flex min-w-0 items-start justify-between gap-3">
                           <div className="flex min-w-0 items-start gap-2.5">
                             <span className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--amber-subtle)] text-[var(--amber)]">
                               <FolderInput size={14} />
                             </span>
                             <div className="min-w-0">
-                              <span className="text-sm font-semibold text-foreground">{t.inbox.composerTitle}</span>
+                              <label htmlFor="inbox-capture-input" className="text-sm font-semibold text-foreground">{t.inbox.composerTitle}</label>
                               <p
-                                className="mt-1 text-xs leading-relaxed text-muted-foreground/60"
+                                className="mt-1 text-xs leading-relaxed text-muted-foreground"
                                 data-capture-autodetect-hint
                               >
                                 {t.inbox.captureAutoDetectHint}
@@ -816,22 +806,17 @@ export default function InboxView() {
                             </div>
                           </div>
                           {saveCaptureCount > 0 && (
-                            <span className="shrink-0 rounded-lg bg-muted/45 px-2 py-1 text-2xs font-medium text-muted-foreground">
+                            <span className="shrink-0 rounded-lg bg-muted/45 px-2 py-1 text-xs font-medium text-muted-foreground">
                               {t.inbox.captureSessionCount(saveCaptureCount)}
                             </span>
                           )}
                         </div>
                       </div>
 
-                      <div className="flex flex-1 flex-col px-4 py-4">
-                        <div
-                          className={`flex min-h-[180px] flex-1 flex-col rounded-xl border transition-colors ${
-                            dragOver
-                              ? 'border-[var(--amber)] bg-background/65'
-                              : 'border-dashed border-border/60 bg-background/45'
-                          }`}
-                        >
+                      <div className="px-4 pt-2 pb-3">
+                        <div className="flex flex-col">
                           <textarea
+                            id="inbox-capture-input"
                             ref={composerInputRef}
                             value={draftText}
                             onChange={(e) => setDraftText(e.target.value)}
@@ -839,13 +824,14 @@ export default function InboxView() {
                             onPaste={handleComposerPaste}
                             aria-label={t.inbox.composerInputLabel}
                             placeholder={t.inbox.composerPlaceholder}
-                            className="min-h-[140px] flex-1 resize-y bg-transparent px-4 py-4 text-sm leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/40 focus-visible:ring-0"
+                            rows={4}
+                            className="min-h-28 max-h-72 resize-y rounded-lg bg-background/60 px-3 py-3 text-sm leading-relaxed text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
                           />
                           <div
-                            className="flex flex-wrap items-center justify-between gap-2 border-t border-border/35 px-4 py-2.5"
+                            className="flex flex-wrap items-center justify-between gap-2 pt-2"
                             data-inbox-composer-footer
                           >
-                            <span className="text-2xs text-muted-foreground/55">
+                            <span className="text-xs text-muted-foreground">
                               {hasCurrentDraft
                                 ? t.inbox.currentDraftHint(textWordCount)
                                 : t.inbox.captureDropHint}
@@ -853,8 +839,8 @@ export default function InboxView() {
                             <button
                               type="button"
                               onClick={stageCurrentNote}
-                              disabled={!hasCurrentDraft || savingText || savingToMind}
-                              className="inline-flex min-h-7 items-center gap-1.5 rounded-md border border-border/60 bg-background/70 px-2.5 py-1.5 text-2xs font-medium text-muted-foreground transition-colors hover:border-[var(--amber)]/35 hover:bg-[var(--amber-subtle)] hover:text-foreground disabled:cursor-not-allowed disabled:opacity-45 focus-visible:ring-2 focus-visible:ring-ring"
+                              disabled={!hasCurrentDraft || savingText}
+                              className="inline-flex min-h-11 items-center gap-1.5 rounded-md border border-border/60 bg-background/70 px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-[var(--amber)]/35 hover:bg-[var(--amber-subtle)] hover:text-foreground disabled:cursor-not-allowed disabled:opacity-45 focus-visible:ring-2 focus-visible:ring-ring"
                               data-stage-note-action
                             >
                               <span className="inline-flex h-4 w-4 items-center justify-center rounded bg-[var(--amber-subtle)] text-[var(--amber)]">
@@ -866,13 +852,58 @@ export default function InboxView() {
                         </div>
                       </div>
 
+                      <div className="flex flex-wrap items-center gap-2 border-t border-border/50 px-4 py-3">
+                        <button
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          className="flex min-h-11 items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                          data-inbox-attach-action
+                        >
+                          <Paperclip size={13} />
+                          {t.inbox.attachButton}
+                        </button>
+                        <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2" data-inbox-primary-actions>
+                          {hasPendingCapture && (
+                            <button
+                              type="button"
+                              onClick={clearCapture}
+                              disabled={savingText}
+                              className="min-h-11 rounded-lg px-2.5 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-45 focus-visible:ring-2 focus-visible:ring-ring"
+                            >
+                              {t.inbox.clearComposer}
+                            </button>
+                          )}
+                          <Button
+                            type="button"
+                            onClick={handleCapture}
+                            disabled={!hasPendingCapture || savingText}
+                            variant="amber"
+                            className="min-h-11 scroll-m-4 px-3 text-sm"
+                          >
+                            {savingText ? <Loader2 size={13} className="animate-spin" /> : <Archive size={13} />}
+                            {savingText
+                              ? (saveCaptureCount > 1 ? t.inbox.savingItems(saveCaptureCount) : t.inbox.savingText)
+                              : (saveCaptureCount > 1 ? t.inbox.captureButtonCount(saveCaptureCount) : t.inbox.captureButton)}
+                          </Button>
+                        </div>
+                      </div>
+                      <CaptureDraftStatus status={captureDraft.status} hasContent={hasPendingCapture} onRetry={() => void captureDraft.flush()} />
+                      {clearedDraft?.owner === captureDraft.getSnapshot && (
+                        <div role="status" className="flex flex-wrap items-center justify-between gap-2 px-4 py-2 text-xs text-muted-foreground">
+                          <span>{t.inbox.captureCleared}</span>
+                          <Button variant="outline" className="min-h-11" onClick={undoClearCapture} disabled={savingText}>
+                            <RotateCcw size={13} />{t.inbox.undoClearCapture}
+                          </Button>
+                        </div>
+                      )}
+
                       {stagedCaptureCount > 0 && (
                         <div className="border-t border-border/40 px-4 py-3">
                           <div className="flex items-center justify-between gap-2">
-                            <p className="text-2xs font-medium uppercase tracking-wider text-muted-foreground/55">
+                            <p className="text-xs font-medium text-muted-foreground">
                               {t.inbox.stagedCapturesTitle}
                             </p>
-                            <span className="rounded-md bg-muted/45 px-1.5 py-0.5 text-2xs text-muted-foreground">
+                            <span className="rounded-md bg-muted/45 px-1.5 py-0.5 text-xs text-muted-foreground">
                               {t.inbox.stagedCaptureCount(stagedCaptureCount)}
                             </span>
                           </div>
@@ -883,6 +914,10 @@ export default function InboxView() {
                                 icon={<FileText size={12} />}
                                 label={t.inbox.pendingNote}
                                 detail={t.inbox.pendingText(note.wordCount)}
+                                preview={note.content}
+                                editLabel={t.inbox.editCaptureItem(note.content.split('\n')[0].slice(0, 80))}
+                                onEdit={() => editStagedNote(note)}
+                                editDisabled={savingText}
                                 onRemove={() => setStagedNotes(prev => prev.filter(item => item.id !== note.id))}
                               />
                             ))}
@@ -913,62 +948,13 @@ export default function InboxView() {
                         </div>
                       )}
 
-                      <div className="flex flex-col flex-wrap gap-2 border-t border-border/50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                        <div className="flex shrink-0 items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => fileInputRef.current?.click()}
-                            className="flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
-                            data-inbox-attach-action
-                          >
-                            <Paperclip size={13} />
-                            {t.inbox.attachButton}
-                          </button>
-                        </div>
-                        <div className="flex min-w-0 flex-1 flex-wrap items-center justify-start gap-2 sm:justify-end" data-inbox-primary-actions>
-                          {hasPendingCapture && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setDraftText('');
-                                setStagedNotes([]);
-                                setPendingFiles([]);
-                                setPendingUrls([]);
-                              }}
-                              className="rounded-lg px-2.5 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
-                            >
-                              {t.inbox.clearComposer}
-                            </button>
-                          )}
-                          <button
-                            type="button"
-                            onClick={handleCapture}
-                            disabled={!hasPendingCapture || savingText || savingToMind}
-                            className="flex items-center gap-1.5 rounded-lg bg-[var(--amber)] px-3 py-2 text-xs font-medium text-[var(--amber-foreground)] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-45 focus-visible:ring-2 focus-visible:ring-ring"
-                          >
-                            {savingText ? <Loader2 size={13} className="animate-spin" /> : <Archive size={13} />}
-                            {savingText
-                              ? (saveCaptureCount > 1 ? t.inbox.savingItems(saveCaptureCount) : t.inbox.savingText)
-                              : (saveCaptureCount > 1 ? t.inbox.captureButtonCount(saveCaptureCount) : t.inbox.captureButton)}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={handleOrganizeToMind}
-                            disabled={!canOrganizeToMind || savingText || savingToMind || organizing}
-                            className="flex items-center gap-1.5 rounded-lg border border-[var(--amber)]/35 bg-background px-3 py-2 text-xs font-medium text-foreground transition-colors hover:bg-[var(--amber-subtle)] disabled:cursor-not-allowed disabled:opacity-45 focus-visible:ring-2 focus-visible:ring-ring"
-                          >
-                            {savingToMind || organizing ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} className="text-[var(--amber)]" />}
-                            {savingToMind || organizing ? t.inbox.organizeToMindRunning : t.inbox.organizeToMindAction}
-                          </button>
-                        </div>
-                      </div>
                     </div>
                   </div>
                   {lastSavedSummary && (
                     <InboxLastSavedStrip
                       summary={lastSavedSummary}
                       pendingCount={queueFiles.length}
-                      onReview={scrollToReviewPreview}
+                      onReview={() => openQueueWorkbench()}
                       onDismiss={() => setLastSavedSummary(null)}
                     />
                   )}
@@ -1052,21 +1038,17 @@ export default function InboxView() {
               )}
             </div>
 
-            {activeView === 'capture' && (
+            {activeView === 'capture' && hasSourcePreview && (
               <aside className="min-w-0 2xl:self-stretch">
                 <InboxCapturePreviewPanel
-                  draftText={draftText}
-                  stagedNotes={stagedNotes}
                   pendingUrls={pendingUrls}
                   pendingFiles={pendingFiles}
-                  selectedIntentTitle={suggestedIntentOption.title}
-                  textWordCount={textWordCount}
                   saveCaptureCount={saveCaptureCount}
                 />
               </aside>
             )}
 
-            {activeView === 'capture' && (
+            {activeView === 'capture' && !loading && queueFiles.length > 0 && (
               <div className="min-w-0 2xl:col-span-2">
                 <InboxQueueSection
                   sectionRef={reviewSectionRef}
@@ -1268,6 +1250,10 @@ function PendingCaptureRow({
   icon,
   label,
   detail,
+  preview,
+  editLabel,
+  onEdit,
+  editDisabled,
   actionLabel,
   onAction,
   onRemove,
@@ -1275,6 +1261,10 @@ function PendingCaptureRow({
   icon: React.ReactNode;
   label: string;
   detail: string;
+  preview?: string;
+  editLabel?: string;
+  onEdit?: () => void;
+  editDisabled?: boolean;
   actionLabel?: string;
   onAction?: () => void;
   onRemove: () => void;
@@ -1289,9 +1279,16 @@ function PendingCaptureRow({
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-center gap-1.5">
           <span className="shrink-0 text-xs font-medium text-foreground/80">{label}</span>
-          <span className="min-w-0 truncate text-2xs text-muted-foreground/58">{detail}</span>
+          <span className="min-w-0 truncate text-xs text-muted-foreground">{detail}</span>
         </div>
+        {preview && <p className="mt-1 line-clamp-2 whitespace-pre-wrap break-words text-sm text-foreground">{preview}</p>}
       </div>
+      {onEdit && (
+        <button type="button" onClick={onEdit} disabled={editDisabled} aria-label={editLabel}
+          className="min-h-11 shrink-0 rounded-md px-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-45 focus-visible:ring-2 focus-visible:ring-ring">
+          {t.inbox.editCaptureAction}
+        </button>
+      )}
       {actionLabel && onAction && (
         <button
           type="button"
@@ -1305,8 +1302,8 @@ function PendingCaptureRow({
       <button
         type="button"
         onClick={onRemove}
-        className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground/50 transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
-        aria-label={t.inbox.removeCaptureItem(label)}
+        className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+        aria-label={t.inbox.removeCaptureItem(preview ? preview.split('\n')[0].slice(0, 80) : label)}
       >
         <X size={12} />
       </button>
@@ -1315,28 +1312,17 @@ function PendingCaptureRow({
 }
 
 function InboxCapturePreviewPanel({
-  draftText,
-  stagedNotes,
   pendingUrls,
   pendingFiles,
-  selectedIntentTitle,
-  textWordCount,
   saveCaptureCount,
 }: {
-  draftText: string;
-  stagedNotes: StagedTextNote[];
   pendingUrls: string[];
   pendingFiles: File[];
-  selectedIntentTitle: string;
-  textWordCount: number;
   saveCaptureCount: number;
 }) {
   const { t } = useLocale();
-  const trimmedText = draftText.trim();
   const primaryUrl = pendingUrls[0];
   const primaryFile = pendingFiles[0];
-  const primaryStagedNote = stagedNotes[0];
-  const hasText = trimmedText.length > 0;
   const additionalCount = Math.max(0, saveCaptureCount - 1);
 
   let body: React.ReactNode;
@@ -1352,7 +1338,6 @@ function InboxCapturePreviewPanel({
         <div className="mt-4 divide-y divide-border/35 border-y border-border/35">
           <CapturePreviewFactRow label={t.inbox.sourcePreviewType} value={t.inbox.sourcePreviewWebLink} />
           <CapturePreviewFactRow label={t.inbox.sourcePreviewSaveAs} value={t.inbox.sourcePreviewSourcePreserved} />
-          <CapturePreviewFactRow label={t.inbox.sourcePreviewStatus} value={t.inbox.sourcePreviewReviewPending} />
         </div>
       </>
     );
@@ -1368,79 +1353,33 @@ function InboxCapturePreviewPanel({
         <div className="mt-4 divide-y divide-border/35 border-y border-border/35">
           <CapturePreviewFactRow label={t.inbox.sourcePreviewType} value={ext ? `.${ext}` : t.inbox.sourcePreviewFileType} />
           <CapturePreviewFactRow label={t.inbox.sourcePreviewSaveAs} value={t.inbox.sourcePreviewOriginalFile} />
-          <CapturePreviewFactRow label={t.inbox.sourcePreviewStatus} value={t.inbox.sourcePreviewReviewPending} />
-        </div>
-      </>
-    );
-  } else if (hasText) {
-    body = (
-      <>
-        <CapturePreviewIdentity
-          icon={<FileText size={15} />}
-          title={t.inbox.sourcePreviewTextCapture}
-          description={t.inbox.pendingText(textWordCount)}
-        />
-        <div className="mt-4 divide-y divide-border/35 border-y border-border/35">
-          <CapturePreviewFactRow label={t.inbox.sourcePreviewType} value={t.inbox.sourcePreviewTextType} />
-          <CapturePreviewFactRow label={t.inbox.sourcePreviewIntent} value={selectedIntentTitle} />
-          <CapturePreviewFactRow label={t.inbox.sourcePreviewStatus} value={t.inbox.sourcePreviewReviewPending} />
-        </div>
-      </>
-    );
-  } else if (primaryStagedNote) {
-    body = (
-      <>
-        <CapturePreviewIdentity
-          icon={<FileText size={15} />}
-          title={t.inbox.sourcePreviewTextCapture}
-          description={t.inbox.pendingText(primaryStagedNote.wordCount)}
-        />
-        <div className="mt-4 divide-y divide-border/35 border-y border-border/35">
-          <CapturePreviewFactRow label={t.inbox.sourcePreviewType} value={t.inbox.sourcePreviewTextType} />
-          <CapturePreviewFactRow label={t.inbox.sourcePreviewIntent} value={selectedIntentTitle} />
-          <CapturePreviewFactRow label={t.inbox.sourcePreviewStatus} value={t.inbox.sourcePreviewReviewPending} />
         </div>
       </>
     );
   } else {
-    body = (
-      <div className="py-5 text-center">
-        <span className="mx-auto inline-flex h-10 w-10 items-center justify-center rounded-lg bg-muted/45 text-muted-foreground/55">
-          <Inbox size={17} />
-        </span>
-        <p className="mt-3 text-sm font-medium text-foreground/78">{t.inbox.sourcePreviewEmptyTitle}</p>
-        <p className="mx-auto mt-1 max-w-[260px] text-xs leading-relaxed text-muted-foreground/58">
-          {t.inbox.sourcePreviewEmptyDesc}
-        </p>
-      </div>
-    );
+    return null;
   }
 
   return (
-    <section
-      className="flex h-full min-h-[320px] flex-col rounded-xl border border-border/60 bg-card/65 shadow-sm"
-      aria-live="polite"
-      aria-label={t.inbox.sourcePreviewTitle}
+    <details
+      className="group border-t border-border/60"
       data-inbox-source-preview
     >
-      <div className="border-b border-border/50 px-4 py-3">
-        <div className="flex items-center gap-2">
-          <Eye size={15} className="text-[var(--amber)]" />
-          <h3 className="text-sm font-semibold text-foreground">{t.inbox.sourcePreviewTitle}</h3>
-        </div>
-        <p className="mt-1 text-xs leading-relaxed text-muted-foreground/60">
-          {saveCaptureCount > 0 ? t.inbox.sourcePreviewActiveDesc : t.inbox.sourcePreviewIdleDesc}
-        </p>
-      </div>
-      <div className="flex flex-1 flex-col px-4 py-4">
+      <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-md px-2 text-sm font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+        <Eye size={15} />
+        <span>{t.inbox.sourcePreviewTitle}</span>
+        <ChevronDown size={15} className="ml-auto transition-transform group-open:rotate-180" />
+      </summary>
+      <div className="px-2 pt-2 pb-4">
+        <p className="mb-4 text-xs leading-relaxed text-muted-foreground">{t.inbox.sourcePreviewActiveDesc}</p>
         {body}
         {additionalCount > 0 && (
-          <div className="mt-3 rounded-lg border border-border/45 bg-background/50 px-3 py-2 text-xs text-muted-foreground/65">
+          <p className="mt-3 text-xs text-muted-foreground">
             {t.inbox.sourcePreviewAlsoStaged(additionalCount)}
-          </div>
+          </p>
         )}
       </div>
-    </section>
+    </details>
   );
 }
 
@@ -1460,7 +1399,7 @@ function CapturePreviewIdentity({
       </span>
       <div className="min-w-0">
         <p className="truncate text-sm font-semibold text-foreground" title={title}>{title}</p>
-        <p className="mt-0.5 truncate text-xs text-muted-foreground/62" title={description}>{description}</p>
+        <p className="mt-0.5 break-all text-xs text-muted-foreground" title={description}>{description}</p>
       </div>
     </div>
   );
@@ -1469,8 +1408,8 @@ function CapturePreviewIdentity({
 function CapturePreviewFactRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="grid grid-cols-[78px_minmax(0,1fr)] items-start gap-3 py-2.5">
-      <p className="text-2xs font-medium uppercase tracking-wider text-muted-foreground/50">{label}</p>
-      <p className="min-w-0 text-xs font-medium leading-snug text-foreground/78">{value}</p>
+      <p className="text-xs font-medium text-muted-foreground">{label}</p>
+      <p className="min-w-0 text-xs font-medium leading-snug text-foreground">{value}</p>
     </div>
   );
 }

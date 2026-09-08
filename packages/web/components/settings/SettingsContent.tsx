@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, type SetStateAction } from 'react';
 import { Settings, Loader2, AlertCircle, CheckCircle2, RotateCcw, Sparkles, Palette, RefreshCw, Plug, Download, X, Trash2, HelpCircle, Puzzle, Compass } from 'lucide-react';
 import { useLocale } from '@/lib/stores/locale-store';
 import { apiFetch } from '@/lib/api';
@@ -15,7 +15,8 @@ import { PluginsTab } from './PluginsTab';
 import { UpdateTab } from './UpdateTab';
 import { UninstallTab } from './UninstallTab';
 import { restoreAiSettingsFromEnvironment } from './ai-env-restore';
-import { saveSettingsDocument } from './settings-save';
+import { settingsDraftStore } from './settings-draft';
+import { useSettingsDraft } from './useSettingsDraft';
 import { requestCommandCenterOpen, requestPluginEntriesOpen } from '@/lib/plugins/ui-events';
 import { useSmoothRouterPush } from '@/hooks/useSmoothRouterPush';
 import { MAIN_BODY_CONTENT_WIDTH_EVENT } from '@/lib/main-body-layout';
@@ -53,20 +54,18 @@ export default function SettingsContent({
   onOpenCommandCenter,
 }: SettingsContentProps) {
   const [tab, setTab] = useState<Tab>('ai');
-  const [data, setData] = useState<SettingsData | null>(null);
-  const [saving, setSaving] = useState(false);
+  const tabRef = useRef(tab);
+  tabRef.current = tab;
+  const draft = useSettingsDraft();
+  const data = draft.data;
+  const saving = draft.status === 'saving';
+  const setData = useCallback((action: SetStateAction<SettingsData | null>) => settingsDraftStore.update(action, tabRef.current), []);
   const [status, setStatus] = useState<'idle' | 'saved' | 'error' | 'load-error'>('idle');
   const { t, locale, setLocale } = useLocale();
   const smoothPush = useSmoothRouterPush();
-  const saveTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const statusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const dataLoaded = useRef(false);
   const contentRef = useRef<HTMLDivElement>(null);
   const loadRequestId = useRef(0);
-  const saveInFlight = useRef(false);
-  const saveAgain = useRef(false);
-  const latestData = useRef<SettingsData | null>(null);
-  const suppressNextAutosave = useRef(false);
   const mountedRef = useRef(true);
 
   const showTransientStatus = useCallback((next: 'saved' | 'error') => {
@@ -75,11 +74,18 @@ export default function SettingsContent({
       statusTimer.current = null;
     }
     setStatus(next);
+    // An unsaved error is a persistent state, not a transient notification.
+    if (next === 'error') return;
     statusTimer.current = setTimeout(() => {
       statusTimer.current = null;
       setStatus('idle');
     }, 2500);
   }, []);
+
+  useEffect(() => {
+    if (draft.status === 'saved' || draft.status === 'error') showTransientStatus(draft.status);
+    else if (draft.status === 'pending' || draft.status === 'saving') setStatus('idle');
+  }, [draft.status, showTransientStatus]);
 
   const [font, setFont] = useState('inter');
   const [fontSize, setFontSize] = useState('15px');
@@ -112,40 +118,44 @@ export default function SettingsContent({
 
   const isPanel = variant === 'panel';
 
+  const loadSettings = useCallback(async () => {
+    const requestId = ++loadRequestId.current;
+    const revision = settingsDraftStore.getSnapshot().revision;
+    setStatus('idle');
+    try {
+      const loaded = await apiFetch<SettingsData>('/api/settings');
+      if (requestId !== loadRequestId.current || !mountedRef.current) return;
+      settingsDraftStore.acceptLoaded(loaded, revision);
+    } catch {
+      if (requestId === loadRequestId.current && mountedRef.current) setStatus('load-error');
+    }
+  }, []);
+
   // Init data when becoming visible
   const prevVisibleRef = useRef(false);
   useEffect(() => {
-    let cancelled = false;
-    const justOpened = isPanel
-      ? (visible && !prevVisibleRef.current)
-      : visible;
+    const justOpened = visible && !prevVisibleRef.current;
 
     if (justOpened) {
-      const requestId = ++loadRequestId.current;
-      dataLoaded.current = false;
-      apiFetch<SettingsData>('/api/settings').then(d => {
-        if (cancelled || requestId !== loadRequestId.current || !visible) return;
-        suppressNextAutosave.current = true;
-        latestData.current = d;
-        dataLoaded.current = true;
-        setData(d);
-      }).catch(() => {
-        if (!cancelled && requestId === loadRequestId.current && visible) setStatus('load-error');
-      });
+      if (!settingsDraftStore.getSnapshot().pending) {
+        void loadSettings();
+      }
       setFont(readStoredProseFont(localStorage));
       setFontSize(localStorage.getItem('prose-font-size') ?? '15px');
       setContentWidth(migrateStoredContentWidth(localStorage.getItem('content-width') ?? '80%'));
       const stored = localStorage.getItem('theme');
       setDark(stored ? stored === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches);
-      setStatus('idle');
     }
     if (!visible) {
-      dataLoaded.current = false;
       loadRequestId.current++;
     }
     prevVisibleRef.current = visible;
-    return () => { cancelled = true; };
-  }, [visible, isPanel]);
+    return () => {
+      loadRequestId.current++;
+      // StrictMode replays mount effects; the replacement load must run too.
+      prevVisibleRef.current = false;
+    };
+  }, [visible, loadSettings]);
 
   useEffect(() => {
     if (visible && initialTab) switchTab(initialTab);
@@ -178,103 +188,20 @@ export default function SettingsContent({
     window.dispatchEvent(new CustomEvent(MAIN_BODY_CONTENT_WIDTH_EVENT, { detail: { value: contentWidth } }));
   }, [contentWidth]);
 
-  // Esc to close — modal only
-  useEffect(() => {
-    if (variant !== 'modal' || !visible || !onClose) return;
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [variant, visible, onClose]);
-
-  // Track unsaved data so we can flush on close/unmount
-  const pendingData = useRef<SettingsData | null>(null);
-
-  const flushSave = useCallback(async (
-    payload?: SettingsData | null,
-    options: { background?: boolean } = {},
-  ) => {
-    const initialPayload = payload ?? pendingData.current ?? latestData.current;
-    if (!initialPayload) return;
-    const reportUi = !options.background;
-
-    latestData.current = initialPayload;
-    pendingData.current = null;
-
-    if (saveInFlight.current) {
-      saveAgain.current = true;
-      return;
-    }
-
-    saveInFlight.current = true;
-    if (reportUi && mountedRef.current) setSaving(true);
-
-    let nextPayload: SettingsData | null = initialPayload;
-    while (nextPayload) {
-      const savingPayload = nextPayload;
-      saveAgain.current = false;
-      try {
-        await saveSettingsDocument(savingPayload);
-        if (!saveAgain.current && reportUi && mountedRef.current) {
-          showTransientStatus('saved');
-          window.dispatchEvent(new Event('mindos:settings-changed'));
-        }
-      } catch {
-        if (!saveAgain.current && reportUi && mountedRef.current) {
-          showTransientStatus('error');
-        }
-      }
-
-      nextPayload = saveAgain.current ? latestData.current : null;
-    }
-
-    saveInFlight.current = false;
-    if (reportUi && mountedRef.current) setSaving(false);
-
-    if (saveAgain.current && latestData.current) {
-      const queuedPayload = latestData.current;
-      saveAgain.current = false;
-      void flushSave(queuedPayload, options);
-    }
-  }, [showTransientStatus]);
-
-  useEffect(() => {
-    if (!data || !dataLoaded.current) return;
-    latestData.current = data;
-    if (suppressNextAutosave.current) {
-      suppressNextAutosave.current = false;
-      pendingData.current = null;
-      clearTimeout(saveTimer.current);
-      return;
-    }
-    pendingData.current = data;
-    clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => {
-      flushSave(data);
-    }, 800);
-    return () => clearTimeout(saveTimer.current);
-  }, [data, flushSave]);
+  const flushSave = useCallback(() => settingsDraftStore.flush(), []);
 
   // Flush unsaved changes when panel hides (panel variant)
   useEffect(() => {
-    if (!visible && pendingData.current) {
-      const d = pendingData.current;
-      pendingData.current = null;
-      clearTimeout(saveTimer.current);
-      flushSave(d);
-    }
+    if (!visible) void flushSave();
   }, [visible, flushSave]);
 
-  // Flush unsaved changes on unmount (modal variant: SettingsModal returns null when !open)
+  // The shared queue survives page unmounts; no fire-and-forget private payload is lost.
   useEffect(() => {
+    mountedRef.current = true;
     return () => {
       mountedRef.current = false;
       if (statusTimer.current) clearTimeout(statusTimer.current);
-      if (pendingData.current) {
-        clearTimeout(saveTimer.current);
-        const d = pendingData.current;
-        pendingData.current = null;
-        flushSave(d, { background: true }).catch(() => {});
-      }
+      void settingsDraftStore.flush();
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -313,18 +240,13 @@ export default function SettingsContent({
   const restoreFromEnv = useCallback(async () => {
     if (!data) return;
     const next = { ...data, ai: restoreAiSettingsFromEnvironment(data) };
-    suppressNextAutosave.current = true;
-    latestData.current = next;
-    pendingData.current = null;
-    clearTimeout(saveTimer.current);
     setData(next);
-    await flushSave(next);
+    if (!await flushSave()) return;
+    const revision = settingsDraftStore.getSnapshot().revision;
     setTimeout(() => {
       apiFetch<SettingsData>('/api/settings').then(d => {
-        suppressNextAutosave.current = true;
-        latestData.current = d;
-        setData(d);
-      }).catch(() => setStatus('error'));
+        settingsDraftStore.acceptLoaded(d, revision);
+      }).catch(() => { if (mountedRef.current) setStatus('load-error'); });
     }, 100);
   }, [data, flushSave]);
 
@@ -353,10 +275,17 @@ export default function SettingsContent({
   const renderInlineSaveStatus = (size: 'compact' | 'full' = 'full') => {
     const icon = size === 'compact' ? 11 : 12;
     return (
-      <div className="flex min-h-4 items-center gap-1.5 text-[10px]" role="status" aria-live="polite">
+      <div className="flex min-h-5 flex-wrap items-center gap-1.5 text-xs" role="status" aria-live="polite">
         {saving && <><Loader2 size={icon} className="animate-spin text-muted-foreground" />{size === 'full' && <span className="text-muted-foreground">{t.settings.save}...</span>}</>}
-        {status === 'saved' && <><CheckCircle2 size={icon} className="text-success" />{size === 'full' && <span className="text-success">{t.settings.saved}</span>}</>}
-        {status === 'error' && <><AlertCircle size={icon} className="text-destructive" />{size === 'full' && <span className="text-destructive">{t.settings.saveFailed}</span>}</>}
+        {!saving && status === 'saved' && <><CheckCircle2 size={icon} className="text-success" /><span className="text-success">{t.settings.saved}</span></>}
+        {!saving && status === 'error' && <>
+          <AlertCircle size={icon} className="text-destructive" />
+          <span className="text-destructive">{t.settings.saveFailed}</span>
+          <button type="button" onClick={() => { void flushSave(); }}
+            className="min-h-9 rounded-md px-2 text-foreground underline underline-offset-4 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            {t.settings.retrySave ?? 'Retry save'}
+          </button>
+        </>}
       </div>
     );
   };
@@ -364,7 +293,7 @@ export default function SettingsContent({
   /* ── Shared content & footer ── */
   const renderContent = () => (
     <div ref={contentRef} className={`flex-1 overflow-y-auto min-h-0 ${isPanel ? 'px-4 py-4 space-y-4' : 'px-6 py-5 space-y-5'}`}>
-      {status === 'load-error' && (tab === 'ai' || tab === 'knowledge') ? (
+      {status === 'load-error' && (tab === 'ai' || tab === 'knowledge' || tab === 'plugins') ? (
         <div className="flex flex-col items-center gap-2 py-8 text-center">
           <AlertCircle size={isPanel ? 18 : 20} className="text-destructive" />
           <p className={`${isPanel ? 'text-xs' : 'text-sm'} text-destructive font-medium`}>
@@ -375,8 +304,12 @@ export default function SettingsContent({
               {t.settings.loadFailedHint ?? 'Check that the server is running and AUTH_TOKEN is configured correctly.'}
             </p>
           )}
+          <button type="button" onClick={() => void loadSettings()}
+            className="min-h-10 rounded-md border border-border px-3 text-sm text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            {t.settings.retryLoad ?? 'Retry loading'}
+          </button>
         </div>
-      ) : !data && tab !== 'appearance' && tab !== 'mcp' && tab !== 'sync' && tab !== 'update' && tab !== 'uninstall' ? (
+      ) : !data && (tab === 'ai' || tab === 'knowledge' || tab === 'plugins') ? (
         <div className="flex justify-center py-8">
           <Loader2 size={isPanel ? 16 : 18} className="animate-spin text-muted-foreground" />
         </div>
@@ -511,7 +444,7 @@ export default function SettingsContent({
           <div className="flex items-center gap-1.5">
             {renderInlineSaveStatus('full')}
             {onClose && (
-              <button onClick={onClose} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
+              <button type="button" aria-label={t.settings.closeSettings ?? 'Close settings'} onClick={onClose} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                 <X size={15} />
               </button>
             )}
@@ -586,7 +519,7 @@ export default function SettingsContent({
           <div className="flex items-center gap-1.5">
             {renderInlineSaveStatus('full')}
             {onClose && (
-              <button onClick={onClose} className="p-1 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              <button type="button" aria-label={t.settings.closeSettings ?? 'Close settings'} onClick={onClose} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                 <X size={15} />
               </button>
             )}

@@ -1,4 +1,5 @@
 'use client';
+import { focusIfAvailable } from '@/lib/focus-if-available';
 
 import { useEffect, useLayoutEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
@@ -590,7 +591,7 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
       slashRef.current.resetSlash();
     }
     updateSelectedAgentRuntime(getMessageAgentRuntime(userMessage));
-    setTimeout(() => inputRef.current?.focus(), 50);
+    setTimeout(() => focusIfAvailable(inputRef.current), 50);
   }, [setComposerValueWithAgentModeSync, updateSelectedAgentRuntime]);
 
   const chatRefs = useMemo(() => ({
@@ -653,7 +654,7 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
     pendingOpenAgentRef.current = null;
     setShowHistory(false);
     chat.firstMessageFired.current = false;
-    setTimeout(() => inputRef.current?.focus(), 0);
+    setTimeout(() => focusIfAvailable(inputRef.current), 0);
   }, [chat.firstMessageFired, currentFile, setComposerValueWithAgentModeSync]);
 
   const bindActiveSessionToRuntime = useCallback((agent: AgentRuntimeIdentity | null) => {
@@ -761,7 +762,7 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
     mentionRef.current.resetMention();
     slashRef.current.resetSlash();
     setSelectedSkill(null);
-    setTimeout(() => inputRef.current?.focus(), 0);
+    setTimeout(() => focusIfAvailable(inputRef.current), 0);
     return true;
   }, [currentFile, queuedFollowUpTextOnly, setComposerValueWithAgentModeSync, t.ask.uploadsProcessing]);
 
@@ -906,7 +907,7 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
       setSelectedSkill(null);
       setShowHistory(false);
       setComposerValueWithAgentModeSync(detail.text);
-      setTimeout(() => inputRef.current?.focus(), 50);
+      setTimeout(() => focusIfAvailable(inputRef.current), 50);
     };
     window.addEventListener(RUNTIME_COMMAND_INSERT_EVENT, handler);
     return () => window.removeEventListener(RUNTIME_COMMAND_INSERT_EVENT, handler);
@@ -957,7 +958,7 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
       const text = (e as CustomEvent).detail?.text;
       if (typeof text === 'string') {
         setComposerValueWithAgentModeSync(text);
-        setTimeout(() => inputRef.current?.focus(), 50);
+        setTimeout(() => focusIfAvailable(inputRef.current), 50);
       }
     };
     window.addEventListener('mindos:home-suggestion', handler);
@@ -982,7 +983,7 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
       const preferredRuntime = openerRuntime ?? loadLastSelectedAgentRuntime();
       pendingOpenAgentRef.current = preferredRuntime;
       if (openerRuntime) persistLastSelectedAgentRuntime(openerRuntime);
-      setTimeout(() => inputRef.current?.focus(), 50);
+      setTimeout(() => focusIfAvailable(inputRef.current, variant === 'home'), 50);
       if (initialNewSession) {
         session.resetSession(preferredRuntime ?? undefined);
       } else if (initialSessionId) {
@@ -1011,7 +1012,7 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
     }
     // Home variant: auto-focus on mount
     if (variant === 'home' && visible && !prevVisibleRef.current) {
-      setTimeout(() => inputRef.current?.focus(), 150);
+      setTimeout(() => focusIfAvailable(inputRef.current, true), 150);
     }
     prevVisibleRef.current = visible;
     prevFileRef.current = currentFile;
@@ -1023,7 +1024,7 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
     if (!visible || !contextRequest) return;
     const path = contextRequest.path;
     setAttachedFiles(prev => prev.includes(path) ? prev : [...prev, path]);
-    setTimeout(() => inputRef.current?.focus(), 50);
+    setTimeout(() => focusIfAvailable(inputRef.current), 50);
   }, [contextRequest, visible]);
 
   useEffect(() => {
@@ -1125,7 +1126,7 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
       setAttachedFiles(prev => [...prev, filePath]);
     }
     setTimeout(() => {
-      inputRef.current?.focus();
+      focusIfAvailable(inputRef.current);
       inputRef.current?.setSelectionRange(atIdx, atIdx);
     }, 0);
   }, [setComposerValueWithAgentModeSync]);
@@ -1144,7 +1145,7 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
       setSelectedSkill(null);
       slashRef.current.resetSlash();
       setTimeout(() => {
-        inputRef.current?.focus();
+        focusIfAvailable(inputRef.current);
         inputRef.current?.setSelectionRange(nextCursor, nextCursor);
       }, 0);
       return;
@@ -1154,7 +1155,7 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
     setSelectedSkill(item);
     slashRef.current.resetSlash();
     setTimeout(() => {
-      inputRef.current?.focus();
+      focusIfAvailable(inputRef.current);
       inputRef.current?.setSelectionRange(slashIdx, slashIdx);
     }, 0);
   }, [setComposerValueWithAgentModeSync]);
@@ -1349,7 +1350,7 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
     updateSelectedAgentRuntime(targetRuntime);
     persistLastSelectedAgentRuntime(targetRuntime);
     importBoundRuntimeSessionHistoryIfNeeded(targetSession, targetRuntime);
-    setTimeout(() => inputRef.current?.focus(), 0);
+    setTimeout(() => focusIfAvailable(inputRef.current), 0);
     return true;
   }, [chat.isLoadingRef, currentFile, importBoundRuntimeSessionHistoryIfNeeded, session.sessions, setComposerValueWithAgentModeSync, updateSelectedAgentRuntime]);
 
@@ -1542,7 +1543,7 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
     // Truncate: keep messages up to (not including) the edited message
     currentSession.setMessages(currentSession.messages.slice(0, index));
     setComposerValueWithAgentModeSync(msg.content);
-    setTimeout(() => inputRef.current?.focus(), 50);
+    setTimeout(() => focusIfAvailable(inputRef.current), 50);
   }, [setComposerValueWithAgentModeSync]);
 
   /** Resend / Regenerate: truncate after user message, auto-submit same content */
@@ -1887,7 +1888,7 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
                   <FileChip
                     path={selectedSkill.name}
                     variant="skill"
-                    onRemove={() => { setSelectedSkill(null); inputRef.current?.focus(); }}
+                    onRemove={() => { setSelectedSkill(null); focusIfAvailable(inputRef.current); }}
                   />
                 )}
               </div>
@@ -1897,7 +1898,7 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
                   {providerNotConfigured && (
                     <button
                       type="button"
-                      className="font-medium underline underline-offset-2 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                      className="min-h-11 rounded-lg bg-[var(--amber-action)] px-4 text-sm font-medium text-[var(--amber-foreground)] transition-shadow hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                       onClick={openAiSettings}
                     >
                       {t.ask.configureProvider}

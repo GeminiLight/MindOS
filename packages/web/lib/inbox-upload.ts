@@ -5,7 +5,7 @@ import { saveInboxFiles, type InboxSaveInput, type InboxSaveResult } from '@/lib
 import { notifyFilesChanged } from '@/lib/files-changed';
 import { openUrlWithBrowserBridge, requiresBrowserBridgeCapture } from '@/lib/browser-bridge';
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB per file
+export const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB per file, including local drafts
 
 /**
  * Convert ArrayBuffer to base64 string.
@@ -109,6 +109,7 @@ export interface QuickDropInboxResult extends InboxSaveResult {
 export async function quickDropToInbox(
   files: File[],
   t: ReturnType<typeof useLocale>['t'],
+  expectedRootId?: string,
 ): Promise<QuickDropInboxResult> {
   const payload: InboxSaveInput[] = [];
   const oversized: string[] = [];
@@ -143,7 +144,7 @@ export async function quickDropToInbox(
   }
 
   try {
-    const result = await saveInboxFiles(payload, t.inbox.saveFailed);
+    const result = await saveInboxFiles(payload, t.inbox.saveFailed, expectedRootId ? { expectedRootId } : {});
     const saved = result.saved.length;
     const formatSkipped = result.skipped.length;
 
@@ -173,6 +174,7 @@ export async function quickDropToInbox(
 export async function clipUrlToInbox(
   url: string,
   t: ReturnType<typeof useLocale>['t'],
+  expectedRootId?: string,
 ): Promise<{ ok: boolean; title?: string; browserBridgeOpened?: boolean }> {
   if (requiresBrowserBridgeCapture(url)) {
     try {
@@ -189,7 +191,7 @@ export async function clipUrlToInbox(
     const res = await fetch('/api/inbox/clip', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url }),
+      body: JSON.stringify({ url, ...(expectedRootId ? { expectedRootId } : {}) }),
     });
 
     const data = await res.json().catch(() => ({}));

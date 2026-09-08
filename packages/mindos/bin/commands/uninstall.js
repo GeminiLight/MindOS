@@ -105,6 +105,23 @@ export const run = async () => {
     return;
   }
 
+  // Ask before stopping services so a refused cleanup leaves the app usable.
+  let config = {};
+  try { config = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8')); } catch {}
+  const mindRoot = normalizeUninstallMindRoot(config?.mindRoot);
+  const removeConfig = existsSync(MINDOS_DIR)
+    && await confirm(`Remove config directory (${dim(MINDOS_DIR)})?`);
+  let assertSafeConfigRemoval;
+  if (removeConfig) {
+    try {
+      ({ assertSafeConfigRemoval } = await import('../../dist/foundation/security/uninstall-safety.js'));
+      assertSafeConfigRemoval();
+    } catch (error) {
+      console.error(red(error instanceof Error ? error.message : String(error)));
+      process.exitCode = 1; done(); return;
+    }
+  }
+
   // 1. Stop processes
   console.log(`\n${cyan('Stopping MindOS...')}`);
   try { stopMindos(); } catch { /* may not be running */ }
@@ -119,14 +136,15 @@ export const run = async () => {
     }
   }
 
-  // Read config before potentially deleting ~/.mindos/
-  let config = {};
-  try { config = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8')); } catch {}
-  const mindRoot = normalizeUninstallMindRoot(config.mindRoot);
-
-  // 3. Ask to remove ~/.mindos/
+  // 3. Remove ~/.mindos/ only with consent and a fresh safety check.
   if (existsSync(MINDOS_DIR)) {
-    if (await confirm(`Remove config directory (${dim(MINDOS_DIR)})?`)) {
+    if (removeConfig) {
+      // Re-read after daemon teardown; the preflight is not deletion authority.
+      try { assertSafeConfigRemoval(); }
+      catch (error) {
+        console.error(red(error instanceof Error ? error.message : String(error)));
+        process.exitCode = 1; done(); return;
+      }
       rmSync(MINDOS_DIR, { recursive: true, force: true });
       console.log(`${green('✔')} Removed ${dim(MINDOS_DIR)}`);
     } else {

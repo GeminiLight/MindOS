@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const { url } = (body ?? {}) as { url?: string };
+  const { url, expectedRootId } = (body ?? {}) as { url?: string; expectedRootId?: unknown };
   if (!url || typeof url !== 'string') {
     return NextResponse.json({ error: 'Request body must contain a url string' }, { status: 400 });
   }
@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
 
     const files = await buildInboxClipFiles(clip);
 
-    const response = handleInboxPost({ files, source: 'web-clipper' }, { mindRoot });
+    const response = handleInboxPost({ files, source: 'web-clipper', ...(expectedRootId !== undefined ? { expectedRootId } : {}) }, { mindRoot });
     if (response.status >= 400 || !isInboxSaveResult(response.body)) {
       const error = response.body && typeof response.body === 'object' && 'error' in response.body
         ? String((response.body as { error?: unknown }).error ?? 'Web clip could not be saved')

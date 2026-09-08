@@ -4,6 +4,12 @@ import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 
 import { messages } from '@/lib/i18n';
+// Isolate the runtime identity API from the queue/write failure scenarios below.
+vi.mock('@/lib/api', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/api')>('@/lib/api');
+  return { ...actual, apiFetch: (url: string, options?: Parameters<typeof actual.apiFetch>[1]) => url === '/api/connect'
+    ? Promise.resolve({ rootId: document.documentElement.dataset.mindRootId }) : actual.apiFetch(url, options) };
+});
 
 const browserBridgeMock = vi.hoisted(() => ({
   openUrlWithBrowserBridge: vi.fn(),
@@ -46,6 +52,7 @@ describe('InboxView product shape', () => {
       url: 'https://chatgpt.com/share/mock',
     });
     localStorage.clear();
+    document.documentElement.dataset.mindRootId = crypto.randomUUID();
     window.history.replaceState(null, '', '/capture');
     (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
@@ -72,6 +79,7 @@ describe('InboxView product shape', () => {
   });
 
   it('shows a named loading state before the Inbox queue resolves', async () => {
+    window.history.replaceState(null, '', '/capture#queue');
     vi.stubGlobal('fetch', vi.fn().mockReturnValue(new Promise(() => {})));
     const InboxView = (await import('@/components/InboxView')).default;
 
@@ -115,7 +123,7 @@ describe('InboxView product shape', () => {
     expect(pageShell?.className).toContain('workbench-content-page');
     expect(pageShell?.className).toContain('inbox-content-page');
     const mainLayout = host.querySelector('[data-inbox-main-layout]');
-    expect(mainLayout?.className).toContain('2xl:grid-cols-[minmax(0,1fr)_minmax(300px,340px)]');
+    expect(mainLayout?.className).not.toContain('2xl:grid-cols');
     expect(mainLayout?.className).not.toContain('max-w-[1120px]');
     expect(host.querySelector('[data-inbox-page-title]')?.textContent).toBe('New capture');
     expect(host.querySelector('[data-inbox-back-to-capture]')).toBeNull();
@@ -134,7 +142,7 @@ describe('InboxView product shape', () => {
     expect(host.querySelector('textarea')?.getAttribute('placeholder')).toContain('Paste a link, write a note');
     expect(host.querySelector('textarea')?.getAttribute('aria-label')).toContain('Add a link, note, file');
     expect(host.textContent).toContain('Attach');
-    expect(host.textContent).toContain('Stage as note');
+    expect(host.textContent).toContain('Add to batch');
     expect(host.textContent).not.toContain('⌘/Ctrl Enter');
     expect(host.textContent).toContain('Save to Inbox');
     expect(host.textContent).toContain('Organize to Mind');
@@ -147,9 +155,9 @@ describe('InboxView product shape', () => {
     expect(primaryActions?.className).toContain('flex-wrap');
     expect(primaryActions?.className).not.toContain('shrink-0');
     expect(primaryActions?.textContent).toContain('Save to Inbox');
-    expect(primaryActions?.textContent).toContain('Organize to Mind');
+    expect(primaryActions?.textContent).not.toContain('Organize to Mind');
     expect(primaryActions?.textContent).not.toContain('Attach');
-    expect(primaryActions?.textContent).not.toContain('Stage as note');
+    expect(primaryActions?.textContent).not.toContain('Add to batch');
     expect(host.textContent).not.toContain('Next action');
     expect(host.textContent).not.toContain('Save only');
     expect(host.textContent).not.toContain('Suggested: Save only');
@@ -161,13 +169,11 @@ describe('InboxView product shape', () => {
     expect(host.querySelectorAll('[data-capture-affordance]')).toHaveLength(0);
     expect(host.textContent).not.toContain('YouTube, Bilibili, XHS');
     expect(host.textContent).not.toContain('Assistant waits for Review');
-    expect(host.textContent).toContain('Live source preview');
-    expect(host.textContent).toContain('Paste any source');
-    expect(host.textContent).toContain('The preview appears here before saving.');
-    const livePreview = host.querySelector('section[aria-label="Live source preview"]');
-    const livePreviewAside = livePreview?.closest('aside');
-    expect(livePreviewAside?.className).not.toContain('sticky');
-    expect(livePreviewAside?.className).not.toContain('top-');
+    expect(host.textContent).not.toContain('Source details');
+    expect(host.textContent).not.toContain('Paste any source');
+    expect(host.textContent).not.toContain('The preview appears here before saving.');
+    const livePreview = host.querySelector('[data-inbox-source-preview]');
+    expect(livePreview).toBeNull();
     expect(host.textContent).not.toContain('Detected');
     expect(host.textContent).not.toContain('Documents');
     expect(host.textContent).not.toContain('Tables');
@@ -202,7 +208,7 @@ describe('InboxView product shape', () => {
     });
   });
 
-  it('runs Organize to Mind directly from the capture composer', async () => {
+  it('opens the saved queue without implicitly saving or organizing the current draft', async () => {
     const InboxView = (await import('@/components/InboxView')).default;
 
     const host = document.createElement('div');
@@ -219,24 +225,29 @@ describe('InboxView product shape', () => {
       await new Promise(r => setTimeout(r, 0));
     });
 
+    const input = host.querySelector('textarea')!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(input, 'Still drafting');
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
     const primaryActions = host.querySelector('[data-inbox-primary-actions]');
-    const organizeButton = Array.from(primaryActions?.querySelectorAll('button') ?? [])
-      .find(button => button.textContent?.includes('Organize to Mind'));
-    expect(organizeButton).not.toBeNull();
+    expect(primaryActions?.textContent).not.toContain('Organize to Mind');
+    const reviewButton = Array.from(host.querySelectorAll('button'))
+      .find(button => button.textContent?.includes('Review 2 pending'));
+    expect(reviewButton).toBeTruthy();
 
     await act(async () => {
-      organizeButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      reviewButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       await new Promise(r => setTimeout(r, 0));
     });
 
-    expect(organizeDetail).toEqual(expect.objectContaining({
-      files: [
-        expect.objectContaining({ name: 'agent-memory-notes.md', path: 'Inbox/agent-memory-notes.md' }),
-        expect.objectContaining({ name: 'wechat-capture.txt', path: 'Inbox/wechat-capture.txt' }),
-      ],
-    }));
+    expect(organizeDetail).toBeNull();
     expect(host.textContent).toContain('Review queue');
-    expect(host.textContent).toContain('2 selected');
+    expect(window.location.hash).toBe('#queue');
+    expect(host.textContent).not.toContain('2 selected');
+    const back = host.querySelector<HTMLButtonElement>('[data-inbox-back-to-capture]')!;
+    await act(async () => { back.click(); await new Promise(r => setTimeout(r, 0)); });
+    expect(host.querySelector('textarea')?.value).toBe('Still drafting');
 
     await act(async () => {
       root.unmount();
@@ -784,7 +795,7 @@ describe('InboxView product shape', () => {
 
     expect(fetchMock).toHaveBeenCalledWith('/api/inbox', expect.objectContaining({
       method: 'DELETE',
-      body: JSON.stringify({ names: ['keep-me.md'] }),
+      body: JSON.stringify({ names: ['keep-me.md'], expectedRootId: document.documentElement.dataset.mindRootId }),
     }));
     expect(host.textContent).toContain('Nothing waiting');
     expect(host.textContent).toContain('Select an item');
@@ -867,9 +878,8 @@ describe('InboxView product shape', () => {
 
     expect(host.textContent).not.toContain('Staged captures');
     expect(host.textContent).toContain('Draft note');
-    expect(host.textContent).toContain('Text capture');
-    expect(host.textContent).toContain('Text note');
-    expect(host.textContent).toContain('Review pending');
+    expect(host.querySelector('[data-inbox-source-preview]')).toBeNull();
+    expect(textarea!.value).toContain('Decision rule: must keep durable notes.');
 
     const saveButton = Array.from(host.querySelectorAll('button'))
       .find(button => button.textContent?.includes('Save to Inbox'));
@@ -888,7 +898,7 @@ describe('InboxView product shape', () => {
       body: expect.stringContaining('"captureIntent":"judgment"'),
     }));
     expect(host.textContent).toContain('Saved 1 capture to Inbox');
-    expect(host.textContent).toContain('Staged locally. Review when you are ready.');
+    expect(host.textContent).toContain('Saved in Inbox. Organize when you are ready.');
 
     await act(async () => {
       root.unmount();
@@ -933,8 +943,8 @@ describe('InboxView product shape', () => {
     expect(host.textContent).toContain('Staged captures');
     expect(host.textContent).toContain('1 staged');
     expect(host.textContent).toContain('Note');
-    expect(host.textContent).toContain('Text capture');
-    expect(host.textContent).toContain('Review pending');
+    expect(host.querySelector('[data-inbox-source-preview]')).toBeNull();
+    expect(host.textContent).toContain('First research note to keep for later.');
 
     await act(async () => {
       root.unmount();
@@ -1131,10 +1141,10 @@ describe('InboxView product shape', () => {
     expect(host.textContent).toContain('URL');
     expect(host.textContent).toContain('example.com/article');
     expect(textarea!.value).toBe('');
-    expect(host.textContent).toContain('Live source preview');
+    expect(host.textContent).toContain('Source details');
     expect(host.textContent).toContain('Web link');
     expect(host.textContent).toContain('Source preserved');
-    expect(host.textContent).toContain('Review pending');
+    expect(host.textContent).not.toContain('Review pending');
     expect(host.textContent).not.toContain('Inbox Organizer');
     expect(host.textContent).not.toContain('Built-in assistant');
     expect(host.textContent).not.toContain('Organize selected');
@@ -1335,7 +1345,7 @@ describe('InboxView product shape', () => {
 
     expect(host.textContent).toContain('example.com/fail');
     expect(host.textContent).toContain('Source preserved');
-    expect(host.textContent).toContain('Review pending');
+    expect(host.textContent).not.toContain('Review pending');
 
     const captureButton = Array.from(host.querySelectorAll('button'))
       .find(button => button.textContent?.includes('Save to Inbox'));
@@ -1351,7 +1361,7 @@ describe('InboxView product shape', () => {
       body: expect.stringContaining('https://example.com/fail'),
     }));
     expect(host.textContent).toContain('example.com/fail');
-    expect(host.textContent).toContain('Live source preview');
+    expect(host.textContent).toContain('Source details');
 
     await act(async () => {
       root.unmount();
@@ -1467,7 +1477,7 @@ describe('InboxView product shape', () => {
 
     expect(host.textContent).toContain('notes.md');
     expect(host.textContent).toContain('Original file');
-    expect(host.textContent).toContain('Review pending');
+    expect(host.textContent).not.toContain('Review pending');
     expect(host.textContent).toContain('Staged captures');
 
     const captureButton = Array.from(host.querySelectorAll('button'))
@@ -1632,7 +1642,7 @@ describe('InboxView product shape', () => {
 
     expect(fetchMock).toHaveBeenCalledWith('/api/inbox', expect.objectContaining({
       method: 'DELETE',
-      body: JSON.stringify({ names: ['ghost.md'] }),
+      body: JSON.stringify({ names: ['ghost.md'], expectedRootId: document.documentElement.dataset.mindRootId }),
     }));
     expect(host.textContent).toContain('ghost');
 

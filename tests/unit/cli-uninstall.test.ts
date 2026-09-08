@@ -20,6 +20,7 @@ const CLI = path.join(ROOT, 'packages', 'mindos', 'bin', 'cli.js');
 let tempHome: string;
 let savedHome: string | undefined;
 let fakeBinDir: string;
+let isolationPreload: string;
 
 beforeEach(() => {
   tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'mindos-uninstall-'));
@@ -31,6 +32,37 @@ beforeEach(() => {
     { mode: 0o755 },
   );
   savedHome = process.env.HOME;
+  isolationPreload = path.join(tempHome, 'isolate.cjs');
+  fs.writeFileSync(isolationPreload, `
+    const fs = require('node:fs');
+    const cp = require('node:child_process');
+    const os = require('node:os');
+    const path = require('node:path');
+    const { syncBuiltinESMExports } = require('node:module');
+    const fixture = ${JSON.stringify(tempHome)};
+    os.homedir = () => fixture;
+    const remove = fs.rmSync;
+    fs.rmSync = (target, options) => {
+      const rel = path.relative(fixture, path.resolve(target));
+      if (!rel || rel === '..' || rel.startsWith('..' + path.sep) || path.isAbsolute(rel)) throw new Error('Test refused deletion outside fixture');
+      return remove(target, options);
+    };
+    cp.execFileSync = (command, args) => {
+      if (command === 'id' && args[0] === '-u') return '1000';
+      if (command === 'npm' || (command === process.execPath && args[0]?.endsWith('npm-cli.js'))) {
+        fs.writeFileSync(path.join(fixture, 'npm-argv.txt'), (command === 'npm' ? args : args.slice(1)).join('\\n'));
+        return '';
+      }
+      if (command === 'launchctl' || command === 'systemctl') {
+        fs.writeFileSync(path.join(fixture, 'daemon-called'), command);
+        const changed = path.join(fixture, 'config-after-daemon.json');
+        if (fs.existsSync(changed)) fs.writeFileSync(path.join(fixture, '.mindos', 'config.json'), fs.readFileSync(changed));
+        return '';
+      }
+      throw new Error('Test refused external command: ' + command);
+    };
+    syncBuiltinESMExports();
+  `);
 });
 
 afterEach(() => {
@@ -49,7 +81,9 @@ function run(
       env: {
         ...process.env,
         HOME: home,
+        MIND_ROOT: undefined,
         NODE_ENV: 'test',
+        NODE_OPTIONS: `--require=${isolationPreload}`,
         PATH: `${fakeBinDir}${path.delimiter}${process.env.PATH ?? ''}`,
       },
       input: opts.input ?? '',
@@ -126,6 +160,48 @@ describe('mindos uninstall — help text', () => {
 });
 
 describe('mindos uninstall — does not delete on N answers', () => {
+  it.each(['same', 'nested', 'alias'])('refuses configuration cleanup when it would remove the %s knowledge base', kind => {
+    const configDir = path.join(tempHome, '.mindos');
+    fs.mkdirSync(configDir, { recursive: true });
+    const stored = kind === 'same' ? configDir : path.join(configDir, '资料 📝');
+    fs.mkdirSync(stored, { recursive: true });
+    const note = path.join(stored, 'keep.md'); fs.writeFileSync(note, 'irreplaceable');
+    let mindRoot = stored;
+    if (kind === 'alias') {
+      mindRoot = path.join(tempHome, 'notes-alias');
+      fs.symlinkSync(stored, mindRoot, process.platform === 'win32' ? 'junction' : 'dir');
+    }
+    writeConfig({ mindRoot });
+    const result = run(['uninstall'], { input: 'y\ny\nn\n' });
+    expect(fs.existsSync(note)).toBe(true);
+    expect(fs.readFileSync(note, 'utf8')).toBe('irreplaceable');
+    expect(result.stdout + result.stderr).toContain('Refusing configuration cleanup');
+    expect(fs.existsSync(path.join(tempHome, 'npm-argv.txt'))).toBe(false);
+    expect(fs.existsSync(path.join(tempHome, 'daemon-called'))).toBe(false);
+  });
+
+  it.skipIf(process.platform === 'win32')('rechecks a changed configuration after service teardown before removing files', () => {
+    const nested = path.join(tempHome, '.mindos', 'notes');
+    fs.mkdirSync(nested, { recursive: true });
+    const note = path.join(nested, 'keep.md');
+    fs.writeFileSync(note, 'irreplaceable');
+    writeConfig({ mindRoot: path.join(tempHome, 'separate-notes') });
+    fs.writeFileSync(path.join(tempHome, 'config-after-daemon.json'), JSON.stringify({ mindRoot: nested }));
+    const result = run(['uninstall'], { input: 'y\ny\nn\n' });
+    expect(fs.existsSync(path.join(tempHome, 'daemon-called'))).toBe(true);
+    expect(fs.readFileSync(note, 'utf8')).toBe('irreplaceable');
+    expect(result.stdout + result.stderr).toContain('Refusing configuration cleanup');
+    expect(fs.existsSync(path.join(tempHome, 'npm-argv.txt'))).toBe(false);
+  });
+
+  it('does not erase configuration when its knowledge-base location cannot be read', () => {
+    fs.mkdirSync(path.join(tempHome, '.mindos'));
+    fs.writeFileSync(path.join(tempHome, '.mindos', 'config.json'), '{broken');
+    const result = run(['uninstall'], { input: 'y\ny\n' });
+    expect(fs.existsSync(path.join(tempHome, '.mindos', 'config.json'))).toBe(true);
+    expect(result.stdout + result.stderr).toContain('Refusing configuration cleanup');
+  });
+
   it('keeps ~/.mindos/ when user says Y to proceed but N to remove config', () => {
     const mindRoot = path.join(tempHome, 'MindOS');
     fs.mkdirSync(mindRoot, { recursive: true });

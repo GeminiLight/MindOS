@@ -1,8 +1,7 @@
 'use client';
 
-import type { ReactNode } from 'react';
 import Link from 'next/link';
-import { Archive, ArrowUpRight, Bot, FolderOpen, GitBranch, Leaf, MessageSquareText, NotebookText, SunMedium } from 'lucide-react';
+import { Archive, ArrowUpRight, Bot, FolderOpen, MessageSquareText, NotebookText } from 'lucide-react';
 import { ECHO_SEGMENT_HREF } from '@/lib/echo-segments';
 import type { EchoSavedItem, EchoStoredSegment } from '@/lib/echo-store';
 import { cn } from '@/lib/utils';
@@ -11,7 +10,6 @@ import { EchoAssistantGenerateButton } from './EchoSegmentPageHeader';
 import type { EchoCopy } from './echo-structured-cards';
 
 const echoSurfaceClass = 'rounded-xl border border-border/60 bg-card/45 shadow-sm';
-const echoPanelClass = 'rounded-xl border border-border/50 bg-background/55 shadow-sm';
 
 function echoFlowCopy(segment: EchoStoredSegment, p: EchoCopy) {
   switch (segment) {
@@ -180,119 +178,34 @@ export function OverviewPanel({
 
   return (
     <>
-      <section className={cn(echoSurfaceClass, 'overflow-hidden p-6 md:p-8')} aria-labelledby="echo-overview-rhythm-title">
-        <span className="mb-3 inline-flex rounded-full bg-muted/45 px-3 py-1 font-sans text-xs font-medium text-muted-foreground">
-          {p.todayLabel}
-        </span>
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,0.9fr)_minmax(28rem,1.1fr)] xl:items-end">
-          <div className="min-w-0">
-            <h2 id="echo-overview-rhythm-title" className="max-w-2xl font-sans text-xl font-semibold leading-tight text-foreground md:text-2xl">
-              {p.overviewHeroTitle}
-            </h2>
-            <p className="mt-3 max-w-2xl font-sans text-sm leading-6 text-muted-foreground">{p.overviewHeroSubtitle}</p>
-          </div>
-          <ol className="grid gap-2 sm:grid-cols-3" aria-label={p.overviewHeroSubtitle}>
-            {loop.map((item, index) => (
-              <li key={item.href} className="min-w-0">
-                <Link
-                  href={item.href}
-                  className="group block h-full rounded-lg border border-border/45 bg-background/45 px-3.5 py-3 transition-[background-color,border-color] duration-150 hover:border-[var(--amber)]/35 hover:bg-muted/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  <span className="font-mono text-[0.68rem] text-muted-foreground">{String(index + 1).padStart(2, '0')}</span>
-                  <span className="mt-2 block font-sans text-sm font-medium text-foreground">{item.title}</span>
-                  <span className="mt-1 line-clamp-2 font-sans text-xs leading-5 text-muted-foreground">{item.body}</span>
-                </Link>
-              </li>
-            ))}
-          </ol>
-        </div>
-      </section>
-
-      <section className={cn(echoSurfaceClass, 'p-6 md:p-7')}>
-        <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+      <section className="border-b border-border/60 pb-8 pt-2" aria-labelledby="echo-reflection-title">
+        <div className="flex flex-col items-start gap-5">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <SunMedium size={19} className="text-[var(--amber)]" aria-hidden />
-              <h2 className="font-sans text-base font-medium text-foreground">{p.overviewNarrativeTitle}</h2>
+              <NotebookText size={19} className="text-muted-foreground" aria-hidden />
+              <h2 id="echo-reflection-title" className="font-sans text-base font-medium text-foreground">{p.overviewReflectionTitle}</h2>
             </div>
-            <p className="mt-4 max-w-xl font-sans text-sm leading-7 text-muted-foreground">
+            <p className="mt-4 max-w-prose whitespace-pre-wrap break-words font-sans text-sm leading-7 text-foreground">
               {dailyLine.trim() || p.overviewNarrativeBody}
             </p>
           </div>
-          <Button type="button" variant="amber" size="xl" onClick={onContinue}>
-            {p.continueLabel}
+          <Button type="button" variant="amber" size="xl" className="min-h-11 w-full sm:w-auto" onClick={onContinue}>
+            {p.overviewReflectAction}
           </Button>
         </div>
       </section>
-
-      <div className="grid gap-4 md:grid-cols-3">
-        <OverviewStatCard
-          href={ECHO_SEGMENT_HREF.imprint}
-          icon={<NotebookText size={25} strokeWidth={1.65} />}
-          title={p.overviewTodayTitle}
-          value={p.overviewMetrics[0]?.value ?? ''}
-          body={p.overviewTodayBody}
-          tone="amber"
-        />
-        <OverviewStatCard
-          href={ECHO_SEGMENT_HREF.growth}
-          icon={<Leaf size={25} strokeWidth={1.65} />}
-          title={p.overviewGrowthTitle}
-          value={p.overviewMetrics[1]?.value ?? ''}
-          body={p.overviewGrowthBody}
-          tone="sage"
-        />
-        <OverviewStatCard
-          href={ECHO_SEGMENT_HREF.practice}
-          icon={<GitBranch size={25} strokeWidth={1.65} />}
-          title={p.overviewPracticeTitle}
-          value={p.overviewMetrics[2]?.value ?? ''}
-          body={p.overviewPracticeBody}
-          tone="graphite"
-        />
-      </div>
+      <nav aria-label={p.overviewHeroSubtitle} className="divide-y divide-border/60">
+        {loop.map(item => (
+          <Link key={item.href} href={item.href}
+            className="group flex min-h-16 items-center justify-between gap-4 rounded-md px-2 py-4 transition-colors duration-150 hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            <div className="min-w-0">
+              <h2 className="text-sm font-medium text-foreground">{item.title}</h2>
+              <p className="mt-1 text-sm leading-6 text-muted-foreground">{item.body}</p>
+            </div>
+            <ArrowUpRight size={16} className="shrink-0 text-muted-foreground group-hover:text-foreground" aria-hidden />
+          </Link>
+        ))}
+      </nav>
     </>
-  );
-}
-
-function OverviewStatCard({
-  href,
-  icon,
-  title,
-  value,
-  body,
-  tone,
-}: {
-  href: string;
-  icon: ReactNode;
-  title: string;
-  value: string;
-  body: string;
-  tone: 'amber' | 'sage' | 'graphite';
-}) {
-  const toneClass = tone === 'sage'
-    ? 'text-[var(--success)]'
-    : tone === 'amber'
-      ? 'text-[var(--amber)]'
-      : 'text-muted-foreground';
-
-  return (
-    <Link
-      href={href}
-      className={cn(
-        echoPanelClass,
-        'group block min-h-[8.75rem] p-5 transition-[background-color,border-color,transform] duration-150 hover:border-[var(--amber)]/30 hover:bg-muted/25 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-      )}
-    >
-      <div className="mb-5 flex items-start justify-between gap-4">
-        <div className={toneClass}>{icon}</div>
-        <span className="rounded-md bg-muted/45 px-2 py-1 font-sans text-xs text-muted-foreground">{value}</span>
-      </div>
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="font-sans text-base font-medium text-foreground">{title}</h2>
-        <ArrowUpRight size={15} className="text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" aria-hidden />
-      </div>
-      <p className="mt-3 font-sans text-sm leading-6 text-muted-foreground">{body}</p>
-    </Link>
   );
 }

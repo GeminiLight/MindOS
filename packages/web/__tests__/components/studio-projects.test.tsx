@@ -5,6 +5,7 @@ import { createRoot } from 'react-dom/client';
 import { getActiveSessionId, resetSession } from '@/lib/agent-session-store';
 import { setMessages } from '@/lib/agent-run-store';
 import { ASK_PANEL_SESSION_ACTIVATE_EVENT } from '@/lib/ask-panel-session-activation';
+import { STUDIO_PROJECTS } from '@/lib/studio-projects';
 
 vi.mock('@/lib/stores/locale-store', () => ({
   useLocale: () => ({ locale: 'en' as const }),
@@ -56,6 +57,7 @@ async function setInputValue(input: HTMLInputElement | HTMLTextAreaElement, valu
 describe('Studio Project UI', () => {
   beforeEach(() => {
     localStorage.clear();
+    localStorage.setItem('mindos:studio-projects', JSON.stringify(STUDIO_PROJECTS));
     mockPush.mockClear();
   });
 

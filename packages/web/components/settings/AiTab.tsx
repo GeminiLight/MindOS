@@ -275,7 +275,7 @@ export function AiTab({ data, setData, updateAi, updateAgent, t }: AiTabProps) {
                       <button
                         type="button"
                         onClick={() => applyProtocolChange(pendingProtocol)}
-                        className="rounded-md bg-[var(--amber)] px-2.5 py-1 text-xs font-medium text-[var(--amber-foreground)] transition-colors hover:bg-[var(--amber)]/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        className="min-h-11 rounded-md bg-[var(--amber-action)] px-3 py-1 text-xs font-medium text-[var(--amber-foreground)] transition-colors hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       >
                         {locale === 'zh' ? '确认切换' : 'Change'}
                       </button>

@@ -403,7 +403,9 @@ export const panelsEn = {
     overviewHeroSubtitle: 'Imprint · Insight · Promotion',
     overviewNarrativeTitle: 'Today’s narrative',
     overviewNarrativeBody:
-      'Today you moved important work forward and noticed a few new connections. Stay aware, then continue.',
+      'No reflection written yet. Start with something worth remembering and explore it with AI.',
+    overviewReflectionTitle: 'Your reflection',
+    overviewReflectAction: 'Reflect with AI',
     todayLabel: 'Today',
     weekLabel: 'This week',
     seasonLabel: 'This quarter',

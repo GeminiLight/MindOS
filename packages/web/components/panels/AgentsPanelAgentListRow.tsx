@@ -115,8 +115,8 @@ function AgentInstallButton({
       type="button"
       onClick={handleInstall}
       disabled={installing}
-      className={`flex items-center gap-1 px-2 py-1.5 text-2xs rounded-lg font-medium text-white disabled:opacity-50 transition-colors shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-        isError ? 'bg-error hover:bg-error/90' : isSuccess ? 'bg-success hover:bg-success/90' : 'bg-[var(--amber)] hover:bg-[var(--amber)]/90'
+      className={`flex min-h-11 items-center gap-1 px-2 py-1.5 text-xs rounded-lg font-medium disabled:opacity-50 transition-colors shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+        isError ? 'bg-error/10 text-error hover:bg-error/20' : isSuccess ? 'bg-success/10 text-success hover:bg-success/20' : '[--amber:var(--amber-action)] bg-[var(--amber)] text-[var(--amber-foreground)] hover:bg-[var(--amber)]/90'
       }`}
       aria-label={`${agentName} ${label}`}
     >

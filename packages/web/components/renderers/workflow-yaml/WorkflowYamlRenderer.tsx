@@ -109,7 +109,7 @@ export function WorkflowYamlRenderer({ filePath, content }: RendererContext) {
             <AlertCircle size={13} className="text-[var(--error)] shrink-0" />
             <span className="text-xs font-medium text-[var(--error)]">Parse issues found</span>
           </div>
-          <ul className="text-2xs text-[var(--error)]/70 pl-5 list-disc space-y-0.5">
+          <ul className="text-xs text-error pl-5 list-disc space-y-0.5">
             {parsed.errors.slice(0, 3).map((e, i) => <li key={i}>{e}</li>)}
           </ul>
         </div>

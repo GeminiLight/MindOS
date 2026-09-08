@@ -91,7 +91,7 @@ function RunStepCard({ step, canRun, onRun, onSkip, onCancel }: {
               )}
               {step.status === 'running' && (
                 <button onClick={onCancel}
-                  className="flex items-center gap-1 px-2 py-0.5 rounded-md text-2xs text-[var(--error)]/70 hover:text-[var(--error)] hover:bg-[var(--error)]/10 transition-colors">
+                  className="flex items-center gap-1 px-2 py-0.5 rounded-md text-xs text-error hover:bg-error/10 transition-colors">
                   <XCircle size={9} /> Stop
                 </button>
               )}
@@ -122,7 +122,7 @@ function RunStepCard({ step, canRun, onRun, onSkip, onCancel }: {
                     <AlertCircle size={10} className="text-[var(--error)]" />
                     <span className="text-2xs font-medium text-[var(--error)]">Error</span>
                   </div>
-                  <div className="text-xs text-[var(--error)]/80 whitespace-pre-wrap break-words leading-relaxed">{step.error}</div>
+                  <div className="text-xs text-error whitespace-pre-wrap break-words leading-relaxed">{step.error}</div>
                 </div>
               )}
               {step.output && (

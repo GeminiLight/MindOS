@@ -2,6 +2,8 @@
 
 import SettingsContent from './settings/SettingsContent';
 import type { Tab } from './settings/types';
+import { Dialog } from '@base-ui/react/dialog';
+import { useLocale } from '@/lib/stores/locale-store';
 
 interface SettingsModalProps {
   open: boolean;
@@ -18,13 +20,12 @@ export default function SettingsModal({
   onOpenPluginEntries,
   onOpenCommandCenter,
 }: SettingsModalProps) {
+  const { t } = useLocale();
   return (
-    <div style={{ display: open ? undefined : 'none' }}>
-      <div
-        className="fixed inset-0 z-app-modal flex items-end md:items-start justify-center md:pt-[10vh] modal-backdrop"
-        onClick={(e) => e.target === e.currentTarget && onClose()}
-      >
-        <div role="dialog" aria-modal="true" aria-label="Settings" className="w-full md:max-w-4xl lg:max-w-5xl md:mx-4 bg-card border-t md:border border-border rounded-t-xl md:rounded-xl shadow-xl flex flex-col h-[88vh] md:h-[80vh] md:max-h-[85vh] overflow-hidden">
+    <Dialog.Root open={open} onOpenChange={next => { if (!next) onClose(); }}>
+      <Dialog.Portal keepMounted>
+        <Dialog.Backdrop hidden={!open} className="fixed inset-0 z-app-modal modal-backdrop" />
+        <Dialog.Popup hidden={!open} aria-label={t.settings.title} className="fixed bottom-0 left-1/2 z-app-modal flex h-[88dvh] w-full -translate-x-1/2 flex-col overflow-hidden rounded-t-xl border-t border-border bg-card shadow-xl outline-none md:bottom-auto md:top-[10dvh] md:h-[80dvh] md:max-h-[85dvh] md:w-[calc(100%-2rem)] md:max-w-4xl md:rounded-xl md:border lg:max-w-5xl">
           <SettingsContent
             visible={open}
             variant="modal"
@@ -33,8 +34,8 @@ export default function SettingsModal({
             onOpenPluginEntries={onOpenPluginEntries}
             onOpenCommandCenter={onOpenCommandCenter}
           />
-        </div>
-      </div>
-    </div>
+        </Dialog.Popup>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }

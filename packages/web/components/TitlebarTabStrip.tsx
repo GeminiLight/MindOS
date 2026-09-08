@@ -443,7 +443,7 @@ export default function TitlebarTabStrip() {
         aria-label={t.workspaceTabs.homeTab}
         data-titlebar-home-button
         onClick={navigateHome}
-        className={`mb-1 mr-1 flex h-7 w-7 shrink-0 items-center justify-center self-end rounded-full transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+        className={`mb-1 ml-1 mr-1 flex h-7 w-7 shrink-0 items-center justify-center self-end rounded-full transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
           homeLauncherActive
             ? 'bg-[var(--amber-dim)] text-[var(--amber)]'
             : 'text-muted-foreground hover:bg-muted hover:text-foreground'

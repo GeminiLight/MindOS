@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   archiveInboxFiles,
   fetchInboxFiles,
@@ -7,6 +7,7 @@ import {
 } from '@/lib/inbox-client';
 
 describe('inbox-client', () => {
+  afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
   beforeEach(() => {
     vi.unstubAllGlobals();
   });
@@ -23,6 +24,34 @@ describe('inbox-client', () => {
       message: 'MIND_ROOT is not configured',
       status: 400,
     } satisfies Partial<InboxClientError>);
+  });
+
+  it.each(['headers', 'body'])('stops waiting for stalled queue %s and aborts the read', async stage => {
+    vi.useFakeTimers();
+    let signal: AbortSignal | undefined;
+    vi.stubGlobal('fetch', vi.fn((_url, init) => {
+      signal = init?.signal;
+      return stage === 'headers'
+        ? new Promise(() => {})
+        : Promise.resolve({ ok: true, json: () => new Promise(() => {}) });
+    }));
+    const result = fetchInboxFiles('Queue unavailable. Retry.').catch(error => error);
+    await vi.advanceTimersByTimeAsync(15000);
+    expect(signal?.aborted).toBe(true);
+    expect(await result).toMatchObject({ name: 'InboxClientError', message: 'Queue unavailable. Retry.' });
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('does not misrepresent an unreadable queue response as an empty queue', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => { throw new SyntaxError('Invalid JSON'); } })));
+    await expect(fetchInboxFiles('Could not read queue')).rejects.toThrow('Could not read queue');
+  });
+
+  it('clears its timeout after a successful empty queue read', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ files: [] }) })));
+    await expect(fetchInboxFiles('Load failed')).resolves.toEqual([]);
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   it('normalizes save results without treating skipped files as saved', async () => {

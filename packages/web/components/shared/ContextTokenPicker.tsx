@@ -59,6 +59,8 @@ export function ContextSelectionRow({
   open,
   chips,
   footerAction,
+  inlinePicker = false,
+  pickerFeedback,
   onQueryChange,
   onOpenChange,
   onSelect,
@@ -76,11 +78,14 @@ export function ContextSelectionRow({
   open: boolean;
   chips: ContextSelectedChip[];
   footerAction?: ContextPickerAction;
+  inlinePicker?: boolean;
+  pickerFeedback?: ReactNode;
   onQueryChange: (value: string) => void;
   onOpenChange: (open: boolean) => void;
   onSelect: (candidate: ContextSelectableItem) => void;
 }) {
   const rowRef = useRef<HTMLDivElement>(null);
+  const addRef = useRef<HTMLButtonElement>(null);
   const normalizedQuery = query.trim().toLowerCase();
   const filteredCandidates = candidates.filter((candidate) => {
     if (!normalizedQuery) return true;
@@ -100,6 +105,7 @@ export function ContextSelectionRow({
     const closeFromEscape = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
       onOpenChange(false);
+      addRef.current?.focus();
     };
 
     document.addEventListener('pointerdown', closeFromPointer, true);
@@ -111,27 +117,32 @@ export function ContextSelectionRow({
   }, [onOpenChange, open]);
 
   return (
-    <div ref={rowRef} className="grid grid-cols-[5.5rem_minmax(0,1fr)_2rem] items-center gap-2 py-1">
-      <div className="flex min-h-7 items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+    <div ref={rowRef} className={cn('grid items-center gap-2 py-1', inlinePicker ? 'grid-cols-[5rem_minmax(0,1fr)_2.75rem]' : 'grid-cols-[5.5rem_minmax(0,1fr)_2rem]')}
+      onKeyDownCapture={event => {
+        if (!open || event.key !== 'Escape') return;
+        event.preventDefault(); event.stopPropagation(); event.nativeEvent.stopImmediatePropagation();
+        onOpenChange(false); addRef.current?.focus();
+      }}>
+      <div className={cn('flex items-center gap-1.5 font-medium text-muted-foreground', inlinePicker ? 'min-h-11 text-xs' : 'min-h-7 text-[11px]')}>
         {icon}
         <span>{label}</span>
       </div>
       <div className="relative min-w-0">
         <div className="flex min-w-0 flex-wrap items-center gap-1.5">
           {chips.length === 0 ? (
-            <span className="min-w-0 truncate font-sans text-xs text-muted-foreground/80">{emptyLabel}</span>
+            <span className="min-w-0 truncate font-sans text-xs text-muted-foreground">{emptyLabel}</span>
           ) : chips.map((chip) => (
             <span
               key={chip.id}
               title={chip.title}
-              className="group inline-flex h-6 max-w-[180px] items-center gap-1 rounded-md bg-muted/45 px-1.5 text-[11px] text-foreground transition-colors hover:bg-muted/65"
+              className={cn('group inline-flex max-w-full items-center gap-1 rounded-md bg-muted/45 px-1.5 text-xs text-foreground transition-colors hover:bg-muted/65', inlinePicker ? 'min-h-11' : 'h-6 max-w-[180px]')}
             >
               <ContextTokenIcon value={chip.icon} label={chip.label} />
               <span className="truncate">{chip.label}</span>
               <button
                 type="button"
                 onClick={chip.onRemove}
-                className="rounded text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover:opacity-100"
+                className={cn('shrink-0 rounded text-muted-foreground transition-opacity hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover:opacity-100', inlinePicker ? 'flex h-11 w-11 items-center justify-center' : 'opacity-0')}
                 aria-label={chip.removeLabel}
               >
                 <X size={12} />
@@ -139,7 +150,7 @@ export function ContextSelectionRow({
             </span>
           ))}
         </div>
-        {open ? (
+        {open && !inlinePicker ? (
           <ContextPickerPopover
             kind={kind}
             searchLabel={searchLabel}
@@ -154,15 +165,19 @@ export function ContextSelectionRow({
         ) : null}
       </div>
       <button
+        ref={addRef}
         type="button"
         onClick={() => onOpenChange(!open)}
-        className="inline-flex h-7 w-7 shrink-0 items-center justify-center justify-self-end rounded-md border border-border/45 bg-background/55 text-muted-foreground transition-colors hover:border-[var(--amber)]/45 hover:bg-muted/45 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className={cn('inline-flex shrink-0 items-center justify-center justify-self-end rounded-md border border-border bg-background text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring', inlinePicker ? 'h-11 w-11' : 'h-7 w-7')}
         title={addTitle}
         aria-label={addTitle}
         aria-expanded={open}
       >
         <Plus size={13} />
       </button>
+      {open && inlinePicker && <div className="col-span-3 min-w-0">
+        <ContextPickerPopover kind={kind} searchLabel={searchLabel} noMatchesLabel={noMatchesLabel} query={query} candidates={filteredCandidates} selectedIds={selectedIds} onQueryChange={onQueryChange} onSelect={candidate => { onSelect(candidate); addRef.current?.focus(); }} footerAction={footerAction} inline feedback={pickerFeedback} />
+      </div>}
     </div>
   );
 }
@@ -175,6 +190,8 @@ function ContextPickerPopover({
   candidates,
   selectedIds,
   footerAction,
+  inline = false,
+  feedback,
   onQueryChange,
   onSelect,
 }: {
@@ -185,16 +202,18 @@ function ContextPickerPopover({
   candidates: ContextSelectableItem[];
   selectedIds: Set<string>;
   footerAction?: ContextPickerAction;
+  inline?: boolean;
+  feedback?: ReactNode;
   onQueryChange: (value: string) => void;
   onSelect: (candidate: ContextSelectableItem) => void;
 }) {
   return (
     <div
-      className="absolute left-0 top-full z-50 mt-1 w-[min(360px,calc(100vw-2rem))] rounded-lg border border-border/55 bg-popover p-1.5 shadow-lg"
+      className={cn('rounded-lg border border-border bg-popover p-1.5', inline ? 'w-full' : 'absolute left-0 top-full z-50 mt-1 w-[min(360px,calc(100vw-2rem))] shadow-lg')}
       data-context-token-picker={kind}
       data-session-context-picker={kind}
     >
-      <label className="flex h-8 items-center gap-1.5 rounded-md border border-border/45 bg-background/70 px-2 text-muted-foreground">
+      <label className={cn('flex items-center gap-1.5 rounded-md border border-border bg-background px-2 text-muted-foreground focus-within:ring-2 focus-within:ring-ring', inline ? 'h-11' : 'h-8')}>
         <Search size={13} />
         <input
           autoFocus
@@ -206,7 +225,7 @@ function ContextPickerPopover({
         />
       </label>
       <div className="mt-1 max-h-44 overflow-auto">
-        {candidates.length === 0 ? (
+        {feedback ?? (candidates.length === 0 ? (
           <div className="px-2 py-2 text-xs text-muted-foreground">{noMatchesLabel}</div>
         ) : candidates.map((candidate) => {
           const selected = selectedIds.has(candidate.id);
@@ -218,6 +237,7 @@ function ContextPickerPopover({
               onClick={() => onSelect(candidate)}
               className={cn(
                 'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                inline && 'min-h-11',
                 selected ? 'cursor-default text-muted-foreground' : 'text-foreground hover:bg-muted/55',
               )}
             >
@@ -231,7 +251,7 @@ function ContextPickerPopover({
               {selected ? <Check size={13} /> : null}
             </button>
           );
-        })}
+        }))}
       </div>
       {footerAction ? (
         <button

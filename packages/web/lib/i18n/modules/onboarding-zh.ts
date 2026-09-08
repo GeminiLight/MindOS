@@ -211,6 +211,10 @@ export const onboardingZh = {
     close: '关闭',
     skip: '跳过',
     stepLocked: '请先完成上一步',
+    saveFailed: '引导偏好未保存，请重试后再离开此页。',
+    loadFailed: '无法加载引导偏好。',
+    retry: '重试',
+    dismiss: '关闭引导',
     import: {
       title: '导入你的文件',
       cta: '导入',

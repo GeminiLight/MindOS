@@ -16,6 +16,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
+import { useLocale } from '@/lib/stores/locale-store';
 import { encodePath } from '@/lib/utils';
 import { getObsidianImportSupport, type ObsidianImportSupportKind } from '@/lib/obsidian-compat/import-policy';
 import {
@@ -124,6 +125,8 @@ export function ObsidianPluginHostSection({
   focusPluginId = null,
   onFocusedPlugin,
 }: ObsidianPluginHostSectionProps = {}) {
+  const { locale } = useLocale();
+  const isZh = locale === 'zh';
   const [plugins, setPlugins] = useState<ObsidianPluginStatus[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyKey, setBusyKey] = useState<string | null>(null);
@@ -649,8 +652,8 @@ export function ObsidianPluginHostSection({
     <>
       <SettingCard
         icon={<Terminal size={15} />}
-        title="Obsidian plugin host"
-        description="Enable imported lightweight plugins, load their commands, and inspect compatibility limits."
+        title={isZh ? 'Obsidian 插件' : 'Obsidian plugin host'}
+        description={isZh ? '启用已导入的轻量插件，加载命令，并查看兼容范围。' : 'Enable imported lightweight plugins, load their commands, and inspect compatibility limits.'}
         actions={(
           <div className="flex items-center gap-2">
           <button
@@ -660,16 +663,16 @@ export function ObsidianPluginHostSection({
             className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 text-xs text-foreground transition-colors hover:bg-muted/60 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
-            Refresh
+            {isZh ? '刷新' : 'Refresh'}
           </button>
           <button
             type="button"
             onClick={() => runAction('load-enabled')}
             disabled={loading || busyKey !== null || counts.enabled === 0}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--amber)] px-3 py-1.5 text-xs font-medium text-[var(--amber-foreground)] transition-colors disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="inline-flex min-h-11 items-center gap-1.5 rounded-lg bg-[var(--amber-action)] px-3 py-1.5 text-xs font-medium text-[var(--amber-foreground)] transition-colors hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             {busyKey === 'load-enabled:all' ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} />}
-            Load enabled
+            {isZh ? '加载已启用插件' : 'Load enabled'}
           </button>
           </div>
         )}
@@ -678,9 +681,9 @@ export function ObsidianPluginHostSection({
 
       <div className="space-y-3">
         <div className="flex flex-wrap gap-2 text-2xs text-muted-foreground">
-          <span className="rounded bg-muted/60 px-2 py-1 font-mono">{counts.total} imported</span>
-          <span className="rounded bg-muted/60 px-2 py-1 font-mono">{counts.enabled} enabled</span>
-          <span className="rounded bg-muted/60 px-2 py-1 font-mono">{counts.loaded} loaded</span>
+          <span className="rounded bg-muted/60 px-2 py-1 font-mono">{counts.total} {isZh ? '已导入' : 'imported'}</span>
+          <span className="rounded bg-muted/60 px-2 py-1 font-mono">{counts.enabled} {isZh ? '已启用' : 'enabled'}</span>
+          <span className="rounded bg-muted/60 px-2 py-1 font-mono">{counts.loaded} {isZh ? '已加载' : 'loaded'}</span>
           {counts.blocked > 0 && (
             <span className="rounded px-2 py-1 font-mono text-[var(--error)] bg-[color-mix(in_srgb,var(--error)_12%,transparent)]">{counts.blocked} blocked</span>
           )}

@@ -1,6 +1,8 @@
 'use client';
 
-import { useId } from 'react';
+import { Popover } from '@base-ui/react/popover';
+import { useRef } from 'react';
+import { X } from 'lucide-react';
 import type { ContextUsageMetadata } from '@/lib/agent/stream-consumer';
 import { useLocale } from '@/lib/stores/locale-store';
 
@@ -9,11 +11,19 @@ interface ContextStatusButtonProps {
 }
 
 function formatTokenCount(value: number | undefined): string {
-  if (!Number.isFinite(value)) return '0';
+  if (!Number.isFinite(value)) return '—';
   const normalized = Math.max(0, Math.round(value ?? 0));
   if (normalized >= 1_000_000) return `${(normalized / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`;
   if (normalized >= 1_000) return `${(normalized / 1_000).toFixed(1).replace(/\.0$/, '')}K`;
   return `${normalized}`;
+}
+
+function usagePercent(usage: ContextUsageMetadata): number | null {
+  if (!Number.isFinite(usage.usedTokens) || usage.usedTokens < 0
+    || !Number.isFinite(usage.contextWindow) || usage.contextWindow <= 0) return null;
+  // Keep the headline consistent with the displayed numerator and denominator.
+  const percent = usage.usedTokens / usage.contextWindow * 100;
+  return Number.isFinite(percent) ? Math.round(percent) : null;
 }
 
 function contextActionLabel(action: ContextUsageMetadata['action'], locale: string): string {
@@ -65,7 +75,8 @@ function contextWindowSourceLabel(source: ContextUsageMetadata['contextWindowSou
 }
 
 function buildTooltipLines(usage: ContextUsageMetadata, locale: string): string[] {
-  const percent = Math.max(0, Math.round(usage.percent));
+  const percent = usagePercent(usage);
+  if (percent === null) return [locale === 'zh' ? '上下文用量暂不可用' : 'Context usage unavailable'];
   const used = Math.max(0, Math.round(usage.usedTokens));
   const contextWindow = Math.max(0, Math.round(usage.contextWindow));
   const available = Math.max(0, contextWindow - used);
@@ -77,7 +88,7 @@ function buildTooltipLines(usage: ContextUsageMetadata, locale: string): string[
 
   if (locale === 'zh') {
     return [
-      `索引中 ${percent}%`,
+      `上下文占用 ${percent}%`,
       `上下文窗口: ${formatTokenCount(contextWindow)} tokens`,
       `已占用: ${formatTokenCount(used)} · 可用: ${formatTokenCount(available)}`,
       `窗口来源: ${source}`,
@@ -91,7 +102,7 @@ function buildTooltipLines(usage: ContextUsageMetadata, locale: string): string[
   }
 
   return [
-    `Indexing ${percent}%`,
+    `Context used ${percent}%`,
     `Context window: ${formatTokenCount(contextWindow)} tokens`,
     `Used: ${formatTokenCount(used)} · Available: ${formatTokenCount(available)}`,
     `Window source: ${source}`,
@@ -106,24 +117,24 @@ function buildTooltipLines(usage: ContextUsageMetadata, locale: string): string[
 
 export default function ContextStatusButton({ usage }: ContextStatusButtonProps) {
   const { locale } = useLocale();
-  const tooltipId = useId();
+  const closeRef = useRef<HTMLButtonElement>(null);
   if (!usage) return null;
 
-  const percent = Math.max(0, Math.round(usage.percent));
+  const percent = usagePercent(usage) ?? 0;
   const clampedPercent = Math.max(0, Math.min(100, percent));
   const radius = 7;
   const circumference = 2 * Math.PI * radius;
   const strokeDashoffset = circumference * (1 - clampedPercent / 100);
   const tooltipLines = buildTooltipLines(usage, locale);
-  const ariaLabel = tooltipLines.slice(0, 3).join('，');
+  const ariaLabel = tooltipLines.slice(0, 3).join(locale === 'zh' ? '，' : '; ');
 
   return (
-    <div className="group/context-status relative z-20 inline-flex h-7 w-7 shrink-0 items-center justify-center">
-      <button
+    <Popover.Root>
+      <Popover.Trigger
         type="button"
-        className="hit-target-box relative z-10 inline-flex h-7 w-7 items-center justify-center text-muted-foreground transition-colors duration-75 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [--hit-target-radius:var(--radius-lg)] [--hit-target-hover-bg:color-mix(in_srgb,var(--muted)_60%,transparent)] [--hit-target-active-bg:color-mix(in_srgb,var(--amber)_8%,transparent)]"
+        className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors duration-75 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         aria-label={ariaLabel}
-        aria-describedby={tooltipId}
+        title={tooltipLines[0]}
       >
         <svg
           aria-hidden="true"
@@ -152,21 +163,22 @@ export default function ContextStatusButton({ usage }: ContextStatusButtonProps)
             className="opacity-80"
           />
         </svg>
-      </button>
-      <div
-        id={tooltipId}
-        role="tooltip"
-        className="pointer-events-none absolute bottom-[calc(100%+6px)] left-1/2 z-50 hidden w-56 -translate-x-1/2 rounded-md border border-border/60 bg-popover px-3 py-2 text-left text-[11px] leading-relaxed text-popover-foreground shadow-lg group-hover/context-status:block group-focus-within/context-status:block"
-      >
-        <div className="font-medium text-foreground">{tooltipLines[0]}</div>
-        <div className="mt-1 text-muted-foreground">{tooltipLines[1]}</div>
-        <div className="text-muted-foreground">{tooltipLines[2]}</div>
-        {tooltipLines.slice(3).map((line, index) => (
-          <div key={line} className={index === 0 ? 'mt-1 text-2xs text-muted-foreground/70' : 'text-2xs text-muted-foreground/70'}>
-            {line}
-          </div>
-        ))}
-      </div>
-    </div>
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Positioner side="top" align="end" sideOffset={8} collisionPadding={12} collisionAvoidance={{ side: 'shift', align: 'shift', fallbackAxisSide: 'none' }} className="z-50">
+          <Popover.Popup initialFocus={closeRef} className="flex w-[min(20rem,calc(100vw-1.5rem))] max-h-[var(--available-height)] flex-col overflow-hidden rounded-xl border border-border bg-popover p-3 text-popover-foreground shadow-lg focus-visible:outline-none">
+            <div className="flex shrink-0 items-center justify-between gap-3">
+              <Popover.Title className="text-sm font-medium">{tooltipLines[0]}</Popover.Title>
+              <Popover.Close ref={closeRef} aria-label={locale === 'zh' ? '关闭上下文用量' : 'Close context usage'} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><X size={16} /></Popover.Close>
+            </div>
+            {tooltipLines.length > 1 && (
+              <div className="min-h-0 overflow-y-auto pb-1 text-xs leading-relaxed text-muted-foreground">
+                {tooltipLines.slice(1).map((line, index) => <p key={line} className={index === 2 ? 'mt-2' : undefined}>{line}</p>)}
+              </div>
+            )}
+          </Popover.Popup>
+        </Popover.Positioner>
+      </Popover.Portal>
+    </Popover.Root>
   );
 }

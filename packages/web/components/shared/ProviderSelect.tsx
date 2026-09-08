@@ -147,20 +147,18 @@ export default function ProviderSelect({
   if (useProviderEntryMode) {
     const entries = providerEntries ?? [];
 
+    if (entries.length === 0) return (
+      <div className="space-y-3">
+        <p className="text-sm text-muted-foreground">{locale === 'zh' ? '添加一个模型服务商，即可开始与 MindOS Agent 对话。' : 'Add a model provider to start talking with MindOS Agent.'}</p>
+        {onAdd && <button type="button" onClick={onAdd} className="min-h-11 inline-flex items-center gap-2 rounded-lg bg-[var(--amber-action)] px-4 text-sm font-medium text-[var(--amber-foreground)] transition-shadow hover:shadow-sm">
+          <Plus size={14} /><span>{locale === 'zh' ? '添加服务商' : 'Add provider'}</span>
+        </button>}
+      </div>
+    );
+
     return (
       <div className="space-y-2">
         <div data-provider-entry-grid className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-          {entries.length === 0 && (
-            <div className="rounded-lg border border-dashed border-border/70 bg-background/40 px-3 py-3 sm:col-span-2 xl:col-span-3">
-              <p className="text-sm font-medium text-foreground">
-                {locale === 'zh' ? '还没有服务商' : 'No providers yet'}
-              </p>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                {locale === 'zh' ? '添加一个模型服务商后，MindOS Agent 才能使用它。' : 'Add a model provider before MindOS Agent can use it.'}
-              </p>
-            </div>
-          )}
-
           {entries.map(cp => {
             const isSelected = value === cp.id;
             const preset = PROVIDER_PRESETS[cp.protocol];
@@ -182,7 +180,7 @@ export default function ProviderSelect({
               >
                 <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[11px] font-semibold ${
                   isSelected
-                    ? 'bg-[var(--amber)] text-[var(--amber-foreground)]'
+                    ? 'bg-[var(--amber-action)] text-[var(--amber-foreground)]'
                     : 'bg-muted text-muted-foreground group-hover:text-foreground'
                 }`}>
                   {preset.shortLabel.slice(0, 2)}

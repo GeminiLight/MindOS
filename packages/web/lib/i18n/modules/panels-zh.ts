@@ -403,7 +403,9 @@ export const panelsZh = {
     overviewHeroSubtitle: '印迹 · 洞察 · 承接',
     overviewNarrativeTitle: '今日叙述',
     overviewNarrativeBody:
-      '今天你专注推进了重要事项，也留意到一些新的灵感与连接。保持觉察，继续前行。',
+      '还没有写下记录。从一件值得记住的小事开始，与 AI 一起整理你的想法。',
+    overviewReflectionTitle: '你的记录',
+    overviewReflectAction: '与 AI 一起复盘',
     todayLabel: '今天',
     weekLabel: '本周',
     seasonLabel: '本季度',

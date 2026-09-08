@@ -1,14 +1,14 @@
 'use client';
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { CSSProperties, MouseEvent, ReactNode } from 'react';
-import { createPortal } from 'react-dom';
+import { useEffect, useMemo, useState } from 'react';
+import type { MouseEvent, ReactNode } from 'react';
+import { Popover } from '@base-ui/react/popover';
 import {
   Bot,
+  AlertCircle,
   BriefcaseBusiness,
   ChevronDown,
-  ChevronUp,
-  CircleHelp,
+  X,
   FolderOpen,
   Layers3,
   Loader2,
@@ -37,6 +37,7 @@ import {
 import { openMindPathInFileManager } from '@/lib/open-in-file-manager';
 import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
+import { apiFetch } from '@/lib/api';
 
 type SessionContextLabels = {
   title: string;
@@ -63,6 +64,10 @@ type SessionContextLabels = {
   applyNextTurn: string;
   spacesCount: (n: number) => string;
   assistantsCount: (n: number) => string;
+  loadingSpaces: string;
+  loadSpacesFailed: string;
+  retrySpaces: string;
+  close: string;
 };
 
 type SessionContextDockProps = {
@@ -99,16 +104,13 @@ const DEFAULT_LABELS: SessionContextLabels = {
   applyNextTurn: 'Changes apply to the next message.',
   spacesCount: (n) => `${n} space${n === 1 ? '' : 's'}`,
   assistantsCount: (n) => `${n} assistant${n === 1 ? '' : 's'}`,
+  loadingSpaces: 'Loading spaces…',
+  loadSpacesFailed: 'Could not load spaces. Try again.',
+  retrySpaces: 'Retry loading spaces',
+  close: 'Close context',
 };
 
 type PickerKind = 'spaces' | 'assistants';
-
-type TrayPosition = {
-  left: number;
-  width: number;
-  bottom: number;
-  maxHeight: number;
-};
 
 type WorkspaceSpaceRecord = {
   name?: string;
@@ -142,11 +144,11 @@ function assistantToCandidate(assistant: ContextAssistantRef): ContextSelectable
 }
 
 function isWorkspaceSpaceRecord(value: unknown): value is WorkspaceSpaceRecord {
-  return Boolean(
-    value
-    && typeof value === 'object'
-    && typeof (value as { path?: unknown }).path === 'string',
-  );
+  if (!value || typeof value !== 'object') return false;
+  const record = value as Record<string, unknown>;
+  return typeof record.path === 'string' && Boolean(record.path.trim())
+    && (record.name === undefined || typeof record.name === 'string')
+    && (record.description === undefined || typeof record.description === 'string');
 }
 
 function normalizeSpacePath(value: string): string {
@@ -221,15 +223,14 @@ export default function SessionContextDock({
   onSetWorkDir,
   onSetContextSelection,
 }: SessionContextDockProps) {
-  const rootRef = useRef<HTMLDivElement>(null);
-  const trayRef = useRef<HTMLDivElement>(null);
   const [expanded, setExpanded] = useState(false);
-  const [trayPosition, setTrayPosition] = useState<TrayPosition | null>(null);
   const [workDirDraftState, setWorkDirDraftState] = useState({ key: '', value: '' });
   const [openPicker, setOpenPicker] = useState<PickerKind | null>(null);
   const [spaceQuery, setSpaceQuery] = useState('');
   const [assistantQuery, setAssistantQuery] = useState('');
   const [workspaceSpaces, setWorkspaceSpaces] = useState<WorkspaceSpaceRecord[]>([]);
+  const [spacesStatus, setSpacesStatus] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [spacesAttempt, setSpacesAttempt] = useState(0);
   const [isOpeningWorkDir, setIsOpeningWorkDir] = useState(false);
   const resolvedLabels = useMemo<SessionContextLabels>(() => ({
     ...DEFAULT_LABELS,
@@ -258,78 +259,29 @@ export default function SessionContextDock({
     : resolvedLabels.none;
 
   useEffect(() => {
+    if (!expanded) return;
     let cancelled = false;
+    const controller = new AbortController();
+    setSpacesStatus('loading');
 
     async function loadWorkspaceSpaces() {
       try {
-        const response = await fetch('/api/file?op=list_spaces');
-        if (!response.ok) return;
-        const body = await response.json() as { spaces?: unknown };
-        if (cancelled || !Array.isArray(body.spaces)) return;
-        setWorkspaceSpaces(body.spaces.filter(isWorkspaceSpaceRecord));
+        const body = await apiFetch<{ spaces?: unknown }>('/api/file?op=list_spaces', { signal: controller.signal, timeout: 15_000 });
+        if (cancelled) return;
+        if (!Array.isArray(body.spaces) || !body.spaces.every(isWorkspaceSpaceRecord)) throw new Error('Invalid spaces response');
+        setWorkspaceSpaces(body.spaces);
+        setSpacesStatus('ready');
       } catch {
-        // Keep the built-in candidates available when the runtime cannot list spaces.
+        if (!cancelled) setSpacesStatus('error');
       }
     }
 
     loadWorkspaceSpaces();
     return () => {
       cancelled = true;
+      controller.abort();
     };
-  }, []);
-
-  useLayoutEffect(() => {
-    if (!expanded) return;
-
-    const updateTrayPosition = () => {
-      const rect = rootRef.current?.getBoundingClientRect();
-      if (!rect || typeof window === 'undefined') return;
-
-      const viewportPadding = 8;
-      const gap = 8;
-      const width = Math.min(rect.width, 720, window.innerWidth - viewportPadding * 2);
-      const left = Math.max(
-        viewportPadding,
-        Math.min(rect.left + (rect.width - width) / 2, window.innerWidth - viewportPadding - width),
-      );
-      const bottom = Math.max(viewportPadding, window.innerHeight - rect.top + gap);
-      const maxHeight = Math.max(120, rect.top - viewportPadding - gap);
-      const next = { left, width, bottom, maxHeight };
-
-      setTrayPosition((current) => (
-        current
-        && Math.abs(current.left - next.left) < 0.5
-        && Math.abs(current.width - next.width) < 0.5
-        && Math.abs(current.bottom - next.bottom) < 0.5
-        && Math.abs(current.maxHeight - next.maxHeight) < 0.5
-          ? current
-          : next
-      ));
-    };
-
-    updateTrayPosition();
-    window.addEventListener('resize', updateTrayPosition);
-    window.addEventListener('scroll', updateTrayPosition, true);
-    return () => {
-      window.removeEventListener('resize', updateTrayPosition);
-      window.removeEventListener('scroll', updateTrayPosition, true);
-    };
-  }, [expanded]);
-
-  useLayoutEffect(() => {
-    if (!expanded) return;
-
-    const handlePointerDown = (event: PointerEvent) => {
-      const target = event.target;
-      if (!(target instanceof Node)) return;
-      if (rootRef.current?.contains(target) || trayRef.current?.contains(target)) return;
-      setOpenPicker(null);
-      setExpanded(false);
-    };
-
-    document.addEventListener('pointerdown', handlePointerDown, true);
-    return () => document.removeEventListener('pointerdown', handlePointerDown, true);
-  }, [expanded]);
+  }, [expanded, spacesAttempt]);
 
   const setWorkDirDraft = (value: string) => {
     setWorkDirDraftState({ key: workDirDraftKey, value });
@@ -395,46 +347,23 @@ export default function SessionContextDock({
     });
   };
 
-  const trayStyle: CSSProperties = trayPosition
-    ? {
-      left: trayPosition.left,
-      width: trayPosition.width,
-      bottom: trayPosition.bottom,
-      maxHeight: trayPosition.maxHeight,
-    }
-    : { left: 0, width: 0, bottom: 0, visibility: 'hidden' };
-
   return (
-    <div ref={rootRef} className="relative border-b border-border/30">
-      {expanded && typeof document !== 'undefined' && createPortal(
-        <div
-          ref={trayRef}
-          className={cn(
-            'fixed z-50 overflow-visible rounded-xl border border-border/45 bg-popover/95 p-2.5 text-popover-foreground shadow-lg backdrop-blur supports-[backdrop-filter]:bg-popover/90',
-            compact && 'p-2',
-          )}
-          style={trayStyle}
-          onKeyDownCapture={(event) => {
-            if (event.key !== 'Escape') return;
-            if (openPicker) setOpenPicker(null);
-            else setExpanded(false);
-            event.stopPropagation();
-          }}
+    <div className="relative border-b border-border/30">
+      <Popover.Root open={expanded} onOpenChange={open => { setExpanded(open); if (!open) setOpenPicker(null); }}>
+      <Popover.Portal>
+        <Popover.Positioner side="top" align="start" sideOffset={8} collisionPadding={12} collisionAvoidance={{ side: 'shift', align: 'shift', fallbackAxisSide: 'none' }} className="z-50">
+        <Popover.Popup
+          className="flex w-[min(32rem,calc(100vw-1.5rem))] max-h-[var(--available-height)] flex-col overflow-hidden rounded-xl border border-border bg-popover p-3 text-popover-foreground shadow-lg focus-visible:outline-none"
         >
-          <div className="mb-1 flex items-center justify-between gap-3 px-1">
-            <div className="font-sans text-[11px] font-medium text-muted-foreground">{resolvedLabels.title}</div>
-            <span
-              role="img"
-              aria-label={resolvedLabels.applyNextTurn}
-              title={resolvedLabels.applyNextTurn}
-              className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground/75"
-            >
-              <CircleHelp size={13} />
-            </span>
+          <div className="mb-1 flex shrink-0 items-center justify-between gap-3 px-1">
+            <Popover.Title className="text-sm font-medium">{resolvedLabels.title}</Popover.Title>
+            <Popover.Close aria-label={resolvedLabels.close} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><X size={16} /></Popover.Close>
           </div>
+          <Popover.Description className="mb-3 shrink-0 px-1 text-xs leading-relaxed text-muted-foreground">{resolvedLabels.applyNextTurn}</Popover.Description>
 
-          <div className="grid grid-cols-[5.5rem_minmax(0,1fr)_2rem] items-center gap-2 py-1">
-            <div className="flex min-h-7 items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+          <div className="min-h-0 overflow-y-auto px-1 pb-1">
+          <div className="grid grid-cols-[5rem_minmax(0,1fr)_2.75rem] items-center gap-2 py-1">
+            <div className="flex min-h-11 items-center gap-1.5 text-xs font-medium text-muted-foreground">
               <BriefcaseBusiness size={13} />
               <span>{resolvedLabels.workDir}</span>
             </div>
@@ -450,8 +379,8 @@ export default function SessionContextDock({
                   browseLabel={resolvedLabels.workDirBrowse}
                   browseUnavailableLabel={resolvedLabels.workDirBrowseUnavailable}
                   wrapperClassName="min-w-0"
-                  inputClassName="h-7 rounded-lg border-border/45 bg-background/70 px-2.5 py-1 pr-9 text-xs"
-                  browseButtonClassName="right-1 h-6 w-6 rounded-md"
+                  inputClassName="h-11 rounded-lg border-border bg-background px-2.5 py-1 pr-11 text-sm"
+                  browseButtonClassName="right-0 h-11 w-11 rounded-md"
                   suggestionsClassName="text-xs"
                   suggestionClassName="py-1.5 text-xs"
                 />
@@ -462,7 +391,7 @@ export default function SessionContextDock({
               )}
             </div>
             {workDirEditable ? (
-              <span aria-hidden="true" className="h-7 w-7 justify-self-end" />
+                  <span aria-hidden="true" className="h-11 w-11 justify-self-end" />
             ) : (
               <button
                 type="button"
@@ -470,7 +399,7 @@ export default function SessionContextDock({
                 title={resolvedLabels.openRootInFileManager}
                 disabled={isOpeningWorkDir}
                 onClick={openCurrentWorkDir}
-                className="inline-flex h-7 w-7 items-center justify-center justify-self-end rounded-md text-muted-foreground/80 transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-60"
+                className="inline-flex h-11 w-11 items-center justify-center justify-self-end rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-60"
               >
                 {isOpeningWorkDir ? <Loader2 size={13} className="animate-spin" /> : <FolderOpen size={13} />}
               </button>
@@ -478,6 +407,22 @@ export default function SessionContextDock({
           </div>
 
           <ContextSelectionRow
+            inlinePicker
+            pickerFeedback={spacesStatus === 'loading' ? (
+              <p role="status" className="px-2 py-3 text-xs text-muted-foreground">{resolvedLabels.loadingSpaces}</p>
+            ) : spacesStatus === 'error' ? (
+              <div className="px-2 py-2">
+                <p role="alert" className="flex items-start gap-2 text-xs leading-relaxed text-foreground">
+                  <AlertCircle size={14} className="shrink-0 text-error" aria-hidden />
+                  <span>{resolvedLabels.loadSpacesFailed}</span>
+                </p>
+                <button type="button" aria-label={resolvedLabels.retrySpaces}
+                  className="mt-1 min-h-11 rounded-md px-2 text-xs font-medium text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  onClick={() => { setSpacesStatus('loading'); setSpacesAttempt(value => value + 1); }}>
+                  {resolvedLabels.retrySpaces}
+                </button>
+              </div>
+            ) : undefined}
             kind="spaces"
             icon={<Layers3 size={13} />}
             label={resolvedLabels.spaces}
@@ -503,6 +448,7 @@ export default function SessionContextDock({
           />
 
           <ContextSelectionRow
+            inlinePicker
             kind="assistants"
             icon={<Bot size={13} />}
             label={resolvedLabels.assistants}
@@ -526,23 +472,21 @@ export default function SessionContextDock({
               onRemove: () => removeAssistant(assistant.id),
             }))}
           />
-        </div>,
-        document.body,
-      )}
+          </div>
+        </Popover.Popup>
+        </Popover.Positioner>
+      </Popover.Portal>
 
-      <button
+      <Popover.Trigger
         type="button"
-        onClick={() => setExpanded((value) => !value)}
-        onKeyDown={(event) => {
-          if (event.key === 'Escape') setExpanded(false);
-        }}
         aria-label={resolvedLabels.title}
         aria-expanded={expanded}
         className={cn(
-          'group flex min-h-9 w-full items-center gap-1.5 px-3 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+          'group flex min-h-11 w-full flex-wrap items-center gap-x-2 gap-y-1 px-3 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
           compact && 'px-2',
         )}
       >
+        <span className="font-medium">{resolvedLabels.title}</span>
         <SummaryItem
           icon={<BriefcaseBusiness size={13} />}
           title={resolvedLabels.workDir}
@@ -550,22 +494,23 @@ export default function SessionContextDock({
           detail={workDir?.path}
           className="max-w-[46%] sm:max-w-[42%]"
         />
-        <SummaryItem
+        {selection.spaces.length > 0 && <SummaryItem
           icon={<Layers3 size={13} />}
           title={resolvedLabels.spaces}
-          value={String(selection.spaces.length)}
+          value={resolvedLabels.spacesCount(selection.spaces.length)}
           detail={spacesSummary}
-        />
-        <SummaryItem
+        />}
+        {selection.assistants.length > 0 && <SummaryItem
           icon={<Bot size={13} />}
           title={resolvedLabels.assistants}
-          value={String(selection.assistants.length)}
+          value={resolvedLabels.assistantsCount(selection.assistants.length)}
           detail={assistantsSummary}
-        />
+        />}
         <span className="ml-auto flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors group-hover:text-foreground">
-          {expanded ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+          <ChevronDown size={14} className={expanded ? 'rotate-180' : undefined} />
         </span>
-      </button>
+      </Popover.Trigger>
+      </Popover.Root>
     </div>
   );
 }
@@ -592,8 +537,7 @@ function SummaryItem({
       title={detail || `${title}: ${value}`}
     >
       {icon}
-      <span className="hidden shrink-0 font-medium text-muted-foreground sm:inline">{title}</span>
-      <span className="min-w-0 truncate font-normal text-foreground/90">
+      <span className="min-w-0 truncate font-normal text-foreground">
         {value}
       </span>
     </span>

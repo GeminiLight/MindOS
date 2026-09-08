@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useId, useRef } from 'react';
 import { useLocale } from '@/lib/stores/locale-store';
 import { FolderSync, PenLine, BarChart3, Sparkles, ArrowUpRight } from 'lucide-react';
 import OnboardingView from './OnboardingView';
-import Logo from './Logo';
+import Link from 'next/link';
 import GuideCard from './GuideCard';
 import ChatContent from '@/components/chat/ChatContent';
 import type { SpaceInfo } from '@/lib/space-records';
@@ -27,6 +27,8 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
   const smoothPush = useSmoothRouterPush();
   const [activeTab, setActiveTab] = useState(0);
   const [maximized, setMaximized] = useState(false);
+  const tabsId = useId();
+  const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const hasKnowledge = recent.length > 0 || (existingFiles?.length ?? 0) > 0 || (spaces?.length ?? 0) > 0;
 
   const toggleMaximize = useCallback(() => setMaximized(v => !v), []);
@@ -65,26 +67,20 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
       {!maximized && (
         <>
           {/* Guide Card */}
-          <div className="flex-shrink-0 px-4 md:px-6 pt-4 pb-6">
+          <div className="flex-shrink-0 px-4 md:px-6 has-[:not(:empty)]:pt-4">
             <div className="max-w-4xl mx-auto">
               <GuideCard hasExistingFiles={hasKnowledge} />
             </div>
           </div>
 
-          {/* Spacer top */}
-          <div className="flex-1 min-h-0" />
-
-          {/* Hero */}
-          <div className="flex-shrink-0 flex flex-col items-center text-center px-4 md:px-6 pb-8">
-            <div className="flex items-center gap-4 mb-3">
-              <Logo id="home-hero" className="w-10 h-5 opacity-90" />
-              <h1 className="text-2xl font-brand leading-none">
-                <span className="text-foreground">Mind</span><span className="text-[var(--amber)]">OS</span>
-              </h1>
+          <div className="flex-shrink-0 px-4 md:px-6 pt-6 pb-4">
+            <div className="max-w-4xl mx-auto flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+              <h1 className="text-xl font-display text-foreground">{t.ask.homeHeading}</h1>
+              <nav className="flex items-center gap-2" aria-label={t.ask.homeWorkLinks}>
+                <Link href="/capture" className="min-h-11 inline-flex items-center rounded-lg px-3 text-sm text-muted-foreground hover:bg-muted hover:text-foreground">{t.sidebar.capture}</Link>
+                <Link href="/wiki" className="min-h-11 inline-flex items-center rounded-lg px-3 text-sm text-muted-foreground hover:bg-muted hover:text-foreground">{t.sidebar.files}</Link>
+              </nav>
             </div>
-            <p className="text-sm text-muted-foreground/50 max-w-sm leading-relaxed">
-              {t.app.tagline}
-            </p>
           </div>
         </>
       )}
@@ -103,7 +99,7 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
         <div className={maximized ? 'flex-1 min-h-0 flex flex-col overflow-hidden' : 'w-full max-w-4xl'}>
           <div
             data-walkthrough="ask-button"
-            className={maximized ? 'flex-1 min-h-0 flex flex-col overflow-hidden' : 'rounded-xl border border-border/70 shadow-sm overflow-hidden flex flex-col max-h-[50vh]'}
+            className={maximized ? 'flex-1 min-h-0 flex flex-col overflow-hidden' : 'overflow-hidden flex flex-col max-h-[50vh]'}
           >
             <ChatContent
               visible={true}
@@ -126,8 +122,8 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
               <div className="w-full max-w-4xl">
 
                 {/* Pill Tabs */}
-                <div className="-mx-1 mb-5 overflow-x-auto px-1 pb-1" role="tablist" aria-label={t.ask.title}>
-                  <div className="flex w-max min-w-full items-center justify-start gap-1.5 sm:justify-center">
+                <div className="-mx-1 -mt-1 mb-5 overflow-x-auto px-1 pt-1 pb-1" role="tablist" aria-label={t.ask.title}>
+                  <div className="flex w-max min-w-full items-center justify-start gap-1.5">
                   {categories.map((cat, i) => {
                     const Icon = TAB_ICONS[i % TAB_ICONS.length];
                     const isActive = i === activeTab;
@@ -136,13 +132,27 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
                         key={cat.label}
                         type="button"
                         role="tab"
+                        id={`${tabsId}-tab-${i}`}
+                        aria-controls={`${tabsId}-panel`}
                         aria-selected={isActive}
+                        tabIndex={isActive ? 0 : -1}
+                        ref={node => { tabRefs.current[i] = node; }}
+                        onKeyDown={event => {
+                          const target = event.key === 'ArrowRight' ? (i + 1) % categories.length
+                            : event.key === 'ArrowLeft' ? (i - 1 + categories.length) % categories.length
+                            : event.key === 'Home' ? 0
+                            : event.key === 'End' ? categories.length - 1 : null;
+                          if (target === null) return;
+                          event.preventDefault();
+                          setActiveTab(target);
+                          tabRefs.current[target]?.focus();
+                        }}
                         onClick={() => setActiveTab(i)}
                         data-hit-active={isActive ? 'true' : undefined}
                         className={`hit-target-box flex items-center gap-1.5 px-4 py-2 text-xs font-medium transition-all duration-150 [--hit-target-radius:9999px] [--hit-target-active-bg:color-mix(in_srgb,var(--amber)_12%,transparent)] [--hit-target-hover-bg:color-mix(in_srgb,var(--muted)_40%,transparent)] ${
                           isActive
-                            ? 'text-[var(--amber)]'
-                            : 'text-muted-foreground/50 hover:text-muted-foreground'
+                            ? 'text-foreground'
+                            : 'text-muted-foreground hover:text-foreground'
                         }`}
                       >
                         <Icon size={13} />
@@ -154,7 +164,7 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
                 </div>
 
                 {/* Prompt Cards — 2x2 grid */}
-                <div className="grid grid-cols-2 gap-2" role="tabpanel">
+                <div id={`${tabsId}-panel`} aria-labelledby={`${tabsId}-tab-${activeTab}`} className="grid grid-cols-1 gap-2 sm:grid-cols-2" role="tabpanel">
                   {current.items.map((item, i) => (
                     <button
                       key={`${activeTab}-${i}`}
@@ -165,9 +175,9 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
                           <div className="text-[13px] font-medium text-foreground/90 leading-snug mb-0.5">{item.label}</div>
-                          <div className="text-xs text-muted-foreground/60 leading-relaxed">{item.desc}</div>
+                          <div className="text-xs text-muted-foreground leading-relaxed">{item.desc}</div>
                         </div>
-                        <ArrowUpRight size={14} className="shrink-0 mt-0.5 text-muted-foreground/20 group-hover:text-[var(--amber)] transition-colors" />
+                        <ArrowUpRight size={14} className="shrink-0 mt-0.5 text-muted-foreground group-hover:text-foreground transition-colors" aria-hidden />
                       </div>
                     </button>
                   ))}
@@ -176,14 +186,7 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
             </div>
           )}
 
-          {/* Spacer bottom */}
-          <div className="flex-1 min-h-0" />
-
-          {/* Footer */}
-          <div className="flex-shrink-0 py-4 flex items-center justify-center gap-2 text-[11px] text-muted-foreground/20">
-            <Logo id="home-footer" className="w-4 h-2 opacity-20" />
-            <span>{t.app.footer}</span>
-          </div>
+          <div className="h-6 shrink-0" aria-hidden />
         </>
       )}
     </div>

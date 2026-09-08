@@ -31,13 +31,13 @@ const COPY = {
     title: 'Studio',
     subtitle: 'Overview for projects, apps, automations, and inspectable context.',
     projectsTitle: 'Projects',
-    projectsDesc: 'Context, Sessions, and review in one durable project lane.',
+    projectsDesc: 'Keep related notes, conversations, and next steps together.',
     appsTitle: 'Apps',
-    appsDesc: 'Focused work surfaces for recurring personal workflows.',
+    appsDesc: 'Tools for the work you do regularly.',
     automationTitle: 'Automation',
     automationDesc: 'Scheduled plans and repeatable agent work.',
     contextTitle: 'Context',
-    contextDesc: 'Inspect recall assets and the receipts behind retrieval decisions.',
+    contextDesc: 'See which sources the AI can use and how they were selected.',
     continueTitle: 'Continue',
     continueHint: 'Best next move',
     openProject: 'Open Project',
@@ -46,6 +46,7 @@ const COPY = {
     openAutomation: 'Open Automation',
     openContext: 'Inspect Context',
     noProject: 'No projects yet.',
+    firstProject: 'Set up your first project',
     sessions: 'sessions',
     reviewItems: 'review',
     latestSession: 'Latest Session',
@@ -53,19 +54,19 @@ const COPY = {
     activeProjects: 'active',
     appCount: '2 apps',
     automationHint: 'plans',
-    contextHint: 'assets & receipts',
+    contextHint: 'sources & selection history',
   },
   zh: {
     title: '工作台',
     subtitle: '项目、应用、自动化与可检查上下文的总览。',
     projectsTitle: '项目',
-    projectsDesc: '把上下文、对话和复盘放进稳定的项目工作流。',
+    projectsDesc: '把相关笔记、对话和下一步行动放在一起。',
     appsTitle: '应用',
-    appsDesc: '面向高频个人工作流的专用工作面。',
+    appsDesc: '完成日常工作的专用工具。',
     automationTitle: '自动化',
     automationDesc: '定时计划和可重复的 Agent 工作。',
     contextTitle: '上下文',
-    contextDesc: '检查可回忆资产，以及检索决策背后的回执。',
+    contextDesc: '查看 AI 可使用的资料，以及这些资料如何被选中。',
     continueTitle: '继续推进',
     continueHint: '最值得做的下一步',
     openProject: '打开项目',
@@ -74,6 +75,7 @@ const COPY = {
     openAutomation: '打开自动化',
     openContext: '检查上下文',
     noProject: '还没有项目。',
+    firstProject: '设置第一个项目',
     sessions: '对话',
     reviewItems: '待复盘',
     latestSession: '最近对话',
@@ -81,7 +83,7 @@ const COPY = {
     activeProjects: '推进中',
     appCount: '2 个应用',
     automationHint: '计划',
-    contextHint: '资产与回执',
+    contextHint: '资料与选取记录',
   },
 } as const;
 
@@ -140,9 +142,12 @@ function StudioContinueOverview({
 }) {
   if (!project) {
     return (
-      <section data-studio-overview-continue className="border-y border-border/60 py-5">
-        <div className="text-sm font-semibold text-foreground">{copy.continueTitle}</div>
-        <p className="mt-1 text-sm text-muted-foreground">{copy.noProject}</p>
+      <section data-studio-overview-continue className="border-b border-border/60 pb-5">
+        <h2 className="text-base font-semibold text-foreground">{copy.noProject}</h2>
+        <p className="mt-2 max-w-prose text-sm leading-6 text-muted-foreground">{copy.projectsDesc}</p>
+        <Button render={<Link href="/studio/projects" />} nativeButton={false} variant="amber" size="xl" className="mt-4 min-h-11">
+          {copy.firstProject}<ArrowRight size={15} aria-hidden />
+        </Button>
       </section>
     );
   }
@@ -271,15 +276,15 @@ export default function StudioOverviewContent() {
           sessionCount={continueSessionCount}
         />
 
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4" aria-label={copy.title}>
-          <OverviewCard
+        <section className={`grid gap-4 md:grid-cols-2 ${projects.length > 0 ? 'xl:grid-cols-4' : 'xl:grid-cols-3'}`} aria-label={copy.title}>
+          {projects.length > 0 && <OverviewCard
             href="/studio/projects"
             icon={<FolderOpen size={17} aria-hidden="true" />}
             title={copy.projectsTitle}
             description={copy.projectsDesc}
             meta={`${projects.length} ${copy.projectsTitle} · ${activeProjects} ${copy.activeProjects} · ${sessionTotal} ${copy.sessions} · ${reviewItems} ${copy.reviewItems}`}
             action={copy.viewProjects}
-          />
+          />}
           <OverviewCard
             href="/studio/apps"
             icon={<Blocks size={17} aria-hidden="true" />}

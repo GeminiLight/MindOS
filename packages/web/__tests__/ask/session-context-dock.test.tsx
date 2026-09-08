@@ -50,7 +50,7 @@ function sessionWithSelection(selection: Partial<SessionContextSelection> = {}):
   };
 }
 
-function mountDock({
+async function mountDock({
   session = sessionWithSelection({
     spaces: [{ path: 'MIND_DAO', label: '道', icon: '道', source: 'manual' }],
     assistants: [{ id: 'daily-signal', name: 'Daily Signal', kind: 'assistant', source: 'manual' }],
@@ -68,7 +68,7 @@ function mountDock({
   document.body.appendChild(host);
   const root = createRoot(host);
 
-  act(() => {
+  await act(async () => {
     root.render(
       <SessionContextDock
         session={session}
@@ -83,7 +83,7 @@ function mountDock({
   return { host, root, onSetWorkDir, onSetContextSelection };
 }
 
-describe('SessionContextDock', () => {
+describe('SessionContextDock', async () => {
   beforeEach(() => {
     vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new Error('fetch unused in this test'))));
   });
@@ -93,14 +93,14 @@ describe('SessionContextDock', () => {
     document.body.innerHTML = '';
   });
 
-  it('renders a quiet collapsed summary without the legacy Context/None table copy', () => {
-    const { host, root } = mountDock();
+  it('names the collapsed context and shows selected counts without an empty table', async () => {
+    const { host, root } = await mountDock();
 
     expect(host.textContent).toContain('Mind');
-    expect(host.textContent).toContain('Spaces');
-    expect(host.textContent).toContain('Assistants');
+    expect(host.textContent).toContain('1 space');
+    expect(host.textContent).toContain('1 assistant');
     expect(host.textContent).toContain('1');
-    expect(host.textContent).not.toContain('Context');
+    expect(host.textContent).toContain('Context');
     expect(host.textContent).not.toContain('None');
 
     act(() => root.unmount());
@@ -117,32 +117,32 @@ describe('SessionContextDock', () => {
     }));
 
     const onSetContextSelection = vi.fn(() => true);
-    const { host, root } = mountDock({ onSetContextSelection });
+    const { host, root } = await mountDock({ onSetContextSelection });
 
     await act(async () => {
       await new Promise(resolve => setTimeout(resolve, 0));
     });
 
     const toggle = host.querySelector('button[aria-label="Context"]') as HTMLButtonElement;
-    act(() => {
+    await act(async () => {
       toggle.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
     const addSpace = document.body.querySelector('button[aria-label="Add Space"]') as HTMLButtonElement;
-    act(() => {
+    await act(async () => {
       addSpace.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
     expect(document.body.querySelector('[data-session-context-picker="spaces"]')?.textContent).not.toContain('术');
 
     const search = document.body.querySelector('input[aria-label="Search spaces"]') as HTMLInputElement;
-    act(() => {
+    await act(async () => {
       search.value = 'Research';
       search.dispatchEvent(new Event('input', { bubbles: true }));
     });
 
     const research = Array.from(document.body.querySelectorAll('button')).find((button) => button.textContent?.includes('Research')) as HTMLButtonElement;
-    act(() => {
+    await act(async () => {
       research.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
@@ -153,7 +153,7 @@ describe('SessionContextDock', () => {
     }));
 
     const removeDao = document.body.querySelector('button[aria-label="Remove 道"]') as HTMLButtonElement;
-    act(() => {
+    await act(async () => {
       removeDao.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
@@ -176,7 +176,7 @@ describe('SessionContextDock', () => {
     }));
 
     const onSetContextSelection = vi.fn(() => true);
-    const { host, root } = mountDock({
+    const { host, root } = await mountDock({
       session: sessionWithSelection(),
       onSetContextSelection,
     });
@@ -186,12 +186,12 @@ describe('SessionContextDock', () => {
     });
 
     const toggle = host.querySelector('button[aria-label="Context"]') as HTMLButtonElement;
-    act(() => {
+    await act(async () => {
       toggle.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
     const addSpace = document.body.querySelector('button[aria-label="Add Space"]') as HTMLButtonElement;
-    act(() => {
+    await act(async () => {
       addSpace.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
@@ -202,13 +202,13 @@ describe('SessionContextDock', () => {
     expect(pickerText).not.toContain('术');
 
     const search = document.body.querySelector('input[aria-label="Search spaces"]') as HTMLInputElement;
-    act(() => {
+    await act(async () => {
       search.value = 'Research';
       search.dispatchEvent(new Event('input', { bubbles: true }));
     });
 
     const research = Array.from(document.body.querySelectorAll('button')).find((button) => button.textContent?.includes('Research')) as HTMLButtonElement;
-    act(() => {
+    await act(async () => {
       research.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
@@ -225,31 +225,31 @@ describe('SessionContextDock', () => {
     act(() => root.unmount());
   });
 
-  it('adds Assistants through the searchable chip picker', () => {
+  it('adds Assistants through the searchable chip picker', async () => {
     const onSetContextSelection = vi.fn(() => true);
-    const { host, root } = mountDock({
+    const { host, root } = await mountDock({
       session: sessionWithSelection(),
       onSetContextSelection,
     });
 
     const toggle = host.querySelector('button[aria-label="Context"]') as HTMLButtonElement;
-    act(() => {
+    await act(async () => {
       toggle.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
     const addAssistant = document.body.querySelector('button[aria-label="Add Assistant"]') as HTMLButtonElement;
-    act(() => {
+    await act(async () => {
       addAssistant.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
     const search = document.body.querySelector('input[aria-label="Search assistants"]') as HTMLInputElement;
-    act(() => {
+    await act(async () => {
       search.value = 'Inbox';
       search.dispatchEvent(new Event('input', { bubbles: true }));
     });
 
     const inboxOrganizer = Array.from(document.body.querySelectorAll('button')).find((button) => button.textContent?.includes('Inbox Organizer')) as HTMLButtonElement;
-    act(() => {
+    await act(async () => {
       inboxOrganizer.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
@@ -262,20 +262,20 @@ describe('SessionContextDock', () => {
     act(() => root.unmount());
   });
 
-  it('uses icon-only controls for the locked WorkDir and next-message apply details', () => {
-    const { host, root } = mountDock({ workDirEditable: false });
+  it('explains next-message scope and keeps the locked folder action available', async () => {
+    const { host, root } = await mountDock({ workDirEditable: false });
 
     const toggle = host.querySelector('button[aria-label="Context"]') as HTMLButtonElement;
-    act(() => {
+    await act(async () => {
       toggle.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
     expect(document.body.textContent).not.toContain('Locked after first message');
     expect(document.body.textContent).not.toContain('Open root in file manager');
-    expect(document.body.textContent).not.toContain('Changes apply to the next message.');
+    expect(document.body.textContent).toContain('Changes apply to the next message.');
     expect(document.body.querySelector('[aria-label="Locked after first message"]')).toBeNull();
     expect(document.body.querySelector('[aria-label="Open root in file manager"]')).not.toBeNull();
-    expect(document.body.querySelector('[aria-label="Changes apply to the next message."]')).not.toBeNull();
+    expect(document.body.querySelector('[role="dialog"]')?.getAttribute('aria-describedby')).toBeTruthy();
 
     act(() => root.unmount());
   });
@@ -295,14 +295,14 @@ describe('SessionContextDock', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    const { host, root } = mountDock({ workDirEditable: false });
+    const { host, root } = await mountDock({ workDirEditable: false });
 
     await act(async () => {
       await Promise.resolve();
     });
 
     const toggle = host.querySelector('button[aria-label="Context"]') as HTMLButtonElement;
-    act(() => {
+    await act(async () => {
       toggle.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
@@ -320,21 +320,22 @@ describe('SessionContextDock', () => {
     act(() => root.unmount());
   });
 
-  it('collapses the expanded tray when the user clicks outside the context controls', () => {
-    const { host, root } = mountDock();
+  it('collapses the expanded tray when the user clicks outside the context controls', async () => {
+    const { host, root } = await mountDock();
     const outside = document.createElement('button');
     outside.textContent = 'Composer input';
     document.body.appendChild(outside);
 
     const toggle = host.querySelector('button[aria-label="Context"]') as HTMLButtonElement;
-    act(() => {
+    await act(async () => {
       toggle.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
     expect(document.body.querySelector('button[aria-label="Add Space"]')).not.toBeNull();
 
-    act(() => {
-      outside.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+    await act(async () => {
+      outside.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+      outside.click();
     });
 
     expect(document.body.querySelector('button[aria-label="Add Space"]')).toBeNull();

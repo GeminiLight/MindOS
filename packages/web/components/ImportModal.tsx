@@ -474,7 +474,7 @@ export default function ImportModal({ open, onClose, defaultSpace, initialFiles,
                           </label>
                         ))}
                         {im.conflict === 'overwrite' && (
-                          <p className="text-2xs text-error/80 pl-5">{t.fileImport.overwriteWarn}</p>
+                          <p className="text-xs text-error pl-5">{t.fileImport.overwriteWarn}</p>
                         )}
                       </div>
                     )}

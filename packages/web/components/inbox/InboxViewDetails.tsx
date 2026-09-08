@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useState, type ComponentType } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { AlertCircle, Archive, Check, ChevronDown, Eye, History, ListChecks, Plus, RotateCcw } from 'lucide-react';
+import { AlertCircle, Archive, Check, ChevronDown, Eye, History, RotateCcw } from 'lucide-react';
 import { useLocale } from '@/lib/stores/locale-store';
 import { encodePath } from '@/lib/utils';
 import type { OrganizeHistoryEntry } from '@/lib/organize-history';
@@ -304,85 +304,55 @@ export function InboxProcessNav({
 }) {
   const { t } = useLocale();
   const entries: Array<{
-    view: Exclude<InboxViewMode, 'capture'>;
-    icon: ComponentType<{ size?: number; className?: string }>;
+    view: InboxViewMode;
     label: string;
     count: number;
   }> = [
+    { view: 'capture', label: t.inbox.viewCapture, count: 0 },
     {
       view: 'queue',
-      icon: ListChecks,
       label: t.inbox.viewQueue,
       count: pendingCount,
     },
     {
       view: 'shelved',
-      icon: Archive,
       label: t.inbox.viewShelved,
       count: shelvedCount,
     },
     {
       view: 'history',
-      icon: History,
       label: t.inbox.viewHistory,
       count: doneCount,
     },
   ];
 
   return (
-    <nav className="md:hidden rounded-xl border border-border/60 bg-card/45 p-3 shadow-sm" aria-label={t.inbox.title}>
-      <button
-        type="button"
-        onClick={() => onSwitch('capture')}
-        aria-current={activeView === 'capture' ? 'page' : undefined}
-        className={`relative z-10 flex min-h-10 w-full touch-manipulation items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition-opacity focus-visible:ring-2 focus-visible:ring-ring ${
-          activeView === 'capture'
-            ? 'bg-[var(--amber)] text-[var(--amber-foreground)] hover:opacity-90'
-            : 'bg-[var(--amber)] text-[var(--amber-foreground)] hover:opacity-90'
-        }`}
-      >
-        <Plus size={13} />
-        {t.inbox.viewCapture}
-      </button>
-
-      <div className="mt-3">
-        <p className="mb-1.5 px-1 text-2xs font-medium uppercase tracking-wider text-muted-foreground/50">
-          {t.inbox.sidebarProcessTitle}
-        </p>
-        <div className="space-y-1">
+    <nav className="grid grid-cols-4 gap-1 rounded-lg bg-muted/35 p-1 md:hidden" aria-label={t.inbox.title}>
           {entries.map(entry => {
             const active = activeView === entry.view;
-            const Icon = entry.icon;
             return (
               <button
                 key={entry.view}
                 type="button"
                 onClick={() => onSwitch(entry.view)}
                 aria-current={active ? 'page' : undefined}
-                className={`relative z-10 flex min-h-10 w-full touch-manipulation items-center gap-2 rounded-lg border px-3 py-2 text-left transition-colors focus-visible:ring-2 focus-visible:ring-ring ${
+                className={`flex min-h-11 min-w-0 flex-wrap items-center justify-center gap-x-1 rounded-md px-1 py-2 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:ring-ring ${
                   active
-                    ? 'border-[var(--amber)]/45 bg-[var(--amber-subtle)] text-foreground'
-                    : 'border-transparent text-muted-foreground hover:bg-muted/45'
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:bg-muted/45 hover:text-foreground'
                 }`}
               >
-                <Icon size={13} className={`shrink-0 ${active ? 'text-[var(--amber)]' : 'text-muted-foreground/60'}`} />
-                <span className={`min-w-0 flex-1 truncate text-xs font-medium ${active ? 'text-foreground' : 'text-foreground/85'}`}>
+                <span className="min-w-0 break-words text-center">
                   {entry.label}
                 </span>
                 {entry.count > 0 && (
-                  <span className={`rounded-full px-1.5 py-px text-2xs font-medium tabular-nums ${
-                    active
-                      ? 'bg-background/75 text-[var(--amber-text)]'
-                      : 'bg-muted/55 text-muted-foreground/75'
-                  }`}>
+                  <span className="text-xs tabular-nums text-muted-foreground">
                     {entry.count}
                   </span>
                 )}
               </button>
             );
           })}
-        </div>
-      </div>
     </nav>
   );
 }

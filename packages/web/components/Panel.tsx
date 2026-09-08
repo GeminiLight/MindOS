@@ -20,6 +20,7 @@ import { useLocale } from '@/lib/stores/locale-store';
 import { listTrashAction } from '@/lib/actions';
 import { DEFAULT_LEFT_PANEL_WIDTH, LEFT_PANEL } from '@/lib/config/panel-sizes';
 import { fetchInboxFiles } from '@/lib/inbox-client';
+import { useResourceCount } from '@/hooks/useResourceCount';
 
 const noop = () => {};
 
@@ -146,7 +147,9 @@ export default function Panel({
   const moreBtnRef = useRef<HTMLButtonElement>(null);
   const morePopoverRef = useRef<HTMLDivElement>(null);
   const showHidden = useShowHiddenFiles();
-  const [trashCount, setTrashCount] = useState(0);
+  const loadTrashCount = useCallback(async () => (await listTrashAction()).length, []);
+  const trash = useResourceCount(loadTrashCount);
+  const { count: trashCount, refresh: fetchTrash } = trash;
 
   useEffect(() => {
     if (!morePopover) return;
@@ -167,27 +170,20 @@ export default function Panel({
     };
   }, [morePopover]);
 
-  const [inboxCount, setInboxCount] = useState(0);
-
-  const fetchTrash = useCallback(() => {
-    listTrashAction().then(items => setTrashCount(items.length)).catch(() => {});
-  }, []);
+  const loadInboxCount = useCallback(async () => (await fetchInboxFiles(t.inbox.loadFailed)).length, [t.inbox.loadFailed]);
+  const inbox = useResourceCount(loadInboxCount);
+  const { count: inboxCount, refresh: fetchInbox } = inbox;
 
   useEffect(() => {
     if (activePanel !== 'files') return;
 
-    const fetchInbox = () => {
-      fetchInboxFiles(t.inbox.loadFailed)
-        .then(files => setInboxCount(files.length))
-        .catch(() => setInboxCount(0));
-    };
     fetchTrash();
     fetchInbox();
     window.addEventListener('mindos:inbox-updated', fetchInbox);
     return () => {
       window.removeEventListener('mindos:inbox-updated', fetchInbox);
     };
-  }, [activePanel, t.inbox.loadFailed, fetchTrash]);
+  }, [activePanel, fetchInbox, fetchTrash]);
 
   // Debounced + path-filtered per the mindos:files-changed listener contract.
   useFilesChanged(fetchTrash, {
@@ -427,10 +423,9 @@ export default function Panel({
                   >
                     <Trash2 size={14} className="shrink-0" />
                     <span className="flex-1">{t.trash.title}</span>
-                    {trashCount > 0 && (
-                      <span className="text-xs text-muted-foreground tabular-nums">{trashCount}</span>
-                    )}
+                    <span className="text-xs text-muted-foreground tabular-nums" title={trash.error ? t.sidebar.countUnavailable : undefined}>{trashCount ?? '—'}{trash.error ? ' · !' : ''}</span>
                   </button>
+                  {trash.error && <button type="button" onClick={() => void fetchTrash()} className="min-h-11 w-full px-3 text-left text-xs text-error hover:bg-muted">{t.sidebar.countRetry}</button>}
                   <div className="my-1 border-t border-border/50" />
                   <button
                     className="hit-target-box w-full flex items-center gap-2 px-3 py-1.5 text-sm text-foreground transition-colors text-left [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:0px]"
@@ -482,7 +477,7 @@ export default function Panel({
           }`}>
             {t.sidebar.capture}
           </span>
-          {inboxCount > 0 && (
+          {inboxCount !== null && (
             <span className={`text-2xs font-medium tabular-nums px-1.5 py-px rounded-full transition-colors ${
               isInboxActive
                 ? 'bg-[var(--amber)]/15 text-[var(--amber)]'
@@ -490,6 +485,10 @@ export default function Panel({
             }`}>{inboxCount}</span>
           )}
         </button>
+        {inbox.error && <div className="mx-3 mb-2 flex items-center gap-2 text-xs" role="status">
+          <span className="flex-1 text-error">{t.sidebar.countUnavailable}</span>
+          <button type="button" onClick={() => void fetchInbox()} className="min-h-11 px-2 rounded-md text-foreground hover:bg-muted">{t.sidebar.countRetry}</button>
+        </div>}
         <SyncStatusBar collapsed={false} onOpenSyncSettings={onOpenSyncSettings} />
       </div>
 

@@ -75,6 +75,8 @@ export const aiChatEn = {
       { label: 'Brainstorm ideas', prompt: 'Brainstorm 3 creative ideas for my next project' },
     ],
     /** Categorized prompts for homepage explore section */
+    homeHeading: 'Continue your work',
+    homeWorkLinks: 'Open your workspace',
     homeCategories: [
       {
         label: 'Knowledge',
@@ -195,6 +197,10 @@ export const aiChatEn = {
       applyNextTurn: 'Changes apply to the next message.',
       spacesCount: (n: number) => `${n} space${n === 1 ? '' : 's'}`,
       assistantsCount: (n: number) => `${n} assistant${n === 1 ? '' : 's'}`,
+      loadingSpaces: 'Loading spaces…',
+      loadSpacesFailed: 'Could not load spaces. Try again.',
+      retrySpaces: 'Retry loading spaces',
+      close: 'Close context',
     },
   },
   changes: {

@@ -62,6 +62,9 @@ describe('HomeContent existing knowledge state', () => {
     expect(host.querySelector('[data-testid="onboarding-view"]')).toBeNull();
     expect(host.querySelector('[data-testid="chat-content"]')).not.toBeNull();
     expect(host.querySelector('[data-testid="guide-card"]')?.getAttribute('data-has-existing-files')).toBe('true');
+    expect(host.querySelector('a[href="/capture"]')).not.toBeNull();
+    expect(host.querySelector('a[href="/wiki"]')).not.toBeNull();
+    expect(host.textContent).not.toContain(messages.en.app.footer);
 
     await act(async () => {
       host.querySelector<HTMLButtonElement>('[data-testid="chat-content"]')!.click();
@@ -97,5 +100,30 @@ describe('HomeContent existing knowledge state', () => {
       root.unmount();
     });
     host.remove();
+  });
+
+  it('lets the keyboard select suggestions with a single tab stop and labelled panel', async () => {
+    const HomeContent = (await import('@/components/HomeContent')).default;
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    try {
+      await act(async () => root.render(<HomeContent recent={[]} existingFiles={['Notes/A.md']} />));
+      const tabs = Array.from(host.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
+      expect(tabs.filter(tab => tab.tabIndex === 0)).toHaveLength(1);
+      tabs[0].focus();
+      await act(async () => tabs[0].dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true })));
+      expect(document.activeElement).toBe(tabs.at(-1));
+      expect(tabs.at(-1)?.getAttribute('aria-selected')).toBe('true');
+      expect(host.querySelector('[role="tabpanel"]')?.getAttribute('aria-labelledby')).toBe(tabs.at(-1)?.id);
+      await act(async () => tabs.at(-1)!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true })));
+      expect(document.activeElement).toBe(tabs[0]);
+      await act(async () => tabs[0].dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true })));
+      expect(document.activeElement).toBe(tabs.at(-1));
+      expect(tabs[0].getAttribute('aria-controls')).toBe(host.querySelector('[role="tabpanel"]')?.id);
+    } finally {
+      await act(async () => root.unmount());
+      host.remove();
+    }
   });
 });

@@ -3,6 +3,7 @@ import {
   mkdtempSync,
   mkdirSync,
   readFileSync,
+  rmSync,
   symlinkSync,
   writeFileSync
 } from 'node:fs';
@@ -778,7 +779,9 @@ describe('MindOS server contract: product operations', () => {
     expect(writes).toEqual(['Y\nN\nN\n']);
   });
 
-  it('removes local configuration only when removeConfig is explicitly true', () => {
+  it('removes local configuration only when removeConfig is explicitly true', ({ onTestFinished }) => {
+    const homeDir = mkdtempSync(join(tmpdir(), 'mindos-uninstall-contract-'));
+    onTestFinished(() => rmSync(homeDir, { recursive: true, force: true }));
     const writes: string[] = [];
     const spawned: Array<{ command: string; args: string[]; options: Record<string, unknown>; unrefCalled: boolean; stdinEnded: boolean }> = [];
     const spawn = (command: string, args: string[], options: Record<string, unknown>) => {
@@ -794,6 +797,7 @@ describe('MindOS server contract: product operations', () => {
     };
 
     const response = handleUninstallPost({ removeConfig: true }, {
+      homeDir,
       cliPath: '/opt/mindos/bin/cli.js',
       nodeBin: '/usr/local/bin/node',
       env: { PATH: '/usr/bin' },

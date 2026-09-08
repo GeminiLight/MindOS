@@ -429,15 +429,15 @@ export function buildStudioProjectFromDraft(
     cadence: 'Project rhythm not set',
     cadenceZh: '尚未设置项目节奏',
     stage: 'draft',
-    progress: 12,
+    progress: 0,
     updated: 'Just now',
     nextAction: 'Start the first focused Session.',
     nextActionZh: '开始第一个聚焦 Session。',
     sessions: [],
-    reviewItems: ['Define promotion target'],
-    reviewItemsZh: ['确定沉淀目标'],
-    lessons: ['No reusable lesson yet'],
-    lessonsZh: ['暂无可复用经验'],
+    reviewItems: [],
+    reviewItemsZh: [],
+    lessons: [],
+    lessonsZh: [],
   };
 }
 
@@ -502,15 +502,9 @@ export function markStudioProjectOpened(projectId: string): void {
 }
 
 export function readStudioProjects(): StudioProject[] {
-  const seedIds = new Set(STUDIO_PROJECTS.map((project) => project.id));
-  const customProjects = readCustomProjects();
-  const customById = new Map(customProjects.map((project) => [project.id, project]));
-  const customOnlyProjects = customProjects.filter((project) => !seedIds.has(project.id));
-  const seedProjects = STUDIO_PROJECTS.map((project) => {
-    const override = customById.get(project.id);
-    return override ? { ...project, ...override } : project;
-  });
-  return [...customOnlyProjects, ...seedProjects];
+  // Examples are not personal history. Keep adopted, persisted legacy projects
+  // intact, but never append synthetic activity to an empty workspace.
+  return readCustomProjects();
 }
 
 function applyProjectDefaultsUpdate(project: StudioProject, updates: StudioProjectDefaultsUpdate): StudioProject {

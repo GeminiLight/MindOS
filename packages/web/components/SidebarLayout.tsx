@@ -11,11 +11,12 @@ import {
 import { flushSync } from 'react-dom';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { Search, Settings, Menu, X, FolderInput } from 'lucide-react';
+import { Search, Settings, Menu, FolderInput } from 'lucide-react';
 import ActivityBar from './ActivityBar';
 import TitlebarRow from './TitlebarRow';
 import Panel from './Panel';
 import MindFileTreeSections from './file-tree/MindFileTreeSections';
+import MobileNavigationDrawer, { MOBILE_DRAWER_BREAKPOINT_PX } from './MobileNavigationDrawer';
 import Logo from './Logo';
 import AskFab from './AskFab';
 import PluginEntriesDock from './plugins/PluginEntriesDock';
@@ -23,6 +24,7 @@ import PluginHotkeyHost from './plugins/PluginHotkeyHost';
 import SyncPopover from './panels/SyncPopover';
 import KeyboardShortcuts from './KeyboardShortcuts';
 import ChangesBanner from './changes/ChangesBanner';
+import SettingsSaveNotice from './settings/SettingsSaveNotice';
 import SpaceInitToast from './SpaceInitToast';
 import OrganizeToast from './OrganizeToast';
 import PanelLoadingFallback from './panels/PanelLoadingFallback';
@@ -90,7 +92,7 @@ import {
   type RoutePanelId,
 } from '@/lib/navigation-panel';
 import type { Tab } from './settings/types';
-import { MOBILE_SIDEBAR, RIGHT_AGENT_DETAIL_PANEL, getLeftPanelWidth } from '@/lib/config/panel-sizes';
+import { RIGHT_AGENT_DETAIL_PANEL, getLeftPanelWidth } from '@/lib/config/panel-sizes';
 import {
   MAIN_BODY_CONTENT_WIDTH_EVENT,
   parseContentWidthRatio,
@@ -154,9 +156,6 @@ const RightAgentDetailPanel = dynamic(() => import('./RightAgentDetailPanel'), {
 const RIGHT_AGENT_DETAIL_DEFAULT_WIDTH = RIGHT_AGENT_DETAIL_PANEL.DEFAULT;
 const RIGHT_AGENT_DETAIL_MIN_WIDTH = RIGHT_AGENT_DETAIL_PANEL.MIN;
 const RIGHT_AGENT_DETAIL_MAX_WIDTH = RIGHT_AGENT_DETAIL_PANEL.MAX_ABS;
-
-/** Tailwind `md` breakpoint: the mobile drawer is hidden at and above this width. */
-const MOBILE_DRAWER_BREAKPOINT_PX = 768;
 
 function useViewportWidth(): number {
   const [viewportWidth, setViewportWidth] = useState(0);
@@ -289,8 +288,6 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [mobileAskOpen, setMobileAskOpen] = useState(false);
   const mobileMenuButtonRef = useRef<HTMLButtonElement>(null);
-  const mobileDrawerCloseRef = useRef<HTMLButtonElement>(null);
-  const lastMobileDrawerTriggerRef = useRef<HTMLElement | null>(null);
 
   const { t } = useLocale();
   const inboxOrganize = useInboxOrganizeController({ aiOrganize, labels: t.inbox });
@@ -650,23 +647,6 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
     const id = requestAnimationFrame(() => setMobileOpen(false));
     return () => cancelAnimationFrame(id);
   }, [pathname]);
-
-  useEffect(() => {
-    if (!mobileOpen) {
-      lastMobileDrawerTriggerRef.current?.focus();
-      lastMobileDrawerTriggerRef.current = null;
-      return;
-    }
-    const focusFrame = requestAnimationFrame(() => mobileDrawerCloseRef.current?.focus());
-    const closeOnEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setMobileOpen(false);
-    };
-    document.addEventListener('keydown', closeOnEscape);
-    return () => {
-      cancelAnimationFrame(focusFrame);
-      document.removeEventListener('keydown', closeOnEscape);
-    };
-  }, [mobileOpen]);
 
   // Deep-link workbench routes keep their matching left panel aligned with URL.
   // Files/Mind routes are intentionally excluded so users can close that panel
@@ -1044,15 +1024,12 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
 
       {/* ── Mobile ── */}
       {/* top: var(--app-titlebar-h) — when the mac shell viewport drops below md, the header sits below the titlebar drag row */}
-      <header className="md:hidden fixed top-[var(--app-titlebar-h)] left-0 right-0 z-30 bg-card border-b border-border flex items-center justify-between px-3 py-2" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
+      <header className="mobile-app-header md:hidden fixed top-[var(--app-titlebar-h)] left-0 right-0 z-30 bg-card border-b border-border flex items-center justify-between px-3">
         <button
           ref={mobileMenuButtonRef}
-          onClick={() => {
-            lastMobileDrawerTriggerRef.current = mobileMenuButtonRef.current;
-            setMobileOpen(true);
-          }}
+          onClick={() => setMobileOpen(true)}
           className="p-3 -ml-1 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors active:bg-accent"
-          aria-label="Open menu"
+          aria-label={t.sidebar.openMenu}
           aria-haspopup="dialog"
           aria-expanded={mobileOpen}
         >
@@ -1079,24 +1056,12 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
         </div>
       </header>
 
-      {mobileOpen && <div className="md:hidden fixed inset-0 z-40 overlay-backdrop" onClick={() => setMobileOpen(false)} aria-hidden />}
-      <aside
-        role="dialog"
-        aria-modal="true"
-        aria-label="MindOS menu"
-        className={`md:hidden fixed top-0 left-0 h-screen z-50 bg-card border-r border-border flex flex-col transition-transform duration-300 ease-in-out ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}`}
-        style={{ width: MOBILE_SIDEBAR.WIDTH, maxWidth: MOBILE_SIDEBAR.MAX_WIDTH }}
+      <MobileNavigationDrawer
+        open={mobileOpen}
+        viewportWidth={viewportWidth}
+        onClose={handleMobileNavigate}
+        triggerRef={mobileMenuButtonRef}
       >
-        <div className="flex items-center justify-between px-4 py-4 border-b border-border shrink-0">
-          <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
-            <Logo id="drawer" />
-            <span className="text-foreground text-sm font-brand">MindOS</span>
-          </Link>
-          <button ref={mobileDrawerCloseRef} onClick={() => setMobileOpen(false)} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors" aria-label="Close menu">
-            <X size={16} />
-          </button>
-        </div>
-        <div className="flex-1 overflow-y-auto min-h-0 px-2 py-2">
           {mountMobileDrawerTree && (
             <MindFileTreeSections
               fileTree={fileTree}
@@ -1105,8 +1070,7 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
               onImport={handleOpenImport}
             />
           )}
-        </div>
-      </aside>
+      </MobileNavigationDrawer>
 
       {mobileSearchMounted && <SearchModal open={mobileSearchOpen} onClose={() => setMobileSearchOpen(false)} />}
       {mobileAskMounted && <AskModal open={effectiveMobileAskOpen} onClose={() => setMobileAskOpen(false)} currentFile={currentFile} />}
@@ -1114,9 +1078,7 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
       <main
         id="main-content"
         tabIndex={-1}
-        aria-hidden={mobileOpen || undefined}
-        inert={mobileOpen ? true : undefined}
-        className="app-main-scrollport fixed inset-x-0 bottom-0 top-[var(--app-titlebar-h)] overflow-y-auto overflow-x-hidden transition-[padding-left,padding-right] duration-200 pt-[52px] md:pt-0"
+        className="app-main-scrollport fixed inset-x-0 bottom-0 top-[var(--app-titlebar-h)] overflow-y-auto overflow-x-hidden transition-[padding-left,padding-right] duration-200 md:pt-0"
         onDragEnter={(e) => {
           if (!e.dataTransfer.types.includes('Files')) return;
           e.preventDefault();
@@ -1143,6 +1105,7 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
         {/* The app scrollport starts below the titlebar row, so the scrollbar gutter
             is reserved only in the content area and the tab header stays full width. */}
         <div className="min-h-full bg-background">
+          <SettingsSaveNotice editing={settingsOpen || pathname === '/settings'} onOpen={tab => { setSettingsTab(tab); setSettingsOpen(true); }} />
           <ChangesBanner />
           {children}
         </div>

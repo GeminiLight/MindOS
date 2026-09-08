@@ -457,7 +457,7 @@ export default function ActivityBar({
             });
             if (!isHome) smoothPush('/');
           }}
-          className={`relative z-10 flex items-center ${expanded ? 'px-3 gap-2' : 'justify-center'} w-full h-[var(--app-titlebar-h)] shrink-0 transition-opacity cursor-pointer ${isHome ? 'opacity-100' : 'opacity-50 hover:opacity-80'}`}
+          className={`relative z-10 flex items-center ${expanded ? 'px-3 gap-2' : 'justify-center'} w-full h-[var(--app-titlebar-h)] shrink-0 transition-opacity cursor-pointer [--focus-ring-offset:-3px] [--focus-ring-width:3px] focus-visible:opacity-100 ${isHome ? 'opacity-100' : 'opacity-50 hover:opacity-80'}`}
           aria-label="MindOS Home"
         >
           <Logo id="rail" className="w-7 h-3.5 shrink-0" />

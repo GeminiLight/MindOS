@@ -31,6 +31,7 @@
   --color-tool-read: var(--tool-read);
   --color-tool-search: var(--tool-search);
   --color-amber-foreground: var(--amber-foreground);
+  --color-amber-action: var(--amber-action);
   --color-logo-sparkle: var(--logo-sparkle);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
@@ -63,6 +64,20 @@ body {
   background-color: var(--background);
   scrollbar-gutter: stable;
   scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+  scroll-padding-block: 8px;
+}
+
+.mobile-app-header {
+  /* 44px targets + 4px focus clearance above/below + 1px border. */
+  padding-top: calc(env(safe-area-inset-top, 0px) + 4px);
+  padding-bottom: 4px;
+}
+
+@media (width < 48rem) {
+  .app-main-scrollport {
+    padding-top: var(--mobile-header-height);
+    scroll-padding-top: calc(var(--mobile-header-height) + 8px);
+  }
 }
 
 .stable-scroll-area,
@@ -74,6 +89,7 @@ body {
 
 :root {
   color-scheme: light;
+  --mobile-header-height: calc(53px + env(safe-area-inset-top, 0px));
   --font-inter: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-ibm-plex-sans: "IBM Plex Sans", Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-ibm-plex-mono: "IBM Plex Mono", "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
@@ -98,16 +114,17 @@ body {
   --destructive-foreground: #ffffff;
   --border: rgba(28, 26, 23, 0.1);
   --input: rgba(28, 26, 23, 0.12);
-  --ring: var(--amber);
+  --ring: #95551b;
   --radius: 0.5rem;
   --amber: #c8873a;
+  --amber-action: #95551b;
   --amber-text: #9a6a2b;
   --amber-dim: rgba(200, 135, 58, 0.18);
   --amber-subtle: rgba(200, 135, 30, 0.08);
   --amber-foreground: #ffffff;
   --logo-sparkle: #FEF3C7;
-  --success: #5a8d60;
-  --error: #c85050;
+  --success: #234b2c;
+  --error: #762c2c;
   --tool-read: #5a8ab4;
   --tool-search: #9a7ab4;
   --sidebar: #ede9e1;
@@ -117,7 +134,7 @@ body {
   --sidebar-accent: #d9d3c6;
   --sidebar-accent-foreground: #1c1a17;
   --sidebar-border: rgba(28, 26, 23, 0.08);
-  --sidebar-ring: rgba(28, 26, 23, 0.3);
+  --sidebar-ring: var(--ring);
   --scrollbar-track: transparent;
   --scrollbar-thumb: color-mix(in srgb, var(--foreground) 24%, transparent);
   --scrollbar-thumb-hover: color-mix(in srgb, var(--foreground) 34%, transparent);
@@ -143,15 +160,16 @@ body {
   --destructive-foreground: #ffffff;
   --border: rgba(232, 228, 220, 0.08);
   --input: rgba(232, 228, 220, 0.1);
-  --ring: var(--amber);
+  --ring: #e0a85e;
   --amber: #d4954a;
+  --amber-action: #a46328;
   --amber-text: #e0a85e;
   --amber-dim: rgba(212, 149, 74, 0.20);
   --amber-subtle: rgba(212, 149, 74, 0.10);
   --amber-foreground: #ffffff;
   --logo-sparkle: #FEF3C7;
-  --success: #7aad80;
-  --error: #c85050;
+  --success: #a0c4a4;
+  --error: #eeaaa4;
   --tool-read: #8ab4d8;
   --tool-search: #c8a0d8;
   --sidebar: #1c1a17;
@@ -161,13 +179,13 @@ body {
   --sidebar-accent: #252219;
   --sidebar-accent-foreground: #e8e4dc;
   --sidebar-border: rgba(232, 228, 220, 0.07);
-  --sidebar-ring: rgba(232, 228, 220, 0.2);
+  --sidebar-ring: var(--ring);
   --scrollbar-thumb: color-mix(in srgb, var(--foreground) 28%, transparent);
   --scrollbar-thumb-hover: color-mix(in srgb, var(--foreground) 42%, transparent);
 }
 
 @layer base {
-  * { @apply border-border outline-ring/50; }
+  * { @apply border-border outline-ring; }
   body { @apply bg-background text-foreground; }
 }
 
@@ -761,13 +779,13 @@ body {
   }
 }
 
-/* Global focus-visible ring for interactive elements */
-button:focus-visible,
-a:focus-visible,
-[role="button"]:focus-visible {
-  outline: 2px solid var(--amber);
-  outline-offset: 2px;
-  border-radius: 4px;
+/* Global focus-visible ring: preserve component geometry and use a dedicated
+   contrast-safe amber, independent of a button's local --amber background. */
+:is(button, a[href], input:not([type="hidden"]), textarea, select, summary,
+    [role="button"], [tabindex]:not([tabindex="-1"])):focus-visible {
+  outline: var(--focus-ring-width, 2px) solid var(--ring);
+  outline-offset: var(--focus-ring-offset, 2px);
+  scroll-margin: 8px;
 }
 
 /* ─── Milkdown typography overrides are in styles/milkdown-overrides.css ─── */
@@ -918,8 +936,8 @@ input[type="checkbox"].form-check:checked:active {
   border-color: var(--amber);
 }
 input[type="checkbox"].form-check:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 2px var(--ring);
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
 }
 input[type="checkbox"].form-check:disabled {
   opacity: 0.5;
@@ -940,8 +958,8 @@ input[type="radio"].form-radio:checked {
   border: 4px solid var(--amber);
 }
 input[type="radio"].form-radio:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 2px var(--ring);
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
 }
 
 /* ── Workspace titlebar row (spec-titlebar-row) ──

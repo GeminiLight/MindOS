@@ -233,14 +233,18 @@ describe('ChatContent runtime selector placement', () => {
 
     expect(host.querySelector('[data-testid="permission-capsule"]')).toBeTruthy();
     expect(host.querySelector('[data-testid="provider-capsule"]')).toBeTruthy();
-    expect(host.querySelector('button[aria-label*="索引中 73%"]')).toBeTruthy();
-    expect(host.textContent).toContain('上下文窗口: 128K tokens');
-    expect(host.textContent).toContain('已占用: 36K · 可用: 92K');
+    const usage = host.querySelector<HTMLButtonElement>('button[aria-label*="上下文占用 28%"]');
+    expect(usage).toBeTruthy();
+    await act(async () => usage!.click());
+    const details = document.querySelector('[role="dialog"]');
+    expect(details?.textContent).toContain('上下文窗口: 128K tokens');
+    expect(details?.textContent).toContain('已占用: 36K · 可用: 92K');
     expect(host.querySelector('[data-testid="runtime-switcher"]')?.textContent).toBe('MindOS');
     expect(host.querySelector('[data-testid="agent-selector"]')).toBeNull();
 
     await act(async () => {
       root.unmount();
     });
+    host.remove();
   });
 });

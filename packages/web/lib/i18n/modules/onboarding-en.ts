@@ -211,6 +211,10 @@ export const onboardingEn = {
     close: 'Close',
     skip: 'Skip',
     stepLocked: 'Complete the previous step first',
+    saveFailed: 'Your guide preferences were not saved. Retry before leaving this page.',
+    loadFailed: 'Could not load your guide preferences.',
+    retry: 'Retry',
+    dismiss: 'Dismiss guide',
     import: {
       title: 'Import your files',
       cta: 'Import',

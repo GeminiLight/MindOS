@@ -25,7 +25,8 @@ describe('Sidebar width contract', () => {
     expect(leftPanel).not.toContain('280');
     expect(leftPanel).not.toContain('56');
 
-    expect(sidebarLayout).toContain('MOBILE_SIDEBAR');
+    expect(sidebarLayout).toContain('MobileNavigationDrawer');
+    expect(readSource('components/MobileNavigationDrawer.tsx')).toContain('MOBILE_SIDEBAR');
     expect(sidebarLayout).not.toContain('w-[85vw]');
     expect(sidebarLayout).not.toContain('max-w-[320px]');
   });

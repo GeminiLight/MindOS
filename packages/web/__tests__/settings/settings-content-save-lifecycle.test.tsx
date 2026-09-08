@@ -90,6 +90,7 @@ function makeSettings(activeProvider: string): SettingsData {
 
 describe('SettingsContent save lifecycle', () => {
   beforeEach(() => {
+    vi.resetModules();
     vi.useFakeTimers();
     vi.clearAllMocks();
     localStorage.clear();
@@ -115,6 +116,141 @@ describe('SettingsContent save lifecycle', () => {
 
   afterEach(() => {
     vi.useRealTimers();
+  });
+
+  it('recovers failed settings after the editing page has unmounted', async () => {
+    const SettingsContent = (await import('@/components/settings/SettingsContent')).default;
+    mockApiFetch.mockImplementation((_url: string, opts?: RequestInit) => !opts?.method
+      ? Promise.resolve(makeSettings('p_initial')) : Promise.reject(new Error('offline')));
+    const host = document.createElement('div'); document.body.appendChild(host);
+    let root = createRoot(host);
+    try {
+      await act(async () => root.render(<SettingsContent visible initialTab="ai" variant="panel" />));
+      await act(async () => Array.from(host.querySelectorAll('button')).find(b => b.textContent === 'first')!.click());
+      await act(async () => root.unmount());
+      root = createRoot(host);
+      await act(async () => root.render(<SettingsContent visible initialTab="ai" variant="panel" />));
+      expect(host.querySelector('[data-testid="active-provider"]')?.textContent).toBe('p_first');
+      expect(host.textContent).toContain('Save failed');
+    } finally { await act(async () => root.unmount()); host.remove(); }
+  });
+
+  it('protects refresh while settings are unsaved and releases it only after a successful save', async () => {
+    const SettingsContent = (await import('@/components/settings/SettingsContent')).default;
+    const pending = deferred<unknown>();
+    mockApiFetch.mockImplementation((_url: string, opts?: RequestInit) => !opts?.method
+      ? Promise.resolve(makeSettings('p_initial')) : pending.promise);
+    const host = document.createElement('div'); document.body.appendChild(host);
+    const root = createRoot(host);
+    try {
+      await act(async () => root.render(<SettingsContent visible initialTab="ai" variant="panel" />));
+      await act(async () => Array.from(host.querySelectorAll('button')).find(b => b.textContent === 'first')!.click());
+      const leaving = new Event('beforeunload', { cancelable: true }); window.dispatchEvent(leaving);
+      expect(leaving.defaultPrevented).toBe(true);
+      await act(async () => { await vi.advanceTimersByTimeAsync(800); pending.resolve({}); await pending.promise; });
+      const savedLeaving = new Event('beforeunload', { cancelable: true }); window.dispatchEvent(savedLeaving);
+      expect(savedLeaving.defaultPrevented).toBe(false);
+    } finally { await act(async () => root.unmount()); host.remove(); }
+  });
+
+  it('shares edits between two settings surfaces without duplicate autosaves', async () => {
+    const SettingsContent = (await import('@/components/settings/SettingsContent')).default;
+    mockApiFetch.mockImplementation((_url: string, opts?: RequestInit) => !opts?.method
+      ? Promise.resolve(makeSettings('p_initial')) : Promise.resolve({}));
+    const host = document.createElement('div'); document.body.appendChild(host); const root = createRoot(host);
+    try {
+      await act(async () => root.render(<><SettingsContent visible initialTab="ai" variant="panel" /><SettingsContent visible initialTab="ai" variant="modal" /></>));
+      await act(async () => Array.from(host.querySelectorAll('button')).find(b => b.textContent === 'first')!.click());
+      expect(Array.from(host.querySelectorAll('[data-testid="active-provider"]')).map(node => node.textContent)).toEqual(['p_first', 'p_first']);
+      await act(async () => { await vi.advanceTimersByTimeAsync(800); });
+      expect(mockApiFetch.mock.calls.filter(([, options]) => options?.method === 'POST')).toHaveLength(1);
+    } finally { await act(async () => root.unmount()); host.remove(); }
+  });
+
+  it('keeps failed changes visible until an explicit retry succeeds', async () => {
+    const SettingsContent = (await import('@/components/settings/SettingsContent')).default;
+    let shouldFail = true;
+    const bodies: SettingsData[] = [];
+    mockApiFetch.mockImplementation((_url: string, opts?: RequestInit) => {
+      if (!opts?.method) return Promise.resolve(makeSettings('p_initial'));
+      bodies.push(JSON.parse(String(opts.body)));
+      return shouldFail ? Promise.reject(new Error('offline')) : Promise.resolve({});
+    });
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    try {
+      await act(async () => { root.render(<SettingsContent visible initialTab="ai" variant="panel" />); });
+      await act(async () => { Array.from(host.querySelectorAll('button')).find(b => b.textContent === 'first')!.click(); });
+      await act(async () => { await vi.advanceTimersByTimeAsync(800); });
+      await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+      expect(host.textContent).toContain('Save failed');
+      expect(bodies).toHaveLength(1);
+      const retry = Array.from(host.querySelectorAll('button')).find(b => b.textContent === 'Retry save');
+      expect(retry).toBeTruthy();
+      shouldFail = false;
+      await act(async () => { retry!.click(); });
+      expect(bodies.map(body => body.ai.activeProvider)).toEqual(['p_first', 'p_first']);
+      expect(host.textContent).not.toContain('Save failed');
+      expect(host.textContent).toContain('Saved');
+    } finally {
+      await act(async () => root.unmount());
+      host.remove();
+    }
+  });
+
+  it.each(['ai', 'knowledge', 'plugins'] as const)('offers a working load retry on the %s tab', async (tab) => {
+    const SettingsContent = (await import('@/components/settings/SettingsContent')).default;
+    mockApiFetch.mockRejectedValueOnce(new Error('offline')).mockResolvedValue(makeSettings('p_initial'));
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    try {
+      await act(async () => { root.render(<SettingsContent visible initialTab={tab} variant="panel" />); });
+      expect(host.textContent).toContain('Failed to load settings');
+      const retry = Array.from(host.querySelectorAll('button')).find(b => b.textContent === 'Retry loading');
+      expect(retry).toBeTruthy();
+      await act(async () => { retry!.click(); });
+      expect(mockApiFetch).toHaveBeenCalledTimes(2);
+      expect(host.textContent).not.toContain('Failed to load settings');
+    } finally {
+      await act(async () => root.unmount());
+      host.remove();
+    }
+  });
+
+  it('preserves failed local changes when settings is closed and reopened', async () => {
+    const SettingsContent = (await import('@/components/settings/SettingsContent')).default;
+    mockApiFetch.mockImplementation((_url: string, opts?: RequestInit) => opts?.method
+      ? Promise.reject(new Error('offline')) : Promise.resolve(makeSettings('p_initial')));
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    try {
+      await act(async () => { root.render(<SettingsContent visible initialTab="ai" variant="panel" />); });
+      await act(async () => { Array.from(host.querySelectorAll('button')).find(b => b.textContent === 'first')!.click(); });
+      await act(async () => { await vi.advanceTimersByTimeAsync(800); });
+      await act(async () => { root.render(<SettingsContent visible={false} initialTab="ai" variant="panel" />); });
+      await act(async () => { root.render(<SettingsContent visible initialTab="ai" variant="panel" />); });
+      expect(host.querySelector('[data-testid="active-provider"]')?.textContent).toBe('p_first');
+      expect(host.textContent).toContain('Save failed');
+    } finally {
+      await act(async () => root.unmount());
+      host.remove();
+    }
+  });
+
+  it('finishes loading when React replays mount effects in StrictMode', async () => {
+    const SettingsContent = (await import('@/components/settings/SettingsContent')).default;
+    mockApiFetch.mockResolvedValue(makeSettings('p_initial'));
+    const host = document.createElement('div');
+    const root = createRoot(host);
+    try {
+      await act(async () => root.render(<React.StrictMode><SettingsContent visible initialTab="ai" variant="modal" /></React.StrictMode>));
+      expect(host.querySelector('[data-testid="active-provider"]')?.textContent).toBe('p_initial');
+    } finally {
+      await act(async () => root.unmount());
+    }
   });
 
   it('ignores stale settings GET responses after the panel hides and reopens', async () => {
@@ -482,6 +618,21 @@ describe('SettingsContent save lifecycle', () => {
       root.unmount();
     });
     host.remove();
+  });
+
+  it('gives both responsive close buttons a name and a touch-sized hit area', async () => {
+    const SettingsContent = (await import('@/components/settings/SettingsContent')).default;
+    mockApiFetch.mockResolvedValue(makeSettings('p_initial'));
+    const host = document.createElement('div');
+    const root = createRoot(host);
+    try {
+      await act(async () => root.render(<SettingsContent visible initialTab="ai" variant="modal" onClose={() => {}} />));
+      const buttons = host.querySelectorAll('button[aria-label="Close settings"]');
+      expect(buttons).toHaveLength(2);
+      buttons.forEach(button => expect(button.className).toContain('h-11 w-11'));
+    } finally {
+      await act(async () => root.unmount());
+    }
   });
 
   it('migrates legacy appearance preferences when settings opens', async () => {

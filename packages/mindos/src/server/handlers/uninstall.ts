@@ -2,6 +2,7 @@ import { spawn as nodeSpawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { json, type MindosServerResponse } from '../response.js';
+import { assertSafeConfigRemoval } from '../../foundation/security/uninstall-safety.js';
 
 export type UninstallSpawnOptions = {
   detached: true;
@@ -28,6 +29,7 @@ export type UninstallPostPayload = {
 };
 
 export type UninstallPostOptions = {
+  homeDir?: string;
   cliPath?: string;
   nodeBin?: string;
   env?: NodeJS.ProcessEnv | Record<string, string | undefined>;
@@ -42,6 +44,10 @@ export function handleUninstallPost(
 ): MindosServerResponse<{ ok: true } | { error: string }> {
   try {
     const removeConfig = resolveRemoveConfig(body);
+    if (removeConfig) {
+      try { assertSafeConfigRemoval(options.homeDir, options.env ?? process.env); }
+      catch (error) { return json({ error: error instanceof Error ? error.message : 'Configuration cleanup cannot be verified.' }, { status: 409 }); }
+    }
     const env = cleanUninstallEnv(options.env ?? process.env);
     const spawn = options.spawn ?? nodeSpawn as UninstallSpawn;
     const nodeBin = options.nodeBin ?? env.MINDOS_NODE_BIN ?? process.execPath;

@@ -7,17 +7,20 @@ function readSource(relativePath: string) {
 }
 
 describe('mobile drawer accessibility contract', () => {
+  it('makes the translated-away drawer unavailable to keyboard and assistive technology', () => {
+    const source = readSource('components/MobileNavigationDrawer.tsx');
+    expect(source).toContain('<Dialog.Root open={visible}');
+    expect(source).toContain('<Dialog.Popup');
+    expect(source).toContain('const visible = open && !desktop;');
+  });
   it('exposes the mobile sidebar as a dialog with focus and background guards', () => {
     const source = readSource('components/SidebarLayout.tsx');
 
     expect(source).toContain('aria-haspopup="dialog"');
     expect(source).toContain('aria-expanded={mobileOpen}');
-    expect(source).toContain('role="dialog"');
-    expect(source).toContain('aria-modal="true"');
-    expect(source).toContain('mobileDrawerCloseRef.current?.focus()');
-    expect(source).toContain("if (e.key === 'Escape') setMobileOpen(false)");
-    expect(source).toContain('aria-hidden={mobileOpen || undefined}');
-    expect(source).toContain('inert={mobileOpen ? true : undefined}');
+    expect(source).toContain('<MobileNavigationDrawer');
+    expect(source).not.toContain('inert={mobileOpen');
+    expect(source).not.toContain('const closeOnEscape');
   });
 
   it('does not mount the drawer file tree on desktop viewports', () => {

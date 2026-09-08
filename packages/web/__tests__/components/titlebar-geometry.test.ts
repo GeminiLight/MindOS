@@ -36,7 +36,7 @@ const BARE_VIEWPORT_HEIGHT =
 const VIEWPORT_HEIGHT_ALLOWLIST: Record<string, string> = {
   'components/ActivityBar.tsx':
     'fixed rail intentionally spans the full viewport — its logo row lives inside the titlebar row',
-  'components/SidebarLayout.tsx':
+  'components/MobileNavigationDrawer.tsx':
     'mobile drawer is a fixed overlay that intentionally spans the full viewport',
 };
 

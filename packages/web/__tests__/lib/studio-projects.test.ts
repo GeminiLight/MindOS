@@ -18,10 +18,10 @@ describe('studio projects', () => {
     localStorage.clear();
   });
 
-  it('includes the default projects when no custom projects exist', () => {
+  it('starts with no personal projects instead of inserting demonstration activity', () => {
     const projects = readStudioProjects();
 
-    expect(projects.map((project) => project.id)).toEqual(STUDIO_PROJECTS.map((project) => project.id));
+    expect(projects).toEqual([]);
   });
 
   it('creates a trimmed custom project and persists it before defaults', () => {
@@ -102,6 +102,8 @@ describe('studio projects', () => {
   });
 
   it('persists editable defaults for seeded Projects without falling back to legacy labels', () => {
+    // A user adopted and persisted this legacy example; it must remain editable.
+    localStorage.setItem('mindos:studio-projects', JSON.stringify([STUDIO_PROJECTS[0]]));
     const updated = updateStudioProjectDefaults('launch-practice', {
       spaces: [],
       assistants: [
@@ -124,7 +126,7 @@ describe('studio projects', () => {
     expect(fs.existsSync(path.join(process.cwd(), 'app/studio/projects/[projectId]/page.tsx'))).toBe(false);
   });
 
-  it('suffixes duplicate ids against defaults and custom projects', () => {
+  it('suffixes duplicate ids against actual saved projects, not invisible examples', () => {
     const first = createStudioProject({
       title: 'Launch Practice',
       goal: 'A different launch practice',
@@ -140,14 +142,29 @@ describe('studio projects', () => {
       workArea: '',
     });
 
-    expect(first.id).toBe('launch-practice-2');
-    expect(second.id).toBe('launch-practice-3');
+    expect(first.id).toBe('launch-practice');
+    expect(second.id).toBe('launch-practice-2');
     expect(findStudioProject(readStudioProjects(), second.id)?.goal).toBe('Another launch practice');
   });
 
-  it('ignores corrupt localStorage payloads and keeps default projects available', () => {
+  it('does not disguise a corrupt project store with demonstration records', () => {
     localStorage.setItem('mindos:studio-projects', '{broken');
 
-    expect(readStudioProjects().map((project) => project.id)).toEqual(STUDIO_PROJECTS.map((project) => project.id));
+    expect(readStudioProjects()).toEqual([]);
+    expect(localStorage.getItem('mindos:studio-projects')).toBe('{broken');
+  });
+
+  it('does not invent progress, lessons, or review items for a newly created project', () => {
+    const project = createStudioProject({ title: '我的工作 🌱' });
+    expect(project.progress).toBe(0);
+    expect(project.sessions).toEqual([]);
+    expect(project.reviewItems).toEqual([]);
+    expect(project.lessons).toEqual([]);
+  });
+
+  it('preserves a saved legacy project verbatim without appending unseen examples', () => {
+    const adopted = { ...STUDIO_PROJECTS[0], goal: '用户修改过的目标', title: '我的发布计划' };
+    localStorage.setItem('mindos:studio-projects', JSON.stringify([adopted]));
+    expect(readStudioProjects()).toEqual([adopted]);
   });
 });
