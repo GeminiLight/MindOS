@@ -55,7 +55,7 @@ export default function SessionListDrawer({
             'Enter a new name',
             [
               { text: 'Cancel', style: 'cancel' },
-              { text: 'Rename', onPress: (text) => text?.trim() && onRename(session.id, text.trim()) },
+              { text: 'Rename', onPress: (text?: string) => text?.trim() && onRename(session.id, text.trim()) },
             ],
             'plain-text',
             session.title,
@@ -182,7 +182,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   backdrop: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
   drawer: {

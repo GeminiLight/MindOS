@@ -13,7 +13,8 @@ const componentPaths = [
 ];
 
 describe('component ref cleanup lint contract', () => {
-  it('does not access refs during render in remaining component surfaces', () => {
+  // Scans the whole component tree; give it headroom when turbo runs every suite in parallel.
+  it('does not access refs during render in remaining component surfaces', { timeout: 60_000 }, () => {
     const result = spawnSync(
       'pnpm',
       ['--filter', '@mindos/web', 'exec', 'eslint', '-f', 'json', ...componentPaths],

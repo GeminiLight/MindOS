@@ -254,7 +254,7 @@ args = ["mcp"]
     expect(stdout).toContain('Config is valid');
   });
 
-  it('mindos doctor recognizes provider-array configs', () => {
+  it('mindos doctor recognizes provider-array configs', { timeout: 15000 }, () => {
     writeDefaultConfig({
       ai: {
         activeProvider: 'p_openai01',

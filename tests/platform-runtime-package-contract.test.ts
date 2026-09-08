@@ -126,8 +126,6 @@ describe('OpenCode-style platform runtime packages', () => {
       '@modelcontextprotocol/sdk',
       '@sinclair/typebox',
       'chokidar',
-      'pino',
-      'pino-pretty',
       'zod',
     ]) {
       expect(script).toContain(`'${dependency}'`);

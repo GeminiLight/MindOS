@@ -1,7 +1,7 @@
 /**
  * Tab navigator with OfflineBanner overlay when connection drops.
  */
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, type ColorValue } from 'react-native';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -9,7 +9,7 @@ import OfflineBanner from '@/components/OfflineBanner';
 import { colors } from '@/lib/theme';
 import type { MobileIconName } from '@/lib/mobile-icons';
 
-function TabIcon({ name, color, size }: { name: MobileIconName; color: string; size: number }) {
+function TabIcon({ name, color, size }: { name: MobileIconName; color: ColorValue; size: number }) {
   return <Ionicons name={name} size={size} color={color} />;
 }
 

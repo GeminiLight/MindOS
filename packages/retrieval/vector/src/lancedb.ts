@@ -1,10 +1,14 @@
 /**
  * LanceDB implementation of VectorDatabase
+ *
+ * Backed by `@lancedb/lancedb` (the successor of the deprecated `vectordb`
+ * package). Predicates stay SQL text built by `filters.ts`; the vector column
+ * comes back as an Arrow list, so it is normalized to `number[]` here.
  */
 
-import * as lancedb from 'vectordb'
+import * as lancedb from '@lancedb/lancedb'
 import { buildLanceIdFilter, buildLanceMetadataFilter } from './filters.js'
-import type { Connection, Table } from 'vectordb'
+import type { Connection, Table } from '@lancedb/lancedb'
 import type { VectorDatabase, VectorEmbedding, VectorQuery, VectorSearchResults, VectorIndexStats } from './types.js'
 import type { Result } from '@geminilight/mindos/foundation'
 import { ok, err } from '@geminilight/mindos/foundation'
@@ -20,6 +24,29 @@ export interface LanceDBConfig {
   tableName: string
   /** Vector dimension */
   dimension: number
+}
+
+interface LanceRow {
+  id: string
+  vector: Iterable<number> | ArrayLike<number>
+  metadata?: string | null
+  _distance?: number | null
+}
+
+const INIT_ROW_ID = '__init__'
+
+function toNumberArray(vector: LanceRow['vector']): number[] {
+  return Array.from(vector as Iterable<number>, (value) => Number(value))
+}
+
+function parseMetadata(raw: string | null | undefined): Record<string, unknown> {
+  if (!raw) return {}
+  try {
+    const parsed = JSON.parse(raw) as unknown
+    return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {}
+  } catch {
+    return {}
+  }
 }
 
 /**
@@ -69,17 +96,18 @@ export class LanceDBVectorDatabase implements VectorDatabase {
       if (tableNames.includes(this.config.tableName)) {
         this.table = await connResult.value.openTable(this.config.tableName)
       } else {
-        // Create table with initial data that has proper metadata structure
-        // LanceDB requires at least one row to infer schema
-        this.table = await connResult.value.createTable(this.config.tableName, [
+        // LanceDB infers the schema from data, so seed one row with the right
+        // shape (a `vector` column of the configured dimension plus a JSON
+        // metadata string) and remove it straight away.
+        const table = await connResult.value.createTable(this.config.tableName, [
           {
-            id: '__init__',
+            id: INIT_ROW_ID,
             vector: new Array(this.config.dimension).fill(0),
             metadata: '{}',
           },
         ])
-        // Delete the initialization row
-        await this.table.delete('id = "__init__"')
+        await table.delete(buildLanceIdFilter([INIT_ROW_ID]))
+        this.table = table
       }
 
       return ok(this.table)
@@ -99,10 +127,11 @@ export class LanceDBVectorDatabase implements VectorDatabase {
     }
 
     try {
+      if (embeddings.length === 0) return ok(undefined)
       const records = embeddings.map((e) => ({
         id: e.id,
         vector: e.vector,
-        metadata: JSON.stringify(e.metadata),
+        metadata: JSON.stringify(e.metadata ?? {}),
       }))
 
       await tableResult.value.add(records)
@@ -138,10 +167,10 @@ export class LanceDBVectorDatabase implements VectorDatabase {
     }
 
     try {
-      const startTime = Date.now()
+      const startTime = process.hrtime.bigint()
 
       let searchQuery = tableResult.value
-        .search(query.vector)
+        .vectorSearch(query.vector)
         .limit(query.limit ?? 10)
 
       // Apply metadata filters if provided
@@ -153,15 +182,16 @@ export class LanceDBVectorDatabase implements VectorDatabase {
         }
       }
 
-      const results = await searchQuery.execute()
-      const processingTime = Date.now() - startTime
+      const results = (await searchQuery.toArray()) as LanceRow[]
+      // Never report 0ms: callers treat processingTime as a positive duration.
+      const processingTime = Math.max(1, Math.round(Number(process.hrtime.bigint() - startTime) / 1e6))
 
       // Transform results
       const items = results
-        .map((result: any) => ({
-          id: result.id,
+        .map((result) => ({
+          id: String(result.id),
           score: 1 - (result._distance ?? 0), // Convert distance to similarity
-          metadata: JSON.parse(result.metadata ?? '{}'),
+          metadata: parseMetadata(result.metadata),
         }))
         .filter((item) => !query.minScore || item.score >= query.minScore)
 
@@ -182,15 +212,11 @@ export class LanceDBVectorDatabase implements VectorDatabase {
     }
 
     try {
-      const results = await tableResult.value
-        .search(new Array(this.config.dimension).fill(0))
+      const results = (await tableResult.value
+        .query()
         .where(buildLanceIdFilter([id]))
         .limit(1)
-        .execute()
-
-      if (results.length === 0) {
-        return ok(null)
-      }
+        .toArray()) as LanceRow[]
 
       const result = results[0]
       if (!result) {
@@ -198,9 +224,9 @@ export class LanceDBVectorDatabase implements VectorDatabase {
       }
 
       return ok({
-        id: result.id as string,
-        vector: result.vector as number[],
-        metadata: JSON.parse((result.metadata as string) ?? '{}'),
+        id: String(result.id),
+        vector: toNumberArray(result.vector),
+        metadata: parseMetadata(result.metadata),
       })
     } catch (error) {
       return err(wrapError(error))
@@ -214,7 +240,11 @@ export class LanceDBVectorDatabase implements VectorDatabase {
     }
 
     try {
-      await connResult.value.dropTable(this.config.tableName)
+      const tableNames = await connResult.value.tableNames()
+      if (tableNames.includes(this.config.tableName)) {
+        await connResult.value.dropTable(this.config.tableName)
+      }
+      this.table?.close()
       this.table = null
       return ok(undefined)
     } catch (error) {
@@ -255,7 +285,12 @@ export class LanceDBVectorDatabase implements VectorDatabase {
    * Close the database connection
    */
   async close(): Promise<void> {
-    this.table = null
-    this.connection = null
+    try {
+      this.table?.close()
+      this.connection?.close()
+    } finally {
+      this.table = null
+      this.connection = null
+    }
   }
 }

@@ -150,7 +150,7 @@ const styles = StyleSheet.create({
     fontSize: typography.body,
   },
   overlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     justifyContent: 'center',
     alignItems: 'center',
   },

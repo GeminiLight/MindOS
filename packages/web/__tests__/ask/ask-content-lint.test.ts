@@ -5,8 +5,9 @@ import { describe, expect, it } from 'vitest';
 
 const repoRoot = resolve(__dirname, '../../../..');
 
+// Whole-tree lint scans need headroom when turbo runs every workspace suite in parallel.
 describe('ChatContent lint contract', () => {
-  it('does not access refs during render', () => {
+  it('does not access refs during render', { timeout: 60_000 }, () => {
     const result = spawnSync(
       'pnpm',
       ['--filter', '@mindos/web', 'exec', 'eslint', '-f', 'json', 'components/chat/ChatContent.tsx'],
@@ -28,7 +29,7 @@ describe('ChatContent lint contract', () => {
     expect(refWarnings).toEqual([]);
   });
 
-  it('renders ACP agent mode before permission and ACP model controls after permission', () => {
+  it('renders ACP agent mode before permission and ACP model controls after permission', { timeout: 60_000 }, () => {
     const source = readFileSync(resolve(repoRoot, 'packages/web/components/chat/ChatContent.tsx'), 'utf-8');
     const agentModeIndex = source.indexOf('<AcpRuntimeOptionsCapsule');
     const permissionIndex = source.indexOf('<ModeCapsule');

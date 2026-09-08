@@ -358,7 +358,7 @@ const styles = StyleSheet.create({
   },
   floatingLabel: { color: colors.white, fontSize: typography.body, fontWeight: '800' },
   modalRoot: { flex: 1, justifyContent: 'flex-end' },
-  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: colors.scrim },
+  backdrop: { ...StyleSheet.absoluteFill, backgroundColor: colors.scrim },
   sheet: {
     maxHeight: '88%', backgroundColor: colors.surfaceRaised,
     borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet,

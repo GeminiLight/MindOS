@@ -109,7 +109,8 @@ describe('hybridSearch', () => {
 
     const rebuild = vi.fn().mockRejectedValue(new Error('Local embedding runtime is not installed'));
     vi.doMock('@/lib/core/embedding-index', () => ({
-      EmbeddingIndex: vi.fn().mockImplementation(() => ({
+      // Vitest 4+ calls the implementation with `new`; an arrow function is not a constructor.
+      EmbeddingIndex: vi.fn().mockImplementation(function EmbeddingIndexMock() { return {
         isBuiltFor: () => false,
         load: () => false,
         isBuilding: () => false,
@@ -120,7 +121,7 @@ describe('hybridSearch', () => {
         removeFile: vi.fn(),
         getDocCount: () => 0,
         getDimensions: () => 0,
-      })),
+      }; }),
     }));
 
     const { hybridSearch } = await import('@/lib/core/hybrid-search');
@@ -156,7 +157,8 @@ describe('hybridSearch', () => {
     }));
 
     vi.doMock('@/lib/core/embedding-index', () => ({
-      EmbeddingIndex: vi.fn().mockImplementation(() => ({
+      // Vitest 4+ calls the implementation with `new`; an arrow function is not a constructor.
+      EmbeddingIndex: vi.fn().mockImplementation(function EmbeddingIndexMock() { return {
         isBuiltFor: () => true,
         load: () => true,
         isBuilding: () => false,
@@ -171,7 +173,7 @@ describe('hybridSearch', () => {
         removeFile: vi.fn(),
         getDocCount: () => 2,
         getDimensions: () => 384,
-      })),
+      }; }),
     }));
 
     const { hybridSearch } = await import('@/lib/core/hybrid-search');

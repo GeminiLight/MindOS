@@ -3,11 +3,12 @@ import { buildLanceIdFilter, buildLanceMetadataFilter } from './filters.js'
 
 describe('LanceDB predicate builders', () => {
   it('builds an OR chain for safe ids', () => {
-    expect(buildLanceIdFilter(['doc1', 'chunk:2', 'a.b-c'])).toBe('id = "doc1" OR id = "chunk:2" OR id = "a.b-c"')
+    expect(buildLanceIdFilter(['doc1', 'chunk:2', 'a.b-c'])).toBe("id = 'doc1' OR id = 'chunk:2' OR id = 'a.b-c'")
   })
 
   it('rejects ids that could break out of the predicate', () => {
     expect(() => buildLanceIdFilter(['x" OR 1=1 OR id = "'])).toThrow(/Unsafe vector id/)
+    expect(() => buildLanceIdFilter(["x' OR 1=1 OR id = '"])).toThrow(/Unsafe vector id/)
     expect(() => buildLanceIdFilter([''])).toThrow(/Unsafe vector id/)
   })
 

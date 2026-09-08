@@ -3,7 +3,7 @@
  */
 
 import type { Logger, LoggerConfig } from './types.js'
-import { PinoLoggerAdapter } from './logger.js'
+import { JsonLoggerAdapter } from './logger.js'
 
 /**
  * Default logger configuration
@@ -23,7 +23,7 @@ export function createLogger(config?: Partial<LoggerConfig>): Logger {
     ...config,
   }
 
-  return new PinoLoggerAdapter(finalConfig)
+  return new JsonLoggerAdapter(finalConfig)
 }
 
 /**

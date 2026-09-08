@@ -136,10 +136,11 @@ describe('Desktop release packaging contract', () => {
   it('keeps Electron main and preload builds externalized for Node runtime modules', () => {
     const config = readText('packages/desktop/electron.vite.config.ts');
 
-    expect(config).toContain('externalizeDepsPlugin');
+    // electron-vite 5 deprecated externalizeDepsPlugin in favour of build.externalizeDeps.
+    expect(config).not.toContain('externalizeDepsPlugin');
     expect(config).toContain('nodeBuiltins');
     expect(config).toContain("include: ['electron']");
-    expect(config).toContain('plugins: [externalizeDepsPlugin');
+    expect(config).toContain("externalizeDeps: { include: ['electron'] }");
     expect(config).toContain('external: electronMainExternal');
   });
 

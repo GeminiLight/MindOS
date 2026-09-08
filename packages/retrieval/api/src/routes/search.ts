@@ -7,7 +7,7 @@ const searchSchema = z.object({
   query: z.string().min(1),
   limit: z.number().int().positive().max(100).optional().default(10),
   offset: z.number().int().nonnegative().optional().default(0),
-  filters: z.record(z.any()).optional(),
+  filters: z.record(z.string(), z.any()).optional(),
 })
 
 export function createSearchRouter(ctx: ApiContext): Router {

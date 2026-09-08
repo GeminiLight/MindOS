@@ -2,7 +2,7 @@
  * MeiliSearch implementation of SearchEngine
  */
 
-import { MeiliSearch, type Index } from 'meilisearch'
+import { Meilisearch, type Index } from 'meilisearch'
 import type { SearchEngine, SearchDocument, SearchOptions, SearchResults, IndexStats } from './types.js'
 import { buildMeilisearchFilter } from './filters.js'
 import type { Result } from '@geminilight/mindos/foundation'
@@ -21,16 +21,26 @@ export interface MeiliSearchConfig {
   indexName: string
 }
 
+function meilisearchErrorCode(error: unknown): string | undefined {
+  if (!error || typeof error !== 'object') return undefined
+  const cause = (error as { cause?: unknown }).cause
+  if (cause && typeof cause === 'object' && typeof (cause as { code?: unknown }).code === 'string') {
+    return (cause as { code: string }).code
+  }
+  const code = (error as { code?: unknown }).code
+  return typeof code === 'string' ? code : undefined
+}
+
 /**
  * MeiliSearch-based search engine
  */
 export class MeiliSearchEngine implements SearchEngine {
-  private readonly client: MeiliSearch
+  private readonly client: Meilisearch
   private readonly indexName: string
   private index: Index | null = null
 
   constructor(config: MeiliSearchConfig) {
-    this.client = new MeiliSearch({
+    this.client = new Meilisearch({
       host: config.host,
       apiKey: config.apiKey,
     })
@@ -179,9 +189,10 @@ export class MeiliSearchEngine implements SearchEngine {
     try {
       const document = await indexResult.value.getDocument(id)
       return ok(document as SearchDocument)
-    } catch (error: any) {
-      // MeiliSearch throws error for not found
-      if (error.code === 'document_not_found') {
+    } catch (error: unknown) {
+      // MeiliSearch throws for a missing document. The JS client moved the
+      // API error code from `error.code` to `error.cause.code`; accept both.
+      if (meilisearchErrorCode(error) === 'document_not_found') {
         return ok(null)
       }
       return err(wrapError(error))

@@ -37,8 +37,6 @@ const CLI_RUNTIME_ROOT_DEPENDENCIES = [
   '@modelcontextprotocol/sdk',
   '@sinclair/typebox',
   'chokidar',
-  'pino',
-  'pino-pretty',
   'zod',
 ];
 

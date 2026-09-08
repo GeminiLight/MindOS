@@ -20,12 +20,12 @@
   "dependencies": {
     "@mindos/search": "workspace:*",
     "@mindos/vector": "workspace:*",
-    "chokidar": "^4.0.3",
+    "chokidar": "^5.0.0",
     "@geminilight/mindos": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.10.5",
     "typescript": "^5.7.3",
-    "vitest": "^2.1.8"
+    "vitest": "^5.0.0"
   }
 }

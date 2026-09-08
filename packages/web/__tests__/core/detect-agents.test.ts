@@ -42,6 +42,9 @@ describe('detectAgentPresence', () => {
     statSyncSpy.mockReset();
     readdirSyncSpy.mockReset();
     readFileSyncSpy.mockReset();
+    // Since Vitest 3 mockReset() restores the real implementation, so a reset spy would
+    // consult the developer machine's ~/.claude etc. Default to "absent" explicitly.
+    existsSyncSpy.mockReturnValue(false);
     statSyncSpy.mockImplementation(() => { throw new Error('stat path not mocked'); });
     readdirSyncSpy.mockImplementation(() => { throw new Error('readdir path not mocked'); });
     readFileSyncSpy.mockImplementation(() => { throw new Error('read file not mocked'); });

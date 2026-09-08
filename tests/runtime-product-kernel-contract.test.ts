@@ -68,8 +68,6 @@ describe('MindOS runtime product kernel contract', () => {
       '@sinclair/typebox',
       'chokidar',
       'hono',
-      'pino',
-      'pino-pretty',
       'zod',
     ]);
     expect(manifest.dependencies).toHaveProperty('@anthropic-ai/claude-agent-sdk', '0.3.170');

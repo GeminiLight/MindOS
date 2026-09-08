@@ -120,7 +120,8 @@ describe('Middleware', () => {
         details: [
           {
             path: 'path',
-            message: 'String must contain at least 1 character(s)',
+            // zod 4 wording; zod 3 said "String must contain at least 1 character(s)"
+            message: 'Too small: expected string to have >=1 characters',
             code: 'too_small',
           },
         ],

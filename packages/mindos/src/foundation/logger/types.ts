@@ -2,10 +2,11 @@
  * Logger types and interfaces
  */
 
+
 /**
  * Log level
  */
-export type LogLevel = 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal'
+export type LogLevel = 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal' | 'silent'
 
 /**
  * Log context
@@ -73,6 +74,8 @@ export interface LoggerConfig {
   file?: string
   /** Enable console output */
   console: boolean
-  /** Redact sensitive fields */
+  /** Keys whose values are replaced with "[Redacted]" at any depth */
   redact?: string[]
+  /** Extra writable stream that receives every record (tests, custom sinks) */
+  stream?: NodeJS.WritableStream
 }

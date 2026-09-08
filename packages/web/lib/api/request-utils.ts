@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import type { ZodSchema } from 'zod';
+import type { ZodType } from 'zod';
 import { MindOSError, ErrorCodes } from '@/lib/errors';
 
 /** Upper bound for JSON bodies on knowledge write routes (/api/inbox, /api/file, /api/file/import). */
@@ -138,7 +138,7 @@ export async function parseJsonBody(req: NextRequest): Promise<Record<string, un
  */
 export async function parseAndValidateBody<T>(
   req: NextRequest,
-  schema: ZodSchema,
+  schema: ZodType,
 ): Promise<T> {
   const body = await parseJsonBody(req);
   const result = schema.safeParse(body);
@@ -146,8 +146,8 @@ export async function parseAndValidateBody<T>(
   if (!result.success) {
     throw new MindOSError(
       ErrorCodes.INVALID_REQUEST,
-      `Validation failed: ${result.error.errors.map(e => `${e.path.join('.')} ${e.message}`).join('; ')}`,
-      { errors: result.error.errors },
+      `Validation failed: ${result.error.issues.map(e => `${e.path.join('.')} ${e.message}`).join('; ')}`,
+      { errors: result.error.issues },
       'Request validation failed',
     );
   }

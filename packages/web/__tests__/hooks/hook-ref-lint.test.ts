@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 const repoRoot = resolve(__dirname, '../../../..');
 
 describe('hook ref lint contract', () => {
-  it('does not access refs during render in shared hooks', () => {
+  it('does not access refs during render in shared hooks', { timeout: 60_000 }, () => {
     const result = spawnSync(
       'pnpm',
       [

@@ -260,7 +260,7 @@ Host tilde-test
       expect(tunnel.isAlive()).toBe(false);
     });
 
-    it('rejects start() if SSH is not available', async () => {
+    it('rejects start() if SSH is not available', { timeout: 10000 }, async () => {
       // Since start() will try to find SSH, and most test environments have SSH installed,
       // we can only verify that start() doesn't throw during initialization
       const tunnel = new SshTunnel('nonexistent.invalid', 9999, 9999);
@@ -268,7 +268,7 @@ Host tilde-test
 
       // Clean up any potential tunnel process
       await tunnel.stop();
-    }, { timeout: 10000 });
+    });
 
     it('calls onDeath callback when tunnel dies after successful start', async () => {
       const onDeathMock = vi.fn();

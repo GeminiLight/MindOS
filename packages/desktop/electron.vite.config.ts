@@ -1,5 +1,5 @@
 import { builtinModules } from 'node:module';
-import { defineConfig, externalizeDepsPlugin } from 'electron-vite';
+import { defineConfig } from 'electron-vite';
 import { resolve } from 'node:path';
 
 const nodeBuiltins = [...builtinModules, ...builtinModules.map((name) => `node:${name}`)];
@@ -7,8 +7,9 @@ const electronMainExternal = ['electron', ...nodeBuiltins];
 
 export default defineConfig({
   main: {
-    plugins: [externalizeDepsPlugin({ include: ['electron'] })],
     build: {
+      // electron-vite 5 moved dependency externalization from a plugin to this option.
+      externalizeDeps: { include: ['electron'] },
       outDir: 'dist-electron/main',
       rollupOptions: {
         external: electronMainExternal,
@@ -28,8 +29,8 @@ export default defineConfig({
     },
   },
   preload: {
-    plugins: [externalizeDepsPlugin({ include: ['electron'] })],
     build: {
+      externalizeDeps: { include: ['electron'] },
       outDir: 'dist-electron/preload',
       rollupOptions: {
         external: electronMainExternal,

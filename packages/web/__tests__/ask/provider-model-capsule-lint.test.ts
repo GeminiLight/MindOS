@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 const repoRoot = resolve(__dirname, '../../../..');
 
 describe('ProviderModelCapsule lint contract', () => {
-  it('does not access refs during render', () => {
+  it('does not access refs during render', { timeout: 60_000 }, () => {
     const result = spawnSync(
       'pnpm',
       ['--filter', '@mindos/web', 'exec', 'eslint', '-f', 'json', 'components/ask/ProviderModelCapsule.tsx'],

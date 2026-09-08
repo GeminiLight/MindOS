@@ -4,8 +4,9 @@ import { describe, expect, it } from 'vitest';
 
 const repoRoot = resolve(__dirname, '../../../..');
 
+// Whole-tree lint scans need headroom when turbo runs every workspace suite in parallel.
 describe('useResizeDrag lint contract', () => {
-  it('does not mutate refs during render', () => {
+  it('does not mutate refs during render', { timeout: 60_000 }, () => {
     const result = spawnSync(
       'pnpm',
       ['--filter', '@mindos/web', 'exec', 'eslint', '-f', 'json', 'hooks/useResizeDrag.ts'],

@@ -3,6 +3,10 @@
  * interpolated raw, so a quote in either broke the predicate or widened a
  * delete. Ids are restricted to a safe alphabet; metadata values are encoded
  * exactly as they appear in the stored JSON and single quotes are doubled.
+ *
+ * String literals must use single quotes: the DataFusion parser behind
+ * `@lancedb/lancedb` treats double-quoted text as a column identifier, so
+ * `id = "doc1"` fails with "No field named doc1".
  */
 const SAFE_VECTOR_ID = /^[A-Za-z0-9_.:@-]{1,128}$/
 
@@ -14,7 +18,7 @@ export function assertSafeVectorId(id: string): string {
 }
 
 export function buildLanceIdFilter(ids: string[]): string {
-  return ids.map((id) => `id = "${assertSafeVectorId(id)}"`).join(' OR ')
+  return ids.map((id) => `id = '${assertSafeVectorId(id)}'`).join(' OR ')
 }
 
 function sqlStringBody(value: string): string {
