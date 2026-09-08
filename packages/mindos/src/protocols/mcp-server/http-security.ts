@@ -84,3 +84,32 @@ export function isAuthorizedBearer(header: unknown, expectedToken: string | null
   if (a.length !== b.length) return false;
   return timingSafeEqual(a, b);
 }
+
+/** Hostnames a loopback-bound MCP server accepts in the `Host` header (DNS-rebinding protection). */
+export const MCP_LOCALHOST_HOSTNAMES = ['localhost', '127.0.0.1', '[::1]'];
+
+export type HostHeaderValidation =
+  | { ok: true; hostname: string }
+  | { ok: false; message: string };
+
+/**
+ * Mirrors the MCP SDK's Express `localhostHostValidation`: the Host header is
+ * parsed with the URL API (so ports and IPv6 brackets are handled) and its
+ * hostname must be one of the loopback names. Only applied when the server is
+ * bound to loopback, where a browser reaching it via a rebound DNS name is the
+ * realistic attack.
+ */
+export function validateLocalhostHostHeader(
+  hostHeader: string | null | undefined,
+  allowedHostnames: readonly string[] = MCP_LOCALHOST_HOSTNAMES,
+): HostHeaderValidation {
+  if (!hostHeader) return { ok: false, message: 'Missing Host header' };
+  let hostname: string;
+  try {
+    hostname = new URL(`http://${hostHeader}`).hostname;
+  } catch {
+    return { ok: false, message: `Invalid Host header: ${hostHeader}` };
+  }
+  if (!allowedHostnames.includes(hostname)) return { ok: false, message: `Invalid Host: ${hostname}` };
+  return { ok: true, hostname };
+}

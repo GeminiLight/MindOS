@@ -134,6 +134,21 @@ describe('createMcpSessionRegistry', () => {
       vi.useRealTimers();
     }
   });
+
+  it('closeAll closes every session regardless of age and survives a failing transport', async () => {
+    const registry = createMcpSessionRegistry<ReturnType<typeof fakeTransport>, string>({ now: () => 1_000 });
+    const fresh = fakeTransport();
+    const broken = { close: vi.fn(async () => { throw new Error('socket gone'); }) };
+    registry.add('fresh', fresh, 'a');
+    registry.add('broken', broken, 'b');
+
+    await expect(registry.closeAll()).resolves.toEqual(['fresh', 'broken']);
+
+    expect(fresh.close).toHaveBeenCalledTimes(1);
+    expect(broken.close).toHaveBeenCalledTimes(1);
+    expect(registry.size).toBe(0);
+    await expect(registry.closeAll()).resolves.toEqual([]);
+  });
 });
 
 describe('isJsonRpcInitializeRequest', () => {

@@ -226,14 +226,16 @@
     "build:platform-packages": "node ../../scripts/build-platform-packages.mjs"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.93.0",
     "@anthropic-ai/claude-agent-sdk": "0.3.170",
+    "@anthropic-ai/sdk": "^0.93.0",
     "@earendil-works/pi-agent-core": "0.84.4",
     "@earendil-works/pi-ai": "0.84.4",
     "@earendil-works/pi-coding-agent": "0.84.4",
+    "@hono/node-server": "^1.19.14",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@sinclair/typebox": "^0.34.33",
     "chokidar": "^4.0.3",
+    "hono": "^4.12.14",
     "pino": "^8.17.0",
     "pino-pretty": "^10.3.0",
     "zod": "^4.3.6"

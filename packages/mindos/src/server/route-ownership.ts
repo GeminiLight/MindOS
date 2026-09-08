@@ -5,6 +5,7 @@ export type MindosWebApiRouteOwner =
 
 export type MindosWebApiRouteAdapter =
   | 'next-response'
+  | 'mindos-app'
   | 'stream'
   | 'host'
   | 'optional-capability';
@@ -48,6 +49,17 @@ const migrated = (path: string, risk: MindosWebApiRouteRisk = 'low') =>
     'Phase 1: migrated Product Server adapter',
     risk,
     'No residual product ownership expected; this route should remain a thin Next adapter.',
+  );
+
+/** Routes served by the shared Hono route table via `delegateToMindos`; the Web file is a one-line delegation. */
+const delegated = (path: string, risk: MindosWebApiRouteRisk = 'low') =>
+  route(
+    path,
+    'product-owned',
+    'mindos-app',
+    'Phase 7: unified Hono route table delegation',
+    risk,
+    'Served by the shared route table through handleMindosRequest; the Next file only injects host services.',
   );
 
 const optional = (
@@ -111,8 +123,8 @@ export const MINDOS_WEB_API_ROUTE_OWNERSHIP: MindosWebApiRouteOwnership[] = [
   migrated('/api/agent/user-question', 'high'),
   host('/api/agent/user-question/request', 'Native runtime user-question requests are per active Web agent turn and use in-memory bridge state owned by the host Chat Panel.', 'high'),
   host('/api/auth', 'Auth cookie/session handling is host-specific today; Product Server will need an auth context adapter before direct HTTP exposure.', 'high'),
-  migrated('/api/backlinks'),
-  migrated('/api/bootstrap'),
+  delegated('/api/backlinks'),
+  delegated('/api/bootstrap'),
   migrated('/api/changes'),
   migrated('/api/channels/verify', 'medium'),
   migrated('/api/connections', 'high'),
@@ -147,10 +159,10 @@ export const MINDOS_WEB_API_ROUTE_OWNERSHIP: MindosWebApiRouteOwnership[] = [
   optional('/api/file/import', 'Phase 5: content ingestion optional capabilities', 'high', 'File import is a content-ingestion write path and needs capability-level size limits, conflict checks, and rollback.'),
   migrated('/api/file/raw'),
   migrated('/api/file', 'high'),
-  migrated('/api/files'),
+  delegated('/api/files'),
   migrated('/api/git'),
-  migrated('/api/graph'),
-  migrated('/api/health'),
+  delegated('/api/graph'),
+  delegated('/api/health'),
   migrated('/api/im/activity', 'medium'),
   migrated('/api/im/config', 'high'),
   host('/api/im/feishu/long-connection/event', 'Raw long-connection event delivery is host-specific, but event parsing and state updates should stay behind Product protocol handlers.', 'medium'),
@@ -193,10 +205,10 @@ export const MINDOS_WEB_API_ROUTE_OWNERSHIP: MindosWebApiRouteOwnership[] = [
   optional('/api/obsidian/import', 'Phase 5: content ingestion optional capabilities', 'high', 'Obsidian import remains a Web-owned bulk write path and needs optional capability size limits and rollback.'),
   optional('/api/plugins/catalog', 'Phase 5: plugin optional capabilities', 'medium', 'Plugin catalog aggregation remains Web-owned while MindOS renderers and Obsidian imported plugins converge under the optional plugin capability model.'),
   optional('/api/plugins/surfaces', 'Phase 5: plugin optional capabilities', 'medium', 'Plugin surface aggregation is still Web-owned while Obsidian compatibility and renderer plugin surfaces remain optional runtime capabilities.'),
-  migrated('/api/recent-files'),
+  delegated('/api/recent-files'),
   migrated('/api/restart', 'high'),
-  migrated('/api/search/prewarm'),
-  migrated('/api/search'),
+  delegated('/api/search/prewarm'),
+  delegated('/api/search'),
   migrated('/api/context-assets'),
   migrated('/api/retrieval-receipts'),
   migrated('/api/context-feedback', 'high'),
@@ -217,7 +229,7 @@ export const MINDOS_WEB_API_ROUTE_OWNERSHIP: MindosWebApiRouteOwnership[] = [
   migrated('/api/skills/runtime-matches', 'medium'),
   migrated('/api/space-overview'),
   migrated('/api/sync', 'high'),
-  migrated('/api/tree-version'),
+  delegated('/api/tree-version'),
   migrated('/api/uninstall', 'high'),
   migrated('/api/update-check'),
   migrated('/api/update-status'),

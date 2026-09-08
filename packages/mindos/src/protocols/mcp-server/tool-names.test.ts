@@ -7,12 +7,12 @@ import { MINDOS_MCP_TOOL_COUNT, MINDOS_MCP_TOOL_NAMES } from './tool-names.js';
 const here = dirname(fileURLToPath(import.meta.url));
 
 function registeredToolNamesFromSource(): string[] {
-  const source = readFileSync(resolve(here, 'index.ts'), 'utf-8');
+  const source = readFileSync(resolve(here, 'tools.ts'), 'utf-8');
   return [...source.matchAll(/\bregisterTool\(\s*["']([^"']+)["']/g)].map((match) => match[1]!);
 }
 
 describe('MINDOS_MCP_TOOL_NAMES source contract', () => {
-  it('matches every registerTool(...) call in index.ts, in order', () => {
+  it('matches every registerTool(...) call in tools.ts, in order', () => {
     const registered = registeredToolNamesFromSource();
     expect(registered.length).toBeGreaterThan(0);
     expect([...MINDOS_MCP_TOOL_NAMES]).toEqual(registered);

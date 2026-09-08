@@ -77,6 +77,30 @@ describe('Web API route ownership contract', () => {
     }
   });
 
+  it('keeps delegated Web routes as one-line hand-offs to the shared Hono route table', () => {
+    const delegated = MINDOS_WEB_API_ROUTE_OWNERSHIP.filter((route) => route.adapter === 'mindos-app');
+    expect(delegated.map((route) => route.path).sort()).toEqual([
+      '/api/backlinks',
+      '/api/bootstrap',
+      '/api/files',
+      '/api/graph',
+      '/api/health',
+      '/api/recent-files',
+      '/api/search',
+      '/api/search/prewarm',
+      '/api/tree-version',
+    ]);
+
+    for (const route of delegated) {
+      const source = read(route.webRouteFile);
+      expect(source, route.path).toContain('_mindos-adapter');
+      expect(source, route.path).toMatch(new RegExp(`delegateToMindos\\('GET', '${route.path.replace(/[/]/g, '\\/')}'`));
+      expect(source, route.path).not.toContain('handle');
+      expect(source, route.path).not.toMatch(/\bfrom ['"]node:(fs|child_process|os|net)['"]/);
+      expect(source.split('\n').length, route.path).toBeLessThanOrEqual(20);
+    }
+  });
+
   it('makes every non-migrated route carry a phase and residual-risk note', () => {
     const nonMigrated = MINDOS_WEB_API_ROUTE_OWNERSHIP.filter((route) => route.adapter !== 'next-response');
 

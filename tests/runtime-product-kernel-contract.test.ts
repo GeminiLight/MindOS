@@ -61,10 +61,13 @@ describe('MindOS runtime product kernel contract', () => {
       '@earendil-works/pi-agent-core',
       '@earendil-works/pi-ai',
       '@earendil-works/pi-coding-agent',
+      // Product Server and MCP HTTP transport run on Hono over node:http
+      '@hono/node-server',
       '@modelcontextprotocol/sdk',
       // kb-tools value-imports TypeBox at runtime (Wave 3, agent-core consolidation)
       '@sinclair/typebox',
       'chokidar',
+      'hono',
       'pino',
       'pino-pretty',
       'zod',

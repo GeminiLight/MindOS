@@ -23,7 +23,7 @@ describe('GET /api/tree-version', () => {
     fsMocks.getTreeVersion.mockReturnValue(7);
 
     const { GET } = await import('../../app/api/tree-version/route');
-    const res = GET();
+    const res = await GET();
 
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toEqual({ v: 7 });
@@ -35,7 +35,7 @@ describe('GET /api/tree-version', () => {
     fsMocks.getTreeVersion.mockReturnValue(43);
 
     const { POST } = await import('../../app/api/tree-version/route');
-    const res = POST();
+    const res = await POST();
 
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toEqual({ v: 43 });

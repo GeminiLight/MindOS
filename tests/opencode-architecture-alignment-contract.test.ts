@@ -181,10 +181,14 @@ describe('OpenCode architecture alignment', () => {
     expect(server).toContain('handleRawFile');
     expect(server).toContain('handleSettingsGet');
     expect(server).toContain('handleMcpStatus');
-    expect(healthRoute).toContain("from '@geminilight/mindos/server'");
-    expect(filesRoute).toContain("from '@geminilight/mindos/server'");
+    // health/files/search hand the request to the shared Hono route table via
+    // the Web adapter, which is itself a thin @geminilight/mindos/server client.
+    const adapter = readText('packages/web/app/api/_mindos-adapter.ts');
+    expect(adapter).toContain("from '@geminilight/mindos/server'");
+    expect(healthRoute).toContain("delegateToMindos('GET', '/api/health')");
+    expect(filesRoute).toContain("delegateToMindos('GET', '/api/files')");
+    expect(searchRoute).toContain("delegateToMindos('GET', '/api/search')");
     expect(rawRoute).toContain("from '@geminilight/mindos/server'");
-    expect(searchRoute).toContain("from '@geminilight/mindos/server'");
     expect(settingsRoute).toContain("from '@geminilight/mindos/server'");
     expect(mcpStatusRoute).toContain("from '@geminilight/mindos/server'");
     expect(healthRoute).not.toContain('function readVersion');

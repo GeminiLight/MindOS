@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -6,6 +6,16 @@ const root = resolve(__dirname, '..');
 
 function read(relativePath: string): string {
   return readFileSync(resolve(root, relativePath), 'utf-8');
+}
+
+/** The Product Server route table (`routes/*.ts`) is the single source of the HTTP surface; read it as one text. */
+function readRouteTable(): string {
+  const dir = resolve(root, 'packages/mindos/src/server/routes');
+  return readdirSync(dir)
+    .filter((entry) => entry.endsWith('.ts') && !entry.endsWith('.test.ts'))
+    .sort()
+    .map((entry) => readFileSync(resolve(dir, entry), 'utf-8'))
+    .join('\n');
 }
 
 describe('Product server extraction contract', () => {
@@ -24,77 +34,78 @@ describe('Product server extraction contract', () => {
   it('moves product HTTP ownership into @geminilight/mindos/server', () => {
     const serverIndex = read('packages/mindos/src/server/index.ts');
     const http = read('packages/mindos/src/server/http.ts');
+    const routes = readRouteTable();
     const runtime = read('packages/mindos/src/server/runtime.ts');
 
     expect(serverIndex).toContain('createMindosHttpServer');
     expect(serverIndex).toContain('createDefaultMindosHttpServices');
     expect(http).toContain('createServer');
-    expect(http).toContain('/api/recent-files');
-    expect(http).toContain('/api/file');
-    expect(http).toContain('/api/extract-pdf');
-    expect(http).toContain('/api/extract-docx');
-    expect(http).toContain('/api/agent/sessions/');
+    expect(routes).toContain('/api/recent-files');
+    expect(routes).toContain('/api/file');
+    expect(routes).toContain('/api/extract-pdf');
+    expect(routes).toContain('/api/extract-docx');
+    expect(routes).toContain('/api/agent/sessions/');
     expect(http).not.toContain("route === 'POST /api/ask'");
-    expect(http).toContain('/api/agent/sessions/');
-    expect(http).toContain('/api/a2a');
-    expect(http).toContain('/api/a2a/agents');
-    expect(http).toContain('/api/a2a/delegations');
-    expect(http).toContain('/api/a2a/discover');
-    expect(http).toContain('/api/acp/config');
-    expect(http).toContain('/api/acp/detect');
-    expect(http).toContain('/api/acp/install');
-    expect(http).toContain('/api/acp/registry');
-    expect(http).toContain('/api/acp/session');
-    expect(http).toContain('/api/tree-version');
-    expect(http).toContain('/api/search/prewarm');
-    expect(http).toContain('/api/backlinks');
-    expect(http).toContain('/api/graph');
-    expect(http).toContain('/api/agent-activity');
-    expect(http).toContain('/api/agent-runtimes');
-    expect(http).toContain('/api/agent-runtimes/extensions');
-    expect(http).toContain('/api/agent-runtimes/extensions/preflight');
-    expect(http).toContain('/api/agent-runtimes/extensions/install');
-    expect(http).toContain('/api/agent-runtimes/codex/threads');
-    expect(http).toContain('/api/agent/sessions');
-    expect(http).toContain('/api/space-overview');
-    expect(http).toContain('/api/git');
-    expect(http).toContain('/api/inbox');
-    expect(http).toContain('/api/setup/check-path');
-    expect(http).toContain('/api/setup/ls');
-    expect(http).toContain('/api/setup');
-    expect(http).toContain('/api/bootstrap');
-    expect(http).toContain('/api/connect');
-    expect(http).toContain('/api/embedding');
-    expect(http).toContain('/api/channels/verify');
-    expect(http).toContain('/api/im/activity');
-    expect(http).toContain('/api/im/config');
-    expect(http).toContain('/api/im/status');
-    expect(http).toContain('/api/im/test');
-    expect(http).toContain('/api/im/webhook-status');
-    expect(http).toContain('/api/im/feishu/oauth');
-    expect(http).toContain('/api/im/feishu/oauth/callback');
-    expect(http).toContain('/api/im/feishu/long-connection');
-    expect(http).toContain('/api/monitoring');
-    expect(http).toContain('/api/update-status');
-    expect(http).toContain('/api/update-check');
-    expect(http).toContain('/api/restart');
-    expect(http).toContain('/api/update');
-    expect(http).toContain('/api/uninstall');
-    expect(http).toContain('/api/init');
-    expect(http).toContain('/api/sync');
-    expect(http).toContain('/api/setup/check-port');
-    expect(http).toContain('/api/setup/generate-token');
-    expect(http).toContain('/api/workflows');
-    expect(http).toContain('/api/skills');
-    expect(http).toContain('/api/changes');
-    expect(http).toContain('/api/settings/test-key');
-    expect(http).toContain('/api/settings/list-models');
+    expect(routes).toContain('/api/agent/sessions/');
+    expect(routes).toContain('/api/a2a');
+    expect(routes).toContain('/api/a2a/agents');
+    expect(routes).toContain('/api/a2a/delegations');
+    expect(routes).toContain('/api/a2a/discover');
+    expect(routes).toContain('/api/acp/config');
+    expect(routes).toContain('/api/acp/detect');
+    expect(routes).toContain('/api/acp/install');
+    expect(routes).toContain('/api/acp/registry');
+    expect(routes).toContain('/api/acp/session');
+    expect(routes).toContain('/api/tree-version');
+    expect(routes).toContain('/api/search/prewarm');
+    expect(routes).toContain('/api/backlinks');
+    expect(routes).toContain('/api/graph');
+    expect(routes).toContain('/api/agent-activity');
+    expect(routes).toContain('/api/agent-runtimes');
+    expect(routes).toContain('/api/agent-runtimes/extensions');
+    expect(routes).toContain('/api/agent-runtimes/extensions/preflight');
+    expect(routes).toContain('/api/agent-runtimes/extensions/install');
+    expect(routes).toContain('/api/agent-runtimes/codex/threads');
+    expect(routes).toContain('/api/agent/sessions');
+    expect(routes).toContain('/api/space-overview');
+    expect(routes).toContain('/api/git');
+    expect(routes).toContain('/api/inbox');
+    expect(routes).toContain('/api/setup/check-path');
+    expect(routes).toContain('/api/setup/ls');
+    expect(routes).toContain('/api/setup');
+    expect(routes).toContain('/api/bootstrap');
+    expect(routes).toContain('/api/connect');
+    expect(routes).toContain('/api/embedding');
+    expect(routes).toContain('/api/channels/verify');
+    expect(routes).toContain('/api/im/activity');
+    expect(routes).toContain('/api/im/config');
+    expect(routes).toContain('/api/im/status');
+    expect(routes).toContain('/api/im/test');
+    expect(routes).toContain('/api/im/webhook-status');
+    expect(routes).toContain('/api/im/feishu/oauth');
+    expect(routes).toContain('/api/im/feishu/oauth/callback');
+    expect(routes).toContain('/api/im/feishu/long-connection');
+    expect(routes).toContain('/api/monitoring');
+    expect(routes).toContain('/api/update-status');
+    expect(routes).toContain('/api/update-check');
+    expect(routes).toContain('/api/restart');
+    expect(routes).toContain('/api/update');
+    expect(routes).toContain('/api/uninstall');
+    expect(routes).toContain('/api/init');
+    expect(routes).toContain('/api/sync');
+    expect(routes).toContain('/api/setup/check-port');
+    expect(routes).toContain('/api/setup/generate-token');
+    expect(routes).toContain('/api/workflows');
+    expect(routes).toContain('/api/skills');
+    expect(routes).toContain('/api/changes');
+    expect(routes).toContain('/api/settings/test-key');
+    expect(routes).toContain('/api/settings/list-models');
     expect(runtime).toContain('collectAllFilesFromMindRoot');
     expect(runtime).toContain('getRecentlyModifiedFromMindRoot');
   });
 
   it('adds product-owned route contracts for foundational knowledge APIs', () => {
-    const contract = read('packages/mindos/src/server/contract.ts');
+    const contract = readRouteTable();
 
     expect(contract).toContain("id: 'recent-files'");
     expect(contract).toContain("path: '/api/recent-files'");
@@ -317,8 +328,10 @@ describe('Product server extraction contract', () => {
 
     for (const route of migratedRoutes) {
       const source = read(route);
-      expect(source, route).toContain('@geminilight/mindos/server');
-      expect(source, route).toContain('toNextResponse');
+      // Thin adapters either call a product handler and convert with
+      // toNextResponse, or hand the request to the shared Hono route table.
+      expect(source, route).toMatch(/@geminilight\/mindos\/server|_mindos-adapter/);
+      expect(source, route).toMatch(/toNextResponse|delegateToMindos/);
     }
   });
 

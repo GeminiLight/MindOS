@@ -37,6 +37,8 @@ export interface McpSessionRegistry<T extends McpSessionTransportLike, S> {
   delete(sessionId: string): boolean;
   /** Close and drop every session idle for longer than the timeout. Returns the closed ids. */
   sweep(): Promise<string[]>;
+  /** Close and drop every session regardless of age (server shutdown). Returns the closed ids. */
+  closeAll(): Promise<string[]>;
   /** Start an unref'd interval sweeper; returns a stop function. */
   startSweeper(intervalMs?: number, onSwept?: (closedIds: string[]) => void): () => void;
 }
@@ -47,6 +49,21 @@ export function createMcpSessionRegistry<T extends McpSessionTransportLike, S>(
   const idleTimeoutMs = options.idleTimeoutMs ?? MCP_SESSION_IDLE_TIMEOUT_MS;
   const now = options.now ?? Date.now;
   const sessions = new Map<string, McpSessionEntry<T, S>>();
+
+  async function closeSessions(ids: string[]): Promise<string[]> {
+    for (const id of ids) {
+      const entry = sessions.get(id);
+      // Drop the map entry first so a transport.onclose callback that also
+      // deletes by id is a harmless no-op.
+      sessions.delete(id);
+      try {
+        await entry?.transport.close();
+      } catch {
+        // Best-effort: the client is gone anyway.
+      }
+    }
+    return ids;
+  }
 
   const registry: McpSessionRegistry<T, S> = {
     get size() {
@@ -76,18 +93,10 @@ export function createMcpSessionRegistry<T extends McpSessionTransportLike, S>(
       for (const [id, entry] of sessions) {
         if (entry.lastSeenAt < cutoff) stale.push(id);
       }
-      for (const id of stale) {
-        const entry = sessions.get(id);
-        // Drop the map entry first so a transport.onclose callback that also
-        // deletes by id is a harmless no-op.
-        sessions.delete(id);
-        try {
-          await entry?.transport.close();
-        } catch {
-          // Best-effort: the client is gone anyway.
-        }
-      }
-      return stale;
+      return closeSessions(stale);
+    },
+    async closeAll() {
+      return closeSessions([...sessions.keys()]);
     },
     startSweeper(intervalMs = MCP_SESSION_SWEEP_INTERVAL_MS, onSwept) {
       const timer = setInterval(() => {

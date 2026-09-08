@@ -183,7 +183,7 @@ mindos/
 - `@geminilight/mindos/foundation`：shared/errors/core/config/logger/permissions/security。
 - `@geminilight/mindos/knowledge`：storage/spaces/graph/audit/git/knowledge-ops。
 - `@geminilight/mindos/retrieval`：retrieval 核心 contracts、chunking 策略、index/search/vector 抽象与能力边界；默认不启用 MeiliSearch / LanceDB / Express 等重型后端。
-- `@geminilight/mindos/server`：API route contract、response/error/cache/CORS shape、health/files/file.raw/search/settings/mcp.status handlers。Web route 只做 Next Request/Response adapter。
+- `@geminilight/mindos/server`：API route contract、response/error/cache/CORS shape、health/files/file.raw/search/settings/mcp.status handlers。HTTP 层是一张路由表加一个 Hono 应用：`packages/mindos/src/server/routes/*.ts` 按领域（files / search / knowledge / agent / agent-runtimes / a2a / acp / im / automations / settings / setup / mcp / skills / system）导出 `MindosRouteDefinition[]`（`{ id, method, path, auth, handler(ctx) }`），`contract.ts` 的 `MINDOS_SERVER_ROUTES` 只是这张表的 `{ id, method, path, auth }` 投影；`app.ts` 的 `createMindosApp({ services, auth, staticFallback })` 从表构建 Hono 应用（契约鉴权、body 限额、ETag/304、SSE 流、静态回退、tree cache 失效），`http.ts` 只做 `node:http` + `@hono/node-server` 的 bootstrap。新增路由只需在对应领域文件加一行。Web route 只做 Next Request/Response adapter：一部分直接调用 handler 再 `toNextResponse`，`health`/`files`/`tree-version`/`recent-files`/`search`/`search/prewarm`/`backlinks`/`graph`/`bootstrap` 则通过 `delegateToMindos()` 把请求交给同一张路由表（`auth: 'host'`，由 Next proxy 鉴权）。详见 `wiki/specs/spec-hono-route-table.md`。
 - `@geminilight/mindos/client`：HTTP client、typed health/files/search/settings/updateSettings/mcpStatus/askStream helpers、server launcher lifecycle。
 - `@geminilight/mindos/plugin` / `tool` / `session` / `agent`：OpenCode-style extension/runtime contracts；先作为 product subpath exports，后续再评估是否拆独立 npm 包。
 - `@geminilight/mindos/protocols`：MCP/ACP/A2A 的产品逻辑归属规则；ACP/MCP 默认 runtime 源码位于 `packages/mindos/src/protocols/*`，发布为 `dist/protocols/*` bundle。
@@ -236,9 +236,9 @@ Web 的 `packages/web/app/api/file/route.ts` 只保留 Next.js adapter：读取 
 
 ### 4. packages/mindos/src/protocols/mcp-server — MCP Server
 
-**传输：** stdio (本地 Agent) / Streamable HTTP (远程设备，Bearer Token)
+**传输：** stdio (本地 Agent) / Streamable HTTP (远程设备，Bearer Token)。HTTP 传输不再依赖 Express：`http-app.ts` 用 Hono + SDK 的 `WebStandardStreamableHTTPServerTransport` 提供 `/mcp` 与 `/api/health`，由 `@hono/node-server` 挂到 `node:http`；无 token 时强制绑定 loopback 并做 Host 头校验（`http-security.ts`），会话由 `session-registry.ts` 记录并定期清理空闲会话。`tools.ts` 只负责注册工具，`index.ts` 保留 `MCP_TRANSPORT` / `MCP_HOST` / `MCP_PORT` / `MCP_ENDPOINT` / `MINDOS_URL` / `AUTH_TOKEN` 的 env 契约。
 
-**工具覆盖：** 读取 (bootstrap, list, read, recent, backlinks, history) / 搜索 (search_notes) / 写入 (write, create, append, append_csv) / 语义编辑 (insert_after_heading, update_section, insert_lines, update_lines) / 管理 (delete, rename, move) — 完整列表以 `packages/mindos/src/protocols/mcp-server/index.ts` 注册为准。
+**工具覆盖：** 读取 (bootstrap, list, read, recent, backlinks, history) / 搜索 (search_notes) / 写入 (write, create, append, append_csv) / 语义编辑 (insert_after_heading, update_section, insert_lines, update_lines) / 管理 (delete, rename, move) — 完整列表以 `packages/mindos/src/protocols/mcp-server/tools.ts` 注册为准。
 
 **安全边界：** 路径沙箱 (`MIND_ROOT` 内) + `INSTRUCTION.md` 写保护 + 25,000 字符上限
 

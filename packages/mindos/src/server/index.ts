@@ -401,6 +401,32 @@ export {
 } from './http.js';
 
 export {
+  createMindosApp,
+  handleMindosRequest,
+  type HandleMindosRequestOptions,
+  type MindosApp,
+  type MindosAppAuthMode,
+  type MindosAppOptions,
+} from './app.js';
+
+export {
+  defineRoutes,
+  toHonoPath,
+  type MindosRouteAuth,
+  type MindosRouteAuthGuard,
+  type MindosRouteContext,
+  type MindosRouteDefinition,
+  type MindosRouteHandler,
+  type MindosRouteMethod,
+} from './route-table.js';
+
+export { MINDOS_ROUTE_AUTH_GUARDS, MINDOS_ROUTE_TABLE } from './routes/index.js';
+
+export { toWebResponse, etagMatches, isSseBody, isSseFrameBody, sseFrames } from './web-response.js';
+export { HttpBodyError, readJsonBody, MINDOS_DEFAULT_JSON_BODY_LIMIT } from './body.js';
+export { isAuthorizedRequest, readAuthToken, readWebPassword } from './auth.js';
+
+export {
   MINDOS_SERVER_EVENT_TYPES,
   createMindosServerEventBus,
   getMindosServerEventBus,

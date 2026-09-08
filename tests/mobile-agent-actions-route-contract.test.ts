@@ -17,10 +17,15 @@ describe('mobile pending agent actions route contract', () => {
       expect.objectContaining({ method: 'POST', path: '/api/agent/user-question', auth: 'required' }),
     ]));
 
-    const http = read('packages/mindos/src/server/http.ts');
-    expect(http).toContain("route === 'GET /api/agent/pending-actions'");
-    expect(http).toContain("route === 'POST /api/agent/runtime-permission'");
-    expect(http).toContain("route === 'POST /api/agent/user-question'");
+    // The Hono app dispatches from the route table, so the wiring lives in the
+    // agent domain file rather than an `if (route === ...)` chain.
+    const routes = read('packages/mindos/src/server/routes/agent.ts');
+    expect(routes).toContain("id: 'agent.pending-actions', method: 'GET', path: '/api/agent/pending-actions'");
+    expect(routes).toContain("id: 'agent.runtime-permission.resolve', method: 'POST', path: '/api/agent/runtime-permission'");
+    expect(routes).toContain("id: 'agent.user-question.resolve', method: 'POST', path: '/api/agent/user-question'");
+    expect(routes).toContain('handlePendingAgentActionsGet(');
+    expect(routes).toContain('handleRuntimePermissionDecisionPost(');
+    expect(routes).toContain('handleUserQuestionDecisionPost(');
   });
 
   it('keeps Next routes as thin adapters to the same Product Server handlers', () => {

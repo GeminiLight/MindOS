@@ -4,6 +4,10 @@
  * Pre-release smoke test: verifies both HTTP and stdio MCP transports
  * can initialize and execute a tool call (mindos_list_files).
  *
+ * The HTTP transport is the Hono-hosted Streamable HTTP server
+ * (packages/mindos/src/protocols/mcp-server/http-app.ts); POST responses are
+ * SSE by default, so the parser below accepts both SSE and plain JSON.
+ *
  * Prerequisites:
  *   - App server running at MINDOS_URL (default http://localhost:3456)
  *   - MCP bundle built: `pnpm --filter @geminilight/mindos build`
