@@ -374,7 +374,7 @@ Join our WeChat group for early access, feedback, and AI workflow discussions:
 <a href="https://github.com/one2piece2hello"><img src="https://github.com/one2piece2hello.png" width="60" style="border-radius:50%" alt="one2piece2hello" /></a>
 <a href="https://github.com/zz-haooo"><img src="https://github.com/zz-haooo.png" width="60" style="border-radius:50%" alt="zz-haooo" /></a>
 <a href="https://github.com/zjpyb"><img src="https://github.com/zjpyb.png" width="60" style="border-radius:50%" alt="zjpyb" /></a>
-<a href="https://github.com/huzhangyi"><img src="https://github.com/huzhangyi.png" width="60" style="border-radius:50%" alt="huzhangyi" /></a>
+<a href="https://github.com/WHU-HZY"><img src="https://github.com/WHU-HZY.png" width="60" style="border-radius:50%" alt="WHU-HZY" /></a>
 <a href="https://github.com/zenozhg"><img src="https://github.com/zenozhg.png" width="60" style="border-radius:50%" alt="Zeno Zhang" /></a>
 <a href="https://github.com/octo-patch"><img src="https://github.com/octo-patch.png" width="60" style="border-radius:50%" alt="Octopus" /></a>
 
