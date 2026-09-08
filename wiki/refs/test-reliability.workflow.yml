@@ -1,0 +1,66 @@
+# Template: copy to .github/workflows/test-reliability.yml with a credential that has the `workflow` scope.
+# Kept under wiki/refs because the branch that authored it was pushed with an OAuth token lacking that scope.
+name: Test Reliability Boundaries
+
+on:
+  pull_request:
+    paths:
+      - 'packages/mindos/src/**'
+      - 'packages/mobile/**'
+      - 'packages/web/components/agents/AgentActivitySection.tsx'
+      - 'packages/web/lib/agent/active-recall.ts'
+      - 'packages/web/__tests__/agent/active-recall-receipt.test.ts'
+      - 'packages/web/__tests__/components/agent-run-observatory.test.tsx'
+      - '**/package.json'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/test-reliability.yml'
+      - 'tests/reliability-workflow.test.ts'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: reliability-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  reliability:
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.18.3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.19.0'
+          cache: pnpm
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build product and protocol runtimes
+        run: pnpm --filter @geminilight/mindos build
+      - name: Test durable ownership and recovery boundaries
+        run: >-
+          pnpm --filter @geminilight/mindos exec vitest run
+          src/server/connections src/agent/capsules
+          src/server/handlers/agent-run-capsules.test.ts
+          src/server/handlers/agent-runs.test.ts
+          src/server.product-ops.test.ts
+          src/server/automations/events.test.ts
+      - name: Test mobile persistence and API compatibility
+        run: pnpm --filter @mindos/mobile test
+      - name: Typecheck mobile
+        run: pnpm --filter @mindos/mobile typecheck
+      - name: Test Web recovery observability and context eligibility
+        run: >-
+          pnpm --filter @mindos/web exec vitest run
+          __tests__/components/agent-run-observatory.test.tsx
+          __tests__/agent/active-recall-receipt.test.ts
+      - name: Typecheck Web
+        run: pnpm --filter @mindos/web typecheck
