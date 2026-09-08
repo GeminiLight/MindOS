@@ -3,6 +3,7 @@
  */
 
 import * as lancedb from 'vectordb'
+import { buildLanceIdFilter, buildLanceMetadataFilter } from './filters.js'
 import type { Connection, Table } from 'vectordb'
 import type { VectorDatabase, VectorEmbedding, VectorQuery, VectorSearchResults, VectorIndexStats } from './types.js'
 import type { Result } from '@geminilight/mindos/foundation'
@@ -122,8 +123,8 @@ export class LanceDBVectorDatabase implements VectorDatabase {
     }
 
     try {
-      const filter = ids.map((id) => `id = "${id}"`).join(' OR ')
-      await tableResult.value.delete(filter)
+      if (ids.length === 0) return ok(undefined)
+      await tableResult.value.delete(buildLanceIdFilter(ids))
       return ok(undefined)
     } catch (error) {
       return err(wrapError(error))
@@ -145,14 +146,7 @@ export class LanceDBVectorDatabase implements VectorDatabase {
 
       // Apply metadata filters if provided
       if (query.filter) {
-        const filters = Object.entries(query.filter)
-          .map(([key, value]) => {
-            if (typeof value === 'string') {
-              return `metadata LIKE '%"${key}":"${value}"%'`
-            }
-            return `metadata LIKE '%"${key}":${value}%'`
-          })
-          .join(' AND ')
+        const filters = buildLanceMetadataFilter(query.filter)
 
         if (filters) {
           searchQuery = searchQuery.where(filters)
@@ -190,7 +184,7 @@ export class LanceDBVectorDatabase implements VectorDatabase {
     try {
       const results = await tableResult.value
         .search(new Array(this.config.dimension).fill(0))
-        .where(`id = "${id}"`)
+        .where(buildLanceIdFilter([id]))
         .limit(1)
         .execute()
 

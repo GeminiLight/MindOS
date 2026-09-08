@@ -387,4 +387,18 @@ describe('SpaceManager', () => {
       }
     });
   });
+
+});
+
+describe('SpaceManager hidden directory guard', () => {
+  it('refuses to create or delete dot-prefixed names', async () => {
+    const fs = new MockFileSystem();
+    const manager = createSpaceManager(fs, '/mind');
+    for (const name of ['.git', '.mindos', '.obsidian', '.hidden']) {
+      const created = await manager.createSpace(name);
+      expect(created.ok, `create ${name}`).toBe(false);
+      const deleted = await manager.deleteSpace(name);
+      expect(deleted.ok, `delete ${name}`).toBe(false);
+    }
+  });
 });

@@ -24,6 +24,7 @@ import {
 import { AgentAvatar, ActionButton, ConfirmDialog, PillButton } from './AgentsPrimitives';
 import { Toggle } from '../settings/Primitives';
 import { useSkillMatrix } from '@/hooks/useSkillMatrix';
+import { useTransientMessage } from '@/hooks/useTransientMessage';
 import { isSkillCellOn, nextSkillCellAction, postSkillCellAction } from '@/lib/skill-cell-actions';
 import SkillDetailPopover from './SkillDetailPopover';
 import CustomAgentModal from './CustomAgentModal';
@@ -53,9 +54,9 @@ export default function AgentDetailContent({ agentKey }: { agentKey: string }) {
   const [mcpBusy, setMcpBusy] = useState(false);
   const [mcpMessage, setMcpMessage] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
-  const [deleteMsg, setDeleteMsg] = useState<string | null>(null);
+  const [deleteMsg, setDeleteMsg, clearDeleteMsgAfter] = useTransientMessage<string | null>(null);
   const [confirmMcpRemove, setConfirmMcpRemove] = useState<string | null>(null);
-  const [mcpHint, setMcpHint] = useState<string | null>(null);
+  const [mcpHint, setMcpHint, clearMcpHintAfter] = useTransientMessage<string | null>(null);
   const [detailSkillName, setDetailSkillName] = useState<string | null>(null);
 
   // Custom agent actions
@@ -213,9 +214,9 @@ export default function AgentDetailContent({ agentKey }: { agentKey: string }) {
       setDeleteMsg(a.detail.skillDeleteFailed);
     } finally {
       setSkillBusy(null);
-      setTimeout(() => setDeleteMsg(null), 3000);
+      clearDeleteMsgAfter(3000);
     }
-  }, [a.detail.skillDeleteSuccess, a.detail.skillDeleteFailed, mcp]);
+  }, [a.detail.skillDeleteSuccess, a.detail.skillDeleteFailed, mcp, clearDeleteMsgAfter]);
 
   const handleCopySkillToAgent = useCallback(async (
     skillName: string,
@@ -341,8 +342,8 @@ export default function AgentDetailContent({ agentKey }: { agentKey: string }) {
   const handleMcpRemoveConfirm = useCallback(() => {
     setConfirmMcpRemove(null);
     setMcpHint(a.detail.mcpServerHint);
-    setTimeout(() => setMcpHint(null), 4000);
-  }, [a.detail.mcpServerHint]);
+    clearMcpHintAfter(4000);
+  }, [a.detail.mcpServerHint, clearMcpHintAfter]);
 
   if (!agent) {
     const connectedAgents = mcp.agents

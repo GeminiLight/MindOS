@@ -1353,3 +1353,104 @@ describe('agent runtime adapters: Claude Code', () => {
     expect(events).not.toContainEqual({ type: 'done' });
   });
 });
+
+describe('Claude native lane terminal failure reporting', () => {
+  it('returns result.error when the Claude Code CLI result is_error instead of recording the run as completed', async () => {
+    const events: MindOSSSEvent[] = [];
+    const transport = createFakeClaudeTransport([
+      JSON.stringify({ type: 'system', subtype: 'init', session_id: 'claude-session-err' }),
+      JSON.stringify({ type: 'assistant', message: { content: [{ type: 'text', text: 'Working' }] } }),
+      JSON.stringify({ type: 'result', subtype: 'error_during_execution', is_error: true, result: 'Credit balance is too low', session_id: 'claude-session-err' }),
+    ]);
+
+    const result = await runMindosNativeAgentTurn({
+      runtime: { kind: 'claude', id: 'claude', name: 'Claude Code', binaryPath: '/usr/local/bin/claude' },
+      cwd: '/tmp/mind',
+      prompt: 'Review this.',
+      send: (event) => events.push(event),
+      services: {
+        createClaudeClient: () => createClaudeCodeCliClient(transport),
+      },
+    });
+
+    expect(result.error).toBeInstanceOf(Error);
+    expect(result.error?.message).toBe('Credit balance is too low');
+    expect(result.externalSessionId).toBe('claude-session-err');
+    expect(events.filter((event) => event.type === 'error')).toEqual([{ type: 'error', message: 'Credit balance is too low' }]);
+    expect(events).not.toContainEqual({ type: 'done' });
+    expect(events.some((event) => event.type === 'runtime_binding' && event.status === 'failed')).toBe(false);
+  });
+
+  it('returns result.error when the Claude Agent SDK result is_error', async () => {
+    const events: MindOSSSEvent[] = [];
+    const sdk = createFakeClaudeSdk([
+      { type: 'system', subtype: 'init', session_id: 'claude-sdk-err', cwd: '/tmp/mind' },
+      { type: 'result', subtype: 'error_during_execution', session_id: 'claude-sdk-err', is_error: true, errors: ['Rate limit reached for this account'] },
+    ]);
+
+    const result = await runMindosNativeAgentTurn({
+      runtime: { kind: 'claude', id: 'claude', name: 'Claude Code', binaryPath: '/usr/local/bin/claude' },
+      cwd: '/tmp/mind',
+      prompt: 'Review this.',
+      send: (event) => events.push(event),
+      services: {
+        loadClaudeSdk: () => sdk,
+      },
+    });
+
+    expect(result.error?.message).toBe('Rate limit reached for this account');
+    expect(result.externalSessionId).toBe('claude-sdk-err');
+    expect(events.filter((event) => event.type === 'error')).toEqual([{ type: 'error', message: 'Rate limit reached for this account' }]);
+    expect(events).not.toContainEqual({ type: 'done' });
+  });
+
+  it('keeps a successful Claude turn free of errors', async () => {
+    const transport = createFakeClaudeTransport([
+      JSON.stringify({ type: 'system', subtype: 'init', session_id: 'claude-ok' }),
+      JSON.stringify({ type: 'result', subtype: 'success', session_id: 'claude-ok', result: 'Done' }),
+    ]);
+    const result = await runMindosNativeAgentTurn({
+      runtime: { kind: 'claude', id: 'claude', name: 'Claude Code', binaryPath: '/usr/local/bin/claude' },
+      cwd: '/tmp/mind',
+      prompt: 'Review this.',
+      send: () => {},
+      services: {
+        createClaudeClient: () => createClaudeCodeCliClient(transport),
+      },
+    });
+    expect(result).toEqual({ externalSessionId: 'claude-ok' });
+  });
+});
+
+describe('Claude native lane user cancellation', () => {
+  it('reports a user cancel as a neutral status and a canceled result instead of a stream error', async () => {
+    const controller = new AbortController();
+    const close = vi.fn(async () => {});
+    const client: ClaudeCodeCliClient = {
+      close,
+      startTurn: ({ signal }: { signal?: AbortSignal }) => pendingUntilAbort(signal),
+    };
+    const events: MindOSSSEvent[] = [];
+
+    const resultPromise = runMindosNativeAgentTurn({
+      runtime: { kind: 'claude', id: 'claude', name: 'Claude Code', binaryPath: '/usr/local/bin/claude', externalSessionId: 'claude-existing' },
+      cwd: '/tmp/mind',
+      prompt: 'Hang until canceled.',
+      signal: controller.signal,
+      send: (event) => events.push(event),
+      services: {
+        createClaudeClient: () => client,
+      },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    controller.abort();
+    const result = await resultPromise;
+
+    expect(result.error).toBeInstanceOf(Error);
+    expect(result.externalSessionId).toBe('claude-existing');
+    expect(close).toHaveBeenCalled();
+    expect(events.some((event) => event.type === 'error')).toBe(false);
+    expect(events).toContainEqual({ type: 'status', visible: true, runtime: 'claude', message: 'Canceled by user.' });
+    expect(events.some((event) => event.type === 'runtime_binding' && event.status === 'failed')).toBe(false);
+  });
+});

@@ -73,6 +73,15 @@ describe('chunkText', () => {
     expect(chunks[0]?.metadata).toEqual(mockMetadata)
   })
 
+  it('generates the same ids for the same file and positions', () => {
+    const text = 'a'.repeat(2500)
+    const first = chunkText(text, '/test/file.txt', mockMetadata, { chunkSize: 1000, chunkOverlap: 0 })
+    const second = chunkText(text, '/test/file.txt', mockMetadata, { chunkSize: 1000, chunkOverlap: 0 })
+    expect(second.map((c) => c.id)).toEqual(first.map((c) => c.id))
+    const other = chunkText(text, '/test/other.txt', mockMetadata, { chunkSize: 1000, chunkOverlap: 0 })
+    expect(other[0]?.id).not.toBe(first[0]?.id)
+  })
+
   it('should generate unique IDs for each chunk', () => {
     const text = 'a'.repeat(2500)
     const chunks = chunkText(text, '/test/file.txt', mockMetadata, {

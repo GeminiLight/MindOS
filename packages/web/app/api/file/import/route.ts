@@ -11,6 +11,12 @@ import { organizeAfterImport } from '@/lib/core/organize';
 import { invalidateSearchIndex } from '@/lib/core/search';
 import { effectiveSopRoot } from '@/lib/settings';
 import { invalidateCache } from '@/lib/fs';
+import {
+  isPayloadTooLarge,
+  KNOWLEDGE_WRITE_MAX_BODY_BYTES,
+  payloadTooLargeResponse,
+  readJsonBodyWithLimit,
+} from '@/lib/api/request-utils';
 
 const MAX_FILES = 20;
 const MAX_CONTENT_LENGTH = 5 * 1024 * 1024;
@@ -110,8 +116,9 @@ function resolveUniquePath(
 export async function POST(req: NextRequest) {
   let body: unknown;
   try {
-    body = await req.json();
-  } catch {
+    body = await readJsonBodyWithLimit(req, KNOWLEDGE_WRITE_MAX_BODY_BYTES);
+  } catch (err) {
+    if (isPayloadTooLarge(err)) return payloadTooLargeResponse(KNOWLEDGE_WRITE_MAX_BODY_BYTES);
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 

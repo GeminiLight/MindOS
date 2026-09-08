@@ -292,7 +292,7 @@ const HistoryParams = Type.Object({
 
 const FileAtVersionParams = Type.Object({
   path: Type.String({ description: 'Relative file path' }),
-  commit: Type.String({ description: 'Git commit hash (full or abbreviated)' }),
+  commit: Type.String({ description: 'Git commit hash (full or abbreviated)', pattern: '^(?:[0-9a-fA-F]{4,64}|HEAD(?:[~^][0-9]*)*)$' }),
 });
 
 const CsvAppendParams = Type.Object({

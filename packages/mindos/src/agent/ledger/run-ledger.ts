@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { effectiveMindRoot } from '../../foundation/mind-root/index.js';
+import { effectiveMindRoot, mindRootResolverGeneration } from '../../foundation/mind-root/index.js';
 import { resolveExistingSafe } from '../../foundation/security/index.js';
 import { getCurrentAgentRunContext } from '../agent-run-context.js';
 import {
@@ -56,10 +56,24 @@ import type {
   UpdateAgentRunInput,
 } from './run-ledger-types.js';
 
+/** In-memory timeline entry; `seq` orders events across the two rings. */
+type LedgerEventEntry = { seq: number; event: AgentEvent };
+
 type AgentRunLedgerStore = {
   records: AgentRunRecord[];
-  /** Live timeline, in-memory only — see module header. */
-  events: AgentEvent[];
+  /**
+   * Live timeline, in-memory only — see module header. Kept oldest-first
+   * (append order) so a streamed token is an O(1) push; readers walk from the
+   * end to produce the newest-first order consumers expect.
+   *
+   * `visibility: 'debug'` events (text / reasoning deltas, tool output deltas)
+   * arrive at token rate and live in their own ring so a chatty run cannot
+   * evict another run's permission request or terminal event from the
+   * timeline ring.
+   */
+  timelineEvents: LedgerEventEntry[];
+  debugEvents: LedgerEventEntry[];
+  nextEventSeq: number;
   mindRoot?: string;
   /** Run ids this process has persisted; compaction writes exactly these. */
   ownRecordIds: Set<string>;
@@ -69,6 +83,19 @@ export type AgentRunEventSubscriber = (event: AgentEvent) => void;
 
 const MAX_RUNS = 500;
 const MAX_EVENTS = 1000;
+/** Debug deltas get the same capacity as before, but in a separate ring. */
+const MAX_DEBUG_EVENTS = 1000;
+/**
+ * Rings are trimmed in batches so a full ring does not copy itself on every
+ * streamed token; readers cap results at MAX_EVENTS so the slack is invisible.
+ */
+const EVENT_TRIM_SLACK = 200;
+/**
+ * `effectiveMindRoot()` stats ~/.mindos/config.json on every call and the
+ * ledger resolves it twice per appended event. Memoize the answer briefly;
+ * resolver changes (test seam) and MIND_ROOT env changes invalidate at once.
+ */
+const LEDGER_ROOT_CACHE_MS = 2000;
 const MAX_SUMMARY_CHARS = 4000;
 const MAX_SHARD_LOG_BYTES = 1024 * 1024;
 const LEDGER_DIR_NAME = '.mindos';
@@ -113,16 +140,53 @@ function shardIdentity(): ShardIdentity {
 }
 
 function emptyStore(mindRoot?: string): AgentRunLedgerStore {
-  return { records: [], events: [], ownRecordIds: new Set(), ...(mindRoot ? { mindRoot } : {}) };
+  return {
+    records: [],
+    timelineEvents: [],
+    debugEvents: [],
+    nextEventSeq: 1,
+    ownRecordIds: new Set(),
+    ...(mindRoot ? { mindRoot } : {}),
+  };
+}
+
+type LedgerRootCache = {
+  root: string | undefined;
+  resolvedAt: number;
+  generation: number;
+  envRoot: string | undefined;
+};
+
+let ledgerRootCache: LedgerRootCache | null = null;
+
+function invalidateLedgerRootCache(): void {
+  ledgerRootCache = null;
 }
 
 function resolveLedgerRoot(): string | undefined {
-  try {
-    const root = effectiveMindRoot();
-    return typeof root === 'string' && root.trim() ? root : undefined;
-  } catch {
-    return undefined;
+  const now = Date.now();
+  const generation = mindRootResolverGeneration();
+  const envRoot = process.env.MIND_ROOT;
+  const cached = ledgerRootCache;
+  if (
+    cached
+    && cached.generation === generation
+    && cached.envRoot === envRoot
+    && now >= cached.resolvedAt
+    && now - cached.resolvedAt < LEDGER_ROOT_CACHE_MS
+  ) {
+    return cached.root;
   }
+
+  let root: string | undefined;
+  try {
+    const resolved = effectiveMindRoot();
+    root = typeof resolved === 'string' && resolved.trim() ? resolved : undefined;
+  } catch {
+    root = undefined;
+  }
+  ledgerRootCache = { root, resolvedAt: now, generation, envRoot };
+  return root;
 }
 
 function ledgerDirPath(mindRoot: string): string {
@@ -553,14 +617,28 @@ function readPersistedStore(mindRoot: string): AgentRunLedgerStore {
     }
   }
   records.sort((a, b) => b.startedAt - a.startedAt);
-  events.sort((a, b) => b.ts - a.ts);
+  // Legacy events come newest-first from disk; the live store is oldest-first.
+  events.sort((a, b) => a.ts - b.ts);
 
-  return {
-    mindRoot,
-    records: records.slice(0, MAX_RUNS),
-    events: events.slice(0, MAX_EVENTS),
-    ownRecordIds,
-  };
+  const store = emptyStore(mindRoot);
+  store.records = records.slice(0, MAX_RUNS);
+  store.ownRecordIds = ownRecordIds;
+  for (const event of events) pushEventEntry(store, event);
+  return store;
+}
+
+function eventRing(store: AgentRunLedgerStore, event: AgentEvent): { ring: LedgerEventEntry[]; max: number } {
+  return event.visibility === 'debug'
+    ? { ring: store.debugEvents, max: MAX_DEBUG_EVENTS }
+    : { ring: store.timelineEvents, max: MAX_EVENTS };
+}
+
+function pushEventEntry(store: AgentRunLedgerStore, event: AgentEvent): void {
+  const { ring, max } = eventRing(store, event);
+  ring.push({ seq: store.nextEventSeq++, event });
+  if (ring.length > max + EVENT_TRIM_SLACK) {
+    ring.splice(0, ring.length - max);
+  }
 }
 
 // --- disk: own-shard writer (the ONLY writes this module performs) ---
@@ -704,10 +782,7 @@ function appendAgentEvent(record: AgentRunRecord, input: AgentEventType | Append
     status: patch.status ?? record.status,
     record,
   };
-  store.events.unshift(event);
-  if (store.events.length > MAX_EVENTS) {
-    store.events = store.events.slice(0, MAX_EVENTS);
-  }
+  pushEventEntry(store, event);
   notifyAgentEventSubscribers(event);
   return event;
 }
@@ -888,14 +963,35 @@ export function listAgentRuns(options: ListAgentRunsOptions = {}): AgentRunRecor
 
 export function listAgentEvents(options: ListAgentEventsOptions = {}): AgentEvent[] {
   const limit = Math.max(1, Math.min(options.limit ?? 100, MAX_EVENTS));
-  return getStore().events
-    .filter((event) => !options.runId || event.runId === options.runId)
-    .filter((event) => !options.rootRunId || event.record.rootRunId === options.rootRunId || event.record.id === options.rootRunId)
-    .filter((event) => !options.chatSessionId || event.record.chatSessionId === options.chatSessionId)
-    .filter((event) => !options.type || event.type === options.type)
-    .filter((event) => !options.category || event.category === options.category)
-    .filter((event) => options.startedAfter === undefined || event.ts >= options.startedAfter || event.record.startedAt >= options.startedAfter)
-    .slice(0, limit);
+  const store = getStore();
+  const matches = (event: AgentEvent): boolean => (
+    (!options.runId || event.runId === options.runId)
+    && (!options.rootRunId || event.record.rootRunId === options.rootRunId || event.record.id === options.rootRunId)
+    && (!options.chatSessionId || event.record.chatSessionId === options.chatSessionId)
+    && (!options.type || event.type === options.type)
+    && (!options.category || event.category === options.category)
+    && (options.startedAfter === undefined || event.ts >= options.startedAfter || event.record.startedAt >= options.startedAfter)
+  );
+
+  // Merge both rings newest-first by sequence number, stopping once `limit`
+  // matches are collected — cheaper than filtering every retained event.
+  const result: AgentEvent[] = [];
+  let timelineIndex = store.timelineEvents.length - 1;
+  let debugIndex = store.debugEvents.length - 1;
+  while (result.length < limit && (timelineIndex >= 0 || debugIndex >= 0)) {
+    const timeline = timelineIndex >= 0 ? store.timelineEvents[timelineIndex] : undefined;
+    const debug = debugIndex >= 0 ? store.debugEvents[debugIndex] : undefined;
+    let entry: LedgerEventEntry;
+    if (timeline && (!debug || timeline.seq > debug.seq)) {
+      entry = timeline;
+      timelineIndex -= 1;
+    } else {
+      entry = debug!;
+      debugIndex -= 1;
+    }
+    if (matches(entry.event)) result.push(entry.event);
+  }
+  return result;
 }
 
 export function subscribeAgentRunEvents(subscriber: AgentRunEventSubscriber): () => void {
@@ -916,9 +1012,11 @@ export function coerceAgentRunPermissionMode(mode: unknown): AgentRunPermissionM
  * Production code must never delete foreign shards; tests need a clean slate.
  */
 export function resetAgentRunsForTest(): void {
+  invalidateLedgerRootCache();
   const store = getStore();
   store.records = [];
-  store.events = [];
+  store.timelineEvents = [];
+  store.debugEvents = [];
   store.ownRecordIds.clear();
   if (!store.mindRoot) return;
   try {
@@ -936,5 +1034,6 @@ export function resetAgentRunsForTest(): void {
 
 /** Test-only: drop the in-memory store so the next access re-merges from disk. */
 export function reloadAgentRunsFromDiskForTest(): void {
+  invalidateLedgerRootCache();
   deleteProcessGlobal(AGENT_RUN_LEDGER_STORE_KEY);
 }

@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { json, publicCacheHeaders, type MindosServerResponse } from '../response.js';
+import { json, revalidateCacheHeaders, type MindosServerResponse } from '../response.js';
 
 export type BootstrapHandlerServices = {
   collectAllFiles(): string[];
@@ -54,7 +54,7 @@ export function handleBootstrapGet(
   }
 
   return json(payload, {
-    headers: publicCacheHeaders(300, weakJsonEtag(payload)),
+    headers: revalidateCacheHeaders(weakJsonEtag(payload)),
   });
 }
 
@@ -107,6 +107,10 @@ type BootstrapTreeNode = {
   children?: BootstrapTreeNode[];
 };
 
+// Directory lookup per sibling list; `nodes.find` made a flat 5000-file root
+// cost ~12M comparisons per /api/bootstrap call.
+const directoryIndex = new WeakMap<BootstrapTreeNode[], Map<string, BootstrapTreeNode>>();
+
 function addFile(nodes: BootstrapTreeNode[], segments: string[]) {
   const [head, ...tail] = segments;
   if (!head) return;
@@ -115,10 +119,16 @@ function addFile(nodes: BootstrapTreeNode[], segments: string[]) {
     return;
   }
 
-  let dir = nodes.find((node) => node.type === 'directory' && node.name === head);
+  let index = directoryIndex.get(nodes);
+  if (!index) {
+    index = new Map();
+    directoryIndex.set(nodes, index);
+  }
+  let dir = index.get(head);
   if (!dir) {
     dir = { name: head, type: 'directory', children: [] };
     nodes.push(dir);
+    index.set(head, dir);
   }
   addFile(dir.children ?? [], tail);
 }

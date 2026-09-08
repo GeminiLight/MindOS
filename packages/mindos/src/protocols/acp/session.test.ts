@@ -783,4 +783,155 @@ describe('ACP Session (SDK-based)', () => {
       expect(toolUpdate).toBeDefined();
     });
   });
+
+  describe('admission control hardening', () => {
+    const PROMPT_TIMEOUT_MS = 5 * 60 * 1000;
+
+    it('reserves slots synchronously so concurrent creates cannot exceed the total limit', async () => {
+      let release!: () => void;
+      const gate = new Promise<void>((resolve) => { release = resolve; });
+      mockInitialize.mockImplementation(async () => {
+        await gate;
+        return { agentCapabilities: {} };
+      });
+
+      const attempts = Array.from({ length: 12 }, (_, i) => createSessionFromEntry({ ...MOCK_ENTRY, id: `agent-${i}` }));
+      // Overflow is decided before any handshake completes.
+      release();
+      const settled = await Promise.allSettled(attempts);
+
+      const fulfilled = settled.filter((r): r is PromiseFulfilledResult<Awaited<typeof attempts[number]>> => r.status === 'fulfilled');
+      const rejected = settled.filter((r): r is PromiseRejectedResult => r.status === 'rejected');
+      expect(fulfilled).toHaveLength(10);
+      expect(rejected).toHaveLength(2);
+      for (const r of rejected) expect((r.reason as Error).message).toContain('Maximum concurrent sessions');
+      expect(getActiveSessions()).toHaveLength(10);
+      expect(spawnAndConnect).toHaveBeenCalledTimes(10);
+
+      for (const r of fulfilled) await closeSession(r.value.id);
+    });
+
+    it('counts in-flight creates against the per-agent limit', async () => {
+      let release!: () => void;
+      const gate = new Promise<void>((resolve) => { release = resolve; });
+      mockInitialize.mockImplementation(async () => {
+        await gate;
+        return { agentCapabilities: {} };
+      });
+
+      const sameAgent = [1, 2, 3].map(() => createSessionFromEntry(MOCK_ENTRY));
+      const fourth = createSessionFromEntry(MOCK_ENTRY);
+      const otherAgent = createSessionFromEntry({ ...MOCK_ENTRY, id: 'other-agent' });
+      release();
+
+      await expect(fourth).rejects.toThrow('Maximum concurrent sessions for agent "test-agent"');
+      const created = await Promise.all([...sameAgent, otherAgent]);
+      expect(created).toHaveLength(4);
+      for (const s of created) await closeSession(s.id);
+    });
+
+    it('releases a reserved slot when the handshake fails', async () => {
+      mockInitialize.mockRejectedValueOnce(new Error('spawn failed'));
+      await expect(createSessionFromEntry({ ...MOCK_ENTRY, id: 'flaky' })).rejects.toThrow();
+
+      const created: string[] = [];
+      for (let i = 0; i < 10; i++) {
+        created.push((await createSessionFromEntry({ ...MOCK_ENTRY, id: `agent-${i}` })).id);
+      }
+      expect(created).toHaveLength(10);
+      for (const id of created) await closeSession(id);
+    });
+
+    it('generates distinct ids for sessions created in the same millisecond', async () => {
+      const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(1_700_000_000_000);
+      try {
+        const a = await createSessionFromEntry(MOCK_ENTRY);
+        const b = await createSessionFromEntry(MOCK_ENTRY);
+        expect(a.id).not.toBe(b.id);
+        expect(a.id).toMatch(/^ses-test-agent-1700000000000-[0-9a-f]{8}$/);
+        expect(b.id).toMatch(/^ses-test-agent-1700000000000-[0-9a-f]{8}$/);
+        await closeSession(a.id);
+        await closeSession(b.id);
+      } finally {
+        nowSpy.mockRestore();
+      }
+    });
+
+    it('reaps stale idle sessions before enforcing the total limit', async () => {
+      const created: string[] = [];
+      for (let i = 0; i < 10; i++) {
+        created.push((await createSessionFromEntry({ ...MOCK_ENTRY, id: `agent-${i}` })).id);
+      }
+      const stale = getSession(created[0])!;
+      stale.lastActivityAt = new Date(Date.now() - 31 * 60 * 1000).toISOString();
+
+      const fresh = await createSessionFromEntry({ ...MOCK_ENTRY, id: 'agent-new' });
+      expect(fresh.agentId).toBe('agent-new');
+      expect(getSession(created[0])).toBeUndefined();
+      expect(getActiveSessions()).toHaveLength(10);
+
+      for (const id of [...created.slice(1), fresh.id]) await closeSession(id);
+    });
+
+    it('does not reap a stale-looking session that is still active', async () => {
+      const created: string[] = [];
+      for (let i = 0; i < 10; i++) {
+        created.push((await createSessionFromEntry({ ...MOCK_ENTRY, id: `agent-${i}` })).id);
+      }
+      const busy = getSession(created[0])!;
+      busy.lastActivityAt = new Date(Date.now() - 31 * 60 * 1000).toISOString();
+      busy.state = 'active';
+
+      await expect(createSessionFromEntry({ ...MOCK_ENTRY, id: 'agent-new' })).rejects.toThrow('Maximum concurrent sessions');
+      expect(getSession(created[0])).toBeDefined();
+
+      busy.state = 'idle';
+      for (const id of created) await closeSession(id);
+    });
+
+    it('cancels the agent turn when prompt() times out', async () => {
+      vi.useFakeTimers();
+      try {
+        const session = await createSessionFromEntry(MOCK_ENTRY);
+        mockPrompt.mockReturnValueOnce(new Promise(() => {}));
+
+        const pending = prompt(session.id, 'hang');
+        const expectation = expect(pending).rejects.toThrow('Prompt timed out after 300s');
+        await vi.advanceTimersByTimeAsync(PROMPT_TIMEOUT_MS + 1);
+        await expectation;
+
+        expect(mockCancel).toHaveBeenCalledWith({ sessionId: 'agent-ses-1' });
+        expect(getSession(session.id)?.state).toBe('error');
+        await closeSession(session.id);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('cancels the agent turn when promptStream() times out even if cancel itself fails', async () => {
+      vi.useFakeTimers();
+      try {
+        const session = await createSessionFromEntry(MOCK_ENTRY);
+        mockPrompt.mockReturnValueOnce(new Promise(() => {}));
+        mockCancel.mockRejectedValueOnce(new Error('agent gone'));
+
+        const pending = promptStream(session.id, 'hang', () => {});
+        const expectation = expect(pending).rejects.toThrow('Prompt timed out');
+        await vi.advanceTimersByTimeAsync(PROMPT_TIMEOUT_MS + 1);
+        await expectation;
+
+        expect(mockCancel).toHaveBeenCalledTimes(1);
+        await closeSession(session.id);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('does not cancel when the prompt completes before the timeout', async () => {
+      const session = await createSessionFromEntry(MOCK_ENTRY);
+      await prompt(session.id, 'quick');
+      expect(mockCancel).not.toHaveBeenCalled();
+      await closeSession(session.id);
+    });
+  });
 });

@@ -103,9 +103,15 @@ export function GraphRenderer({ filePath }: RendererContext) {
       null;
   }, [filePath, graphData, hoveredNodeId, selectedNodeId]);
 
+  // Layout depends only on the graph shape; hover/selection/search must not
+  // trigger a recompute.
+  const layout = useMemo(() => {
+    if (!graphData || graphData.nodes.length === 0) return null;
+    return buildStableLayout(graphData.nodes, graphData.edges, filePath, scope, direction);
+  }, [direction, filePath, graphData, scope]);
+
   const { rfNodes, rfEdges } = useMemo(() => {
-    if (!graphData || graphData.nodes.length === 0) return { rfNodes: [], rfEdges: [] };
-    const layout = buildStableLayout(graphData.nodes, graphData.edges, filePath, scope, direction);
+    if (!graphData || graphData.nodes.length === 0 || !layout) return { rfNodes: [], rfEdges: [] };
 
     const rfNodes = graphData.nodes.map((node) => {
       const matched = matchedNodeIds?.has(node.id) ?? false;
@@ -162,7 +168,7 @@ export function GraphRenderer({ filePath }: RendererContext) {
     });
 
     return { rfNodes, rfEdges };
-  }, [activeNodeIds, direction, filePath, graphData, hoveredNodeId, matchedNodeIds, scope, selectedNodeId]);
+  }, [activeNodeIds, filePath, graphData, hoveredNodeId, layout, matchedNodeIds, selectedNodeId]);
 
   const nodeTypes = useMemo<NodeTypes>(() => ({ wiki: WikiGraphNode as NodeTypes[string] }), []);
 

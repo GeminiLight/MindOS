@@ -1,7 +1,7 @@
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import fs, { mkdtempSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   claimAgentRunCapsuleRecoveryPlan,
   createAgentRunCapsule,
@@ -22,6 +22,7 @@ describe('agent run capsule store', () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     rmSync(mindRoot, { recursive: true, force: true });
   });
 
@@ -264,6 +265,72 @@ describe('agent run capsule store', () => {
     expect(warnings[0]).toContain('capsule-run-1.json');
     expect(() => getAgentRunCapsule(mindRoot, 'capsule-run-1')).toThrow(/corrupt/i);
     expect(readFileSync(storedPath, 'utf-8')).toContain('not-an-array');
+  });
+
+  it('serves an unchanged capsule directory from cache without re-reading files', () => {
+    createAgentRunCapsule(mindRoot, capsuleInput());
+    createAgentRunCapsule(mindRoot, capsuleInput({ id: 'capsule-run-2', runId: 'run-2', now: new Date('2026-09-03T11:00:00.000Z') }));
+    const first = listAgentRunCapsules(mindRoot);
+    expect(first.map((capsule) => capsule.id)).toEqual(['capsule-run-2', 'capsule-run-1']);
+
+    const readSpy = vi.spyOn(fs, 'readFileSync');
+    expect(listAgentRunCapsules(mindRoot)).toEqual(first);
+    expect(listAgentRunCapsules(mindRoot)).toEqual(first);
+    expect(getAgentRunCapsule(mindRoot, 'capsule-run-2')).toEqual(first[0]);
+    expect(readSpy).not.toHaveBeenCalled();
+  });
+
+  it('caches corrupt capsules too, so the poller does not re-parse a broken file every tick', () => {
+    createAgentRunCapsule(mindRoot, capsuleInput());
+    const storedPath = join(mindRoot, '.mindos', 'agent-run-capsules', '2026', '09', 'capsule-run-1.json');
+    writeFileSync(storedPath, '{broken', 'utf-8');
+    const warnings: string[] = [];
+    expect(listAgentRunCapsules(mindRoot, { onCorrupt: (warning) => warnings.push(warning) })).toEqual([]);
+    expect(warnings).toHaveLength(1);
+
+    const readSpy = vi.spyOn(fs, 'readFileSync');
+    expect(listAgentRunCapsules(mindRoot, { onCorrupt: (warning) => warnings.push(warning) })).toEqual([]);
+    expect(warnings).toHaveLength(2);
+    expect(() => getAgentRunCapsule(mindRoot, 'capsule-run-1')).toThrow(/corrupt/i);
+    expect(readSpy).not.toHaveBeenCalled();
+    expect(readFileSync(storedPath, 'utf-8')).toBe('{broken');
+  });
+
+  it('picks up new, finalized, rewritten, and deleted capsules after listing from cache', () => {
+    createAgentRunCapsule(mindRoot, capsuleInput());
+    expect(listAgentRunCapsules(mindRoot).map((capsule) => capsule.id)).toEqual(['capsule-run-1']);
+
+    createAgentRunCapsule(mindRoot, capsuleInput({ id: 'capsule-run-2', runId: 'run-2', now: new Date('2026-09-03T11:00:00.000Z') }));
+    expect(listAgentRunCapsules(mindRoot).map((capsule) => capsule.id)).toEqual(['capsule-run-2', 'capsule-run-1']);
+
+    const finalized = finalizeAgentRunCapsule(mindRoot, 'capsule-run-1', { status: 'failed', now: new Date('2026-09-03T12:00:00.000Z') });
+    expect(getAgentRunCapsule(mindRoot, 'capsule-run-1')).toEqual(finalized);
+    expect(listAgentRunCapsules(mindRoot).find((capsule) => capsule.id === 'capsule-run-1')?.status).toBe('failed');
+
+    const storedPath = join(mindRoot, '.mindos', 'agent-run-capsules', '2026', '09', 'capsule-run-2.json');
+    const rewritten = JSON.parse(readFileSync(storedPath, 'utf-8'));
+    rewritten.status = 'canceled';
+    writeFileSync(storedPath, `${JSON.stringify(rewritten, null, 2)}\n`, 'utf-8');
+    expect(getAgentRunCapsule(mindRoot, 'capsule-run-2')?.status).toBe('canceled');
+    expect(listAgentRunCapsules(mindRoot).find((capsule) => capsule.id === 'capsule-run-2')?.status).toBe('canceled');
+
+    rmSync(storedPath);
+    expect(listAgentRunCapsules(mindRoot).map((capsule) => capsule.id)).toEqual(['capsule-run-1']);
+    expect(getAgentRunCapsule(mindRoot, 'capsule-run-2')).toBeNull();
+  });
+
+  it('locates capsules by id directly for recent months and falls back to a scan for older ones', () => {
+    const old = createAgentRunCapsule(mindRoot, capsuleInput({ id: 'capsule-old', runId: 'run-old', now: new Date('2024-02-10T10:00:00.000Z') }));
+    const recent = createAgentRunCapsule(mindRoot, capsuleInput({ id: 'capsule-recent', runId: 'run-recent', now: new Date() }));
+
+    expect(getAgentRunCapsule(mindRoot, 'capsule-old')).toEqual(old);
+    expect(getAgentRunCapsule(mindRoot, 'capsule-recent')).toEqual(recent);
+    expect(getAgentRunCapsule(mindRoot, 'capsule-missing')).toBeNull();
+    expect(finalizeAgentRunCapsule(mindRoot, 'capsule-old', { status: 'failed' }).status).toBe('failed');
+    expect(() => finalizeAgentRunCapsule(mindRoot, 'capsule-missing', { status: 'failed' })).toThrow(/not found/i);
+
+    // Direct lookup never trusts the id blindly: an escape attempt is rejected before any path is derived.
+    expect(() => getAgentRunCapsule(mindRoot, '../escape')).toThrow(/capsule id/i);
   });
 
   it('preserves and rejects structurally corrupt recovery plans before execution', () => {

@@ -26,6 +26,7 @@ export {
 
 export {
   assertNotProtected,
+  canonicalizeRelativePath,
   assertWithinRoot,
   checkProtected,
   getRelativePath,

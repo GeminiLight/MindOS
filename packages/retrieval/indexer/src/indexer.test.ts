@@ -13,15 +13,20 @@ import { ok } from '@geminilight/mindos/foundation'
 
 // Mock search engine
 class MockSearchEngine implements SearchEngine {
-  documents: any[] = []
+  // Upsert by id, like Meilisearch: re-indexing the same id must not duplicate.
+  private byId = new Map<string, any>()
+
+  get documents(): any[] {
+    return [...this.byId.values()]
+  }
 
   async indexDocument(doc: any) {
-    this.documents.push(doc)
+    this.byId.set(doc.id, doc)
     return ok(undefined)
   }
 
   async indexDocuments(docs: any[]) {
-    this.documents.push(...docs)
+    for (const doc of docs) this.byId.set(doc.id, doc)
     return ok(undefined)
   }
 
@@ -29,12 +34,22 @@ class MockSearchEngine implements SearchEngine {
     return ok([])
   }
 
-  async deleteDocument() {
+  async removeDocument(id: string) {
+    this.byId.delete(id)
     return ok(undefined)
   }
 
+  async removeDocuments(ids: string[]) {
+    for (const id of ids) this.byId.delete(id)
+    return ok(undefined)
+  }
+
+  async getDocument(id: string) {
+    return ok(this.byId.get(id) ?? null)
+  }
+
   async clear() {
-    this.documents = []
+    this.byId.clear()
     return ok(undefined)
   }
 
@@ -163,6 +178,31 @@ describe('FileIndexer', () => {
   })
 
   describe('File Indexing', () => {
+    it('re-indexing the same file does not duplicate documents', async () => {
+      await fs.writeFile('/test/file.md', 'x'.repeat(350))
+      const indexer = new FileIndexer(config, fs, search, vector, logger)
+      await indexer.start()
+      const afterFirst = search.documents.length
+      expect(afterFirst).toBeGreaterThan(1)
+
+      await indexer.start()
+      expect(search.documents.length).toBe(afterFirst)
+    })
+
+    it('removes stale chunks when a file shrinks and all chunks when it is deleted', async () => {
+      await fs.writeFile('/test/file.md', 'x'.repeat(350))
+      const indexer = new FileIndexer(config, fs, search, vector, logger)
+      await indexer.start()
+      expect(search.documents.length).toBeGreaterThan(1)
+
+      await fs.writeFile('/test/file.md', 'short')
+      await indexer.start()
+      expect(search.documents.length).toBe(1)
+
+      await (indexer as unknown as { removeFile(path: string): Promise<void> }).removeFile('/test/file.md')
+      expect(search.documents.length).toBe(0)
+    })
+
     it('should index markdown files', async () => {
       await fs.writeFile('/test/file.md', 'Test content')
 

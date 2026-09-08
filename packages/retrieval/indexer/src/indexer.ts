@@ -42,6 +42,9 @@ export class FileIndexer {
     indexDuration: 0,
   }
 
+  /** Chunk ids currently indexed per file; lets re-index and unlink remove stale documents. */
+  private indexedChunkIds = new Map<string, string[]>()
+
   constructor(
     config: IndexerConfig,
     private fs: IFileSystem,
@@ -285,6 +288,15 @@ export class FileIndexer {
         chunkOverlap: this.config.chunkOverlap,
       })
 
+      // Drop chunks that no longer exist (file shrank) before upserting the rest.
+      const nextIds = chunks.map((chunk) => chunk.id)
+      const staleIds = (this.indexedChunkIds.get(filePath) ?? []).filter((id) => !nextIds.includes(id))
+      if (staleIds.length > 0) {
+        const removed = await this.search.removeDocuments(staleIds)
+        if (!removed.ok) this.logger.warn(`Failed to remove stale chunks for ${filePath}`)
+      }
+      this.indexedChunkIds.set(filePath, nextIds)
+
       // Index chunks in search engine
       for (const chunk of chunks) {
         const searchDoc: SearchDocument = {
@@ -403,9 +415,16 @@ export class FileIndexer {
    * Remove file from indices
    */
   private async removeFile(filePath: string): Promise<void> {
-    // Remove from search index
-    // Note: This requires the search engine to support deletion by metadata
-    // For now, we'll log it
-    this.logger.debug(`File removed: ${filePath}`)
+    const ids = this.indexedChunkIds.get(filePath)
+    this.indexedChunkIds.delete(filePath)
+    if (!ids || ids.length === 0) {
+      // Indexed by a previous process: ids are deterministic, but we do not
+      // know how many chunks it had, so there is nothing safe to delete here.
+      this.logger.debug(`File removed (no tracked chunks): ${filePath}`)
+      return
+    }
+    const removed = await this.search.removeDocuments(ids)
+    if (!removed.ok) this.logger.warn(`Failed to remove chunks for deleted file: ${filePath}`)
+    else this.logger.debug(`Removed ${ids.length} chunks for ${filePath}`)
   }
 }

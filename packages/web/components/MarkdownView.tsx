@@ -97,6 +97,32 @@ function makeHeading(Tag: 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6') {
   return HeadingComponent;
 }
 
+// Built once so react-markdown never sees a new heading component type and
+// remounts every heading when the component map is rebuilt.
+const HEADING_COMPONENTS = {
+  h1: makeHeading('h1'),
+  h2: makeHeading('h2'),
+  h3: makeHeading('h3'),
+  h4: makeHeading('h4'),
+  h5: makeHeading('h5'),
+  h6: makeHeading('h6'),
+} as const;
+
+/**
+ * Functional state update that keeps the previous empty array instance when the
+ * next value is also empty. Users without markdown plugins would otherwise get
+ * a fresh `[]` after every surfaces fetch, which rebuilds the component map and
+ * remounts the whole rendered document.
+ */
+function keepEmptyArray<T>(next: T[]): (prev: T[]) => T[] {
+  return (prev) => (prev.length === 0 && next.length === 0 ? prev : next);
+}
+
+/** Reset to empty while preserving an already-empty array instance. */
+function clearArray<T>(prev: T[]): T[] {
+  return prev.length === 0 ? prev : [];
+}
+
 type MarkdownHookMap = Map<string, PluginSurface[]>;
 type MarkdownRenderMap = Map<string, PluginMarkdownCodeBlockRender[]>;
 type MarkdownCodeBlockRenderState = PluginMarkdownCodeBlockRender & { blockId: string };
@@ -231,12 +257,7 @@ function createMarkdownComponents(
   navigateInternalHref: (href: string) => void,
 ): Components {
   return {
-    h1: makeHeading('h1'),
-    h2: makeHeading('h2'),
-    h3: makeHeading('h3'),
-    h4: makeHeading('h4'),
-    h5: makeHeading('h5'),
-    h6: makeHeading('h6'),
+    ...HEADING_COMPONENTS,
     code({ children, node, ...rest }) {
       void node;
       return <code {...stripNonDom(rest)} suppressHydrationWarning>{children}</code>;
@@ -480,9 +501,9 @@ export default function MarkdownView({ content, highlightLines, onDismissHighlig
 
   useEffect(() => {
     if (!mounted || !parsedMarkdown.body.trim()) {
-      setMarkdownHookSurfaces([]);
-      setMarkdownCodeBlockRenders([]);
-      setMarkdownPostProcessorRenders([]);
+      setMarkdownHookSurfaces(clearArray);
+      setMarkdownCodeBlockRenders(clearArray);
+      setMarkdownPostProcessorRenders(clearArray);
       return;
     }
     let cancelled = false;
@@ -493,7 +514,7 @@ export default function MarkdownView({ content, highlightLines, onDismissHighlig
         const hookSurfaces = surfaces.filter(isMarkdownCodeBlockSurface);
         const postProcessorSurfaces = surfaces.filter(isMarkdownPostProcessorSurface);
         if (!cancelled) {
-          setMarkdownHookSurfaces(hookSurfaces);
+          setMarkdownHookSurfaces(keepEmptyArray(hookSurfaces));
         }
 
         const availableLanguages = new Set(hookSurfaces
@@ -502,45 +523,45 @@ export default function MarkdownView({ content, highlightLines, onDismissHighlig
           .filter(Boolean));
         const renderBlocks = fencedCodeBlocks.filter((block) => availableLanguages.has(block.language));
         if (renderBlocks.length === 0) {
-          if (!cancelled) setMarkdownCodeBlockRenders([]);
+          if (!cancelled) setMarkdownCodeBlockRenders(clearArray);
         } else {
           try {
             const snapshots = await fetchPluginMarkdownCodeBlockSnapshots(renderBlocks);
             if (!cancelled) {
-              setMarkdownCodeBlockRenders(snapshots.flatMap((snapshot) => (
+              setMarkdownCodeBlockRenders(keepEmptyArray(snapshots.flatMap((snapshot) => (
                 snapshot.renders.map((render) => ({
                   ...render,
                   language: snapshot.language,
                   blockId: snapshot.id,
                 }))
-              )));
+              ))));
             }
           } catch {
-            if (!cancelled) setMarkdownCodeBlockRenders([]);
+            if (!cancelled) setMarkdownCodeBlockRenders(clearArray);
           }
         }
 
         if (postProcessorSurfaces.length === 0) {
-          if (!cancelled) setMarkdownPostProcessorRenders([]);
+          if (!cancelled) setMarkdownPostProcessorRenders(clearArray);
         } else {
-          if (!cancelled) setMarkdownPostProcessorRenders([]);
+          if (!cancelled) setMarkdownPostProcessorRenders(clearArray);
           cancelDeferredPostProcessors = scheduleMarkdownIdleWork(() => {
             if (cancelled) return;
             fetchPluginMarkdownPostProcessorSnapshots(parsedMarkdown.body, sourcePath)
               .then((renders) => {
-                if (!cancelled) setMarkdownPostProcessorRenders(renders);
+                if (!cancelled) setMarkdownPostProcessorRenders(keepEmptyArray(renders));
               })
               .catch(() => {
-                if (!cancelled) setMarkdownPostProcessorRenders([]);
+                if (!cancelled) setMarkdownPostProcessorRenders(clearArray);
               });
           });
         }
       })
       .catch(() => {
         if (!cancelled) {
-          setMarkdownHookSurfaces([]);
-          setMarkdownCodeBlockRenders([]);
-          setMarkdownPostProcessorRenders([]);
+          setMarkdownHookSurfaces(clearArray);
+          setMarkdownCodeBlockRenders(clearArray);
+          setMarkdownPostProcessorRenders(clearArray);
         }
       });
     return () => {

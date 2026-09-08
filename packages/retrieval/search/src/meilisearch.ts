@@ -4,6 +4,7 @@
 
 import { MeiliSearch, type Index } from 'meilisearch'
 import type { SearchEngine, SearchDocument, SearchOptions, SearchResults, IndexStats } from './types.js'
+import { buildMeilisearchFilter } from './filters.js'
 import type { Result } from '@geminilight/mindos/foundation'
 import { ok, err } from '@geminilight/mindos/foundation'
 import { createError, wrapError } from '@geminilight/mindos/foundation'
@@ -139,27 +140,7 @@ export class MeiliSearchEngine implements SearchEngine {
     }
 
     try {
-      // Build filter string
-      const filters: string[] = []
-
-      if (options.tags && options.tags.length > 0) {
-        const tagFilters = options.tags.map((tag) => `tags = "${tag}"`).join(' OR ')
-        filters.push(`(${tagFilters})`)
-      }
-
-      if (options.pathPrefix) {
-        filters.push(`path STARTS WITH "${options.pathPrefix}"`)
-      }
-
-      if (options.createdAfter) {
-        filters.push(`createdAt >= ${options.createdAfter.getTime()}`)
-      }
-
-      if (options.createdBefore) {
-        filters.push(`createdAt <= ${options.createdBefore.getTime()}`)
-      }
-
-      const filterString = filters.length > 0 ? filters.join(' AND ') : undefined
+      const filterString = buildMeilisearchFilter(options)
 
       // Perform search
       const result = await indexResult.value.search(query, {

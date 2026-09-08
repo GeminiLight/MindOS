@@ -18,6 +18,26 @@ const IS_WIN = process.platform === 'win32';
 const execFileAsync = promisify(execFile);
 const CHILD_PROCESS_TERM_TIMEOUT_MS = 5000;
 const PID_TERM_TIMEOUT_MS = 1500;
+/** After SIGKILL, how long to wait for the kernel to report the child's exit before giving up. */
+const FORCE_KILL_CONFIRM_TIMEOUT_MS = 1500;
+
+/**
+ * Env vars that tell the MCP server (and any future child) it was launched by a
+ * daemon supervisor. The MCP server disables its stdin parent-death watchdog when
+ * either is set, so a Desktop started via systemd/GNOME autostart or launchd would
+ * inherit them and leave an orphaned MCP behind when Desktop dies.
+ */
+const DAEMON_SUPERVISOR_ENV_KEYS = ['INVOCATION_ID', 'LAUNCHED_BY_LAUNCHD'] as const;
+
+export function sanitizeChildEnv(base: Record<string, string | undefined>): Record<string, string> {
+  const env: Record<string, string> = {};
+  for (const [key, value] of Object.entries(base)) {
+    if (value === undefined) continue;
+    if ((DAEMON_SUPERVISOR_ENV_KEYS as readonly string[]).includes(key)) continue;
+    env[key] = value;
+  }
+  return env;
+}
 
 export function isMindosOwnedCommandLine(commandLine: string): boolean {
   const normalized = commandLine.replace(/\\/g, '/').toLowerCase();
@@ -47,24 +67,40 @@ function forceKillChildProcess(proc: ChildProcess): void {
   } catch { /* already dead */ }
 }
 
-function terminateChildProcess(proc: ChildProcess | null, timeoutMs = CHILD_PROCESS_TERM_TIMEOUT_MS): Promise<void> {
+/**
+ * SIGTERM → wait → SIGKILL → wait (bounded) for the exit event.
+ * Resolves `true` when the child confirmed exit, `false` when it may still be
+ * alive after force-kill (caller must keep its PID on record for the next boot).
+ */
+function terminateChildProcess(
+  proc: ChildProcess | null,
+  timeoutMs = CHILD_PROCESS_TERM_TIMEOUT_MS,
+  forceKillConfirmMs = FORCE_KILL_CONFIRM_TIMEOUT_MS,
+): Promise<boolean> {
   return new Promise((resolve) => {
-    if (!proc || proc.killed) { resolve(); return; }
+    if (!proc || proc.killed) { resolve(true); return; }
+    // Already exited (e.g. crashed before stop()): kill() is a no-op and 'exit'
+    // will never fire again, so waiting would only produce a false "unclean" verdict.
+    if (typeof proc.exitCode === 'number' || typeof proc.signalCode === 'string') { resolve(true); return; }
 
     let resolved = false;
-    const done = () => {
+    let confirmTimer: ReturnType<typeof setTimeout> | null = null;
+    const done = (confirmed: boolean) => {
       if (resolved) return;
       resolved = true;
       clearTimeout(forceKillTimer);
-      resolve();
+      if (confirmTimer) clearTimeout(confirmTimer);
+      resolve(confirmed);
     };
 
     const forceKillTimer = setTimeout(() => {
       forceKillChildProcess(proc);
-      done();
+      // Resolving here without the exit event let stop() clear the PID file for a
+      // child that was still alive; give the kernel a moment to report the exit.
+      confirmTimer = setTimeout(() => done(false), forceKillConfirmMs);
     }, timeoutMs);
 
-    proc.once('exit', done);
+    proc.once('exit', () => done(true));
 
     try {
       if (IS_WIN && proc.pid) {
@@ -79,7 +115,7 @@ function terminateChildProcess(proc: ChildProcess | null, timeoutMs = CHILD_PROC
       }
       proc.kill('SIGTERM');
     } catch {
-      done();
+      done(true);
     }
   });
 }
@@ -260,8 +296,13 @@ export class ProcessManager extends EventEmitter {
     }
   }
 
-  /** Graceful shutdown: SIGTERM → 5s timeout → force kill */
-  async stop(): Promise<void> {
+  /**
+   * Graceful shutdown: SIGTERM → 5s timeout → force kill → bounded wait for exit.
+   * Resolves `true` when every managed child confirmed exit. Resolves `false` when
+   * a child may still be alive; its PID stays in desktop-children.pid so the next
+   * boot's heal path can finish the job (callers must not record a clean exit).
+   */
+  async stop(opts: { termTimeoutMs?: number; forceKillConfirmMs?: number } = {}): Promise<boolean> {
     this.stopped = true;
     this.emit('status-change', 'stopping');
 
@@ -274,16 +315,27 @@ export class ProcessManager extends EventEmitter {
     for (const t of this.respawnTimers) clearTimeout(t);
     this.respawnTimers = [];
 
-    await Promise.all([
-      terminateChildProcess(this.webProcess),
-      // Don't kill external MCP (owned by CLI)
-      this.externalMcp ? Promise.resolve() : terminateChildProcess(this.mcpProcess),
+    const webProc = this.webProcess;
+    const mcpProc = this.externalMcp ? null : this.mcpProcess; // Don't kill external MCP (owned by CLI)
+    const [webExited, mcpExited] = await Promise.all([
+      terminateChildProcess(webProc, opts.termTimeoutMs, opts.forceKillConfirmMs),
+      terminateChildProcess(mcpProc, opts.termTimeoutMs, opts.forceKillConfirmMs),
     ]);
+
+    const survivors: number[] = [];
+    if (!webExited && webProc?.pid) survivors.push(webProc.pid);
+    if (!mcpExited && mcpProc?.pid) survivors.push(mcpProc.pid);
 
     this.webProcess = null;
     this.mcpProcess = null;
-    this.clearChildPids();
+    if (survivors.length === 0) {
+      this.clearChildPids();
+    } else {
+      console.warn(`[MindOS:ProcessManager] child process(es) did not confirm exit after force-kill: ${survivors.join(', ')} — keeping PID file for next-boot cleanup`);
+      this.writePidList(survivors);
+    }
     this.emit('status-change', 'stopped');
+    return survivors.length === 0;
   }
 
   /** Restart services */
@@ -336,14 +388,15 @@ export class ProcessManager extends EventEmitter {
       } catch { /* no config */ }
     }
 
+    const baseEnv = sanitizeChildEnv(this.opts.env || process.env);
     const env: Record<string, string> = {
-      ...(this.opts.env || process.env as Record<string, string>),
+      ...baseEnv,
       MCP_TRANSPORT: 'http', // Desktop always uses HTTP transport (not stdio). MCP clients must use http://127.0.0.1:<port>/mcp
       MCP_PORT: String(mcpPort),
       // Loopback by default: AUTH_TOKEN is optional, so binding all interfaces
       // exposed an unauthenticated MCP API to the LAN. MINDOS_MCP_HOST is the
       // explicit opt-in for non-loopback setups.
-      MCP_HOST: (this.opts.env || process.env as Record<string, string>).MINDOS_MCP_HOST || '127.0.0.1',
+      MCP_HOST: baseEnv.MINDOS_MCP_HOST || '127.0.0.1',
       MINDOS_URL: `http://127.0.0.1:${webPort}`,
       ...(token ? { AUTH_TOKEN: token } : {}),
       ...(verbose ? { MCP_VERBOSE: '1' } : {}),
@@ -370,7 +423,7 @@ export class ProcessManager extends EventEmitter {
     }
 
     const env: Record<string, string> = {
-      ...(this.opts.env || process.env as Record<string, string>),
+      ...sanitizeChildEnv(this.opts.env || process.env),
       MINDOS_WEB_PORT: String(webPort),
       MINDOS_MCP_PORT: String(this.opts.mcpPort),
       MIND_ROOT: mindRoot,
@@ -745,6 +798,10 @@ export class ProcessManager extends EventEmitter {
     if (this.webProcess?.pid) pids.push(this.webProcess.pid);
     if (this.mcpProcess?.pid) pids.push(this.mcpProcess.pid);
     if (pids.length === 0) return;
+    this.writePidList(pids);
+  }
+
+  private writePidList(pids: number[]): void {
     try {
       const pidFile = ProcessManager.childPidFile();
       const dir = path.dirname(pidFile);

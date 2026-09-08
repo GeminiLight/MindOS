@@ -7,6 +7,9 @@ import { testMindRoot } from '../setup';
 import { DELETE, GET, PATCH, POST } from '../../app/api/echo/cards/route';
 
 const agentSessionsMock = vi.hoisted(() => vi.fn());
+const aiRunnerState = vi.hoisted(() => ({
+  gate: null as null | { started: Promise<void>; markStarted: () => void; release: () => void },
+}));
 
 vi.mock('@geminilight/mindos/server', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@geminilight/mindos/server')>();
@@ -15,6 +18,35 @@ vi.mock('@geminilight/mindos/server', async (importOriginal) => {
     handleAgentSessionsGet: agentSessionsMock,
   };
 });
+
+// The real runner needs a configured provider (none in tests) and fails fast,
+// which lets the generator fall back to deterministic cards. When a test arms
+// `aiRunnerState.gate`, the runner instead blocks until released so a second
+// request can land mid-generation.
+vi.mock('@/lib/ai/model-client', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/ai/model-client')>();
+  return {
+    ...actual,
+    createDefaultAiTaskRunner: () => {
+      const gate = aiRunnerState.gate;
+      if (!gate) return actual.createDefaultAiTaskRunner();
+      return {
+        run: () => new Promise<never>((_, reject) => {
+          gate.release = () => reject(new Error('slow model aborted by test'));
+          gate.markStarted();
+        }),
+      };
+    },
+  };
+});
+
+function armSlowRunner() {
+  let markStarted!: () => void;
+  const started = new Promise<void>((resolve) => { markStarted = resolve; });
+  const gate = { started, markStarted, release: () => {} };
+  aiRunnerState.gate = gate;
+  return gate;
+}
 
 describe('/api/echo/cards', () => {
   function getRequest(segment: string) {
@@ -285,5 +317,52 @@ describe('/api/echo/cards', () => {
         ],
       },
     });
+  });
+  it('keeps a PATCH that lands during a slow generation', async () => {
+    const now = Date.now();
+    agentSessionsMock.mockReturnValue({
+      status: 200,
+      body: [{
+        id: 'insight-slow-session',
+        title: 'Slow generation source',
+        createdAt: now - 30 * 60_000,
+        updatedAt: now - 5 * 60_000,
+        messages: [
+          { role: 'user', content: '生成过程很慢的时候，用户可能同时修改设置。' },
+          { role: 'assistant', content: 'The PATCH must survive the generation write.' },
+        ],
+      }],
+    });
+
+    const gate = armSlowRunner();
+    const generation = POST(bodyRequest({ segment: 'insight', trigger: 'manual', locale: 'zh' }));
+    // Wait until the mocked model call is actually in flight.
+    await gate.started;
+
+    const patchRes = await PATCH(bodyRequest({
+      segment: 'insight',
+      schedule: { mode: 'interval', dailyTime: '07:45', intervalHours: 3 },
+    }, 'PATCH'));
+    expect(patchRes.status).toBe(200);
+
+    gate.release();
+    const generationRes = await generation;
+    const generated = await generationRes.json();
+    aiRunnerState.gate = null;
+
+    expect(generationRes.status, JSON.stringify(generated)).toBe(200);
+    expect(generated.state).toMatchObject({
+      runCount: 1,
+      schedule: expect.objectContaining({ mode: 'interval', dailyTime: '07:45', intervalHours: 3 }),
+    });
+    expect(generated.cards.length).toBeGreaterThan(0);
+
+    const persistedRes = GET(getRequest('insight'));
+    const persisted = await persistedRes.json();
+    expect(persisted.state).toMatchObject({
+      runCount: 1,
+      schedule: expect.objectContaining({ mode: 'interval', dailyTime: '07:45', intervalHours: 3 }),
+    });
+    expect(persisted.cards.length).toBeGreaterThan(0);
   });
 });

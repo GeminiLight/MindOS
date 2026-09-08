@@ -1,12 +1,13 @@
 export const runtime = 'nodejs';
 
 import { NextRequest, NextResponse } from 'next/server';
+import fsp from 'fs/promises';
 import path from 'path';
 import archiver from 'archiver';
 import { Readable, PassThrough } from 'stream';
 import { getMindRoot } from '@/lib/fs';
 import { readFile } from '@/lib/core/fs-ops';
-import { markdownToHTML, collectExportFiles } from '@/lib/core/export';
+import { markdownToHTML, collectExportFiles, type ExportFileEntry } from '@/lib/core/export';
 import { handleRouteErrorSimple } from '@/lib/errors';
 
 export async function GET(req: NextRequest) {
@@ -67,32 +68,7 @@ export async function GET(req: NextRequest) {
       const date = new Date().toISOString().slice(0, 10);
       const zipName = `${spaceName}-${date}.zip`;
 
-      // Create archive
-      const archive = archiver('zip', { zlib: { level: 6 } });
-      const passThrough = new PassThrough();
-      archive.pipe(passThrough);
-
-      if (format === 'zip-html') {
-        // Convert each MD file to HTML
-        for (const file of files) {
-          if (file.relativePath.endsWith('.md')) {
-            const title = path.basename(file.relativePath, '.md');
-            const html = await markdownToHTML(file.content, title, file.relativePath);
-            const htmlPath = file.relativePath.replace(/\.md$/, '.html');
-            archive.append(html, { name: htmlPath });
-          } else {
-            archive.append(file.content, { name: file.relativePath });
-          }
-        }
-      } else {
-        for (const file of files) {
-          archive.append(file.content, { name: file.relativePath });
-        }
-      }
-
-      // Pipe archive errors to the passthrough stream
-      archive.on('error', (err) => passThrough.destroy(err));
-      void archive.finalize();
+      const passThrough = await streamZipArchive(files, format, req.signal);
 
       // Convert Node stream to Web ReadableStream
       const readable = Readable.toWeb(passThrough) as ReadableStream;
@@ -109,4 +85,52 @@ export async function GET(req: NextRequest) {
   } catch (err) {
     return handleRouteErrorSimple(err);
   }
+}
+
+/**
+ * Build the zip as a stream. Plain entries are handed to archiver by path so it
+ * reads each file lazily instead of the route buffering the whole space first;
+ * zip-html still converts one markdown file at a time. A client disconnect
+ * (req.signal) aborts the archive so no more disk reads or compression happen
+ * for a response nobody will receive.
+ */
+async function streamZipArchive(
+  files: ExportFileEntry[],
+  format: 'zip' | 'zip-html',
+  signal: AbortSignal,
+): Promise<PassThrough> {
+  const archive = archiver('zip', { zlib: { level: 6 } });
+  const passThrough = new PassThrough();
+  // Pipe archive errors to the passthrough stream
+  archive.on('error', (err) => passThrough.destroy(err));
+  archive.pipe(passThrough);
+
+  const abortArchive = () => { archive.abort(); };
+  if (signal.aborted) {
+    abortArchive();
+    return passThrough;
+  }
+  signal.addEventListener('abort', abortArchive, { once: true });
+  passThrough.once('close', () => signal.removeEventListener('abort', abortArchive));
+
+  for (const file of files) {
+    if (signal.aborted) break;
+    if (format === 'zip-html' && file.relativePath.endsWith('.md')) {
+      // Convert each MD file to HTML, one file at a time
+      const content = await fsp.readFile(file.absPath, 'utf-8');
+      if (signal.aborted) break;
+      const title = path.basename(file.relativePath, '.md');
+      const html = await markdownToHTML(content, title, file.relativePath);
+      if (signal.aborted) break;
+      archive.append(html, { name: file.relativePath.replace(/\.md$/, '.html') });
+    } else {
+      archive.file(file.absPath, { name: file.relativePath });
+    }
+  }
+
+  if (!signal.aborted) {
+    // Rejections are already surfaced through the 'error' listener above.
+    archive.finalize().catch(() => { /* handled via 'error' */ });
+  }
+  return passThrough;
 }

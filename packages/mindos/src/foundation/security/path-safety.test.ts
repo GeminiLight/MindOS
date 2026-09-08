@@ -9,6 +9,7 @@ import {
   assertNotProtected,
   validatePath,
   normalizePath,
+  canonicalizeRelativePath,
 } from './index';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -191,6 +192,34 @@ describe('@mindos/security', () => {
     it('should return false for other files', () => {
       expect(isRootProtected('README.md')).toBe(false);
     });
+
+    it.each([
+      './INSTRUCTION.md',
+      'INSTRUCTION.md/',
+      './INSTRUCTION.md/',
+      '.\\INSTRUCTION.md',
+      '/INSTRUCTION.md',
+      'Notes/../INSTRUCTION.md',
+    ])('treats %s as the protected root file', (spelling) => {
+      expect(isRootProtected(spelling)).toBe(true);
+    });
+
+    it('does not protect a same-named file inside a subdirectory', () => {
+      expect(isRootProtected('Notes/INSTRUCTION.md')).toBe(false);
+    });
+  });
+
+  describe('canonicalizeRelativePath', () => {
+    it.each([
+      ['./Notes/today.md', 'Notes/today.md'],
+      ['Notes//today.md/', 'Notes/today.md'],
+      ['Notes\\today.md', 'Notes/today.md'],
+      ['/Notes/today.md', 'Notes/today.md'],
+      ['.', ''],
+      ['./', ''],
+    ])('canonicalizes %s to %s', (input, expected) => {
+      expect(canonicalizeRelativePath(input)).toBe(expected);
+    });
   });
 
   describe('assertNotProtected', () => {
@@ -207,6 +236,11 @@ describe('@mindos/security', () => {
     it('should validate safe paths', () => {
       const result = validatePath(testRoot, 'file.txt');
       expect(result.ok).toBe(true);
+    });
+
+    it('rejects protected files regardless of spelling when an operation is given', () => {
+      expect(validatePath(testRoot, './INSTRUCTION.md', 'write').ok).toBe(false);
+      expect(validatePath(testRoot, 'INSTRUCTION.md/', 'write').ok).toBe(false);
     });
 
     it('should reject unsafe paths', () => {

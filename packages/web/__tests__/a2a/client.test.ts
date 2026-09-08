@@ -131,6 +131,47 @@ describe('A2A Client', () => {
       expect(agent).toBeNull();
     });
 
+    it('does not follow redirects during agent-card discovery', async () => {
+      // A public host must not be able to 302 the card fetch into a private network.
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 302,
+        statusText: 'Found',
+        headers: new Headers({ location: 'http://127.0.0.1:3456/.well-known/agent-card.json' }),
+        json: async () => ({}),
+      });
+
+      await expect(discoverAgent('https://public-agent.example')).resolves.toBeNull();
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://public-agent.example/.well-known/agent-card.json',
+        expect.objectContaining({ redirect: 'manual' }),
+      );
+      expect(getDiscoveredAgents()).toHaveLength(0);
+    });
+
+    it('treats opaqueredirect responses as failure', async () => {
+      // Browser-style manual-redirect result: status 0, type opaqueredirect.
+      mockFetch.mockResolvedValueOnce({ ok: false, status: 0, type: 'opaqueredirect' });
+
+      await expect(discoverAgent('https://public-agent.example')).resolves.toBeNull();
+      expect(getDiscoveredAgents()).toHaveLength(0);
+    });
+
+    it('rejects a redirect response even if it claims a valid card body', async () => {
+      // Defensive: a 3xx must never be consumed as a card, regardless of body.
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 301,
+        type: 'opaqueredirect',
+        json: async () => MOCK_CARD,
+      });
+
+      await expect(discoverAgent('https://public-agent.example')).resolves.toBeNull();
+      expect(getDiscoveredAgents()).toHaveLength(0);
+    });
+
     it('returns null for card without JSONRPC interface', async () => {
       const cardNoRpc = {
         ...MOCK_CARD,
@@ -329,6 +370,34 @@ describe('A2A Client', () => {
       await expect(delegateTask(agent!.id, 'fail')).rejects.toThrow('A2A RPC failed: 500');
     });
 
+    it('rejects RPC redirects', async () => {
+      mockFetch.mockResolvedValueOnce({ ok: true, json: async () => MOCK_CARD });
+      const agent = await discoverAgent('http://test:3000');
+
+      // statusText intentionally omitted so the assertion below can only pass
+      // via the explicit redirect rejection, not the generic status message.
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 307,
+        statusText: '',
+        headers: new Headers({ location: 'http://169.254.169.254/latest/meta-data/' }),
+      });
+
+      await expect(delegateTask(agent!.id, 'follow me')).rejects.toThrow('A2A RPC failed: redirect not allowed');
+
+      const rpcCall = mockFetch.mock.calls[1];
+      expect(rpcCall[0]).toBe('http://test:3000/api/a2a');
+      expect(rpcCall[1]).toEqual(expect.objectContaining({ method: 'POST', redirect: 'manual' }));
+
+      const [record] = getDelegationHistory();
+      expect(record).toEqual(expect.objectContaining({
+        agentId: agent!.id,
+        message: 'follow me',
+        status: 'failed',
+        error: 'A2A RPC failed: redirect not allowed',
+      }));
+    });
+
     it('sends correct JSON-RPC body', async () => {
       mockFetch.mockResolvedValueOnce({ ok: true, json: async () => MOCK_CARD });
       const agent = await discoverAgent('http://test:3000');
@@ -417,6 +486,16 @@ describe('A2A Client', () => {
       mockFetch.mockResolvedValueOnce(mockRpcResponse({ id: 'task-without-status' }));
 
       await expect(checkRemoteTaskStatus(agent!.id, 'bad')).rejects.toThrow('Invalid A2A task response');
+    });
+
+    it('rejects RPC redirects when polling task status', async () => {
+      mockFetch.mockResolvedValueOnce({ ok: true, json: async () => MOCK_CARD });
+      const agent = await discoverAgent('http://test:3000');
+
+      mockFetch.mockResolvedValueOnce({ ok: false, status: 302, statusText: '' });
+
+      await expect(checkRemoteTaskStatus(agent!.id, 'task-1')).rejects.toThrow('A2A RPC failed: redirect not allowed');
+      expect(mockFetch.mock.calls[1][1]).toEqual(expect.objectContaining({ redirect: 'manual' }));
     });
   });
 });

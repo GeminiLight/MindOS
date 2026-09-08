@@ -1,4 +1,4 @@
-import { generateUUID } from '../foundation/shared/index.js';
+import { createHash } from 'node:crypto';
 import type { DocumentChunk, FileMetadata } from './types.js';
 
 export interface ChunkerOptions {
@@ -28,6 +28,15 @@ function normalizeOptions(options: Partial<ChunkerOptions>): ChunkerOptions {
   return { chunkSize, chunkOverlap };
 }
 
+/**
+ * Chunk ids are a function of (file, position) so re-indexing a file upserts
+ * the same documents instead of appending duplicates on every rebuild or
+ * watcher event, and stale chunks can be removed by id.
+ */
+export function stableChunkId(filePath: string, chunkIndex: number): string {
+  return createHash('sha256').update(`${filePath}\0${chunkIndex}`).digest('hex').slice(0, 32);
+}
+
 function makeChunk(
   content: string,
   filePath: string,
@@ -35,7 +44,7 @@ function makeChunk(
   chunkIndex: number,
 ): DocumentChunk {
   return {
-    id: generateUUID(),
+    id: stableChunkId(filePath, chunkIndex),
     filePath,
     content,
     chunkIndex,

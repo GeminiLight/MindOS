@@ -10,6 +10,7 @@ import { encodePath, relativeTime } from '@/lib/utils';
 import { FileNode, SYSTEM_FILES } from '@/lib/types';
 import type { SpacePreview } from '@/lib/core/types';
 import { useLocale } from '@/lib/stores/locale-store';
+import { useShowHiddenFiles } from '@/lib/stores/hidden-files';
 import { openTab } from '@/lib/workspace-tabs';
 
 async function copyPathToClipboard(path: string) {
@@ -40,27 +41,20 @@ function countFiles(node: FileNode): number {
 }
 
 const DIR_VIEW_KEY = 'mindos-dir-view';
-const HIDDEN_FILES_KEY = 'show-hidden-files';
 const VIRTUAL_DIR_ENTRY_THRESHOLD = 200;
 
-function subscribeHiddenFiles(cb: () => void) {
-  const handler = (e: StorageEvent) => { if (e.key === HIDDEN_FILES_KEY) cb(); };
-  const custom = () => cb();
-  window.addEventListener('storage', handler);
-  window.addEventListener('mindos:hidden-files-changed', custom);
-  return () => {
-    window.removeEventListener('storage', handler);
-    window.removeEventListener('mindos:hidden-files-changed', custom);
-  };
-}
+type DirViewMode = 'grid' | 'list';
 
-function getShowHiddenFiles() {
-  if (typeof window === 'undefined') return false;
-  return localStorage.getItem(HIDDEN_FILES_KEY) === 'true';
-}
+// In-memory fallback for when localStorage throws (Safari "block all cookies").
+let memoryDirView: DirViewMode = 'grid';
 
-function useShowHiddenFiles() {
-  return useSyncExternalStore(subscribeHiddenFiles, getShowHiddenFiles, () => false);
+function readDirViewPref(): DirViewMode {
+  try {
+    const saved = localStorage.getItem(DIR_VIEW_KEY);
+    return (saved === 'list' || saved === 'grid') ? saved : 'grid';
+  } catch {
+    return memoryDirView;
+  }
 }
 
 function useDirViewPref() {
@@ -70,15 +64,17 @@ function useDirViewPref() {
       window.addEventListener('mindos-dir-view-change', listener);
       return () => window.removeEventListener('mindos-dir-view-change', listener);
     },
-    () => {
-      const saved = localStorage.getItem(DIR_VIEW_KEY);
-      return (saved === 'list' || saved === 'grid') ? saved : 'grid';
-    },
+    readDirViewPref,
     () => 'grid' as const,
   );
 
-  const setView = (v: 'grid' | 'list') => {
-    localStorage.setItem(DIR_VIEW_KEY, v);
+  const setView = (v: DirViewMode) => {
+    memoryDirView = v;
+    try {
+      localStorage.setItem(DIR_VIEW_KEY, v);
+    } catch {
+      // Storage blocked; the in-memory preference still drives this session.
+    }
     window.dispatchEvent(new Event('mindos-dir-view-change'));
   };
 
@@ -131,10 +127,15 @@ type OverviewState = 'idle' | 'loading' | 'error' | 'unchanged';
 function useSpaceFileCount(dirPath: string) {
   const [count, setCount] = useState<number | null>(null);
   useEffect(() => {
-    fetch(`/api/space-overview?space=${encodeURIComponent(dirPath)}`)
-      .then(r => r.json())
-      .then(d => setCount(d.fileCount ?? 0))
-      .catch(() => setCount(null));
+    const controller = new AbortController();
+    fetch(`/api/space-overview?space=${encodeURIComponent(dirPath)}`, { signal: controller.signal })
+      .then(r => {
+        if (!r.ok) throw new Error(`space-overview ${r.status}`);
+        return r.json();
+      })
+      .then(d => { if (!controller.signal.aborted) setCount(d.fileCount ?? 0); })
+      .catch(() => { if (!controller.signal.aborted) setCount(null); });
+    return () => controller.abort();
   }, [dirPath]);
   return count;
 }

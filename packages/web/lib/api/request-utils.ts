@@ -1,6 +1,119 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import type { ZodSchema } from 'zod';
 import { MindOSError, ErrorCodes } from '@/lib/errors';
+
+/** Upper bound for JSON bodies on knowledge write routes (/api/inbox, /api/file, /api/file/import). */
+export const KNOWLEDGE_WRITE_MAX_BODY_BYTES = 25 * 1024 * 1024;
+
+/**
+ * Body-read failure with an HTTP status attached. `code` + `statusCode` follow
+ * the product error shape so handleRouteErrorSimple() maps it to the right
+ * status if a route lets it propagate.
+ */
+export class RequestBodyError extends Error {
+  readonly code: 'PAYLOAD_TOO_LARGE' | 'INVALID_JSON';
+  readonly statusCode: 413 | 400;
+
+  constructor(code: 'PAYLOAD_TOO_LARGE' | 'INVALID_JSON', message: string) {
+    super(message);
+    this.name = 'RequestBodyError';
+    this.code = code;
+    this.statusCode = code === 'PAYLOAD_TOO_LARGE' ? 413 : 400;
+  }
+}
+
+export function isPayloadTooLarge(error: unknown): error is RequestBodyError {
+  return error instanceof RequestBodyError && error.statusCode === 413;
+}
+
+export function payloadTooLargeResponse(maxBytes: number): NextResponse<{ error: string }> {
+  return NextResponse.json(
+    { error: `Request body too large (limit ${maxBytes} bytes)` },
+    { status: 413 },
+  );
+}
+
+function parseContentLength(header: string | null): number | null {
+  if (header === null) return null;
+  const trimmed = header.trim();
+  if (!/^\d+$/.test(trimmed)) return null;
+  const value = Number(trimmed);
+  return Number.isSafeInteger(value) ? value : null;
+}
+
+function concatChunks(chunks: Uint8Array[], total: number): Uint8Array {
+  if (chunks.length === 1) return chunks[0];
+  const out = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    out.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return out;
+}
+
+/**
+ * Read and parse a JSON body while enforcing a byte limit.
+ *
+ * A declared `content-length` above the limit is rejected before the body is
+ * touched. Otherwise the stream is consumed chunk by chunk and cancelled as
+ * soon as the running total exceeds `maxBytes`, so a client without a
+ * content-length header (chunked upload) cannot make the server buffer an
+ * unbounded payload the way `req.json()` would.
+ *
+ * Throws RequestBodyError with statusCode 413 (too large) or 400 (empty or
+ * invalid JSON).
+ */
+export async function readJsonBodyWithLimit(req: Request, maxBytes: number): Promise<unknown> {
+  const declared = parseContentLength(req.headers.get('content-length'));
+  if (declared !== null && declared > maxBytes) {
+    throw new RequestBodyError(
+      'PAYLOAD_TOO_LARGE',
+      `Request body too large: ${declared} bytes exceeds the ${maxBytes}-byte limit`,
+    );
+  }
+
+  const body = req.body;
+  if (!body) {
+    throw new RequestBodyError('INVALID_JSON', 'Request body must be valid JSON');
+  }
+
+  const reader = body.getReader();
+  const chunks: Uint8Array[] = [];
+  let received = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      received += value.byteLength;
+      if (received > maxBytes) {
+        await reader.cancel().catch(() => { /* client may already be gone */ });
+        throw new RequestBodyError(
+          'PAYLOAD_TOO_LARGE',
+          `Request body too large: exceeded the ${maxBytes}-byte limit`,
+        );
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  if (received === 0) {
+    throw new RequestBodyError('INVALID_JSON', 'Request body must be valid JSON');
+  }
+
+  const raw = new TextDecoder('utf-8').decode(concatChunks(chunks, received));
+  try {
+    return JSON.parse(raw) as unknown;
+  } catch (error) {
+    throw new RequestBodyError(
+      'INVALID_JSON',
+      `Request body must be valid JSON: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+}
 
 /**
  * Parse JSON from request body safely.

@@ -2,11 +2,32 @@ import fs from 'fs';
 import path from 'path';
 import { describe, expect, it } from 'vitest';
 import { getTestMindRoot } from '../setup';
+import type { AiTaskRunnerLike } from '@/lib/ai/ai-task-runner';
 import {
   generateEchoCards,
+  generateEchoCardsWithAi,
   readEchoCardsState,
+  updateEchoCard,
   updateEchoCardSchedule,
 } from '@/lib/echo-card-generator';
+
+type Deferred = { promise: Promise<never>; reject: (reason: unknown) => void; started: Promise<void> };
+
+/** An AI runner that blocks until the test releases it, then fails so the
+ *  deterministic fallback produces cards. Models a multi-second model call. */
+function slowRunner(): { runner: AiTaskRunnerLike; gate: Deferred } {
+  let reject!: (reason: unknown) => void;
+  let markStarted!: () => void;
+  const started = new Promise<void>((resolve) => { markStarted = resolve; });
+  const promise = new Promise<never>((_, rej) => { reject = rej; });
+  const runner: AiTaskRunnerLike = {
+    run: () => {
+      markStarted();
+      return promise;
+    },
+  };
+  return { runner, gate: { promise, reject, started } };
+}
 
 describe('echo card generator', () => {
   const now = new Date('2026-06-29T12:00:00.000Z');
@@ -158,5 +179,89 @@ describe('echo card generator', () => {
     expect(result.state.segments.promotion.runCount).toBe(0);
     expect(result.state.segments.promotion.checkpointAt).toBeUndefined();
     expect(readEchoCardsState(root).segments.promotion.checkpointAt).toBeUndefined();
+  });
+  it('does not lose concurrent edits made while an AI generation is in flight', async () => {
+    const root = getTestMindRoot();
+    const seeded = generateEchoCards({
+      mindRoot: root,
+      segment: 'promotion',
+      sessions: [session('promotion-existing', 3)],
+      trigger: 'manual',
+      locale: 'zh',
+      now,
+    });
+    const existingCard = seeded.cards[0];
+    const { runner, gate } = slowRunner();
+
+    const pending = generateEchoCardsWithAi({
+      mindRoot: root,
+      segment: 'insight',
+      sessions: [session('insight-slow', 5)],
+      trigger: 'manual',
+      locale: 'zh',
+      now: new Date(now.getTime() + 60_000),
+      aiTaskRunner: runner,
+    });
+    await gate.started;
+
+    // Writers landing during the model call: a schedule PATCH on the same
+    // segment and a card edit on another segment.
+    updateEchoCardSchedule(root, 'insight', { mode: 'interval', intervalHours: 6, dailyTime: '08:30' });
+    const edited = updateEchoCard(root, 'promotion', existingCard.id, { content: '用户在生成期间编辑了这张卡片' }, new Date(now.getTime() + 90_000));
+    expect(edited?.userEdited).toBe(true);
+
+    gate.reject(new Error('model timeout'));
+    const result = await pending;
+
+    expect(result.extraction.mode).toBe('deterministic');
+    expect(result.cards.length).toBeGreaterThan(0);
+    const state = readEchoCardsState(root);
+    expect(state.segments.insight.schedule).toEqual({ mode: 'interval', intervalHours: 6, dailyTime: '08:30' });
+    expect(state.segments.insight.runCount).toBe(1);
+    expect(state.cards.find((card) => card.id === existingCard.id)).toMatchObject({
+      content: '用户在生成期间编辑了这张卡片',
+      userEdited: true,
+    });
+    expect(state.cards.some((card) => card.segment === 'insight')).toBe(true);
+    expect(result.state.segments.insight.schedule.mode).toBe('interval');
+    expect(fs.readdirSync(path.join(root, '.mindos', 'echo')).filter((name) => name.endsWith('.tmp'))).toEqual([]);
+  });
+
+  it('serializes overlapping generations so neither run count nor cards are dropped', async () => {
+    const root = getTestMindRoot();
+    const first = slowRunner();
+    const second = slowRunner();
+
+    const insightRun = generateEchoCardsWithAi({
+      mindRoot: root,
+      segment: 'insight',
+      sessions: [session('insight-parallel', 5)],
+      trigger: 'manual',
+      now,
+      aiTaskRunner: first.runner,
+    });
+    const promotionRun = generateEchoCardsWithAi({
+      mindRoot: root,
+      segment: 'promotion',
+      sessions: [session('promotion-parallel', 4)],
+      trigger: 'manual',
+      now: new Date(now.getTime() + 1_000),
+      aiTaskRunner: second.runner,
+    });
+
+    await first.gate.started;
+    first.gate.reject(new Error('first model failed'));
+    await second.gate.started;
+    second.gate.reject(new Error('second model failed'));
+    const [insight, promotion] = await Promise.all([insightRun, promotionRun]);
+
+    const state = readEchoCardsState(root);
+    expect(state.segments.insight.runCount).toBe(1);
+    expect(state.segments.promotion.runCount).toBe(1);
+    expect(state.cards.some((card) => card.segment === 'insight')).toBe(true);
+    expect(state.cards.some((card) => card.segment === 'promotion')).toBe(true);
+    expect(insight.cards.length).toBeGreaterThan(0);
+    expect(promotion.cards.length).toBeGreaterThan(0);
+    expect(promotion.state.cards.some((card) => card.segment === 'insight')).toBe(true);
   });
 });

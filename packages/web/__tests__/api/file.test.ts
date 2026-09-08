@@ -2,7 +2,7 @@ import { beforeEach, describe, it, expect, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { seedFile, testMindRoot } from '../setup';
 import { GET, POST } from '../../app/api/file/route';
-import { invalidateCache } from '../../lib/fs';
+import { collectAllFiles, invalidateCache, peekContentVersion, peekTreeVersion } from '../../lib/fs';
 import fs from 'fs';
 import path from 'path';
 
@@ -158,6 +158,56 @@ describe('POST /api/file', () => {
     // Verify on disk
     const content = fs.readFileSync(path.join(root(), 'new.md'), 'utf-8');
     expect(content).toBe('hello');
+  });
+
+  describe('in-memory cache invalidation', () => {
+    it('makes a created file visible to the cached file list without a manual invalidateCache()', async () => {
+      invalidateCache();
+      // Warm the tree cache for this mind root before writing through the API.
+      expect(collectAllFiles()).not.toContain('cached/new-note.md');
+
+      const res = await POST(post({ op: 'create_file', path: 'cached/new-note.md', content: 'fresh' }));
+      expect(res.status).toBe(200);
+
+      expect(collectAllFiles()).toContain('cached/new-note.md');
+    });
+
+    it('makes a save_file that creates a new path visible through the cache', async () => {
+      invalidateCache();
+      expect(collectAllFiles()).not.toContain('saved-fresh.md');
+
+      const res = await POST(post({ op: 'save_file', path: 'saved-fresh.md', content: 'hello' }));
+      expect(res.status).toBe(200);
+
+      expect(collectAllFiles()).toContain('saved-fresh.md');
+    });
+
+    it('bumps the content version without a tree change for in-place edits', async () => {
+      seedFile('edited.md', 'v1');
+      invalidateCache();
+      expect(collectAllFiles()).toContain('edited.md');
+      const treeBefore = peekTreeVersion();
+      const contentBefore = peekContentVersion();
+
+      const res = await POST(post({ op: 'save_file', path: 'edited.md', content: 'v2' }));
+      expect(res.status).toBe(200);
+
+      expect(peekContentVersion()).toBeGreaterThan(contentBefore);
+      expect(peekTreeVersion()).toBe(treeBefore);
+    });
+
+    it('drops a deleted file from the cached file list', async () => {
+      seedFile('doomed.md', 'bye');
+      invalidateCache();
+      expect(collectAllFiles()).toContain('doomed.md');
+      const treeBefore = peekTreeVersion();
+
+      const res = await POST(post({ op: 'delete_file', path: 'doomed.md' }));
+      expect(res.status).toBe(200);
+
+      expect(collectAllFiles()).not.toContain('doomed.md');
+      expect(peekTreeVersion()).toBeGreaterThan(treeBefore);
+    });
   });
 
   it('denies agent writes to root-level system files by default', async () => {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { X, Loader2, Globe, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { useLocale } from '@/lib/stores/locale-store';
 import type { RemoteAgent } from '@/lib/a2a/types';
@@ -24,25 +24,31 @@ export default function DiscoverAgentModal({
   const p = t.panels.agents;
   const [url, setUrl] = useState('');
   const [result, setResult] = useState<RemoteAgent | null>(null);
+  // Bumped on close so a discovery that resolves afterwards cannot repopulate
+  // the (reused) modal state.
+  const discoverGenerationRef = useRef(0);
 
   if (!open) return null;
 
   const handleDiscover = async () => {
     if (!url.trim() || discovering) return;
     setResult(null);
+    const generation = discoverGenerationRef.current;
     const agent = await onDiscover(url.trim());
+    if (generation !== discoverGenerationRef.current) return;
     if (agent) setResult(agent);
+  };
+
+  const handleClose = () => {
+    discoverGenerationRef.current += 1;
+    setUrl('');
+    setResult(null);
+    onClose();
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') handleDiscover();
-    if (e.key === 'Escape') onClose();
-  };
-
-  const handleClose = () => {
-    setUrl('');
-    setResult(null);
-    onClose();
+    if (e.key === 'Escape') handleClose();
   };
 
   return (

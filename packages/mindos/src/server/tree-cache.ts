@@ -1,5 +1,5 @@
-import { existsSync, watch, type FSWatcher } from 'node:fs';
-import { resolve, sep } from 'node:path';
+import { existsSync, statSync, watch, type FSWatcher } from 'node:fs';
+import { join, resolve, sep } from 'node:path';
 import { MINDOS_IGNORED_DIRS, collectFileStatsFromMindRoot } from './runtime.js';
 import { MINDOS_IGNORE_FILE, createMindosSearchIgnoreMatcher } from './search-ignore.js';
 
@@ -28,6 +28,8 @@ export type MindRootTreeCacheOptions = {
 export type MindRootTreeCache = {
   getTreeVersion(): number;
   collectAllFiles(): string[];
+  /** Cached per-file stats (path, mtime, size) for incremental consumers. */
+  collectFileStats(): Array<{ path: string; mtime: number; size: number }>;
   getRecentlyModified(limit?: number): Array<{ path: string; mtime: number }>;
   /** Mark the cache dirty; the next read rebuilds. Cheap and synchronous. */
   invalidate(): void;
@@ -37,7 +39,7 @@ export type MindRootTreeCache = {
 };
 
 type TreeCacheState = {
-  stats: Array<{ path: string; mtime: number }>;
+  stats: Array<{ path: string; mtime: number; size: number }>;
   files: string[];
   signature: string;
   version: number;
@@ -134,6 +136,9 @@ export function createMindRootTreeCache(
     collectAllFiles() {
       return [...ensure().files];
     },
+    collectFileStats() {
+      return ensure().stats.map((entry) => ({ ...entry }));
+    },
     getRecentlyModified(limit = 10) {
       const boundedLimit = Math.max(1, Math.min(limit, 30));
       return [...ensure().stats]
@@ -154,11 +159,31 @@ export function createMindRootTreeCache(
   };
 }
 
+// The matcher re-reads .mindosignore; this runs once per fs event, and a git
+// pull touching thousands of files would otherwise re-read it thousands of
+// times on the event loop. Cache per root, keyed by the ignore file's mtime.
+const ignoreMatcherCache = new Map<string, { key: string; matcher: (relativePath: string) => boolean }>();
+
+function ignoreMatcherFor(root: string): (relativePath: string) => boolean {
+  let key = 'missing';
+  try {
+    const stat = statSync(join(root, MINDOS_IGNORE_FILE));
+    key = `${stat.mtimeMs}:${stat.size}`;
+  } catch {
+    // No ignore file: only the built-in directory list applies.
+  }
+  const cached = ignoreMatcherCache.get(root);
+  if (cached && cached.key === key) return cached.matcher;
+  const matcher = createMindosSearchIgnoreMatcher(root, MINDOS_IGNORED_DIRS);
+  ignoreMatcherCache.set(root, { key, matcher });
+  return matcher;
+}
+
 function isIgnoredPath(root: string, filename: string): boolean {
   if (filename === MINDOS_IGNORE_FILE) return false;
   const normalized = filename.split(sep).join('/');
   try {
-    return createMindosSearchIgnoreMatcher(root, MINDOS_IGNORED_DIRS)(normalized);
+    return ignoreMatcherFor(root)(normalized);
   } catch {
     // Fallback keeps watcher noise bounded even if the root disappears.
   }

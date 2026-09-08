@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync, type Dirent } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync, type Dirent } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, extname, join, relative, resolve } from 'node:path';
 import { resolveExistingSafe, resolveSafe } from '../foundation/security/index.js';
@@ -254,19 +254,47 @@ export function writeRuntimeSettings(settings: MindosRuntimeSettings, options: M
   const home = options.homeDir ?? homedir();
   const settingsPath = join(home, '.mindos', 'config.json');
   mkdirSync(dirname(settingsPath), { recursive: true });
-  writeFileSync(settingsPath, `${JSON.stringify(settings, null, 2)}\n`, 'utf-8');
+  // config.json holds the mind root, API keys and the auth token. A crash in
+  // the middle of a plain writeFileSync leaves a truncated file, after which
+  // getDefaultMindRoot silently falls back to ~/MindOS/mind. temp + rename
+  // keeps the previous config intact until the new one is fully on disk.
+  const temp = `${settingsPath}.${process.pid}.${Date.now().toString(36)}.tmp`;
+  try {
+    writeFileSync(temp, `${JSON.stringify(settings, null, 2)}\n`, 'utf-8');
+    renameSync(temp, settingsPath);
+  } catch (error) {
+    try { unlinkSync(temp); } catch { /* best-effort cleanup */ }
+    throw error;
+  }
+  settingsReadCache.delete(settingsPath);
+}
+
+export interface MindosRuntimeSearchHints {
+  /**
+   * Monotonic version of the mind root as seen by the tree cache. When it is
+   * unchanged since the last search, the index skips its stat walk entirely.
+   */
+  treeVersion?: number;
 }
 
 export async function searchMindRoot(
   mindRoot: string,
   query: string,
   options: MindosRuntimeSearchOptions = {},
+  hints: MindosRuntimeSearchHints = {},
 ): Promise<MindosRuntimeSearchResult[]> {
   const q = query.trim().toLowerCase();
   if (!q) return [];
   const limit = Math.max(1, Math.min(options.limit ?? 20, 100));
   if (limit <= 0) return [];
-  return getRuntimeSearchIndex(mindRoot).search(q, { ...options, limit });
+  return getRuntimeSearchIndex(mindRoot).search(q, { ...options, limit }, hints);
+}
+
+export function prewarmRuntimeSearch(
+  mindRoot: string,
+  hints: MindosRuntimeSearchHints = {},
+): { cacheState: 'hit' | 'built'; documentCount: number } {
+  return getRuntimeSearchIndex(mindRoot).warm(hints);
 }
 
 const RUNTIME_SEARCH_TEXT_EXTENSIONS = new Set(['.md', '.csv', '.json']);
@@ -359,16 +387,23 @@ function insertRuntimeSearchHit(
   if (results.length > limit) results.length = limit;
 }
 
+type RuntimeSearchDoc = { content: string; lower: string; mtime: number; size: number; tokens: Set<string> };
+
 class RuntimeSearchIndex {
   private signature = '';
-  private docs = new Map<string, { content: string; lower: string; mtime: number }>();
+  private treeVersion: number | undefined;
+  private docs = new Map<string, RuntimeSearchDoc>();
   private inverted = new Map<string, Set<string>>();
   private files: string[] = [];
 
   constructor(private readonly mindRoot: string) {}
 
-  search(query: string, options: MindosRuntimeSearchOptions & { limit: number }): MindosRuntimeSearchResult[] {
-    this.ensureFresh();
+  search(
+    query: string,
+    options: MindosRuntimeSearchOptions & { limit: number },
+    hints: MindosRuntimeSearchHints = {},
+  ): MindosRuntimeSearchResult[] {
+    this.ensureFresh(hints);
     const terms = runtimeSearchTerms(query);
     const candidates = this.candidatesForQuery(query);
     const candidateFiles = candidates ?? this.files;
@@ -408,19 +443,40 @@ class RuntimeSearchIndex {
     return results;
   }
 
-  private ensureFresh(): void {
+  /** Build or refresh the index without running a query. */
+  warm(hints: MindosRuntimeSearchHints = {}): { cacheState: 'hit' | 'built'; documentCount: number } {
+    const cacheState = this.ensureFresh(hints);
+    return { cacheState, documentCount: this.docs.size };
+  }
+
+  private ensureFresh(hints: MindosRuntimeSearchHints): 'hit' | 'built' {
+    // Fast path: the tree cache already knows nothing changed, so skip the
+    // full stat walk that used to run on every single search request.
+    if (
+      hints.treeVersion !== undefined
+      && this.treeVersion === hints.treeVersion
+      && this.signature !== ''
+    ) {
+      return 'hit';
+    }
     const stats = collectFileStatsFromMindRoot(this.mindRoot);
     const signature = runtimeSearchSignature(stats);
-    if (signature === this.signature) return;
-
+    this.treeVersion = hints.treeVersion;
+    if (signature === this.signature) return 'hit';
     this.signature = signature;
-    this.docs.clear();
-    this.inverted.clear();
-    this.files = [];
 
+    // Incremental rebuild: only files whose mtime/size changed are re-read
+    // and re-tokenised. A single save used to re-read the whole library.
+    const seen = new Set<string>();
+    let changed = false;
     for (const stat of stats) {
       const ext = extname(stat.path).toLowerCase();
       if (!RUNTIME_SEARCH_TEXT_EXTENSIONS.has(ext)) continue;
+      seen.add(stat.path);
+      const existing = this.docs.get(stat.path);
+      if (existing && existing.mtime === stat.mtime && existing.size === stat.size) continue;
+      changed = true;
+      this.removeDoc(stat.path);
       let content: string;
       try {
         content = readTextFileFromMindRoot(this.mindRoot, stat.path);
@@ -430,11 +486,9 @@ class RuntimeSearchIndex {
       if (content.length > RUNTIME_SEARCH_MAX_CONTENT_LENGTH) {
         content = content.slice(0, RUNTIME_SEARCH_MAX_CONTENT_LENGTH);
       }
-      const lower = content.toLowerCase();
-      this.docs.set(stat.path, { content, lower, mtime: stat.mtime });
-      this.files.push(stat.path);
-
-      for (const token of runtimeTokenize(`${stat.path}\n${content}`)) {
+      const tokens = runtimeTokenize(`${stat.path}\n${content}`);
+      this.docs.set(stat.path, { content, lower: content.toLowerCase(), mtime: stat.mtime, size: stat.size, tokens });
+      for (const token of tokens) {
         let paths = this.inverted.get(token);
         if (!paths) {
           paths = new Set<string>();
@@ -443,7 +497,25 @@ class RuntimeSearchIndex {
         paths.add(stat.path);
       }
     }
-    this.files.sort((a, b) => a.localeCompare(b));
+    for (const filePath of [...this.docs.keys()]) {
+      if (seen.has(filePath)) continue;
+      this.removeDoc(filePath);
+      changed = true;
+    }
+    if (changed) this.files = [...this.docs.keys()].sort((a, b) => a.localeCompare(b));
+    return 'built';
+  }
+
+  private removeDoc(filePath: string): void {
+    const doc = this.docs.get(filePath);
+    if (!doc) return;
+    for (const token of doc.tokens) {
+      const paths = this.inverted.get(token);
+      if (!paths) continue;
+      paths.delete(filePath);
+      if (paths.size === 0) this.inverted.delete(token);
+    }
+    this.docs.delete(filePath);
   }
 
   private candidatesForQuery(query: string): string[] | null {
@@ -459,6 +531,11 @@ class RuntimeSearchIndex {
   }
 }
 
+// Every request reads config.json at least twice (auth token + web password)
+// and skill listing reads it again. Parse once per on-disk version; a stat is
+// far cheaper than read + JSON.parse and still observes external edits.
+const settingsReadCache = new Map<string, { key: string; value: MindosRuntimeSettings }>();
+
 function safeReadSettings(options: MindosRuntimeOptions): MindosRuntimeSettings {
   if (options.readSettings) {
     try {
@@ -467,15 +544,30 @@ function safeReadSettings(options: MindosRuntimeOptions): MindosRuntimeSettings 
       return {};
     }
   }
+  const home = options.homeDir ?? homedir();
+  const settingsPath = join(home, '.mindos', 'config.json');
+  let key: string;
   try {
-    const home = options.homeDir ?? homedir();
-    const raw = readFileSync(join(home, '.mindos', 'config.json'), 'utf-8');
-    const parsed = JSON.parse(raw) as MindosRuntimeSettings;
-    if (parsed && typeof parsed === 'object') return parsed;
+    const stat = statSync(settingsPath);
+    key = `${stat.mtimeMs}:${stat.size}:${stat.ino}`;
   } catch {
+    settingsReadCache.delete(settingsPath);
     return {};
   }
-  return {};
+  // Callers historically received a fresh object per read and some mutate it
+  // in place before writing; hand out a clone so the cache stays pristine.
+  const cached = settingsReadCache.get(settingsPath);
+  if (cached && cached.key === key) return structuredClone(cached.value);
+  try {
+    const raw = readFileSync(settingsPath, 'utf-8');
+    const parsed = JSON.parse(raw) as MindosRuntimeSettings;
+    const value = parsed && typeof parsed === 'object' ? parsed : {};
+    settingsReadCache.set(settingsPath, { key, value });
+    return structuredClone(value);
+  } catch {
+    settingsReadCache.delete(settingsPath);
+    return {};
+  }
 }
 
 function walkMindRoot(

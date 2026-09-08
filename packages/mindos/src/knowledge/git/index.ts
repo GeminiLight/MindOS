@@ -26,6 +26,18 @@ function normalizeGitPath(value: string): string {
   return value.replace(/\\/g, '/').replace(/^\/+/, '');
 }
 
+/**
+ * `git show <rev>:<path>` parses a leading `-` in <rev> as an option, so an
+ * attacker-controlled commit such as `--output=/outside/root` would make git
+ * write files anywhere. Only hex object names and plain HEAD-relative refs are
+ * accepted; branch/tag names are intentionally out of scope for this API.
+ */
+const SAFE_GIT_COMMIT_REF = /^(?:[0-9a-fA-F]{4,64}|HEAD(?:[~^]\d*)*)$/;
+
+export function isSafeGitCommitRef(value: string): boolean {
+  return SAFE_GIT_COMMIT_REF.test(value.trim());
+}
+
 async function findPathAtCommit(
   mindRoot: string,
   currentPath: string,
@@ -119,6 +131,13 @@ export async function gitShowFile(
   filePath: string,
   commitHash: string
 ): Promise<Result<string>> {
+  if (!isSafeGitCommitRef(commitHash)) {
+    return err(
+      createError('VALIDATION_ERROR', 'Invalid git commit reference', {
+        context: { filePath, commitHash },
+      })
+    );
+  }
   const resolveResult = resolveSafeResult(mindRoot, filePath);
   if (!resolveResult.ok) {
     return err(resolveResult.error);

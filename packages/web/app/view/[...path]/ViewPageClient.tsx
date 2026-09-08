@@ -47,6 +47,11 @@ import {
 } from '@/lib/obsidian-compat/linter-adapter';
 import { useObsidianLinterProfile } from '@/lib/stores/obsidian-linter-profile-store';
 import type { PluginSurface } from '@/lib/plugins/surfaces';
+import type { BrowserEditorSandboxContribution } from '@/lib/obsidian-compat/browser-editor-sandbox';
+
+// Stable empty default so the CodeMirror sandbox compartment is not
+// reconfigured on every keystroke when the linter preview is off.
+const EMPTY_CONTRIBUTIONS: BrowserEditorSandboxContribution[] = [];
 
 interface ViewPageClientProps {
   filePath: string;
@@ -136,7 +141,12 @@ function normalizeMarkdownModePreference(value: string | null): MdViewMode {
 
 function readMarkdownModePreference(): MdViewMode {
   if (typeof window === 'undefined') return 'wysiwyg';
-  return normalizeMarkdownModePreference(window.localStorage.getItem(MARKDOWN_VIEW_MODE_STORAGE_KEY));
+  try {
+    return normalizeMarkdownModePreference(window.localStorage.getItem(MARKDOWN_VIEW_MODE_STORAGE_KEY));
+  } catch {
+    // Storage blocked (e.g. Safari "block all cookies"); use the default mode.
+    return 'wysiwyg';
+  }
 }
 
 function hasUnsafeMarkdownFrontmatterFence(content: string): boolean {
@@ -271,10 +281,23 @@ export default function ViewPageClient({
   const autoSavingRef = useRef(false);
   const mountedRef = useRef(true);
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+  // Latest values for the unmount flush (effects capture stale closures).
+  const autoSaveSnapshotRef = useRef({ editContent, savedContent, editing, isMarkdown, isDraft, saveAction });
+  useEffect(() => {
+    autoSaveSnapshotRef.current = { editContent, savedContent, editing, isMarkdown, isDraft, saveAction };
+  }, [editContent, savedContent, editing, isMarkdown, isDraft, saveAction]);
 
   useEffect(() => {
     mountedRef.current = true;
-    return () => { mountedRef.current = false; };
+    return () => {
+      mountedRef.current = false;
+      // Navigating away with a pending debounce would silently drop the last
+      // edit; fire a final fire-and-forget save with the latest content.
+      const latest = autoSaveSnapshotRef.current;
+      if (latest.isMarkdown && latest.editing && !latest.isDraft && latest.editContent !== latest.savedContent) {
+        void latest.saveAction(twemojiToNative(latest.editContent)).catch(() => {});
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -282,8 +305,12 @@ export default function ViewPageClient({
       return;
     }
     if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
-    autoSaveTimerRef.current = setTimeout(async () => {
-      if (autoSavingRef.current) return;
+    const run = async () => {
+      if (autoSavingRef.current) {
+        // A save is still in flight; try again shortly instead of dropping this edit.
+        autoSaveTimerRef.current = setTimeout(run, 1000);
+        return;
+      }
       autoSavingRef.current = true;
       try {
         if (!mountedRef.current) return;
@@ -293,17 +320,22 @@ export default function ViewPageClient({
         await saveAction(cleanContent);
         if (!mountedRef.current) return;
         setSavedContent(cleanContent);
+        setSaveError(null);
         notifySelfSavedFile();
         setAutoSaveStatus('saved');
         setTimeout(() => {
           if (mountedRef.current) setAutoSaveStatus('idle');
         }, 1500);
-      } catch {
-        if (mountedRef.current) setAutoSaveStatus('idle');
+      } catch (err) {
+        if (mountedRef.current) {
+          setAutoSaveStatus('idle');
+          setSaveError(err instanceof Error ? err.message : 'Failed to save');
+        }
       } finally {
         autoSavingRef.current = false;
       }
-    }, 1000);
+    };
+    autoSaveTimerRef.current = setTimeout(run, 1000);
     return () => {
       if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
     };
@@ -313,7 +345,11 @@ export default function ViewPageClient({
   });
   const setMdViewMode = useCallback((mode: MdViewMode) => {
     setMdViewModeState(mode);
-    localStorage.setItem(MARKDOWN_VIEW_MODE_STORAGE_KEY, mode);
+    try {
+      localStorage.setItem(MARKDOWN_VIEW_MODE_STORAGE_KEY, mode);
+    } catch {
+      // Persisting the preference is best-effort.
+    }
   }, []);
   const [modeMenuOpen, setModeMenuOpen] = useState(false);
   const modeButtonRef = useRef<HTMLButtonElement>(null);
@@ -406,6 +442,8 @@ export default function ViewPageClient({
         router.push(`/view/${encodePath(result.newPath)}`);
         refreshCurrentView();
         notifyFilesChanged([filePath, result.newPath]);
+      } else if (!result.success) {
+        toast.error(result.error ?? 'Rename failed');
       }
     });
   }, [renameValue, filePath, router, retargetKeptDocTab, refreshCurrentView]);
@@ -431,6 +469,8 @@ export default function ViewPageClient({
         router.push('/');
         refreshCurrentView();
         notifyFilesChanged([filePath]);
+      } else {
+        toast.error(result.error ?? 'Delete failed');
       }
     });
   }, [filePath, router, t, refreshCurrentView]);
@@ -610,12 +650,19 @@ export default function ViewPageClient({
         setMdViewMode('preview');
         if (editing) {
           const clean = twemojiToNative(editContent);
+          const previousSaved = savedContent;
           setSavedContent(clean);
           if (clean !== savedContent) {
             keepCurrentTab();
+            setSaveError(null);
             saveAction(clean)
               .then(() => notifySelfSavedFile())
-              .catch(() => {});
+              .catch((err) => {
+                if (!mountedRef.current) return;
+                // The optimistic content never reached disk; show what is really saved.
+                setSavedContent(previousSaved);
+                setSaveError(err instanceof Error ? err.message : 'Failed to save');
+              });
           }
           setEditing(false);
         }
@@ -656,7 +703,7 @@ export default function ViewPageClient({
       profile: obsidianLinterProfile,
     });
   }, [canShowLinterPreview, editContent, linterPreviewEnabled, obsidianLinterProfile]);
-  const linterSandboxContributions = linterPreview?.contributions ?? [];
+  const linterSandboxContributions = linterPreview?.contributions ?? EMPTY_CONTRIBUTIONS;
   const linterIssueCountLabel = linterPreview
     ? `${linterPreview.issues.length}${linterPreview.skipped.length > 0 ? '+' : ''}`
     : '';

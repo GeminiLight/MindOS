@@ -424,10 +424,19 @@ function writeTextExclusive(mindRoot: string, relativePath: string, content: str
   fs.writeFileSync(abs, content, { encoding: 'utf-8', flag: 'wx' });
 }
 
+/** Atomic replace (temp + rename): index.json and drafts are rewritten whole,
+ *  so a crash mid-write must not leave a truncated file for the next reader. */
 function writeText(mindRoot: string, relativePath: string, content: string): void {
   const abs = resolveSafe(mindRoot, relativePath);
   fs.mkdirSync(path.dirname(abs), { recursive: true });
-  fs.writeFileSync(abs, content, 'utf-8');
+  const temp = `${abs}.${process.pid}.${Date.now().toString(36)}.tmp`;
+  try {
+    fs.writeFileSync(temp, content, 'utf-8');
+    fs.renameSync(temp, abs);
+  } catch (error) {
+    try { fs.unlinkSync(temp); } catch { /* best-effort cleanup */ }
+    throw error;
+  }
 }
 
 function walk(dir: string, visitFile: (absPath: string) => void): void {

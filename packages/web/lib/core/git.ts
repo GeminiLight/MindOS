@@ -33,7 +33,18 @@ export function gitLog(mindRoot: string, filePath: string, limit: number): GitLo
 /**
  * Returns the content of a file at a specific git commit.
  */
+// Mirrors @geminilight/mindos knowledge/git: a leading `-` in <rev> would be
+// parsed by `git show` as an option (e.g. `--output=/outside/root`).
+const SAFE_GIT_COMMIT_REF = /^(?:[0-9a-fA-F]{4,64}|HEAD(?:[~^]\d*)*)$/;
+
+export function isSafeGitCommitRef(value: string): boolean {
+  return SAFE_GIT_COMMIT_REF.test(value.trim());
+}
+
 export function gitShowFile(mindRoot: string, filePath: string, commitHash: string): string {
+  if (!isSafeGitCommitRef(commitHash)) {
+    throw new Error(`Invalid git commit reference: ${commitHash}`);
+  }
   const resolved = resolveExistingSafe(mindRoot, filePath);
   const relFromGitRoot = execFileSync(
     'git',

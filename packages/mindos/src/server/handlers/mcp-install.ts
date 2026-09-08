@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, resolve } from 'node:path';
 import { errorResponse, json, type MindosServerResponse } from '../response.js';
@@ -69,6 +69,8 @@ export type MindosMcpInstallResult = {
   transport?: string;
   verified?: boolean;
   verifyError?: string;
+  /** Non-fatal notices, e.g. a JSONC file lost its comments and was backed up. */
+  warnings?: string[];
 };
 
 export type MindosMcpInstallServices = {
@@ -93,6 +95,71 @@ function parseJsonc(text: string): Record<string, unknown> {
   stripped = stripped.replace(/\/\*[\s\S]*?\*\//g, '');
   if (!stripped.trim()) return {};
   return JSON.parse(stripped) as Record<string, unknown>;
+}
+
+/**
+ * True when JSON/JSONC text contains `//` or `/* ... *\/` comments outside of
+ * string literals. `parseJsonc` strips them, so re-serialising such a file
+ * would silently drop user comments.
+ */
+export function hasJsoncComments(text: string): boolean {
+  let inString = false;
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text[i];
+    if (inString) {
+      if (ch === '\\') {
+        i += 1;
+      } else if (ch === '"') {
+        inString = false;
+      }
+      continue;
+    }
+    if (ch === '"') {
+      inString = true;
+      continue;
+    }
+    if (ch === '/' && (text[i + 1] === '/' || text[i + 1] === '*')) return true;
+  }
+  return false;
+}
+
+/**
+ * Write via a same-directory temp file + rename so a crash mid-write can
+ * never leave a third-party agent config truncated or half-written.
+ */
+export function writeFileAtomically(absPath: string, content: string): void {
+  const tmpPath = `${absPath}.tmp-${process.pid}`;
+  try {
+    writeFileSync(tmpPath, content, 'utf-8');
+    renameSync(tmpPath, absPath);
+  } catch (error) {
+    try {
+      unlinkSync(tmpPath);
+    } catch {
+      // Nothing to clean up (the temp file was never created).
+    }
+    throw error;
+  }
+}
+
+/**
+ * Replace a JSON/JSONC agent config. When the original contained comments,
+ * keep a `.bak` copy of it and return a warning so the caller can surface it.
+ */
+function writeJsonConfigFile(absPath: string, existingText: string, nextText: string): string[] {
+  const warnings: string[] = [];
+  if (existingText && hasJsoncComments(existingText)) {
+    const backupPath = `${absPath}.bak`;
+    writeFileAtomically(backupPath, existingText);
+    warnings.push(`Comments were removed from ${absPath}; a backup of the original was saved to ${backupPath}`);
+  }
+  writeFileAtomically(absPath, nextText);
+  return warnings;
+}
+
+function withWarnings(result: MindosMcpInstallResult, warnings: string[]): MindosMcpInstallResult {
+  if (warnings.length > 0) result.warnings = warnings;
+  return result;
 }
 
 function expandHome(input: string, homeDir = homedir()): string {
@@ -696,10 +763,11 @@ function writeMcpServerEntry(
     return { agent: agentKey, status: 'ok', path: configPath, message: 'Already configured' };
   }
 
+  let warnings: string[] = [];
   if (agent.format === 'toml') {
-    writeFileSync(absPath, mergeTomlEntry(existing, agent.key, serverName, entry), 'utf-8');
+    writeFileAtomically(absPath, mergeTomlEntry(existing, agent.key, serverName, entry));
   } else if (agent.format === 'yaml') {
-    writeFileSync(absPath, mergeYamlEntry(existing, agent.key, serverName, entry), 'utf-8');
+    writeFileAtomically(absPath, mergeYamlEntry(existing, agent.key, serverName, entry));
   } else {
     const config = existing.trim() ? parseJsonc(existing) : {};
     const container = scope === 'global' && agent.globalNestedKey
@@ -710,10 +778,10 @@ function writeMcpServerEntry(
           return config[agent.key] as Record<string, unknown>;
         })();
     container[serverName] = entry;
-    writeFileSync(absPath, `${JSON.stringify(config, null, 2)}\n`, 'utf-8');
+    warnings = writeJsonConfigFile(absPath, existing, `${JSON.stringify(config, null, 2)}\n`);
   }
 
-  return { agent: agentKey, status: 'ok', path: configPath };
+  return withWarnings({ agent: agentKey, status: 'ok', path: configPath }, warnings);
 }
 
 async function verifyHttpConnection(
@@ -784,14 +852,14 @@ export async function handleMcpInstallPost(
 
       try {
         mkdirSync(dirname(absPath), { recursive: true });
+        const existing = existsSync(absPath) ? readFileSync(absPath, 'utf-8') : '';
+        let warnings: string[] = [];
         if (agent.format === 'toml') {
-          const existing = existsSync(absPath) ? readFileSync(absPath, 'utf-8') : '';
-          writeFileSync(absPath, mergeTomlEntry(existing, agent.key, 'mindos', entry), 'utf-8');
+          writeFileAtomically(absPath, mergeTomlEntry(existing, agent.key, 'mindos', entry));
         } else if (agent.format === 'yaml') {
-          const existing = existsSync(absPath) ? readFileSync(absPath, 'utf-8') : '';
-          writeFileSync(absPath, mergeYamlEntry(existing, agent.key, 'mindos', entry), 'utf-8');
+          writeFileAtomically(absPath, mergeYamlEntry(existing, agent.key, 'mindos', entry));
         } else {
-          const config = existsSync(absPath) ? parseJsonc(readFileSync(absPath, 'utf-8')) : {};
+          const config = existing.trim() ? parseJsonc(existing) : {};
           const container = scope === 'global' && agent.globalNestedKey
             ? ensureNestedPath(config, agent.globalNestedKey)
             : (() => {
@@ -800,10 +868,13 @@ export async function handleMcpInstallPost(
                 return config[agent.key] as Record<string, unknown>;
               })();
           container.mindos = entry;
-          writeFileSync(absPath, `${JSON.stringify(config, null, 2)}\n`, 'utf-8');
+          warnings = writeJsonConfigFile(absPath, existing, `${JSON.stringify(config, null, 2)}\n`);
         }
 
-        const result: MindosMcpInstallResult = { agent: key, status: 'ok', path: configPath, transport: effectiveTransport };
+        const result: MindosMcpInstallResult = withWarnings(
+          { agent: key, status: 'ok', path: configPath, transport: effectiveTransport },
+          warnings,
+        );
 
         if (effectiveTransport === 'http') {
           const verification = await verifyHttpConnection(String(entry.url), body.token, services.fetcher);
@@ -924,16 +995,18 @@ export function handleMcpUninstallPost(
 
       const updatedPaths: string[] = [];
       const errors: string[] = [];
+      const warnings: string[] = [];
       try {
         for (const configPath of existingPaths) {
           const absPath = expandHome(configPath, services.homeDir);
           try {
+            const existing = readFileSync(absPath, 'utf-8');
             if (agent.format === 'toml') {
-              writeFileSync(absPath, removeTomlEntry(readFileSync(absPath, 'utf-8'), agent.key, serverName), 'utf-8');
+              writeFileAtomically(absPath, removeTomlEntry(existing, agent.key, serverName));
             } else if (agent.format === 'yaml') {
-              writeFileSync(absPath, removeYamlEntry(readFileSync(absPath, 'utf-8'), agent.key, serverName), 'utf-8');
+              writeFileAtomically(absPath, removeYamlEntry(existing, agent.key, serverName));
             } else {
-              const config = parseJsonc(readFileSync(absPath, 'utf-8'));
+              const config = parseJsonc(existing);
               const container = scope === 'global' && agent.globalNestedKey
                 ? getNestedPath(config, agent.globalNestedKey)
                 : (() => {
@@ -942,7 +1015,7 @@ export function handleMcpUninstallPost(
                   })();
               if (container && serverName in container) {
                 delete container[serverName];
-                writeFileSync(absPath, `${JSON.stringify(config, null, 2)}\n`, 'utf-8');
+                warnings.push(...writeJsonConfigFile(absPath, existing, `${JSON.stringify(config, null, 2)}\n`));
               }
             }
             updatedPaths.push(configPath);
@@ -954,7 +1027,7 @@ export function handleMcpUninstallPost(
         if (errors.length > 0) {
           results.push({ agent: key, status: 'error', message: errors.join('; ') });
         } else {
-          results.push({ agent: key, status: 'ok', path: updatedPaths[0] ?? configPaths[0] });
+          results.push(withWarnings({ agent: key, status: 'ok', path: updatedPaths[0] ?? configPaths[0] }, warnings));
         }
       } catch (error) {
         results.push({ agent: key, status: 'error', message: String(error) });

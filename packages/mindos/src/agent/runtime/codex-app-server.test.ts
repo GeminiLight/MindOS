@@ -1355,3 +1355,301 @@ describe('agent runtime adapters: Codex app-server', () => {
     });
   });
 });
+
+function createCodexTurnTransport(
+  onTurnStart: (queue: AsyncQueue<CodexAppServerMessage>, requestId: number) => void,
+  options: { read?: (queue: AsyncQueue<CodexAppServerMessage>) => AsyncIterable<CodexAppServerMessage> } = {},
+): CodexAppServerTransport & { sent: unknown[] } {
+  const queue = new AsyncQueue<CodexAppServerMessage>();
+  const sent: unknown[] = [];
+  return {
+    sent,
+    send(message) {
+      sent.push(message);
+      const record = message as { id?: number; method?: string };
+      if (record.method === 'initialize') {
+        queue.push({ id: record.id!, result: { userAgent: 'codex-test' } });
+      }
+      if (record.method === 'thread/start') {
+        queue.push({ id: record.id!, result: { thread: { id: 'thr-new' } } });
+      }
+      if (record.method === 'turn/start') {
+        queue.push({ id: record.id!, result: { turn: { id: 'turn-1' } } });
+        onTurnStart(queue, record.id!);
+      }
+    },
+    read() {
+      return options.read ? options.read(queue) : queue;
+    },
+    close() {
+      queue.close();
+    },
+  };
+}
+
+async function* passThroughThenThrow<T>(source: AsyncIterable<T>, error: Error): AsyncIterable<T> {
+  for await (const item of source) {
+    if ((item as { method?: string }).method === '__crash__') throw error;
+    yield item;
+  }
+}
+
+describe('Codex native lane terminal failure reporting', () => {
+  it('returns result.error when Codex reports turn/failed instead of recording the run as completed', async () => {
+    const events: MindOSSSEvent[] = [];
+    const transport = createCodexTurnTransport((queue) => {
+      queue.push({ method: 'item/agentMessage/delta', params: { delta: 'partial' } });
+      queue.push({ method: 'turn/failed', params: { message: 'model unavailable' } });
+    });
+
+    const result = await runMindosNativeAgentTurn({
+      runtime: { kind: 'codex', id: 'codex', name: 'Codex' },
+      cwd: '/tmp/mind',
+      prompt: 'Summarize this repo.',
+      send: (event) => events.push(event),
+      services: {
+        createCodexClient: () => createCodexAppServerClient(transport),
+      },
+    });
+
+    expect(result.error).toBeInstanceOf(Error);
+    expect(result.error?.message).toBe('model unavailable');
+    expect(result.externalSessionId).toBe('thr-new');
+    // The runtime's own error event is forwarded exactly once and not duplicated by the lane.
+    expect(events.filter((event) => event.type === 'error')).toEqual([{ type: 'error', message: 'model unavailable' }]);
+    expect(events).not.toContainEqual({ type: 'done' });
+    // A failed turn does not invalidate the thread binding; the thread can still be resumed.
+    expect(events.some((event) => event.type === 'runtime_binding' && event.status === 'failed')).toBe(false);
+  });
+
+  it('returns result.error when a Codex turn/completed notification carries a failed status', async () => {
+    const events: MindOSSSEvent[] = [];
+    const transport = createCodexTurnTransport((queue) => {
+      queue.push({ method: 'turn/completed', params: { turn: { id: 'turn-1', status: 'failed', error: { message: 'sandbox denied' } } } });
+    });
+
+    const result = await runMindosNativeAgentTurn({
+      runtime: { kind: 'codex', id: 'codex', name: 'Codex' },
+      cwd: '/tmp/mind',
+      prompt: 'Summarize this repo.',
+      send: (event) => events.push(event),
+      services: {
+        createCodexClient: () => createCodexAppServerClient(transport),
+      },
+    });
+
+    expect(result.error?.message).toBe('sandbox denied');
+    expect(events.filter((event) => event.type === 'error')).toHaveLength(1);
+  });
+
+  it('fails the turn when the app-server stream dies after turn/start was acknowledged', async () => {
+    const crash = new Error('Codex app-server was killed by signal SIGKILL');
+    const transport = createCodexTurnTransport((queue) => {
+      queue.push({ method: 'item/agentMessage/delta', params: { delta: 'partial' } });
+      queue.push({ method: '__crash__' });
+    }, {
+      read: (queue) => passThroughThenThrow(queue, crash),
+    });
+    const client = createCodexAppServerClient(transport);
+    await client.initialize();
+    const thread = await client.startThread({ cwd: '/tmp/mind' });
+
+    const seen: unknown[] = [];
+    await expect((async () => {
+      for await (const notification of client.startTurn({
+        threadId: thread.threadId,
+        cwd: '/tmp/mind',
+        input: [{ type: 'text', text: 'Summarize this repo.' }],
+      })) {
+        seen.push(notification);
+      }
+    })()).rejects.toThrow('Codex app-server was killed by signal SIGKILL');
+    expect(seen).toEqual([{ method: 'item/agentMessage/delta', params: { delta: 'partial' } }]);
+  });
+
+  it('fails the turn when the app-server stream ends without a terminal turn notification', async () => {
+    const transport = createCodexTurnTransport((queue) => {
+      queue.push({ method: 'item/agentMessage/delta', params: { delta: 'partial' } });
+      queue.close();
+    });
+    const client = createCodexAppServerClient(transport);
+    await client.initialize();
+    const thread = await client.startThread({ cwd: '/tmp/mind' });
+
+    await expect((async () => {
+      for await (const _notification of client.startTurn({
+        threadId: thread.threadId,
+        cwd: '/tmp/mind',
+        input: [{ type: 'text', text: 'Summarize this repo.' }],
+      })) {
+        // drain
+      }
+    })()).rejects.toThrow('Codex app-server stream ended before turn/completed.');
+  });
+
+  it('surfaces a mid-turn app-server crash as result.error through the native lane', async () => {
+    const events: MindOSSSEvent[] = [];
+    const transport = createCodexTurnTransport((queue) => {
+      queue.push({ method: 'item/agentMessage/delta', params: { delta: 'partial' } });
+      queue.push({ method: '__crash__' });
+    }, {
+      read: (queue) => passThroughThenThrow(queue, new Error('Codex app-server exited with code 137')),
+    });
+
+    const result = await runMindosNativeAgentTurn({
+      runtime: { kind: 'codex', id: 'codex', name: 'Codex' },
+      cwd: '/tmp/mind',
+      prompt: 'Summarize this repo.',
+      send: (event) => events.push(event),
+      services: {
+        createCodexClient: () => createCodexAppServerClient(transport),
+      },
+    });
+
+    expect(result.error?.message).toBe('Codex app-server exited with code 137');
+    expect(events).toContainEqual({ type: 'text_delta', delta: 'partial' });
+    expect(events).toContainEqual({ type: 'error', message: 'Codex native runtime error: Codex app-server exited with code 137' });
+    expect(events).not.toContainEqual({ type: 'done' });
+  });
+});
+
+describe('Codex transient error notifications (willRetry)', () => {
+  it('maps a willRetry error notification to a visible status instead of a terminal error', () => {
+    expect(mapCodexAppServerNotificationToSseEvents({
+      method: 'error',
+      params: { message: 'stream disconnected before completion', willRetry: true },
+    })).toEqual([{
+      type: 'status',
+      visible: true,
+      runtime: 'codex',
+      message: expect.stringContaining('stream disconnected before completion'),
+    }]);
+    expect(mapCodexAppServerNotificationToSseEvents({
+      method: 'error',
+      params: { error: { message: 'upstream timeout' }, willRetry: true },
+    })).toEqual([{
+      type: 'status',
+      visible: true,
+      runtime: 'codex',
+      message: expect.stringContaining('upstream timeout'),
+    }]);
+  });
+
+  it('keeps willRetry: false and missing willRetry as terminal errors', () => {
+    expect(mapCodexAppServerNotificationToSseEvents({
+      method: 'error',
+      params: { message: 'fatal', willRetry: false },
+    })).toEqual([{ type: 'error', message: 'fatal' }]);
+    expect(mapCodexAppServerNotificationToSseEvents({
+      method: 'error',
+      params: { message: 'fatal' },
+    })).toEqual([{ type: 'error', message: 'fatal' }]);
+  });
+
+  it('does not end the turn stream on a willRetry error and completes normally afterwards', async () => {
+    const events: MindOSSSEvent[] = [];
+    const transport = createCodexTurnTransport((queue) => {
+      queue.push({ method: 'error', params: { message: 'stream disconnected', willRetry: true } });
+      queue.push({ method: 'item/agentMessage/delta', params: { delta: 'recovered' } });
+      queue.push({ method: 'turn/completed', params: { turn: { id: 'turn-1' }, status: 'completed' } });
+    });
+
+    const result = await runMindosNativeAgentTurn({
+      runtime: { kind: 'codex', id: 'codex', name: 'Codex' },
+      cwd: '/tmp/mind',
+      prompt: 'Summarize this repo.',
+      send: (event) => events.push(event),
+      services: {
+        createCodexClient: () => createCodexAppServerClient(transport),
+      },
+    });
+
+    expect(result).toEqual({ externalSessionId: 'thr-new' });
+    expect(events.some((event) => event.type === 'error')).toBe(false);
+    expect(events).toContainEqual({
+      type: 'status',
+      visible: true,
+      runtime: 'codex',
+      message: expect.stringContaining('stream disconnected'),
+    });
+    expect(events).toContainEqual({ type: 'text_delta', delta: 'recovered' });
+    expect(events).toContainEqual({ type: 'done' });
+  });
+});
+
+describe('Codex native lane user cancellation', () => {
+  it('reports a user cancel as a neutral status and a canceled result instead of a stream error', async () => {
+    const controller = new AbortController();
+    const interruptTurn = vi.fn(async () => {});
+    const client: CodexAppServerClient = {
+      initialize: async () => {},
+      startThread: async () => ({ threadId: 'thr-cancel' }),
+      resumeThread: async () => ({ threadId: 'thr-cancel' }),
+      listModels: async () => ({ data: [], nextCursor: null }),
+      listThreads: async () => ({ data: [], nextCursor: null, backwardsCursor: null }),
+      readThread: async () => { throw new Error('unused'); },
+      forkThread: async () => { throw new Error('unused'); },
+      archiveThread: async () => {},
+      unarchiveThread: async () => { throw new Error('unused'); },
+      interruptTurn,
+      startTurn: ({ signal }: { signal?: AbortSignal }) => pendingUntilAbort(signal),
+    };
+    const events: MindOSSSEvent[] = [];
+
+    const resultPromise = runMindosNativeAgentTurn({
+      runtime: { kind: 'codex', id: 'codex', name: 'Codex' },
+      cwd: '/tmp/mind',
+      prompt: 'Hang until canceled.',
+      signal: controller.signal,
+      send: (event) => events.push(event),
+      services: {
+        createCodexClient: () => client,
+      },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    controller.abort();
+    const result = await resultPromise;
+
+    expect(result.error).toBeInstanceOf(Error);
+    expect(result.externalSessionId).toBe('thr-cancel');
+    expect(interruptTurn).toHaveBeenCalledWith({ threadId: 'thr-cancel' });
+    expect(events.some((event) => event.type === 'error')).toBe(false);
+    expect(events).toContainEqual({ type: 'status', visible: true, runtime: 'codex', message: 'Canceled by user.' });
+    // A user cancel leaves the thread resumable; only real failures mark the binding failed.
+    expect(events.some((event) => event.type === 'runtime_binding' && event.status === 'failed')).toBe(false);
+  });
+
+  it('still reports timeouts as errors with a failed binding', async () => {
+    vi.useFakeTimers();
+    const client: CodexAppServerClient = {
+      initialize: async () => {},
+      startThread: async () => ({ threadId: 'thr-timeout' }),
+      resumeThread: async () => ({ threadId: 'thr-timeout' }),
+      listModels: async () => ({ data: [], nextCursor: null }),
+      listThreads: async () => ({ data: [], nextCursor: null, backwardsCursor: null }),
+      readThread: async () => { throw new Error('unused'); },
+      forkThread: async () => { throw new Error('unused'); },
+      archiveThread: async () => {},
+      unarchiveThread: async () => { throw new Error('unused'); },
+      startTurn: ({ signal }: { signal?: AbortSignal }) => pendingUntilAbort(signal),
+    };
+    const events: MindOSSSEvent[] = [];
+
+    const resultPromise = runMindosNativeAgentTurn({
+      runtime: { kind: 'codex', id: 'codex', name: 'Codex' },
+      cwd: '/tmp/mind',
+      prompt: 'Hang.',
+      timeoutMs: 100,
+      send: (event) => events.push(event),
+      services: {
+        createCodexClient: () => client,
+      },
+    });
+    await vi.advanceTimersByTimeAsync(100);
+    const result = await resultPromise;
+
+    expect(result.error).toMatchObject({ code: 'TIMEOUT' });
+    expect(events).toContainEqual({ type: 'error', message: 'Codex native runtime error: Native runtime timed out after 1s.' });
+    expect(events.some((event) => event.type === 'runtime_binding' && event.status === 'failed')).toBe(true);
+  });
+});

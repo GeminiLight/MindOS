@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   evaluatePermission,
   parsePermissionRules,
@@ -25,6 +25,33 @@ describe('evaluatePermission', () => {
 
     expect(result.effect).toBe('deny');
     expect(result.reason).toContain('protected');
+  });
+
+  it.each(['./INSTRUCTION.md', 'INSTRUCTION.md/', '.\\INSTRUCTION.md', './INSTRUCTION.md/'])(
+    'denies agent writes to root-level system files spelled as %s',
+    (spelling) => {
+      const result = evaluatePermission({
+        actor: { type: 'agent', agentName: 'claude-code' },
+        op: 'save_file',
+        path: spelling,
+      });
+      expect(result.effect).toBe('deny');
+    },
+  );
+
+  it('applies path rules to non-canonical spellings of the same file', () => {
+    const rules: PermissionRule[] = [
+      { actor: '*', op: '*', path: 'Templates/**', effect: 'deny', reason: 'templates are read-only' },
+    ];
+    for (const spelling of ['./Templates/base.md', 'Templates//base.md', 'Templates\\base.md']) {
+      const result = evaluatePermission({
+        actor: { type: 'agent', agentName: 'codex' },
+        op: 'save_file',
+        path: spelling,
+        rules,
+      });
+      expect(result.effect).toBe('deny');
+    }
   });
 
   it('does not apply the default system-file deny rule to user requests', () => {
@@ -88,6 +115,16 @@ describe('evaluatePermission', () => {
 });
 
 describe('parsePermissionRules', () => {
+  it('warns loudly when the rules are malformed so a typo cannot silently drop deny rules', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      expect(parsePermissionRules('{ "actor": ')).toEqual([]);
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('MINDOS_PERMISSION_RULES'), expect.any(String));
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
   it('returns an empty list for malformed JSON instead of throwing', () => {
     expect(parsePermissionRules('{bad json')).toEqual([]);
   });

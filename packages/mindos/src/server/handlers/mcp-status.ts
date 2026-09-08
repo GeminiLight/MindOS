@@ -1,3 +1,4 @@
+import { MINDOS_MCP_TOOL_COUNT } from '../../protocols/mcp-server/tool-names.js';
 import { errorResponse, json, type MindosServerResponse } from '../response.js';
 
 export type MindosMcpStatusSettings = {
@@ -74,7 +75,7 @@ export async function handleMcpStatus(
       transport: 'http',
       endpoint,
       port,
-      toolCount: running ? 24 : 0,
+      toolCount: running ? MINDOS_MCP_TOOL_COUNT : 0,
       authConfigured,
       maskedToken: authConfigured ? services.maskToken(token) : undefined,
       localIP: services.getLocalIP(),

@@ -107,12 +107,19 @@ export async function handleUpdateCheckGet(
   });
 }
 
-export function handleRestartPost(options: RestartPostOptions = {}): MindosServerResponse<{ ok: true } | { error: string }> {
+export function handleRestartPost(options: RestartPostOptions = {}): MindosServerResponse<{ ok: true; note?: string } | { error: string }> {
   try {
     const env = options.env ?? process.env;
+    const scheduleExit = options.scheduleExit ?? ((delayMs) => setTimeout(() => process.exit(0), delayMs));
+    if (env.MINDOS_MANAGED === '1') {
+      // Desktop's ProcessManager owns this process. Spawning `mindos restart`
+      // here would start a second supervisor that fights over the ports and
+      // outlives the app; exiting is enough, the manager respawns us.
+      scheduleExit(500);
+      return json({ ok: true, note: 'ProcessManager will respawn' });
+    }
     const childEnv = cleanEnvForRestart(env);
     spawnCli('restart', childEnv, options);
-    const scheduleExit = options.scheduleExit ?? ((delayMs) => setTimeout(() => process.exit(0), delayMs));
     scheduleExit(1500);
     return json({ ok: true });
   } catch (error) {

@@ -8,6 +8,7 @@ import { isAgentOwnedSkillOrigin, type SkillMatrix } from '@/components/settings
 import { abbreviateHomePath, isBuiltinSkillOrigin, skillSourceFolder } from '@/lib/skill-source';
 import { ApiError, apiFetch } from '@/lib/api';
 import { useSkillMatrix } from '@/hooks/useSkillMatrix';
+import { useTransientMessage } from '@/hooks/useTransientMessage';
 import type { McpContextValue } from '@/lib/stores/mcp-store';
 import type {
   AgentBuckets,
@@ -426,7 +427,7 @@ function BySkillView({
   const [confirmAgentRemove, setConfirmAgentRemove] = useState<{ agentName: string; skillName: string } | null>(null);
   const [confirmSkillDelete, setConfirmSkillDelete] = useState<string | null>(null);
   const [pickerSkill, setPickerSkill] = useState<string | null>(null);
-  const [hintMessage, setHintMessage] = useState<string | null>(null);
+  const [hintMessage, setHintMessage, clearHintAfter] = useTransientMessage<string | null>(null);
   const [deleteBusy, setDeleteBusy] = useState<string | null>(null);
   const [linkBusy, setLinkBusy] = useState<string | null>(null);
 
@@ -437,7 +438,7 @@ function BySkillView({
     const agent = allAgents.find((a) => a.name === agentName);
     if (!agent) {
       setHintMessage(copy.manualSkillHint);
-      setTimeout(() => setHintMessage(null), 4000);
+      clearHintAfter(4000);
       return;
     }
     // Agent-owned real directory → park it (reversible) instead of unlinking.
@@ -462,9 +463,9 @@ function BySkillView({
         setHintMessage(copy.unlinkSkillFailed(skillName, agentName, err instanceof Error ? err.message : 'Unknown error'));
       }
     } finally {
-      setTimeout(() => setHintMessage(null), 4000);
+      clearHintAfter(4000);
     }
-  }, [confirmAgentRemove, allAgents, copy, matrix, onRefresh]);
+  }, [confirmAgentRemove, allAgents, copy, matrix, onRefresh, clearHintAfter]);
 
   const handleDeleteSkill = useCallback(async (name: string) => {
     setConfirmSkillDelete(null);
@@ -482,9 +483,9 @@ function BySkillView({
       setHintMessage(copy.skillDeleteFailed);
     } finally {
       setDeleteBusy(null);
-      setTimeout(() => setHintMessage(null), 3000);
+      clearHintAfter(3000);
     }
-  }, [copy.skillDeleted, copy.skillDeleteFailed, onRefresh]);
+  }, [copy.skillDeleted, copy.skillDeleteFailed, onRefresh, clearHintAfter]);
 
   const sortedGrouped = useMemo(() => {
     const entries: Array<[string, UnifiedSkillItem[]]> = [];
@@ -575,6 +576,7 @@ function BySkillView({
           onToggleSkill={onToggleSkill}
           setPickerSkill={setPickerSkill}
           setHintMessage={setHintMessage}
+          clearHintAfter={clearHintAfter}
           setConfirmSkillDelete={setConfirmSkillDelete}
           setConfirmAgentRemove={setConfirmAgentRemove}
           setLinkBusy={setLinkBusy}
@@ -643,6 +645,7 @@ function VirtualizedSkillList({
   onToggleSkill,
   setPickerSkill,
   setHintMessage,
+  clearHintAfter,
   setConfirmSkillDelete,
   setConfirmAgentRemove,
   setLinkBusy,
@@ -658,6 +661,7 @@ function VirtualizedSkillList({
   onToggleSkill: (name: string, enabled: boolean) => Promise<boolean>;
   setPickerSkill: (name: string | null) => void;
   setHintMessage: (msg: string | null) => void;
+  clearHintAfter: (ms: number) => void;
   setConfirmSkillDelete: (name: string | null) => void;
   setConfirmAgentRemove: (v: { agentName: string; skillName: string } | null) => void;
   setLinkBusy: (key: string | null) => void;
@@ -706,12 +710,12 @@ function VirtualizedSkillList({
       const target = allAgents.find((a) => a.key === agentKey);
       if (!target?.skillWorkspacePath) {
         setHintMessage(copy.linkSkillUnsupported);
-        setTimeout(() => setHintMessage(null), 4000);
+        clearHintAfter(4000);
         return;
       }
       if (skill.kind === 'native' && !skill.sourcePath) {
         setHintMessage(copy.nativeSkillSourceMissing);
-        setTimeout(() => setHintMessage(null), 4000);
+        clearHintAfter(4000);
         return;
       }
 
@@ -747,7 +751,7 @@ function VirtualizedSkillList({
         setHintMessage(copy.linkSkillFailed(skill.name, target.name, reason));
       } finally {
         setLinkBusy(null);
-        setTimeout(() => setHintMessage(null), 5000);
+        clearHintAfter(5000);
       }
     };
 
@@ -859,7 +863,7 @@ function VirtualizedSkillList({
         </div>
       </div>
     );
-  }, [allAgents, copy, pickerSkill, deleteBusy, linkBusy, onOpenDetail, onToggleSkill, setPickerSkill, setHintMessage, setConfirmSkillDelete, setConfirmAgentRemove, setLinkBusy, onRefresh]);
+  }, [allAgents, copy, pickerSkill, deleteBusy, linkBusy, onOpenDetail, onToggleSkill, setPickerSkill, setHintMessage, clearHintAfter, setConfirmSkillDelete, setConfirmAgentRemove, setLinkBusy, onRefresh]);
 
   return (
     <Virtuoso

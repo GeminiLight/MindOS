@@ -20,11 +20,33 @@ describe('export helpers', () => {
       const files = collectExportFiles(mindRoot, 'Space')
         .sort((a, b) => a.relativePath.localeCompare(b.relativePath));
 
-      expect(files).toEqual([
-        { relativePath: 'data.csv', content: 'name,value' },
-        { relativePath: 'Nested/note.md', content: 'hello' },
-        { relativePath: 'README.md', content: '# Space' },
-      ]);
+      // Entries carry the on-disk path so the export route can stream them;
+      // contents are no longer buffered up front.
+      expect(files.map((file) => file.relativePath)).toEqual(['data.csv', 'Nested/note.md', 'README.md']);
+      expect(files.map((file) => fs.readFileSync(file.absPath, 'utf-8'))).toEqual(['name,value', 'hello', '# Space']);
+      for (const file of files) {
+        expect(path.isAbsolute(file.absPath)).toBe(true);
+        expect(file).not.toHaveProperty('content');
+      }
+    });
+
+    it('skips files the process cannot read instead of failing the export', () => {
+      seedFile(mindRoot, 'Space/ok.md', 'readable');
+      seedFile(mindRoot, 'Space/locked.md', 'unreadable');
+      fs.chmodSync(path.join(mindRoot, 'Space/locked.md'), 0o000);
+
+      try {
+        const files = collectExportFiles(mindRoot, 'Space');
+        // Root can read anything regardless of mode bits; only assert when the
+        // permission actually applies.
+        if (process.getuid?.() !== 0) {
+          expect(files.map((file) => file.relativePath)).toEqual(['ok.md']);
+        } else {
+          expect(files.map((file) => file.relativePath).sort()).toEqual(['locked.md', 'ok.md']);
+        }
+      } finally {
+        fs.chmodSync(path.join(mindRoot, 'Space/locked.md'), 0o644);
+      }
     });
 
     it('rejects traversal before checking directories outside mindRoot', () => {

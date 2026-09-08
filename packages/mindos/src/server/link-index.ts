@@ -58,6 +58,8 @@ export type LinkScanServices = {
   readTextFile?: (path: string) => string;
   /** Optional cheap change signal; when present, link scans are cached per version. */
   getTreeVersion?: () => number;
+  /** Optional per-file stats; when present, only changed files are re-read on rebuild. */
+  collectFileStats?: () => Array<{ path: string; mtime: number; size: number }>;
 };
 
 export type LinkSnapshot = {
@@ -79,7 +81,9 @@ export type LinkSnapshot = {
   backlinksByTarget: Map<string, Map<string, Set<string>>>;
 };
 
-type CachedSnapshot = LinkSnapshot & { version: number };
+type FileScan = { mtime: number; size: number; metadata: FileLinkMetadata; hits: LinkHit[] };
+
+type CachedSnapshot = LinkSnapshot & { version: number; fileScans: Map<string, FileScan> };
 
 // Keyed by the getTreeVersion function: stable for a long-lived services object
 // (standalone server), naturally absent for ad-hoc services (tests, callers
@@ -101,29 +105,61 @@ export function getLinkSnapshot(services: LinkScanServices): LinkSnapshot {
   const cached = snapshotCache.get(versionFn);
   if (cached && cached.version === version) return cached;
 
-  const snapshot: CachedSnapshot = { version, ...buildLinkSnapshot(services) };
+  const snapshot: CachedSnapshot = { version, ...buildLinkSnapshotIncremental(services, cached) };
   snapshotCache.set(versionFn, snapshot);
   return snapshot;
 }
 
 export function buildLinkSnapshot(services: LinkScanServices): LinkSnapshot {
+  return buildLinkSnapshotIncremental(services, undefined);
+}
+
+/**
+ * Rebuilds the snapshot, reusing the per-file scan of every markdown file
+ * whose mtime/size is unchanged. Link resolution depends on which files exist
+ * (basename matching), so reuse is only attempted when the file list itself is
+ * identical; adds, deletes and renames still trigger a full rescan. A single
+ * "save then open the next note" used to re-read the whole library.
+ */
+function buildLinkSnapshotIncremental(
+  services: LinkScanServices,
+  previous: CachedSnapshot | undefined,
+): LinkSnapshot & { fileScans: Map<string, FileScan> } {
   const files = collectMarkdownFiles(services);
   const fileSet = new Set(files);
   const basenameMap = buildBasenameMap(files);
   const fileMetadata = new Map<string, FileLinkMetadata>();
   const hits: LinkHit[] = [];
   const backlinksByTarget = new Map<string, Map<string, Set<string>>>();
+  const fileScans = new Map<string, FileScan>();
+
+  const statsByPath = collectStatsByPath(services);
+  const reusable = previous && statsByPath && sameFileList(previous.files, files) ? previous.fileScans : null;
 
   for (const source of files) {
-    let content = '';
-    try {
-      content = readText(services, source);
-    } catch {
-      // File deleted (or unreadable) between listing and reading — skip it.
-      continue;
+    const stat = statsByPath?.get(source);
+    const prior = reusable?.get(source);
+    let scan: FileScan;
+    if (prior && stat && prior.mtime === stat.mtime && prior.size === stat.size) {
+      scan = prior;
+    } else {
+      let content = '';
+      try {
+        content = readText(services, source);
+      } catch {
+        // File deleted (or unreadable) between listing and reading — skip it.
+        continue;
+      }
+      scan = {
+        mtime: stat?.mtime ?? Number.NaN,
+        size: stat?.size ?? Number.NaN,
+        metadata: extractFileMetadata(content, source),
+        hits: extractLinkHits(content, source, fileSet, basenameMap),
+      };
     }
-    fileMetadata.set(source, extractFileMetadata(content, source));
-    for (const hit of extractLinkHits(content, source, fileSet, basenameMap)) {
+    fileScans.set(source, scan);
+    fileMetadata.set(source, scan.metadata);
+    for (const hit of scan.hits) {
       hits.push(hit);
       let sources = backlinksByTarget.get(hit.target);
       if (!sources) {
@@ -155,7 +191,30 @@ export function buildLinkSnapshot(services: LinkScanServices): LinkSnapshot {
     incomingEdgesByTarget,
     nodeIds,
     backlinksByTarget,
+    fileScans,
   };
+}
+
+function collectStatsByPath(services: LinkScanServices): Map<string, { mtime: number; size: number }> | null {
+  if (!services.collectFileStats) return null;
+  try {
+    const map = new Map<string, { mtime: number; size: number }>();
+    for (const entry of services.collectFileStats()) {
+      const normalized = normalizeTargetPath(entry.path);
+      if (normalized) map.set(normalized, { mtime: entry.mtime, size: entry.size });
+    }
+    return map;
+  } catch {
+    return null;
+  }
+}
+
+function sameFileList(previous: string[], current: string[]): boolean {
+  if (previous.length !== current.length) return false;
+  for (let index = 0; index < previous.length; index += 1) {
+    if (previous[index] !== current[index]) return false;
+  }
+  return true;
 }
 
 export function normalizeTargetPath(value: string | undefined): string | undefined {

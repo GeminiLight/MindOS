@@ -18,6 +18,11 @@ interface EditorProps {
   sandboxContributions?: BrowserEditorSandboxContribution[];
 }
 
+// Stable default so the sandbox compartment is not reconfigured on every
+// keystroke when the caller passes no contributions (a fresh `[]` per render
+// would change the effect dependency each time).
+const EMPTY_CONTRIBUTIONS: BrowserEditorSandboxContribution[] = [];
+
 const darkTheme = EditorView.theme({
   '&': {
     backgroundColor: 'var(--background)',
@@ -71,7 +76,7 @@ export default function Editor({
   value,
   onChange,
   language = 'markdown',
-  sandboxContributions = [],
+  sandboxContributions = EMPTY_CONTRIBUTIONS,
 }: EditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);

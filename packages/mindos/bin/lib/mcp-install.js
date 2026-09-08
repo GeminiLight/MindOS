@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, mkdirSync, renameSync, unlinkSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { CONFIG_PATH } from './constants.js';
 import { bold, dim, cyan, green, red, yellow } from './colors.js';
@@ -40,6 +40,55 @@ function readNestedPath(obj, dotPath) {
   }
   if (!current || typeof current !== 'object') return null;
   return current;
+}
+
+/**
+ * True when JSON/JSONC text has `//` or `/* ... *\/` comments outside string
+ * literals. parseJsonc() strips them, so re-serialising would drop them.
+ */
+export function hasJsoncComments(text) {
+  let inString = false;
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text[i];
+    if (inString) {
+      if (ch === '\\') i += 1;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') { inString = true; continue; }
+    if (ch === '/' && (text[i + 1] === '/' || text[i + 1] === '*')) return true;
+  }
+  return false;
+}
+
+/**
+ * Write via same-directory temp file + rename so a crash mid-write can never
+ * leave a third-party agent config truncated. Mirrors
+ * src/server/handlers/mcp-install.ts#writeFileAtomically.
+ */
+export function writeFileAtomically(absPath, content) {
+  const tmpPath = `${absPath}.tmp-${process.pid}`;
+  try {
+    writeFileSync(tmpPath, content, 'utf-8');
+    renameSync(tmpPath, absPath);
+  } catch (error) {
+    try { unlinkSync(tmpPath); } catch { /* temp file was never created */ }
+    throw error;
+  }
+}
+
+/**
+ * Replace a JSON/JSONC config, backing up a commented original to `.bak`.
+ * Returns the backup path when one was written, otherwise null.
+ */
+export function writeJsonConfigFile(absPath, existingText, nextText) {
+  let backupPath = null;
+  if (existingText && hasJsoncComments(existingText)) {
+    backupPath = `${absPath}.bak`;
+    writeFileAtomically(backupPath, existingText);
+  }
+  writeFileAtomically(absPath, nextText);
+  return backupPath;
 }
 
 function configPathCandidates(agent, scope) {
@@ -400,19 +449,21 @@ export async function mcpInstall() {
       const existing = existsSync(absPath) ? readFileSync(absPath, 'utf-8') : '';
       existed = existing.includes(`[${agent.key}.mindos]`);
       const merged = mergeTomlEntry(existing, agent.key, 'mindos', entry);
-      writeFileSync(absPath, merged, 'utf-8');
+      writeFileAtomically(absPath, merged);
     } else if (agent.format === 'yaml') {
       // YAML format (e.g. Hermes): line-based merge preserving existing content
       const existing = existsSync(absPath) ? readFileSync(absPath, 'utf-8') : '';
       const yamlPattern = new RegExp(`^\\s{2}mindos\\s*:`, 'm');
       existed = yamlPattern.test(existing);
       const merged = mergeYamlEntry(existing, agent.key, 'mindos', entry);
-      writeFileSync(absPath, merged, 'utf-8');
+      writeFileAtomically(absPath, merged);
     } else {
       // JSON format (default)
       let config = {};
+      let existingText = '';
       if (existsSync(absPath)) {
-        try { config = parseJsonc(readFileSync(absPath, 'utf-8')); } catch {
+        existingText = readFileSync(absPath, 'utf-8');
+        try { config = parseJsonc(existingText); } catch {
           const error = `Failed to parse existing config: ${absPath}`;
           console.error(red(`  ${error} — skipping.`));
           mcpFailures.push({ agentKey, name: agent.name, error });
@@ -428,7 +479,10 @@ export async function mcpInstall() {
         : (() => { if (!config[agent.key]) config[agent.key] = {}; return config[agent.key]; })();
       existed = !!container.mindos;
       container.mindos = entry;
-      writeFileSync(absPath, JSON.stringify(config, null, 2) + '\n', 'utf-8');
+      const backupPath = writeJsonConfigFile(absPath, existingText, JSON.stringify(config, null, 2) + '\n');
+      if (backupPath) {
+        console.log(yellow(`  ! Comments were removed from ${absPath}; original saved to ${backupPath}`));
+      }
     }
 
     console.log(`${green('✔')} ${existed ? 'Updated' : 'Installed'} MindOS MCP for ${bold(agent.name)} ${dim(`→ ${absPath}`)}`);

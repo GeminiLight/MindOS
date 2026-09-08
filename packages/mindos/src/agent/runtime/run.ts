@@ -208,6 +208,48 @@ function isTimeoutError(value: unknown): value is Error & { code: 'TIMEOUT' } {
   return value instanceof Error && (value as { code?: unknown }).code === 'TIMEOUT';
 }
 
+/**
+ * Marker for failures the runtime itself reported through its event stream
+ * (Claude `result.is_error`, Codex `turn/failed`). The `error` SSE event has
+ * already been forwarded to the client by the time the lane throws this, so
+ * the catch blocks must not send a second one — but the lane still needs to
+ * return `result.error`, otherwise callers record the run as `completed`.
+ */
+const RUNTIME_REPORTED_ERROR_NAME = 'MindosRuntimeReportedError';
+
+function createRuntimeReportedError(message: string): Error {
+  const error = new Error(message);
+  error.name = RUNTIME_REPORTED_ERROR_NAME;
+  return error;
+}
+
+function isRuntimeReportedError(error: Error): boolean {
+  return error.name === RUNTIME_REPORTED_ERROR_NAME;
+}
+
+/** True when the lane stopped because the user canceled, not because it timed out. */
+function isUserCancel(signal?: AbortSignal): boolean {
+  return Boolean(signal?.aborted) && !isTimeoutError(signal?.reason);
+}
+
+/**
+ * Terminal-state tracker for a lane's event loop. Runtimes report failures as
+ * `{type:'error'}` events without a following `done`; the lane must turn that
+ * into a thrown error after the loop so `result.error` is populated.
+ */
+type LaneTerminalState = { errorMessage?: string; sawDone: boolean };
+
+function trackLaneTerminalEvent(state: LaneTerminalState, event: MindOSSSEvent): void {
+  if (event.type === 'error') state.errorMessage = event.message;
+  if (event.type === 'done') state.sawDone = true;
+}
+
+function throwIfLaneReportedError(state: LaneTerminalState): void {
+  if (state.errorMessage !== undefined && !state.sawDone) {
+    throw createRuntimeReportedError(state.errorMessage);
+  }
+}
+
 function errorFromRuntimeFailure(
   error: unknown,
   signal?: AbortSignal,
@@ -378,17 +420,24 @@ async function runClaudeNativeAgentTurn(options: MindosNativeAgentTurnOptions): 
     return sessionId ? { externalSessionId: sessionId } : {};
   } catch (error) {
     const err = errorFromRuntimeFailure(error, options.signal, 'claude');
-    if (sessionId) {
-      options.send({
-        type: 'runtime_binding',
-        runtime: 'claude',
-        externalSessionId: sessionId,
-        cwd: options.cwd,
-        status: 'failed',
-        reason: err.message,
-      });
+    if (isUserCancel(options.signal)) {
+      // The session stays resumable after a user cancel, so do not mark the
+      // binding failed; a neutral status keeps the client from rendering a
+      // "Stream Error" while the ledger still records `canceled` via `error`.
+      sendNativeRuntimeStatus(options, 'claude', 'Canceled by user.');
+    } else if (!isRuntimeReportedError(err)) {
+      if (sessionId) {
+        options.send({
+          type: 'runtime_binding',
+          runtime: 'claude',
+          externalSessionId: sessionId,
+          cwd: options.cwd,
+          status: 'failed',
+          reason: err.message,
+        });
+      }
+      options.send({ type: 'error', message: `Claude Code native runtime error: ${err.message}` });
     }
-    options.send({ type: 'error', message: `Claude Code native runtime error: ${err.message}` });
     return { error: err, ...(sessionId ? { externalSessionId: sessionId } : {}) };
   } finally {
     await client?.close?.();
@@ -429,6 +478,7 @@ async function runClaudeTurnWithClient(
       ...(permissionPrompt ? { permissionPrompt } : {}),
       signal: options.signal,
     });
+    const terminal: LaneTerminalState = { sawDone: false };
     for await (const event of iterateWithNativeRuntimeAbort(turnEvents, options.signal)) {
       if (event.type === 'session_id') {
         sessionId = event.sessionId;
@@ -442,8 +492,10 @@ async function runClaudeTurnWithClient(
         sendNativeRuntimeStatus(options, 'claude', 'Claude Code is connected and working in this chat.');
         continue;
       }
+      trackLaneTerminalEvent(terminal, event);
       options.send(event);
     }
+    throwIfLaneReportedError(terminal);
     return sessionId;
   } finally {
     await materialized.cleanup();
@@ -556,14 +608,17 @@ async function runCodexNativeAgentTurn(options: MindosNativeAgentTurnOptions): P
         ...codexPermissionOptionsForMindosMode(options.permissionMode),
         signal: options.signal,
       });
+      const terminal: LaneTerminalState = { sawDone: false };
       for await (const notification of iterateWithNativeRuntimeAbort(turnNotifications, options.signal)) {
         if (notification.method === 'serverRequest/resolved') {
           abortCodexPendingServerRequest(notification.params, pendingServerRequests);
         }
         for (const event of mapCodexAppServerNotificationToSseEvents(notification)) {
+          trackLaneTerminalEvent(terminal, event);
           options.send(event);
         }
       }
+      throwIfLaneReportedError(terminal);
     } finally {
       await materialized?.cleanup();
       options.signal?.removeEventListener('abort', abortListener);
@@ -573,17 +628,23 @@ async function runCodexNativeAgentTurn(options: MindosNativeAgentTurnOptions): P
     return { externalSessionId: threadId };
   } catch (error) {
     const err = errorFromRuntimeFailure(error, options.signal, 'codex');
-    if (threadId) {
-      options.send({
-        type: 'runtime_binding',
-        runtime: 'codex',
-        externalSessionId: threadId,
-        cwd: options.cwd,
-        status: 'failed',
-        reason: err.message,
-      });
+    if (isUserCancel(options.signal)) {
+      // See the Claude lane: a user cancel leaves the thread resumable and
+      // must not surface as a stream error.
+      sendNativeRuntimeStatus(options, 'codex', 'Canceled by user.');
+    } else if (!isRuntimeReportedError(err)) {
+      if (threadId) {
+        options.send({
+          type: 'runtime_binding',
+          runtime: 'codex',
+          externalSessionId: threadId,
+          cwd: options.cwd,
+          status: 'failed',
+          reason: err.message,
+        });
+      }
+      options.send({ type: 'error', message: `Codex native runtime error: ${err.message}` });
     }
-    options.send({ type: 'error', message: `Codex native runtime error: ${err.message}` });
     return { error: err, ...(threadId ? { externalSessionId: threadId } : {}) };
   } finally {
     abortAllCodexPendingServerRequests(pendingServerRequests);

@@ -1315,10 +1315,57 @@ describe('MindOS server contract: skills, custom agents, MCP management', () => 
       env: expect.objectContaining({
         MCP_TRANSPORT: 'http',
         MCP_PORT: '9995',
-        MCP_HOST: '0.0.0.0',
+        // No auth token anywhere: an unauthenticated MCP must stay on loopback.
+        MCP_HOST: '127.0.0.1',
         MINDOS_URL: 'http://127.0.0.1:5678',
       }),
     }]);
+    expect(spawned[1]?.env.AUTH_TOKEN).toBeUndefined();
+  });
+
+  it('never spawns an unauthenticated MCP on a LAN host but honours MCP_HOST once a token exists', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'mindos-mcp-restart-host-'));
+    const bundlePath = join(root, 'packages', 'mindos', 'dist', 'protocols', 'mcp-server', 'index.cjs');
+    const spawnedHosts: Array<{ host: string | undefined; token: string | undefined }> = [];
+    const services = {
+      projectRoot: root,
+      execPath: '/node',
+      killByPort: () => {},
+      waitForPortFree: async () => true,
+      pathExists: (path: string) => path === bundlePath,
+      spawnDetached: (_command: string, _args: string[], options: { env: NodeJS.ProcessEnv }) => {
+        spawnedHosts.push({ host: options.env.MCP_HOST, token: options.env.AUTH_TOKEN });
+        return { pid: 1, unref: () => {} };
+      },
+    };
+
+    await handleMcpRestartPost({
+      ...services,
+      readSettings: () => ({ mcpPort: 9996 }),
+      env: { MCP_HOST: '0.0.0.0' } as NodeJS.ProcessEnv,
+    });
+    await handleMcpRestartPost({
+      ...services,
+      readSettings: () => ({ mcpPort: 9997 }),
+      env: { MCP_HOST: '192.168.1.20' } as NodeJS.ProcessEnv,
+    });
+    await handleMcpRestartPost({
+      ...services,
+      readSettings: () => ({ mcpPort: 9998, authToken: 'from-settings' }),
+      env: { MCP_HOST: '0.0.0.0' } as NodeJS.ProcessEnv,
+    });
+    await handleMcpRestartPost({
+      ...services,
+      readSettings: () => ({ mcpPort: 9999 }),
+      env: { MCP_HOST: '0.0.0.0', AUTH_TOKEN: 'from-env' } as NodeJS.ProcessEnv,
+    });
+
+    expect(spawnedHosts).toEqual([
+      { host: '127.0.0.1', token: undefined },
+      { host: '127.0.0.1', token: undefined },
+      { host: '0.0.0.0', token: 'from-settings' },
+      { host: '0.0.0.0', token: 'from-env' },
+    ]);
   });
 
   it('finds MCP restart port owners without shell-interpolated process lookup', () => {

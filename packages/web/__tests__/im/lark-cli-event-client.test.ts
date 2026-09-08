@@ -102,4 +102,71 @@ describe('lark-cli event client', () => {
 
     expect(client.status()).toMatchObject({ running: false, lastError: expect.stringMatching(/disconnected|exited/i) });
   });
+
+  it('notifies onExit with an error when the consumer dies after becoming ready', async () => {
+    const child = fakeChild();
+    const onExit = vi.fn();
+    const client = createLarkCliEventClient({
+      executablePath: '/opt/lark-cli', profile: 'cli_existing', spawnProcess: () => child, onEvent: vi.fn(), onExit,
+    });
+    const starting = client.start();
+    child.stderr.write('[event] ready event_key=im.message.receive_v1\n');
+    await starting;
+
+    child.stderr.write('[event] failed: websocket disconnected\n');
+    child.emit('exit', 2, null);
+
+    expect(onExit).toHaveBeenCalledTimes(1);
+    const [error] = onExit.mock.calls[0];
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toMatch(/disconnected/i);
+    expect(client.status()).toMatchObject({ running: false, lastError: expect.stringContaining('disconnected') });
+  });
+
+  it('notifies onExit without an error when the consumer exits cleanly after becoming ready', async () => {
+    const child = fakeChild();
+    const onExit = vi.fn();
+    const client = createLarkCliEventClient({
+      executablePath: '/opt/lark-cli', profile: 'cli_existing', spawnProcess: () => child, onEvent: vi.fn(), onExit,
+    });
+    const starting = client.start();
+    child.stderr.write('[event] ready event_key=im.message.receive_v1\n');
+    await starting;
+
+    child.emit('exit', 0, null);
+
+    expect(onExit).toHaveBeenCalledTimes(1);
+    expect(onExit.mock.calls[0][0]).toBeUndefined();
+    expect(client.status().running).toBe(false);
+  });
+
+  it('does not notify onExit when the consumer exits before becoming ready', async () => {
+    const child = fakeChild();
+    const onExit = vi.fn();
+    const client = createLarkCliEventClient({
+      executablePath: '/opt/lark-cli', profile: 'cli_existing', spawnProcess: () => child, onEvent: vi.fn(), onExit,
+    });
+    const starting = client.start();
+    child.emit('exit', 1, null);
+
+    await expect(starting).rejects.toThrow(/exited before ready/i);
+    expect(onExit).not.toHaveBeenCalled();
+  });
+
+  it('does not notify onExit when the consumer exits after an explicit stop', async () => {
+    const child = fakeChild();
+    const onExit = vi.fn();
+    const client = createLarkCliEventClient({
+      executablePath: '/opt/lark-cli', profile: 'cli_existing', spawnProcess: () => child, onEvent: vi.fn(), onExit,
+    });
+    const starting = client.start();
+    child.stderr.write('[event] ready event_key=im.message.receive_v1\n');
+    await starting;
+
+    client.stop();
+    child.emit('exit', null, 'SIGTERM');
+
+    expect(onExit).not.toHaveBeenCalled();
+    expect(client.status()).toMatchObject({ running: false, lastError: undefined });
+  });
 });

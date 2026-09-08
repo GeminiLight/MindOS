@@ -178,7 +178,7 @@ export default function AgentActivitySection() {
               )}
             </div>
             <div className="min-w-0 rounded-lg border border-border/60 bg-background/35 p-5">
-              {!loading && selected ? <TraceDetail trace={selected} copy={copy} locale={locale} onRecovered={() => setReload((value) => value + 1)} /> : !loading ? <EmptyState text={copy.noDetail} /> : null}
+              {!loading && selected ? <TraceDetail key={selected.id} trace={selected} copy={copy} locale={locale} onRecovered={() => refresh()} /> : !loading ? <EmptyState text={copy.noDetail} /> : null}
             </div>
           </div>
         </>

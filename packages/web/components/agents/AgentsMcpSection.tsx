@@ -1,9 +1,10 @@
 'use client';
 
-import { useCallback, useDeferredValue, useMemo, useState } from 'react';
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { RefreshCw, Search, Server } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
+import { useTransientMessage } from '@/hooks/useTransientMessage';
 import type { McpContextValue } from '@/lib/stores/mcp-store';
 import type { AgentBuckets, AgentStatusFilter, AgentTransportFilter } from './agents-content-model';
 import {
@@ -101,15 +102,16 @@ export default function AgentsMcpSection({
     return crossAgentServers.filter((srv) => srv.serverName.toLowerCase().includes(q));
   }, [crossAgentServers, deferredQuery]);
 
-  async function handleReconnect(agent: (typeof mcp.agents)[number]) {
+  async function handleReconnect(agent: (typeof mcp.agents)[number]): Promise<boolean> {
     setBusyAction(`reconnect:${agent.key}`);
     try {
       const scope = agent.scope === 'project' ? 'project' : 'global';
       const transport = agent.transport === 'http' ? 'http' : 'stdio';
-      await mcp.installAgent(agent.key, { scope, transport });
-      await mcp.refresh({ force: true });
+      // installAgent already force-refreshes the store on success.
+      return await mcp.installAgent(agent.key, { scope, transport });
     } catch (err) {
       console.error('[mcp] reconnect failed', err);
+      return false;
     } finally {
       setBusyAction(null);
     }
@@ -260,6 +262,7 @@ export default function AgentsMcpSection({
           busyAction={busyAction}
           onCopyServer={handleCopyServer}
           onReconnect={handleReconnect}
+          onRefresh={() => mcp.refresh({ force: true })}
         />
       )}
     </section>
@@ -293,7 +296,7 @@ function ByAgentView({
   onStatusFilter: (f: AgentStatusFilter) => void;
   onTransportFilter: (f: AgentTransportFilter) => void;
   onCopySnippet: (agentKey: string) => Promise<void>;
-  onReconnect: (agent: ReturnType<typeof sortAgentsByStatus>[number]) => Promise<void>;
+  onReconnect: (agent: ReturnType<typeof sortAgentsByStatus>[number]) => Promise<boolean>;
   onInstallMindos: (agentKey: string) => Promise<void>;
   onBulkReconnect: () => Promise<void>;
 }) {
@@ -412,19 +415,27 @@ function ByServerView({
   busyAction,
   onCopyServer,
   onReconnect,
+  onRefresh,
 }: {
   copy: Parameters<typeof AgentsMcpSection>[0]['copy'];
   servers: ReturnType<typeof aggregateCrossAgentMcpServers>;
   allAgents: ReturnType<typeof sortAgentsByStatus>;
   busyAction: string | null;
   onCopyServer: (serverName: string, sourceAgentKey: string, targetAgentKey: string) => Promise<boolean>;
-  onReconnect: (agent: ReturnType<typeof sortAgentsByStatus>[number]) => Promise<void>;
+  onReconnect: (agent: ReturnType<typeof sortAgentsByStatus>[number]) => Promise<boolean>;
+  onRefresh: () => Promise<void>;
 }) {
   const [pickerServer, setPickerServer] = useState<string | null>(null);
   const [confirmState, setConfirmState] = useState<{ agentKey: string; agentName: string; serverName: string } | null>(null);
-  const [hintMessage, setHintMessage] = useState<string | null>(null);
+  const [hintMessage, setHintMessage, clearHintAfter] = useTransientMessage<string | null>(null);
   const [reconnectingServer, setReconnectingServer] = useState<string | null>(null);
   const [reconnectMsg, setReconnectMsg] = useState<Record<string, string>>({});
+  // Per-server dismiss timers for reconnectMsg; cleared on unmount.
+  const reconnectMsgTimersRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  useEffect(() => () => {
+    for (const timer of reconnectMsgTimersRef.current.values()) clearTimeout(timer);
+    reconnectMsgTimersRef.current.clear();
+  }, []);
   const agentsByName = useMemo(() => new Map(allAgents.map((agent) => [agent.name, agent])), [allAgents]);
   const allAgentPickerOptions = useMemo(
     () => allAgents
@@ -441,9 +452,9 @@ function ByServerView({
       setHintMessage(ok
         ? copy.copyServerSuccess(serverName, target?.name ?? targetAgentKey)
         : copy.copyServerFailed(serverName, target?.name ?? targetAgentKey));
-      setTimeout(() => setHintMessage(null), 4000);
+      clearHintAfter(4000);
     },
-    [allAgents, copy, onCopyServer],
+    [allAgents, copy, onCopyServer, clearHintAfter],
   );
 
   const handleConfirmRemove = useCallback(async () => {
@@ -462,11 +473,12 @@ function ByServerView({
         body: JSON.stringify({ agents: [{ key: agentKey, scope, serverName: confirmState.serverName }] }),
       });
       setHintMessage(copy.removeSuccess ?? 'Removed. Restart your agent to apply.');
+      await onRefresh();
     } catch {
       setHintMessage(copy.removeFailed ?? 'Failed to remove. Try editing the config file manually.');
     }
-    setTimeout(() => setHintMessage(null), 4000);
-  }, [confirmState, allAgents, copy]);
+    clearHintAfter(4000);
+  }, [confirmState, allAgents, copy, onRefresh, clearHintAfter]);
 
   const handleReconnectAllInServer = useCallback(
     async (serverName: string, agents: typeof allAgents) => {
@@ -475,16 +487,19 @@ function ByServerView({
       let ok = 0;
       let failed = 0;
       for (const agent of agents) {
-        try {
-          await onReconnect(agent);
-          ok++;
-        } catch {
-          failed++;
-        }
+        // onReconnect never throws; it reports success through its return value.
+        if (await onReconnect(agent)) ok++;
+        else failed++;
       }
       setReconnectMsg((prev) => ({ ...prev, [serverName]: copy.reconnectAllDone(ok, failed) }));
       setReconnectingServer(null);
-      setTimeout(() => setReconnectMsg((prev) => { const next = { ...prev }; delete next[serverName]; return next; }), 4000);
+      const timers = reconnectMsgTimersRef.current;
+      const existing = timers.get(serverName);
+      if (existing) clearTimeout(existing);
+      timers.set(serverName, setTimeout(() => {
+        timers.delete(serverName);
+        setReconnectMsg((prev) => { const next = { ...prev }; delete next[serverName]; return next; });
+      }, 4000));
     },
     [copy, onReconnect],
   );

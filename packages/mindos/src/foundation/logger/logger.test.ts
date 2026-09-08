@@ -204,4 +204,17 @@ describe('Logger configuration', () => {
       expect(logger).toBeDefined()
     })
   })
+
+})
+
+describe('PinoLoggerAdapter.child', () => {
+  it('shares the parent pino instance and merges bindings instead of opening a new transport', () => {
+    const parent = new PinoLoggerAdapter({ level: 'info', console: false, pretty: false } as LoggerConfig, { service: 'test' })
+    const child = parent.child({ requestId: 'r-1' }) as PinoLoggerAdapter
+    const parentPino = (parent as unknown as { pinoLogger: { bindings(): Record<string, unknown> } }).pinoLogger
+    const childPino = (child as unknown as { pinoLogger: { bindings(): Record<string, unknown> } }).pinoLogger
+    expect(childPino).not.toBe(parentPino)
+    expect(childPino.bindings()).toMatchObject({ requestId: 'r-1' })
+    expect(() => child.info('hello from child')).not.toThrow()
+  })
 })

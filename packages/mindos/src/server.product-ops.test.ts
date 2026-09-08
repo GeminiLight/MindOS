@@ -630,6 +630,22 @@ describe('MindOS server contract: product operations', () => {
     });
   });
 
+  it('does not spawn a second supervisor when restarted under Desktop ProcessManager', () => {
+    const spawned: string[] = [];
+    const scheduledExit: number[] = [];
+    const res = handleRestartPost({
+      cliPath: '/opt/mindos/bin/cli.js',
+      nodeBin: '/usr/local/bin/node',
+      env: { PATH: '/usr/bin', MINDOS_MANAGED: '1', MINDOS_WEB_PORT: '3011' },
+      spawn: (command: string) => { spawned.push(command); return { unref: () => {} }; },
+      scheduleExit: (delayMs) => { scheduledExit.push(delayMs); },
+    });
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ ok: true, note: 'ProcessManager will respawn' });
+    expect(spawned).toEqual([]);
+    expect(scheduledExit).toHaveLength(1);
+  });
+
   it('runs restart and update process controls with sanitized child environments', () => {
     const spawned: Array<{ command: string; args: string[]; options: Record<string, unknown>; unrefCalled: boolean }> = [];
     const spawn = (command: string, args: string[], options: Record<string, unknown>) => {

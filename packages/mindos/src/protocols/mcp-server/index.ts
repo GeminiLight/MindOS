@@ -19,13 +19,18 @@ import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js
 import { randomUUID } from "node:crypto";
 import { createServer } from "node:http";
 import { z } from "zod";
+import { formatForcedLoopbackWarning, isAuthorizedBearer, resolveMcpBindHost } from "./http-security.js";
+import { createMcpSessionRegistry, isJsonRpcInitializeRequest } from "./session-registry.js";
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
 const BASE_URL       = process.env.MINDOS_URL      ?? "http://localhost:3456";
 const AUTH_TOKEN     = process.env.AUTH_TOKEN;
 const MCP_TRANSPORT  = process.env.MCP_TRANSPORT   ?? "http";    // "http" | "stdio"
-const MCP_HOST       = process.env.MCP_HOST        ?? "0.0.0.0";
+// Without an auth token nothing guards the HTTP endpoint, so the bind host is
+// forced to loopback regardless of MCP_HOST (see resolveMcpBindHost).
+const MCP_BIND       = resolveMcpBindHost(process.env.MCP_HOST, AUTH_TOKEN);
+const MCP_HOST       = MCP_BIND.host;
 const MCP_PORT       = parseInt(process.env.MCP_PORT ?? "8781", 10);
 const MCP_ENDPOINT   = process.env.MCP_ENDPOINT    ?? "/mcp";
 const CHARACTER_LIMIT = 25_000;
@@ -777,7 +782,13 @@ function listenHttpServer(httpServer: ReturnType<typeof createServer>): Promise<
 async function main() {
   if (MCP_TRANSPORT === "http") {
     // ── Streamable HTTP mode (per-session transport) ─────────────────────
-    const sessions = new Map<string, { transport: StreamableHTTPServerTransport; server: McpServer }>();
+    // The SDK only fires transport.onclose on an explicit DELETE, so clients
+    // that drop and re-initialize would leak a McpServer per reconnect. The
+    // registry tracks lastSeenAt per request and a sweeper closes idle ones.
+    const sessions = createMcpSessionRegistry<StreamableHTTPServerTransport, McpServer>();
+
+    const forcedLoopbackWarning = formatForcedLoopbackWarning(MCP_BIND);
+    if (forcedLoopbackWarning) console.error(forcedLoopbackWarning);
 
     const expressApp = createMcpExpressApp({ host: MCP_HOST });
 
@@ -787,8 +798,7 @@ async function main() {
 
     if (AUTH_TOKEN) {
       expressApp.use(MCP_ENDPOINT, (req, res, next) => {
-        const bearer = req.headers.authorization?.replace("Bearer ", "");
-        if (bearer !== AUTH_TOKEN) {
+        if (!isAuthorizedBearer(req.headers.authorization, AUTH_TOKEN)) {
           res.status(401).json({ error: "Unauthorized" });
           return;
         }
@@ -797,16 +807,28 @@ async function main() {
     }
 
     expressApp.all(MCP_ENDPOINT, async (req, res) => {
-      const sessionId = req.headers["mcp-session-id"] as string | undefined;
+      const rawSessionId = req.headers["mcp-session-id"];
+      const sessionId = typeof rawSessionId === "string" ? rawSessionId : undefined;
 
-      if (sessionId && sessions.has(sessionId)) {
-        const session = sessions.get(sessionId)!;
+      if (sessionId) {
+        const session = sessions.get(sessionId);
+        if (!session) {
+          res.status(404).json({ jsonrpc: "2.0", error: { code: -32000, message: "Session not found" } });
+          return;
+        }
+        sessions.touch(sessionId);
         await session.transport.handleRequest(req, res, req.body);
         return;
       }
 
-      if (sessionId && !sessions.has(sessionId)) {
-        res.status(404).json({ jsonrpc: "2.0", error: { code: -32000, message: "Session not found" } });
+      // Only a JSON-RPC initialize may open a session. Anything else without a
+      // session id is a protocol error; reject before allocating a McpServer.
+      if (req.method !== "POST" || !isJsonRpcInitializeRequest(req.body)) {
+        res.status(400).json({
+          jsonrpc: "2.0",
+          error: { code: -32000, message: "Bad Request: Mcp-Session-Id header is required for non-initialize requests" },
+          id: null,
+        });
         return;
       }
 
@@ -827,14 +849,19 @@ async function main() {
 
       const sid = transport.sessionId;
       if (sid) {
-        sessions.set(sid, { transport, server });
+        sessions.add(sid, transport, server);
         const client = server.server.getClientVersion();
         const clientLabel = client?.name ? ` (${client.name})` : '';
         console.error(`[MCP] New session ${sid.slice(0, 8)}${clientLabel} (${sessions.size} active)`);
       }
     });
 
+    const stopSweeper = sessions.startSweeper(undefined, (closed) => {
+      console.error(`[MCP] Closed ${closed.length} idle session(s) (${sessions.size} active)`);
+    });
+
     const httpServer = createServer(expressApp as Parameters<typeof createServer>[1]);
+    httpServer.once('close', stopSweeper);
     await listenHttpServer(httpServer);
     const displayHost = MCP_HOST === '0.0.0.0' ? '127.0.0.1' : MCP_HOST;
     console.error(`MindOS MCP server (HTTP) listening on http://${displayHost}:${MCP_PORT}${MCP_ENDPOINT}`);

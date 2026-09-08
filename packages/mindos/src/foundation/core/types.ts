@@ -25,6 +25,8 @@ export interface ServiceRegistration<T = any> {
   factory: ServiceFactory<T>
   lifecycle: ServiceLifecycle
   instance?: T
+  /** True once `instance` has been produced; `instance` itself may be falsy. */
+  hasInstance?: boolean
 }
 
 /**

@@ -105,6 +105,25 @@ describe('Git Operations', () => {
       }
     });
 
+    it('rejects commit refs that git would parse as options', async () => {
+      const outside = path.join(os.tmpdir(), `mindos-git-injection-${process.pid}`);
+      await fs.rm(`${outside}:test.md`, { force: true });
+      try {
+        const result = await gitShowFile(testDir, 'test.md', `--output=${outside}`);
+        expect(result.ok).toBe(false);
+        if (!result.ok) expect(result.error.message).toContain('Invalid git commit reference');
+        await expect(fs.stat(`${outside}:test.md`)).rejects.toThrow();
+      } finally {
+        await fs.rm(`${outside}:test.md`, { force: true });
+      }
+    });
+
+    it('still resolves HEAD-relative refs', async () => {
+      const result = await gitShowFile(testDir, 'test.md', 'HEAD~1');
+      expect(result.ok).toBe(true);
+      if (result.ok) expect(result.value).toBe('Initial content\n');
+    });
+
     it('should return error for invalid commit hash', async () => {
       const result = await gitShowFile(testDir, 'test.md', 'invalid-hash');
       expect(result.ok).toBe(false);

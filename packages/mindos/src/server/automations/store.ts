@@ -113,30 +113,55 @@ function withStateLock<T>(mindRoot: string, operation: () => T): T {
   const directory = resolveExistingSafe(mindRoot, STORE_DIR);
   mkdirSync(directory, { recursive: true });
   const lock = resolveExistingSafe(mindRoot, STORE_LOCK);
-  acquireDirectoryLock(lock);
+  const token = acquireDirectoryLock(lock);
   try {
     return operation();
   } finally {
-    rmSync(lock, { recursive: true, force: true });
+    releaseDirectoryLock(lock, token);
   }
 }
 
-function acquireDirectoryLock(lock: string): void {
+function acquireDirectoryLock(lock: string): string {
+  const token = crypto.randomUUID();
   for (let attempt = 0; attempt < LOCK_ATTEMPTS; attempt += 1) {
     try {
       mkdirSync(lock);
-      writeFileSync(path.join(lock, 'owner'), `${process.pid}\n${Date.now()}\n`, { encoding: 'utf-8', mode: 0o600 });
-      return;
+      writeFileSync(path.join(lock, 'owner'), `${process.pid}\n${Date.now()}\n${token}\n`, { encoding: 'utf-8', mode: 0o600 });
+      return token;
     } catch (error) {
       if (!isAlreadyExists(error)) throw error;
       if (isStaleLock(lock)) {
-        rmSync(lock, { recursive: true, force: true });
+        takeOverStaleLock(lock);
         continue;
       }
       Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, LOCK_WAIT_MS);
     }
   }
   throw new Error('Studio automation state is busy; retry shortly.');
+}
+
+// Two waiters may both judge the lock stale; the rename makes exactly one of
+// them win, so the second cannot delete the lock the first just re-created.
+function takeOverStaleLock(lock: string): void {
+  const graveyard = `${lock}.stale-${process.pid}-${Date.now().toString(36)}`;
+  try {
+    renameSync(lock, graveyard);
+  } catch {
+    return;
+  }
+  rmSync(graveyard, { recursive: true, force: true });
+}
+
+// Only the holder that wrote this token may remove the lock. Without the check
+// a holder whose lock was taken over as stale would delete the new owner's lock.
+function releaseDirectoryLock(lock: string, token: string): void {
+  try {
+    const owner = readFileSync(path.join(lock, 'owner'), 'utf-8');
+    if (!owner.split('\n').includes(token)) return;
+  } catch {
+    return;
+  }
+  rmSync(lock, { recursive: true, force: true });
 }
 
 function isStaleLock(lock: string): boolean {

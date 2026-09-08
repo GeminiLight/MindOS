@@ -4,6 +4,7 @@
  * Implements: initialize → session/new → session/prompt → session/cancel → close.
  */
 
+import { randomUUID } from 'node:crypto';
 import type {
   ClientSideConnection,
   McpServer,
@@ -55,9 +56,17 @@ export interface AcpSessionOptions extends AcpLaunchOptions {
   mcpServers?: McpServer[];
 }
 
-function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  message: string,
+  onTimeout?: () => void,
+): Promise<T> {
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(message)), timeoutMs);
+    const timer = setTimeout(() => {
+      onTimeout?.();
+      reject(new Error(message));
+    }, timeoutMs);
     promise.then(
       (value) => {
         clearTimeout(timer);
@@ -160,6 +169,33 @@ const sessionConnections = new Map<string, AcpConnection>();
 const MAX_SESSIONS_PER_AGENT = 3;
 const MAX_TOTAL_SESSIONS = 10;
 
+/**
+ * Slots reserved by createSessionFromEntry() calls that are still awaiting the
+ * agent handshake. Counted alongside `sessions` so concurrent creates cannot
+ * overshoot the limits during the async window.
+ */
+let pendingSessionTotal = 0;
+const pendingSessionsPerAgent = new Map<string, number>();
+
+function reserveSessionSlot(agentId: string): () => void {
+  pendingSessionTotal += 1;
+  pendingSessionsPerAgent.set(agentId, (pendingSessionsPerAgent.get(agentId) ?? 0) + 1);
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    pendingSessionTotal = Math.max(0, pendingSessionTotal - 1);
+    const remaining = (pendingSessionsPerAgent.get(agentId) ?? 1) - 1;
+    if (remaining <= 0) pendingSessionsPerAgent.delete(agentId);
+    else pendingSessionsPerAgent.set(agentId, remaining);
+  };
+}
+
+function newLocalSessionId(agentId: string): string {
+  // Random suffix: two creates in the same millisecond must not collide.
+  return `ses-${agentId}-${Date.now()}-${randomUUID().slice(0, 8)}`;
+}
+
 type InitializedAcpConnection = {
   conn: AcpConnection;
   agentCapabilities?: AcpAgentCapabilities;
@@ -236,8 +272,23 @@ export async function createSessionFromEntry(
   entry: AcpRegistryEntry,
   options?: AcpSessionOptions,
 ): Promise<AcpSession> {
+  // Free idle slots first so a stale session never blocks a new one, then
+  // reserve a slot synchronously before any await.
+  reapStaleSessions();
   checkSessionLimits(entry.id);
+  const releaseSlot = reserveSessionSlot(entry.id);
 
+  try {
+    return await createSessionFromEntryReserved(entry, options);
+  } finally {
+    releaseSlot();
+  }
+}
+
+async function createSessionFromEntryReserved(
+  entry: AcpRegistryEntry,
+  options?: AcpSessionOptions,
+): Promise<AcpSession> {
   const startedAt = Date.now();
   const sessionCwd = options?.cwd ?? process.cwd();
   const { conn, agentCapabilities, authMethods } = await initializeAcpConnection(entry, options, startedAt);
@@ -276,9 +327,7 @@ export async function createSessionFromEntry(
     throw new Error(`${entry.id}: session/new failed: ${msg}`);
   }
 
-  reapStaleSessions();
-
-  const sessionId = `ses-${entry.id}-${Date.now()}`;
+  const sessionId = newLocalSessionId(entry.id);
   const session: AcpSession = {
     id: sessionId,
     agentId: entry.id,
@@ -537,6 +586,7 @@ export async function prompt(
       }),
       PROMPT_TIMEOUT_MS,
       `Prompt timed out after ${PROMPT_TIMEOUT_MS / 1000}s`,
+      () => cancelAgentPromptBestEffort(conn, wireSessionId),
     );
 
     updateSessionState(session, 'idle');
@@ -602,6 +652,7 @@ export async function promptStream(
       }),
       PROMPT_TIMEOUT_MS,
       `Prompt timed out after ${PROMPT_TIMEOUT_MS / 1000}s`,
+      () => cancelAgentPromptBestEffort(conn, wireSessionId),
     );
 
     onUpdate({ sessionId, type: 'done' });
@@ -623,6 +674,19 @@ export async function promptStream(
 }
 
 /* ── Public API — Session Control ─────────────────────────────────────── */
+
+/**
+ * Ask the agent to stop the in-flight turn. Used when our own prompt timeout
+ * fires so the agent does not keep consuming tokens for a response nobody
+ * will read. Never throws.
+ */
+function cancelAgentPromptBestEffort(conn: AcpConnection, wireSessionId: string): void {
+  try {
+    void Promise.resolve(conn.connection.cancel({ sessionId: wireSessionId })).catch(() => {});
+  } catch {
+    // Best-effort cancel
+  }
+}
 
 export async function cancelPrompt(sessionId: string): Promise<void> {
   const { session, conn } = getSessionAndConn(sessionId);
@@ -1332,10 +1396,11 @@ function upsertPermissionEvent(
 /* ── Internal — Session limits ─────────────────────────────────────────── */
 
 function checkSessionLimits(agentId: string): void {
-  if (sessions.size >= MAX_TOTAL_SESSIONS) {
+  if (sessions.size + pendingSessionTotal >= MAX_TOTAL_SESSIONS) {
     throw new Error(`Maximum concurrent sessions (${MAX_TOTAL_SESSIONS}) reached. Close existing sessions first.`);
   }
-  const agentCount = [...sessions.values()].filter(s => s.agentId === agentId).length;
+  const agentCount = [...sessions.values()].filter(s => s.agentId === agentId).length
+    + (pendingSessionsPerAgent.get(agentId) ?? 0);
   if (agentCount >= MAX_SESSIONS_PER_AGENT) {
     throw new Error(`Maximum concurrent sessions for agent "${agentId}" (${MAX_SESSIONS_PER_AGENT}) reached.`);
   }
@@ -1347,15 +1412,25 @@ const STALE_SESSION_MS = 30 * 60 * 1000; // 30 minutes
 
 function reapStaleSessions(): void {
   const now = Date.now();
-  const staleIds: string[] = [];
-  for (const [id, session] of sessions) {
+  // Snapshot first: the loop mutates the Map.
+  for (const [id, session] of [...sessions]) {
     const lastActivity = new Date(session.lastActivityAt).getTime();
-    if (now - lastActivity > STALE_SESSION_MS && session.state !== 'active') {
-      staleIds.push(id);
-    }
+    if (now - lastActivity <= STALE_SESSION_MS || session.state === 'active') continue;
+    // Free the slot synchronously so a limit check that runs right after this
+    // sees it; the agent process is torn down in the background.
+    const conn = sessionConnections.get(id);
+    sessions.delete(id);
+    sessionConnections.delete(id);
+    if (conn) void teardownReapedConnection(conn, session.agentSessionId ?? id);
   }
-  // Close stale sessions outside the iteration to avoid mutating the Map mid-loop.
-  for (const id of staleIds) {
-    closeSession(id).catch(() => {});
+}
+
+async function teardownReapedConnection(conn: AcpConnection, wireSessionId: string): Promise<void> {
+  if (!conn.process.alive) return;
+  try {
+    await closeAgentSession(conn.connection, wireSessionId);
+  } catch {
+    // Best-effort — many agents don't support session/close
   }
+  killAgent(conn.process);
 }

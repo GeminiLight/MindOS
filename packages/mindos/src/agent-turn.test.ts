@@ -503,6 +503,43 @@ describe('MindOS session event contract', () => {
     expect(mindosRetryDelay(100)).toBe(10000);
   });
 
+  it('only treats 5xx numbers as transient when they read as HTTP statuses', () => {
+    // True upstream failures, in the shapes providers and fetch actually produce.
+    expect(isMindosTransientError(new Error('502 Bad Gateway'))).toBe(true);
+    expect(isMindosTransientError(new Error('503 Service Unavailable'))).toBe(true);
+    expect(isMindosTransientError(new Error('500 Internal Server Error'))).toBe(true);
+    expect(isMindosTransientError(new Error('Request failed with status 502'))).toBe(true);
+    expect(isMindosTransientError(new Error('HTTP 503 from upstream'))).toBe(true);
+    expect(isMindosTransientError(new Error('Error 529: overloaded_error'))).toBe(true);
+    expect(isMindosTransientError(new Error('status code: 504 gateway timeout'))).toBe(true);
+    expect(isMindosTransientError(new Error('upstream returned 502 bad gateway'))).toBe(true);
+    const withStatus = Object.assign(new Error('provider request failed'), { status: 503 });
+    expect(isMindosTransientError(withStatus)).toBe(true);
+    const withStatusCode = Object.assign(new Error('provider request failed'), { statusCode: 500 });
+    expect(isMindosTransientError(withStatusCode)).toBe(true);
+
+    // Numbers that merely look like 5xx must not trigger three full retries.
+    expect(isMindosTransientError(new Error('context length 512 exceeded'))).toBe(false);
+    expect(isMindosTransientError(new Error('Unexpected token at line 503'))).toBe(false);
+    expect(isMindosTransientError(new Error('Model supports at most 512 tokens per chunk'))).toBe(false);
+    expect(isMindosTransientError(new Error('Error at line 503 column 7 while parsing JSON'))).toBe(false);
+    expect(isMindosTransientError(new Error('Tool call took 500 ms'))).toBe(false);
+    expect(isMindosTransientError(new Error('Invalid model id gpt-500'))).toBe(false);
+    const withClientStatus = Object.assign(new Error('provider request failed'), { status: 400 });
+    expect(isMindosTransientError(withClientStatus)).toBe(false);
+  });
+
+  it('treats 429 as retryable with backoff in the ask turn loop but not for client turn resubmission', () => {
+    // LLM call retries are idempotent and use exponential backoff, so a rate
+    // limit is worth waiting out.
+    expect(isMindosTransientError(new Error('429 Too Many Requests'))).toBe(true);
+    expect(isMindosTransientError(Object.assign(new Error('rate limited'), { status: 429 }))).toBe(true);
+    // Resubmitting a whole turn after the server answered 429 (concurrency
+    // cap) would duplicate the turn, so the client-side classifier declines.
+    expect(isMindosRetryableError(new Error('Too many concurrent runs'), 429)).toBe(false);
+    expect(isMindosRetryableError(new Error('Bad Gateway'), 502)).toBe(true);
+  });
+
   it('detects repeated agent tool loops without Web modules', () => {
     const step = (tool: string, input = '{}') => ({ tool, input });
     expect(detectMindosAgentLoop([step('read'), step('read'), step('read')])).toBe(true);

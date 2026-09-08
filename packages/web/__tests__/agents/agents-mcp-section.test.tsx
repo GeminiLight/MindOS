@@ -146,3 +146,57 @@ describe('AgentsMcpSection server installs', () => {
     expect(mcp.refresh).toHaveBeenCalledWith({ force: true });
   });
 });
+
+describe('AgentsMcpSection reconnect and remove flows', () => {
+  it('counts per-server reconnect failures from installAgent results', async () => {
+    const mcp = makeMcp({
+      installAgent: vi.fn().mockResolvedValue(false),
+      agents: [
+        makeAgent('mindos', 'MindOS', { configuredMcpServers: [] }),
+        makeAgent('cursor', 'Cursor', { configuredMcpServers: ['github'] }),
+        makeAgent('codex', 'Codex', { configuredMcpServers: ['github'] }),
+      ],
+    });
+    const { container } = renderSection(mcp);
+    const card = serverCardOf(container, 'github');
+
+    await clickAsync(findButtonByText(card, copy.reconnectAllInServer)!);
+    await act(async () => { await Promise.resolve(); });
+
+    expect(mcp.installAgent).toHaveBeenCalledTimes(2);
+    expect(card.textContent).toContain(copy.reconnectAllDone(0, 2));
+    // installAgent already refreshes the store on success; no redundant force refresh.
+    expect(mcp.refresh).not.toHaveBeenCalled();
+  });
+
+  it('refreshes the store after removing an agent from a server', async () => {
+    const mcp = makeMcp();
+    const { container } = renderSection(mcp);
+    const card = serverCardOf(container, 'github');
+
+    click(findButtonByLabel(card, 'Remove Cursor')!);
+    const confirm = [...document.querySelectorAll<HTMLButtonElement>('[role="alertdialog"] button')]
+      .find((button) => button.textContent?.trim() === copy.removeFromServer);
+    expect(confirm).toBeTruthy();
+    await clickAsync(confirm!);
+    await act(async () => { await Promise.resolve(); });
+
+    expect(mockApiFetch).toHaveBeenCalledWith('/api/mcp/uninstall', expect.objectContaining({ method: 'POST' }));
+    expect(mcp.refresh).toHaveBeenCalledWith({ force: true });
+    expect(container.textContent).toContain(copy.removeSuccess);
+  });
+
+  it('does not force-refresh again after a single reconnect succeeds', async () => {
+    const mcp = makeMcp();
+    const { container } = renderSection(mcp);
+
+    click(findButtonByText(container, copy.tabs.byAgent)!);
+    const reconnect = [...container.querySelectorAll<HTMLButtonElement>('button')]
+      .find((button) => button.textContent?.trim() === copy.actions.reconnect);
+    expect(reconnect).toBeTruthy();
+    await clickAsync(reconnect!);
+
+    expect(mcp.installAgent).toHaveBeenCalledTimes(1);
+    expect(mcp.refresh).not.toHaveBeenCalled();
+  });
+});

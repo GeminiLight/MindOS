@@ -7,6 +7,7 @@ import { useAcpConfig } from '@/hooks/useAcpConfig';
 import type { AcpRegistryEntry } from '@/lib/acp/types';
 import { useAcpRegistry } from '@/hooks/useAcpRegistry';
 import { useAcpDetection } from '@/hooks/useAcpDetection';
+import { useTransientMessage } from '@/hooks/useTransientMessage';
 import { openAskModal } from '@/hooks/useAskModal';
 import { AgentAvatar, AgentHeadingHelp } from './AgentsPrimitives';
 
@@ -365,7 +366,7 @@ export function AcpAgentCard({ agent, installed, detectionDone, acpConfig }: {
   const [configOpen, setConfigOpen] = useState(false);
   const [editCmd, setEditCmd] = useState('');
   const [editArgs, setEditArgs] = useState('');
-  const [saveState, setSaveState] = useState<'idle' | 'saved'>('idle');
+  const [saveState, setSaveState, resetSaveStateAfter] = useTransientMessage<'idle' | 'saved'>('idle');
   const transportLabels: Record<string, string> = {
     npx: p.acpTransportNpx,
     binary: p.acpTransportBinary,
@@ -396,9 +397,9 @@ export function AcpAgentCard({ agent, installed, detectionDone, acpConfig }: {
     });
     if (ok) {
       setSaveState('saved');
-      setTimeout(() => setSaveState('idle'), 3000);
+      resetSaveStateAfter(3000);
     }
-  }, [acpConfig, agent.id, editCmd, editArgs]);
+  }, [acpConfig, agent.id, editCmd, editArgs, resetSaveStateAfter]);
 
   const handleReset = useCallback(async () => {
     await acpConfig.reset(agent.id);
@@ -553,7 +554,7 @@ export function AcpAgentCompactRow({ agent, installCmd }: {
 }) {
   const { t } = useLocale();
   const p = t.panels.agents;
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied, resetCopiedAfter] = useTransientMessage(false);
 
   const effectiveCmd = installCmd || (agent.packageName ? `npm install -g ${agent.packageName}` : null);
 
@@ -562,9 +563,9 @@ export function AcpAgentCompactRow({ agent, installCmd }: {
     if (!effectiveCmd) return;
     navigator.clipboard.writeText(effectiveCmd).then(() => {
       setCopied(true);
-      setTimeout(() => setCopied(false), 3000);
+      resetCopiedAfter(3000);
     }).catch(() => {});
-  }, [effectiveCmd]);
+  }, [effectiveCmd, resetCopiedAfter]);
 
   return (
     /* [P-3] list-row style for not-installed — clearly different from installed cards */

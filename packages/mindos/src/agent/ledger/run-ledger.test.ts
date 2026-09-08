@@ -387,6 +387,107 @@ describe('agent run ledger', () => {
     }));
   });
 
+  it('keeps the newest 1000 timeline events newest-first after a 3000-event flood', () => {
+    const run = startAgentRun({
+      agentKind: 'native-runtime',
+      runtimeId: 'codex',
+      displayName: 'Codex',
+      permissionMode: 'ask',
+      inputSummary: 'flood',
+    });
+    for (let index = 0; index < 3000; index += 1) {
+      appendAgentRunEvent(run.id, { type: 'tool_updated', category: 'tool', message: `evt-${index}` });
+    }
+
+    const events = listAgentEvents({ runId: run.id, limit: 1000 });
+    expect(events).toHaveLength(1000);
+    expect(events[0]?.message).toBe('evt-2999');
+    expect(events[999]?.message).toBe('evt-2000');
+    for (let index = 1; index < events.length; index += 1) {
+      expect(events[index - 1]!.ts).toBeGreaterThanOrEqual(events[index]!.ts);
+    }
+    expect(listAgentEvents({ runId: run.id, limit: 3 }).map((event) => event.message)).toEqual(['evt-2999', 'evt-2998', 'evt-2997']);
+    expect(listAgentEvents({ runId: run.id, type: 'run_started' })).toEqual([]);
+  });
+
+  it('does not evict another run\'s permission request under a flood of debug text deltas', () => {
+    const waiting = startAgentRun({
+      agentKind: 'native-runtime',
+      runtimeId: 'claude',
+      displayName: 'Waiting for approval',
+      chatSessionId: 'chat-waiting',
+      permissionMode: 'ask',
+      inputSummary: 'needs approval',
+    });
+    appendAgentRunEvent(waiting.id, {
+      type: 'permission_requested',
+      category: 'permission',
+      data: { kind: 'permission', action: 'Bash', status: 'requested', resource: 'rm note.md', prompt: 'Allow delete?' },
+    });
+    const noisy = startAgentRun({
+      agentKind: 'native-runtime',
+      runtimeId: 'codex',
+      displayName: 'Noisy',
+      chatSessionId: 'chat-noisy',
+      permissionMode: 'ask',
+      inputSummary: 'stream a lot',
+    });
+    for (let index = 0; index < 3000; index += 1) {
+      appendAgentRunEvent(noisy.id, {
+        type: 'text',
+        category: 'text',
+        message: `delta-${index}`,
+        data: { kind: 'text', text: `delta-${index}`, channel: 'assistant' },
+        visibility: 'debug',
+      });
+    }
+
+    expect(listAgentEvents({ runId: waiting.id, type: 'permission_requested' })).toHaveLength(1);
+    expect(listAgentEvents({ chatSessionId: 'chat-waiting' }).map((event) => event.type)).toEqual(['permission_requested', 'run_started']);
+    // Debug deltas stay listable (reattach replays them) and newest-first.
+    expect(listAgentEvents({ runId: noisy.id, category: 'text', limit: 3 }).map((event) => event.message))
+      .toEqual(['delta-2999', 'delta-2998', 'delta-2997']);
+    // A merged listing across timeline and debug events is still newest-first.
+    const merged = listAgentEvents({ limit: 1000 });
+    expect(merged).toHaveLength(1000);
+    for (let index = 1; index < merged.length; index += 1) {
+      expect(merged[index - 1]!.ts).toBeGreaterThanOrEqual(merged[index]!.ts);
+    }
+    expect(merged[0]?.message).toBe('delta-2999');
+  });
+
+  it('resolves the ledger root once per cache window while streaming events, yet honors a resolver change immediately', () => {
+    let resolves = 0;
+    setMindRootResolverForTests(() => {
+      resolves += 1;
+      return root;
+    });
+    resetAgentRunsForTest();
+    const run = startAgentRun({
+      agentKind: 'native-runtime',
+      runtimeId: 'codex',
+      displayName: 'Codex',
+      permissionMode: 'ask',
+      inputSummary: 'stream',
+    });
+    const before = resolves;
+    for (let index = 0; index < 200; index += 1) {
+      appendAgentRunEvent(run.id, { type: 'text', category: 'text', message: `delta-${index}`, visibility: 'debug' });
+    }
+    expect(resolves - before).toBe(0);
+    expect(listAgentEvents({ runId: run.id, limit: 1 }).map((event) => event.message)).toEqual(['delta-199']);
+
+    const otherRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'mindos-ledger-other-'));
+    try {
+      setMindRootResolverForTests(() => otherRoot);
+      expect(listAgentRuns({ runId: run.id })).toEqual([]);
+      setMindRootResolverForTests(() => root);
+      expect(listAgentRuns({ runId: run.id }).map((record) => record.id)).toEqual([run.id]);
+    } finally {
+      fs.rmSync(otherRoot, { recursive: true, force: true });
+    }
+  });
+
   it('inherits root, chat session, and parent run context when explicit fields are absent', () => {
     const rootRun = startAgentRun({
       agentKind: 'mindos-main',

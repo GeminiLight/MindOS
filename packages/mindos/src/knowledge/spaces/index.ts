@@ -43,7 +43,10 @@ function validateSpaceName(name: string): Result<string> {
     trimmed.includes('/') ||
     trimmed.includes('\\') ||
     trimmed === '.' ||
-    trimmed === '..'
+    trimmed === '..' ||
+    // `.git`, `.mindos`, `.obsidian` ... are infrastructure, never spaces;
+    // deleteSpace recursing into them would be catastrophic.
+    trimmed.startsWith('.')
   ) {
     return err(
       createError('VALIDATION_ERROR', 'Space name must be a single safe path segment', {

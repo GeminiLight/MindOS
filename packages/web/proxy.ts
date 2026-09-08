@@ -4,21 +4,61 @@ import { buildLoginRedirectTarget, WEB_SESSION_COOKIE_NAME } from '@/lib/auth-se
 import { readSetupPending } from '@/lib/setup-state';
 import { defaultEchoPath } from '@/lib/echo-segments';
 import { readRuntimeAuthConfig } from '@/lib/runtime-auth-config';
+import { MINDOS_SERVER_ROUTES } from '@geminilight/mindos/server';
+import { isAllowedCorsOrigin } from '@/lib/cors-origins';
 
-/** CORS headers for /api/* routes (React Native mobile app + cross-origin agents). */
-function corsHeaders(): Record<string, string> {
+/**
+ * CORS headers for /api/* routes. The request Origin is echoed only when it is
+ * on the shared local-network allowlist; other origins get no CORS headers, so
+ * a page on an arbitrary site cannot read API responses. Requests without an
+ * Origin header (curl, native mobile, MCP server) need no CORS at all.
+ */
+function corsHeaders(req: NextRequest): Record<string, string> {
+  const origin = req.headers.get('origin');
+  if (!isAllowedCorsOrigin(origin)) return {};
   return {
-    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Origin': origin,
+    'Access-Control-Allow-Credentials': 'true',
     'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With',
     'Access-Control-Max-Age': '86400',
+    Vary: 'Origin',
   };
 }
 
+/**
+ * Public API routes are derived from the core server contract so the proxy
+ * never drifts from `MINDOS_SERVER_ROUTES` (e.g. the Feishu OAuth callback,
+ * which a browser redirect reaches without any bearer token).
+ * `/api/auth` handles its own password validation and stays open for every method.
+ */
+const ALWAYS_PUBLIC_API_PATHS = new Set(['/api/auth']);
+
+/** Turn a contract path like `/api/foo/[id]/bar` into an exact-match regex. */
+function contractPathPattern(routePath: string): RegExp {
+  const source = routePath
+    .split('/')
+    .map((segment) => (/^\[.+\]$/.test(segment) ? '[^/]+' : segment.replace(/[.*+?^${}()|\\]/g, '\\$&')))
+    .join('/');
+  return new RegExp(`^${source}/?$`);
+}
+
+const PUBLIC_API_ROUTES: Array<{ method: string; pattern: RegExp }> = MINDOS_SERVER_ROUTES
+  .filter((route) => route.auth === 'public')
+  .map((route) => ({ method: route.method, pattern: contractPathPattern(route.path) }));
+
+export function isPublicApiRoute(method: string, pathname: string): boolean {
+  if (ALWAYS_PUBLIC_API_PATHS.has(pathname)) return true;
+  // HEAD is a GET without a body; health probes commonly use it.
+  const normalized = method.toUpperCase() === 'HEAD' ? 'GET' : method.toUpperCase();
+  return PUBLIC_API_ROUTES.some((route) => route.method === normalized && route.pattern.test(pathname));
+}
+
 /** Attach CORS headers to an existing response. */
-function withCors(res: NextResponse): NextResponse {
-  for (const [key, value] of Object.entries(corsHeaders())) {
-    res.headers.set(key, value);
+function withCors(res: NextResponse, req: NextRequest): NextResponse {
+  for (const [key, value] of Object.entries(corsHeaders(req))) {
+    if (key === 'Vary') res.headers.append(key, value);
+    else res.headers.set(key, value);
   }
   return res;
 }
@@ -45,39 +85,44 @@ export async function proxy(req: NextRequest) {
     return response;
   }
 
-  // --- API protection (AUTH_TOKEN) + CORS ---
+  // --- API protection (AUTH_TOKEN / WEB_PASSWORD) + CORS ---
   if (pathname.startsWith('/api/')) {
     // Handle preflight (OPTIONS) requests
     if (req.method === 'OPTIONS') {
-      return new NextResponse(null, { status: 204, headers: corsHeaders() });
+      return new NextResponse(null, { status: 204, headers: corsHeaders(req) });
     }
 
-    // /api/auth handles its own password validation — never block it.
-    // /api/health and /api/connect are unauthenticated so mobile apps can discover this instance.
-    if (pathname === '/api/auth' || pathname === '/api/health' || pathname === '/api/connect') return withCors(NextResponse.next());
+    // Contract-declared public routes (health/connect discovery, OAuth callback,
+    // /api/auth password validation) never require credentials.
+    if (isPublicApiRoute(req.method, pathname)) return withCors(NextResponse.next(), req);
 
-    if (!authToken) return withCors(NextResponse.next());
+    // Open mode only when NEITHER a bearer token NOR a Web password exists. A
+    // Web password alone must still gate the API, otherwise the login wall on
+    // the UI is decorative.
+    if (!authToken && !webPassword) return withCors(NextResponse.next(), req);
 
     // Exempt authenticated web UI sessions (valid JWT cookie = logged-in browser user)
     if (webPassword) {
       const token = req.cookies.get(WEB_SESSION_COOKIE_NAME)?.value ?? '';
-      if (token && await verifyJwt(token, webSessionSecret)) return withCors(NextResponse.next());
+      if (token && await verifyJwt(token, webSessionSecret)) return withCors(NextResponse.next(), req);
     }
 
-    // Preserve the open-browser-UI contract only when the UI has no password.
-    // When a Web password exists, Sec-Fetch-Site alone is not an auth signal:
-    // non-browser HTTP clients can send the same header value.
-    if (!webPassword && req.headers.get('sec-fetch-site') === 'same-origin') {
-      return withCors(NextResponse.next());
+    if (authToken) {
+      // Preserve the open-browser-UI contract only when the UI has no password.
+      // When a Web password exists, Sec-Fetch-Site alone is not an auth signal:
+      // non-browser HTTP clients can send the same header value.
+      if (!webPassword && req.headers.get('sec-fetch-site') === 'same-origin') {
+        return withCors(NextResponse.next(), req);
+      }
+
+      // External / cross-origin requests must provide a bearer token
+      const header = req.headers.get('authorization') ?? '';
+      const bearer = header.startsWith('Bearer ') ? header.slice(7) : '';
+      if (bearer === authToken) return withCors(NextResponse.next(), req);
     }
 
-    // External / cross-origin requests must provide a bearer token
-    const header = req.headers.get('authorization') ?? '';
-    const bearer = header.startsWith('Bearer ') ? header.slice(7) : '';
-    if (bearer !== authToken) {
-      return withCors(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }));
-    }
-    return withCors(NextResponse.next());
+    // Web password without a valid session, or bearer mismatch.
+    return withCors(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }), req);
   }
 
   // --- Entry redirects (/ and /echo) ---

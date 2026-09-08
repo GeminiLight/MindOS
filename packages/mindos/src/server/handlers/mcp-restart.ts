@@ -2,6 +2,7 @@ import { execFileSync, spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { resolve } from 'node:path';
+import { resolveMcpBindHost } from '../../protocols/mcp-server/http-security.js';
 import { errorResponse, json, type MindosServerResponse } from '../response.js';
 
 export type MindosMcpRestartSettings = {
@@ -70,7 +71,8 @@ export async function handleMcpRestartPost(
       ...env,
       MCP_TRANSPORT: 'http',
       MCP_PORT: String(mcpPort),
-      MCP_HOST: env.MCP_HOST || '0.0.0.0',
+      // Unauthenticated MCP must stay on loopback; MCP_HOST only widens the bind with a token.
+      MCP_HOST: resolveMcpBindHost(env.MCP_HOST, authToken).host,
       MINDOS_URL: env.MINDOS_URL || `http://127.0.0.1:${webPort}`,
       ...(authToken ? { AUTH_TOKEN: authToken } : {}),
     };

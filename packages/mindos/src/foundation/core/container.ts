@@ -62,8 +62,9 @@ export class DIContainer implements Container {
       )
     }
 
-    // Return existing singleton instance
-    if (registration.lifecycle === 'singleton' && registration.instance) {
+    // Return existing singleton instance (a factory may legitimately return a
+    // falsy value such as 0 or '', so check presence, not truthiness)
+    if (registration.lifecycle === 'singleton' && registration.hasInstance) {
       return registration.instance as T
     }
 
@@ -89,6 +90,7 @@ export class DIContainer implements Container {
     // Store singleton instance
     if (registration.lifecycle === 'singleton') {
       registration.instance = instance
+      registration.hasInstance = true
     }
 
     // Store scoped instance
@@ -109,8 +111,9 @@ export class DIContainer implements Container {
       )
     }
 
-    // Return existing singleton instance
-    if (registration.lifecycle === 'singleton' && registration.instance) {
+    // Return existing singleton instance (a factory may legitimately return a
+    // falsy value such as 0 or '', so check presence, not truthiness)
+    if (registration.lifecycle === 'singleton' && registration.hasInstance) {
       return registration.instance as T
     }
 
@@ -128,6 +131,7 @@ export class DIContainer implements Container {
     // Store singleton instance
     if (registration.lifecycle === 'singleton') {
       registration.instance = instance
+      registration.hasInstance = true
     }
 
     // Store scoped instance

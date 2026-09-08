@@ -19,4 +19,13 @@ describe('mobile drawer accessibility contract', () => {
     expect(source).toContain('aria-hidden={mobileOpen || undefined}');
     expect(source).toContain('inert={mobileOpen ? true : undefined}');
   });
+
+  it('does not mount the drawer file tree on desktop viewports', () => {
+    const source = readSource('components/SidebarLayout.tsx');
+
+    // Desktop renders already mount the Files panel tree; a second always-on
+    // copy in the hidden drawer doubled hooks, polling and DOM.
+    expect(source).toContain('const mountMobileDrawerTree = mobileOpen || (viewportWidth > 0 && viewportWidth < MOBILE_DRAWER_BREAKPOINT_PX);');
+    expect(source).toMatch(/\{mountMobileDrawerTree && \(\s*<MindFileTreeSections/);
+  });
 });

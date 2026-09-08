@@ -1,6 +1,7 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'fs';
 import { mkTempMindRoot, cleanupMindRoot, seedFile } from '../core/helpers';
+import { collectAllFiles } from '@/lib/core/tree';
 import {
   findOrphans,
   findStaleFiles,
@@ -9,6 +10,16 @@ import {
   computeHealthScore,
   runLint,
 } from '@/lib/lint';
+
+// Passthrough spy: lint.ts and core/link-index.ts both import collectAllFiles
+// from this module, so the call count covers every recursive walk of mindRoot.
+vi.mock('@/lib/core/tree', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/core/tree')>();
+  return {
+    ...actual,
+    collectAllFiles: vi.fn(actual.collectAllFiles),
+  };
+});
 
 describe('lint', () => {
   let mindRoot: string;
@@ -252,6 +263,60 @@ describe('lint', () => {
       expect(report.scope).toBe('NonExistent');
       expect(report.stats.totalFiles).toBe(0);
       expect(report.healthScore).toBe(100);
+    });
+
+    it('walks the knowledge base exactly once per report', () => {
+      seedFile(mindRoot, 'Projects/index.md', '# Index\n\nSee [[todo]] and [[missing]]');
+      seedFile(mindRoot, 'Projects/todo.md', '# Project TODO with enough words to pass the empty threshold');
+      seedFile(mindRoot, 'Notes/random.md', '# Random note');
+      seedFile(mindRoot, 'Notes/data.csv', 'a,b');
+      vi.mocked(collectAllFiles).mockClear();
+
+      runLint(mindRoot);
+      expect(collectAllFiles).toHaveBeenCalledTimes(1);
+
+      vi.mocked(collectAllFiles).mockClear();
+      runLint(mindRoot, 'Projects');
+      expect(collectAllFiles).toHaveBeenCalledTimes(1);
+    });
+
+    it('reads each lintable file at most once per report', () => {
+      seedFile(mindRoot, 'a.md', '# A\n\nLinks to [[b]] and [[nowhere]] with plenty of body text here.');
+      seedFile(mindRoot, 'b.md', '# B');
+      seedFile(mindRoot, 'table.csv', 'x,y');
+      const readSpy = vi.spyOn(fs, 'readFileSync');
+
+      const report = runLint(mindRoot);
+
+      const roots = [mindRoot, fs.realpathSync(mindRoot)];
+      const lintReads = readSpy.mock.calls
+        .map((call) => String(call[0]))
+        .filter((target) => roots.some((root) => target.startsWith(root)) && /\.(md|csv)$/.test(target));
+      readSpy.mockRestore();
+      expect(new Set(lintReads).size).toBe(lintReads.length);
+      expect(lintReads.length).toBe(3);
+      expect(report.brokenLinks.map((entry) => entry.target)).toEqual(['nowhere']);
+      expect(report.empty).toContain('b.md');
+      expect(report.orphans.map((entry) => entry.path)).toEqual(['a.md']);
+    });
+
+    it('produces the same report as the standalone checks', () => {
+      seedFile(mindRoot, 'Space/hub.md', '# Hub\n\n[[leaf]] and [[ghost]] and [text](./leaf.md) plus more filler words.');
+      seedFile(mindRoot, 'Space/leaf.md', '# Leaf');
+      seedFile(mindRoot, 'Space/INSTRUCTION.md', 'system file');
+      seedFile(mindRoot, 'Other/alone.md', 'short');
+      const stale = fs.realpathSync(`${mindRoot}/Other/alone.md`);
+      const past = new Date();
+      past.setDate(past.getDate() - 120);
+      fs.utimesSync(stale, past, past);
+
+      for (const space of [undefined, 'Space', 'Other']) {
+        const report = runLint(mindRoot, space);
+        expect(report.orphans).toEqual(findOrphans(mindRoot, space));
+        expect(report.stale).toEqual(findStaleFiles(mindRoot, 90, space));
+        expect(report.brokenLinks).toEqual(findBrokenLinks(mindRoot, space));
+        expect(report.empty).toEqual(findEmptyFiles(mindRoot, space));
+      }
     });
   });
 });

@@ -3,23 +3,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { signJwt } from '@/lib/jwt';
 import { WEB_SESSION_COOKIE_NAME, WEB_SESSION_MAX_AGE_SECONDS } from '@/lib/auth-session';
 import { readRuntimeAuthConfig } from '@/lib/runtime-auth-config';
+import { isAllowedCorsOrigin } from '@/lib/cors-origins';
+import { authRateLimiter, clientIpFromHeaders, passwordsMatch } from '@/lib/api/auth-guard';
 
-// Allowed CORS origins for cross-origin auth (Capacitor, Electron remote).
-// Localhost variants are always allowed; custom origins can be added here.
-const ALLOWED_ORIGIN_PATTERNS = [
-  /^https?:\/\/localhost(:\d+)?$/,
-  /^https?:\/\/127\.0\.0\.1(:\d+)?$/,
-  /^https?:\/\/\[::1\](:\d+)?$/,
-  /^https?:\/\/10\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d+)?$/,
-  /^https?:\/\/172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}(:\d+)?$/,
-  /^https?:\/\/192\.168\.\d{1,3}\.\d{1,3}(:\d+)?$/,
-  /^capacitor:\/\//,
-  /^file:\/\//,
-];
-
-function isAllowedOrigin(origin: string): boolean {
-  return ALLOWED_ORIGIN_PATTERNS.some((p) => p.test(origin));
-}
+// Allowed CORS origins for cross-origin auth (Capacitor, Electron remote) are
+// shared with the request proxy via lib/cors-origins.ts.
+const isAllowedOrigin = isAllowedCorsOrigin;
 
 /** CORS headers — validate origin against allowlist */
 function getAuthCors(req: NextRequest): Record<string, string> {
@@ -55,12 +44,27 @@ export async function POST(req: NextRequest) {
   const { webPassword, webSessionSecret } = readRuntimeAuthConfig();
   if (!webPassword) return withCors(NextResponse.json({ ok: false }, { status: 401 }), req);
 
+  // Brute-force brake: after repeated failures a client is locked out with
+  // exponential backoff. Checked before the body is parsed so a locked client
+  // costs nothing beyond a map lookup.
+  const clientKey = clientIpFromHeaders(req.headers);
+  const gate = authRateLimiter.check(clientKey);
+  if (!gate.allowed) {
+    const limited = NextResponse.json({ ok: false, error: 'Too many failed login attempts' }, { status: 429 });
+    limited.headers.set('Retry-After', String(gate.retryAfterSeconds));
+    return withCors(limited, req);
+  }
+
   const body = await req.json().catch(() => null);
   if (!body || typeof body !== 'object') {
     return withCors(NextResponse.json({ error: 'Invalid request body' }, { status: 400 }), req);
   }
-  const { password } = body as { password?: string };
-  if (password !== webPassword) return withCors(NextResponse.json({ ok: false }, { status: 401 }), req);
+  const { password } = body as { password?: unknown };
+  if (!passwordsMatch(password, webPassword)) {
+    authRateLimiter.recordFailure(clientKey);
+    return withCors(NextResponse.json({ ok: false }, { status: 401 }), req);
+  }
+  authRateLimiter.reset(clientKey);
 
   const token = await signJwt(
     { sub: 'user', exp: Math.floor(Date.now() / 1000) + WEB_SESSION_MAX_AGE_SECONDS },

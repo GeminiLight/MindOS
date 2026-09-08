@@ -17,7 +17,6 @@ import {
 import { createHash } from 'crypto';
 import { createGunzip } from 'zlib';
 import https from 'https';
-import http from 'http';
 import type { ClientRequest, IncomingMessage } from 'http';
 import semver from 'semver';
 import { analyzeMindOsLayout } from './mindos-runtime-layout';
@@ -63,6 +62,15 @@ export interface CoreUpdateProgress {
 // ── Helpers ──
 
 /**
+ * Only canonical `https://` URLs may be fetched. The manifest is the trust
+ * root for the tarball sha256, and the tarball itself is executed code, so a
+ * plain-http hop anywhere in the chain would let a network attacker swap both.
+ */
+function isHttpsUrl(url: unknown): url is string {
+  return typeof url === 'string' && url.startsWith('https://');
+}
+
+/**
  * Resolve an HTTP redirect Location against the current URL.
  * Rejects unbounded chains and any downgrade away from https — the manifest
  * fetched through this layer is the trust root for tarball sha256 integrity.
@@ -85,9 +93,9 @@ function resolveRedirectTarget(baseUrl: string, location: string | string[] | un
 function fetchUrl(url: string, timeoutMs: number, signal?: AbortSignal, redirectsLeft = MAX_REDIRECTS): Promise<string> {
   return new Promise((resolve, reject) => {
     if (signal?.aborted) return reject(new Error('aborted'));
+    if (!isHttpsUrl(url)) return reject(new Error(`Refusing non-https URL: ${url}`));
 
-    const transport = url.startsWith('https') ? https : http;
-    const req = transport.get(url, { timeout: timeoutMs }, (res) => {
+    const req = https.get(url, { timeout: timeoutMs }, (res) => {
       if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400) {
         // Follow redirect
         res.resume();
@@ -189,10 +197,14 @@ function downloadFile(
       if (signal.aborted) { settled = true; return reject(new Error('aborted')); }
 
       const { url, redirectsLeft } = urlQueue[urlIdx++];
-      const transport = url.startsWith('https') ? https : http;
+      if (!isHttpsUrl(url)) {
+        // Treat like any other failed mirror: record, then try the next URL.
+        retryAfterAttemptFailure(url, new Error(`Refusing non-https download URL: ${url}`));
+        return;
+      }
 
       let req: ClientRequest;
-      req = transport.get(url, { timeout: URL_TIMEOUT }, (res) => {
+      req = https.get(url, { timeout: URL_TIMEOUT }, (res) => {
         activeRes = res;
         if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400) {
           // Follow redirect — a refused/overlong redirect counts as this
@@ -573,10 +585,62 @@ function renameWithRetrySync(
 }
 export { renameWithRetrySync as _renameWithRetrySync_forTest };
 
+export interface CoreDownloadRequest {
+  urls: string[];
+  version: string;
+  size: number;
+  sha256: string;
+}
+
+/**
+ * Turn a renderer `download-core-update` invocation into a download request.
+ *
+ * The renderer only names the version it wants; urls, size and sha256 come from
+ * the manifest cached by the last `check()` in the main process. Trusting a
+ * renderer-supplied url/hash pair would let a compromised page point the
+ * updater at any tarball and supply a matching hash for it.
+ *
+ * Accepts the new `(version)` shape and the legacy `(urls, version, size,
+ * sha256)` shape; in the legacy shape everything except `version` is ignored.
+ */
+export function resolveCoreDownloadRequest(
+  args: readonly unknown[],
+  lastCheck: CoreUpdateInfo | null,
+): CoreDownloadRequest {
+  const requested = args.length >= 2 && Array.isArray(args[0]) ? args[1] : args[0];
+  if (typeof requested !== 'string' || !requested.trim() || requested !== requested.trim()) {
+    throw new Error('Invalid core update version');
+  }
+  if (!lastCheck) throw new Error('No core update check has completed yet — run check() first');
+  if (!lastCheck.available) throw new Error('No core update is available');
+  if (lastCheck.latestVersion !== requested) {
+    throw new Error(`Core version ${requested} was not offered by the last update check (${lastCheck.latestVersion || 'none'})`);
+  }
+  if (!Array.isArray(lastCheck.urls) || lastCheck.urls.length === 0) {
+    throw new Error('Update manifest has no download URLs');
+  }
+  if (!lastCheck.urls.every(isHttpsUrl)) {
+    throw new Error('Update manifest contains a non-https download URL');
+  }
+  if (typeof lastCheck.sha256 !== 'string' || !/^[a-f0-9]{64}$/i.test(lastCheck.sha256)) {
+    throw new Error('Update manifest has an invalid SHA-256');
+  }
+  if (typeof lastCheck.size !== 'number' || !Number.isFinite(lastCheck.size) || lastCheck.size <= 0) {
+    throw new Error('Update manifest has an invalid size');
+  }
+  return { urls: [...lastCheck.urls], version: requested, size: lastCheck.size, sha256: lastCheck.sha256 };
+}
+
 // ── CoreUpdater ──
 
 export class CoreUpdater extends EventEmitter {
   private abortController: AbortController | null = null;
+  /** Result of the most recent check(); the only source of truth for download urls/sha256. */
+  private lastCheck: CoreUpdateInfo | null = null;
+
+  getLastCheck(): CoreUpdateInfo | null {
+    return this.lastCheck;
+  }
 
   /**
    * Check for available Core updates.
@@ -607,7 +671,7 @@ export class CoreUpdater extends EventEmitter {
       semver.gt(latestVersion, currentVersion)
     );
 
-    return {
+    const info: CoreUpdateInfo = {
       available,
       currentVersion,
       latestVersion,
@@ -617,6 +681,8 @@ export class CoreUpdater extends EventEmitter {
       minDesktopVersion: minDesktop,
       desktopTooOld: !!(semver.valid(minDesktop) && semver.gt(minDesktop, app.getVersion())),
     };
+    this.lastCheck = info;
+    return info;
   }
 
   /**

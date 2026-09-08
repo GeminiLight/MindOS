@@ -56,47 +56,61 @@ export default function AgentsContentChannelDetail({ platformId }: { platformId:
   const [activities, setActivities] = useState<IMActivity[]>(cachedActivity.data);
   const [refreshing, setRefreshing] = useState(false);
   const mountedRef = useRef(true);
+  // Monotonic request generation: an older in-flight fetch must never overwrite
+  // state written by a newer one (e.g. the fresh reload after a disconnect).
+  const requestGenerationRef = useRef(0);
 
   const fetchDetail = useCallback(async (background = false) => {
-    if (!background) setLoadState('loading');
-    else setRefreshing(true);
+    const generation = ++requestGenerationRef.current;
+    const isCurrent = () => mountedRef.current && requestGenerationRef.current === generation;
+    if (!background) {
+      setLoadState('loading');
+      setRefreshing(false);
+    } else {
+      setRefreshing(true);
+    }
     try {
+      // Status goes through a direct fetch (not the shared de-duplicated
+      // loader) so a post-mutation reload never reuses a stale in-flight request.
       const [statusRes, activityRes] = await Promise.all([
         fetch('/api/im/status'),
         fetch(`/api/im/activity?platform=${platformId}&limit=5`),
       ]);
-      if (!mountedRef.current) return;
-      if (!statusRes.ok || !activityRes.ok) { if (!background) setLoadState('error'); return; }
+      if (!statusRes.ok) throw new Error(`Channel status load failed (${statusRes.status})`);
+      if (!activityRes.ok) throw new Error(`Channel activity load failed (${activityRes.status})`);
 
       const statusData = await statusRes.json();
       const activityData = await activityRes.json();
       const platforms: PlatformStatus[] = statusData.platforms ?? [];
       const nextActivities: IMActivity[] = activityData.activities ?? [];
 
-      // Update cache
+      if (!isCurrent()) return;
+      // Update cache only with the newest snapshot so a stale response cannot
+      // roll the shared cache backwards either.
       setCachedStatuses(platforms);
       setCachedActivities(platformId, nextActivities);
-
-      if (!mountedRef.current) return;
       setStatus(platforms.find(p => p.platform === platformId) ?? null);
       setActivities(nextActivities);
       setLoadState('ready');
     } catch {
-      if (!background && mountedRef.current) setLoadState('error');
+      if (!background && isCurrent()) setLoadState('error');
+    } finally {
+      if (isCurrent()) setRefreshing(false);
     }
-    if (mountedRef.current) setRefreshing(false);
   }, [platformId]);
 
   useEffect(() => {
     mountedRef.current = true;
-    // If we have cached data, do a background revalidation
-    if (hasCachedData && cachedStatus.stale) {
+    // Stale-while-revalidate: the shared status cache (5 min) and the
+    // per-platform activity cache (15 s) age independently, so revalidate when
+    // either half is stale or never loaded.
+    if (hasCachedData && (cachedStatus.stale || cachedActivity.stale)) {
       fetchDetail(true);
     } else if (!hasCachedData) {
       fetchDetail(false);
     }
     return () => { mountedRef.current = false; };
-  }, [fetchDetail, hasCachedData, cachedStatus.stale]);
+  }, [fetchDetail, hasCachedData, cachedStatus.stale, cachedActivity.stale]);
 
   if (!platform) {
     return (

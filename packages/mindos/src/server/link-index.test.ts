@@ -45,6 +45,49 @@ describe('server link index cache', () => {
     expect(services.readTextFile.mock.calls.length).toBe(readsAfterFirst);
   });
 
+  it('re-reads only files whose stats changed when the file list is stable', () => {
+    const library: Library = new Map([
+      ['source.md', 'Links to [[target]].'],
+      ['other.md', 'Nothing here.'],
+      ['Space/target.md', '# Target'],
+    ]);
+    const stats = new Map<string, { mtime: number; size: number }>([
+      ['source.md', { mtime: 1, size: 20 }],
+      ['other.md', { mtime: 1, size: 13 }],
+      ['Space/target.md', { mtime: 1, size: 8 }],
+    ]);
+    let version = 1;
+    const services = {
+      ...createServices(library, { getTreeVersion: () => version }),
+      collectFileStats: () => [...stats.entries()].map(([path, stat]) => ({ path, ...stat })),
+    };
+
+    expect(handleBacklinks(new URLSearchParams('path=Space/target.md'), services).body).toHaveLength(1);
+    expect(services.readTextFile).toHaveBeenCalledTimes(3);
+
+    // Edit one file: only that file is re-read.
+    library.set('other.md', 'Now also links to [[target]].');
+    stats.set('other.md', { mtime: 2, size: 30 });
+    version += 1;
+    services.readTextFile.mockClear();
+    expect(handleBacklinks(new URLSearchParams('path=Space/target.md'), services).body).toHaveLength(2);
+    expect(services.readTextFile.mock.calls.map((call) => call[0])).toEqual(['other.md']);
+
+    // Version bump without content changes: no reads at all.
+    version += 1;
+    services.readTextFile.mockClear();
+    expect(handleBacklinks(new URLSearchParams('path=Space/target.md'), services).body).toHaveLength(2);
+    expect(services.readTextFile).not.toHaveBeenCalled();
+
+    // Adding a file changes link resolution, so everything is rescanned.
+    library.set('Space/new.md', '# New');
+    stats.set('Space/new.md', { mtime: 3, size: 5 });
+    version += 1;
+    services.readTextFile.mockClear();
+    handleBacklinks(new URLSearchParams('path=Space/target.md'), services);
+    expect(services.readTextFile).toHaveBeenCalledTimes(4);
+  });
+
   it('rebuilds the index when the tree version changes', () => {
     const library: Library = new Map([
       ['source.md', 'No links yet.'],

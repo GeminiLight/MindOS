@@ -3,7 +3,7 @@ import path from 'path';
 import { collectAllFiles } from './core/tree';
 import { readFile } from './core/fs-ops';
 import { resolveExistingSafe } from './core/security';
-import { LinkIndex } from './core/link-index';
+import { extractLinks } from './core/link-index';
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -62,6 +62,54 @@ const WIKI_LINK_RE = /\[\[([^\]|#]+)(?:[|#][^\]]*)?/g;
 // Markdown links: [text](relative/path.md)
 const MD_LINK_RE = /\[[^\]]+\]\(([^)]+\.md)(?:#[^)]*)?\)/g;
 
+// ── Shared per-run context ─────────────────────────────────────────
+
+/**
+ * One lint run shares a single recursive walk of mindRoot and reads every
+ * file at most once. Each check used to walk (and, for links, re-read) the
+ * whole knowledge base independently, so a `/api/lint` request cost five
+ * walks plus two full markdown reads.
+ */
+interface LintContext {
+  mindRoot: string;
+  /** Every file collectAllFiles() reports for mindRoot (one walk). */
+  allFiles: string[];
+  /** allFiles narrowed to the requested space, or allFiles when unscoped. */
+  scopedFiles: string[];
+  /** Read a file at most once; null when it cannot be read. */
+  readContent(filePath: string): string | null;
+  /** Stat a file at most once; null when it cannot be stat'ed. */
+  statOf(filePath: string): fs.Stats | null;
+}
+
+function createLintContext(mindRoot: string, space?: string): LintContext {
+  const allFiles = collectAllFiles(mindRoot);
+  const scopedFiles = filterBySpace(allFiles, space);
+  const contents = new Map<string, string | null>();
+  const stats = new Map<string, fs.Stats | null>();
+  return {
+    mindRoot,
+    allFiles,
+    scopedFiles,
+    readContent(filePath) {
+      const cached = contents.get(filePath);
+      if (cached !== undefined) return cached;
+      let content: string | null;
+      try { content = readFile(mindRoot, filePath); } catch { content = null; }
+      contents.set(filePath, content);
+      return content;
+    },
+    statOf(filePath) {
+      const cached = stats.get(filePath);
+      if (cached !== undefined) return cached;
+      let stat: fs.Stats | null;
+      try { stat = fs.statSync(resolveExistingSafe(mindRoot, filePath)); } catch { stat = null; }
+      stats.set(filePath, stat);
+      return stat;
+    },
+  };
+}
+
 // ── Core Analysis Functions ────────────────────────────────────────
 
 /**
@@ -69,20 +117,98 @@ const MD_LINK_RE = /\[[^\]]+\]\(([^)]+\.md)(?:#[^)]*)?\)/g;
  * System files (README.md, INSTRUCTION.md, etc.) are excluded.
  */
 export function findOrphans(mindRoot: string, space?: string): OrphanEntry[] {
-  const allFiles = getFilteredFiles(mindRoot, space);
-  const mdFiles = allFiles.filter(f => f.endsWith('.md'));
+  return collectOrphans(createLintContext(mindRoot, space));
+}
 
+/**
+ * Find files not modified within the threshold (in days).
+ * Only checks .md and .csv files.
+ */
+export function findStaleFiles(mindRoot: string, thresholdDays: number, space?: string): StaleEntry[] {
+  return collectStaleFiles(createLintContext(mindRoot, space), thresholdDays);
+}
+
+/**
+ * Find broken links — wikilinks or markdown links pointing to non-existent files.
+ */
+export function findBrokenLinks(mindRoot: string, space?: string): BrokenLinkEntry[] {
+  return collectBrokenLinks(createLintContext(mindRoot, space));
+}
+
+/**
+ * Find files with content shorter than the empty threshold (50 chars).
+ * Only checks .md and .csv files.
+ */
+export function findEmptyFiles(mindRoot: string, space?: string): string[] {
+  return collectEmptyFiles(createLintContext(mindRoot, space));
+}
+
+/**
+ * Compute a health score (0–100) from lint stats.
+ *
+ * Penalty weights:
+ * - orphan: -2 each (cap -30)
+ * - stale: -1 each (cap -20)
+ * - broken link: -3 each (cap -30)
+ * - empty: -1 each (cap -20)
+ */
+export function computeHealthScore(stats: LintStats): number {
+  const orphanPenalty = Math.min(stats.orphanFiles * 2, 30);
+  const stalePenalty = Math.min(stats.staleFiles * 1, 20);
+  const brokenPenalty = Math.min(stats.brokenLinks * 3, 30);
+  const emptyPenalty = Math.min(stats.emptyFiles * 1, 20);
+
+  return Math.max(0, 100 - orphanPenalty - stalePenalty - brokenPenalty - emptyPenalty);
+}
+
+// ── Integration ────────────────────────────────────────────────────
+
+/**
+ * Run a full lint analysis on the knowledge base.
+ * @param mindRoot  Absolute path to the knowledge base root
+ * @param space     Optional space name to scope the analysis
+ */
+export function runLint(mindRoot: string, space?: string): LintReport {
+  const ctx = createLintContext(mindRoot, space);
+  const orphans = collectOrphans(ctx);
+  const stale = collectStaleFiles(ctx, 90);
+  const brokenLinks = collectBrokenLinks(ctx);
+  const empty = collectEmptyFiles(ctx);
+
+  const stats: LintStats = {
+    totalFiles: ctx.scopedFiles.length,
+    orphanFiles: orphans.length,
+    staleFiles: stale.length,
+    emptyFiles: empty.length,
+    brokenLinks: brokenLinks.length,
+  };
+
+  return {
+    timestamp: new Date().toISOString(),
+    scope: space ?? 'all',
+    stats,
+    healthScore: computeHealthScore(stats),
+    orphans,
+    stale,
+    brokenLinks,
+    empty,
+  };
+}
+
+// ── Context-based checks ───────────────────────────────────────────
+
+function collectOrphans(ctx: LintContext): OrphanEntry[] {
+  const mdFiles = ctx.scopedFiles.filter(f => f.endsWith('.md'));
   if (mdFiles.length === 0) return [];
 
-  const linkIndex = buildLinkIndexForLint(mindRoot);
+  const backlinks = buildBacklinks(ctx);
 
   const orphans: OrphanEntry[] = [];
   for (const filePath of mdFiles) {
     if (isWhitelisted(filePath)) continue;
 
-    const backlinks = linkIndex.getBacklinks(filePath);
-    if (backlinks.length === 0) {
-      const stat = safeStat(mindRoot, filePath);
+    if ((backlinks.get(filePath)?.size ?? 0) === 0) {
+      const stat = ctx.statOf(filePath);
       orphans.push({
         path: filePath,
         lastModified: stat ? stat.mtime.toISOString() : new Date().toISOString(),
@@ -93,20 +219,15 @@ export function findOrphans(mindRoot: string, space?: string): OrphanEntry[] {
   return orphans;
 }
 
-/**
- * Find files not modified within the threshold (in days).
- * Only checks .md and .csv files.
- */
-export function findStaleFiles(mindRoot: string, thresholdDays: number, space?: string): StaleEntry[] {
-  const allFiles = getFilteredFiles(mindRoot, space);
-  const lintableFiles = allFiles.filter(f => LINT_EXTENSIONS.has(path.extname(f).toLowerCase()));
+function collectStaleFiles(ctx: LintContext, thresholdDays: number): StaleEntry[] {
+  const lintableFiles = ctx.scopedFiles.filter(f => LINT_EXTENSIONS.has(path.extname(f).toLowerCase()));
 
   const now = Date.now();
   const thresholdMs = thresholdDays * 24 * 60 * 60 * 1000;
   const stale: StaleEntry[] = [];
 
   for (const filePath of lintableFiles) {
-    const stat = safeStat(mindRoot, filePath);
+    const stat = ctx.statOf(filePath);
     if (!stat) continue;
 
     const age = now - stat.mtimeMs;
@@ -122,22 +243,16 @@ export function findStaleFiles(mindRoot: string, thresholdDays: number, space?: 
   return stale;
 }
 
-/**
- * Find broken links — wikilinks or markdown links pointing to non-existent files.
- */
-export function findBrokenLinks(mindRoot: string, space?: string): BrokenLinkEntry[] {
-  const allMdFiles = collectAllFiles(mindRoot).filter(f => f.endsWith('.md'));
-  const fileSet = new Set(allMdFiles);
-
-  const filesToScan = space
-    ? allMdFiles.filter(f => f.startsWith(space + '/') || f.startsWith(space + path.sep))
-    : allMdFiles;
+function collectBrokenLinks(ctx: LintContext): BrokenLinkEntry[] {
+  // Link targets may live outside the scoped space, so resolve against all files.
+  const fileSet = new Set(ctx.allFiles.filter(f => f.endsWith('.md')));
+  const filesToScan = ctx.scopedFiles.filter(f => f.endsWith('.md'));
 
   const broken: BrokenLinkEntry[] = [];
 
   for (const filePath of filesToScan) {
-    let content: string;
-    try { content = readFile(mindRoot, filePath); } catch { continue; }
+    const content = ctx.readContent(filePath);
+    if (content === null) continue;
 
     if (isBinaryContent(content)) continue;
 
@@ -179,85 +294,24 @@ export function findBrokenLinks(mindRoot: string, space?: string): BrokenLinkEnt
   return broken;
 }
 
-/**
- * Find files with content shorter than the empty threshold (50 chars).
- * Only checks .md and .csv files.
- */
-export function findEmptyFiles(mindRoot: string, space?: string): string[] {
-  const allFiles = getFilteredFiles(mindRoot, space);
-  const lintableFiles = allFiles.filter(f => LINT_EXTENSIONS.has(path.extname(f).toLowerCase()));
+function collectEmptyFiles(ctx: LintContext): string[] {
+  const lintableFiles = ctx.scopedFiles.filter(f => LINT_EXTENSIONS.has(path.extname(f).toLowerCase()));
 
   const empty: string[] = [];
   for (const filePath of lintableFiles) {
-    try {
-      const content = readFile(mindRoot, filePath);
-      if (content.trim().length < EMPTY_THRESHOLD) {
-        empty.push(filePath);
-      }
-    } catch {
-      continue;
+    const content = ctx.readContent(filePath);
+    if (content === null) continue;
+    if (content.trim().length < EMPTY_THRESHOLD) {
+      empty.push(filePath);
     }
   }
 
   return empty;
 }
 
-/**
- * Compute a health score (0–100) from lint stats.
- *
- * Penalty weights:
- * - orphan: -2 each (cap -30)
- * - stale: -1 each (cap -20)
- * - broken link: -3 each (cap -30)
- * - empty: -1 each (cap -20)
- */
-export function computeHealthScore(stats: LintStats): number {
-  const orphanPenalty = Math.min(stats.orphanFiles * 2, 30);
-  const stalePenalty = Math.min(stats.staleFiles * 1, 20);
-  const brokenPenalty = Math.min(stats.brokenLinks * 3, 30);
-  const emptyPenalty = Math.min(stats.emptyFiles * 1, 20);
-
-  return Math.max(0, 100 - orphanPenalty - stalePenalty - brokenPenalty - emptyPenalty);
-}
-
-// ── Integration ────────────────────────────────────────────────────
-
-/**
- * Run a full lint analysis on the knowledge base.
- * @param mindRoot  Absolute path to the knowledge base root
- * @param space     Optional space name to scope the analysis
- */
-export function runLint(mindRoot: string, space?: string): LintReport {
-  const allFiles = getFilteredFiles(mindRoot, space);
-  const orphans = findOrphans(mindRoot, space);
-  const stale = findStaleFiles(mindRoot, 90, space);
-  const brokenLinks = findBrokenLinks(mindRoot, space);
-  const empty = findEmptyFiles(mindRoot, space);
-
-  const stats: LintStats = {
-    totalFiles: allFiles.length,
-    orphanFiles: orphans.length,
-    staleFiles: stale.length,
-    emptyFiles: empty.length,
-    brokenLinks: brokenLinks.length,
-  };
-
-  return {
-    timestamp: new Date().toISOString(),
-    scope: space ?? 'all',
-    stats,
-    healthScore: computeHealthScore(stats),
-    orphans,
-    stale,
-    brokenLinks,
-    empty,
-  };
-}
-
 // ── Helpers ────────────────────────────────────────────────────────
 
-function getFilteredFiles(mindRoot: string, space?: string): string[] {
-  const all = collectAllFiles(mindRoot);
+function filterBySpace(all: string[], space?: string): string[] {
   if (!space) return all;
   return all.filter(f => f.startsWith(space + '/') || f.startsWith(space + path.sep));
 }
@@ -265,14 +319,6 @@ function getFilteredFiles(mindRoot: string, space?: string): string[] {
 function isWhitelisted(filePath: string): boolean {
   const basename = path.basename(filePath);
   return ORPHAN_WHITELIST.has(basename);
-}
-
-function safeStat(mindRoot: string, filePath: string): fs.Stats | null {
-  try {
-    return fs.statSync(resolveExistingSafe(mindRoot, filePath));
-  } catch {
-    return null;
-  }
 }
 
 /**
@@ -319,12 +365,30 @@ function isBinaryContent(content: string): boolean {
 }
 
 /**
- * Build a fresh LinkIndex for lint analysis.
- * Uses the same extraction logic as the app's LinkIndex
- * but creates an independent instance to avoid side effects.
+ * Build target → sources backlink sets for every markdown file in the
+ * knowledge base, using the same link extraction as the app's LinkIndex
+ * (LinkIndex.rebuild would walk mindRoot again and re-read every file).
  */
-function buildLinkIndexForLint(mindRoot: string): LinkIndex {
-  const index = new LinkIndex();
-  index.rebuild(mindRoot);
-  return index;
+function buildBacklinks(ctx: LintContext): Map<string, Set<string>> {
+  const allMd = ctx.allFiles.filter(f => f.endsWith('.md'));
+  const fileSet = new Set(allMd);
+  const basenameMap = new Map<string, string[]>();
+  for (const f of allMd) {
+    const key = path.basename(f).toLowerCase();
+    if (!basenameMap.has(key)) basenameMap.set(key, []);
+    basenameMap.get(key)!.push(f);
+  }
+
+  const backlinks = new Map<string, Set<string>>();
+  for (const filePath of allMd) {
+    const content = ctx.readContent(filePath);
+    if (content === null) continue;
+    for (const target of extractLinks(content, filePath, fileSet, basenameMap)) {
+      if (target === filePath) continue; // skip self-links
+      let sources = backlinks.get(target);
+      if (!sources) { sources = new Set(); backlinks.set(target, sources); }
+      sources.add(filePath);
+    }
+  }
+  return backlinks;
 }

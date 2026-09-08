@@ -12,8 +12,18 @@ import { formatErrorForLog } from '../errors/index.js'
  */
 export class PinoLoggerAdapter implements Logger {
   private readonly pinoLogger: PinoLogger
+  private readonly config: LoggerConfig
+  private readonly baseContext?: LogContext
 
-  constructor(config: LoggerConfig, baseContext?: LogContext) {
+  constructor(config: LoggerConfig, baseContext?: LogContext, existing?: PinoLogger) {
+    this.config = config
+    this.baseContext = baseContext
+    if (existing) {
+      // Child loggers share the parent's transports instead of opening a new
+      // worker thread per child() call.
+      this.pinoLogger = existing
+      return
+    }
     const options: pino.LoggerOptions = {
       level: config.level,
       redact: config.redact ?? ['password', 'token', 'apiKey', 'secret'],
@@ -88,14 +98,10 @@ export class PinoLoggerAdapter implements Logger {
   }
 
   child(context: LogContext): Logger {
-    const childPino = this.pinoLogger.child(context)
     return new PinoLoggerAdapter(
-      {
-        level: this.pinoLogger.level as any,
-        pretty: false,
-        console: true,
-      },
-      context
+      this.config,
+      { ...(this.baseContext ?? {}), ...context },
+      this.pinoLogger.child(context)
     )
   }
 }

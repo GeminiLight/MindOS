@@ -13,8 +13,31 @@ vi.mock('child_process', () => ({
   execFileSync: vi.fn(),
 }));
 
+// Command resolution consults the real PATH and well-known install directories
+// before any login shell, so spawn tests pin the resolver instead of relying
+// on whatever happens to be installed on the machine running the suite.
+const detectLocalMock = vi.hoisted(() => ({
+  resolveCommandPathSync: vi.fn<(command: string | undefined) => string | null>(),
+  actual: null as ((command: string | undefined) => string | null) | null,
+}));
+
+vi.mock('./detect-local.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./detect-local.js')>();
+  detectLocalMock.actual = actual.resolveCommandPathSync;
+  return { ...actual, resolveCommandPathSync: detectLocalMock.resolveCommandPathSync };
+});
+
 const mockSpawn = vi.mocked(spawn);
 const mockExecFileSync = vi.mocked(execFileSync);
+
+beforeEach(() => {
+  detectLocalMock.resolveCommandPathSync.mockReset();
+  detectLocalMock.resolveCommandPathSync.mockImplementation((command) => detectLocalMock.actual!(command));
+});
+
+function pinResolvedCommands(paths: Record<string, string>) {
+  detectLocalMock.resolveCommandPathSync.mockImplementation((command) => (command ? paths[command] ?? null : null));
+}
 
 function makeChildProcess() {
   return {
@@ -41,17 +64,10 @@ describe('spawnAcpAgent', () => {
     process.env.SHELL = originalShell;
   });
 
-  it('spawns with the absolute executable resolved from the login shell on macOS', () => {
+  it('spawns with the absolute executable resolved for the agent command on macOS', () => {
     Object.defineProperty(process, 'platform', { value: 'darwin' });
     process.env.SHELL = '/bin/zsh';
-
-    mockExecFileSync.mockImplementation((command, args) => {
-      if (command === 'which') throw new Error('not found');
-      if (command === '/bin/zsh' && Array.isArray(args) && String(args[1]).includes("command -v -- 'gemini'")) {
-        return '/Users/test/bin/gemini\n' as any;
-      }
-      throw new Error(`unexpected command: ${String(command)}`);
-    });
+    pinResolvedCommands({ gemini: '/Users/test/bin/gemini' });
 
     spawnAcpAgent({ id: 'gemini' } as any);
 
@@ -65,14 +81,7 @@ describe('spawnAcpAgent', () => {
   it('spawns Claude via the resolved npx executable instead of a bare command', () => {
     Object.defineProperty(process, 'platform', { value: 'darwin' });
     process.env.SHELL = '/bin/zsh';
-
-    mockExecFileSync.mockImplementation((command, args) => {
-      if (command === 'which') throw new Error('not found');
-      if (command === '/bin/zsh' && Array.isArray(args) && String(args[1]).includes("command -v -- 'npx'")) {
-        return '/Users/test/bin/npx\n' as any;
-      }
-      throw new Error(`unexpected command: ${String(command)}`);
-    });
+    pinResolvedCommands({ npx: '/Users/test/bin/npx' });
 
     spawnAcpAgent({ id: 'claude' } as any);
 
@@ -143,14 +152,7 @@ describe('resolveTerminalSpawn', () => {
   it('resolves terminal commands without enabling a shell on Unix', () => {
     Object.defineProperty(process, 'platform', { value: 'darwin' });
     process.env.SHELL = '/bin/zsh';
-
-    mockExecFileSync.mockImplementation((command, args) => {
-      if (command === 'which') throw new Error('not found');
-      if (command === '/bin/zsh' && Array.isArray(args) && String(args[1]).includes("command -v -- 'node'")) {
-        return '/usr/local/bin/node\n' as any;
-      }
-      throw new Error(`unexpected command: ${String(command)}`);
-    });
+    pinResolvedCommands({ node: '/usr/local/bin/node' });
 
     expect(resolveTerminalSpawn('node')).toEqual({
       command: '/usr/local/bin/node',

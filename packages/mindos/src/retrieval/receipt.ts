@@ -139,9 +139,14 @@ export function writeRetrievalReceipt(mindRoot: string, input: WriteRetrievalRec
 
 export function getRetrievalReceipt(mindRoot: string, receiptId: string): RetrievalReceipt | null {
   if (!SAFE_ID.test(receiptId)) return null;
-  return listReceiptFiles(mindRoot)
-    .map(readReceiptFile)
-    .find((receipt): receipt is RetrievalReceipt => receipt?.id === receiptId) ?? null;
+  // Receipts live at <root>/YYYY/MM/<id>.json, so a lookup only needs the
+  // directory listing; parsing every receipt on each lookup scaled with the
+  // full history and blocked the server thread.
+  const fileName = `${receiptId}.json`;
+  const file = listReceiptFiles(mindRoot).find((candidate) => path.basename(candidate) === fileName);
+  if (!file) return null;
+  const receipt = readReceiptFile(file);
+  return receipt?.id === receiptId ? receipt : null;
 }
 
 export function listRetrievalReceipts(

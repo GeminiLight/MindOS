@@ -88,12 +88,25 @@ function escapeHtml(str: string): string {
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-/** Collect all exportable files in a directory tree */
-export function collectExportFiles(mindRoot: string, dirPath: string): { relativePath: string; content: string }[] {
+export interface ExportFileEntry {
+  /** Path inside the exported directory, used as the archive entry name. */
+  relativePath: string;
+  /** Absolute on-disk path for streaming the entry into the archive. */
+  absPath: string;
+}
+
+/**
+ * Collect all exportable files in a directory tree.
+ *
+ * Returns paths only. Contents are streamed by the caller (archiver reads the
+ * file lazily) so exporting a large space never holds every file in memory.
+ * Unreadable files are skipped up front so they cannot fail the archive later.
+ */
+export function collectExportFiles(mindRoot: string, dirPath: string): ExportFileEntry[] {
   const fullDir = resolveExistingSafe(mindRoot, dirPath);
   if (!fs.existsSync(fullDir) || !fs.statSync(fullDir).isDirectory()) return [];
 
-  const results: { relativePath: string; content: string }[] = [];
+  const results: ExportFileEntry[] = [];
   const SKIP = new Set(['INSTRUCTION.md', '.DS_Store']);
 
   function walk(dir: string, prefix: string) {
@@ -106,8 +119,11 @@ export function collectExportFiles(mindRoot: string, dirPath: string): { relativ
         walk(fullPath, relPath);
       } else if (entry.name.endsWith('.md') || entry.name.endsWith('.csv')) {
         try {
-          results.push({ relativePath: relPath, content: fs.readFileSync(fullPath, 'utf-8') });
-        } catch { /* skip unreadable */ }
+          fs.accessSync(fullPath, fs.constants.R_OK);
+        } catch {
+          continue; // skip unreadable
+        }
+        results.push({ relativePath: relPath, absPath: fullPath });
       }
     }
   }

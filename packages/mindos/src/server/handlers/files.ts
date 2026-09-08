@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { queryValue, type MindosRequestQuery } from '../context.js';
-import { json, publicCacheHeaders, type MindosServerResponse } from '../response.js';
+import { json, revalidateCacheHeaders, type MindosServerResponse } from '../response.js';
 
 export type FilesHandlerServices = {
   collectAllFiles(): string[];
@@ -28,7 +28,7 @@ export function handleFiles(query: MindosRequestQuery | undefined, services: Fil
   const limitRaw = queryValue(query, 'limit');
   const offset = parseNonNegativeInteger(queryValue(query, 'offset'), 0);
   const limit = parseNonNegativeInteger(limitRaw, 0);
-  const headers = publicCacheHeaders(60, generateETag(files.join('\n')));
+  const headers = revalidateCacheHeaders(generateETag(files.join('\n')));
 
   if (limitRaw !== undefined && limit > 0) {
     return json({

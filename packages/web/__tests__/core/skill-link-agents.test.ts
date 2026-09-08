@@ -3,7 +3,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { execFileSync } from 'child_process';
-import { listSkillLinkAgents } from '@/lib/mcp-agents';
+import { listSkillLinkAgents, resetAgentPresenceCache } from '@/lib/mcp-agents';
 
 /**
  * listSkillLinkAgents — the downstream-agent list backing the (skill × agent)
@@ -54,6 +54,8 @@ describe('listSkillLinkAgents', () => {
   let readdirSyncSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
+    // Presence detection is memoised for 15s; each case mocks child_process afresh.
+    resetAgentPresenceCache();
     settingsState.customAgents = [];
     existsSyncSpy = vi.spyOn(fs, 'existsSync');
     statSyncSpy = vi.spyOn(fs, 'statSync');

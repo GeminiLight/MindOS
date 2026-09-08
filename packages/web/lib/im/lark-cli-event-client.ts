@@ -34,6 +34,11 @@ export type LarkCliEventClientOptions = {
   executablePath: string;
   profile: string;
   onEvent(event: LarkCliMessageEvent): void | Promise<void>;
+  /**
+   * Called when the consumer process exits after it had become ready, unless the exit was
+   * requested through stop(). `error` is undefined for a clean exit (code 0).
+   */
+  onExit?(error?: Error): void;
   spawnProcess?: SpawnProcess;
 };
 
@@ -50,6 +55,10 @@ export function createLarkCliEventClient(options: LarkCliEventClientOptions) {
   let stderrBuffer = '';
   let startedAt: string | undefined;
   let running = false;
+  // `ready` stays true after the ready line even once stop() flips `running` off, so the exit
+  // handler can tell "died after becoming ready" apart from "never came up".
+  let ready = false;
+  let explicitStop = false;
   let lastError: string | undefined;
   let stopTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -60,18 +69,23 @@ export function createLarkCliEventClient(options: LarkCliEventClientOptions) {
     if (startPromise) return startPromise;
     validateOptions(options);
     const spawnProcess = options.spawnProcess ?? defaultSpawnProcess;
-    child = spawnProcess(options.executablePath, [
+    const spawned = spawnProcess(options.executablePath, [
       '--profile', options.profile,
       'event', 'consume', 'im.message.receive_v1',
       '--as', 'bot',
     ]);
+    child = spawned;
+    ready = false;
+    explicitStop = false;
     lastError = undefined;
+    stdoutBuffer = '';
+    stderrBuffer = '';
     startPromise = new Promise<void>((resolve, reject) => {
       resolveStart = resolve;
       rejectStart = reject;
     });
 
-    child.stdout.on('data', (chunk: Buffer | string) => {
+    spawned.stdout.on('data', (chunk: Buffer | string) => {
       stdoutBuffer = appendBounded(stdoutBuffer, chunk);
       stdoutBuffer = drainLines(stdoutBuffer, (line) => {
         if (!line.trim()) return;
@@ -87,10 +101,11 @@ export function createLarkCliEventClient(options: LarkCliEventClientOptions) {
         }
       });
     });
-    child.stderr.on('data', (chunk: Buffer | string) => {
+    spawned.stderr.on('data', (chunk: Buffer | string) => {
       stderrBuffer = appendBounded(stderrBuffer, chunk);
       stderrBuffer = drainLines(stderrBuffer, (line) => {
         if (!READY_LINE.test(line.trim())) return;
+        ready = true;
         running = true;
         startedAt = new Date().toISOString();
         resolveStart?.();
@@ -98,16 +113,33 @@ export function createLarkCliEventClient(options: LarkCliEventClientOptions) {
         rejectStart = null;
       }, true);
     });
-    child.once('error', (error: Error) => finish(error));
-    child.once('exit', (code: number | null, signal: NodeJS.Signals | null) => {
+    spawned.once('error', (error: Error) => settle(spawned, error));
+    spawned.once('exit', (code: number | null, signal: NodeJS.Signals | null) => {
       const expected = !running && !rejectStart;
       const detail = safeCliFailure(stderrBuffer);
+      const reason = signal ?? code ?? 'unknown';
       const error = expected || code === 0
         ? undefined
-        : new Error(detail || `lark-cli event consumer exited before ready (${signal ?? code ?? 'unknown'}).`);
-      finish(error);
+        : new Error(detail || (ready
+          ? `lark-cli event consumer exited unexpectedly (${reason}).`
+          : `lark-cli event consumer exited before ready (${reason}).`));
+      settle(spawned, error);
     });
     return startPromise;
+  };
+
+  // Node may emit both 'error' and 'exit' for the same process; only the first one for the
+  // current child is allowed to tear down state and notify the owner.
+  const settle = (spawned: ChildLike, error?: Error) => {
+    if (child !== spawned) return;
+    const notifyOwner = ready && !explicitStop;
+    finish(error);
+    if (!notifyOwner) return;
+    try {
+      options.onExit?.(error);
+    } catch (callbackError) {
+      lastError = safeMessage(callbackError, 'Feishu exit handler failed.');
+    }
   };
 
   const finish = (error?: Error) => {
@@ -129,6 +161,7 @@ export function createLarkCliEventClient(options: LarkCliEventClientOptions) {
   const stop = () => {
     const active = child;
     if (!active) return;
+    explicitStop = true;
     running = false;
     active.stdin.end();
     stopTimer = setTimeout(() => {

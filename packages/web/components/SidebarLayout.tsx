@@ -157,6 +157,9 @@ const RIGHT_AGENT_DETAIL_DEFAULT_WIDTH = RIGHT_AGENT_DETAIL_PANEL.DEFAULT;
 const RIGHT_AGENT_DETAIL_MIN_WIDTH = RIGHT_AGENT_DETAIL_PANEL.MIN;
 const RIGHT_AGENT_DETAIL_MAX_WIDTH = RIGHT_AGENT_DETAIL_PANEL.MAX_ABS;
 
+/** Tailwind `md` breakpoint: the mobile drawer is hidden at and above this width. */
+const MOBILE_DRAWER_BREAKPOINT_PX = 768;
+
 function useViewportWidth(): number {
   const [viewportWidth, setViewportWidth] = useState(0);
 
@@ -344,6 +347,12 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
   // navigation transition animate through 2-4 widths — the flicker.
   const effectivePanelWidth = getLeftPanelWidth(activeLeftPanel, lp.panelWidth);
   const viewportWidth = useViewportWidth();
+  // The drawer is `md:hidden`, but a hidden React tree still costs a full
+  // second file tree (hooks, polling, DOM) on every desktop render. Mount its
+  // contents only on small viewports (or while open); the outer <aside> stays
+  // so the slide transition is unchanged. viewportWidth is 0 until the first
+  // effect, which keeps SSR and the first client render identical.
+  const mountMobileDrawerTree = mobileOpen || (viewportWidth > 0 && viewportWidth < MOBILE_DRAWER_BREAKPOINT_PX);
   const [contentWidthRatio, setContentWidthRatio] = useState(() => parseContentWidthRatio(undefined));
   useEffect(() => {
     const updateFromValue = (value: string | null | undefined) => {
@@ -1168,12 +1177,14 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
           </button>
         </div>
         <div className="flex-1 overflow-y-auto min-h-0 px-2 py-2">
-          <MindFileTreeSections
-            fileTree={fileTree}
-            mindSystemSlots={mindSystemSlots}
-            onNavigate={handleMobileNavigate}
-            onImport={handleOpenImport}
-          />
+          {mountMobileDrawerTree && (
+            <MindFileTreeSections
+              fileTree={fileTree}
+              mindSystemSlots={mindSystemSlots}
+              onNavigate={handleMobileNavigate}
+              onImport={handleOpenImport}
+            />
+          )}
         </div>
       </aside>
 

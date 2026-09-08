@@ -18,13 +18,26 @@ function subscribeHiddenFiles(cb: () => void) {
   };
 }
 
+// In-memory fallback when storage is unavailable (Safari "block all cookies"
+// throws SecurityError on every localStorage access).
+let memoryValue = false;
+
 function getShowHiddenFiles() {
   if (typeof window === 'undefined') return false;
-  return localStorage.getItem(HIDDEN_FILES_KEY) === 'true';
+  try {
+    return localStorage.getItem(HIDDEN_FILES_KEY) === 'true';
+  } catch {
+    return memoryValue;
+  }
 }
 
 export function setShowHiddenFiles(value: boolean) {
-  localStorage.setItem(HIDDEN_FILES_KEY, String(value));
+  memoryValue = value;
+  try {
+    localStorage.setItem(HIDDEN_FILES_KEY, String(value));
+  } catch {
+    // Storage blocked; the in-memory value still drives this session.
+  }
   window.dispatchEvent(new Event('mindos:hidden-files-changed'));
 }
 

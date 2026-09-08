@@ -11,6 +11,7 @@ import {
   rm as fsRm,
   copyFile as fsCopyFile,
   rename as fsRename,
+  unlink as fsUnlink,
   access,
 } from 'node:fs/promises'
 import { constants } from 'node:fs'
@@ -59,7 +60,15 @@ export class LocalFileSystem implements IFileSystem {
       const dir = dirname(path)
       await fsMkdir(dir, { recursive: true })
 
-      await fsWriteFile(path, content, encoding)
+      // temp + rename: a crash mid-write must never leave a truncated file
+      const temp = `${path}.${process.pid}.${Date.now().toString(36)}.tmp`
+      try {
+        await fsWriteFile(temp, content, encoding)
+        await fsRename(temp, path)
+      } catch (error) {
+        await fsUnlink(temp).catch(() => undefined)
+        throw error
+      }
       this.logger?.debug(`Wrote file: ${path}`)
       return ok(undefined)
     } catch (error) {

@@ -12,6 +12,8 @@ export type SearchPrewarmPayload = {
   core: {
     cacheState: string;
     fileCount: number;
+    /** Text documents actually held by the search index (md/csv/json). */
+    indexedDocuments?: number;
   };
 };
 

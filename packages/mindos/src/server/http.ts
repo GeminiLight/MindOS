@@ -10,6 +10,7 @@ import {
   readRuntimeSettings,
   readTextFileFromMindRoot,
   searchMindRoot,
+  prewarmRuntimeSearch,
   getSkillRootsFromRuntime,
   writeMindosIgnoreFile,
   writeRuntimeSettings,
@@ -19,7 +20,14 @@ import {
 import { createMindRootTreeCache } from './tree-cache.js';
 import { MINDOS_SERVER_ROUTES } from './contract.js';
 import { createDefaultMcpAgents, createDefaultSkillAgentRegistry } from './mcp-agent-registry.js';
-import { listCachedAcpHandshakeHealth } from '../protocols/acp/index.js';
+import {
+  detectLocalAcpAgents,
+  listCachedAcpHandshakeHealth,
+  resolveCommandPath,
+  resolveCommandPathCandidates,
+} from '../protocols/acp/index.js';
+import { createAgentCapabilitiesServices } from '../agent/tool/capability-registry.js';
+import { handleAgentCapabilitiesGet } from './handlers/agent-capabilities.js';
 import { handleA2aAgentsGet, handleA2aDelegationsGet, handleA2aDiscoverPost, handleA2aOptions, handleA2aPost } from './handlers/a2a.js';
 import {
   handleAcpConfigDelete,
@@ -51,7 +59,7 @@ import {
   handleCodexThreadsGet,
   type CodexThreadManagerServices,
 } from './handlers/agent-runtimes-codex.js';
-import { handleAgentRuntimesGet } from './handlers/agent-runtimes.js';
+import { defaultCheckNativeRuntimeHealth, handleAgentRuntimesGet, type AgentRuntimesServices } from './handlers/agent-runtimes.js';
 import { handleAgentRuntimeMcpProjectionsGet } from './handlers/mcp-runtime-projections.js';
 import { handleAgentRuntimeAdapterProjectionsGet } from './handlers/runtime-adapter-projections.js';
 import { handleAgentRuntimePermissionProjectionsGet } from './handlers/runtime-permission-projections.js';
@@ -132,7 +140,7 @@ import { handleRawFile } from './handlers/file-raw.js';
 import { handleAgentSessionTurnStream } from './handlers/agent-turn.js';
 import { handleRecentFiles } from './handlers/recent-files.js';
 import { handleSearch, type SearchRequestOptions } from './handlers/search.js';
-import { handleSearchPrewarm } from './handlers/search-prewarm.js';
+import { handleSearchPrewarm, type SearchPrewarmPayload } from './handlers/search-prewarm.js';
 import { handleContextAssetsGet } from './handlers/context-assets.js';
 import { handleRetrievalReceiptsGet } from './handlers/retrieval-receipts.js';
 import { handleStudioAutomationsGet, handleStudioAutomationsPost } from './handlers/studio-automations.js';
@@ -194,6 +202,10 @@ export type MindosHttpServices = {
   collectAllFiles(): string[];
   getRecentlyModified(limit: number): Array<{ path: string; mtime: number }>;
   getTreeVersion(): number;
+  /** Per-file stats from the tree cache; lets the link index rescan only changed files. */
+  collectFileStats?(): Array<{ path: string; mtime: number; size: number }>;
+  /** Warms the runtime search index and reports whether it was already fresh. */
+  prewarmSearch?(): SearchPrewarmPayload;
   readTextFile(path: string): string;
   readLines(path: string): string[];
   listSpaces(): string[];
@@ -266,15 +278,26 @@ export function createDefaultMindosHttpServices(options: DefaultMindosHttpServic
     agentSessionsStorePath: options.homeDir ? `${options.homeDir}/.mindos/sessions.json` : undefined,
     updateStatusPath: options.homeDir ? `${options.homeDir}/.mindos/update-status.json` : undefined,
     collectAllFiles: () => treeCache.collectAllFiles(),
+    collectFileStats: () => treeCache.collectFileStats(),
     getRecentlyModified: (limit) => treeCache.getRecentlyModified(limit),
     getTreeVersion: () => treeCache.getTreeVersion(),
+    prewarmSearch: () => {
+      const warmed = prewarmRuntimeSearch(mindRoot, { treeVersion: treeCache.getTreeVersion() });
+      const fileCount = treeCache.collectAllFiles().length;
+      return {
+        warmed: true as const,
+        cacheState: warmed.cacheState,
+        documentCount: fileCount,
+        core: { cacheState: warmed.cacheState, fileCount, indexedDocuments: warmed.documentCount },
+      };
+    },
     invalidateTreeCache: () => treeCache.invalidate(),
     dispose: () => treeCache.dispose(),
     readTextFile: (filePath) => readTextFileFromMindRoot(mindRoot, filePath),
     readLines: (filePath) => readLinesFromMindRoot(mindRoot, filePath),
     listSpaces: () => listMindSpacesFromMindRoot(mindRoot),
     listDirectories: () => listDirectoriesFromMindRoot(mindRoot),
-    search: (query, searchOptions) => searchMindRoot(mindRoot, query, searchOptions),
+    search: (query, searchOptions) => searchMindRoot(mindRoot, query, searchOptions, { treeVersion: treeCache.getTreeVersion() }),
     readSettings: () => readRuntimeSettings(options),
     writeSettings: (settings) => writeRuntimeSettings(settings, options),
     mcpAgents: options.mcpAgents ?? createDefaultMcpAgents(),
@@ -323,6 +346,11 @@ export function createMindosHttpServer(options: MindosHttpServerOptions = {}): M
       if (method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS') {
         services.invalidateTreeCache?.();
       }
+    }).catch((error: unknown) => {
+      // Last line of defence: a rejection here would otherwise be unhandled
+      // and terminate the process under Node's default policy.
+      console.error('[mindos-server] request handler failed after response commit:', error);
+      if (!res.destroyed) res.destroy();
     });
   });
 
@@ -419,6 +447,10 @@ async function handleRequest(
     }
     if (route === 'GET /api/graph') {
       writeResponse(res, handleGraph(url.searchParams, services));
+      return;
+    }
+    if (route === 'GET /api/agent-capabilities') {
+      writeResponse(res, await handleAgentCapabilitiesGet(url.searchParams, createProductAgentCapabilitiesServices(services)));
       return;
     }
     if (route === 'GET /api/agent-activity') {
@@ -1071,6 +1103,13 @@ async function handleRequest(
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     const status = error instanceof HttpBodyError ? error.status : 500;
+    if (res.headersSent) {
+      // A streaming handler already committed the response. writeHead() would
+      // throw ERR_HTTP_HEADERS_SENT out of this catch and, with nothing above
+      // us awaiting, take the whole server process down.
+      if (!res.writableEnded) res.end();
+      return;
+    }
     writeResponse(res, json({ error: message }, { status }));
   }
 }
@@ -1081,7 +1120,11 @@ function isAuthorizedRequest(route: string, req: IncomingMessage, services: Mind
   if (ROUTE_AUTH.get(route) !== 'required') return true;
 
   const token = readAuthToken(services);
-  if (!token) return true;
+  // A Web password without an auth token means the owner wants the deployment
+  // protected but this server has no session mechanism to honour it; serving
+  // the API openly in that state would be fail-open. The static UI branch
+  // already refuses that configuration, so the API refuses it too.
+  if (!token) return !readWebPassword(services);
 
   if (!readWebPassword(services) && req.headers['sec-fetch-site'] === 'same-origin') return true;
 
@@ -1514,13 +1557,52 @@ async function writeSseResponse(
   res.once('close', stopHeartbeat);
   try {
     for await (const event of response.body) {
+      // Client went away: stop pulling from the generator (break runs its
+      // finally blocks) instead of writing into a destroyed socket.
+      if (res.destroyed || res.writableEnded) break;
       res.write(encodeMindosSseEvent(event));
+    }
+  } catch (error) {
+    // Headers are already out, so the only useful thing left is to tell the
+    // client what happened and end the stream cleanly. Rethrowing would land
+    // in handleRequest's catch after headers were sent.
+    if (!res.destroyed && !res.writableEnded) {
+      const message = error instanceof Error ? error.message : String(error);
+      res.write(encodeMindosSseEvent({ type: 'error', message }));
     }
   } finally {
     stopHeartbeat();
     res.off('close', stopHeartbeat);
     if (!res.writableEnded) res.end();
   }
+}
+
+/**
+ * The contract declares GET /api/agent-capabilities for every host, but the
+ * Product Server never wired it and answered 404. The standalone server has no
+ * pi KB toolkit or A2A registry, so those sources are empty here; ACP, native
+ * runtime and MCP capabilities come from the same services the Next host uses.
+ */
+function createProductAgentCapabilitiesServices(services: MindosHttpServices) {
+  return createAgentCapabilitiesServices({
+    knowledgeBaseTools: [],
+    effectiveMindRoot: () => services.mindRoot,
+    readSettings: (() => services.readSettings()) as AgentRuntimesServices['readSettings'],
+    detectLocalAcpAgents,
+    resolveRuntimeCommand: resolveCommandPath,
+    resolveRuntimeCommandCandidates: resolveCommandPathCandidates,
+    checkNativeRuntimeHealth: defaultCheckNativeRuntimeHealth,
+    readMcpConfig: () => services.mcpTools?.readMcpConfig() ?? { mcpServers: {} },
+    readMcpToolCache: () => services.mcpTools?.readMcpToolCache() ?? null,
+    getDiscoveredAgents: () => [],
+  });
+}
+
+function etagMatches(ifNoneMatch: string, etag: string): boolean {
+  if (ifNoneMatch.trim() === '*') return true;
+  const strip = (value: string) => value.trim().replace(/^W\//, '');
+  const wanted = strip(etag);
+  return ifNoneMatch.split(',').some((candidate) => strip(candidate) === wanted);
 }
 
 function writeResponse<T>(res: ServerResponse, response: MindosServerResponse<T>) {
@@ -1531,6 +1613,15 @@ function writeResponse<T>(res: ServerResponse, response: MindosServerResponse<T>
       : { 'Content-Type': 'application/json; charset=utf-8' }),
     ...(response.headers ?? {}),
   };
+
+  const etag = (headers as Record<string, string | undefined>).ETag;
+  const ifNoneMatch = res.req?.headers['if-none-match'];
+  if (etag && response.status === 200 && ifNoneMatch && etagMatches(ifNoneMatch, etag)) {
+    const { 'Content-Type': _contentType, ...revalidated } = headers;
+    res.writeHead(304, revalidated);
+    res.end();
+    return;
+  }
 
   res.writeHead(response.status, headers);
   if (response.status === 204 || response.body === undefined) {

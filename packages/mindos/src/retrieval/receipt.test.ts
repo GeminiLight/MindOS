@@ -59,6 +59,7 @@ describe('retrieval receipts', () => {
     expect(JSON.stringify(receipt)).not.toContain('sk-secret-value');
     expect(JSON.stringify(receipt)).not.toContain('THIS FULL BODY MUST NOT PERSIST');
     expect(getRetrievalReceipt(mindRoot, receipt.id)).toEqual(receipt);
+    expect(getRetrievalReceipt(mindRoot, 'missing-receipt-id')).toBeNull();
     expect(listRetrievalReceipts(mindRoot, { outcome: 'selected', limit: 1 })).toEqual([receipt]);
   });
 

@@ -70,8 +70,17 @@ export function handleRawFile(
   if (rangeHeader) {
     const match = rangeHeader.match(/bytes=(\d+)-(\d*)/);
     if (match) {
-      const start = Math.min(Number.parseInt(match[1] ?? '0', 10), totalSize - 1);
+      const start = Number.parseInt(match[1] ?? '0', 10);
       const end = Math.min(match[2] ? Number.parseInt(match[2], 10) : totalSize - 1, totalSize - 1);
+      // RFC 9110: a first-byte-pos past the end, or an inverted range, is not
+      // satisfiable. Previously this produced a negative Buffer.alloc -> 500.
+      if (totalSize === 0 || !Number.isFinite(start) || start >= totalSize || end < start) {
+        return {
+          status: 416,
+          body: { error: 'Requested range not satisfiable' },
+          headers: { 'Content-Range': `bytes */${totalSize}`, 'Accept-Ranges': 'bytes' },
+        };
+      }
       const chunkSize = end - start + 1;
       const buffer = Buffer.alloc(chunkSize);
       const fd = openSync(resolved, 'r');
@@ -88,6 +97,7 @@ export function handleRawFile(
           'Content-Length': String(chunkSize),
           'Content-Range': `bytes ${start}-${end}/${totalSize}`,
           'Accept-Ranges': 'bytes',
+          ...rawContentSecurityHeaders(mime),
           ...privateCacheHeaders(60),
         },
       };
@@ -103,7 +113,22 @@ export function handleRawFile(
       'Content-Length': String(totalSize),
       'Accept-Ranges': 'bytes',
       'Content-Disposition': 'inline',
+      ...rawContentSecurityHeaders(mime),
       ...privateCacheHeaders(60),
     },
   };
+}
+
+/**
+ * Raw files are served inline on the app origin. An SVG with a <script> opened
+ * directly would execute with the session cookie (stored XSS via any write
+ * path that accepts .svg). The sandbox CSP gives the document an opaque origin
+ * and blocks script; nosniff stops browsers from re-interpreting other types.
+ */
+function rawContentSecurityHeaders(mime: string): Record<string, string> {
+  const headers: Record<string, string> = { 'X-Content-Type-Options': 'nosniff' };
+  if (mime === 'image/svg+xml') {
+    headers['Content-Security-Policy'] = "sandbox; script-src 'none'";
+  }
+  return headers;
 }

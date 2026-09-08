@@ -35,8 +35,21 @@ let _cache: ConfigCache | null = null;
  */
 let _resolverOverride: (() => string) | null = null;
 
+/**
+ * Bumped whenever the resolver override or the config cache is reset, so
+ * callers that memoize `effectiveMindRoot()` (the run ledger calls it twice
+ * per streamed token) can invalidate without paying a `statSync` per check.
+ */
+let _resolverGeneration = 0;
+
 export function setMindRootResolverForTests(resolver: (() => string) | null): void {
   _resolverOverride = resolver;
+  _resolverGeneration += 1;
+}
+
+/** Monotonic counter identifying the current resolver configuration. */
+export function mindRootResolverGeneration(): number {
+  return _resolverGeneration;
 }
 
 function readConfiguredMindRoot(configPath: string): string | null {
@@ -86,4 +99,5 @@ export function effectiveMindRoot(): string {
 /** Clear the config cache (e.g. after a same-size, same-mtime rewrite in tests). */
 export function resetMindRootCacheForTests(): void {
   _cache = null;
+  _resolverGeneration += 1;
 }

@@ -13,6 +13,12 @@ import {
 import { effectiveSopRoot } from '@/lib/settings';
 import { invalidateCache } from '@/lib/fs';
 import { handleRouteErrorSimple } from '@/lib/errors';
+import {
+  isPayloadTooLarge,
+  KNOWLEDGE_WRITE_MAX_BODY_BYTES,
+  payloadTooLargeResponse,
+  readJsonBodyWithLimit,
+} from '@/lib/api/request-utils';
 import { expandInboxDocumentCaptures } from '@/lib/core/inbox-document-capture';
 import { toNextResponse } from '../_mindos-adapter';
 
@@ -27,8 +33,9 @@ export function GET() {
 export async function POST(req: NextRequest) {
   let body: unknown;
   try {
-    body = await req.json();
-  } catch {
+    body = await readJsonBodyWithLimit(req, KNOWLEDGE_WRITE_MAX_BODY_BYTES);
+  } catch (err) {
+    if (isPayloadTooLarge(err)) return payloadTooLargeResponse(KNOWLEDGE_WRITE_MAX_BODY_BYTES);
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
@@ -57,8 +64,9 @@ async function expandInboxPostBody(body: unknown): Promise<unknown> {
 export async function DELETE(req: NextRequest) {
   let body: unknown;
   try {
-    body = await req.json();
-  } catch {
+    body = await readJsonBodyWithLimit(req, KNOWLEDGE_WRITE_MAX_BODY_BYTES);
+  } catch (err) {
+    if (isPayloadTooLarge(err)) return payloadTooLargeResponse(KNOWLEDGE_WRITE_MAX_BODY_BYTES);
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 

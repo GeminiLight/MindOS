@@ -17,6 +17,7 @@ export default function AgentsPanelSessionsTab() {
   const [sessions, setSessions] = useState<SessionEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [closeError, setCloseError] = useState<string | null>(null);
 
   const fetchSessions = useCallback(async () => {
     try {
@@ -41,19 +42,24 @@ export default function AgentsPanelSessionsTab() {
   }, [fetchSessions]);
 
   const handleClose = useCallback(async (sessionId: string) => {
+    setCloseError(null);
     try {
-      await fetch('/api/acp/session', {
+      const res = await fetch('/api/acp/session', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId }),
       });
+      // A 4xx/5xx means the session is still alive server-side; keep the row.
+      if (!res.ok) throw new Error(`Failed to close session: ${res.status}`);
       setSessions(prev => prev.filter(s => s.id !== sessionId));
     } catch (err) {
       console.error('Failed to close session:', err);
+      setCloseError((err as Error).message || 'Failed to close session');
     }
   }, []);
 
-  if (loading) {
+  // Only show the skeleton on the very first load; refetches keep the list mounted.
+  if (loading && sessions.length === 0) {
     return (
       <div className="space-y-3 animate-pulse">
         {Array.from({ length: 3 }).map((_, i) => (
@@ -71,7 +77,7 @@ export default function AgentsPanelSessionsTab() {
     );
   }
 
-  if (error) {
+  if (error && sessions.length === 0) {
     return (
       <div className="rounded-lg border border-border bg-card p-6 text-center">
         <p className="text-sm text-muted-foreground mb-3">{error}</p>
@@ -112,6 +118,10 @@ export default function AgentsPanelSessionsTab() {
           Refresh
         </button>
       </div>
+
+      {(closeError || error) && (
+        <p role="alert" className="text-xs text-error mb-2">{closeError ?? error}</p>
+      )}
 
       {sessions.map(session => (
         <div

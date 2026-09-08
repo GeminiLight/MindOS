@@ -206,6 +206,46 @@ describe('Agent Run Observatory UI', () => {
     );
   });
 
+  it('keeps the recovery success message visible while the list refreshes in place', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === '/api/agent-run-capsules/capsule-root/recovery') {
+        return Response.json({ schemaVersion: 1, plan: { id: 'plan-1', sourceCapsuleId: 'capsule-root', action: 'retry', targetChatSessionId: 'chat-1' } }, { status: 201 });
+      }
+      if (url === '/api/agent/sessions/chat-1/turns') {
+        return new Response('data: {"type":"done"}\n\n', { status: 200 });
+      }
+      return Response.json({
+        runs: [], events: [],
+        observatory: {
+          schemaVersion: 1, generatedAt: '2026-09-02T12:00:00.000Z', warnings: [],
+          traces: [agentTrace, automationTrace],
+          summary: { totalTraces: 2, agentTraces: 1, automationTraces: 1, active: 0, waitingApproval: 1, completed: 0, failed: 1 },
+        },
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    await renderSection();
+
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('button[aria-label="Retry run"]')?.click();
+      for (let i = 0; i < 6; i += 1) await Promise.resolve();
+    });
+    await act(async () => { for (let i = 0; i < 6; i += 1) await Promise.resolve(); });
+
+    // The list refetches after recovery, but the detail pane must stay mounted with its message.
+    expect(fetchMock.mock.calls.filter(([input]) => String(input).startsWith('/api/agent-runs')).length).toBe(2);
+    expect(host.querySelector('[aria-label="Loading runs"]')).toBeNull();
+    expect(host.textContent).toContain('Recovery run started.');
+
+    // Selecting another run must not carry the previous run's recovery state along.
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('button[aria-label="Inspect run Daily radar"]')?.click();
+    });
+    expect(host.textContent).toContain('Daily radar');
+    expect(host.textContent).not.toContain('Recovery run started.');
+  });
+
   it('filters by waiting state and keeps a useful empty filter state', async () => {
     await renderSection();
     await act(async () => {

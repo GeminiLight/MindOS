@@ -79,7 +79,12 @@ export interface LocaleStoreState {
 /** Read locale from localStorage, resolving 'system' */
 function getLocaleSnapshot(): Locale {
   if (typeof window === 'undefined') return 'en';
-  const saved = localStorage.getItem('locale');
+  let saved: string | null = null;
+  try {
+    saved = localStorage.getItem('locale');
+  } catch {
+    // Storage blocked (e.g. Safari "block all cookies"); fall through to navigator.
+  }
   if (saved === 'zh') return 'zh';
   if (saved === 'en') return 'en';
   return navigator.language.startsWith('zh') ? 'zh' : 'en';

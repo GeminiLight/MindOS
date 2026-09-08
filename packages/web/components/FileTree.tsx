@@ -308,10 +308,13 @@ const DirectoryNode = memo(function DirectoryNode({ node, depth, onNavigate, max
         router.refresh();
         notifyFilesChanged([node.path, result.newPath]);
       } else {
+        // Name clash / invalid name / permission: say so instead of silently
+        // closing the input as if nothing happened.
         setRenaming(false);
+        toast.error(result.error || t.fileTree.failed, 4000);
       }
     });
-  }, [renameValue, node.name, node.path, router, smoothPush, isSpace]);
+  }, [renameValue, node.name, node.path, router, smoothPush, isSpace, t]);
 
   const handleSingleClick = useCallback(() => {
     if (renaming) return;
@@ -621,9 +624,10 @@ const FileNodeItem = memo(function FileNodeItem({ node, depth, onNavigate }: {
         notifyFilesChanged([node.path, result.newPath]);
       } else {
         setRenaming(false);
+        toast.error(result.error || t.fileTree.failed, 4000);
       }
     });
-  }, [renameValue, node.name, node.path, router, smoothPush]);
+  }, [renameValue, node.name, node.path, router, smoothPush, t]);
 
   const handleDelete = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();

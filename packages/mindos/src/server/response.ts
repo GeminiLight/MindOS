@@ -38,6 +38,19 @@ export function privateCacheHeaders(seconds: number): Record<string, string> {
   };
 }
 
+/**
+ * For authenticated, mutable resources (file lists, graph, bootstrap): the
+ * browser must revalidate every time, but may still get a cheap 304 when the
+ * ETag matches. `public, max-age` would let the browser serve stale lists for
+ * a minute after the user just saved a file.
+ */
+export function revalidateCacheHeaders(etag: string): Record<string, string> {
+  return {
+    'Cache-Control': 'private, no-cache',
+    ETag: etag,
+  };
+}
+
 export function errorResponse(error: unknown, fallbackStatus = 500): MindosServerResponse<{ error: string }> {
   const message = error instanceof Error ? error.message : String(error || 'Unknown error');
   return json({ error: message }, { status: fallbackStatus });

@@ -71,6 +71,13 @@ function isEventUnread(event: AgentReviewChangeEvent, lastSeenAt: string | null)
   return Number.isFinite(eventMs) && (!Number.isFinite(seenMs) || eventMs > seenMs);
 }
 
+export function sameStringSet(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
+  if (a === b) return true;
+  if (a.size !== b.size) return false;
+  for (const value of a) if (!b.has(value)) return false;
+  return true;
+}
+
 export function eventTouchesPath(event: AgentReviewChangeEvent, path: string): boolean {
   return eventPaths(event).some(candidate => isPathAffected([candidate], path));
 }
@@ -115,16 +122,21 @@ export function useAgentChangeReview({
       }
 
       if (!mountedRef.current) return;
-      setState({
+      setState((previous) => ({
         loading: false,
         unreadCount: summary.unreadCount,
         unreadAgentCount: unreviewedEvents.length,
         unreviewedPathCount: unreviewedPaths.size,
-        unreviewedPaths,
+        // Keep the Set instance stable when its contents did not change so the
+        // AgentReviewPathsContext value stays referentially equal and file rows
+        // are not all re-rendered on every poll.
+        unreviewedPaths: sameStringSet(previous.unreviewedPaths, unreviewedPaths)
+          ? previous.unreviewedPaths
+          : unreviewedPaths,
         events,
         unreviewedEvents,
         lastSeenAt: summary.lastSeenAt,
-      });
+      }));
     } catch {
       if (!mountedRef.current) return;
       setState({

@@ -943,7 +943,26 @@ function parseTomlMcpEntry(content: string, sectionKey: string, serverName: stri
 
 /* ── Agent Presence Detection ──────────────────────────────────────────── */
 
+// `GET /api/mcp/agents` used to spawn one synchronous `which` per registry
+// entry (~20 processes) on every request; presence rarely changes, so a short
+// memo bounds the cost while still noticing a fresh install within seconds.
+const PRESENCE_CACHE_TTL_MS = 15_000;
+const presenceCache = new Map<string, { at: number; value: boolean }>();
+
+/** Test hook: forget memoised presence results. */
+export function resetAgentPresenceCache(): void {
+  presenceCache.clear();
+}
+
 export function detectAgentPresence(agentKey: string): boolean {
+  const cached = presenceCache.get(agentKey);
+  if (cached && Date.now() - cached.at < PRESENCE_CACHE_TTL_MS) return cached.value;
+  const value = detectAgentPresenceUncached(agentKey);
+  presenceCache.set(agentKey, { at: Date.now(), value });
+  return value;
+}
+
+function detectAgentPresenceUncached(agentKey: string): boolean {
   const agent = MCP_AGENTS[agentKey];
   if (!agent) return false;
   // 1. CLI check

@@ -5,6 +5,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { resetRuntimeAuthConfigCacheForTests } from '@/lib/runtime-auth-config';
+import { resetAuthRateLimiterForTests } from '@/lib/api/auth-guard';
 
 function makeAuthRequest(body: unknown, headers: Record<string, string> = {}) {
   return new NextRequest('http://localhost/api/auth', {
@@ -40,6 +41,7 @@ describe('POST /api/auth', () => {
     delete process.env.WEB_PASSWORD;
     delete process.env.WEB_SESSION_SECRET;
     resetRuntimeAuthConfigCacheForTests();
+    resetAuthRateLimiterForTests();
   });
 
   afterEach(() => {
@@ -135,6 +137,53 @@ describe('POST /api/auth', () => {
     expect(setCookie).toContain('SameSite=Lax');
     expect(setCookie).toContain('Max-Age=604800');
     expect(setCookie).toContain('Path=/');
+  });
+
+  it('rejects a password that shares a prefix with the real one', async () => {
+    process.env.WEB_PASSWORD = 'secret';
+    const { POST } = await import('@/app/api/auth/route');
+
+    expect((await POST(makeAuthRequest({ password: 'secre' }))).status).toBe(401);
+    expect((await POST(makeAuthRequest({ password: 'secret ' }))).status).toBe(401);
+    expect((await POST(makeAuthRequest({ password: ['secret'] }))).status).toBe(401);
+  });
+
+  it('rate limits a client after five failed attempts and clears the lock on success', async () => {
+    process.env.WEB_PASSWORD = 'secret';
+    const { POST } = await import('@/app/api/auth/route');
+    const headers = { 'x-forwarded-for': '203.0.113.5' };
+
+    for (let i = 0; i < 5; i++) {
+      expect((await POST(makeAuthRequest({ password: 'wrong' }, headers))).status).toBe(401);
+    }
+
+    const limited = await POST(makeAuthRequest({ password: 'secret' }, headers));
+    expect(limited.status).toBe(429);
+    expect(Number(limited.headers.get('retry-after'))).toBeGreaterThan(0);
+    expect(limited.headers.get('set-cookie')).toBeNull();
+
+    // A different client is unaffected.
+    const other = await POST(makeAuthRequest({ password: 'secret' }, { 'x-forwarded-for': '198.51.100.9' }));
+    expect(other.status).toBe(200);
+
+    resetAuthRateLimiterForTests();
+    const recovered = await POST(makeAuthRequest({ password: 'secret' }, headers));
+    expect(recovered.status).toBe(200);
+    for (let i = 0; i < 4; i++) {
+      expect((await POST(makeAuthRequest({ password: 'wrong' }, headers))).status).toBe(401);
+    }
+    expect((await POST(makeAuthRequest({ password: 'secret' }, headers))).status).toBe(200);
+    for (let i = 0; i < 4; i++) {
+      expect((await POST(makeAuthRequest({ password: 'wrong' }, headers))).status).toBe(401);
+    }
+    expect((await POST(makeAuthRequest({ password: 'secret' }, headers))).status).toBe(200);
+  });
+
+  it('does not count attempts when no Web password is configured', async () => {
+    const { POST } = await import('@/app/api/auth/route');
+    for (let i = 0; i < 6; i++) {
+      expect((await POST(makeAuthRequest({ password: 'x' }, { 'x-forwarded-for': '203.0.113.6' }))).status).toBe(401);
+    }
   });
 
   it('uses SameSite=None and Secure for allowed HTTPS cross-origin auth', async () => {

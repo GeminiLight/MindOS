@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { resetAgentPresenceCache } from '@/lib/mcp-agents';
 import { NextRequest } from 'next/server';
 import fs from 'fs';
 import os from 'os';
@@ -8,6 +9,7 @@ let tempHome: string;
 let origHome: string;
 
 beforeEach(() => {
+  resetAgentPresenceCache();
   tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'mindos-mcp-test-'));
   origHome = process.env.HOME ?? '';
   // Override HOME so expandHome('~/...') resolves to our temp dir

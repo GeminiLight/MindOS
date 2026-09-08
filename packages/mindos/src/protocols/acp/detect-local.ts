@@ -277,36 +277,134 @@ function lookupCommandPathCurrentEnvSync(command: string): string | null {
   return stdout ? parseResolvedPath(stdout) : null;
 }
 
-async function lookupCommandPathLoginShell(command: string): Promise<string | null> {
-  for (const shell of getLoginShells()) {
-    const stdout = await execFileText(shell, ['-lic', `command -v -- ${shellEscape(command)}`]);
-    if (!stdout) continue;
-    const resolved = parseResolvedPath(stdout);
-    if (resolved) return resolved;
+/**
+ * Login shells (`zsh -lic` etc.) are by far the most expensive lookup here: each
+ * spawn sources the user's rc files and costs 1-3s of wall clock, and the sync
+ * variant blocks the event loop for that long. They are therefore the last
+ * resort after the current PATH and the well-known install directories, and
+ * their results (including misses) are memoised for a short window so that
+ * readiness polling and agent spawns do not re-pay that cost on every call.
+ */
+const LOGIN_SHELL_LOOKUP_TTL_MS = 60_000;
+const LOGIN_SHELL_MAX_CONCURRENCY = 4;
+
+type LoginShellLookupMode = 'first' | 'all';
+
+interface LoginShellLookupEntry {
+  expiresAt: number;
+  promise: Promise<string[]>;
+  value?: string[];
+}
+
+const loginShellLookupCache = new Map<string, LoginShellLookupEntry>();
+let loginShellActiveCount = 0;
+const loginShellWaiters: Array<() => void> = [];
+
+/** Test hook: forget memoised login-shell lookups. */
+export function resetCommandPathLookupCache(): void {
+  loginShellLookupCache.clear();
+}
+
+function loginShellLookupKey(mode: LoginShellLookupMode, command: string): string {
+  return `${mode}\0${command}`;
+}
+
+function readLoginShellLookupCache(key: string): LoginShellLookupEntry | null {
+  const entry = loginShellLookupCache.get(key);
+  if (!entry) return null;
+  if (entry.expiresAt <= Date.now()) {
+    loginShellLookupCache.delete(key);
+    return null;
   }
-  return null;
+  return entry;
+}
+
+function writeLoginShellLookupCache(key: string, promise: Promise<string[]>, value?: string[]): LoginShellLookupEntry {
+  const entry: LoginShellLookupEntry = {
+    expiresAt: Date.now() + LOGIN_SHELL_LOOKUP_TTL_MS,
+    promise,
+    ...(value ? { value } : {}),
+  };
+  loginShellLookupCache.set(key, entry);
+  void promise.then(
+    (resolved) => {
+      entry.value = resolved;
+      entry.expiresAt = Date.now() + LOGIN_SHELL_LOOKUP_TTL_MS;
+    },
+    () => {
+      if (loginShellLookupCache.get(key) === entry) loginShellLookupCache.delete(key);
+    },
+  );
+  return entry;
+}
+
+async function withLoginShellSlot<T>(task: () => Promise<T>): Promise<T> {
+  if (loginShellActiveCount < LOGIN_SHELL_MAX_CONCURRENCY) {
+    loginShellActiveCount += 1;
+  } else {
+    // The releasing task hands its slot over directly, so the count stays put.
+    await new Promise<void>((resolve) => loginShellWaiters.push(resolve));
+  }
+  try {
+    return await task();
+  } finally {
+    const next = loginShellWaiters.shift();
+    if (next) next();
+    else loginShellActiveCount -= 1;
+  }
+}
+
+async function runLoginShellLookup(mode: LoginShellLookupMode, command: string): Promise<string[]> {
+  const results: string[] = [];
+  for (const shell of getLoginShells()) {
+    const script = mode === 'first'
+      ? `command -v -- ${shellEscape(command)}`
+      : `which -a ${shellEscape(command)}`;
+    const stdout = await execFileText(shell, ['-lic', script]);
+    if (!stdout) continue;
+    if (mode === 'first') {
+      const resolved = parseResolvedPath(stdout);
+      if (resolved) return [resolved];
+      continue;
+    }
+    for (const candidate of parseResolvedPaths(stdout)) {
+      if (!results.includes(candidate)) results.push(candidate);
+    }
+  }
+  return results;
+}
+
+function lookupLoginShell(mode: LoginShellLookupMode, command: string): Promise<string[]> {
+  const key = loginShellLookupKey(mode, command);
+  const cached = readLoginShellLookupCache(key);
+  if (cached) return cached.promise;
+  const promise = withLoginShellSlot(() => runLoginShellLookup(mode, command));
+  return writeLoginShellLookupCache(key, promise).promise;
+}
+
+async function lookupCommandPathLoginShell(command: string): Promise<string | null> {
+  return (await lookupLoginShell('first', command))[0] ?? null;
 }
 
 async function lookupCommandPathCandidatesLoginShell(command: string): Promise<string[]> {
-  const candidates: string[] = [];
-  for (const shell of getLoginShells()) {
-    const stdout = await execFileText(shell, ['-lic', `which -a ${shellEscape(command)}`]);
-    if (!stdout) continue;
-    for (const candidate of parseResolvedPaths(stdout)) {
-      if (!candidates.includes(candidate)) candidates.push(candidate);
-    }
-  }
-  return candidates;
+  return lookupLoginShell('all', command);
 }
 
 function lookupCommandPathLoginShellSync(command: string): string | null {
+  const settled = readLoginShellLookupCache(loginShellLookupKey('first', command))?.value
+    ?? readLoginShellLookupCache(loginShellLookupKey('all', command))?.value;
+  if (settled) return settled[0] ?? null;
+
+  let resolved: string | null = null;
   for (const shell of getLoginShells()) {
     const stdout = execFileTextSync(shell, ['-lic', `command -v -- ${shellEscape(command)}`]);
     if (!stdout) continue;
-    const resolved = parseResolvedPath(stdout);
-    if (resolved) return resolved;
+    resolved = parseResolvedPath(stdout);
+    if (resolved) break;
   }
-  return null;
+  const value = resolved ? [resolved] : [];
+  writeLoginShellLookupCache(loginShellLookupKey('first', command), Promise.resolve(value), value);
+  return resolved;
 }
 
 export async function resolveCommandPath(command: string | undefined): Promise<string | null> {
@@ -316,8 +414,8 @@ export async function resolveCommandPath(command: string | undefined): Promise<s
   const trimmed = command.trim();
   if (!trimmed || isPathLikeCommand(trimmed)) return null;
   return await lookupCommandPathCurrentEnv(trimmed)
-    ?? await lookupCommandPathLoginShell(trimmed)
-    ?? lookupCommandPathFromSearchPaths(trimmed);
+    ?? lookupCommandPathFromSearchPaths(trimmed)
+    ?? await lookupCommandPathLoginShell(trimmed);
 }
 
 export async function resolveCommandPathCandidates(command: string | undefined): Promise<string[]> {
@@ -328,12 +426,14 @@ export async function resolveCommandPathCandidates(command: string | undefined):
   if (!trimmed || isPathLikeCommand(trimmed)) return [];
 
   const candidates: string[] = [];
-  for (const candidate of [
-    ...await lookupCommandPathCandidatesCurrentEnv(trimmed),
-    ...await lookupCommandPathCandidatesLoginShell(trimmed),
-    ...lookupCommandPathCandidatesFromSearchPaths(trimmed),
-  ]) {
+  const add = (candidate: string) => {
     if (!candidates.includes(candidate)) candidates.push(candidate);
+  };
+  for (const candidate of await lookupCommandPathCandidatesCurrentEnv(trimmed)) add(candidate);
+  for (const candidate of lookupCommandPathCandidatesFromSearchPaths(trimmed)) add(candidate);
+  // Only pay for login shells when nothing cheaper found the command at all.
+  if (candidates.length === 0) {
+    for (const candidate of await lookupCommandPathCandidatesLoginShell(trimmed)) add(candidate);
   }
   return candidates;
 }
@@ -345,14 +445,98 @@ export function resolveCommandPathSync(command: string | undefined): string | nu
   const trimmed = command.trim();
   if (!trimmed || isPathLikeCommand(trimmed)) return null;
   return lookupCommandPathCurrentEnvSync(trimmed)
-    ?? lookupCommandPathLoginShellSync(trimmed)
-    ?? lookupCommandPathFromSearchPaths(trimmed);
+    ?? lookupCommandPathFromSearchPaths(trimmed)
+    ?? lookupCommandPathLoginShellSync(trimmed);
+}
+
+/**
+ * One login shell per shell binary for a whole batch of commands. Detection
+ * probes ~17 commands at once, most of which are not installed; resolving them
+ * one by one used to spawn up to three login shells per command.
+ */
+async function runLoginShellBatchLookup(commands: string[]): Promise<Map<string, string>> {
+  const found = new Map<string, string>();
+  let remaining = [...commands];
+  for (const shell of getLoginShells()) {
+    if (remaining.length === 0) break;
+    const script = remaining
+      .map((command) => `p=$(command -v -- ${shellEscape(command)} 2>/dev/null) && printf '%s\\t%s\\n' ${shellEscape(command)} "$p"`)
+      .join('; ');
+    const stdout = await execFileText(shell, ['-lic', script]);
+    if (!stdout) continue;
+    for (const line of stdout.split(/\r?\n/)) {
+      const tab = line.indexOf('\t');
+      if (tab < 0) continue;
+      const command = line.slice(0, tab);
+      if (found.has(command) || !remaining.includes(command)) continue;
+      const resolved = parseResolvedPath(line.slice(tab + 1));
+      if (resolved) found.set(command, resolved);
+    }
+    remaining = remaining.filter((command) => !found.has(command));
+  }
+  return found;
+}
+
+function lookupLoginShellBatch(commands: string[]): Promise<Map<string, string | null>> {
+  const results = new Map<string, string | null>();
+  const waits: Promise<void>[] = [];
+  const fresh: string[] = [];
+  for (const command of commands) {
+    const cached = readLoginShellLookupCache(loginShellLookupKey('first', command));
+    if (cached) {
+      waits.push(cached.promise.then((value) => { results.set(command, value[0] ?? null); }));
+      continue;
+    }
+    fresh.push(command);
+  }
+  if (fresh.length > 0) {
+    const batch = withLoginShellSlot(() => runLoginShellBatchLookup(fresh));
+    for (const command of fresh) {
+      const promise = batch.then((found) => {
+        const resolved = found.get(command);
+        return resolved ? [resolved] : [];
+      });
+      writeLoginShellLookupCache(loginShellLookupKey('first', command), promise);
+      waits.push(promise.then((value) => { results.set(command, value[0] ?? null); }));
+    }
+  }
+  return Promise.all(waits).then(() => results);
 }
 
 async function lookupCommandPaths(commands: string[]): Promise<Map<string, string | null>> {
   const unique = [...new Set(commands.map((command) => command.trim()).filter(Boolean))];
-  const entries = await Promise.all(unique.map(async (command) => [command, await resolveCommandPath(command)] as const));
-  return new Map(entries);
+  const results = new Map<string, string | null>();
+  const needLoginShell: string[] = [];
+
+  await Promise.all(unique.map(async (command) => {
+    const direct = resolveDirectCommandPath(command);
+    if (direct) {
+      results.set(command, direct);
+      return;
+    }
+    if (isPathLikeCommand(command)) {
+      results.set(command, null);
+      return;
+    }
+    const cheap = await lookupCommandPathCurrentEnv(command) ?? lookupCommandPathFromSearchPaths(command);
+    if (cheap) {
+      results.set(command, cheap);
+      return;
+    }
+    const settled = readLoginShellLookupCache(loginShellLookupKey('first', command))?.value
+      ?? readLoginShellLookupCache(loginShellLookupKey('all', command))?.value;
+    if (settled) {
+      results.set(command, settled[0] ?? null);
+      return;
+    }
+    needLoginShell.push(command);
+  }));
+
+  if (needLoginShell.length > 0) {
+    const batch = await lookupLoginShellBatch(needLoginShell);
+    for (const command of needLoginShell) results.set(command, batch.get(command) ?? null);
+  }
+  return results;
 }
 
 export async function detectLocalAcpAgents(

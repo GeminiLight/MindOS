@@ -1129,12 +1129,17 @@ function callGetUnpushedCount(services: MindosSyncServices, cwd: string): string
   return String((unpushedCommits || 0) + (dirtyFiles || 0));
 }
 
+// Matches bin/lib/sync.js gitExec: a stuck git (index.lock, network FS,
+// credential prompt) must fail instead of blocking every other request.
+const GIT_STATUS_TIMEOUT_MS = 15_000;
+
 function runGit(cwd: string, args: string[]): string {
   return execFileSync('git', args, {
     cwd,
     encoding: 'utf-8',
     stdio: ['ignore', 'pipe', 'ignore'],
     env: sanitizeGitEnv(),
+    timeout: GIT_STATUS_TIMEOUT_MS,
   }).trim();
 }
 

@@ -9,7 +9,7 @@ import {
   type LinkScanServices,
   type LinkTargetSubpath,
 } from '../link-index.js';
-import { json, publicCacheHeaders, type MindosServerResponse } from '../response.js';
+import { json, revalidateCacheHeaders, type MindosServerResponse } from '../response.js';
 
 export type GraphScope = 'global' | 'local';
 export type GraphDirection = 'both' | 'incoming' | 'outgoing';
@@ -89,7 +89,7 @@ export function handleGraph(
   }
 
   const graph = buildGraphData(services, options);
-  return json(graph, { headers: publicCacheHeaders(300, generateETag(graph)) });
+  return json(graph, { headers: revalidateCacheHeaders(generateETag(graph)) });
 }
 
 export function handleBacklinks(
@@ -110,7 +110,7 @@ export function handleBacklinks(
     }))
     .sort((a, b) => a.filePath.localeCompare(b.filePath));
 
-  return json(backlinks, { headers: publicCacheHeaders(300, generateETag(backlinks)) });
+  return json(backlinks, { headers: revalidateCacheHeaders(generateETag(backlinks)) });
 }
 
 type ParsedGraphOptions = {

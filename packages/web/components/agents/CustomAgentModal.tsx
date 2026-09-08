@@ -98,9 +98,18 @@ export default function CustomAgentModal({
     skillDir: '',
   });
 
-  // Reset state when modal opens/closes or editAgent changes
+  // Reset state only when the modal opens or the edited agent *key* changes.
+  // The mcp store replaces agent objects on every poll, so depending on the
+  // object identity would silently wipe the form while the user types.
+  const lastResetKeyRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      lastResetKeyRef.current = null;
+      return;
+    }
+    const resetKey = editAgent ? `edit:${editAgent.key}` : 'new';
+    if (lastResetKeyRef.current === resetKey) return;
+    lastResetKeyRef.current = resetKey;
     if (editAgent) {
       setForm({
         name: editAgent.name,
@@ -185,9 +194,29 @@ export default function CustomAgentModal({
 
   /* ─── Detect ─── */
 
+  // In-flight detection request. Changing the directory (or unmounting) aborts
+  // it, and the generation counter makes any late response a no-op so a slow
+  // answer for directory A can never populate fields after the user moved to B.
+  const detectAbortRef = useRef<AbortController | null>(null);
+  const detectGenerationRef = useRef(0);
+  const cancelDetection = useCallback(() => {
+    detectGenerationRef.current += 1;
+    detectAbortRef.current?.abort();
+    detectAbortRef.current = null;
+  }, []);
+
+  useEffect(() => {
+    if (!detectAbortRef.current) return;
+    cancelDetection();
+    setDetecting(false);
+  }, [form.baseDir, cancelDetection]);
+
+  useEffect(() => cancelDetection, [cancelDetection]);
+
   const handleContinue = useCallback(async () => {
     if (!canContinue) return;
     setError(null);
+    setDetectTimedOut(false);
     setDetecting(true);
 
     const dir = form.baseDir.trim();
@@ -204,8 +233,13 @@ export default function CustomAgentModal({
       return;
     }
 
+    cancelDetection();
+    const generation = detectGenerationRef.current;
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 3000);
+    detectAbortRef.current = controller;
+    let timedOut = false;
+    const timeout = setTimeout(() => { timedOut = true; controller.abort(); }, 3000);
+    const isCurrent = () => detectGenerationRef.current === generation;
 
     try {
       const res = await fetch('/api/agents/custom/detect', {
@@ -217,6 +251,7 @@ export default function CustomAgentModal({
 
       clearTimeout(timeout);
       const data: DetectResult = await res.json();
+      if (!isCurrent()) return;
 
       if (!res.ok) {
         setError((data as unknown as { error: string }).error || p.customAgentFailedSave);
@@ -234,18 +269,28 @@ export default function CustomAgentModal({
       setField('skillDir', data.detectedSkillDir || (dir.endsWith('/') ? dir : dir + '/') + 'skills/');
 
       setPhase('result');
-    } catch {
+    } catch (err) {
       clearTimeout(timeout);
-      const normalized = dir.endsWith('/') ? dir : dir + '/';
-      setField('global', normalized + 'mcp.json');
-      setField('skillDir', normalized + 'skills/');
-      setDetectResult({ exists: false, hasSkillsDir: false });
-      setDetectTimedOut(true);
-      setPhase('result');
+      if (!isCurrent()) return;
+      const isAbort = err instanceof DOMException && err.name === 'AbortError';
+      if (isAbort && timedOut) {
+        // Timeout: proceed with sensible defaults and say so.
+        const normalized = dir.endsWith('/') ? dir : dir + '/';
+        setField('global', normalized + 'mcp.json');
+        setField('skillDir', normalized + 'skills/');
+        setDetectResult({ exists: false, hasSkillsDir: false });
+        setDetectTimedOut(true);
+        setPhase('result');
+      } else if (!isAbort) {
+        setError(p.customAgentNetworkError);
+      }
     } finally {
-      setDetecting(false);
+      if (isCurrent()) {
+        if (detectAbortRef.current === controller) detectAbortRef.current = null;
+        setDetecting(false);
+      }
     }
-  }, [canContinue, form.baseDir, setField, p]);
+  }, [canContinue, cancelDetection, form.baseDir, setField, p]);
 
   /* ─── Save ─── */
 

@@ -122,11 +122,80 @@ export function isPrivateNetworkHost(hostname: string): boolean {
   if (host === '::1' || host === '0:0:0:0:0:0:0:1') return true;
   if (host.includes(':')) {
     if (host.startsWith('fc') || host.startsWith('fd') || host.startsWith('fe80:')) return true;
+
+    const groups = expandIpv6(host);
+    if (!groups) return false;
+    // Unspecified address (::) binds to every local interface; fail closed.
+    if (groups.every((group) => group === 0)) return true;
+    // IPv4-mapped IPv6 (::ffff:a.b.c.d / ::ffff:xxxx:yyyy) reaches the same
+    // IPv4 host, so it must be judged by the IPv4 ranges, not skipped.
+    const mapped = mappedIpv4FromIpv6(groups);
+    if (mapped !== null) return isPrivateIp4(mapped);
+    return false;
   }
 
   const ip4 = parseIp4(host);
   if (ip4 === null) return false;
+  return isPrivateIp4(ip4);
+}
+
+function isPrivateIp4(ip4: number): boolean {
   return PRIVATE_IPV4_RANGES.some(([start, end]) => ip4 >= start && ip4 <= end);
+}
+
+/**
+ * Returns the embedded IPv4 address (as a number) when the 8 IPv6 groups form an
+ * IPv4-mapped address (::ffff:0:0/96), otherwise null.
+ */
+function mappedIpv4FromIpv6(groups: readonly number[]): number | null {
+  if (groups.length !== 8) return null;
+  for (let i = 0; i < 5; i++) {
+    if (groups[i] !== 0) return null;
+  }
+  if (groups[5] !== 0xffff) return null;
+  return ((groups[6] << 16) | groups[7]) >>> 0;
+}
+
+/**
+ * Expand an IPv6 literal (bracket-stripped, lowercased) into 8 16-bit groups.
+ * Accepts `::` compression and a trailing dotted-quad (`::ffff:127.0.0.1`).
+ * Returns null for anything that is not a well-formed IPv6 address.
+ */
+function expandIpv6(value: string): number[] | null {
+  let text = value;
+
+  // Trailing dotted-quad form: convert a.b.c.d into its two hex groups.
+  const lastColon = text.lastIndexOf(':');
+  const tail = text.slice(lastColon + 1);
+  if (tail.includes('.')) {
+    const tailIp4 = parseIp4(tail);
+    if (tailIp4 === null) return null;
+    text = `${text.slice(0, lastColon + 1)}${(tailIp4 >>> 16).toString(16)}:${(tailIp4 & 0xffff).toString(16)}`;
+  }
+
+  const compressedAt = text.indexOf('::');
+  if (compressedAt !== -1 && text.indexOf('::', compressedAt + 1) !== -1) return null;
+
+  if (compressedAt === -1) {
+    const groups = parseIpv6Groups(text);
+    return groups && groups.length === 8 ? groups : null;
+  }
+
+  const head = parseIpv6Groups(text.slice(0, compressedAt));
+  const rest = parseIpv6Groups(text.slice(compressedAt + 2));
+  if (!head || !rest || head.length + rest.length > 7) return null;
+  const fill = new Array<number>(8 - head.length - rest.length).fill(0);
+  return [...head, ...fill, ...rest];
+}
+
+function parseIpv6Groups(text: string): number[] | null {
+  if (!text) return [];
+  const groups: number[] = [];
+  for (const part of text.split(':')) {
+    if (!/^[0-9a-f]{1,4}$/.test(part)) return null;
+    groups.push(parseInt(part, 16));
+  }
+  return groups;
 }
 
 function normalizeAllowedOrigins(origins: readonly string[]): string[] {

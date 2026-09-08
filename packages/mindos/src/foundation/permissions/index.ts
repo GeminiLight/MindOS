@@ -1,3 +1,5 @@
+import { canonicalizeRelativePath } from '../security/index.js';
+
 export type PermissionEffect = 'allow' | 'deny' | 'ask';
 
 export type PermissionActorType = 'user' | 'agent' | 'system';
@@ -49,7 +51,9 @@ const EFFECT_PRIORITY: Record<PermissionEffect, number> = {
 };
 
 function normalizePath(filePath: string): string {
-  return filePath.replace(/\\/g, '/').replace(/^\/+/, '');
+  // Rules and the protected-root check match by name, so `./Templates/x.md`
+  // and `Templates/x.md/` must compare equal to `Templates/x.md`.
+  return canonicalizeRelativePath(filePath);
 }
 
 function isRootLevel(filePath: string): boolean {
@@ -197,7 +201,13 @@ export function parsePermissionRules(raw: string | undefined): PermissionRule[] 
     return parsed
       .map(normalizeRule)
       .filter((rule): rule is PermissionRule => rule !== null);
-  } catch {
+  } catch (error) {
+    // A typo in MINDOS_PERMISSION_RULES silently dropping every deny/ask rule
+    // is fail-open; keep the lenient return value but make the failure visible.
+    console.warn(
+      '[mindos/permissions] MINDOS_PERMISSION_RULES is not valid JSON; no permission rules are applied:',
+      error instanceof Error ? error.message : String(error),
+    );
     return [];
   }
 }

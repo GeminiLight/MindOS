@@ -107,7 +107,14 @@ function abortErrorFromSignal(signal?: AbortSignal, fallback = 'A2A delegation c
   return error;
 }
 
-async function fetchWithTimeout(url: string, opts: RequestInit & { timeoutMs?: number } = {}): Promise<Response> {
+type A2aFetchInit = Omit<RequestInit, 'redirect'> & { timeoutMs?: number };
+
+/**
+ * Fetch without ever following redirects. Every URL this module contacts has
+ * passed the discovery policy, but a redirect target has not; a public host
+ * could otherwise 302 us into localhost or a cloud metadata endpoint (SSRF).
+ */
+async function fetchWithTimeout(url: string, opts: A2aFetchInit = {}): Promise<Response> {
   const { timeoutMs = DISCOVERY_TIMEOUT_MS, signal, ...fetchOpts } = opts;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -119,11 +126,19 @@ async function fetchWithTimeout(url: string, opts: RequestInit & { timeoutMs?: n
       signal.addEventListener('abort', onAbort, { once: true });
       removeAbortListener = () => signal.removeEventListener('abort', onAbort);
     }
-    return await fetch(url, { ...fetchOpts, signal: controller.signal });
+    return await fetch(url, { ...fetchOpts, redirect: 'manual', signal: controller.signal });
   } finally {
     clearTimeout(timer);
     removeAbortListener?.();
   }
+}
+
+/**
+ * With `redirect: 'manual'`, Node/undici surface the raw 3xx response while
+ * browsers return an opaque filtered response (status 0, type 'opaqueredirect').
+ */
+function isRedirectResponse(res: Response): boolean {
+  return res.type === 'opaqueredirect' || (res.status >= 300 && res.status < 400);
 }
 
 async function jsonRpcCall(endpoint: string, method: string, params: unknown, token?: string, options: { signal?: AbortSignal } = {}): Promise<JsonRpcResponse> {
@@ -147,6 +162,9 @@ async function jsonRpcCall(endpoint: string, method: string, params: unknown, to
     signal: options.signal,
   });
 
+  if (isRedirectResponse(res)) {
+    throw new Error('A2A RPC failed: redirect not allowed');
+  }
   if (!res.ok) {
     throw new Error(`A2A RPC failed: ${res.status} ${res.statusText}`);
   }
@@ -179,7 +197,9 @@ export async function discoverAgent(
 
   try {
     const res = await fetchWithTimeout(cardUrl);
-    if (!res.ok) return null;
+    // A 3xx here means the (policy-checked) host is trying to send us elsewhere;
+    // the redirect target was never validated, so treat it like any other failure.
+    if (isRedirectResponse(res) || !res.ok) return null;
 
     const card: AgentCard = await res.json();
     // Validate minimum required fields

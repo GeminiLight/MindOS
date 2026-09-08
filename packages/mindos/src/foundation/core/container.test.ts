@@ -90,6 +90,18 @@ describe('DIContainer', () => {
       expect(logger1).toBe(logger2)
     })
 
+    it('caches singletons whose factory returns a falsy value', () => {
+      const container = createContainer()
+      const token = createToken<number>('zero')
+      let calls = 0
+      container.registerSingleton(token, () => { calls += 1; return 0 })
+
+      expect(container.resolve(token)).toBe(0)
+      expect(container.resolve(token)).toBe(0)
+      expect(container.resolve(token)).toBe(0)
+      expect(calls).toBe(1)
+    })
+
     it('should create singleton instance only once', () => {
       let createCount = 0
       container.registerSingleton('logger', () => {

@@ -371,7 +371,26 @@ export function writeSettings(settings: ServerSettings): void {
     else delete merged.setupPort;
   }
   ensureWebSessionSecret(merged, existing.webPassword);
-  fs.writeFileSync(SETTINGS_PATH, JSON.stringify(merged, null, 2) + '\n', 'utf-8');
+  writeConfigFileAtomic(merged);
+}
+
+/**
+ * Atomic replace for config.json. The file holds the mind root, API keys and
+ * the auth token: a crash or a concurrent reader in the middle of a plain
+ * writeFileSync would expose a truncated file, after which readSettings()
+ * falls back to the setup wizard and the proxy loses its auth config.
+ * temp + rename keeps the previous config intact until the new one is fully
+ * on disk. Mirrors writeRuntimeSettings() in the product runtime.
+ */
+function writeConfigFileAtomic(config: Record<string, unknown>): void {
+  const temp = `${SETTINGS_PATH}.${process.pid}.${Date.now().toString(36)}.tmp`;
+  try {
+    fs.writeFileSync(temp, JSON.stringify(config, null, 2) + '\n', 'utf-8');
+    fs.renameSync(temp, SETTINGS_PATH);
+  } catch (error) {
+    try { fs.unlinkSync(temp); } catch { /* best-effort cleanup */ }
+    throw error;
+  }
 }
 
 /* ── Legacy skill install records (migration only) ─────────────── */
@@ -408,7 +427,7 @@ export function clearInstalledSkillAgents(): void {
   if (!('installedSkillAgents' in config)) return;
   delete config.installedSkillAgents;
   try {
-    fs.writeFileSync(SETTINGS_PATH, JSON.stringify(config, null, 2) + '\n', 'utf-8');
+    writeConfigFileAtomic(config);
   } catch { /* best-effort cleanup */ }
 }
 

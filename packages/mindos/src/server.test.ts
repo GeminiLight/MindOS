@@ -720,6 +720,131 @@ hidden: true
     });
   });
 
+  it('serves the contracted /api/agent-capabilities route from the Product Server', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'mindos-http-capabilities-'));
+    const app = createMindosHttpServer({
+      hostname: '127.0.0.1',
+      port: 0,
+      services: createDefaultMindosHttpServices({ homeDir: root, readSettings: () => ({ mindRoot: root }) }),
+    });
+    await new Promise<void>((resolve) => app.server.listen(0, '127.0.0.1', resolve));
+    const address = app.server.address();
+    if (!address || typeof address === 'string') throw new Error('expected TCP server address');
+    const base = `http://127.0.0.1:${address.port}`;
+    try {
+      // Restrict to sources that need no external binaries so the test stays fast.
+      const res = await fetch(`${base}/api/agent-capabilities?include=kb,mcp,a2a`);
+      expect(res.status).toBe(200);
+      expect(await res.json()).toMatchObject({
+        include: ['kb', 'mcp', 'a2a'],
+        capabilities: [],
+        sources: expect.arrayContaining([
+          expect.objectContaining({ id: 'kb', status: 'ok' }),
+          expect.objectContaining({ id: 'mcp', status: 'ok' }),
+        ]),
+      });
+    } finally {
+      await new Promise<void>((resolve, reject) => app.server.close((error) => error ? reject(error) : resolve()));
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('refuses API access when a Web password is set but no auth token exists', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'mindos-http-password-only-'));
+    const app = createMindosHttpServer({
+      hostname: '127.0.0.1',
+      port: 0,
+      services: createDefaultMindosHttpServices({
+        homeDir: root,
+        readSettings: () => ({ mindRoot: root, webPassword: 'web-secret' }),
+      }),
+    });
+    await new Promise<void>((resolve) => app.server.listen(0, '127.0.0.1', resolve));
+    const address = app.server.address();
+    if (!address || typeof address === 'string') throw new Error('expected TCP server address');
+    const base = `http://127.0.0.1:${address.port}`;
+    try {
+      expect((await fetch(`${base}/api/files`)).status).toBe(401);
+      expect((await fetch(`${base}/api/files`, { headers: { 'Sec-Fetch-Site': 'same-origin' } })).status).toBe(401);
+      // Public routes stay reachable.
+      expect((await fetch(`${base}/api/health`)).status).toBe(200);
+    } finally {
+      await new Promise<void>((resolve, reject) => app.server.close((error) => error ? reject(error) : resolve()));
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('answers 304 to a matching If-None-Match on revalidating routes', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'mindos-http-etag-'));
+    writeFileSync(join(root, 'a.md'), '# a', 'utf-8');
+    const app = createMindosHttpServer({
+      hostname: '127.0.0.1',
+      port: 0,
+      services: createDefaultMindosHttpServices({ homeDir: root, readSettings: () => ({ mindRoot: root }) }),
+    });
+    await new Promise<void>((resolve) => app.server.listen(0, '127.0.0.1', resolve));
+    const address = app.server.address();
+    if (!address || typeof address === 'string') throw new Error('expected TCP server address');
+    const base = `http://127.0.0.1:${address.port}`;
+    try {
+      const first = await fetch(`${base}/api/files`);
+      expect(first.status).toBe(200);
+      expect(first.headers.get('cache-control')).toBe('private, no-cache');
+      const etag = first.headers.get('etag');
+      expect(etag).toMatch(/^"[a-f0-9]{40}"$/);
+
+      const second = await fetch(`${base}/api/files`, { headers: { 'If-None-Match': etag! } });
+      expect(second.status).toBe(304);
+      expect(await second.text()).toBe('');
+
+      const stale = await fetch(`${base}/api/files`, { headers: { 'If-None-Match': '"deadbeef"' } });
+      expect(stale.status).toBe(200);
+    } finally {
+      await new Promise<void>((resolve, reject) => app.server.close((error) => error ? reject(error) : resolve()));
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps serving after an agent turn stream throws mid-flight', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'mindos-http-sse-throw-'));
+    const app = createMindosHttpServer({
+      hostname: '127.0.0.1',
+      port: 0,
+      services: {
+        ...createDefaultMindosHttpServices({
+          homeDir: root,
+          readSettings: () => ({ mindRoot: root }),
+        }),
+        agentTurnStream: async function* () {
+          yield { type: 'status', message: 'starting' };
+          throw new Error('provider exploded mid-stream');
+        },
+      },
+    });
+    await new Promise<void>((resolve) => app.server.listen(0, '127.0.0.1', resolve));
+    const address = app.server.address();
+    if (!address || typeof address === 'string') throw new Error('expected TCP server address');
+    const base = `http://127.0.0.1:${address.port}`;
+    try {
+      const res = await fetch(`${base}/api/agent/sessions/sse-throw/turns`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: [{ role: 'user', content: 'hello' }] }),
+      });
+      expect(res.status).toBe(200);
+      const text = await res.text();
+      expect(text).toContain('"type":"status"');
+      expect(text).toContain('"type":"error"');
+      expect(text).toContain('provider exploded mid-stream');
+
+      // The process must survive and the server must still answer.
+      expect(await (await fetch(`${base}/api/health`)).json()).toMatchObject({ ok: true });
+    } finally {
+      await new Promise<void>((resolve, reject) => app.server.close((error) => error ? reject(error) : resolve()));
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('reports persisted Web password protection through Product Server health', async () => {
     const root = mkdtempSync(join(tmpdir(), 'mindos-http-health-auth-'));
     const app = createMindosHttpServer({
@@ -841,7 +966,7 @@ hidden: true
       offset: 1,
       limit: 2,
     });
-    expect(res.headers?.['Cache-Control']).toBe('public, max-age=60');
+    expect(res.headers?.['Cache-Control']).toBe('private, no-cache');
     expect(res.headers?.ETag).toMatch(/^"[a-f0-9]{40}"$/);
   });
 
@@ -1237,6 +1362,20 @@ hidden: true
     expect(deleted.body).toMatchObject({ ok: true, trashId: expect.any(String) });
     expect(existsSync(join(root, 'note.md'))).toBe(false);
     expect(existsSync(join(root, '..', '.trash', (deleted.body as { trashId: string }).trashId))).toBe(true);
+  });
+
+  it('protects root TODO.md from deletion under any path spelling', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'mindos-todo-protect-'));
+    writeFileSync(join(root, 'TODO.md'), '- [ ] keep me\n', 'utf-8');
+    try {
+      for (const spelling of ['TODO.md', './TODO.md', 'TODO.md/', './/TODO.md']) {
+        const res = await handleFilePost({ op: 'delete_file', path: spelling }, { mindRoot: root });
+        expect(res.status, spelling).toBe(403);
+        expect(existsSync(join(root, 'TODO.md')), spelling).toBe(true);
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   it('rejects destructive file operations against built-in Assistant files and directories', async () => {
@@ -2201,6 +2340,43 @@ hidden: true
       'Content-Range': 'bytes 1-3/6',
       'Content-Length': '3',
     });
+  });
+
+  it('serves SVG raw files with a sandboxing CSP and nosniff', () => {
+    const root = mkdtempSync(join(tmpdir(), 'mindos-raw-file-svg-'));
+    try {
+      writeFileSync(join(root, 'logo.svg'), '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>');
+      writeFileSync(join(root, 'clip.mp3'), 'abcdef');
+      const svg = handleRawFile(new URLSearchParams('path=logo.svg'), { mindRoot: root });
+      expect(svg.status).toBe(200);
+      expect(svg.headers).toMatchObject({
+        'Content-Type': 'image/svg+xml',
+        'Content-Security-Policy': "sandbox; script-src 'none'",
+        'X-Content-Type-Options': 'nosniff',
+      });
+      const audio = handleRawFile(new URLSearchParams('path=clip.mp3'), { mindRoot: root });
+      expect(audio.headers).toMatchObject({ 'X-Content-Type-Options': 'nosniff' });
+      expect(audio.headers).not.toHaveProperty('Content-Security-Policy');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('returns 416 for unsatisfiable raw file ranges instead of crashing', () => {
+    const root = mkdtempSync(join(tmpdir(), 'mindos-raw-file-416-'));
+    try {
+      writeFileSync(join(root, 'clip.mp3'), 'abcdef');
+      for (const range of ['bytes=10-3', 'bytes=99-', 'bytes=6-6']) {
+        const res = handleRawFile(new URLSearchParams('path=clip.mp3'), { mindRoot: root }, { range });
+        expect(res.status, range).toBe(416);
+        expect(res.headers).toMatchObject({ 'Content-Range': 'bytes */6' });
+      }
+      const open = handleRawFile(new URLSearchParams('path=clip.mp3'), { mindRoot: root }, { range: 'bytes=4-' });
+      expect(open.status).toBe(206);
+      expect(open.body?.toString()).toBe('ef');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   it('rejects raw file traversal and unsupported types', () => {

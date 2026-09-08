@@ -123,10 +123,44 @@ export function readEchoCardsState(mindRoot: string): EchoCardsState {
   }
 }
 
+/**
+ * Concurrency contract for cards.json:
+ * - Synchronous writers (updateEchoCard, deleteEchoCard, updateEchoCardSchedule,
+ *   reviewEchoPromotionCard) read, modify and write inside one JS turn, so
+ *   they cannot interleave with each other.
+ * - Async generation awaits a multi-second model call. It must never write a
+ *   snapshot taken before that await; completeGeneration() re-reads the file
+ *   and merges only its own segment. Generations for one mindRoot are also
+ *   serialized through a promise queue so two runs cannot both increment
+ *   runCount from the same base.
+ * - Every write is temp + rename so a crash never leaves a truncated file.
+ */
 export function writeEchoCardsState(mindRoot: string, state: EchoCardsState): void {
   const abs = resolveSafe(mindRoot, ECHO_CARDS_STATE_PATH);
   fs.mkdirSync(path.dirname(abs), { recursive: true });
-  fs.writeFileSync(abs, `${JSON.stringify(normalizeState(state), null, 2)}\n`, 'utf-8');
+  const temp = `${abs}.${process.pid}.${Date.now().toString(36)}.tmp`;
+  try {
+    fs.writeFileSync(temp, `${JSON.stringify(normalizeState(state), null, 2)}\n`, 'utf-8');
+    fs.renameSync(temp, abs);
+  } catch (error) {
+    try { fs.unlinkSync(temp); } catch { /* best-effort cleanup */ }
+    throw error;
+  }
+}
+
+const generationQueues = new Map<string, Promise<void>>();
+
+/** Run `task` after every previously queued generation for the same mindRoot. */
+function withGenerationQueue<T>(mindRoot: string, task: () => Promise<T>): Promise<T> {
+  const key = path.resolve(mindRoot);
+  const previous = generationQueues.get(key) ?? Promise.resolve();
+  const next = previous.then(task);
+  const settled: Promise<void> = next.then(() => undefined, () => undefined);
+  generationQueues.set(key, settled);
+  void settled.then(() => {
+    if (generationQueues.get(key) === settled) generationQueues.delete(key);
+  });
+  return next;
 }
 
 export function generateEchoCards({
@@ -152,7 +186,6 @@ export function generateEchoCards({
   const generatedCards = buildCardsFromSessions(source.sourceSessions, segment, trigger, now, outputLocale);
   return completeGeneration({
     mindRoot,
-    previous: source.previous,
     segment,
     trigger,
     locale: outputLocale,
@@ -164,7 +197,11 @@ export function generateEchoCards({
   });
 }
 
-export async function generateEchoCardsWithAi({
+export async function generateEchoCardsWithAi(input: GenerateEchoCardsWithAiInput): Promise<EchoCardGenerationResult> {
+  return withGenerationQueue(input.mindRoot, () => runGenerationWithAi(input));
+}
+
+async function runGenerationWithAi({
   mindRoot,
   segment,
   sessions,
@@ -203,7 +240,6 @@ export async function generateEchoCardsWithAi({
 
   return completeGeneration({
     mindRoot,
-    previous: source.previous,
     segment,
     trigger,
     locale: outputLocale,
@@ -399,7 +435,6 @@ function emptyGenerationResult({
 
 function completeGeneration({
   mindRoot,
-  previous,
   segment,
   trigger,
   locale,
@@ -410,7 +445,6 @@ function completeGeneration({
   extraction,
 }: {
   mindRoot: string;
-  previous: EchoCardsState;
   segment: EchoCardSegment;
   trigger: EchoGenerationTrigger;
   locale: EchoOutputLocale;
@@ -421,7 +455,12 @@ function completeGeneration({
   extraction: EchoCardGenerationResult['extraction'];
 }): EchoCardGenerationResult {
   const until = now.toISOString();
-  const currentSegment = previous.segments[segment];
+  // Re-read instead of reusing the snapshot taken before the model call: card
+  // edits, deletes, schedule PATCHes or another segment's generation may have
+  // landed in the meantime. Only this segment's bookkeeping and cards are
+  // merged into the current state, so none of those writes are lost.
+  const current = readEchoCardsState(mindRoot);
+  const currentSegment = current.segments[segment];
   const nextSegment: EchoSegmentGenerationState = {
     ...currentSegment,
     checkpointAt: until,
@@ -433,12 +472,12 @@ function completeGeneration({
     windowMinutes,
   };
   const nextState = normalizeState({
-    ...previous,
+    ...current,
     segments: {
-      ...previous.segments,
+      ...current.segments,
       [segment]: nextSegment,
     },
-    cards: mergeGeneratedCards(previous.cards, segment, generatedCards, {
+    cards: mergeGeneratedCards(current.cards, segment, generatedCards, {
       trigger,
       locale,
       extraction,

@@ -18,8 +18,12 @@ const STORAGE_KEY = 'editor-theme';
 
 function getStoredTheme(): EditorTheme {
   if (typeof window === 'undefined') return 'system';
-  const v = localStorage.getItem(STORAGE_KEY);
-  if (EDITOR_THEMES.some(t => t.id === v)) return v as EditorTheme;
+  try {
+    const v = localStorage.getItem(STORAGE_KEY);
+    if (EDITOR_THEMES.some(t => t.id === v)) return v as EditorTheme;
+  } catch {
+    // Storage blocked (e.g. Safari "block all cookies"); fall back to default.
+  }
   return 'system';
 }
 
@@ -31,7 +35,11 @@ interface EditorThemeStore {
 export const useEditorTheme = create<EditorThemeStore>((set) => ({
   theme: getStoredTheme(),
   setTheme: (t) => {
-    localStorage.setItem(STORAGE_KEY, t);
+    try {
+      localStorage.setItem(STORAGE_KEY, t);
+    } catch {
+      // Persisting is best-effort; the in-memory theme still applies.
+    }
     set({ theme: t });
   },
 }));

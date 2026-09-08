@@ -29,6 +29,7 @@ import {
   handleSettingsTestKeyPost,
   getSkillRootsFromRuntime
 } from './server.js';
+import { MINDOS_MCP_TOOL_COUNT, MINDOS_MCP_TOOL_NAMES } from './protocols/mcp-server/tool-names.js';
 
 describe('MindOS server contract: settings, embedding, protocols', () => {
   it('handles settings read with masked secrets and provider env overrides', () => {
@@ -908,12 +909,14 @@ describe('MindOS server contract: settings, embedding, protocols', () => {
     });
 
     expect(res.status).toBe(200);
+    expect(MINDOS_MCP_TOOL_COUNT).toBe(MINDOS_MCP_TOOL_NAMES.length);
+    expect((res.body as { toolCount: number }).toolCount).toBe(MINDOS_MCP_TOOL_NAMES.length);
     expect(res.body).toEqual({
       running: true,
       transport: 'http',
       endpoint: 'http://mindos.local:8567/mcp',
       port: 8567,
-      toolCount: 24,
+      toolCount: MINDOS_MCP_TOOL_COUNT,
       authConfigured: true,
       maskedToken: 'masked:token-secret',
       localIP: '192.168.1.2',

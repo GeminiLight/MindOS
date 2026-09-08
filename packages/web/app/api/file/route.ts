@@ -3,8 +3,21 @@ export const dynamic = 'force-dynamic';
 import { revalidatePath } from 'next/cache';
 import { NextRequest } from 'next/server';
 import { handleFileGet, handleFilePost, handleOpenInFileManagerGet, json } from '@geminilight/mindos/server';
-import { appendContentChange, getFileContent, readLines } from '@/lib/fs';
+import {
+  appendContentChange,
+  flushWatcherChanges,
+  getFileContent,
+  handleWatcherEvent,
+  invalidateCache,
+  readLines,
+} from '@/lib/fs';
 import { handleRouteErrorSimple } from '@/lib/errors';
+import {
+  isPayloadTooLarge,
+  KNOWLEDGE_WRITE_MAX_BODY_BYTES,
+  payloadTooLargeResponse,
+  readJsonBodyWithLimit,
+} from '@/lib/api/request-utils';
 import { effectiveSopRoot } from '@/lib/settings';
 import { SYSTEM_FILES } from '@/lib/types';
 import { toNextResponse } from '../_mindos-adapter';
@@ -39,8 +52,9 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   let body: unknown;
   try {
-    body = await req.json();
-  } catch {
+    body = await readJsonBodyWithLimit(req, KNOWLEDGE_WRITE_MAX_BODY_BYTES);
+  } catch (err) {
+    if (isPayloadTooLarge(err)) return payloadTooLargeResponse(KNOWLEDGE_WRITE_MAX_BODY_BYTES);
     return toNextResponse(json({ error: 'invalid JSON' }, { status: 400 }));
   }
 
@@ -51,6 +65,8 @@ export async function POST(req: NextRequest) {
       agentHeader: agentName,
       protectedRootFiles: SYSTEM_FILES,
     });
+
+    refreshFileCaches(response.treeChanged, response.changeEvent?.path);
 
     if (response.treeChanged) {
       try { revalidatePath('/', 'layout'); } catch { /* noop in test env */ }
@@ -72,4 +88,22 @@ export async function POST(req: NextRequest) {
   } catch (e) {
     return handleRouteErrorSimple(e);
   }
+}
+
+/**
+ * The product handler writes straight to disk, bypassing the lib/fs in-memory
+ * caches (file tree, known-file set, search and link indexes). Without this the
+ * sidebar, search and backlinks keep serving stale data until the TTL or the
+ * file watcher catches up. Tree-shape operations drop everything; content
+ * edits take the same incremental path the watcher uses, which keeps the
+ * search index warm instead of forcing a full rebuild on every save.
+ */
+function refreshFileCaches(treeChanged: boolean | undefined, changedPath: string | undefined): void {
+  if (treeChanged) {
+    invalidateCache();
+    return;
+  }
+  if (!changedPath) return;
+  handleWatcherEvent(changedPath);
+  flushWatcherChanges();
 }

@@ -79,7 +79,7 @@ describe('process-manager subprocess cleanup contract', () => {
       return true;
     };
 
-    await _terminateChildProcess_forTest(proc as never, 1);
+    await _terminateChildProcess_forTest(proc as never, 1, 10);
 
     expect(signals[0]).toBe('SIGTERM');
     expect(signals.length).toBe(2);
@@ -88,5 +88,54 @@ describe('process-manager subprocess cleanup contract', () => {
     } else {
       expect(signals[1]).toBe('SIGKILL');
     }
+  });
+});
+
+describe('terminateChildProcess force-kill confirmation', () => {
+  function fakeProc(exitOnKill: boolean) {
+    const proc = new EventEmitter() as EventEmitter & {
+      killed: boolean;
+      kill: (signal?: NodeJS.Signals) => boolean;
+    };
+    proc.killed = false;
+    proc.kill = (signal?: NodeJS.Signals) => {
+      proc.killed = true;
+      const forced = process.platform === 'win32' ? signal === undefined : signal === 'SIGKILL';
+      if (exitOnKill && forced) setTimeout(() => proc.emit('exit', null, 'SIGKILL'), 0);
+      return true;
+    };
+    return proc;
+  }
+
+  it('resolves true once the child confirms exit after force-kill', async () => {
+    const proc = fakeProc(true);
+    await expect(_terminateChildProcess_forTest(proc as never, 1, 500)).resolves.toBe(true);
+  });
+
+  it('resolves false when the child never emits exit after force-kill (bounded wait)', async () => {
+    const proc = fakeProc(false);
+    const t0 = Date.now();
+    await expect(_terminateChildProcess_forTest(proc as never, 1, 30)).resolves.toBe(false);
+    expect(Date.now() - t0).toBeGreaterThanOrEqual(25);
+  });
+
+  it('resolves true immediately for a child that already exited before stop()', async () => {
+    const proc = new EventEmitter() as EventEmitter & { killed: boolean; exitCode: number | null; signalCode: string | null; kill: () => boolean };
+    proc.killed = false;
+    proc.exitCode = 1;
+    proc.signalCode = null;
+    let killCalls = 0;
+    proc.kill = () => { killCalls++; return false; };
+    const t0 = Date.now();
+    await expect(_terminateChildProcess_forTest(proc as never, 1000, 1000)).resolves.toBe(true);
+    expect(Date.now() - t0).toBeLessThan(200);
+    expect(killCalls).toBe(0);
+  });
+
+  it('resolves true immediately when the child exits on SIGTERM', async () => {
+    const proc = new EventEmitter() as EventEmitter & { killed: boolean; kill: () => boolean };
+    proc.killed = false;
+    proc.kill = () => { proc.killed = true; setTimeout(() => proc.emit('exit', 0, null), 0); return true; };
+    await expect(_terminateChildProcess_forTest(proc as never, 1000, 1000)).resolves.toBe(true);
   });
 });

@@ -298,6 +298,11 @@ export function createCodexAppServerClient(
   const notifications = new AsyncQueue<CodexAppServerNotification>();
   let nextId = 1;
   let readStarted = false;
+  // Set when the transport read loop dies (app-server crash, killed process).
+  // Requests still pending at that moment are rejected directly, but an
+  // in-flight turn whose turn/start already resolved would otherwise just see
+  // the notification queue close and end silently without done/error.
+  let readError: Error | undefined;
 
   const startReadLoop = (signal?: AbortSignal) => {
     if (readStarted) return;
@@ -331,6 +336,7 @@ export function createCodexAppServerClient(
         }
       } catch (error) {
         const err = error instanceof Error ? error : new Error(String(error));
+        readError = err;
         for (const request of pending.values()) {
           request.cleanup();
           request.reject(err);
@@ -460,10 +466,20 @@ export function createCodexAppServerClient(
         ...(input.sandbox ? { sandbox: input.sandbox } : {}),
       };
       await request('turn/start', params, input.signal);
+      let sawTerminal = false;
       for await (const notification of notifications) {
         yield notification;
-        if (isCodexTerminalTurnNotification(notification)) break;
+        if (isCodexTerminalTurnNotification(notification)) {
+          sawTerminal = true;
+          break;
+        }
       }
+      if (sawTerminal) return;
+      // The queue only closes when the read loop ends. Reaching this point
+      // means the app-server went away mid-turn; surface that as a failure
+      // instead of letting the caller record a silently truncated turn.
+      if (readError) throw readError;
+      throw new Error('Codex app-server stream ended before turn/completed.');
     },
     async interruptTurn(input) {
       await request('turn/interrupt', {
@@ -555,13 +571,22 @@ export function mapCodexAppServerNotificationToSseEvents(notification: CodexAppS
   if (toolEvents.length > 0) return toolEvents;
 
   if (notification.method === 'error') {
-    return [{
-      type: 'error',
-      message: compactRuntimeFailureMessage(
-        redactSensitiveText(getCodexErrorMessage(notification.params, 'Codex app-server error')),
-        { runtime: 'codex', fallback: 'Codex app-server error' },
-      ),
-    }];
+    const message = compactRuntimeFailureMessage(
+      redactSensitiveText(getCodexErrorMessage(notification.params, 'Codex app-server error')),
+      { runtime: 'codex', fallback: 'Codex app-server error' },
+    );
+    // `willRetry: true` is the app-server telling us it hit a transient
+    // condition (stream drop, upstream 5xx) and is retrying on its own; the
+    // turn is still alive, so report progress rather than a terminal error.
+    if (isCodexRetryingErrorNotification(notification)) {
+      return [{
+        type: 'status',
+        visible: true,
+        runtime: 'codex',
+        message: `Codex hit a transient error and is retrying: ${message}`,
+      }];
+    }
+    return [{ type: 'error', message }];
   }
 
   if (notification.method === 'item/agentMessage/delta') {
@@ -748,9 +773,13 @@ function isCodexServerRequest(message: CodexAppServerMessage): message is CodexA
     && typeof (message as CodexAppServerServerRequest).method === 'string';
 }
 
+function isCodexRetryingErrorNotification(notification: CodexAppServerNotification): boolean {
+  return notification.method === 'error' && notification.params?.willRetry === true;
+}
+
 function isCodexTerminalTurnNotification(notification: CodexAppServerNotification): boolean {
   return (
-    notification.method === 'error'
+    (notification.method === 'error' && !isCodexRetryingErrorNotification(notification))
     || notification.method === 'turn/completed'
     || notification.method === 'turn/failed'
   );

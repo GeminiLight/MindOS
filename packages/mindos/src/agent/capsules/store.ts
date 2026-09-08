@@ -1,15 +1,7 @@
 import crypto from 'node:crypto';
-import {
-  existsSync,
-  linkSync,
-  mkdirSync,
-  readFileSync,
-  readdirSync,
-  renameSync,
-  statSync,
-  unlinkSync,
-  writeFileSync,
-} from 'node:fs';
+// Namespace import (not named bindings) so the fs calls stay observable to
+// tests that spy on `fs.readFileSync` to prove the capsule cache skips reads.
+import fs from 'node:fs';
 import path from 'node:path';
 import { resolveExistingSafe } from '../../foundation/security/index.js';
 import { redactSensitiveText } from '../redaction.js';
@@ -29,6 +21,40 @@ const MAX_INPUT_SUMMARY = 500;
 const MAX_IDEMPOTENCY_KEY = 200;
 const MAX_CAPSULE_BYTES = 8 * 1024 * 1024;
 const MAX_OUTPUT_TEXT = 64 * 1024;
+
+type CapsuleFileCacheEntry = {
+  /** `resolveExistingSafe()` result for this file; re-validated whenever its stat changes. */
+  safePath: string;
+  mtimeMs: number;
+  size: number;
+  /** Parsed capsule, or null when the file failed validation (see `corruptMessage`). */
+  capsule: AgentRunCapsule | null;
+  corruptMessage?: string;
+};
+
+type CapsuleMonthCacheEntry = {
+  mtimeMs: number;
+  /** Candidate `<id>.json` paths present in this month directory. */
+  files: string[];
+};
+
+type CapsuleStoreCache = {
+  months: Map<string, CapsuleMonthCacheEntry>;
+  files: Map<string, CapsuleFileCacheEntry>;
+  /** Capsule id (file basename) -> candidate path, so lookups by id skip the scan. */
+  ids: Map<string, string>;
+};
+
+/**
+ * Per-mind-root read cache. `GET /api/agent-runs` is polled roughly every
+ * 900ms by the web timeline and used to readdir, realpath twice, read and
+ * JSON.parse every capsule on each poll. Month directories are revalidated by
+ * mtime (creates, atomic rewrites and deletes all touch it) and individual
+ * files by mtime + size, so unchanged capsules are never re-read. Cached
+ * capsules are handed out by reference; callers must treat them as immutable.
+ */
+const capsuleCaches = new Map<string, CapsuleStoreCache>();
+const MAX_CACHED_ROOTS = 16;
 
 export function createAgentRunCapsule(
   mindRoot: string,
@@ -57,30 +83,35 @@ export function createAgentRunCapsule(
   assertCapsuleShape(capsule);
 
   const file = capsuleFile(mindRoot, capsule);
-  mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
+  fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
   if (!writeJsonExclusive(file, capsule)) {
     throw new Error(`Agent run capsule already exists: ${id}`);
   }
+  rememberCapsuleFile(mindRoot, file, capsule);
   return capsule;
 }
 
 export function getAgentRunCapsule(mindRoot: string, id: string): AgentRunCapsule | null {
   requireSafeId(id, 'capsule id');
-  const file = listCapsuleFiles(mindRoot).find((candidate) => path.basename(candidate) === `${id}.json`);
-  return file ? readCapsule(file) : null;
+  const entry = locateCapsuleEntry(mindRoot, id);
+  return entry ? requireCachedCapsule(entry) : null;
 }
 
 export function listAgentRunCapsules(
   mindRoot: string,
   options: { onCorrupt?(message: string): void } = {},
 ): AgentRunCapsule[] {
-  return listCapsuleFiles(mindRoot)
-    .flatMap((file) => {
-      try { return [readCapsule(file)]; } catch (error) {
-        options.onCorrupt?.(error instanceof Error ? error.message : 'Unreadable capsule.');
-        return [];
-      }
-    })
+  const capsules: AgentRunCapsule[] = [];
+  for (const candidate of scanCapsuleFiles(mindRoot)) {
+    const entry = readCapsuleEntry(mindRoot, candidate);
+    if (!entry) continue;
+    if (entry.capsule) {
+      capsules.push(entry.capsule);
+    } else {
+      options.onCorrupt?.(entry.corruptMessage ?? 'Unreadable capsule.');
+    }
+  }
+  return capsules
     .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
     .slice(0, MAX_CAPSULES);
 }
@@ -97,9 +128,10 @@ export function finalizeAgentRunCapsule(
   },
 ): AgentRunCapsule {
   requireSafeId(id, 'capsule id');
-  const file = findCapsuleFile(mindRoot, id);
-  if (!file) throw new Error(`Agent run capsule not found: ${id}`);
-  const current = readCapsule(file);
+  const entry = locateCapsuleEntry(mindRoot, id);
+  if (!entry) throw new Error(`Agent run capsule not found: ${id}`);
+  const current = requireCachedCapsule(entry);
+  const file = entry.safePath;
   const now = input.now ?? new Date();
   if (Number.isNaN(now.getTime())) throw new Error('Capsule timestamp must be a valid date.');
   const next: AgentRunCapsule = {
@@ -117,6 +149,7 @@ export function finalizeAgentRunCapsule(
     updatedAt: now.toISOString(),
   };
   writeJsonAtomic(file, next);
+  rememberCapsuleFile(mindRoot, file, next);
   return next;
 }
 
@@ -133,7 +166,7 @@ export function createAgentRunCapsuleRecoveryPlan(
   }
   const planId = recoveryPlanId(idempotencyKey);
   const planFile = recoveryPlanFile(mindRoot, planId);
-  if (existsSync(planFile)) {
+  if (fs.existsSync(planFile)) {
     const existing = readRecoveryPlan(planFile);
     if (existing.sourceCapsuleId !== capsule.id || existing.action !== input.action) {
       throw new Error('Recovery idempotency key was already used for a different action.');
@@ -164,7 +197,7 @@ export function createAgentRunCapsuleRecoveryPlan(
       : {}),
     createdAt: now.toISOString(),
   };
-  mkdirSync(path.dirname(planFile), { recursive: true, mode: 0o700 });
+  fs.mkdirSync(path.dirname(planFile), { recursive: true, mode: 0o700 });
   if (writeJsonExclusive(planFile, plan)) return plan;
   const winner = readRecoveryPlan(planFile);
   if (winner.sourceCapsuleId !== capsule.id || winner.action !== input.action) {
@@ -179,7 +212,7 @@ export function getAgentRunCapsuleRecoveryPlan(
 ): AgentRunCapsuleRecoveryPlan | null {
   requireSafeId(planId, 'recovery plan id');
   const file = recoveryPlanFile(mindRoot, planId);
-  return existsSync(file) ? readRecoveryPlan(file) : null;
+  return fs.existsSync(file) ? readRecoveryPlan(file) : null;
 }
 
 export function claimAgentRunCapsuleRecoveryPlan(
@@ -199,7 +232,7 @@ export function claimAgentRunCapsuleRecoveryPlan(
     claimedAt: now.toISOString(),
   };
   const file = recoveryClaimFile(mindRoot, plan.id);
-  mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
+  fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
   if (writeJsonExclusive(file, claim)) return claim;
   const existing = readRecoveryClaim(file);
   throw new Error(`Recovery plan was already claimed by run ${existing.runId}.`);
@@ -287,29 +320,172 @@ function recoveryClaimFile(mindRoot: string, planId: string): string {
   );
 }
 
-function findCapsuleFile(mindRoot: string, id: string): string | undefined {
-  return listCapsuleFiles(mindRoot).find((candidate) => path.basename(candidate) === `${id}.json`);
+function cacheFor(mindRoot: string): CapsuleStoreCache {
+  const key = path.resolve(mindRoot);
+  let cache = capsuleCaches.get(key);
+  if (!cache) {
+    cache = { months: new Map(), files: new Map(), ids: new Map() };
+    capsuleCaches.set(key, cache);
+    while (capsuleCaches.size > MAX_CACHED_ROOTS) {
+      const oldest = capsuleCaches.keys().next().value;
+      if (oldest === undefined) break;
+      capsuleCaches.delete(oldest);
+    }
+  }
+  return cache;
 }
 
-function listCapsuleFiles(mindRoot: string): string[] {
-  const root = resolveExistingSafe(mindRoot, CAPSULES_DIR);
-  if (!existsSync(root)) return [];
+function capsulesRoot(mindRoot: string): string {
+  return resolveExistingSafe(mindRoot, CAPSULES_DIR);
+}
+
+/**
+ * Candidate capsule files under `<root>/<YYYY>/<MM>/`. Year and month
+ * directories are tiny and always re-listed; a month's file list is reused
+ * while its directory mtime is unchanged.
+ */
+function scanCapsuleFiles(mindRoot: string): string[] {
+  const cache = cacheFor(mindRoot);
+  const root = capsulesRoot(mindRoot);
+  if (!fs.existsSync(root)) {
+    cache.months.clear();
+    cache.files.clear();
+    cache.ids.clear();
+    return [];
+  }
   const files: string[] = [];
+  const seenMonths = new Set<string>();
   for (const year of safeDirectories(root)) {
     for (const month of safeDirectories(year)) {
-      for (const entry of readdirSync(month, { withFileTypes: true })) {
-        if (!entry.isFile() || !entry.name.endsWith('.json')) continue;
-        const candidate = path.join(month, entry.name);
-        const relative = path.relative(mindRoot, candidate).split(path.sep).join('/');
-        files.push(resolveExistingSafe(mindRoot, relative));
-      }
+      seenMonths.add(month);
+      files.push(...monthCapsuleFiles(cache, month));
     }
+  }
+  for (const month of [...cache.months.keys()]) {
+    if (!seenMonths.has(month)) cache.months.delete(month);
+  }
+  const listed = new Set(files);
+  for (const file of [...cache.files.keys()]) {
+    if (!listed.has(file)) cache.files.delete(file);
+  }
+  for (const [id, file] of [...cache.ids]) {
+    if (!listed.has(file)) cache.ids.delete(id);
   }
   return files;
 }
 
+function monthCapsuleFiles(cache: CapsuleStoreCache, month: string): string[] {
+  let mtimeMs: number;
+  try {
+    mtimeMs = fs.statSync(month).mtimeMs;
+  } catch {
+    cache.months.delete(month);
+    return [];
+  }
+  const cached = cache.months.get(month);
+  if (cached && cached.mtimeMs === mtimeMs) return cached.files;
+  const files = fs.readdirSync(month, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && entry.name.endsWith('.json'))
+    .map((entry) => path.join(month, entry.name));
+  cache.months.set(month, { mtimeMs, files });
+  return files;
+}
+
+/**
+ * Stat-validated read of one capsule file. Returns null when the file is gone.
+ * The symlink / root-containment check runs again whenever the file changed,
+ * and a corrupt file is cached as corrupt so the poller does not re-parse it.
+ */
+function readCapsuleEntry(mindRoot: string, candidate: string): CapsuleFileCacheEntry | null {
+  const cache = cacheFor(mindRoot);
+  let stat: fs.Stats;
+  try {
+    stat = fs.statSync(candidate);
+  } catch {
+    cache.files.delete(candidate);
+    return null;
+  }
+  const cached = cache.files.get(candidate);
+  if (cached && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size) return cached;
+
+  const relative = path.relative(mindRoot, candidate).split(path.sep).join('/');
+  const safePath = resolveExistingSafe(mindRoot, relative);
+  const entry: CapsuleFileCacheEntry = { safePath, mtimeMs: stat.mtimeMs, size: stat.size, capsule: null };
+  try {
+    entry.capsule = readCapsule(safePath);
+  } catch (error) {
+    entry.corruptMessage = error instanceof Error ? error.message : 'Unreadable capsule.';
+  }
+  cache.files.set(candidate, entry);
+  cache.ids.set(path.basename(candidate, '.json'), candidate);
+  return entry;
+}
+
+/**
+ * Find a capsule by id without scanning when possible: first a path remembered
+ * from an earlier create/scan, then the current and previous month directories
+ * (capsules are filed by createdAt and finalized shortly after), and only then
+ * the full cached scan for older capsules.
+ */
+function locateCapsuleEntry(mindRoot: string, id: string): CapsuleFileCacheEntry | null {
+  const cache = cacheFor(mindRoot);
+  const known = cache.ids.get(id);
+  if (known) {
+    const entry = readCapsuleEntry(mindRoot, known);
+    if (entry) return entry;
+    cache.ids.delete(id);
+  }
+  for (const candidate of recentMonthCandidates(mindRoot, id)) {
+    if (!fs.existsSync(candidate)) continue;
+    const entry = readCapsuleEntry(mindRoot, candidate);
+    if (entry) return entry;
+  }
+  const fileName = `${id}.json`;
+  for (const candidate of scanCapsuleFiles(mindRoot)) {
+    if (path.basename(candidate) !== fileName) continue;
+    const entry = readCapsuleEntry(mindRoot, candidate);
+    if (entry) return entry;
+  }
+  return null;
+}
+
+function recentMonthCandidates(mindRoot: string, id: string): string[] {
+  const root = capsulesRoot(mindRoot);
+  const now = new Date();
+  return [0, -1].map((offset) => {
+    const month = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + offset, 1));
+    return path.join(
+      root,
+      String(month.getUTCFullYear()),
+      String(month.getUTCMonth() + 1).padStart(2, '0'),
+      `${id}.json`,
+    );
+  });
+}
+
+/** Seed the cache from a write this process just performed, so the next poll does not re-read it. */
+function rememberCapsuleFile(mindRoot: string, file: string, capsule: AgentRunCapsule): void {
+  const cache = cacheFor(mindRoot);
+  try {
+    const stat = fs.statSync(file);
+    cache.files.set(file, { safePath: file, mtimeMs: stat.mtimeMs, size: stat.size, capsule });
+    cache.ids.set(capsule.id, file);
+  } catch {
+    cache.files.delete(file);
+    cache.ids.delete(capsule.id);
+  }
+}
+
+function requireCachedCapsule(entry: CapsuleFileCacheEntry): AgentRunCapsule {
+  if (entry.capsule) return entry.capsule;
+  throw new Error(
+    entry.corruptMessage
+      ?? `Agent run capsule is corrupt; the original file was preserved: ${path.basename(entry.safePath)}`,
+  );
+}
+
 function safeDirectories(directory: string): string[] {
-  return readdirSync(directory, { withFileTypes: true })
+  return fs.readdirSync(directory, { withFileTypes: true })
     .filter((entry) => entry.isDirectory() && /^\d{2,4}$/.test(entry.name))
     .map((entry) => path.join(directory, entry.name));
 }
@@ -461,19 +637,19 @@ function readRecoveryClaim(file: string): AgentRunCapsuleRecoveryClaim {
 }
 
 function readBoundedJson(file: string): unknown {
-  if (statSync(file).size > MAX_CAPSULE_BYTES) {
+  if (fs.statSync(file).size > MAX_CAPSULE_BYTES) {
     throw new Error(`stored payload exceeds ${MAX_CAPSULE_BYTES} bytes`);
   }
-  return JSON.parse(readFileSync(file, 'utf-8')) as unknown;
+  return JSON.parse(fs.readFileSync(file, 'utf-8')) as unknown;
 }
 
 function writeJsonAtomic(file: string, value: AgentRunCapsule | AgentRunCapsuleRecoveryPlan): void {
   const temp = `${file}.${process.pid}.${crypto.randomUUID()}.tmp`;
   try {
-    writeFileSync(temp, serializeJson(value), { encoding: 'utf-8', mode: 0o600 });
-    renameSync(temp, file);
+    fs.writeFileSync(temp, serializeJson(value), { encoding: 'utf-8', mode: 0o600 });
+    fs.renameSync(temp, file);
   } catch (error) {
-    try { unlinkSync(temp); } catch { /* best-effort cleanup */ }
+    try { fs.unlinkSync(temp); } catch { /* best-effort cleanup */ }
     throw error;
   }
 }
@@ -484,16 +660,16 @@ function writeJsonExclusive(
 ): boolean {
   const temp = `${file}.${process.pid}.${crypto.randomUUID()}.tmp`;
   try {
-    writeFileSync(temp, serializeJson(value), { encoding: 'utf-8', mode: 0o600 });
+    fs.writeFileSync(temp, serializeJson(value), { encoding: 'utf-8', mode: 0o600 });
     try {
-      linkSync(temp, file);
+      fs.linkSync(temp, file);
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'EEXIST') return false;
       throw error;
     }
     return true;
   } finally {
-    try { unlinkSync(temp); } catch { /* best-effort cleanup */ }
+    try { fs.unlinkSync(temp); } catch { /* best-effort cleanup */ }
   }
 }
 

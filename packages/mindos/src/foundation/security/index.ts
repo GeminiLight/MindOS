@@ -193,8 +193,7 @@ export function resolveSafeResult(root: string, filePath: string): Result<string
  * Checks if a relative file path refers to a root-level protected file.
  */
 export function isRootProtected(filePath: string): boolean {
-  const normalized = path.normalize(filePath);
-  return ROOT_PROTECTED_FILES.has(normalized);
+  return ROOT_PROTECTED_FILES.has(canonicalizeRelativePath(filePath));
 }
 
 /**
@@ -263,6 +262,19 @@ export function validatePath(
  */
 export function normalizePath(filePath: string): string {
   return filePath.replace(/\\/g, '/');
+}
+
+/**
+ * Canonical relative form for name-based checks (protected files, permission
+ * globs): forward slashes, `.` segments collapsed, no leading `./` or `/`, no
+ * trailing slash. Callers that must reject `..` still go through resolveSafe;
+ * this only makes `./INSTRUCTION.md`, `INSTRUCTION.md/` and `.\\INSTRUCTION.md`
+ * compare equal to `INSTRUCTION.md`.
+ */
+export function canonicalizeRelativePath(filePath: string): string {
+  const normalized = path.posix.normalize(normalizePath(filePath).replace(/^\/+/, ''));
+  if (normalized === '.' || normalized === './') return '';
+  return normalized.replace(/^(?:\.\/)+/, '').replace(/\/+$/, '');
 }
 
 /**
