@@ -123,9 +123,13 @@ describe('OpenCode-style platform runtime packages', () => {
       '@earendil-works/pi-agent-core',
       '@earendil-works/pi-ai',
       '@earendil-works/pi-coding-agent',
+      '@hono/node-server',
       '@modelcontextprotocol/sdk',
       '@sinclair/typebox',
       'chokidar',
+      'hono',
+      'jsonc-parser',
+      'picomatch',
       'zod',
     ]) {
       expect(script).toContain(`'${dependency}'`);

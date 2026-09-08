@@ -1,10 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { MindOSError, ErrorCodes } from '@/lib/errors';
-import {
-  resolveExistingSafe,
-  resolveSafe,
-} from './core/security';
+import { resolveExistingSafe } from './core/security';
 import {
   readFile as coreReadFile,
   writeFile as coreWriteFile,
@@ -24,23 +21,11 @@ import {
   insertAfterHeading as coreInsertAfterHeading,
   updateSection as coreUpdateSection,
 } from './core/lines';
-import {
-  appendCsvRow as coreAppendCsvRow,
-} from './core/csv';
-import {
-  findBacklinks as coreFindBacklinks,
-} from './core/backlinks';
-import {
-  isGitRepo as coreIsGitRepo,
-  gitLog as coreGitLog,
-  gitShowFile as coreGitShowFile,
-} from './core/git';
-import {
-  LinkIndex,
-} from './core/link-index';
-import {
-  summarizeTopLevelSpaces,
-} from './core/list-spaces';
+import { appendCsvRow as coreAppendCsvRow } from './core/csv';
+import { findBacklinks as coreFindBacklinks } from './core/backlinks';
+import { isGitRepo as coreIsGitRepo, gitLog as coreGitLog, gitShowFile as coreGitShowFile } from './core/git';
+import { LinkIndex } from './core/link-index';
+import { summarizeTopLevelSpaces } from './core/list-spaces';
 import {
   appendContentChange as coreAppendContentChange,
   listContentChanges as coreListContentChanges,
@@ -52,22 +37,32 @@ import type { ContentChangeEvent, ContentChangeInput, ContentChangeSummary } fro
 import { FileNode, SpacePreview } from './core/types';
 import type { SearchPrewarmResponse } from './types';
 import { effectiveMindRoot } from './mind-root';
-import {
-  notifySearchIndexInvalidated,
-  notifySearchIndexFileChanged,
-  notifySearchIndexPathRemoved,
-} from './core/search-index-bridge';
 import { notifyTreeVersionChanged } from './server-events-bridge';
-import {
-  DEFAULT_IGNORED_DIRS,
-  MINDOS_IGNORE_FILE,
-  createSearchIgnoreMatcher,
-  type SearchIgnoredPathMatcher,
-} from './core/tree';
+import { getWebTreeCache } from './core/mind-root-cache';
+import { invalidateSearchIndex, removeSearchIndexPath, updateSearchIndexFile } from './core/search';
 import { extractPdfText } from './core/pdf-text';
 import { telemetry } from './telemetry';
 import { ensureDefaultMindSystemUpgrade } from './mind-system-upgrade';
 import { isDefaultMindSystemScaffoldFile } from './mind-system-scaffold';
+import {
+  collectFileStatsFromMindRoot,
+  type MindRootTreeCache,
+  type MindosRuntimeFileStat,
+  type TreeCacheFlushResult,
+  type TreeCachePathChange,
+} from '@geminilight/mindos/server';
+
+/**
+ * Web facade over the core mind-root tree cache (`@geminilight/mindos/server`).
+ *
+ * The cache (file stats, monotonic version, recursive watcher with batched
+ * per-path updates) lives in the core package and is shared with the search
+ * index. This module only derives what the Web UI needs from the cached file
+ * list — the `FileNode` tree with Space metadata, the scaffold-filtered file
+ * list, recent files — and keeps the shape/content version counters that the
+ * routes, the `/api/events` stream and the tests rely on. Deriving is pure
+ * in-memory work; no `readdirSync` happens here.
+ */
 
 // ─── Root helpers ─────────────────────────────────────────────────────────────
 
@@ -76,34 +71,29 @@ export function getMindRoot(): string {
   return effectiveMindRoot();
 }
 
-const IGNORED_DIRS = DEFAULT_IGNORED_DIRS;
-const ALLOWED_EXTENSIONS = new Set([
-  '.md', '.csv', '.json', '.pdf',
-  '.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.bmp', '.ico',
-  '.mp3', '.wav', '.m4a', '.ogg', '.flac', '.aac',
-  '.mp4', '.webm', '.mov', '.mkv',
-]);
-const SYSTEM_FILES = new Set(['INSTRUCTION.md', 'README.md', 'CONFIG.json', 'CHANGELOG.md']);
+function treeCache(): MindRootTreeCache {
+  return getWebTreeCache(getMindRoot());
+}
 
-// ─── In-memory cache ──────────────────────────────────────────────────────────
+// ─── Derived state ────────────────────────────────────────────────────────────
 
-interface FileTreeCache {
+interface DerivedTreeState {
+  root: string;
+  /** Core tree version the derivation is based on. */
+  coreVersion: number;
+  /** Sorted path list joined with newlines: identical → tree shape unchanged. */
+  pathsKey: string;
   tree: FileNode[];
   allFiles: string[];
   recentFiles: Array<{ path: string; mtime: number }>;
-  shapeSignature: string;
-  fileSignature: string;
-  timestamp: number;
 }
 
-let _cache: FileTreeCache | null = null;
-let _knownFilePaths: Set<string> | null = null;
-const CACHE_TTL_MS = 30_000; // 30 seconds (file watcher still invalidates immediately on changes)
-const WATCHER_BACKED_CACHE_TTL_MS = 5 * 60_000;
-const WATCHER_MISS_SWEEP_MS = 60_000;
-
+let _derived: DerivedTreeState | null = null;
 let _treeVersion = 0;
 let _contentVersion = 0;
+/** Set by explicit invalidations that already bumped the counters (see `invalidateCache`). */
+let _countersBumpedForNextDerive = false;
+let _subscription: { root: string; unsubscribe: () => void } | null = null;
 
 /**
  * Every tree-shape change goes through here so the `/api/events` stream can
@@ -114,128 +104,90 @@ function bumpTreeVersion(): void {
   notifyTreeVersionChanged(_treeVersion);
 }
 
-// Core-search invalidation goes through `core/search-index-bridge` — a
-// dependency-free module — so this file (imported by app/layout for the
-// file tree) never pulls the core search/embedding stack into ordinary
-// page renders. If `core/search` was never loaded, the hooks are absent
-// and the notifications are dropped (the lazy build reads fresh state).
-
-function invalidateSearchIndexLazy(): void {
-  notifySearchIndexInvalidated();
-}
-
-function updateSearchIndexFileLazy(mindRoot: string, filePath: string): void {
-  notifySearchIndexFileChanged(mindRoot, filePath);
-}
-
-function addSearchIndexFileLazy(mindRoot: string, filePath: string): void {
-  // The index's updateFile handles both add and modify.
-  notifySearchIndexFileChanged(mindRoot, filePath);
-}
-
-function removeSearchIndexFileLazy(filePath: string): void {
-  notifySearchIndexPathRemoved(filePath);
-}
-
-function buildCache(root: string): FileTreeCache {
-  const stop = telemetry.startTimer('tree.cache.build');
-  ensureDefaultMindSystemUpgrade(root);
-  const tree = buildFileTree(root);
-  const allFiles: string[] = [];
-  const shapePaths: string[] = [];
-  let directoryCount = 0;
-  function collect(nodes: FileNode[]) {
-    for (const n of nodes) {
-      shapePaths.push(`${n.type}:${n.path}`);
-      if (n.type === 'file') {
-        if (!isDefaultMindSystemScaffoldFile(root, n.path)) allFiles.push(n.path);
-      }
-      else if (n.children) {
-        directoryCount++;
-        collect(n.children);
-      }
-    }
-  }
-  collect(tree);
-  const { fileSignature, recentFiles } = buildFileStats(root, allFiles);
-  stop({ fileCount: allFiles.length, directoryCount });
-  return { tree, allFiles, recentFiles, shapeSignature: shapePaths.join('\n'), fileSignature, timestamp: Date.now() };
-}
-
-function buildFileStats(root: string, allFiles: string[]): {
-  fileSignature: string;
-  recentFiles: Array<{ path: string; mtime: number }>;
-} {
-  const recentFiles: Array<{ path: string; mtime: number }> = [];
-  const fileSignature = allFiles.map((filePath) => {
-    try {
-      const stat = fs.statSync(path.join(root, filePath));
-      recentFiles.push({ path: filePath, mtime: stat.mtimeMs });
-      return JSON.stringify([filePath, stat.size, stat.mtimeMs]);
-    } catch {
-      return JSON.stringify([filePath, 'missing']);
-    }
-  }).join('\n');
-  recentFiles.sort((a, b) => b.mtime - a.mtime);
-  return { fileSignature, recentFiles };
-}
-
-function refreshExpiredCache(): FileTreeCache {
-  const next = buildCache(getMindRoot());
-  if (_cache) {
-    const shapeChanged = _cache.shapeSignature !== next.shapeSignature;
-    const contentChanged = _cache.fileSignature !== next.fileSignature;
-    if (shapeChanged) bumpTreeVersion();
-    if (contentChanged) {
-      _contentVersion++;
-      _searchIndex = null;
-      invalidateSearchIndexLazy();
-      _linkIndex.invalidate();
-    }
-  }
-  _cache = next;
-  _knownFilePaths = new Set(next.allFiles);
-  return _cache;
-}
-
-function rebuildCacheForVersionCheck(): FileTreeCache {
-  _cache = buildCache(getMindRoot());
-  _knownFilePaths = new Set(_cache.allFiles);
-  if (!_watcher) startFileWatcher();
-  return _cache;
-}
-
-function clearTreeCache(): void {
-  _cache = null;
-}
-
-function markTreeAndContentChanged(): void {
-  bumpTreeVersion();
-  _contentVersion++;
-  _searchIndex = null;
-}
-
 function markContentChanged(): void {
   _contentVersion++;
-  _searchIndex = null;
+  _uiSearch = null;
 }
 
-function rememberKnownFile(filePath: string): void {
-  _knownFilePaths?.add(filePath);
+/**
+ * Follow the core cache for the current root: watcher batches flushed by the
+ * core (external edits) re-derive here so counters, the link index and the
+ * SSE stream see them without waiting for the next read.
+ */
+function ensureSubscribed(root: string, cache: MindRootTreeCache): void {
+  if (_subscription?.root === root) return;
+  _subscription?.unsubscribe();
+  const unsubscribe = cache.subscribe(() => {
+    // Only react once someone has read the tree for this root; idle processes
+    // (and tests that never touch the tree) must not start deriving on timers.
+    if (_derived?.root !== root) return;
+    _countersBumpedForNextDerive = false;
+    try { ensureDerived(); } catch { /* the next read retries */ }
+  });
+  _subscription = { root, unsubscribe };
 }
 
-function forgetKnownFile(filePath: string): void {
-  _knownFilePaths?.delete(filePath);
+function ensureDerived(): DerivedTreeState {
+  const root = getMindRoot();
+  const cache = getWebTreeCache(root);
+  ensureSubscribed(root, cache);
+  if (_derived && _derived.root !== root) {
+    // Mind root switched (settings): derived state and indexes belong to the old root.
+    _derived = null;
+    _uiSearch = null;
+    _linkIndex.invalidate();
+  }
+  let coreVersion = cache.getTreeVersion();
+  if (_derived && _derived.coreVersion === coreVersion) return _derived;
+
+  const stop = telemetry.startTimer('tree.cache.build');
+  const upgrade = ensureDefaultMindSystemUpgrade(root);
+  if (upgrade.createdPaths.length > 0 || upgrade.updatedPaths.length > 0) {
+    cache.invalidate();
+    coreVersion = cache.getTreeVersion();
+  }
+  const stats = cache.collectFileStats();
+  const files = stats.map((entry) => entry.path).sort((a, b) => a.localeCompare(b));
+  const pathsKey = files.join('\n');
+  const previous = _derived;
+  const next: DerivedTreeState = {
+    root,
+    coreVersion,
+    pathsKey,
+    tree: deriveFileTree(root, stats, _spacePreviews),
+    allFiles: files.filter((filePath) => !isDefaultMindSystemScaffoldFile(root, filePath)),
+    recentFiles: [],
+  };
+  next.recentFiles = stats
+    .filter((entry) => next.allFiles.includes(entry.path) || !isDefaultMindSystemScaffoldFile(root, entry.path))
+    .map((entry) => ({ path: entry.path, mtime: entry.mtime }))
+    .sort((a, b) => b.mtime - a.mtime);
+  _derived = next;
+  pruneSpacePreviews(_spacePreviews, next.tree);
+  stop({ fileCount: next.allFiles.length, directoryCount: countDirectories(next.tree) });
+
+  if (previous && previous.root === root) {
+    if (_countersBumpedForNextDerive) {
+      // The invalidator already chose the correct counters for this change.
+      _countersBumpedForNextDerive = false;
+    } else {
+      if (previous.pathsKey !== pathsKey) bumpTreeVersion();
+      markContentChanged();
+      _linkIndex.invalidate();
+    }
+  } else {
+    _countersBumpedForNextDerive = false;
+  }
+  return _derived;
 }
 
-function forgetKnownFiles(): void {
-  _knownFilePaths = null;
-}
-
-function invalidateDerivedIndexes(): void {
-  _searchIndex = null;
-  invalidateSearchIndexLazy();
-  _linkIndex.invalidate();
+function countDirectories(nodes: FileNode[]): number {
+  let count = 0;
+  for (const node of nodes) {
+    if (node.type !== 'directory') continue;
+    count += 1 + countDirectories(node.children ?? []);
+  }
+  return count;
 }
 
 /** Monotonically increasing tree-shape counter for sidebar/shell refreshes. */
@@ -249,40 +201,13 @@ export function peekContentVersion(): number {
 }
 
 export function getTreeVersion(): number {
-  if (!_cache) {
-    // Cache was invalidated by an explicit operation — rebuild without bumping
-    // here because the invalidator already chose the correct version counter.
-    rebuildCacheForVersionCheck();
-  } else if (shouldRefreshCacheForVersionCheck()) {
-    // Periodic watcher-miss recovery: keep this on the lightweight version
-    // endpoint, not on every page render that merely needs the current tree.
-    refreshExpiredCache();
-  }
+  ensureDerived();
   return _treeVersion;
 }
 
 export function getContentVersion(): number {
-  if (!_cache) {
-    rebuildCacheForVersionCheck();
-  } else if (shouldRefreshCacheForVersionCheck()) {
-    refreshExpiredCache();
-  }
+  ensureDerived();
   return _contentVersion;
-}
-
-function isCacheValid(ttlMs = CACHE_TTL_MS): boolean {
-  return _cache !== null && (Date.now() - _cache.timestamp) < ttlMs;
-}
-
-function isCacheValidForRead(): boolean {
-  const ttlMs = _watcher ? WATCHER_BACKED_CACHE_TTL_MS : CACHE_TTL_MS;
-  return isCacheValid(ttlMs);
-}
-
-function shouldRefreshCacheForVersionCheck(): boolean {
-  if (!_cache) return true;
-  const ttlMs = _watcher ? WATCHER_MISS_SWEEP_MS : CACHE_TTL_MS;
-  return !isCacheValid(ttlMs);
 }
 
 /** Module-level link index singleton. Lazily built on first graph/backlink access. */
@@ -290,6 +215,7 @@ const _linkIndex = new LinkIndex();
 
 /** Get the link index, ensuring it's built for the current mindRoot. */
 export function getLinkIndex(): LinkIndex {
+  ensureDerived();
   const root = getMindRoot();
   if (!_linkIndex.isBuiltFor(root)) {
     _linkIndex.rebuild(root);
@@ -297,237 +223,150 @@ export function getLinkIndex(): LinkIndex {
   return _linkIndex;
 }
 
-/** Invalidate cache — call after any write/create/delete/rename operation */
+// ─── Invalidation ─────────────────────────────────────────────────────────────
+
+/**
+ * Invalidate after a structural operation (rename / move / delete directory /
+ * trash …): the core cache rescans on the next read, both counters bump now,
+ * and the search / link indexes re-check their inputs incrementally.
+ */
 export function invalidateCache(): void {
-  clearTreeCache();
-  forgetKnownFiles();
-  markTreeAndContentChanged();
-  invalidateDerivedIndexes();
+  let cache: MindRootTreeCache | null = null;
+  try { cache = treeCache(); } catch { cache = null; }
+  cache?.invalidate();
+  bumpTreeVersion();
+  markContentChanged();
+  _countersBumpedForNextDerive = _derived !== null;
+  invalidateSearchIndex();
+  _linkIndex.invalidate();
 }
 
 /**
- * Invalidate cache after a single file was modified (content write, line edit, append).
- * Tree cache is cleared (file list/mtime changed), but search index is updated
- * incrementally for just this file — O(tokens) instead of O(all-files).
+ * Invalidate after a single file was written (content write, line edit,
+ * append, create). The core cache re-stats just this path; the derived tree
+ * is recomputed in memory only when the version moved; the search and link
+ * indexes are updated for this one file.
  */
 function invalidateCacheForFile(filePath: string): void {
-  clearTreeCache();
-  markContentChanged();
-  updateSearchIndexFileLazy(getMindRoot(), filePath);
-  if (_linkIndex.isBuilt()) _linkIndex.updateFile(getMindRoot(), filePath);
+  const root = getMindRoot();
+  const cache = getWebTreeCache(root);
+  const contentBefore = _contentVersion;
+  const change = cache.refreshPath(filePath);
+  applyPathChangeToCounters(change);
+  // Same-size writes within one mtime tick still changed the content.
+  if (_contentVersion === contentBefore) markContentChanged();
+  updateSearchIndexFile(root, filePath);
+  if (_linkIndex.isBuilt()) _linkIndex.updateFile(root, filePath);
 }
 
-/**
- * Invalidate cache after a new file was created.
- * Tree cache is cleared, search index gets incremental addFile.
- */
-function invalidateCacheForNewFile(filePath: string): void {
-  clearTreeCache();
-  rememberKnownFile(filePath);
-  markTreeAndContentChanged();
-  addSearchIndexFileLazy(getMindRoot(), filePath);
-  if (_linkIndex.isBuilt()) _linkIndex.updateFile(getMindRoot(), filePath);
-}
-
-/**
- * Invalidate cache after a file was deleted.
- * Tree cache is cleared, search index gets incremental removeFile.
- */
+/** Invalidate after a file was deleted. */
 function invalidateCacheForDeletedFile(filePath: string): void {
-  clearTreeCache();
-  forgetKnownFile(filePath);
-  markTreeAndContentChanged();
-  removeSearchIndexFileLazy(filePath);
+  const root = getMindRoot();
+  const cache = getWebTreeCache(root);
+  const change = cache.refreshPath(filePath);
+  applyPathChangeToCounters(change);
+  removeSearchIndexPath(filePath);
   if (_linkIndex.isBuilt()) _linkIndex.removeFile(filePath);
 }
 
-function ensureCache(): FileTreeCache {
-  if (isCacheValidForRead()) return _cache!;
-  if (_cache) {
-    refreshExpiredCache();
-  } else {
-    _cache = buildCache(getMindRoot());
-    _knownFilePaths = new Set(_cache.allFiles);
+/**
+ * Reflect a per-path cache change in the Web counters. Once the tree has been
+ * derived, re-deriving (pure in-memory) computes the exact shape/content diff;
+ * before that, classify from the change itself so `peek*Version()` still moves.
+ */
+function applyPathChangeToCounters(change: TreeCachePathChange): void {
+  if (_derived) {
+    _countersBumpedForNextDerive = false;
+    syncDerived();
+    return;
   }
-  // Lazily start the file watcher on first cache build
-  if (!_watcher) startFileWatcher();
-  return _cache;
+  if (change === 'unchanged') return;
+  if (change !== 'changed') bumpTreeVersion();
+  markContentChanged();
 }
 
-// ─── File System Watcher ──────────────────────────────────────────────────────
-// Watches mindRoot for external changes (VSCode, Finder, git pull) and
-// invalidates cache immediately instead of waiting for the TTL. Events are
-// batched (500ms debounce) and applied incrementally to the search index;
-// unknown paths or oversized batches fall back to full invalidation.
-
-let _watcher: fs.FSWatcher | null = null;
-let _watchDebounce: ReturnType<typeof setTimeout> | null = null;
-
-/** Above this many distinct paths per batch, a full invalidation is cheaper. */
-const WATCH_BATCH_LIMIT = 50;
-
-let _watchPending: Set<string> | null = null;
-let _watchPendingRoot: string | null = null;
-let _watchOverflow = false;
-
-function isIgnoredWatcherPath(relPath: string): boolean {
-  if (relPath === MINDOS_IGNORE_FILE) return false;
-  try {
-    return createSearchIgnoreMatcher(getMindRoot())(relPath);
-  } catch {
-    return relPath.split('/').some((segment) => IGNORED_DIRS.has(segment));
-  }
+/** Re-derive now when the tree was already read once; otherwise stay lazy. */
+function syncDerived(): void {
+  if (!_derived) return;
+  try { ensureDerived(); } catch { /* the next read retries */ }
 }
+
+// ─── Watcher entry points ─────────────────────────────────────────────────────
+// The recursive `fs.watch` lives in the core tree cache. These wrappers exist
+// for `/api/file` (which writes through the product handler) and for tests;
+// they apply a batch immediately and update the search / link indexes per path.
 
 /**
- * Record a single watcher event (relative path inside mindRoot).
- * Pass `null`/`undefined` when the platform did not report a filename —
- * this forces a full invalidation on the next flush (never silently drop).
- * Exported for tests and for alternative watch backends.
+ * Record a single watcher event (relative path inside mindRoot). Pass
+ * `null`/`undefined` when the platform did not report a filename — this forces
+ * a full rescan on the next flush (never silently drop).
  */
 export function handleWatcherEvent(filename: string | Buffer | null | undefined): void {
-  if (filename == null) {
-    _watchOverflow = true;
-    scheduleWatcherFlush();
-    return;
-  }
-  const rel = String(filename).split(path.sep).join('/');
-  if (rel === MINDOS_IGNORE_FILE) {
-    _watchOverflow = true;
-    scheduleWatcherFlush();
-    return;
-  }
-  if (isIgnoredWatcherPath(rel)) return;
-
-  let root: string;
-  try { root = getMindRoot(); } catch { _watchOverflow = true; scheduleWatcherFlush(); return; }
-  // Root changed mid-batch (e.g. settings switch) → stale rel paths.
-  if (_watchPendingRoot !== null && _watchPendingRoot !== root) _watchOverflow = true;
-  _watchPendingRoot = root;
-
-  if (!_watchPending) _watchPending = new Set();
-  _watchPending.add(rel);
-  if (_watchPending.size > WATCH_BATCH_LIMIT) _watchOverflow = true;
-  scheduleWatcherFlush();
-}
-
-function scheduleWatcherFlush(): void {
-  if (_watchDebounce) clearTimeout(_watchDebounce);
-  _watchDebounce = setTimeout(flushWatcherChanges, 500);
+  let cache: MindRootTreeCache;
+  try { cache = treeCache(); } catch { return; }
+  cache.handleWatcherEvent(filename);
 }
 
 /**
- * Apply the batched watcher events: invalidate the tree cache and update
- * the search/link indexes incrementally per path. Exported for tests;
- * called automatically 500ms after the last event.
+ * Apply the batched watcher events now: the core cache patches its stats per
+ * path (or rescans for directory events / overflow) and the search / link
+ * indexes are updated incrementally. Also runs automatically 500ms after the
+ * last event inside the core cache.
  */
 export function flushWatcherChanges(): void {
-  if (_watchDebounce) { clearTimeout(_watchDebounce); _watchDebounce = null; }
-  const pending = _watchPending;
-  const pendingRoot = _watchPendingRoot;
-  const overflow = _watchOverflow;
-  _watchPending = null;
-  _watchPendingRoot = null;
-  _watchOverflow = false;
-
-  if (!pending && !overflow) return; // nothing relevant happened
-
   let root: string;
   try { root = getMindRoot(); } catch { return; }
-
-  if (overflow || !pending || pendingRoot !== root) {
+  const cache = getWebTreeCache(root);
+  const result: TreeCacheFlushResult = cache.flushWatcherChanges();
+  if (result.kind === 'none') return;
+  if (result.kind === 'full') {
     invalidateCache();
     return;
   }
-
-  const knownFiles = _knownFilePaths;
-  if (!knownFiles) {
-    // Without a previous file set we cannot safely distinguish a content
-    // edit from a create/delete, so fall back to the conservative full signal.
-    invalidateCache();
-    return;
-  }
-
-  let treeChanged = false;
-  let contentChanged = false;
-
-  for (const rel of pending) {
-    let stat: fs.Stats | null = null;
-    try { stat = fs.statSync(path.join(root, rel)); } catch { stat = null; }
-
-    if (stat?.isDirectory()) {
-      // Directory event: contents unknown (rename/move of a subtree) —
-      // a full invalidation is the only safe answer.
-      invalidateCache();
-      return;
-    }
-    if (stat) {
-      if (!stat.isFile()) {
-        invalidateCache();
-        return;
-      }
-      if (knownFiles.has(rel)) {
-        contentChanged = true;
-        updateSearchIndexFileLazy(root, rel);
-      } else {
-        treeChanged = true;
-        knownFiles.add(rel);
-        addSearchIndexFileLazy(root, rel);
-      }
-      if (_linkIndex.isBuilt()) _linkIndex.updateFile(root, rel);
-    } else if (knownFiles.has(rel)) {
-      treeChanged = true;
-      knownFiles.delete(rel);
-      removeSearchIndexFileLazy(rel);
+  for (const { path: rel, change } of result.changed) {
+    if (change === 'removed') {
+      removeSearchIndexPath(rel);
       if (_linkIndex.isBuilt()) _linkIndex.removeFile(rel);
+    } else {
+      updateSearchIndexFile(root, rel);
+      if (_linkIndex.isBuilt()) _linkIndex.updateFile(root, rel);
     }
   }
-
-  if (!treeChanged && !contentChanged) return;
-
-  clearTreeCache();
-  if (treeChanged) bumpTreeVersion();
-  _contentVersion++;
-  _searchIndex = null;
-}
-
-/**
- * Start watching mindRoot for file changes. Idempotent — safe to call multiple times.
- * Uses Node.js built-in fs.watch (recursive) with 500ms debounce to batch rapid changes.
- * NOTE: { recursive: true } is supported on macOS and Windows only. On Linux, only
- * top-level changes are detected. For full Linux support, chokidar would be needed.
- */
-export function startFileWatcher(): void {
-  if (_watcher) return; // already watching
-  let root: string;
-  try { root = getMindRoot(); } catch { return; }
-
-  try {
-    _watcher = fs.watch(root, { recursive: true }, (_event, filename) => {
-      handleWatcherEvent(filename ?? null);
-    });
-    _watcher.on('error', () => {
-      // Watcher failed (e.g. too many open files) — degrade gracefully to TTL cache
-      stopFileWatcher();
-    });
-  } catch {
-    // fs.watch not supported on this platform — degrade gracefully
-    _watcher = null;
+  if (_derived) {
+    // Watcher-detected changes always count, even right after an explicit invalidation.
+    _countersBumpedForNextDerive = false;
+    syncDerived();
+    return;
   }
+  if (result.changed.some(({ change }) => change !== 'changed')) bumpTreeVersion();
+  markContentChanged();
 }
 
-/** Stop the file watcher. Safe to call even if not watching. */
+/** Start watching mindRoot for external changes. Idempotent. */
+export function startFileWatcher(): void {
+  try { treeCache().startWatcher(); } catch { /* mindRoot not configured yet */ }
+}
+
+/** Stop the watcher; reads fall back to the TTL until `startFileWatcher()`. */
 export function stopFileWatcher(): void {
-  if (_watchDebounce) { clearTimeout(_watchDebounce); _watchDebounce = null; }
-  _watchPending = null;
-  _watchPendingRoot = null;
-  _watchOverflow = false;
-  if (_watcher) { _watcher.close(); _watcher = null; }
+  try { treeCache().stopWatcher(); } catch { /* nothing to stop */ }
 }
 
-// ─── Internal builders ────────────────────────────────────────────────────────
+// ─── Tree derivation ──────────────────────────────────────────────────────────
+
+const ALLOWED_EXTENSIONS = new Set([
+  '.md', '.csv', '.json', '.pdf',
+  '.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.bmp', '.ico',
+  '.mp3', '.wav', '.m4a', '.ogg', '.flac', '.aac',
+  '.mp4', '.webm', '.mov', '.mkv',
+]);
 
 const SPACE_PREVIEW_MAX_LINES = 3;
+
+type SpacePreviewCache = Map<string, { key: string; preview: SpacePreview }>;
+
+/** Preview text per Space directory, keyed by the INSTRUCTION/README mtimes. */
+const _spacePreviews: SpacePreviewCache = new Map();
 
 function readPreviewSource(filePath: string): string | null {
   try {
@@ -561,7 +400,7 @@ function isTemplateContent(content: string | null): boolean {
   return TEMPLATE_MARKERS.some(m => content.includes(m));
 }
 
-function buildSpacePreview(dirAbsPath: string) {
+function buildSpacePreview(dirAbsPath: string): SpacePreview {
   const instructionPath = path.join(dirAbsPath, 'INSTRUCTION.md');
   const readmePath = path.join(dirAbsPath, 'README.md');
   const instructionContent = readPreviewSource(instructionPath);
@@ -584,96 +423,108 @@ function buildSpacePreview(dirAbsPath: string) {
   };
 }
 
-function buildFileTree(
-  dirPath: string,
-  rootOverride?: string,
-  matcher?: SearchIgnoredPathMatcher,
-): FileNode[] {
-  const root = rootOverride ?? getMindRoot();
-  const isIgnored = matcher ?? createSearchIgnoreMatcher(root);
-  let entries: fs.Dirent[];
-  try {
-    entries = fs.readdirSync(dirPath, { withFileTypes: true });
-  } catch {
-    return [];
-  }
+type DirBuilder = {
+  name: string;
+  path: string;
+  dirs: Map<string, DirBuilder>;
+  files: FileNode[];
+  fileStats: Map<string, MindosRuntimeFileStat>;
+};
 
-  const nodes: FileNode[] = [];
-
-  for (const entry of entries) {
-    const fullPath = path.join(dirPath, entry.name);
-    const relativePath = path.relative(root, fullPath).split(path.sep).join('/');
-
-    if (entry.isDirectory()) {
-      if (isIgnored(relativePath, true)) continue;
-      const children = buildFileTree(fullPath, root, isIgnored);
-      if (children.length > 0) {
-        const hasInstruction = children.some(c => c.type === 'file' && c.name === 'INSTRUCTION.md');
-        const node: FileNode = { name: entry.name, path: relativePath, type: 'directory', children };
-        if (hasInstruction) {
-          node.isSpace = true;
-          node.spacePreview = buildSpacePreview(fullPath);
-        }
-        nodes.push(node);
+/**
+ * Build the UI tree from cached file stats. Directories exist only through
+ * their files (empty directories never show, matching the old readdir walk);
+ * a directory holding `INSTRUCTION.md` is a Space and gets its preview, which
+ * is re-read only when INSTRUCTION.md / README.md changed on disk.
+ */
+function deriveFileTree(root: string, stats: MindosRuntimeFileStat[], previews: SpacePreviewCache): FileNode[] {
+  const top: DirBuilder = { name: '', path: '', dirs: new Map(), files: [], fileStats: new Map() };
+  for (const stat of stats) {
+    const segments = stat.path.split('/');
+    const fileName = segments.pop();
+    if (!fileName) continue;
+    const ext = path.extname(fileName).toLowerCase();
+    if (!ALLOWED_EXTENSIONS.has(ext)) continue;
+    let dir = top;
+    let relPath = '';
+    for (const segment of segments) {
+      relPath = relPath ? `${relPath}/${segment}` : segment;
+      let child = dir.dirs.get(segment);
+      if (!child) {
+        child = { name: segment, path: relPath, dirs: new Map(), files: [], fileStats: new Map() };
+        dir.dirs.set(segment, child);
       }
-    } else if (entry.isFile()) {
-      const ext = path.extname(entry.name).toLowerCase();
-      if (ALLOWED_EXTENSIONS.has(ext) && !isIgnored(relativePath, false)) {
-        nodes.push({ name: entry.name, path: relativePath, type: 'file', extension: ext });
-      }
+      dir = child;
     }
+    dir.files.push({ name: fileName, path: stat.path, type: 'file', extension: ext });
+    dir.fileStats.set(fileName, stat);
   }
+  return finishDirectory(root, top, previews);
+}
 
+function finishDirectory(root: string, dir: DirBuilder, previews: SpacePreviewCache): FileNode[] {
+  const nodes: FileNode[] = [];
+  for (const child of dir.dirs.values()) {
+    const children = finishDirectory(root, child, previews);
+    if (children.length === 0) continue;
+    const node: FileNode = { name: child.name, path: child.path, type: 'directory', children };
+    if (child.fileStats.has('INSTRUCTION.md')) {
+      node.isSpace = true;
+      node.spacePreview = spacePreviewFor(root, child, previews);
+    }
+    nodes.push(node);
+  }
+  nodes.push(...dir.files);
   nodes.sort((a, b) => {
     if (a.type !== b.type) return a.type === 'directory' ? -1 : 1;
     return a.name.localeCompare(b.name);
   });
-
   return nodes;
+}
+
+function spacePreviewFor(root: string, dir: DirBuilder, previews: SpacePreviewCache): SpacePreview {
+  const instruction = dir.fileStats.get('INSTRUCTION.md');
+  const readme = dir.fileStats.get('README.md');
+  const key = `${instruction?.mtime ?? 'none'}:${instruction?.size ?? 0}:${readme?.mtime ?? 'none'}:${readme?.size ?? 0}`;
+  const cached = previews.get(dir.path);
+  if (cached && cached.key === key) return cached.preview;
+  const preview = buildSpacePreview(path.join(root, dir.path));
+  previews.set(dir.path, { key, preview });
+  return preview;
+}
+
+/** Drop preview entries for directories that are no longer Spaces. */
+function pruneSpacePreviews(previews: SpacePreviewCache, tree: FileNode[]): void {
+  const live = new Set<string>();
+  const walk = (nodes: FileNode[]) => {
+    for (const node of nodes) {
+      if (node.type !== 'directory') continue;
+      if (node.isSpace) live.add(node.path);
+      walk(node.children ?? []);
+    }
+  };
+  walk(tree);
+  for (const dirPath of [...previews.keys()]) {
+    if (!live.has(dirPath)) previews.delete(dirPath);
+  }
 }
 
 /** Exposed for testing only — builds a file tree from an arbitrary root path. */
 export function buildFileTreeForTest(rootPath: string): FileNode[] {
-  return buildFileTree(rootPath, rootPath);
-}
-
-function buildAllFiles(dirPath: string, matcher?: SearchIgnoredPathMatcher): string[] {
-  const root = getMindRoot();
-  const isIgnored = matcher ?? createSearchIgnoreMatcher(root);
-  let entries: fs.Dirent[];
-  try {
-    entries = fs.readdirSync(dirPath, { withFileTypes: true });
-  } catch {
-    return [];
-  }
-
-  const files: string[] = [];
-  for (const entry of entries) {
-    const fullPath = path.join(dirPath, entry.name);
-    const relativePath = path.relative(root, fullPath).split(path.sep).join('/');
-    if (entry.isDirectory()) {
-      if (isIgnored(relativePath, true)) continue;
-      files.push(...buildAllFiles(fullPath, isIgnored));
-    } else if (entry.isFile()) {
-      const ext = path.extname(entry.name).toLowerCase();
-      if (ALLOWED_EXTENSIONS.has(ext) && !isIgnored(relativePath, false)) {
-        if (!isDefaultMindSystemScaffoldFile(root, relativePath)) files.push(relativePath);
-      }
-    }
-  }
-  return files;
+  const root = path.resolve(rootPath);
+  return deriveFileTree(root, collectFileStatsFromMindRoot(root), new Map());
 }
 
 // ─── Public API: Tree & cache (app-specific) ─────────────────────────────────
 
 /** Returns the cached file tree for the knowledge base. */
 export function getFileTree(): FileNode[] {
-  return ensureCache().tree;
+  return ensureDerived().tree;
 }
 
 /** Top-level Mind Spaces (same cached tree as home Spaces grid). */
 export function listMindSpaces(): MindSpaceSummary[] {
-  return summarizeTopLevelSpaces(getMindRoot(), ensureCache().tree);
+  return summarizeTopLevelSpaces(getMindRoot(), ensureDerived().tree);
 }
 
 /** Appends a structured change event to the change log. */
@@ -729,7 +580,7 @@ export function getSpacePreview(dirPath: string): SpacePreview | null {
 
 /** Returns cached list of all file paths (relative to MIND_ROOT). */
 export function collectAllFiles(): string[] {
-  return ensureCache().allFiles;
+  return ensureDerived().allFiles;
 }
 
 /** Returns whether a relative path is a directory within MIND_ROOT. */
@@ -742,51 +593,36 @@ export function isDirectory(filePath: string): boolean {
   }
 }
 
+function findDirectoryNode(nodes: FileNode[], dirPath: string): FileNode[] | null {
+  if (!dirPath || dirPath === '.') return nodes;
+  for (const node of nodes) {
+    if (node.type !== 'directory') continue;
+    if (node.path === dirPath) return node.children ?? [];
+    if (dirPath.startsWith(`${node.path}/`)) return findDirectoryNode(node.children ?? [], dirPath);
+  }
+  return null;
+}
+
 /** Returns the immediate children (files + subdirs) of a directory. */
 export function getDirEntries(dirPath: string): FileNode[] {
   const root = getMindRoot();
-  const rootResolved = path.resolve(root);
   let resolved: string;
   try {
-    resolved = resolveExistingSafe(rootResolved, dirPath);
+    resolved = resolveExistingSafe(path.resolve(root), dirPath);
   } catch {
     return [];
   }
-
-  let entries: fs.Dirent[];
-  try {
-    entries = fs.readdirSync(resolved, { withFileTypes: true });
-  } catch {
-    return [];
-  }
-
-  const nodes: FileNode[] = [];
-  const isIgnored = createSearchIgnoreMatcher(rootResolved);
-  for (const entry of entries) {
-    const fullPath = path.join(resolved, entry.name);
-    const relativePath = path.relative(rootResolved, fullPath).split(path.sep).join('/');
-    if (entry.isDirectory()) {
-      if (isIgnored(relativePath, true)) continue;
-      const children = buildFileTree(fullPath, rootResolved, isIgnored);
-      if (children.length > 0) {
-        nodes.push({ name: entry.name, path: relativePath, type: 'directory', children });
-      }
-    } else if (entry.isFile()) {
-      const ext = path.extname(entry.name).toLowerCase();
-      if (ALLOWED_EXTENSIONS.has(ext) && !isIgnored(relativePath, false)) {
-        let mtime: number | undefined;
-        try { mtime = fs.statSync(fullPath).mtimeMs; } catch { /* ignore */ }
-        nodes.push({ name: entry.name, path: relativePath, type: 'file', extension: ext, mtime });
-      }
+  const rel = path.relative(path.resolve(root), resolved).split(path.sep).join('/');
+  const children = findDirectoryNode(ensureDerived().tree, rel);
+  if (!children) return [];
+  const cache = treeCache();
+  return children.map((node) => {
+    if (node.type === 'directory') {
+      return { name: node.name, path: node.path, type: 'directory', children: node.children };
     }
-  }
-
-  nodes.sort((a, b) => {
-    if (a.type !== b.type) return a.type === 'directory' ? -1 : 1;
-    return a.name.localeCompare(b.name);
+    const mtime = cache.getFileStat(node.path)?.mtime;
+    return mtime === undefined ? { ...node } : { ...node, mtime };
   });
-
-  return nodes;
 }
 
 /**
@@ -794,7 +630,7 @@ export function getDirEntries(dirPath: string): FileNode[] {
  * @param limit Max files to return (default: 10)
  */
 export function getRecentlyModified(limit = 10): Array<{ path: string; mtime: number }> {
-  return ensureCache().recentFiles.slice(0, limit);
+  return ensureDerived().recentFiles.slice(0, limit);
 }
 
 // ─── Public API: File operations (delegated to @mindos/core) ─────────────────
@@ -834,7 +670,7 @@ export function saveFileContent(filePath: string, content: string): void {
 /** Creates a new file at the given relative path. Creates parent dirs as needed. */
 export function createFile(filePath: string, initialContent = ''): void {
   coreCreateFile(getMindRoot(), filePath, initialContent);
-  invalidateCacheForNewFile(filePath);
+  invalidateCacheForFile(filePath);
 }
 
 /**
@@ -941,38 +777,28 @@ export function updateSection(filePath: string, heading: string, newContent: str
 // ─── Search prewarm (app-level) ───────────────────────────────────────────────
 //
 // The browser ⌘K overlay queries `/api/search`, which uses the core BM25 /
-// hybrid search in `lib/core/`. The old in-process Fuse.js index here had no
-// query callers anymore (dead code) and was removed; what remains is the
-// prewarm bookkeeping used by `/api/search/prewarm` to keep the tree cache
-// warm and report a document count.
+// hybrid search in `lib/core/`. What remains here is the prewarm bookkeeping
+// used by `/api/search/prewarm` to keep the tree cache warm and report a
+// document count; it is keyed on the core tree version, so any file change
+// (shape or content) reports `built` once and `hit` afterwards.
 
 interface UiSearchPrewarmState {
   documentCount: number;
-  timestamp: number;
-  treeVersion: number;
+  coreVersion: number;
 }
 
-let _searchIndex: UiSearchPrewarmState | null = null;
-
-function getValidSearchIndex(): UiSearchPrewarmState | null {
-  ensureCache();
-  return _searchIndex !== null && _searchIndex.treeVersion === _treeVersion
-    ? _searchIndex
-    : null;
-}
+let _uiSearch: UiSearchPrewarmState | null = null;
 
 /** Warm the file-tree cache and report the searchable document count. */
 export function prewarmSearchIndex(): SearchPrewarmResponse {
-  const cached = getValidSearchIndex();
-  if (cached) {
-    telemetry.track('search.ui.prewarm', { cacheState: 'hit', documentCount: cached.documentCount });
-    return { warmed: true, cacheState: 'hit', documentCount: cached.documentCount };
+  const derived = ensureDerived();
+  if (_uiSearch && _uiSearch.coreVersion === derived.coreVersion) {
+    telemetry.track('search.ui.prewarm', { cacheState: 'hit', documentCount: _uiSearch.documentCount });
+    return { warmed: true, cacheState: 'hit', documentCount: _uiSearch.documentCount };
   }
 
-  const stop = telemetry.startTimer('search.ui.index.build');
-  const documentCount = collectAllFiles().length;
-  _searchIndex = { documentCount, timestamp: Date.now(), treeVersion: _treeVersion };
-  stop({ fileCount: documentCount, documentCount });
+  const documentCount = derived.allFiles.length;
+  _uiSearch = { documentCount, coreVersion: derived.coreVersion };
   telemetry.track('search.ui.prewarm', { cacheState: 'built', documentCount });
   return { warmed: true, cacheState: 'built', documentCount };
 }

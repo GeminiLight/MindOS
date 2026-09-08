@@ -3,30 +3,13 @@ import { resolve } from 'node:path';
 import { CONFIG_PATH } from './constants.js';
 import { bold, dim, cyan, green, red, yellow } from './colors.js';
 import { expandHome } from './path-expand.js';
-import { parseJsonc } from './jsonc.js';
+import { parseJsonc, parseJsoncDocument, setJsoncValue } from './jsonc.js';
 import { MCP_AGENTS, detectAgentPresence } from './mcp-agents.js';
 import { mergeTomlEntry } from './toml.js';
 import { mergeYamlEntry } from './yaml.js';
 import { EXIT } from './command.js';
 import { getActiveSkillName } from './agent-readiness.js';
 import { installMindosSkillsForAgents } from './skill-install.js';
-
-/**
- * Walk a dot-separated path inside an object, creating intermediate {} as needed.
- * Returns the leaf object so the caller can set keys on it.
- * e.g. ensureNestedPath({}, 'mcp.clients') → creates obj.mcp.clients = {} and returns it.
- */
-function ensureNestedPath(obj, dotPath) {
-  const parts = dotPath.split('.').filter(Boolean);
-  let current = obj;
-  for (const part of parts) {
-    if (!current[part] || typeof current[part] !== 'object') {
-      current[part] = {};
-    }
-    current = current[part];
-  }
-  return current;
-}
 
 /**
  * Read-only walk of a dot-separated path. Returns null if any segment is missing.
@@ -40,25 +23,6 @@ function readNestedPath(obj, dotPath) {
   }
   if (!current || typeof current !== 'object') return null;
   return current;
-}
-
-/**
- * True when JSON/JSONC text has `//` or `/* ... *\/` comments outside string
- * literals. parseJsonc() strips them, so re-serialising would drop them.
- */
-export function hasJsoncComments(text) {
-  let inString = false;
-  for (let i = 0; i < text.length; i += 1) {
-    const ch = text[i];
-    if (inString) {
-      if (ch === '\\') i += 1;
-      else if (ch === '"') inString = false;
-      continue;
-    }
-    if (ch === '"') { inString = true; continue; }
-    if (ch === '/' && (text[i + 1] === '/' || text[i + 1] === '*')) return true;
-  }
-  return false;
 }
 
 /**
@@ -78,17 +42,12 @@ export function writeFileAtomically(absPath, content) {
 }
 
 /**
- * Replace a JSON/JSONC config, backing up a commented original to `.bak`.
- * Returns the backup path when one was written, otherwise null.
+ * Insert `entry` under `path` (array of keys) editing the existing JSON/JSONC
+ * text in place so user comments and formatting survive, then write
+ * atomically. Mirrors src/server/handlers/mcp-install.ts#writeJsonServerEntry.
  */
-export function writeJsonConfigFile(absPath, existingText, nextText) {
-  let backupPath = null;
-  if (existingText && hasJsoncComments(existingText)) {
-    backupPath = `${absPath}.bak`;
-    writeFileAtomically(backupPath, existingText);
-  }
-  writeFileAtomically(absPath, nextText);
-  return backupPath;
+export function writeJsonServerEntry(absPath, existingText, path, entry) {
+  writeFileAtomically(absPath, setJsoncValue(existingText, path, entry));
 }
 
 function configPathCandidates(agent, scope) {
@@ -458,31 +417,42 @@ export async function mcpInstall() {
       const merged = mergeYamlEntry(existing, agent.key, 'mindos', entry);
       writeFileAtomically(absPath, merged);
     } else {
-      // JSON format (default)
-      let config = {};
+      // JSON / JSONC format (default): edit the existing text in place so user
+      // comments and formatting survive (jsonc-parser modify + applyEdits).
       let existingText = '';
+      let config = {};
       if (existsSync(absPath)) {
         existingText = readFileSync(absPath, 'utf-8');
-        try { config = parseJsonc(existingText); } catch {
-          const error = `Failed to parse existing config: ${absPath}`;
+        const parsed = parseJsoncDocument(existingText);
+        if (parsed.value === undefined) {
+          try { config = parseJsonc(existingText); } catch {
+            const error = `Failed to parse existing config: ${absPath} (${parsed.errors.join('; ')})`;
+            console.error(red(`  ${error} — skipping.`));
+            mcpFailures.push({ agentKey, name: agent.name, error });
+            continue;
+          }
+        } else if (!parsed.value || typeof parsed.value !== 'object' || Array.isArray(parsed.value)) {
+          const error = `Failed to parse existing config: ${absPath} (expected a JSON object at the document root)`;
           console.error(red(`  ${error} — skipping.`));
           mcpFailures.push({ agentKey, name: agent.name, error });
           continue;
+        } else {
+          config = parsed.value;
+          if (parsed.errors.length > 0) {
+            console.log(yellow(`  ! ${absPath} has JSONC syntax issues (${parsed.errors.join('; ')}); edited in place without repairing them`));
+          }
         }
       }
 
       // For global scope with nested key (e.g. CoPaw: mcp.clients),
       // write to the nested path instead of the flat key
       const useNestedKey = isGlobal && agent.globalNestedKey;
-      const container = useNestedKey
-        ? ensureNestedPath(config, agent.globalNestedKey)
-        : (() => { if (!config[agent.key]) config[agent.key] = {}; return config[agent.key]; })();
-      existed = !!container.mindos;
-      container.mindos = entry;
-      const backupPath = writeJsonConfigFile(absPath, existingText, JSON.stringify(config, null, 2) + '\n');
-      if (backupPath) {
-        console.log(yellow(`  ! Comments were removed from ${absPath}; original saved to ${backupPath}`));
-      }
+      const entryPath = useNestedKey
+        ? [...agent.globalNestedKey.split('.').filter(Boolean), 'mindos']
+        : [agent.key, 'mindos'];
+      const container = useNestedKey ? readNestedPath(config, agent.globalNestedKey) : config[agent.key];
+      existed = !!(container && typeof container === 'object' && container.mindos);
+      writeJsonServerEntry(absPath, existingText, entryPath, entry);
     }
 
     console.log(`${green('✔')} ${existed ? 'Updated' : 'Installed'} MindOS MCP for ${bold(agent.name)} ${dim(`→ ${absPath}`)}`);

@@ -3,6 +3,8 @@ import { homedir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { errorResponse, json, type MindosServerResponse } from '../response.js';
 import type { MindosRuntimeSettings, MindosRuntimeSkillRoot } from '../runtime.js';
+import { expandHome } from '../../foundation/shared/utils/path.js';
+import { parseJsonc } from '../../foundation/shared/utils/jsonc.js';
 
 export type CustomAgentDef = {
   name: string;
@@ -387,14 +389,7 @@ export function handleCustomAgentsDelete(
 }
 
 export function expandAgentHome(input: string, homeDir = homedir()): string {
-  return input.startsWith('~/') || input.startsWith('~\\') ? resolve(homeDir, input.slice(2)) : input;
-}
-
-function parseJsonc(text: string): Record<string, unknown> {
-  let stripped = text.replace(/\\"|"(?:\\"|[^"])*"|(\/\/.*$)/gm, (match, comment) => comment ? '' : match);
-  stripped = stripped.replace(/\/\*[\s\S]*?\*\//g, '');
-  if (!stripped.trim()) return {};
-  return JSON.parse(stripped) as Record<string, unknown>;
+  return expandHome(input, homeDir);
 }
 
 function parseJsonMcpServers(content: string, key: string): string[] {

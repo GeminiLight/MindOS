@@ -1,0 +1,826 @@
+{
+  "generatedBy": "packages/web/lib/core/search-index.ts @ 62365957 (pre-consolidation)",
+  "segmenter": true,
+  "files": {
+    "Notes/知识管理.md": "# 人工智能\n\n知识管理系统是一种工具。\n\n深度学习是人工智能的重要分支。",
+    "Notes/ai-research.md": "# AI Research\n\nMachine learning and deep learning notes.\n\nTransformers changed NLP.",
+    "Notes/mixed.md": "MindOS 是一款知识管理工具，support English and 中文 mixed search. GPU 加速。",
+    "Notes/japanese.md": "日本語のテキスト、東京タワー。ひらがなとカタカナ。",
+    "Notes/korean.md": "한국어 문서입니다. 검색 테스트.",
+    "Projects/TODO.md": "# TODO\n\n- Fix the bug\n- Add search feature\n- 搜索功能优化",
+    "Archive/old.md": "This is archived content about search.\n\n量子计算研究进展。",
+    "Journal/2026-01-01 日记.md": "今天学习了机器学习 🚀 emoji test 🎉\n\nfeeling happy 😀",
+    "Resources/data.csv": "name,value\nfoo,bar\n知识,管理",
+    "Resources/prices.md": "price is $100.00 (USD) and 50% off; email test@example.com; tag #mindos",
+    "Deep/nested/path/文件 名 with spaces.md": "nested pathtoken content 深层 目录",
+    "many.md": "test test test test test",
+    "few.md": "test and lots of other words that dilute the density of matches significantly",
+    "README.md": "readme rootsystem token",
+    "node_modules/pkg/index.md": "dependency needle rootsystem"
+  },
+  "indexedFiles": [
+    "Archive/old.md",
+    "Deep/nested/path/文件 名 with spaces.md",
+    "Journal/2026-01-01 日记.md",
+    "Notes/ai-research.md",
+    "Notes/japanese.md",
+    "Notes/korean.md",
+    "Notes/mixed.md",
+    "Notes/知识管理.md",
+    "Projects/TODO.md",
+    "Resources/data.csv",
+    "Resources/prices.md",
+    "few.md",
+    "many.md"
+  ],
+  "avgDocLength": 45.69230769230769,
+  "tokens": {
+    "知识管理系统是一种工具": [
+      "一",
+      "一种",
+      "具",
+      "工",
+      "工具",
+      "是",
+      "理",
+      "知",
+      "知识",
+      "种",
+      "管",
+      "管理",
+      "系",
+      "系统",
+      "统",
+      "识"
+    ],
+    "MindOS 是一款知识管理工具": [
+      "mindos",
+      "一",
+      "具",
+      "工",
+      "工具",
+      "是",
+      "款",
+      "理",
+      "知",
+      "知识",
+      "管",
+      "管理",
+      "识"
+    ],
+    "Machine Learning, deep-learning; NLP_v2 $100 test@example.com #tag": [
+      "#tag",
+      "$100",
+      "com",
+      "deep",
+      "learning",
+      "machine",
+      "nlp_v2",
+      "test@example"
+    ],
+    "a b c": [],
+    "日本語のテキスト 한국어 문서": [
+      "の",
+      "キ",
+      "ス",
+      "テ",
+      "テキスト",
+      "ト",
+      "日",
+      "日本語",
+      "本",
+      "語",
+      "국",
+      "문",
+      "문서",
+      "서",
+      "어",
+      "한",
+      "한국어"
+    ],
+    "🚀 emoji 🎉": [
+      "emoji"
+    ],
+    "Deep/nested/path/文件 名 with spaces.md": [
+      "deep",
+      "md",
+      "nested",
+      "path",
+      "spaces",
+      "spaces.md",
+      "with",
+      "件",
+      "名",
+      "文",
+      "文件"
+    ],
+    "": []
+  },
+  "queries": {
+    "知识管理": {
+      "results": [
+        {
+          "path": "Notes/知识管理.md",
+          "score": 10.88786674682343,
+          "occurrences": 7,
+          "snippet": "...知识管理系统是一种工具。..."
+        },
+        {
+          "path": "Resources/data.csv",
+          "score": 10.322561088954261,
+          "occurrences": 6,
+          "snippet": "name,value\nfoo,bar\n知识,管理"
+        },
+        {
+          "path": "Notes/mixed.md",
+          "score": 8.830317125376482,
+          "occurrences": 7,
+          "snippet": "MindOS 是一款知识管理工具，support English and 中文 mixed search. GPU 加速。"
+        }
+      ],
+      "candidates": [
+        "Notes/mixed.md",
+        "Notes/知识管理.md",
+        "Resources/data.csv"
+      ],
+      "union": [
+        "Notes/mixed.md",
+        "Notes/知识管理.md",
+        "Resources/data.csv"
+      ]
+    },
+    "知识": {
+      "results": [
+        {
+          "path": "Resources/data.csv",
+          "score": 5.1612805444771315,
+          "occurrences": 3,
+          "snippet": "name,value\nfoo,bar\n知识,管理"
+        },
+        {
+          "path": "Notes/知识管理.md",
+          "score": 4.5098567864363295,
+          "occurrences": 3,
+          "snippet": "...知识管理系统是一种工具。..."
+        },
+        {
+          "path": "Notes/mixed.md",
+          "score": 3.6576003858499355,
+          "occurrences": 3,
+          "snippet": "MindOS 是一款知识管理工具，support English and 中文 mixed search. GPU 加速。"
+        }
+      ],
+      "candidates": [
+        "Notes/mixed.md",
+        "Notes/知识管理.md",
+        "Resources/data.csv"
+      ],
+      "union": [
+        "Notes/mixed.md",
+        "Notes/知识管理.md",
+        "Resources/data.csv"
+      ]
+    },
+    "识管": {
+      "results": [
+        {
+          "path": "Notes/知识管理.md",
+          "score": 4.8747243649083245,
+          "occurrences": 3,
+          "snippet": "...知识管理系统是一种工具。..."
+        },
+        {
+          "path": "Notes/mixed.md",
+          "score": 3.9535166109099,
+          "occurrences": 3,
+          "snippet": "MindOS 是一款知识管理工具，support English and 中文 mixed search. GPU 加速。"
+        },
+        {
+          "path": "Resources/data.csv",
+          "score": 3.4408536963180874,
+          "occurrences": 2,
+          "snippet": "name,value\nfoo,bar\n知识,管理"
+        }
+      ],
+      "candidates": [
+        "Notes/mixed.md",
+        "Notes/知识管理.md",
+        "Resources/data.csv"
+      ],
+      "union": [
+        "Notes/mixed.md",
+        "Notes/知识管理.md",
+        "Resources/data.csv"
+      ]
+    },
+    "人工智能": {
+      "results": [
+        {
+          "path": "Notes/知识管理.md",
+          "score": 23.12788261427456,
+          "occurrences": 15,
+          "snippet": "# 人工智能..."
+        }
+      ],
+      "candidates": [
+        "Notes/知识管理.md"
+      ],
+      "union": [
+        "Notes/知识管理.md"
+      ]
+    },
+    "学习": {
+      "results": [
+        {
+          "path": "Journal/2026-01-01 日记.md",
+          "score": 7.181216554794496,
+          "occurrences": 6,
+          "snippet": "今天学习了机器学习 🚀 emoji test 🎉..."
+        },
+        {
+          "path": "Notes/知识管理.md",
+          "score": 5.6044595218523146,
+          "occurrences": 3,
+          "snippet": "...深度学习是人工智能的重要分支。"
+        }
+      ],
+      "candidates": [
+        "Journal/2026-01-01 日记.md",
+        "Notes/知识管理.md"
+      ],
+      "union": [
+        "Journal/2026-01-01 日记.md",
+        "Notes/知识管理.md"
+      ]
+    },
+    "管理": {
+      "results": [
+        {
+          "path": "Resources/data.csv",
+          "score": 5.1612805444771315,
+          "occurrences": 3,
+          "snippet": "name,value\nfoo,bar\n知识,管理"
+        },
+        {
+          "path": "Notes/知识管理.md",
+          "score": 4.5098567864363295,
+          "occurrences": 3,
+          "snippet": "...知识管理系统是一种工具。..."
+        },
+        {
+          "path": "Notes/mixed.md",
+          "score": 3.6576003858499355,
+          "occurrences": 3,
+          "snippet": "MindOS 是一款知识管理工具，support English and 中文 mixed search. GPU 加速。"
+        }
+      ],
+      "candidates": [
+        "Notes/mixed.md",
+        "Notes/知识管理.md",
+        "Resources/data.csv"
+      ],
+      "union": [
+        "Notes/mixed.md",
+        "Notes/知识管理.md",
+        "Resources/data.csv"
+      ]
+    },
+    "量子计算研究": {
+      "results": [
+        {
+          "path": "Archive/old.md",
+          "score": 21.693484318583955,
+          "occurrences": 10,
+          "snippet": "...量子计算研究进展。"
+        }
+      ],
+      "candidates": [
+        "Archive/old.md"
+      ],
+      "union": [
+        "Archive/old.md"
+      ]
+    },
+    "搜索功能": {
+      "results": [
+        {
+          "path": "Projects/TODO.md",
+          "score": 14.9258588687693,
+          "occurrences": 7,
+          "snippet": "...- Fix the bug\n- Add search feature\n- 搜索功能优化"
+        }
+      ],
+      "candidates": [
+        "Projects/TODO.md"
+      ],
+      "union": [
+        "Projects/TODO.md"
+      ]
+    },
+    "search": {
+      "results": [
+        {
+          "path": "Archive/old.md",
+          "score": 1.34642101160273,
+          "occurrences": 1,
+          "snippet": "This is archived content about search...."
+        },
+        {
+          "path": "Projects/TODO.md",
+          "score": 1.323405267814649,
+          "occurrences": 1,
+          "snippet": "...- Fix the bug\n- Add search feature\n- 搜索功能优化"
+        },
+        {
+          "path": "Notes/mixed.md",
+          "score": 1.2192001286166452,
+          "occurrences": 1,
+          "snippet": "MindOS 是一款知识管理工具，support English and 中文 mixed search. GPU 加速。"
+        }
+      ],
+      "candidates": [
+        "Archive/old.md",
+        "Notes/mixed.md",
+        "Projects/TODO.md"
+      ],
+      "union": [
+        "Archive/old.md",
+        "Notes/mixed.md",
+        "Projects/TODO.md"
+      ]
+    },
+    "search feature": {
+      "results": [
+        {
+          "path": "Projects/TODO.md",
+          "score": 5.587936373177306,
+          "occurrences": 3,
+          "snippet": "...- Fix the bug\n- Add search feature\n- 搜索功能优化"
+        },
+        {
+          "path": "Archive/old.md",
+          "score": 1.34642101160273,
+          "occurrences": 1,
+          "snippet": "This is archived content about search...."
+        },
+        {
+          "path": "Notes/mixed.md",
+          "score": 1.2192001286166452,
+          "occurrences": 1,
+          "snippet": "MindOS 是一款知识管理工具，support English and 中文 mixed search. GPU 加速。"
+        }
+      ],
+      "candidates": [
+        "Projects/TODO.md"
+      ],
+      "union": [
+        "Archive/old.md",
+        "Notes/mixed.md",
+        "Projects/TODO.md"
+      ]
+    },
+    "machine learning": {
+      "results": [
+        {
+          "path": "Notes/ai-research.md",
+          "score": 5.846291233587987,
+          "occurrences": 4,
+          "snippet": "...Machine learning and deep learning notes...."
+        }
+      ],
+      "candidates": [
+        "Notes/ai-research.md"
+      ],
+      "union": [
+        "Notes/ai-research.md"
+      ]
+    },
+    "mindos": {
+      "results": [
+        {
+          "path": "Notes/mixed.md",
+          "score": 1.96437062727335,
+          "occurrences": 1,
+          "snippet": "MindOS 是一款知识管理工具，support English and 中文 mixed search. GPU 加速。"
+        }
+      ],
+      "candidates": [
+        "Notes/mixed.md"
+      ],
+      "union": [
+        "Notes/mixed.md"
+      ]
+    },
+    "MindOS 知识": {
+      "results": [
+        {
+          "path": "Notes/mixed.md",
+          "score": 5.621971013123286,
+          "occurrences": 4,
+          "snippet": "MindOS 是一款知识管理工具，support English and 中文 mixed search. GPU 加速。"
+        },
+        {
+          "path": "Resources/data.csv",
+          "score": 5.1612805444771315,
+          "occurrences": 3,
+          "snippet": "name,value\nfoo,bar\n知识,管理"
+        },
+        {
+          "path": "Notes/知识管理.md",
+          "score": 4.5098567864363295,
+          "occurrences": 3,
+          "snippet": "...知识管理系统是一种工具。..."
+        }
+      ],
+      "candidates": [
+        "Notes/mixed.md"
+      ],
+      "union": [
+        "Notes/mixed.md",
+        "Notes/知识管理.md",
+        "Resources/data.csv"
+      ]
+    },
+    "the": {
+      "results": [
+        {
+          "path": "Projects/TODO.md",
+          "score": 1.6446134779224735,
+          "occurrences": 1,
+          "snippet": "...- Fix the bug\n- Add search feature\n- 搜索功能优化"
+        },
+        {
+          "path": "few.md",
+          "score": 1.3455928455729331,
+          "occurrences": 1,
+          "snippet": "test and lots of other words that dilute the density of matches significantly"
+        }
+      ],
+      "candidates": [
+        "Projects/TODO.md",
+        "few.md"
+      ],
+      "union": [
+        "Projects/TODO.md",
+        "few.md"
+      ]
+    },
+    "test": {
+      "results": [
+        {
+          "path": "many.md",
+          "score": 2.641600278669398,
+          "occurrences": 5,
+          "snippet": "test test test test test"
+        },
+        {
+          "path": "Journal/2026-01-01 日记.md",
+          "score": 1.4076219666755814,
+          "occurrences": 1,
+          "snippet": "今天学习了机器学习 🚀 emoji test 🎉..."
+        },
+        {
+          "path": "few.md",
+          "score": 1.0827861282119857,
+          "occurrences": 1,
+          "snippet": "test and lots of other words that dilute the density of matches significantly"
+        }
+      ],
+      "candidates": [
+        "Journal/2026-01-01 日记.md",
+        "few.md",
+        "many.md"
+      ],
+      "union": [
+        "Journal/2026-01-01 日记.md",
+        "few.md",
+        "many.md"
+      ]
+    },
+    "a": {
+      "results": [],
+      "candidates": null,
+      "union": null
+    },
+    "x": {
+      "results": [],
+      "candidates": null,
+      "union": null
+    },
+    "🚀": {
+      "results": [],
+      "candidates": null,
+      "union": null
+    },
+    "emoji": {
+      "results": [
+        {
+          "path": "Journal/2026-01-01 日记.md",
+          "score": 2.26795517876105,
+          "occurrences": 1,
+          "snippet": "今天学习了机器学习 🚀 emoji test 🎉..."
+        }
+      ],
+      "candidates": [
+        "Journal/2026-01-01 日记.md"
+      ],
+      "union": [
+        "Journal/2026-01-01 日记.md"
+      ]
+    },
+    "$100": {
+      "results": [],
+      "candidates": [
+        "Resources/prices.md"
+      ],
+      "union": [
+        "Resources/prices.md"
+      ]
+    },
+    "50%": {
+      "results": [
+        {
+          "path": "Resources/prices.md",
+          "score": 1.8209859099541277,
+          "occurrences": 1,
+          "snippet": "price is $100.00 (USD) and 50% off; email test@example.com; tag #mindos"
+        }
+      ],
+      "candidates": [
+        "Resources/prices.md"
+      ],
+      "union": [
+        "Resources/prices.md"
+      ]
+    },
+    "test@example.com": {
+      "results": [
+        {
+          "path": "Resources/prices.md",
+          "score": 5.462957729862383,
+          "occurrences": 3,
+          "snippet": "price is $100.00 (USD) and 50% off; email test@example.com; tag #mindos"
+        }
+      ],
+      "candidates": [
+        "Resources/prices.md"
+      ],
+      "union": [
+        "Resources/prices.md"
+      ]
+    },
+    "#mindos": {
+      "results": [],
+      "candidates": [
+        "Resources/prices.md"
+      ],
+      "union": [
+        "Resources/prices.md"
+      ]
+    },
+    "深层": {
+      "results": [
+        {
+          "path": "Deep/nested/path/文件 名 with spaces.md",
+          "score": 7.201769960878753,
+          "occurrences": 3,
+          "snippet": "nested pathtoken content 深层 目录"
+        },
+        {
+          "path": "Notes/知识管理.md",
+          "score": 1.8681531739507715,
+          "occurrences": 1,
+          "snippet": "...深度学习是人工智能的重要分支。"
+        }
+      ],
+      "candidates": [
+        "Deep/nested/path/文件 名 with spaces.md"
+      ],
+      "union": [
+        "Deep/nested/path/文件 名 with spaces.md",
+        "Notes/知识管理.md"
+      ]
+    },
+    "文件": {
+      "results": [
+        {
+          "path": "Notes/mixed.md",
+          "score": 1.96437062727335,
+          "occurrences": 1,
+          "snippet": "MindOS 是一款知识管理工具，support English and 中文 mixed search. GPU 加速。"
+        }
+      ],
+      "candidates": [
+        "Deep/nested/path/文件 名 with spaces.md"
+      ],
+      "union": [
+        "Deep/nested/path/文件 名 with spaces.md",
+        "Notes/mixed.md"
+      ]
+    },
+    "日本語": {
+      "results": [
+        {
+          "path": "Notes/japanese.md",
+          "score": 10.965937128075405,
+          "occurrences": 4,
+          "snippet": "日本語のテキスト、東京タワー。ひらがなとカタカナ。"
+        }
+      ],
+      "candidates": [
+        "Notes/japanese.md"
+      ],
+      "union": [
+        "Notes/japanese.md"
+      ]
+    },
+    "東京": {
+      "results": [
+        {
+          "path": "Notes/japanese.md",
+          "score": 8.224452846056554,
+          "occurrences": 3,
+          "snippet": "日本語のテキスト、東京タワー。ひらがなとカタカナ。"
+        }
+      ],
+      "candidates": [],
+      "union": [
+        "Notes/japanese.md"
+      ]
+    },
+    "ひらがな": {
+      "results": [
+        {
+          "path": "Notes/japanese.md",
+          "score": 13.707421410094256,
+          "occurrences": 5,
+          "snippet": "日本語のテキスト、東京タワー。ひらがなとカタカナ。"
+        }
+      ],
+      "candidates": [
+        "Notes/japanese.md"
+      ],
+      "union": [
+        "Notes/japanese.md"
+      ]
+    },
+    "한국어": {
+      "results": [
+        {
+          "path": "Notes/korean.md",
+          "score": 11.87976522208169,
+          "occurrences": 4,
+          "snippet": "한국어 문서입니다. 검색 테스트."
+        }
+      ],
+      "candidates": [
+        "Notes/korean.md"
+      ],
+      "union": [
+        "Notes/korean.md"
+      ]
+    },
+    "검색": {
+      "results": [
+        {
+          "path": "Notes/korean.md",
+          "score": 8.909823916561269,
+          "occurrences": 3,
+          "snippet": "한국어 문서입니다. 검색 테스트."
+        }
+      ],
+      "candidates": [
+        "Notes/korean.md"
+      ],
+      "union": [
+        "Notes/korean.md"
+      ]
+    },
+    "nested pathtoken": {
+      "results": [
+        {
+          "path": "Deep/nested/path/文件 名 with spaces.md",
+          "score": 7.796095926991109,
+          "occurrences": 3,
+          "snippet": "nested pathtoken content 深层 目录"
+        }
+      ],
+      "candidates": [
+        "Deep/nested/path/文件 名 with spaces.md"
+      ],
+      "union": [
+        "Deep/nested/path/文件 名 with spaces.md"
+      ]
+    },
+    "Deep/nested": {
+      "results": [
+        {
+          "path": "Deep/nested/path/文件 名 with spaces.md",
+          "score": 2.5986986423303695,
+          "occurrences": 1,
+          "snippet": "nested pathtoken content 深层 目录"
+        },
+        {
+          "path": "Notes/ai-research.md",
+          "score": 1.6743293266021175,
+          "occurrences": 1,
+          "snippet": "...Machine learning and deep learning notes...."
+        }
+      ],
+      "candidates": [
+        "Deep/nested/path/文件 名 with spaces.md"
+      ],
+      "union": [
+        "Deep/nested/path/文件 名 with spaces.md",
+        "Notes/ai-research.md"
+      ]
+    },
+    "csv 知识": {
+      "results": [
+        {
+          "path": "Resources/data.csv",
+          "score": 5.1612805444771315,
+          "occurrences": 3,
+          "snippet": "name,value\nfoo,bar\n知识,管理"
+        },
+        {
+          "path": "Notes/知识管理.md",
+          "score": 4.5098567864363295,
+          "occurrences": 3,
+          "snippet": "...知识管理系统是一种工具。..."
+        },
+        {
+          "path": "Notes/mixed.md",
+          "score": 3.6576003858499355,
+          "occurrences": 3,
+          "snippet": "MindOS 是一款知识管理工具，support English and 中文 mixed search. GPU 加速。"
+        }
+      ],
+      "candidates": [
+        "Resources/data.csv"
+      ],
+      "union": [
+        "Notes/mixed.md",
+        "Notes/知识管理.md",
+        "Resources/data.csv"
+      ]
+    },
+    "rootsystem": {
+      "results": [],
+      "candidates": [],
+      "union": []
+    },
+    "needle": {
+      "results": [],
+      "candidates": [],
+      "union": []
+    },
+    "xyznonexistent": {
+      "results": [],
+      "candidates": [],
+      "union": []
+    },
+    "Deep learning transformers": {
+      "results": [
+        {
+          "path": "Notes/ai-research.md",
+          "score": 5.846291233587987,
+          "occurrences": 4,
+          "snippet": "...Machine learning and deep learning notes...."
+        }
+      ],
+      "candidates": [
+        "Notes/ai-research.md"
+      ],
+      "union": [
+        "Deep/nested/path/文件 名 with spaces.md",
+        "Notes/ai-research.md"
+      ]
+    },
+    "GPU 加速": {
+      "results": [
+        {
+          "path": "Notes/mixed.md",
+          "score": 9.82185313636675,
+          "occurrences": 5,
+          "snippet": "MindOS 是一款知识管理工具，support English and 中文 mixed search. GPU 加速。"
+        }
+      ],
+      "candidates": [
+        "Notes/mixed.md"
+      ],
+      "union": [
+        "Notes/mixed.md"
+      ]
+    },
+    "2026-01-01": {
+      "results": [],
+      "candidates": [
+        "Journal/2026-01-01 日记.md"
+      ],
+      "union": [
+        "Journal/2026-01-01 日记.md"
+      ]
+    }
+  }
+}

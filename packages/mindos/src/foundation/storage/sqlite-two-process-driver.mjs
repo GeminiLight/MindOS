@@ -36,6 +36,17 @@ if (mode === 'insert-many') {
   process.exit(0);
 }
 
+if (mode === 'open-only') {
+  // Open (create + migrate) and close immediately: the whole process lifetime
+  // is the initialization race the coordinator wants several siblings to hit.
+  const db = sqlite.openMindosDatabase({ file: dbFile, migrations });
+  const journal = db.prepare('PRAGMA journal_mode').get();
+  const versions = db.prepare('SELECT count(*) AS n FROM _migrations').get();
+  db.close();
+  process.stdout.write(JSON.stringify({ pid: process.pid, journal: journal.journal_mode, migrations: versions.n }));
+  process.exit(0);
+}
+
 if (mode === 'hold-write-lock') {
   const holdMs = Number(rest[0]);
   const db = sqlite.openMindosDatabase({ file: dbFile, migrations });

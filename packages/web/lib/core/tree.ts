@@ -1,6 +1,15 @@
 import fs from 'fs';
 import fsp from 'fs/promises';
 import path from 'path';
+import {
+  MINDOS_IGNORED_DIRS,
+  MINDOS_IGNORE_FILE,
+  createMindosIgnoreRuleMatcher,
+  normalizeSearchIgnoredPaths,
+  parseMindosIgnoreContent,
+  readMindosIgnoreFile,
+  writeMindosIgnoreFile,
+} from '@geminilight/mindos/server';
 import type { FileNode } from './types';
 import { isDefaultMindSystemScaffoldFile } from '../mind-system-scaffold';
 
@@ -13,46 +22,13 @@ function toPosix(p: string): string {
   return process.platform === 'win32' ? p.replace(/\\/g, '/') : p;
 }
 
-export const DEFAULT_IGNORED_DIRS = new Set([
-  '.git',
-  'node_modules',
-  '__pycache__',
-  'app',
-  '.next',
-  '.DS_Store',
-  '.cache',
-  '.cc-branch',
-  '.claude',
-  '.cursor',
-  '.idea',
-  '.mypy_cache',
-  '.nuxt',
-  '.output',
-  '.parcel-cache',
-  '.pnpm-store',
-  '.pytest_cache',
-  '.ruff_cache',
-  '.svelte-kit',
-  '.turbo',
-  '.venv',
-  '.vite',
-  '.vscode',
-  '.windsurf',
-  '.yarn',
-  'mcp',
-  '.media',
-  '.mindos',
-  '.obsidian',
-  '.plugins',
-  'build',
-  'coverage',
-  'dist',
-  'env',
-  'out',
-  'target',
-  'venv',
-  'vendor',
-]);
+// Ignore rules (built-in directory list, `.mindosignore` parsing, glob matching)
+// live in the core package; this module only keeps the Web walker helpers that
+// need a sub-directory start point or a custom extension allow-list.
+export const DEFAULT_IGNORED_DIRS = MINDOS_IGNORED_DIRS;
+export { MINDOS_IGNORE_FILE, normalizeSearchIgnoredPaths, readMindosIgnoreFile, writeMindosIgnoreFile };
+export const parseSearchIgnoredPathsContent = parseMindosIgnoreContent;
+
 const DEFAULT_ALLOWED_EXTENSIONS = new Set([
   '.md', '.csv', '.pdf',
   '.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.bmp', '.ico',
@@ -60,7 +36,6 @@ const DEFAULT_ALLOWED_EXTENSIONS = new Set([
   '.mp4', '.webm', '.mov', '.mkv',
 ]);
 const SYSTEM_FILES = new Set(['INSTRUCTION.md', 'README.md', 'CONFIG.json', 'CHANGELOG.md']);
-export const MINDOS_IGNORE_FILE = '.mindosignore';
 
 export interface TreeOptions {
   ignoredDirs?: Set<string>;
@@ -70,139 +45,14 @@ export interface TreeOptions {
 
 export type SearchIgnoredPathMatcher = (relativePath: string, isDirectory?: boolean) => boolean;
 
-function normalizePosixPath(input: string): string {
-  return input.replace(/\\/g, '/').replace(/\/+/g, '/');
-}
-
-function normalizeSearchIgnoredPath(input: string): string | null {
-  let value = normalizePosixPath(input.trim());
-  if (!value || value.startsWith('#')) return null;
-  // Negation is intentionally unsupported for the first MindOS ignore format.
-  // Treating it as a literal path would surprise users more than skipping it.
-  if (value.startsWith('!')) return null;
-  value = value.replace(/^\.\//, '').replace(/^\/+/, '').replace(/\/+$/, '');
-  if (!value || value === '.' || value === '..') return null;
-  if (value.split('/').includes('..')) return null;
-  return value;
-}
-
-export function normalizeSearchIgnoredPaths(input: unknown): string[] {
-  if (!Array.isArray(input)) return [];
-  const seen = new Set<string>();
-  const result: string[] = [];
-  for (const item of input) {
-    if (typeof item !== 'string') continue;
-    const normalized = normalizeSearchIgnoredPath(item);
-    if (!normalized || seen.has(normalized)) continue;
-    seen.add(normalized);
-    result.push(normalized);
-  }
-  return result;
-}
-
-export function parseSearchIgnoredPathsContent(content: string): string[] {
-  return normalizeSearchIgnoredPaths(content.split(/\r?\n/));
-}
-
-export function readMindosIgnoreFile(mindRoot: string): string[] {
-  try {
-    const content = fs.readFileSync(path.join(mindRoot, MINDOS_IGNORE_FILE), 'utf-8');
-    return parseSearchIgnoredPathsContent(content);
-  } catch {
-    return [];
-  }
-}
-
-export function writeMindosIgnoreFile(mindRoot: string, ignoredPaths: string[]): string[] {
-  const normalized = normalizeSearchIgnoredPaths(ignoredPaths);
-  const content = [
-    '# MindOS search ignored paths',
-    '# One directory name, relative path, or simple glob per line.',
-    ...normalized,
-    '',
-  ].join('\n');
-  fs.mkdirSync(mindRoot, { recursive: true });
-  fs.writeFileSync(path.join(mindRoot, MINDOS_IGNORE_FILE), content, 'utf-8');
-  return normalized;
-}
-
-function hasGlob(rule: string): boolean {
-  return /[*?[]/.test(rule);
-}
-
-function escapeRegexChar(char: string): string {
-  return /[\\^$+?.()|{}[\]]/.test(char) ? `\\${char}` : char;
-}
-
-function globToRegExp(pattern: string): RegExp {
-  let source = '^';
-  for (let i = 0; i < pattern.length; i += 1) {
-    const char = pattern.charAt(i);
-    const next = pattern.charAt(i + 1);
-    if (char === '*' && next === '*') {
-      source += '.*';
-      i += 1;
-      continue;
-    }
-    if (char === '*') {
-      source += '[^/]*';
-      continue;
-    }
-    if (char === '?') {
-      source += '[^/]';
-      continue;
-    }
-    source += escapeRegexChar(char);
-  }
-  source += '$';
-  return new RegExp(source);
-}
-
-function createPatternMatcher(rule: string): SearchIgnoredPathMatcher {
-  if (hasGlob(rule)) {
-    const regex = globToRegExp(rule);
-    const basenameRegex = rule.includes('/') ? null : globToRegExp(rule);
-    const deepPrefix = rule.endsWith('/**') ? rule.slice(0, -3) : '';
-    return (relativePath) => {
-      const normalized = normalizePosixPath(relativePath).replace(/^\/+/, '');
-      if (deepPrefix && (normalized === deepPrefix || normalized.startsWith(`${deepPrefix}/`))) return true;
-      if (regex.test(normalized)) return true;
-      if (!basenameRegex) return false;
-      const basename = normalized.split('/').pop() ?? normalized;
-      return basenameRegex.test(basename);
-    };
-  }
-
-  if (rule.includes('/')) {
-    return (relativePath) => {
-      const normalized = normalizePosixPath(relativePath).replace(/^\/+/, '').replace(/\/+$/, '');
-      return normalized === rule || normalized.startsWith(`${rule}/`);
-    };
-  }
-
-  return (relativePath) => {
-    const normalized = normalizePosixPath(relativePath).replace(/^\/+/, '');
-    return normalized.split('/').includes(rule);
-  };
-}
-
 export function createSearchIgnoreMatcher(
   mindRoot: string,
   opts: Pick<TreeOptions, 'ignoredDirs' | 'ignoredPaths'> = {},
 ): SearchIgnoredPathMatcher {
-  const ignoredDirs = opts.ignoredDirs ?? DEFAULT_IGNORED_DIRS;
-  const customRules = normalizeSearchIgnoredPaths([
+  return createMindosIgnoreRuleMatcher(opts.ignoredDirs ?? DEFAULT_IGNORED_DIRS, [
     ...readMindosIgnoreFile(mindRoot),
     ...(opts.ignoredPaths ?? []),
   ]);
-  const customMatchers = customRules.map(createPatternMatcher);
-
-  return (relativePath: string) => {
-    const normalized = normalizePosixPath(relativePath).replace(/^\/+/, '').replace(/\/+$/, '');
-    if (!normalized || normalized === '.') return false;
-    if (normalized.split('/').some((segment) => ignoredDirs.has(segment))) return true;
-    return customMatchers.some((matcher) => matcher(normalized));
-  };
 }
 
 export function isIgnoredTreePath(
@@ -210,12 +60,7 @@ export function isIgnoredTreePath(
   ignoredDirs: Set<string> = DEFAULT_IGNORED_DIRS,
   ignoredPaths: string[] = [],
 ): boolean {
-  const normalized = normalizePosixPath(filePath).replace(/^\/+/, '').replace(/\/+$/, '');
-  if (!normalized || normalized === '.') return false;
-  if (normalized.split('/').some((segment) => ignoredDirs.has(segment))) return true;
-  return normalizeSearchIgnoredPaths(ignoredPaths)
-    .map(createPatternMatcher)
-    .some((matcher) => matcher(normalized));
+  return createMindosIgnoreRuleMatcher(ignoredDirs, ignoredPaths)(filePath);
 }
 
 function isPathWithinRoot(resolved: string, root: string): boolean {

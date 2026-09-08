@@ -466,12 +466,14 @@ export {
   MINDOS_ALLOWED_FILE_EXTENSIONS,
   MINDOS_IGNORED_DIRS,
   collectAllFilesFromMindRoot,
+  collectFileStatsFromMindRoot,
   getDefaultMindRoot,
   getRecentlyModifiedFromMindRoot,
   getSkillRootsFromRuntime,
   getTreeVersionFromMindRoot,
   listDirectoriesFromMindRoot,
   listMindSpacesFromMindRoot,
+  prewarmRuntimeSearch,
   readLinesFromMindRoot,
   readMindosIgnoreFile,
   readRuntimeSettings,
@@ -479,11 +481,58 @@ export {
   searchMindRoot,
   writeMindosIgnoreFile,
   type MindosRuntimeFileNode,
+  type MindosRuntimeFileStat,
   type MindosRuntimeOptions,
+  type MindosRuntimeSearchHints,
+  type MindosRuntimeSearchOptions,
   type MindosRuntimeSearchResult,
   type MindosRuntimeSettings,
   type MindosRuntimeSkillRoot,
 } from './runtime.js';
+
+export {
+  MINDOS_IGNORE_FILE,
+  createCachedMindosSearchIgnoreMatcher,
+  createMindosIgnoreRuleMatcher,
+  createMindosSearchIgnoreMatcher,
+  normalizeSearchIgnoredPaths,
+  parseMindosIgnoreContent,
+  type MindosSearchIgnoreMatcher,
+} from './search-ignore.js';
+
+export {
+  createMindRootTreeCache,
+  getMindRootTreeCache,
+  resetMindRootTreeCachesForTests,
+  type MindRootTreeCache,
+  type MindRootTreeCacheOptions,
+  type TreeCacheFlushResult,
+  type TreeCachePathChange,
+} from './tree-cache.js';
+
+export {
+  MindosSearchIndex,
+  getMindosSearchIndex,
+  resetMindosSearchIndexesForTests,
+  type MindosSearchFileStat,
+  type MindosSearchHit,
+  type MindosSearchIndexOptions,
+  type MindosSearchQueryOptions,
+  type MindosSearchRefreshHints,
+  type MindosSearchRefreshOptions,
+  type MindosSearchRefreshResult,
+  type MindosSearchTextExtractor,
+  type MindosSearchUpdateResult,
+} from './search/index.js';
+
+export {
+  CJK_CHAR_REGEX,
+  hasCjkWordSegmenter,
+  splitSearchQueryTerms,
+  tokenizeSearchText,
+} from './search/tokenizer.js';
+
+export { bm25Score } from './search/scoring.js';
 
 export {
   createMindosHealth,

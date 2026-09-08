@@ -6,7 +6,7 @@
  * core server package from it would drag every Product Server handler into
  * ordinary page renders. Instead the route registers a hook here at module
  * load and `lib/fs.ts` notifies through this module, which has no imports of
- * its own (same shape as `core/search-index-bridge.ts`).
+ * its own.
  *
  * If the route was never loaded there is no connected client, so dropping the
  * notification is correct: the stream's `ready` frame carries the current

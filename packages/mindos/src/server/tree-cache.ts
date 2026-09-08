@@ -1,16 +1,27 @@
 import { existsSync, statSync, watch, type FSWatcher } from 'node:fs';
-import { join, resolve, sep } from 'node:path';
-import { MINDOS_IGNORED_DIRS, collectFileStatsFromMindRoot } from './runtime.js';
-import { MINDOS_IGNORE_FILE, createMindosSearchIgnoreMatcher } from './search-ignore.js';
+import { extname, join, resolve, sep } from 'node:path';
+import {
+  MINDOS_ALLOWED_FILE_EXTENSIONS,
+  MINDOS_IGNORED_DIRS,
+  collectFileStatsFromMindRoot,
+  type MindosRuntimeFileStat,
+} from './mind-root-files.js';
+import { MINDOS_IGNORE_FILE, createCachedMindosSearchIgnoreMatcher } from './search-ignore.js';
 
 /**
- * Cached view over the mind root file tree for the standalone (CLI/Desktop)
- * server. Without this cache every `/api/tree-version` read walked the entire
- * library with a recursive readdir + per-file stat. The cache rebuilds only when:
+ * Cached view over the mind root file tree shared by the standalone
+ * (CLI/Desktop) server and the Web `lib/fs.ts` facade. Without this cache
+ * every `/api/tree-version` read walked the entire library with a recursive
+ * readdir + per-file stat. The cache rebuilds only when:
  *   - a recursive fs.watch event fires (darwin/win32, Linux on Node >= 20), or
- *   - `invalidate()` is called (internal writes via the HTTP server), or
+ *   - `invalidate()` is called (internal structural writes), or
  *   - a safety TTL expires (short fallback TTL when no watcher is available,
  *     long TTL as a missed-event safety net when the watcher is active).
+ *
+ * Single-file changes never rebuild the whole tree: write paths call
+ * `refreshPath()` and watcher events are batched (500ms) and applied per path
+ * through the same routine. Only directory events, unknown filenames, an
+ * oversized batch or a `.mindosignore` edit fall back to a full stat walk.
  *
  * Reads stay lazy. Push consumers (`GET /api/events`) call `subscribe()`; only
  * while at least one subscriber exists does the cache actively detect changes:
@@ -35,16 +46,43 @@ export type MindRootTreeCacheOptions = {
    * TTL so push mode costs no more than the polling it replaces.
    */
   sweepMs?: number;
+  /** Debounce for batching raw watcher events before applying them. Default 500ms. */
+  watchBatchDebounceMs?: number;
+  /** Above this many distinct paths per batch a full rescan is cheaper. Default 50. */
+  watchBatchLimit?: number;
+};
+
+export type TreeCachePathChange = 'added' | 'changed' | 'removed' | 'unchanged' | 'unknown';
+
+export type TreeCacheFlushResult = {
+  /** `none`: nothing relevant; `incremental`: per-path updates applied; `full`: marked dirty. */
+  kind: 'none' | 'incremental' | 'full';
+  changed: Array<{ path: string; change: Exclude<TreeCachePathChange, 'unchanged' | 'unknown'> }>;
 };
 
 export type MindRootTreeCache = {
+  readonly root: string;
   getTreeVersion(): number;
   collectAllFiles(): string[];
   /** Cached per-file stats (path, mtime, size) for incremental consumers. */
-  collectFileStats(): Array<{ path: string; mtime: number; size: number }>;
+  collectFileStats(): MindosRuntimeFileStat[];
+  /** Cached stat of one file, or null when it is not part of the tree. */
+  getFileStat(relativePath: string): MindosRuntimeFileStat | null;
   getRecentlyModified(limit?: number): Array<{ path: string; mtime: number }>;
   /** Mark the cache dirty; the next read rebuilds. Cheap and synchronous. */
   invalidate(): void;
+  /**
+   * Re-stat one relative path and patch the cached tree in place. Directories
+   * (contents unknown) and unreadable paths mark the cache dirty instead.
+   */
+  refreshPath(relativePath: string): TreeCachePathChange;
+  /**
+   * Record a raw watcher event (relative path, or null when the platform did
+   * not report one). Events are debounced and applied by `flushWatcherChanges`.
+   */
+  handleWatcherEvent(filename: string | Buffer | null | undefined): void;
+  /** Apply the pending watcher batch now (also runs automatically after the debounce). */
+  flushWatcherChanges(): TreeCacheFlushResult;
   /**
    * Receive the new tree version whenever a rebuild changes it. Subscribing
    * turns on active change detection (debounced rebuild + periodic sweep);
@@ -53,12 +91,16 @@ export type MindRootTreeCache = {
    */
   subscribe(listener: (version: number) => void): () => void;
   isWatching(): boolean;
-  /** Stop the watcher and push timers. The cache keeps working through the fallback TTL. */
+  /** Start (or restart) the recursive watcher if the environment supports it. */
+  startWatcher(): void;
+  /** Stop the watcher and drop pending events; reads fall back to the TTL until `startWatcher()`. */
+  stopWatcher(): void;
+  /** Stop the watcher and push timers for good. The cache keeps working through the fallback TTL. */
   dispose(): void;
 };
 
 type TreeCacheState = {
-  stats: Array<{ path: string; mtime: number; size: number }>;
+  byPath: Map<string, MindosRuntimeFileStat>;
   files: string[];
   signature: string;
   version: number;
@@ -69,6 +111,22 @@ const DEFAULT_FALLBACK_TTL_MS = 2_000;
 const DEFAULT_WATCHED_TTL_MS = 30_000;
 const DEFAULT_PUSH_DEBOUNCE_MS = 300;
 const DEFAULT_SWEEP_MS = 30_000;
+const DEFAULT_WATCH_BATCH_DEBOUNCE_MS = 500;
+const DEFAULT_WATCH_BATCH_LIMIT = 50;
+
+function signatureOf(byPath: Map<string, MindosRuntimeFileStat>): string {
+  const lines: string[] = [];
+  for (const entry of byPath.values()) lines.push(`${entry.path}\0${entry.mtime}\0${entry.size}`);
+  return lines.sort().join('\n');
+}
+
+function sortedPaths(byPath: Map<string, MindosRuntimeFileStat>): string[] {
+  return [...byPath.keys()].sort((a, b) => a.localeCompare(b));
+}
+
+function normalizeRelative(input: string): string {
+  return input.split(sep).join('/').replace(/\\/g, '/').replace(/^\.\//, '').replace(/^\/+/, '').replace(/\/+$/, '');
+}
 
 export function createMindRootTreeCache(
   mindRoot: string,
@@ -81,21 +139,24 @@ export function createMindRootTreeCache(
   const watchEnabled = options.watch !== false;
   const pushDebounceMs = options.pushDebounceMs ?? DEFAULT_PUSH_DEBOUNCE_MS;
   const sweepMs = options.sweepMs ?? DEFAULT_SWEEP_MS;
+  const watchBatchDebounceMs = options.watchBatchDebounceMs ?? DEFAULT_WATCH_BATCH_DEBOUNCE_MS;
+  const watchBatchLimit = options.watchBatchLimit ?? DEFAULT_WATCH_BATCH_LIMIT;
 
   let state: TreeCacheState | null = null;
   let dirty = false;
   let watcher: FSWatcher | null = null;
   let watcherBroken = false;
+  let watcherStopped = false;
   let disposed = false;
   const subscribers = new Set<(version: number) => void>();
   let pushTimer: ReturnType<typeof setTimeout> | null = null;
   let sweepTimer: ReturnType<typeof setInterval> | null = null;
 
-  function onWatchEvent(filename: string | Buffer | null): void {
-    if (typeof filename === 'string' && isIgnoredPath(root, filename)) return;
-    dirty = true;
-    schedulePush();
-  }
+  // Raw watcher events are batched so a git pull touching hundreds of files
+  // becomes one rescan while a single external save stays a single stat.
+  let pending: Set<string> | null = null;
+  let overflow = false;
+  let batchTimer: ReturnType<typeof setTimeout> | null = null;
 
   function notifyIfChanged(): void {
     if (disposed || subscribers.size === 0) return;
@@ -108,6 +169,10 @@ export function createMindRootTreeCache(
       return;
     }
     if (version === before) return;
+    notifySubscribers(version);
+  }
+
+  function notifySubscribers(version: number): void {
     for (const listener of Array.from(subscribers)) {
       try {
         listener(version);
@@ -148,11 +213,11 @@ export function createMindRootTreeCache(
   }
 
   function ensureWatcher(): void {
-    if (!watchEnabled || disposed || watcherBroken || watcher) return;
+    if (!watchEnabled || disposed || watcherBroken || watcherStopped || watcher) return;
     if (!existsSync(root)) return; // retried on the next rebuild once the root exists
     try {
       watcher = watch(root, { recursive: true, persistent: false }, (_event, filename) => {
-        onWatchEvent(filename);
+        handleWatcherEvent(filename);
       });
       watcher.on('error', () => {
         // Watcher died (root removed, fd exhaustion, ...) — fall back to TTL refreshes.
@@ -177,20 +242,135 @@ export function createMindRootTreeCache(
     watcher = null;
   }
 
+  function clearBatch(): void {
+    if (batchTimer) {
+      clearTimeout(batchTimer);
+      batchTimer = null;
+    }
+    pending = null;
+    overflow = false;
+  }
+
+  function scheduleBatchFlush(): void {
+    if (disposed) return;
+    if (batchTimer) clearTimeout(batchTimer);
+    batchTimer = setTimeout(() => {
+      batchTimer = null;
+      flushWatcherChanges();
+    }, watchBatchDebounceMs);
+    batchTimer.unref?.();
+  }
+
+  function handleWatcherEvent(filename: string | Buffer | null | undefined): void {
+    if (disposed) return;
+    if (filename == null) {
+      overflow = true;
+      scheduleBatchFlush();
+      return;
+    }
+    const rel = normalizeRelative(String(filename));
+    if (rel === MINDOS_IGNORE_FILE) {
+      // Ignore rules changed: only a full rescan can apply them.
+      overflow = true;
+      scheduleBatchFlush();
+      return;
+    }
+    if (!rel || isIgnoredPath(root, rel)) return;
+    if (!pending) pending = new Set();
+    pending.add(rel);
+    if (pending.size > watchBatchLimit) overflow = true;
+    scheduleBatchFlush();
+  }
+
+  function flushWatcherChanges(): TreeCacheFlushResult {
+    const batch = pending;
+    const full = overflow;
+    clearBatch();
+    if (!batch && !full) return { kind: 'none', changed: [] };
+    if (full || !batch || !state) {
+      markDirty();
+      return { kind: 'full', changed: [] };
+    }
+    const changed: TreeCacheFlushResult['changed'] = [];
+    for (const rel of batch) {
+      const change = refreshPath(rel);
+      if (change === 'unknown') {
+        markDirty();
+        return { kind: 'full', changed: [] };
+      }
+      if (change !== 'unchanged') changed.push({ path: rel, change });
+    }
+    return { kind: changed.length > 0 ? 'incremental' : 'none', changed };
+  }
+
+  function markDirty(): void {
+    dirty = true;
+    schedulePush();
+  }
+
+  function refreshPath(relativePath: string): TreeCachePathChange {
+    const rel = normalizeRelative(relativePath);
+    if (!rel || rel === '.') {
+      markDirty();
+      return 'unknown';
+    }
+    if (!state) {
+      // Nothing cached yet: the first read builds from disk anyway.
+      dirty = true;
+      return 'unknown';
+    }
+    if (rel === MINDOS_IGNORE_FILE) {
+      markDirty();
+      return 'unknown';
+    }
+    if (isIgnoredPath(root, rel)) return 'unchanged';
+
+    let stat: ReturnType<typeof statSync> | null = null;
+    try {
+      stat = statSync(join(root, rel));
+    } catch {
+      stat = null;
+    }
+    if (stat && !stat.isFile()) {
+      // Directory (rename/move of a subtree) or special file: contents unknown.
+      markDirty();
+      return 'unknown';
+    }
+    const existing = state.byPath.get(rel);
+    if (!stat || !MINDOS_ALLOWED_FILE_EXTENSIONS.has(extname(rel).toLowerCase())) {
+      if (!existing) return 'unchanged';
+      state.byPath.delete(rel);
+      commitPatch(existing.mtime);
+      return 'removed';
+    }
+    const next: MindosRuntimeFileStat = { path: rel, mtime: stat.mtimeMs, size: stat.size };
+    if (existing && existing.mtime === next.mtime && existing.size === next.size) return 'unchanged';
+    state.byPath.set(rel, next);
+    commitPatch(next.mtime);
+    return existing ? 'changed' : 'added';
+  }
+
+  /** Recompute derived state after a single-path patch; versions stay monotonic. */
+  function commitPatch(mtime: number): void {
+    if (!state) return;
+    state.files = sortedPaths(state.byPath);
+    state.signature = signatureOf(state.byPath);
+    state.version = Math.max(Math.floor(mtime), state.version + 1);
+    if (subscribers.size > 0) notifySubscribers(state.version);
+  }
+
   function ensure(): TreeCacheState {
     ensureWatcher();
     const ttl = watcher ? watchedTtlMs : fallbackTtlMs;
     if (state && !dirty && now() - state.builtAt < ttl) return state;
 
-    const stats = collectFileStatsFromMindRoot(root);
-    const files = stats.map((entry) => entry.path).sort((a, b) => a.localeCompare(b));
-    const signature = stats
-      .map((entry) => `${entry.path}\0${entry.mtime}`)
-      .sort()
-      .join('\n');
-
+    const byPath = new Map<string, MindosRuntimeFileStat>();
     let maxMtime = 0;
-    for (const entry of stats) maxMtime = Math.max(maxMtime, Math.floor(entry.mtime));
+    for (const entry of collectFileStatsFromMindRoot(root)) {
+      byPath.set(entry.path, entry);
+      maxMtime = Math.max(maxMtime, Math.floor(entry.mtime));
+    }
+    const signature = signatureOf(byPath);
 
     // First build matches the uncached semantics (max mtime, 0 for empty/missing
     // roots). Later rebuilds stay monotonic: deletions and renames must bump the
@@ -202,11 +382,12 @@ export function createMindRootTreeCache(
         : Math.max(maxMtime, state.version + 1);
 
     dirty = false;
-    state = { stats, files, signature, version, builtAt: now() };
+    state = { byPath, files: sortedPaths(byPath), signature, version, builtAt: now() };
     return state;
   }
 
   return {
+    root,
     getTreeVersion() {
       return ensure().version;
     },
@@ -214,19 +395,25 @@ export function createMindRootTreeCache(
       return [...ensure().files];
     },
     collectFileStats() {
-      return ensure().stats.map((entry) => ({ ...entry }));
+      return [...ensure().byPath.values()].map((entry) => ({ ...entry }));
+    },
+    getFileStat(relativePath) {
+      const entry = ensure().byPath.get(normalizeRelative(relativePath));
+      return entry ? { ...entry } : null;
     },
     getRecentlyModified(limit = 10) {
       const boundedLimit = Math.max(1, Math.min(limit, 30));
-      return [...ensure().stats]
+      return [...ensure().byPath.values()]
         .sort((a, b) => b.mtime - a.mtime)
         .slice(0, boundedLimit)
-        .map((entry) => ({ ...entry }));
+        .map((entry) => ({ path: entry.path, mtime: entry.mtime }));
     },
     invalidate() {
-      dirty = true;
-      schedulePush();
+      markDirty();
     },
+    refreshPath,
+    handleWatcherEvent,
+    flushWatcherChanges,
     subscribe(listener) {
       subscribers.add(listener);
       startSweep();
@@ -241,9 +428,19 @@ export function createMindRootTreeCache(
     isWatching() {
       return watcher !== null;
     },
+    startWatcher() {
+      watcherStopped = false;
+      ensureWatcher();
+    },
+    stopWatcher() {
+      watcherStopped = true;
+      clearBatch();
+      closeWatcher();
+    },
     dispose() {
       disposed = true;
       stopPushTimers();
+      clearBatch();
       subscribers.clear();
       closeWatcher();
     },
@@ -252,32 +449,39 @@ export function createMindRootTreeCache(
 
 // The matcher re-reads .mindosignore; this runs once per fs event, and a git
 // pull touching thousands of files would otherwise re-read it thousands of
-// times on the event loop. Cache per root, keyed by the ignore file's mtime.
-const ignoreMatcherCache = new Map<string, { key: string; matcher: (relativePath: string) => boolean }>();
-
-function ignoreMatcherFor(root: string): (relativePath: string) => boolean {
-  let key = 'missing';
-  try {
-    const stat = statSync(join(root, MINDOS_IGNORE_FILE));
-    key = `${stat.mtimeMs}:${stat.size}`;
-  } catch {
-    // No ignore file: only the built-in directory list applies.
-  }
-  const cached = ignoreMatcherCache.get(root);
-  if (cached && cached.key === key) return cached.matcher;
-  const matcher = createMindosSearchIgnoreMatcher(root, MINDOS_IGNORED_DIRS);
-  ignoreMatcherCache.set(root, { key, matcher });
-  return matcher;
-}
-
+// times on the event loop. The cache lives in search-ignore.ts and is keyed by
+// the ignore file's mtime + size.
 function isIgnoredPath(root: string, filename: string): boolean {
   if (filename === MINDOS_IGNORE_FILE) return false;
   const normalized = filename.split(sep).join('/');
   try {
-    return ignoreMatcherFor(root)(normalized);
+    return createCachedMindosSearchIgnoreMatcher(root, MINDOS_IGNORED_DIRS)(normalized);
   } catch {
     // Fallback keeps watcher noise bounded even if the root disappears.
   }
   const firstSegment = filename.split(sep)[0]?.split('/')[0] ?? '';
   return MINDOS_IGNORED_DIRS.has(firstSegment);
+}
+
+// ── Per-root registry ───────────────────────────────────────────────────
+
+const treeCaches = new Map<string, MindRootTreeCache>();
+
+/**
+ * Shared cache per resolved mind root so the Web facade and the search index
+ * observe one tree. Options only apply when the instance is created.
+ */
+export function getMindRootTreeCache(mindRoot: string, options?: MindRootTreeCacheOptions): MindRootTreeCache {
+  const root = resolve(mindRoot);
+  let cache = treeCaches.get(root);
+  if (!cache) {
+    cache = createMindRootTreeCache(root, options);
+    treeCaches.set(root, cache);
+  }
+  return cache;
+}
+
+export function resetMindRootTreeCachesForTests(): void {
+  for (const cache of treeCaches.values()) cache.dispose();
+  treeCaches.clear();
 }

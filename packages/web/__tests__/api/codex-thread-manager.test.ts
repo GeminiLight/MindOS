@@ -10,7 +10,11 @@ const mockHandleCodexThreadArchivePost = vi.fn();
 const mockHandleCodexThreadUnarchivePost = vi.fn();
 const mockGetMindRoot = vi.fn(() => '/tmp/mindos-root');
 
-vi.mock('@geminilight/mindos/server', () => ({
+// Only the Codex handlers are stubbed; the rest of the server entrypoint stays
+// real because `@/lib/fs` / `lib/core/tree.ts` now read tree-cache and ignore
+// helpers from it at module load (spec-core-consolidation).
+vi.mock('@geminilight/mindos/server', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@geminilight/mindos/server')>()),
   handleCodexModelsGet: mockHandleCodexModelsGet,
   handleCodexThreadsGet: mockHandleCodexThreadsGet,
   handleCodexThreadGet: mockHandleCodexThreadGet,

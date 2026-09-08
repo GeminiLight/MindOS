@@ -4,6 +4,7 @@ import path from 'path';
 import { execFile, execFileSync } from 'child_process';
 import { findUserOverride, getDetectableAgents, resolveAgentCommand } from './agent-descriptors.js';
 import type { AcpAgentAdapterMetadata, AcpAgentOverride } from './agent-descriptors.js';
+import { expandHome as expandHomePath, expandWindowsEnvVars } from '../../foundation/shared/utils/path.js';
 
 export interface InstalledAgent {
   id: string;
@@ -29,13 +30,9 @@ export interface LocalAcpDetectionOptions {
 }
 
 export function expandHome(filePath: string): string {
-  let homeExpanded = filePath;
-  if (filePath === '~') {
-    homeExpanded = os.homedir();
-  } else if (filePath.startsWith('~/') || filePath.startsWith('~\\')) {
-    homeExpanded = path.resolve(os.homedir(), filePath.slice(2));
-  }
-  return homeExpanded.replace(/%([A-Za-z_][A-Za-z0-9_]*)%/g, (match, name: string) => process.env[name] ?? match);
+  // Shared `~` expansion plus the Windows `%VAR%` form that ACP agent
+  // descriptors use for AppData-relative locations.
+  return expandWindowsEnvVars(expandHomePath(filePath));
 }
 
 export function isPathLikeCommand(command: string): boolean {

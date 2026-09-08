@@ -1,8 +1,14 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
-import { homedir } from 'node:os';
-import { dirname, resolve } from 'node:path';
+import { dirname } from 'node:path';
 import { errorResponse, json, type MindosServerResponse } from '../response.js';
 import type { MindosServerEventEmitter } from '../events/bus.js';
+import { expandHome } from '../../foundation/shared/utils/path.js';
+import {
+  parseJsonc,
+  parseJsoncDocument,
+  removeJsoncValue,
+  setJsoncValue,
+} from '../../foundation/shared/utils/jsonc.js';
 
 export type MindosMcpAgentDef = {
   name: string;
@@ -70,7 +76,7 @@ export type MindosMcpInstallResult = {
   transport?: string;
   verified?: boolean;
   verifyError?: string;
-  /** Non-fatal notices, e.g. a JSONC file lost its comments and was backed up. */
+  /** Non-fatal notices, e.g. a JSONC file had syntax issues but was still edited in place. */
   warnings?: string[];
 };
 
@@ -100,39 +106,6 @@ function notifyMcpChanged(services: { events?: MindosServerEventEmitter }, resul
   if (results.some((result) => result.status === 'ok')) services.events?.emit({ type: 'mcp.changed' });
 }
 
-function parseJsonc(text: string): Record<string, unknown> {
-  let stripped = text.replace(/\\"|"(?:\\"|[^"])*"|(\/\/.*$)/gm, (match, comment) => comment ? '' : match);
-  stripped = stripped.replace(/\/\*[\s\S]*?\*\//g, '');
-  if (!stripped.trim()) return {};
-  return JSON.parse(stripped) as Record<string, unknown>;
-}
-
-/**
- * True when JSON/JSONC text contains `//` or `/* ... *\/` comments outside of
- * string literals. `parseJsonc` strips them, so re-serialising such a file
- * would silently drop user comments.
- */
-export function hasJsoncComments(text: string): boolean {
-  let inString = false;
-  for (let i = 0; i < text.length; i += 1) {
-    const ch = text[i];
-    if (inString) {
-      if (ch === '\\') {
-        i += 1;
-      } else if (ch === '"') {
-        inString = false;
-      }
-      continue;
-    }
-    if (ch === '"') {
-      inString = true;
-      continue;
-    }
-    if (ch === '/' && (text[i + 1] === '/' || text[i + 1] === '*')) return true;
-  }
-  return false;
-}
-
 /**
  * Write via a same-directory temp file + rename so a crash mid-write can
  * never leave a third-party agent config truncated or half-written.
@@ -152,28 +125,93 @@ export function writeFileAtomically(absPath: string, content: string): void {
   }
 }
 
+type JsonConfigDocument = {
+  text: string;
+  value: Record<string, unknown>;
+  warnings: string[];
+};
+
 /**
- * Replace a JSON/JSONC agent config. When the original contained comments,
- * keep a `.bak` copy of it and return a warning so the caller can surface it.
+ * Parse an existing JSON/JSONC agent config for in-place editing. Edits are
+ * applied to the original text (`jsonc-parser` modify), so comments and
+ * formatting survive. Recoverable syntax issues (the parser still yields an
+ * object) become warnings the caller surfaces; anything else throws.
  */
-function writeJsonConfigFile(absPath: string, existingText: string, nextText: string): string[] {
-  const warnings: string[] = [];
-  if (existingText && hasJsoncComments(existingText)) {
-    const backupPath = `${absPath}.bak`;
-    writeFileAtomically(backupPath, existingText);
-    warnings.push(`Comments were removed from ${absPath}; a backup of the original was saved to ${backupPath}`);
+function readJsonConfigDocument(absPath: string, text: string): JsonConfigDocument {
+  if (!text.trim()) return { text, value: {}, warnings: [] };
+  const { value, errors } = parseJsoncDocument(text);
+  if (value === undefined) {
+    // A comment-only file parses to nothing: treat it as an empty config (the
+    // comment itself survives because the edit is applied to the original text).
+    let empty = false;
+    try {
+      empty = Object.keys(parseJsonc(text)).length === 0;
+    } catch {
+      empty = false;
+    }
+    if (empty) return { text, value: {}, warnings: [] };
+    throw new SyntaxError(`Failed to parse ${absPath}: ${errors.join('; ')}`);
   }
-  writeFileAtomically(absPath, nextText);
-  return warnings;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new SyntaxError(`Failed to parse ${absPath}: expected a JSON object at the document root`);
+  }
+  const warnings = errors.length > 0
+    ? [`${absPath} has JSONC syntax issues (${errors.join('; ')}); MindOS edited it in place without repairing them`]
+    : [];
+  return { text, value: value as Record<string, unknown>, warnings };
+}
+
+/** JSON path of a server entry inside an agent config. */
+function jsonServerEntryPath(agent: MindosMcpAgentDef, scope: 'project' | 'global', serverName: string): string[] {
+  if (scope === 'global' && agent.globalNestedKey) {
+    return [...assertSafeObjectKeyPath(agent.globalNestedKey, 'nested config path'), serverName];
+  }
+  assertSafeObjectKey(agent.key, 'agent config key');
+  return [agent.key, serverName];
+}
+
+function jsonServerContainer(
+  document: JsonConfigDocument,
+  agent: MindosMcpAgentDef,
+  scope: 'project' | 'global',
+): Record<string, unknown> | null {
+  if (scope === 'global' && agent.globalNestedKey) return getNestedPath(document.value, agent.globalNestedKey);
+  assertSafeObjectKey(agent.key, 'agent config key');
+  return readOwnRecord(document.value, agent.key);
+}
+
+/** Insert or replace `serverName` in place; returns parse warnings for the caller. */
+function writeJsonServerEntry(
+  absPath: string,
+  existingText: string,
+  agent: MindosMcpAgentDef,
+  scope: 'project' | 'global',
+  serverName: string,
+  entry: Record<string, unknown>,
+): string[] {
+  const document = readJsonConfigDocument(absPath, existingText);
+  writeFileAtomically(absPath, setJsoncValue(document.text, jsonServerEntryPath(agent, scope, serverName), entry));
+  return document.warnings;
+}
+
+/** Remove `serverName` in place when present; the file is untouched otherwise. */
+function removeJsonServerEntry(
+  absPath: string,
+  existingText: string,
+  agent: MindosMcpAgentDef,
+  scope: 'project' | 'global',
+  serverName: string,
+): string[] {
+  const document = readJsonConfigDocument(absPath, existingText);
+  const container = jsonServerContainer(document, agent, scope);
+  if (!container || !(serverName in container)) return document.warnings;
+  writeFileAtomically(absPath, removeJsoncValue(document.text, jsonServerEntryPath(agent, scope, serverName)));
+  return document.warnings;
 }
 
 function withWarnings(result: MindosMcpInstallResult, warnings: string[]): MindosMcpInstallResult {
   if (warnings.length > 0) result.warnings = warnings;
   return result;
-}
-
-function expandHome(input: string, homeDir = homedir()): string {
-  return input.startsWith('~/') || input.startsWith('~\\') ? resolve(homeDir, input.slice(2)) : input;
 }
 
 function configPathCandidates(agent: MindosMcpAgentDef, scope: 'global' | 'project'): string[] {
@@ -208,17 +246,6 @@ function readOwnRecord(obj: Record<string, unknown>, key: string): Record<string
   if (!Object.prototype.hasOwnProperty.call(obj, key)) return null;
   const value = obj[key];
   return value && typeof value === 'object' ? value as Record<string, unknown> : null;
-}
-
-function ensureNestedPath(obj: Record<string, unknown>, dotPath: string): Record<string, unknown> {
-  const parts = assertSafeObjectKeyPath(dotPath, 'nested config path');
-  let current = obj;
-  for (const part of parts) {
-    const existing = readOwnRecord(current, part);
-    if (!existing) current[part] = {};
-    current = current[part] as Record<string, unknown>;
-  }
-  return current;
 }
 
 function getNestedPath(obj: Record<string, unknown>, dotPath: string): Record<string, unknown> | null {
@@ -779,16 +806,7 @@ function writeMcpServerEntry(
   } else if (agent.format === 'yaml') {
     writeFileAtomically(absPath, mergeYamlEntry(existing, agent.key, serverName, entry));
   } else {
-    const config = existing.trim() ? parseJsonc(existing) : {};
-    const container = scope === 'global' && agent.globalNestedKey
-      ? ensureNestedPath(config, agent.globalNestedKey)
-      : (() => {
-          assertSafeObjectKey(agent.key, 'agent config key');
-          if (!readOwnRecord(config, agent.key)) config[agent.key] = {};
-          return config[agent.key] as Record<string, unknown>;
-        })();
-    container[serverName] = entry;
-    warnings = writeJsonConfigFile(absPath, existing, `${JSON.stringify(config, null, 2)}\n`);
+    warnings = writeJsonServerEntry(absPath, existing, agent, scope, serverName, entry);
   }
 
   return withWarnings({ agent: agentKey, status: 'ok', path: configPath }, warnings);
@@ -869,16 +887,7 @@ export async function handleMcpInstallPost(
         } else if (agent.format === 'yaml') {
           writeFileAtomically(absPath, mergeYamlEntry(existing, agent.key, 'mindos', entry));
         } else {
-          const config = existing.trim() ? parseJsonc(existing) : {};
-          const container = scope === 'global' && agent.globalNestedKey
-            ? ensureNestedPath(config, agent.globalNestedKey)
-            : (() => {
-                assertSafeObjectKey(agent.key, 'agent config key');
-                if (!readOwnRecord(config, agent.key)) config[agent.key] = {};
-                return config[agent.key] as Record<string, unknown>;
-              })();
-          container.mindos = entry;
-          warnings = writeJsonConfigFile(absPath, existing, `${JSON.stringify(config, null, 2)}\n`);
+          warnings = writeJsonServerEntry(absPath, existing, agent, scope, 'mindos', entry);
         }
 
         const result: MindosMcpInstallResult = withWarnings(
@@ -1018,17 +1027,7 @@ export function handleMcpUninstallPost(
             } else if (agent.format === 'yaml') {
               writeFileAtomically(absPath, removeYamlEntry(existing, agent.key, serverName));
             } else {
-              const config = parseJsonc(existing);
-              const container = scope === 'global' && agent.globalNestedKey
-                ? getNestedPath(config, agent.globalNestedKey)
-                : (() => {
-                    assertSafeObjectKey(agent.key, 'agent config key');
-                    return readOwnRecord(config, agent.key) ?? undefined;
-                  })();
-              if (container && serverName in container) {
-                delete container[serverName];
-                warnings.push(...writeJsonConfigFile(absPath, existing, `${JSON.stringify(config, null, 2)}\n`));
-              }
+              warnings.push(...removeJsonServerEntry(absPath, existing, agent, scope, serverName));
             }
             updatedPaths.push(configPath);
           } catch (error) {

@@ -1,4 +1,5 @@
 import { canonicalizeRelativePath } from '../security/index.js';
+import { createGlobMatcher, type GlobMatcher } from '../shared/utils/glob.js';
 
 export type PermissionEffect = 'allow' | 'deny' | 'ask';
 
@@ -66,32 +67,22 @@ function basename(filePath: string): string {
   return idx === -1 ? normalized : normalized.slice(idx + 1);
 }
 
-function escapeRegExp(value: string): string {
-  return value.replace(/[|\\{}()[\]^$+?.]/g, '\\$&');
-}
-
-function globToRegExp(pattern: string): RegExp {
-  const normalized = normalizePath(pattern || '**');
-  let source = '';
-
-  for (let i = 0; i < normalized.length; i++) {
-    const char = normalized[i] ?? '';
-    const next = normalized[i + 1];
-    if (char === '*' && next === '*') {
-      source += '.*';
-      i++;
-    } else if (char === '*') {
-      source += '[^/]*';
-    } else {
-      source += escapeRegExp(char);
-    }
-  }
-
-  return new RegExp(`^${source}$`);
-}
-
 function matchesPath(pattern: string, filePath: string): boolean {
-  return globToRegExp(pattern).test(normalizePath(filePath));
+  return globMatcherFor(pattern)(normalizePath(filePath));
+}
+
+// Rules are evaluated for every permission check; compile each pattern once.
+const globMatcherCache = new Map<string, GlobMatcher>();
+
+function globMatcherFor(pattern: string): GlobMatcher {
+  const normalized = normalizePath(pattern || '**');
+  let matcher = globMatcherCache.get(normalized);
+  if (!matcher) {
+    matcher = createGlobMatcher(normalized);
+    if (globMatcherCache.size > 500) globMatcherCache.clear();
+    globMatcherCache.set(normalized, matcher);
+  }
+  return matcher;
 }
 
 function pathSpecificity(pattern: string): number {

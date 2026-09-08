@@ -194,6 +194,43 @@ function applyMigrations(db: DatabaseSync, migrations: MindosDatabaseMigration[]
   }
 }
 
+const SQLITE_BUSY = 5;
+const SQLITE_LOCKED = 6;
+
+function isBusyError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const errcode = (error as { errcode?: unknown }).errcode;
+  if (errcode === SQLITE_BUSY || errcode === SQLITE_LOCKED) return true;
+  return /database is locked|SQLITE_BUSY|SQLITE_LOCKED/i.test(error.message);
+}
+
+/**
+ * Blocks the current thread for `ms`. Only used while opening a database, a
+ * synchronous one-off bounded by BUSY_TIMEOUT_MS, so the event loop pause is
+ * the same one `DatabaseSync` itself imposes while waiting on a lock.
+ */
+function sleepSync(ms: number): void {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+function initializeConnection(db: DatabaseSync, migrations: MindosDatabaseMigration[]): void {
+  // Pragmas run outside any transaction; journal_mode is persisted in the
+  // file, the rest are per-connection.
+  db.exec(`PRAGMA busy_timeout = ${BUSY_TIMEOUT_MS}`);
+  const mode = db.prepare('PRAGMA journal_mode = WAL').get() as { journal_mode?: unknown } | undefined;
+  if (String(mode?.journal_mode ?? '').toLowerCase() !== 'wal') {
+    // The switch was refused because another connection held the file; report
+    // it as a busy condition so the open loop retries instead of running in
+    // rollback-journal mode behind everyone else's back.
+    const error = new Error('database is locked (journal_mode could not switch to WAL)');
+    (error as { errcode?: number }).errcode = SQLITE_BUSY;
+    throw error;
+  }
+  db.exec('PRAGMA synchronous = NORMAL');
+  db.exec('PRAGMA foreign_keys = ON');
+  applyMigrations(db, migrations);
+}
+
 function installExitHook(): void {
   if (exitHookInstalled) return;
   exitHookInstalled = true;
@@ -214,22 +251,30 @@ function openImpl(resolved: string, migrations: MindosDatabaseMigration[]): Mind
       { cause: error },
     );
   }
-  try {
-    // busy_timeout first: switching a fresh file to WAL takes a lock, and a
-    // sibling process opening the same file at the same moment must wait
-    // rather than fail with SQLITE_BUSY. Pragmas run outside any transaction;
-    // journal_mode is persisted in the file, the rest are per-connection.
-    db.exec(`PRAGMA busy_timeout = ${BUSY_TIMEOUT_MS}`);
-    db.exec('PRAGMA journal_mode = WAL');
-    db.exec('PRAGMA synchronous = NORMAL');
-    db.exec('PRAGMA foreign_keys = ON');
-    applyMigrations(db, migrations);
-  } catch (error) {
-    try { db.close(); } catch { /* best-effort cleanup */ }
-    throw new Error(
-      `MindOS could not initialize SQLite database ${resolved}: ${error instanceof Error ? error.message : String(error)}`,
-      { cause: error },
-    );
+  // Sibling processes (Web server + MCP server, or two CLI runs) may open a
+  // brand-new file at the same instant. busy_timeout makes ordinary statements
+  // wait, but SQLite does not run the busy handler while switching the journal
+  // mode to WAL: that step either throws SQLITE_BUSY or quietly leaves the file
+  // in rollback mode. Retry the whole initialization with a bounded backoff so
+  // the loser of the race simply observes the winner's WAL file and schema.
+  const deadline = Date.now() + BUSY_TIMEOUT_MS;
+  let delayMs = 5;
+  for (;;) {
+    try {
+      initializeConnection(db, migrations);
+      break;
+    } catch (error) {
+      if (isBusyError(error) && Date.now() < deadline) {
+        sleepSync(delayMs);
+        delayMs = Math.min(delayMs * 2, 50);
+        continue;
+      }
+      try { db.close(); } catch { /* best-effort cleanup */ }
+      throw new Error(
+        `MindOS could not initialize SQLite database ${resolved}: ${error instanceof Error ? error.message : String(error)}`,
+        { cause: error },
+      );
+    }
   }
   const handle = new MindosDatabaseImpl(resolved, db);
   openDatabases.set(resolved, handle);

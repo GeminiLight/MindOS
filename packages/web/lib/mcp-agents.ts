@@ -17,18 +17,10 @@ export {
   type SkillInstallMode,
 } from './mcp-agent-registry';
 
-/** Parse JSONC — strips single-line (//) and block comments before JSON.parse */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function parseJsonc(text: string): any {
-  let stripped = text.replace(/\\"|"(?:\\"|[^"])*"|(\/\/.*$)/gm, (m, g) => g ? '' : m);
-  stripped = stripped.replace(/\/\*[\s\S]*?\*\//g, '');
-  if (!stripped.trim()) return {};
-  return JSON.parse(stripped);
-}
-
-export function expandHome(p: string): string {
-  return p.startsWith('~/') || p.startsWith('~\\') ? path.resolve(os.homedir(), p.slice(2)) : p;
-}
+// JSONC parsing and `~` expansion live in the core package (spec-core-consolidation);
+// re-exported here because `custom-agents.ts`, the API routes and tests import them from this module.
+import { expandHome, parseJsonc } from '@geminilight/mindos/foundation';
+export { expandHome, parseJsonc };
 
 function normalizeConfigRoot(p: string): string {
   return p.replace(/\\/g, '/').replace(/\/+$/, '');

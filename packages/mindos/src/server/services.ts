@@ -5,14 +5,13 @@ import {
   readLinesFromMindRoot,
   readRuntimeSettings,
   readTextFileFromMindRoot,
-  searchMindRoot,
-  prewarmRuntimeSearch,
   getSkillRootsFromRuntime,
   writeRuntimeSettings,
   type MindosRuntimeOptions,
   type MindosRuntimeSettings,
 } from './runtime.js';
 import { createMindRootTreeCache } from './tree-cache.js';
+import { MindosSearchIndex } from './search/index.js';
 import { createDefaultMcpAgents } from './mcp-agent-registry.js';
 import { getMindosServerEventBus, type MindosServerEventBus } from './events/bus.js';
 import type { CodexThreadManagerServices } from './handlers/agent-runtimes-codex.js';
@@ -103,6 +102,9 @@ export function createDefaultMindosHttpServices(options: DefaultMindosHttpServic
   // Watcher-driven cache: avoids walking the whole library on every poll of
   // /api/tree-version (~5s) and on every /api/files request.
   const treeCache = createMindRootTreeCache(mindRoot);
+  // The search index takes its file stats from the tree cache, so a warm query
+  // never walks the library: tree version unchanged → no stat walk at all.
+  const searchIndex = new MindosSearchIndex(mindRoot, { listFiles: () => treeCache.collectFileStats() });
   // Push path: the tree cache only detects changes actively while the event
   // stream has subscribers (bus lazy source), so an idle server stays lazy.
   const events = getMindosServerEventBus();
@@ -125,13 +127,13 @@ export function createDefaultMindosHttpServices(options: DefaultMindosHttpServic
     getRecentlyModified: (limit) => treeCache.getRecentlyModified(limit),
     getTreeVersion: () => treeCache.getTreeVersion(),
     prewarmSearch: () => {
-      const warmed = prewarmRuntimeSearch(mindRoot, { treeVersion: treeCache.getTreeVersion() });
+      const warmed = searchIndex.refresh({ treeVersion: treeCache.getTreeVersion() });
       const fileCount = treeCache.collectAllFiles().length;
       return {
         warmed: true as const,
         cacheState: warmed.cacheState,
         documentCount: fileCount,
-        core: { cacheState: warmed.cacheState, fileCount, indexedDocuments: warmed.documentCount },
+        core: { cacheState: warmed.cacheState, fileCount, indexedDocuments: searchIndex.getFileCount() },
       };
     },
     invalidateTreeCache: () => treeCache.invalidate(),
@@ -144,7 +146,7 @@ export function createDefaultMindosHttpServices(options: DefaultMindosHttpServic
     readLines: (filePath) => readLinesFromMindRoot(mindRoot, filePath),
     listSpaces: () => listMindSpacesFromMindRoot(mindRoot),
     listDirectories: () => listDirectoriesFromMindRoot(mindRoot),
-    search: (query, searchOptions) => searchMindRoot(mindRoot, query, searchOptions, { treeVersion: treeCache.getTreeVersion() }),
+    search: async (query, searchOptions) => searchIndex.search(query, searchOptions, { treeVersion: treeCache.getTreeVersion() }),
     readSettings: () => readRuntimeSettings(options),
     writeSettings: (settings) => writeRuntimeSettings(settings, options),
     mcpAgents: options.mcpAgents ?? createDefaultMcpAgents(),

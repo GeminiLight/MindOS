@@ -1045,10 +1045,13 @@ hidden: true
 
     const results = await searchMindRoot(root, 'alpha', { limit: 10 });
 
-    expect(results.map((item) => item.path)).toEqual(['Space/note.md', 'data.csv']);
-    expect(results[0]).toMatchObject({
+    // BM25 ranking (shared with Web since spec-core-consolidation): both text
+    // files match once, so the shorter CSV outranks the markdown note.
+    expect(results.map((item) => item.path).sort()).toEqual(['Space/note.md', 'data.csv']);
+    expect(results.find((item) => item.path === 'Space/note.md')).toMatchObject({
       path: 'Space/note.md',
       score: expect.any(Number),
+      occurrences: 1,
       snippet: expect.stringContaining('Alpha project'),
     });
   });

@@ -15,6 +15,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join, normalize, resolve } from 'node:path';
 import { expandHome } from './path-expand.js';
+import { parseJsonc } from './jsonc.js';
 
 function winAppData(...segments) {
   const appData = process.env.APPDATA || resolve(process.env.USERPROFILE || '', 'AppData', 'Roaming');
@@ -369,13 +370,6 @@ export const SKILL_AGENT_REGISTRY = {
   'copaw': { mode: 'unsupported' },
   'hermes': { mode: 'unsupported' },
 };
-
-function parseJsonc(text) {
-  let stripped = text.replace(/\\"|"(?:\\"|[^"])*"|(\/\/.*$)/gm, (match, comment) => comment ? '' : match);
-  stripped = stripped.replace(/\/\*[\s\S]*?\*\//g, '');
-  if (!stripped.trim()) return {};
-  return JSON.parse(stripped);
-}
 
 function readNestedRecord(obj, nestedPath) {
   let current = obj;

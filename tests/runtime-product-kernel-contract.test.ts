@@ -66,8 +66,14 @@ describe('MindOS runtime product kernel contract', () => {
       '@modelcontextprotocol/sdk',
       // kb-tools value-imports TypeBox at runtime (Wave 3, agent-core consolidation)
       '@sinclair/typebox',
+      // bin/lib/sync.js (sync daemon) imports it dynamically; the platform-package
+      // closure resolves dependencies from packages/mindos, so it stays declared here.
       'chokidar',
       'hono',
+      // JSONC agent configs (spec-core-consolidation): comment-preserving reads/writes
+      'jsonc-parser',
+      // .mindosignore / permission globs (spec-core-consolidation)
+      'picomatch',
       'zod',
     ]);
     expect(manifest.dependencies).toHaveProperty('@anthropic-ai/claude-agent-sdk', '0.3.170');

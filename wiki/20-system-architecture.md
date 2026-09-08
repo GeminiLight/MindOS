@@ -221,6 +221,21 @@ mindos/
 
 旧格式在首次打开时导入并改名为 `*.migrated`：`change-log.json`（JSONL 或 v1 pretty JSON）+ `change-log.meta.json`、`agent-run-ledger.json` / `.jsonl` / `agent-run-ledger.<pid>-<startTs>.jsonl` 分片（存活进程的分片保留到进程退出）。`.mindos/db/` 由 sync daemon 自动写入 mind root `.gitignore` 并从 watcher 中排除；Bun 单二进制运行时下这些 store 会抛出明确错误（follow-up）。
 
+#### 文件树缓存与搜索索引（单一实现，Web 只做 facade）
+
+spec 见 `wiki/specs/spec-core-consolidation.md`。文件枚举、树缓存、全文索引、`.mindosignore` 匹配、JSONC 解析和 `~` 展开各只有一份实现，全部在 `packages/mindos/src`：
+
+| 能力 | 模块 | 说明 |
+| --- | --- | --- |
+| 文件枚举 | `server/mind-root-files.ts` | `MINDOS_ALLOWED_FILE_EXTENSIONS` / `MINDOS_IGNORED_DIRS`、`collectFileStatsFromMindRoot` 等 walker；`runtime.ts` 只转出口 |
+| 树缓存 | `server/tree-cache.ts` | `getMindRootTreeCache(root)` 按 root 注册表；stats + 单调 version；递归 `fs.watch` 事件 500ms 批处理后逐路径 `refreshPath()`（目录事件 / null / 溢出 / `.mindosignore` 变化才全量 stat walk）；`subscribe()` 供 SSE `tree.changed`；`startWatcher/stopWatcher` |
+| 搜索索引 | `server/search/{tokenizer,scoring,index}.ts` | `MindosSearchIndex`：`Intl.Segmenter` 中文分词 + unigram（bigram 回退）、BM25、段落 snippet；`refresh()` 以 tree version 为快路径、按 mtime/size 增量重读；`listFiles` / `textExtensions` / `extractors` / `shouldIndex` 可注入；`search-parity.test.ts` 用合并前 Web 实现生成的 fixture 锁定结果 |
+| ignore 规则 | `server/search-ignore.ts` + `foundation/shared/utils/glob.ts` | glob 走 `picomatch`（`dot: true`，无 `/` 的 glob 按 basename 匹配）；`createMindosIgnoreRuleMatcher` 纯函数，`createCachedMindosSearchIgnoreMatcher` 按 `.mindosignore` mtime 缓存 |
+| JSONC | `foundation/shared/utils/jsonc.ts`（CLI 镜像 `bin/lib/jsonc.js`） | `jsonc-parser`：读用 `parseJsonc` / `parseJsoncDocument`，写用 `setJsoncValue` / `removeJsoncValue`（`modify + applyEdits`，注释与格式保留，`.bak` 备份已删除） |
+| `expandHome` | `foundation/shared/utils/path.ts`（CLI 镜像 `bin/lib/path-expand.js`） | `~`、`~/`、`~\`；ACP 的 `expandHome` 在其上叠加 `%VAR%` 展开 |
+
+standalone 服务在 `server/services.ts` 用 `new MindosSearchIndex(root, { listFiles: () => treeCache.collectFileStats() })` 接线；Web 的 `lib/fs.ts` 只从 `getWebTreeCache(root)`（`lib/core/mind-root-cache.ts`，沿用 Web 的 30s / 5min TTL 与 `now: () => Date.now()`）派生 `FileNode` 树、Space 预览（按 INSTRUCTION/README mtime 缓存）、scaffold 过滤的文件列表和 shape / content 两个版本计数器，不再有自己的 `fs.watch` 与 `readdirSync`；`lib/core/search.ts` 只为 Web 配置索引（`.md/.csv` + PDF 抽取、根级系统文件与默认 scaffold 排除）并保留 embedding 联动、PDF 时间预算和 telemetry。核心 `src/` 不再 import `chokidar`（`knowledge/storage/local-watch.ts` 用 `fs.watch` 递归实现同一事件词表），但依赖仍声明在 `packages/mindos/package.json`，因为 `bin/lib/sync.js` 动态导入它且平台包闭包只从该 package 解析依赖。
+
 ### 3. packages/mindos/src/knowledge/knowledge-ops — 知识库操作内核
 
 `packages/mindos/src/knowledge/knowledge-ops` 是知识库写操作的纯 TypeScript 编排层，不依赖 Next.js。它通过 `@geminilight/mindos` 对外暴露，负责：

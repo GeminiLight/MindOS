@@ -4,6 +4,8 @@ import type { Dirent } from 'fs';
 import { homedir } from 'os';
 import { dirname, isAbsolute, join, normalize, resolve } from 'path';
 import { errorResponse, json, type MindosServerResponse } from '../response.js';
+import { expandHome } from '../../foundation/shared/utils/path.js';
+import { parseJsonc } from '../../foundation/shared/utils/jsonc.js';
 import type { MindosMcpAgentDef, MindosSkillAgentRegistration } from './mcp-install.js';
 import type { MindosSkillLinkAgent } from './skill-links.js';
 
@@ -913,18 +915,6 @@ function readSettingsNumber(settings: unknown, key: string): number | undefined 
     return Number.isFinite(parsed) ? parsed : undefined;
   }
   return undefined;
-}
-
-function parseJsonc(text: string): Record<string, unknown> {
-  let stripped = text.replace(/\\"|"(?:\\"|[^"])*"|(\/\/.*$)/gm, (match, comment) => comment ? '' : match);
-  stripped = stripped.replace(/\/\*[\s\S]*?\*\//g, '');
-  if (!stripped.trim()) return {};
-  return JSON.parse(stripped) as Record<string, unknown>;
-}
-
-function expandHome(path: string, homeDir?: string): string {
-  if (!path.startsWith('~/') && !path.startsWith('~\\')) return path;
-  return resolve(homeDir ?? homedir(), path.slice(2));
 }
 
 function resolveAgentConfigPath(

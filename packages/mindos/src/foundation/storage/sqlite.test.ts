@@ -167,6 +167,20 @@ describe('foundation/storage/sqlite', () => {
     expect(db.prepare('SELECT count(*) AS n FROM _migrations').get()).toEqual({ n: 2 });
   }, 60_000);
 
+  it('several real processes initialising the same fresh database concurrently all succeed', async () => {
+    // Regression: switching a brand-new file into WAL needs an exclusive lock
+    // and SQLite does not run the busy handler for that step, so siblings that
+    // open at the same instant used to die with "database is locked".
+    const results = await Promise.all(Array.from({ length: 6 }, () => runDriver('open-only')));
+    expect(new Set(results.map((r) => r.pid)).size).toBe(6);
+    for (const result of results) {
+      expect(result.journal).toBe('wal');
+      expect(result.migrations).toBe(2);
+    }
+    const db = openMindosDatabase({ file, migrations: MIGRATIONS });
+    expect(db.prepare('SELECT count(*) AS n FROM _migrations').get()).toEqual({ n: 2 });
+  }, 60_000);
+
   it('waits for a writer holding the lock instead of failing immediately (busy timeout)', async () => {
     openMindosDatabase({ file, migrations: MIGRATIONS });
     closeMindosDatabase(file);

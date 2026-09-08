@@ -1,19 +1,56 @@
-import fs from 'fs';
 import path from 'path';
-import os from 'os';
-import { resolveExistingSafe } from './security';
-import { SearchIndex, tokenizeSearchText } from './search-index';
-import { registerSearchIndexHooks } from './search-index-bridge';
+import {
+  MindosSearchIndex,
+  bm25Score,
+  tokenizeSearchText,
+  type MindosSearchHit,
+} from '@geminilight/mindos/server';
+import { extractPdfText } from './pdf-text';
+import { getWebTreeCache, isRootSystemFile } from './mind-root-cache';
+import { isDefaultMindSystemScaffoldFile } from '../mind-system-scaffold';
 import type { SearchResult, SearchOptions } from './types';
 import { telemetry } from '../telemetry';
+
 /**
- * Module-level search index singleton.
- * Lazily built on first search, invalidated by `invalidateSearchIndex()`.
+ * Web adapter over the core search index (`@geminilight/mindos/server`).
+ *
+ * The index implementation (CJK tokenizer, BM25, incremental refresh) lives in
+ * the core package; this module only configures it for the Web app — file
+ * stats from the shared tree cache, `.md`/`.csv` text plus PDF extraction, the
+ * root system files and default Mind System scaffold excluded — and keeps the
+ * embedding-index bookkeeping and telemetry that only exist in Web.
  */
-const searchIndex = new SearchIndex();
-type CoreSearchPrewarmResult = { cacheState: 'hit' | 'loaded' | 'built'; fileCount: number };
+
+export { bm25Score, tokenizeSearchText };
+
+type CoreSearchPrewarmResult = { cacheState: 'hit' | 'built'; fileCount: number };
 type CoreSearchEnsureResult = CoreSearchPrewarmResult | { cacheState: 'miss'; fileCount: 0 };
-let _coreBuildTask: { mindRoot: string; promise: Promise<CoreSearchPrewarmResult> } | null = null;
+
+const indexes = new Map<string, MindosSearchIndex>();
+
+function indexFor(mindRoot: string): MindosSearchIndex {
+  const root = path.resolve(mindRoot);
+  let index = indexes.get(root);
+  if (!index) {
+    const cache = getWebTreeCache(root);
+    index = new MindosSearchIndex(root, {
+      listFiles: () => cache.collectFileStats(),
+      textExtensions: ['.md', '.csv'],
+      extractors: { '.pdf': (absolutePath) => extractPdfText(absolutePath) },
+      shouldIndex: (relativePath) => !isRootSystemFile(relativePath) && !isDefaultMindSystemScaffoldFile(root, relativePath),
+    });
+    indexes.set(root, index);
+  }
+  return index;
+}
+
+function existingIndex(mindRoot: string): MindosSearchIndex | null {
+  return indexes.get(path.resolve(mindRoot)) ?? null;
+}
+
+function treeVersionHint(mindRoot: string): { treeVersion: number } {
+  return { treeVersion: getWebTreeCache(mindRoot).getTreeVersion() };
+}
 
 function invalidateEmbeddingIndexLazy(): void {
   void import('./hybrid-search')
@@ -33,64 +70,44 @@ function removeEmbeddingFileLazy(filePath: string): void {
     .catch(() => {});
 }
 
-/** Path to ~/.mindos/ for index persistence. */
-function getMindosDir(): string {
-  return path.join(os.homedir(), '.mindos');
-}
-
-/** Invalidate the core search index. Called from `lib/fs.ts` on write operations. */
+/**
+ * Mark every Web index stale so the next search re-compares file stats
+ * (incremental: unchanged files stay indexed). Called from `lib/fs.ts` after
+ * structural writes and by `/api/file/import`.
+ */
 export function invalidateSearchIndex(): void {
-  searchIndex.invalidate();
-  _coreBuildTask = null;
+  for (const index of indexes.values()) index.markStale();
   invalidateEmbeddingIndexLazy();
 }
 
-/** Incrementally update a single file in the search index (after write/edit). */
+/** Incrementally (re-)index a single file after write/edit/create. */
 export function updateSearchIndexFile(mindRoot: string, filePath: string): void {
-  if (!searchIndex.isBuilt()) return;
-  searchIndex.updateFile(mindRoot, filePath);
-  schedulePersist();
-  // Also update embedding index (async, non-blocking)
+  const index = existingIndex(mindRoot);
+  if (!index || !index.isBuilt()) return;
+  index.updateFile(filePath);
   updateEmbeddingFileLazy(mindRoot, filePath);
 }
 
-/** Incrementally add a new file to the search index (after create). */
+/** Incrementally add a new file (same as update: the index stats the path). */
 export function addSearchIndexFile(mindRoot: string, filePath: string): void {
-  if (!searchIndex.isBuilt()) return;
-  searchIndex.addFile(mindRoot, filePath);
-  schedulePersist();
-  // Also update embedding index (async, non-blocking)
-  updateEmbeddingFileLazy(mindRoot, filePath);
+  updateSearchIndexFile(mindRoot, filePath);
 }
 
-/** Incrementally remove a file — or a directory subtree — from the search index. */
+/** Incrementally remove a file, or a whole directory subtree, from every index. */
 export function removeSearchIndexPath(relPath: string): void {
-  if (!searchIndex.isBuilt()) return;
-  const removed = searchIndex.removePath(relPath);
-  if (removed.length === 0) return;
-  schedulePersist();
-  for (const filePath of removed) removeEmbeddingFileLazy(filePath);
+  for (const index of indexes.values()) {
+    if (!index.isBuilt()) continue;
+    for (const removed of index.removePath(relPath)) removeEmbeddingFileLazy(removed);
+  }
 }
 
 /** Incrementally remove a file from the search index (after delete). */
 export function removeSearchIndexFile(filePath: string): void {
-  if (!searchIndex.isBuilt()) return;
-  searchIndex.removeFile(filePath);
-  schedulePersist();
-  removeEmbeddingFileLazy(filePath);
+  removeSearchIndexPath(filePath);
 }
 
-// Register invalidation hooks on the fs↔search bridge so writes flowing
-// through `lib/fs.ts` (which must not import this module directly) reach
-// the index. Registration happens once at module load.
-registerSearchIndexHooks({
-  invalidateAll: () => invalidateSearchIndex(),
-  updateFile: (mindRoot, filePath) => updateSearchIndexFile(mindRoot, filePath),
-  removePath: (relPath) => removeSearchIndexPath(relPath),
-});
-
 // ── Cold-build PDF budget ────────────────────────────────────────────────
-// A cold in-request rebuild reads text files inline (fast) but defers PDF
+// A cold in-request refresh reads text files inline (fast) but defers PDF
 // extraction beyond this time budget to a background task, so the first
 // search after a restart is not blocked by minutes of PDF parsing.
 const DEFAULT_COLD_PDF_BUDGET_MS = 3_000;
@@ -109,391 +126,64 @@ export function __waitForDeferredPdfIndexingForTests(): Promise<void> {
 
 function scheduleDeferredPdfIndexing(mindRoot: string, deferredPdfs: string[]): void {
   if (deferredPdfs.length === 0) return;
+  const index = indexFor(mindRoot);
   _deferredPdfTask = _deferredPdfTask.then(async () => {
     for (const pdfPath of deferredPdfs) {
-      // Index may have been invalidated/rebuilt for another root meanwhile.
-      if (!searchIndex.isBuiltFor(mindRoot)) return;
+      if (existingIndex(mindRoot) !== index || !index.isBuilt()) return;
       try {
-        // updateFile re-extracts the PDF and replaces the placeholder entry.
-        // Extraction failures are swallowed inside addFile (entry is dropped).
-        searchIndex.updateFile(mindRoot, pdfPath);
+        // updateFile re-extracts the PDF and replaces the placeholder entry;
+        // extraction failures drop the entry and keep the rest going.
+        index.updateFile(pdfPath);
       } catch { /* skip corrupt pdf, keep the rest */ }
       await Promise.resolve(); // yield between files
     }
-    schedulePersist();
   });
 }
 
-/** Debounced persist — writes index to disk 5s after last write operation. */
-let _persistTimer: ReturnType<typeof setTimeout> | null = null;
-let _persistDirty = false;
-
-function schedulePersist(): void {
-  _persistDirty = true;
-  if (_persistTimer) clearTimeout(_persistTimer);
-  _persistTimer = setTimeout(flushPersist, 5000);
+/** Refresh the index for `mindRoot` (incremental; PDFs beyond the budget are deferred). */
+function refreshIndex(mindRoot: string): CoreSearchPrewarmResult {
+  const index = indexFor(mindRoot);
+  const stop = telemetry.startTimer('search.core.refresh');
+  const { cacheState, deferred } = index.refresh(treeVersionHint(mindRoot), { extractionBudgetMs: _coldPdfBudgetMs });
+  scheduleDeferredPdfIndexing(mindRoot, deferred);
+  stop({ cacheState, fileCount: index.getFileCount(), deferredPdfCount: deferred.length });
+  return { cacheState, fileCount: index.getFileCount() };
 }
 
-/** Immediately flush pending index to disk (used by exit hooks). */
-function flushPersist(): void {
-  if (_persistTimer) { clearTimeout(_persistTimer); _persistTimer = null; }
-  if (!_persistDirty) return;
-  _persistDirty = false;
-  try { searchIndex.persist(getMindosDir()); } catch { /* non-critical */ }
-}
-
-// Ensure index is persisted before process exits
-if (typeof process !== 'undefined') {
-  process.on('beforeExit', flushPersist);
-  process.on('SIGTERM', () => { flushPersist(); process.exit(0); });
-  process.on('SIGINT', () => { flushPersist(); process.exit(0); });
-}
-
-/* ── BM25 Parameters ── */
-const BM25_K1 = 1.2;  // Term frequency saturation
-const BM25_B = 0.75;  // Document length normalization
-
-/**
- * Compute BM25 score for a single term in a single document.
- *
- * @param tf          - raw term frequency (occurrences of term in doc)
- * @param df          - document frequency (number of docs containing term)
- * @param docLength   - length of this document (chars)
- * @param avgDocLength - average document length across corpus (chars)
- * @param totalDocs   - total number of documents in corpus
- */
-export function bm25Score(
-  tf: number,
-  df: number,
-  docLength: number,
-  avgDocLength: number,
-  totalDocs: number,
-): number {
-  if (tf === 0 || totalDocs === 0 || avgDocLength === 0) return 0;
-
-  // IDF: log((N - df + 0.5) / (df + 0.5) + 1) — the +1 prevents negative IDF
-  // when df > N/2 (common terms)
-  const idf = Math.log((totalDocs - df + 0.5) / (df + 0.5) + 1);
-
-  // Normalized TF with saturation and length normalization
-  const tfNorm = (tf * (BM25_K1 + 1)) / (tf + BM25_K1 * (1 - BM25_B + BM25_B * docLength / avgDocLength));
-
-  return idf * tfNorm;
-}
-
-/**
- * Split a query into individual search terms for multi-term BM25 scoring.
- * Each term is scored independently, then scores are summed per document.
- */
-function splitQueryTerms(query: string): string[] {
-  const lower = query.toLowerCase().trim();
-  if (!lower) return [];
-  const terms = new Set<string>();
-  terms.add(lower);
-  for (const term of lower.split(/\s+/)) {
-    if (term.length > 0) terms.add(term);
-  }
-  for (const token of tokenizeSearchText(lower)) {
-    if (token.length > 0) terms.add(token);
-  }
-  return [...terms];
-}
-
-/**
- * Count how many times a term appears in text using word-boundary-aware matching.
- * For Latin terms: uses word boundaries (\b)
- * For CJK terms: just counts substring occurrences (CJK has no word boundaries in regex)
- *
- * Caches compiled RegExp per term to avoid recompilation on each file (O(files) → O(1) per term).
- */
-const _termRegexCache = new Map<string, RegExp>();
-
-function getTermRegex(term: string): RegExp {
-  let cached = _termRegexCache.get(term);
-  if (cached) return cached;
-
-  const cjkRegex = /[\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af]/;
-  const hasCJK = cjkRegex.test(term);
-  const escapedTerm = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-  cached = hasCJK
-    ? new RegExp(escapedTerm, 'g')
-    : new RegExp(`\\b${escapedTerm}\\b`, 'g');
-
-  // Bound cache size to prevent unbounded memory growth
-  if (_termRegexCache.size > 500) _termRegexCache.clear();
-  _termRegexCache.set(term, cached);
-  return cached;
-}
-
-function countTermOccurrences(term: string, text: string): number {
-  const regex = getTermRegex(term);
-  regex.lastIndex = 0; // reset stateful /g regex
-  const matches = text.match(regex);
-  return matches ? matches.length : 0;
-}
-
-function insertTopSearchResult(results: SearchResult[], result: SearchResult, limit: number): void {
-  if (results.length === limit && result.score <= results[results.length - 1].score) return;
-
-  let insertAt = results.length;
-  while (insertAt > 0 && results[insertAt - 1].score < result.score) {
-    insertAt -= 1;
-  }
-  results.splice(insertAt, 0, result);
-  if (results.length > limit) results.length = limit;
-}
-
-interface MatchedSearchDocument {
-  filePath: string;
-  content: string;
-  lowerContent: string;
-  docLength: number;
-  termCounts: number[];
-  firstMatchIndex: number;
-  totalOccurrences: number;
-}
-
-/**
- * Prewarm the core search index for a given mindRoot.
- * Tries loading from disk first (fast path), falls back to full rebuild.
- * Returns the number of indexed files and whether the index was loaded or built.
- */
+/** Prewarm the core search index for a given mindRoot (`/api/search/prewarm`). */
 export async function prewarmCoreSearchIndex(mindRoot: string): Promise<CoreSearchPrewarmResult> {
-  if (searchIndex.isBuiltFor(mindRoot)) {
-    telemetry.track('search.core.prewarm', { cacheState: 'hit', fileCount: searchIndex.getFileCount() });
-    return { cacheState: 'hit', fileCount: searchIndex.getFileCount() };
-  }
-
-  const stopLoad = telemetry.startTimer('search.core.prewarm.load');
-  const loaded = searchIndex.load(getMindosDir(), mindRoot);
-  stopLoad({ loaded, fileCount: loaded ? searchIndex.getFileCount() : 0 });
-
-  if (loaded) {
-    telemetry.track('search.core.prewarm', { cacheState: 'loaded', fileCount: searchIndex.getFileCount() });
-    return { cacheState: 'loaded', fileCount: searchIndex.getFileCount() };
-  }
-
-  if (_coreBuildTask?.mindRoot === mindRoot) {
-    return _coreBuildTask.promise;
-  }
-
-  // Use async worker rebuild to avoid blocking the event loop
-  const promise = (async (): Promise<CoreSearchPrewarmResult> => {
-    const { deferredPdfs } = await searchIndex.rebuildAsync(mindRoot, { pdfTimeBudgetMs: _coldPdfBudgetMs });
-    scheduleDeferredPdfIndexing(mindRoot, deferredPdfs);
-    try { searchIndex.persist(getMindosDir()); } catch { /* non-critical */ }
-
-    telemetry.track('search.core.prewarm', { cacheState: 'built', fileCount: searchIndex.getFileCount() });
-    return { cacheState: 'built', fileCount: searchIndex.getFileCount() };
-  })();
-  _coreBuildTask = { mindRoot, promise };
-  try {
-    return await promise;
-  } finally {
-    if (_coreBuildTask?.promise === promise) _coreBuildTask = null;
-  }
+  const result = refreshIndex(mindRoot);
+  telemetry.track('search.core.prewarm', { cacheState: result.cacheState, fileCount: result.fileCount });
+  return result;
 }
 
+/** Report whether an index exists for `mindRoot` without building one (hybrid search). */
 export async function ensureCoreSearchIndexReady(mindRoot: string): Promise<CoreSearchEnsureResult> {
-  if (searchIndex.isBuiltFor(mindRoot)) {
-    return { cacheState: 'hit', fileCount: searchIndex.getFileCount() };
-  }
-
-  if (_coreBuildTask?.mindRoot === mindRoot) {
-    return _coreBuildTask.promise;
-  }
-
-  const loaded = searchIndex.load(getMindosDir(), mindRoot);
-  if (loaded) {
-    return { cacheState: 'loaded', fileCount: searchIndex.getFileCount() };
-  }
-
+  const index = existingIndex(mindRoot);
+  if (index?.isBuilt()) return { cacheState: 'hit', fileCount: index.getFileCount() };
   return { cacheState: 'miss', fileCount: 0 };
 }
 
+function toSearchResult(hit: MindosSearchHit): SearchResult {
+  return { path: hit.path, snippet: hit.snippet, score: hit.score, occurrences: hit.occurrences };
+}
+
 /**
- * Core literal search — used by MCP tools via REST API.
+ * Core literal search — used by MCP tools via REST API and by hybrid search.
  *
- * Scoring: **BM25** (Best Matching 25) — the standard information retrieval
- * ranking function. For multi-term queries, each term is scored independently
- * and scores are summed. This means:
- * - Rare terms (low document frequency) contribute more to the score
- * - Term frequency has diminishing returns (saturation at k1)
- * - Shorter documents score higher when term frequency is equal
- *
- * Candidate narrowing: uses an in-memory inverted index with UNION semantics
- * for multi-term queries (a document matching ANY term is a candidate).
- *
- * NOTE: The App also has a separate Fuse.js fuzzy search in `lib/fs.ts` for the
- * browser `⌘K` search overlay. The two coexist intentionally:
- * - Core search (here): BM25 ranking, used by MCP/API/Agent
- * - App search (lib/fs.ts): Fuse.js fuzzy match, used by frontend ⌘K
+ * Scoring is BM25 over the union of files matching any query token (see
+ * `@geminilight/mindos/server` `MindosSearchIndex`). The App also has an
+ * embedding index (`hybrid-search.ts`) merged with these results via RRF.
  */
 export function searchFiles(mindRoot: string, query: string, opts: SearchOptions = {}): SearchResult[] {
   if (!query.trim()) return [];
-  const { limit = 20, scope, file_type = 'all', modified_after } = opts;
+  const { limit = 20 } = opts;
   if (limit <= 0) return [];
-  const resultLimit = limit;
 
-  // Ensure search index is built for this mindRoot
-  if (!searchIndex.isBuiltFor(mindRoot)) {
-    // Try loading from disk first (fast path — avoids full rebuild)
-    const stopIndexLoad = telemetry.startTimer('search.core.index.load');
-    const loaded = searchIndex.load(getMindosDir(), mindRoot);
-    stopIndexLoad({ loaded, fileCount: loaded ? searchIndex.getFileCount() : 0 });
-    if (!loaded) {
-      // Cold in-request build: text files inline, PDFs beyond the time
-      // budget are deferred to a background task (path tokens are indexed
-      // immediately, full text becomes searchable once extraction finishes).
-      const { deferredPdfs } = searchIndex.rebuild(mindRoot, { pdfTimeBudgetMs: _coldPdfBudgetMs });
-      scheduleDeferredPdfIndexing(mindRoot, deferredPdfs);
-      // Persist for next cold start (fire-and-forget)
-      try { searchIndex.persist(getMindosDir()); } catch { /* non-critical */ }
-    }
-  }
-
-  const totalDocs = searchIndex.getFileCount();
-  const avgDocLength = searchIndex.getAvgDocLength();
-
-  const queryTerms = splitQueryTerms(query);
-  const stopQuery = telemetry.startTimer('search.core.query', {
-    queryLen: query.length,
-    queryTermCount: queryTerms.length,
-    totalDocs,
-  });
-
-  // Use UNION index to get candidate files (any file matching any term)
-  const candidates = searchIndex.getCandidatesUnion(query);
-  const candidateSet = candidates ? new Set(candidates) : null;
-
-  // Warm queries are served entirely from the in-memory index — no
-  // directory re-scan (collectAllFiles) and no per-file disk reads.
-  let allFiles = searchIndex.getAllFiles();
-
-  // Filter by scope (directory prefix)
-  if (scope) {
-    const normalizedScope = scope.endsWith('/') ? scope : scope + '/';
-    allFiles = allFiles.filter(f => f.startsWith(normalizedScope) || f === scope);
-  }
-
-  // Filter by file type
-  if (file_type !== 'all') {
-    const ext = `.${file_type}`;
-    allFiles = allFiles.filter(f => f.endsWith(ext));
-  }
-
-  // Narrow by index candidates (if available)
-  if (candidateSet) {
-    allFiles = allFiles.filter(f => candidateSet.has(f));
-  }
-
-  // Filter by modification time
-  let mtimeThreshold = 0;
-  if (modified_after) {
-    mtimeThreshold = new Date(modified_after).getTime();
-    if (isNaN(mtimeThreshold)) mtimeThreshold = 0;
-  }
-
-  const results: SearchResult[] = [];
-  const lowerQuery = query.toLowerCase();
-
-  // ── Match once: compute per-document term counts and document frequency ──
-  // Contents come from the index's in-memory cache (no disk IO). Keep the term
-  // counts so BM25 scoring below does not re-run regex matching over the same
-  // document a second time.
-  const termDf = new Map<string, number>();
-  const matchedFiles: MatchedSearchDocument[] = [];
-
-  for (const filePath of allFiles) {
-    if (mtimeThreshold > 0) {
-      try {
-        const abs = resolveExistingSafe(mindRoot, filePath);
-        const stat = fs.statSync(abs);
-        if (stat.mtimeMs < mtimeThreshold) continue;
-      } catch { continue; }
-    }
-
-    const content = searchIndex.getContent(mindRoot, filePath);
-    const lower = searchIndex.getLowerContent(mindRoot, filePath);
-    if (content === null || lower === null) continue;
-
-    const termCounts = new Array(queryTerms.length).fill(0);
-    let firstMatchIndex = -1;
-    let totalOccurrences = 0;
-
-    for (let termIndex = 0; termIndex < queryTerms.length; termIndex += 1) {
-      const term = queryTerms[termIndex];
-      // Use consistent term counting with word boundaries for Latin terms
-      const tf = countTermOccurrences(term, lower);
-      if (tf > 0) {
-        termCounts[termIndex] = tf;
-        termDf.set(term, (termDf.get(term) ?? 0) + 1);
-        totalOccurrences += tf;
-        if (firstMatchIndex === -1) {
-          firstMatchIndex = lower.indexOf(term);
-        }
-      }
-    }
-
-    if (totalOccurrences === 0) continue;
-    matchedFiles.push({
-      filePath,
-      content,
-      lowerContent: lower,
-      docLength: searchIndex.getDocLength(filePath) || content.length,
-      termCounts,
-      firstMatchIndex,
-      totalOccurrences,
-    });
-  }
-
-  // ── Score each document with BM25 ──
-  for (const matchedFile of matchedFiles) {
-    // Compute BM25 score: sum of per-term scores
-    let totalScore = 0;
-
-    for (let termIndex = 0; termIndex < queryTerms.length; termIndex += 1) {
-      const tf = matchedFile.termCounts[termIndex];
-      if (tf === 0) continue;
-
-      // Get document frequency for this term (computed in pre-scan)
-      const term = queryTerms[termIndex];
-      const df = termDf.get(term) ?? 0;
-
-      totalScore += bm25Score(tf, df, matchedFile.docLength, avgDocLength, totalDocs);
-    }
-
-    // Build snippet around the first match
-    const index = matchedFile.firstMatchIndex >= 0 ? matchedFile.firstMatchIndex : matchedFile.lowerContent.indexOf(lowerQuery);
-    const snippetAnchor = index >= 0 ? index : 0;
-
-    let snippetStart = matchedFile.content.lastIndexOf('\n\n', snippetAnchor);
-    if (snippetStart === -1) snippetStart = Math.max(0, snippetAnchor - 200);
-    else snippetStart += 2;
-
-    let snippetEnd = matchedFile.content.indexOf('\n\n', snippetAnchor);
-    if (snippetEnd === -1) snippetEnd = Math.min(matchedFile.content.length, snippetAnchor + query.length + 200);
-
-    if (snippetAnchor - snippetStart > 200) snippetStart = snippetAnchor - 200;
-    if (snippetEnd - snippetAnchor > 200) snippetEnd = snippetAnchor + query.length + 200;
-
-    let snippet = matchedFile.content.slice(snippetStart, snippetEnd).trim();
-    snippet = snippet.replace(/\n{3,}/g, '\n\n');
-    if (snippetStart > 0) snippet = '...' + snippet;
-    if (snippetEnd < matchedFile.content.length) snippet += '...';
-
-    insertTopSearchResult(results, {
-      path: matchedFile.filePath,
-      snippet,
-      score: totalScore,
-      occurrences: matchedFile.totalOccurrences,
-    }, resultLimit);
-  }
-
-  stopQuery({
-    candidateCount: candidateSet ? candidateSet.size : allFiles.length,
-    resultCount: results.length,
-  });
+  refreshIndex(mindRoot);
+  const index = indexFor(mindRoot);
+  const stop = telemetry.startTimer('search.core.query', { queryLen: query.length, totalDocs: index.getFileCount() });
+  const results = index.search(query, { ...opts, limit }, treeVersionHint(mindRoot)).map(toSearchResult);
+  stop({ resultCount: results.length });
   return results;
 }
