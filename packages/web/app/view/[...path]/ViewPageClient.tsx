@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition, useCallback, useEffect, useRef, useSyncExternalStore, useMemo, Suspense } from 'react';
+import { useState, useTransition, useCallback, useEffect, useLayoutEffect, useRef, useSyncExternalStore, useMemo, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Edit3, Save, X, Loader2, LayoutTemplate, ArrowLeft, Share2, FileText, Code, MoreHorizontal, Copy, Pencil, Trash2, Star, Download, Eye, PanelLeft, PanelRightOpen, Puzzle, ChevronDown, History, ListChecks, Wand2 } from 'lucide-react';
@@ -153,17 +153,23 @@ function hasUnsafeMarkdownFrontmatterFence(content: string): boolean {
   return hasMarkdownFrontmatterFence(content) && splitMarkdownFrontmatter(content).frontmatter === null;
 }
 
+/**
+ * Initial editing/mode state for a file. `preferredMode` is passed in rather
+ * than read here: the first render must use the server-stable default
+ * (`'wysiwyg'`) so SSR HTML and the hydration render agree; the stored
+ * preference is applied afterwards (see the layout effect in the component).
+ */
 function resolveMarkdownStartState(
   isBinaryFile: boolean,
   isMarkdown: boolean,
   initialEditing: boolean,
   content: string,
+  preferredMode: MdViewMode,
 ): { editing: boolean; mode: MdViewMode } {
   if (isBinaryFile || !isMarkdown) {
     return { editing: !isBinaryFile && (initialEditing || content === ''), mode: 'wysiwyg' };
   }
 
-  const preferredMode = readMarkdownModePreference();
   const hasUnsafeFrontmatter = hasUnsafeMarkdownFrontmatterFence(content);
   const mustEdit = initialEditing || content === '';
 
@@ -231,7 +237,7 @@ export default function ViewPageClient({
   const fileBodyReady = useDeferredFileBodyReady(filePath);
   const [editing, setEditing] = useState(() => {
     if (isCsvLiveSurface) return false;
-    return resolveMarkdownStartState(isBinaryFile, isMarkdown, initialEditing, content).editing;
+    return resolveMarkdownStartState(isBinaryFile, isMarkdown, initialEditing, content, 'wysiwyg').editing;
   });
   const [editContent, setEditContent] = useState(content);
   const [savedContent, setSavedContent] = useState(content);
@@ -341,8 +347,21 @@ export default function ViewPageClient({
     };
   }, [editContent, savedContent, editing, isMarkdown, isDraft, saveAction, keepCurrentTab, notifySelfSavedFile]);
   const [mdViewMode, setMdViewModeState] = useState<MdViewMode>(() => {
-    return resolveMarkdownStartState(isBinaryFile, isMarkdown, initialEditing, content).mode;
+    return resolveMarkdownStartState(isBinaryFile, isMarkdown, initialEditing, content, 'wysiwyg').mode;
   });
+  // Apply the stored mode preference once, after mount. A layout effect runs
+  // before paint, so a "preview" user never sees the editor flash, while the
+  // SSR HTML and the hydration render stay identical (no localStorage in render).
+  const storedPreferenceAppliedRef = useRef(false);
+  useLayoutEffect(() => {
+    if (storedPreferenceAppliedRef.current) return;
+    storedPreferenceAppliedRef.current = true;
+    const preferredMode = readMarkdownModePreference();
+    if (preferredMode === 'wysiwyg') return;
+    const next = resolveMarkdownStartState(isBinaryFile, isMarkdown, initialEditing, content, preferredMode);
+    setMdViewModeState(next.mode);
+    if (!isCsvLiveSurface) setEditing(next.editing);
+  }, [content, initialEditing, isBinaryFile, isCsvLiveSurface, isMarkdown]);
   const setMdViewMode = useCallback((mode: MdViewMode) => {
     setMdViewModeState(mode);
     try {
@@ -371,7 +390,7 @@ export default function ViewPageClient({
     setModeMenuOpen(false);
     setLinterPreviewEnabled(false);
     setLinterFixReviewOpen(false);
-    const nextMarkdownState = resolveMarkdownStartState(isBinaryFile, isMarkdown, initialEditing, content);
+    const nextMarkdownState = resolveMarkdownStartState(isBinaryFile, isMarkdown, initialEditing, content, readMarkdownModePreference());
     setMdViewModeState(nextMarkdownState.mode);
     setEditing(isCsvLiveSurface ? false : nextMarkdownState.editing);
   }, [content, filePath, initialEditing, isBinaryFile, isCsvLiveSurface, isMarkdown]);

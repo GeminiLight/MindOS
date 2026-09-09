@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createDefaultMindosHttpServices, createMindosHttpServer } from './http.js';
-import { handleMindosRequest } from './app.js';
+import { createMindosApp, handleMindosRequest } from './app.js';
 import type { MindosHttpServices } from './services.js';
 import type { MindosRuntimeSettings } from './runtime.js';
 
@@ -92,6 +92,62 @@ describe('Hono Product Server app: auth matrix', () => {
     const url = `${base}/api/agent-runtimes/codex/threads/thr-1/delete`;
     expect((await fetch(url, { method: 'POST' })).status).toBe(401);
     expect((await fetch(url, { method: 'POST', headers: { authorization: 'Bearer secret-token' } })).status).toBe(404);
+  });
+
+  describe('same-origin exemption is scoped to the local machine', () => {
+    // The Node listener hands Hono `{ incoming, outgoing }` as the env; this
+    // mirrors that shape with a controllable socket address.
+    const envFrom = (remoteAddress: string | undefined) => ({ incoming: { socket: { remoteAddress } } });
+    const sameOrigin = (host: string, extra: Record<string, string> = {}) => new Request(`http://${host}/api/files`, {
+      headers: { 'sec-fetch-site': 'same-origin', host, ...extra },
+    });
+
+    it('rejects a LAN browser that loaded the UI through the LAN address', async () => {
+      const root = makeRoot();
+      writeFileSync(join(root, 'note.md'), 'hello');
+      const app = createMindosApp({ services: makeServices(root, { authToken: 'secret-token' }) });
+
+      const lan = await app.fetch(sameOrigin('192.168.1.5:3456'), envFrom('192.168.1.20'));
+      expect(lan.status).toBe(401);
+      expect(await lan.json()).toEqual({ error: 'Unauthorized' });
+
+      const loopback = await app.fetch(sameOrigin('192.168.1.5:3456'), envFrom('127.0.0.1'));
+      expect(loopback.status).toBe(200);
+      const mapped = await app.fetch(sameOrigin('127.0.0.1:3456'), envFrom('::ffff:127.0.0.1'));
+      expect(mapped.status).toBe(200);
+    });
+
+    it('falls back to the Host header when the socket address is bridged or unknown', async () => {
+      const root = makeRoot();
+      const app = createMindosApp({ services: makeServices(root, { authToken: 'secret-token' }) });
+      expect((await app.fetch(sameOrigin('localhost:3456'), envFrom('172.17.0.1'))).status).toBe(200);
+      expect((await app.fetch(sameOrigin('[::1]:3456'))).status).toBe(200);
+      expect((await app.fetch(sameOrigin('192.168.1.5:3456'))).status).toBe(401);
+      expect((await app.fetch(sameOrigin('localhost.evil.com:3456'), envFrom('192.168.1.20'))).status).toBe(401);
+    });
+
+    it('rejects a remote client reported by a reverse proxy but keeps a loopback-reported one', async () => {
+      const root = makeRoot();
+      const app = createMindosApp({ services: makeServices(root, { authToken: 'secret-token' }) });
+      const proxied = await app.fetch(sameOrigin('localhost:3456', { 'x-forwarded-for': '203.0.113.9' }), envFrom('127.0.0.1'));
+      expect(proxied.status).toBe(401);
+      const localThroughProxy = await app.fetch(sameOrigin('localhost:3456', { 'x-forwarded-for': '::ffff:127.0.0.1' }), envFrom('127.0.0.1'));
+      expect(localThroughProxy.status).toBe(200);
+      const bearer = await app.fetch(new Request('http://localhost:3456/api/files', {
+        headers: { authorization: 'Bearer secret-token', 'x-forwarded-for': '203.0.113.9' },
+      }), envFrom('127.0.0.1'));
+      expect(bearer.status).toBe(200);
+    });
+
+    it('applies the same rule to guarded unmatched paths', async () => {
+      const root = makeRoot();
+      const app = createMindosApp({ services: makeServices(root, { authToken: 'secret-token' }) });
+      const url = 'http://192.168.1.5:3456/api/agent-runtimes/codex/threads/thr-1/delete';
+      const lan = await app.fetch(new Request(url, { method: 'POST', headers: { 'sec-fetch-site': 'same-origin', host: '192.168.1.5:3456' } }), envFrom('192.168.1.20'));
+      expect(lan.status).toBe(401);
+      const local = await app.fetch(new Request(url, { method: 'POST', headers: { 'sec-fetch-site': 'same-origin', host: '192.168.1.5:3456' } }), envFrom('127.0.0.1'));
+      expect(local.status).toBe(404);
+    });
   });
 });
 

@@ -14,8 +14,13 @@ vi.mock('@/lib/setup-state', () => ({
   readSetupPending: mockReadSetupPending,
 }));
 
+// Next always carries the Host header of the incoming HTTP request and, before
+// the proxy runs, fills `x-forwarded-for` from the socket peer address; mirror
+// the local-browser shape here so the auth branches see realistic input.
 function makeApiRequest(headers: Record<string, string> = {}) {
-  return new NextRequest('http://localhost/api/files', { headers });
+  return new NextRequest('http://localhost/api/files', {
+    headers: { host: 'localhost', 'x-forwarded-for': '::ffff:127.0.0.1', ...headers },
+  });
 }
 
 function makePageRequest(path = '/some-page', headers: Record<string, string> = {}) {
@@ -64,6 +69,50 @@ describe('middleware — API protection (AUTH_TOKEN)', () => {
     delete process.env.WEB_PASSWORD;
     const res = await middleware(makeApiRequest({ 'sec-fetch-site': 'same-origin' }));
     expect(res.status).toBe(200);
+  });
+
+  describe('same-origin exemption is limited to a localhost Host', () => {
+    beforeEach(() => {
+      process.env.AUTH_TOKEN = 'secret123';
+      delete process.env.WEB_PASSWORD;
+    });
+
+    function sameOriginFrom(host: string, extra: Record<string, string> = {}) {
+      return new NextRequest(`http://${host}/api/files`, {
+        headers: { 'sec-fetch-site': 'same-origin', host, ...extra },
+      });
+    }
+
+    it.each(['localhost:3000', 'LOCALHOST', '127.0.0.1:4567', '[::1]:3456'])('accepts Host %s', async (host) => {
+      expect((await middleware(sameOriginFrom(host))).status).toBe(200);
+    });
+
+    it('rejects a LAN browser that loaded the UI over the LAN address', async () => {
+      const res = await middleware(sameOriginFrom('192.168.1.5:3000'));
+      expect(res.status).toBe(401);
+      expect(await res.json()).toEqual({ error: 'Unauthorized' });
+      expect((await middleware(sameOriginFrom('localhost.evil.com:3000'))).status).toBe(401);
+    });
+
+    it('rejects same-origin requests whose forwarding chain names a remote client', async () => {
+      expect((await middleware(sameOriginFrom('localhost:3000', { 'x-forwarded-for': '203.0.113.9' }))).status).toBe(401);
+      expect((await middleware(sameOriginFrom('localhost:3000', { 'x-forwarded-for': '127.0.0.1, 203.0.113.9' }))).status).toBe(401);
+      expect((await middleware(sameOriginFrom('localhost:3000', { forwarded: 'for=203.0.113.9' }))).status).toBe(401);
+    });
+
+    it('keeps a local browser whose x-forwarded-for Next filled from the loopback socket', async () => {
+      expect((await middleware(sameOriginFrom('localhost:3000', { 'x-forwarded-for': '::ffff:127.0.0.1' }))).status).toBe(200);
+      expect((await middleware(sameOriginFrom('localhost:3000', { 'x-forwarded-for': '::1' }))).status).toBe(200);
+      // A loopback forwarded chain never allows on its own; Host still decides.
+      expect((await middleware(sameOriginFrom('192.168.1.5:3000', { 'x-forwarded-for': '127.0.0.1' }))).status).toBe(401);
+    });
+
+    it('still accepts the bearer from a LAN address', async () => {
+      const res = await middleware(new NextRequest('http://192.168.1.5:3000/api/files', {
+        headers: { host: '192.168.1.5:3000', authorization: 'Bearer secret123' },
+      }));
+      expect(res.status).toBe(200);
+    });
   });
 
   it('rejects spoofable same-origin API requests when the Web UI is password-protected', async () => {

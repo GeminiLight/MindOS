@@ -41,6 +41,18 @@ function isMutatingMethod(method: string): boolean {
 }
 
 /**
+ * Peer address from the `@hono/node-server` env (`{ incoming, outgoing }`).
+ * Hosts that call `app.fetch(request)` without an env (Next delegation, tests)
+ * get `undefined`, which makes the same-origin exemption fall back to `Host`.
+ */
+function remoteAddressOf(env: unknown): string | undefined {
+  if (!env || typeof env !== 'object') return undefined;
+  const incoming = (env as { incoming?: { socket?: { remoteAddress?: unknown } } }).incoming;
+  const address = incoming?.socket?.remoteAddress;
+  return typeof address === 'string' ? address : undefined;
+}
+
+/**
  * Builds the Product Server as a Hono app from the route table. Every host
  * (Node listener, Next delegation, tests) goes through `app.fetch(request)`.
  */
@@ -68,7 +80,12 @@ export function createMindosApp(options: MindosAppOptions): MindosApp {
   for (const route of MINDOS_ROUTE_TABLE) {
     app.on(route.method, toHonoPath(route.path), async (c) => {
       const request = c.req.raw;
-      if (authMode === 'contract' && !isAuthorizedRequest({ auth: route.auth, headers: request.headers, services })) {
+      if (authMode === 'contract' && !isAuthorizedRequest({
+        auth: route.auth,
+        headers: request.headers,
+        remoteAddress: remoteAddressOf(c.env),
+        services,
+      })) {
         return UNAUTHORIZED();
       }
       const response = await route.handler(buildContext(request, c.req.param(), services, runtimeRoot));
@@ -86,7 +103,14 @@ export function createMindosApp(options: MindosAppOptions): MindosApp {
     const url = new URL(request.url);
     if (authMode === 'contract') {
       const guardedAuth = resolveGuardedAuth(request.method, url.pathname, MINDOS_ROUTE_AUTH_GUARDS);
-      if (!isAuthorizedRequest({ auth: guardedAuth, headers: request.headers, services })) return UNAUTHORIZED();
+      if (!isAuthorizedRequest({
+        auth: guardedAuth,
+        headers: request.headers,
+        remoteAddress: remoteAddressOf(c.env),
+        services,
+      })) {
+        return UNAUTHORIZED();
+      }
     }
     if (staticFallback && request.method === 'GET' && !url.pathname.startsWith('/api/')) {
       if (readWebPassword(services)) {

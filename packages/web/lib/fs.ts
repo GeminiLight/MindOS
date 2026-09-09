@@ -147,21 +147,26 @@ function ensureDerived(): DerivedTreeState {
     coreVersion = cache.getTreeVersion();
   }
   const stats = cache.collectFileStats();
+  // `localeCompare` stays: on Node 22 V8's ASCII fast path sorts 20k paths in
+  // ~8 ms, while a cached Intl.Collator measured ~13 ms (see the fs-derive benchmark).
   const files = stats.map((entry) => entry.path).sort((a, b) => a.localeCompare(b));
   const pathsKey = files.join('\n');
   const previous = _derived;
+  const allFiles = files.filter((filePath) => !isDefaultMindSystemScaffoldFile(root, filePath));
+  // Membership lookups below must be O(1): with 20k files an Array#includes
+  // filter made every re-derivation take seconds (see spec-audit-leftovers-2026-09).
+  const allFileSet = new Set(allFiles);
   const next: DerivedTreeState = {
     root,
     coreVersion,
     pathsKey,
     tree: deriveFileTree(root, stats, _spacePreviews),
-    allFiles: files.filter((filePath) => !isDefaultMindSystemScaffoldFile(root, filePath)),
-    recentFiles: [],
+    allFiles,
+    recentFiles: stats
+      .filter((entry) => allFileSet.has(entry.path))
+      .map((entry) => ({ path: entry.path, mtime: entry.mtime }))
+      .sort((a, b) => b.mtime - a.mtime),
   };
-  next.recentFiles = stats
-    .filter((entry) => next.allFiles.includes(entry.path) || !isDefaultMindSystemScaffoldFile(root, entry.path))
-    .map((entry) => ({ path: entry.path, mtime: entry.mtime }))
-    .sort((a, b) => b.mtime - a.mtime);
   _derived = next;
   pruneSpacePreviews(_spacePreviews, next.tree);
   stop({ fileCount: next.allFiles.length, directoryCount: countDirectories(next.tree) });

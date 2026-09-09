@@ -41,23 +41,31 @@ export function etagMatches(ifNoneMatch: string, etag: string): boolean {
   return ifNoneMatch.split(',').some((candidate) => strip(candidate) === wanted);
 }
 
+/** A byte stream body (e.g. a large raw file); passed to `Response` untouched. */
+export function isByteStreamBody(body: unknown): body is ReadableStream<Uint8Array> {
+  return body instanceof ReadableStream;
+}
+
 /**
  * Converts a handler result into a Web-standard `Response`: CORS headers,
- * JSON by default (binary bodies keep their own content type), `304` for a
- * matching `If-None-Match` on a 200 with an ETag, and an SSE stream when the
- * body is an async iterable of MindOS SSE events or a `sseFrames(...)` body.
+ * JSON by default (binary bodies and byte streams keep their own content
+ * type), `304` for a matching `If-None-Match` on a 200 with an ETag, and an SSE
+ * stream when the body is an async iterable of MindOS SSE events or a
+ * `sseFrames(...)` body.
  */
 export function toWebResponse<T>(response: MindosServerResponse<T>, options: ToWebResponseOptions = {}): Response {
   const body = response.body;
   const isBinary = body instanceof Uint8Array;
+  // Node's ReadableStream is also async-iterable, so check it before the SSE shape.
+  const isBytes = isByteStreamBody(body);
   const isFrames = isSseFrameBody(body);
-  const isStream = isFrames || isSseBody(body);
+  const isStream = isFrames || (!isBytes && isSseBody(body));
 
   // Sequential `set` keeps the legacy `writeHead` semantics: later keys win
   // regardless of casing, instead of `Headers` joining duplicates with commas.
   const headers = new Headers();
   for (const [key, value] of Object.entries(CORS_HEADERS)) headers.set(key, value);
-  if (!isBinary && !isStream) headers.set('Content-Type', 'application/json; charset=utf-8');
+  if (!isBinary && !isBytes && !isStream) headers.set('Content-Type', 'application/json; charset=utf-8');
   for (const [key, value] of Object.entries(response.headers ?? {})) headers.set(key, value);
 
   if (isFrames) {
@@ -67,7 +75,7 @@ export function toWebResponse<T>(response: MindosServerResponse<T>, options: ToW
       heartbeat: false,
     });
   }
-  if (isSseBody(body)) {
+  if (!isBytes && isSseBody(body)) {
     return createSseResponse(body, response.status, headers, options, {
       encode: encodeMindosSseEvent,
       heartbeat: true,
@@ -78,6 +86,8 @@ export function toWebResponse<T>(response: MindosServerResponse<T>, options: ToW
   const etag = headers.get('etag');
   const ifNoneMatch = options.request?.headers.get('if-none-match');
   if (etag && response.status === 200 && ifNoneMatch && etagMatches(ifNoneMatch, etag)) {
+    // A handler that did not see If-None-Match may already hold a descriptor.
+    if (isBytes) cancelQuietly(body);
     headers.delete('content-type');
     return new Response(null, { status: 304, headers });
   }
@@ -85,10 +95,26 @@ export function toWebResponse<T>(response: MindosServerResponse<T>, options: ToW
   if (response.status === 204 || body === undefined) {
     return new Response(null, { status: response.status, headers });
   }
+  if (isBytes) {
+    // Consumers (node-server, Next) cancel the reader on client disconnect;
+    // the request signal covers an abort before anyone locked the stream.
+    const signal = options.request?.signal;
+    if (signal) {
+      if (signal.aborted) cancelQuietly(body);
+      else signal.addEventListener('abort', () => cancelQuietly(body), { once: true });
+    }
+    return new Response(body, { status: response.status, headers });
+  }
   if (isBinary) {
     return new Response(body as BodyInit, { status: response.status, headers });
   }
   return new Response(JSON.stringify(body), { status: response.status, headers });
+}
+
+/** Best-effort cancel: a stream the consumer already locked is theirs to cancel. */
+function cancelQuietly(stream: ReadableStream<Uint8Array>): void {
+  if (stream.locked) return;
+  stream.cancel().catch(() => {});
 }
 
 type SseCodec<T> = {

@@ -38,5 +38,8 @@ export const fileRoutes = defineRoutes([
   { id: 'extract-docx', method: 'POST', path: '/api/extract-docx', auth: 'required',
     handler: async (ctx) => handleExtractDocxPost(await ctx.readJsonBody(EXTRACT_DOCX_MAX_BODY_BYTES), documentExtractionServices(ctx)) },
   { id: 'file.raw', method: 'GET', path: '/api/file/raw', auth: 'required',
-    handler: ({ query, headers, services }) => handleRawFile(query, services, { range: headers.get('range') ?? undefined }) },
+    handler: ({ query, headers, services }) => handleRawFile(query, services, {
+      range: headers.get('range') ?? undefined,
+      ifNoneMatch: headers.get('if-none-match') ?? undefined,
+    }) },
 ]);

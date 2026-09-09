@@ -4,7 +4,7 @@ import { buildLoginRedirectTarget, WEB_SESSION_COOKIE_NAME } from '@/lib/auth-se
 import { readSetupPending } from '@/lib/setup-state';
 import { defaultEchoPath } from '@/lib/echo-segments';
 import { readRuntimeAuthConfig } from '@/lib/runtime-auth-config';
-import { MINDOS_SERVER_ROUTES } from '@geminilight/mindos/server';
+import { MINDOS_SERVER_ROUTES, allowsSameOriginExemption } from '@geminilight/mindos/server';
 import { isAllowedCorsOrigin } from '@/lib/cors-origins';
 
 /**
@@ -108,10 +108,18 @@ export async function proxy(req: NextRequest) {
     }
 
     if (authToken) {
-      // Preserve the open-browser-UI contract only when the UI has no password.
-      // When a Web password exists, Sec-Fetch-Site alone is not an auth signal:
-      // non-browser HTTP clients can send the same header value.
-      if (!webPassword && req.headers.get('sec-fetch-site') === 'same-origin') {
+      // Preserve the open-browser-UI contract only when the UI has no password
+      // AND the browser is on this machine. When a Web password exists,
+      // Sec-Fetch-Site alone is not an auth signal: non-browser HTTP clients can
+      // send the same header value. Without a password, a LAN browser that
+      // loaded the UI over `0.0.0.0` would otherwise get token-free API access,
+      // so the exemption is limited to a localhost `Host` (the proxy has no
+      // socket to inspect) and denied outright behind a reverse proxy.
+      if (
+        !webPassword
+        && req.headers.get('sec-fetch-site') === 'same-origin'
+        && allowsSameOriginExemption({ headers: req.headers })
+      ) {
         return withCors(NextResponse.next(), req);
       }
 

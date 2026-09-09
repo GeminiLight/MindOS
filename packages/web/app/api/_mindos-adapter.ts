@@ -16,7 +16,9 @@ import { createWebMindosServices } from './_mindos-services';
 export function toNextResponse<T>(response: MindosServerResponse<T> | Response): Response {
   if (response instanceof Response) return response;
 
-  if (response.body instanceof Uint8Array) {
+  // Byte streams (large raw files) and binary buffers keep their own headers;
+  // Next pipes the stream to the socket and cancels it on client disconnect.
+  if (response.body instanceof ReadableStream || response.body instanceof Uint8Array) {
     return new Response(response.body as BodyInit, {
       status: response.status,
       headers: response.headers,

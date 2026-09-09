@@ -7,10 +7,11 @@ import { useLocale } from '@/lib/stores/locale-store';
 import { restoreFromTrashAction, permanentlyDeleteAction, emptyTrashAction } from '@/lib/actions';
 import { ConfirmDialog } from '@/components/agents/AgentsPrimitives';
 import { toast } from '@/lib/toast';
+import { useHydratedNow } from '@/hooks/useHydratedNow';
 import type { TrashMeta } from '@/lib/core/trash';
 
-function relativeTimeShort(iso: string, t: { justNow?: string; minutesAgo?: (m: number) => string; hoursAgo?: (h: number) => string; daysAgo?: (d: number) => string }): string {
-  const delta = Date.now() - new Date(iso).getTime();
+function relativeTimeShort(iso: string, t: { justNow?: string; minutesAgo?: (m: number) => string; hoursAgo?: (h: number) => string; daysAgo?: (d: number) => string }, now: number): string {
+  const delta = now - new Date(iso).getTime();
   const mins = Math.floor(delta / 60000);
   if (mins < 1) return t.justNow ?? 'just now';
   if (mins < 60) return t.minutesAgo?.(mins) ?? `${mins}m ago`;
@@ -20,13 +21,16 @@ function relativeTimeShort(iso: string, t: { justNow?: string; minutesAgo?: (m: 
   return t.daysAgo?.(days) ?? `${days}d ago`;
 }
 
-function daysUntil(iso: string): number {
-  return Math.max(0, Math.ceil((new Date(iso).getTime() - Date.now()) / 86400000));
+function daysUntil(iso: string, now: number): number {
+  return Math.max(0, Math.ceil((new Date(iso).getTime() - now) / 86400000));
 }
 
 export default function TrashPageClient({ initialItems }: { initialItems: TrashMeta[] }) {
   const { t } = useLocale();
   const router = useRouter();
+  // Null on the server and during hydration: the page arrives from a server
+  // component, so time-relative labels must not depend on the server clock.
+  const now = useHydratedNow();
   const [items, setItems] = useState(initialItems);
   const [isPending, startTransition] = useTransition();
   const [confirmEmpty, setConfirmEmpty] = useState(false);
@@ -136,8 +140,8 @@ export default function TrashPageClient({ initialItems }: { initialItems: TrashM
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
               {items.map(item => {
-                const days = daysUntil(item.expiresAt);
-                const isExpiring = days <= 3;
+                const days = now === null ? null : daysUntil(item.expiresAt, now);
+                const isExpiring = days !== null && days <= 3;
                 return (
                   <div
                     key={item.id}
@@ -164,11 +168,11 @@ export default function TrashPageClient({ initialItems }: { initialItems: TrashM
                     <div className="flex items-center justify-between">
                       <div className="flex flex-col gap-0.5">
                         <span className="text-2xs text-muted-foreground">
-                          {t.trash.deletedAgo(relativeTimeShort(item.deletedAt, t.trash))}
+                          {now !== null && t.trash.deletedAgo(relativeTimeShort(item.deletedAt, t.trash, now))}
                         </span>
                         <span className={`text-2xs ${isExpiring ? 'text-error' : 'text-muted-foreground/60'}`}>
                           {isExpiring && <AlertTriangle size={9} className="inline mr-0.5" />}
-                          {t.trash.expiresIn(days)}
+                          {days !== null && t.trash.expiresIn(days)}
                         </span>
                       </div>
                       <div className="flex items-center gap-1.5">

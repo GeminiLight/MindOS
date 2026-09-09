@@ -15,14 +15,16 @@ export function encodePath(filePath: string): string {
 
 /**
  * Format a timestamp as a human-readable relative time string.
+ * Pass `now` when rendering so the result is a pure function of its inputs
+ * (see `hooks/useHydratedNow` for the SSR-safe clock).
  */
 export function relativeTime(mtime: number, labels: {
   justNow: string;
   minutesAgo: (n: number) => string;
   hoursAgo: (n: number) => string;
   daysAgo: (n: number) => string;
-}): string {
-  const diff = Date.now() - mtime;
+}, now: number = Date.now()): string {
+  const diff = now - mtime;
   const minutes = Math.floor(diff / 60000);
   const hours = Math.floor(diff / 3600000);
   const days = Math.floor(diff / 86400000);

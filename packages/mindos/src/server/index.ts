@@ -425,9 +425,19 @@ export {
 
 export { MINDOS_ROUTE_AUTH_GUARDS, MINDOS_ROUTE_TABLE } from './routes/index.js';
 
-export { toWebResponse, etagMatches, isSseBody, isSseFrameBody, sseFrames } from './web-response.js';
+export { toWebResponse, etagMatches, isByteStreamBody, isSseBody, isSseFrameBody, sseFrames } from './web-response.js';
 export { HttpBodyError, readJsonBody, MINDOS_DEFAULT_JSON_BODY_LIMIT } from './body.js';
-export { isAuthorizedRequest, readAuthToken, readWebPassword } from './auth.js';
+export {
+  allowsSameOriginExemption,
+  forwardedClientAddresses,
+  forwardedClientIsRemote,
+  isAuthorizedRequest,
+  isLoopbackAddress,
+  isLoopbackHost,
+  readAuthToken,
+  readWebPassword,
+  type SameOriginExemptionInput,
+} from './auth.js';
 
 export {
   MINDOS_SERVER_EVENT_TYPES,
@@ -847,7 +857,9 @@ export {
 export {
   MAX_RAW_FILE_SIZE,
   RAW_FILE_MIME_TYPES,
+  RAW_FILE_STREAM_THRESHOLD,
   handleRawFile,
+  type RawFileBody,
   type RawFileHandlerOptions,
   type RawFileHandlerServices,
 } from './handlers/file-raw.js';
