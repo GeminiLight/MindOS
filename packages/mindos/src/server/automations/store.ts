@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import {
   existsSync,
   mkdirSync,
+  readdirSync,
   readFileSync,
   renameSync,
   rmSync,
@@ -11,6 +12,14 @@ import {
 } from 'node:fs';
 import path from 'node:path';
 import { resolveExistingSafe } from '../../foundation/security/index.js';
+import {
+  LeaseBusyError,
+  acquireLease,
+  openStateDatabase,
+  releaseLease,
+  type Lease,
+  type LeaseKey,
+} from '../../foundation/storage/leases.js';
 import { redactSensitiveObject, redactSensitiveText } from '../../agent/redaction.js';
 import {
   STUDIO_AUTOMATION_SCHEDULES,
@@ -29,17 +38,23 @@ import {
 export const STUDIO_AUTOMATION_STATE_FILE = '.mindos/automations/state.json';
 
 const STORE_DIR = '.mindos/automations';
-const STORE_LOCK = `${STORE_DIR}/state.lock`;
+const LEGACY_LOCK_NAME = 'state.lock';
 const MAX_AUTOMATIONS = 200;
 const MAX_HISTORY = 50;
 const MAX_APPROVALS = 500;
 const MAX_NOTIFICATIONS = 500;
 export const STUDIO_AUTOMATION_MAX_EVENTS = 500;
 const MAX_EVENT_DELIVERIES = 200;
-const LOCK_ATTEMPTS = 100;
-const LOCK_WAIT_MS = 10;
-const STALE_LOCK_MS = 30_000;
+/** How long one writer may hold the state lease; the critical section is a read + atomic rewrite of state.json. */
+const LEASE_TTL_MS = 30_000;
+/** Total time a writer waits for the lease before reporting busy (matches the previous 100 x 10 ms spin). */
+const LEASE_WAIT_MS = 1_000;
+/** A pre-lease `state.lock` directory older than this belongs to a dead writer. */
+const LEGACY_LOCK_STALE_MS = 30_000;
 const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,119}$/;
+
+/** Lease that serializes writers of `state.json` in `.mindos/db/state_1.sqlite`. */
+export const STUDIO_AUTOMATION_STATE_LEASE: LeaseKey = { kind: 'automations', key: 'state' };
 
 export function readStudioAutomationState(mindRoot: string): StudioAutomationState {
   const file = resolveExistingSafe(mindRoot, STUDIO_AUTOMATION_STATE_FILE);
@@ -112,64 +127,71 @@ function writeStateUnlocked(mindRoot: string, state: StudioAutomationState): voi
 function withStateLock<T>(mindRoot: string, operation: () => T): T {
   const directory = resolveExistingSafe(mindRoot, STORE_DIR);
   mkdirSync(directory, { recursive: true });
-  const lock = resolveExistingSafe(mindRoot, STORE_LOCK);
-  const token = acquireDirectoryLock(lock);
+  const db = openStateDatabase(mindRoot);
+  let lease: Lease;
+  try {
+    lease = acquireLease(db, {
+      ...STUDIO_AUTOMATION_STATE_LEASE,
+      ttlMs: LEASE_TTL_MS,
+      waitMs: LEASE_WAIT_MS,
+      isContended: () => legacyDirectoryLockIsHeld(directory),
+    });
+  } catch (error) {
+    if (error instanceof LeaseBusyError) {
+      throw new Error('Studio automation state is busy; retry shortly.', { cause: error });
+    }
+    throw error;
+  }
   try {
     return operation();
   } finally {
-    releaseDirectoryLock(lock, token);
+    releaseLease(db, lease);
   }
 }
 
-function acquireDirectoryLock(lock: string): string {
-  const token = crypto.randomUUID();
-  for (let attempt = 0; attempt < LOCK_ATTEMPTS; attempt += 1) {
-    try {
-      mkdirSync(lock);
-      writeFileSync(path.join(lock, 'owner'), `${process.pid}\n${Date.now()}\n${token}\n`, { encoding: 'utf-8', mode: 0o600 });
-      return token;
-    } catch (error) {
-      if (!isAlreadyExists(error)) throw error;
-      if (isStaleLock(lock)) {
-        takeOverStaleLock(lock);
-        continue;
-      }
-      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, LOCK_WAIT_MS);
-    }
-  }
-  throw new Error('Studio automation state is busy; retry shortly.');
-}
-
-// Two waiters may both judge the lock stale; the rename makes exactly one of
-// them win, so the second cannot delete the lock the first just re-created.
-function takeOverStaleLock(lock: string): void {
-  const graveyard = `${lock}.stale-${process.pid}-${Date.now().toString(36)}`;
+// Versions before the SQLite lease serialized writers with a `state.lock`
+// directory. A fresh one means an older process is mid-write during an upgrade
+// window, so it counts as contention. Stale ones, and the `state.lock.stale-*`
+// graveyards the old takeover could leave behind, are removed once and logged.
+function legacyDirectoryLockIsHeld(directory: string): boolean {
+  let entries: string[];
   try {
-    renameSync(lock, graveyard);
-  } catch {
-    return;
-  }
-  rmSync(graveyard, { recursive: true, force: true });
-}
-
-// Only the holder that wrote this token may remove the lock. Without the check
-// a holder whose lock was taken over as stale would delete the new owner's lock.
-function releaseDirectoryLock(lock: string, token: string): void {
-  try {
-    const owner = readFileSync(path.join(lock, 'owner'), 'utf-8');
-    if (!owner.split('\n').includes(token)) return;
-  } catch {
-    return;
-  }
-  rmSync(lock, { recursive: true, force: true });
-}
-
-function isStaleLock(lock: string): boolean {
-  try {
-    return Date.now() - statSync(lock).mtimeMs > STALE_LOCK_MS;
+    entries = readdirSync(directory);
   } catch {
     return false;
   }
+  let held = false;
+  for (const entry of entries) {
+    if (entry !== LEGACY_LOCK_NAME && !entry.startsWith(`${LEGACY_LOCK_NAME}.stale-`)) continue;
+    const lockPath = path.join(directory, entry);
+    if (entry === LEGACY_LOCK_NAME && !isStaleLegacyLock(lockPath)) {
+      held = true;
+      continue;
+    }
+    removeLegacyLock(lockPath);
+  }
+  return held;
+}
+
+function isStaleLegacyLock(lock: string): boolean {
+  try {
+    return Date.now() - statSync(lock).mtimeMs > LEGACY_LOCK_STALE_MS;
+  } catch {
+    return false;
+  }
+}
+
+function removeLegacyLock(lock: string): void {
+  if (!existsSync(lock)) return;
+  try {
+    rmSync(lock, { recursive: true, force: true });
+  } catch {
+    // Leave it for the next writer; the SQLite lease still serializes us.
+    return;
+  }
+  console.warn(
+    `[mindos] automations: removed legacy lock directory ${lock}; writers now coordinate through .mindos/db/state_1.sqlite.`,
+  );
 }
 
 function normalizeState(value: unknown): StudioAutomationState {
@@ -571,10 +593,6 @@ function finiteInteger(value: unknown, fallback: number): number {
 
 function clampInteger(value: unknown, min: number, max: number, fallback: number): number {
   return typeof value === 'number' && Number.isFinite(value) ? Math.max(min, Math.min(max, Math.floor(value))) : fallback;
-}
-
-function isAlreadyExists(error: unknown): boolean {
-  return !!error && typeof error === 'object' && (error as NodeJS.ErrnoException).code === 'EEXIST';
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

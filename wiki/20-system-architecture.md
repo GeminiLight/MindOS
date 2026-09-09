@@ -216,8 +216,11 @@ mindos/
 | 内容变更日志 | `.mindos/db/change_log_1.sqlite` | `server/handlers/change-log-store.ts` | 唯一实现；Web `lib/core/content-changes.ts` 与 `knowledge/audit` 只做委托。list/summary/facets 是 SQL，保留最新 500 条 |
 | Agent run ledger | `.mindos/db/agent_runs_1.sqlite` | `agent/ledger/run-ledger*.ts` | run 行 + timeline/debug 事件同表（`visibility` 列）；每次读库，跨进程即时可见；孤儿 run 由 `owner_pid/owner_start_ts` 在读时投影为 failed，不改写行；每 run 每类事件保留 1000 条，run 保留 500 条 |
 | Run capsule 索引 | `.mindos/db/capsules_1.sqlite` | `agent/capsules/capsule-index.ts` | 0600 JSON 文件仍是事实来源；索引只记 id → 路径 + 少量字段，按月目录 mtime 判断是否重扫，行 stale 时按文件 stat 刷新，删库可重建 |
+| 进程协调 lease | `.mindos/db/state_1.sqlite` | `foundation/storage/leases.ts` | `leases(kind, key, owner, lease_until, acquired_at)`；获取 = 单条 `INSERT … ON CONFLICT DO UPDATE WHERE lease_until <= now`（`BEGIN IMMEDIATE`），释放 / 续约按 owner 匹配，按时间过期所以被 kill 的进程不留永久锁。首个用户是 `server/automations/store.ts` 的 `state.json` 写锁（`kind:'automations'`，TTL 30 s，等待 5→50 ms 退避、总预算 1 s）；`state.json` 本体仍是文件。spec：`wiki/specs/spec-automations-lease-store.md` |
 
 共用底座 `foundation/storage/sqlite.ts`：`openMindosDatabase({ file, migrations })` 负责 WAL / `synchronous=NORMAL` / `busy_timeout=5000` / `foreign_keys=ON`、`_migrations` 表内的幂等迁移、按解析路径缓存的进程内句柄，以及 `openMindosDatabaseIfExists`（纯读不建库）。`node:sqlite` 通过 `process.getBuiltinModule` 加载，避免 vite / webpack 把 `node:sqlite` 当成普通包解析。文件名带 schema 代际后缀（`_1`），破坏性变更换新文件并从旧文件导入。
+
+`state_1.sqlite` 只放协调状态，没有需要保留的数据，删除即重建；automations 的 legacy `state.lock` 目录在升级窗口内被当作争用（mtime ≤ 30 s），过期后由下一次写入清理并 `console.warn` 一次。仓库里其余目录锁（runtime-control-plane 无锁、context-assets、context-feedback、echo-promotion、connections）计划依次接入同一张表，见 spec 的存储盘点表。
 
 旧格式在首次打开时导入并改名为 `*.migrated`：`change-log.json`（JSONL 或 v1 pretty JSON）+ `change-log.meta.json`、`agent-run-ledger.json` / `.jsonl` / `agent-run-ledger.<pid>-<startTs>.jsonl` 分片（存活进程的分片保留到进程退出）。`.mindos/db/` 由 sync daemon 自动写入 mind root `.gitignore` 并从 watcher 中排除；Bun 单二进制运行时下这些 store 会抛出明确错误（follow-up）。
 
