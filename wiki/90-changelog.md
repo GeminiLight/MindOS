@@ -1,8 +1,23 @@
-<!-- Last verified: 2026-09-03 | Current version: v1.1.66 -->
+<!-- Last verified: 2026-09-09 | Current version: v1.1.67 -->
 
 # 变更日志 (CHANGELOG)
 
-## Unreleased
+## v1.1.67 (2026-09-09)
+
+### 平台与架构
+
+- **服务端事件流替代轮询**：新增 `GET /api/events`（SSE，支持 `Last-Event-ID` 回放与心跳）；Web 的文件树版本、Agent run 时间线、MCP / Skills 状态、runtime readiness 与 sync 状态改为事件驱动刷新，轮询只在断连时低频兜底，空闲页签的请求量大幅下降。
+- **派生状态迁移到 SQLite**：change-log 与 agent run ledger 从 JSONL 分片迁移到 `.mindos/db/*_1.sqlite`（`node:sqlite`，WAL，迁移表），首次打开自动导入旧数据；Capsule 文件保持 0600 事实来源并新增索引表，列表与查找不再扫目录；多进程同时创建新库的竞态已修复；sync daemon 明确忽略数据库文件。
+- **Product Server 路由表与 Hono**：133 个 `if` 分支的 `http.ts` 收敛为按域拆分的类型化路由表，`MINDOS_SERVER_ROUTES` 契约由表派生；鉴权、请求体上限、ETag/304、SSE 流式响应统一在 Hono 应用层实现；MCP Streamable HTTP 改用 SDK Web 标准 transport，协议 bundle 去掉 Express 后从 1.4 MB 降到 632 KB；Web 的 9 条 thin 路由改为直接委托共享应用。
+- **Web 基础设施收敛到核心包**：搜索索引只保留核心一份（Intl.Segmenter 中文分词 + BM25 + 增量刷新，中英混排结果经 parity fixture 校验不变）；Web 文件树缓存改为核心 tree cache 的 facade，单文件写入不再重建整树；JSONC 配置用 `jsonc-parser` 原地编辑保留注释；glob 与 `expandHome` 统一实现。
+- **依赖升级与瘦身**：`vectordb` → `@lancedb/lancedb`；zod 统一到 4；Anthropic SDK 统一 0.124；Vitest 5；Electron 44 / electron-builder 26 / electron-vite 5；Expo SDK 57 / React Native 0.86 / React 19.2；chokidar 5、meilisearch 0.60；移除 pino、pino-pretty、fuse.js。
+
+### 安全与稳定性
+
+- **路径与参数校验**：`git show` 拒绝以 `-` 开头的 rev；`./INSTRUCTION.md`、`INSTRUCTION.md/` 等非规范路径不再绕过保护文件、权限规则与 `TODO.md` 删除保护；`/api/file/raw` 内联 SVG 加 sandbox CSP，所有 raw 文件加 nosniff。
+- **鉴权收紧**：只配置 Web 密码而未配置 authToken 时，Product Server 与 Next proxy 不再放行 API；CORS 只回显本机 / 私网 / capacitor / file 来源；MCP HTTP 无 token 时只绑定 127.0.0.1，bearer 比较常量时间，空闲会话 30 分钟回收；登录接口常量时间比较并按 IP 退避；inbox / file / import / extract 路由增加请求体上限。
+- **进程与写入可靠性**：Agent turn SSE 中途异常不再让 Product Server 退出；Codex / Claude 原生 runtime 的失败、中途死亡、重试与用户取消都正确记录与展示；Desktop 托管下 `/api/restart` 不再拉起第二个 supervisor，MCP 子进程看门狗不再丢失，`lastCleanExit` 只在子进程确认退出后写入；第三方 MCP 配置、`config.json`、Echo 卡片、`LocalFileSystem` 全部改为原子写。
+- **性能**：ACP 命令探测不再逐命令 spawn 登录 shell；搜索与反链索引按文件增量刷新；run-ledger、capsule、settings、`.mindosignore`、`list_spaces`、bootstrap、`/api/mcp/agents`、`/api/lint` 等热路径去掉重复 IO；认证可变接口改为 `private, no-cache` 并支持 304；前端修复一批 remount、重复渲染与轮询重置问题。
 
 ### Agent 控制与学习闭环
 
