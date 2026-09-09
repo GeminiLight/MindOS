@@ -15,7 +15,9 @@ import {
 import { ActionSheetIOS, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useEventDrivenRefresh } from '@/hooks/useEventDrivenRefresh';
 import { mindosClient } from '@/lib/api-client';
+import { useConnectionStore } from '@/lib/connection-store';
 import TextInputModal from '@/components/TextInputModal';
 import Breadcrumb from '@/components/Breadcrumb';
 import MindTextInput from '@/components/ui/MindTextInput';
@@ -38,8 +40,13 @@ import { viewFileHref } from '@/lib/mobile-navigation';
 import { colors, hairlineWidth, hitSlop, minTouchTarget, radius, shadows, spacing, typography } from '@/lib/theme';
 import type { FileNode } from '@/lib/types';
 
+/** Agent or CLI writes bump the tree version; the Files list re-reads the tree in place. */
+const FILES_TREE_EVENT_TYPES = ['tree.changed'] as const;
+const FILES_TREE_EVENT_DEBOUNCE_MS = 750;
+
 export default function FilesScreen() {
   const router = useRouter();
+  const status = useConnectionStore((state) => state.status);
   const [tree, setTree] = useState<FileNode[]>([]);
   const [currentPath, setCurrentPath] = useState('');
   const [loading, setLoading] = useState(true);
@@ -66,6 +73,13 @@ export default function FilesScreen() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  useEventDrivenRefresh({
+    enabled: status === 'connected',
+    eventTypes: FILES_TREE_EVENT_TYPES,
+    refresh: load,
+    debounceMs: FILES_TREE_EVENT_DEBOUNCE_MS,
+  });
 
   // Android back button: go to parent folder or let default behavior
   useEffect(() => {

@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AppState, type AppStateStatus } from 'react-native';
 import { mindosClient } from '@/lib/api-client';
 import {
   compactPendingAgentActionError,
+  isPendingAgentActionEvent,
   normalizePendingAgentActions,
   pendingAgentActionKey,
   type NormalizedPendingAgentActions,
@@ -13,9 +13,20 @@ import type {
   PendingAutomationApproval,
   PendingRuntimePermission,
 } from '@/lib/types';
+import { useEventDrivenRefresh } from '@/hooks/useEventDrivenRefresh';
+
+/**
+ * Automation approvals are written by the automation executor and have no
+ * server event yet, so a slow poll stays on even while the stream is
+ * connected. Permission and question prompts arrive through `agent-run.event`.
+ */
+export const PENDING_AGENT_ACTIONS_CONNECTED_POLL_MS = 10_000;
+const PENDING_AGENT_ACTIONS_EVENT_TYPES = ['agent-run.event'] as const;
+const PENDING_AGENT_ACTIONS_EVENT_DEBOUNCE_MS = 250;
 
 interface UsePendingAgentActionsOptions {
   enabled?: boolean;
+  /** Fallback poll period, used only while the server event stream is not connected. */
   pollIntervalMs?: number;
 }
 
@@ -28,7 +39,6 @@ export function usePendingAgentActions({
   const [loading, setLoading] = useState(enabled);
   const [error, setError] = useState('');
   const [resolvingKey, setResolvingKey] = useState<string | null>(null);
-  const [appActive, setAppActive] = useState(() => AppState.currentState === 'active');
   const requestSequence = useRef(0);
   const requestController = useRef<AbortController | null>(null);
   const inFlight = useRef(false);
@@ -137,21 +147,19 @@ export function usePendingAgentActions({
     mindosClient.resolveAutomationApproval({ approvalId: action.approvalId, decision })), [resolveAction]);
 
   useEffect(() => {
-    const subscription = AppState.addEventListener('change', (state: AppStateStatus) => {
-      setAppActive(state === 'active');
-    });
-    return () => subscription.remove();
-  }, []);
-
-  useEffect(() => {
     void refresh({ force: true, showLoading: true });
   }, [refresh]);
 
-  useEffect(() => {
-    if (!enabled || !appActive || pollIntervalMs <= 0) return undefined;
-    const timer = setInterval(() => void refresh(), pollIntervalMs);
-    return () => clearInterval(timer);
-  }, [appActive, enabled, pollIntervalMs, refresh]);
+  useEventDrivenRefresh({
+    enabled,
+    eventTypes: PENDING_AGENT_ACTIONS_EVENT_TYPES,
+    accept: isPendingAgentActionEvent,
+    // An event aborts any in-flight poll so a fresh prompt is never hidden behind a stale response.
+    refresh: (reason) => refresh(reason === 'poll' ? {} : { force: true }),
+    debounceMs: PENDING_AGENT_ACTIONS_EVENT_DEBOUNCE_MS,
+    fallbackPollMs: pollIntervalMs,
+    connectedPollMs: PENDING_AGENT_ACTIONS_CONNECTED_POLL_MS,
+  });
 
   useEffect(() => () => {
     requestSequence.current += 1;

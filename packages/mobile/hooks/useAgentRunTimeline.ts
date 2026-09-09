@@ -5,10 +5,15 @@ import {
   mergeAgentRunTimelineIntoMessages,
   selectVisibleAgentRunTimeline,
 } from '@/lib/agent-run-timeline';
+import { startEventDrivenRefresh } from '@/lib/event-driven-refresh';
 import type { Message } from '@/lib/types';
 
+/** Fallback poll period, used only while the server event stream is not connected. */
 const DEFAULT_POLL_MS = 1200;
 const TURN_SINCE_PADDING_MS = 1000;
+/** Matches the Web timeline: coalesce the burst a single tool call produces. */
+const TIMELINE_EVENT_DEBOUNCE_MS = 150;
+const TIMELINE_EVENT_TYPES = ['agent-run.event'] as const;
 
 export function useAgentRunTimeline(input: {
   chatSessionId: string | null | undefined;
@@ -64,13 +69,22 @@ export function useAgentRunTimeline(input: {
     if (!input.enabled || !input.chatSessionId || !input.isStreaming) return;
     const chatSessionId = input.chatSessionId;
     const controller = new AbortController();
-    const tick = () => {
-      void refreshOnce(chatSessionId, controller.signal);
-    };
-    tick();
-    const interval = setInterval(tick, pollMs);
+    const refresh = () => refreshOnce(chatSessionId, controller.signal);
+    void refresh();
+    // Events for this session drive the timeline while the stream is
+    // connected; the poll only runs while it is not. AppState is not consulted
+    // because this hook is already scoped to an in-progress turn, whose own
+    // request is not gated on it either.
+    const stop = startEventDrivenRefresh({
+      eventTypes: TIMELINE_EVENT_TYPES,
+      accept: (event) => event.type === 'agent-run.event' && event.chatSessionId === chatSessionId,
+      refresh,
+      debounceMs: TIMELINE_EVENT_DEBOUNCE_MS,
+      fallbackPollMs: pollMs,
+      isAppActive: () => true,
+    });
     return () => {
-      clearInterval(interval);
+      stop();
       controller.abort();
     };
   }, [input.chatSessionId, input.enabled, input.isStreaming, pollMs, refreshOnce]);

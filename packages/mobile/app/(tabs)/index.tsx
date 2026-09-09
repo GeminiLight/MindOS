@@ -21,6 +21,7 @@ import {
   MindScreen,
   ScreenSection,
 } from '@/components/ui/MobileScaffold';
+import { useEventDrivenRefresh } from '@/hooks/useEventDrivenRefresh';
 import { useRecentAgentActivity } from '@/hooks/useRecentAgentActivity';
 import { mindosClient } from '@/lib/api-client';
 import { useConnectionStore } from '@/lib/connection-store';
@@ -30,6 +31,10 @@ import { getFileNodeIcon } from '@/lib/mobile-icons';
 import { filesTabHref, viewFileHref } from '@/lib/mobile-navigation';
 import { colors, radius, spacing, typography } from '@/lib/theme';
 import type { FileNode } from '@/lib/types';
+
+/** Agent or CLI writes bump the tree version; Home re-reads spaces and recent files. */
+const HOME_TREE_EVENT_TYPES = ['tree.changed'] as const;
+const HOME_TREE_EVENT_DEBOUNCE_MS = 750;
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -63,6 +68,13 @@ export default function HomeScreen() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useEventDrivenRefresh({
+    enabled: status === 'connected',
+    eventTypes: HOME_TREE_EVENT_TYPES,
+    refresh: loadData,
+    debounceMs: HOME_TREE_EVENT_DEBOUNCE_MS,
+  });
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);

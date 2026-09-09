@@ -9,6 +9,8 @@ import type {
   RuntimePermissionOption,
 } from './types';
 
+import type { ServerEvent } from './server-events';
+
 export type PendingAgentAction = PendingRuntimePermission | PendingAskUserQuestion | PendingAutomationApproval;
 export type AskUserQuestionDraft = { selected?: string[]; custom?: string };
 
@@ -230,4 +232,21 @@ export function compactPendingAgentActionError(error: unknown): string {
     return 'This request was already resolved or expired.';
   }
   return message.trim() || 'Unable to update this request. Try again.';
+}
+
+const PENDING_ACTION_EVENT_CATEGORIES = new Set(['permission', 'question']);
+const PENDING_ACTION_RUN_TERMINAL_TYPES = new Set(['run_completed', 'run_failed', 'run_canceled']);
+
+/**
+ * Only ledger events that can add or remove a pending action should trigger a
+ * re-fetch: permission / question events, and run terminations (a run that
+ * ends takes its open prompts with it). Tool and text events are ignored so a
+ * busy run does not turn into one request per tool call.
+ */
+export function isPendingAgentActionEvent(event: ServerEvent): boolean {
+  if (event.type !== 'agent-run.event') return false;
+  const summary = event.event;
+  if (!summary || typeof summary !== 'object') return false;
+  return PENDING_ACTION_EVENT_CATEGORIES.has(summary.category)
+    || PENDING_ACTION_RUN_TERMINAL_TYPES.has(summary.type);
 }

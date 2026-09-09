@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AppState, type AppStateStatus } from 'react-native';
 import { mindosClient } from '@/lib/api-client';
 import {
   buildRecentAgentActivity,
@@ -8,10 +7,17 @@ import {
   shouldPollRecentAgentActivity,
 } from '@/lib/recent-agent-activity';
 import type { AgentRunsResponse } from '@/lib/types';
+import { useEventDrivenRefresh } from '@/hooks/useEventDrivenRefresh';
+
+/** Any ledger event may change the summary: a new run, a status flip, a prompt waiting on the user. */
+const RECENT_AGENT_ACTIVITY_EVENT_TYPES = ['agent-run.event'] as const;
+/** A run emits several timeline events per tool call; one fetch per burst is enough. */
+const RECENT_AGENT_ACTIVITY_EVENT_DEBOUNCE_MS = 400;
 
 interface UseRecentAgentActivityOptions {
   enabled?: boolean;
   limit?: number;
+  /** Fallback poll period, used only while the server event stream is not connected. */
   pollIntervalMs?: number;
 }
 
@@ -25,15 +31,16 @@ export function useRecentAgentActivity({
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
   const [lastCheckedAt, setLastCheckedAt] = useState<number | null>(null);
-  const [appActive, setAppActive] = useState(() => AppState.currentState === 'active');
   const requestSeqRef = useRef(0);
   const inFlightRef = useRef(false);
+  const queuedRefreshRef = useRef(false);
 
   const refresh = useCallback(async (options: { showRefreshing?: boolean } = {}) => {
-    const showRefreshing = options.showRefreshing ?? true;
+    let showRefreshing = options.showRefreshing ?? true;
     if (!enabled) {
       requestSeqRef.current += 1;
       inFlightRef.current = false;
+      queuedRefreshRef.current = false;
       setPayload(null);
       setError('');
       setLoading(false);
@@ -41,44 +48,46 @@ export function useRecentAgentActivity({
       setLastCheckedAt(null);
       return;
     }
-    if (inFlightRef.current) return;
+    if (inFlightRef.current) {
+      // A server event that lands mid-request must not be lost: run once more afterwards.
+      queuedRefreshRef.current = true;
+      return;
+    }
 
-    const requestSeq = requestSeqRef.current + 1;
-    requestSeqRef.current = requestSeq;
     inFlightRef.current = true;
-    if (showRefreshing) setRefreshing(true);
     try {
-      const next = await mindosClient.getAgentRuns({
-        includeEvents: true,
-        limit,
-      });
-      if (requestSeqRef.current !== requestSeq) return;
-      setPayload(next);
-      setError('');
-      setLastCheckedAt(Date.now());
-    } catch (activityError) {
-      if (requestSeqRef.current !== requestSeq) return;
-      setError(compactAgentActivityError(activityError));
+      do {
+        queuedRefreshRef.current = false;
+        const requestSeq = requestSeqRef.current + 1;
+        requestSeqRef.current = requestSeq;
+        if (showRefreshing) setRefreshing(true);
+        try {
+          const next = await mindosClient.getAgentRuns({
+            includeEvents: true,
+            limit,
+          });
+          if (requestSeqRef.current !== requestSeq) return;
+          setPayload(next);
+          setError('');
+          setLastCheckedAt(Date.now());
+        } catch (activityError) {
+          if (requestSeqRef.current !== requestSeq) return;
+          setError(compactAgentActivityError(activityError));
+        } finally {
+          if (requestSeqRef.current === requestSeq) {
+            setLoading(false);
+            if (showRefreshing) setRefreshing(false);
+          }
+        }
+        showRefreshing = false;
+      } while (queuedRefreshRef.current);
     } finally {
-      if (requestSeqRef.current === requestSeq) {
-        setLoading(false);
-        if (showRefreshing) setRefreshing(false);
-      }
       inFlightRef.current = false;
     }
   }, [enabled, limit]);
 
   useEffect(() => () => {
     requestSeqRef.current += 1;
-  }, []);
-
-  useEffect(() => {
-    function handleAppStateChange(nextState: AppStateStatus) {
-      setAppActive(nextState === 'active');
-    }
-
-    const subscription = AppState.addEventListener('change', handleAppStateChange);
-    return () => subscription.remove();
   }, []);
 
   useEffect(() => {
@@ -98,17 +107,20 @@ export function useRecentAgentActivity({
     () => (enabled ? buildRecentAgentActivity(payload, { limit }) : EMPTY_RECENT_AGENT_ACTIVITY),
     [enabled, limit, payload],
   );
-
+  const summaryRef = useRef(summary);
   useEffect(() => {
-    if (!enabled || !appActive || pollIntervalMs <= 0) return undefined;
-    if (!shouldPollRecentAgentActivity(summary)) return undefined;
+    summaryRef.current = summary;
+  }, [summary]);
 
-    const timer = setInterval(() => {
-      void refresh({ showRefreshing: false });
-    }, pollIntervalMs);
-
-    return () => clearInterval(timer);
-  }, [appActive, enabled, pollIntervalMs, refresh, summary]);
+  useEventDrivenRefresh({
+    enabled,
+    eventTypes: RECENT_AGENT_ACTIVITY_EVENT_TYPES,
+    refresh: () => refresh({ showRefreshing: false }),
+    debounceMs: RECENT_AGENT_ACTIVITY_EVENT_DEBOUNCE_MS,
+    fallbackPollMs: pollIntervalMs,
+    // The fallback poll keeps the old gate: only while a run is active or waiting on the user.
+    shouldPoll: () => shouldPollRecentAgentActivity(summaryRef.current),
+  });
 
   return {
     summary,

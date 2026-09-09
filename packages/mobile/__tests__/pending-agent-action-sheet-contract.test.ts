@@ -12,9 +12,17 @@ describe('pending agent action sheet contract', () => {
     expect(layout).toContain('<PendingAgentActionSheet />');
   });
 
-  it('polls only while connected and active, then refreshes after decisions', () => {
+  it('refreshes on agent-run events, keeps the 2.5s poll only as a fallback, and refreshes after decisions', () => {
     const hook = read('hooks/usePendingAgentActions.ts');
-    expect(hook).toContain('AppState.addEventListener');
+    // Foreground gating and the fallback poll now live in useEventDrivenRefresh
+    // (see event-driven-refresh.test.ts); the hook must wire it rather than
+    // own a setInterval or AppState listener again.
+    expect(hook).toContain('useEventDrivenRefresh({');
+    expect(hook).toContain("'agent-run.event'");
+    expect(hook).toContain('accept: isPendingAgentActionEvent');
+    expect(hook).toContain('fallbackPollMs: pollIntervalMs');
+    expect(hook).not.toMatch(/\bsetInterval\s*\(/);
+    expect(hook).not.toContain('AppState.addEventListener');
     expect(hook).toContain('getPendingAgentActions');
     expect(hook).toContain('resolveRuntimePermission');
     expect(hook).toContain('resolveAutomationApproval');

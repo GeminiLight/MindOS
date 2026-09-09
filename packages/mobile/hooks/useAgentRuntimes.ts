@@ -7,6 +7,11 @@ import {
   compactRuntimeError,
 } from '@/lib/agent-runtime-companion';
 import type { AgentRuntimesResponse } from '@/lib/types';
+import { useEventDrivenRefresh } from '@/hooks/useEventDrivenRefresh';
+
+/** MCP installs and restarts change which runtimes are ready; skills and sync do not. */
+const AGENT_RUNTIMES_EVENT_TYPES = ['mcp.changed'] as const;
+const AGENT_RUNTIMES_EVENT_DEBOUNCE_MS = 500;
 
 interface UseAgentRuntimesOptions {
   enabled?: boolean;
@@ -21,9 +26,10 @@ export function useAgentRuntimes({ enabled = true }: UseAgentRuntimesOptions = {
   const [error, setError] = useState('');
   const [lastCheckedAt, setLastCheckedAt] = useState<number | null>(null);
   const hasLoadedRef = useRef(false);
+  const active = enabled && connectionStatus === 'connected' && !!serverUrl;
 
-  const load = useCallback(async ({ force = false }: { force?: boolean } = {}) => {
-    if (!enabled || connectionStatus !== 'connected' || !serverUrl) {
+  const load = useCallback(async ({ force = false, silent = false }: { force?: boolean; silent?: boolean } = {}) => {
+    if (!active) {
       setResponse(null);
       setError('');
       setLastCheckedAt(null);
@@ -33,8 +39,10 @@ export function useAgentRuntimes({ enabled = true }: UseAgentRuntimesOptions = {
 
     setError('');
     const firstLoad = !hasLoadedRef.current;
-    setLoading(firstLoad);
-    setRefreshing(!firstLoad);
+    if (!silent) {
+      setLoading(firstLoad);
+      setRefreshing(!firstLoad);
+    }
     try {
       const next = await mindosClient.getAgentRuntimes({ force });
       setResponse(next);
@@ -43,14 +51,24 @@ export function useAgentRuntimes({ enabled = true }: UseAgentRuntimesOptions = {
     } catch (runtimeError) {
       setError(compactRuntimeError(runtimeError));
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (!silent) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
-  }, [connectionStatus, enabled, serverUrl]);
+  }, [active]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEventDrivenRefresh({
+    enabled: active,
+    eventTypes: AGENT_RUNTIMES_EVENT_TYPES,
+    // Background updates must not animate the pull-to-refresh control.
+    refresh: () => load({ force: true, silent: true }),
+    debounceMs: AGENT_RUNTIMES_EVENT_DEBOUNCE_MS,
+  });
 
   const summary = useMemo(() => buildRuntimeCompanionSummary(response), [response]);
   const options = useMemo(() => buildRuntimeCompanionOptions(response), [response]);

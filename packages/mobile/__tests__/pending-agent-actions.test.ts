@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildAskUserQuestionAnswers,
   compactPendingAgentActionError,
+  isPendingAgentActionEvent,
   normalizePendingAgentActions,
   pendingAgentActionKey,
 } from '@/lib/pending-agent-actions';
@@ -126,5 +127,44 @@ describe('pending agent action model', () => {
     expect(compactPendingAgentActionError(new Error('Question is no longer pending.')))
       .toBe('This request was already resolved or expired.');
     expect(compactPendingAgentActionError('network down')).toBe('network down');
+  });
+});
+
+describe('isPendingAgentActionEvent', () => {
+  function agentRunEvent(type: string, category: string) {
+    return {
+      type: 'agent-run.event' as const,
+      runId: 'run-1',
+      chatSessionId: 'chat-1',
+      event: { id: 'evt-1', runId: 'run-1', type, category, status: 'running', ts: 1 },
+    };
+  }
+
+  it('accepts permission and question events and run terminations', () => {
+    expect(isPendingAgentActionEvent(agentRunEvent('permission_requested', 'permission'))).toBe(true);
+    expect(isPendingAgentActionEvent(agentRunEvent('permission_resolved', 'permission'))).toBe(true);
+    expect(isPendingAgentActionEvent(agentRunEvent('user_question_started', 'question'))).toBe(true);
+    expect(isPendingAgentActionEvent(agentRunEvent('user_question_resolved', 'question'))).toBe(true);
+    expect(isPendingAgentActionEvent(agentRunEvent('run_completed', 'status'))).toBe(true);
+    expect(isPendingAgentActionEvent(agentRunEvent('run_failed', 'status'))).toBe(true);
+    expect(isPendingAgentActionEvent(agentRunEvent('run_canceled', 'status'))).toBe(true);
+  });
+
+  it('rejects tool, text and status-progress events so busy runs do not cause a fetch per tool call', () => {
+    expect(isPendingAgentActionEvent(agentRunEvent('tool_started', 'tool'))).toBe(false);
+    expect(isPendingAgentActionEvent(agentRunEvent('text', 'text'))).toBe(false);
+    expect(isPendingAgentActionEvent(agentRunEvent('run_started', 'status'))).toBe(false);
+    expect(isPendingAgentActionEvent(agentRunEvent('run_updated', 'status'))).toBe(false);
+  });
+
+  it('rejects other server event types and malformed summaries', () => {
+    expect(isPendingAgentActionEvent({ type: 'tree.changed', version: 1 })).toBe(false);
+    expect(isPendingAgentActionEvent({ type: 'mcp.changed' })).toBe(false);
+    expect(isPendingAgentActionEvent({ type: 'heartbeat' })).toBe(false);
+    expect(isPendingAgentActionEvent({
+      type: 'agent-run.event',
+      runId: 'run-1',
+      event: null as unknown as { id: string; runId: string; type: string; category: string; status: string; ts: number },
+    })).toBe(false);
   });
 });
