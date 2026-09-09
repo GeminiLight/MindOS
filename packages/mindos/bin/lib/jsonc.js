@@ -10,7 +10,34 @@
  * in place so user comments and formatting survive.
  */
 
-import { applyEdits, modify, parse, printParseErrorCode } from 'jsonc-parser';
+import { existsSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+
+/**
+ * Bun standalone executables (the published platform packages) extract bin/,
+ * dist/ and node_modules/ into ~/.mindos/runtime-cache but cannot resolve bare
+ * npm specifiers from those files: `import 'jsonc-parser'`, `require()` and
+ * createRequire all fail with "Cannot find package". Exact file paths do load,
+ * so walk up from this file to the nearest node_modules copy and import the
+ * package's ESM entry by path; plain Node keeps the ordinary bare import.
+ * tests/bun-single-binary-contract.test.ts forbids static bare imports here.
+ */
+async function loadJsoncParser() {
+  try {
+    return await import('jsonc-parser');
+  } catch (bareError) {
+    const here = path.dirname(fileURLToPath(import.meta.url));
+    for (let dir = here; ; dir = path.dirname(dir)) {
+      const candidate = path.join(dir, 'node_modules', 'jsonc-parser', 'lib', 'esm', 'main.js');
+      if (existsSync(candidate)) return import(pathToFileURL(candidate).href);
+      if (path.dirname(dir) === dir) break;
+    }
+    throw bareError;
+  }
+}
+
+const { applyEdits, modify, parse, printParseErrorCode } = await loadJsoncParser();
 
 const FORMATTING = { insertSpaces: true, tabSize: 2, eol: '\n' };
 

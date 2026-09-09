@@ -1,4 +1,5 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { builtinModules } from 'node:module';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { createRuntimeManifest } from '../scripts/runtime-manifest.mjs';
@@ -20,6 +21,36 @@ describe('Bun single-binary runtime contract', () => {
     expect(spec).toContain('runtime.tar.gz');
     expect(spec).toContain('Next standalone');
     expect(spec).toContain('OpenCode');
+  });
+
+  it('keeps the CLI source free of static bare npm imports (the compiled binary cannot resolve them)', () => {
+    // A Bun standalone executable extracts bin/, dist/ and node_modules/ to
+    // ~/.mindos/runtime-cache but cannot resolve bare specifiers from those
+    // files: `import x from 'pkg'`, `require('pkg')` and createRequire all fail
+    // with "Cannot find package". Only exact file paths load. CLI modules must
+    // therefore import node builtins and relative files statically, and load
+    // any npm dependency through an explicit file-path fallback (see
+    // packages/mindos/bin/lib/jsonc.js).
+    const builtins = new Set(builtinModules.flatMap((name) => [name, `node:${name}`]));
+    const offenders: string[] = [];
+    const files = ['packages/mindos/bin', 'packages/mindos/bin/lib'].flatMap((dir) =>
+      readdirSync(resolve(root, dir))
+        .filter((name) => /\.(c?js|mjs)$/.test(name))
+        .map((name) => `${dir}/${name}`),
+    );
+    for (const file of files) {
+      const source = read(file);
+      const specifiers = [
+        ...source.matchAll(/^\s*import\s[^;]*?\sfrom\s+['"]([^'"]+)['"]/gm),
+        ...source.matchAll(/^\s*import\s+['"]([^'"]+)['"]/gm),
+        ...source.matchAll(/\brequire\(\s*['"]([^'"]+)['"]\s*\)/g),
+      ].map((match) => match[1]);
+      for (const specifier of specifiers) {
+        if (specifier.startsWith('.') || specifier.startsWith('/') || builtins.has(specifier)) continue;
+        offenders.push(`${file}: ${specifier}`);
+      }
+    }
+    expect(offenders).toEqual([]);
   });
 
   it('has a Bun binary builder that embeds the runtime archive', () => {
