@@ -66,6 +66,10 @@ Var mindosRuntimeCleanupDone
 
 !macro customCheckAppRunning
   !define MINDOS_CHECK_RUNNING_ID ${__LINE__}
+  ; Overriding this macro skips electron-builder's default block that declares
+  ; and probes $IsPowerShellAvailable; FIND_PROCESS / _CHECK_APP_RUNNING read it,
+  ; and electron-builder 26 compiles with -WX so the missing variable is fatal.
+  !insertmacro IS_POWERSHELL_AVAILABLE
   !insertmacro mindosStopRuntimeChildren
   !insertmacro FIND_PROCESS "${APP_EXECUTABLE_FILENAME}" $R0
   ${if} $R0 == 0

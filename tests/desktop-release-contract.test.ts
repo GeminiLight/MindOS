@@ -16,6 +16,33 @@ describe('Desktop release packaging contract', () => {
     expect(config).not.toContain('@mindos/desktop_${version}_${arch}.${ext}');
   });
 
+  it('pins the Linux executable name instead of letting electron-builder derive it from the scoped package name', () => {
+    // electron-builder 26 defaults linux.executableName to the lower-cased
+    // sanitized package name ("@mindosdesktop") and then rejects the "@".
+    const config = readText('packages/desktop/electron-builder.yml');
+    const linuxSection = config.slice(config.indexOf('\nlinux:'), config.indexOf('\ndeb:'));
+    expect(linuxSection).toContain('executableName: MindOS');
+  });
+
+  it('initialises the PowerShell availability flag before using electron-builder process macros', () => {
+    // Overriding customCheckAppRunning skips electron-builder's default block
+    // that declares $IsPowerShellAvailable; FIND_PROCESS / _CHECK_APP_RUNNING
+    // still read it, and electron-builder 26 compiles NSIS with -WX.
+    const script = readText('packages/desktop/build/installer.nsh');
+    const macroStart = script.indexOf('!macro customCheckAppRunning');
+    const macroEnd = script.indexOf('!macroend', macroStart);
+    const macro = script.slice(macroStart, macroEnd);
+    const powershellProbe = macro.indexOf('!insertmacro IS_POWERSHELL_AVAILABLE');
+    expect(powershellProbe).toBeGreaterThan(-1);
+    expect(powershellProbe).toBeLessThan(macro.indexOf('!insertmacro FIND_PROCESS'));
+  });
+
+  it('builds macOS on the macos-15 image until electron-builder unlocks its keychain correctly on macOS 26', () => {
+    const workflow = readText('.github/workflows/build-desktop.yml');
+    expect(workflow).not.toContain('os: macos-latest');
+    expect(workflow.match(/os: macos-15\b/g)?.length).toBe(2);
+  });
+
   it('runs the generated Windows cleanup script from the NSIS uninstaller', () => {
     const config = readText('packages/desktop/electron-builder.yml');
     const nsis = readText('packages/desktop/build/installer.nsh');

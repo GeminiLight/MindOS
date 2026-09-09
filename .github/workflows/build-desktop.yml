@@ -26,12 +26,16 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: macos-latest
+          # macos-latest is macOS 26, where `security set-key-partition-list`
+          # rejects the P12 password electron-builder passes as the keychain
+          # password (SecKeychainUnlock: passphrase not correct). Stay on
+          # macOS 15 until electron-builder fixes macCodeSign.importCerts.
+          - os: macos-15
             platform: mac
             arch: arm64
             node_platform: darwin
             publish_channel: latest-arm64
-          - os: macos-latest
+          - os: macos-15
             platform: mac
             arch: x64
             node_platform: darwin
