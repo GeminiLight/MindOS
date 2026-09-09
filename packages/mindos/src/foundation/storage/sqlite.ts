@@ -1,10 +1,28 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import type { DatabaseSync, StatementSync } from 'node:sqlite';
+import {
+  SQLITE_BUSY,
+  isBusyError,
+  loadSqliteDriver,
+  type SqliteConnection,
+  type SqliteDriverName,
+  type SqliteStatement,
+} from './sqlite-driver.js';
+
+export {
+  isBusyError,
+  sqliteDriverName,
+  type SqliteDriverName,
+  type SqliteParameter,
+  type SqliteRow,
+  type SqliteRunResult,
+  type SqliteStatement,
+  type SqliteValue,
+} from './sqlite-driver.js';
 
 /**
- * Shared `node:sqlite` helper for MindOS derived-state stores
- * (spec-sqlite-derived-stores).
+ * Shared SQLite helper for MindOS derived-state stores
+ * (spec-sqlite-derived-stores, spec-sqlite-bun-driver).
  *
  * One database file per domain, named `<domain>_<schemaGeneration>.sqlite`,
  * opened in WAL mode so several MindOS processes (web server, MCP server,
@@ -14,28 +32,12 @@ import type { DatabaseSync, StatementSync } from 'node:sqlite';
  *
  * Handles are cached per resolved path for the lifetime of the process.
  *
- * `node:sqlite` is loaded through `process.getBuiltinModule` rather than a
- * static import: vite 5 (vitest) and webpack strip the `node:` prefix and do
- * not know `sqlite` as a builtin, so a static specifier fails module
- * resolution in tests and would need bundler-specific externals in Next.
+ * The embedded SQLite comes from `sqlite-driver.ts`: `node:sqlite` on Node,
+ * `bun:sqlite` inside the Bun platform binaries. Neither is imported
+ * statically (vite and webpack would try to resolve them as npm packages);
+ * the driver loads them by runtime string and normalises the differences, so
+ * everything below is runtime-agnostic.
  */
-
-type SqliteModule = typeof import('node:sqlite');
-
-let sqliteModule: SqliteModule | null = null;
-
-function loadSqlite(): SqliteModule {
-  if (sqliteModule) return sqliteModule;
-  assertNodeRuntime();
-  const loaded = typeof process.getBuiltinModule === 'function'
-    ? (process.getBuiltinModule('node:sqlite') as SqliteModule | undefined)
-    : undefined;
-  if (!loaded || typeof loaded.DatabaseSync !== 'function') {
-    throw new Error(`node:sqlite is not available in this runtime (Node >= 22.19 required, got ${process.version}).`);
-  }
-  sqliteModule = loaded;
-  return loaded;
-}
 
 export interface MindosDatabaseMigration {
   /** Strictly ascending, starting at 1 for a fresh schema generation. */
@@ -52,8 +54,10 @@ export interface OpenMindosDatabaseOptions {
 export interface MindosDatabase {
   readonly file: string;
   readonly isOpen: boolean;
+  /** Which embedded SQLite backs this handle (`node:sqlite` or `bun:sqlite`). */
+  readonly driver: SqliteDriverName;
   /** Prepared statements are cached per SQL string; treat them as shared. */
-  prepare(sql: string): StatementSync;
+  prepare(sql: string): SqliteStatement;
   exec(sql: string): void;
   /**
    * Runs `fn` inside `BEGIN IMMEDIATE ... COMMIT`; rolls back when it throws.
@@ -70,21 +74,23 @@ let exitHookInstalled = false;
 
 class MindosDatabaseImpl implements MindosDatabase {
   readonly file: string;
-  private readonly db: DatabaseSync;
-  private readonly statements = new Map<string, StatementSync>();
+  readonly driver: SqliteDriverName;
+  private readonly db: SqliteConnection;
+  private readonly statements = new Map<string, SqliteStatement>();
   private transactionDepth = 0;
   private open = true;
 
-  constructor(file: string, db: DatabaseSync) {
+  constructor(file: string, db: SqliteConnection, driver: SqliteDriverName) {
     this.file = file;
     this.db = db;
+    this.driver = driver;
   }
 
   get isOpen(): boolean {
     return this.open;
   }
 
-  prepare(sql: string): StatementSync {
+  prepare(sql: string): SqliteStatement {
     this.assertOpen();
     let statement = this.statements.get(sql);
     if (!statement) {
@@ -147,15 +153,6 @@ class MindosDatabaseImpl implements MindosDatabase {
   }
 }
 
-function assertNodeRuntime(): void {
-  if (typeof (globalThis as { Bun?: unknown }).Bun !== 'undefined') {
-    throw new Error(
-      'MindOS SQLite stores require the Node runtime (node:sqlite); '
-      + 'the experimental Bun single-binary build is not supported yet.',
-    );
-  }
-}
-
 function validateMigrations(migrations: MindosDatabaseMigration[]): void {
   let previous = 0;
   for (const migration of migrations) {
@@ -171,7 +168,7 @@ function validateMigrations(migrations: MindosDatabaseMigration[]): void {
   }
 }
 
-function applyMigrations(db: DatabaseSync, migrations: MindosDatabaseMigration[]): void {
+function applyMigrations(db: SqliteConnection, migrations: MindosDatabaseMigration[]): void {
   // BEGIN IMMEDIATE takes the write lock up front, so two processes opening
   // the same fresh file serialize here and the second one sees every version
   // already recorded when it re-reads the table inside its own transaction.
@@ -194,26 +191,16 @@ function applyMigrations(db: DatabaseSync, migrations: MindosDatabaseMigration[]
   }
 }
 
-const SQLITE_BUSY = 5;
-const SQLITE_LOCKED = 6;
-
-function isBusyError(error: unknown): boolean {
-  if (!(error instanceof Error)) return false;
-  const errcode = (error as { errcode?: unknown }).errcode;
-  if (errcode === SQLITE_BUSY || errcode === SQLITE_LOCKED) return true;
-  return /database is locked|SQLITE_BUSY|SQLITE_LOCKED/i.test(error.message);
-}
-
 /**
  * Blocks the current thread for `ms`. Only used while opening a database, a
  * synchronous one-off bounded by BUSY_TIMEOUT_MS, so the event loop pause is
- * the same one `DatabaseSync` itself imposes while waiting on a lock.
+ * the same one the embedded SQLite itself imposes while waiting on a lock.
  */
 function sleepSync(ms: number): void {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }
 
-function initializeConnection(db: DatabaseSync, migrations: MindosDatabaseMigration[]): void {
+function initializeConnection(db: SqliteConnection, migrations: MindosDatabaseMigration[]): void {
   // Pragmas run outside any transaction; journal_mode is persisted in the
   // file, the rest are per-connection.
   db.exec(`PRAGMA busy_timeout = ${BUSY_TIMEOUT_MS}`);
@@ -240,11 +227,11 @@ function installExitHook(): void {
 }
 
 function openImpl(resolved: string, migrations: MindosDatabaseMigration[]): MindosDatabaseImpl {
-  const { DatabaseSync } = loadSqlite();
+  const driver = loadSqliteDriver();
   fs.mkdirSync(path.dirname(resolved), { recursive: true });
-  let db: DatabaseSync;
+  let db: SqliteConnection;
   try {
-    db = new DatabaseSync(resolved);
+    db = driver.open(resolved);
   } catch (error) {
     throw new Error(
       `MindOS could not open SQLite database ${resolved}: ${error instanceof Error ? error.message : String(error)}`,
@@ -276,7 +263,7 @@ function openImpl(resolved: string, migrations: MindosDatabaseMigration[]): Mind
       );
     }
   }
-  const handle = new MindosDatabaseImpl(resolved, db);
+  const handle = new MindosDatabaseImpl(resolved, db, driver.name);
   openDatabases.set(resolved, handle);
   installExitHook();
   return handle;
@@ -284,7 +271,6 @@ function openImpl(resolved: string, migrations: MindosDatabaseMigration[]): Mind
 
 /** Opens (creating and migrating if needed) the database at `options.file`. */
 export function openMindosDatabase(options: OpenMindosDatabaseOptions): MindosDatabase {
-  assertNodeRuntime();
   validateMigrations(options.migrations);
   const resolved = path.resolve(options.file);
   const cached = openDatabases.get(resolved);
@@ -298,7 +284,6 @@ export function openMindosDatabase(options: OpenMindosDatabaseOptions): MindosDa
  * leaves a database (or its parent directory) behind.
  */
 export function openMindosDatabaseIfExists(options: OpenMindosDatabaseOptions): MindosDatabase | null {
-  assertNodeRuntime();
   validateMigrations(options.migrations);
   const resolved = path.resolve(options.file);
   const cached = openDatabases.get(resolved);
@@ -322,11 +307,11 @@ export function openMindosMemoryDatabase(key: string, migrations: MindosDatabase
   const cacheKey = `:memory:${key}`;
   const cached = openDatabases.get(cacheKey);
   if (cached?.isOpen) return cached;
-  const { DatabaseSync } = loadSqlite();
-  const db = new DatabaseSync(':memory:');
+  const driver = loadSqliteDriver();
+  const db = driver.open(':memory:');
   db.exec('PRAGMA foreign_keys = ON');
   applyMigrations(db, migrations);
-  const handle = new MindosDatabaseImpl(cacheKey, db);
+  const handle = new MindosDatabaseImpl(cacheKey, db, driver.name);
   openDatabases.set(cacheKey, handle);
   return handle;
 }

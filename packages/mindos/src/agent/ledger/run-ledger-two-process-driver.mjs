@@ -14,6 +14,9 @@ const mindRootModule = await import(pathToFileURL(path.join(distDir, 'foundation
 mindRootModule.setMindRootResolverForTests(() => mindRoot);
 const ledger = await import(pathToFileURL(path.join(distDir, 'agent/run-ledger.js')).href);
 
+// Reported so the coordinator can prove which runtime actually executed.
+const runtime = typeof Bun !== 'undefined' ? 'bun' : 'node';
+
 if (mode === 'start-and-exit') {
   // Start a run and exit without finishing it — simulates a crashed process.
   const run = ledger.startAgentRun({
@@ -24,7 +27,7 @@ if (mode === 'start-and-exit') {
     permissionMode: 'read',
     inputSummary: 'run that never finishes',
   });
-  process.stdout.write(JSON.stringify({ pid: process.pid, runId: run.id }));
+  process.stdout.write(JSON.stringify({ pid: process.pid, runtime, runId: run.id }));
   process.exit(0);
 }
 
@@ -40,7 +43,7 @@ if (mode === 'start-and-complete') {
   });
   ledger.appendAgentRunEvent(run.id, { type: 'text', category: 'text', message: 'child says hello' });
   ledger.completeAgentRun(run.id, { outputSummary: 'child done' });
-  process.stdout.write(JSON.stringify({ pid: process.pid, runId: run.id }));
+  process.stdout.write(JSON.stringify({ pid: process.pid, runtime, runId: run.id }));
   process.exit(0);
 }
 
@@ -48,7 +51,7 @@ if (mode === 'get-run') {
   // Read a run the parent created; proves the parent's writes are visible here.
   const record = ledger.getAgentRun(rest[0]);
   const events = ledger.listAgentEvents({ runId: rest[0] }).map((event) => event.type);
-  process.stdout.write(JSON.stringify({ pid: process.pid, record: record ?? null, events }));
+  process.stdout.write(JSON.stringify({ pid: process.pid, runtime, record: record ?? null, events }));
   process.exit(0);
 }
 
@@ -69,7 +72,7 @@ if (mode === 'append-many') {
     });
     ledger.completeAgentRun(run.id, { outputSummary: `${prefix}:done:${index}:${big}` });
   }
-  process.stdout.write(JSON.stringify({ pid: process.pid, count }));
+  process.stdout.write(JSON.stringify({ pid: process.pid, runtime, count }));
   process.exit(0);
 }
 

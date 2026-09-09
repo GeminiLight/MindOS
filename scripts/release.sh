@@ -112,6 +112,22 @@ if PATH="$SMOKE_DIR/node_modules/.bin:$PATH" HOME="$AGENT_HOME" NODE_ENV=test "$
     rm -rf "$AGENT_HOME" "$SMOKE_DIR"
     exit 1
   fi
+  # The platform binary runs under Bun: the SQLite-backed stores (agent run
+  # ledger, change log, capsule index) must open, write and read through the
+  # bun:sqlite driver, not fall back to node:sqlite or throw.
+  STORAGE_DOCTOR=$(PATH="$SMOKE_DIR/node_modules/.bin:$PATH" HOME="$AGENT_HOME" NODE_ENV=test "$SMOKE_DIR/node_modules/.bin/mindos" doctor storage --json 2>&1 || true)
+  if ! echo "$STORAGE_DOCTOR" | grep -Eq '"ok"[[:space:]]*:[[:space:]]*true'; then
+    echo "❌ 'mindos doctor storage --json' could not write and read the SQLite store from the packaged runtime"
+    echo "$STORAGE_DOCTOR"
+    rm -rf "$AGENT_HOME" "$SMOKE_DIR"
+    exit 1
+  fi
+  if ! echo "$STORAGE_DOCTOR" | grep -Eq '"driver"[[:space:]]*:[[:space:]]*"bun:sqlite"'; then
+    echo "❌ 'mindos doctor storage --json' did not select the bun:sqlite driver in the single-binary runtime"
+    echo "$STORAGE_DOCTOR"
+    rm -rf "$AGENT_HOME" "$SMOKE_DIR"
+    exit 1
+  fi
 else
   echo "❌ 'mindos mcp install codex -g -y' failed in release smoke"
   cat /tmp/mindos-release-agent-install.log
@@ -119,7 +135,7 @@ else
   exit 1
 fi
 rm -rf "$AGENT_HOME" /tmp/mindos-release-agent-install.log
-echo "   ✅ agent install + doctor readiness works"
+echo "   ✅ agent install + doctor readiness + SQLite storage (bun:sqlite) work"
 
 # Verify key files are present in the installed main package
 for f in bin/mindos-shim.cjs dist/index.js dist/protocols/acp/index.js dist/protocols/mcp-server/index.cjs; do

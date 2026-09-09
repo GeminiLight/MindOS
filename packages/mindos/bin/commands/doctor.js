@@ -4,9 +4,9 @@
  */
 
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { homedir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { CONFIG_PATH, PRODUCT_PACKAGE_JSON, WEB_APP_DIR } from '../lib/constants.js';
 import { bold, dim, cyan, green, red, yellow } from '../lib/colors.js';
 import { isPortInUse } from '../lib/port.js';
@@ -130,9 +130,138 @@ async function runAgentDoctor(args, flags) {
   if (!ok) process.exit(EXIT.ERROR);
 }
 
+const STORAGE_PROBE_LABEL = 'doctor-probe';
+
+/**
+ * Real write / read / rollback round trip through the shared SQLite store on
+ * a scratch database in the OS temp dir, so the check exercises exactly the
+ * code path the ledger uses without touching the user's mind root. The
+ * scratch directory is removed afterwards even when a step throws.
+ */
+function probeSqliteStore(sqlite) {
+  const dir = mkdtempSync(resolve(tmpdir(), 'mindos-doctor-storage-'));
+  const file = resolve(dir, 'probe_1.sqlite');
+  const probe = { file, journalMode: null, inserted: 0, readBack: null, rolledBack: false, cleanedUp: false };
+  try {
+    const db = sqlite.openMindosDatabase({
+      file,
+      migrations: [{ version: 1, sql: 'CREATE TABLE probe(id INTEGER PRIMARY KEY, label TEXT NOT NULL);' }],
+    });
+    probe.journalMode = String(db.prepare('PRAGMA journal_mode').get()?.journal_mode ?? '');
+    probe.inserted = db.prepare('INSERT INTO probe(label) VALUES (?)').run(STORAGE_PROBE_LABEL).changes;
+    probe.readBack = db.prepare('SELECT label FROM probe WHERE id = ?').get(1)?.label ?? null;
+    try {
+      db.transaction(() => {
+        db.prepare('INSERT INTO probe(label) VALUES (?)').run('rolled-back');
+        throw new Error('rollback');
+      });
+    } catch {
+      // expected: the throw must undo the second insert
+    }
+    probe.rolledBack = Number(db.prepare('SELECT count(*) AS n FROM probe').get()?.n) === 1;
+    db.close();
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+    probe.cleanedUp = !existsSync(dir);
+  }
+  return probe;
+}
+
+function countRows(db, table) {
+  try {
+    return Number(db.prepare(`SELECT count(*) AS n FROM ${table}`).get()?.n ?? 0);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Read-only look at the agent run ledger of the configured mind root. A
+ * missing ledger is reported as `exists: false` and never created here: read
+ * paths must not leave a database behind (spec-sqlite-derived-stores).
+ */
+function inspectLedger(sqlite, mindRoot, relativePath) {
+  const root = mindRoot === '~' ? homedir() : mindRoot.replace(/^~[/\\]/, `${homedir()}/`);
+  const file = resolve(root, ...relativePath.split('/'));
+  const ledger = { mindRoot: root, file, exists: existsSync(file) };
+  if (!ledger.exists) return ledger;
+  const db = sqlite.openMindosDatabaseIfExists({ file, migrations: [] });
+  if (!db) {
+    ledger.exists = false;
+    return ledger;
+  }
+  try {
+    ledger.journalMode = String(db.prepare('PRAGMA journal_mode').get()?.journal_mode ?? '');
+    ledger.migrations = countRows(db, '_migrations');
+    ledger.tables = {
+      agent_runs: countRows(db, 'agent_runs'),
+      agent_run_events: countRows(db, 'agent_run_events'),
+    };
+  } finally {
+    db.close();
+  }
+  return ledger;
+}
+
+/**
+ * `mindos doctor storage [--json]` (hidden diagnostic). Reports which SQLite
+ * driver this runtime selected (`node:sqlite` on Node, `bun:sqlite` inside the
+ * compiled platform binaries), proves it with a scratch-database round trip
+ * and inspects the run ledger read-only. Exit 1 when the store is unusable.
+ */
+async function runStorageDoctor(flags) {
+  const jsonMode = flags.json === true;
+  const report = {
+    ok: false,
+    runtime: typeof globalThis.Bun !== 'undefined' ? 'bun' : 'node',
+    runtimeVersion: process.versions.bun ? `bun ${process.versions.bun}` : `node ${process.versions.node}`,
+    driver: null,
+    probe: null,
+    ledger: null,
+    error: null,
+  };
+  try {
+    const sqlite = await import('../../dist/foundation/storage/sqlite.js');
+    const { LEDGER_DB_RELATIVE_PATH } = await import('../../dist/agent/ledger/run-ledger-db.js');
+    const { effectiveMindRoot } = await import('../../dist/foundation/mind-root/index.js');
+    report.driver = sqlite.sqliteDriverName();
+    report.probe = probeSqliteStore(sqlite);
+    report.ledger = inspectLedger(sqlite, effectiveMindRoot(), LEDGER_DB_RELATIVE_PATH);
+    report.ok = report.probe.inserted === 1
+      && report.probe.readBack === STORAGE_PROBE_LABEL
+      && report.probe.rolledBack === true
+      && report.probe.journalMode === 'wal';
+    if (!report.ok) report.error = 'SQLite probe did not round-trip a row through the store';
+  } catch (error) {
+    report.error = error instanceof Error ? error.message : String(error);
+  }
+
+  if (jsonMode) {
+    console.log(JSON.stringify(report, null, 2));
+  } else {
+    console.log(`\n${bold('MindOS Storage Doctor')}\n`);
+    console.log(`  Runtime: ${report.runtime} ${dim(report.runtimeVersion)}`);
+    console.log(`  Driver:  ${report.driver ? green(report.driver) : red('unavailable')}`);
+    if (report.probe) {
+      console.log(`  Probe:   ${report.ok ? green('write / read / rollback ok') : red('failed')} ${dim(`journal_mode=${report.probe.journalMode}`)}`);
+    }
+    if (report.ledger) {
+      console.log(report.ledger.exists
+        ? `  Ledger:  ${green('found')} ${dim(report.ledger.file)}  runs=${report.ledger.tables?.agent_runs ?? '?'} events=${report.ledger.tables?.agent_run_events ?? '?'} journal_mode=${report.ledger.journalMode}`
+        : `  Ledger:  ${yellow('not created yet')} ${dim(report.ledger.file)}`);
+    }
+    if (report.error) console.log(`  ${red('✘')} ${report.error}`);
+    console.log('');
+  }
+  if (!report.ok) process.exit(EXIT.ERROR);
+}
+
 export const run = async (args, flags) => {
   if (args[0] === 'agents' || args[0] === 'agent') {
     return runAgentDoctor(args.slice(1), flags);
+  }
+  if (args[0] === 'storage') {
+    return runStorageDoctor(flags);
   }
 
   const jsonMode = flags.json === true;

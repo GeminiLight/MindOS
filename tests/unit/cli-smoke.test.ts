@@ -197,6 +197,63 @@ args = ["mcp"]
     expect(parsed.agents[0].skill.installed).toBe(true);
   });
 
+  // `doctor storage` loads the built core (dist/); the root unit suite runs
+  // before `turbo run build` in a fresh checkout, so skip (loudly) without it.
+  const distSqlite = path.join(ROOT, 'packages', 'mindos', 'dist', 'foundation', 'storage', 'sqlite.js');
+  const hasDist = fs.existsSync(distSqlite);
+  if (!hasDist) {
+    console.warn('[cli-smoke] packages/mindos/dist is not built; skipping `doctor storage` tests.');
+  }
+
+  it.skipIf(!hasDist)('mindos doctor storage probes the SQLite store via node:sqlite without touching the mind root', () => {
+    const { stdout, exitCode } = run(['doctor', 'storage', '--json']);
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.ok).toBe(true);
+    expect(parsed.runtime).toBe('node');
+    expect(parsed.driver).toBe('node:sqlite');
+    expect(parsed.probe).toEqual(expect.objectContaining({
+      journalMode: 'wal',
+      inserted: 1,
+      readBack: 'doctor-probe',
+      rolledBack: true,
+      cleanedUp: true,
+    }));
+    expect(parsed.ledger).toEqual(expect.objectContaining({ exists: false }));
+    expect(fs.existsSync(path.join(tempHome, 'MindOS'))).toBe(false);
+    expect(fs.existsSync(path.join(tempHome, '.mindos', 'db'))).toBe(false);
+  });
+
+  it.skipIf(!hasDist)('mindos doctor storage reports journal mode and row counts of an existing ledger', () => {
+    const mindRoot = path.join(tempHome, 'mind');
+    const dbDir = path.join(mindRoot, '.mindos', 'db');
+    fs.mkdirSync(dbDir, { recursive: true });
+    writeDefaultConfig({ mindRoot });
+    const { DatabaseSync } = process.getBuiltinModule('node:sqlite') as typeof import('node:sqlite');
+    const db = new DatabaseSync(path.join(dbDir, 'agent_runs_1.sqlite'));
+    db.exec(`
+      CREATE TABLE _migrations(version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL);
+      INSERT INTO _migrations(version, applied_at) VALUES (1, '2026-01-01T00:00:00.000Z');
+      CREATE TABLE agent_runs(id TEXT PRIMARY KEY, run_json TEXT NOT NULL);
+      CREATE TABLE agent_run_events(seq INTEGER PRIMARY KEY AUTOINCREMENT, run_id TEXT NOT NULL);
+      INSERT INTO agent_runs(id, run_json) VALUES ('r1', '{}'), ('r2', '{}');
+      INSERT INTO agent_run_events(run_id) VALUES ('r1'), ('r1'), ('r2');
+    `);
+    db.close();
+
+    const { stdout, exitCode } = run(['doctor', 'storage', '--json']);
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.ok).toBe(true);
+    expect(parsed.ledger).toEqual(expect.objectContaining({
+      exists: true,
+      journalMode: 'wal',
+      migrations: 1,
+      tables: { agent_runs: 2, agent_run_events: 3 },
+    }));
+    expect(parsed.ledger.file).toBe(path.join(dbDir, 'agent_runs_1.sqlite'));
+  });
+
   it('mindos config show without config exits 1', () => {
     const { exitCode } = run(['config', 'show']);
     expect(exitCode).toBe(1);

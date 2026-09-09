@@ -55,9 +55,45 @@ function ensureFreshDist(): void {
   }
 }
 
-function runDriver(mindRoot: string, mode: string, ...args: string[]): Promise<{ pid: number } & Record<string, unknown>> {
+/** Absolute path of `bun` on PATH, or null (the mixed-runtime test is then skipped). */
+function findBun(): string | null {
+  if (process.env.MINDOS_TEST_SKIP_BUN === '1') return null;
+  const names = process.platform === 'win32' ? ['bun.exe', 'bun.cmd', 'bun'] : ['bun'];
+  for (const dir of (process.env.PATH ?? '').split(path.delimiter)) {
+    for (const name of names) {
+      const candidate = path.join(dir, name);
+      try {
+        fs.accessSync(candidate, fs.constants.X_OK);
+        return candidate;
+      } catch {
+        // keep looking
+      }
+    }
+  }
+  return null;
+}
+
+const bun = findBun();
+if (!bun) {
+  console.warn('[run-ledger.two-process.test] `bun` not found on PATH; skipping the Bun + Node mixed-runtime ledger test.');
+}
+
+function runDriver(
+  mindRoot: string,
+  mode: string,
+  ...args: string[]
+): Promise<{ pid: number } & Record<string, unknown>> {
+  return runDriverWith(process.execPath, mindRoot, mode, ...args);
+}
+
+function runDriverWith(
+  execPath: string,
+  mindRoot: string,
+  mode: string,
+  ...args: string[]
+): Promise<{ pid: number } & Record<string, unknown>> {
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [driverPath, distDir, mindRoot, mode, ...args], {
+    const child = spawn(execPath, [driverPath, distDir, mindRoot, mode, ...args], {
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     let stdout = '';
@@ -180,4 +216,48 @@ describe('agent run ledger across real processes', () => {
     expect(listAgentRuns({ runId: 'agent-run-2p-orphan', status: 'failed' })).toHaveLength(1);
     expect(listAgentRuns({ runId: 'agent-run-2p-orphan', status: 'running' })).toEqual([]);
   }, 60_000);
+
+  it.skipIf(!bun)('a Bun process and a Node process write the same ledger concurrently and see each other\'s runs', async () => {
+    // The published platform binaries run the CLI under Bun (bun:sqlite) while
+    // the Web / Desktop runtime stays on Node (node:sqlite); both must share
+    // the same WAL file without losing rows or re-applying migrations.
+    const COUNT = 60;
+    const [viaBun, viaNode] = await Promise.all([
+      runDriverWith(bun as string, root, 'append-many', 'bun-proc', String(COUNT)),
+      runDriver(root, 'append-many', 'node-proc', String(COUNT)),
+    ]);
+    expect(viaBun.runtime).toBe('bun');
+    expect(viaNode.runtime).toBe('node');
+    expect(viaBun.pid).not.toBe(viaNode.pid);
+
+    const runs = listAgentRuns({ kind: 'pi-subagent', limit: 500 });
+    expect(runs).toHaveLength(COUNT * 2);
+    const runtimeIds = new Set(runs.map((run) => run.runtimeId));
+    for (let index = 0; index < COUNT; index += 1) {
+      expect(runtimeIds.has(`bun-proc-${index}`)).toBe(true);
+      expect(runtimeIds.has(`node-proc-${index}`)).toBe(true);
+    }
+    expect(runs.every((run) => run.status === 'completed')).toBe(true);
+
+    const parentRun = startAgentRun({
+      agentKind: 'mindos-main',
+      runtimeId: 'parent-node',
+      displayName: 'Parent Run',
+      permissionMode: 'ask',
+      inputSummary: 'parent turn seen by bun',
+    });
+    const seenByBun = await runDriverWith(bun as string, root, 'get-run', parentRun.id);
+    expect(seenByBun.runtime).toBe('bun');
+    expect(seenByBun.record).toEqual(expect.objectContaining({ id: parentRun.id, status: 'running' }));
+    expect(seenByBun.events).toEqual(['run_started']);
+
+    const bunChild = await runDriverWith(bun as string, root, 'start-and-complete', 'agent-run-2p-bun-child');
+    expect(bunChild.runtime).toBe('bun');
+    expect(getAgentRun('agent-run-2p-bun-child')).toEqual(expect.objectContaining({
+      id: 'agent-run-2p-bun-child',
+      status: 'completed',
+      outputSummary: 'child done',
+    }));
+    expect(rawRunStatus('agent-run-2p-bun-child')).toBe('completed');
+  }, 90_000);
 });

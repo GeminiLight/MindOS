@@ -137,6 +137,39 @@ describe('Bun single-binary runtime contract', () => {
     expect(platformScript).toContain('bundleDocxExtractor');
   });
 
+  it('drives the shared SQLite store through bun:sqlite under Bun and smokes it from the binary', () => {
+    // Decision 3 of spec-web-api-layer-direction: the Bun route only continues
+    // with a bun:sqlite driver behind foundation/storage/sqlite.ts, verified by
+    // the same tests under both runtimes and touched by the release smoke.
+    const driver = read('packages/mindos/src/foundation/storage/sqlite-driver.ts');
+    const store = read('packages/mindos/src/foundation/storage/sqlite.ts');
+    for (const source of [driver, store]) {
+      // Runtime specifiers must never be static: vite strips `node:` and
+      // resolves `sqlite` as an npm package, and webpack would need externals
+      // for both. Only runtime strings (getBuiltinModule / createRequire) load them.
+      expect(source).not.toMatch(/from\s+['"](?:bun|node):sqlite['"]/);
+      expect(source).not.toMatch(/import\(\s*['"](?:bun|node):sqlite['"]\s*\)/);
+      expect(source).not.toMatch(/require\(\s*['"](?:bun|node):sqlite['"]\s*\)/);
+    }
+    expect(store).not.toContain('assertNodeRuntime');
+    expect(driver).toContain('getBuiltinModule');
+    // Bun binds bare named parameters to NULL silently outside strict mode.
+    expect(driver).toContain('strict: true');
+
+    const doctor = read('packages/mindos/bin/commands/doctor.js');
+    expect(doctor).toContain("'storage'");
+    expect(doctor).toContain('dist/foundation/storage/sqlite.js');
+
+    const release = read('scripts/release.sh');
+    expect(release).toContain('doctor storage --json');
+    expect(release).toContain('"driver"[[:space:]]*:[[:space:]]*"bun:sqlite"');
+
+    expect(existsSync(resolve(root, 'wiki/specs/spec-sqlite-bun-driver.md'))).toBe(true);
+    const spec = read('wiki/specs/spec-bun-single-binary-runtime.md');
+    expect(spec).toContain('bun:sqlite');
+    expect(spec).toContain('三个前提');
+  });
+
   it('never routes a packaged runtime into the source-build path', () => {
     // Packaged runtimes ship no packages/web sources, so the source-build
     // branch can only crash there. If the extraction runtime is missing, start
