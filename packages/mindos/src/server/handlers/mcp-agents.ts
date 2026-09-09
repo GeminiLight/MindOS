@@ -138,7 +138,8 @@ export type MindosMcpAgentsServices = {
   detectAgentInstalledSkills?(agentKey: string): MindosMcpAgentInstalledSkills;
   resolveSkillWorkspaceProfile?(agentKey: string): MindosMcpAgentSkillProfile;
   scanCustomAgentSkills?(custom: MindosCustomMcpAgentDef): MindosMcpAgentInstalledSkills;
-  loadMindosSkills?(): MindosMcpMindosSkills;
+  /** MindOS's own skill listing; may resolve asynchronously when the host loads its skill toolkit lazily. */
+  loadMindosSkills?(): MindosMcpMindosSkills | Promise<MindosMcpMindosSkills>;
   skillAgentRegistry?: Record<string, MindosSkillAgentRegistration>;
   fetchHead?(url: string, options: { signal: AbortSignal }): Promise<{ status: number }>;
 };
@@ -218,7 +219,7 @@ export async function handleMcpAgentsGet(
     });
 
     const mindos = agents.find((agent) => agent.key === 'mindos');
-    if (mindos) enrichMindosAgent(mindos, services, env);
+    if (mindos) await enrichMindosAgent(mindos, services, env);
 
     await verifyHttpAgentInstallations(agents, services);
     agents.sort(compareMcpAgents);
@@ -355,11 +356,11 @@ export function parseYamlForServers(content: string, sectionKey: string): string
   return [...names].sort();
 }
 
-function enrichMindosAgent(
+async function enrichMindosAgent(
   agent: MindosMcpAgentProfile,
   services: MindosMcpAgentsServices,
   env: NodeJS.ProcessEnv,
-): void {
+): Promise<void> {
   agent.present = true;
   agent.installed = true;
   agent.scope = 'builtin';
@@ -372,7 +373,7 @@ function enrichMindosAgent(
   }
 
   try {
-    const skills = services.loadMindosSkills?.();
+    const skills = await services.loadMindosSkills?.();
     if (skills) {
       agent.installedSkillNames = skills.names;
       agent.installedSkillCount = skills.names.length;

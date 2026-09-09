@@ -188,9 +188,9 @@ describe('OpenCode architecture alignment', () => {
     expect(healthRoute).toContain("delegateToMindos('GET', '/api/health')");
     expect(filesRoute).toContain("delegateToMindos('GET', '/api/files')");
     expect(searchRoute).toContain("delegateToMindos('GET', '/api/search')");
-    expect(rawRoute).toContain("from '@geminilight/mindos/server'");
-    expect(settingsRoute).toContain("from '@geminilight/mindos/server'");
-    expect(mcpStatusRoute).toContain("from '@geminilight/mindos/server'");
+    expect(rawRoute).toContain("delegateToMindos('GET', '/api/file/raw')");
+    expect(settingsRoute).toContain("delegateToMindos('GET', '/api/settings')");
+    expect(mcpStatusRoute).toContain("delegateToMindos('GET', '/api/mcp/status')");
     expect(healthRoute).not.toContain('function readVersion');
     expect(healthRoute).not.toContain("service: 'mindos'");
   });

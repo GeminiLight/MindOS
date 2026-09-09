@@ -142,10 +142,11 @@ describe('MindOS runtime product kernel contract', () => {
 
   it('makes Web file routes use the product server facade without duplicate local kernels', () => {
     const fileRoute = read('packages/web/app/api/file/route.ts');
+    const fileRouteTable = read('packages/mindos/src/server/routes/files.ts');
     const webSecurity = read('packages/web/lib/core/security.ts');
 
-    expect(fileRoute).toContain("from '@geminilight/mindos/server'");
-    expect(fileRoute).toContain('handleFilePost');
+    expect(fileRoute).toContain("delegateToMindos('POST', '/api/file')");
+    expect(fileRouteTable).toContain('handleFilePost');
     expect(existsSync(resolve(root, 'packages/web/app/api/file/operation-kernel.ts'))).toBe(false);
     expect(existsSync(resolve(root, 'packages/web/app/api/file/handlers.ts'))).toBe(false);
 

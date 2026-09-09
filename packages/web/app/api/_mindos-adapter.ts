@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import {
   createMindosApp,
+  HttpBodyError,
   type MindosApp,
   type MindosHttpServices,
   type MindosRouteMethod,
@@ -54,7 +55,8 @@ export type DelegateToMindosOptions = {
  * Serves a Web route through the shared Product Server route table. The Next
  * proxy has already authenticated the request, so the app runs in `host` auth
  * mode; pages stay with Next, so the static fallback is off; thrown errors map
- * through the Web error policy (`handleRouteErrorSimple`).
+ * through the Web error policy (`handleRouteErrorSimple`), except body-limit
+ * errors, whose 413 / 400 mapping belongs to the app itself.
  */
 export function delegateToMindos(
   method: MindosRouteMethod,
@@ -67,7 +69,7 @@ export function delegateToMindos(
       services: createWebMindosServices(options.services),
       auth: 'host',
       staticFallback: false,
-      onError: (error) => handleRouteErrorSimple(error),
+      onError: (error) => (error instanceof HttpBodyError ? undefined : handleRouteErrorSimple(error)),
     });
     return app;
   };

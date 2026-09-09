@@ -1,29 +1,5 @@
-import {
-  handleImFeishuLongConnectionDelete,
-  handleImFeishuLongConnectionGet,
-  handleImFeishuLongConnectionPost,
-  type ImFeishuLongConnectionServices,
-} from '@geminilight/mindos/server';
-import { readEffectiveIMConfig, writeIMConfig } from '@/lib/im/config';
-import { getFeishuWSClientStatus, startFeishuWSClient, stopFeishuWSClient } from '@/lib/im/feishu-ws-client';
-import { toNextResponse } from '../../../_mindos-adapter';
+import { delegateToMindos } from '../../../_mindos-adapter';
 
-const services: ImFeishuLongConnectionServices = {
-  readConfig: readEffectiveIMConfig as ImFeishuLongConnectionServices['readConfig'],
-  writeConfig: writeIMConfig as ImFeishuLongConnectionServices['writeConfig'],
-  getFeishuWSClientStatus,
-  startFeishuWSClient: startFeishuWSClient as ImFeishuLongConnectionServices['startFeishuWSClient'],
-  stopFeishuWSClient,
-};
-
-export function GET() {
-  return toNextResponse(handleImFeishuLongConnectionGet(services));
-}
-
-export async function POST() {
-  return toNextResponse(await handleImFeishuLongConnectionPost(services));
-}
-
-export function DELETE() {
-  return toNextResponse(handleImFeishuLongConnectionDelete(services));
-}
+export const GET = delegateToMindos('GET', '/api/im/feishu/long-connection');
+export const POST = delegateToMindos('POST', '/api/im/feishu/long-connection');
+export const DELETE = delegateToMindos('DELETE', '/api/im/feishu/long-connection');

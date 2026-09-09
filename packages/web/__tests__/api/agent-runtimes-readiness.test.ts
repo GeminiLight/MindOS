@@ -11,7 +11,8 @@ const mocks = vi.hoisted(() => ({
   resolveCommandPathCandidates: vi.fn(),
   checkNativeRuntimeHealth: vi.fn(),
   getActiveSessionSnapshots: vi.fn(),
-  getAcpHandshakeHealthForRuntimes: vi.fn(),
+  createSession: vi.fn(),
+  closeSession: vi.fn(),
 }));
 
 vi.mock('@geminilight/mindos/server', async () => {
@@ -44,10 +45,8 @@ vi.mock('@/lib/acp/detect-local', () => ({
 
 vi.mock('@/lib/acp/session', () => ({
   getActiveSessionSnapshots: mocks.getActiveSessionSnapshots,
-}));
-
-vi.mock('@/lib/acp/handshake-health', () => ({
-  getAcpHandshakeHealthForRuntimes: mocks.getAcpHandshakeHealthForRuntimes,
+  createSession: mocks.createSession,
+  closeSession: mocks.closeSession,
 }));
 
 vi.mock('@/lib/custom-agents', () => ({
@@ -232,7 +231,8 @@ beforeEach(() => {
     notInstalled: [{ id: 'claude', name: 'Claude Code', installCmd: 'npm install -g @anthropic-ai/claude-code' }],
   });
   mocks.getActiveSessionSnapshots.mockReset().mockReturnValue([activeAcpSnapshot()]);
-  mocks.getAcpHandshakeHealthForRuntimes.mockReset().mockResolvedValue([]);
+  mocks.createSession.mockReset().mockImplementation(async (agentId: string) => ({ id: `ses-${agentId}`, agentId }));
+  mocks.closeSession.mockReset().mockResolvedValue(undefined);
 });
 
 afterEach(() => {
@@ -364,28 +364,18 @@ describe('GET /api/agent-runtimes/readiness', () => {
     ]);
   });
 
-  it('passes handshake probe flags into readiness and surfaces failed ACP handshakes', async () => {
-    mocks.getAcpHandshakeHealthForRuntimes.mockResolvedValueOnce([{
-      schemaVersion: 1,
-      agentId: 'declared-acp',
-      status: 'failed',
-      stage: 'initialize',
-      checkedAt: '2026-06-28T00:00:00.000Z',
-      expiresAt: '2026-06-28T00:05:00.000Z',
-      message: 'initialize failed',
-    }]);
+  it('probes the ACP handshake when handshake=1 and surfaces a failed handshake as a blocker', async () => {
+    mocks.createSession.mockImplementation(async (agentId: string) => {
+      if (agentId === 'declared-acp') throw new Error('initialize failed');
+      return { id: `ses-${agentId}`, agentId };
+    });
 
     const { GET } = await importRoute();
     const res = await GET(new Request('http://localhost/api/agent-runtimes/readiness?handshake=1&force=1&runtime=declared-acp'));
     const body = await res.json();
 
     expect(res.status, JSON.stringify(body)).toBe(200);
-    expect(mocks.getAcpHandshakeHealthForRuntimes).toHaveBeenCalledWith(
-      expect.arrayContaining([
-        expect.objectContaining({ id: 'declared-acp', kind: 'acp' }),
-      ]),
-      { probe: true, force: true },
-    );
+    expect(mocks.createSession).toHaveBeenCalledWith('declared-acp', expect.objectContaining({ permissionMode: 'readonly' }));
     expect(body.projections).toEqual([
       expect.objectContaining({
         runtimeId: 'declared-acp',

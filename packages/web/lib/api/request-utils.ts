@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import type { ZodType } from 'zod';
+import { KNOWLEDGE_WRITE_MAX_BODY_BYTES } from '@geminilight/mindos/server';
 import { MindOSError, ErrorCodes } from '@/lib/errors';
 
-/** Upper bound for JSON bodies on knowledge write routes (/api/inbox, /api/file, /api/file/import). */
-export const KNOWLEDGE_WRITE_MAX_BODY_BYTES = 25 * 1024 * 1024;
+/** Upper bound for JSON bodies on knowledge write routes; shared with the Product Server route table so both hosts agree. */
+export { KNOWLEDGE_WRITE_MAX_BODY_BYTES };
 
 /**
  * Body-read failure with an HTTP status attached. `code` + `statusCode` follow

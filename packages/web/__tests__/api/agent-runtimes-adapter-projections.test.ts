@@ -5,7 +5,8 @@ const mocks = vi.hoisted(() => ({
   resolveCommandPath: vi.fn(),
   resolveCommandPathCandidates: vi.fn(),
   checkNativeRuntimeHealth: vi.fn(),
-  getAcpHandshakeHealthForRuntimes: vi.fn(),
+  createSession: vi.fn(),
+  closeSession: vi.fn(),
 }));
 
 vi.mock('@geminilight/mindos/server', async () => {
@@ -27,8 +28,9 @@ vi.mock('@/lib/acp/detect-local', () => ({
   checkNativeRuntimeHealth: mocks.checkNativeRuntimeHealth,
 }));
 
-vi.mock('@/lib/acp/handshake-health', () => ({
-  getAcpHandshakeHealthForRuntimes: mocks.getAcpHandshakeHealthForRuntimes,
+vi.mock('@/lib/acp/session', () => ({
+  createSession: mocks.createSession,
+  closeSession: mocks.closeSession,
 }));
 
 beforeEach(() => {
@@ -39,7 +41,8 @@ beforeEach(() => {
   });
   mocks.resolveCommandPathCandidates.mockReset().mockResolvedValue([]);
   mocks.checkNativeRuntimeHealth.mockReset().mockResolvedValue({ status: 'available' });
-  mocks.getAcpHandshakeHealthForRuntimes.mockReset().mockResolvedValue([]);
+  mocks.createSession.mockReset();
+  mocks.closeSession.mockReset().mockResolvedValue(undefined);
   mocks.detectLocalAcpAgents.mockReset().mockResolvedValue({
     installed: [
       { id: 'codex-acp', name: 'Codex', binaryPath: '/usr/local/bin/codex', status: 'available' },
@@ -177,38 +180,27 @@ describe('GET /api/agent-runtimes/adapter-projections', () => {
     ]);
   });
 
-  it('passes explicit handshake probes through to ACP health diagnostics', async () => {
-    mocks.getAcpHandshakeHealthForRuntimes.mockResolvedValueOnce([{
-      schemaVersion: 1,
-      agentId: 'opaque-acp',
-      status: 'ready',
-      stage: 'session-new',
-      checkedAt: '2026-06-28T00:00:00.000Z',
-      expiresAt: '2026-06-28T00:05:00.000Z',
-      session: {
-        sessionId: 'ses-local',
-        externalSessionId: 'agent-session-1',
-        supportsLoadSession: true,
-        supportsListSessions: true,
-        supportsClose: true,
-        modeCount: 0,
-        configOptionCount: 0,
-        mcpServerCount: 0,
-        authMethodCount: 0,
-      },
-    }]);
+  it('probes the ACP handshake through the host session factory when handshake=1', async () => {
+    // Every available ACP runtime is probed; the factory answers for each of them.
+    mocks.createSession.mockImplementation(async (agentId: string) => ({
+      id: `ses-${agentId}`,
+      agentId,
+      agentSessionId: `agent-session-${agentId}`,
+      agentCapabilities: { loadSession: true, sessionCapabilities: { list: {}, close: {} } },
+      modes: [],
+      configOptions: [],
+      mcpServers: [],
+      authMethods: [],
+    }));
 
     const { GET } = await importRoute();
     const res = await GET(new Request('http://localhost/api/agent-runtimes/adapter-projections?handshake=1&force=1&runtime=opaque-acp'));
     const body = await res.json();
 
     expect(res.status, JSON.stringify(body)).toBe(200);
-    expect(mocks.getAcpHandshakeHealthForRuntimes).toHaveBeenCalledWith(
-      expect.arrayContaining([
-        expect.objectContaining({ id: 'opaque-acp', kind: 'acp' }),
-      ]),
-      { probe: true, force: true },
-    );
+    // A readonly probe session is opened for the requested ACP runtime and closed again.
+    expect(mocks.createSession).toHaveBeenCalledWith('opaque-acp', expect.objectContaining({ permissionMode: 'readonly' }));
+    expect(mocks.closeSession).toHaveBeenCalledWith('ses-opaque-acp');
     expect(body.projections).toEqual([
       expect.objectContaining({
         runtimeId: 'opaque-acp',

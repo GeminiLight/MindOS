@@ -403,6 +403,17 @@ export {
   type MindosHttpServices,
 } from './http.js';
 
+export type {
+  MindosA2aHostServices,
+  MindosAcpHostServices,
+  MindosAgentRuntimeHostServices,
+  MindosChannelServices,
+  MindosKnowledgeWriteChange,
+  MindosKnowledgeWriteHostServices,
+  MindosMcpAgentHostServices,
+  MindosSkillHostServices,
+} from './services.js';
+
 export {
   createMindosApp,
   handleMindosRequest,
@@ -426,7 +437,7 @@ export {
 export { MINDOS_ROUTE_AUTH_GUARDS, MINDOS_ROUTE_TABLE } from './routes/index.js';
 
 export { toWebResponse, etagMatches, isByteStreamBody, isSseBody, isSseFrameBody, sseFrames } from './web-response.js';
-export { HttpBodyError, readJsonBody, MINDOS_DEFAULT_JSON_BODY_LIMIT } from './body.js';
+export { HttpBodyError, readJsonBody, KNOWLEDGE_WRITE_MAX_BODY_BYTES, MINDOS_DEFAULT_JSON_BODY_LIMIT } from './body.js';
 export {
   allowsSameOriginExemption,
   forwardedClientAddresses,

@@ -12,10 +12,12 @@ vi.mock('@geminilight/mindos/server', async () => {
 const ROUTE_TEST_TIMEOUT_MS = 15_000;
 
 describe('GET /api/assistants', () => {
-  it('keeps the Product Server import lazy so Next does not bundle unrelated runtime adapters', () => {
+  it('delegates every method to the shared route table instead of importing handlers', () => {
     const routePath = fileURLToPath(new URL('../../app/api/assistants/route.ts', import.meta.url));
     const source = readFileSync(routePath, 'utf-8');
-    expect(source).toContain('webpackIgnore');
+    for (const method of ['GET', 'POST', 'DELETE']) {
+      expect(source).toContain(`export const ${method} = delegateToMindos('${method}', '/api/assistants')`);
+    }
     expect(source).not.toMatch(/^import\s+.*from ['"]@geminilight\/mindos\/server['"]/m);
   });
 

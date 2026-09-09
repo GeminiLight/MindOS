@@ -36,6 +36,39 @@ describe('GET /api/file/raw', () => {
     expect(Buffer.from(await res.arrayBuffer()).toString()).toBe('cde');
   });
 
+  it('answers 304 to a matching If-None-Match through the delegated route', async () => {
+    writeBinary('media/sample.mp3', Buffer.from('abcdef'));
+
+    const first = await GET(new NextRequest('http://localhost/api/file/raw?path=media/sample.mp3'));
+    const etag = first.headers.get('etag');
+    expect(etag).toBeTruthy();
+
+    const cached = await GET(new NextRequest('http://localhost/api/file/raw?path=media/sample.mp3', {
+      headers: { 'if-none-match': etag! },
+    }));
+    expect(cached.status).toBe(304);
+    expect(cached.headers.get('etag')).toBe(etag);
+    expect(await cached.text()).toBe('');
+
+    const stale = await GET(new NextRequest('http://localhost/api/file/raw?path=media/sample.mp3', {
+      headers: { 'if-none-match': '"deadbeef"' },
+    }));
+    expect(stale.status).toBe(200);
+  });
+
+  it('streams files above the in-memory threshold with the full body intact', async () => {
+    const large = Buffer.alloc(1_100_000, 0x61);
+    writeBinary('media/large.mp3', large);
+
+    const res = await GET(new NextRequest('http://localhost/api/file/raw?path=media/large.mp3'));
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-length')).toBe(String(large.length));
+    const body = Buffer.from(await res.arrayBuffer());
+    expect(body.length).toBe(large.length);
+    expect(body.equals(large)).toBe(true);
+  });
+
   it('returns JSON errors for invalid raw file requests', async () => {
     const req = new NextRequest('http://localhost/api/file/raw?path=notes/readme.md');
     const res = await GET(req);

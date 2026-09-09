@@ -12,6 +12,8 @@ async function importRoute() {
 
 describe('GET /api/agent-capabilities', () => {
   beforeEach(() => {
+    // The delegated route builds the capability registry once per module; a fresh module per test keeps call counts honest.
+    vi.resetModules();
     vi.clearAllMocks();
     createAgentCapabilitiesServices.mockReturnValue({
       kb: () => [{

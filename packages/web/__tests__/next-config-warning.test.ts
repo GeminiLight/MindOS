@@ -116,6 +116,13 @@ describe('next config warning hygiene', () => {
       'app/api/settings/list-models/route.ts',
       'app/api/settings/test-key/route.ts',
       'app/api/space-overview/route.ts',
+      // Every delegated route shares these; a static PI import here would land in all of them.
+      'app/api/_mindos-adapter.ts',
+      'app/api/_mindos-services.ts',
+      'app/api/_mindos-services/agents.ts',
+      'app/api/_mindos-services/channels.ts',
+      'app/api/_mindos-services/knowledge.ts',
+      'app/api/_mindos-services/settings.ts',
       'lib/compile.ts',
     ];
 
@@ -154,13 +161,10 @@ describe('next config warning hygiene', () => {
     expect(readFileSync(resolve(appRoot, 'lib/agent/headless.ts'), 'utf-8')).toContain(
       "await import('@geminilight/mindos/agent/runtime/adapters/mindos')",
     );
-    expect(readFileSync(resolve(appRoot, 'app/api/mcp/agents/route.ts'), 'utf-8')).toContain(
+    expect(readFileSync(resolve(appRoot, 'app/api/_mindos-services/agents.ts'), 'utf-8')).toContain(
       "await import('@earendil-works/pi-coding-agent')",
     );
-    expect(readFileSync(resolve(appRoot, 'app/api/settings/list-models/route.ts'), 'utf-8')).toContain(
-      "await import('@/lib/agent/pi-models')",
-    );
-    expect(readFileSync(resolve(appRoot, 'app/api/settings/test-key/route.ts'), 'utf-8')).toContain(
+    expect(readFileSync(resolve(appRoot, 'app/api/_mindos-services/settings.ts'), 'utf-8')).toContain(
       "await import('@/lib/agent/pi-models')",
     );
     expect(readFileSync(resolve(appRoot, 'lib/compile.ts'), 'utf-8')).toContain(
@@ -175,7 +179,7 @@ describe('next config warning hygiene', () => {
     expect(readFileSync(resolve(appRoot, 'lib/agent/headless.ts'), 'utf-8')).toContain(
       "await import('@/lib/agent/mindos-pi-runtime-host')",
     );
-    expect(readFileSync(resolve(appRoot, 'app/api/settings/test-key/route.ts'), 'utf-8')).toContain(
+    expect(readFileSync(resolve(appRoot, 'app/api/_mindos-services/settings.ts'), 'utf-8')).toContain(
       "await import('@/lib/agent/model')",
     );
     expect(readFileSync(resolve(appRoot, 'lib/compile.ts'), 'utf-8')).toContain(

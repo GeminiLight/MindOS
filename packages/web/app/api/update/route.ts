@@ -1,8 +1,4 @@
 export const dynamic = 'force-dynamic';
+import { delegateToMindos } from '../_mindos-adapter';
 
-import { handleUpdatePost } from '@geminilight/mindos/server';
-import { toNextResponse } from '../_mindos-adapter';
-
-export async function POST() {
-  return toNextResponse(handleUpdatePost());
-}
+export const POST = delegateToMindos('POST', '/api/update');

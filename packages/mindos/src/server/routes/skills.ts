@@ -28,6 +28,7 @@ export const skillRoutes = defineRoutes([
     handler: async ({ readJsonBody, services }) => handleSkillsPost(await readJsonBody(), {
       mindRoot: services.mindRoot,
       skillRoots: services.listSkills().skillRoots,
+      trustedNativeSkillRoots: services.skills?.trustedNativeSkillRoots?.(),
       readSettings: services.readSettings,
       writeSettings: services.writeSettings,
       listLinkAgents: createHttpSkillLinkAgents(services),
@@ -35,10 +36,14 @@ export const skillRoutes = defineRoutes([
     }) },
 ]);
 
-/** Downstream agents eligible for skill linking, sourced like GET /api/mcp/agents. */
+/** Downstream agents eligible for skill linking; hosts with a richer agent registry (presence probes, custom agents) override it. */
 function createHttpSkillLinkAgents(services: MindosHttpServices): () => MindosSkillLinkAgent[] {
+  const hostList = services.skills?.listLinkAgents;
+  if (hostList) return hostList;
   return () => resolveSkillLinkAgents({
     agents: (services.mcpAgents ?? {}) as Record<string, MindosMcpAgentRegistryDef>,
-    skillAgentRegistry: createDefaultSkillAgentRegistry(),
+    skillAgentRegistry: services.mcpAgentServices?.skillAgentRegistry ?? createDefaultSkillAgentRegistry(),
+    detectAgentPresence: services.mcpAgentServices?.detectAgentPresence,
+    resolveSkillWorkspaceProfile: services.mcpAgentServices?.resolveSkillWorkspaceProfile,
   });
 }

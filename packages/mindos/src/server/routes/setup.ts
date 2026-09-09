@@ -22,11 +22,18 @@ function normalizeSetupSettingsForHttp(settings: MindosRuntimeSettings) {
   };
 }
 
-function createHttpSetupServices(services: MindosHttpServices) {
+/** Product defaults first; a host may add template installers, provider presets and path validators via `services.setup`. */
+export function createHttpSetupServices(services: MindosHttpServices) {
   return {
     readSettings: () => normalizeSetupSettingsForHttp(services.readSettings()),
     writeSettings: (settings: ReturnType<typeof normalizeSetupSettingsForHttp>) => services.writeSettings(settings as MindosRuntimeSettings),
+    ...services.setup,
   };
+}
+
+/** The port the request actually arrived on identifies "this" server; env is the fallback for hosts behind a proxy. */
+function resolveSelfWebPort(url: URL): number {
+  return Number(url.port) || Number(process.env.MINDOS_WEB_PORT) || 0;
 }
 
 export const setupRoutes = defineRoutes([
@@ -40,8 +47,8 @@ export const setupRoutes = defineRoutes([
   { id: 'setup.check-path', method: 'POST', path: '/api/setup/check-path', auth: 'required',
     handler: async ({ readJsonBody }) => handleSetupCheckPath(await readJsonBody()) },
   { id: 'setup.check-port', method: 'POST', path: '/api/setup/check-port', auth: 'required',
-    handler: async ({ readJsonBody }) => handleSetupCheckPort(await readJsonBody(), {
-      myWebPort: Number(process.env.MINDOS_WEB_PORT) || 0,
+    handler: async ({ readJsonBody, url }) => handleSetupCheckPort(await readJsonBody(), {
+      myWebPort: resolveSelfWebPort(url),
       myMcpPort: Number(process.env.MINDOS_MCP_PORT) || 0,
     }) },
   { id: 'setup.generate-token', method: 'POST', path: '/api/setup/generate-token', auth: 'required',

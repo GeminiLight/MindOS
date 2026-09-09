@@ -33,7 +33,12 @@ export const systemRoutes = defineRoutes([
       return { status: response.status, headers: response.headers, body: sseFrames(response.body) };
     } },
   { id: 'monitoring', method: 'GET', path: '/api/monitoring', auth: 'required',
-    handler: ({ services }) => handleMonitoringGet(services) },
+    handler: ({ services }) => handleMonitoringGet({
+      mindRoot: services.mindRoot,
+      getTreeVersion: () => services.getTreeVersion(),
+      // Hosts with their own request metrics (the Web Ask runner) replace the process-local snapshot.
+      ...services.monitoring,
+    }) },
   { id: 'update-status', method: 'GET', path: '/api/update-status', auth: 'required',
     handler: ({ services }) => handleUpdateStatusGet({ statusPath: services.updateStatusPath }) },
   { id: 'update-check', method: 'GET', path: '/api/update-check', auth: 'required',

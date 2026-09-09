@@ -1,8 +1,4 @@
 export const dynamic = 'force-dynamic';
+import { delegateToMindos } from '../_mindos-adapter';
 
-import { handleUpdateStatusGet } from '@geminilight/mindos/server';
-import { toNextResponse } from '../_mindos-adapter';
-
-export function GET() {
-  return toNextResponse(handleUpdateStatusGet());
-}
+export const GET = delegateToMindos('GET', '/api/update-status');

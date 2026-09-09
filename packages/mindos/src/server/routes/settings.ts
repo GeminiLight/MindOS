@@ -25,9 +25,9 @@ import type { MindosHttpServices } from '../services.js';
 
 export const settingsRoutes = defineRoutes([
   { id: 'embedding', method: 'GET', path: '/api/embedding', auth: 'required',
-    handler: () => handleEmbeddingGet() },
+    handler: ({ services }) => handleEmbeddingGet(services.embedding) },
   { id: 'embedding.action', method: 'POST', path: '/api/embedding', auth: 'required',
-    handler: async ({ readJsonBody }) => handleEmbeddingPost(await readJsonBody()) },
+    handler: async ({ readJsonBody, services }) => handleEmbeddingPost(await readJsonBody(), services.embedding) },
   { id: 'settings', method: 'GET', path: '/api/settings', auth: 'required',
     handler: ({ services }) => handleSettingsGet(createHttpSettingsServices(services)) },
   { id: 'settings.update', method: 'POST', path: '/api/settings', auth: 'required',
@@ -80,6 +80,9 @@ function createHttpSettingsServices(services: MindosHttpServices): MindosSetting
       getApiKeyEnvVar: (id) => MINDOS_PROVIDER_PRESETS[id]?.envKeys[0],
       getApiKeyFromEnv: (id) => getMindosApiKeyFromEnv(id),
     },
+    // Hosts with a richer settings store (Web: web-search config, embedding
+    // status, provider presets, cache invalidation) override the defaults.
+    ...services.settings,
   };
 }
 
@@ -121,6 +124,7 @@ function createHttpSettingsTestKeyServices(services: MindosHttpServices) {
     ),
     testModel: testProviderConnectivity,
     clearCompatCacheForBaseUrl: () => undefined,
+    ...services.settingsTestKey,
   };
 }
 
@@ -141,6 +145,7 @@ function createHttpSettingsListModelsServices(services: MindosHttpServices) {
     getDefaultBaseUrl: (provider: string) => MINDOS_PROVIDER_PRESETS[provider]?.defaultBaseUrl ?? '',
     buildEndpointCandidates: buildMindosEndpointCandidates,
     fetch: async (input: string, init: { headers: Record<string, string>; signal: AbortSignal }) => fetch(input, init),
+    ...services.settingsListModels,
   };
 }
 

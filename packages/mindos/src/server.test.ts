@@ -885,14 +885,17 @@ hidden: true
             },
           }),
         }),
-        createSession: async (agentId: string, options?: { overrides?: Record<string, unknown>; cwd?: string }) => {
-          observedOptions = options;
-          return {
-            id: 'ses-custom',
-            agentId,
-            hasCustomOverride: Boolean(options?.overrides?.['custom-acp']),
-            cwd: options?.cwd,
-          };
+        // Host session factories live in the `acp` slot (the Next host layers env + MCP config there).
+        acp: {
+          createSession: async (agentId: string, options?: { overrides?: Record<string, unknown>; cwd?: string }) => {
+            observedOptions = options;
+            return {
+              id: 'ses-custom',
+              agentId,
+              hasCustomOverride: Boolean(options?.overrides?.['custom-acp']),
+              cwd: options?.cwd,
+            };
+          },
         },
       },
     });

@@ -1,5 +1,5 @@
 import { getLocalIPv4 } from '../handlers/connect.js';
-import { handleMcpAgentsGet, type MindosMcpAgentRegistryDef } from '../handlers/mcp-agents.js';
+import { handleMcpAgentsGet, type MindosMcpAgentRegistryDef, type MindosMcpAgentsServices } from '../handlers/mcp-agents.js';
 import {
   handleMcpInstallPost,
   handleMcpServerCopyPost,
@@ -37,25 +37,16 @@ export const mcpRoutes = defineRoutes([
       services.mcpTools ?? { updateServerDirectTools: () => {} },
     ) },
   { id: 'mcp.install', method: 'POST', path: '/api/mcp/install', auth: 'required',
-    handler: async ({ readJsonBody, services }) => handleMcpInstallPost(await readJsonBody() as MindosMcpInstallRequest, {
-      agents: services.mcpAgents ?? {},
-      readSettings: services.readSettings,
-      env: process.env,
-      events: services.events,
-    }) },
+    handler: async ({ readJsonBody, services }) => handleMcpInstallPost(await readJsonBody() as MindosMcpInstallRequest, createHttpMcpInstallServices(services)) },
   { id: 'mcp.copy-server', method: 'POST', path: '/api/mcp/copy-server', auth: 'required',
-    handler: async ({ readJsonBody, services }) => handleMcpServerCopyPost(await readJsonBody() as MindosMcpServerCopyRequest, {
-      agents: services.mcpAgents ?? {},
-      readSettings: services.readSettings,
-      env: process.env,
-      events: services.events,
-    }) },
+    handler: async ({ readJsonBody, services }) => handleMcpServerCopyPost(await readJsonBody() as MindosMcpServerCopyRequest, createHttpMcpInstallServices(services)) },
   { id: 'mcp.install-skill', method: 'POST', path: '/api/mcp/install-skill', auth: 'required',
     handler: async ({ readJsonBody, services, runtimeRoot }) => handleMcpInstallSkillPost(await readJsonBody() as MindosMcpInstallSkillRequest, {
       agents: (services.mcpAgents ?? {}) as Record<string, MindosMcpAgentRegistryDef>,
-      skillAgentRegistry: createDefaultSkillAgentRegistry(),
+      skillAgentRegistry: services.mcpAgentServices?.skillAgentRegistry ?? createDefaultSkillAgentRegistry(),
       projectRoot: services.runtimeRoot ?? runtimeRoot ?? process.cwd(),
       cwd: services.runtimeRoot ?? runtimeRoot ?? process.cwd(),
+      homeDir: services.homeDir,
       env: process.env,
     }) },
   { id: 'mcp.restart', method: 'POST', path: '/api/mcp/restart', auth: 'required',
@@ -72,15 +63,34 @@ export const mcpRoutes = defineRoutes([
     }) },
 ]);
 
-/** Shared by GET /api/mcp/agents and the runtime projection services. */
-export function createHttpMcpAgentsServices(services: MindosHttpServices) {
+/**
+ * Shared by GET /api/mcp/agents and the runtime projection services. Host
+ * enrichers (`mcpAgentServices`: presence probes, installed-config detection,
+ * custom agents, MindOS skill listing) layer over the product defaults.
+ */
+export function createHttpMcpAgentsServices(services: MindosHttpServices): MindosMcpAgentsServices {
+  const { requireAgentPresence: _requireAgentPresence, ...host } = services.mcpAgentServices ?? {};
   return {
     agents: (services.mcpAgents ?? {}) as Record<string, MindosMcpAgentRegistryDef>,
     readSettings: services.readSettings,
     env: process.env,
+    homeDir: services.homeDir,
     mindRoot: services.mindRoot,
     projectRoot: services.runtimeRoot ?? process.cwd(),
     skillAgentRegistry: createDefaultSkillAgentRegistry(),
+    ...host,
+  };
+}
+
+/** Install / copy write agent config files; a host may require the agent to be present before touching them. */
+function createHttpMcpInstallServices(services: MindosHttpServices) {
+  return {
+    agents: services.mcpAgents ?? {},
+    requireAgentPresence: services.mcpAgentServices?.requireAgentPresence,
+    detectAgentPresence: services.mcpAgentServices?.detectAgentPresence,
+    readSettings: services.readSettings,
+    env: process.env,
+    events: services.events,
   };
 }
 

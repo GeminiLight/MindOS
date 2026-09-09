@@ -14,25 +14,100 @@ import { createMindRootTreeCache } from './tree-cache.js';
 import { MindosSearchIndex } from './search/index.js';
 import { createDefaultMcpAgents } from './mcp-agent-registry.js';
 import { getMindosServerEventBus, type MindosServerEventBus } from './events/bus.js';
+import type { A2aServices } from './handlers/a2a.js';
+import type { AcpDetectServices, AcpInstallServices, AcpRegistryServices, AcpSessionServices } from './handlers/acp.js';
+import type { AgentCapabilitiesServices } from './handlers/agent-capabilities.js';
+import type { AgentRuntimePayload, AgentRuntimesPayload, AgentRuntimesServices } from './handlers/agent-runtimes.js';
 import type { CodexThreadManagerServices } from './handlers/agent-runtimes-codex.js';
 import type { ChannelsVerifyServices } from './handlers/channels-verify.js';
+import type { EmbeddingServices } from './handlers/embedding.js';
 import type { ExtractDocxServices } from './handlers/extract-docx.js';
 import type { ExtractPdfServices } from './handlers/extract-pdf.js';
-import type { ImConfigServices } from './handlers/im-config.js';
+import type { ImActivityServices } from './handlers/im-activity.js';
+import type { ImConfig, ImConfigServices } from './handlers/im-config.js';
+import type { ImFeishuLongConnectionServices } from './handlers/im-feishu-long-connection.js';
+import type { ImFeishuOAuthServices } from './handlers/im-feishu-oauth.js';
 import type { ImStatusServices } from './handlers/im-status.js';
 import type { ImTestServices } from './handlers/im-test.js';
+import type { InboxSaveInput } from './handlers/inbox.js';
+import type { MindosMcpAgentsServices } from './handlers/mcp-agents.js';
 import type { MindosMcpAgentDef } from './handlers/mcp-install.js';
 import type { MindosMcpConfigFile, MindosMcpToolCacheEntry } from './handlers/mcp-tools.js';
+import type { MonitoringHandlerServices } from './handlers/monitoring.js';
 import type { SearchRequestOptions } from './handlers/search.js';
 import type { SearchPrewarmPayload } from './handlers/search-prewarm.js';
+import type { MindosSettingsServices } from './handlers/settings.js';
+import type { SettingsListModelsServices } from './handlers/settings-list-models.js';
+import type { SettingsTestKeyServices } from './handlers/settings-test-key.js';
+import type { MindosSkillLinkAgent } from './handlers/skill-links.js';
 import type { MindosSkillRoot } from './handlers/skills.js';
+import type { MindosSetupServices } from '../setup/index.js';
 import type { MindOSSSEvent } from '../agent/turn/index.js';
 
+/** Channel (IM) capabilities a host may inject; every field is optional and falls back to the product default. */
 export type MindosChannelServices =
   ChannelsVerifyServices &
   ImConfigServices &
   ImStatusServices &
-  ImTestServices;
+  ImTestServices &
+  ImActivityServices &
+  ImFeishuOAuthServices &
+  ImFeishuLongConnectionServices & {
+    /**
+     * The config as persisted, without externally bound credentials resolved
+     * into it. OAuth routes read and write through this so a token exchange
+     * never copies a lark-cli profile's secrets into `im.json`.
+     */
+    readStoredConfig?(): ImConfig;
+  };
+
+/** A2A agent registry / task store owned by the host process (the Web host keeps them in memory). */
+export type MindosA2aHostServices = A2aServices;
+
+/** ACP session, detection and registry overrides (the Web host layers settings overrides and env onto sessions). */
+export type MindosAcpHostServices =
+  AcpSessionServices &
+  AcpDetectServices &
+  AcpRegistryServices &
+  AcpInstallServices;
+
+/**
+ * Runtime detection overrides plus a presentation hook: hosts may compact
+ * diagnostics or remember descriptors before the payload leaves the server.
+ */
+export type MindosAgentRuntimeHostServices = AgentRuntimesServices & {
+  decoratePayload?<T extends AgentRuntimesPayload | AgentRuntimePayload>(payload: T): T;
+};
+
+/** MCP agent registry enrichers (presence, installed config, skills) layered over `mcpAgents`. */
+export type MindosMcpAgentHostServices = Partial<Omit<MindosMcpAgentsServices, 'agents'>> & {
+  /** Refuse install/copy for agents whose presence probe fails (the Web host requires it). */
+  requireAgentPresence?: boolean;
+};
+
+export type MindosSkillHostServices = {
+  /** Downstream agents eligible for skill linking; defaults to the registry-derived list. */
+  listLinkAgents?(): MindosSkillLinkAgent[];
+  /** Native skill roots that `read-native` may read from besides the registered skill roots. */
+  trustedNativeSkillRoots?(): string[];
+};
+
+/** Knowledge-root write notification emitted by the route table after `/api/file` and `/api/inbox` mutations. */
+export type MindosKnowledgeWriteChange = {
+  /** True when files were created, deleted, renamed or moved (tree shape changed). */
+  treeChanged: boolean;
+  /** Relative paths whose content changed; empty when only the tree shape is known to have changed. */
+  paths: string[];
+};
+
+export type MindosKnowledgeWriteHostServices = {
+  /** Root files agents may not overwrite (the Web host protects its system files). */
+  protectedRootFiles?: Iterable<string>;
+  /** Expands captured documents (e.g. PDF → companion markdown) before the inbox saves them. */
+  expandInboxFiles?(files: InboxSaveInput[]): Promise<InboxSaveInput[]> | InboxSaveInput[];
+  /** Runs after a successful knowledge write so the host can refresh its own caches. */
+  onChanged?(change: MindosKnowledgeWriteChange): void;
+};
 
 /**
  * Host-provided capabilities the route table runs against. The standalone
@@ -87,6 +162,28 @@ export type MindosHttpServices = {
     reconfigure?(mindRoot: string): void;
     restart?(mindRoot: string): void;
   };
+  // ── Host extension slots ─────────────────────────────────────────────────
+  // Everything below is optional. The standalone Product Server leaves the
+  // slots empty and the route table falls back to the product defaults; the
+  // Next host injects its own stores (A2A registry, ACP session overrides, IM
+  // clients, pi model probes, template installers, cache refreshers) so the
+  // same route table serves both without a second implementation.
+  a2a?: MindosA2aHostServices;
+  acp?: MindosAcpHostServices;
+  agentRuntimes?: MindosAgentRuntimeHostServices;
+  /** Replaces the product capability sources wholesale (the Web host adds KB tools and A2A agents). */
+  agentCapabilities?: AgentCapabilitiesServices;
+  mcpAgentServices?: MindosMcpAgentHostServices;
+  skills?: MindosSkillHostServices;
+  embedding?: EmbeddingServices;
+  settings?: Partial<MindosSettingsServices>;
+  settingsTestKey?: Partial<SettingsTestKeyServices>;
+  settingsListModels?: Partial<SettingsListModelsServices>;
+  setup?: Partial<MindosSetupServices>;
+  knowledgeWrites?: MindosKnowledgeWriteHostServices;
+  monitoring?: Pick<MonitoringHandlerServices, 'metricsSnapshot' | 'getTreeVersion' | 'mcpPort'>;
+  /** Scaffolds the default mind-system files (assistants, slots) before the assistant registry is read. */
+  ensureMindSystemDefaults?(mindRoot: string): void;
 };
 
 export type DefaultMindosHttpServicesOptions = MindosRuntimeOptions & {

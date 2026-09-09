@@ -28,14 +28,17 @@ describe('mobile pending agent actions route contract', () => {
     expect(routes).toContain('handleUserQuestionDecisionPost(');
   });
 
-  it('keeps Next routes as thin adapters to the same Product Server handlers', () => {
+  it('keeps Next routes as one-line delegations to the same Product Server route table', () => {
     const pending = read('packages/web/app/api/agent/pending-actions/route.ts');
     const permission = read('packages/web/app/api/agent/runtime-permission/route.ts');
     const question = read('packages/web/app/api/agent/user-question/route.ts');
 
+    expect(pending).toContain("delegateToMindos('GET', '/api/agent/pending-actions')");
+    expect(permission).toContain("delegateToMindos('POST', '/api/agent/runtime-permission')");
+    expect(question).toContain("delegateToMindos('POST', '/api/agent/user-question')");
     for (const source of [pending, permission, question]) {
-      expect(source).toContain("from '@geminilight/mindos/server'");
-      expect(source).toContain('toNextResponse');
+      expect(source).toContain('_mindos-adapter');
+      expect(source).not.toContain('toNextResponse');
     }
   });
 });

@@ -79,7 +79,7 @@ describe('GET/POST /api/agent-runtimes/control-plane', () => {
       body: '{',
     }));
     expect(invalidJson.status).toBe(400);
-    await expect(invalidJson.json()).resolves.toEqual({ error: 'invalid JSON' });
+    await expect(invalidJson.json()).resolves.toEqual({ error: 'Invalid JSON body' });
 
     const unsupported = await POST(new Request('http://localhost/api/agent-runtimes/control-plane', {
       method: 'POST',

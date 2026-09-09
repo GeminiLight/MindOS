@@ -16,6 +16,7 @@ import {
   type AgentCopySkillPayload,
   type CustomAgentDef,
   type CustomAgentDetectPayload,
+  type CustomAgentSettingsServices,
 } from '../handlers/agents.js';
 import { handleAssistantsDelete, handleAssistantsGet, handleAssistantsPost } from '../handlers/assistants.js';
 import { handleConnectionsGet, handleConnectionsPost } from '../handlers/connections.js';
@@ -54,13 +55,25 @@ export const agentRoutes = defineRoutes([
   { id: 'agent.user-question.resolve', method: 'POST', path: '/api/agent/user-question', auth: 'required',
     handler: async ({ readJsonBody }) => handleUserQuestionDecisionPost(await readJsonBody()) },
   { id: 'assistants', method: 'GET', path: '/api/assistants', auth: 'required',
-    handler: ({ services }) => handleAssistantsGet(services) },
+    handler: ({ services }) => {
+      // Hosts that ship built-in assistants scaffold them lazily on first read;
+      // a scaffold failure must not hide the assistants that already exist.
+      try {
+        services.ensureMindSystemDefaults?.(services.mindRoot);
+      } catch (error) {
+        console.warn('[mindos.assistants] default assistant upgrade skipped:', (error as Error).message);
+      }
+      return handleAssistantsGet(services);
+    } },
   { id: 'assistants.create', method: 'POST', path: '/api/assistants', auth: 'required',
     handler: async ({ readJsonBody, services }) => handleAssistantsPost(await readJsonBody(), services) },
   { id: 'assistants.delete', method: 'DELETE', path: '/api/assistants', auth: 'required',
     handler: async ({ readJsonBody, services }) => handleAssistantsDelete(await readJsonBody(), services) },
   { id: 'agent-capabilities', method: 'GET', path: '/api/agent-capabilities', auth: 'required',
-    handler: ({ query, services }) => handleAgentCapabilitiesGet(query, createProductAgentCapabilitiesServices(services)) },
+    handler: ({ query, services }) => handleAgentCapabilitiesGet(
+      query,
+      services.agentCapabilities ?? createProductAgentCapabilitiesServices(services),
+    ) },
   { id: 'connections', method: 'GET', path: '/api/connections', auth: 'required',
     handler: ({ query, services }) => handleConnectionsGet(query, { mindRoot: services.mindRoot }) },
   { id: 'connections.mutate', method: 'POST', path: '/api/connections', auth: 'required',
@@ -79,11 +92,11 @@ export const agentRoutes = defineRoutes([
   { id: 'agent-sessions.delete', method: 'DELETE', path: '/api/agent/sessions', auth: 'required',
     handler: async ({ readJsonBody, services }) => handleAgentSessionsDelete(await readJsonBody(), { storePath: services.agentSessionsStorePath }) },
   { id: 'agents.custom.create', method: 'POST', path: '/api/agents/custom', auth: 'required',
-    handler: async ({ readJsonBody, services }) => handleCustomAgentsPost(await readJsonBody() as Partial<CustomAgentDef>, services) },
+    handler: async ({ readJsonBody, services }) => handleCustomAgentsPost(await readJsonBody() as Partial<CustomAgentDef>, createCustomAgentServices(services)) },
   { id: 'agents.custom.update', method: 'PUT', path: '/api/agents/custom', auth: 'required',
-    handler: async ({ readJsonBody, services }) => handleCustomAgentsPut(await readJsonBody() as Partial<CustomAgentDef> & { key?: string }, services) },
+    handler: async ({ readJsonBody, services }) => handleCustomAgentsPut(await readJsonBody() as Partial<CustomAgentDef> & { key?: string }, createCustomAgentServices(services)) },
   { id: 'agents.custom.delete', method: 'DELETE', path: '/api/agents/custom', auth: 'required',
-    handler: async ({ readJsonBody, services }) => handleCustomAgentsDelete(await readJsonBody() as { key?: string }, services) },
+    handler: async ({ readJsonBody, services }) => handleCustomAgentsDelete(await readJsonBody() as { key?: string }, createCustomAgentServices(services)) },
   { id: 'agents.custom.detect', method: 'POST', path: '/api/agents/custom/detect', auth: 'required',
     handler: async ({ readJsonBody }) => handleCustomAgentDetectPost(await readJsonBody() as CustomAgentDetectPayload) },
   { id: 'agents.copy-skill', method: 'POST', path: '/api/agents/copy-skill', auth: 'required',
@@ -91,6 +104,16 @@ export const agentRoutes = defineRoutes([
       skillRoots: services.listSkills().skillRoots,
     }) },
 ]);
+
+/** Custom agent keys may not shadow a built-in one; the host's registry decides which keys are built in. */
+function createCustomAgentServices(services: MindosHttpServices): CustomAgentSettingsServices {
+  const builtIn = services.mcpAgentServices?.builtInAgents;
+  return {
+    readSettings: services.readSettings as CustomAgentSettingsServices['readSettings'],
+    writeSettings: services.writeSettings as CustomAgentSettingsServices['writeSettings'],
+    builtInAgentKeys: builtIn ? Object.keys(builtIn) : undefined,
+  };
+}
 
 /**
  * The contract declares GET /api/agent-capabilities for every host, but the

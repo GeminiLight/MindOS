@@ -1,14 +1,4 @@
 export const dynamic = 'force-dynamic';
+import { delegateToMindos } from '../../_mindos-adapter';
 
-import { NextRequest } from 'next/server';
-import { handleSetupCheckPath } from '@geminilight/mindos/server';
-import { handleRouteErrorSimple } from '@/lib/errors';
-import { toNextResponse } from '../../_mindos-adapter';
-
-export async function POST(req: NextRequest) {
-  try {
-    return toNextResponse(handleSetupCheckPath(await req.json()));
-  } catch (err) {
-    return handleRouteErrorSimple(err);
-  }
-}
+export const POST = delegateToMindos('POST', '/api/setup/check-path');

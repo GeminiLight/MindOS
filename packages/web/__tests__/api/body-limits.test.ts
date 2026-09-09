@@ -65,6 +65,7 @@ describe('JSON body limits on write routes', () => {
       body: '{broken',
     }));
     expect(res.status).toBe(400);
-    expect((await res.json()).error).toBe('invalid JSON');
+    // The shared body reader owns the message for every host.
+    expect((await res.json()).error).toBe('Invalid JSON body');
   });
 });

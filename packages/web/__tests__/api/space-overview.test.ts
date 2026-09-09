@@ -1,18 +1,11 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { NextRequest } from 'next/server';
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
-import { tmpdir } from 'node:os';
+import { seedFile } from '../setup';
+import { invalidateCache } from '../../lib/fs';
 
-const testState = vi.hoisted(() => ({
-  mindRoot: '',
-}));
-
+// The POST half compiles with the Web LLM client and stays Web-only; the GET
+// half is served by the shared route table against the real test mind root.
 vi.mock('@/lib/compile', () => ({
-  collectSpaceFiles: vi.fn().mockReturnValue([
-    { name: 'file1.md', preview: '# File 1' },
-    { name: 'file2.md', preview: '# File 2' },
-  ]),
   compileSpaceOverview: vi.fn().mockResolvedValue({
     content: '# Research\nA summary.',
     stats: { fileCount: 2, totalChars: 100, spaceName: 'Research' },
@@ -20,34 +13,33 @@ vi.mock('@/lib/compile', () => ({
   isCompileError: vi.fn().mockReturnValue(false),
 }));
 
-vi.mock('@/lib/fs', () => ({
-  getMindRoot: () => testState.mindRoot,
-}));
-
 const { GET, POST } = await import('@/app/api/space-overview/route');
 
 describe('GET /api/space-overview', () => {
-  beforeEach(() => {
-    testState.mindRoot = mkdtempSync(join(tmpdir(), 'mindos-space-overview-route-'));
-    mkdirSync(join(testState.mindRoot, 'Research'));
-  });
-
-  afterEach(() => {
-    rmSync(testState.mindRoot, { recursive: true, force: true });
-    testState.mindRoot = '';
-  });
-
   it('returns 400 without space param', async () => {
     const req = new NextRequest('http://localhost/api/space-overview');
     const res = await GET(req);
     expect(res.status).toBe(400);
   });
 
-  it('returns file count for valid space', async () => {
+  it('returns file count for a seeded space', async () => {
+    seedFile('Research/file1.md', '# File 1');
+    seedFile('Research/file2.md', '# File 2');
+    seedFile('Other/file3.md', '# not counted');
+    invalidateCache();
+
     const req = new NextRequest('http://localhost/api/space-overview?space=Research');
     const res = await GET(req);
+    expect(res.status).toBe(200);
     const data = await res.json();
     expect(data.fileCount).toBe(2);
+  });
+
+  it('reports zero files for a space that does not exist', async () => {
+    invalidateCache();
+    const res = await GET(new NextRequest('http://localhost/api/space-overview?space=Missing'));
+    expect(res.status).toBe(200);
+    expect((await res.json()).fileCount).toBe(0);
   });
 });
 
