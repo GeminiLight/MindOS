@@ -1,14 +1,16 @@
-import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { errorResponse, json, type MindosServerResponse } from '../response.js';
 import type { MindosServerEventEmitter } from '../events/bus.js';
 import { expandHome } from '../../foundation/shared/utils/path.js';
 import {
-  parseJsonc,
-  parseJsoncDocument,
-  removeJsoncValue,
-  setJsoncValue,
-} from '../../foundation/shared/utils/jsonc.js';
+  assertSafeMcpServerName,
+  detectConfigFormat,
+  readMcpServerEntryFromText,
+  removeMcpServerEntryFromFile,
+  writeMcpServerEntryToFile,
+  type McpServerEntryLocation,
+} from './mcp-config-formats.js';
 
 export type MindosMcpAgentDef = {
   name: string;
@@ -106,109 +108,6 @@ function notifyMcpChanged(services: { events?: MindosServerEventEmitter }, resul
   if (results.some((result) => result.status === 'ok')) services.events?.emit({ type: 'mcp.changed' });
 }
 
-/**
- * Write via a same-directory temp file + rename so a crash mid-write can
- * never leave a third-party agent config truncated or half-written.
- */
-export function writeFileAtomically(absPath: string, content: string): void {
-  const tmpPath = `${absPath}.tmp-${process.pid}`;
-  try {
-    writeFileSync(tmpPath, content, 'utf-8');
-    renameSync(tmpPath, absPath);
-  } catch (error) {
-    try {
-      unlinkSync(tmpPath);
-    } catch {
-      // Nothing to clean up (the temp file was never created).
-    }
-    throw error;
-  }
-}
-
-type JsonConfigDocument = {
-  text: string;
-  value: Record<string, unknown>;
-  warnings: string[];
-};
-
-/**
- * Parse an existing JSON/JSONC agent config for in-place editing. Edits are
- * applied to the original text (`jsonc-parser` modify), so comments and
- * formatting survive. Recoverable syntax issues (the parser still yields an
- * object) become warnings the caller surfaces; anything else throws.
- */
-function readJsonConfigDocument(absPath: string, text: string): JsonConfigDocument {
-  if (!text.trim()) return { text, value: {}, warnings: [] };
-  const { value, errors } = parseJsoncDocument(text);
-  if (value === undefined) {
-    // A comment-only file parses to nothing: treat it as an empty config (the
-    // comment itself survives because the edit is applied to the original text).
-    let empty = false;
-    try {
-      empty = Object.keys(parseJsonc(text)).length === 0;
-    } catch {
-      empty = false;
-    }
-    if (empty) return { text, value: {}, warnings: [] };
-    throw new SyntaxError(`Failed to parse ${absPath}: ${errors.join('; ')}`);
-  }
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    throw new SyntaxError(`Failed to parse ${absPath}: expected a JSON object at the document root`);
-  }
-  const warnings = errors.length > 0
-    ? [`${absPath} has JSONC syntax issues (${errors.join('; ')}); MindOS edited it in place without repairing them`]
-    : [];
-  return { text, value: value as Record<string, unknown>, warnings };
-}
-
-/** JSON path of a server entry inside an agent config. */
-function jsonServerEntryPath(agent: MindosMcpAgentDef, scope: 'project' | 'global', serverName: string): string[] {
-  if (scope === 'global' && agent.globalNestedKey) {
-    return [...assertSafeObjectKeyPath(agent.globalNestedKey, 'nested config path'), serverName];
-  }
-  assertSafeObjectKey(agent.key, 'agent config key');
-  return [agent.key, serverName];
-}
-
-function jsonServerContainer(
-  document: JsonConfigDocument,
-  agent: MindosMcpAgentDef,
-  scope: 'project' | 'global',
-): Record<string, unknown> | null {
-  if (scope === 'global' && agent.globalNestedKey) return getNestedPath(document.value, agent.globalNestedKey);
-  assertSafeObjectKey(agent.key, 'agent config key');
-  return readOwnRecord(document.value, agent.key);
-}
-
-/** Insert or replace `serverName` in place; returns parse warnings for the caller. */
-function writeJsonServerEntry(
-  absPath: string,
-  existingText: string,
-  agent: MindosMcpAgentDef,
-  scope: 'project' | 'global',
-  serverName: string,
-  entry: Record<string, unknown>,
-): string[] {
-  const document = readJsonConfigDocument(absPath, existingText);
-  writeFileAtomically(absPath, setJsoncValue(document.text, jsonServerEntryPath(agent, scope, serverName), entry));
-  return document.warnings;
-}
-
-/** Remove `serverName` in place when present; the file is untouched otherwise. */
-function removeJsonServerEntry(
-  absPath: string,
-  existingText: string,
-  agent: MindosMcpAgentDef,
-  scope: 'project' | 'global',
-  serverName: string,
-): string[] {
-  const document = readJsonConfigDocument(absPath, existingText);
-  const container = jsonServerContainer(document, agent, scope);
-  if (!container || !(serverName in container)) return document.warnings;
-  writeFileAtomically(absPath, removeJsoncValue(document.text, jsonServerEntryPath(agent, scope, serverName)));
-  return document.warnings;
-}
-
 function withWarnings(result: MindosMcpInstallResult, warnings: string[]): MindosMcpInstallResult {
   if (warnings.length > 0) result.warnings = warnings;
   return result;
@@ -220,283 +119,16 @@ function configPathCandidates(agent: MindosMcpAgentDef, scope: 'global' | 'proje
   return [primary, ...(readAlso ?? [])].filter((entry): entry is string => !!entry);
 }
 
-function isUnsafeObjectKey(key: string): boolean {
-  return key === '__proto__' || key === 'prototype' || key === 'constructor';
-}
-
-function assertSafeObjectKeyPath(dotPath: string, label: string): string[] {
-  const parts = dotPath.split('.').map((part) => part.trim()).filter(Boolean);
-  if (parts.length === 0 || parts.some(isUnsafeObjectKey)) {
-    throw new Error(`Invalid ${label}`);
-  }
-  return parts;
-}
-
-function assertSafeObjectKey(key: string, label: string): void {
-  if (!key || isUnsafeObjectKey(key)) throw new Error(`Invalid ${label}`);
-}
-
-function assertSafeMcpServerName(serverName: string): void {
-  if (!serverName.trim() || /[\r\n\0]/.test(serverName) || isUnsafeObjectKey(serverName)) {
-    throw new Error('Invalid MCP server name');
-  }
-}
-
-function readOwnRecord(obj: Record<string, unknown>, key: string): Record<string, unknown> | null {
-  if (!Object.prototype.hasOwnProperty.call(obj, key)) return null;
-  const value = obj[key];
-  return value && typeof value === 'object' ? value as Record<string, unknown> : null;
-}
-
-function getNestedPath(obj: Record<string, unknown>, dotPath: string): Record<string, unknown> | null {
-  const parts = assertSafeObjectKeyPath(dotPath, 'nested config path');
-  let current: unknown = obj;
-  for (const part of parts) {
-    if (!current || typeof current !== 'object') return null;
-    if (!Object.prototype.hasOwnProperty.call(current, part)) return null;
-    current = (current as Record<string, unknown>)[part];
-  }
-  return current && typeof current === 'object' ? current as Record<string, unknown> : null;
-}
-
-function quotedConfigString(value: unknown): string {
-  return JSON.stringify(String(value));
-}
-
-function tomlKey(key: string): string {
-  return /^[A-Za-z0-9_-]+$/.test(key) ? key : quotedConfigString(key);
-}
-
-function tomlTablePath(sectionKey: string, serverName: string, ...suffixes: string[]): string {
-  return [
-    ...sectionKey.split('.').filter(Boolean).map(tomlKey),
-    tomlKey(serverName),
-    ...suffixes.map(tomlKey),
-  ].join('.');
-}
-
-function yamlKey(key: string): string {
-  return /^[A-Za-z0-9_-]+$/.test(key) ? key : quotedConfigString(key);
-}
-
-function isYamlMappingLine(trimmed: string, key: string): boolean {
-  return trimmed === `${key}:` || trimmed === `${yamlKey(key)}:`;
-}
-
-function buildTomlEntry(sectionKey: string, serverName: string, entry: Record<string, unknown>): string {
-  const lines: string[] = [`[${tomlTablePath(sectionKey, serverName)}]`];
-  if (entry.type) lines.push(`type = ${quotedConfigString(entry.type)}`);
-  if (entry.command) lines.push(`command = ${quotedConfigString(entry.command)}`);
-  if (entry.url) lines.push(`url = ${quotedConfigString(entry.url)}`);
-  if (Array.isArray(entry.args)) lines.push(`args = [${entry.args.map(quotedConfigString).join(', ')}]`);
-  if (entry.env && typeof entry.env === 'object') {
-    lines.push('', `[${tomlTablePath(sectionKey, serverName, 'env')}]`);
-    for (const [key, value] of Object.entries(entry.env)) lines.push(`${tomlKey(key)} = ${quotedConfigString(value)}`);
-  }
-  if (entry.headers && typeof entry.headers === 'object') {
-    lines.push('', `[${tomlTablePath(sectionKey, serverName, 'headers')}]`);
-    for (const [key, value] of Object.entries(entry.headers)) lines.push(`${tomlKey(key)} = ${quotedConfigString(value)}`);
-  }
-  return lines.join('\n');
-}
-
-function mergeTomlEntry(existing: string, sectionKey: string, serverName: string, entry: Record<string, unknown>): string {
-  const sectionHeader = `[${tomlTablePath(sectionKey, serverName)}]`;
-  const envHeader = `[${tomlTablePath(sectionKey, serverName, 'env')}]`;
-  const headersHeader = `[${tomlTablePath(sectionKey, serverName, 'headers')}]`;
-  const legacyHeaders = new Set([
-    `[${sectionKey}.${serverName}]`,
-    `[${sectionKey}.${serverName}.env]`,
-    `[${sectionKey}.${serverName}.headers]`,
-  ]);
-  const result: string[] = [];
-  let skipping = false;
-
-  for (const line of existing.split('\n')) {
-    const trimmed = line.trim();
-    if (trimmed === sectionHeader || trimmed === envHeader || trimmed === headersHeader || legacyHeaders.has(trimmed)) {
-      skipping = true;
-      continue;
-    }
-    if (skipping && trimmed.startsWith('[')) skipping = false;
-    if (!skipping) result.push(line);
-  }
-
-  while (result.length > 0 && result[result.length - 1]?.trim() === '') result.pop();
-  result.push('', buildTomlEntry(sectionKey, serverName, entry), '');
-  return result.join('\n');
-}
-
-function removeTomlEntry(existing: string, sectionKey: string, serverName: string): string {
-  const sectionHeader = `[${tomlTablePath(sectionKey, serverName)}]`;
-  const envHeader = `[${tomlTablePath(sectionKey, serverName, 'env')}]`;
-  const headersHeader = `[${tomlTablePath(sectionKey, serverName, 'headers')}]`;
-  const legacyHeaders = new Set([
-    `[${sectionKey}.${serverName}]`,
-    `[${sectionKey}.${serverName}.env]`,
-    `[${sectionKey}.${serverName}.headers]`,
-  ]);
-  const result: string[] = [];
-  let skipping = false;
-
-  for (const line of existing.split('\n')) {
-    const trimmed = line.trim();
-    if (trimmed === sectionHeader || trimmed === envHeader || trimmed === headersHeader || legacyHeaders.has(trimmed)) {
-      skipping = true;
-      continue;
-    }
-    if (skipping && trimmed.startsWith('[')) skipping = false;
-    if (!skipping) result.push(line);
-  }
-
-  const cleaned: string[] = [];
-  for (const line of result) {
-    if (line.trim() === '' && cleaned.length > 0 && cleaned[cleaned.length - 1]?.trim() === '') continue;
-    cleaned.push(line);
-  }
-  return cleaned.join('\n');
-}
-
-function buildYamlEntry(serverName: string, entry: Record<string, unknown>): string {
-  const lines: string[] = [`  ${yamlKey(serverName)}:`];
-  if (entry.type) lines.push(`    type: ${quotedConfigString(entry.type)}`);
-  if (entry.command) lines.push(`    command: ${quotedConfigString(entry.command)}`);
-  if (entry.url) lines.push(`    url: ${quotedConfigString(entry.url)}`);
-  if (Array.isArray(entry.args)) lines.push(`    args: [${entry.args.map(quotedConfigString).join(', ')}]`);
-  if (entry.env && typeof entry.env === 'object') {
-    lines.push('    env:');
-    for (const [key, value] of Object.entries(entry.env)) lines.push(`      ${yamlKey(key)}: ${quotedConfigString(value)}`);
-  }
-  if (entry.headers && typeof entry.headers === 'object') {
-    lines.push('    headers:');
-    for (const [key, value] of Object.entries(entry.headers)) lines.push(`      ${yamlKey(key)}: ${quotedConfigString(value)}`);
-  }
-  return lines.join('\n');
-}
-
-function mergeYamlEntry(existing: string, sectionKey: string, serverName: string, entry: Record<string, unknown>): string {
-  const newBlock = buildYamlEntry(serverName, entry);
-  if (!existing.trim()) return `${sectionKey}:\n${newBlock}\n`;
-
-  const result: string[] = [];
-  let inSection = false;
-  let sectionFound = false;
-  let baseIndent = -1;
-  let skipping = false;
-  let serverIndent = -1;
-
-  for (const line of existing.split('\n')) {
-    const trimmed = line.trim();
-    const indent = line.length - line.trimStart().length;
-
-    if (indent === 0 && trimmed === `${sectionKey}:`) {
-      inSection = true;
-      sectionFound = true;
-      baseIndent = -1;
-      result.push(line);
-      continue;
-    }
-    if (indent === 0 && trimmed && !trimmed.startsWith('#') && inSection) {
-      while (result.length > 0 && result[result.length - 1]?.trim() === '') result.pop();
-      result.push(newBlock, '', line);
-      inSection = false;
-      skipping = false;
-      continue;
-    }
-    if (!inSection) {
-      result.push(line);
-      continue;
-    }
-    if (!trimmed || trimmed.startsWith('#')) {
-      if (!skipping) result.push(line);
-      continue;
-    }
-    if (baseIndent < 0) baseIndent = indent;
-    if (indent === baseIndent) {
-      if (isYamlMappingLine(trimmed, serverName)) {
-        skipping = true;
-        serverIndent = indent;
-        continue;
-      }
-      skipping = false;
-    }
-    if (skipping) {
-      if (indent > serverIndent) continue;
-      skipping = false;
-    }
-    result.push(line);
-  }
-
-  if (inSection) {
-    while (result.length > 0 && result[result.length - 1]?.trim() === '') result.pop();
-    result.push(newBlock);
-  }
-  if (!sectionFound) {
-    while (result.length > 0 && result[result.length - 1]?.trim() === '') result.pop();
-    result.push('', `${sectionKey}:`, newBlock);
-  }
-
-  let output = result.join('\n');
-  if (!output.endsWith('\n')) output += '\n';
-  return output;
-}
-
-function removeYamlEntry(existing: string, sectionKey: string, serverName: string): string {
-  const result: string[] = [];
-  let inSection = false;
-  let baseIndent = -1;
-  let skipping = false;
-  let serverIndent = -1;
-
-  for (const line of existing.split('\n')) {
-    const trimmed = line.trim();
-    const indent = line.length - line.trimStart().length;
-
-    if (indent === 0 && isYamlMappingLine(trimmed, sectionKey)) {
-      inSection = true;
-      baseIndent = -1;
-      skipping = false;
-      result.push(line);
-      continue;
-    }
-    if (indent === 0 && trimmed && inSection) {
-      inSection = false;
-      skipping = false;
-      result.push(line);
-      continue;
-    }
-    if (!inSection) {
-      result.push(line);
-      continue;
-    }
-    if (!trimmed || trimmed.startsWith('#')) {
-      if (!skipping) result.push(line);
-      continue;
-    }
-    if (baseIndent < 0) baseIndent = indent;
-    if (indent === baseIndent) {
-      if (isYamlMappingLine(trimmed, serverName)) {
-        skipping = true;
-        serverIndent = indent;
-        continue;
-      }
-      skipping = false;
-    }
-    if (skipping) {
-      if (indent > serverIndent) continue;
-      skipping = false;
-    }
-    result.push(line);
-  }
-
-  const cleaned: string[] = [];
-  for (const line of result) {
-    if (line.trim() === '' && cleaned.length > 0 && cleaned[cleaned.length - 1]?.trim() === '') continue;
-    cleaned.push(line);
-  }
-  let output = cleaned.join('\n');
-  if (output && !output.endsWith('\n')) output += '\n';
-  return output;
+/**
+ * Where `agent` keeps its servers map for `scope`. Only the global config of
+ * CoPaw-style agents nests the map under a dotted path (`mcp.clients`).
+ */
+function entryLocation(agent: MindosMcpAgentDef, scope: 'project' | 'global'): McpServerEntryLocation {
+  return {
+    format: detectConfigFormat(agent.format),
+    sectionKey: agent.key,
+    nestedPath: scope === 'global' ? agent.globalNestedKey : undefined,
+  };
 }
 
 function buildEntry(
@@ -537,228 +169,6 @@ function buildEntry(
   return entry;
 }
 
-function parseTomlValue(rawValue: string): unknown {
-  const raw = rawValue.trim().replace(/,$/, '');
-  if (!raw) return '';
-  if ((raw.startsWith('"') && raw.endsWith('"')) || (raw.startsWith("'") && raw.endsWith("'"))) {
-    return raw.slice(1, -1);
-  }
-  if (raw === 'true') return true;
-  if (raw === 'false') return false;
-  if (raw.startsWith('[') && raw.endsWith(']')) {
-    try {
-      return JSON.parse(raw.replace(/'/g, '"'));
-    } catch {
-      return raw;
-    }
-  }
-  const numberValue = Number(raw);
-  if (Number.isFinite(numberValue)) return numberValue;
-  return raw;
-}
-
-function parseTomlInlineObject(rawValue: string): Record<string, unknown> | null {
-  const raw = rawValue.trim();
-  if (!raw.startsWith('{') || !raw.endsWith('}')) return null;
-  const body = raw.slice(1, -1).trim();
-  if (!body) return {};
-
-  const result: Record<string, unknown> = {};
-  for (const part of splitTopLevelTomlItems(body)) {
-    const match = part.match(/^\s*([A-Za-z0-9_-]+)\s*=\s*(.+?)\s*$/);
-    if (!match) continue;
-    const key = match[1];
-    const value = match[2];
-    if (!key || value == null) continue;
-    result[key] = parseTomlValue(value);
-  }
-  return result;
-}
-
-function splitTopLevelTomlItems(body: string): string[] {
-  const parts: string[] = [];
-  let current = '';
-  let quote: '"' | "'" | null = null;
-  let bracketDepth = 0;
-
-  for (let i = 0; i < body.length; i += 1) {
-    const ch = body[i];
-    const prev = body[i - 1];
-    if ((ch === '"' || ch === "'") && prev !== '\\') {
-      quote = quote === ch ? null : quote ?? ch;
-    } else if (!quote && ch === '[') {
-      bracketDepth += 1;
-    } else if (!quote && ch === ']') {
-      bracketDepth = Math.max(0, bracketDepth - 1);
-    } else if (!quote && bracketDepth === 0 && ch === ',') {
-      if (current.trim()) parts.push(current.trim());
-      current = '';
-      continue;
-    }
-    current += ch;
-  }
-  if (current.trim()) parts.push(current.trim());
-  return parts;
-}
-
-function parseTomlMcpServerEntry(existing: string, sectionKey: string, serverName: string): Record<string, unknown> | null {
-  const targetSection = tomlTablePath(sectionKey, serverName);
-  const envSection = tomlTablePath(sectionKey, serverName, 'env');
-  const headersSection = tomlTablePath(sectionKey, serverName, 'headers');
-  const legacyTargetSection = `${sectionKey}.${serverName}`;
-  const legacyEnvSection = `${sectionKey}.${serverName}.env`;
-  const legacyHeadersSection = `${sectionKey}.${serverName}.headers`;
-  const entry: Record<string, unknown> = {};
-  let current: 'entry' | 'env' | 'headers' | 'root' | null = null;
-
-  for (const line of existing.split('\n')) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#')) continue;
-    if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
-      const section = trimmed.slice(1, -1).trim();
-      if (section === targetSection || section === legacyTargetSection) current = 'entry';
-      else if (section === envSection || section === legacyEnvSection) current = 'env';
-      else if (section === headersSection || section === legacyHeadersSection) current = 'headers';
-      else if (section === sectionKey) current = 'root';
-      else current = null;
-      continue;
-    }
-
-    const match = trimmed.match(/^([A-Za-z0-9_-]+)\s*=\s*(.+)$/);
-    if (!match) continue;
-    const key = match[1];
-    const rawValue = match[2];
-    if (!key || !rawValue) continue;
-
-    if (current === 'entry') {
-      entry[key] = parseTomlValue(rawValue);
-    } else if (current === 'env' || current === 'headers') {
-      const nestedKey = current;
-      const nested = entry[nestedKey] && typeof entry[nestedKey] === 'object'
-        ? entry[nestedKey] as Record<string, unknown>
-        : {};
-      nested[key] = parseTomlValue(rawValue);
-      entry[nestedKey] = nested;
-    } else if (current === 'root' && key === serverName) {
-      const inline = parseTomlInlineObject(rawValue);
-      if (inline) return inline;
-    }
-  }
-
-  return Object.keys(entry).length > 0 ? entry : null;
-}
-
-function parseYamlScalar(rawValue: string): unknown {
-  const raw = rawValue.trim();
-  if (!raw) return '';
-  if ((raw.startsWith('"') && raw.endsWith('"')) || (raw.startsWith("'") && raw.endsWith("'"))) {
-    return raw.slice(1, -1);
-  }
-  if (raw === 'true') return true;
-  if (raw === 'false') return false;
-  if (raw.startsWith('[') && raw.endsWith(']')) {
-    try {
-      return JSON.parse(raw.replace(/'/g, '"'));
-    } catch {
-      return raw;
-    }
-  }
-  const numberValue = Number(raw);
-  if (Number.isFinite(numberValue)) return numberValue;
-  return raw;
-}
-
-function parseYamlMcpServerEntry(existing: string, sectionKey: string, serverName: string): Record<string, unknown> | null {
-  const entry: Record<string, unknown> = {};
-  let inSection = false;
-  let inServer = false;
-  let baseIndent = -1;
-  let serverIndent = -1;
-  let nestedKey: 'env' | 'headers' | null = null;
-  let nestedIndent = -1;
-
-  for (const line of existing.split('\n')) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#')) continue;
-    const indent = line.length - line.trimStart().length;
-
-    if (indent === 0 && isYamlMappingLine(trimmed, sectionKey)) {
-      inSection = true;
-      inServer = false;
-      baseIndent = -1;
-      serverIndent = -1;
-      nestedKey = null;
-      nestedIndent = -1;
-      continue;
-    }
-    if (indent === 0 && trimmed) {
-      if (inServer) break;
-      inSection = false;
-      continue;
-    }
-    if (!inSection) continue;
-    if (baseIndent < 0) baseIndent = indent;
-
-    if (indent === baseIndent) {
-      if (inServer) break;
-      inServer = isYamlMappingLine(trimmed, serverName);
-      serverIndent = -1;
-      nestedKey = null;
-      nestedIndent = -1;
-      continue;
-    }
-    if (!inServer) continue;
-    if (serverIndent < 0) serverIndent = indent;
-    if (indent === serverIndent) {
-      nestedKey = null;
-      nestedIndent = -1;
-      const blockMatch = trimmed.match(/^(env|headers):\s*$/);
-      if (blockMatch?.[1] === 'env' || blockMatch?.[1] === 'headers') {
-        nestedKey = blockMatch[1];
-        nestedIndent = -1;
-        if (!entry[nestedKey]) entry[nestedKey] = {};
-        continue;
-      }
-      const match = trimmed.match(/^([A-Za-z0-9_-]+|"[^"]+"):\s*(.+)$/);
-      if (!match) continue;
-      const key = match[1]?.replace(/^"|"$/g, '');
-      const value = match[2];
-      if (key && value != null) entry[key] = parseYamlScalar(value);
-      continue;
-    }
-    if (!nestedKey) continue;
-    if (nestedIndent < 0) nestedIndent = indent;
-    if (indent !== nestedIndent) continue;
-    const match = trimmed.match(/^([A-Za-z0-9_-]+|"[^"]+"):\s*(.+)$/);
-    if (!match) continue;
-    const key = match[1]?.replace(/^"|"$/g, '');
-    const value = match[2];
-    if (!key || value == null) continue;
-    const nested = entry[nestedKey] as Record<string, unknown>;
-    nested[key] = parseYamlScalar(value);
-  }
-
-  return Object.keys(entry).length > 0 ? entry : null;
-}
-
-function readMcpServerEntry(
-  content: string,
-  agent: MindosMcpAgentDef,
-  scope: 'project' | 'global',
-  serverName: string,
-): Record<string, unknown> | null {
-  assertSafeMcpServerName(serverName);
-  if (agent.format === 'toml') return parseTomlMcpServerEntry(content, agent.key, serverName);
-  if (agent.format === 'yaml') return parseYamlMcpServerEntry(content, agent.key, serverName);
-
-  const config = parseJsonc(content);
-  const container = scope === 'global' && agent.globalNestedKey
-    ? getNestedPath(config, agent.globalNestedKey)
-    : readOwnRecord(config, agent.key);
-  const entry = container ? readOwnRecord(container, serverName) : null;
-  return entry ? JSON.parse(JSON.stringify(entry)) as Record<string, unknown> : null;
-}
-
 function findMcpServerEntry(
   agent: MindosMcpAgentDef,
   serverName: string,
@@ -770,7 +180,7 @@ function findMcpServerEntry(
     for (const configPath of configPathCandidates(agent, scope)) {
       const absPath = expandHome(configPath, services.homeDir);
       if (!existsSync(absPath)) continue;
-      const entry = readMcpServerEntry(readFileSync(absPath, 'utf-8'), agent, scope, serverName);
+      const entry = readMcpServerEntryFromText(readFileSync(absPath, 'utf-8'), entryLocation(agent, scope), serverName);
       if (entry) return { entry, path: configPath, scope };
     }
   }
@@ -795,20 +205,13 @@ function writeMcpServerEntry(
   const absPath = expandHome(configPath, services.homeDir);
   mkdirSync(dirname(absPath), { recursive: true });
   const existing = existsSync(absPath) ? readFileSync(absPath, 'utf-8') : '';
-  const existingEntry = existing.trim() ? readMcpServerEntry(existing, agent, scope, serverName) : null;
+  const location = entryLocation(agent, scope);
+  const existingEntry = existing.trim() ? readMcpServerEntryFromText(existing, location, serverName) : null;
   if (existingEntry && !overwrite) {
     return { agent: agentKey, status: 'ok', path: configPath, message: 'Already configured' };
   }
 
-  let warnings: string[] = [];
-  if (agent.format === 'toml') {
-    writeFileAtomically(absPath, mergeTomlEntry(existing, agent.key, serverName, entry));
-  } else if (agent.format === 'yaml') {
-    writeFileAtomically(absPath, mergeYamlEntry(existing, agent.key, serverName, entry));
-  } else {
-    warnings = writeJsonServerEntry(absPath, existing, agent, scope, serverName, entry);
-  }
-
+  const warnings = writeMcpServerEntryToFile(absPath, existing, location, serverName, entry);
   return withWarnings({ agent: agentKey, status: 'ok', path: configPath }, warnings);
 }
 
@@ -881,14 +284,7 @@ export async function handleMcpInstallPost(
       try {
         mkdirSync(dirname(absPath), { recursive: true });
         const existing = existsSync(absPath) ? readFileSync(absPath, 'utf-8') : '';
-        let warnings: string[] = [];
-        if (agent.format === 'toml') {
-          writeFileAtomically(absPath, mergeTomlEntry(existing, agent.key, 'mindos', entry));
-        } else if (agent.format === 'yaml') {
-          writeFileAtomically(absPath, mergeYamlEntry(existing, agent.key, 'mindos', entry));
-        } else {
-          warnings = writeJsonServerEntry(absPath, existing, agent, scope, 'mindos', entry);
-        }
+        const warnings = writeMcpServerEntryToFile(absPath, existing, entryLocation(agent, scope), 'mindos', entry);
 
         const result: MindosMcpInstallResult = withWarnings(
           { agent: key, status: 'ok', path: configPath, transport: effectiveTransport },
@@ -1014,6 +410,7 @@ export function handleMcpUninstallPost(
         continue;
       }
 
+      const location = entryLocation(agent, scope);
       const updatedPaths: string[] = [];
       const errors: string[] = [];
       const warnings: string[] = [];
@@ -1022,13 +419,7 @@ export function handleMcpUninstallPost(
           const absPath = expandHome(configPath, services.homeDir);
           try {
             const existing = readFileSync(absPath, 'utf-8');
-            if (agent.format === 'toml') {
-              writeFileAtomically(absPath, removeTomlEntry(existing, agent.key, serverName));
-            } else if (agent.format === 'yaml') {
-              writeFileAtomically(absPath, removeYamlEntry(existing, agent.key, serverName));
-            } else {
-              warnings.push(...removeJsonServerEntry(absPath, existing, agent, scope, serverName));
-            }
+            warnings.push(...removeMcpServerEntryFromFile(absPath, existing, location, serverName));
             updatedPaths.push(configPath);
           } catch (error) {
             errors.push(`${configPath}: ${String(error)}`);

@@ -8,7 +8,6 @@ import {
   handleMcpInstallPost,
   handleMcpServerCopyPost,
   handleMcpUninstallPost,
-  writeFileAtomically,
   type MindosMcpAgentDef,
 } from './mcp-install.js';
 
@@ -70,31 +69,6 @@ const COMMENTED_JSONC = `{
   }
 }
 `;
-
-describe('writeFileAtomically', () => {
-  it('writes the content and leaves no temp file behind', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'mindos-atomic-'));
-    const target = join(dir, 'config.json');
-    writeFileAtomically(target, '{"a":1}\n');
-    expect(readFileSync(target, 'utf-8')).toBe('{"a":1}\n');
-    expect(leftovers(dir)).toEqual([]);
-  });
-
-  it('replaces existing content in one step', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'mindos-atomic-'));
-    const target = join(dir, 'config.json');
-    writeFileSync(target, 'old');
-    writeFileAtomically(target, 'new');
-    expect(readFileSync(target, 'utf-8')).toBe('new');
-    expect(leftovers(dir)).toEqual([]);
-  });
-
-  it('throws and leaves nothing behind when the directory does not exist', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'mindos-atomic-'));
-    expect(() => writeFileAtomically(join(dir, 'missing', 'config.json'), 'x')).toThrow();
-    expect(readdirSync(dir)).toEqual([]);
-  });
-});
 
 describe('MCP install writes third-party agent configs atomically', () => {
   it('round-trips JSON, TOML and YAML configs without leaving .tmp-* files', async () => {
