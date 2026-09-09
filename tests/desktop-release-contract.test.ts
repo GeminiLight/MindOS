@@ -134,6 +134,18 @@ describe('Desktop release packaging contract', () => {
     expect(updater).toContain("autoUpdater.channel = 'latest-arm64'");
   });
 
+  it('resolves default exports of externalized ESM-only dependencies in the CJS main and preload bundles', () => {
+    // electron-store 10 is ESM-only. The main bundle is CJS and externalizes
+    // every dependency, so `require('electron-store')` yields the module
+    // namespace; without `interop: 'auto'` Rollup treats it as the default
+    // export and the packaged app dies with "Store is not a constructor".
+    const config = readText('packages/desktop/electron.vite.config.ts');
+    const mainBlock = config.slice(config.indexOf('  main: {'), config.indexOf('  preload: {'));
+    const preloadBlock = config.slice(config.indexOf('  preload: {'), config.indexOf('  renderer: {'));
+    expect(mainBlock).toContain("interop: 'auto'");
+    expect(preloadBlock).toContain("interop: 'auto'");
+  });
+
   it('requires trusted local renderers for high-impact desktop IPC', () => {
     const main = readText('packages/desktop/src/main.ts');
     const updater = readText('packages/desktop/src/updater.ts');

@@ -19,6 +19,10 @@ export default defineConfig({
         output: {
           entryFileNames: 'main.js',
           format: 'cjs',
+          // Externalized deps are require()d from the CJS bundle. ESM-only ones
+          // (electron-store 10) come back as a namespace with __esModule, so
+          // let Rollup pick `.default` at runtime instead of assuming CJS.
+          interop: 'auto',
         },
       },
     },
@@ -42,6 +46,10 @@ export default defineConfig({
         output: {
           entryFileNames: '[name].js',
           format: 'cjs',
+          // Externalized deps are require()d from the CJS bundle. ESM-only ones
+          // (electron-store 10) come back as a namespace with __esModule, so
+          // let Rollup pick `.default` at runtime instead of assuming CJS.
+          interop: 'auto',
         },
       },
     },
