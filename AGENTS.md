@@ -329,7 +329,12 @@ pnpm run test:release             # release 前全量 build + test + typecheck
 
 1. **确认代码已 push 到 origin main**，且 `sync-to-mindos` CI 已完成（公开仓已同步）
 2. **确定 Desktop 版本号**：查看上一个 release tag（`gh release list --repo GeminiLight/MindOS | head -3`），patch +1
-3. **触发 Build Desktop workflow**：
+3. **先在公开仓打 desktop tag**：workflow 的 checkout 以 `tag` 输入为 ref，tag 不存在时五个平台 job 会在 checkout 就失败（2026-09-09 实际踩坑）。tag 指向公开仓 `main` 上对应 MindOS 版本的同步提交：
+   ```bash
+   SHA=$(gh api repos/GeminiLight/MindOS/commits/main -q .sha)
+   gh api repos/GeminiLight/MindOS/git/refs -f ref=refs/tags/desktop-v<VERSION> -f sha=$SHA
+   ```
+4. **触发 Build Desktop workflow**：
    ```bash
    gh workflow run "Build Desktop" --repo GeminiLight/MindOS \
      -f publish=true \
@@ -338,13 +343,13 @@ pnpm run test:release             # release 前全量 build + test + typecheck
    - `publish=true`：构建完成后自动创建 GitHub Release（默认已开启）
    - `tag=desktop-v<VERSION>`：**必须传**，workflow 会从 tag 提取版本号写入 `packages/desktop/package.json`，确保安装包文件名正确（如 `MindOS-0.1.13.dmg`）
    - `sign_mac=true`：macOS 签名+公证（默认已开启）
-4. **验证 Release**：`gh release view desktop-v<VERSION> --repo GeminiLight/MindOS`
+5. **验证 Release**：`gh release view desktop-v<VERSION> --repo GeminiLight/MindOS`
    - 检查 assets 包含所有平台：`.dmg`（arm64 + x64）、`.exe`、`.AppImage`、`.deb`
    - 检查文件名版本号正确（不是旧版本号）
-5. **如果 Release 有问题**（文件名错误、缺文件等）：
+6. **如果 Release 有问题**（文件名错误、缺文件等）：
    ```bash
    gh release delete desktop-v<VERSION> --repo GeminiLight/MindOS --yes
-   # 重新触发 step 3
+   # 重新触发 step 4
    ```
 
 **常见踩坑：**
