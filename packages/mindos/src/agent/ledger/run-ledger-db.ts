@@ -9,6 +9,7 @@ import {
 import type { RunOwner } from './run-ledger-legacy-import.js';
 import type {
   AgentEvent,
+  AgentEventType,
   AgentEventVisibility,
   AgentRunRecord,
   ListAgentEventsOptions,
@@ -21,6 +22,12 @@ import type {
  * filter columns the API uses plus the full record as JSON; `agent_run_events`
  * keeps timeline and debug events in one table, distinguished by
  * `visibility`, ordered by the autoincrement `seq`.
+ *
+ * Event rows carry only the event payload (spec-ledger-write-cost): the run
+ * record is joined back from `agent_runs` at read time. Lifecycle and
+ * permission events keep an embedded snapshot of the record as it was when
+ * they happened, and rows written before the spec (record embedded in every
+ * row) read back unchanged.
  */
 
 export const LEDGER_DB_RELATIVE_PATH = '.mindos/db/agent_runs_1.sqlite';
@@ -72,6 +79,33 @@ const MIGRATIONS: MindosDatabaseMigration[] = [
       CREATE INDEX idx_agent_run_events_run ON agent_run_events(run_id, seq);
       CREATE INDEX idx_agent_run_events_ts ON agent_run_events(ts DESC);
       CREATE INDEX idx_agent_run_events_run_visibility ON agent_run_events(run_id, visibility, seq);
+    `,
+  },
+  {
+    // Artifact pointer index (spec-ledger-write-cost P2): shares the ledger
+    // file because every process that records artifacts already has it open,
+    // and artifacts are index cards about runs. Rows are the sanitized record
+    // as JSON plus the columns the API filters on.
+    version: 2,
+    sql: `
+      CREATE TABLE agent_artifacts(
+        id TEXT PRIMARY KEY,
+        runtime_id TEXT NOT NULL,
+        agent_kind TEXT NOT NULL,
+        source TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        status TEXT NOT NULL,
+        session_id TEXT,
+        external_session_id TEXT,
+        run_id TEXT,
+        tool_call_id TEXT,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        artifact_json TEXT NOT NULL
+      );
+      CREATE INDEX idx_agent_artifacts_run ON agent_artifacts(run_id, created_at);
+      CREATE INDEX idx_agent_artifacts_created ON agent_artifacts(created_at DESC);
+      CREATE INDEX idx_agent_artifacts_updated ON agent_artifacts(updated_at DESC);
     `,
   },
 ];
@@ -221,36 +255,77 @@ export function insertEventRow(db: MindosDatabase, event: AgentEvent): void {
     event.category,
     event.visibility ?? 'timeline',
     event.record.startedAt,
-    JSON.stringify(event),
+    storedEventJson(event),
   );
+}
+
+/**
+ * Event types whose row keeps a snapshot of the run record: they describe a
+ * state transition (or an approval gate) and the record as it was at that
+ * moment is part of the evidence. Every other row drops the record and gets
+ * it back from `agent_runs` on read, so a token delta costs bytes for its text
+ * only.
+ */
+const RECORD_SNAPSHOT_EVENT_TYPES: ReadonlySet<AgentEventType> = new Set<AgentEventType>([
+  'run_started',
+  'run_updated',
+  'run_completed',
+  'run_failed',
+  'run_canceled',
+  'permission',
+  'permission_requested',
+  'permission_resolved',
+]);
+
+export function storedEventJson(event: AgentEvent): string {
+  if (RECORD_SNAPSHOT_EVENT_TYPES.has(event.type)) return JSON.stringify(event);
+  const { record: _record, ...payload } = event;
+  return JSON.stringify(payload);
 }
 
 export function listEventRows(db: MindosDatabase, options: ListAgentEventsOptions, limit: number): AgentEvent[] {
   const where: string[] = [];
   const params: Array<string | number> = [];
-  if (options.runId) { where.push('run_id = ?'); params.push(options.runId); }
-  if (options.rootRunId) { where.push('(root_run_id = ? OR run_id = ?)'); params.push(options.rootRunId, options.rootRunId); }
-  if (options.chatSessionId) { where.push('chat_session_id = ?'); params.push(options.chatSessionId); }
-  if (options.type) { where.push('type = ?'); params.push(options.type); }
-  if (options.category) { where.push('category = ?'); params.push(options.category); }
-  if (options.visibility) { where.push('visibility = ?'); params.push(options.visibility); }
+  if (options.runId) { where.push('e.run_id = ?'); params.push(options.runId); }
+  if (options.rootRunId) { where.push('(e.root_run_id = ? OR e.run_id = ?)'); params.push(options.rootRunId, options.rootRunId); }
+  if (options.chatSessionId) { where.push('e.chat_session_id = ?'); params.push(options.chatSessionId); }
+  if (options.type) { where.push('e.type = ?'); params.push(options.type); }
+  if (options.category) { where.push('e.category = ?'); params.push(options.category); }
+  if (options.visibility) { where.push('e.visibility = ?'); params.push(options.visibility); }
   if (options.startedAfter !== undefined) {
-    where.push('(ts >= ? OR run_started_at >= ?)');
+    where.push('(e.ts >= ? OR e.run_started_at >= ?)');
     params.push(options.startedAfter, options.startedAfter);
   }
   params.push(limit);
   const rows = db.prepare(`
-    SELECT event_json FROM agent_run_events
+    SELECT e.event_json AS event_json, e.run_id AS run_id, r.run_json AS run_json
+    FROM agent_run_events e LEFT JOIN agent_runs r ON r.id = e.run_id
     ${where.length > 0 ? `WHERE ${where.join(' AND ')}` : ''}
-    ORDER BY seq DESC LIMIT ?
-  `).all(...params) as Array<{ event_json: string }>;
+    ORDER BY e.seq DESC LIMIT ?
+  `).all(...params) as Array<{ event_json: string; run_id: string; run_json: string | null }>;
   const events: AgentEvent[] = [];
+  // One parse per run per listing: a run's events share the same record.
+  const recordsByRun = new Map<string, AgentRunRecord | null>();
   for (const row of rows) {
+    let event: AgentEvent;
     try {
-      events.push(JSON.parse(row.event_json) as AgentEvent);
+      event = JSON.parse(row.event_json) as AgentEvent;
     } catch {
       // A corrupt row must not poison the whole listing.
+      continue;
     }
+    if (!event.record) {
+      let record = recordsByRun.get(row.run_id);
+      if (record === undefined) {
+        record = row.run_json ? parseRunRow({ run_json: row.run_json } as RunRow) : null;
+        recordsByRun.set(row.run_id, record);
+      }
+      // Events are deleted together with their run, so a missing run row
+      // means the listing raced a prune; the event has no record to offer.
+      if (!record) continue;
+      event.record = record;
+    }
+    events.push(event);
   }
   return events;
 }
@@ -266,10 +341,11 @@ export function pruneRunEvents(db: MindosDatabase, runId: string, visibility: Ag
   `).run(runId, visibility, runId, visibility, MAX_EVENTS_PER_RUN_VISIBILITY - 1);
 }
 
-/** Test-only: empties both tables. */
+/** Test-only: empties every ledger table (runs, events, artifacts). */
 export function clearLedger(db: MindosDatabase): void {
   db.transaction(() => {
     db.exec('DELETE FROM agent_run_events');
     db.exec('DELETE FROM agent_runs');
+    db.exec('DELETE FROM agent_artifacts');
   });
 }

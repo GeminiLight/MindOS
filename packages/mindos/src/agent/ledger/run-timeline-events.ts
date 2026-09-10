@@ -3,6 +3,7 @@ import {
   type MindOSSSEvent,
 } from '../turn/index.js';
 import {
+  appendAgentRunDeltaEvent,
   appendAgentRunEvent,
 } from './run-ledger.js';
 import type {
@@ -71,10 +72,15 @@ function append(runId: string, input: AppendAgentEventInput): void {
   appendAgentRunEvent(runId, input);
 }
 
+/** Token-rate frames: delivered live, persisted coalesced (spec-ledger-write-cost). */
+function appendDelta(runId: string, input: AppendAgentEventInput): void {
+  appendAgentRunDeltaEvent(runId, input);
+}
+
 export function appendSseEventToAgentRun(runId: string, event: MindOSSSEvent): void {
   if (event.type === 'text_delta') {
     if (!event.delta.trim()) return;
-    append(runId, {
+    appendDelta(runId, {
       type: 'text',
       category: 'text',
       message: event.delta,
@@ -85,7 +91,7 @@ export function appendSseEventToAgentRun(runId: string, event: MindOSSSEvent): v
   }
   if (event.type === 'thinking_delta') {
     if (!event.delta.trim()) return;
-    append(runId, {
+    appendDelta(runId, {
       type: 'text',
       category: 'text',
       message: event.delta,
@@ -112,7 +118,7 @@ export function appendSseEventToAgentRun(runId: string, event: MindOSSSEvent): v
     return;
   }
   if (event.type === 'tool_delta') {
-    append(runId, {
+    appendDelta(runId, {
       type: 'tool_updated',
       category: 'tool',
       message: event.delta,

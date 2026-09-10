@@ -13,7 +13,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setMindRootResolverForTests } from '../../foundation/mind-root/index.js';
 import { finalizeSubagentAsyncRunFromEvent, wrapSubagentToolForLedger } from './subagent-ledger-extension.js';
 import { getCurrentAgentRunContext, runWithAgentRunContext, setAgentRunContextForResource } from '../agent-run-context.js';
+import * as ledger from '../ledger/run-ledger.js';
 import {
+  getAgentRun,
   listAgentEvents,
   listAgentRuns,
   resetAgentRunsForTest,
@@ -855,6 +857,51 @@ describe('MindOS subagent ledger extension', () => {
         error: 'Tests failed.',
       }),
     ]);
+  });
+
+  it('finalizes a detached run by its id without listing the ledger, even behind newer runs', async () => {
+    const upstream = {
+      name: 'subagent',
+      parameters: {} as any,
+      execute: vi.fn(async () => ({
+        content: [{ type: 'text', text: 'Async: reviewer [async-deep]\n\nThe async run is detached.' }],
+        details: { mode: 'single', runId: 'async-deep', asyncId: 'async-deep', results: [] },
+      })),
+    };
+    const wrapped = wrapSubagentToolForLedger(upstream as any);
+    await wrapped.execute('tool-call-async-deep', { agent: 'reviewer', task: 'Review later.', async: true });
+    const detached = listAgentRuns({ kind: 'pi-subagent' })[0]!;
+    expect(detached.status).toBe('streaming');
+
+    // The pre-fix lookup listed up to 500 pi-subagent runs per completion event
+    // and scanned them for the asyncId; newer runs must not change the answer.
+    for (let index = 0; index < 50; index += 1) {
+      startAgentRun({ agentKind: 'pi-subagent', runtimeId: `padding-${index}`, displayName: 'Padding', permissionMode: 'read', inputSummary: 'pad' });
+    }
+    const listSpy = vi.spyOn(ledger, 'listAgentRuns');
+    try {
+      expect(finalizeSubagentAsyncRunFromEvent({ id: 'async-deep', state: 'completed', summary: 'Deep done.' })).toBe(true);
+      expect(listSpy).not.toHaveBeenCalled();
+    } finally {
+      listSpy.mockRestore();
+    }
+    expect(getAgentRun(detached.id)).toEqual(expect.objectContaining({
+      status: 'completed',
+      outputSummary: 'Deep done.',
+      metadata: expect.objectContaining({ asyncId: 'async-deep', asyncComplete: true }),
+    }));
+    // A second completion for the same async id has nothing left to finalize.
+    expect(finalizeSubagentAsyncRunFromEvent({ id: 'async-deep', state: 'completed', summary: 'Again.' })).toBe(false);
+  });
+
+  it('buffers a completion for an unknown async id without scanning the ledger', () => {
+    const listSpy = vi.spyOn(ledger, 'listAgentRuns');
+    try {
+      expect(finalizeSubagentAsyncRunFromEvent({ id: 'async-unknown', state: 'completed' })).toBe(false);
+      expect(listSpy).not.toHaveBeenCalled();
+    } finally {
+      listSpy.mockRestore();
+    }
   });
 
   it('keeps canceled status when a signal aborts before upstream settles', async () => {

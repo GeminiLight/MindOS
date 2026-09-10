@@ -1,11 +1,10 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { execFileSync, spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { setMindRootResolverForTests } from '../../foundation/mind-root/index.js';
 import { openMindosDatabase } from '../../foundation/storage/sqlite.js';
+import { ensureFreshDist, findBun, runDriver, runDriverWith } from './__fixtures__/two-process-harness.mjs';
 import { LEDGER_DB_RELATIVE_PATH } from './run-ledger-db.js';
 import {
   completeAgentRun,
@@ -24,95 +23,9 @@ import {
  * same WAL-mode sqlite file with genuinely distinct pids.
  */
 
-const here = path.dirname(fileURLToPath(import.meta.url));
-const pkgRoot = path.resolve(here, '..', '..', '..');
-const distDir = path.join(pkgRoot, 'dist');
-const driverPath = path.join(here, 'run-ledger-two-process-driver.mjs');
-
-function newestSourceMtime(dir: string): number {
-  let newest = 0;
-  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) {
-      newest = Math.max(newest, newestSourceMtime(full));
-    } else if (entry.name.endsWith('.ts') && !entry.name.endsWith('.test.ts')) {
-      newest = Math.max(newest, fs.statSync(full).mtimeMs);
-    }
-  }
-  return newest;
-}
-
-/** The drivers import dist/, so rebuild when src is newer than the build. */
-function ensureFreshDist(): void {
-  const probe = path.join(distDir, 'agent', 'ledger', 'run-ledger.js');
-  const distMtime = fs.existsSync(probe) ? fs.statSync(probe).mtimeMs : -1;
-  const srcMtime = Math.max(
-    newestSourceMtime(path.join(pkgRoot, 'src', 'agent')),
-    newestSourceMtime(path.join(pkgRoot, 'src', 'foundation')),
-  );
-  if (distMtime < srcMtime) {
-    execFileSync(path.join(pkgRoot, 'node_modules', '.bin', 'tsc'), [], { cwd: pkgRoot, stdio: 'ignore' });
-  }
-}
-
-/** Absolute path of `bun` on PATH, or null (the mixed-runtime test is then skipped). */
-function findBun(): string | null {
-  if (process.env.MINDOS_TEST_SKIP_BUN === '1') return null;
-  const names = process.platform === 'win32' ? ['bun.exe', 'bun.cmd', 'bun'] : ['bun'];
-  for (const dir of (process.env.PATH ?? '').split(path.delimiter)) {
-    for (const name of names) {
-      const candidate = path.join(dir, name);
-      try {
-        fs.accessSync(candidate, fs.constants.X_OK);
-        return candidate;
-      } catch {
-        // keep looking
-      }
-    }
-  }
-  return null;
-}
-
 const bun = findBun();
 if (!bun) {
   console.warn('[run-ledger.two-process.test] `bun` not found on PATH; skipping the Bun + Node mixed-runtime ledger test.');
-}
-
-function runDriver(
-  mindRoot: string,
-  mode: string,
-  ...args: string[]
-): Promise<{ pid: number } & Record<string, unknown>> {
-  return runDriverWith(process.execPath, mindRoot, mode, ...args);
-}
-
-function runDriverWith(
-  execPath: string,
-  mindRoot: string,
-  mode: string,
-  ...args: string[]
-): Promise<{ pid: number } & Record<string, unknown>> {
-  return new Promise((resolve, reject) => {
-    const child = spawn(execPath, [driverPath, distDir, mindRoot, mode, ...args], {
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-    let stdout = '';
-    let stderr = '';
-    child.stdout.on('data', (chunk: Buffer) => { stdout += chunk.toString(); });
-    child.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString(); });
-    child.on('error', reject);
-    child.on('exit', (code) => {
-      if (code !== 0) {
-        reject(new Error(`driver ${mode} exited with ${code}: ${stderr}`));
-        return;
-      }
-      try {
-        resolve(JSON.parse(stdout) as { pid: number } & Record<string, unknown>);
-      } catch {
-        reject(new Error(`driver ${mode} produced unparsable output: ${stdout}`));
-      }
-    });
-  });
 }
 
 let root = '';
@@ -188,6 +101,12 @@ describe('agent run ledger across real processes', () => {
       'text',
       'run_started',
     ]);
+    // Rows written by the child carry no record of their own (spec-ledger-write-cost);
+    // this process joins it back from the run row, lifecycle rows keep their snapshot.
+    const childEvents = listAgentEvents({ runId: 'agent-run-2p-child' });
+    expect(childEvents.every((event) => event.record.id === 'agent-run-2p-child')).toBe(true);
+    expect(childEvents.find((event) => event.type === 'text')?.record.status).toBe('completed');
+    expect(childEvents.find((event) => event.type === 'run_started')?.record.status).toBe('running');
     expect(listAgentRuns().map((run) => run.id)).toEqual(['agent-run-2p-child', parentRun.id]);
 
     const seenByChild = await runDriver(root, 'get-run', parentRun.id);

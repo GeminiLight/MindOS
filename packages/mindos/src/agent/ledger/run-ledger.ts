@@ -71,6 +71,12 @@ import path from 'node:path';
  * run created by one process is visible to the others on their next read.
  * Realtime subscribers stay in-process; the SSE bridge subscribes in the
  * process that produces the events.
+ *
+ * Write cost (spec-ledger-write-cost): event rows carry the event payload
+ * only (the run record is joined back on read), the record of an open run
+ * this process owns is cached instead of re-read per event, and token deltas
+ * are delivered to subscribers at once but persisted as one merged row per
+ * ~250 ms / 2 KB window.
  */
 
 export * from './run-ledger-types.js';
@@ -98,6 +104,16 @@ export type AgentRunEventSubscriber = (event: AgentEvent) => void;
  */
 const LEDGER_ROOT_CACHE_MS = 2000;
 
+type DeltaBuffer = {
+  /** `text:<channel>` or `tool:<toolCallId>`: one row never mixes channels or tool calls. */
+  key: string;
+  /** Private copy of the first delta; later deltas are merged into it. Subscribers got the originals. */
+  event: AgentEvent;
+  chars: number;
+  count: number;
+  timer: ReturnType<typeof setTimeout> | null;
+};
+
 type LedgerProcessState = {
   mindRoot: string | undefined;
   db: MindosDatabase | null;
@@ -105,6 +121,14 @@ type LedgerProcessState = {
   imported: boolean;
   /** Appends since the last per-run prune, keyed by `${runId}\n${visibility}`. */
   pendingPrunes: Map<string, number>;
+  /**
+   * Non-terminal runs this process owns, keyed by id: the record every
+   * appended event snapshots, so streaming a token does not re-read the run
+   * row. Terminal writes evict; a reopened handle starts empty.
+   */
+  openRuns: Map<string, AgentRunRecord>;
+  /** Token deltas waiting to be persisted as one merged row, keyed by run id. */
+  pendingDeltas: Map<string, DeltaBuffer>;
 };
 
 type OwnerIdentity = { pid: number; startTs: number };
@@ -119,7 +143,7 @@ function ownerIdentity(): OwnerIdentity {
 }
 
 function freshState(mindRoot: string | undefined): LedgerProcessState {
-  return { mindRoot, db: null, imported: false, pendingPrunes: new Map() };
+  return { mindRoot, db: null, imported: false, pendingPrunes: new Map(), openRuns: new Map(), pendingDeltas: new Map() };
 }
 
 type LedgerRootCache = {
@@ -185,6 +209,9 @@ function getLedger(options: { create: boolean }): MindosDatabase | null {
     state.db = db;
     state.imported = false;
     state.pendingPrunes.clear();
+    // A fresh handle (first open, or reopened after closeAllMindosDatabases)
+    // may see rows written elsewhere; cached run snapshots are re-read on demand.
+    state.openRuns.clear();
   }
   if (!state.imported) {
     state.imported = true;
@@ -277,7 +304,13 @@ function notifyAgentEventSubscribers(event: AgentEvent): void {
 
 // --- writes ---
 
-function persistEvent(event: AgentEvent): void {
+/** Token deltas are persisted as one merged row per window (spec-ledger-write-cost). */
+const DELTA_FLUSH_MS = 250;
+const DELTA_FLUSH_CHARS = 2048;
+/** Bound on cached open runs; a lane that never reaches a terminal write must not leak. */
+const OPEN_RUN_CACHE_MAX = 1000;
+
+function insertPersistedEvent(event: AgentEvent): void {
   const db = getLedger({ create: true });
   if (!db) return;
   try {
@@ -297,11 +330,17 @@ function persistEvent(event: AgentEvent): void {
   }
 }
 
-function appendAgentEvent(record: AgentRunRecord, input: AgentEventType | AppendAgentEventInput, message?: string): AgentEvent {
+/** Persists a non-delta event after the run's buffered deltas, so `seq` follows the order things happened. */
+function persistEvent(event: AgentEvent): void {
+  flushRunDeltas(event.runId);
+  insertPersistedEvent(event);
+}
+
+function buildEvent(record: AgentRunRecord, input: AgentEventType | AppendAgentEventInput, message?: string): AgentEvent {
   const patch = typeof input === 'string'
     ? normalizeEventPatch(record, { type: input, category: normalizeEventCategory(undefined, input), ...(message ? { message } : {}) })
     : normalizeEventPatch(record, input);
-  const event: AgentEvent = {
+  return {
     id: createEventId(),
     runId: record.id,
     ...patch,
@@ -309,12 +348,147 @@ function appendAgentEvent(record: AgentRunRecord, input: AgentEventType | Append
     status: patch.status ?? record.status,
     record,
   };
+}
+
+function appendAgentEvent(record: AgentRunRecord, input: AgentEventType | AppendAgentEventInput, message?: string): AgentEvent {
+  const event = buildEvent(record, input, message);
   persistEvent(event);
   notifyAgentEventSubscribers(event);
   return event;
 }
 
+function deltaKey(event: AgentEvent): string {
+  if (event.data?.kind === 'tool') return `tool:${event.toolCallId ?? ''}`;
+  if (event.data?.kind === 'text') return `text:${event.data.channel ?? 'assistant'}`;
+  return `${event.type}:${event.category}`;
+}
+
+function deltaText(event: AgentEvent): string {
+  if (event.data?.kind === 'text') return event.data.text;
+  if (event.data?.kind === 'tool') return event.data.outputSummary ?? '';
+  return event.message ?? '';
+}
+
+function cloneForBuffer(event: AgentEvent): AgentEvent {
+  return {
+    ...event,
+    ...(event.data ? { data: { ...event.data } } : {}),
+    ...(event.metadata ? { metadata: { ...event.metadata } } : {}),
+  };
+}
+
+function mergeDelta(buffer: DeltaBuffer, event: AgentEvent, text: string): void {
+  const target = buffer.event;
+  if (event.message !== undefined) target.message = `${target.message ?? ''}${event.message}`;
+  if (target.data?.kind === 'text' && event.data?.kind === 'text') {
+    target.data.text += event.data.text;
+  } else if (target.data?.kind === 'tool' && event.data?.kind === 'tool') {
+    target.data.outputSummary = `${target.data.outputSummary ?? ''}${event.data.outputSummary ?? ''}`;
+  }
+  buffer.chars += text.length;
+  buffer.count += 1;
+}
+
+function flushRunDeltas(runId: string): void {
+  const state = getState();
+  const buffer = state.pendingDeltas.get(runId);
+  if (!buffer) return;
+  state.pendingDeltas.delete(runId);
+  if (buffer.timer) clearTimeout(buffer.timer);
+  if (buffer.count > 1) buffer.event.metadata = { ...(buffer.event.metadata ?? {}), coalesced: buffer.count };
+  insertPersistedEvent(buffer.event);
+}
+
+function flushAllPendingDeltas(): void {
+  const state = getState();
+  for (const runId of Array.from(state.pendingDeltas.keys())) flushRunDeltas(runId);
+}
+
+function discardPendingDeltas(state: LedgerProcessState): void {
+  for (const buffer of state.pendingDeltas.values()) {
+    if (buffer.timer) clearTimeout(buffer.timer);
+  }
+  state.pendingDeltas.clear();
+}
+
+/**
+ * Queues a delta for persistence. Same-key deltas of a run merge into one
+ * row; a different key (channel or tool call) flushes the open buffer first
+ * so rows keep the order in which things were said. The buffer flushes on
+ * size, on a short timer, before any non-delta write for the run, and before
+ * an in-process read.
+ */
+function bufferDelta(event: AgentEvent): void {
+  const state = getState();
+  const key = deltaKey(event);
+  const text = deltaText(event);
+  const open = state.pendingDeltas.get(event.runId);
+  if (open && open.key !== key) flushRunDeltas(event.runId);
+  let buffer = state.pendingDeltas.get(event.runId);
+  if (buffer) {
+    mergeDelta(buffer, event, text);
+  } else {
+    buffer = { key, event: cloneForBuffer(event), chars: text.length, count: 1, timer: null };
+    state.pendingDeltas.set(event.runId, buffer);
+  }
+  if (buffer.chars >= DELTA_FLUSH_CHARS) {
+    flushRunDeltas(event.runId);
+    return;
+  }
+  if (!buffer.timer) {
+    const runId = event.runId;
+    const timer = setTimeout(() => {
+      try {
+        flushRunDeltas(runId);
+      } catch {
+        // A late flush must never surface into agent execution.
+      }
+    }, DELTA_FLUSH_MS);
+    timer.unref?.();
+    buffer.timer = timer;
+  }
+}
+
+function rememberOpenRun(state: LedgerProcessState, record: AgentRunRecord): void {
+  if (isTerminalStatus(record.status)) {
+    state.openRuns.delete(record.id);
+    return;
+  }
+  if (!state.openRuns.has(record.id) && state.openRuns.size >= OPEN_RUN_CACHE_MAX) {
+    const oldest = state.openRuns.keys().next().value;
+    if (oldest !== undefined) state.openRuns.delete(oldest);
+  }
+  state.openRuns.set(record.id, record);
+}
+
+/**
+ * The record an event appended to `runId` snapshots. Open runs this process
+ * owns come from the cache; anything else is read from the database (and
+ * cached when it turns out to be ours, e.g. after the handle was reopened).
+ */
+function resolveRunForEvent(runId: string): AgentRunRecord | undefined {
+  const state = getState();
+  const cached = state.openRuns.get(runId);
+  if (cached && state.db?.isOpen) return cached;
+  const db = getLedger({ create: false });
+  if (!db) return undefined;
+  try {
+    const row = readRunRow(db, runId);
+    if (!row) return undefined;
+    const self = ownerIdentity();
+    const record = projectRow(row, self);
+    if (!record) return undefined;
+    const owner = rowOwner(row);
+    if (owner && owner.pid === self.pid && owner.startTs === self.startTs) rememberOpenRun(getState(), record);
+    return record;
+  } catch {
+    return undefined;
+  }
+}
+
 function persistRun(record: AgentRunRecord): void {
+  // Deltas that were streamed before this transition belong before its event row.
+  flushRunDeltas(record.id);
   const db = getLedger({ create: true });
   if (!db) return;
   try {
@@ -322,15 +496,30 @@ function persistRun(record: AgentRunRecord): void {
       upsertRun(db, record, ownerIdentity(), nowMs());
       pruneRuns(db);
     });
+    rememberOpenRun(getState(), record);
   } catch {
     // Ledger persistence must never affect agent execution.
   }
 }
 
 export function appendAgentRunEvent(runId: string, input: AppendAgentEventInput): AgentEvent | undefined {
-  const record = getAgentRun(runId);
+  const record = resolveRunForEvent(runId);
   if (!record) return undefined;
   return appendAgentEvent(record, input);
+}
+
+/**
+ * Appends a streamed delta (assistant / reasoning text, tool output). Live
+ * subscribers receive it at once, exactly like `appendAgentRunEvent`; only
+ * persistence is coalesced, so a token costs no database round trip.
+ */
+export function appendAgentRunDeltaEvent(runId: string, input: AppendAgentEventInput): AgentEvent | undefined {
+  const record = resolveRunForEvent(runId);
+  if (!record) return undefined;
+  const event = buildEvent(record, input);
+  bufferDelta(event);
+  notifyAgentEventSubscribers(event);
+  return event;
 }
 
 function finishRun(
@@ -509,6 +698,8 @@ export function listAgentRuns(options: ListAgentRunsOptions = {}): AgentRunRecor
 
 export function listAgentEvents(options: ListAgentEventsOptions = {}): AgentEvent[] {
   const limit = Math.max(1, Math.min(options.limit ?? 100, MAX_EVENTS));
+  // In-process readers (reattach replay, /api/agent-runs) see every delta streamed so far.
+  flushAllPendingDeltas();
   const db = getLedger({ create: false });
   if (!db) return [];
   try {
@@ -530,6 +721,27 @@ export function coerceAgentRunPermissionMode(mode: unknown): AgentRunPermissionM
   return normalizePermissionMode(mode);
 }
 
+// --- shared handle (artifact ledger) ---
+
+/**
+ * The ledger database, for stores that live in the same file
+ * (spec-ledger-write-cost P2: `agent_artifacts`). Same open-on-demand rules
+ * as the run ledger: `create: false` returns null while nothing exists yet.
+ */
+export function getAgentLedgerDatabase(options: { create: boolean }): MindosDatabase | null {
+  return getLedger(options);
+}
+
+/** Mind root the ledger currently resolves to (undefined = in-memory fallback). */
+export function agentLedgerMindRoot(): string | undefined {
+  return getState().mindRoot;
+}
+
+/** `{ pid, startTs }` this process stamps on rows it writes; also decides whether a legacy shard owner is dead. */
+export function agentLedgerOwnerIdentity(): { pid: number; startTs: number } {
+  return ownerIdentity();
+}
+
 // --- test seams ---
 
 /**
@@ -542,6 +754,8 @@ export function resetAgentRunsForTest(): void {
   invalidateLedgerRootCache();
   const state = getState();
   state.pendingPrunes.clear();
+  state.openRuns.clear();
+  discardPendingDeltas(state);
   try {
     const db = state.db?.isOpen ? state.db : openLedgerDatabase(state.mindRoot, { create: false });
     if (db) {
@@ -568,6 +782,7 @@ export function resetAgentRunsForTest(): void {
 export function reloadAgentRunsFromDiskForTest(): void {
   invalidateLedgerRootCache();
   const state = getProcessGlobal<LedgerProcessState | null>(AGENT_RUN_LEDGER_STORE_KEY, () => null);
+  if (state) discardPendingDeltas(state);
   if (state?.db) closeMindosDatabase(state.db.file);
   deleteProcessGlobal(AGENT_RUN_LEDGER_STORE_KEY);
 }

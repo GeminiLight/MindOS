@@ -76,5 +76,38 @@ if (mode === 'append-many') {
   process.exit(0);
 }
 
+if (mode === 'artifact-append') {
+  // rest: <runtimeId> <runId> <count> — record `count` artifact pointers so a
+  // sibling process can observe them through the shared ledger database.
+  const artifacts = await import(pathToFileURL(path.join(distDir, 'agent/ledger/artifact-ledger.js')).href);
+  const [runtimeId, runId, countRaw] = rest;
+  const count = Number(countRaw);
+  const ids = [];
+  for (let index = 0; index < count; index += 1) {
+    const record = artifacts.appendAgentArtifact({
+      runtimeId,
+      agentKind: 'native-runtime',
+      source: 'runtime-output',
+      kind: 'file',
+      status: 'completed',
+      runId,
+      path: `/tmp/${runtimeId}/file-${index}.md`,
+      title: `${runtimeId} artifact ${index}`,
+    });
+    if (record) ids.push(record.id);
+  }
+  process.stdout.write(JSON.stringify({ pid: process.pid, runtime, ids }));
+  process.exit(0);
+}
+
+if (mode === 'artifact-list') {
+  // rest: <runtimeId> — read artifacts the parent recorded; proves visibility here.
+  const artifacts = await import(pathToFileURL(path.join(distDir, 'agent/ledger/artifact-ledger.js')).href);
+  const records = artifacts.listAgentArtifacts({ runtimeId: rest[0] })
+    .map((record) => ({ id: record.id, path: record.path, title: record.title }));
+  process.stdout.write(JSON.stringify({ pid: process.pid, runtime, artifacts: records }));
+  process.exit(0);
+}
+
 process.stderr.write(`unknown driver mode: ${mode}\n`);
 process.exit(1);

@@ -1,16 +1,29 @@
-import fs from 'node:fs';
-import path from 'node:path';
 import { createHash } from 'node:crypto';
-import { effectiveMindRoot } from '../../foundation/mind-root/index.js';
-import { resolveExistingSafe } from '../../foundation/security/index.js';
+import type { MindosDatabase } from '../../foundation/storage/sqlite.js';
 import {
-  AGENT_ARTIFACT_LEDGER_SHARD_KEY,
   AGENT_ARTIFACT_LEDGER_STORE_KEY,
   deleteProcessGlobal,
   getProcessGlobal,
 } from '../global-state.js';
 import { redactSensitiveObject, redactSensitiveText } from '../redaction.js';
 import type { AcpContentBlock, AcpToolCallFull } from '../../protocols/acp/types.js';
+import {
+  ARTIFACT_TRIM_SLACK,
+  MAX_ARTIFACTS,
+  hasLegacyArtifactShards,
+  importLegacyArtifactShards,
+  listArtifactRows,
+  pruneArtifacts,
+  readArtifactRow,
+  removeLegacyArtifactFiles,
+  upsertArtifact,
+} from './artifact-ledger-db.js';
+import {
+  agentLedgerMindRoot,
+  agentLedgerOwnerIdentity,
+  getAgentLedgerDatabase,
+  reloadAgentRunsFromDiskForTest,
+} from './run-ledger.js';
 import type { AgentNodeKind } from './run-ledger-types.js';
 
 /**
@@ -20,6 +33,11 @@ import type { AgentNodeKind } from './run-ledger-types.js';
  * persists safe pointers that let MindOS build preview, artifact, and file
  * change panels without copying transcripts, command output, env, headers, or
  * base64 blobs into a second store.
+ *
+ * Persistence (spec-ledger-write-cost P2): table `agent_artifacts` in the run
+ * ledger database (`<mindRoot>/.mindos/db/agent_runs_1.sqlite`), so every
+ * MindOS process sees every other process's artifacts on its next read.
+ * Legacy per-process JSONL shards are imported once on first use.
  */
 
 export type AgentArtifactKind =
@@ -114,168 +132,84 @@ export type RecordArtifactsFromAcpToolCallInput = {
   toolCall: AcpToolCallFull;
 };
 
-type ArtifactLedgerStore = {
-  records: AgentArtifactLedgerRecord[];
-  mindRoot?: string;
+/** Per-process bookkeeping; the rows themselves live in the shared database. */
+type ArtifactLedgerProcessState = {
+  /** Handles whose legacy shards were already imported. */
+  importedFor: WeakSet<MindosDatabase>;
+  /** Appends since the last prune (amortized like run events). */
+  appendsSincePrune: number;
 };
 
-type ArtifactShardOperation =
-  | { version: 1; type: 'artifact_upsert'; ts: number; record: AgentArtifactLedgerRecord };
-
-const MAX_ARTIFACTS = 1000;
 const MAX_TEXT_CHARS = 1000;
 const MAX_PATH_CHARS = 1200;
-const LEDGER_DIR_NAME = '.mindos';
-const SHARD_FILE_PATTERN = /^agent-artifact-ledger\.(\d+)-(\d+)\.jsonl$/;
 const IMAGE_EXTENSION_RE = /\.(?:png|jpe?g|webp|gif|svg)$/i;
 const PATCH_EXTENSION_RE = /\.(?:patch|diff)$/i;
 const BRANCH_URI_RE = /^(?:git:)?branch:/i;
 const PR_URI_RE = /^(?:https?:\/\/|git:)?(?:pull-request|pr)[:/]/i;
 const INLINE_BLOB_PREFIX_RE = /^(?:data:|iVBORw0KGgo|\/9j\/|UklGR)/;
 
-function shardIdentity(): { pid: number; startTs: number } {
-  return getProcessGlobal(AGENT_ARTIFACT_LEDGER_SHARD_KEY, () => ({
-    pid: process.pid,
-    startTs: Math.round(performance.timeOrigin),
-  }));
-}
-
-function resolveLedgerRoot(): string | undefined {
-  try {
-    const root = effectiveMindRoot();
-    return typeof root === 'string' && root.trim() ? root : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-function ledgerDirPath(mindRoot: string): string {
-  return resolveExistingSafe(mindRoot, LEDGER_DIR_NAME);
-}
-
-function ownShardPath(mindRoot: string): string {
-  const { pid, startTs } = shardIdentity();
-  return resolveExistingSafe(
-    mindRoot,
-    path.posix.join(LEDGER_DIR_NAME, `agent-artifact-ledger.${pid}-${startTs}.jsonl`),
-  );
-}
-
-function emptyStore(mindRoot?: string): ArtifactLedgerStore {
-  return { records: [], ...(mindRoot ? { mindRoot } : {}) };
-}
-
-function getStore(): ArtifactLedgerStore {
-  const mindRoot = resolveLedgerRoot();
-  const store = getProcessGlobal<ArtifactLedgerStore>(
+function getArtifactState(): ArtifactLedgerProcessState {
+  return getProcessGlobal<ArtifactLedgerProcessState>(
     AGENT_ARTIFACT_LEDGER_STORE_KEY,
-    () => (mindRoot ? readPersistedStore(mindRoot) : emptyStore()),
+    () => ({ importedFor: new WeakSet(), appendsSincePrune: 0 }),
   );
-  if (store.mindRoot !== mindRoot) {
-    deleteProcessGlobal(AGENT_ARTIFACT_LEDGER_STORE_KEY);
-    return getProcessGlobal<ArtifactLedgerStore>(
-      AGENT_ARTIFACT_LEDGER_STORE_KEY,
-      () => (mindRoot ? readPersistedStore(mindRoot) : emptyStore()),
-    );
-  }
-  return store;
 }
 
-function listShardFiles(mindRoot: string): string[] {
-  try {
-    const dir = ledgerDirPath(mindRoot);
-    if (!fs.existsSync(dir)) return [];
-    return fs.readdirSync(dir)
-      .filter((name) => SHARD_FILE_PATTERN.test(name))
-      .sort()
-      .map((name) => path.join(dir, name));
-  } catch {
-    return [];
+/**
+ * The shared ledger handle, importing legacy shards the first time a handle
+ * is used. Read paths pass `create: false` and get null while nothing has
+ * been persisted yet — unless legacy shards are waiting to be imported.
+ */
+function getArtifactDb(options: { create: boolean }): MindosDatabase | null {
+  const mindRoot = agentLedgerMindRoot();
+  const create = options.create || (mindRoot !== undefined && hasLegacyArtifactShards(mindRoot));
+  const db = getAgentLedgerDatabase({ create });
+  if (!db) return null;
+  const state = getArtifactState();
+  if (!state.importedFor.has(db)) {
+    state.importedFor.add(db);
+    if (mindRoot) importLegacyArtifactShards(db, mindRoot, agentLedgerOwnerIdentity(), normalizePersistedRecord);
   }
-}
-
-function readPersistedStore(mindRoot: string): ArtifactLedgerStore {
-  const recordsById = new Map<string, AgentArtifactLedgerRecord>();
-  for (const file of listShardFiles(mindRoot)) {
-    try {
-      for (const line of fs.readFileSync(file, 'utf-8').split('\n')) {
-        const trimmed = line.trim();
-        if (!trimmed) continue;
-        let op: Partial<ArtifactShardOperation>;
-        try { op = JSON.parse(trimmed) as Partial<ArtifactShardOperation>; } catch { continue; }
-        if (op.version !== 1 || op.type !== 'artifact_upsert') continue;
-        const record = normalizePersistedRecord(op.record);
-        if (!record) continue;
-        const existing = recordsById.get(record.id);
-        if (!existing || record.updatedAt >= existing.updatedAt) recordsById.set(record.id, record);
-      }
-    } catch {
-      // A torn or unreadable shard must never block artifact projection.
-    }
-  }
-  return {
-    mindRoot,
-    records: [...recordsById.values()]
-      .sort((a, b) => b.updatedAt - a.updatedAt)
-      .slice(0, MAX_ARTIFACTS),
-  };
-}
-
-function appendOwnShardOperation(store: ArtifactLedgerStore, record: AgentArtifactLedgerRecord): void {
-  if (!store.mindRoot) return;
-  try {
-    const file = ownShardPath(store.mindRoot);
-    fs.mkdirSync(path.dirname(file), { recursive: true });
-    const op: ArtifactShardOperation = {
-      version: 1,
-      type: 'artifact_upsert',
-      ts: Date.now(),
-      record,
-    };
-    fs.appendFileSync(file, `${JSON.stringify(op)}\n`, 'utf-8');
-  } catch {
-    // Artifact persistence is diagnostic; it must not affect runtime execution.
-  }
+  return db;
 }
 
 export function appendAgentArtifact(input: AppendAgentArtifactInput): AgentArtifactLedgerRecord | undefined {
   const normalized = normalizeArtifactInput(input);
   if (!normalized) return undefined;
-
-  const store = getStore();
-  const existingIndex = store.records.findIndex((record) => record.id === normalized.id);
-  const existing = existingIndex >= 0 ? store.records[existingIndex] : undefined;
-  const record: AgentArtifactLedgerRecord = {
-    ...existing,
-    ...normalized,
-    createdAt: existing?.createdAt ?? normalized.createdAt,
-    updatedAt: normalized.updatedAt,
-    metadata: mergeMetadata(existing?.metadata, normalized.metadata),
-  };
-
-  if (existingIndex >= 0) {
-    store.records[existingIndex] = record;
-  } else {
-    store.records.unshift(record);
+  try {
+    const db = getArtifactDb({ create: true });
+    if (!db) return undefined;
+    const existing = readArtifactRow(db, normalized.id);
+    const record: AgentArtifactLedgerRecord = {
+      ...existing,
+      ...normalized,
+      createdAt: existing?.createdAt ?? normalized.createdAt,
+      updatedAt: normalized.updatedAt,
+      metadata: mergeMetadata(existing?.metadata, normalized.metadata),
+    };
+    upsertArtifact(db, record);
+    const state = getArtifactState();
+    state.appendsSincePrune += 1;
+    if (state.appendsSincePrune >= ARTIFACT_TRIM_SLACK) {
+      state.appendsSincePrune = 0;
+      pruneArtifacts(db);
+    }
+    return record;
+  } catch {
+    // Artifact persistence is diagnostic; it must not affect runtime execution.
+    return undefined;
   }
-  store.records = store.records
-    .sort((a, b) => b.updatedAt - a.updatedAt)
-    .slice(0, MAX_ARTIFACTS);
-  appendOwnShardOperation(store, record);
-  return record;
 }
 
 export function listAgentArtifacts(options: ListAgentArtifactsOptions = {}): AgentArtifactLedgerRecord[] {
   const limit = Math.max(1, Math.min(options.limit ?? MAX_ARTIFACTS, MAX_ARTIFACTS));
-  return getStore().records
-    .filter((record) => !options.runtimeId || record.runtimeId === options.runtimeId)
-    .filter((record) => !options.sessionId || record.sessionId === options.sessionId)
-    .filter((record) => !options.externalSessionId || record.externalSessionId === options.externalSessionId)
-    .filter((record) => !options.runId || record.runId === options.runId)
-    .filter((record) => !options.toolCallId || record.toolCallId === options.toolCallId)
-    .filter((record) => !options.kind || record.kind === options.kind)
-    .filter((record) => !options.source || record.source === options.source)
-    .slice(0, limit);
+  try {
+    const db = getArtifactDb({ create: false });
+    if (!db) return [];
+    return listArtifactRows(db, options, limit);
+  } catch {
+    return [];
+  }
 }
 
 export function recordArtifactsFromAcpToolCall(input: RecordArtifactsFromAcpToolCallInput): AgentArtifactLedgerRecord[] {
@@ -310,13 +244,21 @@ export function recordArtifactsFromAcpToolCall(input: RecordArtifactsFromAcpTool
   return records;
 }
 
+/** Test-only: drop the shared handle so the next access re-opens the database and re-imports legacy shards. */
 export function reloadAgentArtifactsFromDiskForTest(): void {
   deleteProcessGlobal(AGENT_ARTIFACT_LEDGER_STORE_KEY);
-  getStore();
+  reloadAgentRunsFromDiskForTest();
 }
 
+/**
+ * Test-only: forget per-process artifact state (import markers, prune
+ * counter) and delete legacy shard files under the current mind root. Rows
+ * stay in the database; `resetAgentRunsForTest` empties the whole ledger.
+ */
 export function resetAgentArtifactsForTest(): void {
   deleteProcessGlobal(AGENT_ARTIFACT_LEDGER_STORE_KEY);
+  const mindRoot = agentLedgerMindRoot();
+  if (mindRoot) removeLegacyArtifactFiles(mindRoot);
 }
 
 function artifactPointersFromAcpToolCall(toolCall: AcpToolCallFull): Array<{

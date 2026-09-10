@@ -61,19 +61,13 @@ export const AGENT_RUN_LEDGER_SUBSCRIBERS_KEY = Symbol.for('mindos.agentRunLedge
 export const AGENT_RUN_LEDGER_SHARD_KEY = Symbol.for('mindos.agentRunLedger.shard');
 
 /**
- * In-memory artifact pointer ledger store (artifact-ledger.ts). Runtime
- * archives, generated files, diffs, branches, PRs, and preview artifacts are
- * represented as pointer records only; sharing the store prevents the UI and
- * runtime module graphs from seeing different artifact indexes.
+ * Per-process artifact ledger bookkeeping (artifact-ledger.ts): which
+ * database handles already had their legacy JSONL shards imported, plus the
+ * amortized prune counter. The rows themselves live in the shared run ledger
+ * database (spec-ledger-write-cost P2); sharing the bookkeeping keeps every
+ * module copy from re-importing the same shards.
  */
 export const AGENT_ARTIFACT_LEDGER_STORE_KEY = Symbol.for('mindos.agentArtifactLedger');
-
-/**
- * Per-process artifact ledger shard identity (artifact-ledger.ts). Mirrors
- * the run ledger's single-writer shard model so every module copy in one
- * process appends to the same `agent-artifact-ledger.<pid>-<startTs>.jsonl`.
- */
-export const AGENT_ARTIFACT_LEDGER_SHARD_KEY = Symbol.for('mindos.agentArtifactLedger.shard');
 
 /**
  * Request-scoped AgentRunContext by pi runtime resource
@@ -145,6 +139,16 @@ export const KB_EXTENSION_HOST_KEY = Symbol.for('mindos.kbExtensionHost');
  * predates the consolidation — keep it stable.
  */
 export const SUBAGENT_EARLY_ASYNC_COMPLETIONS_KEY = Symbol.for('mindos.subagentEarlyAsyncCompletions');
+
+/**
+ * asyncId → ledger run id for detached subagent runs
+ * (subagent-ledger-extension.ts), registered when the tool wrapper marks a
+ * run streaming so the upstream async-complete event finalizes it by primary
+ * key instead of listing the newest 500 runs (spec-ledger-write-cost P3).
+ * Shared because the event listener may live in a different module copy
+ * than the wrapper that registered the run.
+ */
+export const SUBAGENT_ASYNC_RUN_IDS_KEY = Symbol.for('mindos.subagentAsyncRunIds');
 
 /**
  * Unsubscribe handle for the subagent async-complete event listener

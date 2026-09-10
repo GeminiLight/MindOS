@@ -21,7 +21,6 @@ import {
   completeAgentRun,
   failAgentRun,
   getAgentRun,
-  listAgentRuns,
   startAgentRun,
   updateAgentRun,
 } from '../ledger/run-ledger.js';
@@ -45,6 +44,7 @@ import {
 } from './subagent-orchestrator.js';
 import {
   getProcessGlobal,
+  SUBAGENT_ASYNC_RUN_IDS_KEY,
   SUBAGENT_EARLY_ASYNC_COMPLETIONS_KEY,
   SUBAGENT_LEDGER_EVENT_UNSUBSCRIBE_KEY,
 } from '../global-state.js';
@@ -245,9 +245,12 @@ function asyncIdFromPayload(payload: unknown): string | undefined {
 export function finalizeSubagentAsyncRunFromEvent(payload: unknown): boolean {
   const asyncId = asyncIdFromPayload(payload);
   if (!asyncId) return false;
-  const run = listAgentRuns({ kind: 'pi-subagent', limit: 500 })
-    .find((candidate) => candidate.status === 'streaming' && candidate.metadata?.asyncId === asyncId);
-  if (!run) {
+  // Look the run up by primary key (spec-ledger-write-cost P3): the wrapper
+  // registered asyncId → run id when it marked the run streaming, so no
+  // ledger listing is needed.
+  const runId = getAsyncRunIds().get(asyncId);
+  const run = runId ? getAgentRun(runId) : undefined;
+  if (!run || run.status !== 'streaming' || run.metadata?.asyncId !== asyncId) {
     // A fast async run can complete before the tool wrapper has stored the
     // asyncId on the ledger record. Buffer the payload so the wrapper can
     // finalize the run as soon as it registers it.
@@ -260,6 +263,7 @@ export function finalizeSubagentAsyncRunFromEvent(payload: unknown): boolean {
 }
 
 function applyAsyncCompletion(runId: string, asyncId: string, payload: unknown): void {
+  getAsyncRunIds().delete(asyncId);
   const status = statusFromAsyncCompletePayload(payload);
   const output = textFromAsyncCompletePayload(payload);
   const metadata = { asyncId, asyncComplete: true };
@@ -267,6 +271,24 @@ function applyAsyncCompletion(runId: string, asyncId: string, payload: unknown):
     completeAgentRun(runId, { outputSummary: output, metadata });
   } else {
     failAgentRun(runId, { status, error: output || `Subagent async run ${status}.`, metadata });
+  }
+}
+
+const MAX_TRACKED_ASYNC_RUNS = 500;
+
+/** Detached runs awaiting an upstream completion event, keyed by asyncId; oldest registration evicts first. */
+function getAsyncRunIds(): Map<string, string> {
+  return getProcessGlobal(SUBAGENT_ASYNC_RUN_IDS_KEY, () => new Map<string, string>());
+}
+
+function trackAsyncRun(asyncId: string, runId: string): void {
+  const tracked = getAsyncRunIds();
+  tracked.delete(asyncId);
+  tracked.set(asyncId, runId);
+  while (tracked.size > MAX_TRACKED_ASYNC_RUNS) {
+    const oldest = tracked.keys().next().value;
+    if (oldest === undefined) break;
+    tracked.delete(oldest);
   }
 }
 
@@ -603,6 +625,7 @@ export function wrapSubagentToolForLedger(
           });
           // The completion event may have already arrived and been buffered.
           const asyncId = typeof metadata.asyncId === 'string' ? metadata.asyncId : undefined;
+          if (asyncId) trackAsyncRun(asyncId, run.id);
           const early = asyncId ? takeEarlyAsyncCompletion(asyncId) : null;
           if (asyncId && early) {
             applyAsyncCompletion(run.id, asyncId, early.payload);
