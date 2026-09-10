@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { safePluginIdentifierIssue } from '@geminilight/mindos/foundation';
 import { resolveExistingSafe } from '@/lib/core/security';
 
 export const OBSIDIAN_PLUGIN_ROOT_RELATIVE_PATH = '.mindos/plugins';
@@ -25,7 +26,12 @@ export interface ObsidianPluginLocation extends ObsidianPluginRootLocation {
 }
 
 export function assertSafeObsidianPluginId(pluginId: string): void {
-  if (!pluginId || pluginId.includes('..') || pluginId.includes('/') || pluginId.includes('\\')) {
+  // Shared segment validator (foundation/plugins/safe-id): dot segments,
+  // separators, Windows drives/reserved names, prototype keys, control
+  // chars, unicode, 64-char cap. The message is kept verbatim because
+  // loader/plugin-manager map it onto PLUGIN_NOT_FOUND diagnostics.
+  const issue = safePluginIdentifierIssue(pluginId, { allowDots: false });
+  if (issue) {
     throw new Error(`Plugin path escapes MindOS plugin directory: ${pluginId}`);
   }
 }

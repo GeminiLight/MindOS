@@ -182,7 +182,7 @@ mindos/
 
 `@geminilight/mindos` 是 MindOS 的产品主 runtime package。当前暴露的产品能力入口：
 
-- `@geminilight/mindos/foundation`：shared/errors/core/config/logger/permissions/security。
+- `@geminilight/mindos/foundation`：shared/errors/core/config/logger/permissions/security/plugins（plugins = 插件安装共享原语：staged-install / safe-id / confirmation-receipt，见下文「插件安装原语」）。
 - `@geminilight/mindos/knowledge`：storage/spaces/graph/audit/git/knowledge-ops。
 - `@geminilight/mindos/retrieval`：retrieval 核心 contracts、chunking 策略、index/search/vector 抽象与能力边界；默认不启用 MeiliSearch / LanceDB / Express 等重型后端。
 - `@geminilight/mindos/server`：API route contract、response/error/cache/CORS shape、health/files/file.raw/search/settings/mcp.status handlers。HTTP 层是一张路由表加一个 Hono 应用：`packages/mindos/src/server/routes/*.ts` 按领域（files / search / knowledge / agent / agent-runtimes / a2a / acp / im / automations / settings / setup / mcp / skills / system）导出 `MindosRouteDefinition[]`（`{ id, method, path, auth, handler(ctx) }`），`contract.ts` 的 `MINDOS_SERVER_ROUTES` 只是这张表的 `{ id, method, path, auth }` 投影；`app.ts` 的 `createMindosApp({ services, auth, staticFallback })` 从表构建 Hono 应用（契约鉴权、body 限额、ETag/304、SSE 流、静态回退、tree cache 失效），`http.ts` 只做 `node:http` + `@hono/node-server` 的 bootstrap。新增路由只需在对应领域文件加一行。Web 侧 106 条 product-owned 路由（`route-ownership.ts` 里 adapter 为 `mindos-app` 的全部）都是一行 `delegateToMindos(method, path)`，请求经 Next proxy 鉴权后交给同一张路由表（`auth: 'host'`），body 限额、内容变更日志、错误映射全在路由表里；Web 只通过 `packages/web/app/api/_mindos-services.ts` 与 `_mindos-services/{agents,settings,channels,knowledge}.ts` 把宿主能力注入 `MindosHttpServices` 的可选插槽（`a2a` / `acp` / `agentRuntimes` / `agentCapabilities` / `mcpAgentServices` / `skills` / `embedding` / `settings*` / `setup` / `channels` / `knowledgeWrites` / `monitoring` / `ensureMindSystemDefaults`）。standalone Product Server 留空这些插槽，路由表回退到产品默认实现。只有 `tree-version` 与 `space-overview` 的 POST 是 Web-only 附加方法；`stream` adapter（agent turn、events）、host-owned 与 optional-capability 路由仍由 Next 自己实现。契约测试 `tests/web-api-route-ownership-contract.test.ts` 锁定：`mindos-app` 文件不含 `toNextResponse(`、不直接 import handler，且委托的方法集与 `MINDOS_SERVER_ROUTES` 一致。详见 `wiki/specs/spec-hono-route-table.md` 与 `wiki/specs/spec-web-route-delegation.md`。
@@ -209,6 +209,25 @@ mindos/
 - `api`：Express / WebSocket retrieval service。
 
 这些 adapter 依赖 `@geminilight/mindos/retrieval` 的核心 contracts；`packages/mindos` 不反向 import 它们。
+
+#### 插件安装原语与 runtime extension 安装（2026-09-11）
+
+spec：`wiki/specs/spec-plugin-primitives.md`（审计 P2-5 / P2-6 + #326 layering 收尾）。
+
+`foundation/plugins/` 是两套插件安装路径（agent runtime extension 与 Obsidian community plugin）的共享原语层，经 `@geminilight/mindos/foundation` 导出：
+
+| 原语 | 模块 | 消费方 |
+| --- | --- | --- |
+| staged install | `staged-install.ts` `stagedDirectorySwap(targetDir, populate, options)`：mkdtemp stage → populate → validate → beforeSwap → backup+双 rename → onSwapped → backup 清理（可容忍失败）；任一步失败清 stage、目标缺失时从 backup 恢复 | `server/handlers/runtime-extensions.ts`（经 extension-store）、`web/lib/obsidian-compat/community-install.ts`（install 与 update 流，stage/backup 命名前缀保持 `.installing-<id>-` / `.updating-<id>-` / `.previous-<id>-`） |
+| id/路径段校验 | `safe-id.ts`：首字符 alnum、内部 `[A-Za-z0-9._-]`（`allowDots` 可关）、拒绝 dot 段/分隔符/Windows 盘符与保留名/原型键/控制字符/unicode，默认 64 上限，返回 issue 枚举 | `agent/runtime/extension-manifest.ts sanitizeId`、`web/lib/obsidian-compat/plugin-paths.ts assertSafeObsidianPluginId`（错误文案保持不变）、`agent/runtime/acp-overrides.ts isSafeAgentId`、runtime-extensions settings 记录键 |
+| 确认收据 | `confirmation-receipt.ts`：canonical-JSON（键排序、剔除原型键）→ sha256 截断指纹；`{ fingerprint, confirmedAt, ttlMs? }` 收据 + ttl/时钟偏移校验；install 请求形状分类（fingerprint / legacy-boolean / missing / invalid / ambiguous） | runtime extension install（下表）；参考设计是 Obsidian `capability-gate.ts` 的 gate 指纹 |
+
+Runtime extension 安装链（`POST /api/agent-runtimes/extensions/preflight|install`）：
+
+- **preflight**（只读）：parse+sanitize manifest → `fingerprint = sha256(canonicalJson({ schema, replace, manifest, acpAgentOverrides, acpAgentIds }))`，只由提交内容派生、与宿主状态无关；响应含 `fingerprint` 与 `warnings`。
+- **install**：确认形状检查（无确认 400；布尔+指纹 ambiguous 400）→ 服务端重建 preflight → `confirmFingerprint` 失配 409（manifest 变更 / 过期 replay / replace 语义变化都会失配）→ staged install → 写 settings。旧布尔 `confirm: true` 仅保留一个发布期，放行但响应 `warnings` 带弃用提示（删除跟进项在 backlog）。
+- **授权归属（P2-6）**：`replace: true` 能覆盖哪些 ACP agent 由宿主 `settings.runtimeExtensions[id].appliedAcpAgents` 决定（与 `acpAgents` 同一信任边界）；扩展目录 `mindos-runtime-extension.json` 仅作展示与迁移兜底（settings 无记录时才读，下一次成功 install/replace 收编进 settings）。目录 I/O 在 `agent/runtime/extension-store.ts`，HTTP handler 只剩请求/响应形状。
+- **layering**：`agent/runtime` 触达 `protocols/acp` 的唯一 door 是 `acp-types.ts` wire-type barrel；`parseAcpAgentOverrides` 已迁到 runtime 本地 `acp-overrides.ts`（protocols 层 re-export 保持公共 API），`layering.test.ts` 的 `DOCUMENTED_EXCEPTIONS` 为空。
 
 #### 派生状态存储（node:sqlite）
 

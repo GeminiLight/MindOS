@@ -40,4 +40,5 @@ export * from './foundation/config/index.js';
 export * from './foundation/logger/index.js';
 export * from './foundation/mind-root/index.js';
 export * from './foundation/permissions/index.js';
+export * from './foundation/plugins/index.js';
 export * from './foundation/security/index.js';

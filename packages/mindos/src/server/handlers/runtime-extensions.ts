@@ -1,31 +1,67 @@
-import {
-  existsSync,
-  mkdirSync,
-  readdirSync,
-  readFileSync,
-  rmSync,
-  renameSync,
-  statSync,
-  writeFileSync,
-} from 'node:fs';
-import { join, relative } from 'node:path';
+/**
+ * HTTP handlers for agent runtime extensions — request/response shape only.
+ *
+ * Extension directory I/O lives in `agent/runtime/extension-store.ts`; the
+ * staged-install swap, id rules, and fingerprint confirmation come from
+ * `foundation/plugins` (spec-plugin-primitives). The public names this module
+ * re-exports keep `server/index.ts` and the route table untouched.
+ */
+
+import { existsSync } from 'node:fs';
 import {
   parseAgentRuntimeExtensionManifest,
   type AgentRuntimeExtensionManifest,
   type AgentRuntimeExtensionManifestDiagnostic,
 } from '../../agent/runtime/extension-manifest.js';
 import {
+  EXTENSION_MANIFEST_FILE,
+  EXTENSION_METADATA_FILE,
+  MINDOS_RUNTIME_EXTENSIONS_ROOT,
+  extensionContributionCounts,
+  installAgentRuntimeExtension,
+  listInstalledAgentRuntimeExtensions,
+  readInstalledExtensionAppliedAcpAgents,
+  stripResolvedPaths,
+  type AgentRuntimeExtensionContributionCounts,
+  type InstalledAgentRuntimeExtension,
+  type InstalledAgentRuntimeExtensionMetadata,
+} from '../../agent/runtime/extension-store.js';
+import {
   AGENT_DESCRIPTORS,
   resolveAlias,
   type AcpAgentOverride,
 } from '../../protocols/acp/agent-descriptors.js';
+import { isSafeAgentId } from '../../agent/runtime/acp-overrides.js';
+import { safePluginIdentifierIssue } from '../../foundation/plugins/safe-id.js';
+import {
+  evaluateInstallConfirmation,
+  computeArtifactFingerprint,
+  matchInstallConfirmationFingerprint,
+} from '../../foundation/plugins/confirmation-receipt.js';
 import { resolveExistingSafe } from '../../foundation/security/index.js';
 import { json, privateCacheHeaders, type MindosServerResponse } from '../response.js';
 
-export const MINDOS_RUNTIME_EXTENSIONS_ROOT = '.mindos/runtime-extensions';
+export {
+  MINDOS_RUNTIME_EXTENSIONS_ROOT,
+  listInstalledAgentRuntimeExtensions,
+  type AgentRuntimeExtensionContributionCounts,
+  type InstalledAgentRuntimeExtension,
+  type InstalledAgentRuntimeExtensionMetadata,
+};
+
+export type RuntimeExtensionSettingsRecord = {
+  /**
+   * ACP agent ids this extension applied through a confirmed install/replace.
+   * Host settings are the authorization record for `replace: true` (P2-6);
+   * the extension-directory metadata file is display/migration fallback only.
+   */
+  appliedAcpAgents?: string[];
+  updatedAt?: string;
+};
 
 export type RuntimeExtensionSettings = {
   acpAgents?: Record<string, AcpAgentOverride>;
+  runtimeExtensions?: Record<string, RuntimeExtensionSettingsRecord>;
   [key: string]: unknown;
 };
 
@@ -36,49 +72,19 @@ export type RuntimeExtensionServices = {
   now?: () => Date;
 };
 
-export type AgentRuntimeExtensionContributionCounts = {
-  acpAdapters: number;
-  mcpServers: number;
-  assistants: number;
-  agents: number;
-  skills: number;
-  commands: number;
-  themes: number;
-  settingsTabs: number;
-};
-
-export type InstalledAgentRuntimeExtensionMetadata = {
-  schemaVersion: 1;
-  source: 'agent-runtime-extension';
-  extensionId: string;
-  version?: string;
-  installedAt: string;
-  updatedAt?: string;
-  contributionCounts: AgentRuntimeExtensionContributionCounts;
-  appliedAcpAgents: string[];
-  lifecycleScriptsDeclared: number;
-};
-
-export type InstalledAgentRuntimeExtension = {
-  id: string;
-  name: string;
-  version?: string;
-  description?: string;
-  root: typeof MINDOS_RUNTIME_EXTENSIONS_ROOT;
-  targetDir: string;
-  manifestPath: string;
-  metadataPath: string;
-  manifest: AgentRuntimeExtensionManifest;
-  metadata: InstalledAgentRuntimeExtensionMetadata;
-  diagnostics: AgentRuntimeExtensionManifestDiagnostic[];
-};
-
 export type AgentRuntimeExtensionPreflightPayload = {
   ok: true;
   readOnly: true;
   writePolicy: 'preflight-only';
   installable: boolean;
   blockedReasons: string[];
+  warnings: string[];
+  /**
+   * Canonical-JSON sha256 fingerprint of everything the install would apply
+   * (manifest, ACP overrides, replace flag). Install must echo it back via
+   * `confirmFingerprint`; any change to the submitted manifest invalidates it.
+   */
+  fingerprint?: string;
   diagnostics: AgentRuntimeExtensionManifestDiagnostic[];
   extension?: {
     id: string;
@@ -103,6 +109,7 @@ export type AgentRuntimeExtensionInstallPayload = {
   installed: InstalledAgentRuntimeExtension;
   preflight: AgentRuntimeExtensionPreflightPayload;
   acpAgents: Record<string, AcpAgentOverride>;
+  warnings: string[];
 };
 
 type RuntimeExtensionInstallBody = {
@@ -110,11 +117,13 @@ type RuntimeExtensionInstallBody = {
   manifestJson?: unknown;
   extensionRoot?: unknown;
   confirm?: unknown;
+  confirmFingerprint?: unknown;
   replace?: unknown;
 };
 
-const METADATA_FILE = 'mindos-runtime-extension.json';
-const MANIFEST_FILE = 'manifest.json';
+const INSTALL_FINGERPRINT_SCHEMA = 'mindos.agent-runtime-extension.install.v1';
+const FINGERPRINT_MISMATCH_MESSAGE =
+  'Runtime extension confirmation does not match the submitted manifest. Re-run preflight and confirm the current fingerprint.';
 
 export function handleAgentRuntimeExtensionsGet(
   services: Pick<RuntimeExtensionServices, 'mindRoot'>,
@@ -145,7 +154,12 @@ export function handleAgentRuntimeExtensionInstallPost(
 ): MindosServerResponse<AgentRuntimeExtensionInstallPayload | { error: string }> {
   try {
     const payload = objectBody(body) as RuntimeExtensionInstallBody;
-    if (payload.confirm !== true) {
+    // P2-5: confirmation is fingerprint-based. A boolean `confirm: true` no
+    // longer authorizes "whatever manifest arrives next"; the client must echo
+    // the fingerprint from preflight. The legacy boolean stays accepted for
+    // exactly one release with a deprecation warning (spec-plugin-primitives).
+    const confirmation = evaluateInstallConfirmation(payload);
+    if (confirmation.kind === 'missing' || confirmation.kind === 'invalid' || confirmation.kind === 'ambiguous') {
       return json({ error: 'Runtime extension install requires explicit confirmation.' }, { status: 400 });
     }
 
@@ -156,17 +170,35 @@ export function handleAgentRuntimeExtensionInstallPost(
       }, { status: 409 });
     }
 
+    const matched = matchInstallConfirmationFingerprint(confirmation, preflight.fingerprint ?? '', {
+      mismatchMessage: FINGERPRINT_MISMATCH_MESSAGE,
+    });
+    if (!matched.ok) {
+      return json({ error: matched.error }, { status: 409 });
+    }
+    const warnings = [...preflight.warnings, ...(matched.warning ? [matched.warning] : [])];
+
     const replace = payload.replace === true;
     const settings = services.readSettings();
     const existingAcpAgents = sanitizeAcpAgents(settings.acpAgents);
-    const installed = writeInstalledExtension(preflight.manifest, preflight.acpAgentIds, services, replace);
+    const installed = installAgentRuntimeExtension(services.mindRoot, preflight.manifest, {
+      appliedAcpAgents: preflight.acpAgentIds,
+      replace,
+      ...(services.now ? { now: services.now } : {}),
+    });
     const nextAcpAgents = {
       ...existingAcpAgents,
       ...pickAcpAgentOverrides(preflight.acpAgentOverrides, preflight.acpAgentIds),
     };
-    services.writeSettings({ ...settings, acpAgents: nextAcpAgents });
+    const nowIso = (services.now?.() ?? new Date()).toISOString();
+    const runtimeExtensions = sanitizeRuntimeExtensionRecords(settings.runtimeExtensions);
+    defineRecordProperty(runtimeExtensions, preflight.manifest.id, {
+      appliedAcpAgents: [...preflight.acpAgentIds],
+      updatedAt: nowIso,
+    });
+    services.writeSettings({ ...settings, acpAgents: nextAcpAgents, runtimeExtensions });
 
-    return json({ ok: true, installed, preflight, acpAgents: nextAcpAgents }, { status: replace ? 200 : 201 });
+    return json({ ok: true, installed, preflight, acpAgents: nextAcpAgents, warnings }, { status: replace ? 200 : 201 });
   } catch (error) {
     return runtimeExtensionErrorResponse(error);
   }
@@ -185,6 +217,7 @@ export function buildAgentRuntimeExtensionPreflight(
       writePolicy: 'preflight-only',
       installable: false,
       blockedReasons: [rawManifest.error],
+      warnings: [],
       diagnostics: [{
         code: 'invalid-manifest-input',
         severity: 'error',
@@ -223,7 +256,7 @@ export function buildAgentRuntimeExtensionPreflight(
   const settings = safeReadSettings(services);
   const existingAcpAgents = sanitizeAcpAgents(settings.acpAgents);
   const replaceableAcpAgents = manifest && replace
-    ? readInstalledExtensionAppliedAcpAgents(services.mindRoot, manifest)
+    ? resolveReplaceableAcpAgents(services.mindRoot, settings, manifest)
     : new Set<string>();
   for (const agentId of acpAgentIds) {
     if (existingAcpAgents[agentId] && !replaceableAcpAgents.has(agentId)) {
@@ -241,109 +274,42 @@ export function buildAgentRuntimeExtensionPreflight(
     blockedReasons.push('Extension manifest has error diagnostics.');
   }
 
+  const acpAgentOverrides = pickAcpAgentOverrides(safeOverrides, acpAgentIds);
   return {
     ok: true,
     readOnly: true,
     writePolicy: 'preflight-only',
     installable: Boolean(manifest) && blockedReasons.length === 0,
     blockedReasons: Array.from(new Set(blockedReasons)),
+    warnings: [],
+    ...(manifest ? { fingerprint: installFingerprint(manifest, acpAgentOverrides, acpAgentIds, replace) } : {}),
     diagnostics,
     ...(extension ? { extension } : {}),
     ...(manifest ? { manifest } : {}),
-    acpAgentOverrides: pickAcpAgentOverrides(safeOverrides, acpAgentIds),
+    acpAgentOverrides,
     acpAgentIds,
   };
 }
 
-export function listInstalledAgentRuntimeExtensions(mindRoot: string): InstalledAgentRuntimeExtension[] {
-  const rootDir = runtimeExtensionsRootDir(mindRoot);
-  if (!existsSync(rootDir) || !statSync(rootDir).isDirectory()) return [];
-
-  const installed: InstalledAgentRuntimeExtension[] = [];
-  for (const entry of readdirSync(rootDir, { withFileTypes: true })) {
-    if (!entry.isDirectory()) continue;
-    const extensionDir = join(rootDir, entry.name);
-    const manifestPath = join(extensionDir, MANIFEST_FILE);
-    if (!existsSync(manifestPath) || !statSync(manifestPath).isFile()) continue;
-
-    try {
-      const raw = JSON.parse(readFileSync(manifestPath, 'utf-8')) as unknown;
-      const parsed = parseAgentRuntimeExtensionManifest(raw, { extensionRoot: extensionDir });
-      if (!parsed.manifest) continue;
-      const manifest = stripResolvedPaths(parsed.manifest);
-      const metadataPath = join(extensionDir, METADATA_FILE);
-      const metadata = readExtensionMetadata(metadataPath, manifest);
-      installed.push({
-        id: manifest.id,
-        name: manifest.displayName ?? manifest.name,
-        ...(manifest.version ? { version: manifest.version } : {}),
-        ...(manifest.description ? { description: manifest.description } : {}),
-        root: MINDOS_RUNTIME_EXTENSIONS_ROOT,
-        targetDir: relative(mindRoot, extensionDir).split('\\').join('/'),
-        manifestPath: relative(mindRoot, manifestPath).split('\\').join('/'),
-        metadataPath: relative(mindRoot, metadataPath).split('\\').join('/'),
-        manifest,
-        metadata,
-        diagnostics: parsed.diagnostics,
-      });
-    } catch {
-      continue;
-    }
-  }
-
-  return installed.sort((a, b) => a.name.localeCompare(b.name));
-}
-
-function writeInstalledExtension(
+/**
+ * Fingerprint of everything an install would apply. Derived only from the
+ * submitted manifest (never from host state) so preflight and install agree
+ * on identical input, while any manifest mutation — including a replayed
+ * confirmation for a changed manifest — invalidates it.
+ */
+function installFingerprint(
   manifest: AgentRuntimeExtensionManifest,
-  appliedAcpAgents: string[],
-  services: RuntimeExtensionServices,
+  acpAgentOverrides: Record<string, AcpAgentOverride>,
+  acpAgentIds: string[],
   replace: boolean,
-): InstalledAgentRuntimeExtension {
-  const rootDir = runtimeExtensionsRootDir(services.mindRoot);
-  mkdirSync(rootDir, { recursive: true });
-  const targetDir = resolveExistingSafe(services.mindRoot, `${MINDOS_RUNTIME_EXTENSIONS_ROOT}/${manifest.id}`);
-  const alreadyInstalled = existsSync(targetDir);
-  if (alreadyInstalled && !replace) {
-    throw new Error(`Runtime extension is already installed: ${manifest.id}`);
-  }
-
-  const stageDir = `${targetDir}.installing-${process.pid}-${Date.now()}`;
-  const backupDir = `${targetDir}.backup-${process.pid}-${Date.now()}`;
-  const now = services.now?.() ?? new Date();
-  const installedAt = alreadyInstalled
-    ? readExistingInstalledAt(services.mindRoot, manifest)
-    : undefined;
-  const metadata = buildExtensionMetadata(manifest, appliedAcpAgents, now, installedAt);
-
-  try {
-    rmSync(stageDir, { recursive: true, force: true });
-    mkdirSync(stageDir, { recursive: true });
-    writeFileSync(join(stageDir, MANIFEST_FILE), `${JSON.stringify(stripResolvedPaths(manifest), null, 2)}\n`, 'utf-8');
-    writeFileSync(join(stageDir, METADATA_FILE), `${JSON.stringify(metadata, null, 2)}\n`, 'utf-8');
-
-    if (alreadyInstalled) {
-      renameSync(targetDir, backupDir);
-    }
-    renameSync(stageDir, targetDir);
-    rmSync(backupDir, { recursive: true, force: true });
-  } catch (error) {
-    rmSync(stageDir, { recursive: true, force: true });
-    if (!existsSync(targetDir) && existsSync(backupDir)) {
-      renameSync(backupDir, targetDir);
-    } else {
-      rmSync(backupDir, { recursive: true, force: true });
-    }
-    throw error;
-  }
-
-  const listed = listInstalledAgentRuntimeExtensions(services.mindRoot).find((item) => item.id === manifest.id);
-  if (listed) return listed;
-  throw new Error(`Failed to install runtime extension: ${manifest.id}`);
-}
-
-function runtimeExtensionsRootDir(mindRoot: string): string {
-  return resolveExistingSafe(mindRoot, MINDOS_RUNTIME_EXTENSIONS_ROOT);
+): string {
+  return computeArtifactFingerprint({
+    schema: INSTALL_FINGERPRINT_SCHEMA,
+    replace,
+    manifest,
+    acpAgentOverrides,
+    acpAgentIds,
+  });
 }
 
 function extensionSummary(manifest: AgentRuntimeExtensionManifest, mindRoot: string): AgentRuntimeExtensionPreflightPayload['extension'] {
@@ -355,107 +321,69 @@ function extensionSummary(manifest: AgentRuntimeExtensionManifest, mindRoot: str
     ...(manifest.description ? { description: manifest.description } : {}),
     root: MINDOS_RUNTIME_EXTENSIONS_ROOT,
     targetDir,
-    manifestPath: `${targetDir}/${MANIFEST_FILE}`,
-    metadataPath: `${targetDir}/${METADATA_FILE}`,
+    manifestPath: `${targetDir}/${EXTENSION_MANIFEST_FILE}`,
+    metadataPath: `${targetDir}/${EXTENSION_METADATA_FILE}`,
     alreadyInstalled: existsSync(resolveExistingSafe(mindRoot, targetDir)),
-    contributionCounts: contributionCounts(manifest),
+    contributionCounts: extensionContributionCounts(manifest),
     lifecycleScriptsDeclared: manifest.lifecycle.scripts.length,
   };
 }
 
-function buildExtensionMetadata(
-  manifest: AgentRuntimeExtensionManifest,
-  appliedAcpAgents: string[],
-  now: Date,
-  installedAt?: string,
-): InstalledAgentRuntimeExtensionMetadata {
-  return {
-    schemaVersion: 1,
-    source: 'agent-runtime-extension',
-    extensionId: manifest.id,
-    ...(manifest.version ? { version: manifest.version } : {}),
-    installedAt: installedAt ?? now.toISOString(),
-    ...(installedAt ? { updatedAt: now.toISOString() } : {}),
-    contributionCounts: contributionCounts(manifest),
-    appliedAcpAgents,
-    lifecycleScriptsDeclared: manifest.lifecycle.scripts.length,
-  };
-}
-
-function readExistingInstalledAt(mindRoot: string, manifest: AgentRuntimeExtensionManifest): string | undefined {
-  const extensionDir = resolveExistingSafe(mindRoot, `${MINDOS_RUNTIME_EXTENSIONS_ROOT}/${manifest.id}`);
-  if (!existsSync(extensionDir)) return undefined;
-  try {
-    const metadata = readExtensionMetadata(join(extensionDir, METADATA_FILE), manifest);
-    return metadata.installedAt;
-  } catch {
-    return undefined;
-  }
-}
-
-function readInstalledExtensionAppliedAcpAgents(
+/**
+ * Authorization source for `replace: true` (audit P2-6). Host settings win
+ * whenever they carry a record for the extension — the extension-directory
+ * metadata file sits inside the mind root, so any agent with mind-root write
+ * access could forge it to claim ownership of a user's custom ACP agent. The
+ * directory file is only read as a migration fallback for installs that
+ * predate settings ownership; the next successful install/replace rewrites
+ * the record into settings and closes the window.
+ */
+function resolveReplaceableAcpAgents(
   mindRoot: string,
+  settings: RuntimeExtensionSettings,
   manifest: AgentRuntimeExtensionManifest,
 ): Set<string> {
-  const extensionDir = resolveExistingSafe(mindRoot, `${MINDOS_RUNTIME_EXTENSIONS_ROOT}/${manifest.id}`);
-  if (!existsSync(extensionDir)) return new Set();
-  try {
-    const metadata = readExtensionMetadata(join(extensionDir, METADATA_FILE), manifest);
-    return new Set(metadata.appliedAcpAgents);
-  } catch {
-    return new Set();
-  }
+  const records = sanitizeRuntimeExtensionRecords(settings.runtimeExtensions);
+  const record = Object.prototype.hasOwnProperty.call(records, manifest.id)
+    ? records[manifest.id]
+    : undefined;
+  if (record) return new Set(record.appliedAcpAgents ?? []);
+  return readInstalledExtensionAppliedAcpAgents(mindRoot, manifest);
 }
 
-function readExtensionMetadata(
-  metadataPath: string,
-  manifest: AgentRuntimeExtensionManifest,
-): InstalledAgentRuntimeExtensionMetadata {
-  try {
-    const parsed = JSON.parse(readFileSync(metadataPath, 'utf-8')) as Partial<InstalledAgentRuntimeExtensionMetadata>;
-    if (parsed.schemaVersion === 1 && parsed.source === 'agent-runtime-extension' && parsed.extensionId === manifest.id) {
-      return {
-        schemaVersion: 1,
-        source: 'agent-runtime-extension',
-        extensionId: manifest.id,
-        ...(typeof parsed.version === 'string' ? { version: parsed.version } : manifest.version ? { version: manifest.version } : {}),
-        installedAt: typeof parsed.installedAt === 'string' ? parsed.installedAt : new Date(0).toISOString(),
-        ...(typeof parsed.updatedAt === 'string' ? { updatedAt: parsed.updatedAt } : {}),
-        contributionCounts: parsed.contributionCounts ?? contributionCounts(manifest),
-        appliedAcpAgents: Array.isArray(parsed.appliedAcpAgents)
-          ? parsed.appliedAcpAgents.filter((item): item is string => typeof item === 'string')
-          : [],
-        lifecycleScriptsDeclared: typeof parsed.lifecycleScriptsDeclared === 'number'
-          ? parsed.lifecycleScriptsDeclared
-          : manifest.lifecycle.scripts.length,
-      };
-    }
-  } catch {
-    // Fall through to derived metadata for legacy or hand-written manifests.
+function sanitizeRuntimeExtensionRecords(
+  raw: unknown,
+): Record<string, RuntimeExtensionSettingsRecord> {
+  const result: Record<string, RuntimeExtensionSettingsRecord> = {};
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return result;
+  for (const [key, value] of Object.entries(raw)) {
+    // Record keys are extension ids: validate with the same shared rules the
+    // manifest parser uses (not the agent-id variant, which also rejects
+    // Windows reserved device names that are legal extension ids).
+    if (safePluginIdentifierIssue(key, { maxLength: 64 }) !== undefined) continue;
+    if (!value || typeof value !== 'object' || Array.isArray(value)) continue;
+    const record = value as Partial<RuntimeExtensionSettingsRecord>;
+    const applied = Array.isArray(record.appliedAcpAgents)
+      ? record.appliedAcpAgents.filter((item): item is string => typeof item === 'string')
+      : undefined;
+    defineRecordProperty(result, key, {
+      ...(applied ? { appliedAcpAgents: applied } : {}),
+      ...(typeof record.updatedAt === 'string' ? { updatedAt: record.updatedAt } : {}),
+    });
   }
-  return {
-    schemaVersion: 1,
-    source: 'agent-runtime-extension',
-    extensionId: manifest.id,
-    ...(manifest.version ? { version: manifest.version } : {}),
-    installedAt: new Date(0).toISOString(),
-    contributionCounts: contributionCounts(manifest),
-    appliedAcpAgents: manifest.contributes.acpAdapters.map((adapter) => adapter.id),
-    lifecycleScriptsDeclared: manifest.lifecycle.scripts.length,
-  };
+  return result;
 }
 
-function contributionCounts(manifest: AgentRuntimeExtensionManifest): AgentRuntimeExtensionContributionCounts {
-  return {
-    acpAdapters: manifest.contributes.acpAdapters.length,
-    mcpServers: manifest.contributes.mcpServers.length,
-    assistants: manifest.contributes.assistants.length,
-    agents: manifest.contributes.agents.length,
-    skills: manifest.contributes.skills.length,
-    commands: manifest.contributes.commands.length,
-    themes: manifest.contributes.themes.length,
-    settingsTabs: manifest.contributes.settingsTabs.length,
-  };
+/**
+ * Own-property assignment that cannot hit the `__proto__` setter even if a
+ * sanitized key somehow slipped through (keys are regex-gated upstream).
+ */
+function defineRecordProperty<T>(
+  target: Record<string, T>,
+  key: string,
+  value: T,
+): void {
+  Object.defineProperty(target, key, { value, enumerable: true, writable: true, configurable: true });
 }
 
 function readManifestInput(payload: RuntimeExtensionInstallBody): { ok: true; manifest: unknown } | { ok: false; error: string } {
@@ -522,18 +450,11 @@ function sanitizeAcpAgents(raw: unknown): Record<string, AcpAgentOverride> {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
   const result: Record<string, AcpAgentOverride> = {};
   for (const [key, value] of Object.entries(raw)) {
-    if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(key)) continue;
-    if (key === '__proto__' || key === 'constructor' || key === 'prototype') continue;
+    if (!isSafeAgentId(key)) continue;
     if (!value || typeof value !== 'object' || Array.isArray(value)) continue;
-    result[key] = value as AcpAgentOverride;
+    defineRecordProperty(result, key, value as AcpAgentOverride);
   }
   return result;
-}
-
-function stripResolvedPaths(manifest: AgentRuntimeExtensionManifest): AgentRuntimeExtensionManifest {
-  return JSON.parse(JSON.stringify(manifest, (_key, value) => (
-    _key === 'resolvedPath' ? undefined : value
-  ))) as AgentRuntimeExtensionManifest;
 }
 
 function safeReadSettings(

@@ -97,16 +97,25 @@ describe('/api/agent-runtimes/extensions', () => {
   });
 
   it('installs manifests and lists installed runtime extensions through thin Next adapters', async () => {
+    const preflightRoute = await importPreflightRoute();
+    const preflightRes = await preflightRoute.POST(postRequest('http://localhost/api/agent-runtimes/extensions/preflight', {
+      manifest: manifest(),
+    }));
+    const preflightJson = await preflightRes.json();
+    expect(preflightRes.status).toBe(200);
+    expect(preflightJson.fingerprint).toMatch(/^[0-9a-f]{32}$/);
+
     const installRoute = await importInstallRoute();
     const installRes = await installRoute.POST(postRequest('http://localhost/api/agent-runtimes/extensions/install', {
       manifest: manifest(),
-      confirm: true,
+      confirmFingerprint: preflightJson.fingerprint,
     }));
     const installJson = await installRes.json();
 
     expect(installRes.status).toBe(201);
     expect(installJson).toMatchObject({
       ok: true,
+      warnings: [],
       installed: {
         id: 'aion-style-pack',
         manifestPath: '.mindos/runtime-extensions/aion-style-pack/manifest.json',
@@ -139,6 +148,42 @@ describe('/api/agent-runtimes/extensions', () => {
           }),
         }),
       }),
+    ]);
+  });
+
+  it('rejects installs whose confirmation fingerprint does not match the submitted manifest', async () => {
+    const preflightRoute = await importPreflightRoute();
+    const preflightRes = await preflightRoute.POST(postRequest('http://localhost/api/agent-runtimes/extensions/preflight', {
+      manifest: manifest(),
+    }));
+    const preflightJson = await preflightRes.json();
+
+    const mutated = manifest();
+    mutated.contributes.acpAdapters[0].cliCommand = 'codebuddy-trojan';
+    const { POST } = await importInstallRoute();
+    const res = await POST(postRequest('http://localhost/api/agent-runtimes/extensions/install', {
+      manifest: mutated,
+      confirmFingerprint: preflightJson.fingerprint,
+    }));
+    const json = await res.json();
+
+    expect(res.status).toBe(409);
+    expect(json.error).toMatch(/confirmation does not match the submitted manifest/i);
+    expect(testState.settings.acpAgents).toBeUndefined();
+    expect(fs.existsSync(path.join(mindRoot, '.mindos'))).toBe(false);
+  });
+
+  it('accepts the legacy boolean confirm for one release with a deprecation warning', async () => {
+    const { POST } = await importInstallRoute();
+    const res = await POST(postRequest('http://localhost/api/agent-runtimes/extensions/install', {
+      manifest: manifest(),
+      confirm: true,
+    }));
+    const json = await res.json();
+
+    expect(res.status).toBe(201);
+    expect(json.warnings).toEqual([
+      expect.stringContaining('confirm: true is deprecated'),
     ]);
   });
 

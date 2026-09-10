@@ -1,10 +1,9 @@
 import path from 'node:path';
 import { redactSensitiveObject, redactSensitiveText } from '../redaction.js';
-import {
-  parseAcpAgentOverrides,
-  type AcpAgentAdapterMetadata,
-  type AcpAgentOverride,
-} from '../../protocols/acp/agent-descriptors.js';
+import { safePluginIdentifierIssue } from '../../foundation/plugins/safe-id.js';
+import { parseAcpAgentOverrides } from './acp-overrides.js';
+import type { AcpAgentAdapterMetadata } from './adapter-metadata.js';
+import type { AcpAgentOverride } from './agent-descriptor-table.js';
 
 export type AgentRuntimeExtensionManifestDiagnosticSeverity = 'info' | 'warning' | 'error';
 
@@ -135,8 +134,7 @@ export type ParseAgentRuntimeExtensionManifestResult = {
 const MAX_STRING = 500;
 const MAX_LONG_STRING = 2000;
 const MAX_ITEMS = 100;
-const SAFE_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/;
-const SAFE_ENV_KEY_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
+const MAX_ID_LENGTH = 64;
 const WINDOWS_DRIVE_RE = /^[A-Za-z]:/;
 const CONTROL_CHARS_RE = /[\x00-\x1f]/;
 const SECRETISH_KEY_RE = /(?:api[_-]?key|authorization|auth[_-]?token|access[_-]?token|refresh[_-]?token|token|password|passwd|secret|client[_-]?secret|app[_-]?secret|bot[_-]?token|webhook)/i;
@@ -540,10 +538,12 @@ function sanitizeUrl(raw: unknown): string | undefined {
 }
 
 function sanitizeId(raw: unknown): string | undefined {
-  const value = sanitizeString(raw, 120);
-  if (!value || !SAFE_ID_RE.test(value)) return undefined;
-  if (value === '__proto__' || value === 'constructor' || value === 'prototype') return undefined;
-  return value;
+  // Shared identifier validator (foundation/plugins/safe-id): dot segments,
+  // separators, Windows drives/reserved names, prototype keys, control chars,
+  // and a 64-char cap (the old inline regex allowed 120).
+  const value = sanitizeString(raw, MAX_ID_LENGTH + 8);
+  if (!value) return undefined;
+  return safePluginIdentifierIssue(value, { maxLength: MAX_ID_LENGTH }) === undefined ? value : undefined;
 }
 
 function sanitizeStringArray(raw: unknown, maxItems: number, maxLength: number): string[] {

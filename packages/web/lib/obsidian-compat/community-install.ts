@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { assertSafePluginIdentifier, stagedDirectorySwap } from '@geminilight/mindos/foundation';
 import { ErrorCodes, MindOSError } from '@/lib/errors';
 import { ManifestError, validateManifest } from './manifest';
 import {
@@ -176,11 +177,12 @@ export async function installObsidianCommunityPlugin(
   fs.mkdirSync(pluginsRoot, { recursive: true });
   assertPluginRootCanBeCreated(pluginsRoot);
 
-  let stageDir: string | undefined;
-  try {
-    stageDir = fs.mkdtempSync(path.join(pluginsRoot, `.installing-${pluginId}-`));
-    const metadata = buildInstallMetadata(preflight, options.now?.() ?? new Date());
+  const metadata = buildInstallMetadata(preflight, options.now?.() ?? new Date());
 
+  // stage → validate → rename → rollback lives in the shared primitive
+  // (spec-plugin-primitives); the `.installing-<id>-` staging name is kept so
+  // plugin enumeration and tests keep recognising in-flight installs.
+  stagedDirectorySwap(targetDir, (stageDir) => {
     fs.writeFileSync(path.join(stageDir, 'manifest.json'), fetched.files.manifestJson, 'utf-8');
     fs.writeFileSync(path.join(stageDir, 'main.js'), fetched.files.mainJs, 'utf-8');
     if (typeof fetched.files.stylesCss === 'string') {
@@ -191,36 +193,33 @@ export async function installObsidianCommunityPlugin(
       `${JSON.stringify(metadata, null, 2)}\n`,
       'utf-8',
     );
+  }, {
+    stageParentDir: pluginsRoot,
+    stagePrefix: `.installing-${pluginId}-`,
+    existsMessage: `Obsidian plugin is already installed: ${pluginId}`,
+    validate: () => {
+      if (pathExists(targetDir)) {
+        throw new MindOSError(
+          ErrorCodes.CONFLICT,
+          `Obsidian plugin is already installed: ${pluginId}`,
+        );
+      }
+    },
+  });
 
-    if (pathExists(targetDir)) {
-      throw new MindOSError(
-        ErrorCodes.CONFLICT,
-        `Obsidian plugin is already installed: ${pluginId}`,
-      );
-    }
-
-    fs.renameSync(stageDir, targetDir);
-    stageDir = undefined;
-
-    return {
-      ok: true,
-      plugin: preflight.plugin,
-      installed: {
-        pluginId,
-        targetDir,
-        enabled: false,
-        loaded: false,
-        source: 'obsidian-community',
-        metadata,
-      },
-      preflight,
-    };
-  } catch (err) {
-    if (stageDir) {
-      fs.rmSync(stageDir, { recursive: true, force: true });
-    }
-    throw err;
-  }
+  return {
+    ok: true,
+    plugin: preflight.plugin,
+    installed: {
+      pluginId,
+      targetDir,
+      enabled: false,
+      loaded: false,
+      source: 'obsidian-community',
+      metadata,
+    },
+    preflight,
+  };
 }
 
 export async function planObsidianCommunityPluginUpdate(
@@ -355,73 +354,59 @@ export async function updateObsidianCommunityPlugin(
     options.now?.() ?? new Date(),
   );
 
-  let stageDir: string | undefined;
-  let backupDir: string | undefined;
-  try {
-    stageDir = fs.mkdtempSync(path.join(pluginsRoot, `.updating-${pluginId}-`));
+  await options.beforeSwap?.();
+
+  // stage → backup → rename → rollback lives in the shared primitive
+  // (spec-plugin-primitives). A failed backup cleanup after a successful swap
+  // is tolerated: the new package is already published, and a stale hidden
+  // `.previous-<id>-` backup is safer than reporting a failed update.
+  const swap = stagedDirectorySwap<{ preservedDataJson: boolean }>(targetDir, (stageDir) => {
     copyPreservedPluginFiles(targetDir, stageDir);
     writeFetchedPackageToDir(stageDir, fetched.files, metadata);
+  }, {
+    stageParentDir: pluginsRoot,
+    stagePrefix: `.updating-${pluginId}-`,
+    backupPrefix: `.previous-${pluginId}-`,
+    replace: true,
+    validate: () => {
+      if (!pathExists(targetDir) || !fs.statSync(targetDir).isDirectory()) {
+        throw new MindOSError(
+          ErrorCodes.FILE_NOT_FOUND,
+          `Obsidian plugin is not installed: ${pluginId}`,
+        );
+      }
+    },
+    onSwapped: (publishedDir) => ({
+      preservedDataJson: pathExists(path.join(publishedDir, 'data.json')),
+    }),
+    tolerateBackupCleanupFailure: true,
+  });
 
-    await options.beforeSwap?.();
-
-    if (!pathExists(targetDir) || !fs.statSync(targetDir).isDirectory()) {
-      throw new MindOSError(
-        ErrorCodes.FILE_NOT_FOUND,
-        `Obsidian plugin is not installed: ${pluginId}`,
-      );
-    }
-
-    backupDir = uniqueHiddenDirPath(pluginsRoot, `.previous-${pluginId}-`);
-    fs.renameSync(targetDir, backupDir);
-    fs.renameSync(stageDir, targetDir);
-    stageDir = undefined;
-
-    try {
-      fs.rmSync(backupDir, { recursive: true, force: true });
-    } catch {
-      // The new package is already published. A stale hidden backup is safer
-      // than reporting a failed update after the swap has completed.
-    }
-    backupDir = undefined;
-
-    return {
-      ok: true,
-      plugin: preflight.plugin,
-      updated: {
-        pluginId,
-        targetDir,
-        previousVersion: localManifest.version,
-        version: remoteVersion,
-        source: 'obsidian-community',
-        metadata,
-        preservedDataJson: pathExists(path.join(targetDir, 'data.json')),
-      },
-      files,
-      preflight,
-    };
-  } catch (err) {
-    if (backupDir && pathExists(backupDir) && !pathExists(targetDir)) {
-      fs.renameSync(backupDir, targetDir);
-      backupDir = undefined;
-    }
-    if (stageDir) {
-      fs.rmSync(stageDir, { recursive: true, force: true });
-    }
-    if (backupDir) {
-      fs.rmSync(backupDir, { recursive: true, force: true });
-    }
-    throw err;
-  }
+  return {
+    ok: true,
+    plugin: preflight.plugin,
+    updated: {
+      pluginId,
+      targetDir,
+      previousVersion: localManifest.version,
+      version: remoteVersion,
+      source: 'obsidian-community',
+      metadata,
+      preservedDataJson: swap.payload?.preservedDataJson ?? false,
+    },
+    files,
+    preflight,
+  };
 }
 
 function assertSafePluginId(pluginId: string): void {
+  // Shared segment validator (foundation/plugins/safe-id) instead of routing a
+  // synthetic manifest through validateManifest; Obsidian community ids never
+  // contain dots, so the stricter allowDots:false rules are a superset.
   try {
-    validateManifest({ id: pluginId, name: 'Plugin', version: '0.0.0' });
+    assertSafePluginIdentifier(pluginId, { allowDots: false, context: 'obsidian plugin id' });
   } catch (err) {
-    if (err instanceof ManifestError) {
-      throw new MindOSError(ErrorCodes.INVALID_REQUEST, err.message);
-    }
-    throw err;
+    throw new MindOSError(ErrorCodes.INVALID_REQUEST, err instanceof Error ? err.message : String(err));
   }
 }
 
@@ -671,14 +656,6 @@ function parseMetadataDate(value: unknown): Date | undefined {
 
 function normalizeRepoForProvenance(repo: string): string {
   return repo.trim().toLowerCase();
-}
-
-function uniqueHiddenDirPath(parentDir: string, prefix: string): string {
-  for (let attempt = 0; attempt < 10; attempt += 1) {
-    const candidate = path.join(parentDir, `${prefix}${Date.now()}-${process.pid}-${attempt}`);
-    if (!pathExists(candidate)) return candidate;
-  }
-  throw new MindOSError(ErrorCodes.CONFLICT, 'Could not allocate plugin update backup directory.');
 }
 
 function pathExists(filePath: string): boolean {

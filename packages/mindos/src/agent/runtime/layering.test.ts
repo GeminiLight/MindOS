@@ -23,13 +23,12 @@ const WIRE_TYPES_MODULE = '../../protocols/acp/types.js';
  * Files owned by other tasks that still import `protocols/acp` directly. Each
  * entry names the import it is allowed to keep; once the file stops importing
  * `protocols/`, the entry itself fails the test so the exception cannot linger.
+ *
+ * Currently empty: `extension-manifest.ts` was the last exception and now
+ * parses ACP overrides through the runtime-local `acp-overrides.ts`
+ * (spec-plugin-primitives).
  */
-const DOCUMENTED_EXCEPTIONS: Record<string, string> = {
-  // `parseAcpAgentOverrides` is now reachable without the protocol host, but the
-  // manifest parser belongs to the extension-manifest owner; they only need to
-  // repoint one import.
-  'extension-manifest.ts': '../../protocols/acp/agent-descriptors.js',
-};
+const DOCUMENTED_EXCEPTIONS: Record<string, string> = {};
 
 function listRuntimeSources(dir: string): string[] {
   const out: string[] = [];
