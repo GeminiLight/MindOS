@@ -8,6 +8,7 @@ import {
   runMindosAgentTurnWithRetry,
   runMindosWithTimeout,
 } from './retry.js';
+import { getCurrentTurnDeadline } from './turn-deadline.js';
 import type { MindOSSSEvent } from './index.js';
 
 /**
@@ -335,9 +336,16 @@ export async function runMindosAcpAgentTurn(options: MindosAcpAgentTurnOptions):
       execute: async () => {
         // One budget per attempt covers session open and the prompt: a
         // handshake that hangs must time out (and honour cancel) exactly like
-        // a hanging prompt does.
+        // a hanging prompt does. When the turn runs under a TurnDeadline,
+        // bridge-wait pauses extend this attempt budget too (bounded by the
+        // deadline's total-pause cap).
+        const turnDeadline = getCurrentTurnDeadline();
+        const pausedBaselineMs = turnDeadline?.pausedMsSoFar() ?? 0;
         const deadline = Date.now() + timeoutMs;
-        const remainingMs = () => Math.max(1, deadline - Date.now());
+        const remainingMs = () => Math.max(
+          1,
+          deadline + ((turnDeadline?.pausedMsSoFar() ?? 0) - pausedBaselineMs) - Date.now(),
+        );
 
         const sessionOpen = await openAcpTurnSessionScoped(options, remainingMs(), timeoutMessage);
         const session = sessionOpen.session;

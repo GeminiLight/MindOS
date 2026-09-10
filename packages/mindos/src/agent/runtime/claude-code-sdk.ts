@@ -20,6 +20,7 @@ import {
   readMindosRuntimeImageAsBase64,
   type MindosRuntimeAttachment,
 } from './attachments.js';
+import { buildRuntimePermissionRequest } from './lane-runner.js';
 
 export type ClaudeCodeSdkQuery = AsyncIterable<Record<string, unknown>> & {
   interrupt?(): Promise<void>;
@@ -397,7 +398,10 @@ function buildClaudeSdkPermissionRequest(
   },
 ): MindosRuntimePermissionRequest {
   const hasSessionSuggestion = Array.isArray(options.suggestions) && options.suggestions.length > 0;
-  return {
+  // Shared permission shaping (spec-runtime-lane-contract 方案 8): the Claude
+  // SDK lane only offers acceptForSession when the SDK supplied session rules
+  // to persist; the option set itself comes from the single source.
+  return buildRuntimePermissionRequest({
     runtime: 'claude',
     toolCallId: options.toolUseID,
     toolName,
@@ -408,18 +412,11 @@ function buildClaudeSdkPermissionRequest(
       ...(options.displayName ? { displayName: options.displayName } : {}),
       ...(options.description ? { description: options.description } : {}),
     },
-    reason: options.title ?? options.description ?? options.decisionReason,
-    options: [
-      { id: 'accept', label: 'Allow once', description: 'Run this action one time.', intent: 'allow' },
-      ...(hasSessionSuggestion ? [{
-        id: 'acceptForSession',
-        label: 'Allow for session',
-        description: 'Allow matching Claude Code actions for the rest of this session.',
-        intent: 'allow' as const,
-      }] : []),
-      { id: 'decline', label: 'Deny', description: 'Reject this action.', intent: 'deny' },
-    ],
-  };
+    ...(options.title ?? options.description ?? options.decisionReason
+      ? { reason: options.title ?? options.description ?? options.decisionReason }
+      : {}),
+    allowSessionScope: hasSessionSuggestion,
+  });
 }
 
 function claudeSdkPermissionResult(

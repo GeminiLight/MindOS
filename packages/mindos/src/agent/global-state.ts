@@ -112,6 +112,15 @@ export const ASK_USER_QUESTION_BRIDGE_KEY = Symbol.for('mindos.askUserQuestionBr
 export const AGENT_PENDING_PROMPTS_KEY = Symbol.for('mindos.agentPendingPrompts');
 
 /**
+ * Turn-deadline registry by bridge run id (turn/turn-deadline.ts). The lane
+ * caller pauses the turn clock while permission / question bridge requests
+ * are pending; out-of-band resolvers (the Claude MCP shim's HTTP route) run
+ * outside the lane's AsyncLocalStorage, so bridges and the lane caller meet
+ * through this realm-wide map instead.
+ */
+export const AGENT_TURN_DEADLINE_REGISTRY_KEY = Symbol.for('mindos.agentTurnDeadlineRegistry');
+
+/**
  * Request-scoped KB permission policy storage (kb-extension.ts). The pi
  * DefaultResourceLoader imports the host's kb-extension entry file in its own
  * module graph, so the AsyncLocalStorage written by the /api/agent/sessions/:sessionId/turns route and

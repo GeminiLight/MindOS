@@ -1266,6 +1266,59 @@ describe('agent runtime adapters: Codex app-server', () => {
     expect(events).toContainEqual({ type: 'text_delta', delta: 'Deleted.' });
   });
 
+  it('shapes Codex permission options through the shared runtime permission builder', async () => {
+    const queue = new AsyncQueue<CodexAppServerMessage>();
+    const transport: CodexAppServerTransport = {
+      send(message) {
+        const record = message as { id?: number; method?: string };
+        if (record.method === 'initialize') {
+          queue.push({ id: record.id!, result: { userAgent: 'codex-test' } });
+        }
+        if (record.method === 'thread/start') {
+          queue.push({ id: record.id!, result: { thread: { id: 'thr-shaping' } } });
+        }
+        if (record.method === 'turn/start') {
+          queue.push({ id: record.id!, result: { turn: { id: 'turn-shaping' } } });
+          queue.push({
+            id: 900,
+            method: 'item/commandExecution/requestApproval',
+            params: { itemId: 'cmd-shared', command: 'ls' },
+          });
+          queue.push({ method: 'turn/completed', params: { turn: { id: 'turn-shaping' }, status: 'completed' } });
+        }
+      },
+      read() {
+        return queue;
+      },
+      close() {
+        queue.close();
+      },
+    };
+
+    const captured: Array<{ options: Array<Record<string, unknown>> }> = [];
+    await runMindosNativeAgentTurn({
+      runtime: { kind: 'codex', id: 'codex', name: 'Codex' },
+      cwd: '/tmp/mind',
+      prompt: 'List it.',
+      send: () => {},
+      services: {
+        createCodexClient: ({ handleServerRequest }) => createCodexAppServerClient(transport, { handleServerRequest }),
+        requestRuntimePermission: async (request) => {
+          captured.push({ options: request.options as Array<Record<string, unknown>> });
+          return { decision: 'accept' };
+        },
+      },
+    });
+
+    // Single source with the Claude SDK lane and the Claude MCP shim
+    // (buildRuntimePermissionRequest): accept / acceptForSession / decline.
+    expect(captured[0]!.options).toEqual([
+      { id: 'accept', label: 'Allow once', description: 'Run this action one time.', intent: 'allow', scope: 'once' },
+      { id: 'acceptForSession', label: 'Allow for session', description: 'Allow matching actions for the rest of this session.', intent: 'allow', scope: 'session' },
+      { id: 'decline', label: 'Deny', description: 'Reject this action.', intent: 'deny' },
+    ]);
+  });
+
   it('answers Codex app-server user input requests through the question service', async () => {
     const queue = new AsyncQueue<CodexAppServerMessage>();
     const sent: unknown[] = [];

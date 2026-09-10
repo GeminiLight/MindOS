@@ -1,49 +1,18 @@
-import path from 'path';
 import {
   MINDOS_SSE_HEADERS,
   encodeMindosSseEvent,
   startMindosAgentTurnSseHeartbeat,
   type MindOSSSEvent,
 } from '@geminilight/mindos/agent/turn';
-import type { AgentRunRecord } from '@geminilight/mindos/agent/ledger/run-ledger';
-import { isAbortLikeError } from '@geminilight/mindos/agent/ledger/run-cancellation';
+import { classifyLaneTerminalStatus } from '@geminilight/mindos/agent/runtime';
 import { metrics } from '@/lib/metrics';
 
-export function agentRunErrorStatus(error: unknown, signal?: AbortSignal): 'failed' | 'canceled' | 'timed_out' {
-  if (signal?.aborted || isAbortLikeError(error)) return 'canceled';
-  return (error as { code?: unknown })?.code === 'TIMEOUT' ? 'timed_out' : 'failed';
-}
-
-export function sendAgentRunContext(
-  send: (event: MindOSSSEvent) => void,
-  run: AgentRunRecord,
-): void {
-  send({
-    type: 'agent_run_context',
-    rootRunId: run.rootRunId ?? run.id,
-    ...(run.chatSessionId ? { chatSessionId: run.chatSessionId } : {}),
-    startedAt: run.startedAt,
-  } as unknown as MindOSSSEvent);
-}
-
-export function formatMindosPiExtensionLoadStatus(errors: Array<{ path: string; error: string }> | undefined): string | null {
-  if (!errors?.length) return null;
-  const names = [...new Set(errors.map((entry) => path.basename(entry.path || 'extension')).filter(Boolean))].slice(0, 5);
-  const hasWebAccessError = errors.some((entry) => entry.path.includes('pi-web-access'));
-  const suffix = hasWebAccessError
-    ? ' pi-web-access is unavailable or incomplete, so web_search/fetch_content may be unavailable.'
-    : ' Some extension tools may be unavailable.';
-  return `MindOS detected ${errors.length} extension issue${errors.length === 1 ? '' : 's'}${names.length ? ` (${names.join(', ')})` : ''}.${suffix}`;
-}
-
-export function compactStringEnv(env: Record<string, string | undefined> | undefined): Record<string, string> | undefined {
-  if (!env) return undefined;
-  const compact: Record<string, string> = {};
-  for (const [key, value] of Object.entries(env)) {
-    if (typeof value === 'string') compact[key] = value;
-  }
-  return Object.keys(compact).length > 0 ? compact : undefined;
-}
+/**
+ * SSE shell utilities for the agent turn lanes. Terminal classification moved
+ * to the core lane runner; this alias keeps the historical web name
+ * (spec-runtime-lane-contract 方案 2).
+ */
+export const agentRunErrorStatus = classifyLaneTerminalStatus;
 
 export function omitEnvKeys(
   env: Record<string, string>,

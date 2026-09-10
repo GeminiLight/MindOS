@@ -1,4 +1,5 @@
 import type { MindOSSSEvent } from './index.js';
+import { armPausableTurnTimer, getCurrentTurnDeadline } from './turn-deadline.js';
 
 /**
  * Turn-execution control primitives shared by every lane: transient-error
@@ -115,19 +116,27 @@ export function resolveMindosAgentTimeoutMs(raw: string | undefined = undefined,
 }
 
 export async function runMindosWithTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
+  // When a turn deadline is active (lane caller), the race timer pauses with
+  // it: bridge waits must not consume the turn budget (turn-deadline.ts).
+  // Without a deadline this is the plain setTimeout race it always was.
+  const deadline = getCurrentTurnDeadline();
+  let disposeTimer: (() => void) | undefined;
   const timeout = new Promise<never>((_resolve, reject) => {
-    timer = setTimeout(() => {
-      const error = new Error(message) as Error & { code?: string };
-      error.code = 'TIMEOUT';
-      reject(error);
-    }, timeoutMs);
+    disposeTimer = armPausableTurnTimer({
+      timeoutMs,
+      ...(deadline ? { deadline } : {}),
+      onTimeout: () => {
+        const error = new Error(message) as Error & { code?: string };
+        error.code = 'TIMEOUT';
+        reject(error);
+      },
+    });
   });
 
   try {
     return await Promise.race([promise, timeout]);
   } finally {
-    if (timer) clearTimeout(timer);
+    disposeTimer?.();
   }
 }
 

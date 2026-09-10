@@ -8,6 +8,10 @@
  */
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { ASK_USER_QUESTION_BRIDGE_KEY, getProcessGlobal } from '../global-state.js';
+import {
+  pauseTurnDeadlineForRun,
+  resumeTurnDeadlineForRun,
+} from '../turn/turn-deadline.js';
 import { ensurePendingDecisionTail } from './pending-prompt-changes.js';
 import { finishPendingPrompt, pendingPromptKey, recordPendingPrompt } from './pending-prompt-store.js';
 
@@ -218,6 +222,8 @@ function enqueueAskUserQuestion(
       clearTimeout(pending.timeout);
       if (abort) input.signal?.removeEventListener('abort', abort);
       pendingQuestions.delete(key);
+      // The human wait is over: give the turn clock back its budget.
+      resumeTurnDeadlineForRun(context.runId);
       // Every exit path (answer, cancel, timeout, abort, run teardown) closes
       // the cross-process store row too.
       finishPendingPrompt(pendingPromptKey({ kind: 'user-question', runId: context.runId, toolCallId: input.toolCallId }));
@@ -260,6 +266,10 @@ function enqueueAskUserQuestion(
       expiresAt: createdAt + timeoutMs,
     });
     ensurePendingDecisionTail();
+
+    // A pending human answer must not consume the turn timeout: pause the
+    // run's turn deadline (bounded by its total-pause cap) until finish().
+    pauseTurnDeadlineForRun(context.runId);
 
     abort = () => {
       context.send({

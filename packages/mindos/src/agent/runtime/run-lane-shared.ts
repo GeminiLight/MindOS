@@ -1,5 +1,6 @@
 import type { MindOSSSEvent } from '../turn/index.js';
 import { redactSensitiveText } from '../turn/index.js';
+import { armPausableTurnTimer, getCurrentTurnDeadline } from '../turn/turn-deadline.js';
 import type { MindosPermissionMode } from '../permission/index.js';
 import type { MindosAgentMode } from '../mode.js';
 import type {
@@ -322,11 +323,18 @@ export function withNativeRuntimeTimeout(options: MindosNativeAgentTurnOptions):
     options.signal?.addEventListener('abort', abortFromParent, { once: true });
   }
 
-  const timer = setTimeout(() => {
-    if (!controller.signal.aborted) {
-      controller.abort(createNativeRuntimeTimeoutError(timeoutMs));
-    }
-  }, timeoutMs);
+  // Pausable when the lane caller runs the turn under a TurnDeadline: a
+  // pending permission / question bridge wait freezes the native turn clock
+  // (bounded by the deadline's total-pause cap) instead of consuming it.
+  const disposeTimer = armPausableTurnTimer({
+    timeoutMs,
+    ...(getCurrentTurnDeadline() ? { deadline: getCurrentTurnDeadline() } : {}),
+    onTimeout: () => {
+      if (!controller.signal.aborted) {
+        controller.abort(createNativeRuntimeTimeoutError(timeoutMs));
+      }
+    },
+  });
 
   return {
     options: {
@@ -334,7 +342,7 @@ export function withNativeRuntimeTimeout(options: MindosNativeAgentTurnOptions):
       signal: controller.signal,
     },
     cleanup: () => {
-      clearTimeout(timer);
+      disposeTimer();
       options.signal?.removeEventListener('abort', abortFromParent);
     },
   };

@@ -12,6 +12,8 @@ export * from './codex-env.js';
 export * from './descriptors.js';
 export * from './detection.js';
 export * from './extension-manifest.js';
+export * from './lane-adapters.js';
+export * from './lane-runner.js';
 export * from './lifecycle.js';
 export * from './registry.js';
 export * from './runtime-env.js';

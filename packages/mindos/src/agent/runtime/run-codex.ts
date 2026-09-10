@@ -10,6 +10,10 @@ import {
   materializeMindosRuntimeAttachments,
 } from './attachments.js';
 import {
+  buildRuntimePermissionOptions,
+  runtimePermissionDecisionOption,
+} from './lane-runner.js';
+import {
   errorFromRuntimeFailure,
   isRuntimeReportedError,
   isUserCancel,
@@ -431,7 +435,7 @@ function buildCodexPermissionRequest(request: CodexAppServerServerRequest): Mind
       method: request.method,
       ...params,
     },
-    options: getCodexPermissionOptions(params, request.method),
+    options: getCodexPermissionOptions(params),
     action,
     ...(command || filePath ? { resource: command ?? filePath } : {}),
     ...(getString(params, 'reason') ?? getString(params, 'message') ? {
@@ -499,7 +503,7 @@ function normalizeCodexUserQuestionOptions(value: unknown): MindosRuntimeUserQue
   });
 }
 
-function getCodexPermissionOptions(params: Record<string, unknown>, method: string): MindosRuntimePermissionOption[] {
+function getCodexPermissionOptions(params: Record<string, unknown>): MindosRuntimePermissionOption[] {
   const fromParams = [
     ...stringArray(params.availableDecisions),
     ...stringArray(params.decisions),
@@ -507,34 +511,17 @@ function getCodexPermissionOptions(params: Record<string, unknown>, method: stri
   ].map(decisionOption);
   if (fromParams.length > 0) return dedupeOptions(fromParams);
 
-  const defaults = method === 'item/permissions/requestApproval'
-    ? ['accept', 'acceptForSession', 'decline']
-    : ['accept', 'acceptForSession', 'decline'];
-  return defaults.map(decisionOption);
+  // Default trio from the shared permission shaping (spec-runtime-lane-contract
+  // 方案 8): one source for codex, the Claude SDK lane and the Claude MCP shim.
+  return buildRuntimePermissionOptions();
 }
 
 function decisionOption(id: string): MindosRuntimePermissionOption {
-  const labels: Record<string, string> = {
-    accept: 'Allow once',
-    acceptForSession: 'Allow session',
-    decline: 'Deny',
-    cancel: 'Cancel',
-    deny: 'Deny',
-  };
-  const descriptions: Record<string, string> = {
-    accept: 'Run this action one time.',
-    acceptForSession: 'Run this action and remember the same rule for this Codex session.',
-    decline: 'Reject this action.',
-    cancel: 'Cancel the pending action.',
-  };
-  return {
-    id,
-    label: labels[id] ?? id,
-    ...(descriptions[id] ? { description: descriptions[id] } : {}),
-    intent: id === 'accept' || id === 'acceptForSession' ? 'allow' : id === 'decline' || id === 'deny' ? 'deny' : 'cancel',
-    ...(id === 'accept' ? { scope: 'once' as const } : {}),
-    ...(id === 'acceptForSession' ? { scope: 'session' as const } : {}),
-  };
+  const shaped = runtimePermissionDecisionOption(id);
+  if (shaped.label !== id) return shaped;
+  // Unrecognized server-provided decisions historically surfaced as a
+  // cancel-intent option; keep that behaviour for arbitrary Codex decision ids.
+  return { id, label: id, intent: 'cancel' };
 }
 
 function dedupeOptions(options: MindosRuntimePermissionOption[]): MindosRuntimePermissionOption[] {

@@ -1,4 +1,5 @@
 import type { ClaudeCodeCliPermissionPrompt } from '@geminilight/mindos/agent/runtime';
+import { buildRuntimePermissionOptions } from '@geminilight/mindos/agent/runtime';
 
 export const CLAUDE_PERMISSION_PROMPT_SERVER = 'mindos_runtime_permission';
 export const CLAUDE_PERMISSION_PROMPT_TOOL = 'mindos_runtime_permission';
@@ -22,6 +23,11 @@ export function createClaudePermissionPromptConfig(input: {
             MINDOS_RUNTIME_PERMISSION_RUN_ID: input.runId,
             MINDOS_RUNTIME_PERMISSION_TOOL: CLAUDE_PERMISSION_PROMPT_TOOL,
             MINDOS_ASK_USER_QUESTION_TOOL: CLAUDE_ASK_USER_QUESTION_TOOL,
+            // Single-source option shaping (spec-runtime-lane-contract 方案 8):
+            // the shim offers the same accept / acceptForSession / decline trio
+            // as the Codex and Claude SDK lanes. The embedded source carries
+            // an identical fallback for env loss.
+            MINDOS_RUNTIME_PERMISSION_OPTIONS: JSON.stringify(buildRuntimePermissionOptions()),
             ...(process.env.AUTH_TOKEN ? { MINDOS_RUNTIME_PERMISSION_AUTH_TOKEN: process.env.AUTH_TOKEN } : {}),
             ...(process.env.MINDOS_RUNTIME_PERMISSION_FETCH_TIMEOUT_MS
               ? { MINDOS_RUNTIME_PERMISSION_FETCH_TIMEOUT_MS: process.env.MINDOS_RUNTIME_PERMISSION_FETCH_TIMEOUT_MS }
@@ -73,6 +79,28 @@ const askUserQuestionToolName = process.env.MINDOS_ASK_USER_QUESTION_TOOL || 'As
 const fetchTimeoutMs = Number(process.env.MINDOS_RUNTIME_PERMISSION_FETCH_TIMEOUT_MS) > 0
   ? Number(process.env.MINDOS_RUNTIME_PERMISSION_FETCH_TIMEOUT_MS)
   : 900000;
+// Canonical option trio (accept / acceptForSession / decline), injected by the
+// host from the shared core shaping; the fallback below is the same set so an
+// env loss cannot silently drop the session-scope choice.
+const FALLBACK_PERMISSION_OPTIONS = [
+  { id: 'accept', label: 'Allow once', description: 'Run this action one time.', intent: 'allow', scope: 'once' },
+  { id: 'acceptForSession', label: 'Allow for session', description: 'Allow matching actions for the rest of this session.', intent: 'allow', scope: 'session' },
+  { id: 'decline', label: 'Deny', description: 'Reject this action.', intent: 'deny' },
+];
+function parsePermissionOptions() {
+  try {
+    const parsed = JSON.parse(process.env.MINDOS_RUNTIME_PERMISSION_OPTIONS || '');
+    return Array.isArray(parsed) && parsed.length > 0 ? parsed : FALLBACK_PERMISSION_OPTIONS;
+  } catch {
+    return FALLBACK_PERMISSION_OPTIONS;
+  }
+}
+const permissionOptions = parsePermissionOptions();
+// Session-scope allows are remembered per tool name for the lifetime of this
+// shim process (== the Claude Code session). The CLI shim has no SDK
+// updatedPermissions rule mechanism, so tool-name granularity is the closest
+// feasible approximation of "Allow for session" (known limitation, spec 风险 6).
+const sessionAllowedTools = new Set();
 let buffer = '';
 
 function send(message) {
@@ -187,10 +215,7 @@ async function requestDecision(args) {
       toolName: extractToolName(args),
       input,
       reason: extractReason(args),
-      options: [
-        { id: 'accept', label: 'Allow once', description: 'Run this action one time.', intent: 'allow' },
-        { id: 'decline', label: 'Deny', description: 'Reject this action.', intent: 'deny' },
-      ],
+      options: permissionOptions,
     }),
   });
   if (!response.ok) return { decision: 'cancel', cancelled: true };
@@ -343,8 +368,28 @@ async function handleRequest(message) {
       return;
     }
 
+    // A session-scope allow for this tool short-circuits the bridge round-trip.
+    if (sessionAllowedTools.has(toolName)) {
+      send({
+        jsonrpc: '2.0',
+        id,
+        result: textResult({ behavior: 'allow', updatedInput: extractToolInput(args) }),
+      });
+      return;
+    }
+
     const decision = await requestDecision(args);
-    const allow = decision && !decision.cancelled && decision.decision === 'accept';
+    const allow = isRecord(decision)
+      && decision.cancelled !== true
+      && (decision.decisionIntent === 'allow'
+        || decision.decision === 'accept'
+        || decision.decision === 'acceptForSession');
+    if (allow
+      && (decision.decision === 'acceptForSession'
+        || decision.decisionScope === 'session'
+        || decision.decisionScope === 'always')) {
+      sessionAllowedTools.add(toolName);
+    }
     const value = allow
       ? { behavior: 'allow', updatedInput: extractToolInput(args) }
       : { behavior: 'deny', message: 'Denied in MindOS.' };

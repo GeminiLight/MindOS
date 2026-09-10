@@ -1,54 +1,27 @@
-import { randomUUID } from 'crypto';
 import { MindOSError, apiError, ErrorCodes } from '@/lib/errors';
 import { metrics } from '@/lib/metrics';
 import { readBaseUrlCompat, writeBaseUrlCompat, type ServerSettings } from '@/lib/settings';
 import { resolveAgentTurnCompatMode } from '@/lib/agent/agent-turn-compat';
-import {
-  appendSseEventToAgentRun,
-} from '@geminilight/mindos/agent';
 import type { MindosAgentModeContract } from '@geminilight/mindos/agent/mode';
-import type { AgentRunStatus } from '@geminilight/mindos/agent/ledger/run-ledger-types';
 import {
-  appendMindosAgentModeRunEvents,
-  createMindosAgentModeRunArtifacts,
-  mindosAgentModeArtifactsMetadata,
-} from '@geminilight/mindos/agent/mode-run-events';
-import {
-  runMindosNonStreamingFallback,
   resolveMindosAgentTimeoutMs,
-  type MindOSSSEvent,
+  runMindosNonStreamingFallback,
   type MindosUiAgentMessage,
 } from '@geminilight/mindos/agent/turn';
 import {
   runMindosPiAgentTurnSession,
-  type MindosPiAgentTurnSessionResult,
 } from '@geminilight/mindos/agent/mindos-pi';
-import { runWithAskUserQuestionBridge } from '@geminilight/mindos/agent/bridges/user-question-bridge';
 import {
-  runWithAgentRunContext,
-  setAgentRunContextForResource,
-} from '@geminilight/mindos/agent/agent-run-context';
-import {
-  completeAgentRun,
-  failAgentRun,
-  startAgentRun,
-} from '@geminilight/mindos/agent/ledger/run-ledger';
-import {
-  createMindosAgentPermissionPolicy,
-} from '@geminilight/mindos/agent/mindos-pi/permission';
+  createMindosPiRuntimeLane,
+  runRuntimeLaneTurn,
+} from '@geminilight/mindos/agent/runtime';
+import { createMindosAgentPermissionPolicy } from '@geminilight/mindos/agent/mindos-pi/permission';
 import { getSessionDir } from '@/lib/pi-integration/session-store';
-import {
-  agentRunErrorStatus,
-  createAgentTurnSseResponse,
-  formatMindosPiExtensionLoadStatus,
-  sendAgentRunContext,
-} from './turn-sse';
+import { createAgentTurnSseResponse } from './turn-sse';
 import type { AgentTurnCapsuleSeed } from './turn-capsule';
 import {
-  capsuleRuntimeBinding,
-  captureAgentTurnCapsule,
-  finalizeAgentTurnCapsule,
-} from './turn-capsule';
+  armAgentRunClientDisconnectCancel,
+} from './turn-lane-shared';
 
 type PermissionPolicy = ReturnType<typeof createMindosAgentPermissionPolicy>;
 
@@ -93,8 +66,19 @@ export type RunMindosPiTurnInput = {
   capsule: AgentTurnCapsuleSeed;
 };
 
+/**
+ * Embedded Pi lane: a thin HTTP/SSE adapter over the core lane runner
+ * (spec-runtime-lane-contract 方案 2). The runtime is created BEFORE the SSE
+ * shell so initialization failures stay JSON apiErrors (never half-opened
+ * streams); the ledger / capsule / grace / terminal lifecycle lives in
+ * `runRuntimeLaneTurn`, and pre-run frames + compat fallback wiring live in
+ * the core adapter with the web host deps injected below.
+ *
+ * `runMindosPiAgentTurnSession` / `runMindosNonStreamingFallback` are imported
+ * from the package BARRELS and injected as deps so host vi.mock barrel
+ * contracts keep intercepting (known-pitfalls barrel-mock rule).
+ */
 export async function runMindosPiTurn(input: RunMindosPiTurnInput): Promise<Response> {
-  let systemPrompt = input.systemPrompt;
   try {
     const {
       createWebMindosPiRuntimeHostServices,
@@ -110,7 +94,7 @@ export async function runMindosPiTurn(input: RunMindosPiTurnInput): Promise<Resp
     const { runWithKbPermissionPolicy } = await import('@/lib/agent/kb-extension');
     const runtime = await runWithKbPermissionPolicy(input.permissionPolicy, () => createMindosAgentRuntime({
       messages: input.mindosUiMessages,
-      systemPrompt,
+      systemPrompt: input.systemPrompt,
       turnPrompt: input.turnPrompt,
       providerOverride: input.providerOverride,
       modelOverride: input.modelOverride,
@@ -127,35 +111,48 @@ export async function runMindosPiTurn(input: RunMindosPiTurnInput): Promise<Resp
       ...(input.chatSessionId ? { runtimeSession: { sessionDir: getSessionDir(input.chatSessionId) } } : {}),
       hostServices: createWebMindosPiRuntimeHostServices(input.serverSettings),
     }));
-    systemPrompt = runtime.systemPrompt;
-    const {
-      session,
-      agentRunContextResource,
-      llmHistoryMessages,
-      lastUserContent,
-      lastUserImages,
-      fallbackTools,
-      turnPrompt,
-      contextUsage,
-      apiKey,
-      modelName,
-      provider,
-      baseUrl,
-      runtimeSession,
-    } = runtime;
-    const extensionLoadErrors = (runtime as { extensionLoadErrors?: Array<{ path: string; error: string }> }).extensionLoadErrors;
-    const extensionLoadStatus = formatMindosPiExtensionLoadStatus(extensionLoadErrors);
 
-    return createAgentTurnSseResponse(async (send) => {
-      let outputSummary = '';
-      let streamedError: Error | undefined;
-      const mainRun = startAgentRun({
-        ...(input.capsule.runId ? { id: input.capsule.runId } : {}),
+    // The runtime returns the post-compaction turn prompt; the lane runs it.
+    const turnPrompt = runtime.turnPrompt;
+    const lane = createMindosPiRuntimeLane({
+      runtime,
+      prompt: turnPrompt,
+      cwd: input.executionCwd,
+      stepLimit: input.stepLimit,
+      thinkingLevel: input.agentConfig.thinkingLevel,
+      proxyMessages: {
+        proxyCompatMode: input.t.proxyCompatMode,
+        proxyCompatDetecting: input.t.proxyCompatDetecting,
+        proxyCompatFailed: input.t.proxyCompatFailed,
+        proxyCompatAlsoFailed: input.t.proxyCompatAlsoFailed,
+      },
+    }, {
+      runPiSession: runMindosPiAgentTurnSession,
+      runNonStreamingFallback: runMindosNonStreamingFallback,
+      readCompatCache: () => readBaseUrlCompat(),
+      resolveCompatMode: (compatInput) => resolveAgentTurnCompatMode(compatInput),
+      writeCompat: (key, mode) => {
+        writeBaseUrlCompat(key, mode);
+        console.log(`[agent-turn] Proxy compat detected: ${key} → ${mode} (cached)`);
+      },
+      recordToolExecution: () => metrics.recordToolExecution(),
+      recordTokens: (inputTokens, outputTokens) => metrics.recordTokens(inputTokens, outputTokens),
+      onStep: (step, maxSteps) => {
+        if (process.env.NODE_ENV === 'development') console.log(`[agent-turn] Step ${step}/${maxSteps}`);
+      },
+    });
+    const session = await lane.open({});
+    const lastUserContent = runtime.lastUserContent;
+
+    return createAgentTurnSseResponse((send) => runRuntimeLaneTurn(lane, {
+      chatSessionId: input.chatSessionId,
+      requestSignal: input.requestSignal,
+      timeoutMs: resolveMindosAgentTimeoutMs(process.env.MINDOS_AGENT_TIMEOUT_MS),
+      session,
+      ledger: {
         agentKind: 'mindos-main',
         runtimeId: 'mindos',
         displayName: 'MindOS Agent',
-        chatSessionId: input.chatSessionId,
-        cwd: input.executionCwd,
         permissionMode: input.permissionPolicy.permissionMode,
         inputSummary: typeof lastUserContent === 'string' ? lastUserContent : JSON.stringify(lastUserContent),
         metadata: {
@@ -174,212 +171,12 @@ export async function runMindosPiTurn(input: RunMindosPiTurnInput): Promise<Resp
           sessionAssistants: input.sessionAssistants,
           ...(input.assistantId ? { assistantId: input.assistantId } : {}),
         },
-      });
-      const embeddedRuntimeBinding = runtimeSession
-        ? capsuleRuntimeBinding({
-          kind: 'mindos',
-          runtimeId: 'mindos',
-          externalSessionId: runtimeSession.externalSessionId,
-          cwd: input.executionCwd,
-        })
-        : undefined;
-      captureAgentTurnCapsule(mainRun, input.capsule, {
-        model: modelName,
-        thinkingEffort: input.agentConfig.thinkingLevel,
-        ...(embeddedRuntimeBinding ? { runtimeBinding: embeddedRuntimeBinding } : {}),
-      });
-      sendAgentRunContext(send, mainRun);
-      const sendWithLedger = (event: MindOSSSEvent) => {
-        if (event.type === 'text_delta') outputSummary += event.delta;
-        // Mirror the native lane: an error frame is a failed turn even when
-        // the session returns without a structured error result.
-        if (event.type === 'error') streamedError = new Error(event.message);
-        appendSseEventToAgentRun(mainRun.id, event);
-        send(event);
-      };
-      const recordRunFailure = (error: unknown, terminalStatus: ReturnType<typeof agentRunErrorStatus>) => {
-        const modeArtifacts = recordModeArtifacts(
-          mainRun.id,
-          input.agentModeContract,
-          outputSummary,
-          terminalStatus,
-        );
-        failAgentRun(mainRun.id, {
-          status: terminalStatus,
-          error,
-          outputSummary,
-          ...(runtimeSession ? {
-            archive: {
-              sessionId: runtimeSession.externalSessionId,
-              path: runtimeSession.sessionFile,
-            },
-            metadata: {
-              ...mindosAgentModeArtifactsMetadata(modeArtifacts),
-              externalSessionId: runtimeSession.externalSessionId,
-              runtimeSessionDir: runtimeSession.sessionDir,
-              runtimeSessionResumed: runtimeSession.resumed,
-            },
-          } : {
-            metadata: mindosAgentModeArtifactsMetadata(modeArtifacts),
-          }),
-        });
-        finalizeAgentTurnCapsule({
-          mindRoot: input.mindRoot,
-          runId: mainRun.id,
-          status: terminalStatus,
-          outputText: outputSummary,
-          ...(embeddedRuntimeBinding ? { runtimeBinding: embeddedRuntimeBinding } : {}),
-        });
-      };
-      if (runtimeSession) {
-        sendWithLedger({
-          type: 'runtime_binding',
-          runtime: 'mindos',
-          externalSessionId: runtimeSession.externalSessionId,
-          cwd: input.executionCwd,
-        });
-      }
-      if (contextUsage) {
-        sendWithLedger(contextUsage);
-        if (contextUsage.action !== 'none' && contextUsage.message) {
-          sendWithLedger({
-            type: 'status',
-            runtime: 'mindos',
-            visible: true,
-            message: contextUsage.message,
-          });
-        }
-      }
-      if (extensionLoadStatus) {
-        sendWithLedger({
-          type: 'status',
-          runtime: 'mindos',
-          visible: true,
-          message: extensionLoadStatus,
-        });
-      }
-      let sessionResult: MindosPiAgentTurnSessionResult | undefined;
-      try {
-        const agentRunContext = {
-          chatSessionId: input.chatSessionId,
-          rootRunId: mainRun.rootRunId ?? mainRun.id,
-          parentRunId: mainRun.id,
-        };
-        const restoreAgentRunResourceContext = setAgentRunContextForResource(agentRunContextResource, agentRunContext);
-        try {
-          await runWithAgentRunContext(agentRunContext, async () => {
-            const compatCache = readBaseUrlCompat();
-            const effectiveBaseUrlKey = baseUrl || 'default';
-            const compatMode = resolveAgentTurnCompatMode({
-              provider,
-              baseUrl,
-              cachedMode: compatCache[effectiveBaseUrlKey],
-            });
-            const runProxyFallback = () => runMindosNonStreamingFallback({
-              baseUrl: baseUrl ?? '',
-              apiKey,
-              model: modelName,
-              systemPrompt,
-              historyMessages: llmHistoryMessages,
-              userContent: turnPrompt,
-              tools: fallbackTools,
-              send: sendWithLedger,
-              signal: input.requestSignal,
-              maxSteps: input.stepLimit,
-            });
-
-            const agentRunId = randomUUID();
-            sessionResult = await runWithAskUserQuestionBridge({
-              runId: agentRunId,
-              send: (event) => sendWithLedger(event as unknown as MindOSSSEvent),
-            }, () => runMindosPiAgentTurnSession({
-              session: {
-                subscribe: (callback) => session.subscribe(callback),
-                prompt: async (prompt, options) => { await session.prompt(prompt, options as any); },
-                steer: (message) => session.steer(message),
-                abort: () => session.abort(),
-              },
-              prompt: turnPrompt,
-              promptOptions: lastUserImages ? { images: lastUserImages } : undefined,
-              stepLimit: input.stepLimit,
-              timeoutMs: resolveMindosAgentTimeoutMs(process.env.MINDOS_AGENT_TIMEOUT_MS),
-              signal: input.requestSignal,
-              provider,
-              baseUrl,
-              effectiveBaseUrlKey,
-              compatMode,
-              send: sendWithLedger,
-              runFallback: runProxyFallback,
-              proxyMessages: {
-                proxyCompatMode: input.t.proxyCompatMode,
-                proxyCompatDetecting: input.t.proxyCompatDetecting,
-                proxyCompatFailed: input.t.proxyCompatFailed,
-                proxyCompatAlsoFailed: input.t.proxyCompatAlsoFailed,
-              },
-              onToolExecution: () => metrics.recordToolExecution(),
-              onTokens: (inputTokens, outputTokens) => metrics.recordTokens(inputTokens, outputTokens),
-              onStep: (step, maxSteps) => {
-                if (process.env.NODE_ENV === 'development') console.log(`[agent-turn] Step ${step}/${maxSteps}`);
-              },
-              writeCompat: (key, mode) => {
-                writeBaseUrlCompat(key, mode);
-                console.log(`[agent-turn] Proxy compat detected: ${key} → ${mode} (cached)`);
-              },
-            }));
-          });
-        } finally {
-          restoreAgentRunResourceContext();
-        }
-        const terminalError = sessionResult?.status === 'error'
-          ? new Error(sessionResult.message ?? 'MindOS agent turn failed.')
-          : streamedError;
-        if (terminalError) {
-          // The session already sent the SSE error frame (and no `done`):
-          // record the failure without re-throwing, or the client would
-          // receive a second error frame for the same failure.
-          recordRunFailure(terminalError, 'failed');
-          return;
-        }
-        const modeArtifacts = recordModeArtifacts(
-          mainRun.id,
-          input.agentModeContract,
-          outputSummary,
-          'completed',
-        );
-        completeAgentRun(mainRun.id, {
-          outputSummary,
-          ...(runtimeSession ? {
-            archive: {
-              sessionId: runtimeSession.externalSessionId,
-              path: runtimeSession.sessionFile,
-            },
-          } : {}),
-          metadata: {
-            ...mindosAgentModeArtifactsMetadata(modeArtifacts),
-            ...(runtimeSession ? {
-              externalSessionId: runtimeSession.externalSessionId,
-              runtimeSessionDir: runtimeSession.sessionDir,
-              runtimeSessionResumed: runtimeSession.resumed,
-            } : {}),
-          },
-        });
-        finalizeAgentTurnCapsule({
-          mindRoot: input.mindRoot,
-          runId: mainRun.id,
-          status: 'completed',
-          outputText: outputSummary,
-          ...(embeddedRuntimeBinding ? { runtimeBinding: embeddedRuntimeBinding } : {}),
-        });
-      } catch (error) {
-        recordRunFailure(error, agentRunErrorStatus(error, input.requestSignal));
-        throw error;
-      } finally {
-        // The pi AgentSession is turn-scoped here: release its listeners and
-        // agent connection so a long-lived host does not accumulate them.
-        session.dispose?.();
-      }
-    }, (err) => {
-      if (err instanceof Error && (err as any).code === 'TIMEOUT') return input.t.agentTimeout;
+      },
+      capsule: input.capsule,
+      modeContract: input.agentModeContract,
+      disconnect: { arm: armAgentRunClientDisconnectCancel },
+    }, send), (err) => {
+      if (err instanceof Error && (err as { code?: unknown }).code === 'TIMEOUT') return input.t.agentTimeout;
       return err instanceof Error ? err.message : String(err);
     });
   } catch (err) {
@@ -392,19 +189,4 @@ export async function runMindosPiTurn(input: RunMindosPiTurnInput): Promise<Resp
     }
     return apiError(ErrorCodes.MODEL_INIT_FAILED, err instanceof Error ? err.message : 'Failed to initialize AI model', 500);
   }
-}
-
-function recordModeArtifacts(
-  runId: string,
-  contract: MindosAgentModeContract,
-  outputSummary: string,
-  runStatus: AgentRunStatus,
-) {
-  const artifacts = createMindosAgentModeRunArtifacts({
-    contract,
-    outputSummary,
-    runStatus,
-  });
-  appendMindosAgentModeRunEvents(runId, artifacts);
-  return artifacts;
 }

@@ -594,3 +594,139 @@ describe('Claude Code permission prompt MCP config', () => {
     }
   });
 });
+
+describe('Claude Code permission shim shared option shaping and acceptForSession', () => {
+  function shimServer(input: { runId: string; baseUrl: string }) {
+    const prompt = createClaudePermissionPromptConfig(input);
+    const mcpConfig = prompt.mcpConfig as {
+      mcpServers: Record<string, { command: string; args: string[]; env: Record<string, string> }>;
+    };
+    return mcpConfig.mcpServers[CLAUDE_PERMISSION_PROMPT_SERVER];
+  }
+
+  async function spawnShim(server: { command: string; args: string[]; env: Record<string, string> }) {
+    child = spawn(server.command, server.args, {
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env: { ...process.env, ...server.env },
+    });
+    const lines = createInterface({ input: child.stdout! });
+    let nextId = 100;
+    return {
+      async callTool(toolName: string, args: Record<string, unknown>) {
+        const id = nextId++;
+        child!.stdin!.write(`${JSON.stringify({
+          jsonrpc: '2.0',
+          id,
+          method: 'tools/call',
+          params: { name: CLAUDE_PERMISSION_PROMPT_TOOL, arguments: { toolName, ...args } },
+        })}\n`);
+        const response = await readJsonLine(lines);
+        const text = (response.result as { content: Array<{ text: string }> }).content[0].text;
+        return { id, response, value: JSON.parse(text) as Record<string, unknown> };
+      },
+    };
+  }
+
+  it('offers the shared three-option set including acceptForSession', async () => {
+    let capturedBody: Record<string, any> | null = null;
+    const bridge = await startBridgeServer(async (req, res) => {
+      capturedBody = await readBody(req) as Record<string, any>;
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ decision: 'decline', cancelled: false, decisionIntent: 'deny' }));
+    });
+    try {
+      const server = shimServer({ runId: 'run-options', baseUrl: bridge.baseUrl });
+      expect(JSON.parse(server.env.MINDOS_RUNTIME_PERMISSION_OPTIONS)).toEqual([
+        { id: 'accept', label: 'Allow once', description: 'Run this action one time.', intent: 'allow', scope: 'once' },
+        { id: 'acceptForSession', label: 'Allow for session', description: 'Allow matching actions for the rest of this session.', intent: 'allow', scope: 'session' },
+        { id: 'decline', label: 'Deny', description: 'Reject this action.', intent: 'deny' },
+      ]);
+      const shim = await spawnShim(server);
+      const { value } = await shim.callTool('Bash', { toolUseId: 'toolu-opt-1', input: { command: 'ls' } });
+      expect(capturedBody?.options).toEqual(JSON.parse(server.env.MINDOS_RUNTIME_PERMISSION_OPTIONS));
+      expect(value).toEqual({ behavior: 'deny', message: 'Denied in MindOS.' });
+    } finally {
+      await bridge.close();
+    }
+  });
+
+  it('treats an acceptForSession decision as allow and caches the tool for the shim session', async () => {
+    let bridgeHits = 0;
+    const bridge = await startBridgeServer(async (req, res) => {
+      bridgeHits += 1;
+      await readBody(req);
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({
+        decision: 'acceptForSession',
+        cancelled: false,
+        decisionLabel: 'Allow for session',
+        decisionIntent: 'allow',
+        decisionScope: 'session',
+      }));
+    });
+    try {
+      const shim = await spawnShim(shimServer({ runId: 'run-session-allow', baseUrl: bridge.baseUrl }));
+      const first = await shim.callTool('Bash', { toolUseId: 'toolu-session-1', input: { command: 'ls' } });
+      expect(first.value).toEqual({ behavior: 'allow', updatedInput: { command: 'ls' } });
+      expect(bridgeHits).toBe(1);
+
+      // Same tool: served from the shim's session cache, no bridge round-trip.
+      const second = await shim.callTool('Bash', { toolUseId: 'toolu-session-2', input: { command: 'rm note.md' } });
+      expect(second.value).toEqual({ behavior: 'allow', updatedInput: { command: 'rm note.md' } });
+      expect(bridgeHits).toBe(1);
+
+      // A different tool still asks.
+      await shim.callTool('Write', { toolUseId: 'toolu-session-3', input: { path: 'a.md' } });
+      expect(bridgeHits).toBe(2);
+    } finally {
+      await bridge.close();
+    }
+  });
+
+  it('does not cache accept-once or deny decisions', async () => {
+    const decisions = [
+      { decision: 'accept', cancelled: false, decisionIntent: 'allow', decisionScope: 'once' },
+      { decision: 'accept', cancelled: false, decisionIntent: 'allow', decisionScope: 'once' },
+      { decision: 'decline', cancelled: false, decisionIntent: 'deny' },
+      { decision: 'accept', cancelled: false, decisionIntent: 'allow', decisionScope: 'once' },
+    ];
+    let bridgeHits = 0;
+    const bridge = await startBridgeServer(async (req, res) => {
+      await readBody(req);
+      const decision = decisions[Math.min(bridgeHits, decisions.length - 1)];
+      bridgeHits += 1;
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify(decision));
+    });
+    try {
+      const shim = await spawnShim(shimServer({ runId: 'run-no-cache', baseUrl: bridge.baseUrl }));
+      const first = await shim.callTool('Bash', { toolUseId: 'toolu-once-1', input: { command: 'ls' } });
+      expect(first.value).toMatchObject({ behavior: 'allow' });
+      const second = await shim.callTool('Bash', { toolUseId: 'toolu-once-2', input: { command: 'ls' } });
+      expect(second.value).toMatchObject({ behavior: 'allow' });
+      expect(bridgeHits).toBe(2);
+      const third = await shim.callTool('Bash', { toolUseId: 'toolu-deny-1', input: { command: 'rm x' } });
+      expect(third.value).toEqual({ behavior: 'deny', message: 'Denied in MindOS.' });
+      const fourth = await shim.callTool('Bash', { toolUseId: 'toolu-after-deny', input: { command: 'ls' } });
+      expect(fourth.value).toMatchObject({ behavior: 'allow' });
+      expect(bridgeHits).toBe(4);
+    } finally {
+      await bridge.close();
+    }
+  });
+
+  it('allows when the bridge answers with a bare allow intent (no decision id match)', async () => {
+    const bridge = await startBridgeServer(async (req, res) => {
+      await readBody(req);
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ decision: 'custom-allow', cancelled: false, decisionIntent: 'allow' }));
+    });
+    try {
+      const shim = await spawnShim(shimServer({ runId: 'run-intent-allow', baseUrl: bridge.baseUrl }));
+      const { value } = await shim.callTool('Bash', { toolUseId: 'toolu-intent-1', input: { command: 'ls' } });
+      expect(value).toMatchObject({ behavior: 'allow' });
+    } finally {
+      await bridge.close();
+    }
+  });
+});

@@ -460,7 +460,7 @@ Web 的 `packages/web/app/api/file/route.ts` 只保留 Next.js adapter：读取 
     └── 外部 runtime：Codex / Claude Code / ACP adapter → SSE 流式输出
 ```
 
-lane 生命周期（ledger/capsule/断连宽限）目前仍在 Web `_lib/turn-lane-*.ts` 各一份；收敛到 core `RuntimeLane` 契约的设计已定稿于 `wiki/specs/spec-runtime-lane-contract.md`，实现在下一个任务分支（见 backlog）。
+lane 生命周期（ledger start/complete/fail、capsule capture/finalize、mode artifacts、取消/超时分类、断连宽限、bridge ALS）收敛到 core 的唯一调用方 `agent/runtime/runRuntimeLaneTurn`（`lane-runner.ts`）；四条 lane（mindos-pi / codex / claude / acp）经 `lane-adapters.ts` 适配既有协议函数（runner 函数全部 deps 注入，默认绑定叶子模块，web 从 barrel import 后显式传入以保 vi.mock 契约）。Web `_lib/turn-lane-*.ts` 退化为 HTTP/SSE 壳 + 服务装配。三条 lane 统一走「客户端在场表 + 断连宽限」取消模型（presence 端口由 web 注入）。设计与验收见 `wiki/specs/spec-runtime-lane-contract.md`（方案 1/2/8 已落地）。
 
 ### 外部 Agent (MCP)
 
