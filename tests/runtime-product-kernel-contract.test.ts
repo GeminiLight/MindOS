@@ -122,6 +122,7 @@ describe('MindOS runtime product kernel contract', () => {
       './protocols/acp',
       './retrieval',
       './server',
+      './server/projections/*',
       './tool',
     ]);
   });

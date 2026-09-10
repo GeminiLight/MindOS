@@ -79,7 +79,6 @@ export const MINDOS_WEB_API_ROUTE_OWNERSHIP: MindosWebApiRouteOwnership[] = [
   delegated('/api/agent-run-capsules/[capsuleId]/recovery', 'high'),
   host('/api/agent-runs/cancel', 'Agent run cancellation dispatches to Web host in-process cancellation handlers and must stay host-owned until Product Server owns run execution control.', 'high'),
   host('/api/agent-runs/reattach', 'Agent run reattach streams replay Web host in-memory ledger events and must stay host-owned until Product Server owns run persistence and event fanout.', 'medium'),
-  host('/api/agent-runs/stream', 'Agent run timeline streaming subscribes to the Web host in-process ledger and must stay host-owned until Product Server owns run persistence and event fanout.', 'medium'),
   host('/api/assistant-runs', 'Assistant run execution currently normalizes assistant requests and delegates into the Web Ask runner; Product Server owns the profile registry only until Runtime Context and Schedule persistence are promoted.', 'medium'),
   delegated('/api/assistants', 'medium'),
   delegated('/api/agent-runtimes', 'medium'),

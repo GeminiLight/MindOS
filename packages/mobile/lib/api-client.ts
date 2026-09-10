@@ -15,6 +15,9 @@ import type {
   AgentRunsResponse,
   AskUserQuestionAnswer,
   PendingAgentActionsResponse,
+  PendingAskUserQuestion,
+  PendingAutomationApproval,
+  PendingRuntimePermission,
   AgentRunCapsuleRecoveryAction,
 } from './types';
 import { normalizeFilesResponseToTree } from './file-tree';
@@ -377,13 +380,36 @@ class MindOSClient {
     const permissions = Array.isArray(data.permissions) ? data.permissions : [];
     const questions = Array.isArray(data.questions) ? data.questions : [];
     const automationApprovals = Array.isArray(data.automationApprovals) ? data.automationApprovals : [];
+    // Current servers answer with the normalized `actions` list (core
+    // projection, spec-cross-process-run-events D). Older servers only send
+    // the three groups: merge them by createdAt with locally built keys so
+    // the sheet keeps working during a mixed-version window (no expiry
+    // filtering — the old server already listed only open prompts).
+    const actions = Array.isArray(data.actions)
+      ? data.actions
+      : [
+          ...permissions.map((action: PendingRuntimePermission) => ({
+            ...action,
+            key: `runtime-permission:${action.runId}:${action.requestId}`,
+          })),
+          ...questions.map((action: PendingAskUserQuestion) => ({
+            ...action,
+            key: `user-question:${action.runId}:${action.toolCallId}`,
+          })),
+          ...automationApprovals.map((action: PendingAutomationApproval) => ({
+            ...action,
+            key: `automation-approval:${action.approvalId}`,
+          })),
+        ].sort((left: { createdAt?: number }, right: { createdAt?: number }) =>
+          (left.createdAt ?? 0) - (right.createdAt ?? 0));
     return {
       permissions,
       questions,
       automationApprovals,
+      actions,
       pendingCount: typeof data.pendingCount === 'number'
         ? data.pendingCount
-        : permissions.length + questions.length + automationApprovals.length,
+        : actions.length,
       generatedAt: typeof data.generatedAt === 'number' ? data.generatedAt : Date.now(),
     };
   }
@@ -429,9 +455,12 @@ class MindOSClient {
     startedAfter?: number;
     limit?: number;
     includeEvents?: boolean;
+    /** Lean timeline view: server skips observatory attachments and precomputes `timeline`. */
+    view?: 'timeline';
     signal?: AbortSignal;
   } = {}): Promise<AgentRunsResponse> {
     const params = new URLSearchParams();
+    if (input.view) params.set('view', input.view);
     if (input.chatSessionId) params.set('chatSessionId', input.chatSessionId);
     if (input.rootRunId) params.set('rootRunId', input.rootRunId);
     if (typeof input.startedAfter === 'number' && Number.isFinite(input.startedAfter)) {
@@ -452,6 +481,7 @@ class MindOSClient {
     return {
       runs: Array.isArray(data.runs) ? data.runs : [],
       events: Array.isArray(data.events) ? data.events : [],
+      ...(data.timeline !== undefined ? { timeline: data.timeline } : {}),
       ...(data.observatory && typeof data.observatory === 'object' && Array.isArray(data.observatory.traces)
         ? { observatory: { traces: data.observatory.traces } }
         : {}),

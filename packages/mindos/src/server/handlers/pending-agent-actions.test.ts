@@ -1,7 +1,8 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { setMindRootResolverForTests } from '../../foundation/mind-root/index.js';
 import {
   requestRuntimePermissionForRun,
   runWithRuntimePermissionBridge,
@@ -10,6 +11,7 @@ import {
   askUserQuestionForRun,
   runWithAskUserQuestionBridge,
 } from '../../agent/bridges/user-question-bridge.js';
+import { resetPendingPromptStoreForTest } from '../../agent/bridges/pending-prompt-store.js';
 import {
   handleAutomationApprovalDecisionPost,
   handlePendingAgentActionsGet,
@@ -19,6 +21,22 @@ import {
 import { requestStudioAutomationPermission } from '../automations/approvals.js';
 import { mutateStudioAutomationState, readStudioAutomationState } from '../automations/store.js';
 import type { StudioAutomationJob } from '../automations/types.js';
+
+// The handler now unions the cross-process prompt store into its answer; pin
+// the store to a temp root so foreign rows can never leak into assertions.
+let storeRoot = '';
+
+beforeEach(() => {
+  storeRoot = mkdtempSync(join(tmpdir(), 'mindos-pending-handler-'));
+  setMindRootResolverForTests(() => storeRoot);
+  resetPendingPromptStoreForTest();
+});
+
+afterEach(() => {
+  resetPendingPromptStoreForTest();
+  setMindRootResolverForTests(null);
+  rmSync(storeRoot, { recursive: true, force: true });
+});
 
 describe('pending agent action handlers', () => {
   it('lists and resolves a runtime permission through the shared bridge state', async () => {

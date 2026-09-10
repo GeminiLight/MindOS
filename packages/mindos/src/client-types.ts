@@ -245,3 +245,15 @@ export type { AgentRunPermissionMode } from './agent/ledger/run-ledger-types.js'
 export type { MindosPermissionMode } from './agent/permission/types.js';
 
 export type { MindOSSSEvent } from './agent/turn/index.js';
+
+// ── Pending agent actions (served by GET /api/agent/pending-actions) ────────
+
+export type {
+  AskUserQuestionDraft,
+  PendingAgentAction,
+  PendingAgentActionEntry,
+  PendingAgentActionsPayload,
+  PendingAskUserQuestionAction,
+  PendingAutomationApprovalAction,
+  PendingRuntimePermissionAction,
+} from './server/projections/pending-actions.js';

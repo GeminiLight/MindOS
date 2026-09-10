@@ -497,6 +497,13 @@ export {
   isAgentRunLedgerBridgeInstalled,
   summarizeAgentRunEvent,
 } from './events/ledger-bridge.js';
+export {
+  LEDGER_TAIL_INTERVAL_MS,
+  getLedgerTailBridgeStatsForTest,
+  installLedgerTailBridge,
+  isLedgerTailBridgeActive,
+  isLedgerTailBridgeInstalled,
+} from './events/ledger-tail-bridge.js';
 export { installRuntimeControlPlaneBridge, isRuntimeControlPlaneBridgeInstalled } from './events/control-plane-bridge.js';
 
 export {

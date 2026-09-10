@@ -3,7 +3,12 @@
  * packages/web/__tests__/agent/runtime-permission-bridge.test.ts
  * (spec-agent-core-consolidation Wave 2).
  */
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { setMindRootResolverForTests } from '../../foundation/mind-root/index.js';
+import { resetPendingPromptStoreForTest } from './pending-prompt-store.js';
 import {
   getPendingRuntimePermissionCount,
   listPendingRuntimePermissions,
@@ -12,8 +17,21 @@ import {
   runWithRuntimePermissionBridge,
 } from './runtime-permission-bridge.js';
 
+// The bridge mirrors prompts into the cross-process store; point it at a
+// temp root so tests never touch the developer's real mind root.
+let mindRoot = '';
+
+beforeEach(() => {
+  mindRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'mindos-permission-bridge-'));
+  setMindRootResolverForTests(() => mindRoot);
+  resetPendingPromptStoreForTest();
+});
+
 afterEach(() => {
   vi.useRealTimers();
+  resetPendingPromptStoreForTest();
+  setMindRootResolverForTests(null);
+  fs.rmSync(mindRoot, { recursive: true, force: true });
 });
 
 describe('runtime permission bridge', () => {

@@ -102,6 +102,16 @@ export const RUNTIME_PERMISSION_BRIDGE_KEY = Symbol.for('mindos.runtimePermissio
 export const ASK_USER_QUESTION_BRIDGE_KEY = Symbol.for('mindos.askUserQuestionBridge');
 
 /**
+ * Cross-process pending prompt store state (pending-prompt-store.ts): the open
+ * sqlite handle, the amortized prune counter, the change-listener set and the
+ * decision tail timer. Bridges exist in several module copies inside Next
+ * (server bundle vs node_modules); a forked listener set would make
+ * `run.pending-actions.changed` fire for only some copies, and a forked tail
+ * timer would drain each decision more than once.
+ */
+export const AGENT_PENDING_PROMPTS_KEY = Symbol.for('mindos.agentPendingPrompts');
+
+/**
  * Request-scoped KB permission policy storage (kb-extension.ts). The pi
  * DefaultResourceLoader imports the host's kb-extension entry file in its own
  * module graph, so the AsyncLocalStorage written by the /api/agent/sessions/:sessionId/turns route and

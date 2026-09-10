@@ -17,6 +17,7 @@ import { useMention } from '@/hooks/useMention';
 import { useSlashCommand } from '@/hooks/useSlashCommand';
 import type { SkillSlashItem, SlashItem } from '@/hooks/useSlashCommand';
 import MessageList from '@/components/ask/MessageList';
+import PendingAgentActions from '@/components/ask/PendingAgentActions';
 import MentionPopover from '@/components/ask/MentionPopover';
 import SlashCommandPopover from '@/components/ask/SlashCommandPopover';
 import SessionHistoryPanel from '@/components/ask/SessionHistoryPanel';
@@ -1535,6 +1536,35 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
     regenerateMessage: t.ask.regenerateMessage,
   }), [t, reconnectAttempt, reconnectMax]);
 
+  const pendingActionLabels = useMemo(() => ({
+    title: t.ask.pendingActionsTitle,
+    answer: t.ask.pendingActionAnswer,
+    cancel: t.ask.pendingActionCancel,
+    approve: t.ask.pendingActionApprove,
+    deny: t.ask.pendingActionDeny,
+  }), [t]);
+
+  /**
+   * Prompts already rendered inline in the current message stream (waiting
+   * permission / question tool-call parts) must not appear a second time in
+   * the pending list (spec-cross-process-run-events H, duplicate-UI rule).
+   */
+  const inlinePendingRunIds = useMemo(() => {
+    const runIds = new Set<string>();
+    for (const message of session.messages) {
+      for (const part of message.parts ?? []) {
+        if (part.type !== 'tool-call') continue;
+        if (part.runtimePermission?.status === 'waiting' && part.runtimePermission.runId) {
+          runIds.add(part.runtimePermission.runId);
+        }
+        if (part.userQuestion?.status === 'waiting' && part.userQuestion.runId) {
+          runIds.add(part.userQuestion.runId);
+        }
+      }
+    }
+    return runIds;
+  }, [session.messages]);
+
   /** Edit: pre-fill composer with the user message content, truncate history after it */
   const handleEditMessage = useCallback((index: number) => {
     const currentSession = sessionRef.current;
@@ -1684,6 +1714,8 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
 
       {!showHistory && (
         <>
+      {/* Cross-process pending prompts (any host), above the message list; hidden when empty */}
+      <PendingAgentActions excludeRunIds={inlinePendingRunIds} labels={pendingActionLabels} />
       {/* Messages — home variant hides empty state unless maximized (suggestions rendered externally in normal mode) */}
       <div className="flex-1 min-h-0 flex flex-col">
         {!isHome && (

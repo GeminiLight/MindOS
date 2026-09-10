@@ -113,6 +113,56 @@ describe('ToolCallBlock native runtime rendering', () => {
     vi.unstubAllGlobals();
   });
 
+  it('marks the request resolved elsewhere on a 404 instead of spinning or erroring', async () => {
+    // The prompt was decided in another tab/host (or timed out) while this
+    // view still showed `waiting` (spec-cross-process-run-events H).
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 404,
+      json: async () => ({ error: 'Permission request is no longer pending.' }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const view = renderToolCall({
+      type: 'tool-call',
+      toolCallId: 'cmd-404',
+      toolName: 'Bash',
+      runtime: 'codex',
+      state: 'running',
+      input: { command: 'pnpm test' },
+      runtimePermission: {
+        runId: 'run-404',
+        requestId: 'perm-404',
+        runtime: 'codex',
+        status: 'waiting',
+        options: [
+          { id: 'accept', label: 'Allow once', intent: 'allow' },
+          { id: 'decline', label: 'Deny', intent: 'deny' },
+        ],
+      },
+    });
+
+    const allowButton = Array.from(view.host.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('Allow once'));
+    expect(allowButton).toBeTruthy();
+
+    await act(async () => {
+      allowButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(view.host.textContent).toContain('Resolved elsewhere');
+    expect(view.host.textContent).not.toContain('Waiting for your decision');
+    expect(view.host.textContent).not.toContain('Permission request is no longer pending.');
+    const buttons = Array.from(view.host.querySelectorAll('button'))
+      .filter((button) => button.textContent?.includes('Allow once') || button.textContent?.includes('Deny'));
+    expect(buttons.length).toBeGreaterThan(0);
+    expect(buttons.every((button) => (button as HTMLButtonElement).disabled)).toBe(true);
+    expect(allowButton?.querySelector('.animate-spin')).toBeNull();
+
+    view.cleanup();
+    vi.unstubAllGlobals();
+  });
+
   it('clears local permission button loading state once the runtime resolves the request', async () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
     vi.stubGlobal('fetch', fetchMock);

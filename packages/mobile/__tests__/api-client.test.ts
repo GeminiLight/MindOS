@@ -260,10 +260,16 @@ describe('mindosClient auth', () => {
       generatedAt: 123,
     }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
 
+    // An old server without `actions`: the client merges the three groups by
+    // createdAt and builds the keys locally (spec-cross-process-run-events I).
     await expect(mindosClient.getPendingAgentActions()).resolves.toEqual({
       permissions: [{ kind: 'runtime-permission', requestId: 'req-1' }],
       questions: [],
       automationApprovals: [{ kind: 'automation-approval', approvalId: 'approval-1' }],
+      actions: [
+        { kind: 'runtime-permission', requestId: 'req-1', key: 'runtime-permission:undefined:req-1' },
+        { kind: 'automation-approval', approvalId: 'approval-1', key: 'automation-approval:approval-1' },
+      ],
       pendingCount: 2,
       generatedAt: 123,
     });
@@ -271,6 +277,27 @@ describe('mindosClient auth', () => {
       'http://127.0.0.1:4567/api/agent/pending-actions',
       expect.objectContaining({ headers: expect.objectContaining({ Authorization: 'Bearer secret-token' }) }),
     );
+  });
+
+  it('passes server-normalized pending actions through untouched', async () => {
+    mindosClient.setBaseUrl('http://127.0.0.1:4567');
+    mindosClient.setAuthToken('secret-token');
+    const actions = [
+      { kind: 'user-question', runId: 'run-1', toolCallId: 'q-1', key: 'user-question:run-1:q-1', createdAt: 5 },
+    ];
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify({
+      permissions: [],
+      questions: [{ kind: 'user-question', runId: 'run-1', toolCallId: 'q-1', createdAt: 5 }],
+      automationApprovals: [],
+      actions,
+      pendingCount: 1,
+      generatedAt: 123,
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+
+    await expect(mindosClient.getPendingAgentActions()).resolves.toMatchObject({
+      actions,
+      pendingCount: 1,
+    });
   });
 
   it('resolves a durable automation approval through the MindOS server', async () => {

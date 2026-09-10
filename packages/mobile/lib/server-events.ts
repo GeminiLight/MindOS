@@ -37,6 +37,7 @@ export const SERVER_EVENT_TYPES = [
   'skills.changed',
   'mcp.changed',
   'sync.changed',
+  'run.pending-actions.changed',
   'heartbeat',
   'ready',
 ] as const;
@@ -60,6 +61,8 @@ export interface ServerEventMap {
   'skills.changed': { type: 'skills.changed' };
   'mcp.changed': { type: 'mcp.changed' };
   'sync.changed': { type: 'sync.changed' };
+  /** A pending permission / question / automation-approval prompt was created or resolved in any host process. */
+  'run.pending-actions.changed': { type: 'run.pending-actions.changed' };
   heartbeat: { type: 'heartbeat' };
   ready: { type: 'ready'; lastEventId: number; resync: boolean; treeVersion?: number };
 }

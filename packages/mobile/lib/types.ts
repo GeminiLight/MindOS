@@ -18,6 +18,12 @@ import type {
   AgentRunTimelineRecord,
   DetectedRuntimeAgent,
   MissingRuntimeAgent,
+  PendingAgentAction,
+  PendingAgentActionEntry,
+  PendingAgentActionsPayload,
+  PendingAskUserQuestionAction,
+  PendingAutomationApprovalAction,
+  PendingRuntimePermissionAction,
 } from '@geminilight/mindos/client-types';
 
 export type {
@@ -32,8 +38,15 @@ export type {
   AgentRuntimeAdapter,
   AgentRuntimeKind,
   AgentRuntimeStatus,
+  AskUserQuestionDraft,
   DetectedRuntimeAgent,
   MissingRuntimeAgent,
+  PendingAgentAction,
+  PendingAgentActionEntry,
+  PendingAgentActionsPayload,
+  PendingAskUserQuestionAction,
+  PendingAutomationApprovalAction,
+  PendingRuntimePermissionAction,
 } from '@geminilight/mindos/client-types';
 
 // --- Core domain types (from packages/web/lib/core/types.ts) ---
@@ -147,6 +160,8 @@ export interface AgentRuntimesResponse {
 export interface AgentRunsResponse {
   runs: AgentRunTimelineRecord[];
   events: AgentRunTimelineEvent[];
+  /** Server-computed visible timeline; only present with `view=timeline` (spec-cross-process-run-events F). */
+  timeline?: AgentRunTimelinePart | null;
   observatory?: {
     traces: Array<{
       id: string;
@@ -206,17 +221,12 @@ export interface RuntimePermissionState extends RuntimePermissionRequest {
   decisionScope?: 'once' | 'session' | 'always' | 'turn';
 }
 
-export interface PendingRuntimePermission extends Omit<RuntimePermissionRequest, 'type'> {
-  kind: 'runtime-permission';
-  action: string;
-  risk: {
-    level: 'low' | 'medium' | 'high';
-    summary: string;
-    reasons?: string[];
-  };
-  createdAt: number;
-  expiresAt: number;
-}
+/**
+ * Pending agent action shapes are the core projection types
+ * (spec-cross-process-run-events D/I): one derivation serves Web, Mobile and
+ * every host process. The historical mobile names stay as aliases.
+ */
+export type PendingRuntimePermission = PendingRuntimePermissionAction;
 
 export interface AskUserQuestionOption {
   label: string;
@@ -241,40 +251,11 @@ export interface AskUserQuestionAnswer {
   preview?: string;
 }
 
-export interface PendingAskUserQuestion {
-  kind: 'user-question';
-  runId: string;
-  toolCallId: string;
-  questions: AskUserQuestionQuestion[];
-  createdAt: number;
-  expiresAt: number;
-}
+export type PendingAskUserQuestion = PendingAskUserQuestionAction;
 
-export interface PendingAutomationApproval {
-  kind: 'automation-approval';
-  approvalId: string;
-  jobId: string;
-  runId?: string;
-  jobTitle: string;
-  runtime: 'codex' | 'claude';
-  toolName: string;
-  action?: string;
-  resource?: string;
-  inputPreview?: string;
-  risk?: {
-    level: 'low' | 'medium' | 'high';
-    summary: string;
-  };
-  createdAt: number;
-}
+export type PendingAutomationApproval = PendingAutomationApprovalAction;
 
-export interface PendingAgentActionsResponse {
-  permissions: PendingRuntimePermission[];
-  questions: PendingAskUserQuestion[];
-  automationApprovals: PendingAutomationApproval[];
-  pendingCount: number;
-  generatedAt: number;
-}
+export type PendingAgentActionsResponse = PendingAgentActionsPayload;
 
 export interface ChatSession {
   id: string;

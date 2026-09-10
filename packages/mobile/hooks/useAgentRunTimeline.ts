@@ -3,7 +3,6 @@ import { mindosClient } from '@/lib/api-client';
 import {
   latestUserMessageTimestamp,
   mergeAgentRunTimelineIntoMessages,
-  selectVisibleAgentRunTimeline,
 } from '@/lib/agent-run-timeline';
 import { startEventDrivenRefresh } from '@/lib/event-driven-refresh';
 import type { Message } from '@/lib/types';
@@ -47,20 +46,20 @@ export function useAgentRunTimeline(input: {
 
   const refreshOnce = useCallback(async (chatSessionId: string, signal?: AbortSignal) => {
     const startedAfter = ensureTurnStartedAfter();
+    // view=timeline: the server skips the observatory attachments and
+    // precomputes the visible timeline with the ONE shared core projection
+    // (spec-cross-process-run-events E/F).
     const payload = await mindosClient.getAgentRuns({
       chatSessionId,
       startedAfter,
       includeEvents: true,
       limit: 50,
+      view: 'timeline',
       signal,
     }).catch(() => null);
     if (!payload || signal?.aborted) return;
 
-    const timeline = selectVisibleAgentRunTimeline({
-      payload,
-      chatSessionId,
-      startedAfter,
-    });
+    const timeline = payload.timeline ?? null;
     if (!timeline) return;
     setMessagesRef.current((prev) => mergeAgentRunTimelineIntoMessages(prev, timeline));
   }, [ensureTurnStartedAfter]);

@@ -10,6 +10,7 @@ import {
 import type { ToolCallPart } from '@/lib/types';
 import type { LucideIcon } from 'lucide-react';
 import AskUserQuestionBlock from './AskUserQuestionBlock';
+import { requestPendingAgentActionsRefresh } from '@/hooks/usePendingAgentActions';
 import { redactSensitiveObject, redactSensitiveText } from '@geminilight/mindos/agent/redaction';
 
 const DESTRUCTIVE_TOOLS = new Set(['delete_file', 'move_file', 'rename_file', 'write_file']);
@@ -446,6 +447,7 @@ function RuntimePermissionControls({ part }: { part: ToolCallPart }) {
   const permission = part.runtimePermission;
   const [submitting, setSubmitting] = useState<string | null>(null);
   const [error, setError] = useState('');
+  const [resolvedElsewhere, setResolvedElsewhere] = useState(false);
   const waiting = permission?.status === 'waiting';
 
   useEffect(() => {
@@ -454,16 +456,18 @@ function RuntimePermissionControls({ part }: { part: ToolCallPart }) {
 
   if (!permission) return null;
   const permissionState = permission;
-  const statusText = permissionState.status === 'approved'
-    ? 'Approved'
-    : permissionState.status === 'denied'
-      ? 'Denied'
-      : permissionState.status === 'cancelled'
-        ? 'Cancelled'
-        : 'Waiting for your decision';
+  const statusText = resolvedElsewhere
+    ? 'Resolved elsewhere'
+    : permissionState.status === 'approved'
+      ? 'Approved'
+      : permissionState.status === 'denied'
+        ? 'Denied'
+        : permissionState.status === 'cancelled'
+          ? 'Cancelled'
+          : 'Waiting for your decision';
 
   async function submitDecision(decision: string) {
-    if (!waiting || submitting) return;
+    if (!waiting || submitting || resolvedElsewhere) return;
     setSubmitting(decision);
     setError('');
     try {
@@ -476,6 +480,15 @@ function RuntimePermissionControls({ part }: { part: ToolCallPart }) {
           decision,
         }),
       });
+      if (res.status === 404) {
+        // The prompt is gone: another tab, another host or the timeout won the
+        // race (spec-cross-process-run-events). Stop offering the decision,
+        // say what happened, and let the pending list refetch — never spin.
+        setResolvedElsewhere(true);
+        setSubmitting(null);
+        requestPendingAgentActionsRefresh();
+        return;
+      }
       if (!res.ok) {
         const body = await res.json().catch(() => null);
         throw new Error(typeof body?.error === 'string' ? body.error : 'Could not send permission decision.');
@@ -516,7 +529,7 @@ function RuntimePermissionControls({ part }: { part: ToolCallPart }) {
             <button
               key={option.id}
               type="button"
-              disabled={!waiting || Boolean(submitting)}
+              disabled={!waiting || Boolean(submitting) || resolvedElsewhere}
               onClick={() => void submitDecision(option.id)}
               title={optionDescription}
               className={`inline-flex h-7 items-center gap-1 rounded-md border px-2 text-2xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${

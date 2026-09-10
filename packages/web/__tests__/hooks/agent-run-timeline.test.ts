@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  buildAgentRunsTimelineStreamUrl,
   buildAgentRunsTimelineUrl,
   mergeAgentRunTimelineIntoMessages,
   selectVisibleAgentRunTimeline,
@@ -41,30 +40,18 @@ function eventFor(
 }
 
 describe('mergeAgentRunTimelineIntoMessages', () => {
-  it('builds root-scoped query urls before falling back to startedAfter', () => {
+  it('builds lean timeline-view query urls, root-scoped before startedAfter fallback', () => {
     expect(buildAgentRunsTimelineUrl({
       chatSessionId: 'chat-1',
       rootRunId: 'root-1',
       startedAfter: 100,
-    })).toBe('/api/agent-runs?chatSessionId=chat-1&limit=50&rootRunId=root-1');
+    })).toBe('/api/agent-runs?view=timeline&chatSessionId=chat-1&limit=50&rootRunId=root-1');
 
     expect(buildAgentRunsTimelineUrl({
       chatSessionId: 'chat-1',
       startedAfter: 100,
       limit: 20,
-    })).toBe('/api/agent-runs?chatSessionId=chat-1&limit=20&startedAfter=100');
-
-    expect(buildAgentRunsTimelineStreamUrl({
-      chatSessionId: 'chat-1',
-      rootRunId: 'root-1',
-      startedAfter: 100,
-    })).toBe('/api/agent-runs/stream?chatSessionId=chat-1&limit=50&rootRunId=root-1');
-
-    expect(buildAgentRunsTimelineStreamUrl({
-      chatSessionId: 'chat-1',
-      startedAfter: 100,
-      limit: 20,
-    })).toBe('/api/agent-runs/stream?chatSessionId=chat-1&limit=20&startedAfter=100');
+    })).toBe('/api/agent-runs?view=timeline&chatSessionId=chat-1&limit=20&startedAfter=100');
   });
 
   it('adds a timeline part to the latest assistant message without dropping text content', () => {

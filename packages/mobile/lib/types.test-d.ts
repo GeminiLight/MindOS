@@ -30,6 +30,11 @@ type Assertions = [
   Expect<Equal<Mobile.AgentRunTimelineEventData, Core.AgentRunTimelineEventData>>,
   Expect<Equal<Mobile.AgentRunTimelineEvent, Core.AgentRunTimelineEvent>>,
   Expect<Equal<Mobile.AgentRunTimelinePart, Core.AgentRunTimelinePart>>,
+  Expect<Equal<Mobile.PendingRuntimePermission, Core.PendingRuntimePermissionAction>>,
+  Expect<Equal<Mobile.PendingAskUserQuestion, Core.PendingAskUserQuestionAction>>,
+  Expect<Equal<Mobile.PendingAutomationApproval, Core.PendingAutomationApprovalAction>>,
+  Expect<Equal<Mobile.PendingAgentActionsResponse, Core.PendingAgentActionsPayload>>,
+  Expect<Equal<Mobile.PendingAgentActionEntry, Core.PendingAgentActionEntry>>,
 ];
 
 export type { Assertions as ClientTypeAssertions };

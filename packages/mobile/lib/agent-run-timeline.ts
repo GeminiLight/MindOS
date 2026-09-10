@@ -1,13 +1,21 @@
 import type {
   AgentRunStatus,
-  AgentRunTimelineEvent,
   AgentRunTimelinePart,
   AgentRunTimelineRecord,
-  AgentRunsResponse,
   Message,
   MessagePart,
   TextPart,
 } from './types';
+
+/**
+ * Client-side timeline message operations. The visibility rules (which runs
+ * and events a timeline card shows) moved to the core projection
+ * `server/projections/agent-run-timeline.ts` (spec-cross-process-run-events E):
+ * the server precomputes `payload.timeline` for `GET /api/agent-runs?view=timeline`
+ * with the ONE shared implementation. Metro cannot import product runtime
+ * code, so the merge below stays local — kept honest against the core module
+ * by `__tests__/agent-run-timeline-core-parity.test.ts`.
+ */
 
 const TERMINAL_STATUSES = new Set<AgentRunStatus>(['completed', 'failed', 'canceled', 'timed_out']);
 
@@ -21,40 +29,6 @@ export function latestUserMessageTimestamp(messages: Message[]): number {
     }
   }
   return Date.now();
-}
-
-export function selectVisibleAgentRunTimeline(input: {
-  payload: AgentRunsResponse;
-  chatSessionId: string;
-  startedAfter: number;
-  rootRunId?: string;
-  now?: number;
-}): AgentRunTimelinePart | null {
-  const runs = Array.isArray(input.payload.runs) ? input.payload.runs : [];
-  const events = Array.isArray(input.payload.events) ? input.payload.events : [];
-  const eventsByRun = new Map<string, AgentRunTimelineEvent[]>();
-  for (const event of events) {
-    const next = eventsByRun.get(event.runId) ?? [];
-    next.push(event);
-    eventsByRun.set(event.runId, next);
-  }
-
-  const visibleRuns = runs.filter((run) => isTimelineRunVisible(run, eventsByRun.get(run.id) ?? []));
-  const visibleRunIds = new Set(visibleRuns.map((run) => run.id));
-  const visibleEvents = events
-    .filter((event) => visibleRunIds.has(event.runId))
-    .filter(isActionableTimelineEvent);
-
-  if (visibleRuns.length === 0 && visibleEvents.length === 0) return null;
-  return {
-    type: 'agent-run-timeline',
-    chatSessionId: input.chatSessionId,
-    ...(input.rootRunId ? { rootRunId: input.rootRunId } : {}),
-    startedAfter: input.startedAfter,
-    runs: visibleRuns,
-    ...(visibleEvents.length > 0 ? { events: visibleEvents } : {}),
-    updatedAt: input.now ?? Date.now(),
-  };
 }
 
 export function mergeAgentRunTimelineIntoMessages(
@@ -164,39 +138,6 @@ function omitParts(message: Message): Message {
   const next = { ...message };
   delete next.parts;
   return next;
-}
-
-function isActionableTimelineEvent(event: AgentRunTimelineEvent): boolean {
-  if (event.visibility === 'debug') return false;
-  if (
-    event.record?.agentKind === 'native-runtime'
-    && (event.category === 'tool' || event.category === 'permission' || event.category === 'question')
-  ) {
-    return false;
-  }
-  if (
-    event.category === 'tool'
-    || event.category === 'file'
-    || event.category === 'permission'
-    || event.category === 'question'
-    || event.category === 'error'
-  ) {
-    return true;
-  }
-  if (event.type === 'run_failed' || event.type === 'run_canceled') return true;
-  return event.status === 'failed' || event.status === 'timed_out' || event.status === 'canceled';
-}
-
-function isTimelineRunVisible(run: AgentRunTimelineRecord, events: AgentRunTimelineEvent[]): boolean {
-  if (run.agentKind === 'mindos-main') return false;
-  if (run.status === 'failed' || run.status === 'timed_out' || run.status === 'canceled' || Boolean(run.error)) {
-    return true;
-  }
-  if (events.some(isActionableTimelineEvent)) return true;
-  if (run.agentKind === 'pi-subagent' || run.agentKind === 'a2a' || run.agentKind === 'mindos-headless') return true;
-  if (run.agentKind === 'acp') return Boolean(run.parentRunId && run.parentRunId !== run.id);
-  if (run.agentKind !== 'native-runtime') return true;
-  return false;
 }
 
 function serializeTimeline(part: AgentRunTimelinePart): string {

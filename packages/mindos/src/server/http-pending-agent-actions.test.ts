@@ -1,7 +1,8 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { setMindRootResolverForTests } from '../foundation/mind-root/index.js';
 import {
   requestRuntimePermissionForRun,
   runWithRuntimePermissionBridge,
@@ -10,6 +11,10 @@ import {
   askUserQuestionViaBridge,
   runWithAskUserQuestionBridge,
 } from '../agent/bridges/user-question-bridge.js';
+import {
+  recordPendingPrompt,
+  resetPendingPromptStoreForTest,
+} from '../agent/bridges/pending-prompt-store.js';
 import { createMindosHttpServer } from './http.js';
 import { handleStudioAutomationsPost } from './handlers/studio-automations.js';
 import { requestStudioAutomationPermission } from './automations/approvals.js';
@@ -19,6 +24,23 @@ const cleanups: Array<() => void | Promise<void>> = [];
 
 afterEach(async () => {
   while (cleanups.length) await cleanups.pop()?.();
+});
+
+// The pending-actions route now unions the cross-process prompt store; pin
+// the store to each test's temp root so rows never leak across tests or into
+// the developer's real mind root.
+let storeRoot = '';
+
+beforeEach(() => {
+  storeRoot = mkdtempSync(join(tmpdir(), 'mindos-pending-actions-store-'));
+  setMindRootResolverForTests(() => storeRoot);
+  resetPendingPromptStoreForTest();
+});
+
+afterEach(() => {
+  resetPendingPromptStoreForTest();
+  setMindRootResolverForTests(null);
+  rmSync(storeRoot, { recursive: true, force: true });
 });
 
 async function startServer() {
@@ -154,5 +176,86 @@ describe('Product Server pending agent action routes', () => {
     expect(resolved.status).toBe(200);
     await expect(resolved.json()).resolves.toMatchObject({ ok: true, result: 'resolved' });
     expect(readStudioAutomationState(root).approvals[0]).toMatchObject({ status: 'denied' });
+  });
+
+  it('lists store-only prompts from another lane and forwards their decisions', async () => {
+    const { base } = await startServer();
+    // A prompt that exists ONLY in the cross-process store (no in-memory map
+    // entry in this process) — the shape a foreign host writes.
+    const now = Date.now();
+    recordPendingPrompt({
+      kind: 'runtime-permission',
+      runId: 'store-run',
+      requestId: 'store-request',
+      runtime: 'claude',
+      toolCallId: 'tool-store',
+      toolName: 'Bash',
+      options: [
+        { id: 'allow-once', label: 'Allow once', intent: 'allow', scope: 'once' },
+        { id: 'deny', label: 'Deny', intent: 'deny', scope: 'once' },
+      ],
+      action: 'command',
+      resource: 'pnpm test',
+      risk: { level: 'medium', summary: 'Runs a command.' },
+      createdAt: now,
+      expiresAt: now + 60_000,
+    });
+
+    const listed = await fetch(`${base}/api/agent/pending-actions`, { headers: auth });
+    expect(listed.status).toBe(200);
+    const body = await listed.json();
+    expect(body).toMatchObject({
+      pendingCount: 1,
+      permissions: [expect.objectContaining({ runId: 'store-run', requestId: 'store-request' })],
+      actions: [expect.objectContaining({ key: 'runtime-permission:store-run:store-request' })],
+    });
+
+    // This process does not hold the prompt, so the decision is forwarded
+    // through the store for the owning process to drain.
+    const resolved = await fetch(`${base}/api/agent/runtime-permission`, {
+      method: 'POST',
+      headers: { ...auth, 'content-type': 'application/json' },
+      body: JSON.stringify({ runId: 'store-run', requestId: 'store-request', decision: 'allow-once' }),
+    });
+    expect(resolved.status).toBe(200);
+    await expect(resolved.json()).resolves.toMatchObject({ ok: true, forwarded: true });
+
+    // First-writer-wins: a second decision is a 404, and the prompt is gone
+    // from the listing.
+    const again = await fetch(`${base}/api/agent/runtime-permission`, {
+      method: 'POST',
+      headers: { ...auth, 'content-type': 'application/json' },
+      body: JSON.stringify({ runId: 'store-run', requestId: 'store-request', decision: 'deny' }),
+    });
+    expect(again.status).toBe(404);
+    const after = await fetch(`${base}/api/agent/pending-actions`, { headers: auth });
+    await expect(after.json()).resolves.toMatchObject({ pendingCount: 0, actions: [] });
+  });
+
+  it('refuses a forwarded decision that is not one of the stored options', async () => {
+    const { base } = await startServer();
+    const now = Date.now();
+    recordPendingPrompt({
+      kind: 'runtime-permission',
+      runId: 'store-run-400',
+      requestId: 'store-request-400',
+      runtime: 'codex',
+      toolCallId: 'tool-store-400',
+      toolName: 'Bash',
+      options: [{ id: 'deny', label: 'Deny', intent: 'deny', scope: 'once' }],
+      action: 'command',
+      risk: { level: 'low', summary: 'Read only.' },
+      createdAt: now,
+      expiresAt: now + 60_000,
+    });
+    const resolved = await fetch(`${base}/api/agent/runtime-permission`, {
+      method: 'POST',
+      headers: { ...auth, 'content-type': 'application/json' },
+      body: JSON.stringify({ runId: 'store-run-400', requestId: 'store-request-400', decision: 'allow-always' }),
+    });
+    expect(resolved.status).toBe(400);
+    await expect(resolved.json()).resolves.toMatchObject({
+      error: 'Permission decision is not valid for this request.',
+    });
   });
 });

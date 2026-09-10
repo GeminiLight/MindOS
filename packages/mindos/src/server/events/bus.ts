@@ -21,6 +21,7 @@ export type MindosServerEventType =
   | 'runtime.changed'
   | 'settings.changed'
   | 'control-plane.changed'
+  | 'run.pending-actions.changed'
   | 'acp.session.changed'
   | 'heartbeat';
 
@@ -48,6 +49,8 @@ export type MindosServerEvent =
   | { type: 'settings.changed' }
   /** A runtime control-plane mutation (schedule / approval / task / mailbox …) was committed to disk. */
   | { type: 'control-plane.changed'; mindRoot: string; action: string; updatedAt: string }
+  /** A pending permission / question / automation-approval prompt was created or resolved (any process). */
+  | { type: 'run.pending-actions.changed' }
   | { type: 'acp.session.changed'; agentId: string; sessionId: string; state: 'idle' | 'active' | 'error' | 'closed' }
   | { type: 'heartbeat' };
 
@@ -60,6 +63,7 @@ export const MINDOS_SERVER_EVENT_TYPES: readonly MindosServerEventType[] = [
   'runtime.changed',
   'settings.changed',
   'control-plane.changed',
+  'run.pending-actions.changed',
   'acp.session.changed',
   'heartbeat',
 ];

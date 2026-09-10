@@ -1,28 +1,46 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { mindosClient } from '@/lib/api-client';
-import {
-  compactPendingAgentActionError,
-  isPendingAgentActionEvent,
-  normalizePendingAgentActions,
-  pendingAgentActionKey,
-  type NormalizedPendingAgentActions,
-} from '@/lib/pending-agent-actions';
+import { compactPendingAgentActionError } from '@/lib/pending-agent-actions';
 import type {
   AskUserQuestionAnswer,
+  PendingAgentActionsResponse,
   PendingAskUserQuestion,
   PendingAutomationApproval,
   PendingRuntimePermission,
 } from '@/lib/types';
+import type { ServerEvent } from '@/lib/server-events';
 import { useEventDrivenRefresh } from '@/hooks/useEventDrivenRefresh';
 
 /**
- * Automation approvals are written by the automation executor and have no
- * server event yet, so a slow poll stays on even while the stream is
- * connected. Permission and question prompts arrive through `agent-run.event`.
+ * Pending actions are now event-driven from EVERY host process
+ * (spec-cross-process-run-events I): the host tails the shared prompt store
+ * and emits `run.pending-actions.changed` when any process creates or
+ * resolves a prompt (automation approvals included), so the old 10s
+ * connected poll is gone. Payload derivation lives in the core projection —
+ * the server answers with normalized `actions[].key` and this hook only
+ * manages transport state.
  */
-export const PENDING_AGENT_ACTIONS_CONNECTED_POLL_MS = 10_000;
-const PENDING_AGENT_ACTIONS_EVENT_TYPES = ['agent-run.event'] as const;
+const PENDING_AGENT_ACTIONS_EVENT_TYPES = ['agent-run.event', 'run.pending-actions.changed'] as const;
 const PENDING_AGENT_ACTIONS_EVENT_DEBOUNCE_MS = 250;
+const PENDING_ACTION_EVENT_CATEGORIES = new Set(['permission', 'question']);
+const PENDING_ACTION_RUN_TERMINAL_TYPES = new Set(['run_completed', 'run_failed', 'run_canceled']);
+
+/** Mirrors the core `isPendingAgentActionEvent` filter (runtime code mobile cannot import). */
+function acceptPendingAgentActionEvent(event: ServerEvent): boolean {
+  if (event.type === 'run.pending-actions.changed') return true;
+  if (event.type !== 'agent-run.event') return false;
+  return PENDING_ACTION_EVENT_CATEGORIES.has(event.event.category)
+    || PENDING_ACTION_RUN_TERMINAL_TYPES.has(event.event.type);
+}
+
+const EMPTY_SNAPSHOT: PendingAgentActionsResponse = {
+  permissions: [],
+  questions: [],
+  automationApprovals: [],
+  actions: [],
+  pendingCount: 0,
+  generatedAt: 0,
+};
 
 interface UsePendingAgentActionsOptions {
   enabled?: boolean;
@@ -34,8 +52,7 @@ export function usePendingAgentActions({
   enabled = true,
   pollIntervalMs = 2500,
 }: UsePendingAgentActionsOptions = {}) {
-  const [snapshot, setSnapshot] = useState<NormalizedPendingAgentActions>(() =>
-    normalizePendingAgentActions({ permissions: [], questions: [], automationApprovals: [] }));
+  const [snapshot, setSnapshot] = useState<PendingAgentActionsResponse>(EMPTY_SNAPSHOT);
   const [loading, setLoading] = useState(enabled);
   const [error, setError] = useState('');
   const [resolvingKey, setResolvingKey] = useState<string | null>(null);
@@ -50,7 +67,7 @@ export function usePendingAgentActions({
       requestController.current?.abort();
       requestController.current = null;
       inFlight.current = false;
-      setSnapshot(normalizePendingAgentActions({ permissions: [], questions: [], automationApprovals: [] }));
+      setSnapshot(EMPTY_SNAPSHOT);
       setLoading(false);
       setError('');
       return;
@@ -67,7 +84,7 @@ export function usePendingAgentActions({
     try {
       const payload = await mindosClient.getPendingAgentActions({ signal: controller.signal });
       if (requestSequence.current !== sequence) return;
-      setSnapshot(normalizePendingAgentActions(payload));
+      setSnapshot(payload);
       setError('');
     } catch (requestError) {
       if (controller.signal.aborted || requestSequence.current !== sequence) return;
@@ -92,11 +109,15 @@ export function usePendingAgentActions({
     try {
       await operation();
       setSnapshot((current) => {
-        const permissions = current.permissions.filter((item) => pendingAgentActionKey(item) !== key);
-        const questions = current.questions.filter((item) => pendingAgentActionKey(item) !== key);
-        const automationApprovals = current.automationApprovals
-          .filter((item) => pendingAgentActionKey(item) !== key);
-        return normalizePendingAgentActions({ permissions, questions, automationApprovals });
+        const actions = current.actions.filter((item) => item.key !== key);
+        return {
+          permissions: actions.filter((item): item is PendingRuntimePermission & { key: string } => item.kind === 'runtime-permission'),
+          questions: actions.filter((item): item is PendingAskUserQuestion & { key: string } => item.kind === 'user-question'),
+          automationApprovals: actions.filter((item): item is PendingAutomationApproval & { key: string } => item.kind === 'automation-approval'),
+          actions,
+          pendingCount: actions.length,
+          generatedAt: current.generatedAt,
+        };
       });
       await refresh({ force: true });
       return true;
@@ -111,9 +132,9 @@ export function usePendingAgentActions({
   }, [refresh]);
 
   const resolvePermission = useCallback((
-    action: PendingRuntimePermission,
+    action: PendingRuntimePermission & { key: string },
     decision: string,
-  ) => resolveAction(pendingAgentActionKey(action), () =>
+  ) => resolveAction(action.key, () =>
     mindosClient.resolveRuntimePermission({
       runId: action.runId,
       requestId: action.requestId,
@@ -121,9 +142,9 @@ export function usePendingAgentActions({
     })), [resolveAction]);
 
   const answerQuestion = useCallback((
-    action: PendingAskUserQuestion,
+    action: PendingAskUserQuestion & { key: string },
     answers: AskUserQuestionAnswer[],
-  ) => resolveAction(pendingAgentActionKey(action), () =>
+  ) => resolveAction(action.key, () =>
     mindosClient.resolveUserQuestion({
       runId: action.runId,
       toolCallId: action.toolCallId,
@@ -131,8 +152,8 @@ export function usePendingAgentActions({
       answers,
     })), [resolveAction]);
 
-  const cancelQuestion = useCallback((action: PendingAskUserQuestion) =>
-    resolveAction(pendingAgentActionKey(action), () =>
+  const cancelQuestion = useCallback((action: PendingAskUserQuestion & { key: string }) =>
+    resolveAction(action.key, () =>
       mindosClient.resolveUserQuestion({
         runId: action.runId,
         toolCallId: action.toolCallId,
@@ -141,9 +162,9 @@ export function usePendingAgentActions({
       })), [resolveAction]);
 
   const resolveAutomationApproval = useCallback((
-    action: PendingAutomationApproval,
+    action: PendingAutomationApproval & { key: string },
     decision: 'allow' | 'deny',
-  ) => resolveAction(pendingAgentActionKey(action), () =>
+  ) => resolveAction(action.key, () =>
     mindosClient.resolveAutomationApproval({ approvalId: action.approvalId, decision })), [resolveAction]);
 
   useEffect(() => {
@@ -153,12 +174,11 @@ export function usePendingAgentActions({
   useEventDrivenRefresh({
     enabled,
     eventTypes: PENDING_AGENT_ACTIONS_EVENT_TYPES,
-    accept: isPendingAgentActionEvent,
+    accept: acceptPendingAgentActionEvent,
     // An event aborts any in-flight poll so a fresh prompt is never hidden behind a stale response.
     refresh: (reason) => refresh(reason === 'poll' ? {} : { force: true }),
     debounceMs: PENDING_AGENT_ACTIONS_EVENT_DEBOUNCE_MS,
     fallbackPollMs: pollIntervalMs,
-    connectedPollMs: PENDING_AGENT_ACTIONS_CONNECTED_POLL_MS,
   });
 
   useEffect(() => () => {

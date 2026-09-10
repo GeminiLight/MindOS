@@ -17,7 +17,6 @@ import { usePendingAgentActions } from '@/hooks/usePendingAgentActions';
 import { useConnectionStore } from '@/lib/connection-store';
 import {
   buildAskUserQuestionAnswers,
-  pendingAgentActionKey,
   type AskUserQuestionDraft,
 } from '@/lib/pending-agent-actions';
 import type {
@@ -31,7 +30,8 @@ export default function PendingAgentActionSheet() {
   const connected = useConnectionStore((state) => state.status === 'connected');
   const pending = usePendingAgentActions({ enabled: connected });
   const action = pending.actions[0];
-  const actionKey = action ? pendingAgentActionKey(action) : null;
+  // The core projection stamps a stable key on every action entry.
+  const actionKey = action ? action.key : null;
   const [visible, setVisible] = useState(false);
   const [dismissedKey, setDismissedKey] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Record<number, AskUserQuestionDraft>>({});
@@ -55,7 +55,7 @@ export default function PendingAgentActionSheet() {
     setVisible(false);
   };
 
-  async function submitQuestion(questionAction: PendingAskUserQuestion) {
+  async function submitQuestion(questionAction: PendingAskUserQuestion & { key: string }) {
     const result = buildAskUserQuestionAnswers(questionAction, drafts);
     if (!result.ok) {
       setValidationError(result.error);

@@ -12,15 +12,17 @@ describe('pending agent action sheet contract', () => {
     expect(layout).toContain('<PendingAgentActionSheet />');
   });
 
-  it('refreshes on agent-run events, keeps the 2.5s poll only as a fallback, and refreshes after decisions', () => {
+  it('refreshes on pending-action and agent-run events, keeps the 2.5s poll only as a fallback, and refreshes after decisions', () => {
     const hook = read('hooks/usePendingAgentActions.ts');
     // Foreground gating and the fallback poll now live in useEventDrivenRefresh
     // (see event-driven-refresh.test.ts); the hook must wire it rather than
     // own a setInterval or AppState listener again.
     expect(hook).toContain('useEventDrivenRefresh({');
     expect(hook).toContain("'agent-run.event'");
-    expect(hook).toContain('accept: isPendingAgentActionEvent');
+    expect(hook).toContain("'run.pending-actions.changed'");
+    expect(hook).toContain('accept: acceptPendingAgentActionEvent');
     expect(hook).toContain('fallbackPollMs: pollIntervalMs');
+    expect(hook).not.toMatch(/connectedPollMs/);
     expect(hook).not.toMatch(/\bsetInterval\s*\(/);
     expect(hook).not.toContain('AppState.addEventListener');
     expect(hook).toContain('getPendingAgentActions');
@@ -28,6 +30,15 @@ describe('pending agent action sheet contract', () => {
     expect(hook).toContain('resolveAutomationApproval');
     expect(hook).toContain('resolveUserQuestion');
     expect(hook).toContain('pollIntervalMs = 2500');
+  });
+
+  it('consumes the server-normalized action keys instead of deriving them locally', () => {
+    const hook = read('hooks/usePendingAgentActions.ts');
+    expect(hook).toContain('item.key !== key');
+    expect(hook).not.toContain('pendingAgentActionKey');
+    const sheet = read('components/agent/PendingAgentActionSheet.tsx');
+    expect(sheet).toContain('action.key');
+    expect(sheet).not.toContain('pendingAgentActionKey');
   });
 
   it('supports server-provided permission choices and complete question answers', () => {

@@ -44,13 +44,17 @@ describe('mobile event-driven refresh wiring', () => {
     }
   });
 
-  it('keeps a slow connected poll for pending actions because automation approvals have no server event', () => {
+  it('drives pending actions from run.pending-actions.changed with no connected poll', () => {
+    // The host now tails the cross-process prompt store and emits
+    // `run.pending-actions.changed` for every process's prompts (including
+    // automation approvals), so the 10s connected poll is gone
+    // (spec-cross-process-run-events I).
     const source = read('hooks/usePendingAgentActions.ts');
-    const match = source.match(/PENDING_AGENT_ACTIONS_CONNECTED_POLL_MS\s*=\s*([\d_]+)/);
-    expect(match).not.toBeNull();
-    expect(Number(match![1].replace(/_/g, ''))).toBeGreaterThanOrEqual(10_000);
-    expect(source).toContain('connectedPollMs: PENDING_AGENT_ACTIONS_CONNECTED_POLL_MS');
-    expect(source).toContain('accept: isPendingAgentActionEvent');
+    expect(source).not.toMatch(/connectedPollMs/);
+    expect(source).not.toMatch(/PENDING_AGENT_ACTIONS_CONNECTED_POLL_MS/);
+    expect(source).toContain("'run.pending-actions.changed'");
+    expect(source).toMatch(/PENDING_AGENT_ACTIONS_EVENT_TYPES = \['agent-run\.event', 'run\.pending-actions\.changed'\]/);
+    expect(source).toContain('accept: acceptPendingAgentActionEvent');
   });
 
   it('does not add a connected poll anywhere else', () => {

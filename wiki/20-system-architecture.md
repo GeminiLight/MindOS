@@ -106,7 +106,7 @@ mindos/
 | `POST /api/file/import` | 文件导入（支持 AI Organize） |
 | `GET /api/changes` | 变更事件追踪 |
 | `GET /api/tree-version` | 文件树版本号（流断开时的兜底轮询） |
-| `GET /api/events` | 服务端事件流（SSE）：`tree.changed` / `agent-run.event` / `skills.changed` / `mcp.changed` / `sync.changed`，支持 `Last-Event-ID` 重放与 `?types=` 过滤；Web 以它替代固定间隔轮询，见 `specs/spec-sse-event-stream.md` |
+| `GET /api/events` | 服务端事件流（SSE）：`tree.changed` / `agent-run.event` / `skills.changed` / `mcp.changed` / `sync.changed` / `runtime.changed` / `settings.changed` / `control-plane.changed` / `run.pending-actions.changed`，支持 `Last-Event-ID` 重放与 `?types=` 过滤；Web 以它替代固定间隔轮询，见 `specs/spec-sse-event-stream.md`。跨进程：`server/events/ledger-tail-bridge.ts` 是懒源，只在有订阅者时每 1 s tail 共享 ledger（owner≠本进程的行才发 `agent-run.event`，水位=max(seq)，不回放历史），并盯 pending-prompt store 的 meta version 与 automations `state.json` 指纹发 `run.pending-actions.changed`，见 `specs/spec-cross-process-run-events.md` |
 | `POST /api/agent-activity` | Agent 活动日志 |
 | `POST /api/a2a` | A2A JSON-RPC 端点 |
 | `GET /api/a2a/agents` | A2A Agent 列表 |
@@ -219,6 +219,7 @@ mindos/
 | 内容变更日志 | `.mindos/db/change_log_1.sqlite` | `server/handlers/change-log-store.ts` | 唯一实现；Web `lib/core/content-changes.ts` 与 `knowledge/audit` 只做委托。list/summary/facets 是 SQL，保留最新 500 条 |
 | Agent run ledger | `.mindos/db/agent_runs_1.sqlite` | `agent/ledger/run-ledger*.ts` | run 行 + timeline/debug 事件同表（`visibility` 列）；事件行只存事件 payload，`record` 读时从 `agent_runs` JOIN 补回（生命周期 / permission 事件保留写入时快照，旧行内嵌 record 原样可读）；本进程打开的 run 记录按进程缓存，token delta 逐条通知进程内订阅者、按 ≤250 ms / 2 KB 合并成一行落库（非 delta 写、生命周期写、进程内读之前 flush）；跨进程即时可见（debug delta 最多晚 250 ms）；孤儿 run 由 `owner_pid/owner_start_ts` 在读时投影为 failed，不改写行；每 run 每类事件保留 1000 条，run 保留 500 条。spec：`wiki/specs/spec-ledger-write-cost.md` |
 | Agent artifact 指针 | 同上（`agent_artifacts` 表，migration v2） | `agent/ledger/artifact-ledger{,-db}.ts` | 指针索引卡（path / uri / runId / toolCallId），不存 blob；索引 `(run_id, created_at)` / `(created_at DESC)` / `(updated_at DESC)`，列表按 `updated_at DESC`；按 `created_at` 保留最新 1000；旧 `agent-artifact-ledger.<pid>-<startTs>.jsonl` 首次使用时一次性导入 |
+| 跨进程 pending prompts | `.mindos/db/agent_pending_prompts_1.sqlite` | `agent/bridges/pending-prompt-store.ts` | permission / question 提示的跨进程镜像：bridge enqueue/finish 时 upsert/resolve 行（owner_pid/start_ts 标进程），任意进程可对开放行提交决定——单条 `UPDATE … WHERE resolved_at IS NULL` 保证 first-writer-wins，持有者进程 500 ms tail 把决定灌回原 promise 并标 consumed；`meta.version+writer` 供宿主 tail 发 `run.pending-actions.changed`；resolved/expired 行 1 h 后按写入摊销 prune。`GET /api/agent/pending-actions` = 本进程 Map ∪ 存储开放行（owner 存活）∪ automation approvals，经 `server/projections/pending-actions.ts`（纯模块，Web/Mobile 共用同一派生）输出带 `actions[].key`。spec：`wiki/specs/spec-cross-process-run-events.md` |
 | Run capsule 索引 | `.mindos/db/capsules_1.sqlite` | `agent/capsules/capsule-index.ts` | 0600 JSON 文件仍是事实来源；索引只记 id → 路径 + 少量字段，按月目录 mtime 判断是否重扫，行 stale 时按文件 stat 刷新，删库可重建 |
 | 进程协调 lease | `.mindos/db/state_1.sqlite` | `foundation/storage/leases.ts` | `leases(kind, key, owner, lease_until, acquired_at)`；获取 = 单条 `INSERT … ON CONFLICT DO UPDATE WHERE lease_until <= now`（`BEGIN IMMEDIATE`），释放 / 续约按 owner 匹配，按时间过期所以被 kill 的进程不留永久锁。首个用户是 `server/automations/store.ts` 的 `state.json` 写锁（`kind:'automations'`，TTL 30 s，等待 5→50 ms 退避、总预算 1 s）；`state.json` 本体仍是文件。spec：`wiki/specs/spec-automations-lease-store.md` |
 

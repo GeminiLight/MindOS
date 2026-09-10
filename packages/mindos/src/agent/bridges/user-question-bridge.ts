@@ -8,6 +8,8 @@
  */
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { ASK_USER_QUESTION_BRIDGE_KEY, getProcessGlobal } from '../global-state.js';
+import { ensurePendingDecisionTail } from './pending-prompt-changes.js';
+import { finishPendingPrompt, pendingPromptKey, recordPendingPrompt } from './pending-prompt-store.js';
 
 export type AskUserQuestionOption = {
   label: string;
@@ -216,6 +218,10 @@ function enqueueAskUserQuestion(
       clearTimeout(pending.timeout);
       if (abort) input.signal?.removeEventListener('abort', abort);
       pendingQuestions.delete(key);
+      // Every exit path (answer, cancel, timeout, abort, run teardown) closes
+      // the cross-process store row too.
+      finishPendingPrompt(pendingPromptKey({ kind: 'user-question', runId: context.runId, toolCallId: input.toolCallId }));
+      ensurePendingDecisionTail();
       resolve(result);
     };
 
@@ -241,6 +247,19 @@ function enqueueAskUserQuestion(
       createdAt,
       expiresAt: createdAt + timeoutMs,
     });
+
+    // Cross-process visibility (spec-cross-process-run-events): mirror the
+    // open question into the shared store so other hosts can list and answer
+    // it, and start draining answers they submit back into this promise.
+    recordPendingPrompt({
+      kind: 'user-question',
+      runId: context.runId,
+      toolCallId: input.toolCallId,
+      questions,
+      createdAt,
+      expiresAt: createdAt + timeoutMs,
+    });
+    ensurePendingDecisionTail();
 
     abort = () => {
       context.send({
@@ -293,7 +312,7 @@ export function answerAskUserQuestion(input: {
   if (!pending) return { ok: false, status: 404, error: 'Question is no longer pending.' };
   const validation = input.cancelled === true
     ? { ok: true as const, answers: [] }
-    : validateAnswers(pending.params.questions, input.answers);
+    : validateAskUserQuestionAnswers(pending.params.questions, input.answers);
   if (!validation.ok) return { ok: false, status: 400, error: validation.error };
 
   const result: AskUserQuestionResult = {
@@ -318,7 +337,13 @@ export function answerAskUserQuestion(input: {
   return { ok: true };
 }
 
-function validateAnswers(
+/**
+ * Validates answers against the pending questions. Exported for the
+ * cross-process forwarding path (pending-prompt-resolution.ts), which must
+ * apply exactly the same rules against the persisted snapshot before a
+ * decision is written to the store.
+ */
+export function validateAskUserQuestionAnswers(
   questions: AskUserQuestionQuestion[],
   answers: AskUserQuestionAnswer[],
 ): { ok: true; answers: AskUserQuestionAnswer[] } | { ok: false; error: string } {

@@ -1,16 +1,13 @@
 import {
-  listPendingRuntimePermissions,
-  resolveRuntimePermission,
-} from '../../agent/bridges/runtime-permission-bridge.js';
-import {
-  answerAskUserQuestion,
-  cancelAskUserQuestion,
-  listPendingAskUserQuestions,
-  type AskUserQuestionAnswer,
-} from '../../agent/bridges/user-question-bridge.js';
+  answerAskUserQuestionOrForward,
+  cancelAskUserQuestionOrForward,
+  resolveRuntimePermissionOrForward,
+} from '../../agent/bridges/pending-prompt-resolution.js';
+import type { AskUserQuestionAnswer } from '../../agent/bridges/user-question-bridge.js';
 import { json, type MindosServerResponse } from '../response.js';
 import { resolveStudioAutomationApproval } from '../automations/approvals.js';
-import { readStudioAutomationState } from '../automations/store.js';
+import { buildPendingAgentActionsPayload } from '../projections/pending-actions-source.js';
+import type { PendingAutomationApprovalAction } from '../projections/pending-actions.js';
 
 type ErrorBody = { error: string };
 
@@ -18,34 +15,18 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
-export type PendingAutomationApproval = {
-  kind: 'automation-approval';
-  approvalId: string;
-  jobId: string;
-  runId?: string;
-  jobTitle: string;
-  runtime: 'codex' | 'claude';
-  toolName: string;
-  action?: string;
-  resource?: string;
-  inputPreview?: string;
-  risk?: { level: 'low' | 'medium' | 'high'; summary: string };
-  createdAt: number;
-};
+/** Kept as an alias: the canonical shape lives in the pure core projection. */
+export type PendingAutomationApproval = PendingAutomationApprovalAction;
 
 export type PendingAgentActionServices = { mindRoot?: string; now?(): Date };
 
 export function handlePendingAgentActionsGet(services: PendingAgentActionServices = {}) {
-  const permissions = listPendingRuntimePermissions();
-  const questions = listPendingAskUserQuestions();
-  const automationApprovals = projectAutomationApprovals(services.mindRoot);
-  return json({
-    permissions,
-    questions,
-    automationApprovals,
-    pendingCount: permissions.length + questions.length + automationApprovals.length,
-    generatedAt: services.now?.().getTime() ?? Date.now(),
-  });
+  // One shared derivation for every host: in-process bridge maps ∪ open rows
+  // from the cross-process prompt store ∪ durable automation approvals.
+  return json(buildPendingAgentActionsPayload({
+    ...(services.mindRoot ? { mindRoot: services.mindRoot } : {}),
+    ...(services.now ? { now: services.now().getTime() } : {}),
+  }));
 }
 
 export function handleAutomationApprovalDecisionPost(
@@ -73,7 +54,7 @@ export function handleAutomationApprovalDecisionPost(
 
 export function handleRuntimePermissionDecisionPost(
   body: unknown,
-): MindosServerResponse<{ ok: true } | ErrorBody> {
+): MindosServerResponse<{ ok: true; forwarded?: true } | ErrorBody> {
   if (!isRecord(body)) return json({ error: 'Invalid request body.' }, { status: 400 });
   const runId = stringField(body, 'runId');
   const requestId = stringField(body, 'requestId');
@@ -81,15 +62,17 @@ export function handleRuntimePermissionDecisionPost(
   if (!runId || !requestId || !decision) {
     return json({ error: 'runId, requestId, and decision are required.' }, { status: 400 });
   }
-  const result = resolveRuntimePermission({ runId, requestId, decision });
+  // The prompt may be pending in another process; the resolver forwards the
+  // decision through the cross-process store when the local map misses.
+  const result = resolveRuntimePermissionOrForward({ runId, requestId, decision });
   return result.ok
-    ? json({ ok: true })
+    ? json({ ok: true, ...(result.forwarded ? { forwarded: true } : {}) })
     : json({ error: result.error }, { status: result.status });
 }
 
 export function handleUserQuestionDecisionPost(
   body: unknown,
-): MindosServerResponse<{ ok: true } | ErrorBody> {
+): MindosServerResponse<{ ok: true; forwarded?: true } | ErrorBody> {
   if (!isRecord(body)) return json({ error: 'Invalid request body.' }, { status: 400 });
   const runId = stringField(body, 'runId');
   const toolCallId = stringField(body, 'toolCallId');
@@ -98,19 +81,19 @@ export function handleUserQuestionDecisionPost(
   }
   const action = stringField(body, 'action') ?? 'answer';
   const result = action === 'cancel'
-    ? cancelAskUserQuestion({
+    ? cancelAskUserQuestionOrForward({
         runId,
         toolCallId,
         reason: stringField(body, 'reason') ?? 'user_cancelled',
       })
-    : answerAskUserQuestion({
+    : answerAskUserQuestionOrForward({
         runId,
         toolCallId,
         answers: normalizeAnswers(body.answers),
         cancelled: body.cancelled === true,
       });
   return result.ok
-    ? json({ ok: true })
+    ? json({ ok: true, ...(result.forwarded ? { forwarded: true } : {}) })
     : json({ error: result.error }, { status: result.status });
 }
 
@@ -134,31 +117,4 @@ function normalizeAnswers(value: unknown): AskUserQuestionAnswer[] {
 function stringField(record: Record<string, unknown>, key: string): string | undefined {
   const value = record[key];
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
-}
-
-function projectAutomationApprovals(mindRoot: string | undefined): PendingAutomationApproval[] {
-  if (!mindRoot) return [];
-  try {
-    const state = readStudioAutomationState(mindRoot);
-    const jobs = new Map(state.automations.map((job) => [job.id, job]));
-    return state.approvals
-      .filter((approval) => approval.status === 'pending')
-      .map((approval) => ({
-        kind: 'automation-approval' as const,
-        approvalId: approval.id,
-        jobId: approval.jobId,
-        ...(approval.runId ? { runId: approval.runId } : {}),
-        jobTitle: jobs.get(approval.jobId)?.title ?? 'Automation',
-        runtime: approval.runtime,
-        toolName: approval.toolName,
-        ...(approval.action ? { action: approval.action } : {}),
-        ...(approval.resource ? { resource: approval.resource } : {}),
-        ...(approval.inputPreview ? { inputPreview: approval.inputPreview } : {}),
-        ...(approval.risk ? { risk: approval.risk } : {}),
-        createdAt: new Date(approval.createdAt).getTime(),
-      }))
-      .sort((left, right) => left.createdAt - right.createdAt || left.approvalId.localeCompare(right.approvalId));
-  } catch {
-    return [];
-  }
 }

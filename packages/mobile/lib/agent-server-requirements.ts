@@ -102,7 +102,7 @@ export const AGENT_SERVER_REQUIREMENTS: AgentServerRequirement[] = [
     unlocks: 'Pi subagent, MindOS subagent, ACP, and A2A timeline trees on mobile.',
     requiredEndpoints: [
       'GET /api/agent-runs/tree',
-      'GET/SSE /api/agent-runs/stream',
+      'GET/SSE /api/events (agent-run.event)',
     ],
     requiredCapabilities: [
       'agentRuns.tree',

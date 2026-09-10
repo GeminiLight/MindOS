@@ -38,6 +38,8 @@ import type {
   StudioAutomationJob,
   StudioAutomationRunStatus,
 } from '../automations/types.js';
+import type { AgentRunTimelinePart } from '../../agent/stream/stream-message-types.js';
+import { selectVisibleAgentRunTimeline } from '../projections/agent-run-timeline.js';
 import { json, type MindosServerResponse } from '../response.js';
 
 const AGENT_KINDS = new Set<AgentNodeKind>(['mindos-main', 'mindos-headless', 'native-runtime', 'pi-subagent', 'acp', 'a2a']);
@@ -116,7 +118,10 @@ export type AgentRunObservatory = {
 export type AgentRunsPayload = {
   runs: AgentRunRecord[];
   events: AgentEvent[];
-  observatory: AgentRunObservatory;
+  /** Absent in the lean `view=timeline` response. */
+  observatory?: AgentRunObservatory;
+  /** Only in the lean `view=timeline` response: the server-computed visible timeline (null without chatSessionId). */
+  timeline?: AgentRunTimelinePart | null;
 };
 
 export type AgentRunObservatoryInput = {
@@ -188,6 +193,34 @@ export function handleAgentRunsGet(
     ...(rootRunId || startedAfter === undefined ? {} : { startedAfter }),
     limit,
   }) : [];
+
+  // Lean timeline view (spec-cross-process-run-events F): the chat timeline
+  // refresh needs runs + events + the shared visibility projection only. The
+  // observatory attachments (automation state, artifacts, receipts, context
+  // assets, capsules) are skipped entirely — no reads, no warnings.
+  if (boundedText(searchParams.get('view'), 40) === 'timeline') {
+    const timelineEvents = includeEvents ? events : listAgentEvents({
+      ...(runId ? { runId } : {}),
+      ...(rootRunId ? { rootRunId } : {}),
+      ...(chatSessionId ? { chatSessionId } : {}),
+      ...(rootRunId || startedAfter === undefined ? {} : { startedAfter }),
+      limit,
+    });
+    const timeline = chatSessionId
+      ? selectVisibleAgentRunTimeline({
+          payload: { runs, events: timelineEvents },
+          chatSessionId,
+          startedAfter: startedAfter ?? 0,
+          ...(rootRunId ? { rootRunId } : {}),
+          ...(services.now ? { now: services.now().getTime() } : {}),
+        })
+      : null;
+    return json(
+      { runs, events: timelineEvents, timeline },
+      { headers: { 'Cache-Control': 'no-store' } },
+    );
+  }
+
   const warnings: string[] = [];
   const state = safeAttachment(
     () => readStudioAutomationState(services.mindRoot),

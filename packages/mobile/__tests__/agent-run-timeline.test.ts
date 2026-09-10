@@ -2,14 +2,19 @@ import { describe, expect, it } from 'vitest';
 import {
   mergeAgentRunTimelineIntoMessages,
   preserveAgentRunTimelineParts,
-  selectVisibleAgentRunTimeline,
 } from '@/lib/agent-run-timeline';
 import type {
-  AgentRunTimelineEvent,
   AgentRunTimelinePart,
   AgentRunTimelineRecord,
   Message,
 } from '@/lib/types';
+
+/**
+ * Mobile keeps only the client-side message operations; the visibility rules
+ * live in the core projection (server/projections/agent-run-timeline.ts) and
+ * the merge parity between the two copies is pinned by
+ * agent-run-timeline-core-parity.test.ts (spec-cross-process-run-events E).
+ */
 
 function run(overrides: Partial<AgentRunTimelineRecord> = {}): AgentRunTimelineRecord {
   return {
@@ -30,74 +35,7 @@ function run(overrides: Partial<AgentRunTimelineRecord> = {}): AgentRunTimelineR
   };
 }
 
-function eventFor(
-  record: AgentRunTimelineRecord,
-  event: Partial<AgentRunTimelineEvent> & Pick<AgentRunTimelineEvent, 'id' | 'type' | 'category'>,
-): AgentRunTimelineEvent {
-  return {
-    runId: record.id,
-    status: record.status,
-    ts: record.startedAt + 1,
-    record,
-    ...event,
-  };
-}
-
-describe('agent-run-timeline mobile projection', () => {
-  it('selects visible Pi/subagent runs and actionable permission events', () => {
-    const subagent = run();
-    const mindosMain = run({
-      id: 'main',
-      agentKind: 'mindos-main',
-      runtimeId: 'mindos',
-      displayName: 'MindOS Agent',
-    });
-    const permissionEvent = eventFor(subagent, {
-      id: 'permission-1',
-      type: 'permission_requested',
-      category: 'permission',
-      data: {
-        kind: 'permission',
-        action: 'Bash',
-        status: 'requested',
-        prompt: 'Allow command?',
-      },
-    });
-
-    const timeline = selectVisibleAgentRunTimeline({
-      payload: {
-        runs: [mindosMain, subagent],
-        events: [permissionEvent],
-      },
-      chatSessionId: 'chat-1',
-      startedAfter: 900,
-      now: 1300,
-    });
-
-    expect(timeline).toMatchObject({
-      type: 'agent-run-timeline',
-      chatSessionId: 'chat-1',
-      startedAfter: 900,
-      updatedAt: 1300,
-    });
-    expect(timeline?.runs.map((item) => item.id)).toEqual(['run-1']);
-    expect(timeline?.events?.map((item) => item.id)).toEqual(['permission-1']);
-  });
-
-  it('does not show ordinary successful native runs without actionable events', () => {
-    const native = run({
-      agentKind: 'native-runtime',
-      runtimeId: 'codex',
-      displayName: 'Codex',
-      metadata: { runtimeKind: 'codex' },
-    });
-
-    expect(selectVisibleAgentRunTimeline({
-      payload: { runs: [native], events: [] },
-      chatSessionId: 'chat-1',
-      startedAfter: 900,
-    })).toBeNull();
-  });
+describe('agent-run-timeline mobile message operations', () => {
 
   it('merges a timeline into the latest assistant message without dropping text content', () => {
     const timeline: AgentRunTimelinePart = {
