@@ -27,8 +27,24 @@ import type {
   CreateAgentRunCapsuleInput,
   CreateAgentRunCapsuleRecoveryPlanInput,
 } from './types.js';
+import {
+  cancelQueuedCapsuleWrite,
+  clearCapsuleWriteCancel,
+  clearPendingCapsule,
+  enqueueCapsuleWrite,
+  getPendingCapsule,
+  isCapsuleWriteCancelled,
+  pendingCapsuleEntries,
+  setCapsuleWriteSyncFallback,
+  setPendingCapsule,
+} from './write-queue.js';
 
 export { CAPSULES_DB_RELATIVE_PATH } from './capsule-index.js';
+export {
+  flushAllCapsuleWrites,
+  flushCapsuleWrites,
+  writePendingCapsuleWritesSync,
+} from './write-queue.js';
 
 const CAPSULES_DIR = '.mindos/agent-run-capsules';
 const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,119}$/;
@@ -65,6 +81,38 @@ type CapsuleStoreCache = {
 const capsuleCaches = new Map<string, CapsuleStoreCache>();
 const MAX_CACHED_ROOTS = 16;
 
+// ── Async write queue (implementation in ./write-queue.ts) ─────────────────
+//
+// Capsule persistence used to run structuredClone + JSON.stringify +
+// writeFileSync + link synchronously inside `createAgentRunCapsule`, before the
+// lane could emit the first SSE byte (10-25ms for a ~6MB chat). The public
+// store functions stay synchronous — lane callers do not await them — but the
+// disk work is queued on a per-capsule promise chain, and an in-memory overlay
+// serves same-process reads while a write is pending. See write-queue.ts for
+// the queue/overlay/flush/exit-fallback machinery.
+
+setCapsuleWriteSyncFallback((pending) => {
+  fs.mkdirSync(path.dirname(pending.file), { recursive: true, mode: 0o700 });
+  writeJsonAtomic(pending.file, pending.capsule);
+});
+
+function rootKeyOf(mindRoot: string): string {
+  return path.resolve(mindRoot);
+}
+
+/** Cache/index reconciliation after a write landed; keeps the newest state. */
+function settlePendingCapsule(
+  id: string,
+  capsule: AgentRunCapsule,
+  mindRoot: string,
+  file: string,
+): void {
+  const current = getPendingCapsule(id);
+  if (current && current.capsule !== capsule) return; // a newer finalize owns reconciliation
+  rememberCapsuleFile(mindRoot, file, capsule);
+  clearPendingCapsule(id, capsule);
+}
+
 export function createAgentRunCapsule(
   mindRoot: string,
   input: CreateAgentRunCapsuleInput,
@@ -84,7 +132,11 @@ export function createAgentRunCapsule(
     ...(input.chatSessionId ? { chatSessionId: input.chatSessionId } : {}),
     source: input.source,
     status: input.status ?? 'running',
-    request: structuredClone(input.request),
+    // No structuredClone here: the turn lane builds this request with its own
+    // fresh clone (web `_lib/turn-runner.ts` capsuleSeed), so cloning again was
+    // a pure double copy on the pre-first-byte critical path. Ownership of the
+    // request transfers to the store; callers must not mutate it afterwards.
+    request: input.request,
     provenance: structuredClone(input.provenance ?? {}),
     createdAt: now.toISOString(),
     updatedAt: now.toISOString(),
@@ -92,16 +144,74 @@ export function createAgentRunCapsule(
   assertCapsuleShape(capsule);
 
   const file = capsuleFile(mindRoot, capsule);
-  fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
-  if (!writeJsonExclusive(file, capsule)) {
+  const pending = getPendingCapsule(id);
+  if ((pending && pending.mindRootKey === rootKeyOf(mindRoot)) || fs.existsSync(file)) {
     throw new Error(`Agent run capsule already exists: ${id}`);
   }
-  rememberCapsuleFile(mindRoot, file, capsule);
+  // Synchronous, tiny, exclusive STUB write. Keeps the two failure contracts
+  // callers rely on before the lane starts — an unwritable mind root throws
+  // (mkdir) and a duplicate id throws (exclusive link), across processes — at
+  // microsecond cost independent of chat size. The stub is a schema-valid
+  // capsule with an empty transcript; the full payload replaces it from the
+  // write queue. The in-memory overlay serves the full state until it lands.
+  fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
+  if (!writeJsonExclusive(file, capsuleStub(capsule))) {
+    throw new Error(`Agent run capsule already exists: ${id}`);
+  }
+  clearCapsuleWriteCancel(id);
+  setPendingCapsule(id, { mindRootKey: rootKeyOf(mindRoot), file, capsule, landed: false });
+  enqueueCapsuleWrite(id, async () => {
+    const current = getPendingCapsule(id);
+    if (!current || current.file !== file) return;
+    if (current.landed) {
+      settlePendingCapsule(id, capsule, mindRoot, file);
+      return;
+    }
+    const temp = `${file}.${process.pid}.${crypto.randomUUID()}.tmp`;
+    try {
+      if (isCapsuleWriteCancelled(id)) throw new Error('cancelled');
+      // Serialize first so an oversized payload fails before touching disk.
+      const serialized = serializeJson(capsule);
+      await fs.promises.writeFile(temp, serialized, { encoding: 'utf-8', mode: 0o600 });
+      if (isCapsuleWriteCancelled(id)) throw new Error('cancelled');
+      await fs.promises.rename(temp, file);
+    } catch (error) {
+      await fs.promises.unlink(temp).catch(() => { /* best-effort cleanup */ });
+      // Never leave a stub behind pretending to be a durable capsule when the
+      // full write failed (oversized payload, disk error, cancellation).
+      removeCapsuleFileQuietly(file);
+      if (String((error as Error)?.message) === 'cancelled') return;
+      throw error;
+    }
+    settlePendingCapsule(id, capsule, mindRoot, file);
+  });
   return capsule;
+}
+
+/** Schema-valid capsule skeleton written synchronously at capture time. */
+function capsuleStub(capsule: AgentRunCapsule): AgentRunCapsule {
+  return {
+    ...capsule,
+    request: {
+      ...capsule.request,
+      messages: [],
+      context: { ...capsule.request.context, uploadedFiles: [] },
+    },
+  };
+}
+
+function removeCapsuleFileQuietly(file: string): void {
+  try {
+    fs.rmSync(file, { force: true });
+  } catch {
+    // Best effort: a leftover stub is revalidated by stat on the next read.
+  }
 }
 
 export function getAgentRunCapsule(mindRoot: string, id: string): AgentRunCapsule | null {
   requireSafeId(id, 'capsule id');
+  const pending = getPendingCapsule(id);
+  if (pending && pending.mindRootKey === rootKeyOf(mindRoot)) return pending.capsule;
   const entry = locateCapsuleEntry(mindRoot, id);
   return entry ? requireCachedCapsule(entry) : null;
 }
@@ -110,19 +220,27 @@ export function listAgentRunCapsules(
   mindRoot: string,
   options: { onCorrupt?(message: string): void } = {},
 ): AgentRunCapsule[] {
+  const rootKey = rootKeyOf(mindRoot);
+  const byId = new Map<string, AgentRunCapsule>();
   const db = syncCapsuleIndex(mindRoot);
-  if (!db) return [];
-  const capsules: AgentRunCapsule[] = [];
-  for (const row of listCapsuleRows(db)) {
-    const entry = readIndexedEntry(mindRoot, db, row);
-    if (!entry) continue;
-    if (entry.capsule) {
-      capsules.push(entry.capsule);
-    } else {
-      options.onCorrupt?.(entry.corruptMessage ?? 'Unreadable capsule.');
+  if (db) {
+    for (const row of listCapsuleRows(db)) {
+      const entry = readIndexedEntry(mindRoot, db, row);
+      if (!entry) continue;
+      if (entry.capsule) {
+        byId.set(entry.capsule.id, entry.capsule);
+      } else {
+        options.onCorrupt?.(entry.corruptMessage ?? 'Unreadable capsule.');
+      }
     }
   }
-  return capsules
+  // Overlay pending writes not yet on disk (newest state wins), so a same-process
+  // list right after create/finalize still reflects the run.
+  for (const [id, pending] of pendingCapsuleEntries()) {
+    if (pending.mindRootKey !== rootKey) continue;
+    byId.set(id, pending.capsule);
+  }
+  return [...byId.values()]
     .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
     .slice(0, MAX_CAPSULES);
 }
@@ -139,10 +257,23 @@ export function finalizeAgentRunCapsule(
   },
 ): AgentRunCapsule {
   requireSafeId(id, 'capsule id');
+  const rootKey = rootKeyOf(mindRoot);
+  // Disk anchors existence: a capsule deleted behind the store's back must
+  // still fail finalize (the lane degrades to CAPSULE_FINALIZE_FAILED). The
+  // overlay supplies the freshest state while the full write is queued.
   const entry = locateCapsuleEntry(mindRoot, id);
-  if (!entry) throw new Error(`Agent run capsule not found: ${id}`);
-  const current = requireCachedCapsule(entry);
-  const file = entry.safePath;
+  const pending = getPendingCapsule(id);
+  const pendingHere = pending && pending.mindRootKey === rootKey ? pending : undefined;
+  if (!entry) {
+    if (pendingHere) {
+      // The queued write is no longer grounded on disk; cancel it so an
+      // in-flight job cannot resurrect the deleted capsule after this failure.
+      cancelQueuedCapsuleWrite(id);
+    }
+    throw new Error(`Agent run capsule not found: ${id}`);
+  }
+  const current = pendingHere ? pendingHere.capsule : requireCachedCapsule(entry);
+  const file = pendingHere ? pendingHere.file : entry.safePath;
   const now = input.now ?? new Date();
   if (Number.isNaN(now.getTime())) throw new Error('Capsule timestamp must be a valid date.');
   const next: AgentRunCapsule = {
@@ -159,8 +290,19 @@ export function finalizeAgentRunCapsule(
       : current.result ? { result: current.result } : {}),
     updatedAt: now.toISOString(),
   };
-  writeJsonAtomic(file, next);
-  rememberCapsuleFile(mindRoot, file, next);
+  // Update the overlay synchronously so same-process reads see the finalized
+  // state, then queue the atomic rewrite behind any pending create on the chain.
+  setPendingCapsule(id, { mindRootKey: rootKey, file, capsule: next, landed: false });
+  enqueueCapsuleWrite(id, async () => {
+    const queued = getPendingCapsule(id);
+    if (!queued || queued.file !== file) return;
+    if (!queued.landed) {
+      const serialized = serializeJson(next);
+      await fs.promises.mkdir(path.dirname(file), { recursive: true, mode: 0o700 });
+      await writeJsonAtomicAsync(file, serialized);
+    }
+    settlePendingCapsule(id, next, mindRoot, file);
+  });
   return next;
 }
 
@@ -779,6 +921,19 @@ function writeJsonExclusive(
     return true;
   } finally {
     try { fs.unlinkSync(temp); } catch { /* best-effort cleanup */ }
+  }
+}
+
+// ── async variants used by the queued capsule writes ──
+
+async function writeJsonAtomicAsync(file: string, serialized: string): Promise<void> {
+  const temp = `${file}.${process.pid}.${crypto.randomUUID()}.tmp`;
+  try {
+    await fs.promises.writeFile(temp, serialized, { encoding: 'utf-8', mode: 0o600 });
+    await fs.promises.rename(temp, file);
+  } catch (error) {
+    await fs.promises.unlink(temp).catch(() => { /* best-effort cleanup */ });
+    throw error;
   }
 }
 

@@ -4,6 +4,7 @@ import {
   sanitizeToolOutput,
   type MindOSSSEvent,
 } from '../turn/index.js';
+import { getCurrentAgentRunContext } from '../agent-run-context.js';
 import { compactRuntimeFailureMessage } from './runtime-errors.js';
 import type { CodexAppServerNotification } from './codex-app-server.js';
 
@@ -12,13 +13,110 @@ import type { CodexAppServerNotification } from './codex-app-server.js';
  * `codex-app-server.ts` so the JSON-RPC client and the stdio transport stay
  * under the file-size budget. The client only needs the two terminal-state
  * predicates and the small record helpers exported at the bottom.
+ *
+ * Tool-ish notifications are mapped from an EXPLICIT protocol table
+ * (`CODEX_TOOL_NOTIFICATION_PHASES`) rather than the legacy
+ * `/(tool|command|exec|approval|permission|patch)/` + start/delta/end regex
+ * guess, which collapsed any unknown method into a fabricated `codex-${method}`
+ * tool row. Methods that are known but carry no MindOS event live in
+ * `CODEX_KNOWN_SILENT_NOTIFICATIONS`; anything else is recorded as a typed
+ * `unhandled-notification` debug event (best effort, via the run ledger) so it
+ * is inspectable without inventing a tool call or silently vanishing.
  */
 
-export function mapCodexAppServerNotificationToSseEvents(notification: CodexAppServerNotification): MindOSSSEvent[] {
-  const toolEvents = mapCodexRuntimeToolNotification(notification);
-  if (toolEvents.length > 0) return toolEvents;
+export type CodexToolNotificationPhase = 'start' | 'delta' | 'end';
 
-  if (notification.method === 'error') {
+/**
+ * Every method the legacy regex actually caught, with the phase the regex
+ * produced (verified by the oracle in codex-app-server-events.test.ts). Add a
+ * row here when Codex ships a new tool-ish notification; until then it lands in
+ * the unhandled-notification debug path instead of a guessed tool row.
+ */
+export const CODEX_TOOL_NOTIFICATION_PHASES: ReadonlyMap<string, CodexToolNotificationPhase> = new Map([
+  ['item/command/started', 'start'],
+  ['item/command/completed', 'end'],
+  ['item/command/failed', 'end'],
+  ['item/command/outputDelta', 'delta'],
+  ['item/permission/requested', 'start'],
+  // Legacy regex matched `call` inside `mcpToolCall` → start phase; preserved.
+  ['item/mcpToolCall/progress', 'start'],
+  ['execCommand/begin', 'start'],
+  ['execCommand/end', 'end'],
+  ['execApproval/requested', 'start'],
+  ['applyPatchApproval/requested', 'start'],
+]);
+
+/**
+ * Known protocol notifications that carry no MindOS SSE event. Some matched the
+ * legacy gate but no phase regex (→ `[]`); some never matched the gate. Either
+ * way the legacy mapper returned `[]`, so they are enumerated here to keep that
+ * behaviour and stay out of the unhandled-notification debug path.
+ */
+export const CODEX_KNOWN_SILENT_NOTIFICATIONS: ReadonlySet<string> = new Set([
+  'turn/started',
+  'turn/aborted',
+  'item/updated',
+  'item/permission/resolved',
+  'serverRequest/resolved',
+  'thread/started',
+  'login/chatgpt/completed',
+]);
+
+export type CodexUnhandledNotificationEvent = {
+  type: 'unhandled-notification';
+  method: string;
+  paramsSummary: string;
+};
+
+/** Typed, redacted, bounded description of a notification the table does not know. */
+export function describeCodexUnhandledNotification(
+  notification: CodexAppServerNotification,
+): CodexUnhandledNotificationEvent {
+  return {
+    type: 'unhandled-notification',
+    method: notification.method,
+    paramsSummary: redactSensitiveText(safeJson(notification.params ?? {})).slice(0, 200),
+  };
+}
+
+/**
+ * Best-effort debug record of an unknown notification into the active run
+ * ledger. Uses the ALS run context for the run id and a lazy import so the hot
+ * event mapper keeps no static runtime→ledger dependency. No-ops outside a run
+ * context (e.g. unit tests calling the mapper directly).
+ */
+function recordCodexUnhandledNotification(notification: CodexAppServerNotification): void {
+  const context = getCurrentAgentRunContext();
+  const runId = context?.parentRunId ?? context?.rootRunId;
+  if (!runId) return;
+  const event = describeCodexUnhandledNotification(notification);
+  void import('../ledger/run-ledger.js')
+    .then(({ appendAgentRunEvent }) => {
+      appendAgentRunEvent(runId, {
+        type: 'runtime_status',
+        category: 'status',
+        message: `Codex app-server sent an unhandled notification: ${event.method}`,
+        runtime: 'codex',
+        visibility: 'debug',
+        data: {
+          kind: 'status',
+          nextStatus: 'running',
+          summary: event.paramsSummary ? `${event.method} ${event.paramsSummary}` : event.method,
+        },
+      });
+    })
+    .catch(() => { /* best effort */ });
+}
+
+export function mapCodexAppServerNotificationToSseEvents(notification: CodexAppServerNotification): MindOSSSEvent[] {
+  const method = notification.method;
+  const params = notification.params ?? {};
+
+  // Official Codex item notifications keep their dedicated mapping.
+  const officialItemEvents = mapCodexOfficialItemNotification(method, params);
+  if (officialItemEvents.length > 0) return officialItemEvents;
+
+  if (method === 'error') {
     const message = compactRuntimeFailureMessage(
       redactSensitiveText(getCodexErrorMessage(notification.params, 'Codex app-server error')),
       { runtime: 'codex', fallback: 'Codex app-server error' },
@@ -37,20 +135,20 @@ export function mapCodexAppServerNotificationToSseEvents(notification: CodexAppS
     return [{ type: 'error', message }];
   }
 
-  if (notification.method === 'item/agentMessage/delta') {
+  if (method === 'item/agentMessage/delta') {
     const delta = getStringParam(notification.params, 'delta') ?? getStringParam(notification.params, 'text');
     return delta ? [{ type: 'text_delta', delta }] : [];
   }
 
-  if (notification.method === 'item/thinking/delta') {
+  if (method === 'item/thinking/delta') {
     const delta = getStringParam(notification.params, 'delta') ?? getStringParam(notification.params, 'text');
     return delta ? [{ type: 'thinking_delta', delta }] : [];
   }
 
   if (
-    notification.method === 'item/reasoning/textDelta'
-    || notification.method === 'item/reasoning/summaryTextDelta'
-    || notification.method === 'item/reasoning/summaryPartAdded'
+    method === 'item/reasoning/textDelta'
+    || method === 'item/reasoning/summaryTextDelta'
+    || method === 'item/reasoning/summaryPartAdded'
   ) {
     const delta = getStringParam(notification.params, 'delta')
       ?? getStringParam(notification.params, 'text')
@@ -58,7 +156,7 @@ export function mapCodexAppServerNotificationToSseEvents(notification: CodexAppS
     return delta ? [{ type: 'thinking_delta', delta }] : [];
   }
 
-  if (notification.method === 'turn/completed') {
+  if (method === 'turn/completed') {
     const status = getCodexTurnStatus(notification.params);
     if (status && status !== 'completed' && status !== 'success') {
       return [{
@@ -72,7 +170,7 @@ export function mapCodexAppServerNotificationToSseEvents(notification: CodexAppS
     return [{ type: 'done' }];
   }
 
-  if (notification.method === 'turn/failed') {
+  if (method === 'turn/failed') {
     return [{
       type: 'error',
       message: compactRuntimeFailureMessage(
@@ -82,24 +180,29 @@ export function mapCodexAppServerNotificationToSseEvents(notification: CodexAppS
     }];
   }
 
+  // Explicit tool-phase table (replaces the legacy regex guess).
+  const phase = CODEX_TOOL_NOTIFICATION_PHASES.get(method);
+  if (phase) return buildCodexToolEvent(method, phase, params);
+
+  // Known protocol notifications with no MindOS event.
+  if (CODEX_KNOWN_SILENT_NOTIFICATIONS.has(method)) return [];
+
+  // Unknown method: typed debug record, never a fabricated tool row.
+  recordCodexUnhandledNotification(notification);
   return [];
 }
 
-function mapCodexRuntimeToolNotification(notification: CodexAppServerNotification): MindOSSSEvent[] {
-  const method = notification.method;
+function buildCodexToolEvent(
+  method: string,
+  phase: CodexToolNotificationPhase,
+  params: Record<string, unknown>,
+): MindOSSSEvent[] {
   const lower = method.toLowerCase();
-  const params = notification.params ?? {};
-
-  const officialItemEvents = mapCodexOfficialItemNotification(method, params);
-  if (officialItemEvents.length > 0) return officialItemEvents;
-
-  if (!/(tool|command|exec|approval|permission|patch)/.test(lower)) return [];
-
   const toolCallId = getCodexToolCallId(method, params);
   const toolName = getCodexToolName(method, params);
   if (!toolCallId || !toolName) return [];
 
-  if (/outputdelta|output_delta/.test(lower)) {
+  if (phase === 'delta') {
     const delta = getStringParam(params, 'delta')
       ?? getStringParam(params, 'output')
       ?? getStringParam(params, 'text');
@@ -112,7 +215,7 @@ function mapCodexRuntimeToolNotification(notification: CodexAppServerNotificatio
     }] : [];
   }
 
-  if (/(end|ended|complete|completed|result|output|failed|error|rejected|denied|approved|allowed)/.test(lower)) {
+  if (phase === 'end') {
     return [{
       type: 'tool_end',
       toolCallId,
@@ -123,17 +226,13 @@ function mapCodexRuntimeToolNotification(notification: CodexAppServerNotificatio
     }];
   }
 
-  if (/(start|started|begin|began|added|call|request|requested|created)/.test(lower)) {
-    return [{
-      type: 'tool_start',
-      toolCallId,
-      toolName,
-      args: sanitizeToolArgs(toolName, getCodexToolInput(params)),
-      runtime: 'codex',
-    }];
-  }
-
-  return [];
+  return [{
+    type: 'tool_start',
+    toolCallId,
+    toolName,
+    args: sanitizeToolArgs(toolName, getCodexToolInput(params)),
+    runtime: 'codex',
+  }];
 }
 
 function mapCodexOfficialItemNotification(

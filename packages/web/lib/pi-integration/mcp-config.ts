@@ -18,6 +18,8 @@ export const MINDOS_AGENT_MCP_CONFIG_PATH = path.join(MINDOS_MCP_RUNTIME_DIR, 'p
 export const MINDOS_AGENT_MCP_SANDBOX_HOME = path.join(MINDOS_MCP_RUNTIME_DIR, 'mcp-sandbox-home');
 export const MINDOS_AGENT_MCP_SANDBOX_CWD = path.join(MINDOS_MCP_RUNTIME_DIR, 'mcp-sandbox-cwd');
 export const PI_MCP_METADATA_CACHE_PATH = path.join(os.homedir(), '.pi', 'agent', 'mcp-cache.json');
+/** Filtered metadata cache MindOS writes into the adapter sandbox (derived from PI_MCP_METADATA_CACHE_PATH). */
+export const MINDOS_AGENT_MCP_SANDBOX_CACHE_PATH = path.join(MINDOS_AGENT_MCP_SANDBOX_HOME, '.pi', 'agent', 'mcp-cache.json');
 
 /** Parsed MCP server entry from mcp.json */
 export interface McpServerEntry {
@@ -91,6 +93,9 @@ export function writeMcpConfig(config: McpConfigFile): void {
   const tmp = `${MINDOS_MCP_CONFIG_PATH}.${process.pid}.tmp`;
   fs.writeFileSync(tmp, JSON.stringify(config, null, 2) + '\n', 'utf-8');
   fs.renameSync(tmp, MINDOS_MCP_CONFIG_PATH);
+  // We just changed the source config; drop the derived runtime-config memo so
+  // the next turn recomputes instead of trusting a stale stat key.
+  resetMindosAgentMcpRuntimeConfigCache();
 }
 
 /**
@@ -130,17 +135,64 @@ export function readMcpToolCache(): Record<string, { tools: Array<{ name: string
   }
 }
 
+/**
+ * Change-driven memo for the derived runtime config. Keyed by the mtime+size of
+ * the two source files (`~/.mindos/mcp.json` and the pi-mcp-adapter metadata
+ * cache). On an unchanged turn this lets `ensureMindosAgentMcpRuntimeConfig`
+ * return the previous result after a few cheap stats — no re-read, no rewrite —
+ * instead of unconditionally rewriting two files every turn. Reset explicitly by
+ * `writeMcpConfig`/`updateServerDirectTools` and available to tests/settings.
+ */
+let mcpRuntimeConfigMemo: {
+  sourceKey: string;
+  metadataCacheKey: string;
+  result: MindosAgentMcpRuntimeConfig;
+} | null = null;
+
+/** Drops the derived runtime-config memo so the next ensure recomputes. */
+export function resetMindosAgentMcpRuntimeConfigCache(): void {
+  mcpRuntimeConfigMemo = null;
+}
+
+function statKey(filePath: string): string {
+  try {
+    const stat = fs.statSync(filePath);
+    return `${stat.mtimeMs}:${stat.size}`;
+  } catch {
+    return 'missing';
+  }
+}
+
+function ensureDirectory(dir: string): void {
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+}
+
 export function ensureMindosAgentMcpRuntimeConfig(): MindosAgentMcpRuntimeConfig {
+  const sourceKey = statKey(MINDOS_MCP_CONFIG_PATH);
+  const metadataCacheKey = statKey(PI_MCP_METADATA_CACHE_PATH);
+  // Fast path: sources unchanged since last write and both outputs still exist.
+  if (
+    mcpRuntimeConfigMemo
+    && mcpRuntimeConfigMemo.sourceKey === sourceKey
+    && mcpRuntimeConfigMemo.metadataCacheKey === metadataCacheKey
+    && fs.existsSync(MINDOS_AGENT_MCP_CONFIG_PATH)
+    && fs.existsSync(MINDOS_AGENT_MCP_SANDBOX_CACHE_PATH)
+  ) {
+    return mcpRuntimeConfigMemo.result;
+  }
+
   const source = readMcpConfig();
   const bounded = createBoundedMindosAgentMcpConfig(source);
-  fs.mkdirSync(MINDOS_MCP_RUNTIME_DIR, { recursive: true });
-  fs.mkdirSync(MINDOS_AGENT_MCP_SANDBOX_HOME, { recursive: true });
-  fs.mkdirSync(MINDOS_AGENT_MCP_SANDBOX_CWD, { recursive: true });
+  ensureDirectory(MINDOS_MCP_RUNTIME_DIR);
+  ensureDirectory(MINDOS_AGENT_MCP_SANDBOX_HOME);
+  ensureDirectory(MINDOS_AGENT_MCP_SANDBOX_CWD);
 
-  writeJsonFilePrivate(MINDOS_AGENT_MCP_CONFIG_PATH, bounded.config);
+  // Content-compare before writing so a source touch with no semantic change
+  // (or a second concurrent turn) performs zero writes.
+  writeJsonFilePrivateIfChanged(MINDOS_AGENT_MCP_CONFIG_PATH, bounded.config);
   writeFilteredMcpMetadataCache(bounded.serverPolicies);
 
-  return {
+  const result: MindosAgentMcpRuntimeConfig = {
     configPath: MINDOS_AGENT_MCP_CONFIG_PATH,
     sandboxHome: MINDOS_AGENT_MCP_SANDBOX_HOME,
     sandboxCwd: MINDOS_AGENT_MCP_SANDBOX_CWD,
@@ -148,6 +200,8 @@ export function ensureMindosAgentMcpRuntimeConfig(): MindosAgentMcpRuntimeConfig
     serverCount: Object.keys(bounded.config.mcpServers).length,
     proxyAllowed: bounded.proxyAllowed,
   };
+  mcpRuntimeConfigMemo = { sourceKey, metadataCacheKey, result };
+  return result;
 }
 
 export function createBoundedMindosAgentMcpConfig(config: McpConfigFile): {
@@ -225,10 +279,10 @@ function cloneServerEntryForRuntime(entry: McpServerEntry): McpServerEntry {
 }
 
 function writeFilteredMcpMetadataCache(serverPolicies: Record<string, true | string[]>): void {
-  const cachePath = path.join(MINDOS_AGENT_MCP_SANDBOX_HOME, '.pi', 'agent', 'mcp-cache.json');
+  const cachePath = MINDOS_AGENT_MCP_SANDBOX_CACHE_PATH;
   const cache = readRawMcpMetadataCache();
   if (!cache) {
-    writeJsonFilePrivate(cachePath, { version: 1, servers: {} });
+    writeJsonFilePrivateIfChanged(cachePath, { version: 1, servers: {} });
     return;
   }
 
@@ -256,7 +310,7 @@ function writeFilteredMcpMetadataCache(serverPolicies: Record<string, true | str
     filteredServers[serverName] = next;
   }
 
-  writeJsonFilePrivate(cachePath, { version: 1, servers: filteredServers });
+  writeJsonFilePrivateIfChanged(cachePath, { version: 1, servers: filteredServers });
 }
 
 function readRawMcpMetadataCache(): { version?: unknown; servers?: unknown } | null {
@@ -270,10 +324,21 @@ function readRawMcpMetadataCache(): { version?: unknown; servers?: unknown } | n
   }
 }
 
-function writeJsonFilePrivate(filePath: string, value: unknown): void {
+/** Writes only when the serialized content differs from what is already on disk. */
+function writeJsonFilePrivateIfChanged(filePath: string, value: unknown): void {
+  const serialized = `${JSON.stringify(value, null, 2)}\n`;
+  try {
+    if (fs.readFileSync(filePath, 'utf-8') === serialized) return;
+  } catch {
+    // Missing or unreadable: fall through and write.
+  }
+  writeSerializedFilePrivate(filePath, serialized);
+}
+
+function writeSerializedFilePrivate(filePath: string, serialized: string): void {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   const tmp = `${filePath}.${process.pid}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(value, null, 2) + '\n', 'utf-8');
+  fs.writeFileSync(tmp, serialized, 'utf-8');
   try {
     fs.chmodSync(tmp, 0o600);
   } catch {

@@ -1,6 +1,26 @@
 import type { LocalAttachment } from '@/lib/types';
+import {
+  MINDOS_AGENT_ATTACHMENT_MAX_CHARS,
+  MINDOS_AGENT_ATTACHMENT_MAX_FILE_BYTES,
+  MINDOS_AGENT_ATTACHMENT_MAX_FILE_COUNT,
+  MINDOS_AGENT_ATTACHMENT_MAX_TOTAL_BYTES,
+} from '@geminilight/mindos/agent/turn';
 
-export const AI_ATTACHMENT_MAX_CHARS = 20_000;
+/**
+ * The per-turn attachment budget lives in core (`agent/turn`) so the Product
+ * Server handler and the Next host enforce identical limits. This web module
+ * re-exports those constants instead of declaring its own, keeping a single
+ * source of truth. `AI_ATTACHMENT_MAX_CHARS` is the text-char cap the chat UI
+ * gates on before submit; the byte/count caps are enforced server-side at
+ * request normalisation (`validateMindosAgentTurnAttachmentBudget`).
+ */
+export const AI_ATTACHMENT_MAX_CHARS = MINDOS_AGENT_ATTACHMENT_MAX_CHARS;
+export {
+  MINDOS_AGENT_ATTACHMENT_MAX_CHARS,
+  MINDOS_AGENT_ATTACHMENT_MAX_FILE_BYTES,
+  MINDOS_AGENT_ATTACHMENT_MAX_FILE_COUNT,
+  MINDOS_AGENT_ATTACHMENT_MAX_TOTAL_BYTES,
+};
 
 export interface OversizedAiAttachment {
   name: string;

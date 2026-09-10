@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentRunCapsuleRecoveryPlan } from '../capsules/types.js';
 import {
+  MINDOS_AGENT_ATTACHMENT_MAX_FILE_BYTES,
+  MINDOS_AGENT_ATTACHMENT_MAX_FILE_COUNT,
+  MINDOS_AGENT_ATTACHMENT_MAX_TOTAL_BYTES,
   findUnknownMindosAgentTurnRequestFields,
   findUnknownMindosSessionTurnContextFields,
   getLastMindosUserContent,
@@ -11,10 +14,12 @@ import {
   normalizeMindosAgentOptions,
   normalizeMindosAgentSessionTurnBody,
   normalizeMindosNativeRuntimeOptions,
+  normalizeMindosNativeRuntimeOptionsForRuntime,
   normalizeMindosSelectedRuntime,
   normalizeMindosSessionContextSelection,
   normalizeMindosSessionWorkDir,
   parseMindosAgentTurnRequest,
+  validateMindosAgentTurnAttachmentBudget,
   validateMindosAgentModeField,
   validateMindosAgentOptionsObject,
   validateMindosPermissionModeField,
@@ -241,6 +246,200 @@ describe('normalizeMindosAgentSessionTurnBody', () => {
   it('rejects unknown nested fields with the prefixed message', () => {
     expect(normalizeMindosAgentSessionTurnBody({ message: { text: 'x' }, context: { bogus: 1 } }, 's1'))
       .toEqual({ ok: false, message: 'Unknown field: context.bogus' });
+  });
+});
+
+describe('reasoning effort normalisation at the request boundary', () => {
+  it('folds case for a known codex effort and keeps model override', () => {
+    expect(normalizeMindosNativeRuntimeOptionsForRuntime({ reasoningEffort: ' HIGH ', modelOverride: ' gpt-5 ' }, 'codex'))
+      .toEqual({ options: { reasoningEffort: 'high', modelOverride: 'gpt-5' } });
+  });
+
+  it('drops an unsupported codex effort with a status-ready notice instead of forwarding it', () => {
+    const result = normalizeMindosNativeRuntimeOptionsForRuntime({ reasoningEffort: 'turbo' }, 'codex');
+    expect(result.options).toEqual({});
+    expect(result.effortNotice).toMatch(/Reasoning effort "turbo" is not supported by Codex/);
+    expect(result.effortNotice).toMatch(/using its default/);
+  });
+
+  it('drops minimal for claude (outside its vocabulary) with a notice', () => {
+    const result = normalizeMindosNativeRuntimeOptionsForRuntime({ reasoningEffort: 'minimal' }, 'claude');
+    expect(result.options).toEqual({});
+    expect(result.effortNotice).toMatch(/not supported by Claude Code/);
+  });
+
+  it('keeps the legacy shape-only behaviour when no runtime kind is known', () => {
+    expect(normalizeMindosNativeRuntimeOptionsForRuntime({ reasoningEffort: 'high' }, undefined))
+      .toEqual({ options: { reasoningEffort: 'high' } });
+    expect(normalizeMindosNativeRuntimeOptionsForRuntime({ reasoningEffort: 'HIGH' }, undefined))
+      .toEqual({ options: {} });
+    expect(normalizeMindosNativeRuntimeOptionsForRuntime({ reasoningEffort: 'custom_effort-1' }, undefined))
+      .toEqual({ options: { reasoningEffort: 'custom_effort-1' } });
+  });
+
+  it('normalises effort in the strict parse and surfaces effortNotice', () => {
+    const parsed = parseMindosAgentTurnRequest({
+      messages: [{ role: 'user', content: 'hi' }],
+      selectedRuntime: { id: 'codex', name: 'Codex', kind: 'codex' },
+      runtimeOptions: { reasoningEffort: 'turbo', modelOverride: 'gpt-5' },
+    });
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.body.runtimeOptions).toEqual({ modelOverride: 'gpt-5' });
+    expect(parsed.effortNotice).toMatch(/not supported by Codex/);
+  });
+
+  it('normalises effort in the session-turn shorthand and messages[] passthrough', () => {
+    const shorthand = normalizeMindosAgentSessionTurnBody({
+      message: { text: 'hi' },
+      selectedRuntime: { id: 'codex', name: 'Codex', kind: 'codex' },
+      runtimeOptions: { reasoningEffort: 'XHIGH' },
+    }, 's1');
+    expect(shorthand.ok).toBe(true);
+    if (shorthand.ok) {
+      expect(shorthand.body.runtimeOptions).toEqual({ reasoningEffort: 'xhigh' });
+      expect(shorthand.effortNotice).toBeUndefined();
+    }
+
+    const passthrough = normalizeMindosAgentSessionTurnBody({
+      messages: [{ role: 'user', content: 'hi' }],
+      selectedRuntime: { id: 'claude', name: 'Claude Code', kind: 'claude' },
+      runtimeOptions: { reasoningEffort: 'minimal' },
+    }, 's2');
+    expect(passthrough.ok).toBe(true);
+    if (passthrough.ok) {
+      expect(passthrough.body.runtimeOptions).toEqual({});
+      expect(passthrough.effortNotice).toMatch(/not supported by Claude Code/);
+    }
+  });
+
+  it('re-normalises a legacy capsule effort on recovery replay', () => {
+    const body = mindosAgentRunCapsuleRecoveryPlanToTurnBody({
+      schemaVersion: 1,
+      id: 'recovery-1',
+      sourceCapsuleId: 'capsule-1',
+      action: 'retry',
+      request: {
+        messages: [{ role: 'user', content: 'hi' }],
+        runtime: { kind: 'codex', id: 'codex', name: 'Codex' },
+        runtimeBinding: null,
+        thinkingEffort: 'turbo',
+        model: 'gpt-5',
+        context: { attachedFiles: [], uploadedFiles: [], receiptIds: [], assetIds: [] },
+        options: {},
+      },
+      createdAt: '2026-09-03T10:00:00.000Z',
+    } as unknown as AgentRunCapsuleRecoveryPlan, 'chat-9');
+    // 'turbo' is not a codex effort: replay omits it (runtime default) and keeps the model.
+    expect(body.runtimeOptions).toEqual({ modelOverride: 'gpt-5' });
+  });
+});
+
+describe('turn attachment budget', () => {
+  // base64 string whose decoded estimate is `bytes` (estimate = floor(len*3/4))
+  const b64 = (bytes: number): string => 'A'.repeat(Math.ceil((bytes * 4) / 3));
+  const uploadedFile = (name: string, dataBase64?: string, content = '') => ({
+    name,
+    content,
+    ...(dataBase64 ? { dataBase64 } : {}),
+  });
+  const image = (data: string) => ({ type: 'image', data, mimeType: 'image/png' });
+  const strictBody = (overrides: Record<string, unknown>) => parseMindosAgentTurnRequest({
+    messages: [{ role: 'user', content: 'hi' }],
+    ...overrides,
+  });
+
+  it('exposes the documented budget constants derived from the client caps and capsule limit', () => {
+    expect(MINDOS_AGENT_ATTACHMENT_MAX_FILE_BYTES).toBe(5 * 1024 * 1024);
+    expect(MINDOS_AGENT_ATTACHMENT_MAX_TOTAL_BYTES).toBe(5 * 1024 * 1024);
+    expect(MINDOS_AGENT_ATTACHMENT_MAX_FILE_COUNT).toBe(16);
+  });
+
+  it('rejects an oversized uploadedFiles dataBase64 at strict parse', () => {
+    const result = strictBody({
+      uploadedFiles: [uploadedFile('movie.mp4', b64(MINDOS_AGENT_ATTACHMENT_MAX_FILE_BYTES + 4))],
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.message).toMatch(/payload too large/i);
+      expect(result.message).toContain('movie.mp4');
+    }
+  });
+
+  it('rejects an oversized image inside message shorthand and messages[] history', () => {
+    const shorthand = normalizeMindosAgentSessionTurnBody({
+      message: { text: 'look', images: [image(b64(MINDOS_AGENT_ATTACHMENT_MAX_FILE_BYTES + 4))] },
+    }, 's1');
+    expect(shorthand.ok).toBe(false);
+
+    const passthrough = normalizeMindosAgentSessionTurnBody({
+      messages: [
+        { role: 'user', content: 'earlier', images: [image(b64(MINDOS_AGENT_ATTACHMENT_MAX_FILE_BYTES + 4))] },
+      ],
+    }, 's1');
+    expect(passthrough.ok).toBe(false);
+  });
+
+  it('rejects context.uploadedFiles that exceed the total per-turn budget', () => {
+    const half = Math.floor(MINDOS_AGENT_ATTACHMENT_MAX_TOTAL_BYTES / 2) + 1024;
+    const result = normalizeMindosAgentSessionTurnBody({
+      message: { text: 'two files' },
+      context: { uploadedFiles: [uploadedFile('a.pdf', b64(half)), uploadedFile('b.pdf', b64(half))] },
+    }, 's1');
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.message).toMatch(/per-turn budget/i);
+  });
+
+  it('rejects more attachments than the per-turn count limit', () => {
+    const images = Array.from({ length: MINDOS_AGENT_ATTACHMENT_MAX_FILE_COUNT + 1 }, () => image('QUJD'));
+    const result = strictBody({ images });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.message).toMatch(/attachments exceed the 16 per-turn limit/i);
+  });
+
+  it('bounds a huge text-only upload through the per-file byte budget', () => {
+    // The 20k char cap is enforced downstream (web host 413); the parser budget
+    // bounds the same content by bytes so a multi-MiB text upload cannot slip
+    // into the tmp decode / capsule clone path.
+    const result = strictBody({
+      uploadedFiles: [uploadedFile('huge.txt', undefined, 'x'.repeat(MINDOS_AGENT_ATTACHMENT_MAX_FILE_BYTES + 1))],
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.message).toMatch(/per-file limit/i);
+  });
+
+  it('accepts payloads exactly at every limit', () => {
+    expect(strictBody({
+      uploadedFiles: [uploadedFile('edge.bin', b64(MINDOS_AGENT_ATTACHMENT_MAX_FILE_BYTES))],
+    }).ok).toBe(true);
+    expect(strictBody({
+      images: Array.from({ length: MINDOS_AGENT_ATTACHMENT_MAX_FILE_COUNT }, () => image('QUJD')),
+    }).ok).toBe(true);
+  });
+
+  it('counts data-URL-prefixed base64 by its decoded payload', () => {
+    const prefixed = `data:image/png;base64,${b64(MINDOS_AGENT_ATTACHMENT_MAX_FILE_BYTES + 4)}`;
+    const result = strictBody({ images: [image(prefixed)] });
+    expect(result.ok).toBe(false);
+  });
+
+  it('leaves small legacy payloads untouched', () => {
+    expect(validateMindosAgentTurnAttachmentBudget({})).toBeNull();
+    expect(strictBody({
+      uploadedFiles: [{ name: 'f.pdf', content: 'text', dataBase64: 'cGRmLWJ5dGVz' }],
+      images: [image('aW1n')],
+    }).ok).toBe(true);
+    expect(strictBody({
+      messages: [{ role: 'user', content: 'hi', images: [{ data: 'img' }] }],
+    }).ok).toBe(true);
+  });
+
+  it('ignores malformed entries instead of throwing', () => {
+    expect(validateMindosAgentTurnAttachmentBudget({
+      uploadedFiles: [null, 'nope', { name: 42 }, { content: 7 }],
+      images: [null, { data: 5 }],
+      messages: [null, 'x', { images: 'not-an-array' }],
+    })).toBeNull();
   });
 });
 

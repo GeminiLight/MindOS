@@ -1,6 +1,7 @@
 import type { MindosPermissionMode } from '../permission/index.js';
 import { isMindosThinkingLevel, type MindosThinkingLevel } from '../mindos-pi/thinking.js';
 import type { MindosAgentMode } from '../mode.js';
+import { normalizeRuntimeEffort, type RuntimeEffortKind } from '../runtime/runtime-effort.js';
 import type {
   AgentRunCapsuleRecoveryPlan,
   AgentRunCapsuleRuntimeBinding,
@@ -283,6 +284,33 @@ export function normalizeMindosNativeRuntimeOptions(value: unknown): MindosNativ
   };
 }
 
+/**
+ * Kind-aware variant used at the request boundary. When the selected runtime
+ * kind is known, `reasoningEffort` is validated against that runtime's
+ * vocabulary (see `runtime-effort.ts`): a known level folds to lowercase, an
+ * UNKNOWN level is dropped so the runtime falls back to its own default instead
+ * of being forwarded (which fails a Codex turn with a JSON-RPC error), and a
+ * `status`-ready `effortNotice` is returned for the host to surface. Without a
+ * kind this defers to the legacy shape-only regex so direct callers (and the
+ * existing wire contract) are unchanged.
+ */
+export function normalizeMindosNativeRuntimeOptionsForRuntime(
+  value: unknown,
+  runtimeKind: MindosAgentRuntimeKind | undefined,
+): { options: MindosNativeRuntimeOptions; effortNotice?: string } {
+  if (!isMindosTurnRecord(value)) return { options: {} };
+  if (runtimeKind === undefined) return { options: normalizeMindosNativeRuntimeOptions(value) };
+  const modelOverride = cleanMindosTurnString(value.modelOverride, 240);
+  const effort = normalizeRuntimeEffort(runtimeKind as RuntimeEffortKind, value.reasoningEffort);
+  return {
+    options: {
+      ...(effort.effort ? { reasoningEffort: effort.effort } : {}),
+      ...(modelOverride ? { modelOverride } : {}),
+    },
+    ...(effort.fellBack ? { effortNotice: effort.note } : {}),
+  };
+}
+
 /** Always returns an object; callers spread it conditionally on non-emptiness. */
 export function normalizeMindosAcpRuntimeOptions(value: unknown): MindosAcpRuntimeOptions {
   if (!isMindosTurnRecord(value)) return {};
@@ -350,6 +378,122 @@ export function normalizeMindosUploadedFiles(files: unknown[]): MindosUploadedFi
       ...(typeof file.size === 'number' && Number.isFinite(file.size) ? { size: file.size } : {}),
       ...(typeof file.dataBase64 === 'string' && file.dataBase64 ? { dataBase64: file.dataBase64 } : {}),
     }));
+}
+
+// ── Attachment budget (single validated byte/count limit) ────────────────────
+//
+// Before this, text uploads were capped (client-side at 20 000 chars and, on
+// the web host, `turn-runner.ts` returns a 413 `AI_ATTACHMENT_TOO_LARGE`), but
+// `uploadedFiles[].dataBase64` and `images[].data` were UNCAPPED on the server:
+// each turn base64-decoded them to tmp and cloned them into the run capsule
+// until the 8 MiB capsule limit failed the whole run mid-flight. This budget
+// gates the byte/count dimensions at request normalisation, before any tmp
+// write or capsule clone. It deliberately does NOT re-reject the text-char cap:
+// on the web host that check already produces a 413 downstream, and a parser
+// rejection would only downgrade it to a 400. Text `content` still contributes
+// its length to the per-file/total byte accounting so a huge text upload is
+// bounded too. Defaults are derived from constants already in the codebase:
+//   - per-file / total decoded bytes: 5 MiB each. The capsule JSON limit is
+//     8 MiB and base64 inflates raw bytes by ~4/3, so a single 5 MiB file
+//     (~6.67 MiB base64) still fits one capsule with headroom, while the 5 MiB
+//     total keeps multi-attachment turns under the capsule limit instead of
+//     failing it. This matches the client's 5 MiB per-image cap.
+//   - count: 16 (generous over the client's 4-image cap; bounds tmp fan-out).
+// The text-char cap constant lives in `agent/turn/index.ts`
+// (`MINDOS_AGENT_ATTACHMENT_MAX_CHARS`), re-exported by the web
+// `attachment-limits.ts` so there is a single source of truth.
+
+export const MINDOS_AGENT_ATTACHMENT_MAX_FILE_BYTES = 5 * 1024 * 1024;
+export const MINDOS_AGENT_ATTACHMENT_MAX_TOTAL_BYTES = 5 * 1024 * 1024;
+export const MINDOS_AGENT_ATTACHMENT_MAX_FILE_COUNT = 16;
+
+/** Decoded-byte estimate for a base64 string (data-URL prefix aware), without decoding it. */
+function estimateMindosBase64DecodedBytes(value: string): number {
+  const payload = value.includes(',') && value.trimStart().toLowerCase().startsWith('data:')
+    ? value.slice(value.indexOf(',') + 1)
+    : value;
+  return Math.floor((payload.length * 3) / 4);
+}
+
+function formatMindosAttachmentBytes(bytes: number): string {
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MiB`;
+}
+
+type MindosTurnAttachmentTotals = { count: number; bytes: number };
+
+function addMindosUploadedFileBytes(
+  file: Record<string, unknown>,
+  totals: MindosTurnAttachmentTotals,
+): string | null {
+  totals.count += 1;
+  const content = typeof file.content === 'string' ? file.content : '';
+  const dataBase64 = typeof file.dataBase64 === 'string' ? file.dataBase64 : '';
+  // A binary upload is bounded by its decoded base64 size; a text-only upload by
+  // its character length (a cheap byte proxy that also feeds the total budget).
+  const bytes = dataBase64
+    ? estimateMindosBase64DecodedBytes(dataBase64)
+    : content.length;
+  if (bytes > MINDOS_AGENT_ATTACHMENT_MAX_FILE_BYTES) {
+    const name = typeof file.name === 'string' ? file.name : 'attachment';
+    return `Attachment payload too large (413): "${name}" is ${formatMindosAttachmentBytes(bytes)}, over the ${formatMindosAttachmentBytes(MINDOS_AGENT_ATTACHMENT_MAX_FILE_BYTES)} per-file limit. Remove or shrink it, then run again.`;
+  }
+  totals.bytes += bytes;
+  return null;
+}
+
+function addMindosImageBytes(image: Record<string, unknown>, totals: MindosTurnAttachmentTotals): string | null {
+  totals.count += 1;
+  const data = typeof image.data === 'string' ? image.data : '';
+  const bytes = data ? estimateMindosBase64DecodedBytes(data) : 0;
+  if (bytes > MINDOS_AGENT_ATTACHMENT_MAX_FILE_BYTES) {
+    return `Attachment payload too large (413): an image is ${formatMindosAttachmentBytes(bytes)}, over the ${formatMindosAttachmentBytes(MINDOS_AGENT_ATTACHMENT_MAX_FILE_BYTES)} per-file limit. Remove or shrink it, then run again.`;
+  }
+  totals.bytes += bytes;
+  return null;
+}
+
+/**
+ * Validates the single per-turn attachment byte/count budget across every place
+ * a turn body can carry an attachment: top-level/context `uploadedFiles`,
+ * top-level `images`, `message.images` (shorthand) and `messages[].images`
+ * (full history). Returns a 413-style message or null. Runs on the raw record
+ * before normalisation so an oversized payload is rejected prior to any tmp
+ * decode or capsule clone. The 20k text-char cap is intentionally not enforced
+ * here (the web host already returns a 413 for it downstream); text content
+ * still counts toward the byte totals.
+ */
+export function validateMindosAgentTurnAttachmentBudget(record: Record<string, unknown>): string | null {
+  const totals: MindosTurnAttachmentTotals = { count: 0, bytes: 0 };
+  const context = mindosTurnObjectField(record, 'context');
+  const uploadedFiles = mindosTurnArrayField(context, 'uploadedFiles') ?? mindosTurnArrayField(record, 'uploadedFiles');
+  for (const file of uploadedFiles ?? []) {
+    if (!isMindosTurnRecord(file)) continue;
+    const error = addMindosUploadedFileBytes(file, totals);
+    if (error) return error;
+  }
+
+  const imageGroups: Array<unknown[] | undefined> = [
+    mindosTurnArrayField(record, 'images'),
+    mindosTurnArrayField(mindosTurnObjectField(record, 'message'), 'images'),
+  ];
+  for (const message of mindosTurnArrayField(record, 'messages') ?? []) {
+    if (isMindosTurnRecord(message)) imageGroups.push(mindosTurnArrayField(message, 'images'));
+  }
+  for (const group of imageGroups) {
+    for (const image of group ?? []) {
+      if (!isMindosTurnRecord(image)) continue;
+      const error = addMindosImageBytes(image, totals);
+      if (error) return error;
+    }
+  }
+
+  if (totals.count > MINDOS_AGENT_ATTACHMENT_MAX_FILE_COUNT) {
+    return `Attachment payload too large (413): ${totals.count} attachments exceed the ${MINDOS_AGENT_ATTACHMENT_MAX_FILE_COUNT} per-turn limit. Remove some, then run again.`;
+  }
+  if (totals.bytes > MINDOS_AGENT_ATTACHMENT_MAX_TOTAL_BYTES) {
+    return `Attachment payload too large (413): attachments total ${formatMindosAttachmentBytes(totals.bytes)}, over the ${formatMindosAttachmentBytes(MINDOS_AGENT_ATTACHMENT_MAX_TOTAL_BYTES)} per-turn budget. Remove or shrink them, then run again.`;
+  }
+  return null;
 }
 
 export function normalizeMindosSessionWorkDir(value: unknown): MindosSessionWorkDir | undefined {
@@ -573,7 +717,7 @@ export function getLastMindosUserImages(messages: readonly unknown[]): unknown[]
 // ── Body parsers ────────────────────────────────────────────────────────────
 
 export type MindosAgentSessionTurnBodyResult =
-  | { ok: true; body: MindosAgentTurnRequest }
+  | { ok: true; body: MindosAgentTurnRequest; effortNotice?: string }
   | { ok: false; message: string };
 
 /**
@@ -598,10 +742,25 @@ export function normalizeMindosAgentSessionTurnBody(
   if (unknownRequestField) return { ok: false, message: unknownRequestField };
   const unknownContextField = findUnknownMindosSessionTurnContextFields(record);
   if (unknownContextField) return { ok: false, message: unknownContextField };
+  const sessionAttachmentError = validateMindosAgentTurnAttachmentBudget(record);
+  if (sessionAttachmentError) return { ok: false, message: sessionAttachmentError };
   if (Array.isArray(record.messages)) {
+    // Full messages[] turn request: pass through with the path sessionId
+    // winning, but normalise the reasoning effort against the selected
+    // runtime's vocabulary so an unsupported effort cannot reach the runtime.
+    const passthroughRuntime = normalizeMindosSelectedRuntime(record);
+    const { options: passthroughRuntimeOptions, effortNotice } = normalizeMindosNativeRuntimeOptionsForRuntime(
+      record.runtimeOptions,
+      passthroughRuntime?.kind,
+    );
     return {
       ok: true,
-      body: { ...(record as unknown as MindosAgentTurnRequest), chatSessionId: sessionId },
+      body: {
+        ...(record as unknown as MindosAgentTurnRequest),
+        chatSessionId: sessionId,
+        ...(isMindosTurnRecord(record.runtimeOptions) ? { runtimeOptions: passthroughRuntimeOptions } : {}),
+      },
+      ...(effortNotice ? { effortNotice } : {}),
     };
   }
 
@@ -613,10 +772,13 @@ export function normalizeMindosAgentSessionTurnBody(
     return { ok: false, message: 'message.text is required' };
   }
 
-  const runtimeOptions = mindosTurnObjectField(record, 'runtimeOptions');
   const acpRuntimeOptions = normalizeMindosAcpRuntimeOptions(record.acpRuntimeOptions);
   const selectedRuntime = mindosTurnSelectedRuntimeField(record);
   const selectedAcpAgent = mindosTurnSelectedAcpAgentField(record);
+  const { options: normalizedRuntimeOptions, effortNotice } = normalizeMindosNativeRuntimeOptionsForRuntime(
+    record.runtimeOptions,
+    selectedRuntime?.kind,
+  );
   const skillName = mindosTurnStringField(messageRecord, 'skillName');
   return {
     ok: true,
@@ -652,7 +814,7 @@ export function normalizeMindosAgentSessionTurnBody(
       ...(mindosTurnObjectField(record, 'runtimeBinding')
         ? { runtimeBinding: mindosTurnObjectField(record, 'runtimeBinding') as MindosRuntimeSessionBinding }
         : {}),
-      ...(runtimeOptions ? { runtimeOptions: runtimeOptions as MindosNativeRuntimeOptions } : {}),
+      ...(Object.keys(normalizedRuntimeOptions).length > 0 ? { runtimeOptions: normalizedRuntimeOptions } : {}),
       ...(Object.keys(acpRuntimeOptions).length > 0 ? { acpRuntimeOptions } : {}),
       ...(mindosTurnObjectField(record, 'agentOptions')
         ? { agentOptions: mindosTurnObjectField(record, 'agentOptions') as MindosAgentOptions }
@@ -661,6 +823,7 @@ export function normalizeMindosAgentSessionTurnBody(
       ...(mindosTurnStringField(record, 'providerOverride') ? { providerOverride: mindosTurnStringField(record, 'providerOverride') } : {}),
       ...(mindosTurnStringField(record, 'modelOverride') ? { modelOverride: mindosTurnStringField(record, 'modelOverride') } : {}),
     },
+    ...(effortNotice ? { effortNotice } : {}),
   };
 }
 
@@ -671,7 +834,7 @@ export function normalizeMindosAgentSessionTurnBody(
  * (server.runtime-web.test.ts pins it).
  */
 export function parseMindosAgentTurnRequest(body: unknown):
-  | { ok: true; body: MindosAgentTurnRequest }
+  | { ok: true; body: MindosAgentTurnRequest; effortNotice?: string }
   | { ok: false; message: string } {
   if (!body || typeof body !== 'object') {
     return { ok: false, message: 'Invalid agent turn request body' };
@@ -683,6 +846,8 @@ export function parseMindosAgentTurnRequest(body: unknown):
   if (!Array.isArray(record.messages)) {
     return { ok: false, message: 'messages must be an array' };
   }
+  const attachmentBudgetError = validateMindosAgentTurnAttachmentBudget(record);
+  if (attachmentBudgetError) return { ok: false, message: attachmentBudgetError };
 
   const agentModeError = validateMindosAgentModeField(record.agentMode);
   if (agentModeError) return { ok: false, message: agentModeError };
@@ -709,7 +874,7 @@ export function parseMindosAgentTurnRequest(body: unknown):
   const runtimeBindingRecord = mindosTurnObjectField(record, 'runtimeBinding');
   const unknownRuntimeBinding = runtimeBindingRecord ? firstUnknownMindosTurnField(runtimeBindingRecord, MINDOS_RUNTIME_BINDING_FIELDS, 'runtimeBinding') : null;
   if (unknownRuntimeBinding) return { ok: false, message: unknownRuntimeBinding };
-  const runtimeOptions = normalizeMindosNativeRuntimeOptions(record.runtimeOptions);
+  const { options: runtimeOptions, effortNotice } = normalizeMindosNativeRuntimeOptionsForRuntime(record.runtimeOptions, selectedRuntime?.kind);
   const acpRuntimeOptions = normalizeMindosAcpRuntimeOptions(record.acpRuntimeOptions);
   const agentOptions = normalizeMindosAgentOptions(record.agentOptions);
 
@@ -736,6 +901,7 @@ export function parseMindosAgentTurnRequest(body: unknown):
       ...(typeof record.providerOverride === 'string' ? { providerOverride: record.providerOverride } : {}),
       ...(typeof record.modelOverride === 'string' ? { modelOverride: record.modelOverride } : {}),
     },
+    ...(effortNotice ? { effortNotice } : {}),
   };
 }
 
@@ -772,11 +938,14 @@ export function mindosAgentRunCapsuleRecoveryPlanToTurnBody(
       updatedAt: request.runtimeBinding.updatedAt ?? Date.now(),
     }
     : null;
+  // The capsule stores the already-normalised effort, but re-normalise on replay
+  // so a legacy/foreign capsule with an unsupported effort cannot fail the turn.
+  const replayEffort = normalizeRuntimeEffort(request.runtime.kind as RuntimeEffortKind, request.thinkingEffort);
   const nativeRuntimeOptions = request.runtime.kind === 'codex' || request.runtime.kind === 'claude'
     ? {
       ...storedRuntimeOptions,
       ...(request.model ? { modelOverride: request.model } : {}),
-      ...(request.thinkingEffort ? { reasoningEffort: request.thinkingEffort } : {}),
+      ...(replayEffort.effort ? { reasoningEffort: replayEffort.effort } : {}),
     }
     : undefined;
   return {

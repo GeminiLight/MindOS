@@ -9,6 +9,8 @@ import {
   createAgentRunCapsule,
   createAgentRunCapsuleRecoveryPlan,
   finalizeAgentRunCapsule,
+  flushAllCapsuleWrites,
+  flushCapsuleWrites,
   getAgentRunCapsuleRecoveryPlan,
   getAgentRunCapsule,
   listAgentRunCapsules,
@@ -32,13 +34,16 @@ describe('agent run capsule store', () => {
     mkdirSync(join(mindRoot, '.mindos'), { recursive: true });
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     vi.restoreAllMocks();
+    // Land queued capsule writes before the temp root disappears, so the
+    // process-exit fallback never recreates a removed directory.
+    await flushAllCapsuleWrites().catch(() => {});
     closeAllMindosDatabases();
     rmSync(mindRoot, { recursive: true, force: true });
   });
 
-  it('persists replay input privately while exposing only a redacted recovery projection', () => {
+  it('persists replay input privately while exposing only a redacted recovery projection', async () => {
     const capsule = createAgentRunCapsule(mindRoot, {
       id: 'capsule-run-1',
       runId: 'run-1',
@@ -118,6 +123,7 @@ describe('agent run capsule store', () => {
     expect(JSON.stringify(projection)).not.toContain('private-upload-token');
     expect(JSON.stringify(projection)).not.toContain('sk-secret-value');
 
+    await flushCapsuleWrites('capsule-run-1');
     const storedPath = join(
       mindRoot,
       '.mindos',
@@ -228,20 +234,25 @@ describe('agent run capsule store', () => {
       .toThrow(/already claimed.*recovery-run-1/i);
   });
 
-  it('rejects capsules whose serialized replay payload exceeds the storage limit', () => {
-    expect(() => createAgentRunCapsule(mindRoot, capsuleInput({
+  it('rejects capsules whose serialized replay payload exceeds the storage limit', async () => {
+    // The synchronous call succeeds (persistence is queued); the oversized
+    // payload fails when the queued write serializes, and flush surfaces it.
+    createAgentRunCapsule(mindRoot, capsuleInput({
       request: {
         ...capsuleInput().request,
         messages: [{ role: 'user', content: 'x'.repeat(8 * 1024 * 1024) }],
       },
-    }))).toThrow(/payload is too large/i);
+    }));
+    await expect(flushCapsuleWrites('capsule-run-1')).rejects.toThrow(/payload is too large/i);
     expect(listAgentRunCapsules(mindRoot)).toEqual([]);
   });
 
-  it('rejects invalid ids, duplicate capsules, corrupt storage, and unsupported resume', () => {
+  it('rejects invalid ids, duplicate capsules, corrupt storage, and unsupported resume', async () => {
     expect(() => createAgentRunCapsule(mindRoot, capsuleInput({ id: '../escape' }))).toThrow(/capsule id/i);
 
     createAgentRunCapsule(mindRoot, capsuleInput());
+    expect(() => createAgentRunCapsule(mindRoot, capsuleInput())).toThrow(/already exists/i);
+    await flushCapsuleWrites('capsule-run-1');
     expect(() => createAgentRunCapsule(mindRoot, capsuleInput())).toThrow(/already exists/i);
 
     const storedPath = join(mindRoot, '.mindos', 'agent-run-capsules', '2026', '09', 'capsule-run-1.json');
@@ -263,8 +274,9 @@ describe('agent run capsule store', () => {
     })).toThrow(/no reusable runtime session/i);
   });
 
-  it('preserves and rejects structurally corrupt capsule JSON before projection', () => {
+  it('preserves and rejects structurally corrupt capsule JSON before projection', async () => {
     createAgentRunCapsule(mindRoot, capsuleInput());
+    await flushCapsuleWrites('capsule-run-1');
     const storedPath = join(mindRoot, '.mindos', 'agent-run-capsules', '2026', '09', 'capsule-run-1.json');
     const malformed = JSON.parse(readFileSync(storedPath, 'utf-8'));
     malformed.request.context.attachedFiles = 'not-an-array';
@@ -279,9 +291,10 @@ describe('agent run capsule store', () => {
     expect(readFileSync(storedPath, 'utf-8')).toContain('not-an-array');
   });
 
-  it('serves an unchanged capsule directory from cache without re-reading files', () => {
+  it('serves an unchanged capsule directory from cache without re-reading files', async () => {
     createAgentRunCapsule(mindRoot, capsuleInput());
     createAgentRunCapsule(mindRoot, capsuleInput({ id: 'capsule-run-2', runId: 'run-2', now: new Date('2026-09-03T11:00:00.000Z') }));
+    await flushAllCapsuleWrites();
     const first = listAgentRunCapsules(mindRoot);
     expect(first.map((capsule) => capsule.id)).toEqual(['capsule-run-2', 'capsule-run-1']);
 
@@ -292,8 +305,9 @@ describe('agent run capsule store', () => {
     expect(readSpy).not.toHaveBeenCalled();
   });
 
-  it('caches corrupt capsules too, so the poller does not re-parse a broken file every tick', () => {
+  it('caches corrupt capsules too, so the poller does not re-parse a broken file every tick', async () => {
     createAgentRunCapsule(mindRoot, capsuleInput());
+    await flushCapsuleWrites('capsule-run-1');
     const storedPath = join(mindRoot, '.mindos', 'agent-run-capsules', '2026', '09', 'capsule-run-1.json');
     writeFileSync(storedPath, '{broken', 'utf-8');
     const warnings: string[] = [];
@@ -308,7 +322,7 @@ describe('agent run capsule store', () => {
     expect(readFileSync(storedPath, 'utf-8')).toBe('{broken');
   });
 
-  it('picks up new, finalized, rewritten, and deleted capsules after listing from cache', () => {
+  it('picks up new, finalized, rewritten, and deleted capsules after listing from cache', async () => {
     createAgentRunCapsule(mindRoot, capsuleInput());
     expect(listAgentRunCapsules(mindRoot).map((capsule) => capsule.id)).toEqual(['capsule-run-1']);
 
@@ -319,6 +333,7 @@ describe('agent run capsule store', () => {
     expect(getAgentRunCapsule(mindRoot, 'capsule-run-1')).toEqual(finalized);
     expect(listAgentRunCapsules(mindRoot).find((capsule) => capsule.id === 'capsule-run-1')?.status).toBe('failed');
 
+    await flushCapsuleWrites('capsule-run-2');
     const storedPath = join(mindRoot, '.mindos', 'agent-run-capsules', '2026', '09', 'capsule-run-2.json');
     const rewritten = JSON.parse(readFileSync(storedPath, 'utf-8'));
     rewritten.status = 'canceled';
@@ -331,9 +346,10 @@ describe('agent run capsule store', () => {
     expect(getAgentRunCapsule(mindRoot, 'capsule-run-2')).toBeNull();
   });
 
-  it('locates capsules by id directly for recent months and falls back to a scan for older ones', () => {
+  it('locates capsules by id directly for recent months and falls back to a scan for older ones', async () => {
     const old = createAgentRunCapsule(mindRoot, capsuleInput({ id: 'capsule-old', runId: 'run-old', now: new Date('2024-02-10T10:00:00.000Z') }));
     const recent = createAgentRunCapsule(mindRoot, capsuleInput({ id: 'capsule-recent', runId: 'run-recent', now: new Date() }));
+    await flushAllCapsuleWrites();
 
     expect(getAgentRunCapsule(mindRoot, 'capsule-old')).toEqual(old);
     expect(getAgentRunCapsule(mindRoot, 'capsule-recent')).toEqual(recent);
@@ -366,9 +382,10 @@ describe('agent run capsule store', () => {
     expect(readFileSync(storedPath, 'utf-8')).not.toContain('"context"');
   });
 
-  it('indexes capsules in sqlite so get and finalize never list directories', () => {
+  it('indexes capsules in sqlite so get and finalize never list directories', async () => {
     createAgentRunCapsule(mindRoot, capsuleInput());
     createAgentRunCapsule(mindRoot, capsuleInput({ id: 'capsule-old', runId: 'run-old', now: new Date('2024-02-10T10:00:00.000Z') }));
+    await flushAllCapsuleWrites();
     expect(indexRows()).toEqual([
       expect.objectContaining({ id: 'capsule-old', status: 'completed', path: '.mindos/agent-run-capsules/2024/02/capsule-old.json' }),
       expect.objectContaining({ id: 'capsule-run-1', status: 'completed', path: '.mindos/agent-run-capsules/2026/09/capsule-run-1.json' }),
@@ -380,6 +397,7 @@ describe('agent run capsule store', () => {
     const readdirSpy = vi.spyOn(fs, 'readdirSync');
     expect(getAgentRunCapsule(mindRoot, 'capsule-old')?.id).toBe('capsule-old');
     expect(finalizeAgentRunCapsule(mindRoot, 'capsule-old', { status: 'failed' }).status).toBe('failed');
+    await flushCapsuleWrites('capsule-old');
     expect(readdirSpy).not.toHaveBeenCalled();
     expect(indexRows().find((row) => row.id === 'capsule-old')?.status).toBe('failed');
 
@@ -398,9 +416,10 @@ describe('agent run capsule store', () => {
     expect(readdirSpy.mock.calls.map((call) => String(call[0])).some((dir) => /agent-run-capsules[\\/]\d{4}[\\/]\d{2}$/.test(dir))).toBe(false);
   });
 
-  it('discovers a capsule another process filed directly on disk and indexes it', () => {
+  it('discovers a capsule another process filed directly on disk and indexes it', async () => {
     createAgentRunCapsule(mindRoot, capsuleInput());
     expect(listAgentRunCapsules(mindRoot).map((capsule) => capsule.id)).toEqual(['capsule-run-1']);
+    await flushCapsuleWrites('capsule-run-1');
 
     const foreign = { ...createAgentRunCapsule(mkdtempSync(join(tmpdir(), 'mindos-run-capsule-foreign-')), capsuleInput({ id: 'capsule-foreign', runId: 'run-foreign', now: new Date('2026-09-04T10:00:00.000Z') })) };
     const dir = join(mindRoot, '.mindos', 'agent-run-capsules', '2026', '09');
@@ -418,8 +437,9 @@ describe('agent run capsule store', () => {
     expect(indexRows().map((row) => row.id)).toEqual(['capsule-ancient', 'capsule-foreign', 'capsule-run-1']);
   });
 
-  it('refreshes a stale index row when the file changed underneath it and drops rows for deleted files', () => {
+  it('refreshes a stale index row when the file changed underneath it and drops rows for deleted files', async () => {
     createAgentRunCapsule(mindRoot, capsuleInput());
+    await flushCapsuleWrites('capsule-run-1');
     const storedPath = join(mindRoot, '.mindos', 'agent-run-capsules', '2026', '09', 'capsule-run-1.json');
     const rewritten = JSON.parse(readFileSync(storedPath, 'utf-8'));
     rewritten.status = 'canceled';
@@ -438,9 +458,10 @@ describe('agent run capsule store', () => {
     expect(indexRows()).toEqual([]);
   });
 
-  it('rebuilds the index from the directory when the database is missing', () => {
+  it('rebuilds the index from the directory when the database is missing', async () => {
     createAgentRunCapsule(mindRoot, capsuleInput());
     createAgentRunCapsule(mindRoot, capsuleInput({ id: 'capsule-run-2', runId: 'run-2', now: new Date('2026-09-03T11:00:00.000Z') }));
+    await flushAllCapsuleWrites();
     closeAllMindosDatabases();
     for (const suffix of ['', '-wal', '-shm']) rmSync(`${indexDbFile()}${suffix}`, { force: true });
 
@@ -449,8 +470,9 @@ describe('agent run capsule store', () => {
     expect(getAgentRunCapsule(mindRoot, 'capsule-run-2')?.id).toBe('capsule-run-2');
   });
 
-  it('ignores index rows that point outside the capsules tree', () => {
+  it('ignores index rows that point outside the capsules tree', async () => {
     createAgentRunCapsule(mindRoot, capsuleInput());
+    await flushCapsuleWrites('capsule-run-1');
     const db = openMindosDatabase({ file: indexDbFile(), migrations: [] });
     db.prepare(`INSERT INTO capsules(id, path, size, mtime_ms) VALUES ('capsule-evil', '../../etc/passwd', 1, 1)`).run();
     db.prepare(`INSERT INTO capsules(id, path, size, mtime_ms) VALUES ('capsule-renamed', '.mindos/agent-run-capsules/2026/09/capsule-run-1.json', 1, 1)`).run();
